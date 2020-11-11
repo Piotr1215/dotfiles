@@ -1,0 +1,29 @@
+[color]
+	branch = auto
+	diff = auto
+	interactive = auto
+	status = auto
+[core]
+	excludesfile = ~/.gitignore
+[user]
+	name = decoder
+	email = decoder@live.de
+[alias]
+	s = status
+	st = status
+	d = diff
+	dc = diff --cached
+	ci = commit --verbose
+	cia = commit --verbose --all
+	co = checkout
+	su = submodule update --init --recursive
+	logg = log --graph
+	add-commit = !git add -A && git commit
+[diff]
+	tool = vimdiff
+[merge]
+	tool = vimdiff
+[push]
+	default = matching
+[branch]
+	autosetuprebase = always

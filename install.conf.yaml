@@ -1,0 +1,28 @@
+- shell:
+  - chsh -s $(which zsh)
+  - [chsh -s $(which zsh), Making zsh the default shell]
+  -
+    command: read var && echo Your variable is $var
+    stdin: true
+    stdout: true
+    description: Reading and printing variable
+    quiet: true
+  -
+    command: read fail
+    stderr: true
+- defaults:
+    link:
+      relink: true
+
+- clean: ['~']
+
+- link:
+    ~/.tmux.conf: tmux.conf
+    ~/.vim: vim
+    ~/.vimrc: vimrc
+
+- create:
+    - ~/.vim/undo-history
+
+- shell:
+  - [git submodule update --init --recursive, Installing submodules]
