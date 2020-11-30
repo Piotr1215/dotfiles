@@ -12,16 +12,14 @@
       create: true
     ~/.zshrc:
       path: zsh/zshrc.zsh
-      force: true
       create: true
     ~/.oh-my-zsh: zsh/oh-my-zsh
       create: true
     ~/.bashrc:
       path: bash/bashrc
-      force: true
-
-- create:
-    - ~/.vim/undo-history
+      create: true
 
 - shell:
   - [git submodule update --init --recursive, Installing submodules]
+  - chsh -s $(which zsh)
+  - [chsh -s $(which zsh), Making zsh the default shell]
