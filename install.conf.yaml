@@ -5,12 +5,17 @@
 
 - link:
     ~/.tmux.conf: tmux.conf
+      create: true
     ~/.vim: vim
+      create: true
     ~/.vimrc: vimrc
+      create: true
     ~/.zshrc:
       path: zsh/zshrc.zsh
       force: true
+      create: true
     ~/.oh-my-zsh: zsh/oh-my-zsh
+      create: true
     ~/.bashrc:
       path: bash/bashrc
       force: true
