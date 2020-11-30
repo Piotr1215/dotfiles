@@ -3,8 +3,6 @@
       relink: true
       create: true
 
-- clean: ['~']
-
 - link:
     ~/.tmux.conf: tmux.conf
     ~/.vim: vim
