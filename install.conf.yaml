@@ -1,6 +1,7 @@
 - defaults:
     link:
       relink: true
+      create: true
 
 - clean: ['~']
 
@@ -8,6 +9,13 @@
     ~/.tmux.conf: tmux.conf
     ~/.vim: vim
     ~/.vimrc: vimrc
+    ~/.zshrc:
+      path: zsh/zshrc.zsh
+      force: true
+    ~/.oh-my-zsh: zsh/oh-my-zsh
+    ~/.bashrc:
+      path: bash/bashrc
+      force: true
 
 - create:
     - ~/.vim/undo-history
