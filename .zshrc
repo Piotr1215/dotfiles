@@ -2,7 +2,7 @@
 # export PATH=$HOME/bin:/usr/local/bin:$PATH
 
 # Path to your oh-my-zsh installation.
-export ZSH="/home/decoder/.oh-my-zsh"
+export ZSH="~/.oh-my-zsh"
 
 # Set name of the theme to load --- if set to "random", it will
 # load a random theme each time oh-my-zsh is loaded, in which case,
@@ -124,7 +124,6 @@ export VAGRANT_WSL_ENABLE_WINDOWS_ACCESS="1"
 #export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
 #export PATH=$PATH:"$ZSH_CUSTOM/plugins/navi"
 
-echo "Setting environment variables for Terraform"
 export KUBECONFIG=$HOME/.kube/config
 
 PATH=$HOME/.local/bin:$PATH
