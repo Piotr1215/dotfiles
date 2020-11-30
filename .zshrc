@@ -8,7 +8,7 @@ export ZSH="/home/decoder/.oh-my-zsh"
 # load a random theme each time oh-my-zsh is loaded, in which case,
 # to know which specific one was loaded, run: echo $RANDOM_THEME
 # See https://github.com/ohmyzsh/ohmyzsh/wiki/Themes
-ZSH_THEME="agnoster"
+ZSH_THEME="robbyrussell"
 
 # Set list of themes to pick from when loading at random
 # Setting this variable when ZSH_THEME=random will cause zsh to load
@@ -68,7 +68,7 @@ ZSH_THEME="agnoster"
 # Custom plugins may be added to ~/.oh-my-zsh/custom/plugins/
 # Example format: plugins=(rails git textmate ruby lighthouse)
 # Add wisely, as too many plugins slow down shell startup.
-plugins=(git zsh-autosuggestions)
+plugins=(git kubectl zsh-autosuggestions)
 
 # source $HOME/kube-ps1/kube-ps1.sh
 # source $ZSH/oh-my-zsh.sh
@@ -100,6 +100,14 @@ plugins=(git zsh-autosuggestions)
 # alias zshconfig="mate ~/.zshrc"
 # alias ohmyzsh="mate ~/.oh-my-zsh"
 # # My path aliases
+
+alias k=kubectl
+# complete -F __start_kubectl k
+
+export KUBECONFIG=$HOME/.kube/config
+
+source $ZSH/oh-my-zsh.sh
+
 alias windev='cd /mnt/d/dev/'
 alias dev='cd ~/dev'
 alias decod='cd /mnt/c/Users/decod/'
@@ -127,3 +135,8 @@ PATH=$HOME/.local/bin:$PATH
 kcdebug() { kubectl run -i --rm --tty debug --image=busybox --restart=Never -- sh }
 alias diskusage='du -sh * | sort -h --reverse'
 
+[[ /usr/local/bin/kubectl ]] && source <(kubectl completion zsh)
+alias cls=clear
+alias dls="docker container ls -a"
+
+PATH=$HOME/.local/bin:$PATH

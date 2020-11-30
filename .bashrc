@@ -128,3 +128,5 @@ alias decod='cd /mnt/c/Users/decod/'
 LS_COLORS='rs=0:di=1;35:ln=01;36:mh=00:pi=40;33:so=01;35:do=01:ow=01;36;40:'
 export LS_COLORS
 [ -f ~/.fzf.bash ] && source ~/.fzf.bash
+PATH=$HOME/.local/bin:$PATH
+PATH=$HOME/.local/bin:$PATH
