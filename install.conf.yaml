@@ -5,19 +5,12 @@
 
 - link:
     ~/.tmux.conf: tmux.conf
-      create: true
-    ~/.vim: vim
-      create: true
-    ~/.vimrc: vimrc
-      create: true
     ~/.zshrc:
       path: zsh/zshrc.zsh
-      create: true
-    ~/.oh-my-zsh: zsh/oh-my-zsh
-      create: true
+    ~/.oh-my-zsh:
+      path: zsh/oh-my-zsh
     ~/.bashrc:
       path: bash/bashrc
-      create: true
 
 - shell:
   - [git submodule update --init --recursive, Installing submodules]
