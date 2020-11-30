@@ -1,17 +1,15 @@
 - defaults:
     link:
       create: true
-
-- clean: ['~']
+      relink: true
 
 - link:
     ~/.tmux.conf: tmux.conf
-    ~/.zshrc:
-      path: zsh/zshrc.zsh
-    ~/.oh-my-zsh:
-      path: zsh/oh-my-zsh
-    ~/.bashrc:
-      path: bash/bashrc
+    /home/vagrant/.zshrc: zsh/zshrc.zsh
+    ~/.oh-my-zsh: zsh/oh-my-zsh
+    ~/.bashrc: bash/bashrc
+
+- clean: ['~', '~/.config/']
 
 - shell:
   - [git submodule update --init --recursive, Installing submodules]
