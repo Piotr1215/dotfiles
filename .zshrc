@@ -114,6 +114,7 @@ alias decod='cd /mnt/c/Users/decod/'
 alias kdump='kubectl get all --all-namespaces'
 alias addkey='eval $(ssh-agent) && ssh-add'
 alias ll='ls -lah'
+alias km=kustomize
 
 eval $(dircolors -p | sed -e 's/DIR 01;34/DIR 01;36/' | dircolors /dev/stdin)
 export VAGRANT_WSL_ENABLE_WINDOWS_ACCESS="1"
