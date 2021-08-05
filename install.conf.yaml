@@ -8,6 +8,7 @@
     /home/vagrant/.zshrc: zsh/zshrc.zsh
     ~/.oh-my-zsh: zsh/oh-my-zsh
     ~/.bashrc: bash/bashrc
+    ~/.vimrc: ~/.vimrc
 
 - clean: ['~', '~/.config/']
 
