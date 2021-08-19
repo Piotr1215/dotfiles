@@ -82,7 +82,7 @@ echo '[STEP 11] Installing stern'
 (
     wget https://github.com/wercker/stern/releases/download/1.11.0/stern_linux_amd64 && \
     chmod +x stern_linux_amd64 && \
-    mv stern_linux_amd64 /usr/local/bin/stern
+    sudo mv stern_linux_amd64 /usr/local/bin/stern
 )
 
 echo '[STEP 12] Installing kubectx and kubens - quickly switch kubernetes context and namespace'
