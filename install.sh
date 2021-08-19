@@ -70,6 +70,8 @@ sudo apt install -y nodejs npm
 
 echo '[STEP 9] install zsh'
 
+sudo rm -rf ~/.oh-my-zsh
+
 sh -c "$(wget -O- https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
 
 echo '[STEP 10] Installing zsh-autosuggestions plugin'
