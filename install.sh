@@ -9,14 +9,14 @@ GPG_KEY=$3
 
 if [ -z "$NAME" ]
 then
-  read -p "Please enter your git user.name, (for example, polatengin)" NAME
+  read -p "Please enter your git user.name, (for example, piotr1215)" NAME
   NAME=${NAME:-"polatengin"}
 fi
 
 if [ -z "$EMAIL" ]
 then
-  read -p "Please enter your git user.email, (for example, polatengin[at]outlook[dot]com)" EMAIL
-  EMAIL=${EMAIL:-"polatengin@outlook.com"}
+  read -p "Please enter your git user.email, (for example, decoder[at]live[dot]de)" EMAIL
+  EMAIL=${EMAIL:-"decoder@live.com"}
 fi
 
 git config --global user.name $NAME
