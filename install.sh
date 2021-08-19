@@ -86,6 +86,9 @@ echo '[STEP 11] Installing stern'
 )
 
 echo '[STEP 12] Installing kubectx and kubens - quickly switch kubernetes context and namespace'
+
+sudo rm -drf /opt/kubectx
+
 (
   git clone https://github.com/ahmetb/kubectx /opt/kubectx && \
   ln -s /opt/kubectx/kubectx /usr/local/bin/kubectx && \
