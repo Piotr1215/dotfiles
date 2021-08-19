@@ -126,8 +126,8 @@ eval $(dircolors -p | sed -e 's/DIR 01;34/DIR 01;36/' | dircolors /dev/stdin)
 
 # add Pulumi to the PATH
 #export PATH=$PATH:$HOME/.pulumi/bin
-#export PATH=$PATH:$HOME/.krew/bin
-#export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
+export PATH=$PATH:$HOME/.krew/bin
+export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
 #export PATH=$PATH:"$ZSH_CUSTOM/plugins/navi"
 
 export KUBECONFIG=$HOME/.kube/config
