@@ -75,6 +75,8 @@ sudo rm -rf ~/.oh-my-zsh
 sh -c "$(wget -O- https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
 
 echo '[STEP 10] Installing zsh-autosuggestions plugin'
+sudo mkdir -p /root/.oh-my-zsh/custom/plugins/zsh-autosuggestions
+
 git clone https://github.com/zsh-users/zsh-autosuggestions /root/.oh-my-zsh/custom/plugins/zsh-autosuggestions
 
 echo '[STEP 11] Installing stern'
