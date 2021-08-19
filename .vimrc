@@ -44,6 +44,7 @@ call glaive#Install()        " enable this line after the installation of glaive
 filetype plugin indent on    " required
 
 " custom setting
+set clipboard=unnamed " use system clipboard
 set mouse=a
 set number
 set encoding=utf-8
