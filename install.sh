@@ -85,15 +85,15 @@ echo '[STEP 11] Installing stern'
     sudo mv stern_linux_amd64 /usr/local/bin/stern
 )
 
-echo '[STEP 12] Installing kubectx and kubens - quickly switch kubernetes context and namespace'
+# echo '[STEP 12] Installing kubectx and kubens - quickly switch kubernetes context and namespace'
 
-sudo rm -drf /opt/kubectx
+# sudo rm -drf /opt/kubectx
 
-(
-  git clone https://github.com/ahmetb/kubectx /opt/kubectx && \
-  ln -s /opt/kubectx/kubectx /usr/local/bin/kubectx && \
-  ln -s /opt/kubectx/kubens /usr/local/bin/kubens
-)
+# (
+#   git clone https://github.com/ahmetb/kubectx /opt/kubectx && \
+#   ln -s /opt/kubectx/kubectx /usr/local/bin/kubectx && \
+#   ln -s /opt/kubectx/kubens /usr/local/bin/kubens
+# )
 
 echo '[STEP 13] Installing Okteto for local development'
 curl https://get.okteto.com -sSfL | sh
