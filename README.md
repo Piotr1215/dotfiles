@@ -29,10 +29,30 @@ RestartSec=10
 
 [Install]
 WantedBy=multi-user.target
-
-
 ```
 
+### Install inotify-hookable
+
+sudo apt install inotify-hookable -y
+
+### Write script
+
+This script watches a folder with dotfiles and every time a change to a file is made or a new file is created, commits everything and pushes to git. This also works of course if the changes are made on the symlinked files.
+
+``` bash
+cd /home/decoder/dev/dotfiles
+while true; do
+    inotify-hookable \
+     --watch-files ./ \
+     --on-modify-command "git add . && git commit -m 'auto commit' && git push origin master"
+done
+```
+
+### Enable and start the service
+
+- `sudo systemctl daemon-reload`
+- `sudo systemctl enable checkfile`
+- `sudo systemctl start checkfile`
 
 ## How to run
 
