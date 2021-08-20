@@ -24,7 +24,7 @@ ZSH_THEME="powerlevel10k/powerlevel10k"
 # ZSH_THEME_RANDOM_CANDIDATES=( "robbyrussell" "agnoster" )
 
 # Uncomment the following line to use case-sensitive completion.
-# CASE_SENSITIVE="true"
+# CASE_SENSITIVE="true" test1
 
 # Uncomment the following line to use hyphen-insensitive completion.
 # Case-sensitive completion must be off. _ and - will be interchangeable.
@@ -117,7 +117,7 @@ alias dls="docker container ls -a"
 eval $(dircolors -p | sed -e 's/DIR 01;34/DIR 01;36/' | dircolors /dev/stdin)
 
 # EXPORT & PATH
-export KUBECONFIG=$HOME/.kube/config
+export KUBECONFIG=~/.kube/config:~/.kube/config-vagrant
 export PATH=$PATH:$HOME/.krew/bin
 export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
 export PATH=$HOME/.local/bin:$PATH
@@ -131,6 +131,18 @@ function kcdebug() {
 
 function mkd() {
   mkdir -p "$@" && cd "$_";
+}
+
+function vup() {
+  vagrant up 9fd33ae
+  vagrant up 511094c
+  vagrant up 9ee0cc2
+}
+
+function vhalt {
+  vagrant halt 9ee0cc2
+  vagrant halt 511094c
+  vagrant halt 9fd33ae
 }
 
 [[ /usr/local/bin/kubectl ]] && source <(kubectl completion zsh)
