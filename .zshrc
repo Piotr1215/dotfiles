@@ -2,7 +2,7 @@
 # Initialization code that may require console input (password prompts, [y/n]
 # confirmations, etc.) must go above this block; everything else may go below.
 if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then
-  source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
+    source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
 fi
 
 # If you come from bash you might have to change your $PATH.
@@ -94,26 +94,14 @@ source $ZSH/oh-my-zsh.sh
 #   export EDITOR='mvim'
 # fi
 
-# Compilation flags
-# export ARCHFLAGS="-arch x86_64"
 
-# Set personal aliases, overriding those provided by oh-my-zsh libs,
-# plugins, and themes. Aliases can be placed here, though oh-my-zsh
-# users are encouraged to define aliases within the ZSH_CUSTOM folder.
-# For a full list of active aliases, run `alias`.
-#
-# Example aliases
-# alias zshconfig="mate ~/.zshrc"
-# alias ohmyzsh="mate ~/.oh-my-zsh"
-# # My path aliases
-
-alias k=kubectl
-# complete -F __start_kubectl k
-
-export KUBECONFIG=$HOME/.kube/config
+# PROMPT CUSTOMIZATION
+# To customize prompt, run `p10k configure` or edit ~/.p10k.zsh.
+[[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
 
 source $ZSH/oh-my-zsh.sh
 
+alias k=kubectl
 alias windev='cd /mnt/d/dev/'
 alias dev='cd ~/dev'
 alias decod='cd /mnt/c/Users/decod/'
@@ -121,30 +109,28 @@ alias kdump='kubectl get all --all-namespaces'
 alias addkey='eval $(ssh-agent) && ssh-add'
 alias ll='ls -lah'
 alias km=kustomize
-
-eval $(dircolors -p | sed -e 's/DIR 01;34/DIR 01;36/' | dircolors /dev/stdin)
-
-# add Pulumi to the PATH
-#export PATH=$PATH:$HOME/.pulumi/bin
-export PATH=$PATH:$HOME/.krew/bin
-export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
-#export PATH=$PATH:"$ZSH_CUSTOM/plugins/navi"
-
-export KUBECONFIG=$HOME/.kube/config
-
-PATH=$HOME/.local/bin:$PATH
-
-# PROMPT='$(kube_ps1)'$PROMPT
-
-[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
-kcdebug() { kubectl run -i --rm --tty debug --image=busybox --restart=Never -- sh }
+alias vz='vim ~/.zshrc'
 alias diskusage='du -sh * | sort -h --reverse'
-
-[[ /usr/local/bin/kubectl ]] && source <(kubectl completion zsh)
 alias cls=clear
 alias dls="docker container ls -a"
 
-PATH=$HOME/.local/bin:$PATH
+eval $(dircolors -p | sed -e 's/DIR 01;34/DIR 01;36/' | dircolors /dev/stdin)
 
-# To customize prompt, run `p10k configure` or edit ~/.p10k.zsh.
-[[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
+# EXPORT & PATH
+export KUBECONFIG=$HOME/.kube/config
+export PATH=$PATH:$HOME/.krew/bin
+export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
+export PATH=$HOME/.local/bin:$PATH
+
+[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
+
+# USER FUNCTIONS
+function kcdebug() {
+  kubectl run -i --rm --tty debug --image=busybox --restart=Never -- sh
+}
+
+function mkd() {
+  mkdir -p "$@" && cd "$_";
+}
+
+[[ /usr/local/bin/kubectl ]] && source <(kubectl completion zsh)
