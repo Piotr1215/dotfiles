@@ -102,9 +102,7 @@ source $ZSH/oh-my-zsh.sh
 source $ZSH/oh-my-zsh.sh
 
 alias k=kubectl
-alias windev='cd /mnt/d/dev/'
 alias dev='cd ~/dev'
-alias decod='cd /mnt/c/Users/decod/'
 alias kdump='kubectl get all --all-namespaces'
 alias addkey='eval $(ssh-agent) && ssh-add'
 alias ll='ls -lah'
