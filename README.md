@@ -70,4 +70,4 @@ or
 
 ## Testing
 
-The setup was tested on Ubuntu 20.04 VM, works.
+The setup was tested on Ubuntu 20.04 VM.
