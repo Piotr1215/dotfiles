@@ -6,6 +6,8 @@ Simplified version without dotbot:
 - symlink all the .files
 - TODO: automate symlinking
 
+## Auto-config commit
+
 ## How to run
 
 either
