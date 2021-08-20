@@ -123,10 +123,15 @@ export PATH=$HOME/.local/bin:$PATH
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
 
 # USER FUNCTIONS
+
 function gac() {
   git add .
   git commit -m "$1"
   git push
+}
+
+function key() {
+  cat /home/decoder/script/shortcuts.txt |  yad --width=750 --height=750  --center --close-on-unfocus --text-info
 }
 
 function kcdebug() {
