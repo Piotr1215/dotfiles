@@ -75,7 +75,7 @@ ENABLE_CORRECTION="true"
 # Custom plugins may be added to ~/.oh-my-zsh/custom/plugins/
 # Example format: plugins=(rails git textmate ruby lighthouse)
 # Add wisely, as too many plugins slow down shell startup.
-plugins=(git kubectl zsh-autosuggestions zsh-syntax-highlighting sudo google)
+plugins=(git kubectl zsh-autosuggestions zsh-syntax-highlighting sudo web-search)
 
 # source $HOME/kube-ps1/kube-ps1.sh
 source $ZSH/oh-my-zsh.sh
