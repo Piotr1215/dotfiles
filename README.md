@@ -54,13 +54,19 @@ done
 - `sudo systemctl enable checkfile`
 - `sudo systemctl start checkfile`
 
+### Monitor the service
+
+`journalctl -fu checkfile.service`
+
 ## How to run
 
-either
+Either
 
 `bash -c "$(curl -fsSL https://raw.githubusercontent.com/Piotr1215/dotfiles/master/install.sh)"`
 
-or `curl https://raw.githubusercontent.com/Piotr1215/dotfiles/master/install.sh | bash -s -- ${GIT_USERNAME} ${GIT_EMAIL} ${GPG_KEY}`
+or
+
+`curl https://raw.githubusercontent.com/Piotr1215/dotfiles/master/install.sh | bash -s -- ${GIT_USERNAME} ${GIT_EMAIL} ${GPG_KEY}`
 
 ## Testing
 
