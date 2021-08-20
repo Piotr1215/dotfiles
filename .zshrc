@@ -123,6 +123,12 @@ export PATH=$HOME/.local/bin:$PATH
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
 
 # USER FUNCTIONS
+function gac() {
+  git add .
+  git commit -m "$1"
+  git push
+}
+
 function kcdebug() {
   kubectl run -i --rm --tty debug --image=busybox --restart=Never -- sh
 }
