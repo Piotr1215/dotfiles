@@ -15,7 +15,7 @@ autocmd FileType yaml setlocal ts=2 sts=2 sw=2 expandtab
 " let Vundle manage Vundle, required
 Plugin 'VundleVim/Vundle.vim'
 
-" all plugin test1
+" all plugin test2
 Plugin 'Valloric/YouCompleteMe'
 Plugin 'vim-syntastic/syntastic'
 
