@@ -131,7 +131,7 @@ function gac() {
 }
 
 function key() {
-  cat /home/decoder/script/shortcuts.txt |  yad --width=750 --height=750  --center --close-on-unfocus --text-info
+  cat /home/decoder/scripts/shortcuts.txt |  yad --width=750 --height=750  --center --close-on-unfocus --text-info
 }
 
 function kcdebug() {
