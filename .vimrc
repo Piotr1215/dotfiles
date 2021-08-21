@@ -48,6 +48,9 @@ call vundle#end()            " required
 call glaive#Install()        " enable this line after the installation of glaive
 filetype plugin indent on    " required
 
+syntax on
+colorscheme onedark
+
 " custom setting
 set clipboard=unnamed " use system clipboard
 set mouse=v
