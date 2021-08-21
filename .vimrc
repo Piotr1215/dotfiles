@@ -116,7 +116,7 @@ map ; :Files<CR>
 " setup for gruvbox
 set t_Co=256
 set background=dark
-colorscheme industry
+# colorscheme industry
 " let g:gruvbox_contrast_dark = 'soft'
 
 " setup for ctrlp
