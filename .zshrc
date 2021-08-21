@@ -111,7 +111,7 @@ alias vz='vim ~/.zshrc'
 alias diskusage='du -sh * | sort -h --reverse'
 alias cls=clear
 alias dls="docker container ls -a"
-alias serve="browser-sync start -s -f . --no-notify --host localhost --port 55555000"
+alias serve="browser-sync start -s -f . --no-notify --host localhost --port 5000"
 
 eval $(dircolors -p | sed -e 's/DIR 01;34/DIR 01;36/' | dircolors /dev/stdin)
 
