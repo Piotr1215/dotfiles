@@ -114,9 +114,9 @@ map <silent> <F5> : NERDTreeToggle<CR>
 map ; :Files<CR>
 
 " setup for gruvbox
-# set t_Co=256
-# set background=dark
-# colorscheme industry
+" set t_Co=256
+" set background=dark
+" colorscheme industry
 " let g:gruvbox_contrast_dark = 'soft'
 
 " setup for ctrlp
