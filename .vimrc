@@ -5,12 +5,10 @@ set ignorecase
 set smartcase
 " set the runtime path to include Vundle and initialize
 set rtp+=~/.vim/bundle/Vundle.vim
+
 call vundle#begin()
 " alternatively, pass a path where Vundle should install plugins
 "call vundle#begin('~/some/path/here')
-
-" YAML related config
-autocmd FileType yaml setlocal ts=2 sts=2 sw=2 expandtab
 
 " let Vundle manage Vundle, required
 Plugin 'VundleVim/Vundle.vim'
@@ -42,6 +40,8 @@ Plugin 'tpope/vim-surround'
 Plugin 'mattn/emmet-vim'
 
 Plugin 'dense-analysis/ale'
+Plugin 'sheerun/vim-polyglot'
+Plugin 'joshdick/onedark.vim'
 
 " All of your Plugins must be added before the following line
 call vundle#end()            " required
@@ -67,6 +67,7 @@ set autoindent
 " indent for special file
 autocmd FileType c,cpp setlocal expandtab shiftwidth=2 softtabstop=2 cindent
 autocmd FileType python setlocal expandtab shiftwidth=4 softtabstop=4 autoindent
+autocmd FileType yaml setlocal ts=2 sts=2 sw=2 expandtab
 
 " setup for ycm
 let g:ycm_global_ycm_extra_conf = '~/.vim/bundle/YouCompleteMe/third_party/ycmd/examples/.ycm_extra_conf.py'
