@@ -112,6 +112,7 @@ alias diskusage='du -sh * | sort -h --reverse'
 alias cls=clear
 alias dls="docker container ls -a"
 alias serve="browser-sync start -s -f . --no-notify --host localhost --port 5000"
+alias dca='code /home/decoder/dev/dca-prep-kit'
 
 eval $(dircolors -p | sed -e 's/DIR 01;34/DIR 01;36/' | dircolors /dev/stdin)
 
