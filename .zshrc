@@ -121,6 +121,7 @@ export KUBECONFIG=~/.kube/config
 export PATH=$PATH:$HOME/.krew/bin
 export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
 export PATH=$HOME/.local/bin:$PATH
+export PATH=$HOME/scripts:$PATH
 
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
 
