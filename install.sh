@@ -37,7 +37,7 @@ sudo apt-get -y upgrade
 
 echo '[STEP 2] install essencial packages'
 
-sudo apt install -y vim-gtk htop unzip python3-setuptools figlet tmux pydf mc wget mtr ncdu cmatrix ranger jq gdu
+sudo apt install -y vim-gtk htop unzip python3-setuptools figlet tmux pydf mc wget mtr ncdu cmatrix ranger jq gdu lsd lolcat
 
 echo '[STEP 3] install pip'
 
