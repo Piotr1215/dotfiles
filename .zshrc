@@ -119,6 +119,7 @@ alias dca='code /home/decoder/dev/dca-prep-kit'
 alias lst='dpkg -l' #List installed packages with their description
 alias dpsa="docker ps -a --format 'table {{.ID}}\t{{.Names}}\t{{.Image}}'" #docker ps -a with only id name and image
 alias gmail='web_search duckduckgo \!gmail'
+alias disk='gdu'
 
 eval $(dircolors -p | sed -e 's/DIR 01;34/DIR 01;36/' | dircolors /dev/stdin)
 
