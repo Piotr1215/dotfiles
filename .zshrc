@@ -125,7 +125,7 @@ eval $(dircolors -p | sed -e 's/DIR 01;34/DIR 01;36/' | dircolors /dev/stdin)
 
 # EXPORT & PATH
 export KUBECONFIG=~/.kube/config
-export KUBECONFIG=~/.kube/config:~/.kube/config-k3s
+#export KUBECONFIG=~/.kube/config:~/.kube/config-k3s
 export PATH=$PATH:$HOME/.krew/bin
 export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
 export PATH=$HOME/.local/bin:$PATH
