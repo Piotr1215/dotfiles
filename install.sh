@@ -9,6 +9,12 @@ GPG_KEY=$3
 
 LOG="${HOME}/dotfiles.log"
 
+process() {
+  echo "$(date) PROCESSING:  $@" >> $LOG
+  printf "$(tput setaf 6) STEP:${STEP:-0} %s...$(tput sgr0)\n" "$@"
+  STEP=$((STEP+1))
+}
+
 if [ -z "$NAME" ]
 then
   read -p "Please enter your git user.name, (for example, piotr1215)" NAME
