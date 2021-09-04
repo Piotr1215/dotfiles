@@ -33,7 +33,7 @@ then
   git config --global commit.gpgsign true
 fi
 
-echo 'Bootstrap steps start here:\n------------------'
+process "→ Bootstrap steps start here:\n------------------"
 
 process "→ upgrade and update apt packages"
 
