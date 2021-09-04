@@ -119,6 +119,6 @@ process "→ Install tmux with cool customizations"
   ./tmux-config/install.sh
 
 process "→ Setting zsh as default shell"
-  chsh -s $(which zsh)
+  sudo chsh -s $(which zsh) vagrant
 
 echo '[STEP 16] Installation complete'
