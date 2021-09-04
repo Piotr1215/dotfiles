@@ -27,9 +27,6 @@ then
   EMAIL=${EMAIL:-"decoder@live.com"}
 fi
 
-git config --global user.name $NAME
-git config --global user.email $EMAIL
-
 if [ ! -z "$GPG_KEY" ]
 then
   git config --global user.signingkey "$GPG_KEY"
@@ -42,6 +39,12 @@ process "→ upgrade and update apt packages"
 
   sudo apt-get update
   sudo apt-get -y upgrade
+  sudo apt install -y git
+
+process "→ setup git config"
+
+git config --global user.name $NAME
+git config --global user.email $EMAIL
 
 process "→ install essencial packages"
 
