@@ -12,3 +12,5 @@ process() {
 }
 
 process "→ Creating directory at ${LOG} and setting permissions"
+process "→ Creating directory at ${LOG} and setting permissions"
+process "→ Creating directory at ${LOG} and setting permissions"
