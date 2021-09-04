@@ -43,8 +43,8 @@ process "→ upgrade and update apt packages"
 
 process "→ setup git config"
 
-git config --global user.name $NAME
-git config --global user.email $EMAIL
+  git config --global user.name $NAME
+  git config --global user.email $EMAIL
 
 process "→ install essencial packages"
 
