@@ -96,11 +96,11 @@ process "→ Installing zsh-autosuggestions plugin"
   git clone https://github.com/zsh-users/zsh-autosuggestions ~/.oh-my-zsh/custom/plugins/zsh-autosuggestions
 
 process "→ Installing stern"
-  (
-      wget https://github.com/wercker/stern/releases/download/1.11.0/stern_linux_amd64 && \
-      sudo chmod +x stern_linux_amd64 && \
-      sudo mv stern_linux_amd64 /usr/local/bin/stern
-  )
+(
+    wget https://github.com/wercker/stern/releases/download/1.11.0/stern_linux_amd64 && \
+    sudo chmod +x stern_linux_amd64 && \
+    sudo mv stern_linux_amd64 /usr/local/bin/stern
+)
 
 # process "→ Installing kubectx and kubens - quickly switch kubernetes context and namespace"
 
