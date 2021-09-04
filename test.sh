@@ -5,9 +5,8 @@ set -e
 LOG="${HOME}/dotfiles.log"
 
 process() {
-  STEP=1
   echo "$(date) PROCESSING:  $@" >> $LOG
-  printf "$(tput setaf 6) STEP:${STEP} %s...$(tput sgr0)\n" "$@"
+  printf "$(tput setaf 6) STEP:${STEP:-1} %s...$(tput sgr0)\n" "$@"
   STEP=$((STEP+1))
 }
 
