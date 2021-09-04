@@ -7,7 +7,7 @@ LOG="${HOME}/dotfiles.log"
 process() {
   STEP=1
   echo "$(date) PROCESSING:  $@" >> $LOG
-  printf "$(tput setaf 6) %s...$(tput sgr0)\n" "$@"
+  printf "$(tput setaf 6) STEP:${STEP} %i %s...$(tput sgr0)\n" "$@"
 }
 
 process "→ Creating directory at ${LOG} and setting permissions"
