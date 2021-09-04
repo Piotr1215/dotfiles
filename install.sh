@@ -120,5 +120,6 @@ process "→ Install tmux with cool customizations"
 
 process "→ Setting zsh as default shell"
   sudo chsh -s $(which zsh) vagrant
+  zsh
 
 echo '[STEP 16] Installation complete'
