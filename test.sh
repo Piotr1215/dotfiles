@@ -10,4 +10,4 @@ process() {
   printf "$(tput setaf 6) %s...$(tput sgr0)\n" "$@"
 }
 
-process "→ Creating directory at ${DIR} and setting permissions"
+process "→ Creating directory at ${LOG} and setting permissions"
