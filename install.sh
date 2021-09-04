@@ -103,14 +103,14 @@ process "→ Installing stern"
 #   ln -s /opt/kubectx/kubens /usr/local/bin/kubens
 # )
 
-echo '[STEP 13] Installing Okteto for local development'
-curl https://get.okteto.com -sSfL | sh
+process "→ Installing Okteto for local development"
+  curl https://get.okteto.com -sSfL | sh
 
-echo '[STEP 14] Install tmux with cool customizations'
-git clone https://github.com/samoshkin/tmux-config.git
-./tmux-config/install.sh
+process "→ Install tmux with cool customizations"
+  git clone https://github.com/samoshkin/tmux-config.git
+  ./tmux-config/install.sh
 
-echo '[STEP 15] Setting zsh as default shell'
-chsh -s $(which zsh)
+process "→ Setting zsh as default shell"
+  chsh -s $(which zsh)
 
 echo '[STEP 16] Installation complete'
