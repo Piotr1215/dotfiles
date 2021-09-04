@@ -82,7 +82,9 @@ process "→ install node and nmp"
 
   sudo apt install -y nodejs npm
 
-process "→ install zsh"
+process "→ install zsh and oh-my-zsh"
+
+  sudo apt install zsh
 
   sudo rm -rf ~/.oh-my-zsh
 
