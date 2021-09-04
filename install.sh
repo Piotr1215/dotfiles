@@ -2,10 +2,12 @@
 
 set -e
 
-# collect name and email and save it as git config, globally
+# Set variables
 NAME=$1
 EMAIL=$2
 GPG_KEY=$3
+
+LOG="${HOME}/dotfiles.log"
 
 if [ -z "$NAME" ]
 then
