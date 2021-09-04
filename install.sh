@@ -97,7 +97,7 @@ process "→ Installing zsh-autosuggestions plugin"
 process "→ Installing stern"
   (
       wget https://github.com/wercker/stern/releases/download/1.11.0/stern_linux_amd64 && \
-      chmod +x stern_linux_amd64 && \
+      sudo chmod +x stern_linux_amd64 && \
       sudo mv stern_linux_amd64 /usr/local/bin/stern
   )
 
