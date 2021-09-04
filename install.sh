@@ -38,12 +38,12 @@ fi
 
 echo 'Bootstrap steps start here:\n------------------'
 
-echo '[STEP 1] upgrade and update apt packages'
+process "→ upgrade and update apt packages"
 
 sudo apt-get update
 sudo apt-get -y upgrade
 
-echo '[STEP 2] install essencial packages'
+process "→ install essencial packages"
 
 sudo apt install -y vim-gtk htop unzip python3-setuptools figlet tmux pydf mc wget mtr ncdu cmatrix ranger jq gdu lsd lolcat
 
