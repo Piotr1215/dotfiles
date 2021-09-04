@@ -39,6 +39,9 @@ process "→ upgrade and update apt packages"
 
   sudo apt-get update
   sudo apt-get -y upgrade
+
+process "→ install git"
+
   sudo apt install -y git
 
 process "→ setup git config"
