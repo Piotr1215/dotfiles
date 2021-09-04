@@ -93,7 +93,7 @@ process "→ Installing stern"
       sudo mv stern_linux_amd64 /usr/local/bin/stern
   )
 
-# echo '[STEP 12] Installing kubectx and kubens - quickly switch kubernetes context and namespace'
+# process "→ Installing kubectx and kubens - quickly switch kubernetes context and namespace"
 
 # sudo rm -drf /opt/kubectx
 
