@@ -122,5 +122,5 @@ process "→ Install tmux with cool customizations"
 process "→ Setting zsh as default shell"
   sudo chsh -s $(which zsh) vagrant
   zsh
-
+  sed -i 's/ZSH_THEME="robbyrussell"/ZSH_THEME="3den"/g' ~/.zshrc
 process "→ Installation complete"
