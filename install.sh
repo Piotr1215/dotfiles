@@ -84,7 +84,7 @@ process "→ install node and nmp"
 
 process "→ install zsh and oh-my-zsh"
 
-  sudo apt install zsh
+  sudo apt install zsh -y
 
   sudo rm -rf ~/.oh-my-zsh
 
