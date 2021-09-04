@@ -101,7 +101,7 @@ source $ZSH/oh-my-zsh.sh
 
 source $ZSH/oh-my-zsh.sh
 
-alias getupd='source ./scripts/getupdates.sh'
+alias getupd='source ${HOME}/scripts/getupdates.sh'
 alias k=kubectl
 alias dev='cd ~/dev'
 alias kdump='kubectl get all --all-namespaces'
