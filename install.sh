@@ -40,58 +40,58 @@ echo 'Bootstrap steps start here:\n------------------'
 
 process "→ upgrade and update apt packages"
 
-sudo apt-get update
-sudo apt-get -y upgrade
+  sudo apt-get update
+  sudo apt-get -y upgrade
 
 process "→ install essencial packages"
 
-sudo apt install -y vim-gtk htop unzip python3-setuptools figlet tmux pydf mc wget mtr ncdu cmatrix ranger jq gdu lsd lolcat
+  sudo apt install -y vim-gtk htop unzip python3-setuptools figlet tmux pydf mc wget mtr ncdu cmatrix ranger jq gdu lsd lolcat
 
 process "→ install pip"
 
-sudo apt install -y python3-pip
+  sudo apt install -y python3-pip
 
 process "→ install go"
 
-sudo apt install -y golang
+  sudo apt install -y golang
 
 process "→ install kubectl"
 
-cd /usr/local/bin
-sudo curl -LO https://storage.googleapis.com/kubernetes-release/release/`curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt`/bin/linux/amd64/kubectl
-sudo chmod +x ./kubectl
+  cd /usr/local/bin
+  sudo curl -LO https://storage.googleapis.com/kubernetes-release/release/`curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt`/bin/linux/amd64/kubectl
+  sudo chmod +x ./kubectl
 
 process "→ install helm"
 
-curl https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3 | bash
+  curl https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3 | bash
 
 process "→ install terraform"
 
-cd /tmp
-wget https://releases.hashicorp.com/terraform/0.13.4/terraform_0.13.4_linux_amd64.zip
-unzip terraform_0.13.4_linux_amd64.zip
-sudo mv terraform /usr/local/bin/
+  cd /tmp
+  wget https://releases.hashicorp.com/terraform/0.13.4/terraform_0.13.4_linux_amd64.zip
+  unzip terraform_0.13.4_linux_amd64.zip
+  sudo mv terraform /usr/local/bin/
 
 process "→ install node and nmp"
 
-sudo apt install -y nodejs npm
+  sudo apt install -y nodejs npm
 
 process "→ install zsh"
 
-sudo rm -rf ~/.oh-my-zsh
+  sudo rm -rf ~/.oh-my-zsh
 
-sh -c "$(wget -O- https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
+  sh -c "$(wget -O- https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
 
-echo '[STEP 10] Installing zsh-autosuggestions plugin'
+process "→ Installing zsh-autosuggestions plugin"
 
-git clone https://github.com/zsh-users/zsh-autosuggestions ~/.oh-my-zsh/custom/plugins/zsh-autosuggestions
+  git clone https://github.com/zsh-users/zsh-autosuggestions ~/.oh-my-zsh/custom/plugins/zsh-autosuggestions
 
-echo '[STEP 11] Installing stern'
-(
-    wget https://github.com/wercker/stern/releases/download/1.11.0/stern_linux_amd64 && \
-    chmod +x stern_linux_amd64 && \
-    sudo mv stern_linux_amd64 /usr/local/bin/stern
-)
+process "→ Installing stern"
+  (
+      wget https://github.com/wercker/stern/releases/download/1.11.0/stern_linux_amd64 && \
+      chmod +x stern_linux_amd64 && \
+      sudo mv stern_linux_amd64 /usr/local/bin/stern
+  )
 
 # echo '[STEP 12] Installing kubectx and kubens - quickly switch kubernetes context and namespace'
 
