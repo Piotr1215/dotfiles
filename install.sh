@@ -114,10 +114,6 @@ process "→ Installing stern"
 process "→ Installing Okteto for local development"
   curl https://get.okteto.com -sSfL | sh
 
-process "→ Install tmux with cool customizations"
-  git clone https://github.com/samoshkin/tmux-config.git
-  ./tmux-config/install.sh
-
 process "→ Setting zsh as default shell"
   sudo chsh -s $(which zsh) vagrant
   zsh
