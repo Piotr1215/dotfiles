@@ -78,6 +78,7 @@ process "→ install terraform"
   unzip terraform_0.13.4_linux_amd64.zip
   sudo mv terraform /usr/local/bin/
 )
+
 process "→ install node and nmp"
 
   sudo apt install -y nodejs npm
