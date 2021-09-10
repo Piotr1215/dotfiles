@@ -101,6 +101,7 @@ source $ZSH/oh-my-zsh.sh
 
 source $ZSH/oh-my-zsh.sh
 
+alias gcc='git diff --stat --cached origin/master' # Git Check Commit before pushing
 alias docs='docsify serve docs'
 alias glog='git log --graph --oneline --decorate'
 alias music='browse https://www.youtube.com/playlist?list=PL3-_0fT8ay_I9cEIoPNKRN7PcGjnAZ1Re'
