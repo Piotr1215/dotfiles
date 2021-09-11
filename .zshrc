@@ -135,6 +135,7 @@ export PATH=$PATH:$HOME/.krew/bin
 export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
 export PATH=$HOME/.local/bin:$PATH
 export PATH=$HOME/scripts:$PATH
+export PATH=$HOME/go/bin:$PATH
 
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
 
