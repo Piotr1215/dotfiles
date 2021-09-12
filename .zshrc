@@ -171,6 +171,12 @@ function vhalt {
   vagrant halt 9fd33ae
 }
 
+
+function pex() {
+
+    pet exec -q=$@;
+}
+
 function iapt() {
     if [ -z "$1" ]; then
         echo "Usage: iapt <initial search string> - select packages on peco and they will be installed" 
