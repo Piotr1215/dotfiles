@@ -160,15 +160,15 @@ function mkd() {
 }
 
 function vup() {
-  vagrant up 9fd33ae
-  vagrant up 511094c
-  vagrant up 9ee0cc2
+    vagrant up a11ae0c
+    vagrant up 7e9caf9
+    vagrant up 4be48a8
 }
 
 function vhalt {
-  vagrant halt 9ee0cc2
-  vagrant halt 511094c
-  vagrant halt 9fd33ae
+  vagrant halt a11ae0c
+  vagrant halt 7e9caf9
+  vagrant halt 4be48a8
 }
 
 
