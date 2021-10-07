@@ -141,3 +141,5 @@ nmap <F8> :TagbarToggle<CR>
 let g:indentLine_char = '│'
 set tags=./tags,tags;$HOME
 "source ~/cscope_maps.vim
+
+let g:go_fmt_command = "goimports"
