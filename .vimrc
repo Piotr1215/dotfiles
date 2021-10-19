@@ -23,6 +23,7 @@ set expandtab
 set shiftwidth=4
 set softtabstop=4
 set autoindent
+set relativenumber=true
 
 syntax on
 " set the runtime path to include Vundle and initialize
