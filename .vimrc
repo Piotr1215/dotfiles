@@ -4,7 +4,6 @@ filetype off                  " required
 set ignorecase
 set smartcase
 set hidden
-set guicursor
 set noerrorbells
 set scrolloff=8
 set signcolumn=yes
