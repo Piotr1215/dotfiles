@@ -3,6 +3,29 @@ filetype off                  " required
 
 set ignorecase
 set smartcase
+set hidden
+set guicursor
+set noerrorbells
+set scrolloff=8
+set signcolumn=yes
+set colorcolumn=80
+
+" custom setting
+set clipboard=unnamed " use system clipboard
+set mouse=v
+set number
+set encoding=utf-8
+set backspace=indent,eol,start
+set cursorline
+set guioptions=
+
+" indent for global
+set expandtab
+set shiftwidth=4
+set softtabstop=4
+set autoindent
+
+syntax on
 " set the runtime path to include Vundle and initialize
 set rtp+=~/.vim/bundle/Vundle.vim
 
@@ -53,21 +76,6 @@ filetype plugin indent on    " required
 syntax on
 colorscheme onedark
 
-" custom setting
-set clipboard=unnamed " use system clipboard
-set mouse=v
-set number
-set encoding=utf-8
-set backspace=indent,eol,start
-set cursorline
-set guioptions=
-syntax on
-
-" indent for global
-set expandtab
-set shiftwidth=4
-set softtabstop=4
-set autoindent
 
 " indent for special file
 autocmd FileType c,cpp setlocal expandtab shiftwidth=2 softtabstop=2 cindent
