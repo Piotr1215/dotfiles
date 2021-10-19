@@ -68,6 +68,8 @@ Plugin 'dense-analysis/ale'
 Plugin 'sheerun/vim-polyglot'
 Plugin 'joshdick/onedark.vim'
 
+Plugin 'christoomey/vim-system-copy'
+
 " All of your Plugins must be added before the following line
 call vundle#end()            " required
 call glaive#Install()        " enable this line after the installation of glaive
