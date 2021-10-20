@@ -27,6 +27,7 @@ set autoindent
 set relativenumber
 
 syntax on
+syntax enable
 " set the runtime path to include Vundle and initialize
 set rtp+=~/.vim/bundle/Vundle.vim
 
@@ -76,7 +77,6 @@ call vundle#end()            " required
 call glaive#Install()        " enable this line after the installation of glaive
 filetype plugin indent on    " required
 
-syntax on
 colorscheme onedark
 
 
