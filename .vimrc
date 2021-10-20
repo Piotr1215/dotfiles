@@ -1,6 +1,7 @@
 set nocompatible              " be iMproved, required
 filetype off                  " required
 
+set nocompatible
 set ignorecase
 set smartcase
 set hidden
