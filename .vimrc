@@ -1,14 +1,12 @@
 set nocompatible              " be iMproved, required
 filetype off                  " required
 
-set nocompatible
 set ignorecase
 set smartcase
 set hidden
 set noerrorbells
 set scrolloff=8
 set signcolumn=yes
-set colorcolumn=80
 
 " custom setting
 set clipboard=unnamed " use system clipboard
@@ -78,7 +76,6 @@ call glaive#Install()        " enable this line after the installation of glaive
 filetype plugin indent on    " required
 
 colorscheme onedark
-
 
 " indent for special file
 autocmd FileType c,cpp setlocal expandtab shiftwidth=2 softtabstop=2 cindent
