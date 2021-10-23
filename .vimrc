@@ -37,6 +37,7 @@ call vundle#begin()
 Plugin 'VundleVim/Vundle.vim'
 
 " all plugin
+Plugin 'mhinz/vim-startify'
 Plugin 'Valloric/YouCompleteMe'
 Plugin 'vim-syntastic/syntastic'
 
