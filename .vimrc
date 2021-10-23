@@ -43,16 +43,16 @@ Plugin 'vim-syntastic/syntastic'
 
 Plugin 'fatih/vim-go'
 
-Plugin 'google/vim-maktaba'
-Plugin 'google/vim-codefmt'
-Plugin 'google/vim-glaive'
-
 Plugin 'scrooloose/nerdtree'
 Plugin 'vim-airline/vim-airline'
 Plugin 'Raimondi/delimitMate'
-Plugin 'morhetz/gruvbox'
-Plugin 'ctrlpvim/ctrlp.vim'
+
+# Automatic closing of brackets matching
+# Plugin 'morhetz/gruvbox'
+
+# F8 shortcut
 Plugin 'majutsushi/tagbar'
+
 Plugin 'Yggdroot/indentLine'
 
 Plugin 'hashivim/vim-terraform'
