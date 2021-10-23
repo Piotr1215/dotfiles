@@ -113,8 +113,6 @@ augroup autoformat_settings
   autocmd FileType c,cpp,proto,javascript AutoFormatBuffer clang-format
   autocmd FileType python AutoFormatBuffer yapf
 augroup END
-" use google style for clang-format
-Glaive codefmt clang_format_style='google'
 
 " open NERDTree automatically when vim starts up on opening a directory
 let NERDTreeShowHidden=1
