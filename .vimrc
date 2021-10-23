@@ -47,10 +47,10 @@ Plugin 'scrooloose/nerdtree'
 Plugin 'vim-airline/vim-airline'
 Plugin 'Raimondi/delimitMate'
 
-# Automatic closing of brackets matching
-# Plugin 'morhetz/gruvbox'
+" Automatic closing of brackets matching
+" Plugin 'morhetz/gruvbox'
 
-# F8 shortcut
+" F8 shortcut
 Plugin 'majutsushi/tagbar'
 
 Plugin 'Yggdroot/indentLine'
