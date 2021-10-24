@@ -151,3 +151,6 @@ set tags=./tags,tags;$HOME
 "source ~/cscope_maps.vim
 
 let g:go_fmt_command = "goimports"
+
+" Setup for custom global mappings
+let g:mapleader='<space>'
