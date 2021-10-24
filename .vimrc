@@ -81,7 +81,6 @@ Plugin 'joshdick/onedark.vim'
 
 Plugin 'christoomey/vim-system-copy'
 
-" Plugins for working with markdown
 Plugin 'godlygeek/tabular'
 Plugin 'plasticboy/vim-markdown'
 
