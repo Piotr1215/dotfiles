@@ -9,7 +9,6 @@ set scrolloff=8
 set signcolumn=yes
 
 " custom setting
-set clipboard=unnamed 
 set mouse=v
 set number
 set encoding=utf-8
