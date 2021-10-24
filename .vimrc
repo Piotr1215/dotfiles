@@ -29,6 +29,9 @@ syntax enable
 set rtp+=~/.vim/bundle/Vundle.vim
 
 " Custom shortcuts
+nnoremap <SPACE> <Nop>
+map <Space> <Leader>
+
 nmap <F8> :TagbarToggle<CR>
 nnoremap ,<space> :nohlsearch<CR>
 " Copy line from above and inser under cursor and enter inser mode from the
@@ -160,5 +163,3 @@ set tags=./tags,tags;$HOME
 
 let g:go_fmt_command = "goimports"
 
-" Setup for custom global mappings
-nnoremap <SPACE> <Nop>
