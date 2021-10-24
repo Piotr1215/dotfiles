@@ -140,6 +140,13 @@ augroup autoformat_settings
   autocmd FileType python AutoFormatBuffer yapf
 augroup END
 
+augroup vimrc_todo
+    au!
+    au Syntax * syn match MyTodo /\v<(FIXME|NOTE|TODO|OPTIMIZE|XXX):/
+          \ containedin=.*Comment,vimCommentTitle
+augroup END
+hi def link MyTodo Todo
+
 " open NERDTree automatically when vim starts up on opening a directory
 let NERDTreeShowHidden=1
 autocmd StdinReadPre * let s:std_in=1
