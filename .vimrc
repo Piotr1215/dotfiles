@@ -94,6 +94,8 @@ Plugin 'sakshamgupta05/vim-todo-highlight'
 
 Plugin 'tpope/vim-fugitive'
 
+Plugin 'junegunn/vim-emoji'
+
 " All of your Plugins must be added before the following line
 call vundle#end()            
 filetype plugin indent on   
