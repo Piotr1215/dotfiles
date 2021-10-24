@@ -37,7 +37,8 @@ nnoremap ,<space> :nohlsearch<CR>
 nnoremap <Leader>c 1ky$jp0i
 " nnoremap <Leader>k A<% :+1: %><esc>
 
-map <Leader>k ":+1:" <esc>
+"map <Leader>k ":+1:" <esc>
+map <Leader>k obinding.pry<ESC>
 
 call vundle#begin()
 " alternatively, pass a path where Vundle should install plugins
