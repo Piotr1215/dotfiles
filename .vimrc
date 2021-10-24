@@ -29,6 +29,10 @@ syntax enable
 " set the runtime path to include Vundle and initialize
 set rtp+=~/.vim/bundle/Vundle.vim
 
+" Custom shortcuts
+nmap <F8> :TagbarToggle<CR>
+nnoremap ,<space> :nohlsearch<CR>
+
 call vundle#begin()
 " alternatively, pass a path where Vundle should install plugins
 "call vundle#begin('~/some/path/here')
@@ -139,10 +143,7 @@ let g:ctrlp_custom_ignore = {
   \ 'link': 'some_bad_symbolic_links',
   \ }
 set wildignore+=*/tmp/*,*.so,*.swp,*.zip
-let g:ctrlp_user_command = ['.git', 'cd %s && git ls-files -co --exclude-standard']
 
-" setup for tagbar
-nmap <F8> :TagbarToggle<CR>
 
 " setup for indent line
 let g:indentLine_char = '│'
