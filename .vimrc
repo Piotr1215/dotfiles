@@ -35,7 +35,7 @@ nnoremap ,<space> :nohlsearch<CR>
 " Copy line from above and inser under cursor and enter inser mode from the
 " start of the line
 nnoremap <Leader>c 1ky$jp0i
-nnoremap <Leader>k <esc> A :+1: <esc>
+nnoremap <Leader>k A :+1: <esc>
 
 "map <Leader>k ":+1:" <esc>
 "map <Leader>k obinding.pry<ESC>
