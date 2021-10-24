@@ -32,6 +32,8 @@ set rtp+=~/.vim/bundle/Vundle.vim
 nnoremap <SPACE> <Nop>
 map <Space> <Leader>
 
+inoremap jj <Esc> 
+
 nmap <F8> :TagbarToggle<CR>
 nnoremap ,<space> :nohlsearch<CR>
 " Copy line from above and inser under cursor and enter inser mode from the
@@ -85,6 +87,7 @@ Plugin 'christoomey/vim-system-copy'
 
 Plugin 'godlygeek/tabular'
 Plugin 'plasticboy/vim-markdown'
+Plugin 'mattn/webapi-vim'
 
 " All of your Plugins must be added before the following line
 call vundle#end()            
