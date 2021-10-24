@@ -89,6 +89,8 @@ Plugin 'godlygeek/tabular'
 Plugin 'plasticboy/vim-markdown'
 Plugin 'mattn/webapi-vim'
 
+Plugin 'iamcco/markdown-preview.nvim' 
+
 " All of your Plugins must be added before the following line
 call vundle#end()            
 filetype plugin indent on   
