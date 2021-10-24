@@ -35,7 +35,7 @@ nnoremap ,<space> :nohlsearch<CR>
 " Copy line from above and inser under cursor and enter inser mode from the
 " start of the line
 nnoremap <Leader>c 1ky$jp0i
-nnoremap <leader>k A<% :+1: %><esc>
+nnoremap <Leader>k A<% :+1: %><esc>
 
 call vundle#begin()
 " alternatively, pass a path where Vundle should install plugins
