@@ -1,0 +1,8 @@
+{
+  "html": {
+    "snippets": {
+      "hid": "\t<details>\n\t<summary>click to see the answer</summary>\n\t${child}|\n\t</details>\n"
+    }
+  }
+}
+
