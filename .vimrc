@@ -105,6 +105,9 @@ autocmd FileType yaml setlocal ts=2 sts=2 sw=2 expandtab
 " setup custom emmet snippets
 let g:user_emmet_settings = webapi#json#decode(join(readfile(expand('~/.snippets_custom.json')), "\n"))
 
+" setup for markdown snippet
+let g:vim_markdown_folding_disabled = 1
+
 " setup for ycm
 let g:ycm_global_ycm_extra_conf = '~/.vim/bundle/YouCompleteMe/third_party/ycmd/examples/.ycm_extra_conf.py'
 let g:ycm_python_binary_path = 'python'
