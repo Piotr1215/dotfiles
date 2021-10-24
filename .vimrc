@@ -32,7 +32,8 @@ set rtp+=~/.vim/bundle/Vundle.vim
 " Custom shortcuts
 nmap <F8> :TagbarToggle<CR>
 nnoremap ,<space> :nohlsearch<CR>
-nnoremap <Leader>c 1ky$jpo          " Copy line from above and paste below and enter insert mode
+" Copy line from above and inser under cursor and enter inser mode
+nnoremap <Leader>c 1ky$jpo
 
 call vundle#begin()
 " alternatively, pass a path where Vundle should install plugins
