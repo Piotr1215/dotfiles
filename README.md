@@ -10,6 +10,12 @@ Simplified version without dotbot:
 
 Once the dotfiles are symlinked, it is easy to forget to commit them do the repo (there is no indicator on the symlinked file).
 
+To symlink a file: (source ->  destination)
+
+```bash
+ln -sf /path/to/file /path/to/symlink
+```
+
 Use this systemd service to automate this process
 
 ### Create a service
