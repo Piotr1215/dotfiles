@@ -309,5 +309,5 @@ set tags=./tags,tags;$HOME
 let g:go_fmt_command = "goimports"
 
 " Setup for custom global mappings
-let g:mapleader='<space>'
-let mapleader=" "
+nnoremap <SPACE> <Nop>
+map <Space> <Leader>
