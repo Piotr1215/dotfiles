@@ -33,12 +33,11 @@ set rtp+=~/.vim/bundle/Vundle.vim
 nmap <F8> :TagbarToggle<CR>
 nnoremap ,<space> :nohlsearch<CR>
 " Copy line from above and inser under cursor and enter inser mode from the
-" start of the line
 nnoremap <Leader>c 1ky$jp0i
+" Used as marks for learning
 nnoremap <Leader>ok A :+1: <esc><CR>
-
-"map <Leader>k ":+1:" <esc>
-"map <Leader>k obinding.pry<ESC>
+nnoremap <Leader>bad A :-1: <esc><CR>
+nnoremap <Leader>r A :hand: <esc><CR>
 
 call vundle#begin()
 " alternatively, pass a path where Vundle should install plugins
