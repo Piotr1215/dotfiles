@@ -7,6 +7,7 @@ set hidden
 set noerrorbells
 set scrolloff=8
 set signcolumn=yes
+set hlsearch
 
 " custom setting
 set mouse=v
