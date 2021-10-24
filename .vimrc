@@ -57,7 +57,6 @@ Plugin 'vim-syntastic/syntastic'
 
 Plugin 'fatih/vim-go'
 
-Plugin 'scrooloose/nerdtree'
 Plugin 'vim-airline/vim-airline'
 Plugin 'Raimondi/delimitMate'
 
@@ -151,12 +150,9 @@ augroup vimrc_todo
 augroup END
 hi def link MyTodo Todo
 
-" open NERDTree automatically when vim starts up on opening a directory
-let NERDTreeShowHidden=1
 autocmd StdinReadPre * let s:std_in=1
-autocmd VimEnter * if argc() == 1 && isdirectory(argv()[0]) && !exists("s:std_in") | exe 'NERDTree' argv()[0] | wincmd p | ene | endif
+" autocmd VimEnter * if argc() == 1 && isdirectory(argv()[0]) && !exists("s:std_in") | exe 'NERDTree' argv()[0] | wincmd p | ene | endif
 
-map <silent> <F5> : NERDTreeToggle<CR>
 map ; :Files<CR>
 
 " setup for gruvbox
