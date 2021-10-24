@@ -32,6 +32,7 @@ set rtp+=~/.vim/bundle/Vundle.vim
 " Custom shortcuts
 nmap <F8> :TagbarToggle<CR>
 nnoremap ,<space> :nohlsearch<CR>
+nnoremap <Leader>c y1kp
 
 call vundle#begin()
 " alternatively, pass a path where Vundle should install plugins
