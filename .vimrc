@@ -23,6 +23,7 @@ set shiftwidth=5
 set softtabstop=4
 set autoindent
 set relativenumber
+set incsearch
 
 syntax on
 syntax enable
