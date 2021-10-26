@@ -61,7 +61,6 @@ map <leader>es :sp %%
 map <leader>ev :vsp %%
 map <leader>et :tabe %%
 
-
 " Copy line from above and inser under cursor and enter inser mode from the
 nnoremap <Leader>c 1ky$jp0i
 
@@ -73,6 +72,7 @@ nnoremap <Leader>r A :hand: <esc><CR>
 " SHORTCUTS REMAPS
 " Stop search highlight
 nnoremap ,<space> :nohlsearch<CR>
+map ; :Files<CR>
 
 " jj in insert mode instead of ESC
 inoremap jj <Esc> 
@@ -215,7 +215,6 @@ hi def link MyTodo Todo
 autocmd StdinReadPre * let s:std_in=1
 " autocmd VimEnter * if argc() == 1 && isdirectory(argv()[0]) && !exists("s:std_in") | exe 'NERDTree' argv()[0] | wincmd p | ene | endif
 
-map ; :Files<CR>
 
 " setup for gruvbox
 " set t_Co=256
