@@ -215,7 +215,7 @@ autocmd StdinReadPre * let s:std_in=1
 " setup for gruvbox
 set t_Co=256
 set background=dark
-" colorscheme onedark
+colorscheme gruvbox
 " colorscheme industry
 let g:gruvbox_contrast_dark = 'soft'
 
