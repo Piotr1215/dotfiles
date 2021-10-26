@@ -1,5 +1,6 @@
 set nocompatible
-filetype off
+syntax on
+filetype on
 
 set ignorecase
 set smartcase
@@ -25,13 +26,11 @@ set autoindent
 set relativenumber
 set incsearch
 
-syntax on
 syntax enable
 " set the runtime path to include Vundle and initialize
 set rtp+=~/.vim/bundle/Vundle.vim
 
 " *** REMAPS ***
-
 " LEADER REMAPS
 " Space is leader
 nnoremap <SPACE> <Nop>
