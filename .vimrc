@@ -104,10 +104,8 @@ Plugin 'fatih/vim-go'
 Plugin 'vim-airline/vim-airline'
 Plugin 'Raimondi/delimitMate'
 
-" Automatic closing of brackets matching
-" Plugin 'morhetz/gruvbox'
+Plugin 'morhetz/gruvbox'
 
-" F8 shortcut
 Plugin 'majutsushi/tagbar'
 
 Plugin 'Yggdroot/indentLine'
@@ -150,7 +148,6 @@ Plugin 'honza/vim-snippets'
 call vundle#end()            
 filetype plugin indent on   
 set completefunc=emoji#complete
-colorscheme onedark
 
 " Trigger configuration. You need to change this to something other than <tab> if you use one of the following:
 " - https://github.com/Valloric/YouCompleteMe
@@ -215,12 +212,12 @@ hi def link MyTodo Todo
 autocmd StdinReadPre * let s:std_in=1
 " autocmd VimEnter * if argc() == 1 && isdirectory(argv()[0]) && !exists("s:std_in") | exe 'NERDTree' argv()[0] | wincmd p | ene | endif
 
-
 " setup for gruvbox
-" set t_Co=256
-" set background=dark
-" colorscheme industry
-" let g:gruvbox_contrast_dark = 'soft'
+set t_Co=256
+set background=dark
+colorscheme onedark
+colorscheme industry
+let g:gruvbox_contrast_dark = 'soft'
 
 " setup for ctrlp
 let g:ctrlp_map = '<c-p>'
