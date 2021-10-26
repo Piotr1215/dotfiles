@@ -1,5 +1,5 @@
 set nocompatible
-syntax on
+syntax enable
 filetype on
 
 set ignorecase
@@ -26,7 +26,6 @@ set autoindent
 set relativenumber
 set incsearch
 
-syntax enable
 " set the runtime path to include Vundle and initialize
 set rtp+=~/.vim/bundle/Vundle.vim
 
