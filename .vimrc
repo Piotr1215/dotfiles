@@ -30,21 +30,33 @@ syntax enable
 " set the runtime path to include Vundle and initialize
 set rtp+=~/.vim/bundle/Vundle.vim
 
-" Custom shortcuts
+" *** REMAPS ***
+
+" LEADER REMAPS
+" Space is leader
 nnoremap <SPACE> <Nop>
 map <Space> <Leader>
 
-inoremap jj <Esc> 
-
-nmap <F8> :TagbarToggle<CR>
-nnoremap ,<space> :nohlsearch<CR>
 " Copy line from above and inser under cursor and enter inser mode from the
 nnoremap <Leader>c 1ky$jp0i
-" Used as marks for learning
+
+" When learning for exam, used as scoring mechanism
 nnoremap <Leader>ok A :+1: <esc><CR>
 nnoremap <Leader>bad A :-1: <esc><CR>
 nnoremap <Leader>r A :hand: <esc><CR>
+
+" SHORTCUTS REMAPS
+" Stop search highlight
+nnoremap ,<space> :nohlsearch<CR>
+
+" jj in insert mode instead of ESC
+inoremap jj <Esc> 
+
+" Copies till the end of a line. Fits with Shift + D, C etc
 nnoremap Y y$
+
+" COMMAND REMAPS
+nmap <F8> :TagbarToggle<CR>
 
 call vundle#begin()
 " alternatively, pass a path where Vundle should install plugins
