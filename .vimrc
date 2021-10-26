@@ -62,6 +62,10 @@ inoremap jj <Esc>
 " Copies till the end of a line. Fits with Shift + D, C etc
 nnoremap Y y_
 
+" Replace multiple words simultaniously
+nnoremap cn *``cgn
+nnoremap cN *``cgN
+
 " COMMAND REMAPS
 nmap <F8> :TagbarToggle<CR>
 
