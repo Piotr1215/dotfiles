@@ -59,8 +59,8 @@ map <leader>ev :vsp %%
 map <leader>et :tabe %%
 
 " Add line below without entering insert mode!
-nnoremap <silent> <Up><space>  :<c-u>put!=repeat([''],v:count)<bar>']+1<cr>
-nnoremap <silent> <Down><space>  :<c-u>put =repeat([''],v:count)<bar>'[-1<cr>
+nnoremap <silent> <leader><Up>   :<c-u>put!=repeat([''],v:count)<bar>']+1<cr>
+nnoremap <silent> <leader><Down> :<c-u>put =repeat([''],v:count)<bar>'[-1<cr>
 
 " Copy line from above and inser under cursor and enter inser mode from the
 nnoremap <Leader>c 1ky$jp0i
