@@ -122,7 +122,7 @@ Plugin 'mattn/emmet-vim'
 
 Plugin 'dense-analysis/ale'
 Plugin 'sheerun/vim-polyglot'
-Plugin 'joshdick/onedark.vim'
+" Plugin 'joshdick/onedark.vim'
 
 Plugin 'christoomey/vim-system-copy'
 
