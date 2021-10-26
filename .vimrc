@@ -44,6 +44,7 @@ nnoremap <Leader>c 1ky$jp0i
 nnoremap <Leader>ok A :+1: <esc><CR>
 nnoremap <Leader>bad A :-1: <esc><CR>
 nnoremap <Leader>r A :hand: <esc><CR>
+nnoremap Y y$
 
 call vundle#begin()
 " alternatively, pass a path where Vundle should install plugins
