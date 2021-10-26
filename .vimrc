@@ -60,7 +60,7 @@ nnoremap ,<space> :nohlsearch<CR>
 inoremap jj <Esc> 
 
 " Copies till the end of a line. Fits with Shift + D, C etc
-nnoremap Y y$
+nnoremap Y y_
 
 " COMMAND REMAPS
 nmap <F8> :TagbarToggle<CR>
