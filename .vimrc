@@ -76,6 +76,7 @@ map ; :Files<CR>
 
 " jj in insert mode instead of ESC
 inoremap jj <Esc> 
+inoremap jk <Esc> 
 
 " Copies till the end of a line. Fits with Shift + D, C etc
 nnoremap Y y_
