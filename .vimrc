@@ -37,6 +37,14 @@ set rtp+=~/.vim/bundle/Vundle.vim
 nnoremap <SPACE> <Nop>
 map <Space> <Leader>
 
+" Move line of text up and down
+vnoremap J :m '>+1<CR>gv=gv
+vnoremap K :m '<-2<CR>gv=gv
+inoremap <C-j> <esc>:m .+1<CR>==
+inoremap <C-k> <esc>:m .-2<CR>==
+nnoremap <leader>k :m .-2<CR>==
+nnoremap <leader>j :m .+1<CR>==
+
 " Copy line from above and inser under cursor and enter inser mode from the
 nnoremap <Leader>c 1ky$jp0i
 
