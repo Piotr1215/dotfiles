@@ -72,10 +72,10 @@ nnoremap  <Leader>nh :.,/^#/-1<CR>
 nnoremap <Leader>b :Buffers<CR>
 
 " delete white space
-nnoremap <Leader>rspace :%s/\s\+$//e
+nnoremap <Leader>rspace :%s/\s\+$//e<CR>
 
 " delete lines if there is more than one empty line
-nnoremap <Leader>rlines :%s/\n\{3,}/\r\r/e
+nnoremap <Leader>rlines :%s/\n\{3,}/\r\r/e<CR>
 
 " When learning for exam, used as scoring mechanism
 nnoremap <Leader>ok A :+1: <esc><CR>
