@@ -1,6 +1,7 @@
 set nocompatible
 syntax enable
 filetype on
+filetype plugin on
 
 set ignorecase
 set smartcase
@@ -43,32 +44,6 @@ inoremap <C-k> <esc>:m .-2<CR>==
 nnoremap <leader>k :m .-2<CR>==
 nnoremap <leader>j :m .+1<CR>==
 
-function! MoveParagraphFirstLine()
-  let column = col(".")
-  let first_line = line("'{")
-  " Detect if the first line of the current paragraph is also the first line
-  " of the current buffer and move cursor position accordingly.
-  if first_line == 1
-    call cursor(1, column)
-  else
-    call cursor(first_line + 1, column)
-  endif
-endfunction
-
-function! MoveParagraphLastLine()
-  let column = col(".")
-  let last_line = line("'}")
-  " Detect if the last line of the paragraph is also last line of the buffer.
-  if line("$") == last_line
-    call cursor(last_line, column)
-  else
-    call cursor(last_line - 1, column)
-  endif
-endfunction
-
-nnoremap <leader>f :call MoveParagraphFirstLine()<CR>
-nnoremap <leader>l :call MoveParagraphLastLine()<CR>
-
 " Add line below without entering insert mode!
 nnoremap <silent> <leader><Up>   :<c-u>put!=repeat([''],v:count)<bar>']+1<cr>
 nnoremap <silent> <leader><Down> :<c-u>put =repeat([''],v:count)<bar>'[-1<cr>
@@ -89,6 +64,9 @@ map <leader>et :tabe %%
 
 " Copy line from above and inser under cursor and enter inser mode from the
 nnoremap <Leader>c 1ky$jp0i
+
+" delete word forward in insert mode
+inoremap <C-e> <C-o>dw<Left>
 
 " When learning for exam, used as scoring mechanism
 nnoremap <Leader>ok A :+1: <esc><CR>
