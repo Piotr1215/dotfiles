@@ -65,8 +65,17 @@ map <leader>et :tabe %%
 " Copy line from above and inser under cursor and enter inser mode from the
 nnoremap <Leader>c 1ky$jp0i
 
-" delete word forward in insert mode
-inoremap <C-e> <C-o>dw<Left>
+" go to next header
+nnoremap  <Leader>nh :.,/^#/-1<CR>
+
+" Show buffers
+nnoremap <Leader>b :Buffers<CR>
+
+" delete white space
+nnoremap <Leader>rspace :%s/\s\+$//e
+
+" delete lines if there is more than one empty line
+nnoremap <Leader>rlines :%s/\n\{3,}/\r\r/e
 
 " When learning for exam, used as scoring mechanism
 nnoremap <Leader>ok A :+1: <esc><CR>
@@ -77,6 +86,12 @@ nnoremap <Leader>r A :hand: <esc><CR>
 " Stop search highlight
 nnoremap ,<space> :nohlsearch<CR>
 map ; :Files<CR>
+
+" delete word forward in insert mode
+inoremap <C-e> <C-o>dw<Left>
+
+" cut content to next header
+nmap cO :.,/^#/-1d<CR>
 
 " jj in insert mode instead of ESC
 inoremap jj <Esc> 
