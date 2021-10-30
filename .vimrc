@@ -36,6 +36,9 @@ set rtp+=~/.vim/bundle/Vundle.vim
 nnoremap <SPACE> <Nop>
 map <Space> <Leader>
 
+" disable ` mapping
+map ` <Nop>
+
 " Move line of text up and down
 vnoremap J :m '>+1<CR>gv=gv
 vnoremap K :m '<-2<CR>gv=gv
