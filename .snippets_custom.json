@@ -2,7 +2,7 @@
   "html": {
     "snippets": {
       "hid": "\t<details>\n\t<summary>click to see the answer</summary>\n\t${child}|\n\t</details>\n",
-      "grp": "\ngroup$1${child}|\nend"
+      "grp": "\ngroup ${1:name} ${child}|\nend"
     }
   }
 }
