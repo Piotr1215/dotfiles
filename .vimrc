@@ -193,7 +193,7 @@ autocmd FileType yaml setlocal ts=2 sts=2 sw=2 expandtab
 let g:user_emmet_settings = webapi#json#decode(join(readfile(expand('~/.snippets_custom.json')), "\n"))
 
 " setup for markdown snippet
-let g:vim_markdown_folding_disabled = 1 
+let g:vim_markdown_folding_disabled = 0 
 let g:vim_markdown_folding_level = 3
 let g:vim_markdown_toc_autofit = 1
 let g:vim_markdown_conceal = 0
