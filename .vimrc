@@ -69,7 +69,7 @@ map <leader>et :tabe %%
 nnoremap <Leader>c 1ky$jp0i
 
 nnoremap <Leader>gl }
-
+nnoremap space i<space><esc>
 " go to next header
 nnoremap  <Leader>nh :.,/^#/-1<CR>
 
