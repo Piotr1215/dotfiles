@@ -69,7 +69,7 @@ map <leader>et :tabe %%
 nnoremap <Leader>c 1ky$jp0i
 
 nnoremap <Leader>gl }
-nnoremap space i<space><esc>
+nnoremap <Leader>i i<space><esc>
 nnoremap <leader>sv :source $MYVIMRC<CR>
 
 
