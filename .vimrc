@@ -68,6 +68,8 @@ map <leader>et :tabe %%
 " Copy line from above and inser under cursor and enter inser mode from the
 nnoremap <Leader>c 1ky$jp0i
 
+nnoremap <Leader>gl }
+
 " go to next header
 nnoremap  <Leader>nh :.,/^#/-1<CR>
 
