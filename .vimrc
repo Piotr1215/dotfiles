@@ -89,6 +89,7 @@ nnoremap <Leader>rlines :%s/\n\{3,}/\r\r/e<CR>
 nnoremap <Leader>ok A :+1: <esc><CR>
 nnoremap <Leader>bad A :-1: <esc><CR>
 nnoremap <Leader>r A :hand: <esc><CR>
+nnoremap <Leader>clean :g/<details>/,/<\/details>/d _<CR>
 
 " SHORTCUTS REMAPS
 " Stop search highlight
