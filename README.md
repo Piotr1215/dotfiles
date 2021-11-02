@@ -16,6 +16,8 @@ To symlink a file: (source ->  destination)
 ln -sf /path/to/file /path/to/symlink
 ```
 
+> IMPORTANT: Once a file is added to the repo folder, it will be auto-committed.
+
 Use this systemd service to automate this process
 
 ### Create a service
