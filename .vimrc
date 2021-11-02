@@ -1,5 +1,6 @@
 set nocompatible
 syntax enable
+syntax on
 filetype on
 filetype plugin on
 
@@ -36,8 +37,16 @@ set rtp+=~/.vim/bundle/Vundle.vim
 nnoremap <SPACE> <Nop>
 map <Space> <Leader>
 
-" disable ` mapping
+" Show all files 
+nnoremap <Leader>; :Files<CR>
+
+nnoremap <Leader>q @q
+
 map ` <Nop>
+nnoremap <leader>nf :NERDTreeFocus<CR>
+nnoremap <leader>ne :NERDTree<CR>
+nnoremap <leader>nt :NERDTreeToggle<CR>
+nnoremap <leader>nfi :NERDTreeFind<CR>
 
 " Move line of text up and down
 vnoremap J :m '>+1<CR>gv=gv
@@ -65,42 +74,81 @@ map <leader>es :sp %%
 map <leader>ev :vsp %%
 map <leader>et :tabe %%
 
-" Copy line from above and inser under cursor and enter inser mode from the
-nnoremap <Leader>c 1ky$jp0i
+" Removes whitespace
+nnoremap <Leader>rspace :%s/\s\+$//e
+" Removes empty lines if there are more than 2
+nnoremap <Leader>rlines :%s/\n\{3,}/\r\r/e
 
-nnoremap <Leader>gl }
-nnoremap <Leader>i i<space><esc>
-nnoremap <leader>sv :source $MYVIMRC<CR>
+" Copy/Cut diagrams
+nnoremap <Leader>ply <Cmd>call search('```plantuml', 'Wbc') \| .,/```/y<CR>
+nnoremap <Leader>pld <Cmd>call search('```plantuml', 'Wbc') \| .,/```/d<CR>
 
+map asd <Plug>Markdown_MoveToParentHeader
 
-" go to next header
-nnoremap  <Leader>nh :.,/^#/-1<CR>
+" Set spellcheck on/off
+nnoremap <Leader>son :setlocal spell spelllang=en_us<CR>
+nnoremap <Leader>sof :set nospell<CR>
 
-" Show buffers
-nnoremap <Leader>b :Buffers<CR>
-
-" delete white space
-nnoremap <Leader>rspace :%s/\s\+$//e<CR>
-
-" delete lines if there is more than one empty line
-nnoremap <Leader>rlines :%s/\n\{3,}/\r\r/e<CR>
-
-" When learning for exam, used as scoring mechanism
+" Used for learning for certs
 nnoremap <Leader>ok A :+1: <esc><CR>
 nnoremap <Leader>bad A :-1: <esc><CR>
 nnoremap <Leader>r A :hand: <esc><CR>
 nnoremap <Leader>clean :g/<details>/,/<\/details>/d _<CR>
 
+" delete word forward in insert mode
+inoremap <C-e> <C-o>dw<Left> 
+
+nnoremap <Leader>i i<space><esc>
+
+" Copy line from above and inser under cursor and enter inser mode from the
+nnoremap <Leader>c 1ky$jp0i
+nnoremap <Leader>gl }
+nnoremap <leader>sv :source ~/.vimrc<CR>
+
+function! s:MarkdowCodeBlock(outside)
+    call search('```', 'cb')
+    if a:outside
+        normal! 0Vo
+    else
+        normal! j0Vo
+    endif
+    call search('```')
+    if ! a:outside
+        normal! k
+    endif
+endfunction
+
+onoremap <silent>am <cmd>call <sid>MarkdowCodeBlock(1)<cr>
+xnoremap <silent>am <cmd>call <sid>MarkdowCodeBlock(1)<cr>
+
+onoremap <silent>im <cmd>call <sid>MarkdowCodeBlock(0)<cr>
+xnoremap <silent>im <cmd>call <sid>MarkdowCodeBlock(0)<cr>
+
+"toggles whether or not the current window is automatically zoomed
+function! ToggleMaxWins()
+if exists('g:windowMax')
+  au! maxCurrWin
+  wincmd =
+  unlet g:windowMax
+else
+  augroup maxCurrWin
+      " au BufEnter * wincmd _ | wincmd |
+      "
+      " only max it vertically
+      au! WinEnter * wincmd _
+  augroup END
+  do maxCurrWin WinEnter
+  let g:windowMax=1
+endif
+endfunction
+nnoremap <Leader>max :call ToggleMaxWins()<CR>
+nnoremap <Leader>b :Buffers<CR>
+nnoremap <Leader>nh :.,/^#/-1<CR> 
+nnoremap <Leader>ph <Plug>Markdown_MoveToPreviousHeader
+
 " SHORTCUTS REMAPS
 " Stop search highlight
 nnoremap ,<space> :nohlsearch<CR>
-map ; :Files<CR>
-
-" delete word forward in insert mode
-inoremap <C-e> <C-o>dw<Left>
-
-" cut content to next header
-nmap cO :.,/^#/-1d<CR>
 
 " jj in insert mode instead of ESC
 inoremap jj <Esc> 
@@ -114,7 +162,12 @@ nnoremap cn *``cgn
 nnoremap cN *``cgN
 
 " COMMAND REMAPS
+command GitDiff execute  "w !git diff --no-index -- % -"
 nmap <F8> :TagbarToggle<CR>
+
+" cut content to next header #
+nmap cO :.,/^#/-1d<CR>
+
 
 call vundle#begin()
 " alternatively, pass a path where Vundle should install plugins
@@ -125,16 +178,19 @@ Plugin 'VundleVim/Vundle.vim'
 
 " all plugin
 Plugin 'mhinz/vim-startify'
-Plugin 'Valloric/YouCompleteMe'
+
+if has('vim')
+    Plugin 'Valloric/YouCompleteMe'
+endif
+
+
+Plugin 'wellle/targets.vim'
 Plugin 'vim-syntastic/syntastic'
-
 Plugin 'fatih/vim-go'
-
 Plugin 'vim-airline/vim-airline'
 Plugin 'Raimondi/delimitMate'
 
-Plugin 'morhetz/gruvbox'
-
+Plugin 'preservim/nerdtree'
 Plugin 'majutsushi/tagbar'
 
 Plugin 'Yggdroot/indentLine'
@@ -150,8 +206,11 @@ Plugin 'tpope/vim-surround'
 Plugin 'mattn/emmet-vim'
 
 Plugin 'dense-analysis/ale'
+
 Plugin 'sheerun/vim-polyglot'
-" Plugin 'joshdick/onedark.vim'
+
+
+Plugin 'ryanoasis/vim-devicons'
 
 Plugin 'christoomey/vim-system-copy'
 
@@ -175,20 +234,31 @@ Plugin 'honza/vim-snippets'
 
 Plugin 'ctrlpvim/ctrlp.vim'
 
+Plugin 'dhruvasagar/vim-table-mode'
+
+" Color Schemes
+Plugin 'morhetz/gruvbox'
+Plugin 'joshdick/onedark.vim'
+Plugin 'arcticicestudio/nord-vim'
+Plugin 'dracula/vim', { 'name': 'dracula' }
+Plugin 'srcery-colors/srcery-vim'
 " All of your Plugins must be added before the following line
 call vundle#end()            
+
+" *** COLOR_SCHEMES ***
+set t_Co=256
+set background=dark
+let g:lightline = {
+      \ 'colorscheme': 'srcery',
+      \ }
+let g:onedark_termcolors=16
+" let g:dracula_termcolors=16
+" colorscheme onedark
+" colorscheme industry
+colorscheme srcery
+" let g:gruvbox_contrast_dark = 'soft'
+
 filetype plugin indent on   
-set completefunc=emoji#complete
-
-" Trigger configuration. You need to change this to something other than <tab> if you use one of the following:
-" - https://github.com/Valloric/YouCompleteMe
-" - https://github.com/nvim-lua/completion-nvim
-let g:UltiSnipsExpandTrigger="<c-q>"
-let g:UltiSnipsJumpForwardTrigger="<c-b>"
-let g:UltiSnipsJumpBackwardTrigger="<c-z>"
-
-" If you want :UltiSnipsEdit to split your window.
-let g:UltiSnipsEditSplit="vertical"
 
 " indent for special file
 autocmd FileType c,cpp setlocal expandtab shiftwidth=2 softtabstop=2 cindent
@@ -199,13 +269,15 @@ autocmd FileType yaml setlocal ts=2 sts=2 sw=2 expandtab
 let g:user_emmet_settings = webapi#json#decode(join(readfile(expand('~/.snippets_custom.json')), "\n"))
 
 " setup for markdown snippet
-let g:vim_markdown_folding_disabled = 0 
+let g:vim_markdown_folding_disabled = 0
 let g:vim_markdown_folding_level = 3
 let g:vim_markdown_toc_autofit = 1
 let g:vim_markdown_conceal = 0
 let g:vim_markdown_conceal_code_blocks = 0
 let g:vim_markdown_no_extensions_in_markdown = 1
 let g:vim_markdown_autowrite = 1
+let g:vim_markdown_follow_anchor = 1
+
 
 " setup for ycm
 let g:ycm_global_ycm_extra_conf = '~/.vim/bundle/YouCompleteMe/third_party/ycmd/examples/.ycm_extra_conf.py'
@@ -218,6 +290,13 @@ let g:ycm_semantic_triggers =  {
   \ 'cpp' : ['re!\w{2}'],
   \ 'python' : ['re!\w{2}'],
   \ }
+ 
+" Trigger configuration. You need to change this to something other than <tab> if you use one of the following:
+" - https://github.com/Valloric/YouCompleteMe
+" - https://github.com/nvim-lua/completion-nvim
+let g:UltiSnipsExpandTrigger="<c-q>"
+let g:UltiSnipsJumpForwardTrigger="<c-b>"
+let g:UltiSnipsJumpBackwardTrigger="<c-z>"
 
 " setup for syntastic
 set statusline+=%#warningmsg#
@@ -239,22 +318,10 @@ augroup autoformat_settings
   autocmd FileType python AutoFormatBuffer yapf
 augroup END
 
-augroup vimrc_todo
-    au!
-    au Syntax * syn match MyTodo /\v<(FIXME|NOTE|TODO|OPTIMIZE|XXX):/
-          \ containedin=.*Comment,vimCommentTitle
-augroup END
-hi def link MyTodo Todo
-
+" open NERDTree automatically when vim starts up on opening a directory
+let NERDTreeShowHidden=1
 autocmd StdinReadPre * let s:std_in=1
 " autocmd VimEnter * if argc() == 1 && isdirectory(argv()[0]) && !exists("s:std_in") | exe 'NERDTree' argv()[0] | wincmd p | ene | endif
-
-" setup for gruvbox
-set t_Co=256
-set background=dark
-colorscheme gruvbox
-" colorscheme industry
-let g:gruvbox_contrast_dark = 'soft'
 
 " setup for ctrlp
 let g:ctrlp_map = '<c-p>'
