@@ -251,11 +251,11 @@ set background=dark
 let g:lightline = {
       \ 'colorscheme': 'srcery',
       \ }
-let g:onedark_termcolors=16
+" let g:onedark_termcolors=16
 " let g:dracula_termcolors=16
-" colorscheme onedark
+colorscheme onedark
 " colorscheme industry
-colorscheme srcery
+" colorscheme srcery
 " let g:gruvbox_contrast_dark = 'soft'
 
 filetype plugin indent on   
