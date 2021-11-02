@@ -78,4 +78,7 @@ or
 
 ## Testing
 
-The setup was tested on Ubuntu 20.04 VM.
+The setup was tested on:
+- Ubuntu 20.04
+- Pop!_OS 21.04
+
