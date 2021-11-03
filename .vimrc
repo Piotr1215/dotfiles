@@ -160,11 +160,7 @@ Plugin 'VundleVim/Vundle.vim'
 
 " all plugin
 Plugin 'mhinz/vim-startify'
-
-if has('vim')
-    Plugin 'Valloric/YouCompleteMe'
-endif
-
+Plugin 'neoclide/coc.nvim', {'branch': 'release'}
 Plugin 'wellle/targets.vim'
 Plugin 'vim-syntastic/syntastic'
 Plugin 'fatih/vim-go'
@@ -262,18 +258,6 @@ let g:vim_markdown_conceal_code_blocks = 0
 let g:vim_markdown_no_extensions_in_markdown = 1
 let g:vim_markdown_autowrite = 1
 let g:vim_markdown_follow_anchor = 1
-
-" setup for ycm
-let g:ycm_global_ycm_extra_conf = '~/.vim/bundle/YouCompleteMe/third_party/ycmd/examples/.ycm_extra_conf.py'
-let g:ycm_python_binary_path = 'python'
-let g:ycm_complete_in_comments = 1
-let g:ycm_autoclose_preview_window_after_completion = 1
-let g:ycm_autoclose_preview_window_after_insertion = 1
-let g:ycm_semantic_triggers =  {
-  \ 'c' : ['re!\w{2}'],
-  \ 'cpp' : ['re!\w{2}'],
-  \ 'python' : ['re!\w{2}'],
-  \ }
 
 " Trigger configuration. You need to change this to something other than <tab> if you use one of the following:
 " - https://github.com/Valloric/YouCompleteMe
