@@ -175,7 +175,7 @@ nmap <F8> :TagbarToggle<CR>
 " cut content to next header #
 nmap cO :.,/^#/-1d<CR>
 
-if has('vim')
+if has('nvim')
     " Find files using Telescope command-line sugar.
     nnoremap <leader>ff <cmd>Telescope find_files<cr>
     nnoremap <leader>fg <cmd>Telescope live_grep<cr>
