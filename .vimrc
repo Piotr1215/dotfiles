@@ -175,6 +175,13 @@ nmap <F8> :TagbarToggle<CR>
 " cut content to next header #
 nmap cO :.,/^#/-1d<CR>
 
+if has('vim')
+    " Find files using Telescope command-line sugar.
+    nnoremap <leader>ff <cmd>Telescope find_files<cr>
+    nnoremap <leader>fg <cmd>Telescope live_grep<cr>
+    nnoremap <leader>fb <cmd>Telescope buffers<cr>
+    nnoremap <leader>fh <cmd>Telescope help_tags<cr>
+endif
 
 call vundle#begin()
 " alternatively, pass a path where Vundle should install plugins
@@ -243,8 +250,11 @@ Plugin 'ctrlpvim/ctrlp.vim'
 
 Plugin 'dhruvasagar/vim-table-mode'
 
-Plugin 'nvim-lua/plenary.nvim' " don't forget to add this one if you don't have it yet!
-Plugin 'ThePrimeagen/harpoon'
+if has('nvim')
+    Plugin 'nvim-lua/plenary.nvim' " don't forget to add this one if you don't have it yet!
+    Plugin 'ThePrimeagen/harpoon'
+    Plugin 'nvim-telescope/telescope.nvim'
+endif
 
 " Color Schemes
 Plugin 'morhetz/gruvbox'
