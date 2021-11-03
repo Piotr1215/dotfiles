@@ -154,6 +154,13 @@ nnoremap ,<space> :nohlsearch<CR>
 inoremap jj <Esc> 
 inoremap jk <Esc> 
 
+" Harpoon settings
+nnoremap <Leader>ha :lua require("harpoon.mark").add_file()
+nnoremap <Leader>hj :lua require("harpoon.ui").nav_file(1)
+nnoremap <Leader>h1j :lua require("harpoon.ui").nav_file(2)
+nnoremap <Leader>h2j :lua require("harpoon.ui").nav_file(3)
+nnoremap <Leader>hm :lua require("harpoon.ui").toggle_quick_menu()
+
 " Copies till the end of a line. Fits with Shift + D, C etc
 nnoremap Y y_
 
