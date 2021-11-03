@@ -12,6 +12,7 @@ set scrolloff=8
 set signcolumn=yes
 set hlsearch
 set autochdir
+
 " custom setting
 set mouse=v
 set number
@@ -37,9 +38,6 @@ set rtp+=~/.vim/bundle/Vundle.vim
 nnoremap <SPACE> <Nop>
 map <Space> <Leader>
 
-" Show all files 
-nnoremap <Leader>; :Files<CR>
-
 nnoremap <Leader>q @q
 
 map ` <Nop>
@@ -60,13 +58,6 @@ nnoremap <leader>j :m .+1<CR>==
 nnoremap <silent> <leader><Up>   :<c-u>put!=repeat([''],v:count)<bar>']+1<cr>
 nnoremap <silent> <leader><Down> :<c-u>put =repeat([''],v:count)<bar>'[-1<cr>
 
-" Enclose highlighted parts in brackets etc
-vnoremap <leader>' <esc>`>a'<esc>`<i'<esc>
-vnoremap <leader>" <esc>`>a"<esc>`<i"<esc>
-vnoremap <leader>( <esc>`>a)<esc>`<i(<esc>
-vnoremap <leader>[ <esc>`>a]<esc>`<i[<esc>
-vnoremap <leader>{ <esc>`>a}<esc>`<i{<esc>
-
 " Edit current file in different ways
 cnoremap %% <C-R>=fnameescape(expand('%:h')).'/'<cr>
 map <leader>ew :e %%
@@ -75,15 +66,13 @@ map <leader>ev :vsp %%
 map <leader>et :tabe %%
 
 " Removes whitespace
-nnoremap <Leader>rspace :%s/\s\+$//e
 " Removes empty lines if there are more than 2
+nnoremap <Leader>rspace :%s/\s\+$//e
 nnoremap <Leader>rlines :%s/\n\{3,}/\r\r/e
 
-" Copy/Cut diagrams
-nnoremap <Leader>ply <Cmd>call search('```plantuml', 'Wbc') \| .,/```/y<CR>
-nnoremap <Leader>pld <Cmd>call search('```plantuml', 'Wbc') \| .,/```/d<CR>
-
 map asd <Plug>Markdown_MoveToParentHeader
+nnoremap <Leader>ph <Plug>Markdown_MoveToPreviousHeader
+nnoremap <Leader>nh :.,/^#/-1<CR>
 
 " Set spellcheck on/off
 nnoremap <Leader>son :setlocal spell spelllang=en_us<CR>
@@ -96,7 +85,7 @@ nnoremap <Leader>r A :hand: <esc><CR>
 nnoremap <Leader>clean :g/<details>/,/<\/details>/d _<CR>
 
 " delete word forward in insert mode
-inoremap <C-e> <C-o>dw<Left> 
+inoremap <C-e> <C-o>dw<Left>
 
 nnoremap <Leader>i i<space><esc>
 
@@ -124,43 +113,14 @@ xnoremap <silent>am <cmd>call <sid>MarkdowCodeBlock(1)<cr>
 onoremap <silent>im <cmd>call <sid>MarkdowCodeBlock(0)<cr>
 xnoremap <silent>im <cmd>call <sid>MarkdowCodeBlock(0)<cr>
 
-"toggles whether or not the current window is automatically zoomed
-function! ToggleMaxWins()
-if exists('g:windowMax')
-  au! maxCurrWin
-  wincmd =
-  unlet g:windowMax
-else
-  augroup maxCurrWin
-      " au BufEnter * wincmd _ | wincmd |
-      "
-      " only max it vertically
-      au! WinEnter * wincmd _
-  augroup END
-  do maxCurrWin WinEnter
-  let g:windowMax=1
-endif
-endfunction
-nnoremap <Leader>max :call ToggleMaxWins()<CR>
-nnoremap <Leader>b :Buffers<CR>
-nnoremap <Leader>nh :.,/^#/-1<CR> 
-nnoremap <Leader>ph <Plug>Markdown_MoveToPreviousHeader
-
 " SHORTCUTS REMAPS
 " Stop search highlight
 nnoremap ,<space> :nohlsearch<CR>
 
 " jj in insert mode instead of ESC
-inoremap jj <Esc> 
-inoremap jk <Esc> 
+inoremap jj <Esc>
+inoremap jk <Esc>
 
-" Harpoon settings
-nnoremap <Leader>ha :lua require("harpoon.mark").add_file()<CR>
-nnoremap <Leader>hj :lua require("harpoon.ui").nav_file(1)<CR>
-nnoremap <Leader>h1j :lua require("harpoon.ui").nav_file(2)<CR>
-nnoremap <Leader>h2j :lua require("harpoon.ui").nav_file(3)<CR>
-nnoremap <Leader>hm :lua require("harpoon.ui").toggle_quick_menu()<CR>
-nnoremap <Leader>pp :lua require'telescope.builtin'.file_browser{}
 " Copies till the end of a line. Fits with Shift + D, C etc
 nnoremap Y y_
 
@@ -181,6 +141,14 @@ if has('nvim')
     nnoremap <leader>fg <cmd>Telescope live_grep<cr>
     nnoremap <leader>fb <cmd>Telescope buffers<cr>
     nnoremap <leader>fh <cmd>Telescope help_tags<cr>
+
+    " Harpoon settings
+    nnoremap <Leader>ha :lua require("harpoon.mark").add_file()<CR>
+    nnoremap <Leader>hj :lua require("harpoon.ui").nav_file(1)<CR>
+    nnoremap <Leader>h1j :lua require("harpoon.ui").nav_file(2)<CR>
+    nnoremap <Leader>h2j :lua require("harpoon.ui").nav_file(3)<CR>
+    nnoremap <Leader>hm :lua require("harpoon.ui").toggle_quick_menu()<CR>
+    nnoremap <Leader>pp :lua require'telescope.builtin'.file_browser{}
 endif
 
 call vundle#begin()
@@ -197,11 +165,12 @@ if has('vim')
     Plugin 'Valloric/YouCompleteMe'
 endif
 
-
 Plugin 'wellle/targets.vim'
 Plugin 'vim-syntastic/syntastic'
 Plugin 'fatih/vim-go'
 Plugin 'vim-airline/vim-airline'
+" Automatically close patenthesis, quotes etc
+
 Plugin 'Raimondi/delimitMate'
 
 Plugin 'preservim/nerdtree'
@@ -223,7 +192,6 @@ Plugin 'dense-analysis/ale'
 
 Plugin 'sheerun/vim-polyglot'
 
-
 Plugin 'ryanoasis/vim-devicons'
 
 Plugin 'christoomey/vim-system-copy'
@@ -232,9 +200,7 @@ Plugin 'godlygeek/tabular'
 Plugin 'plasticboy/vim-markdown'
 Plugin 'mattn/webapi-vim'
 
-Plugin 'iamcco/markdown-preview.nvim' 
-
-Plugin 'sakshamgupta05/vim-todo-highlight'
+Plugin 'iamcco/markdown-preview.nvim'
 
 Plugin 'tpope/vim-fugitive'
 
@@ -260,11 +226,9 @@ endif
 " Color Schemes
 Plugin 'morhetz/gruvbox'
 Plugin 'joshdick/onedark.vim'
-Plugin 'arcticicestudio/nord-vim'
-Plugin 'dracula/vim', { 'name': 'dracula' }
 Plugin 'srcery-colors/srcery-vim'
 " All of your Plugins must be added before the following line
-call vundle#end()            
+call vundle#end()
 
 " *** COLOR_SCHEMES ***
 set t_Co=256
@@ -279,7 +243,7 @@ colorscheme onedark
 " colorscheme srcery
 " let g:gruvbox_contrast_dark = 'soft'
 
-filetype plugin indent on   
+filetype plugin indent on
 
 " indent for special file
 autocmd FileType c,cpp setlocal expandtab shiftwidth=2 softtabstop=2 cindent
@@ -299,7 +263,6 @@ let g:vim_markdown_no_extensions_in_markdown = 1
 let g:vim_markdown_autowrite = 1
 let g:vim_markdown_follow_anchor = 1
 
-
 " setup for ycm
 let g:ycm_global_ycm_extra_conf = '~/.vim/bundle/YouCompleteMe/third_party/ycmd/examples/.ycm_extra_conf.py'
 let g:ycm_python_binary_path = 'python'
@@ -311,7 +274,7 @@ let g:ycm_semantic_triggers =  {
   \ 'cpp' : ['re!\w{2}'],
   \ 'python' : ['re!\w{2}'],
   \ }
- 
+
 " Trigger configuration. You need to change this to something other than <tab> if you use one of the following:
 " - https://github.com/Valloric/YouCompleteMe
 " - https://github.com/nvim-lua/completion-nvim
