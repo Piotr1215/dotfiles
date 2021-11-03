@@ -100,6 +100,7 @@ source $ZSH/oh-my-zsh.sh
 
 source $ZSH/oh-my-zsh.sh
 
+alias vim='nvim'
 alias gcc='git diff --stat --cached origin/master' # Git Check Commit before pushing
 alias docs='docsify serve docs'
 alias glog='git log --graph --oneline --decorate'
