@@ -249,3 +249,5 @@ bindkey '^X^f' peco-files
 
 
 [[ /usr/local/bin/kubectl ]] && source <(kubectl completion zsh)
+
+export PATH="$HOME/.yarn/bin:$HOME/.config/yarn/global/node_modules/.bin:$PATH"
