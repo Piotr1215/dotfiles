@@ -11,7 +11,7 @@ set noerrorbells
 set scrolloff=8
 set signcolumn=yes
 set hlsearch
-
+set autochdir
 " custom setting
 set mouse=v
 set number
