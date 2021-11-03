@@ -254,6 +254,7 @@ if has('nvim')
     Plugin 'nvim-lua/plenary.nvim' " don't forget to add this one if you don't have it yet!
     Plugin 'ThePrimeagen/harpoon'
     Plugin 'nvim-telescope/telescope.nvim'
+    Plugin 'nvim-telescope/telescope-fzf-native.nvim', { 'do': 'make' }
 endif
 
 " Color Schemes
