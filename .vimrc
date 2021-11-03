@@ -236,6 +236,9 @@ Plugin 'ctrlpvim/ctrlp.vim'
 
 Plugin 'dhruvasagar/vim-table-mode'
 
+Plugin 'nvim-lua/plenary.nvim' " don't forget to add this one if you don't have it yet!
+Plugin 'ThePrimeagen/harpoon'
+
 " Color Schemes
 Plugin 'morhetz/gruvbox'
 Plugin 'joshdick/onedark.vim'
