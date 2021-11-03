@@ -160,7 +160,7 @@ nnoremap <Leader>hj :lua require("harpoon.ui").nav_file(1)<CR>
 nnoremap <Leader>h1j :lua require("harpoon.ui").nav_file(2)<CR>
 nnoremap <Leader>h2j :lua require("harpoon.ui").nav_file(3)<CR>
 nnoremap <Leader>hm :lua require("harpoon.ui").toggle_quick_menu()<CR>
-
+nnoremap <Leader>pp :lua require'telescope.builtin'.file_browser{}
 " Copies till the end of a line. Fits with Shift + D, C etc
 nnoremap Y y_
 
