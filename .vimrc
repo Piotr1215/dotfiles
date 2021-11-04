@@ -148,7 +148,7 @@ if has('nvim')
     nnoremap <Leader>h1j :lua require("harpoon.ui").nav_file(2)<CR>
     nnoremap <Leader>h2j :lua require("harpoon.ui").nav_file(3)<CR>
     nnoremap <Leader>hm :lua require("harpoon.ui").toggle_quick_menu()<CR>
-    nnoremap <Leader>pp :lua require'telescope.builtin'.file_browser{}
+    nnoremap <Leader>gp :lua require'telescope.builtin'.grep_string{}<CR>
 endif
 
 call vundle#begin()
