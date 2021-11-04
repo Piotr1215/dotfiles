@@ -97,7 +97,7 @@ nnoremap <leader>sv :source ~/.vimrc<CR>
 function! s:MarkdowCodeBlock(outside)
     call search('```', 'cb')
     if a:outside
-        normal! 0Vo
+        normal! Vo
     else
         normal! j0Vo
     endif
