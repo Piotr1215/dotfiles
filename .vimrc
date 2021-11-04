@@ -158,60 +158,13 @@ call vundle#begin()
 " let Vundle manage Vundle, required
 Plugin 'VundleVim/Vundle.vim'
 
-" all plugin
+" Editor functionality
 Plugin 'mhinz/vim-startify'
-Plugin 'neoclide/coc.nvim', {'branch': 'release'}
-Plugin 'wellle/targets.vim'
-Plugin 'vim-syntastic/syntastic'
-Plugin 'fatih/vim-go'
 Plugin 'vim-airline/vim-airline'
-" Automatically close patenthesis, quotes etc
-
-Plugin 'Raimondi/delimitMate'
-
-Plugin 'preservim/nerdtree'
-Plugin 'majutsushi/tagbar'
-
-Plugin 'Yggdroot/indentLine'
-
-Plugin 'hashivim/vim-terraform'
-
+Plugin 'ryanoasis/vim-devicons'
 Plugin 'junegunn/fzf', { 'do': { -> fzf#install() } }
 Plugin 'junegunn/fzf.vim'
-
-Plugin 'terryma/vim-multiple-cursors'
-
-Plugin 'tpope/vim-surround'
-Plugin 'mattn/emmet-vim'
-
-Plugin 'dense-analysis/ale'
-
-Plugin 'sheerun/vim-polyglot'
-
-Plugin 'ryanoasis/vim-devicons'
-
-Plugin 'christoomey/vim-system-copy'
-
-Plugin 'godlygeek/tabular'
-Plugin 'plasticboy/vim-markdown'
-Plugin 'mattn/webapi-vim'
-
-Plugin 'iamcco/markdown-preview.nvim'
-
-Plugin 'tpope/vim-fugitive'
-
-Plugin 'junegunn/vim-emoji'
-
-" Track the engine.
-Plugin 'SirVer/ultisnips'
-
-" Snippets are separated from the engine. Add this if you want them:
-Plugin 'honza/vim-snippets'
-
 Plugin 'ctrlpvim/ctrlp.vim'
-
-Plugin 'dhruvasagar/vim-table-mode'
-
 if has('nvim')
     Plugin 'nvim-lua/plenary.nvim' " don't forget to add this one if you don't have it yet!
     Plugin 'ThePrimeagen/harpoon'
@@ -219,10 +172,39 @@ if has('nvim')
     Plugin 'nvim-telescope/telescope-fzf-native.nvim', { 'do': 'make' }
 endif
 
+" Editing related
+Plugin 'Raimondi/delimitMate'
+Plugin 'godlygeek/tabular'
+Plugin 'plasticboy/vim-markdown'
+Plugin 'mattn/webapi-vim'
+Plugin 'Yggdroot/indentLine'
+Plugin 'tpope/vim-surround'
+Plugin 'mattn/emmet-vim'
+Plugin 'preservim/nerdtree'
+Plugin 'wellle/targets.vim'
+Plugin 'terryma/vim-multiple-cursors'
+Plugin 'vim-syntastic/syntastic'
+Plugin 'sheerun/vim-polyglot'
+Plugin 'iamcco/markdown-preview.nvim'
+Plugin 'junegunn/vim-emoji'
+Plugin 'christoomey/vim-system-copy'
+Plugin 'dhruvasagar/vim-table-mode'
+
+" Programming
+Plugin 'majutsushi/tagbar'
+Plugin 'hashivim/vim-terraform'
+Plugin 'fatih/vim-go'
+Plugin 'neoclide/coc.nvim', {'branch': 'release'}
+Plugin 'dense-analysis/ale'
+Plugin 'tpope/vim-fugitive'
+Plugin 'SirVer/ultisnips'
+Plugin 'honza/vim-snippets'
+
 " Color Schemes
 Plugin 'morhetz/gruvbox'
 Plugin 'joshdick/onedark.vim'
 Plugin 'srcery-colors/srcery-vim'
+
 " All of your Plugins must be added before the following line
 call vundle#end()
 
@@ -234,10 +216,10 @@ let g:lightline = {
       \ }
 " let g:onedark_termcolors=16
 " let g:dracula_termcolors=16
-colorscheme onedark
+colorscheme gruvbox          
 " colorscheme industry
 " colorscheme srcery
-" let g:gruvbox_contrast_dark = 'soft'
+let g:gruvbox_contrast_dark = 'hard'
 
 filetype plugin indent on
 
