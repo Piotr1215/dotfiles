@@ -1,1 +1,0 @@
-/home/decoder/scripts/tmux-cht.sh
