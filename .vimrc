@@ -119,9 +119,6 @@ xmap <Leader>l <Plug>(Limelight)
 
 autocmd! User GoyoEnter Limelight
 autocmd! User GoyoLeave Limelight!
-" Color name (:help cterm-colors) or ANSI code
-let g:limelight_conceal_ctermfg = 'gray'
-let g:limelight_conceal_ctermfg = 240
 
 " SHORTCUTS REMAPS
 " Stop search highlight
@@ -235,6 +232,11 @@ colorscheme gruvbox
 let g:gruvbox_contrast_dark = 'hard'
 
 filetype plugin indent on
+
+"Goyo settings
+" Color name (:help cterm-colors) or ANSI code
+let g:limelight_conceal_ctermfg = 'gray'
+let g:limelight_conceal_ctermfg = 240
 
 " indent for special file
 autocmd FileType c,cpp setlocal expandtab shiftwidth=2 softtabstop=2 cindent
