@@ -117,6 +117,9 @@ xnoremap <silent>im <cmd>call <sid>MarkdowCodeBlock(0)<cr>
 nmap <Leader>l <Plug>(Limelight)
 xmap <Leader>l <Plug>(Limelight)
 
+autocmd! User GoyoEnter Limelight
+autocmd! User GoyoLeave Limelight!
+
 " SHORTCUTS REMAPS
 " Stop search highlight
 nnoremap ,<space> :nohlsearch<CR>
