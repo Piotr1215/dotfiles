@@ -113,6 +113,10 @@ xnoremap <silent>am <cmd>call <sid>MarkdowCodeBlock(1)<cr>
 onoremap <silent>im <cmd>call <sid>MarkdowCodeBlock(0)<cr>
 xnoremap <silent>im <cmd>call <sid>MarkdowCodeBlock(0)<cr>
 
+" Goyo and limelight
+nmap <Leader>l <Plug>(Limelight)
+xmap <Leader>l <Plug>(Limelight)
+
 " SHORTCUTS REMAPS
 " Stop search highlight
 nnoremap ,<space> :nohlsearch<CR>
@@ -165,6 +169,7 @@ Plugin 'ryanoasis/vim-devicons'
 Plugin 'junegunn/fzf', { 'do': { -> fzf#install() } }
 Plugin 'junegunn/fzf.vim'
 Plugin 'ctrlpvim/ctrlp.vim'
+
 if has('nvim')
     Plugin 'nvim-lua/plenary.nvim' " don't forget to add this one if you don't have it yet!
     Plugin 'ThePrimeagen/harpoon'
@@ -189,6 +194,8 @@ Plugin 'iamcco/markdown-preview.nvim'
 Plugin 'junegunn/vim-emoji'
 Plugin 'christoomey/vim-system-copy'
 Plugin 'dhruvasagar/vim-table-mode'
+Plugin 'junegunn/limelight.vim'
+Plugin 'junegunn/goyo.vim'
 
 " Programming
 Plugin 'majutsushi/tagbar'
