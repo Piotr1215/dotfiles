@@ -172,6 +172,7 @@ Plugin 'ryanoasis/vim-devicons'
 Plugin 'junegunn/fzf', { 'do': { -> fzf#install() } }
 Plugin 'junegunn/fzf.vim'
 Plugin 'ctrlpvim/ctrlp.vim'
+Plugin 'voldikss/vim-floaterm'    
 
 if has('nvim')
     Plugin 'nvim-lua/plenary.nvim' " don't forget to add this one if you don't have it yet!
