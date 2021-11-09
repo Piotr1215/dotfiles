@@ -94,6 +94,9 @@ nnoremap <Leader>c 1ky$jp0i
 nnoremap <Leader>gl }
 nnoremap <leader>sv :source ~/.vimrc<CR>
 
+"Floaterm
+nnoremap <silent><Leader>ft :FloatermNew<CR>
+
 function! s:MarkdowCodeBlock(outside)
     call search('```', 'cb')
     if a:outside
