@@ -227,7 +227,6 @@ Plugin 'ferrine/md-img-paste.vim'
 Plugin 'SidOfc/mkdx'
 Plugin 'weirongxu/plantuml-previewer.vim'
 Plugin 'tyru/open-browser.vim'
-Plugin 'aklt/plantuml-syntax'
 
 " Programming
 Plugin 'majutsushi/tagbar'
