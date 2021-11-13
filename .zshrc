@@ -137,6 +137,7 @@ export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
 export PATH=$HOME/.local/bin:$PATH
 export PATH=$HOME/scripts:$PATH
 export PATH=$HOME/go/bin:$PATH
+export FONTCONFIG_PATH=/etc/fonts
 
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
 
