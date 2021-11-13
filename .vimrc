@@ -142,7 +142,18 @@ nnoremap cN *``cgN
 command GitDiff execute  "w !git diff --no-index -- % -"
 nmap <F8> :TagbarToggle<CR>
 
-" cut content to next header #
+" Replace multiple words simultaniously
+nnoremap <Leader>x *``cgn
+nnoremap <Leader>X #``cgN
+
+" Split line in two
+nnoremap <Leader>sp i<CR><Esc>
+
+" Zoom split windows
+noremap Zz <c-w>_ \| <c-w>\|
+noremap Zo <c-w>=
+
+"cut content to next header #
 nmap cO :.,/^#/-1d<CR>
 
 if has('nvim')
@@ -160,6 +171,15 @@ if has('nvim')
     nnoremap <Leader>hm :lua require("harpoon.ui").toggle_quick_menu()<CR>
     nnoremap <Leader>gs :lua require'telescope.builtin'.grep_string{}<CR>
 endif
+
+"Floatterm settings
+nnoremap   <silent><Leader>fl :FloatermNew<CR>
+nnoremap   <silent><Leader>ft :FloatermToggle<CR>
+nnoremap   <silent><Leader>fs :FloatermShow<CR>
+nnoremap   <silent><Leader>fh :FloatermHide<CR>
+
+" Goyo shortcuts
+nnoremap   <silent><Leader>go :Goyo 100<CR>
 
 call vundle#begin()
 " alternatively, pass a path where Vundle should install plugins
@@ -203,6 +223,8 @@ Plugin 'christoomey/vim-system-copy'
 Plugin 'dhruvasagar/vim-table-mode'
 Plugin 'junegunn/limelight.vim'
 Plugin 'junegunn/goyo.vim'
+Plugin 'ferrine/md-img-paste.vim'
+Plugin 'SidOfc/mkdx'
 
 " Programming
 Plugin 'majutsushi/tagbar'
@@ -237,10 +259,63 @@ let g:gruvbox_contrast_dark = 'hard'
 
 filetype plugin indent on
 
+" Completion trigger
+inoremap <silent><expr> <TAB>
+      \ pumvisible() ? "\<C-n>" :
+      \ <SID>check_back_space() ? "\<TAB>" :
+      \ coc#refresh()
+inoremap <expr><S-TAB> pumvisible() ? "\<C-p>" : "\<C-h>"
+
+" Use <c-space> to trigger completion.
+inoremap <silent><expr> <c-space> coc#refresh()
+
+" Use <cr> to confirm completion, `<C-g>u` means break undo chain at current
+" position. Coc only does snippet and additional edit on confirm.
+" <cr> could be remapped by other vim plugin, try `:verbose imap <CR>`.
+if exists('*complete_info')
+  inoremap <expr> <cr> complete_info()["selected"] != "-1" ? "\<C-y>" : "\<C-g>u\<CR>"
+else
+  inoremap <expr> <cr> pumvisible() ? "\<C-y>" : "\<C-g>u\<CR>"
+endif
+
 "Goyo settings
 " Color name (:help cterm-colors) or ANSI code
 let g:limelight_conceal_ctermfg = 'gray'
 let g:limelight_conceal_ctermfg = 240
+
+"Goyo config
+function! s:goyo_enter()
+  if executable('tmux') && strlen($TMUX)
+    silent !tmux set status off
+    silent !tmux list-panes -F '\#F' | grep -q Z || tmux resize-pane -Z
+  endif
+  set noshowmode
+  set noshowcmd
+  set scrolloff=999
+  Limelight
+  " ...
+endfunction
+
+function! s:goyo_leave()
+  if executable('tmux') && strlen($TMUX)
+    silent !tmux set status on
+    silent !tmux list-panes -F '\#F' | grep -q Z && tmux resize-pane -Z
+  endif
+  set showmode
+  set showcmd
+  set scrolloff=5
+  Limelight!
+  " ...
+endfunction
+
+autocmd! User GoyoEnter nested call <SID>goyo_enter()
+autocmd! User GoyoLeave nested call <SID>goyo_leave()
+
+" Image paste 
+autocmd FileType markdown nmap <buffer><silent> <leader>p :call mdip#MarkdownClipboardImage()<CR>
+" there are some defaults for image directory and image name, you can change them
+let g:mdip_imgdir = 'media'
+let g:mdip_imgname = 'image'
 
 " indent for special file
 autocmd FileType c,cpp setlocal expandtab shiftwidth=2 softtabstop=2 cindent
