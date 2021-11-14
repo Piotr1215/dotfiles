@@ -336,6 +336,7 @@ let g:vim_markdown_conceal_code_blocks = 0
 let g:vim_markdown_no_extensions_in_markdown = 1
 let g:vim_markdown_autowrite = 1
 let g:vim_markdown_follow_anchor = 1
+let g:vim_markdown_auto_insert_bullets = 0
 
 " Trigger configuration. You need to change this to something other than <tab> if you use one of the following:
 " - https://github.com/Valloric/YouCompleteMe
