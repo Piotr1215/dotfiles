@@ -72,7 +72,7 @@ nnoremap <Leader>rlines :%s/\n\{3,}/\r\r/e
 
 map asd <Plug>Markdown_MoveToParentHeader
 nnoremap <Leader>ph <Plug>Markdown_MoveToPreviousHeader
-nnoremap <Leader>nh :.,/^#/-1<CR>
+nnoremap <Leader>nh :.,/^#/<CR>
 
 " Set spellcheck on/off
 nnoremap <Leader>son :setlocal spell spelllang=en_us<CR>
