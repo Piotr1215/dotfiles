@@ -100,6 +100,8 @@ source $ZSH/oh-my-zsh.sh
 
 source $ZSH/oh-my-zsh.sh
 
+alias die='shutdown now'
+alias zedit='vim ~/.zshrc'
 alias vim='nvim'
 alias gcc='git diff --stat --cached origin/master' # Git Check Commit before pushing
 alias docs='docsify serve docs'
