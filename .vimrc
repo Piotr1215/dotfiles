@@ -242,6 +242,7 @@ Plugin 'honza/vim-snippets'
 Plugin 'morhetz/gruvbox'
 Plugin 'joshdick/onedark.vim'
 Plugin 'srcery-colors/srcery-vim'
+Plugin 'NLKNguyen/papercolor-theme'
 
 " All of your Plugins must be added before the following line
 call vundle#end()
@@ -250,13 +251,14 @@ call vundle#end()
 set t_Co=256
 set background=dark
 let g:lightline = {
-      \ 'colorscheme': 'srcery',
+      \ 'colorscheme': 'PaperColor',
       \ }
 " let g:onedark_termcolors=16
 " let g:dracula_termcolors=16
-colorscheme gruvbox          
+" colorscheme gruvbox          
 " colorscheme industry
 " colorscheme srcery
+colorscheme papercolor
 let g:gruvbox_contrast_dark = 'hard'
 
 filetype plugin indent on
