@@ -196,6 +196,8 @@ Plugin 'junegunn/fzf', { 'do': { -> fzf#install() } }
 Plugin 'junegunn/fzf.vim'
 Plugin 'ctrlpvim/ctrlp.vim'
 Plugin 'voldikss/vim-floaterm'    
+Plugin 'hrsh7th/vim-vsnip'
+Plugin 'hrsh7th/vim-vsnip-integ'
 
 if has('nvim')
     Plugin 'nvim-lua/plenary.nvim' " don't forget to add this one if you don't have it yet!
