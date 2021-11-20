@@ -258,7 +258,7 @@ let g:lightline = {
 " colorscheme gruvbox          
 " colorscheme industry
 " colorscheme srcery
-colorscheme papercolor
+colorscheme PaperColor
 let g:gruvbox_contrast_dark = 'hard'
 
 filetype plugin indent on
