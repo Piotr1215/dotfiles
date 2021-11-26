@@ -129,6 +129,7 @@ alias dpsa="docker ps -a --format 'table {{.ID}}\t{{.Names}}\t{{.Image}}'" #dock
 alias gmail='web_search duckduckgo \!gmail'
 alias disk='gdu'
 alias mkdd='mkdir $(date +"%Y-%m-%d")'
+alias admin='sudo bash -c "apt-get update && apt-get -y upgrade && apt-get -y autoremove && apt-get -y clean"'
 
 eval $(dircolors -p | sed -e 's/DIR 01;34/DIR 01;36/' | dircolors /dev/stdin)
 
