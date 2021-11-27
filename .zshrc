@@ -114,6 +114,7 @@ alias dev='cd ~/dev'
 alias kdump='kubectl get all --all-namespaces'
 alias addkey='eval $(ssh-agent) && ssh-add'
 alias ll='ls -lah'
+alias lt='lsd -alt'
 alias l='lsd -al'
 alias lol=lolcat
 alias lal='lsd -al | lolcat -a -d 5'
