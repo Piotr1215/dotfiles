@@ -209,7 +209,7 @@ endif
 " Editing related
 Plugin 'Raimondi/delimitMate'
 Plugin 'godlygeek/tabular'
-Plugin 'plasticboy/vim-markdown'
+" Plugin 'plasticboy/vim-markdown'
 Plugin 'mattn/webapi-vim'
 Plugin 'Yggdroot/indentLine'
 Plugin 'tpope/vim-surround'
