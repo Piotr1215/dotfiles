@@ -226,7 +226,7 @@ Plugin 'dhruvasagar/vim-table-mode'
 Plugin 'junegunn/limelight.vim'
 Plugin 'junegunn/goyo.vim'
 Plugin 'ferrine/md-img-paste.vim'
-"Plugin 'SidOfc/mkdx'
+Plugin 'SidOfc/mkdx'
 Plugin 'weirongxu/plantuml-previewer.vim'
 Plugin 'tyru/open-browser.vim'
 
