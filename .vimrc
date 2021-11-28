@@ -209,7 +209,7 @@ endif
 " Editing related
 Plugin 'Raimondi/delimitMate'
 Plugin 'godlygeek/tabular'
-" Plugin 'plasticboy/vim-markdown'
+Plugin 'plasticboy/vim-markdown'
 Plugin 'mattn/webapi-vim'
 Plugin 'Yggdroot/indentLine'
 Plugin 'tpope/vim-surround'
@@ -226,7 +226,7 @@ Plugin 'dhruvasagar/vim-table-mode'
 Plugin 'junegunn/limelight.vim'
 Plugin 'junegunn/goyo.vim'
 Plugin 'ferrine/md-img-paste.vim'
-Plugin 'SidOfc/mkdx'
+"Plugin 'SidOfc/mkdx'
 Plugin 'weirongxu/plantuml-previewer.vim'
 Plugin 'tyru/open-browser.vim'
 
@@ -298,12 +298,12 @@ let g:limelight_conceal_ctermfg = 'gray'
 let g:limelight_conceal_ctermfg = 240
 
 "Markdown settings
-let g:mkdx#settings     = { 'highlight': { 'enable': 1 },
-                        \ 'enter': { 'shift': 1 },
-                        \ 'links': { 'external': { 'enable': 1 } },
-                        \ 'toc': { 'text': 'Table of Contents', 'update_on_write': 1 },
-                        \ 'fold': { 'enable': 1 } }
-let g:polyglot_disabled = ['markdown']
+"let g:mkdx#settings     = { 'highlight': { 'enable': 1 },
+"                        \ 'enter': { 'shift': 1 },
+"                        \ 'links': { 'external': { 'enable': 1 } },
+"                        \ 'toc': { 'text': 'Table of Contents', 'update_on_write': 1 },
+"                        \ 'fold': { 'enable': 1 } }
+"let g:polyglot_disabled = ['markdown']
 "Goyo config
 function! s:goyo_enter()
   if executable('tmux') && strlen($TMUX)
