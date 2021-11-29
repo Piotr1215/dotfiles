@@ -144,6 +144,8 @@ export PATH=$HOME/scripts:$PATH
 export PATH=$HOME/go/bin:$PATH
 export FONTCONFIG_PATH=/etc/fonts
 
+source ~/.github_variables
+
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
 
 # USER FUNCTIONS
