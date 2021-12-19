@@ -65,7 +65,7 @@ nnoremap <leader>j :m .+1<CR>==
 
 " Swap the word the cursor is on with the next word (which can be on a
 " newline, and punctuation is "skipped"):
-nmap <silent> gw "_yiw:s/\(\%#\w\+\)\(\_W\+\)\(\w\+\)/\3\2\1/<CR><C-o>:noh<CR>
+nmap <leader> gw "_yiw:s/\(\%#\w\+\)\(\_W\+\)\(\w\+\)/\3\2\1/<CR><C-o>:noh<CR>
 
 " FzF CoC Extension
 nmap <Leader>f [fzf-p]
