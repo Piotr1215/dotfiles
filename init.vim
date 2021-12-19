@@ -128,7 +128,7 @@ nnoremap <Leader>i i<space><esc>
 " Copy line from above and inser under cursor and enter inser mode from the
 nnoremap <Leader>c 1ky$jp0i
 nnoremap <Leader>gl }
-nnoremap <leader>sv :source /Users/p.zaniewski/.config/nvim/init.vim<CR>
+nnoremap <leader>sv :source /home/decoder/.config/nvim/init.vim<CR>
 
 function! s:MarkdowCodeBlock(outside)
     call search('```', 'cb')
