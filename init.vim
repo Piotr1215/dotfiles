@@ -232,6 +232,7 @@ Plugin 'ThePrimeagen/harpoon'
 Plugin 'nvim-telescope/telescope.nvim'
 Plugin 'nvim-telescope/telescope-fzf-native.nvim', { 'do': 'make' }
 Plugin 'voldikss/vim-floaterm'
+Plugin 'ggandor/lightspeed.nvim'
 
 " Editing related
 Plugin 'Raimondi/delimitMate'
