@@ -184,7 +184,7 @@ function vhalt {
 
 function pex() {
 
-    pet exec -q=$@;
+    pet exec -q$@;
 }
 
 function prev() {
