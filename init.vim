@@ -17,6 +17,7 @@ set scrolloff=8
 set signcolumn=yes
 set hlsearch
 " set autochdir
+set updatetime=300
 
 " set split directions
 set splitbelow
@@ -50,10 +51,9 @@ map <Space> <Leader>
 nnoremap <Leader>q @q
 
 map ` <Nop>
-nnoremap <leader>nf :NERDTreeFocus<CR>
-nnoremap <leader>ne :NERDTree<CR>
-nnoremap <leader>nt :NERDTreeToggle<CR>
-nnoremap <leader>nfi :NERDTreeFind<CR>
+
+nnoremap <leader>dd :Lexplore %:p:h<CR>
+nnoremap <Leader>da :Lexplore<CR>
 
 " Move line of text up and down
 vnoremap J :m '>+1<CR>gv=gv
@@ -63,36 +63,41 @@ inoremap <C-k> <esc>:m .-2<CR>==
 nnoremap <leader>k :m .-2<CR>==
 nnoremap <leader>j :m .+1<CR>==
 
-" Swap the word the cursor is on with the next word (which can be on a
-" newline, and punctuation is "skipped"):
-nmap <leader>swp "_yiw:s/\(\%#\w\+\)\(\_W\+\)\(\w\+\)/\3\2\1/<CR>:noh<CR>
-
-" FzF CoC Extension
-nmap <Leader>f [fzf-p]
-xmap <Leader>f [fzf-p]
-
-nnoremap <silent> [fzf-p]p     :<C-u>CocCommand fzf-preview.FromResources project_mru git<CR>
-nnoremap <silent> [fzf-p]gs    :<C-u>CocCommand fzf-preview.GitStatus<CR>
-nnoremap <silent> [fzf-p]ga    :<C-u>CocCommand fzf-preview.GitActions<CR>
-nnoremap <silent> [fzf-p]b     :<C-u>CocCommand fzf-preview.Buffers<CR>
-nnoremap <silent> [fzf-p]B     :<C-u>CocCommand fzf-preview.AllBuffers<CR>
-nnoremap <silent> [fzf-p]o     :<C-u>CocCommand fzf-preview.FromResources buffer project_mru<CR>
-nnoremap <silent> [fzf-p]<C-o> :<C-u>CocCommand fzf-preview.Jumps<CR>
-nnoremap <silent> [fzf-p]g;    :<C-u>CocCommand fzf-preview.Changes<CR>
-nnoremap <silent> [fzf-p]/     :<C-u>CocCommand fzf-preview.Lines --add-fzf-arg=--no-sort --add-fzf-arg=--query="'"<CR>
-nnoremap <silent> [fzf-p]*     :<C-u>CocCommand fzf-preview.Lines --add-fzf-arg=--no-sort --add-fzf-arg=--query="'<C-r>=expand('<cword>')<CR>"<CR>
-nnoremap          [fzf-p]gr    :<C-u>CocCommand fzf-preview.ProjectGrep<Space>
-xnoremap          [fzf-p]gr    "sy:CocCommand   fzf-preview.ProjectGrep<Space>-F<Space>"<C-r>=substitute(substitute(@s, '\n', '', 'g'), '/', '\\/', 'g')<CR>"
-nnoremap <silent> [fzf-p]t     :<C-u>CocCommand fzf-preview.BufferTags<CR>
-nnoremap <silent> [fzf-p]q     :<C-u>CocCommand fzf-preview.QuickFix<CR>
-nnoremap <silent> [fzf-p]l     :<C-u>CocCommand fzf-preview.LocationList<CR>
-
 " Select last pasted text
 nnoremap gp `[v`]
 
 " Add line below without entering insert mode!
 nnoremap <silent> <leader><Up>   :<c-u>put!=repeat([''],v:count)<bar>']+1<cr>
 nnoremap <silent> <leader><Down> :<c-u>put =repeat([''],v:count)<bar>'[-1<cr>
+
+map  <Leader>o <Plug>(easymotion-prefix)
+map  <Leader>of <Plug>(easymotion-bd-f)
+
+nnoremap <leader>sw hdeep
+
+" CoC Extension
+nmap <Leader>e <Cmd>CocCommand explorer<CR>
+
+nmap <Leader>f [fzf-p]
+xmap <Leader>f [fzf-p]
+
+nnoremap <silent> [fzf-p]p     :<C-u>CocCommand fzf-preview.FromResources project_mru git<CR>
+nnoremap <silent> [fzf-p]pf    :<C-u>CocCommand fzf-preview.ProjectFiles<CR>
+nnoremap <silent> [fzf-p]gs    :<C-u>CocCommand fzf-preview.GitStatus<CR>
+nnoremap <silent> [fzf-p]ga    :<C-u>CocCommand fzf-preview.GitActions<CR>
+nnoremap <silent> [fzf-p]b     :<C-u>CocCommand fzf-preview.Buffers<CR>
+nnoremap <silent> [fzf-p]B     :<C-u>CocCommand fzf-preview.AllBuffers<CR>
+nnoremap <silent> [fzf-p]m     :<C-u>CocCommand fzf-preview.MruFiles<CR>
+nnoremap <silent> [fzf-p]o     :<C-u>CocCommand fzf-preview.FromResources buffer project_mru<CR>
+nnoremap <silent> [fzf-p]<C-o> :<C-u>CocCommand fzf-preview.Jumps<CR>
+nnoremap <silent> [fzf-p]g;    :<C-u>CocCommand fzf-preview.Changes<CR>
+nnoremap <silent> [fzf-p]/     :<C-u>CocCommand fzf-preview.Lines--add-fzf-arg=--no-sort --add-fzf-arg=--query="'"<CR>
+nnoremap <silent> [fzf-p]*     :<C-u>CocCommand fzf-preview.Lines --add-fzf-arg=--no-sort --add-fzf-arg=--query="'<C-r>=expand('<cword>')<CR>"<CR>
+nnoremap          [fzf-p]gr    :<C-u>CocCommand fzf-preview.ProjectGrep<Space>
+xnoremap          [fzf-p]gr    "sy:CocCommand   fzf-preview.ProjectGrep<Space>-F<Space>"<C-r>=substitute(substitute(@s, '\n', '', 'g'), '/', '\\/', 'g')<CR>"
+nnoremap <silent> [fzf-p]t     :<C-u>CocCommand fzf-preview.BufferTags<CR>
+nnoremap <silent> [fzf-p]q     :<C-u>CocCommand fzf-preview.QuickFix<CR>
+nnoremap <silent> [fzf-p]L     :<C-u>CocCommand fzf-preview.LocationList<CR> 
 
 " Edit current file in different ways
 cnoremap %% <C-R>=fnameescape(expand('%:h')).'/'<cr>
@@ -125,10 +130,11 @@ inoremap <C-e> <C-o>dw<Left>
 
 nnoremap <Leader>i i<space><esc>
 
-" Copy line from above and inser under cursor and enter inser mode from the
-nnoremap <Leader>c 1ky$jp0i
+" Accept first grammar correction
+nnoremap <Leader>c 1z=
 nnoremap <Leader>gl }
-nnoremap <leader>sv :source /home/decoder/.config/nvim/init.vim<CR>
+" nnoremp <leader>sv :source /Users/p.zaniewski/.config/nvim/init.vim<CR>
+nnoremp <leader>sv :source /home/decoder/.config/nvim/init.vim<CR>
 
 function! s:MarkdowCodeBlock(outside)
     call search('```', 'cb')
@@ -170,6 +176,10 @@ nmap <F8> :TagbarToggle<CR>
 
 " cut content to next header #
 nmap cO :.,/^#/-1d<CR>
+
+" copy content to next header #
+nmap cY :.,/^#/-1y<CR>
+
 tnoremap <Esc> <C-\><C-n>
 command! -nargs=* T split | terminal <args>
 command! -nargs=* VT vsplit | terminal <args>
@@ -187,7 +197,7 @@ nnoremap <leader>tf <cmd>lua require'telescope.builtin'.find_files({ find_comman
 nnoremap <leader>tg <cmd>Telescope live_grep<cr>
 nnoremap <leader>tb <cmd>Telescope buffers<cr>
 nnoremap <leader>th <cmd>Telescope help_tags<cr>
-nnoremap <Leader>gs :lua require'telescope.builtin'.grep_string{}<CR>
+nnoremap <Leader>ts :lua require'telescope.builtin'.grep_string{}<CR>
 
 " Harpoon settings
 nnoremap <Leader>ha :lua require("harpoon.mark").add_file()<CR>
@@ -232,7 +242,7 @@ Plugin 'ThePrimeagen/harpoon'
 Plugin 'nvim-telescope/telescope.nvim'
 Plugin 'nvim-telescope/telescope-fzf-native.nvim', { 'do': 'make' }
 Plugin 'voldikss/vim-floaterm'
-Plugin 'ggandor/lightspeed.nvim'
+Plugin 'easymotion/vim-easymotion'
 
 " Editing related
 Plugin 'Raimondi/delimitMate'
@@ -242,7 +252,6 @@ Plugin 'mattn/webapi-vim'
 Plugin 'Yggdroot/indentLine'
 Plugin 'tpope/vim-surround'
 Plugin 'mattn/emmet-vim'
-Plugin 'preservim/nerdtree'
 Plugin 'wellle/targets.vim'
 Plugin 'terryma/vim-multiple-cursors'
 Plugin 'vim-syntastic/syntastic'
@@ -267,7 +276,7 @@ Plugin 'nvim-treesitter/nvim-treesitter', {'do': ':TSUpdate'}  " We recommend up
 Plugin 'majutsushi/tagbar'
 Plugin 'hashivim/vim-terraform'
 Plugin 'fatih/vim-go'
-Plugin 'neoclide/coc.nvim', {'branch': 'release'}
+Plugin 'neoclide/coc.nvim', { 'branch': 'master', 'do': 'yarn install --frozen-lockfile' }
 Plugin 'dense-analysis/ale'
 Plugin 'tpope/vim-fugitive'
 
@@ -405,11 +414,6 @@ augroup autoformat_settings
   autocmd FileType python AutoFormatBuffer yapf
 augroup END
 
-" open NERDTree automatically when vim starts up on opening a directory
-let NERDTreeShowHidden=1
-" autocmd StdinReadPre * let s:std_in=1
-" autocmd VimEnter * if argc() == 1 && isdirectory(argv()[0]) && !exists("s:std_in") | exe 'NERDTree' argv()[0] | wincmd p | ene | endif
-
 " setup for ctrlp
 let g:ctrlp_map = '<c-p>'
 let g:ctrlp_cmd = 'CtrlPMixed'
@@ -427,4 +431,4 @@ let g:indentLine_char = '?'
 set tags=./tags,tags;$HOME
 "source ~/cscope_maps.vim
 
-let g:go_fmt_command = "goimports"
+let g:go_fmt_command = "goimports"a
