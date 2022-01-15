@@ -431,4 +431,4 @@ let g:indentLine_char = '?'
 set tags=./tags,tags;$HOME
 "source ~/cscope_maps.vim
 
-let g:go_fmt_command = "goimports"a
+let g:go_fmt_command = "goimports"
