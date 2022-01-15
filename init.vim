@@ -134,7 +134,7 @@ nnoremap <Leader>i i<space><esc>
 nnoremap <Leader>c 1z=
 nnoremap <Leader>gl }
 " nnoremp <leader>sv :source /Users/p.zaniewski/.config/nvim/init.vim<CR>
-nnoremp <leader>sv :source /home/decoder/.config/nvim/init.vim<CR>
+nnoremap <leader>sv :source /home/decoder/.config/nvim/init.vim<CR>
 
 function! s:MarkdowCodeBlock(outside)
     call search('```', 'cb')
