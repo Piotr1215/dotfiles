@@ -170,6 +170,9 @@ nnoremap Y yg_
 nnoremap <Leader>x *``cgn
 nnoremap <Leader>X #``cgN
 
+" Search and replace word under cursor using F4
+nnoremap <F4> :%s/<c-r><c-w>/<c-r><c-w>/gc<c-f>$F/i
+
 " COMMAND REMAPS
 command GitDiff execute  "w !git diff --no-index -- % -"
 nmap <F8> :TagbarToggle<CR>
