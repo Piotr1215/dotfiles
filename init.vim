@@ -73,7 +73,7 @@ nnoremap <silent> <leader><Down> :<c-u>put =repeat([''],v:count)<bar>'[-1<cr>
 map  <Leader>o <Plug>(easymotion-prefix)
 map  <Leader>of <Plug>(easymotion-bd-f)
 
-nnoremap <leader>sw hdeep
+nnoremap <leader>sw dawelp
 
 " CoC Extension
 nmap <Leader>e <Cmd>CocCommand explorer<CR>
