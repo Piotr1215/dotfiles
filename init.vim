@@ -202,6 +202,9 @@ nnoremap <leader>tb <cmd>Telescope buffers<cr>
 nnoremap <leader>th <cmd>Telescope help_tags<cr>
 nnoremap <Leader>ts :lua require'telescope.builtin'.grep_string{}<CR>
 
+" Markdown Settings
+nnoremap <silent><leader>mp :MarkdownPreview
+
 " Harpoon settings
 nnoremap <Leader>ha :lua require("harpoon.mark").add_file()<CR>
 nnoremap <Leader>hj :lua require("harpoon.ui").nav_file(1)<CR>
