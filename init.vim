@@ -65,7 +65,7 @@ nnoremap <leader>j :m .+1<CR>==
 
 " Select last pasted text
 nnoremap gp `[v`]
-nnoremap <leader>ex :echo system(@u)
+nnoremap <leader>ex :exe '!'.@u
 
 " Add line below without entering insert mode!
 nnoremap <silent> <leader><Up>   :<c-u>put!=repeat([''],v:count)<bar>']+1<cr>
