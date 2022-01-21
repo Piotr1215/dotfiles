@@ -66,7 +66,7 @@ nnoremap <leader>j :m .+1<CR>==
 " Select last pasted text
 nnoremap gp `[v`]
 
-nnoremap <leader>ex :execute shellescape(expand('<cword>'))<Cr>
+nnoremap <leader>ex :!start shellescape(expand('<cword>'))<Cr>
 
 " Add line below without entering insert mode!
 nnoremap <silent> <leader><Up>   :<c-u>put!=repeat([''],v:count)<bar>']+1<cr>
