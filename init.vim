@@ -355,7 +355,7 @@ function! s:goyo_leave()
   " ...
 endfunction
 
-autocmd BufWritePost *.puml !java -jar /usr/local/bin/plantuml.jar <afile> -o "./rendered"
+autocmd BufWritePost *.puml silent! !java -jar /usr/local/bin/plantuml.jar <afile> -o "./rendered"
 
 autocmd! User GoyoEnter nested call <SID>goyo_enter()
 autocmd! User GoyoLeave nested call <SID>goyo_leave()
