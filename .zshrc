@@ -145,6 +145,7 @@ export PATH=$HOME/.local/bin:$PATH
 export PATH=$HOME/scripts:$PATH
 export PATH=$HOME/go/bin:$PATH
 export FONTCONFIG_PATH=/etc/fonts
+export EDITOR=nvim
 
 source ~/.github_variables
 
