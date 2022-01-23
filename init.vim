@@ -416,6 +416,7 @@ let g:mdip_imgdir = '_media'
 let g:mdip_imgname = 'image'
 
 " indent for special file
+autocmd BufNewFile,BufRead *.fs,*.fsx,*.fsi set filetype=fsharp
 autocmd FileType c,cpp setlocal expandtab shiftwidth=2 softtabstop=2 cindent
 autocmd FileType python setlocal expandtab shiftwidth=4 softtabstop=4 autoindent
 autocmd FileType yaml setlocal ts=2 sts=2 sw=2 expandtab
