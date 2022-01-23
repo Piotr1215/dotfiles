@@ -287,6 +287,9 @@ Plugin 'fatih/vim-go'
 Plugin 'neoclide/coc.nvim', { 'branch': 'master', 'do': 'yarn install --frozen-lockfile' }
 Plugin 'dense-analysis/ale'
 Plugin 'tpope/vim-fugitive'
+Plugin 'ionide/Ionide-vim', {
+      \ 'do':  'make fsautocomplete',
+      \}
 
 " Color Schemes
 Plugin 'morhetz/gruvbox'
