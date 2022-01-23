@@ -284,8 +284,9 @@ Plugin 'nvim-treesitter/nvim-treesitter', {'do': ':TSUpdate'}  " We recommend up
 Plugin 'majutsushi/tagbar'
 Plugin 'hashivim/vim-terraform'
 Plugin 'fatih/vim-go'
-Plugin 'neoclide/coc.nvim', { 'branch': 'master', 'do': 'yarn install --frozen-lockfile' }
-Plugin 'dense-analysis/ale'
+Plugin 'neovim/nvim-lspconfig'
+" Plugin 'neoclide/coc.nvim', { 'branch': 'master', 'do': 'yarn install --frozen-lockfile' }
+" Plugin 'dense-analysis/ale'
 Plugin 'tpope/vim-fugitive'
 Plugin 'ionide/Ionide-vim', {
       \ 'do':  'make fsautocomplete',
