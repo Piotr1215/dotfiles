@@ -100,7 +100,7 @@ source $ZSH/oh-my-zsh.sh
 
 source $ZSH/oh-my-zsh.sh
 
-alias ls=exa
+alias ls=exa --long --all
 alias cat=batcat
 alias lzd='docker run --rm -it -v /var/run/docker.sock:/var/run/docker.sock -v /config/lazydocker:/.config/jesseduffield/lazydocker lazyteam/lazydocker'
 alias die='shutdown now'
