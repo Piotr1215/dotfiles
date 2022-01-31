@@ -148,6 +148,7 @@ export PATH=$HOME/scripts:$PATH
 export PATH=$HOME/go/bin:$PATH
 export FONTCONFIG_PATH=/etc/fonts
 export EDITOR=nvim
+export GOPATH=$HOME/go/
 
 source ~/.github_variables
 
