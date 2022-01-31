@@ -135,6 +135,7 @@ alias gmail='web_search duckduckgo \!gmail'
 alias disk='gdu'
 alias mkdd='mkdir $(date +"%Y-%m-%d")'
 alias admin='sudo bash -c "apt-get update && apt-get -y upgrade && apt-get -y autoremove && apt-get -y clean"'
+alias sr='source ~/.zshrc'
 
 eval $(dircolors -p | sed -e 's/DIR 01;34/DIR 01;36/' | dircolors /dev/stdin)
 
@@ -149,6 +150,7 @@ export PATH=$HOME/go/bin:$PATH
 export FONTCONFIG_PATH=/etc/fonts
 export EDITOR=nvim
 export GOPATH=$HOME/go/
+export GH_USER=Piotr1215
 
 source ~/.github_variables
 
