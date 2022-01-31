@@ -1,7 +1,3 @@
-"set runtimepath^=~/.vim runtimepath+=~/.vim/after
-"    let &packpath = &runtimepath
-"    source ~/.vimrc
-
 set nocompatible
 syntax enable
 syntax on
@@ -16,13 +12,10 @@ set noerrorbells
 set scrolloff=8
 set signcolumn=yes
 set hlsearch
-" set autochdir
 set updatetime=300
 
-" set split directions
 set splitbelow
 set splitright
-" custom setting
 
 set mouse=v
 set number
@@ -31,7 +24,6 @@ set backspace=indent,eol,start
 set cursorline
 set guioptions=
 
-" indent for global
 set expandtab
 set shiftwidth=5
 set softtabstop=4
@@ -47,11 +39,11 @@ set rtp+=~/.vim/bundle/Vundle.vim
 " Space is leader
 nnoremap <SPACE> <Nop>
 map <Space> <Leader>
-
 nnoremap <Leader>q @q
 
 map ` <Nop>
 
+" Netrw settings
 nnoremap <leader>dd :Lexplore %:p:h<CR>
 nnoremap <Leader>da :Lexplore<CR>
 
@@ -62,27 +54,82 @@ inoremap <C-j> <esc>:m .+1<CR>==
 inoremap <C-k> <esc>:m .-2<CR>==
 nnoremap <leader>k :m .-2<CR>==
 nnoremap <leader>j :m .+1<CR>==
+nnoremap <leader>w :w<CR>
 
 " Select last pasted text
 nnoremap gp `[v`]
 
+" Execute word under cursor like a shell command
 nnoremap <leader>ex :!<cword><Cr>
 
 " Add line below without entering insert mode!
 nnoremap <silent> <leader><Up>   :<c-u>put!=repeat([''],v:count)<bar>']+1<cr>
 nnoremap <silent> <leader><Down> :<c-u>put =repeat([''],v:count)<bar>'[-1<cr>
 
+" Easy Motion Mappings
 map  <Leader>o <Plug>(easymotion-prefix)
 map  <Leader>of <Plug>(easymotion-bd-f)
+map  <Leader>ol <Plug>(easymotion-bd-w)
 
+" 1. TEXT EDITING
+" Go to next header
+nnoremap <Leader>nh :.,/^#/<CR>
+
+" Set spellcheck on/off
+nnoremap <Leader>son :setlocal spell spelllang=en_us<CR>
+nnoremap <Leader>sof :set nospell<CR>
+
+" Accept first grammar correction
+nnoremap <Leader>c 1z=
+
+" Removes whitespace
+nnoremap <Leader>rspace :%s/\s\+$//e
+
+" Removes empty lines if there are more than 2
+nnoremap <Leader>rlines :%s/\n\{3,}/\r\r/e
+
+" Swap words
 nnoremap <leader>sw dawelp
 
-" CoC Extension
-nmap <Leader>e <Cmd>CocCommand explorer<CR>
+" Insert space 
+nnoremap <Leader>i i<space><esc>
 
+" delete word forward in insert mode
+inoremap <C-e> <C-o>dw<Left>
+
+" Operations on Code Block
+onoremap <silent>am <cmd>call <sid>MarkdowCodeBlock(1)<cr>
+xnoremap <silent>am <cmd>call <sid>MarkdowCodeBlock(1)<cr>
+
+onoremap <silent>im <cmd>call <sid>MarkdowCodeBlock(0)<cr>
+xnoremap <silent>im <cmd>call <sid>MarkdowCodeBlock(0)<cr>
+
+" Copies till the end of a line. Fits with Shift + D, C etc
+nnoremap Y yg_
+
+" Replace multiple words simultaniously
+nnoremap <Leader>x *``cgn
+nnoremap <Leader>X #``cgN
+
+" Search and replace word under cursor using F4
+nnoremap <F4> :%s/<c-r><c-w>/<c-r><c-w>/gc<c-f>$F/i
+
+" cut and copy content to next header #
+nmap cO :.,/^#/-1d<CR>
+nmap cY :.,/^#/-1y<CR>
+
+"Split line in two
+nnoremap <Leader>sp i<CR><Esc>
+
+" Markdown Previe
+nnoremap <silent><leader>mp :MarkdownPreview<CR>
+
+" 2. NAVIGATION
+" CoC Extension
 nmap <Leader>f [fzf-p]
 xmap <Leader>f [fzf-p]
 
+" Files and Projects navigation
 nnoremap <silent> [fzf-p]p     :<C-u>CocCommand fzf-preview.FromResources project_mru git<CR>
 nnoremap <silent> [fzf-p]pf    :<C-u>CocCommand fzf-preview.ProjectFiles<CR>
 nnoremap <silent> [fzf-p]gs    :<C-u>CocCommand fzf-preview.GitStatus<CR>
@@ -90,7 +137,7 @@ nnoremap <silent> [fzf-p]ga    :<C-u>CocCommand fzf-preview.GitActions<CR>
 nnoremap <silent> [fzf-p]b     :<C-u>CocCommand fzf-preview.Buffers<CR>
 nnoremap <silent> [fzf-p]B     :<C-u>CocCommand fzf-preview.AllBuffers<CR>
 nnoremap <silent> [fzf-p]m     :<C-u>CocCommand fzf-preview.MruFiles<CR>
-nnoremap <silent> [fzf-p]o     :<C-u>CocCommand fzf-preview.FromResources buffer project_mru<CR>
+nnoremap <silent> [fzf-p]po     :<C-u>CocCommand fzf-preview.FromResources buffer project_mru<CR>
 nnoremap <silent> [fzf-p]<C-o> :<C-u>CocCommand fzf-preview.Jumps<CR>
 nnoremap <silent> [fzf-p]g;    :<C-u>CocCommand fzf-preview.Changes<CR>
 nnoremap <silent> [fzf-p]/     :<C-u>CocCommand fzf-preview.Lines--add-fzf-arg=--no-sort --add-fzf-arg=--query="'"<CR>
@@ -101,25 +148,18 @@ nnoremap <silent> [fzf-p]t     :<C-u>CocCommand fzf-preview.BufferTags<CR>
 nnoremap <silent> [fzf-p]q     :<C-u>CocCommand fzf-preview.QuickFix<CR>
 nnoremap <silent> [fzf-p]L     :<C-u>CocCommand fzf-preview.LocationList<CR> 
 
-" Edit current file in different ways
-cnoremap %% <C-R>=fnameescape(expand('%:h')).'/'<cr>
-map <leader>ew :e %%
-map <leader>es :sp %%
-map <leader>ev :vsp %%
-map <leader>et :tabe %%
+" Find files using Telescope command-line sugar.
+" map('n', '<leader>ff', "<cmd>lua require'telescope.builtin'.find_files({ find_command = {'rg', '--files', '--hidden', '-g', '!.git' }})<cr>", default_opts)
+nnoremap <leader>tf <cmd>lua require'telescope.builtin'.find_files({ find_command = {'rg', '--files', '--hidden', '-g', '!.git' }})<cr>
+nnoremap <leader>tg <cmd>Telescope live_grep<cr>
+nnoremap <leader>tb <cmd>Telescope buffers<cr>
+nnoremap <leader>th <cmd>Telescope help_tags<cr>
+nnoremap <Leader>ts :lua require'telescope.builtin'.grep_string{}<CR>
 
-" Removes whitespace
-" Removes empty lines if there are more than 2
-nnoremap <Leader>rspace :%s/\s\+$//e
-nnoremap <Leader>rlines :%s/\n\{3,}/\r\r/e
-
-map asd <Plug>Markdown_MoveToParentHeader
-nnoremap <Leader>ph <Plug>Markdown_MoveToPreviousHeader
-nnoremap <Leader>nh :.,/^#/<CR>
-
-" Set spellcheck on/off
-nnoremap <Leader>son :setlocal spell spelllang=en_us<CR>
-nnoremap <Leader>sof :set nospell<CR>
+" Git mappings
+nnoremap <leader>goh :G push -f origin HEAD<CR>
+nnoremap <leader>gop :G push<CR>
+command GitDiff execute  "w !git diff --no-index -- % -"
 
 " Used for learning for certs
 nnoremap <Leader>ok A :+1: <esc><CR>
@@ -127,14 +167,6 @@ nnoremap <Leader>bad A :-1: <esc><CR>
 nnoremap <Leader>r A :hand: <esc><CR>
 nnoremap <Leader>clean :g/<details>/,/<\/details>/d _<CR>
 
-" delete word forward in insert mode
-inoremap <C-e> <C-o>dw<Left>
-
-nnoremap <Leader>i i<space><esc>
-
-" Accept first grammar correction
-nnoremap <Leader>c 1z=
-nnoremap <Leader>gl }
 " nnoremp <leader>sv :source /Users/p.zaniewski/.config/nvim/init.vim<CR>
 nnoremap <leader>sv :source /home/decoder/.config/nvim/init.vim<CR>
 
@@ -151,13 +183,7 @@ function! s:MarkdowCodeBlock(outside)
     endif
 endfunction
 
-onoremap <silent>am <cmd>call <sid>MarkdowCodeBlock(1)<cr>
-xnoremap <silent>am <cmd>call <sid>MarkdowCodeBlock(1)<cr>
-
-onoremap <silent>im <cmd>call <sid>MarkdowCodeBlock(0)<cr>
-xnoremap <silent>im <cmd>call <sid>MarkdowCodeBlock(0)<cr>
-
-" SHORTCUTS REMAPS
+" 3 - VIM HELPERS
 " Stop search highlight
 nnoremap ,<space> :nohlsearch<CR>
 
@@ -165,47 +191,21 @@ nnoremap ,<space> :nohlsearch<CR>
 inoremap jj <Esc>
 inoremap jk <Esc>
 
-" Copies till the end of a line. Fits with Shift + D, C etc
-nnoremap Y yg_
+" Zoom split windows
+noremap Zz <c-w>_ \| <c-w>\|
+noremap Zo <c-w>=
 
-" Replace multiple words simultaniously
-nnoremap <Leader>x *``cgn
-nnoremap <Leader>X #``cgN
-
-" Search and replace word under cursor using F4
-nnoremap <F4> :%s/<c-r><c-w>/<c-r><c-w>/gc<c-f>$F/i
-
-" COMMAND REMAPS
-command GitDiff execute  "w !git diff --no-index -- % -"
 nmap <F8> :TagbarToggle<CR>
-
-" cut content to next header #
-nmap cO :.,/^#/-1d<CR>
-
-" copy content to next header #
-nmap cY :.,/^#/-1y<CR>
 
 tnoremap <Esc> <C-\><C-n>
 command! -nargs=* T split | terminal <args>
 command! -nargs=* VT vsplit | terminal <args>
 
-"Split line in two
-nnoremap <Leader>sp i<CR><Esc>
-
-" Zoom split windows
-noremap Zz <c-w>_ \| <c-w>\|
-noremap Zo <c-w>=
-
-" Find files using Telescope command-line sugar.
-" map('n', '<leader>ff', "<cmd>lua require'telescope.builtin'.find_files({ find_command = {'rg', '--files', '--hidden', '-g', '!.git' }})<cr>", default_opts)
-nnoremap <leader>tf <cmd>lua require'telescope.builtin'.find_files({ find_command = {'rg', '--files', '--hidden', '-g', '!.git' }})<cr>
-nnoremap <leader>tg <cmd>Telescope live_grep<cr>
-nnoremap <leader>tb <cmd>Telescope buffers<cr>
-nnoremap <leader>th <cmd>Telescope help_tags<cr>
-nnoremap <Leader>ts :lua require'telescope.builtin'.grep_string{}<CR>
-
-" Markdown Settings
-nnoremap <silent><leader>mp :MarkdownPreview<CR>
+" Split navigation
+nnoremap <C-J> <C-W><C-J>
+nnoremap <C-K> <C-W><C-K>
+nnoremap <C-L> <C-W><C-L>
+nnoremap <C-H> <C-W><C-H>
 
 " Harpoon settings
 nnoremap <Leader>ha :lua require("harpoon.mark").add_file()<CR>
@@ -221,15 +221,6 @@ nnoremap   <silent><Leader>fs :FloatermShow<CR>
 nnoremap   <silent><Leader>fh :FloatermHide<CR>
 nnoremap   <silent><Leader>fn :FloatermNext<CR>
 nnoremap   <silent><Leader>fc :FloatermKill<CR>
-
-" Split navigation
-nnoremap <C-J> <C-W><C-J>
-nnoremap <C-K> <C-W><C-K>
-nnoremap <C-L> <C-W><C-L>
-nnoremap <C-H> <C-W><C-H>
-
-" Goyo shortcuts
-nnoremap   <silent><Leader>go :Goyo 100<CR>
 
 call vundle#begin()
 " alternatively, pass a path where Vundle should install plugins
@@ -268,7 +259,6 @@ Plugin 'iamcco/markdown-preview.nvim'
 Plugin 'junegunn/vim-emoji'
 Plugin 'christoomey/vim-system-copy'
 Plugin 'dhruvasagar/vim-table-mode'
-Plugin 'junegunn/goyo.vim'
 Plugin 'junegunn/limelight.vim'
 Plugin 'ferrine/md-img-paste.vim'
 Plugin 'SidOfc/mkdx'
@@ -284,9 +274,9 @@ Plugin 'nvim-treesitter/nvim-treesitter', {'do': ':TSUpdate'}  " We recommend up
 Plugin 'majutsushi/tagbar'
 Plugin 'hashivim/vim-terraform'
 Plugin 'fatih/vim-go'
-Plugin 'neovim/nvim-lspconfig'
+Plugin 'neoclide/coc.nvim', {'branch': 'release'}
 " Plugin 'neoclide/coc.nvim', { 'branch': 'master', 'do': 'yarn install --frozen-lockfile' }
-" Plugin 'dense-analysis/ale'
+Plugin 'dense-analysis/ale'
 Plugin 'tpope/vim-fugitive'
 Plugin 'ionide/Ionide-vim', {
       \ 'do':  'make fsautocomplete',
@@ -300,56 +290,6 @@ Plugin 'NLKNguyen/papercolor-theme'
 
 " All of your Plugins must be added before the following line
 call vundle#end()
-
-" LSP CONFIG
-lua << EOF
-local nvim_lsp = require('lspconfig')
-
--- Use an on_attach function to only map the following keys
--- after the language server attaches to the current buffer
-local on_attach = function(client, bufnr)
-  local function buf_set_keymap(...) vim.api.nvim_buf_set_keymap(bufnr, ...) end
-  local function buf_set_option(...) vim.api.nvim_buf_set_option(bufnr, ...) end
-
-  -- Enable completion triggered by <c-x><c-o>
-  buf_set_option('omnifunc', 'v:lua.vim.lsp.omnifunc')
-
-  -- Mappings.
-  local opts = { noremap=true, silent=true }
-
-  -- See `:help vim.lsp.*` for documentation on any of the below functions
-  buf_set_keymap('n', 'gD', '<cmd>lua vim.lsp.buf.declaration()<CR>', opts)
-  buf_set_keymap('n', 'gd', '<cmd>lua vim.lsp.buf.definition()<CR>', opts)
-  buf_set_keymap('n', 'K', '<cmd>lua vim.lsp.buf.hover()<CR>', opts)
-  buf_set_keymap('n', 'gi', '<cmd>lua vim.lsp.buf.implementation()<CR>', opts)
-  buf_set_keymap('n', '<C-k>', '<cmd>lua vim.lsp.buf.signature_help()<CR>', opts)
-  buf_set_keymap('n', '<space>wa', '<cmd>lua vim.lsp.buf.add_workspace_folder()<CR>', opts)
-  buf_set_keymap('n', '<space>wr', '<cmd>lua vim.lsp.buf.remove_workspace_folder()<CR>', opts)
-  buf_set_keymap('n', '<space>wl', '<cmd>lua print(vim.inspect(vim.lsp.buf.list_workspace_folders()))<CR>', opts)
-  buf_set_keymap('n', '<space>D', '<cmd>lua vim.lsp.buf.type_definition()<CR>', opts)
-  buf_set_keymap('n', '<space>rn', '<cmd>lua vim.lsp.buf.rename()<CR>', opts)
-  buf_set_keymap('n', '<space>ca', '<cmd>lua vim.lsp.buf.code_action()<CR>', opts)
-  buf_set_keymap('n', 'gr', '<cmd>lua vim.lsp.buf.references()<CR>', opts)
-  buf_set_keymap('n', '<space>e', '<cmd>lua vim.diagnostic.open_float()<CR>', opts)
-  buf_set_keymap('n', '[d', '<cmd>lua vim.diagnostic.goto_prev()<CR>', opts)
-  buf_set_keymap('n', ']d', '<cmd>lua vim.diagnostic.goto_next()<CR>', opts)
-  buf_set_keymap('n', '<space>q', '<cmd>lua vim.diagnostic.setloclist()<CR>', opts)
-  buf_set_keymap('n', '<space>f', '<cmd>lua vim.lsp.buf.formatting()<CR>', opts)
-
-end
-require'lspconfig'.tsserver.setup{}
--- Use a loop to conveniently call 'setup' on multiple servers and
--- map buffer local keybindings when the language server attaches
-local servers = { 'pyright', 'rust_analyzer', 'fsautocomplete'}
-for _, lsp in ipairs(servers) do
-  nvim_lsp[lsp].setup {
-    on_attach = on_attach,
-    flags = {
-      debounce_text_changes = 150,
-    }
-  }
-end
-EOF
 
 set completefunc=emoji#complete
 
@@ -367,35 +307,119 @@ let g:gruvbox_contrast_dark = 'hard'
 
 filetype plugin indent on
 
-"Goyo config
-function! s:goyo_enter()
-  if executable('tmux') && strlen($TMUX)
-    silent !tmux set status off
-    silent !tmux list-panes -F '\#F' | grep -q Z || tmux resize-pane -Z
-  endif
-  set noshowmode
-  set noshowcmd
-  set scrolloff=999
-  Limelight
-  " ...
+" Use tab for trigger completion with characters ahead and navigate.
+" NOTE: Use command ':verbose imap <tab>' to make sure tab is not mapped by
+" other plugin before putting this into your config.
+inoremap <silent><expr> <TAB>
+      \ pumvisible() ? "\<C-n>" :
+      \ <SID>check_back_space() ? "\<TAB>" :
+      \ coc#refresh()
+inoremap <expr><S-TAB> pumvisible() ? "\<C-p>" : "\<C-h>"
+
+function! s:check_back_space() abort
+  let col = col('.') - 1
+  return !col || getline('.')[col - 1]  =~# '\s'
 endfunction
 
-function! s:goyo_leave()
-  if executable('tmux') && strlen($TMUX)
-    silent !tmux set status on
-    silent !tmux list-panes -F '\#F' | grep -q Z && tmux resize-pane -Z
+" Use <c-space> to trigger completion.
+if has('nvim')
+  inoremap <silent><expr> <c-space> coc#refresh()
+else
+  inoremap <silent><expr> <c-@> coc#refresh()
+endif
+
+" Make <CR> auto-select the first completion item and notify coc.nvim to
+" format on enter, <cr> could be remapped by other vim plugin
+inoremap <silent><expr> <cr> pumvisible() ? coc#_select_confirm()
+                              \: "\<C-g>u\<CR>\<c-r>=coc#on_enter()\<CR>"
+
+" Use `[g` and `]g` to navigate diagnostics
+" Use `:CocDiagnostics` to get all diagnostics of current buffer in location list.
+nmap <silent> [g <Plug>(coc-diagnostic-prev)
+nmap <silent> ]g <Plug>(coc-diagnostic-next)
+
+" GoTo code navigation.
+nmap <silent> gd <Plug>(coc-definition)
+nmap <silent> gy <Plug>(coc-type-definition)
+nmap <silent> gimp <Plug>(coc-implementation)
+nmap <silent> gr <Plug>(coc-references)
+
+" Use K to show documentation in preview window.
+nnoremap <silent> K :call <SID>show_documentation()<CR>
+
+function! s:show_documentation()
+  if (index(['vim','help'], &filetype) >= 0)
+    execute 'h '.expand('<cword>')
+  elseif (coc#rpc#ready())
+    call CocActionAsync('doHover')
+  else
+    execute '!' . &keywordprg . " " . expand('<cword>')
   endif
-  set showmode
-  set showcmd
-  set scrolloff=5
-  Limelight!
-  " ...
 endfunction
 
-autocmd BufWritePost *.puml silent! "!java -jar /usr/local/bin/plantuml.jar <afile> -o ./rendered"
+" Highlight the symbol and its references when holding the cursor.
+autocmd CursorHold * silent call CocActionAsync('highlight')
 
-autocmd! User GoyoEnter nested call <SID>goyo_enter()
-autocmd! User GoyoLeave nested call <SID>goyo_leave()
+" Symbol renaming.
+nmap <leader>rn <Plug>(coc-rename)
+
+" Formatting selected code.
+xmap <leader>fo  <Plug>(coc-format-selected)
+nmap <leader>fo  <Plug>(coc-format-selected)
+
+augroup mygroup
+  autocmd!
+  " Setup formatexpr specified filetype(s).
+  autocmd FileType typescript,json setl formatexpr=CocAction('formatSelected')
+  " Update signature help on jump placeholder.
+  autocmd User CocJumpPlaceholder call CocActionAsync('showSignatureHelp')
+augroup end
+
+" Applying codeAction to the selected region.
+" Example: `<leader>aap` for current paragraph
+xmap <leader>a  <Plug>(coc-codeaction-selected)
+nmap <leader>a  <Plug>(coc-codeaction-selected)
+
+" Remap keys for applying codeAction to the current buffer.
+nmap <leader>ac  <Plug>(coc-codeaction)
+" Apply AutoFix to problem on the current line.
+nmap <leader>qf  <Plug>(coc-fix-current)
+
+" Map function and class text objects
+" NOTE: Requires 'textDocument.documentSymbol' support from the language server.
+xmap if <Plug>(coc-funcobj-i)
+omap if <Plug>(coc-funcobj-i)
+xmap af <Plug>(coc-funcobj-a)
+omap af <Plug>(coc-funcobj-a)
+xmap ic <Plug>(coc-classobj-i)
+omap ic <Plug>(coc-classobj-i)
+xmap ac <Plug>(coc-classobj-a)
+omap ac <Plug>(coc-classobj-a)
+
+" Use CTRL-S for selections ranges.
+" Requires 'textDocument/selectionRange' support of language server.
+nmap <silent> <C-s> <Plug>(coc-range-select)
+xmap <silent> <C-s> <Plug>(coc-range-select)
+
+" Add `:Format` command to format current buffer.
+command! -nargs=0 Format :call CocAction('format')
+
+" Add `:Fold` comand to fold current buffer.
+command! -nargs=? Fold :call     CocAction('fold', <f-args>)
+
+" Add `:OR` command for organize imports of the current buffer.
+command! -nargs=0 OR   :call     CocAction('runCommand', 'editor.action.organizeImport')
+
+" Use <Ctrl-F> to format documents with prettier
+command! -nargs=0 Prettier :CocCommand prettier.formatFile
+noremap <C-F> :Prettier<CR>
+
+" Add (Neo)Vim's native statusline support.
+" NOTE: Please see `:h coc-status` for integrations with external plugins that
+" provide custom statusline: lightline.vim, vim-airline.
+set statusline^=%{coc#status()}%{get(b:,'coc_current_function','')}
+
+autocmd BufWritePost *.puml silent! !java -DPLANTUML_LIMIT_SIZE=8192 -jar /usr/local/bin/plantuml.jar <afile> -o ./rendered
 
 " vsnip settings
 " Expand
@@ -416,7 +440,6 @@ let g:mdip_imgdir = '_media'
 let g:mdip_imgname = 'image'
 
 " indent for special file
-autocmd BufNewFile,BufRead *.fs,*.fsx,*.fsi set filetype=fsharp
 autocmd FileType c,cpp setlocal expandtab shiftwidth=2 softtabstop=2 cindent
 autocmd FileType python setlocal expandtab shiftwidth=4 softtabstop=4 autoindent
 autocmd FileType yaml setlocal ts=2 sts=2 sw=2 expandtab
@@ -427,11 +450,13 @@ au FileType plantuml let g:plantuml_previewer#plantuml_jar_path = get(
     \  0
     \)
 
+let g:plantuml_previewer#viewer_path = "/home/decoder/.vim/bundle/plantuml-previewer.vim/viewer"
+
 " setup custom emmet snippets
 let g:user_emmet_settings = webapi#json#decode(join(readfile(expand('~/.snippets_custom.json')), "\n"))
 
 " setup for markdown snippet
-let g:vim_markdown_folding_disabled = 0
+let g:vim_markdown_folding_disabled = 1
 let g:vim_markdown_folding_level = 3
 let g:vim_markdown_toc_autofit = 1
 let g:vim_markdown_conceal = 0
@@ -439,6 +464,7 @@ let g:vim_markdown_conceal_code_blocks = 0
 let g:vim_markdown_no_extensions_in_markdown = 1
 let g:vim_markdown_autowrite = 1
 let g:vim_markdown_follow_anchor = 1
+let g:vim_markdown_auto_insert_bullets = 0
 
 " setup for syntastic
 set statusline+=%#warningmsg#
