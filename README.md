@@ -10,10 +10,14 @@ Simplified version without dotbot:
 
 Once the dotfiles are symlinked, it is easy to forget to commit them do the repo (there is no indicator on the symlinked file).
 
+FIRST COPY FILE TO THIS REPO AND THAN SYMLINK IT IN THE DESTINATION FOLDER NOT OTHER WAY AROUND!!!
+
 To symlink a file: (source ->  destination)
 
 ```bash
-ln -sf /path/to/file /path/to/symlink
+# This will create symlink on the filesystem FROM the file in the repo TO the file in the filesystem
+# So you end up with symlinks in the file system and actual files in the repo!
+ln -sf /path/to/file_in_this_repo /path/to/symlink_name_in_whatever_folder_locally
 ```
 
 > IMPORTANT: Once a file is added to the repo folder, it will be auto-committed.
