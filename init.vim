@@ -1,1 +1,0 @@
-/home/decoder/.config/nvim/init.vim
