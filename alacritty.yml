@@ -24,9 +24,9 @@
   #TERM: alacritty
 
 window:
-  # dimensions:
-  #   columns: 133
-  #   lines: 40
+  dimensions:
+    columns: 133
+    lines: 40
 
   # Window position (changes require restart)
   #
