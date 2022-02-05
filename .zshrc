@@ -176,19 +176,6 @@ function mkd() {
   mkdir -p "$@" && cd "$_";
 }
 
-function vup() {
-    vagrant up a11ae0c
-    vagrant up 7e9caf9
-    vagrant up 4be48a8
-}
-
-function vhalt {
-  vagrant halt a11ae0c
-  vagrant halt 7e9caf9
-  vagrant halt 4be48a8
-}
-
-
 function pex() {
 
     pet exec -q = $@;
