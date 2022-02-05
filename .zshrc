@@ -102,6 +102,7 @@ source $ZSH/oh-my-zsh.sh
 
 alias ghs='gh s'
 alias ls='exa --long --all'
+alias lt='exa --long --all --sort={{modified}} --header --icons --git'
 alias cat=batcat
 alias lzd='docker run --rm -it -v /var/run/docker.sock:/var/run/docker.sock -v /config/lazydocker:/.config/jesseduffield/lazydocker lazyteam/lazydocker'
 alias die='shutdown now'
@@ -118,7 +119,6 @@ alias dev='cd ~/dev'
 alias kdump='kubectl get all --all-namespaces'
 alias addkey='eval $(ssh-agent) && ssh-add'
 alias ll='ls -lah'
-alias lt='lsd -alt'
 alias l='lsd -al'
 alias lol=lolcat
 alias lal='lsd -al | lolcat -a -d 5'
