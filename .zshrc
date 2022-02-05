@@ -231,7 +231,7 @@ function peco-directories() {
   fi
 }
 
-function peco-files() {
+function iopen {
   local current_lbuffer="$LBUFFER"
   local current_rbuffer="$RBUFFER"
   if command -v fd >/dev/null 2>&1; then
