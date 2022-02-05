@@ -102,7 +102,7 @@ source $ZSH/oh-my-zsh.sh
 
 alias ghs='gh s'
 alias ls='exa --long --all'
-alias lt='exa --long --grid --all --sort=modified --header --icons'
+alias la='exa --long --grid --all --sort=modified --header --icons'
 alias cat=batcat
 alias lzd='docker run --rm -it -v /var/run/docker.sock:/var/run/docker.sock -v /config/lazydocker:/.config/jesseduffield/lazydocker lazyteam/lazydocker'
 alias die='shutdown now'
