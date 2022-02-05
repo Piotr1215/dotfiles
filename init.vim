@@ -125,7 +125,7 @@ nnoremap <Leader>sp i<CR><Esc>
 nnoremap <silent><leader>mp :MarkdownPreview<CR>
 
 " Fix Markdown Errors
-nnoremap <leader>fm :<C-u>CocCommand markdownlint.FixAll<CR>
+nnoremap <leader>fm :<C-u>CocCommand markdownlint.fixAll<CR>
 
 " 2. NAVIGATION
 " CoC Extension
