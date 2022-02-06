@@ -14,7 +14,7 @@ error_symbol = "[✗](bold red)"
 # docker
 [docker_context]
 symbol = "🐋 "
-disabled = false
+disabled = true
 
 # kubernetes
 [kubernetes]
