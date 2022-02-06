@@ -2,8 +2,8 @@
 add_newline = true
 
 format="""
-[➜](bold green)
-$kubernetes$directory$character """
+$kubernetes$directory$character 
+[➜](bold green) """
 
 # Disable the package module, hiding it from the prompt completely
 [package]
