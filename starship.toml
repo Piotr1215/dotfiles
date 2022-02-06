@@ -9,7 +9,6 @@ disabled = true
 [character]      # The name of the module we are configuring is "character"
 symbol = "➜"
 success_symbol = "[➜](bold green)"
-success_symbol = "[➜](bold green)"
 error_symbol = "[✗](bold red)"
 
 # docker
