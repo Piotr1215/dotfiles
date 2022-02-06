@@ -1,6 +1,5 @@
 # Don't print a new line at the start of the prompt
 add_newline = false
-format = "$all" 
 
 # Disable the package module, hiding it from the prompt completely
 [package]
@@ -15,7 +14,7 @@ use_symbol_for_status = true
 # kubernetes
 [kubernetes]
 symbol = "⛵ "
-style = "dimmed green"
+style = "bold dimmed green"
 disabled = false
 
 [kubernetes.context_aliases]
