@@ -1,10 +1,7 @@
 # Don't print a new line at the start of the prompt
 add_newline = false
 
-format = """
-[┌───────────────────>](bold green)
-[│](bold green)$directory$rust$package
-[└─>](bold green) """
+format = """ [│](bold green)$directory$kubernetes$git_status """
 
 # Disable the package module, hiding it from the prompt completely
 [package]
