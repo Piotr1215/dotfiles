@@ -20,7 +20,7 @@ disabled = true
 [kubernetes]
 symbol = "⛵ "
 style = "bold dimmed green"
-disabled = false
+disabled = true
 
 [kubernetes.context_aliases]
 "dev.local.cluster.k8s" = "dev"
