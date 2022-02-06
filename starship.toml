@@ -1,6 +1,11 @@
 # Don't print a new line at the start of the prompt
 add_newline = false
-format="$all$directory$character"
+
+format = """
+[┌───────────────────>](bold green)
+[│](bold green)$directory$rust$package
+[└─>](bold green) """
+
 # Disable the package module, hiding it from the prompt completely
 [package]
 disabled = true
