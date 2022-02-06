@@ -262,6 +262,6 @@ export NVM_DIR="$HOME/.nvm"
 
 source /home/decoder/dev/kube-ps1/kube-ps1.sh
 PROMPT='$(kube_ps1)'$PROMPT
-PROMPT="$PROMPT"$'\n →'
+PROMPT="$PROMPT"$'\n→ '
 
 #eval "$(starship init zsh)"
