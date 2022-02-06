@@ -150,6 +150,7 @@ export FONTCONFIG_PATH=/etc/fonts
 export EDITOR=nvim
 export GOPATH=$HOME/go/
 export GH_USER=Piotr1215
+export STARSHIP_CONFIG=/home/decoder/.config
 
 source ~/.github_variables
 
