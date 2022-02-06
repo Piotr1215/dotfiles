@@ -1,9 +1,9 @@
 # Don't print a new line at the start of the prompt
-add_newline = true
+add_newline = false
 
 format="""
-$kubernetes$directory$character 
-[➜](bold green) """
+$kubernetes$directory
+$character """
 
 # Disable the package module, hiding it from the prompt completely
 [package]
