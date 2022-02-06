@@ -1,7 +1,7 @@
 # Don't print a new line at the start of the prompt
 add_newline = false
 
-format = """ [➜](bold green)$directory$kubernetes$git_status """
+format="$all$directory$character"
 
 # Disable the package module, hiding it from the prompt completely
 [package]
