@@ -7,7 +7,9 @@ disabled = true
 
 # Replace the "❯" symbol in the prompt with "➜"
 [character]      # The name of the module we are configuring is "character"
-success_ymbol = "[➜](bold green)"
+symbol = "➜"
+success_symbol = "[➜](bold green)"
+success_symbol = "[➜](bold green)"
 error_symbol = "[✗](bold red)"
 
 # docker
