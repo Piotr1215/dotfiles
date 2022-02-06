@@ -97,6 +97,9 @@ plugins=(git kubectl zsh-autosuggestions zsh-syntax-highlighting sudo web-search
 # To customize prompt, run `p10k configure` or edit ~/.p10k.zsh.
 # [[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
 
+source /home/decoder/dev/kube-ps1/kube-ps1.sh
+PROMPT='$(kube_ps1)'$PROMPT
+
 source $ZSH/oh-my-zsh.sh
 
 alias ghs='gh s'
