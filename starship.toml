@@ -1,6 +1,9 @@
 # Don't print a new line at the start of the prompt
 add_newline = false
 
+[prompt]
+format = "$all" 
+
 # Disable the package module, hiding it from the prompt completely
 [package]
 disabled = true
