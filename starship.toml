@@ -15,3 +15,23 @@ disabled = false
 
 [kubernetes.context_aliases]
 "dev.local.cluster.k8s" = "dev"
+
+# git
+
+[git_commit]
+commit_hash_length = 4
+
+[git_status]
+conflicted = "🏳"
+ahead = "🏎💨"
+behind = "😰"
+diverged = "😵"
+untracked = "🤷‍"
+stashed = "📦"
+modified = "📝"
+staged.value = "++"
+staged.style = "green"
+staged_count.enabled = true
+staged_count.style = "green"
+renamed = "👅"
+deleted = "🗑"

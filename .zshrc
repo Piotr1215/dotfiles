@@ -78,9 +78,6 @@ ZSH_THEME="spaceship"
 # Add wisely, as too many plugins slow down shell startup.
 plugins=(git kubectl zsh-autosuggestions zsh-syntax-highlighting sudo web-search)
 
-# source $HOME/kube-ps1/kube-ps1.sh
-source $ZSH/oh-my-zsh.sh
-
 # User configuration
 
 # export MANPATH="/usr/local/man:$MANPATH"
@@ -98,7 +95,7 @@ source $ZSH/oh-my-zsh.sh
 
 # PROMPT CUSTOMIZATION
 # To customize prompt, run `p10k configure` or edit ~/.p10k.zsh.
-[[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
+# [[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
 
 source $ZSH/oh-my-zsh.sh
 
