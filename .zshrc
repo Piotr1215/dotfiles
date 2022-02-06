@@ -261,6 +261,6 @@ export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
 
 source /home/decoder/dev/kube-ps1/kube-ps1.sh
-PROMPT='$(kube_ps1)'$PROMPT\n
+PROMPT='$(kube_ps1)'$PROMPT"\n"
 
 #eval "$(starship init zsh)"
