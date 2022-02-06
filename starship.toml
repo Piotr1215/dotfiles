@@ -9,6 +9,11 @@ disabled = true
 [character]      # The name of the module we are configuring is "character"
 error_symbol = "✗"
 
+# docker
+[docker_context]
+symbol = "🐋 "
+disabled = false
+
 # kubernetes
 [kubernetes]
 symbol = "⛵ "
