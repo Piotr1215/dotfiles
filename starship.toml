@@ -32,7 +32,6 @@ untracked = "🤷‍"
 stashed = "📦"
 modified = "📝"
 staged.value = "++"
-staged.style = "green"
 staged_count.enabled = true
 staged.style = "green"
 renamed = "👅"
