@@ -2,7 +2,7 @@
 add_newline = false
 
 format="""
-$kubernetes$directory
+$kubernetes$directory$git_status
 $character """
 
 # Disable the package module, hiding it from the prompt completely
