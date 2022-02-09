@@ -202,7 +202,7 @@ nmap <F8> :TagbarToggle<CR>
 
 tnoremap <Esc> <C-\><C-n>
 autocmd TermOpen term://* startinsert
-command! -nargs=* T split | resize 15 | terminal <args>
+command! -nargs=* T :split | resize 15 | terminal
 #command! -nargs=* T split | terminal <args>
 command! -nargs=* VT vsplit | terminal <args>
 
