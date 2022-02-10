@@ -186,6 +186,16 @@ function! s:MarkdowCodeBlock(outside)
     endif
 endfunction
 
+function! Reformat()
+  execute '%s/\v(\[!TIP\].*)/\1\r:::/g'
+  execute '%s/> \[!TIP\]/:::tip\r/g'
+  execute '%s/\v(\[!INFO\].*)/\1\r:::/g'
+  execute '%s/> \[!INFO\]/:::info\r/g'
+endfunction
+
+
+
+
 " 3 - VIM HELPERS
 " Stop search highlight
 nnoremap ,<space> :nohlsearch<CR>
