@@ -193,9 +193,6 @@ function! Reformat()
   execute '%s/> \[!INFO\]/:::info\r/g'
 endfunction
 
-
-
-
 " 3 - VIM HELPERS
 " Stop search highlight
 nnoremap ,<space> :nohlsearch<CR>
