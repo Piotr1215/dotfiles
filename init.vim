@@ -281,7 +281,7 @@ Plugin 'majutsushi/tagbar'
 Plugin 'hashivim/vim-terraform'
 Plugin 'fatih/vim-go'
 Plugin 'neoclide/coc.nvim', {'branch': 'release'}
-Plugin 'rhysd/clang-format'
+Plugin 'rhysd/vim-clang-format'
 Plugin 'dense-analysis/ale'
 Plugin 'tpope/vim-fugitive'
 Plugin 'ionide/Ionide-vim', {
