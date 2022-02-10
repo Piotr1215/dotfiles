@@ -114,7 +114,6 @@ alias docs='docsify serve docs'
 alias glog='git log --graph --oneline --decorate'
 alias music='browse https://www.youtube.com/playlist?list=PL3-_0fT8ay_I9cEIoPNKRN7PcGjnAZ1Re'
 alias getupd='source ${HOME}/scripts/getupdates.sh'
-alias getnvim='source ${HOME}/scripts/upgrade-nvim.sh'
 alias k=kubectl
 alias dev='cd ~/dev'
 alias kdump='kubectl get all --all-namespaces'
