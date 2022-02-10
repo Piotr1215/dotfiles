@@ -192,7 +192,7 @@ function! Reformat()
   execute '%s/\v(\[!INFO\].*)/\1\r:::/g'
   execute '%s/> \[!INFO\]/:::info\r/g'
 endfunction
-onoremap <silent>mm <cmd>call <sid>Reformat()<cr>
+onoremap <silent>mm <cmd>call Reformat()<cr>
 " 3 - VIM HELPERS
 " Stop search highlight
 nnoremap ,<space> :nohlsearch<CR>
