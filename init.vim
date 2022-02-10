@@ -482,7 +482,7 @@ let g:terraform_align=1
 
 " autoformat
 augroup autoformat_settings
-  autocmd FileType c,cpp,proto,javascript AutoFormatBuffer :ClangFormat
+  autocmd FileType c,cpp,proto,javascript AutoFormatBuffer clang-format
   autocmd FileType python AutoFormatBuffer yapf
 augroup END
 
