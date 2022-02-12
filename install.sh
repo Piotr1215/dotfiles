@@ -89,7 +89,7 @@ process "→ setup git config"
 
 process "→ install essencial packages"
 
-  sudo apt install -y vim-gtk htop unzip python3-setuptools figlet tmux pydf mc wget mtr ncdu cmatrix ranger jq lolcat tmux alacritty
+  sudo apt install -y vim-gtk htop unzip python3-setuptools figlet tmux pydf mc wget mtr ncdu cmatrix ranger jq lolcat tmux
 
 process "→ install pip"
 
