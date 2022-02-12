@@ -143,6 +143,8 @@ process "→ Installing zsh-autosuggestions plugin"
 
   git clone https://github.com/zsh-users/zsh-autosuggestions ~/.oh-my-zsh/custom/plugins/zsh-autosuggestions
 
+git clone https://github.com/zsh-users/zsh-syntax-highlighting.git
+
 # process "→ Installing stern"
 # (
 #     wget https://github.com/wercker/stern/releases/download/1.11.0/stern_linux_amd64 && \
