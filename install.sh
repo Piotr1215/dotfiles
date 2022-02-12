@@ -161,6 +161,7 @@ process "→ Installing Arkade"
 process "→ Installing Neovim"
   mkdir -p ${HOME}/.config/nvim/
   ln -sf ${HOME}/dotfiles/init.vim ${HOME}/.config/nvim/init.vim
+  ln -sf ${HOME}/dotfiles/snippets_custom.json ${HOME}/.snippets_custom.json
 
   sudo curl -LO https://github.com/neovim/neovim/releases/latest/download/nvim.appimage
   sudo chmod u+x nvim.appimage
