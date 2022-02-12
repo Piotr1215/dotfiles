@@ -31,7 +31,6 @@ for name in *; do
     target="$HOME/.$name"
     if [[ ! "$name" =~ '\.sh$' ]] && [ "$name" != 'README.md' ] && [[ "$name" != 'settings.json' ]] && [[ "$name" != 'config' ]]; then
       backup $target
-      symlink $PWD/$name $target
     fi
   fi
 done
@@ -90,7 +89,7 @@ process "→ setup git config"
 process "→ install essencial packages"
 
   sudo apt install -y vim-gtk htop unzip python3-setuptools figlet tmux pydf mc wget mtr ncdu cmatrix ranger jq lolcat tmux
-
+  ln -sf ${HOME}/dotfiles/.tmux.conf ~/.tmux.conf
 process "→ install pip"
 
   sudo apt install -y python3-pip
@@ -171,7 +170,7 @@ process "→ Installing Neovim"
   nvim +PluginInstall +qall
 
 process "→ Setting zsh as default shell"
-ln -sf ./dotfiles/.zshrc ~/.zshrc
+ln -sf ${HOME}/dotfiles/.zshrc ~/.zshrc
 sudo chsh -s $(which zsh) $(whoami)
   zsh
   sed -i 's/ZSH_THEME="robbyrussell"/ZSH_THEME="3den"/g' ~/.zshrc
