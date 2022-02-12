@@ -5,7 +5,7 @@ Simplified version without dotbot:
 - run install
 - symlink all the .files
 - TODOS:
-  - symlink files that require directories correctly
+  - [x] symlink files that require directories correctly
   - switch to arkade for installing devops CLIs
 
 ## Create User
@@ -94,6 +94,8 @@ or
 ## Testing
 
 The setup was tested on:
+
+Last test date: 12.02.2022
 
 - Ubuntu 20.04
 - Pop!_OS 21.04
