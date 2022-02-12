@@ -109,6 +109,10 @@ process "→ install helm"
 
   curl https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3 | bash
 
+process "→ install kube-ps1"
+
+  git clone https://github.com/jonmosco/kube-ps1.git  
+
 process "→ install terraform"
 (
   cd /tmp
