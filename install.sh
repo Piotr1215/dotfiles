@@ -160,6 +160,8 @@ process "→ Installing Arkade"
   curl -sLS https://get.arkade.dev | sudo sh
 
 process "→ Installing Neovim"
+  mkdir -p ${HOME}/.config/nvim/
+  ln -sf ${HOME}/dotfiles/init.vim ${HOME}/.config/nvim/init.vim
   sudo apt-get install -y neovim
 
 process "→ Setting zsh as default shell"
