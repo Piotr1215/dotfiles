@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-set -euo pipefail
+set -eo pipefail
 IFS=$'\n\t'
 
 # Define a function which rename a `target` file to `target.backup` if the file
