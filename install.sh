@@ -88,12 +88,18 @@ process "→ setup git config"
 
 process "→ install essencial packages"
 
-  sudo apt install -y vim-gtk htop unzip python3-setuptools figlet tmux pydf mc wget mtr ncdu cmatrix ranger jq lolcat tmux exa
+  sudo apt install -y vim-gtk htop unzip python3-setuptools figlet tmux pydf mc wget mtr ncdu cmatrix ranger jq lolcat tmux
   ln -sf ${HOME}/dotfiles/.tmux.conf ~/.tmux.conf
 
 process "→ install pip"
 
   sudo apt install -y python3-pip
+
+process "→ install exa"
+
+  EXA_VERSION=$(curl -s "https://api.github.com/repos/ogham/exa/releases/latest" | grep -Po '"tag_name": "v\K[0-9.]+')
+  curl -Lo exa.zip "https://github.com/ogham/exa/releases/latest/download/exa-linux-x86_64-v${EXA_VERSION}.zip"
+  sudo unzip -q exa.zip bin/exa -d /usr/local
 
 process "→ install go"
 
