@@ -164,6 +164,7 @@ process "→ Installing Neovim"
   ln -sf ${HOME}/dotfiles/init.vim ${HOME}/.config/nvim/init.vim
   sudo apt-get install -y neovim
   git clone https://github.com/VundleVim/Vundle.vim.git ~/.vim/bundle/Vundle.vim
+  vim +PluginInstall +qall
 
 process "→ Setting zsh as default shell"
 sudo chsh -s $(which zsh) $(whoami)
