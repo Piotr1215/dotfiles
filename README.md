@@ -97,4 +97,5 @@ The setup was tested on:
 
 - Ubuntu 20.04
 - Pop!_OS 21.04
+- Katacoda testbed: https://www.katacoda.com/scenario-examples/courses/environment-usages/ubuntu-2004
 
