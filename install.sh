@@ -68,6 +68,8 @@ then
 fi
 
 process "→ Bootstrap steps start here:\n------------------"
+  sudo useradd decoder
+  su decoder
 
 process "→ upgrade and update apt packages"
 
@@ -160,7 +162,7 @@ process "→ Installing Arkade"
   curl -sLS https://get.arkade.dev | sudo sh
 
 process "→ Setting zsh as default shell"
-  sudo chsh -s $(which zsh) root
+  sudo chsh -s $(which zsh) decoder
   zsh
   sed -i 's/ZSH_THEME="robbyrussell"/ZSH_THEME="3den"/g' ~/.zshrc
 
