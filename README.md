@@ -6,6 +6,15 @@ Simplified version without dotbot:
 - symlink all the .files
 - TODO: automate symlinking
 
+## Create User
+
+```bash
+sudo adduser decoder
+sudo usermod -aG sudo decoder
+su decoder
+cd
+```
+
 ## Auto-config commit
 
 Once the dotfiles are symlinked, it is easy to forget to commit them do the repo (there is no indicator on the symlinked file).
@@ -83,6 +92,7 @@ or
 ## Testing
 
 The setup was tested on:
+
 - Ubuntu 20.04
 - Pop!_OS 21.04
 
