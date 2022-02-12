@@ -182,7 +182,7 @@ process "→ Installing Neovim"
   cd /home/decoder/.vim/bundle/coc.nvim
   yarn install
 
-  ln -sf ${HOME}/dotfiles/snippets_custom.json ${HOME}/.snippets_custom.json
+  ln -sf ${HOME}/dotfiles/.snippets_custom.json ${HOME}/.snippets_custom.json
 
 process "→ Setting zsh as default shell"
 cd ${HOME}
