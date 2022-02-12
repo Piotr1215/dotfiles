@@ -88,7 +88,7 @@ process "→ setup git config"
 
 process "→ install essencial packages"
 
-  sudo apt install -y vim-gtk htop unzip python3-setuptools figlet tmux pydf mc wget mtr ncdu cmatrix ranger jq lolcat tmux
+  sudo apt install -y vim-gtk htop unzip python3-setuptools figlet tmux pydf mc wget mtr ncdu cmatrix ranger jq lolcat tmux bat
   ln -sf ${HOME}/dotfiles/.tmux.conf ~/.tmux.conf
 
 process "→ install pip"
@@ -180,6 +180,8 @@ process "→ Installing Neovim"
   sudo chown decoder /usr/local/bin/nvim
   git clone https://github.com/VundleVim/Vundle.vim.git ~/.vim/bundle/Vundle.vim
   sudo nvim +PluginInstall +qall
+  cd /home/decoder/.vim/bundle/coc.nvim
+  yarn install
 
 process "→ Setting zsh as default shell"
 cd ${HOME}
