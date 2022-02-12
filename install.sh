@@ -119,7 +119,7 @@ process "→ install terraform"
 
 process "→ install node and nmp"
 
-  sudo apt install -y nodejs npm
+  sudo apt install -y nodejs
 
 process "→ install zsh and oh-my-zsh"
 
