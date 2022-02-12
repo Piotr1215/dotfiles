@@ -153,7 +153,7 @@ export GOPATH=$HOME/go/
 export GH_USER=Piotr1215
 export STARSHIP_CONFIG=/home/decoder/.config/starship.toml
 
-source ~/.github_variables
+# source ~/.github_variables
 
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
 
