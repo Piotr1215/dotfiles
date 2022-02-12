@@ -171,6 +171,7 @@ process "→ Installing Neovim"
   nvim +PluginInstall +qall
 
 process "→ Setting zsh as default shell"
+ln -sf ./dotfiles/.zshrc ~/.zshrc
 sudo chsh -s $(which zsh) $(whoami)
   zsh
   sed -i 's/ZSH_THEME="robbyrussell"/ZSH_THEME="3den"/g' ~/.zshrc
