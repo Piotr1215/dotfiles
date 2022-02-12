@@ -172,7 +172,7 @@ process "→ Installing Neovim"
 
 process "→ Setting zsh as default shell"
 cd
-ln -sf ${HOME}/dotfiles/.zshrc ~/.zshrc
+ln -sf ${HOME}/dotfiles/.zshrc ${HOME}/.zshrc
 sudo chsh -s $(which zsh) decoder
   zsh
   sed -i 's/ZSH_THEME="robbyrussell"/ZSH_THEME="3den"/g' ~/.zshrc
