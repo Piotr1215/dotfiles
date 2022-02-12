@@ -172,7 +172,6 @@ process "→ Installing Arkade"
 process "→ Installing Neovim"
   mkdir -p ${HOME}/.config/nvim/
   ln -sf ${HOME}/dotfiles/init.vim ${HOME}/.config/nvim/init.vim
-  ln -sf ${HOME}/dotfiles/snippets_custom.json ${HOME}/.snippets_custom.json
 
   sudo curl -LO https://github.com/neovim/neovim/releases/latest/download/nvim.appimage
   sudo chmod +x nvim.appimage
@@ -182,6 +181,8 @@ process "→ Installing Neovim"
   sudo nvim +PluginInstall +qall
   cd /home/decoder/.vim/bundle/coc.nvim
   yarn install
+
+  ln -sf ${HOME}/dotfiles/snippets_custom.json ${HOME}/.snippets_custom.json
 
 process "→ Setting zsh as default shell"
 cd ${HOME}
