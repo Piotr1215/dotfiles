@@ -6,7 +6,7 @@ Simplified version without dotbot:
 - symlink all the .files
 - TODOS:
   - symlink files that require directories correctly
-  - add snap/nvim to PATH
+  - switch to arkade for installing devops CLIs
 
 ## Create User
 
