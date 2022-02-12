@@ -153,6 +153,9 @@ process "→ Installing stern"
 process "→ Installing Okteto for local development"
   curl https://get.okteto.com -sSfL | sh
 
+process "→ Installing alacritty"
+  sudo snap install alacritty --classic
+
 process "→ Installing Arkade"
   curl -sLS https://get.arkade.dev | sudo sh
 
