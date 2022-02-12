@@ -111,7 +111,7 @@ process "→ install helm"
 
 process "→ install kube-ps1"
 
-  git clone https://github.com/jonmosco/kube-ps1.git  
+  git clone https://github.com/jonmosco/kube-ps1.git - ${HOME}/kube-ps1
 
 process "→ install terraform"
 (
