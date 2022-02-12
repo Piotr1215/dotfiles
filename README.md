@@ -4,7 +4,9 @@ Simplified version without dotbot:
 
 - run install
 - symlink all the .files
-- TODO: symlink files that require directories correctly.
+- TODOS:
+  - symlink files that require directories correctly
+  - add snap/nvim to PATH
 
 ## Create User
 
