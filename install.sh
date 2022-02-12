@@ -171,7 +171,7 @@ process "→ Installing Neovim"
   sudo nvim +PluginInstall +qall
 
 process "→ Setting zsh as default shell"
-cd
+cd ${HOME}
 ln -sf ${HOME}/dotfiles/.zshrc ${HOME}/.zshrc
 sudo chsh -s $(which zsh) decoder
   zsh
