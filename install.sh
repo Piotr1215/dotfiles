@@ -179,7 +179,7 @@ process "→ Installing Neovim"
   sudo mv nvim.appimage /usr/local/bin/nvim
   sudo chown decoder /usr/local/bin/nvim
   git clone https://github.com/VundleVim/Vundle.vim.git ~/.vim/bundle/Vundle.vim
-  sudo nvim +PluginInstall +qall
+  nvim +PluginInstall +qall
   cd /home/decoder/.vim/bundle/coc.nvim
   yarn install
 
