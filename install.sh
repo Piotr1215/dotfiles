@@ -162,13 +162,18 @@ process "→ Installing Arkade"
 process "→ Installing Neovim"
   mkdir -p ${HOME}/.config/nvim/
   ln -sf ${HOME}/dotfiles/init.vim ${HOME}/.config/nvim/init.vim
-  sudo snap install --edge nvim --classic
+
+  curl -LO https://github.com/neovim/neovim/releases/latest/download/nvim.appimage
+  chmod u+x nvim.appimage
+  mv nvim.appimage /usr/local/bin/nvim
+
   git clone https://github.com/VundleVim/Vundle.vim.git ~/.vim/bundle/Vundle.vim
-  vim +PluginInstall +qall
+  nvim +PluginInstall +qall
 
 process "→ Setting zsh as default shell"
 sudo chsh -s $(which zsh) $(whoami)
   zsh
   sed -i 's/ZSH_THEME="robbyrussell"/ZSH_THEME="3den"/g' ~/.zshrc
+  source ~/.zshrc
 
 process "→ Installation complete"
