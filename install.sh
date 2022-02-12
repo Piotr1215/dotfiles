@@ -162,7 +162,7 @@ process "→ Installing Arkade"
 process "→ Installing Neovim"
   mkdir -p ${HOME}/.config/nvim/
   ln -sf ${HOME}/dotfiles/init.vim ${HOME}/.config/nvim/init.vim
-  sudo apt-get install -y neovim
+  sudo snap install --edge nvim --classic
   git clone https://github.com/VundleVim/Vundle.vim.git ~/.vim/bundle/Vundle.vim
   vim +PluginInstall +qall
 
