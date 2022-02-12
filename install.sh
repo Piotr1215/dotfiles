@@ -74,6 +74,10 @@ process "→ upgrade and update apt packages"
   sudo apt-get update
   sudo apt-get -y upgrade
 
+process "→ Installing snapd"
+
+  sudo apt install snapd
+
 process "→ install git"
 
   sudo apt install -y git
