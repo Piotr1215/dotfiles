@@ -164,8 +164,8 @@ process "→ Installing Neovim"
   ln -sf ${HOME}/dotfiles/init.vim ${HOME}/.config/nvim/init.vim
 
   curl -LO https://github.com/neovim/neovim/releases/latest/download/nvim.appimage
-  chmod u+x nvim.appimage
-  mv nvim.appimage /usr/local/bin/nvim
+  sudo chmod u+x nvim.appimage
+  sudo mv nvim.appimage /usr/local/bin/nvim
 
   git clone https://github.com/VundleVim/Vundle.vim.git ~/.vim/bundle/Vundle.vim
   nvim +PluginInstall +qall
