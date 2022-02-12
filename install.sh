@@ -167,7 +167,9 @@ process "→ Installing Okteto for local development"
 
 process "→ Installing alacritty"
   sudo snap install alacritty --classic
-
+  mkdir -p ${HOME}/.config/alacritty/
+  ln -sf ${HOME}/dotfiles/alacritty.yml ${HOME}/.config/alacritty/alacritty.yml
+  
 process "→ Installing Arkade"
   curl -sLS https://get.arkade.dev | sudo sh
 
