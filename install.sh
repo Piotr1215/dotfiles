@@ -149,6 +149,9 @@ process "→ Installing stern"
 process "→ Installing Okteto for local development"
   curl https://get.okteto.com -sSfL | sh
 
+process "→ Installing Arkade"
+  curl -sLS https://get.arkade.dev | sudo sh
+
 process "→ Setting zsh as default shell"
   sudo chsh -s $(which zsh) vagrant
   zsh
