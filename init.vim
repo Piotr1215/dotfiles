@@ -465,6 +465,11 @@ let g:plantuml_previewer#viewer_path = "/home/decoder/.vim/bundle/plantuml-previ
 " setup custom emmet snippets
 let g:user_emmet_settings = webapi#json#decode(join(readfile(expand('~/.snippets_custom.json')), "\n"))
 
+" setup for netrw
+let g:netrw_winsize = 30
+let g:netrw_banner = 0
+let g:netrw_keepdir = 0
+
 " setup for markdown snippet
 let g:vim_markdown_folding_disabled = 1
 let g:vim_markdown_folding_level = 3
