@@ -195,6 +195,8 @@ function! Reformat()
   execute '%s/> \[!NOTE\]/:::note\r/g'
   execute '%s/\v(\[!WARNING\].*)/\1\r:::/g'
   execute '%s/> \[!WARNING\]/:::danger\r/g'
+  execute '%s/\v(\[!ATTENTION\].*)/\1\r:::/g'
+  execute '%s/> \[!ATTENTION\]/:::caution\r/g'
 endfunction
 
 nnoremap <leader>mm :call Reformat()<cr>
