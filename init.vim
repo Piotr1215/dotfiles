@@ -193,6 +193,8 @@ function! Reformat()
   execute '%s/> \[!INFO\]/:::info\r/g'
   execute '%s/\v(\[!NOTE\].*)/\1\r:::/g'
   execute '%s/> \[!NOTE\]/:::note\r/g'
+  execute '%s/\v(\[!WARNING\].*)/\1\r:::/g'
+  execute '%s/> \[!WARNING\]/:::danger\r/g'
 endfunction
 
 nnoremap <leader>mm :call Reformat()<cr>
