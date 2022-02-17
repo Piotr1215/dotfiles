@@ -264,6 +264,7 @@ Plugin 'voldikss/vim-floaterm'
 Plugin 'easymotion/vim-easymotion'
 Plugin 'rafamadriz/friendly-snippets'
 Plugin 'mrjones2014/legendary.nvim'
+Plugin 'folke/which-key.nvim'
 
 " Editing related
 Plugin 'Raimondi/delimitMate'
