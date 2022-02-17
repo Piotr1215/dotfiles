@@ -75,6 +75,9 @@ map  <Leader>ol <Plug>(easymotion-bd-w)
 " Go to next header
 nnoremap <Leader>nh :.,/^#/<CR>
 
+" Copy selection to clipboard with Ctrl+v
+vmap <C-c> "+y
+
 " Set spellcheck on/off
 nnoremap <Leader>son :setlocal spell spelllang=en_us<CR>
 nnoremap <Leader>sof :set nospell<CR>
