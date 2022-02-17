@@ -300,9 +300,6 @@ Plugin 'neoclide/coc.nvim', {'branch': 'release'}
 Plugin 'rhysd/vim-clang-format'
 Plugin 'dense-analysis/ale'
 Plugin 'tpope/vim-fugitive'
-Plugin 'ionide/Ionide-vim', {
-      \ 'do':  'make fsautocomplete',
-      \}
 
 " Color Schemes
 Plugin 'NLKNguyen/papercolor-theme'
