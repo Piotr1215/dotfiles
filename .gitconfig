@@ -27,3 +27,5 @@
 	default = matching
 [branch]
 	autosetuprebase = always
+[init]
+	defaultBranch = main
