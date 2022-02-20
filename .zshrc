@@ -152,7 +152,7 @@ export EDITOR=nvim
 export GOPATH=$HOME/go/
 export GH_USER=Piotr1215
 export STARSHIP_CONFIG=/home/decoder/.config/starship.toml
-
+export PLANTUML_LIMIT_SIZE=8192
 # source ~/.github_variables
 
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
