@@ -467,11 +467,11 @@ autocmd FileType yaml setlocal ts=2 sts=2 sw=2 expandtab
 autocmd FileType markdown setlocal expandtab shiftwidth=4 softtabstop=4 autoindent
 
 autocmd BufWritePost *.puml silent! !java -DPLANTUML_LIMIT_SIZE=8192 -jar /usr/local/bin/plantuml.jar <afile> -o ./rendered
-au FileType plantuml let g:plantuml_previewer#plantuml_jar_path = get(
-    \  matchlist(system('cat `which plantuml` | grep plantuml.jar'), '\v.*\s[''"]?(\S+plantuml\.jar).*'),
-    \  1,
-    \  0
-    \)
+au FileType plantuml let g:plantuml_previewer#plantuml_jar_path = java -DPLANTUML_LIMIT_SIZE=8192 -jar /usr/local/bin/plantuml.jar
+"    \  matchlist(system('cat `which plantuml` | grep plantuml.jar'), '\v.*\s[''"]?(\S+plantuml\.jar).*'),
+"    \  1,
+"    \  0
+"    \)
 
 let g:plantuml_previewer#viewer_path = "/home/decoder/.vim/bundle/plantuml-previewer.vim/viewer"
 
