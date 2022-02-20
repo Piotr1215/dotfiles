@@ -446,10 +446,10 @@ smap <expr> <C-l>   vsnip#available(1)  ? '<Plug>(vsnip-expand-or-jump)' : '<C-l
 
 " Select or cut text to use as $TM_SELECTED_TEXT in the next snippet.
 " See https://github.com/hrsh7th/vim-vsnip/pull/50
-nmap        t   <Plug>(vsnip-select-text)
-xmap        t   <Plug>(vsnip-select-text)
-nmap        T   <Plug>(vsnip-cut-text)
-xmap        T   <Plug>(vsnip-cut-text)
+nmap <leader>t   <Plug>(vsnip-select-text)
+xmap <leader>t   <Plug>(vsnip-select-text)
+nmap <leader>T   <Plug>(vsnip-cut-text)
+xmap <leader>T   <Plug>(vsnip-cut-text)
 
 " Color name (:help cterm-colors) or ANSI code
 let g:limelight_conceal_ctermfg = 'gray'
@@ -465,6 +465,8 @@ autocmd FileType c,cpp setlocal expandtab shiftwidth=2 softtabstop=2 cindent
 autocmd FileType python setlocal expandtab shiftwidth=4 softtabstop=4 autoindent
 autocmd FileType yaml setlocal ts=2 sts=2 sw=2 expandtab
 autocmd FileType markdown setlocal expandtab shiftwidth=4 softtabstop=4 autoindent
+
+autocmd BufWritePost *.puml silent! !java -DPLANTUML_LIMIT_SIZE=8192 -jar /usr/local/bin/plantuml.jar <afile> -o ./rendered
 au FileType plantuml let g:plantuml_previewer#plantuml_jar_path = get(
     \  matchlist(system('cat `which plantuml` | grep plantuml.jar'), '\v.*\s[''"]?(\S+plantuml\.jar).*'),
     \  1,
