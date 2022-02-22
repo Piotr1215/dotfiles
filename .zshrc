@@ -180,7 +180,7 @@ function mkd() {
 
 function pex() {
 
-    pet exec -q = $@;
+    pet exec -q $@;
 }
 
 function prev() {
