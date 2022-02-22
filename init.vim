@@ -208,6 +208,9 @@ nnoremap <leader>mm :call Reformat()<cr>
 " Stop search highlight
 nnoremap ,<space> :nohlsearch<CR>
 
+" Copy function or routine body and keyword
+nnoremap <silent> yaf [m{jV]m%y
+
 " jj in insert mode instead of ESC
 inoremap jj <Esc>
 inoremap jk <Esc>
