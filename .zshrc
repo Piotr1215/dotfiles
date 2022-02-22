@@ -183,7 +183,7 @@ function pex() {
 }
 
 function psx() {
-    pet exec $1
+    pet exec -q $1
 }
 function prev() {
   PREV=$(fc -lrn | head -n 1)
