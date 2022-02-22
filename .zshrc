@@ -179,10 +179,12 @@ function mkd() {
 }
 
 function pex() {
-
-    pet exec $1
+    pet exec
 }
 
+function psx() {
+    pet exec $1
+}
 function prev() {
   PREV=$(fc -lrn | head -n 1)
   sh -c "pet new `printf %q "$PREV"`"
