@@ -178,7 +178,7 @@ function enterRepo() {
         cd /home/decoder/dev/$repo
     else
         echo "Repository not found locally, cloning"
-        gh repo clone /home/decoder/dev/$repo
+        gh repo clone $repo /home/decoder/dev/$repo
         cd /home/decoder/dev/$repo
     fi
 }
