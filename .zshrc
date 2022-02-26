@@ -166,14 +166,17 @@ function gac() {
   git push
 }
 
+# Find a repo for my user and cd into it, clone and cd if not found
 function enterRepo() {
     export repo=$(ghs -u Piotr1215 | sed 's:.*/::')
+
     if [[ -z "$repo" ]]; then
-        echo "Repository not found"
+        echo "Repository not found, cloning"
+    elif [[ !-d /home/decoder/dev/$repo ]]; then
+        gh repo clone /home/decoder/dev/$repo
     else
         cd /home/decoder/dev/$repo
     fi
-    
 }
 
 function key() {
