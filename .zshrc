@@ -181,17 +181,10 @@ function repo() {
         echo "Repository found locally, entering"
         cd /home/decoder/dev/$repo
     else
-        trap ctrl_c INT
         echo "Repository not found locally, cloning"
         gh repo clone $repo /home/decoder/dev/$repo
         cd /home/decoder/dev/$repo
     fi
-}
-function ctrl_c() {
-    echo 
-    echo "Ctrl-C by user"
-    # do the jobs
-    exit
 }
 
 function key() {
