@@ -166,6 +166,16 @@ function gac() {
   git push
 }
 
+function enterRepo() {
+    export repo=$(ghs -u Piotr1215 | sed 's:.*/::')
+    if [[ -z "$repo" ]]; then
+        echo "Repository not found"
+    else
+        cd /home/decoder/dev/$repo
+    fi
+    
+}
+
 function key() {
   cat /home/decoder/scripts/shortcuts.txt |  yad --width=750 --height=750  --center --close-on-unfocus --text-info
 }
