@@ -171,7 +171,7 @@ function repo() {
     if [[ -z "$1" ]]; then
         export repo=$(ghs -u Piotr1215 | sed 's:.*/::')
     else
-        export repo=$1
+        export repo=$(ghs -u Piotr1215 $1 | sed 's:.*/::')
     fi
 
     if [[ -z "$repo" ]]; then
