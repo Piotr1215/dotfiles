@@ -168,7 +168,6 @@ function gac() {
 
 # Find a repo for my user and cd into it, clone and cd if not found on disk
 function repo() {
-    trap ctrl_c INT
     # If repo name not provided, prompt for it rather than error out
     if [[ -z "$1" ]]; then
         export repo=$(ghs -u Piotr1215 | sed 's:.*/::')
@@ -182,6 +181,7 @@ function repo() {
         echo "Repository found locally, entering"
         cd /home/decoder/dev/$repo
     else
+        trap ctrl_c INT
         echo "Repository not found locally, cloning"
         gh repo clone $repo /home/decoder/dev/$repo
         cd /home/decoder/dev/$repo
