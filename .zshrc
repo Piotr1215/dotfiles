@@ -172,7 +172,6 @@ function enterRepo() {
 
     if [[ -z "$repo" ]]; then
         echo "Repository not found"
-        exit 1
     elif [[ -d /home/decoder/dev/$repo ]]; then
         echo "Repository found locally, entering"
         cd /home/decoder/dev/$repo
