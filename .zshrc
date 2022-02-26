@@ -168,7 +168,11 @@ function gac() {
 
 # Find a repo for my user and cd into it, clone and cd if not found on disk
 function enterRepo() {
-    export repo=$(ghs -u Piotr1215 | sed 's:.*/::')
+    if [[ -z "$1" ]]; then
+        export repo=$(ghs -u Piotr1215 | sed 's:.*/::')
+    else
+        export repo=$1
+    fi
 
     if [[ -z "$repo" ]]; then
         echo "Repository not found"
