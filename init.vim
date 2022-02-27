@@ -130,6 +130,12 @@ nnoremap <Leader>sp i<CR><Esc>
 " Markdown Previe
 nnoremap <silent><leader>mp :MarkdownPreview<CR>
 
+" Find and replace
+nnoremap <Space><Space> :%s/\<<C-r>=expand("<cword>")<CR>\>/
+
+" Upload selected to ix.io
+vnoremap <Leader>pp :w !curl -F "f:1=<-" ix.io<CR>
+
 " Fix Markdown Errors
 nnoremap <leader>fx :<C-u>CocCommand markdownlint.fixAll<CR>
 
