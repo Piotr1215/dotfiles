@@ -59,6 +59,9 @@ nnoremap <leader>w :w<CR>
 " Select last pasted text
 nnoremap gp `[v`]
 
+" Find occunrances of selected text
+vnoremap // y/\V<C-R>=escape(@",'/\')<CR><CR>
+
 " Execute word under cursor like a shell command
 nnoremap <leader>ex :!<cword><Cr>
 
