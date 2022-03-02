@@ -195,10 +195,10 @@ function repo() {
 }
 
 function checkfetch() {
-    res=$(onefetch)
+    local res=$(onefetch)
     if [[ "$res" =~ "Error" ]]; then
         echo ""
-    else echo $(onefetch)
+    else echo $res
     fi
 }
 
