@@ -171,16 +171,15 @@ function gacs() {
   git commit -m "$1" -s
   git push
 }
-# Find a repo for my user and cd into it, clone and cd if not found on disk
+
+# Find a repo for authenticated user with gh CLI and cd into it, clone and cd if not found on disk
 function repo() {
-    # If repo name not provided, prompt for it rather than error out
     if [[ -z "$1" ]]; then
         echo "Please provide search term"
         exit 0
     else
         export repo=$(gh repo list --limit 1000 | awk '{print $1}' | sed 's:.*/::' | rg $1 | fzf)
     fi
-
     if [[ -z "$repo" ]]; then
         echo "Repository not found"
     elif [[ -d /home/decoder/dev/$repo ]]; then
@@ -191,6 +190,7 @@ function repo() {
         echo "Repository not found locally, cloning"
         gh repo clone $repo /home/decoder/dev/$repo
         cd /home/decoder/dev/$repo
+        onefetch
     fi
 }
 
