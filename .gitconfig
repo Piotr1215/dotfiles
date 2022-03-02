@@ -8,6 +8,7 @@
 [user]
 	name = decoder
 	email = decoder@live.de
+	signingkey = FED1B098B68D69FD
 [alias]
 	s = status
 	st = status
