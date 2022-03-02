@@ -176,7 +176,7 @@ function gacs() {
 function repo() {
     if [[ -z "$1" ]]; then
         echo "Please provide search term"
-        exit 0
+        return
     else
         export repo=$(gh repo list --limit 1000 | awk '{print $1}' | sed 's:.*/::' | rg $1 | fzf)
     fi
