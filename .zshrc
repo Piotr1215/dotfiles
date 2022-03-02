@@ -166,6 +166,11 @@ function gac() {
   git push
 }
 
+function gacs() {
+  git add .
+  git commit -m "$1" -s
+  git push
+}
 # Find a repo for my user and cd into it, clone and cd if not found on disk
 function repo() {
     # If repo name not provided, prompt for it rather than error out
