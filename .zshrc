@@ -185,12 +185,12 @@ function repo() {
     elif [[ -d /home/decoder/dev/$repo ]]; then
         echo "Repository found locally, entering"
         cd /home/decoder/dev/$repo
-        $(checkfetch)
+        onefetch
     else
         echo "Repository not found locally, cloning"
         gh repo clone $repo /home/decoder/dev/$repo
         cd /home/decoder/dev/$repo
-        $(checkfetch)
+        onefetch
     fi
 }
 
