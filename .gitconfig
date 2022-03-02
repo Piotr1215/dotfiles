@@ -7,7 +7,7 @@
 	excludesfile = ~/.gitignore
 [user]
 	name = Piotr Zaniewski
-	email = decoder@live.de
+	email = piotr@upbound.io
 	signingkey = FED1B098B68D69FD
 [alias]
 	s = status
