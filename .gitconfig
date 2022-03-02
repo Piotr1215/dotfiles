@@ -6,7 +6,7 @@
 [core]
 	excludesfile = ~/.gitignore
 [user]
-	name = decoder
+	name = Piotr Zaniewski
 	email = decoder@live.de
 	signingkey = FED1B098B68D69FD
 [alias]
