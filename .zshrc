@@ -198,7 +198,7 @@ function checkfetch() {
     local res=$(onefetch) &> /dev/null
     if [[ "$res" =~ "Error" ]]; then
         echo ""
-    else $(onefetch)
+    else echo $(onefetch)
     fi
 }
 
