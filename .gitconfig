@@ -30,3 +30,5 @@
 	autosetuprebase = always
 [init]
 	defaultBranch = main
+[commit]
+	gpgsign = true
