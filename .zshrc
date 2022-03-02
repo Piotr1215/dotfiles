@@ -175,9 +175,10 @@ function gacs() {
 function repo() {
     # If repo name not provided, prompt for it rather than error out
     if [[ -z "$1" ]]; then
-        export repo=$(ghs -u Piotr1215 | sed 's:.*/::')
+        echo "Please provide search term"
+        exit 0
     else
-        export repo=$(ghs -u Piotr1215 $1 | sed 's:.*/::')
+        export repo=$(gh repo list --limit 1000 | awk '{print $1}' | sed 's:.*/::' | rg $1 | fzf)
     fi
 
     if [[ -z "$repo" ]]; then
