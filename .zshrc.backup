@@ -305,7 +305,3 @@ PROMPT='$(kube_ps1)'$PROMPT
 PROMPT="$PROMPT"$'\n→ '
 
 #eval "$(starship init zsh)"
-
-export PATH=$PATH:/home/decoder/bin
-
-source '/home/decoder/lib/azure-cli/az.completion'
