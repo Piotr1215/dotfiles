@@ -76,8 +76,8 @@ map  <Leader>ol <Plug>(easymotion-bd-w)
 
 " 1. TEXT EDITING
 " Paste at the end of the line with a space
-:nnoremap 1 A <esc>p
-:nnoremap 2 "+p
+:nnoremap <C-1> A <esc>p
+:nnoremap <C-2> "+p
 
 " Go to next header
 nnoremap <Leader>nh :.,/^#/<CR>
