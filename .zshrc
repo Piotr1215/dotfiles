@@ -315,3 +315,5 @@ if [ -f '/home/decoder/google-cloud-sdk/path.zsh.inc' ]; then . '/home/decoder/g
 
 # The next line enables shell command completion for gcloud.
 if [ -f '/home/decoder/google-cloud-sdk/completion.zsh.inc' ]; then . '/home/decoder/google-cloud-sdk/completion.zsh.inc'; fi
+
+eval "$(direnv hook zsh)"
