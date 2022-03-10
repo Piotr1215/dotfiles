@@ -154,6 +154,7 @@ export GH_USER=Piotr1215
 export STARSHIP_CONFIG=/home/decoder/.config/starship.toml
 export PLANTUML_LIMIT_SIZE=8192
 export DEMODIR=/home/decoder/dev/crossplane-scenarios
+export git_main_branch=main
 
 # source ~/.github_variables
 
