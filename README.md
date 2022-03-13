@@ -1,14 +1,14 @@
 # Dotfiles Repo
 
-Simplified version without dotbot:
+Simple dotfiles with an installation script
 
-- run install
-- symlink all the .files
-- TODOS:
-  - [x] symlink files that require directories correctly
-  - switch to arkade for installing devops CLIs
+## Installation
 
-## Create User
+Installation steps on a fresh Ubuntu/PoP_Os! distro.
+
+### Create User
+
+Create a user, in my case user name is `decoder`, and switch to the user directory.
 
 ```bash
 sudo adduser decoder
@@ -16,6 +16,18 @@ sudo usermod -aG sudo decoder
 su decoder
 cd
 ```
+
+### Run install script
+
+Runing `./install` will
+- backup existing dotfiles
+- configure git with given user and email (default values point to my user)
+- install bunch of programs and symling the right
+- most notably, install neovim and configure its plugins
+- arkade is also worth mentioning, it proxies installation of a lot of devops, cloud-native tools
+
+### TODOS:
+- [ ] switch to arkade for installing devops CLIs
 
 ## Auto-config commit
 
