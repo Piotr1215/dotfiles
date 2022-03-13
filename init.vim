@@ -145,6 +145,9 @@ vnoremap <Leader>pp :w !curl -F "f:1=<-" ix.io<CR>
 " Fix Markdown Errors
 nnoremap <leader>fx :<C-u>CocCommand markdownlint.fixAll<CR>
 
+" Move screen to contain current line at the top
+nnoremap <leader>d zt
+
 " Abbreviations
 iab <expr> t/ strftime('TODO(' . $USER . ' %Y-%m-%d):')
 
