@@ -179,6 +179,7 @@ nnoremap <silent> [fzf-p]L     :<C-u>CocCommand fzf-preview.LocationList<CR>
 " map('n', '<leader>ff', "<cmd>lua require'telescope.builtin'.find_files({ find_command = {'rg', '--files', '--hidden', '-g', '!.git' }})<cr>", default_opts)
 nnoremap <leader>tf <cmd>lua require'telescope.builtin'.find_files({ find_command = {'rg', '--files', '--hidden', '-g', '!.git' }})<cr>
 nnoremap <leader>tg <cmd>Telescope live_grep<cr>
+nnoremap <leader>to <cmd>Telescope oldfiles<cr>
 nnoremap <leader>tb <cmd>Telescope buffers<cr>
 nnoremap <leader>th <cmd>Telescope help_tags<cr>
 nnoremap <Leader>ts :lua require'telescope.builtin'.grep_string{}<CR>
