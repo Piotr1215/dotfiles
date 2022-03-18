@@ -146,23 +146,6 @@ process "→ Installing zsh-autosuggestions plugin"
 
 git clone https://github.com/zsh-users/zsh-syntax-highlighting.git ~/.oh-my-zsh/custom/plugins/zsh-syntax-highlighting
 
-# process "→ Installing stern"
-# (
-#     wget https://github.com/wercker/stern/releases/download/1.11.0/stern_linux_amd64 && \
-#     sudo chmod +x stern_linux_amd64 && \
-#     sudo mv stern_linux_amd64 /usr/local/bin/stern
-# )
-
-# process "→ Installing kubectx and kubens - quickly switch kubernetes context and namespace"
-
-# sudo rm -drf /opt/kubectx
-
-# (
-#   git clone https://github.com/ahmetb/kubectx /opt/kubectx && \
-#   ln -s /opt/kubectx/kubectx /usr/local/bin/kubectx && \
-#   ln -s /opt/kubectx/kubens /usr/local/bin/kubens
-# )
-
 process "→ Installing krew kubectl plugin"
   set -x; cd "$(mktemp -d)" &&
   curl -fsSLO "https://github.com/kubernetes-sigs/krew/releases/download/v0.3.4/krew.{tar.gz,yaml}" &&
@@ -203,5 +186,9 @@ process "→ Setting zsh as default shell"
   sed -i 's/ZSH_THEME="robbyrussell"/ZSH_THEME="3den"/g' ~/.zshrc
   source ~/.zshrc
   exec zshrc
+
+process "→ Install kubectx and kubens using krew"
+  kubectl krew install ctx
+  kubectl krew install ns
 
 process "→ Installation complete"
