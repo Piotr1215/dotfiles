@@ -23,6 +23,7 @@ done
 [ -z "$password" ] && password=$(uuidgen | cut -d'-' -f1)
 
 useradd -m "$username" -p "$password" > /dev/null 2>&1
+usermod -aG sudo "$username" > /dev/null 2>&1
 
 #------------#
 # VARIATIONS #
