@@ -163,8 +163,15 @@ git clone https://github.com/zsh-users/zsh-syntax-highlighting.git ~/.oh-my-zsh/
 #   ln -s /opt/kubectx/kubens /usr/local/bin/kubens
 # )
 
-process "→ Installing Okteto for local development"
-  curl https://get.okteto.com -sSfL | sh
+process "→ Installing krew kubectl plugin"
+  set -x; cd "$(mktemp -d)" &&
+  curl -fsSLO "https://github.com/kubernetes-sigs/krew/releases/download/v0.3.4/krew.{tar.gz,yaml}" &&
+  tar zxvf krew.tar.gz &&
+  KREW=./krew-"$(uname | tr '[:upper:]' '[:lower:]')_amd64" &&
+  "$KREW" install --manifest=krew.yaml --archive=krew.tar.gz &&
+  "$KREW" update
+
+  echo 'export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"' >>~/.zshrc
 
 process "→ Installing alacritty"
   sudo snap install alacritty --classic
@@ -189,11 +196,12 @@ process "→ Installing Neovim"
   yarn install
 
 process "→ Setting zsh as default shell"
-cd ${HOME}
-ln -sf ${HOME}/dotfiles/.zshrc ${HOME}/.zshrc
-sudo chsh -s $(which zsh) decoder
+  cd ${HOME}
+  ln -sf ${HOME}/dotfiles/.zshrc ${HOME}/.zshrc
+  sudo chsh -s $(which zsh) decoder
   zsh
   sed -i 's/ZSH_THEME="robbyrussell"/ZSH_THEME="3den"/g' ~/.zshrc
   source ~/.zshrc
+  exec zshrc
 
 process "→ Installation complete"
