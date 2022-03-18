@@ -10,23 +10,32 @@ Installation steps on a fresh Ubuntu/PoP_Os! distro.
 
 Create a user, in my case user name is `decoder`, and switch to the user directory.
 
+For testing purposes, password is "test", use real password for real installation ofc :)
+
 ```bash
-sudo adduser decoder
-sudo usermod -aG sudo decoder
+./create-test-user.sh -u "decoder" -p "test"
 su decoder
 cd
 ```
 
-### Run install script
+### Clone the repo and install
+
+```bash
+git clone https://github.com/Piotr1215/dotfiles.git
+cd dotfiles
+./install.sh
+```
 
 Runing `./install` will
+
 - backup existing dotfiles
 - configure git with given user and email (default values point to my user)
 - install bunch of programs and symling the right
 - most notably, install neovim and configure its plugins
 - arkade is also worth mentioning, it proxies installation of a lot of devops, cloud-native tools
 
-### TODOS:
+### TODOS
+
 - [ ] switch to arkade for installing devops CLIs
 
 ## Auto-config commit
@@ -111,5 +120,5 @@ Last test date: 12.02.2022
 
 - Ubuntu 20.04
 - Pop!_OS 21.04
-- Katacoda testbed: https://www.katacoda.com/scenario-examples/courses/environment-usages/ubuntu-2004
+- Katacoda testbed: <https://www.katacoda.com/scenario-examples/courses/environment-usages/ubuntu-2004>
 
