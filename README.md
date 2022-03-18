@@ -33,6 +33,7 @@ Runing `./install` will
 - install bunch of programs and symling the right
 - most notably, install neovim and configure its plugins
 - arkade is also worth mentioning, it proxies installation of a lot of devops, cloud-native tools
+- kubectl installed with krew plugin manager
 
 ### TODOS
 
@@ -116,7 +117,7 @@ or
 
 The setup was tested on:
 
-Last test date: 12.02.2022
+Last test date: 18.03.2022
 
 - Ubuntu 20.04
 - Pop!_OS 21.04
