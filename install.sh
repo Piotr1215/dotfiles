@@ -173,8 +173,8 @@ process "→ Installing AWS CLI"
   sudo ./aws/install
 
 process "→ Installing GCP CLI"
-  curl -O https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-sdk-377.0.0-linux-x86_64.tar.gz
-  tar -xf google-cloud-sdk-377.0.0-linux-x86.tar.gz
+  curl "https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-sdk-377.0.0-linux-x86_64.tar.gz" -o "google-cloud-sdk-377.0.0-linux-x86.tar.gz"
+  tar zxvf google-cloud-sdk-377.0.0-linux-x86.tar.gz
   ./google-cloud-sdk/install.sh --usage-reporting=false --quiet
 
 process "→ Installing Neovim"
