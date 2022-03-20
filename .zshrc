@@ -148,6 +148,7 @@ export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
 export PATH=$HOME/.local/bin:$PATH
 export PATH=$HOME/scripts:$PATH
 export PATH=$HOME/go/bin:$PATH
+export PATH=$PATH:/usr/local/go/bin
 export FONTCONFIG_PATH=/etc/fonts
 export EDITOR=nvim
 export GOPATH=$HOME/go/
