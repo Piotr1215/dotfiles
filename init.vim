@@ -30,6 +30,8 @@ set softtabstop=4
 set autoindent
 set relativenumber
 set incsearch
+set laststatus=3
+set highlight WinSeparator guibg=None
 
 " set the runtime path to include Vundle and initialize
 set rtp+=~/.vim/bundle/Vundle.vim
