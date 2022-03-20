@@ -164,6 +164,9 @@ process "→ Installing alacritty"
 process "→ Installing Arkade"
   curl -sLS https://get.arkade.dev | sudo sh
 
+process "→ Installing Azure CLI"
+  curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+
 process "→ Installing Neovim"
   mkdir -p ${HOME}/.config/nvim/
   ln -sf ${HOME}/dotfiles/init.vim ${HOME}/.config/nvim/init.vim
