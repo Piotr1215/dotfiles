@@ -167,6 +167,16 @@ process "→ Installing Arkade"
 process "→ Installing Azure CLI"
   curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
 
+process "→ Installing AWS CLI"
+  curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+  unzip awscliv2.zip
+  sudo ./aws/install
+
+process "→ Installing GCP CLI"
+  curl -O https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-sdk-377.0.0-linux-x86_64.tar.gz
+  tar -xf google-cloud-sdk-377.0.0-linux-x86.tar.gz
+  ./google-cloud-sdk/install.sh --usage-reporting=false --quiet
+
 process "→ Installing Neovim"
   mkdir -p ${HOME}/.config/nvim/
   ln -sf ${HOME}/dotfiles/init.vim ${HOME}/.config/nvim/init.vim
