@@ -83,17 +83,14 @@ map  <Leader>ol <Plug>(easymotion-bd-w)
 " Paste at the end of line with space
 :nnoremap <leader>5 A <esc>p
 
-" Copy crom clipboard
-:nnoremap <leader>1 "+y
+" Copy selection to clipboard with Ctrl+v
+vmap <C-c> "+y
 
 " Paste crom clipboard
 :nnoremap <leader>2 "+p
 
 " Go to next header
 nnoremap <Leader>nh :.,/^#/<CR>
-
-" Copy selection to clipboard with Ctrl+v
-vmap <C-c> "+y
 
 " Set spellcheck on/off
 nnoremap <Leader>son :setlocal spell spelllang=en_us<CR>
