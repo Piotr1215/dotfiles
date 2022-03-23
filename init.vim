@@ -78,8 +78,15 @@ map  <Leader>of <Plug>(easymotion-bd-f)
 map  <Leader>ol <Plug>(easymotion-bd-w)
 
 " 1. TEXT EDITING
-" Paste at the end of the line with a space
-:nnoremap <leader>1 A <esc>p
+" Easier copy/paste
+
+" Paste at the end of line with space
+:nnoremap <leader>5 A <esc>p
+
+" Copy crom clipboard
+:nnoremap <leader>1 "+y
+
+" Paste crom clipboard
 :nnoremap <leader>2 "+p
 
 " Go to next header
