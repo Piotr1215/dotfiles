@@ -100,6 +100,7 @@ plugins=(git kubectl zsh-autosuggestions zsh-syntax-highlighting sudo web-search
 
 source $ZSH/oh-my-zsh.sh
 
+alias mux=tmuxinator
 alias ra=ranger
 alias alaw='nohup alacritty --working-directory $PWD >&/dev/null'
 alias ghs='gh s'
