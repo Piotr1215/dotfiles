@@ -191,8 +191,9 @@ nnoremap <leader>to <cmd>Telescope oldfiles<cr>
 nnoremap <leader>tb <cmd>Telescope buffers<cr>
 nnoremap <leader>th <cmd>Telescope help_tags<cr>
 nnoremap <Leader>ts :lua require'telescope.builtin'.grep_string{}<CR>
+
 let g:rooter_patterns = ['.git', 'package.json', '!node_modules']
-nnoremap <leader>tp ':Telescope find_files cwd='.FindRootDirectory().'/<cr>'
+nnoremap <leader>tp <cmd>Telescope find_files cwd='.FindRootDirectory()./<cr>
 
 " Git mappings
 nnoremap <leader>goh :G push -f origin HEAD<CR>
