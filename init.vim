@@ -302,6 +302,7 @@ Plugin 'voldikss/vim-floaterm'
 Plugin 'easymotion/vim-easymotion'
 Plugin 'rafamadriz/friendly-snippets'
 Plugin 'airblade/vim-rooter'
+Plugin 'cljoly/telescope-repo.nvim'
 
 " Editing related
 Plugin 'Raimondi/delimitMate'
