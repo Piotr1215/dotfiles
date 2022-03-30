@@ -185,15 +185,14 @@ nnoremap <silent> [fzf-p]L     :<C-u>CocCommand fzf-preview.LocationList<CR>
 
 " Find files using Telescope command-line sugar.
 " map('n', '<leader>ff', "<cmd>lua require'telescope.builtin'.find_files({ find_command = {'rg', '--files', '--hidden', '-g', '!.git' }})<cr>", default_opts)
+let g:rooter_patterns = ['.git', 'package.json', '!node_modules']
 nnoremap <leader>tf <cmd>lua require'telescope.builtin'.find_files({ find_command = {'rg', '--files', '--hidden', '-g', '!.git' }})<cr>
 nnoremap <leader>tg <cmd>Telescope live_grep<cr>
 nnoremap <leader>to <cmd>Telescope oldfiles<cr>
 nnoremap <leader>tb <cmd>Telescope buffers<cr>
 nnoremap <leader>th <cmd>Telescope help_tags<cr>
 nnoremap <Leader>ts :lua require'telescope.builtin'.grep_string{}<CR>
-
-let g:rooter_patterns = ['.git', 'package.json', '!node_modules']
-nnoremap <leader>tp <cmd>Telescope find_files cwd='.FindRootDirectory().'<cr>
+nnoremap <leader>tp <cmd>Telescope find_files<cr>
 
 " Git mappings
 nnoremap <leader>goh :G push -f origin HEAD<CR>
