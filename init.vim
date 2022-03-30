@@ -299,6 +299,7 @@ Plugin 'nvim-telescope/telescope-fzf-native.nvim', { 'do': 'make' }
 Plugin 'voldikss/vim-floaterm'
 Plugin 'easymotion/vim-easymotion'
 Plugin 'rafamadriz/friendly-snippets'
+Plugin 'airblade/vim-rooter'
 
 " Editing related
 Plugin 'Raimondi/delimitMate'
