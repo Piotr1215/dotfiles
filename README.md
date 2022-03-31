@@ -38,6 +38,7 @@ Runing `./install` will
 ### TODOS
 
 - [ ] switch to arkade for installing devops CLIs
+- [ ] TODO(decoder 2022-03-31): add tmuxinator sessions to the repo
 
 ## Auto-config commit
 
