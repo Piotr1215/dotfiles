@@ -106,6 +106,7 @@ zstyle ':completion:*:directory-stack' list-colors '=(#b) #([0-9]#)*( *)==95=38;
 
 source $ZSH/oh-my-zsh.sh
 
+alias redirect="2>&1 | tee output.txt"
 alias go16="go1.16.15"
 alias yml="cat <<EOF | kubectl create -f -"
 alias mux=tmuxinator
