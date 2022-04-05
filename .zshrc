@@ -106,8 +106,6 @@ zstyle ':completion:*:directory-stack' list-colors '=(#b) #([0-9]#)*( *)==95=38;
 
 source $ZSH/oh-my-zsh.sh
 
-alias testme="printf $PWD"
-alias cpa="printf $PWD | xclip"
 alias redirect="2>&1 | tee output.txt"
 alias go16="go1.16.15"
 alias yml="cat <<EOF | kubectl create -f -"
@@ -176,6 +174,10 @@ export git_main_branch=main
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
 
 # USER FUNCTIONS
+
+function cpa() {
+    printf $PWD | xclip
+}
 
 function gac() {
   git add .
