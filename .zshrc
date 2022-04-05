@@ -176,7 +176,7 @@ export git_main_branch=main
 # USER FUNCTIONS
 
 function cpa() {
-    printf $PWD | xclip -selection c
+    printf $PWD | xclip -selection clipboard -o
 }
 
 function gac() {
