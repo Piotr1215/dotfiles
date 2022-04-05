@@ -176,11 +176,11 @@ export git_main_branch=main
 # USER FUNCTIONS
 
 function cpa() {
-    printf $PWD | xclip -selection clipboard
+    printf $PWD | xclip -selection primary 
 }
 
 function dpa() {
-    xclip -o -sel clip
+    cd $(xclip -o -sel clip)
 }
 
 function gac() {
