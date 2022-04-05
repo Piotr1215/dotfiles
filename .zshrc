@@ -180,7 +180,7 @@ function cpa() {
 }
 
 function dpa() {
-    cd $(xclip -o -sel clip)
+    cd $(xclip -o -sel primary)
 }
 
 function gac() {
