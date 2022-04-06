@@ -201,7 +201,7 @@ function repo() {
         echo "Please provide search term"
         return
     else
-        export repo=$(gh repo list --limit 1000 | awk '{print $1}' | sed 's:.*/::' | rg $1 | fzf)
+        export repo=$({ gh repo list Piotr1215 --limit 1000;  gh repo list upbound --limit 1000 } | awk '{print $1}' | sed 's:.*/::' | rg $1 | fzf)
     fi
     if [[ -z "$repo" ]]; then
         echo "Repository not found"
