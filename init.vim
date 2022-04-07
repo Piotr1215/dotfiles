@@ -487,8 +487,8 @@ smap <expr> <C-l>   vsnip#available(1)  ? '<Plug>(vsnip-expand-or-jump)' : '<C-l
 " See https://github.com/hrsh7th/vim-vsnip/pull/50
 nmap <leader>t   <Plug>(vsnip-select-text)
 xmap <leader>t   <Plug>(vsnip-select-text)
-nmap <leader>tt   <Plug>(vsnip-cut-text)
-xmap <leader>tt   <Plug>(vsnip-cut-text)
+nmap <leader>tc   <Plug>(vsnip-cut-text)
+xmap <leader>tc   <Plug>(vsnip-cut-text)
 
 " Color name (:help cterm-colors) or ANSI code
 let g:limelight_conceal_ctermfg = 'gray'
