@@ -109,7 +109,7 @@ nnoremap <Leader>rspace :%s/\s\+$//e
 nnoremap <Leader>rlines :%s/\n\{3,}/\r\r/e
 
 " Swap words
-nnoremap <leader>sw d"qdiwdwep"qp
+nnoremap <leader>sw :s/\v([^, ]+)(\s*,\s*)([^, ]+)/\3\2\1/<CR>
 
 " Insert space
 nnoremap <Leader>i i<space><esc>
