@@ -505,11 +505,7 @@ autocmd FileType python setlocal expandtab shiftwidth=4 softtabstop=4 autoindent
 autocmd FileType yaml setlocal ts=2 sts=2 sw=2 expandtab
 autocmd FileType markdown setlocal expandtab shiftwidth=4 softtabstop=4 autoindent
 
-"au FileType plantuml let g:plantuml_previewer#plantuml_jar_path = get(
-"    \  matchlist(system('cat `which plantuml` | grep plantuml.jar'), '\v.*\s[''"]?(\S+plantuml\.jar).*'),
-"    \  1,
-"    \  0
-"    \)
+au FileType plantuml let g:plantuml_previewer#plantuml_jar_path = /usr/local/bin/plantuml.jar
 
 let g:plantuml_previewer#viewer_path = "/home/decoder/.vim/bundle/plantuml-previewer.vim/viewer"
 
