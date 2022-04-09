@@ -4,7 +4,7 @@
 	interactive = auto
 	status = auto
 [core]
-	excludesfile = ~/.gitignore
+	excludesFile = ~/.gitignore
 [user]
 	name = Piotr Zaniewski
 	email = piotr@upbound.io
