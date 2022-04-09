@@ -64,6 +64,7 @@ if [ ! -z "$GPG_KEY" ]
 then
   git config --global user.signingkey "$GPG_KEY"
   git config --global commit.gpgsign true
+  git config --global core.excludesFile '~/.gitignore'
 fi
 
 process "→ Bootstrap steps start here:\n------------------"
