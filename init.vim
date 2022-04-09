@@ -171,21 +171,14 @@ nnoremap <silent> [fzf-p]gs    :<C-u>CocCommand fzf-preview.GitStatus<CR>
 nnoremap <silent> [fzf-p]ga    :<C-u>CocCommand fzf-preview.GitActions<CR>
 nnoremap <silent> [fzf-p]b     :<C-u>CocCommand fzf-preview.Buffers<CR>
 nnoremap <silent> [fzf-p]B     :<C-u>CocCommand fzf-preview.AllBuffers<CR>
-nnoremap <silent> [fzf-p]m     :<C-u>CocCommand fzf-preview.MruFiles<CR>
 nnoremap <silent> [fzf-p]po     :<C-u>CocCommand fzf-preview.FromResources buffer project_mru<CR>
 nnoremap <silent> [fzf-p]<C-o> :<C-u>CocCommand fzf-preview.Jumps<CR>
 nnoremap <silent> [fzf-p]g;    :<C-u>CocCommand fzf-preview.Changes<CR>
-nnoremap <silent> [fzf-p]/     :<C-u>CocCommand fzf-preview.Lines--add-fzf-arg=--no-sort --add-fzf-arg=--query="'"<CR>
-nnoremap <silent> [fzf-p]*     :<C-u>CocCommand fzf-preview.Lines --add-fzf-arg=--no-sort --add-fzf-arg=--query="'<C-r>=expand('<cword>')<CR>"<CR>
-nnoremap          [fzf-p]gr    :<C-u>CocCommand fzf-preview.ProjectGrep<Space>
-xnoremap          [fzf-p]gr    "sy:CocCommand   fzf-preview.ProjectGrep<Space>-F<Space>"<C-r>=substitute(substitute(@s, '\n', '', 'g'), '/', '\\/', 'g')<CR>"
-nnoremap <silent> [fzf-p]t     :<C-u>CocCommand fzf-preview.BufferTags<CR>
 nnoremap <silent> [fzf-p]q     :<C-u>CocCommand fzf-preview.QuickFix<CR>
 nnoremap <silent> [fzf-p]L     :<C-u>CocCommand fzf-preview.LocationList<CR>
 
 " Find files using Telescope command-line sugar.
 " map('n', '<leader>ff', "<cmd>lua require'telescope.builtin'.find_files({ find_command = {'rg', '--files', '--hidden', '-g', '!.git' }})<cr>", default_opts)
-let g:rooter_patterns = ['.git', 'package.json', '!node_modules']
 nnoremap <leader>tf <cmd>lua require'telescope.builtin'.find_files({ find_command = {'rg', '--files', '--hidden', '-g', '!.git' }})<cr>
 nnoremap <leader>tg <cmd>Telescope live_grep<cr>
 nnoremap <leader>to <cmd>Telescope oldfiles<cr>
@@ -222,21 +215,6 @@ function! s:MarkdowCodeBlock(outside)
     endif
 endfunction
 
-function! Reformat()
-  execute '%s/\v(\[!TIP\].*)/\1\r:::/g'
-  execute '%s/> \[!TIP\]/:::tip\r/g'
-  execute '%s/\v(\[!INFO\].*)/\1\r:::/g'
-  execute '%s/> \[!INFO\]/:::info\r/g'
-  execute '%s/\v(\[!NOTE\].*)/\1\r:::/g'
-  execute '%s/> \[!NOTE\]/:::note\r/g'
-  execute '%s/\v(\[!WARNING\].*)/\1\r:::/g'
-  execute '%s/> \[!WARNING\]/:::danger\r/g'
-  execute '%s/\v(\[!ATTENTION\].*)/\1\r:::/g'
-  execute '%s/> \[!ATTENTION\]/:::caution\r/g'
-endfunction
-
-nnoremap <leader>mm :call Reformat()<cr>
-
 " 3 - VIM HELPERS
 " Stop search highlight
 nnoremap ,<space> :nohlsearch<CR>
@@ -257,21 +235,13 @@ nmap <F8> :TagbarToggle<CR>
 tnoremap <Esc> <C-\><C-n>
 autocmd TermOpen term://* startinsert
 command! -nargs=* T :split | resize 15 | terminal
-"command! -nargs=* T split | terminal <args>
 command! -nargs=* VT vsplit | terminal <args>
 
 " Split navigation
-nnoremap <C-J> <C-W><C-J>
-nnoremap <C-K> <C-W><C-K>
-nnoremap <C-L> <C-W><C-L>
-nnoremap <C-H> <C-W><C-H>
-
-" Harpoon settings
-nnoremap <Leader>ha :lua require("harpoon.mark").add_file()<CR>
-nnoremap <Leader>hj :lua require("harpoon.ui").nav_file(1)<CR>
-nnoremap <Leader>h1j :lua require("harpoon.ui").nav_file(2)<CR>
-nnoremap <Leader>h2j :lua require("harpoon.ui").nav_file(3)<CR>
-nnoremap <Leader>hm :lua require("harpoon.ui").toggle_quick_menu()<CR>
+nnoremap <S-J> <C-W><C-J>
+nnoremap <S-K> <C-W><C-K>
+nnoremap <S-L> <C-W><C-L>
+nnoremap <S-H> <C-W><C-H>
 
 "Floatterm settings
 nnoremap   <silent><Leader>fl :FloatermNew<CR>
@@ -296,7 +266,6 @@ Plugin 'junegunn/fzf', { 'do': { -> fzf#install() } }
 Plugin 'junegunn/fzf.vim'
 Plugin 'ctrlpvim/ctrlp.vim'
 Plugin 'nvim-lua/plenary.nvim' " don't forget to add this one if you don't have it yet!
-Plugin 'ThePrimeagen/harpoon'
 Plugin 'nvim-telescope/telescope.nvim'
 Plugin 'nvim-telescope/telescope-fzf-native.nvim', { 'do': 'make' }
 Plugin 'voldikss/vim-floaterm'
@@ -314,7 +283,6 @@ Plugin 'Yggdroot/indentLine'
 Plugin 'tpope/vim-surround'
 Plugin 'mattn/emmet-vim'
 Plugin 'wellle/targets.vim'
-Plugin 'terryma/vim-multiple-cursors'
 Plugin 'vim-syntastic/syntastic'
 Plugin 'sheerun/vim-polyglot'
 Plugin 'iamcco/markdown-preview.nvim'
@@ -515,6 +483,9 @@ let g:plantuml_previewer#viewer_path = "/home/decoder/.vim/bundle/plantuml-previ
 
 " setup custom emmet snippets
 let g:user_emmet_settings = webapi#json#decode(join(readfile(expand('~/.snippets_custom.json')), "\n"))
+
+" Rooter
+let g:rooter_patterns = ['.git', 'package.json', '!node_modules']
 
 " setup for netrw
 let g:netrw_winsize = 30
