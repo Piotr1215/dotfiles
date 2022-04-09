@@ -4,94 +4,15 @@ if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]
     source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
 fi
 
-# If you come from bash you might have to change your $PATH.
-# export PATH=$HOME/bin:/usr/local/bin:$PATH
-
 # Path to your oh-my-zsh installation.
 export ZSH="/home/decoder/.oh-my-zsh"
 
-# Set name of the theme to load --- if set to "random", it will
-# load a random theme each time oh-my-zsh is loaded, in which case,
-# to know which specific one was loaded, run: echo $RANDOM_THEME
-# See https://github.com/ohmyzsh/ohmyzsh/wiki/Themes
 #ZSH_THEME="spaceship"
 ZSH_THEME="simple"
 #ZSH_THEME="powerlevel10k/powerlevel10k"
 
-# Set list of themes to pick from when loading at random
-# Setting this variable when ZSH_THEME=random will cause zsh to load
-# a theme from this variable instead of looking in ~/.oh-my-zsh/themes/
-# If set to an empty array, this variable will have no effect.
-# ZSH_THEME_RANDOM_CANDIDATES=( "robbyrussell" "agnoster" )
-
-# Uncomment the following line to use case-sensitive completion.
-# CASE_SENSITIVE="true"
-
-# Uncomment the following line to use hyphen-insensitive completion.
-# Case-sensitive completion must be off. _ and - will be interchangeable.
-# HYPHEN_INSENSITIVE="true"
-
-# Uncomment the following line to disable bi-weekly auto-update checks.
-# DISABLE_AUTO_UPDATE="true"
-
-# Uncomment the following line to automatically update without prompting.
-# DISABLE_UPDATE_PROMPT="true"
-
-# Uncomment the following line to change how often to auto-update (in days).
-# export UPDATE_ZSH_DAYS=13
-
-# Uncomment the following line if pasting URLs and other text is messed up.
-# DISABLE_MAGIC_FUNCTIONS=true
-
-# Uncomment the following line to disable colors in ls.
-# DISABLE_LS_COLORS="true"
-
-# Uncomment the following line to disable auto-setting terminal title.
-# DISABLE_AUTO_TITLE="true"
-
-# Uncomment the following line to enable command auto-correction.
-# ENABLE_CORRECTION="false"
-
-# Uncomment the following line to display red dots whilst waiting for completion.
-# COMPLETION_WAITING_DOTS="true"
-
-# Uncomment the following line if you want to disable marking untracked files
-# under VCS as dirty. This makes repository status check for large repositories
-# much, much faster.
-# DISABLE_UNTRACKED_FILES_DIRTY="true"
-
-# Uncomment the following line if you want to change the command execution time
-# stamp shown in the history command output.
-# You can set one of the optional three formats:
-# "mm/dd/yyyy"|"dd.mm.yyyy"|"yyyy-mm-dd"
-# or set a custom format using the strftime function format specifications,
-# see 'man strftime' for details.
-# HIST_STAMPS="mm/dd/yyyy"
-
-# Would you like to use another custom folder than $ZSH/custom?
-# ZSH_CUSTOM=/path/to/new-custom-folder
-
-# Which plugins would you like to load?
-# Standard plugins can be found in ~/.oh-my-zsh/plugins/*
-# Custom plugins may be added to ~/.oh-my-zsh/custom/plugins/
-# Example format: plugins=(rails git textmate ruby lighthouse)
 # Add wisely, as too many plugins slow down shell startup.
 plugins=(git kubectl zsh-autosuggestions zsh-syntax-highlighting sudo web-search alias-finder colored-man-pages)
-
-# User configuration
-
-# export MANPATH="/usr/local/man:$MANPATH"
-
-# You may need to manually set your language environment
-# export LANG=en_US.UTF-8
-
-# Preferred editor for local and remote sessions
-# if [[ -n $SSH_CONNECTION ]]; then
-#   export EDITOR='vim'
-# else
-#   export EDITOR='mvim'
-# fi
-
 
 # PROMPT CUSTOMIZATION
 # To customize prompt, run `p10k configure` or edit ~/.p10k.zsh.
@@ -169,6 +90,11 @@ export STARSHIP_CONFIG=/home/decoder/.config/starship.toml
 export PLANTUML_LIMIT_SIZE=8192
 export DEMODIR=/home/decoder/dev/crossplane-scenarios
 export git_main_branch=main
+export PATH="$HOME/.yarn/bin:$HOME/.config/yarn/global/node_modules/.bin:$PATH"
+export PATH=$PATH:/home/decoder/bin
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
+[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
 
 # source ~/.github_variables
 
@@ -258,79 +184,14 @@ function iapt() {
     fi  
 }
 
-function peco-directories() {
-  local current_lbuffer="$LBUFFER"
-  local current_rbuffer="$RBUFFER"
-  if command -v fd >/dev/null 2>&1; then
-    local dir="$(command fd --type directory --hidden --no-ignore --exclude .git/ --color never 2>/dev/null | peco )"
-  else
-    local dir="$(
-      command find \( -path '*/\.*' -o -fstype dev -o -fstype proc \) -type d -print 2>/dev/null \
-      | sed 1d \
-      | cut -b3- \
-      | awk '{a[length($0)" "NR]=$0}END{PROCINFO["sorted_in"]="@ind_num_asc"; for(i in a) print a[i]}' - \
-      | peco
-    )"
-  fi
-
-  if [ -n "$dir" ]; then
-    dir=$(echo "$dir" | tr --delete '\n')
-    dir=$(printf %q "$dir")
-
-    BUFFER="${current_lbuffer}${file}${current_rbuffer}"
-    CURSOR=$#BUFFER
-  fi
-}
-
-function iopen {
-  local current_lbuffer="$LBUFFER"
-  local current_rbuffer="$RBUFFER"
-  if command -v fd >/dev/null 2>&1; then
-    local file="$(command fd --type file --hidden --no-ignore --exclude .git/ --color never 2>/dev/null | peco)"
-  elif command -v rg >/dev/null 2>&1; then
-    local file="$(rg --glob "" --files --hidden --no-ignore-vcs --iglob !.git/ --color never 2>/dev/null | peco)"
-  elif command -v ag >/dev/null 2>&1; then
-    local file="$(ag --files-with-matches --unrestricted --skip-vcs-ignores --ignore .git/ --nocolor -g "" 2>/dev/null | peco)"
-  else
-    local file="$(
-    command find \( -path '*/\.*' -o -fstype dev -o -fstype proc \) -type f -print 2> /dev/null \
-      | sed 1d \
-      | cut -b3- \
-      | awk '{a[length($0)" "NR]=$0}END{PROCINFO["sorted_in"]="@ind_num_asc"; for(i in a) print a[i]}' - \
-      | peco
-    )"
-  fi
-
-  if [ -n "$file" ]; then
-    file=$(echo "$file" | tr --delete '\n')
-    file=$(printf %q "$file")
-    BUFFER="${current_lbuffer}${file}${current_rbuffer}"
-    CURSOR=$#BUFFER
-  fi
-}
-
-zle -N peco-directories
-bindkey '^Xf' peco-directories
-zle -N peco-files
-bindkey '^X^f' peco-files
-
-
 [[ /usr/local/bin/kubectl ]] && source <(kubectl completion zsh)
 
-export PATH="$HOME/.yarn/bin:$HOME/.config/yarn/global/node_modules/.bin:$PATH"
-
-export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
-[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
-
+# Prompt
 source /home/decoder/kube-ps1/kube-ps1.sh
 PROMPT='$(kube_ps1)'$PROMPT
 PROMPT="$PROMPT"$'\n→ '
 
-#eval "$(starship init zsh)"
-
-export PATH=$PATH:/home/decoder/bin
-
+# Cloud Shells Settings
 source '/home/decoder/lib/azure-cli/az.completion'
 
 # The next line updates PATH for the Google Cloud SDK.
