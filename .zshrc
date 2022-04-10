@@ -80,16 +80,17 @@ eval $(dircolors -p | sed -e 's/DIR 01;34/DIR 01;36/' | dircolors /dev/stdin)
 
 # EXPORT & PATH
 export KUBECONFIG=~/.kube/config
+export GOPATH=$HOME/go/
 export PATH=$PATH:$HOME/.krew/bin
 export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
 export PATH=$HOME/.local/bin:$PATH
 export PATH=$HOME/scripts:$PATH
 export PATH=$HOME/go/bin:$PATH
+export PATH=$HOME/go:$PATH
 export PATH=$PATH:/usr/local/go/bin
 export PATH=$PATH:$HOME/.istioctl/bin
 export FONTCONFIG_PATH=/etc/fonts
 export EDITOR=nvim
-export GOPATH=$HOME/go/
 export GH_USER=Piotr1215
 export STARSHIP_CONFIG=/home/decoder/.config/starship.toml
 export PLANTUML_LIMIT_SIZE=8192
