@@ -22,7 +22,7 @@
 	logg = log --graph
 	add-commit = !git add -A && git commit
 [diff]
-	tool = vimdiff
+	#tool = vimdiff
 	colorMoved = default
 [merge]
 	tool = vimdiff
