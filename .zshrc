@@ -27,7 +27,10 @@ zstyle ':completion:*:directory-stack' list-colors '=(#b) #([0-9]#)*( *)==95=38;
 
 source $ZSH/oh-my-zsh.sh
 source /home/decoder/.oh-my-zsh/custom/plugins/nix-shell/nix-shell.plugin.zsh
-
+source $HOME/nix-zsh-completions/nix-zsh-completions.plugin.zsh
+fpath=($HOME/nix-zsh-completions $fpath)
+autoload -U compinit && compinit
+prompt_nix_shell_setup
 
 alias lvim='nvim -c "normal '\''0"'
 alias redirect="2>&1 | tee output.txt"
