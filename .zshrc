@@ -27,8 +27,8 @@ zstyle ':completion:*:directory-stack' list-colors '=(#b) #([0-9]#)*( *)==95=38;
 
 source $ZSH/oh-my-zsh.sh
 source /home/decoder/.oh-my-zsh/custom/plugins/nix-shell/nix-shell.plugin.zsh
-source $HOME/nix-zsh-completions/nix-zsh-completions.plugin.zsh
-fpath=($HOME/nix-zsh-completions $fpath)
+source /home/decoder/.oh-my-zsh/custom/plugins/nix-zsh-completions/nix-zsh-completions.plugin.zsh
+fpath=(/home/decoder/.oh-my-zsh/custom/plugins/nix-zsh-completions/nix-zsh-completions.plugin.zsh $fpath)
 autoload -U compinit && compinit
 prompt_nix_shell_setup
 
