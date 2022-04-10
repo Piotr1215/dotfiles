@@ -32,6 +32,7 @@ fpath=(/home/decoder/.oh-my-zsh/custom/plugins/nix-zsh-completions/nix-zsh-compl
 autoload -U compinit && compinit
 prompt_nix_shell_setup
 
+alias lg='lazygit'
 alias lvim='nvim -c "normal '\''0"'
 alias redirect="2>&1 | tee output.txt"
 alias go16="go1.16.15"
