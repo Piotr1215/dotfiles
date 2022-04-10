@@ -275,6 +275,7 @@ Plugin 'easymotion/vim-easymotion'
 Plugin 'rafamadriz/friendly-snippets'
 Plugin 'airblade/vim-rooter'
 Plugin 'cljoly/telescope-repo.nvim'
+Plugin 'kdheepak/lazygit.nvim'
 
 " Editing related
 Plugin 'Raimondi/delimitMate'
