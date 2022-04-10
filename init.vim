@@ -4,6 +4,8 @@ syntax on
 filetype on
 filetype plugin on
 
+set runtimepath^=/home/decoder/dev/coc-up/src/coc-test
+
 set nolist
 set ignorecase
 set smartcase
