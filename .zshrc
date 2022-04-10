@@ -26,6 +26,7 @@ autoload -U compinit && compinit   # load + start completion
 zstyle ':completion:*:directory-stack' list-colors '=(#b) #([0-9]#)*( *)==95=38;5;12'
 
 source $ZSH/oh-my-zsh.sh
+source /nix/var/nix/profiles/default/bin/nix-shell/nix-shell.plugin.zsh
 
 alias lvim='nvim -c "normal '\''0"'
 alias redirect="2>&1 | tee output.txt"
