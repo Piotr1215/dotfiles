@@ -5,6 +5,7 @@
 	status = auto
 [core]
 	excludesFile = ~/.gitignore
+	pager = delta
 [user]
 	name = Piotr Zaniewski
 	email = piotr@upbound.io
@@ -22,8 +23,10 @@
 	add-commit = !git add -A && git commit
 [diff]
 	tool = vimdiff
+	colorMoved = default
 [merge]
 	tool = vimdiff
+	conflictstyle = diff3
 [push]
 	default = matching
 [branch]
@@ -32,3 +35,7 @@
 	defaultBranch = main
 [commit]
 	gpgsign = true
+[interactive]
+    diffFilter = delta --color-only
+[delta]
+    navigate = true  # use n and N to move between diff sections
