@@ -240,8 +240,6 @@ command! -nargs=* T :split | resize 15 | terminal
 command! -nargs=* VT vsplit | terminal <args>
 
 " Split navigation
-nnoremap <S-J> <C-W><C-J>
-nnoremap <S-K> <C-W><C-K>
 nnoremap <S-L> <C-W><C-L>
 nnoremap <S-H> <C-W><C-H>
 
