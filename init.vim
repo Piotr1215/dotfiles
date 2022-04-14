@@ -221,6 +221,9 @@ endfunction
 " Stop search highlight
 nnoremap ,<space> :nohlsearch<CR>
 
+" Execute Command in scratchpad buffer
+:command! -nargs=* -complete=shellcmd R new | setlocal buftype=nofile bufhidden=hide noswapfile | r !<args>
+
 " Copy function or routine body and keyword
 nnoremap <silent> yaf [m{jV]m%y
 
