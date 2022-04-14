@@ -42,7 +42,7 @@ alias ra=ranger
 alias alaw='nohup alacritty --working-directory $PWD >&/dev/null'
 alias ghs='gh s'
 alias ls='exa --long --all --header --icons'
-alias la='exa --long --grid --all --sort=modified --reverse --header --icons'
+alias la='exa --long --grid --all --sort=accessed --reverse --header --icons'
 alias cat=batcat
 alias lzd='docker run --rm -it -v /var/run/docker.sock:/var/run/docker.sock -v /config/lazydocker:/.config/jesseduffield/lazydocker lazyteam/lazydocker'
 alias rest='shutdown now'
