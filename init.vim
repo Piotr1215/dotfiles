@@ -45,7 +45,14 @@ map <Space> <Leader>
 nnoremap <Leader>q @q
 
 map ` <Nop>
+
+" Insert a placeholder
 inoremap ,p <++>
+
+" Execute a macro over visual line selections
+xnoremap Q :'<,'>:normal @q<CR>
+
+
 " Netrw settings
 nnoremap <leader>dd :Lexplore %:p:h<CR>
 nnoremap <Leader>da :Lexplore<CR>
