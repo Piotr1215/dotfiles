@@ -45,7 +45,7 @@ map <Space> <Leader>
 nnoremap <Leader>q @q
 
 map ` <Nop>
-
+inoremap ,p <++>
 " Netrw settings
 nnoremap <leader>dd :Lexplore %:p:h<CR>
 nnoremap <Leader>da :Lexplore<CR>
