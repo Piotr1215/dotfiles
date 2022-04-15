@@ -4,7 +4,7 @@ syntax on
 filetype on
 filetype plugin on
 
-set runtimepath^=/home/decoder/dev/coc-up
+"set runtimepath^=/home/decoder/dev/coc-up
 
 set nolist
 set ignorecase
