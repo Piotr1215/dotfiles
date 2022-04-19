@@ -85,6 +85,7 @@ nnoremap <silent> <leader><Down> :<c-u>put =repeat([''],v:count)<bar>'[-1<cr>
 map  <Leader>o <Plug>(easymotion-prefix)
 map  <Leader>of <Plug>(easymotion-bd-f)
 map  <Leader>ol <Plug>(easymotion-bd-w)
+map  <Leader>oc <Plug>(easymotion-overwin-f2)
 
 " 1. TEXT EDITING
 " Easier copy/paste
