@@ -75,7 +75,7 @@ nnoremap gp `[v`]
 vnoremap // y/\V<C-R>=escape(@",'/\')<CR><CR>
 
 " Execute word under cursor like a shell command
-nnoremap <leader>ex :!<cword><Cr>
+nnoremap <leader>ex :exec '!'.getline('.')
 
 " Add line below without entering insert mode!
 nnoremap <silent> <leader><Up>   :<c-u>put!=repeat([''],v:count)<bar>']+1<cr>
