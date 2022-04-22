@@ -84,7 +84,7 @@ function! s:SendVisualToTerm()
   let @r = l:old_r
 endfunction
 
-vnoremap <silent>ox <cmd>call <sid>ShaDaIndent()<cr>
+vnoremap <silent>ro <cmd>call <sid>ShaDaIndent()<cr>
 
 
 " Add line below without entering insert mode!
