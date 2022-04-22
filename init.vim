@@ -377,6 +377,12 @@ nmap <silent> gy <Plug>(coc-type-definition)
 nmap <silent> gimp <Plug>(coc-implementation)
 nmap <silent> gr <Plug>(coc-references)
 
+let g:sendtowindow_use_defaults=0
+nmap <leader>sr <Plug>SendRight
+xmap <silent>srv <Plug>SendRightV
+nmap <leader>sd <Plug>SendDown
+xmap <silent>sdv <Plug>SendDownV
+
 " Use K to show documentation in preview window.
 nnoremap <silent> K :call <SID>show_documentation()<CR>
 
