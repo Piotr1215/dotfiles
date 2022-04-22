@@ -79,7 +79,7 @@ nnoremap <leader>ex :exec '!'.getline('.')<CR>
 
 function! s:SendVisualToTerm()
   let l:old_r = @r
-  let @r = split(s:GetVisual(), "\n")
+  let @r = print(api.nvim_buf_get_mark(0, '<'))
   call REPLSend(@r)
   let @r = l:old_r
 endfunction
