@@ -15,6 +15,7 @@ set scrolloff=8
 set signcolumn=yes
 set hlsearch
 set updatetime=300
+set textwidth=80
 
 set splitbelow
 set splitright
@@ -488,6 +489,9 @@ autocmd FileType markdown nmap <buffer><silent> <leader>p :call mdip#MarkdownCli
 " there are some defaults for image directory and image name, you can change them
 let g:mdip_imgdir = '_media'
 let g:mdip_imgname = 'image'
+
+" Auto-wrap markdown at 80 characters
+au BufRead,BufNewFile *.md setlocal textwidth=80
 
 " indent for special file
 autocmd FileType c,cpp setlocal expandtab shiftwidth=2 softtabstop=2 cindent
