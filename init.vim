@@ -77,6 +77,16 @@ vnoremap // y/\V<C-R>=escape(@",'/\')<CR><CR>
 " Execute word under cursor like a shell command
 nnoremap <leader>ex :exec '!'.getline('.')<CR>
 
+function! s:SendVisualToTerm()
+  let l:old_r = @r
+  let @r = split(s:GetVisual(), "\n")
+  call REPLSend(@r)
+  let @r = l:old_r
+endfunction
+
+vnoremap <silent>ox <cmd>call <sid>ShaDaIndent()<cr>
+
+
 " Add line below without entering insert mode!
 nnoremap <silent> <leader><Up>   :<c-u>put!=repeat([''],v:count)<bar>']+1<cr>
 nnoremap <silent> <leader><Down> :<c-u>put =repeat([''],v:count)<bar>'[-1<cr>
