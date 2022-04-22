@@ -457,9 +457,6 @@ command! -nargs=0 OR   :call     CocAction('runCommand', 'editor.action.organize
 command! -nargs=0 Prettier :CocCommand prettier.formatFile
 noremap <C-F> :Prettier<CR>
 
-let g:prettier#quickfix_enabled = 0
-autocmd TextChanged,InsertLeave *.js,*.jsx,*.mjs,*.ts,*.tsx,*.css,*.less,*.scss,*.graphql,*.md,*.vue,*.svelte,*.html PrettierAsync
-
 " Add (Neo)Vim's native statusline support.
 " NOTE: Please see `:h coc-status` for integrations with external plugins that
 " provide custom statusline: lightline.vim, vim-airline.
