@@ -77,16 +77,6 @@ vnoremap // y/\V<C-R>=escape(@",'/\')<CR><CR>
 " Execute word under cursor like a shell command
 nnoremap <leader>ex :exec '!'.getline('.')<CR>
 
-function! s:SendVisualToTerm()
-  let l:old_r = @r
-  let @r = print(nvim_buf_get_mark(0, '<'))
-  call REPLSend(@r)
-  let @r = l:old_r
-endfunction
-
-vnoremap <silent>ro <cmd>call <sid>SendVisualToTerm()<cr>
-
-
 " Add line below without entering insert mode!
 nnoremap <silent> <leader><Up>   :<c-u>put!=repeat([''],v:count)<bar>']+1<cr>
 nnoremap <silent> <leader><Down> :<c-u>put =repeat([''],v:count)<bar>'[-1<cr>
@@ -295,6 +285,7 @@ Plugin 'rafamadriz/friendly-snippets'
 Plugin 'airblade/vim-rooter'
 Plugin 'cljoly/telescope-repo.nvim'
 Plugin 'kdheepak/lazygit.nvim'
+Plugin 'karoliskoncevicius/vim-sendtowindow'
 
 " Editing related
 Plugin 'Raimondi/delimitMate'
