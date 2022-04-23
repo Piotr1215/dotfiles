@@ -22,7 +22,9 @@ plugins=(git kubectl zsh-autosuggestions zsh-syntax-highlighting sudo web-search
 setopt AUTO_PUSHD                  # pushes the old directory onto the stack
 setopt PUSHD_MINUS                 # exchange the meanings of '+' and '-'
 setopt CDABLE_VARS                 # expand the expression (allows 'cd -2/tmp')
-autoload -U compinit && compinit   # load + start completion
+setopt auto_cd
+setopt extended_glob
+autoload -Uz compinit && compinit   # load + start completion
 zstyle ':completion:*:directory-stack' list-colors '=(#b) #([0-9]#)*( *)==95=38;5;12'
 
 source $ZSH/oh-my-zsh.sh
