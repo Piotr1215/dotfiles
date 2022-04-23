@@ -36,6 +36,8 @@ prompt_nix_shell_setup
 
 # Turn history on to have cd - history
 HISTFILE=${ZDOTDIR:-$HOME}/.zsh_history
+SAVEHIST=10000
+HISTSIZE=5000
 
 alias op='xdg-open '
 alias ddgit='web_search github'
