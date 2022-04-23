@@ -35,15 +35,15 @@ autoload -U compinit && compinit
 prompt_nix_shell_setup
 
 # Turn history on to have cd - history
-HISTFILE=${ZDOTDIR:-$HOME}/.zsh_history
 SAVEHIST=10000
 HISTSIZE=5000
+
 # share history across multiple zsh sessions
-setopt SHARE_HISTORY
-# append to history
-setopt APPEND_HISTORY
-# adds commands as they are typed, not at shell exit
-setopt INC_APPEND_HISTORY
+setopt HIST_SAVE_NO_DUPS INC_APPEND_HISTORY
+HISTFILE=~/.zsh/dirhist/${PWD//\//@}
+chpwd() {
+  [[ $PWD = $OLDPWD ]] || fc -Pp ~/.zsh/dirhist/${PWD//\//@}
+}
 
 alias op='xdg-open '
 alias ddgit='web_search github'
