@@ -34,6 +34,9 @@ fpath=(/home/decoder/.oh-my-zsh/custom/plugins/nix-zsh-completions/nix-zsh-compl
 autoload -U compinit && compinit
 prompt_nix_shell_setup
 
+# Turn history on to have cd - history
+HISTFILE=${ZDOTDIR:-$HOME}/.zsh_history
+
 alias op='xdg-open '
 alias ddgit='web_search github'
 alias lg='lazygit'
