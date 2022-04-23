@@ -38,6 +38,10 @@ prompt_nix_shell_setup
 HISTFILE=${ZDOTDIR:-$HOME}/.zsh_history
 SAVEHIST=10000
 HISTSIZE=5000
+# share history across multiple zsh sessions
+setopt SHARE_HISTORY
+# append to history
+setopt APPEND_HISTORY
 
 alias op='xdg-open '
 alias ddgit='web_search github'
