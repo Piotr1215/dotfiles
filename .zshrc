@@ -12,7 +12,7 @@ ZSH_THEME="simple"
 #ZSH_THEME="powerlevel10k/powerlevel10k"
 
 # Add wisely, as too many plugins slow down shell startup.
-plugins=(git kubectl zsh-autosuggestions zsh-syntax-highlighting sudo web-search alias-finder colored-man-pages nix-shell)
+plugins=(z git kubectl zsh-autosuggestions zsh-syntax-highlighting sudo web-search alias-finder colored-man-pages nix-shell)
 
 # PROMPT CUSTOMIZATION
 # To customize prompt, run `p10k configure` or edit ~/.p10k.zsh.
