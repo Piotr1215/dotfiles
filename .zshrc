@@ -42,6 +42,8 @@ HISTSIZE=5000
 setopt SHARE_HISTORY
 # append to history
 setopt APPEND_HISTORY
+# adds commands as they are typed, not at shell exit
+setopt INC_APPEND_HISTORY
 
 alias op='xdg-open '
 alias ddgit='web_search github'
