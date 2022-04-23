@@ -41,6 +41,7 @@ HISTSIZE=5000
 setopt HIST_SAVE_NO_DUPS INC_APPEND_HISTORY
 HISTFILE=${ZDOTDIR:-$HOME}/.zsh_history
 
+alias y=z
 alias op='xdg-open '
 alias ddgit='web_search github'
 alias lg='lazygit'
