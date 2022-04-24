@@ -288,6 +288,7 @@ Plugin 'airblade/vim-rooter'
 Plugin 'cljoly/telescope-repo.nvim'
 Plugin 'kdheepak/lazygit.nvim'
 Plugin 'karoliskoncevicius/vim-sendtowindow'
+Plugin 'jpalardy/vim-slime'
 
 " Editing related
 Plugin 'Raimondi/delimitMate'
