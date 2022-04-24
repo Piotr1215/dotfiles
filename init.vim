@@ -520,7 +520,7 @@ let g:netrw_banner = 0
 let g:netrw_keepdir = 0
 
 " setup for markdown snippet
-let g:vim_markdown_folding_disabled = 0
+let g:vim_markdown_folding_disabled = 1
 let g:vim_markdown_folding_level = 3
 let g:vim_markdown_toc_autofit = 1
 let g:vim_markdown_conceal = 0
