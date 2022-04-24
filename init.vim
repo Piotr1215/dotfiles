@@ -517,6 +517,7 @@ let g:rooter_patterns = ['.git', 'package.json', '!node_modules']
 
 " Setup for slime
 let g:slime_target = "tmux"
+let g:slime_default_config = {"socket_name": "default", "target_pane": "{last}"}
 
 " setup for netrw
 let g:netrw_winsize = 30
