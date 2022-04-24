@@ -515,6 +515,9 @@ let g:user_emmet_settings = webapi#json#decode(join(readfile(expand('~/.snippets
 " Rooter
 let g:rooter_patterns = ['.git', 'package.json', '!node_modules']
 
+" Setup for slime
+let g:slime_target = "tmux"
+
 " setup for netrw
 let g:netrw_winsize = 30
 let g:netrw_banner = 0
