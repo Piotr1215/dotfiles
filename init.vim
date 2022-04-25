@@ -290,7 +290,6 @@ Plugin 'cljoly/telescope-repo.nvim'
 Plugin 'kdheepak/lazygit.nvim'
 Plugin 'karoliskoncevicius/vim-sendtowindow'
 Plugin 'jpalardy/vim-slime'
-Plugin 'SirVer/ultisnips'
 
 " Editing related
 Plugin 'Raimondi/delimitMate'
@@ -484,16 +483,6 @@ nmap <leader>t   <Plug>(vsnip-select-text)
 xmap <leader>t   <Plug>(vsnip-select-text)
 nmap <leader>tc   <Plug>(vsnip-cut-text)
 xmap <leader>tc   <Plug>(vsnip-cut-text)
-
-" Trigger configuration. You need to change this to something other than <tab> if you use one of the following:
-" - https://github.com/Valloric/YouCompleteMe
-" - https://github.com/nvim-lua/completion-nvim
-let g:UltiSnipsExpandTrigger="<c-u>"
-let g:UltiSnipsJumpForwardTrigger="<c-b>"
-let g:UltiSnipsJumpBackwardTrigger="<c-z>"
-
-" If you want :UltiSnipsEdit to split your window.
-let g:UltiSnipsEditSplit="vertical"
 
 " Color name (:help cterm-colors) or ANSI code
 let g:limelight_conceal_ctermfg = 'gray'
