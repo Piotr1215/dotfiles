@@ -142,7 +142,7 @@ nnoremap <Leader>x *``cgn
 nnoremap <Leader>X #``cgN
 
 " Copy from cursor to end of line
-nnoremap <leader>y vg_cp
+nnoremap <leader>yc vg_cp
 
 " Search and replace word under cursor using F4
 nnoremap <F4> :%s/<c-r><c-w>/<c-r><c-w>/gc<c-f>$F/i
