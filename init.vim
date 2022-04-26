@@ -500,7 +500,7 @@ au BufRead,BufNewFile *.md setlocal textwidth=80
 " indent for special file
 autocmd FileType c,cpp setlocal expandtab shiftwidth=2 softtabstop=2 cindent
 autocmd FileType python setlocal expandtab shiftwidth=4 softtabstop=4 autoindent
-#autocmd FileType yaml setlocal ts=2 sts=2 sw=4 expandtab
+"autocmd FileType yaml setlocal ts=2 sts=2 sw=4 expandtab
 autocmd FileType yaml setlocal tabstop=8 softtabstop=0 expandtab shiftwidth=4 smarttab
 autocmd FileType markdown setlocal expandtab shiftwidth=4 softtabstop=4 autoindent
 
