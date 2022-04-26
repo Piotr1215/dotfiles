@@ -130,12 +130,13 @@ export NVM_DIR="$HOME/.nvm"
 # USER FUNCTIONS
 
 function ytd() {
-    if [[ -z "$1" ]]; then
-        echo "Please provide search term"
-        return
-    else
-        youtube-dl -o "~/music/%(title)s.%(ext)s"  $1 --no-playlist &
+    link=$(xsel -ob)
+
+    if [[ "$link" != *"www.youtube.com"* ]]; then
+        echo "This is not the right format, copy again"
+        return 1 2>/dev/null
     fi
+    youtube-dl -o "~/music/%(title)s.%(ext)s"  $link --no-playlist &
 }
 
 function cpa() {
