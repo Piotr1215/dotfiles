@@ -134,7 +134,7 @@ function ytd() {
         echo "Please provide search term"
         return
     else
-        youtuge-dl $1 --no-playlist
+        youtube-dl $1 --no-playlist
     fi
 }
 
