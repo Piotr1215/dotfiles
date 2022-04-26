@@ -290,6 +290,7 @@ Plugin 'cljoly/telescope-repo.nvim'
 Plugin 'kdheepak/lazygit.nvim'
 Plugin 'karoliskoncevicius/vim-sendtowindow'
 Plugin 'jpalardy/vim-slime'
+Plugin 'cuducos/yaml.nvim'
 
 " Editing related
 Plugin 'Raimondi/delimitMate'
