@@ -48,7 +48,6 @@ setopt share_history            # share hist between sessions
 setopt bang_hist                # !keyword
 HISTFILE=${ZDOTDIR:-$HOME}/.zsh_history
 
-alias yt='ytd(){youtube download $1 --no-playlist}'
 alias gs='git show'
 alias y=z
 alias op='xdg-open '
@@ -129,6 +128,15 @@ export NVM_DIR="$HOME/.nvm"
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
 
 # USER FUNCTIONS
+
+function ytd() {
+    if [[ -z "$1" ]]; then
+        echo "Please provide search term"
+        return
+    else
+        youtuge-dl $1 --no-playlist
+    fi
+}
 
 function cpa() {
     printf $PWD | xclip -selection primary 
