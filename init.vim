@@ -500,7 +500,7 @@ au BufRead,BufNewFile *.md setlocal textwidth=80
 " indent for special file
 autocmd FileType c,cpp setlocal expandtab shiftwidth=2 softtabstop=2 cindent
 autocmd FileType python setlocal expandtab shiftwidth=4 softtabstop=4 autoindent
-autocmd FileType yaml setlocal ts=6 sts=6 sw=6 expandtab
+autocmd FileType yaml setlocal tabstop=6 softtabstop=6 shiftwidth=6 expandtab
 autocmd FileType markdown setlocal expandtab shiftwidth=4 softtabstop=4 autoindent
 
 "au FileType plantuml let g:plantuml_previewer#plantuml_jar_path = get(
