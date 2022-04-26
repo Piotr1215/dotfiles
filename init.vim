@@ -514,7 +514,7 @@ let g:plantuml_previewer#viewer_path = "/home/decoder/.vim/bundle/plantuml-previ
 
 " setup custom emmet snippets
 let g:user_emmet_settings = webapi#json#decode(join(readfile(expand('~/.snippets_custom.json')), "\n"))
-
+let g:indentLine_char = '⦙'
 " Rooter
 let g:rooter_patterns = ['.git', 'package.json', '!node_modules']
 
