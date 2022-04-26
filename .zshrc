@@ -132,7 +132,7 @@ export NVM_DIR="$HOME/.nvm"
 function ytd() {
     link=$(xsel -ob)
 
-    if [[ "$link" != *"www.youtube.com"* ]]; then
+    if [[ "$link" != *"youtu.be"* ]]; then
         echo "This is not the right format, copy again"
         return 1 2>/dev/null
     fi
