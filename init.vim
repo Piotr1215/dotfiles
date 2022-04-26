@@ -2,7 +2,7 @@ set nocompatible
 syntax enable
 syntax on
 filetype on
-filetype plugin on
+filetype plugin indent on
 
 set nolist
 set ignorecase
