@@ -134,7 +134,7 @@ function ytd() {
         echo "Please provide search term"
         return
     else
-        youtube-dl $1 --no-playlist
+        youtube-dl -o "~/music/%(title)s.%(ext)s"  $1 --no-playlist
     fi
 }
 
