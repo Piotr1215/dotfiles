@@ -136,6 +136,7 @@ function ytd() {
         echo "This is not the right format, copy again"
         return 1 2>/dev/null
     fi
+
     youtube-dl -o "~/music/%(title)s.%(ext)s"  $link --no-playlist &
 }
 
