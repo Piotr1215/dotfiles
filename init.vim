@@ -18,6 +18,7 @@ set autochdir
 
 set splitbelow
 set splitright
+set pastetoggle=<F1>
 
 set mouse=v
 set number
