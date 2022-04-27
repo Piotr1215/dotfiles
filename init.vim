@@ -53,6 +53,8 @@ inoremap ,p <++>
 " Execute a macro over visual line selections
 xnoremap Q :'<,'>:normal @q<CR>
 
+" Delete to black hole register, simply wipe out
+nnoremap del "_dd
 
 " Netrw settings
 nnoremap <leader>dd :Lexplore %:p:h<CR>
