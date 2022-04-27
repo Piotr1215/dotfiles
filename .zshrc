@@ -48,6 +48,7 @@ setopt share_history            # share hist between sessions
 setopt bang_hist                # !keyword
 HISTFILE=${ZDOTDIR:-$HOME}/.zsh_history
 
+alias yx='y -t '
 alias gs='git show'
 alias y=z
 alias op='xdg-open '
