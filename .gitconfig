@@ -35,6 +35,7 @@
 	defaultBranch = main
 [commit]
 	gpgsign = true
+	template = /home/decoder/.gitmessage
 [interactive]
     diffFilter = delta --color-only
 [delta]
