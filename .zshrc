@@ -130,6 +130,10 @@ export NVM_DIR="$HOME/.nvm"
 
 # USER FUNCTIONS
 
+function tlink() {
+    xgd-open "{$1}#:~:text={$2}"
+}
+
 function ytd() {
     link=$(xsel -ob)
 
