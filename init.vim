@@ -175,10 +175,6 @@ nnoremap <leader>d zt
 " Abbreviations
 iab <expr> t/ strftime('TODO(' . $USER . ' %Y-%m-%d):')
 
-" Lua Snippets Settings
-
-:lua require("luasnip.loaders.from_vscode").lazy_load()
-
 " 2. NAVIGATION
 " CoC Extension
 nmap <Leader>f [fzf-p]
@@ -323,7 +319,6 @@ Plugin 'hrsh7th/vim-vsnip'
 Plugin 'hrsh7th/vim-vsnip-integ'
 Plugin 'sakshamgupta05/vim-todo-highlight'
 Plugin 'nvim-treesitter/nvim-treesitter', {'do': ':TSUpdate'}  " We recommend updating the parsers on update
-Plugin 'L3MON4D3/LuaSnip'
 
 " Programming
 Plugin 'majutsushi/tagbar'
