@@ -513,7 +513,7 @@ autocmd FileType markdown setlocal expandtab shiftwidth=4 softtabstop=4 autoinde
 
 let g:plantuml_previewer#viewer_path = "/home/decoder/.vim/bundle/plantuml-previewer.vim/viewer"
 "let g:plantuml_previewer#viewer_path = "/home/decoder/dev/platform-core/diagrams/rendered"
-let g:plantuml_previewer#debug_mode = 1
+let g:plantuml_previewer#debug_mode = 0
 " setup custom emmet snippets
 let g:user_emmet_settings = webapi#json#decode(join(readfile(expand('~/.snippets_custom.json')), "\n"))
 let g:indentLine_char = '⦙'
