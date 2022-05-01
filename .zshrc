@@ -130,8 +130,9 @@ export NVM_DIR="$HOME/.nvm"
 
 # USER FUNCTIONS
 
-function tlink() {
-    xdg-open "{$1}#:~:text={$2}"
+function copyname() {
+    file=$1
+    stat -t $1 | cut -d '.' -f1 | xargs echo -n | xclip
 }
 
 function ytd() {
