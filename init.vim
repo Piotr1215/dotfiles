@@ -61,7 +61,7 @@ nnoremap <leader>dd :Lexplore %:p:h<CR>
 nnoremap <Leader>da :Lexplore<CR>
 
 " Move line of text up and down
-vnoremap J :m '>+1<CR>gv=gv
+vnoremap <S-PageUp> :m '>+1<CR>gv=gv
 vnoremap K :m '<-2<CR>gv=gv
 inoremap <C-j> <esc>:m .+1<CR>==
 inoremap <C-k> <esc>:m .-2<CR>==
@@ -259,6 +259,8 @@ command! -nargs=* VT vsplit | terminal <args>
 " Split navigation
 nnoremap <S-L> <C-W><C-L>
 nnoremap <S-H> <C-W><C-H>
+nnoremap <S-K> <C-W><C-K>
+nnoremap <S-J> <C-W><C-J>
 
 "Floatterm settings
 nnoremap   <silent><Leader>fl :FloatermNew<CR>
