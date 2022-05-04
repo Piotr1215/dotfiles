@@ -259,7 +259,7 @@ command! -nargs=* VT vsplit | terminal <args>
 " Split navigation
 nnoremap <S-L> <C-W><C-L>
 nnoremap <S-H> <C-W><C-H>
-nnoremap <S-K> <C-W><C-K>
+nnoremap <S-U> <C-W><C-K>
 nnoremap <S-J> <C-W><C-J>
 
 "Floatterm settings
