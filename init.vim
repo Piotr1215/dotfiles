@@ -257,10 +257,10 @@ command! -nargs=* T :split | resize 15 | terminal
 command! -nargs=* VT vsplit | terminal <args>
 
 " Split navigation
-nnoremap <S-L> <C-W><C-L>
-nnoremap <S-H> <C-W><C-H>
-nnoremap <S-U> <C-W><C-K>
-nnoremap <S-J> <C-W><C-J>
+#nnoremap <S-L> <C-W><C-L>
+#nnoremap <S-H> <C-W><C-H>
+#nnoremap <S-U> <C-W><C-K>
+#nnoremap <S-J> <C-W><C-J>
 
 "Floatterm settings
 nnoremap   <silent><Leader>fl :FloatermNew<CR>
