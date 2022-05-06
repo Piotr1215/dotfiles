@@ -381,6 +381,14 @@ inoremap <silent><expr> <cr> pumvisible() ? coc#_select_confirm()
 nmap <silent> [g <Plug>(coc-diagnostic-prev)
 nmap <silent> ]g <Plug>(coc-diagnostic-next)
 
+let g:tmux_navigator_no_mappings = 1
+
+nnoremap <silent> <A-Left> :TmuxNavigateLeft<cr>
+nnoremap <silent> <A-Down> :TmuxNavigateDown<cr>
+nnoremap <silent> <A-Up> :TmuxNavigateUp<cr>
+nnoremap <silent> <A-Right> :TmuxNavigateRight<cr>
+nnoremap <silent> <A-End> :TmuxNavigatePrevious<cr>
+
 " GoTo code navigation.
 nmap <silent> gd <Plug>(coc-definition)
 nmap <silent> gy <Plug>(coc-type-definition)
