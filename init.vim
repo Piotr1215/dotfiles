@@ -146,7 +146,7 @@ nnoremap <Leader>X #``cgN
 
 " Find and replace
 "nnoremap <Space><Space> :%s/\<<C-r>=expand("<cword>")<CR>\>/
-vnoremap <Space><Space> "hy:%s/<C-r>h//gc<left><left><left>
+vnoremap <C-r> "hy:%s/<C-r>h//gc<left><left><left>
 
 " Copy from cursor to end of line
 nnoremap <leader>y "+y$
