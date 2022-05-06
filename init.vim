@@ -147,9 +147,6 @@ nnoremap <Leader>X #``cgN
 " Copy from cursor to end of line
 nnoremap <leader>y "+y$
 
-" Search and replace word under cursor using F4
-nnoremap <F4> :%s/<c-r><c-w>/<c-r><c-w>/gc<c-f>$F/i
-
 " cut and copy content to next header #
 nmap cO :.,/^#/-1d<CR>
 nmap cY :.,/^#/-1y<CR>
