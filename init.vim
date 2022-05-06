@@ -144,6 +144,9 @@ nnoremap Y yg_
 nnoremap <Leader>x *``cgn
 nnoremap <Leader>X #``cgN
 
+" Find and replace
+nnoremap <Space><Space> :%s/\<<C-r>=expand("<cword>")<CR>\>/
+
 " Copy from cursor to end of line
 nnoremap <leader>y "+y$
 
@@ -157,8 +160,6 @@ nnoremap <Leader>sp i<CR><Esc>
 " Markdown Previe
 nnoremap <silent><leader>mp :MarkdownPreview<CR>
 
-" Find and replace
-nnoremap <Space><Space> :%s/\<<C-r>=expand("<cword>")<CR>\>/
 
 " Upload selected to ix.io
 vnoremap <Leader>pp :w !curl -F "f:1=<-" ix.io<CR>
