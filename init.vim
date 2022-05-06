@@ -295,6 +295,7 @@ Plugin 'cljoly/telescope-repo.nvim'
 Plugin 'kdheepak/lazygit.nvim'
 Plugin 'karoliskoncevicius/vim-sendtowindow'
 Plugin 'jpalardy/vim-slime'
+Plugin 'christoomey/vim-tmux-navigator'
 
 " Editing related
 Plugin 'Raimondi/delimitMate'
