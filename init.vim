@@ -69,8 +69,8 @@ nnoremap <leader>k :m .-2<CR>==
 nnoremap <leader>j :m .+1<CR>==
 
 " Insert 2 empty lines and go into inser mode
-nnoremap <leader>O O<ESC>O
-nnoremap <leader>o o<cr>
+nnoremap <leader>L O<ESC>O
+nnoremap <leader>l o<cr>
 
 " Save buffer
 nnoremap <leader>w :w<CR>
