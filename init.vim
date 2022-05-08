@@ -43,23 +43,19 @@ set rtp+=~/.vim/bundle/Vundle.vim
 " Space is leader
 nnoremap <SPACE> <Nop>
 map <Space> <Leader>
-nnoremap <Leader>q @q
-
 map ` <Nop>
 
-" Insert a placeholder
-inoremap ,p <++>
-
+" MACROS
+" ------ 
+"
+" Run q macro
+nnoremap <Leader>q @q
 " Execute a macro over visual line selections
 xnoremap Q :'<,'>:normal @q<CR>
 
-" Delete to black hole register, simply wipe out
-nnoremap del "_dd
-
-" Netrw settings
-nnoremap <leader>dd :Lexplore %:p:h<CR>
-nnoremap <Leader>da :Lexplore<CR>
-
+" MOVE AROUND
+" -----------
+"
 " Move line of text up and down
 vnoremap <S-PageDown> :m '>+1<CR>gv=gv
 vnoremap <S-PageUp> :m '<-2<CR>gv=gv
@@ -67,160 +63,103 @@ inoremap <C-j> <esc>:m .+1<CR>==
 inoremap <C-k> <esc>:m .-2<CR>==
 nnoremap <leader>k :m .-2<CR>==
 nnoremap <leader>j :m .+1<CR>==
+" Go to next header
+nnoremap <Leader>nh :.,/^#/<CR>
 
-" Insert 2 empty lines and go into inser mode
-nnoremap <leader>L O<ESC>O
-nnoremap <leader>l o<cr>
-
-" Save buffer
-nnoremap <leader>w :w<CR>
-
-" Select last pasted text
-nnoremap gp `[v`]
-
+" SEARCH & REPLACE
+" --------------
+"
 " Find occunrances of selected text
 vnoremap // y/\V<C-R>=escape(@",'/\')<CR><CR>
-
-" Execute word under cursor like a shell command
-nnoremap <leader>ex :exec '!'.getline('.')<CR>
-
-" Add line below without entering insert mode!
-nnoremap <silent> <leader><Up>   :<c-u>put!=repeat([''],v:count)<bar>']+1<cr>
-nnoremap <silent> <leader><Down> :<c-u>put =repeat([''],v:count)<bar>'[-1<cr>
-
 " Easy Motion Mappings
 map  <Leader>o <Plug>(easymotion-prefix)
 map  <Leader>of <Plug>(easymotion-bd-f)
 map  <Leader>ol <Plug>(easymotion-bd-w)
 nmap  <Leader>oc <Plug>(easymotion-overwin-f2)
+" Stop search highlight
+nnoremap ,<space> :nohlsearch<CR>
 
-" 1. TEXT EDITING
-" Easier copy/paste
-
+" MANIPULATE TEXT
+" ---------------------------
+"
+" Insert 2 empty lines and go into inser mode
+nnoremap <leader>L O<ESC>O
+nnoremap <leader>l o<cr>
+" Select last pasted text
+nnoremap gp `[v`]
+" Add line below without entering insert mode!
+nnoremap <silent> <leader><Up>   :<c-u>put!=repeat([''],v:count)<bar>']+1<cr>
+nnoremap <silent> <leader><Down> :<c-u>put =repeat([''],v:count)<bar>'[-1<cr>
 " Paste at the end of line with space
-:nnoremap <leader>5 A <esc>p
-
+nnoremap <leader>5 A <esc>p
 " Copy to 0 register
-:nnoremap <leader>1 "0y
-
+nnoremap <leader>1 "0y
 " Paste crom clipboard
-:nnoremap <leader>2 "+p
-
-" Go to next header
-nnoremap <Leader>nh :.,/^#/<CR>
-
-" Copy selection to clipboard with Ctrl+v
+nnoremap <leader>2 "+p
+" Copy selection to clipboard with Ctrl+c
 vmap <C-c> "+y
-
-" Set spellcheck on/off
-nnoremap <Leader>son :setlocal spell spelllang=en_us<CR>
-nnoremap <Leader>sof :set nospell<CR>
-
-" Accept first grammar correction
-nnoremap <Leader>c 1z=
-
 " Removes whitespace
 nnoremap <Leader>rspace :%s/\s\+$//e
-
 " Removes empty lines if there are more than 2
 nnoremap <Leader>rlines :%s/\n\{3,}/\r\r/e
-
-" Swap words
-nnoremap <leader>sw :s/\v([^(]+)(\s*,\s*)([^, ]\v([^)])+)/\3\2\1<CR>
-
 " Insert space
 nnoremap <Leader>i i<space><esc>
-
 " delete word forward in insert mode
 inoremap <C-e> <C-o>dw<Left>
-
-" Operations on Code Block
-onoremap <silent>am <cmd>call <sid>MarkdowCodeBlock(1)<cr>
-xnoremap <silent>am <cmd>call <sid>MarkdowCodeBlock(1)<cr>
-
-onoremap <silent>im <cmd>call <sid>MarkdowCodeBlock(0)<cr>
-xnoremap <silent>im <cmd>call <sid>MarkdowCodeBlock(0)<cr>
-
 " Copies till the end of a line. Fits with Shift + D, C etc
 nnoremap Y yg_
-
 " Replace multiple words simultaniously
+" Repeat with .
 nnoremap <Leader>x *``cgn
 nnoremap <Leader>X #``cgN
-
 " Find and replace
 "nnoremap <Space><Space> :%s/\<<C-r>=expand("<cword>")<CR>\>/
 vnoremap <C-r> "hy:%s/<C-r>h//gc<left><left><left>
-
 " Copy from cursor to end of line
 nnoremap <leader>y "+y$
-
 " cut and copy content to next header #
 nmap cO :.,/^#/-1d<CR>
 nmap cY :.,/^#/-1y<CR>
-
 "Split line in two
 nnoremap <Leader>sp i<CR><Esc>
+" Swap words separated by comma
+nnoremap <leader>sw :s/\v([^(]+)(\s*,\s*)([^, ]\v([^)])+)/\3\2\1<CR>
+" Copy function or routine body and keyword
+nnoremap <silent> yaf [m{jV]m%y
 
-" Markdown Previe
-nnoremap <silent><leader>mp :MarkdownPreview<CR>
-
-
+" EXTERNAL
+" --------
+"
+" Execute line under cursor in shell
+nnoremap <leader>ex :exec '!'.getline('.')<CR>
+" Set spellcheck on/off
+nnoremap <Leader>son :setlocal spell spelllang=en_us<CR>
+nnoremap <Leader>sof :set nospell<CR>
+" Accept first grammar correction
+nnoremap <Leader>c 1z=
 " Upload selected to ix.io
 vnoremap <Leader>pp :w !curl -F "f:1=<-" ix.io<CR>
+" Execute Command in scratchpad buffer
+:command! -nargs=* -complete=shellcmd R new | setlocal buftype=nofile bufhidden=hide noswapfile | r !<args>
+nmap <leader>sr <Plug>SendRight<cr>
+xmap <silent>srv <Plug>SendRightV<cr>
+nmap <leader>sd <Plug>SendDown<cr>
+xmap <silent>sdv <Plug>SendDownV<cr>
+" setup mapping to call :LazyGit
+nnoremap <silent> <leader>gg :LazyGit<CR>
 
+" MARKDOWN
+" --------
+"
+" Operations on Code Block
+onoremap <silent>am <cmd>call <sid>MarkdowCodeBlock(1)<cr>
+xnoremap <silent>am <cmd>call <sid>MarkdowCodeBlock(1)<cr>
+onoremap <silent>im <cmd>call <sid>MarkdowCodeBlock(0)<cr>
+xnoremap <silent>im <cmd>call <sid>MarkdowCodeBlock(0)<cr>
+" Markdown Previev
+nnoremap <silent><leader>mp :MarkdownPreview<CR>
 " Fix Markdown Errors
 nnoremap <leader>fx :<C-u>CocCommand markdownlint.fixAll<CR>
-
-" Move screen to contain current line at the top
-nnoremap <leader>d zt
-
-" Abbreviations
-iab <expr> t/ strftime('TODO(' . $USER . ' %Y-%m-%d):')
-
-" 2. NAVIGATION
-" CoC Extension
-nmap <Leader>f [fzf-p]
-xmap <Leader>f [fzf-p]
-
-" Files and Projects navigation
-nnoremap <silent> [fzf-p]p     :<C-u>CocCommand fzf-preview.FromResources project_mru git<CR>
-nnoremap <silent> [fzf-p]pf    :<C-u>CocCommand fzf-preview.ProjectFiles<CR>
-nnoremap <silent> [fzf-p]gs    :<C-u>CocCommand fzf-preview.GitStatus<CR>
-nnoremap <silent> [fzf-p]ga    :<C-u>CocCommand fzf-preview.GitActions<CR>
-nnoremap <silent> [fzf-p]b     :<C-u>CocCommand fzf-preview.Buffers<CR>
-nnoremap <silent> [fzf-p]B     :<C-u>CocCommand fzf-preview.AllBuffers<CR>
-nnoremap <silent> [fzf-p]po     :<C-u>CocCommand fzf-preview.FromResources buffer project_mru<CR>
-nnoremap <silent> [fzf-p]<C-o> :<C-u>CocCommand fzf-preview.Jumps<CR>
-nnoremap <silent> [fzf-p]g;    :<C-u>CocCommand fzf-preview.Changes<CR>
-nnoremap <silent> [fzf-p]q     :<C-u>CocCommand fzf-preview.QuickFix<CR>
-nnoremap <silent> [fzf-p]L     :<C-u>CocCommand fzf-preview.LocationList<CR>
-
-" Find files using Telescope command-line sugar.
-" map('n', '<leader>ff', "<cmd>lua require'telescope.builtin'.find_files({ find_command = {'rg', '--files', '--hidden', '-g', '!.git' }})<cr>", default_opts)
-nnoremap <leader>tf <cmd>lua require'telescope.builtin'.find_files({ find_command = {'rg', '--files', '--hidden', '-g', '!.git' }})<cr>
-nnoremap <leader>tg <cmd>Telescope live_grep<cr>
-nnoremap <leader>to <cmd>Telescope oldfiles<cr>
-nnoremap <leader>tb <cmd>Telescope buffers<cr>
-nnoremap <leader>th <cmd>Telescope help_tags<cr>
-nnoremap <Leader>ts :lua require'telescope.builtin'.grep_string{}<CR>
-nnoremap <leader>tp <cmd>Telescope find_files<cr>
-nnoremap <leader>tl <cmd>Telescope repo list<cr>
-
-" Git mappings
-nnoremap <leader>goh :G push -f origin HEAD<CR>
-nnoremap <leader>gop :G push<CR>
-command GitDiff execute  "w !git diff --no-index -- % -"
-
-" Used for learning for certs
-nnoremap <Leader>ok A :+1: <esc><CR>
-nnoremap <Leader>bad A :-1: <esc><CR>
-nnoremap <Leader>r A :hand: <esc><CR>
-nnoremap <Leader>clean :g/<details>/,/<\/details>/d _<CR>
-
-" nnoremp <leader>sv :source /Users/p.zaniewski/.config/nvim/init.vim<CR>
-nnoremap <leader>sv :source /home/decoder/.config/nvim/init.vim<CR>
-
 function! s:MarkdowCodeBlock(outside)
     call search('```', 'cb')
     if a:outside
@@ -234,37 +173,63 @@ function! s:MarkdowCodeBlock(outside)
     endif
 endfunction
 
-" 3 - VIM HELPERS
-" Stop search highlight
-nnoremap ,<space> :nohlsearch<CR>
+" ABBREVIATIONS
+" -------------
+"
+iab <expr> t/ strftime('TODO(' . $USER . ' %Y-%m-%d):')
 
-" Execute Command in scratchpad buffer
-:command! -nargs=* -complete=shellcmd R new | setlocal buftype=nofile bufhidden=hide noswapfile | r !<args>
-
-" Copy function or routine body and keyword
-nnoremap <silent> yaf [m{jV]m%y
-
+" NAVIGATION & EDITOR
+" ----------
+" FZF Key
+nmap <Leader>f [fzf-p]
+xmap <Leader>f [fzf-p]
+" Files and Projects navigation
+nnoremap <silent> [fzf-p]p     :<C-u>CocCommand fzf-preview.FromResources project_mru git<CR>
+nnoremap <silent> [fzf-p]pf    :<C-u>CocCommand fzf-preview.ProjectFiles<CR>
+nnoremap <silent> [fzf-p]gs    :<C-u>CocCommand fzf-preview.GitStatus<CR>
+nnoremap <silent> [fzf-p]ga    :<C-u>CocCommand fzf-preview.GitActions<CR>
+nnoremap <silent> [fzf-p]b     :<C-u>CocCommand fzf-preview.Buffers<CR>
+nnoremap <silent> [fzf-p]B     :<C-u>CocCommand fzf-preview.AllBuffers<CR>
+nnoremap <silent> [fzf-p]po     :<C-u>CocCommand fzf-preview.FromResources buffer project_mru<CR>
+nnoremap <silent> [fzf-p]<C-o> :<C-u>CocCommand fzf-preview.Jumps<CR>
+nnoremap <silent> [fzf-p]g;    :<C-u>CocCommand fzf-preview.Changes<CR>
+nnoremap <silent> [fzf-p]q     :<C-u>CocCommand fzf-preview.QuickFix<CR>
+nnoremap <silent> [fzf-p]L     :<C-u>CocCommand fzf-preview.LocationList<CR>
+" Find files using Telescope command-line sugar.
+" map('n', '<leader>ff', "<cmd>lua require'telescope.builtin'.find_files({ find_command = {'rg', '--files', '--hidden', '-g', '!.git' }})<cr>", default_opts)
+nnoremap <leader>tf <cmd>lua require'telescope.builtin'.find_files({ find_command = {'rg', '--files', '--hidden', '-g', '!.git' }})<cr>
+nnoremap <leader>tg <cmd>Telescope live_grep<cr>
+nnoremap <leader>to <cmd>Telescope oldfiles<cr>
+nnoremap <leader>tb <cmd>Telescope buffers<cr>
+nnoremap <leader>th <cmd>Telescope help_tags<cr>
+nnoremap <Leader>ts :lua require'telescope.builtin'.grep_string{}<CR>
+nnoremap <leader>tp <cmd>Telescope find_files<cr>
+nnoremap <leader>tl <cmd>Telescope repo list<cr>
+" Netrw settings
+nnoremap <leader>dd :Lexplore %:p:h<CR>
+nnoremap <Leader>da :Lexplore<CR>
+" Save buffer
+nnoremap <leader>w :w<CR>
+" Move screen to contain current line at the top
+nnoremap <leader>d zt
+" Git mappings
+command GitDiff execute  "w !git diff --no-index -- % -"
+nnoremap <leader>sv :source /home/decoder/.config/nvim/init.vim<CR>
 " jj in insert mode instead of ESC
 inoremap jj <Esc>
 inoremap jk <Esc>
-
 " Zoom split windows
 noremap Zz <c-w>_ \| <c-w>\|
 noremap Zo <c-w>=
-
-nmap <F8> :TagbarToggle<CR>
-
-tnoremap <Esc> <C-\><C-n>
-autocmd TermOpen term://* startinsert
-command! -nargs=* T :split | resize 15 | terminal
-command! -nargs=* VT vsplit | terminal <args>
-
 " Split navigation
 nnoremap <S-L> <C-W><C-L>
 nnoremap <S-H> <C-W><C-H>
 nnoremap <S-U> <C-W><C-K>
 nnoremap <S-J> <C-W><C-J>
-
+"Neovim built in terminal settings
+autocmd TermOpen term://* startinsert
+command! -nargs=* T :split | resize 15 | terminal
+command! -nargs=* VT vsplit | terminal <args>
 "Floatterm settings
 nnoremap   <silent><Leader>fl :FloatermNew<CR>
 nnoremap   <silent><Leader>ft :FloatermToggle<CR>
@@ -272,6 +237,12 @@ nnoremap   <silent><Leader>fs :FloatermShow<CR>
 nnoremap   <silent><Leader>fh :FloatermHide<CR>
 nnoremap   <silent><Leader>fn :FloatermNext<CR>
 nnoremap   <silent><Leader>fc :FloatermKill<CR>
+
+" Used for learning for certs
+nnoremap <Leader>ok A :+1: <esc><CR>
+nnoremap <Leader>bad A :-1: <esc><CR>
+nnoremap <Leader>r A :hand: <esc><CR>
+nnoremap <Leader>clean :g/<details>/,/<\/details>/d _<CR>
 
 call vundle#begin()
 " alternatively, pass a path where Vundle should install plugins
@@ -390,10 +361,6 @@ nmap <silent> gimp <Plug>(coc-implementation)
 nmap <silent> gr <Plug>(coc-references)
 
 let g:sendtowindow_use_defaults=0
-nmap <leader>sr <Plug>SendRight<cr>
-xmap <silent>srv <Plug>SendRightV<cr>
-nmap <leader>sd <Plug>SendDown<cr>
-xmap <silent>sdv <Plug>SendDownV<cr>
 
 " Use K to show documentation in preview window.
 nnoremap <silent> K :call <SID>show_documentation()<CR>
@@ -415,8 +382,8 @@ autocmd CursorHold * silent call CocActionAsync('highlight')
 nmap <leader>rn <Plug>(coc-rename)
 
 " Formatting selected code.
-xmap <leader>fo  <Plug>(coc-format-selected)
-nmap <leader>fo  <Plug>(coc-format-selected)
+xmap <leader>fo <Plug>(coc-format-selected)
+nmap <leader>fo <Plug>(coc-format-selected)
 
 augroup mygroup
   autocmd!
@@ -428,13 +395,13 @@ augroup end
 
 " Applying codeAction to the selected region.
 " Example: `<leader>aap` for current paragraph
-xmap <leader>a  <Plug>(coc-codeaction-selected)
-nmap <leader>a  <Plug>(coc-codeaction-selected)
+xmap <leader>a <Plug>(coc-codeaction-selected)
+nmap <leader>a <Plug>(coc-codeaction-selected)
 
 " Remap keys for applying codeAction to the current buffer.
-nmap <leader>ac  <Plug>(coc-codeaction)
+nmap <leader>ac <Plug>(coc-codeaction)
 " Apply AutoFix to problem on the current line.
-nmap <leader>qf  <Plug>(coc-fix-current)
+nmap <leader>qf <Plug>(coc-fix-current)
 
 " Map function and class text objects
 " NOTE: Requires 'textDocument.documentSymbol' support from the language server.
@@ -442,13 +409,7 @@ xmap if <Plug>(coc-funcobj-i)
 omap if <Plug>(coc-funcobj-i)
 xmap af <Plug>(coc-funcobj-a)
 omap af <Plug>(coc-funcobj-a)
-xmap ic <Plug>(coc-classobj-i)
-omap ic <Plug>(coc-classobj-i)
-xmap ac <Plug>(coc-classobj-a)
-omap ac <Plug>(coc-classobj-a)
 
-" setup mapping to call :LazyGit
-nnoremap <silent> <leader>gg :LazyGit<CR>
 
 " Use CTRL-S for selections ranges.
 " Requires 'textDocument/selectionRange' support of language server.
