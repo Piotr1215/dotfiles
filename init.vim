@@ -172,6 +172,12 @@ function! s:MarkdowCodeBlock(outside)
         normal! k
     endif
 endfunction
+" Markdown paste image
+autocmd FileType markdown nmap <buffer><silent> <leader>p :call mdip#MarkdownClipboardImage()<CR>
+"autocmd BufWritePost *.puml silent! !java -DPLANTUML_LIMIT_SIZE=8192 -jar /usr/local/bin/plantuml.jar <afile> -o ./rendered
+autocmd BufWritePost *.puml silent! !java -DPLANTUML_LIMIT_SIZE=8192 -jar /usr/local/bin/plantuml.jar -tsvg <afile> -o ./rendered
+" Auto-wrap markdown at 80 characters
+au BufRead,BufNewFile *.md setlocal textwidth=80
 
 " ABBREVIATIONS
 " -------------
@@ -238,13 +244,104 @@ nnoremap   <silent><Leader>fh :FloatermHide<CR>
 nnoremap   <silent><Leader>fn :FloatermNext<CR>
 nnoremap   <silent><Leader>fc :FloatermKill<CR>
 
+" PROGRAMMING
+" -----------
+"
+" Use `[g` and `]g` to navigate diagnostics
+" Use `:CocDiagnostics` to get all diagnostics of current buffer in location list.
+nmap <silent> [g <Plug>(coc-diagnostic-prev)
+nmap <silent> ]g <Plug>(coc-diagnostic-next)
+" GoTo code navigation.
+nmap <silent> gd <Plug>(coc-definition)
+nmap <silent> gy <Plug>(coc-type-definition)
+nmap <silent> gimp <Plug>(coc-implementation)
+nmap <silent> gr <Plug>(coc-references)
+" Symbol renaming.
+nmap <leader>rn <Plug>(coc-rename)
+" Formatting selected code.
+xmap <leader>fo <Plug>(coc-format-selected)
+nmap <leader>fo <Plug>(coc-format-selected)
+" Applying codeAction to the selected region.
+" Example: `<leader>aap` for current paragraph
+xmap <leader>a <Plug>(coc-codeaction-selected)
+nmap <leader>a <Plug>(coc-codeaction-selected)
+" Remap keys for applying codeAction to the current buffer.
+nmap <leader>ac <Plug>(coc-codeaction)
+" Apply AutoFix to problem on the current line.
+nmap <leader>qf <Plug>(coc-fix-current)
+" Map function and class text objects
+" NOTE: Requires 'textDocument.documentSymbol' support from the language server.
+xmap if <Plug>(coc-funcobj-i)
+omap if <Plug>(coc-funcobj-i)
+xmap af <Plug>(coc-funcobj-a)
+omap af <Plug>(coc-funcobj-a)
+" Use CTRL-S for selections ranges.
+" Requires 'textDocument/selectionRange' support of language server.
+nmap <silent> <C-s> <Plug>(coc-range-select)
+xmap <silent> <C-s> <Plug>(coc-range-select)
+" Add `:Format` command to format current buffer.
+command! -nargs=0 Format :call CocAction('format')
+" Add `:Fold` comand to fold current buffer.
+command! -nargs=? Fold :call     CocAction('fold', <f-args>)
+" Add `:OR` command for organize imports of the current buffer.
+command! -nargs=0 OR   :call     CocAction('runCommand', 'editor.action.organizeImport')
+" Use <Ctrl-F> to format documents with prettier
+command! -nargs=0 Prettier :CocCommand prettier.formatFile
+noremap <C-F> :Prettier<CR>
+" Highlight the symbol and its references when holding the cursor.
+autocmd CursorHold * silent call CocActionAsync('highlight')
+" Use K to show documentation in preview window.
+nnoremap <silent> K :call <SID>show_documentation()<CR>
+" vsnip settings
+" Expand
+imap <expr> <C-j>   vsnip#expandable()  ? '<Plug>(vsnip-expand)'         : '<C-j>'
+smap <expr> <C-j>   vsnip#expandable()  ? '<Plug>(vsnip-expand)'         : '<C-j>'
+" Expand or jump
+imap <expr> <C-l>   vsnip#available(1)  ? '<Plug>(vsnip-expand-or-jump)' : '<C-l>'
+smap <expr> <C-l>   vsnip#available(1)  ? '<Plug>(vsnip-expand-or-jump)' : '<C-l>'
+" Select or cut text to use as $TM_SELECTED_TEXT in the next snippet.
+" See https://github.com/hrsh7th/vim-vsnip/pull/50
+nmap <leader>t <Plug>(vsnip-select-text)
+xmap <leader>t <Plug>(vsnip-select-text)
+nmap <leader>tc <Plug>(vsnip-cut-text)
+xmap <leader>tc <Plug>(vsnip-cut-text)
+function! s:show_documentation()
+  if (index(['vim','help'], &filetype) >= 0)
+    execute 'h '.expand('<cword>')
+  elseif (coc#rpc#ready())
+    call CocActionAsync('doHover')
+  else
+    execute '!' . &keywordprg . " " . expand('<cword>')
+  endif
+endfunction
+" Use tab for trigger completion with characters ahead and navigate.
+" NOTE: Use command ':verbose imap <tab>' to make sure tab is not mapped by
+" other plugin before putting this into your config.
+inoremap <silent><expr> <TAB>
+      \ pumvisible() ? "\<C-n>" :
+      \ <SID>check_back_space() ? "\<TAB>" :
+      \ coc#refresh()
+inoremap <expr><S-TAB> pumvisible() ? "\<C-p>" : "\<C-h>"
+function! s:check_back_space() abort
+  let col = col('.') - 1
+  return !col || getline('.')[col - 1]  =~# '\s'
+endfunction
+" Use <c-space> to trigger completion.
+if has('nvim')
+  inoremap <silent><expr> <c-space> coc#refresh()
+else
+  inoremap <silent><expr> <c-@> coc#refresh()
+endif
+" Make <CR> auto-select the first completion item and notify coc.nvim to
+" format on enter, <cr> could be remapped by other vim plugin
+inoremap <silent><expr> <cr> pumvisible() ? coc#_select_confirm()
+
 call vundle#begin()
 " alternatively, pass a path where Vundle should install plugins
 "call vundle#begin('~/some/path/here')
 
 " let Vundle manage Vundle, required
 Plugin 'VundleVim/Vundle.vim'
-
 " Editor functionality
 Plugin 'mhinz/vim-startify'
 Plugin 'vim-airline/vim-airline'
@@ -263,7 +360,6 @@ Plugin 'cljoly/telescope-repo.nvim'
 Plugin 'kdheepak/lazygit.nvim'
 Plugin 'karoliskoncevicius/vim-sendtowindow'
 Plugin 'jpalardy/vim-slime'
-
 " Editing related
 Plugin 'Raimondi/delimitMate'
 Plugin 'godlygeek/tabular'
@@ -289,7 +385,6 @@ Plugin 'hrsh7th/vim-vsnip'
 Plugin 'hrsh7th/vim-vsnip-integ'
 Plugin 'sakshamgupta05/vim-todo-highlight'
 Plugin 'nvim-treesitter/nvim-treesitter', {'do': ':TSUpdate'}  " We recommend updating the parsers on update
-
 " Programming
 Plugin 'majutsushi/tagbar'
 Plugin 'hashivim/vim-terraform'
@@ -298,7 +393,6 @@ Plugin 'neoclide/coc.nvim', {'branch': 'release'}
 Plugin 'rhysd/vim-clang-format'
 Plugin 'dense-analysis/ale'
 Plugin 'tpope/vim-fugitive'
-
 " Color Schemes
 Plugin 'NLKNguyen/papercolor-theme'
 
@@ -315,68 +409,9 @@ let g:lightline = {
       \ }
 colorscheme PaperColor
 
-" Use tab for trigger completion with characters ahead and navigate.
-" NOTE: Use command ':verbose imap <tab>' to make sure tab is not mapped by
-" other plugin before putting this into your config.
-inoremap <silent><expr> <TAB>
-      \ pumvisible() ? "\<C-n>" :
-      \ <SID>check_back_space() ? "\<TAB>" :
-      \ coc#refresh()
-inoremap <expr><S-TAB> pumvisible() ? "\<C-p>" : "\<C-h>"
-
-function! s:check_back_space() abort
-  let col = col('.') - 1
-  return !col || getline('.')[col - 1]  =~# '\s'
-endfunction
-
-" Use <c-space> to trigger completion.
-if has('nvim')
-  inoremap <silent><expr> <c-space> coc#refresh()
-else
-  inoremap <silent><expr> <c-@> coc#refresh()
-endif
-
-" Make <CR> auto-select the first completion item and notify coc.nvim to
-" format on enter, <cr> could be remapped by other vim plugin
-inoremap <silent><expr> <cr> pumvisible() ? coc#_select_confirm()
-                              \: "\<C-g>u\<CR>\<c-r>=coc#on_enter()\<CR>"
-
-" Use `[g` and `]g` to navigate diagnostics
-" Use `:CocDiagnostics` to get all diagnostics of current buffer in location list.
-nmap <silent> [g <Plug>(coc-diagnostic-prev)
-nmap <silent> ]g <Plug>(coc-diagnostic-next)
-
-" GoTo code navigation.
-nmap <silent> gd <Plug>(coc-definition)
-nmap <silent> gy <Plug>(coc-type-definition)
-nmap <silent> gimp <Plug>(coc-implementation)
-nmap <silent> gr <Plug>(coc-references)
-
-let g:sendtowindow_use_defaults=0
-
-" Use K to show documentation in preview window.
-nnoremap <silent> K :call <SID>show_documentation()<CR>
-
-function! s:show_documentation()
-  if (index(['vim','help'], &filetype) >= 0)
-    execute 'h '.expand('<cword>')
-  elseif (coc#rpc#ready())
-    call CocActionAsync('doHover')
-  else
-    execute '!' . &keywordprg . " " . expand('<cword>')
-  endif
-endfunction
-
-" Highlight the symbol and its references when holding the cursor.
-autocmd CursorHold * silent call CocActionAsync('highlight')
-
-" Symbol renaming.
-nmap <leader>rn <Plug>(coc-rename)
-
-" Formatting selected code.
-xmap <leader>fo <Plug>(coc-format-selected)
-nmap <leader>fo <Plug>(coc-format-selected)
-
+" AUTOGROUPS
+" ----------
+"
 augroup mygroup
   autocmd!
   " Setup formatexpr specified filetype(s).
@@ -384,109 +419,50 @@ augroup mygroup
   " Update signature help on jump placeholder.
   autocmd User CocJumpPlaceholder call CocActionAsync('showSignatureHelp')
 augroup end
-
-" Applying codeAction to the selected region.
-" Example: `<leader>aap` for current paragraph
-xmap <leader>a <Plug>(coc-codeaction-selected)
-nmap <leader>a <Plug>(coc-codeaction-selected)
-
-" Remap keys for applying codeAction to the current buffer.
-nmap <leader>ac <Plug>(coc-codeaction)
-" Apply AutoFix to problem on the current line.
-nmap <leader>qf <Plug>(coc-fix-current)
-
-" Map function and class text objects
-" NOTE: Requires 'textDocument.documentSymbol' support from the language server.
-xmap if <Plug>(coc-funcobj-i)
-omap if <Plug>(coc-funcobj-i)
-xmap af <Plug>(coc-funcobj-a)
-omap af <Plug>(coc-funcobj-a)
-
-
-" Use CTRL-S for selections ranges.
-" Requires 'textDocument/selectionRange' support of language server.
-nmap <silent> <C-s> <Plug>(coc-range-select)
-xmap <silent> <C-s> <Plug>(coc-range-select)
-
-" Add `:Format` command to format current buffer.
-command! -nargs=0 Format :call CocAction('format')
-
-" Add `:Fold` comand to fold current buffer.
-command! -nargs=? Fold :call     CocAction('fold', <f-args>)
-
-" Add `:OR` command for organize imports of the current buffer.
-command! -nargs=0 OR   :call     CocAction('runCommand', 'editor.action.organizeImport')
-
-" Use <Ctrl-F> to format documents with prettier
-command! -nargs=0 Prettier :CocCommand prettier.formatFile
-noremap <C-F> :Prettier<CR>
-
-" Add (Neo)Vim's native statusline support.
-" NOTE: Please see `:h coc-status` for integrations with external plugins that
-" provide custom statusline: lightline.vim, vim-airline.
-set statusline^=%{coc#status()}%{get(b:,'coc_current_function','')}
-
-"autocmd BufWritePost *.puml silent! !java -DPLANTUML_LIMIT_SIZE=8192 -jar /usr/local/bin/plantuml.jar <afile> -o ./rendered
-autocmd BufWritePost *.puml silent! !java -DPLANTUML_LIMIT_SIZE=8192 -jar /usr/local/bin/plantuml.jar -tsvg <afile> -o ./rendered
-
-" vsnip settings
-" Expand
-imap <expr> <C-j>   vsnip#expandable()  ? '<Plug>(vsnip-expand)'         : '<C-j>'
-smap <expr> <C-j>   vsnip#expandable()  ? '<Plug>(vsnip-expand)'         : '<C-j>'
-
-" Expand or jump
-imap <expr> <C-l>   vsnip#available(1)  ? '<Plug>(vsnip-expand-or-jump)' : '<C-l>'
-smap <expr> <C-l>   vsnip#available(1)  ? '<Plug>(vsnip-expand-or-jump)' : '<C-l>'
-
-" Select or cut text to use as $TM_SELECTED_TEXT in the next snippet.
-" See https://github.com/hrsh7th/vim-vsnip/pull/50
-nmap <leader>t <Plug>(vsnip-select-text)
-xmap <leader>t <Plug>(vsnip-select-text)
-nmap <leader>tc <Plug>(vsnip-cut-text)
-xmap <leader>tc <Plug>(vsnip-cut-text)
-
-" Color name (:help cterm-colors) or ANSI code
-let g:limelight_conceal_ctermfg = 'gray'
-let g:limelight_conceal_ctermfg = 240
-
-autocmd FileType markdown nmap <buffer><silent> <leader>p :call mdip#MarkdownClipboardImage()<CR>
-" there are some defaults for image directory and image name, you can change them
-let g:mdip_imgdir = '_media'
-let g:mdip_imgname = 'image'
-
-" Auto-wrap markdown at 80 characters
-au BufRead,BufNewFile *.md setlocal textwidth=80
-
 " indent for special file
 autocmd FileType c,cpp setlocal expandtab shiftwidth=2 softtabstop=2 cindent
 autocmd FileType python setlocal expandtab shiftwidth=4 softtabstop=4 autoindent
 autocmd FileType yaml setlocal ts=2 sts=2 sw=4 expandtab
 autocmd FileType markdown setlocal expandtab shiftwidth=4 softtabstop=4 autoindent
+" autoformat
+augroup autoformat_settings
+  autocmd FileType c,cpp,proto,javascript setlocal equalprg=clang-format
+  autocmd FileType python AutoFormatBuffer yapf
+augroup end
+augroup last_cursor_position
+  autocmd!
+  autocmd BufReadPost *
+    \ if line("'\"") > 1 && line("'\"") <= line("$") && &ft !~# 'commit' | execute "normal! g`\"zvzz" | endif
+augroup end
 
-"au FileType plantuml let g:plantuml_previewer#plantuml_jar_path = get(
-"    \  matchlist(system('cat `which plantuml` | grep plantuml.jar'), '\v.*\s[''"]?(\S+plantuml\.jar).*'),
-"    \  1,
-"    \  0
-"    \)
-
+" PLUGIN SETTINGS
+" ---------------
+"
+" Add (Neo)Vim's native statusline support.
+" NOTE: Please see `:h coc-status` for integrations with external plugins that
+" provide custom statusline: lightline.vim, vim-airline.
+set statusline^=%{coc#status()}%{get(b:,'coc_current_function','')}
+" Color name (:help cterm-colors) or ANSI code
+let g:limelight_conceal_ctermfg = 'gray'
+let g:limelight_conceal_ctermfg = 240
+let g:sendtowindow_use_defaults=0
+" there are some defaults for image directory and image name, you can change them
+let g:mdip_imgdir = '_media'
+let g:mdip_imgname = 'image'
 let g:plantuml_previewer#viewer_path = "/home/decoder/.vim/bundle/plantuml-previewer.vim/viewer"
-"let g:plantuml_previewer#viewer_path = "/home/decoder/dev/platform-core/diagrams/rendered"
 let g:plantuml_previewer#debug_mode = 0
 " setup custom emmet snippets
 let g:user_emmet_settings = webapi#json#decode(join(readfile(expand('~/.snippets_custom.json')), "\n"))
 let g:indentLine_char = '⦙'
 " Rooter
 let g:rooter_patterns = ['.git', 'package.json', '!node_modules']
-
 " Setup for slime
 let g:slime_target = "tmux"
 let g:slime_default_config = {"socket_name": "default", "target_pane": "{last}"}
-
 " setup for netrw
 let g:netrw_winsize = 30
 let g:netrw_banner = 0
 let g:netrw_keepdir = 0
-
 " setup for markdown snippet
 let g:vim_markdown_folding_disabled = 1
 let g:vim_markdown_folding_level = 3
@@ -498,7 +474,6 @@ let g:vim_markdown_autowrite = 1
 let g:vim_markdown_follow_anchor = 1
 let g:vim_markdown_auto_insert_bullets = 0
 let g:vim_markdown_new_list_item_indent = 0
-
 " setup for syntastic
 set statusline+=%#warningmsg#
 set statusline+=%{SyntasticStatuslineFlag()}
@@ -508,23 +483,9 @@ let g:syntastic_auto_loc_list = 0
 let g:syntastic_check_on_open = 0
 let g:syntastic_check_on_wq = 0
 let g:syntastic_python_checkers = ['flake8']
-
 " setup for terraform
 let g:terraform_fmt_on_save=1
 let g:terraform_align=1
-
-" autoformat
-augroup autoformat_settings
-  autocmd FileType c,cpp,proto,javascript setlocal equalprg=clang-format
-  autocmd FileType python AutoFormatBuffer yapf
-augroup END
-
-augroup last_cursor_position
-  autocmd!
-  autocmd BufReadPost *
-    \ if line("'\"") > 1 && line("'\"") <= line("$") && &ft !~# 'commit' | execute "normal! g`\"zvzz" | endif
-augroup END
-
 " setup for ctrlp
 let g:ctrlp_map = '<c-p>'
 let g:ctrlp_cmd = 'CtrlPMixed'
@@ -536,12 +497,10 @@ let g:ctrlp_custom_ignore = {
   \ 'link': 'some_bad_symbolic_links',
   \ }
 set wildignore+=*/tmp/*,*.so,*.swp,*.zip
-
 " setup for indent line
 let g:indentLine_char = '?'
 set tags=./tags,tags;$HOME
 "source ~/cscope_maps.vim
-
 let g:go_fmt_command = "goimports"
 let g:go_highlight_types = 1
 let g:go_highlight_fields = 1
