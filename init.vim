@@ -109,7 +109,7 @@ inoremap <C-e> <C-o>dw<Left>
 " Copies till the end of a line. Fits with Shift + D, C etc
 nnoremap Y yg_
 " Replace multiple words simultaniously
-" Repeat with .
+" Repeat, with .
 nnoremap <Leader>x *``cgn
 nnoremap <Leader>X #``cgN
 " Find and replace
