@@ -238,12 +238,6 @@ nnoremap   <silent><Leader>fh :FloatermHide<CR>
 nnoremap   <silent><Leader>fn :FloatermNext<CR>
 nnoremap   <silent><Leader>fc :FloatermKill<CR>
 
-" Used for learning for certs
-nnoremap <Leader>ok A :+1: <esc><CR>
-nnoremap <Leader>bad A :-1: <esc><CR>
-nnoremap <Leader>r A :hand: <esc><CR>
-nnoremap <Leader>clean :g/<details>/,/<\/details>/d _<CR>
-
 call vundle#begin()
 " alternatively, pass a path where Vundle should install plugins
 "call vundle#begin('~/some/path/here')
@@ -320,8 +314,6 @@ let g:lightline = {
       \ 'colorscheme': 'PaperColor',
       \ }
 colorscheme PaperColor
-
-filetype plugin indent on
 
 " Use tab for trigger completion with characters ahead and navigate.
 " NOTE: Use command ':verbose imap <tab>' to make sure tab is not mapped by
