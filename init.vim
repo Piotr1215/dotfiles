@@ -218,8 +218,6 @@ nnoremap <Leader>da :Lexplore<CR>
 nnoremap <leader>w :w<CR>
 " Move screen to contain current line at the top
 nnoremap <leader>d zt
-" Git mappings
-command GitDiff execute  "w !git diff --no-index -- % -"
 nnoremap <leader>sv :source /home/decoder/.config/nvim/init.vim<CR>
 " jj in insert mode instead of ESC
 inoremap jj <Esc>
@@ -335,6 +333,8 @@ endif
 " Make <CR> auto-select the first completion item and notify coc.nvim to
 " format on enter, <cr> could be remapped by other vim plugin
 inoremap <silent><expr> <cr> pumvisible() ? coc#_select_confirm()
+" Git mappings
+command GitDiff execute  "w !git diff --no-index -- % -"
 
 call vundle#begin()
 " alternatively, pass a path where Vundle should install plugins
