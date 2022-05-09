@@ -241,6 +241,9 @@ nnoremap   <silent><Leader>fs :FloatermShow<CR>
 nnoremap   <silent><Leader>fh :FloatermHide<CR>
 nnoremap   <silent><Leader>fn :FloatermNext<CR>
 nnoremap   <silent><Leader>fc :FloatermKill<CR>
+" add relative number movements to the jump list 
+nnoremap <expr> k (v:count1 > 1 ? "m'" . v:count1 : '') . 'k' 
+nnoremap <expr> j (v:count1 > 1 ? "m'" . v:count1 : '') . 'j'
 
 " PROGRAMMING
 " -----------
