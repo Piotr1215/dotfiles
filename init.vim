@@ -179,7 +179,7 @@ autocmd BufWritePost *.puml silent! !java -DPLANTUML_LIMIT_SIZE=8192 -jar /usr/l
 " Auto-wrap markdown at 80 characters
 " au BufRead,BufNewFile *.md setlocal textwidth=80
 " Update text to 80 characters, do not update automatically
-nnoremap <leader>wi :setlocal textwidth=80
+nnoremap <leader>wi :setlocal textwidth=80<cr>
 
 " ABBREVIATIONS
 " -------------
