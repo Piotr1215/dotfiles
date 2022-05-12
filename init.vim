@@ -431,7 +431,7 @@ autocmd FileType python setlocal expandtab shiftwidth=4 softtabstop=4 autoindent
 autocmd FileType yaml setlocal ts=2 sts=2 sw=4 expandtab
 autocmd FileType markdown setlocal expandtab shiftwidth=4 softtabstop=4 autoindent
 " Highlight the symbol and its references when holding the cursor.
-autocmd CursorHold * silent call CocActionAsync('highlight')
+autocmd CursorHold * silent! call CocActionAsync('highlight')
 " autoformat
 augroup autoformat_settings
   autocmd FileType c,cpp,proto,javascript setlocal equalprg=clang-format
