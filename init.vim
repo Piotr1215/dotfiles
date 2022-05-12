@@ -307,7 +307,7 @@ inoremap <silent><expr> <TAB>
       \ pumvisible() ? "\<C-n>" :
       \ <SID>check_back_space() ? "\<TAB>" :
       \ coc#refresh()
-"inoremap <expr><S-TAB> pumvisible() ? "\<C-p>" : "\<C-h>"
+inoremap <expr><S-TAB> pumvisible() ? "\<C-p>" : "\<C-h>"
 function! s:show_documentation()
   if (index(['vim','help'], &filetype) >= 0)
     execute 'h '.expand('<cword>')
@@ -329,7 +329,10 @@ else
 endif
 " Make <CR> auto-select the first completion item and notify coc.nvim to
 " format on enter, <cr> could be remapped by other vim plugin
+
+" This was causing E109 Missing ':' after ?
 "inoremap <silent><expr> <cr> pumvisible() ? : coc#_select_confirm()
+
 " Git mappings
 command GitDiff execute  "w !git diff --no-index -- % -"
 " Add `:Format` command to format current buffer.
