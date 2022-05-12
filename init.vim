@@ -504,7 +504,7 @@ let g:ctrlp_custom_ignore = {
   \ }
 set wildignore+=*/tmp/*,*.so,*.swp,*.zip
 " setup for indent line
-let g:indentLine_char = '?'
+let g:indentLine_char = '|'
 set tags=./tags,tags;$HOME
 "source ~/cscope_maps.vim
 let g:go_fmt_command = "goimports"
