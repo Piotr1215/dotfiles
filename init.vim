@@ -360,7 +360,6 @@ Plugin 'nvim-telescope/telescope-fzf-native.nvim', { 'do': 'make' }
 Plugin 'voldikss/vim-floaterm'
 Plugin 'easymotion/vim-easymotion'
 Plugin 'rafamadriz/friendly-snippets'
-Plugin 'airblade/vim-rooter'
 Plugin 'cljoly/telescope-repo.nvim'
 Plugin 'kdheepak/lazygit.nvim'
 Plugin 'karoliskoncevicius/vim-sendtowindow'
@@ -462,8 +461,6 @@ let g:plantuml_previewer#debug_mode = 0
 " setup custom emmet snippets
 let g:user_emmet_settings = webapi#json#decode(join(readfile(expand('~/.snippets_custom.json')), "\n"))
 let g:indentLine_char = '⦙'
-" Rooter
-let g:rooter_patterns = ['.git', 'package.json', '!node_modules']
 " Setup for slime
 let g:slime_target = "tmux"
 let g:slime_default_config = {"socket_name": "default", "target_pane": "{last}"}
