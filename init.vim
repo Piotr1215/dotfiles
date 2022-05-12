@@ -44,6 +44,7 @@ set rtp+=~/.vim/bundle/Vundle.vim
 nnoremap <SPACE> <Nop>
 map <Space> <Leader>
 map ` <Nop>
+nnoremap / ö
 
 " MACROS
 " ------ 
