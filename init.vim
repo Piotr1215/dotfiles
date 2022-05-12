@@ -330,8 +330,7 @@ endif
 " Make <CR> auto-select the first completion item and notify coc.nvim to
 " format on enter, <cr> could be remapped by other vim plugin
 " This was causing E109 Missing ':' after ?
-"inoremap <silent><expr> <cr> pumvisible() ? : coc#_select_confirm()
-
+inoremap <silent><expr> <cr> pumvisible() ? : coc#_select_confirm()
 " Git mappings
 command GitDiff execute  "w !git diff --no-index -- % -"
 " Add `:Format` command to format current buffer.
