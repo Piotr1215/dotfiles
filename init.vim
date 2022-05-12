@@ -45,6 +45,7 @@ nnoremap <SPACE> <Nop>
 map <Space> <Leader>
 map ` <Nop>
 nnoremap / ö
+inoremap / ö
 
 " MACROS
 " ------ 
