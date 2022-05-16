@@ -255,7 +255,7 @@ if [ -f '/home/decoder/google-cloud-sdk/path.zsh.inc' ]; then . '/home/decoder/g
 if [ -f '/home/decoder/google-cloud-sdk/completion.zsh.inc' ]; then . '/home/decoder/google-cloud-sdk/completion.zsh.inc'; fi
 
 eval "$(direnv hook zsh)"
-eval "$(zoxide init bash)"
+eval "$(zoxide init zsh)"
 
 ### Added by Zinit's installer
 if [[ ! -f $HOME/.local/share/zinit/zinit.git/zinit.zsh ]]; then
