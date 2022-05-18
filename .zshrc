@@ -33,14 +33,16 @@ setopt extended_glob
 autoload -Uz compinit && compinit   # load + start completion
 zstyle ':completion:*:directory-stack' list-colors '=(#b) #([0-9]#)*( *)==95=38;5;12'
 
+source $ZSH/oh-my-zsh.sh
+autoload -U compinit && compinit
+
 if [[ $(uname -s) == Linux ]]; then
-  source $ZSH/oh-my-zsh.sh
   source ${HOME}/.oh-my-zsh/custom/plugins/nix-shell/nix-shell.plugin.zsh
   source ${HOME}/.oh-my-zsh/custom/plugins/nix-zsh-completions/nix-zsh-completions.plugin.zsh
   fpath=(${HOME}/.oh-my-zsh/custom/plugins/nix-zsh-completions/nix-zsh-completions.plugin.zsh $fpath)
-  autoload -U compinit && compinit
   prompt_nix_shell_setup
 fi
+
 # Turn history on to have cd - history
 SAVEHIST=10000
 HISTSIZE=5000
