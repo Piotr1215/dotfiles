@@ -41,11 +41,15 @@ set rtp+=~/.vim/bundle/Vundle.vim
 " *** REMAPS ***
 " LEADER REMAPS
 " Space is leader
+let uname = system('uname -s')
 nnoremap <SPACE> <Nop>
 map <Space> <Leader>
 map ` <Nop>
-nnoremap ö /
-inoremap ö /
+
+if uname = Linux
+  nnoremap ö /
+  inoremap ö /
+endif
 
 " MACROS
 " ------ 
