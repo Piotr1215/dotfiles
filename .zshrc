@@ -12,7 +12,7 @@ ZSH_THEME="simple"
 #ZSH_THEME="powerlevel10k/powerlevel10k"
 
 # Add wisely, as too many plugins slow down shell startup.
-if command -v apt > /dev/null; then
+if [[ $(uname -s) == Linux ]]; then
   plugins=(z git kubectl zsh-autosuggestions zsh-syntax-highlighting sudo web-search alias-finder colored-man-pages nix-shell)
 else
   plugins=(z git kubectl zsh-autosuggestions zsh-syntax-highlighting sudo web-search alias-finder colored-man-pages)
@@ -31,7 +31,7 @@ setopt extended_glob
 autoload -Uz compinit && compinit   # load + start completion
 zstyle ':completion:*:directory-stack' list-colors '=(#b) #([0-9]#)*( *)==95=38;5;12'
 
-if command -v apt > /dev/null; then
+if [[ $(uname -s) == Linux ]]; then
   source $ZSH/oh-my-zsh.sh
   source ${HOME}/.oh-my-zsh/custom/plugins/nix-shell/nix-shell.plugin.zsh
   source ${HOME}/.oh-my-zsh/custom/plugins/nix-zsh-completions/nix-zsh-completions.plugin.zsh
@@ -104,7 +104,7 @@ alias mkdd='mkdir $(date +"%Y-%m-%d")'
 alias admin='sudo bash -c "apt-get update && apt-get -y upgrade && apt-get -y autoremove && apt-get -y clean"'
 alias sr='source ~/.zshrc'
 
-if command -v apt > /dev/null; then
+if [[ $(uname -s) == Linux ]]; then
   eval $(dircolors -p | sed -e 's/DIR 01;34/DIR 01;36/' | dircolors /dev/stdin)
 else
   export CLICOLOR=YES
