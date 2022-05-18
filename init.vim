@@ -1,4 +1,3 @@
-set nocompatible
 syntax enable
 syntax on
 filetype on
@@ -41,13 +40,13 @@ set rtp+=~/.vim/bundle/Vundle.vim
 " *** REMAPS ***
 " LEADER REMAPS
 " Space is leader
+" Declare global variable to mark system
 let uname = system('uname -s')
 nnoremap <SPACE> <Nop>
 map <Space> <Leader>
 map ` <Nop>
 
 if uname =~ 'Linux'
-  echo uname
   nnoremap ö /
   inoremap ö /
 endif
