@@ -256,7 +256,7 @@ PROMPT='$(kube_ps1)'$PROMPT
 PROMPT="$PROMPT"$'\n→ '
 
 # Cloud Shells Settings
-source '${HOME}/lib/azure-cli/az.completion'
+# source '${HOME}/lib/azure-cli/az.completion'
 
 # The next line updates PATH for the Google Cloud SDK.
 if [ -f '${HOME}/google-cloud-sdk/path.zsh.inc' ]; then . '${HOME}/google-cloud-sdk/path.zsh.inc'; fi
