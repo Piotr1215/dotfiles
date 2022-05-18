@@ -185,6 +185,13 @@ autocmd BufWritePost *.puml silent! !java -DPLANTUML_LIMIT_SIZE=8192 -jar /usr/l
 " Auto-wrap markdown at 80 characters
 " au BufRead,BufNewFile *.md setlocal textwidth=80
 " Update text to 80 characters, do not update automatically
+if uname =~ 'Darwin'
+au FileType plantuml let g:plantuml_previewer#plantuml_jar_path = get(
+    \  matchlist(system('cat `which plantuml` | grep plantuml.jar'), '\v.*\s[''"]?(\S+plantuml\.jar).*'),
+    \  1,
+    \  0
+    \)
+endif
 nnoremap <leader>wi :setlocal textwidth=80<cr>
 
 " ABBREVIATIONS
@@ -462,7 +469,8 @@ let g:sendtowindow_use_defaults=0
 " there are some defaults for image directory and image name, you can change them
 let g:mdip_imgdir = '_media'
 let g:mdip_imgname = 'image'
-let g:plantuml_previewer#viewer_path = "${HOME}/.vim/bundle/plantuml-previewer.vim/viewer"
+let g:plantuml_previewer#viewer_path = '~/.vim/bundle/plantuml-previewer.vim/viewer'
+"let g:plantuml_previewer#viewer_path = '/Users/piotr/.vim/bundle/plantuml-previewer.vim/viewer'
 let g:plantuml_previewer#debug_mode = 0
 " setup custom emmet snippets
 let g:user_emmet_settings = webapi#json#decode(join(readfile(expand('~/.snippets_custom.json')), "\n"))
