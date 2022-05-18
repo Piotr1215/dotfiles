@@ -226,7 +226,7 @@ nnoremap <Leader>da :Lexplore<CR>
 nnoremap <leader>w :w<CR>
 " Move screen to contain current line at the top
 nnoremap <leader>d zt
-nnoremap <leader>sv :source /home/decoder/.config/nvim/init.vim<CR>
+nnoremap <leader>sv :source ${HOME}/.config/nvim/init.vim<CR>
 " jj in insert mode instead of ESC
 inoremap jj <Esc>
 inoremap jk <Esc>
@@ -462,7 +462,7 @@ let g:sendtowindow_use_defaults=0
 " there are some defaults for image directory and image name, you can change them
 let g:mdip_imgdir = '_media'
 let g:mdip_imgname = 'image'
-let g:plantuml_previewer#viewer_path = "/home/decoder/.vim/bundle/plantuml-previewer.vim/viewer"
+let g:plantuml_previewer#viewer_path = "${HOME}/.vim/bundle/plantuml-previewer.vim/viewer"
 let g:plantuml_previewer#debug_mode = 0
 " setup custom emmet snippets
 let g:user_emmet_settings = webapi#json#decode(join(readfile(expand('~/.snippets_custom.json')), "\n"))
