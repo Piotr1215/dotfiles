@@ -42,6 +42,7 @@ set rtp+=~/.vim/bundle/Vundle.vim
 " LEADER REMAPS
 " Space is leader
 let uname = system('uname -s')
+echo uname
 nnoremap <SPACE> <Nop>
 map <Space> <Leader>
 map ` <Nop>
