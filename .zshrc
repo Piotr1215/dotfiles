@@ -13,9 +13,9 @@ ZSH_THEME="simple"
 
 # Add wisely, as too many plugins slow down shell startup.
 if command apt > /dev/null; then
-plugins=(z git kubectl zsh-autosuggestions zsh-syntax-highlighting sudo web-search alias-finder colored-man-pages nix-shell)
+  plugins=(z git kubectl zsh-autosuggestions zsh-syntax-highlighting sudo web-search alias-finder colored-man-pages nix-shell)
 else
-plugins=(z git kubectl zsh-autosuggestions zsh-syntax-highlighting sudo web-search alias-finder colored-man-pages)
+  plugins=(z git kubectl zsh-autosuggestions zsh-syntax-highlighting sudo web-search alias-finder colored-man-pages)
 fi
 
 # PROMPT CUSTOMIZATION
