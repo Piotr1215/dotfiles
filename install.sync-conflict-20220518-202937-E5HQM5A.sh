@@ -69,50 +69,73 @@ fi
 
 process "→ Bootstrap steps start here:\n------------------"
 
-#process "→ setup git config"
-#
-#  git config --global user.name $NAME
-#  git config --global user.email $EMAIL
-#  ln -sf ${HOME}/dotfiles/.gitconfig ~/.gitconfig
+process "→ upgrade and update apt packages"
 
-#process "→ install essencial packages"
-#
-#  brew install htop unzip figlet tmux wget mtr ncdu cmatrix ranger jq lolcat tmux bat
-#  ln -sf ${HOME}/dotfiles/.tmux.conf ~/.tmux.conf
+  sudo apt-get update
+  sudo apt-get -y upgrade
 
-#process "→ install pip"
-#
-#       brew install python3-pip
+process "→ Installing snapd"
 
-#process "→ install exa"
-#
-#  brew install exa
+  sudo apt install snapd
 
-#process "→ install go"
-#
-#  brew install golang
+process "→ install git"
 
-#process "→ install kubectl"
-#
-#  curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/darwin/arm64/kubectl"
-#  sudo chmod +x ./kubectl
-#  sudo mv ./kubectl /usr/bin/kubectl
+  sudo apt install -y git
 
-#process "→ install helm"
-#
-#  curl https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3 | bash
+process "→ setup git config"
 
-#process "→ install kube-ps1"
-#
-#  git clone https://github.com/jonmosco/kube-ps1.git ${HOME}/kube-ps1/
+  git config --global user.name $NAME
+  git config --global user.email $EMAIL
+  ln -sf ${HOME}/dotfiles/.gitconfig ~/.gitconfig
+
+process "→ install essencial packages"
+
+  sudo apt install -y vim-gtk htop unzip python3-setuptools figlet tmux pydf mc wget mtr ncdu cmatrix ranger jq lolcat tmux bat locate
+  ln -sf ${HOME}/dotfiles/.tmux.conf ~/.tmux.conf
+
+process "→ install pip"
+
+  sudo apt install -y python3-pip
+
+process "→ install exa"
+
+  EXA_VERSION=$(curl -s "https://api.github.com/repos/ogham/exa/releases/latest" | grep -Po '"tag_name": "v\K[0-9.]+')
+  curl -Lo exa.zip "https://github.com/ogham/exa/releases/latest/download/exa-linux-x86_64-v${EXA_VERSION}.zip"
+  sudo unzip -q exa.zip bin/exa -d /usr/local
+
+process "→ install go"
+
+  sudo apt install -y golang
+
+process "→ install kubectl"
+
+  cd /usr/local/bin
+  sudo curl -LO https://storage.googleapis.com/kubernetes-release/release/`curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt`/bin/linux/amd64/kubectl
+  sudo chmod +x ./kubectl
+
+process "→ install helm"
+
+  curl https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3 | bash
+
+process "→ install kube-ps1"
+
+  git clone https://github.com/jonmosco/kube-ps1.git ${HOME}/kube-ps1/
+
+process "→ install terraform"
+(
+  cd /tmp
+  wget https://releases.hashicorp.com/terraform/0.13.4/terraform_0.13.4_linux_amd64.zip
+  unzip terraform_0.13.4_linux_amd64.zip
+  sudo mv terraform /usr/local/bin/
+)
 
 process "→ install node and nmp"
 
-  brew install nodejs
+  sudo apt install -y nodejs
 
 process "→ install zsh and oh-my-zsh"
 
-  brew install zsh
+  sudo apt install -y zsh
 
   sudo rm -rf ~/.oh-my-zsh
 
@@ -125,30 +148,35 @@ process "→ Installing zsh-autosuggestions plugin"
 git clone https://github.com/zsh-users/zsh-syntax-highlighting.git ~/.oh-my-zsh/custom/plugins/zsh-syntax-highlighting
 
 process "→ Installing krew kubectl plugin"
-  brew install krew
+  set -x; cd "$(mktemp -d)" &&
+  curl -fsSLO "https://github.com/kubernetes-sigs/krew/releases/download/v0.3.4/krew.{tar.gz,yaml}" &&
+  tar zxvf krew.tar.gz &&
+  KREW=./krew-"$(uname | tr '[:upper:]' '[:lower:]')_amd64" &&
+  "$KREW" install --manifest=krew.yaml --archive=krew.tar.gz &&
+  "$KREW" update
 
   echo 'export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"' >>~/.zshrc
 
 process "→ Installing alacritty"
-#  sudo snap install alacritty --classic
-mkdir -p ${HOME}/.config/alacritty/
-ln -sf ${HOME}/dotfiles/alacritty.yml ${HOME}/.config/alacritty/alacritty.yml
+  sudo snap install alacritty --classic
+  mkdir -p ${HOME}/.config/alacritty/
+  ln -sf ${HOME}/dotfiles/alacritty.yml ${HOME}/.config/alacritty/alacritty.yml
   
 process "→ Installing Arkade"
   curl -sLS https://get.arkade.dev | sudo sh
 
-#process "→ Installing Azure CLI"
-#  curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+process "→ Installing Azure CLI"
+  curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
 
-#process "→ Installing AWS CLI"
-#  curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-#  unzip awscliv2.zip
-#  sudo ./aws/install
+process "→ Installing AWS CLI"
+  curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+  unzip awscliv2.zip
+  sudo ./aws/install
 
-#process "→ Installing GCP CLI"
-#  curl "https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-sdk-377.0.0-linux-x86_64.tar.gz" -o "google-cloud-sdk-377.0.0-linux-x86.tar.gz"
-#  tar zxvf google-cloud-sdk-377.0.0-linux-x86.tar.gz
-#  ./google-cloud-sdk/install.sh --usage-reporting=false --quiet
+process "→ Installing GCP CLI"
+  curl "https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-sdk-377.0.0-linux-x86_64.tar.gz" -o "google-cloud-sdk-377.0.0-linux-x86.tar.gz"
+  tar zxvf google-cloud-sdk-377.0.0-linux-x86.tar.gz
+  ./google-cloud-sdk/install.sh --usage-reporting=false --quiet
 
 process "→ Installing Neovim"
   mkdir -p ${HOME}/.config/nvim/
@@ -176,3 +204,5 @@ process "→ Setting zsh as default shell"
 process "→ Install kubectx and kubens using krew"
   kubectl krew install ctx
   kubectl krew install ns
+
+process "→ Installation complete"
