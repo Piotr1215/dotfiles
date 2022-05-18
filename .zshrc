@@ -106,7 +106,11 @@ alias sr='source ~/.zshrc'
 
 if command apt > /dev/null; then
   eval $(dircolors -p | sed -e 's/DIR 01;34/DIR 01;36/' | dircolors /dev/stdin)
+else
+  export CLICOLOR=YES
+  export LSCOLORS="Gxfxcxdxbxegedabagacad"
 fi
+
 # EXPORT & PATH
 export KUBECONFIG=~/.kube/config
 export GOPATH=$HOME/go/
