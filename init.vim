@@ -46,7 +46,7 @@ nnoremap <SPACE> <Nop>
 map <Space> <Leader>
 map ` <Nop>
 
-if system('uname -s') =~ 'Linux'
+if uname =~ 'Linux'
   echo uname
   nnoremap ö /
   inoremap ö /
