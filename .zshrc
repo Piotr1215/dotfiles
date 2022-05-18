@@ -70,7 +70,7 @@ alias alaw='nohup alacritty --working-directory $PWD >&/dev/null'
 alias ghs='gh s'
 alias ls='exa --long --all --header --icons'
 alias la='exa --long --grid --all --sort=accessed --reverse --header --icons'
-alias cat=batcat
+alias cat=bat
 alias lzd='docker run --rm -it -v /var/run/docker.sock:/var/run/docker.sock -v /config/lazydocker:/.config/jesseduffield/lazydocker lazyteam/lazydocker'
 alias rest='shutdown now'
 alias vedit='vim ~/.config/nvim/init.vim'
