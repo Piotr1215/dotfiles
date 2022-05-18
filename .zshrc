@@ -5,7 +5,7 @@ if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]
 fi
 
 # Path to your oh-my-zsh installation.
-export ZSH="/home/decoder/.oh-my-zsh"
+export ZSH="${HOME}/.oh-my-zsh"
 
 #ZSH_THEME="spaceship"
 ZSH_THEME="simple"
@@ -27,13 +27,14 @@ setopt extended_glob
 autoload -Uz compinit && compinit   # load + start completion
 zstyle ':completion:*:directory-stack' list-colors '=(#b) #([0-9]#)*( *)==95=38;5;12'
 
-source $ZSH/oh-my-zsh.sh
-source /home/decoder/.oh-my-zsh/custom/plugins/nix-shell/nix-shell.plugin.zsh
-source /home/decoder/.oh-my-zsh/custom/plugins/nix-zsh-completions/nix-zsh-completions.plugin.zsh
-fpath=(/home/decoder/.oh-my-zsh/custom/plugins/nix-zsh-completions/nix-zsh-completions.plugin.zsh $fpath)
-autoload -U compinit && compinit
-prompt_nix_shell_setup
-
+if command apt > /dev/null; then
+  source $ZSH/oh-my-zsh.sh
+  source ${HOME}/.oh-my-zsh/custom/plugins/nix-shell/nix-shell.plugin.zsh
+  source ${HOME}/.oh-my-zsh/custom/plugins/nix-zsh-completions/nix-zsh-completions.plugin.zsh
+  fpath=(${HOME}/.oh-my-zsh/custom/plugins/nix-zsh-completions/nix-zsh-completions.plugin.zsh $fpath)
+  autoload -U compinit && compinit
+  prompt_nix_shell_setup
+fi
 # Turn history on to have cd - history
 SAVEHIST=10000
 HISTSIZE=5000
@@ -90,7 +91,7 @@ alias diskusage='du -sh * | sort -h --reverse'
 alias cls=clear
 alias dls="docker container ls -a"
 alias serve="browser-sync start -s -f . --no-notify --host localhost --port 5000"
-alias dca='code /home/decoder/dev/dca-prep-kit'
+alias dca='code ${HOME}/dev/dca-prep-kit'
 alias lst='dpkg -l' #List installed packages with their description
 alias dpsa="docker ps -a --format 'table {{.ID}}\t{{.Names}}\t{{.Image}}'" #docker ps -a with only id name and image
 alias gmail='web_search duckduckgo \!gmail'
@@ -115,12 +116,12 @@ export PATH=$PATH:$HOME/.istioctl/bin
 export FONTCONFIG_PATH=/etc/fonts
 export EDITOR=nvim
 export GH_USER=Piotr1215
-export STARSHIP_CONFIG=/home/decoder/.config/starship.toml
+export STARSHIP_CONFIG=${HOME}/.config/starship.toml
 export PLANTUML_LIMIT_SIZE=8192
-export DEMODIR=/home/decoder/dev/crossplane-scenarios
+export DEMODIR=${HOME}/dev/crossplane-scenarios
 export git_main_branch=main
 export PATH="$HOME/.yarn/bin:$HOME/.config/yarn/global/node_modules/.bin:$PATH"
-export PATH=$PATH:/home/decoder/bin
+export PATH=$PATH:${HOME}/bin
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
 [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
@@ -177,14 +178,14 @@ function repo() {
     fi
     if [[ -z "$repo" ]]; then
         echo "Repository not found"
-    elif [[ -d /home/decoder/dev/$repo ]]; then
+    elif [[ -d ${HOME}/dev/$repo ]]; then
         echo "Repository found locally, entering"
-        cd /home/decoder/dev/$repo
+        cd ${HOME}/dev/$repo
         onefetch
     else
         echo "Repository not found locally, cloning"
-        gh repo clone $repo /home/decoder/dev/$repo
-        cd /home/decoder/dev/$repo
+        gh repo clone $repo ${HOME}/dev/$repo
+        cd ${HOME}/dev/$repo
         onefetch
     fi
 }
@@ -198,7 +199,7 @@ function checkfetch() {
 }
 
 function key() {
-  cat /home/decoder/scripts/shortcuts.txt |  yad --width=750 --height=1050  --center --close-on-unfocus --text-info
+  cat ${HOME}/scripts/shortcuts.txt |  yad --width=750 --height=1050  --center --close-on-unfocus --text-info
 }
 
 function kcdebug() {
@@ -241,18 +242,18 @@ bindkey '^s' pet-select
 [[ /usr/local/bin/kubectl ]] && source <(kubectl completion zsh)
 
 # Prompt
-source /home/decoder/kube-ps1/kube-ps1.sh
+source ${HOME}/kube-ps1/kube-ps1.sh
 PROMPT='$(kube_ps1)'$PROMPT
 PROMPT="$PROMPT"$'\n→ '
 
 # Cloud Shells Settings
-source '/home/decoder/lib/azure-cli/az.completion'
+source '${HOME}/lib/azure-cli/az.completion'
 
 # The next line updates PATH for the Google Cloud SDK.
-if [ -f '/home/decoder/google-cloud-sdk/path.zsh.inc' ]; then . '/home/decoder/google-cloud-sdk/path.zsh.inc'; fi
+if [ -f '${HOME}/google-cloud-sdk/path.zsh.inc' ]; then . '${HOME}/google-cloud-sdk/path.zsh.inc'; fi
 
 # The next line enables shell command completion for gcloud.
-if [ -f '/home/decoder/google-cloud-sdk/completion.zsh.inc' ]; then . '/home/decoder/google-cloud-sdk/completion.zsh.inc'; fi
+if [ -f '${HOME}/google-cloud-sdk/completion.zsh.inc' ]; then . '${HOME}/google-cloud-sdk/completion.zsh.inc'; fi
 
 eval "$(direnv hook zsh)"
 
