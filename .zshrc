@@ -104,8 +104,9 @@ alias mkdd='mkdir $(date +"%Y-%m-%d")'
 alias admin='sudo bash -c "apt-get update && apt-get -y upgrade && apt-get -y autoremove && apt-get -y clean"'
 alias sr='source ~/.zshrc'
 
-eval $(dircolors -p | sed -e 's/DIR 01;34/DIR 01;36/' | dircolors /dev/stdin)
-
+if command apt > /dev/null; then
+  eval $(dircolors -p | sed -e 's/DIR 01;34/DIR 01;36/' | dircolors /dev/stdin)
+fi
 # EXPORT & PATH
 export KUBECONFIG=~/.kube/config
 export GOPATH=$HOME/go/
