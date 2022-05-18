@@ -47,7 +47,7 @@ map <Space> <Leader>
 map ` <Nop>
 
 if uname == 'Linux'
-  print "This is Linux"
+  echo "This is Linux"
   nnoremap ö /
   inoremap ö /
 endif
