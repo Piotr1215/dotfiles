@@ -46,7 +46,8 @@ nnoremap <SPACE> <Nop>
 map <Space> <Leader>
 map ` <Nop>
 
-if uname = Linux
+if uname == 'Linux'
+  print "This is Linux"
   nnoremap ö /
   inoremap ö /
 endif
