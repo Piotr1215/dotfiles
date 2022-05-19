@@ -8,7 +8,7 @@ fi
 export ZSH="${HOME}/.oh-my-zsh"
 
 #ZSH_THEME="spaceship"
-ZSH_THEME="simple"
+ZSH_THEME="simple" #Best theme ever
 #ZSH_THEME="powerlevel10k/powerlevel10k"
 
 # Add wisely, as too many plugins slow down shell startup.
