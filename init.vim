@@ -375,7 +375,6 @@ Plugin 'cljoly/telescope-repo.nvim'
 Plugin 'kdheepak/lazygit.nvim'
 Plugin 'karoliskoncevicius/vim-sendtowindow'
 Plugin 'jpalardy/vim-slime'
-Plugin 'itchyny/vim-gitbranch'
 " Editing related
 Plugin 'Raimondi/delimitMate'
 Plugin 'godlygeek/tabular'
@@ -453,15 +452,6 @@ augroup last_cursor_position
   autocmd BufReadPost *
     \ if line("'\"") > 1 && line("'\"") <= line("$") && &ft !~# 'commit' | execute "normal! g`\"zvzz" | endif
 augroup end
-function! GetUniqueSessionName()
-  let path = fnamemodify(getcwd(), ':~:t')
-  let path = empty(path) ? 'no-project' : path
-  let branch = gitbranch#name()
-  let branch = empty(branch) ? '' : '-' . branch
-  return substitute(path . branch, '/', '-', 'g')
-endfunction
-autocmd User        StartifyReady silent execute 'SLoad '  . GetUniqueSessionName()
-autocmd VimLeavePre *             silent execute 'SSave! ' . GetUniqueSessionName()
 
 " PLUGIN SETTINGS
 " ---------------
