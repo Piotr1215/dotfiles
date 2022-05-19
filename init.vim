@@ -84,6 +84,7 @@ map  <Leader>ol <Plug>(easymotion-bd-w)
 nmap  <Leader>oc <Plug>(easymotion-overwin-f2)
 " Stop search highlight
 nnoremap ,<space> :nohlsearch<CR>
+vnoremap <C-r> "hy:%s/<C-r>h//gc<left><left><left>
 
 " MANIPULATE TEXT
 " ---------------------------
@@ -118,9 +119,6 @@ nnoremap Y yg_
 " Repeat, with .
 nnoremap <Leader>x *``cgn
 nnoremap <Leader>X #``cgN
-" Find and replace
-"nnoremap <Space><Space> :%s/\<<C-r>=expand("<cword>")<CR>\>/
-vnoremap <C-r> "hy:%s/<C-r>h//gc<left><left><left>
 " Copy from cursor to end of line
 nnoremap <leader>y "+y$
 " cut and copy content to next header #
