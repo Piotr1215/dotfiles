@@ -1,6 +1,4 @@
-lua <<EOF
-print('hello from lua')
-EOF
+lua require('basic')
 syntax enable
 syntax on
 filetype on
