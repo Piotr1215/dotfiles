@@ -1,3 +1,6 @@
+lua <<EOF
+print('hello from lua')
+EOF
 syntax enable
 syntax on
 filetype on
