@@ -13,7 +13,7 @@ set scrolloff=8
 set signcolumn=yes
 set hlsearch
 set updatetime=300
-set textwidth=80
+"set textwidth=80
 set autochdir
 
 set splitbelow
