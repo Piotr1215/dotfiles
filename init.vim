@@ -376,6 +376,7 @@ Plugin 'kdheepak/lazygit.nvim'
 Plugin 'karoliskoncevicius/vim-sendtowindow'
 Plugin 'jpalardy/vim-slime'
 Plugin 'esensar/nvim-dev-container'
+:lua require("devcontainer").setup{}
 " Editing related
 Plugin 'Raimondi/delimitMate'
 Plugin 'godlygeek/tabular'
