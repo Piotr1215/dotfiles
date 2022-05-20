@@ -401,6 +401,7 @@ Plugin 'hrsh7th/vim-vsnip'
 Plugin 'hrsh7th/vim-vsnip-integ'
 Plugin 'sakshamgupta05/vim-todo-highlight'
 Plugin 'nvim-treesitter/nvim-treesitter', {'do': ':TSUpdate'}  " We recommend updating the parsers on update
+Plugin 'preservim/nerdcommenter'
 " Programming
 Plugin 'majutsushi/tagbar'
 Plugin 'hashivim/vim-terraform'
