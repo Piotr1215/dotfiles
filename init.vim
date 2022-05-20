@@ -1,4 +1,4 @@
-lua require('basic')
+"lua require('basic')
 syntax enable
 syntax on
 filetype on
