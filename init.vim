@@ -162,8 +162,7 @@ xnoremap <silent>am <cmd>call <sid>MarkdowCodeBlock(1)<cr>
 onoremap <silent>im <cmd>call <sid>MarkdowCodeBlock(0)<cr>
 xnoremap <silent>im <cmd>call <sid>MarkdowCodeBlock(0)<cr>
 " Markdown Previev
-nnoremap <leader>mp :MarkdownPreview<CR>
-" nnoremap <silent><leader>mp :MarkdownPreview<CR>
+nnoremap <silent><leader>mp :MarkdownPreview<CR>
 " Fix Markdown Errors
 nnoremap <leader>fx :<C-u>CocCommand markdownlint.fixAll<CR>
 function! s:MarkdowCodeBlock(outside)
@@ -529,4 +528,4 @@ let g:go_highlight_interfaces = 1
 let g:go_highlight_operators = 1
 " MarkdownPreview settings
 let g:mkdp_browser = '/usr/bin/google-chrome'
-let g:mkdp_echo_preview_url = 1
+let g:mkdp_echo_preview_url = 0
