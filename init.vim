@@ -162,7 +162,8 @@ xnoremap <silent>am <cmd>call <sid>MarkdowCodeBlock(1)<cr>
 onoremap <silent>im <cmd>call <sid>MarkdowCodeBlock(0)<cr>
 xnoremap <silent>im <cmd>call <sid>MarkdowCodeBlock(0)<cr>
 " Markdown Previev
-nnoremap <silent><leader>mp :MarkdownPreview<CR>
+nnoremap <leader>mp :MarkdownPreview<CR>
+" nnoremap <silent><leader>mp :MarkdownPreview<CR>
 " Fix Markdown Errors
 nnoremap <leader>fx :<C-u>CocCommand markdownlint.fixAll<CR>
 function! s:MarkdowCodeBlock(outside)
