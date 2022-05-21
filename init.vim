@@ -529,3 +529,4 @@ let g:go_highlight_interfaces = 1
 let g:go_highlight_operators = 1
 " MarkdownPreview settings
 let g:mkdp_browser = '/usr/bin/google-chrome'
+let g:mkdp_echo_preview_url = 1
