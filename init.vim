@@ -248,6 +248,7 @@ nnoremap <S-J> <C-W><C-J>
 autocmd TermOpen term://* startinsert
 command! -nargs=* T :split | resize 15 | terminal
 command! -nargs=* VT vsplit | terminal <args>
+tnoremap <Esc> <C-\><C-n>
 "Floatterm settings
 nnoremap   <silent><Leader>fl :FloatermNew<CR>
 nnoremap   <silent><Leader>ft :FloatermToggle<CR>
