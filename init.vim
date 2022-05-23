@@ -378,6 +378,7 @@ Plugin 'kdheepak/lazygit.nvim'
 Plugin 'karoliskoncevicius/vim-sendtowindow'
 Plugin 'jpalardy/vim-slime'
 Plugin 'natebosch/vim-lsc'
+Plugin 'neovim/nvim-lspconfig'
 " Editing related
 Plugin 'Raimondi/delimitMate'
 Plugin 'godlygeek/tabular'
