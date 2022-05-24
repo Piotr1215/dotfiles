@@ -377,8 +377,6 @@ Plugin 'cljoly/telescope-repo.nvim'
 Plugin 'kdheepak/lazygit.nvim'
 Plugin 'karoliskoncevicius/vim-sendtowindow'
 Plugin 'jpalardy/vim-slime'
-Plugin 'natebosch/vim-lsc'
-Plugin 'neovim/nvim-lspconfig'
 " Editing related
 Plugin 'Raimondi/delimitMate'
 Plugin 'godlygeek/tabular'
@@ -532,6 +530,3 @@ let g:go_highlight_operators = 1
 " MarkdownPreview settings
 let g:mkdp_browser = '/usr/bin/google-chrome'
 let g:mkdp_echo_preview_url = 0
-" LSC
-let g:lsc_server_commands = {'yaml': 'up xpls serve --verbose'}
-let g:lsc_auto_map = v:true
