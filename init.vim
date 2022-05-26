@@ -231,7 +231,7 @@ endif
 " Git mappings
 command GitDiff execute  "w !git diff --no-index -- % -"
 " Add `:Format` command to format current buffer.
-command! -nargs=0 Format :call CocAction('format')
+"command! -nargs=0 Format :call CocAction('format')
 " Add `:Fold` comand to fold current buffer.
 command! -nargs=? Fold :call     CocAction('fold', <f-args>)
 " Add `:OR` command for organize imports of the current buffer.

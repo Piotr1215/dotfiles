@@ -34,6 +34,13 @@ function xmap(shortcut, command)
   map('x', shortcut, command)
 end
 
+-- USER COMMANDS --
+vim.api.nvim_create_user_command(
+  'Format',
+  "call CocAction('format')",
+  {bang = true}
+)
+
 -- MOVE AROUND --
 vmap("<S-PageDown>", ":m '>+1<CR>gv=gv")     -- Move Line Down in Visual Mode
 vmap("<S-PageUp>", ":m '<-2<CR>gv=gv")       -- Move Line Up in Visual Mode
