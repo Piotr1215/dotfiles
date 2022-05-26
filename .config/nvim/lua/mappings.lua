@@ -28,10 +28,10 @@ function xmap(shortcut, command)
   map('x', shortcut, command)
 end
 
-vmap("<S-PageDown>", ":m '>+1<CR>gv=gv")
-vmap("<S-PageUp>", ":m '<-2<CR>gv=gv")
-nmap("<leader>k", ":m .-2<CR>==")
-nmap("<leader>j", ":m .+1<CR>==")
+vmap("<S-PageDown>", ":m '>+1<CR>gv=gv")     -- Move Line Down in Visual Mode
+vmap("<S-PageUp>", ":m '<-2<CR>gv=gv")       -- Move Line Up in Visual Mode
+nmap("<leader>k", ":m .-2<CR>==")            -- Move Line Up in Normal Mode
+nmap("<leader>j", ":m .+1<CR>==")            -- Move Line Down in Normal Mode
 
-nmap("<Leader>nh", ":.,/^#/<CR>")
+nmap("<Leader>nh", ":.,/^#/<CR>")            -- Got to next markdown header
 
