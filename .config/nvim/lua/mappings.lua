@@ -73,7 +73,7 @@ nmap('<leader>yw', '"*yiw')
 -- Removes whitespace
 nmap('<Leader>rspace', ':%s/\\s\\+$//e')
 -- Removes empty lines if there are more than 2
-nmap('<Leader>rlines', ':%s/\n\{3,}/\r\r/e')
+nmap('<Leader>rlines', ':%s/\\n\{3,}/\\r\\r/e')
 -- Insert space
 nmap('<Leader>i', 'i<space><esc>')
 -- delete word forward in insert mode
