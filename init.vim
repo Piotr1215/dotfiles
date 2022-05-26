@@ -3,8 +3,6 @@ syntax on
 filetype on
 filetype plugin indent on
 
-nnoremap <SPACE> <Nop>
-
 lua require('settings')
 lua require('mappings')
 lua require('plugins')
