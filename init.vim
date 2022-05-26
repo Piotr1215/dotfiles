@@ -31,7 +31,7 @@ let @q = 'wys$)lvt S"f i,wvt)S"^'
 " --------------
 "
 " Find occunrances of selected text
-vnoremap // y/\V<C-R>=escape(@",'/\')<CR><CR>
+"vnoremap // y/\V<C-R>=escape(@",'/\')<CR><CR>
 "" Easy Motion Mappings
 "map  <Leader>o <Plug>(easymotion-prefix)
 "map  <Leader>of <Plug>(easymotion-bd-f)
