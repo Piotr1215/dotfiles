@@ -9,12 +9,12 @@ lua require('settings')
 set rtp+=~/.vim/bundle/Vundle.vim
 
 " *** REMAPS ***
+nnoremap <SPACE> <Nop>
 lua require('mappings')
-" LEADER REMAPS
+"vLEADER REMAPS
 " Spvcv is leader
 " Dvclare global variable to mark system
 let uname = system('uname -s')
-"vvoremap <SPACE> <Nop>
 "map <Space> <Leader>
 "map ` <Nop>
 
