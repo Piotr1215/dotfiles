@@ -106,6 +106,8 @@ nnoremap <leader>1 "0y
 nnoremap <leader>2 "+p
 " Copy selection to clipboard with Ctrl+c
 vmap <C-c> "*y
+" Copy word under cusror to the clipboard buffer
+nnoremap <leader>yw "*yiw
 " Removes whitespace
 nnoremap <Leader>rspace :%s/\s\+$//e
 " Removes empty lines if there are more than 2
