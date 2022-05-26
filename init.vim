@@ -38,11 +38,11 @@ xnoremap Q :'<,'>:normal @q<CR>
 "
 " Find occunrances of selected text
 vnoremap // y/\V<C-R>=escape(@",'/\')<CR><CR>
-" Easy Motion Mappings
-map  <Leader>o <Plug>(easymotion-prefix)
-map  <Leader>of <Plug>(easymotion-bd-f)
-map  <Leader>ol <Plug>(easymotion-bd-w)
-nmap  <Leader>oc <Plug>(easymotion-overwin-f2)
+"" Easy Motion Mappings
+"map  <Leader>o <Plug>(easymotion-prefix)
+"map  <Leader>of <Plug>(easymotion-bd-f)
+"map  <Leader>ol <Plug>(easymotion-bd-w)
+"nmap  <Leader>oc <Plug>(easymotion-overwin-f2)
 " Stop search highlight
 nnoremap ,<space> :nohlsearch<CR>
 vnoremap <C-r> "hy:%s/<C-r>h//gc<left><left><left>
