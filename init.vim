@@ -105,7 +105,7 @@ nnoremap <leader>1 "0y
 " Paste crom clipboard
 nnoremap <leader>2 "+p
 " Copy selection to clipboard with Ctrl+c
-vmap <C-c> "+y
+vmap <C-c> "*y
 " Removes whitespace
 nnoremap <Leader>rspace :%s/\s\+$//e
 " Removes empty lines if there are more than 2
