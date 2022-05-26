@@ -4,8 +4,6 @@ syntax on
 filetype on
 filetype plugin indent on
 
-local set = vim.opt
-
 set nolist
 set ignorecase
 set smartcase
