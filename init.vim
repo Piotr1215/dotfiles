@@ -3,40 +3,40 @@ syntax enable
 syntax on
 filetype on
 filetype plugin indent on
-
-set nolist
-set ignorecase
-set smartcase
-set hidden
-set noerrorbells
-set scrolloff=8
-set signcolumn=yes
-set hlsearch
-set updatetime=300
-"set textwidth=80
-set autochdir
-
-set splitbelow
-set splitright
-set pastetoggle=<F1>
-
-set mouse=v
-set number
-set encoding=utf-8
-set backspace=indent,eol,start
-set cursorline
-set guioptions=
-
-set expandtab
-set shiftwidth=5
-set softtabstop=4
-set autoindent
-set relativenumber
-set incsearch
-set laststatus=3
-
-" set the runtime path to include Vundle and initialize
-set rtp+=~/.vim/bundle/Vundle.vim
+lua require('settings')
+"set nolist
+"set ignorecase
+"set smartcase
+"set hidden
+"set noerrorbells
+"set scrolloff=8
+"set signcolumn=yes
+"set hlsearch
+"set updatetime=300
+""set textwidth=80
+"set autochdir
+"
+"set splitbelow
+"set splitright
+"set pastetoggle=<F1>
+"
+"set mouse=v
+"set number
+"set encoding=utf-8
+"set backspace=indent,eol,start
+"set cursorline
+"set guioptions=
+"
+"set expandtab
+"set shiftwidth=5
+"set softtabstop=4
+"set autoindent
+"set relativenumber
+"set incsearch
+"set laststatus=3
+"
+"" set the runtime path to include Vundle and initialize
+"set rtp+=~/.vim/bundle/Vundle.vim
 
 " *** REMAPS ***
 " LEADER REMAPS
