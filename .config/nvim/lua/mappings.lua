@@ -62,8 +62,8 @@ nmap("<leader>l", "o<cr>")
 -- Select last pasted text
 nmap("gp", "`[v`]")
 -- Add line below without entering insert mode!
-nmap("<leader><Up>",   ':<c-u>put!=repeat([''],v:count)<bar>\']+1<cr>')
-nmap("<leader><Down>", ':<c-u>put =repeat([''],v:count)<bar>\'[-1<cr>')
+nmap("<leader><Up>",   ':<c-u>put!=repeat([\'\'],v:count)<bar>\']+1<cr>')
+nmap("<leader><Down>", ':<c-u>put =repeat([\'\'],v:count)<bar>\'[-1<cr>')
 -- Paste crom clipboard
 nmap("<leader>2", '"*p')
 -- Copy selection to clipboard with Ctrl+c
