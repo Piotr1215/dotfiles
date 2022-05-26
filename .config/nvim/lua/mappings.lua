@@ -71,7 +71,7 @@ vmap("<C-c>", '"*y')
 -- Copy word under cusror to the clipboard buffer
 nmap('<leader>yw', '"*yiw')
 -- Removes whitespace
-nmap('<Leader>rspace', ':%s/\s\+$//e')
+nmap('<Leader>rspace', ':%s/\\s\\+$//e')
 -- Removes empty lines if there are more than 2
 nmap('<Leader>rlines', ':%s/\n\{3,}/\r\r/e')
 -- Insert space
