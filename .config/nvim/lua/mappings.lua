@@ -47,10 +47,10 @@ nmap("<Leader>of", "<Plug>(easymotion-bd-f)")
 nmap("<Leader>ol", "<Plug>(easymotion-bd-w)")
 nmap("<Leader>oc", "<Plug>(easymotion-overwin-f2)")
 -- Stop search highlight
-nnoremap (",<space>", ":nohlsearch<CR>")
-vnoremap ("<C-r>", "\"hy:%s/<C-r>h//gc<left><left><left>")
+nmap(",<space>", ":nohlsearch<CR>")
+vmap("<C-r>", "\"hy:%s/<C-r>h//gc<left><left><left>")
 
 -- MACROS --
-nnoremap ("<Leader>q", "@q")
-xnoremap ("Q", ":'<,'>:normal @q<CR>")
+nmap("<Leader>q", "@q")
+xmap("Q", ":'<,'>:normal @q<CR>")
 
