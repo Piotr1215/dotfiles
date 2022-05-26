@@ -15,8 +15,8 @@ lua require('mappings')
 " Spvcv is leader
 " Dvclare global variable to mark system
 let uname = system('uname -s')
-"map <Space> <Leader>
-"map ` <Nop>
+map <Space> <Leader>
+map ` <Nop>
 
 if uname =~ 'Linux'
   nnoremap ö /
