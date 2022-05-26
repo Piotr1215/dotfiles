@@ -263,12 +263,12 @@ Plugin 'VundleVim/Vundle.vim'
 "Plugin 'nvim-telescope/telescope-fzf-native.nvim', { 'do': 'make' }
 "Plugin 'voldikss/vim-floaterm'
 "Plugin 'easymotion/vim-easymotion'
-Plugin 'rafamadriz/friendly-snippets'
-Plugin 'cljoly/telescope-repo.nvim'
-Plugin 'kdheepak/lazygit.nvim'
-Plugin 'karoliskoncevicius/vim-sendtowindow'
-Plugin 'jpalardy/vim-slime'
-Plugin 'ldelossa/gh.nvim', { 'requires': 'ldelossa/litee.nvim'}
+"Plugin 'rafamadriz/friendly-snippets'
+"Plugin 'cljoly/telescope-repo.nvim'
+"Plugin 'kdheepak/lazygit.nvim'
+"Plugin 'karoliskoncevicius/vim-sendtowindow'
+"Plugin 'jpalardy/vim-slime'
+"Plugin 'ldelossa/gh.nvim', { 'requires': 'ldelossa/litee.nvim'}
 " Editing related
 Plugin 'Raimondi/delimitMate'
 Plugin 'godlygeek/tabular'
