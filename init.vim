@@ -12,12 +12,8 @@ set rtp+=~/.vim/bundle/Vundle.vim
 nnoremap <SPACE> <Nop>
 lua require('mappings')
 lua require('plugins')
-"vLEADER REMAPS
-
-" Spvcv is leader
-" Dvclare global variable to mark system
+" Declare global variable to mark system
 let uname = system('uname -s')
-"map <Space> <Leader>
 map ` <Nop>
 
 if uname =~ 'Linux'
@@ -256,16 +252,16 @@ call vundle#begin()
 " let Vundle manage Vundle, required
 Plugin 'VundleVim/Vundle.vim'
 " Editor functionality
-Plugin 'mhinz/vim-startify'
-Plugin 'vim-airline/vim-airline'
-Plugin 'ryanoasis/vim-devicons'
-Plugin 'junegunn/fzf', { 'do': { -> fzf#install() } }
-Plugin 'junegunn/fzf.vim'
-Plugin 'ctrlpvim/ctrlp.vim'
-Plugin 'nvim-lua/plenary.nvim' " don't forget to add this one if you don't have it yet!
-Plugin 'nvim-telescope/telescope.nvim'
-Plugin 'nvim-telescope/telescope-fzf-native.nvim', { 'do': 'make' }
-Plugin 'voldikss/vim-floaterm'
+"Plugin 'mhinz/vim-startify'
+"Plugin 'vim-airline/vim-airline'
+"Plugin 'ryanoasis/vim-devicons'
+"Plugin 'junegunn/fzf', { 'do': { -> fzf#install() } }
+"Plugin 'junegunn/fzf.vim'
+"Plugin 'ctrlpvim/ctrlp.vim'
+"Plugin 'nvim-lua/plenary.nvim' " don't forget to add this one if you don't have it yet!
+"Plugin 'nvim-telescope/telescope.nvim'
+"Plugin 'nvim-telescope/telescope-fzf-native.nvim', { 'do': 'make' }
+"Plugin 'voldikss/vim-floaterm'
 "Plugin 'easymotion/vim-easymotion'
 Plugin 'rafamadriz/friendly-snippets'
 Plugin 'cljoly/telescope-repo.nvim'
