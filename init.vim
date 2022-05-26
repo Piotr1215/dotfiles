@@ -11,7 +11,9 @@ set rtp+=~/.vim/bundle/Vundle.vim
 " *** REMAPS ***
 nnoremap <SPACE> <Nop>
 lua require('mappings')
+
 "vLEADER REMAPS
+
 " Spvcv is leader
 " Dvclare global variable to mark system
 let uname = system('uname -s')
@@ -35,7 +37,7 @@ xnoremap Q :'<,'>:normal @q<CR>
 " -----------
 "
 " Move line of text up and down
-vnoremap <S-PageDown> :m '>+1<CR>gv=gv
+"vnoremap <S-PageDown> :m '>+1<CR>gv=gv
 vnoremap <S-PageUp> :m '<-2<CR>gv=gv
 inoremap <C-j> <esc>:m .+1<CR>==
 inoremap <C-k> <esc>:m .-2<CR>==
