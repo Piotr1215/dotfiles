@@ -54,4 +54,4 @@ vmap("<C-r>", '"hy:%s/<C-r>h//gc<left><left><left>')
 nmap("<Leader>q", "@q")
 xmap("Q", ":'<,'>:normal @q<CR>")
 
-vmap("//", 'y/\V<C-R>=escape(@",'/\')<CR><CR>')
+vmap("//", 'y/\\V<C-R>=escape(@",'/\')<CR><CR>')
