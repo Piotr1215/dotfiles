@@ -28,6 +28,7 @@ function xmap(shortcut, command)
   map('x', shortcut, command)
 end
 
+-- MOVE AROUND --
 vmap("<S-PageDown>", ":m '>+1<CR>gv=gv")     -- Move Line Down in Visual Mode
 vmap("<S-PageUp>", ":m '<-2<CR>gv=gv")       -- Move Line Up in Visual Mode
 nmap("<leader>k", ":m .-2<CR>==")            -- Move Line Up in Normal Mode
