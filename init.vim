@@ -232,9 +232,6 @@ endif
 command! -nargs=? Fold :call     CocAction('fold', <f-args>)
 " Add `:OR` command for organize imports of the current buffer.
 command! -nargs=0 OR   :call     CocAction('runCommand', 'editor.action.organizeImport')
-" Use <Ctrl-F> to format documents with prettier
-"command! -nargs=0 Prettier :CocCommand prettier.formatFile
-"noremap <C-F> :Prettier<CR>
 
 set completefunc=emoji#complete
 
