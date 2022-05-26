@@ -43,5 +43,16 @@ return require('packer').startup(function()
   use 'sakshamgupta05/vim-todo-highlight'
   use { 'nvim-treesitter/nvim-treesitter', run = ':TSUpdate' }
   use 'preservim/nerdcommenter'
+-- Programming
+  use 'majutsushi/tagbar'
+  use 'hashivim/vim-terraform'
+  use 'fatih/vim-go'
+  use {'neoclide/coc.nvim', branch = 'release'}
+  use 'rhysd/vim-clang-format'
+  use 'dense-analysis/ale'
+  use 'tpope/vim-fugitive'
+  use 'airblade/vim-gitgutter'
+-- Color Schemes
+  use 'NLKNguyen/papercolor-theme'
 end)
 

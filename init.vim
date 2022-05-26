@@ -251,43 +251,17 @@ call vundle#begin()
 
 " let Vundle manage Vundle, required
 Plugin 'VundleVim/Vundle.vim'
-" Editing related
-"Plugin 'Raimondi/delimitMate'
-"Plugin 'godlygeek/tabular'
-"Plugin 'plasticboy/vim-markdown'
-"Plugin 'mattn/webapi-vim'
-"Plugin 'Yggdroot/indentLine'
-"Plugin 'tpope/vim-surround'
-"Plugin 'mattn/emmet-vim'
-"Plugin 'wellle/targets.vim'
-"Plugin 'vim-syntastic/syntastic'
-"Plugin 'sheerun/vim-polyglot'
-"Plugin 'iamcco/markdown-preview.nvim'
-"Plugin 'junegunn/vim-emoji'
-"Plugin 'christoomey/vim-system-copy'
-"Plugin 'dhruvasagar/vim-table-mode'
-"Plugin 'junegunn/limelight.vim'
-"Plugin 'ferrine/md-img-paste.vim'
-"Plugin 'SidOfc/mkdx'
-"Plugin 'weirongxu/plantuml-previewer.vim'
-"Plugin 'tyru/open-browser.vim'
-"Plugin 'dhruvasagar/vim-open-url'
-"Plugin 'hrsh7th/vim-vsnip'
-"Plugin 'hrsh7th/vim-vsnip-integ'
-"Plugin 'sakshamgupta05/vim-todo-highlight'
-"Plugin 'nvim-treesitter/nvim-treesitter', {'do': ':TSUpdate'}  " We recommend updating the parsers on update
-"Plugin 'preservim/nerdcommenter'
 " Programming
-Plugin 'majutsushi/tagbar'
-Plugin 'hashivim/vim-terraform'
-Plugin 'fatih/vim-go'
-Plugin 'neoclide/coc.nvim', {'branch': 'release'}
-Plugin 'rhysd/vim-clang-format'
-Plugin 'dense-analysis/ale'
-Plugin 'tpope/vim-fugitive'
-Plugin 'airblade/vim-gitgutter'
-" Color Schemes
-Plugin 'NLKNguyen/papercolor-theme'
+"Plugin 'majutsushi/tagbar'
+"Plugin 'hashivim/vim-terraform'
+"Plugin 'fatih/vim-go'
+"Plugin 'neoclide/coc.nvim', {'branch': 'release'}
+"Plugin 'rhysd/vim-clang-format'
+"Plugin 'dense-analysis/ale'
+"Plugin 'tpope/vim-fugitive'
+"Plugin 'airblade/vim-gitgutter'
+"" Color Schemes
+"Plugin 'NLKNguyen/papercolor-theme'
 
 " All of your Plugins must be added before the following line
 call vundle#end()
