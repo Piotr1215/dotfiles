@@ -11,7 +11,7 @@ set rtp+=~/.vim/bundle/Vundle.vim
 " *** REMAPS ***
 nnoremap <SPACE> <Nop>
 lua require('mappings')
-
+lua require('plugins')
 "vLEADER REMAPS
 
 " Spvcv is leader
