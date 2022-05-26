@@ -28,7 +28,7 @@ function xmap(shortcut, command)
   map('x', shortcut, command)
 end
 
-vmap("<S-PageDown> :m", "'>+1<CR>gv=gv")
+vmap("<S-PageDown>", ":m '>+1<CR>gv=gv")
 --[[vnoremap <S-PageUp> :m '<-2<CR>gv=gv
 inoremap <C-j> <esc>:m .+1<CR>==
 inoremap <C-k> <esc>:m .-2<CR>==
