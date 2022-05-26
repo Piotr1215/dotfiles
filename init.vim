@@ -9,6 +9,7 @@ lua require('settings')
 set rtp+=~/.vim/bundle/Vundle.vim
 
 " *** REMAPS ***
+lua require('mappings')
 " LEADER REMAPS
 " Space is leader
 " Declare global variable to mark system
