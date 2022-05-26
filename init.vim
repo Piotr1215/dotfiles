@@ -3,15 +3,12 @@ syntax on
 filetype on
 filetype plugin indent on
 
-" Move setting to a dedicated lua module
-lua require('settings')
-" set the runtime path to include Vundle and initialize
-set rtp+=~/.vim/bundle/Vundle.vim
-
-" *** REMAPS ***
 nnoremap <SPACE> <Nop>
+
+lua require('settings')
 lua require('mappings')
 lua require('plugins')
+
 " Declare global variable to mark system
 let uname = system('uname -s')
 map ` <Nop>
@@ -244,27 +241,6 @@ command! -nargs=0 OR   :call     CocAction('runCommand', 'editor.action.organize
 " Use <Ctrl-F> to format documents with prettier
 command! -nargs=0 Prettier :CocCommand prettier.formatFile
 noremap <C-F> :Prettier<CR>
-
-call vundle#begin()
-" alternatively, pass a path where Vundle should install plugins
-"call vundle#begin('~/some/path/here')
-
-" let Vundle manage Vundle, required
-Plugin 'VundleVim/Vundle.vim'
-" Programming
-"Plugin 'majutsushi/tagbar'
-"Plugin 'hashivim/vim-terraform'
-"Plugin 'fatih/vim-go'
-"Plugin 'neoclide/coc.nvim', {'branch': 'release'}
-"Plugin 'rhysd/vim-clang-format'
-"Plugin 'dense-analysis/ale'
-"Plugin 'tpope/vim-fugitive'
-"Plugin 'airblade/vim-gitgutter'
-"" Color Schemes
-"Plugin 'NLKNguyen/papercolor-theme'
-
-" All of your Plugins must be added before the following line
-call vundle#end()
 
 set completefunc=emoji#complete
 
