@@ -27,8 +27,6 @@ endif
 
 let @q = "wys$)lvt S'f i,wvt)S'^"
 
-
-
 " EXTERNAL
 " --------
 "
