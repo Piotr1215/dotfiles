@@ -11,10 +11,10 @@ set rtp+=~/.vim/bundle/Vundle.vim
 " *** REMAPS ***
 lua require('mappings')
 " LEADER REMAPS
-" Space is leader
-" Declare global variable to mark system
+" Spvcv is leader
+" Dvclare global variable to mark system
 let uname = system('uname -s')
-"nnoremap <SPACE> <Nop>
+"vvoremap <SPACE> <Nop>
 "map <Space> <Leader>
 "map ` <Nop>
 
