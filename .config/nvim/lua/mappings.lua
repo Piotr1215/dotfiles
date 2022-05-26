@@ -40,6 +40,12 @@ vim.api.nvim_create_user_command(
   "call CocAction('format')",
   {bang = true}
 )
+--Get diff for current file
+vim.api.nvim_create_user_command(
+  'Gdiff',
+  "execute  'w !git diff --no-index -- % -'",
+  {bang = false}
+)
 
 -- MOVE AROUND --
 vmap("<S-PageDown>", ":m '>+1<CR>gv=gv")     -- Move Line Down in Visual Mode
