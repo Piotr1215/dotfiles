@@ -25,13 +25,7 @@ if uname =~ 'Linux'
   inoremap ö /
 endif
 
-" MACROS
-" ------ 
-"
-" Run q macro
-nnoremap <Leader>q @q
-" Execute a macro over visual line selections
-xnoremap Q :'<,'>:normal @q<CR>
+let @q = 'wys$)lvt S"f i,wvt)S"^'
 
 " SEARCH & REPLACE
 " --------------
