@@ -25,65 +25,9 @@ if uname =~ 'Linux'
   inoremap ö /
 endif
 
-let @q = 'wys$)lvt S"f i,wvt)S"^'
+let @q = "wys$)lvt S'f i,wvt)S'^"
 
-" SEARCH & REPLACE
-" --------------
-"
-" Find occunrances of selected text
-"vnoremap // y/\V<C-R>=escape(@",'/\')<CR><CR>
-"" Easy Motion Mappings
-"map  <Leader>o <Plug>(easymotion-prefix)
-"map  <Leader>of <Plug>(easymotion-bd-f)
-"map  <Leader>ol <Plug>(easymotion-bd-w)
-"nmap  <Leader>oc <Plug>(easymotion-overwin-f2)
 
-" MANIPULATE TEXT
-" ---------------------------
-"
-" Insert 2 empty lines and go into inser mode
-nnoremap <leader>L O<ESC>O
-nnoremap <leader>l o<cr>
-" Select last pasted text
-nnoremap gp `[v`]
-" Add line below without entering insert mode!
-nnoremap <silent> <leader><Up>   :<c-u>put!=repeat([''],v:count)<bar>']+1<cr>
-nnoremap <silent> <leader><Down> :<c-u>put =repeat([''],v:count)<bar>'[-1<cr>
-" Paste at the end of line with space
-nnoremap <leader>5 A <esc>p
-" Copy to 0 register
-nnoremap <leader>1 "0y
-" Paste crom clipboard
-nnoremap <leader>2 "+p
-" Copy selection to clipboard with Ctrl+c
-vmap <C-c> "*y
-" Copy word under cusror to the clipboard buffer
-nnoremap <leader>yw "*yiw
-" Removes whitespace
-nnoremap <Leader>rspace :%s/\s\+$//e
-" Removes empty lines if there are more than 2
-nnoremap <Leader>rlines :%s/\n\{3,}/\r\r/e
-" Insert space
-nnoremap <Leader>i i<space><esc>
-" delete word forward in insert mode
-inoremap <C-e> <C-o>dw<Left>
-" Copies till the end of a line. Fits with Shift + D, C etc
-nnoremap Y yg_
-" Replace multiple words simultaniously
-" Repeat, with .
-nnoremap <Leader>x *``cgn
-nnoremap <Leader>X #``cgN
-" Copy from cursor to end of line
-nnoremap <leader>y "+y$
-" cut and copy content to next header #
-nmap cO :.,/^#/-1d<CR>
-nmap cY :.,/^#/-1y<CR>
-"Split line in two
-nnoremap <Leader>sp i<CR><Esc>
-" Swap words separated by comma
-nnoremap <leader>sw :s/\v([^(]+)(\s*,\s*)([^, ]\v([^)])+)/\3\2\1<CR>
-" Copy function or routine body and keyword
-nnoremap <silent> yaf [m{jV]m%y
 
 " EXTERNAL
 " --------

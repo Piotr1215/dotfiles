@@ -49,9 +49,53 @@ nmap("<Leader>oc", "<Plug>(easymotion-overwin-f2)")
 -- Stop search highlight
 nmap(",<space>", ":nohlsearch<CR>")
 vmap("<C-r>", '"hy:%s/<C-r>h//gc<left><left><left>')
+vmap("//", 'y/\\V<C-R>=escape(@",\'/\')<CR><CR>')
 
 -- MACROS --
 nmap("<Leader>q", "@q")
 xmap("Q", ":'<,'>:normal @q<CR>")
 
-vmap("//", 'y/\\V<C-R>=escape(@",\'/\')<CR><CR>')
+-- MANIPULATE TEXT --
+-- Insert 2 empty lines and go into inser mode
+nmap ("<leader>L", "O<ESC>O")
+nmap ("<leader>l", "o<cr>")
+-- Select last pasted text
+nmap ("gp", "`[v`]")
+-- Add line below without entering insert mode!
+nmap <silent> <leader><Up>   :<c-u>put!=repeat([''],v:count)<bar>']+1<cr>
+nmap <silent> <leader><Down> :<c-u>put =repeat([''],v:count)<bar>'[-1<cr>
+" Paste at the end of line with space
+nmap <leader>5 A <esc>p
+" Copy to 0 register
+nmap <leader>1 "0y
+" Paste crom clipboard
+nmap <leader>2 "+p
+" Copy selection to clipboard with Ctrl+c
+vmap <C-c> "*y
+" Copy word under cusror to the clipboard buffer
+nmap <leader>yw "*yiw
+" Removes whitespace
+nmap <Leader>rspace :%s/\s\+$//e
+" Removes empty lines if there are more than 2
+nmap <Leader>rlines :%s/\n\{3,}/\r\r/e
+" Insert space
+nmap <Leader>i i<space><esc>
+" delete word forward in insert mode
+inoremap <C-e> <C-o>dw<Left>
+" Copies till the end of a line. Fits with Shift + D, C etc
+nmap Y yg_
+" Replace multiple words simultaniously
+" Repeat, with .
+nmap <Leader>x *``cgn
+nmap <Leader>X #``cgN
+" Copy from cursor to end of line
+nmap <leader>y "+y$
+" cut and copy content to next header #
+nmap cO :.,/^#/-1d<CR>
+nmap cY :.,/^#/-1y<CR>
+"Split line in two
+nmap <Leader>sp i<CR><Esc>
+" Swap words separated by comma
+nmap <leader>sw :s/\v([^(]+)(\s*,\s*)([^, ]\v([^)])+)/\3\2\1<CR>
+" Copy function or routine body and keyword
+nmap <silent> yaf [m{jV]m%y
