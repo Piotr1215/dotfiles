@@ -48,7 +48,7 @@ nmap("<Leader>ol", "<Plug>(easymotion-bd-w)")
 nmap("<Leader>oc", "<Plug>(easymotion-overwin-f2)")
 -- Stop search highlight
 nmap(",<space>", ":nohlsearch<CR>")
-vmap("<C-r>", "\"hy:%s/<C-r>h//gc<left><left><left>")
+vmap("<C-r>", ""hy:%s/<C-r>h//gc<left><left><left>")
 
 -- MACROS --
 nmap("<Leader>q", "@q")
