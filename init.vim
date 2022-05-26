@@ -33,19 +33,6 @@ nnoremap <Leader>q @q
 " Execute a macro over visual line selections
 xnoremap Q :'<,'>:normal @q<CR>
 
-" MOVE AROUND
-" -----------
-"
-" Move line of text up and down
-"vnoremap <S-PageDown> :m '>+1<CR>gv=gv
-"vnoremap <S-PageUp> :m '<-2<CR>gv=gv
-"inoremap <C-j> <esc>:m .+1<CR>==
-"inoremap <C-k> <esc>:m .-2<CR>==
-"nnoremap <leader>k :m .-2<CR>==
-"nnoremap <leader>j :m .+1<CR>==
-"" Go to next header
-"nnoremap <Leader>nh :.,/^#/<CR>
-
 " SEARCH & REPLACE
 " --------------
 "
