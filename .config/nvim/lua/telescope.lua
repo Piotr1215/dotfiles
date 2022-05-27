@@ -1,3 +1,19 @@
+-- Telescope
+require('telescope').setup {
+  defaults = {
+    layout_strategy = 'vertical',
+    -- borderchars = { '┄','┆','┈','┊','┌','┐','┘','└',},
+    -- borderchars = {'━','┃','━','┃','╆','╅','╃','╄',},
+    -- borderchars = {'━','┃','━','┃','╆','╅','╃','╄',},
+    borderchars = {'─','│','─','│','┌','┐','┘','└',},
+    mappings = {
+      i = {
+        ['<C-u>'] = false,
+        ['<C-d>'] = false,
+      },
+    },
+  },
+}
 local set_up_telescope = function()
   local set_keymap = function(mode, bind, cmd)
     key(mode, bind, cmd, { noremap = true, silent = true })
