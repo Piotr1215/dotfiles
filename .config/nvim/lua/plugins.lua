@@ -9,7 +9,7 @@ return require('packer').startup(function()
   use 'junegunn/fzf.vim'
   use 'ctrlpvim/ctrlp.vim'
   use 'nvim-lua/plenary.nvim'
-  use 'nvim-telescope/telescope.nvim'
+  use { 'nvim-telescope/telescope.nvim', requires = { { 'nvim-lua/popup.nvim' }, { 'nvim-lua/plenary.nvim' } } }
   use {'nvim-telescope/telescope-fzf-native.nvim', run = 'make' }
   use 'voldikss/vim-floaterm'
   use 'rafamadriz/friendly-snippets'
