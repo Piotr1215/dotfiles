@@ -1,3 +1,4 @@
+local key = vim.api.nvim_set_keymap
 -- Telescope
 require('telescope').setup {
   defaults = {
