@@ -17,7 +17,6 @@ if uname =~ 'Linux'
 endif
 
 let @q = "wys$)lvt S'f i,wvt)S'^"
-ls
 "" EXTERNAL
 "" --------
 ""
