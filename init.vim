@@ -17,26 +17,6 @@ if uname =~ 'Linux'
 endif
 
 let @q = "wys$)lvt S'f i,wvt)S'^"
-"" EXTERNAL
-"" --------
-""
-"" Execute line under cursor in shell
-"nnoremap <leader>ex :exec '!'.getline('.')<CR>
-"" Set spellcheck on/off
-"nnoremap <Leader>son :setlocal spell spelllang=en_us<CR>
-"nnoremap <Leader>sof :set nospell<CR>
-"" Accept first grammar correction
-"nnoremap <Leader>c 1z=
-"" Upload selected to ix.io
-"vnoremap <Leader>pp :w !curl -F "f:1=<-" ix.io<CR>
-"" Execute Command in scratchpad buffer
-""":command! -nargs=* -complete=shellcmd R new | setlocal buftype=nofile bufhidden=hide noswapfile | r !<args>
-"nmap <leader>sr <Plug>SendRight<cr>
-"xmap <silent>srv <Plug>SendRightV<cr>
-"nmap <leader>sd <Plug>SendDown<cr>
-"xmap <silent>sdv <Plug>SendDownV<cr>
-"" setup mapping to call :LazyGit
-"nnoremap <silent> <leader>gg :LazyGit<CR>
 
 " MARKDOWN
 " --------
@@ -102,14 +82,14 @@ nnoremap <silent> [fzf-p]q     :<C-u>CocCommand fzf-preview.QuickFix<CR>
 nnoremap <silent> [fzf-p]L     :<C-u>CocCommand fzf-preview.LocationList<CR>
 " Find files using Telescope command-line sugar.
 " map('n', '<leader>ff', "<cmd>lua require'telescope.builtin'.find_files({ find_command = {'rg', '--files', '--hidden', '-g', '!.git' }})<cr>", default_opts)
-nnoremap <leader>tf <cmd>lua require'telescope.builtin'.find_files({ find_command = {'rg', '--files', '--hidden', '-g', '!.git' }})<cr>
-nnoremap <leader>tg <cmd>Telescope live_grep<cr>
-nnoremap <leader>to <cmd>Telescope oldfiles<cr>
-nnoremap <leader>tb <cmd>Telescope buffers<cr>
-nnoremap <leader>th <cmd>Telescope help_tags<cr>
-nnoremap <Leader>ts :lua require'telescope.builtin'.grep_string{}<CR>
-nnoremap <leader>tp <cmd>Telescope find_files<cr>
-nnoremap <leader>tl <cmd>Telescope repo list<cr>
+"nnoremap <leader>tf <cmd>lua require'telescope.builtin'.find_files({ find_command = {'rg', '--files', '--hidden', '-g', '!.git' }})<cr>
+"nnoremap <leader>tg <cmd>Telescope live_grep<cr>
+"nnoremap <leader>to <cmd>Telescope oldfiles<cr>
+"nnoremap <leader>tb <cmd>Telescope buffers<cr>
+"nnoremap <leader>th <cmd>Telescope help_tags<cr>
+"nnoremap <Leader>ts :lua require'telescope.builtin'.grep_string{}<CR>
+"nnoremap <leader>tp <cmd>Telescope find_files<cr>
+"nnoremap <leader>tl <cmd>Telescope repo list<cr>
 " Netrw settings
 nnoremap <leader>dd :Lexplore %:p:h<CR>
 nnoremap <Leader>da :Lexplore<CR>
