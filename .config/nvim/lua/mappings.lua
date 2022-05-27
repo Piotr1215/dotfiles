@@ -125,3 +125,21 @@ nmap('cY', ':.,/^#/-1y<CR>')
 nmap('<Leader>sp', 'i<CR><Esc>')
 -- Copy function or routine body and keyword
 nmap('yaf', '[m{jV]m%y')
+
+-- EXTERNAL --
+-- Execute line under cursor in shell
+nmap('<leader>ex', ':exec \'!\'.getline(\'.\')<CR>')
+-- Set spellcheck on/off
+nmap('<Leader>son', ':setlocal spell spelllang=en_us<CR>')
+nmap('<Leader>sof', ':set nospell<CR>')
+-- Accept first grammar correction
+nmap('<Leader>c', '1z=')
+-- Upload selected to ix.io
+vmap ('<Leader>pp', ':w !curl -F "f:1=<--- ix.io<CR>')
+-- Execute Command in scratchpad buffer
+nmap('<leader>sr', '<Plug>SendRight<cr>')
+xmap('<silent>srv', '<Plug>SendRightV<cr>')
+nmap('<leader>sd', '<Plug>SendDown<cr>')
+xmap('<silent>sdv', '<Plug>SendDownV<cr>')
+-- setup mapping to call :LazyGit
+nmap('<silent>', '<leader>gg :LazyGit<CR>')
