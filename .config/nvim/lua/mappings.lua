@@ -66,10 +66,10 @@ nmap("<Leader>nh", ":.,/^#/<CR>")            -- Got to next markdown header
 
 -- SEARCH & REPLACE --
 -- Easy Motion Mappings
-nmap("<Leader>o", "<Plug>(easymotion-prefix)")
-nmap("<Leader>of", "<Plug>(easymotion-bd-f)")
-nmap("<Leader>ol", "<Plug>(easymotion-bd-w)")
-nmap("<Leader>oc", "<Plug>(easymotion-overwin-f2)")
+emap("<Leader>o", "<Plug>(easymotion-prefix)")
+emap("<Leader>of", "<Plug>(easymotion-bd-f)")
+emap("<Leader>ol", "<Plug>(easymotion-bd-w)")
+emap("<Leader>oc", "<Plug>(easymotion-overwin-f2)")
 -- Stop search highlight
 nmap(",<space>", ":nohlsearch<CR>")
 vmap("<C-r>", '"hy:%s/<C-r>h//gc<left><left><left>')
