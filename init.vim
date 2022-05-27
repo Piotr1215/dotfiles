@@ -6,6 +6,7 @@ filetype plugin indent on
 lua require('settings')
 lua require('mappings')
 lua require('plugins')
+lua require('telescope')
 
 " Declare global variable to mark system
 let uname = system('uname -s')
