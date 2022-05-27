@@ -46,7 +46,7 @@ vim.api.nvim_create_user_command(
 vim.api.nvim_create_user_command(
   'R',
   "new | setlocal buftype=nofile bufhidden=hide noswapfile | r !<args>",
-  {bang = false, -complete = shellcmd}
+  {bang = false, complete = 'shellcmd'}
 )
 
 --Get diff for current file
