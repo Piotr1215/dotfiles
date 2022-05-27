@@ -5,7 +5,7 @@ local set_up_telescope = function()
   end
   set_keymap('n', '<leader><leader>', [[<cmd>lua require('telescope.builtin').buffers()<CR>]])
   --set_keymap('n', '<leader>tf', [[<cmd>lua require('telescope.builtin').find_files({find_command = {'rg', '--files', '--hidden', '-g', '!.git' }})<CR>]])
-  set_keymap('n', '<leader>tf', [[<cmd>lua require('telescope.builtin').find_files(})<CR>]])
+  set_keymap('n', '<leader>tf', [[<cmd>lua require('telescope.builtin').find_files()<CR>]])
   set_keymap('n', '<leader>tg', [[<cmd>lua require('telescope.builtin').live_grep()<CR>]])
   set_keymap('n', '<leader>to', [[<cmd>lua require('telescope.builtin').oldfiles()<CR>]])
   set_keymap('n', '<leader>ts', [[<cmd>lua require('telescope.builtin').grep_string()<CR>]])
