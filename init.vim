@@ -81,24 +81,24 @@ nnoremap <silent> [fzf-p]<C-o> :<C-u>CocCommand fzf-preview.Jumps<CR>
 nnoremap <silent> [fzf-p]g;    :<C-u>CocCommand fzf-preview.Changes<CR>
 nnoremap <silent> [fzf-p]q     :<C-u>CocCommand fzf-preview.QuickFix<CR>
 nnoremap <silent> [fzf-p]L     :<C-u>CocCommand fzf-preview.LocationList<CR>
-"" Netrw settings
-"nnoremap <leader>dd :Lexplore %:p:h<CR>
-"nnoremap <Leader>da :Lexplore<CR>
-"" Save buffer
-"nnoremap <leader>w :w<CR>
-"" Move screen to contain current line at the top
-"nnoremap <leader>sv :source ${HOME}/.config/nvim/init.vim<CR>
-"" jj in insert mode instead of ESC
-"inoremap jj <Esc>
-"inoremap jk <Esc>
-"" Zoom split windows
-"noremap Zz <c-w>_ \| <c-w>\|
-"noremap Zo <c-w>=
-"" Split navigation
-"nnoremap <S-L> <C-W><C-L>
-"nnoremap <S-H> <C-W><C-H>
-"nnoremap <S-U> <C-W><C-K>
-"nnoremap <S-J> <C-W><C-J>
+" Netrw settings
+nnoremap <leader>dd :Lexplore %:p:h<CR>
+nnoremap <Leader>da :Lexplore<CR>
+" Save buffer
+nnoremap <leader>w :w<CR>
+" Move screen to contain current line at the top
+nnoremap <leader>sv :source ${HOME}/.config/nvim/init.vim<CR>
+" jj in insert mode instead of ESC
+inoremap jj <Esc>
+inoremap jk <Esc>
+" Zoom split windows
+noremap Zz <c-w>_ \| <c-w>\|
+noremap Zo <c-w>=
+" Split navigation
+nnoremap <S-L> <C-W><C-L>
+nnoremap <S-H> <C-W><C-H>
+nnoremap <S-U> <C-W><C-K>
+nnoremap <S-J> <C-W><C-J>
 "Neovim built in terminal settings
 autocmd TermOpen term://* startinsert
 command! -nargs=* T :split | resize 15 | terminal
