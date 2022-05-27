@@ -142,4 +142,4 @@ xmap('<silent>srv', '<Plug>SendRightV<cr>')
 nmap('<leader>sd', '<Plug>SendDown<cr>')
 xmap('<silent>sdv', '<Plug>SendDownV<cr>')
 -- setup mapping to call :LazyGit
-nmap('<leader>gg :LazyGit<CR>')
+nmap('<leader>gg', ':LazyGit<CR>')
