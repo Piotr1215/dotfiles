@@ -156,7 +156,7 @@ nmap('<leader>sv', ':source ${HOME}/.config/nvim/init.vim<CR>')
 imap('jj', '<Esc>')
 imap('jk', '<Esc>')
 -- Zoom split windows
-nmap('Zz', '<c-w>_ \| <c-w>\|')
+nmap('Zz', '<c-w>_ \\| <c-w>\\|')
 nmap('Zo', '<c-w>=')
 -- Split navigation
 nmap('<S-L>', '<C-W><C-L>')
