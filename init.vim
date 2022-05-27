@@ -31,7 +31,7 @@ nnoremap <Leader>c 1z=
 " Upload selected to ix.io
 vnoremap <Leader>pp :w !curl -F "f:1=<-" ix.io<CR>
 " Execute Command in scratchpad buffer
-:command! -nargs=* -complete=shellcmd R new | setlocal buftype=nofile bufhidden=hide noswapfile | r !<args>
+"":command! -nargs=* -complete=shellcmd R new | setlocal buftype=nofile bufhidden=hide noswapfile | r !<args>
 nmap <leader>sr <Plug>SendRight<cr>
 xmap <silent>srv <Plug>SendRightV<cr>
 nmap <leader>sd <Plug>SendDown<cr>

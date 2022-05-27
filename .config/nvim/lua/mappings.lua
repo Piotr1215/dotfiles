@@ -35,10 +35,18 @@ function xmap(shortcut, command)
 end
 
 -- USER COMMANDS --
+-- Format with default CocAction
 vim.api.nvim_create_user_command(
   'Format',
   "call CocAction('format')",
   {bang = true}
+)
+
+--Execute shell command in a read-only scratchpad buffer
+vim.api.nvim_create_user_command(
+  'R',
+  "new | setlocal buftype=nofile bufhidden=hide noswapfile | r !<args>",
+  {bang = false, complete = shellcmd}
 )
 
 --Get diff for current file
