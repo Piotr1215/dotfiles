@@ -143,24 +143,3 @@ nmap('<leader>sd', '<Plug>SendDown<cr>')
 xmap('<silent>sdv', '<Plug>SendDownV<cr>')
 -- setup mapping to call :LazyGit
 nmap('<leader>gg', ':LazyGit<CR>')
-
--- NAVIGATION --
--- Netrw settings
---nmap('<leader>dd', ':Lexplore %:p:h<CR>')
---nmap('<Leader>da', ':Lexplore<CR>')
----- Save buffer
---nmap('<leader>w', ':w<CR>')
----- Move screen to contain current line at the top
---nmap('<leader>sv', ':source ${HOME}/.config/nvim/init.vim<CR>')
----- jj in insert mode instead of ESC
---imap('jj', '<Esc>')
---imap('jk', '<Esc>')
----- Zoom split windows
-----nmap('Zz', '<c-w>_ \| <c-w>\|')
-----nmap('Zo', '<c-w>=')
----- Split navigation
---nmap('<S-L>', '<C-W><C-L>')
---nmap('<S-H>', '<C-W><C-H>')
---nmap('<S-U>', '<C-W><C-K>')
---nmap('<S-J>', '<C-W><C-J>')
-
