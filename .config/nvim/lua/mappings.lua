@@ -157,7 +157,7 @@ imap('jj', '<Esc>')
 imap('jk', '<Esc>')
 -- Zoom split windows
 --nmap('Zz', '<c-w>_ \| <c-w>\|')
-nmap('Zo', '<c-w>=')
+--nmap('Zo', '<c-w>=')
 -- Split navigation
 nmap('<S-L>', '<C-W><C-L>')
 nmap('<S-H>', '<C-W><C-H>')
