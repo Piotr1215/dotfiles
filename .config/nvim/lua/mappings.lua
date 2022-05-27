@@ -3,7 +3,7 @@ vim.g.mapleader = " "
 vim.g.maplocalleader = " "
 
 function map(mode, shortcut, command)
-  vim.api.nvim_set_keymap(mode, shortcut, command, { nmap = true, silent = true })
+  vim.api.nvim_set_keymap(mode, shortcut, command, { nnoremap = true, silent = true })
 end
 
 function emap(shortcut, command)
