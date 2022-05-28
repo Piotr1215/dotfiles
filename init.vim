@@ -13,21 +13,6 @@ if uname =~ 'Linux'
   inoremap ö /
 endif
 
-" MARKDOWN
-" --------
-"function! s:MarkdowCodeBlock(outside)
-"    call search('```', 'cb')
-"    if a:outside
-"        normal! Vo
-"    else
-"        normal! j0Vo
-"    endif
-"    call search('```')
-"    if ! a:outside
-"        normal! k
-"    endif
-"endfunction
-
 if uname =~ 'Darwin'
 au FileType plantuml let g:plantuml_previewer#plantuml_jar_path = get(
     \  matchlist(system('cat `which plantuml` | grep plantuml.jar'), '\v.*\s[''"]?(\S+plantuml\.jar).*'),
