@@ -46,7 +46,7 @@ iab <expr> t/ strftime('TODO(' . $USER . ' %Y-%m-%d):')
 " NAVIGATION & EDITOR
 " ----------
 " FZF Key
-"nmap <Leader>f [fzf-p]
+"lspconfignmap <Leader>f [fzf-plspconfiglspconfiglspconfiglspconfig]
 "xmap <Leader>f [fzf-p]
 "" Files and Projects navigation
 "nnoremap <silent> [fzf-p]p     :<C-u>CocCommand fzf-preview.FromResources project_mru git<CR>
