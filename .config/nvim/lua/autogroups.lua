@@ -1,7 +1,7 @@
 local api = vim.api
 
 api.nvim_exec(
-  [[
+     [[
     augroup fileTypes
      autocmd FileType c,cpp setlocal expandtab shiftwidth=2 softtabstop=2 cindent
      autocmd FileType python setlocal expandtab shiftwidth=4 softtabstop=4 autoindent
@@ -9,11 +9,11 @@ api.nvim_exec(
      autocmd FileType markdown setlocal expandtab shiftwidth=4 softtabstop=4 autoindent
      autocmd FileType markdown nmap <buffer><silent> <leader>p :call mdip#MarkdownClipboardImage()<CR>
     augroup end
-  ]], false
+  ]]  , false
 )
 
 api.nvim_exec(
-  [[
+     [[
     augroup helpers
      autocmd!
      autocmd TermOpen term://* startinsert
@@ -21,38 +21,38 @@ api.nvim_exec(
      autocmd User CocJumpPlaceholder call CocActionAsync('showSignatureHelp')
      autocmd CursorHold * silent! call CocActionAsync('highlight')
     augroup end
-  ]], false
+  ]]  , false
 )
 
 api.nvim_exec(
-  [[
+     [[
     augroup plantuml
      autocmd BufWritePost *.puml silent! !java -DPLANTUML_LIMIT_SIZE=8192 -jar /usr/local/bin/plantuml.jar -tsvg <afile> -o ./rendered
     augroup end
-  ]], false
+  ]]  , false
 )
 
 api.nvim_exec(
-  [[
+     [[
     augroup autoformat_settings
      autocmd FileType c,cpp,proto,javascript setlocal equalprg=clang-format
      autocmd FileType python AutoFormatBuffer yapf
     augroup end
-  ]], false
+  ]]  , false
 )
 
 api.nvim_exec(
-  [[
+     [[
     augroup last_cursor_position
      autocmd!
      autocmd BufReadPost *
        \ if line("'\"") > 1 && line("'\"") <= line("$") && &ft !~# 'commit' | execute "normal! g`\"zvzz" | endif
     augroup end
-  ]], false
+  ]]  , false
 )
 -- Compile packages on add
-vim.cmd 
-  [[
+vim.cmd
+[[
     augroup Packer
      autocmd!
      autocmd BufWritePost plugins.lua source <afile> | PackerCompile
