@@ -78,13 +78,6 @@ vim.api.nvim_create_user_command(
 )
 nmap("<C-f>", ":Pretty<CR>")
 
---Get diff for current file
-vim.api.nvim_create_user_command(
-  'MarkdowCodeBlock',
-  ":call MarkdowCodeBlock",
-  {bang = true}
-)
-
 -- MOVE AROUND --
 vmap("<S-PageDown>", ":m '>+1<CR>gv=gv")     -- Move Line Down in Visual Mode
 vmap("<S-PageUp>", ":m '<-2<CR>gv=gv")       -- Move Line Up in Visual Mode
