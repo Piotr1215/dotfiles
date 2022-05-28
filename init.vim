@@ -61,8 +61,8 @@ nnoremap <silent> [fzf-p]q     :<C-u>CocCommand fzf-preview.QuickFix<CR>
 nnoremap <silent> [fzf-p]L     :<C-u>CocCommand fzf-preview.LocationList<CR>
 "Neovim built in terminal settings
 " add relative number movements to the jump list 
-nnoremap <expr> k (v:count1 > 1 ? "m'" . v:count1 : '') . 'k' 
-nnoremap <expr> j (v:count1 > 1 ? "m'" . v:count1 : '') . 'j'
+"nnoremap <expr> k (v:count1 > 1 ? "m'" . v:count1 : '') . 'k' 
+"nnoremap <expr> j (v:count1 > 1 ? "m'" . v:count1 : '') . 'j'
 
 nnoremap <silent> K :call <SID>show_documentation()<CR>
 " Use tab for trigger completion with characters ahead and navigate.

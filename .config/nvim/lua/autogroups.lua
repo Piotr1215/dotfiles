@@ -55,6 +55,6 @@ vim.cmd
   [[
     augroup Packer
      autocmd!
-     autocmd BufWritePost plugins.lua PackerCompile
+     autocmd BufWritePost plugins.lua source <afile> | PackerCompile
     augroup end
   ]]
