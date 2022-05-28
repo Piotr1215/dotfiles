@@ -98,5 +98,6 @@ return require('packer').startup(function()
 -- Color Schemes
   use 'NLKNguyen/papercolor-theme'
   use "EdenEast/nightfox.nvim" -- Packer
+  require('lualine').setup()
 end)
 
