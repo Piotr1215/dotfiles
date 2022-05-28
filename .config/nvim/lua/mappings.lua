@@ -220,7 +220,19 @@ nmap('<Leader>fs', ':FloatermShow<CR>')
 nmap('<Leader>fh', ':FloatermHide<CR>')
 nmap('<Leader>fn', ':FloatermNext<CR>')
 nmap('<Leader>fc', ':FloatermKill<CR>')
-
+nmap('<Leader>f', '[fzf-p]')
+xmap('<Leader>f', '[fzf-p]')
+nmap('[fzf-p]p',     ':<C-u>CocCommand fzf-preview.FromResources project_mru git<CR>')
+nmap('[fzf-p]pf',    ':<C-u>CocCommand fzf-preview.ProjectFiles<CR>')
+nmap('[fzf-p]gs',    ':<C-u>CocCommand fzf-preview.GitStatus<CR>')
+nmap('[fzf-p]ga',    ':<C-u>CocCommand fzf-preview.GitActions<CR>')
+nmap('[fzf-p]b',     ':<C-u>CocCommand fzf-preview.Buffers<CR>')
+nmap('[fzf-p]B',     ':<C-u>CocCommand fzf-preview.AllBuffers<CR>')
+nmap('[fzf-p]po',     ':<C-u>CocCommand fzf-preview.FromResources buffer project_mru<CR>')
+nmap('[fzf-p]<C-o>', ':<C-u>CocCommand fzf-preview.Jumps<CR>')
+nmap('[fzf-p]g;',    ':<C-u>CocCommand fzf-preview.Changes<CR>')
+nmap('[fzf-p]q',     ':<C-u>CocCommand fzf-preview.QuickFix<CR>')
+nmap('[fzf-p]L',     ':<C-u>CocCommand fzf-preview.LocationList<CR>')
 
 -- PROGRAMMING --
 -- Use `[g` and `]g` to navigate diagnostics
