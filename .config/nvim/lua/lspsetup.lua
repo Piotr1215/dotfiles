@@ -44,7 +44,7 @@ local on_attach = function(_, bufnr)
   buf_set_keymap('n', 'gd', '<cmd>lua vim.lsp.buf.definition()<CR>', opts)
 
   -- Format buffer
-  buf_set_keymap('n', '<F3>', '<cmd>lua vim.lsp.buf.formatting()<CR>', opts)
+  buf_set_keymap('n', '<c-f>', '<cmd>lua vim.lsp.buf.formatting()<CR>', opts)
 
   -- Jump LSP diagnostics
   -- NOTE: Currently, there is a bug in lspsaga.diagnostic module. Thus we use
@@ -60,8 +60,6 @@ local on_attach = function(_, bufnr)
 
   -- Doc popup scrolling
   buf_set_keymap('n', 'K', "<cmd>lua require('lspsaga.hover').render_hover_doc()<CR>", opts)
-  buf_set_keymap('n', '<C-f>', "<cmd>lua require('lspsaga.action').smart_scroll_with_saga(1)<CR>", opts)
-  buf_set_keymap('n', '<C-b>', "<cmd>lua require('lspsaga.action').smart_scroll_with_saga(-1)<CR>", opts)
 
   -- codeaction
   buf_set_keymap('n', '<leader>ac', "<cmd>lua require('lspsaga.codeaction').code_action()<CR>", opts)
