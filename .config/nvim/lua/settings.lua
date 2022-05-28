@@ -6,6 +6,10 @@ cmd('syntax on')
 cmd('filetype on')
 cmd('filetype plugin indent on')
 
+--Remap for dealing with word wrap
+vim.api.nvim_set_keymap('n', 'k', "v:count == 0 ? 'gk' : 'k'", { noremap = true, expr = true, silent = true })
+vim.api.nvim_set_keymap('n', 'j', "v:count == 0 ? 'gj' : 'j'", { noremap = true, expr = true, silent = true })
+
 set.background = 'dark'
 set.ignorecase = true             -- ignore case in search
 set.smartcase = true              -- do not ignore case with capitals  
