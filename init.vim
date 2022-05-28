@@ -65,7 +65,7 @@ nnoremap <silent> [fzf-p]L     :<C-u>CocCommand fzf-preview.LocationList<CR>
 "nnoremap <expr> k (v:count1 > 1 ? "m'" . v:count1 : '') . 'k' 
 "nnoremap <expr> j (v:count1 > 1 ? "m'" . v:count1 : '') . 'j'
 
-nnoremap <silent> K :call <SID>show_documentation()<CR>
+"nnoremap <silent> K :call <SID>show_documentation()<CR>
 " Use tab for trigger completion with characters ahead and navigate.
 " NOTE: Use command ':verbose imap <tab>' to make sure tab is not mapped by
 " other plugin before putting this into your config.
