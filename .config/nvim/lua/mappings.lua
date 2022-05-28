@@ -129,6 +129,7 @@ nmap('cY', ':.,/^#/-1y<CR>')
 nmap('<Leader>sp', 'i<CR><Esc>')
 -- Copy function or routine body and keyword
 nmap('yaf', '[m{jV]m%y')
+nmap('<leader>wi', ':setlocal textwidth=80<cr>')
 
 -- MARKDOWN --
 -- Operations on Code Block
@@ -140,21 +141,21 @@ xmap('<silent>im', '<cmd>call s:MarkdowCodeBlock(0)<cr>')
 nmap('<leader>mp', ':MarkdownPreview<CR>')
 -- Fix Markdown Errors
 nmap('<leader>fx', ':<C-u>CocCommand markdownlint.fixAll<CR>')
-vim.api.nvim_exec(
-     [[
-     function! s:MarkdowCodeBlock(outside)
-         call search('```', 'cb')
-         if a:outside
-             normal! Vo
-         else
-             normal! j0Vo
-         endif
-         call search('```')
-         if ! a:outside
-             normal! k
-         endif
-     endfunction
-     ]], false)
+--vim.api.nvim_exec(
+--     [[
+--     function! s:MarkdowCodeBlock(outside)
+--         call search('```', 'cb')
+--         if a:outside
+--             normal! Vo
+--         else
+--             normal! j0Vo
+--         endif
+--         call search('```')
+--         if ! a:outside
+--             normal! k
+--         endif
+--     endfunction
+--     ]], false)
 --" Markdown paste image
 
 -- EXTERNAL --
@@ -201,3 +202,52 @@ nmap('<Leader>fs', ':FloatermShow<CR>')
 nmap('<Leader>fh', ':FloatermHide<CR>')
 nmap('<Leader>fn', ':FloatermNext<CR>')
 nmap('<Leader>fc', ':FloatermKill<CR>')
+
+
+-- PROGRAMMING --
+-- Use `[g` and `]g` to navigate diagnostics
+-- Use `:CocDiagnostics` to get all diagnostics of current buffer in location list.
+nmap ('<silent>', '[g <Plug>(coc-diagnostic-prev))'
+nmap ('<silent>', ']g <Plug>(coc-diagnostic-next))'
+-- GoTo code navigation.
+nmap ('<silent>', 'gd <Plug>(coc-definition))'
+nmap ('<silent>', 'gy <Plug>(coc-type-definition))'
+nmap ('<silent>', 'gimp <Plug>(coc-implementation))'
+nmap ('<silent>', 'gr <Plug>(coc-references))'
+-- Symbol renaming.
+nmap ('<leader>rn', '<Plug>(coc-rename))'
+-- Formatting selected code.
+xmap ('<leader>fo', '<Plug>(coc-format-selected))'
+nmap ('<leader>fo', '<Plug>(coc-format-selected))'
+-- Applying codeAction to the selected region.
+-- Example: `<leader>aap` for current paragraph
+xmap ('<leader>a', '<Plug>(coc-codeaction-selected))'
+nmap ('<leader>a', '<Plug>(coc-codeaction-selected))'
+-- Remap keys for applying codeAction to the current buffer.
+nmap ('<leader>ac', '<Plug>(coc-codeaction))'
+-- Apply AutoFix to problem on the current line.
+nmap ('<leader>qf', '<Plug>(coc-fix-current))'
+-- Map function and class text objects
+-- NOTE: Requires 'textDocument.documentSymbol' support from the language server.
+xmap ('if', '<Plug>(coc-funcobj-i))'
+omap ('if', '<Plug>(coc-funcobj-i))'
+xmap ('af', '<Plug>(coc-funcobj-a))'
+omap ('af', '<Plug>(coc-funcobj-a))'
+-- Use CTRL-S for selections ranges.
+-- Requires 'textDocument/selectionRange' support of language server.
+nmap ('<silent>', '<C-s> <Plug>(coc-range-select))'
+xmap ('<silent>', '<C-s> <Plug>(coc-range-select))'
+-- vsnip settings
+-- Expand
+imap ('<expr>', '<C-j>   vsnip#expandable()  ? \'<Plug>(vsnip-expand)\'         : \'<C-j>')
+smap ('<expr>', '<C-j>   vsnip#expandable()  ? \'<Plug>(vsnip-expand)\'         : \'<C-j>')
+
+-- Expand or jump
+imap ('<expr>', '<C-l>   vsnip#available(1)  ? \'<Plug>(vsnip-expand-or-jump)\' : \'<C-l>')
+smap ('<expr>', '<C-l>   vsnip#available(1)  ? \'<Plug>(vsnip-expand-or-jump)\' : \'<C-l>')
+-- Select or cut text to use as $TM_SELECTED_TEXT in the next snippet.
+-- See https://github.com/hrsh7th/vim-vsnip/pull/50
+nmap ('<leader>t', '<Plug>(vsnip-select-text))'
+xmap ('<leader>t', '<Plug>(vsnip-select-text))'
+nmap ('<leader>tc', '<Plug>(vsnip-cut-text))'
+xmap ('<leader>tc', '<Plug>(vsnip-cut-text))'
