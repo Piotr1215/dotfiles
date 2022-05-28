@@ -93,10 +93,10 @@ return require('packer').startup(function()
   use 'fatih/vim-go'
   use {'neoclide/coc.nvim', branch = 'release'}
   use 'rhysd/vim-clang-format'
-  use 'dense-analysis/ale'
   use 'tpope/vim-fugitive'
   use 'airblade/vim-gitgutter'
 -- Color Schemes
   use 'NLKNguyen/papercolor-theme'
+  use "EdenEast/nightfox.nvim" -- Packer
 end)
 
