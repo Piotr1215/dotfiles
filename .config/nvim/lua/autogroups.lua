@@ -1,6 +1,5 @@
 local api = vim.api
 
-
 api.nvim_exec(
   [[
     augroup intendation

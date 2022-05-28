@@ -87,13 +87,13 @@ autocmd TermOpen term://* startinsert
 command! -nargs=* T :split | resize 15 | terminal
 command! -nargs=* VT vsplit | terminal <args>
 tnoremap <Esc> <C-\><C-n>
-"Floatterm settings
-nnoremap   <silent><Leader>fl :FloatermNew<CR>
-nnoremap   <silent><Leader>ft :FloatermToggle<CR>
-nnoremap   <silent><Leader>fs :FloatermShow<CR>
-nnoremap   <silent><Leader>fh :FloatermHide<CR>
-nnoremap   <silent><Leader>fn :FloatermNext<CR>
-nnoremap   <silent><Leader>fc :FloatermKill<CR>
+""Floatterm settings
+"nnoremap   <silent><Leader>fl :FloatermNew<CR>
+"nnoremap   <silent><Leader>ft :FloatermToggle<CR>
+"nnoremap   <silent><Leader>fs :FloatermShow<CR>
+"nnoremap   <silent><Leader>fh :FloatermHide<CR>
+"nnoremap   <silent><Leader>fn :FloatermNext<CR>
+"nnoremap   <silent><Leader>fc :FloatermKill<CR>
 " add relative number movements to the jump list 
 nnoremap <expr> k (v:count1 > 1 ? "m'" . v:count1 : '') . 'k' 
 nnoremap <expr> j (v:count1 > 1 ? "m'" . v:count1 : '') . 'j'
@@ -196,32 +196,8 @@ let g:lightline = {
 colorscheme PaperColor
 
 " AUTOGROUPS
-" ----------
-"
-"augroup cocHelpers
-"  autocmd!
-"  " Setup formatexpr specified filetype(s).
-"  autocmd FileType typescript,json setl formatexpr=CocAction('formatSelected')
-"  " Update signature help on jump placeholder.
-"  autocmd User CocJumpPlaceholder call CocActionAsync('showSignatureHelp')
-"augroup end
-"" indent for special file
-"autocmd FileType c,cpp setlocal expandtab shiftwidth=2 softtabstop=2 cindent
-"autocmd FileType python setlocal expandtab shiftwidth=4 softtabstop=4 autoindent
-"autocmd FileType yaml setlocal ts=2 sts=2 sw=4 expandtab
-"autocmd FileType markdown setlocal expandtab shiftwidth=4 softtabstop=4 autoindent
 " Highlight the symbol and its references when holding the cursor.
 autocmd CursorHold * silent! call CocActionAsync('highlight')
-" autoformat
-"augroup autoformat_settings
-"  autocmd FileType c,cpp,proto,javascript setlocal equalprg=clang-format
-"  autocmd FileType python AutoFormatBuffer yapf
-"augroup end
-"augroup last_cursor_position
-"  autocmd!
-"  autocmd BufReadPost *
-"    \ if line("'\"") > 1 && line("'\"") <= line("$") && &ft !~# 'commit' | execute "normal! g`\"zvzz" | endif
-"augroup end
 
 " PLUGIN SETTINGS
 " ---------------
