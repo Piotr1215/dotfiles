@@ -1,6 +1,11 @@
 local set = vim.opt
 local cmd = vim.cmd
 
+cmd('syntax enable')
+cmd('syntax on')
+cmd('filetype on')
+cmd('filetype plugin indent on')
+
 set.ignorecase = true             -- ignore case in search
 set.smartcase = true              -- do not ignore case with capitals  
 set.scrolloff = 8
