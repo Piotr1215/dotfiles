@@ -34,6 +34,10 @@ function xmap(shortcut, command)
   map('x', shortcut, command)
 end
 
+function xmap(shortcut, command)
+  map('o', shortcut, command)
+end
+
 -- USER COMMANDS --
 -- Format with default CocAction
 vim.api.nvim_create_user_command(
