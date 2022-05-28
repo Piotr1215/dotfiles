@@ -95,7 +95,7 @@ endif
 set completefunc=emoji#complete
 
 " *** COLOR_SCHEMES ***
-set t_Co=256
+"set t_Co=256
 let g:lightline = {
       \ 'colorscheme': 'PaperColor',
       \ }
