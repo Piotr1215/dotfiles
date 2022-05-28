@@ -14,11 +14,20 @@ api.nvim_exec(
 
 api.nvim_exec(
   [[
-    augroup cocHelpers
+    augroup helpers
      autocmd!
+     autocmd TermOpen term://* startinsert
      autocmd FileType typescript,json setl formatexpr=CocAction('formatSelected')
      autocmd User CocJumpPlaceholder call CocActionAsync('showSignatureHelp')
      autocmd CursorHold * silent! call CocActionAsync('highlight')
+    augroup end
+  ]], false
+)
+
+api.nvim_exec(
+  [[
+    augroup plantuml
+     autocmd BufWritePost *.puml silent! !java -DPLANTUML_LIMIT_SIZE=8192 -jar /usr/local/bin/plantuml.jar -tsvg <afile> -o ./rendered
     augroup end
   ]], false
 )
