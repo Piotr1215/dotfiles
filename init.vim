@@ -43,34 +43,12 @@ endif
 "
 iab <expr> t/ strftime('TODO(' . $USER . ' %Y-%m-%d):')
 
-" NAVIGATION & EDITOR
-" ----------
-" FZF Key
-"lspconfignmap <Leader>f [fzf-plspconfiglspconfiglspconfiglspconfig]lspconfiglspconfig
-"xmap <Leader>f [fzf-p]
-"" Files and Projects navigation
-"nnoremap <silent> [fzf-p]p     :<C-u>CocCommand fzf-preview.FromResources project_mru git<CR>
-"nnoremap <silent> [fzf-p]pf    :<C-u>CocCommand fzf-preview.ProjectFiles<CR>
-"nnoremap <silent> [fzf-p]gs    :<C-u>CocCommand fzf-preview.GitStatus<CR>
-"nnoremap <silent> [fzf-p]ga    :<C-u>CocCommand fzf-preview.GitActions<CR>
-"nnoremap <silent> [fzf-p]b     :<C-u>CocCommand fzf-preview.Buffers<CR>
-"nnoremap <silent> [fzf-p]B     :<C-u>CocCommand fzf-preview.AllBuffers<CR>
-"nnoremap <silent> [fzf-p]po     :<C-u>CocCommand fzf-preview.FromResources buffer project_mru<CR>
-"nnoremap <silent> [fzf-p]<C-o> :<C-u>CocCommand fzf-preview.Jumps<CR>
-"nnoremap <silent> [fzf-p]g;    :<C-u>CocCommand fzf-preview.Changes<CR>
-"nnoremap <silent> [fzf-p]q     :<C-u>CocCommand fzf-preview.QuickFix<CR>
-"nnoremap <silent> [fzf-p]L     :<C-u>CocCommand fzf-preview.LocationList<CR>
-
 function! s:check_back_space() abort
   let col = col('.') - 1
   return !col || getline('.')[col - 1]  =~# '\s'
 endfunction
-set completefunc=emoji#complete
 
-" *** COLOR_SCHEMES ***
-let g:lightline = {
-      \ 'colorscheme': 'PaperColor',
-      \ }
+set completefunc=emoji#complete
 
 " PLUGIN SETTINGS
 " ---------------
