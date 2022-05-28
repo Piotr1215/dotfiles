@@ -32,18 +32,18 @@ let @q = "wys$)lvt S'f i,wvt)S'^"
 "nnoremap <silent><leader>mp :MarkdownPreview<CR>
 "" Fix Markdown Errors
 "nnoremap <leader>fx :<C-u>CocCommand markdownlint.fixAll<CR>
-"function! s:MarkdowCodeBlock(outside)
-"    call search('```', 'cb')
-"    if a:outside
-"        normal! Vo
-"    else
-"        normal! j0Vo
-"    endif
-"    call search('```')
-"    if ! a:outside
-"        normal! k
-"    endif
-"endfunction
+function! s:MarkdowCodeBlock(outside)
+    call search('```', 'cb')
+    if a:outside
+        normal! Vo
+    else
+        normal! j0Vo
+    endif
+    call search('```')
+    if ! a:outside
+        normal! k
+    endif
+endfunction
 " Markdown paste image
 autocmd FileType markdown nmap <buffer><silent> <leader>p :call mdip#MarkdownClipboardImage()<CR>
 "autocmd BufWritePost *.puml silent! !java -DPLANTUML_LIMIT_SIZE=8192 -jar /usr/local/bin/plantuml.jar <afile> -o ./rendered
