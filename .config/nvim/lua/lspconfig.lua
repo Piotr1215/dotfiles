@@ -1,4 +1,3 @@
-local lsp = require('lspconfig')
 -- The required servers
 -- Mappings.
 -- See `:help vim.diagnostic.*` for documentation on any of the below functions
