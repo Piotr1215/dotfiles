@@ -14,9 +14,10 @@ api.nvim_exec(
 api.nvim_exec(
   [[
     augroup cocHelpers
-      autocmd!
-      autocmd FileType typescript,json setl formatexpr=CocAction('formatSelected')
-      autocmd User CocJumpPlaceholder call CocActionAsync('showSignatureHelp')
+     autocmd!
+     autocmd FileType typescript,json setl formatexpr=CocAction('formatSelected')
+     autocmd User CocJumpPlaceholder call CocActionAsync('showSignatureHelp')
+     autocmd CursorHold * silent! call CocActionAsync('highlight')
     augroup end
   ]], false
 )
@@ -24,8 +25,8 @@ api.nvim_exec(
 api.nvim_exec(
   [[
     augroup autoformat_settings
-       autocmd FileType c,cpp,proto,javascript setlocal equalprg=clang-format
-       autocmd FileType python AutoFormatBuffer yapf
+     autocmd FileType c,cpp,proto,javascript setlocal equalprg=clang-format
+     autocmd FileType python AutoFormatBuffer yapf
     augroup end
   ]], false
 )
@@ -33,9 +34,9 @@ api.nvim_exec(
 api.nvim_exec(
   [[
     augroup last_cursor_position
-      autocmd!
-      autocmd BufReadPost *
-        \ if line("'\"") > 1 && line("'\"") <= line("$") && &ft !~# 'commit' | execute "normal! g`\"zvzz" | endif
+     autocmd!
+     autocmd BufReadPost *
+       \ if line("'\"") > 1 && line("'\"") <= line("$") && &ft !~# 'commit' | execute "normal! g`\"zvzz" | endif
     augroup end
   ]], false
 )
@@ -43,7 +44,7 @@ api.nvim_exec(
 vim.cmd 
   [[
     augroup Packer
-      autocmd!
-      autocmd BufWritePost plugins.lua PackerCompile
+     autocmd!
+     autocmd BufWritePost plugins.lua PackerCompile
     augroup end
   ]]

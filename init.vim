@@ -108,15 +108,6 @@ if has('nvim')
 else
   inoremap <silent><expr> <c-@> coc#refresh()
 endif
-" Make <CR> auto-select the first completion item and notify coc.nvim to
-" format on enter, <cr> could be remapped by other vim plugin
-" This was causing E109 Missing ':' after ?
-" inoremap <silent><expr> <cr> pumvisible() ? : coc#_select_confirm()
-" Add `:Fold` comand to fold current buffer.
-command! -nargs=? Fold :call     CocAction('fold', <f-args>)
-" Add `:OR` command for organize imports of the current buffer.
-command! -nargs=0 OR   :call     CocAction('runCommand', 'editor.action.organizeImport')
-
 set completefunc=emoji#complete
 
 " *** COLOR_SCHEMES ***
@@ -125,11 +116,7 @@ set background=dark
 let g:lightline = {
       \ 'colorscheme': 'PaperColor',
       \ }
-colorscheme PaperColor
 
-" AUTOGROUPS
-" Highlight the symbol and its references when holding the cursor.
-autocmd CursorHold * silent! call CocActionAsync('highlight')
 
 " PLUGIN SETTINGS
 " ---------------
