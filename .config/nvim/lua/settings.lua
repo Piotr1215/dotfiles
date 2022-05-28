@@ -34,6 +34,7 @@ set.relativenumber = true
 set.incsearch = true
 set.laststatus = 3
 
+cmd('set statusline^=%{coc#status()}%{get(b:,\'coc_current_function\',\'\')}')
 cmd('set statusline+=%#warningmsg#')
 cmd('set statusline+=%{SyntasticStatuslineFlag()}')
 cmd('set statusline+=%*')
