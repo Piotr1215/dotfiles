@@ -28,7 +28,11 @@ return require('packer').startup(function()
   use 'wellle/targets.vim'
   use 'vim-syntastic/syntastic'
   use 'sheerun/vim-polyglot'
-  use 'iamcco/markdown-preview.nvim'
+  use({
+        "iamcco/markdown-preview.nvim",
+        run = ":call mkdp#util#install()",
+        ft = { "markdown", "packer" },
+  })
   use 'junegunn/vim-emoji'
   use 'christoomey/vim-system-copy'
   use 'dhruvasagar/vim-table-mode'
