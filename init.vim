@@ -22,16 +22,6 @@ let @q = "wys$)lvt S'f i,wvt)S'^"
 
 " MARKDOWN
 " --------
-"
-"" Operations on Code Block
-"onoremap <silent>am <cmd>call <sid>MarkdowCodeBlock(1)<cr>
-"xnoremap <silent>am <cmd>call <sid>MarkdowCodeBlock(1)<cr>
-"onoremap <silent>im <cmd>call <sid>MarkdowCodeBlock(0)<cr>
-"xnoremap <silent>im <cmd>call <sid>MarkdowCodeBlock(0)<cr>
-"" Markdown Previev
-"nnoremap <silent><leader>mp :MarkdownPreview<CR>
-"" Fix Markdown Errors
-"nnoremap <leader>fx :<C-u>CocCommand markdownlint.fixAll<CR>
 function! s:MarkdowCodeBlock(outside)
     call search('```', 'cb')
     if a:outside
@@ -58,7 +48,6 @@ au FileType plantuml let g:plantuml_previewer#plantuml_jar_path = get(
     \  0
     \)
 endif
-nnoremap <leader>wi :setlocal textwidth=80<cr>
 
 " ABBREVIATIONS
 " -------------
@@ -96,52 +85,56 @@ nnoremap <expr> j (v:count1 > 1 ? "m'" . v:count1 : '') . 'j'
 "
 " Use `[g` and `]g` to navigate diagnostics
 " Use `:CocDiagnostics` to get all diagnostics of current buffer in location list.
-nmap <silent> [g <Plug>(coc-diagnostic-prev)
-nmap <silent> ]g <Plug>(coc-diagnostic-next)
-" GoTo code navigation.
-nmap <silent> gd <Plug>(coc-definition)
-nmap <silent> gy <Plug>(coc-type-definition)
-nmap <silent> gimp <Plug>(coc-implementation)
-nmap <silent> gr <Plug>(coc-references)
-" Symbol renaming.
-nmap <leader>rn <Plug>(coc-rename)
-" Formatting selected code.
-xmap <leader>fo <Plug>(coc-format-selected)
-nmap <leader>fo <Plug>(coc-format-selected)
-" Applying codeAction to the selected region.
-" Example: `<leader>aap` for current paragraph
-xmap <leader>a <Plug>(coc-codeaction-selected)
-nmap <leader>a <Plug>(coc-codeaction-selected)
-" Remap keys for applying codeAction to the current buffer.
-nmap <leader>ac <Plug>(coc-codeaction)
-" Apply AutoFix to problem on the current line.
-nmap <leader>qf <Plug>(coc-fix-current)
-" Map function and class text objects
-" NOTE: Requires 'textDocument.documentSymbol' support from the language server.
-xmap if <Plug>(coc-funcobj-i)
-omap if <Plug>(coc-funcobj-i)
-xmap af <Plug>(coc-funcobj-a)
-omap af <Plug>(coc-funcobj-a)
-" Use CTRL-S for selections ranges.
-" Requires 'textDocument/selectionRange' support of language server.
-nmap <silent> <C-s> <Plug>(coc-range-select)
-xmap <silent> <C-s> <Plug>(coc-range-select)
-" Use K to show documentation in preview window.
-nnoremap <silent> K :call <SID>show_documentation()<CR>
-" vsnip settings
-" Expand
-imap <expr> <C-j>   vsnip#expandable()  ? '<Plug>(vsnip-expand)'         : '<C-j>'
-smap <expr> <C-j>   vsnip#expandable()  ? '<Plug>(vsnip-expand)'         : '<C-j>'
+"nmap <silent> [g <Plug>(coc-diagnostic-prev)
+"nmap <silent> ]g <Plug>(coc-diagnostic-next)
+"" GoTo code navigation.
+"nmap <silent> gd <Plug>(coc-definition)
+"nmap <silent> gy <Plug>(coc-type-definition)
+"nmap <silent> gimp <Plug>(coc-implementation)
+"nmap <silent> gr <Plug>(coc-references)
+"" Symbol renaming.
+"nmap <leader>rn <Plug>(coc-rename)
+"" Formatting selected code.
+"xmap <leader>fo <Plug>(coc-format-selected)
+"nmap <leader>fo <Plug>(coc-format-selected)
+"" Applying codeAction to the selected region.
+"" Example: `<leader>aap` for current paragraph
+"xmap <leader>a <Plug>(coc-codeaction-selected)
+"nmap <leader>a <Plug>(coc-codeaction-selected)
+"" Remap keys for applying codeAction to the current buffer.
+"nmap <leader>ac <Plug>(coc-codeaction)
+"" Apply AutoFix to problem on the current line.
+"nmap <leader>qf <Plug>(coc-fix-current)
+"" Map function and class text objects
+"" NOTE: Requires 'textDocument.documentSymbol' support from the language server.
+"xmap if <Plug>(coc-funcobj-i)
+"omap if <Plug>(coc-funcobj-i)
+"xmap af <Plug>(coc-funcobj-a)
+"omap af <Plug>(coc-funcobj-a)
+"" Use CTRL-S for selections ranges.
+"" Requires 'textDocument/selectionRange' support of language server.
+"nmap <silent> <C-s> <Plug>(coc-range-select)
+"xmap <silent> <C-s> <Plug>(coc-range-select)
+"" Use K to show documentation in preview window.
 
-" Expand or jump
-imap <expr> <C-l>   vsnip#available(1)  ? '<Plug>(vsnip-expand-or-jump)' : '<C-l>'
-smap <expr> <C-l>   vsnip#available(1)  ? '<Plug>(vsnip-expand-or-jump)' : '<C-l>'
-" Select or cut text to use as $TM_SELECTED_TEXT in the next snippet.
-" See https://github.com/hrsh7th/vim-vsnip/pull/50
-nmap <leader>t <Plug>(vsnip-select-text)
-xmap <leader>t <Plug>(vsnip-select-text)
-nmap <leader>tc <Plug>(vsnip-cut-text)
-xmap <leader>tc <Plug>(vsnip-cut-text)
+
+nnoremap <silent> K :call <SID>show_documentation()<CR>
+
+
+"" vsnip settings
+"" Expand
+"imap <expr> <C-j>   vsnip#expandable()  ? '<Plug>(vsnip-expand)'         : '<C-j>'
+"smap <expr> <C-j>   vsnip#expandable()  ? '<Plug>(vsnip-expand)'         : '<C-j>'
+"
+"" Expand or jump
+"imap <expr> <C-l>   vsnip#available(1)  ? '<Plug>(vsnip-expand-or-jump)' : '<C-l>'
+"smap <expr> <C-l>   vsnip#available(1)  ? '<Plug>(vsnip-expand-or-jump)' : '<C-l>'
+"" Select or cut text to use as $TM_SELECTED_TEXT in the next snippet.
+"" See https://github.com/hrsh7th/vim-vsnip/pull/50
+"nmap <leader>t <Plug>(vsnip-select-text)
+"xmap <leader>t <Plug>(vsnip-select-text)
+"nmap <leader>tc <Plug>(vsnip-cut-text)
+"xmap <leader>tc <Plug>(vsnip-cut-text)
 " Use tab for trigger completion with characters ahead and navigate.
 " NOTE: Use command ':verbose imap <tab>' to make sure tab is not mapped by
 " other plugin before putting this into your config.
