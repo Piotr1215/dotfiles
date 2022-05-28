@@ -50,6 +50,20 @@ vim.api.nvim_create_user_command(
   {bang = true}
 )
 
+--Open Buildin terminal vertical mode
+vim.api.nvim_create_user_command(
+  'VT',
+  "vsplit | terminal <args>",
+  {bang = false, nargs = '*'}
+)
+
+--Open Buildin terminal
+vim.api.nvim_create_user_command(
+  'T',
+  ":split | resize 15 | terminal",
+  {bang = false, nargs = '*'}
+)
+
 --Execute shell command in a read-only scratchpad buffer
 vim.api.nvim_create_user_command(
   'R',
