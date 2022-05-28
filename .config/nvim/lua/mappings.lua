@@ -78,6 +78,13 @@ vim.api.nvim_create_user_command(
 )
 nmap("<C-f>", ":Pretty<CR>")
 
+--Get diff for current file
+vim.api.nvim_create_user_command(
+  'MarkdowCodeBlock',
+  ":call MarkdowCodeBlock",
+  {bang = true}
+)
+
 -- MOVE AROUND --
 vmap("<S-PageDown>", ":m '>+1<CR>gv=gv")     -- Move Line Down in Visual Mode
 vmap("<S-PageUp>", ":m '<-2<CR>gv=gv")       -- Move Line Up in Visual Mode
@@ -143,17 +150,9 @@ nmap('<leader>wi', ':setlocal textwidth=80<cr>')
 
 -- MARKDOWN --
 -- Operations on Code Block
-omap('<silent>am', '[[<cmd>call s:MarkdowCodeBlock(1)<cr>]]')
-xmap('<silent>am', '[[<cmd>call s:MarkdowCodeBlock(1)<cr>]]')
-omap('<silent>im', '[[<cmd>call s:MarkdowCodeBlock(0)<cr>]]')
-xmap('<silent>im', '[[<cmd>call s:MarkdowCodeBlock(0)<cr>]]')
--- Markdown Previev
-nmap('<leader>mp', ':MarkdownPreview<CR>')
--- Fix Markdown Errors
-nmap('<leader>fx', ':<C-u>CocCommand markdownlint.fixAll<CR>')
-vim.api.nvim_exec(
+vim.cmd(
      [[
-     function! s:MarkdowCodeBlock(outside)
+     function! MarkdownCodeBlock(outside)
          call search('```', 'cb')
          if a:outside
              normal! Vo
@@ -165,7 +164,15 @@ vim.api.nvim_exec(
              normal! k
          endif
      endfunction
-     ]], false)
+     ]])
+omap('am', ':call MarkdownCodeBlock(1)<cr>')
+xmap('am', ':call MarkdownCodeBlock(1)<cr>')
+omap('im', ':call MarkdownCodeBlock(0)<cr>')
+xmap('im', ':call MarkdownCodeBlock(0)<cr>')
+-- Markdown Previev
+nmap('<leader>mp', ':MarkdownPreview<CR>')
+-- Fix Markdown Errors
+nmap('<leader>fx', ':<C-u>CocCommand markdownlint.fixAll<CR>')
 --" Markdown paste image
 
 -- EXTERNAL --
