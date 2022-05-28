@@ -3,7 +3,7 @@ return require('packer').startup(function()
 -- Editor Functionality
   use 'easymotion/vim-easymotion'
   use 'mhinz/vim-startify'
-  use 'vim-airline/vim-airline'
+  --use 'vim-airline/vim-airline'
   use 'ryanoasis/vim-devicons'
   use {'junegunn/fzf', run = './install --bin' }
   use 'junegunn/fzf.vim'
@@ -50,7 +50,7 @@ return require('packer').startup(function()
 -- Programming
 -- LSP
   -- LSP Client
-  use 'neovim/nvim-lspconfig'
+  --use 'neovim/nvim-lspconfig'
 
   -- Language Server installer
   use {
