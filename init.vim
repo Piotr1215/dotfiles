@@ -58,9 +58,6 @@ set completefunc=emoji#complete
 " provide custom statusline: lightline.vim, vim-airline.
 set statusline^=%{coc#status()}%{get(b:,'coc_current_function','')}
 " Color name (:help cterm-colors) or ANSI code
-let g:limelight_conceal_ctermfg = 'gray'
-let g:limelight_conceal_ctermfg = 240
-let g:sendtowindow_use_defaults=0
 " there are some defaults for image directory and image name, you can change them
 let g:mdip_imgdir = '_media'
 let g:mdip_imgname = 'image'

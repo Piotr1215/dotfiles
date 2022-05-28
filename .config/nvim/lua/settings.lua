@@ -12,7 +12,7 @@ vim.api.nvim_set_keymap('n', 'j', "v:count == 0 ? 'gj' : 'j'", { noremap = true,
 
 set.background = 'dark'
 set.ignorecase = true             -- ignore case in search
-set.smartcase = true              -- do not ignore case with capitals  
+set.smartcase = true              -- do not ignore case with capitals
 set.scrolloff = 8
 set.hlsearch = true
 set.updatetime = 300
@@ -23,7 +23,7 @@ set.splitright = true             -- put new windows below current
 set.mouse = v
 set.number = true
 set.encoding = "utf-8"
-set.backspace = indent,eol,start
+cmd('set.backspace = indent,eol,start')
 set.cursorline = true
 
 set.expandtab = true
@@ -35,3 +35,6 @@ set.incsearch = true
 set.laststatus = 3
 
 cmd('colorscheme PaperColor')
+
+-- Plugins Settings --
+vim.g.limelight_conceal_ctermfg = 'gray'
