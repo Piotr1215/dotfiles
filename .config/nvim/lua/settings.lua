@@ -1,5 +1,5 @@
 local set = vim.opt
-local cmp = vim.cmp
+local cmp = vim.cmd
 
 set.ignorecase = true             -- ignore case in search
 set.smartcase = true              -- do not ignore case with capitals  
