@@ -34,7 +34,7 @@ function xmap(shortcut, command)
   map('x', shortcut, command)
 end
 
-function xmap(shortcut, command)
+function omap(shortcut, command)
   map('o', shortcut, command)
 end
 
