@@ -143,29 +143,29 @@ nmap('<leader>wi', ':setlocal textwidth=80<cr>')
 
 -- MARKDOWN --
 -- Operations on Code Block
-omap('<silent>am', '<cmd>call s:MarkdowCodeBlock(1)<cr>')
-xmap('<silent>am', '<cmd>call s:MarkdowCodeBlock(1)<cr>')
-omap('<silent>im', '<cmd>call s:MarkdowCodeBlock(0)<cr>')
-xmap('<silent>im', '<cmd>call s:MarkdowCodeBlock(0)<cr>')
+omap('<silent>am', '[[<cmd>call s:MarkdowCodeBlock(1)<cr>]]')
+xmap('<silent>am', '[[<cmd>call s:MarkdowCodeBlock(1)<cr>]]')
+omap('<silent>im', '[[<cmd>call s:MarkdowCodeBlock(0)<cr>]]')
+xmap('<silent>im', '[[<cmd>call s:MarkdowCodeBlock(0)<cr>]]')
 -- Markdown Previev
 nmap('<leader>mp', ':MarkdownPreview<CR>')
 -- Fix Markdown Errors
 nmap('<leader>fx', ':<C-u>CocCommand markdownlint.fixAll<CR>')
---vim.api.nvim_exec(
---     [[
---     function! s:MarkdowCodeBlock(outside)
---         call search('```', 'cb')
---         if a:outside
---             normal! Vo
---         else
---             normal! j0Vo
---         endif
---         call search('```')
---         if ! a:outside
---             normal! k
---         endif
---     endfunction
---     ]], false)
+vim.api.nvim_exec(
+     [[
+     function! s:MarkdowCodeBlock(outside)
+         call search('```', 'cb')
+         if a:outside
+             normal! Vo
+         else
+             normal! j0Vo
+         endif
+         call search('```')
+         if ! a:outside
+             normal! k
+         endif
+     endfunction
+     ]], false)
 --" Markdown paste image
 
 -- EXTERNAL --
