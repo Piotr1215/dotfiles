@@ -140,6 +140,13 @@ nmap('<Leader>sp', 'i<CR><Esc>')
 -- Copy function or routine body and keyword
 nmap('yaf', '[m{jV]m%y')
 nmap('<leader>wi', ':setlocal textwidth=80<cr>')
+vim.cmd(
+     [[
+     function! s:check_back_space() abort
+       let col = col('.') - 1
+       return !col || getline('.')[col - 1]  =~# '\s'
+     endfunction
+     ]])
 
 -- MARKDOWN --
 -- Operations on Code Block
