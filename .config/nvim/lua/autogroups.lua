@@ -39,3 +39,11 @@ api.nvim_exec(
     augroup end
   ]], false
 )
+-- Compile packages on add
+vim.cmd 
+  [[
+    augroup Packer
+      autocmd!
+      autocmd BufWritePost plugins.lua PackerCompile
+    augroup end
+  ]]
