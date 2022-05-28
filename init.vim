@@ -13,8 +13,6 @@ if uname =~ 'Linux'
   inoremap ö /
 endif
 
-let @q = "wys$)lvt S'f i,wvt)S'^"
-
 " MARKDOWN
 " --------
 function! s:MarkdowCodeBlock(outside)
@@ -37,11 +35,6 @@ au FileType plantuml let g:plantuml_previewer#plantuml_jar_path = get(
     \  0
     \)
 endif
-
-" ABBREVIATIONS
-" -------------
-"
-iab <expr> t/ strftime('TODO(' . $USER . ' %Y-%m-%d):')
 
 function! s:check_back_space() abort
   let col = col('.') - 1
