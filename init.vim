@@ -28,13 +28,7 @@ function! s:MarkdowCodeBlock(outside)
         normal! k
     endif
 endfunction
-" Markdown paste image
-"autocmd FileType markdown nmap <buffer><silent> <leader>p :call mdip#MarkdownClipboardImage()<CR>
-"autocmd BufWritePost *.puml silent! !java -DPLANTUML_LIMIT_SIZE=8192 -jar /usr/local/bin/plantuml.jar <afile> -o ./rendered
-autocmd BufWritePost *.puml silent! !java -DPLANTUML_LIMIT_SIZE=8192 -jar /usr/local/bin/plantuml.jar -tsvg <afile> -o ./rendered
-" Auto-wrap markdown at 80 characters
-" au BufRead,BufNewFile *.md setlocal textwidth=80
-" Update text to 80 characters, do not update automatically
+
 if uname =~ 'Darwin'
 au FileType plantuml let g:plantuml_previewer#plantuml_jar_path = get(
     \  matchlist(system('cat `which plantuml` | grep plantuml.jar'), '\v.*\s[''"]?(\S+plantuml\.jar).*'),
@@ -66,7 +60,6 @@ nnoremap <silent> [fzf-p]g;    :<C-u>CocCommand fzf-preview.Changes<CR>
 nnoremap <silent> [fzf-p]q     :<C-u>CocCommand fzf-preview.QuickFix<CR>
 nnoremap <silent> [fzf-p]L     :<C-u>CocCommand fzf-preview.LocationList<CR>
 "Neovim built in terminal settings
-autocmd TermOpen term://* startinsert
 command! -nargs=* T :split | resize 15 | terminal
 command! -nargs=* VT vsplit | terminal <args>
 tnoremap <Esc> <C-\><C-n>
