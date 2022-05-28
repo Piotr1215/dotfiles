@@ -46,7 +46,7 @@ local servers = {
   "emmet_ls",
 }
 
-for _, lsp in pairs(servers) do
+for _, lsp in ipairs(servers) do
     lsp[server].setup {
         capabilities = capabilities,
         on_attach = on_attach,
