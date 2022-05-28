@@ -167,7 +167,6 @@ cmp.setup({
 
   formatting = {
     format = lspkind.cmp_format({
-      with_text = true,
       preset = 'codicons',
       symbol_map = cmp_kinds, -- The glyphs will be used by `lspkind`
       menu = ({
