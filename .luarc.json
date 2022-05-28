@@ -3,6 +3,7 @@
     "Lua.diagnostics.globals": [
         "vim",
         "tmap",
-        "use"
+        "use",
+        "v"
     ]
 }
