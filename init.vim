@@ -1,8 +1,3 @@
-syntax enable
-syntax on
-filetype on
-filetype plugin indent on
-
 lua require('settings')
 lua require('mappings')
 lua require('plugins')
