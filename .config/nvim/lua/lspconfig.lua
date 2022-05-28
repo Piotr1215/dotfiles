@@ -1,7 +1,3 @@
--- Plugin configuration
--- LSP and LS Installer
-local lsp_installer = require("nvim-lsp-installer")
-
 -- The required servers
 -- Mappings.
 -- See `:help vim.diagnostic.*` for documentation on any of the below functions
@@ -33,6 +29,7 @@ local on_attach = function(client, bufnr)
   vim.api.nvim_buf_set_keymap(bufnr, 'n', 'gr', '<cmd>lua vim.lsp.buf.references()<CR>', opts)
   vim.api.nvim_buf_set_keymap(bufnr, 'n', '<space>f', '<cmd>lua vim.lsp.buf.formatting()<CR>', opts)
 end
+
 local servers = {
   "bashls",
   "sumneko_lua",
@@ -48,6 +45,7 @@ local servers = {
   "yamlls",
   "emmet_ls",
 }
+
 for _, lsp in pairs(servers) do
   require('lspconfig')[lsp].setup {
     on_attach = on_attach,
