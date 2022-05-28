@@ -6,7 +6,6 @@ lua require('autogroups')
 
 " Declare global variable to mark system
 let uname = system('uname -s')
-map ` <Nop>
 
 if uname =~ 'Linux'
   nnoremap ö /
@@ -30,7 +29,7 @@ function! s:MarkdowCodeBlock(outside)
     endif
 endfunction
 " Markdown paste image
-autocmd FileType markdown nmap <buffer><silent> <leader>p :call mdip#MarkdownClipboardImage()<CR>
+"autocmd FileType markdown nmap <buffer><silent> <leader>p :call mdip#MarkdownClipboardImage()<CR>
 "autocmd BufWritePost *.puml silent! !java -DPLANTUML_LIMIT_SIZE=8192 -jar /usr/local/bin/plantuml.jar <afile> -o ./rendered
 autocmd BufWritePost *.puml silent! !java -DPLANTUML_LIMIT_SIZE=8192 -jar /usr/local/bin/plantuml.jar -tsvg <afile> -o ./rendered
 " Auto-wrap markdown at 80 characters
