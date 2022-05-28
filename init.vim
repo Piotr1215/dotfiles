@@ -48,8 +48,6 @@ function! s:check_back_space() abort
   return !col || getline('.')[col - 1]  =~# '\s'
 endfunction
 
-set completefunc=emoji#complete
-
 " PLUGIN SETTINGS
 " ---------------
 "
