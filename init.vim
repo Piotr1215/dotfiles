@@ -3,6 +3,7 @@ lua require('mappings')
 lua require('plugins')
 lua require('telescope')
 lua require('autogroups')
+lua require('lspconfig')
 
 " Declare global variable to mark system
 let uname = system('uname -s')
