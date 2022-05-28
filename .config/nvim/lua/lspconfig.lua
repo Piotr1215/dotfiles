@@ -1,6 +1,5 @@
 -- Plugin configuration
 -- LSP and LS Installer
-require('lspconfig')
 local lsp_installer = require("nvim-lsp-installer")
 
 -- The required servers
