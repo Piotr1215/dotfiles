@@ -41,8 +41,8 @@ cmd('set statusline+=%{SyntasticStatuslineFlag()}')
 cmd('set statusline+=%*')
 cmd('set wildignore+=*/tmp/*,*.so,*.swp,*.zip')
 
-cmd('colorscheme PaperColor')
---cmd('colorscheme nightfox')
+--cmd('colorscheme PaperColor')
+cmd('colorscheme terafox')
 
 -- Plugins Settings --
 vim.g.limelight_conceal_ctermfg = 'gray'

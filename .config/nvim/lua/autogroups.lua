@@ -1,5 +1,7 @@
 local api = vim.api
 
+local sysname = vim.loop.os_uname().sysname
+
 api.nvim_exec(
      [[
     augroup fileTypes
@@ -58,3 +60,16 @@ vim.cmd
      autocmd BufWritePost plugins.lua source <afile> | PackerCompile
     augroup end
   ]]
+
+if sysname == 'Darwin' then
+     api.nvim_exec(
+     [[
+         augroup plant_folder
+          autocmd FileType plantuml let g:plantuml_previewer#plantuml_jar_path = get(
+              \  matchlist(system('cat `which plantuml` | grep plantuml.jar'), '\v.*\s[''"]?(\S+plantuml\.jar).*'),
+              \  1,
+              \  0
+              \)
+         augroup end
+       ]]   , false)
+end
