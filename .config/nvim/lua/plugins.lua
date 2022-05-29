@@ -47,6 +47,7 @@ return require('packer').startup(function()
   use 'sakshamgupta05/vim-todo-highlight'
   use { 'nvim-treesitter/nvim-treesitter', run = ':TSUpdate' }
   use 'preservim/nerdcommenter'
+  use "lukas-reineke/indent-blankline.nvim"
 -- Programming
 -- LSP
   -- LSP Client
