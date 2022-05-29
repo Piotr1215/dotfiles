@@ -107,4 +107,7 @@ vim.g.go_highlight_operators = 1
 -- MarkdownPreview settings
 vim.g.mkdp_browser = '/usr/bin/google-chrome'
 vim.g.mkdp_echo_preview_url = 0
-
+-- MKDX --
+vim.g['mkdx#settings'] = {
+  highlight = {'enable = 1'}
+}
