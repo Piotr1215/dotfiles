@@ -1,0 +1,272 @@
+{
+  "Composition template": {
+    "prefix": "comp",
+    "scope": "yaml",
+    "description": "Composition template with placeholders to fill in",
+    "body": [
+      "$LINE_COMMENT ${1:compositionKind}",
+      "apiVersion: apiextensions.crossplane.io/v1",
+      "kind: Composition",
+      "metadata:",
+      "  name: ${1/(.*)/${1:/downcase}/}s.platform-composites.upbound.io",
+      "spec:",
+      " # patchSets:",
+      " #   - name:",
+      " #     patches:",
+      " #       - :",
+      "  writeConnectionSecretsToNamespace: upbound-system",
+      "  compositeTypeRef:",
+      "    apiVersion: platform-composites.upbound.io/v1alpha1",
+      "    kind: ${1:compositionKind}",
+      "  resources:",
+      "  ${0}"
+    ]
+  },
+  "Composition base element": {
+    "prefix": "compbase",
+    "scope": "yaml",
+    "description": "Composition base element with placeholders to fill in",
+    "body": [
+      "- name: ${1:resourceName}",
+      "  base:",
+      "    apiVersion: ",
+      "    kind: ${2:resourceKind}",
+      "    spec:",
+      "      deletionPolicy: Orphan",
+      "      forProvider:",
+      "      providerConfigRef:",
+      "        name: ${3:providerName}",
+      "  #patches:${0}"
+    ]
+  },
+  "Definition template": {
+    "prefix": "def",
+    "scope": "yaml",
+    "description": "Definition template with placeholders to fill in",
+    "body": [
+      "$LINE_COMMENT ${1:definitionKindName}",
+      "apiVersion: apiextensions.crossplane.io/v1",
+      "kind: CompositeResourceDefinition",
+      "metadata:",
+      "  name: x${1/(.*)/${1:/downcase}/}s.platform-composites.upbound.io",
+      "spec:",
+      "  group: platform-composites.upbound.io",
+      "  names:",
+      "    kind: X${1:definitionKindName}",
+      "    plural: x${1/(.*)/${1:/downcase}/}s",
+      " # claimNames:",
+      " #   kind: ${1:definitionKindName}",
+      " #   plural: ${1/(.*)/${1:/downcase}/}s",
+      "  defaultCompositionRef:",
+      "    name: ${1/(.*)/${1:/downcase}/}s.platform-composites.upbound.io",
+      "  connectionSecretKeys:",
+      "  versions:",
+      "    - name: v1alpha1",
+      "      served: true",
+      "      referenceable: true",
+      "      schema:",
+      "        openAPIV3Schema:",
+      "          type: object",
+      "          properties:",
+      "            spec:",
+      "              type: object",
+      "              properties:",
+      "                ${0}:",
+      "              required:",
+      "                - ",
+      "           # status:",
+      "           #   type: object",
+      "           #   properties:",
+      "           #     xxxxxxx:",
+      "           #       type: string",
+      "           #       description: ",
+      "     # additionalPrinterColumns:",
+      "     #   - name: ",
+      "     #     type: ",
+      "     #     jsonPath: "
+    ]
+  },
+  "Definition Property": {
+    "prefix": "defprop",
+    "scope": "yaml",
+    "description": "Definition property with placeholders to fill in",
+    "body": [
+      "properties:",
+      "  ${1:propertyName}:",
+      "    type: ${2:propertyType}",
+      "    description: ${3:propertyDescription}",
+      "#required:",
+      "#  - "
+    ]
+  },
+  "Definition Property Inner": {
+    "prefix": "definner",
+    "scope": "yaml",
+    "description": "Definition inner property with placeholders to fill in",
+    "body": [
+      "${1:propertyName}:",
+      "  type: ${2:propertyType}",
+      "  description: ${3:propertyDescription}"
+    ]
+  },
+  "Patch FromCompositeFieldPath": {
+    "prefix": "patch",
+    "scope": "yaml",
+    "description": "Default patch FromCompositeFieldPath",
+    "body": [
+      "- type: FromCompositeFieldPath",
+      "  fromFieldPath: ${1:fromFieldPath}",
+      "  toFieldPath: ${2:toFieldPath}"
+    ]
+  },
+  "Patch ToCompositeFieldPath": {
+    "prefix": "patchto",
+    "scope": "yaml",
+    "description": "Patch ToCompositeFieldPath",
+    "body": [
+      "- type: ToCompositeFieldPath",
+      "  toFieldPath: ${1:toFieldPath}",
+      "  fromFieldPath: ${2:fromFieldPath}"
+    ]
+  },
+  "Patch CommbineFromComposite": {
+    "prefix": "patchcombine",
+    "scope": "yaml",
+    "description": "Patch CombineFromComposite",
+    "body": [
+      "- type: CombineFromComposite",
+      "  combine:",
+      "    variables:",
+      "      - fromFieldPath: ${1:fromFieldPath}",
+      "      - fromFieldPath: ${2:fromFieldPath}",
+      "    strategy: string",
+      "    string:",
+      "      fmt: \"$3{%s-%s}\"",
+      "  toFieldPath: ${4:toFieldPath}",
+      "  policy:",
+      "    fromFieldPath: Required"
+    ]
+  },
+  "Patch CommbineToComposite": {
+    "prefix": "patchcombineto",
+    "scope": "yaml",
+    "description": "Patch CombineToComposite",
+    "body": [
+      "- type: CombineToComposite",
+      "  combine:",
+      "    variables:",
+      "      - fromFieldPath: ${1:fromFieldPath}",
+      "      - fromFieldPath: ${2:fromFieldPath}",
+      "    strategy: string",
+      "    string:",
+      "      fmt: \"$3{%s-%s}\"",
+      "  toFieldPath: ${4:toFieldPath}"
+    ]
+  },
+  "Transform Map": {
+    "prefix": "transmap",
+    "scope": "yaml",
+    "description": "Map transforrmation",
+    "body": [
+      "transforms:",
+      "- type: map",
+      "  map:",
+      "    ${1:from}: ${2:to}"
+    ]
+  },
+  "Transform Multiply": {
+    "prefix": "transmultiply",
+    "scope": "yaml",
+    "description": "Multiplication transforrmation",
+    "body": [
+      "transforms:",
+      "- type: math",
+      "  math:",
+      "    multiply: ${1:integer}"
+    ]
+  },
+  "Transform Format": {
+    "prefix": "transformat",
+    "scope": "yaml",
+    "description": "String transforrmation",
+    "body": [
+      "transforms:",
+      "- type: string",
+      "  string:",
+      "    type: Format",
+      "    fmt: ${1:\"%s-Format\"}"
+    ]
+  },
+  "Transform ToUpper": {
+    "prefix": "transupper",
+    "scope": "yaml",
+    "description": "ToUpper transforrmation",
+    "body": [
+      "transforms:",
+      "- type: string",
+      "  string:",
+      "    type: Convert",
+      "    convert: ToUpper"
+    ]
+  },
+  "Transform ToLower": {
+    "prefix": "translower",
+    "scope": "yaml",
+    "description": "ToLower transforrmation",
+    "body": [
+      "transforms:",
+      "- type: string",
+      "  string:",
+      "    type: Convert",
+      "    convert: ToLower"
+    ]
+  },
+  "Transform ToBase64": {
+    "prefix": "transtobase",
+    "scope": "yaml",
+    "description": "ToBase64 transforrmation",
+    "body": [
+      "transforms:",
+      "- type: string",
+      "  string:",
+      "    type: Convert",
+      "    convert: ToBase64"
+    ]
+  },
+  "Transform FromBase64": {
+    "prefix": "transfrombase",
+    "scope": "yaml",
+    "description": "FromBase64 transforrmation",
+    "body": [
+      "transforms:",
+      "- type: string",
+      "  string:",
+      "    type: Convert",
+      "    convert: FromBase64"
+    ]
+  },
+  "Transform TrimPrefix": {
+    "prefix": "transtrimprefix",
+    "scope": "yaml",
+    "description": "TrimPrefix transforrmation",
+    "body": [
+      "transforms:",
+      "- type: string",
+      "  string:",
+      "    type: TrimPrefix",
+      "    trim: '${1:prefix}'"
+    ]
+  },
+  "Transform TrimSuffix": {
+    "prefix": "transtrimsuffix",
+    "scope": "yaml",
+    "description": "TrimSuffix transforrmation",
+    "body": [
+      "transforms:",
+      "- type: string",
+      "  string:",
+      "    type: TrimSuffix",
+      "    trim: '${1:suffix}'"
+    ]
+  }
+}
