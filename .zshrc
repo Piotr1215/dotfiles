@@ -59,7 +59,6 @@ HISTFILE=${ZDOTDIR:-$HOME}/.zsh_history
 
 alias wm='watch kubectl get managed'
 alias rm='rm -i'
-alias grep=rg
 alias yx='y -t '
 alias gs='git show'
 alias y=z
