@@ -1,0 +1,75 @@
+{
+  "YAML Code Snippet": {
+    "prefix": "yml",
+    "scope": "markdown",
+    "body": ["```yaml", "${1}", "```", "${0}"],
+    "description": "Inserts YAML code snippet"
+  },
+  "Bash Code Snippet": {
+    "prefix": "bsh",
+    "scope": "markdown",
+    "body": ["```bash", "${1}", "```", "${0}"],
+    "description": "Inserts bash code snippet"
+  },
+  "Bash Code Snippet with surround": {
+    "prefix": "bshs",
+    "scope": "markdown",
+    "body": ["```bash", "${1:$TM_SELECTED_TEXT}", "```", "${0}"],
+    "description": "Inserts bash code snippet"
+  },
+  "Bash Code Snippet for Katacoda": {
+    "prefix": "bshk",
+    "scope": "markdown",
+    "body": ["```bash", "${1}", "```{{execute T1}}", "${0}"],
+    "description": "Inserts bash code snippet"
+  },
+  "Document Front Matter": {
+    "prefix": "docyaml",
+    "body": [
+      "---",
+      "title: ${1:title}",
+      "sidebar_label: ${2:label}",
+      "tags:",
+      "\t- ${3:tag1}",
+      "\t- ${4:tag1}",
+      "---\n${0}"
+    ],
+    "description": "Front matter snippet for docosaurus docs"
+  },
+  "Insert table": {
+    "prefix": "table",
+    "body": [
+      "| ${1:Column1}  | ${2:Column2}   | ${3:Column3}   |",
+      "|-------------- | -------------- | -------------- |",
+      "| ${4:Item1}    | ${5:Item1}     | ${6:Item1}     |",
+      "${0}"
+    ],
+    "description": "Insert table with 2 rows and 3 columns. First row is heading."
+  },
+  "PlantUML Server Proxy": {
+    "scope": "markdown",
+    "prefix": "proxy",
+    "body": "![${1:DiagramName}](http://www.plantuml.com/plantuml/proxy?cache=yes&src=https://raw.githubusercontent.com/Piotr1215/${2:Repository}/master/diagrams/${3:FileName}.puml&fmt=png)$0",
+    "description": "Insert proxy link"
+  },
+  "PlantUML File Embed": {
+    "scope": "markdown",
+    "prefix": "plant",
+    "body": "![${1:DiagramName}](diagrams/rendered/${2:FileName}.png)$0",
+    "description": "Quickly insert a diagram picture"
+  },
+  "Center Text": {
+    "prefix": "caption",
+    "scope": "html, markdown",
+    "body": "<p style=\"text-align: center;\"><small>${1:ImageDescription}</small></p>\n",
+    "description": "Center caption under an image"
+  },
+  "log": {
+    "prefix": ["log"],
+    "body": "console.log(${1:$TM_SELECTED_TEXT});"
+  },
+  "text": {
+    "prefix": ["text"],
+    "body": "```text\n${1:$TM_SELECTED_TEXT}\n```"
+  }
+}
