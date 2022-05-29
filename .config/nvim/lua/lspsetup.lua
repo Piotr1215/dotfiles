@@ -233,3 +233,42 @@ cmp.setup.cmdline(':', {
     { name = 'cmdline' }
   })
 })
+
+-- Lualine
+require("lualine").setup({
+    sections = {
+        lualine_c = {
+            { "filename", path = 1 },
+            "lsp_progress",
+        },
+    },
+})
+
+-- indent-blankline
+require("indent_blankline").setup({
+    -- for example, context is off by default, use this to turn it on
+    space_char_blankline = " ",
+    show_current_context = true,
+    show_current_context_start = true,
+    filetype_exclude = { "help", "packer" },
+    buftype_exclude = { "terminal", "nofile" },
+    show_trailing_blankline_indent = false,
+})
+
+-- treesitter
+require("nvim-treesitter.configs").setup({
+    ensure_installed = {
+        "python",
+        "rust",
+        "c",
+        "cpp",
+        "bash",
+        "go",
+        "html",
+        "yaml",
+        "toml",
+    },
+    highlight = {
+        enable = true,
+    },
+})

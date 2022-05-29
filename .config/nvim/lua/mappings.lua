@@ -2,6 +2,8 @@ vim.keymap.set({ 'n', 'v' }, '<Space>', '<Nop>', { silent = true })
 vim.g.mapleader = " "
 vim.g.maplocalleader = " "
 
+local sysname = vim.loop.os_uname().sysname
+
 local function map(mode, shortcut, command)
   vim.api.nvim_set_keymap(mode, shortcut, command, { noremap = true, silent = true })
 end
@@ -32,6 +34,11 @@ end
 
 local function smap(shortcut, command)
   map('s', shortcut, command)
+end
+
+if sysname == 'Linux' then
+     nmap('ö', '/')
+     imap('ö', '/')
 end
 
 -- USER COMMANDS --
