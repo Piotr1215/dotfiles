@@ -123,6 +123,7 @@ else
 fi
 
 # EXPORT & PATH
+export TERM=tmux-256color
 export KUBECONFIG=~/.kube/config
 export GOPATH=$HOME/go/
 export PATH=$PATH:$HOME/.krew/bin
