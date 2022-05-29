@@ -38,7 +38,7 @@ return require('packer').startup(function()
   use 'dhruvasagar/vim-table-mode'
   use 'junegunn/limelight.vim'
   use 'ferrine/md-img-paste.vim'
-  use 'SidOfc/mkdx'
+  --use 'SidOfc/mkdx'
   use 'weirongxu/plantuml-previewer.vim'
   use 'tyru/open-browser.vim'
   use 'dhruvasagar/vim-open-url'
