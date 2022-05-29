@@ -206,7 +206,9 @@ nmap('<Leader>da', ':Lexplore<CR>')
 -- Save buffer
 nmap('<leader>w', ':w<CR>')
 -- Move screen to contain current line at the top
-nmap('<leader>sv', ':source /home/decoder/.config/nvim/init.vim<CR>')
+local pathToVimInit = ':source ' .. vim.fn.expand('~/.config/nvim/init.vim<CR>')
+--nmap('<leader>sv', ':source /home/decoder/.config/nvim/init.vim<CR>')
+nmap('<leader>sv', pathToVimInit)
 -- jj in insert mode instead of ESC
 imap('jj', '<Esc>')
 imap('jk', '<Esc>')

@@ -1,7 +1,7 @@
 lua require('settings')
 lua require('plugins')
 lua require('mappings')
-lua require('telescope')
+lua require('telescopesetup')
 lua require('autogroups')
 lua require('lspsetup')
 
