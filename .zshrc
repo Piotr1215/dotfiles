@@ -57,6 +57,7 @@ setopt share_history            # share hist between sessions
 setopt bang_hist                # !keyword
 HISTFILE=${ZDOTDIR:-$HOME}/.zsh_history
 
+alias ldoc='lazydocker'
 alias wm='watch kubectl get managed'
 alias rm='rm -i'
 alias yx='y -t '
