@@ -56,6 +56,10 @@ require('nightfox').setup({
   }
 })
 cmd('colorscheme nightfox')
+require('lualine').setup()
+require('litee.lib').setup()
+require('litee.gh').setup()
+
 -- Plugins Settings --
 vim.g.limelight_conceal_ctermfg = 'gray'
 vim.g.limelight_conceal_ctermfg = 'gray'
