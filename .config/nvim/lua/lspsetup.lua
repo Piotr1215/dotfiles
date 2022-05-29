@@ -8,7 +8,6 @@ local servers = {
   "sumneko_lua",
   "dockerls",
   "gopls",
-  "grammarly",
   "html",
   "vimls",
   "taplo",
@@ -258,8 +257,6 @@ require("indent_blankline").setup({
 -- treesitter
 require("nvim-treesitter.configs").setup({
     ensure_installed = {
-        "python",
-        "rust",
         "c",
         "cpp",
         "bash",
