@@ -3,7 +3,6 @@ return require('packer').startup(function()
 -- Editor Functionality
   use 'easymotion/vim-easymotion'
   use 'mhinz/vim-startify'
-  --use 'vim-airline/vim-airline'
   use 'ryanoasis/vim-devicons'
   use {'junegunn/fzf', run = './install --bin' }
   use 'junegunn/fzf.vim'
@@ -12,7 +11,6 @@ return require('packer').startup(function()
   use { 'nvim-telescope/telescope.nvim', requires = { { 'nvim-lua/popup.nvim' }, { 'nvim-lua/plenary.nvim' } } }
   use {'nvim-telescope/telescope-fzf-native.nvim', run = 'make' }
   use 'voldikss/vim-floaterm'
-  use 'rafamadriz/friendly-snippets'
   use 'cljoly/telescope-repo.nvim'
   use 'kdheepak/lazygit.nvim'
   use 'karoliskoncevicius/vim-sendtowindow'
@@ -36,7 +34,6 @@ return require('packer').startup(function()
   use 'junegunn/vim-emoji'
   use 'christoomey/vim-system-copy'
   use 'dhruvasagar/vim-table-mode'
-  use 'junegunn/limelight.vim'
   use 'ferrine/md-img-paste.vim'
   --use 'SidOfc/mkdx'
   use 'weirongxu/plantuml-previewer.vim'
@@ -49,10 +46,6 @@ return require('packer').startup(function()
   use 'preservim/nerdcommenter'
   use "lukas-reineke/indent-blankline.nvim"
 -- Programming
--- LSP
-  -- LSP Client
-  --use 'neovim/nvim-lspconfig'
-
   -- Language Server installer
   use {
     "williamboman/nvim-lsp-installer",
@@ -73,7 +66,6 @@ return require('packer').startup(function()
       'hrsh7th/cmp-cmdline',
     }
   }
-
   -- snippets
   use {
     'hrsh7th/cmp-vsnip', requires = {
@@ -81,7 +73,7 @@ return require('packer').startup(function()
       'rafamadriz/friendly-snippets',
     }
   }
-    -- Fancier statusline
+  -- Fancier statusline
   use {
     'nvim-lualine/lualine.nvim',
     requires = {

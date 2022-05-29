@@ -42,8 +42,19 @@ cmd('set statusline+=%*')
 cmd('set wildignore+=*/tmp/*,*.so,*.swp,*.zip')
 
 --cmd('colorscheme PaperColor')
-cmd('colorscheme terafox')
-
+require('nightfox').setup({
+  options ={
+     transparent = true,
+     terminal_colors = true,
+  },
+  modules = {
+     telescope = true,
+     treesitter = true,
+     lsp_saga = true,
+     gitgutter = true
+  }
+})
+cmd('colorscheme nightfox')
 -- Plugins Settings --
 vim.g.limelight_conceal_ctermfg = 'gray'
 vim.g.limelight_conceal_ctermfg = 'gray'
