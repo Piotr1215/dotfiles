@@ -97,5 +97,8 @@ return require('packer').startup(function()
   use 'NLKNguyen/papercolor-theme'
   use "EdenEast/nightfox.nvim" -- Packer
   require('lualine').setup()
+  require('litee.lib').setup()
+  require('litee.gh').setup()
+
 end)
 
