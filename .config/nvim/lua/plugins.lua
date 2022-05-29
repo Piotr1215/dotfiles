@@ -66,6 +66,11 @@ return require('packer').startup(function()
       'hrsh7th/cmp-cmdline',
     }
   }
+  -- GitHub pull requests
+  use {
+    'ldelossa/gh.nvim',
+    requires = { { 'ldelossa/litee.nvim' } }
+  }
   -- snippets
   use {
     'hrsh7th/cmp-vsnip', requires = {
