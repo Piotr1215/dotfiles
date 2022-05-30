@@ -1,7 +1,7 @@
 lua require('settings')
 lua require('plugins')
-lua require('lspsetup')
 lua require('mappings')
+lua require('lspsetup')
 
 function! WinMove(key)
     let t:curwin = winnr()
