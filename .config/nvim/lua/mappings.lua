@@ -7,49 +7,55 @@ local api = vim.api
 local sysname = vim.loop.os_uname().sysname
 
 local function map(mode, shortcut, command)
-  vim.api.nvim_set_keymap(mode, shortcut, command, { noremap = true, silent = true })
+     vim.api.nvim_set_keymap(mode, shortcut, command, { noremap = true, silent = true })
 end
 
 local function emap(shortcut, command)
-  map('', shortcut, command)
+     map('', shortcut, command)
 end
 
 local function nmap(shortcut, command)
-  map('n', shortcut, command)
+     map('n', shortcut, command)
 end
 
 local function imap(shortcut, command)
-  map('i', shortcut, command)
+     map('i', shortcut, command)
 end
 
 local function vmap(shortcut, command)
-  map('v', shortcut, command)
+     map('v', shortcut, command)
 end
 
 local function xmap(shortcut, command)
-  map('x', shortcut, command)
+     map('x', shortcut, command)
 end
 
 local function omap(shortcut, command)
-  map('o', shortcut, command)
+     map('o', shortcut, command)
 end
 
 local function smap(shortcut, command)
-  map('s', shortcut, command)
+     map('s', shortcut, command)
 end
+
 -- }}}
 
 -- Autocommands {{{
+local indentSettings = vim.api.nvim_create_augroup("IndentSettings", { clear = true })
+
+vim.api.nvim_create_autocmd("FileType", {
+     pattern = { "c", "cpp" },
+     command = "setlocal expandtab shiftwidth=2 softtabstop=2 cindent",
+     group = indentSettings,
+})
 api.nvim_exec(
      [[
     augroup fileTypes
-     autocmd FileType c,cpp setlocal expandtab shiftwidth=2 softtabstop=2 cindent
      autocmd FileType python setlocal expandtab shiftwidth=4 softtabstop=4 autoindent
      autocmd FileType yaml setlocal ts=2 sts=2 sw=4 expandtab
      autocmd FileType markdown setlocal expandtab shiftwidth=4 softtabstop=4 autoindent
      autocmd FileType markdown nmap <buffer><silent> <leader>p :call mdip#MarkdownClipboardImage()<CR>
      autocmd FileType lua setlocal foldmethod=marker
-     autocmd FileType go setlocal foldmethod=syntax
     augroup end
   ]]  , false
 )
@@ -103,7 +109,7 @@ vim.cmd
 
 if sysname == 'Darwin' then
      api.nvim_exec(
-     [[
+          [[
          augroup plant_folder
           autocmd FileType plantuml let g:plantuml_previewer#plantuml_jar_path = get(
               \  matchlist(system('cat `which plantuml` | grep plantuml.jar'), '\v.*\s[''"]?(\S+plantuml\.jar).*'),
@@ -111,14 +117,14 @@ if sysname == 'Darwin' then
               \  0
               \)
          augroup end
-       ]]   , false)
+       ]]  , false)
 end
-require('telescope').setup{
---  defaults   = {},
---  pickers    = {},
-  extensions = {
-      file_browser = {}
-    }
+require('telescope').setup {
+     --  defaults   = {},
+     --  pickers    = {},
+     extensions = {
+          file_browser = {}
+     }
 }
 -- }}}
 
@@ -126,22 +132,22 @@ require('telescope').setup{
 require('telescope').load_extension('file_browser')
 local key = vim.api.nvim_set_keymap
 local set_up_telescope = function()
-  local set_keymap = function(mode, bind, cmd)
-    key(mode, bind, cmd, { noremap = true, silent = true })
-  end
-  set_keymap('n', '<leader><leader>', [[<cmd>lua require('telescope.builtin').buffers()<CR>]])
-  --set_keymap('n', '<leader>tf', [[<cmd>lua require('telescope.builtin').find_files({find_command = {'rg', '--files', '--hidden', '-g', '!.git' }})<CR>]])
-  set_keymap('n', '<leader>fp', [[<cmd>lua require('telescope.builtin').find_files()<CR>]])
-  set_keymap('n', '<leader>fgr', [[<cmd>lua require('telescope.builtin').live_grep()<CR>]])
-  set_keymap('n', '<leader>fg', [[<cmd>lua require('telescope.builtin').git_files()<CR>]])
-  set_keymap('n', '<leader>fo', [[<cmd>lua require('telescope.builtin').oldfiles()<CR>]])
-  set_keymap('n', '<leader>fi', ':Telescope file_browser<CR>')
-  set_keymap('n', '<leader>fst', [[<cmd>lua require('telescope.builtin').grep_string()<CR>]])
-  set_keymap('n', '<leader>fb', [[<cmd>lua require('telescope.builtin').current_buffer_fuzzy_find()<CR>]])
-  set_keymap('n', '<leader>fh', [[<cmd>lua require('telescope.builtin').help_tags()<CR>]])
-  set_keymap('n', '<leader>ft', [[<cmd>lua require('telescope.builtin').tags()<CR>]])
-  set_keymap('n', '<leader>fT', [[<cmd>lua require('telescope.builtin').tags{ only_current_buffer = true }<CR>]])
-  -- set_keymap('n', '<leader>sf', [[<cmd>lua vim.lsp.buf.formatting()<CR>]])
+     local set_keymap = function(mode, bind, cmd)
+          key(mode, bind, cmd, { noremap = true, silent = true })
+     end
+     set_keymap('n', '<leader><leader>', [[<cmd>lua require('telescope.builtin').buffers()<CR>]])
+     --set_keymap('n', '<leader>tf', [[<cmd>lua require('telescope.builtin').find_files({find_command = {'rg', '--files', '--hidden', '-g', '!.git' }})<CR>]])
+     set_keymap('n', '<leader>fp', [[<cmd>lua require('telescope.builtin').find_files()<CR>]])
+     set_keymap('n', '<leader>fgr', [[<cmd>lua require('telescope.builtin').live_grep()<CR>]])
+     set_keymap('n', '<leader>fg', [[<cmd>lua require('telescope.builtin').git_files()<CR>]])
+     set_keymap('n', '<leader>fo', [[<cmd>lua require('telescope.builtin').oldfiles()<CR>]])
+     set_keymap('n', '<leader>fi', ':Telescope file_browser<CR>')
+     set_keymap('n', '<leader>fst', [[<cmd>lua require('telescope.builtin').grep_string()<CR>]])
+     set_keymap('n', '<leader>fb', [[<cmd>lua require('telescope.builtin').current_buffer_fuzzy_find()<CR>]])
+     set_keymap('n', '<leader>fh', [[<cmd>lua require('telescope.builtin').help_tags()<CR>]])
+     set_keymap('n', '<leader>ft', [[<cmd>lua require('telescope.builtin').tags()<CR>]])
+     set_keymap('n', '<leader>fT', [[<cmd>lua require('telescope.builtin').tags{ only_current_buffer = true }<CR>]])
+     -- set_keymap('n', '<leader>sf', [[<cmd>lua vim.lsp.buf.formatting()<CR>]])
 end
 
 set_up_telescope()
@@ -150,44 +156,44 @@ set_up_telescope()
 -- User commands {{{
 -- Format with default CocAction
 vim.api.nvim_create_user_command(
-  'Format',
-  "call CocAction('format')",
-  {bang = true}
+     'Format',
+     "call CocAction('format')",
+     { bang = true }
 )
 
 --Open Buildin terminal vertical mode
 vim.api.nvim_create_user_command(
-  'VT',
-  "vsplit | terminal <args>",
-  {bang = false, nargs = '*'}
+     'VT',
+     "vsplit | terminal <args>",
+     { bang = false, nargs = '*' }
 )
 
 --Open Buildin terminal
 vim.api.nvim_create_user_command(
-  'T',
-  ":split | resize 15 | terminal",
-  {bang = false, nargs = '*'}
+     'T',
+     ":split | resize 15 | terminal",
+     { bang = false, nargs = '*' }
 )
 
 --Execute shell command in a read-only scratchpad buffer
 vim.api.nvim_create_user_command(
-  'R',
-  "new | setlocal buftype=nofile bufhidden=hide noswapfile | r !<args>",
-  {bang = false, nargs = '*', complete = 'shellcmd'}
+     'R',
+     "new | setlocal buftype=nofile bufhidden=hide noswapfile | r !<args>",
+     { bang = false, nargs = '*', complete = 'shellcmd' }
 )
 
 --Get diff for current file
 vim.api.nvim_create_user_command(
-  'Gdiff',
-  "execute  'w !git diff --no-index -- % -'",
-  {bang = false}
+     'Gdiff',
+     "execute  'w !git diff --no-index -- % -'",
+     { bang = false }
 )
 
 --Get diff for current file
 vim.api.nvim_create_user_command(
-  'Pretty',
-  "CocCommand prettier.formatFile",
-  {bang = true}
+     'Pretty',
+     "CocCommand prettier.formatFile",
+     { bang = true }
 )
 nmap("<C-f>", ":Pretty<CR>")
 -- }}}
@@ -199,12 +205,12 @@ if sysname == 'Linux' then
      imap('ö', '/')
 end
 -- MOVE AROUND --
-vmap("<S-PageDown>", ":m '>+1<CR>gv=gv")     -- Move Line Down in Visual Mode
-vmap("<S-PageUp>", ":m '<-2<CR>gv=gv")       -- Move Line Up in Visual Mode
-nmap("<leader>k", ":m .-2<CR>==")            -- Move Line Up in Normal Mode
-nmap("<leader>j", ":m .+1<CR>==")            -- Move Line Down in Normal Mode
+vmap("<S-PageDown>", ":m '>+1<CR>gv=gv") -- Move Line Down in Visual Mode
+vmap("<S-PageUp>", ":m '<-2<CR>gv=gv") -- Move Line Up in Visual Mode
+nmap("<leader>k", ":m .-2<CR>==") -- Move Line Up in Normal Mode
+nmap("<leader>j", ":m .+1<CR>==") -- Move Line Down in Normal Mode
 
-nmap("<Leader>nh", ":.,/^#/<CR>")            -- Got to next markdown header
+nmap("<Leader>nh", ":.,/^#/<CR>") -- Got to next markdown header
 
 -- SEARCH & REPLACE --
 -- Easy Motion Mappings
@@ -228,7 +234,7 @@ nmap("<leader>l", "o<cr>")
 -- Select last pasted text
 nmap("gp", "`[v`]")
 -- Add line below without entering insert mode!
-nmap("<leader><Up>",   ':<c-u>put!=repeat([\'\'],v:count)<bar>\']+1<cr>')
+nmap("<leader><Up>", ':<c-u>put!=repeat([\'\'],v:count)<bar>\']+1<cr>')
 nmap("<leader><Down>", ':<c-u>put =repeat([\'\'],v:count)<bar>\'[-1<cr>')
 -- Paste crom clipboard
 nmap("<leader>2", '"*p')
@@ -304,7 +310,7 @@ nmap('<Leader>sof', ':set nospell<CR>')
 -- Accept first grammar correction
 nmap('<Leader>c', '1z=')
 -- Upload selected to ix.io
-vmap ('<Leader>pp', ':w !curl -F "f:1=<--- ix.io<CR>')
+vmap('<Leader>pp', ':w !curl -F "f:1=<--- ix.io<CR>')
 -- Execute Command in scratchpad buffer
 nmap('<leader>sr', '<Plug>SendRight<cr>')
 xmap('<silent>srv', '<Plug>SendRightV<cr>')
@@ -341,8 +347,8 @@ nmap('<Leader>fc', ':FloatermKill<CR>')
 --nmap ('<silent>', ']g <Plug>(coc-diagnostic-next)')
 -- GoTo code navigation.
 --nmap ('<silent>', 'gd <Plug>(coc-definition)')
-nmap ('<silent>', 'gy <Plug>(coc-type-definition)')
-nmap ('<silent>', 'gimp <Plug>(coc-implementation)')
+nmap('<silent>', 'gy <Plug>(coc-type-definition)')
+nmap('<silent>', 'gimp <Plug>(coc-implementation)')
 --nmap ('<silent>', 'gr <Plug>(coc-references)')
 -- Symbol renaming.
 --nmap ('<leader>rn', '<Plug>(coc-rename)')
@@ -353,29 +359,29 @@ nmap ('<silent>', 'gimp <Plug>(coc-implementation)')
 -- Remap keys for applying codeAction to the current buffer.
 --nmap ('<leader>ac', '<Plug>(coc-codeaction)')
 -- Apply AutoFix to problem on the current line.
-nmap ('<leader>qf', '<Plug>(coc-fix-current)')
+nmap('<leader>qf', '<Plug>(coc-fix-current)')
 -- Map function and class text objects
 -- NOTE: Requires 'textDocument.documentSymbol' support from the language server.
-xmap ('if', '<Plug>(coc-funcobj-i)')
-omap ('if', '<Plug>(coc-funcobj-i)')
-xmap ('af', '<Plug>(coc-funcobj-a)')
-omap ('af', '<Plug>(coc-funcobj-a)')
+xmap('if', '<Plug>(coc-funcobj-i)')
+omap('if', '<Plug>(coc-funcobj-i)')
+xmap('af', '<Plug>(coc-funcobj-a)')
+omap('af', '<Plug>(coc-funcobj-a)')
 -- Use CTRL-S for selections ranges.
 -- Requires 'textDocument/selectionRange' support of language server.
-nmap ('<silent>', '<C-s> <Plug>(coc-range-select)')
-xmap ('<silent>', '<C-s> <Plug>(coc-range-select)')
+nmap('<silent>', '<C-s> <Plug>(coc-range-select)')
+xmap('<silent>', '<C-s> <Plug>(coc-range-select)')
 -- vsnip settings
 -- Expand
-imap ('<expr>', '<C-j>   vsnip#expandable()  ? \'<Plug>(vsnip-expand)\'         : \'<C-j>')
-smap ('<expr>', '<C-j>   vsnip#expandable()  ? \'<Plug>(vsnip-expand)\'         : \'<C-j>')
+imap('<expr>', '<C-j>   vsnip#expandable()  ? \'<Plug>(vsnip-expand)\'         : \'<C-j>')
+smap('<expr>', '<C-j>   vsnip#expandable()  ? \'<Plug>(vsnip-expand)\'         : \'<C-j>')
 
 -- Expand or jump
-imap ('<expr>', '<C-l>   vsnip#available(1)  ? \'<Plug>(vsnip-expand-or-jump)\' : \'<C-l>')
-smap ('<expr>', '<C-l>   vsnip#available(1)  ? \'<Plug>(vsnip-expand-or-jump)\' : \'<C-l>')
+imap('<expr>', '<C-l>   vsnip#available(1)  ? \'<Plug>(vsnip-expand-or-jump)\' : \'<C-l>')
+smap('<expr>', '<C-l>   vsnip#available(1)  ? \'<Plug>(vsnip-expand-or-jump)\' : \'<C-l>')
 -- Select or cut text to use as $TM_SELECTED_TEXT in the next snippet.
 -- See https://github.com/hrsh7th/vim-vsnip/pull/50
-nmap ('<leader>t', '<Plug>(vsnip-select-text)')
-xmap ('<leader>t', '<Plug>(vsnip-select-text)')
-nmap ('<leader>tc', '<Plug>(vsnip-cut-text)')
-xmap ('<leader>tc', '<Plug>(vsnip-cut-text)')
+nmap('<leader>t', '<Plug>(vsnip-select-text)')
+xmap('<leader>t', '<Plug>(vsnip-select-text)')
+nmap('<leader>tc', '<Plug>(vsnip-cut-text)')
+xmap('<leader>tc', '<Plug>(vsnip-cut-text)')
 -- }}}
