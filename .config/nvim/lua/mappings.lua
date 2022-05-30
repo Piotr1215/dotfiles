@@ -1,7 +1,5 @@
-vim.keymap.set({ 'n', 'v' }, '<Space>', '<Nop>', { silent = true })
-vim.g.mapleader = " "
-vim.g.maplocalleader = " "
-
+-- Local Functions {{{
+local api = vim.api
 local sysname = vim.loop.os_uname().sysname
 
 local function map(mode, shortcut, command)
@@ -35,13 +33,9 @@ end
 local function smap(shortcut, command)
   map('s', shortcut, command)
 end
+-- }}}
 
-if sysname == 'Linux' then
-     nmap('ö', '/')
-     imap('ö', '/')
-end
-
--- USER COMMANDS --
+-- User commands {{{
 -- Format with default CocAction
 vim.api.nvim_create_user_command(
   'Format',
@@ -84,7 +78,17 @@ vim.api.nvim_create_user_command(
   {bang = true}
 )
 nmap("<C-f>", ":Pretty<CR>")
+-- }}}
 
+-- Mappings {{{
+vim.keymap.set({ 'n', 'v' }, '<Space>', '<Nop>', { silent = true })
+vim.g.mapleader = " "
+vim.g.maplocalleader = " "
+-- Map only if Linux
+if sysname == 'Linux' then
+     nmap('ö', '/')
+     imap('ö', '/')
+end
 -- MOVE AROUND --
 vmap("<S-PageDown>", ":m '>+1<CR>gv=gv")     -- Move Line Down in Visual Mode
 vmap("<S-PageUp>", ":m '<-2<CR>gv=gv")       -- Move Line Up in Visual Mode
@@ -275,3 +279,111 @@ nmap ('<leader>t', '<Plug>(vsnip-select-text)')
 xmap ('<leader>t', '<Plug>(vsnip-select-text)')
 nmap ('<leader>tc', '<Plug>(vsnip-cut-text)')
 xmap ('<leader>tc', '<Plug>(vsnip-cut-text)')
+-- }}}
+
+-- Autocommands {{{
+api.nvim_exec(
+     [[
+    augroup fileTypes
+     autocmd FileType c,cpp setlocal expandtab shiftwidth=2 softtabstop=2 cindent
+     autocmd FileType python setlocal expandtab shiftwidth=4 softtabstop=4 autoindent
+     autocmd FileType yaml setlocal ts=2 sts=2 sw=4 expandtab
+     autocmd FileType markdown setlocal expandtab shiftwidth=4 softtabstop=4 autoindent
+     autocmd FileType markdown nmap <buffer><silent> <leader>p :call mdip#MarkdownClipboardImage()<CR>
+     autocmd FileType lua setlocal foldmethod=marker
+    augroup end
+  ]]  , false
+)
+
+api.nvim_exec(
+     [[
+    augroup helpers
+     autocmd!
+     autocmd TermOpen term://* startinsert
+     autocmd FileType typescript,json setl formatexpr=CocAction('formatSelected')
+     autocmd User CocJumpPlaceholder call CocActionAsync('showSignatureHelp')
+     autocmd CursorHold * silent! call CocActionAsync('highlight')
+    augroup end
+  ]]  , false
+)
+
+api.nvim_exec(
+     [[
+    augroup plantuml
+     autocmd BufWritePost *.puml silent! !java -DPLANTUML_LIMIT_SIZE=8192 -jar /usr/local/bin/plantuml.jar -tsvg <afile> -o ./rendered
+    augroup end
+  ]]  , false
+)
+
+api.nvim_exec(
+     [[
+    augroup autoformat_settings
+     autocmd FileType c,cpp,proto,javascript setlocal equalprg=clang-format
+     autocmd FileType python AutoFormatBuffer yapf
+    augroup end
+  ]]  , false
+)
+
+api.nvim_exec(
+     [[
+    augroup last_cursor_position
+     autocmd!
+     autocmd BufReadPost *
+       \ if line("'\"") > 1 && line("'\"") <= line("$") && &ft !~# 'commit' | execute "normal! g`\"zvzz" | endif
+    augroup end
+  ]]  , false
+)
+-- Compile packages on add
+vim.cmd
+[[
+    augroup Packer
+     autocmd!
+     autocmd BufWritePost plugins.lua source <afile> | PackerCompile
+    augroup end
+  ]]
+
+if sysname == 'Darwin' then
+     api.nvim_exec(
+     [[
+         augroup plant_folder
+          autocmd FileType plantuml let g:plantuml_previewer#plantuml_jar_path = get(
+              \  matchlist(system('cat `which plantuml` | grep plantuml.jar'), '\v.*\s[''"]?(\S+plantuml\.jar).*'),
+              \  1,
+              \  0
+              \)
+         augroup end
+       ]]   , false)
+end
+require('telescope').setup{
+--  defaults   = {},
+--  pickers    = {},
+  extensions = {
+      file_browser = {}
+    }
+}
+-- }}}
+
+-- Telescope {{{
+require('telescope').load_extension('file_browser')
+local key = vim.api.nvim_set_keymap
+local set_up_telescope = function()
+  local set_keymap = function(mode, bind, cmd)
+    key(mode, bind, cmd, { noremap = true, silent = true })
+  end
+  set_keymap('n', '<leader><leader>', [[<cmd>lua require('telescope.builtin').buffers()<CR>]])
+  --set_keymap('n', '<leader>tf', [[<cmd>lua require('telescope.builtin').find_files({find_command = {'rg', '--files', '--hidden', '-g', '!.git' }})<CR>]])
+  set_keymap('n', '<leader>fp', [[<cmd>lua require('telescope.builtin').find_files()<CR>]])
+  set_keymap('n', '<leader>fgr', [[<cmd>lua require('telescope.builtin').live_grep()<CR>]])
+  set_keymap('n', '<leader>fg', [[<cmd>lua require('telescope.builtin').git_files()<CR>]])
+  set_keymap('n', '<leader>fo', [[<cmd>lua require('telescope.builtin').oldfiles()<CR>]])
+  set_keymap('n', '<leader>fi', ':Telescope file_browser<CR>')
+  set_keymap('n', '<leader>fst', [[<cmd>lua require('telescope.builtin').grep_string()<CR>]])
+  set_keymap('n', '<leader>fb', [[<cmd>lua require('telescope.builtin').current_buffer_fuzzy_find()<CR>]])
+  set_keymap('n', '<leader>fh', [[<cmd>lua require('telescope.builtin').help_tags()<CR>]])
+  set_keymap('n', '<leader>ft', [[<cmd>lua require('telescope.builtin').tags()<CR>]])
+  set_keymap('n', '<leader>fT', [[<cmd>lua require('telescope.builtin').tags{ only_current_buffer = true }<CR>]])
+  -- set_keymap('n', '<leader>sf', [[<cmd>lua vim.lsp.buf.formatting()<CR>]])
+end
+
+set_up_telescope()
+-- }}}

@@ -1,8 +1,6 @@
 lua require('settings')
 lua require('plugins')
 lua require('mappings')
-lua require('telescopesetup')
-lua require('autogroups')
 lua require('lspsetup')
 
 function! WinMove(key)
