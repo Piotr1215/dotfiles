@@ -275,3 +275,9 @@ require("nvim-treesitter.configs").setup({
           enable = true,
      },
 })
+
+--- up xpls
+--require("lspconfig").up.setup{
+     --args = {"xpls serve --verbose"},
+     --filetype = 'yaml'
+--}
