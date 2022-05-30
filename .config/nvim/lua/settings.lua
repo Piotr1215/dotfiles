@@ -5,6 +5,7 @@ cmd('syntax enable')
 cmd('syntax on')
 cmd('filetype on')
 cmd('filetype plugin indent on')
+cmd('set winbar=%=%m\\ %f')
 
 --Remap for dealing with word wrap
 vim.api.nvim_set_keymap('n', 'k', "v:count == 0 ? 'gk' : 'k'", { noremap = true, expr = true, silent = true })
@@ -17,7 +18,6 @@ set.scrolloff = 8
 set.hlsearch = true
 set.updatetime = 300
 set.autochdir = true
-
 set.splitright = true -- put new windows below current
 set.splitbelow = true -- put new windows below current
 
