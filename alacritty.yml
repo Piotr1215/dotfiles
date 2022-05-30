@@ -124,7 +124,7 @@ font:
     # family: MesloLGS Nerd Font
 
     # The `style` can be specified to pick a specific face.
-    #style: Bold
+    style: Bold
 
   # Italic font face
   italic:
@@ -135,7 +135,7 @@ font:
     # family: MesloLGS Nerd Font
 
     # The `style` can be specified to pick a specific face.
-    #style: Italic
+    style: Italic
 
   # Bold italic font face
   bolditalic:
@@ -146,7 +146,7 @@ font:
     # family: MesloLGS Nerd Font
 
     # The `style` can be specified to pick a specific face.
-    #style: Bold Italic
+    style: Bold Italic
 
   # Point size
   size: 14.0
