@@ -49,6 +49,7 @@ api.nvim_exec(
      autocmd FileType markdown setlocal expandtab shiftwidth=4 softtabstop=4 autoindent
      autocmd FileType markdown nmap <buffer><silent> <leader>p :call mdip#MarkdownClipboardImage()<CR>
      autocmd FileType lua setlocal foldmethod=marker
+     autocmd FileType go setlocal foldmethod=syntax
     augroup end
   ]]  , false
 )
@@ -325,16 +326,9 @@ nmap('<leader>sv', pathToVimInit)
 imap('jj', '<Esc>')
 imap('jk', '<Esc>')
 -- Zoom split windows
-nmap('Zz', '<c-w>_ \\| <c-w>\\|')
+nmap('Zz', '<c-w>_ | <c-w>|')
 nmap('Zo', '<c-w>=')
--- Split navigation
-nmap('<S-L>', '<C-W><C-L>')
-nmap('<S-H>', '<C-W><C-H>')
-nmap('<S-U>', '<C-W><C-K>')
-nmap('<S-J>', '<C-W><C-J>')
 -- Floatterm settings
-nmap('<Leader>fl', ':FloatermNew<CR>')
-nmap('<Leader>ft', ':FloatermToggle<CR>')
 nmap('<Leader>fs', ':FloatermShow<CR>')
 nmap('<Leader>fh', ':FloatermHide<CR>')
 nmap('<Leader>fn', ':FloatermNext<CR>')
@@ -343,21 +337,21 @@ nmap('<Leader>fc', ':FloatermKill<CR>')
 -- PROGRAMMING --
 -- Use `[g` and `]g` to navigate diagnostics
 -- Use `:CocDiagnostics` to get all diagnostics of current buffer in location list.
-nmap ('<silent>', '[g <Plug>(coc-diagnostic-prev)')
-nmap ('<silent>', ']g <Plug>(coc-diagnostic-next)')
+--nmap ('<silent>', '[g <Plug>(coc-diagnostic-prev)')
+--nmap ('<silent>', ']g <Plug>(coc-diagnostic-next)')
 -- GoTo code navigation.
-nmap ('<silent>', 'gd <Plug>(coc-definition)')
+--nmap ('<silent>', 'gd <Plug>(coc-definition)')
 nmap ('<silent>', 'gy <Plug>(coc-type-definition)')
 nmap ('<silent>', 'gimp <Plug>(coc-implementation)')
-nmap ('<silent>', 'gr <Plug>(coc-references)')
+--nmap ('<silent>', 'gr <Plug>(coc-references)')
 -- Symbol renaming.
-nmap ('<leader>rn', '<Plug>(coc-rename)')
+--nmap ('<leader>rn', '<Plug>(coc-rename)')
 -- Applying codeAction to the selected region.
 -- Example: `<leader>aap` for current paragraph
-xmap ('<leader>a', '<Plug>(coc-codeaction-selected)')
-nmap ('<leader>a', '<Plug>(coc-codeaction-selected)')
+--xmap ('<leader>a', '<Plug>(coc-codeaction-selected)')
+--nmap ('<leader>a', '<Plug>(coc-codeaction-selected)')
 -- Remap keys for applying codeAction to the current buffer.
-nmap ('<leader>ac', '<Plug>(coc-codeaction)')
+--nmap ('<leader>ac', '<Plug>(coc-codeaction)')
 -- Apply AutoFix to problem on the current line.
 nmap ('<leader>qf', '<Plug>(coc-fix-current)')
 -- Map function and class text objects
