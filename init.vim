@@ -1,6 +1,6 @@
 lua require('settings')
-lua require('lspsetup')
 lua require('plugins')
+lua require('lspsetup')
 lua require('mappings')
 
 function! WinMove(key)
