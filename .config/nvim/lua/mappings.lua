@@ -1,4 +1,8 @@
 -- Local Functions {{{
+vim.keymap.set({ 'n', 'v' }, '<Space>', '<Nop>', { silent = true })
+vim.g.mapleader = " "
+vim.g.maplocalleader = " "
+
 local api = vim.api
 local sysname = vim.loop.os_uname().sysname
 
@@ -81,9 +85,6 @@ nmap("<C-f>", ":Pretty<CR>")
 -- }}}
 
 -- Mappings {{{
-vim.keymap.set({ 'n', 'v' }, '<Space>', '<Nop>', { silent = true })
-vim.g.mapleader = " "
-vim.g.maplocalleader = " "
 -- Map only if Linux
 if sysname == 'Linux' then
      nmap('ö', '/')
