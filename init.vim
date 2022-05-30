@@ -36,7 +36,7 @@ nnoremap <silent> <C-j> :call WinMove('j')<CR>
 nnoremap <silent> <C-k> :call WinMove('k')<CR>
 nnoremap <silent> <C-l> :call WinMove('l')<CR>
 
-nnoremap <silent> <A-Left> :call WnMoveA('h')<CR>
-nnoremap <silent> <A-Down> :call WnMoveA('j')<CR>
-nnoremap <silent> <A-Up> :call WnMoveA('k')<CR>
-nnoremap <silent> <A-RIght> :call WnMoveA('l')<CR>
+nnoremap <silent> <A-Left> :call WinMoveA('h')<CR>
+nnoremap <silent> <A-Down> :call WinMoveA('j')<CR>
+nnoremap <silent> <A-Up> :call WinMoveA('k')<CR>
+nnoremap <silent> <A-RIght> :call WinMoveA('l')<CR>
