@@ -54,7 +54,6 @@ require('nightfox').setup({
      treesitter = true,
      lsp_saga = true,
      gitgutter = true,
-     floaterm = true,
   }
 })
 cmd('colorscheme nightfox')
