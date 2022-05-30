@@ -1,0 +1,1 @@
+set laststatus=3
