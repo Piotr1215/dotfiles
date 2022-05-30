@@ -19,6 +19,7 @@ set.updatetime = 300
 set.autochdir = true
 
 set.splitright = true -- put new windows below current
+set.splitbelow = true -- put new windows below current
 
 set.mouse = v
 set.number = true
@@ -52,7 +53,8 @@ require('nightfox').setup({
      telescope = true,
      treesitter = true,
      lsp_saga = true,
-     gitgutter = true
+     gitgutter = true,
+     floaterm = true,
   }
 })
 cmd('colorscheme nightfox')
