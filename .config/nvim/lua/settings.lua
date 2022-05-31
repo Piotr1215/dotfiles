@@ -40,22 +40,25 @@ set.laststatus = 3
 
 --cmd('colorscheme PaperColor')
 require('nightfox').setup({
-  options ={
-     transparent = true,
-     terminal_colors = true,
-     dim_inactive = true,
-  },
-  modules = {
-     telescope = true,
-     treesitter = true,
-     lsp_saga = true,
-     gitgutter = true,
-  }
+     options = {
+          transparent = true,
+          terminal_colors = true,
+          dim_inactive = true,
+     },
+     modules = {
+          telescope = true,
+          treesitter = true,
+          lsp_saga = true,
+          gitgutter = true,
+     }
 })
 cmd('colorscheme nightfox')
 require('lualine').setup()
 require('litee.lib').setup()
 require('litee.gh').setup()
+require('nvim-tree').setup {
+     auto_close = true
+}
 
 -- Color name (:help cterm-colors) or ANSI code
 -- there are some defaults for image directory and image name, you can change them
@@ -91,17 +94,17 @@ vim.g.syntastic_check_on_open = 0
 vim.g.syntastic_check_on_wq = 0
 vim.g.syntastic_python_checkers = '[\'flake8\']'
 -- setup for terraform
-vim.g.terraform_fmt_on_save=1
-vim.g.terraform_align=1
+vim.g.terraform_fmt_on_save = 1
+vim.g.terraform_align = 1
 -- setup for ctrlp
 vim.g.ctrlp_map = '<c-p>'
 vim.g.ctrlp_cmd = 'CtrlPMixed'
 vim.g.ctrlp_working_path_mode = 'ra'
 vim.g.ctrlp_custom_ignore = '\\v[\\/]\\.(git|hg|svn)$'
 vim.g.ctrlp_custom_ignore = {
-  dir = {'\\v[\\/]\\.(git|hg|svn)$'},
-  file = {'\\v\\.(exe|so|dll)$'},
-  link = {'some_bad_symbolic_links'},
+     dir = { '\\v[\\/]\\.(git|hg|svn)$' },
+     file = { '\\v\\.(exe|so|dll)$' },
+     link = { 'some_bad_symbolic_links' },
 }
 -- setup for indent line
 vim.g.indentLine_char = '|'
