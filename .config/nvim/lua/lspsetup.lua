@@ -10,8 +10,8 @@ local servers = {
      "gopls",
      "html",
      "vimls",
-     "taplo",
      "yamlls",
+     "awk_ls",
      "emmet_ls",
 }
 
