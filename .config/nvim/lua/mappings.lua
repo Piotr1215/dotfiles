@@ -114,7 +114,7 @@ vim.cmd
 [[
     augroup Packer
      autocmd!
-     autocmd BufWritePost plugins.lua source <afile> | PackerCompile
+     autocmd BufWritePost plugins.lua source <afile> | PackerSync
     augroup end
   ]]
 
@@ -334,9 +334,9 @@ xmap('<silent>sdv', '<Plug>SendDownV<cr>')
 -- setup mapping to call :LazyGit
 nmap('<leader>gg', ':LazyGit<CR>')
 -- NAVIGATION --
--- Netrw settings
-nmap('<leader>dd', ':Lexplore %:p:h<CR>')
-nmap('<Leader>da', ':Lexplore<CR>')
+-- Nvim Tree settings
+nmap('<leader>dd', ':NvimTreeToggle<CR>')
+nmap('<Leader>da', ':NvimTreeFindFile<CR>')
 -- Save buffer
 nmap('<leader>w', ':w<CR>')
 -- Move screen to contain current line at the top
