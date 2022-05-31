@@ -141,6 +141,7 @@ require('telescope').setup {
 
 -- Telescope {{{
 require('telescope').load_extension('file_browser')
+require('telescope').load_extension('repo')
 local key = vim.api.nvim_set_keymap
 local set_up_telescope = function()
      local set_keymap = function(mode, bind, cmd)
@@ -149,6 +150,7 @@ local set_up_telescope = function()
      set_keymap('n', '<leader><leader>', [[<cmd>lua require('telescope.builtin').buffers()<CR>]])
      --set_keymap('n', '<leader>tf', [[<cmd>lua require('telescope.builtin').find_files({find_command = {'rg', '--files', '--hidden', '-g', '!.git' }})<CR>]])
      set_keymap('n', '<leader>fp', [[<cmd>lua require('telescope.builtin').find_files()<CR>]])
+     set_keymap('n', '<leader>fr', [[<cmd>lua require'telescope'.extensions.repo.list{search_dirs = {"~/dev"}}<CR>]])
      set_keymap('n', '<leader>fgr', [[<cmd>lua require('telescope.builtin').live_grep()<CR>]])
      set_keymap('n', '<leader>fg', [[<cmd>lua require('telescope.builtin').git_files()<CR>]])
      set_keymap('n', '<leader>fo', [[<cmd>lua require('telescope.builtin').oldfiles()<CR>]])
