@@ -6,11 +6,14 @@ cmd('syntax on')
 cmd('filetype on')
 cmd('filetype plugin indent on')
 cmd('set winbar=%=%m\\ %f')
+cmd('set completefunc=emoji#complete')
+cmd('set statusline+=%#warningmsg#')
+cmd('set statusline+=%{SyntasticStatuslineFlag()}')
+cmd('set statusline+=%*')
+cmd('set wildignore+=*/tmp/*,*.so,*.swp,*.zip')
+cmd('set backspace=indent,eol,start')
 
 --Remap for dealing with word wrap
-vim.api.nvim_set_keymap('n', 'k', "v:count == 0 ? 'gk' : 'k'", { noremap = true, expr = true, silent = true })
-vim.api.nvim_set_keymap('n', 'j', "v:count == 0 ? 'gj' : 'j'", { noremap = true, expr = true, silent = true })
-
 set.background = 'dark'
 set.ignorecase = true -- ignore case in search
 set.smartcase = true -- do not ignore case with capitals
@@ -24,7 +27,6 @@ set.splitbelow = true -- put new windows below current
 set.mouse = v
 set.number = true
 set.encoding = "utf-8"
-cmd('set backspace=indent,eol,start')
 set.cursorline = true
 
 set.expandtab = true
@@ -34,13 +36,6 @@ set.autoindent = true
 set.relativenumber = true
 set.incsearch = true
 set.laststatus = 3
-
-cmd('set completefunc=emoji#complete')
-cmd('set statusline^=%{coc#status()}%{get(b:,\'coc_current_function\',\'\')}')
-cmd('set statusline+=%#warningmsg#')
-cmd('set statusline+=%{SyntasticStatuslineFlag()}')
-cmd('set statusline+=%*')
-cmd('set wildignore+=*/tmp/*,*.so,*.swp,*.zip')
 
 --cmd('colorscheme PaperColor')
 require('nightfox').setup({
