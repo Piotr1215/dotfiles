@@ -21,8 +21,8 @@ set.scrolloff = 8
 set.hlsearch = true
 set.updatetime = 300
 set.autochdir = true
-set.splitright = true -- put new windows below current
-set.splitbelow = true -- put new windows below current
+set.splitright = true -- put new splits to the right
+set.splitbelow = true -- put new splits below
 
 set.mouse = v
 set.number = true
