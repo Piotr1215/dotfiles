@@ -21,6 +21,13 @@ return require('packer').startup(function()
      use 'junegunn/fzf.vim'
      use 'junegunn/vim-emoji'
      use 'kdheepak/lazygit.nvim'
+     use {
+          'kyazdani42/nvim-tree.lua',
+          requires = {
+               'kyazdani42/nvim-web-devicons', -- optional, for file icon
+          },
+          tag = 'nightly' -- optional, updated every week. (see issue #1193)
+     }
      use { 'ldelossa/gh.nvim', requires = { { 'ldelossa/litee.nvim' } } }
      use 'lukas-reineke/indent-blankline.nvim'
      use 'majutsushi/tagbar'
