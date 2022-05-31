@@ -48,13 +48,27 @@ vim.api.nvim_create_autocmd("FileType", {
      command = "setlocal expandtab shiftwidth=2 softtabstop=2 cindent",
      group = indentSettings,
 })
+
+vim.api.nvim_create_autocmd("FileType", {
+     pattern = { "yaml" },
+     command = "setlocal ts=2 sts=2 sw=4 expandtab",
+     group = indentSettings,
+})
+
+vim.api.nvim_create_autocmd("FileType", {
+     pattern = { "markdown", "python" },
+     command = "setlocal expandtab shiftwidth=4 softtabstop=4 autoindent",
+     group = indentSettings,
+})
+
+vim.api.nvim_create_autocmd("FileType", {
+     pattern = { "markdown" },
+     command = "nmap <buffer><silent> <leader>p :call mdip#MarkdownClipboardImage()<CR>",
+})
+
 api.nvim_exec(
      [[
     augroup fileTypes
-     autocmd FileType python setlocal expandtab shiftwidth=4 softtabstop=4 autoindent
-     autocmd FileType yaml setlocal ts=2 sts=2 sw=4 expandtab
-     autocmd FileType markdown setlocal expandtab shiftwidth=4 softtabstop=4 autoindent
-     autocmd FileType markdown nmap <buffer><silent> <leader>p :call mdip#MarkdownClipboardImage()<CR>
      autocmd FileType lua setlocal foldmethod=marker
     augroup end
   ]]  , false
@@ -65,9 +79,6 @@ api.nvim_exec(
     augroup helpers
      autocmd!
      autocmd TermOpen term://* startinsert
-     autocmd FileType typescript,json setl formatexpr=CocAction('formatSelected')
-     autocmd User CocJumpPlaceholder call CocActionAsync('showSignatureHelp')
-     autocmd CursorHold * silent! call CocActionAsync('highlight')
     augroup end
   ]]  , false
 )
@@ -200,6 +211,8 @@ nmap("<C-f>", ":Pretty<CR>")
 
 -- Mappings {{{
 -- Map only if Linux
+vim.api.nvim_set_keymap('n', 'k', "v:count == 0 ? 'gk' : 'k'", { noremap = true, expr = true, silent = true })
+vim.api.nvim_set_keymap('n', 'j', "v:count == 0 ? 'gj' : 'j'", { noremap = true, expr = true, silent = true })
 if sysname == 'Linux' then
      nmap('ö', '/')
      imap('ö', '/')
@@ -342,24 +355,7 @@ nmap('<Leader>fc', ':FloatermKill<CR>')
 
 -- PROGRAMMING --
 -- Use `[g` and `]g` to navigate diagnostics
--- Use `:CocDiagnostics` to get all diagnostics of current buffer in location list.
---nmap ('<silent>', '[g <Plug>(coc-diagnostic-prev)')
---nmap ('<silent>', ']g <Plug>(coc-diagnostic-next)')
--- GoTo code navigation.
---nmap ('<silent>', 'gd <Plug>(coc-definition)')
-nmap('<silent>', 'gy <Plug>(coc-type-definition)')
-nmap('<silent>', 'gimp <Plug>(coc-implementation)')
---nmap ('<silent>', 'gr <Plug>(coc-references)')
--- Symbol renaming.
---nmap ('<leader>rn', '<Plug>(coc-rename)')
--- Applying codeAction to the selected region.
--- Example: `<leader>aap` for current paragraph
---xmap ('<leader>a', '<Plug>(coc-codeaction-selected)')
---nmap ('<leader>a', '<Plug>(coc-codeaction-selected)')
--- Remap keys for applying codeAction to the current buffer.
---nmap ('<leader>ac', '<Plug>(coc-codeaction)')
 -- Apply AutoFix to problem on the current line.
-nmap('<leader>qf', '<Plug>(coc-fix-current)')
 -- Map function and class text objects
 -- NOTE: Requires 'textDocument.documentSymbol' support from the language server.
 xmap('if', '<Plug>(coc-funcobj-i)')
