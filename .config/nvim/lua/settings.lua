@@ -28,6 +28,7 @@ set.mouse = v
 set.number = true
 set.encoding = "utf-8"
 set.cursorline = true
+set.clipboard = 'unnamedplus'
 
 set.expandtab = true
 set.shiftwidth = 5
@@ -55,12 +56,6 @@ cmd('colorscheme nightfox')
 require('lualine').setup()
 require('litee.lib').setup()
 require('litee.gh').setup()
-
--- Plugins Settings --
-vim.g.limelight_conceal_ctermfg = 'gray'
-vim.g.limelight_conceal_ctermfg = 'gray'
-vim.g.limelight_conceal_ctermfg = 240
-vim.g.sendtowindow_use_defaults = 0
 
 -- Color name (:help cterm-colors) or ANSI code
 -- there are some defaults for image directory and image name, you can change them
