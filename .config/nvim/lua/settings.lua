@@ -56,9 +56,7 @@ cmd('colorscheme nightfox')
 require('lualine').setup()
 require('litee.lib').setup()
 require('litee.gh').setup()
-require('nvim-tree').setup {
-     auto_close = true
-}
+require('nvim-tree').setup()
 
 -- Color name (:help cterm-colors) or ANSI code
 -- there are some defaults for image directory and image name, you can change them
