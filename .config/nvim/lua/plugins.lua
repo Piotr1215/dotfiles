@@ -120,6 +120,6 @@ return require('packer').startup(function()
      use 'wellle/targets.vim'
      use { 'williamboman/nvim-lsp-installer', { 'neovim/nvim-lspconfig', } }
      use 'Yggdroot/indentLine'
-     use({ 'iamcco/markdown-preview.nvim', run = ':call mkdp#util#install()', ft = { 'markdown', 'packer' }, })
+     use { "ellisonleao/glow.nvim", branch = 'main' }
      use { 'nvim-treesitter/nvim-treesitter', run = ':TSUpdate' }
 end)
