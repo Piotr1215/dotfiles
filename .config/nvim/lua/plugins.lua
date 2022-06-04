@@ -1,32 +1,18 @@
 return require('packer').startup(function()
+     -- Packer
      use 'wbthomason/packer.nvim'
+     -- Git
      use 'airblade/vim-gitgutter'
-     use 'christoomey/vim-system-copy'
      use 'cljoly/telescope-repo.nvim'
-     use 'ctrlpvim/ctrlp.vim'
-     use 'mfussenegger/nvim-dap'
-     use 'leoluz/nvim-dap-go'
-     use { "rcarriga/nvim-dap-ui", requires = { "mfussenegger/nvim-dap" } }
-     use 'theHamsta/nvim-dap-virtual-text'
-     use 'nvim-telescope/telescope-dap.nvim'
-     use 'rhysd/vim-grammarous'
-     use 'dhruvasagar/vim-open-url'
-     use 'dhruvasagar/vim-table-mode'
+     use 'kdheepak/lazygit.nvim'
+     -- Editor Extensions
      use 'easymotion/vim-easymotion'
-     use 'EdenEast/nightfox.nvim'
-     use 'fatih/vim-go'
      use 'ferrine/md-img-paste.vim'
-     use 'godlygeek/tabular'
-     use 'hashivim/vim-terraform'
-     use { 'hrsh7th/cmp-vsnip', requires = { 'hrsh7th/vim-vsnip', 'rafamadriz/friendly-snippets', } }
-     use { 'hrsh7th/nvim-cmp', requires = { 'nvim-treesitter', 'hrsh7th/cmp-nvim-lsp', 'hrsh7th/cmp-buffer', 'hrsh7th/cmp-path', 'hrsh7th/cmp-cmdline', } }
      use 'hrsh7th/vim-vsnip'
      use 'hrsh7th/vim-vsnip-integ'
      use 'jpalardy/vim-slime'
-     use { 'junegunn/fzf', run = './install --bin' }
      use 'junegunn/fzf.vim'
      use 'junegunn/vim-emoji'
-     use 'kdheepak/lazygit.nvim'
      use {
           'kyazdani42/nvim-tree.lua',
           requires = {
@@ -34,21 +20,90 @@ return require('packer').startup(function()
           },
           tag = 'nightly' -- optional, updated every week. (see issue #1193)
      }
-     use { 'ldelossa/gh.nvim', requires = { { 'ldelossa/litee.nvim' } } }
+     use {
+          'junegunn/fzf',
+          run = './install --bin'
+     }
      use 'lukas-reineke/indent-blankline.nvim'
      use 'majutsushi/tagbar'
      use 'mattn/emmet-vim'
      use 'mattn/webapi-vim'
      use 'mhinz/vim-startify'
-     use { 'neoclide/coc.nvim', branch = 'release' }
-     use 'NLKNguyen/papercolor-theme'
-     use { 'nvim-lualine/lualine.nvim', requires = { 'kyazdani42/nvim-web-devicons', 'arkav/lualine-lsp-progress', }, }
-     use 'nvim-lua/plenary.nvim'
-     use { 'nvim-telescope/telescope-file-browser.nvim' }
-     use { 'nvim-telescope/telescope-fzf-native.nvim', run = 'make' }
-     use { 'nvim-telescope/telescope.nvim', requires = { { 'nvim-lua/popup.nvim' }, { 'nvim-lua/plenary.nvim' } } }
-     use 'onsails/lspkind-nvim'
+     use {
+          'nvim-lualine/lualine.nvim',
+          requires = {
+               'kyazdani42/nvim-web-devicons',
+               'arkav/lualine-lsp-progress', },
+     }
+     -- Programming
+     use 'fatih/vim-go'
+     -- DevOps
+     use 'hashivim/vim-terraform'
+     -- Telescope
+     use 'christoomey/vim-system-copy'
+     use 'ctrlpvim/ctrlp.vim'
+     -- Debugging
+     use 'mfussenegger/nvim-dap'
+     use 'leoluz/nvim-dap-go'
+     use {
+          "rcarriga/nvim-dap-ui",
+          requires = {
+               "mfussenegger/nvim-dap" }
+     }
+     use 'theHamsta/nvim-dap-virtual-text'
+     use 'nvim-telescope/telescope-dap.nvim'
+     -- Markdown
+     use 'rhysd/vim-grammarous'
+     use 'dhruvasagar/vim-open-url'
+     use 'dhruvasagar/vim-table-mode'
+     use 'ferrine/md-img-paste.vim'
+     use 'godlygeek/tabular'
      use 'plasticboy/vim-markdown'
+     -- Look & Feel
+     use 'EdenEast/nightfox.nvim'
+     use 'NLKNguyen/papercolor-theme'
+     -- LSP Autocomplete
+     use {
+          'hrsh7th/cmp-vsnip',
+          requires = {
+               'hrsh7th/vim-vsnip',
+               'rafamadriz/friendly-snippets',
+          }
+     }
+     use {
+          'hrsh7th/nvim-cmp',
+          requires = {
+               'nvim-treesitter',
+               'hrsh7th/cmp-nvim-lsp',
+               'hrsh7th/cmp-buffer',
+               'hrsh7th/cmp-path',
+               'hrsh7th/cmp-cmdline', }
+     }
+     use {
+          'ldelossa/gh.nvim',
+          requires = {
+               { 'ldelossa/litee.nvim' }
+          }
+     }
+     use {
+          'neoclide/coc.nvim',
+          branch = 'release'
+     }
+     use 'nvim-lua/plenary.nvim'
+     use {
+          'nvim-telescope/telescope-file-browser.nvim'
+     }
+     use {
+          'nvim-telescope/telescope-fzf-native.nvim', run = 'make'
+     }
+     use {
+          'nvim-telescope/telescope.nvim',
+          requires = {
+               { 'nvim-lua/popup.nvim' },
+               { 'nvim-lua/plenary.nvim' }
+          }
+     }
+     use 'onsails/lspkind-nvim'
      use 'preservim/nerdcommenter'
      use 'Raimondi/delimitMate'
      use 'rhysd/vim-clang-format'
