@@ -4,6 +4,12 @@ return require('packer').startup(function()
      use 'christoomey/vim-system-copy'
      use 'cljoly/telescope-repo.nvim'
      use 'ctrlpvim/ctrlp.vim'
+     use 'mfussenegger/nvim-dap'
+     use 'leoluz/nvim-dap-go'
+     use { "rcarriga/nvim-dap-ui", requires = { "mfussenegger/nvim-dap" } }
+     use 'theHamsta/nvim-dap-virtual-text'
+     use 'nvim-telescope/telescope-dap.nvim'
+     use 'rhysd/vim-grammarous'
      use 'dhruvasagar/vim-open-url'
      use 'dhruvasagar/vim-table-mode'
      use 'easymotion/vim-easymotion'
