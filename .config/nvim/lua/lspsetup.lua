@@ -276,8 +276,31 @@ require("nvim-treesitter.configs").setup({
      },
 })
 
+local dap, dapui = require("dap"), require("dapui")
+require('nvim-dap-virtual-text').setup()
+require('dap-go').setup()
+require("dapui").setup()
+dap.listeners.after.event_initialized["dapui_config"] = function()
+  dapui.open()
+end
+dap.listeners.before.event_terminated["dapui_config"] = function()
+  dapui.close()
+end
+dap.listeners.before.event_exited["dapui_config"] = function()
+  dapui.close()
+end
+dap.configurations.go = {
+     {
+          type = 'go';
+          name = 'Debug';
+          request = 'launch';
+          showLog = false;
+          program = "${file}";
+          dlvToolPath = vim.fn.exepath('~/go/bin/dlv') -- Adjust to where delve is installed
+     },
+}
 --- up xpls
 --require("lspconfig").up.setup{
-     --args = {"xpls serve --verbose"},
-     --filetype = 'yaml'
+--args = {"xpls serve --verbose"},
+--filetype = 'yaml'
 --}
