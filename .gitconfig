@@ -1,42 +1,42 @@
 [color]
-	branch = auto
-	diff = auto
-	interactive = auto
-	status = auto
+branch = auto
+diff = auto
+interactive = auto
+status = auto
 [core]
-	excludesFile = ~/.gitignore
-	pager = delta
+excludesFile = ~/.gitignore
+pager = delta
 [user]
-	name = Piotr Zaniewski
-	email = piotr@upbound.io
-	signingkey = FED1B098B68D69FD
+	name = piotr1215
+email = piotr@upbound.io
+signingkey = FED1B098B68D69FD
 [alias]
-	s = status
-	st = status
-	d = diff
-	dc = diff --cached
-	ci = commit --verbose
-	cia = commit --verbose --all
-	co = checkout
-	su = submodule update --init --recursive
-	logg = log --graph
-	add-commit = !git add -A && git commit
+s = status
+st = status
+d = diff
+dc = diff --cached
+ci = commit --verbose
+cia = commit --verbose --all
+co = checkout
+su = submodule update --init --recursive
+logg = log --graph
+add-commit = !git add -A && git commit
 [diff]
-	#tool = vimdiff
-	colorMoved = default
+#tool = vimdiff
+colorMoved = default
 [merge]
-	tool = vimdiff
-	conflictstyle = diff3
+tool = vimdiff
+conflictstyle = diff3
 [push]
-	default = matching
+default = matching
 [branch]
-	autosetuprebase = always
+autosetuprebase = always
 [init]
-	defaultBranch = main
+defaultBranch = main
 [commit]
-	gpgsign = true
-	template = ~/.gitmessage
+gpgsign = true
+template = ~/.gitmessage
 [interactive]
-    diffFilter = delta --color-only
+diffFilter = delta --color-only
 [delta]
-    navigate = true  # use n and N to move between diff sections
+navigate = true # use n and N to move between diff sections

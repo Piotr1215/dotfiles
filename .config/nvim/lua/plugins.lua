@@ -53,6 +53,12 @@ return require('packer').startup(function()
      use 'theHamsta/nvim-dap-virtual-text'
      use 'nvim-telescope/telescope-dap.nvim'
      -- Markdown
+     use({ "iamcco/markdown-preview.nvim",
+          run = "cd app && npm install",
+          setup = function()
+               vim.g.mkdp_filetypes = { "markdown" }
+          end,
+          ft = { "markdown" }, })
      use 'rhysd/vim-grammarous'
      use 'dhruvasagar/vim-open-url'
      use 'dhruvasagar/vim-table-mode'
