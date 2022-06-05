@@ -7,9 +7,9 @@ status = auto
 excludesFile = ~/.gitignore
 pager = delta
 [user]
-	name = piotr1215
 email = piotr@upbound.io
 signingkey = FED1B098B68D69FD
+name = Piotr Zaniewski
 [alias]
 s = status
 st = status
