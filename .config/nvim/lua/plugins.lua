@@ -24,6 +24,16 @@ return require('packer').startup(function()
           'junegunn/fzf',
           run = './install --bin'
      }
+     use {
+          "folke/zen-mode.nvim",
+          config = function()
+               require("zen-mode").setup {
+                    -- your configuration comes here
+                    -- or leave it empty to use the default settings
+                    -- refer to the configuration section below
+               }
+          end
+     }
      use 'lukas-reineke/indent-blankline.nvim'
      use 'majutsushi/tagbar'
      use 'mattn/emmet-vim'
