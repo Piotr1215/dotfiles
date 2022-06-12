@@ -2,7 +2,6 @@ lua require('settings')
 lua require('plugins')
 lua require('mappings')
 lua require('lspsetup')
-
 function! WinMove(key)
     let t:curwin = winnr()
     exec "wincmd ".a:key
@@ -20,3 +19,4 @@ nnoremap <silent> <C-h> :call WinMove('h')<CR>
 nnoremap <silent> <C-j> :call WinMove('j')<CR>
 nnoremap <silent> <C-k> :call WinMove('k')<CR>
 nnoremap <silent> <C-l> :call WinMove('l')<CR>
+

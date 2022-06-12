@@ -57,6 +57,7 @@ setopt share_history            # share hist between sessions
 setopt bang_hist                # !keyword
 HISTFILE=${ZDOTDIR:-$HOME}/.zsh_history
 
+alias tf=terraform
 alias df=duf
 alias ps=procs
 alias ldoc='lazydocker'

@@ -224,7 +224,6 @@ vmap("<S-PageDown>", ":m '>+1<CR>gv=gv") -- Move Line Down in Visual Mode
 vmap("<S-PageUp>", ":m '<-2<CR>gv=gv") -- Move Line Up in Visual Mode
 nmap("<leader>k", ":m .-2<CR>==") -- Move Line Up in Normal Mode
 nmap("<leader>j", ":m .+1<CR>==") -- Move Line Down in Normal Mode
-
 nmap("<Leader>nh", ":.,/^#/<CR>") -- Got to next markdown header
 
 -- SEARCH & REPLACE --
@@ -243,7 +242,12 @@ nmap("<Leader>q", "@q")
 xmap("Q", ":'<,'>:normal @q<CR>")
 
 -- MANIPULATE TEXT --
+-- Comment paragraphs
+nmap("<silent> <leader>c}", "V}:call NERDComment('x', 'toggle')<CR>")
+nmap("<silent> <leader>c{", "V{:call NERDComment('x', 'toggle')<CR>")
 -- Insert 2 empty lines and go into inser mode
+nmap("<leader>fe", "<Plug>(grammaruos-fixit)")
+nmap("<leader>fa", "<Plug>(grammaruos-fixall)")
 nmap("<leader>L", "O<ESC>O")
 nmap("<leader>l", "o<cr>")
 -- Select last pasted text
@@ -340,9 +344,9 @@ nmap('<Leader>da', ':NvimTreeFindFile<CR>')
 -- Save buffer
 nmap('<leader>w', ':w<CR>')
 -- Move screen to contain current line at the top
-local pathToVimInit = ':source ' .. vim.fn.expand('~/.config/nvim/init.vim<CR>')
---nmap('<leader>sv', ':source /home/decoder/.config/nvim/init.vim<CR>')
-nmap('<leader>sv', pathToVimInit)
+--local pathToVimInit = ':source ' .. vim.fn.expand('~/.config/nvim/init.vim<CR>')
+nmap('<leader>sv', ':source /home/decoder/.config/nvim/init.vim<CR>')
+--nmap('<leader>sv', pathToVimInit)
 -- jj in insert mode instead of ESC
 imap('jj', '<Esc>')
 imap('jk', '<Esc>')
@@ -382,4 +386,7 @@ nmap('<leader>t', '<Plug>(vsnip-select-text)')
 xmap('<leader>t', '<Plug>(vsnip-select-text)')
 nmap('<leader>tc', '<Plug>(vsnip-cut-text)')
 xmap('<leader>tc', '<Plug>(vsnip-cut-text)')
+
+-- Telekasten
+nmap ('<leader>tk', ':lua require(\'telekasten\').panel()<CR>')
 -- }}}

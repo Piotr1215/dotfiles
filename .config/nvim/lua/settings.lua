@@ -54,8 +54,6 @@ require('nightfox').setup({
 })
 cmd('colorscheme nightfox')
 require('lualine').setup()
-require('litee.lib').setup()
-require('litee.gh').setup()
 require('nvim-tree').setup()
 
 -- Color name (:help cterm-colors) or ANSI code

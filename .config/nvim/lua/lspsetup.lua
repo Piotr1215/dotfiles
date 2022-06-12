@@ -299,6 +299,8 @@ dap.configurations.go = {
           dlvToolPath = vim.fn.exepath('~/go/bin/dlv') -- Adjust to where delve is installed
      },
 }
+-- load snippets from path/of/your/nvim/config/my-cool-snippets
+require("luasnip.loaders.from_vscode").lazy_load()
 --- up xpls
 --require("lspconfig").up.setup{
 --args = {"xpls serve --verbose"},
