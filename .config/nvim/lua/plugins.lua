@@ -8,6 +8,7 @@ return require('packer').startup(function()
      -- Editor Extensions
      use 'easymotion/vim-easymotion'
      use 'ferrine/md-img-paste.vim'
+     use 'L3MON4D3/LuaSnip'
      use 'hrsh7th/vim-vsnip'
      use 'hrsh7th/vim-vsnip-integ'
      use 'jpalardy/vim-slime'
@@ -28,9 +29,6 @@ return require('packer').startup(function()
           "folke/zen-mode.nvim",
           config = function()
                require("zen-mode").setup {
-                    -- your configuration comes here
-                    -- or leave it empty to use the default settings
-                    -- refer to the configuration section below
                }
           end
      }
@@ -63,6 +61,8 @@ return require('packer').startup(function()
      use 'theHamsta/nvim-dap-virtual-text'
      use 'nvim-telescope/telescope-dap.nvim'
      -- Markdown
+     use 'renerocksai/telekasten.nvim'
+     use 'SidOfc/mkdx'
      use({ "iamcco/markdown-preview.nvim",
           run = "cd app && npm install",
           setup = function()
@@ -94,12 +94,6 @@ return require('packer').startup(function()
                'hrsh7th/cmp-buffer',
                'hrsh7th/cmp-path',
                'hrsh7th/cmp-cmdline', }
-     }
-     use {
-          'ldelossa/gh.nvim',
-          requires = {
-               { 'ldelossa/litee.nvim' }
-          }
      }
      use {
           'neoclide/coc.nvim',
