@@ -624,7 +624,7 @@ mouse_bindings:
 #
 # If the same trigger is assigned to multiple actions, all of them are executed
 # in the order they were defined in.
-#key_bindings:
+key_bindings:
   #- { key: Paste,                                       action: Paste          }
   #- { key: Copy,                                        action: Copy           }
   #- { key: L,         mods: Control,                    action: ClearLogNotice }
@@ -635,7 +635,7 @@ mouse_bindings:
   #- { key: End,       mods: Shift,   mode: ~Alt,        action: ScrollToBottom }
 
   # Vi Mode
-  #- { key: Space,  mods: Shift|Control, mode: ~Search,    action: ToggleViMode            }
+  - { key: Space,  mods: Shift|Control, mode: ~Search,    action: ToggleViMode            }
   #- { key: Space,  mods: Shift|Control, mode: Vi|~Search, action: ScrollToBottom          }
   #- { key: Escape,                      mode: Vi|~Search, action: ClearSelection          }
   #- { key: I,                           mode: Vi|~Search, action: ToggleViMode            }
@@ -649,7 +649,7 @@ mouse_bindings:
   #- { key: F,      mods: Control,       mode: Vi|~Search, action: ScrollPageDown          }
   #- { key: U,      mods: Control,       mode: Vi|~Search, action: ScrollHalfPageUp        }
   #- { key: D,      mods: Control,       mode: Vi|~Search, action: ScrollHalfPageDown      }
-  #- { key: Y,                           mode: Vi|~Search, action: Copy                    }
+  - { key: Y,                           mode: Vi|~Search, action: Copy                    }
   #- { key: Y,                           mode: Vi|~Search, action: ClearSelection          }
   #- { key: Copy,                        mode: Vi|~Search, action: ClearSelection          }
   #- { key: V,                           mode: Vi|~Search, action: ToggleNormalSelection   }
@@ -668,9 +668,9 @@ mouse_bindings:
   #- { key: Key0,                        mode: Vi|~Search, action: First                   }
   #- { key: Key4,   mods: Shift,         mode: Vi|~Search, action: Last                    }
   #- { key: Key6,   mods: Shift,         mode: Vi|~Search, action: FirstOccupied           }
-  #- { key: H,      mods: Shift,         mode: Vi|~Search, action: High                    }
-  #- { key: M,      mods: Shift,         mode: Vi|~Search, action: Middle                  }
-  #- { key: L,      mods: Shift,         mode: Vi|~Search, action: Low                     }
+  - { key: H,      mods: Shift,         mode: Vi|~Search, action: High                    }
+  - { key: M,      mods: Shift,         mode: Vi|~Search, action: Middle                  }
+  - { key: L,      mods: Shift,         mode: Vi|~Search, action: Low                     }
   #- { key: B,                           mode: Vi|~Search, action: SemanticLeft            }
   #- { key: W,                           mode: Vi|~Search, action: SemanticRight           }
   #- { key: E,                           mode: Vi|~Search, action: SemanticRightEnd        }
