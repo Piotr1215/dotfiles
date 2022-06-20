@@ -6,6 +6,7 @@ return require('packer').startup(function()
      use 'cljoly/telescope-repo.nvim'
      use 'kdheepak/lazygit.nvim'
      -- Editor Extensions
+     use 'famiu/nvim-reload'
      use 'easymotion/vim-easymotion'
      use 'ferrine/md-img-paste.vim'
      use 'L3MON4D3/LuaSnip'
@@ -50,6 +51,17 @@ return require('packer').startup(function()
      -- Telescope
      use 'christoomey/vim-system-copy'
      use 'ctrlpvim/ctrlp.vim'
+     -- Lua
+     use {
+          "ahmedkhalf/project.nvim",
+          config = function()
+               require("project_nvim").setup {
+                    -- your configuration comes here
+                    -- or leave it empty to use the default settings
+                    -- refer to the configuration section below
+               }
+          end
+     }
      -- Debugging
      use 'mfussenegger/nvim-dap'
      use 'leoluz/nvim-dap-go'

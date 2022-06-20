@@ -14,6 +14,12 @@ local function emap(shortcut, command)
      map('', shortcut, command)
 end
 
+--Leader normal mapping
+local function lnmap(shortcut, command)
+     local leader = "<leader>"..shortcut
+     map('n', leader, command)
+end
+
 local function nmap(shortcut, command)
      map('n', shortcut, command)
 end
@@ -142,6 +148,8 @@ require('telescope').setup {
 -- Telescope {{{
 require('telescope').load_extension('file_browser')
 require('telescope').load_extension('repo')
+require('telescope').load_extension('fzf')
+require('telescope').load_extension('projects')
 local key = vim.api.nvim_set_keymap
 local set_up_telescope = function()
      local set_keymap = function(mode, bind, cmd)
@@ -164,6 +172,10 @@ local set_up_telescope = function()
 end
 
 set_up_telescope()
+-- }}}
+
+-- Telekasten {{{
+lnmap("tkf", ":lua require('telekasten').find_notes()<CR>") -- Move Line Up in Normal Mode
 -- }}}
 
 -- User commands {{{
@@ -240,8 +252,11 @@ vmap("//", 'y/\\V<C-R>=escape(@",\'/\')<CR><CR>')
 -- MACROS --
 nmap("<Leader>q", "@q")
 xmap("Q", ":'<,'>:normal @q<CR>")
+lnmap("jq", ":g/{/.!jq .<CR>")
 
 -- MANIPULATE TEXT --
+-- Copy file name
+lnmap("cpf", ":let @* = expand(\"%:t\")<CR>")
 -- Comment paragraphs
 nmap("<silent> <leader>c}", "V}:call NERDComment('x', 'toggle')<CR>")
 nmap("<silent> <leader>c{", "V{:call NERDComment('x', 'toggle')<CR>")
