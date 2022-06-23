@@ -5,6 +5,7 @@ cmd('syntax enable')
 cmd('syntax on')
 cmd('filetype on')
 cmd('filetype plugin indent on')
+cmd('set clipboard=unnamed')
 cmd('set winbar=%=%m\\ %f')
 cmd('set completefunc=emoji#complete')
 cmd('set statusline+=%#warningmsg#')
@@ -12,6 +13,7 @@ cmd('set statusline+=%{SyntasticStatuslineFlag()}')
 cmd('set statusline+=%*')
 cmd('set wildignore+=*/tmp/*,*.so,*.swp,*.zip')
 cmd('set backspace=indent,eol,start')
+cmd('set foldexpr=getline(v:lnum)=~\'^\\s*$\'&&getline(v:lnum+1)=~\'\\S\'?\'<1\':1')
 
 --Remap for dealing with word wrap
 set.background = 'dark'
@@ -28,7 +30,6 @@ set.mouse = v
 set.number = true
 set.encoding = "utf-8"
 set.cursorline = true
-set.clipboard = 'unnamedplus'
 
 set.expandtab = true
 set.shiftwidth = 5

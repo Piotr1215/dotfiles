@@ -6,6 +6,7 @@ return require('packer').startup(function()
      use 'cljoly/telescope-repo.nvim'
      use 'kdheepak/lazygit.nvim'
      -- Editor Extensions
+     use 'vimpostor/vim-tpipeline'
      use 'famiu/nvim-reload'
      use 'easymotion/vim-easymotion'
      use 'ferrine/md-img-paste.vim'

@@ -68,6 +68,16 @@ vim.api.nvim_create_autocmd("FileType", {
 })
 
 vim.api.nvim_create_autocmd("FileType", {
+     pattern = { "go" },
+     command = "set foldmethod=manual",
+})
+
+vim.api.nvim_create_autocmd("FileType", {
+     pattern = { "go" },
+     command = "nmap <buffer><silent> <leader>fld :%g/ {/normal! zf%<CR>",
+})
+
+vim.api.nvim_create_autocmd("FileType", {
      pattern = { "markdown" },
      command = "nmap <buffer><silent> <leader>p :call mdip#MarkdownClipboardImage()<CR>",
 })
@@ -76,6 +86,8 @@ api.nvim_exec(
      [[
     augroup fileTypes
      autocmd FileType lua setlocal foldmethod=marker
+     autocmd FileType go setlocal foldmethod=expr
+     autocmd BufRead,BufNewFile .envrc set filetype=sh
     augroup end
   ]]  , false
 )
@@ -166,7 +178,7 @@ local set_up_telescope = function()
      set_keymap('n', '<leader>fst', [[<cmd>lua require('telescope.builtin').grep_string()<CR>]])
      set_keymap('n', '<leader>fb', [[<cmd>lua require('telescope.builtin').current_buffer_fuzzy_find()<CR>]])
      set_keymap('n', '<leader>fh', [[<cmd>lua require('telescope.builtin').help_tags()<CR>]])
-     set_keymap('n', '<leader>ft', [[<cmd>lua require('telescope.builtin').tags()<CR>]])
+     set_keymap('n', '<leader>ft', [[<cmd>lua require('telescope.builtin').tagstack()<CR>]])
      set_keymap('n', '<leader>fT', [[<cmd>lua require('telescope.builtin').tags{ only_current_buffer = true }<CR>]])
      -- set_keymap('n', '<leader>sf', [[<cmd>lua vim.lsp.buf.formatting()<CR>]])
 end
