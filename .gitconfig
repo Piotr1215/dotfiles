@@ -25,7 +25,7 @@ add-commit = !git add -A && git commit
 #tool = vimdiff
 colorMoved = default
 [merge]
-tool = vimdiff
+	tool = fugitive
 conflictstyle = diff3
 [push]
 default = matching
@@ -42,3 +42,5 @@ diffFilter = delta --color-only
 navigate = true # use n and N to move between diff sections
 [url "git@github.com:"]
 	insteadOf = https://github.com/
+[mergetool "fugitive"]
+	cmd = nvim -f -c \"Gvdiffsplit!\" \"$MERGED\"

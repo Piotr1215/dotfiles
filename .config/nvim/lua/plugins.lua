@@ -6,6 +6,19 @@ return require('packer').startup(function()
      use 'cljoly/telescope-repo.nvim'
      use 'kdheepak/lazygit.nvim'
      -- Editor Extensions
+     use { 'anuvyklack/hydra.nvim',
+          requires = 'anuvyklack/keymap-layer.nvim' -- needed only for pink hydras
+     }
+     use {
+          "folke/which-key.nvim",
+          config = function()
+               require("which-key").setup {
+                    -- your configuration comes here
+                    -- or leave it empty to use the default settings
+                    -- refer to the configuration section below
+               }
+          end
+     }
      use 'vimpostor/vim-tpipeline'
      use 'famiu/nvim-reload'
      use 'easymotion/vim-easymotion'

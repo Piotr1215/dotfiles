@@ -179,6 +179,7 @@ local set_up_telescope = function()
      set_keymap('n', '<leader>fb', [[<cmd>lua require('telescope.builtin').current_buffer_fuzzy_find()<CR>]])
      set_keymap('n', '<leader>fh', [[<cmd>lua require('telescope.builtin').help_tags()<CR>]])
      set_keymap('n', '<leader>ft', [[<cmd>lua require('telescope.builtin').tagstack()<CR>]])
+     set_keymap('n', '<leader>re', [[<cmd>lua require('telescope.builtin').registers()<CR>]])
      set_keymap('n', '<leader>fT', [[<cmd>lua require('telescope.builtin').tags{ only_current_buffer = true }<CR>]])
      -- set_keymap('n', '<leader>sf', [[<cmd>lua vim.lsp.buf.formatting()<CR>]])
 end
@@ -235,10 +236,52 @@ vim.api.nvim_create_user_command(
 nmap("<C-f>", ":Pretty<CR>")
 -- }}}
 
+
+-- Hydra {{{
+local Hydra = require("hydra")
+
+Hydra({
+name = "Change / Resize Window",
+mode = { "n" },
+body = "<C-w>",
+config = {
+	-- color = "pink",
+},
+heads = {
+-- move between windows
+{ "<C-h>", "<C-w>h" },
+{ "<C-j>", "<C-w>j" },
+{ "<C-k>", "<C-w>k" },
+{ "<C-l>", "<C-w>l" },
+
+-- resizing window
+{ "H", "<C-w>3<" },
+{ "L", "<C-w>3>" },
+{ "K", "<C-w>2+" },
+{ "J", "<C-w>2-" },
+
+-- equalize window sizes
+{ "e", "<C-w>=" },
+
+-- close active window
+{ "Q", ":q<cr>" },
+{ "<C-q>", ":q<cr>" },
+
+-- exit this Hydra
+{ "q", nil, { exit = true, nowait = true } },
+{ ";", nil, { exit = true, nowait = true } },
+{ "<Esc>", nil, { exit = true, nowait = true } },
+},
+})
+
+-- }}}
+
 -- Mappings {{{
 -- Map only if Linux
 vim.api.nvim_set_keymap('n', 'k', "v:count == 0 ? 'gk' : 'k'", { noremap = true, expr = true, silent = true })
 vim.api.nvim_set_keymap('n', 'j', "v:count == 0 ? 'gj' : 'j'", { noremap = true, expr = true, silent = true })
+vim.keymap.set("n", "<C-j>", [[:keepjumps normal! j}k<cr>]], {noremap = true, silent = true})
+vim.keymap.set("n", "<C-k>", [[:keepjumps normal! k{j<cr>]], {noremap = true, silent = true})
 if sysname == 'Linux' then
      nmap('ö', '/')
      imap('ö', '/')
