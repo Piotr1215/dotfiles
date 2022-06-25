@@ -6,6 +6,13 @@ return require('packer').startup(function()
      use 'cljoly/telescope-repo.nvim'
      use 'kdheepak/lazygit.nvim'
      -- Editor Extensions
+     use "stevearc/dressing.nvim"
+     use({
+          "ziontee113/icon-picker.nvim",
+          config = function()
+               require("icon-picker")
+          end,
+     })
      use { 'anuvyklack/hydra.nvim',
           requires = 'anuvyklack/keymap-layer.nvim' -- needed only for pink hydras
      }
@@ -28,7 +35,7 @@ return require('packer').startup(function()
      use 'hrsh7th/vim-vsnip-integ'
      use 'jpalardy/vim-slime'
      use 'junegunn/fzf.vim'
-     use 'junegunn/vim-emoji'
+     use 'nvim-telescope/telescope-symbols.nvim'
      use {
           'kyazdani42/nvim-tree.lua',
           requires = {

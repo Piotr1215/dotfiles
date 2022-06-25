@@ -236,7 +236,6 @@ vim.api.nvim_create_user_command(
 nmap("<C-f>", ":Pretty<CR>")
 -- }}}
 
-
 -- Hydra {{{
 local Hydra = require("hydra")
 
@@ -282,6 +281,11 @@ vim.api.nvim_set_keymap('n', 'k', "v:count == 0 ? 'gk' : 'k'", { noremap = true,
 vim.api.nvim_set_keymap('n', 'j', "v:count == 0 ? 'gj' : 'j'", { noremap = true, expr = true, silent = true })
 vim.keymap.set("n", "<C-j>", [[:keepjumps normal! j}k<cr>]], {noremap = true, silent = true})
 vim.keymap.set("n", "<C-k>", [[:keepjumps normal! k{j<cr>]], {noremap = true, silent = true})
+local opts = { noremap = true, silent = true }
+vim.keymap.set("n", "<Leader><Leader>i", "<cmd>PickIcons<cr>", opts)
+vim.keymap.set("n", "<Leader>ts", "<cmd>Telescope<cr>", opts)
+vim.keymap.set("i", "<C-i>", "<cmd>PickIconsInsert<cr>", opts)
+vim.keymap.set("i", "<A-i>", "<cmd>PickAltFontAndSymbolsInsert<cr>", opts)
 if sysname == 'Linux' then
      nmap('ö', '/')
      imap('ö', '/')
