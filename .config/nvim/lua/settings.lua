@@ -14,6 +14,7 @@ cmd('set statusline+=%*')
 cmd('set wildignore+=*/tmp/*,*.so,*.swp,*.zip')
 cmd('set backspace=indent,eol,start')
 cmd('set foldexpr=getline(v:lnum)=~\'^\\s*$\'&&getline(v:lnum+1)=~\'\\S\'?\'<1\':1')
+cmd('set jumpoptions=view')
 
 --Remap for dealing with word wrap
 set.background = 'dark'
@@ -131,3 +132,5 @@ vim.g.go_highlight_operators = 1
 -- MarkdownPreview settings
 vim.g.mkdp_browser = '/usr/bin/google-chrome'
 vim.g.mkdp_echo_preview_url = 0
+-- Nerdcommenter
+vim.g.NERDSpaceDelims = 1

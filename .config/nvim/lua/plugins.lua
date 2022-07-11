@@ -2,6 +2,7 @@ return require('packer').startup(function()
      -- Packer
      use 'wbthomason/packer.nvim'
      -- Git
+     use 'alaviss/nim.nvim'
      use 'airblade/vim-gitgutter'
      use 'cljoly/telescope-repo.nvim'
      use 'kdheepak/lazygit.nvim'
