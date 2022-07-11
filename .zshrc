@@ -20,6 +20,11 @@ fi
 if [[ -z "$ZSH_CUSTOM" ]]; then
     ZSH_CUSTOM="$ZSH/custom"
 fi
+compdef _k3d k3d
+# don't run the completion function when being source-ed or eval-ed
+if [ "$funcstack[1]" = "_k3d" ]; then
+    _k3d
+fi
 # PROMPT CUSTOMIZATION
 # To customize prompt, run `p10k configure` or edit ~/.p10k.zsh.
 # [[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
@@ -63,6 +68,7 @@ alias ps=procs
 alias ldoc='lazydocker'
 alias wm='watch kubectl get managed'
 alias rm='rm -i'
+alias rmm='rm'
 alias yx='y -t '
 alias gs='git show'
 alias y=z
@@ -126,6 +132,7 @@ else
 fi
 
 # EXPORT & PATH
+export PATH=/home/decoder/.nimble/bin:$PATH
 export KUBECONFIG=~/.kube/config
 export GOPATH=$HOME/go/
 export PATH=$PATH:$HOME/.krew/bin

@@ -169,13 +169,13 @@ local set_up_telescope = function()
      end
      set_keymap('n', '<leader><leader>', [[<cmd>lua require('telescope.builtin').buffers()<CR>]])
      --set_keymap('n', '<leader>tf', [[<cmd>lua require('telescope.builtin').find_files({find_command = {'rg', '--files', '--hidden', '-g', '!.git' }})<CR>]])
-     set_keymap('n', '<leader>fp', [[<cmd>lua require('telescope.builtin').find_files()<CR>]])
+     set_keymap('n', '<leader>fp', [[<cmd>lua require('telescope.builtin').find_files({search_dirs = {"~/dev"}})<CR>]])
      set_keymap('n', '<leader>fr', [[<cmd>lua require'telescope'.extensions.repo.list{search_dirs = {"~/dev"}}<CR>]])
      set_keymap('n', '<leader>fgr', [[<cmd>lua require('telescope.builtin').live_grep()<CR>]])
      set_keymap('n', '<leader>fg', [[<cmd>lua require('telescope.builtin').git_files()<CR>]])
      set_keymap('n', '<leader>fo', [[<cmd>lua require('telescope.builtin').oldfiles()<CR>]])
      set_keymap('n', '<leader>fi', ':Telescope file_browser<CR>')
-     set_keymap('n', '<leader>fst', [[<cmd>lua require('telescope.builtin').grep_string()<CR>]])
+     set_keymap('n', '<leader>fst', [[<cmd>lua require('telescope.builtin').grep_string({search_dirs = {"~/dev"}})<CR>]])
      set_keymap('n', '<leader>fb', [[<cmd>lua require('telescope.builtin').current_buffer_fuzzy_find()<CR>]])
      set_keymap('n', '<leader>fh', [[<cmd>lua require('telescope.builtin').help_tags()<CR>]])
      set_keymap('n', '<leader>ft', [[<cmd>lua require('telescope.builtin').tagstack()<CR>]])
@@ -284,6 +284,10 @@ vim.keymap.set("n", "<C-k>", [[:keepjumps normal! k{j<cr>]], {noremap = true, si
 local opts = { noremap = true, silent = true }
 vim.keymap.set("n", "<Leader><Leader>i", "<cmd>PickIcons<cr>", opts)
 vim.keymap.set("n", "<Leader>ts", "<cmd>Telescope<cr>", opts)
+vim.keymap.set("i", "<C-9>", "]", opts)
+vim.keymap.set("i", "<C-8>", "[", opts)
+vim.keymap.set("n", "<C-9>", "]", opts)
+vim.keymap.set("n", "<C-8>", "[", opts)
 vim.keymap.set("i", "<C-i>", "<cmd>PickIconsInsert<cr>", opts)
 vim.keymap.set("i", "<A-i>", "<cmd>PickAltFontAndSymbolsInsert<cr>", opts)
 if sysname == 'Linux' then
@@ -296,6 +300,7 @@ vmap("<S-PageUp>", ":m '<-2<CR>gv=gv") -- Move Line Up in Visual Mode
 nmap("<leader>k", ":m .-2<CR>==") -- Move Line Up in Normal Mode
 nmap("<leader>j", ":m .+1<CR>==") -- Move Line Down in Normal Mode
 nmap("<Leader>nh", ":.,/^#/<CR>") -- Got to next markdown header
+nmap("<Leader>em", ":/\\V\\c\\<\\>") -- find exact match
 
 -- SEARCH & REPLACE --
 -- Easy Motion Mappings

@@ -8,7 +8,7 @@ excludesFile = ~/.gitignore
 pager = delta
 [user]
 email = piotr@upbound.io
-signingkey = FED1B098B68D69FD
+	signingkey = FED1B098B68D69FD
 name = Piotr Zaniewski
 [alias]
 s = status
@@ -25,7 +25,7 @@ add-commit = !git add -A && git commit
 #tool = vimdiff
 colorMoved = default
 [merge]
-	tool = fugitive
+tool = fugitive
 conflictstyle = diff3
 [push]
 default = matching
