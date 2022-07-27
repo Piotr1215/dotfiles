@@ -45,7 +45,7 @@ local on_attach = function(_, bufnr)
 
      -- Format buffer
      buf_set_keymap('n', '<c-f>', '<cmd>lua vim.lsp.buf.format({ async = true })<CR>', opts)
-     buf_set_keymap('n', 'ds', '<cmd>lua vim.lsp.buf.document_symbol()<CR>', opts)
+     buf_set_keymap('n', 'dm', '<cmd>lua vim.lsp.buf.document_symbol()<CR>', opts)
 
      -- Jump LSP diagnostics
      -- NOTE: Currently, there is a bug in lspsaga.diagnostic module. Thus we use
@@ -191,7 +191,7 @@ cmp.setup({
                select = true,
           },
 
-          -- Use Tab and Shift-Tab to browse through the suggestions.
+          -- Use Ctrl + j and Shift-Ctrl + j to browse through the suggestions.
           ["<Tab>"] = cmp.mapping(function(fallback)
                if cmp.visible() then
                     cmp.select_next_item()

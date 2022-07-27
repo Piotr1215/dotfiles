@@ -103,8 +103,20 @@ return require('packer').startup(function()
                vim.g.mkdp_filetypes = { "markdown" }
           end,
           ft = { "markdown" }, })
-     use 'rhysd/vim-grammarous'
      use 'dhruvasagar/vim-open-url'
+     use 'marcelofern/vale.nvim'
+     use 'jose-elias-alvarez/null-ls.nvim'
+     use {
+          "folke/trouble.nvim",
+          requires = "kyazdani42/nvim-web-devicons",
+          config = function()
+               require("trouble").setup {
+                    -- your configuration comes here
+                    -- or leave it empty to use the default settings
+                    -- refer to the configuration section below
+               }
+          end
+     }
      use 'dhruvasagar/vim-table-mode'
      use 'ferrine/md-img-paste.vim'
      use 'godlygeek/tabular'

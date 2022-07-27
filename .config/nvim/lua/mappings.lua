@@ -16,7 +16,7 @@ end
 
 --Leader normal mapping
 local function lnmap(shortcut, command)
-     local leader = "<leader>"..shortcut
+     local leader = "<leader>" .. shortcut
      map('n', leader, command)
 end
 
@@ -42,6 +42,10 @@ end
 
 local function smap(shortcut, command)
      map('s', shortcut, command)
+end
+
+local function tmap(shortcut, command)
+     map('t', shortcut, command)
 end
 
 -- }}}
@@ -97,6 +101,7 @@ api.nvim_exec(
     augroup helpers
      autocmd!
      autocmd TermOpen term://* startinsert
+     autocmd BufEnter * silent! lcd %:p:h
     augroup end
   ]]  , false
 )
@@ -202,15 +207,15 @@ vim.api.nvim_create_user_command(
 --Open Buildin terminal vertical mode
 vim.api.nvim_create_user_command(
      'VT',
-     "vsplit | terminal <args>",
+     "vsplit | lcd %:p:h | terminal",
      { bang = false, nargs = '*' }
 )
 
 --Open Buildin terminal
 vim.api.nvim_create_user_command(
      'T',
-     ":split | resize 15 | terminal",
-     { bang = false, nargs = '*' }
+     "split | lcd %:h | resize 15 | terminal",
+     { bang = true, nargs = '*' }
 )
 
 --Execute shell command in a read-only scratchpad buffer
@@ -240,37 +245,37 @@ nmap("<C-f>", ":Pretty<CR>")
 local Hydra = require("hydra")
 
 Hydra({
-name = "Change / Resize Window",
-mode = { "n" },
-body = "<C-w>",
-config = {
-	-- color = "pink",
-},
-heads = {
--- move between windows
-{ "<C-h>", "<C-w>h" },
-{ "<C-j>", "<C-w>j" },
-{ "<C-k>", "<C-w>k" },
-{ "<C-l>", "<C-w>l" },
+     name = "Change / Resize Window",
+     mode = { "n" },
+     body = "<C-w>",
+     config = {
+          -- color = "pink",
+     },
+     heads = {
+          -- move between windows
+          { "<C-h>", "<C-w>h" },
+          { "<C-j>", "<C-w>j" },
+          { "<C-k>", "<C-w>k" },
+          { "<C-l>", "<C-w>l" },
 
--- resizing window
-{ "H", "<C-w>3<" },
-{ "L", "<C-w>3>" },
-{ "K", "<C-w>2+" },
-{ "J", "<C-w>2-" },
+          -- resizing window
+          { "H", "<C-w>3<" },
+          { "L", "<C-w>3>" },
+          { "K", "<C-w>2+" },
+          { "J", "<C-w>2-" },
 
--- equalize window sizes
-{ "e", "<C-w>=" },
+          -- equalize window sizes
+          { "e", "<C-w>=" },
 
--- close active window
-{ "Q", ":q<cr>" },
-{ "<C-q>", ":q<cr>" },
+          -- close active window
+          { "Q", ":q<cr>" },
+          { "<C-q>", ":q<cr>" },
 
--- exit this Hydra
-{ "q", nil, { exit = true, nowait = true } },
-{ ";", nil, { exit = true, nowait = true } },
-{ "<Esc>", nil, { exit = true, nowait = true } },
-},
+          -- exit this Hydra
+          { "q", nil, { exit = true, nowait = true } },
+          { ";", nil, { exit = true, nowait = true } },
+          { "<Esc>", nil, { exit = true, nowait = true } },
+     },
 })
 
 -- }}}
@@ -279,8 +284,8 @@ heads = {
 -- Map only if Linux
 vim.api.nvim_set_keymap('n', 'k', "v:count == 0 ? 'gk' : 'k'", { noremap = true, expr = true, silent = true })
 vim.api.nvim_set_keymap('n', 'j', "v:count == 0 ? 'gj' : 'j'", { noremap = true, expr = true, silent = true })
-vim.keymap.set("n", "<C-j>", [[:keepjumps normal! j}k<cr>]], {noremap = true, silent = true})
-vim.keymap.set("n", "<C-k>", [[:keepjumps normal! k{j<cr>]], {noremap = true, silent = true})
+vim.keymap.set("n", "<C-j>", [[:keepjumps normal! j}k<cr>]], { noremap = true, silent = true })
+vim.keymap.set("n", "<C-k>", [[:keepjumps normal! k{j<cr>]], { noremap = true, silent = true })
 local opts = { noremap = true, silent = true }
 vim.keymap.set("n", "<Leader><Leader>i", "<cmd>PickIcons<cr>", opts)
 vim.keymap.set("n", "<Leader>ts", "<cmd>Telescope<cr>", opts)
@@ -317,6 +322,7 @@ vmap("//", 'y/\\V<C-R>=escape(@",\'/\')<CR><CR>')
 nmap("<Leader>q", "@q")
 xmap("Q", ":'<,'>:normal @q<CR>")
 lnmap("jq", ":g/{/.!jq .<CR>")
+tmap("<ESC>", "<C-\\><C-n>")
 
 -- MANIPULATE TEXT --
 -- Copy file name
@@ -348,6 +354,8 @@ nmap('<Leader>rlines', ':%s/\\n\\{3,}/\\r\\r/e')
 nmap('<Leader>i', 'i<space><esc>')
 -- delete word forward in insert mode
 imap('<C-e>', '<C-o>dw<Left>')
+-- delete word with Ctrl Backspace
+imap('<C-BS>', '<C-W>')
 -- Copies till the end of a line. Fits with Shift + D, C etc
 nmap('Y', 'yg_')
 -- Replace multiple words simultaniously
@@ -466,6 +474,9 @@ xmap('<leader>t', '<Plug>(vsnip-select-text)')
 nmap('<leader>tc', '<Plug>(vsnip-cut-text)')
 xmap('<leader>tc', '<Plug>(vsnip-cut-text)')
 
+-- Abbreviations
+vim.cmd('abb cros Crossplane')
+
 -- Telekasten
-nmap ('<leader>tk', ':lua require(\'telekasten\').panel()<CR>')
+nmap('<leader>tk', ':lua require(\'telekasten\').panel()<CR>')
 -- }}}
