@@ -20,7 +20,6 @@ fi
 if [[ -z "$ZSH_CUSTOM" ]]; then
     ZSH_CUSTOM="$ZSH/custom"
 fi
-compdef _k3d k3d
 # don't run the completion function when being source-ed or eval-ed
 if [ "$funcstack[1]" = "_k3d" ]; then
     _k3d

@@ -33,8 +33,8 @@ set.encoding = "utf-8"
 set.cursorline = true
 
 set.expandtab = true
-set.shiftwidth = 5
-set.softtabstop = 4
+set.shiftwidth = 2
+set.softtabstop = 2
 set.autoindent = true
 set.relativenumber = true
 set.incsearch = true
@@ -75,6 +75,20 @@ require("nvim-tree").setup({
     update_cwd = true
   },
 })
+
+require("vale").setup({
+  -- path to the vale binary.
+  bin="/usr/local/bin/vale",
+  -- path to your vale-specific configuration.
+  vale_config_path="$HOME/.vale.ini",
+})
+
+require("null-ls").setup({
+    sources = {
+        require("null-ls").builtins.diagnostics.vale,
+    },
+})
+
 -- Color name (:help cterm-colors) or ANSI code
 -- there are some defaults for image directory and image name, you can change them
 vim.g.mdip_imgdir = '_media'
@@ -92,8 +106,9 @@ vim.g.netrw_winsize = 30
 vim.g.netrw_banner = 0
 vim.g.netrw_keepdir = 0
 -- setup for markdown snippet
-vim.g.vim_markdown_folding_disabled = 1
-vim.g.vim_markdown_folding_level = 3
+vim.g.vim_markdown_folding_disabled = 0
+vim.g.vim_markdown_folding_style_pythonic = 1
+vim.g.vim_markdown_folding_level = 2
 vim.g.vim_markdown_toc_autofit = 1
 vim.g.vim_markdown_conceal = 0
 vim.g.vim_markdown_conceal_code_blocks = 0
