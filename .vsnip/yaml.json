@@ -71,7 +71,7 @@
       "            spec:",
       "              type: object",
       "              properties:",
-      "                ${0}:",
+      "                ${0}",
       "              required:",
       "                - ",
       "           # status:",
@@ -117,6 +117,15 @@
       "- type: FromCompositeFieldPath",
       "  fromFieldPath: ${1:fromFieldPath}",
       "  toFieldPath: ${2:toFieldPath}"
+    ]
+  },
+  "Patch PatchSet": {
+    "prefix": "patchset",
+    "scope": "yaml",
+    "description": "Patch with named patchset",
+    "body": [
+      "- type: PatchSet",
+      "  patchSetName: ${1:patchSetName}"
     ]
   },
   "Patch ToCompositeFieldPath": {
