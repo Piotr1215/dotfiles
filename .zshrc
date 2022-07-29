@@ -267,6 +267,7 @@ function pet-select() {
 zle -N pet-select
 stty -ixon
 bindkey '^s' pet-select
+bindkey '^I' autosuggest-accept
 
 [[ /usr/local/bin/kubectl ]] && source <(kubectl completion zsh)
 
