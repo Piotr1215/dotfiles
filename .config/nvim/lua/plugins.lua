@@ -141,7 +141,8 @@ return require('packer').startup(function()
                'hrsh7th/cmp-path',
                'hrsh7th/cmp-cmdline', }
      }
-     use 'nvim-lua/plenary.nvim'
+     use {'neoclide/coc.nvim', branch = 'release'}
+     use { 'mhartington/formatter.nvim' }
      use {
           'nvim-telescope/telescope-file-browser.nvim'
      }
