@@ -128,6 +128,21 @@
       "  patchSetName: ${1:patchSetName}"
     ]
   },
+  "Patch claim name to MR name": {
+    "prefix": "patchname",
+    "scope": "yaml",
+    "description": "Patchset Claim name to MR external name",
+    "body": [
+      "- name: claimNameIsResourceName",
+      "  patches:",
+      "    - type: FromCompositeFieldPath",
+      "      fromFieldPath: metadata.name",
+      "      toFieldPath: metadata.name",
+      "    - type: FromCompositeFieldPath",
+      "      fromFieldPath: metadata.labels[crossplane.io/claim-name]",
+      "      toFieldPath: metadata.name"
+    ]
+  },
   "Patch ToCompositeFieldPath": {
     "prefix": "patchto",
     "scope": "yaml",
