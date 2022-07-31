@@ -91,8 +91,7 @@ else
 fi
 alias lzd='docker run --rm -it -v /var/run/docker.sock:/var/run/docker.sock -v /config/lazydocker:/.config/jesseduffield/lazydocker lazyteam/lazydocker'
 alias rest='shutdown now'
-alias nedit='vim -c "SLoad vim"'
-alias vedit='vim ~/.config/nvim/init.vim'
+alias vedit='vim ~/.config/nvim/init.lua'
 alias zedit='vim ~/.zshrc'
 alias vim='nvim'
 alias gcc='git diff --stat --cached origin/master' # Git Check Commit before pushing
