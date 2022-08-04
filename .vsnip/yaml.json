@@ -128,6 +128,36 @@
       "  patchSetName: ${1:patchSetName}"
     ]
   },
+  "Patch owner and project labels GCP": {
+    "prefix": "patchownerGCP",
+    "scope": "yaml",
+    "description": "Patchset Owner and project labels for easier identification and billing for GCP",
+    "body": [
+      "- name: ownerAndProjectLabels",
+      "  patches:",
+      "    - type: FromCompositeFieldPath",
+      "      fromFieldPath: spec.parameters.owner",
+      "      toFieldPath: spec.forProvider.labels[owner]",
+      "    - type: FromCompositeFieldPath",
+      "      fromFieldPath: spec.parameters.project",
+      "      toFieldPath: spec.forProvider.labels[project]"
+    ]
+  },
+  "Patch owner and project labels AWS/Azure": {
+    "prefix": "patchownerAWS",
+    "scope": "yaml",
+    "description": "Patchset Owner and project labels for easier identification and billing AWS/Azure",
+    "body": [
+      "- name: ownerAndProjectLabels",
+      "  patches:",
+      "    - type: FromCompositeFieldPath",
+      "      fromFieldPath: spec.parameters.owner",
+      "      toFieldPath: spec.forProvider.tags[owner]",
+      "    - type: FromCompositeFieldPath",
+      "      fromFieldPath: spec.parameters.project",
+      "      toFieldPath: spec.forProvider.tags[project]"
+    ]
+  },
   "Patch claim name to MR name": {
     "prefix": "patchname",
     "scope": "yaml",
