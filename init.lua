@@ -309,7 +309,8 @@ require('packer').startup(function(use)
     'nvim-lualine/lualine.nvim',
     requires = {
       'kyazdani42/nvim-web-devicons',
-      'arkav/lualine-lsp-progress', },
+      'arkav/lualine-lsp-progress',
+    },
   }
   -- Programming
   use 'fatih/vim-go'
@@ -335,7 +336,8 @@ require('packer').startup(function(use)
   use {
     "rcarriga/nvim-dap-ui",
     requires = {
-      "mfussenegger/nvim-dap" }
+      "mfussenegger/nvim-dap"
+    }
   }
   use 'theHamsta/nvim-dap-virtual-text'
   use 'nvim-telescope/telescope-dap.nvim'
@@ -383,10 +385,11 @@ require('packer').startup(function(use)
       'hrsh7th/cmp-nvim-lsp',
       'hrsh7th/cmp-buffer',
       'hrsh7th/cmp-path',
-      'hrsh7th/cmp-cmdline', }
+      'hrsh7th/cmp-cmdline',
+    }
   }
-  use {'neoclide/coc.nvim', branch = 'master', run = 'yarn install --frozen-lockfile'}
   use { 'mhartington/formatter.nvim' }
+  use { 'neoclide/coc.nvim', branch = 'release' }
   use {
     'nvim-telescope/telescope-file-browser.nvim'
   }
@@ -704,7 +707,7 @@ nmap("<Leader>em", ":/\\V\\c\\<\\>") -- find exact match
 emap("<Leader>o", "<Plug>(easymotion-prefix)")
 emap("<Leader>of", "<Plug>(easymotion-bd-f)")
 emap("<Leader>ol", "<Plug>(easymotion-bd-w)")
-emap("<Leader>oc", "<Plug>(easymotion-overwin-f2)")
+emap("<Leader>oo", "<Plug>(easymotion-overwin-f2)")
 -- Stop search highlight
 nmap(",<space>", ":nohlsearch<CR>")
 vmap("<C-r>", '"hy:%s/<C-r>h//gc<left><left><left>')
