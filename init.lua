@@ -127,18 +127,19 @@ require("nvim-tree").setup({
   },
 })
 
-require("vale").setup({
-  -- path to the vale binary.
-  bin = "/usr/local/bin/vale",
-  -- path to your vale-specific configuration.
-  vale_config_path = "$HOME/.vale.ini",
-})
+--require("vale").setup({
+  ---- path to the vale binary.
+  --bin = "/usr/local/bin/vale",
+  ---- path to your vale-specific configuration.
+  --vale_config_path = "$HOME/.vale.ini",
+--})
 
-require("null-ls").setup({
-  sources = {
-    require("null-ls").builtins.diagnostics.vale,
-  },
-})
+-- require("null-ls").setup({
+  -- sources = {
+    -- require("null-ls").builtins.diagnostics.vale,
+  -- },
+-- })
+
 local null_ls = require("null-ls")
 local helpers = require("null-ls.helpers")
 
@@ -748,7 +749,13 @@ nmap('<Leader>rlines', ':%s/\\n\\{3,}/\\r\\r/e')
 -- Insert space
 nmap('<Leader>i', 'i<space><esc>')
 -- delete word forward in insert mode
-imap('<C-e>', '<C-o>dw<Left>')
+nmap('<Leader>i', 'i<space><esc>')
+-- black hole register operations
+lnmap('d', '"_D')
+lnmap('diw', '"_diw')
+lnmap('daw', '"_daw')
+lnmap('diW', '"_diW')
+lnmap('dd', '"_dd')
 -- delete word with Ctrl Backspace
 imap('<C-BS>', '<C-W>')
 -- Copies till the end of a line. Fits with Shift + D, C etc
@@ -821,7 +828,7 @@ xmap('<silent>sdv', '<Plug>SendDownV<cr>')
 nmap('<leader>gg', ':LazyGit<CR>')
 -- NAVIGATION --
 -- Nvim Tree settings
-nmap('<leader>dd', ':NvimTreeToggle<CR>')
+nmap('<leader>df', ':NvimTreeToggle<CR>')
 nmap('<Leader>da', ':NvimTreeFindFile<CR>')
 -- Save buffer
 nmap('<leader>w', ':w<CR>')
