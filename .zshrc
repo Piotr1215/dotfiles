@@ -117,6 +117,7 @@ alias dca='code ${HOME}/dev/dca-prep-kit'
 alias lst='dpkg -l' #List installed packages with their description
 alias dpsa="docker ps -a --format 'table {{.ID}}\t{{.Names}}\t{{.Image}}'" #docker ps -a with only id name and image
 alias dps="docker ps --format 'table {{.ID}}\t{{.Names}}\t{{.Image}}'" #docker ps -a with only id name and image
+# https://gitlab.com/gitlab-org/incubation-engineering/ai-assist/dokter
 alias doc=dokter
 alias gmail='web_search duckduckgo \!gmail'
 alias disk='gdu'
