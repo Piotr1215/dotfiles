@@ -7,6 +7,9 @@ require('packer').startup(function(use)
   use 'cljoly/telescope-repo.nvim'
   use 'kdheepak/lazygit.nvim'
   -- Editor Extensions
+  use { "williamboman/mason.nvim" }
+  use "williamboman/mason-lspconfig.nvim"
+  use "neovim/nvim-lspconfig"
   use "stevearc/dressing.nvim"
   use { 'anuvyklack/hydra.nvim',
     requires = 'anuvyklack/keymap-layer.nvim' -- needed only for pink hydras
@@ -14,19 +17,15 @@ require('packer').startup(function(use)
   use {
     "folke/which-key.nvim",
     config = function()
-      require("which-key").setup {
-        -- your configuration comes here
-        -- or leave it empty to use the default settings
-        -- refer to the configuration section below
-      }
+      require("which-key").setup {}
     end
   }
   use 'vimpostor/vim-tpipeline'
-  use 'famiu/nvim-reload'
   use 'easymotion/vim-easymotion'
   use 'ferrine/md-img-paste.vim'
   use 'L3MON4D3/LuaSnip'
   use 'hrsh7th/vim-vsnip'
+  use 'williamboman/nvim-lsp-installer'
   use 'hrsh7th/vim-vsnip-integ'
   use 'jpalardy/vim-slime'
   use 'junegunn/fzf.vim'
@@ -50,7 +49,6 @@ require('packer').startup(function(use)
     end
   }
   use 'lukas-reineke/indent-blankline.nvim'
-  use 'majutsushi/tagbar'
   use 'mattn/emmet-vim'
   use 'mattn/webapi-vim'
   use 'mhinz/vim-startify'
@@ -66,17 +64,12 @@ require('packer').startup(function(use)
   -- DevOps
   use 'hashivim/vim-terraform'
   -- Telescope
-  use 'christoomey/vim-system-copy'
   use 'ctrlpvim/ctrlp.vim'
   -- Lua
   use {
     "ahmedkhalf/project.nvim",
     config = function()
-      require("project_nvim").setup {
-        -- your configuration comes here
-        -- or leave it empty to use the default settings
-        -- refer to the configuration section below
-      }
+      require("project_nvim").setup {}
     end
   }
   -- Debugging
@@ -106,11 +99,7 @@ require('packer').startup(function(use)
     "folke/trouble.nvim",
     requires = "kyazdani42/nvim-web-devicons",
     config = function()
-      require("trouble").setup {
-        -- your configuration comes here
-        -- or leave it empty to use the default settings
-        -- refer to the configuration section below
-      }
+      require("trouble").setup {}
     end
   }
   use 'dhruvasagar/vim-table-mode'
@@ -179,7 +168,6 @@ require('packer').startup(function(use)
   use 'voldikss/vim-floaterm'
   use 'weirongxu/plantuml-previewer.vim'
   use 'wellle/targets.vim'
-  use { 'williamboman/nvim-lsp-installer', { 'neovim/nvim-lspconfig', } }
   use 'Yggdroot/indentLine'
   use { "ellisonleao/glow.nvim", branch = 'main' }
   use { 'nvim-treesitter/nvim-treesitter', run = ':TSUpdate' }
