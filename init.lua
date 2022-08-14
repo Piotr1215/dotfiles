@@ -128,16 +128,16 @@ require("nvim-tree").setup({
 })
 
 --require("vale").setup({
-  ---- path to the vale binary.
-  --bin = "/usr/local/bin/vale",
-  ---- path to your vale-specific configuration.
-  --vale_config_path = "$HOME/.vale.ini",
+---- path to the vale binary.
+--bin = "/usr/local/bin/vale",
+---- path to your vale-specific configuration.
+--vale_config_path = "$HOME/.vale.ini",
 --})
 
 -- require("null-ls").setup({
-  -- sources = {
-    -- require("null-ls").builtins.diagnostics.vale,
-  -- },
+-- sources = {
+-- require("null-ls").builtins.diagnostics.vale,
+-- },
 -- })
 
 local null_ls = require("null-ls")
@@ -413,7 +413,14 @@ require('packer').startup(function(use)
   use 'sheerun/vim-polyglot'
   use { 'tami5/lspsaga.nvim', requires = { 'neovim/nvim-lspconfig' } }
   use 'tpope/vim-fugitive'
-  use 'tpope/vim-surround'
+  use({
+    "kylechui/nvim-surround",
+    config = function()
+      require("nvim-surround").setup({
+        -- Configuration here, or leave empty to use defaults
+      })
+    end
+  })
   use 'tyru/open-browser.vim'
   use 'vim-syntastic/syntastic'
   use 'voldikss/vim-floaterm'
