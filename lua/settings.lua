@@ -37,7 +37,7 @@ set.softtabstop = 2
 set.autoindent = true
 set.relativenumber = true
 set.incsearch = true
-set.laststatus = 3
+set.laststatus = 2
 
 --cmd('colorscheme PaperColor')
 require('nightfox').setup({
@@ -65,7 +65,7 @@ require('telescope').setup {
   }
 }
 vcmd('colorscheme nightfox')
-require('lualine').setup()
+-- require('lualine').setup()
 require("nvim-tree").setup({
   respect_buf_cwd = true,
   update_cwd = true,
@@ -74,66 +74,6 @@ require("nvim-tree").setup({
     update_cwd = true
   },
 })
-
---require("vale").setup({
----- path to the vale binary.
---bin = "/usr/local/bin/vale",
----- path to your vale-specific configuration.
---vale_config_path = "$HOME/.vale.ini",
---})
-
--- require("null-ls").setup({
--- sources = {
--- require("null-ls").builtins.diagnostics.vale,
--- },
--- })
-
-local null_ls = require("null-ls")
-local helpers = require("null-ls.helpers")
-
-local uplint = {
-  vim.lsp.buf.format({ timeout_ms = 2000 }),
-  method = null_ls.methods.DIAGNOSTICS_ON_SAVE,
-  filetypes = { "yaml" },
-  -- null_ls.generator creates an async source
-  -- that spawns the command with the given arguments and options
-  generator = null_ls.generator({
-    command = "up",
-    args = { "xpls", "serve", "--verbose" },
-    to_stdin = false,
-    from_stderr = true,
-    multiple_files = true,
-    -- choose an output format (raw, json, or line)
-    format = "json",
-    to_temp_file = false,
-    use_cache = false,
-    check_exit_code = function(code, stderr)
-      local success = code <= 1
-
-      if not success then
-        -- can be noisy for things that run often (e.g. diagnostics), but can
-        -- be useful for things that run on demand (e.g. formatting)
-        print(stderr)
-      end
-
-      return success
-    end,
-    -- use helpers to parse the output from string matchers,
-    -- or parse it manually with a function
-    on_output = helpers.diagnostics.from_patterns({
-      {
-        pattern = [[:(%d+):(%d+) [%w-/]+ (.*)]],
-        groups = { "row", "col", "message" },
-      },
-      {
-        pattern = [[:(%d+) [%w-/]+ (.*)]],
-        groups = { "row", "message" },
-      },
-    }),
-  }),
-}
-
-null_ls.register(uplint)
 
 -- Color name (:help cterm-colors) or ANSI code
 -- there are some defaults for image directory and image name, you can change them
