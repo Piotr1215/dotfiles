@@ -5,6 +5,3 @@ require("mappings")
 require("telescope-setup")
 require("hydra-setup")
 require("lsp-setup")
-
-
-
