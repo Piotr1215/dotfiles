@@ -52,7 +52,6 @@ require('packer').startup(function(use)
   use 'mattn/emmet-vim'
   use 'mattn/webapi-vim'
   use 'mhinz/vim-startify'
-  use 'vimpostor/vim-tpipeline'
   -- Programming
   use 'fatih/vim-go'
   -- DevOps
@@ -128,6 +127,7 @@ require('packer').startup(function(use)
   use {
     'nvim-telescope/telescope-fzf-native.nvim', run = 'make'
   }
+  use 'vim-airline/vim-airline'
   use {
     'nvim-telescope/telescope.nvim',
     requires = {
