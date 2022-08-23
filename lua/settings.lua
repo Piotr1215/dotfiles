@@ -76,6 +76,20 @@ require("nvim-tree").setup({
   },
 })
 
+require("telekasten").setup {
+  home = "/home/decoder/zettelkasten",
+  dailies = "/home/decoder/zettelkasten/daily",
+  weeklies = "/home/decoder/zettelkasten/weekly",
+  templates = "/home/decoder/zettelkasten/templates",
+  -- markdown file extension
+  extension = ".md",
+
+  -- following a link to a non-existing note will create it
+  follow_creates_nonexisting = true,
+  dailies_create_nonexisting = true,
+  weeklies_create_nonexisting = true,
+}
+
 -- Color name (:help cterm-colors) or ANSI code
 -- there are some defaults for image directory and image name, you can change them
 vim.g.mdip_imgdir = '_media'
