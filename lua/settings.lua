@@ -65,7 +65,6 @@ require('telescope').setup {
   }
 }
 vcmd('colorscheme nightfox')
--- require('lualine').setup()
 require("nvim-tree").setup({
   respect_buf_cwd = true,
   update_cwd = true,

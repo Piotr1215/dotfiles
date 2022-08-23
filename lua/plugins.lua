@@ -52,13 +52,7 @@ require('packer').startup(function(use)
   use 'mattn/emmet-vim'
   use 'mattn/webapi-vim'
   use 'mhinz/vim-startify'
-  use {
-    'nvim-lualine/lualine.nvim',
-    requires = {
-      'kyazdani42/nvim-web-devicons',
-      'arkav/lualine-lsp-progress',
-    },
-  }
+  use 'vimpostor/vim-tpipeline'
   -- Programming
   use 'fatih/vim-go'
   -- DevOps

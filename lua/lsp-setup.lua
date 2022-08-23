@@ -239,16 +239,6 @@ cmp.setup.cmdline(':', {
      })
 })
 
--- Lualine
-require("lualine").setup({
-     sections = {
-          lualine_c = {
-               { "filename", path = 1 },
-               "lsp_progress",
-          },
-     },
-})
-
 -- indent-blankline
 require("indent_blankline").setup({
      -- for example, context is off by default, use this to turn it on
