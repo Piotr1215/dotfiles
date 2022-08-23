@@ -20,7 +20,6 @@ require('packer').startup(function(use)
       require("which-key").setup {}
     end
   }
-  use 'vimpostor/vim-tpipeline'
   use 'easymotion/vim-easymotion'
   use 'ferrine/md-img-paste.vim'
   use 'L3MON4D3/LuaSnip'

@@ -15,6 +15,7 @@ vcmd('set wildignore+=*/tmp/*,*.so,*.swp,*.zip')
 vcmd('set backspace=indent,eol,start')
 vcmd('set foldexpr=getline(v:lnum)=~\'^\\s*$\'&&getline(v:lnum+1)=~\'\\S\'?\'<1\':1')
 vcmd('set jumpoptions=view')
+vcmd('set t_Co=256')
 
 --Remap for dealing with word wrap
 set.background = 'dark'
@@ -38,6 +39,7 @@ set.autoindent = true
 set.relativenumber = true
 set.incsearch = true
 set.laststatus = 2
+set.cmdheight = 0
 
 --cmd('colorscheme PaperColor')
 require('nightfox').setup({
