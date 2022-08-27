@@ -125,6 +125,13 @@ vim.api.nvim_create_user_command(
   { bang = true }
 )
 
+-- Add -name: to composition resources
+vim.api.nvim_create_user_command(
+  'AddNames',
+  'g/apiVersion: \\(apiextensions\\|platform-composites\\)\\@!/normal!O- name:',
+  { bang = false }
+)
+
 --Open Buildin terminal vertical mode
 vim.api.nvim_create_user_command(
   'VT',
