@@ -131,31 +131,31 @@
   "Patch owner and project labels GCP": {
     "prefix": "patchownerGCP",
     "scope": "yaml",
-    "description": "Patchset Owner and project labels for easier identification and billing for GCP",
+    "description": "Patchset Owner and service labels for easier identification and billing for GCP",
     "body": [
-      "- name: ownerAndProjectLabels",
+      "- name: ownerAndServiceLabels",
       "  patches:",
       "    - type: FromCompositeFieldPath",
       "      fromFieldPath: spec.parameters.owner",
       "      toFieldPath: spec.forProvider.labels[owner]",
       "    - type: FromCompositeFieldPath",
-      "      fromFieldPath: spec.parameters.project",
-      "      toFieldPath: spec.forProvider.labels[project]"
+      "      fromFieldPath: spec.parameters.service",
+      "      toFieldPath: spec.forProvider.labels[service]"
     ]
   },
   "Patch owner and project labels AWS/Azure": {
     "prefix": "patchownerAWS",
     "scope": "yaml",
-    "description": "Patchset Owner and project labels for easier identification and billing AWS/Azure",
+    "description": "Patchset Owner and service labels for easier identification and billing AWS/Azure",
     "body": [
-      "- name: ownerAndProjectLabels",
+      "- name: ownerAndServiceLabels",
       "  patches:",
       "    - type: FromCompositeFieldPath",
       "      fromFieldPath: spec.parameters.owner",
       "      toFieldPath: spec.forProvider.tags[owner]",
       "    - type: FromCompositeFieldPath",
-      "      fromFieldPath: spec.parameters.project",
-      "      toFieldPath: spec.forProvider.tags[project]"
+      "      fromFieldPath: spec.parameters.service",
+      "      toFieldPath: spec.forProvider.tags[service]"
     ]
   },
   "Patch claim name to MR name": {
