@@ -72,6 +72,7 @@ if sysname == 'Linux' then
 end
 -- MOVE AROUND --
 lnmap("tkf", ":lua require('telekasten').find_notes()<CR>") -- Move Line Up in Normal Mode
+nmap("<BS>", "^")
 nmap("<C-f>", ":Pretty<CR>")
 vmap("<S-PageDown>", ":m '>+1<CR>gv=gv") -- Move Line Down in Visual Mode
 vmap("<S-PageUp>", ":m '<-2<CR>gv=gv") -- Move Line Up in Visual Mode
@@ -184,6 +185,7 @@ xmap('im', ':call MarkdownCodeBlock(0)<cr>')
 nmap('<leader>mp', ':MarkdownPreview<CR>')
 -- Fix Markdown Errors
 nmap('<leader>fx', ':<C-u>CocCommand markdownlint.fixAll<CR>')
+nmap('<leader>fmt', ':Pretty<CR>')
 --" Markdown paste image
 
 -- EXTERNAL --
