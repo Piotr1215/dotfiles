@@ -20,6 +20,12 @@ require('packer').startup(function(use)
       require("which-key").setup {}
     end
   }
+  use({
+    "WilsonOh/emoji_picker-nvim",
+    config = function()
+      require("emoji_picker").setup()
+    end,
+  })
   use 'easymotion/vim-easymotion'
   use 'ferrine/md-img-paste.vim'
   use 'L3MON4D3/LuaSnip'
@@ -75,6 +81,7 @@ require('packer').startup(function(use)
   }
   use 'theHamsta/nvim-dap-virtual-text'
   use 'nvim-telescope/telescope-dap.nvim'
+  use 'xiyaowong/telescope-emoji.nvim'
   -- Markdown
   use 'renerocksai/telekasten.nvim'
   use 'SidOfc/mkdx'
