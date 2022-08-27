@@ -5,7 +5,7 @@ vcmd('syntax enable')
 vcmd('syntax on')
 vcmd('filetype on')
 vcmd('filetype plugin indent on')
-vcmd('set clipboard=unnamedplus')
+vcmd('set clipboard+=unnamedplus')
 vcmd('set winbar=%=%m\\ %f')
 vcmd('set completefunc=emoji#complete')
 -- vcmd('set statusline+=%#warningmsg#')
@@ -15,7 +15,7 @@ vcmd('set wildignore+=*/tmp/*,*.so,*.swp,*.zip')
 vcmd('set backspace=indent,eol,start')
 vcmd('set foldexpr=getline(v:lnum)=~\'^\\s*$\'&&getline(v:lnum+1)=~\'\\S\'?\'<1\':1')
 vcmd('set jumpoptions=view')
-vcmd('set t_Co=256')
+-- vcmd('set t_Co=256')
 
 --Remap for dealing with word wrap
 set.background = 'dark'
@@ -39,7 +39,7 @@ set.autoindent = true
 set.relativenumber = true
 set.incsearch = true
 set.laststatus = 2
-set.cmdheight = 0
+set.cmdheight = 1
 
 --cmd('colorscheme PaperColor')
 require('nightfox').setup({
@@ -55,6 +55,9 @@ require('nightfox').setup({
     gitgutter = true,
   }
 })
+
+require("telescope").load_extension("emoji")
+
 require('telescope').setup {
   extensions = {
     fzf = {
@@ -63,10 +66,23 @@ require('telescope').setup {
       override_file_sorter = true, -- override the file sorter
       case_mode = "smart_case", -- or "ignore_case" or "respect_case"
       -- the default case_mode is "smart_case"
+    },
+    emoji = {
+      action = function(emoji)
+        -- argument emoji is a table.
+        -- {name="", value="", cagegory="", description=""}
+
+        vim.fn.setreg("*", emoji.value)
+        print([[Press p or "*p to paste this emoji]] .. emoji.value)
+
+        vim.api.nvim_put({ emoji.value }, 'c', false, true)
+      end,
     }
   }
 }
+
 vcmd('colorscheme nightfox')
+
 require("nvim-tree").setup({
   respect_buf_cwd = true,
   update_cwd = true,
