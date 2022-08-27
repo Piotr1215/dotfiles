@@ -66,17 +66,6 @@ require('telescope').setup {
       override_file_sorter = true, -- override the file sorter
       case_mode = "smart_case", -- or "ignore_case" or "respect_case"
       -- the default case_mode is "smart_case"
-    },
-    emoji = {
-      action = function(emoji)
-        -- argument emoji is a table.
-        -- {name="", value="", cagegory="", description=""}
-
-        vim.fn.setreg("*", emoji.value)
-        print([[Press p or "*p to paste this emoji]] .. emoji.value)
-
-        vim.api.nvim_put({ emoji.value }, 'c', false, true)
-      end,
     }
   }
 }
