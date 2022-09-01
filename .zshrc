@@ -203,6 +203,21 @@ function gacs() {
 }
 
 # Find a repo for authenticated user with gh CLI and cd into it, clone and cd if not found on disk
+function rep() {
+    if [[ -z "$1" ]]; then
+        export repo=$(ls ${HOME}/dev | awk '{print $8}' |  fzf) 
+    else
+        export repo=$(ls ${HOME}/dev | awk '{print $8}' | rg $1 | fzf) 
+    fi
+    if [[ -z "$repo" ]]; then
+        echo "Repository not found"
+      else
+        echo "Repository found locally, entering"
+        cd ${HOME}/dev/$repo
+        onefetch
+    fi
+}
+
 function repo() {
     if [[ -z "$1" ]]; then
         echo "Please provide search term"
