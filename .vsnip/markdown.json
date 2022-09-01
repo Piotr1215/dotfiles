@@ -14,7 +14,7 @@
   "Slides pre-processing": {
     "prefix": "slides_pre",
     "scope": "markdown",
-    "body": ["~~~${1:command}", "${0}", "~~~"],
+    "body": ["```", "~~~${1:command}", "${0}", "~~~", "```"],
     "description": "Inserts slides pre-processing snippet"
   },
   "Bash Code Snippet with surround": {
@@ -42,6 +42,13 @@
     ],
     "description": "Front matter snippet for docosaurus docs"
   },
+
+  "Slides Theme": {
+    "prefix": "theme",
+    "body": ["---", "theme: ~/slides-themes/theme.json", "author: Piotr Zaniewski", "date: MMMM dd, YYYY", "paging: Slide %d / %d", "---"],
+    "description": "Insert header with slides theme"
+  },
+
   "Insert table": {
     "prefix": "table",
     "body": [
@@ -52,6 +59,7 @@
     ],
     "description": "Insert table with 2 rows and 3 columns. First row is heading."
   },
+
   "PlantUML Server Proxy": {
     "scope": "markdown",
     "prefix": "proxy",
