@@ -214,7 +214,9 @@ function rep() {
       else
         echo "Repository found locally, entering"
         cd ${HOME}/dev/$repo
-        onefetch
+        if [[ -d .git ]]; then
+          onefetch
+        fi
     fi
 }
 
