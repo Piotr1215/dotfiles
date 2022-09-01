@@ -179,8 +179,8 @@
     "description": "Patch ToCompositeFieldPath",
     "body": [
       "- type: ToCompositeFieldPath",
-      "  toFieldPath: ${1:toFieldPath}",
-      "  fromFieldPath: ${2:fromFieldPath}"
+      "  fromFieldPath: ${1:fromFieldPath}",
+      "  toFieldPath: ${2:toFieldPath}"
     ]
   },
   "Patch CommbineFromComposite": {
