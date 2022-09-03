@@ -61,6 +61,7 @@ setopt share_history            # share hist between sessions
 setopt bang_hist                # !keyword
 HISTFILE=${ZDOTDIR:-$HOME}/.zsh_history
 
+alias deb=deb-get
 alias work='google-chrome --profile-directory="Profile 2"'
 alias fun='google-chrome --profile-directory="Default"'
 alias tf=terraform
