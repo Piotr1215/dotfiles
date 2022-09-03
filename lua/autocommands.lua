@@ -135,14 +135,14 @@ vim.api.nvim_create_user_command(
 --Open Buildin terminal vertical mode
 vim.api.nvim_create_user_command(
   'VT',
-  "vsplit | lcd %:p:h | terminal",
+  "vsplit | terminal bash -c \"cd %:p:h;zsh\"",
   { bang = false, nargs = '*' }
 )
 
 --Open Buildin terminal
 vim.api.nvim_create_user_command(
   'T',
-  "split | lcd %:h | resize 15 | terminal",
+  "split | resize 15 | terminal bash -c \"cd %:p:h;zsh\"",
   { bang = true, nargs = '*' }
 )
 
