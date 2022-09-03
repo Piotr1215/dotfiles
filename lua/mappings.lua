@@ -92,6 +92,8 @@ emap("<Leader>oo", "<Plug>(easymotion-overwin-f2)")
 nmap(",<space>", ":nohlsearch<CR>")
 vmap("<C-r>", '"hy:%s/<C-r>h//gc<left><left><left>')
 vmap("//", 'y/\\V<C-R>=escape(@",\'/\')<CR><CR>')
+nmap(";;", ":%s:::g<Left><Left><Left>")
+nmap(";'", ":%s:::cg<Left><Left><Left><Left>")
 
 -- MACROS --
 nmap("<Leader>q", "@q")
