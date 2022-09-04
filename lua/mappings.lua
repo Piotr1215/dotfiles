@@ -208,6 +208,7 @@ nmap('<leader>sd', '<Plug>SendDown<cr>')
 xmap('<silent>sdv', '<Plug>SendDownV<cr>')
 -- setup mapping to call :LazyGit
 nmap('<leader>gg', ':LazyGit<CR>')
+
 -- NAVIGATION --
 -- Nvim Tree settings
 nmap('<leader>df', ':NvimTreeToggle<CR>')
