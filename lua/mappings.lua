@@ -268,3 +268,8 @@ tmap("<M-i>", "<C-\\><C-n>:RnvimrResize<CR>")
 nmap("<M-o>", ":RnvimrToggle<CR>")
 tmap("<M-o>", "<C-\\><C-n>:RnvimrToggle<CR>")
 
+-- Harpoon
+nmap("<leader>ha", ":lua require(\"harpoon.mark\").add_file()<CR>")
+nmap("<leader>hm", ":lua require(\"harpoon.ui\").toggle_quick_menu()<CR>")
+nmap("<leader>ht", ":lua require(\"harpoon.tmux\").gotoTerminal(1)<CR>")
+
