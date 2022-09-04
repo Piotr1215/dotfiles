@@ -260,6 +260,11 @@ xmap('<leader>tc', '<Plug>(vsnip-cut-text)')
 
 -- Abbreviations
 vim.cmd('abb cros Crossplane')
-
 -- Telekasten
 nmap('<leader>tk', ':lua require(\'telekasten\').panel()<CR>')
+
+-- Ranger
+tmap("<M-i>", "<C-\\><C-n>:RnvimrResize<CR>")
+nmap("<M-o>", ":RnvimrToggle<CR>")
+tmap("<M-o>", "<C-\\><C-n>:RnvimrToggle<CR>")
+

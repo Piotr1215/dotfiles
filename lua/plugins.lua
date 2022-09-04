@@ -7,6 +7,7 @@ require('packer').startup(function(use)
   use 'cljoly/telescope-repo.nvim'
   use 'kdheepak/lazygit.nvim'
   -- Editor Extensions
+  use 'kevinhwang91/rnvimr' -- https://github.com/kevinhwang91/rnvimr
   use { "williamboman/mason.nvim" }
   use "williamboman/mason-lspconfig.nvim"
   use "neovim/nvim-lspconfig"
