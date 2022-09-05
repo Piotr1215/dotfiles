@@ -92,8 +92,8 @@ emap("<Leader>oo", "<Plug>(easymotion-overwin-f2)")
 nmap(",<space>", ":nohlsearch<CR>")
 vmap("<C-r>", '"hy:%s/<C-r>h//gc<left><left><left>')
 vmap("//", 'y/\\V<C-R>=escape(@",\'/\')<CR><CR>')
-nmap(";;", ":%s:::g<Left><Left><Left>")
-nmap(";'", ":%s:::cg<Left><Left><Left><Left>")
+-- nmap(";;", ":%s:::g<Left><Left><Left>")
+-- nmap(";'", ":%s:::cg<Left><Left><Left><Left>")
 
 -- MACROS --
 nmap("<Leader>q", "@q")
@@ -272,5 +272,6 @@ tmap("<M-o>", "<C-\\><C-n>:RnvimrToggle<CR>")
 -- Harpoon
 nmap("<leader>ha", ":lua require(\"harpoon.mark\").add_file()<CR>")
 nmap("<leader>hm", ":lua require(\"harpoon.ui\").toggle_quick_menu()<CR>")
-nmap("<leader>ht", ":lua require(\"harpoon.tmux\").gotoTerminal(1)<CR>")
+nmap("<leader>hh", ":lua require(\"harpoon.ui\").nav_next()<CR>")
+nmap("<leader>hl", ":lua require(\"harpoon.ui\").nav_prev()<CR>")
 
