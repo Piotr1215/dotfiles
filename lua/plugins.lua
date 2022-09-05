@@ -7,6 +7,7 @@ require('packer').startup(function(use)
   use 'cljoly/telescope-repo.nvim'
   use 'kdheepak/lazygit.nvim'
   -- Editor Extensions
+  use { 'michaelb/sniprun', run = 'bash ./install.sh'} -- https://github.com/michaelb/sniprun
   use 'ThePrimeagen/harpoon' -- https://github.com/ThePrimeagen/harpoon
   use 'kevinhwang91/rnvimr' -- https://github.com/kevinhwang91/rnvimr
   use { "williamboman/mason.nvim" }
@@ -85,6 +86,7 @@ require('packer').startup(function(use)
   use 'nvim-telescope/telescope-dap.nvim'
   use 'xiyaowong/telescope-emoji.nvim'
   -- Markdown
+  use 'jubnzv/mdeval.nvim'
   use 'renerocksai/telekasten.nvim'
   use 'SidOfc/mkdx'
   use({ "iamcco/markdown-preview.nvim",

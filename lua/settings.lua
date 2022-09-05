@@ -41,6 +41,23 @@ set.incsearch = true
 set.laststatus = 2
 set.cmdheight = 1
 
+require 'mdeval'.setup({
+  -- Don't ask before executing code blocks
+  require_confirmation=false,
+  -- Change code blocks evaluation options.
+  eval_options = {
+    -- Set custom configuration for C++
+    cpp = {
+      command = {"clang++", "-std=c++20", "-O0"},
+      default_header = [[
+    #include <iostream>
+    #include <vector>
+    using namespace std;
+      ]]
+    },
+  },
+})
+
 --cmd('colorscheme PaperColor')
 require('nightfox').setup({
   options = {
