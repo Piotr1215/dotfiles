@@ -265,11 +265,31 @@ require("nvim-treesitter.configs").setup({
           enable = true,
      },
 })
+require'packer'.startup(function()
+        use "mfussenegger/nvim-dap"
+end)
 
 local dap, dapui = require("dap"), require("dapui")
 require('nvim-dap-virtual-text').setup()
 require('dap-go').setup()
 require("dapui").setup()
+
+dap.adapters.dockerfile = {
+  type = 'executable';
+  command = 'buildg';
+  args = { 'dap', "serve" };
+}
+
+dap.configurations.dockerfile = {
+    {
+        type = "dockerfile",
+        name = "Dockerfile Configuration",
+        request = "launch",
+        stopOnEntry = true,
+        program = "${file}",
+    },
+}
+
 dap.listeners.after.event_initialized["dapui_config"] = function()
   dapui.open()
 end
