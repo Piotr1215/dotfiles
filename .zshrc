@@ -119,6 +119,7 @@ alias km=kustomize
 alias diskusage='du -sh * | sort -h --reverse'
 alias dls="docker container ls -a"
 alias serve="browser-sync start -s -f . --no-notify --host localhost --port 5000"
+alias dca='mux s dca'
 alias lst='dpkg -l' #List installed packages with their description
 alias dpsa="docker ps -a --format 'table {{.ID}}\t{{.Names}}\t{{.Image}}'" #docker ps -a with only id name and image
 alias dps="docker ps --format 'table {{.ID}}\t{{.Names}}\t{{.Image}}'" #docker ps -a with only id name and image
