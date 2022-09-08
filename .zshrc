@@ -105,6 +105,7 @@ alias gcc='git diff --stat --cached origin/master' # Git Check Commit before pus
 alias docs='docsify serve docs'
 alias glog='git log --graph --oneline --decorate'
 alias music='browse https://www.youtube.com/playlist?list=PL3-_0fT8ay_I9cEIoPNKRN7PcGjnAZ1Re'
+alias getupd='source "${HOME}"/scripts/__getupdates.sh'
 alias k=kubectl
 alias dev='cd ~/dev'
 alias kdump='kubectl get all --all-namespaces'
