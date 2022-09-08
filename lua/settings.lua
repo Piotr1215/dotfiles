@@ -172,3 +172,5 @@ vim.g.mkdp_browser = '/usr/bin/google-chrome'
 vim.g.mkdp_echo_preview_url = 0
 -- Nerdcommenter
 vim.g.NERDSpaceDelims = 1
+-- Ranger
+vim.g.rnvimr_enable_picker = 1
