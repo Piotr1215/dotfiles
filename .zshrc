@@ -100,6 +100,7 @@ alias rest='shutdown now'
 alias vedit='vim ~/.config/nvim/init.lua'
 alias ledit='vim ~/.config/nvim/lua'
 alias zedit='vim ~/.zshrc'
+alias tedit='vim ~/.tmux.conf'
 alias vim='nvim'
 alias gcc='git diff --stat --cached origin/master' # Git Check Commit before pushing
 alias docs='docsify serve docs'
