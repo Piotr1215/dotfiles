@@ -139,6 +139,7 @@ else
 fi
 
 # EXPORT & PATH
+export VISUAL=nvim
 export PATH=/home/decoder/.nimble/bin:$PATH
 export KUBECONFIG=~/.kube/config
 export GOPATH=$HOME/go/
