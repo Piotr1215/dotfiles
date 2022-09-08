@@ -61,6 +61,7 @@ setopt share_history            # share hist between sessions
 setopt bang_hist                # !keyword
 HISTFILE=${ZDOTDIR:-$HOME}/.zsh_history
 
+alias pavu=pavucontrol #Control sound sources, useful for trouble shooting
 alias watch=viddy
 alias cplcom="fc -ln -1 | tr -d '\n' | xsel --clipboard"
 alias deb=deb-get
