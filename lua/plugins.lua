@@ -7,7 +7,7 @@ require('packer').startup(function(use)
   use 'cljoly/telescope-repo.nvim'
   use 'kdheepak/lazygit.nvim'
   -- Editor Extensions
-  use { 'michaelb/sniprun', run = 'bash ./install.sh'} -- https://github.com/michaelb/sniprun
+  use { 'michaelb/sniprun', run = 'bash ./install.sh' } -- https://github.com/michaelb/sniprun
   use 'ThePrimeagen/harpoon' -- https://github.com/ThePrimeagen/harpoon
   use 'kevinhwang91/rnvimr' -- https://github.com/kevinhwang91/rnvimr
   use { "williamboman/mason.nvim" }

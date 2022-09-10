@@ -1,8 +1,8 @@
 local set = vim.opt
 local vcmd = vim.cmd
 
-vcmd('syntax enable')
 vcmd('syntax on')
+vcmd('syntax enable')
 vcmd('filetype on')
 vcmd('filetype plugin indent on')
 vcmd('set clipboard+=unnamedplus')
@@ -16,6 +16,7 @@ vcmd('set backspace=indent,eol,start')
 vcmd('set foldexpr=getline(v:lnum)=~\'^\\s*$\'&&getline(v:lnum+1)=~\'\\S\'?\'<1\':1')
 vcmd('set jumpoptions=view')
 -- vcmd('set t_Co=256')
+vcmd('let g:slime_default_config = {"socket_name": "default", "target_pane": "{last}"}')
 
 --Remap for dealing with word wrap
 set.background = 'dark'
@@ -123,7 +124,7 @@ vim.g.user_emmet_settings = 'webapi#json#decode(join(readfile(expand(\'~/.snippe
 vim.g.indentLine_char = '⦙'
 -- Setup for slime
 vim.g.slime_target = "tmux"
-vim.g.slime_default_config = '{"socket_name": "default", "target_pane": "{last}"}'
+-- vim.g.slime_default_config = '{"socket_name": "default", "target_pane": "{last}"}'
 -- setup for netrw
 vim.g.netrw_winsize = 30
 vim.g.netrw_banner = 0
