@@ -277,6 +277,5 @@ nmap("<leader>hl", ":lua require(\"harpoon.ui\").nav_prev()<CR>")
 
 -- Mdeval
 vim.api.nvim_set_keymap('n', '<leader>ev',
-                        "<cmd>lua require 'mdeval'.eval_code_block()<CR>",
-                        {silent = true, noremap = true})
-
+  "<cmd>lua require 'mdeval'.eval_code_block()<CR>",
+  { silent = true, noremap = true })
