@@ -88,7 +88,7 @@ require('packer').startup(function(use)
   -- Markdown
   use 'jubnzv/mdeval.nvim'
   use 'renerocksai/telekasten.nvim'
-  use 'SidOfc/mkdx'
+  -- use 'SidOfc/mkdx'
   use({ "iamcco/markdown-preview.nvim",
     run = "cd app && npm install",
     setup = function()

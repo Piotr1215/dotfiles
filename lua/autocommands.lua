@@ -91,13 +91,13 @@ vim.cmd
     augroup end
   ]]
 
-vim.cmd
-[[
- augroup MKDX
-   au!
-   au FileType markdown so $HOME/.vim/bundle/mkdx/ftplugin/markdown.vim
- augroup END
-]]
+-- vim.cmd
+-- [[
+ -- augroup MKDX
+   -- au!
+   -- au FileType markdown so $HOME/.vim/bundle/mkdx/ftplugin/markdown.vim
+ -- augroup END
+-- ]]
 if sysname == 'Darwin' then
   api.nvim_exec(
     [[

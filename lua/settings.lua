@@ -15,7 +15,6 @@ vcmd('set wildignore+=*/tmp/*,*.so,*.swp,*.zip')
 vcmd('set backspace=indent,eol,start')
 vcmd('set foldexpr=getline(v:lnum)=~\'^\\s*$\'&&getline(v:lnum+1)=~\'\\S\'?\'<1\':1')
 vcmd('set jumpoptions=view')
--- vcmd('set t_Co=256')
 vcmd('let g:slime_default_config = {"socket_name": "default", "target_pane": "{last}"}')
 
 --Remap for dealing with word wrap
