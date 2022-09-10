@@ -201,11 +201,6 @@ nmap('<Leader>sof', ':set nospell<CR>')
 nmap('<Leader>c', '1z=')
 -- Upload selected to ix.io
 vmap('<Leader>pp', ':w !curl -F "f:1=<--- ix.io<CR>')
--- Execute Command in scratchpad buffer
-nmap('<leader>sr', '<Plug>SendRight<cr>')
-xmap('<silent>srv', '<Plug>SendRightV<cr>')
-nmap('<leader>sd', '<Plug>SendDown<cr>')
-xmap('<silent>sdv', '<Plug>SendDownV<cr>')
 -- setup mapping to call :LazyGit
 nmap('<leader>gg', ':LazyGit<CR>')
 
