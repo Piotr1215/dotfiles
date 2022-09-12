@@ -100,9 +100,12 @@ nmap("<Leader>q", "@q")
 xmap("Q", ":'<,'>:normal @q<CR>")
 lnmap("jq", ":g/{/.!jq .<CR>")
 tmap("<ESC>", "<C-\\><C-n>")
+xmap("<leader>ee", "vamy}o^[PO** Results **^[jjvim:@*!bash")
 
 -- MANIPULATE TEXT --
 -- Copy file name
+-- Replace and keep pasted buffer
+xmap("<leader>p", "\"_dP")
 lnmap("cpf", ":let @* = expand(\"%:t\")<CR>")
 -- Comment paragraphs
 nmap("<silent> <leader>c}", "V}:call NERDComment('x', 'toggle')<CR>")

@@ -33,7 +33,7 @@ vim.api.nvim_create_autocmd("FileType", {
 
 vim.api.nvim_create_autocmd("FileType", {
   pattern = { "markdown" },
-  command = "nmap <buffer><silent> <leader>p :call mdip#MarkdownClipboardImage()<CR>",
+  command = "nmap <buffer><silent> <leader>ps :call mdip#MarkdownClipboardImage()<CR>",
 })
 
 api.nvim_exec(
