@@ -13,6 +13,10 @@ Create a user, in my case user name is `decoder`, and switch to the user directo
 For testing purposes, password is "test", use real password for real installation ofc :)
 
 ```bash
+wget https://raw.githubusercontent.com/Piotr1215/dotfiles/27c5e069d2dc239728e20dececce7e81db958949/create-test-user.sh
+```
+
+```bash
 ./create-test-user.sh -u "decoder" -p "test"
 su decoder
 cd
