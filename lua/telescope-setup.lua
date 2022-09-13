@@ -1,7 +1,21 @@
+require('telescope').setup {
+  extensions = {
+    fzf = {
+      fuzzy = true, -- false will only do exact matching
+      override_generic_sorter = true, -- override the generic sorter
+      override_file_sorter = true, -- override the file sorter
+      case_mode = "smart_case", -- or "ignore_case" or "respect_case"
+      -- the default case_mode is "smart_case"
+    }
+  }
+}
 require('telescope').load_extension('file_browser')
 require('telescope').load_extension('repo')
 require('telescope').load_extension('fzf')
 require('telescope').load_extension('projects')
+require("telescope").load_extension("recent_files")
+require("telescope").load_extension("emoji")
+
 local key = vim.api.nvim_set_keymap
 local set_up_telescope = function()
   local set_keymap = function(mode, bind, cmd)
@@ -20,6 +34,7 @@ local set_up_telescope = function()
   set_keymap('n', '<leader>fh', [[<cmd>lua require('telescope.builtin').help_tags()<CR>]])
   set_keymap('n', '<leader>ft', [[<cmd>lua require('telescope.builtin').tagstack()<CR>]])
   set_keymap('n', '<leader>re', [[<cmd>lua require('telescope.builtin').registers()<CR>]])
+  set_keymap('n', '<leader>rf', [[<cmd>lua require('telescope').extensions.recent_files.pick()<CR>]])
   set_keymap('n', '<leader>fT', [[<cmd>lua require('telescope.builtin').tags{ only_current_buffer = true }<CR>]])
   -- set_keymap('n', '<leader>sf', [[<cmd>lua vim.lsp.buf.formatting()<CR>]])
 end
