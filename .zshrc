@@ -226,6 +226,21 @@ function rep() {
     fi
 }
 
+function sound() {
+    echo "Usage:\n - hdmi: plays sound via main monitor on HDMI3\n - head: plays sound via main headset"
+    if [[ -z "$1" ]]; then
+        echo "Please provide hdmi or head"
+        return
+    fi
+    if [[ "$1" == hdmi ]]; then
+      wpctl set-default 53
+    echo "Sound output set to 53=monitor"
+    else
+      wpctl set-default 31
+    echo "Sound output set to 31=headset"
+    fi
+} 
+
 function repo() {
     if [[ -z "$1" ]]; then
         echo "Please provide search term"
