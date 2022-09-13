@@ -234,7 +234,8 @@ function sound() {
     fi
     if [[ "$1" == hdmi ]]; then
       wpctl set-default 53
-    echo "Sound output set to 53=monitor"
+      wpctl set-mute 52 1
+    echo "Sound output set to 53=monitor, mic muted"
     else
       wpctl set-default 31
     echo "Sound output set to 31=headset"
