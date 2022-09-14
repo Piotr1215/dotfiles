@@ -2,6 +2,7 @@ require('packer').startup(function(use)
   -- Packer
   use 'wbthomason/packer.nvim'
   -- Git
+  use { 'sindrets/diffview.nvim' }
   use 'alaviss/nim.nvim'
   use 'airblade/vim-gitgutter'
   use 'cljoly/telescope-repo.nvim'
@@ -37,7 +38,7 @@ require('packer').startup(function(use)
   use 'hrsh7th/vim-vsnip-integ'
   use 'jpalardy/vim-slime'
   use 'junegunn/fzf.vim'
-  use {"smartpde/telescope-recent-files"}
+  use { "smartpde/telescope-recent-files" }
   use 'nvim-telescope/telescope-symbols.nvim'
   use {
     'kyazdani42/nvim-tree.lua',

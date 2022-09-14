@@ -2,6 +2,7 @@ local sysname = vim.loop.os_uname().sysname
 local api = vim.api
 
 local indentSettings = vim.api.nvim_create_augroup("IndentSettings", { clear = true })
+local goSettings = vim.api.nvim_create_augroup("Go Settings", { clear = true })
 
 vim.api.nvim_create_autocmd("FileType", {
   pattern = { "c", "cpp" },
@@ -29,12 +30,36 @@ vim.api.nvim_create_autocmd("FileType", {
 vim.api.nvim_create_autocmd("FileType", {
   pattern = { "go" },
   command = "nmap <buffer><silent> <leader>fld :%g/ {/normal! zf%<CR>",
+  group = goSettings,
 })
 
 vim.api.nvim_create_autocmd("FileType", {
   pattern = { "markdown" },
   command = "nmap <buffer><silent> <leader>ps :call mdip#MarkdownClipboardImage()<CR>",
 })
+
+vim.api.nvim_create_autocmd({"BufWinEnter"}, {
+  pattern = { "go" },
+  command = "loadview",
+  group = goSettings,
+})
+
+vim.api.nvim_create_autocmd({"BufLeave", "BufWinLeave"}, {
+  pattern = { "go" },
+  command = "mkview",
+  group = goSettings,
+})
+
+-- api.nvim_exec(
+  -- [[
+  -- -- Save and restore manual folds when we exit a file
+  -- augroup SaveManualFolds
+      -- autocmd!
+      -- au BufWinLeave, BufLeave ?* silent! mkview
+      -- au BufWinEnter           ?* silent! loadview
+  -- augroup END
+  -- ]], false
+-- )
 
 api.nvim_exec(
   [[
@@ -93,10 +118,10 @@ vim.cmd
 
 -- vim.cmd
 -- [[
- -- augroup MKDX
-   -- au!
-   -- au FileType markdown so $HOME/.vim/bundle/mkdx/ftplugin/markdown.vim
- -- augroup END
+-- augroup MKDX
+-- au!
+-- au FileType markdown so $HOME/.vim/bundle/mkdx/ftplugin/markdown.vim
+-- augroup END
 -- ]]
 if sysname == 'Darwin' then
   api.nvim_exec(
