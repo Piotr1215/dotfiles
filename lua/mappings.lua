@@ -80,7 +80,7 @@ nmap("<leader>k", ":m .-2<CR>==") -- Move Line Up in Normal Mode
 nmap("<leader>j", ":m .+1<CR>==") -- Move Line Down in Normal Mode
 nmap("<Leader>nh", ":.,/^#/<CR>") -- Got to next markdown header
 nmap("<Leader>em", ":/\\V\\c\\<\\>") -- find exact match
-imap("<C-l>", "<C-o>A") -- useful for passing over braces and quotations
+imap("<C-l>", "<C-o>a") -- useful for passing over braces and quotations
 
 -- SEARCH & REPLACE --
 -- Easy Motion Mappings

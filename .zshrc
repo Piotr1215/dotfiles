@@ -61,6 +61,7 @@ setopt share_history            # share hist between sessions
 setopt bang_hist                # !keyword
 HISTFILE=${ZDOTDIR:-$HOME}/.zsh_history
 
+alias slack='fuzzpak slack 2>/dev/null'
 alias pavu=pavucontrol #Control sound sources, useful for trouble shooting
 alias watch=viddy
 alias cplcom="fc -ln -1 | tr -d '\n' | xsel --clipboard"
@@ -91,7 +92,7 @@ alias ra=ranger
 alias alaw='nohup alacritty --working-directory $PWD >&/dev/null'
 alias ghs='gh s'
 alias ls='exa --long --all --header --icons'
-alias la='exa --long --grid --all --sort=accessed --reverse --header --icons'
+alias la='exa --long --grid --all --sort=accessed --header --icons'
 if [[ $(uname -s) == Linux ]]; then
   alias cat=batcat
 else
@@ -243,11 +244,11 @@ function sound() {
         return
     fi
     if [[ "$1" == hdmi ]]; then
-      wpctl set-default 53
-      wpctl set-mute 52 1
+      wpctl set-default $(wpctl status | grep -E "GP106 High Definition Audio Controller Digital Stereo" | grep "\d+" -Po | head -n 1) 
+      wpctl set-mute $(wpctl status | grep --after-context=3 " ├─ Sources:" | grep "Microphone Mono" | grep "\d+" -Po | head -n 1) 1
     echo "Sound output set to 53=monitor, mic muted"
     else
-      wpctl set-default 31
+      wpctl set-default $(wpctl status | grep -E "\[G533 Wireless Headset Dongle\] Digital Stereo \(IEC958\)" | grep "\d+" -Po | head -n 1)
     echo "Sound output set to 31=headset"
     fi
 } 
