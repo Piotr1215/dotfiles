@@ -61,6 +61,12 @@ setopt share_history            # share hist between sessions
 setopt bang_hist                # !keyword
 HISTFILE=${ZDOTDIR:-$HOME}/.zsh_history
 
+# kubectl aliases
+alias kaf='kubectl apply -f'
+alias kdf='kubectl delete -f'
+
+# regular aliases
+alias diff=colordiff
 alias slack='fuzzpak slack 2>/dev/null'
 alias pavu=pavucontrol #Control sound sources, useful for trouble shooting
 alias watch=viddy
@@ -322,7 +328,7 @@ function pet-select() {
 zle -N pet-select
 stty -ixon
 bindkey '^s' pet-select
-bindkey '^k' autosuggest-accept
+bindkey '^@' autosuggest-accept
 
 [[ /usr/local/bin/kubectl ]] && source <(kubectl completion zsh)
 
