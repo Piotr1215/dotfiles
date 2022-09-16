@@ -153,6 +153,7 @@ vim.g.go_highlight_fields = 1
 vim.g.go_highlight_structs = 1
 vim.g.go_highlight_interfaces = 1
 vim.g.go_highlight_operators = 1
+vim.g.go_fmt_experimental = 1
 -- MarkdownPreview settings
 vim.g.mkdp_browser = '/usr/bin/google-chrome'
 vim.g.mkdp_echo_preview_url = 0
