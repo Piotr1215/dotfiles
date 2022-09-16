@@ -227,7 +227,6 @@ nmap('Zo', '<c-w>=')
 nmap('<Leader>fs', ':FloatermShow<CR>')
 nmap('<Leader>fh', ':FloatermHide<CR>')
 nmap('<Leader>fn', ':FloatermNext<CR>')
-nmap('<Leader>fc', ':FloatermKill<CR>')
 
 -- PROGRAMMING --
 -- Use `[g` and `]g` to navigate diagnostics
