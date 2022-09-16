@@ -58,7 +58,17 @@ require 'mdeval'.setup({
   },
 })
 
---cmd('colorscheme PaperColor')
+require("catppuccin").setup({
+	transparent_background = true,
+	term_colors = true,
+})
+
+require("tokyonight").setup({
+  style = "night", -- The theme comes in three styles, `storm`, a darker variant `night` and `day`
+  transparent = true, -- Enable this to disable setting the background color
+  terminal_colors = true,
+})
+
 require('nightfox').setup({
   options = {
     transparent = true,

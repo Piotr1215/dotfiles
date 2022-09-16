@@ -114,6 +114,9 @@ require('packer').startup(function(use)
   -- Look & Feel
   use 'EdenEast/nightfox.nvim'
   use 'NLKNguyen/papercolor-theme'
+  use 'folke/tokyonight.nvim'
+  use 'rktjmp/lush.nvim'
+  use { "catppuccin/nvim", as = "catppuccin" }
   -- LSP Autocomplete
   use {
     'hrsh7th/cmp-vsnip',
