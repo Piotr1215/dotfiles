@@ -161,3 +161,6 @@ vim.g.mkdp_echo_preview_url = 0
 vim.g.NERDSpaceDelims = 1
 -- Ranger
 vim.g.rnvimr_enable_picker = 1
+-- Startify
+vim.g.startify_session_persistence = 1
+

@@ -38,29 +38,6 @@ vim.api.nvim_create_autocmd("FileType", {
   command = "nmap <buffer><silent> <leader>ps :call mdip#MarkdownClipboardImage()<CR>",
 })
 
-vim.api.nvim_create_autocmd({"BufWinEnter"}, {
-  pattern = { "go" },
-  command = "loadview",
-  group = goSettings,
-})
-
-vim.api.nvim_create_autocmd({"BufLeave", "BufWinLeave"}, {
-  pattern = { "go" },
-  command = "mkview",
-  group = goSettings,
-})
-
--- api.nvim_exec(
-  -- [[
-  -- -- Save and restore manual folds when we exit a file
-  -- augroup SaveManualFolds
-      -- autocmd!
-      -- au BufWinLeave, BufLeave ?* silent! mkview
-      -- au BufWinEnter           ?* silent! loadview
-  -- augroup END
-  -- ]], false
--- )
-
 api.nvim_exec(
   [[
     augroup fileTypes
