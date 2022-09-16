@@ -216,7 +216,7 @@ function gacs() {
 }
 
 # Find a repo for authenticated user with gh CLI and cd into it, clone and cd if not found on disk
-function rep() {
+function repo() {
     if [[ -z "$1" ]]; then
         export repo=$(ls ${HOME}/dev | awk '{print $8}' |  fzf) 
     else
@@ -259,7 +259,7 @@ function sound() {
     fi
 } 
 
-function repo() {
+function old_repo() {
     if [[ -z "$1" ]]; then
         echo "Please provide search term"
         return
