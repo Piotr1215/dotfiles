@@ -178,10 +178,10 @@ vim.g.startify_session_number = 5
 vim.g.startify_files_number = 5
 vim.g.startify_commands = {
   { 'Help Autocmd', 'h nvim_create_autocmd' },
-  { 'Search Dev', 'Telescope find_files search_dirs=~/dev,--hidden,--with-filename' },
-  { 'Search Repos', 'lua require\'telescope\'.extensions.repo.list{search_dirs = {"~/dev"}}' },
-  { 'Ranger', 'RnvimrToggle' },
-  { 'Change Color', 'Telescope colorscheme' }
+  { 'Search Dev:   SPC fd', 'Telescope find_files search_dirs=~/dev,--hidden,--with-filename' },
+  { 'Search Repos: SPC fr', 'lua require\'telescope\'.extensions.repo.list{search_dirs = {"~/dev"}}' },
+  { 'Ranger:       ALT o', 'RnvimrToggle' },
+  { 'Change Color: SPC fc', 'Telescope colorscheme' }
 }
 vim.g.startify_bookmarks = {
   '~/dev/dotfiles/lua',
