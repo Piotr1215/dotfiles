@@ -56,7 +56,6 @@ vim.api.nvim_set_keymap('n', 'k', "v:count == 0 ? 'gk' : 'k'", { noremap = true,
 vim.api.nvim_set_keymap('n', 'j', "v:count == 0 ? 'gj' : 'j'", { noremap = true, expr = true, silent = true })
 vim.keymap.set("n", "<C-j>", [[:keepjumps normal! j}k<cr>]], { noremap = true, silent = true })
 vim.keymap.set("n", "<C-k>", [[:keepjumps normal! k{j<cr>]], { noremap = true, silent = true })
-vim.keymap.set("n", "<Leader><Leader>i", "<cmd>PickIcons<cr>", opts)
 vim.keymap.set("n", "<Leader>ts", "<cmd>Telescope<cr>", opts)
 
 -- MOVE AROUND --
@@ -89,23 +88,24 @@ xmap("<leader>ee", "vamy}o^[PO** Results **^[jjvim:@*!bash")
 
 -- MANIPULATE TEXT --
 -- Replace and keep pasted buffer
-xmap("<leader>p", "\"_dp")
+xmap("<leader>p", "\"_dP")
 lnmap("cpf", ":let @* = expand(\"%:t\")<cr>")
-imap("<c-l>", "<c-o>a") -- useful for passing over braces and quotations
+imap("<C-l>", "<C-o>a") -- useful for passing over braces and quotations
 -- comment paragraphs
 nmap("<silent> <leader>c}", "v}:call nerdcomment('x', 'toggle')<cr>")
 nmap("<silent> <leader>c{", "v{:call nerdcomment('x', 'toggle')<cr>")
 -- insert 2 empty lines and go into inser mode
+nmap("<leader>L", "O<ESC>)")
 nmap("<leader>l", "o<cr>")
 -- select last pasted text
 nmap("gp", "`[v`]")
 -- add line below without entering insert mode!
-nmap("<leader><up>", ':<c-u>put!=repeat([\'\'],v:count)<bar>\']+1<cr>')
-nmap("<leader><down>", ':<c-u>put =repeat([\'\'],v:count)<bar>\'[-1<cr>')
+nmap("<leader><Up>", ':<c-u>put!=repeat([\'\'],v:count)<bar>\']+1<cr>')
+nmap("<leader><Down>", ':<c-u>put =repeat([\'\'],v:count)<bar>\'[-1<cr>')
 -- paste crom clipboard
 nmap("<leader>2", '"*p')
 -- copy selection to clipboard with ctrl+c
-vmap("<c-c>", '"*y')
+vmap("<C-c>", '"*y')
 -- copy word under cusror to the clipboard buffer
 nmap('<leader>yw', '"*yiw')
 -- removes whitespace
@@ -115,24 +115,24 @@ nmap('<leader>i', 'i<space><esc>')
 -- delete word forward in insert mode
 nmap('<leader>i', 'i<space><esc>')
 -- black hole register operations
-lnmap('d', '"_d')
+lnmap('d', '"_D')
 lnmap('diw', '"_diw')
 lnmap('daw', '"_daw')
-lnmap('diw', '"_diw')
+lnmap('diW', '"_diW')
 lnmap('dd', '"_dd')
 -- delete word with ctrl backspace
-imap('<c-bs>', '<c-w>')
+imap('<C-BS>', '<C-W>')
 -- copies till the end of a line. fits with shift + d, c etc
-nmap('y', 'yg_')
+nmap('Y', 'yg_')
 -- replace multiple words simultaniously
 -- repeat, with .
 nmap('<leader>x', '*``cgn')
-nmap('<leader>x', '#``cgn')
+nmap('<leader>X', '#``cgn')
 -- copy from cursor to end of line
 nmap('<leader>y', '"+y$')
 -- cut and copy content to next header #
-nmap('co', ':.,/^#/-1d<cr>')
-nmap('cy', ':.,/^#/-1y<cr>')
+nmap('cO', ':.,/^#/-1d<cr>')
+nmap('cY', ':.,/^#/-1y<cr>')
 -- split line in two
 nmap('<leader>sp', 'i<cr><esc>')
 -- copy function or routine body and keyword
@@ -203,10 +203,6 @@ imap('jk', '<Esc>')
 -- Zoom split windows
 nmap('Zz', '<c-w>_ | <c-w>|')
 nmap('Zo', '<c-w>=')
--- Floatterm settings
-nmap('<Leader>fs', ':FloatermShow<CR>')
-nmap('<Leader>fh', ':FloatermHide<CR>')
-nmap('<Leader>fn', ':FloatermNext<CR>')
 
 -- PROGRAMMING --
 -- Use `[g` and `]g` to navigate diagnostics
@@ -256,3 +252,6 @@ nmap("<leader>hl", ":lua require(\"harpoon.ui\").nav_prev()<CR>")
 vim.api.nvim_set_keymap('n', '<leader>ev',
   "<cmd>lua require 'mdeval'.eval_code_block()<CR>",
   { silent = true, noremap = true })
+
+-- Startify
+lnmap("st", ":Startify<CR>") -- start Startify screen
