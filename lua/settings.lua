@@ -43,12 +43,12 @@ set.cmdheight = 1
 
 require 'mdeval'.setup({
   -- Don't ask before executing code blocks
-  require_confirmation=false,
+  require_confirmation = false,
   -- Change code blocks evaluation options.
   eval_options = {
     -- Set custom configuration for C++
     cpp = {
-      command = {"clang++", "-std=c++20", "-O0"},
+      command = { "clang++", "-std=c++20", "-O0" },
       default_header = [[
     #include <iostream>
     #include <vector>
@@ -59,8 +59,8 @@ require 'mdeval'.setup({
 })
 
 require("catppuccin").setup({
-	transparent_background = true,
-	term_colors = true,
+  transparent_background = true,
+  term_colors = true,
 })
 
 require("tokyonight").setup({
@@ -173,4 +173,15 @@ vim.g.NERDSpaceDelims = 1
 vim.g.rnvimr_enable_picker = 1
 -- Startify
 vim.g.startify_session_persistence = 1
-
+vim.g.startify_change_to_vsc_root = 1
+vim.g.startify_session_number = 5
+vim.g.startify_files_number = 5
+vim.g.startify_commands = {
+  { 'Help Autocmd', 'h nvim_create_autocmd' },
+  { 'Search Dev', 'Telescope find_files search_dirs=~/dev,--hidden,--with-filename' },
+  { 'Search Repos', 'lua require\'telescope\'.extensions.repo.list{search_dirs = {"~/dev"}}' },
+  { 'Ranger', 'RnvimrToggle' },
+  { 'Change Color', 'Telescope colorscheme' }
+}
+vim.g.startify_bookmarks = { '~/dev/dotfiles/lua', '~/.zshrc', '~/.tmux.conf' }
+vim.g.startify_custom_header = "startify#pad(split(system('fortune -s | cowsay | lolcat; date'), '\n'))"
