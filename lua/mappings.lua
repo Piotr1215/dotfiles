@@ -58,6 +58,7 @@ vim.keymap.set("n", "<C-j>", [[:keepjumps normal! j}k<cr>]], { noremap = true, s
 vim.keymap.set("n", "<C-k>", [[:keepjumps normal! k{j<cr>]], { noremap = true, silent = true })
 vim.keymap.set("n", "<Leader><Leader>i", "<cmd>PickIcons<cr>", opts)
 vim.keymap.set("n", "<Leader>ts", "<cmd>Telescope<cr>", opts)
+
 -- MOVE AROUND --
 lnmap("tkf", ":lua require('telekasten').find_notes()<CR>") -- Move Line Up in Normal Mode
 nmap("<BS>", "^")
@@ -68,6 +69,7 @@ nmap("<leader>k", ":m .-2<CR>==") -- Move Line Up in Normal Mode
 nmap("<leader>j", ":m .+1<CR>==") -- Move Line Down in Normal Mode
 
 -- SEARCH & REPLACE --
+nmap("<Leader>em", ":/\\V\\c\\<\\>") -- find exact match
 -- Easy Motion Mappings
 emap("<Leader>o", "<Plug>(easymotion-prefix)")
 emap("<Leader>of", "<Plug>(easymotion-bd-f)")
@@ -87,17 +89,54 @@ xmap("<leader>ee", "vamy}o^[PO** Results **^[jjvim:@*!bash")
 
 -- MANIPULATE TEXT --
 -- Replace and keep pasted buffer
+xmap("<leader>p", "\"_dp")
+lnmap("cpf", ":let @* = expand(\"%:t\")<cr>")
+imap("<c-l>", "<c-o>a") -- useful for passing over braces and quotations
+-- comment paragraphs
+nmap("<silent> <leader>c}", "v}:call nerdcomment('x', 'toggle')<cr>")
+nmap("<silent> <leader>c{", "v{:call nerdcomment('x', 'toggle')<cr>")
+-- insert 2 empty lines and go into inser mode
 nmap("<leader>l", "o<cr>")
+-- select last pasted text
 nmap("gp", "`[v`]")
+-- add line below without entering insert mode!
+nmap("<leader><up>", ':<c-u>put!=repeat([\'\'],v:count)<bar>\']+1<cr>')
+nmap("<leader><down>", ':<c-u>put =repeat([\'\'],v:count)<bar>\'[-1<cr>')
+-- paste crom clipboard
 nmap("<leader>2", '"*p')
+-- copy selection to clipboard with ctrl+c
+vmap("<c-c>", '"*y')
+-- copy word under cusror to the clipboard buffer
 nmap('<leader>yw', '"*yiw')
+-- removes whitespace
+nmap('<leader>rspace', ':%s/\\s\\+$//e')
+-- insert space
+nmap('<leader>i', 'i<space><esc>')
 -- delete word forward in insert mode
+nmap('<leader>i', 'i<space><esc>')
 -- black hole register operations
+lnmap('d', '"_d')
 lnmap('diw', '"_diw')
 lnmap('daw', '"_daw')
+lnmap('diw', '"_diw')
 lnmap('dd', '"_dd')
+-- delete word with ctrl backspace
+imap('<c-bs>', '<c-w>')
+-- copies till the end of a line. fits with shift + d, c etc
+nmap('y', 'yg_')
+-- replace multiple words simultaniously
+-- repeat, with .
+nmap('<leader>x', '*``cgn')
+nmap('<leader>x', '#``cgn')
+-- copy from cursor to end of line
 nmap('<leader>y', '"+y$')
 -- cut and copy content to next header #
+nmap('co', ':.,/^#/-1d<cr>')
+nmap('cy', ':.,/^#/-1y<cr>')
+-- split line in two
+nmap('<leader>sp', 'i<cr><esc>')
+-- copy function or routine body and keyword
+nmap('yaf', '[m{jv]m%y')
 nmap('<leader>wi', ':setlocal textwidth=80<cr>')
 vim.cmd(
   [[
