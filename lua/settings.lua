@@ -183,5 +183,9 @@ vim.g.startify_commands = {
   { 'Ranger', 'RnvimrToggle' },
   { 'Change Color', 'Telescope colorscheme' }
 }
-vim.g.startify_bookmarks = { '~/dev/dotfiles/lua', '~/.zshrc', '~/.tmux.conf' }
+vim.g.startify_bookmarks = {
+  '~/dev/dotfiles/lua',
+  '~/.zshrc',
+  '~/.tmux.conf'
+}
 vim.g.startify_custom_header = "startify#pad(split(system('fortune -s | cowsay | lolcat; date'), '\n'))"
