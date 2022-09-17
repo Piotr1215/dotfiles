@@ -7,7 +7,7 @@ vim.keymap.set({ 'n', 'v' }, '<Space>', '<Nop>', { silent = true })
 vim.g.mapleader = " "
 vim.g.maplocalleader = " "
 
-local sysname = vim.loop.os_uname().sysname
+local opts = { noremap = true, silent = true }
 
 local function map(mode, shortcut, command)
   vim.api.nvim_set_keymap(mode, shortcut, command, { noremap = true, silent = true })
@@ -52,7 +52,6 @@ local function tmap(shortcut, command)
 end
 
 -- }}}
--- Map only if Linux
 vim.api.nvim_set_keymap('n', 'k', "v:count == 0 ? 'gk' : 'k'", { noremap = true, expr = true, silent = true })
 vim.api.nvim_set_keymap('n', 'j', "v:count == 0 ? 'gj' : 'j'", { noremap = true, expr = true, silent = true })
 vim.keymap.set("n", "<C-j>", [[:keepjumps normal! j}k<cr>]], { noremap = true, silent = true })
@@ -66,10 +65,6 @@ vim.keymap.set("n", "<C-9>", "]", opts)
 vim.keymap.set("n", "<C-8>", "[", opts)
 vim.keymap.set("i", "<C-i>", "<cmd>PickIconsInsert<cr>", opts)
 vim.keymap.set("i", "<A-i>", "<cmd>PickAltFontAndSymbolsInsert<cr>", opts)
-if sysname == 'Linux' then
-  nmap('ö', '/')
-  imap('ö', '/')
-end
 -- MOVE AROUND --
 lnmap("tkf", ":lua require('telekasten').find_notes()<CR>") -- Move Line Up in Normal Mode
 nmap("<BS>", "^")
