@@ -56,15 +56,8 @@ vim.api.nvim_set_keymap('n', 'k', "v:count == 0 ? 'gk' : 'k'", { noremap = true,
 vim.api.nvim_set_keymap('n', 'j', "v:count == 0 ? 'gj' : 'j'", { noremap = true, expr = true, silent = true })
 vim.keymap.set("n", "<C-j>", [[:keepjumps normal! j}k<cr>]], { noremap = true, silent = true })
 vim.keymap.set("n", "<C-k>", [[:keepjumps normal! k{j<cr>]], { noremap = true, silent = true })
-local opts = { noremap = true, silent = true }
 vim.keymap.set("n", "<Leader><Leader>i", "<cmd>PickIcons<cr>", opts)
 vim.keymap.set("n", "<Leader>ts", "<cmd>Telescope<cr>", opts)
-vim.keymap.set("i", "<C-9>", "]", opts)
-vim.keymap.set("i", "<C-8>", "[", opts)
-vim.keymap.set("n", "<C-9>", "]", opts)
-vim.keymap.set("n", "<C-8>", "[", opts)
-vim.keymap.set("i", "<C-i>", "<cmd>PickIconsInsert<cr>", opts)
-vim.keymap.set("i", "<A-i>", "<cmd>PickAltFontAndSymbolsInsert<cr>", opts)
 -- MOVE AROUND --
 lnmap("tkf", ":lua require('telekasten').find_notes()<CR>") -- Move Line Up in Normal Mode
 nmap("<BS>", "^")
@@ -73,9 +66,6 @@ vmap("<S-PageDown>", ":m '>+1<CR>gv=gv") -- Move Line Down in Visual Mode
 vmap("<S-PageUp>", ":m '<-2<CR>gv=gv") -- Move Line Up in Visual Mode
 nmap("<leader>k", ":m .-2<CR>==") -- Move Line Up in Normal Mode
 nmap("<leader>j", ":m .+1<CR>==") -- Move Line Down in Normal Mode
-nmap("<Leader>nh", ":.,/^#/<CR>") -- Got to next markdown header
-nmap("<Leader>em", ":/\\V\\c\\<\\>") -- find exact match
-imap("<C-l>", "<C-o>a") -- useful for passing over braces and quotations
 
 -- SEARCH & REPLACE --
 -- Easy Motion Mappings
@@ -87,8 +77,6 @@ emap("<Leader>oo", "<Plug>(easymotion-overwin-f2)")
 nmap(",<space>", ":nohlsearch<CR>")
 vmap("<C-r>", '"hy:%s/<C-r>h//gc<left><left><left>')
 vmap("//", 'y/\\V<C-R>=escape(@",\'/\')<CR><CR>')
--- nmap(";;", ":%s:::g<Left><Left><Left>")
--- nmap(";'", ":%s:::cg<Left><Left><Left><Left>")
 
 -- MACROS --
 nmap("<Leader>q", "@q")
@@ -98,60 +86,18 @@ tmap("<ESC>", "<C-\\><C-n>")
 xmap("<leader>ee", "vamy}o^[PO** Results **^[jjvim:@*!bash")
 
 -- MANIPULATE TEXT --
--- Copy file name
 -- Replace and keep pasted buffer
-xmap("<leader>p", "\"_dP")
-lnmap("cpf", ":let @* = expand(\"%:t\")<CR>")
--- Comment paragraphs
-nmap("<silent> <leader>c}", "V}:call NERDComment('x', 'toggle')<CR>")
-nmap("<silent> <leader>c{", "V{:call NERDComment('x', 'toggle')<CR>")
--- Insert 2 empty lines and go into inser mode
-nmap("<leader>fe", "<Plug>(grammaruos-fixit)")
-nmap("<leader>fa", "<Plug>(grammaruos-fixall)")
-nmap("<leader>L", "O<ESC>O")
 nmap("<leader>l", "o<cr>")
--- Select last pasted text
 nmap("gp", "`[v`]")
--- Add line below without entering insert mode!
-nmap("<leader><Up>", ':<c-u>put!=repeat([\'\'],v:count)<bar>\']+1<cr>')
-nmap("<leader><Down>", ':<c-u>put =repeat([\'\'],v:count)<bar>\'[-1<cr>')
--- Paste crom clipboard
 nmap("<leader>2", '"*p')
--- Copy selection to clipboard with Ctrl+c
-vmap("<C-c>", '"*y')
--- Copy word under cusror to the clipboard buffer
 nmap('<leader>yw', '"*yiw')
--- Removes whitespace
-nmap('<Leader>rspace', ':%s/\\s\\+$//e')
--- Removes empty lines if there are more than 2
-nmap('<Leader>rlines', ':%s/\\n\\{3,}/\\r\\r/e')
--- Insert space
-nmap('<Leader>i', 'i<space><esc>')
 -- delete word forward in insert mode
-nmap('<Leader>i', 'i<space><esc>')
 -- black hole register operations
-lnmap('d', '"_D')
 lnmap('diw', '"_diw')
 lnmap('daw', '"_daw')
-lnmap('diW', '"_diW')
 lnmap('dd', '"_dd')
--- delete word with Ctrl Backspace
-imap('<C-BS>', '<C-W>')
--- Copies till the end of a line. Fits with Shift + D, C etc
-nmap('Y', 'yg_')
--- Replace multiple words simultaniously
--- Repeat, with .
-nmap('<Leader>x', '*``cgn')
-nmap('<Leader>X', '#``cgN')
--- Copy from cursor to end of line
 nmap('<leader>y', '"+y$')
 -- cut and copy content to next header #
-nmap('cO', ':.,/^#/-1d<CR>')
-nmap('cY', ':.,/^#/-1y<CR>')
--- Split line in two
-nmap('<Leader>sp', 'i<CR><Esc>')
--- Copy function or routine body and keyword
-nmap('yaf', '[m{jV]m%y')
 nmap('<leader>wi', ':setlocal textwidth=80<cr>')
 vim.cmd(
   [[
