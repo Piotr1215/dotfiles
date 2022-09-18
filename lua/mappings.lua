@@ -78,6 +78,8 @@ emap("<Leader>oo", "<Plug>(easymotion-overwin-f2)")
 nmap(",<space>", ":nohlsearch<CR>")
 vmap("<C-r>", '"hy:%s/<C-r>h//gc<left><left><left>')
 vmap("//", 'y/\\V<C-R>=escape(@",\'/\')<CR><CR>')
+-- Search only in visual selection using %V atom
+vmap("<C-s>", ":s/\\%V")
 
 -- MACROS --
 nmap("<Leader>q", "@q")
@@ -95,7 +97,7 @@ imap("<C-l>", "<C-o>a") -- useful for passing over braces and quotations
 nmap("<silent> <leader>c}", "v}:call nerdcomment('x', 'toggle')<cr>")
 nmap("<silent> <leader>c{", "v{:call nerdcomment('x', 'toggle')<cr>")
 -- insert 2 empty lines and go into inser mode
-nmap("<leader>L", "O<ESC>)")
+nmap("<leader>L", "O<ESC>O")
 nmap("<leader>l", "o<cr>")
 -- select last pasted text
 nmap("gp", "`[v`]")
