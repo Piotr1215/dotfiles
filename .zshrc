@@ -107,7 +107,7 @@ fi
 alias lzd='docker run --rm -it -v /var/run/docker.sock:/var/run/docker.sock -v /config/lazydocker:/.config/jesseduffield/lazydocker lazyteam/lazydocker'
 alias rest='shutdown now'
 alias vedit='vim ~/.config/nvim/init.lua'
-alias ledit='vim ~/.config/nvim/lua'
+alias dots='vim -S dots.vim'
 alias zedit='vim ~/.zshrc'
 alias tedit='vim ~/.tmux.conf'
 alias vim='nvim'
