@@ -187,6 +187,8 @@ vim.g.startify_commands = {
 vim.g.startify_bookmarks = {
   '~/dev/dotfiles/lua',
   '~/.zshrc',
-  '~/.tmux.conf'
+  '~/.tmux.conf',
+  '~/.taskrc',
+  '~/.config/ranger/rc.conf',
 }
 vim.g.startify_custom_header = "startify#pad(split(system('fortune -s | cowsay | lolcat; date'), '\n'))"
