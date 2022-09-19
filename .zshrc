@@ -253,10 +253,12 @@ function sound() {
     if [[ "$1" == hdmi ]]; then
       wpctl set-default $(wpctl status | grep -E "GP106 High Definition Audio Controller Digital Stereo" | grep "\d+" -Po | head -n 1) 
       wpctl set-mute $(wpctl status | grep --after-context=3 " ├─ Sources:" | grep "Microphone Mono" | grep "\d+" -Po | head -n 1) 1
-    echo "Sound output set to 53=monitor, mic muted"
+      amixer set Master 25%
+    echo "Sound output set to 53=monitor, mic muted\nVolume 25%"
     else
       wpctl set-default $(wpctl status | grep -E "\[G533 Wireless Headset Dongle\] Digital Stereo \(IEC958\)" | grep "\d+" -Po | head -n 1)
-    echo "Sound output set to 31=headset"
+      amixer set Master 100%
+    echo "Sound output set to 31=headset\nVolume 100%"
     fi
 } 
 
