@@ -28,6 +28,11 @@ vim.api.nvim_create_autocmd("FileType", {
 })
 
 vim.api.nvim_create_autocmd("FileType", {
+  pattern = { "bash" },
+  command = "set foldmethod=manual",
+})
+
+vim.api.nvim_create_autocmd("FileType", {
   pattern = { "go" },
   command = "nmap <buffer><silent> <leader>fld :%g/ {/normal! zf%<CR>",
   group = goSettings,
@@ -36,6 +41,11 @@ vim.api.nvim_create_autocmd("FileType", {
 vim.api.nvim_create_autocmd("FileType", {
   pattern = { "markdown" },
   command = "nmap <buffer><silent> <leader>ps :call mdip#MarkdownClipboardImage()<CR>",
+})
+
+vim.api.nvim_create_autocmd({ "BufWritePost" }, {
+  pattern = { "*.sh" },
+  command = "silent! !shfmt -l -w %",
 })
 
 api.nvim_exec(
