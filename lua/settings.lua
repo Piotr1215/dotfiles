@@ -175,8 +175,8 @@ vim.g.rnvimr_enable_picker = 1
 vim.g.startify_session_persistence = 1
 vim.g.startify_change_to_vsc_root = 1
 vim.g.startify_session_number = 5
-vim.g.startify_files_number = 5
-vim.g.startify_session_delete_buffers = 1
+vim.g.startify_files_number = 10
+vim.g.startify_session_delete_buffers = 0
 vim.g.startify_commands = {
   { 'Help Autocmd', 'h nvim_create_autocmd' },
   { 'Search Dev:   SPC fd', 'Telescope find_files search_dirs=~/dev,--hidden,--with-filename' },
