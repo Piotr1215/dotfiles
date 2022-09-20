@@ -89,56 +89,51 @@ tmap("<ESC>", "<C-\\><C-n>")
 xmap("<leader>ee", "vamy}o^[PO** Results **^[jjvim:@*!bash")
 
 -- MANIPULATE TEXT --
--- Replace and keep pasted buffer
-xmap("<leader>p", "\"_dP")
-lnmap("cpf", ":let @* = expand(\"%:t\")<cr>")
-imap("<C-l>", "<C-o>a") -- useful for passing over braces and quotations
--- comment paragraphs
-nmap("<silent> <leader>c}", "v}:call nerdcomment('x', 'toggle')<cr>")
-nmap("<silent> <leader>c{", "v{:call nerdcomment('x', 'toggle')<cr>")
--- insert 2 empty lines and go into inser mode
-nmap("<leader>L", "O<ESC>O")
-nmap("<leader>l", "o<cr>")
--- select last pasted text
-nmap("gp", "`[v`]")
--- add line below without entering insert mode!
-nmap("<leader><Up>", ':<c-u>put!=repeat([\'\'],v:count)<bar>\']+1<cr>')
-nmap("<leader><Down>", ':<c-u>put =repeat([\'\'],v:count)<bar>\'[-1<cr>')
--- paste crom clipboard
-nmap("<leader>2", '"*p')
--- copy selection to clipboard with ctrl+c
-vmap("<C-c>", '"*y')
--- copy word under cusror to the clipboard buffer
-nmap('<leader>yw', '"*yiw')
--- removes whitespace
-nmap('<leader>rspace', ':%s/\\s\\+$//e')
--- insert space
-nmap('<leader>i', 'i<space><esc>')
--- delete word forward in insert mode
-nmap('<leader>i', 'i<space><esc>')
+-- Copy & Paste
+xmap("<leader>p", "\"_dP") -- paste the same yanked text into visual selection
+nmap("S", "\"_diwP") -- substitute current word with last yanked text
+vmap("F", "\"_dP") -- substitute selection with last yanked text
+lnmap("cpf", ":let @+ = expand(\"%:t\")<cr>") -- Copy current file name
+nmap("gp", "`[v`]") -- select last pasted text
+nmap("<leader>2", '"*p') -- paste from * (selection register)
+vmap("<C-c>", '"+y') -- copy selection to clipboard with ctrl+c
+nmap('<leader>yw', '"+yiw') -- copy word under cusror to the clipboard buffer
+nmap('Y', 'yg_') -- copies till the end of a line without a new line, fits with shift + d, c etc
+nmap('<leader>y', '"+y$') -- copy from cursor to end of line
+nmap('yaf', '[m{jv]m%y') -- copy function or routine body and keyword
 -- black hole register operations
 lnmap('d', '"_D')
 lnmap('diw', '"_diw')
 lnmap('daw', '"_daw')
 lnmap('diW', '"_diW')
 lnmap('dd', '"_dd')
+-- useful for passing over braces and quotations
+imap("<C-l>", "<C-o>a")
+-- comment paragraphs
+nmap("<silent> <leader>c}", "v}:call nerdcomment('x', 'toggle')<cr>")
+nmap("<silent> <leader>c{", "v{:call nerdcomment('x', 'toggle')<cr>")
+-- insert 2 empty lines and go into inser mode
+nmap("<leader>L", "O<ESC>O")
+nmap("<leader>l", "o<cr>")
+-- add line below without entering insert mode!
+nmap("<leader><Up>", ':<c-u>put!=repeat([\'\'],v:count)<bar>\']+1<cr>')
+nmap("<leader><Down>", ':<c-u>put =repeat([\'\'],v:count)<bar>\'[-1<cr>')
+-- removes whitespace
+nmap('<leader>rspace', ':%s/\\s\\+$//e')
+-- insert space
+nmap('<leader>i', 'i<space><esc>')
+-- delete word forward in insert mode
+nmap('<leader>i', 'i<space><esc>')
 -- delete word with ctrl backspace
 imap('<C-BS>', '<C-W>')
--- copies till the end of a line. fits with shift + d, c etc
-nmap('Y', 'yg_')
 -- replace multiple words simultaniously
--- repeat, with .
 nmap('<leader>x', '*``cgn')
 nmap('<leader>X', '#``cgn')
--- copy from cursor to end of line
-nmap('<leader>y', '"+y$')
 -- cut and copy content to next header #
 nmap('cO', ':.,/^#/-1d<cr>')
 nmap('cY', ':.,/^#/-1y<cr>')
 -- split line in two
 nmap('<leader>sp', 'i<cr><esc>')
--- copy function or routine body and keyword
-nmap('yaf', '[m{jv]m%y')
 nmap('<leader>wi', ':setlocal textwidth=80<cr>')
 vim.cmd(
   [[
