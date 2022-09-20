@@ -110,7 +110,6 @@ require('packer').startup(function(use)
   }
   use 'dhruvasagar/vim-table-mode'
   use 'godlygeek/tabular'
-  -- use 'plasticboy/vim-markdown'
   use 'ixru/nvim-markdown'
   -- Look & Feel
   use 'EdenEast/nightfox.nvim'
