@@ -30,6 +30,7 @@ require('packer').startup(function(use)
       require("emoji_picker").setup()
     end,
   })
+  use 'austintaylor/vim-commaobject'
   use 'easymotion/vim-easymotion'
   use 'ferrine/md-img-paste.vim'
   use 'L3MON4D3/LuaSnip'
