@@ -91,10 +91,12 @@ xmap("<leader>ee", "vamy}o^[PO** Results **^[jjvim:@*!bash")
 -- MANIPULATE TEXT --
 -- Copy & Paste
 xmap("<leader>p", "\"_dP") -- paste the same yanked text into visual selection
-nmap("S", "\"_diwP") -- substitute current word with last yanked text
-vmap("F", "\"_dP") -- substitute selection with last yanked text
+nmap("<leader>sw", "\"_diwP") -- substitute current word with last yanked text
+nmap("<leader>sW", "\"_diWP") -- substitute current WORD with last yanked text
+vmap("<leader>ss", "\"_dP") -- substitute selection with last yanked text
 lnmap("cpf", ":let @+ = expand(\"%:t\")<cr>") -- Copy current file name
 nmap("gp", "`[v`]") -- select last pasted text
+nmap("<leader>1", '"0p') -- paste from 0 (latest yank)
 nmap("<leader>2", '"*p') -- paste from * (selection register)
 vmap("<C-c>", '"+y') -- copy selection to clipboard with ctrl+c
 nmap('<leader>yw', '"+yiw') -- copy word under cusror to the clipboard buffer
