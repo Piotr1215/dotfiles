@@ -1,0 +1,62 @@
+# /home/decoder/.config/tmuxinator/atosik.yml
+
+name: comp
+root: ~/dev/platform-composites
+
+# Optional tmux socket
+# socket_name: foo
+
+# Note that the pre and post options have been deprecated and will be replaced by
+# project hooks.
+
+# Project hooks
+
+# Runs on project start, always
+on_project_start: git fetch origin --prune
+
+# Run on project start, the first time
+# on_project_first_start: command
+
+# Run on project start, after the first time
+# on_project_restart: command
+
+# Run on project exit ( detaching from tmux session )
+# on_project_exit: command
+
+# Run on project stop
+# on_project_stop: command
+
+# Runs in each window and pane before window/pane specific commands. Useful for setting up interpreter versions.
+# pre_window: tmux source-file ~/.tmux.conf 
+
+# Pass command line options to tmux. Useful for specifying a different tmux.conf.
+# tmux_options: -f ~/.tmux.mac.conf
+
+# Change the command to call tmux.  This can be used by derivatives/wrappers like byobu.
+# tmux_command: byobu
+
+# Specifies (by name or index) which window will be selected on project startup. If not set, the first window is used.
+startup_window: git
+
+# Specifies (by index) which pane of the specified window will be selected on project startup. If not set, the first pane is used.
+startup_pane: "1"
+
+# Controls whether the tmux session should be attached to automatically. Defaults to true.
+# attach: false
+
+windows:
+  - dev:
+      layout: cf44,294x77,0,0[294x18,0,0{147x18,0,0,0,146x18,148,0,2},294x58,0,19,3]
+      panes:
+        - cd ~/dev/platform-composites/examples/; clear; ls
+        - cd ~/dev/platform-composites/package/storagebucket; clear; wm
+        - k9s -c ev
+  - vim:
+      layout: tiled
+      panes:
+        - vim -c "SLoad comp"
+  - git:
+      layout: even-horizontal
+      panes:
+        - exa --grid; cowsay "You go little cow\!"
+        - lg

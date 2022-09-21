@@ -8,9 +8,11 @@ Installation steps on a fresh Ubuntu/PoP_Os! distro.
 
 ### Create User
 
-Create a user, in my case user name is `decoder`, and switch to the user directory.
+Create a user, in my case user name is `decoder`, and switch to the user
+directory.
 
-For testing purposes, password is "test", use real password for real installation ofc :)
+For testing purposes, password is "test", use real password for real
+installation ofc :)
 
 ```bash
 wget https://raw.githubusercontent.com/Piotr1215/dotfiles/27c5e069d2dc239728e20dececce7e81db958949/create-test-user.sh
@@ -20,6 +22,14 @@ wget https://raw.githubusercontent.com/Piotr1215/dotfiles/27c5e069d2dc239728e20d
 ./create-test-user.sh -u "decoder" -p "test"
 su decoder
 cd
+```
+
+### Note on symlinking
+
+Use `stow` to symling whole directories and exclude others, example
+
+```bash
+stow --ignore=".stfolder" --target=/home/decoder/.config/tmuxinator tmuxinator
 ```
 
 ### Clone the repo and install
@@ -36,7 +46,8 @@ Runing `./install` will
 - configure git with given user and email (default values point to my user)
 - install bunch of programs and symling the right
 - most notably, install neovim and configure its plugins
-- arkade is also worth mentioning, it proxies installation of a lot of devops, cloud-native tools
+- arkade is also worth mentioning, it proxies installation of a lot of devops,
+  cloud-native tools
 - kubectl installed with krew plugin manager
 
 ### TODOS
@@ -46,11 +57,13 @@ Runing `./install` will
 
 ## Auto-config commit
 
-Once the dotfiles are symlinked, it is easy to forget to commit them do the repo (there is no indicator on the symlinked file).
+Once the dotfiles are symlinked, it is easy to forget to commit them do the repo
+(there is no indicator on the symlinked file).
 
-FIRST COPY FILE TO THIS REPO AND THAN SYMLINK IT IN THE DESTINATION FOLDER NOT OTHER WAY AROUND!!!
+FIRST COPY FILE TO THIS REPO AND THAN SYMLINK IT IN THE DESTINATION FOLDER NOT
+OTHER WAY AROUND!!!
 
-To symlink a file: (source ->  destination)
+To symlink a file: (source -> destination)
 
 ```bash
 # This will create symlink on the filesystem FROM the file in the repo TO the file in the filesystem
@@ -87,9 +100,11 @@ sudo apt install inotify-hookable -y
 
 ### Write script
 
-This script watches a folder with dotfiles and every time a change to a file is made or a new file is created, commits everything and pushes to git. This also works of course if the changes are made on the symlinked files.
+This script watches a folder with dotfiles and every time a change to a file is
+made or a new file is created, commits everything and pushes to git. This also
+works of course if the changes are made on the symlinked files.
 
-``` bash
+```bash
 cd /home/decoder/dev/dotfiles
 while true; do
     inotify-hookable \
@@ -125,6 +140,6 @@ The setup was tested on:
 Last test date: 18.03.2022
 
 - Ubuntu 20.04
-- Pop!_OS 21.04
-- Katacoda testbed: <https://www.katacoda.com/scenario-examples/courses/environment-usages/ubuntu-2004>
-
+- Pop!\_OS 21.04
+- Katacoda testbed:
+  <https://www.katacoda.com/scenario-examples/courses/environment-usages/ubuntu-2004>
