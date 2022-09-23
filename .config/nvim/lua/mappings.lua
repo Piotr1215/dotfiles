@@ -60,6 +60,9 @@ utils.nmap('<leader>y', '"+y$') -- copy from cursor to end of line
 utils.nmap('yaf', '[m{jv]m%y') -- copy function or routine body and keyword
 -- useful for passing over braces and quotations
 utils.imap("<C-l>", "<C-o>a")
+-- set mark on this line ma
+utils.imap(";[", "<c-o>ma")
+utils.imap("']", "<c-o>mA")
 -- comment paragraphs
 utils.nmap("<silent> <leader>c}", "v}:call nerdcomment('x', 'toggle')<cr>")
 utils.nmap("<silent> <leader>c{", "v{:call nerdcomment('x', 'toggle')<cr>")
