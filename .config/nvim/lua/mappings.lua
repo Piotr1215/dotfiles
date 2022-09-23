@@ -13,11 +13,8 @@ vim.api.nvim_set_keymap('n', 'j', "v:count == 0 ? 'gj' : 'j'", { noremap = true,
 vim.keymap.set("n", "<C-j>", [[:keepjumps normal! j}k<cr>]], opts)
 vim.keymap.set("n", "<C-k>", [[:keepjumps normal! k{j<cr>]], opts)
 vim.keymap.set("n", "<Leader>ts", "<cmd>Telescope<cr>", opts)
-
--- MOVE AROUND --
 utils.lnmap("tkf", ":lua require('telekasten').find_notes()<CR>") -- Move Line Up in Normal Mode
 utils.nmap("<BS>", "^")
-utils.nmap("<C-f>", ":Pretty<CR>")
 utils.vmap("<S-PageDown>", ":m '>+1<CR>gv=gv") -- Move Line Down in Visual Mode
 utils.vmap("<S-PageUp>", ":m '<-2<CR>gv=gv") -- Move Line Up in Visual Mode
 utils.nmap("<leader>k", ":m .-2<CR>==") -- Move Line Up in Normal Mode
@@ -59,12 +56,6 @@ utils.nmap('<leader>yw', '"+yiw') -- copy word under cusror to the clipboard buf
 utils.nmap('Y', 'yg_') -- copies till the end of a line without a new line, fits with shift + d, c etc
 utils.nmap('<leader>y', '"+y$') -- copy from cursor to end of line
 utils.nmap('yaf', '[m{jv]m%y') -- copy function or routine body and keyword
--- black hole register operations
-utils.lnmap('d', '"_D')
-utils.lnmap('diw', '"_diw')
-utils.lnmap('daw', '"_daw')
-utils.lnmap('diW', '"_diW')
-utils.lnmap('dd', '"_dd')
 -- useful for passing over braces and quotations
 utils.imap("<C-l>", "<C-o>a")
 -- comment paragraphs
