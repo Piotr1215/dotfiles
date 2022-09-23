@@ -35,6 +35,7 @@ utils.vmap("//", 'y/\\V<C-R>=escape(@",\'/\')<CR><CR>')
 utils.vmap("<C-s>", ":s/\\%V")
 
 -- MACROS --
+utils.nmap("<leader>gt",":!ctags -R --exclude=.git--exclude=vendor --exclude=node_modules --exclude=db --exclude=log .<CR>")
 utils.nmap("<Leader>q", "@q")
 utils.xmap("Q", ":'<,'>:normal @q<CR>")
 utils.lnmap("jq", ":g/{/.!jq .<CR>")
@@ -69,6 +70,8 @@ utils.nmap("<silent> <leader>c{", "v{:call nerdcomment('x', 'toggle')<cr>")
 -- insert 2 empty lines and go into inser mode
 utils.nmap("<leader>L", "O<ESC>O")
 utils.nmap("<leader>l", "o<cr>")
+-- Format with pretty
+utils.nmap("<C-f>", ":Pretty<CR>")
 -- add line below without entering insert mode!
 utils.nmap("<leader><Up>", ':<c-u>put!=repeat([\'\'],v:count)<bar>\']+1<cr>')
 utils.nmap("<leader><Down>", ':<c-u>put =repeat([\'\'],v:count)<bar>\'[-1<cr>')
