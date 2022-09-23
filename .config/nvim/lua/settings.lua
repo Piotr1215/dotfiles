@@ -26,6 +26,8 @@ set.updatetime = 300
 set.autochdir = true
 set.splitright = true -- put new splits to the right
 set.splitbelow = true -- put new splits below
+set.lazyredraw = true -- do not redraw for macros, faster execution
+set.undofile = true -- persistent undo even after session close
 
 set.number = true
 set.encoding = "utf-8"
