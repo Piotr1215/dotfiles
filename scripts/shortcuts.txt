@@ -52,6 +52,8 @@ Ctrl + w + Ctrl + r             - Rotate splits
 Ctrl + w + hjkl + Ctrl + w x    - Swap position of 2 panes. Navigate from the
                                   window to the one u want to swap with and hit x 
 :echo maparg("<leader>ff", "n") - this will detect what mapping maps to~
+q:                              - enter commands history
+q/                              - enter search history
 
 # *** Insert Mode *** #
 Ctrl + y            - copy character from the line above
