@@ -43,6 +43,8 @@ utils.xmap("<leader>ee", "vamy}o^[PO** Results **^[jjvim:@*!bash")
 
 -- MANIPULATE TEXT --
 -- Copy & Paste
+utils.nmap("x", "\"_d") -- make x delete stuff into black hole register
+utils.omap("x", "\"_d") -- delete into black hole register but as operator pending
 utils.xmap("<leader>p", "\"_dP") -- paste the same yanked text into visual selection
 utils.nmap("<leader>sw", "\"_diwP") -- substitute current word with last yanked text
 utils.nmap("<leader>sW", "\"_diWP") -- substitute current WORD with last yanked text
