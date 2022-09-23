@@ -38,6 +38,7 @@ local set_up_telescope = function()
   set_keymap('n', '<leader>fc', [[<cmd>lua require('telescope.builtin').colorscheme()<CR>]])
   set_keymap('n', '<leader>rf', [[<cmd>lua require('telescope').extensions.recent_files.pick()<CR>]])
   set_keymap('n', '<leader>fT', [[<cmd>lua require('telescope.builtin').tags{ only_current_buffer = true }<CR>]])
+  set_keymap('n', '<leader>fm', [[<cmd>Telescope emoji<CR>]])
   -- set_keymap('n', '<leader>sf', [[<cmd>lua vim.lsp.buf.formatting()<CR>]])
 end
 
