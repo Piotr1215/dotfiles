@@ -46,7 +46,6 @@ require('packer').startup(function(use)
   use 'hrsh7th/vim-vsnip'
   use 'williamboman/nvim-lsp-installer'
   use 'hrsh7th/vim-vsnip-integ'
-  use 'jpalardy/vim-slime'
   use 'junegunn/fzf.vim'
   use { "smartpde/telescope-recent-files" }
   use 'nvim-telescope/telescope-symbols.nvim'
