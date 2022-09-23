@@ -5,6 +5,11 @@ vim.keymap.set({ 'n', 'v' }, '<Space>', '<Nop>', { silent = true })
 vim.g.mapleader = " "
 vim.g.maplocalleader = " "
 
+-- MOVE AROUND --
+-- j/k moves over virtual (wrapped) lines
+vim.api.nvim_set_keymap('n', 'k', "v:count == 0 ? 'gk' : 'k'", { noremap = true, expr = true, silent = true })
+vim.api.nvim_set_keymap('n', 'j', "v:count == 0 ? 'gj' : 'j'", { noremap = true, expr = true, silent = true })
+-- Navigate between paragraphs and add to jumplist
 vim.keymap.set("n", "<C-j>", [[:keepjumps normal! j}k<cr>]], opts)
 vim.keymap.set("n", "<C-k>", [[:keepjumps normal! k{j<cr>]], opts)
 vim.keymap.set("n", "<Leader>ts", "<cmd>Telescope<cr>", opts)
