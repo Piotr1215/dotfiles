@@ -180,7 +180,7 @@ vim.g.startify_commands = {
   { 'Change Color: SPC fc', 'Telescope colorscheme' }
 }
 vim.g.startify_bookmarks = {
-  '~/dev/dotfiles/lua',
+  '~/.config/nvim/lua',
   '~/.zshrc',
   '~/.tmux.conf',
   '~/.taskrc',
