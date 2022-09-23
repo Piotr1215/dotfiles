@@ -17,7 +17,7 @@ vim.api.nvim_create_autocmd("FileType", {
 })
 
 vim.api.nvim_create_autocmd("FileType", {
-  pattern = { "markdown", "python" },
+  pattern = { "python" },
   command = "setlocal expandtab shiftwidth=4 softtabstop=4 autoindent",
   group = indentSettings,
 })
@@ -36,11 +36,6 @@ vim.api.nvim_create_autocmd("FileType", {
   pattern = { "go" },
   command = "nmap <buffer><silent> <leader>fld :%g/ {/normal! zf%<CR>",
   group = goSettings,
-})
-
-vim.api.nvim_create_autocmd("FileType", {
-  pattern = { "markdown" },
-  command = "nmap <buffer><silent> <leader>ps :call mdip#MarkdownClipboardImage()<CR>",
 })
 
 vim.api.nvim_create_autocmd({ "BufWritePost" }, {
