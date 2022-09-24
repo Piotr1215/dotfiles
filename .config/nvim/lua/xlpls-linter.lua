@@ -7,9 +7,10 @@ local xpls = {
     -- null_ls.generator creates an async source
     -- that spawns the command with the given arguments and options
     generator = null_ls.generator({
-        command = "up xpls serve",
-        to_stdin = false,
-        from_stderr = false,
+        command = "up",
+        args = { "xpls serve --verbose" },
+        to_stdin = true,
+        from_stderr = true,
         -- choose an output format (raw, json, or line)
         format = "line",
         check_exit_code = function(code, stderr)

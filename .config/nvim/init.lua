@@ -6,3 +6,5 @@ require("telescope-setup")
 require("hydra-setup")
 require("lsp-setup")
 require("which-key-setup")
+-- require('xlpls-linter')
+
