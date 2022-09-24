@@ -173,7 +173,8 @@ vim.g.startify_session_number = 5
 vim.g.startify_files_number = 10
 vim.g.startify_session_delete_buffers = 0
 vim.g.startify_commands = {
-  { 'Help Autocmd', 'h nvim_create_autocmd' },
+  { 'Help Features', 'h nvim-features' },
+  { 'Help Quickref', 'h quickref' },
   { 'Search Dev:   SPC fd', 'Telescope find_files search_dirs=~/dev,--hidden,--with-filename' },
   { 'Search Repos: SPC fr', 'lua require\'telescope\'.extensions.repo.list{search_dirs = {"~/dev"}}' },
   { 'Ranger:       ALT o', 'RnvimrToggle' },
