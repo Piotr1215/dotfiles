@@ -207,3 +207,4 @@ vim.api.nvim_set_keymap('n', '<leader>ev', "<cmd>lua require 'mdeval'.eval_code_
 
 -- Startify
 utils.lnmap("st", ":Startify<CR>") -- start Startify screen
+utils.lnmap("cd", ":cd %:p:h<CR>:pwd<CR>") -- change to current directory of active file and print out
