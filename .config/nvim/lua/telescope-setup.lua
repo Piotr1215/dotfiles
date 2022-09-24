@@ -5,10 +5,11 @@ require('telescope').setup {
       override_generic_sorter = true, -- override the generic sorter
       override_file_sorter = true, -- override the file sorter
       case_mode = "smart_case", -- or "ignore_case" or "respect_case"
-      -- the default case_mode is "smart_case"
-    }
+    },
+    file_browser = {}
   }
 }
+
 require('telescope').load_extension('file_browser')
 require('telescope').load_extension('repo')
 require('telescope').load_extension('fzf')
@@ -22,8 +23,7 @@ local set_up_telescope = function()
     key(mode, bind, cmd, { noremap = true, silent = true })
   end
   set_keymap('n', '<leader><leader>', [[<cmd>lua require('telescope.builtin').buffers()<CR>]])
-  --set_keymap('n', '<leader>tf', [[<cmd>lua require('telescope.builtin').find_files({find_command = {'rg', '--files', '--hidden', '-g', '!.git' }})<CR>]])
-  set_keymap('n', '<leader>ff', [[<cmd>lua require('telescope.builtin').find_files({search_dirs = {"$PWD"}})<CR>]])
+  set_keymap('n', '<leader>ff', [[<cmd>lua require('telescope.builtin').find_files({find_command = {'rg', '--files', '--hidden', '-g', '!.git' }})<CR>]])
   set_keymap('n', '<leader>fd', [[<cmd>lua require('telescope.builtin').find_files({search_dirs = {"~/dev"}})<CR>]])
   set_keymap('n', '<leader>fr', [[<cmd>lua require'telescope'.extensions.repo.list{search_dirs = {"~/dev"}}<CR>]])
   set_keymap('n', '<leader>fw', [[<cmd>lua require('telescope.builtin').live_grep({hidden = true})<CR>]])
@@ -39,8 +39,6 @@ local set_up_telescope = function()
   set_keymap('n', '<leader>rf', [[<cmd>lua require('telescope').extensions.recent_files.pick()<CR>]])
   set_keymap('n', '<leader>fT', [[<cmd>lua require('telescope.builtin').tags{ only_current_buffer = true }<CR>]])
   set_keymap('n', '<leader>fm', [[<cmd>Telescope emoji<CR>]])
-  -- set_keymap('n', '<leader>sf', [[<cmd>lua vim.lsp.buf.formatting()<CR>]])
 end
 
 set_up_telescope()
-
