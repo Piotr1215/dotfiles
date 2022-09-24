@@ -110,13 +110,6 @@ if sysname == 'Darwin' then
          augroup end
        ]], false)
 end
-require('telescope').setup {
-  --  defaults   = {},
-  --  pickers    = {},
-  extensions = {
-    file_browser = {}
-  }
-}
 -- User commands {{{
 -- Format with default CocAction
 vim.api.nvim_create_user_command(
