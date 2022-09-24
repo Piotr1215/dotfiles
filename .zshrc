@@ -67,6 +67,7 @@ alias kdf='kubectl delete -f'
 
 # regular aliases
 alias v=nvim
+alias rg='rg --hidden'
 alias diff=colordiff
 alias slack='fuzzpak slack 2>/dev/null'
 alias pavu=pavucontrol #Control sound sources, useful for trouble shooting
@@ -172,6 +173,7 @@ export PATH="$HOME/.yarn/bin:$HOME/.config/yarn/global/node_modules/.bin:$PATH"
 export PATH=$PATH:${HOME}/bin
 export NVM_DIR="$HOME/.nvm"
 export RANGER_LOAD_DEFAULT_RC=FALSE
+export RIPGREP_CONFIG_PATH=$HOME/.ripgreprc
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
 [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
 
