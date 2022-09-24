@@ -3,18 +3,10 @@ require('packer').startup(function(use)
   use 'wbthomason/packer.nvim'
   -- Git
   use { 'sindrets/diffview.nvim' }
-  use 'alaviss/nim.nvim'
-  use 'airblade/vim-gitgutter'
-  use 'cljoly/telescope-repo.nvim'
-  use 'kdheepak/lazygit.nvim'
-  -- Editor Extensions
-  use { 'michaelb/sniprun', run = 'bash ./install.sh' } -- https://github.com/michaelb/sniprun
+  -- Editor Extensions {{{
   use 'ThePrimeagen/harpoon' -- https://github.com/ThePrimeagen/harpoon
   use 'kevinhwang91/rnvimr' -- https://github.com/kevinhwang91/rnvimr
-  use { "williamboman/mason.nvim" }
-  use "williamboman/mason-lspconfig.nvim"
-  use "neovim/nvim-lspconfig"
-  use "stevearc/dressing.nvim"
+  use 'airblade/vim-gitgutter'
   use { 'anuvyklack/hydra.nvim',
     requires = 'anuvyklack/keymap-layer.nvim' -- needed only for pink hydras
   }
@@ -33,23 +25,26 @@ require('packer').startup(function(use)
       }
     end,
   }
-  use({
-    "WilsonOh/emoji_picker-nvim",
-    config = function()
-      require("emoji_picker").setup()
-    end,
-  })
+  use 'lukas-reineke/indent-blankline.nvim'
   use 'machakann/vim-swap'
   use 'austintaylor/vim-commaobject'
   use 'easymotion/vim-easymotion'
   use 'ferrine/md-img-paste.vim'
-  use 'L3MON4D3/LuaSnip'
-  use 'hrsh7th/vim-vsnip'
-  use 'williamboman/nvim-lsp-installer'
-  use 'hrsh7th/vim-vsnip-integ'
+  use {
+    "cuducos/yaml.nvim",
+    ft = { "yaml" }, -- optional
+    requires = {
+      "nvim-treesitter/nvim-treesitter",
+      "nvim-telescope/telescope.nvim" -- optional
+    },
+  }
+  -- }}}
+  -- File System Integration {{{
+  use {
+    'junegunn/fzf',
+    run = './install --bin'
+  }
   use 'junegunn/fzf.vim'
-  use { "smartpde/telescope-recent-files" }
-  use 'nvim-telescope/telescope-symbols.nvim'
   use {
     'kyazdani42/nvim-tree.lua',
     requires = {
@@ -57,58 +52,33 @@ require('packer').startup(function(use)
     },
     tag = 'nightly' -- optional, updated every week. (see issue #1193)
   }
-  use {
-    'junegunn/fzf',
-    run = './install --bin'
-  }
-  use {
-    "folke/zen-mode.nvim",
-    config = function()
-      require("zen-mode").setup {
-      }
-    end
-  }
-  use 'lukas-reineke/indent-blankline.nvim'
-  use 'mattn/emmet-vim'
-  use 'mattn/webapi-vim'
-  use 'mhinz/vim-startify'
-  -- Programming
-  use 'fatih/vim-go'
-  -- DevOps
-  use 'hashivim/vim-terraform'
-  -- Telescope
+  -- }}}
+  -- Telescope {{{
+  use 'nvim-telescope/telescope-symbols.nvim'
+  use 'cljoly/telescope-repo.nvim'
+  use 'kdheepak/lazygit.nvim'
   use 'ctrlpvim/ctrlp.vim'
-  -- Lua
   use {
-    "ahmedkhalf/project.nvim",
-    config = function()
-      require("project_nvim").setup {}
-    end
-  }
-  -- Debugging
-  use 'mfussenegger/nvim-dap'
-  use 'leoluz/nvim-dap-go'
-  use {
-    "rcarriga/nvim-dap-ui",
+    'nvim-telescope/telescope.nvim',
     requires = {
-      "mfussenegger/nvim-dap"
+      { 'nvim-lua/popup.nvim' },
+      { 'nvim-lua/plenary.nvim' }
     }
   }
-  use 'theHamsta/nvim-dap-virtual-text'
-  use 'nvim-telescope/telescope-dap.nvim'
-  use 'xiyaowong/telescope-emoji.nvim'
-  -- Markdown
-  use 'jubnzv/mdeval.nvim'
-  use 'renerocksai/telekasten.nvim'
-  -- use 'SidOfc/mkdx'
-  use({ "iamcco/markdown-preview.nvim",
-    run = "cd app && npm install",
-    setup = function()
-      vim.g.mkdp_filetypes = { "markdown" }
-    end,
-    ft = { "markdown" }, })
-  use 'dhruvasagar/vim-open-url'
-  use 'marcelofern/vale.nvim'
+  use {
+    'nvim-telescope/telescope-file-browser.nvim'
+  }
+  use {
+    'nvim-telescope/telescope-fzf-native.nvim', run = 'make'
+  }
+  use { "smartpde/telescope-recent-files" }
+  -- }}}
+  -- LSP {{{
+  use { "williamboman/mason.nvim" }
+  use "williamboman/mason-lspconfig.nvim"
+  use 'williamboman/nvim-lsp-installer'
+  use "neovim/nvim-lspconfig"
+  use 'mfussenegger/nvim-dap'
   use 'jose-elias-alvarez/null-ls.nvim'
   use {
     "folke/trouble.nvim",
@@ -117,15 +87,6 @@ require('packer').startup(function(use)
       require("trouble").setup {}
     end
   }
-  use 'dhruvasagar/vim-table-mode'
-  use 'godlygeek/tabular'
-  use 'ixru/nvim-markdown'
-  -- Look & Feel
-  use 'EdenEast/nightfox.nvim'
-  use 'NLKNguyen/papercolor-theme'
-  use 'folke/tokyonight.nvim'
-  use 'rktjmp/lush.nvim'
-  use { "catppuccin/nvim", as = "catppuccin" }
   -- LSP Autocomplete
   use {
     'hrsh7th/cmp-vsnip',
@@ -144,29 +105,64 @@ require('packer').startup(function(use)
       'hrsh7th/cmp-cmdline',
     }
   }
-  use { 'mhartington/formatter.nvim' }
-  use { 'neoclide/coc.nvim', branch = 'release' }
+  use 'leoluz/nvim-dap-go'
   use {
-    'nvim-telescope/telescope-file-browser.nvim'
-  }
-  use {
-    'nvim-telescope/telescope-fzf-native.nvim', run = 'make'
-  }
-  use 'vim-airline/vim-airline'
-  use {
-    'nvim-telescope/telescope.nvim',
+    "rcarriga/nvim-dap-ui",
     requires = {
-      { 'nvim-lua/popup.nvim' },
-      { 'nvim-lua/plenary.nvim' }
+      "mfussenegger/nvim-dap"
     }
   }
+  use 'theHamsta/nvim-dap-virtual-text'
+  use 'nvim-telescope/telescope-dap.nvim'
+  use "stevearc/dressing.nvim"
+  -- }}}
+  use 'L3MON4D3/LuaSnip'
+  use 'hrsh7th/vim-vsnip'
+  use 'hrsh7th/vim-vsnip-integ'
+  use 'mattn/emmet-vim'
+  use 'mattn/webapi-vim'
+  use 'mhinz/vim-startify'
+  -- Programming
+  use 'fatih/vim-go'
+  -- DevOps
+  use 'hashivim/vim-terraform'
+  use 'xiyaowong/telescope-emoji.nvim'
+  -- Markdown {{{
+  use 'jubnzv/mdeval.nvim'
+  use 'Yggdroot/indentLine'
+  use 'tyru/open-browser.vim'
+  -- Fenced edit of markdown code blocks
+  use {
+    'AckslD/nvim-FeMaco.lua',
+    config = 'require("femaco").setup()',
+  }
+  use 'ixru/nvim-markdown'
+  use 'dhruvasagar/vim-open-url'
+  use 'marcelofern/vale.nvim'
+  use 'dhruvasagar/vim-table-mode'
+  use 'renerocksai/telekasten.nvim'
+  use({ "iamcco/markdown-preview.nvim",
+    run = "cd app && npm install",
+    setup = function()
+      vim.g.mkdp_filetypes = { "markdown" }
+    end,
+    ft = { "markdown" }, })
+  -- Look & Feel {{{
+  use 'EdenEast/nightfox.nvim'
+  use 'NLKNguyen/papercolor-theme'
+  use 'folke/tokyonight.nvim'
+  use 'rktjmp/lush.nvim'
+  use { "catppuccin/nvim", as = "catppuccin" }
+  -- }}}
+  use { 'mhartington/formatter.nvim' }
+  use { 'neoclide/coc.nvim', branch = 'release' }
+  use 'vim-airline/vim-airline'
   use 'onsails/lspkind-nvim'
   use 'preservim/nerdcommenter'
   use 'Raimondi/delimitMate'
-  use 'rhysd/vim-clang-format'
   use 'ryanoasis/vim-devicons'
   use 'sakshamgupta05/vim-todo-highlight'
-  use 'sheerun/vim-polyglot'
+  -- use 'sheerun/vim-polyglot'
   use { 'tami5/lspsaga.nvim', requires = { 'neovim/nvim-lspconfig' } }
   use 'tpope/vim-fugitive'
   use({
@@ -177,17 +173,9 @@ require('packer').startup(function(use)
       })
     end
   })
-  -- Fenced edit of markdown code blocks
-  use {
-    'AckslD/nvim-FeMaco.lua',
-    config = 'require("femaco").setup()',
-  }
-  use 'tyru/open-browser.vim'
-  use 'vim-syntastic/syntastic'
   use 'voldikss/vim-floaterm'
   use 'weirongxu/plantuml-previewer.vim'
   use 'wellle/targets.vim'
-  use 'Yggdroot/indentLine'
   use { "ellisonleao/glow.nvim", branch = 'main' }
   use { 'nvim-treesitter/nvim-treesitter', run = ':TSUpdate' }
 end)
