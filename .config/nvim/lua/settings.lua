@@ -152,6 +152,15 @@ vim.g.ctrlp_custom_ignore = {
   file = { '\\v\\.(exe|so|dll)$' },
   link = { 'some_bad_symbolic_links' },
 }
+vim.cmd [[
+let g:PaperColor_Theme_Options = {
+  \   'theme': {
+  \     'default.dark': {
+  \       'transparent_background': 1
+  \     }
+  \   }
+  \ }
+]]
 -- setup for indent line
 vim.g.indentLine_char = '|'
 vim.g.go_fmt_command = "goimports"
