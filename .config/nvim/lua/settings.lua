@@ -23,7 +23,6 @@ set.smartcase = true -- do not ignore case with capitals
 set.scrolloff = 8
 set.hlsearch = true
 set.updatetime = 300
-set.autochdir = true
 set.splitright = true -- put new splits to the right
 set.splitbelow = true -- put new splits below
 set.lazyredraw = true -- do not redraw for macros, faster execution
@@ -167,6 +166,7 @@ vim.g.NERDSpaceDelims = 1
 -- Ranger
 vim.g.rnvimr_enable_picker = 1
 -- Startify
+vim.g.startify_change_to_dir = 1
 vim.g.startify_session_persistence = 1
 vim.g.startify_change_to_vsc_root = 1
 vim.g.startify_session_number = 5
