@@ -66,6 +66,7 @@ alias kaf='kubectl apply -f'
 alias kdf='kubectl delete -f'
 
 # regular aliases
+alias v=nvim
 alias diff=colordiff
 alias slack='fuzzpak slack 2>/dev/null'
 alias pavu=pavucontrol #Control sound sources, useful for trouble shooting
