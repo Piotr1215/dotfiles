@@ -82,7 +82,7 @@ require('nightfox').setup({
     gitgutter = true,
   }
 })
-
+require("mason").setup()
 vcmd('colorscheme nightfox')
 
 require("nvim-tree").setup({
