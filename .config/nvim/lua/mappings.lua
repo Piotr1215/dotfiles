@@ -125,7 +125,6 @@ utils.xmap('im', ':call MarkdownCodeBlock(0)<cr>')
 -- Markdown Previev
 utils.nmap('<leader>mp', ':MarkdownPreview<CR>')
 -- Fix Markdown Errors
-utils.nmap('<leader>fx', ':<C-u>CocCommand markdownlint.fixAll<CR>')
 utils.nmap('<leader>fmt', ':Pretty<CR>')
 --" Markdown paste image
 
@@ -160,15 +159,6 @@ utils.nmap('Zo', '<c-w>=')
 -- Apply AutoFix to problem on the current line.
 -- Map function and class text objects
 -- NOTE: Requires 'textDocument.documentSymbol' support from the language server.
-utils.xmap('if', '<Plug>(coc-funcobj-i)')
-utils.omap('if', '<Plug>(coc-funcobj-i)')
-utils.xmap('af', '<Plug>(coc-funcobj-a)')
-utils.omap('af', '<Plug>(coc-funcobj-a)')
--- Use CTRL-S for selections ranges.
--- Requires 'textDocument/selectionRange' support of language server.
-utils.nmap('<silent>', '<C-s> <Plug>(coc-range-select)')
-utils.xmap('<silent>', '<C-s> <Plug>(coc-range-select)')
--- vsnip settings
 -- Expand
 utils.imap('<expr>', '<C-j>   vsnip#expandable()  ? \'<Plug>(vsnip-expand)\'         : \'<C-j>')
 utils.smap('<expr>', '<C-j>   vsnip#expandable()  ? \'<Plug>(vsnip-expand)\'         : \'<C-j>')
