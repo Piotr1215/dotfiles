@@ -12,6 +12,7 @@ iabbrev VV ↓
   false
 )
 
+vcmd('set conceallevel=0')
 vcmd('setlocal spell spelllang=en_us')
 vcmd('setlocal expandtab shiftwidth=4 softtabstop=4 autoindent')
 
