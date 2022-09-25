@@ -12,8 +12,6 @@ vim.api.nvim_set_keymap('n', 'j', "v:count == 0 ? 'gj' : 'j'", { noremap = true,
 -- Navigate between paragraphs and add to jumplist
 vim.keymap.set("n", "<C-j>", [[:keepjumps normal! j}k<cr>]], opts)
 vim.keymap.set("n", "<C-k>", [[:keepjumps normal! k{j<cr>]], opts)
-vim.keymap.set("n", "<Leader>ts", "<cmd>Telescope<cr>", opts)
-utils.lnmap("tkf", ":lua require('telekasten').find_notes()<CR>") -- Move Line Up in Normal Mode
 utils.nmap("<BS>", "^")
 utils.vmap("<S-PageDown>", ":m '>+1<CR>gv=gv") -- Move Line Down in Visual Mode
 utils.vmap("<S-PageUp>", ":m '<-2<CR>gv=gv") -- Move Line Up in Visual Mode
@@ -40,30 +38,33 @@ utils.nmap("<Leader>q", "@q")
 utils.xmap("Q", ":'<,'>:normal @q<CR>")
 utils.lnmap("jq", ":g/{/.!jq .<CR>")
 utils.tmap("<ESC>", "<C-\\><C-n>")
-utils.xmap("<leader>ee", "vamy}o^[PO** Results **^[jjvim:@*!bash")
 
 -- MANIPULATE TEXT --
--- Copy & Paste
-utils.nmap("x", "\"_d") -- make x delete stuff into black hole register, use xl to delete letter under cursor
-utils.omap("x", "\"_d") -- delete into black hole register but as operator pending
+-- Yank
+utils.nmap('<leader>yw', '"+yiw') -- yank word under cusror to the clipboard buffer
+utils.nmap('<leader>yW', '"+yiW') -- yank WORD under cusror to the clipboard buffer
+-- Paste
 utils.xmap("<leader>p", "\"_dP") -- paste the same yanked text into visual selection
+utils.nmap("<leader>1", '"0p') -- paste from 0 (latest yank)
+utils.nmap("<leader>2", '"*p') -- paste from * (selection register)
+-- Substitute
 utils.nmap("<leader>sw", "\"_diwP") -- substitute current word with last yanked text
 utils.nmap("<leader>sW", "\"_diWP") -- substitute current WORD with last yanked text
 utils.vmap("<leader>ss", "\"_dP") -- substitute selection with last yanked text
-utils.lnmap("cpf", ":let @+ = expand(\"%:t\")<cr>") -- Copy current file name
-utils.nmap("gp", "`[v`]") -- select last pasted text
-utils.nmap("<leader>1", '"0p') -- paste from 0 (latest yank)
-utils.nmap("<leader>2", '"*p') -- paste from * (selection register)
-utils.vmap("<C-c>", '"+y') -- copy selection to clipboard with ctrl+c
-utils.nmap('<leader>yw', '"+yiw') -- copy word under cusror to the clipboard buffer
-utils.nmap('Y', 'yg_') -- copies till the end of a line without a new line, fits with shift + d, c etc
-utils.nmap('<leader>y', '"+y$') -- copy from cursor to end of line
-utils.nmap('yaf', '[m{jv]m%y') -- copy function or routine body and keyword
+-- Delete
+utils.nmap("cx", "\"_x") -- delete single letter
+utils.nmap("x", "\"_d") -- needed for operator pending mode
+utils.omap("x", "\"_d") -- delete into black hole register but as operator pending
+
+-- select last pasted text
+utils.nmap("gp", "`[v`]")
 -- useful for passing over braces and quotations
 utils.imap("<C-l>", "<C-o>a")
 -- set mark on this line ma
 utils.imap(";[", "<c-o>ma")
 utils.imap("']", "<c-o>mA")
+-- Copy current file name
+utils.lnmap("cpf", ":let @+ = expand(\"%:t\")<cr>")
 -- comment paragraphs
 utils.nmap("<silent> <leader>c}", "v}:call nerdcomment('x', 'toggle')<cr>")
 utils.nmap("<silent> <leader>c{", "v{:call nerdcomment('x', 'toggle')<cr>")
@@ -147,10 +148,6 @@ utils.nmap('<leader>df', ':NvimTreeToggle<CR>')
 utils.nmap('<Leader>da', ':NvimTreeFindFile<CR>')
 -- Save buffer
 utils.nmap('<leader>w', ':w<CR>')
--- Move screen to contain current line at the top
---local pathToVimInit = ':source ' .. vim.fn.expand('~/.config/nvim/init.vim<CR>')
-utils.nmap('<leader>sv', ':source /home/decoder/.config/nvim/init.lua<CR>')
---nmap('<leader>sv', pathToVimInit)
 -- jj in insert mode instead of ESC
 utils.imap('jj', '<Esc>')
 utils.imap('jk', '<Esc>')
@@ -188,9 +185,8 @@ utils.xmap('<leader>tc', '<Plug>(vsnip-cut-text)')
 
 -- Abbreviations
 vim.cmd('abb cros Crossplane')
--- Telekasten
-utils.nmap('<leader>tk', ':lua require(\'telekasten\').panel()<CR>')
 
+-- Plugins specific mappings
 -- Ranger
 utils.tmap("<M-i>", "<C-\\><C-n>:RnvimrResize<CR>")
 utils.nmap("<M-o>", ":RnvimrToggle<CR>")
@@ -208,3 +204,10 @@ vim.api.nvim_set_keymap('n', '<leader>ev', "<cmd>lua require 'mdeval'.eval_code_
 -- Startify
 utils.lnmap("st", ":Startify<CR>") -- start Startify screen
 utils.lnmap("cd", ":cd %:p:h<CR>:pwd<CR>") -- change to current directory of active file and print out
+
+-- Telescope
+vim.keymap.set("n", "<Leader>ts", "<cmd>Telescope<cr>", opts)
+
+-- Telekasten
+utils.lnmap("tkf", ":lua require('telekasten').find_notes()<CR>")
+utils.nmap('<leader>tk', ':lua require(\'telekasten\').panel()<CR>')
