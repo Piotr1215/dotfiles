@@ -129,7 +129,7 @@ require('packer').startup(function(use)
   use 'xiyaowong/telescope-emoji.nvim'
   -- Markdown {{{
   use 'jubnzv/mdeval.nvim'
-  use 'Yggdroot/indentLine'
+  -- use 'Yggdroot/indentLine'
   use 'tyru/open-browser.vim'
   -- Fenced edit of markdown code blocks
   use {
