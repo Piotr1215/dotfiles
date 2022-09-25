@@ -138,7 +138,7 @@ utils.nmap('<Leader>sof', ':set nospell<CR>')
 -- Accept first grammar correction
 utils.nmap('<Leader>c', '1z=')
 -- Upload selected to ix.io
-utils.vmap('<Leader>pp', ':w !curl -F "f:1=<--- ix.io<CR>')
+utils.vmap('<Leader>pb', ":w !share<CR>")
 -- setup mapping to call :LazyGit
 utils.nmap('<leader>gg', ':LazyGit<CR>')
 
