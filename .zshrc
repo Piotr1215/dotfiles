@@ -183,6 +183,11 @@ export RIPGREP_CONFIG_PATH=$HOME/.ripgreprc
 
 # USER FUNCTIONS
 
+function share ()
+{
+  curl -sF 'clbin=<-' https://clbin.com | xargs -I _ echo -n _"?hl" | tee >(xsel -ib 2>&1) | tee >(xargs echo) | nohup xargs xdg-open >/dev/null 2>&1
+}
+
 function copyname() {
     file=$1
     stat -t $1 | cut -d '.' -f1 | xargs echo -n | xclip
