@@ -82,8 +82,22 @@
     "prefix": ["log"],
     "body": "console.log(${1:$TM_SELECTED_TEXT});"
   },
+  "blog": {
+    "scope": "markdown",
+    "prefix": ["blog"],
+    "body": [
+      "---", 
+      "title: Welcome Docusaurus v2",
+      "description: $1", 
+      "tags: [$2, $3]",
+      "image: ./_media/",
+      "hide_table_of_contents: false", 
+      "---",
+      "$0"
+    ]
+  },
   "text": {
     "prefix": ["text"],
-    "body": "```text\n${1:$TM_SELECTED_TEXT}\n```"
+    "body": "```text\n${1:$tm_selected_text}\n```"
   }
 }
