@@ -16,14 +16,32 @@ require('telescope').load_extension('fzf')
 require("telescope").load_extension("recent_files")
 require("telescope").load_extension("emoji")
 
+-- Configure find files builtin with custom opts
+-- For neovim's config directory
+function search_dev()
+  local opts = {
+    prompt_title = "Dev", -- Title for the picker
+    shorten_path = false, -- Display full paths, short paths are ugly
+    cwd = "~/dev", -- Set path to directory whose files should be shown
+    file_ignore_patterns = { ".git", ".png", "tags" }, -- Folder/files to be ignored
+    initial_mode = "insert", -- Start in insert mode
+    selection_strategy = "reset", -- Start selection from top when list changes
+    theme = require("telescope.themes").get_dropdown({}), -- Theme to be used, can be omitted to use defaults
+  }
+
+  -- Pass opts to find_files
+  require("telescope.builtin").find_files(opts)
+end
+
 local key = vim.api.nvim_set_keymap
 local set_up_telescope = function()
   local set_keymap = function(mode, bind, cmd)
     key(mode, bind, cmd, { noremap = true, silent = true })
   end
+  set_keymap("n", "<Leader>fd", "[[<cmd>lua search_dev()<CR>]]")
   set_keymap('n', '<leader><leader>', [[<cmd>lua require('telescope.builtin').buffers()<CR>]])
-  set_keymap('n', '<leader>ff', [[<cmd>cd %:p:h<CR><cmd>pwd<CR><cmd>lua require('telescope.builtin').find_files({find_command = {'rg', '--files', '--hidden', '-g', '!.git' }, {search_dirs = {"$PWD"}}})<CR>]])
-  set_keymap('n', '<leader>fd', [[<cmd>lua require('telescope.builtin').find_files({find_command = {'rg', '--files', '--hidden', '-g', '!.git' }, {search_dirs = {"~/dev"}}})<CR>]])
+  set_keymap('n', '<leader>ff',
+    [[<cmd>cd %:p:h<CR><cmd>pwd<CR><cmd>lua require('telescope.builtin').find_files({find_command = {'rg', '--files', '--hidden', '-g', '!.git' }, {search_dirs = {"$PWD"}}})<CR>]])
   set_keymap('n', '<leader>fr', [[<cmd>lua require'telescope'.extensions.repo.list{search_dirs = {"~/dev"}}<CR>]])
   set_keymap('n', '<leader>fw', [[<cmd>lua require('telescope.builtin').live_grep({hidden = true})<CR>]])
   set_keymap('n', '<leader>fg', [[<cmd>lua require('telescope.builtin').git_files()<CR>]])
