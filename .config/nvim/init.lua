@@ -4,7 +4,7 @@ require("autocommands")
 require("mappings")
 require("telescope-setup")
 require("hydra-setup")
+-- require('xlpls-linter')
 require("lsp-setup")
 require("which-key-setup")
--- require('xlpls-linter')
 
