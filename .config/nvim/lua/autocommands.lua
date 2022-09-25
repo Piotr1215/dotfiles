@@ -110,13 +110,6 @@ if sysname == 'Darwin' then
          augroup end
        ]], false)
 end
--- User commands {{{
--- Format with default CocAction
-vim.api.nvim_create_user_command(
-  'Format',
-  "call CocAction('format')",
-  { bang = true }
-)
 
 -- Add -name: to composition resources
 vim.api.nvim_create_user_command(
@@ -156,7 +149,7 @@ vim.api.nvim_create_user_command(
 --Get diff for current file
 vim.api.nvim_create_user_command(
   'Pretty',
-  "CocCommand prettier.formatFile",
+  "Prettier",
   { bang = true }
 )
 

@@ -93,7 +93,24 @@ require("nvim-tree").setup({
     update_cwd = true
   },
 })
+local prettier = require("prettier")
 
+prettier.setup({
+  bin = 'prettier', -- or `'prettierd'` (v0.22+)
+  filetypes = {
+    "css",
+    "html",
+    "javascript",
+    "javascriptreact",
+    "json",
+    "less",
+    "markdown",
+    "typescript",
+    "typescriptreact",
+    "yaml",
+    "go",
+  },
+})
 require("telekasten").setup {
   home = "/home/decoder/zettelkasten",
   dailies = "/home/decoder/zettelkasten/daily",

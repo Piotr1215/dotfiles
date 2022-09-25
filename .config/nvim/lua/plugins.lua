@@ -148,6 +148,7 @@ require('packer').startup(function(use)
     end,
     ft = { "markdown" }, })
   -- Look & Feel {{{
+  use 'MunifTanjim/prettier.nvim'
   use 'EdenEast/nightfox.nvim'
   use 'NLKNguyen/papercolor-theme'
   use 'folke/tokyonight.nvim'
@@ -155,7 +156,6 @@ require('packer').startup(function(use)
   use { "catppuccin/nvim", as = "catppuccin" }
   -- }}}
   use { 'mhartington/formatter.nvim' }
-  use { 'neoclide/coc.nvim', branch = 'release' }
   use 'vim-airline/vim-airline'
   use 'onsails/lspkind-nvim'
   use 'preservim/nerdcommenter'
