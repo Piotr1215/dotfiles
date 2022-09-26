@@ -66,6 +66,7 @@ alias kaf='kubectl apply -f'
 alias kdf='kubectl delete -f'
 
 # regular aliases
+alias gist=gist
 alias v=nvim
 alias rg='rg --hidden'
 alias diff=colordiff
@@ -182,6 +183,11 @@ export RIPGREP_CONFIG_PATH=$HOME/.ripgreprc
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
 
 # USER FUNCTIONS
+
+function gist ()
+{
+   gh gist create --filename $(echo $(date +"%m-%d-%y")-$RANDOM.sh)
+}
 
 function share ()
 {
