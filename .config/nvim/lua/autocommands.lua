@@ -73,15 +73,6 @@ api.nvim_exec(
 
 api.nvim_exec(
   [[
-    augroup autoformat_settings
-     autocmd FileType c,cpp,proto,javascript setlocal equalprg=clang-format
-     autocmd FileType python AutoFormatBuffer yapf
-    augroup end
-  ]], false
-)
-
-api.nvim_exec(
-  [[
     augroup last_cursor_position
      autocmd!
      autocmd BufReadPost *
