@@ -210,7 +210,7 @@ vim.g.startify_bookmarks = {
   '~/.config/nvim/lua',
   '~/.zshrc',
   '~/.tmux.conf',
-  '~/.taskrc',
+  '~/.config/task/.taskrc',
   '~/.config/ranger/rc.conf',
   '~/scripts/shortcuts.txt',
 }
