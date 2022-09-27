@@ -33,6 +33,10 @@ function search_dev()
   require("telescope.builtin").find_files(opts)
 end
 
+local default_opts = {noremap = true, silent = true}
+vim.api.nvim_set_keymap('v', '<leader>fsd', 'y<ESC>:Telescope live_grep default_text=<c-r>0<CR> search_dirs={"~/dev"}', default_opts)
+vim.api.nvim_set_keymap('v', '<leader>fs', 'y<ESC>:Telescope live_grep default_text=<c-r>0<CR> search_dirs={"$PWD"}', default_opts)
+
 local key = vim.api.nvim_set_keymap
 local set_up_telescope = function()
   local set_keymap = function(mode, bind, cmd)
@@ -47,7 +51,7 @@ local set_up_telescope = function()
   set_keymap('n', '<leader>fg', [[<cmd>lua require('telescope.builtin').git_files()<CR>]])
   set_keymap('n', '<leader>fo', [[<cmd>lua require('telescope.builtin').oldfiles()<CR>]])
   set_keymap('n', '<leader>fi', ':Telescope file_browser<CR>')
-  set_keymap('n', '<leader>fst', [[<cmd>lua require('telescope.builtin').grep_string({search_dirs = {"~/dev"}})<CR>]])
+  set_keymap('n', '<leader>fsw', [[<cmd>lua require('telescope.builtin').grep_string({search_dirs = {"~/dev"}})<CR>]])
   set_keymap('n', '<leader>fb', [[<cmd>lua require('telescope.builtin').current_buffer_fuzzy_find()<CR>]])
   set_keymap('n', '<leader>fh', [[<cmd>lua require('telescope.builtin').help_tags()<CR>]])
   set_keymap('n', '<leader>ft', [[<cmd>lua require('telescope.builtin').tagstack()<CR>]])
