@@ -66,6 +66,7 @@ alias kaf='kubectl apply -f'
 alias kdf='kubectl delete -f'
 
 # regular aliases
+alias ath=__swap_alacritty_theme.sh
 alias gist=gist
 alias v=nvim
 alias rg='rg --hidden'
