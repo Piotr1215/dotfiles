@@ -130,7 +130,8 @@ vim.g.startify_commands = {
   { 'Search Dev:   SPC fd', 'Telescope find_files search_dirs=~/dev,--hidden,--with-filename' },
   { 'Search Repos: SPC fr', 'lua require\'telescope\'.extensions.repo.list{search_dirs = {"~/dev"}}' },
   { 'Ranger:       ALT o', 'RnvimrToggle' },
-  { 'Change Color: SPC fc', 'Telescope colorscheme' }
+  { 'Change Color: SPC fc', 'Telescope colorscheme' },
+  { 'Pick Emoji:   SPC fm', 'Telescope emoji' }
 }
 vim.g.startify_bookmarks = {
   '~/.config/nvim/lua',
@@ -141,4 +142,3 @@ vim.g.startify_bookmarks = {
   '~/scripts/shortcuts.txt',
 }
 vim.g.startify_custom_header = "startify#pad(split(system('fortune -s | cowsay | lolcat; date'), '\n'))"
-
