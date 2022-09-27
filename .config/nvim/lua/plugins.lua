@@ -148,6 +148,9 @@ require('packer').startup(function(use)
     end,
     ft = { "markdown" }, })
   -- Look & Feel {{{
+  use 'xiyaowong/nvim-transparent'
+  use 'bluz71/vim-moonfly-colors'
+  use 'kdheepak/monochrome.nvim'
   use 'MunifTanjim/prettier.nvim'
   use 'EdenEast/nightfox.nvim'
   use 'NLKNguyen/papercolor-theme'

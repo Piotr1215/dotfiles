@@ -204,3 +204,6 @@ utils.nmap('<leader>tk', ':lua require(\'telekasten\').panel()<CR>')
 
 -- Tmuxinator
 utils.lnmap("wl", ":.!echo -n \"      layout:\" $(tmux list-windows | sed -n 's/.*layout \\(.*\\)] @.*/\\1/p')<CR>")
+
+-- Transparent Plugin
+utils.lnmap("tr", ":TransparentToggle<CR>")
