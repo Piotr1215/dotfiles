@@ -9,9 +9,10 @@ set -euo pipefail
 IFS=$'\n\t'
 
 themes_folder="$HOME/.config/alacritty/themes/"
-files=$(exa ~/.config/alacritty/themes)
 config_file="$HOME/.config/alacritty/alacritty.yml"
 
-file=$(echo "$files" | awk '{print $1}' | uniq | fzf)
+files=$(tree $HOME/.config/alacritty/themes/ -i | head -n-2 | tail -n+2)
+
+file=$(echo "$files" | uniq | fzf)
 
 sed -i "s#\($themes_folder\)\(.*\)#$themes_folder$file#" "$config_file"
