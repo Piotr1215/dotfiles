@@ -201,3 +201,6 @@ vim.keymap.set("n", "<Leader>ts", "<cmd>Telescope<cr>", opts)
 -- Telekasten
 utils.lnmap("tkf", ":lua require('telekasten').find_notes()<CR>")
 utils.nmap('<leader>tk', ':lua require(\'telekasten\').panel()<CR>')
+
+-- Tmuxinator
+utils.lnmap("wl", ":.!echo -n \"      layout:\" $(tmux list-windows | sed -n 's/.*layout \\(.*\\)] @.*/\\1/p')<CR>")
