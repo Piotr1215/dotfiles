@@ -66,6 +66,7 @@ alias kaf='kubectl apply -f'
 alias kdf='kubectl delete -f'
 
 # regular aliases
+alias heart="echo -n $(python -c 'print u"\u2665".encode("utf-8")')"
 alias ath=__swap_alacritty_theme.sh
 alias gist=gist
 alias v=nvim
@@ -155,7 +156,8 @@ fi
 export VISUAL=nvim
 export PATH=/home/decoder/.nimble/bin:$PATH
 export KUBECONFIG=~/.kube/config
-export GOPATH=$HOME/go/
+export GOPATH=/usr/local/go
+export GOBIN=/usr/local/go/bin
 export PATH=$PATH:$HOME/.krew/bin
 export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
 export PATH=$HOME/.local/bin:$PATH
@@ -388,3 +390,5 @@ zinit light-mode for \
     zdharma-continuum/zinit-annex-rust
 
 ### End of Zinit's installer chunk
+
+[[ -s "/home/decoder/.gvm/scripts/gvm" ]] && source "/home/decoder/.gvm/scripts/gvm"
