@@ -207,3 +207,6 @@ utils.lnmap("wl", ":.!echo -n \"      layout:\" $(tmux list-windows | sed -n 's/
 
 -- Transparent Plugin
 utils.lnmap("tr", ":TransparentToggle<CR>")
+
+-- FeMaco
+utils.lnmap("ec", ":FeMaco<CR>")
