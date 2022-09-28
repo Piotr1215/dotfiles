@@ -1,30 +1,25 @@
 require('packer').startup(function(use)
   -- Packer
   use 'wbthomason/packer.nvim'
-  -- Git
-  use { 'sindrets/diffview.nvim' }
   -- Editor Extensions {{{
+  use 'mattn/emmet-vim'
+  use 'mattn/webapi-vim'
+  use 'mhinz/vim-startify'
+  use 'wellle/targets.vim'
+  use 'preservim/nerdcommenter'
+  use 'tpope/vim-fugitive'
+  use 'voldikss/vim-floaterm'
+  use 'sindrets/diffview.nvim'
   use 'ThePrimeagen/harpoon' -- https://github.com/ThePrimeagen/harpoon
   use 'kevinhwang91/rnvimr' -- https://github.com/kevinhwang91/rnvimr
   use 'airblade/vim-gitgutter'
-  use { 'anuvyklack/hydra.nvim',
-    requires = 'anuvyklack/keymap-layer.nvim' -- needed only for pink hydras
-  }
-  use {
-    "folke/which-key.nvim",
+  use({
+    "kylechui/nvim-surround",
     config = function()
-      require("which-key").setup {
-        plugins = {
-          marks = true, -- shows a list of your marks on ' and `
-          registers = true, -- shows your registers on " in NORMAL or <C-r> in INSERT mode
-          spelling = {
-            enabled = true, -- enabling this will show WhichKey when pressing z= to select spelling suggestions
-            suggestions = 20, -- how many suggestions should be shown in the list?
-          },
-        }
-      }
-    end,
-  }
+      require("nvim-surround").setup({})
+    end
+  })
+  use 'folke/which-key.nvim'
   use 'lukas-reineke/indent-blankline.nvim'
   use 'machakann/vim-swap'
   use 'austintaylor/vim-commaobject'
@@ -39,7 +34,7 @@ require('packer').startup(function(use)
     },
   }
   -- }}}
-  -- File System Integration {{{
+  -- System Integration {{{
   use {
     'junegunn/fzf',
     run = './install --bin'
@@ -54,6 +49,7 @@ require('packer').startup(function(use)
   }
   -- }}}
   -- Telescope {{{
+  use 'xiyaowong/telescope-emoji.nvim'
   use 'nvim-telescope/telescope-symbols.nvim'
   use 'cljoly/telescope-repo.nvim'
   use 'kdheepak/lazygit.nvim'
@@ -74,6 +70,9 @@ require('packer').startup(function(use)
   use { "smartpde/telescope-recent-files" }
   -- }}}
   -- LSP {{{
+  use { 'nvim-treesitter/nvim-treesitter', run = ':TSUpdate' }
+  use { 'tami5/lspsaga.nvim', requires = { 'neovim/nvim-lspconfig' } }
+  use 'onsails/lspkind-nvim'
   use { "williamboman/mason.nvim" }
   use "williamboman/mason-lspconfig.nvim"
   use 'williamboman/nvim-lsp-installer'
@@ -87,7 +86,6 @@ require('packer').startup(function(use)
       require("trouble").setup {}
     end
   }
-  -- LSP Autocomplete
   use {
     'hrsh7th/cmp-vsnip',
     requires = {
@@ -116,22 +114,18 @@ require('packer').startup(function(use)
   use 'nvim-telescope/telescope-dap.nvim'
   use "stevearc/dressing.nvim"
   -- }}}
+  -- Snippets {{{
   use 'L3MON4D3/LuaSnip'
   use 'hrsh7th/vim-vsnip'
   use 'hrsh7th/vim-vsnip-integ'
-  use 'mattn/emmet-vim'
-  use 'mattn/webapi-vim'
-  use 'mhinz/vim-startify'
-  -- Programming
+  -- }}}
+  -- Programming {{{
   use 'fatih/vim-go'
-  -- DevOps
   use 'hashivim/vim-terraform'
-  use 'xiyaowong/telescope-emoji.nvim'
+  -- }}}
   -- Markdown {{{
   use 'jubnzv/mdeval.nvim'
-  -- use 'Yggdroot/indentLine'
   use 'tyru/open-browser.vim'
-  -- Fenced edit of markdown code blocks
   use {
     'AckslD/nvim-FeMaco.lua',
     config = 'require("femaco").setup()',
@@ -147,7 +141,13 @@ require('packer').startup(function(use)
       vim.g.mkdp_filetypes = { "markdown" }
     end,
     ft = { "markdown" }, })
+  use 'weirongxu/plantuml-previewer.vim'
+  -- }}}
   -- Look & Feel {{{
+  use { "ellisonleao/glow.nvim", branch = 'main' }
+  use 'mhartington/formatter.nvim'
+  use 'sakshamgupta05/vim-todo-highlight'
+  use 'ryanoasis/vim-devicons'
   use 'xiyaowong/nvim-transparent'
   use 'bluz71/vim-moonfly-colors'
   use 'kdheepak/monochrome.nvim'
@@ -157,28 +157,6 @@ require('packer').startup(function(use)
   use 'folke/tokyonight.nvim'
   use 'rktjmp/lush.nvim'
   use { "catppuccin/nvim", as = "catppuccin" }
-  -- }}}
-  use { 'mhartington/formatter.nvim' }
   use 'vim-airline/vim-airline'
-  use 'onsails/lspkind-nvim'
-  use 'preservim/nerdcommenter'
-  use 'Raimondi/delimitMate'
-  use 'ryanoasis/vim-devicons'
-  use 'sakshamgupta05/vim-todo-highlight'
-  -- use 'sheerun/vim-polyglot'
-  use { 'tami5/lspsaga.nvim', requires = { 'neovim/nvim-lspconfig' } }
-  use 'tpope/vim-fugitive'
-  use({
-    "kylechui/nvim-surround",
-    config = function()
-      require("nvim-surround").setup({
-        -- Configuration here, or leave empty to use defaults
-      })
-    end
-  })
-  use 'voldikss/vim-floaterm'
-  use 'weirongxu/plantuml-previewer.vim'
-  use 'wellle/targets.vim'
-  use { "ellisonleao/glow.nvim", branch = 'main' }
-  use { 'nvim-treesitter/nvim-treesitter', run = ':TSUpdate' }
+  -- }}}
 end)
