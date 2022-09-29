@@ -17,8 +17,9 @@ while 'true'; do
 
 	for FILE in $files; do
 		sed -i "s#\($themes_folder\)\(.*\)#$themes_folder$FILE#" "$config_file"
-		echo "$FILE"
-		read -p "Press Enter to continue" </dev/tty
+		echo "Featuring: $FILE"
+		# read -p "Press Enter to continue" </dev/tty
+		sleep 3
 	done
 
 done
