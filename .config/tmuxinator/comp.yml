@@ -54,7 +54,7 @@ windows:
   - vim:
       layout: tiled
       panes:
-        - vim -c "SLoad comp"
+        - vim -c "SLoad comp" -c 'execute "normal <CR>"'
   - git:
       layout: even-horizontal
       panes:
