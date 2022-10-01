@@ -49,6 +49,8 @@ require('packer').startup(function(use)
   }
   -- }}}
   -- Telescope {{{
+  use 'danielpieper/telescope-tmuxinator.nvim'
+  use 'jvgrootveld/telescope-zoxide'
   use {
     'dhruvmanila/telescope-bookmarks.nvim',
     tag = '*',
@@ -78,6 +80,17 @@ require('packer').startup(function(use)
   use { "smartpde/telescope-recent-files" }
   -- }}}
   -- LSP {{{
+  use {
+    "AckslD/nvim-neoclip.lua",
+    requires = {
+      -- you'll need at least one of these
+      { 'nvim-telescope/telescope.nvim' },
+      { 'ibhagwan/fzf-lua' },
+    },
+    config = function()
+      require('neoclip').setup()
+    end,
+  }
   use { 'nvim-treesitter/nvim-treesitter', run = ':TSUpdate' }
   use { 'tami5/lspsaga.nvim', requires = { 'neovim/nvim-lspconfig' } }
   use 'onsails/lspkind-nvim'
@@ -141,7 +154,6 @@ require('packer').startup(function(use)
   use 'ixru/nvim-markdown'
   use 'dhruvasagar/vim-open-url'
   use 'marcelofern/vale.nvim'
-  use 'dhruvasagar/vim-table-mode'
   use 'renerocksai/telekasten.nvim'
   use({ "iamcco/markdown-preview.nvim",
     run = "cd app && npm install",
