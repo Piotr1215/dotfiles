@@ -49,6 +49,14 @@ require('packer').startup(function(use)
   }
   -- }}}
   -- Telescope {{{
+  use {
+    'dhruvmanila/telescope-bookmarks.nvim',
+    tag = '*',
+    -- Uncomment if the selected browser is Firefox, Waterfox or buku
+    -- requires = {
+    --   'kkharji/sqlite.lua',
+    -- }
+  }
   use 'xiyaowong/telescope-emoji.nvim'
   use 'nvim-telescope/telescope-symbols.nvim'
   use 'cljoly/telescope-repo.nvim'
