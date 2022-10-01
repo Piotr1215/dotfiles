@@ -66,6 +66,7 @@ alias kaf='kubectl apply -f'
 alias kdf='kubectl delete -f'
 
 # regular aliases
+alias sam=sampler
 alias remind=__remind.sh
 alias heart="echo -n $(python -c 'print u"\u2665".encode("utf-8")')"
 alias ath=__swap_alacritty_theme.sh
