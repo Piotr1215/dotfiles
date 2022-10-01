@@ -144,6 +144,7 @@ require('packer').startup(function(use)
   use 'weirongxu/plantuml-previewer.vim'
   -- }}}
   -- Look & Feel {{{
+  use 'uga-rosa/ccc.nvim'
   use { "ellisonleao/glow.nvim", branch = 'main' }
   use 'mhartington/formatter.nvim'
   use 'sakshamgupta05/vim-todo-highlight'
