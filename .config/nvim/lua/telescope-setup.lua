@@ -15,6 +15,7 @@ require('telescope').load_extension('repo')
 require('telescope').load_extension('fzf')
 require("telescope").load_extension("recent_files")
 require("telescope").load_extension("emoji")
+require('telescope').load_extension('bookmarks')
 
 -- Configure find files builtin with custom opts
 -- For neovim's config directory
