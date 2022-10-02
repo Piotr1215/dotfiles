@@ -2,6 +2,10 @@ require('packer').startup(function(use)
   -- Packer
   use 'wbthomason/packer.nvim'
   -- Editor Extensions {{{
+  use {
+    "windwp/nvim-autopairs",
+    config = function() require("nvim-autopairs").setup {} end
+  }
   use 'mattn/emmet-vim'
   use 'mattn/webapi-vim'
   use 'mhinz/vim-startify'
