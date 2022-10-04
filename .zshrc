@@ -67,8 +67,6 @@ alias kdf='kubectl delete -f'
 
 # regular aliases
 alias aopa="__toggle_alacritty_opacity.sh"
-alias prime="xrandr --output HDMI-0 --primary"
-alias second="xrandr --output DVI-D-0 --primary"
 alias sam=sampler
 alias remind=__remind.sh
 alias heart="echo -n $(python -c 'print u"\u2665".encode("utf-8")')"
@@ -267,6 +265,17 @@ function vol() {
     fi
     amixer set Master "$1"%
     echo "Volume set to $1%"
+}
+
+function mon ()
+{
+  active_mon=$(xrandr | grep primary)
+
+  if [[ "$active_mon" =~ "HDMI" ]]; then
+    xrandr --output DVI-D-0 --primary
+  else
+    xrandr --output HDMI-0 --primary
+  fi
 }
 
 function sout() {
