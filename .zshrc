@@ -66,6 +66,7 @@ alias kaf='kubectl apply -f'
 alias kdf='kubectl delete -f'
 
 # regular aliases
+alias aopa="__toggle_alacritty_opacity.sh"
 alias prime="xrandr --output HDMI-0 --primary"
 alias second="xrandr --output DVI-D-0 --primary"
 alias sam=sampler
