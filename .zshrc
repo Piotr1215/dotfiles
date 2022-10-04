@@ -269,22 +269,31 @@ function vol() {
     echo "Volume set to $1%"
 }
 
-function sound() {
-    echo "Usage:\n - hdmi: plays sound via main monitor on HDMI3\n - head: plays sound via main headset"
-    if [[ -z "$1" ]]; then
-        echo "Please provide hdmi or head"
-        return
-    fi
-    if [[ "$1" == hdmi ]]; then
+function sout() {
+  echo "Usage: sout toggles between\n - hdmi: plays sound via main monitor or\n - head: plays sound via main headset\n"
+
+  export output
+  if [[ -z "$output" ]]; then
+   output='hdmi' 
+  fi
+
+  case "$output" in
+    'hdmi') 
+      wpctl set-default $(wpctl status | grep -E "\[G533 Wireless Headset Dongle\] Digital Stereo \(IEC958\)" | grep "\d+" -Po | head -n 1)
+      amixer set Master 100%
+      output='head'
+      echo "Sound output set to 31=headset\nVolume 100%"
+    ;;
+    'head') 
       wpctl set-default $(wpctl status | grep -E "GP106 High Definition Audio Controller Digital Stereo" | grep "\d+" -Po | head -n 1) 
       wpctl set-mute $(wpctl status | grep --after-context=3 " ├─ Sources:" | grep "Microphone Mono" | grep "\d+" -Po | head -n 1) 1
       amixer set Master 25%
-    echo "Sound output set to 53=monitor, mic muted\nVolume 25%"
-    else
-      wpctl set-default $(wpctl status | grep -E "\[G533 Wireless Headset Dongle\] Digital Stereo \(IEC958\)" | grep "\d+" -Po | head -n 1)
-      amixer set Master 100%
-    echo "Sound output set to 31=headset\nVolume 100%"
-    fi
+      output='hdmi'
+      echo "Sound output set to 53=monitor, mic muted\nVolume 25%"
+    ;;
+    *) echo "This shouldn't happen, wrong output variable, $output"
+    ;;
+  esac
 } 
 
 function old_repo() {
