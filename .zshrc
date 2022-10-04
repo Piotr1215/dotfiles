@@ -66,6 +66,8 @@ alias kaf='kubectl apply -f'
 alias kdf='kubectl delete -f'
 
 # regular aliases
+alias prime="xrandr --output HDMI-0 --primary"
+alias second="xrandr --output DVI-D-0 --primary"
 alias sam=sampler
 alias remind=__remind.sh
 alias heart="echo -n $(python -c 'print u"\u2665".encode("utf-8")')"
