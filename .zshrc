@@ -116,6 +116,7 @@ else
   alias cat=bat
 fi
 alias lzd='docker run --rm -it -v /var/run/docker.sock:/var/run/docker.sock -v /config/lazydocker:/.config/jesseduffield/lazydocker lazyteam/lazydocker'
+alias revive='shutdown -r now'
 alias rest='shutdown now'
 alias vedit='vim ~/.config/nvim/init.lua'
 alias dots='cd ~/dev/dotfiles; lg'
