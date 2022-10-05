@@ -62,8 +62,10 @@ setopt bang_hist                # !keyword
 HISTFILE=${ZDOTDIR:-$HOME}/.zsh_history
 
 # kubectl aliases
+alias k=kubectl
 alias kaf='kubectl apply -f'
 alias kdf='kubectl delete -f'
+alias kk=/usr/bin/kubecolor
 
 # regular aliases
 alias aopa="__toggle_alacritty_opacity.sh"
@@ -127,7 +129,6 @@ alias docs='docsify serve docs'
 alias glog='git log --graph --oneline --decorate'
 alias music='browse https://www.youtube.com/playlist?list=PL3-_0fT8ay_I9cEIoPNKRN7PcGjnAZ1Re'
 alias getupd='source "${HOME}"/scripts/__getupdates.sh'
-alias k=kubectl
 alias dev='cd ~/dev'
 alias kdump='kubectl get all --all-namespaces'
 alias addkey='eval $(ssh-agent) && ssh-add'
@@ -281,7 +282,6 @@ function mon ()
 function sout() {
   echo "Usage: sout toggles between\n - hdmi: plays sound via main monitor or\n - head: plays sound via main headset\n"
 
-  export output
   if [[ -z "$output" ]]; then
    output='hdmi' 
   fi
