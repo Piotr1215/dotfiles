@@ -56,7 +56,7 @@ function remind() {
 	fi
 	# Schedule the notification
 	echo "notify-send '$MESSAGE' 'Reminder' -u critical" | at $TIME 2>/dev/null
-	echo "Notification scheduled at $TIME"
+	echo "Notification '$MESSAGE' scheduled at $TIME" | tee ~/.notifications.log
 }
 
 remind "$@"
