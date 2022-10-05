@@ -46,8 +46,8 @@ on_project_start: sound hdmi
 
 windows:
   - relax:
-      layout: even-horizontal
+      layout: tiled
       panes:
         - cmus ~/music/
-        - __show_image.sh ~/Pictures/horse-training.jpg 15 10 20 75
+        # - __show_image.sh ~/Pictures/horse-training.jpg 17 2 15 75 > /dev/null 2>&1
         - cava
