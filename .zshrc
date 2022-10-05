@@ -282,47 +282,44 @@ function mon ()
 function sout() {
   echo "Usage: sout toggles between\n - hdmi: plays sound via main monitor or\n - head: plays sound via main headset\n"
 
-  if [[ -z "$output" ]]; then
-   output='hdmi' 
-  fi
+  # Do some grep magic to retrieve id of output devices, * indicates active device
+  local local_output=$(wpctl status | grep Sinks: -A2 | head -3 | grep \* | grep "\d+" -Po | head -1)
+  local new_output=$(wpctl status | grep Sinks: -A2 | head -3 | grep -v \* | grep "\d+" -Po | head -1)
 
-  case "$output" in
-    'hdmi') 
-      wpctl set-default $(wpctl status | grep -E "\[G533 Wireless Headset Dongle\] Digital Stereo \(IEC958\)" | grep "\d+" -Po | head -n 1)
-      amixer set Master 100%
-      output='head'
-      echo "Sound output set to 31=headset\nVolume 100%"
-    ;;
-    'head') 
-      wpctl set-default $(wpctl status | grep -E "GP106 High Definition Audio Controller Digital Stereo" | grep "\d+" -Po | head -n 1) 
-      wpctl set-mute $(wpctl status | grep --after-context=3 " ├─ Sources:" | grep "Microphone Mono" | grep "\d+" -Po | head -n 1) 1
-      amixer set Master 25%
-      output='hdmi'
-      echo "Sound output set to 53=monitor, mic muted\nVolume 25%"
-    ;;
-    *) echo "This shouldn't happen, wrong output variable, $output"
-    ;;
-  esac
+  # Swap the the device with no star making it active and adding the star
+  wpctl set-default "$new_output"
+  local sink_name=$(wpctl status | grep Sinks: -A2 | head -3 | grep \*)
+
+  if [[ $(echo "$sink_name" |  grep "GP106 High Definition") ]]; then
+    wpctl set-mute $(wpctl status | grep --after-context=3 " ├─ Sources:" | grep "Microphone Mono" | grep "\d+" -Po | head -n 1) 1
+    amixer set Master 25%
+    local_output='hdmi'
+    echo "Sound local_output set to '$=monitor, mic muted\nVolume 25%"
+  else
+    amixer set Master 100%
+    local_output='head'
+    echo "Sound local_output set to 31=headset\nVolume 100%"
+  fi
 } 
 
 function old_repo() {
     if [[ -z "$1" ]]; then
-        echo "Please provide search term"
-        return
+      echo "Please provide search term"
+      return
     else
-        export repo=$({ gh repo list Piotr1215 --limit 1000;  gh repo list upbound --limit 1000 } | awk '{print $1}' | sed 's:.*/::' | rg $1 | fzf)
+      export repo=$({ gh repo list Piotr1215 --limit 1000;  gh repo list upbound --limit 1000 } | awk '{print $1}' | sed 's:.*/::' | rg $1 | fzf)
     fi
     if [[ -z "$repo" ]]; then
-        echo "Repository not found"
+      echo "Repository not found"
     elif [[ -d ${HOME}/dev/$repo ]]; then
-        echo "Repository found locally, entering"
-        cd ${HOME}/dev/$repo
-        onefetch
+      echo "Repository found locally, entering"
+      cd ${HOME}/dev/$repo
+      onefetch
     else
-        echo "Repository not found locally, cloning"
-        gh repo clone $repo ${HOME}/dev/$repo
-        cd ${HOME}/dev/$repo
-        onefetch
+      echo "Repository not found locally, cloning"
+      gh repo clone $repo ${HOME}/dev/$repo
+      cd ${HOME}/dev/$repo
+      onefetch
     fi
 }
 
@@ -377,6 +374,7 @@ bindkey '^s' pet-select
 bindkey '^@' autosuggest-accept
 
 [[ /usr/local/bin/kubectl ]] && source <(kubectl completion zsh)
+[[ /usr/local/bin/kubecolor ]] && source <(kubecolor completion zsh)
 
 # Prompt
 source ${HOME}/kube-ps1/kube-ps1.sh
