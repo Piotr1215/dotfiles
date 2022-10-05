@@ -80,8 +80,8 @@ alias pavu=pavucontrol #Control sound sources, useful for trouble shooting
 alias watch=viddy
 alias cplcom="fc -ln -1 | tr -d '\n' | xsel --clipboard"
 alias deb=deb-get
-alias work='nohup firefox -R "Work" > /dev/null 2>&1 &'
-alias home='nohup firefox -R "Home" > /dev/null 2>&1 &'
+alias work='nohup firefox -P "Work" > /dev/null 2>&1 &'
+alias home='nohup firefox -P "Home" > /dev/null 2>&1 &'
 alias cwork='google-chrome --profile-directory="Profile 2"'
 alias cfun='google-chrome --profile-directory="Default"'
 alias tf=terraform
