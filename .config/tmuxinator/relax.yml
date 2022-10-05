@@ -50,3 +50,4 @@ windows:
       panes:
         - cmus ~/music/
         - __show_image.sh ~/Pictures/horse-training.jpg 15 10 20 75
+        - cava
