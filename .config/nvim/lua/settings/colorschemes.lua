@@ -12,7 +12,7 @@ require("tokyonight").setup({
 
 require('nightfox').setup({
   options = {
-    transparent = true,
+    transparent = false,
     terminal_colors = true,
     dim_inactive = true,
   },
