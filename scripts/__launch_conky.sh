@@ -5,9 +5,11 @@
 # The set -o pipefaile if any command in a pipeline fails, that return code will be used as the return code of the whole pipeline
 # https://bit.ly/37nFgin
 set -euo pipefail
+
+# Add source and line number wher running in debug mode: bash -xv __launch_conky.sh
+export PS4='+(${BASH_SOURCE}:${LINENO}): ${FUNCNAME[0]:+${FUNCNAME[0]}(): }'
+
 # Set new line and tab for word splitting
 IFS=$'\n\t'
 
-curl -sF 'clbin=<-' https://clbin.com \
-  | xargs -I _ echo -n _"?hl" \
-  | nohup xargs xdg-open >/dev/null 2>&1
+conky -c ~/.config/conky/zoring.conf
