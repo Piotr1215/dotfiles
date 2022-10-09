@@ -22,11 +22,11 @@ utils.nmap("<leader>j", ":m .+1<CR>==") -- Move Line Down in Normal Mode
 utils.nmap("<Leader>em", ":/\\V\\c\\<\\>") -- find exact match
 
 -- Nvim Leap Mappings
-utils.nmap("m", "<Plug>(leap-forward)")
-utils.nmap("mx", "<Plug>(leap-forward-x)")
-utils.nmap("M", "<Plug>(leap-backward-x)")
-utils.nmap("Mx", "<Plug>(leap-backward)")
-utils.nmap("mw", "<Plug>(leap-cross-window)")
+utils.emap("<Leader>l", "<Plug>(leap-forward)")
+utils.emap("<Leader>lx", "<Plug>(leap-forward-x)")
+utils.emap("<Leader>lb", "<Plug>(leap-backward)")
+utils.emap("<Leader>lbx", "<Plug>(leap-backward-x)")
+utils.emap("<Leader>lw", "<Plug>(leap-cross-window)")
 -- Stop search highlight
 utils.nmap(",<space>", ":nohlsearch<CR>")
 utils.vmap("<C-r>", '"hy:%s/<C-r>h//gc<left><left><left>')
@@ -71,8 +71,9 @@ utils.lnmap("cpf", ":let @+ = expand(\"%:t\")<cr>")
 utils.nmap("<silent> <leader>c}", "v}:call nerdcomment('x', 'toggle')<cr>")
 utils.nmap("<silent> <leader>c{", "v{:call nerdcomment('x', 'toggle')<cr>")
 -- insert 2 empty lines and go into inser mode
-utils.nmap("<leader>L", "O<ESC>O")
-utils.nmap("<leader>l", "o<cr>")
+-- utils.nmap("<leader>L", "O<ESC>O")
+-- utils.nmap("<leader>l", "o<cr>")
+
 -- Format with pretty
 utils.nmap("<C-f>", ":Pretty<CR>")
 -- add line below without entering insert mode!

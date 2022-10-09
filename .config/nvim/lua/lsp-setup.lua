@@ -47,7 +47,7 @@ local on_attach = function(_, bufnr)
 
   -- Format buffer
   buf_set_keymap('n', '<c-f>', '<cmd>lua vim.lsp.buf.format({ async = true })<CR>', opts)
-  buf_set_keymap('n', '<leader>dm', '<cmd>lua vim.lsp.buf.document_symbol()<CR>', opts)
+  buf_set_keymap('n', 'dm', '<cmd>lua vim.lsp.buf.document_symbol()<CR>', opts)
 
   -- Jump LSP diagnostics
   -- NOTE: Currently, there is a bug in lspsaga.diagnostic module. Thus we use
