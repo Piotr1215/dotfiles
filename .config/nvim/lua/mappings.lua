@@ -20,11 +20,13 @@ utils.nmap("<leader>j", ":m .+1<CR>==") -- Move Line Down in Normal Mode
 
 -- SEARCH & REPLACE --
 utils.nmap("<Leader>em", ":/\\V\\c\\<\\>") -- find exact match
--- Easy Motion Mappings
-utils.emap("<Leader>o", "<Plug>(easymotion-prefix)")
-utils.emap("<Leader>of", "<Plug>(easymotion-bd-f)")
-utils.emap("<Leader>ol", "<Plug>(easymotion-bd-w)")
-utils.emap("<Leader>oo", "<Plug>(easymotion-overwin-f2)")
+
+-- Nvim Leap Mappings
+utils.emap("<Leader>of", "<Plug>(leap-forward)")
+utils.emap("<Leader>ofx", "<Plug>(leap-forward-x)")
+utils.emap("<Leader>ob", "<Plug>(leap-backward)")
+utils.emap("<Leader>obx", "<Plug>(leap-backward-x)")
+utils.emap("<Leader>ow", "<Plug>(leap-cross-window)")
 -- Stop search highlight
 utils.nmap(",<space>", ":nohlsearch<CR>")
 utils.vmap("<C-r>", '"hy:%s/<C-r>h//gc<left><left><left>')
@@ -166,7 +168,7 @@ utils.smap('<expr>', '<C-j>   vsnip#expandable()  ? \'<Plug>(vsnip-expand)\'    
 -- Expand or jump
 utils.imap('<expr>', '<C-l>   vsnip#available(1)  ? \'<Plug>(vsnip-expand-or-jump)\' : \'<C-l>')
 utils.smap('<expr>', '<C-l>   vsnip#available(1)  ? \'<Plug>(vsnip-expand-or-jump)\' : \'<C-l>')
--- Select or cut text to use as $TM_SELECTED_TEXT in the next snippet.
+-- Select or cut text to use as $TM_SELECTED_TEXT in the next snippet
 -- See https://github.com/hrsh7th/vim-vsnip/pull/50
 utils.nmap('<leader>t', '<Plug>(vsnip-select-text)')
 utils.xmap('<leader>t', '<Plug>(vsnip-select-text)')

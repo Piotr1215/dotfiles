@@ -37,6 +37,7 @@ require('packer').startup(function(use)
       "nvim-telescope/telescope.nvim" -- optional
     },
   }
+  use 'ggandor/leap.nvim'
   -- }}}
   -- System Integration {{{
   use {
