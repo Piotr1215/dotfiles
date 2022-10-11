@@ -1,7 +1,7 @@
 # /home/decoder/.config/tmuxinator/atosik.yml
 
-name: relax
-root: ~/music
+name: backstage
+root: ~/dev/argocd-infra-setup
 
 # Optional tmux socket
 # socket_name: foo
@@ -12,7 +12,7 @@ root: ~/music
 # Project hooks
 
 # Runs on project start, always
-# on_project_start: sound hdmi 
+# on_project_start: git fetch origin --prune
 
 # Run on project start, the first time
 # on_project_first_start: command
@@ -27,7 +27,7 @@ root: ~/music
 # on_project_stop: command
 
 # Runs in each window and pane before window/pane specific commands. Useful for setting up interpreter versions.
-# pre_window: rbenv shell 2.0.0-p247
+# pre_window: tmux source-file ~/.tmux.conf 
 
 # Pass command line options to tmux. Useful for specifying a different tmux.conf.
 # tmux_options: -f ~/.tmux.mac.conf
@@ -36,18 +36,18 @@ root: ~/music
 # tmux_command: byobu
 
 # Specifies (by name or index) which window will be selected on project startup. If not set, the first window is used.
-# startup_window: dev
+# startup_window: vim
 
 # Specifies (by index) which pane of the specified window will be selected on project startup. If not set, the first pane is used.
-# startup_pane: 2
+# startup_pane: "2"
 
 # Controls whether the tmux session should be attached to automatically. Defaults to true.
 # attach: false
 
 windows:
-  - relax:
-      layout: 3fe1,294x78,0,0[294x37,0,0,14,294x8,0,38,16,294x31,0,47,15]
+  - poke:
+      layout: 98cc,273x75,0,0[273x29,0,0,0,273x45,0,30{133x45,0,30,1,139x45,134,30,5}]
       panes:
-        - clock; cmus ~/music/
-        - ls
-        - cava
+        - k9s
+        - watch kubectl get crossplane
+        - exa --grid | cowsay -f tux | lolcat
