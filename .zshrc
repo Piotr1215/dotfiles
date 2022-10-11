@@ -265,7 +265,7 @@ function repo() {
 function vol() {
     echo "Usage: provide volume in intiger, e.g. 50 will adjust vol to 50%"
     if [[ -z "$1" ]]; then
-        echo "Please provide volume"
+        amixer get Master
         return
     fi
     amixer set Master "$1"%
