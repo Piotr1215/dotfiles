@@ -68,6 +68,7 @@ alias kdf='kubectl delete -f'
 alias kk=/usr/bin/kubecolor
 
 # regular aliases
+alias clock="__clock.sh &"
 alias relog="DISPLAY=:0 gnome-session-quit --force"
 alias uxp="{ cd ~/dev/backstage-demo && just ~/dev/backstage-demo/setup_infra }"
 alias uxp-="just ~/dev/backstage-demo/teardown"
