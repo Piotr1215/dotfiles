@@ -83,16 +83,16 @@ end
 local lspconfig = require 'lspconfig'
 local configs = require 'lspconfig.configs'
 -- Check if it's already defined for when reloading this file.
-  configs.up = {
-    default_config = {
-      cmd = { "up", "xpls", "serve" };
-      filetypes = { 'yaml' };
-      root_dir = lspconfig.util.root_pattern('crossplane.yaml')
-    };
-  }
+configs.up = {
+  default_config = {
+    cmd = { "up", "xpls", "serve" };
+    filetypes = { 'yaml' };
+    root_dir = lspconfig.util.root_pattern('crossplane.yaml')
+  };
+}
 
 require("lspconfig")['up'].setup({
-on_attach = on_attach
+  on_attach = on_attach
 })
 
 local server_specific_opts = {
