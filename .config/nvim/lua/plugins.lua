@@ -90,9 +90,15 @@ require('packer').startup(function(use)
       -- you'll need at least one of these
       { 'nvim-telescope/telescope.nvim' },
       { 'ibhagwan/fzf-lua' },
+      {'kkharji/sqlite.lua', module = 'sqlite'},
     },
     config = function()
-      require('neoclip').setup()
+      require('neoclip').setup({
+      history = 1000,
+      enable_persistent_history = true,
+      length_limit = 1048576,
+      continuous_sync = true,
+      })
     end,
   }
   use { 'nvim-treesitter/nvim-treesitter', run = ':TSUpdate' }
