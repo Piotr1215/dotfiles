@@ -49,4 +49,4 @@ windows:
       layout: even-horizontal
       panes:
         - clear; fortune -s | cowsay | lolcat; zsh
-        - clear; vim -S dev.vim
+        - clear
