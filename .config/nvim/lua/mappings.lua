@@ -22,17 +22,16 @@ utils.nmap("<leader>j", ":m .+1<CR>==") -- Move Line Down in Normal Mode
 utils.nmap("<Leader>em", ":/\\V\\c\\<\\>") -- find exact match
 
 -- Nvim Leap Mappings
-utils.emap("<Leader>l", "<Plug>(leap-forward)")
-utils.emap("<Leader>lx", "<Plug>(leap-forward-x)")
-utils.emap("<Leader>lb", "<Plug>(leap-backward)")
-utils.emap("<Leader>lbx", "<Plug>(leap-backward-x)")
-utils.emap("<Leader>lw", "<Plug>(leap-cross-window)")
+utils.emap("<Leader>of", "<Plug>(leap-forward)")
+utils.emap("<Leader>ofx", "<Plug>(leap-forward-x)")
+utils.emap("<Leader>ob", "<Plug>(leap-backward)")
+utils.emap("<Leader>obx", "<Plug>(leap-backward-x)")
+utils.emap("<Leader>ow", "<Plug>(leap-cross-window)")
 -- Stop search highlight
 utils.nmap(",<space>", ":nohlsearch<CR>")
-utils.vmap("<C-r>", '"hy:%s/<C-r>h//gc<left><left><left>')
-utils.vmap("//", 'y/\\V<C-R>=escape(@",\'/\')<CR><CR>')
--- Search only in visual selection using %V atom
-utils.vmap("<C-s>", ":s/\\%V")
+utils.vmap("<C-r>", '"hy:%s/<C-r>h//gc<left><left><left>') -- Change selection
+utils.vmap("//", 'y/\\V<C-R>=escape(@",\'/\')<CR><CR>') -- Highlight selection
+utils.vmap("<C-s>", ":s/\\%V") -- Search only in visual selection using %V atom
 
 -- MACROS --
 utils.nmap("<leader>gt",":!ctags -R --exclude=.git--exclude=vendor --exclude=node_modules --exclude=db --exclude=log .<CR>")
