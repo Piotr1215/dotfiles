@@ -28,6 +28,10 @@ end
 local on_attach = function(_, bufnr)
   -- Create some shortcut functions.
   -- NOTE: The `vim` variable is supplied by Neovim.
+  if vim.bo[bufnr].buftype ~= "" or vim.bo[bufnr].filetype == "helm" then
+    vim.diagnostic.disable()
+  end
+
   local function buf_set_keymap(...)
     vim.api.nvim_buf_set_keymap(bufnr, ...)
   end
