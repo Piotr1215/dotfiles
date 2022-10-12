@@ -1,7 +1,7 @@
 # /home/decoder/.config/tmuxinator/atosik.yml
 
 name: backstage
-root: ~/dev/argocd-infra-setup
+root: ~/dev/backstage-demo
 
 # Optional tmux socket
 # socket_name: foo
@@ -45,7 +45,7 @@ root: ~/dev/argocd-infra-setup
 # attach: false
 
 windows:
-  - poke:
+  - main:
       layout: 98cc,273x75,0,0[273x29,0,0,0,273x45,0,30{133x45,0,30,1,139x45,134,30,5}]
       panes:
         - k9s
