@@ -17,7 +17,7 @@ vcmd('setlocal spell spelllang=en_us')
 vcmd('setlocal expandtab shiftwidth=4 softtabstop=4 autoindent')
 
 -- MarkdownPreview settings
-vim.g.mkdp_browser = '/usr/bin/google-chrome'
+vim.g.mkdp_browser = '/usr/bin/firefox'
 vim.g.mkdp_echo_preview_url = 0
 
 utils.nmap("nmap <buffer><silent> <leader>ps", ":call mdip#MarkdownClipboardImage()<CR>")
