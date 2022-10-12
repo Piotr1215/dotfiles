@@ -6,6 +6,7 @@ require('packer').startup(function(use)
     "windwp/nvim-autopairs",
     config = function() require("nvim-autopairs").setup {} end
   }
+  use 'sheerun/vim-polyglot'
   use 'mattn/emmet-vim'
   use 'mattn/webapi-vim'
   use 'mhinz/vim-startify'
@@ -90,14 +91,14 @@ require('packer').startup(function(use)
       -- you'll need at least one of these
       { 'nvim-telescope/telescope.nvim' },
       { 'ibhagwan/fzf-lua' },
-      {'kkharji/sqlite.lua', module = 'sqlite'},
+      { 'kkharji/sqlite.lua', module = 'sqlite' },
     },
     config = function()
       require('neoclip').setup({
-      history = 1000,
-      enable_persistent_history = true,
-      length_limit = 1048576,
-      continuous_sync = true,
+        history = 1000,
+        enable_persistent_history = true,
+        length_limit = 1048576,
+        continuous_sync = true,
       })
     end,
   }
@@ -163,6 +164,7 @@ require('packer').startup(function(use)
     'AckslD/nvim-FeMaco.lua',
     config = 'require("femaco").setup()',
   }
+  use 'ferrine/md-img-paste.vim'
   use 'ixru/nvim-markdown'
   use 'dhruvasagar/vim-open-url'
   use 'marcelofern/vale.nvim'
@@ -176,6 +178,13 @@ require('packer').startup(function(use)
   use 'weirongxu/plantuml-previewer.vim'
   -- }}}
   -- Look & Feel {{{
+  use {
+    "max397574/colortils.nvim",
+    cmd = "Colortils",
+    config = function()
+      require("colortils").setup()
+    end,
+  }
   use { "ellisonleao/gruvbox.nvim" }
   use 'uga-rosa/ccc.nvim'
   use { "ellisonleao/glow.nvim", branch = 'main' }
