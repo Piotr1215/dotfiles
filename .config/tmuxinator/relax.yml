@@ -46,7 +46,7 @@ root: ~/music
 
 windows:
   - relax:
-      layout: 3fe1,294x78,0,0[294x37,0,0,14,294x8,0,38,16,294x31,0,47,15]
+      layout: cd72,146x38,0,0[146x15,0,0,3,146x6,0,16,4,146x15,0,23,5]
       panes:
         - clock; cmus ~/music/
         - ls
