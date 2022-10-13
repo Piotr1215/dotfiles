@@ -36,10 +36,10 @@ root: ~/dev/backstage-demo
 # tmux_command: byobu
 
 # Specifies (by name or index) which window will be selected on project startup. If not set, the first window is used.
-# startup_window: vim
+startup_window: edit
 
 # Specifies (by index) which pane of the specified window will be selected on project startup. If not set, the first pane is used.
-# startup_pane: "2"
+startup_pane: "2"
 
 # Controls whether the tmux session should be attached to automatically. Defaults to true.
 # attach: false
@@ -50,4 +50,13 @@ windows:
       panes:
         - k9s
         - watch kubectl get crossplane
-        - exa --grid | cowsay -f tux | lolcat
+        - clear; exa --grid --long | figlet -f term | boxes -d unicornsay | lolcat
+  - edit:
+      layout: even-horizontal
+      panes:
+        - cd slides; ./slides presentation.md
+        - cd slides; vim presentation.md
+  - readme:
+      layout: tiled
+      panes:
+        - vim README.md -c "MarkdownPreview"
