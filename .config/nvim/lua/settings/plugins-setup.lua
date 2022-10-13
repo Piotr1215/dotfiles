@@ -151,5 +151,6 @@ vim.g.startify_bookmarks = {
   '~/.config/task/.taskrc',
   '~/.config/ranger/rc.conf',
   '~/scripts/shortcuts.txt',
+  '/home/decoder/snap/cheat/common/.config/cheat/conf.yml',
 }
 vim.g.startify_custom_header = "startify#pad(split(system('fortune -s | cowsay | lolcat; date'), '\n'))"
