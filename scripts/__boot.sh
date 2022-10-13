@@ -9,9 +9,17 @@ set -euo pipefail
 # Add source and line number wher running in debug mode: bash -xv __boot.sh
 export PS4='+(${BASH_SOURCE}:${LINENO}): ${FUNCNAME[0]:+${FUNCNAME[0]}(): }'
 
-# Set new line and tab for word splitting
-IFS=$'\n\t'
+weekdays=('Monday' 'Tuesday' 'Wednesday' 'Thursday' 'Friday')
 
-fuzzpak slack 2>/dev/null &
-nohup firefox -P "Work" >/dev/null 2>&1 &
-alacritty -e tmuxinator start poke
+current_day=$(date +"%A")
+
+echo "$current_day"
+
+if [[ " ${weekdays[*]} " =~ " $current_day " ]]; then
+	fuzzpak slack 2>/dev/null &
+	nohup firefox -P "Work" about:profiles >/dev/null 2>&1 &
+	alacritty -e tmuxinator start poke &
+else
+	#Weekend :)
+	alacritty -e tmuxinator start relax &
+fi
