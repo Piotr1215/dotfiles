@@ -124,6 +124,11 @@ utils.omap('am', ':call MarkdownCodeBlock(1)<cr>')
 utils.xmap('am', ':call MarkdownCodeBlock(1)<cr>')
 utils.omap('im', ':call MarkdownCodeBlock(0)<cr>')
 utils.xmap('im', ':call MarkdownCodeBlock(0)<cr>')
+-- Select visually x 
+utils.nmap('v2', 'v3iw')
+utils.nmap('v3', 'v5iw')
+utils.nmap('v4', 'v7iw')
+utils.nmap('v5', 'v9iw')
 -- Markdown Previev
 utils.nmap('<leader>mp', ':MarkdownPreview<CR>')
 -- Fix Markdown Errors
