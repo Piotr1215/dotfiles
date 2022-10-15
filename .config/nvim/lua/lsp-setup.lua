@@ -15,6 +15,7 @@ local servers = {
   "yamlls",
   "awk_ls",
   "emmet_ls",
+  "rust-analyzer",
 }
 
 for _, name in pairs(servers) do
@@ -76,6 +77,7 @@ local on_attach = function(_, bufnr)
   -- NOTE: Use `vim.cmd` since `buf_set_keymap` is not working with `tnoremap...`
   vim.cmd [[
   nnoremap <silent> <A-d> <cmd>lua require('lspsaga.floaterm').open_float_terminal()<CR>
+  nnoremap <silent> ga    <cmd>lua vim.lsp.buf.code_action()<CR>
   tnoremap <silent> <A-d> <C-\><C-n>:lua require('lspsaga.floaterm').close_float_terminal()<CR>
   ]]
 end
@@ -116,7 +118,7 @@ local server_specific_opts = {
 -- `nvim-cmp` comes with additional capabilities, alongside the ones
 -- provided by Neovim!
 local capabilities = vim.lsp.protocol.make_client_capabilities()
-capabilities = require('cmp_nvim_lsp').update_capabilities(capabilities)
+capabilities = require('cmp_nvim_lsp').default_capabilities()
 
 lsp_installer.on_server_ready(function(server)
   -- the keymaps, flags and capabilities that will be sent to the server as
@@ -136,6 +138,20 @@ lsp_installer.on_server_ready(function(server)
   -- And set up the server with our configuration!
   server:setup(opts)
 end)
+
+
+local rt = require("rust-tools")
+
+rt.setup({
+  server = {
+    on_attach = function(_, bufnr)
+      -- Hover actions
+      vim.keymap.set("n", "<leader>ar", rt.hover_actions.hover_actions, { buffer = bufnr })
+      -- Code action groups
+      vim.keymap.set("n", "<leader>ag", rt.code_action_group.code_action_group, { buffer = bufnr })
+    end,
+  },
+})
 
 -- nvim-cmp
 local lspkind = require('lspkind')
@@ -281,6 +297,7 @@ require("nvim-treesitter.configs").setup({
     "html",
     "yaml",
     "toml",
+    "rust",
   },
   highlight = {
     enable = true,
