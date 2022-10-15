@@ -336,7 +336,8 @@ function checkfetch() {
 }
 
 function key() {
-  cat ${HOME}/shortcuts.txt |  yad --width=750 --height=1050  --center --close-on-unfocus --text-info
+  cat ${HOME}/shortcuts.md 
+  # cat ${HOME}/shortcuts.md |  yad --width=750 --height=1050  --center --close-on-unfocus --text-info
 }
 
 function kcdebug() {

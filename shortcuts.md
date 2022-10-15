@@ -1,4 +1,5 @@
-#***** shell ***** #
+## Shell
+
 Ctrl + U            – remove from the cursor to the start of the line.
 Ctrl + K            – cut from the cursor to the end of the line.
 Ctrl + W            – cut from the cursor to the start of the preceding word.<- LEFT
@@ -19,18 +20,13 @@ Ctrl + Shift + _    - undo last keystroke in command
 !*                  - all arguments of previous function except first
 !$                  - last argument of previous call
 
-***** Tmux ***** #
+## Tmux
 Ctrl +b, Alt + 1    - change panes to vertical position
 Ctrl +b, Alt + 2    - change panes to horizontal position
 Ctro +b, Ctrl + o   - swap panes 1:2 to 2:1
 Ctrl +b [           - enter copy Mode
 
-***** Copy Mode Instructions *****
-Space               - start selection
-Enter               - copy selection
-Ctrl + b ], <S-Ins> - paste
-
-***** Vim ***** #
+## Vim
 "+yt                            - copy to clipboard till character (space in this case)
 Ctro + n                        - does some crazy multi-cursor
 Ctrl + u                        - go 1/4 screen up
@@ -55,11 +51,14 @@ Ctrl + w + hjkl + Ctrl + w x    - Swap position of 2 panes. Navigate from the
 q:                              - enter commands history
 q/                              - enter search history
 
-# *** Insert Mode *** #
+### Insert mode
 Ctrl + y            - copy character from the line above
 Ctrl + e            - copy character from the line below
 
-# Nvim Surround plugin #
+### Plugins
+
+#### Nvim Surround
+
     Old text                    Command         New text
 --------------------------------------------------------------------------------
     surr*ound_words             ysiw)           (surround_words)
@@ -70,24 +69,16 @@ Ctrl + e            - copy character from the line below
     <b>or tag* types</b>        csth1<CR>       <h1>or tag types</h1>
     delete(functi*on calls)     dsf             function calls
 
-# Plugin shortcuts for christoomey/vim-system-copy #
+## Tips $ Tricks
 
-" cpiw => copy word into system clipboard
-" cpi' => copy inside single quotes to system clipboard
-" cvi' => paste inside single quotes from system clipboard
-" In addition, cP is mapped to copy the current line directly.
-" The sequence cV is mapped to paste the content of system clipboard to the next line.
-
-Add this maybe: https://github.com/tpope/vim-fugitive
-
-## How to modify multiple files
+### How to modify multiple files
 
 1. Record a macro
 2. Load files to buffers: args pattern for files
 3. Execute macro: argsdo normal@mw (where m is macro and w stands for write)
 4. Write all buffers: wall
 
-## How to convert decimal to binary
+### How to convert decimal to binary
 
 Conversion steps:
 - Divide the number by 2.
@@ -113,3 +104,18 @@ Similar to main-horizontal but the large pane is placed on the left and the othe
 
 tiled
 Panes are spread out as evenly as possible over the window in both rows and columns.
+
+## Ranger
+
+Command hints show up whenever a mapping has multiple continuations:
+g for navigation and tabs
+r for :open_with command
+y for yank(copy)
+d for cut/delete
+p for paste
+o for sort
+. for filter_stack
+z for changing settings
+u for "undo"
+M for linemode
++, -, = for setting access rights to files
