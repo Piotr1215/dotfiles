@@ -155,6 +155,8 @@ vim.g.startify_session_delete_buffers = 0
 vim.g.startify_commands = {
   { 'Help Features', 'h nvim-features' },
   { 'Help Quickref', 'h quickref' },
+  { 'Edit Aliases', 'e ~/.zsh_aliases' },
+  { 'Edit Functions', 'e ~/.zsh_functions' },
   { 'Search Dev:   SPC fd', 'Telescope find_files search_dirs=~/dev,--hidden,--with-filename' },
   { 'Search Repos: SPC fr', 'lua require\'telescope\'.extensions.repo.list{search_dirs = {"~/dev"}}' },
   { 'Ranger:       ALT o', 'RnvimrToggle' },
