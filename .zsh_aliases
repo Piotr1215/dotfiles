@@ -1,0 +1,94 @@
+# kubectl aliases
+alias k=kubectl
+alias kaf='kubectl apply -f'
+alias kdf='kubectl delete -f'
+alias kk=/usr/bin/kubecolor
+
+# regular aliases
+alias clock="__clock.sh &"
+alias relog="DISPLAY=:0 gnome-session-quit --force"
+alias uxp="{ cd ~/dev/backstage-demo && just ~/dev/backstage-demo/setup_infra }"
+alias uxp-="just ~/dev/backstage-demo/teardown"
+alias aopa="__toggle_alacritty_opacity.sh"
+alias sam=sampler
+alias remind=__remind.sh
+alias heart="echo -n $(python -c 'print u"\u2665".encode("utf-8")')"
+alias ath=__swap_alacritty_theme.sh
+alias gist=gist
+alias v=nvim
+alias rg='rg --hidden'
+alias fd='fd --hidden'
+alias diff=colordiff
+alias slack='fuzzpak slack 2>/dev/null &'
+alias pavu=pavucontrol #Control sound sources, useful for trouble shooting
+alias watch=viddy
+alias cplcom="fc -ln -1 | tr -d '\n' | xsel --clipboard"
+alias deb=deb-get
+alias work='nohup firefox -P "Work" > /dev/null 2>&1 &'
+alias home='nohup firefox -P "Home" > /dev/null 2>&1 &'
+alias cwork='google-chrome --profile-directory="Profile 2"'
+alias cfun='google-chrome --profile-directory="Default"'
+alias tf=terraform
+alias df=duf
+alias ps=procs
+alias ldoc='lazydocker'
+alias wm='watch kubectl get managed'
+alias rm='rm -v'
+alias rmm='rm -i'
+alias gs='git show'
+alias op='xdg-open '
+alias ddgit='web_search github'
+alias lg='lazygit'
+alias llvim='/home/decoder/.local/bin/lvim'
+alias lvim='nvim -c "normal '\''0"'
+alias redirect="2>&1 | tee output.txt"
+alias go16="go1.16.15"
+alias yml="cat <<EOF | kubectl create -f -"
+alias mux=tmuxinator
+alias ms="tmuxinator start" 
+alias mst="tmuxinator stop" 
+alias ra=ranger
+alias alaw='nohup alacritty --working-directory $PWD >&/dev/null'
+alias ghs='gh s'
+alias ls='exa --long --all --header --icons'
+alias la='exa --long --grid --all --sort=accessed --header --icons'
+if [[ $(uname -s) == Linux ]]; then
+  alias cat=batcat
+else
+  alias cat=bat
+fi
+alias lzd='docker run --rm -it -v /var/run/docker.sock:/var/run/docker.sock -v /config/lazydocker:/.config/jesseduffield/lazydocker lazyteam/lazydocker'
+alias revive='shutdown -r now'
+alias rest='shutdown now'
+alias vedit='vim ~/.config/nvim/init.lua'
+alias dots='cd ~/dev/dotfiles'
+alias zedit='vim ~/.zshrc'
+alias tedit='vim ~/.tmux.conf'
+alias vim='nvim'
+alias gcc='git diff --stat --cached origin/master' # Git Check Commit before pushing
+alias docs='docsify serve docs'
+alias glog='git log --graph --oneline --decorate'
+alias music='browse https://www.youtube.com/playlist?list=PL3-_0fT8ay_I9cEIoPNKRN7PcGjnAZ1Re'
+alias getupd='source "${HOME}"/scripts/__getupdates.sh'
+alias dev='cd ~/dev'
+alias kdump='kubectl get all --all-namespaces'
+alias addkey='eval $(ssh-agent) && ssh-add'
+alias ll='ls -lah'
+alias l='lsd -al'
+alias lol=lolcat
+alias lal='lsd -al | lolcat -a -d 5'
+alias km=kustomize
+alias diskusage='du -sh * | sort -h --reverse'
+alias dls="docker container ls -a"
+alias serve="browser-sync start -s -f . --no-notify --host localhost --port 5000"
+alias dca='mux s dca'
+alias lst='dpkg -l' #List installed packages with their description
+alias dpsa="docker ps -a --format 'table {{.ID}}\t{{.Names}}\t{{.Image}}'" #docker ps -a with only id name and image
+alias dps="docker ps --format 'table {{.ID}}\t{{.Names}}\t{{.Image}}'" #docker ps -a with only id name and image
+# https://gitlab.com/gitlab-org/incubation-engineering/ai-assist/dokter
+alias doc=dokter
+alias gmail='web_search duckduckgo \!gmail'
+alias disk='gdu'
+alias mkdd='mkdir $(date +"%Y-%m-%d")'
+alias admin='sudo bash -c "apt-get update && apt-get -y upgrade && apt-get -y autoremove && apt-get -y clean"'
+alias sr='source ~/.zshrc'
