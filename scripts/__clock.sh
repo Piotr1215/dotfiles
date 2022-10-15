@@ -12,4 +12,4 @@ export PS4='+(${BASH_SOURCE}:${LINENO}): ${FUNCNAME[0]:+${FUNCNAME[0]}(): }'
 # Set new line and tab for word splitting
 IFS=$'\n\t'
 
-while sleep 1; do printf "\e[s\e[1;%sH%s\e[u" $((COLUMNS - 27)) "$(date)"; done
+while sleep 1; do printf "\e[s\e[1;%sH%s\e[u" $((COLUMNS - 28)) "$(date)"; done
