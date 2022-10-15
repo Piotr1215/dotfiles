@@ -46,7 +46,6 @@ startup_pane: "1"
 
 windows:
   - poke:
-      layout: even-horizontal
+      layout: tiled
       panes:
-        - clear; fortune -s | cowsay | lolcat; zsh
         - clear

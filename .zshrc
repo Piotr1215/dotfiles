@@ -24,6 +24,11 @@ fi
 if [ "$funcstack[1]" = "_k3d" ]; then
     _k3d
 fi
+
+if [[ -z $TMUX ]]; then
+  tmuxinator start poke
+fi
+
 # PROMPT CUSTOMIZATION
 # To customize prompt, run `p10k configure` or edit ~/.p10k.zsh.
 # [[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
