@@ -40,6 +40,8 @@ zstyle ':completion:*:directory-stack' list-colors '=(#b) #([0-9]#)*( *)==95=38;
 source $ZSH/oh-my-zsh.sh
 autoload -U compinit && compinit
 
+eval "$(zoxide init zsh)"
+
 if [[ $(uname -s) == Linux ]]; then
   source ${HOME}/.oh-my-zsh/custom/plugins/nix-shell/nix-shell.plugin.zsh
   source ${HOME}/.oh-my-zsh/custom/plugins/nix-zsh-completions/nix-zsh-completions.plugin.zsh
@@ -80,6 +82,7 @@ alias ath=__swap_alacritty_theme.sh
 alias gist=gist
 alias v=nvim
 alias rg='rg --hidden'
+alias fd='fd --hidden'
 alias diff=colordiff
 alias slack='fuzzpak slack 2>/dev/null &'
 alias pavu=pavucontrol #Control sound sources, useful for trouble shooting
@@ -97,7 +100,6 @@ alias ldoc='lazydocker'
 alias wm='watch kubectl get managed'
 alias rm='rm -v'
 alias rmm='rm -i'
-alias zx='y -t '
 alias gs='git show'
 alias op='xdg-open '
 alias ddgit='web_search github'
@@ -155,7 +157,6 @@ alias disk='gdu'
 alias mkdd='mkdir $(date +"%Y-%m-%d")'
 alias admin='sudo bash -c "apt-get update && apt-get -y upgrade && apt-get -y autoremove && apt-get -y clean"'
 alias sr='source ~/.zshrc'
-
 if [[ $(uname -s) == Linux ]]; then
   eval $(dircolors -p | sed -e 's/DIR 01;34/DIR 01;36/' | dircolors /dev/stdin)
 else
@@ -394,30 +395,5 @@ if [ -f '${HOME}/google-cloud-sdk/path.zsh.inc' ]; then . '${HOME}/google-cloud-
 
 # The next line enables shell command completion for gcloud.
 if [ -f '${HOME}/google-cloud-sdk/completion.zsh.inc' ]; then . '${HOME}/google-cloud-sdk/completion.zsh.inc'; fi
-
-eval "$(direnv hook zsh)"
-
-### Added by Zinit's installer
-if [[ ! -f $HOME/.local/share/zinit/zinit.git/zinit.zsh ]]; then
-    print -P "%F{33} %F{220}Installing %F{33}ZDHARMA-CONTINUUM%F{220} Initiative Plugin Manager (%F{33}zdharma-continuum/zinit%F{220})…%f"
-    command mkdir -p "$HOME/.local/share/zinit" && command chmod g-rwX "$HOME/.local/share/zinit"
-    command git clone https://github.com/zdharma-continuum/zinit "$HOME/.local/share/zinit/zinit.git" && \
-        print -P "%F{33} %F{34}Installation successful.%f%b" || \
-        print -P "%F{160} The clone has failed.%f%b"
-fi
-
-source "$HOME/.local/share/zinit/zinit.git/zinit.zsh"
-autoload -Uz _zinit
-(( ${+_comps} )) && _comps[zinit]=_zinit
-
-# Load a few important annexes, without Turbo
-# (this is currently required for annexes)
-zinit light-mode for \
-    zdharma-continuum/zinit-annex-as-monitor \
-    zdharma-continuum/zinit-annex-bin-gem-node \
-    zdharma-continuum/zinit-annex-patch-dl \
-    zdharma-continuum/zinit-annex-rust
-
-### End of Zinit's installer chunk
 
 [[ -s "/home/decoder/.gvm/scripts/gvm" ]] && source "/home/decoder/.gvm/scripts/gvm"
