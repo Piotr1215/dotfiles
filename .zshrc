@@ -69,6 +69,10 @@ else
   export LSCOLORS="Gxfxcxdxbxegedabagacad"
 fi
 
+# Source functions and aliases
+source ~/.zsh_aliases
+source ~/.zsh_functions
+
 # EXPORT & PATH
 export VISUAL=nvim
 export PATH=/home/decoder/.nimble/bin:$PATH

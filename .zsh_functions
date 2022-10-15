@@ -1,0 +1,156 @@
+function gist ()
+{
+   gh gist create --filename $(echo $(date +"%m-%d-%y")-$RANDOM.sh)
+}
+
+function share ()
+{
+  curl -sF 'clbin=<-' https://clbin.com | xargs -I _ echo -n _"?hl" | tee >(xsel -ib 2>&1) | tee >(xargs echo) | nohup xargs xdg-open >/dev/null 2>&1
+}
+
+function copyname() {
+    file=$1
+    stat -t $1 | cut -d '.' -f1 | xargs echo -n | xclip
+}
+
+function ytd() {
+    link=$(xsel -ob)
+
+    if [[ "$link" != *"youtu.be"* ]]; then
+        echo "This is not the right format, copy again"
+        return 1 2>/dev/null
+    fi
+
+    youtube-dl -o "~/music/%(title)s.%(ext)s"  $link --no-playlist &
+}
+
+function cpa() {
+    printf $PWD | xclip -selection primary 
+}
+
+function dpa() {
+    cd $(xclip -o -sel primary)
+}
+
+function gac() {
+  git add .
+  git commit -m "$1"
+  git push
+}
+
+function gacs() {
+  git add .
+  git commit -m "$1" -s
+  git push
+}
+
+# Find a repo for authenticated user with gh CLI and cd into it, clone and cd if not found on disk
+function repo() {
+    if [[ -z "$1" ]]; then
+        export repo=$(ls ${HOME}/dev | awk '{print $8}' |  fzf) 
+    else
+        export repo=$(ls ${HOME}/dev | awk '{print $8}' | rg $1 | fzf) 
+    fi
+    if [[ -z "$repo" ]]; then
+        echo "Repository not found"
+      else
+        echo "Repository found locally, entering"
+        cd ${HOME}/dev/$repo
+        if [[ -d .git ]]; then
+          onefetch
+        fi
+    fi
+}
+
+function vol() {
+    echo "Usage: provide volume in intiger, e.g. 50 will adjust vol to 50%"
+    if [[ -z "$1" ]]; then
+        amixer get Master
+        return
+    fi
+    amixer set Master "$1"%
+    echo "Volume set to $1%"
+}
+
+function mon ()
+{
+  active_mon=$(xrandr | grep primary)
+
+  if [[ "$active_mon" =~ "HDMI" ]]; then
+    xrandr --output DVI-D-0 --primary
+  else
+    xrandr --output HDMI-0 --primary
+  fi
+}
+
+function sout() {
+  echo "Usage: sout toggles between\n - hdmi: plays sound via main monitor or\n - head: plays sound via main headset\n"
+
+  # Do some grep magic to retrieve id of output devices, * indicates active device
+  local local_output=$(wpctl status | grep Sinks: -A2 | head -3 | grep \* | grep "\d+" -Po | head -1)
+  local new_output=$(wpctl status | grep Sinks: -A2 | head -3 | grep -v \* | grep "\d+" -Po | head -1)
+
+  # Swap the the device with no star making it active and adding the star
+  wpctl set-default "$new_output"
+  local sink_name=$(wpctl status | grep Sinks: -A2 | head -3 | grep \*)
+
+  if [[ $(echo "$sink_name" |  grep "GP106 High Definition") ]]; then
+    wpctl set-mute $(wpctl status | grep --after-context=3 " ├─ Sources:" | grep "Microphone Mono" | grep "\d+" -Po | head -n 1) 1
+    amixer set Master 25%
+    local_output='hdmi'
+    echo "Sound local_output set to '$=monitor, mic muted\nVolume 25%"
+  else
+    amixer set Master 100%
+    local_output='head'
+    echo "Sound local_output set to 31=headset\nVolume 100%"
+  fi
+} 
+
+function old_repo() {
+    if [[ -z "$1" ]]; then
+      echo "Please provide search term"
+      return
+    else
+      export repo=$({ gh repo list Piotr1215 --limit 1000;  gh repo list upbound --limit 1000 } | awk '{print $1}' | sed 's:.*/::' | rg $1 | fzf)
+    fi
+    if [[ -z "$repo" ]]; then
+      echo "Repository not found"
+    elif [[ -d ${HOME}/dev/$repo ]]; then
+      echo "Repository found locally, entering"
+      cd ${HOME}/dev/$repo
+      onefetch
+    else
+      echo "Repository not found locally, cloning"
+      gh repo clone $repo ${HOME}/dev/$repo
+      cd ${HOME}/dev/$repo
+      onefetch
+    fi
+}
+
+function checkfetch() {
+    local res=$(onefetch) &> /dev/null
+    if [[ "$res" =~ "Error" ]]; then
+        echo ""
+    else echo $(onefetch)
+    fi
+}
+
+function key() {
+  cat ${HOME}/shortcuts.md 
+  # cat ${HOME}/shortcuts.md |  yad --width=750 --height=1050  --center --close-on-unfocus --text-info
+}
+
+function kcdebug() {
+  kubectl run -i --rm --tty debug --image=busybox --restart=Never -- sh
+}
+
+function mkd() {
+  mkdir -p "$@" && cd "$_";
+}
+function iapt() {
+    if [ -z "$1" ]; then
+        echo "Usage: iapt <initial search string> - select packages on peco and they will be installed" 
+    else 
+        sudo apt-cache search $1 | peco | awk '{ print $1 }' | tr "\n" " " | xargs -- sudo apt-get -y install
+    fi  
+}
