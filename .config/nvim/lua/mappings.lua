@@ -22,10 +22,6 @@ utils.nmap("<leader>j", ":m .+1<CR>==") -- Move Line Down in Normal Mode
 utils.nmap("<Leader>em", ":/\\V\\c\\<\\>") -- find exact match
 
 -- Nvim Leap Mappings
-utils.emap("<Leader>of", "<Plug>(leap-forward)")
-utils.emap("<Leader>ofx", "<Plug>(leap-forward-x)")
-utils.emap("<Leader>ob", "<Plug>(leap-backward)")
-utils.emap("<Leader>obx", "<Plug>(leap-backward-x)")
 utils.emap("<Leader>ow", "<Plug>(leap-cross-window)")
 -- Stop search highlight
 utils.nmap(",<space>", ":nohlsearch<CR>")
@@ -53,9 +49,9 @@ utils.nmap("<leader>sw", "\"_diwP") -- substitute current word with last yanked 
 utils.nmap("<leader>sW", "\"_diWP") -- substitute current WORD with last yanked text
 utils.vmap("<leader>ss", "\"_dP") -- substitute selection with last yanked text
 -- Delete
-utils.nmap("cx", "\"_x") -- delete single letter
-utils.nmap("x", "\"_d") -- needed for operator pending mode
-utils.omap("x", "\"_d") -- delete into black hole register but as operator pending
+-- utils.nmap("cx", "\"_x") -- delete single letter
+-- utils.nmap("x", "\"_d") -- needed for operator pending mode
+-- utils.omap("x", "\"_d") -- delete into black hole register but as operator pending
 
 -- select last pasted text
 utils.nmap("gp", "`[v`]")
@@ -70,8 +66,8 @@ utils.lnmap("cpf", ":let @+ = expand(\"%:t\")<cr>")
 utils.nmap("<silent> <leader>c}", "v}:call nerdcomment('x', 'toggle')<cr>")
 utils.nmap("<silent> <leader>c{", "v{:call nerdcomment('x', 'toggle')<cr>")
 -- insert 2 empty lines and go into inser mode
--- utils.nmap("<leader>L", "O<ESC>O")
--- utils.nmap("<leader>l", "o<cr>")
+utils.nmap("<leader>L", "O<ESC>O")
+utils.nmap("<leader>l", "o<cr>")
 
 -- Format with pretty
 utils.nmap("<C-f>", ":Pretty<CR>")

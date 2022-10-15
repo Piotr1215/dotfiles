@@ -57,6 +57,23 @@ prettier.setup({
   },
 })
 
+require("nvim-surround").setup({
+  keymaps = {
+    insert = "<C-g>s",
+    insert_line = "<C-g>S",
+    normal = "ys",
+    normal_cur = "yss",
+    normal_line = "yS",
+    normal_cur_line = "ySS",
+    visual = "S",
+    visual_line = "gS",
+    delete = "d;",
+    change = "c;",
+  },
+})
+
+require('leap').add_default_mappings()
+
 require("telekasten").setup {
   home = "/home/decoder/zettelkasten",
   dailies = "/home/decoder/zettelkasten/daily",
