@@ -152,6 +152,7 @@ require('packer').startup(function(use)
   use 'hrsh7th/vim-vsnip-integ'
   -- }}}
   -- Programming {{{
+  use 'simrat39/rust-tools.nvim'
   use 'IndianBoy42/tree-sitter-just'
   use 'NoahTheDuke/vim-just'
   use 'fatih/vim-go'
