@@ -20,7 +20,8 @@ vcmd('setlocal expandtab shiftwidth=4 softtabstop=4 autoindent')
 vim.g.mkdp_browser = '/usr/bin/firefox'
 vim.g.mkdp_echo_preview_url = 0
 
-utils.nmap("nmap <buffer><silent> <leader>ps", ":call mdip#MarkdownClipboardImage()<CR>")
+utils.nmap("<buffer><silent> <leader>ps", ":call mdip#MarkdownClipboardImage()<CR>")
+utils.imap("<c-e>", "<cmd>:Telescope symbols<CR>")
 
 vim.api.nvim_buf_set_keymap(0, "v", ",wl", [[c[<c-r>"]()<esc>]], { noremap = false })
 
