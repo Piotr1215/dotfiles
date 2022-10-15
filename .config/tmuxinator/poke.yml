@@ -48,4 +48,4 @@ windows:
   - poke:
       layout: tiled
       panes:
-        - clear
+        - clear; neofetch
