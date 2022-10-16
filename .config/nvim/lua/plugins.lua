@@ -85,23 +85,7 @@ require('packer').startup(function(use)
   use { "smartpde/telescope-recent-files" }
   -- }}}
   -- LSP {{{
-  use {
-    "AckslD/nvim-neoclip.lua",
-    requires = {
-      -- you'll need at least one of these
-      { 'nvim-telescope/telescope.nvim' },
-      { 'ibhagwan/fzf-lua' },
-      { 'kkharji/sqlite.lua', module = 'sqlite' },
-    },
-    config = function()
-      require('neoclip').setup({
-        history = 1000,
-        enable_persistent_history = true,
-        length_limit = 1048576,
-        continuous_sync = true,
-      })
-    end,
-  }
+  use { 'ibhagwan/fzf-lua' }
   use { 'nvim-treesitter/nvim-treesitter', run = ':TSUpdate' }
   use { 'tami5/lspsaga.nvim', requires = { 'neovim/nvim-lspconfig' } }
   use 'onsails/lspkind-nvim'
