@@ -1,3 +1,10 @@
+timer ()
+{
+  total=$1 
+  for ((i=total; i>0; i--)); do sleep 1; printf "Time remaining $i secs \r"; done 
+  echo -e "\a" 
+}
+
 function gist ()
 {
    gh gist create --filename $(echo $(date +"%m-%d-%y")-$RANDOM.sh)
