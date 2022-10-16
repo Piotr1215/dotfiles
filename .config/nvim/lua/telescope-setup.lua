@@ -17,7 +17,6 @@ require("telescope").load_extension("recent_files")
 require("telescope").load_extension("emoji")
 require('telescope').load_extension('bookmarks')
 require("telescope").load_extension('zoxide')
-require("telescope").load_extension('neoclip')
 require('telescope').load_extension('tmuxinator')
 
 -- Configure find files builtin with custom opts
@@ -40,7 +39,6 @@ end
 local default_opts = {noremap = true, silent = true}
 vim.api.nvim_set_keymap('v', '<leader>fsd', 'y<ESC>:Telescope live_grep default_text=<c-r>0<CR> search_dirs={"~/dev"}', default_opts)
 vim.api.nvim_set_keymap('v', '<leader>fs', 'y<ESC>:Telescope live_grep default_text=<c-r>0<CR> search_dirs={"$PWD"}', default_opts)
-vim.api.nvim_set_keymap('n', '<leader>nc', ':Telescope neoclip a extra=star,plus,0<CR>', default_opts)
 vim.api.nvim_set_keymap('n', "<leader>tm", ":lua require('telescope').extensions.tmuxinator.projects{}<CR>", default_opts)
 
 local key = vim.api.nvim_set_keymap
