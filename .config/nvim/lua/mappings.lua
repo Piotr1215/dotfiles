@@ -129,7 +129,6 @@ utils.nmap('v5', 'v9iw')
 utils.nmap('<leader>mp', ':MarkdownPreview<CR>')
 -- Fix Markdown Errors
 utils.nmap('<leader>fmt', ':Pretty<CR>')
---" Markdown paste image
 
 -- EXTERNAL --
 -- Execute line under cursor in shell
