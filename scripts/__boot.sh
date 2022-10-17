@@ -18,8 +18,9 @@ echo "$current_day"
 if [[ " ${weekdays[*]} " =~ " $current_day " ]]; then
 	fuzzpak slack 2>/dev/null &
 	nohup firefox -P "Work" about:profiles >/dev/null 2>&1 &
-	alacritty -e tmuxinator start poke &
+	alacritty
 else
 	#Weekend :)
-	alacritty -e tmuxinator start relax &
+	nohup firefox -P "Home" about:profiles >/dev/null 2>&1 &
+	alacritty
 fi
