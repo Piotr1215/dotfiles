@@ -30,7 +30,6 @@ utils.vmap("//", 'y/\\V<C-R>=escape(@",\'/\')<CR><CR>') -- Highlight selection
 utils.vmap("<C-s>", ":s/\\%V") -- Search only in visual selection using %V atom
 
 -- MACROS --
-utils.nmap("<leader>gt",":!ctags -R --exclude=.git--exclude=vendor --exclude=node_modules --exclude=db --exclude=log .<CR>")
 utils.nmap("<Leader>q", "@q")
 utils.xmap("Q", ":'<,'>:normal @q<CR>")
 utils.lnmap("jq", ":g/{/.!jq .<CR>")
@@ -38,33 +37,28 @@ utils.tmap("<ESC>", "<C-\\><C-n>")
 
 -- MANIPULATE TEXT --
 -- Yank
-utils.nmap('<leader>yw', '"+yiw') -- yank word under cusror to the clipboard buffer
+utils.nmap('<leader>yw', '"+yiw') -- yank word under cusror to the clipboard buffer 
 utils.nmap('<leader>yW', '"+yiW') -- yank WORD under cusror to the clipboard buffer
 -- Paste
 utils.xmap("<leader>p", "\"_dP") -- paste the same yanked text into visual selection
 utils.nmap("<leader>1", '"0p') -- paste from 0 (latest yank)
-utils.nmap("<leader>2", '"*p') -- paste from * (selection register)
+utils.nmap("<leader>2", '"*p') -- paste from 0 (latest yank) 
 -- Substitute
 utils.nmap("<leader>sw", "\"_diwP") -- substitute current word with last yanked text
 utils.nmap("<leader>sW", "\"_diWP") -- substitute current WORD with last yanked text
-utils.vmap("<leader>ss", "\"_dP") -- substitute selection with last yanked text
--- Delete
--- utils.nmap("cx", "\"_x") -- delete single letter
--- utils.nmap("x", "\"_d") -- needed for operator pending mode
--- utils.omap("x", "\"_d") -- delete into black hole register but as operator pending
+utils.vmap("<leader>ss", "\"_dp") -- substitute selection with last yanked text
 
 -- select last pasted text
 utils.nmap("gp", "`[v`]")
 -- useful for passing over braces and quotations
 utils.imap("<C-l>", "<C-o>a")
+utils.imap("<C-p>", "<C-o>A")
+utils.imap("<C-n>", "<C-o>A;<ESC>")
 -- set mark on this line ma
 utils.imap(";[", "<c-o>ma")
 utils.imap("']", "<c-o>mA")
 -- Copy current file name
 utils.lnmap("cpf", ":let @+ = expand(\"%:t\")<cr>")
--- comment paragraphs
-utils.nmap("<silent> <leader>c}", "v}:call nerdcomment('x', 'toggle')<cr>")
-utils.nmap("<silent> <leader>c{", "v{:call nerdcomment('x', 'toggle')<cr>")
 -- insert 2 empty lines and go into inser mode
 utils.nmap("<leader>L", "O<ESC>O")
 utils.nmap("<leader>l", "o<cr>")
@@ -74,14 +68,10 @@ utils.nmap("<C-f>", ":Pretty<CR>")
 -- add line below without entering insert mode!
 utils.nmap("<leader><Up>", ':<c-u>put!=repeat([\'\'],v:count)<bar>\']+1<cr>')
 utils.nmap("<leader><Down>", ':<c-u>put =repeat([\'\'],v:count)<bar>\'[-1<cr>')
--- removes whitespace
-utils.nmap('<leader>rspace', ':%s/\\s\\+$//e')
 -- insert space
 utils.nmap('<leader>i', 'i<space><esc>')
 -- delete word forward in insert mode
-utils.nmap('<leader>i', 'i<space><esc>')
--- delete word with ctrl backspace
-utils.imap('<C-BS>', '<C-W>')
+utils.imap('<c-d>', '<c-o>daw')
 -- replace multiple words simultaniously
 utils.nmap('<leader>x', '*``cgn')
 utils.nmap('<leader>X', '#``cgn')
@@ -157,14 +147,6 @@ utils.nmap('Zz', '<c-w>_ | <c-w>|')
 utils.nmap('Zo', '<c-w>=')
 
 -- PROGRAMMING --
--- Use `[g` and `]g` to navigate diagnostics
--- Apply AutoFix to problem on the current line.
--- Map function and class text objects
--- NOTE: Requires 'textDocument.documentSymbol' support from the language server.
--- Expand
-utils.imap('<expr>', '<C-j>   vsnip#expandable()  ? \'<Plug>(vsnip-expand)\'         : \'<C-j>')
-utils.smap('<expr>', '<C-j>   vsnip#expandable()  ? \'<Plug>(vsnip-expand)\'         : \'<C-j>')
-
 -- Expand or jump
 utils.imap('<expr>', '<C-l>   vsnip#available(1)  ? \'<Plug>(vsnip-expand-or-jump)\' : \'<C-l>')
 utils.smap('<expr>', '<C-l>   vsnip#available(1)  ? \'<Plug>(vsnip-expand-or-jump)\' : \'<C-l>')
