@@ -136,6 +136,13 @@ require('packer').startup(function(use)
   use 'hrsh7th/vim-vsnip-integ'
   -- }}}
   -- Programming {{{
+  use {
+    'saecki/crates.nvim',
+    requires = { 'nvim-lua/plenary.nvim' },
+    config = function()
+      require('crates').setup()
+    end,
+  }
   use 'simrat39/rust-tools.nvim'
   use 'IndianBoy42/tree-sitter-just'
   use 'NoahTheDuke/vim-just'
