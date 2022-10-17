@@ -21,7 +21,6 @@ vim.g.mkdp_browser = '/usr/bin/firefox'
 vim.g.mkdp_echo_preview_url = 0
 
 utils.nmap("<leader>mm", ":call mdip#MarkdownClipboardImage()<CR>")
-utils.imap("<c-e>", "<cmd>:Telescope symbols<CR>")
 
 vim.api.nvim_buf_set_keymap(0, "v", ",wl", [[c[<c-r>"]()<esc>]], { noremap = false })
 

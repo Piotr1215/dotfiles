@@ -7,6 +7,14 @@ require('telescope').setup {
       case_mode = "smart_case", -- or "ignore_case" or "respect_case"
     },
     file_browser = {}
+    emoji = {
+      action = function(emoji)
+        vim.fn.setreg("*", emoji.value)
+        print([[Press p or "*p to paste this emoji]] .. emoji.value)
+        -- insert emoji when picked
+        vim.api.nvim_put({ emoji.value }, 'c', false, true)
+      end,
+    },
   }
 }
 
@@ -55,6 +63,8 @@ local set_up_telescope = function()
   set_keymap('n', '<leader>fg', [[<cmd>lua require('telescope.builtin').git_files()<CR>]])
   set_keymap('n', '<leader>fo', [[<cmd>lua require('telescope.builtin').oldfiles()<CR>]])
   set_keymap('n', '<leader>fi', ':Telescope file_browser<CR>')
+  set_keymap('i', '<C-e>', '<cmd>:Telescope emoji<CR>')
+  set_keymap('n', '<leader>fe', [[<cmd>Telescope emoji<CR>]])
   set_keymap('n', '<leader>fsw', [[<cmd>lua require('telescope.builtin').grep_string({search_dirs = {"~/dev"}})<CR>]])
   set_keymap('n', '<leader>fb', [[<cmd>lua require('telescope.builtin').current_buffer_fuzzy_find()<CR>]])
   set_keymap('n', '<leader>fh', [[<cmd>lua require('telescope.builtin').help_tags()<CR>]])
