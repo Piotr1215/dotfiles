@@ -5,10 +5,11 @@ alias kdf='kubectl delete -f'
 alias kk=/usr/bin/kubecolor
 
 # regular aliases
+alias we=watchexec
 alias clock="__clock.sh &"
 alias relog="DISPLAY=:0 gnome-session-quit --force"
-alias uxp="{ cd ~/dev/backstage-demo && just ~/dev/backstage-demo/setup_infra }"
-alias uxp-="just ~/dev/backstage-demo/teardown"
+alias uxp="just ~/dev/platform-composites/demos/backstage-demo/setup_infra"
+alias uxp-="just ~/dev/platform-composites/demos/backstage-demo/teardown"
 alias aopa="__toggle_alacritty_opacity.sh"
 alias sam=sampler
 alias remind=__remind.sh
