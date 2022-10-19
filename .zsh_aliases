@@ -5,6 +5,7 @@ alias kdf='kubectl delete -f'
 alias kk=/usr/bin/kubecolor
 
 # regular aliases
+alias z=zi
 alias we=watchexec
 alias clock="__clock.sh &"
 alias relog="DISPLAY=:0 gnome-session-quit --force"
