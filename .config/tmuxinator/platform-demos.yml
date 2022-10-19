@@ -1,7 +1,7 @@
 # /home/decoder/.config/tmuxinator/atosik.yml
 
-name: comp
-root: ~/dev/platform-composites
+name: platform-demos
+root: ~/dev/platform-composites/demos/<%= @args[0] %>
 
 # Optional tmux socket
 # socket_name: foo
@@ -48,20 +48,15 @@ windows:
   - dev:
       layout: cf44,294x77,0,0[294x18,0,0{147x18,0,0,0,146x18,148,0,2},294x58,0,19,3]
       panes:
-        - cd ~/dev/platform-composites/examples/; clear; ls
-        - cd ~/dev/platform-composites/package/storagebucket; clear; wm
+        - cd ~/dev/platform-composites/demos/<%= @args[0] %>; clear; ls
+        - cd ~/dev/platform-composites/demos/<%= @args[0] %>; clear;
         - k9s -c ev
   - git:
       layout: 374d,255x67,0,0{73x67,0,0,26,181x67,74,0,29}
       panes:
         - exa --grid; cowsay "You go little cow\!"
         - lg
-  - slides:
+  - vim:
       layout: even-horizontal
       panes:
-        - cd ./demos/backstage-demo/slides; ./slides presentation.md
-        - cd ./demos/backstage-demo/slides; vim presentation.md
-  - readme:
-      layout: tiled
-      panes:
-        - vim ./demos/backstage-demo/README.md -c "MarkdownPreview"
+        - vim .
