@@ -46,7 +46,7 @@ utils.nmap("<leader>2", '"*p') -- paste from 0 (latest yank)
 -- Substitute
 utils.nmap("<leader>sw", "\"_diwP") -- substitute current word with last yanked text
 utils.nmap("<leader>sW", "\"_diWP") -- substitute current WORD with last yanked text
-utils.vmap("<leader>ss", "\"_dp") -- substitute selection with last yanked text
+utils.vmap("<leader>ss", "\"_dP") -- substitute selection with last yanked text
 
 -- select last pasted text
 utils.nmap("gp", "`[v`]")
