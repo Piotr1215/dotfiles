@@ -72,6 +72,7 @@ fi
 # Source functions and aliases
 source ~/.zsh_aliases
 source ~/.zsh_functions
+eval "$(direnv hook zsh)"
 
 # EXPORT & PATH
 export VISUAL=nvim

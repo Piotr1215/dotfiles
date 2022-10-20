@@ -40,6 +40,7 @@ parse_repository() {
 start_existing_project() {
 	if tmuxinator list | grep -q "$full_name"; then
 		tmuxinator start "$full_name"
+		return 0
 	fi
 }
 
