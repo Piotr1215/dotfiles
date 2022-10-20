@@ -39,28 +39,17 @@ parse_repository() {
 # Looks like this project already exists, should we start it?
 start_existing_project() {
 	if tmuxinator list | grep -q "$full_name"; then
-		read -p -r "This tmuxinator project already exists, you you want to start it? [y/n] " input
-
-		case $input in
-		[yY][eE][sS] | [yY])
-			tmuxinator start "$full_name"
-			;;
-		[nN][oO] | [nN])
-			echo "Exiting" && return 0
-			;;
-		*)
-			echo "Invalid input..."
-			return 1
-			;;
-		esac
+		tmuxinator start "$full_name"
 	fi
 }
 
 # Create new tmuxinator project
 create_new_project() {
+	local extension="yml" # extension must be yml, othwerwise two files are created, yml and yaml
+
 	echo "Creating a new tmuxinator project $full_name"
-	cp ~/.config/tmuxinator/poke.yml ~/.config/tmuxinator/"$full_name".yaml
-	new_project="$HOME/.config/tmuxinator/$full_name.yaml"
+	cp ~/.config/tmuxinator/poke.yml ~/.config/tmuxinator/"$full_name"."$extension"
+	new_project="$HOME/.config/tmuxinator/$full_name.$extension"
 
 	# Change base values
 	sed -i "s#^name: poke#name: $full_name#" "$new_project"
