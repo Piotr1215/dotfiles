@@ -14,7 +14,7 @@
   "Slides pre-processing": {
     "prefix": "slides_pre",
     "scope": "markdown",
-    "body": ["```", "~~~${1:command}", "${0}", "~~~", "```"],
+    "body": ["```bash", "~~~${1:command}", "${0}", "~~~", "```"],
     "description": "Inserts slides pre-processing snippet"
   },
   "Bash Code Snippet with surround": {
