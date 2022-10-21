@@ -1,7 +1,7 @@
 # /home/decoder/.config/tmuxinator/atosik.yml
 
 name: platform-composites-demo-flux-and-crossplane
-root: /home/decoder/dev/platform-composites
+root: /home/decoder/dev/platform-composites/demos/flux-with-crossplane
 
 # Optional tmux socket
 # socket_name: foo
