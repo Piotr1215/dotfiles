@@ -144,6 +144,16 @@ local rt = require("rust-tools")
 
 rt.setup({
   server = {
+    settings = {
+      -- to enable rust-analyzer settings visit:
+      -- https://github.com/rust-analyzer/rust-analyzer/blob/master/docs/user/generated_config.adoc
+      ["rust-analyzer"] = {
+        -- enable clippy on save
+        checkOnSave = {
+          command = "clippy"
+        },
+      }
+    },
     on_attach = function(_, bufnr)
       -- Hover actions
       vim.keymap.set("n", "<leader>ar", rt.hover_actions.hover_actions, { buffer = bufnr })
