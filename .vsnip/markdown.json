@@ -5,6 +5,12 @@
     "body": ["```yaml", "${1}", "```", "${0}"],
     "description": "Inserts YAML code snippet"
   },
+  "Rust Code Snippet": {
+    "prefix": "rst",
+    "scope": "markdown",
+    "body": ["```rust", "${1}", "```", "${0}"],
+    "description": "Inserts rust code snippet"
+  },
   "Bash Code Snippet": {
     "prefix": "bsh",
     "scope": "markdown",
