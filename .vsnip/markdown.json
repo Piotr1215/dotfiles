@@ -23,12 +23,6 @@
     "body": ["```bash", "${1:$TM_SELECTED_TEXT}", "```", "${0}"],
     "description": "Inserts bash code snippet"
   },
-  "Bash Code Snippet for Katacoda": {
-    "prefix": "bshk",
-    "scope": "markdown",
-    "body": ["```bash", "${1}", "```{{execute T1}}", "${0}"],
-    "description": "Inserts bash code snippet"
-  },
   "Document Front Matter": {
     "prefix": "docyaml",
     "body": [
