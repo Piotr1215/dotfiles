@@ -18,6 +18,21 @@ require 'mdeval'.setup({
   },
 })
 
+require('femaco').setup({
+  -- return filetype to use for a given lang
+  -- lang can be nil
+  ft_from_lang = function(lang)
+    Language = lang
+    return lang
+  end,
+  -- what to do after opening the float
+  post_open_float = function(winnr)
+    if Language == "rust" then
+      require('rust-tools.standalone').start_standalone_client()
+    end
+  end
+})
+
 require("nvim-tree").setup({
   respect_buf_cwd = true,
   update_cwd = true,
