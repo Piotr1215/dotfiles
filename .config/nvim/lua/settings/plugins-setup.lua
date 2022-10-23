@@ -18,6 +18,8 @@ require 'mdeval'.setup({
   },
 })
 
+require('mini.ai').setup()
+
 require('femaco').setup({
   -- what to do after opening the float
   post_open_float = function(winnr)
