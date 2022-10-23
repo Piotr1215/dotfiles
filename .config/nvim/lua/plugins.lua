@@ -6,6 +6,7 @@ require('packer').startup(function(use)
     "windwp/nvim-autopairs",
     config = function() require("nvim-autopairs").setup {} end
   }
+  use 'echasnovski/mini.nvim'
   use 'sheerun/vim-polyglot'
   use 'mattn/emmet-vim'
   use 'mattn/webapi-vim'
@@ -156,7 +157,6 @@ require('packer').startup(function(use)
     'AckslD/nvim-FeMaco.lua',
     config = 'require("femaco").setup()',
   }
-  use 'ferrine/md-img-paste.vim'
   use 'ixru/nvim-markdown'
   use 'dhruvasagar/vim-open-url'
   use 'marcelofern/vale.nvim'
@@ -192,6 +192,6 @@ require('packer').startup(function(use)
   use 'folke/tokyonight.nvim'
   use 'rktjmp/lush.nvim'
   use { "catppuccin/nvim", as = "catppuccin" }
-  use 'vim-airline/vim-airline'
+  use 'beauwilliams/statusline.lua'
   -- }}}
 end)
