@@ -58,7 +58,7 @@ utils.imap("<C-n>", "<C-o>A;<ESC>")
 utils.imap(";[", "<c-o>ma")
 utils.imap("']", "<c-o>mA")
 -- Copy current file name
-utils.lnmap("cpf", ":let @+ = expand(\"%:t\")<cr>")
+utils.lnmap("cpf", ":let @+ = expand(\"%:p\")<cr>")
 -- insert 2 empty lines and go into inser mode
 utils.nmap("<leader>L", "O<ESC>O")
 utils.nmap("<leader>l", "o<cr>")
