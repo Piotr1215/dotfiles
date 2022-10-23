@@ -22,11 +22,6 @@ if [ "$funcstack[1]" = "_k3d" ]; then
     _k3d
 fi
 
-# DO NOT Always start tmux
-# if [[ -z $TMUX ]]; then
-  # tmuxinator start poke
-# fi
-
 eval "$(zoxide init zsh)"
 
 # Directory history
