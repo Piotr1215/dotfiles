@@ -1,6 +1,6 @@
 # /home/decoder/.config/tmuxinator/atosik.yml
 
-name: platform-composites-demo-flux-and-crossplane
+name: flux-and-crossplane
 root: /home/decoder/dev/platform-composites/demos/flux-with-crossplane
 
 # Optional tmux socket
@@ -46,7 +46,6 @@ startup_pane: "1"
 
 windows:
   - poke:
-      layout: main-vertical
+      layout: even-vertical
       panes:
-        - clear; neofetch
         - ls
