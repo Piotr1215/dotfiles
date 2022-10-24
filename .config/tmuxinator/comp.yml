@@ -56,12 +56,3 @@ windows:
       panes:
         - exa --grid; cowsay "You go little cow\!"
         - lg
-  - slides:
-      layout: even-horizontal
-      panes:
-        - cd ./demos/backstage-demo/slides; ./slides presentation.md
-        - cd ./demos/backstage-demo/slides; vim presentation.md
-  - readme:
-      layout: tiled
-      panes:
-        - vim ./demos/backstage-demo/README.md -c "MarkdownPreview"
