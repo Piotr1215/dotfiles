@@ -68,6 +68,13 @@ prettier.setup({
   },
 })
 
+require('lualine').setup {
+  options = {
+    theme      = 'nord',
+    extensions = { 'nvim-tree', 'nvim-dap-ui' }
+  },
+}
+
 require("nvim-surround").setup({
   keymaps = {
     insert = "<C-g>s",
