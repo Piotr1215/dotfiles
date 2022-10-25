@@ -1,7 +1,10 @@
 -- Plugin configuration
 -- LSP and LS Installer
 require('lspconfig')
-
+local dap, dapui = require("dap"), require("dapui")
+require('nvim-dap-virtual-text').setup()
+require('dap-go').setup()
+require("dapui").setup()
 
 local lsp_installer = require("nvim-lsp-installer")
 vim.lsp.set_log_level("debug")
@@ -72,6 +75,9 @@ local on_attach = function(_, bufnr)
   -- codeaction
   buf_set_keymap('n', '<leader>ac', "<cmd>lua require('lspsaga.codeaction').code_action()<CR>", opts)
   buf_set_keymap('v', '<leader>a', ":<C-U>lua require('lspsaga.codeaction').range_code_action()<CR>", opts)
+
+      -- breakpoint
+ buf_set_keymap('n',  '<leader>tb', "<cmd>lua require('dap').toggle_breakpoint()<CR>", opts)
 
   -- Floating terminal
   -- NOTE: Use `vim.cmd` since `buf_set_keymap` is not working with `tnoremap...`
@@ -317,10 +323,6 @@ require 'packer'.startup(function()
   use "mfussenegger/nvim-dap"
 end)
 
-local dap, dapui = require("dap"), require("dapui")
-require('nvim-dap-virtual-text').setup()
-require('dap-go').setup()
-require("dapui").setup()
 
 dap.adapters.dockerfile = {
   type = 'executable';
@@ -328,6 +330,27 @@ dap.adapters.dockerfile = {
   args = { 'dap', "serve" };
 }
 
+dap.adapters.lldb = {
+  type = "executable",
+  command = "/usr/bin/lldb-vscode", -- adjust as needed
+  -- command = "/usr/bin/rust-lldb", -- adjust as needed
+  name = "lldb",
+}
+
+dap.configurations.rust = {
+  {
+    name = "Launch",
+    type = "lldb",
+    request = "launch",
+    program = function()
+      return vim.fn.input("Path to executable: ", vim.fn.getcwd() .. "/target/debug/", "file")
+    end,
+    cwd = "${workspaceFolder}",
+    stopOnEntry = false,
+    args = {},
+    runInTerminal = false,
+  },
+}
 dap.configurations.dockerfile = {
   {
     type = "dockerfile",
