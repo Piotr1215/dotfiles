@@ -165,7 +165,7 @@ vim.g.NERDSpaceDelims = 1
 vim.g.rnvimr_enable_picker = 1
 -- Startify
 vim.g.startify_change_to_dir = 1
-vim.g.startify_session_persistence = 1
+vim.g.startify_session_persistence = 0
 vim.g.startify_change_to_vsc_root = 1
 vim.g.startify_session_number = 5
 vim.g.startify_files_number = 10
