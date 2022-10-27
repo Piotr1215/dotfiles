@@ -76,8 +76,8 @@ local on_attach = function(_, bufnr)
   buf_set_keymap('n', '<leader>ac', "<cmd>lua require('lspsaga.codeaction').code_action()<CR>", opts)
   buf_set_keymap('v', '<leader>a', ":<C-U>lua require('lspsaga.codeaction').range_code_action()<CR>", opts)
 
-      -- breakpoint
- buf_set_keymap('n',  '<leader>tb', "<cmd>lua require('dap').toggle_breakpoint()<CR>", opts)
+  -- breakpoint
+  buf_set_keymap('n', '<leader>tb', "<cmd>lua require('dap').toggle_breakpoint()<CR>", opts)
 
   -- Floating terminal
   -- NOTE: Use `vim.cmd` since `buf_set_keymap` is not working with `tnoremap...`
@@ -149,6 +149,11 @@ end)
 local rt = require("rust-tools")
 
 rt.setup({
+  tools = {
+    -- how to execute terminal commands
+    -- options right now: termopen / quickfix
+    executor = require("rust-tools/executors").quickfix,
+  },
   server = {
     settings = {
       -- to enable rust-analyzer settings visit:
