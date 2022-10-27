@@ -39,6 +39,7 @@ require('packer').startup(function(use)
     },
   }
   use 'ggandor/leap.nvim'
+  use {'kevinhwang91/nvim-bqf'}
   -- }}}
   -- System Integration {{{
   use {
@@ -69,7 +70,6 @@ require('packer').startup(function(use)
   use 'nvim-telescope/telescope-symbols.nvim'
   use 'cljoly/telescope-repo.nvim'
   use 'kdheepak/lazygit.nvim'
-  use 'ctrlpvim/ctrlp.vim'
   use {
     'nvim-telescope/telescope.nvim',
     requires = {
