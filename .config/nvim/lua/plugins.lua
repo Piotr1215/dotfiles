@@ -39,7 +39,7 @@ require('packer').startup(function(use)
     },
   }
   use 'ggandor/leap.nvim'
-  use {'kevinhwang91/nvim-bqf'}
+  use { 'kevinhwang91/nvim-bqf' }
   -- }}}
   -- System Integration {{{
   use {
@@ -149,6 +149,7 @@ require('packer').startup(function(use)
   use 'NoahTheDuke/vim-just'
   use 'fatih/vim-go'
   use 'hashivim/vim-terraform'
+  use 'nvim-treesitter/nvim-treesitter-textobjects'
   -- }}}
   -- Markdown {{{
   use 'jubnzv/mdeval.nvim'
