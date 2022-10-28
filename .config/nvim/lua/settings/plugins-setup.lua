@@ -220,6 +220,9 @@ vim.g.startify_change_to_vsc_root = 1
 vim.g.startify_session_number = 5
 vim.g.startify_files_number = 10
 vim.g.startify_session_delete_buffers = 0
+vim.g.startify_skiplist = {
+  '^/tmp'
+}
 vim.g.startify_commands = {
   { 'Help Features', 'h nvim-features' },
   { 'Help Quickref', 'h quickref' },
