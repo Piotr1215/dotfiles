@@ -48,5 +48,4 @@ windows:
   - poke:
       layout: main-vertical
       panes:
-        - clear; neofetch
         - ls
