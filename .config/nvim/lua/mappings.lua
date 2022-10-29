@@ -37,16 +37,36 @@ utils.tmap("<ESC>", "<C-\\><C-n>")
 
 -- MANIPULATE TEXT --
 -- Yank
-utils.nmap('<leader>yw', '"+yiw') -- yank word under cusror to the clipboard buffer 
+utils.nmap('<leader>yw', '"+yiw') -- yank word under cusror to the clipboard buffer
 utils.nmap('<leader>yW', '"+yiW') -- yank WORD under cusror to the clipboard buffer
 -- Paste
 utils.xmap("<leader>p", "\"_dP") -- paste the same yanked text into visual selection
 utils.nmap("<leader>1", '"0p') -- paste from 0 (latest yank)
-utils.nmap("<leader>2", '"*p') -- paste from 0 (latest yank) 
+utils.nmap("<leader>2", '"*p') -- paste from 0 (latest yank)
 -- Substitute
 utils.nmap("<leader>sw", "\"_diwP") -- substitute current word with last yanked text
 utils.nmap("<leader>sW", "\"_diWP") -- substitute current WORD with last yanked text
 utils.vmap("<leader>ss", "\"_dP") -- substitute selection with last yanked text
+-- Change default text objects mappings to store changed/deleted text in register named with the same letter. This works for words/WORDS and braces
+utils.nmap("ciw", "\"cciw")
+utils.nmap("ciW", "\"cciW")
+utils.nmap("caw", "\"ccaw")
+utils.nmap("caW", "\"cciW")
+
+utils.nmap("diw", "\"ddiw")
+utils.nmap("diW", "\"ddiW")
+utils.nmap("daw", "\"ddaw")
+utils.nmap("daW", "\"ddiW")
+
+utils.nmap("cib", "\"bcib")
+utils.nmap("cab", "\"bcab")
+utils.nmap("dib", "\"bdib")
+utils.nmap("dab", "\"bdab")
+
+-- utils.nmap("ciq", '\"cciq')
+-- utils.nmap("caq", "\"ccaq")
+-- utils.nmap("diq", "\"cdiq")
+-- utils.nmap("daq", "\"cdaq")
 
 -- select last pasted text
 utils.nmap("gp", "`[v`]")
@@ -110,7 +130,7 @@ utils.omap('am', ':call MarkdownCodeBlock(1)<cr>')
 utils.xmap('am', ':call MarkdownCodeBlock(1)<cr>')
 utils.omap('im', ':call MarkdownCodeBlock(0)<cr>')
 utils.xmap('im', ':call MarkdownCodeBlock(0)<cr>')
--- Select visually x 
+-- Select visually x
 utils.nmap('v2', 'v3iw')
 utils.nmap('v3', 'v5iw')
 utils.nmap('v4', 'v7iw')
@@ -173,7 +193,8 @@ utils.nmap("<leader>hh", ":lua require(\"harpoon.ui\").nav_next()<CR>")
 utils.nmap("<leader>hl", ":lua require(\"harpoon.ui\").nav_prev()<CR>")
 
 -- Mdeval
-vim.api.nvim_set_keymap('n', '<leader>ev', "<cmd>lua require 'mdeval'.eval_code_block()<CR>", { silent = true, noremap = true })
+vim.api.nvim_set_keymap('n', '<leader>ev', "<cmd>lua require 'mdeval'.eval_code_block()<CR>",
+  { silent = true, noremap = true })
 
 -- Startify
 utils.lnmap("st", ":Startify<CR>") -- start Startify screen
@@ -206,20 +227,20 @@ utils.lnmap("fs", ":FloatermShow<CR>")
 -- Trouble
 -- Lua
 vim.keymap.set("n", "<leader>xx", "<cmd>TroubleToggle<cr>",
-  {silent = true, noremap = true}
+  { silent = true, noremap = true }
 )
 vim.keymap.set("n", "<leader>xw", "<cmd>TroubleToggle workspace_diagnostics<cr>",
-  {silent = true, noremap = true}
+  { silent = true, noremap = true }
 )
 vim.keymap.set("n", "<leader>xd", "<cmd>TroubleToggle document_diagnostics<cr>",
-  {silent = true, noremap = true}
+  { silent = true, noremap = true }
 )
 vim.keymap.set("n", "<leader>xl", "<cmd>TroubleToggle loclist<cr>",
-  {silent = true, noremap = true}
+  { silent = true, noremap = true }
 )
 vim.keymap.set("n", "<leader>xq", "<cmd>TroubleToggle quickfix<cr>",
-  {silent = true, noremap = true}
+  { silent = true, noremap = true }
 )
 vim.keymap.set("n", "gR", "<cmd>TroubleToggle lsp_references<cr>",
-  {silent = true, noremap = true}
+  { silent = true, noremap = true }
 )
