@@ -1,4 +1,16 @@
 {
+  "Markdown reference href part": {
+    "prefix": "refh",
+    "scope": "markdown",
+    "body": ["<a id=\"${1}\" href=\"$CLIPBOARD\">[[${1}]]</a> : ${3:desc}"],
+    "description": "Insert href reference at the bottom"
+  },
+  "Markdown reference": {
+    "prefix": "ref",
+    "scope": "markdown",
+    "body": ["[[${1}]](#${1})"],
+    "description": "Insert reference to something"
+  },
   "YAML Code Snippet": {
     "prefix": "yml",
     "scope": "markdown",
