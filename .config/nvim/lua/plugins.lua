@@ -48,9 +48,9 @@ require('packer').startup(function(use)
   }
   use 'junegunn/fzf.vim'
   use {
-    'kyazdani42/nvim-tree.lua',
+    'nvim-tree/nvim-tree.lua',
     requires = {
-      'kyazdani42/nvim-web-devicons', -- optional, for file icon
+      'nvim-tree/nvim-web-devicons', -- optional, for file icon
     },
     tag = 'nightly' -- optional, updated every week. (see issue #1193)
   }
