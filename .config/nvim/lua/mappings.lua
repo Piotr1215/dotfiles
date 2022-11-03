@@ -47,6 +47,9 @@ utils.nmap("<leader>2", '"*p') -- paste from 0 (latest yank)
 utils.nmap("<leader>sw", "\"_diwP") -- substitute current word with last yanked text
 utils.nmap("<leader>sW", "\"_diWP") -- substitute current WORD with last yanked text
 utils.vmap("<leader>ss", "\"_dP") -- substitute selection with last yanked text
+-- Delete
+utils.lnmap("d", "ma$mb`ad`bi") -- delete from cursor to end of line minus last character
+
 -- Change default text objects mappings to store changed/deleted text in register named with the same letter. This works for words/WORDS and braces
 utils.nmap("ciw", "\"cciw")
 utils.nmap("ciW", "\"cciW")
