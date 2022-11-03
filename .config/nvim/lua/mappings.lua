@@ -76,7 +76,7 @@ utils.nmap("gp", "`[v`]")
 -- useful for passing over braces and quotations
 utils.imap("<C-l>", "<C-o>a")
 utils.imap("<C-p>", "<C-o>A")
-utils.imap("<C-n>", "<C-o>A;<ESC>")
+utils.imap("<C-n>", "<C-e><C-o>A;<ESC>")
 -- set mark on this line ma
 utils.imap(";[", "<c-o>ma")
 utils.imap("']", "<c-o>mA")
