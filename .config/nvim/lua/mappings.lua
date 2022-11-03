@@ -223,8 +223,8 @@ utils.lnmap("ec", ":FeMaco<CR>")
 utils.lnmap("fl", ":Files<CR>")
 
 -- Floaterm
-utils.lnmap("t", ":FloatermToggle<CR>")
-utils.tmap("<leader>t", "<C-\\><C-n>:FloatermToggle<CR>")
+utils.lnmap("tt", ":FloatermToggle<CR>")
+utils.tmap("<leader>tt", "<C-\\><C-n>:FloatermToggle<CR>")
 
 -- Trouble
 -- Lua
