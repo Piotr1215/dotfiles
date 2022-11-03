@@ -1,7 +1,7 @@
 # /home/decoder/.config/tmuxinator/atosik.yml
 
-name: primary-production
-root: ~/dev/clusters/primary-production
+name: cluster
+root: ~/dev/clusters/primary-<%= @args[0] %>
 
 # Optional tmux socket
 # socket_name: foo
@@ -12,7 +12,7 @@ root: ~/dev/clusters/primary-production
 # Project hooks
 
 # Runs on project start, always
-# on_project_start: 
+on_project_start: export USE_GKE_GCLOUD_AUTH_PLUGIN=True
 
 # Run on project start, the first time
 # on_project_first_start: command
@@ -48,5 +48,5 @@ windows:
   - dev:
       layout: main-horizontal
       panes:
-        - ./jump_dev.sh
-        - sleep 10; k9s
+        - just create_tunnel
+        - just jump
