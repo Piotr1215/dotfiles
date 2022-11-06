@@ -6,12 +6,12 @@ alias kk=/usr/bin/kubecolor
 
 # regular aliases
 alias z=zi
+alias nv='neovide --multigrid --notabs'
 alias we=watchexec
 alias clock="__clock.sh &"
 alias relog="DISPLAY=:0 gnome-session-quit --force"
 alias uxp="just ~/dev/platform-composites/demos/backstage-demo/setup_infra"
 alias uxp-="just ~/dev/platform-composites/demos/backstage-demo/teardown"
-# alias aopa="__toggle_alacritty_opacity.sh"
 alias sam=sampler
 alias remind=__remind.sh
 alias heart="echo -n $(python -c 'print u"\u2665".encode("utf-8")')"
