@@ -1,0 +1,17 @@
+---
+apiVersion: pkg.crossplane.io/v1alpha1
+kind: ControllerConfig
+metadata:
+  name: gcp-config
+spec:
+  args:
+    - '-d'
+---
+apiVersion: pkg.crossplane.io/v1
+kind: Provider
+metadata:
+  name: provider-gcp
+spec:
+  package: xpkg.upbound.io/upbound/provider-gcp:$gcp_provider_version
+  controllerConfigRef:
+    name: gcp-config
