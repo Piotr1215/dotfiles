@@ -1,0 +1,23 @@
+apiVersion: storage.gcp.upbound.io/v1beta1
+kind: Bucket
+metadata:
+  annotations:
+    crossplane.io/external-name: sample-deleteme-$random_suffix
+  name: example
+spec:
+  deletionPolicy: Delete
+  forProvider:
+    cors:
+    - maxAgeSeconds: 3600
+      method:
+      - GET
+      origin:
+      - '*'
+      responseHeader:
+      - Content-Type
+    location: EU
+    project: crossplane-playground
+    storageClass: MULTI_REGIONAL
+    uniformBucketLevelAccess: true
+  providerConfigRef:
+    name: default
