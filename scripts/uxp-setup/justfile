@@ -6,13 +6,11 @@ yaml    := justfile_directory() + "/yaml"
 
 browse      := if os() == "linux" { "xdg-open "} else { "open" }
 copy        := if os() == "linux" { "xsel -ib"} else { "pbcopy" }
-argocd_port := "30950"
 
-export gcp_provider_version     := "v0.15.0"
+export gcp_provider_version     := "v0.17.0"
 export random_suffix            := `echo $RANDOM`
 export base64encoded_gcp_creds  := `base64 ~/creds-gcp.json | tr -d "\n"`
 export gcp_project_id           := "crossplane-playground"
-
 
 # this list of available targets
 # targets marked with * are main targets
@@ -22,9 +20,9 @@ default:
 _check_mandatory_programs:
   @if ! type "kind" > /dev/null ;then echo "Please install KIND" && exit 1; fi
   @if ! type "kubectl" > /dev/null; then echo "Please install kubectl" && exit 1; fi
-
+ 
 # * setup kind cluster with GCP official provider and ArgoCD
-setup_infra: _check_mandatory_programs setup_kind setup_gcp setup_argo 
+setup_infra: _check_mandatory_programs setup_kind setup_gcp setup_k8s
 
 # setup kind cluster
 setup_kind:
@@ -44,6 +42,18 @@ setup_kind:
   up uxp install
   kubectl wait --for condition=Available=True --timeout=300s deployment/xgql --namespace upbound-system
 
+# setup provider Kubernetes
+setup_k8s:
+  #!/usr/bin/env bash
+  echo "Setting up provider kubernetes"
+  set -euo pipefail
+
+  kubectl apply -f {{yaml}}/kubernetes-provider.yaml
+  kubectl wait --for condition=healthy --timeout=300s provider.pkg.crossplane.io/provider-kubernetes
+  SA=$(kubectl -n upbound-system get sa -o name | grep provider-kubernetes | sed -e 's|serviceaccount\/|upbound-system:|g')
+  kubectl create clusterrolebinding provider-kubernetes-admin-binding --clusterrole cluster-admin --serviceaccount="${SA}"
+  kubectl apply -f {{yaml}}/kubernetes-provider-config.yaml
+
 # setup GCP official provider
 setup_gcp:
   @echo "Setting up GCP official provider"
@@ -51,44 +61,6 @@ setup_gcp:
   @envsubst < {{yaml}}/gcp-provider.yaml | kubectl apply -f - 
   @kubectl wait --for condition=healthy --timeout=300s provider/provider-gcp
   @envsubst < {{yaml}}/provider-config.yaml | kubectl apply -f - 
-
-# setup ArgoCD and patch server service to nodePort 30950
-setup_argo: _setup_argo_rollouts && _create_repo_secret
-  @echo "Installing ArgoCD"
-  @kubectl create namespace argocd
-  @kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml 
-  @kubectl wait --for condition=Available=True --timeout=300s deployment/argocd-server --namespace argocd
-  @kubectl patch svc argocd-server -n argocd -p '{"spec": {"type": "NodePort"}}'
-  @kubectl patch svc argocd-server -n argocd --type merge --type='json' -p='[{"op": "replace", "path": "/spec/ports/0/nodePort", "value": {{argocd_port}}}]'
-
-# copy ArgoCD secret to clipboard
-copy_argo_secret:
-  @kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d | {{copy}}
-  @echo secret copied to clipboard
-
-# expose argo endpoint via ngrok
-expose_argo:
-  ngrok http https://localhost:30950
-
-# setup argo rollouts
-_setup_argo_rollouts:
-  @kubectl create namespace argo-rollouts
-  @kubectl apply -n argo-rollouts -f https://github.com/argoproj/argo-rollouts/releases/latest/download/install.yaml
-  @kubectl wait --for condition=Available=True --timeout=300s deployment/argo-rollouts --namespace argo-rollouts
-
-# browse to exposed ngrok_url
-browse_ngrok:
-  #!/usr/bin/env bash
-  set -euo pipefail
-  url=$(curl http://localhost:4040/api/tunnels | jq ".tunnels[0].public_url" | tr -d "\"")
-  just copy_argo_secret
-  xdg-open $url 
-
-# copy ArgoCD server secret to clipboard and launch browser without port forwarding
-launch_argo:
-  @kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d | {{copy}}
-  @echo secret copied to clipboard
-  @nohup {{browse}} http://localhost:{{argocd_port}} >/dev/null 2>&1 &
 
 # deploy a sample bucket to verify the setup
 test_cluster:
@@ -108,7 +80,3 @@ teardown: delete_bucket
 # watch crossplane resources
 watch RESOURCE='crossplane':
   watch kubectl get {{RESOURCE}}
-
-_create_repo_secret:
-  @echo "Creating repo secret"
-  @kubectl apply -f ${HOME}/backstage-demo/secrets/repo-deploy-secret.yaml
