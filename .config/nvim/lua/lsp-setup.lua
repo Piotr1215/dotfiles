@@ -6,28 +6,6 @@ require('nvim-dap-virtual-text').setup()
 require('dap-go').setup()
 require("dapui").setup()
 
-local lsp_installer = require("nvim-lsp-installer")
-vim.lsp.set_log_level("debug")
-local servers = {
-  "bashls",
-  "sumneko_lua",
-  "dockerls",
-  "gopls",
-  "html",
-  "vimls",
-  "yamlls",
-  "awk_ls",
-  "emmet_ls",
-  "rust-analyzer",
-}
-
-for _, name in pairs(servers) do
-  local server_is_found, server = lsp_installer.get_server(name)
-  if server_is_found and not server:is_installed() then
-    print("Installing " .. name)
-    server:install()
-  end
-end
 
 local on_attach = function(_, bufnr)
   -- Create some shortcut functions.
@@ -125,26 +103,6 @@ local server_specific_opts = {
 -- provided by Neovim!
 local capabilities = vim.lsp.protocol.make_client_capabilities()
 capabilities = require('cmp_nvim_lsp').default_capabilities()
-
-lsp_installer.on_server_ready(function(server)
-  -- the keymaps, flags and capabilities that will be sent to the server as
-  -- options.
-  local opts = {
-    on_attach = on_attach,
-    flags = { debounce_text_changes = 150 },
-    capabilities = capabilities,
-  }
-
-  -- If the current surver's name matches with the ones specified in the
-  -- `server_specific_opts`, set the options.
-  if server_specific_opts[server.name] then
-    server_specific_opts[server.name](opts)
-  end
-
-  -- And set up the server with our configuration!
-  server:setup(opts)
-end)
-
 
 local rt = require("rust-tools")
 

@@ -91,8 +91,7 @@ require('packer').startup(function(use)
   use { 'tami5/lspsaga.nvim', requires = { 'neovim/nvim-lspconfig' } }
   use 'onsails/lspkind-nvim'
   use { "williamboman/mason.nvim" }
-  use "williamboman/mason-lspconfig.nvim"
-  use 'williamboman/nvim-lsp-installer'
+  use 'williamboman/mason-lspconfig.nvim'
   use "neovim/nvim-lspconfig"
   use 'mfussenegger/nvim-dap'
   use 'jose-elias-alvarez/null-ls.nvim'
