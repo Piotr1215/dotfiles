@@ -38,7 +38,8 @@ require('packer').startup(function(use)
       "nvim-telescope/telescope.nvim" -- optional
     },
   }
-  use 'ggandor/leap.nvim'
+  use 'https://gitlab.com/madyanov/svart.nvim'
+  -- use 'ggandor/leap.nvim'
   use { 'kevinhwang91/nvim-bqf' }
   -- }}}
   -- System Integration {{{
