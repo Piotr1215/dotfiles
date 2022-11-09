@@ -7,7 +7,6 @@ alias kk=/usr/bin/kubecolor
 # regular aliases
 alias z=zi
 alias nv='neovide --multigrid --notabs'
-alias we=watchexec
 alias clock="__clock.sh &"
 alias relog="DISPLAY=:0 gnome-session-quit --force"
 alias uxp="just ~/dev/dotfiles/scripts/uxp-setup/setup_infra"
