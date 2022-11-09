@@ -21,8 +21,6 @@ utils.nmap("<leader>j", ":m .+1<CR>==") -- Move Line Down in Normal Mode
 -- SEARCH & REPLACE --
 utils.nmap("<Leader>em", ":/\\V\\c\\<\\>") -- find exact match
 
--- Nvim Leap Mappings
-utils.emap("<Leader>ow", "<Plug>(leap-cross-window)")
 -- Stop search highlight
 utils.nmap(",<space>", ":nohlsearch<CR>")
 utils.vmap("<C-r>", '"hy:%s/<C-r>h//gc<left><left><left>') -- Change selection
@@ -225,6 +223,10 @@ utils.lnmap("fl", ":Files<CR>")
 -- Floaterm
 utils.lnmap("tt", ":FloatermToggle<CR>")
 utils.tmap("<leader>tt", "<C-\\><C-n>:FloatermToggle<CR>")
+
+-- Svart
+vim.keymap.set({ "n", "x", "o" }, "s", "<Cmd>Svart<CR>")       -- begin search
+vim.keymap.set({ "n", "x", "o" }, "S", "<Cmd>SvartRepeat<CR>") -- repeat with last searched query
 
 -- Trouble
 -- Lua
