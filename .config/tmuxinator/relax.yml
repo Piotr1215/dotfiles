@@ -46,7 +46,7 @@ root: ~/music
 
 windows:
   - relax:
-      layout: even-horizontal
+      layout: main-horizontal
       panes:
         - clock; cmus ~/music/
         - cava
