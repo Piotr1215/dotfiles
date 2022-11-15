@@ -25,6 +25,7 @@ require('packer').startup(function(use)
       require("nvim-surround").setup({})
     end
   })
+  use 'gcmt/taboo.vim'
   use 'folke/which-key.nvim'
   use 'lukas-reineke/indent-blankline.nvim'
   use 'machakann/vim-swap'
