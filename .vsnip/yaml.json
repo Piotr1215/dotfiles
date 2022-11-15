@@ -1,4 +1,41 @@
 {
+  "Example claim": {
+    "prefix": "claim",
+    "scope": "yaml",
+    "description": "Example claim for developer-platform",
+    "body": [
+      "$LINE_COMMENT ${1:compositionKind}",
+      "apiVersion: developer-platform.upbound.io/v1alpha1",
+      "kind: ${1}",
+      "metadata:",
+      "  name: ${1/(.*)/${1:/downcase}/}-example",
+      "spec:",
+      "  ${0}"
+    ]
+  },
+  "IDP composition template": {
+    "prefix": "compd",
+    "scope": "yaml",
+    "description": "IDP composition template with placeholders to fill in",
+    "body": [
+      "$LINE_COMMENT ${1:compositionKind}",
+      "apiVersion: apiextensions.crossplane.io/v1",
+      "kind: Composition",
+      "metadata:",
+      "  name: ${1/(.*)/${1:/downcase}/}s.developer-platform.upbound.io",
+      "spec:",
+      " # patchSets:",
+      " #   - name:",
+      " #     patches:",
+      " #       - :",
+      "  writeConnectionSecretsToNamespace: upbound-system",
+      "  compositeTypeRef:",
+      "    apiVersion: developer-platform.upbound.io/v1alpha1",
+      "    kind: ${1:compositionKind}",
+      "  resources:",
+      "  ${0}"
+    ]
+  },
   "Composition template": {
     "prefix": "comp",
     "scope": "yaml",
