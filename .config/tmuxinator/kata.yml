@@ -36,21 +36,16 @@ on_project_start: git fetch origin --prune
 # tmux_command: byobu
 
 # Specifies (by name or index) which window will be selected on project startup. If not set, the first window is used.
-startup_window: git
+startup_window: dev
 
 # Specifies (by index) which pane of the specified window will be selected on project startup. If not set, the first pane is used.
-startup_pane: "1"
+# startup_pane: "1"
 
 # Controls whether the tmux session should be attached to automatically. Defaults to true.
 # attach: false
 
 windows:
-  - vim:
+  - dev:
       layout: tiled
       panes:
-        - vim -S kata.vim
-  - git:
-      layout: even-horizontal
-      panes:
-        - exa --grid; cowsay "You go little cow\!"
         - lg
