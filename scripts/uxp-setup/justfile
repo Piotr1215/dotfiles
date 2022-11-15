@@ -7,9 +7,11 @@ yaml    := justfile_directory() + "/yaml"
 browse      := if os() == "linux" { "xdg-open "} else { "open" }
 copy        := if os() == "linux" { "xsel -ib"} else { "pbcopy" }
 
-export gcp_provider_version     := "v0.17.0"
+export gcp_provider_version     := "v0.18.0"
+export aws_provider_version     := "v0.20.0"
 export random_suffix            := `echo $RANDOM`
 export base64encoded_gcp_creds  := `base64 ~/creds-gcp.json | tr -d "\n"`
+export base64encoded_aws_creds  := `cat ~/.aws/credentials | grep -i 609897127049_AdministratorAccess -A3 | sed 's/609897127049_AdministratorAccess/default/' | base64 | tr -d "\n"`
 export gcp_project_id           := "crossplane-playground"
 
 # this list of available targets
@@ -22,7 +24,7 @@ _check_mandatory_programs:
   @if ! type "kubectl" > /dev/null; then echo "Please install kubectl" && exit 1; fi
  
 # * setup kind cluster with GCP official provider and ArgoCD
-setup_infra: _check_mandatory_programs setup_kind setup_gcp setup_k8s
+setup_infra: _check_mandatory_programs setup_kind setup_gcp setup_k8s setup_helm
 
 # setup kind cluster
 setup_kind:
@@ -54,13 +56,37 @@ setup_k8s:
   kubectl create clusterrolebinding provider-kubernetes-admin-binding --clusterrole cluster-admin --serviceaccount="${SA}"
   kubectl apply -f {{yaml}}/kubernetes-provider-config.yaml
 
+# setup provider Helm
+setup_helm:
+  #!/usr/bin/env bash
+  echo "Setting up provider Helm"
+  set -euo pipefail
+
+  kubectl apply -f {{yaml}}/helm-provider.yaml
+  kubectl wait --for condition=healthy --timeout=300s provider.pkg.crossplane.io/provider-helm
+  SA=$(kubectl -n upbound-system get sa -o name | grep provider-helm | sed -e 's|serviceaccount\/|upbound-system:|g')
+  kubectl create clusterrolebinding provider-helm-admin-binding --clusterrole cluster-admin --serviceaccount="${SA}"
+  sleep 3
+  kubectl apply -f {{yaml}}/helm-provider-config.yaml
+
+# setup AWS official provider
+setup_aws:
+  @echo "Setting up AWS official provider"
+  @kubectl delete secret -n upbound-system aws-creds --ignore-not-found
+  @__swapcreds.sh
+  @echo $base64encoded_aws_creds
+  @kubectl config use-context kind-control-plane
+  @envsubst < {{yaml}}/aws-provider.yaml | kubectl apply -f - 
+  @kubectl wait --for condition=healthy --timeout=300s provider/provider-aws
+  @envsubst < {{yaml}}/aws-provider-config.yaml | kubectl apply -f - 
+
 # setup GCP official provider
 setup_gcp:
   @echo "Setting up GCP official provider"
   @kubectl config use-context kind-control-plane
   @envsubst < {{yaml}}/gcp-provider.yaml | kubectl apply -f - 
   @kubectl wait --for condition=healthy --timeout=300s provider/provider-gcp
-  @envsubst < {{yaml}}/provider-config.yaml | kubectl apply -f - 
+  @envsubst < {{yaml}}/gcp-provider-config.yaml | kubectl apply -f - 
 
 # deploy a sample bucket to verify the setup
 test_cluster:
