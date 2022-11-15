@@ -52,7 +52,6 @@ windows:
         - cd ~/dev/platform-composites/package/storagebucket; clear; wm
         - k9s -c ev
   - git:
-      layout: 374d,255x67,0,0{73x67,0,0,26,181x67,74,0,29}
+      layout: tiled
       panes:
-        - exa --grid; cowsay "You go little cow\!"
         - lg

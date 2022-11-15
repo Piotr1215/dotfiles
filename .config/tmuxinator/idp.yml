@@ -1,7 +1,7 @@
-# /home/decoder/.config/tmuxinator/idp.yml
+# /home/decoder/.config/tmuxinator/atosik.yml
 
 name: idp
-root: ~/
+root: ~/dev/idp
 
 # Optional tmux socket
 # socket_name: foo
@@ -12,7 +12,7 @@ root: ~/
 # Project hooks
 
 # Runs on project start, always
-# on_project_start: command
+on_project_start: git fetch origin --prune
 
 # Run on project start, the first time
 # on_project_first_start: command
@@ -27,7 +27,7 @@ root: ~/
 # on_project_stop: command
 
 # Runs in each window and pane before window/pane specific commands. Useful for setting up interpreter versions.
-# pre_window: rbenv shell 2.0.0-p247
+# pre_window: tmux source-file ~/.tmux.conf 
 
 # Pass command line options to tmux. Useful for specifying a different tmux.conf.
 # tmux_options: -f ~/.tmux.mac.conf
@@ -36,22 +36,23 @@ root: ~/
 # tmux_command: byobu
 
 # Specifies (by name or index) which window will be selected on project startup. If not set, the first window is used.
-# startup_window: editor
+startup_window: git
 
 # Specifies (by index) which pane of the specified window will be selected on project startup. If not set, the first pane is used.
-# startup_pane: 1
+startup_pane: "1"
 
 # Controls whether the tmux session should be attached to automatically. Defaults to true.
 # attach: false
 
 windows:
-  - editor:
-      layout: main-vertical
-      # Synchronize all panes of this window, can be enabled before or after the pane commands run.
-      # 'before' represents legacy functionality and will be deprecated in a future release, in favour of 'after'
-      # synchronize: after
+  - dev:
+      layout: 2166,318x80,0,0[318x21,0,0{158x21,0,0,20,159x21,159,0,22},318x58,0,22{158x58,0,22,23,159x58,159,22,24}]
       panes:
-        - vim
-        - guard
-  - server: bundle exec rails s
-  - logs: tail -f log/development.log
+        - ls
+        - clear
+        - wm
+        - k9s -c ev
+  - git:
+      layout: tiled
+      panes:
+        - vim -c "SLoad idp"
