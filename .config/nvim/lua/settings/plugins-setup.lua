@@ -229,8 +229,8 @@ vim.g.rnvimr_enable_picker = 1
 vim.g.startify_change_to_dir = 1
 vim.g.startify_session_persistence = 0
 vim.g.startify_change_to_vsc_root = 1
-vim.g.startify_session_number = 5
-vim.g.startify_files_number = 10
+vim.g.startify_session_number = 10
+vim.g.startify_files_number = 5
 vim.g.startify_session_delete_buffers = 0
 vim.g.startify_skiplist = {
   '^/tmp'
