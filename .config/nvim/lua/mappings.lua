@@ -12,6 +12,12 @@ vim.api.nvim_set_keymap('n', 'j', "v:count == 0 ? 'gj' : 'j'", { noremap = true,
 -- Navigate between paragraphs and add to jumplist
 vim.keymap.set("n", "<C-j>", [[:keepjumps normal! j}k<cr>]], opts)
 vim.keymap.set("n", "<C-k>", [[:keepjumps normal! k{j<cr>]], opts)
+utils.nmap("<C-right>", "<c-w>l")
+vim.api.nvim_set_keymap('n', '<C-Left>', '<C-W>h', { noremap = true, silent = true })
+vim.api.nvim_set_keymap('n', '<S-PageUp>', 'gT', { noremap = true, silent = true })
+vim.api.nvim_set_keymap('n', '<S-PageDown>', 'gt', { noremap = true, silent = true })
+utils.nmap("<C-down>", "<c-w>j")
+utils.nmap("<C-up>", "<c-w>k")
 utils.nmap("<BS>", "^")
 utils.vmap("<S-PageDown>", ":m '>+1<CR>gv=gv") -- Move Line Down in Visual Mode
 utils.vmap("<S-PageUp>", ":m '<-2<CR>gv=gv") -- Move Line Up in Visual Mode
@@ -248,3 +254,6 @@ vim.keymap.set("n", "<leader>xq", "<cmd>TroubleToggle quickfix<cr>",
 vim.keymap.set("n", "gR", "<cmd>TroubleToggle lsp_references<cr>",
   { silent = true, noremap = true }
 )
+
+-- Crates
+utils.lnmap("cu", "lua require('crates').upgrade_crate()")
