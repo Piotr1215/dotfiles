@@ -54,11 +54,7 @@ alias alaw='nohup alacritty --working-directory $PWD >&/dev/null'
 alias ghs='gh s'
 alias ls='exa --long --all --header --icons'
 alias la='exa --long --grid --all --sort=accessed --header --icons'
-if [[ $(uname -s) == Linux ]]; then
-  alias cat=batcat
-else
-  alias cat=bat
-fi
+alias cat=bat
 alias lzd='docker run --rm -it -v /var/run/docker.sock:/var/run/docker.sock -v /config/lazydocker:/.config/jesseduffield/lazydocker lazyteam/lazydocker'
 alias revive='shutdown -r now'
 alias rest='shutdown now'
