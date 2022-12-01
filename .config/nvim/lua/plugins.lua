@@ -1,4 +1,4 @@
-require('packer').startup(function(use)
+return require('packer').startup(function(use)
   -- Packer
   use 'wbthomason/packer.nvim'
   -- Editor Extensions {{{
