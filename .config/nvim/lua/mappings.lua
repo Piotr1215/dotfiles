@@ -176,6 +176,10 @@ utils.imap('jk', '<Esc>')
 -- Zoom split windows
 utils.nmap('Zz', '<c-w>_ | <c-w>|')
 utils.nmap('Zo', '<c-w>=')
+-- quickfix window
+utils.lnmap('qf', ':copen<CR>')
+-- close tab
+utils.lnmap('tcl', ':tabc<CR>')
 
 -- PROGRAMMING --
 -- Expand or jump
