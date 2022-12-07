@@ -154,6 +154,8 @@ require("nvim-surround").setup({
   },
 })
 
+require('leap').add_default_mappings()
+
 require("telekasten").setup {
   home = "/home/decoder/zettelkasten",
   dailies = "/home/decoder/zettelkasten/daily",
