@@ -9,7 +9,10 @@ vim.g.maplocalleader = " "
 utils.lnmap("wa", ":wqa<cr>")
 utils.lnmap("qa", ":qa!<cr>")
 utils.nmap("<tab>", ":wincmd w<cr>")
-utils.nmap("<nop>", "<Plug>Markdown_Fold")
+utils.nmap("<nop>", "<Plug>Markdown_Fold") -- tab is for moving around only
+-- center screen after moving pageup or down
+utils.nmap("<c-d>", "<c-d>zz")
+utils.nmap("<c-u>", "<c-u>zz")
 -- j/k moves over virtual (wrapped) lines
 vim.api.nvim_set_keymap('n', 'k', "v:count == 0 ? 'gk' : 'k'", { noremap = true, expr = true, silent = true })
 vim.api.nvim_set_keymap('n', 'j', "v:count == 0 ? 'gj' : 'j'", { noremap = true, expr = true, silent = true })
@@ -31,6 +34,8 @@ utils.nmap("<leader>j", ":m .+1<CR>==") -- Move Line Down in Normal Mode
 -- SEARCH & REPLACE --
 utils.nmap("<Leader>em", ":/\\V\\c\\<\\>") -- find exact match
 
+-- Nvim Leap Mappings
+utils.emap("<Leader>ow", "<Plug>(leap-cross-window)")
 -- Stop search highlight
 utils.nmap(",<space>", ":nohlsearch<CR>")
 utils.vmap("<C-r>", '"hy:%s/<C-r>h//gc<left><left><left>') -- Change selection
@@ -238,9 +243,9 @@ utils.lnmap("fl", ":Files<CR>")
 utils.lnmap("tt", ":FloatermToggle<CR>")
 utils.tmap("<leader>tt", "<C-\\><C-n>:FloatermToggle<CR>")
 
--- Svart
-vim.keymap.set({ "n", "x", "o" }, "s", "<Cmd>Svart<CR>")       -- begin search
-vim.keymap.set({ "n", "x", "o" }, "S", "<Cmd>SvartRepeat<CR>") -- repeat with last searched query
+-- -- Svart
+-- vim.keymap.set({ "n", "x", "o" }, "s", "<Cmd>Svart<CR>")       -- begin search
+-- vim.keymap.set({ "n", "x", "o" }, "S", "<Cmd>SvartRepeat<CR>") -- repeat with last searched query
 
 -- Trouble
 -- Lua
