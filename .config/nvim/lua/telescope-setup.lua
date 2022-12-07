@@ -9,6 +9,7 @@ require("telescope").load_extension("emoji")
 require('telescope').load_extension('bookmarks')
 require("telescope").load_extension('zoxide')
 require('telescope').load_extension('tmuxinator')
+require("telescope").load_extension("live_grep_args")
 
 require('telescope').setup {
   extensions = {
@@ -98,7 +99,7 @@ local set_up_telescope = function()
   set_keymap('n', '<leader>ff',
     [[<cmd>cd %:p:h<CR><cmd>pwd<CR><cmd>lua require('telescope.builtin').find_files({find_command = {'rg', '--files', '--hidden', '-g', '!.git' }, {search_dirs = {"$PWD"}}})<CR>]])
   set_keymap('n', '<leader>fr', [[<cmd>lua require'telescope'.extensions.repo.list{search_dirs = {"~/dev"}}<CR>]])
-  set_keymap('n', '<leader>fw', [[<cmd>lua require('telescope.builtin').live_grep()<CR>]])
+  set_keymap('n', '<leader>fw', [[<cmd>lua require('telescope').extensions.live_grep_args.live_grep_args()<CR>]])
   set_keymap('n', '<leader>fg', [[<cmd>lua require('telescope.builtin').git_files()<CR>]])
   set_keymap('n', '<leader>fo', [[<cmd>lua require('telescope.builtin').oldfiles()<CR>]])
   set_keymap('n', '<leader>fi', ':Telescope file_browser<CR>')
