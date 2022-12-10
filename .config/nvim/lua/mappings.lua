@@ -49,6 +49,8 @@ utils.lnmap("jq", ":g/{/.!jq .<CR>")
 utils.tmap("<ESC>", "<C-\\><C-n>")
 
 -- MANIPULATE TEXT --
+-- YAML fold
+utils.lnmap('yf', ':set foldmethod=indent<CR>')
 -- Yank
 utils.nmap('<leader>yw', '"+yiw') -- yank word under cusror to the clipboard buffer
 utils.nmap('<leader>yW', '"+yiW') -- yank WORD under cusror to the clipboard buffer
