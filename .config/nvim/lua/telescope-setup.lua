@@ -81,9 +81,9 @@ function search_dev()
 end
 
 local default_opts = { noremap = true, silent = true }
-vim.api.nvim_set_keymap('n', '<leader>fsd', ':Telescope live_grep<CR> search_dirs={"~/dev"}',
+vim.api.nvim_set_keymap('n', '<leader>fsd', ':exe "!cd ~/dev" | exe ":Telescope live_grep<CR>',
   default_opts)
-vim.api.nvim_set_keymap('v', '<leader>fsd', 'y<ESC>:Telescope live_grep default_text=<c-r>0<CR> search_dirs={"~/dev"}',
+vim.api.nvim_set_keymap('v', '<leader>fsd', 'y<ESC>:Telescope live_grep default_text=<c-r>0<CR> search_dirs={cwd=/home/decoder/dev/}',
   default_opts)
 vim.api.nvim_set_keymap('v', '<leader>fs', 'y<ESC>:Telescope live_grep default_text=<c-r>0<CR> search_dirs={"$PWD"}',
   default_opts)
