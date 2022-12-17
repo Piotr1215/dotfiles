@@ -13,6 +13,9 @@ iabbrev VV ↓
 )
 
 vcmd('set conceallevel=0')
+-- this setting makes markdown auto-set the 80 text width limit when typing
+-- vcmd('set fo+=a')
+vcmd('set textwidth=80')
 vcmd('setlocal spell spelllang=en_us')
 vcmd('setlocal expandtab shiftwidth=4 softtabstop=4 autoindent')
 
