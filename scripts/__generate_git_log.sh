@@ -14,6 +14,13 @@ IFS=$'\n\t'
 
 # Grab current repo name
 repo=$(basename $(git rev-parse --show-toplevel))
+org=Piotr1215
 
 # Take last 10 commits and wrap them in https
-git log --pretty="%H| - %s" | grep -v Merge | grep -v chore | head -n 10 | sed 's/\(.*|\)/- [&]\(https:\/\/github.com\/piotr1215\/'$repo'\/&\)/g' | sed 's/|//g'
+# git log --pretty="%H| - %s" | grep -v Merge | grep -v chore | head -n 10 | sed 's/\(.*|\)/- [&]\(https:\/\/github.com\/'$org'\/'$repo'\/&\)/g' | sed 's/|//g'
+
+git log --pretty="%H - %s" |
+	awk -F" - " -vSHORT=8 -vORG="$org" -vREPO="$repo" \
+		'/Merge/ || /chore/ { next }
+		++i > 10 {exit}
+		{printf "[%s](https://github.com/%s/%s/%s) - %s\n", substr($1, 1, SHORT), ORG, REPO, $1, $2}'
