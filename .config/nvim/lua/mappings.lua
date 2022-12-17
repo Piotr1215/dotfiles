@@ -170,6 +170,7 @@ utils.nmap('<Leader>c', '1z=')
 utils.vmap('<Leader>pb', ":w !share<CR>")
 -- setup mapping to call :LazyGit
 utils.nmap('<leader>gg', ':LazyGit<CR>')
+utils.nmap('<leader>gl', ':r !bash ~/dev/dotfiles/scripts/__generate_git_log.sh<CR>')
 
 -- NAVIGATION --
 -- Nvim Tree settings
