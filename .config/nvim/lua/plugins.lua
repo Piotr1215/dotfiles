@@ -96,7 +96,6 @@ return require('packer').startup(function(use)
   use { "williamboman/mason.nvim" }
   use 'williamboman/mason-lspconfig.nvim'
   use "neovim/nvim-lspconfig"
-  use 'mfussenegger/nvim-dap'
   use 'jose-elias-alvarez/null-ls.nvim'
   use {
     "folke/trouble.nvim",
