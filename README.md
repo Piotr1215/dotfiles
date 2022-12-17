@@ -143,3 +143,16 @@ Last test date: 18.03.2022
 - Pop!\_OS 21.04
 - Katacoda testbed:
   <https://www.katacoda.com/scenario-examples/courses/environment-usages/ubuntu-2004>
+
+## Changelog
+
+- [9ac32d87f7f0cfd301b5927ae6ab7f31d28949be](https://github.com/piotr1215/dotfiles/9ac32d87f7f0cfd301b5927ae6ab7f31d28949be) - Simple script to generate change log with last 10 commits
+- [f2af1f0cc0f13892f67405316491be7795279d10](https://github.com/piotr1215/dotfiles/f2af1f0cc0f13892f67405316491be7795279d10) - Combine demos with slides
+- [7d53aa074202f1b0024dfea66a68fc40e143a061](https://github.com/piotr1215/dotfiles/7d53aa074202f1b0024dfea66a68fc40e143a061) - Nvim dap was multiple times in the scirpt, this messes up with packer
+- [f7b8dcc761df7ad9e17d6f3772e9eb2db01f3874](https://github.com/piotr1215/dotfiles/f7b8dcc761df7ad9e17d6f3772e9eb2db01f3874) - Do not auto-wrap text, this messes up with the code fences
+- [27a106cc3f678e0088f419a77acc9fc42387896d](https://github.com/piotr1215/dotfiles/27a106cc3f678e0088f419a77acc9fc42387896d) - The dedicated mapping is not needed as arguments can be passed to ripgrep
+- [b7d455a5e240ff06740d97c467e6cc116370ffe3](https://github.com/piotr1215/dotfiles/b7d455a5e240ff06740d97c467e6cc116370ffe3) - Livesearch option with ability to search directly in dev folder
+- [96250d35c26a0ddee754c202c8c66d8735191112](https://github.com/piotr1215/dotfiles/96250d35c26a0ddee754c202c8c66d8735191112) - yaml fodmethod indent for easier file transposing
+- [a0b66193301cb021c8c0b9130775b62a9c890a9f](https://github.com/piotr1215/dotfiles/a0b66193301cb021c8c0b9130775b62a9c890a9f) - Side tree for tmux invoked with tab
+- [03df552765d3cddecc1cbcbf20ab8dc9f408028a](https://github.com/piotr1215/dotfiles/03df552765d3cddecc1cbcbf20ab8dc9f408028a) - Add ability to pass argumetns to rg for live telescope grep
+- [6efca2dc165f247783b5db3816096bb6af652871](https://github.com/piotr1215/dotfiles/6efca2dc165f247783b5db3816096bb6af652871) - Moving page up/down also centers screen
