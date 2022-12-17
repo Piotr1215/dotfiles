@@ -36,7 +36,7 @@ on_project_start: git fetch origin --prune
 # tmux_command: byobu
 
 # Specifies (by name or index) which window will be selected on project startup. If not set, the first window is used.
-startup_window: vim
+startup_window: slides
 
 # Specifies (by index) which pane of the specified window will be selected on project startup. If not set, the first pane is used.
 # startup_pane: "2"
@@ -45,8 +45,11 @@ startup_window: vim
 # attach: false
 
 windows:
-  - vim:
+  - slides:
       layout: even-horizontal
       panes:
-        - vim -S demo.vim
-        - ls
+        - cd 2022-12-15 && slides slides.md
+  - vim:
+      layout: tiled
+      panes:
+          - vim -c "SLoad arch"
