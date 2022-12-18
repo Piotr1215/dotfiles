@@ -13,6 +13,7 @@ vcmd('set backspace=indent,eol,start')
 vcmd('set foldexpr=getline(v:lnum)=~\'^\\s*$\'&&getline(v:lnum+1)=~\'\\S\'?\'<1\':1')
 vcmd('set jumpoptions=view')
 vcmd('set sessionoptions+=tabpages,globals')
+vim.o.completeopt = 'menuone,noselect'
 
 --Remap for dealing with word wrap
 set.background = 'dark'
