@@ -33,6 +33,9 @@ utils.nmap("<leader>j", ":m .+1<CR>==") -- Move Line Down in Normal Mode
 
 -- SEARCH & REPLACE --
 utils.nmap("<Leader>em", ":/\\V\\c\\<\\>") -- find exact match
+vim.keymap.set("n", "J", "mzJ`z")
+vim.keymap.set("n", "n", "nzzzv")
+vim.keymap.set("n", "N", "Nzzzv")
 
 -- Nvim Leap Mappings
 utils.emap("<Leader>ow", "<Plug>(leap-cross-window)")
