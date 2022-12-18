@@ -88,5 +88,4 @@ alias doc=dokter
 alias gmail='web_search duckduckgo \!gmail'
 alias disk='gdu'
 alias mkdd='mkdir $(date +"%Y-%m-%d")'
-alias admin='sudo bash -c "apt-get update && apt-get -y upgrade && apt-get -y autoremove && apt-get -y clean"'
 alias sr='source ~/.zshrc'
