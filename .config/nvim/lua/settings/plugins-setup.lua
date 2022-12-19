@@ -20,12 +20,23 @@ require 'mdeval'.setup({
 
 require('mini.ai').setup()
 
+require("obsidian").setup({
+  dir = "~/dev/obsidian/decoder",
+  notes_subdir = "Notes",
+  completion = {
+    nvim_cmp = true, -- if using nvim-cmp, otherwise set to false
+  }
+})
+
 require 'nvim-treesitter.configs'.setup {
   -- Add languages to be installed here that you want installed for treesitter
   ensure_installed = {'go', 'lua', 'rust', 'typescript', 'help' },
 
   highlight = { enable = true },
-  indent = { enable = true },
+  indent = {
+    enable = true,
+    additional_vim_regex_highlighting = { "markdown" },
+  },
   incremental_selection = {
     enable = true,
     keymaps = {

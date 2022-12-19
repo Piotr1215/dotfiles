@@ -152,14 +152,27 @@ utils.xmap('am', ':call MarkdownCodeBlock(1)<cr>')
 utils.omap('im', ':call MarkdownCodeBlock(0)<cr>')
 utils.xmap('im', ':call MarkdownCodeBlock(0)<cr>')
 -- Select visually x
-utils.nmap('v2', 'v3iw')
-utils.nmap('v3', 'v5iw')
-utils.nmap('v4', 'v7iw')
-utils.nmap('v5', 'v9iw')
+vim.keymap.set('n', 'v2', 'v3iw')
+vim.keymap.set('n', 'v3', 'v5iw')
+vim.keymap.set('n', 'v4', 'v7iw')
+vim.keymap.set('n', 'v5', 'v9iw')
+
 -- Markdown Previev
 utils.nmap('<leader>mp', ':MarkdownPreview<CR>')
 -- Fix Markdown Errors
 utils.nmap('<leader>fmt', ':Pretty<CR>')
+vim.keymap.set(
+  "n",
+  "gf",
+  function()
+    if require('obsidian').util.cursor_on_markdown_link() then
+      return "<cmd>ObsidianFollowLink<CR>"
+    else
+      return "gf"
+    end
+  end,
+  { noremap = false, expr = true}
+)
 
 -- EXTERNAL --
 -- Execute line under cursor in shell
