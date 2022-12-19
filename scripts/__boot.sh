@@ -11,11 +11,13 @@ export PS4='+(${BASH_SOURCE}:${LINENO}): ${FUNCNAME[0]:+${FUNCNAME[0]}(): }'
 
 weekdays=('Monday' 'Tuesday' 'Wednesday' 'Thursday' 'Friday')
 
+timeoff=1
+
 current_day=$(date +"%A")
 
 echo "$current_day"
 
-if [[ " ${weekdays[*]} " =~ " $current_day " ]]; then
+if [[ " ${weekdays[*]} " =~ " $current_day " ]] && [[ "$timeoff" == 0 ]]; then
 	fuzzpak slack 2>/dev/null &
 	nohup firefox -P "Work" about:profiles >/dev/null 2>&1 &
 	alacritty
