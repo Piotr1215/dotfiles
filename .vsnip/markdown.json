@@ -1,4 +1,14 @@
 {
+  "Details HTML": {
+    "prefix": "det",
+    "scope": "markdown",
+    "body": ["- ${1:TASK_DETAILS}",
+      "<details>",
+      "<summary>click to see the answer</summary>",
+      "<code>${2:ANSWER}</code>",
+      "</details>${0}"],
+    "description": "Details HTML snippet"
+  },
   "Markdown reference href part": {
     "prefix": "refh",
     "scope": "markdown",
