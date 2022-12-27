@@ -11,7 +11,7 @@ export PS4='+(${BASH_SOURCE}:${LINENO}): ${FUNCNAME[0]:+${FUNCNAME[0]}(): }'
 
 weekdays=('Monday' 'Tuesday' 'Wednesday' 'Thursday' 'Friday')
 
-timeoff=1
+timeoff=0
 
 current_day=$(date +"%A")
 
