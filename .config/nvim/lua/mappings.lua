@@ -156,6 +156,7 @@ vim.keymap.set('n', 'v2', 'v3iw')
 vim.keymap.set('n', 'v3', 'v5iw')
 vim.keymap.set('n', 'v4', 'v7iw')
 vim.keymap.set('n', 'v5', 'v9iw')
+vim.keymap.set('n', '_', 'vg_')
 
 -- Markdown Previev
 utils.nmap('<leader>mp', ':MarkdownPreview<CR>')
