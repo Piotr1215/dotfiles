@@ -16,8 +16,8 @@ return require('packer').startup(function(use)
   use 'tpope/vim-fugitive'
   use 'voldikss/vim-floaterm'
   use 'sindrets/diffview.nvim'
-  use 'ThePrimeagen/harpoon' -- https://github.com/ThePrimeagen/harpoon
-  use 'kevinhwang91/rnvimr' -- https://github.com/kevinhwang91/rnvimr
+  use 'ThePrimeagen/harpoon'
+  use 'kevinhwang91/rnvimr'
   use 'airblade/vim-gitgutter'
   use({
     "kylechui/nvim-surround",
@@ -172,13 +172,6 @@ return require('packer').startup(function(use)
   use 'weirongxu/plantuml-previewer.vim'
   -- }}}
   -- Look & Feel {{{
-  use {
-    "max397574/colortils.nvim",
-    cmd = "Colortils",
-    config = function()
-      require("colortils").setup()
-    end,
-  }
   use { "ellisonleao/gruvbox.nvim" }
   use 'uga-rosa/ccc.nvim'
   use { "ellisonleao/glow.nvim", branch = 'main' }
