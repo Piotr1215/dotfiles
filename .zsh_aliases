@@ -5,7 +5,7 @@ alias kdf='kubectl delete -f'
 alias kk=/usr/bin/kubecolor
 
 # regular aliases
-alias gweb='gh repo view --branch $(git rev-parse --abbrev-ref HEAD) --web'
+alias ghweb='gh repo view --branch $(git rev-parse --abbrev-ref HEAD) --web'
 alias tr2='tree -LC 2 --si --sort name | less'
 alias z=zi
 alias nv='neovide --multigrid --notabs'
