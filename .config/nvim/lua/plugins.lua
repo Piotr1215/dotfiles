@@ -6,6 +6,7 @@ return require('packer').startup(function(use)
     "windwp/nvim-autopairs",
     config = function() require("nvim-autopairs").setup {} end
   }
+  use 'stevearc/oil.nvim'
   use 'echasnovski/mini.nvim'
   use 'sheerun/vim-polyglot'
   use 'mattn/emmet-vim'
