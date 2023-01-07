@@ -51,6 +51,12 @@ function gacs() {
   git push
 }
 
+# Select any open PR form the active repo and open it in a web browser
+function ghpr()
+{
+  gh pr list | fzf | awk '{print $1}' | xargs gh pr view --web
+}
+
 # Find a repo for authenticated user with gh CLI and cd into it, clone and cd if not found on disk
 function repo() {
     if [[ -z "$1" ]]; then
