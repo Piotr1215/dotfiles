@@ -19,7 +19,12 @@ require 'mdeval'.setup({
 })
 
 require('mini.ai').setup()
-
+require('oil').setup({
+    view_options = {
+    -- Show files and directories that start with "."
+    show_hidden = true,
+  },
+})
 require("obsidian").setup({
   dir = "~/dev/obsidian/decoder",
   notes_subdir = "Notes",
