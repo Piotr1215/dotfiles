@@ -5,17 +5,19 @@ alias kdf='kubectl delete -f'
 alias kk=/usr/bin/kubecolor
 
 # regular aliases
+alias it='cat ~/issue-template.md | xsel --clipboard'
 alias ghweb='gh repo view --branch $(git rev-parse --abbrev-ref HEAD) --web'
 alias tr2='tree -LC 2 --si --sort name | less'
 alias z=zi
 alias nv='neovide --multigrid --notabs'
 alias clock="__clock.sh &"
 alias relog="DISPLAY=:0 gnome-session-quit --force"
+alias upinstall='curl -sL https://cli.upbound.io | sh'
 alias uxp="just ~/dev/dotfiles/scripts/uxp-setup/setup_infra"
 alias uxp-="just ~/dev/dotfiles/scripts/uxp-setup/teardown"
 alias sam=sampler
 alias remind=__remind.sh
-alias heart="echo -n $(python -c 'print u"\u2665".encode("utf-8")')"
+# alias heart="echo -n $(python -c 'print u"\u2665".encode("utf-8")')"
 alias ath=__swap_alacritty_theme.sh
 alias gist=gist
 alias v=nvim
