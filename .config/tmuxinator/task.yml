@@ -12,7 +12,7 @@ root: ~/dev/
 # Project hooks
 
 # Runs on project start, always
-on_project_start: pomodoro
+# on_project_start: nohup gnome-pomodoro &
 
 # Run on project start, the first time
 # on_project_first_start: command
@@ -24,7 +24,7 @@ on_project_start: pomodoro
 # on_project_exit: command
 
 # Run on project stop
-# on_project_stop: command
+# on_project_stop: pkill gnome-pomodoro
 
 # Runs in each window and pane before window/pane specific commands. Useful for setting up interpreter versions.
 # pre_window: tmux source-file ~/.tmux.conf 
@@ -46,8 +46,9 @@ startup_pane: "0"
 
 windows:
   - poke:
-      layout: 62bd,146x38,0,0[146x26,0,0{104x26,0,0,0,41x26,105,0,1},146x11,0,27,2]
+      layout: main-horizontal
       panes:
         - tui
         - watch timew
         - clear
+        - tomatoshell -f
