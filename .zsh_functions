@@ -167,3 +167,16 @@ function iapt() {
         sudo apt-cache search $1 | peco | awk '{ print $1 }' | tr "\n" " " | xargs -- sudo apt-get -y install
     fi  
 }
+
+function ghprview ()
+{
+    if [ -z "$1" ]; then
+        echo "Provide link to pr" 
+        return
+    else 
+      local pr="$1"
+      local repo=$(echo "$pr" | cut -d "/" -f5)
+      local pr_nr=$(echo "$pr" | cut -d "/" -f7)
+      gh pr view -R "upbound/$repo" "$pr_nr" --web
+    fi  
+}
