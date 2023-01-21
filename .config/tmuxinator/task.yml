@@ -51,4 +51,3 @@ windows:
         - tui
         - watch timew
         - clear
-        - tomatoshell -f
