@@ -290,3 +290,7 @@ vim.keymap.set("n", "gR", "<cmd>TroubleToggle lsp_references<cr>",
 
 -- Crates
 utils.lnmap("cu", "lua require('crates').upgrade_crate()")
+
+-- NoNeckPain
+utils.lnmap("ne", "<cmd>NoNeckPain<cr>")
+

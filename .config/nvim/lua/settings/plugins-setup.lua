@@ -18,6 +18,19 @@ require 'mdeval'.setup({
   },
 })
 
+require("no-neck-pain").setup({
+  width = 75,
+  buffers = {
+    left = {
+     backgroundColor = "tokyonight-moon",
+    },
+    right = {
+      backgroundColor = "tokyonight-moon",
+      enabled = false
+    }
+  }
+})
+
 require('mini.ai').setup()
 require('oil').setup({
     view_options = {
