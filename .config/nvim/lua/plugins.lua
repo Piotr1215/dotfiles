@@ -6,6 +6,7 @@ return require('packer').startup(function(use)
     "windwp/nvim-autopairs",
     config = function() require("nvim-autopairs").setup {} end
   }
+  use 'vim-scripts/scrollfix'
   use {"shortcuts/no-neck-pain.nvim", tag = "*" } 
   use 'stevearc/oil.nvim'
   use 'echasnovski/mini.nvim'
