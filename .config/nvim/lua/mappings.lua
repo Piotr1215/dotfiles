@@ -294,3 +294,6 @@ utils.lnmap("cu", "lua require('crates').upgrade_crate()")
 -- NoNeckPain
 utils.lnmap("ne", "<cmd>NoNeckPain<cr>")
 
+-- Scrollfix
+utils.lnmap("f2", "<cmd>FIX 25<cr>")
+utils.lnmap("f0", "<cmd>FIX -1<cr>")

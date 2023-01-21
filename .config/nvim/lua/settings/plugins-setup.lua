@@ -268,6 +268,8 @@ vim.g.go_fmt_experimental = 1
 -- Nerdcommenter
 vim.g.NERDSpaceDelims = 1
 -- Ranger
+-- Scrollfix
+vim.g.scrollfix = -1
 vim.g.rnvimr_enable_picker = 1
 -- Startify
 vim.g.startify_change_to_dir = 1
