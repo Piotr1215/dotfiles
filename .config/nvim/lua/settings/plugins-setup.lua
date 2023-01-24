@@ -296,7 +296,7 @@ vim.g.startify_bookmarks = {
   '~/.config/nvim/lua',
   '~/.zshrc',
   '~/.tmux.conf',
-  '~/.config/task/.taskrc',
+  '~/.taskrc',
   '~/.config/ranger/rc.conf',
   '~/scripts/shortcuts.txt',
   '/home/decoder/snap/cheat/common/.config/cheat/conf.yml',
