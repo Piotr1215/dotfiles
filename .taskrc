@@ -1,4 +1,4 @@
-# [Created by task 2.6.1 9/17/2022 10:57:35]
+# [Created by task 2.6.2 9/27/2022 15:56:17]
 # Taskwarrior program configuration file.
 # For more documentation, see https://taskwarrior.org or try 'man task', 'man task-color',
 # 'man task-sync' or 'man taskrc'
@@ -17,22 +17,11 @@
 # Files
 data.location=/home/decoder/.task
 
-# Show the tracking of time
-journal.time=on
-
-# Indicate the active task in reports
-active.indicator=>
-
-# Aliases
-alias.dailystatus=status:completed end.after:today all
-alias.punt=modify wait:1d
-alias.someday=mod +someday wait:someday
-
 # To use the default location of the XDG directories,
 # move this configuration file from ~/.taskrc to ~/.config/task/taskrc and uncomment below
 
-data.location=~/.local/share/task
-hooks.location=~/home/decoder/.task/hooks
+#data.location=~/.local/share/task
+#hooks.location=~/.config/task/hooks
 
 # Color theme (uncomment one to use)
 #include light-16.theme
@@ -40,27 +29,32 @@ hooks.location=~/home/decoder/.task/hooks
 #include dark-16.theme
 #include dark-256.theme
 #include dark-red-256.theme
-#include dark-green-256.theme
+include dark-green-256.theme
 #include dark-blue-256.theme
 #include dark-violets-256.theme
 #include dark-yellow-green.theme
 #include dark-gray-256.theme
-#include dark-gray-blue-256.theme
+# include dark-gray-blue-256.theme
 #include solarized-dark-256.theme
 #include solarized-light-256.theme
-include no-color.theme
+#include no-color.theme
 
+context.work.read=+work
+context.work.write=+work
+context.learn.read=+learn
+context.learn.write=+learn
 uda.reviewed.type=date
 uda.reviewed.label=Reviewed
 report._reviewed.description=Tasksh review report.  Adjust the filter to your needs.
 report._reviewed.columns=uuid
 report._reviewed.sort=reviewed+,modified+
 report._reviewed.filter=( reviewed.none: or reviewed.before:now-1week ) and ( +PENDING or +WAITING )
-context.work.read=+work
-context.work.write=+work
-context.research.read=+research
-context.research.write=+research
-context.blogs.read=+blog
-context.blogs.write=+blog
-context.certifications.read=+certs
-context.certifications.write=+certs
+context.home.read=+home
+context.home.write=+home
+context=work
+context.temp.read=+temp
+context.temp.write=+temp
+
+#UserDefinedShortcuts
+uda.taskwarrior-tui.shortcuts.1=~/.config/taskwarrior-tui/shortcut-scripts/list-competed.sh
+uda.taskwarrior-tui.shortcuts.2=~/.config/taskwarrior-tui/shortcut-scripts/taskopen-annotation.sh
