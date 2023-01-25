@@ -27,17 +27,17 @@ data.location=/home/decoder/.task
 #include light-16.theme
 #include light-256.theme
 #include dark-16.theme
-#include dark-256.theme
+include dark-256.theme
 #include dark-red-256.theme
-include dark-green-256.theme
+# include dark-green-256.theme
 #include dark-blue-256.theme
 #include dark-violets-256.theme
 #include dark-yellow-green.theme
-#include dark-gray-256.theme
+# include dark-gray-256.theme
 # include dark-gray-blue-256.theme
-#include solarized-dark-256.theme
+# include solarized-dark-256.theme
 #include solarized-light-256.theme
-#include no-color.theme
+# include no-color.theme
 
 context.work.read=+work
 context.work.write=+work
@@ -56,5 +56,7 @@ context.temp.read=+temp
 context.temp.write=+temp
 
 #UserDefinedShortcuts
-uda.taskwarrior-tui.shortcuts.1=~/.config/taskwarrior-tui/shortcut-scripts/list-competed.sh
-uda.taskwarrior-tui.shortcuts.2=~/.config/taskwarrior-tui/shortcut-scripts/taskopen-annotation.sh
+uda.taskwarrior-tui.task-report.next.filter=status:pending
+uda.taskwarrior-tui.shortcuts.1=~/.config/taskwarrior-tui/shortcut-scripts/taskopen-annotation.sh
+uda.taskwarrior-tui.shortcuts.2=task context home
+uda.taskwarrior-tui.shortcuts.3=task context work
