@@ -38,6 +38,13 @@ include dark-256.theme
 # include solarized-dark-256.theme
 #include solarized-light-256.theme
 # include no-color.theme
+#
+# Custom reports
+report.workdone.description=List of completed tasks in the work context
+report.workdone.columns=id,project,description.desc,end
+report.workdone.labels=ID,Proj,Desc,Done
+report.workdone.sort=end+,project+
+report.workdone.filter=status:completed
 
 context.work.read=+work
 context.work.write=+work
