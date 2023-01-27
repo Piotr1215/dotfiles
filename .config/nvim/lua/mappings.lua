@@ -43,7 +43,7 @@ utils.emap("<Leader>ow", "<Plug>(leap-cross-window)")
 utils.nmap(",<space>", ":nohlsearch<CR>")
 utils.vmap("<C-r>", '"hy:%s/<C-r>h//gc<left><left><left>') -- Change selection
 utils.vmap("//", 'y/\\V<C-R>=escape(@",\'/\')<CR><CR>') -- Highlight selection
-utils.vmap("<C-s>", ":s/\\%V") -- Search only in visual selection using %V atom
+utils.vmap("<leader><C-s>", ":s/\\%V") -- Search only in visual selection usingb%V atom
 
 -- MACROS --
 utils.nmap("<Leader>q", "@q")
@@ -248,7 +248,7 @@ utils.lnmap("tkf", ":lua require('telekasten').find_notes()<CR>")
 utils.nmap('<leader>tk', ':lua require(\'telekasten\').panel()<CR>')
 
 -- Tmuxinator
-utils.lnmap("wl", ":.!echo -n \"      layout:\" $(tmux list-windows | sed -n 's/.*layout \\(.*\\)] @.*/\\1/p')<CR>")
+-- utils.lnmap("wl", ":.!echo -n \"      layout:\" $(tmux list-windows | sed -n 's/.*layout \\(.*\\)] @.*/\\1/p')<CR>")
 
 -- Transparent Plugin
 utils.lnmap("tr", ":TransparentToggle<CR>")
