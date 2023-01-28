@@ -9,6 +9,14 @@
       "</details>${0}"],
     "description": "Details HTML snippet"
   },
+  "Highlight text to make it stand out on the page": {
+    "prefix": "high",
+    "scope": "markdown",
+    "body": ["```diff",
+      "! ${1:TEXT} !",
+      "```${0}"],
+    "description": "Highlight markdown text as important, it will render differently depending on the diff highlighting tooling"
+  },
   "Markdown reference href part": {
     "prefix": "refh",
     "scope": "markdown",
