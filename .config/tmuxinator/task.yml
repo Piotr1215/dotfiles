@@ -46,8 +46,7 @@ startup_pane: "0"
 
 windows:
   - poke:
-      layout: main-horizontal
+      layout: main-vertical
       panes:
-        - tui
-        - watch timew
-        - clear
+        - tui -r current
+        - task workdone
