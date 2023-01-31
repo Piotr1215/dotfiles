@@ -45,6 +45,11 @@ report.workdone.columns=id,project,description.desc,end
 report.workdone.labels=ID,Proj,Desc,Done
 report.workdone.sort=end+,project+
 report.workdone.filter=status:completed
+report.current.description=List of current tasks in the work context
+report.current.columns=id,entry.age,priority,project,tags,description.desc,entry,due.relative
+report.current.labels=ID,Age,P,Proj,Tag,Desc,Created,Due
+report.current.sort=entry+,project+
+report.current.filter=status:pending
 
 context.work.read=+work
 context.work.write=+work
@@ -67,3 +72,6 @@ uda.taskwarrior-tui.task-report.next.filter=status:pending
 uda.taskwarrior-tui.shortcuts.1=~/.config/taskwarrior-tui/shortcut-scripts/taskopen-annotation.sh
 uda.taskwarrior-tui.shortcuts.2=task context home
 uda.taskwarrior-tui.shortcuts.3=task context work
+
+#Taskwarrior tui overrides
+uda.taskwarrior-tui.task-report.jump-on-task-add=true

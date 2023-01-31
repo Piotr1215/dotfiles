@@ -7,6 +7,7 @@ alias kk=/usr/bin/kubecolor
 # regular aliases
 alias it='cat ~/issue-template.md | xsel --clipboard'
 alias tuid='task workdone'
+alias tuic='task current'
 alias ghweb='gh repo view --branch $(git rev-parse --abbrev-ref HEAD) --web'
 alias tr2='tree -LC 2 --si --sort name | less'
 alias z=zi
