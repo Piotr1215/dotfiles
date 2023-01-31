@@ -53,8 +53,9 @@ utils.tmap("<ESC>", "<C-\\><C-n>")
 
 -- MANIPULATE TEXT --
 -- YAML fold
-utils.lnmap('yf', ':set foldmethod=indent<CR>')
+utils.lnmap('yi', ':set foldmethod=indent<CR>')
 -- Yank
+utils.nmap('<leader>yf', ':%y<cr>') -- yank word under cusror to the clipboard buffer
 utils.nmap('<leader>yw', '"+yiw') -- yank word under cusror to the clipboard buffer
 utils.nmap('<leader>yW', '"+yiW') -- yank WORD under cusror to the clipboard buffer
 -- Paste
@@ -162,18 +163,6 @@ vim.keymap.set('n', '_', 'vg_')
 utils.nmap('<leader>mp', ':MarkdownPreview<CR>')
 -- Fix Markdown Errors
 utils.nmap('<leader>fmt', ':Pretty<CR>')
-vim.keymap.set(
-  "n",
-  "gf",
-  function()
-    if require('obsidian').util.cursor_on_markdown_link() then
-      return "<cmd>ObsidianFollowLink<CR>"
-    else
-      return "gf"
-    end
-  end,
-  { noremap = false, expr = true}
-)
 
 -- EXTERNAL --
 -- Execute line under cursor in shell
@@ -297,3 +286,18 @@ utils.lnmap("ne", "<cmd>NoNeckPain<cr>")
 -- Scrollfix
 utils.lnmap("f2", "<cmd>FIX 25<cr>")
 utils.lnmap("f0", "<cmd>FIX -1<cr>")
+
+-- Obsidian
+utils.vmap("ol", ":ObsidianLink<cr>")
+vim.keymap.set(
+  "n",
+  "gf",
+  function()
+    if require('obsidian').util.cursor_on_markdown_link() then
+      return "<cmd>ObsidianFollowLink<CR>"
+    else
+      return "gf"
+    end
+  end,
+  { noremap = false, expr = true}
+)
