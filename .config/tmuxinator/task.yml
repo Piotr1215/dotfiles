@@ -49,4 +49,4 @@ windows:
       layout: main-vertical
       panes:
         - tui -r current
-        - task workdone
+        - watch task workdone

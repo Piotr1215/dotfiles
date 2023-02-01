@@ -1,6 +1,10 @@
 # Path to your oh-my-zsh installation.
 export ZSH="${HOME}/.oh-my-zsh"
 
+if [[ -z $TMUX ]]; then
+  tmuxinator start poke
+fi
+
 #ZSH_THEME="spaceship"
 #ZSH_THEME="powerlevel10k/powerlevel10k"
 ZSH_THEME="simple" #Best theme ever
