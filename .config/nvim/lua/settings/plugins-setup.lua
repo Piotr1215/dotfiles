@@ -299,6 +299,6 @@ vim.g.startify_bookmarks = {
   '~/.taskrc',
   '~/.config/ranger/rc.conf',
   '~/scripts/shortcuts.txt',
-  '/home/decoder/snap/cheat/common/.config/cheat/conf.yml',
+  '~/.taskopenrc',
 }
 vim.g.startify_custom_header = "startify#pad(split(system('fortune -s | cowsay | lolcat; date'), '\n'))"
