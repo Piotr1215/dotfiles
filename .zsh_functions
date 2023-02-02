@@ -17,7 +17,7 @@ function share ()
 
 function copyname() {
     file=$1
-    stat -t $1 | cut -d '.' -f1 | xargs echo -n | xclip
+    stat -t $1 | cut -d ' ' -f1 | xargs echo -n | xsel -ib
 }
 
 function ytd() {
@@ -54,22 +54,20 @@ function gacs() {
 # Select any open PR form the active repo and open it in a web browser
 function ghpr()
 {
-  gh pr list | fzf | awk '{print $1}' | xargs gh pr view --web
+  GH_FORCE_TTY=100% gh pr list | fzf --ansi --preview 'GH_FORCE_TTY=100% gh pr view {1}' --preview-window up --header-lines 3 | awk '{print $1}' | xargs gh pr diff -w
 }
 
 # Find a repo for authenticated user with gh CLI and cd into it, clone and cd if not found on disk
 function repo() {
-    if [[ -z "$1" ]]; then
-        export repo=$(ls ${HOME}/dev | awk '{print $8}' |  fzf) 
-    else
-        export repo=$(ls ${HOME}/dev | awk '{print $8}' | rg $1 | fzf) 
-    fi
+  export repo=$(fd . ${HOME}/dev --type=directory --max-depth=1 --color always| awk -F "/" '{print $5}' | fzf --ansi --preview 'onefetch /home/decoder/dev/{1}' --preview-window up)
     if [[ -z "$repo" ]]; then
         echo "Repository not found"
       else
         echo "Repository found locally, entering"
         cd ${HOME}/dev/$repo
         if [[ -d .git ]]; then
+          echo "Fetching origin"
+          git fetch origin
           onefetch
         fi
     fi
@@ -150,7 +148,6 @@ function checkfetch() {
 
 function key() {
   cat ${HOME}/shortcuts.md 
-  # cat ${HOME}/shortcuts.md |  yad --width=750 --height=1050  --center --close-on-unfocus --text-info
 }
 
 function kcdebug() {
@@ -160,14 +157,6 @@ function kcdebug() {
 function mkd() {
   mkdir -p "$@" && cd "$_";
 }
-function iapt() {
-    if [ -z "$1" ]; then
-        echo "Usage: iapt <initial search string> - select packages on peco and they will be installed" 
-    else 
-        sudo apt-cache search $1 | peco | awk '{ print $1 }' | tr "\n" " " | xargs -- sudo apt-get -y install
-    fi  
-}
-
 function ghprview ()
 {
     if [ -z "$1" ]; then

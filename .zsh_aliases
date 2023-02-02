@@ -1,10 +1,9 @@
-# kubectl aliases
-alias k=kubectl
 alias kaf='kubectl apply -f'
 alias kdf='kubectl delete -f'
 alias kk=/usr/bin/kubecolor
 
 # regular aliases
+alias f='fd --type f --hidden --exclude .git | fzf-tmux -p --reverse | xargs nvim'
 alias it='cat ~/issue-template.md | xsel --clipboard'
 alias tuid='task workdone'
 alias tuic='task current'
