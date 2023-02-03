@@ -27,6 +27,8 @@ Ctro +b, Ctrl + o   - swap panes 1:2 to 2:1
 Ctrl +b [           - enter copy Mode
 
 ## Vim
+:h index                        - check what key is mapped to, keymaps, set
+verbose?
 "+yt                            - copy to clipboard till character (space in this case)
 Ctro + n                        - does some crazy multi-cursor
 Ctrl + u                        - go 1/4 screen up
