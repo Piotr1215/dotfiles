@@ -147,7 +147,7 @@ function checkfetch() {
 }
 
 function key() {
-  cat ${HOME}/shortcuts.md 
+  cat --color=always ${HOME}/shortcuts.md | less -i -R
 }
 
 function kcdebug() {
