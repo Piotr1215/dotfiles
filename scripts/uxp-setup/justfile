@@ -7,7 +7,7 @@ yaml    := justfile_directory() + "/yaml"
 browse      := if os() == "linux" { "xdg-open "} else { "open" }
 copy        := if os() == "linux" { "xsel -ib"} else { "pbcopy" }
 
-export gcp_provider_version     := "v0.26.0"
+export gcp_provider_version     := env_var_or_default('GCP_PROVIDER', "v0.26.0")
 export aws_provider_version     := "v0.28.0"
 export random_suffix            := `echo $RANDOM`
 export base64encoded_gcp_creds  := `base64 ~/creds-gcp.json | tr -d "\n"`
