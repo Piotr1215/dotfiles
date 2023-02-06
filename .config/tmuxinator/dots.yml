@@ -1,6 +1,6 @@
 # /home/decoder/.config/tmuxinator/atosik.yml
 
-name: dot
+name: dots
 root: ~/dev/dotfiles
 
 # Optional tmux socket
@@ -36,7 +36,7 @@ on_project_start: git fetch origin --prune
 # tmux_command: byobu
 
 # Specifies (by name or index) which window will be selected on project startup. If not set, the first window is used.
-startup_window: Vim
+startup_window: vim
 
 # Specifies (by index) which pane of the specified window will be selected on project startup. If not set, the first pane is used.
 startup_pane: 2
@@ -53,4 +53,4 @@ windows:
   - vim:
       layout: tiled
       panes:
-          - vim -c "SLoad vim"
+          - vim -c "SLoad dots"
