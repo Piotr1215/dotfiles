@@ -43,7 +43,7 @@ include dark-256.theme
 report.workdone.description=List of completed tasks in the work context
 report.workdone.columns=id,project,description,end
 report.workdone.labels=ID,Proj,Desc,Done
-report.workdone.sort=end+\/,project+
+report.workdone.sort=end-\/,project+
 report.workdone.filter=status:completed
 report.current.description=List of current tasks in the work context
 report.current.columns=id,entry.age,priority,project,tags,description.desc,entry,due.relative
