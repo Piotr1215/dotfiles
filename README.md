@@ -146,13 +146,13 @@ Last test date: 18.03.2022
 
 ## Changelog
 
-[de5e2407](https://github.com/Piotr1215/dotfiles/de5e2407f58ebbef30534e0d7e3f939f99c8edcd) - Moving to awk based implmenetaion for the git log script
-[0ff90d5b](https://github.com/Piotr1215/dotfiles/0ff90d5be42b2744668b527ae025bdd940850582) - Changelog
-[eb1ad490](https://github.com/Piotr1215/dotfiles/eb1ad490fa58ac66633282482225c53232052206) - Mapping to insert quick changelog
-[9ac32d87](https://github.com/Piotr1215/dotfiles/9ac32d87f7f0cfd301b5927ae6ab7f31d28949be) - Simple script to generate change log with last 10 commits
-[f2af1f0c](https://github.com/Piotr1215/dotfiles/f2af1f0cc0f13892f67405316491be7795279d10) - Combine demos with slides
-[7d53aa07](https://github.com/Piotr1215/dotfiles/7d53aa074202f1b0024dfea66a68fc40e143a061) - Nvim dap was multiple times in the scirpt, this messes up with packer
-[f7b8dcc7](https://github.com/Piotr1215/dotfiles/f7b8dcc761df7ad9e17d6f3772e9eb2db01f3874) - Do not auto-wrap text, this messes up with the code fences
-[27a106cc](https://github.com/Piotr1215/dotfiles/27a106cc3f678e0088f419a77acc9fc42387896d) - The dedicated mapping is not needed as arguments can be passed to ripgrep
-[b7d455a5](https://github.com/Piotr1215/dotfiles/b7d455a5e240ff06740d97c467e6cc116370ffe3) - Livesearch option with ability to search directly in dev folder
-[96250d35](https://github.com/Piotr1215/dotfiles/96250d35c26a0ddee754c202c8c66d8735191112) - yaml fodmethod indent for easier file transposing
+- [45369094](https://github.com/Piotr1215/dotfiles/4536909435c495dd9d0d11418beee9a9d81ab30e) - Adding obsidian mappings
+- [7b07b5e2](https://github.com/Piotr1215/dotfiles/7b07b5e2f16dbe504e247d142d54848e08d8c47c) - Startup pane was not loading correctly
+- [6646ba0b](https://github.com/Piotr1215/dotfiles/6646ba0be82597caa99eacc058c2838a56ba12dc) - Adding comment to easier find quickfix plugin
+- [e870c1b6](https://github.com/Piotr1215/dotfiles/e870c1b695042e1c1dade8ebc66dc439c9dec5cd) - Startify session for dotfiles
+- [fa5c9cec](https://github.com/Piotr1215/dotfiles/fa5c9cecac043d534e32af966332b96d991b6fd7) - Sort done projects desdending
+- [bb6bd211](https://github.com/Piotr1215/dotfiles/bb6bd21178b49797e4624635660983ea34b3c68e) - Ability to override provider GCP version from environmental variable
+- [7ae3cca9](https://github.com/Piotr1215/dotfiles/7ae3cca91feea3eb770d9878ef5a01a698f789ce) - Pipe to less with case insensitive search and color output from cat
+- [b98b5c3f](https://github.com/Piotr1215/dotfiles/b98b5c3fb658e0afc87e961e43f79128f3fe1774) - aliases cleanup
+- [8fbe9fe7](https://github.com/Piotr1215/dotfiles/8fbe9fe76e8cb7679900349593949f6f7f4c7339) - full tasks description in completed
+- [54008228](https://github.com/Piotr1215/dotfiles/54008228e2a980c77b78fa074b6bd23af21ce915) - upgrading uxp setup for providers
