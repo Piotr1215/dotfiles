@@ -23,4 +23,4 @@ git log --pretty="%H - %s" |
 	awk -F" - " -vSHORT=8 -vORG="$org" -vREPO="$repo" \
 		'/Merge/ || /chore/ { next }
 		++i > 10 {exit}
-		{printf "[%s](https://github.com/%s/%s/%s) - %s\n", substr($1, 1, SHORT), ORG, REPO, $1, $2}'
+		{printf "- [%s](https://github.com/%s/%s/%s) - %s\n", substr($1, 1, SHORT), ORG, REPO, $1, $2}'
