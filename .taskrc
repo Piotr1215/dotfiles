@@ -63,7 +63,6 @@ report._reviewed.sort=reviewed+,modified+
 report._reviewed.filter=( reviewed.none: or reviewed.before:now-1week ) and ( +PENDING or +WAITING )
 context.home.read=+home
 context.home.write=+home
-context=work
 context.temp.read=+temp
 context.temp.write=+temp
 
@@ -75,5 +74,4 @@ uda.taskwarrior-tui.shortcuts.3=task context work
 
 #Taskwarrior tui overrides
 uda.taskwarrior-tui.task-report.jump-on-task-add=true
-context.ideas.read=+idea
-context.ideas.write=+idea
+context=work
