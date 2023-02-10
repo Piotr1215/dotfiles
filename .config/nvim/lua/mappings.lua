@@ -54,6 +54,9 @@ utils.tmap("<ESC>", "<C-\\><C-n>")
 -- MANIPULATE TEXT --
 -- YAML fold
 utils.lnmap('yi', ':set foldmethod=indent<CR>')
+-- Registries
+-- The below mapping helps select from a register in the place of insert point
+utils.imap('<C-p>', '<C-o>:Telescope registers<cr><C-w>')
 -- Yank
 utils.nmap('<leader>yf', ':%y<cr>') -- yank word under cusror to the clipboard buffer
 utils.nmap('<leader>yw', '"+yiw') -- yank word under cusror to the clipboard buffer
@@ -94,7 +97,7 @@ utils.nmap("dab", "\"bdab")
 utils.nmap("gp", "`[v`]")
 -- useful for passing over braces and quotations
 utils.imap("<C-l>", "<C-o>a")
-utils.imap("<C-p>", "<C-o>A")
+-- utils.imap("<C-p>", "<C-o>A")
 utils.imap("<C-n>", "<C-e><C-o>A;<ESC>")
 -- set mark on this line ma
 utils.imap(";[", "<c-o>ma")
