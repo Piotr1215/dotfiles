@@ -49,7 +49,7 @@ alias ra=ranger
 alias alaw='nohup alacritty --working-directory $PWD >&/dev/null'
 alias ghs='gh s'
 alias ls='exa --long --all --header --icons'
-alias la='exa --long --grid --all --sort=accessed --header --icons'
+alias la='exa --long --all --sort=age --header --icons'
 alias cat=bat
 alias lzd='docker run --rm -it -v /var/run/docker.sock:/var/run/docker.sock -v /config/lazydocker:/.config/jesseduffield/lazydocker lazyteam/lazydocker'
 alias revive='shutdown -r now'
@@ -63,7 +63,6 @@ alias glog='git log --graph --oneline --decorate'
 alias dev='cd ~/dev'
 alias kdump='kubectl get all --all-namespaces'
 alias addkey='eval $(ssh-agent) && ssh-add'
-alias ll='ls -lah'
 alias l='lsd -al'
 alias lol=lolcat
 alias lal='lsd -al | lolcat -a -d 5'
