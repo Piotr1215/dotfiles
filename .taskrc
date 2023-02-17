@@ -53,8 +53,6 @@ report.current.filter=status:pending
 
 context.work.read=+work
 context.work.write=+work
-context.learn.read=+learn
-context.learn.write=+learn
 uda.reviewed.type=date
 uda.reviewed.label=Reviewed
 report._reviewed.description=Tasksh review report.  Adjust the filter to your needs.
@@ -74,4 +72,4 @@ uda.taskwarrior-tui.shortcuts.3=task context work
 
 #Taskwarrior tui overrides
 uda.taskwarrior-tui.task-report.jump-on-task-add=true
-context=work
+context=home
