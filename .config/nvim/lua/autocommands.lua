@@ -38,10 +38,10 @@ vim.api.nvim_create_autocmd("FileType", {
   group = goSettings,
 })
 
-vim.api.nvim_create_autocmd({ "BufWinEnter" }, {
-  pattern = vim.fn.expand("$HOME").."/dev/obsidian/*/*.md",
-  command = "MarkdownPreview",
-})
+-- vim.api.nvim_create_autocmd({ "BufWinEnter" }, {
+  -- pattern = vim.fn.expand("$HOME").."/dev/obsidian/*/*.md",
+  -- command = "MarkdownPreview",
+-- })
 
 vim.api.nvim_create_autocmd({ "BufWritePost" }, {
   pattern = { "*.sh" },
