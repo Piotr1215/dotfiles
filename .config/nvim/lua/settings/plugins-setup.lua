@@ -47,12 +47,26 @@ require("obsidian").setup({
   notes_subdir = "Notes",
   completion = {
     nvim_cmp = true, -- if using nvim-cmp, otherwise set to false
-  }
+  },
+  note_id_func = function(title)
+    -- Create note IDs in a Zettelkasten format with a timestamp and a suffix.
+    local suffix = ""
+    if title ~= nil then
+      -- If title is given, transform it into valid file name.
+      suffix = title:gsub(" ", "-"):gsub("[^A-Za-z0-9-]", ""):lower()
+    else
+      -- If title is nil, just add 4 random uppercase letters to the suffix.
+      for _ = 1, 4 do
+        suffix = suffix .. string.char(math.random(65, 90))
+      end
+    end
+    return tostring(suffix)
+  end
 })
 
 require 'nvim-treesitter.configs'.setup {
   -- Add languages to be installed here that you want installed for treesitter
-  ensure_installed = {'go', 'lua', 'rust', 'typescript', 'help' },
+  ensure_installed = {'go', 'lua', 'rust', 'typescript', 'help', 'markdown', 'markdown_inline' },
 
   highlight = { enable = true },
   indent = {
@@ -62,10 +76,10 @@ require 'nvim-treesitter.configs'.setup {
   incremental_selection = {
     enable = true,
     keymaps = {
-      init_selection = '<c-space>',
-      node_incremental = '<c-space>',
+      init_selection    = '<c-space>',
+      node_decremental  = '<c-backspace>',
+      node_incremental  = '<c-space>',
       scope_incremental = '<c-s>',
-      node_decremental = '<c-backspace>',
     },
   },
   textobjects = {
@@ -180,7 +194,7 @@ prettier.setup({
 
 require('lualine').setup {
   options = {
-    theme      = 'nord',
+    theme      = 'tokyonight',
     extensions = { 'nvim-tree', 'nvim-dap-ui' }
   },
 }
