@@ -1,6 +1,10 @@
 -- Settings for plugins
 require("mason").setup()
 
+require('mini.align').setup()
+
+require('mini.animate').setup()
+
 require 'mdeval'.setup({
   -- Don't ask before executing code blocks
   require_confirmation = false,
