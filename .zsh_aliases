@@ -3,6 +3,9 @@ alias kdf='kubectl delete -f'
 alias kk=/usr/bin/kubecolor
 
 # regular aliases
+alias -g L='| less'
+alias -g G='| grep -i'
+alias -g C='| xsel --clipboard'
 alias f='fd --type f --hidden --exclude .git | fzf-tmux --preview "bat --color=always {$1}" --reverse | xargs nvim'
 alias it='cat ~/issue-template.md | xsel --clipboard'
 alias tuid='task workdone'
@@ -16,7 +19,6 @@ alias relog="DISPLAY=:0 gnome-session-quit --force"
 alias upinstall='curl -sL https://cli.upbound.io | sh'
 alias uxp="just ~/dev/dotfiles/scripts/uxp-setup/setup_infra"
 alias uxp-="just ~/dev/dotfiles/scripts/uxp-setup/teardown"
-alias remind=__remind.sh
 # alias heart="echo -n $(python -c 'print u"\u2665".encode("utf-8")')"
 alias ath=__swap_alacritty_theme.sh
 alias v=nvim
@@ -49,7 +51,7 @@ alias ra=ranger
 alias alaw='nohup alacritty --working-directory $PWD >&/dev/null'
 alias ghs='gh s'
 alias ls='exa --long --all --header --icons'
-alias la='exa --long --all --sort=age --header --icons'
+alias la='exa --long --all --sort=age --reverse --header --icons'
 alias cat=bat
 alias lzd='docker run --rm -it -v /var/run/docker.sock:/var/run/docker.sock -v /config/lazydocker:/.config/jesseduffield/lazydocker lazyteam/lazydocker'
 alias revive='shutdown -r now'
