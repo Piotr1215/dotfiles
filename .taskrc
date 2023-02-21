@@ -72,4 +72,4 @@ uda.taskwarrior-tui.shortcuts.3=task context work
 
 #Taskwarrior tui overrides
 uda.taskwarrior-tui.task-report.jump-on-task-add=true
-context=home
+context=work
