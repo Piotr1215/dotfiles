@@ -69,6 +69,7 @@ utils.nmap("<leader>2", '"*p') -- paste from 0 (latest yank)
 utils.nmap("<leader>sw", "\"_diwP") -- substitute current word with last yanked text
 utils.nmap("<leader>sW", "\"_diWP") -- substitute current WORD with last yanked text
 utils.vmap("<leader>ss", "\"_dP") -- substitute selection with last yanked text
+
 -- Delete
 utils.lnmap("d", "ma$mb`ad`bi") -- delete from cursor to end of line minus last character
 
@@ -293,6 +294,7 @@ utils.lnmap("f0", "<cmd>FIX -1<cr>")
 -- Obsidian
 utils.vmap("ol", ":ObsidianLink<cr>")
 utils.lnmap("oq", ":ObsidianQuickSwitch<cr>")
+utils.lnmap("on", ":ObsidianNew")
 utils.lnmap("os", ":ObsidianSearch<cr>")
 vim.keymap.set(
   "n",
