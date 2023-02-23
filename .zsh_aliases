@@ -1,17 +1,26 @@
-alias kaf='kubectl apply -f'
-alias kdf='kubectl delete -f'
-alias kk=/usr/bin/kubecolor
 
-# regular aliases
+# Global aliases
 alias -g L='| less'
 alias -g G='| grep -i'
 alias -g C='| xsel --clipboard'
+alias -g NUL="> /dev/null 2>&1"
+
+# Suffix aliases
+alias -s txt=nvim
+alias -s yaml=nvim
+alias -s md=nvim
+
+# Regular aliases
 alias f='fd --type f --hidden --exclude .git | fzf-tmux --preview "bat --color=always {$1}" --reverse | xargs nvim'
 alias it='cat ~/issue-template.md | xsel --clipboard'
 alias tuid='task workdone'
 alias tuic='task current'
 alias ghweb='gh repo view --branch $(git rev-parse --abbrev-ref HEAD) --web'
 alias tr2='tree -LC 2 --si --sort name | less'
+## Kubernetes aliases
+alias kaf='kubectl apply -f'
+alias kdf='kubectl delete -f'
+alias kk=/usr/bin/kubecolor
 alias z=zi
 alias nv='neovide --multigrid --notabs'
 alias clock="__clock.sh &"
@@ -19,7 +28,6 @@ alias relog="DISPLAY=:0 gnome-session-quit --force"
 alias upinstall='curl -sL https://cli.upbound.io | sh'
 alias uxp="just ~/dev/dotfiles/scripts/uxp-setup/setup_infra"
 alias uxp-="just ~/dev/dotfiles/scripts/uxp-setup/teardown"
-# alias heart="echo -n $(python -c 'print u"\u2665".encode("utf-8")')"
 alias ath=__swap_alacritty_theme.sh
 alias v=nvim
 alias rg='rg --hidden'
@@ -78,5 +86,5 @@ alias dps="docker ps --format 'table {{.ID}}\t{{.Names}}\t{{.Image}}'" #docker p
 # https://gitlab.com/gitlab-org/incubation-engineering/ai-assist/dokter
 alias disk='gdu'
 alias mkdd='mkdir $(date +"%Y-%m-%d")'
-alias sr='source ~/.zshrc'
+alias sr='omz reload'
 alias lsprog='ls /home/decoder/go/bin; ls /usr/bin; ls /usr/local/bin'
