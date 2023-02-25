@@ -1,90 +1,89 @@
 
 # Global aliases
-alias -g L='| less'
-alias -g G='| grep -i'
 alias -g C='| xsel --clipboard'
+alias -g G='| grep -i'
+alias -g H=' --help'
+alias -g L='| less'
 alias -g NUL="> /dev/null 2>&1"
+alias -g R="2>&1 | tee output.txt"
 
 # Suffix aliases
+alias -s md=nvim
 alias -s txt=nvim
 alias -s yaml=nvim
-alias -s md=nvim
 
-# Regular aliases
+# Directories and files
 alias f='fd --type f --hidden --exclude .git | fzf-tmux --preview "bat --color=always {$1}" --reverse | xargs nvim'
-alias it='cat ~/issue-template.md | xsel --clipboard'
-alias tuid='task workdone'
-alias tuic='task current'
-alias ghweb='gh repo view --branch $(git rev-parse --abbrev-ref HEAD) --web'
+alias la='exa --long --all --sort=age --reverse --header --icons'
+alias ls='exa --long --all --header --icons'
+alias lsf='fd --max-depth=1 --type=file'
 alias tr2='tree -LC 2 --si --sort name | less'
+
+# Commands shadow
+alias cat=bat
+alias df=duf
+alias diff=colordiff
+alias fd='fd --hidden'
+alias it='cat ~/issue-template.md | xsel --clipboard'
+alias kk=/usr/bin/kubecolor
+alias lol=lolcat
+alias mux=tmuxinator
+alias nv='neovide --multigrid --notabs'
+alias ps=procs
+alias ra=ranger
+alias rg='rg --hidden'
+alias vim=nvim
+alias v=nvim
+alias watch=viddy
+
 ## Kubernetes aliases
+alias kdump='kubectl get all --all-namespaces'
 alias kaf='kubectl apply -f'
 alias kdf='kubectl delete -f'
-alias kk=/usr/bin/kubecolor
-alias z=zi
-alias nv='neovide --multigrid --notabs'
+
+# Other
+alias addkey='eval $(ssh-agent) && ssh-add'
+alias adit='vim ~/.zsh_aliases'
 alias clock="__clock.sh &"
+alias cplcom="fc -ln -1 | tr -d '\n' | xsel --clipboard"
+alias dca='mux s dca'
+alias ddgit='web_search github'
+alias deb=deb-get
+alias dev='cd ~/dev'
+alias disk='gdu'
+alias diskusage='du -sh * | sort -h --reverse'
+alias dls="docker container ls -a"
+alias dots='cd ~/dev/dotfiles'
+alias dpsa="docker ps -a --format 'table {{.ID}}\t{{.Names}}\t{{.Image}}'" #docker ps -a with only id name and image
+alias dps="docker ps --format 'table {{.ID}}\t{{.Names}}\t{{.Image}}'" #docker ps -a with only id name and image
+alias gcc='git diff --stat --cached origin/master' # Git Check Commit before pushing
+alias ghs='gh s'
+alias ghweb='gh repo view --branch $(git rev-parse --abbrev-ref HEAD) --web'
+alias glog='git log --graph --oneline --decorate'
+alias gs='git show'
+alias home='nohup firefox -P "Home" > /dev/null 2>&1 &'
+alias lg='lazygit'
+alias lsprog='ls /home/decoder/go/bin; ls /usr/bin; ls /usr/local/bin'
+alias lst='dpkg -l' #List installed packages with their description
+alias lvim='nvim -c "normal '\''0"'
+alias lzd='docker run --rm -it -v /var/run/docker.sock:/var/run/docker.sock -v /config/lazydocker:/.config/jesseduffield/lazydocker lazyteam/lazydocker'
+alias mkdd='mkdir $(date +"%Y-%m-%d")'
+alias ms="tmuxinator start" 
+alias mst="tmuxinator stop" 
 alias relog="DISPLAY=:0 gnome-session-quit --force"
+alias rest='shutdown now'
+alias revive='shutdown -r now'
+alias rmm='rm -i'
+alias rm='rm -v'
+alias serve="browser-sync start -s -f . --no-notify --host localhost --port 5000"
+alias slack='fuzzpak slack 2>/dev/null &'
+alias sr='omz reload'
+alias tedit='vim ~/.tmux.conf'
+alias tuic='task current'
+alias tuid='task workdone'
 alias upinstall='curl -sL https://cli.upbound.io | sh'
 alias uxp="just ~/dev/dotfiles/scripts/uxp-setup/setup_infra"
 alias uxp-="just ~/dev/dotfiles/scripts/uxp-setup/teardown"
-alias ath=__swap_alacritty_theme.sh
-alias v=nvim
-alias rg='rg --hidden'
-alias fd='fd --hidden'
-alias diff=colordiff
-alias slack='fuzzpak slack 2>/dev/null &'
-alias watch=viddy
-alias cplcom="fc -ln -1 | tr -d '\n' | xsel --clipboard"
-alias deb=deb-get
-alias work='nohup firefox -P "Work" > /dev/null 2>&1 &'
-alias home='nohup firefox -P "Home" > /dev/null 2>&1 &'
-alias df=duf
-alias ps=procs
 alias wm='watch kubectl get managed'
-alias rm='rm -v'
-alias rmm='rm -i'
-alias gs='git show'
-alias op='xdg-open '
-alias ddgit='web_search github'
-alias lg='lazygit'
-alias llvim='/home/decoder/.local/bin/lvim'
-alias lvim='nvim -c "normal '\''0"'
-alias redirect="2>&1 | tee output.txt"
-alias yml="cat <<EOF | kubectl create -f -"
-alias mux=tmuxinator
-alias ms="tmuxinator start" 
-alias mst="tmuxinator stop" 
-alias ra=ranger
-alias alaw='nohup alacritty --working-directory $PWD >&/dev/null'
-alias ghs='gh s'
-alias ls='exa --long --all --header --icons'
-alias la='exa --long --all --sort=age --reverse --header --icons'
-alias cat=bat
-alias lzd='docker run --rm -it -v /var/run/docker.sock:/var/run/docker.sock -v /config/lazydocker:/.config/jesseduffield/lazydocker lazyteam/lazydocker'
-alias revive='shutdown -r now'
-alias rest='shutdown now'
-alias dots='cd ~/dev/dotfiles'
+alias work='nohup firefox -P "Work" > /dev/null 2>&1 &'
 alias zedit='vim ~/.zshrc'
-alias tedit='vim ~/.tmux.conf'
-alias vim='nvim'
-alias gcc='git diff --stat --cached origin/master' # Git Check Commit before pushing
-alias glog='git log --graph --oneline --decorate'
-alias dev='cd ~/dev'
-alias kdump='kubectl get all --all-namespaces'
-alias addkey='eval $(ssh-agent) && ssh-add'
-alias l='lsd -al'
-alias lol=lolcat
-alias lal='lsd -al | lolcat -a -d 5'
-alias diskusage='du -sh * | sort -h --reverse'
-alias dls="docker container ls -a"
-alias serve="browser-sync start -s -f . --no-notify --host localhost --port 5000"
-alias dca='mux s dca'
-alias lst='dpkg -l' #List installed packages with their description
-alias dpsa="docker ps -a --format 'table {{.ID}}\t{{.Names}}\t{{.Image}}'" #docker ps -a with only id name and image
-alias dps="docker ps --format 'table {{.ID}}\t{{.Names}}\t{{.Image}}'" #docker ps -a with only id name and image
-# https://gitlab.com/gitlab-org/incubation-engineering/ai-assist/dokter
-alias disk='gdu'
-alias mkdd='mkdir $(date +"%Y-%m-%d")'
-alias sr='omz reload'
-alias lsprog='ls /home/decoder/go/bin; ls /usr/bin; ls /usr/local/bin'
