@@ -15,7 +15,7 @@ For testing purposes, password is "test", use real password for real
 installation ofc :)
 
 ```bash
-wget https://raw.githubusercontent.com/Piotr1215/dotfiles/master/install.sh
+wget https://raw.githubusercontent.com/Piotr1215/dotfiles/master/create-test-user.sh
 ```
 
 ```bash
