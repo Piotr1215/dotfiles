@@ -18,7 +18,7 @@ backup() {
 }
 
 symlink() {
-	stow . --restow
+	stow . --restow --adopt
 }
 
 # For all files `$name` in the present folder except `*.sh`, `README.md`, `settings.json`,
@@ -62,6 +62,10 @@ if [ -z "$GPG_KEY" ]; then
 fi
 
 process "→ Bootstrap steps start here:\n------------------"
+
+process "→ Copy .stow-ignore file to home directory"
+
+cp "${HOME}"/dotfiles/.stow-local-ignore ~/
 
 process "→ upgrade and update apt packages"
 

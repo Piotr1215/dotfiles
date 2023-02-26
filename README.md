@@ -19,7 +19,9 @@ wget https://raw.githubusercontent.com/Piotr1215/dotfiles/master/create-test-use
 ```
 
 ```bash
+sudo chmod +x create-test-user.sh
 ./create-test-user.sh -u "decoder" -p "testingme"
+sudo passwd decoder
 su decoder
 cd
 ```
@@ -29,6 +31,7 @@ cd
 ```bash
 git clone https://github.com/Piotr1215/dotfiles.git
 cd dotfiles
+chmod +x install.sh
 ./install.sh
 ```
 
