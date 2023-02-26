@@ -83,7 +83,7 @@ git config --global user.email "$EMAIL"
 
 process "→ install essencial packages"
 
-sudo apt install -y vim-gtk htop unzip python3-setuptools figlet tmux pydf mc wget mtr ncdu cmatrix ranger jq lolcat tmux bat locate libgraph-easy-perl
+sudo apt install -y vim-gtk htop unzip python3-setuptools figlet tmux pydf mc wget mtr ncdu cmatrix ranger jq lolcat tmux bat locate libgraph-easy-perl stow
 # ln -sf ${HOME}/dotfiles/.tmux.conf ~/.tmux.conf
 
 process "→ install pip"
