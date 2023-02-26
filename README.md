@@ -149,22 +149,6 @@ or
 
 The setup was tested on:
 
-Last test date: 18.03.2022
+Last test date: Sun 26 Feb 18:23:57 CET 2023
 
-- Ubuntu 20.04
-- Pop!\_OS 21.04
-- Katacoda testbed:
-  <https://www.katacoda.com/scenario-examples/courses/environment-usages/ubuntu-2004>
-
-## Changelog
-
-- [45369094](https://github.com/Piotr1215/dotfiles/4536909435c495dd9d0d11418beee9a9d81ab30e) - Adding obsidian mappings
-- [7b07b5e2](https://github.com/Piotr1215/dotfiles/7b07b5e2f16dbe504e247d142d54848e08d8c47c) - Startup pane was not loading correctly
-- [6646ba0b](https://github.com/Piotr1215/dotfiles/6646ba0be82597caa99eacc058c2838a56ba12dc) - Adding comment to easier find quickfix plugin
-- [e870c1b6](https://github.com/Piotr1215/dotfiles/e870c1b695042e1c1dade8ebc66dc439c9dec5cd) - Startify session for dotfiles
-- [fa5c9cec](https://github.com/Piotr1215/dotfiles/fa5c9cecac043d534e32af966332b96d991b6fd7) - Sort done projects desdending
-- [bb6bd211](https://github.com/Piotr1215/dotfiles/bb6bd21178b49797e4624635660983ea34b3c68e) - Ability to override provider GCP version from environmental variable
-- [7ae3cca9](https://github.com/Piotr1215/dotfiles/7ae3cca91feea3eb770d9878ef5a01a698f789ce) - Pipe to less with case insensitive search and color output from cat
-- [b98b5c3f](https://github.com/Piotr1215/dotfiles/b98b5c3fb658e0afc87e961e43f79128f3fe1774) - aliases cleanup
-- [8fbe9fe7](https://github.com/Piotr1215/dotfiles/8fbe9fe76e8cb7679900349593949f6f7f4c7339) - full tasks description in completed
-- [54008228](https://github.com/Piotr1215/dotfiles/54008228e2a980c77b78fa074b6bd23af21ce915) - upgrading uxp setup for providers
+- Ubuntu 20.04 vm
