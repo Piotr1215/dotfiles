@@ -156,14 +156,11 @@ process "→ Installing gh, k9s, kind, krew"
 arkade get gh \
            k9s \
 					 kind \
+					 kubectx \
+					 kubens \
 					 yq
 
 echo 'export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"' >>~/.zshrc
-
-process "→ Install kubectx and kubens using krew"
-
-kubectl krew install ctx
-kubectl krew install ns
 
 process "→ Installing Azure CLI"
 curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
