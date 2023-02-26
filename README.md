@@ -19,7 +19,7 @@ wget https://raw.githubusercontent.com/Piotr1215/dotfiles/master/create-test-use
 ```
 
 ```bash
-sudo chmod +x create-test-user.sh
+sudo chmod +x chreate-test-user.sh
 ./create-test-user.sh -u "decoder" -p "testingme"
 sudo passwd decoder
 su decoder
@@ -33,6 +33,15 @@ git clone https://github.com/Piotr1215/dotfiles.git
 cd dotfiles
 chmod +x install.sh
 ./install.sh
+```
+
+### Symlink all the things
+
+Once the installation is completed run the following command from the `dotfiles`
+directory.
+
+```bash
+stow . --restow --adopt
 ```
 
 ### Note on symlinks
@@ -55,7 +64,7 @@ Runing `./install` will
 
 ### TODOS
 
-- [ ] switch to arkade for installing devops CLIs
+- [x] switch to arkade for installing devops CLIs
 - [x] TODO(decoder 2022-03-31): add tmuxinator sessions to the repo
 
 ## Auto-config commit
