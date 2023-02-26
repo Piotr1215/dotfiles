@@ -87,52 +87,44 @@ git config --global user.email "$EMAIL"
 
 process "→ install essencial packages"
 
-sudo apt install -y vim-gtk htop unzip python3-setuptools figlet tmux pydf mc wget mtr ncdu cmatrix ranger jq lolcat tmux bat locate libgraph-easy-perl stow
+sudo apt install -y vim-gtk htop unzip python3-setuptools figlet tmux pydf mc wget mtr ncdu cmatrix ranger jq lolcat tmux bat locate libgraph-easy-perl stow cowsay fortune
 # ln -sf ${HOME}/dotfiles/.tmux.conf ~/.tmux.conf
 
-process "→ install pip"
+process "→ install tmuxinator"
+sudo gem install tmuxinator
 
+process "→ install pip"
 sudo apt install -y python3-pip
 
 process "→ install exa"
-
 EXA_VERSION=$(curl -s "https://api.github.com/repos/ogham/exa/releases/latest" | grep -Po '"tag_name": "v\K[0-9.]+')
 curl -Lo exa.zip "https://github.com/ogham/exa/releases/latest/download/exa-linux-x86_64-v${EXA_VERSION}.zip"
 sudo unzip -q exa.zip bin/exa -d /usr/local
 sudo rm exa.zip
 
 process "→ install go"
-
 sudo apt install -y golang
 
 process "→ install kubectl"
-
 cd /usr/local/bin
 sudo curl -LO https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl
 sudo chmod +x ./kubectl
 
 process "→ install helm"
-
 curl https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3 | bash
 
 process "→ install kube-ps1"
-
 git clone https://github.com/jonmosco/kube-ps1.git "${HOME}"/kube-ps1/
 
 process "→ install node and nmp"
-
 sudo apt install -y nodejs
 
 process "→ install zsh and oh-my-zsh"
-
 sudo apt install -y zsh
-
 sudo rm -rf ~/.oh-my-zsh
-
 sh -c "$(wget -O- https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
 
 process "→ Installing zsh-autosuggestions plugin"
-
 git clone https://github.com/zsh-users/zsh-autosuggestions ~/.oh-my-zsh/custom/plugins/zsh-autosuggestions
 git clone https://github.com/zsh-users/zsh-syntax-highlighting.git ~/.oh-my-zsh/custom/plugins/zsh-syntax-highlighting
 
@@ -175,24 +167,21 @@ curl "https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-sd
 tar zxvf google-cloud-sdk-377.0.0-linux-x86.tar.gz
 ./google-cloud-sdk/install.sh --usage-reporting=false --quiet
 
-process "→ Installing Neovim"
-
-mkdir -p "${HOME}"/.config/nvim/
-
-sudo curl -LO https://github.com/neovim/neovim/releases/latest/download/nvim.appimage
-sudo chmod +x nvim.appimage
-sudo mv nvim.appimage /usr/local/bin/nvim
-sudo chown "$user" /usr/local/bin/nvim
-nvim --headless -c 'autocmd User PackerComplete quitall' -c 'PackerSync'
+symlink
 
 process "→ Setting zsh as default shell"
-
-symlink
 cd "$HOME"
 sudo chsh -s $(which zsh) "$user"
 zsh
 sed -i 's/ZSH_THEME="robbyrussell"/ZSH_THEME="3den"/g' ~/.zshrc
 source ~/.zshrc
 exec zsh
+
+process "→ Installing Neovim"
+sudo curl -LO https://github.com/neovim/neovim/releases/latest/download/nvim.appimage
+sudo chmod +x nvim.appimage
+sudo mv nvim.appimage /usr/local/bin/nvim
+sudo chown "$user" /usr/local/bin/nvim
+nvim --headless -c 'autocmd User PackerComplete quitall' -c 'PackerSync'
 
 process → Installation complete"
