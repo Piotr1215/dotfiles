@@ -44,6 +44,7 @@ utils.nmap(",<space>", ":nohlsearch<CR>")
 utils.vmap("<C-r>", '"hy:%s/<C-r>h//gc<left><left><left>') -- Change selection
 utils.vmap("//", 'y/\\V<C-R>=escape(@",\'/\')<CR><CR>') -- Highlight selection
 utils.vmap("<leader><C-s>", ":s/\\%V") -- Search only in visual selection usingb%V atom
+utils.vmap("srt", ":!sort -n -k 2<cr>")
 
 -- MACROS --
 utils.nmap("<Leader>q", "@q")
