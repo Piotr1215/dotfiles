@@ -26,7 +26,33 @@ _check_mandatory_programs:
 # * setup kind cluster with GCP official provider and ArgoCD
 setup_infra: _check_mandatory_programs setup_kind setup_gcp setup_k8s setup_helm
 
-# setup kind cluster
+# setup kind cluster with Crossplane and composition functions
+setup_kind_xfn:
+  #!/usr/bin/env bash
+  echo "Creating kind cluster and Installing Crossplane"
+  set -euo pipefail
+
+  cluster="control-plane"
+
+  echo "Creating kind cluster - ${cluster}"
+  kind create cluster --config=kind-config.yaml --wait 3m 
+  kind get kubeconfig --name "${cluster}"
+  kubectl config use-context kind-"${cluster}"
+
+  echo "Installing Crossplane with composition functions enabled"
+  helm install crossplane --namespace crossplane-system crossplane-stable/crossplane \
+      --create-namespace \
+      --set "args={--debug,--enable-composition-functions}" \
+      --set "xfn.enabled=true" \
+      --set "xfn.args={--debug}"
+
+# Check if crossplane composition functions installed properly
+check_xfn:
+   @echo "Checking if crossplane composition functions installed properly"
+   @echo ""
+   @kubectl -n crossplane-system logs -l app=crossplane
+
+# setup kind cluster with UXP
 setup_kind:
   #!/usr/bin/env bash
   echo "Creating kind cluster and Installing UXP"
