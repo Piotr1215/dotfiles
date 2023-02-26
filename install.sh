@@ -119,13 +119,6 @@ process "→ install kube-ps1"
 
 git clone https://github.com/jonmosco/kube-ps1.git "${HOME}"/kube-ps1/
 
-process "→ install terraform"
-(
-	cd /tmp
-	wget https://releases.hashicorp.com/terraform/0.13.4/terraform_0.13.4_linux_amd64.zip
-	unzip terraform_0.13.4_linux_amd64.zip
-	sudo mv terraform /usr/local/bin/
-)
 process "→ install node and nmp"
 
 sudo apt install -y nodejs
@@ -144,23 +137,26 @@ git clone https://github.com/zsh-users/zsh-autosuggestions ~/.oh-my-zsh/custom/p
 
 git clone https://github.com/zsh-users/zsh-syntax-highlighting.git ~/.oh-my-zsh/custom/plugins/zsh-syntax-highlighting
 
-process "→ Installing krew kubectl plugin"
-set -x
-cd "$(mktemp -d)" &&
-	curl -fsSLO "https://github.com/kubernetes-sigs/krew/releases/download/v0.3.4/krew.{tar.gz,yaml}" &&
-	tar zxvf krew.tar.gz &&
-	KREW=./krew-"$(uname | tr '[:upper:]' '[:lower:]')_amd64" &&
-	"$KREW" install --manifest=krew.yaml --archive=krew.tar.gz &&
-	"$KREW" update
-
-echo 'export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"' >>~/.zshrc
-
-process "→ Installing alacrittyprocess "→ Installing alacritty"
-  sudo snap install alacritty --classic
-  mkdir -p ${HOME}/.config/alacritty/
+process "→ Installing alacritty"
+sudo snap install alacritty --classic
+mkdir -p ${HOME}/.config/alacritty/
 
 process "→ Installing Arkade"
 curl -sLS https://get.arkade.dev | sudo sh
+
+process "→ Installing gh, k9s, kind, krew"
+arkade get gh \
+           k9s \
+					 kind \
+					 krew \
+					 yq
+
+echo 'export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"' >>~/.zshrc
+
+process "→ Install kubectx and kubens using krew"
+
+kubectl krew install ctx
+kubectl krew install ns
 
 process "→ Installing Azure CLI"
 curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
@@ -176,31 +172,22 @@ tar zxvf google-cloud-sdk-377.0.0-linux-x86.tar.gz
 ./google-cloud-sdk/install.sh --usage-reporting=false --quiet
 
 process "→ Installing Neovim"
+
 mkdir -p "${HOME}"/.config/nvim/
 
 sudo curl -LO https://github.com/neovim/neovim/releases/latest/download/nvim.appimage
 sudo chmod +x nvim.appimage
 sudo mv nvim.appimage /usr/local/bin/nvim
 sudo chown "$user" /usr/local/bin/nvim
-git clone https://github.com/VundleVim/Vundle.vim.git ~/.vim/bundle/Vundle.vim
 nvim --headless -c 'autocmd User PackerComplete quitall' -c 'PackerSync'
-(
-	cd /home/"$user"/.vim/bundle/coc.nvim
-	yarn install
-)
 
 process "→ Setting zsh as default shell"
+
 cd "$HOME"
 sudo chsh -s $(which zsh) "$user"
 zsh
 sed -i 's/ZSH_THEME="robbyrussell"/ZSH_THEME="3den"/g' ~/.zshrc
 source ~/.zshrc
-exec zshrc
-
-process "→ Install kubectx and kubens using krew"
-kubectl krew install ctx
-kubectl krew install ns
-
-symlink
+exec zsh
 
 process → Installation complete"
