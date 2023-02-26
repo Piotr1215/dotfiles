@@ -134,8 +134,16 @@ sh -c "$(wget -O- https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools
 process "→ Installing zsh-autosuggestions plugin"
 
 git clone https://github.com/zsh-users/zsh-autosuggestions ~/.oh-my-zsh/custom/plugins/zsh-autosuggestions
-
 git clone https://github.com/zsh-users/zsh-syntax-highlighting.git ~/.oh-my-zsh/custom/plugins/zsh-syntax-highlighting
+
+process "→ Installing krew kubectl plugin"
+set -x
+cd "$(mktemp -d)" &&
+	curl -fsSLO "https://github.com/kubernetes-sigs/krew/releases/download/v0.3.4/krew.{tar.gz,yaml}" &&
+	tar zxvf krew.tar.gz &&
+	KREW=./krew-"$(uname | tr '[:upper:]' '[:lower:]')_amd64" &&
+	"$KREW" install --manifest=krew.yaml --archive=krew.tar.gz &&
+	"$KREW" update
 
 process "→ Installing alacritty"
 sudo snap install alacritty --classic
@@ -148,7 +156,6 @@ process "→ Installing gh, k9s, kind, krew"
 arkade get gh \
            k9s \
 					 kind \
-					 krew \
 					 yq
 
 echo 'export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"' >>~/.zshrc
@@ -183,6 +190,7 @@ nvim --headless -c 'autocmd User PackerComplete quitall' -c 'PackerSync'
 
 process "→ Setting zsh as default shell"
 
+symlink
 cd "$HOME"
 sudo chsh -s $(which zsh) "$user"
 zsh
