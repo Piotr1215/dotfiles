@@ -15,21 +15,13 @@ For testing purposes, password is "test", use real password for real
 installation ofc :)
 
 ```bash
-wget https://raw.githubusercontent.com/Piotr1215/dotfiles/27c5e069d2dc239728e20dececce7e81db958949/create-test-user.sh
+wget https://raw.githubusercontent.com/Piotr1215/dotfiles/master/install.sh
 ```
 
 ```bash
-./create-test-user.sh -u "decoder" -p "test"
+./create-test-user.sh -u "decoder" -p "testingme"
 su decoder
 cd
-```
-
-### Note on symlinking
-
-Use `stow` to symling whole directories and exclude others, example
-
-```bash
-stow --ignore=".stfolder" --target=/home/decoder/.config/tmuxinator tmuxinator
 ```
 
 ### Clone the repo and install
@@ -40,20 +32,28 @@ cd dotfiles
 ./install.sh
 ```
 
+### Note on symlinks
+
+The install script is using `stow` to symlink whole directories and exclude others.
+You can symlink additional directories like so:
+
+```bash
+stow --ignore=".stfolder" --target=/home/decoder/.config/tmuxinator tmuxinator
+```
+
 Runing `./install` will
 
 - backup existing dotfiles
 - configure git with given user and email (default values point to my user)
-- install bunch of programs and symling the right
+- install bunch of programs and symlink them using stow
 - most notably, install neovim and configure its plugins
-- arkade is also worth mentioning, it proxies installation of a lot of devops,
   cloud-native tools
 - kubectl installed with krew plugin manager
 
 ### TODOS
 
 - [ ] switch to arkade for installing devops CLIs
-- [ ] TODO(decoder 2022-03-31): add tmuxinator sessions to the repo
+- [x] TODO(decoder 2022-03-31): add tmuxinator sessions to the repo
 
 ## Auto-config commit
 
