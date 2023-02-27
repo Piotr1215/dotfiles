@@ -1,11 +1,12 @@
 
 # Global aliases
 alias -g C='| xsel --clipboard'
-alias -g G='| grep -i'
+alias -g G='| grep -i --color=always'
 alias -g H=' --help'
 alias -g L='| less'
 alias -g NUL="> /dev/null 2>&1"
 alias -g R="2>&1 | tee output.txt"
+alias -g T="| tail -n +2"
 
 # Suffix aliases
 alias -s md=nvim
@@ -14,16 +15,16 @@ alias -s yaml=nvim
 
 # Directories and files
 alias f='fd --type f --hidden --exclude .git | fzf-tmux --preview "bat --color=always {$1}" --reverse | xargs nvim'
-alias la='exa --long --all --sort=age --reverse --header --icons'
-alias ls='exa --long --all --header --icons'
+alias la='exa --color=always --long --all --sort=age --reverse --header --icons'
+alias ls='exa --color=always --long --all --header --icons'
 alias lsf='fd --max-depth=1 --type=file'
 alias tr2='tree -LC 2 --si --sort name | less'
 
 # Commands shadow
-alias cat=bat
+alias cat='bat --color=always'
 alias df=duf
 alias diff=colordiff
-alias fd='fd --hidden'
+alias fd='fd --hidden --color=always'
 alias it='cat ~/issue-template.md | xsel --clipboard'
 alias kk=/usr/bin/kubecolor
 alias lol=lolcat
@@ -31,7 +32,7 @@ alias mux=tmuxinator
 alias nv='neovide --multigrid --notabs'
 alias ps=procs
 alias ra=ranger
-alias rg='rg --hidden'
+alias rg='rg --hidden --color=always'
 alias vim=nvim
 alias v=nvim
 alias watch=viddy
