@@ -172,6 +172,7 @@ utils.nmap('<leader>fmt', ':Pretty<CR>')
 -- EXTERNAL --
 -- Execute line under cursor in shell
 utils.nmap('<leader>ex', ':exec \'!\'.getline(\'.\')<CR>')
+utils.nmap('<leader>eX', ':%w !bash<cr>')
 -- Set spellcheck on/off
 utils.nmap('<Leader>son', ':setlocal spell spelllang=en_us<CR>')
 utils.nmap('<Leader>sof', ':set nospell<CR>')
