@@ -68,7 +68,6 @@ context.temp.write=+temp
 uda.follow.type=string
 uda.follow.label=follow
 uda.follow.values=Y,N
-uda.follow.default=N
 
 #UserDefinedShortcuts
 uda.taskwarrior-tui.task-report.next.filter=status:pending
