@@ -51,6 +51,12 @@ function gacs() {
   git push
 }
 
+# Select gist, preview it, output to terminal and copy to clipboard
+function ghgist()
+{
+  GH_FORCE_TTY=100% gh gist list --limit 1000 | fzf --ansi --preview 'GH_FORCE_TTY=100% gh gist view {1}' --preview-window up | awk '{print $1}' | xargs gh gist view --raw | tee /dev/tty | xsel --clipboard
+}
+
 # Select any open PR form the active repo and open it in a web browser
 function ghpr()
 {
