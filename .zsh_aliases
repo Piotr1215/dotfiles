@@ -15,7 +15,6 @@ alias -s yaml=nvim
 
 # Directories and files
 alias f='__open-file.sh'
-# alias f='fd --type f --hidden --exclude .git | fzf-tmux --preview "bat --color=always {$1}" --reverse | xargs nvim'
 alias la='exa --color=always --long --all --sort=age --reverse --header --icons'
 alias ls='exa --color=always --long --all --header --icons'
 alias lsf='fd --max-depth=1 --type=file'
