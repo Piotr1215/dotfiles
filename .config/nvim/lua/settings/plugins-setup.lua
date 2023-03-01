@@ -34,14 +34,7 @@ require("no-neck-pain").setup({
     }
   }
 })
--- Configure Neural like so in Lua
-require('neural').setup({
-    source = {
-        openai = {
-            api_key = vim.env.OPENAI_API_KEY,
-        },
-    },
-})
+
 require('mini.ai').setup()
 require('oil').setup({
     view_options = {
