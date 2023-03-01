@@ -25,10 +25,6 @@ return require('packer').startup(function(use)
 		require("various-textobjs").setup({ useDefaultKeymaps = true })
 	end,
 }
-  use 'dense-analysis/neural'
-  use 'muniftanjim/nui.nvim'
-  use 'elpiloto/significant.nvim'
-  -- use 'ziontee113/syntax-tree-surfer'
   use 'RRethy/nvim-align'
   use 'vim-scripts/scrollfix'
   use {"shortcuts/no-neck-pain.nvim", tag = "*" } 
