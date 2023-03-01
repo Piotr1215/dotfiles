@@ -1,31 +1,37 @@
-timer ()
+# Creates a real-time countdown with alert sound, useful for bash scripts and terminal.
+function timer ()
 {
   total=$1 
   for ((i=total; i>0; i--)); do sleep 1; printf "Time remaining $i secs \r"; done 
   echo -e "\a" 
 }
 
-fif() {
+# Searches for a string in files using rga and fzf, and opens the file with nvim.
+function fif() {
     if [ ! "$#" -gt 0 ]; then echo "Need a string to search for!"; return 1; fi
     local file
     file="$(rga --max-count=1 --ignore-case --files-with-matches --no-messages "$*" | fzf-tmux +m --preview="rga --ignore-case --pretty --context 10 '"$*"' {}")" && echo "opening $file" && nvim "$file" || return 1;
 }
 
+# Creates a new gist with a unique filename including current date and random number
 function gist ()
 {
    gh gist create --filename $(echo $(date +"%m-%d-%y")-$RANDOM.sh)
 }
 
+# Uploads content to clbin and copies URL to clipboard, opens in browser
 function share ()
 {
   curl -sF 'clbin=<-' https://clbin.com | xargs -I _ echo -n _"?hl" | tee >(xsel -ib 2>&1) | tee >(xargs echo) | nohup xargs xdg-open >/dev/null 2>&1
 }
 
+# Copy file name to clipboard
 function copyname() {
     file=$1
     stat -t $1 | cut -d ' ' -f1 | xargs echo -n | xsel -ib
 }
 
+# Download a YouTube video from the URL in the clipboard, save to ~/music with title and extension
 function ytd() {
     link=$(xsel -ob)
 
@@ -37,20 +43,24 @@ function ytd() {
     youtube-dl -o "~/music/%(title)s.%(ext)s"  $link --no-playlist &
 }
 
+# Copy current working directory path to clipboard
 function cpa() {
     printf $PWD | xclip -selection primary 
 }
 
+# Change directory to path stored in primary clipboard
 function dpa() {
     cd $(xclip -o -sel primary)
 }
 
+# Add all changes to git, commit with given message, and push
 function gac() {
   git add .
   git commit -m "$1"
   git push
 }
 
+# Add all changes to git, commit with given message and signed-off-by line, and push
 function gacs() {
   git add .
   git commit -m "$1" -s
@@ -85,6 +95,7 @@ function repo() {
     fi
 }
 
+# Adjust system volume to given percentage or display current volume
 function vol() {
     echo "Usage: provide volume in intiger, e.g. 50 will adjust vol to 50%"
     if [[ -z "$1" ]]; then
@@ -95,6 +106,7 @@ function vol() {
     echo "Volume set to $1%"
 }
 
+# Switch primary monitor between HDMI and DVI-D-0
 function mon ()
 {
   active_mon=$(xrandr | grep primary)
@@ -106,6 +118,7 @@ function mon ()
   fi
 }
 
+# Toggle audio output between main monitor and headset
 function sout() {
   echo "Usage: sout toggles between\n - hdmi: plays sound via main monitor or\n - head: plays sound via main headset\n"
 
@@ -129,27 +142,7 @@ function sout() {
   fi
 } 
 
-function old_repo() {
-    if [[ -z "$1" ]]; then
-      echo "Please provide search term"
-      return
-    else
-      export repo=$({ gh repo list Piotr1215 --limit 1000;  gh repo list upbound --limit 1000 } | awk '{print $1}' | sed 's:.*/::' | rg $1 | fzf)
-    fi
-    if [[ -z "$repo" ]]; then
-      echo "Repository not found"
-    elif [[ -d ${HOME}/dev/$repo ]]; then
-      echo "Repository found locally, entering"
-      cd ${HOME}/dev/$repo
-      onefetch
-    else
-      echo "Repository not found locally, cloning"
-      gh repo clone $repo ${HOME}/dev/$repo
-      cd ${HOME}/dev/$repo
-      onefetch
-    fi
-}
-
+# Check system info using onefetch and output in terminal
 function checkfetch() {
     local res=$(onefetch) &> /dev/null
     if [[ "$res" =~ "Error" ]]; then
@@ -158,14 +151,17 @@ function checkfetch() {
     fi
 }
 
+# Display list of shortcuts in color using less
 function key() {
   cat --color=always ${HOME}/shortcuts.md | less -i -R
 }
 
+# Open a debugging shell within a Kubernetes pod
 function kcdebug() {
   kubectl run -i --rm --tty debug --image=busybox --restart=Never -- sh
 }
 
+# Create a directory and change to it in one command
 function mkd() {
   mkdir -p "$@" && cd "$_";
 }
