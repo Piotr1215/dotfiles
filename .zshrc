@@ -1,6 +1,9 @@
 # Path to your oh-my-zsh installation.
 export ZSH="${HOME}/.oh-my-zsh"
 
+# This sets vim key bindings mode.
+# set -o vi
+
 if [[ -z $TMUX ]]; then
   tmuxinator start poke
 fi
