@@ -21,7 +21,6 @@ alias lsf='fd --max-depth=1 --type=file'
 alias tr2='tree -LC 2 --si --sort name | less'
 
 # Commands shadow
-alias pfn='__print-functions.sh'
 alias cat='bat --color=always'
 alias df=duf
 alias diff=colordiff
@@ -31,6 +30,7 @@ alias kk=/usr/bin/kubecolor
 alias lol=lolcat
 alias mux=tmuxinator
 alias nv='neovide --multigrid --notabs'
+alias pfn='__print-functions.sh'
 alias ps=procs
 alias ra=ranger
 alias rg='rg --hidden --color=always'
