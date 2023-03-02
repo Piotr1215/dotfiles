@@ -59,6 +59,7 @@ utils.lnmap('yi', ':set foldmethod=indent<CR>')
 -- The below mapping helps select from a register in the place of insert point
 utils.imap('<C-p>', '<C-o>:Telescope registers<cr><C-w>')
 -- Yank
+utils.nmap('<leader>dfil', ':%d<cr>') -- delete file content to default buffer
 utils.nmap('<leader>yf', ':%y<cr>') -- yank word under cusror to the clipboard buffer
 utils.nmap('<leader>yw', '"+yiw') -- yank word under cusror to the clipboard buffer
 utils.nmap('<leader>yW', '"+yiW') -- yank WORD under cusror to the clipboard buffer
