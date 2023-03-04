@@ -27,6 +27,8 @@ Ctro +b, Ctrl + o   - swap panes 1:2 to 2:1
 Ctrl +b [           - enter copy Mode
 
 ## Vim
+P,                              - p pastes text and replaces current buffer, P
+pastes without replacing buffer
 :h index                        - check what key is mapped to, keymaps, set
 verbose?
 "+yt                            - copy to clipboard till character (space in this case)
