@@ -19,17 +19,13 @@ vim.api.nvim_set_keymap('n', 'j', "v:count == 0 ? 'gj' : 'j'", { noremap = true,
 -- Navigate between paragraphs and add to jumplist
 vim.keymap.set("n", "<C-j>", [[:keepjumps normal! j}k<cr>]], opts)
 vim.keymap.set("n", "<C-k>", [[:keepjumps normal! k{j<cr>]], opts)
-utils.nmap("<C-right>", "<c-w>l")
-vim.api.nvim_set_keymap('n', '<C-Left>', '<C-W>h', { noremap = true, silent = true })
 vim.api.nvim_set_keymap('n', '<S-PageUp>', 'gT', { noremap = true, silent = true })
 vim.api.nvim_set_keymap('n', '<S-PageDown>', 'gt', { noremap = true, silent = true })
-utils.nmap("<C-down>", "<c-w>j")
-utils.nmap("<C-up>", "<c-w>k")
 utils.nmap("<BS>", "^")
 utils.vmap("<S-PageDown>", ":m '>+1<CR>gv=gv") -- Move Line Down in Visual Mode
-utils.vmap("<S-PageUp>", ":m '<-2<CR>gv=gv") -- Move Line Up in Visual Mode
-utils.nmap("<leader>k", ":m .-2<CR>==") -- Move Line Up in Normal Mode
-utils.nmap("<leader>j", ":m .+1<CR>==") -- Move Line Down in Normal Mode
+utils.vmap("<S-PageUp>", ":m '<-2<CR>gv=gv")   -- Move Line Up in Visual Mode
+utils.nmap("<leader>k", ":m .-2<CR>==")        -- Move Line Up in Normal Mode
+utils.nmap("<leader>j", ":m .+1<CR>==")        -- Move Line Down in Normal Mode
 
 -- SEARCH & REPLACE --
 utils.nmap("<Leader>em", ":/\\V\\c\\<\\>") -- find exact match
@@ -49,7 +45,6 @@ utils.vmap("srt", ":!sort -n -k 2<cr>")
 -- MACROS --
 utils.nmap("<Leader>q", "@q")
 utils.xmap("Q", ":'<,'>:normal @q<CR>")
-utils.lnmap("jq", ":g/{/.!jq .<CR>")
 utils.tmap("<ESC>", "<C-\\><C-n>")
 
 -- MANIPULATE TEXT --
@@ -59,23 +54,22 @@ utils.lnmap('yi', ':set foldmethod=indent<CR>')
 -- The below mapping helps select from a register in the place of insert point
 utils.imap('<C-p>', '<C-o>:Telescope registers<cr><C-w>')
 -- Yank
-utils.nmap('<leader>dfil', ':%d<cr>') -- delete file content to default buffer
+utils.nmap('<leader>dfil', ':%_d<cr>') -- delete file content to black hole register
 utils.nmap('<leader>yf', ':%y<cr>') -- yank word under cusror to the clipboard buffer
 utils.nmap('<leader>yw', '"+yiw') -- yank word under cusror to the clipboard buffer
 utils.nmap('<leader>yW', '"+yiW') -- yank WORD under cusror to the clipboard buffer
 -- Paste
-utils.xmap("<leader>p", "\"_dP") -- paste the same yanked text into visual selection
+utils.xmap("<leader>p", "\"_dP") -- paste the same yanked text into clipboard buffer
 utils.nmap("<leader>1", '"0p') -- paste from 0 (latest yank)
 utils.nmap("<leader>2", '"*p') -- paste from 0 (latest yank)
 -- Substitute
 utils.nmap("<leader>sw", "\"_diwP") -- substitute current word with last yanked text
 utils.nmap("<leader>sW", "\"_diWP") -- substitute current WORD with last yanked text
-utils.vmap("<leader>ss", "\"_dP") -- substitute selection with last yanked text
 
 -- Delete
 utils.lnmap("d", "ma$mb`ad`bi") -- delete from cursor to end of line minus last character
 
--- Change default text objects mappings to store changed/deleted text in register named with the same letter. This works for words/WORDS and braces
+--  default text objects mappings to store changed/deleted text in register named with the same letter. This works for words/WORDS and braces
 utils.nmap("ciw", "\"cciw")
 utils.nmap("ciW", "\"cciW")
 utils.nmap("caw", "\"ccaw")
@@ -91,16 +85,10 @@ utils.nmap("cab", "\"bcab")
 utils.nmap("dib", "\"bdib")
 utils.nmap("dab", "\"bdab")
 
--- utils.nmap("ciq", '\"cciq')
--- utils.nmap("caq", "\"ccaq")
--- utils.nmap("diq", "\"cdiq")
--- utils.nmap("daq", "\"cdaq")
-
 -- select last pasted text
 utils.nmap("gp", "`[v`]")
 -- useful for passing over braces and quotations
 utils.imap("<C-l>", "<C-o>a")
--- utils.imap("<C-p>", "<C-o>A")
 utils.imap("<C-n>", "<C-e><C-o>A;<ESC>")
 -- set mark on this line ma
 utils.imap(";[", "<c-o>ma")
@@ -180,7 +168,7 @@ utils.nmap('<Leader>sof', ':set nospell<CR>')
 -- Accept first grammar correction
 utils.nmap('<Leader>c', '1z=')
 -- Upload selected to ix.io
-utils.vmap('<Leader>pb', ":w !share<CR>")
+utils.vmap('<Leader>pb', "w !bash share<CR>")
 -- setup mapping to call :LazyGit
 utils.nmap('<leader>gg', ':LazyGit<CR>')
 utils.nmap('<leader>gl', ':r !bash ~/dev/dotfiles/scripts/__generate_git_log.sh<CR>')
