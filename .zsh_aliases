@@ -21,7 +21,7 @@ alias lsf='fd --max-depth=1 --type=file'
 alias tr2='tree -LC 2 --si --sort name | less'
 
 # Commands shadow
-alias cat='bat --color=always'
+alias cat='bat'
 alias df=duf
 alias diff=colordiff
 alias fd='fd --hidden --color=always'
