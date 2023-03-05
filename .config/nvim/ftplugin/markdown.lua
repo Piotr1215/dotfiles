@@ -1,6 +1,13 @@
 local utils = require('utils')
 local vcmd = vim.cmd
 
+vcmd('set conceallevel=0')
+-- this setting makes markdown auto-set the 80 text width limit when typing
+-- vcmd('set fo+=a')
+vcmd('set textwidth=80')
+vcmd('setlocal spell spelllang=en_us')
+vcmd('setlocal expandtab shiftwidth=4 softtabstop=4 autoindent')
+
 vim.api.nvim_exec(
   [[
 " arrows
@@ -12,12 +19,26 @@ iabbrev VV ↓
   false
 )
 
-vcmd('set conceallevel=0')
--- this setting makes markdown auto-set the 80 text width limit when typing
--- vcmd('set fo+=a')
-vcmd('set textwidth=80')
-vcmd('setlocal spell spelllang=en_us')
-vcmd('setlocal expandtab shiftwidth=4 softtabstop=4 autoindent')
+-- Operations on Code Block
+vim.cmd(
+  [[
+     function! MarkdownCodeBlock(outside)
+         call search('```', 'cb')
+         if a:outside
+             normal! Vo
+         else
+             normal! j0Vo
+         endif
+         call search('```')
+         if ! a:outside
+             normal! k
+         endif
+     endfunction
+     ]])
+utils.omap('am', ':call MarkdownCodeBlock(1)<cr>')
+utils.xmap('am', ':call MarkdownCodeBlock(1)<cr>')
+utils.omap('im', ':call MarkdownCodeBlock(0)<cr>')
+utils.xmap('im', ':call MarkdownCodeBlock(0)<cr>')
 
 -- MarkdownPreview settings
 vim.g.mkdp_browser = '/usr/bin/firefox'
