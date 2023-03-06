@@ -20,6 +20,13 @@ alias ls='exa --color=always --long --all --header --icons'
 alias lsf='fd --max-depth=1 --type=file'
 alias tr2='tree -LC 2 --si --sort name | less'
 
+# LXC aliases
+alias lux='lxc start ubuntu --console=vga'
+## start and stop lxc vm with hybernated state
+## meaning all programs and windows will preserve
+alias lux--='lxc stop --stateful ubuntu'
+alias lux-='lxc stop ubuntu'
+
 # Commands shadow
 alias cat='bat'
 alias df=duf
