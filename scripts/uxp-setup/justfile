@@ -7,13 +7,15 @@ yaml    := justfile_directory() + "/yaml"
 browse      := if os() == "linux" { "xdg-open "} else { "open" }
 copy        := if os() == "linux" { "xsel -ib"} else { "pbcopy" }
 
-export gcp_provider_version     := env_var_or_default('GCP_PROVIDER', "v0.26.0")
-export aws_provider_version     := "v0.28.0"
-export random_suffix            := `echo $RANDOM`
-export base64encoded_gcp_creds  := `base64 ~/creds-gcp.json | tr -d "\n"`
-export base64encoded_aws_creds  := `cat ~/.aws/credentials | grep -i 609897127049_AdministratorAccess -A3 | sed 's/609897127049_AdministratorAccess/default/' | base64 | tr -d "\n"`
-export gcp_project_id           := "crossplane-playground"
-
+export gcp_provider_version         := env_var_or_default('GCP_PROVIDER', "v0.26.0")
+export azure_provider_version       := env_var_or_default('AZURE_PROVIDER', "v0.28.0")
+export aws_provider_version         := "v0.28.0"
+export random_suffix                := `echo $RANDOM`
+export base64encoded_azure_creds    := `base64 ~/crossplane-azure-provider-key.json | tr -d "\n"`
+export base64encoded_gcp_creds      := `base64 ~/creds-gcp.json | tr -d "\n"`
+export base64encoded_aws_creds      := `cat ~/.aws/credentials | grep -i 609897127049_AdministratorAccess -A3 | sed 's/609897127049_AdministratorAccess/default/' | base64 | tr -d "\n"`
+export gcp_project_id               := "crossplane-playground"
+                                    
 # this list of available targets
 # targets marked with * are main targets
 default:
@@ -68,7 +70,7 @@ setup_kind:
   echo "Installing UXP"
   kubectl create namespace upbound-system
   up uxp install
-  kubectl wait --for condition=Available=True --timeout=300s deployment/xgql --namespace upbound-system
+  kubectl wait --for condition=Available=True --timeout=300s deployment/crossplane --namespace upbound-system
 
 # setup provider Kubernetes
 setup_k8s:
@@ -105,6 +107,14 @@ setup_aws:
   @envsubst < {{yaml}}/aws-provider.yaml | kubectl apply -f - 
   @kubectl wait --for condition=healthy --timeout=300s provider/provider-aws
   @envsubst < {{yaml}}/aws-provider-config.yaml | kubectl apply -f - 
+
+# setup Azure official provider
+setup_azure:
+  @echo "Setting up Azure official provider"
+  @kubectl config use-context kind-control-plane
+  @envsubst < {{yaml}}/azure-provider.yaml | kubectl apply -f - 
+  @kubectl wait --for condition=healthy --timeout=300s provider/provider-azure
+  @envsubst < {{yaml}}/azure-provider-config.yaml | kubectl apply -f - 
 
 # setup GCP official provider
 setup_gcp:
