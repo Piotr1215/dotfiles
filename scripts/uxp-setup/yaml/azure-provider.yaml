@@ -1,0 +1,17 @@
+---
+apiVersion: pkg.crossplane.io/v1alpha1
+kind: ControllerConfig
+metadata:
+  name: azure-config
+spec:
+  args:
+    - '-d'
+---
+apiVersion: pkg.crossplane.io/v1
+kind: Provider
+metadata:
+  name: provider-azure
+spec:
+  package: xpkg.upbound.io/upbound/provider-azure:$azure_provider_version
+  controllerConfigRef:
+    name: azure-config
