@@ -1,0 +1,58 @@
+# /home/decoder/.config/tmuxinator/atosik.yml
+
+name: azure-perf
+root: ~/dev/clusters/azure-perf
+
+# Optional tmux socket
+# socket_name: foo
+
+# Note that the pre and post options have been deprecated and will be replaced by
+# project hooks.
+
+# Project hooks
+
+# Runs on project start, always
+# on_project_start: git fetch origin --prune
+
+# Run on project start, the first time
+# on_project_first_start: command
+
+# Run on project start, after the first time
+# on_project_restart: command
+
+# Run on project exit ( detaching from tmux session )
+# on_project_exit: command
+
+# Run on project stop
+# on_project_stop: command
+
+# Runs in each window and pane before window/pane specific commands. Useful for setting up interpreter versions.
+# pre_window: tmux source-file ~/.tmux.conf 
+
+# Pass command line options to tmux. Useful for specifying a different tmux.conf.
+# tmux_options: -f ~/.tmux.mac.conf
+
+# Change the command to call tmux.  This can be used by derivatives/wrappers like byobu.
+# tmux_command: byobu
+
+# Specifies (by name or index) which window will be selected on project startup. If not set, the first window is used.
+# startup_window: git
+
+# Specifies (by index) which pane of the specified window will be selected on project startup. If not set, the first pane is used.
+startup_pane: "1"
+
+# Controls whether the tmux session should be attached to automatically. Defaults to true.
+# attach: false
+
+windows:
+  - dev:
+      layout: cb96,239x66,0,0[239x10,0,0{119x10,0,0,18,119x10,120,0,20},239x42,0,11,21,239x12,0,54,22]
+      panes:
+        - clear; echo run just launch_grafana
+        - clear; echo run just launch_prometheus
+        - k9s -c ev
+        - clear; echo Type commands here. Make sure to copy AWS creds and run --swapcreds.sh
+  - vim:
+      layout: tiled
+      panes:
+          - vim -c "SLoad azure-perf"
