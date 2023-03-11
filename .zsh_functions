@@ -6,6 +6,20 @@ function timer ()
   echo -e "\a" 
 }
 
+# Simplifies font installation, making font customization easier and improving visual experience in the shell
+function install_font ()
+{
+  if [[ -z $1 ]]; then
+   echo provide path to zipped font file 
+   return 1
+  fi
+  
+  font_zip=$(realpath "$1")
+
+  unzip "$font_zip" "*.ttf" "*.otf" -d ~/.local/share/fonts/
+  fc-cache -vf
+}
+
 # Searches for a string in files using rga and fzf, and opens the file with nvim.
 function fif() {
     if [ ! "$#" -gt 0 ]; then echo "Need a string to search for!"; return 1; fi
