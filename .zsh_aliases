@@ -38,7 +38,6 @@ alias lol=lolcat
 alias mux=tmuxinator
 alias nv='neovide --multigrid --notabs'
 alias pfn='__print-functions.sh'
-alias ps=procs
 alias ra=ranger
 alias rg='rg --hidden --color=always'
 alias vim=nvim
