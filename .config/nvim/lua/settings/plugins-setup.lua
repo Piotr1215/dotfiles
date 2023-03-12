@@ -23,11 +23,10 @@ require 'mdeval'.setup({
 require("no-neck-pain").setup({
   width = 75,
   buffers = {
-    left = {
-     backgroundColor = "tokyonight-moon",
+    colors = {
+     background = "tokyonight-moon",
     },
     right = {
-      backgroundColor = "tokyonight-moon",
       enabled = false
     }
   }
