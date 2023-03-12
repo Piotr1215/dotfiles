@@ -74,6 +74,7 @@ alias lg='lazygit'
 alias lsprog='ls /home/decoder/go/bin; ls /usr/bin; ls /usr/local/bin'
 alias lst='dpkg -l' #List installed packages with their description
 alias lvim='nvim -c "normal '\''0"'
+alias mvim='vim $(git ls-files -m)'
 alias lzd='docker run --rm -it -v /var/run/docker.sock:/var/run/docker.sock -v /config/lazydocker:/.config/jesseduffield/lazydocker lazyteam/lazydocker'
 alias mkdd='mkdir $(date +"%Y-%m-%d")'
 alias ms="tmuxinator start" 
