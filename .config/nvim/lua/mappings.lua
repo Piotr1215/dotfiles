@@ -170,6 +170,7 @@ utils.nmap('<Leader>c', '1z=')
 -- Upload selected to ix.io
 utils.vmap('<Leader>pb', "w !bash share<CR>")
 -- setup mapping to call :LazyGit
+utils.lnmap('gd', ':Gvdiffsplit<CR>')
 utils.nmap('<leader>gg', ':LazyGit<CR>')
 utils.nmap('<leader>gl', ':r !bash ~/dev/dotfiles/scripts/__generate_git_log.sh<CR>')
 
