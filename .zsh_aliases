@@ -32,7 +32,7 @@ alias lux-='lxc stop ubuntu'
 alias cat='bat'
 alias df=duf
 alias diff=colordiff
-alias fd='fd --hidden --color=always'
+alias fd='fd --hidden'
 alias it='cat ~/issue-template.md | xsel --clipboard'
 alias kk=/usr/bin/kubecolor
 alias lol=lolcat
