@@ -5,7 +5,12 @@ local dap, dapui = require("dap"), require("dapui")
 require('nvim-dap-virtual-text').setup()
 require('dap-go').setup()
 require("dapui").setup()
-
+  require "lsp_signature".setup({
+    bind = true, -- This is mandatory, otherwise border config won't get registered.
+    handler_opts = {
+      border = "rounded"
+    }
+  })
 
 local on_attach = function(_, bufnr)
   -- Create some shortcut functions.
@@ -26,7 +31,12 @@ local on_attach = function(_, bufnr)
   buf_set_option('omnifunc', 'v:lua.vim.lsp.omnifunc')
 
   local opts = { noremap = true, silent = true }
-
+require "lsp_signature".on_attach({
+      bind = true, -- This is mandatory, otherwise border config won't get registered.
+      handler_opts = {
+        border = "rounded"
+      }
+    }, bufnr)
   -- ======================= The Keymaps =========================
   -- jump to definition
   buf_set_keymap('n', 'gd', '<cmd>lua vim.lsp.buf.definition()<CR>', opts)
@@ -43,6 +53,9 @@ local on_attach = function(_, bufnr)
 
   -- Rename symbol
   buf_set_keymap('n', '<leader>rn', "<cmd>lua require('lspsaga.rename').rename()<CR>", opts)
+
+  -- Go to implementation
+  buf_set_keymap('n', 'gi', '<cmd>lua vim.lsp.buf.implementation()<CR>', opts)
 
   -- Find reference
   buf_set_keymap('n', 'gr', '<cmd>lua require("lspsaga.provider").lsp_finder()<CR>', opts)
@@ -66,6 +79,9 @@ local on_attach = function(_, bufnr)
   ]]
 end
 
+require('go').setup({
+  on_attach = on_attach
+})
 local lspconfig = require 'lspconfig'
 local configs = require 'lspconfig.configs'
 -- Check if it's already defined for when reloading this file.
@@ -78,7 +94,7 @@ configs.up = {
 }
 
 require("lspconfig")['up'].setup({
-  on_attach = on_attach
+  lsp_on_attach = true
 })
 
 local server_specific_opts = {
@@ -103,6 +119,23 @@ local server_specific_opts = {
 -- provided by Neovim!
 local capabilities = vim.lsp.protocol.make_client_capabilities()
 capabilities = require('cmp_nvim_lsp').default_capabilities()
+
+lspconfig.gopls.setup{
+	cmd = {'gopls'},
+	-- for postfix snippets and analyzers
+	capabilities = capabilities,
+	    settings = {
+	      gopls = {
+		      experimentalPostfixCompletions = true,
+		      analyses = {
+		        unusedparams = true,
+		        shadow = true,
+		     },
+		     staticcheck = true,
+		    },
+	    },
+	on_attach = on_attach,
+}
 
 local rt = require("rust-tools")
 
