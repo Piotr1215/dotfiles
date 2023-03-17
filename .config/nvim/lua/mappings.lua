@@ -13,12 +13,13 @@ utils.nmap("<nop>", "<Plug>Markdown_Fold") -- tab is for moving around only
 -- center screen after moving pageup or down
 utils.nmap("<c-d>", "<c-d>zz")
 utils.nmap("<c-u>", "<c-u>zz")
+utils.nmap(";", ":")
 -- j/k moves over virtual (wrapped) lines
 vim.api.nvim_set_keymap('n', 'k', "v:count == 0 ? 'gk' : 'k'", { noremap = true, expr = true, silent = true })
 vim.api.nvim_set_keymap('n', 'j', "v:count == 0 ? 'gj' : 'j'", { noremap = true, expr = true, silent = true })
 -- Navigate between paragraphs and add to jumplist
 vim.keymap.set("n", "<C-j>", [[:keepjumps normal! j}k<cr>]], opts)
-vim.keymap.set("n", "<C-k>", [[:keepjumps normal! k{j<cr>]], opts)
+-- vim.keymap.set("n", "<C-k>", [[:keepjumps normal! k{j<cr>]], opts)
 vim.api.nvim_set_keymap('n', '<S-PageUp>', 'gT', { noremap = true, silent = true })
 vim.api.nvim_set_keymap('n', '<S-PageDown>', 'gt', { noremap = true, silent = true })
 utils.nmap("<BS>", "^")
@@ -157,7 +158,8 @@ vim.keymap.set('n', '_', 'vg_')
 utils.nmap('<leader>mp', ':MarkdownPreview<CR>')
 -- Fix Markdown Errors
 utils.nmap('<leader>fmt', ':Pretty<CR>')
-
+vim.keymap.set({ 'n' }, '<C-k>', function()       require('lsp_signature').toggle_float_win()
+    end, { silent = true, noremap = true, desc = 'toggle signature' })
 -- EXTERNAL --
 -- Execute line under cursor in shell
 utils.nmap('<leader>ex', ':exec \'!\'.getline(\'.\')<CR>')
