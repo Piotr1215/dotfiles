@@ -3,6 +3,8 @@ require("mason").setup()
 
 require('mini.align').setup()
 
+require('go').setup()
+
 require 'mdeval'.setup({
   -- Don't ask before executing code blocks
   require_confirmation = false,
@@ -212,20 +214,6 @@ require("nvim-surround").setup({
 })
 
 require('leap').add_default_mappings()
-
-require("telekasten").setup {
-  home = "/home/decoder/zettelkasten",
-  dailies = "/home/decoder/zettelkasten/daily",
-  weeklies = "/home/decoder/zettelkasten/weekly",
-  templates = "/home/decoder/zettelkasten/templates",
-  -- markdown file extension
-  extension = ".md",
-
-  -- following a link to a non-existing note will create it
-  follow_creates_nonexisting = true,
-  dailies_create_nonexisting = true,
-  weeklies_create_nonexisting = true,
-}
 
 -- Color name (:help cterm-colors) or ANSI code
 -- there are some defaults for image directory and image name, you can change them
