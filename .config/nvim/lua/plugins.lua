@@ -30,7 +30,6 @@ return require('packer').startup(function(use)
   use {"shortcuts/no-neck-pain.nvim", tag = "*" } 
   use 'stevearc/oil.nvim'
   use 'echasnovski/mini.nvim'
-  use 'sheerun/vim-polyglot'
   use 'mattn/emmet-vim'
   use 'mattn/webapi-vim'
   use 'mhinz/vim-startify'
@@ -39,7 +38,6 @@ return require('packer').startup(function(use)
   use 'tpope/vim-fugitive'
   use 'voldikss/vim-floaterm'
   use 'sindrets/diffview.nvim'
-  use 'ThePrimeagen/harpoon'
   use 'kevinhwang91/rnvimr'
   use 'airblade/vim-gitgutter'
   use({
@@ -112,6 +110,7 @@ return require('packer').startup(function(use)
   use { "smartpde/telescope-recent-files" }
   -- }}}
   -- LSP {{{
+  use 'ray-x/lsp_signature.nvim'
   use { 'ibhagwan/fzf-lua' }
   use { 'nvim-treesitter/nvim-treesitter', run = ':TSUpdate' }
   use { 'tami5/lspsaga.nvim', requires = { 'neovim/nvim-lspconfig' } }
@@ -134,6 +133,15 @@ return require('packer').startup(function(use)
       'rafamadriz/friendly-snippets',
     }
   }
+  use 'leoluz/nvim-dap-go'
+  use {
+    "rcarriga/nvim-dap-ui",
+    requires = {
+      "mfussenegger/nvim-dap"
+    }
+  }
+  -- }}}
+  -- Snippets {{{
   use {
     'hrsh7th/nvim-cmp',
     requires = {
@@ -144,23 +152,13 @@ return require('packer').startup(function(use)
       'hrsh7th/cmp-cmdline',
     }
   }
-  use 'leoluz/nvim-dap-go'
-  use {
-    "rcarriga/nvim-dap-ui",
-    requires = {
-      "mfussenegger/nvim-dap"
-    }
-  }
-  use 'theHamsta/nvim-dap-virtual-text'
-  -- use 'nvim-telescope/telescope-dap.nvim'
-  use "stevearc/dressing.nvim"
-  -- }}}
-  -- Snippets {{{
   use 'L3MON4D3/LuaSnip'
   use 'hrsh7th/vim-vsnip'
   use 'hrsh7th/vim-vsnip-integ'
   -- }}}
   -- Programming {{{
+  use 'theHamsta/nvim-dap-virtual-text'
+  use "stevearc/dressing.nvim"
   use {
     'saecki/crates.nvim',
     requires = { 'nvim-lua/plenary.nvim' },
@@ -171,7 +169,8 @@ return require('packer').startup(function(use)
   use 'simrat39/rust-tools.nvim'
   use 'IndianBoy42/tree-sitter-just'
   use 'NoahTheDuke/vim-just'
-  use 'fatih/vim-go'
+  use 'ray-x/go.nvim'
+  use 'ray-x/guihua.lua' -- recommended if need floating window support
   use 'hashivim/vim-terraform'
   use 'nvim-treesitter/nvim-treesitter-textobjects'
   -- }}}
@@ -185,7 +184,6 @@ return require('packer').startup(function(use)
   use 'ixru/nvim-markdown'
   use 'dhruvasagar/vim-open-url'
   use 'marcelofern/vale.nvim'
-  use 'renerocksai/telekasten.nvim'
   use({ "iamcco/markdown-preview.nvim",
     run = "cd app && npm install",
     setup = function()
