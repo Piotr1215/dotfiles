@@ -1,3 +1,16 @@
+source ~/scripts/__reusable_variables.sh
+
+function testme ()
+{
+# dynamic prefix variable using prefix_separator
+prefix="${1:+$1$prefix_separator}"
+echo ${prefix}
+}
+# Creates a folder named with the current or prefixed date, using the format "prefix-YYYY-MM-DD" if a prefix is provided.
+function mkdd ()
+{
+ mkdir -p ${1:+$1$prefix_separator}$(date +%F); }
+
 # Creates a real-time countdown with alert sound, useful for bash scripts and terminal.
 function timer ()
 {

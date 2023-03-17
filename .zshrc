@@ -84,6 +84,7 @@ export PATH=/home/decoder/.nimble/bin:$PATH
 export KUBECONFIG=~/.kube/config
 export GOPATH=/usr/local/go
 export GOBIN=/usr/local/go/bin
+export PATH=$PATH:$GOPATH/bin
 export PATH=$PATH:$HOME/.krew/bin
 export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
 export PATH=$HOME/.local/bin:$PATH
