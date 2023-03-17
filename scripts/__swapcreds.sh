@@ -37,7 +37,7 @@ parse_clipboard_input() {
 	# Paste profile from the "Option 2"
 	profile=$(${paste_tool})
 	# Make sure we are not pasting junk
-	if [[ "$profile" != *"_AdministratorAccess"* ]]; then
+	if [[ "$profile" != *"_AdministratorAccess"* && "$profile" != *"_Half-Day-AdminAccess"* ]]; then
 		echo "This is not the right format, copy again"
 		return 5
 	fi
