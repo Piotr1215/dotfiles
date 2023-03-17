@@ -4,6 +4,14 @@ local api = vim.api
 local indentSettings = vim.api.nvim_create_augroup("IndentSettings", { clear = true })
 local goSettings = vim.api.nvim_create_augroup("Go Settings", { clear = true })
 
+vim.api.nvim_create_autocmd("BufWritePre", {
+  pattern = "*.go",
+  callback = function()
+   require('go.format').goimport()
+  end,
+  group = goSettings,
+})
+
 vim.api.nvim_create_autocmd("FileType", {
   pattern = { "c", "cpp" },
   command = "setlocal expandtab shiftwidth=2 softtabstop=2 cindent",
@@ -52,6 +60,7 @@ api.nvim_exec(
   [[
     augroup fileTypes
      autocmd FileType lua setlocal foldmethod=marker
+     autocmd FileType just setlocal foldmethod=marker
      autocmd FileType go setlocal foldmethod=expr
      autocmd BufRead,BufNewFile .envrc set filetype=sh
     augroup end
