@@ -4,10 +4,10 @@ name: Run Tests
 on:
   push:
     branches:
-      - main
+      - master
   pull_request:
     branches:
-      - main
+      - master
 
 jobs:
   run-tests:
@@ -19,7 +19,7 @@ jobs:
 
     - name: Set up Bash
       run: |
-        echo "BASH_VERSION=$(bash --version)" >> $GITHUB_ENV
+        echo "BASH_VERSION=${BASH_VERSION}" >> $GITHUB_ENV
 
     - name: Run tests
       working-directory: scripts
