@@ -1,26 +1,25 @@
 #!/usr/bin/env bash
 
-# The set -e option instructs bash to immediately exit if any command has a non-zero exit status
-# The set -u referencing a previously undefined  variable - with the exceptions of $* and $@ - is an error
-# The set -o pipefaile if any command in a pipeline fails, that return code will be used as the return code of the whole pipeline
-# https://bit.ly/37nFgin
-set -eu
+source __trap.sh
 
-# Add source and line number wher running in debug mode: bash -xv __generate_git_log.sh
-export PS4='+(${BASH_SOURCE}:${LINENO}): ${FUNCNAME[0]:+${FUNCNAME[0]}(): }'
+# Set the default number of commits to 10
+num_commits="${1:-10}"
 
-# Set new line and tab for word splitting
-IFS=$'\n\t'
+# Get the remote URL for the current Git repository
+remote_url=$(git remote get-url origin)
 
-# Grab current repo name
-repo=$(basename $(git rev-parse --show-toplevel))
-org=Piotr1215
+# Get the git log
+git_log_output=$(git log --oneline --decorate=short -n "$num_commits" 2>&1)
+exit_status=$?
 
-# Take last 10 commits and wrap them in https
-# git log --pretty="%H| - %s" | grep -v Merge | grep -v chore | head -n 10 | sed 's/\(.*|\)/- [&]\(https:\/\/github.com\/'$org'\/'$repo'\/&\)/g' | sed 's/|//g'
+# If git log exits with a non-zero status, exit the script with an error
+if [ $exit_status -ne 0 ]; then
+	echo "ERROR: ${git_log_output}"
+	exit 1
+fi
 
-git log --pretty="%H - %s" |
-	awk -F" - " -vSHORT=8 -vORG="$org" -vREPO="$repo" \
-		'/Merge/ || /chore/ { next }
-		++i > 10 {exit}
-		{printf "- [%s](https://github.com/%s/%s/%s) - %s\n", substr($1, 1, SHORT), ORG, REPO, $1, $2}'
+# Process the git log output
+processed_git_log=$(echo "${git_log_output}" | awk -v remote_url="${remote_url}" '{ gsub(/^[a-z0-9]+/, "&@"); printf "- [%s](%s/%s) - %s\n", substr($1, 1, 7), remote_url, substr($1, 1, 40), substr($0, index($0,$2)) }')
+
+# Print the processed git log
+echo -e "${processed_git_log}"
