@@ -1,24 +1,33 @@
 ## Shell
 
-Ctrl + U            – remove from the cursor to the start of the line.
-Ctrl + K            – cut from the cursor to the end of the line.
-Ctrl + W            – cut from the cursor to the start of the preceding word.<- LEFT
-Ctrl + Y            - paste last copied word from the clipboard
-Ctrl + q            - when a command is already typed, move it to buffer, clear command line and execute another one before
-Alt  + D            – "remove from the cursor to the end of the next word."
-Ctrl + L            – clear the terminal.
-Ctrl + A            - go to the beginning of the line
-Ctrl + E            - go to the end of the line
-Alt  + B            - go back one word
-Alt  + F            - go forward one word
-Ctrl + XX           - switch between beginning of the line and current position
-Ctrl + XE           - edit current command in default editor
+Ctrl + U             - remove from the cursor to the start of the line.
+Ctrl + K             - cut from the cursor to the end of the line.
+Ctrl + W             - cut from the cursor to the start of the preceding word.<- LEFT
+Ctrl + Y             - paste last copied word from the clipboard
+Ctrl + q             - when a command is already typed, move it to buffer, clear command line and execute another one before
+Alt  + D             - "remove from the cursor to the end of the next word."
+Ctrl + L             - clear the terminal.
+Ctrl + A             - go to the beginning of the line
+Ctrl + E             - go to the end of the line
+Alt  + B             - go back one word
+Alt  + F             - go forward one word
+Ctrl + XX            - switch between beginning of the line and current position
+Ctrl + XE            - edit current command in default editor
 dult  + T            - swap the current word with the previous word
-Ctrl + T            - swap 2 characters places
-Alt  + .            - repeat last argument of previous command, same as !$
-Ctrl + Shift + _    - undo last keystroke in command
-!*                  - all arguments of previous function except first
-!$                  - last argument of previous call
+Ctrl + T             - swap 2 characters places
+Alt  + .             - repeat last argument of previous command, same as !$
+Ctrl + Shift + _     - undo last keystroke in command
+!*                   - all arguments of previous function except first
+!$                   - last argument of previous call
+$0                   - the name of the current shell script or program.
+$1, $2, $3, ...      - the positional parameters passed to the shell script or function.
+$#                   - the number of positional parameters passed to the shell script or function.
+$@                   - all the positional parameters passed to the shell script or function, individually quoted.
+$*                   - all the positional parameters passed to the shell script or function, as a single, space-separated string.
+$?                   - the exit status of the last executed command.
+$$                   - the process ID of the current shell.
+$!                   - the process ID of the last executed background command.
+$IFS                 - the internal field separator, used to separate words in a string.
 
 ## Tmux
 Ctrl +b, Alt + 1    - change panes to vertical position
