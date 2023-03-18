@@ -1,0 +1,27 @@
+# .github/workflows/test_workflow.yml
+name: Run Tests
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  run-tests:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Check out repository
+      uses: actions/checkout@v2
+
+    - name: Set up Bash
+      run: |
+        echo "BASH_VERSION=$(bash --version)" >> $GITHUB_ENV
+
+    - name: Run tests
+      working-directory: scripts
+      run: bash __detect_os_tests.sh
+
