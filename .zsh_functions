@@ -180,7 +180,7 @@ function checkfetch() {
 
 # Display list of shortcuts in color using less
 function key() {
-  cat --color=always ${HOME}/shortcuts.md | less -i -R
+  bat --color=always ${HOME}/shortcuts.md | less -i -R
 }
 
 # Open a debugging shell within a Kubernetes pod
