@@ -8,9 +8,8 @@
       "# The set -u referencing a previously undefined  variable - with the exceptions of \\$* and \\$@ - is an error",
       "# The set -o pipefaile if any command in a pipeline fails, that return code will be used as the return code of the whole pipeline",
       "# https://bit.ly/37nFgin",
-      "set -euo pipefail\n",
-      "# Add source and line number wher running in debug mode: bash -xv $TM_FILENAME",
-      "export PS4='+(\\${BASH_SOURCE}:\\${LINENO}): \\${FUNCNAME[0]:+\\${FUNCNAME[0]}(): }'\n",
+      "set -eo pipefail\n",
+      "# Add source and line number wher running in debug mode: __run_with_xtrace.sh $TM_FILENAME",
       "# Set new line and tab for word splitting",
       "IFS=\\$'\\n\\t'\n\n"
     ],
