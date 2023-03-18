@@ -1,8 +1,8 @@
 source ~/scripts/__reusable_variables.sh
 
+# dynamic prefix variable using prefix_separator
 function testme ()
 {
-# dynamic prefix variable using prefix_separator
 prefix="${1:+$1$prefix_separator}"
 echo ${prefix}
 }
@@ -70,14 +70,29 @@ function ytd() {
     youtube-dl -o "~/music/%(title)s.%(ext)s"  $link --no-playlist &
 }
 
-# Copy current working directory path to clipboard
+# Copy the current working directory path to the clipboard
 function cpa() {
-    printf $PWD | xclip -selection primary 
+    if command -v xclip > /dev/null; then
+        printf "%s" "$PWD" | xclip -selection clipboard
+        printf "%s\n" "Current working directory ('$(basename "$PWD")') path copied to clipboard."
+    else
+        printf "%s\n" "Error: 'xclip' command not found. Please install 'xclip' to use this function."
+    fi
 }
 
-# Change directory to path stored in primary clipboard
+# Change the directory to the path stored in the clipboard
 function dpa() {
-    cd $(xclip -o -sel primary)
+    if command -v xclip > /dev/null; then
+        local target_dir
+        target_dir="$(xclip -o -sel clipboard)"
+        if [[ -d "${target_dir}" ]]; then
+            cd "${target_dir}" && printf "%s\n" "Changed directory to: ${target_dir}"
+        else
+            printf "%s\n" "Error: Invalid directory path or directory does not exist."
+        fi
+    else
+        printf "%s\n" "Error: 'xclip' command not found. Please install 'xclip' to use this function."
+    fi
 }
 
 # Add all changes to git, commit with given message, and push
