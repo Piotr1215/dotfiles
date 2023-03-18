@@ -43,7 +43,7 @@ run_test() {
 echo "Test case 1: M1"
 OSTYPE="darwin"
 mock_arch="arm64"
-run_test "M1"
+run_test "M2"
 
 echo "Test case 2: Mac (Intel)"
 OSTYPE="darwin"
