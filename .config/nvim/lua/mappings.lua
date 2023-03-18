@@ -13,7 +13,11 @@ utils.nmap("<nop>", "<Plug>Markdown_Fold") -- tab is for moving around only
 -- center screen after moving pageup or down
 utils.nmap("<c-d>", "<c-d>zz")
 utils.nmap("<c-u>", "<c-u>zz")
-utils.nmap(";", ":")
+utils.nmap(";;", ":", {silent = false})
+-- enter search and replace 
+utils.lnmap("sa", "ggVG")
+utils.lnmap("r", ":%s/\\v/g<left><left>", { silent = false })
+utils.lnmap("rc", ":g//yank A | call setreg('+', @A)<left><left><left><left><left><left><left><left><left><left><left><left><left><left><left><left><left><left><left><left><left><left><left><left><left><left><left><left><left><left>", { silent = false })
 -- j/k moves over virtual (wrapped) lines
 vim.api.nvim_set_keymap('n', 'k', "v:count == 0 ? 'gk' : 'k'", { noremap = true, expr = true, silent = true })
 vim.api.nvim_set_keymap('n', 'j', "v:count == 0 ? 'gj' : 'j'", { noremap = true, expr = true, silent = true })
@@ -182,7 +186,7 @@ utils.nmap('<leader>gl', ':r !bash ~/dev/dotfiles/scripts/__generate_git_log.sh<
 utils.nmap('<leader>df', ':NvimTreeToggle<CR>')
 utils.nmap('<Leader>da', ':NvimTreeFindFile<CR>')
 -- Save buffer
-utils.nmap('<leader>w', ':w<CR>')
+utils.nmap('<leader>w', ':wall<CR>')
 -- jj in insert mode instead of ESC
 utils.imap('jj', '<Esc>')
 utils.imap('jk', '<Esc>')
