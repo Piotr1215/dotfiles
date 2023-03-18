@@ -8,12 +8,16 @@ vim.g.maplocalleader = " "
 -- MOVE AROUND --
 utils.lnmap("wa", ":wqa<cr>")
 utils.lnmap("qa", ":qa!<cr>")
+utils.lnmap(";q", ":qa<cr>")
+utils.lnmap(";w", ":wqa<cr>")
+utils.lnmap(";e", ":!bash % ", { silent = false })
 utils.nmap("<tab>", ":wincmd w<cr>")
 utils.nmap("<nop>", "<Plug>Markdown_Fold") -- tab is for moving around only
 -- center screen after moving pageup or down
 utils.nmap("<c-d>", "<c-d>zz")
 utils.nmap("<c-u>", "<c-u>zz")
 utils.nmap(";;", ":", {silent = false})
+utils.vmap(";;", ":", {silent = false})
 -- enter search and replace 
 utils.lnmap("sa", "ggVG")
 utils.lnmap("r", ":%s/\\v/g<left><left>", { silent = false })
