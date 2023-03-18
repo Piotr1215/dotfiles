@@ -1,4 +1,3 @@
-
 # Global aliases
 alias -g C='| xsel --clipboard'
 alias -g G='| grep -i --color=always'
