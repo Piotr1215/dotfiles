@@ -1,11 +1,23 @@
 source ~/scripts/__reusable_variables.sh
 
+# Restart a tmuxinator session
+function mst ()
+{
+  if [[ -z $1 ]]; then
+   echo "Provide tmuxinator session to stop" 
+  fi
+
+  tmuxinator stop "$1"
+  tmuxinator start poke
+}
+
 # dynamic prefix variable using prefix_separator
 function testme ()
 {
 prefix="${1:+$1$prefix_separator}"
 echo ${prefix}
 }
+
 # Creates a folder named with the current or prefixed date, using the format "prefix-YYYY-MM-DD" if a prefix is provided.
 function mkdd ()
 {
@@ -219,3 +231,4 @@ function ghprview ()
       gh pr view -R "upbound/$repo" "$pr_nr" --web
     fi  
 }
+
