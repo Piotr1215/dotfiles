@@ -77,7 +77,6 @@ alias lvim='nvim -c "normal '\''0"'
 alias mvim='vim $(git ls-files -m)'
 alias lzd='docker run --rm -it -v /var/run/docker.sock:/var/run/docker.sock -v /config/lazydocker:/.config/jesseduffield/lazydocker lazyteam/lazydocker'
 alias ms="tmuxinator start" 
-alias mst="tmuxinator stop" 
 alias relog="DISPLAY=:0 gnome-session-quit --force"
 alias rest='shutdown now'
 alias revive='shutdown -r now'

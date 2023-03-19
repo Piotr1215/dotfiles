@@ -54,6 +54,7 @@ setopt bang_hist                # !keyword
 HISTFILE=${ZDOTDIR:-$HOME}/.zsh_history
 
 source $ZSH/oh-my-zsh.sh
+source ~/.oh-my-zsh/plugins/tmuxinator/_mst 
 autoload -U compinit && compinit
 
 # Add nix shell to prompt if in nix env
