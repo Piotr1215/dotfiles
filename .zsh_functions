@@ -1,5 +1,39 @@
 source ~/scripts/__reusable_variables.sh
 
+function plink ()
+{
+  link=$(xclip -o -sel clipboard)
+  desc="$*"
+  if [[ -z $desc ]]; then
+   echo "Provide description for link" 
+   return 1
+  fi
+
+  if [[ -z $link ]]; then
+   echo "Provide url to link" 
+   return 1
+  fi
+
+  if [[ $link =~ ^https?:// ]]; then
+    echo "Linking $link"
+    command_name="xdg-open \\\"$link\\\""
+    description="Link to $desc"
+
+    # Use expect to interact with pet new
+    /usr/bin/expect <<EOF
+      spawn pet new
+      expect "Command>"
+      send "${command_name}\r"
+      expect "Description>"
+      send "${description}\r"
+      expect eof
+EOF
+  else
+    echo "Not a valid url"
+    return 1
+  fi
+}
+
 # Restart a tmuxinator session
 function mst ()
 {
