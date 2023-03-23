@@ -81,10 +81,8 @@ function search_dev()
 end
 
 local default_opts = { noremap = true, silent = true }
-vim.api.nvim_set_keymap('v', '<leader>fsd', 'y<ESC>:Telescope live_grep default_text=<c-r>0<CR> search_dirs={cwd=/home/decoder/dev/}',
-  default_opts)
-vim.api.nvim_set_keymap('v', '<leader>fs', 'y<ESC>:Telescope live_grep default_text=<c-r>0<CR> search_dirs={"$PWD"}',
-  default_opts)
+vim.api.nvim_set_keymap('v', '<leader>fsd', 'y<ESC>:Telescope live_grep_args default_text="<c-r>0<CR>a" /home/decoder/dev"', default_opts)
+vim.api.nvim_set_keymap('v', '<leader>fs', 'y<ESC>:Telescope live_grep default_text=<c-r>0<CR> search_dirs={"$PWD"}', default_opts)
 vim.api.nvim_set_keymap('n', "<leader>tm", ":lua require('telescope').extensions.tmuxinator.projects{}<CR>", default_opts)
 
 local key = vim.api.nvim_set_keymap
