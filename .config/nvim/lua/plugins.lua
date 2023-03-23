@@ -14,6 +14,8 @@ return require('packer').startup(function(use)
   -- Packer
   use 'wbthomason/packer.nvim'
   -- AI {{{
+
+  use 'github/copilot.vim'
   use({
   "jackMort/ChatGPT.nvim",
     config = function()
