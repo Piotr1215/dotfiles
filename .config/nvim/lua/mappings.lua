@@ -36,6 +36,13 @@ utils.vmap("<S-PageUp>", ":m '<-2<CR>gv=gv")   -- Move Line Up in Visual Mode
 utils.nmap("<leader>k", ":m .-2<CR>==")        -- Move Line Up in Normal Mode
 utils.nmap("<leader>j", ":m .+1<CR>==")        -- Move Line Down in Normal Mode
 
+-- CHAT GPT KEYMAPS --
+utils.lnmap("c", ":ChatGPT<cr>")
+utils.lnmap("ca", ":ChatGPTActAs<cr>")
+utils.lnmap("co", ":ChatGPTCompleteCode<cr>")
+utils.lnmap("ce", ":ChatGPTEditWithInstructions<cr>")
+utils.lnmap("cr", ":ChatGPTRunCustomCodeAction<cr>")
+
 -- SEARCH & REPLACE --
 utils.nmap("<Leader>em", ":/\\V\\c\\<\\>") -- find exact match
 vim.keymap.set("n", "J", "mzJ`z")
@@ -177,7 +184,7 @@ utils.lnmap('cx', ':!chmod +x %<cr>')
 utils.nmap('<Leader>son', ':setlocal spell spelllang=en_us<CR>')
 utils.nmap('<Leader>sof', ':set nospell<CR>')
 -- Accept first grammar correction
-utils.nmap('<Leader>c', '1z=')
+-- utils.nmap('<Leader>c', '1z=')
 -- Upload selected to ix.io
 utils.vmap('<Leader>pb', "w !bash share<CR>")
 -- setup mapping to call :LazyGit
