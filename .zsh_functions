@@ -108,12 +108,12 @@ function copyname() {
 function ytd() {
     link=$(xsel -ob)
 
-    if [[ "$link" != *"youtu.be"* ]]; then
+    if [[ "$link" != *"youtu"*  ]]; then
         echo "This is not the right format, copy again"
         return 1 2>/dev/null
     fi
 
-    youtube-dl -o "~/music/%(title)s.%(ext)s"  $link --no-playlist &
+     yt-dlp -o "~/music/%(title)s.%(ext)s"  $link --no-playlist &
 }
 
 # Copy the current working directory path to the clipboard
