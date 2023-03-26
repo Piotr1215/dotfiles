@@ -48,8 +48,5 @@ windows:
   - slides:
       layout: even-horizontal
       panes:
-        - cd 2022-12-15 && slides slides.md
-  - vim:
-      layout: tiled
-      panes:
-          - vim -c "SLoad arch"
+        # Change subdirectory to the newest for convinience
+        - cd $(exa --only-dirs --sort=created | tail -n1 | tr -d '\n')
