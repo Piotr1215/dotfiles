@@ -304,7 +304,7 @@ utils.lnmap("f0", "<cmd>FIX -1<cr>")
 -- Obsidian
 utils.vmap("ol", ":ObsidianLink<cr>")
 utils.lnmap("oq", ":ObsidianQuickSwitch<cr>")
-utils.lnmap("on", ":ObsidianNew")
+utils.lnmap("on", ":ObsidianNew ", { silent = false })
 utils.lnmap("os", ":ObsidianSearch<cr>")
 vim.keymap.set(
   "n",
