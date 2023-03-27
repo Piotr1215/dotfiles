@@ -177,8 +177,10 @@ utils.nmap('<leader>fmt', ':Pretty<CR>')
     --end, { silent = true, noremap = true, desc = 'toggle signature' })
 -- EXTERNAL --
 -- Execute line under cursor in shell
-utils.nmap('<leader>ex', ':exec \'!\'.getline(\'.\')<CR>')
-utils.nmap('<leader>eX', ':%w !bash<cr>')
+utils.nmap('<leader>ex', ':.w !bash -e <cr>') -- execute current line and output to command line
+utils.nmap('<leader>eX', ':%w !bash -e <cr>') -- exexute all lines and output to command line
+utils.nmap('<leader>el', ':.!bash -e <cr>', {silent = false}) -- execute current line and replace with result
+utils.nmap('<leader>eL', ':% !bash % <cr>') -- execute all lines and replace with result
 utils.lnmap('cx', ':!chmod +x %<cr>')
 -- Set spellcheck on/off
 utils.nmap('<Leader>son', ':setlocal spell spelllang=en_us<CR>')
