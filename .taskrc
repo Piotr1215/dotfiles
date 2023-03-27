@@ -49,7 +49,7 @@ report.current.description=List of current tasks in the work context
 report.current.columns=id,entry.age,priority,project,tags,description.desc,entry,due.relative,follow
 report.current.labels=ID,Age,P,Proj,Tag,Desc,Created,Due,Follow
 report.current.sort=entry+,project+
-report.current.filter=status:pending
+report.current.filter=status:pending -idea
 
 context.work.read=+work
 context.work.write=+work
