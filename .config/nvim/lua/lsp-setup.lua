@@ -11,7 +11,6 @@ require("dapui").setup()
       border = "rounded"
     }
   })
-
 local on_attach = function(_, bufnr)
   -- Create some shortcut functions.
   -- NOTE: The `vim` variable is supplied by Neovim.
@@ -83,6 +82,7 @@ require('go').setup({
   on_attach = on_attach
 })
 local lspconfig = require 'lspconfig'
+lspconfig.pyright.setup {}
 local configs = require 'lspconfig.configs'
 -- Check if it's already defined for when reloading this file.
 configs.up = {
