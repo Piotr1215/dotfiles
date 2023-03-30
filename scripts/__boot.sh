@@ -25,6 +25,7 @@ move_alacritty_to_hdmi_0() {
 	done
 	wmctrl -r Alacritty -e 0,1920,0,-1,-1
 	WID=$(xdotool search --onlyvisible --classname Alacritty | head -1)
+	sleep 3
 	xdotool windowactivate --sync $WID
 	xdotool windowraise $WID
 }
