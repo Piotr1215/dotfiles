@@ -132,10 +132,27 @@ function pet-select() {
 }
 
 zle -N pet-select
-stty -ixon
 bindkey '^s' pet-select
-bindkey -s '^f' "f\n"
+
+function zoxider() {
+  BUFFER=$(zoxide query -i)
+  zle accept-line
+}
+
+zle -N zoxider
+bindkey '^j' zoxider
+
+function f_enter() {
+  BUFFER="f"
+  zle accept-line
+}
+
+zle -N f_enter
+bindkey '^f' f_enter
+
 bindkey '^@' autosuggest-accept
+
+stty -ixon
 
 [[ /usr/local/bin/kubectl ]] && source <(kubectl completion zsh)
 [[ /usr/local/bin/kubecolor ]] && source <(kubecolor completion zsh)
