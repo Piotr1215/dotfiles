@@ -10,6 +10,7 @@ require('telescope').load_extension('bookmarks')
 require("telescope").load_extension('zoxide')
 require('telescope').load_extension('tmuxinator')
 require("telescope").load_extension("live_grep_args")
+require("telescope").load_extension('cmdline')
 
 require('telescope').setup {
   extensions = {
