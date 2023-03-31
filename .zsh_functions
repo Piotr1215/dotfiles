@@ -1,4 +1,4 @@
-source ~/scripts/__reusable_variables.sh
+source ~/dev/dotfiles/scripts/__reusable_variables.sh
 
 function plink ()
 {
