@@ -14,7 +14,6 @@ return require('packer').startup(function(use)
   -- Packer
   use 'wbthomason/packer.nvim'
   -- AI {{{
-
   use 'github/copilot.vim'
   use({
   "jackMort/ChatGPT.nvim",
@@ -49,13 +48,14 @@ return require('packer').startup(function(use)
     "windwp/nvim-autopairs",
     config = function() require("nvim-autopairs").setup {} end
   }
-  -- Packer
+  use { 'jonarrien/telescope-cmdline.nvim' }
   use {
 	"chrisgrieser/nvim-various-textobjs",
 	config = function () 
 		require("various-textobjs").setup({ useDefaultKeymaps = true })
 	end,
 }
+  use 'ThePrimeagen/harpoon'
   use 'RRethy/nvim-align'
   use 'vim-scripts/scrollfix'
   use {"shortcuts/no-neck-pain.nvim", tag = "*" } 
