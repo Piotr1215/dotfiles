@@ -65,6 +65,8 @@ if [[ $(uname -s) == Linux ]]; then
   prompt_nix_shell_setup
 fi
 
+  fpath=(${HOME}/.oh-my-zsh/completions/ $fpath)
+
 if [[ $(uname -s) == Linux ]]; then
   eval $(dircolors -p | sed -e 's/DIR 01;34/DIR 01;36/' | dircolors /dev/stdin)
 else
@@ -94,6 +96,7 @@ export PATH=$HOME/go/bin:$PATH
 export PATH=$HOME/go:$PATH
 export PATH=$PATH:/usr/local/go/bin
 export PATH=$PATH:$HOME/.istioctl/bin
+export PATH=$PATH:$HOME/dev/dotfiles/scripts
 export FONTCONFIG_PATH=/etc/fonts
 export EDITOR=nvim
 export GH_USER=Piotr1215
