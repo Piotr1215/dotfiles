@@ -140,37 +140,6 @@ vim.cmd(
      endfunction
      ]])
 
--- MARKDOWN --
--- Operations on Code Block
-vim.cmd(
-  [[
-     function! MarkdownCodeBlock(outside)
-         call search('```', 'cb')
-         if a:outside
-             normal! Vo
-         else
-             normal! j0Vo
-         endif
-         call search('```')
-         if ! a:outside
-             normal! k
-         endif
-     endfunction
-     ]])
-utils.omap('am', ':call MarkdownCodeBlock(1)<cr>')
-utils.xmap('am', ':call MarkdownCodeBlock(1)<cr>')
-utils.omap('im', ':call MarkdownCodeBlock(0)<cr>')
-utils.xmap('im', ':call MarkdownCodeBlock(0)<cr>')
--- Select visually x
-vim.keymap.set('n', 'v2', 'v3iw')
-vim.keymap.set('n', 'v3', 'v5iw')
-vim.keymap.set('n', 'v4', 'v7iw')
-vim.keymap.set('n', 'v5', 'v9iw')
-vim.keymap.set('n', '_', 'vg_')
-
--- Markdown Previev
-utils.nmap('<leader>mp', ':MarkdownPreview<CR>')
--- Fix Markdown Errors
 utils.nmap('<leader>fmt', ':Pretty<CR>')
 -- vim.keymap.set({ 'n' }, '<C-k>', function()       require('lsp_signature').toggle_float_win()
     --end, { silent = true, noremap = true, desc = 'toggle signature' })

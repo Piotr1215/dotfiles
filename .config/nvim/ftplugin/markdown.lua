@@ -19,31 +19,31 @@ iabbrev VV ↓
   false
 )
 
--- Operations on Code Block
-vim.cmd(
-  [[
-     function! MarkdownCodeBlock(outside)
-         call search('```', 'cb')
-         if a:outside
-             normal! Vo
-         else
-             normal! j0Vo
-         endif
-         call search('```')
-         if ! a:outside
-             normal! k
-         endif
-     endfunction
-     ]])
-utils.omap('am', ':call MarkdownCodeBlock(1)<cr>')
-utils.xmap('am', ':call MarkdownCodeBlock(1)<cr>')
-utils.omap('im', ':call MarkdownCodeBlock(0)<cr>')
-utils.xmap('im', ':call MarkdownCodeBlock(0)<cr>')
+-- Operations on Fenced Code Block
+function MarkdownCodeBlock(outside)
+  vim.cmd("call search('```', 'cb')")
+  if outside then
+    vim.cmd("normal! Vo")
+  else
+    vim.cmd("normal! j0Vo")
+  end
+  vim.cmd("call search('```')")
+  if not outside then
+    vim.cmd("normal! k")
+  end
+end
+
+utils.omap('am', '<Cmd>lua MarkdownCodeBlock(true)<CR>')
+utils.xmap('am', '<Cmd>lua MarkdownCodeBlock(true)<CR>')
+utils.omap('im', '<Cmd>lua MarkdownCodeBlock(false)<CR>')
+utils.xmap('im', '<Cmd>lua MarkdownCodeBlock(false)<CR>')
 
 -- MarkdownPreview settings
 vim.g.mkdp_browser = '/usr/bin/firefox'
 vim.g.mkdp_echo_preview_url = 0
+utils.nmap('<leader>mp', ':MarkdownPreview<CR>')
 
+-- MarkdownClipboardImage settings
 utils.nmap("<leader>mm", ":call mdip#MarkdownClipboardImage()<CR>")
 
 vim.api.nvim_buf_set_keymap(0, "v", ",wl", [[c[<c-r>"]()<esc>]], { noremap = false })
