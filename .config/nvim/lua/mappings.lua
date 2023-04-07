@@ -69,38 +69,24 @@ utils.lnmap('yi', ':set foldmethod=indent<CR>')
 -- The below mapping helps select from a register in the place of insert point
 utils.imap('<C-p>', '<C-o>:Telescope registers<cr><C-w>')
 -- Yank
+utils.lnmap('yl', '\"*yy') -- yank line to the clipboard buffer
 utils.nmap('<leader>dfil', ':%d<cr>') -- delete file content to black hole register
-utils.nmap('<leader>yf', ':%y<cr>') -- yank word under cusror to the clipboard buffer
+utils.nmap('<leader>yf', ':%y<cr>') -- yank file under cusror to the clipboard buffer
 utils.nmap('<leader>yw', '"+yiw') -- yank word under cusror to the clipboard buffer
 utils.nmap('<leader>yW', '"+yiW') -- yank WORD under cusror to the clipboard buffer
 -- Paste
-utils.xmap("<leader>p", "\"_dP") -- paste the same yanked text into clipboard buffer
+utils.lnmap('pa', '\"*p') -- paste from clipboard buffer after the cursor
+utils.lnmap('p', '\"*P') -- paste from clipboard buffer before the cursor
 utils.nmap("<leader>1", '"0p') -- paste from 0 (latest yank)
 utils.nmap("<leader>2", '"*p') -- paste from 0 (latest yank)
 -- Substitute
 utils.nmap("<leader>sw", "\"_diwP") -- substitute current word with last yanked text
 utils.nmap("<leader>sW", "\"_diWP") -- substitute current WORD with last yanked text
-
 -- Delete
-utils.lnmap("d", "ma$mb`ad`bi") -- delete from cursor to end of line minus last character
+utils.lnmap('dl', '\"_dd') -- delete line to black hole register
+utils.xmap('<leader>d', '\"_d') -- delete selection to black hole register
 
---  default text objects mappings to store changed/deleted text in register named with the same letter. This works for words/WORDS and braces
-utils.nmap("ciw", "\"cciw")
-utils.nmap("ciW", "\"cciW")
-utils.nmap("caw", "\"ccaw")
-utils.nmap("caW", "\"cciW")
-
-utils.nmap("diw", "\"ddiw")
-utils.nmap("diW", "\"ddiW")
-utils.nmap("daw", "\"ddaw")
-utils.nmap("daW", "\"ddiW")
-
-utils.nmap("cib", "\"bcib")
-utils.nmap("cab", "\"bcab")
-utils.nmap("dib", "\"bdib")
-utils.nmap("dab", "\"bdab")
-
--- select last pasted text
+-- select pasted text
 utils.nmap("gp", "`[v`]")
 -- useful for passing over braces and quotations
 utils.imap("<C-l>", "<C-o>a")
