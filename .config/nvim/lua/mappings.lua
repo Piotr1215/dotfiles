@@ -21,7 +21,6 @@ utils.vmap(";;", ":", {silent = false})
 -- enter search and replace 
 utils.lnmap("sa", "ggVG")
 utils.lnmap("r", ":%s/\\v/g<left><left>", { silent = false })
-utils.lnmap("rc", ":g//yank A | call setreg('+', @A)<left><left><left><left><left><left><left><left><left><left><left><left><left><left><left><left><left><left><left><left><left><left><left><left><left><left><left><left><left><left>", { silent = false })
 -- j/k moves over virtual (wrapped) lines
 vim.api.nvim_set_keymap('n', 'k', "v:count == 0 ? 'gk' : 'k'", { noremap = true, expr = true, silent = true })
 vim.api.nvim_set_keymap('n', 'j', "v:count == 0 ? 'gj' : 'j'", { noremap = true, expr = true, silent = true })
