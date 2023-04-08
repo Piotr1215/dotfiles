@@ -35,3 +35,23 @@ end
 
 create_word_selection_mappings()
 
+-- Custom f command function
+-- This is needed because ;; is mapped to enter command mode
+vim.cmd([[
+function! CustomF(backwards)
+  let l:char = nr2char(getchar())
+  if a:backwards
+    execute "normal! F" . l:char
+  else
+    execute "normal! f" . l:char
+  endif
+  nnoremap ; ;
+  vnoremap ; ;
+endfunction
+]])
+
+-- Map f to the custom f command function so that pressing f and ; works as expected
+vim.api.nvim_set_keymap("n", "f", ":call CustomF(0)<CR>", {})
+vim.api.nvim_set_keymap("v", "f", ":call CustomF(0)<CR>", {})
+vim.api.nvim_set_keymap("n", "F", ":call CustomF(1)<CR>", {})
+vim.api.nvim_set_keymap("v", "F", ":call CustomF(1)<CR>", {})
