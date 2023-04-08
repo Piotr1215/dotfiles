@@ -35,26 +35,3 @@ end
 
 create_word_selection_mappings()
 
-function _G.generate_mappings_command(action, inner_outer, text_object)
-  local register = string.lower(action)
-  return '"' .. register .. action .. inner_outer .. text_object
-end
-
-function _G.generate_mappings(action, inner_outer, text_object)
-  local command = _G.generate_mappings_command(action, inner_outer, text_object)
-  vim.api.nvim_set_keymap('n', action .. inner_outer .. text_object, command, {noremap = true})
-end
-
--- Generate the mappings for change and delete actions
-local actions = {'c', 'd'}
-local inner_outer = {'i', 'a'}
-local text_objects = {'w', 'W', ')', '.', 'b', 'q', 'p', '`', "'", '"'}
-
-for _, action in ipairs(actions) do
-  for _, io in ipairs(inner_outer) do
-    for _, text_object in ipairs(text_objects) do
-      _G.generate_mappings(action, io, text_object)
-    end
-  end
-end
-
