@@ -40,7 +40,7 @@ utils.lnmap("c", ":ChatGPT<cr>")
 utils.lnmap("ca", ":ChatGPTActAs<cr>")
 utils.lnmap("co", ":ChatGPTCompleteCode<cr>")
 utils.lnmap("ce", ":ChatGPTEditWithInstructions<cr>")
-utils.lnmap("cr", ":ChatGPTRunCustomCodeAction<cr>")
+utils.vmap("<leader>cr", ":ChatGPTRun ", { silent = false })
 
 -- SEARCH & REPLACE --
 utils.nmap("<Leader>em", ":/\\V\\c\\<\\>") -- find exact match
