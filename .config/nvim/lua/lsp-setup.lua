@@ -68,6 +68,7 @@ require "lsp_signature".on_attach({
 
   -- breakpoint
   buf_set_keymap('n', '<leader>tb', "<cmd>lua require('dap').toggle_breakpoint()<CR>", opts)
+  buf_set_keymap('n', '<leader>ds', ":Telescope lsp_document_symbols<CR>", opts)
 
   -- Floating terminal
   -- NOTE: Use `vim.cmd` since `buf_set_keymap` is not working with `tnoremap...`
@@ -83,6 +84,7 @@ require('go').setup({
 })
 local lspconfig = require 'lspconfig'
 lspconfig.pyright.setup {}
+lspconfig.lua_ls.setup {}
 local configs = require 'lspconfig.configs'
 -- Check if it's already defined for when reloading this file.
 configs.up = {
