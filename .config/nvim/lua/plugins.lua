@@ -1,8 +1,8 @@
 local ensure_packer = function()
   local fn = vim.fn
-  local install_path = fn.stdpath('data')..'/site/pack/packer/start/packer.nvim'
+  local install_path = fn.stdpath('data') .. '/site/pack/packer/start/packer.nvim'
   if fn.empty(fn.glob(install_path)) > 0 then
-    fn.system({'git', 'clone', '--depth', '1', 'https://github.com/wbthomason/packer.nvim', install_path})
+    fn.system({ 'git', 'clone', '--depth', '1', 'https://github.com/wbthomason/packer.nvim', install_path })
     vim.cmd [[packadd packer.nvim]]
     return true
   end
@@ -13,27 +13,43 @@ local packer_bootstrap = ensure_packer()
 return require('packer').startup(function(use)
   -- Packer
   use 'wbthomason/packer.nvim'
+  --
   -- AI {{{
   use 'github/copilot.vim'
   use({
-  "jackMort/ChatGPT.nvim",
+    "jackMort/ChatGPT.nvim",
     config = function()
       require("chatgpt").setup({
-          keymaps = {
-    close = { "<C-c>" },
-    submit = "<C-s>",
-    yank_last = "<C-y>",
-    yank_last_code = "<C-k>",
-    scroll_up = "<C-u>",
-    scroll_down = "<C-d>",
-    toggle_settings = "<C-o>",
-    new_session = "<C-n>",
-    cycle_windows = "<Tab>",
-    -- in the Sessions pane
-    select_session = "<Space>",
-    rename_session = "r",
-    delete_session = "d",
-  },
+        keymaps = {
+          close = { "<C-c>" },
+          submit = "<C-s>",
+          yank_last = "<C-y>",
+          yank_last_code = "<C-k>",
+          scroll_up = "<C-u>",
+          scroll_down = "<C-d>",
+          toggle_settings = "<C-o>",
+          new_session = "<C-n>",
+          cycle_windows = "<Tab>",
+          -- in the Sessions pane
+          select_session = "<Space>",
+          rename_session = "r",
+          delete_session = "d",
+          openai_params = {
+            model = "gpt-4",
+            frequency_penalty = 0,
+            presence_penalty = 0,
+            max_tokens = 300,
+            temperature = 0.5,
+            top_p = 1,
+            n = 1,
+          },
+          openai_edit_params = {
+            model = "code-davinci-edit-001",
+            temperature = 0,
+            top_p = 1,
+            n = 1,
+          },
+        },
       })
     end,
     requires = {
@@ -41,7 +57,7 @@ return require('packer').startup(function(use)
       "nvim-lua/plenary.nvim",
       "nvim-telescope/telescope.nvim"
     }
-})
+  })
   -- }}}
   -- Editor Extensions {{{
   use {
@@ -50,15 +66,15 @@ return require('packer').startup(function(use)
   }
   use { 'jonarrien/telescope-cmdline.nvim' }
   use {
-	"chrisgrieser/nvim-various-textobjs",
-	config = function () 
-		require("various-textobjs").setup({ useDefaultKeymaps = true })
-	end,
-}
+    "chrisgrieser/nvim-various-textobjs",
+    config = function()
+      require("various-textobjs").setup({ useDefaultKeymaps = true })
+    end,
+  }
   use 'ThePrimeagen/harpoon'
   use 'RRethy/nvim-align'
   use 'vim-scripts/scrollfix'
-  use {"shortcuts/no-neck-pain.nvim", tag = "*" } 
+  use { "shortcuts/no-neck-pain.nvim", tag = "*" }
   use 'stevearc/oil.nvim'
   use 'echasnovski/mini.nvim'
   use 'mattn/emmet-vim'
@@ -106,7 +122,7 @@ return require('packer').startup(function(use)
     requires = {
       'nvim-tree/nvim-web-devicons', -- optional, for file icon
     },
-    tag = 'nightly' -- optional, updated every week. (see issue #1193)
+    tag = 'nightly'                  -- optional, updated every week. (see issue #1193)
   }
   -- }}}
   -- Telescope {{{
@@ -215,12 +231,14 @@ return require('packer').startup(function(use)
   use 'ixru/nvim-markdown'
   use 'dhruvasagar/vim-open-url'
   use 'marcelofern/vale.nvim'
-  use({ "iamcco/markdown-preview.nvim",
+  use({
+    "iamcco/markdown-preview.nvim",
     run = "cd app && npm install",
     setup = function()
       vim.g.mkdp_filetypes = { "markdown" }
     end,
-    ft = { "markdown" }, })
+    ft = { "markdown" },
+  })
   use 'weirongxu/plantuml-previewer.vim'
   -- }}}
   -- Look & Feel {{{
