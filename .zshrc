@@ -145,6 +145,14 @@ function zoxider() {
 zle -N zoxider
 bindkey '^j' zoxider
 
+function sessionizer_enter() {
+  BUFFER="__sessionizer.sh"
+  zle accept-line
+}
+
+zle -N sessionizer_enter
+bindkey '^x' sessionizer_enter
+
 function f_enter() {
   BUFFER="f"
   zle accept-line
