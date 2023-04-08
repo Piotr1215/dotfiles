@@ -84,7 +84,16 @@ require('go').setup({
 })
 local lspconfig = require 'lspconfig'
 lspconfig.pyright.setup {}
-lspconfig.lua_ls.setup {}
+lspconfig.lua_ls.setup {
+      settings = {
+        Lua = {
+            diagnostics = {
+                globals = { 'vim' }
+            }
+        }
+    }
+}
+
 local configs = require 'lspconfig.configs'
 -- Check if it's already defined for when reloading this file.
 configs.up = {
