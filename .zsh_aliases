@@ -29,6 +29,7 @@ alias lux-='lxc stop ubuntu'
 
 # Commands shadow
 alias cat='bat'
+alias lu=__launch_url.sh
 alias df=duf
 alias diff=colordiff
 alias fd='fd --hidden'

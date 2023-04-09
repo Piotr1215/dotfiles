@@ -1,13 +1,34 @@
 local dap, dapui = require("dap"), require("dapui")
 
-require 'packer'.startup(function()
-  use "mfussenegger/nvim-dap"
-end)
+require("dapui").setup({})
 
 dap.adapters.dockerfile = {
   type = 'executable';
   command = 'buildg';
   args = { 'dap', "serve" };
+}
+
+require('dap-go').setup {
+  -- :help dap-configuration
+  dap_configurations = {
+    {
+      -- Must be "go" or it will be ignored by the plugin
+      type = "go",
+      name = "Attach remote",
+      mode = "remote",
+      request = "attach",
+    },
+  },
+  -- delve configurations
+  delve = {
+    -- time to wait for delve to initialize the debug session.
+    -- default to 20 seconds
+    initialize_timeout_sec = 20,
+    -- a string that defines the port to start delve debugger.
+    -- default to string "${port}" which instructs nvim-dap
+    -- to start the process in a random available port
+    port = "${port}"
+  },
 }
 
 dap.adapters.lldb = {
@@ -31,6 +52,7 @@ dap.configurations.rust = {
     runInTerminal = false,
   },
 }
+
 dap.configurations.dockerfile = {
   {
     type = "dockerfile",
@@ -50,14 +72,3 @@ end
 dap.listeners.before.event_exited["dapui_config"] = function()
   dapui.close()
 end
-dap.configurations.go = {
-  {
-    type = 'go';
-    name = 'Debug';
-    request = 'launch';
-    showLog = false;
-    program = "${file}";
-    dlvToolPath = vim.fn.exepath('~/go/bin/dlv') -- Adjust to where delve is installed
-  },
-}
-
