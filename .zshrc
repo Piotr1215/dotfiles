@@ -80,8 +80,10 @@ source ~/.zsh_functions
 eval "$(direnv hook zsh)"
 
 # EXPORT & PATH
+export FZF_BASE=/usr/bin/fzf
 export FZF_DEFAULT_COMMAND='fd --hidden'
 export FZF_CTRL_T_COMMAND='fd --hidden'
+export FZF_ALT_C_COMMAND='fd --hidden'
 export VISUAL=nvim
 export PATH=/home/decoder/.nimble/bin:$PATH
 export KUBECONFIG=~/.kube/config
