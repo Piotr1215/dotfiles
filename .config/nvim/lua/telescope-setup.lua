@@ -110,6 +110,7 @@ local set_up_telescope = function()
   set_keymap('n', '<leader>fz', [[<cmd>lua require('telescope').extensions.zoxide.list()<CR>]])
   set_keymap('n', '<leader>fT', [[<cmd>lua require('telescope.builtin').tags{ only_current_buffer = true }<CR>]])
   set_keymap('n', '<leader>rg', [[<cmd>lua require('telescope.builtin').registers()<CR>]])
+  set_keymap('n', '<leader>?', [[<cmd>lua require('telescope.builtin').help_tags()<CR>]])
 end
 
 set_up_telescope()
