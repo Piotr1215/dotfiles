@@ -18,8 +18,7 @@ backup() {
 }
 
 symlink() {
-	stow . --restow --adopt
-}
+	for i in $(ls -d */ | sed 's/.$//'); do stow -t $HOME "$i"; done;}
 
 # For all files `$name` in the present folder except `*.sh`, `README.md`, `settings.json`,
 # and `config`, backup the target file located at `~/.$name` and symlink `$name` to `~/.$name`
