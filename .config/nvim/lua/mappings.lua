@@ -11,7 +11,6 @@ utils.lnmap("qa", ":qa!<cr>")
 utils.lnmap(";q", ":qa<cr>")
 utils.lnmap(";w", ":wqa<cr>")
 utils.lnmap(";e", ":!bash % ", { silent = false })
-utils.nmap("<tab>", ":wincmd w<cr>")
 utils.nmap("<nop>", "<Plug>Markdown_Fold") -- tab is for moving around only
 utils.lnmap("nh", "<Plug>Markdown_MoveToNextHeader") -- tab is for moving around only
 utils.lnmap("ph", "<Plug>Markdown_MoveToPreviousHeader") -- tab is for moving around only

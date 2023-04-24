@@ -79,7 +79,6 @@ require("no-neck-pain").setup({
   }
 })
 
-require('mini.ai').setup()
 require('oil').setup({
     view_options = {
     -- Show files and directories that start with "."
