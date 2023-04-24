@@ -13,6 +13,8 @@ utils.lnmap(";w", ":wqa<cr>")
 utils.lnmap(";e", ":!bash % ", { silent = false })
 utils.nmap("<tab>", ":wincmd w<cr>")
 utils.nmap("<nop>", "<Plug>Markdown_Fold") -- tab is for moving around only
+utils.lnmap("nh", "<Plug>Markdown_MoveToNextHeader") -- tab is for moving around only
+utils.lnmap("ph", "<Plug>Markdown_MoveToPreviousHeader") -- tab is for moving around only
 -- center screen after moving pageup or down
 utils.nmap("<c-d>", "<c-d>zz")
 utils.nmap("<c-u>", "<c-u>zz")
@@ -97,8 +99,8 @@ utils.imap("']", "<c-o>mA")
 -- Copy current file name
 utils.lnmap("cpf", ":let @+ = expand(\"%:p\")<cr>")
 -- insert 2 empty lines and go into inser mode
-utils.nmap("<leader>L", "O<ESC>O")
-utils.nmap("<leader>l", "o<cr>")
+utils.nmap("<leader>O", "O<ESC>O")
+utils.nmap("<leader>o", "o<cr>")
 
 -- Format with pretty
 utils.nmap("<C-f>", ":Pretty<CR>")
