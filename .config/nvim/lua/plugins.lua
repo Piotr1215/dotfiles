@@ -43,16 +43,17 @@ return require('packer').startup(function(use)
           frequency_penalty = 0,
           presence_penalty = 0,
           max_tokens = 300,
-          temperature = 0.3,
+          temperature = 0.5,
           top_p = 1,
           n = 1,
         },
         openai_edit_params = {
-          model = "code-davinci-edit-002",
+          model = "code-davinci-edit-001",
           temperature = 0,
           top_p = 1,
           n = 1,
         },
+        actions_paths = { "~/.config/chatgpt/actions.json" },
       })
     end,
     requires = {
