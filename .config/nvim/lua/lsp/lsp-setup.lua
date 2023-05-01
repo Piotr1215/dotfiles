@@ -42,53 +42,51 @@ local on_attach = function(_, bufnr)
 
   nmap('<leader>br', require('dap').toggle_breakpoint, 'Toggle Breakpoint')
   nmap('<leader>ac', "<cmd>lua require('lspsaga.codeaction').code_action()<CR>", 'Code Action')
-  vim.keymap.set({"n","v"}, "<leader>caa", "<cmd>Lspsaga code_action<CR>", { silent = true })
-
+  vim.keymap.set({ "n", "v" }, "<leader>caa", "<cmd>Lspsaga code_action<CR>", { silent = true })
 end
 
 local lspconfig = require 'lspconfig'
 lspconfig.pyright.setup {}
-lspconfig.luacheck.setup {}
 lspconfig.lua_ls.setup {
-      settings = {
-        Lua = {
-            diagnostics = {
-                globals = { 'vim' }
-            }
-        }
+  settings = {
+    Lua = {
+      diagnostics = {
+        globals = { 'vim' }
+      }
     }
+  }
 }
 
 local configs = require 'lspconfig.configs'
 -- Check if it's already defined for when reloading this file.
 configs.up = {
   default_config = {
-    cmd = { "up", "xpls", "serve" };
-    filetypes = { 'yaml' };
+    cmd = { "up", "xpls", "serve" },
+    filetypes = { 'yaml' },
     root_dir = lspconfig.util.root_pattern('crossplane.yaml')
-  };
+  },
 }
 
 -- require("lspconfig")['up'].setup({
-  -- lsp_on_attach = true
+-- lsp_on_attach = true
 -- })
 
 local capabilities = vim.lsp.protocol.make_client_capabilities()
 capabilities = require('cmp_nvim_lsp').default_capabilities()
 
-lspconfig.gopls.setup{
-	cmd = {'gopls'},
-	-- for postfix snippets and analyzers
-	capabilities = capabilities,
-	    settings = {
-	      gopls = {
-		      experimentalPostfixCompletions = true,
-		      analyses = {
-		        unusedparams = true,
-		        shadow = true,
-		     },
-		     staticcheck = true,
-		    },
-	    },
-	on_attach = on_attach,
+lspconfig.gopls.setup {
+  cmd = { 'gopls' },
+  -- for postfix snippets and analyzers
+  capabilities = capabilities,
+  settings = {
+    gopls = {
+      experimentalPostfixCompletions = true,
+      analyses = {
+        unusedparams = true,
+        shadow = true,
+      },
+      staticcheck = true,
+    },
+  },
+  on_attach = on_attach,
 }
