@@ -7,7 +7,7 @@ local goSettings = vim.api.nvim_create_augroup("Go Settings", { clear = true })
 vim.api.nvim_create_autocmd("BufWritePre", {
   pattern = "*.go",
   callback = function()
-   require('go.format').goimport()
+    require('go.format').goimport()
   end,
   group = goSettings,
 })
@@ -47,11 +47,13 @@ vim.api.nvim_create_autocmd("FileType", {
 })
 
 -- vim.api.nvim_create_autocmd({ "BufWinEnter" }, {
-  -- pattern = vim.fn.expand("$HOME").."/dev/obsidian/*/*.md",
-  -- command = "MarkdownPreview",
+-- pattern = vim.fn.expand("$HOME").."/dev/obsidian/*/*.md",
+-- command = "MarkdownPreview",
 -- })
 
-vim.api.nvim_create_autocmd({ "BufWritePost" }, {
+vim.cmd [[autocmd BufWritePre * lua vim.lsp.buf.format()]]
+
+vim.api.nvim_create_autocmd({ "bufwritepost" }, {
   pattern = { "*.sh" },
   command = "silent! !shfmt -l -w %",
 })
