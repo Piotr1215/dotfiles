@@ -48,6 +48,7 @@ end
 
 local lspconfig = require 'lspconfig'
 lspconfig.pyright.setup {}
+lspconfig.luacheck.setup {}
 lspconfig.lua_ls.setup {
       settings = {
         Lua = {
