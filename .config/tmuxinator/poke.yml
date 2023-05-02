@@ -48,4 +48,4 @@ windows:
   - poke:
       layout: main-vertical
       panes:
-        - ls
+        - fortune | cowsay
