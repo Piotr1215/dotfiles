@@ -59,6 +59,17 @@
       "  ${0}"
     ]
   },
+  "Composition clean base element": {
+    "prefix": "compcleanbase",
+    "scope": "yaml",
+    "description": "Composition clean base element with placeholders to fill in",
+    "body": [
+      "- name: ${1:resourceName}",
+      "  base:",
+      "    ${0}", 
+      "  patches:"
+    ]
+  },
   "Composition base element": {
     "prefix": "compbase",
     "scope": "yaml",
@@ -193,6 +204,18 @@
       "    - type: FromCompositeFieldPath",
       "      fromFieldPath: spec.parameters.service",
       "      toFieldPath: spec.forProvider.tags[service]"
+    ]
+  },
+  "Patch environment name to providerConfigRef name": {
+    "prefix": "patchenvtoprovider",
+    "scope": "yaml",
+    "description": "Patchset environment name to providerConfigRef name",
+    "body": [
+      "- name: environmentToProviderConfig",
+      "  patches:",
+      "    - type: FromCompositeFieldPath",
+      "      fromFieldPath: spec.parameters.environment",
+      "      toFieldPath: spec.providerConfigRef.name"
     ]
   },
   "Patch claim name to MR name": {
