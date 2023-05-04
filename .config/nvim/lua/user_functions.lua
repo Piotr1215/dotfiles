@@ -21,6 +21,7 @@ function _G.yank_matching_lines()
     end
   end
 end
+
 vim.api.nvim_set_keymap('n', '<Leader>ya', ':lua _G.yank_matching_lines()<CR>', { noremap = true, silent = true })
 
 function _G.create_word_selection_mappings()
@@ -55,3 +56,31 @@ vim.api.nvim_set_keymap("n", "f", ":call CustomF(0)<CR>", {})
 vim.api.nvim_set_keymap("v", "f", ":call CustomF(0)<CR>", {})
 vim.api.nvim_set_keymap("n", "F", ":call CustomF(1)<CR>", {})
 vim.api.nvim_set_keymap("v", "F", ":call CustomF(1)<CR>", {})
+
+function _G.process_task_list(...)
+  local args = { ... }
+  local modifiers = table.concat(args, " ")
+  local lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
+  local new_lines = {}
+
+  for _, line in ipairs(lines) do
+    local trimmed_line = line:gsub("^[•*%-%+]+%s*", "") -- Remove bullet points
+    if #trimmed_line > 0 then
+      if modifiers == "" then
+        table.insert(new_lines, "task add \"" .. trimmed_line .. "\"")
+      else
+        table.insert(new_lines, "task add " .. modifiers .. " \"" .. trimmed_line .. "\"")
+      end
+    else
+      table.insert(new_lines, "") -- Keep empty lines
+    end
+  end
+
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, new_lines)
+end
+
+vim.api.nvim_set_keymap('n', '<Leader>pt', ':lua _G.process_task_list()<CR>', { noremap = true, silent = true })
+
+vim.cmd([[
+  command! -nargs=* ProcessTasks :lua _G.process_task_list(<f-args>)
+]])
