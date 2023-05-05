@@ -72,3 +72,26 @@ cmp.setup.buffer {
     ghost_text = false,
   },
 }
+
+function BoldMe()
+  local start_pos = vim.fn.getpos("'<")
+  local end_pos = vim.fn.getpos("'>")
+  local start_line = start_pos[2]
+  local end_line = end_pos[2]
+  local start_col = start_pos[3]
+  local end_col = end_pos[3]
+
+  if end_line == start_line then
+    local line = vim.api.nvim_buf_get_lines(0, start_line - 1, start_line, false)[1]
+    local modified_line = line:sub(1, start_col - 1) ..
+        '**' .. line:sub(start_col, end_col) .. '**' .. line:sub(end_col + 1)
+    vim.api.nvim_buf_set_lines(0, start_line - 1, start_line, false, { modified_line })
+  else
+    local lines = vim.api.nvim_buf_get_lines(0, start_line - 1, end_line, false)
+    lines[1] = lines[1]:sub(1, start_col - 1) .. '**' .. lines[1]:sub(start_col)
+    lines[#lines] = lines[#lines]:sub(1, end_col) .. '**' .. lines[#lines]:sub(end_col + 1)
+    vim.api.nvim_buf_set_lines(0, start_line - 1, end_line, false, lines)
+  end
+end
+
+vim.api.nvim_buf_set_keymap(0, 'v', '<Leader>b', ':lua BoldMe()<CR>', { noremap = true, silent = true })
