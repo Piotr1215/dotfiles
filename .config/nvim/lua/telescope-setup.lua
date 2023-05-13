@@ -15,10 +15,10 @@ require("telescope").load_extension('cmdline')
 require('telescope').setup {
   extensions = {
     fzf = {
-      fuzzy = true, -- false will only do exact matching
+      fuzzy = true,                   -- false will only do exact matching
       override_generic_sorter = true, -- override the generic sorter
-      override_file_sorter = true, -- override the file sorter
-      case_mode = "smart_case", -- or "ignore_case" or "respect_case"
+      override_file_sorter = true,    -- override the file sorter
+      case_mode = "smart_case",       -- or "ignore_case" or "respect_case"
     },
     file_browser = {},
     emoji = {
@@ -37,7 +37,7 @@ require('telescope').setup {
         default = {
           keepinsert = true,
           action = function(selection)
-            builtin.find_files({ cwd = selection.path, find_command = {'rg', '--files', '--hidden', '-g', '!.git' }})
+            builtin.find_files({ cwd = selection.path, find_command = { 'rg', '--files', '--hidden', '-g', '!.git' } })
             -- builtin.find_files({ cwd = selection.path })
           end,
         },
@@ -53,7 +53,7 @@ require('telescope').setup {
         ["<C-f>"] = {
           keepinsert = true,
           action = function(selection)
-            builtin.find_files({ cwd = selection.path, find_command = {'rg', '--files', '--hidden', '-g', '!.git' }})
+            builtin.find_files({ cwd = selection.path, find_command = { 'rg', '--files', '--hidden', '-g', '!.git' } })
           end
         }
       }
@@ -68,22 +68,24 @@ t.load_extension('zoxide')
 -- For neovim's config directory
 function search_dev()
   local opts = {
-    prompt_title = "Dev", -- Title for the picker
-    shorten_path = false, -- Display full paths, short paths are ugly
-    cwd = "~/dev", -- Set path to directory whose files should be shown
-    file_ignore_patterns = { ".git", ".png", "tags" }, -- Folder/files to be ignored
-    initial_mode = "insert", -- Start in insert mode
-    selection_strategy = "reset", -- Start selection from top when list changes
+    prompt_title = "Dev",                                 -- Title for the picker
+    shorten_path = false,                                 -- Display full paths, short paths are ugly
+    cwd = "~/dev",                                        -- Set path to directory whose files should be shown
+    file_ignore_patterns = { ".git", ".png", "tags" },    -- Folder/files to be ignored
+    initial_mode = "insert",                              -- Start in insert mode
+    selection_strategy = "reset",                         -- Start selection from top when list changes
     theme = require("telescope.themes").get_dropdown({}), -- Theme to be used, can be omitted to use defaults
   }
 
--- Pass opts to find_files
+  -- Pass opts to find_files
   require("telescope.builtin").find_files(opts)
 end
 
 local default_opts = { noremap = true, silent = true }
-vim.api.nvim_set_keymap('v', '<leader>fsd', 'y<ESC>:Telescope live_grep_args default_text="<c-r>0<CR>a" /home/decoder/dev"', default_opts)
-vim.api.nvim_set_keymap('v', '<leader>fs', 'y<ESC>:Telescope live_grep default_text=<c-r>0<CR> search_dirs={"$PWD"}', default_opts)
+vim.api.nvim_set_keymap('v', '<leader>fsd',
+  'y<ESC>:Telescope live_grep_args default_text="<c-r>0<CR>a" /home/decoder/dev"', default_opts)
+vim.api.nvim_set_keymap('v', '<leader>fs', 'y<ESC>:Telescope live_grep default_text=<c-r>0<CR> search_dirs={"$PWD"}',
+  default_opts)
 vim.api.nvim_set_keymap('n', "<leader>tm", ":lua require('telescope').extensions.tmuxinator.projects{}<CR>", default_opts)
 
 local key = vim.api.nvim_set_keymap
@@ -108,7 +110,7 @@ local set_up_telescope = function()
   set_keymap('n', '<leader>re', [[<cmd>lua require('telescope.builtin').registers()<CR>]])
   set_keymap('n', '<leader>fc', [[<cmd>lua require('telescope.builtin').colorscheme()<CR>]])
   set_keymap('n', '<leader>fz', [[<cmd>lua require('telescope').extensions.zoxide.list()<CR>]])
-  set_keymap('n', '<leader>fT', [[<cmd>lua require('telescope.builtin').tags{ only_current_buffer = true }<CR>]])
+  set_keymap('n', '<leader>ft', ':TodoTelescope<CR>')
   set_keymap('n', '<leader>rg', [[<cmd>lua require('telescope.builtin').registers()<CR>]])
   set_keymap('n', '<leader>?', [[<cmd>lua require('telescope.builtin').help_tags()<CR>]])
 end
