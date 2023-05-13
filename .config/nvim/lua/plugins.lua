@@ -222,6 +222,7 @@ return require('packer').startup(function(use)
   use 'NoahTheDuke/vim-just'
   use 'ray-x/go.nvim'
   use 'ray-x/guihua.lua' -- recommended if need floating window support
+  use 'rmagatti/goto-preview'
   use 'hashivim/vim-terraform'
   use 'nvim-treesitter/nvim-treesitter-textobjects'
   -- }}}
@@ -250,7 +251,7 @@ return require('packer').startup(function(use)
   use 'uga-rosa/ccc.nvim'
   use { "ellisonleao/glow.nvim", branch = 'main' }
   use 'mhartington/formatter.nvim'
-  use 'sakshamgupta05/vim-todo-highlight'
+  use 'folke/todo-comments.nvim'
   use 'ryanoasis/vim-devicons'
   use 'xiyaowong/nvim-transparent'
   use 'bluz71/vim-moonfly-colors'
