@@ -5,6 +5,8 @@ require('mini.align').setup()
 
 require('go').setup()
 
+require('goto-preview').setup {}
+
 require 'mdeval'.setup({
   -- Don't ask before executing code blocks
   require_confirmation = false,
@@ -26,7 +28,7 @@ require("no-neck-pain").setup({
   width = 75,
   buffers = {
     colors = {
-     background = "tokyonight-moon",
+      background = "tokyonight-moon",
     },
     right = {
       enabled = false
@@ -35,7 +37,7 @@ require("no-neck-pain").setup({
 })
 
 require('oil').setup({
-    view_options = {
+  view_options = {
     -- Show files and directories that start with "."
     show_hidden = true,
   },
@@ -61,10 +63,11 @@ require("obsidian").setup({
     return tostring(suffix)
   end
 })
+require("todo-comments").setup {}
 
 require 'nvim-treesitter.configs'.setup {
   -- Add languages to be installed here that you want installed for treesitter
-  ensure_installed = {'go', 'lua', 'rust', 'typescript', 'help', 'markdown', 'markdown_inline' },
+  ensure_installed = { 'go', 'lua', 'rust', 'typescript', 'help', 'markdown', 'markdown_inline' },
 
   highlight = { enable = true },
   indent = {
@@ -112,7 +115,7 @@ require 'nvim-treesitter.configs'.setup {
       -- mapping query_strings to modes.
       selection_modes = {
         ['@parameter.outer'] = 'v', -- charwise
-        ['@function.outer'] = 'V', -- linewise
+        ['@function.outer'] = 'V',  -- linewise
         ['@class.outer'] = '<c-v>', -- blockwise
       },
       -- If you set this to `true` (default is `false`) then any textobject is
@@ -164,10 +167,10 @@ local prettier = require("prettier")
 
 require("which-key").setup({
   plugins = {
-    marks = true, -- shows a list of your marks on ' and `
-    registers = true, -- shows your registers on " in NORMAL or <C-r> in INSERT mode
+    marks = true,       -- shows a list of your marks on ' and `
+    registers = true,   -- shows your registers on " in NORMAL or <C-r> in INSERT mode
     spelling = {
-      enabled = true, -- enabling this will show WhichKey when pressing z= to select spelling suggestions
+      enabled = true,   -- enabling this will show WhichKey when pressing z= to select spelling suggestions
       suggestions = 20, -- how many suggestions should be shown in the list?
     },
   }
@@ -284,13 +287,13 @@ vim.g.startify_skiplist = {
   '^/tmp'
 }
 vim.g.startify_commands = {
-  { 'Help Features', 'h nvim-features' },
-  { 'Help Quickref', 'h quickref' },
-  { 'Edit Aliases', 'e ~/.zsh_aliases' },
-  { 'Edit Functions', 'e ~/.zsh_functions' },
+  { 'Help Features',        'h nvim-features' },
+  { 'Help Quickref',        'h quickref' },
+  { 'Edit Aliases',         'e ~/.zsh_aliases' },
+  { 'Edit Functions',       'e ~/.zsh_functions' },
   { 'Search Dev:   SPC fd', 'Telescope find_files search_dirs=~/dev,--hidden,--with-filename' },
   { 'Search Repos: SPC fr', 'lua require\'telescope\'.extensions.repo.list{search_dirs = {"~/dev"}}' },
-  { 'Ranger:       ALT o', 'RnvimrToggle' },
+  { 'Ranger:       ALT o',  'RnvimrToggle' },
   { 'Change Color: SPC fc', 'Telescope colorscheme' },
   { 'Pick Emoji:   SPC fm', 'Telescope emoji' }
 }
