@@ -282,3 +282,6 @@ vim.cmd([[
         imap <silent><script><expr> <C-s> copilot#Accept("\<CR>")
         let g:copilot_no_tab_map = v:true
 ]])
+
+-- GoTo Preview
+vim.keymap.set("n", "gtp", "<cmd>lua require('goto-preview').goto_preview_definition()<CR>", { noremap = true })
