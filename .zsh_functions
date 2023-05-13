@@ -79,6 +79,13 @@ function install_font ()
   fc-cache -vf
 }
 
+# Searches for a string in files using rga and fzf in case sensitive mode, and opens the file with nvim.
+function fifs() {
+    if [ ! "$#" -gt 0 ]; then echo "Need a string to search for!"; return 1; fi
+    local file
+    file="$(rga --max-count=1 --files-with-matches --no-messages "$*" | fzf-tmux +m --preview="rga --pretty --context 10 '"$*"' {}")"  && echo "opening $file" && nvim "$file" || return 1
+}
+
 # Searches for a string in files using rga and fzf, and opens the file with nvim.
 function fif() {
     if [ ! "$#" -gt 0 ]; then echo "Need a string to search for!"; return 1; fi
