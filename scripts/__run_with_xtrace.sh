@@ -20,14 +20,6 @@ if [ -z "$1" ]; then
 	exit 1
 fi
 
-function_exists() {
-	declare -F "$1" >/dev/null
-}
-
-script_exists() {
-	[ -f "$(which "$1")" ] && [ -x "$(which "$1")" ]
-}
-
 input_to_run="$1"
 shift
 
@@ -37,18 +29,4 @@ echo -e "${header}"
 
 export PS4='+(${LINENO}): ${FUNCNAME[0]:+${FUNCNAME[0]}(): } \t '
 
-if script_exists "$input_to_run"; then
-	BASH_XTRACEFD=2 bash -x "$input_to_run" "$@"
-elif function_exists "$input_to_run"; then
-	temp_script=$(mktemp)
-
-	echo "source ~/.zsh_functions" >>"$temp_script"
-	echo "${input_to_run} \"\$@\"" >>"$temp_script"
-
-	BASH_XTRACEFD=2 bash -x "$temp_script" "$@"
-
-	rm "$temp_script"
-else
-	echo "Error: '$input_to_run' not found as a script or function. Please provide a valid script file or function name."
-	exit 1
-fi
+BASH_XTRACEFD=2 bash -x "$input_to_run" "$@"
