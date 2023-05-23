@@ -44,6 +44,7 @@ require('oil').setup({
 })
 require("obsidian").setup({
   dir = "~/dev/obsidian/decoder",
+  disable_frontmatter = true,
   notes_subdir = "Notes",
   completion = {
     nvim_cmp = true, -- if using nvim-cmp, otherwise set to false
