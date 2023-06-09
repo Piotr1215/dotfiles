@@ -72,6 +72,7 @@ if [[ $(uname -s) == Linux ]]; then
 else
   export CLICOLOR=YES
   export LSCOLORS="Gxfxcxdxbxegedabagacad"
+  export TERM=alacritty
 fi
 
 # Source functions and aliases
