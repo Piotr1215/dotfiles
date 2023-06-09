@@ -73,6 +73,9 @@ else
   export CLICOLOR=YES
   export LSCOLORS="Gxfxcxdxbxegedabagacad"
   export TERM=alacritty
+  # This prevents the 'too many files error' when running PackerSync
+  ulimit -n 10240
+
 fi
 
 # Source functions and aliases
