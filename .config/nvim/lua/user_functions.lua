@@ -1,5 +1,20 @@
 local wk = require("which-key")
 
+function _G.toggle_function_folding()
+  if vim.wo.foldenable and vim.wo.foldmethod == "expr" then
+    print("Disabling folding")
+    vim.cmd('setlocal nofoldenable')
+    vim.cmd('setlocal foldmethod=manual')
+  else
+    print("Enabling folding")
+    vim.cmd('setlocal foldenable')
+    vim.cmd('setlocal foldmethod=expr')
+    vim.cmd([[setlocal foldexpr=getline(v:lnum)=~'^function\\s\\+\\w\\+\\s*()'?'a1':getline(v:lnum)=~'}'?'s1':'=']])
+  end
+end
+
+vim.cmd("command! Fold lua _G.toggle_function_folding()")
+
 function _G.yank_matching_lines()
   local search_pattern = vim.fn.getreg('/')
   if search_pattern ~= '' then
