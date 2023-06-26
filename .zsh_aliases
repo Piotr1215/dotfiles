@@ -51,11 +51,11 @@ alias kaf='kubectl apply -f'
 alias kdf='kubectl delete -f'
 
 # Other
-alias code=code-insiders
 alias addkey='eval $(ssh-agent) && ssh-add'
 alias adit='vim ~/.zsh_aliases'
 alias ai='~/dev/yolo-ai-cmdbot/yolo.py'
 alias clock="__clock.sh &"
+alias code=code-insiders
 alias cplcom="fc -ln -1 | tr -d '\n' | xsel --clipboard"
 alias dca='mux s dca'
 alias ddgit='web_search github'
@@ -95,6 +95,7 @@ alias tuid='task workdone'
 alias upinstall='curl -sL https://cli.upbound.io | sh'
 alias uxp="just ~/dev/dotfiles/scripts/uxp-setup/setup_infra"
 alias uxp-="just ~/dev/dotfiles/scripts/uxp-setup/teardown"
+alias vn='nvim /tmp/temp-$RANDOM.md'
 alias walp='__set_wallpaper.sh'
 alias wm='watch kubectl get managed'
 alias work='nohup firefox -P "Work" > /dev/null 2>&1 &'
