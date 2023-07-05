@@ -53,7 +53,7 @@ alias kdf='kubectl delete -f'
 # Other
 alias addkey='eval $(ssh-agent) && ssh-add'
 alias adit='vim ~/.zsh_aliases'
-alias ai='~/dev/yolo-ai-cmdbot/yolo.py'
+alias ai='/home/decoder/go/bin/aicmd'
 alias clock="__clock.sh &"
 alias code=code-insiders
 alias cplcom="fc -ln -1 | tr -d '\n' | xsel --clipboard"
