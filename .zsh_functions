@@ -197,12 +197,13 @@ function repo() {
         if [[ -d .git ]]; then
           echo "Fetching origin"
           git fetch origin
-                      create_tmux_session "${HOME}/dev/$repo"
           onefetch
         fi
+          create_tmux_session "${HOME}/dev/$repo"
     fi
 }
 
+# Create a new tmux session with the given path in the dev folder
 function create_tmux_session() {
     local RESULT="$1"
     zoxide add "$RESULT" &>/dev/null # add to zoxide database
