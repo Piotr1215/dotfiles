@@ -4,6 +4,12 @@ local api = vim.api
 local indentSettings = vim.api.nvim_create_augroup("IndentSettings", { clear = true })
 local goSettings = vim.api.nvim_create_augroup("Go Settings", { clear = true })
 
+vim.api.nvim_create_user_command(
+  'Pretty',
+  "Prettier",
+  { bang = true }
+)
+
 vim.api.nvim_create_autocmd("BufWritePre", {
   pattern = "*.go",
   callback = function()
@@ -38,6 +44,11 @@ vim.api.nvim_create_autocmd("FileType", {
 vim.api.nvim_create_autocmd("FileType", {
   pattern = { "bash" },
   command = "set foldmethod=manual",
+})
+
+vim.api.nvim_create_autocmd("bufwritepost", {
+  pattern = { "*.md" },
+  command = "Prettier",
 })
 
 vim.api.nvim_create_autocmd("FileType", {
@@ -153,12 +164,6 @@ vim.api.nvim_create_user_command(
   { bang = false }
 )
 
---Get diff for current file
-vim.api.nvim_create_user_command(
-  'Pretty',
-  "Prettier",
-  { bang = true }
-)
 
 vim.cmd [[
 function! WinMove(key)

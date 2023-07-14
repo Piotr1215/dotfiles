@@ -57,6 +57,8 @@ lspconfig.lua_ls.setup {
   }
 }
 
+require 'lspconfig'.marksman.setup {}
+
 local configs = require 'lspconfig.configs'
 -- Check if it's already defined for when reloading this file.
 configs.up = {
