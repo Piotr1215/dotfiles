@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+USE_POPUP=true
+if [ "$1" = "--no-popup" ]; then
+	USE_POPUP=false
+	shift # Remove --no-popup from the argument list
+fi
 
 if [ "$1" = "-h" ] || [ "$1" == "--help" ]; then # help argument
 	printf "\n"
@@ -59,7 +64,7 @@ if [ $# -eq 0 ]; then             # no argument provided
 					--prompt "$PROMPT"
 			)
 		fi
-	else # in tmux
+	elif $USE_POPUP; then # in tmux, and using popups
 		RESULT=$(
 			(tmux list-sessions -F '#S' && (zoxide query -l | sed -e "$HOME_REPLACER")) | fzf-tmux \
 				--bind "$DIR_BIND" \
@@ -69,6 +74,16 @@ if [ $# -eq 0 ]; then             # no argument provided
 				--header "$HEADER" \
 				--prompt "$PROMPT" \
 				-p 60%,50%
+		)
+	else # in tmux, but not using popups
+		RESULT=$(
+			(tmux list-sessions -F '#S' && (zoxide query -l | sed -e "$HOME_REPLACER")) | fzf \
+				--bind "$DIR_BIND" \
+				--bind "$SESSION_BIND" \
+				--bind "$ZOXIDE_BIND" \
+				--border-label "$BORDER_LABEL" \
+				--header "$HEADER" \
+				--prompt "$PROMPT"
 		)
 	fi
 else # argument provided
