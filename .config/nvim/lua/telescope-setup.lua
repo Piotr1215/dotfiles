@@ -13,6 +13,18 @@ require("telescope").load_extension("live_grep_args")
 require("telescope").load_extension('cmdline')
 
 require('telescope').setup {
+  defaults = {
+    vimgrep_arguments = {
+      'rg',
+      '--color=never',
+      '--no-heading',
+      '--with-filename',
+      '--line-number',
+      '--column',
+      '--smart-case',
+      '--hidden',
+    },
+  },
   extensions = {
     fzf = {
       fuzzy = true,                   -- false will only do exact matching
@@ -20,7 +32,9 @@ require('telescope').setup {
       override_file_sorter = true,    -- override the file sorter
       case_mode = "smart_case",       -- or "ignore_case" or "respect_case"
     },
-    file_browser = {},
+    file_browser = {
+      hidden = true,
+    },
     emoji = {
       action = function(emoji)
         vim.fn.setreg("*", emoji.value)
@@ -101,11 +115,12 @@ local set_up_telescope = function()
   set_keymap('n', '<leader>fw', [[<cmd>lua require('telescope').extensions.live_grep_args.live_grep_args()<CR>]])
   set_keymap('n', '<leader>fg', [[<cmd>lua require('telescope.builtin').git_files()<CR>]])
   set_keymap('n', '<leader>fo', [[<cmd>lua require('telescope.builtin').oldfiles()<CR>]])
-  set_keymap('n', '<leader>fi', ':Telescope file_browser<CR>')
+  set_keymap('n', '<leader>fi', ':Telescope file_browser hidden=true<CR>')
   set_keymap('i', '<C-e>', '<cmd>:Telescope symbols<CR>')
   set_keymap('n', '<leader>fe', [[<cmd>Telescope emoji<CR>]])
   set_keymap('n', '<leader>fsw', [[<cmd>lua require('telescope.builtin').grep_string({search_dirs = {"~/dev"}})<CR>]])
   set_keymap('n', '<leader>fb', [[<cmd>lua require('telescope.builtin').current_buffer_fuzzy_find()<CR>]])
+  set_keymap('n', '<leader>fh', [[<cmd>lua require('telescope.builtin').search_history()<CR>]])
   set_keymap('n', '<leader>gj', [[<cmd>lua require('telescope.builtin').jumplist()<CR>]])
   set_keymap('n', '<leader>re', [[<cmd>lua require('telescope.builtin').registers()<CR>]])
   set_keymap('n', '<leader>fc', [[<cmd>lua require('telescope.builtin').colorscheme()<CR>]])
