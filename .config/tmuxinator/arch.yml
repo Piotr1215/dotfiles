@@ -53,4 +53,4 @@ windows:
   - vim:
       layout: tiled
       panes:
-          - vim
+          - __open-file-git.sh
