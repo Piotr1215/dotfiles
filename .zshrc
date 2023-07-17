@@ -167,6 +167,14 @@ function f_enter() {
 zle -N f_enter
 bindkey '^f' f_enter
 
+function f_git_enter() {
+  BUFFER="__open-file-git.sh"
+  zle accept-line
+}
+
+zle -N f_git_enter
+bindkey '^o' f_git_enter
+
 bindkey '^@' autosuggest-accept
 
 stty -ixon
