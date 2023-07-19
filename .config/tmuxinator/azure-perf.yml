@@ -36,7 +36,7 @@ root: ~/dev/clusters/azure-perf
 # tmux_command: byobu
 
 # Specifies (by name or index) which window will be selected on project startup. If not set, the first window is used.
-# startup_window: git
+startup_window: vim
 
 # Specifies (by index) which pane of the specified window will be selected on project startup. If not set, the first pane is used.
 startup_pane: "1"
@@ -55,4 +55,4 @@ windows:
   - vim:
       layout: tiled
       panes:
-          - vim -c "SLoad azure-perf"
+          - __open-file-git.sh
