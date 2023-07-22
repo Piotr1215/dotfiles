@@ -29,13 +29,14 @@ alias lux-='lxc stop ubuntu'
 
 # Commands shadow
 alias cat='bat'
-alias lu=__launch_url.sh
+alias c=chatgpt-cli
 alias df=duf
 alias diff=colordiff
 alias fd='fd --hidden'
 alias it='cat ~/issue-template.md | xsel --clipboard'
 alias kk=/usr/bin/kubecolor
 alias lol=lolcat
+alias lu=__launch_url.sh
 alias mux=tmuxinator
 alias nv='neovide --multigrid --notabs'
 alias pfn='__print-functions.sh'
