@@ -1,5 +1,26 @@
 local wk = require("which-key")
 
+-- Store the zoom state
+local zoomed = false
+
+-- Function to toggle zoom
+function _G.toggle_zoom()
+  if zoomed then
+    vim.api.nvim_command('wincmd =')
+    zoomed = false
+  else
+    vim.api.nvim_command('wincmd _')
+    vim.api.nvim_command('wincmd |')
+    zoomed = true
+  end
+end
+
+-- Key mapping
+vim.api.nvim_set_keymap('n', '<leader>zw', ':lua toggle_zoom()<CR>', { noremap = true, silent = true })
+
+-- Key mapping
+vim.api.nvim_set_keymap('n', '<leader>zw', ':lua toggle_zoom()<CR>', { noremap = true, silent = false })
+
 function _G.toggle_function_folding()
   if vim.wo.foldenable and vim.wo.foldmethod == "expr" then
     print("Disabling folding")
