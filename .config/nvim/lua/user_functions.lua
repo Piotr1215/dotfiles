@@ -93,6 +93,21 @@ vim.api.nvim_set_keymap("v", "f", ":call CustomF(0)<CR>", {})
 vim.api.nvim_set_keymap("n", "F", ":call CustomF(1)<CR>", {})
 vim.api.nvim_set_keymap("v", "F", ":call CustomF(1)<CR>", {})
 
+function _G.my_custom_complete(arg_lead, cmd_line, cursor_pos)
+  -- This is your list of arguments.
+  local items = { "project:", "due:", "+next" }
+
+  -- Filter the items based on the argument lead.
+  local matches = {}
+  for _, item in ipairs(items) do
+    if item:find(arg_lead) == 1 then
+      table.insert(matches, item)
+    end
+  end
+
+  return matches
+end
+
 function _G.process_task_list(...)
   local args = { ... }
   local modifiers = table.concat(args, " ")
@@ -118,5 +133,5 @@ end
 vim.api.nvim_set_keymap('n', '<Leader>pt', ':lua _G.process_task_list()<CR>', { noremap = true, silent = true })
 
 vim.cmd([[
-  command! -nargs=* ProcessTasks :lua _G.process_task_list(<f-args>)
+  command! -nargs=* -complete=customlist,v:lua.my_custom_complete ProcessTasks :lua _G.process_task_list(<f-args>)
 ]])
