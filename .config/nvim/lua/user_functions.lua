@@ -18,8 +18,44 @@ end
 -- Key mapping
 vim.api.nvim_set_keymap('n', '<leader>zw', ':lua toggle_zoom()<CR>', { noremap = true, silent = true })
 
--- Key mapping
-vim.api.nvim_set_keymap('n', '<leader>zw', ':lua toggle_zoom()<CR>', { noremap = true, silent = false })
+local actions = require('telescope.actions')
+local action_state = require('telescope.actions.state')
+
+function _G.insert_file_path()
+  require('telescope.builtin').find_files({
+    cwd = '~/dev', -- Set the directory to search
+    attach_mappings = function(_, map)
+      map('i', '<CR>', function(prompt_bufnr)
+        local selected_file = action_state.get_selected_entry(prompt_bufnr).path
+        actions.close(prompt_bufnr)
+
+        -- Replace the home directory with ~
+        selected_file = selected_file:gsub(vim.fn.expand("$HOME"), "~")
+
+        -- Ask the user if they want to insert the full path or just the file name
+        local choice = vim.fn.input("Insert full path or file name? (n[ame]/p[ath]): ")
+        local text_to_insert
+        if choice == 'p' then
+          text_to_insert = selected_file
+        elseif choice == 'n' then
+          text_to_insert = vim.fn.fnamemodify(selected_file, ':t')
+        end
+
+        -- Move the cursor back one position if it's between quotes
+        local col = vim.fn.col('.') - 1
+        if vim.fn.getline('.')[col] == "'" or vim.fn.getline('.')[col] == '"' then
+          vim.fn.cursor(vim.fn.line('.'), col)
+        end
+
+        -- Insert the text at the cursor position
+        vim.api.nvim_put({ text_to_insert }, 'c', true, true)
+      end)
+      return true
+    end,
+  })
+end
+
+vim.api.nvim_set_keymap('i', '<M-i>', [[<Cmd>lua insert_file_path()<CR>]], { noremap = true, silent = true })
 
 function _G.toggle_function_folding()
   if vim.wo.foldenable and vim.wo.foldmethod == "expr" then
