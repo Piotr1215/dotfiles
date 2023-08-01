@@ -90,6 +90,7 @@ alias rm='rm -v'
 alias serve="browser-sync start -s -f . --no-notify --host localhost --port 5000"
 alias slack='fuzzpak slack 2>/dev/null &'
 alias sr='omz reload'
+alias tadi='~/dev/dotfiles/scripts/__create_task_idea.sh'
 alias tedit='vim ~/.tmux.conf'
 alias tuic='task current'
 alias tuid='task workdone'
