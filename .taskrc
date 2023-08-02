@@ -46,9 +46,9 @@ report.workdone.labels=ID,Proj,Desc,Done
 report.workdone.sort=end-\/,project+
 report.workdone.filter=status:completed
 report.current.description=List of current tasks in the work context
-report.current.columns=id,entry.age,priority,project,tags,description.desc,entry,due.relative,follow
+report.current.columns=id,entry.age,manual_priority,project,tags,description.desc,entry,due.relative,follow
 report.current.labels=ID,Age,P,Proj,Tag,Desc,Created,Due,Follow
-report.current.sort=entry+,project+
+report.current.sort=manual_priority-,project+
 report.current.filter=status:pending -idea
 
 context.work.read=+work
@@ -68,6 +68,8 @@ context.temp.write=+temp
 uda.follow.type=string
 uda.follow.label=follow
 uda.follow.values=Y,N
+uda.manual_priority.type=numeric
+uda.manual_priority.label=Manual Priority
 
 #UserDefinedShortcuts
 uda.taskwarrior-tui.task-report.next.filter=status:pending
@@ -75,6 +77,9 @@ uda.taskwarrior-tui.shortcuts.1=~/.config/taskwarrior-tui/shortcut-scripts/tasko
 uda.taskwarrior-tui.shortcuts.2=task context home
 uda.taskwarrior-tui.shortcuts.3=task context work
 uda.taskwarrior-tui.shortcuts.4=~/.config/taskwarrior-tui/shortcut-scripts/follow-up.sh
+uda.taskwarrior-tui.shortcuts.5=~/.config/taskwarrior-tui/shortcut-scripts/__increase_task_priority.sh
+uda.taskwarrior-tui.shortcuts.6=~/.config/taskwarrior-tui/shortcut-scripts/__decrease_task_priority.sh
+uda.taskwarrior-tui.shortcuts.7=~/.config/taskwarrior-tui/shortcut-scripts/__toggle_sorting.sh
 
 #Taskwarrior tui overrides
 uda.taskwarrior-tui.task-report.jump-on-task-add=true
