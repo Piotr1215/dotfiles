@@ -150,16 +150,31 @@ function _G.process_task_list(...)
   local lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
   local new_lines = {}
 
+  -- Adding shebang and setting options
+  table.insert(new_lines, '#!/usr/bin/env bash')
+  table.insert(new_lines, 'set -eo pipefail')
+
   for _, line in ipairs(lines) do
-    local trimmed_line = line:gsub("^[•*%-%+]+%s*", "") -- Remove bullet points
+    local trimmed_line = line:gsub('^[•*%-%+]+%s*', '') -- Remove bullet points
+    local links = {}
+
+    -- Extract http/https links and remove them from the task description
+    trimmed_line = trimmed_line:gsub('(https?://[%w%.%-%_/&%?=%~]+)', function(link)
+      table.insert(links, link)
+      return ''
+    end)
+
     if #trimmed_line > 0 then
-      if modifiers == "" then
-        table.insert(new_lines, "task add \"" .. trimmed_line .. "\"")
-      else
-        table.insert(new_lines, "task add " .. modifiers .. " \"" .. trimmed_line .. "\"")
+      table.insert(new_lines,
+        'output=$(task add ' .. (modifiers ~= '' and modifiers .. ' ' or '') .. '"' .. trimmed_line .. '")')
+      table.insert(new_lines, 'task_id=$(echo "$output" | grep -o "Created task [0-9]*." | cut -d " " -f 3 | tr -d ".")')
+
+      -- Annotate the task with the extracted links
+      for _, link in ipairs(links) do
+        table.insert(new_lines, 'task $task_id annotate -- ' .. link)
       end
     else
-      table.insert(new_lines, "") -- Keep empty lines
+      table.insert(new_lines, '') -- Keep empty lines
     end
   end
 
