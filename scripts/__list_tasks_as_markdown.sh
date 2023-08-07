@@ -10,10 +10,10 @@ list_tasks() {
 	filter=""
 	mark=""
 	if [ "$status" == "pending" ]; then
-		filter="-COMPLETED"
+		filter="status:pending"
 		mark=" "
 	else
-		filter="+COMPLETED"
+		filter="status:completed"
 		mark="x"
 	fi
 
@@ -21,12 +21,12 @@ list_tasks() {
 	if [ ${#projects[@]} -gt 0 ]; then
 		for project in "${projects[@]}"; do
 			echo "$project"
-			task $filter project:"$project" export | jq -r ".[] | \"- [$mark] \" + .description"
+			task "$filter" project:"$project" export | jq -r ".[] | \"- [$mark] \" + .description"
 			echo
 		done
 	else
 		# If no projects are provided, fetch tasks from all projects
-		task $filter export | jq -r ".[] | \"- [$mark] \" + .description"
+		task "$filter" export | jq -r ".[] | \"- [$mark] \" + .description"
 	fi
 }
 
