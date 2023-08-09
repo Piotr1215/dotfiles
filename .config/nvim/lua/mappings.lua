@@ -61,7 +61,7 @@ utils.vmap("<leader><C-s>", ":s/\\%V")                     -- Search only in vis
 utils.vmap("srt", ":!sort -n -k 2<cr>")
 
 -- MACROS --
-utils.nmap("<Leader>q", "@q")
+utils.nmap("<Leader>m", "@q")
 utils.xmap("Q", ":'<,'>:normal @q<CR>")
 utils.tmap("<ESC>", "<C-\\><C-n>")
 
@@ -87,6 +87,7 @@ utils.nmap("<leader>sw", "\"_diwP")   -- substitute current word with last yanke
 utils.nmap("<leader>sW", "\"_diWP")   -- substitute current WORD with last yanked text
 -- Delete
 utils.lnmap('dl', '\"_dd')            -- delete line to black hole register
+utils.lnmap('d_', '\"_D')             -- delete till end of line to black hole register
 utils.xmap('<leader>d', '\"_d')       -- delete selection to black hole register
 
 -- select pasted text
