@@ -66,6 +66,9 @@ utils.xmap("Q", ":'<,'>:normal @q<CR>")
 utils.tmap("<ESC>", "<C-\\><C-n>")
 
 -- MANIPULATE TEXT --
+-- jump to next "" text
+vim.api.nvim_set_keymap('n', 'cinq', '/"[^"]*"<CR>:nohlsearch<CR>ci"', { noremap = true, silent = true })
+
 -- YAML fold
 utils.lnmap('yi', ':set foldmethod=indent<CR>')
 -- Registries
