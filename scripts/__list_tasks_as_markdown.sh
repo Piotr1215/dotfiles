@@ -1,5 +1,7 @@
 #!/bin/bash
 
+source __project_mappings.conf
+
 # Function to list tasks based on status and projects
 list_tasks() {
 	status="$1"
@@ -20,7 +22,7 @@ list_tasks() {
 	# If projects are provided, loop through each project and fetch tasks
 	if [ ${#projects[@]} -gt 0 ]; then
 		for project in "${projects[@]}"; do
-			echo "$project"
+			echo "${project_descriptions[$project]:-$project}"
 			task rc.context=work "$filter" project:"$project" export 2>/dev/null | jq -r ".[] | \"- [$mark] \" + .description"
 			echo
 		done
@@ -30,7 +32,7 @@ list_tasks() {
 		for project in "${all_projects[@]}"; do
 			tasks=$(task rc.context=work "$filter" project:"$project" export 2>/dev/null | jq -r ".[] | \"- [$mark] \" + .description")
 			if [ -n "$tasks" ]; then
-				echo "$project"
+				echo "${project_descriptions[$project]:-$project}"
 				echo "$tasks"
 				echo
 			fi
