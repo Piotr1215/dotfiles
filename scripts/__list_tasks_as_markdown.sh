@@ -21,12 +21,20 @@ list_tasks() {
 	if [ ${#projects[@]} -gt 0 ]; then
 		for project in "${projects[@]}"; do
 			echo "$project"
-			task "$filter" project:"$project" export | jq -r ".[] | \"- [$mark] \" + .description"
+			task rc.context=work "$filter" project:"$project" export 2>/dev/null | jq -r ".[] | \"- [$mark] \" + .description"
 			echo
 		done
 	else
 		# If no projects are provided, fetch tasks from all projects
-		task "$filter" export | jq -r ".[] | \"- [$mark] \" + .description"
+		all_projects=($(task rc.context=work projects 2>/dev/null | grep -vE '^[0-9]+$' | grep -vE '^$' | tail -n +4 | head -n -2))
+		for project in "${all_projects[@]}"; do
+			tasks=$(task rc.context=work "$filter" project:"$project" export 2>/dev/null | jq -r ".[] | \"- [$mark] \" + .description")
+			if [ -n "$tasks" ]; then
+				echo "$project"
+				echo "$tasks"
+				echo
+			fi
+		done
 	fi
 }
 
