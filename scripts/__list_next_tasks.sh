@@ -1,4 +1,5 @@
 #!/bin/bash
+source __project_mappings.conf
 
 # Get the output from the task command
 output=$(task tmark-next)
@@ -13,6 +14,9 @@ while IFS= read -r line; do
 	project="${line%% *}"
 	description="${line#* }"
 
+	# Trim leading spaces from the description
+	description=$(echo "$description" | sed 's/^[ \t]*//')
+
 	# Check if the line is empty (indicating a new project)
 	if [ -z "$line" ]; then
 		continue
@@ -24,6 +28,6 @@ done <<<"$cleaned_output"
 
 # Print the tasks
 for project in "${!tasks[@]}"; do
-	echo "$project"
+	echo "${project_descriptions[$project]:-$project}"
 	echo -e "${tasks[$project]}"
 done
