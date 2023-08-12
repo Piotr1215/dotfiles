@@ -90,7 +90,6 @@ return require('packer').startup(function(use)
   use 'voldikss/vim-floaterm'
   use 'sindrets/diffview.nvim'
   use 'kevinhwang91/rnvimr'
-  use 'airblade/vim-gitgutter'
   use({
     "kylechui/nvim-surround",
     config = function()
