@@ -174,7 +174,11 @@ function f_git_enter() {
 
 zle -N f_git_enter
 bindkey '^o' f_git_enter
-
+copy-line-to-clipboard() {
+  echo -n $BUFFER | xclip -selection clipboard
+}
+zle -N copy-line-to-clipboard
+bindkey '^Y' copy-line-to-clipboard
 bindkey '^@' autosuggest-accept
 
 stty -ixon
