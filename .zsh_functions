@@ -1,7 +1,7 @@
 source ~/dev/dotfiles/scripts/__reusable_variables.sh
 
-# Define our custom copy function
-copy_and_create_folders() {
+# Define custom copy function
+function copy_and_create_folders() {
     # Before proceeding, check if the last argument (which is the destination) 
     # exists as a directory or its parent directory exists. If not, create it.
     if [[ ! -d "${@[-1]}" && ! -d "$(dirname "${@[-1]}")" ]]; then
@@ -14,6 +14,7 @@ copy_and_create_folders() {
     command cp "$@"
 }
 
+# Paste link form clipboard and create a new pet snippet
 function plink ()
 {
   link=$(xclip -o -sel clipboard)
