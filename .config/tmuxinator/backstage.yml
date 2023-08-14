@@ -49,17 +49,3 @@ windows:
       layout: even-horizontal
       panes:
         - cd argo-setup/demos/backstage-demo/slides; slides presentation.md
-  - back-ui:
-      layout: even-horizontal
-      panes:
-        - cd backstage-setup; yarn dev
-  - argo-cd:
-      layout: 98cc,273x75,0,0[273x29,0,0,0,273x45,0,30{133x45,0,30,1,139x45,134,30,5}]
-      panes:
-        - k9s
-        - watch kubectl get crossplane
-        - cd argo-setup/demos/backstage-demo; ls
-  - argo-apps:
-      layout: even-horizontal
-      panes:
-        - cd argo-apps; lg
