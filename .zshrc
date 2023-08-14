@@ -115,20 +115,20 @@ export PATH="$HOME/.yarn/bin:$HOME/.config/yarn/global/node_modules/.bin:$PATH"
 export PATH=$PATH:${HOME}/bin
 export RANGER_LOAD_DEFAULT_RC=FALSE
 export RIPGREP_CONFIG_PATH=$HOME/.ripgreprc
-export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-autoload -U add-zsh-hook
+# export NVM_DIR="$HOME/.nvm"
+# [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+# autoload -U add-zsh-hook
 
-load-nvmrc() {
-  if [[ -f .nvmrc && -r .nvmrc ]]; then
-    nvm use
-  elif [[ $(nvm version) != $(nvm version default)  ]]; then
-    echo "Reverting to nvm default version"
-    nvm use default
-  fi
-}
-add-zsh-hook chpwd load-nvmrc
-load-nvmrc
+# load-nvmrc() {
+  # if [[ -f .nvmrc && -r .nvmrc ]]; then
+    # nvm use
+  # elif [[ $(nvm version) != $(nvm version default)  ]]; then
+    # echo "Reverting to nvm default version"
+    # nvm use default
+  # fi
+# }
+# add-zsh-hook chpwd load-nvmrc
+# load-nvmrc
 
 # source ~/.github_variables
 
