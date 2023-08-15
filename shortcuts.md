@@ -1,31 +1,33 @@
 ## Shell
 
-Ctrl + U             - remove from the cursor to the start of the line.
-Ctrl + K             - cut from the cursor to the end of the line.
-Ctrl + W             - cut from the cursor to the start of the preceding word.<- LEFT
-Ctrl + Y             - paste last copied word from the clipboard
-Ctrl + q             - when a command is already typed, move it to buffer, clear command line and execute another one before
-Alt  + D             - "remove from the cursor to the end of the next word."
-Ctrl + L             - clear the terminal.
-Ctrl + A             - go to the beginning of the line
-Ctrl + E             - go to the end of the line
-Alt  + B             - go back one word
-Alt  + F             - go forward one word
-Ctrl + XX            - switch between beginning of the line and current position
-Ctrl + XE            - edit current command in default editor
-dult  + T            - swap the current word with the previous word
-Ctrl + T             - swap 2 characters places
-Alt  + .             - repeat last argument of previous command, same as !$
+Ctrl + U - remove from the cursor to the start of the line.
+Ctrl + K - cut from the cursor to the end of the line.
+Ctrl + W - cut from the cursor to the start of the preceding word.<- LEFT
+Ctrl + Y - paste last copied word from the clipboard
+Ctrl + q - when a command is already typed, move it to buffer, clear command line and execute another one before
+Alt + D - "remove from the cursor to the end of the next word."
+Ctrl + L - clear the terminal.
+Ctrl + A - go to the beginning of the line
+Ctrl + E - go to the end of the line
+Alt + B - go back one word
+Alt + F - go forward one word
+Ctrl + XX - switch between beginning of the line and current position
+Ctrl + XE - edit current command in default editor
+dult + T - swap the current word with the previous word
+Ctrl + T - swap 2 characters places
+Alt + . - repeat last argument of previous command, same as !$
 Ctrl + Shift + _     - undo last keystroke in command
 !*                   - all arguments of previous function except first
-!$                   - last argument of previous call
+!$ - last argument of previous call
 $0                   - the name of the current shell script or program.
 $1, $2, $3, ...      - the positional parameters passed to the shell script or function.
-$#                   - the number of positional parameters passed to the shell script or function.
+$# - the number of positional parameters passed to the shell script or function.
 $@                   - all the positional parameters passed to the shell script or function, individually quoted.
-$*                   - all the positional parameters passed to the shell script or function, as a single, space-separated string.
-$?                   - the exit status of the last executed command.
-$$                   - the process ID of the current shell.
+$\* - all the positional parameters passed to the shell script or function, as a single, space-separated string.
+$? - the exit status of the last executed command.
+
+$$
+- the process ID of the current shell.
 $!                   - the process ID of the last executed background command.
 $IFS                 - the internal field separator, used to separate words in a string.
 
@@ -59,7 +61,7 @@ Ctro + a                        - increment number in normal mode
 Ctrl + w + HJKL                 - move splits around
 Ctrl + w + Ctrl + r             - Rotate splits
 Ctrl + w + hjkl + Ctrl + w x    - Swap position of 2 panes. Navigate from the
-                                  window to the one u want to swap with and hit x 
+                                  window to the one u want to swap with and hit x
 :echo maparg("<leader>ff", "n") - this will detect what mapping maps to~
 q:                              - enter commands history
 q/                              - enter search history
@@ -132,3 +134,23 @@ z for changing settings
 u for "undo"
 M for linemode
 +, -, = for setting access rights to files
+
+## Moreutils
+
+The moreutils tools
+
+    chronic: runs a command quietly unless it fails
+    combine: combine the lines in two files using boolean operations
+    errno: look up errno names and descriptions
+    ifdata: get network interface info without parsing ifconfig output
+    ifne: run a program if the standard input is not empty
+    isutf8: check if a file or standard input is utf-8
+    lckdo: execute a program with a lock held
+    mispipe: pipe two commands, returning the exit status of the first
+    parallel: run multiple jobs at once
+    pee: tee standard input to pipes
+    sponge: soak up standard input and write to a file
+    ts: timestamp standard input
+    vidir: edit a directory in your text editor
+    vipe: insert a text editor into a pipe
+    zrun: automatically uncompress arguments to command
