@@ -142,28 +142,6 @@ require('femaco').setup({
   end
 })
 
-require("nvim-tree").setup({
-  respect_buf_cwd = true,
-  update_cwd = true,
-  update_focused_file = {
-    enable = true,
-    update_cwd = true
-  },
-  view = {
-    adaptive_size = true,
-    float = {
-      enable = true,
-      quit_on_focus_loss = true,
-      open_win_config = {
-        relative = "editor",
-        border = "rounded",
-        row = 1,
-        col = 1,
-      },
-    },
-  },
-})
-
 local prettier = require("prettier")
 
 require("which-key").setup({
@@ -197,7 +175,7 @@ prettier.setup({
 require('lualine').setup {
   options = {
     theme      = 'tokyonight',
-    extensions = { 'nvim-tree', 'nvim-dap-ui' }
+    extensions = { 'nvim-dap-ui' }
   },
 }
 

@@ -120,13 +120,7 @@ return require('packer').startup(function(use)
     run = './install --bin'
   }
   use 'junegunn/fzf.vim'
-  use {
-    'nvim-tree/nvim-tree.lua',
-    requires = {
-      'nvim-tree/nvim-web-devicons', -- optional, for file icon
-    },
-    tag = 'nightly'                  -- optional, updated every week. (see issue #1193)
-  }
+  use 'nvim-tree/nvim-web-devicons' -- optional, for file icon
   -- }}}
   -- Telescope {{{
   use 'danielpieper/telescope-tmuxinator.nvim'
