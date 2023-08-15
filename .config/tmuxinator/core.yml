@@ -48,9 +48,8 @@ windows:
   - dev:
       layout: even-horizontal
       panes:
-        - exa --grid; cowsay "You go little cow\!"
         - lg
   - vim:
       layout: tiled
       panes:
-          - vim
+          -  __open-file-git.sh
