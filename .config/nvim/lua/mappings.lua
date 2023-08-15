@@ -75,23 +75,23 @@ utils.lnmap('yi', ':set foldmethod=indent<CR>')
 -- The below mapping helps select from a register in the place of insert point
 utils.imap('<C-p>', '<C-o>:Telescope registers<cr><C-w>')
 -- Yank
-utils.lnmap('yl', '\"*yy')            -- yank line to the clipboard buffer
-utils.nmap('<leader>dfil', ':%d<cr>') -- delete file content to black hole register
-utils.nmap('<leader>yf', ':%y<cr>')   -- yank file under cusror to the clipboard buffer
-utils.nmap('<leader>yw', '"+yiw')     -- yank word under cusror to the clipboard buffer
-utils.nmap('<leader>yW', '"+yiW')     -- yank WORD under cusror to the clipboard buffer
+utils.lnmap('yl', '\"*yy')          -- yank line to the clipboard buffer
+utils.nmap('<leader>df', ':%d<cr>') -- delete file content to black hole register
+utils.nmap('<leader>yf', ':%y<cr>') -- yank file under cusror to the clipboard buffer
+utils.nmap('<leader>yw', '"+yiw')   -- yank word under cusror to the clipboard buffer
+utils.nmap('<leader>yW', '"+yiW')   -- yank WORD under cusror to the clipboard buffer
 -- Paste
-utils.lnmap('pa', '\"*p')             -- paste from clipboard buffer after the cursor
-utils.lnmap('p', '\"*P')              -- paste from clipboard buffer before the cursor
-utils.nmap("<leader>1", '"0p')        -- paste from 0 (latest yank)
-utils.nmap("<leader>2", '"*p')        -- paste from 0 (latest yank)
+utils.lnmap('pa', '\"*p')           -- paste from clipboard buffer after the cursor
+utils.lnmap('p', '\"*P')            -- paste from clipboard buffer before the cursor
+utils.nmap("<leader>1", '"0p')      -- paste from 0 (latest yank)
+utils.nmap("<leader>2", '"*p')      -- paste from 0 (latest yank)
 -- Substitute
-utils.nmap("<leader>sw", "\"_diwP")   -- substitute current word with last yanked text
-utils.nmap("<leader>sW", "\"_diWP")   -- substitute current WORD with last yanked text
+utils.nmap("<leader>sw", "\"_diwP") -- substitute current word with last yanked text
+utils.nmap("<leader>sW", "\"_diWP") -- substitute current WORD with last yanked text
 -- Delete
-utils.lnmap('dl', '\"_dd')            -- delete line to black hole register
-utils.lnmap('d_', '\"_D')             -- delete till end of line to black hole register
-utils.xmap('<leader>d', '\"_d')       -- delete selection to black hole register
+utils.lnmap('dl', '\"_dd')          -- delete line to black hole register
+utils.lnmap('d_', '\"_D')           -- delete till end of line to black hole register
+utils.xmap('<leader>d', '\"_d')     -- delete selection to black hole register
 
 -- select pasted text
 utils.nmap("gp", "`[v`]")
@@ -156,9 +156,6 @@ utils.nmap('<leader>gg', ':LazyGit<CR>')
 utils.nmap('<leader>gl', ':r !bash ~/dev/dotfiles/scripts/__generate_git_log.sh<CR>')
 
 -- NAVIGATION --
--- Nvim Tree settings
-utils.nmap('<leader>df', ':NvimTreeToggle<CR>')
-utils.nmap('<Leader>da', ':NvimTreeFindFile<CR>')
 -- Save buffer
 utils.nmap('<leader>w', ':wall<CR>')
 -- jj in insert mode instead of ESC
