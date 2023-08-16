@@ -154,3 +154,37 @@ The moreutils tools
     vidir: edit a directory in your text editor
     vipe: insert a text editor into a pipe
     zrun: automatically uncompress arguments to command
+
+## Taskwarrior
+
+Taskwarrior is a command-line task management program that provides various attributes and modifiers to adjust when and how tasks are displayed, acted upon, and due. Here's a list of the time-specific attributes/modifiers and their explanations:
+
+1. **due:** The due date of a task. For example:
+   ```
+   task add Buy milk due:tomorrow
+   ```
+
+2. **wait:** The date or duration to wait until the task becomes active (or 'pending'). Until that time, the task is in a 'waiting' status and doesn't show up in the default report. For example:
+   ```
+   task add Buy bread wait:2days
+   ```
+
+3. **until:** The expiration date of the task. If a task isn't completed before its `until` date, it'll be automatically deleted. For example:
+   ```
+   task add Buy chocolate until:2023-09-01
+   ```
+
+4. **scheduled:** The date or time you intend to start the task. It's informational and doesn't affect the status of the task. For example:
+   ```
+   task add Read a book scheduled:next week
+   ```
+
+5. **recur:** How frequently a recurring task should be created. For example:
+   ```
+   task add Pay rent due:1st recur:monthly
+   ```
+   This will create a recurring task due on the 1st of each month.
+
+6. **+OVERDUE:** A virtual tag that automatically gets assigned to tasks past their due date.
+
+In addition to these attributes, Taskwarrior supports a variety of date formats and relative date expressions like `today`, `tomorrow`, `yesterday`, `now`, `sunday`, `monday`, `next week`, `last month`, etc.
