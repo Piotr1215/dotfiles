@@ -10,35 +10,27 @@ time_string="$2"
 case $time_string in
 "tomorrow")
 	delay="8:00 AM tomorrow"
-	echo $delay
 	;;
 "eow")
 	delay="12:00 PM next Fri"
-	echo $delay
 	;;
 "eod")
 	delay="8:00 PM"
-	echo $delay
 	;;
 *m)
 	delay="now + ${time_string%m} minutes"
-	echo $delay
 	;;
 *h)
 	delay="now + ${time_string%h} hours"
-	echo $delay
 	;;
 *d)
 	delay="now + ${time_string%d} days"
-	echo $delay
 	;;
 *w)
 	delay="now + ${time_string%w} weeks"
-	echo $delay
 	;;
 *y)
 	delay="now + ${time_string%y} years"
-	echo $delay
 	;;
 *)
 	echo "Invalid time format"
@@ -46,7 +38,27 @@ case $time_string in
 	;;
 esac
 
-echo "DISPLAY=:1 zenity --info --text='$message'" | at $delay
+if [[ "$3" != "internal" ]]; then
+	echo "$0 '$message' '$time_string' internal" | at $delay
+else
+	# This part is executed when scheduled by 'at'
+	while true; do
+		zenity --question --text="$message" --display=":1" \
+			--ok-label="Acknowledged" --cancel-label="Remind me in 5 minutes" \
+			--width=200 --height=100
 
-# Log the task to Taskwarrior after showing the zenity dialog
-task log "$message" +reminder
+		# Check the exit status of zenity
+		case $? in
+		0) # User clicked "Acknowledged"
+			task log "$message" +reminder
+			break
+			;;
+		1)         # User clicked "Remind me in 5 minutes"
+			sleep 300 # Sleep for 5 minutes (300 seconds)
+			;;
+		*) # Any other exit code means an error or unexpected closure
+			break
+			;;
+		esac
+	done
+fi
