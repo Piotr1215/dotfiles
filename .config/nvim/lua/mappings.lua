@@ -151,6 +151,7 @@ utils.nmap('<Leader>sof', ':set nospell<CR>')
 -- Upload selected to ix.io
 utils.vmap('<Leader>pb', "w !bash share<CR>")
 utils.nmap('<Leader>p', ":pu<CR>")
+utils.nmap('<Leader>hs', ":History<CR>")
 
 -- setup mapping to call :LazyGit
 utils.lnmap('gd', ':Gvdiffsplit<CR>')
