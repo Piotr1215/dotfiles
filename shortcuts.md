@@ -3,7 +3,7 @@
 Ctrl + U - remove from the cursor to the start of the line.
 Ctrl + K - cut from the cursor to the end of the line.
 Ctrl + W - cut from the cursor to the start of the preceding word.<- LEFT
-Ctrl + Y - paste last copied word from the clipboard
+Ctrl + Y - copy command line content
 Ctrl + q - when a command is already typed, move it to buffer, clear command line and execute another one before
 Alt + D - "remove from the cursor to the end of the next word."
 Ctrl + L - clear the terminal.
@@ -21,6 +21,7 @@ Ctrl + Shift + _     - undo last keystroke in command
 !$ - last argument of previous call
 $0                   - the name of the current shell script or program.
 $1, $2, $3, ...      - the positional parameters passed to the shell script or function.
+!:1 !:2     ...      - the positional parameters from previous command
 $# - the number of positional parameters passed to the shell script or function.
 $@                   - all the positional parameters passed to the shell script or function, individually quoted.
 $\* - all the positional parameters passed to the shell script or function, as a single, space-separated string.
@@ -188,3 +189,4 @@ Taskwarrior is a command-line task management program that provides various attr
 6. **+OVERDUE:** A virtual tag that automatically gets assigned to tasks past their due date.
 
 In addition to these attributes, Taskwarrior supports a variety of date formats and relative date expressions like `today`, `tomorrow`, `yesterday`, `now`, `sunday`, `monday`, `next week`, `last month`, etc.
+$$
