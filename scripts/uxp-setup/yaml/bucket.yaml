@@ -16,7 +16,7 @@ spec:
       responseHeader:
       - Content-Type
     location: EU
-    project: crossplane-playground
+    project: squad-platform-playground
     storageClass: MULTI_REGIONAL
     uniformBucketLevelAccess: true
   providerConfigRef:
