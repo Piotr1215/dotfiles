@@ -2,7 +2,7 @@ apiVersion: storage.gcp.upbound.io/v1beta1
 kind: Bucket
 metadata:
   annotations:
-    crossplane.io/external-name: sample-deleteme-$random_suffix
+    crossplane.io/external-name: sample-deleteme-221133
   name: example
 spec:
   deletionPolicy: Delete
