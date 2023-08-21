@@ -97,6 +97,18 @@ setup_helm:
   sleep 3
   kubectl apply -f {{yaml}}/helm-provider-config.yaml
 
+# deploy monitoring stack
+deploy_monitoring:
+  @helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+  helm repo update
+  @helm upgrade --install kube-prometheus-stack prometheus-community/kube-prometheus-stack -n prometheus \
+   --set namespaceOverride=prometheus \
+   --set grafana.namespaceOverride=prometheus \
+   --set grafana.defaultDashboardsEnabled=true \
+   --set kube-state-metrics.namespaceOverride=prometheus \
+   --set prometheus-node-exporter.namespaceOverride=prometheus --create-namespace
+  @kubectl -n prometheus patch prometheus kube-prometheus-stack-prometheus --type merge --patch '{"spec":{"enableAdminAPI":true}}'
+
 # setup AWS official provider
 setup_aws:
   @echo "Setting up AWS official provider"
