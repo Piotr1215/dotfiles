@@ -3,7 +3,9 @@ require("mason").setup()
 
 require('mini.align').setup()
 
-require('go').setup()
+require('go').setup({
+  gofmt = 'gofumpt',
+})
 
 require('goto-preview').setup {}
 
