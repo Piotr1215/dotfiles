@@ -6,6 +6,7 @@ require('mini.align').setup()
 require('go').setup({
   gofmt = 'gofumpt',
 })
+require('dap-python').setup('~/.virtualenvs/debugpy/bin/python')
 
 require('goto-preview').setup {}
 

@@ -184,6 +184,7 @@ return require('packer').startup(function(use)
       "mfussenegger/nvim-dap"
     }
   }
+  use 'mfussenegger/nvim-dap-python'
   -- }}}
   -- Snippets {{{
   use {
