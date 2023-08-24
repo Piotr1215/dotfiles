@@ -3,10 +3,12 @@ use strict;
 use warnings;
 use XML::LibXML;
 
+my $mode = shift @ARGV || '';
+
 # Path to the project mappings file
-my $project_mappings_file = '__project_mappings.conf';
+my $project_mappings_file = '/home/decoder/dev/dotfiles/scripts/__project_mappings.conf';
 # Path to the script that generates the XML content
-my $xml_script = './__format_tasks_xml.pl';
+my $xml_script = '/home/decoder/dev/dotfiles/scripts/__format_tasks_xml.pl';
 
 # Read project mappings
 my %project_mappings;
@@ -41,31 +43,39 @@ for my $task ($doc->findnodes('/tasks/task')) {
   my $status = $task->findvalue('status');
   my $end_date = $task->findvalue('end');
   $end_date =~ s/T.*//; # Remove time component
+  my $tags = join ' ', $task->findnodes('tags/tag/text()');
+  
+  # Skip tasks without the +work tag or with the +idea tag
+  next unless $tags =~ /\bwork\b/;
+  next if $tags =~ /\bidea\b/;
 
-  # Skip if the task is not completed or not completed yesterday
-  next unless $status eq 'completed' && $end_date eq $yesterday;
+  # Determine if we should include the task based on the mode
+  next unless ($mode eq '+next' && $status eq 'pending' && $tags =~ /\bnext\b/) ||
+              ($mode eq '+pending' && $status eq 'pending') ||
+              ($mode eq '' && $status eq 'completed' && $end_date eq $yesterday);
 
   my $project_key = $task->findvalue('project') || ' ';
   my $project = $project_mappings{$project_key} || 'Unknown';
   my $url_index = 1; # Keep track of the URL index
   my $description = $task->findvalue('description');
   my $anno_text = "";
+  my $checkbox = ($status eq 'pending') ? "[ ]" : "[x]";
 
   # Process annotations and extract links
   for my $anno ($task->findnodes('annotations/annotation')) {
     if ($anno->findvalue('description') =~ /(https:\/\/\S+)/) {
-      $anno_text .= " [[${url_index}]($1)]";
+      $anno_text .= " [[${url_index}]]($1)"; # Fixed Markdown link format
       $url_index++; # Increment the URL index
     }
   }
 
   # Add to the group
-  push @{$tasks_by_project{$project}}, "[x] $description$anno_text";
+  push @{$tasks_by_project{$project}}, "$checkbox $description$anno_text";
 }
 
 # Print the tasks grouped by project
 for my $project (sort keys %tasks_by_project) {
-  print "$project\n"; # Removed extra newline here
+  print "$project\n";
   for my $task (@{$tasks_by_project{$project}}) {
     print "- $task\n";
   }
