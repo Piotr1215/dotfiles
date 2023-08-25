@@ -11,6 +11,31 @@ set -eo pipefail
 
 # Add source and line number wher running in debug mode: __run_with_xtrace.sh __boot.sh
 
+help_function() {
+	echo "Usage: __boot.sh [-h|--help]"
+	echo ""
+	echo "This script automates the boot process based on the current day of the week."
+	echo "It sets specific bash options for error handling and executes different commands"
+	echo "depending on whether it's a weekday or weekend."
+	echo ""
+	echo "Options:"
+	echo "  -h, --help    Show this help message and exit."
+	echo ""
+	echo "Features:"
+	echo "  - Sources a generic error handling function from __trap.sh."
+	echo "  - Sets specific bash options for error handling (set -eo pipefail)."
+	echo "  - Moves Alacritty window to HDMI 0."
+	echo "  - Launches specific Firefox profiles for work or home, depending on the day."
+	echo ""
+	echo "Note: This script includes debug options and references to other scripts."
+}
+
+# Check for help argument
+if [[ "$1" == "-h" ]] || [[ "$1" == "--help" ]]; then
+	help_function
+	exit 0
+fi
+
 weekdays=('Monday' 'Tuesday' 'Wednesday' 'Thursday' 'Friday')
 
 timeoff=0
