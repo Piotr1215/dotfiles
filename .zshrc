@@ -34,6 +34,7 @@ eval "$(zoxide init zsh)"
 
 # Directory history
 setopt AUTO_PUSHD                  # pushes the old directory onto the stack
+setopt AUTO_CD                     # change to a directory without cd
 setopt PUSHD_MINUS                 # exchange the meanings of '+' and '-'
 setopt CDABLE_VARS                 # expand the expression (allows 'cd -2/tmp')
 setopt auto_cd
