@@ -1,5 +1,30 @@
 #!/bin/bash
 
+# Help function
+display_help() {
+	echo "Supported date and time modifiers:"
+	echo "  m: minutes"
+	echo "  h: hours"
+	echo "  d: days"
+	echo "  w: weeks"
+	echo "  y: years"
+	echo "  --: escape hatch for arbitrary 'at' modifiers (e.g., 'Monday eod', '13:00 ETSC')"
+	echo "Common 'at' modifiers:"
+	echo "  tomorrow, eow (end of week), eod (end of day)"
+}
+
+# List reminders
+if [[ "$1" == "-l" || "$1" == "--list" ]]; then
+	at -l
+	exit 0
+fi
+
+# Display help
+if [[ "$1" == "-h" || "$1" == "--help" ]]; then
+	display_help
+	exit 0
+fi
+
 # Ensure we have access to the X server
 xhost +
 
@@ -8,6 +33,9 @@ time_string="$2"
 
 # Define delay based on the given time string
 case $time_string in
+"--")
+	delay="$3" # Accept arbitrary 'at' modifiers
+	;;
 "tomorrow")
 	delay="8:00 AM tomorrow"
 	;;

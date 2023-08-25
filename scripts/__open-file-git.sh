@@ -9,6 +9,31 @@ source __trap.sh
 # https://bit.ly/37nFgin
 set -o pipefail
 
+help_function() {
+	echo "Usage: __open-file-git.sh [-h|--help]"
+	echo ""
+	echo "This script opens files from the Git repository using fzf-tmux for selection and the configured editor (default: nvim) for viewing."
+	echo "It lists the files from the Git log, allows multi-selection, and opens them in different layouts depending on the number of files selected."
+	echo ""
+	echo "Options:"
+	echo "  -h, --help    Show this help message and exit."
+	echo ""
+	echo "Features:"
+	echo "  - Sources a generic error handling function from __trap.sh."
+	echo "  - Gets the repository root path using 'git rev-parse --show-toplevel'."
+	echo "  - Lists files from the Git log and filters them using fzf-tmux."
+	echo "  - Opens selected files in the configured editor (default: nvim) with different layouts."
+	echo "  - Handles interruptions and errors gracefully."
+	echo ""
+	echo "Note: This script requires Git, fzf-tmux, and a compatible editor (e.g., nvim)."
+}
+
+# Check for help argument
+if [[ "$1" == "-h" ]] || [[ "$1" == "--help" ]]; then
+	help_function
+	exit 0
+fi
+
 # Custom error handling function for fzf-tmux
 handle_fzf_error() {
 	if [ $? -eq 130 ]; then
