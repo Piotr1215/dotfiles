@@ -3,9 +3,7 @@ require("mason").setup()
 
 require('mini.align').setup()
 
-require('go').setup({
-  gofmt = 'gofumpt',
-})
+require('go').setup()
 require('dap-python').setup('~/.virtualenvs/debugpy/bin/python')
 
 require('goto-preview').setup {}

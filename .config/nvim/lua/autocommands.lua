@@ -10,11 +10,16 @@ vim.api.nvim_create_user_command(
   { bang = true }
 )
 
-vim.api.nvim_create_autocmd("BufWritePre", {
-  pattern = "*.go",
+vim.api.nvim_create_autocmd('BufWritePre', {
+  pattern = '*.go',
   callback = function()
-    require('go.format').goimport()
-  end,
+    vim.lsp.buf.code_action({ context = { only = { 'source.organizeImports' } }, apply = true })
+  end
+})
+
+vim.api.nvim_create_autocmd("FileType", {
+  pattern = { "go" },
+  command = "nmap <buffer><silent> <leader>fld :%g/ {/normal! zf%<CR>",
   group = goSettings,
 })
 
@@ -51,11 +56,6 @@ vim.api.nvim_create_autocmd("bufwritepost", {
   command = "Prettier",
 })
 
-vim.api.nvim_create_autocmd("FileType", {
-  pattern = { "go" },
-  command = "nmap <buffer><silent> <leader>fld :%g/ {/normal! zf%<CR>",
-  group = goSettings,
-})
 
 -- vim.api.nvim_create_autocmd({ "BufWinEnter" }, {
 -- pattern = vim.fn.expand("$HOME").."/dev/obsidian/*/*.md",
