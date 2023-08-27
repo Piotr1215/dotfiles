@@ -62,7 +62,7 @@ utils.vmap("srt", ":!sort -n -k 2<cr>")
 
 -- MACROS --
 utils.nmap("<Leader>m", "@q")
-utils.xmap("Q", ":'<,'>:normal @q<CR>")
+utils.xmap("<leader>Q", ":'<,'>:normal @q<CR>")
 utils.tmap("<ESC>", "<C-\\><C-n>")
 
 -- MANIPULATE TEXT --
