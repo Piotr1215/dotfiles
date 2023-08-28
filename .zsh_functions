@@ -132,18 +132,6 @@ function copyname() {
     stat -t $1 | cut -d ' ' -f1 | xargs echo -n | xsel -ib
 }
 
-# Download a YouTube video from the URL in the clipboard, save to ~/music with title and extension
-function ytd() {
-    link=$(xsel -ob)
-
-    if [[ "$link" != *"youtu"*  ]]; then
-        echo "This is not the right format, copy again"
-        return 1 2>/dev/null
-    fi
-
-     yt-dlp -o "~/music/%(title)s.%(ext)s"  $link --no-playlist &
-}
-
 # Copy the current working directory path to the clipboard
 function cpa() {
     if command -v xclip > /dev/null; then
@@ -183,6 +171,17 @@ function gacs() {
   git push
 }
 
+# Search for my open PRs and open the selected one in a web browser
+function ghpr() {
+  pr_data=$(gh search prs --author "@me" --state=open --json url,repository,title | \
+            jq -r '.[] | select(.title) | "\(.title) | \(.url)"')
+
+  longest=$(echo "$pr_data" | awk -F'|' '{ if (length($1) > max) max = length($1) } END { print max }')
+
+  echo "$pr_data" | awk -v max="$longest" -F'|' '{ printf "%-" max "s | %s\n", $1, $2 }' | \
+  fzf | awk -F'|' '{print $2}' | xargs xdg-open > /dev/null 2>&1 
+}
+
 # Select gist, preview it, output to terminal and go to web view
 function ghgistweb()
 {
@@ -196,7 +195,7 @@ function ghgist()
 }
 
 # Select any open PR form the active repo and open it in a web browser
-function ghpr()
+function ghprrepo()
 {
   GH_FORCE_TTY=100% gh pr list | fzf --ansi --preview 'GH_FORCE_TTY=100% gh pr view {1}' --preview-window up --header-lines 3 | awk '{print $1}' | xargs gh pr diff -w
 }
