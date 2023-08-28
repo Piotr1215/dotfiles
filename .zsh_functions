@@ -288,9 +288,9 @@ function sout() {
 
   if [[ $(echo "$sink_name" |  grep "GP106 High Definition") ]]; then
     wpctl set-mute $(wpctl status | grep --after-context=3 " ├─ Sources:" | grep "Microphone Mono" | grep "\d+" -Po | head -n 1) 1
-    amixer set Master 25%
+    amixer set Master 50%
     local_output='hdmi'
-    echo "Sound local_output set to '$=monitor, mic muted\nVolume 25%"
+    echo "Sound local_output set to '$=monitor, mic muted\nVolume 50%"
   else
     amixer set Master 100%
     local_output='head'
