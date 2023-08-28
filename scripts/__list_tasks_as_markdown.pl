@@ -2,8 +2,16 @@
 use strict;
 use warnings;
 use XML::LibXML;
+use Time::Piece;  # Add this line
 
 my $mode = shift @ARGV || '';
+
+# Get yesterday's date in the required format
+my $t = localtime;
+my $wday = $t->wdayname;  # Current weekday name (Sun, Mon, etc.)
+
+# Adjust for Monday to point to Friday
+my $days_to_subtract = ($wday eq 'Mon') ? 3 : 1;
 
 # Path to the project mappings file
 my $project_mappings_file = '/home/decoder/dev/dotfiles/scripts/__project_mappings.conf';
@@ -35,7 +43,7 @@ my $doc = $parser->load_xml(string => $xml_content);
 my %tasks_by_project;
 
 # Get yesterday's date in the required format
-my ($sec, $min, $hour, $mday, $mon, $year) = localtime(time - 24*60*60);
+my ($sec, $min, $hour, $mday, $mon, $year) = localtime(time - $days_to_subtract * 24 * 60 * 60);
 my $yesterday = sprintf "%4d%02d%02d", $year + 1900, $mon + 1, $mday;
 
 # Iterate through the tasks and process them
