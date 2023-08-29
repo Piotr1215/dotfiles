@@ -260,22 +260,19 @@ vim.g.rnvimr_enable_picker = 1
 vim.g.startify_change_to_dir = 1
 vim.g.startify_session_persistence = 0
 vim.g.startify_change_to_vsc_root = 1
-vim.g.startify_session_number = 7
-vim.g.startify_files_number = 7
+vim.g.startify_session_number = 0
+vim.g.startify_files_number = 10
 vim.g.startify_session_delete_buffers = 0
 vim.g.startify_skiplist = {
   '^/tmp'
 }
 vim.g.startify_commands = {
-  { 'Help Features',        'h nvim-features' },
-  { 'Help Quickref',        'h quickref' },
-  { 'Edit Aliases',         'e ~/.zsh_aliases' },
-  { 'Edit Functions',       'e ~/.zsh_functions' },
-  { 'Search Dev:   SPC fd', 'Telescope find_files search_dirs=~/dev,--hidden,--with-filename' },
-  { 'Search Repos: SPC fr', 'lua require\'telescope\'.extensions.repo.list{search_dirs = {"~/dev"}}' },
-  { 'Ranger:       ALT o',  'RnvimrToggle' },
-  { 'Change Color: SPC fc', 'Telescope colorscheme' },
-  { 'Pick Emoji:   SPC fm', 'Telescope emoji' }
+  { 'Search Dev    :SPC fd', 'Telescope find_files search_dirs=~/dev,--hidden,--with-filename' },
+  { 'Search Repos  :SPC fr', 'lua require\'telescope\'.extensions.repo.list{search_dirs = {"~/dev"}}' },
+  { 'Ranger        :ALT o',  'RnvimrToggle' },
+  { 'Change Color  :SPC fc', 'Telescope colorscheme' },
+  { 'Transparent Bg:SPC tr', 'TransparentEnable' },
+  { 'Pick Emoji    :SPC fm', 'Telescope emoji' }
 }
 vim.g.startify_bookmarks = {
   '~/.config/nvim/lua',
@@ -284,7 +281,9 @@ vim.g.startify_bookmarks = {
   '~/.taskrc',
   '~/.config/ranger/rc.conf',
   '~/shortcuts.md',
+  '/usr/local/share/zsh/site-functions',
   '~/scripts/__project_mappings.conf',
   '~/.taskopenrc',
+  '/home/decoder/.oh-my-zsh/plugins/tmuxinator/_mst',
 }
 vim.g.startify_custom_header = "startify#pad(split(system('fortune -s | cowsay | lolcat; date'), '\n'))"
