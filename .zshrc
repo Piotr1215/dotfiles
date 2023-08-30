@@ -34,7 +34,7 @@ eval "$(zoxide init zsh)"
 
 # Directory history
 setopt AUTO_PUSHD                  # pushes the old directory onto the stack
-setopt AUTO_CD                     # change to a directory without cd
+setopt AUTO_CD                    # change to a directory without cd
 setopt PUSHD_MINUS                 # exchange the meanings of '+' and '-'
 setopt CDABLE_VARS                 # expand the expression (allows 'cd -2/tmp')
 setopt auto_cd
@@ -164,13 +164,13 @@ function zoxider() {
 zle -N zoxider
 bindkey '^j' zoxider
 
-function sessionizer_enter() {
-  BUFFER="__sessionizer.sh"
-  zle accept-line
-}
+# function sessionizer_enter() {
+  # BUFFER="__sessionizer.sh"
+  # zle accept-line
+# }
 
-zle -N sessionizer_enter
-bindkey '^x' sessionizer_enter
+# zle -N sessionizer_enter
+# bindkey '^x' sessionizer_enter
 
 function f_enter() {
   BUFFER="f"

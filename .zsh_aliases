@@ -17,7 +17,7 @@ alias -s yaml=nvim
 # Directories and files
 alias f='__open-file.sh'
 alias ls='lsa'
-alias lsc='lsa --color=always'
+alias lsc='ls --color=always'
 alias exaa='exa --color=always --long --all --sort=age --reverse --header --icons'
 alias exa='exa --color=always --long --all --header --icons'
 alias exaf='fd --max-depth=1 --type=file'
