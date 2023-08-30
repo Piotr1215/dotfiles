@@ -16,11 +16,10 @@ alias -s yaml=nvim
 
 # Directories and files
 alias f='__open-file.sh'
-alias ls='lsa'
-alias lsc='ls --color=always'
-alias exaa='exa --color=always --long --all --sort=age --reverse --header --icons'
-alias exa='exa --color=always --long --all --header --icons'
-alias exaf='fd --max-depth=1 --type=file'
+alias uls='/usr/bin/ls'
+alias ls='exa --color=always --long --all --header --icons'
+alias lsa='exa --color=always --long --all --sort=age --reverse --header --icons'
+alias lsf='fd --max-depth=1 --type=file'
 alias tr2='tree -LC 2 --si --sort name | less'
 
 # LXC aliases
