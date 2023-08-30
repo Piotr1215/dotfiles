@@ -41,15 +41,40 @@ include dark-256.theme
 #
 # Custom reports
 report.workdone.description=List of completed tasks in the work context
-report.workdone.columns=id,project,description,end
-report.workdone.labels=ID,Proj,Desc,Done
+report.workdone.columns=project,description.desc,end
+report.workdone.labels=Proj,Desc,Done
 report.workdone.sort=end-\/,project+
-report.workdone.filter=status:completed
+report.workdone.filter=status:completed description!="fill standup forms"
+
 report.current.description=List of current tasks in the work context
 report.current.columns=id,entry.age,manual_priority,project,tags,description.desc,entry,due.relative,follow
 report.current.labels=ID,Age,P,Proj,Tag,Desc,Created,Due,Follow
 report.current.sort=manual_priority-,project+
-report.current.filter=status:pending -idea
+report.current.filter=(status:pending or status:recurring) and (-idea)
+
+report.tmark.description=List of tasks to report
+report.tmark.columns=project,description.desc
+report.tmark.labels=Proj,Desc
+report.tmark.sort=project+
+report.tmark.filter=status:pending -idea
+
+report.tmark-done.description=List of tasks to report done
+report.tmark-done.columns=project,description.desc
+report.tmark-done.labels=Proj,Desc
+report.tmark-done.sort=project+
+report.tmark-done.filter=status:completed -idea
+
+report.tmark-next.description=List of tasks to report next
+report.tmark-next.columns=project,description.desc
+report.tmark-next.labels=Proj,Desc
+report.tmark-next.sort=project+\/
+report.tmark-next.filter=status:pending -idea +next
+
+report.tmark-yesterday.description=List of tasks completed yesterday
+report.tmark-yesterday.columns=project,description.desc
+report.tmark-yesterday.labels=Proj,Desc
+report.tmark-yesterday.sort=project+\/
+report.tmark-yesterday.filter=status:completed end:yesterday
 
 context.work.read=+work
 context.work.write=+work
@@ -77,9 +102,8 @@ uda.taskwarrior-tui.shortcuts.1=~/.config/taskwarrior-tui/shortcut-scripts/tasko
 uda.taskwarrior-tui.shortcuts.2=task context home
 uda.taskwarrior-tui.shortcuts.3=task context work
 uda.taskwarrior-tui.shortcuts.4=~/.config/taskwarrior-tui/shortcut-scripts/follow-up.sh
-uda.taskwarrior-tui.shortcuts.5=~/.config/taskwarrior-tui/shortcut-scripts/__increase_task_priority.sh
-uda.taskwarrior-tui.shortcuts.6=~/.config/taskwarrior-tui/shortcut-scripts/__decrease_task_priority.sh
-uda.taskwarrior-tui.shortcuts.7=~/.config/taskwarrior-tui/shortcut-scripts/__toggle_sorting.sh
+uda.taskwarrior-tui.shortcuts.5=~/.config/taskwarrior-tui/shortcut-scripts/__decrease_task_priority.sh
+uda.taskwarrior-tui.shortcuts.6=~/.config/taskwarrior-tui/shortcut-scripts/__increase_task_priority.sh
 
 #Taskwarrior tui overrides
 uda.taskwarrior-tui.task-report.jump-on-task-add=true
