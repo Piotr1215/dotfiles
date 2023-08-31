@@ -298,6 +298,34 @@ function sout() {
   fi
 } 
 
+# Start multiple tmuxinator sessions
+function msm ()
+{
+  if [[ -z $1 ]]; then
+    echo "Provide one or more tmuxinator sessions to start"
+    return 1  # Exit early with error status
+  fi
+
+  # Split the arguments into an array, zsh populates this by default
+  for session in "$@"; do
+    tmuxinator start "$session"
+  done
+}
+
+# Close multiple tmuxinator sessions
+function mst ()
+{
+  if [[ -z $1 ]]; then
+    echo "Provide one or more tmuxinator sessions to start"
+    return 1  # Exit early with error status
+  fi
+
+  # Split the arguments into an array, zsh populates this by default
+  for session in "$@"; do
+    tmuxinator stop "$session"
+  done
+}
+
 # Check system info using onefetch and output in terminal
 function checkfetch() {
     local res=$(onefetch) &> /dev/null
