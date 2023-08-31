@@ -85,7 +85,6 @@ alias lsprog='ls /home/decoder/go/bin; ls /usr/bin; ls /usr/local/bin'
 alias lst='dpkg -l' #List installed packages with their description
 alias lvim='nvim -c "normal '\''0"'
 alias lzd='docker run --rm -it -v /var/run/docker.sock:/var/run/docker.sock -v /config/lazydocker:/.config/jesseduffield/lazydocker lazyteam/lazydocker'
-alias ms="tmuxinator start" 
 alias mvim='vim $(git ls-files -m)'
 alias relog="DISPLAY=:0 gnome-session-quit --force"
 alias rest='shutdown now'
