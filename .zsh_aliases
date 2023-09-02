@@ -48,6 +48,7 @@ alias rg='rg --hidden'
 alias vim=nvim
 alias v=nvim
 alias watch=viddy
+alias ms=msm
 
 ## Kubernetes aliases
 alias kdump='kubectl get all --all-namespaces'
