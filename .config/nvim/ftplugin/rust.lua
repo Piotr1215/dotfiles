@@ -1,12 +1,11 @@
 vim.cmd('set completeopt=menuone,noinsert,noselect')
 vim.cmd('set shortmess+=c')
 
--- Treesitter folding 
--- vim.wo.foldmethod = 'expr'
--- vim.wo.foldexpr = 'nvim_treesitter#foldexpr()'
+-- Treesitter folding
+vim.cmd('set foldmethod=marker')
+vim.cmd('set foldmarker={{{,}}}')
 
 vim.api.nvim_create_autocmd({ "BufWritePost" }, {
   pattern = { "*.rs" },
-  command = "RustFmt",
+  command = "silent! RustFmt",
 })
-
