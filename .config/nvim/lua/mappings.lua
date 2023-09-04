@@ -110,8 +110,8 @@ utils.nmap("<leader>o", "o<cr>")
 -- Format with pretty
 utils.nmap("<C-f>", ":Pretty<CR>")
 -- add line below without entering insert mode!
-utils.nmap("<leader><Up>", ':<c-u>put!=repeat([\'\'],v:count)<bar>\']+1<cr>')
-utils.nmap("<leader><Down>", ':<c-u>put =repeat([\'\'],v:count)<bar>\'[-1<cr>')
+utils.nmap("<leader>L", ':<c-u>put!=repeat([\'\'],v:count)<bar>\']+1<cr>')
+utils.nmap("<leader>l", ':<c-u>put =repeat([\'\'],v:count)<bar>\'[-1<cr>')
 -- insert space
 utils.nmap('<leader>i', 'i<space><esc>')
 -- delete word forward in insert mode
@@ -269,18 +269,13 @@ utils.vmap("ol", ":ObsidianLink<cr>")
 utils.lnmap("oq", ":ObsidianQuickSwitch<cr>")
 utils.lnmap("on", ":ObsidianNew ", { silent = false })
 utils.lnmap("os", ":ObsidianSearch<cr>")
-vim.keymap.set(
-  "n",
-  "gf",
-  function()
-    if require('obsidian').util.cursor_on_markdown_link() then
-      return "<cmd>ObsidianFollowLink<CR>"
-    else
-      return "gf"
-    end
-  end,
-  { noremap = false, expr = true }
-)
+-- vim.keymap.set("n", "gf", function()
+-- if require("obsidian").util.cursor_on_markdown_link() then
+-- return "<cmd>ObsidianFollowLink<CR>"
+-- else
+-- return "gf"
+-- end
+-- end, { noremap = false, expr = true })
 
 -- Copilot
 vim.cmd([[
