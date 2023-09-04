@@ -1,11 +1,17 @@
 -- Colorschemes settings
 require("catppuccin").setup({
+  flavour = "mocha",
   transparent_background = false,
   term_colors = true,
+  integrations = {
+    cmp = true,
+    treesitter = true,
+    notify = true,
+  }
 })
 
 require("tokyonight").setup({
-  style = "night", -- The theme comes in three styles, `storm`, a darker variant `night` and `day`
+  style = "night",     -- The theme comes in three styles, `storm`, a darker variant `night` and `day`
   transparent = false, -- Enable this to disable setting the background color
   terminal_colors = true,
 })
@@ -63,9 +69,17 @@ require('cmp').setup({
 vim.g.moonflyNormalFloat = true
 vim.g.moonflyWinSeparator = 2
 vim.g.moonflyTransparent = true
-vim.opt.fillchars = { horiz = '━', horizup = '┻', horizdown = '┳', vert = '┃', vertleft = '┫', vertright = '┣', verthoriz = '╋', }
+vim.opt.fillchars = {
+  horiz = '━',
+  horizup = '┻',
+  horizdown = '┳',
+  vert = '┃',
+  vertleft = '┫',
+  vertright = '┣',
+  verthoriz = '╋',
+}
 vim.g.termigurcolors = true
 -- Active colorscheme
 -- vim.cmd [[colorscheme moonfly]]
 -- vim.cmd('colorscheme nightfox')
-vim.cmd('colorscheme tokyonight-moon')
+vim.cmd('colorscheme catppuccin')
