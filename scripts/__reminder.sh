@@ -2,6 +2,14 @@
 
 # Help function
 display_help() {
+	echo "Usage: remind <description> <time>/<opt -- time>"
+	echo ""
+	echo "Examples:"
+	echo "  remind 'Take a break' 10m"
+	echo "  remind 'Meeting' 2h"
+	echo "  remind 'Submit report' 1d"
+	echo "  remind 'Do laundry' -- 'Monday 13:00'"
+	echo ""
 	echo "Supported date and time modifiers:"
 	echo "  m: minutes"
 	echo "  h: hours"
@@ -9,6 +17,7 @@ display_help() {
 	echo "  w: weeks"
 	echo "  y: years"
 	echo "  --: escape hatch for arbitrary 'at' modifiers (e.g., 'Monday eod', '13:00 ETSC')"
+	echo ""
 	echo "Common 'at' modifiers:"
 	echo "  tomorrow, eow (end of week), eod (end of day)"
 }
