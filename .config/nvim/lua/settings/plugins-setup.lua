@@ -45,8 +45,13 @@ require('oil').setup({
 })
 require("obsidian").setup({
   dir = "~/dev/obsidian/decoder",
-  disable_frontmatter = true,
+  disable_frontmatter = false,
   notes_subdir = "Notes",
+  templates = {
+    subdir = "Templates",
+    date_format = "%Y-%m-%d-%a",
+    time_format = "%H:%M"
+  },
   finder = "fzf-lua",
   mappings = {
     ["gf"] = require("obsidian.mapping").gf_passthrough(),
