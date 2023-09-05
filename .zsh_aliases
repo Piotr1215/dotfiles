@@ -36,7 +36,6 @@ alias c=chatgpt-cli
 alias df=duf
 alias diff=colordiff
 alias fd='fd --hidden'
-alias it='cat ~/issue-template.md | xsel --clipboard'
 alias kk=/usr/bin/kubecolor
 alias lol=lolcat
 alias lu=__launch_url.sh
