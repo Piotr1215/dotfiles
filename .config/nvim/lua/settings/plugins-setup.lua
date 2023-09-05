@@ -48,6 +48,9 @@ require("obsidian").setup({
   disable_frontmatter = true,
   notes_subdir = "Notes",
   finder = "fzf-lua",
+  mappings = {
+    ["gf"] = require("obsidian.mapping").gf_passthrough(),
+  },
   completion = {
     nvim_cmp = true, -- if using nvim-cmp, otherwise set to false
   },
@@ -147,6 +150,11 @@ require('femaco').setup({
 local prettier = require("prettier")
 
 require("which-key").setup({
+  triggers_blacklist = {
+    -- list of mode / prefixes that should never be hooked by WhichKey
+    -- this is mostly relevant for keymaps that start with a native binding
+    n = { "g" },
+  },
   plugins = {
     marks = true,       -- shows a list of your marks on ' and `
     registers = true,   -- shows your registers on " in NORMAL or <C-r> in INSERT mode
