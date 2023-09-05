@@ -190,3 +190,14 @@ Taskwarrior is a command-line task management program that provides various attr
 
 In addition to these attributes, Taskwarrior supports a variety of date formats and relative date expressions like `today`, `tomorrow`, `yesterday`, `now`, `sunday`, `monday`, `next week`, `last month`, etc.
 $$
+
+## ToDo Support
+
+Nvim supports following todo highlights:
+
+- HACK
+- NOTE
+- PERF
+- TEST
+- TODO
+- WARN
