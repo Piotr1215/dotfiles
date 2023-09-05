@@ -82,4 +82,4 @@ vim.g.termigurcolors = true
 -- Active colorscheme
 -- vim.cmd [[colorscheme moonfly]]
 -- vim.cmd('colorscheme nightfox')
-vim.cmd('colorscheme catppuccin')
+vim.cmd('colorscheme tokyonight-moon')
