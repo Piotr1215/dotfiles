@@ -22,6 +22,12 @@ display_help() {
 	echo "  tomorrow, eow (end of week), eod (end of day)"
 }
 
+# Check if no parameters are provided
+if [[ $# -eq 0 ]]; then
+	display_help
+	exit 0
+fi
+
 # List reminders
 if [[ "$1" == "-l" || "$1" == "--list" ]]; then
 	at -l
