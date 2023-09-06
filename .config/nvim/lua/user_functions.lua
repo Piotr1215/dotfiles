@@ -18,6 +18,73 @@ end
 -- Key mapping
 vim.api.nvim_set_keymap('n', '<leader>zw', ':lua toggle_zoom()<CR>', { noremap = true, silent = true })
 
+-- Function for creating or updating a Taskwarrior task
+function _G.create_or_update_task()
+  local current_line = vim.fn.getline('.')
+  local cursor_pos = vim.fn.col('.')
+  local file_path = vim.fn.expand('%:p') -- Get full path of current file
+  local line_number = vim.fn.line('.')   -- Get current line number
+
+  -- Keywords we are looking for
+  local keywords = { "TODO", "HACK", "NOTE", "PERF", "TEST", "WARN" }
+
+  for _, keyword in ipairs(keywords) do
+    local start_index, end_index = string.find(current_line, keyword)
+    if start_index then
+      local task_description = string.sub(current_line, end_index + 2, cursor_pos - 1)
+      local task_tag = "+" .. string.lower(keyword)
+
+      -- Ask for project and other tags
+      local project = vim.fn.input('Enter project name: ')
+      local additional_tags_input = vim.fn.input('Enter additional tags separated by spaces: ')
+      local additional_tags = {}
+
+      -- Prefix each additional tag with a "+"
+      for tag in additional_tags_input:gmatch("%S+") do
+        table.insert(additional_tags, "+" .. tag)
+      end
+
+      -- Prepare the task command
+      local task_cmd = string.format("task add %s \"%s\"", task_tag, task_description)
+
+      -- Add additional tags if available
+      if #additional_tags > 0 then
+        task_cmd = task_cmd .. " " .. table.concat(additional_tags, " ")
+      end
+
+      -- Add project if available
+      if project and #project > 0 then
+        task_cmd = task_cmd .. " project:" .. project
+      end
+
+      -- Execute the task add command
+      local output = vim.fn.system(task_cmd)
+      print("Output: ", output)
+
+      for line in output:gmatch("[^\r\n]+") do
+        local task_id = string.match(line, "Created task (%d+)%.")
+        if task_id then
+          print("Task ID extracted: ", task_id)
+
+          -- Annotate task with filename and line number in the nvimline format
+          local annotation = string.format("nvimline:%s:%s", line_number, file_path)
+          local annotate_cmd = string.format("task %s annotate \"%s\"", task_id, annotation)
+          local annotate_output = vim.fn.system(annotate_cmd)
+
+          print("Annotation output: ", annotate_output)
+          return
+        else
+          print("Failed to extract task ID")
+        end
+      end
+    end
+  end
+end
+
+-- Bind Ctrl-T in insert mode to call the create_or_update_task function
+vim.api.nvim_set_keymap('i', '<C-T>', [[<Cmd>lua create_or_update_task(vim.fn.getline('.'))<CR>]],
+  { noremap = true, silent = true })
+
 local actions = require('telescope.actions')
 local action_state = require('telescope.actions.state')
 
