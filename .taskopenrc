@@ -8,6 +8,11 @@ task_attributes="priority,project,tags,description"
 EDITOR=nvim
 path_ext=/usr/share/taskopen/scripts
 [Actions]
+nvimline.target=annotations
+nvimline.labelregex=".*"
+nvimline.regex="^nvimline:(\\d+):(.*)"
+nvimline.command="/home/decoder/.config/taskwarrior-tui/shortcut-scripts/taksopen_line.sh $FILE"
+nvimline.modes="batch,any,normal"
 files.target=annotations
 files.labelregex=".*"
 files.regex="^[\\.\\/~]+.*\\.(.*)"
