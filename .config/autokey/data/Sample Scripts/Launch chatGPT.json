@@ -1,21 +1,21 @@
 {
     "type": "script",
-    "description": "Insert Date",
+    "description": "Launch chatGPT",
     "store": {},
     "modes": [
         1
     ],
-    "usageCount": 0,
+    "usageCount": 16,
     "prompt": false,
     "omitTrigger": false,
     "showInTrayMenu": false,
     "abbreviation": {
         "abbreviations": [
-            "idate"
+            "ichat"
         ],
         "backspace": true,
         "ignoreCase": false,
-        "immediate": false,
+        "immediate": true,
         "triggerInside": false,
         "wordChars": "[\\w]"
     },

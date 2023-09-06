@@ -1,18 +1,16 @@
 {
     "type": "script",
-    "description": "Insert Date",
+    "description": "GoogleSelectedText",
     "store": {},
     "modes": [
-        1
+        3
     ],
-    "usageCount": 0,
+    "usageCount": 3,
     "prompt": false,
     "omitTrigger": false,
     "showInTrayMenu": false,
     "abbreviation": {
-        "abbreviations": [
-            "idate"
-        ],
+        "abbreviations": [],
         "backspace": true,
         "ignoreCase": false,
         "immediate": false,
@@ -20,8 +18,10 @@
         "wordChars": "[\\w]"
     },
     "hotkey": {
-        "modifiers": [],
-        "hotKey": null
+        "modifiers": [
+            "<super>"
+        ],
+        "hotKey": "g"
     },
     "filter": {
         "regex": null,
