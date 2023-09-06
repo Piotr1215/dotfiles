@@ -54,6 +54,12 @@
     "body": ["```bash", "~~~${1:command}", "${0}", "~~~", "```"],
     "description": "Inserts slides pre-processing snippet"
   },
+  "Parenthesis []": {
+    "prefix": "par",
+    "scope": "markdown",
+    "body": ["[${1:$TM_SELECTED_TEXT}]"],
+    "description": "Wrap selected in parenthesis"
+  },
   "Bash Code Snippet with surround": {
     "prefix": "bshs",
     "scope": "markdown",
