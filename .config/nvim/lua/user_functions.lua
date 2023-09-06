@@ -1,3 +1,4 @@
+-- TODO: consider splitting the whole file into smaller parts
 local wk = require("which-key")
 
 -- Store the zoom state
