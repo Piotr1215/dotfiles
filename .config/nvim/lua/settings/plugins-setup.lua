@@ -300,5 +300,6 @@ vim.g.startify_bookmarks = {
   '~/.taskopenrc',
   '~/.oh-my-zsh/plugins/tmuxinator/_mst',
   '~/.config/taskwarrior-tui/shortcut-scripts',
+  '~/.local/share/nvim/site/pack/packer/start',
 }
 vim.g.startify_custom_header = "startify#pad(split(system('fortune -s | cowsay | lolcat; date'), '\n'))"
