@@ -269,6 +269,7 @@ utils.vmap("ol", ":ObsidianLink<cr>")
 utils.lnmap("oq", ":ObsidianQuickSwitch<cr>")
 utils.lnmap("on", ":ObsidianNew ", { silent = false })
 utils.lnmap("os", ":ObsidianSearch<cr>")
+utils.lnmap("ob", ":ObsidianBacklinks<cr>")
 -- vim.keymap.set("n", "gf", function()
 -- if require("obsidian").util.cursor_on_markdown_link() then
 -- return "<cmd>ObsidianFollowLink<CR>"
