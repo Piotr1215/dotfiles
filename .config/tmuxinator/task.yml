@@ -45,7 +45,7 @@ startup_pane: 2
 # attach: false
 
 windows:
-  - poke:
+  - tasks:
       layout: even-horizontal
       panes:
         - tui -r workdone
