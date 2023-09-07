@@ -19,6 +19,43 @@ end
 -- Key mapping
 vim.api.nvim_set_keymap('n', '<leader>zw', ':lua toggle_zoom()<CR>', { noremap = true, silent = true })
 
+
+-- TODO: funciton could search for task first
+function _G.mark_task_done()
+  -- Get the current line and parse it
+  local line = vim.api.nvim_get_current_line()
+  print("Original line: ", line)
+
+  -- Uncomment the line
+  vim.cmd [[execute "normal \<Plug>NERDCommenterUncomment"]]
+  line = vim.api.nvim_get_current_line()
+  print("Uncommented line: ", line)
+
+  local patterns = { 'TODO:', 'HACK:', 'NOTE:', 'PERF:', 'TEST:', 'WARN:' }
+  local taskDescription = nil
+  for _, pattern in ipairs(patterns) do
+    local start_idx = string.find(line, pattern)
+    if start_idx then
+      taskDescription = string.sub(line, start_idx + string.len(pattern) + 1)
+      break
+    end
+  end
+  print("Task description: ", taskDescription or "nil")
+
+  -- If a task description was found, mark it as done
+  if taskDescription then
+    local output = vim.fn.system("yes | task description~'" .. taskDescription .. "' done")
+    print("Command output: ", output)
+    -- Check the command's output to make sure the task was marked done
+    if string.find(output, "Completed") then
+      -- Delete the current line
+      vim.cmd [[normal dd]]
+    end
+  end
+end
+
+-- Map the function to a key
+vim.api.nvim_set_keymap('n', '<leader>dt', [[<Cmd>lua mark_task_done()<CR>]], { noremap = true, silent = true })
 -- Function for creating or updating a Taskwarrior task
 function _G.create_or_update_task()
   local current_line = vim.fn.getline('.')
