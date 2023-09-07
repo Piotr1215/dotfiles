@@ -19,8 +19,8 @@ end
 -- Key mapping
 vim.api.nvim_set_keymap('n', '<leader>zw', ':lua toggle_zoom()<CR>', { noremap = true, silent = true })
 
+-- TODO: functionality to move back from file to taskwarrior or task
 
--- TODO: funciton could search for task first
 function _G.mark_task_done()
   -- Get the current line and parse it
   local line = vim.api.nvim_get_current_line()
