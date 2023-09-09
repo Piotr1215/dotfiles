@@ -19,8 +19,41 @@ end
 -- Key mapping
 vim.api.nvim_set_keymap('n', '<leader>zw', ':lua toggle_zoom()<CR>', { noremap = true, silent = true })
 
--- TODO: functionality to move back from file to taskwarrior or task
+function _G.go_to_task_in_taskwarrior_tui()
+  -- Get the current line and save it as the original line
+  local original_line = vim.api.nvim_get_current_line()
 
+  -- Uncomment the line
+  vim.cmd [[execute "normal \<Plug>NERDCommenterUncomment"]]
+  local uncommented_line = vim.api.nvim_get_current_line()
+
+  local patterns = { 'TODO:', 'HACK:', 'NOTE:', 'PERF:', 'TEST:', 'WARN:' }
+  local taskDescription = nil
+
+  for _, pattern in ipairs(patterns) do
+    local start_idx = string.find(uncommented_line, pattern)
+    if start_idx then
+      taskDescription = string.sub(uncommented_line, start_idx + string.len(pattern) + 1)
+      taskDescription = string.sub(taskDescription, 1, 50)
+      break
+    end
+  end
+
+  -- If a task description was found, use it to go to the task in taskwarrior-tui
+  if taskDescription then
+    -- print("Sleeping for 2 seconds before tmux switch...")
+    -- vim.cmd("sleep 2") -- sleep for 2 seconds
+    local output = vim.fn.system(" ~/dev/dotfiles/scripts/__switch_to_tui.sh '" .. taskDescription .. "'")
+  end
+
+  -- Replace the line back with the original
+  vim.api.nvim_set_current_line(original_line)
+end
+
+vim.api.nvim_set_keymap('n', '<leader>gt', [[<Cmd>lua go_to_task_in_taskwarrior_tui()<CR>]],
+  { noremap = true, silent = true })
+
+-- TODO: delete task from tui to file
 function _G.mark_task_done()
   -- Get the current line and parse it
   local line = vim.api.nvim_get_current_line()
