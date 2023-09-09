@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 
-# The set -e option instructs bash to immediately exit if any command has a non-zero exit status
-# The set -u referencing a previously undefined  variable - with the exceptions of $* and $@ - is an error
-# The set -o pipefail if any command in a pipeline fails, that return code will be used as the return code of the whole pipeline
 set -eo pipefail
+
+# Capture the current session name
+current_session=$(tmux display-message -p '#S')
 
 # Parse the task description from the argument
 TASK_DESCRIPTION="$1"
@@ -12,10 +12,18 @@ TASK_DESCRIPTION="$1"
 tmux new-session -d -s new-task-session "tui -r current"
 
 # Sleep for a bit to allow tui to load
-sleep 0.5
+sleep 0.1
 
 # Send the keystrokes needed to filter tasks by description to the target pane
 tmux send-keys -t new-task-session:1.1 "/description:$TASK_DESCRIPTION" C-m
 
 # Attach to the new session
 tmux switch-client -t new-task-session
+
+# Wait for the session to be closed, either by the user or some other way
+while tmux has-session -t new-task-session 2>/dev/null; do
+	sleep 0.1
+done
+
+# Switch back to the original session
+tmux switch-client -t $current_session
