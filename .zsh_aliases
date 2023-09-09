@@ -50,6 +50,7 @@ alias watch=viddy
 alias ms=msm
 
 ## Kubernetes aliases
+alias kconf='__create_separate_kubeconfig.sh'
 alias kdump='kubectl get all --all-namespaces'
 alias kaf='kubectl apply -f'
 alias kdf='kubectl delete -f'
@@ -110,4 +111,3 @@ alias wm='watch kubectl get managed'
 alias work='nohup firefox -P "Work" > /dev/null 2>&1 &'
 alias zedit='vim ~/.zshrc'
 alias vhs='vim -c ":History"'
-alias python='python3'
