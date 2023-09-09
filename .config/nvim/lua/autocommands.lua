@@ -69,6 +69,9 @@ vim.api.nvim_create_autocmd({ "bufwritepost" }, {
   command = "silent! !shfmt -l -w %",
 })
 
+vim.cmd [[
+  command! TMarkn execute "r !~/dev/dotfiles/scripts/__list_tasks_as_markdown.pl '+next'"
+]]
 api.nvim_exec(
   [[
     augroup fileTypes
