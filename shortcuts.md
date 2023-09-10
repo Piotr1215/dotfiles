@@ -32,11 +32,15 @@ $$
 $!                   - the process ID of the last executed background command.
 $IFS                 - the internal field separator, used to separate words in a string.
 
+---
+
 ## Tmux
 Ctrl +b, Alt + 1    - change panes to vertical position
 Ctrl +b, Alt + 2    - change panes to horizontal position
 Ctro +b, Ctrl + o   - swap panes 1:2 to 2:1
 Ctrl +b [           - enter copy Mode
+
+---
 
 ## Vim
 P,                              - p pastes text and replaces current buffer, P
@@ -71,6 +75,8 @@ q/                              - enter search history
 Ctrl + y            - copy character from the line above
 Ctrl + e            - copy character from the line below
 
+---
+
 ### Plugins
 
 #### Nvim Surround
@@ -84,6 +90,8 @@ Ctrl + e            - copy character from the line below
     'change quot*es'            cs'"            "change quotes"
     <b>or tag* types</b>        csth1<CR>       <h1>or tag types</h1>
     delete(functi*on calls)     dsf             function calls
+
+---
 
 ## Tips $ Tricks
 
@@ -101,6 +109,8 @@ Conversion steps:
 - Get the integer quotient for the next iteration.
 - Get the remainder for the binary digit.
 - Repeat the steps until the quotient is equal to 0.
+
+---
 
 ## Tmuxinator Layouts
 
@@ -121,6 +131,8 @@ Similar to main-horizontal but the large pane is placed on the left and the othe
 tiled
 Panes are spread out as evenly as possible over the window in both rows and columns.
 
+---
+
 ## Ranger
 
 Command hints show up whenever a mapping has multiple continuations:
@@ -135,6 +147,8 @@ z for changing settings
 u for "undo"
 M for linemode
 +, -, = for setting access rights to files
+
+---
 
 ## Moreutils
 
@@ -155,6 +169,8 @@ The moreutils tools
     vidir: edit a directory in your text editor
     vipe: insert a text editor into a pipe
     zrun: automatically uncompress arguments to command
+
+---
 
 ## Taskwarrior
 
@@ -189,7 +205,8 @@ Taskwarrior is a command-line task management program that provides various attr
 6. **+OVERDUE:** A virtual tag that automatically gets assigned to tasks past their due date.
 
 In addition to these attributes, Taskwarrior supports a variety of date formats and relative date expressions like `today`, `tomorrow`, `yesterday`, `now`, `sunday`, `monday`, `next week`, `last month`, etc.
-$$
+
+---
 
 ## ToDo Support
 
@@ -201,3 +218,51 @@ Nvim supports following todo highlights:
 - TEST
 - TODO
 - WARN
+
+---
+
+## Developer Workflow for Task Management with TaskWarrior and Neovim
+
+### Introduction
+
+This workflow guides you through an integrated approach to managing tasks using TaskWarrior and Neovim. It aims to streamline task management directly within the coding environment.
+
+### Workflow Steps
+
+#### 1. Write Code and Add TODO Comments
+
+While actively writing code, you might come up with a new task idea. To make a note of this, simply add a TODO comment in your code:
+
+```bash
+# TODO: use shift to get rid of the argument
+```
+
+#### 2. Convert TODO to TaskWarrior Task
+
+Turn your `TODO:` comment into a TaskWarrior task by using a Neovim shortcut. In insert mode, press `Ctrl+t` to trigger this action. You can then add additional details like project and tags:
+
+```bash
+project: bash
+tags: techniques learning
+```
+
+#### 3. Jump to Task Location in Code
+
+The next day, open TaskWarrior's Task User Interface (TUI). Your new task will appear there. Simply press `1` to jump directly to the corresponding line in the code file.
+
+#### 4. Add Context to Task
+
+While working on the task, you may want to add more context, like a URL. Use `<leader>gt` in Neovim to open the task in the TUI. Press `A` to add the URL, then `Ctrl+C` to exit, and you'll be returned to the same line in your editor.
+
+#### 5. Open TUI Session
+
+The TUI session is fast and ephemeral, thanks to tmux integration. It's a seamless experience while working on your tasks.
+
+#### 6. Remove Completed Task
+
+Once the task is completed, select it in the TUI, then press `1` to jump to it in the code file. Use `<leader>dt` in Neovim to remove the task. The corresponding task will also be removed in the TUI.
+
+#### 7. Remove Task Directly in TUI
+
+Wondering what happens if you remove the task directly from the TUI first? As of the latest update, doing this will automatically remove the corresponding TODO comment in the code file. To create a new task for a TODO comment, simply use `Ctrl+t` in Neovim to add it to TaskWarrior.
+$$
