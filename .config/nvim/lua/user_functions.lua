@@ -53,7 +53,6 @@ end
 vim.api.nvim_set_keymap('n', '<leader>gt', [[<Cmd>lua go_to_task_in_taskwarrior_tui()<CR>]],
   { noremap = true, silent = true })
 
--- TODO: delete task from tui to file
 function _G.mark_task_done()
   -- Get the current line and parse it
   local line = vim.api.nvim_get_current_line()
