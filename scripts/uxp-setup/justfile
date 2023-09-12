@@ -7,9 +7,9 @@ yaml    := justfile_directory() + "/yaml"
 browse      := if os() == "linux" { "xdg-open "} else { "open" }
 copy        := if os() == "linux" { "xsel -ib"} else { "pbcopy" }
 
-export gcp_provider_version         := env_var_or_default('GCP_PROVIDER', "v0.26.0")
-export azure_provider_version       := env_var_or_default('AZURE_PROVIDER', "v0.28.0")
-export aws_provider_version         := "v0.30.0"
+export gcp_provider_version         := env_var_or_default('GCP_PROVIDER', "v0.35.0")
+export azure_provider_version       := env_var_or_default('AZURE_PROVIDER', "v0.36.0")
+export aws_provider_version         := "v0.40~.0"
 export random_suffix                := `echo $RANDOM`
 export base64encoded_azure_creds    := `base64 ~/crossplane-azure-provider-key.json | tr -d "\n"`
 export base64encoded_gcp_creds      := `base64 ~/gcp-creds-platform.json | tr -d "\n"`
@@ -26,7 +26,7 @@ _check_mandatory_programs:
   @if ! type "kubectl" > /dev/null; then echo "Please install kubectl" && exit 1; fi
  
 # * setup kind cluster with GCP official provider and ArgoCD
-setup_infra: _check_mandatory_programs setup_kind setup_gcp setup_k8s setup_helm
+setup_infra: _check_mandatory_programs setup_kind setup_k8s setup_helm
 
 # setup kind cluster with Crossplane and composition functions
 setup_kind_xfn:
@@ -69,7 +69,7 @@ setup_kind:
 
   echo "Installing UXP"
   kubectl create namespace upbound-system
-  up uxp install
+  helm install uxp --namespace upbound-system upbound-stable/universal-crossplane --devel
   kubectl wait --for condition=Available=True --timeout=300s deployment/crossplane --namespace upbound-system
 
 # setup provider Kubernetes
@@ -147,8 +147,8 @@ delete_bucket:
   @envsubst < {{yaml}}/bucket.yaml | kubectl delete --ignore-not-found -f - 
 
 # * delete KIND cluster and clearnup cloud resources
-teardown: delete_bucket
-  @echo "Delete KIND cluster, ensure bucket is removed first"
+teardown: 
+  @echo "Delete KIND cluster"
   @kind delete clusters control-plane
 
 # watch crossplane resources
