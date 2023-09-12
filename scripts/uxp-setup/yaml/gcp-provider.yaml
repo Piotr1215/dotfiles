@@ -4,8 +4,7 @@ kind: ControllerConfig
 metadata:
   name: gcp-config
 spec:
-  args:
-    - '-d'
+  args: []
 ---
 apiVersion: pkg.crossplane.io/v1
 kind: Provider
