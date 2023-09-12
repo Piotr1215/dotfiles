@@ -12,15 +12,6 @@ markdown_template = '''## Description
 
 <!-- how can someone test it and tell that the task is done -->
 
-## Testing Criteria
-
-- [ ]
-
-<!-- observable and verifiable test steps for example
-     - linking the Notion doc
-     - link to working cloud resources to be verified, etc)
--->
-
 ## Related
 
 <!-- patent issues, related and blockers -->
