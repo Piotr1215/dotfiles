@@ -14,7 +14,6 @@ utils.lnmap(";e", ":!bash % ", { silent = false })
 utils.nmap("<nop>", "<Plug>Markdown_Fold")               -- tab is for moving around only
 utils.lnmap("nh", "<Plug>Markdown_MoveToNextHeader")     -- tab is for moving around only
 utils.lnmap("ph", "<Plug>Markdown_MoveToPreviousHeader") -- tab is for moving around only
-utils.nmap("<Tab>", "<C-w>w")                            -- tab is for moving around only
 -- center screen after moving pageup or down
 utils.nmap("<c-d>", "<c-d>zz")
 utils.nmap("<c-u>", "<c-u>zz")
