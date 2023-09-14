@@ -89,7 +89,6 @@ return require('packer').startup(function(use)
   use 'tpope/vim-fugitive'
   use 'voldikss/vim-floaterm'
   use 'sindrets/diffview.nvim'
-  use 'kevinhwang91/rnvimr'
   use({
     "kylechui/nvim-surround",
     config = function()
