@@ -185,12 +185,6 @@ utils.xmap('<leader>tc', '<Plug>(vsnip-cut-text)')
 -- Abbreviations
 vim.cmd('abb cros Crossplane')
 
--- Plugins specific mappings
--- Ranger
-utils.tmap("<M-i>", "<C-\\><C-n>:RnvimrResize<CR>")
-utils.nmap("<M-o>", ":RnvimrToggle<CR>")
-utils.tmap("<M-o>", "<C-\\><C-n>:RnvimrToggle<CR>")
-
 -- Harpoon
 utils.nmap("<leader>ha", ":lua require(\"harpoon.mark\").add_file()<CR>")
 utils.nmap("<leader>hm", ":lua require(\"harpoon.ui\").toggle_quick_menu()<CR>")
