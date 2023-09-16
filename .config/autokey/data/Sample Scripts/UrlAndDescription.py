@@ -21,7 +21,7 @@ def invoke_plink(description, url):
     child.sendline(command_description)
     child.expect(pexpect.EOF)
 
-# Main logic
+# Main logic of the script
 active_window_title = subprocess.getoutput("xdotool getactivewindow getwindowname")
 
 if 'Firefox' in active_window_title:
