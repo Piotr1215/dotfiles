@@ -1,14 +1,19 @@
-import urllib.parse
 import webbrowser
+base="https://duckduckgo.com/?q="
+phrase=clipboard.get_selection()
 
-# Get the selected text
-selected_text = clipboard.get_selection()
+#Remove trailing or leading white space and find if there are multiple
+#words.
+phrase=phrase.strip()
+singleWord=False
+if phrase.find(' ')<0:
+    singleWord=True
 
-# URL-encode the text
-encoded_text = urllib.parse.quote_plus(selected_text)
+#Generate search URL.
+if singleWord:
+    search_url=base+phrase
+if (not singleWord):
+    phrase='+'.join(phrase.split())
+    search_url=base+phrase
 
-# Create the Google search URL
-search_url = f"https://www.google.com/search?q={encoded_text}"
-
-# Open the URL in the default web browser
-webbrowser.open(search_url)
+webbrowser.open_new_tab(search_url)
