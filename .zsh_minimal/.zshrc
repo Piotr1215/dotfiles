@@ -22,6 +22,12 @@ export CLICOLOR=YES
 export LSCOLORS="Gxfxcxdxbxegedabagacad"
 # This prevents the 'too many files error' when running PackerSync
 ulimit -n 10240
+
+alias mdit='nvim ~/.zsh_minimal/.zshrc'
+function ddg() {
+    open "https://duckduckgo.com/?q=$*"
+}
+
 parse_git_dirty() {
   git_status="$(git status 2> /dev/null)"
   [[ "$git_status" =~ "Changes to be committed:" ]] && echo -n "%F{green}·%f"
