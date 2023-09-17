@@ -1,6 +1,7 @@
 import subprocess
 import time
 import pexpect
+from urllib.parse import urlparse
 
 def write_to_file(description, url):
     with open('capture_data.txt', 'a') as f:
@@ -41,7 +42,7 @@ if 'Firefox' in active_window_title:
     
     # Capture URL separately
     keyboard.send_keys('yy')
-    time.sleep(0.25)  # Allow some time for the clipboard operation to complete
+    time.sleep(0.5)  # Allow some time for the clipboard operation to complete
     
     url = clipboard.get_clipboard()
 
@@ -58,7 +59,9 @@ if 'Firefox' in active_window_title:
     #dialog.info_dialog(title="Information", message=message)
     # Create a custom dialog box with Zenity
     options = ["No Task", "Create Task"]
-    message = f"The url '{url}'\nwith description '{description}' was added.\n\nShould we create an idea task for it?"
+    parsed_url = urlparse(url)
+    domain = parsed_url.netloc  # Extracts the domain from the URL
+    message = f"Pet link created for '{description}' from '{domain}' domain.\n\nShould we create an idea task for it?\n"
 
     # Call list_menu to show the dialog
     exit_code, choice = dialog.list_menu(options, title="Choose an Action", message=message, default="No Task")
