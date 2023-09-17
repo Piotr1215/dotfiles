@@ -148,6 +148,14 @@ function prev() {
   sh -c "pet new `printf %q "$PREV"`"
 }
 
+function pet-select-bmk() {
+  BUFFER=$(pet search --tag link)
+  zle redisplay
+}
+
+zle -N pet-select-bmk
+bindkey '^t' pet-select-bmk
+
 function pet-select() {
   BUFFER=$(pet search --query "$LBUFFER")
   CURSOR=$#BUFFER
