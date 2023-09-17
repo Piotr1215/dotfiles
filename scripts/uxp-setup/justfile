@@ -25,8 +25,19 @@ _check_mandatory_programs:
   @if ! type "kind" > /dev/null ;then echo "Please install KIND" && exit 1; fi
   @if ! type "kubectl" > /dev/null; then echo "Please install kubectl" && exit 1; fi
  
-# * setup kind cluster with GCP official provider and ArgoCD
-setup_infra: _check_mandatory_programs setup_kind setup_k8s setup_helm
+# * setup kind cluster with ArgoCD, kubernetes and help providers
+setup_infra: _check_mandatory_programs setup_kind setup_k8s setup_helm enable_metrics_server
+
+# enable metrics server
+enable_metrics_server:
+ @kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+ @kubectl patch deployment metrics-server -n kube-system \
+  --type='json' \
+  -p='[{"op": "add", "path": "/spec/template/spec/containers/0/args/-", "value": "--kubelet-insecure-tls=true"}]'
+
+# disable metrics server
+disable_metrics_server:
+ @kubectl delete -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
 
 # setup kind cluster with Crossplane and composition functions
 setup_kind_xfn:
