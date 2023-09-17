@@ -13,12 +13,15 @@ def invoke_plink(description, url):
 
     command_name = f"xdg-open \"{url}\""
     command_description = f"Link to {description}"
+    command_tag = "link"
 
-    child = pexpect.spawn('pet new')
+    child = pexpect.spawn('pet new -t')
     child.expect('Command>')
     child.sendline(command_name)
     child.expect('Description>')
     child.sendline(command_description)
+    child.expect('Tag>')
+    child.sendline(command_tag)
     child.expect(pexpect.EOF)
 
 # Main logic of the script
