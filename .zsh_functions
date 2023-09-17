@@ -33,14 +33,17 @@ function plink ()
     echo "Linking $link"
     command_name="xdg-open \\\"$link\\\""
     description="Link to $desc"
+    tag="link"
 
     # Use expect to interact with pet new
     /usr/bin/expect <<EOF
-      spawn pet new
+      spawn pet new -t
       expect "Command>"
       send "${command_name}\r"
       expect "Description>"
       send "${description}\r"
+      expect "Tag>"
+      send "${tag}\r"
       expect eof
 EOF
   else
