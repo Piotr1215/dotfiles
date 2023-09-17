@@ -54,7 +54,18 @@ if 'Firefox' in active_window_title:
     
     # Invoke plink function with the captured description and URL
     invoke_plink(description, url)
-    message = "The url '{}' and description '{}' were added".format(url, description)
-    dialog.info_dialog(title="Information", message=message)
+    #message = "The url '{}' and description '{}' were added".format(url, description)
+    #dialog.info_dialog(title="Information", message=message)
+    # Create a custom dialog box with Zenity
+    options = ["No Task", "Create Task"]
+    message = f"The url '{url}'\nwith description '{description}' was added.\n\nShould we create an idea task for it?"
+
+    # Call list_menu to show the dialog
+    exit_code, choice = dialog.list_menu(options, title="Choose an Action", message=message, default="No Task")
+
+    # Process the choice
+    if choice == "Create Task":
+        subprocess.run(["/home/decoder/dev/dotfiles/scripts/__create_task.sh", description, "+idea"])
+
     clipboard.fill_clipboard("")
     clipboard.fill_selection("")
