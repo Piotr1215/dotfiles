@@ -293,6 +293,7 @@ vim.g.startify_bookmarks = {
   '~/.zshrc',
   '~/.tmux.conf',
   '~/.taskrc',
+  '~/.task/hooks',
   '~/.config/ranger/rc.conf',
   '~/shortcuts.md',
   '/usr/local/share/zsh/site-functions',
