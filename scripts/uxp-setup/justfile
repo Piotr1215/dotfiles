@@ -10,6 +10,7 @@ copy        := if os() == "linux" { "xsel -ib"} else { "pbcopy" }
 export gcp_provider_version         := env_var_or_default('GCP_PROVIDER', "v0.35.0")
 export azure_provider_version       := env_var_or_default('AZURE_PROVIDER', "v0.36.0")
 export aws_provider_version         := "v0.40~.0"
+export k8s_version                  := "1.27.0"
 export random_suffix                := `echo $RANDOM`
 export base64encoded_azure_creds    := `base64 ~/crossplane-azure-provider-key.json | tr -d "\n"`
 export base64encoded_gcp_creds      := `base64 ~/gcp-creds-platform.json | tr -d "\n"`
@@ -74,7 +75,7 @@ setup_kind:
   cluster="control-plane"
 
   echo "Creating kind cluster - ${cluster}"
-  kind create cluster --config=kind-config.yaml --wait 3m 
+  envsubst < kind-config.yaml | kind create cluster --config=- --wait 3m 
   kind get kubeconfig --name "${cluster}"
   kubectl config use-context kind-"${cluster}"
 
