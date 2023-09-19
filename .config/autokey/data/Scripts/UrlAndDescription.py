@@ -7,7 +7,6 @@ from bs4 import BeautifulSoup
 import requests
 import openai
 
-from dotenv import load_dotenv
 envrc_path = os.path.expanduser('~/.envrc')
 with open(envrc_path, 'r') as f:
     lines = f.readlines()
@@ -37,7 +36,7 @@ def sanitize_tags(raw_tags):
 
     
 def get_tags_from_openai(description):
-    prompt = f"Based on the provided website description: '{description}', please generate a list of up to 5 relevant tags for categorizing the content. Tags should have a maximum of 14 characters, include no special characters, and be words like +linux, +shopping, +pets. Please format the tags like this: +tag1, +tag2, +tag3, ..."
+    prompt = f"Based on the provided website description: '{description}', please generate a list of up to 3 relevant tags for categorizing the content. Tags should have a maximum of 14 characters, include no special characters, and be words like +linux, +shopping, +pets. Please format the tags like this: +tag1, +tag2, +tag3, ..."
     
     chat_completion = openai.ChatCompletion.create(
         model="gpt-3.5-turbo",
@@ -48,7 +47,6 @@ def get_tags_from_openai(description):
     )
     
     tags_output = chat_completion['choices'][0]['message']['content'] # type: ignore
-    # Sanitize output (make sure it only includes the tags)
     tags = tags_output.strip().split(", ")
     return sanitize_tags(tags)
 
@@ -65,7 +63,6 @@ def get_website_description(url):
     except Exception as e:
         return f"An error occurred: {e}"
         
-# Function to get custom task descriptions
 def get_custom_description(default_description):
     command = f"zenity --entry --text 'Enter task description:' --title 'Task Description' --entry-text '{default_description}' --width 400"
     try:
@@ -92,7 +89,6 @@ def invoke_plink(description, url, tags):
     child.sendline(command_tag)
     child.expect(pexpect.EOF)
 
-# Main logic of the script
 active_window_title = subprocess.getoutput("xdotool getactivewindow getwindowname")
 
 if 'Firefox' in active_window_title:
@@ -120,9 +116,6 @@ if 'Firefox' in active_window_title:
     
     # Invoke plink function with the captured description and URL
     invoke_plink(description, url, tags)
-    #message = "The url '{}' and description '{}' were added".format(url, description)
-    #dialog.info_dialog(title="Information", message=message)
-    # Create a custom dialog box with Zenity
     options = ["No Task", "Create Task"]
     parsed_url = urlparse(url)
     domain = parsed_url.netloc  # Extracts the domain from the URL
