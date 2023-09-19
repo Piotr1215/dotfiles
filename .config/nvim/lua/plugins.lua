@@ -169,6 +169,7 @@ return require('packer').startup(function(use)
       require("trouble").setup {}
     end
   }
+  use 'hrsh7th/cmp-nvim-lsp-signature-help'
   use {
     'hrsh7th/cmp-vsnip',
     requires = {
@@ -196,6 +197,7 @@ return require('packer').startup(function(use)
       'hrsh7th/cmp-cmdline',
     }
   }
+  use 'hrsh7th/cmp-nvim-lua'
   use 'L3MON4D3/LuaSnip'
   use 'hrsh7th/vim-vsnip'
   use 'hrsh7th/vim-vsnip-integ'
