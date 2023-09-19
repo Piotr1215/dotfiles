@@ -1,6 +1,15 @@
 -- TODO: consider splitting the whole file into smaller parts
 local wk = require("which-key")
 
+function _G.print_current_file_dir()
+  local dir = vim.fn.expand('%:p:h')
+  if dir ~= '' then
+    print(dir)
+  end
+end
+
+vim.cmd("command! GetCurrentFileDir lua print_current_file_dir()")
+
 -- Store the zoom state
 local zoomed = false
 
