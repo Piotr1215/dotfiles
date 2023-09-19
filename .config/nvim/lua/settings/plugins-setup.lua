@@ -78,9 +78,15 @@ require("todo-comments").setup {}
 
 require 'nvim-treesitter.configs'.setup {
   -- Add languages to be installed here that you want installed for treesitter
-  ensure_installed = { 'go', 'lua', 'rust', 'typescript', 'help', 'markdown', 'markdown_inline' },
+  ensure_installed = { 'go', 'lua', 'rust', 'toml', 'typescript', 'help', 'markdown', 'markdown_inline' },
 
   highlight = { enable = true },
+  auto_install = true,
+  rainbow = {
+    enable = true,
+    extended_mode = true,
+    max_file_lines = nil,
+  },
   indent = {
     enable = true,
     additional_vim_regex_highlighting = { "markdown" },
