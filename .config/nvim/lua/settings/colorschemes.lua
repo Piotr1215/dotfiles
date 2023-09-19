@@ -58,13 +58,6 @@ require("transparent").setup({
 local winhighlight = {
   winhighlight = "Normal:NormalFloat,FloatBorder:FloatBorder,CursorLine:PmenuSel",
 }
-local cmp = require('cmp')
-require('cmp').setup({
-  window = {
-    completion = cmp.config.window.bordered(winhighlight),
-    documentation = cmp.config.window.bordered(winhighlight),
-  }
-})
 
 vim.g.moonflyNormalFloat = true
 vim.g.moonflyWinSeparator = 2
