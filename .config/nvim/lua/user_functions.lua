@@ -19,6 +19,19 @@ end
 -- Key mapping
 vim.api.nvim_set_keymap('n', '<leader>zw', ':lua toggle_zoom()<CR>', { noremap = true, silent = true })
 
+function _G.ranger_popup_in_tmux()
+  -- Get the directory of the current file in Neovim
+  local current_file = vim.fn.expand('%:p:h')
+
+  -- Formulate the tmux command with either the file directory or the pane's current path
+  local tmux_command = "tmux popup -d '" .. current_file .. "' -E -h 95% -w 95% -x 100% 'ranger'"
+
+  -- Execute the tmux command
+  os.execute(tmux_command)
+end
+
+vim.api.nvim_set_keymap('n', '<leader>mr', ':lua ranger_popup_in_tmux()<CR>', { noremap = true, silent = true })
+
 function _G.go_to_task_in_taskwarrior_tui()
   -- Get the current line and save it as the original line
   local original_line = vim.api.nvim_get_current_line()
