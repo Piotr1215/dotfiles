@@ -8,6 +8,6 @@ set -eo pipefail
 
 while true; do
 	inotify-hookable \
-		--watch-files ~/.config/autokey/data/Sample\ Scripts/ \
-		--on-modify-command "rsync -av --delete --exclude='*.json' ~/.config/autokey/data/Sample\ Scripts/ ~/dev/dotfiles/.config/autokey/data/Sample\ Scripts/"
+		--watch-files ~/.config/autokey/data/Scripts/ \
+		--on-modify-command "rsync -av --delete --exclude='*.json' ~/.config/autokey/data/Scripts/ ~/dev/dotfiles/.config/autokey/data/Scripts/"
 done

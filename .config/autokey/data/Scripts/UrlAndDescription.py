@@ -3,9 +3,14 @@ import time
 import pexpect
 from urllib.parse import urlparse
 
-def write_to_file(description, url):
-    with open('capture_data.txt', 'a') as f:
-        f.write(f"{description};{url}\n")
+# Function to get custom task descriptions
+def get_custom_description(default_description):
+    command = f"zenity --entry --text 'Enter task description:' --title 'Task Description' --entry-text '{default_description}'"
+    try:
+        task_description = subprocess.check_output(command, shell=True, text=True).strip()
+        return task_description
+    except subprocess.CalledProcessError:
+        return None
 
 def invoke_plink(description, url):
     if not url.startswith('http://') and not url.startswith('https://'):
@@ -50,9 +55,6 @@ if 'Firefox' in active_window_title:
     if not description:
         description = active_window_title
     
-    # Write captured data to file
-    write_to_file(description, url)
-    
     # Invoke plink function with the captured description and URL
     invoke_plink(description, url)
     #message = "The url '{}' and description '{}' were added".format(url, description)
@@ -68,6 +70,11 @@ if 'Firefox' in active_window_title:
 
     # Process the choice
     if choice == "Create Task":
+        # Get custom task description
+        custom_description = get_custom_description(description)
+
+        # If the custom description is provided, use it; otherwise, use the existing description logic
+        description = custom_description if custom_description else description
         subprocess.run(["/home/decoder/dev/dotfiles/scripts/__create_task.sh", description, "+idea"])
 
     clipboard.fill_clipboard("")
