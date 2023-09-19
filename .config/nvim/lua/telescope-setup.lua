@@ -107,7 +107,7 @@ local set_up_telescope = function()
   local set_keymap = function(mode, bind, cmd)
     key(mode, bind, cmd, { noremap = true, silent = true })
   end
-  set_keymap("n", "<Leader>fd", "[[<cmd>lua search_dev()<CR>]]")
+  set_keymap("n", "<Leader>fd", "<cmd>lua search_dev()<CR>")
   set_keymap('n', '<leader><leader>', [[<cmd>lua require('telescope.builtin').buffers()<CR>]])
   set_keymap('n', '<leader>ff',
     [[<cmd>cd %:p:h<CR><cmd>pwd<CR><cmd>lua require('telescope.builtin').find_files({find_command = {'rg', '--files', '--hidden', '-g', '!.git' }, {search_dirs = {"$PWD"}}})<CR>]])
