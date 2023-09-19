@@ -132,21 +132,3 @@ require("indent_blankline").setup({
   buftype_exclude = { "terminal", "nofile" },
   show_trailing_blankline_indent = false,
 })
-
--- treesitter
-require("nvim-treesitter.configs").setup({
-  ensure_installed = {
-    "c",
-    "cpp",
-    "bash",
-    "go",
-    "html",
-    "yaml",
-    "toml",
-    "rust",
-  },
-  highlight = {
-    enable = true,
-  },
-})
-
