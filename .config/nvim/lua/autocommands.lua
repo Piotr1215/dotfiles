@@ -4,17 +4,13 @@ local api = vim.api
 local indentSettings = vim.api.nvim_create_augroup("IndentSettings", { clear = true })
 local goSettings = vim.api.nvim_create_augroup("Go Settings", { clear = true })
 
-vim.api.nvim_create_user_command(
-  'Pretty',
-  "Prettier",
-  { bang = true }
-)
+vim.api.nvim_create_user_command("Pretty", "Prettier", { bang = true })
 
-vim.api.nvim_create_autocmd('BufWritePre', {
-  pattern = '*.go',
+vim.api.nvim_create_autocmd("BufWritePre", {
+  pattern = "*.go",
   callback = function()
-    vim.lsp.buf.code_action({ context = { only = { 'source.organizeImports' } }, apply = true })
-  end
+    vim.lsp.buf.code_action({ context = { only = { "source.organizeImports" } }, apply = true })
+  end,
 })
 
 vim.api.nvim_create_autocmd("FileType", {
@@ -56,22 +52,26 @@ vim.api.nvim_create_autocmd("bufwritepost", {
   command = "Prettier",
 })
 
-
 -- vim.api.nvim_create_autocmd({ "BufWinEnter" }, {
 -- pattern = vim.fn.expand("$HOME").."/dev/obsidian/*/*.md",
 -- command = "MarkdownPreview",
 -- })
 
-vim.cmd [[autocmd BufWritePre * lua vim.lsp.buf.format()]]
+vim.cmd([[autocmd BufWritePre * lua vim.lsp.buf.format()]])
+
+vim.api.nvim_create_autocmd({ "bufwritepost" }, {
+  pattern = { "*.lua" },
+  command = "silent! !stylua %",
+})
 
 vim.api.nvim_create_autocmd({ "bufwritepost" }, {
   pattern = { "*.sh" },
   command = "silent! !shfmt -l -w %",
 })
 
-vim.cmd [[
+vim.cmd([[
   command! TMarkn execute "r !~/dev/dotfiles/scripts/__list_tasks_as_markdown.pl '+next'"
-]]
+]])
 api.nvim_exec(
   [[
     augroup fileTypes
@@ -80,7 +80,8 @@ api.nvim_exec(
      autocmd FileType go setlocal foldmethod=expr
      autocmd BufRead,BufNewFile .envrc set filetype=sh
     augroup end
-  ]], false
+  ]],
+  false
 )
 
 api.nvim_exec(
@@ -90,7 +91,8 @@ api.nvim_exec(
      autocmd TermOpen term://* startinsert
      autocmd BufEnter * silent! lcd %:p:h
     augroup end
-  ]], false
+  ]],
+  false
 )
 
 api.nvim_exec(
@@ -98,7 +100,8 @@ api.nvim_exec(
     augroup plantuml
      autocmd BufWritePost *.puml silent! !java -DPLANTUML_LIMIT_SIZE=8192 -jar /usr/local/bin/plantuml.jar -tsvg <afile> -o ./rendered
     augroup end
-  ]], false
+  ]],
+  false
 )
 
 api.nvim_exec(
@@ -108,18 +111,18 @@ api.nvim_exec(
      autocmd BufReadPost *
        \ if line("'\"") > 1 && line("'\"") <= line("$") && &ft !~# 'commit' | execute "normal! g`\"zvzz" | endif
     augroup end
-  ]], false
+  ]],
+  false
 )
 -- Compile packages on add
-vim.cmd
-[[
+vim.cmd([[
     augroup Packer
      autocmd!
      autocmd BufWritePost plugins.lua source <afile> | PackerSync
     augroup end
-  ]]
+  ]])
 
-if sysname == 'Darwin' then
+if sysname == "Darwin" then
   api.nvim_exec(
     [[
          augroup plant_folder
@@ -129,46 +132,39 @@ if sysname == 'Darwin' then
               \  0
               \)
          augroup end
-       ]], false)
+       ]],
+    false
+  )
 end
 
 -- Add -name: to composition resources
 vim.api.nvim_create_user_command(
-  'AddNames',
-  'g/apiVersion: \\(apiextensions\\|platform-composites\\)\\@!/normal!O- name:',
+  "AddNames",
+  "g/apiVersion: \\(apiextensions\\|platform-composites\\)\\@!/normal!O- name:",
   { bang = false }
 )
 
 --Open Buildin terminal vertical mode
-vim.api.nvim_create_user_command(
-  'VT',
-  "vsplit | terminal bash -c \"cd %:p:h;zsh\"",
-  { bang = false, nargs = '*' }
-)
+vim.api.nvim_create_user_command("VT", 'vsplit | terminal bash -c "cd %:p:h;zsh"', { bang = false, nargs = "*" })
 
 --Open Buildin terminal
 vim.api.nvim_create_user_command(
-  'T',
-  "split | resize 15 | terminal bash -c \"cd %:p:h;zsh\"",
-  { bang = true, nargs = '*' }
+  "T",
+  'split | resize 15 | terminal bash -c "cd %:p:h;zsh"',
+  { bang = true, nargs = "*" }
 )
 
 --Execute shell command in a read-only scratchpad buffer
 vim.api.nvim_create_user_command(
-  'R',
+  "R",
   "new | setlocal buftype=nofile bufhidden=hide noswapfile | r !<args>",
-  { bang = false, nargs = '*', complete = 'shellcmd' }
+  { bang = false, nargs = "*", complete = "shellcmd" }
 )
 
 --Get diff for current file
-vim.api.nvim_create_user_command(
-  'Gdiff',
-  "execute  'w !git diff --no-index -- % -'",
-  { bang = false }
-)
+vim.api.nvim_create_user_command("Gdiff", "execute  'w !git diff --no-index -- % -'", { bang = false })
 
-
-vim.cmd [[
+vim.cmd([[
 function! WinMove(key)
    let t:curwin = winnr()
    exec "wincmd ".a:key
@@ -181,5 +177,5 @@ function! WinMove(key)
        exec "wincmd ".a:key
    endif
 endfunction
-]]
+]])
 -- }}}
