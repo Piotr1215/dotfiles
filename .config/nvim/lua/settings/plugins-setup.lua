@@ -1,6 +1,12 @@
 -- Settings for plugins
 require("mason").setup()
 
+require('yanksearch').setup({
+  lines_above = 1,
+  lines_below = 1,
+  lines_around = 0, -- This will override lines_above and lines_below if set to a non-zero value
+})
+
 require('mini.align').setup()
 
 require('go').setup()
