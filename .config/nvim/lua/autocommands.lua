@@ -9,7 +9,7 @@ vim.api.nvim_create_user_command("Pretty", "Prettier", { bang = true })
 vim.api.nvim_create_autocmd("BufWritePre", {
   pattern = "*.go",
   callback = function()
-    vim.lsp.buf.code_action({ context = { only = { "source.organizeImports" } }, apply = true })
+    vim.lsp.buf.code_action { context = { only = { "source.organizeImports" } }, apply = true }
   end,
 })
 
@@ -57,21 +57,34 @@ vim.api.nvim_create_autocmd("bufwritepost", {
 -- command = "MarkdownPreview",
 -- })
 
-vim.cmd([[autocmd BufWritePre * lua vim.lsp.buf.format()]])
+vim.cmd [[autocmd BufWritePre * lua vim.lsp.buf.format()]]
 
-vim.api.nvim_create_autocmd({ "bufwritepost" }, {
-  pattern = { "*.lua" },
-  command = "silent! !stylua %",
-})
+vim.api.nvim_exec(
+  [[
+  augroup stylua_format
+    autocmd!
+    autocmd BufWritePost *.lua lua StyluaFormat()
+  augroup END
+]],
+  false
+)
+
+function StyluaFormat()
+  local current_dir = vim.fn.getcwd()
+  local file_dir = vim.fn.fnamemodify(vim.fn.expand "%:p", ":h")
+  vim.cmd("cd " .. file_dir)
+  vim.cmd("silent! !stylua --search-parent-directories " .. vim.fn.expand "%:p")
+  vim.cmd("cd " .. current_dir)
+end
 
 vim.api.nvim_create_autocmd({ "bufwritepost" }, {
   pattern = { "*.sh" },
   command = "silent! !shfmt -l -w %",
 })
 
-vim.cmd([[
+vim.cmd [[
   command! TMarkn execute "r !~/dev/dotfiles/scripts/__list_tasks_as_markdown.pl '+next'"
-]])
+]]
 api.nvim_exec(
   [[
     augroup fileTypes
@@ -115,12 +128,12 @@ api.nvim_exec(
   false
 )
 -- Compile packages on add
-vim.cmd([[
+vim.cmd [[
     augroup Packer
      autocmd!
      autocmd BufWritePost plugins.lua source <afile> | PackerSync
     augroup end
-  ]])
+  ]]
 
 if sysname == "Darwin" then
   api.nvim_exec(
@@ -164,7 +177,7 @@ vim.api.nvim_create_user_command(
 --Get diff for current file
 vim.api.nvim_create_user_command("Gdiff", "execute  'w !git diff --no-index -- % -'", { bang = false })
 
-vim.cmd([[
+vim.cmd [[
 function! WinMove(key)
    let t:curwin = winnr()
    exec "wincmd ".a:key
@@ -177,5 +190,5 @@ function! WinMove(key)
        exec "wincmd ".a:key
    endif
 endfunction
-]])
+]]
 -- }}}
