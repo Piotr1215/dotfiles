@@ -241,6 +241,9 @@ return require('packer').startup(function(use)
   })
   use 'weirongxu/plantuml-previewer.vim'
   -- }}}
+  -- My Plugins {{{
+  use 'Piotr1215/yanksearch.nvim'
+  -- }}}
   -- Look & Feel {{{
   use { "ellisonleao/gruvbox.nvim" }
   use 'uga-rosa/ccc.nvim'

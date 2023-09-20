@@ -279,3 +279,7 @@ vim.cmd([[
 
 -- GoTo Preview
 vim.keymap.set("n", "gtp", "<cmd>lua require('goto-preview').goto_preview_definition()<CR>", { noremap = true })
+
+-- My Plugins
+-- Yank Matching Lines
+vim.api.nvim_set_keymap('n', '<Leader>ya', ':YankMatchingLines<CR>', { noremap = true, silent = true })
