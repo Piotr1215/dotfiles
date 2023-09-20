@@ -88,7 +88,7 @@ eval "$(direnv hook zsh)"
 
 # EXPORT & PATH
 export FZF_BASE=/usr/bin/fzf
-export FZF_DEFAULT_COMMAND='fd --hidden'
+export FZF_DEFAULT_COMMAND='fd --hidden --exclude .git'
 export FZF_CTRL_T_COMMAND='fd --hidden'
 export FZF_ALT_C_COMMAND='fd --hidden'
 export VISUAL=nvim
@@ -106,6 +106,7 @@ export PATH=$HOME/go:$PATH
 export PATH=$PATH:/usr/local/go/bin
 export PATH=$PATH:$HOME/.istioctl/bin
 export PATH=$PATH:$HOME/dev/dotfiles/scripts
+export PATH=$PATH:$HOME/.luarocks/bin
 export FONTCONFIG_PATH=/etc/fonts
 export EDITOR=nvim
 export GH_USER=Piotr1215
