@@ -1,20 +1,20 @@
 -- Settings for plugins
 require("mason").setup()
 
-require('yanksearch').setup({
-  lines_above = 1,
-  lines_below = 1,
+require("yanksearch").setup {
+  lines_above = 0,
+  lines_below = 0,
   lines_around = 0, -- This will override lines_above and lines_below if set to a non-zero value
-})
+}
 
-require('mini.align').setup()
+require("mini.align").setup()
 
-require('go').setup()
-require('dap-python').setup('~/.virtualenvs/debugpy/bin/python')
+require("go").setup()
+require("dap-python").setup "~/.virtualenvs/debugpy/bin/python"
 
-require('goto-preview').setup {}
+require("goto-preview").setup {}
 
-require 'mdeval'.setup({
+require("mdeval").setup {
   -- Don't ask before executing code blocks
   require_confirmation = false,
   -- Change code blocks evaluation options.
@@ -26,37 +26,37 @@ require 'mdeval'.setup({
     #include <iostream>
     #include <vector>
     using namespace std;
-      ]]
+      ]],
     },
   },
-})
+}
 
-require("no-neck-pain").setup({
+require("no-neck-pain").setup {
   width = 75,
   buffers = {
     colors = {
       background = "tokyonight-moon",
     },
     right = {
-      enabled = false
-    }
-  }
-})
+      enabled = false,
+    },
+  },
+}
 
-require('oil').setup({
+require("oil").setup {
   view_options = {
     -- Show files and directories that start with "."
     show_hidden = true,
   },
-})
-require("obsidian").setup({
+}
+require("obsidian").setup {
   dir = "~/dev/obsidian/decoder",
   disable_frontmatter = false,
   notes_subdir = "Notes",
   templates = {
     subdir = "Templates",
     date_format = "%Y-%m-%d-%a",
-    time_format = "%H:%M"
+    time_format = "%H:%M",
   },
   finder = "fzf-lua",
   mappings = {
@@ -78,13 +78,13 @@ require("obsidian").setup({
       end
     end
     return tostring(suffix)
-  end
-})
+  end,
+}
 require("todo-comments").setup {}
 
-require 'nvim-treesitter.configs'.setup {
+require("nvim-treesitter.configs").setup {
   -- Add languages to be installed here that you want installed for treesitter
-  ensure_installed = { 'go', 'lua', 'rust', 'toml', 'typescript', 'help', 'markdown', 'markdown_inline' },
+  ensure_installed = { "go", "lua", "rust", "toml", "typescript", "help", "markdown", "markdown_inline" },
 
   highlight = { enable = true },
   auto_install = true,
@@ -100,16 +100,16 @@ require 'nvim-treesitter.configs'.setup {
   incremental_selection = {
     enable = true,
     keymaps = {
-      init_selection    = '<c-space>',
-      node_decremental  = '<c-backspace>',
-      node_incremental  = '<c-space>',
-      scope_incremental = '<c-s>',
+      init_selection = "<c-space>",
+      node_decremental = "<c-backspace>",
+      node_incremental = "<c-space>",
+      scope_incremental = "<c-s>",
     },
   },
   textobjects = {
     lsp_interop = {
       enable = true,
-      border = 'none',
+      border = "none",
       peek_definition_code = {
         ["<leader>dF"] = "@function.outer",
       },
@@ -137,9 +137,9 @@ require 'nvim-treesitter.configs'.setup {
       -- and should return the mode ('v', 'V', or '<c-v>') or a table
       -- mapping query_strings to modes.
       selection_modes = {
-        ['@parameter.outer'] = 'v', -- charwise
-        ['@function.outer'] = 'V',  -- linewise
-        ['@class.outer'] = '<c-v>', -- blockwise
+        ["@parameter.outer"] = "v", -- charwise
+        ["@function.outer"] = "V", -- linewise
+        ["@class.outer"] = "<c-v>", -- blockwise
       },
       -- If you set this to `true` (default is `false`) then any textobject is
       -- extended to include preceding or succeeding whitespace. Succeeding
@@ -155,35 +155,35 @@ require 'nvim-treesitter.configs'.setup {
   },
 }
 
-require('femaco').setup({
+require("femaco").setup {
   -- what to do after opening the float
   post_open_float = function(winnr)
     if vim.bo.filetype == "rust" then
-      require('rust-tools.standalone').start_standalone_client()
+      require("rust-tools.standalone").start_standalone_client()
     end
-  end
-})
+  end,
+}
 
-local prettier = require("prettier")
+local prettier = require "prettier"
 
-require("which-key").setup({
+require("which-key").setup {
   triggers_blacklist = {
     -- list of mode / prefixes that should never be hooked by WhichKey
     -- this is mostly relevant for keymaps that start with a native binding
     n = { "g" },
   },
   plugins = {
-    marks = true,       -- shows a list of your marks on ' and `
-    registers = true,   -- shows your registers on " in NORMAL or <C-r> in INSERT mode
+    marks = true, -- shows a list of your marks on ' and `
+    registers = true, -- shows your registers on " in NORMAL or <C-r> in INSERT mode
     spelling = {
-      enabled = true,   -- enabling this will show WhichKey when pressing z= to select spelling suggestions
+      enabled = true, -- enabling this will show WhichKey when pressing z= to select spelling suggestions
       suggestions = 20, -- how many suggestions should be shown in the list?
     },
-  }
-})
+  },
+}
 
-prettier.setup({
-  bin = 'prettier', -- or `'prettierd'` (v0.22+)
+prettier.setup {
+  bin = "prettier", -- or `'prettierd'` (v0.22+)
   filetypes = {
     "css",
     "html",
@@ -197,16 +197,16 @@ prettier.setup({
     "yaml",
     "go",
   },
-})
+}
 
-require('lualine').setup {
+require("lualine").setup {
   options = {
-    theme      = 'tokyonight',
-    extensions = { 'nvim-dap-ui' }
+    theme = "tokyonight",
+    extensions = { "nvim-dap-ui" },
   },
 }
 
-require("nvim-surround").setup({
+require("nvim-surround").setup {
   keymaps = {
     insert = "<C-g>s",
     insert_line = "<C-g>S",
@@ -219,19 +219,19 @@ require("nvim-surround").setup({
     delete = "d;",
     change = "c;",
   },
-})
+}
 
-require('leap').add_default_mappings()
+require("leap").add_default_mappings()
 
 -- Color name (:help cterm-colors) or ANSI code
 -- there are some defaults for image directory and image name, you can change them
-vim.g.mdip_imgdir = '_media'
-vim.g.mdip_imgname = 'image'
-vim.g['plantuml_previewer#viewer_path'] = '~/.vim/bundle/plantuml-previewer.vim/viewer'
-vim.g['plantuml_previewer#debug_mode'] = 0
+vim.g.mdip_imgdir = "_media"
+vim.g.mdip_imgname = "image"
+vim.g["plantuml_previewer#viewer_path"] = "~/.vim/bundle/plantuml-previewer.vim/viewer"
+vim.g["plantuml_previewer#debug_mode"] = 0
 -- setup custom emmet snippets
-vim.g.user_emmet_settings = 'webapi#json#decode(join(readfile(expand(\'~/.snippets_custom.json\')), "\n"))'
-vim.g.indentLine_char = '⦙'
+vim.g.user_emmet_settings = "webapi#json#decode(join(readfile(expand('~/.snippets_custom.json')), \"\n\"))"
+vim.g.indentLine_char = "⦙"
 -- setup for netrw
 vim.g.netrw_winsize = 30
 vim.g.netrw_banner = 0
@@ -253,22 +253,22 @@ vim.g.syntastic_always_populate_loc_list = 0
 vim.g.syntastic_auto_loc_list = 0
 vim.g.syntastic_check_on_open = 0
 vim.g.syntastic_check_on_wq = 0
-vim.g.syntastic_python_checkers = '[\'flake8\']'
+vim.g.syntastic_python_checkers = "['flake8']"
 -- setup for terraform
 vim.g.terraform_fmt_on_save = 1
 vim.g.terraform_align = 1
 -- setup for ctrlp
-vim.g.ctrlp_map = '<c-p>'
-vim.g.ctrlp_cmd = 'CtrlPMixed'
-vim.g.ctrlp_working_path_mode = 'ra'
-vim.g.ctrlp_custom_ignore = '\\v[\\/]\\.(git|hg|svn)$'
+vim.g.ctrlp_map = "<c-p>"
+vim.g.ctrlp_cmd = "CtrlPMixed"
+vim.g.ctrlp_working_path_mode = "ra"
+vim.g.ctrlp_custom_ignore = "\\v[\\/]\\.(git|hg|svn)$"
 vim.g.ctrlp_custom_ignore = {
-  dir = { '\\v[\\/]\\.(git|hg|svn)$' },
-  file = { '\\v\\.(exe|so|dll)$' },
-  link = { 'some_bad_symbolic_links' },
+  dir = { "\\v[\\/]\\.(git|hg|svn)$" },
+  file = { "\\v\\.(exe|so|dll)$" },
+  link = { "some_bad_symbolic_links" },
 }
 -- setup for indent line
-vim.g.indentLine_char = '|'
+vim.g.indentLine_char = "|"
 vim.g.go_fmt_command = "goimports"
 vim.g.go_highlight_types = 1
 vim.g.go_highlight_fields = 1
@@ -290,29 +290,29 @@ vim.g.startify_session_number = 0
 vim.g.startify_files_number = 10
 vim.g.startify_session_delete_buffers = 0
 vim.g.startify_skiplist = {
-  '^/tmp'
+  "^/tmp",
 }
 vim.g.startify_commands = {
-  { 'Search Dev    :SPC fd', 'Telescope find_files search_dirs=~/dev,--hidden,--with-filename' },
-  { 'Search Repos  :SPC fr', 'lua require\'telescope\'.extensions.repo.list{search_dirs = {"~/dev"}}' },
-  { 'Ranger        :ALT o',  'RnvimrToggle' },
-  { 'Change Color  :SPC fc', 'Telescope colorscheme' },
-  { 'Transparent Bg:SPC tr', 'TransparentEnable' },
-  { 'Pick Emoji    :SPC fm', 'Telescope emoji' }
+  { "Search Dev    :SPC fd", "Telescope find_files search_dirs=~/dev,--hidden,--with-filename" },
+  { "Search Repos  :SPC fr", "lua require'telescope'.extensions.repo.list{search_dirs = {\"~/dev\"}}" },
+  { "Ranger        :ALT o", "RnvimrToggle" },
+  { "Change Color  :SPC fc", "Telescope colorscheme" },
+  { "Transparent Bg:SPC tr", "TransparentEnable" },
+  { "Pick Emoji    :SPC fm", "Telescope emoji" },
 }
 vim.g.startify_bookmarks = {
-  '~/.config/nvim/lua',
-  '~/.zshrc',
-  '~/.tmux.conf',
-  '~/.taskrc',
-  '~/.task/hooks',
-  '~/.config/ranger/rc.conf',
-  '~/shortcuts.md',
-  '/usr/local/share/zsh/site-functions',
-  '~/scripts/__project_mappings.conf',
-  '~/.taskopenrc',
-  '~/.oh-my-zsh/plugins/tmuxinator/_mst',
-  '~/.config/taskwarrior-tui/shortcut-scripts',
-  '~/.local/share/nvim/site/pack/packer/start',
+  "~/.config/nvim/lua",
+  "~/.zshrc",
+  "~/.tmux.conf",
+  "~/.taskrc",
+  "~/.task/hooks",
+  "~/.config/ranger/rc.conf",
+  "~/shortcuts.md",
+  "/usr/local/share/zsh/site-functions",
+  "~/scripts/__project_mappings.conf",
+  "~/.taskopenrc",
+  "~/.oh-my-zsh/plugins/tmuxinator/_mst",
+  "~/.config/taskwarrior-tui/shortcut-scripts",
+  "~/.local/share/nvim/site/pack/packer/start",
 }
 vim.g.startify_custom_header = "startify#pad(split(system('fortune -s | cowsay | lolcat; date'), '\n'))"
