@@ -24,6 +24,7 @@ close $map_fh;
 my $xml_content = `$xml_script`;
 die "Error running '$xml_script': $!" unless defined $xml_content;
 $xml_content =~ s/&(?![A-Za-z0-9#]+;)/&amp;/g;
+$xml_content =~ s{(<description>.*?)(<)(.*?</description>)}{$1&lt;$3}g;
 
 my $parser = XML::LibXML->new;
 my $doc = $parser->load_xml(string => $xml_content);
