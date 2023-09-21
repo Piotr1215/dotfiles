@@ -78,7 +78,7 @@ for my $project (sort keys %tasks_yesterday) {
     print "\n";
 }
 
-print "----------------\n";
+print "----Last Week----\n\n";
 
 for my $project (sort keys %tasks_last_week) {
     print "$project\n";
