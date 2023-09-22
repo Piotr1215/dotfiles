@@ -36,7 +36,7 @@ def sanitize_tags(raw_tags):
 
     
 def get_tags_from_openai(description):
-    prompt = f"Based on the provided website description: '{description}', please generate a list of up to 3 relevant tags for categorizing the content. Tags should have a maximum of 14 characters, include no special characters, and be words like +linux, +shopping, +pets. Please format the tags like this: +tag1, +tag2, +tag3, ..."
+    prompt = f"Based on the provided website description: '{description}', please generate a list of up to 3 relevant tags for categorizing the content. Tags should have a maximum of 14 characters, include no special characters, do not include capital letters and preffer short tags.Example good tags: +linux, +shopping, +pets. Please format the tags like this: +tag1, +tag2, +tag3"
     
     chat_completion = openai.ChatCompletion.create(
         model="gpt-3.5-turbo",
