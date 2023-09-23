@@ -27,7 +27,7 @@ _check_mandatory_programs:
   @if ! type "kubectl" > /dev/null; then echo "Please install kubectl" && exit 1; fi
  
 # * setup kind cluster with ArgoCD, kubernetes and help providers
-setup_infra: _check_mandatory_programs setup_kind setup_k8s setup_helm enable_metrics_server
+setup_infra xp-version: _check_mandatory_programs setup_kind setup_k8s setup_helm enable_metrics_server
 
 # enable metrics server
 enable_metrics_server:
@@ -67,9 +67,9 @@ check_xfn:
    @kubectl -n crossplane-system logs -l app=crossplane
 
 # setup kind cluster with UXP
-setup_kind:
+setup_kind xp-version="uxp":
   #!/usr/bin/env bash
-  echo "Creating kind cluster and Installing UXP"
+  echo "Creating kind cluster and Installing ${xp-version}"
   set -euo pipefail
 
   cluster="control-plane"
@@ -79,9 +79,19 @@ setup_kind:
   kind get kubeconfig --name "${cluster}"
   kubectl config use-context kind-"${cluster}"
 
-  echo "Installing UXP"
-  kubectl create namespace upbound-system
-  helm install uxp --namespace upbound-system upbound-stable/universal-crossplane --devel
+  if [[ "${xp-version}" == "uxp" ]]; then
+    echo "Installing UXP"
+    kubectl create namespace upbound-system
+    helm install uxp --namespace upbound-system upbound-stable/universal-crossplane --devel
+  else
+    echo "Installing Crossplane"
+    helm repo add crossplane-master https://charts.crossplane.io/master/
+    helm repo update
+    helm install crossplane \
+    --namespace upbound-system \
+    --create-namespace crossplane-master/crossplane \
+    --devel 
+  fi
   kubectl wait --for condition=Available=True --timeout=300s deployment/crossplane --namespace upbound-system
 
 # setup provider Kubernetes
