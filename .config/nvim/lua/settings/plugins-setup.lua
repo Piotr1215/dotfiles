@@ -101,7 +101,7 @@ require("nvim-treesitter.configs").setup {
     enable = true,
     keymaps = {
       init_selection = "<c-space>",
-      node_decremental = "<c-backspace>",
+      node_decremental = "<c-h>",
       node_incremental = "<c-space>",
       scope_incremental = "<c-s>",
     },
