@@ -1,4 +1,4 @@
-local utils = require("utils")
+local utils = require "utils"
 local opts = { noremap = true, silent = true }
 
 vim.keymap.set({ "n", "v" }, "<Space>", "<Nop>", { silent = true })
@@ -124,12 +124,12 @@ utils.nmap("cY", ":.,/^#/-1y<cr>")
 -- split line in two
 utils.nmap("<leader>sp", "i<cr><esc>")
 utils.nmap("<leader>wi", ":setlocal textwidth=80<cr>")
-vim.cmd([[
+vim.cmd [[
      function! s:check_back_space() abort
        let col = col('.') - 1
        return !col || getline('.')[col - 1]  =~# '\s'
      endfunction
-     ]])
+     ]]
 
 utils.nmap("<leader>fmt", ":Pretty<CR>")
 -- vim.keymap.set({ 'n' }, '<C-k>', function()       require('lsp_signature').toggle_float_win()
@@ -182,7 +182,7 @@ utils.nmap("<leader>tc", "<Plug>(vsnip-cut-text)")
 utils.xmap("<leader>tc", "<Plug>(vsnip-cut-text)")
 
 -- Abbreviations
-vim.cmd("abb cros Crossplane")
+vim.cmd "abb cros Crossplane"
 
 -- Harpoon
 utils.nmap("<leader>ha", ':lua require("harpoon.mark").add_file()<CR>')
@@ -192,10 +192,10 @@ utils.nmap("<leader>hl", ':lua require("harpoon.ui").nav_prev()<CR>')
 
 -- Mdeval
 vim.api.nvim_set_keymap(
-	"n",
-	"<leader>ev",
-	"<cmd>lua require 'mdeval'.eval_code_block()<CR>",
-	{ silent = true, noremap = true }
+  "n",
+  "<leader>ev",
+  "<cmd>lua require 'mdeval'.eval_code_block()<CR>",
+  { silent = true, noremap = true }
 )
 
 -- Startify
@@ -263,10 +263,10 @@ utils.lnmap("ob", ":ObsidianBacklinks<cr>")
 -- end, { noremap = false, expr = true })
 
 -- Copilot
-vim.cmd([[
+vim.cmd [[
         imap <silent><script><expr> <C-s> copilot#Accept("\<CR>")
         let g:copilot_no_tab_map = v:true
-]])
+]]
 
 -- GoTo Preview
 vim.keymap.set("n", "gtp", "<cmd>lua require('goto-preview').goto_preview_definition()<CR>", { noremap = true })
