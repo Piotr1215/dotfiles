@@ -22,21 +22,18 @@ openai.api_key = os.environ.get('OPENAI_API_KEY')
 
 def sanitize_tags(raw_tags):
     if not isinstance(raw_tags, list):
-        return ["+unknown"]
+        return []
     
     sanitized_tags = []
     for tag in raw_tags:
-        clean_tag = tag.replace("+", "")
+        clean_tag = tag.lower().replace("+", "")
         if clean_tag.isalnum():
             sanitized_tags.append(f"+{clean_tag}")
-        else:
-            return ["+unknown"]
-
-    return sanitized_tags if sanitized_tags else ["+unknown"]
-
+    
+    return sanitized_tags[:3]  # Only return the first 3 tags
     
 def get_tags_from_openai(description):
-    prompt = f"Based on the provided website description: '{description}', please generate a list of up to 3 relevant tags for categorizing the content. Tags should have a maximum of 14 characters, include no special characters, do not include capital letters and preffer short tags.Example good tags: +linux, +shopping, +pets. Please format the tags like this: +tag1, +tag2, +tag3"
+    prompt = f"Based on the provided website description: '{description}', please generate a list of up to 3 relevant tags for categorizing the content. Tags should have a maximum of 14 characters, include no special characters, do not include capital letters and prefer short tags. Example good tags: +linux, +shopping, +pets. Please format the tags like this: +tag1, +tag2, +tag3"
     
     chat_completion = openai.ChatCompletion.create(
         model="gpt-3.5-turbo",
@@ -46,7 +43,7 @@ def get_tags_from_openai(description):
         }]
     )
     
-    tags_output = chat_completion['choices'][0]['message']['content'] # type: ignore
+    tags_output = chat_completion['choices'][0]['message']['content']
     tags = tags_output.strip().split(", ")
     return sanitize_tags(tags)
 
@@ -57,12 +54,12 @@ def get_website_description(url):
         meta_tag = soup.find('meta', {'name': 'description'}) or soup.find('meta', {'property': 'og:description'})
 
         if meta_tag:
-            return meta_tag['content'] # type: ignore
+            return meta_tag['content']
         else:
             return "No description available"
     except Exception as e:
         return f"An error occurred: {e}"
-        
+
 def get_custom_description(default_description):
     command = f"zenity --entry --text 'Enter task description:' --title 'Task Description' --entry-text '{default_description}' --width 400"
     try:
@@ -78,7 +75,16 @@ def invoke_plink(description, url, tags):
 
     command_name = f"xdg-open \"{url}\""
     command_description = f"Link to {description}"
-    command_tag = ",".join(tag[1:] for tag in tags)  # Remove the "+" from each tag and join them
+
+    # Convert tags to lowercase and remove the "+" prefix
+    tags = [tag[1:].lower() for tag in tags]
+
+    # Ensure the "link" tag is always present
+    if "link" not in tags:
+        tags.append("link")
+
+    # Create a space-separated string of tags
+    command_tag = " ".join(tags)
 
     child = pexpect.spawn('pet new -t')
     child.expect('Command>')
@@ -93,44 +99,35 @@ active_window_title = subprocess.getoutput("xdotool getactivewindow getwindownam
 
 if 'Firefox' in active_window_title:
     try:
-        # Capture selected text
         description = clipboard.get_selection()
         time.sleep(0.25)
     except Exception:
-        # If no text is selected, use the window title as the description
         description = active_window_title
 
-    # Clear clipboard
     clipboard.fill_clipboard("")  
-    
-    # Capture URL separately
     keyboard.send_keys('yy')
-    time.sleep(0.5)  # Allow some time for the clipboard operation to complete
-    
+    time.sleep(0.5)
+
     url = clipboard.get_clipboard()
     website_description = get_website_description(url)
-    tags = get_tags_from_openai(website_description) 
-    # If no text is selected, use the window title as the description
+    tags = get_tags_from_openai(website_description)
+
+    parsed_url = urlparse(url)
+    domain = parsed_url.netloc
+
     if not description:
         description = active_window_title
-    
-    # Invoke plink function with the captured description and URL
-    invoke_plink(description, url, tags)
-    options = ["No Task", "Create Task"]
-    parsed_url = urlparse(url)
-    domain = parsed_url.netloc  # Extracts the domain from the URL
-    message = f"Pet link created for '{description}' from '{domain}' domain.\n\nShould we create an idea task for it?\n"
 
-    # Call list_menu to show the dialog
-    exit_code, choice = dialog.list_menu(options, title="Choose an Action", message=message, default="No Task")
+    options = ["Add Link", "Do Not Add Link"]
+    message = f"Should we add a pet link for '{description}' from '{domain}' domain?\n"
+    exit_code, choice = dialog.list_menu(options, title="Choose an Action", message=message, default="Do Not Add Link")
 
-    # Process the choice
-    if choice == "Create Task":
-        # Get custom task description
-        custom_description = get_custom_description(description)
-
-        # If the custom description is provided, use it; otherwise, use the existing description logic
-        description = custom_description if custom_description else description
+    # Check if the dialog was cancelled (exit code is 0 when OK is clicked)
+    if exit_code == 0:
+        if choice == "Add Link":
+            invoke_plink(description, url, tags)
+        
+        # Always create a task regardless of the link choice
         subprocess.run(["/home/decoder/dev/dotfiles/scripts/__create_task.sh", description] + tags)
 
     clipboard.fill_clipboard("")
