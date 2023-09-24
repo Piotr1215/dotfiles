@@ -36,6 +36,15 @@ utils.vmap("<S-PageUp>", ":m '<-2<CR>gv=gv") -- Move Line Up in Visual Mode
 utils.nmap("<leader>k", ":m .-2<CR>==") -- Move Line Up in Normal Mode
 utils.nmap("<leader>j", ":m .+1<CR>==") -- Move Line Down in Normal Mode
 
+-- Inlay Hints (nvim nighlty required)
+if vim.lsp.inlay_hint then
+  vim.keymap.set(
+    "n",
+    "<leader>ih",
+    "<cmd>lua vim.lsp.inlay_hint(0, nil)<CR>",
+    { silent = true, noremap = true, desc = "Toggle inlay hints" }
+  )
+end
 -- CHAT GPT KEYMAPS --
 utils.lnmap("ct", ":ChatGPT<cr>")
 utils.lnmap("ca", ":ChatGPTActAs<cr>")
