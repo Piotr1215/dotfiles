@@ -124,11 +124,12 @@ if 'Firefox' in active_window_title:
 
     # Check if the dialog was cancelled (exit code is 0 when OK is clicked)
     if exit_code == 0:
+        custom_description = get_custom_description(description)
         if choice == "Add Link":
-            invoke_plink(description, url, tags)
+            invoke_plink(custom_description, url, tags)
         
         # Always create a task regardless of the link choice
-        subprocess.run(["/home/decoder/dev/dotfiles/scripts/__create_task.sh", description] + tags)
+        subprocess.run(["/home/decoder/dev/dotfiles/scripts/__create_task.sh", custom_description] + tags)
 
     clipboard.fill_clipboard("")
     clipboard.fill_selection("")
