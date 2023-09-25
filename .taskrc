@@ -53,8 +53,8 @@ report.currentall.sort=manual_priority-,project+
 report.currentall.filter=status:pending
 
 report.current.description=List of current tasks in the work context
-report.current.columns=id,entry.age,manual_priority,project,tags,description.desc,entry,due.relative,follow
-report.current.labels=ID,Age,P,Proj,Tag,Desc,Created,Due,Follow
+report.current.columns=id,entry.age,manual_priority,project,tags,description.desc,entry,due.relative,duration
+report.current.labels=ID,Age,P,Proj,Tag,Desc,Created,Due,Duration
 report.current.sort=manual_priority-,project+
 report.current.filter=status:pending and (manual_priority>=0 or manual_priority="") and -idea
 
@@ -101,13 +101,16 @@ uda.follow.label=follow
 uda.follow.values=Y,N
 uda.manual_priority.type=numeric
 uda.manual_priority.label=Manual Priority
+uda.duration.type=duration
+uda.duration.label=Duration
+uda.duration.default=PT30M
 
 #UserDefinedShortcuts
 uda.taskwarrior-tui.task-report.next.filter=status:pending
 uda.taskwarrior-tui.shortcuts.1=~/.config/taskwarrior-tui/shortcut-scripts/taskopen-annotation.sh
 uda.taskwarrior-tui.shortcuts.2=task context home
 uda.taskwarrior-tui.shortcuts.3=task context work
-uda.taskwarrior-tui.shortcuts.4=~/.config/taskwarrior-tui/shortcut-scripts/follow-up.sh
+uda.taskwarrior-tui.shortcuts.4=~/.config/taskwarrior-tui/shortcut-scripts/increase_duration.sh
 uda.taskwarrior-tui.shortcuts.5=~/.config/taskwarrior-tui/shortcut-scripts/__decrease_task_priority.sh
 uda.taskwarrior-tui.shortcuts.6=~/.config/taskwarrior-tui/shortcut-scripts/__increase_task_priority.sh
 uda.taskwarrior-tui.shortcuts.7=~/.config/taskwarrior-tui/shortcut-scripts/__annotate_with_note.sh
