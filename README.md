@@ -62,11 +62,6 @@ Runing `./install` will
   cloud-native tools
 - kubectl installed with krew plugin manager
 
-### TODOS
-
-- [x] switch to arkade for installing devops CLIs
-- [x] TODO(decoder 2022-03-31): add tmuxinator sessions to the repo
-
 ## Auto-config commit
 
 Once the dotfiles are symlinked, it is easy to forget to commit them do the repo
@@ -152,3 +147,82 @@ The setup was tested on:
 Last test date: Sun 26 Feb 18:23:57 CET 2023
 
 - Ubuntu 20.04 vm
+
+---
+
+# Taskwarrior setup
+
+Taskwarrior setup is highly customized and thus requires a decided
+documentation section.
+
+Taskwarrior uses custom `hooks` and `scripts` to add and extend the workflow.
+
+## Developer Workflow for Task Management with TaskWarrior and Neovim
+
+### Introduction
+
+This workflow guides you through an integrated approach to managing tasks using TaskWarrior and Neovim. It aims to streamline task management directly within the coding environment.
+
+### Workflow Steps
+
+#### 1. Write Code and Add TODO Comments
+
+While actively writing code, you might come up with a new task idea. To make a note of this, simply add a TODO comment in your code:
+
+```bash
+# TODO: use shift to get rid of the argument
+```
+
+#### 2. Convert TODO to TaskWarrior Task
+
+Turn your `TODO:` comment into a TaskWarrior task by using a Neovim shortcut. In insert mode, press `Ctrl+t` to trigger this action. You can then add additional details like project and tags:
+
+```bash
+project: bash
+tags: techniques learning
+```
+
+#### 3. Jump to Task Location in Code
+
+The next day, open TaskWarrior's Task User Interface (TUI). Your new task will appear there. Simply press `1` to jump directly to the corresponding line in the code file.
+
+#### 4. Add Context to Task
+
+While working on the task, you may want to add more context, like a URL. Use `<leader>gt` in Neovim to open the task in the TUI. Press `A` to add the URL, then `Ctrl+C` to exit, and you'll be returned to the same line in your editor.
+
+#### 5. Open TUI Session
+
+The TUI session is fast and ephemeral, thanks to tmux integration. It's a seamless experience while working on your tasks.
+
+#### 6. Remove Completed Task
+
+Once the task is completed, select it in the TUI, then press `1` to jump to it in the code file. Use `<leader>dt` in Neovim to remove the task. The corresponding task will also be removed in the TUI.
+
+#### 7. Remove Task Directly in TUI
+
+Wondering what happens if you remove the task directly from the TUI first? As of the latest update, doing this will automatically remove the corresponding TODO comment in the code file. To create a new task for a TODO comment, simply use `Ctrl+t` in Neovim to add it to TaskWarrior.
+
+Certainly! Let's dive into explaining how the duration field and its associated logic work in our Taskwarrior script. This will help solidify your understanding and serve as documentation for future reference.
+
+## Duration Field and Logic in Taskwarrior Script
+
+### Duration Field
+
+- **What It Is**: The `duration` field in Taskwarrior stores the estimated amount of time it will take to complete a specific task. The value is stored as an ISO 8601 duration string, like `PT15M` for 15 minutes.
+
+### Logic Surrounding Duration
+
+- **Start Time**: When a task is started, Taskwarrior records the start time.
+- **End Time**: When a task is stopped, Taskwarrior records the end time.
+- **Time Exceeded**: If the actual time taken to complete a task exceeds the estimated duration, the script annotates the task with a message.
+
+  - **Annotation Format**: The annotation specifies when the task was completed and by how much the estimated time was exceeded.
+  - **Example Annotation**: `2023-09-25 18:31:38 -- Exceeded estimated time by 2 minutes.`
+
+### Why is it
+
+1. **Task Start**: On task start, capture the current time.
+
+2. **Task Stop**: On task stop, capture the current time and compare it with the estimated duration. If the actual duration exceeds the estimated duration, an annotation is added to the task.
+
+3. **Multiple Exceeds**: If the task's actual duration exceeds the estimated duration multiple times, each occurrence should be recorded as a separate annotation.
