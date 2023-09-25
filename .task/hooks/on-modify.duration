@@ -1,0 +1,68 @@
+#!/usr/bin/env python3
+
+import sys
+import json
+import os
+from datetime import datetime
+
+# Read the original and modified task from stdin
+original_task_json = sys.stdin.readline().strip()
+modified_task_json = sys.stdin.readline().strip()
+
+# Parse the JSON
+original_task = json.loads(original_task_json)
+modified_task = json.loads(modified_task_json)
+
+# Temp file to store the start time
+temp_file_path = f"/tmp/task_start_time_{original_task['uuid']}.json"
+
+# Function to convert ISO duration to minutes
+def iso_duration_to_minutes(iso_duration):
+    hours, minutes = 0, 0
+    if 'H' in iso_duration:
+        hours = int(iso_duration[2:-1].split('H')[0])
+        remaining = iso_duration.split('H')[1]
+        if remaining:
+            minutes = int(remaining[:-1])
+    elif 'M' in iso_duration:
+        minutes = int(iso_duration[2:-1])
+    return hours * 60 + minutes
+
+# Check if the task is started or stopped by looking at the 'start' attribute
+if 'start' in modified_task and 'start' not in original_task:
+    # Task is started
+    # Store the start time in a temp file
+    with open(temp_file_path, 'w') as f:
+        f.write(datetime.utcnow().isoformat())
+elif 'start' not in modified_task and 'start' in original_task:
+    # Task is stopped
+    # Read the start time from the temp file if it exists
+    if os.path.exists(temp_file_path):
+        with open(temp_file_path, 'r') as f:
+            start_time = datetime.fromisoformat(f.read())
+        
+        # Calculate elapsed time
+        elapsed_time = datetime.utcnow() - start_time
+        elapsed_minutes = int(elapsed_time.total_seconds() / 60)
+        
+        # If duration is specified
+        if 'duration' in modified_task:
+            estimated_minutes = iso_duration_to_minutes(modified_task['duration'])
+            
+            # Check if elapsed time exceeds estimated time
+            if elapsed_minutes > estimated_minutes:
+                extra_time = elapsed_minutes - estimated_minutes
+                annotation = f"Exceeded estimated time by {extra_time} minutes."
+                if 'annotations' in modified_task:
+                    modified_task['annotations'].append({"description": annotation})
+                else:
+                    modified_task['annotations'] = [{"description": annotation}]
+        
+        # Delete the temp file
+        os.remove(temp_file_path)
+
+# Output the modified task as JSON
+print(json.dumps(modified_task))
+
+# Exit without error
+sys.exit(0)
