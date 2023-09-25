@@ -225,19 +225,20 @@ end
 vim.api.nvim_set_keymap("i", "<M-i>", [[<Cmd>lua insert_file_path()<CR>]], { noremap = true, silent = true })
 
 function _G.toggle_function_folding()
-  if vim.wo.foldenable and vim.wo.foldmethod == "expr" then
-    print "Disabling folding"
+  if vim.wo.foldenable then
     vim.cmd "setlocal nofoldenable"
-    vim.cmd "setlocal foldmethod=manual"
+    vim.cmd "normal zR" -- Unfold all folds
+    vim.cmd 'echo "Disabling folding"'
   else
-    print "Enabling folding"
     vim.cmd "setlocal foldenable"
     vim.cmd "setlocal foldmethod=expr"
-    vim.cmd [[setlocal foldexpr=getline(v:lnum)=~'^function\\s\\+\\w\\+\\s*()'?'a1':getline(v:lnum)=~'}'?'s1':'=']]
+    vim.cmd "normal zM" -- Fold all folds
+    print "Enabling folding"
   end
 end
 
 vim.cmd "command! Fold lua _G.toggle_function_folding()"
+vim.api.nvim_set_keymap("n", "fld", [[<Cmd>lua _G.toggle_function_folding()<CR>]], { noremap = true, silent = false })
 
 function _G.create_word_selection_mappings()
   for i = 2, 5 do
