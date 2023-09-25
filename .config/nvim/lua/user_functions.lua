@@ -3,6 +3,10 @@ local actions = require "telescope.actions"
 local action_state = require "telescope.actions.state"
 local zoomed = false
 
+--- Processes a task list and generates a shell script to handle tasks via the taskwarrior CLI.
+-- This function modifies the current buffer, adding lines that invoke taskwarrior commands.
+-- The resulting lines will include any additional modifiers passed to the function.
+-- @param ... A variable number of string modifiers to pass to the `task add` command
 function _G.process_task_list(...)
   local args = { ... }
   local modifiers = table.concat(args, " ")
@@ -45,6 +49,12 @@ function _G.process_task_list(...)
   vim.api.nvim_buf_set_lines(0, 0, -1, false, new_lines)
 end
 
+--- Custom completion function specifically for `process_task_list` in Neovim's command-line interface.
+-- This function provides argument suggestions for the `process_task_list` function when called from the command line.
+-- @param arg_lead The leading portion of the argument to be completed.
+-- @param cmd_line The entire command line input up to this point.
+-- @param cursor_pos The position of the cursor within the command line.
+-- @return A table containing argument suggestions that match the prefix (arg_lead) for `process_task_list`.
 function _G.my_custom_complete(arg_lead, cmd_line, cursor_pos)
   -- This is your list of arguments.
   local items = { "project:", "due:", "+next" }
@@ -103,11 +113,9 @@ function _G.insert_file_path()
           text_to_insert = vim.fn.fnamemodify(selected_file, ":t")
         end
 
-        -- Move the cursor back one position if it's between quotes
+        -- Move the cursor back one position
         local col = vim.fn.col "." - 1
-        if vim.fn.getline(".")[col] == "'" or vim.fn.getline(".")[col] == '"' then
-          vim.fn.cursor(vim.fn.line ".", col)
-        end
+        vim.fn.cursor(vim.fn.line ".", col)
 
         -- Insert the text at the cursor position
         vim.api.nvim_put({ text_to_insert }, "c", true, true)
