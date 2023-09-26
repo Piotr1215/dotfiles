@@ -80,16 +80,28 @@ function _G.create_word_selection_mappings()
   wk.register({ ["_"] = { "vg_", "Select inside underscored word" } }, { mode = "n", prefix = "" })
 end
 
+-- TODO: create separate funcion to only enable folding
+function _G.enable_function_folding()
+  vim.defer_fn(function()
+    if vim.wo.foldenable then
+      vim.cmd "setlocal foldenable"
+      vim.cmd "setlocal foldmethod=expr"
+      vim.cmd "normal zx"
+      print "Re-enabling folding!"
+    end
+  end, 100) -- Initial delay
+end
+
 function _G.toggle_function_folding()
   if vim.wo.foldenable then
     vim.cmd "setlocal nofoldenable"
     vim.cmd "normal zR" -- Unfold all folds
-    vim.cmd 'echo "Disabling folding"'
+    vim.cmd 'echo "Disabling folding!"'
   else
     vim.cmd "setlocal foldenable"
     vim.cmd "setlocal foldmethod=expr"
     vim.cmd "normal zM" -- Fold all folds
-    print "Enabling folding"
+    print "Enabling folding!"
   end
 end
 
@@ -312,8 +324,17 @@ vim.api.nvim_set_keymap(
   [[<Cmd>lua create_or_update_task(vim.fn.getline('.'))<CR>]],
   { noremap = true, silent = true }
 )
-vim.api.nvim_set_keymap("i", "<M-i>", [[<Cmd>lua insert_file_path()<CR>]], { noremap = true, silent = true })
 vim.cmd "command! Fold lua _G.toggle_function_folding()"
+vim.cmd "command! FoldE lua _G.enable_function_folding()"
+
+vim.api.nvim_create_autocmd("BufWritePre", {
+  pattern = "*.lua",
+  callback = function()
+    _G.enable_function_folding()
+  end,
+})
+
+vim.api.nvim_set_keymap("i", "<M-i>", [[<Cmd>lua insert_file_path()<CR>]], { noremap = true, silent = true })
 vim.api.nvim_set_keymap("n", "fld", [[<Cmd>lua _G.toggle_function_folding()<CR>]], { noremap = true, silent = false })
 vim.api.nvim_set_keymap("n", "f", ":call CustomF(0)<CR>", {})
 vim.api.nvim_set_keymap("v", "f", ":call CustomF(0)<CR>", {})
@@ -323,4 +344,5 @@ vim.api.nvim_set_keymap("n", "<Leader>pt", ":lua _G.process_task_list()<CR>", { 
 vim.cmd [[
   command! -nargs=* -complete=customlist,v:lua.my_custom_complete ProcessTasks :lua _G.process_task_list(<f-args>)
 ]]
+
 create_word_selection_mappings()
