@@ -59,15 +59,15 @@ vim.api.nvim_create_autocmd("bufwritepost", {
 
 vim.cmd [[autocmd BufWritePre * lua vim.lsp.buf.format()]]
 
-vim.api.nvim_exec(
-  [[
-  augroup stylua_format
-    autocmd!
-    autocmd BufWritePost *.lua lua StyluaFormat()
-  augroup END
-]],
-  false
-)
+-- vim.api.nvim_exec(
+-- [[
+-- augroup stylua_format
+-- autocmd!
+-- autocmd BufWritePost *.lua lua StyluaFormat()
+-- augroup END
+-- ]],
+-- false
+-- )
 
 function StyluaFormat()
   local current_dir = vim.fn.getcwd()
