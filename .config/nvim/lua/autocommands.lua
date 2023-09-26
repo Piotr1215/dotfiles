@@ -88,9 +88,6 @@ vim.cmd [[
 api.nvim_exec(
   [[
     augroup fileTypes
-     autocmd FileType lua setlocal foldmethod=marker
-     autocmd FileType just setlocal foldmethod=marker
-     autocmd FileType go setlocal foldmethod=expr
      autocmd BufRead,BufNewFile .envrc set filetype=sh
     augroup end
   ]],
