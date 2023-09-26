@@ -80,28 +80,16 @@ function _G.create_word_selection_mappings()
   wk.register({ ["_"] = { "vg_", "Select inside underscored word" } }, { mode = "n", prefix = "" })
 end
 
--- TODO: create separate funcion to only enable folding
-function _G.enable_function_folding()
-  vim.defer_fn(function()
-    if vim.wo.foldenable then
-      vim.cmd "setlocal foldenable"
-      vim.cmd "setlocal foldmethod=expr"
-      vim.cmd "normal zx"
-      print "Re-enabling folding!"
-    end
-  end, 100) -- Initial delay
-end
-
 function _G.toggle_function_folding()
   if vim.wo.foldenable then
     vim.cmd "setlocal nofoldenable"
     vim.cmd "normal zR" -- Unfold all folds
-    vim.cmd 'echo "Disabling folding!"'
+    vim.cmd 'echo "Disabling folding"'
   else
     vim.cmd "setlocal foldenable"
     vim.cmd "setlocal foldmethod=expr"
     vim.cmd "normal zM" -- Fold all folds
-    print "Enabling folding!"
+    print "Enabling folding"
   end
 end
 
@@ -141,7 +129,7 @@ function _G.create_or_update_task()
   local current_line = vim.fn.getline "."
   local cursor_pos = vim.fn.col "."
   local file_path = vim.fn.expand "%:p" -- Get full path of current file
-  local line_number = vim.fn.line "." -- Get current line number
+  local line_number = vim.fn.line "."   -- Get current line number
 
   -- Keywords we are looking for
   local keywords = { "TODO", "HACK", "NOTE", "PERF", "TEST", "WARN" }
@@ -325,12 +313,15 @@ vim.api.nvim_set_keymap(
   { noremap = true, silent = true }
 )
 vim.cmd "command! Fold lua _G.toggle_function_folding()"
-vim.cmd "command! FoldE lua _G.enable_function_folding()"
 
 vim.api.nvim_create_autocmd("BufWritePre", {
-  pattern = "*.lua",
+  pattern = "*.*",
   callback = function()
-    _G.enable_function_folding()
+    vim.defer_fn(function()
+      _G.toggle_function_folding()
+      _G.toggle_function_folding()
+      vim.cmd "normal zx"
+    end, 50) -- Delay for 50 milliseconds
   end,
 })
 
