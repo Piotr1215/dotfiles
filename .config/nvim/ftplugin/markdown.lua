@@ -37,6 +37,9 @@ utils.omap('am', '<Cmd>lua MarkdownCodeBlock(true)<CR>')
 utils.xmap('am', '<Cmd>lua MarkdownCodeBlock(true)<CR>')
 utils.omap('im', '<Cmd>lua MarkdownCodeBlock(false)<CR>')
 utils.xmap('im', '<Cmd>lua MarkdownCodeBlock(false)<CR>')
+utils.nmap("<nop>", "<Plug>Markdown_Fold")               -- tab is for moving around only
+utils.lnmap("nh", "<Plug>Markdown_MoveToNextHeader")     -- tab is for moving around only
+utils.lnmap("ph", "<Plug>Markdown_MoveToPreviousHeader") -- tab is for moving around only
 
 -- MarkdownPreview settings
 vim.g.mkdp_browser = '/usr/bin/firefox'
