@@ -57,7 +57,7 @@ end
 -- @return A table containing argument suggestions that match the prefix (arg_lead) for `process_task_list`.
 function _G.my_custom_complete(arg_lead, cmd_line, cursor_pos)
   -- This is your list of arguments.
-  local items = { "project:", "due:", "+next" }
+  local items = { "project:", "due:", "+next", "duration:" }
 
   -- Filter the items based on the argument lead.
   local matches = {}
