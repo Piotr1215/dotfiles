@@ -16,6 +16,7 @@ export base64encoded_azure_creds    := `base64 ~/crossplane-azure-provider-key.j
 export base64encoded_gcp_creds      := `base64 ~/gcp-creds-platform.json | tr -d "\n"`
 export base64encoded_aws_creds      := `cat ~/.aws/credentials | grep -i 609897127049_AdministratorAccess -A3 | sed 's/609897127049_AdministratorAccess/default/' | base64 | tr -d "\n"`
 export gcp_project_id               := "squad-platform-playground"
+export xp_namespace                 := "crossplane-system"
                                     
 # this list of available targets
 # targets marked with * are main targets
@@ -27,7 +28,7 @@ _check_mandatory_programs:
   @if ! type "kubectl" > /dev/null; then echo "Please install kubectl" && exit 1; fi
  
 # * setup kind cluster with ArgoCD, kubernetes and help providers
-setup_infra xp-version: _check_mandatory_programs setup_kind setup_k8s setup_helm enable_metrics_server
+setup_infra xp-version: _check_mandatory_programs setup_kind (setup_uxp xp-version) setup_k8s setup_helm enable_metrics_server
 
 # enable metrics server
 enable_metrics_server:
@@ -40,36 +41,16 @@ enable_metrics_server:
 disable_metrics_server:
  @kubectl delete -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
 
-# setup kind cluster with Crossplane and composition functions
-setup_kind_xfn:
-  #!/usr/bin/env bash
-  echo "Creating kind cluster and Installing Crossplane"
-  set -euo pipefail
-
-  cluster="control-plane"
-
-  echo "Creating kind cluster - ${cluster}"
-  kind create cluster --config=kind-config.yaml --wait 3m 
-  kind get kubeconfig --name "${cluster}"
-  kubectl config use-context kind-"${cluster}"
-
-  echo "Installing Crossplane with composition functions enabled"
-  helm install crossplane --namespace crossplane-system crossplane-stable/crossplane \
-      --create-namespace \
-      --set "args={--debug,--enable-composition-functions}" \
-      --set "xfn.enabled=true" \
-      --set "xfn.args={--debug}"
-
 # Check if crossplane composition functions installed properly
 check_xfn:
    @echo "Checking if crossplane composition functions installed properly"
    @echo ""
-   @kubectl -n crossplane-system logs -l app=crossplane
+   @kubectl -n {{xp_namespace}} logs -l app=crossplane
 
 # setup kind cluster with UXP
-setup_kind xp-version="uxp":
+setup_kind:
   #!/usr/bin/env bash
-  echo "Creating kind cluster and Installing ${xp-version}"
+  echo "Creating kind cluster"
   set -euo pipefail
 
   cluster="control-plane"
@@ -79,20 +60,32 @@ setup_kind xp-version="uxp":
   kind get kubeconfig --name "${cluster}"
   kubectl config use-context kind-"${cluster}"
 
-  if [[ "${xp-version}" == "uxp" ]]; then
-    echo "Installing UXP"
-    kubectl create namespace upbound-system
-    helm install uxp --namespace upbound-system upbound-stable/universal-crossplane --devel
+# setup kind cluster with UXP
+setup_uxp xp-version='stable':
+  #!/usr/bin/env bash
+  echo "Debug: xp-version is {{xp-version}}"
+  if kubectl get namespace {{xp_namespace}} > /dev/null 2>&1; then
+    echo "Namespace {{xp_namespace}} already exists"
   else
-    echo "Installing Crossplane"
-    helm repo add crossplane-master https://charts.crossplane.io/master/
-    helm repo update
-    helm install crossplane \
-    --namespace upbound-system \
-    --create-namespace crossplane-master/crossplane \
-    --devel 
+    echo "Creating namespace {{xp_namespace}}"
+    kubectl create namespace {{xp_namespace}}
   fi
-  kubectl wait --for condition=Available=True --timeout=300s deployment/crossplane --namespace upbound-system
+
+  if [[ {{xp-version}} == "stable" ]]; then
+    echo "Installing UXP version {{xp-version}}"
+    helm install uxp --namespace {{xp_namespace}} upbound-stable/universal-crossplane --devel
+  elif [[ {{xp-version}} == "functions" ]]; then
+    echo "Installing UXP version {{xp-version}}"
+    helm repo add crossplane-master https://charts.crossplane.io/master --force-update
+    helm repo update
+    helm upgrade --install crossplane crossplane-master/crossplane \
+    --namespace crossplane-system \
+    --devel
+  else 
+    echo "Unrecognizable version"
+    exit 1
+  fi
+  kubectl wait --for condition=Available=True --timeout=300s deployment/crossplane --namespace {{xp_namespace}}
 
 # setup provider Kubernetes
 setup_k8s:
@@ -102,7 +95,7 @@ setup_k8s:
 
   kubectl apply -f {{yaml}}/kubernetes-provider.yaml
   kubectl wait --for condition=healthy --timeout=300s provider.pkg.crossplane.io/provider-kubernetes
-  SA=$(kubectl -n upbound-system get sa -o name | grep provider-kubernetes | sed -e 's|serviceaccount\/|upbound-system:|g')
+  SA=$(kubectl -n {{xp_namespace}} get sa -o name | grep provider-kubernetes | sed -e 's|serviceaccount\/|{{xp_namespace}}:|g')
   kubectl create clusterrolebinding provider-kubernetes-admin-binding --clusterrole cluster-admin --serviceaccount="${SA}"
   kubectl apply -f {{yaml}}/kubernetes-provider-config.yaml
 
@@ -114,7 +107,7 @@ setup_helm:
 
   kubectl apply -f {{yaml}}/helm-provider.yaml
   kubectl wait --for condition=healthy --timeout=300s provider.pkg.crossplane.io/provider-helm
-  SA=$(kubectl -n upbound-system get sa -o name | grep provider-helm | sed -e 's|serviceaccount\/|upbound-system:|g')
+  SA=$(kubectl -n {{xp_namespace}} get sa -o name | grep provider-helm | sed -e 's|serviceaccount\/|{{xp_namespace}}:|g')
   kubectl create clusterrolebinding provider-helm-admin-binding --clusterrole cluster-admin --serviceaccount="${SA}"
   sleep 3
   kubectl apply -f {{yaml}}/helm-provider-config.yaml
@@ -134,7 +127,7 @@ deploy_monitoring:
 # setup AWS official provider
 setup_aws:
   @echo "Setting up AWS official provider"
-  @kubectl delete secret -n upbound-system aws-creds --ignore-not-found
+  @kubectl delete secret -n {{xp_namespace}} aws-creds --ignore-not-found
   @__swapcreds.sh
   @echo $base64encoded_aws_creds
   @kubectl config use-context kind-control-plane
