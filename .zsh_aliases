@@ -1,5 +1,5 @@
 # Global aliases
-alias -g C='| xsel --clipboard'
+alias -g C='| sed -r "s/\x1b\[[0-9;]*m//g" | xsel --clipboard'
 alias -g G='| grep -i --color=always'
 alias -g H=' --help'
 alias -g L='| less'
