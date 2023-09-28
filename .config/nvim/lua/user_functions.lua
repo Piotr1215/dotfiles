@@ -84,12 +84,10 @@ function _G.toggle_function_folding()
   if vim.wo.foldenable then
     vim.cmd "setlocal nofoldenable"
     vim.cmd "normal zR" -- Unfold all folds
-    vim.cmd 'echo "Disabling folding"'
   else
     vim.cmd "setlocal foldenable"
     vim.cmd "setlocal foldmethod=expr"
     vim.cmd "normal zM" -- Fold all folds
-    print "Enabling folding"
   end
 end
 
