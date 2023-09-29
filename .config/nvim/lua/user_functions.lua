@@ -289,6 +289,39 @@ end
 vim.api.nvim_set_keymap('n', '<leader>msg', [[:lua redirect_messages_to_clipboard()<CR>]],
   { noremap = true, silent = true })
 
+
+function _G.execute_visual_selection()
+  -- Yank visual selection into register "a"
+  vim.cmd('normal! gvy')
+  local lines = vim.fn.getreg('"')
+
+  -- Clean up the lines and print for debugging
+  lines = lines:gsub("[\n\r]", ""):gsub("'", [['"'"']])
+  print("Executing command: ", lines)
+
+  -- Execute command and capture output
+  local result = vim.fn.systemlist("bash -c " .. "'" .. lines .. "'")
+
+  -- Create a new buffer and window, setting the filetype to sh for syntax highlighting
+  vim.cmd("new")
+  vim.cmd("set filetype=sh")
+
+  -- Make the buffer a scratch buffer
+  vim.cmd("setlocal buftype=nofile")
+  vim.cmd("setlocal bufhidden=wipe")
+
+  -- Fill the buffer with command output
+  for i, line in ipairs(result) do
+    vim.fn.setline(i, line)
+  end
+
+  -- Map 'q' to close the buffer in this window
+  vim.api.nvim_buf_set_keymap(0, 'n', 'q', ':q!<CR>', { noremap = true, silent = true })
+end
+
+-- Map <leader>es in visual mode to the function
+vim.api.nvim_set_keymap('x', '<leader>es', [[:lua execute_visual_selection()<CR>]], { noremap = true, silent = true })
+
 -- Custom f command function
 -- This is needed because ;; is mapped to enter command mode
 vim.cmd [[
