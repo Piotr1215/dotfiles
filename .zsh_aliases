@@ -16,7 +16,7 @@ alias -s yaml=nvim
 
 # Directories and files
 alias f='__open-file.sh'
-alias uls='/usr/bin/ls'
+alias la='/usr/bin/ls'
 alias ls='exa --color=always --long --all --header --icons'
 alias lsa='exa --color=always --long --all --sort=age --reverse --header --icons'
 alias lsf='fd --max-depth=1 --type=file'
