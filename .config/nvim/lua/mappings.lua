@@ -118,8 +118,10 @@ utils.nmap("<leader>o", "o<cr>")
 -- Format with pretty
 utils.nmap("<C-f>", ":Pretty<CR>")
 -- add line below without entering insert mode!
-utils.nmap("<leader>L", ":<c-u>put!=repeat([''],v:count)<bar>']+1<cr>")
-utils.nmap("<leader>l", ":<c-u>put =repeat([''],v:count)<bar>'[-1<cr>")
+utils.nmap('<leader>l', ':lua add_empty_lines(true)<CR>')
+utils.nmap('<leader>L', ':lua add_empty_lines(false)<CR>')
+-- utils.nmap("<leader>L", ":<c-u>put!=repeat([''],v:count)<bar>']+1normal k<cr>")
+-- utils.nmap("<leader>l", ":<c-u>put =repeat([''],v:count)<bar>'[-1normal j<cr>")
 -- insert space
 utils.nmap("<leader>i", "i<space><esc>")
 -- delete word forward in insert mode

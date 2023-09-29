@@ -289,6 +289,64 @@ end
 vim.api.nvim_set_keymap('n', '<leader>msg', [[:lua redirect_messages_to_clipboard()<CR>]],
   { noremap = true, silent = true })
 
+function _G.add_empty_lines(below)
+  local count = vim.v.count1
+  local lines = {}
+  for _ = 1, count do
+    table.insert(lines, "")
+  end
+
+  if below then
+    vim.fn.append(vim.fn.line('.'), lines)
+    vim.cmd('normal! ' .. count .. 'j')
+  else
+    vim.fn.append(vim.fn.line('.') - 1, lines)
+    vim.cmd('normal! ' .. count .. 'k')
+  end
+end
+
+function _G.create_floating_scratch(content)
+  -- Get editor dimensions
+  local width = vim.api.nvim_get_option("columns")
+  local height = vim.api.nvim_get_option("lines")
+
+  -- Calculate the floating window size
+  local win_height = math.ceil(height * 0.8) + 2 -- Adding 2 for the border
+  local win_width = math.ceil(width * 0.8) + 2   -- Adding 2 for the border
+
+  -- Calculate window's starting position
+  local row = math.ceil((height - win_height) / 2)
+  local col = math.ceil((width - win_width) / 2)
+
+  -- Create a buffer and set it as a scratch buffer
+  local buf = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_buf_set_option(buf, 'buftype', 'nofile')
+  vim.api.nvim_buf_set_option(buf, 'bufhidden', 'wipe')
+  vim.api.nvim_buf_set_option(buf, 'filetype', 'sh') -- for syntax highlighting
+
+  -- Create the floating window with a border and set some options
+  local win = vim.api.nvim_open_win(buf, true, {
+    relative = 'editor',
+    row = row,
+    col = col,
+    width = win_width,
+    height = win_height,
+    border = 'single' -- You can also use 'double', 'rounded', or 'solid'
+  })
+
+  -- Check if we've got content to populate the buffer with
+  if content then
+    vim.api.nvim_buf_set_lines(buf, 0, -1, true, content)
+  else
+    vim.api.nvim_buf_set_lines(buf, 0, -1, true, { "This is a scratch buffer in a floating window." })
+  end
+
+  vim.api.nvim_win_set_option(win, 'wrap', false)
+  vim.api.nvim_win_set_option(win, 'cursorline', true)
+
+  -- Map 'q' to close the buffer in this window
+  vim.api.nvim_buf_set_keymap(buf, 'n', 'q', ':q!<CR>', { noremap = true, silent = true })
+end
 
 function _G.execute_visual_selection()
   -- Yank visual selection into register "a"
@@ -302,21 +360,8 @@ function _G.execute_visual_selection()
   -- Execute command and capture output
   local result = vim.fn.systemlist("bash -c " .. "'" .. lines .. "'")
 
-  -- Create a new buffer and window, setting the filetype to sh for syntax highlighting
-  vim.cmd("new")
-  vim.cmd("set filetype=sh")
-
-  -- Make the buffer a scratch buffer
-  vim.cmd("setlocal buftype=nofile")
-  vim.cmd("setlocal bufhidden=wipe")
-
-  -- Fill the buffer with command output
-  for i, line in ipairs(result) do
-    vim.fn.setline(i, line)
-  end
-
-  -- Map 'q' to close the buffer in this window
-  vim.api.nvim_buf_set_keymap(0, 'n', 'q', ':q!<CR>', { noremap = true, silent = true })
+  -- Create a floating scratch buffer and populate it with the output
+  _G.create_floating_scratch(result)
 end
 
 -- Map <leader>es in visual mode to the function
