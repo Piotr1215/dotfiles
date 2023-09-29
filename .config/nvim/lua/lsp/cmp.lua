@@ -123,7 +123,7 @@ cmp.setup.cmdline(':', {
 })
 
 -- Indent-blankline
-require("indent_blankline").setup({
+require("ibl").setup({
   -- for example, context is off by default, use this to turn it on
   space_char_blankline = " ",
   show_current_context = true,
@@ -131,4 +131,5 @@ require("indent_blankline").setup({
   filetype_exclude = { "help", "packer" },
   buftype_exclude = { "terminal", "nofile" },
   show_trailing_blankline_indent = false,
+  main = "ibl"
 })
