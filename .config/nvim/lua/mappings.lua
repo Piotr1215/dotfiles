@@ -11,8 +11,8 @@ utils.lnmap("qa", ":qa!<cr>")
 utils.lnmap(";q", ":qa<cr>")
 utils.lnmap(";w", ":wqa<cr>")
 utils.lnmap(";e", ":!bash % ", { silent = false })
-utils.nmap("<nop>", "<Plug>Markdown_Fold") -- tab is for moving around only
-utils.lnmap("nh", "<Plug>Markdown_MoveToNextHeader") -- tab is for moving around only
+utils.nmap("<nop>", "<Plug>Markdown_Fold")               -- tab is for moving around only
+utils.lnmap("nh", "<Plug>Markdown_MoveToNextHeader")     -- tab is for moving around only
 utils.lnmap("ph", "<Plug>Markdown_MoveToPreviousHeader") -- tab is for moving around only
 -- center screen after moving pageup or down
 utils.nmap("<c-d>", "<c-d>zz")
@@ -32,9 +32,9 @@ vim.api.nvim_set_keymap("n", "<S-PageUp>", "gT", { noremap = true, silent = true
 vim.api.nvim_set_keymap("n", "<S-PageDown>", "gt", { noremap = true, silent = true })
 utils.nmap("<BS>", "^")
 utils.vmap("<S-PageDown>", ":m '>+1<CR>gv=gv") -- Move Line Down in Visual Mode
-utils.vmap("<S-PageUp>", ":m '<-2<CR>gv=gv") -- Move Line Up in Visual Mode
-utils.nmap("<leader>k", ":m .-2<CR>==") -- Move Line Up in Normal Mode
-utils.nmap("<leader>j", ":m .+1<CR>==") -- Move Line Down in Normal Mode
+utils.vmap("<S-PageUp>", ":m '<-2<CR>gv=gv")   -- Move Line Up in Visual Mode
+utils.nmap("<leader>k", ":m .-2<CR>==")        -- Move Line Up in Normal Mode
+utils.nmap("<leader>j", ":m .+1<CR>==")        -- Move Line Down in Normal Mode
 
 -- Inlay Hints (nvim nighlty required)
 if vim.lsp.inlay_hint then
@@ -64,8 +64,8 @@ utils.emap("<Leader>ow", "<Plug>(leap-cross-window)")
 -- Stop search highlight
 utils.nmap(",<space>", ":nohlsearch<CR>")
 utils.vmap("<C-r>", '"hy:%s/<C-r>h//gc<left><left><left>') -- Change selection
-utils.vmap("//", "y/\\V<C-R>=escape(@\",'/')<CR><CR>") -- Highlight selection
-utils.vmap("<leader><C-s>", ":s/\\%V") -- Search only in visual selection usingb%V atom
+utils.vmap("//", "y/\\V<C-R>=escape(@\",'/')<CR><CR>")     -- Highlight selection
+utils.vmap("<leader><C-s>", ":s/\\%V")                     -- Search only in visual selection usingb%V atom
 utils.vmap("srt", ":!sort -n -k 2<cr>")
 
 -- MACROS --
@@ -83,23 +83,23 @@ utils.lnmap("yi", ":set foldmethod=indent<CR>")
 -- The below mapping helps select from a register in the place of insert point
 utils.imap("<C-p>", "<C-o>:Telescope registers<cr><C-w>")
 -- Yank
-utils.lnmap("yl", '"*yy') -- yank line to the clipboard buffer
+utils.lnmap("yl", '"*yy')           -- yank line to the clipboard buffer
 utils.nmap("<leader>df", ":%d<cr>") -- delete file content to black hole register
 utils.nmap("<leader>yf", ":%y<cr>") -- yank file under cusror to the clipboard buffer
-utils.nmap("<leader>yw", '"+yiw') -- yank word under cusror to the clipboard buffer
-utils.nmap("<leader>yW", '"+yiW') -- yank WORD under cusror to the clipboard buffer
+utils.nmap("<leader>yw", '"+yiw')   -- yank word under cusror to the clipboard buffer
+utils.nmap("<leader>yW", '"+yiW')   -- yank WORD under cusror to the clipboard buffer
 -- Paste
-utils.lnmap("pa", '"*p') -- paste from clipboard buffer after the cursor
-utils.lnmap("p", '"*P') -- paste from clipboard buffer before the cursor
-utils.nmap("<leader>1", '"0p') -- paste from 0 (latest yank)
-utils.nmap("<leader>2", '"*p') -- paste from 0 (latest yank)
+utils.lnmap("pa", '"*p')            -- paste from clipboard buffer after the cursor
+utils.lnmap("p", '"*P')             -- paste from clipboard buffer before the cursor
+utils.nmap("<leader>1", '"0p')      -- paste from 0 (latest yank)
+utils.nmap("<leader>2", '"*p')      -- paste from 0 (latest yank)
 -- Substitute
-utils.nmap("<leader>sw", '"_diwP') -- substitute current word with last yanked text
-utils.nmap("<leader>sW", '"_diWP') -- substitute current WORD with last yanked text
+utils.nmap("<leader>sw", '"_diwP')  -- substitute current word with last yanked text
+utils.nmap("<leader>sW", '"_diWP')  -- substitute current WORD with last yanked text
 -- Delete
-utils.lnmap("dl", '"_dd') -- delete line to black hole register
-utils.lnmap("d_", '"_D') -- delete till end of line to black hole register
-utils.xmap("<leader>d", '"_d') -- delete selection to black hole register
+utils.lnmap("dl", '"_dd')           -- delete line to black hole register
+utils.lnmap("d_", '"_D')            -- delete till end of line to black hole register
+utils.xmap("<leader>d", '"_d')      -- delete selection to black hole register
 
 -- select pasted text
 utils.nmap("gp", "`[v`]")
@@ -145,10 +145,10 @@ utils.nmap("<leader>fmt", ":Pretty<CR>")
 --end, { silent = true, noremap = true, desc = 'toggle signature' })
 -- EXTERNAL --
 -- Execute line under cursor in shell
-utils.nmap("<leader>ex", ":.w !bash -e <cr>") -- execute current line and output to command line
-utils.nmap("<leader>eX", ":%w !bash -e <cr>") -- exexute all lines and output to command line
+utils.nmap("<leader>ex", ":.w !bash -e <cr>")                   -- execute current line and output to command line
+utils.nmap("<leader>eX", ":%w !bash -e <cr>")                   -- exexute all lines and output to command line
 utils.nmap("<leader>el", ":.!bash -e <cr>", { silent = false }) -- execute current line and replace with result
-utils.nmap("<leader>eL", ":% !bash % <cr>") -- execute all lines and replace with result
+utils.nmap("<leader>eL", ":% !bash % <cr>")                     -- execute all lines and replace with result
 utils.lnmap("cx", ":!chmod +x %<cr>")
 -- Set spellcheck on/off
 utils.nmap("<Leader>son", ":setlocal spell spelllang=en_us<CR>")
@@ -208,7 +208,7 @@ vim.api.nvim_set_keymap(
 )
 
 -- Startify
-utils.lnmap("st", ":Startify<CR>") -- start Startify screen
+utils.lnmap("st", ":Startify<CR>")         -- start Startify screen
 utils.lnmap("cd", ":cd %:p:h<CR>:pwd<CR>") -- change to current directory of active file and print out
 
 -- Telescope
