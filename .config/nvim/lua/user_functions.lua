@@ -278,6 +278,17 @@ function _G.print_current_file_dir()
   end
 end
 
+function _G.redirect_messages_to_clipboard()
+  -- Redirect messages to clipboard register
+  vim.cmd("redir @+")
+  vim.cmd("messages")
+  vim.cmd("redir END")
+end
+
+-- Map <leader>msg to the function
+vim.api.nvim_set_keymap('n', '<leader>msg', [[:lua redirect_messages_to_clipboard()<CR>]],
+  { noremap = true, silent = true })
+
 -- Custom f command function
 -- This is needed because ;; is mapped to enter command mode
 vim.cmd [[
