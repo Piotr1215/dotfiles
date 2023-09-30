@@ -97,7 +97,7 @@ def invoke_plink(description, url, tags):
 
 active_window_title = subprocess.getoutput("xdotool getactivewindow getwindowname")
 
-if 'Firefox' in active_window_title:
+if 'Firefox' in active_window_title or 'Chrome' in active_window_title:
     try:
         description = clipboard.get_selection()
         time.sleep(0.25)
