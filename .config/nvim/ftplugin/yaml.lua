@@ -5,6 +5,8 @@ local cmp = require "cmp"
 cmp.setup.buffer {
   sources = {
     { name = "vsnip" },
+    { name = "nvim_lsp" },
+    { name = "path" },
     { name = "spell" },
     {
       name = "buffer",
