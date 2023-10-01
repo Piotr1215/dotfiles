@@ -76,7 +76,34 @@ configs.up = {
 
 local capabilities = vim.lsp.protocol.make_client_capabilities()
 capabilities = require("cmp_nvim_lsp").default_capabilities()
-
+require('lspconfig')['yamlls'].setup {
+  {
+    on_attach = on_attach,
+    capabilities = capabilities,
+    filetypes = { "yaml", "yml" },
+    flags = { debounce_test_changes = 150 },
+    settings = {
+      yaml = {
+        format = {
+          enable = true,
+          singleQuote = true,
+          printWidth = 120,
+        },
+        hover = true,
+        completion = true,
+        validate = true,
+      },
+      schemas = {
+        ["https://json.schemastore.org/github-workflow.json"] = "/.github/workflows/*",
+        ["http://json.schemastore.org/github-action"] = { ".github/action.{yml,yaml}" },
+      },
+      schemaStore = {
+        enable = true,
+        url = "https://www.schemastore.org/api/json/catalog.json",
+      },
+    },
+  }
+}
 lspconfig.gopls.setup {
   cmd = { "gopls" },
   -- for postfix snippets and analyzers
