@@ -45,6 +45,7 @@ alias pfn='__print-functions.sh'
 alias ra=ranger
 alias rg='rg --hidden'
 alias vim=nvim
+alias nvim-kick="NVIM_APPNAME=kickstart nvim nvim $@"
 alias v=nvim
 alias watch=viddy
 alias ms=msm
