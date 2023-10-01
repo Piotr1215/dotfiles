@@ -201,7 +201,6 @@ return require("packer").startup(function(use)
     },
   }
   use "hrsh7th/cmp-nvim-lua"
-  use "L3MON4D3/LuaSnip"
   use "hrsh7th/vim-vsnip"
   use "hrsh7th/vim-vsnip-integ"
   -- }}}
