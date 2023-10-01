@@ -118,18 +118,20 @@ if 'Firefox' in active_window_title or 'Chrome' in active_window_title:
     if not description:
         description = active_window_title
 
-    options = ["Add Link", "Do Not Add Link"]
-    message = f"Should we add a pet link for '{description}' from '{domain}' domain?\n"
-    exit_code, choice = dialog.list_menu(options, title="Choose an Action", message=message, default="Do Not Add Link")
+    options = ["Add Link", "Create Task"]
+    message = f"Would you like to add a pet link for '{description}' from '{domain}' domain or create a task?"
+    exit_code, choices = dialog.list_menu_multi(options, title="Choose an Action", message=message, defaults=["Create Task"])
 
     # Check if the dialog was cancelled (exit code is 0 when OK is clicked)
     if exit_code == 0:
-        custom_description = get_custom_description(description)
-        if choice == "Add Link":
+        if "Add Link" in choices or "Create Task" in choices:
+            custom_description = get_custom_description(description)
+            
+        if "Add Link" in choices:
             invoke_plink(custom_description, url, tags)
         
-        # Always create a task regardless of the link choice
-        subprocess.run(["/home/decoder/dev/dotfiles/scripts/__create_task.sh", custom_description] + tags)
+        if "Create Task" in choices:
+            subprocess.run(["/home/decoder/dev/dotfiles/scripts/__create_task.sh", custom_description] + tags)
 
     clipboard.fill_clipboard("")
     clipboard.fill_selection("")
