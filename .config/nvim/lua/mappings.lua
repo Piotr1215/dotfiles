@@ -12,6 +12,7 @@ utils.lnmap(";q", ":qa<cr>")
 utils.lnmap(";w", ":wqa<cr>")
 utils.lnmap(";e", ":!bash % ", { silent = false })
 utils.nmap("<nop>", "<Plug>Markdown_Fold")               -- tab is for moving around only
+utils.nmap("<nop>", "<Plug>NERDCommenterAltDelims")      -- tab is for moving around only
 utils.lnmap("nh", "<Plug>Markdown_MoveToNextHeader")     -- tab is for moving around only
 utils.lnmap("ph", "<Plug>Markdown_MoveToPreviousHeader") -- tab is for moving around only
 -- center screen after moving pageup or down
@@ -47,7 +48,6 @@ if vim.lsp.inlay_hint then
 end
 -- CHAT GPT KEYMAPS --
 utils.lnmap("ct", ":ChatGPT<cr>")
-utils.lnmap("ca", ":ChatGPTActAs<cr>")
 utils.lnmap("co", ":ChatGPTCompleteCode<cr>")
 utils.lnmap("ce", ":ChatGPTEditWithInstructions<cr>")
 utils.vmap("<leader>cr", ":ChatGPTRun ", { silent = false })
