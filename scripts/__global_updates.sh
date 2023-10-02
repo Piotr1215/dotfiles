@@ -12,7 +12,7 @@ export PS4='+(${BASH_SOURCE}:${LINENO}): ${FUNCNAME[0]:+${FUNCNAME[0]}(): }'
 # Set new line and tab for word splitting
 IFS=$'\n\t'
 
-source __check_root.sh
+source __check_root.sh "$@"
 # source "${HOME}"/dev/dotfiles/scripts/__check_root.sh
 
 go-global-update && cargo install-update -a
