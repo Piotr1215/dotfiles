@@ -35,7 +35,7 @@ preexec() {
       else
         .[$cmd] = 1
       end
-    ' $json_file > tmp.json && mv tmp.json $json_file
+    ' $json_file | sponge $json_file
   fi
 }
 

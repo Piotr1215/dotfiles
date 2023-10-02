@@ -4,7 +4,7 @@
   "__open-file.sh": 5,
   "sr": 8,
   "zedit": 10,
-  "adit": 3,
+  "adit": 4,
   "cat": 6,
   "__usage_report.sh": 25,
   "lvim": 3,
@@ -14,4 +14,8 @@
   "ra": 1,
   "__global_updates.sh": 3,
   "__run_with_xtrace.sh": 1,
+  "watch": 1,
+  "fdit": 1,
+  "tr2": 1,
+  "dots": 1
 }
