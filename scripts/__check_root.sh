@@ -29,8 +29,7 @@ help_function() {
 	echo "Note: Debug options can be enabled with 'bash -xv __check_root.sh'."
 }
 
-# Check for help argument
-if [[ "$1" == "-h" ]] || [[ "$1" == "--help" ]]; then
+if [[ -n "${1-}" && ("$1" == "-h" || "$1" == "--help") ]]; then
 	help_function
 	exit 0
 fi
