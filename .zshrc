@@ -9,6 +9,36 @@ if [[ -z $TMUX ]]; then
   tmuxinator start poke
 fi
 
+# Initialize script usage tracking file
+if [ ! -f "/home/decoder/dev/dotfiles/.script_usage.json" ]; then
+  echo '{}' > /home/decoder/dev/dotfiles/.script_usage.json
+fi
+
+# Load aliases into a variable from the specific file
+alias_list=$(awk -F'[ =]' '/^alias / {print $2}' /home/decoder/.zsh_aliases)
+
+# Zsh preexec function
+preexec() {
+  # echo "Debug: preexec called with $1"  # Debug line
+  local cmd=$(echo $1 | awk '{print $1}' | sed 's/^.\///')
+  local folder=$(pwd)
+  local json_file="/home/decoder/dev/dotfiles/.script_usage.json"
+
+  # echo "Debug: cmd=$cmd, functions=\${functions[$cmd]}, alias_list= $alias_list "  # Debug line
+  # Check if the command is a script in the specific folder or a defined function
+  if [[ -f "/home/decoder/dev/dotfiles/scripts/$cmd" || -n "${functions[$cmd]}" || " $alias_list " == *"$cmd"* ]]; then
+    # echo "Debug: Inside if condition"  # Debug line
+    # Update JSON file
+    jq --arg cmd "$cmd" --arg folder "$folder" '
+      if has($cmd) then
+        .[$cmd] += 1
+      else
+        .[$cmd] = 1
+      end
+    ' $json_file > tmp.json && mv tmp.json $json_file
+  fi
+}
+
 #ZSH_THEME="spaceship"
 #ZSH_THEME="powerlevel10k/powerlevel10k"
 ZSH_THEME="simple" #Best theme ever
@@ -183,7 +213,7 @@ bindkey '^j' zoxider
 # bindkey '^x' sessionizer_enter
 
 function f_enter() {
-  BUFFER="f"
+  BUFFER="__open-file.sh"
   zle accept-line
 }
 
