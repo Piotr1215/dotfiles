@@ -76,6 +76,10 @@ configs.up = {
 
 local capabilities = vim.lsp.protocol.make_client_capabilities()
 capabilities = require("cmp_nvim_lsp").default_capabilities()
+require 'lspconfig'.bashls.setup {
+  filetypes = { "sh", "zsh" },
+}
+
 require('lspconfig')['yamlls'].setup {
   {
     on_attach = on_attach,
