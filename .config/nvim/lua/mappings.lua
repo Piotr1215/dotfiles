@@ -109,8 +109,10 @@ utils.imap("<C-n>", "<C-e><C-o>A;<ESC>")
 -- set mark on this line ma
 utils.imap(";[", "<c-o>ma")
 utils.imap("']", "<c-o>mA")
--- Copy current file name
+-- Copy current file name and path
 utils.lnmap("cpf", ':let @+ = expand("%:p")<cr>')
+-- Copy current file name
+utils.lnmap("cpn", ':let @+ = expand("%:t")<cr>')
 -- insert 2 empty lines and go into inser mode
 utils.nmap("<leader>O", "O<ESC>O")
 utils.nmap("<leader>o", "o<cr>")
