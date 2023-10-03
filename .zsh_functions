@@ -1,12 +1,13 @@
+# shellcheck disable=SC1090
+# ~ works ok here
 source ~/dev/dotfiles/scripts/__reusable_variables.sh
 
 # Define custom copy function
 function copy_and_create_folders() {
     echo "Debug: Function copy_and_create_folders called"  # Debug line
-    last_arg="${@: -1}"  # This will get the last argument
+    last_arg="${!#}"  # This will get the last argument
     echo "Debug: last_arg=$last_arg"
     echo "Debug: dirname of last_arg=$(dirname "$last_arg")"
-    echo "Debug: Checking if $last_arg or $(dirname "$last_arg") exists."
     if [[ ! -d "$last_arg" && ! -d "$(dirname "$last_arg")" ]]; then
       echo "Debug: Inside if condition"
         target_dir="$(dirname "${@[-1]}")"
@@ -56,34 +57,16 @@ EOF
   fi
 }
 
-# Restart a tmuxinator session
-function mst ()
-{
-  if [[ -z $1 ]]; then
-   echo "Provide tmuxinator session to stop" 
-  fi
-
-  tmuxinator stop "$1"
-  tmuxinator start poke
-}
-
-# dynamic prefix variable using prefix_separator
-function testme ()
-{
-prefix="${1:+$1$prefix_separator}"
-echo ${prefix}
-}
-
 # Creates a folder named with the current or prefixed date, using the format "prefix-YYYY-MM-DD" if a prefix is provided.
 function mkdd ()
 {
- mkdir -p ${1:+$1$prefix_separator}$(date +%F); }
+ mkdir -p ${1:+$1$prefix_separator}"$(date +%F)"; }
 
 # Creates a real-time countdown with alert sound, useful for bash scripts and terminal.
 function timer ()
 {
   total=$1 
-  for ((i=total; i>0; i--)); do sleep 1; printf "Time remaining $i secs \r"; done 
+  for ((i=total; i>0; i--)); do sleep 1; printf "Time remaining %s secs \r" "$i"; done
   echo -e "\a" 
 }
 
@@ -107,24 +90,30 @@ function install_font ()
   fc-cache -vf
 }
 
-# Searches for a string in files using rga and fzf in case sensitive mode, and opens the file with nvim.
+# Common function to search for a string in files using rga and fzf, and opens the file with nvim.
+function _fif_common() {
+    local ignore_case_flag="$1"
+    shift  # Remove the first argument, leaving the search string in "$*"
+
+    if [ ! "$#" -gt 0 ]; then echo "Need a string to search for!"; return 1; fi
+
+    local file
+    local preview_cmd
+    preview_cmd=$(printf "rga %s --pretty --context 10 '%s' {}" "$ignore_case_flag" "$*")
+    
+    # shellcheck disable=SC2086
+    # we want to word split here so the flag is parsed
+    file=$(rga --max-count=1 $ignore_case_flag --files-with-matches --no-messages "$*" | fzf-tmux +m --preview="$preview_cmd") && echo "opening $file" && nvim "$file" || return 1
+}
+
+# Wrapper function for case-sensitive search
 function fifs() {
-    if [ ! "$#" -gt 0 ]; then echo "Need a string to search for!"; return 1; fi
-    local file
-    file="$(rga --max-count=1 --files-with-matches --no-messages "$*" | fzf-tmux +m --preview="rga --pretty --context 10 '"$*"' {}")"  && echo "opening $file" && nvim "$file" || return 1
+    _fif_common "" "$@"
 }
 
-# Searches for a string in files using rga and fzf, and opens the file with nvim.
+# Wrapper function for case-insensitive search
 function fif() {
-    if [ ! "$#" -gt 0 ]; then echo "Need a string to search for!"; return 1; fi
-    local file
-    file="$(rga --max-count=1 --ignore-case --files-with-matches --no-messages "$*" | fzf-tmux +m --preview="rga --ignore-case --pretty --context 10 '"$*"' {}")" && echo "opening $file" && nvim "$file" || return 1;
-}
-
-# Creates a new gist with a unique filename including current date and random number
-function gist ()
-{
-   gh gist create --filename $(echo $(date +"%m-%d-%y")-$RANDOM.sh)
+    _fif_common "--ignore-case" "$@"
 }
 
 # Uploads content to clbin and copies URL to clipboard, opens in browser
@@ -134,9 +123,9 @@ function share ()
 }
 
 # Copy file name to clipboard
-function copyname() {
-    file=$1
-    stat -t $1 | cut -d ' ' -f1 | xargs echo -n | xsel -ib
+function cname() {
+    file="$1"
+    stat -t "$1" | cut -d ' ' -f1 | xargs echo -n | xsel -ib
 }
 
 # Copy the current working directory path to the clipboard
@@ -178,15 +167,37 @@ function gacs() {
   git push
 }
 
-# Search for my open PRs and open the selected one in a web browser
-function ghpr() {
-  pr_data=$(gh search prs --author "@me" --state=open --json url,repository,title | \
+# Search for my open issues and open the selected one in a web browser
+function _ghsearch() {
+  local search_type="$1"
+  pr_data=$(gh search "$search_type" --author "@me" --state=open --json url,repository,title | \
             jq -r '.[] | select(.title) | "\(.title) | \(.url)"')
 
   longest=$(echo "$pr_data" | awk -F'|' '{ if (length($1) > max) max = length($1) } END { print max }')
 
   echo "$pr_data" | awk -v max="$longest" -F'|' '{ printf "%-" max "s | %s\n", $1, $2 }' | \
   fzf | awk -F'|' '{print $2}' | xargs xdg-open > /dev/null 2>&1 
+}
+
+# Search for my open PRs and open the selected one in a web browser
+function ghissue() {
+  _ghsearch "issues"
+}
+
+# Search for my repositories and open the selected one in a web browser
+function ghrepo() {
+  pr_data=$(gh search repos --owner "@me" --limit 300 --json url,name,owner | \
+            jq -r '.[] | "\(.name) | \(.url)"')
+
+  longest=$(echo "$pr_data" | awk -F'|' '{ if (length($1) > max) max = length($1) } END { print max }')
+
+  echo "$pr_data" | awk -v max="$longest" -F'|' '{ printf "%-" max "s | %s\n", $1, $2}' | \
+  fzf | awk -F'|' '{print $2}' | xargs xdg-open > /dev/null 2>&1 
+}
+
+# Search for my open PRs and open the selected one in a web browser
+function ghpr() {
+  _ghsearch "prs"
 }
 
 # Select gist, preview it, output to terminal and go to web view
@@ -199,12 +210,6 @@ function ghgistweb()
 function ghgist()
 {
   GH_FORCE_TTY=100% gh gist list --limit 1000 | fzf --ansi --preview 'GH_FORCE_TTY=100% gh gist view {1}' --preview-window up | awk '{print $1}' | xargs gh gist view --raw | tee /dev/tty | xsel --clipboard
-}
-
-# Select any open PR form the active repo and open it in a web browser
-function ghprrepo()
-{
-  GH_FORCE_TTY=100% gh pr list | fzf --ansi --preview 'GH_FORCE_TTY=100% gh pr view {1}' --preview-window up --header-lines 3 | awk '{print $1}' | xargs gh pr diff -w
 }
 
 # Find a repo for authenticated user with gh CLI and cd into it, clone and cd if not found on disk
@@ -270,7 +275,7 @@ function vol() {
 }
 
 # Switch primary monitor between HDMI and DVI-D-0
-function mon ()
+function mon()
 {
   active_mon=$(xrandr | grep primary)
 
@@ -351,21 +356,3 @@ function key() {
 function kcdebug() {
   kubectl run -i --rm --tty debug --image=busybox --restart=Never -- sh
 }
-
-# Create a directory and change to it in one command
-function mkd() {
-  mkdir -p "$@" && cd "$_";
-}
-function ghprview ()
-{
-    if [ -z "$1" ]; then
-        echo "Provide link to pr" 
-        return
-    else 
-      local pr="$1"
-      local repo=$(echo "$pr" | cut -d "/" -f5)
-      local pr_nr=$(echo "$pr" | cut -d "/" -f7)
-      gh pr view -R "upbound/$repo" "$pr_nr" --web
-    fi  
-}
-

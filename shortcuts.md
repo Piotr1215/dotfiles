@@ -32,6 +32,11 @@ $$
 $!                   - the process ID of the last executed background command.
 $IFS                 - the internal field separator, used to separate words in a string.
 
+Loop through a file:
+while read -r cmd; do
+  echo "Processing: $cmd"
+  # Your code here
+done < coms
 ---
 
 ## Tmux
@@ -221,4 +226,3 @@ Nvim supports following todo highlights:
 
 ---
 $$
-
