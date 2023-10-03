@@ -2,14 +2,18 @@ source ~/dev/dotfiles/scripts/__reusable_variables.sh
 
 # Define custom copy function
 function copy_and_create_folders() {
-    # Before proceeding, check if the last argument (which is the destination) 
-    # exists as a directory or its parent directory exists. If not, create it.
-    if [[ ! -d "${@[-1]}" && ! -d "$(dirname "${@[-1]}")" ]]; then
+    echo "Debug: Function copy_and_create_folders called"  # Debug line
+    last_arg="${@: -1}"  # This will get the last argument
+    echo "Debug: last_arg=$last_arg"
+    echo "Debug: dirname of last_arg=$(dirname "$last_arg")"
+    echo "Debug: Checking if $last_arg or $(dirname "$last_arg") exists."
+    if [[ ! -d "$last_arg" && ! -d "$(dirname "$last_arg")" ]]; then
+      echo "Debug: Inside if condition"
         target_dir="$(dirname "${@[-1]}")"
         mkdir -p "$target_dir"
         echo "Created directory structure: $target_dir"
     fi
-
+    
     # Now use the regular cp command
     command cp "$@"
 }
