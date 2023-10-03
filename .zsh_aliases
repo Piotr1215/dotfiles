@@ -29,7 +29,7 @@ alias lux--='lxc stop --stateful ubuntu'
 alias lux-='lxc stop ubuntu'
 
 # Commands shadow
-alias cp=copy_and_create_folders
+alias cpf=copy_and_create_folders
 alias cat='bat'
 alias c=chatgpt-cli
 alias df=duf
