@@ -122,14 +122,13 @@ cmp.setup.cmdline(':', {
   })
 })
 
--- Indent-blankline
-require("ibl").setup({
-  -- for example, context is off by default, use this to turn it on
-  space_char_blankline = " ",
-  show_current_context = true,
-  show_current_context_start = true,
-  filetype_exclude = { "help", "packer" },
-  buftype_exclude = { "terminal", "nofile" },
-  show_trailing_blankline_indent = false,
-  main = "ibl"
-})
+local highlight = {
+  "CursorColumn",
+}
+require("ibl").setup {
+  indent = { highlight = highlight, char = "" },
+  whitespace = {
+    remove_blankline_trail = false,
+  },
+  scope = { enabled = false },
+}
