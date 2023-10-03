@@ -138,7 +138,7 @@ require("nvim-treesitter.configs").setup {
       -- mapping query_strings to modes.
       selection_modes = {
         ["@parameter.outer"] = "v", -- charwise
-        ["@function.outer"] = "V", -- linewise
+        ["@function.outer"] = "V",  -- linewise
         ["@class.outer"] = "<c-v>", -- blockwise
       },
       -- If you set this to `true` (default is `false`) then any textobject is
@@ -173,10 +173,10 @@ require("which-key").setup {
     n = { "g" },
   },
   plugins = {
-    marks = true, -- shows a list of your marks on ' and `
-    registers = true, -- shows your registers on " in NORMAL or <C-r> in INSERT mode
+    marks = true,       -- shows a list of your marks on ' and `
+    registers = true,   -- shows your registers on " in NORMAL or <C-r> in INSERT mode
     spelling = {
-      enabled = true, -- enabling this will show WhichKey when pressing z= to select spelling suggestions
+      enabled = true,   -- enabling this will show WhichKey when pressing z= to select spelling suggestions
       suggestions = 20, -- how many suggestions should be shown in the list?
     },
   },
@@ -295,7 +295,7 @@ vim.g.startify_skiplist = {
 vim.g.startify_commands = {
   { "Search Dev    :SPC fd", "Telescope find_files search_dirs=~/dev,--hidden,--with-filename" },
   { "Search Repos  :SPC fr", "lua require'telescope'.extensions.repo.list{search_dirs = {\"~/dev\"}}" },
-  { "Ranger        :ALT o", "RnvimrToggle" },
+  { "Ranger        :ALT o",  "RnvimrToggle" },
   { "Change Color  :SPC fc", "Telescope colorscheme" },
   { "Transparent Bg:SPC tr", "TransparentEnable" },
   { "Pick Emoji    :SPC fm", "Telescope emoji" },
