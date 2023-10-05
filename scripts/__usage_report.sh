@@ -10,10 +10,6 @@ subfolder="/home/decoder/dev/dotfiles/scripts/uxp-setup"
 # Path to the .zsh_functions and .zsh_aliases files
 functions_file="/home/decoder/.zsh_functions"
 aliases_file="/home/decoder/.zsh_aliases"
-
-# Read the JSON into a variable
-json_data=$(cat $json_file)
-
 # Function to process and sort data
 process_and_sort() {
 	local -n data_ref=$1
@@ -29,6 +25,28 @@ process_and_sort() {
 
 	echo ""
 }
+# Function to show general usage report
+general_usage_report() {
+	# Initialize associative array for general usage
+	declare -A general_data
+
+	# Populate the associative array with general usage data
+	keys=$(echo $json_data | jq -r 'keys[]')
+	for key in $keys; do
+		count=$(echo $json_data | jq -r ".[\"$key\"]")
+		general_data["$key"]=$count
+	done
+
+	# Print the sorted report
+	process_and_sort general_data "General Usage Report"
+}
+# Read the JSON into a variable
+json_data=$(cat $json_file)
+# Check for "general" parameter
+if [[ "$1" == "general" ]]; then
+	general_usage_report
+	exit 0
+fi
 
 # Initialize associative arrays for scripts, functions, and aliases
 declare -A script_data
