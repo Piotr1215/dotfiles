@@ -2,6 +2,9 @@
 require "lspconfig"
 require("nvim-dap-virtual-text").setup()
 
+local capabilities = vim.lsp.protocol.make_client_capabilities()
+capabilities = require("cmp_nvim_lsp").default_capabilities()
+
 -- Diagnostic keymaps
 vim.keymap.set("n", "[d", vim.diagnostic.goto_prev, { desc = "Go to previous diagnostic message" })
 vim.keymap.set("n", "]d", vim.diagnostic.goto_next, { desc = "Go to next diagnostic message" })
@@ -41,13 +44,16 @@ local on_attach = function(_, bufnr)
   nmap("<c-f>", "<cmd>lua vim.lsp.buf.format({ async = true })<CR>", "Format Buffer")
 
   nmap("<leader>br", require("dap").toggle_breakpoint, "Toggle Breakpoint")
-  nmap("<leader>ac", "<cmd>lua require('lspsaga.codeaction').code_action()<CR>", "Code Action")
+  -- nmap("<leader>cac", ":Lspsaga code_action<CR>", "Code Action")
   vim.keymap.set({ "n", "v" }, "<leader>caa", "<cmd>Lspsaga code_action<CR>", { silent = true })
 end
 
 local lspconfig = require "lspconfig"
 lspconfig.pyright.setup {}
 lspconfig.lua_ls.setup {
+  capabilities = capabilities,
+  on_attach = on_attach,
+
   settings = {
     Lua = {
       diagnostics = {
@@ -74,8 +80,6 @@ configs.up = {
 -- lsp_on_attach = true
 -- })
 
-local capabilities = vim.lsp.protocol.make_client_capabilities()
-capabilities = require("cmp_nvim_lsp").default_capabilities()
 require 'lspconfig'.bashls.setup {
   filetypes = { "sh", "zsh" },
 }
