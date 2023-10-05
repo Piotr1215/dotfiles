@@ -167,51 +167,6 @@ function gacs() {
   git push
 }
 
-# Search for my open issues and open the selected one in a web browser
-function _ghsearch() {
-  local search_type="$1"
-  pr_data=$(gh search "$search_type" --author "@me" --state=open --json url,repository,title | \
-            jq -r '.[] | select(.title) | "\(.title) | \(.url)"')
-
-  longest=$(echo "$pr_data" | awk -F'|' '{ if (length($1) > max) max = length($1) } END { print max }')
-
-  echo "$pr_data" | awk -v max="$longest" -F'|' '{ printf "%-" max "s | %s\n", $1, $2 }' | \
-  fzf | awk -F'|' '{print $2}' | xargs xdg-open > /dev/null 2>&1 
-}
-
-# Search for my open PRs and open the selected one in a web browser
-function ghissue() {
-  _ghsearch "issues"
-}
-
-# Search for my repositories and open the selected one in a web browser
-function ghrepo() {
-  pr_data=$(gh search repos --owner "@me" --limit 300 --json url,name,owner | \
-            jq -r '.[] | "\(.name) | \(.url)"')
-
-  longest=$(echo "$pr_data" | awk -F'|' '{ if (length($1) > max) max = length($1) } END { print max }')
-
-  echo "$pr_data" | awk -v max="$longest" -F'|' '{ printf "%-" max "s | %s\n", $1, $2}' | \
-  fzf | awk -F'|' '{print $2}' | xargs xdg-open > /dev/null 2>&1 
-}
-
-# Search for my open PRs and open the selected one in a web browser
-function ghpr() {
-  _ghsearch "prs"
-}
-
-# Select gist, preview it, output to terminal and go to web view
-function ghgistweb()
-{
-  GH_FORCE_TTY=100% gh gist list --limit 1000 | fzf --ansi --preview 'GH_FORCE_TTY=100% gh gist view {1}' --preview-window up | awk '{print $1}' | xargs gh gist view --web | tee /dev/tty | xsel --clipboard
-}
-
-# Select gist, preview it, output to terminal and copy to clipboard
-function ghgist()
-{
-  GH_FORCE_TTY=100% gh gist list --limit 1000 | fzf --ansi --preview 'GH_FORCE_TTY=100% gh gist view {1}' --preview-window up | awk '{print $1}' | xargs gh gist view --raw | tee /dev/tty | xsel --clipboard
-}
-
 # Find a repo for authenticated user with gh CLI and cd into it, clone and cd if not found on disk
 function repo() {
   export repo=$(fd . ${HOME}/dev --type=directory --max-depth=1 --color always| awk -F "/" '{print $5}' | fzf --ansi --preview 'onefetch /home/decoder/dev/{1}' --preview-window up)
