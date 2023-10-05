@@ -20,5 +20,7 @@ source_up
 KUBECONFIG=./config
 EOL
 
+cd "$1" && direnv allow
+
 # Output the message to indicate success
 echo "Folder $1 and .envrc file have been created."
