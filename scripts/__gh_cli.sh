@@ -1,6 +1,13 @@
-#!/bin/bash
-# gh_cli.sh: A CLI for GitHub utilities
+#!/usr/bin/env bash
 
+# gh_cli.sh: A CLI for GitHub utilities
+# Check for dependencies
+for cmd in "gh" "jq" "git"; do
+	if ! command -v $cmd &>/dev/null; then
+		echo "$cmd is not installed. Please install it and try again."
+		exit 1
+	fi
+done
 # Help Menu
 function show_help() {
 	echo "Usage: gh_cli.sh [command]"
@@ -13,6 +20,32 @@ function show_help() {
 	echo "  ghgistweb       - Select gist, preview it, output to terminal and go to web view"
 	echo "  ghgist          - Select gist, preview it, output to terminal and copy to clipboard"
 }
+# Print error statement and exit
+
+print_error() {
+	local exit_code="$?"
+	local line_number="$1"
+	local cmd="$2"
+
+	if [[ "$exit_code" -eq "130" ]] || [[ "$exit_code" -eq "123" ]]; then
+		echo "Script interrupted by user." >&2
+		exit 1
+	fi
+	echo "ERROR: An error occurred in the script \"$0\" on line $line_number" >&2
+	echo "Exit Code: $exit_code" >&2
+	echo "Command: $cmd" >&2
+
+	# Print a simple stack trace
+	echo "Stack Trace:" >&2
+	for i in "${!FUNCNAME[@]}"; do
+		echo "  ${FUNCNAME[$i]}() called at line ${BASH_LINENO[$i - 1]} in ${BASH_SOURCE[$i]}" >&2
+	done
+
+	exit 1
+}
+
+# Set the error trap
+trap 'print_error $LINENO "$BASH_COMMAND"' ERR
 
 # Common function to format and open URLs
 format_and_open() {
