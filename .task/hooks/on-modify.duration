@@ -28,6 +28,12 @@ def iso_duration_to_minutes(iso_duration):
         minutes = int(iso_duration[2:-1])
     return hours * 60 + minutes
 
+# Function to convert minutes to ISO duration
+def minutes_to_iso_duration(minutes):
+    hours = minutes // 60
+    remaining_minutes = minutes % 60
+    return f"PT{hours}H{remaining_minutes}M" if hours else f"PT{remaining_minutes}M"
+
 # Check if the task is started or stopped by looking at the 'start' attribute
 if 'start' in modified_task and 'start' not in original_task:
     # Task is started
@@ -49,14 +55,18 @@ elif 'start' not in modified_task and 'start' in original_task:
         if 'duration' in modified_task:
             estimated_minutes = iso_duration_to_minutes(modified_task['duration'])
             
-            # Check if elapsed time exceeds estimated time
-            if elapsed_minutes > estimated_minutes:
+            # Check if elapsed time exceeds or equals estimated time
+            if elapsed_minutes >= estimated_minutes:
                 extra_time = elapsed_minutes - estimated_minutes
-                annotation = f"Exceeded estimated time by {extra_time} minutes."
+                annotation = f"Exceeded estimated time by {extra_time} minutes." if extra_time > 0 else "Used up all estimated time."
                 if 'annotations' in modified_task:
                     modified_task['annotations'].append({"description": annotation})
                 else:
                     modified_task['annotations'] = [{"description": annotation}]
+            
+            # Subtract elapsed time from estimated time
+            remaining_minutes = max(0, estimated_minutes - elapsed_minutes)
+            modified_task['duration'] = minutes_to_iso_duration(remaining_minutes)
         
         # Delete the temp file
         os.remove(temp_file_path)
