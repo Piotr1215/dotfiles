@@ -14,16 +14,32 @@ function show_help() {
 	echo "  ghgist          - Select gist, preview it, output to terminal and copy to clipboard"
 }
 
-# Search for my open issues and open the selected one in a web browser
+# Common function to format and open URLs
+format_and_open() {
+	local data="$1"
+	local longest=$(echo "$data" | awk -F'|' '{ if (length($1) > max) max = length($1) } END { print max }')
+	echo "$data" | awk -v max="$longest" -F'|' '{ printf "%-" max "s | %s\n", $1, $2 }' |
+		fzf | awk -F'|' '{print $2}' | xargs xdg-open >/dev/null 2>&1
+}
+
+# Unified search function
 function _ghsearch() {
 	local search_type="$1"
-	pr_data=$(gh search "$search_type" --author "@me" --state=open --json url,repository,title |
+	local review_requested="$2"
+	local flags=(--state=open --json url,repository,title)
+
+	# Add author or review-requested based on the flag
+	if [ "$review_requested" = "true" ]; then
+		flags+=(--review-requested "@me")
+	else
+		flags+=(--author "@me")
+	fi
+
+	local data=$(gh search "$search_type" "${flags[@]}" |
 		jq -r '.[] | select(.title) | "\(.title) | \(.url)"')
+	[ -z "$data" ] && echo "No data found." && return 1
 
-	longest=$(echo "$pr_data" | awk -F'|' '{ if (length($1) > max) max = length($1) } END { print max }')
-
-	echo "$pr_data" | awk -v max="$longest" -F'|' '{ printf "%-" max "s | %s\n", $1, $2 }' |
-		fzf | awk -F'|' '{print $2}' | xargs xdg-open >/dev/null 2>&1
+	format_and_open "$data"
 }
 
 # Search for my open PRs and open the selected one in a web browser
@@ -33,27 +49,18 @@ function ghmyissues() {
 
 # Search for my repositories and open the selected one in a web browser
 function ghmyrepos() {
-	pr_data=$(gh search repos --owner "@me" --limit 300 --json url,name,owner |
+	local data=$(gh search repos --owner "@me" --limit 300 --json url,name,owner |
 		jq -r '.[] | "\(.name) | \(.url)"')
 
-	longest=$(echo "$pr_data" | awk -F'|' '{ if (length($1) > max) max = length($1) } END { print max }')
-
-	echo "$pr_data" | awk -v max="$longest" -F'|' '{ printf "%-" max "s | %s\n", $1, $2}' |
-		fzf | awk -F'|' '{print $2}' | xargs xdg-open >/dev/null 2>&1
+	format_and_open "$data"
 }
 
 # Search for my open PRs and open the selected one in a web browser
 function ghmyprs() {
-	_ghsearch "prs"
+	_ghsearch "prs" "false"
 }
 function ghmyprsreview() {
-	pr_data=$(gh search prs --review-requested "@me" --state=open --json url,repository,title |
-		jq -r '.[] | select(.title) | "\(.title) | \(.url)"')
-
-	longest=$(echo "$pr_data" | awk -F'|' '{ if (length($1) > max) max = length($1) } END { print max }')
-
-	echo "$pr_data" | awk -v max="$longest" -F'|' '{ printf "%-" max "s | %s\n", $1, $2 }' |
-		fzf | awk -F'|' '{print $2}' | xargs xdg-open >/dev/null 2>&1
+	_ghsearch "prs" "true"
 }
 # Function to list and select a PR in the current repository, then open its URL
 function ghrepoprs() {
