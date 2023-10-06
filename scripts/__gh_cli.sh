@@ -46,7 +46,15 @@ function ghmyrepos() {
 function ghmyprs() {
 	_ghsearch "prs"
 }
+function ghmyprsreview() {
+	pr_data=$(gh search prs --review-requested "@me" --state=open --json url,repository,title |
+		jq -r '.[] | select(.title) | "\(.title) | \(.url)"')
 
+	longest=$(echo "$pr_data" | awk -F'|' '{ if (length($1) > max) max = length($1) } END { print max }')
+
+	echo "$pr_data" | awk -v max="$longest" -F'|' '{ printf "%-" max "s | %s\n", $1, $2 }' |
+		fzf | awk -F'|' '{print $2}' | xargs xdg-open >/dev/null 2>&1
+}
 # Function to list and select a PR in the current repository, then open its URL
 function ghrepoprs() {
 	# Fetch PRs in the current repository
@@ -120,6 +128,9 @@ ghrepobranches)
 	;;
 ghgistweb)
 	ghgistweb
+	;;
+ghmyprsreview)
+	ghmyprsreview
 	;;
 ghgist)
 	ghgist
