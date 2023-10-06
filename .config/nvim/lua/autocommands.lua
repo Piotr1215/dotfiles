@@ -37,16 +37,6 @@ vim.api.nvim_create_autocmd("FileType", {
   group = indentSettings,
 })
 
-vim.api.nvim_create_autocmd("FileType", {
-  pattern = { "go" },
-  command = "set foldmethod=manual",
-})
-
-vim.api.nvim_create_autocmd("FileType", {
-  pattern = { "bash" },
-  command = "set foldmethod=manual",
-})
-
 vim.api.nvim_create_autocmd("bufwritepost", {
   pattern = { "*.md" },
   command = "Prettier",

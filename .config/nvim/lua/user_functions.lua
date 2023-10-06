@@ -80,14 +80,23 @@ function _G.create_word_selection_mappings()
   wk.register({ ["_"] = { "vg_", "Select inside underscored word" } }, { mode = "n", prefix = "" })
 end
 
+_G.folding_enabled = false
+
+
+-- Toggle function
 function _G.toggle_function_folding()
-  if vim.wo.foldenable then
+  print("toggle_function_folding called") -- Debug print
+  if _G.folding_enabled then
+    print("Disabling folds")              -- Debug print
     vim.cmd "setlocal nofoldenable"
-    vim.cmd "normal zR" -- Unfold all folds
+    vim.cmd "normal zR"                   -- Unfold all folds
+    _G.folding_enabled = false
   else
+    print("Enabling folds") -- Debug print
     vim.cmd "setlocal foldenable"
     vim.cmd "setlocal foldmethod=expr"
     vim.cmd "normal zM" -- Fold all folds
+    _G.folding_enabled = true
   end
 end
 
@@ -400,17 +409,6 @@ vim.api.nvim_set_keymap(
   { noremap = true, silent = true }
 )
 vim.cmd "command! Fold lua _G.toggle_function_folding()"
-
-vim.api.nvim_create_autocmd("BufWritePre", {
-  pattern = "*.*",
-  callback = function()
-    vim.defer_fn(function()
-      _G.toggle_function_folding()
-      _G.toggle_function_folding()
-      vim.cmd "normal zx"
-    end, 50) -- Delay for 50 milliseconds
-  end,
-})
 
 vim.api.nvim_set_keymap("i", "<M-i>", [[<Cmd>lua insert_file_path()<CR>]], { noremap = true, silent = true })
 vim.api.nvim_set_keymap("n", "fld", [[<Cmd>lua _G.toggle_function_folding()<CR>]], { noremap = true, silent = false })
