@@ -57,6 +57,7 @@ cmp.setup({
         luasnip = "[LuaSnip]",
         nvim_lua = "[Lua]",
         latex_symbols = "[Latex]",
+        projects = "[Projects]",
       }),
     }),
   },
