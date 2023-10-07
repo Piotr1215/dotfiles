@@ -1,4 +1,6 @@
 #!/bin/bash
+# This script is part used in the tmux.conf file to trigger ranger
+# TAG: ranger-tmux-setup
 if [[ $(tmux display-message -p '#{pane_current_command}') == "nvim" ]]; then
 	tmux send-keys 'Space' 'm' 'r'
 else
