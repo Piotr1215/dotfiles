@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Path to the JSON file
-json_file="/home/decoder/dev/dotfiles/.script_usage.json"
+json_file="/home/decoder/dev/dotfiles/usage_statistics/.script_usage.json"
 
 # Path to the scripts folder and subfolder
 scripts_folder="/home/decoder/dev/dotfiles/scripts"
