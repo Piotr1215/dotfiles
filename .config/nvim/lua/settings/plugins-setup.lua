@@ -82,7 +82,7 @@ require("obsidian").setup {
 }
 require("todo-comments").setup {
   keywords = {
-    TAG = {
+    PROJECT = {
       icon = " ", -- icon used for the sign, and in search results
       color = "info", -- can be a hex color, or a named color (see below)
       -- signs = false, -- configure signs for some keywords individually

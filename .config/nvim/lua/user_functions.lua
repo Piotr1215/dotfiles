@@ -260,7 +260,7 @@ end
 
 -- Trigger ranger in neovim inside a tmux popup
 -- Current file path will be the main path
--- TAG: ranger-tmux-setup
+-- PROJECT: ranger-tmux-setup
 function _G.ranger_popup_in_tmux()
   -- Get the directory of the current file in Neovim
   local current_file = vim.fn.expand "%:p:h"
