@@ -103,6 +103,7 @@ cmp.setup({
     { name = 'emoji' },
     { name = 'path' },
     { name = "crates" },
+    { name = "tags",    priority = 100 },
   },
 })
 
