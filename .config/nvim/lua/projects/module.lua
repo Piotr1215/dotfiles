@@ -9,7 +9,7 @@ end
 ---Return the debug name of this source (optional).
 ---@return string
 function source:get_debug_name()
-  return 'tags'
+  return 'projects'
 end
 
 ---Return the keyword pattern for triggering completion (optional).
@@ -44,4 +44,4 @@ function source:execute(completion_item, callback)
 end
 
 ---Register your source to nvim-cmp.
-require('cmp').register_source('tags', source)
+require('cmp').register_source('projects', source)

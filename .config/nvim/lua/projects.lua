@@ -1,4 +1,4 @@
-local module = require("tags.module")
+local module = require("projects.module")
 
 -- main module file
 local M = {}
