@@ -111,6 +111,9 @@ utils.imap(";[", "<c-o>ma")
 utils.imap("']", "<c-o>mA")
 -- Copy current file name and path
 utils.lnmap("cpf", ':let @+ = expand("%:p")<cr>')
+-- Copy current file name, path, and line number
+-- Related script: /home/decoder/dev/dotfiles/scripts/__trigger_ranger.sh:7
+utils.lnmap("cpfl", [[:let @+ = expand("%:p") . ':' . line('.')<cr>]])
 -- Copy current file name
 utils.lnmap("cpn", ':let @+ = expand("%:t")<cr>')
 -- insert 2 empty lines and go into inser mode
