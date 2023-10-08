@@ -25,6 +25,7 @@ end
 function source:complete(params, callback)
   callback({
     { label = 'ranger-tmux-setup' },
+    { label = 'playlist' },
   })
 end
 

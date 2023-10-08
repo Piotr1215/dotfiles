@@ -100,3 +100,5 @@ alias vn='nvim /tmp/temp-$RANDOM.md'
 alias wm='watch kubectl get managed'
 alias work='nohup firefox -P "Work" > /dev/null 2>&1 &'
 alias zedit='vim ~/.zshrc'
+# PROJECT: playlist
+alias play='nohup ~/dev/dotfiles/scripts/__lauch_playlist.sh > /dev/null 2>&1 &'
