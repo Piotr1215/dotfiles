@@ -13,11 +13,14 @@ fi
 #ZSH_THEME="powerlevel10k/powerlevel10k"
 ZSH_THEME="simple" #Best theme ever
 
+autoload -Uz compinit
+compinit -d "${ZDOTDIR:-$HOME}/.zcompdump"
+
 # PUGINS 
 if [[ $(uname -s) == Linux ]]; then
-  plugins=(z git kubectl zsh-autosuggestions zsh-syntax-highlighting sudo web-search alias-finder colored-man-pages nix-shell)
+  plugins=(z git kubectl zsh-autosuggestions zsh-syntax-highlighting sudo web-search colored-man-pages nix-shell)
 else
-  plugins=(z git kubectl zsh-autosuggestions zsh-syntax-highlighting sudo web-search alias-finder colored-man-pages)
+  plugins=(z git kubectl zsh-autosuggestions zsh-syntax-highlighting sudo web-search colored-man-pages)
 fi
 
 # Set ZSH_CUSTOM dir if env var not present
@@ -42,8 +45,8 @@ setopt extended_glob
 zstyle ':completion:*:directory-stack' list-colors '=(#b) #([0-9]#)*( *)==95=38;5;12'
 
 # Turn history on to have cd - history
-SAVEHIST=10000
-HISTSIZE=5000
+SAVEHIST=1000
+HISTSIZE=1000
 
 setopt append_history           # append
 setopt hist_ignore_all_dups     # no duplicate
@@ -58,7 +61,6 @@ HISTFILE=${ZDOTDIR:-$HOME}/.zsh_history
 source $ZSH/oh-my-zsh.sh
 source ~/.oh-my-zsh/plugins/tmuxinator/_mst 
 source ~/.oh-my-zsh/plugins/tmuxinator/_msm
-autoload -U compinit && compinit
 
 # Add nix shell to prompt if in nix env
 if [[ $(uname -s) == Linux ]]; then
@@ -226,4 +228,4 @@ if [ -f '/home/decoder/dev/clusters/primary-dev/google-cloud-sdk/path.zsh.inc' ]
 if [ -f '/home/decoder/dev/clusters/primary-dev/google-cloud-sdk/completion.zsh.inc' ]; then . '/home/decoder/dev/clusters/primary-dev/google-cloud-sdk/completion.zsh.inc'; fi
 
 eval "$(starship init zsh)"
-# zprof
+# zprof > /tmp/zprof.out
