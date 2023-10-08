@@ -10,6 +10,9 @@ import openai
 envrc_path = os.path.expanduser('~/.envrc')
 with open(envrc_path, 'r') as f:
     lines = f.readlines()
+    
+# Path to the Haruna playlist file
+haruna_playlist_path = os.path.expanduser('~/haruna_playlist.m3u')
 
 for line in lines:
     if line.startswith('export '):
@@ -19,6 +22,21 @@ for line in lines:
             os.environ[key] = value
 
 openai.api_key = os.environ.get('OPENAI_API_KEY')
+
+def append_to_playlist(url, playlist_file_path):
+    # Read existing URLs from the playlist file
+    with open(playlist_file_path, 'r') as f:
+        existing_urls = f.readlines()
+
+    # Remove any trailing newlines
+    existing_urls = [line.strip() for line in existing_urls]
+
+    # Check if the URL is already in the playlist
+    if url not in existing_urls:
+        # Append the URL to the playlist file
+        with open(playlist_file_path, 'a') as f:
+            f.write(url + '\n')
+
 
 def sanitize_tags(raw_tags):
     if not isinstance(raw_tags, list):
@@ -118,8 +136,8 @@ if 'Firefox' in active_window_title or 'Chrome' in active_window_title or 'Brave
     if not description:
         description = active_window_title
 
-    options = ["Add Link", "Create Task"]
-    message = f"Would you like to add a pet link for '{description}' from '{domain}' domain or create a task?"
+    options = ["Add Link", "Create Task", "Add to Playlist"]
+    message = f"Would you like to add a pet link for '{description}' from '{domain}' domain, create a task, or add to MPV playlist?"
     exit_code, choices = dialog.list_menu_multi(options, title="Choose an Action", message=message, defaults=["Create Task"])
 
     # Check if the dialog was cancelled (exit code is 0 when OK is clicked)
@@ -132,6 +150,13 @@ if 'Firefox' in active_window_title or 'Chrome' in active_window_title or 'Brave
         
         if "Create Task" in choices:
             subprocess.run(["/home/decoder/dev/dotfiles/scripts/__create_task.sh", custom_description] + tags)
+            
+        # PROJECT: playlist
+        if "Add to Playlist" in choices:
+            if "youtube.com" in domain or "youtu.be" in domain:  # Check if the domain is YouTube
+                append_to_playlist(url, haruna_playlist_path)
+            else:
+                print("The URL must be from YouTube to add to Haruna playlist.")
 
     clipboard.fill_clipboard("")
     clipboard.fill_selection("")
