@@ -6,10 +6,10 @@ uuid="$1"
 # Directory where notes are stored
 notes_dir="/home/decoder/dev/obsidian/decoder/Notes"
 
-# Use fzf to select a note file
+# Show fzf dialog to select an existing note
 filepath=$(find "$notes_dir" -type f -name '*.md' | fzf-tmux --preview "bat --color=always {}")
 
-# If fzf was cancelled or no file was selected, exit the script
+# If fzf was cancelled, exit the script
 if [ -z "$filepath" ]; then
 	echo "No file selected. Exiting."
 	exit 1
@@ -24,3 +24,5 @@ if [[ "$task_output" == *"Annotated"* ]]; then
 else
 	echo "Failed to annotate the task."
 fi
+
+nvim "$filepath"
