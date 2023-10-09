@@ -335,7 +335,7 @@ vim.g.startify_bookmarks = {
   "~/.config/ranger/rc.conf",
   "~/shortcuts.md",
   "/usr/local/share/zsh/site-functions",
-  "/home/decoder/dev/dotfiles/.config/nvim/lua/tags/module.lua",
+  "~/dev/dotfiles/.config/nvim/lua/projects/module.lua",
   "~/scripts/__project_mappings.conf",
   "~/.taskopenrc",
   "~/.oh-my-zsh/plugins/tmuxinator/_mst",
