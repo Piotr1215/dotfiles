@@ -7,7 +7,7 @@ alias -g NUL="> /dev/null 2>&1"
 alias -g R="2>&1 | tee output.txt"
 alias -g T="| tail -n +2"
 alias -g V=' --version'
-alias -g W='| vim -'
+alias -g W='| nvim -c "setlocal buftype=nofile bufhidden=wipe" -c "nnoremap <buffer> q :q!<CR>" -'
 
 # Suffix aliases
 alias -s md=nvim
