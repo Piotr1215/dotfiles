@@ -32,7 +32,6 @@ local on_attach = function(_, bufnr)
 
   -- See `:help K` for why this keymap
   nmap("K", "<cmd>lua require('lspsaga.hover').render_hover_doc()<CR>", "Hover Documentation")
-  nmap("<C-k>", vim.lsp.buf.signature_help, "Signature Documentation")
 
   -- Lesser used LSP functionality
   nmap("<leader>wA", vim.lsp.buf.add_workspace_folder, "[W]orkspace [A]dd Folder")
@@ -76,9 +75,12 @@ configs.up = {
   },
 }
 
--- require("lspconfig")['up'].setup({
--- lsp_on_attach = true
--- })
+require("lspconfig")['up'].setup({
+  cmd = { "up", "xpls", "serve", "--verbose" },
+  filetypes = { "yaml" },
+  root_dir = lspconfig.util.root_pattern "crossplane.yaml",
+  on_attach = on_attach,
+})
 
 require 'lspconfig'.bashls.setup {
   filetypes = { "sh", "zsh" },
