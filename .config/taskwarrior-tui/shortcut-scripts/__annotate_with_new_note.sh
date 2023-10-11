@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # UUID of the task to annotate
-uuid="$1"
+uuid="$@"
 
 # Directory where notes are stored
 notes_dir="/home/decoder/dev/obsidian/decoder/Notes"
@@ -19,7 +19,7 @@ else
 fi
 
 # Annotate the task with the filepath
-task_output=$(task "$uuid" annotate "$filepath")
+task_output=$(task rc.bukl=0 rc.confirmation=off "$uuid" annotate "$filepath")
 
 # Check if annotation was successful
 if [[ "$task_output" == *"Annotated"* ]]; then
