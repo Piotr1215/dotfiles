@@ -2,12 +2,17 @@
 
 set -eo pipefail
 
-detect_os() {
+get_os_map() {
 	declare -A os_map=(
 		["linux"]="linux"
 		["darwin,arm64"]="M1"
 		["darwin,x86_64"]="mac"
 	)
+	echo "${os_map[@]}"
+}
+
+detect_os() {
+	os_map=$(get_os_map)
 
 	arch=$(uname -m)
 	os_type=$(echo $OSTYPE | cut -d"-" -f1)
