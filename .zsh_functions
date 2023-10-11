@@ -92,18 +92,50 @@ function install_font ()
 
 # Common function to search for a string in files using rga and fzf, and opens the file with nvim.
 function _fif_common() {
-    local ignore_case_flag="$1"
-    shift  # Remove the first argument, leaving the search string in "$*"
+  local ignore_case_flag="$1"
+  shift
 
-    if [ ! "$#" -gt 0 ]; then echo "Need a string to search for!"; return 1; fi
+  if [ ! "$#" -gt 0 ]; then
+    echo "Need a string to search for!"
+    return 1
+  fi
 
-    local file
-    local preview_cmd
-    preview_cmd=$(printf "rga %s --pretty --context 10 '%s' {}" "$ignore_case_flag" "$*")
-    
-    # shellcheck disable=SC2086
-    # we want to word split here so the flag is parsed
-    file=$(rga --max-count=1 $ignore_case_flag --files-with-matches --no-messages "$*" | fzf-tmux +m --preview="$preview_cmd") && echo "opening $file" && nvim "$file" || return 1
+  local files
+  local preview_cmd=$(printf "rga %s --pretty --context 10 '%s' {}" "$ignore_case_flag" "$*")
+  local rga_output=$(rga --max-count=1 $ignore_case_flag --files-with-matches --no-messages "$*")
+
+  IFS=$'\n' files=($(echo "$rga_output" | fzf-tmux +m --preview="$preview_cmd" --multi --select-1 --exit-0)) || return 1
+
+  if [ ${#files[@]} -eq 0 ]; then
+    echo "No files selected."
+    return 0
+  fi
+
+  typeset -a temp_files
+  for i in {1..${#files[@]}}; do
+    if [[ -n "${files[i]}" ]]; then
+      temp_files[i]=$(realpath "${files[i]}")
+    fi
+  done
+  files=("${temp_files[@]}")
+
+  local nvim_cmd=""
+  case "${#files[@]}" in
+    2)
+      nvim -O "${files[1]}" "${files[2]}"
+      ;;
+    3)
+      nvim_cmd="nvim -O \"${files[1]}\" -c 'wincmd j' -c \"vsplit ${files[2]}\" -c \"split ${files[3]}\""
+      ;;
+    4)
+      nvim_cmd="nvim -O \"${files[1]}\" -c \"vsplit ${files[2]}\" -c \"split ${files[3]}\" -c 'wincmd h' -c \"split ${files[4]}\""
+      ;;
+    *)
+      nvim_cmd="nvim \"${files[@]}\""
+      ;;
+  esac
+
+  eval "$nvim_cmd"
 }
 
 # Wrapper function for case-sensitive search
