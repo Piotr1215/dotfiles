@@ -26,9 +26,9 @@ utils.lnmap("r", ":%s/\\v/g<left><left>", { silent = false })
 -- j/k moves over virtual (wrapped) lines
 vim.api.nvim_set_keymap("n", "k", "v:count == 0 ? 'gk' : 'k'", { noremap = true, expr = true, silent = true })
 vim.api.nvim_set_keymap("n", "j", "v:count == 0 ? 'gj' : 'j'", { noremap = true, expr = true, silent = true })
--- Navigate between paragraphs and add to jumplist
-vim.keymap.set("n", "<C-j>", [[:keepjumps normal! j}k<cr>]], opts)
-vim.keymap.set("n", "<C-k>", [[:keepjumps normal! k{j<cr>]], opts)
+-- Navigate 10 lines up or down
+vim.keymap.set("n", "<C-j>", [[10j<cr>]], opts)
+vim.keymap.set("n", "<C-k>", [[10k<cr>]], opts)
 vim.api.nvim_set_keymap("n", "<S-PageUp>", "gT", { noremap = true, silent = true })
 vim.api.nvim_set_keymap("n", "<S-PageDown>", "gt", { noremap = true, silent = true })
 utils.nmap("<BS>", "^")
