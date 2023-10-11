@@ -1,7 +1,7 @@
 import os
 import subprocess
 
-# Path to the playlist file
+# PROJECT: playlist
 vids_playlist_path = os.path.expanduser('~/vids_playlist.m3u')
 # Path to the Videos folder
 videos_folder_path = os.path.expanduser('~/Videos')
