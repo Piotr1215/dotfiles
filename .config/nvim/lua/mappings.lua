@@ -117,7 +117,7 @@ utils.lnmap("cpfl", [[:let @+ = expand("%:p") . ':' . line('.')<cr>]])
 -- Copy current file name
 utils.lnmap("cpn", ':let @+ = expand("%:t")<cr>')
 -- insert 2 empty lines and go into inser mode
-utils.nmap("<leader>O", "O<ESC>O")
+utils.nmap("<leader>O", "o<esc>o")
 utils.nmap("<leader>o", "o<cr>")
 
 -- Format with pretty
@@ -265,7 +265,7 @@ utils.lnmap("f2", "<cmd>FIX 25<cr>")
 utils.lnmap("f0", "<cmd>FIX -1<cr>")
 
 -- Obsidian
-utils.vmap("ol", ":ObsidianLink<cr>")
+utils.vmap("ol", ":ObsidianLink<leader>", { silent = false })
 utils.lnmap("oq", ":ObsidianQuickSwitch<cr>")
 utils.lnmap("on", ":ObsidianNew ", { silent = false })
 utils.lnmap("os", ":ObsidianSearch<cr>")
