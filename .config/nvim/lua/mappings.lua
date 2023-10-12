@@ -117,7 +117,7 @@ utils.lnmap("cpfl", [[:let @+ = expand("%:p") . ':' . line('.')<cr>]])
 -- Copy current file name
 utils.lnmap("cpn", ':let @+ = expand("%:t")<cr>')
 -- insert 2 empty lines and go into inser mode
-utils.nmap("<leader>O", "o<esc>o")
+utils.nmap("<leader>O", "O<ESC>O")
 utils.nmap("<leader>o", "o<cr>")
 
 -- Format with pretty
