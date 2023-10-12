@@ -136,5 +136,17 @@
   "text": {
     "prefix": ["text"],
     "body": "```text\n${1:$tm_selected_text}\n```"
+  },
+  "note": {
+    "prefix": ["note"],
+    "body": "> [!NOTE]\n> ${0}"
+  },
+  "warn": {
+    "prefix": ["warn"],
+    "body": "> [!WARNING]\n> ${0}"
+  },
+  "imp": {
+    "prefix": ["imp"],
+    "body": "> [!IMPORTANT]\n> ${0}"
   }
 }
