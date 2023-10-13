@@ -7,6 +7,7 @@ vids_playlist_path = os.path.expanduser('~/vids_playlist.m3u')
 videos_folder_path = os.path.expanduser('~/Videos')
 # Path to the Bash script for downloading YouTube videos
 download_script_path = '/home/decoder/dev/dotfiles/scripts/__download_youtube.sh'
+autoclose_zenity_script = '/home/decoder/dev/dotfiles/scripts/__auto_close_zenity.sh'
 
 def append_to_playlist(playlist_file_path):
     url = clipboard.get_clipboard()
@@ -20,7 +21,7 @@ def append_to_playlist(playlist_file_path):
     # Check if the URL is already in the playlist
     if url not in existing_urls:
         # Call the Bash script to download the video
-        subprocess.run(["zenity", "--notification","--width=4000", f"--text='Downloading: {url}'"])
+        subprocess.run([autoclose_zenity_script, f"Downloading: {url}"])
         subprocess.run([download_script_path])
 
         # Get the video title
@@ -33,7 +34,7 @@ def append_to_playlist(playlist_file_path):
         with open(playlist_file_path, 'a') as f:
             f.write(video_file_path + '\n')
         # Show Zenity notification
-        subprocess.run(["zenity", "--notification", f"--text='Downloaded: {video_title}'"])
+        subprocess.run([autoclose_zenity_script, f"Downloaded: {video_title}"])
 
 # Get the active window title
 active_window_title = subprocess.getoutput("xdotool getactivewindow getwindowname")
