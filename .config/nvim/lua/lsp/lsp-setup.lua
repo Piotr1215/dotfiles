@@ -69,7 +69,7 @@ local configs = require "lspconfig.configs"
 -- Check if it's already defined for when reloading this file.
 configs.up = {
   default_config = {
-    cmd = { "up", "xpls", "serve" },
+    cmd = { "up", "xpls", "serve", "--verbose" },
     filetypes = { "yaml" },
     root_dir = lspconfig.util.root_pattern "crossplane.yaml",
   },
