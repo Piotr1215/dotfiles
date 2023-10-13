@@ -300,18 +300,23 @@ function sout() {
   fi
 } 
 
-# Start multiple tmuxinator sessions
-function msm ()
-{
-  if [[ -z $1 ]]; then
-    echo "Provide one or more tmuxinator sessions to start"
-    return 1  # Exit early with error status
-  fi
+function msm () {
+    if [[ -z $1 ]]
+    then
+        echo "Provide one or more tmuxinator sessions to start"
+        return 1
+    fi
+    
+    # Special case for 'cluster' which takes an additional argument
+    if [[ $1 == "cluster" && ! -z $2 ]]; then
+        tmuxinator start cluster $2
+        return 0
+    fi
 
-  # Split the arguments into an array, zsh populates this by default
-  for session in "$@"; do
-    tmuxinator start "$session"
-  done
+    for session in "$@"
+    do
+        tmuxinator start "$session"
+    done
 }
 
 # Close multiple tmuxinator sessions
