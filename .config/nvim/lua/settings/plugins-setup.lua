@@ -50,7 +50,7 @@ require("oil").setup {
   },
 }
 require("obsidian").setup {
-  dir = "~/dev/obsidian/decoder",
+  dir = "/home/decoder/dev/obsidian/decoder",
   disable_frontmatter = false,
   notes_subdir = "Notes",
   templates = {
