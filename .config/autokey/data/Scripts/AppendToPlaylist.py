@@ -20,6 +20,7 @@ def append_to_playlist(playlist_file_path):
     # Check if the URL is already in the playlist
     if url not in existing_urls:
         # Call the Bash script to download the video
+        subprocess.run(["zenity", "--notification","--width=4000", f"--text='Downloading: {url}'"])
         subprocess.run([download_script_path])
 
         # Get the video title
@@ -32,7 +33,7 @@ def append_to_playlist(playlist_file_path):
         with open(playlist_file_path, 'a') as f:
             f.write(video_file_path + '\n')
         # Show Zenity notification
-        subprocess.run(["zenity", "--notification", f"--text='Video downloaded and added to playlist: {video_title}'"])
+        subprocess.run(["zenity", "--notification", f"--text='Downloaded: {video_title}'"])
 
 # Get the active window title
 active_window_title = subprocess.getoutput("xdotool getactivewindow getwindowname")
