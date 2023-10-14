@@ -103,3 +103,4 @@ alias zedit='vim ~/.zshrc'
 # PROJECT: playlist
 alias play='nohup ~/dev/dotfiles/scripts/__launch_playlist.sh > /dev/null 2>&1 &'
 alias play_vid='nohup ~/dev/dotfiles/scripts/__launch_playlist.sh vids_playlist > /dev/null 2>&1 &'
+alias vl='nvim -o ~/vids_playlist.m3u ~/haruna_playlist.m3u'
