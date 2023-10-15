@@ -21,8 +21,6 @@ for line in lines:
             key, value = key_value_pair
             os.environ[key] = value
 
-openai.api_key = os.environ.get('OPENAI_API_KEY')
-
 def append_to_playlist(url, playlist_file_path):
     # Read existing URLs from the playlist file
     with open(playlist_file_path, 'r') as f:
@@ -36,34 +34,6 @@ def append_to_playlist(url, playlist_file_path):
         # Append the URL to the playlist file
         with open(playlist_file_path, 'a') as f:
             f.write(url + '\n')
-
-
-def sanitize_tags(raw_tags):
-    if not isinstance(raw_tags, list):
-        return []
-    
-    sanitized_tags = []
-    for tag in raw_tags:
-        clean_tag = tag.lower().replace("+", "")
-        if clean_tag.isalnum():
-            sanitized_tags.append(f"+{clean_tag}")
-    
-    return sanitized_tags[:3]  # Only return the first 3 tags
-    
-def get_tags_from_openai(description):
-    prompt = f"Based on the provided website description: '{description}', please generate a list of up to 3 relevant tags for categorizing the content. Tags should have a maximum of 14 characters, include no special characters, do not include capital letters and prefer short tags. Example good tags: +linux, +shopping, +pets. Please format the tags like this: +tag1, +tag2, +tag3"
-    
-    chat_completion = openai.ChatCompletion.create(
-        model="gpt-3.5-turbo",
-        messages=[{
-            "role": "user",
-            "content": prompt
-        }]
-    )
-    
-    tags_output = chat_completion['choices'][0]['message']['content']
-    tags = tags_output.strip().split(", ")
-    return sanitize_tags(tags)
 
 def get_website_description(url):
     try:
@@ -86,7 +56,7 @@ def get_custom_description(default_description):
     except subprocess.CalledProcessError:
         return None
 
-def invoke_plink(description, url, tags):
+def invoke_plink(description, url):
     if not url.startswith('http://') and not url.startswith('https://'):
         print("Not a valid URL.")
         return 1
@@ -95,7 +65,7 @@ def invoke_plink(description, url, tags):
     command_description = f"Link to {description}"
 
     # Convert tags to lowercase and remove the "+" prefix
-    tags = [tag[1:].lower() for tag in tags]
+    tags = ["web"]
 
     # Ensure the "link" tag is always present
     if "link" not in tags:
@@ -128,7 +98,7 @@ if 'Firefox' in active_window_title or 'Chrome' in active_window_title or 'Brave
 
     url = clipboard.get_clipboard()
     website_description = get_website_description(url)
-    tags = get_tags_from_openai(website_description)
+    tags = ["+web"]
 
     parsed_url = urlparse(url)
     domain = parsed_url.netloc
@@ -146,7 +116,7 @@ if 'Firefox' in active_window_title or 'Chrome' in active_window_title or 'Brave
             custom_description = get_custom_description(description)
             
         if "Add Link" in choices:
-            invoke_plink(custom_description, url, tags)
+            invoke_plink(custom_description, url)
         
         if "Create Task" in choices:
             subprocess.run(["/home/decoder/dev/dotfiles/scripts/__create_task.sh", custom_description] + tags)
