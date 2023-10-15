@@ -229,6 +229,7 @@ return require("packer").startup(function(use)
     "AckslD/nvim-FeMaco.lua",
     config = 'require("femaco").setup()',
   }
+  use 'sbdchd/neoformat'
   use "ixru/nvim-markdown"
   use "dhruvasagar/vim-open-url"
   use "marcelofern/vale.nvim"
