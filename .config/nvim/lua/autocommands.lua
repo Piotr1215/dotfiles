@@ -37,10 +37,12 @@ vim.api.nvim_create_autocmd("FileType", {
   group = indentSettings,
 })
 
-vim.api.nvim_create_autocmd("bufwritepost", {
-  pattern = { "*.md" },
-  command = "Prettier",
-})
+vim.api.nvim_exec([[
+  augroup MyAutoCommands
+    autocmd!
+    autocmd BufWritePost *.md silent Neoformat
+  augroup END
+]], false)
 
 -- vim.api.nvim_create_autocmd({ "BufWinEnter" }, {
 -- pattern = vim.fn.expand("$HOME").."/dev/obsidian/*/*.md",
