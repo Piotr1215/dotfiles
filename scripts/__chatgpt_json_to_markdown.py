@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import json
+import os
 
 def process_parts(parts, role):
     result = []
@@ -27,12 +28,20 @@ def create_markdown_files(input_file):
             continue
 
         file_name = create_file_name(title)
+        directory = os.path.dirname(file_name)
+        if directory and not os.path.exists(directory):
+            os.makedirs(directory)
+
         content_parts = [f"# {title}\n\n"]
         for mapping in item["mapping"].values():
-            if mapping["message"] is not None:
-                role = mapping["message"]["author"]["role"]
-                parts = mapping["message"]["content"]["parts"]
-                content_parts.extend(process_parts(parts, role))
+            message = mapping.get("message")
+            if message is not None:
+                content = message.get("content")
+                if content is not None:
+                    parts = content.get("parts")
+                    if parts is not None:
+                        role = message["author"]["role"]
+                        content_parts.extend(process_parts(parts, role))
         content = "\n\n".join(content_parts)
 
         with open(file_name, 'w') as f:
