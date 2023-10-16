@@ -3,6 +3,41 @@ local actions = require "telescope.actions"
 local action_state = require "telescope.actions.state"
 local zoomed = false
 
+-- Create a flag to keep track of whether the prompt has been shown
+local prompt_shown = false
+
+function _G.test_delete_videos()
+  local filepath = vim.fn.expand('%:p')                                  -- Get the full path of the current file
+  if filepath == '/home/decoder/vids_playlist.m3u' then
+    local lines = vim.fn.readfile(filepath)                              -- Read the file into a table
+    local content = table.concat(lines, '\n'):gsub("^%s*(.-)%s*$", "%1") -- Join the table into a string and trim whitespace
+    if content == "" and not prompt_shown then                           -- Check if the file is empty and prompt was not shown yet
+      local answer = vim.fn.input('Delete all video files in ~/Video? (y/n): ')
+      if answer:lower() == 'y' then
+        local handle = io.popen(
+          'find /home/decoder/Videos -type f \\( -name "*.mp4" -o -name "*.webm" \\) -exec rm -f {} + 2>&1')
+        local output = handle:read("*a")
+        handle:close()
+
+        -- Count deleted files
+        local _, count = string.gsub(output, '\n', '\n')
+        if count > 0 then
+          -- Display how many files were deleted
+          print(count .. " video files deleted.")
+        else
+          print(output) -- Pass through the system error message
+        end
+      end
+      prompt_shown = true  -- Set the flag to true, so the prompt won't be shown again
+    else
+      prompt_shown = false -- Reset the flag, so the prompt can be shown again
+    end
+  end
+end
+
+-- Hook the function to the TextChanged and TextChangedI events
+vim.cmd [[ autocmd BufWritePost *.m3u lua test_delete_videos() ]]
+
 --- Processes a task list and generates a shell script to handle tasks via the taskwarrior CLI.
 -- This function modifies the current buffer, adding lines that invoke taskwarrior commands.
 -- The resulting lines will include any additional modifiers passed to the function.
