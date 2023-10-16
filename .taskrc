@@ -58,6 +58,12 @@ report.current.labels=ID,Age,P,Proj,Tag,Desc,Created,Due,Duration
 report.current.sort=manual_priority-,project+
 report.current.filter=status:pending and (manual_priority>=0 or manual_priority="") and -idea
 
+report.current-projects.description=List of current projects in work context
+report.current-projects.columns=project
+report.current-projects.labels=Project
+report.current-projects.sort=project+
+report.current-projects.filter=status:pending 
+
 report.tmark.description=List of tasks to report
 report.tmark.columns=project,description.desc
 report.tmark.labels=Proj,Desc
@@ -108,7 +114,7 @@ uda.duration.default=PT30M
 #UserDefinedShortcuts
 uda.taskwarrior-tui.task-report.next.filter=status:pending
 uda.taskwarrior-tui.shortcuts.1=~/.config/taskwarrior-tui/shortcut-scripts/taskopen-annotation.sh
-uda.taskwarrior-tui.shortcuts.2=task context home
+uda.taskwarrior-tui.shortcuts.2=~/dev/dotfiles/scripts/__cycle_tmuxinator_projects.sh
 uda.taskwarrior-tui.shortcuts.3=task context work
 uda.taskwarrior-tui.shortcuts.4=~/.config/taskwarrior-tui/shortcut-scripts/increase_duration.sh
 uda.taskwarrior-tui.shortcuts.5=~/.config/taskwarrior-tui/shortcut-scripts/__decrease_task_priority.sh
