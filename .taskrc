@@ -30,6 +30,8 @@ data.location=/home/decoder/.task
 # include dark-256.theme
 #include dark-red-256.theme
 include dark-green-256.theme
+color.blocked = white on rgb067
+color.blocking = white on rgb908
 #include dark-blue-256.theme
 # include dark-violets-256.theme
 # include dark-yellow-green.theme
