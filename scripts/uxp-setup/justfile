@@ -28,7 +28,7 @@ _check_mandatory_programs:
   @if ! type "kubectl" > /dev/null; then echo "Please install kubectl" && exit 1; fi
  
 # * setup kind cluster with ArgoCD, kubernetes and help providers
-setup_infra xp-version: _check_mandatory_programs setup_kind (setup_uxp xp-version) setup_k8s setup_helm enable_metrics_server
+setup_infra xp-version='stable': _check_mandatory_programs setup_kind (setup_uxp xp-version) setup_k8s setup_helm enable_metrics_server
 
 # enable metrics server
 enable_metrics_server:
