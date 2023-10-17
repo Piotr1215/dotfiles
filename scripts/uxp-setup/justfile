@@ -29,6 +29,7 @@ _check_mandatory_programs:
  
 # * setup kind cluster with ArgoCD, kubernetes and help providers
 setup_infra xp-version='stable': _check_mandatory_programs setup_kind (setup_uxp xp-version) setup_k8s setup_helm enable_metrics_server
+setup_infra_forkless xp-version='stable': _check_mandatory_programs setup_kind (setup_uxp xp-version) 
 
 # enable metrics server
 enable_metrics_server:
@@ -74,7 +75,7 @@ setup_uxp xp-version='stable':
   if [[ {{xp-version}} == "stable" ]]; then
     echo "Installing UXP version {{xp-version}}"
     helm install uxp --namespace {{xp_namespace}} upbound-stable/universal-crossplane --devel
-  elif [[ {{xp-version}} == "functions" ]]; then
+  elif [[ {{xp-version}} == "master" ]]; then
     echo "Installing UXP version {{xp-version}}"
     helm repo add crossplane-master https://charts.crossplane.io/master --force-update
     helm repo update
