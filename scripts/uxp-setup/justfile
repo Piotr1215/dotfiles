@@ -3,6 +3,7 @@ set export
 set shell := ["bash", "-uc"]
 
 yaml    := justfile_directory() + "/yaml"
+scripts    := justfile_directory() + "/scripts"
 
 browse      := if os() == "linux" { "xdg-open "} else { "open" }
 copy        := if os() == "linux" { "xsel -ib"} else { "pbcopy" }
@@ -124,6 +125,15 @@ deploy_monitoring:
    --set kube-state-metrics.namespaceOverride=prometheus \
    --set prometheus-node-exporter.namespaceOverride=prometheus --create-namespace
   @kubectl -n prometheus patch prometheus kube-prometheus-stack-prometheus --type merge --patch '{"spec":{"enableAdminAPI":true}}'
+
+
+# setup AWS providerConfig
+setup_aws_provider_config:
+  @echo "Setting up AWS providerConfig"
+  @kubectl delete secret -n {{xp_namespace}} aws-creds --ignore-not-found
+  @kubectl config use-context kind-control-plane
+  @{{scripts}}/setup_aws_secret.sh
+  @envsubst < {{yaml}}/aws-provider-config.yaml | kubectl apply -f - 
 
 # setup AWS official provider
 setup_aws:
