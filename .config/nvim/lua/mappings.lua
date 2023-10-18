@@ -46,12 +46,6 @@ if vim.lsp.inlay_hint then
     { silent = true, noremap = true, desc = "Toggle inlay hints" }
   )
 end
--- CHAT GPT KEYMAPS --
-utils.lnmap("ct", ":ChatGPT<cr>")
-utils.lnmap("co", ":ChatGPTCompleteCode<cr>")
-utils.lnmap("ce", ":ChatGPTEditWithInstructions<cr>")
-utils.vmap("<leader>cr", ":ChatGPTRun ", { silent = false })
-utils.lnmap("cr", ":ChatGPTRun ", { silent = false })
 
 -- SEARCH & REPLACE --
 utils.nmap("<Leader>em", ":/\\V\\c\\<\\>") -- find exact match

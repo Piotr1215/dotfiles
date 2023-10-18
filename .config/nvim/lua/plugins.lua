@@ -16,53 +16,40 @@ return require("packer").startup(function(use)
   -- AI {{{
   use "github/copilot.vim"
   use {
-    "jackMort/ChatGPT.nvim",
+    "thmsmlr/gpt.nvim",
     config = function()
-      require("chatgpt").setup {
-        chat = {
-          welcome_message = "Welcome to ChatGPT.nvim!",
-          keymaps = {
-            yank_last = "<C-y>",
-            yank_last_code = "<C-k>",
-            scroll_up = "<C-u>",
-            scroll_down = "<C-d>",
-            toggle_settings = "<C-o>",
-            new_session = "<C-n>",
-            cycle_windows = "<Tab>",
-            -- in the Sessions pane
-            select_session = "<Space>",
-            rename_session = "r",
-            delete_session = "d",
-          },
-        },
-        popup_input = {
-          submit = "<C-s>",
-        },
-        openai_params = {
-          model = "gpt-4",
-          frequency_penalty = 0,
-          presence_penalty = 0,
-          max_tokens = 300,
-          temperature = 0.5,
-          top_p = 1,
-          n = 1,
-        },
-        openai_edit_params = {
-          model = "code-davinci-edit-001",
-          temperature = 0,
-          top_p = 1,
-          n = 1,
-        },
-        actions_paths = { "~/.config/chatgpt/actions.json" },
-      }
-    end,
-    requires = {
-      "MunifTanjim/nui.nvim",
-      "nvim-lua/plenary.nvim",
-      "nvim-telescope/telescope.nvim",
-    },
-  }
-  -- }}}
+      require('gpt').setup({
+        api_key = os.getenv("OPENAI_API_KEY")
+      })
+
+      opts = { silent = true, noremap = true }
+      vim.keymap.set('v', '<C-g>r', require('gpt').replace, {
+        silent = true,
+        noremap = true,
+        desc = "[G]pt [R]ewrite"
+      })
+      vim.keymap.set('v', '<C-g>p', require('gpt').visual_prompt, {
+        silent = false,
+        noremap = true,
+        desc = "[G]pt [P]rompt"
+      })
+      vim.keymap.set('n', '<C-g>p', require('gpt').prompt, {
+        silent = true,
+        noremap = true,
+        desc = "[G]pt [P]rompt"
+      })
+      vim.keymap.set('n', '<C-g>c', require('gpt').cancel, {
+        silent = true,
+        noremap = true,
+        desc = "[G]pt [C]ancel"
+      })
+      vim.keymap.set('i', '<C-g>p', require('gpt').prompt, {
+        silent = true,
+        noremap = true,
+        desc = "[G]pt [P]rompt"
+      })
+    end
+  } -- }}}
   -- Editor Extensions {{{
   use {
     "windwp/nvim-autopairs",
