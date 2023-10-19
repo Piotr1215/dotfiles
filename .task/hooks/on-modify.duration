@@ -4,6 +4,7 @@ import sys
 import json
 import os
 from datetime import datetime
+import subprocess
 
 # Read the original and modified task from stdin
 original_task_json = sys.stdin.readline().strip()
@@ -13,8 +14,8 @@ modified_task_json = sys.stdin.readline().strip()
 original_task = json.loads(original_task_json)
 modified_task = json.loads(modified_task_json)
 
-# Temp file to store the start time
-temp_file_path = f"/tmp/task_start_time_{original_task['uuid']}.json"
+# Temp file to store the start time and reminder PID
+temp_file_path = f"/tmp/task_data_{original_task['uuid']}.json"
 
 # Function to convert ISO duration to minutes
 def iso_duration_to_minutes(iso_duration):
@@ -34,18 +35,41 @@ def minutes_to_iso_duration(minutes):
     remaining_minutes = minutes % 60
     return f"PT{hours}H{remaining_minutes}M" if hours else f"PT{remaining_minutes}M"
 
-# Check if the task is started or stopped by looking at the 'start' attribute
+# Function to invoke the reminder script
+def set_reminder(description, duration_minutes):
+    hours = duration_minutes // 60
+    minutes = duration_minutes % 60
+    duration_string = f"{hours}h{minutes}m" if hours else f"{minutes}m"
+    command = f"__reminder.sh 'Task Reminder: {description}' {duration_string}"
+    try:
+        process = subprocess.Popen(command, shell=True)
+        return process.pid  # Return the process ID of the reminder
+    except Exception as e:
+        print(f"Failed to set reminder: {str(e)}")
+        return None
+
+# Function to cancel the reminder
+def cancel_reminder(reminder_pid):
+    command = f"atrm {reminder_pid}"
+    result = subprocess.run(command, shell=True, capture_output=True, text=True)
+    if result.returncode != 0:
+        print(f"Failed to cancel reminder: {result.stderr}")
+
 if 'start' in modified_task and 'start' not in original_task:
     # Task is started
-    # Store the start time in a temp file
-    with open(temp_file_path, 'w') as f:
-        f.write(datetime.utcnow().isoformat())
+    # Store the start time and reminder PID in a temp file
+    reminder_pid = set_reminder(modified_task.get('description', 'No description'), iso_duration_to_minutes(modified_task['duration']))
+    if reminder_pid is not None:
+        with open(temp_file_path, 'w') as f:
+            json.dump({"start_time": datetime.utcnow().isoformat(), "reminder_pid": reminder_pid}, f)
 elif 'start' not in modified_task and 'start' in original_task:
     # Task is stopped
-    # Read the start time from the temp file if it exists
+    # Read the start time and reminder PID from the temp file if it exists
     if os.path.exists(temp_file_path):
         with open(temp_file_path, 'r') as f:
-            start_time = datetime.fromisoformat(f.read())
+            task_data = json.load(f)
+        start_time = datetime.fromisoformat(task_data['start_time'])
+        reminder_pid = task_data.get('reminder_pid')
         
         # Calculate elapsed time
         elapsed_time = datetime.utcnow() - start_time
@@ -67,6 +91,10 @@ elif 'start' not in modified_task and 'start' in original_task:
             # Subtract elapsed time from estimated time
             remaining_minutes = max(0, estimated_minutes - elapsed_minutes)
             modified_task['duration'] = minutes_to_iso_duration(remaining_minutes)
+        
+        # Cancel the reminder
+        if reminder_pid is not None:
+            cancel_reminder(reminder_pid)
         
         # Delete the temp file
         os.remove(temp_file_path)
