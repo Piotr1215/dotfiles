@@ -82,11 +82,7 @@ case $time_string in
 esac
 
 if [[ "$3" != "internal" ]]; then
-	# Capture the output of the 'at' command, which includes the job ID
-	at_output=$(echo "$0" "$message" "$time_string" "internal" | at "$delay" 2>&1)
-	# Extract the job ID from the output and echo it
-	job_id=$(echo "$at_output" | grep -oP '(?<=job )\d+')
-	echo "$job_id"
+	echo "$0 '$message' '$time_string' internal" | at $delay
 else
 	# This part is executed when scheduled by 'at'
 	while true; do
