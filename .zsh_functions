@@ -19,6 +19,11 @@ function copy_and_create_folders() {
     command cp "$@"
 }
 
+# xev wrapper for ascii keycodes
+function char2hex() {
+  xev | awk -F'[ )]+' '/^KeyPress/ { a[NR+2] } NR in a { printf "%-3s %s\n", $5, $8 }'
+}
+
 # Paste link form clipboard and create a new pet snippet
 function plink ()
 {
