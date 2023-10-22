@@ -607,7 +607,7 @@ key_bindings:
   #- { key: Copy,                                        action: Copy           }
   #- { key: L,         mods: Control,                    action: ClearLogNotice }
   # - { key: W,         mods: Command,                    chars: "\x02\x73"      }
-  - { key: P,         mods: Command,                    chars: "\x02\x71"      }
+  - { key: P,         mods: Command,                    chars: "\x02\x77"      }
   - { key: I, mods: Control, chars: "\x1b[105;5u" }
   #- { key: PageUp,    mods: Shift,   mode: ~Alt,        action: ScrollPageUp,  }
   #- { key: PageDown,  mods: Shift,   mode: ~Alt,        action: ScrollPageDown }
