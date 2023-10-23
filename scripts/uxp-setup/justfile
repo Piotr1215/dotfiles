@@ -2,7 +2,7 @@
 set export
 set shell := ["bash", "-uc"]
 
-yaml    := justfile_directory() + "/yaml"
+yaml       := justfile_directory() + "/yaml"
 scripts    := justfile_directory() + "/scripts"
 
 browse      := if os() == "linux" { "xdg-open "} else { "open" }
