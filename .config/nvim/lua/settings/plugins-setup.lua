@@ -52,6 +52,7 @@ require("oil").setup {
 require("obsidian").setup {
   dir = "/home/decoder/dev/obsidian/decoder",
   disable_frontmatter = false,
+  open_app_foreground = true,
   notes_subdir = "Notes",
   templates = {
     subdir = "Templates",
@@ -64,6 +65,7 @@ require("obsidian").setup {
   },
   completion = {
     nvim_cmp = true, -- if using nvim-cmp, otherwise set to false
+    prepend_note_id = false,
   },
   note_id_func = function(title)
     -- Create note IDs in a Zettelkasten format with a timestamp and a suffix.
