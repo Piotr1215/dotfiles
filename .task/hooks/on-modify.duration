@@ -67,6 +67,12 @@ elif 'start' not in modified_task and 'start' in original_task:
             # Subtract elapsed time from estimated time
             remaining_minutes = max(0, estimated_minutes - elapsed_minutes)
             modified_task['duration'] = minutes_to_iso_duration(remaining_minutes)
+
+            annotation = f"Worked on the task for {elapsed_minutes} minutes."
+            if 'annotations' in modified_task:
+                modified_task['annotations'].append({"description": annotation})
+            else:
+                modified_task['annotations'] = [{"description": annotation}]
         
         # Delete the temp file
         os.remove(temp_file_path)
