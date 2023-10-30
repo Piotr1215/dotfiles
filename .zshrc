@@ -60,7 +60,6 @@ HISTFILE=${ZDOTDIR:-$HOME}/.zsh_history
 
 source $ZSH/oh-my-zsh.sh
 source ~/.oh-my-zsh/plugins/tmuxinator/_mst 
-source ~/.oh-my-zsh/plugins/tmuxinator/_msm
 
 # Add nix shell to prompt if in nix env
 if [[ $(uname -s) == Linux ]]; then
