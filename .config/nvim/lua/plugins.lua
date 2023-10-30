@@ -228,6 +228,10 @@ return require("packer").startup(function(use)
     end,
     ft = { "markdown" },
   }
+  use 'javiorfo/nvim-soil'
+
+  -- Optional for puml syntax highlighting:
+  use 'javiorfo/nvim-nyctophilia'
   use "weirongxu/plantuml-previewer.vim"
   -- }}}
   -- My Plugins {{{
