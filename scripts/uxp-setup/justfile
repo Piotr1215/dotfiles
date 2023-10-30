@@ -30,7 +30,7 @@ _check_mandatory_programs:
  
 # * setup kind cluster with ArgoCD, kubernetes and help providers
 setup_infra xp-version='stable': _check_mandatory_programs setup_kind (setup_uxp xp-version) setup_k8s setup_helm enable_metrics_server
-setup_infra_forkless xp-version='stable': _check_mandatory_programs setup_kind (setup_uxp xp-version) 
+setup_infra_forkless xp-version='stable': _check_mandatory_programs setup_kind (setup_uxp xp-version) enable_metrics_server
 
 # enable metrics server
 enable_metrics_server:
