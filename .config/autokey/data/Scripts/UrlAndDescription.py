@@ -21,7 +21,7 @@ for line in lines:
             key, value = key_value_pair
             os.environ[key] = value
 
-def append_to_playlist(url, playlist_file_path):
+def append_to_playlist(url, description, playlist_file_path):
     # Read existing URLs from the playlist file
     with open(playlist_file_path, 'r') as f:
         existing_urls = f.readlines()
@@ -33,6 +33,7 @@ def append_to_playlist(url, playlist_file_path):
     if url not in existing_urls:
         # Append the URL to the playlist file
         with open(playlist_file_path, 'a') as f:
+            f.write('# '+ description + '\n')
             f.write(url + '\n')
 
 def get_website_description(url):
@@ -124,7 +125,7 @@ if 'Firefox' in active_window_title or 'Chrome' in active_window_title or 'Brave
         # PROJECT: playlist
         if "Add to Playlist" in choices:
             if "youtube.com" in domain or "youtu.be" in domain:  # Check if the domain is YouTube
-                append_to_playlist(url, haruna_playlist_path)
+                append_to_playlist(url, description, haruna_playlist_path)
             else:
                 print("The URL must be from YouTube to add to Haruna playlist.")
 
