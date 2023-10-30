@@ -94,6 +94,7 @@ alias tuic='task current'
 alias tuid='task workdone'
 alias uxp="just ~/dev/dotfiles/scripts/uxp-setup/setup_infra"
 alias uxpf="just ~/dev/dotfiles/scripts/uxp-setup/setup_infra functions"
+alias uxpm="just ~/dev/dotfiles/scripts/uxp-setup/setup_infra master"
 alias uxp-="just ~/dev/dotfiles/scripts/uxp-setup/teardown"
 alias .j='just --justfile ~/dev/dotfiles/scripts/uxp-setup/justfile --working-directory .'
 alias vn='nvim /tmp/temp-$RANDOM.md'
