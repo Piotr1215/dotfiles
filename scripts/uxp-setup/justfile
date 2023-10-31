@@ -10,7 +10,7 @@ copy        := if os() == "linux" { "xsel -ib"} else { "pbcopy" }
 
 export gcp_provider_version         := env_var_or_default('GCP_PROVIDER', "v0.35.0")
 export azure_provider_version       := env_var_or_default('AZURE_PROVIDER', "v0.36.0")
-export aws_provider_version         := "v0.40~.0"
+export aws_provider_version         := "v0.43.0"
 export k8s_version                  := "1.27.0"
 export random_suffix                := `echo $RANDOM`
 export base64encoded_azure_creds    := `base64 ~/crossplane-azure-provider-key.json | tr -d "\n"`
@@ -127,6 +127,13 @@ deploy_monitoring:
   @kubectl -n prometheus patch prometheus kube-prometheus-stack-prometheus --type merge --patch '{"spec":{"enableAdminAPI":true}}'
 
 
+# setup AWS official provider
+setup_aws_provider:
+  @echo "Setting up AWS official provider"
+  @kubectl config use-context kind-control-plane
+  @envsubst < {{yaml}}/aws-provider.yaml | kubectl apply -f - 
+  @kubectl wait --for condition=healthy --timeout=300s provider/provider-aws
+
 # setup AWS providerConfig
 setup_aws_provider_config:
   @echo "Setting up AWS providerConfig"
@@ -153,6 +160,12 @@ setup_azure:
   @envsubst < {{yaml}}/azure-provider.yaml | kubectl apply -f - 
   @kubectl wait --for condition=healthy --timeout=300s provider/provider-azure
   @envsubst < {{yaml}}/azure-provider-config.yaml | kubectl apply -f - 
+
+# setup GCP official provider config
+setup_gcp_provider_config:
+  @echo "Setting up GCP official provider config"
+  @kubectl config use-context kind-control-plane
+  @envsubst < {{yaml}}/gcp-provider-config.yaml | kubectl apply -f - 
 
 # setup GCP official provider
 setup_gcp:
