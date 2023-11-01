@@ -76,6 +76,10 @@ Ctrl + w + hjkl + Ctrl + w x    - Swap position of 2 panes. Navigate from the
 q:                              - enter commands history
 q/                              - enter search history
 
+### LSP
+
+K twice enters the hover window so can copy from there etc
+
 ### Insert mode
 Ctrl + y            - copy character from the line above
 Ctrl + e            - copy character from the line below
