@@ -4,6 +4,23 @@ local action_state = require "telescope.actions.state"
 
 local zoomed = false
 
+
+function _G.get_tmux_working_directory()
+  local handle = io.popen("tmux display-message -p -F '#{pane_current_path}'")
+  if handle then
+    local result = handle:read("*a")
+    handle:close()
+    if result and result ~= "" then
+      local trimmed_result = result:gsub("%s+", "")
+      return trimmed_result
+    else
+      print("No result obtained or result is empty")
+    end
+  else
+    print("Failed to create handle")
+  end
+end
+
 _G.operator_callback = function()
   local s_pos = vim.fn.getpos("'<")
   local e_pos = vim.fn.getpos("'>")

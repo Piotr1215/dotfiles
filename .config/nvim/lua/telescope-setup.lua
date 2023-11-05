@@ -110,7 +110,7 @@ local set_up_telescope = function()
   set_keymap("n", "<Leader>fd", "<cmd>lua search_dev()<CR>")
   set_keymap('n', '<leader><leader>', [[<cmd>lua require('telescope.builtin').buffers()<CR>]])
   set_keymap('n', '<leader>ff',
-    [[<cmd>cd %:p:h<CR><cmd>pwd<CR><cmd>lua require('telescope.builtin').find_files({find_command = {'rg', '--files', '--hidden', '-g', '!.git' }, {search_dirs = {"$PWD"}}})<CR>]])
+    [[<cmd>lua require('telescope.builtin').find_files({ find_command = {'rg', '--files', '--hidden', '-g', '!.git'}, search_dirs = {get_tmux_working_directory()} })<CR>]])
   set_keymap('n', '<leader>fr', [[<cmd>lua require'telescope'.extensions.repo.list{search_dirs = {"~/dev"}}<CR>]])
   set_keymap('n', '<leader>fw', [[<cmd>lua require('telescope').extensions.live_grep_args.live_grep_args()<CR>]])
   set_keymap('n', '<leader>fg', [[<cmd>lua require('telescope.builtin').git_files()<CR>]])
