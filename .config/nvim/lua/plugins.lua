@@ -22,7 +22,6 @@ return require("packer").startup(function(use)
         api_key = os.getenv("OPENAI_API_KEY")
       })
 
-      opts = { silent = true, noremap = true }
       vim.keymap.set('v', '<C-g>r', require('gpt').replace, {
         silent = true,
         noremap = true,
