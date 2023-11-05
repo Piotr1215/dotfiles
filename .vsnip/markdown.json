@@ -137,6 +137,18 @@
     "prefix": ["text"],
     "body": "```text\n${1:$tm_selected_text}\n```"
   },
+    "copy": {
+    "prefix": ["copy"],
+    "body": "{{copy}}\n"
+  },
+  "exec": {
+    "prefix": ["exec"],
+    "body": "{{exec}}\n"
+  },
+  "exec_interrupt": {
+    "prefix": ["execi"],
+    "body": "{{exec interrupt}}\n"
+  },
   "note": {
     "prefix": ["note"],
     "body": "> [!NOTE]\n> ${0}"
