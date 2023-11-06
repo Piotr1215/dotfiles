@@ -305,7 +305,7 @@ function sout() {
   fi
 } 
 
-function msm () {
+function ms () {
     if [[ -z $1 ]]
     then
         echo "Provide one or more tmuxinator sessions to start"
