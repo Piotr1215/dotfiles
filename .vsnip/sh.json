@@ -10,5 +10,15 @@
       "IFS=\\$'\\n\\t'\n\n"
     ],
     "description": "Strict mode for bash script"
+  },
+  "While File Reader": {
+    "prefix": "while_file",
+    "scope": "bash",
+    "body": [
+      "while IFS= read -r line; do \n",
+      "echo \"\\$line\"\n",
+      "done </${0}\n"
+    ],
+    "description": "Read file line by line"
   }
 }
