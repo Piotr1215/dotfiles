@@ -58,7 +58,7 @@ if [ ${#files[@]} -eq 0 ]; then
 fi
 
 for i in "${!files[@]}"; do
-	files[i]=$(realpath "${files[i]}")
+	files[i]=$(realpath "$repo_root/${files[i]}")
 done
 
 case "${#files[@]}" in
