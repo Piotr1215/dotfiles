@@ -57,9 +57,9 @@ vim.keymap.set("n", "N", "Nzzzv")
 utils.emap("<Leader>ow", "<Plug>(leap-cross-window)")
 -- Stop search highlight
 utils.nmap(",<space>", ":nohlsearch<CR>")
-utils.vmap("<C-r>", '"hy:%s/\\v<C-r>h//g<left><left><left>', { silent = false }) -- Change selection
-utils.vmap("//", "y/\\V<C-R>=escape(@\",'/')<CR><CR>")                          -- Highlight selection
-utils.vmap("<leader><C-s>", ":s/\\%V")                                          -- Search only in visual selection usingb%V atom
+utils.vmap("<C-r>", '"hy:%s/\\v<C-r>h//g<left><left>', { silent = false }) -- Change selection
+utils.vmap("//", "y/\\V<C-R>=escape(@\",'/')<CR><CR>")                     -- Highlight selection
+utils.vmap("<leader><C-s>", ":s/\\%V")                                     -- Search only in visual selection usingb%V atom
 utils.vmap("srt", ":!sort -n -k 2<cr>")
 
 -- MACROS --
@@ -230,6 +230,7 @@ utils.lnmap("ec", ":FeMaco<CR>")
 
 -- Fzf Files
 utils.lnmap("fl", ":Files<CR>")
+utils.lnmap("lg", ":FzfLua live_grep<CR>")
 
 -- Floaterm
 utils.lnmap("tt", ":FloatermToggle<CR>")
