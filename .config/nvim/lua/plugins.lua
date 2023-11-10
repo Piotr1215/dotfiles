@@ -63,7 +63,6 @@ return require("packer").startup(function(use)
       require("various-textobjs").setup { useDefaultKeymaps = true }
     end,
   }
-  use "ThePrimeagen/harpoon"
   use "RRethy/nvim-align"
   use "vim-scripts/scrollfix"
   use { "shortcuts/no-neck-pain.nvim", tag = "*" }
@@ -76,14 +75,12 @@ return require("packer").startup(function(use)
   use "preservim/nerdcommenter"
   use "tpope/vim-fugitive"
   use "voldikss/vim-floaterm"
-  use "sindrets/diffview.nvim"
   use {
     "kylechui/nvim-surround",
     config = function()
       require("nvim-surround").setup {}
     end,
   }
-  use "gcmt/taboo.vim"
   use "folke/which-key.nvim"
   use "lukas-reineke/indent-blankline.nvim"
   use "machakann/vim-swap"
@@ -205,12 +202,10 @@ return require("packer").startup(function(use)
   use "ray-x/go.nvim"
   use "ray-x/guihua.lua" -- recommended if need floating window support
   use "rmagatti/goto-preview"
-  use "hashivim/vim-terraform"
   use "nvim-treesitter/nvim-treesitter-textobjects"
   -- }}}
   -- Markdown {{{
   use "jubnzv/mdeval.nvim"
-  use "tyru/open-browser.vim"
   use {
     "AckslD/nvim-FeMaco.lua",
     config = 'require("femaco").setup()',
@@ -218,7 +213,6 @@ return require("packer").startup(function(use)
   use 'sbdchd/neoformat'
   use "ixru/nvim-markdown"
   use "dhruvasagar/vim-open-url"
-  use "marcelofern/vale.nvim"
   use {
     "iamcco/markdown-preview.nvim",
     run = "cd app && npm install",
@@ -238,7 +232,6 @@ return require("packer").startup(function(use)
   -- }}}
   -- Look & Feel {{{
   use { "ellisonleao/gruvbox.nvim" }
-  use "uga-rosa/ccc.nvim"
   use { "ellisonleao/glow.nvim", branch = "main" }
   use "mhartington/formatter.nvim"
   use "folke/todo-comments.nvim"
@@ -246,7 +239,6 @@ return require("packer").startup(function(use)
   use "xiyaowong/nvim-transparent"
   use "bluz71/vim-moonfly-colors"
   use "kdheepak/monochrome.nvim"
-  use "MunifTanjim/prettier.nvim"
   use "EdenEast/nightfox.nvim"
   use "NLKNguyen/papercolor-theme"
   use "folke/tokyonight.nvim"
