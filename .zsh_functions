@@ -156,7 +156,25 @@ function fif() {
 # Uploads content to clbin and copies URL to clipboard, opens in browser
 function share ()
 {
-  curl -sF 'clbin=<-' https://clbin.com | xargs -I _ echo -n _"?hl" | tee >(xsel -ib 2>&1) | tee >(xargs echo) | nohup xargs xdg-open >/dev/null 2>&1
+    local image_path="/tmp/screenshot.png"
+
+    # Save the clipboard content to a file
+    # Adjust this command based on your system and the clipboard content
+    xclip -selection clipboard -t image/png -o > "$image_path"
+
+    # Upload the image file and parse the JSON response to get the link
+    local response=$(curl -sF "file=@$image_path" https://file.io)
+    local url=$(echo $response | jq -r '.link')
+
+    # Check if the URL is valid
+    if [[ $url != "https://file.io/"* ]]; then
+        echo "Error: Invalid URL received"
+        return 1
+    fi
+
+    # Handle the URL (copy to clipboard, open in browser, etc.)
+    echo $url | tee >(xsel -ib)
+    nohup xdg-open $url >/dev/null 2>&1 &
 }
 
 # Copy file name to clipboard
