@@ -7,6 +7,7 @@ vim.g.maplocalleader = " "
 
 -- MOVE AROUND --
 utils.lnmap("wa", ":wqa<cr>")
+utils.lnmap("qq", ":qa<cr>")
 utils.lnmap("qa", ":qa!<cr>")
 utils.lnmap(";q", ":qa<cr>")
 utils.lnmap(";w", ":wqa<cr>")
@@ -193,12 +194,6 @@ utils.xmap("<leader>tc", "<Plug>(vsnip-cut-text)")
 
 -- Abbreviations
 vim.cmd "abb cros Crossplane"
-
--- Harpoon
-utils.nmap("<leader>ha", ':lua require("harpoon.mark").add_file()<CR>')
-utils.nmap("<leader>hm", ':lua require("harpoon.ui").toggle_quick_menu()<CR>')
-utils.nmap("<leader>hh", ':lua require("harpoon.ui").nav_next()<CR>')
-utils.nmap("<leader>hl", ':lua require("harpoon.ui").nav_prev()<CR>')
 
 -- Mdeval
 vim.api.nvim_set_keymap(
