@@ -62,6 +62,8 @@ source $ZSH/oh-my-zsh.sh
 source ~/.oh-my-zsh/plugins/tmuxinator/_mst 
 source ~/.oh-my-zsh/plugins/tmuxinator/_ms
 
+fpath=(${HOME}/.oh-my-zsh/completions/ $fpath)
+
 # Add nix shell to prompt if in nix env
 if [[ $(uname -s) == Linux ]]; then
   source ${HOME}/.oh-my-zsh/custom/plugins/nix-shell/nix-shell.plugin.zsh
@@ -69,8 +71,6 @@ if [[ $(uname -s) == Linux ]]; then
   fpath=(${HOME}/.oh-my-zsh/custom/plugins/nix-zsh-completions/nix-zsh-completions.plugin.zsh $fpath)
   prompt_nix_shell_setup
 fi
-
-  fpath=(${HOME}/.oh-my-zsh/completions/ $fpath)
 
 if [[ $(uname -s) == Linux ]]; then
   eval $(dircolors -p | sed -e 's/DIR 01;34/DIR 01;36/' | dircolors /dev/stdin)
@@ -80,13 +80,11 @@ else
   export TERM=alacritty
   # This prevents the 'too many files error' when running PackerSync
   ulimit -n 10240
-
 fi
 
 # Source functions and aliases
 source ~/.zsh_aliases
 source ~/.zsh_functions
-eval "$(direnv hook zsh)"
 
 # EXPORT & PATH
 export FZF_BASE=/usr/bin/fzf
@@ -227,5 +225,6 @@ if [ -f '/home/decoder/dev/clusters/primary-dev/google-cloud-sdk/path.zsh.inc' ]
 # The next line enables shell command completion for gcloud.
 if [ -f '/home/decoder/dev/clusters/primary-dev/google-cloud-sdk/completion.zsh.inc' ]; then . '/home/decoder/dev/clusters/primary-dev/google-cloud-sdk/completion.zsh.inc'; fi
 
+eval "$(direnv hook zsh)"
 eval "$(starship init zsh)"
 # zprof > /tmp/zprof.out
