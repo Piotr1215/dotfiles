@@ -47,34 +47,34 @@ Ctrl +b [           - enter copy Mode
 
 ---
 
-## Vim
-P,                              - p pastes text and replaces current buffer, P
-pastes without replacing buffer
-:h index                        - check what key is mapped to, keymaps, set
-verbose?
-"+yt                            - copy to clipboard till character (space in this case)
-Ctro + n                        - does some crazy multi-cursor
-Ctrl + u                        - go 1/4 screen up
-Ctrl + d                        - go 1/4 screen down
-Ctrl + f                        - go 1 screen up
-Ctrl + b                        - go 1 screen down
-z    + Enter                    - move line to the top of the screen
-M                               - move to the middle of the screen
-%                               - move to related closing item like ([<]) etc
-sp                              - horizontal split
-vsp                             - vertical split
-:r !command                     - execute command and insert output below the cursor
-Ctrl + 6                        - switch between buffers
-:g/pattern/norm! @a             - excute macro stored in a registry over lines matching pattern
-Ctrl + f                        - in command mode, edit list of previous commands
-Ctro + a                        - increment number in normal mode
-Ctrl + w + HJKL                 - move splits around
-Ctrl + w + Ctrl + r             - Rotate splits
-Ctrl + w + hjkl + Ctrl + w x    - Swap position of 2 panes. Navigate from the
-                                  window to the one u want to swap with and hit x
-:echo maparg("<leader>ff", "n") - this will detect what mapping maps to~
-q:                              - enter commands history
-q/                              - enter search history
+| Command | Description |
+| --- | --- |
+| P | pastes text and replaces current buffer |
+| p | pastes without replacing buffer |
+| :h index | check what key is mapped to |
+| verbose? |  |
+| "+yt" | copy to clipboard till character (space in this case) |
+| Ctro + n | does some crazy multi-cursor |
+| Ctrl + u | go 1/4 screen up |
+| Ctrl + d | go 1/4 screen down |
+| Ctrl + f | go 1 screen up |
+| Ctrl + b | go 1 screen down |
+| z + Enter | move line to the top of the screen |
+| M | move to the middle of the screen |
+| % | move to related closing item like ([<]) etc |
+| sp | horizontal split |
+| vsp | vertical split |
+| :r !command | execute command and insert output below the cursor |
+| Ctrl + 6 | switch between buffers |
+| :g/pattern/norm! @a | excute macro stored in a registry over lines matching pattern |
+| Ctrl + f | in command mode, edit list of previous commands |
+| Ctro + a | increment number in normal mode |
+| Ctrl + w + HJKL | move splits around |
+| Ctrl + w + Ctrl + r | Rotate splits |
+| Ctrl + w + hjkl + Ctrl + w x | Swap position of 2 panes. Navigate from the window to the one u want to swap with and hit x |
+| :echo maparg("<leader>ff", "n") | this will detect what mapping maps to~ |
+| q: | enter commands history |
+| q/ | enter search history |
 
 ### LSP
 
