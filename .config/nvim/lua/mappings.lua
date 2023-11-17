@@ -166,6 +166,7 @@ utils.nmap("<Leader>hs", ":History<CR>")
 utils.lnmap("gd", ":Gvdiffsplit<CR>")
 utils.nmap("<leader>gg", ":LazyGit<CR>")
 utils.nmap("<leader>gl", ":r !bash ~/dev/dotfiles/scripts/__generate_git_log.sh<CR>")
+utils.lnmap("gh", ":Gclog %<CR>")
 
 -- NAVIGATION --
 -- Save buffer
