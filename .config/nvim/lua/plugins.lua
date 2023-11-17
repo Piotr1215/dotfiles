@@ -63,6 +63,7 @@ return require("packer").startup(function(use)
       require("various-textobjs").setup { useDefaultKeymaps = true }
     end,
   }
+  use "David-Kunz/gen.nvim"
   use "RRethy/nvim-align"
   use "vim-scripts/scrollfix"
   use { "shortcuts/no-neck-pain.nvim", tag = "*" }
