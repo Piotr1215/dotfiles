@@ -162,7 +162,9 @@ utils.vmap("<Leader>pb", "w !bash share<CR>")
 utils.nmap("<Leader>p", ":pu<CR>")
 utils.nmap("<Leader>hs", ":History<CR>")
 
--- setup mapping to call :LazyGit
+-- Git related mappings
+vim.keymap.set({ 'n', 'v' }, "<leader>gb", ":GBrowse<cr>", opts)
+vim.keymap.set({ 'n', 'v' }, '<leader>gc', ':GBrowse!<cr>', opts)
 utils.lnmap("gd", ":Gvdiffsplit<CR>")
 utils.nmap("<leader>gg", ":LazyGit<CR>")
 utils.nmap("<leader>gl", ":r !bash ~/dev/dotfiles/scripts/__generate_git_log.sh<CR>")

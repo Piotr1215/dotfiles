@@ -1,31 +1,29 @@
 ## Shell
 
-Ctrl + U - remove from the cursor to the start of the line.
-Ctrl + K - cut from the cursor to the end of the line.
-Ctrl + W - cut from the cursor to the start of the preceding word.<- LEFT
-Ctrl + Y - copy command line content
-Ctrl + q - when a command is already typed, move it to buffer, clear command line and execute another one before
-Alt + D - "remove from the cursor to the end of the next word."
-Ctrl + L - clear the terminal.
-Ctrl + A - go to the beginning of the line
-Ctrl + E - go to the end of the line
-Alt + B - go back one word
-Alt + F - go forward one word
-Ctrl + XX - switch between beginning of the line and current position
-Ctrl + XE - edit current command in default editor
-dult + T - swap the current word with the previous word
-Ctrl + T - swap 2 characters places
-Alt + . - repeat last argument of previous command, same as !$
-Ctrl + Shift + _     - undo last keystroke in command
-!*                   - all arguments of previous function except first
-!$ - last argument of previous call
-$0                   - the name of the current shell script or program.
-$1, $2, $3, ...      - the positional parameters passed to the shell script or function.
-!:1 !:2     ...      - the positional parameters from previous command
-$# - the number of positional parameters passed to the shell script or function.
-$@                   - all the positional parameters passed to the shell script or function, individually quoted.
-$\* - all the positional parameters passed to the shell script or function, as a single, space-separated string.
-$? - the exit status of the last executed command.
+| Keyboard Shortcut | Action |
+| --- | --- |
+| Ctrl + U | Remove from cursor to start of line |
+| Ctrl + K | Cut from cursor to end of line |
+| Ctrl + W | Cut from cursor to start of preceding word.<- LEFT |
+| Ctrl + Y | Copy command line content |
+| Ctrl + q | When a command is already typed, move it to buffer, clear command line and execute another one before |
+| Alt + D | Remove from cursor to end of next word |
+| Ctrl + L | Clear terminal |
+| Ctrl + A | Go to beginning of line |
+| Ctrl + E | Go to end of line |
+| Alt + B | Go back one word |
+| Alt + F | Go forward one word |
+| Ctrl + XX | Switch between beginning of line and current position |
+| Ctrl + XE | Edit current command in default editor |
+| dult + T | Swap the current word with previous word |
+| Ctrl + T | Swap 2 characters places |
+| Alt + . | Repeat last argument of previous command, same as !$ |
+| Ctrl + Shift + _ | Undo last keystroke in command |
+| !*:1 !*:2 ... | Positional parameters from previous command |
+| $# | Number of positional parameters passed to the shell script or function |
+| $@ | All the positional parameters passed to the shell script or function, individually quoted |
+| $\* | All the positional parameters passed to the shell script or function, as a single, space-separated string |
+| $? | Exit status of the last executed command |
 
 $$
 - the process ID of the current shell.
