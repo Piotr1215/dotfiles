@@ -6,6 +6,14 @@ local goSettings = vim.api.nvim_create_augroup("Go Settings", { clear = true })
 
 vim.api.nvim_create_user_command("Pretty", "Prettier", { bang = true })
 
+vim.api.nvim_create_user_command(
+  'Browse',
+  function(opts)
+    vim.fn.system { 'xdg-open', opts.fargs[1] }
+  end,
+  { nargs = 1 }
+)
+
 vim.api.nvim_create_autocmd("BufWritePre", {
   pattern = "*.go",
   callback = function()
