@@ -164,7 +164,8 @@ utils.nmap("<Leader>hs", ":History<CR>")
 
 -- Git related mappings
 vim.keymap.set({ 'n', 'v' }, "<leader>gb", ":GBrowse<cr>", opts)
-vim.keymap.set({ 'n', 'v' }, '<leader>gc', ':GBrowse!<cr>', opts)
+vim.keymap.set('n', '<leader>gc', function() vim.cmd('GBrowse!') end, opts)
+vim.keymap.set('v', '<leader>gc', ':GBrowse!<CR>', { noremap = true, silent = false })
 utils.lnmap("gd", ":Gvdiffsplit<CR>")
 utils.nmap("<leader>gg", ":LazyGit<CR>")
 utils.nmap("<leader>gl", ":r !bash ~/dev/dotfiles/scripts/__generate_git_log.sh<CR>")
