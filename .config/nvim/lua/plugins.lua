@@ -15,40 +15,18 @@ return require("packer").startup(function(use)
   use "wbthomason/packer.nvim"
   -- AI {{{
   use "github/copilot.vim"
-  use {
-    "thmsmlr/gpt.nvim",
+  use({
+    "robitx/gp.nvim",
     config = function()
-      require('gpt').setup({
-        api_key = os.getenv("OPENAI_API_KEY")
-      })
+      require("gp").setup()
 
-      vim.keymap.set('v', '<C-g>r', require('gpt').replace, {
-        silent = true,
-        noremap = true,
-        desc = "[G]pt [R]ewrite"
-      })
-      vim.keymap.set('v', '<C-g>p', require('gpt').visual_prompt, {
-        silent = false,
-        noremap = true,
-        desc = "[G]pt [P]rompt"
-      })
-      vim.keymap.set('n', '<C-g>p', require('gpt').prompt, {
-        silent = true,
-        noremap = true,
-        desc = "[G]pt [P]rompt"
-      })
-      vim.keymap.set('n', '<C-g>c', require('gpt').cancel, {
-        silent = true,
-        noremap = true,
-        desc = "[G]pt [C]ancel"
-      })
-      vim.keymap.set('i', '<C-g>p', require('gpt').prompt, {
-        silent = true,
-        noremap = true,
-        desc = "[G]pt [P]rompt"
-      })
-    end
-  } -- }}}
+      -- or setup with your own config (see Install > Configuration in Readme)
+      -- require("gp").setup(conf)
+
+      -- shortcuts might be setup here (see Usage > Shortcuts in Readme)
+    end,
+  })
+  -- }}}
   -- Editor Extensions {{{
   use {
     "windwp/nvim-autopairs",
