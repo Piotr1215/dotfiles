@@ -65,7 +65,6 @@ require("obsidian").setup {
   },
   completion = {
     nvim_cmp = true, -- if using nvim-cmp, otherwise set to false
-    prepend_note_id = false,
   },
   note_id_func = function(title)
     -- Create note IDs in a Zettelkasten format with a timestamp and a suffix.
