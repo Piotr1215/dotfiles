@@ -30,6 +30,7 @@ alias lux-='lxc stop ubuntu'
 
 # Commands shadow
 alias cpf=copy_and_create_folders
+alias aider='aider --model gpt-4-1106-preview --no-auto-commits'
 alias cat='bat'
 alias c=chatgpt-cli
 alias df=duf
