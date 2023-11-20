@@ -324,5 +324,6 @@ vim.g.startify_bookmarks = {
   "~/.oh-my-zsh/plugins/tmuxinator/_mst",
   "~/.config/taskwarrior-tui/shortcut-scripts",
   "~/.local/share/nvim/site/pack/packer/start",
+  "~/.local/share/nvim/gp/chats",
 }
 vim.g.startify_custom_header = "startify#pad(split(system('fortune -s | cowsay | lolcat; date'), '\n'))"
