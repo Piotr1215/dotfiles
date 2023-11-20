@@ -41,6 +41,12 @@ return require("packer").startup(function(use)
       require("various-textobjs").setup { useDefaultKeymaps = true }
     end,
   }
+  use({
+    "wintermute-cell/gitignore.nvim",
+    requires = {
+      "nvim-telescope/telescope.nvim"   -- optional: for multi-select
+    }
+  })
   use "tpope/vim-rhubarb"
   use "David-Kunz/gen.nvim"
   use "RRethy/nvim-align"
