@@ -17,8 +17,8 @@ if pgrep -x "alacritty" >/dev/null; then
 
 		# wmctrl -r Alacritty -e 0,1920,0,-1,-1
 
-		xdotool windowactivate --sync "$window"
 		xdotool windowraise "$window"
+		xdotool windowactivate --sync "$window"
 	else
 		echo "No Alacritty window found."
 	fi

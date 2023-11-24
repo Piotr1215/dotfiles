@@ -1,11 +1,16 @@
 #!/bin/bash
-UPPER_SCREEN_HEIGHT=11
 MIDDLE_SCREEN_POING=1920
 LEFT_SCREEN_CORNER=0
 HALF_SCREEN_WIDTH=1930
 FULL_SCREEN_WIDTH=3860
-# layout3.sh
-# Check if Alacritty is running
+
+slack=$(xdotool search --onlyvisible --classname Slack | head -n 1)
+if [[ -z "${slack}" ]]; then
+	echo "No Slack window found"
+	/home/decoder/dev/dotfiles/scripts/__layout2.sh
+	exit 0
+fi
+
 if pgrep -x "alacritty" >/dev/null; then
 	# Get the ID of the first visible Alacritty window
 	window=$(xdotool search --onlyvisible --classname Alacritty | head -n 1)
