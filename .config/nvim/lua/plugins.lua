@@ -44,9 +44,10 @@ return require("packer").startup(function(use)
   use({
     "wintermute-cell/gitignore.nvim",
     requires = {
-      "nvim-telescope/telescope.nvim"   -- optional: for multi-select
+      "nvim-telescope/telescope.nvim" -- optional: for multi-select
     }
   })
+  use { 'dccsillag/magma-nvim', run = ':UpdateRemotePlugins' }
   use "tpope/vim-rhubarb"
   use "David-Kunz/gen.nvim"
   use "RRethy/nvim-align"
