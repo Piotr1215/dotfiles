@@ -8,15 +8,22 @@ if pgrep -x "alacritty" >/dev/null; then
 	if [ -n "$window" ]; then
 		# Unmaximize the window
 		xdotool windowunmap "$window"
-		sleep 0.2 # A short delay
 
 		# Resize the window
 		xdotool windowmap "$window"
-		xdotool windowsize "$window" 45% 100%
+		# Resize and move the window to the left side of the screen with exact pixel dimensions
+
+		wmctrl -i -r "$window" -b add,maximized_vert,maximized_horz
+
+		# wmctrl -r Alacritty -e 0,1920,0,-1,-1
+
+		xdotool windowactivate --sync "$window"
+		xdotool windowraise "$window"
 	else
 		echo "No Alacritty window found."
 	fi
+
 else
 	# Launch Alacritty
-	alacritty &
+	echo "Please launch Alacritty first."
 fi
