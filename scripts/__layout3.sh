@@ -22,6 +22,10 @@ if [ ${#firefox_windows[@]} -eq 2 ]; then
 			xdotool windowmove "$window_id" 1910 0
 		fi
 	done
+elif [ ${#firefox_windows[@]} -eq 1 ]; then
+	# Call __layout5.sh if only one Firefox window is found
+	echo "Only one Firefox window found."
+	~/dev/dotfiles/scripts/__layout5.sh
 else
-	echo "Not enough Firefox windows found."
+	echo "No Firefox windows found."
 fi
