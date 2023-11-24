@@ -48,7 +48,7 @@ vim.g.mkdp_echo_preview_url = 0
 utils.nmap('<leader>mp', ':MarkdownPreview<CR>')
 
 -- MarkdownClipboardImage settings
-utils.nmap("<leader>mm", ":call mdip#MarkdownClipboardImage()<CR>")
+utils.nmap("<leader>pi", ":call mdip#MarkdownClipboardImage()<CR>")
 
 vim.api.nvim_buf_set_keymap(0, "v", ",wl", [[c[<c-r>"]()<esc>]], { noremap = false })
 
