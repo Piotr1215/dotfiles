@@ -149,13 +149,14 @@ function prev() {
   sh -c "pet new `printf %q "$PREV"`"
 }
 
-function open_file_git() {
+function open_file_git_staged() {
    __open-file-git-staged.sh 
 }
 
-bindkey "^[^O" open_file_git
+# Binds Ctrl+Alt+O to open_file_git
+bindkey "^[^O" open_file_git_staged
+zle -N open_file_git_staged
 
-zle -N open_file_git
 function pet-select-bmk() {
   BUFFER=$(pet search --tag link)
   zle redisplay
