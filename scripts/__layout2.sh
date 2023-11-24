@@ -12,7 +12,7 @@ if pgrep -x "alacritty" >/dev/null; then
 		# Resize the window
 		xdotool windowmap "$window"
 		# Resize and move the window to the left side of the screen with exact pixel dimensions
-		xdotool windowsize "$window" 50% 100%
+		xdotool windowsize "$window" 1920 2128
 		xdotool windowmove "$window" 0 32
 	else
 		echo "No Alacritty window found."
@@ -30,7 +30,7 @@ if pgrep -x "alacritty" >/dev/null; then
 		xdotool windowsize "$firefox_window" 1946 2154
 		# Move the Firefox window to the right side of the screen
 		# The x-coordinate is set to 1920 to position the window on the right half of the screen
-		xdotool windowmove "$firefox_window" 1910 25
+		xdotool windowmove "$firefox_window" 1907 21
 	else
 		echo "No Firefox window found."
 	fi
