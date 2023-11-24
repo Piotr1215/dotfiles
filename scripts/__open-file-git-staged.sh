@@ -52,7 +52,7 @@ repo_root=$(git rev-parse --show-toplevel)
 
 IFS=$'\n' files=($(git status -s | awk '{print $2}' | grep -v '^$' | fzf-tmux --preview "bat --color=always {}" --reverse --multi --select-1 --exit-0 || handle_fzf_error))
 
-# Check if any files were selected, and exit if not
+# Check if any files were selected, and exit if not test
 if [ ${#files[@]} -eq 0 ]; then
 	exit 0
 fi
