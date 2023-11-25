@@ -31,6 +31,8 @@ if pgrep -x "alacritty" >/dev/null; then
 		# Move the Firefox window to the right side of the screen
 		# The x-coordinate is set to 1920 to position the window on the right half of the screen
 		xdotool windowmove "$firefox_window" 1907 21
+		sleep 0.2
+		xdotool windowactivate --sync "$firefox_window" key ctrl+super+Right
 	else
 		echo "No Firefox window found."
 	fi
