@@ -24,6 +24,9 @@ utils.vmap(";;", ":", { silent = false })
 -- enter search and replace
 utils.lnmap("sa", "ggVG")
 utils.lnmap("r", ":%s/\\v/g<left><left>", { silent = false })
+utils.lnmap("ss", ":s/", { silent = false })
+utils.lnmap("sw", ":s/\\w*\\w*<left><left><left>", { silent = false })
+utils.lnmap("sW", ":s/\\W*\\W*<left><left><left>", { silent = false })
 -- j/k moves over virtual (wrapped) lines
 vim.api.nvim_set_keymap("n", "k", "v:count == 0 ? 'gk' : 'k'", { noremap = true, expr = true, silent = true })
 vim.api.nvim_set_keymap("n", "j", "v:count == 0 ? 'gj' : 'j'", { noremap = true, expr = true, silent = true })
@@ -88,9 +91,6 @@ utils.lnmap("pa", '"*p')            -- paste from clipboard buffer after the cur
 utils.lnmap("p", '"*P')             -- paste from clipboard buffer before the cursor
 utils.nmap("<leader>1", '"0p')      -- paste from 0 (latest yank)
 utils.nmap("<leader>2", '"*p')      -- paste from 0 (latest yank)
--- Substitute
-utils.nmap("<leader>sw", '"_diwP')  -- substitute current word with last yanked text
-utils.nmap("<leader>sW", '"_diWP')  -- substitute current WORD with last yanked text
 -- Delete
 utils.lnmap("dl", '"_dd')           -- delete line to black hole register
 utils.lnmap("d_", '"_D')            -- delete till end of line to black hole register
