@@ -23,13 +23,14 @@ if [[ -n "$slack" && -n "$zoom" ]]; then
 elif [[ -n "$zoom" ]]; then
 	echo "Only Zoom window found. Positioning."
 	wmctrl -i -r "$zoom" -b remove,maximized_vert,maximized_horz
-	wmctrl -i -r "$zoom" -e 0,$LEFT_MARGIN,$TOP_MARGIN_ZOOM,$WINDOW_WIDTH,$WINDOW_HEIGHT
+	wmctrl -i -r "$zoom" -b add,maximized_vert,maximized_horz
+	xdotool windowactivate --sync "$zoom"
 
 elif [[ -n "$slack" ]]; then
 	echo "Only Slack window found. Positioning."
 	wmctrl -i -r "$slack" -b remove,maximized_vert,maximized_horz
-	wmctrl -i -r "$slack" -e 0,$LEFT_MARGIN,$TOP_MARGIN_SLACK,$WINDOW_WIDTH,$WINDOW_HEIGHT
-
+	wmctrl -i -r "$slack" -b add,maximized_vert,maximized_horz
+	xdotool windowactivate --sync "$slack"
 else
 	echo "No Slack or Zoom window found"
 	/home/decoder/dev/dotfiles/scripts/__layout2.sh
