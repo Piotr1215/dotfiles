@@ -12,10 +12,9 @@ root: ~/dev/ai
 # Project hooks
 
 # Runs on project start, always
-# on_project_start: git fetch origin --prune
+# on_project_first_start: xdg-open http://localhost:3000
 
 # Run on project start, the first time
-# on_project_first_start: command
 
 # Run on project start, after the first time
 # on_project_restart: command
