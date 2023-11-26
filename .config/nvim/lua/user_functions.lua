@@ -481,7 +481,7 @@ function _G.execute_visual_selection()
 end
 
 -- Map <leader>es in visual mode to the function
-vim.api.nvim_set_keymap('x', '<leader>es', [[:lua execute_visual_selection()<CR>]], { noremap = true, silent = true })
+vim.api.nvim_set_keymap('x', '<leader>ex', [[:lua execute_visual_selection()<CR>]], { noremap = true, silent = true })
 
 -- Custom f command function
 -- This is needed because ;; is mapped to enter command mode
