@@ -45,7 +45,6 @@ alias pfn='__print-functions.sh'
 alias ra=ranger
 alias rg='rg --hidden'
 alias vim=nvim
-alias nvim-kick="NVIM_APPNAME=kickstart nvim nvim $@"
 alias v=nvim
 alias watch=viddy
 
@@ -54,6 +53,8 @@ alias kconf='__create_separate_kubeconfig.sh'
 alias kdump='kubectl get all --all-namespaces'
 alias kaf='kubectl apply -f'
 alias kdf='kubectl delete -f'
+alias kstart='~/dev/dotfiles/scripts/__kind_manager.sh --start'
+alias kstop='~/dev/dotfiles/scripts/__kind_manager.sh --stop'
 
 # Other
 alias ytd='__download_youtube.sh'
