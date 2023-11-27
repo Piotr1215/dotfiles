@@ -17,6 +17,7 @@ if [ -n "$slack_window" ]; then
 	# Resize and move the window to the left side of the screen with exact pixel dimensions
 	xdotool windowsize "$slack_window" 1920 2128
 	xdotool windowmove "$slack_window" 0 32
+	xdotool windowactivate --sync "$slack_window"
 
 else
 	echo "No Slack window found."
@@ -33,6 +34,7 @@ if [ -n "$firefox_window" ]; then
 	# Move the Firefox window to the right side of the screen
 	# The x-coordinate is set to 1920 to position the window on the right half of the screen
 	xdotool windowmove "$firefox_window" 1907 21
+	xdotool windowactivate --sync "$firefox_window"
 else
 	echo "No Firefox window found."
 fi
