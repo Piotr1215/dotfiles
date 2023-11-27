@@ -11,6 +11,8 @@ if [ -n "$window" ]; then
 	# Resize and move the window to the left side of the screen with exact pixel dimensions
 	xdotool windowsize "$window" 1920 2128
 	xdotool windowmove "$window" 0 32
+	xdotool windowactivate --sync "$window"
+
 else
 	echo "No Alacritty window found."
 fi

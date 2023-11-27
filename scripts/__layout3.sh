@@ -17,9 +17,12 @@ if [ ${#firefox_windows[@]} -eq 2 ]; then
 		if [ $i -eq 0 ]; then
 			# Move the first window to the left side of the screen
 			xdotool windowmove "$window_id" -13 21
+			xdotool windowactivate --sync "$window_id"
+
 		else
 			# Move the second window to the right side of the screen
 			xdotool windowmove "$window_id" 1910 0
+			xdotool windowactivate --sync "$window_id"
 		fi
 	done
 elif [ ${#firefox_windows[@]} -eq 1 ]; then
