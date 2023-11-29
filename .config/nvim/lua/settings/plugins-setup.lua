@@ -14,6 +14,11 @@ require("dap-python").setup "~/.virtualenvs/debugpy/bin/python"
 
 require("goto-preview").setup {}
 
+require('gen').setup({
+  model = "llama2",
+  show_model = true
+})
+
 require("mdeval").setup {
   -- Don't ask before executing code blocks
   require_confirmation = false,
