@@ -7,11 +7,11 @@ WINDOW_HEIGHT=1022
 
 alacritty=$(xdotool search --onlyvisible --classname Alacritty | head -n 1)
 zoom=$(xdotool search --onlyvisible --class Zoom | head -n 1)
+slack=$(xdotool search --onlyvisible --class Slack | head -n 1)
 
-# Check if both alacritty and Zoom windows are found
+# Check if Zoom or Slack windows are found along with alacritty
 if [[ -n "$alacritty" && -n "$zoom" ]]; then
 	echo "Both alacritty and Zoom windows found. Arranging windows."
-
 	# Position Zoom at the top
 	wmctrl -i -r "$zoom" -b remove,maximized_vert,maximized_horz
 	wmctrl -i -r "$zoom" -e 0,$LEFT_MARGIN,$TOP_MARGIN_ZOOM,$WINDOW_WIDTH,$WINDOW_HEIGHT
@@ -28,13 +28,14 @@ elif [[ -n "$zoom" ]]; then
 	wmctrl -i -r "$zoom" -b add,maximized_vert,maximized_horz
 	xdotool windowactivate --sync "$zoom"
 
-elif [[ -n "$alacritty" ]]; then
-	echo "Only alacritty window found. Positioning."
-	wmctrl -i -r "$alacritty" -b remove,maximized_vert,maximized_horz
-	wmctrl -i -r "$alacritty" -b add,maximized_vert,maximized_horz
-	xdotool windowactivate --sync "$alacritty"
+elif [[ -n "$slack" ]]; then
+	echo "Only Slack window found. Maximizing."
+	wmctrl -i -r "$slack" -b remove,maximized_vert,maximized_horz
+	wmctrl -i -r "$slack" -b add,maximized_vert,maximized_horz
+	xdotool windowactivate --sync "$slack"
+
 else
-	echo "No alacritty or Zoom window found"
+	echo "No Zoom or Slack window found. Exiting."
 	/home/decoder/dev/dotfiles/scripts/__layout2.sh
 	exit 0
 fi
