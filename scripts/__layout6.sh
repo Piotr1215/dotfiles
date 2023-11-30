@@ -6,7 +6,7 @@ WINDOW_WIDTH=3832
 WINDOW_HEIGHT=1022
 
 alacritty=$(xdotool search --onlyvisible --classname Alacritty | head -n 1)
-zoom=$(xdotool search --onlyvisible --class Zoom | head -n 1)
+zoom=$(xdotool search --onlyvisible --name 'Zoom Meeting' | head -n 1)
 slack=$(xdotool search --onlyvisible --class Slack | head -n 1)
 
 # Check if Zoom or Slack windows are found along with alacritty
