@@ -290,6 +290,8 @@ vim.g.go_highlight_structs = 1
 vim.g.go_highlight_interfaces = 1
 vim.g.go_highlight_operators = 1
 vim.g.go_fmt_experimental = 1
+-- Send to window
+vim.g.sendtowindow_use_defaults = 0
 -- Nerdcommenter
 vim.g.NERDSpaceDelims = 1
 -- Ranger

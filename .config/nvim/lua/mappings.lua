@@ -118,8 +118,8 @@ utils.nmap("<leader>o", "o<cr>")
 -- Format with pretty
 utils.nmap("<C-f>", ":Pretty<CR>")
 -- add line below without entering insert mode!
-utils.nmap('<leader><Down>', ':lua add_empty_lines(true)<CR>')
-utils.nmap('<leader><Up>', ':lua add_empty_lines(false)<CR>')
+utils.nmap('<leader>l', ':lua add_empty_lines(true)<CR>')
+utils.nmap('<leader>L', ':lua add_empty_lines(false)<CR>')
 -- utils.nmap("<leader>L", ":<c-u>put!=repeat([''],v:count)<bar>']+1normal k<cr>")
 -- utils.nmap("<leader>l", ":<c-u>put =repeat([''],v:count)<bar>'[-1normal j<cr>")
 -- insert space
@@ -310,3 +310,19 @@ vim.keymap.set("v", "<C-g>e", ":<C-u>'<,'>GpEnew<cr>", keymapOptions("Visual Ene
 vim.keymap.set("v", "<C-g>p", ":<C-u>'<,'>GpPopup<cr>", keymapOptions("Visual Popup"))
 
 vim.keymap.set({ "n", "i", "v", "x" }, "<C-g>s", "<cmd>GpStop<cr>", keymapOptions("Stop"))
+
+-- Rust Crates
+vim.keymap.set("n", "<leader>uc", "<cmd>lua require('crates').upgrade_crate()<cr>", keymapOptions("Upgrade Rust Crate"))
+
+-- Send to window
+-- Normal and Insert mode mappings
+utils.lnmap("<Left>", "<Plug>SendLeft", keymapOptions("Send Left"))
+utils.lnmap("<Down>", "<Plug>SendDown", keymapOptions("Send Down"))
+utils.lnmap("<Up>", "<Plug>SendUp", keymapOptions("Send Up"))
+utils.lnmap("<Right>", "<Plug>SendRight", keymapOptions("Send Right"))
+
+-- Visual mode mappings
+utils.xmap("<Left>", "<Plug>SendLeftV<cr>", keymapOptions("Visual Send Left"))
+utils.xmap("<Down>", "<Plug>SendDownV<cr>", keymapOptions("Visual Send Down"))
+utils.xmap("<Up>", "<Plug>SendUpV<cr>", keymapOptions("Visual Send Up"))
+utils.xmap("<Right>", "<Plug>SendRightV<cr>", keymapOptions("Visual Send Right"))
