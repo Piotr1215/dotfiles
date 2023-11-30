@@ -107,6 +107,8 @@ alias dedit='direnv edit'
 # PROJECT: playlist
 alias play='nohup ~/dev/dotfiles/scripts/__launch_playlist.sh > /dev/null 2>&1 &'
 alias play_vid='nohup ~/dev/dotfiles/scripts/__launch_playlist.sh vids_playlist > /dev/null 2>&1 &'
+alias play_bek='mpv --loop-file --ytdl https://www.youtube.com/watch\?v\=K3SLQiTC4tM &'
+alias play_lustmord='mpv --loop-file --ytdl https://youtu.be/nj_DqmRac78 &'
 alias vl='nvim -o ~/vids_playlist.m3u ~/haruna_playlist.m3u'
 alias check_vids='~/dev/dotfiles/scripts/__check_video_download_queue.sh &'
 
