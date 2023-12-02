@@ -1,0 +1,8 @@
+layouts:
+  firefox_alacritty_vertical_half:
+    key_binding: "Ctrl+Alt+F"  # Example key binding
+    windows:
+      - window: "Navigator"  # Class name for Firefox
+        position: "1-2"      # Left vertical half
+      - window: "Alacritty"
+        position: "3-4"      # Right vertical half
