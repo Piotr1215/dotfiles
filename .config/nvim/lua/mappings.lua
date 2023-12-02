@@ -322,7 +322,7 @@ utils.lnmap("<Up>", "<Plug>SendUp", keymapOptions("Send Up"))
 utils.lnmap("<Right>", "<Plug>SendRight", keymapOptions("Send Right"))
 
 -- Visual mode mappings
-utils.xmap("<Left>", "<Plug>SendLeftV<cr>", keymapOptions("Visual Send Left"))
-utils.xmap("<Down>", "<Plug>SendDownV<cr>", keymapOptions("Visual Send Down"))
-utils.xmap("<Up>", "<Plug>SendUpV<cr>", keymapOptions("Visual Send Up"))
-utils.xmap("<Right>", "<Plug>SendRightV<cr>", keymapOptions("Visual Send Right"))
+utils.xmap("<leader><Left>", "<Plug>SendLeftV<cr>", keymapOptions("Visual Send Left"))
+utils.xmap("<leader><Down>", "<Plug>SendDownV<cr>", keymapOptions("Visual Send Down"))
+utils.xmap("<leader><Up>", "<Plug>SendUpV<cr>", keymapOptions("Visual Send Up"))
+utils.xmap("<leader><Right>", "<Plug>SendRightV<cr>", keymapOptions("Visual Send Right"))
