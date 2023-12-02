@@ -15,7 +15,7 @@ require("dap-python").setup "~/.virtualenvs/debugpy/bin/python"
 require("goto-preview").setup {}
 
 require('gen').setup({
-  model = "llama2",
+  model = "mistral",
   show_model = true
 })
 
@@ -57,7 +57,7 @@ require("oil").setup {
 require("obsidian").setup {
   dir = "/home/decoder/dev/obsidian/decoder",
   disable_frontmatter = false,
-  open_app_foreground = true,
+  -- open_app_foreground = true,
   notes_subdir = "Notes",
   templates = {
     subdir = "Templates",
@@ -66,7 +66,20 @@ require("obsidian").setup {
   },
   finder = "fzf-lua",
   mappings = {
-    ["gf"] = require("obsidian.mapping").gf_passthrough(),
+    -- Overrides the 'gf' mapping to work on markdown/wiki links within your vault.
+    ["gf"] = {
+      action = function()
+        return require("obsidian").util.gf_passthrough()
+      end,
+      opts = { noremap = false, expr = true, buffer = true },
+    },
+    -- Toggle check-boxes.
+    ["<leader>ch"] = {
+      action = function()
+        return require("obsidian").util.toggle_checkbox()
+      end,
+      opts = { buffer = true },
+    },
   },
   completion = {
     nvim_cmp = true, -- if using nvim-cmp, otherwise set to false
