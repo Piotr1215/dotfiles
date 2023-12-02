@@ -19,6 +19,36 @@ function copy_and_create_folders() {
     command cp "$@"
 }
 
+function play_song() {
+    # Check if a song name is provided
+    if [[ -z $1 ]]; then
+        echo "Provide song name"
+        return 1
+    fi
+
+    # Determine the song URL based on the input
+    case $1 in
+        "bek")
+            song_url="https://www.youtube.com/watch?v=K3SLQiTC4tM"
+            ;;
+        "lustmord")
+            song_url="https://youtu.be/nj_DqmRac78"
+            ;;
+        *)
+            echo "Song not found"
+            return 1
+            ;;
+    esac
+
+    echo "Playing $song_url"
+
+    # Start mpv in the background without video and redirect its output
+    echo "Starting mpv..."
+    mpv --loop-file --ytdl --no-video "$song_url" >/dev/null 2>&1 &
+
+    echo "mpv process ID: $!"
+}
+
 # xev wrapper for ascii keycodes
 function char2hex() {
   xev | awk -F'[ )]+' '/^KeyPress/ { a[NR+2] } NR in a { printf "%-3s %s\n", $5, $8 }'
