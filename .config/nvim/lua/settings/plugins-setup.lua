@@ -345,5 +345,6 @@ vim.g.startify_bookmarks = {
   "~/.config/taskwarrior-tui/shortcut-scripts",
   "~/.local/share/nvim/site/pack/packer/start",
   "~/.local/share/nvim/gp/chats",
+  "/etc/systemd/system/zoom-monitor.service",
 }
 vim.g.startify_custom_header = "startify#pad(split(system('fortune -s | cowsay | lolcat; date'), '\n'))"
