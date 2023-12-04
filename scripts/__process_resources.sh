@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Function to process each file and extract the required information
+# This script processes resource files and extracts required fields, sorting them by kind and counting occurrences.
 process_file() {
 	local file=$1
 	local dir=$(dirname "$file")
