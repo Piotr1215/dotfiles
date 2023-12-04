@@ -59,8 +59,8 @@ setopt bang_hist                # !keyword
 HISTFILE=${ZDOTDIR:-$HOME}/.zsh_history
 
 # Gnome related Settings
-# Disable animations
-gsettings set org.gnome.desktop.interface enable-animations false
+# Enable animations
+gsettings set org.gnome.desktop.interface enable-animations true
 
 source $ZSH/oh-my-zsh.sh
 source ~/.oh-my-zsh/plugins/tmuxinator/_mst 
