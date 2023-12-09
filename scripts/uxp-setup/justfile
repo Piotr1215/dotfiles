@@ -126,6 +126,39 @@ deploy_monitoring:
    --set prometheus-node-exporter.namespaceOverride=prometheus --create-namespace
   @kubectl -n prometheus patch prometheus kube-prometheus-stack-prometheus --type merge --patch '{"spec":{"enableAdminAPI":true}}'
 
+# port forward grafana, user: admin, pw: prom-operator
+help_launch_grafana:
+  nohup {{browse}} http://localhost:3000 >/dev/null 2>&1
+  kubectl port-forward -n prometheus svc/kube-prometheus-stack-grafana 3000:80
+
+# port forward prometheus
+help_port_forward_prometheus:
+  kubectl port-forward -n prometheus svc/kube-prometheus-stack-prometheus 9090:9090 &
+
+# port forward prometheus and launch local browser
+help_launch_prometheus:
+  nohup {{browse}} http://localhost:9090 >/dev/null 2>&1
+  kubectl port-forward -n prometheus svc/kube-prometheus-stack-prometheus 9090:9090
+
+# get node ip
+help_copy_node_ip:
+  #!/usr/bin/env bash
+  node_ip=$(kubectl get nodes -o wide | awk ' FNR == 2 {print $6}')
+  echo "$node_ip" | {{copy}}
+
+# get prometheus query for memory
+help_copy_prometheus_memory_metric prov:
+  #!/usr/bin/env bash
+  pod=$(kubectl -n upbound-system get pod -l pkg.crossplane.io/provider=provider-{{prov}} -o name)
+  pod="${pod##*/}"
+  sum="sum(node_namespace_pod_container:container_memory_working_set_bytes{pod="\"$pod\"", namespace="\"upbound-system"\"})"
+  echo -n "$sum" | {{copy}}
+
+# get prometheus clusterIP for prometheus configuration
+help_copy_prometheus_url:
+  #!/usr/bin/env bash
+  ip=$(kubectl get svc -n prometheus kube-prometheus-stack-prometheus -o jsonpath='{.spec.clusterIP}')
+  echo http://"$ip":9090 | {{copy}}
 
 # setup AWS official provider
 setup_aws_provider:
