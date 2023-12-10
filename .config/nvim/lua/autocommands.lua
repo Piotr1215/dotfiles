@@ -85,6 +85,9 @@ vim.api.nvim_create_autocmd({ "bufwritepost" }, {
 vim.cmd [[
   command! TMarkn execute "r !~/dev/dotfiles/scripts/__list_tasks_as_markdown.pl '+next'"
 ]]
+vim.cmd [[
+  command! ClearQF call setqflist([])
+]]
 api.nvim_exec(
   [[
     augroup fileTypes
