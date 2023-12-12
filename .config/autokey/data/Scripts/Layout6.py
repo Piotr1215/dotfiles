@@ -1,7 +1,8 @@
 import os
 import subprocess
 
-layout = '/home/decoder/dev/dotfiles/scripts/__layout6.sh'
+# PROJECT: window_manager
+layout = '/home/decoder/dev/dotfiles/scripts/__layouts.sh'
 
-subprocess.run([layout])
+subprocess.run([layout, "6"])
 
