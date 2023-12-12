@@ -1,7 +1,7 @@
 import os
 import subprocess
 
-layout = '/home/decoder/dev/dotfiles/scripts/__layout2.sh'
+layout = '/home/decoder/dev/dotfiles/scripts/__layouts.sh'
 
-subprocess.run([layout])
+subprocess.run([layout, "2"])
 
