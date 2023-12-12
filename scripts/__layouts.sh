@@ -9,6 +9,7 @@ if [[ -z "$1" ]]; then
 	exit 1
 fi
 
+#{{{ Utility Functions
 maximize_window() {
 	window="$1"
 	wmctrl -i -r "$window" -b add,maximized_vert,maximized_horz
@@ -17,17 +18,18 @@ minimize_window() {
 	window="$1"
 	wmctrl -i -r "$window" -b remove,maximized_vert,maximized_horz
 }
-
+unmap_map_window() {
+	window="$1"
+	xdotool windowunmap "$window"
+	xdotool windowmap "$window"
+}
+#}}}
 max_alacritty() {
-
 	# Get the ID of the first visible Alacritty window
 	window=$(xdotool search --onlyvisible --classname Alacritty | head -n 1)
 	if [ -n "$window" ]; then
 		# Unmaximize the window
-		xdotool windowunmap "$window"
-
-		# Resize the window
-		xdotool windowmap "$window"
+		unmap_map_window "$window"
 		maximize_window "$window"
 		# wmctrl -r Alacritty -e 0,1920,0,-1,-1
 
@@ -44,7 +46,6 @@ alacritty_firefox_vertical() {
 	if [ -n "$window" ]; then
 		# Unmaximize the window
 		xdotool windowunmap "$window"
-
 		# Resize the window
 		xdotool windowmap "$window"
 		# Resize and move the window to the left side of the screen with exact pixel dimensions
@@ -171,7 +172,6 @@ max_firefox() {
 	fi
 }
 # PROJECT: window_manager
-# TODO: rework layout 6 does not work in main script works standalone
 zoom_alacritty_horizontal() {
 	LEFT_MARGIN=4
 	TOP_MARGIN_ZOOM=72    # Now for Zoom
