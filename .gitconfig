@@ -28,7 +28,7 @@ colorMoved = default
 tool = fugitive
 conflictstyle = diff3
 [push]
-default = matching
+	default = current
 [branch]
 autosetuprebase = always
 [init]
