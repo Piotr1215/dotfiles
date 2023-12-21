@@ -149,7 +149,8 @@ require("nvim-treesitter.configs").setup {
     max_file_lines = nil,
   },
   indent = {
-    enable = true,
+    -- TODO:(piotr1215) This is experimental feature and breaks go indentation on new line, check back later
+    enable = false,
     additional_vim_regex_highlighting = { "markdown" },
   },
   incremental_selection = {
