@@ -5,6 +5,20 @@ local action_state = require "telescope.actions.state"
 local zoomed = false
 
 
+-- Inserts a TODO comment at the current cursor position and then comments out the original line.
+function _G.insert_todo_and_comment()
+  -- Insert the TODO text at the current cursor position
+  local line = vim.api.nvim_get_current_line()
+  print("Original line: ", line)
+
+  vim.api.nvim_put({ 'TODO(piotr1215):' }, '', true, true)
+  -- Uncomment the line
+  vim.cmd [[execute "normal \<Plug>NERDCommenterComment"]]
+  vim.cmd [[execute "normal \A"]]
+end
+
+vim.api.nvim_set_keymap('i', '<leader>td', '<C-o>:lua insert_todo_and_comment()<CR>', { noremap = true, silent = true })
+
 function _G.get_tmux_working_directory()
   local handle = io.popen("tmux display-message -p -F '#{pane_current_path}'")
   if handle then
