@@ -12,13 +12,14 @@ done
 function show_help() {
 	echo "Usage: gh_cli.sh [command]"
 	echo "Available commands:"
-	echo "  ghmyissues      - Search for my open issues"
-	echo "  ghmyrepos       - Search for my repositories"
-	echo "  ghmyprs         - Search for my open PRs"
-	echo "  ghrepoprs       - List and select a PR in the current repository"
-	echo "  ghrepobranches  - Select a git branch and open its URL"
-	echo "  ghgistweb       - Select gist, preview it, output to terminal and go to web view"
-	echo "  ghgist          - Select gist, preview it, output to terminal and copy to clipboard"
+	echo "  ghmyissues        - Search for my open issues"
+	echo "  ghmyrepos         - Search for my repositories"
+	echo "  ghmyprs           - Search for my open PRs"
+	echo "  ghrepoprs         - List and select a PR in the current repository"
+	echo "  ghrepobranches    - Select a git branch and open its URL"
+	echo "  ghgistweb         - Select gist, preview it, output to terminal and go to web view"
+	echo "  ghgist            - Select gist, preview it, output to terminal and copy to clipboard"
+	echo "  ghnewrepo         - Create a private repo with the current directory name and description"
 }
 # Print error statement and exit
 
@@ -43,9 +44,6 @@ print_error() {
 
 	exit 1
 }
-
-# Set the error trap
-trap 'print_error $LINENO "$BASH_COMMAND"' ERR
 
 # Common function to format and open URLs
 format_and_open() {
@@ -145,6 +143,17 @@ function ghgistweb() {
 function ghgist() {
 	GH_FORCE_TTY=100% gh gist list --limit 1000 | fzf --ansi --preview 'GH_FORCE_TTY=100% gh gist view {1}' --preview-window up | awk '{print $1}' | xargs gh gist view --raw | tee /dev/tty | xsel --clipboard
 }
+function ghnewrepo() {
+	if [ -z "$2" ]; then
+		echo "Please provide a repo description"
+		exit 1
+	fi
+	local repo_description="$1"
+	gh repo create "$(basename "$PWD")" --private --source=. --description "$repo_description"
+}
+
+# Set the error trap
+trap 'print_error $LINENO "$BASH_COMMAND"' ERR
 
 # Argument Parsing with Help Menu
 case "$1" in
@@ -174,6 +183,9 @@ ghmyprsreview)
 	;;
 ghgist)
 	ghgist
+	;;
+ghnewrepo)
+	ghnewrepo "$@"
 	;;
 *)
 	echo "Invalid command"
