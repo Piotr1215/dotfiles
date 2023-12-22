@@ -263,6 +263,7 @@ function _G.create_or_update_task()
     local start_index, end_index = string.find(current_line, keyword)
     if start_index then
       local task_description = string.sub(current_line, end_index + 2, cursor_pos - 1)
+      task_description = string.gsub(task_description, "%(piotr1215%)", "")
       local task_tag = "+" .. string.lower(keyword)
 
       -- Ask for project and other tags
