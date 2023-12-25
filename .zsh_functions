@@ -307,10 +307,10 @@ function create_tmux_session() {
 function vol() {
     echo "Usage: provide volume in intiger, e.g. 50 will adjust vol to 50%"
     if [[ -z "$1" ]]; then
-        amixer get Master
+      echo "Current volume on Masteris $(amixer get Master | grep '%' | awk -F'[][]' '{ print $2 }' | head -n 1)"
         return
     fi
-    amixer set Master "$1"%
+    amixer set Master "$1"% > /dev/null
     echo "Volume set to $1%"
 }
 
