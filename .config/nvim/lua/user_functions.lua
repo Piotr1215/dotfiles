@@ -17,7 +17,7 @@ function _G.insert_todo_and_comment()
   vim.cmd [[execute "normal \A "]]
 end
 
-vim.api.nvim_set_keymap('i', '<leader>td', '<C-o>:lua insert_todo_and_comment()<CR>', { noremap = true, silent = true })
+vim.api.nvim_set_keymap('i', '<c-0>', '<C-o>:lua insert_todo_and_comment()<CR>', { noremap = true, silent = true })
 
 function _G.get_tmux_working_directory()
   local handle = io.popen("tmux display-message -p -F '#{pane_current_path}'")
