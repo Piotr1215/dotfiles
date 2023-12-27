@@ -30,18 +30,19 @@ autocmd CursorHold * lua vim.diagnostic.open_float(nil, { focusable = false })
 ]]
 
 --Remap for dealing with word wrap
+set.gp = "git grep -n"
 set.completeopt = { "menuone", "noselect", "noinsert" }
 set.shortmess = set.shortmess + { c = true }
 set.background = "dark"
 set.ignorecase = true -- ignore case in search
-set.smartcase = true -- do not ignore case with capitals
+set.smartcase = true  -- do not ignore case with capitals
 set.scrolloff = 8
 set.hlsearch = true
 set.updatetime = 300
 set.splitright = true -- put new splits to the right
 set.splitbelow = true -- put new splits below
 set.lazyredraw = true -- do not redraw for macros, faster execution
-set.undofile = true -- persistent undo even after session close
+set.undofile = true   -- persistent undo even after session close
 
 set.number = true
 set.encoding = "utf-8"
