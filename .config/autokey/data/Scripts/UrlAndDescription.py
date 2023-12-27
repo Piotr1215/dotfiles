@@ -36,6 +36,21 @@ def append_to_playlist(url, description, playlist_file_path):
             f.write('# '+ description + '\n')
             f.write(url + '\n')
 
+def append_to_web_highlights(description, url):
+    # Path to the Web Highlights Markdown file
+    web_highlights_path = '/home/decoder/dev/obsidian/decoder/Notes/webhighlights.md'
+    
+    # Split the description into words and take the first three words
+    words = description.split()
+    header = ' '.join(words[:3]) if len(words) >= 3 else description
+    
+    # Prepare the content to append
+    content_to_append = f"## {header}\n\n{description}\n\nURL: {url}\n\n"
+    
+    # Append to the file
+    with open(web_highlights_path, 'a') as f:
+        f.write(content_to_append)
+
 def get_website_description(url):
     try:
         response = requests.get(url)
@@ -89,6 +104,7 @@ active_window_title = subprocess.getoutput("xdotool getactivewindow getwindownam
 if 'Firefox' in active_window_title or 'Chrome' in active_window_title or 'Brave' in active_window_title:
     try:
         description = clipboard.get_selection()
+        truncated_description = (description[:25] + '...') if len(description) > 25 else description
         time.sleep(0.25)
     except Exception:
         description = active_window_title
@@ -107,9 +123,9 @@ if 'Firefox' in active_window_title or 'Chrome' in active_window_title or 'Brave
     if not description:
         description = active_window_title
 
-    options = ["Add Link", "Create Task", "Add to Playlist"]
-    message = f"Would you like to add a pet link for '{description}' from '{domain}' domain, create a task, or add to MPV playlist?"
-    exit_code, choices = dialog.list_menu_multi(options, title="Choose an Action", message=message, defaults=["Create Task"])
+    options = ["Add Link", "Create Task", "Add to Playlist", "Append to Web Highlights"]
+    message = f"Would you like to add a pet link for '{truncated_description}' from '{domain}' domain, create a task, add to MPV playlist, or append to Web Highlights?"
+    exit_code, choices = dialog.list_menu_multi(options, title="Choose an Action", message=message, defaults=["Append to Web Highlights"], height="220")
 
     # Check if the dialog was cancelled (exit code is 0 when OK is clicked)
     if exit_code == 0:
@@ -121,6 +137,16 @@ if 'Firefox' in active_window_title or 'Chrome' in active_window_title or 'Brave
         
         if "Create Task" in choices:
             subprocess.run(["/home/decoder/dev/dotfiles/scripts/__create_task.sh", custom_description] + tags)
+            
+        if "Append to Web Highlights" in choices:
+           # Use the extension's shortcut to copy the selection as Markdown
+           keyboard.send_keys('<shift>+<alt>+8')
+           time.sleep(0.25)  # Wait for the clipboard to be updated
+           markdown_selection = clipboard.get_clipboard()
+
+           # Now proceed to append the markdown formatted text to your file
+           append_to_web_highlights(markdown_selection, url)
+
             
         # PROJECT: playlist
         if "Add to Playlist" in choices:
