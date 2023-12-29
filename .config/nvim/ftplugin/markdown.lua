@@ -50,6 +50,9 @@ utils.nmap("<nop>", "<Plug>Markdown_Fold")               -- tab is for moving ar
 utils.lnmap("nh", "<Plug>Markdown_MoveToNextHeader")     -- tab is for moving around only
 utils.lnmap("ph", "<Plug>Markdown_MoveToPreviousHeader") -- tab is for moving around only
 utils.lnmap("ctd", "4wvg$y")                             -- copy description from the taskwarrior task in the markdown format
+-- cut and copy content to next header #
+utils.nmap("cO", ":.,/^#/-1d<cr>")
+utils.nmap("cY", ":.,/^#/-1y<cr>")
 
 -- MarkdownPreview settings
 vim.g.mkdp_browser = '/usr/bin/firefox'

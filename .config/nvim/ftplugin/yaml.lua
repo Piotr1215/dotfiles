@@ -1,4 +1,7 @@
+local utils = require "utils"
 vim.api.nvim_buf_set_keymap(0, "n", "<leader>yt", ":YAMLTelescope<CR>", { noremap = false })
+-- FOLDING --
+utils.lnmap("yi", ":set foldmethod=indent<CR>") -- indent based folding
 
 -- Setup cmp setup buffer configuration - 👻 text off for markdown
 local cmp = require "cmp"
