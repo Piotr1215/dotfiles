@@ -54,6 +54,8 @@ return require("packer").startup(function(use)
   })
   -- }}}
   -- Editor Extensions {{{
+  use 'jesseleite/nvim-macroni'
+
   use {
     "windwp/nvim-autopairs",
     config = function()
