@@ -64,7 +64,7 @@ done
 
 case "${#files[@]}" in
 2)
-	${EDITOR:-nvim} -O "${files[@]}"
+	${EDITOR:-nvim} -O +'normal g;' "${files[@]}"
 	;;
 3)
 	${EDITOR:-nvim} -O "${files[0]}" -c 'wincmd j' -c "vsplit ${files[1]}" -c "split ${files[2]}"
