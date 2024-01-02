@@ -47,20 +47,34 @@ handle_fzf_error() {
 
 # Add source and line number when running in debug mode: __run_with_xtrace.sh __open-file.sh
 
-# Get the repository root path
+# Get the repository root path and change to the repo root directory
 repo_root=$(git rev-parse --show-toplevel)
+cd "$repo_root" || {
+	echo "Failed to change to repository root directory"
+	exit 1
+}
 
-IFS=$'\n' files=($(git log --name-only --format=format: -- . | awk '!seen[$0]++' | grep -v '^$' | fzf-tmux --preview "bat --color=always {}" --reverse --multi --select-1 --exit-0 || handle_fzf_error))
+# Generate the file list and verify each file path
+file_list=$(git ls-tree -r HEAD --name-only)
+existing_files=$(echo "$file_list" | while IFS= read -r file; do
+	if [ -f "$file" ]; then
+		echo "$repo_root/$file"
+	fi
+done)
+
+# Sort and list files
+sorted_files=$(echo "$existing_files" | xargs -d '\n' ls -lt)
+
+# Use fzf-tmux to select from the sorted list
+IFS=$'\n' files=($(echo "$sorted_files" | awk '{print $9}' | awk '!seen[$0]++' | grep -v '^$' | fzf-tmux --preview "bat --color=always {}" --reverse --multi --select-1 --exit-0 || handle_fzf_error))
 
 # Check if any files were selected, and exit if not
 if [ ${#files[@]} -eq 0 ]; then
+	echo "No files were selected. Exiting."
 	exit 0
 fi
 
-for i in "${!files[@]}"; do
-	files[i]=$(realpath "$repo_root/${files[i]}")
-done
-
+# Directly use the full paths in the case statement
 case "${#files[@]}" in
 2)
 	${EDITOR:-nvim} -O "${files[@]}"
