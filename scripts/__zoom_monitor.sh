@@ -111,5 +111,5 @@ while true; do
 		echo "$(date): Zoom window not found." >>/home/decoder/zoom_monitor.log
 		login_initiated=0
 	fi
-	sleep 5 # Check every 10 seconds
+	sleep 3 # Check every 3 seconds
 done
