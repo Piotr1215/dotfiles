@@ -1,7 +1,7 @@
 # /home/decoder/.config/tmuxinator/atosik.yml
 
 name: mxe-perf
-root: ~/dev/clusters/azure-perf
+root: ~/dev/mxe
 
 # Optional tmux socket
 # socket_name: foo
@@ -48,10 +48,10 @@ windows:
   - dev:
       layout: cb96,239x66,0,0[239x10,0,0{119x10,0,0,18,119x10,120,0,20},239x42,0,11,21,239x12,0,54,22]
       panes:
-        - clear; echo -n run just help_launch_grafana; read -r
-        - clear; echo -n run just help_launch_prometheus; read -r
-        - clear; k9s -c ev; read -r
-        - clear; echo Type commands here. 
+        - clear; print -z just help_launch_grafana
+        - clear; print -z just help_launch_prometheus
+        - clear; print -z k9s -c ev
+        - clear; just
   - vim:
       layout: tiled
       panes:
