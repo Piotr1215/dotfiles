@@ -69,6 +69,7 @@ return require("packer").startup(function(use)
       require("various-textobjs").setup { useDefaultKeymaps = true }
     end,
   }
+  use 'lewis6991/gitsigns.nvim'
   use({
     "wintermute-cell/gitignore.nvim",
     requires = {
