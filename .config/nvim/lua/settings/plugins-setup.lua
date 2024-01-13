@@ -66,7 +66,7 @@ require("obsidian").setup {
   },
   -- Optional, configure additional syntax highlighting / extmarks.
   ui = {
-    enable = true,         -- set to false to disable all additional syntax features
+    enable = false,        -- set to false to disable all additional syntax features
     update_debounce = 200, -- update delay after a text change (in milliseconds)
     -- Define how various check-boxes are displayed
     external_link_icon = { char = "", hl_group = "ObsidianExtLinkIcon" },
