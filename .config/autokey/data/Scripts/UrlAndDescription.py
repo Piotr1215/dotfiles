@@ -141,7 +141,7 @@ if 'Firefox' in active_window_title or 'Chrome' in active_window_title or 'Brave
         if "Append to Web Highlights" in choices:
            # Use the extension's shortcut to copy the selection as Markdown
            keyboard.send_keys('<shift>+<alt>+8')
-           time.sleep(0.25)  # Wait for the clipboard to be updated
+           time.sleep(1)  # Wait for the clipboard to be updated
            markdown_selection = clipboard.get_clipboard()
 
            # Now proceed to append the markdown formatted text to your file
