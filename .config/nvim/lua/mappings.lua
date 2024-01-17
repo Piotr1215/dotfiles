@@ -70,7 +70,8 @@ utils.nmap("<leader>yW", '"+yiW')                                               
 utils.lnmap("pa", '"*p')                                                                                       -- paste from clipboard buffer after the cursor
 utils.lnmap("p", '"*P')                                                                                        -- paste from clipboard buffer before the cursor
 utils.nmap("<leader>0", '"0p')                                                                                 -- paste from 0 (latest yank)
-utils.nmap("<leader>1", '"1p')                                                                                 -- paste from 0 (latest delete)
+utils.nmap("<leader>1", '"1p')                                                                                 -- paste from 1 (latest delete)
+utils.nmap("<leader>2", '"*p')                                                                                 -- paste from 2 (clipboard)
 utils.nmap("<Leader>p", ":pu<CR>")                                                                             -- paste from clipboard buffer after the cursor
 utils.lnmap("dl", '"_dd')                                                                                      -- delete line to black hole register
 utils.lnmap("d_", '"_D')                                                                                       -- delete till end of line to black hole register
@@ -116,6 +117,8 @@ utils.nmap("<leader>tc", "<Plug>(vsnip-cut-text)")                              
 utils.xmap("<leader>tc", "<Plug>(vsnip-cut-text)")                                                             -- Select or cut text to use as $TM_SELECTED_TEXT in the next snippet
 -- ABBREVIATIONS --
 vim.cmd "abb cros Crossplane"
+vim.cmd "abb tcom TODO:(piotr1215)"
+
 
 -- PLUGIN MAPPINGS --
 -- Mdeval
