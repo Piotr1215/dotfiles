@@ -21,6 +21,10 @@ vim.api.nvim_create_user_command(
 -- end,
 -- })
 
+vim.cmd([[
+  autocmd BufWritePost mappings.lua normal! mM
+]])
+
 vim.api.nvim_create_autocmd("FileType", {
   pattern = { "go" },
   command = "nmap <buffer><silent> <leader>fld :%g/ {/normal! zf%<CR>",
