@@ -202,8 +202,6 @@ Once the task is completed, select it in the TUI, then press `1` to jump to it i
 
 Wondering what happens if you remove the task directly from the TUI first? As of the latest update, doing this will automatically remove the corresponding TODO comment in the code file. To create a new task for a TODO comment, simply use `Ctrl+t` in Neovim to add it to TaskWarrior.
 
-Certainly! Let's dive into explaining how the duration field and its associated logic work in our Taskwarrior script. This will help solidify your understanding and serve as documentation for future reference.
-
 ## Duration Field and Logic in Taskwarrior Script
 
 ### Duration Field
