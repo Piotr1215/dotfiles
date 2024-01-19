@@ -35,6 +35,7 @@ set.completeopt = { "menuone", "noselect", "noinsert" }
 set.shortmess = set.shortmess + { c = true }
 set.background = "dark"
 set.ignorecase = true -- ignore case in search
+set.infercase = true  -- adjust case in search
 set.smartcase = true  -- do not ignore case with capitals
 set.scrolloff = 8
 set.hlsearch = true
