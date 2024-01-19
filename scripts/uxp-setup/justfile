@@ -89,6 +89,18 @@ setup_uxp xp-version='stable':
   fi
   kubectl wait --for condition=Available=True --timeout=300s deployment/crossplane --namespace {{xp_namespace}}
 
+# deploy sample function
+deploy_function:
+  #!/usr/bin/env bash
+  cat <<EOF | kubectl apply -f -
+    apiVersion: pkg.crossplane.io/v1beta1
+    kind: Function
+    metadata:
+      name: function-patch-and-transform
+    spec:
+      package: xpkg.upbound.io/crossplane-contrib/function-patch-and-transform:v0.2.1
+  EOF
+
 # setup provider Kubernetes
 setup_k8s:
   #!/usr/bin/env bash
