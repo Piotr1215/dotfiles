@@ -2,6 +2,8 @@
 
 Simple dotfiles with an installation script
 
+> I guess not so simple any more
+
 ## Installation
 
 Installation steps on a fresh Ubuntu/PoP_Os! distro.
