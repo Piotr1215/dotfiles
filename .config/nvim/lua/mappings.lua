@@ -102,7 +102,6 @@ vim.keymap.set({ 'n', 'v' }, "<leader>gb", ":GBrowse<cr>", opts)                
 vim.keymap.set('n', '<leader>gc', function() vim.cmd('GBrowse!') end, opts)                                    -- git browse current file and line in browser
 vim.keymap.set('v', '<leader>gc', ':GBrowse!<CR>', { noremap = true, silent = false })                         -- git browse current file and selected line in browser
 utils.lnmap("gd", ":Gvdiffsplit<CR>")                                                                          -- git diff current file
-utils.nmap("<leader>gg", ":LazyGit<CR>")                                                                       -- start lazygit
 utils.nmap("<leader>gl", ":r !bash ~/dev/dotfiles/scripts/__generate_git_log.sh<CR>")                          -- generate git log
 utils.lnmap("gh", ":Gclog %<CR>")                                                                              -- show git log for current file
 -- OTHER --

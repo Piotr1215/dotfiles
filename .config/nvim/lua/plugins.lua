@@ -137,7 +137,6 @@ return require("packer").startup(function(use)
   use "xiyaowong/telescope-emoji.nvim"
   use "nvim-telescope/telescope-symbols.nvim"
   use "cljoly/telescope-repo.nvim"
-  use "kdheepak/lazygit.nvim"
   use {
     "nvim-telescope/telescope.nvim",
     requires = {
