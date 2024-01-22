@@ -2,6 +2,9 @@
 # Path to your oh-my-zsh installation.
 export ZSH="${HOME}/.oh-my-zsh"
 
+# This sets vim key bindings mode.
+# set -o vi
+
 if [[ -z $TMUX ]]; then
   tmuxinator start poke
 fi
@@ -139,18 +142,6 @@ export RIPGREP_CONFIG_PATH=$HOME/.ripgreprc
 
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
 
-# This sets vim key bindings mode.
-bindkey -v
-export KEYTIMEOUT=1
-bindkey -M viins '^P' up-line-or-history    # Bind Ctrl+P in insert mode
-bindkey -M viins '^N' down-line-or-history  # Bind Ctrl+N in insert mode
-bindkey '^a' beginning-of-line
-bindkey '^e' end-of-line
-bindkey '^k' kill-line
-bindkey '^X^E' edit-command-line
-bindkey -M menuselect 'j' vi-down-line-or-history
-bindkey -M menuselect 'k' vi-up-line-or-history
-
 function pex() {
     pet exec
 }
@@ -225,7 +216,6 @@ copy-line-to-clipboard() {
 zle -N copy-line-to-clipboard
 bindkey '^Y' copy-line-to-clipboard
 bindkey '^@' autosuggest-accept
-
 
 stty -ixon
 
