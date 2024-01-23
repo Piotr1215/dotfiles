@@ -16,6 +16,8 @@ utils.lnmap("qa", ":qa!<cr>")                                                   
 -- UNMAP --
 utils.nmap("<nop>", "<Plug>NERDCommenterAltDelims")                                                            -- tab is for moving around only
 -- NAVIGATION --
+utils.nmap("<c-l>", "<c-w>l")                                                                                  -- move to right window
+utils.nmap("<c-h>", "<c-w>h")                                                                                  -- move to left window
 utils.nmap("<c-u>", "<c-u>zz")                                                                                 -- center screen after page up
 utils.nmap("<c-d>", "<c-d>zz")                                                                                 -- center screen after page down
 vim.keymap.set({ 'n', 'v' }, '<C-j>', [[10j<cr>]], opts)                                                       -- moves over virtual (wrapped) lines down
