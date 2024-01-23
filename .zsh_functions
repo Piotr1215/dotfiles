@@ -19,6 +19,10 @@ function copy_and_create_folders() {
     command cp "$@"
 }
 
+function apply_pattern() {
+    awk "NR == 1 || /$1/"
+}
+
 function play_song() {
     # Check if a song name is provided
     if [[ -z $1 ]]; then
