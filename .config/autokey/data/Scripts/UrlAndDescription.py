@@ -36,16 +36,13 @@ def append_to_playlist(url, description, playlist_file_path):
             f.write('# '+ description + '\n')
             f.write(url + '\n')
 
-def append_to_web_highlights(description, url):
+def append_to_web_highlights(title, description, url):
     # Path to the Web Highlights Markdown file
     web_highlights_path = '/home/decoder/dev/obsidian/decoder/Notes/webhighlights.md'
     
-    # Split the description into words and take the first three words
-    words = description.split()
-    header = ' '.join(words[:3]) if len(words) >= 3 else description
     
     # Prepare the content to append
-    content_to_append = f"## {header}\n\n{description}\n\nURL: {url}\n\n"
+    content_to_append = f"\n## {title}\n\n{description}\n\nURL: {url}\n\n"
     
     # Append to the file
     with open(web_highlights_path, 'a') as f:
@@ -143,9 +140,10 @@ if 'Firefox' in active_window_title or 'Chrome' in active_window_title or 'Brave
            keyboard.send_keys('<shift>+<alt>+8')
            time.sleep(1)  # Wait for the clipboard to be updated
            markdown_selection = clipboard.get_clipboard()
+           title = get_custom_description("Enter title for the highlight")
 
            # Now proceed to append the markdown formatted text to your file
-           append_to_web_highlights(markdown_selection, url)
+           append_to_web_highlights(title, markdown_selection, url)
 
             
         # PROJECT: playlist
