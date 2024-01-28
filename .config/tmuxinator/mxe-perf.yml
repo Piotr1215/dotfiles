@@ -1,7 +1,7 @@
 # /home/decoder/.config/tmuxinator/atosik.yml
 
 name: mxe-perf
-root: ~/dev/mxe
+root: ~/dev/mxe/performance
 
 # Optional tmux socket
 # socket_name: foo
