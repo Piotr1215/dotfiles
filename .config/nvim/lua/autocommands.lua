@@ -30,6 +30,11 @@ vim.api.nvim_create_autocmd("FileType", {
   command = "nmap <buffer><silent> <leader>fld :%g/ {/normal! zf%<CR>",
   group = goSettings,
 })
+vim.api.nvim_create_autocmd("BufWritePost", {
+  pattern = { "*test*.go" },
+  command = ":silent! GoTestFile",
+  group = goSettings,
+})
 
 vim.api.nvim_create_autocmd("FileType", {
   pattern = { "c", "cpp" },
