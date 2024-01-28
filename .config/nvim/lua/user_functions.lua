@@ -19,6 +19,48 @@ end
 
 vim.api.nvim_set_keymap('i', '<c-a>', '<C-o>:lua insert_todo_and_comment()<CR>', { noremap = true, silent = true })
 
+function _G.swapWords()
+  local current_line = vim.api.nvim_get_current_line()
+  local cursor_pos = vim.api.nvim_win_get_cursor(0)
+  local col = cursor_pos[2] + 1 -- Adjusting for Lua's 1-based indexing
+
+  -- Extract WORDs from the current line
+  local words = {}
+  for word in current_line:gmatch("%S+") do
+    table.insert(words, word)
+  end
+
+  -- Find the current and next WORD
+  local current_word, next_word
+  local current_word_start, next_word_start
+  local index = 0
+  for _, word in ipairs(words) do
+    index = current_line:find(word, index + 1, true)
+    if index < col then
+      current_word = word
+      current_word_start = index
+    elseif index >= col and not next_word then
+      next_word = word
+      next_word_start = index
+      break
+    end
+  end
+
+  -- Swap the WORDs if possible
+  if current_word and next_word then
+    local swapped_line = current_line:sub(1, current_word_start - 1) .. next_word
+    swapped_line = swapped_line .. current_line:sub(current_word_start + #current_word, next_word_start - 1)
+    swapped_line = swapped_line .. current_word .. current_line:sub(next_word_start + #next_word)
+    vim.api.nvim_set_current_line(swapped_line)
+    -- Set the new cursor position
+    local new_col = next_word_start + #next_word - #current_word
+    vim.api.nvim_win_set_cursor(0, { cursor_pos[1], new_col })
+  end
+end
+
+-- Key binding
+vim.api.nvim_set_keymap('n', '<leader>sw', '<cmd>lua swapwords()<cr>', { noremap = true, silent = true })
+
 function _G.get_tmux_working_directory()
   local handle = io.popen("tmux display-message -p -F '#{pane_current_path}'")
   if handle then
