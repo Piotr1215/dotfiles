@@ -2,6 +2,7 @@
 import json
 import os
 import shutil
+import sys
 
 # Function to add a new step with background script
 def add_step_with_background(steps, title):
@@ -25,6 +26,12 @@ def add_step_with_background(steps, title):
 
 # Main function
 def main():
+    # Check for help argument
+    if len(sys.argv) > 1 and sys.argv[1] in ('-h', '--help'):
+        print("Usage: __add_killercoda_step.py")
+        print("This script adds a new step with a background script to the KillerCoda scenario.")
+        return
+
     index_file = 'index.json'
     backup_file = 'index_backup.json'
 
@@ -38,7 +45,11 @@ def main():
 
     # Load the index.json content
     with open(index_file, 'r', encoding='utf-8') as file:
-        data = json.load(file)
+        try:
+            data = json.load(file)
+        except json.JSONDecodeError as e:
+            print(f"JSONDecodeError: {e.msg} at line {e.lineno}, column {e.colno}")
+            return
 
     # Prompt for the title of the new step
     title = input("Enter the title for the new step: ")
@@ -56,4 +67,5 @@ def main():
 # Run the main function
 if __name__ == "__main__":
     main()
+
 
