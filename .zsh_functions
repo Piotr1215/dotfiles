@@ -134,11 +134,6 @@ function _fif_common() {
   local ignore_case_flag="$1"
   shift
 
-  if [ ! "$#" -gt 0 ]; then
-    echo "Need a string to search for!"
-    return 1
-  fi
-
   local files
   local preview_cmd=$(printf "rga %s --pretty --context 10 '%s' {}" "$ignore_case_flag" "$*")
   local rga_output=$(rga --max-count=1 $ignore_case_flag --files-with-matches --no-messages "$*")
