@@ -59,7 +59,7 @@ function _G.swapWords()
 end
 
 -- Key binding
-vim.api.nvim_set_keymap('n', '<leader>sw', '<cmd>lua swapwords()<cr>', { noremap = true, silent = true })
+vim.api.nvim_set_keymap('n', '<leader>sw', '<cmd>lua swapWords()<cr>', { noremap = true, silent = true })
 
 function _G.get_tmux_working_directory()
   local handle = io.popen("tmux display-message -p -F '#{pane_current_path}'")
