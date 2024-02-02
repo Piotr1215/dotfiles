@@ -159,9 +159,6 @@ vim.keymap.set("n", "gR", "<cmd>TroubleToggle lsp_references<cr>", { silent = tr
 -- Rust Crates
 vim.keymap.set("n", "<leader>uc", "<cmd>lua require('crates').upgrade_crate()<cr>")
 
--- NoNeckPain
-utils.lnmap("ne", "<cmd>NoNeckPain<cr>")
-
 -- Scrollfix
 utils.lnmap("f2", "<cmd>FIX 25<cr>")
 utils.lnmap("f0", "<cmd>FIX -1<cr>")
@@ -210,6 +207,9 @@ vim.keymap.set({ "n", "i", "v", "x" }, "<C-g>s", "<cmd>GpStop<cr>", keymapOption
 
 -- Nvim Leap Mappings
 utils.emap("<Leader>ow", "<Plug>(leap-cross-window)")
+
+-- Nvim zenmode Mappings
+utils.lnmap("zm", "<cmd>ZenMode<cr>")
 
 -- Send to window
 -- Visual mode mappings

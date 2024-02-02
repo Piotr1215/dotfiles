@@ -36,18 +36,6 @@ require("mdeval").setup {
   },
 }
 
-require("no-neck-pain").setup {
-  width = 75,
-  buffers = {
-    colors = {
-      background = "tokyonight-moon",
-    },
-    right = {
-      enabled = false,
-    },
-  },
-}
-
 require("oil").setup {
   view_options = {
     -- Show files and directories that start with "."

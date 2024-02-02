@@ -82,7 +82,6 @@ return require("packer").startup(function(use)
   use "David-Kunz/gen.nvim"
   use "RRethy/nvim-align"
   use "vim-scripts/scrollfix"
-  use { "shortcuts/no-neck-pain.nvim", tag = "*" }
   use "stevearc/oil.nvim"
   use "echasnovski/mini.nvim"
   use "mattn/emmet-vim"
@@ -178,6 +177,8 @@ return require("packer").startup(function(use)
       "rafamadriz/friendly-snippets",
     },
   }
+  use "folke/zen-mode.nvim"
+  use "folke/twilight.nvim"
   use "leoluz/nvim-dap-go"
   use {
     "rcarriga/nvim-dap-ui",
