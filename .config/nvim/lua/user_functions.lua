@@ -478,6 +478,22 @@ function _G.add_empty_lines(below)
   end
 end
 
+function _G.execute_file_and_show_output()
+  -- Define the command to execute the current file
+  local cmd = "bash " .. vim.fn.expand('%:p')   -- '%:p' expands to the current file path
+
+  -- Execute the command and capture its output
+  local output = vim.fn.systemlist(cmd)
+
+  -- Check for execution error
+  if vim.v.shell_error ~= 0 then
+    table.insert(output, 1, "Error executing file:")
+  end
+
+  -- Call the function to create a floating scratch buffer with the output
+  _G.create_floating_scratch(output)
+end
+
 function _G.create_floating_scratch(content)
   -- Get editor dimensions
   local width = vim.api.nvim_get_option("columns")
