@@ -44,6 +44,7 @@ set.splitright = true -- put new splits to the right
 set.splitbelow = true -- put new splits below
 set.lazyredraw = true -- do not redraw for macros, faster execution
 set.undofile = true   -- persistent undo even after session close
+set.spellfile = vim.fn.stdpath("config") .. "/spell/en.utf-8.add"
 
 set.number = true
 set.encoding = "utf-8"
