@@ -1,9 +1,60 @@
 local wk = require "which-key"
 local actions = require "telescope.actions"
 local action_state = require "telescope.actions.state"
-
+local unpack = unpack or table.unpack
 local zoomed = false
 
+function _G.select_note_type_and_create()
+  local note_types = {
+    'projects', 'topics', 'meetings', 'reviews', 'how-tos'
+  }
+
+  vim.ui.select(note_types, { prompt = 'Select note type:' }, function(choice)
+    if not choice then return end
+    local note_title = vim.fn.input('Note title: ')
+    if note_title ~= "" then
+      -- Directly concatenate without additional quotes
+      vim.cmd('CreateNoteWithTemplate ' .. choice .. ' ' .. note_title)
+    end
+  end)
+end
+
+vim.api.nvim_set_keymap('n', '<leader>oc', ':lua select_note_type_and_create()<CR>', { noremap = true, silent = true })
+
+function _G.create_note_with_template(template_type, note_title)
+  -- Define base directory for notes
+  local base_dir = "Notes"
+  -- Define the command to create a new note using ObsidianNew
+  local obsidian_new_cmd = string.format(":ObsidianNew %s/%s/%s", base_dir, template_type, note_title)
+  vim.api.nvim_command(obsidian_new_cmd)
+
+  -- Wait briefly to ensure command execution completion
+  vim.wait(100, function() end)
+
+  -- Insert two empty lines at the end
+  vim.api.nvim_buf_set_lines(0, -1, -1, false, { "", "" })
+
+  -- Move the cursor to the last line of the file
+  vim.api.nvim_command("normal G")
+
+  -- Apply the template based on the type
+  local obsidian_template_cmd = string.format(":ObsidianTemplate %s.md", template_type)
+  vim.api.nvim_command(obsidian_template_cmd)
+end
+
+vim.api.nvim_create_user_command('CreateNoteWithTemplate', function(input)
+  -- Split input to get template type and note title
+  local args = vim.split(input.args, " ", { trimempty = true })
+  if #args < 2 then
+    print("Usage: CreateNoteWithTemplate <template_type> <note_title>")
+    return
+  end
+  local template_type = args[1]
+
+  local note_title = table.concat({ select(2, unpack(args)) }, " ")
+
+  create_note_with_template(template_type, note_title)
+end, { nargs = "+" })
 
 -- Inserts a TODO comment at the current cursor position and then comments out the original line.
 function _G.insert_todo_and_comment()
@@ -480,7 +531,7 @@ end
 
 function _G.execute_file_and_show_output()
   -- Define the command to execute the current file
-  local cmd = "bash " .. vim.fn.expand('%:p')   -- '%:p' expands to the current file path
+  local cmd = "bash " .. vim.fn.expand('%:p') -- '%:p' expands to the current file path
 
   -- Execute the command and capture its output
   local output = vim.fn.systemlist(cmd)

@@ -87,10 +87,22 @@ require('gitsigns').setup {
   end
 }
 require("obsidian").setup {
-  dir = "/home/decoder/dev/obsidian/decoder",
+  workspaces = {
+    {
+      name = "main",
+      path = "~/dev/obsidian/decoder",
+      -- Optional, override certain settings.
+      overrides = {
+        notes_subdir = "Notes",
+      },
+    },
+    {
+      name = "work",
+      path = "~/dev/obsidian/upbound",
+    },
+  },
   disable_frontmatter = false,
   -- open_app_foreground = true,
-  notes_subdir = "Notes",
   templates = {
     subdir = "Templates",
     date_format = "%Y-%m-%d-%a",
@@ -123,7 +135,7 @@ require("obsidian").setup {
     -- Open the URL in the default web browser.
     vim.fn.jobstart({ "xdg-open", url }) -- linux
   end,
-  finder = "fzf-lua",
+  finder = "telescope.nvim",
   mappings = {
     -- Overrides the 'gf' mapping to work on markdown/wiki links within your vault.
     ["gf"] = {
@@ -142,6 +154,8 @@ require("obsidian").setup {
   },
   completion = {
     nvim_cmp = true, -- if using nvim-cmp, otherwise set to false
+    new_notes_location = "notes_subdir",
+    prepend_note_path = true,
   },
   note_id_func = function(title)
     -- Create note IDs in a Zettelkasten format with a timestamp and a suffix.

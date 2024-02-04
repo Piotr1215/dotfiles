@@ -170,6 +170,7 @@ utils.lnmap("on", ":ObsidianNew ", { silent = false })
 utils.vmap("on", ":ObsidianLinkNew ", { silent = false })
 utils.lnmap("os", ":ObsidianSearch<cr>")
 utils.lnmap("ob", ":ObsidianBacklinks<cr>")
+utils.lnmap("ot", ":ObsidianTags<cr>")
 
 -- Copilot
 vim.cmd [[
