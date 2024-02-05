@@ -3,10 +3,19 @@ require("catppuccin").setup({
   flavour = "mocha",
   transparent_background = false,
   term_colors = true,
+  -- color_overrides = {
+  -- mocha = {
+  -- base = "#000000",
+  -- mantle = "#000000",
+  -- crust = "#000000",
+  -- },
+  -- },
   integrations = {
     cmp = true,
     treesitter = true,
     notify = true,
+    telescope = true,
+    gitsigns = true,
   }
 })
 
@@ -73,6 +82,8 @@ vim.opt.fillchars = {
 }
 vim.g.termigurcolors = true
 -- Active colorscheme
--- vim.cmd [[colorscheme moonfly]]
+-- vim.cmd('colorscheme moonfly')
+vim.cmd('colorscheme catppuccin')
 -- vim.cmd('colorscheme nightfox')
-vim.cmd('colorscheme tokyonight-moon')
+-- vim.cmd('colorscheme tokyonight-night')
+-- vim.cmd('colorscheme carbonfox')
