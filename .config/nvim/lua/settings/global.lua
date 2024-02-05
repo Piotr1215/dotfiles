@@ -2,6 +2,7 @@ local set = vim.opt
 local vcmd = vim.cmd
 
 vcmd "syntax on"
+vcmd "set termguicolors"
 vcmd "syntax enable"
 vcmd "filetype on"
 vcmd "filetype plugin indent on"

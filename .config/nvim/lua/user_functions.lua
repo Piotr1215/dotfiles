@@ -6,7 +6,7 @@ local zoomed = false
 
 function _G.select_note_type_and_create()
   local note_types = {
-    'projects', 'topics', 'meetings', 'reviews', 'how-tos'
+    'projects', 'areas', 'resources', 'meetings', 'reviews'
   }
 
   vim.ui.select(note_types, { prompt = 'Select note type:' }, function(choice)
