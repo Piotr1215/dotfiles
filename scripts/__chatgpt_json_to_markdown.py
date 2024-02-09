@@ -9,7 +9,13 @@ def process_parts(parts, role):
             result.append("### Me:\n")
         else:
             result.append("### GPT:\n")
-        content = part.replace('\\n', '\n').strip()
+        
+        # Check if part is a dict and extract the text content; otherwise, process as string
+        if isinstance(part, dict):
+            content = part.get('text', '').replace('\\n', '\n').strip()  # Adjust 'text' key as needed
+        else:
+            content = part.replace('\\n', '\n').strip()
+            
         result.append(f"{content}\n")
     return result
 
