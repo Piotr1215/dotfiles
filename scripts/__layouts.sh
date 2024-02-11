@@ -234,39 +234,48 @@ max_slack() {
 }
 firefox_firefox_alacritty() {
 	LEFT_MARGIN=4
-	TOP_MARGIN=21
-	WINDOW_WIDTH_HALF=1916
-	WINDOW_HEIGHT_HALF=1050
-	WINDOW_HEIGHT_ALACRITTY=1050
+	TOP_MARGIN_ZOOM=72    # Now for Zoom
+	TOP_MARGIN_SLACK=1105 # Now for Slack
+	WINDOW_WIDTH=3832
+	WINDOW_HEIGHT=1022
 
 	firefox_windows=($(xdotool search --classname Navigator | head -n 2))
 	alacritty=$(xdotool search --onlyvisible --classname Alacritty | head -n 1)
 
-	if [ ${#firefox_windows[@]} -eq 2 ] && [ -n "$alacritty" ]; then
-		echo "Arranging two Firefox windows and one Alacritty window."
+	firefox_windows=($(xdotool search --classname Navigator | head -n 2))
+	if [ ${#firefox_windows[@]} -eq 2 ]; then
+		# Iterate over the two windows and position them
 		for i in 0 1; do
 			window_id=${firefox_windows[$i]}
 			minimize_window "$window_id"
-			xdotool windowmap "$window_id"
-			xdotool windowsize "$window_id" $WINDOW_WIDTH_HALF $WINDOW_HEIGHT_HALF
-			if [ $i -eq 0 ]; then
-				xdotool windowmove "$window_id" $LEFT_MARGIN $TOP_MARGIN
-			else
-				xdotool windowmove "$window_id" $LEFT_MARGIN $(($TOP_MARGIN + $WINDOW_HEIGHT_HALF))
-			fi
-			xdotool windowactivate --sync "$window_id"
-		done
 
+			# Resize the window
+			xdotool windowmap "$window_id"
+			xdotool windowsize "$window_id" 1946 1094
+
+			# Move the window to the left or right side of the screen
+			if [ $i -eq 0 ]; then
+				# Move the first window to the left side of the screen
+				xdotool windowmove "$window_id" -13 21
+				xdotool windowactivate --sync "$window_id"
+
+			else
+				# Move the second window to the right side of the screen
+				xdotool windowmove "$window_id" 1910 0
+				xdotool windowactivate --sync "$window_id"
+			fi
+		done
+		# Position alacritty at the bottom
 		minimize_window "$alacritty"
-		xdotool windowmap "$alacritty"
-		wmctrl -i -r "$alacritty" -e 0,$LEFT_MARGIN,$(($TOP_MARGIN + 2 * $WINDOW_HEIGHT_HALF)),$((2 * $WINDOW_WIDTH_HALF)),$WINDOW_HEIGHT_ALACRITTY
+		wmctrl -i -r "$alacritty" -e 0,$LEFT_MARGIN,$TOP_MARGIN_SLACK,$WINDOW_WIDTH,1050
 		xdotool windowactivate --sync "$alacritty"
-	elif [ ${#firefox_windows[@]} -lt 2 ]; then
-		echo "Not enough Firefox windows found."
-		firefox_alacritty
-	elif [ -z "$alacritty" ]; then
-		echo "No Alacritty window found."
-		firefox_alacritty
+
+	elif [ ${#firefox_windows[@]} -eq 1 ]; then
+		# Call __layout5.sh if only one Firefox window is found
+		echo "Only one Firefox window found."
+		alacritty_firefox_vertical
+	else
+		echo "No Firefox windows found."
 	fi
 }
 
