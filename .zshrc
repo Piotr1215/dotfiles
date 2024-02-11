@@ -112,6 +112,7 @@ export PATH=$PATH:/usr/local/go/bin
 export PATH=$PATH:$HOME/.istioctl/bin
 export PATH=$PATH:$HOME/dev/dotfiles/scripts
 export PATH=$PATH:$HOME/.luarocks/bin
+export PATH=$PATH:$HOME/.local/bin
 export FONTCONFIG_PATH=/etc/fonts
 export EDITOR=nvim
 export GH_USER=Piotr1215
