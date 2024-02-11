@@ -232,6 +232,42 @@ max_slack() {
 		echo "No Slack window found."
 	fi
 }
+firefox_firefox_alacritty() {
+	LEFT_MARGIN=4
+	TOP_MARGIN_FIREFOX=21
+	WINDOW_WIDTH=3832
+	WINDOW_HEIGHT_FIREFOX=1022
+	WINDOW_HEIGHT_ALACRITTY=1050
+
+	firefox_windows=($(xdotool search --classname Navigator | head -n 2))
+	alacritty=$(xdotool search --onlyvisible --classname Alacritty | head -n 1)
+
+	if [ ${#firefox_windows[@]} -eq 2 ] && [ -n "$alacritty" ]; then
+		echo "Arranging two Firefox windows and one Alacritty window."
+		for i in 0 1; do
+			window_id=${firefox_windows[$i]}
+			minimize_window "$window_id"
+			xdotool windowmap "$window_id"
+			xdotool windowsize "$window_id" $WINDOW_WIDTH $WINDOW_HEIGHT_FIREFOX
+			if [ $i -eq 0 ]; then
+				xdotool windowmove "$window_id" $LEFT_MARGIN $TOP_MARGIN_FIREFOX
+			else
+				xdotool windowmove "$window_id" $LEFT_MARGIN $(($TOP_MARGIN_FIREFOX + $WINDOW_HEIGHT_FIREFOX))
+			fi
+			xdotool windowactivate --sync "$window_id"
+		done
+
+		minimize_window "$alacritty"
+		xdotool windowmap "$alacritty"
+		wmctrl -i -r "$alacritty" -e 0,$LEFT_MARGIN,$(($TOP_MARGIN_FIREFOX + 2 * $WINDOW_HEIGHT_FIREFOX)),$WINDOW_WIDTH,$WINDOW_HEIGHT_ALACRITTY
+		xdotool windowactivate --sync "$alacritty"
+	elif [ ${#firefox_windows[@]} -lt 2 ]; then
+		echo "Not enough Firefox windows found."
+	elif [ -z "$alacritty" ]; then
+		echo "No Alacritty window found."
+	fi
+}
+
 case $1 in
 1) max_alacritty ;;
 2) alacritty_firefox_vertical ;;
@@ -240,6 +276,7 @@ case $1 in
 5) max_firefox ;;
 6) zoom_alacritty_horizontal ;;
 7) max_slack ;;
+8) firefox_firefox_alacritty ;;
 *)
 	echo "Usage: $0 {1|2|3|4|5|6|7}"
 	exit 1
