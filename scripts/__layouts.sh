@@ -5,7 +5,7 @@
 IFS=$'\n\t'
 
 if [[ -z "$1" ]]; then
-	echo "Usage: $0 {1|2|3|4|5|6|7}"
+	echo "Usage: $0 {1|2|3|4|5|6|7|8}"
 	exit 1
 fi
 
@@ -234,9 +234,9 @@ max_slack() {
 }
 firefox_firefox_alacritty() {
 	LEFT_MARGIN=4
-	TOP_MARGIN_FIREFOX=21
-	WINDOW_WIDTH=3832
-	WINDOW_HEIGHT_FIREFOX=1022
+	TOP_MARGIN=21
+	WINDOW_WIDTH_HALF=1916
+	WINDOW_HEIGHT_HALF=1050
 	WINDOW_HEIGHT_ALACRITTY=1050
 
 	firefox_windows=($(xdotool search --classname Navigator | head -n 2))
@@ -248,23 +248,25 @@ firefox_firefox_alacritty() {
 			window_id=${firefox_windows[$i]}
 			minimize_window "$window_id"
 			xdotool windowmap "$window_id"
-			xdotool windowsize "$window_id" $WINDOW_WIDTH $WINDOW_HEIGHT_FIREFOX
+			xdotool windowsize "$window_id" $WINDOW_WIDTH_HALF $WINDOW_HEIGHT_HALF
 			if [ $i -eq 0 ]; then
-				xdotool windowmove "$window_id" $LEFT_MARGIN $TOP_MARGIN_FIREFOX
+				xdotool windowmove "$window_id" $LEFT_MARGIN $TOP_MARGIN
 			else
-				xdotool windowmove "$window_id" $LEFT_MARGIN $(($TOP_MARGIN_FIREFOX + $WINDOW_HEIGHT_FIREFOX))
+				xdotool windowmove "$window_id" $LEFT_MARGIN $(($TOP_MARGIN + $WINDOW_HEIGHT_HALF))
 			fi
 			xdotool windowactivate --sync "$window_id"
 		done
 
 		minimize_window "$alacritty"
 		xdotool windowmap "$alacritty"
-		wmctrl -i -r "$alacritty" -e 0,$LEFT_MARGIN,$(($TOP_MARGIN_FIREFOX + 2 * $WINDOW_HEIGHT_FIREFOX)),$WINDOW_WIDTH,$WINDOW_HEIGHT_ALACRITTY
+		wmctrl -i -r "$alacritty" -e 0,$LEFT_MARGIN,$(($TOP_MARGIN + 2 * $WINDOW_HEIGHT_HALF)),$((2 * $WINDOW_WIDTH_HALF)),$WINDOW_HEIGHT_ALACRITTY
 		xdotool windowactivate --sync "$alacritty"
 	elif [ ${#firefox_windows[@]} -lt 2 ]; then
 		echo "Not enough Firefox windows found."
+		firefox_alacritty
 	elif [ -z "$alacritty" ]; then
 		echo "No Alacritty window found."
+		firefox_alacritty
 	fi
 }
 
@@ -278,7 +280,7 @@ case $1 in
 7) max_slack ;;
 8) firefox_firefox_alacritty ;;
 *)
-	echo "Usage: $0 {1|2|3|4|5|6|7}"
+	echo "Usage: $0 {1|2|3|4|5|6|7|8}"
 	exit 1
 	;;
 esac
