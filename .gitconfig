@@ -49,3 +49,7 @@ navigate = true # use n and N to move between diff sections
 	smudge = git-lfs smudge -- %f
 	process = git-lfs filter-process
 	required = true
+[rerere]
+	enabled = true
+[maintenance]
+	repo = /home/decoder/dev/dotfiles
