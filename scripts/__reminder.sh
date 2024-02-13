@@ -87,7 +87,7 @@ else
 	# This part is executed when scheduled by 'at'
 	while true; do
 		zenity --question --text="$message" --display=":1" \
-			--ok-label="Acknowledged" --cancel-label="Remind me in 5 minutes" \
+			--ok-label="Acknowledged" --cancel-label="Remind me later" \
 			--width=200 --height=100
 
 		# Check the exit status of zenity
@@ -96,8 +96,14 @@ else
 			task log "$message" +reminder
 			break
 			;;
-		1)         # User clicked "Remind me in 5 minutes"
-			sleep 300 # Sleep for 5 minutes (300 seconds)
+		1) # User clicked "Remind me later"
+			# Ask user for delay in minutes
+			delay=$(zenity --entry --title="Reminder Delay" --text="Enter delay in minutes:" --display=":1")
+			if [[ $? -eq 0 && $delay =~ ^[0-9]+$ ]]; then
+				sleep $((delay * 60)) # Sleep for the specified amount of minutes
+			else
+				break
+			fi
 			;;
 		*) # Any other exit code means an error or unexpected closure
 			break
