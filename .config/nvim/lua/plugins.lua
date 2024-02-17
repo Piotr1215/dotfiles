@@ -77,6 +77,7 @@ return require("packer").startup(function(use)
     }
   })
   use { 'marcelofern/vale.nvim' }
+  use 'tyru/open-browser.vim'
   use 'karoliskoncevicius/vim-sendtowindow'
   use { 'dccsillag/magma-nvim', run = ':UpdateRemotePlugins' }
   use "tpope/vim-rhubarb"
