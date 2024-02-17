@@ -27,7 +27,7 @@
     "description": "Details HTML snippet"
   },
   "Highlight text to make it stand out on the page": {
-    "prefix": "high",
+    "prefix": "diff",
     "scope": "markdown",
     "body": ["```diff",
       "! ${1:TEXT} !",
