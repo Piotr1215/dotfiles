@@ -76,6 +76,7 @@ return require("packer").startup(function(use)
       "nvim-telescope/telescope.nvim" -- optional: for multi-select
     }
   })
+  use { 'marcelofern/vale.nvim' }
   use 'karoliskoncevicius/vim-sendtowindow'
   use { 'dccsillag/magma-nvim', run = ':UpdateRemotePlugins' }
   use "tpope/vim-rhubarb"

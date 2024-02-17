@@ -36,6 +36,21 @@ vim.api.nvim_create_autocmd("BufWritePost", {
   group = goSettings,
 })
 
+
+-- Run Vale on markdown files in crossplane-docs
+vim.api.nvim_create_autocmd("BufWritePost", {
+  pattern = "*.md",
+  callback = function(args)
+    local file_path = vim.fn.getcwd()
+    if string.match(file_path, "crossplane%-docs/content") then
+      local current_dir = vim.fn.getcwd()
+      vim.cmd("lcd %:p:h")
+      vim.cmd(":silent! Vale")
+      vim.cmd("lcd " .. current_dir)
+    end
+  end,
+})
+
 vim.api.nvim_create_autocmd("FileType", {
   pattern = { "c", "cpp" },
   command = "setlocal expandtab shiftwidth=2 softtabstop=2 cindent",
@@ -77,6 +92,15 @@ vim.cmd [[autocmd BufWritePre * lua vim.lsp.buf.format()]]
 -- ]],
 -- false
 -- )
+vim.api.nvim_create_autocmd("BufWritePost", {
+  pattern = "*.md",
+  callback = function()
+    local file_path = vim.fn.expand('%:p') -- Get the full path of the current file
+    if not string.match(file_path, "crossplane%-docs") then
+      vim.cmd("silent Neoformat")
+    end
+  end,
+})
 
 function StyluaFormat()
   local current_dir = vim.fn.getcwd()

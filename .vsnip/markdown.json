@@ -1,4 +1,20 @@
 {
+  "Hugo Important Hint":{
+    "prefix": "hint",
+    "scope": "markdown",
+    "body": ["{{< hint \"important\" >}}",
+      "${1:Important hint}",
+      "{{< /hint >}}${0}"],
+    "description": "Hugo Important Hint"
+  },
+  "Hugo Expand": {
+    "prefix": "expand",
+    "scope": "markdown",
+    "body": ["{{< expand \"${1}\" >}}",
+      "${2}",
+      "{{< /expand >}}${0}"],
+    "description": "Hugo Expand"
+  },
   "Details HTML": {
     "prefix": "det",
     "scope": "markdown",

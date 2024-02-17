@@ -19,6 +19,12 @@ require('gen').setup({
   show_model = true
 })
 
+require("vale").setup({
+  -- path to the vale binary.
+  bin = "/usr/local/bin/vale",
+  -- path to your vale-specific configuration.
+  vale_config_path = "$HOME/dev/crossplane-docs/utils/vale/.vale.ini",
+})
 require("mdeval").setup {
   -- Don't ask before executing code blocks
   require_confirmation = false,
