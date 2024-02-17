@@ -69,29 +69,6 @@ vim.api.nvim_create_autocmd("FileType", {
   group = indentSettings,
 })
 
-vim.api.nvim_exec([[
-  augroup MyAutoCommands
-    autocmd!
-    autocmd BufWritePost *.md silent Neoformat
-  augroup END
-]], false)
-
--- vim.api.nvim_create_autocmd({ "BufWinEnter" }, {
--- pattern = vim.fn.expand("$HOME").."/dev/obsidian/*/*.md",
--- command = "MarkdownPreview",
--- })
-
-vim.cmd [[autocmd BufWritePre * lua vim.lsp.buf.format()]]
-
--- vim.api.nvim_exec(
--- [[
--- augroup stylua_format
--- autocmd!
--- autocmd BufWritePost *.lua lua StyluaFormat()
--- augroup END
--- ]],
--- false
--- )
 vim.api.nvim_create_autocmd("BufWritePost", {
   pattern = "*.md",
   callback = function()
