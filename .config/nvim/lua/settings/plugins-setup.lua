@@ -1,4 +1,5 @@
 -- Settings for plugins
+vim.notify = require("notify")
 require("mason").setup()
 
 require("yanksearch").setup {
