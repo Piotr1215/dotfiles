@@ -55,8 +55,8 @@ vim.api.nvim_set_keymap("n", "cinq", '/"[^"]*"<CR>:nohlsearch<CR>ci"', { noremap
 utils.nmap("gp", "`[v`]")                                                                                      -- select pasted text
 utils.imap("<C-l>", "<C-o>a")                                                                                  -- skip over a letter
 utils.imap("<C-n>", "<C-e><C-o>A;<ESC>")                                                                       -- insert semicolon at the end of the line
-utils.nmap("<leader>O", "O<ESC>O")                                                                             -- insert 2 empty lines and go into inser mode
-utils.nmap("<leader>o", "o<cr>")                                                                               -- insert 2 empty lines and go into inser mode
+utils.nmap("<leader>LL", "O<ESC>O")                                                                             -- insert 2 empty lines and go into inser mode
+utils.nmap("<leader>ll", "o<cr>")                                                                               -- insert 2 empty lines and go into inser mode
 utils.nmap('<leader>l', ':lua add_empty_lines(true)<CR>')                                                      -- add line below without entering insert mode
 utils.nmap('<leader>L', ':lua add_empty_lines(false)<CR>')                                                     -- add line above without entering insert mode
 utils.nmap("<leader>i", "i<space><esc>")                                                                       -- insert space
