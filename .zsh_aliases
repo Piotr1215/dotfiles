@@ -50,6 +50,7 @@ alias rg='rg --hidden'
 alias vim=nvim
 alias v=nvim
 alias watch=viddy
+alias ugu='ug -Q -.'
 
 ## Kubernetes aliases
 alias kconf='__create_separate_kubeconfig.sh'
