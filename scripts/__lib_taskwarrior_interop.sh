@@ -32,6 +32,13 @@ create_task() {
 	echo "$task_id"
 }
 
+# Get task ID from description
+get_task_id_by_description() {
+	local description="$1"
+	task_id=$(task "description:$description" | grep -oPm1 "^(\d+)")
+	echo "$task_id"
+}
+
 # Annotate an existing task
 annotate_task() {
 	local task_id="$1"
