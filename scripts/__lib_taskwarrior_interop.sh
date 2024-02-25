@@ -1,6 +1,25 @@
 #!/bin/bash
 
-# Add a new task and return its ID
+# create_task
+# Creates a new task in Taskwarrior with a given description and optional additional attributes.
+#
+# Usage:
+#   task_id=$(create_task "Task Description" "+label1" "+label2" "project:ProjectName")
+#
+# Arguments:
+#   $1 - The task description. This should be the first argument and in quotes if it contains spaces.
+#   $@ - Optional additional arguments for the task, such as labels (prefixed with +) and project (prefixed with project:).
+#       These should be separate arguments and not combined in a single string.
+#
+# Examples:
+#   task_id=$(create_task "Review document" "+work" "project:Documentation")
+#   This creates a task with the description "Review document", adds a "work" label, and assigns it to the "Documentation" project.
+#
+#   task_id=$(create_task "Fix bug in script" "+bugfix" "+urgent" "project:Development")
+#   This creates a task with the description "Fix bug in script", adds "bugfix" and "urgent" labels, and assigns it to the "Development" project.
+#
+# Returns:
+#   The ID of the newly created task.
 create_task() {
 	local description=$1
 	shift # Now $@ contains the rest of the arguments
