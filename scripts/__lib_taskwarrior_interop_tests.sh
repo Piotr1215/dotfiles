@@ -8,57 +8,82 @@ cleanup() {
 	yes | task +integration delete
 }
 
+# Helper function to report a test failure
+report_failure() {
+	echo "Test failed: $1 - $2"
+	exit 1
+}
+
+# Helper function to report a test success
+report_success() {
+	echo "Test succeeded: $1"
+}
+
 # Test creation of a new task and retrieval of its ID
 test_create_task() {
-	echo "Testing task creation..."
-	local task_id
-	local output
+	local task_id description label
+	description="Test task"
+	label="integration"
 
-	output=$(create_task "Test task +integration")
-	task_id=$(echo "$output" | grep -o '[0-9]*')
-	if task _get "$task_id".description | grep -q "Test task"; then
-		echo "Create task test passed."
+	task_id=$(create_task "$description" "+$label")
+
+	if task _get "$task_id".description | grep -q "$description"; then
+		report_success "create_task"
 	else
-		echo "Create task test failed."
+		report_failure "create_task" "Description does not match."
 	fi
+
+	if task _get "$task_id".tags | grep -q "$label"; then
+		report_success "label_assignment"
+	else
+		report_failure "label_assignment" "Label was not added."
+	fi
+
 	cleanup
 }
 
 # Test annotation of an existing task
 test_annotate_task() {
-	echo "Testing task annotation..."
-	local task_id
-	local output
+	local task_id annotation
+	local task_title="Annotate test-$RANDOM"
+	annotation="Annotation text"
 
-	output=$(create_task "Annotate test +integration")
-	task_id=$(echo "$output" | grep -o '[0-9]*')
-	annotate_task "$task_id" "Annotation text"
-	if task _get "$task_id".annotations | grep -q "Annotation text"; then
-		echo "Annotate task test passed."
+	task_id=$(create_task "$task_title" "+integration")
+	annotate_task "$task_id" "$annotation"
+
+	# Adjusted to check for the description of the first annotation
+	if task _get "$task_id".annotations.1.description | grep -q "$annotation"; then
+		report_success "annotate_task"
 	else
-		echo "Annotate task test failed."
+		report_failure "annotate_task" "Annotation was not added."
 	fi
+
 	cleanup
 }
 
 # Test marking a task as completed
 test_mark_task_completed() {
-	echo "Testing marking task as completed..."
 	local task_id
-	local output
 
-	output=$(create_task "Complete test +integration")
-	task_id=$(echo "$output" | grep -o '[0-9]*')
+	task_id=$(create_task "Complete test" "+integration")
 	mark_task_completed "$task_id"
+
 	if task _get "$task_id".status | grep -q "completed"; then
-		echo "Mark task completed test passed."
+		report_success "mark_task_completed"
 	else
-		echo "Mark task completed test failed."
+		report_failure "mark_task_completed" "Task was not marked completed."
 	fi
+
 	cleanup
 }
 
-# Call test functions
+cleanup
+sleep 2
 test_create_task
+sleep 2
 test_annotate_task
+sleep 2
 test_mark_task_completed
+
+# If all tests pass, exit with code 0
+exit 0

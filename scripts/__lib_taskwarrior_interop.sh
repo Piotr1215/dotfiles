@@ -2,13 +2,13 @@
 
 # Add a new task and return its ID
 create_task() {
-	# Combine all arguments into the task attributes
-	local task_attributes="$*"
+	local description=$1
+	shift # Now $@ contains the rest of the arguments
 
-	local output task_id
-
-	# shellcheck disable=SC2086 # Cannot quote $task_attributes as it is a list of arguments
-	output=$(task add $task_attributes)
+	# Use "$@" to pass all additional arguments to task add
+	local output
+	output=$(task add "$description" "$@")
+	local task_id
 	task_id=$(echo "$output" | grep -o 'Created task [0-9]*.' | cut -d ' ' -f 3 | tr -d '.')
 	echo "$task_id"
 }
@@ -23,8 +23,12 @@ annotate_task() {
 # Mark a task as completed
 mark_task_completed() {
 	local task_id="$1"
-	# shellcheck disable=SC1010 # done in this case refers to the task status and not bash keyword
-	task "$task_id" done
+	echo "Attempting to mark task $task_id as completed..."
+	#shellcheck disable=SC1010
+	task "$task_id" done || {
+		echo "Failed to mark task $task_id as completed"
+		exit 1
+	}
 }
 
 # Mark a task as pending
