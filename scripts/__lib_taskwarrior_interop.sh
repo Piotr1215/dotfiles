@@ -64,6 +64,14 @@ mark_task_pending() {
 }
 
 # Add a label to a task
+get_task_labels() {
+	echo "Getting labels for task $1"
+	local task_id="$1"
+	labels=$(task _get "$task_id".tags)
+	echo "$labels"
+}
+
+# Add a label to a task
 add_task_label() {
 	local task_id="$1"
 	local label="$2"
