@@ -21,16 +21,24 @@ sanitize_task() {
 	echo "${description//[\[\]]/}"
 }
 
-# Add issues to taskwarrior as new tasks or do nothing if the task already exists
-process_issue() {
-	local issue_line=$1
-	local issue_id issue_description issue_repo_name issue_repo sanitized_description
+# Retrieve and format GitHub issues
+get_issues() {
+	local issues
+	issues=$(gh api -X GET /search/issues \
+		-f q='is:issue is:open assignee:Piotr1215' \
+		--jq '.items[] | select(.state == "open") | {id: .number, description: .title, repository: .repository_url}')
+	echo "$issues"
+}
 
+# Synchronize issues with Taskwarrior
+sync_to_taskwarrior() {
+	local issue_line issue_id issue_description issue_repo_name issue_repo sanitized_description
+
+	issue_line=$1
 	issue_id=$(echo "$issue_line" | jq -r '.id')
 	issue_description=$(echo "$issue_line" | jq -r '.description')
 	issue_repo_name=$(echo "$issue_line" | jq -r '.repository' | awk -F'/' '{print $6}')
 	issue_repo=$(echo "$issue_line" | jq -r '.repository' | sed -e 's/api.//' -e 's/repos\///')
-
 	sanitized_description=$(sanitize_task "$issue_description")
 
 	# Check if the task already exists by searching for a sanitized description
@@ -53,12 +61,10 @@ process_issue() {
 main() {
 	local issues
 
-	issues=$(gh api -X GET /search/issues \
-		-f q='is:issue is:open assignee:Piotr1215' \
-		--jq '.items[] | select(.state == "open") | {id: .number, description: .title, content: .body, repository: .repository_url, state: .state}')
+	issues=$(get_issues)
 
 	echo "$issues" | jq -c '.' | while IFS= read -r line; do
-		process_issue "$line"
+		sync_to_taskwarrior "$line"
 	done
 }
 
