@@ -129,3 +129,5 @@ uda.taskwarrior-tui.task-report.jump-on-task-add=true
 context=work
 context.archive.read=+archive
 context.archive.write=+archive
+context.integration.read=+integration
+context.integration.write=+integration
