@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+source ./__lib_taskwarrior_interop.sh
+
 set -eo pipefail
 
 # Add source and line number wher running in debug mode: __run_with_xtrace.sh github_issue_sync.sh
@@ -22,7 +24,7 @@ sanitize_task() {
 # Add issues to taskwarrior as new tasks or do nothing if the task already exists
 process_issue() {
 	local issue_line=$1
-	local issue_id issue_description issue_repo_name issue_repo output task_id sanitized_description
+	local issue_id issue_description issue_repo_name issue_repo sanitized_description
 
 	issue_id=$(echo "$issue_line" | jq -r '.id')
 	issue_description=$(echo "$issue_line" | jq -r '.description')
@@ -31,10 +33,16 @@ process_issue() {
 
 	sanitized_description=$(sanitize_task "$issue_description")
 
+	# Check if the task already exists by searching for a sanitized description
 	if ! task "$sanitized_description" &>/dev/null; then
-		output=$(task add "$sanitized_description" +github project:"$issue_repo_name")
-		task_id=$(echo "$output" | grep -o 'Created task [0-9]*.' | cut -d ' ' -f 3 | tr -d '.')
-		task "$task_id" annotate "$issue_repo/issues/$issue_id"
+		# Pass the arguments as an array to maintain separation
+		local task_args=("$sanitized_description" "+github" "project:$issue_repo_name")
+
+		# Use create_task function to add a new task with attributes
+		task_id=$(create_task "${task_args[@]}") # Expand array elements as separate arguments
+
+		# Annotate the newly created task with the issue URL
+		annotate_task "$task_id" "$issue_repo/issues/$issue_id"
 		log "Task created for: $sanitized_description"
 	else
 		log "Task already exists for: $sanitized_description"
