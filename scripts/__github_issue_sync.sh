@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-source ./__lib_taskwarrior_interop.sh
+source /home/decoder/dev/dotfiles/scripts/__lib_taskwarrior_interop.sh
 
 set -eo pipefail
 
@@ -66,6 +66,22 @@ main() {
 	echo "$issues" | jq -c '.' | while IFS= read -r line; do
 		sync_to_taskwarrior "$line"
 	done
+	# existing_task_ids=$(task +github export | jq -r '.[] | select(.status == "pending") | "\(.id) \(.description)"')
+	# github_issues=$(echo "$issues" | jq -r '. | "\(.description)"')
+	# echo "$github_issues"
+	# echo "$existing_task_ids"
+	# # Loop through Taskwarrior tasks
+	# echo "$existing_task_ids" | while IFS= read -r line; do
+	# # Extract task ID and description
+	# task_id=$(echo "$line" | awk '{print $1}')
+	# description=$(echo "$line" | cut -d' ' -f2-)
+
+	# # Check if the task description is not in GitHub issues
+	# if ! echo "$github_issues" | grep -Fxq "$description"; then
+	# # Mark task as completed if the description is not found
+	# mark_task_completed "$task_id"
+	# fi
+	# done
 }
 
 # Simulate entry point call
