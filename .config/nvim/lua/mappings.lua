@@ -45,7 +45,7 @@ utils.nmap(",<space>", ":nohlsearch<CR>")                                       
 utils.nmap("<leader>x", "*``cgn")                                                                              -- replace word under cursor simultaneously
 utils.nmap("<leader>X", "#``cgn")                                                                              -- replace word under cursor simultaneously
 -- MACROS --
-utils.nmap("<Leader>m", "@q")                                                                                  -- run macro from q register
+utils.nmap("<c-m>", "@q")                                                                                  -- run macro from q register
 utils.xmap("<leader>Q", ":'<,'>:normal @q<CR>")                                                                -- run macro from q register on visual selection
 utils.tmap("<ESC>", "<C-\\><C-n>")                                                                             -- exit terminal mode
 vim.keymap.set('n', '<leader>ml', '^I-<Space>[<Space>]<Space><Esc>^j', { remap = true, silent = false })       -- prepend markdown list item on line
