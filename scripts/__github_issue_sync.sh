@@ -25,9 +25,12 @@ sanitize_task() {
 # Retrieve and format GitHub issues
 get_issues() {
 	local issues
-	issues=$(gh api -X GET /search/issues \
+	if ! issues=$(gh api -X GET /search/issues \
 		-f q='is:issue is:open assignee:Piotr1215' \
-		--jq '.items[] | select(.state == "open") | {id: .number, description: .title, repository: .repository_url}')
+		--jq '.items[] | select(.state == "open") | {id: .number, description: .title, repository: .repository_url}'); then
+		echo "Error: Unable to fetch issues"
+		return 1
+	fi
 	echo "$issues"
 }
 
