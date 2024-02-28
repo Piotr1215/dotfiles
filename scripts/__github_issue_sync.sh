@@ -79,11 +79,9 @@ compare_and_display_tasks_not_in_github() {
 	log "Starting comparison of Taskwarrior tasks and GitHub issues."
 	# Convert the newline-separated string of existing task descriptions into an array
 	mapfile -t existing_task_descriptions_array <<<"$existing_task_descriptions"
-	log "Existing Taskwarrior task descriptions array: ${existing_task_descriptions_array[*]}"
 
 	# Convert the newline-separated string of GitHub issue descriptions into an array (no need to parse JSON)
 	mapfile -t github_issue_descriptions_array <<<"$github_issues"
-	log "GitHub issue descriptions array: ${github_issue_descriptions_array[*]}"
 
 	# Iterate over each Taskwarrior task description in the array
 	for task_description in "${existing_task_descriptions_array[@]}"; do
@@ -104,6 +102,7 @@ compare_and_display_tasks_not_in_github() {
 			sync_github_issue "$task_description"
 		fi
 	done
+	log "Comparison of Taskwarrior tasks and GitHub issues completed."
 }
 
 # Follow the Python convention and execute the main function
@@ -115,15 +114,14 @@ main() {
 	local description
 
 	issues=$(get_issues)
-	log "Retrieved GitHub issues: $issues"
+	local formatted_issues=$(echo "$issues" | jq .)
+	log "Retrieved GitHub issues: $formatted_issues"
 
 	echo "$issues" | while IFS= read -r line; do
 		sync_to_taskwarrior "$(echo "$line" | jq -c '.')"
 	done
 	existing_task_ids=$(task +github export | jq -r '.[] | select(.status == "pending") | .description' | while read -r line; do sanitize_task "$line"; done)
-	log "Existing Taskwarrior task descriptions: $existing_task_ids"
 	github_issues=$(echo "$issues" | jq -r '. | .description' | while read -r line; do sanitize_task "$line"; done)
-	log "GitHub issue descriptions: $github_issues"
 
 	compare_and_display_tasks_not_in_github "$existing_task_ids" "$github_issues"
 }
