@@ -54,6 +54,12 @@ report.currentall.labels=ID,Age,P,Proj,Tag,Desc,Created,Due,Follow
 report.currentall.sort=manual_priority-,project+
 report.currentall.filter=status:pending
 
+report.ideas.description=List of pending ideas
+report.ideas.columns=id,entry.age,manual_priority,project,tags,description.desc,entry,due.relative,duration
+report.ideas.labels=ID,Age,P,Proj,Tag,Desc,Created,Due,Duration
+report.ideas.sort=manual_priority-,project+
+report.ideas.filter=status:pending and +idea 
+
 report.current.description=List of current tasks in the work context
 report.current.columns=id,entry.age,manual_priority,project,tags,description.desc,entry,due.relative,duration
 report.current.labels=ID,Age,P,Proj,Tag,Desc,Created,Due,Duration
@@ -123,6 +129,7 @@ uda.taskwarrior-tui.shortcuts.5=~/.config/taskwarrior-tui/shortcut-scripts/__dec
 uda.taskwarrior-tui.shortcuts.6=~/.config/taskwarrior-tui/shortcut-scripts/__increase_task_priority.sh
 uda.taskwarrior-tui.shortcuts.7=~/.config/taskwarrior-tui/shortcut-scripts/__annotate_with_note.sh
 uda.taskwarrior-tui.shortcuts.8=~/.config/taskwarrior-tui/shortcut-scripts/__annotate_with_new_note.sh
+uda.taskwarrior-tui.shortcuts.9=~/.config/taskwarrior-tui/shortcut-scripts/__switch_report.sh ideas
 
 #Taskwarrior tui overrides
 uda.taskwarrior-tui.task-report.jump-on-task-add=true
