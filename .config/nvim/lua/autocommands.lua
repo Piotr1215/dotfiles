@@ -200,6 +200,14 @@ vim.api.nvim_create_user_command(
   { bang = false, nargs = "*", complete = "shellcmd" }
 )
 
+-- Highlighting when yanking text
+vim.api.nvim_create_autocmd("TextYankPost", {
+  desc = "Highlight yanked text",
+  pattern = "*",
+  callback = function()
+    vim.highlight.on_yank { higroup = "IncSearch", timeout = 250 }
+  end,
+})
 
 --Get diff for current file
 vim.api.nvim_create_user_command("Gdiff", "execute  'w !git diff --no-index -- % -'", { bang = false })
