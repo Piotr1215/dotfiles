@@ -204,6 +204,29 @@ vim.api.nvim_create_user_command(
 --Get diff for current file
 vim.api.nvim_create_user_command("Gdiff", "execute  'w !git diff --no-index -- % -'", { bang = false })
 
+vim.api.nvim_create_user_command("Gdiffu", function()
+  -- Save the current buffer
+  vim.cmd("w")
+
+  -- Get the current file path
+  local file_path = vim.api.nvim_buf_get_name(0)
+
+  -- Run git diff and capture the output
+  local handle = io.popen("git diff --unified=0 -- " .. file_path)
+  local result = handle:read("*a")
+  handle:close()
+
+  -- Split the output into lines for the floating window
+  local content = {}
+  for line in result:gmatch("([^\n]*)\n?") do
+    table.insert(content, line)
+  end
+
+  -- Display the result in a floating scratch buffer
+  _G.create_floating_scratch(content)
+end, { bang = false })
+
+
 vim.cmd [[
 function! WinMove(key)
    let t:curwin = winnr()
