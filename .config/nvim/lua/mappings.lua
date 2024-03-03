@@ -102,6 +102,7 @@ vim.keymap.set({ 'n', 'v' }, "<leader>gb", ":GBrowse<cr>", opts)                
 vim.keymap.set('n', '<leader>gc', function() vim.cmd('GBrowse!') end, opts)                                    -- git browse current file and line in browser
 vim.keymap.set('v', '<leader>gc', ':GBrowse!<CR>', { noremap = true, silent = false })                         -- git browse current file and selected line in browser
 utils.lnmap("gd", ":Gvdiffsplit<CR>")                                                                          -- git diff current file
+utils.lnmap("gu", ":Gdiffu<CR>")                                                                          -- git diff current file
 utils.nmap("<leader>gl", ":r !bash ~/dev/dotfiles/scripts/__generate_git_log.sh<CR>")                          -- generate git log
 utils.lnmap("gh", ":Gclog %<CR>")                                                                              -- show git log for current file
 -- OTHER --
@@ -177,7 +178,6 @@ vim.cmd [[
         imap <silent><script><expr> <C-s> copilot#Accept("\<CR>")
         let g:copilot_no_tab_map = v:true
 ]]
-
 -- GoTo Preview
 vim.keymap.set("n", "gtp", "<cmd>lua require('goto-preview').goto_preview_definition()<CR>", { noremap = true })
 
