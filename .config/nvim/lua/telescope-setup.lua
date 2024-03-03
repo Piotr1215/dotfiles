@@ -101,6 +101,13 @@ vim.api.nvim_set_keymap('v', '<leader>fsd',
 vim.api.nvim_set_keymap('v', '<leader>fs', 'y<ESC>:Telescope live_grep default_text=<c-r>0<CR> search_dirs={"$PWD"}',
   default_opts)
 vim.api.nvim_set_keymap('n', "<leader>tm", ":lua require('telescope').extensions.tmuxinator.projects{}<CR>", default_opts)
+vim.keymap.set('n', '<leader>/', function()
+  builtin.current_buffer_fuzzy_find(require('telescope.themes').get_dropdown {
+  winblend = 10,
+  previewer = false,
+  relative = "editor",
+})
+end, {desc = "Find in current buffer"})
 
 local key = vim.api.nvim_set_keymap
 local set_up_telescope = function()
@@ -121,7 +128,6 @@ local set_up_telescope = function()
   set_keymap('n', '<leader>fe', [[<cmd>Telescope emoji<CR>]])
   set_keymap('n', '<leader>fsw', [[<cmd>lua require('telescope.builtin').grep_string({search_dirs = {"~/dev"}})<CR>]])
   set_keymap('v', '<leader>fsw', [[<cmd>lua require('telescope.builtin').grep_string({search_dirs = {"~/dev"}})<CR>]])
-  set_keymap('n', '<leader>fb', [[<cmd>lua require('telescope.builtin').current_buffer_fuzzy_find()<CR>]])
   set_keymap('n', '<leader>fh', [[<cmd>lua require('telescope.builtin').search_history()<CR>]])
   set_keymap('n', '<leader>ds', [[<cmd>lua require('telescope.builtin').lsp_document_symbols()<CR>]])
   set_keymap('n', '<leader>gj', [[<cmd>lua require('telescope.builtin').jumplist()<CR>]])
