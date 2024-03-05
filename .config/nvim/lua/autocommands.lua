@@ -3,6 +3,7 @@ local api = vim.api
 
 local indentSettings = vim.api.nvim_create_augroup("IndentSettings", { clear = true })
 local goSettings = vim.api.nvim_create_augroup("Go Settings", { clear = true })
+local yamlSettings = vim.api.nvim_create_augroup("Yaml Settings", { clear = true })
 
 vim.api.nvim_create_user_command("Pretty", "Prettier", { bang = true })
 
@@ -67,6 +68,14 @@ vim.api.nvim_create_autocmd("FileType", {
   pattern = { "python" },
   command = "setlocal expandtab shiftwidth=4 softtabstop=4 autoindent",
   group = indentSettings,
+})
+
+vim.api.nvim_create_autocmd("BufWritePost", {
+  pattern = "*.yaml",
+  callback = function()
+    vim.cmd("silent Neoformat")
+  end,
+  group = yamlSettings,
 })
 
 vim.api.nvim_create_autocmd("BufWritePost", {
