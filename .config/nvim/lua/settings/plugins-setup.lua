@@ -9,6 +9,7 @@ require("yanksearch").setup {
 }
 
 require("mini.align").setup()
+require('mini.ai').setup()
 
 require("go").setup()
 require("dap-python").setup "~/.virtualenvs/debugpy/bin/python"
@@ -115,6 +116,7 @@ require("obsidian").setup {
     date_format = "%Y-%m-%d-%a",
     time_format = "%H:%M",
   },
+  new_notes_location = "notes_subdir",
   -- Optional, configure additional syntax highlighting / extmarks.
   ui = {
     enable = false,        -- set to false to disable all additional syntax features
@@ -159,26 +161,18 @@ require("obsidian").setup {
       opts = { buffer = true },
     },
   },
+  wiki_link_func = function(opts)
+  if opts.label ~= opts.path then
+    return string.format("[[%s|%s]]", opts.path, opts.label)
+  else
+    return string.format("[[%s]]", opts.path)
+  end
+end,
   completion = {
     nvim_cmp = true, -- if using nvim-cmp, otherwise set to false
-    new_notes_location = "notes_subdir",
-    prepend_note_path = true,
   },
-  note_id_func = function(title)
-    -- Create note IDs in a Zettelkasten format with a timestamp and a suffix.
-    local suffix = ""
-    if title ~= nil then
-      -- If title is given, transform it into valid file name.
-      suffix = title:gsub(" ", "-"):gsub("[^A-Za-z0-9-]", ""):lower()
-    else
-      -- If title is nil, just add 4 random uppercase letters to the suffix.
-      for _ = 1, 4 do
-        suffix = suffix .. string.char(math.random(65, 90))
-      end
-    end
-    return tostring(suffix)
-  end,
 }
+
 require("todo-comments").setup {
   keywords = {
     PROJECT = {
