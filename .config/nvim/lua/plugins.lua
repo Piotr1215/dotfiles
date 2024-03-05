@@ -269,7 +269,10 @@ return require("packer").startup(function(use)
     requires = { "kyazdani42/nvim-web-devicons", opt = true },
   }
   -- }}}
-  use "epwalsh/obsidian.nvim"
+  use({
+    "epwalsh/obsidian.nvim",
+    tag = "*",
+  })
   if packer_bootstrap then
     require("packer").sync()
   end
