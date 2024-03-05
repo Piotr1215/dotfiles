@@ -51,7 +51,6 @@ utils.tmap("<ESC>", "<C-\\><C-n>")                                              
 vim.keymap.set('n', '<leader>ml', '^I-<Space>[<Space>]<Space><Esc>^j', { remap = true, silent = false })       -- prepend markdown list item on line
 utils.vmap("srt", ":!sort -n -k 2<cr>")                                                                        -- sort by second column
 -- MANIPULATE TEXT --
-vim.api.nvim_set_keymap("n", "cinq", '/"[^"]*"<CR>:nohlsearch<CR>ci"', { noremap = true, silent = true })      -- change in next quotes
 utils.nmap("gp", "`[v`]")                                                                                      -- select pasted text
 utils.imap("<C-l>", "<C-o>a")                                                                                  -- skip over a letter
 utils.imap("<C-n>", "<C-e><C-o>A;<ESC>")                                                                       -- insert semicolon at the end of the line
