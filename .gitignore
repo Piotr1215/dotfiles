@@ -3,3 +3,4 @@
 *.vim
 .config/nvim/plugin/packer_compiled.lua
 .aider*
+.nvimrc.lua
