@@ -15,15 +15,15 @@ return require("packer").startup(function(use)
   use "wbthomason/packer.nvim"
   -- AI {{{
   use "github/copilot.vim"
-  use({
+  use {
     "robitx/gp.nvim",
     config = function()
-      require("gp").setup({
+      require("gp").setup {
         agents = {
           -- Disable ChatGPT 3.5
           {
             name = "ChatGPT3-5",
-            chat = false,    -- just name would suffice
+            chat = false, -- just name would suffice
             command = false, -- just name would suffice
           },
           {
@@ -34,27 +34,27 @@ return require("packer").startup(function(use)
             model = { model = "gpt-4-1106-preview", temperature = 1.1, top_p = 1 },
             -- system prompt (use this to specify the persona/role of the AI)
             system_prompt = "You are a general AI assistant.\n\n"
-                .. "The user provided the additional info about how they would like you to respond:\n\n"
-                .. "- If you're unsure don't guess and say you don't know instead.\n"
-                .. "- Ask question if you need clarification to provide better answer.\n"
-                .. "- Think deeply and carefully from first principles step by step.\n"
-                .. "- Zoom out first to see the big picture and then zoom in to details.\n"
-                .. "- Use Socratic method to improve your thinking and coding skills.\n"
-                .. "- Don't elide any code from your output if the answer requires coding.\n"
-                .. "- Take a deep breath; You've got this!\n",
+              .. "The user provided the additional info about how they would like you to respond:\n\n"
+              .. "- If you're unsure don't guess and say you don't know instead.\n"
+              .. "- Ask question if you need clarification to provide better answer.\n"
+              .. "- Think deeply and carefully from first principles step by step.\n"
+              .. "- Zoom out first to see the big picture and then zoom in to details.\n"
+              .. "- Use Socratic method to improve your thinking and coding skills.\n"
+              .. "- Don't elide any code from your output if the answer requires coding.\n"
+              .. "- Take a deep breath; You've got this!\n",
           },
         },
-      })
+      }
 
       -- or setup with your own config (see Install > Configuration in Readme)
       -- require("gp").setup(conf)
 
       -- shortcuts might be setup here (see Usage > Shortcuts in Readme)
     end,
-  })
+  }
   -- }}}
   -- Editor Extensions {{{
-  use 'jesseleite/nvim-macroni'
+  use "jesseleite/nvim-macroni"
 
   use {
     "windwp/nvim-autopairs",
@@ -69,18 +69,18 @@ return require("packer").startup(function(use)
       require("various-textobjs").setup { useDefaultKeymaps = true }
     end,
   }
-  use 'lewis6991/gitsigns.nvim'
-  use({
+  use "lewis6991/gitsigns.nvim"
+  use {
     "wintermute-cell/gitignore.nvim",
     requires = {
-      "nvim-telescope/telescope.nvim" -- optional: for multi-select
-    }
-  })
-  use 'rcarriga/nvim-notify'
-  use { 'marcelofern/vale.nvim' }
-  use 'tyru/open-browser.vim'
-  use 'karoliskoncevicius/vim-sendtowindow'
-  use { 'dccsillag/magma-nvim', run = ':UpdateRemotePlugins' }
+      "nvim-telescope/telescope.nvim", -- optional: for multi-select
+    },
+  }
+  use "rcarriga/nvim-notify"
+  use { "marcelofern/vale.nvim" }
+  use "tyru/open-browser.vim"
+  use "karoliskoncevicius/vim-sendtowindow"
+  use { "dccsillag/magma-nvim", run = ":UpdateRemotePlugins" }
   use "tpope/vim-rhubarb"
   use "David-Kunz/gen.nvim"
   use "RRethy/nvim-align"
@@ -180,7 +180,7 @@ return require("packer").startup(function(use)
       "rafamadriz/friendly-snippets",
     },
   }
-  use "folke/zen-mode.nvim"
+  use { "folke/zen-mode.nvim"}
   use "folke/twilight.nvim"
   use "leoluz/nvim-dap-go"
   use {
@@ -230,7 +230,7 @@ return require("packer").startup(function(use)
     "AckslD/nvim-FeMaco.lua",
     config = 'require("femaco").setup()',
   }
-  use 'sbdchd/neoformat'
+  use "sbdchd/neoformat"
   use "ixru/nvim-markdown"
   use "dhruvasagar/vim-open-url"
   use {
@@ -241,10 +241,10 @@ return require("packer").startup(function(use)
     end,
     ft = { "markdown" },
   }
-  use 'javiorfo/nvim-soil'
+  use "javiorfo/nvim-soil"
 
   -- Optional for puml syntax highlighting:
-  use 'javiorfo/nvim-nyctophilia'
+  use "javiorfo/nvim-nyctophilia"
   use "weirongxu/plantuml-previewer.vim"
   -- }}}
   -- My Plugins {{{
@@ -269,10 +269,10 @@ return require("packer").startup(function(use)
     requires = { "kyazdani42/nvim-web-devicons", opt = true },
   }
   -- }}}
-  use({
+  use {
     "epwalsh/obsidian.nvim",
     tag = "*",
-  })
+  }
   if packer_bootstrap then
     require("packer").sync()
   end
