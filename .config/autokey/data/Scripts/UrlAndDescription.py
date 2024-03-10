@@ -1,11 +1,12 @@
+import os
+import uuid
 import subprocess
 import time
-import pexpect
 from urllib.parse import urlparse
-import os
-from bs4 import BeautifulSoup
+
+import pexpect
 import requests
-import openai
+from bs4 import BeautifulSoup
 
 envrc_path = os.path.expanduser('~/.envrc')
 with open(envrc_path, 'r') as f:
@@ -21,30 +22,35 @@ for line in lines:
             key, value = key_value_pair
             os.environ[key] = value
 
-def append_to_playlist(url, description, playlist_file_path):
-    # Read existing URLs from the playlist file
-    with open(playlist_file_path, 'r') as f:
-        existing_urls = f.readlines()
+def take_screenshot_interactively():
+    # Simulate pressing the Print key
+    time.sleep(0.5)
+    subprocess.run(["xdotool", "key", "Print"])
+    subprocess.run(["zenity", "--info", "--title=Screenshot", "--text=Screenshot taken."])
 
-    # Remove any trailing newlines
-    existing_urls = [line.strip() for line in existing_urls]
+def save_screenshot_to_file(media_folder_path):
+    # Generate a random filename for the screenshot
+    screenshot_filename = f"{uuid.uuid4()}.png"
+    screenshot_full_path = os.path.join(media_folder_path, screenshot_filename)
 
-    # Check if the URL is already in the playlist
-    if url not in existing_urls:
-        # Append the URL to the playlist file
-        with open(playlist_file_path, 'a') as f:
-            f.write('# '+ description + '\n')
-            f.write(url + '\n')
+    # Save the screenshot from the clipboard to a file
+    with open(screenshot_full_path, "wb") as f:
+        subprocess.run(["xclip", "-selection", "clipboard", "-t", "image/png", "-o"], stdout=f)
+    
+    # Check if the screenshot was saved successfully
+    if os.path.isfile(screenshot_full_path) and os.path.getsize(screenshot_full_path) > 0:
+        return screenshot_full_path
+    else:
+        print("Failed to save screenshot.")
+        return None
 
-def append_to_web_highlights(title, description, url):
-    # Path to the Web Highlights Markdown file
+def append_to_web_highlights_with_screenshot(title, url, screenshot_full_path):
     web_highlights_path = '/home/decoder/dev/obsidian/decoder/Notes/webhighlights.md'
+    relative_path_to_image = os.path.relpath(screenshot_full_path, os.path.dirname(web_highlights_path))
+
+    # Append the title and a link to the screenshot in the web highlights markdown file
+    content_to_append = f"\n## {title}\n\n![Screenshot]({relative_path_to_image})\n\nURL: {url}\n\n"
     
-    
-    # Prepare the content to append
-    content_to_append = f"\n## {title}\n\n{description}\n\nURL: {url}\n\n"
-    
-    # Append to the file
     with open(web_highlights_path, 'a') as f:
         f.write(content_to_append)
 
@@ -99,6 +105,8 @@ def invoke_plink(description, url):
 active_window_title = subprocess.getoutput("xdotool getactivewindow getwindowname")
 
 if 'Firefox' in active_window_title or 'Chrome' in active_window_title or 'Brave' in active_window_title:
+    truncated_description = ""
+    url = ""
     try:
         description = clipboard.get_selection()
         truncated_description = (description[:25] + '...') if len(description) > 25 else description
@@ -136,14 +144,14 @@ if 'Firefox' in active_window_title or 'Chrome' in active_window_title or 'Brave
             subprocess.run(["/home/decoder/dev/dotfiles/scripts/__create_task.sh", custom_description] + tags)
             
         if "Append to Web Highlights" in choices:
-           # Use the extension's shortcut to copy the selection as Markdown
-           keyboard.send_keys('<shift>+<alt>+8')
-           time.sleep(1)  # Wait for the clipboard to be updated
-           markdown_selection = clipboard.get_clipboard()
-           title = get_custom_description("Enter title for the highlight")
-
-           # Now proceed to append the markdown formatted text to your file
-           append_to_web_highlights(title, markdown_selection, url)
+           media_folder_path = '/home/decoder/dev/obsidian/decoder/Notes/_media/'
+           take_screenshot_interactively()
+           screenshot_full_path = save_screenshot_to_file(media_folder_path)
+           if screenshot_full_path:
+               # Use the extension's shortcut to copy the selection as Markdown
+               title = get_custom_description("Enter title for the highlight")
+               # Now proceed to append the markdown formatted text to your file
+               append_to_web_highlights_with_screenshot(title, url, screenshot_full_path)
 
             
         # PROJECT: playlist
