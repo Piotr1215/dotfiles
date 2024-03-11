@@ -33,10 +33,8 @@ eval "$(zoxide init zsh)"
 
 # Directory history
 setopt AUTO_PUSHD                  # pushes the old directory onto the stack
-setopt AUTO_CD                    # change to a directory without cd
 setopt PUSHD_MINUS                 # exchange the meanings of '+' and '-'
 setopt CDABLE_VARS                 # expand the expression (allows 'cd -2/tmp')
-setopt auto_cd
 setopt extended_glob
 zstyle ':completion:*:directory-stack' list-colors '=(#b) #([0-9]#)*( *)==95=38;5;12'
 
@@ -112,20 +110,6 @@ export PATH="$HOME/.yarn/bin:$HOME/.config/yarn/global/node_modules/.bin:$PATH"
 export PATH=$PATH:${HOME}/bin
 export RANGER_LOAD_DEFAULT_RC=FALSE
 export RIPGREP_CONFIG_PATH=$HOME/.ripgreprc
-# export NVM_DIR="$HOME/.nvm"
-# [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-# autoload -U add-zsh-hook
-
-# load-nvmrc() {
-  # if [[ -f .nvmrc && -r .nvmrc ]]; then
-    # nvm use
-  # elif [[ $(nvm version) != $(nvm version default)  ]]; then
-    # echo "Reverting to nvm default version"
-    # nvm use default
-  # fi
-# }
-# add-zsh-hook chpwd load-nvmrc
-# load-nvmrc
 
 # source ~/.github_variables
 
@@ -176,14 +160,6 @@ function zoxider() {
 zle -N zoxider
 bindkey '^j' zoxider
 
-# function sessionizer_enter() {
-  # BUFFER="__sessionizer.sh"
-  # zle accept-line
-# }
-
-# zle -N sessionizer_enter
-# bindkey '^x' sessionizer_enter
-
 function f_enter() {
   BUFFER="__open-file.sh"
   zle accept-line
@@ -216,9 +192,6 @@ stty -ixon
 source ${HOME}/kube-ps1/kube-ps1.sh
 PROMPT='$(kube_ps1)'$PROMPT
 PROMPT="$PROMPT"$'\n→ '
-
-# Cloud Shells Settings
-# source '${HOME}/lib/azure-cli/az.completion'
 
 [[ -s "/home/decoder/.gvm/scripts/gvm" ]] && source "/home/decoder/.gvm/scripts/gvm"
 
