@@ -17,11 +17,7 @@ autoload -Uz compinit
 compinit -d "${ZDOTDIR:-$HOME}/.zcompdump"
 
 # PUGINS 
-if [[ $(uname -s) == Linux ]]; then
-  plugins=(z git kubectl zsh-autosuggestions zsh-syntax-highlighting sudo web-search colored-man-pages nix-shell)
-else
-  plugins=(z git kubectl zsh-autosuggestions zsh-syntax-highlighting sudo web-search colored-man-pages)
-fi
+plugins=(z git kubectl zsh-autosuggestions zsh-syntax-highlighting sudo web-search colored-man-pages)
 
 # Set ZSH_CUSTOM dir if env var not present
 if [[ -z "$ZSH_CUSTOM" ]]; then
@@ -67,14 +63,6 @@ source ~/.oh-my-zsh/plugins/tmuxinator/_mst
 source ~/.oh-my-zsh/plugins/tmuxinator/_ms
 
 fpath=(${HOME}/.oh-my-zsh/completions/ $fpath)
-
-# Add nix shell to prompt if in nix env
-if [[ $(uname -s) == Linux ]]; then
-  source ${HOME}/.oh-my-zsh/custom/plugins/nix-shell/nix-shell.plugin.zsh
-  source ${HOME}/.oh-my-zsh/custom/plugins/nix-zsh-completions/nix-zsh-completions.plugin.zsh
-  fpath=(${HOME}/.oh-my-zsh/custom/plugins/nix-zsh-completions/nix-zsh-completions.plugin.zsh $fpath)
-  prompt_nix_shell_setup
-fi
 
 if [[ $(uname -s) == Linux ]]; then
   eval $(dircolors -p | sed -e 's/DIR 01;34/DIR 01;36/' | dircolors /dev/stdin)
