@@ -39,6 +39,7 @@ vim.keymap.set("n", "N", "Nzzzv")                                               
 utils.lnmap("sa", "ggVG")                                                                                      -- select all
 utils.lnmap("r", ":%s/\\v/g<left><left>", { silent = false })                                                  -- replace
 utils.lnmap("ss", ":s/", { silent = false })                                                                   -- search and replace
+utils.lnmap("SS", ":%s/", { silent = false })                                                                   -- search and replace
 utils.vmap("<leader><C-s>", ":s/\\%V")                                                                         -- Search only in visual selection usingb%V atom
 utils.vmap("<C-r>", '"hy:%s/\\v<C-r>h//g<left><left>', { silent = false })                                     -- change selection
 utils.nmap(",<space>", ":nohlsearch<CR>")                                                                      -- Stop search highlight
@@ -209,7 +210,7 @@ vim.keymap.set({ "n", "i", "v", "x" }, "<C-g>s", "<cmd>GpStop<cr>", keymapOption
 utils.emap("<Leader>ow", "<Plug>(leap-cross-window)")
 
 -- Nvim zenmode Mappings
-utils.lnmap("zm", "<cmd>ZenMode<cr>")
+utils.lnmap("zm", "<cmd>lua toggleZenAndFix()<cr>")
 
 -- Send to window
 -- Visual mode mappings
