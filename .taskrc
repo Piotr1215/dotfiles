@@ -30,8 +30,9 @@ data.location=/home/decoder/.task
 # include dark-256.theme
 #include dark-red-256.theme
 include dark-green-256.theme
-color.blocked = white on red
-color.blocking = white on yellow
+color.blocked = dark-blue-256 on black
+color.blocking = dark-green-256 on black
+color.tag.epic = bold green
 #include dark-blue-256.theme
 # include dark-violets-256.theme
 # include dark-yellow-green.theme
@@ -61,8 +62,8 @@ report.ideas.sort=manual_priority-,project+
 report.ideas.filter=status:pending and +idea 
 
 report.current.description=List of current tasks in the work context
-report.current.columns=id,entry.age,manual_priority,project,tags,description.desc,entry,due.relative,duration
-report.current.labels=ID,Age,P,Proj,Tag,Desc,Created,Due,Duration
+report.current.columns=id,entry.age,manual_priority,project,tags,description.desc,entry,due.relative,duration,follow
+report.current.labels=ID,Age,P,Proj,Tag,Desc,Created,Due,Duration,Follow
 report.current.sort=manual_priority-,project+
 report.current.filter=status:pending and (manual_priority>=0 or manual_priority="") and -idea
 
