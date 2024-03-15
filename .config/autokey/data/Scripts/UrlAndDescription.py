@@ -157,7 +157,7 @@ if 'Firefox' in active_window_title or 'Chrome' in active_window_title or 'Brave
         # PROJECT: playlist
         if "Add to Playlist" in choices:
             if "youtube.com" in domain or "youtu.be" in domain:  # Check if the domain is YouTube
-                append_to_playlist(url, description, haruna_playlist_path)
+                subprocess.run(["/home/decoder/dev/dotfiles/scripts/__append_to_playlist.py", url, active_window_title, haruna_playlist_path])
             else:
                 print("The URL must be from YouTube to add to Haruna playlist.")
 
