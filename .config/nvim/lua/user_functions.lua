@@ -4,6 +4,27 @@ local action_state = require "telescope.actions.state"
 local unpack = unpack or table.unpack
 local zoomed = false
 
+if vim.g.scroll_fix_enabled == nil then
+    vim.g.scroll_fix_enabled = false -- Start with scroll fix disabled
+end
+function _G.toggleZenAndFix()
+    -- Toggle ZenMode
+    vim.cmd('ZenMode')
+
+    -- Toggle between FIX 25 and FIX -1 based on a global variable
+    if vim.g.scroll_fix_enabled then
+        -- If scroll fix is currently enabled, disable it
+        vim.cmd('FIX -1')
+        vim.g.scroll_fix_enabled = false
+        print "ScrollFix disabled."
+    else
+        -- If scroll fix is currently disabled, enable it to your preferred setting (25 in this case)
+        vim.cmd('FIX 25')
+        vim.g.scroll_fix_enabled = true
+        print "ScrollFix set to 25%."
+    end
+end
+
 function _G.select_note_type_and_create()
   local note_types = {
     'projects', 'areas', 'resources', 'meetings', 'reviews'
