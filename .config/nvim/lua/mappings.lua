@@ -15,6 +15,22 @@ utils.lnmap("qq", ":qa<cr>")                                                    
 utils.lnmap("qa", ":qa!<cr>")                                                                                  -- close all without saving
 -- UNMAP --
 utils.nmap("<nop>", "<Plug>NERDCommenterAltDelims")                                                            -- tab is for moving around only
+vim.api.nvim_set_keymap('t', '<A-h>', [[<C-\><C-N><C-w>h]], {noremap = true})
+vim.api.nvim_set_keymap('t', '<A-j>', [[<C-\><C-N><C-w>j]], {noremap = true})
+vim.api.nvim_set_keymap('t', '<A-k>', [[<C-\><C-N><C-w>k]], {noremap = true})
+vim.api.nvim_set_keymap('t', '<A-l>', [[<C-\><C-N><C-w>l]], {noremap = true})
+vim.api.nvim_set_keymap('i', '<A-h>', [[<C-\><C-N><C-w>h]], {noremap = true})
+vim.api.nvim_set_keymap('i', '<A-j>', [[<C-\><C-N><C-w>j]], {noremap = true})
+vim.api.nvim_set_keymap('i', '<A-k>', [[<C-\><C-N><C-w>k]], {noremap = true})
+vim.api.nvim_set_keymap('i', '<A-l>', [[<C-\><C-N><C-w>l]], {noremap = true})
+vim.api.nvim_set_keymap('n', '<A-h>', [[<C-w>h]], {noremap = true})
+vim.api.nvim_set_keymap('n', '<A-j>', [[<C-w>j]], {noremap = true})
+vim.api.nvim_set_keymap('n', '<A-k>', [[<C-w>k]], {noremap = true})
+vim.api.nvim_set_keymap('n', '<A-l>', [[<C-w>l]], {noremap = true})
+vim.api.nvim_set_keymap('n', '<leader>tv',":vsp term://", {noremap = true, silent = false})
+vim.api.nvim_set_keymap('n', '<leader>th',":sp term://", {noremap = true, silent = false})
+
+--
 -- NAVIGATION --
 utils.nmap("<c-l>", "<c-w>l")                                                                                  -- move to right window
 utils.nmap("<c-h>", "<c-w>h")                                                                                  -- move to left window
@@ -118,7 +134,6 @@ utils.xmap("<leader>tc", "<Plug>(vsnip-cut-text)")                              
 -- ABBREVIATIONS --
 vim.cmd "abb cros Crossplane"
 vim.cmd "abb tcom TODO:(piotr1215)"
-
 
 -- PLUGIN MAPPINGS --
 -- Mdeval
