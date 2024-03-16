@@ -2,6 +2,35 @@
 # ~ works ok here
 source ~/dev/dotfiles/scripts/__reusable_variables.sh
 
+function crypt() {
+  ENCRYPTED_DIR="$HOME/dev/encrypted"
+  # Check if the current directory is the mount point or a subdirectory of it
+  if pwd | grep -q "^$MOUNT_POINT"; then
+    echo "You are currently in the encrypted directory. Changing to home directory."
+    cd ~/dev || return 1
+  fi
+  if findmnt -M "$ENCRYPTED_DIR" > /dev/null; then
+    fusermount -u "$ENCRYPTED_DIR" && echo "Encrypted directory unmounted successfully." || echo "Failed to unmount encrypted directory."
+    bw logout
+    echo "Logged out from bitwarden."
+  else
+    echo "Encrypted directory is not mounted."
+  fi
+}
+
+function uncrypt() {
+  if [ -n "$(\ls -A ~/dev/encrypted)" ]; then
+    echo "Directory is not empty, assuming already uncrypted, switching to directory."
+  elif encfs ~/.encrypted ~/dev/encrypted; then
+    echo "Encrypted directory mounted successfully."
+  else
+    echo "Failed to mount encrypted directory."
+    return
+  fi
+  
+  cd ~/dev/encrypted && ls
+}
+
 # Define custom copy function
 function copy_and_create_folders() {
     echo "Debug: Function copy_and_create_folders called"  # Debug line
