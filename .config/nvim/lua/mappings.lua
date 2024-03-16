@@ -76,6 +76,7 @@ utils.nmap("<leader>ll", "o<cr>")                                               
 utils.nmap('<leader>l', ':lua add_empty_lines(true)<CR>')                                                      -- add line below without entering insert mode
 utils.nmap('<leader>L', ':lua add_empty_lines(false)<CR>')                                                     -- add line above without entering insert mode
 utils.nmap("<leader>i", "i<space><esc>")                                                                       -- insert space
+utils.nmap("<leader>sq", ":normal viWS\"<CR>")                                                                 -- skip over a letter
 -- REGISTRIES --
 utils.imap("<C-p>", "<C-o>:Telescope registers<cr><C-w>")                                                      -- The below mapping helps select from a register in the place of insert point
 utils.lnmap("yl", '"*yy')                                                                                      -- yank line to the clipboard buffer
