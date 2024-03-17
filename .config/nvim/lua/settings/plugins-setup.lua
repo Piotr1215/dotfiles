@@ -166,6 +166,12 @@ require("obsidian").setup {
       opts = { buffer = true },
     },
   },
+  note_path_func = function(spec)
+    -- This is equivalent to the default behavior.
+    local path = spec.dir / tostring(spec.title)
+    return path:with_suffix(".md")
+  end,
+
   wiki_link_func = function(opts)
   if opts.label ~= opts.path then
     return string.format("[[%s|%s]]", opts.path, opts.label)
