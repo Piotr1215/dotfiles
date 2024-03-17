@@ -90,7 +90,6 @@ return require("packer").startup(function(use)
   use "mattn/emmet-vim"
   use "mattn/webapi-vim"
   use "mhinz/vim-startify"
-  use "wellle/targets.vim"
   use "preservim/nerdcommenter"
   use "tpope/vim-fugitive"
   use "voldikss/vim-floaterm"
