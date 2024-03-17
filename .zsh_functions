@@ -11,7 +11,6 @@ function crypt() {
   fi
   if findmnt -M "$ENCRYPTED_DIR" > /dev/null; then
     fusermount -u "$ENCRYPTED_DIR" && echo "Encrypted directory unmounted successfully." || echo "Failed to unmount encrypted directory."
-    bw logout
     echo "Logged out from bitwarden."
   else
     echo "Encrypted directory is not mounted."
