@@ -139,3 +139,4 @@ context.archive.read=+archive
 context.archive.write=+archive
 context.integration.read=+integration
 context.integration.write=+integration
+uda.taskwarrior-tui.selection.reverse=yes
