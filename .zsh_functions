@@ -165,7 +165,7 @@ function _fif_common() {
   local files
   local preview_cmd=$(printf "rga %s --pretty --context 10 '%s' {}" "$ignore_case_flag" "$*")
   local rga_output=$(rga --max-count=1 $ignore_case_flag --files-with-matches --no-messages "$*")
-
+  echo "$rga_output" | xsel --clipboard --input
   IFS=$'\n' files=($(echo "$rga_output" | fzf-tmux +m --preview="$preview_cmd" --multi --select-1 --exit-0)) || return 1
 
   if [ ${#files[@]} -eq 0 ]; then
@@ -180,7 +180,6 @@ function _fif_common() {
     fi
   done
   files=("${temp_files[@]}")
-
   local nvim_cmd=""
   case "${#files[@]}" in
     2)
