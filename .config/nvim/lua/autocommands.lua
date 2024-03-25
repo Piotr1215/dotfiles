@@ -37,7 +37,34 @@ vim.api.nvim_create_autocmd("BufWritePost", {
   group = goSettings,
 })
 
+-- Function to dynamically set up Vale based on the file's directory
+local function dynamicValeSetup()
+  -- Default vale_config_path
+  local vale_config_path = "$HOME/dev/vale/.vale.ini"
 
+  -- Get the current file's directory
+  local file_path = vim.fn.expand("%:p:h")
+
+  -- Check if the current file is inside the crossplane-docs/content directory
+  if string.match(file_path, "crossplane%-docs/content") then
+    -- Update vale_config_path for crossplane-docs content
+    vale_config_path = "$HOME/dev/crossplane-docs/utils/vale/.vale.ini"
+  end
+
+  -- Configure Vale with the determined vale_config_path
+  require("vale").setup({
+    bin = "/usr/local/bin/vale",
+    vale_config_path = vale_config_path,
+  })
+end
+
+-- Autocommand to configure Vale on entering a buffer or when the filetype is markdown
+vim.api.nvim_create_autocmd({"BufEnter", "FileType"}, {
+  pattern = "*.md",
+  callback = function()
+    dynamicValeSetup()
+  end,
+})
 -- Run Vale on markdown files in crossplane-docs
 vim.api.nvim_create_autocmd("BufWritePost", {
   pattern = "*.md",
