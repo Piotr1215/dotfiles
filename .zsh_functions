@@ -165,6 +165,8 @@ function _fif_common() {
   local files
   local preview_cmd=$(printf "rga %s --pretty --context 10 '%s' {}" "$ignore_case_flag" "$*")
   local rga_output=$(rga --max-count=1 $ignore_case_flag --files-with-matches --no-messages "$*")
+  # PROJECT: project
+  # This is used to copy file names so that they can be used a project documentaiton
   echo "$rga_output" | xsel --clipboard --input
   IFS=$'\n' files=($(echo "$rga_output" | fzf-tmux +m --preview="$preview_cmd" --multi --select-1 --exit-0)) || return 1
 
