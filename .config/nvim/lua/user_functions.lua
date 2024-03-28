@@ -239,18 +239,22 @@ vim.cmd [[ autocmd BufWritePost *.m3u lua test_delete_videos() ]]
 -- This function modifies the current buffer, adding lines that invoke taskwarrior commands.
 -- The resulting lines will include any additional modifiers passed to the function.
 -- @param ... A variable number of string modifiers to pass to the `task add` command
-function _G.process_task_list(...)
-  local args = { ... }
+function _G.process_task_list(start_line, end_line, ...)
+  local args = {...} -- Remaining arguments are considered modifiers.
   local modifiers = table.concat(args, " ")
-  local lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
-  local new_lines = {}
+  local lines
 
-  -- Adding shebang and setting options
-  table.insert(new_lines, "#!/usr/bin/env bash")
-  table.insert(new_lines, "set -eo pipefail")
+  -- Determine if a specific range was provided; otherwise, use the entire file.
+  if start_line and end_line then
+    lines = vim.api.nvim_buf_get_lines(0, start_line - 1, end_line, false)
+  else
+    lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
+  end
+
+  local new_lines = {"#!/usr/bin/env bash", "set -eo pipefail"}
 
   for _, line in ipairs(lines) do
-    local trimmed_line = line:gsub("^[•*%-%+]+%s*", "") -- Remove bullet points
+    local trimmed_line = line :gsub("^[•*%-%+]+%s*", "")  -- Removes bullet points like •, *, -, and + at the start of a line
     local links = {}
 
     -- Extract http/https links and remove them from the task description
@@ -260,25 +264,17 @@ function _G.process_task_list(...)
     end)
 
     if #trimmed_line > 0 then
-      table.insert(
-        new_lines,
-        "output=$(task add " .. (modifiers ~= "" and modifiers .. " " or "") .. '"' .. trimmed_line .. '")'
-      )
-      table.insert(
-        new_lines,
-        'task_id=$(echo "$output" | grep -o "Created task [0-9]*." | cut -d " " -f 3 | tr -d ".")'
-      )
+      table.insert(new_lines, "output=$(task add " .. (modifiers ~= "" and modifiers .. " " or "") .. '"' .. trimmed_line .. '")')
+      table.insert(new_lines, 'task_id=$(echo "$output" | grep -o "Created task [0-9]*." | cut -d " " -f 3 | tr -d ".")')
 
-      -- Annotate the task with the extracted links
       for _, link in ipairs(links) do
         table.insert(new_lines, "task $task_id annotate -- " .. link)
       end
-    else
-      table.insert(new_lines, "") -- Keep empty lines
     end
   end
 
-  vim.api.nvim_buf_set_lines(0, 0, -1, false, new_lines)
+  -- Utilize the create_floating_scratch function to display the new lines in a floating window.
+  _G.create_floating_scratch(new_lines)
 end
 
 --- Custom completion function specifically for `process_task_list` in Neovim's command-line interface.
@@ -668,9 +664,8 @@ vim.api.nvim_set_keymap("n", "f", ":call CustomF(0)<CR>", {})
 vim.api.nvim_set_keymap("v", "f", ":call CustomF(0)<CR>", {})
 vim.api.nvim_set_keymap("n", "F", ":call CustomF(1)<CR>", {})
 vim.api.nvim_set_keymap("v", "F", ":call CustomF(1)<CR>", {})
-vim.api.nvim_set_keymap("n", "<Leader>pt", ":lua _G.process_task_list()<CR>", { noremap = true, silent = true })
 vim.cmd [[
-  command! -nargs=* -complete=customlist,v:lua.my_custom_complete ProcessTasks :lua _G.process_task_list(<f-args>)
+  command! -range -nargs=* -complete=customlist,v:lua.my_custom_complete ProcessTasks :lua _G.process_task_list(<line1>, <line2>, <f-args>)
 ]]
 
 create_word_selection_mappings()
