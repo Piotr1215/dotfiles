@@ -19,6 +19,7 @@ function source:get_keyword_pattern()
   return [[\k\+]]
 end
 
+-- PROJECT: taskwarrior-projects
 ---Invoke completion (required).
 ---@param params cmp.SourceCompletionApiParams
 ---@param callback fun(response: lsp.CompletionResponse|nil)
@@ -27,6 +28,7 @@ function source:complete(params, callback)
     { label = 'ranger-tmux-setup' },
     { label = 'playlist' },
     { label = 'zoom-monitor' },
+    { label = 'upcli'},
   })
 end
 
