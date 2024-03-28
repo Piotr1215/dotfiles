@@ -7,6 +7,24 @@ local zoomed = false
 if vim.g.scroll_fix_enabled == nil then
     vim.g.scroll_fix_enabled = false -- Start with scroll fix disabled
 end
+
+function _G.grepInProject()
+    local handle = io.popen('git rev-parse --show-toplevel 2> /dev/null')
+    local gitRoot = handle and handle:read("*a") or ""
+    if handle then
+        handle:close()
+    end
+
+    if gitRoot ~= "" then
+        gitRoot = gitRoot:gsub("%s+$", "")
+    end
+
+    local cwd = gitRoot ~= "" and gitRoot or vim.fn.getcwd()
+    require('fzf-lua').live_grep({ cwd = cwd })
+end
+
+vim.api.nvim_set_keymap('n', '<leader>fw', ':lua grepInProject()<CR>', { noremap = true, silent = true })
+
 function _G.toggleZenAndFix()
     -- Toggle ZenMode
     vim.cmd('ZenMode')
