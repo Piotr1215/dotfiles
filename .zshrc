@@ -143,6 +143,27 @@ function pet-select-bmk() {
 zle -N pet-select-bmk
 bindkey '^t' pet-select-bmk
 
+function output_file_path() {
+    # Use fd or find to list files and pipe into fzf for selection
+    local selected_file=$(fd . --type f | fzf)
+
+    # Check if a file was selected
+    if [[ -n $selected_file ]]; then
+        # Convert to absolute path (realpath can also be used)
+        local absolute_path=$(realpath "$selected_file")
+
+        # Append the selected file's path to the current command line
+        BUFFER="$BUFFER $absolute_path"
+        CURSOR=$#BUFFER  # Move cursor to the end of the line
+    fi
+
+    zle reset-prompt  # Redraw the prompt to reflect the updated BUFFER
+    zle .redisplay  # Explicitly request a redisplay
+}
+
+zle -N output_file_path
+bindkey '^[f' output_file_path
+
 function pet-select() {
   BUFFER=$(pet search --query "$LBUFFER")
   CURSOR=$#BUFFER
