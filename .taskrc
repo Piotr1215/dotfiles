@@ -65,7 +65,7 @@ report.current.description=List of current tasks in the work context
 report.current.columns=id,entry.age,manual_priority,project,tags,description.desc,entry,due.relative,duration,follow
 report.current.labels=ID,Age,P,Proj,Tag,Desc,Created,Due,Duration,Follow
 report.current.sort=manual_priority-,project+
-report.current.filter=status:pending and (manual_priority>=0 or manual_priority="") and -idea
+report.current.filter=status:pending and -idea
 
 report.current-projects.description=List of current projects in work context
 report.current-projects.columns=project
