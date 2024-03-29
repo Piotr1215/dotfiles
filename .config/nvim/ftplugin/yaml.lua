@@ -3,6 +3,11 @@ vim.api.nvim_buf_set_keymap(0, "n", "<leader>yt", ":YAMLTelescope<CR>", { norema
 -- FOLDING --
 utils.lnmap("yi", ":set foldmethod=indent<CR>") -- indent based folding
 
+vim.api.nvim_create_autocmd("FileType", {
+  pattern = "yaml",
+  command = "setlocal cursorcolumn",
+})
+
 -- Setup cmp setup buffer configuration - 👻 text off for markdown
 local cmp = require "cmp"
 cmp.setup.buffer {
