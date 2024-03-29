@@ -82,6 +82,7 @@ return require("packer").startup(function(use)
   use "karoliskoncevicius/vim-sendtowindow"
   use { "dccsillag/magma-nvim", run = ":UpdateRemotePlugins" }
   use "tpope/vim-rhubarb"
+  use { "nvim-neotest/nvim-nio" }
   use "David-Kunz/gen.nvim"
   use "RRethy/nvim-align"
   use "vim-scripts/scrollfix"
@@ -92,6 +93,7 @@ return require("packer").startup(function(use)
   use "mhinz/vim-startify"
   use "preservim/nerdcommenter"
   use "tpope/vim-fugitive"
+  use 'mbbill/undotree'
   use "voldikss/vim-floaterm"
   use {
     "kylechui/nvim-surround",

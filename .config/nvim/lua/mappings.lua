@@ -228,6 +228,9 @@ utils.emap("<Leader>ow", "<Plug>(leap-cross-window)")
 -- Nvim zenmode Mappings
 utils.lnmap("zm", "<cmd>lua toggleZenAndFix()<cr>")
 
+-- Undotree
+vim.keymap.set('n', '<leader>5', vim.cmd.UndotreeToggle)
+
 -- Send to window
 -- Visual mode mappings
 utils.xmap("<leader><Left>", "<Plug>SendLeftV<cr>", keymapOptions("Visual Send Left"))
