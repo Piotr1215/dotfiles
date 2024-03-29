@@ -93,7 +93,15 @@ return require("packer").startup(function(use)
   use "mhinz/vim-startify"
   use "preservim/nerdcommenter"
   use "tpope/vim-fugitive"
-  use 'mbbill/undotree'
+use {
+  "jiaoshijie/undotree",
+  config = function()
+    require('undotree').setup()
+  end,
+  requires = {
+    "nvim-lua/plenary.nvim",
+  },
+}
   use "voldikss/vim-floaterm"
   use {
     "kylechui/nvim-surround",
