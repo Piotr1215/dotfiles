@@ -173,9 +173,6 @@ vim.keymap.set("n", "<leader>xl", "<cmd>TroubleToggle loclist<cr>", { silent = t
 vim.keymap.set("n", "<leader>xq", "<cmd>TroubleToggle quickfix<cr>", { silent = true, noremap = true })
 vim.keymap.set("n", "gR", "<cmd>TroubleToggle lsp_references<cr>", { silent = true, noremap = true })
 
--- Rust Crates
-vim.keymap.set("n", "<leader>uc", "<cmd>lua require('crates').upgrade_crate()<cr>")
-
 -- Scrollfix
 utils.lnmap("f2", "<cmd>FIX 25<cr>")
 utils.lnmap("f0", "<cmd>FIX -1<cr>")
@@ -229,7 +226,7 @@ utils.emap("<Leader>ow", "<Plug>(leap-cross-window)")
 utils.lnmap("zm", "<cmd>lua toggleZenAndFix()<cr>")
 
 -- Undotree
-vim.keymap.set('n', '<leader>5', vim.cmd.UndotreeToggle)
+vim.keymap.set('n', '<leader>u', require('undotree').toggle, { noremap = true, silent = true })
 
 -- Send to window
 -- Visual mode mappings
