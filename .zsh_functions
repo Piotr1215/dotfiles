@@ -211,6 +211,11 @@ function fif() {
     _fif_common "--ignore-case" "$@"
 }
 
+# Wrapper function for project tags search
+function fifp() {
+    _fif_common "--ignore-case" "PROJECT: $*"
+}
+
 # Uploads content to clbin and copies URL to clipboard, opens in browser
 function share ()
 {
