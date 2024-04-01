@@ -145,7 +145,7 @@ bindkey '^t' pet-select-bmk
 
 function output_file_path() {
     # Use fd or find to list files and pipe into fzf for selection
-    local selected_file=$(fd . --type f | fzf)
+    local selected_file=$(fd . | fzf)
 
     # Check if a file was selected
     if [[ -n $selected_file ]]; then
