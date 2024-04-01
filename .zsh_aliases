@@ -97,6 +97,7 @@ alias tadi='~/dev/dotfiles/scripts/__create_task.sh'
 alias tedit='vim ~/.tmux.conf'
 alias tuic='task current'
 alias tuid='task workdone'
+alias tuiw='task context work; tui --report current'
 alias uxp="just ~/dev/dotfiles/scripts/uxp-setup/setup_infra"
 alias uxpf="just ~/dev/dotfiles/scripts/uxp-setup/setup_infra functions"
 alias uxpm="just ~/dev/dotfiles/scripts/uxp-setup/setup_infra master"
