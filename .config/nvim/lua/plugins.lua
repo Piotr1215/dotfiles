@@ -93,6 +93,7 @@ return require("packer").startup(function(use)
   use "mhinz/vim-startify"
   use "preservim/nerdcommenter"
   use "tpope/vim-fugitive"
+  use 'folke/neodev.nvim'
 use {
   "jiaoshijie/undotree",
   config = function()

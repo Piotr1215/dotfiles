@@ -85,6 +85,8 @@ vim.api.nvim_create_autocmd("FileType", {
   group = indentSettings,
 })
 
+vim.api.nvim_create_user_command("WS", function() vim.cmd("write | source %") end, { bang = false })
+
 vim.api.nvim_create_autocmd("FileType", {
   pattern = { "yaml" },
   command = "setlocal ts=2 sts=2 sw=2 expandtab",
