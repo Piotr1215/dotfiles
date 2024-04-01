@@ -12,9 +12,9 @@ local feedkey = function(key, mode)
 end
 
 local cmp_kinds = {
+  Function = "",
   Text = "",
   Method = "",
-  Function = "",
   Constructor = "",
   Field = "ﰠ",
   Variable = "",
@@ -98,7 +98,7 @@ cmp.setup({
 
   sources = {
     { name = 'nvim_lsp' },
-    { name = 'nvim_lua' },
+    { name = 'nvim_lua', priority = 100 },
     { name = 'vsnip' },
     { name = 'buffer' },
     { name = 'emoji' },

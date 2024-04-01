@@ -1,7 +1,7 @@
 local M = {}
 
 M.capabilities = require("cmp_nvim_lsp").default_capabilities()
-
+vim.lsp.set_log_level("debug")
 -- Diagnostic keymaps
 vim.keymap.set("n", "[d", vim.diagnostic.goto_prev, { desc = "Go to previous diagnostic message" })
 vim.keymap.set("n", "]d", vim.diagnostic.goto_next, { desc = "Go to next diagnostic message" })
@@ -15,6 +15,7 @@ M.on_attach = function(_, bufnr)
     vim.keymap.set("n", keys, func, { buffer = bufnr, desc = desc })
   end
   vim.api.nvim_buf_set_option(bufnr, 'omnifunc', 'v:lua.vim.lsp.omnifunc')
+  vim.keymap.set("i", "<C-k>", vim.lsp.buf.signature_help, {buffer=0})
 
   nmap("<leader>ca", vim.lsp.buf.code_action, "[C]ode [A]ction")
   nmap("gd", vim.lsp.buf.definition, "[G]oto [D]efinition")
