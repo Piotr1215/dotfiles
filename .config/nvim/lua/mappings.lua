@@ -225,6 +225,10 @@ utils.emap("<Leader>ow", "<Plug>(leap-cross-window)")
 -- Nvim zenmode Mappings
 utils.lnmap("zm", "<cmd>lua toggleZenAndFix()<cr>")
 
+-- Nvim Telescope Crossplane Mappings
+vim.keymap.set("n", "<Leader>tcm", ":Telescope telescope-crossplane crossplane_managed<CR>")
+vim.keymap.set("n", "<Leader>tcr", ":Telescope telescope-crossplane crossplane_resources<CR>")
+
 -- Undotree
 vim.keymap.set('n', '<leader>u', require('undotree').toggle, { noremap = true, silent = true })
 
