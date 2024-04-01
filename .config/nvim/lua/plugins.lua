@@ -94,6 +94,7 @@ return require("packer").startup(function(use)
   use "preservim/nerdcommenter"
   use "tpope/vim-fugitive"
   use 'folke/neodev.nvim'
+  use 'Piotr1215/telescope-crossplane.nvim'
 use {
   "jiaoshijie/undotree",
   config = function()
