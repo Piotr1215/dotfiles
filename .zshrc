@@ -225,3 +225,10 @@ if [ -f '/home/decoder/dev/clusters/primary-dev/google-cloud-sdk/completion.zsh.
 eval "$(direnv hook zsh)"
 eval "$(starship init zsh)"
 # zprof > /tmp/zprof.out
+
+# bun completions
+[ -s "/home/decoder/.oh-my-zsh/completions/_bun" ] && source "/home/decoder/.oh-my-zsh/completions/_bun"
+
+# bun
+export BUN_INSTALL="$HOME/.bun"
+export PATH="$BUN_INSTALL/bin:$PATH"
