@@ -336,6 +336,7 @@ vim.g.mdip_imgdir = "_media"
 vim.g.mdip_imgname = "image"
 vim.g["plantuml_previewer#viewer_path"] = "~/.vim/bundle/plantuml-previewer.vim/viewer"
 vim.g["plantuml_previewer#debug_mode"] = 0
+vim.g["plantuml_previewer#plantuml_jar_path"] = "/usr/local/bin/plantuml.jar"
 -- setup custom emmet snippets
 vim.g.user_emmet_settings = "webapi#json#decode(join(readfile(expand('~/.snippets_custom.json')), \"\n\"))"
 vim.g.indentLine_char = "⦙"
