@@ -2,6 +2,14 @@
 # ~ works ok here
 source ~/dev/dotfiles/scripts/__reusable_variables.sh
 
+function saver() {
+  if [[ -z $1 ]]; then
+    echo "Provide hidden text to save"
+    return 1
+  fi
+  tmatrix --mode=default --fall-speed=0,1 --title="$1" --color=green --background=black 
+}
+
 function crypt() {
   ENCRYPTED_DIR="$HOME/dev/encrypted"
   # Check if the current directory is the mount point or a subdirectory of it
