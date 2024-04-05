@@ -95,6 +95,7 @@ return require("packer").startup(function(use)
   use "tpope/vim-fugitive"
   use 'folke/neodev.nvim'
   use 'Piotr1215/telescope-crossplane.nvim'
+  use {'mistricky/codesnap.nvim', run = 'make'}
 use {
   "jiaoshijie/undotree",
   config = function()

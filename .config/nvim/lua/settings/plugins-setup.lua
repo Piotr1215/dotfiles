@@ -7,7 +7,10 @@ require("yanksearch").setup {
   lines_below = 0,
   lines_around = 0, -- This will override lines_above and lines_below if set to a non-zero value
 }
-
+require("codesnap").setup({
+  -- ...
+  watermark = "󰭪"
+})
 require("mini.align").setup()
 require('mini.ai').setup()
 
