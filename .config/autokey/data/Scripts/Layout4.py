@@ -3,5 +3,6 @@ import subprocess
 
 layout = '/home/decoder/dev/dotfiles/scripts/__layouts.sh'
 
-subprocess.run([layout, "4"])
+# Slack -> Alacritty
+subprocess.run([layout, "9"])
 

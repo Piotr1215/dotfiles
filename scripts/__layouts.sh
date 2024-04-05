@@ -152,6 +152,46 @@ slack_firefox_vertical() {
 		echo "No Firefox window found."
 	fi
 }
+slack_alacritty_vertical() {
+
+	slack=$(xdotool search --onlyvisible --classname Slack | head -n 1)
+	if [[ -z "${slack}" ]]; then
+		echo "No Slack window found"
+		alacritty_firefox_vertical
+		exit 0
+	fi
+
+	# Get the ID of the first Firefox window across all workspaces
+	slack_window=$(xdotool search --onlyvisible --classname Slack | head -n 1)
+	if [ -n "$slack_window" ]; then
+
+		minimize_window "$slack_window"
+
+		xdotool windowmap "$slack_window"
+		# Resize and move the window to the left side of the screen with exact pixel dimensions
+		xdotool windowsize "$slack_window" 1915 2092
+		xdotool windowmove "$slack_window" 0 13
+		xdotool windowactivate --sync "$slack_window"
+
+	else
+		echo "No Slack window found."
+	fi
+	# Get the ID of the first visible Alacritty window
+	window=$(xdotool search --onlyvisible --classname Alacritty | head -n 1)
+	if [ -n "$window" ]; then
+		# Unmaximize the window
+		xdotool windowunmap "$window"
+		# Resize the window
+		xdotool windowmap "$window"
+		# Resize and move the window to the left side of the screen with exact pixel dimensions
+		xdotool windowsize "$window" 1920 2128
+		xdotool windowmove "$window" 1907 21
+		xdotool windowactivate --sync "$window"
+
+	else
+		echo "No Alacritty window found."
+	fi
+}
 max_firefox() {
 
 	# layout1.sh
@@ -288,8 +328,9 @@ case $1 in
 6) zoom_alacritty_horizontal ;;
 7) max_slack ;;
 8) firefox_firefox_alacritty ;;
+9) slack_alacritty_vertical ;;
 *)
-	echo "Usage: $0 {1|2|3|4|5|6|7|8}"
+	echo "Usage: $0 {1|2|3|4|5|6|7|8|9}"
 	exit 1
 	;;
 esac
