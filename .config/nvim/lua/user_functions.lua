@@ -20,7 +20,7 @@ function _G.grepInProject()
     end
 
     local cwd = gitRoot ~= "" and gitRoot or vim.fn.getcwd()
-    require('fzf-lua').live_grep({ cwd = cwd })
+    require('telescope').extensions.live_grep_args.live_grep_args({ cwd = cwd })
 end
 
 vim.api.nvim_set_keymap('n', '<leader>fw', ':lua grepInProject()<CR>', { noremap = true, silent = true })
