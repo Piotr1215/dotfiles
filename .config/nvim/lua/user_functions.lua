@@ -623,20 +623,54 @@ function _G.create_floating_scratch(content)
   vim.api.nvim_buf_set_keymap(buf, 'n', 'q', ':q!<CR>', { noremap = true, silent = true })
 end
 
+function _G.interrupt_process()
+  if _G.job_id then
+    vim.fn.jobstop(_G.job_id)
+    _G.job_id = nil -- Clear the job ID after stopping the job
+    print("Process interrupted.")
+  end
+end
+
 function _G.execute_visual_selection()
-  -- Yank visual selection into register "a"
   vim.cmd('normal! gvy')
   local lines = vim.fn.getreg('"')
+  
+  -- Create a temporary script file
+  local script_path = "/tmp/nvim_exec_script.sh"
+  local script_file = io.open(script_path, "w")
+  script_file:write(lines)
+  script_file:close()
 
-  -- Clean up the lines and print for debugging
-  lines = lines:gsub("[\n\r]", ""):gsub("'", [['"'"']])
-  print("Executing command: ", lines)
+  local command = "bash " .. script_path
+  _G.create_floating_scratch(nil)
 
-  -- Execute command and capture output
-  local result = vim.fn.systemlist("bash -c " .. "'" .. lines .. "'")
+  local bufs = vim.api.nvim_list_bufs()
+  local target_buf = bufs[#bufs]
 
-  -- Create a floating scratch buffer and populate it with the output
-  _G.create_floating_scratch(result)
+  _G.job_id = vim.fn.jobstart(command, {
+    on_stdout = function(_, data)
+      if data then
+        vim.api.nvim_buf_set_lines(target_buf, -1, -1, false, data)
+        local win_ids = vim.fn.win_findbuf(target_buf)
+        for _, win_id in ipairs(win_ids) do
+          vim.api.nvim_win_set_cursor(win_id, {vim.api.nvim_buf_line_count(target_buf), 0})
+        end
+      end
+    end,
+    on_stderr = function(_, data)
+      if data then
+        vim.api.nvim_buf_set_lines(target_buf, -1, -1, false, data)
+        local win_ids = vim.fn.win_findbuf(target_buf)
+        for _, win_id in ipairs(win_ids) do
+          vim.api.nvim_win_set_cursor(win_id, {vim.api.nvim_buf_line_count(target_buf), 0})
+        end
+      end
+    end,
+    stdout_buffered = false,
+    stderr_buffered = false,
+  })
+
+  vim.api.nvim_buf_set_keymap(target_buf, 'n', '<C-c>', '<cmd>lua _G.interrupt_process()<CR>', { noremap = true, silent = true })
 end
 
 -- Map <leader>es in visual mode to the function
