@@ -149,7 +149,7 @@ if 'Firefox' in active_window_title or 'Chrome' in active_window_title or 'Brave
            screenshot_full_path = save_screenshot_to_file(media_folder_path)
            if screenshot_full_path:
                # Use the extension's shortcut to copy the selection as Markdown
-               title = get_custom_description("Enter title for the highlight")
+               title = get_custom_description(description)
                # Now proceed to append the markdown formatted text to your file
                append_to_web_highlights_with_screenshot(title, url, screenshot_full_path)
 
