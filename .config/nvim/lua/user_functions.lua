@@ -5,42 +5,42 @@ local unpack = unpack or table.unpack
 local zoomed = false
 
 if vim.g.scroll_fix_enabled == nil then
-    vim.g.scroll_fix_enabled = false -- Start with scroll fix disabled
+  vim.g.scroll_fix_enabled = false -- Start with scroll fix disabled
 end
 
 function _G.grepInProject()
-    local handle = io.popen('git rev-parse --show-toplevel 2> /dev/null')
-    local gitRoot = handle and handle:read("*a") or ""
-    if handle then
-        handle:close()
-    end
+  local handle = io.popen('git rev-parse --show-toplevel 2> /dev/null')
+  local gitRoot = handle and handle:read("*a") or ""
+  if handle then
+    handle:close()
+  end
 
-    if gitRoot ~= "" then
-        gitRoot = gitRoot:gsub("%s+$", "")
-    end
+  if gitRoot ~= "" then
+    gitRoot = gitRoot:gsub("%s+$", "")
+  end
 
-    local cwd = gitRoot ~= "" and gitRoot or vim.fn.getcwd()
-    require('telescope').extensions.live_grep_args.live_grep_args({ cwd = cwd })
+  local cwd = gitRoot ~= "" and gitRoot or vim.fn.getcwd()
+  require('telescope').extensions.live_grep_args.live_grep_args({ cwd = cwd })
 end
 
 vim.api.nvim_set_keymap('n', '<leader>fw', ':lua grepInProject()<CR>', { noremap = true, silent = true })
 
 function _G.toggleZenAndFix()
-    -- Toggle ZenMode
-    vim.cmd('ZenMode')
+  -- Toggle ZenMode
+  vim.cmd('ZenMode')
 
-    -- Toggle between FIX 25 and FIX -1 based on a global variable
-    if vim.g.scroll_fix_enabled then
-        -- If scroll fix is currently enabled, disable it
-        vim.cmd('FIX -1')
-        vim.g.scroll_fix_enabled = false
-        print "ScrollFix disabled."
-    else
-        -- If scroll fix is currently disabled, enable it to your preferred setting (25 in this case)
-        vim.cmd('FIX 25')
-        vim.g.scroll_fix_enabled = true
-        print "ScrollFix set to 25%."
-    end
+  -- Toggle between FIX 25 and FIX -1 based on a global variable
+  if vim.g.scroll_fix_enabled then
+    -- If scroll fix is currently enabled, disable it
+    vim.cmd('FIX -1')
+    vim.g.scroll_fix_enabled = false
+    print "ScrollFix disabled."
+  else
+    -- If scroll fix is currently disabled, enable it to your preferred setting (25 in this case)
+    vim.cmd('FIX 25')
+    vim.g.scroll_fix_enabled = true
+    print "ScrollFix set to 25%."
+  end
 end
 
 function _G.select_note_type_and_create()
@@ -258,31 +258,34 @@ vim.cmd [[ autocmd BufWritePost *.m3u lua test_delete_videos() ]]
 -- The resulting lines will include any additional modifiers passed to the function.
 -- @param ... A variable number of string modifiers to pass to the `task add` command
 function _G.process_task_list(start_line, end_line, ...)
-  local args = {...} -- Remaining arguments are considered modifiers.
+  local args = { ... }
   local modifiers = table.concat(args, " ")
   local lines
 
-  -- Determine if a specific range was provided; otherwise, use the entire file.
-  if start_line and end_line then
-    lines = vim.api.nvim_buf_get_lines(0, start_line - 1, end_line, false)
-  else
-    lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
+  -- If no range is provided, use the entire buffer.
+  if not start_line or not end_line then
+    start_line, end_line = 1, vim.api.nvim_buf_line_count(0)
   end
 
-  local new_lines = {"#!/usr/bin/env bash", "set -eo pipefail"}
+  lines = vim.api.nvim_buf_get_lines(0, start_line - 1, end_line, false)
+
+  local new_lines = { "#!/usr/bin/env bash", "set -eo pipefail" }
 
   for _, line in ipairs(lines) do
-    local trimmed_line = line :gsub("^[•*%-%+]+%s*", "")  -- Removes bullet points like •, *, -, and + at the start of a line
+    local trimmed_line = line:gsub("^[•*%-%+]+%s*", "")
     local links = {}
 
-    -- Extract http/https links and remove them from the task description
     trimmed_line = trimmed_line:gsub("(https?://[%w%.%-%_/&%?=%~]+)", function(link)
       table.insert(links, link)
       return ""
     end)
 
     if #trimmed_line > 0 then
-      table.insert(new_lines, "output=$(task add " .. (modifiers ~= "" and modifiers .. " " or "") .. '"' .. trimmed_line .. '")')
+      -- No more "\n" before "# Adding task:"; instead, just ensure it's a new entry in the table.
+      table.insert(new_lines, "") -- Ensure there's an empty line before adding a new task if desired.
+      table.insert(new_lines, "# Adding task: " .. trimmed_line)
+      table.insert(new_lines,
+        "output=$(task add " .. (modifiers ~= "" and modifiers .. " " or "") .. '"' .. trimmed_line .. '")')
       table.insert(new_lines, 'task_id=$(echo "$output" | grep -o "Created task [0-9]*." | cut -d " " -f 3 | tr -d ".")')
 
       for _, link in ipairs(links) do
@@ -291,7 +294,7 @@ function _G.process_task_list(start_line, end_line, ...)
     end
   end
 
-  -- Utilize the create_floating_scratch function to display the new lines in a floating window.
+
   _G.create_floating_scratch(new_lines)
 end
 
@@ -634,7 +637,7 @@ end
 function _G.execute_visual_selection()
   vim.cmd('normal! gvy')
   local lines = vim.fn.getreg('"')
-  
+
   -- Create a temporary script file
   local script_path = "/tmp/nvim_exec_script.sh"
   local script_file = io.open(script_path, "w")
@@ -653,7 +656,7 @@ function _G.execute_visual_selection()
         vim.api.nvim_buf_set_lines(target_buf, -1, -1, false, data)
         local win_ids = vim.fn.win_findbuf(target_buf)
         for _, win_id in ipairs(win_ids) do
-          vim.api.nvim_win_set_cursor(win_id, {vim.api.nvim_buf_line_count(target_buf), 0})
+          vim.api.nvim_win_set_cursor(win_id, { vim.api.nvim_buf_line_count(target_buf), 0 })
         end
       end
     end,
@@ -662,7 +665,7 @@ function _G.execute_visual_selection()
         vim.api.nvim_buf_set_lines(target_buf, -1, -1, false, data)
         local win_ids = vim.fn.win_findbuf(target_buf)
         for _, win_id in ipairs(win_ids) do
-          vim.api.nvim_win_set_cursor(win_id, {vim.api.nvim_buf_line_count(target_buf), 0})
+          vim.api.nvim_win_set_cursor(win_id, { vim.api.nvim_buf_line_count(target_buf), 0 })
         end
       end
     end,
@@ -670,7 +673,8 @@ function _G.execute_visual_selection()
     stderr_buffered = false,
   })
 
-  vim.api.nvim_buf_set_keymap(target_buf, 'n', '<C-c>', '<cmd>lua _G.interrupt_process()<CR>', { noremap = true, silent = true })
+  vim.api.nvim_buf_set_keymap(target_buf, 'n', '<C-c>', '<cmd>lua _G.interrupt_process()<CR>',
+    { noremap = true, silent = true })
 end
 
 -- Map <leader>es in visual mode to the function
@@ -717,7 +721,7 @@ vim.api.nvim_set_keymap("v", "f", ":call CustomF(0)<CR>", {})
 vim.api.nvim_set_keymap("n", "F", ":call CustomF(1)<CR>", {})
 vim.api.nvim_set_keymap("v", "F", ":call CustomF(1)<CR>", {})
 vim.cmd [[
-  command! -range -nargs=* -complete=customlist,v:lua.my_custom_complete ProcessTasks :lua _G.process_task_list(<line1>, <line2>, <f-args>)
+  command! -range=% -nargs=* -complete=customlist,v:lua.my_custom_complete ProcessTasks :lua _G.process_task_list(<line1>, <line2>, <f-args>)
 ]]
 
 create_word_selection_mappings()
