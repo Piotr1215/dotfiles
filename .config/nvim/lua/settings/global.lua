@@ -21,16 +21,6 @@ vim.wo.foldenable = false
 vcmd "setlocal nofoldenable"
 vim.api.nvim_set_option("updatetime", 300)
 
--- TODO:(piotr1215) figure out if using hover diagnostics makes sense
--- Fixed column for diagnostics to appear
--- Show autodiagnostic popup on cursor hover_range
--- Goto previous / next diagnostic warning / error
--- Show inlay_hints more frequently
--- vim.cmd [[
--- set signcolumn=yes
--- autocmd CursorHold * lua vim.diagnostic.open_float(nil, { focusable = true })
--- ]]
-
 --Remap for dealing with word wrap
 set.gp = "git grep -n"
 set.completeopt = { "menuone", "noselect", "noinsert" }
