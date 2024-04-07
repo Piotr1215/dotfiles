@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 
+# Read track names and paths from "${HOME}/haruna_playlist.m3u",
+# where comments are track names.
+# Select track to play using a fuzzy search interface provided by 'gum'.
+# Requires: bash, mpv, gum.
+
 set -eo pipefail
 
 # Set newline and tab as word splitting delimiters
