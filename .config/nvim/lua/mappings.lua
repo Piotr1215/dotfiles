@@ -107,7 +107,7 @@ utils.nmap("<leader>eX", ":%w !bash -e <cr>")                                   
 utils.nmap("<leader>el", ":.!bash -e <cr>", { silent = false })                                                -- execute current line and replace with result
 utils.nmap("<leader>eL", ":% !bash % <cr>")                                                                    -- execute all lines and replace with result
 utils.lnmap("cx", ":!chmod +x %<cr>")                                                                          -- make file executable
-utils.lnmap(";e", "<cmd>lua _G.execute_file_and_show_output()<CR>", { silent = false })                        -- execute file and show output
+utils.lnmap("ef", "<cmd>lua _G.execute_file_and_show_output()<CR>", { silent = false })                        -- execute file and show output
 utils.vmap("<Leader>pb", "w !bash share<CR>")                                                                  -- upload selected to ix.io
 -- FORMATTING --
 utils.nmap("<leader>fmt", ":Pretty<CR>")                                                                       -- format json with pretty
