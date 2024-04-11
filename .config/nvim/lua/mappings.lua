@@ -13,6 +13,7 @@ utils.imap("jk", "<Esc>")                                                       
 utils.nmap("<leader>w", ":wall<CR>")                                                                           -- save all
 utils.lnmap("qq", ":qa<cr>")                                                                                   -- close all
 utils.lnmap("qa", ":qa!<cr>")                                                                                  -- close all without saving
+vim.keymap.set("n", "<leader>tf", ":!touch %<cr>", {silent = true, noremap = true})                                                                             -- touch file to reload observers
 -- UNMAP --
 utils.nmap("<nop>", "<Plug>NERDCommenterAltDelims")                                                            -- tab is for moving around only
 vim.api.nvim_set_keymap('t', '<A-h>', [[<C-\><C-N><C-w>h]], {noremap = true})
@@ -228,6 +229,9 @@ utils.lnmap("zm", "<cmd>lua toggleZenAndFix()<cr>")
 -- Nvim Telescope Crossplane Mappings
 vim.keymap.set("n", "<Leader>tcm", ":Telescope telescope-crossplane crossplane_managed<CR>")
 vim.keymap.set("n", "<Leader>tcr", ":Telescope telescope-crossplane crossplane_resources<CR>")
+
+-- Oil Nvim
+vim.keymap.set("n", "<Leader>ol", "<cmd>Oil<CR>", { noremap = true, silent = true })
 
 -- Undotree
 vim.keymap.set('n', '<leader>u', require('undotree').toggle, { noremap = true, silent = true })
