@@ -14,7 +14,10 @@ require("codesnap").setup({
 require("mini.align").setup()
 require('mini.ai').setup()
 
-require("go").setup()
+require("go").setup({
+  gofmt = "gofumpt",
+  lsp_gofumpt = true,
+})
 require("dap-python").setup "~/.virtualenvs/debugpy/bin/python"
 
 require("goto-preview").setup {}
