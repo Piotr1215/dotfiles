@@ -19,6 +19,7 @@ M.on_attach = function(_, bufnr)
 
   nmap("<leader>ca", vim.lsp.buf.code_action, "[C]ode [A]ction")
   nmap("gd", vim.lsp.buf.definition, "[G]oto [D]efinition")
+  nmap("gD", "<cmd>vsplit | lua vim.lsp.buf.definition()<CR>", "Open Definition in Vertical Split")
   nmap("gI", vim.lsp.buf.implementation, "[G]oto [I]mplementation")
   nmap("gr", require('telescope.builtin').lsp_references, "[G]oto [R]eferences")
   nmap("<leader>rn", "<cmd>lua require('lspsaga.rename').rename()<CR>", "Rename Symbol")
