@@ -39,9 +39,10 @@ vim.api.nvim_create_autocmd("BufWritePost", {
 
 vim.api.nvim_create_autocmd("BufWritePost", {
   pattern = { "*.go" },
-  command = ":silent! GoFmt",
+  callback = function() require("go.format").gofmt() end,
   group = goSettings,
 })
+
 -- Function to dynamically set up Vale based on the file's directory
 local function dynamicValeSetup()
   -- Default vale_config_path
