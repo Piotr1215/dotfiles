@@ -221,7 +221,7 @@ function fif() {
 
 # Wrapper function for project tags search
 function fifp() {
-    _fif_common "--ignore-case" "PROJECT: $*"
+    _fif_common "" "PROJECT: $*"
 }
 
 # Uploads content to clbin and copies URL to clipboard, opens in browser
