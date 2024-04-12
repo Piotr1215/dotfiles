@@ -24,7 +24,7 @@ require("goto-preview").setup {}
 require("zen-mode").setup {
   window = {
     backdrop = 0.75, -- shade the backdrop of the Zen window. Set to 1 to keep the same as Normal
-    width = .50, -- width of the Zen window
+    width = .50,     -- width of the Zen window
   },
 }
 require('gen').setup({
@@ -173,12 +173,12 @@ require("obsidian").setup {
   end,
 
   wiki_link_func = function(opts)
-  if opts.label ~= opts.path then
-    return string.format("[[%s|%s]]", opts.path, opts.label)
-  else
-    return string.format("[[%s]]", opts.path)
-  end
-end,
+    if opts.label ~= opts.path then
+      return string.format("[[%s|%s]]", opts.path, opts.label)
+    else
+      return string.format("[[%s]]", opts.path)
+    end
+  end,
   completion = {
     nvim_cmp = true, -- if using nvim-cmp, otherwise set to false
   },
