@@ -171,7 +171,7 @@ use {
   -- LSP {{{
   use "ray-x/lsp_signature.nvim"
   use { "ibhagwan/fzf-lua" }
-  use { "nvim-treesitter/nvim-treesitter", run = ":TSUpdate" }
+  use { "nvim-treesitter/nvim-treesitter", run = ":TSUpdate", requires = { "nvim-treesitter/playground" } }
   use { "tami5/lspsaga.nvim", requires = { "neovim/nvim-lspconfig" } }
   use "onsails/lspkind-nvim"
   use { "williamboman/mason.nvim" }
