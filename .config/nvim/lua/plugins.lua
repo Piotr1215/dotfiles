@@ -63,12 +63,12 @@ return require("packer").startup(function(use)
     end,
   }
   use { "jonarrien/telescope-cmdline.nvim" }
-  -- use {
-    -- "chrisgrieser/nvim-various-textobjs",
-    -- config = function()
-      -- require("various-textobjs").setup { useDefaultKeymaps = true }
-    -- end,
-  -- }
+  use {
+    "chrisgrieser/nvim-various-textobjs",
+    config = function()
+      require("various-textobjs").setup { useDefaultKeymaps = true }
+    end,
+  }
   use "lewis6991/gitsigns.nvim"
   use {
     "wintermute-cell/gitignore.nvim",
