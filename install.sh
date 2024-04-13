@@ -87,7 +87,7 @@ git config --global user.email "$EMAIL"
 process "→ install essencial packages"
 
 sudo apt install -y vim-gtk htop unzip python3-setuptools figlet tmux pydf mc wget mtr ncdu cmatrix ranger jq lolcat tmux bat locate libgraph-easy-perl stow cowsay fortune
-sudo apt install -y encfs fuse xclip xsel alsa-utils fd-find expect bat neovide
+sudo apt install -y encfs fuse xclip xsel alsa-utils fd-find expect bat
 
 process "→ install tmuxinator"
 sudo gem install tmuxinator
@@ -176,7 +176,6 @@ process "→ Installing GCP CLI"
 curl "https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-sdk-377.0.0-linux-x86_64.tar.gz" -o "google-cloud-sdk-377.0.0-linux-x86.tar.gz"
 tar zxvf google-cloud-sdk-377.0.0-linux-x86.tar.gz
 ./google-cloud-sdk/install.sh --usage-reporting=false --quiet
-
 
 process "→ Installing Neovim"
 sudo curl -LO https://github.com/neovim/neovim/releases/latest/download/nvim.appimage
