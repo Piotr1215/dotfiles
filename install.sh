@@ -177,7 +177,16 @@ curl "https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-sd
 tar zxvf google-cloud-sdk-377.0.0-linux-x86.tar.gz
 ./google-cloud-sdk/install.sh --usage-reporting=false --quiet
 
+
+process "→ Installing Neovim"
+sudo curl -LO https://github.com/neovim/neovim/releases/latest/download/nvim.appimage
+sudo chmod +x nvim.appimage
+sudo mv nvim.appimage /usr/local/bin/nvim
+sudo chown "$user" /usr/local/bin/nvim
+
 symlink
+
+nvim --headless -c 'autocmd User PackerComplete quitall' -c 'PackerSync'
 
 process "→ Setting zsh as default shell"
 cd "$HOME"
@@ -186,12 +195,5 @@ zsh
 sed -i 's/ZSH_THEME="robbyrussell"/ZSH_THEME="3den"/g' ~/.zshrc
 source ~/.zshrc
 exec zsh
-
-process "→ Installing Neovim"
-sudo curl -LO https://github.com/neovim/neovim/releases/latest/download/nvim.appimage
-sudo chmod +x nvim.appimage
-sudo mv nvim.appimage /usr/local/bin/nvim
-sudo chown "$user" /usr/local/bin/nvim
-nvim --headless -c 'autocmd User PackerComplete quitall' -c 'PackerSync'
 
 process → Installation complete"
