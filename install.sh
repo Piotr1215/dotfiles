@@ -87,7 +87,7 @@ git config --global user.email "$EMAIL"
 process "→ install essencial packages"
 
 sudo apt install -y vim-gtk htop unzip python3-setuptools figlet tmux pydf mc wget mtr ncdu cmatrix ranger jq lolcat tmux bat locate libgraph-easy-perl stow cowsay fortune
-# ln -sf ${HOME}/dotfiles/.tmux.conf ~/.tmux.conf
+sudo apt install -y encfs fuse xclip xsel alsa-utils fd-find expect bat neovide
 
 process "→ install tmuxinator"
 sudo gem install tmuxinator
@@ -103,6 +103,17 @@ sudo rm exa.zip
 
 process "→ install go"
 sudo apt install -y golang
+
+process "→ Install development tools and package managers"
+
+sudo apt install -y cargo
+cargo install just
+cargo install zoxide
+cargo install onefetch
+
+process "→ Install PipeWire for audio management"
+
+sudo apt install -y pipewire pipewire-utils
 
 process "→ install kubectl"
 cd /usr/local/bin
