@@ -50,6 +50,14 @@ require("mdeval").setup {
 }
 
 require("oil").setup {
+  experimental_watch_for_changes = true,
+  columns = {
+    "icon",
+  },
+  preview = {
+    max_width = 0.9,
+    width = 100,
+  },
   view_options = {
     -- Show files and directories that start with "."
     show_hidden = true,
