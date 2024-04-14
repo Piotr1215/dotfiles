@@ -66,7 +66,7 @@ return require("packer").startup(function(use)
   use {
     "chrisgrieser/nvim-various-textobjs",
     config = function()
-      require("various-textobjs").setup { useDefaultKeymaps = true }
+      require("various-textobjs").setup { useDefaultKeymaps = false }
     end,
   }
   use "lewis6991/gitsigns.nvim"
