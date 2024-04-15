@@ -38,7 +38,7 @@ fi
 
 weekdays=('Monday' 'Tuesday' 'Wednesday' 'Thursday' 'Friday')
 
-timeoff=0
+timeoff=1
 
 current_day=$(date +"%A")
 

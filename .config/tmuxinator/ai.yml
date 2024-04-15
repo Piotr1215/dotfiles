@@ -1,7 +1,7 @@
 # /home/decoder/.config/tmuxinator/atosik.yml
 
 name: ai
-root: ~/dev/ai
+root: ~/dev/ai-reliability
 
 # Optional tmux socket
 # socket_name: foo
@@ -50,7 +50,7 @@ windows:
         - mprocs --config ./llm-procs.yaml
         - k9s
   - hack-week:
-      root: ~/dev/hack-week-2023
+      root: ~/dev/ai-reliability
       layout: tiled
       panes:
           - vim
