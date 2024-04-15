@@ -7,13 +7,9 @@ local yamlSettings = vim.api.nvim_create_augroup("Yaml Settings", { clear = true
 
 vim.api.nvim_create_user_command("Pretty", "Prettier", { bang = true })
 
-vim.api.nvim_create_user_command(
-  'Browse',
-  function(opts)
-    vim.fn.system { 'xdg-open', opts.fargs[1] }
-  end,
-  { nargs = 1 }
-)
+vim.api.nvim_create_user_command("Browse", function(opts)
+  vim.fn.system { "xdg-open", opts.fargs[1] }
+end, { nargs = 1 })
 
 -- vim.api.nvim_create_autocmd("BufWritePre", {
 -- pattern = "*.go",
@@ -22,9 +18,9 @@ vim.api.nvim_create_user_command(
 -- end,
 -- })
 
-vim.cmd([[
+vim.cmd [[
   autocmd BufWritePost mappings.lua normal! mM
-]])
+]]
 
 vim.api.nvim_create_autocmd("FileType", {
   pattern = { "go" },
@@ -39,7 +35,9 @@ vim.api.nvim_create_autocmd("BufWritePost", {
 
 vim.api.nvim_create_autocmd("BufWritePost", {
   pattern = { "*.go" },
-  callback = function() require("go.format").gofmt() end,
+  callback = function()
+    require("go.format").gofmt()
+  end,
   group = goSettings,
 })
 
@@ -49,7 +47,7 @@ local function dynamicValeSetup()
   local vale_config_path = "$HOME/dev/vale/.vale.ini"
 
   -- Get the current file's directory
-  local file_path = vim.fn.expand("%:p:h")
+  local file_path = vim.fn.expand "%:p:h"
 
   -- Check if the current file is inside the crossplane-docs/content directory
   if string.match(file_path, "crossplane%-docs/content") then
@@ -58,14 +56,14 @@ local function dynamicValeSetup()
   end
 
   -- Configure Vale with the determined vale_config_path
-  require("vale").setup({
+  require("vale").setup {
     bin = "/usr/local/bin/vale",
     vale_config_path = vale_config_path,
-  })
+  }
 end
 
 -- Autocommand to configure Vale on entering a buffer or when the filetype is markdown
-vim.api.nvim_create_autocmd({"BufEnter", "FileType"}, {
+vim.api.nvim_create_autocmd({ "BufEnter", "FileType" }, {
   pattern = "*.md",
   callback = function()
     dynamicValeSetup()
@@ -78,8 +76,8 @@ vim.api.nvim_create_autocmd("BufWritePost", {
     local file_path = vim.fn.getcwd()
     if string.match(file_path, "crossplane%-docs/content") then
       local current_dir = vim.fn.getcwd()
-      vim.cmd("lcd %:p:h")
-      vim.cmd(":silent! Vale")
+      vim.cmd "lcd %:p:h"
+      vim.cmd ":silent! Vale"
       vim.cmd("lcd " .. current_dir)
     end
   end,
@@ -91,7 +89,9 @@ vim.api.nvim_create_autocmd("FileType", {
   group = indentSettings,
 })
 
-vim.api.nvim_create_user_command("WS", function() vim.cmd("write | source %") end, { bang = false })
+vim.api.nvim_create_user_command("WS", function()
+  vim.cmd "write | source %"
+end, { bang = false })
 
 vim.api.nvim_create_autocmd("FileType", {
   pattern = { "yaml" },
@@ -108,17 +108,24 @@ vim.api.nvim_create_autocmd("FileType", {
 vim.api.nvim_create_autocmd("BufWritePost", {
   pattern = "*.yaml",
   callback = function()
-    vim.cmd("silent Neoformat")
+    vim.cmd "silent Neoformat"
   end,
   group = yamlSettings,
+})
+
+vim.api.nvim_create_autocmd({ "BufRead", "BufNewFile" }, {
+  pattern = "*.hurl",
+  callback = function()
+    vim.opt.filetype = "hurl"
+  end,
 })
 
 vim.api.nvim_create_autocmd("BufWritePost", {
   pattern = "*.md",
   callback = function()
-    local file_path = vim.fn.expand('%:p') -- Get the full path of the current file
+    local file_path = vim.fn.expand "%:p" -- Get the full path of the current file
     if not string.match(file_path, "crossplane%-docs") then
-      vim.cmd("silent Neoformat")
+      vim.cmd "silent Neoformat"
     end
   end,
 })
@@ -130,6 +137,13 @@ function StyluaFormat()
   vim.cmd("silent! !stylua --search-parent-directories " .. vim.fn.expand "%:p")
   vim.cmd("cd " .. current_dir)
 end
+vim.api.nvim_create_autocmd("BufWritePost", {
+  pattern = "*.lua",
+  callback = function()
+    StyluaFormat()
+  end,
+  desc = "Auto-format Lua files with Stylua",
+})
 
 vim.api.nvim_create_autocmd({ "bufwritepost" }, {
   pattern = { "*.sh" },
@@ -224,8 +238,8 @@ vim.api.nvim_create_user_command(
 -- Define a Lua function to create the scratch buffer, execute the shell command, and set the keymap
 function create_scratch_buffer(args)
   -- Create a new scratch buffer
-  vim.cmd("new")
-  vim.cmd("setlocal buftype=nofile bufhidden=hide noswapfile")
+  vim.cmd "new"
+  vim.cmd "setlocal buftype=nofile bufhidden=hide noswapfile"
 
   -- Execute the shell command and capture its output in the buffer
   vim.cmd("r !" .. args)
@@ -234,7 +248,7 @@ function create_scratch_buffer(args)
   local buf = vim.api.nvim_get_current_buf()
 
   -- Set the 'q' key to exit the buffer in the scratch buffer
-  vim.api.nvim_buf_set_keymap(buf, 'n', 'q', ':q!<CR>', { noremap = true, silent = true })
+  vim.api.nvim_buf_set_keymap(buf, "n", "q", ":q!<CR>", { noremap = true, silent = true })
 end
 
 -- Create a user command 'R' to execute your Lua function, passing along any arguments
@@ -262,12 +276,12 @@ vim.api.nvim_create_user_command("Ghistory", function()
 
   -- Run git diff and capture the output
   local handle = io.popen("git log -p --all -- " .. file_path, "r")
-  local result = handle:read("*a")
+  local result = handle:read "*a"
   handle:close()
 
   -- Split the output into lines for the floating window
   local content = {}
-  for line in result:gmatch("([^\n]*)\n?") do
+  for line in result:gmatch "([^\n]*)\n?" do
     table.insert(content, line)
   end
 
@@ -277,26 +291,25 @@ end, { bang = false, desc = "Show git history for the current file" })
 
 vim.api.nvim_create_user_command("Gdiffu", function()
   -- Save the current buffer
-  vim.cmd("w")
+  vim.cmd "w"
 
   -- Get the current file path
   local file_path = vim.api.nvim_buf_get_name(0)
 
   -- Run git diff and capture the output
   local handle = io.popen("git diff --unified=0 -- " .. file_path)
-  local result = handle:read("*a")
+  local result = handle:read "*a"
   handle:close()
 
   -- Split the output into lines for the floating window
   local content = {}
-  for line in result:gmatch("([^\n]*)\n?") do
+  for line in result:gmatch "([^\n]*)\n?" do
     table.insert(content, line)
   end
 
   -- Display the result in a floating scratch buffer
   _G.create_floating_scratch(content)
 end, { bang = false })
-
 
 vim.cmd [[
 function! WinMove(key)

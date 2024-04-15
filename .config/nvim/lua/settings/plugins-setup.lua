@@ -1,5 +1,5 @@
 -- Settings for plugins
-vim.notify = require("notify")
+vim.notify = require "notify"
 require("mason").setup()
 
 require("yanksearch").setup {
@@ -7,30 +7,30 @@ require("yanksearch").setup {
   lines_below = 0,
   lines_around = 0, -- This will override lines_above and lines_below if set to a non-zero value
 }
-require("codesnap").setup({
+require("codesnap").setup {
   -- ...
-  watermark = "󰭪"
-})
+  watermark = "󰭪",
+}
 require("mini.align").setup()
-require('mini.ai').setup()
+require("mini.ai").setup()
 
-require("go").setup({
+require("go").setup {
   gofmt = "gofumpt",
   lsp_gofumpt = true,
-})
+}
 require("dap-python").setup "~/.virtualenvs/debugpy/bin/python"
 
 require("goto-preview").setup {}
 require("zen-mode").setup {
   window = {
     backdrop = 0.75, -- shade the backdrop of the Zen window. Set to 1 to keep the same as Normal
-    width = .50,     -- width of the Zen window
+    width = 0.50, -- width of the Zen window
   },
 }
-require('gen').setup({
+require("gen").setup {
   model = "mistral-openorca:latest",
-  show_model = true
-})
+  show_model = true,
+}
 
 require("mdeval").setup {
   -- Don't ask before executing code blocks
@@ -49,6 +49,15 @@ require("mdeval").setup {
   },
 }
 
+require("hurl").setup {
+  -- Specify your custom environment file name here
+  ft = "hurl",
+  env_file = {
+    ".envrc",
+  },
+  -- Other configuration options...
+}
+
 require("oil").setup {
   experimental_watch_for_changes = true,
   columns = {
@@ -63,7 +72,7 @@ require("oil").setup {
     show_hidden = true,
   },
 }
-require('gitsigns').setup {
+require("gitsigns").setup {
   on_attach = function(bufnr)
     local gs = package.loaded.gitsigns
 
@@ -74,38 +83,54 @@ require('gitsigns').setup {
     end
 
     -- Navigation
-    map('n', ']c', function()
-      if vim.wo.diff then return ']c' end
-      vim.schedule(function() gs.next_hunk() end)
-      return '<Ignore>'
+    map("n", "]c", function()
+      if vim.wo.diff then
+        return "]c"
+      end
+      vim.schedule(function()
+        gs.next_hunk()
+      end)
+      return "<Ignore>"
     end, { expr = true })
 
-    map('n', '[c', function()
-      if vim.wo.diff then return '[c' end
-      vim.schedule(function() gs.prev_hunk() end)
-      return '<Ignore>'
+    map("n", "[c", function()
+      if vim.wo.diff then
+        return "[c"
+      end
+      vim.schedule(function()
+        gs.prev_hunk()
+      end)
+      return "<Ignore>"
     end, { expr = true })
 
     -- Actions
-    map('n', '<leader>hh', gs.select_hunk)
-    map('n', '<leader>hl', gs.setloclist)
-    map('n', '<leader>hs', gs.stage_hunk)
-    map('n', '<leader>hr', gs.reset_hunk)
-    map('v', '<leader>hs', function() gs.stage_hunk { vim.fn.line('.'), vim.fn.line('v') } end)
-    map('v', '<leader>hr', function() gs.reset_hunk { vim.fn.line('.'), vim.fn.line('v') } end)
-    map('n', '<leader>hS', gs.stage_buffer)
-    map('n', '<leader>hu', gs.undo_stage_hunk)
-    map('n', '<leader>hR', gs.reset_buffer)
-    map('n', '<leader>hp', gs.preview_hunk_inline)
-    map('n', '<leader>hb', function() gs.blame_line { full = true } end)
-    map('n', '<leader>tb', gs.toggle_current_line_blame)
-    map('n', '<leader>hd', gs.diffthis)
-    map('n', '<leader>hD', function() gs.diffthis('~') end)
-    map('n', '<leader>td', gs.toggle_deleted)
+    map("n", "<leader>hh", gs.select_hunk)
+    map("n", "<leader>hl", gs.setloclist)
+    map("n", "<leader>hs", gs.stage_hunk)
+    map("n", "<leader>hr", gs.reset_hunk)
+    map("v", "<leader>hs", function()
+      gs.stage_hunk { vim.fn.line ".", vim.fn.line "v" }
+    end)
+    map("v", "<leader>hr", function()
+      gs.reset_hunk { vim.fn.line ".", vim.fn.line "v" }
+    end)
+    map("n", "<leader>hS", gs.stage_buffer)
+    map("n", "<leader>hu", gs.undo_stage_hunk)
+    map("n", "<leader>hR", gs.reset_buffer)
+    map("n", "<leader>hp", gs.preview_hunk_inline)
+    map("n", "<leader>hb", function()
+      gs.blame_line { full = true }
+    end)
+    map("n", "<leader>tb", gs.toggle_current_line_blame)
+    map("n", "<leader>hd", gs.diffthis)
+    map("n", "<leader>hD", function()
+      gs.diffthis "~"
+    end)
+    map("n", "<leader>td", gs.toggle_deleted)
 
     -- Text object
-    map({ 'o', 'x' }, 'ih', ':<C-U>Gitsigns select_hunk<CR>')
-  end
+    map({ "o", "x" }, "ih", ":<C-U>Gitsigns select_hunk<CR>")
+  end,
 }
 require("obsidian").setup {
   workspaces = {
@@ -132,7 +157,7 @@ require("obsidian").setup {
   new_notes_location = "notes_subdir",
   -- Optional, configure additional syntax highlighting / extmarks.
   ui = {
-    enable = false,        -- set to false to disable all additional syntax features
+    enable = false, -- set to false to disable all additional syntax features
     update_debounce = 200, -- update delay after a text change (in milliseconds)
     -- Define how various check-boxes are displayed
     external_link_icon = { char = "", hl_group = "ObsidianExtLinkIcon" },
@@ -155,7 +180,7 @@ require("obsidian").setup {
   },
   follow_url_func = function(url)
     -- Open the URL in the default web browser.
-    vim.fn.jobstart({ "xdg-open", url }) -- linux
+    vim.fn.jobstart { "xdg-open", url } -- linux
   end,
   finder = "telescope.nvim",
   mappings = {
@@ -177,7 +202,7 @@ require("obsidian").setup {
   note_path_func = function(spec)
     -- This is equivalent to the default behavior.
     local path = spec.dir / tostring(spec.title)
-    return path:with_suffix(".md")
+    return path:with_suffix ".md"
   end,
 
   wiki_link_func = function(opts)
@@ -204,8 +229,19 @@ require("todo-comments").setup {
 
 require("nvim-treesitter.configs").setup {
   -- Add languages to be installed here that you want installed for treesitter
-  ensure_installed = { "go", "lua", "rust", "toml", "typescript", "help", "bash", "markdown_inline", "markdown",
-    "dockerfile" },
+  ensure_installed = {
+    "go",
+    "hurl",
+    "lua",
+    "rust",
+    "toml",
+    "typescript",
+    "help",
+    "bash",
+    "markdown_inline",
+    "markdown",
+    "dockerfile",
+  },
 
   highlight = { enable = true },
   auto_install = true,
@@ -269,7 +305,7 @@ require("nvim-treesitter.configs").setup {
       -- mapping query_strings to modes.
       selection_modes = {
         ["@parameter.outer"] = "v", -- charwise
-        ["@function.outer"] = "V",  -- linewise
+        ["@function.outer"] = "V", -- linewise
         ["@class.outer"] = "<c-v>", -- blockwise
       },
       -- If you set this to `true` (default is `false`) then any textobject is
@@ -303,7 +339,6 @@ require("femaco").setup {
   end,
 }
 
-
 require("which-key").setup {
   triggers_blacklist = {
     -- list of mode / prefixes that should never be hooked by WhichKey
@@ -311,10 +346,10 @@ require("which-key").setup {
     n = { "g" },
   },
   plugins = {
-    marks = true,       -- shows a list of your marks on ' and `
-    registers = true,   -- shows your registers on " in NORMAL or <C-r> in INSERT mode
+    marks = true, -- shows a list of your marks on ' and `
+    registers = true, -- shows your registers on " in NORMAL or <C-r> in INSERT mode
     spelling = {
-      enabled = true,   -- enabling this will show WhichKey when pressing z= to select spelling suggestions
+      enabled = true, -- enabling this will show WhichKey when pressing z= to select spelling suggestions
       suggestions = 20, -- how many suggestions should be shown in the list?
     },
   },
@@ -419,7 +454,7 @@ vim.g.startify_skiplist = {
 vim.g.startify_commands = {
   { "Search Dev    :SPC fd", "Telescope find_files search_dirs=~/dev,--hidden,--with-filename" },
   { "Search Repos  :SPC fr", "lua require'telescope'.extensions.repo.list{search_dirs = {\"~/dev\"}}" },
-  { "Ranger        :ALT o",  "RnvimrToggle" },
+  { "Ranger        :ALT o", "RnvimrToggle" },
   { "Change Color  :SPC fc", "Telescope colorscheme" },
   { "Transparent Bg:SPC tr", "TransparentEnable" },
   { "Pick Emoji    :SPC fm", "Telescope emoji" },
