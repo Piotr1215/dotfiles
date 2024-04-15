@@ -61,6 +61,7 @@ alias kstart='~/dev/dotfiles/scripts/__kind_manager.sh --start'
 alias kstop='~/dev/dotfiles/scripts/__kind_manager.sh --stop'
 
 # Other
+alias tick='__ticker.sh'
 alias ytd='__download_youtube.sh'
 alias remind='__reminder.sh'
 alias adit='vim ~/.zsh_aliases'

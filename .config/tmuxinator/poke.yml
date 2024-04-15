@@ -48,4 +48,4 @@ windows:
   - poke:
       layout: main-vertical
       panes:
-        - fortune | cowsay
+        - echo "Ticker tick tick\n" && __ticker.sh
