@@ -52,6 +52,24 @@ return require("packer").startup(function(use)
       -- shortcuts might be setup here (see Usage > Shortcuts in Readme)
     end,
   }
+  use { "MunifTanjim/nui.nvim" }
+  use {
+    "jellydn/hurl.nvim",
+  }
+  use {
+    "Piotr1215/toggler.nvim",
+    config = function()
+      require("toggler").setup {
+        {
+          name = "Vale",
+          cmd = "Vale",
+          key = "<leader>vl",
+          pattern = "*.md",
+        },
+      }
+    end,
+  }
+
   -- }}}
   -- Editor Extensions {{{
   use "jesseleite/nvim-macroni"
@@ -93,18 +111,18 @@ return require("packer").startup(function(use)
   use "mhinz/vim-startify"
   use "preservim/nerdcommenter"
   use "tpope/vim-fugitive"
-  use 'folke/neodev.nvim'
-  use 'Piotr1215/telescope-crossplane.nvim'
-  use {'mistricky/codesnap.nvim', run = 'make'}
-use {
-  "jiaoshijie/undotree",
-  config = function()
-    require('undotree').setup()
-  end,
-  requires = {
-    "nvim-lua/plenary.nvim",
-  },
-}
+  use "folke/neodev.nvim"
+  use "Piotr1215/telescope-crossplane.nvim"
+  use { "mistricky/codesnap.nvim", run = "make" }
+  use {
+    "jiaoshijie/undotree",
+    config = function()
+      require("undotree").setup()
+    end,
+    requires = {
+      "nvim-lua/plenary.nvim",
+    },
+  }
   use "voldikss/vim-floaterm"
   use {
     "kylechui/nvim-surround",
@@ -192,7 +210,7 @@ use {
       "rafamadriz/friendly-snippets",
     },
   }
-  use { "folke/zen-mode.nvim"}
+  use { "folke/zen-mode.nvim" }
   use "folke/twilight.nvim"
   use "leoluz/nvim-dap-go"
   use {
