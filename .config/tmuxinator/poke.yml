@@ -48,4 +48,4 @@ windows:
   - poke:
       layout: main-vertical
       panes:
-        - echo "Ticker tick tick\n" && __ticker.sh
+        - ~/dev/dotfiles/scripts/__you_got_this.sh 
