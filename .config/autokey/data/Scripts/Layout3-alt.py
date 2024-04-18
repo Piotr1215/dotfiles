@@ -1,8 +1,8 @@
 import os
 import subprocess
 
+# Firefox/Firefox
 layout = '/home/decoder/dev/dotfiles/scripts/__layouts.sh'
 
-# Slack -> Alacritty
-subprocess.run([layout, "9"])
+subprocess.run([layout, "3"])
 
