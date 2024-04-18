@@ -59,6 +59,9 @@ require("hurl").setup {
 }
 
 require("oil").setup {
+  opts = {
+    preview = true,
+  },
   experimental_watch_for_changes = true,
   columns = {
     "icon",
