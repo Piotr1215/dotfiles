@@ -1,7 +1,7 @@
 # /home/decoder/.config/tmuxinator/atosik.yml
 
-name: dca
-root: ~/dev/dca-prep-kit
+name: home
+root: ~/dev/cloudrumble
 
 # Optional tmux socket
 # socket_name: foo
