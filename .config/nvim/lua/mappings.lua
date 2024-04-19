@@ -104,6 +104,7 @@ utils.imap("<c-d>", "<c-o>daw") -- delete word forward in insert mode
 utils.nmap("<leader>sp", "i<cr><esc>") -- split line in two
 -- EXTERNAL COMMANDS --
 vim.keymap.set("c", "<C-w>", "\\w*", { noremap = true }) -- copy word under cursor
+vim.keymap.set("c", "<C-s>", "\\S*", { noremap = true }) -- copy WORD under cursor
 utils.nmap("<leader>ex", ":.w !bash -e <cr>") -- execute current line and output to command line
 utils.nmap("<leader>eX", ":%w !bash -e <cr>") -- exexute all lines and output to command line
 utils.nmap("<leader>el", ":.!bash -e <cr>", { silent = false }) -- execute current line and replace with result
