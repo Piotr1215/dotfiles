@@ -42,7 +42,7 @@ selected_track=$(echo "$track_names" | gum filter --fuzzy)
 
 if [[ -n $selected_track ]]; then
 	echo "Playing track: $selected_track"
-	nohup mpv --loop-file "${tracks[$selected_track]}" &>/dev/null &
+	nohup mpv --loop-file --no-terminal --no-video "${tracks[$selected_track]}" >/dev/null 2>&1 &
 else
 	echo "No track selected. Exiting."
 	exit 0
