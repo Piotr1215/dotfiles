@@ -28,7 +28,7 @@ require("zen-mode").setup {
   },
 }
 require("gen").setup {
-  model = "mistral-openorca:latest",
+  model = "llama3:latest",
   show_model = true,
 }
 
