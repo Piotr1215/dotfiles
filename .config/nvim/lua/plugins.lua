@@ -159,6 +159,12 @@ return require("packer").startup(function(use)
   use "danielpieper/telescope-tmuxinator.nvim"
   use "jvgrootveld/telescope-zoxide"
   use {
+    "ellisonleao/glow.nvim",
+    config = function()
+      require("glow").setup()
+    end,
+  }
+  use {
     "dhruvmanila/telescope-bookmarks.nvim",
     tag = "*",
     -- Uncomment if the selected browser is Firefox, Waterfox or buku
@@ -282,7 +288,6 @@ return require("packer").startup(function(use)
   -- }}}
   -- Look & Feel {{{
   use { "ellisonleao/gruvbox.nvim" }
-  use { "ellisonleao/glow.nvim", branch = "main" }
   use "mhartington/formatter.nvim"
   use "folke/todo-comments.nvim"
   use "ryanoasis/vim-devicons"
