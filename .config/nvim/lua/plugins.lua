@@ -216,8 +216,8 @@ return require("packer").startup(function(use)
       "rafamadriz/friendly-snippets",
     },
   }
-  use { "folke/zen-mode.nvim" }
-  use "folke/twilight.nvim"
+  use { "shortcuts/no-neck-pain.nvim", tag = "*" }
+
   use "leoluz/nvim-dap-go"
   use {
     "rcarriga/nvim-dap-ui",

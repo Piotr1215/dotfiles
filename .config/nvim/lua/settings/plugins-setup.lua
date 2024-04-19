@@ -21,12 +21,19 @@ require("go").setup {
 require("dap-python").setup "~/.virtualenvs/debugpy/bin/python"
 
 require("goto-preview").setup {}
-require("zen-mode").setup {
-  window = {
-    backdrop = 0.75, -- shade the backdrop of the Zen window. Set to 1 to keep the same as Normal
-    width = 0.50, -- width of the Zen window
+
+require("no-neck-pain").setup {
+  width = 75,
+  buffers = {
+    colors = {
+      background = "tokyonight-moon",
+    },
+    right = {
+      enabled = false,
+    },
   },
 }
+
 require("gen").setup {
   model = "llama3:latest",
   show_model = true,

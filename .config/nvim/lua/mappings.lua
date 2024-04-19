@@ -231,8 +231,8 @@ vim.keymap.set({ "n", "i", "v", "x" }, "<C-g>s", "<cmd>GpStop<cr>", keymapOption
 -- Nvim Leap Mappings
 utils.emap("<Leader>ow", "<Plug>(leap-cross-window)")
 
--- Nvim zenmode Mappings
-utils.lnmap("zm", "<cmd>lua toggleZenAndFix()<cr>")
+-- Nvim no neck pain Mappings
+utils.lnmap("ne", "<cmd>NoNeckPain<cr>")
 
 -- Nvim Telescope Crossplane Mappings
 vim.keymap.set("n", "<Leader>tcm", ":Telescope telescope-crossplane crossplane_managed<CR>")
