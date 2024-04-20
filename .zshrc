@@ -78,6 +78,7 @@ source ~/.zsh_functions
 
 # EXPORT & PATH
 export XDG_CONFIG_HOME=~/.config
+export XDG_CONFIG_DIRS=/home/decoder/.config/nvim:$XDG_CONFIG_DIRS
 export FZF_BASE=/usr/bin/fzf
 export FZF_DEFAULT_COMMAND='fd --hidden --exclude .git'
 export FZF_CTRL_T_COMMAND='fd --hidden'
@@ -110,6 +111,9 @@ export PATH="$HOME/.yarn/bin:$HOME/.config/yarn/global/node_modules/.bin:$PATH"
 export PATH=$PATH:${HOME}/bin
 export RANGER_LOAD_DEFAULT_RC=FALSE
 export RIPGREP_CONFIG_PATH=$HOME/.ripgreprc
+if [ -d "$HOME/.dotnet/tools" ] ; then
+    PATH="$HOME/.dotnet/tools:$PATH"
+fi
 
 # source ~/.github_variables
 
