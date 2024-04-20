@@ -128,22 +128,22 @@ if 'Firefox' in active_window_title or 'Chrome' in active_window_title or 'Brave
     if not description:
         description = active_window_title
 
-    options = ["Add Link", "Create Task", "Add to Playlist", "Append to Web Highlights"]
-    message = f"Would you like to add a pet link for '{truncated_description}' from '{domain}' domain, create a task, add to MPV playlist, or append to Web Highlights?"
-    exit_code, choices = dialog.list_menu_multi(options, title="Choose an Action", message=message, defaults=["Append to Web Highlights"], height="220")
+    options = ["Link", "Task", "Playlist", "Highlights"]
+    message = f"Add a pet link for '{truncated_description}' from '{domain}' domain, create a task, add to MPV playlist, or append to Web Highlights?"
+    exit_code, choices = dialog.list_menu_multi(options, title="Choose an Action", message=message, defaults=["Highlights"], height="220")
 
     # Check if the dialog was cancelled (exit code is 0 when OK is clicked)
     if exit_code == 0:
-        if "Add Link" in choices or "Create Task" in choices:
+        if "Link" in choices or "Task" in choices:
             custom_description = get_custom_description(description)
             
-        if "Add Link" in choices:
+        if "Link" in choices:
             invoke_plink(custom_description, url)
         
-        if "Create Task" in choices:
+        if "Task" in choices:
             subprocess.run(["/home/decoder/dev/dotfiles/scripts/__create_task.sh", custom_description] + tags)
             
-        if "Append to Web Highlights" in choices:
+        if "Highlights" in choices:
            media_folder_path = '/home/decoder/dev/obsidian/decoder/Notes/_media/'
            take_screenshot_interactively()
            screenshot_full_path = save_screenshot_to_file(media_folder_path)
@@ -155,7 +155,7 @@ if 'Firefox' in active_window_title or 'Chrome' in active_window_title or 'Brave
 
             
         # PROJECT: playlist
-        if "Add to Playlist" in choices:
+        if "Playlist" in choices:
             if "youtube.com" in domain or "youtu.be" in domain:  # Check if the domain is YouTube
                 subprocess.run(["/home/decoder/dev/dotfiles/scripts/__append_to_playlist.py", url, active_window_title, haruna_playlist_path])
             else:
