@@ -100,6 +100,7 @@ return require("packer").startup(function(use)
       "nvim-telescope/telescope.nvim", -- optional: for multi-select
     },
   }
+  use { "ionide/Ionide-vim" }
   use "rcarriga/nvim-notify"
   use { "marcelofern/vale.nvim" }
   use "tyru/open-browser.vim"
