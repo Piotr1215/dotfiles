@@ -9,8 +9,8 @@ if vim.g.scroll_fix_enabled == nil then
 end
 
 function _G.grepInProject()
-  local handle = io.popen('git rev-parse --show-toplevel 2> /dev/null')
-  local gitRoot = handle and handle:read("*a") or ""
+  local handle = io.popen "git rev-parse --show-toplevel 2> /dev/null"
+  local gitRoot = handle and handle:read "*a" or ""
   if handle then
     handle:close()
   end
@@ -20,24 +20,24 @@ function _G.grepInProject()
   end
 
   local cwd = gitRoot ~= "" and gitRoot or vim.fn.getcwd()
-  require('telescope').extensions.live_grep_args.live_grep_args({ cwd = cwd })
+  require("telescope").extensions.live_grep_args.live_grep_args { cwd = cwd }
 end
 
-vim.api.nvim_set_keymap('n', '<leader>fw', ':lua grepInProject()<CR>', { noremap = true, silent = true })
+vim.api.nvim_set_keymap("n", "<leader>fw", ":lua grepInProject()<CR>", { noremap = true, silent = true })
 
 function _G.toggleZenAndFix()
   -- Toggle ZenMode
-  vim.cmd('ZenMode')
+  vim.cmd "ZenMode"
 
   -- Toggle between FIX 25 and FIX -1 based on a global variable
   if vim.g.scroll_fix_enabled then
     -- If scroll fix is currently enabled, disable it
-    vim.cmd('FIX -1')
+    vim.cmd "FIX -1"
     vim.g.scroll_fix_enabled = false
     print "ScrollFix disabled."
   else
     -- If scroll fix is currently disabled, enable it to your preferred setting (25 in this case)
-    vim.cmd('FIX 25')
+    vim.cmd "FIX 25"
     vim.g.scroll_fix_enabled = true
     print "ScrollFix set to 25%."
   end
@@ -45,20 +45,26 @@ end
 
 function _G.select_note_type_and_create()
   local note_types = {
-    'projects', 'areas', 'resources', 'meetings', 'reviews'
+    "projects",
+    "areas",
+    "resources",
+    "meetings",
+    "reviews",
   }
 
-  vim.ui.select(note_types, { prompt = 'Select note type:' }, function(choice)
-    if not choice then return end
-    local note_title = vim.fn.input('Note title: ')
+  vim.ui.select(note_types, { prompt = "Select note type:" }, function(choice)
+    if not choice then
+      return
+    end
+    local note_title = vim.fn.input "Note title: "
     if note_title ~= "" then
       -- Directly concatenate without additional quotes
-      vim.cmd('CreateNoteWithTemplate ' .. choice .. ' ' .. note_title)
+      vim.cmd("CreateNoteWithTemplate " .. choice .. " " .. note_title)
     end
   end)
 end
 
-vim.api.nvim_set_keymap('n', '<leader>oc', ':lua select_note_type_and_create()<CR>', { noremap = true, silent = true })
+vim.api.nvim_set_keymap("n", "<leader>oc", ":lua select_note_type_and_create()<CR>", { noremap = true, silent = true })
 
 function _G.create_note_with_template(template_type, note_title)
   -- Define base directory for notes
@@ -74,18 +80,18 @@ function _G.create_note_with_template(template_type, note_title)
   vim.api.nvim_buf_set_lines(0, -1, -1, false, { "", "" })
 
   -- Move the cursor to the last line of the file
-  vim.api.nvim_command("normal G")
+  vim.api.nvim_command "normal G"
 
   -- Apply the template based on the type
   local obsidian_template_cmd = string.format(":ObsidianTemplate %s.md", template_type)
   vim.api.nvim_command(obsidian_template_cmd)
 end
 
-vim.api.nvim_create_user_command('CreateNoteWithTemplate', function(input)
+vim.api.nvim_create_user_command("CreateNoteWithTemplate", function(input)
   -- Split input to get template type and note title
   local args = vim.split(input.args, " ", { trimempty = true })
   if #args < 2 then
-    print("Usage: CreateNoteWithTemplate <template_type> <note_title>")
+    print "Usage: CreateNoteWithTemplate <template_type> <note_title>"
     return
   end
   local template_type = args[1]
@@ -101,13 +107,13 @@ function _G.insert_todo_and_comment()
   local line = vim.api.nvim_get_current_line()
   print("Original line: ", line)
 
-  vim.api.nvim_put({ 'TODO:(piotr1215)' }, '', true, true)
+  vim.api.nvim_put({ "TODO:(piotr1215)" }, "", true, true)
   -- Uncomment the line
   vim.cmd [[execute "normal \<Plug>NERDCommenterComment"]]
   vim.cmd [[execute "normal \A "]]
 end
 
-vim.api.nvim_set_keymap('i', '<c-a>', '<C-o>:lua insert_todo_and_comment()<CR>', { noremap = true, silent = true })
+vim.api.nvim_set_keymap("i", "<c-a>", "<C-o>:lua insert_todo_and_comment()<CR>", { noremap = true, silent = true })
 
 function _G.swapWords()
   local current_line = vim.api.nvim_get_current_line()
@@ -116,7 +122,7 @@ function _G.swapWords()
 
   -- Extract WORDs from the current line
   local words = {}
-  for word in current_line:gmatch("%S+") do
+  for word in current_line:gmatch "%S+" do
     table.insert(words, word)
   end
 
@@ -149,49 +155,49 @@ function _G.swapWords()
 end
 
 -- Key binding
-vim.api.nvim_set_keymap('n', '<leader>sw', '<cmd>lua swapWords()<cr>', { noremap = true, silent = true })
+vim.api.nvim_set_keymap("n", "<leader>sw", "<cmd>lua swapWords()<cr>", { noremap = true, silent = true })
 
 function _G.get_tmux_working_directory()
-  local handle = io.popen("tmux display-message -p -F '#{pane_current_path}'")
+  local handle = io.popen "tmux display-message -p -F '#{pane_current_path}'"
   if handle then
-    local result = handle:read("*a")
+    local result = handle:read "*a"
     handle:close()
     if result and result ~= "" then
       local trimmed_result = result:gsub("%s+", "")
       return trimmed_result
     else
-      print("No result obtained or result is empty")
+      print "No result obtained or result is empty"
     end
   else
-    print("Failed to create handle")
+    print "Failed to create handle"
   end
 end
 
 _G.operator_callback = function()
-  local s_pos = vim.fn.getpos("'<")
-  local e_pos = vim.fn.getpos("'>")
+  local s_pos = vim.fn.getpos "'<"
+  local e_pos = vim.fn.getpos "'>"
   local s_line, s_col = s_pos[2], s_pos[3]
   local e_line, e_col = e_pos[2], e_pos[3]
-  local register_content = vim.fn.getreg('a') -- Get the content of the "a" register
+  local register_content = vim.fn.getreg "a" -- Get the content of the "a" register
 
   -- Split the register content into lines
-  local replacement_lines = vim.split(register_content, '\n')
+  local replacement_lines = vim.split(register_content, "\n")
 
   -- Replace the visually selected text with the lines from the register
   vim.api.nvim_buf_set_text(0, s_line - 1, s_col - 1, e_line - 1, e_col, replacement_lines)
 end
 
 function _G.replace_with_register()
-  print("Running replace_with_register function")
+  print "Running replace_with_register function"
   -- Call the register picker from telescope
-  require('telescope.builtin').registers({
+  require("telescope.builtin").registers {
     attach_mappings = function(prompt_bufnr, map)
-      print("Register picker called from telescope")
+      print "Register picker called from telescope"
       actions.select_default:replace(function()
-        print("Inside actions.select_default:replace function")
+        print "Inside actions.select_default:replace function"
         -- Close the picker
         actions.close(prompt_bufnr)
-        print("Picker closed")
+        print "Picker closed"
 
         -- Get the selected register
         local selection = action_state.get_selected_entry()
@@ -202,40 +208,40 @@ function _G.replace_with_register()
         print(vim.inspect(register_content))
 
         -- Set the content of the "a" register
-        vim.fn.setreg('a', register_content)
+        vim.fn.setreg("a", register_content)
 
         -- Set up the operator callback
         vim.o.operatorfunc = "v:lua._G.operator_callback"
         vim.api.nvim_feedkeys("g@`<", "ni", false) -- This triggers the operator callback on the visual selection
 
-        print("Substitute command executed")
+        print "Substitute command executed"
       end)
-      print("Exited from actions.select_default:replace function")
+      print "Exited from actions.select_default:replace function"
       return true -- Keep the rest of the mappings
-    end
-  })
+    end,
+  }
 end
 
 -- Create a keymap to call the replace_with_register function
-vim.api.nvim_set_keymap('v', '<leader>rg', [[:lua replace_with_register()<CR>]], { noremap = true, silent = true })
+vim.api.nvim_set_keymap("v", "<leader>rg", [[:lua replace_with_register()<CR>]], { noremap = true, silent = true })
 -- Create a flag to keep track of whether the prompt has been shown
 local prompt_shown = false
 
 function _G.test_delete_videos()
-  local filepath = vim.fn.expand('%:p')                                  -- Get the full path of the current file
-  if filepath == '/home/decoder/vids_playlist.m3u' then
-    local lines = vim.fn.readfile(filepath)                              -- Read the file into a table
-    local content = table.concat(lines, '\n'):gsub("^%s*(.-)%s*$", "%1") -- Join the table into a string and trim whitespace
-    if content == "" and not prompt_shown then                           -- Check if the file is empty and prompt was not shown yet
-      local answer = vim.fn.input('Delete all video files in ~/Video? (y/n): ')
-      if answer:lower() == 'y' then
-        local handle = io.popen(
-          'find /home/decoder/Videos -type f \\( -name "*.mp4" -o -name "*.webm" \\) -exec rm -f {} + 2>&1')
-        local output = handle:read("*a")
+  local filepath = vim.fn.expand "%:p" -- Get the full path of the current file
+  if filepath == "/home/decoder/vids_playlist.m3u" then
+    local lines = vim.fn.readfile(filepath) -- Read the file into a table
+    local content = table.concat(lines, "\n"):gsub("^%s*(.-)%s*$", "%1") -- Join the table into a string and trim whitespace
+    if content == "" and not prompt_shown then -- Check if the file is empty and prompt was not shown yet
+      local answer = vim.fn.input "Delete all video files in ~/Video? (y/n): "
+      if answer:lower() == "y" then
+        local handle =
+          io.popen 'find /home/decoder/Videos -type f \\( -name "*.mp4" -o -name "*.webm" \\) -exec rm -f {} + 2>&1'
+        local output = handle:read "*a"
         handle:close()
 
         -- Count deleted files
-        local _, count = string.gsub(output, '\n', '\n')
+        local _, count = string.gsub(output, "\n", "\n")
         if count > 0 then
           -- Display how many files were deleted
           print(count .. " video files deleted.")
@@ -243,7 +249,7 @@ function _G.test_delete_videos()
           print(output) -- Pass through the system error message
         end
       end
-      prompt_shown = true  -- Set the flag to true, so the prompt won't be shown again
+      prompt_shown = true -- Set the flag to true, so the prompt won't be shown again
     else
       prompt_shown = false -- Reset the flag, so the prompt can be shown again
     end
@@ -284,16 +290,20 @@ function _G.process_task_list(start_line, end_line, ...)
       -- No more "\n" before "# Adding task:"; instead, just ensure it's a new entry in the table.
       table.insert(new_lines, "") -- Ensure there's an empty line before adding a new task if desired.
       table.insert(new_lines, "# Adding task: " .. trimmed_line)
-      table.insert(new_lines,
-        "output=$(task add " .. (modifiers ~= "" and modifiers .. " " or "") .. '"' .. trimmed_line .. '")')
-      table.insert(new_lines, 'task_id=$(echo "$output" | grep -o "Created task [0-9]*." | cut -d " " -f 3 | tr -d ".")')
+      table.insert(
+        new_lines,
+        "output=$(task add " .. (modifiers ~= "" and modifiers .. " " or "") .. '"' .. trimmed_line .. '")'
+      )
+      table.insert(
+        new_lines,
+        'task_id=$(echo "$output" | grep -o "Created task [0-9]*." | cut -d " " -f 3 | tr -d ".")'
+      )
 
       for _, link in ipairs(links) do
         table.insert(new_lines, "task $task_id annotate -- " .. link)
       end
     end
   end
-
 
   _G.create_floating_scratch(new_lines)
 end
@@ -331,17 +341,16 @@ end
 
 _G.folding_enabled = false
 
-
 -- Toggle function
 function _G.toggle_function_folding()
-  print("toggle_function_folding called") -- Debug print
+  print "toggle_function_folding called" -- Debug print
   if _G.folding_enabled then
-    print("Disabling folds")              -- Debug print
+    print "Disabling folds" -- Debug print
     vim.cmd "setlocal nofoldenable"
-    vim.cmd "normal zR"                   -- Unfold all folds
+    vim.cmd "normal zR" -- Unfold all folds
     _G.folding_enabled = false
   else
-    print("Enabling folds") -- Debug print
+    print "Enabling folds" -- Debug print
     vim.cmd "setlocal foldenable"
     vim.cmd "setlocal foldmethod=expr"
     vim.cmd "normal zM" -- Fold all folds
@@ -385,7 +394,7 @@ function _G.create_or_update_task()
   local current_line = vim.fn.getline "."
   local cursor_pos = vim.fn.col "."
   local file_path = vim.fn.expand "%:p" -- Get full path of current file
-  local line_number = vim.fn.line "."   -- Get current line number
+  local line_number = vim.fn.line "." -- Get current line number
 
   -- Keywords we are looking for
   local keywords = { "TODO", "HACK", "NOTE", "PERF", "TEST", "WARN" }
@@ -542,14 +551,18 @@ end
 
 function _G.redirect_messages_to_clipboard()
   -- Redirect messages to clipboard register
-  vim.cmd("redir @+")
-  vim.cmd("messages")
-  vim.cmd("redir END")
+  vim.cmd "redir @+"
+  vim.cmd "messages"
+  vim.cmd "redir END"
 end
 
 -- Map <leader>msg to the function
-vim.api.nvim_set_keymap('n', '<leader>msg', [[:lua redirect_messages_to_clipboard()<CR>]],
-  { noremap = true, silent = true })
+vim.api.nvim_set_keymap(
+  "n",
+  "<leader>msg",
+  [[:lua redirect_messages_to_clipboard()<CR>]],
+  { noremap = true, silent = true }
+)
 
 function _G.add_empty_lines(below)
   local count = vim.v.count1
@@ -559,17 +572,22 @@ function _G.add_empty_lines(below)
   end
 
   if below then
-    vim.fn.append(vim.fn.line('.'), lines)
-    vim.cmd('normal! ' .. count .. 'j')
+    vim.fn.append(vim.fn.line ".", lines)
+    vim.cmd("normal! " .. count .. "j")
   else
-    vim.fn.append(vim.fn.line('.') - 1, lines)
-    vim.cmd('normal! ' .. count .. 'k')
+    vim.fn.append(vim.fn.line "." - 1, lines)
+    vim.cmd("normal! " .. count .. "k")
   end
 end
 
 function _G.execute_file_and_show_output()
-  -- Define the command to execute the current file
-  local cmd = "bash " .. vim.fn.expand('%:p') -- '%:p' expands to the current file path
+  -- Define the command based on filetype
+  local cmd
+  if vim.bo.filetype == "fsharp" then
+    cmd = "dotnet run " .. vim.fn.expand "%:p" -- for F# files, use dotnet run
+  else
+    cmd = "bash " .. vim.fn.expand "%:p" -- for other files, use bash
+  end
 
   -- Execute the command and capture its output
   local output = vim.fn.systemlist(cmd)
@@ -585,12 +603,12 @@ end
 
 function _G.create_floating_scratch(content)
   -- Get editor dimensions
-  local width = vim.api.nvim_get_option("columns")
-  local height = vim.api.nvim_get_option("lines")
+  local width = vim.api.nvim_get_option "columns"
+  local height = vim.api.nvim_get_option "lines"
 
   -- Calculate the floating window size
   local win_height = math.ceil(height * 0.8) + 2 -- Adding 2 for the border
-  local win_width = math.ceil(width * 0.8) + 2   -- Adding 2 for the border
+  local win_width = math.ceil(width * 0.8) + 2 -- Adding 2 for the border
 
   -- Calculate window's starting position
   local row = math.ceil((height - win_height) / 2)
@@ -598,18 +616,18 @@ function _G.create_floating_scratch(content)
 
   -- Create a buffer and set it as a scratch buffer
   local buf = vim.api.nvim_create_buf(false, true)
-  vim.api.nvim_buf_set_option(buf, 'buftype', 'nofile')
-  vim.api.nvim_buf_set_option(buf, 'bufhidden', 'wipe')
-  vim.api.nvim_buf_set_option(buf, 'filetype', 'sh') -- for syntax highlighting
+  vim.api.nvim_buf_set_option(buf, "buftype", "nofile")
+  vim.api.nvim_buf_set_option(buf, "bufhidden", "wipe")
+  vim.api.nvim_buf_set_option(buf, "filetype", "sh") -- for syntax highlighting
 
   -- Create the floating window with a border and set some options
   local win = vim.api.nvim_open_win(buf, true, {
-    relative = 'editor',
+    relative = "editor",
     row = row,
     col = col,
     width = win_width,
     height = win_height,
-    border = 'single' -- You can also use 'double', 'rounded', or 'solid'
+    border = "single", -- You can also use 'double', 'rounded', or 'solid'
   })
 
   -- Check if we've got content to populate the buffer with
@@ -619,24 +637,24 @@ function _G.create_floating_scratch(content)
     vim.api.nvim_buf_set_lines(buf, 0, -1, true, { "This is a scratch buffer in a floating window." })
   end
 
-  vim.api.nvim_win_set_option(win, 'wrap', false)
-  vim.api.nvim_win_set_option(win, 'cursorline', true)
+  vim.api.nvim_win_set_option(win, "wrap", false)
+  vim.api.nvim_win_set_option(win, "cursorline", true)
 
   -- Map 'q' to close the buffer in this window
-  vim.api.nvim_buf_set_keymap(buf, 'n', 'q', ':q!<CR>', { noremap = true, silent = true })
+  vim.api.nvim_buf_set_keymap(buf, "n", "q", ":q!<CR>", { noremap = true, silent = true })
 end
 
 function _G.interrupt_process()
   if _G.job_id then
     vim.fn.jobstop(_G.job_id)
     _G.job_id = nil -- Clear the job ID after stopping the job
-    print("Process interrupted.")
+    print "Process interrupted."
   end
 end
 
 function _G.execute_visual_selection()
-  vim.cmd('normal! gvy')
-  local lines = vim.fn.getreg('"')
+  vim.cmd "normal! gvy"
+  local lines = vim.fn.getreg '"'
 
   -- Create a temporary script file
   local script_path = "/tmp/nvim_exec_script.sh"
@@ -673,12 +691,17 @@ function _G.execute_visual_selection()
     stderr_buffered = false,
   })
 
-  vim.api.nvim_buf_set_keymap(target_buf, 'n', '<C-c>', '<cmd>lua _G.interrupt_process()<CR>',
-    { noremap = true, silent = true })
+  vim.api.nvim_buf_set_keymap(
+    target_buf,
+    "n",
+    "<C-c>",
+    "<cmd>lua _G.interrupt_process()<CR>",
+    { noremap = true, silent = true }
+  )
 end
 
 -- Map <leader>es in visual mode to the function
-vim.api.nvim_set_keymap('x', '<leader>ex', [[:lua execute_visual_selection()<CR>]], { noremap = true, silent = true })
+vim.api.nvim_set_keymap("x", "<leader>ex", [[:lua execute_visual_selection()<CR>]], { noremap = true, silent = true })
 
 -- Custom f command function
 -- This is needed because ;; is mapped to enter command mode
