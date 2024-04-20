@@ -1,6 +1,6 @@
 -- LSP and LS Installer
 require("nvim-dap-virtual-text").setup()
-require("neodev").setup({})
+require("neodev").setup {}
 local def = require "lsp.default-lsp"
 local lspconfig = require "lspconfig"
 lspconfig.lua_ls.setup {
@@ -11,10 +11,10 @@ lspconfig.lua_ls.setup {
   settings = {
     Lua = {
       runtime = {
-        version = "LuaJIT"
+        version = "LuaJIT",
       },
       -- diagnostics = {
-        -- globals = { "vim" },
+      -- globals = { "vim" },
       -- },
       hint = { enable = true },
       signatureHelp = { enable = true },
@@ -34,18 +34,18 @@ configs.up = {
   },
 }
 
-require("lspconfig")['up'].setup({
+require("lspconfig")["up"].setup {
   cmd = { "up", "xpls", "serve", "--verbose" },
   filetypes = { "yaml" },
   root_dir = lspconfig.util.root_pattern "crossplane.yaml",
   on_attach = def.on_attach,
-})
+}
 
-require 'lspconfig'.bashls.setup {
+require("lspconfig").bashls.setup {
   filetypes = { "sh", "zsh" },
 }
 
-require('lspconfig')['yamlls'].setup {
+require("lspconfig")["yamlls"].setup {
   {
     on_attach = def.on_attach,
     capabilities = def.capabilities,
@@ -71,7 +71,16 @@ require('lspconfig')['yamlls'].setup {
         url = "https://www.schemastore.org/api/json/catalog.json",
       },
     },
-  }
+  },
+}
+require("ionide").setup {
+  on_attach = def.on_attach,
+  capabilities = def.capabilities,
+}
+-- PROJECT: lsp_lines
+-- Disable virtual_text since it's redundant due to lsp_lines.
+vim.diagnostic.config {
+  virtual_text = false,
 }
 lspconfig.gopls.setup {
   cmd = { "gopls" },
