@@ -78,7 +78,7 @@ source ~/.zsh_functions
 
 # EXPORT & PATH
 export XDG_CONFIG_HOME=~/.config
-export XDG_CONFIG_DIRS=/home/decoder/.config/nvim:$XDG_CONFIG_DIRS
+export XDG_CONFIG_DIRS=/home/decoder/dev/dotfiles/.config/nvim:$XDG_CONFIG_DIRS
 export FZF_BASE=/usr/bin/fzf
 export FZF_DEFAULT_COMMAND='fd --hidden --exclude .git'
 export FZF_CTRL_T_COMMAND='fd --hidden'
