@@ -54,6 +54,12 @@ return require("packer").startup(function(use)
   }
   use { "MunifTanjim/nui.nvim" }
   use {
+    "https://git.sr.ht/~whynothugo/lsp_lines.nvim",
+    config = function()
+      require("lsp_lines").setup()
+    end,
+  }
+  use {
     "jellydn/hurl.nvim",
   }
   use {
