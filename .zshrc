@@ -224,6 +224,7 @@ if [ -f '/home/decoder/dev/clusters/primary-dev/google-cloud-sdk/completion.zsh.
 
 eval "$(direnv hook zsh)"
 eval "$(starship init zsh)"
+eval "$(thefuck --alias)"
 # zprof > /tmp/zprof.out
 
 # bun completions
