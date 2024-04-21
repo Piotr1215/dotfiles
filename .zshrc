@@ -193,6 +193,15 @@ function f_enter() {
 zle -N f_enter
 bindkey '^f' f_enter
 
+# PROJECT: git-log
+function open_logg() {
+  BUFFER="logg"
+  zle accept-line
+}
+
+zle -N open_logg
+bindkey '^l' open_logg
+
 function f_git_enter() {
   BUFFER="__open-file-git.sh"
   zle accept-line

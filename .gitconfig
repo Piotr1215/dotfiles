@@ -20,7 +20,10 @@ cia = commit --verbose --all
 co = checkout
 su = submodule update --init --recursive
 logg = log --graph
+; PROJECT: git-log
 add-commit = !git add -A && git commit
+	lg-detail = log --graph --decorate --pretty=format:'%C(yellow)%h%C(reset) %C(green)%ad%C(reset) %C(auto)%d%C(reset)%n%C(white)%B%C(reset)' --date=short
+	lg = log --graph --decorate --color=always --pretty=format:'%C(yellow)%h%C(reset) -%C(red)%d%C(reset) %s %C(green)(%cr)%C(reset)' --abbrev-commit
 [diff]
 #tool = vimdiff
 colorMoved = default
