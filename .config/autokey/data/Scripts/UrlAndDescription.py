@@ -130,7 +130,14 @@ if 'Firefox' in active_window_title or 'Chrome' in active_window_title or 'Brave
 
     options = ["Link", "Task", "Playlist", "Highlights"]
     message = f"Add a pet link for '{truncated_description}' from '{domain}' domain, create a task, add to MPV playlist, or append to Web Highlights?"
-    exit_code, choices = dialog.list_menu_multi(options, title="Choose an Action", message=message, defaults=["Highlights"], height="220")
+    #  exit_code, choices = dialog.list_menu_multi(options, title="Choose an Action", message=message, defaults=["Highlights"], height="220")
+    process = subprocess.Popen("~/dev/dotfiles/scripts/__zenity_selector.sh", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    output, errors = process.communicate()
+    exit_code = process.returncode
+    if exit_code != 0:
+        raise subprocess.CalledProcessError(exit_code, process.args, output=output, stderr=errors)
+    choices = output.strip().split(' ')
+
 
     # Check if the dialog was cancelled (exit code is 0 when OK is clicked)
     if exit_code == 0:
