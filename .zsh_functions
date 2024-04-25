@@ -232,9 +232,33 @@ function fif() {
     _fif_common "--ignore-case" "$@"
 }
 
-# Wrapper function for project tags search
+# Dedicated function to list all files associated with a given project tag
+function list_project_files() {
+    local project_tag="PROJECT: $1"
+    local ignore_case_flag=""  # Adjust as necessary for case sensitivity
+
+    cd ~/dev
+    # Use rga to find files containing the project tag, listing filenames only
+    local rga_output=$(rga --max-count=1 $ignore_case_flag --files-with-matches --no-messages "$project_tag")
+
+    # Check if any files were found
+    if [[ -z "$rga_output" ]]; then
+        echo "No files found for project $1."
+        return 0
+    fi
+
+    # Print each file path
+    echo "$rga_output"
+}
+# Wrapper function for project tags search with optional listing
 function fifp() {
-    _fif_common "" "PROJECT: $*"
+    local mode="$1"  # Check for the '-l' flag
+    if [[ "$mode" == "-l" ]]; then
+        shift  # Remove the first argument (the '-l' flag)
+        list_project_files "$*"
+    else
+        _fif_common "" "PROJECT: $*"
+    fi
 }
 
 # Uploads content to clbin and copies URL to clipboard, opens in browser

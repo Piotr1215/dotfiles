@@ -80,6 +80,15 @@ require("mdeval").setup {
       exec_type = "interpreted", -- Since Go runs as 'go run' for scripts
       language_code = "go", -- Assuming the plugin can use this to identify code blocks
     },
+    zsh = {
+      command = { "zsh", "-c" },
+      exec_type = "interpreted",
+      language_code = "zsh",
+      extension = "sh",
+      default_header = [[
+#!/usr/bin/env zsh
+      ]],
+    },
     cpp = {
       command = { "clang++", "-std=c++20", "-O0" },
       default_header = [[
