@@ -390,6 +390,47 @@ function _G.insert_file_path()
   }
 end
 
+function _G.add_project_from_line(current_line)
+  local project_pattern = "PROJECT:%s*(%S+)"
+  local project_name = current_line:match(project_pattern)
+
+  if not project_name then
+    print "No project name found on the line."
+    return
+  end
+
+  local file_path = vim.fn.expand "~/projects.txt"
+  local projects = {}
+  local file = io.open(file_path, "r")
+
+  if file then
+    for line in file:lines() do
+      projects[line] = true
+    end
+    file:close()
+  end
+
+  if projects[project_name] then
+    print("Project already exists: " .. project_name)
+  else
+    file = io.open(file_path, "a")
+    if file then
+      file:write(project_name .. "\n")
+      file:close()
+      print("Project added: " .. project_name)
+    else
+      print "Failed to open the file."
+    end
+  end
+end
+
+vim.api.nvim_set_keymap(
+  "i", -- Insert mode
+  "<C-p>",
+  [[<Cmd>lua _G.add_project_from_line(vim.fn.getline('.'))<CR>]], -- Passes current line to the function
+  { noremap = true, silent = false }
+)
+
 function _G.create_or_update_task()
   local current_line = vim.fn.getline "."
   local cursor_pos = vim.fn.col "."

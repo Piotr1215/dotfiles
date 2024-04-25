@@ -59,6 +59,7 @@ gsettings set org.gnome.desktop.interface enable-animations true
 source $ZSH/oh-my-zsh.sh
 source ~/.oh-my-zsh/plugins/tmuxinator/_mst 
 source ~/.oh-my-zsh/plugins/tmuxinator/_ms
+source ~/.oh-my-zsh/plugins/tmuxinator/_fifp
 
 fpath=(${HOME}/.oh-my-zsh/completions/ $fpath)
 
