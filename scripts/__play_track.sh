@@ -1,18 +1,10 @@
 #!/usr/bin/env bash
 
-# Read track names and paths from "${HOME}/haruna_playlist.m3u",
-# where comments are track names.
-# Select track to play using a fuzzy search interface provided by 'gum'.
-# Requires: bash, mpv, gum.
-
 set -eo pipefail
-
-# Set newline and tab as word splitting delimiters
 IFS=$'\n\t'
 
 # PROJECT: playlist
 tracks_file="${HOME}/haruna_playlist.m3u"
-
 if [[ ! -f "$tracks_file" ]]; then
 	echo "Error: Track file not found at $tracks_file"
 	exit 1
@@ -37,12 +29,19 @@ if [ ${#tracks[@]} -eq 0 ]; then
 fi
 
 track_names=$(printf "%s\n" "${!tracks[@]}")
-
 selected_track=$(echo "$track_names" | gum filter --fuzzy)
 
 if [[ -n $selected_track ]]; then
-	echo "Playing track: $selected_track"
-	nohup mpv --loop-file --no-terminal --no-video "${tracks[$selected_track]}" >/dev/null 2>&1 &
+	track_path="${tracks[$selected_track]}"
+	# Prepare a valid tmux session name: replace spaces, trim to 25 characters max
+	tmux_session_name=$(echo "${selected_track// /_}" | cut -c 1-25)
+
+	# Start new tmux session in the background
+	tmux new-session -d -s "$tmux_session_name" mpv --loop-file --no-video --ytdl "$track_path"
+
+	echo "MPV launched in tmux session: $tmux_session_name"
+	echo "To control MPV, attach to the tmux session using: tmux attach -t $tmux_session_name"
+	echo "To stop playback, you can kill the tmux session: tmux kill-session -t $tmux_session_name"
 else
 	echo "No track selected. Exiting."
 	exit 0
