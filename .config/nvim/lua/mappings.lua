@@ -217,6 +217,11 @@ local function keymapOptions(desc)
   }
 end
 
+-- Restart nvim
+vim.keymap.set("n", "<leader>-", function()
+  vim.fn.system "bash __restart_nvim.sh"
+end, { noremap = true, silent = true })
+
 vim.keymap.set({ "n", "i" }, "<C-g>r", "<cmd>GpRewrite<cr>", keymapOptions "Inline Rewrite")
 vim.keymap.set({ "n", "i" }, "<C-g>a", "<cmd>GpAppend<cr>", keymapOptions "Append")
 vim.keymap.set({ "n", "i" }, "<C-g>b", "<cmd>GpPrepend<cr>", keymapOptions "Prepend")
