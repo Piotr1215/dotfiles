@@ -228,9 +228,6 @@ vim.keymap.set("v", "<C-g>e", ":<C-u>'<,'>GpEnew<cr>", keymapOptions "Visual Ene
 vim.keymap.set("v", "<C-g>p", ":<C-u>'<,'>GpPopup<cr>", keymapOptions "Visual Popup")
 vim.keymap.set({ "n", "i", "v", "x" }, "<C-g>s", "<cmd>GpStop<cr>", keymapOptions "Stop")
 
--- Nvim Leap Mappings
-utils.emap("<Leader>ow", "<Plug>(leap-cross-window)")
-
 -- Nvim no neck pain Mappings
 utils.lnmap("ne", "<cmd>NoNeckPain<cr>")
 

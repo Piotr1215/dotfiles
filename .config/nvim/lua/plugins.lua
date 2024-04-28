@@ -115,7 +115,6 @@ return require("packer").startup(function(use)
     },
   }
   -- use 'https://gitlab.com/madyanov/svart.nvim'
-  use "ggandor/leap.nvim"
   use { "kevinhwang91/nvim-bqf" } -- better quickfix window
   -- }}}
   -- System Integration {{{
