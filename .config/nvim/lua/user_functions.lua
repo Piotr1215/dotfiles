@@ -395,7 +395,7 @@ function _G.add_project_from_line(current_line)
   local project_name = current_line:match(project_pattern)
 
   if not project_name then
-    print "No project name found on the line."
+    require "notify"("No project name found on the line.", "error")
     return
   end
 
@@ -411,15 +411,15 @@ function _G.add_project_from_line(current_line)
   end
 
   if projects[project_name] then
-    print("Project already exists: " .. project_name)
+    require "notify"("Project already exists: " .. project_name, "info")
   else
     file = io.open(file_path, "a")
     if file then
       file:write(project_name .. "\n")
       file:close()
-      print("Project added: " .. project_name)
+      require "notify"("Project added: " .. project_name, "info")
     else
-      print "Failed to open the file."
+      require "notify"("Failed to open the file.", "error")
     end
   end
 end
