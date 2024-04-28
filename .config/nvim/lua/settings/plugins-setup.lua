@@ -431,8 +431,6 @@ require("nvim-surround").setup {
   },
 }
 
-require("leap").add_default_mappings()
-
 -- Color name (:help cterm-colors) or ANSI code
 -- there are some defaults for image directory and image name, you can change them
 vim.g.mdip_imgdir = "_media"
