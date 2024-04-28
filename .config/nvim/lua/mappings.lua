@@ -101,6 +101,7 @@ utils.lnmap("cpfl", [[:let @+ = expand("%:p") . ':' . line('.')<cr>]]) -- Copy c
 utils.lnmap("cpn", ':let @+ = expand("%:t")<cr>') -- Copy current file name
 utils.nmap("<C-f>", ":Pretty<CR>") -- format json with pretty
 utils.imap("<c-d>", "<c-o>daw") -- delete word forward in insert mode
+vim.keymap.set("i", "<C-H>", "<c-w>", { noremap = true }) -- delete word forward in insert mode
 utils.nmap("<leader>sp", "i<cr><esc>") -- split line in two
 -- EXTERNAL COMMANDS --
 vim.keymap.set("c", "<C-w>", "\\w*", { noremap = true }) -- copy word under cursor
