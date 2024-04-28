@@ -11,13 +11,6 @@ vim.api.nvim_create_user_command("Browse", function(opts)
   vim.fn.system { "xdg-open", opts.fargs[1] }
 end, { nargs = 1 })
 
--- vim.api.nvim_create_autocmd("BufWritePre", {
--- pattern = "*.go",
--- callback = function()
--- vim.lsp.buf.code_action { context = { only = { "source.organizeImports" } }, apply = true }
--- end,
--- })
-
 vim.cmd [[
   autocmd BufWritePost mappings.lua normal! mM
 ]]
