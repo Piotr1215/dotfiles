@@ -110,16 +110,9 @@ require("hurl").setup {
 }
 
 require("oil").setup {
-  opts = {
-    preview = true,
-  },
   experimental_watch_for_changes = true,
   columns = {
     "icon",
-  },
-  preview = {
-    max_width = 0.9,
-    width = 100,
   },
   view_options = {
     -- Show files and directories that start with "."

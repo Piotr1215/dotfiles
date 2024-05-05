@@ -14,6 +14,7 @@ utils.imap("jk", "<Esc>") -- esc and save
 utils.nmap("<leader>w", ":wall<CR>") -- save all
 utils.lnmap("qq", "@q") -- close all
 utils.lnmap("qa", ":qa!<cr>") -- close all without saving
+utils.lnmap("qf", ":q!<cr>") -- close current bufferall without saving
 vim.keymap.set("n", "<leader>tf", ":!touch %<cr>", { silent = true, noremap = true }) -- touch file to reload observers
 -- UNMAP --
 utils.nmap("<nop>", "<Plug>NERDCommenterAltDelims") -- tab is for moving around only
@@ -128,8 +129,6 @@ utils.lnmap("gd", ":Gvdiffsplit<CR>") -- git diff current file
 utils.lnmap("gu", ":Gdiffu<CR>") -- git diff current file
 utils.nmap("<leader>gl", ":r !bash ~/dev/dotfiles/scripts/__generate_git_log.sh<CR>") -- generate git log
 utils.lnmap("gh", ":Gclog %<CR>") -- show git log for current file
--- OTHER --
-utils.lnmap("qf", ":copen<CR>") -- open quickfix window
 -- PROGRAMMING --
 utils.imap("<expr>", "<C-l>   vsnip#available(1)  ? '<Plug>(vsnip-expand-or-jump)' : '<C-l>") -- Vsnippet expand or jump
 utils.smap("<expr>", "<C-l>   vsnip#available(1)  ? '<Plug>(vsnip-expand-or-jump)' : '<C-l>") -- Vsnippet expand or jump
@@ -247,7 +246,7 @@ vim.keymap.set("n", "<Leader>ol", function()
   local oil = require "oil"
   oil.open()
   require("oil.util").run_after_load(0, function()
-    oil.select { preview = true }
+    oil.open_preview(vertical)
   end)
 end)
 
