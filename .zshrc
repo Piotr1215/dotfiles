@@ -76,7 +76,6 @@ fi
 # Source functions and aliases
 source ~/.zsh_aliases
 source ~/.zsh_functions
-
 # EXPORT & PATH
 export XDG_CONFIG_HOME=~/.config
 export XDG_CONFIG_DIRS=/home/decoder/dev/dotfiles/.config/nvim:$XDG_CONFIG_DIRS
@@ -251,3 +250,8 @@ export PATH="$BUN_INSTALL/bin:$PATH"
 export WASMTIME_HOME="$HOME/.wasmtime"
 
 export PATH="$WASMTIME_HOME/bin:$PATH"
+
+export JSONNET_PATH=/home/decoder/dev/grafonnet-lib
+
+eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+
