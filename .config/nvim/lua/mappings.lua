@@ -43,9 +43,8 @@ vim.keymap.set({ "n", "v" }, "<C-j>", [[10j<cr>]], opts) -- moves over virtual (
 vim.keymap.set({ "n", "v" }, "<C-k>", [[10k<cr>]], opts) -- moves over virtual (wrapped) lines up
 vim.api.nvim_set_keymap("n", "k", "v:count == 0 ? 'gk' : 'k'", { noremap = true, expr = true, silent = true }) -- moves up over virtual (wrapped) lines
 vim.api.nvim_set_keymap("n", "j", "v:count == 0 ? 'gj' : 'j'", { noremap = true, expr = true, silent = true }) -- moves down over virtual (wrapped) lines
-vim.api.nvim_set_keymap("n", "<S-PageUp>", "gT", { noremap = true, silent = true }) -- move to previous tab
-vim.api.nvim_set_keymap("n", "<S-PageDown>", "gt", { noremap = true, silent = true }) -- move to next tab
-utils.nmap("<BS>", "^") -- move to first non-blank character of the line
+vim.api.nvim_set_keymap("n", "<M-Right>", "gT", { noremap = true, silent = true }) -- move to next tab
+utils.nmap("<BS>", "^") -- move to first non-bkgtgtgtgtlank character of the line
 utils.vmap("<S-PageDown>", ":m '>+1<CR>gv=gv") -- Move Line Down in Visual Mode
 utils.vmap("<S-PageUp>", ":m '<-2<CR>gv=gv") -- Move Line Up in Visual Mode
 utils.nmap("<leader>k", ":m .-2<CR>==") -- Move Line Up in Normal Mode
