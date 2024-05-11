@@ -4,7 +4,7 @@
 uuid="$@"
 
 # Directory where notes are stored
-notes_dir="/home/decoder/dev/obsidian/decoder/Notes"
+notes_dir="/home/decoder/dev/obsidian/decoder/Notes/projects/"
 
 # Show fzf dialog to select an existing note
 filepath=$(find "$notes_dir" -type f -name '*.md' | fzf-tmux --preview "bat --color=always {}")
