@@ -43,6 +43,7 @@ return require("packer").startup(function(use)
   -- }}}
   -- Editor Extensions {{{
   use "jesseleite/nvim-macroni"
+  use "nosduco/remote-sshfs.nvim"
 
   use {
     "windwp/nvim-autopairs",
