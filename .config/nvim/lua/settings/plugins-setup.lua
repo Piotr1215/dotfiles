@@ -36,6 +36,9 @@ require("gp").setup {
     },
   },
 }
+
+require("remote-sshfs").setup {}
+
 require("codesnap").setup {
   -- ...
   watermark = "󰭪",
