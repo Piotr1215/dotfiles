@@ -48,5 +48,6 @@ set.softtabstop = 2
 set.autoindent = true
 set.relativenumber = true
 set.incsearch = true
+set.inccommand = "split"
 set.laststatus = 2
 set.cmdheight = 1
