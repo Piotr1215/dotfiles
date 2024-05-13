@@ -6,6 +6,44 @@ function pkill() {
   ps aux | fzf --height 40% --layout=reverse --prompt="Select process to kill: " | awk '{print $2}' | xargs -r sudo kill
 }
 
+# Function to create and activate a Python virtual environment
+function mkvenv() {    # Set the environment directory name, default to 'venv' if no name provided
+    local env_dir=${1:-venv}
+    local requirements_path="captured-requirements.txt"
+    # Check if the environment already exists
+        # Create the virtual environment
+        echo "Creating new virtual environment '$env_dir'..."
+        python3 -m venv $env_dir
+        
+        # Activate the virtual environment
+        source $env_dir/bin/activate
+        
+        # Optional: Install any default packages
+        pip install --upgrade pip
+        pip install wheel
+
+        if [ -f "$requirements_path" ]; then
+            echo "Installing packages from '$requirements_path'..."
+            pip install -r "$requirements_path"
+        fi
+        
+        echo "Virtual environment '$env_dir' created and activated!"
+  }
+
+function rmvenv() {
+    # Check if the environment is active
+    local requirements_path="captured-requirements.txt"
+    if [[ "$VIRTUAL_ENV" != "" ]]; then
+        pip freeze > "$requirements_path"
+        # Deactivate the environment
+        deactivate
+        
+        echo "Virtual environment deactivated and all installed packages captured"
+    else
+        echo "No virtual environment is active."
+    fi
+}
+
 # PROJECT: git-log
 function logg() {
     git lg | fzf --ansi --no-sort \
