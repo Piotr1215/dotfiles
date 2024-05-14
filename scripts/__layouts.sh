@@ -89,17 +89,17 @@ firefox_firefox_vertical() {
 
 			# Resize the window
 			xdotool windowmap "$window_id"
-			xdotool windowsize "$window_id" 1946 2154
+			xdotool windowsize "$window_id" 1960 2168
 
-			# Move the window to the left or right side of the screen
+			# Move the window to the specified coordinates
 			if [ $i -eq 0 ]; then
 				# Move the first window to the left side of the screen
-				xdotool windowmove "$window_id" -13 21
+				xdotool windowmove "$window_id" -20 12
 				xdotool windowactivate --sync "$window_id"
 
 			else
 				# Move the second window to the right side of the screen
-				xdotool windowmove "$window_id" 1910 0
+				xdotool windowmove "$window_id" 1900 12
 				xdotool windowactivate --sync "$window_id"
 			fi
 		done
