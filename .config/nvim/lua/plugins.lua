@@ -92,7 +92,6 @@ return require("packer").startup(function(use)
   use "David-Kunz/gen.nvim"
   use "RRethy/nvim-align"
   use "vim-scripts/scrollfix"
-  use "stevearc/oil.nvim"
   use "echasnovski/mini.nvim"
   use "mattn/emmet-vim"
   use "mattn/webapi-vim"

@@ -239,15 +239,7 @@ utils.lnmap("ne", "<cmd>NoNeckPain<cr>")
 vim.keymap.set("n", "<Leader>tcm", ":Telescope telescope-crossplane crossplane_managed<CR>")
 vim.keymap.set("n", "<Leader>tcr", ":Telescope telescope-crossplane crossplane_resources<CR>")
 
--- Oil Nvim
--- vim.keymap.set("n", "<Leader>ol", "<cmd>Oil<CR>", { noremap = true, silent = true })
-vim.keymap.set("n", "<Leader>ol", function()
-  local oil = require "oil"
-  oil.open()
-  require("oil.util").run_after_load(0, function()
-    oil.open_preview(vertical)
-  end)
-end)
+vim.keymap.set("n", "<Leader>mf", ":lua MiniFiles.open()<CR>", { noremap = true, silent = true })
 
 -- Undotree
 vim.keymap.set("n", "<leader>u", require("undotree").toggle, { noremap = true, silent = true })
