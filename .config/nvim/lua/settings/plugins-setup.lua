@@ -45,6 +45,13 @@ require("codesnap").setup {
 }
 require("mini.align").setup()
 require("mini.ai").setup()
+require("mini.files").setup {
+  windows = {
+    preview = true,
+    width_focus = 100,
+    width_preview = 100,
+  },
+}
 
 require("go").setup {
   gofmt = "gofumpt",
@@ -112,16 +119,6 @@ require("hurl").setup {
   -- Other configuration options...
 }
 
-require("oil").setup {
-  experimental_watch_for_changes = true,
-  columns = {
-    "icon",
-  },
-  view_options = {
-    -- Show files and directories that start with "."
-    show_hidden = true,
-  },
-}
 require("gitsigns").setup {
   on_attach = function(bufnr)
     local gs = package.loaded.gitsigns
