@@ -7,6 +7,14 @@ local function is_in_obsidian_repo()
   return string.find(current_file_path, "/home/decoder/dev/obsidian/") ~= nil
 end
 vcmd "set conceallevel=0"
+
+vim.api.nvim_create_autocmd("FileType", {
+  pattern = "markdown",
+  callback = function()
+    vim.opt_local.conceallevel = 0
+  end,
+})
+
 -- this setting makes markdown auto-set the 80 text width limit when typing
 -- vcmd('set fo+=a')
 if is_in_obsidian_repo() then
