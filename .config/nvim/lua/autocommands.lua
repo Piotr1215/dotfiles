@@ -113,15 +113,15 @@ vim.api.nvim_create_autocmd({ "BufRead", "BufNewFile" }, {
   end,
 })
 
-vim.api.nvim_create_autocmd("BufWritePost", {
-  pattern = "*.md",
-  callback = function()
-    local file_path = vim.fn.expand "%:p" -- Get the full path of the current file
-    if not string.match(file_path, "crossplane%-docs") then
-      vim.cmd "silent Neoformat"
-    end
-  end,
-})
+-- vim.api.nvim_create_autocmd("BufWritePost", {
+-- pattern = "*.md",
+-- callback = function()
+-- local file_path = vim.fn.expand "%:p" -- Get the full path of the current file
+-- if not string.match(file_path, "crossplane%-docs") then
+-- vim.cmd "silent Neoformat"
+-- end
+-- end,
+-- })
 
 function StyluaFormat()
   local current_dir = vim.fn.getcwd()
