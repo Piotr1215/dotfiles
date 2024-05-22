@@ -51,6 +51,7 @@ alias vim=nvim
 alias v=nvim
 alias watch=viddy
 alias ugu='ug -Q -.'
+alias kazam='KAZAM_PULSE_SOURCE="alsa_input.usb-Generic_Blue_Microphones_2147BAH02Z78-00.iec958-stereo" kazam --debug'
 
 ## Kubernetes aliases
 alias kconf='__create_separate_kubeconfig.sh'
