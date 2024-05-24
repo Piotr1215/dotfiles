@@ -2,6 +2,13 @@
 # ~ works ok here
 source ~/dev/dotfiles/scripts/__reusable_variables.sh
 
+function record() {
+  # run kazam
+  kazam &
+  # run noisetorch to reduce noise
+  noisetorch
+}
+
 function pkill() {
   ps aux | fzf --height 40% --layout=reverse --prompt="Select process to kill: " | awk '{print $2}' | xargs -r sudo kill
 }
