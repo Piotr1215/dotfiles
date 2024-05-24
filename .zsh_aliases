@@ -17,10 +17,11 @@ alias -s yaml=nvim
 
 # Directories and files
 alias la='/usr/bin/ls'
-alias ls='exa --color=always --long --all --header --icons'
+alias ls='exa --color=always --long --all --header --icons --git'
 alias lsa='exa --color=always --long --all --sort=age --reverse --header --icons'
 alias lsf='fd --max-depth=1 --type=file'
 alias tr2='tree -LC 2 --si --sort name | less'
+alias lt='exa --tree --level=2 --icons --color=always --git'
 
 # LXC aliases
 alias lux='lxc start ubuntu --console=vga'
@@ -51,7 +52,6 @@ alias vim=nvim
 alias v=nvim
 alias watch=viddy
 alias ugu='ug -Q -.'
-alias kazam='KAZAM_PULSE_SOURCE="alsa_input.usb-Generic_Blue_Microphones_2147BAH02Z78-00.iec958-stereo" kazam --debug'
 
 ## Kubernetes aliases
 alias kconf='__create_separate_kubeconfig.sh'
