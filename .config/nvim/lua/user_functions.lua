@@ -158,13 +158,12 @@ end
 vim.api.nvim_set_keymap("n", "<leader>sw", "<cmd>lua swapWords()<cr>", { noremap = true, silent = true })
 
 function _G.get_tmux_working_directory()
-  local handle = io.popen "tmux display-message -p -F '#{pane_current_path}'"
+  local handle = io.popen "tmux display-message -p -F '#{session_path}'"
   if handle then
-    local result = handle:read "*a"
+    local result = handle:read "*l"
     handle:close()
     if result and result ~= "" then
-      local trimmed_result = result:gsub("%s+", "")
-      return trimmed_result
+      return result
     else
       print "No result obtained or result is empty"
     end
