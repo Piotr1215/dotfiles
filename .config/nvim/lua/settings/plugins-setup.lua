@@ -2,6 +2,22 @@
 vim.notify = require "notify"
 require("mason").setup()
 
+require("neotest").setup {
+  adapters = {
+    require "neotest-python",
+  },
+}
+
+require("neotest").setup {
+  adapters = {
+    require "neotest-python" {
+      dap = { justMyCode = false },
+      args = { "-vv" },
+    },
+    require "neotest-plenary",
+  },
+}
+
 require("yanksearch").setup {
   lines_above = 0,
   lines_below = 0,

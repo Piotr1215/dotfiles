@@ -44,7 +44,8 @@ return require("packer").startup(function(use)
   -- Editor Extensions {{{
   use "jesseleite/nvim-macroni"
   use "nosduco/remote-sshfs.nvim"
-
+  use "nvim-neotest/neotest-python"
+  use "nvim-neotest/neotest-plenary"
   use {
     "windwp/nvim-autopairs",
     config = function()
@@ -209,6 +210,15 @@ return require("packer").startup(function(use)
     "rcarriga/nvim-dap-ui",
     requires = {
       "mfussenegger/nvim-dap",
+    },
+  }
+  use {
+    "nvim-neotest/neotest",
+    requires = {
+      "nvim-neotest/nvim-nio",
+      "nvim-lua/plenary.nvim",
+      "antoinemadec/FixCursorHold.nvim",
+      "nvim-treesitter/nvim-treesitter",
     },
   }
   use "mfussenegger/nvim-dap-python"
