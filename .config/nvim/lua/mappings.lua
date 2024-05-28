@@ -33,7 +33,41 @@ vim.api.nvim_set_keymap("n", "<A-l>", [[<C-w>l]], { noremap = true })
 vim.api.nvim_set_keymap("n", "<leader>tv", ":vsp term://", { noremap = true, silent = false })
 vim.api.nvim_set_keymap("n", "<leader>th", ":sp term://", { noremap = true, silent = false })
 
---
+-- Ensure 'notify' is required
+local notify = require "notify"
+
+-- Map the key to call an inline function for kubectl apply
+vim.api.nvim_set_keymap("n", "<leader>ka", "", {
+  noremap = true,
+  silent = false,
+  callback = function()
+    local current_file = vim.fn.expand "%:p"
+    local cmd = "kubectl apply -f " .. current_file
+    local handle = io.popen(cmd)
+    local result = handle:read "*a"
+    handle:close()
+
+    -- Use notify to print the result
+    notify(result, "info")
+  end,
+})
+
+-- Map the key to call an inline function for kubectl delete
+vim.api.nvim_set_keymap("n", "<leader>kd", "", {
+  noremap = true,
+  silent = false,
+  callback = function()
+    local current_file = vim.fn.expand "%:p"
+    local cmd = "kubectl delete -f " .. current_file
+    local handle = io.popen(cmd)
+    local result = handle:read "*a"
+    handle:close()
+
+    -- Use notify to print the result
+    notify(result, "info")
+  end,
+})
+
 -- NAVIGATION --
 utils.nmap("<c-l>", "<c-w>l") -- move to right window
 utils.nmap("<c-h>", "<c-w>h") -- move to left window
