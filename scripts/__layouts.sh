@@ -77,34 +77,45 @@ alacritty_firefox_vertical() {
 	fi
 }
 firefox_firefox_vertical() {
+	# Deactivate any Alacritty windows
+	alacritty_window=$(xdotool search --onlyvisible --classname Alacritty | head -n 1)
+	if [ -n "$alacritty_window" ]; then
+		echo "Deactivating Alacritty window ID: $alacritty_window"
+		xdotool windowminimize "$alacritty_window"
+	fi
 
-	# layout2.sh
 	# Get the IDs of the first two Firefox windows across all workspaces
 	firefox_windows=($(xdotool search --classname Navigator | head -n 2))
+
 	if [ ${#firefox_windows[@]} -eq 2 ]; then
 		# Iterate over the two windows and position them
 		for i in 0 1; do
 			window_id=${firefox_windows[$i]}
+			echo "Handling window ID: $window_id"
+
 			minimize_window "$window_id"
 
-			# Resize the window
+			# Unmaximize the window
+			xdotool windowunmap "$window_id"
 			xdotool windowmap "$window_id"
+
+			# Resize the window
 			xdotool windowsize "$window_id" 1960 2168
 
 			# Move the window to the specified coordinates
 			if [ $i -eq 0 ]; then
-				# Move the first window to the left side of the screen
+				echo "Moving first window to the left side"
 				xdotool windowmove "$window_id" -20 12
-				xdotool windowactivate --sync "$window_id"
-
 			else
-				# Move the second window to the right side of the screen
+				echo "Moving second window to the right side"
 				xdotool windowmove "$window_id" 1900 12
-				xdotool windowactivate --sync "$window_id"
 			fi
+
+			# Activate the window
+			sleep 0.2
+			xdotool windowactivate --sync "$window_id"
 		done
 	elif [ ${#firefox_windows[@]} -eq 1 ]; then
-		# Call __layout5.sh if only one Firefox window is found
 		echo "Only one Firefox window found."
 		max_firefox
 	else
