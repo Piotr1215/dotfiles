@@ -17,12 +17,7 @@ return require("packer").startup(function(use)
   use "github/copilot.vim"
   use { "robitx/gp.nvim" }
   use { "MunifTanjim/nui.nvim" }
-  use {
-    "https://git.sr.ht/~whynothugo/lsp_lines.nvim",
-    config = function()
-      require("lsp_lines").setup()
-    end,
-  }
+  use { "RaafatTurki/corn.nvim" }
   use {
     "jellydn/hurl.nvim",
   }

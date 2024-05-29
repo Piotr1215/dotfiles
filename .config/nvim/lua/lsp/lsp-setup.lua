@@ -78,7 +78,7 @@ require("ionide").setup {
   capabilities = def.capabilities,
 }
 -- PROJECT: lsp_lines
--- Disable virtual_text since it's redundant due to lsp_lines.
+-- When using lsp_lines, this needs to be disabled
 vim.diagnostic.config {
   virtual_text = false,
 }

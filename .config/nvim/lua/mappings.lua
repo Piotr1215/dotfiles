@@ -32,6 +32,7 @@ vim.api.nvim_set_keymap("n", "<A-k>", [[<C-w>k]], { noremap = true })
 vim.api.nvim_set_keymap("n", "<A-l>", [[<C-w>l]], { noremap = true })
 vim.api.nvim_set_keymap("n", "<leader>tv", ":vsp term://", { noremap = true, silent = false })
 vim.api.nvim_set_keymap("n", "<leader>th", ":sp term://", { noremap = true, silent = false })
+vim.api.nvim_set_keymap("n", "<leader>ct", ":lua require('corn').toggle()<CR>", { noremap = true, silent = false })
 
 -- Ensure 'notify' is required
 local notify = require "notify"
