@@ -15,6 +15,12 @@
       "{{< /expand >}}${0}"],
     "description": "Hugo Expand"
   },
+  "Link Killercoda": {
+    "prefix": "linkkc",
+    "scope": "markdown",
+    "body": ["[${1:Link text}]({{TRAFFIC_HOST1_${2:PORT}}})${0}"],
+    "description": "Link to Killercoda"
+  },
   "Details HTML": {
     "prefix": "det",
     "scope": "markdown",
