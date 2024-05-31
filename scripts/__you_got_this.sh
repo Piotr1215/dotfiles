@@ -9,22 +9,23 @@ center_text() {
 	echo "$input"
 }
 
-# Read the output of your ticker script into an array
-ticker_output=("${(@f)$(~/dev/dotfiles/scripts/__ticker.sh)}")
+# Fetch a motivational quote from the Quotable API
+quote_response=$(curl -s https://api.quotable.io/quotes/random)
+quote=$(echo $quote_response | jq -r '.[0].content')
+author=$(echo $quote_response | jq -r '.[0].author')
 
 # Calculate the number of empty lines to print at the top to center vertically
-ticker_lines=${#ticker_output[@]}
-vertical_padding=$(( ((rows - ticker_lines) / 2) - 30 ))
+vertical_padding=$(((rows / 2) - 2))
 
 # Print the vertical padding
 for ((i = 0; i < vertical_padding; i++)); do
 	echo ""
 done
 
-# Now center each line of the ticker output horizontally
-for line in "${ticker_output[@]}"; do
-	center_text "$line"
-done
-
 # Center the "You got this" message
+
+# Center the motivational quote
+center_text "$quote"
+center_text "- $author"
+center_text ""
 center_text "You got this 🦾"
