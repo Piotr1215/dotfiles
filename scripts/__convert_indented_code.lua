@@ -1,3 +1,4 @@
+-- PROJECT: blogs-convert
 local fenced = "```\n%s\n```\n"
 function CodeBlock(cb)
 	-- use pandoc's default behavior if the block has classes or attribs
