@@ -26,12 +26,12 @@ function mkvenv() {    # Set the environment directory name, default to 'venv' i
         source $env_dir/bin/activate
         
         # Optional: Install any default packages
-        pip install --upgrade pip
-        pip install wheel
+        pip3 install --upgrade pip
+        pip3 install wheel
 
         if [ -f "$requirements_path" ]; then
             echo "Installing packages from '$requirements_path'..."
-            pip install -r "$requirements_path"
+            pip3 install -r "$requirements_path"
         fi
         
         echo "Virtual environment '$env_dir' created and activated!"
@@ -41,7 +41,9 @@ function rmvenv() {
     # Check if the environment is active
     local requirements_path="captured-requirements.txt"
     if [[ "$VIRTUAL_ENV" != "" ]]; then
-        pip freeze > "$requirements_path"
+        if [[ ! -f "requirements.txt" ]]; then
+            pip3 freeze > "$requirements_path"
+        fi
         # Deactivate the environment
         deactivate
         
