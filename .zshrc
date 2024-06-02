@@ -2,6 +2,8 @@
 # Path to your oh-my-zsh installation.
 export ZSH="${HOME}/.oh-my-zsh"
 
+export PATH="/usr/bin:/home/decoder/.local/bin:$PATH"
+
 # This sets vim key bindings mode.
 # set -o vi
 
@@ -250,8 +252,3 @@ export PATH="$BUN_INSTALL/bin:$PATH"
 export WASMTIME_HOME="$HOME/.wasmtime"
 
 export PATH="$WASMTIME_HOME/bin:$PATH"
-
-export JSONNET_PATH=/home/decoder/dev/grafonnet-lib
-
-eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
-
