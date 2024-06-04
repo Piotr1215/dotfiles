@@ -8,6 +8,19 @@ require("neotest").setup {
   },
 }
 
+require("image").setup {
+  backend = "ueberzug",
+  integrations = {
+    markdown = {
+      enabled = true,
+      clear_in_insert_mode = true,
+      download_remote_images = false,
+      only_render_image_at_cursor = true,
+      filetypes = { "markdown" }, -- markdown extensions (ie. quarto) can go here
+    },
+  },
+}
+
 require("neotest").setup {
   adapters = {
     require "neotest-python" {

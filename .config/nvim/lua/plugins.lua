@@ -1,3 +1,5 @@
+package.path = package.path .. ";" .. vim.fn.expand "$HOME" .. "/.luarocks/share/lua/5.1/?/init.lua"
+package.path = package.path .. ";" .. vim.fn.expand "$HOME" .. "/.luarocks/share/lua/5.1/?.lua"
 local ensure_packer = function()
   local fn = vim.fn
   local install_path = fn.stdpath "data" .. "/site/pack/packer/start/packer.nvim"
@@ -38,6 +40,7 @@ return require("packer").startup(function(use)
   -- }}}
   -- Editor Extensions {{{
   use "jesseleite/nvim-macroni"
+  use "3rd/image.nvim"
   use "nosduco/remote-sshfs.nvim"
   use "nvim-neotest/neotest-python"
   use "nvim-neotest/neotest-plenary"
