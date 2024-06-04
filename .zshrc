@@ -252,3 +252,4 @@ export PATH="$BUN_INSTALL/bin:$PATH"
 export WASMTIME_HOME="$HOME/.wasmtime"
 
 export PATH="$WASMTIME_HOME/bin:$PATH"
+if [ -f "/home/decoder/.config/fabric/fabric-bootstrap.inc" ]; then . "/home/decoder/.config/fabric/fabric-bootstrap.inc"; fi
