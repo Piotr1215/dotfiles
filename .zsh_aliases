@@ -23,12 +23,12 @@ alias lsf='fd --max-depth=1 --type=file'
 alias tr2='tree -LC 2 --si --sort name | less'
 alias lt='exa --tree --level=2 --icons --color=always --git'
 
-# LXC aliases
-alias lux='lxc start ubuntu --console=vga'
+# incus aliases
+alias inc='incus start ubuntu --console=vga'
 ## start and stop lxc vm with hybernated state
 ## meaning all programs and windows will preserve
-alias lux--='lxc stop --stateful ubuntu'
-alias lux-='lxc stop ubuntu'
+alias inc--='incus stop --stateful ubuntu'
+alias inc-='incus stop ubuntu'
 
 # Commands shadow
 alias cpf=copy_and_create_folders
