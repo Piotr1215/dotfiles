@@ -24,7 +24,7 @@ alias tr2='tree -LC 2 --si --sort name | less'
 alias lt='exa --tree --level=2 --icons --color=always --git'
 
 # incus aliases
-alias inc='incus start ubuntu --console=vga'
+alias inc='incus console ubuntu --type=vga'
 ## start and stop lxc vm with hybernated state
 ## meaning all programs and windows will preserve
 alias inc--='incus stop --stateful ubuntu'
