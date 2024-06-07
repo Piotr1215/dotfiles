@@ -14,14 +14,14 @@ fi
 INPUT_VIDEO="$1"
 OUTPUT_VIDEO="$OUTPUT_DIR/$(basename "$INPUT_VIDEO" .mp4)_with_intro_outro.mp4"
 
-# Re-encode intro, input, and outro videos using NVENC to ensure compatibility
+# Re-encode intro, input, and outro videos using NVENC with a higher bitrate to ensure quality
 INTRO_TEMP=$(mktemp --suffix=.mp4)
 INPUT_TEMP=$(mktemp --suffix=.mp4)
 OUTRO_TEMP=$(mktemp --suffix=.mp4)
 
-ffmpeg -i "$INTRO_VIDEO" -c:v h264_nvenc -preset fast -c:a aac -ar 44100 -ac 2 -y "$INTRO_TEMP"
-ffmpeg -i "$INPUT_VIDEO" -c:v h264_nvenc -preset fast -c:a aac -ar 44100 -ac 2 -y "$INPUT_TEMP"
-ffmpeg -i "$OUTRO_VIDEO" -c:v h264_nvenc -preset fast -c:a aac -ar 44100 -ac 2 -y "$OUTRO_TEMP"
+ffmpeg -i "$INTRO_VIDEO" -c:v h264_nvenc -preset slow -b:v 8M -c:a aac -ar 44100 -ac 2 -y "$INTRO_TEMP"
+ffmpeg -i "$INPUT_VIDEO" -c:v h264_nvenc -preset slow -b:v 8M -c:a aac -ar 44100 -ac 2 -y "$INPUT_TEMP"
+ffmpeg -i "$OUTRO_VIDEO" -c:v h264_nvenc -preset slow -b:v 8M -c:a aac -ar 44100 -ac 2 -y "$OUTRO_TEMP"
 
 # Concatenate the videos
 ffmpeg -f concat -safe 0 -i <(printf "file '%s'\nfile '%s'\nfile '%s'\n" "$INTRO_TEMP" "$INPUT_TEMP" "$OUTRO_TEMP") -c copy "$OUTPUT_VIDEO"
