@@ -157,7 +157,7 @@ utils.nmap("<Leader>sof", ":set nospell<CR>") -- set spell check off
 vim.keymap.set({ "n", "v" }, "<leader>gb", ":GBrowse<cr>", opts) -- git browse current file in browser
 vim.keymap.set("n", "<leader>gc", function()
   vim.cmd "GBrowse!"
-end, opts) -- git browse current file and line in browser
+end, { desc = "Copy url to current file" }) -- git browse current file and line in browser
 vim.keymap.set("v", "<leader>gc", ":GBrowse!<CR>", { noremap = true, silent = false }) -- git browse current file and selected line in browser
 utils.lnmap("gd", ":Gvdiffsplit<CR>") -- git diff current file
 utils.lnmap("gu", ":Gdiffu<CR>") -- git diff current file
