@@ -1,6 +1,6 @@
 # /home/decoder/.config/tmuxinator/atosik.yml
 
-name: home
+name: cloudrumble
 root: ~/dev/cloudrumble
 
 # Optional tmux socket
