@@ -32,8 +32,8 @@ alias inc-='incus stop ubuntu'
 
 # Commands shadow
 alias cpf=copy_and_create_folders
-alias aider='aider --model gpt-4-turbo-preview --dark-mode --no-auto-commits'
-alias aider-commit='aider --model gpt-4-1106-preview --dark-mode'
+alias aider='aider --model gpt-4o --dark-mode --no-auto-commits'
+alias aider-commit='aider --model gpt-4o --dark-mode'
 alias cat='bat'
 alias c='chatgpt-cli -ml'
 alias cg='chatgpt-cli'
