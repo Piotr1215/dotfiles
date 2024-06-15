@@ -80,7 +80,9 @@ require("remote-sshfs").setup {}
 
 require("codesnap").setup {
   -- ...
-  watermark = "󰭪",
+  has_breadcrumbs = true,
+  watermark = "",
+  mac_window_bar = false,
 }
 require("mini.align").setup()
 require("mini.ai").setup()
