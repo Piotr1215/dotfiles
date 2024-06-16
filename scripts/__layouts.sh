@@ -5,7 +5,7 @@
 IFS=$'\n\t'
 
 if [[ -z "$1" ]]; then
-	echo "Usage: $0 {1|2|3|4|5|6|7|8}"
+	echo "Usage: $0 {1|2|3|4|5|6|7|8|9|10}"
 	exit 1
 fi
 
@@ -330,6 +330,27 @@ firefox_firefox_alacritty() {
 	fi
 }
 
+alacritty_resize_9_16() {
+	# Calculate the dimensions for a 9:16 aspect ratio.
+	# Setting height to 1800 pixels
+	local height=2100
+	local width=$((height * 9 / 16))
+
+	# Get the ID of the first visible Alacritty window
+	local window=$(xdotool search --onlyvisible --classname Alacritty | head -n 1)
+	if [ -n "$window" ]; then
+		# Unmaximize the window if it is maximized
+		minimize_window "$window"
+
+		# Resize and move the window, adjust the position from the edges
+		xdotool windowsize "$window" $width $height
+		xdotool windowmove "$window" 50 50
+		xdotool windowactivate --sync "$window"
+	else
+		echo "No Alacritty window found."
+	fi
+}
+
 case $1 in
 1) max_alacritty ;;
 2) alacritty_firefox_vertical ;;
@@ -340,8 +361,9 @@ case $1 in
 7) max_slack ;;
 8) firefox_firefox_alacritty ;;
 9) slack_alacritty_vertical ;;
+10) alacritty_resize_9_16 ;;
 *)
-	echo "Usage: $0 {1|2|3|4|5|6|7|8|9}"
+	echo "Usage: $0 {1|2|3|4|5|6|7|8|9|10}"
 	exit 1
 	;;
 esac
