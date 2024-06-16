@@ -46,7 +46,7 @@ handle_fzf_error() {
 }
 
 # Set new line and tab for word splitting
-IFS=$'\n' files=($(fzf-tmux --preview "bat --color=always {$1}" --reverse --query="$1" --multi --select-1 --exit-0 || handle_fzf_error))
+IFS=$'\n' files=($(fzf-tmux --preview '[[ -d {} ]] && exa --color=always --long --all --header --icons --git {} || bat --color=always {}' --reverse --query="$1" --multi --select-1 --exit-0 2>/dev/null))
 
 # Check if any files were selected, and exit if not
 if [ ${#files[@]} -eq 0 ]; then
