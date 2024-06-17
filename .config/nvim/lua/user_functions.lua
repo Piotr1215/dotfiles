@@ -328,16 +328,6 @@ function _G.my_custom_complete(arg_lead, cmd_line, cursor_pos)
   return matches
 end
 
-function _G.create_word_selection_mappings()
-  for i = 2, 5 do
-    local count = 2 * i - 1
-    vim.api.nvim_set_keymap("n", "v" .. i, "v" .. count .. "iw", { noremap = true })
-    wk.register({ ["v" .. i] = { "v" .. count .. "iw", "Select " .. i .. " words" } }, { mode = "n", prefix = "" })
-  end
-  vim.api.nvim_set_keymap("n", "_", "vg_", { noremap = true })
-  wk.register({ ["_"] = { "vg_", "Select inside underscored word" } }, { mode = "n", prefix = "" })
-end
-
 _G.folding_enabled = false
 
 -- Toggle function
@@ -786,5 +776,3 @@ vim.api.nvim_set_keymap("v", "F", ":call CustomF(1)<CR>", {})
 vim.cmd [[
   command! -range=% -nargs=* -complete=customlist,v:lua.my_custom_complete ProcessTasks :lua _G.process_task_list(<line1>, <line2>, <f-args>)
 ]]
-
-create_word_selection_mappings()
