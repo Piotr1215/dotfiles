@@ -31,16 +31,6 @@ require("neotest").setup {
   },
 }
 
-require("corn").setup {
-  on_toggle = function(is_hidden)
-    vim.diagnostic.config { virtual_text = not vim.diagnostic.config().virtual_text }
-  end,
-  item_preprocess_func = function(item)
-    return item
-  end,
-  scope = "file",
-}
-
 require("yanksearch").setup {
   lines_above = 0,
   lines_below = 0,
