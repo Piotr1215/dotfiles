@@ -2,11 +2,20 @@
 # ~ works ok here
 source ~/dev/dotfiles/scripts/__reusable_variables.sh
 
+function short() {
+  if [[ -z "$1" ]]; then
+    echo "Folder name is required."
+    return 1
+  else
+    take "$1"
+  fi
+  cp ~/dev/shorts/templates/demo.sh .
+  clear
+}
+
 function record() {
-  # run kazam
-  kazam &
   # run noisetorch to reduce noise
-  noisetorch
+  noisetorch &
 }
 
 function pkill() {
