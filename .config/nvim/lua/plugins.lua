@@ -19,7 +19,6 @@ return require("packer").startup(function(use)
   use "github/copilot.vim"
   use { "robitx/gp.nvim" }
   use { "MunifTanjim/nui.nvim" }
-  use { "RaafatTurki/corn.nvim" }
   use {
     "jellydn/hurl.nvim",
   }
