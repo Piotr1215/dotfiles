@@ -46,7 +46,7 @@ handle_fzf_error() {
 }
 
 # Set new line and tab for word splitting
-IFS=$'\n' files=($(fzf-tmux --preview '[[ -d {} ]] && exa --color=always --long --all --header --icons --git {} || bat --color=always {}' --reverse --query="$1" --multi --select-1 --exit-0 2>/dev/null))
+IFS=$'\n' files=($(fzf-tmux --preview '[[ -d {} ]] && exa --color=always --long --all --header --icons --git {} || bat --color=always {}' --reverse --query="$1" --multi --select-1 --exit-0))
 
 # Check if any files were selected, and exit if not
 if [ ${#files[@]} -eq 0 ]; then
@@ -59,13 +59,13 @@ done
 
 case "${#files[@]}" in
 2)
-	${EDITOR:-nvim} -O +'normal g;' "${files[@]}"
+	${EDITOR:-nvim} -O +'silent! normal g;' "${files[@]}"
 	;;
 3)
-	${EDITOR:-nvim} -O "${files[0]}" -c 'wincmd j' -c "vsplit ${files[1]}" -c "split ${files[2]}"
+	${EDITOR:-nvim} -O "${files[0]}" -c 'wincmd j' -c "silent! vsplit ${files[1]}" -c "silent! split ${files[2]}"
 	;;
 4)
-	${EDITOR:-nvim} -O "${files[0]}" -c "vsplit ${files[1]}" -c "split ${files[2]}" -c 'wincmd h' -c "split ${files[3]}"
+	${EDITOR:-nvim} -O "${files[0]}" -c "silent! vsplit ${files[1]}" -c "silent! split ${files[2]}" -c 'wincmd h' -c "silent! split ${files[3]}"
 	;;
 *)
 	${EDITOR:-nvim} "${files[@]}"
