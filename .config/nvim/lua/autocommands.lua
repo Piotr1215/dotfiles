@@ -35,17 +35,26 @@ vim.api.nvim_create_autocmd("BufWritePost", {
 })
 
 -- Function to dynamically set up Vale based on the file's directory
-local function dynamicValeSetup()
-  -- Default vale_config_path
-  local vale_config_path = "$HOME/dev/vale/.vale.ini"
 
+local function dynamicValeSetup()
   -- Get the current file's directory
   local file_path = vim.fn.expand "%:p:h"
+
+  -- Default vale_config_path
+  local default_vale_config_path = "$HOME/dev/vale/.vale.ini"
+  local vale_config_path = default_vale_config_path
 
   -- Check if the current file is inside the crossplane-docs/content directory
   if string.match(file_path, "crossplane%-docs/content") then
     -- Update vale_config_path for crossplane-docs content
-    vale_config_path = "$HOME/dev/crossplane-docs/utils/vale/.vale.ini"
+    default_vale_config_path = "$HOME/dev/crossplane-docs/utils/vale/.vale.ini"
+    vale_config_path = default_vale_config_path
+  end
+
+  -- Check if .vale.ini exists in the current directory
+  local current_dir_vale_path = file_path .. "/.vale.ini"
+  if vim.fn.filereadable(current_dir_vale_path) == 1 then
+    vale_config_path = current_dir_vale_path
   end
 
   -- Configure Vale with the determined vale_config_path
