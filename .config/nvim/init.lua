@@ -8,7 +8,6 @@ require "lsp"
 require "which-key-setup"
 require "user_functions"
 require "projects"
-require "typing_simulation"
 
 -- PROJECT: project-config
 -- Searches for a .nvimrc file from the current directory up to the root and executes it if found.

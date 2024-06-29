@@ -31,6 +31,11 @@ require("neotest").setup {
   },
 }
 
+require("typeit").setup {
+  default_speed = 30, -- Default typing speed (milliseconds)
+  default_pause = "paragraph", -- Default pause behavior ('line' or 'paragraph')
+}
+
 require("yanksearch").setup {
   lines_above = 0,
   lines_below = 0,

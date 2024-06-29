@@ -33,7 +33,12 @@ vim.api.nvim_create_autocmd("BufWritePost", {
   end,
   group = goSettings,
 })
-
+vim.api.nvim_create_user_command("StartEmpty", function()
+  vim.cmd "enew"
+  vim.bo.buftype = "nofile"
+  vim.bo.bufhidden = "hide"
+  vim.bo.swapfile = false
+end, {})
 -- Function to dynamically set up Vale based on the file's directory
 
 local function dynamicValeSetup()
