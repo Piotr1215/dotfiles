@@ -278,6 +278,7 @@ return require("packer").startup(function(use)
   -- }}}
   -- My Plugins {{{
   use "Piotr1215/yanksearch.nvim"
+  use "Piotr1215/typeit.nvim"
   -- }}}
   -- Look & Feel {{{
   use { "ellisonleao/gruvbox.nvim" }
