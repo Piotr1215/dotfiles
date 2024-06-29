@@ -1,4 +1,5 @@
 #!/usr/bin/env zsh
+
 cols=$(tput cols)
 rows=$(tput lines)
 
@@ -9,10 +10,12 @@ center_text() {
 	echo "$input"
 }
 
-# Fetch a motivational quote from the Quotable API
-quote_response=$(curl -s https://api.quotable.io/quotes/random)
-quote=$(echo $quote_response | jq -r '.[0].content')
-author=$(echo $quote_response | jq -r '.[0].author')
+# Fetch a motivational quote from the ZenQuotes API
+quote_response=$(curl -s https://zenquotes.io/api/quotes)
+
+# Extract the quote and author using jq
+quote=$(echo $quote_response | jq -r '.[0].q')
+author=$(echo $quote_response | jq -r '.[0].a')
 
 # Calculate the number of empty lines to print at the top to center vertically
 vertical_padding=$(((rows / 2) - 2))
@@ -21,8 +24,6 @@ vertical_padding=$(((rows / 2) - 2))
 for ((i = 0; i < vertical_padding; i++)); do
 	echo ""
 done
-
-# Center the "You got this" message
 
 # Center the motivational quote
 center_text "$quote"
