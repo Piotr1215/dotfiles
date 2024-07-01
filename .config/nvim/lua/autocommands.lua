@@ -58,6 +58,13 @@ local function toggle_formatoptions_o()
     print "Added 'o' to formatoptions"
   end
 end
+
+vim.api.nvim_create_user_command("TmuxLayout", function()
+  local layout = vim.fn.system "tmux list-windows | sed -n 's/.*layout \\(.*\\)] @.*/\\1/p'"
+  layout = layout:gsub("^%s*(.-)%s*$", "%1") -- Trim whitespace
+  vim.api.nvim_put({ "      layout: " .. layout }, "l", true, true)
+end, {})
+
 -- Create a user command to toggle formatoptions
 vim.api.nvim_create_user_command("ToggleFormatoptions", toggle_formatoptions_o, {})
 
