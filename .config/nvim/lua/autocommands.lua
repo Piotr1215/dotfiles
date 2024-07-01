@@ -39,7 +39,27 @@ vim.api.nvim_create_user_command("StartEmpty", function()
   vim.bo.bufhidden = "hide"
   vim.bo.swapfile = false
 end, {})
+
 -- Function to dynamically set up Vale based on the file's directory
+vim.api.nvim_create_autocmd("FileType", {
+  pattern = "*",
+  callback = function()
+    vim.opt_local.formatoptions:remove "o"
+  end,
+})
+
+local function toggle_formatoptions_o()
+  local current_formatoptions = vim.opt.formatoptions:get()
+  if vim.tbl_contains(current_formatoptions, "o") then
+    vim.opt.formatoptions:remove "o"
+    print "Removed 'o' from formatoptions"
+  else
+    vim.opt.formatoptions:append "o"
+    print "Added 'o' to formatoptions"
+  end
+end
+-- Create a user command to toggle formatoptions
+vim.api.nvim_create_user_command("ToggleFormatoptions", toggle_formatoptions_o, {})
 
 local function dynamicValeSetup()
   -- Get the current file's directory
