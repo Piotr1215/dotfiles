@@ -312,7 +312,7 @@ firefox_firefox_alacritty() {
 
 			else
 				# Move the second window to the right side of the screen
-				xdotool windowmove "$window_id" 1910 0
+				xdotool windowmove "$window_id" 1910 21
 				xdotool windowactivate --sync "$window_id"
 			fi
 		done
