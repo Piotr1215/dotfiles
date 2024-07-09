@@ -89,6 +89,7 @@ vim.keymap.set("n", "J", "mzJ`z") -- join lines without spaces
 vim.keymap.set("n", "n", "nzzzv") -- keep cursor centered
 vim.keymap.set("n", "N", "Nzzzv") -- keep cursor centered
 -- SEARCH AND REPLACE
+utils.lnmap("pa", "ggVGp") -- select all
 utils.lnmap("sa", "ggVG") -- select all
 utils.lnmap("r", ":%s/\\v/g<left><left>", { silent = false }) -- replace
 utils.lnmap("ss", ":s/", { silent = false }) -- search and replace
