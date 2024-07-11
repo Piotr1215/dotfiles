@@ -13,6 +13,12 @@ function short() {
   clear
 }
 
+function cfp() {
+    local file_path="$1"
+    local full_path=$(realpath "$file_path")
+    echo -n "$full_path" | xclip -selection clipboard
+}
+
 function record() {
   # run noisetorch to reduce noise
   noisetorch &
