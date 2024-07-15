@@ -18,8 +18,9 @@ ZSH_THEME="simple" #Best theme ever
 autoload -Uz compinit
 compinit -d "${ZDOTDIR:-$HOME}/.zcompdump"
 
-# PUGINS 
+# PUGINS & MODULES
 plugins=(z git kubectl zsh-autosuggestions zsh-syntax-highlighting sudo web-search colored-man-pages)
+zmodload zsh/mapfile # Bring mapfile functionality similar to bash
 
 # Set ZSH_CUSTOM dir if env var not present
 if [[ -z "$ZSH_CUSTOM" ]]; then
