@@ -47,8 +47,7 @@ require("gp").setup {
       -- Disable ChatGPT 3.5
       {
         name = "ChatGPT3-5",
-        chat = false, -- just name would suffice
-        command = false, -- just name would suffice
+        disable = true,
       },
       {
         name = "ChatGPT4",
@@ -423,11 +422,7 @@ require("femaco").setup {
 }
 
 require("which-key").setup {
-  triggers_blacklist = {
-    -- list of mode / prefixes that should never be hooked by WhichKey
-    -- this is mostly relevant for keymaps that start with a native binding
-    n = { "g" },
-  },
+  notify = false,
   plugins = {
     marks = true, -- shows a list of your marks on ' and `
     registers = true, -- shows your registers on " in NORMAL or <C-r> in INSERT mode
