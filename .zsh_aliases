@@ -22,6 +22,7 @@ alias lsa='exa --color=always --long --all --sort=age --reverse --header --icons
 alias lsf='fd --max-depth=1 --type=file'
 alias tr2='tree -LC 2 --si --sort name | less'
 alias lt='exa --tree --level=2 --icons --color=always --git'
+alias lsndir='ls -ld *(/om[1])'
 
 # incus aliases
 alias inc='incus console ubuntu --type=vga'
