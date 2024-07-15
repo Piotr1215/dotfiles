@@ -38,6 +38,7 @@ return require("packer").startup(function(use)
 
   -- }}}
   -- Editor Extensions {{{
+  use "yssl/QFEnter"
   use "jesseleite/nvim-macroni"
   use "3rd/image.nvim"
   use "nosduco/remote-sshfs.nvim"
