@@ -121,7 +121,6 @@ utils.nmap("<leader>df", ":%d<cr>") -- delete file content to black hole registe
 utils.nmap("<leader>yf", ":%y<cr>") -- yank file under cusror to the clipboard buffer
 utils.nmap("<leader>yw", '"+yiw') -- yank word under cusror to the clipboard buffer
 utils.nmap("<leader>yW", '"+yiW') -- yank WORD under cusror to the clipboard buffer
-utils.lnmap("pa", '"*p') -- paste from clipboard buffer after the cursor
 utils.lnmap("p", '"*P') -- paste from clipboard buffer before the cursor
 utils.nmap("<leader>0", '"0p') -- paste from 0 (latest yank)
 utils.nmap("<leader>1", '"1p') -- paste from 1 (latest delete)
