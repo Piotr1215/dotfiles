@@ -128,12 +128,6 @@ vim.api.nvim_create_user_command("WS", function()
 end, { bang = false })
 
 vim.api.nvim_create_autocmd("FileType", {
-  pattern = { "yaml" },
-  command = "setlocal ts=2 sts=2 sw=2 expandtab",
-  group = indentSettings,
-})
-
-vim.api.nvim_create_autocmd("FileType", {
   pattern = { "python" },
   command = "setlocal expandtab shiftwidth=4 softtabstop=4 autoindent",
   group = indentSettings,
