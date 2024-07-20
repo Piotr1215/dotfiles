@@ -4,6 +4,74 @@ local action_state = require "telescope.actions.state"
 local unpack = unpack or table.unpack
 local zoomed = false
 
+-- Define a global variable to keep track of the toggle state
+_G.horizontal_scroll_enabled = false
+
+-- Function to enable horizontal scrolling
+function EnableHorizontalScroll()
+  if _G.horizontal_scroll_enabled then
+    print "Horizontal scroll is already enabled"
+    return
+  end
+
+  -- Disable line wrapping
+  vim.opt.wrap = false
+
+  -- Set sidescrolloff to maintain a buffer around the cursor
+  vim.opt.sidescrolloff = 5
+  vim.opt.sidescroll = 1
+
+  -- Autocmd to adjust horizontal scrolling
+  vim.api.nvim_create_autocmd({ "CursorMoved", "CursorMovedI" }, {
+    pattern = "*",
+    callback = function()
+      local col = vim.fn.col "."
+      local winwidth = vim.api.nvim_win_get_width(0)
+      local scrolloff = vim.opt.sidescrolloff:get()
+
+      if col < scrolloff then
+        vim.cmd "normal! zh"
+      elseif col > (winwidth - scrolloff) then
+        vim.cmd "normal! zl"
+      end
+    end,
+    group = vim.api.nvim_create_augroup("HorizontalScrollGroup", { clear = true }),
+  })
+
+  _G.horizontal_scroll_enabled = true
+  print "Horizontal scroll enabled"
+end
+
+-- Function to disable horizontal scrolling
+function DisableHorizontalScroll()
+  if not _G.horizontal_scroll_enabled then
+    print "Horizontal scroll is already disabled"
+    return
+  end
+
+  -- Clear autocmds for horizontal scrolling
+  vim.api.nvim_clear_autocmds { group = "HorizontalScrollGroup" }
+
+  -- Reset sidescrolloff and wrap to default
+  vim.opt.sidescrolloff = 0
+  vim.opt.wrap = true
+
+  _G.horizontal_scroll_enabled = false
+  print "Horizontal scroll disabled"
+end
+
+-- Function to toggle horizontal scrolling
+function ToggleHorizontalScroll()
+  if _G.horizontal_scroll_enabled then
+    DisableHorizontalScroll()
+  else
+    EnableHorizontalScroll()
+  end
+end
+
+-- Register the command
+vim.api.nvim_create_user_command("HorizontalScrollMode", ToggleHorizontalScroll, {})
+
 -- Function to move to the next or previous closed fold
 function _G.NavigateFold(direction)
   local cmd = "normal! " .. direction
