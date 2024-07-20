@@ -6,6 +6,7 @@ status = auto
 [core]
 excludesFile = ~/.gitignore
 pager = delta
+	editor = nvim
 [user]
 email = piotrzan@gmail.com
 signingkey = 7E954FC99DDF7875
