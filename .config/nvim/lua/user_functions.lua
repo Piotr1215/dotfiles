@@ -4,6 +4,25 @@ local action_state = require "telescope.actions.state"
 local unpack = unpack or table.unpack
 local zoomed = false
 
+-- Function to move to the next or previous closed fold
+function _G.NavigateFold(direction)
+  local cmd = "normal! " .. direction
+  local view = vim.fn.winsaveview()
+  local lnum = view.lnum
+  local new_lnum = lnum
+  local open = true
+
+  while lnum == new_lnum or open do
+    vim.cmd(cmd)
+    new_lnum = vim.fn.line "."
+    open = vim.fn.foldclosed(new_lnum) < 0
+  end
+
+  if open then
+    vim.fn.winrestview(view)
+  end
+end
+
 if vim.g.scroll_fix_enabled == nil then
   vim.g.scroll_fix_enabled = false -- Start with scroll fix disabled
 end
