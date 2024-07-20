@@ -2,26 +2,36 @@
 # Path to your oh-my-zsh installation.
 export ZSH="${HOME}/.oh-my-zsh"
 
-export PATH="/usr/bin:/home/decoder/.local/bin:$PATH"
-
 # This sets vim key bindings mode.
-# set -o vi
+set -o vi
 
 if [[ -z $TMUX ]]; then
   tmuxinator start poke
 fi
 
-#ZSH_THEME="spaceship"
-#ZSH_THEME="powerlevel10k/powerlevel10k"
 ZSH_THEME="simple" #Best theme ever
-
+ZVM_INIT_MODE=sourcing
 autoload -Uz compinit
 compinit -d "${ZDOTDIR:-$HOME}/.zcompdump"
 
+# https://github.com/jeffreytse/zsh-vi-mode
+function zvm_config() {
+  ZVM_LINE_INIT_MODE=$ZVM_MODE_INSERT
+  ZVM_VI_INSERT_ESCAPE_BINDKEY=kj
+  ZVM_CURSOR_STYLE_ENABLED=false
+  ZVM_VI_EDITOR=nvim
+# export KEYTIMEOUT=1
+}
+
+function zvm_after_init() {
+  zvm_bindkey viins '^Q' push-line
+}
+
 # PUGINS & MODULES
-plugins=(z git kubectl zsh-autosuggestions zsh-syntax-highlighting sudo web-search colored-man-pages)
+plugins=(z git kubectl zsh-autosuggestions zsh-syntax-highlighting web-search colored-man-pages zsh-vi-mode)
 zmodload zsh/mapfile # Bring mapfile functionality similar to bash
 
+# The plugin will auto execute this zvm_after_lazy_keybindings function
 # Set ZSH_CUSTOM dir if env var not present
 if [[ -z "$ZSH_CUSTOM" ]]; then
     ZSH_CUSTOM="$ZSH/custom"
@@ -91,6 +101,7 @@ export PATH=/home/decoder/.nimble/bin:$PATH
 export KUBECONFIG=~/.kube/config
 export GOPATH=/usr/local/go
 export GOBIN=/usr/local/go/bin
+export PATH="/usr/bin:/home/decoder/.local/bin:$PATH"
 export PATH=$PATH:$GOPATH/bin
 export PATH=$PATH:$HOME/.krew/bin
 export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
@@ -121,6 +132,7 @@ fi
 # source ~/.github_variables
 
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
+zvm_after_init_commands+=('[ -f ~/.fzf ] && source ~/.fzf')
 
 function pex() {
     pet exec
@@ -197,13 +209,13 @@ zle -N f_enter
 bindkey '^f' f_enter
 
 # PROJECT: git-log
-function open_logg() {
-  BUFFER="logg"
-  zle accept-line
-}
+# function open_logg() {
+  # BUFFER="logg"
+  # zle accept-line
+# }
 
-zle -N open_logg
-bindkey '^l' open_logg
+# zle -N open_logg
+# bindkey '^l' open_logg
 
 function f_git_enter() {
   BUFFER="__open-file-git.sh"
