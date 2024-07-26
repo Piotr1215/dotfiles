@@ -5,14 +5,13 @@ local unpack = unpack or table.unpack
 local zoomed = false
 
 -- Lua function to select header text object
-local function get_header_start()
-  local current_line = vim.fn.getline "."
+local function get_header_start(line)
+  line = line or vim.fn.line "."
+  local current_line = vim.api.nvim_buf_get_lines(0, line - 1, line, true)[1]
   if current_line:match "^#+%s" then
-    return vim.fn.line "."
+    return line
   end
-
-  local header_start = vim.fn.search("^#\\{1,5}\\s", "bnW")
-  return header_start ~= 0 and header_start or nil
+  return vim.fn.search("^#\\{1,5}\\s", "bnW")
 end
 
 -- Function to get the ending position of the current header section
@@ -20,48 +19,67 @@ local function get_header_end(header_start)
   if not header_start then
     return nil
   end
-
-  local start_row, start_col = unpack(vim.api.nvim_win_get_cursor(0))
-  vim.api.nvim_win_set_cursor(0, { header_start + 1, 0 })
   local next_header = vim.fn.search("^#\\{1,5}\\s", "nW")
-  vim.api.nvim_win_set_cursor(0, { start_row, start_col })
-
   return next_header == 0 and vim.fn.line "$" or next_header - 1
 end
 
--- Function to select the header content (inner)
-local function select_inner_header()
-  local header_start = get_header_start()
-  if not header_start then
-    return
+-- Function to select the header and its content
+local function select_header(outer, count)
+  count = count or 1
+  local start_line = vim.fn.line "."
+  local end_line = start_line
+  local last_line = vim.fn.line "$"
+
+  for i = 1, count do
+    local header_start = get_header_start(end_line)
+    if not header_start or header_start > last_line then
+      break
+    end
+    local header_end = get_header_end(header_start)
+    if i == 1 then
+      start_line = header_start + (outer and 0 or 1)
+    end
+    end_line = header_end
+    if end_line == last_line then
+      break
+    end
+    -- Move to the next line after the current header
+    vim.api.nvim_win_set_cursor(0, { end_line + 1, 0 })
   end
 
-  local header_end = get_header_end(header_start)
-  vim.cmd(string.format("normal! %dG", header_start + 1))
-  vim.cmd(string.format("normal! V%dG", header_end))
+  vim.api.nvim_win_set_cursor(0, { start_line, 0 })
+  vim.cmd(string.format("normal! V%dG", end_line))
 end
 
--- Function to select the header and its content (around)
-local function select_outer_header()
-  local header_start = get_header_start()
-  if not header_start then
-    return
+-- Ensure the function is globally accessible
+_G.select_header = select_header
+
+-- Define the key mappings for the text object using a loop
+for _, mode in ipairs { "o", "x" } do
+  for _, type in ipairs { "i", "a" } do
+    vim.api.nvim_set_keymap(
+      mode,
+      type .. "h",
+      string.format(":<C-U>lua select_header(%s, vim.v.count1)<CR>", type == "a"),
+      { noremap = true, silent = true }
+    )
   end
-
-  local header_end = get_header_end(header_start)
-  vim.cmd(string.format("normal! %dG", header_start))
-  vim.cmd(string.format("normal! V%dG", header_end))
 end
 
--- Ensure the functions are globally accessible
-_G.select_inner_header = select_inner_header
-_G.select_outer_header = select_outer_header
+-- Ensure the function is globally accessible
+_G.select_header = select_header
 
--- Define the key mappings for the text object
-vim.api.nvim_set_keymap("o", "ih", ":lua select_inner_header()<CR>", { noremap = true, silent = true })
-vim.api.nvim_set_keymap("x", "ih", ":lua select_inner_header()<CR>", { noremap = true, silent = true })
-vim.api.nvim_set_keymap("o", "ah", ":lua select_outer_header()<CR>", { noremap = true, silent = true })
-vim.api.nvim_set_keymap("x", "ah", ":lua select_outer_header()<CR>", { noremap = true, silent = true })
+-- Define the key mappings for the text object using a loop
+for _, mode in ipairs { "o", "x" } do
+  for _, type in ipairs { "i", "a" } do
+    vim.api.nvim_set_keymap(
+      mode,
+      type .. "h",
+      string.format(":<C-U>lua select_header(%s, vim.v.count1)<CR>", type == "a"),
+      { noremap = true, silent = true }
+    )
+  end
+end
 
 function _G.AnnotateText()
   -- Get the start and end positions of the selected text
