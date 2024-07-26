@@ -1,6 +1,5 @@
 -- LSP and LS Installer
 require("nvim-dap-virtual-text").setup()
-require("neodev").setup {}
 local def = require "lsp.default-lsp"
 local lspconfig = require "lspconfig"
 lspconfig.lua_ls.setup {
