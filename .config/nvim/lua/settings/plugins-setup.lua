@@ -72,12 +72,6 @@ require("gp").setup {
 
 require("remote-sshfs").setup {}
 
-require("codesnap").setup {
-  -- ...
-  has_breadcrumbs = true,
-  watermark = "",
-  mac_window_bar = false,
-}
 require("mini.align").setup()
 require("mini.ai").setup()
 require("mini.files").setup {
@@ -258,7 +252,6 @@ require("nvim-treesitter.configs").setup {
     "rust",
     "toml",
     "typescript",
-    "help",
     "bash",
     "markdown_inline",
     "markdown",

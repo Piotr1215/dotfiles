@@ -224,12 +224,6 @@ api.nvim_exec(
   false
 )
 -- Compile packages on add
-vim.cmd [[
-    augroup Packer
-     autocmd!
-     autocmd BufWritePost plugins.lua source <afile> | PackerSync
-    augroup end
-  ]]
 
 if sysname == "Darwin" then
   api.nvim_exec(

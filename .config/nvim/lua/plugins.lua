@@ -1,28 +1,30 @@
 package.path = package.path .. ";" .. vim.fn.expand "$HOME" .. "/.luarocks/share/lua/5.1/?/init.lua"
 package.path = package.path .. ";" .. vim.fn.expand "$HOME" .. "/.luarocks/share/lua/5.1/?.lua"
-local ensure_packer = function()
-  local fn = vim.fn
-  local install_path = fn.stdpath "data" .. "/site/pack/packer/start/packer.nvim"
-  if fn.empty(fn.glob(install_path)) > 0 then
-    fn.system { "git", "clone", "--depth", "1", "https://github.com/wbthomason/packer.nvim", install_path }
-    vim.cmd [[packadd packer.nvim]]
-    return true
+-- Bootstrap lazy.nvim
+local lazypath = vim.fn.stdpath "data" .. "/lazy/lazy.nvim"
+if not (vim.uv or vim.loop).fs_stat(lazypath) then
+  local lazyrepo = "https://github.com/folke/lazy.nvim.git"
+  local out = vim.fn.system { "git", "clone", "--filter=blob:none", "--branch=stable", lazyrepo, lazypath }
+  if vim.v.shell_error ~= 0 then
+    vim.api.nvim_echo({
+      { "Failed to clone lazy.nvim:\n", "ErrorMsg" },
+      { out, "WarningMsg" },
+      { "\nPress any key to exit..." },
+    }, true, {})
+    vim.fn.getchar()
+    os.exit(1)
   end
-  return false
 end
-
-local packer_bootstrap = ensure_packer()
-return require("packer").startup(function(use)
-  -- Packer
-  use "wbthomason/packer.nvim"
+vim.opt.rtp:prepend(lazypath)
+return require("lazy").setup {
   -- AI {{{
-  use "github/copilot.vim"
-  use { "robitx/gp.nvim" }
-  use { "MunifTanjim/nui.nvim" }
-  use {
+  "github/copilot.vim",
+  "robitx/gp.nvim",
+  "MunifTanjim/nui.nvim",
+  {
     "jellydn/hurl.nvim",
-  }
-  use {
+  },
+  {
     "Piotr1215/toggler.nvim",
     config = function()
       require("toggler").setup {
@@ -34,260 +36,256 @@ return require("packer").startup(function(use)
         },
       }
     end,
-  }
+  },
 
   -- }}}
   -- Editor Extensions {{{
-  use { "romainl/vim-cool" }
-  use "yssl/QFEnter"
-  use "jesseleite/nvim-macroni"
-  use "3rd/image.nvim"
-  use "nosduco/remote-sshfs.nvim"
-  use "nvim-neotest/neotest-python"
-  use "nvim-neotest/neotest-plenary"
-  use {
+  "romainl/vim-cool",
+  "yssl/QFEnter",
+  "jesseleite/nvim-macroni",
+  "3rd/image.nvim",
+  "nosduco/remote-sshfs.nvim",
+  "nvim-neotest/neotest-python",
+  "nvim-neotest/neotest-plenary",
+  {
     "windwp/nvim-autopairs",
     config = function()
       require("nvim-autopairs").setup {}
     end,
-  }
-  use { "jonarrien/telescope-cmdline.nvim" }
-  use {
+  },
+  "jonarrien/telescope-cmdline.nvim",
+  {
     "chrisgrieser/nvim-various-textobjs",
     config = function()
       require("various-textobjs").setup { useDefaultKeymaps = false }
     end,
-  }
-  use {
+  },
+  {
     "wintermute-cell/gitignore.nvim",
-    requires = {
+    dependencies = {
       "nvim-telescope/telescope.nvim", -- optional: for multi-select
     },
-  }
-  use { "ionide/Ionide-vim" }
-  use "rcarriga/nvim-notify"
-  use { "marcelofern/vale.nvim" }
-  use "tyru/open-browser.vim"
-  use "karoliskoncevicius/vim-sendtowindow"
-  use { "dccsillag/magma-nvim", run = ":UpdateRemotePlugins" }
-  use "tpope/vim-rhubarb"
-  use { "nvim-neotest/nvim-nio" }
-  use "David-Kunz/gen.nvim"
-  use "RRethy/nvim-align"
-  use "vim-scripts/scrollfix"
-  use "echasnovski/mini.nvim"
-  use "mattn/emmet-vim"
-  use "mattn/webapi-vim"
-  use "mhinz/vim-startify"
-  use "preservim/nerdcommenter"
-  use "tpope/vim-fugitive"
-  use "folke/neodev.nvim"
-  use "Piotr1215/telescope-crossplane.nvim"
-  use { "mistricky/codesnap.nvim", run = "make" }
-  use {
+  },
+  "ionide/Ionide-vim",
+  "rcarriga/nvim-notify",
+  "marcelofern/vale.nvim",
+  "tyru/open-browser.vim",
+  "karoliskoncevicius/vim-sendtowindow",
+  "tpope/vim-rhubarb",
+  "nvim-neotest/nvim-nio",
+  "David-Kunz/gen.nvim",
+  "RRethy/nvim-align",
+  "vim-scripts/scrollfix",
+  "echasnovski/mini.nvim",
+  "mattn/emmet-vim",
+  "mattn/webapi-vim",
+  "mhinz/vim-startify",
+  "preservim/nerdcommenter",
+  "tpope/vim-fugitive",
+  "folke/neodev.nvim",
+  "Piotr1215/telescope-crossplane.nvim",
+  {
     "jiaoshijie/undotree",
     config = function()
       require("undotree").setup()
     end,
-    requires = {
+    dependencies = {
       "nvim-lua/plenary.nvim",
     },
-  }
-  use "voldikss/vim-floaterm"
-  use {
+  },
+  "voldikss/vim-floaterm",
+  {
     "kylechui/nvim-surround",
     config = function()
       require("nvim-surround").setup {}
     end,
-  }
-  use "folke/which-key.nvim"
-  use "lukas-reineke/indent-blankline.nvim"
-  use "machakann/vim-swap"
-  use "austintaylor/vim-commaobject"
-  use "ferrine/md-img-paste.vim"
-  use {
+  },
+  "folke/which-key.nvim",
+  "lukas-reineke/indent-blankline.nvim",
+  "machakann/vim-swap",
+  "austintaylor/vim-commaobject",
+  "ferrine/md-img-paste.vim",
+  {
     "cuducos/yaml.nvim",
     ft = { "yaml" }, -- optional
-    requires = {
+    dependencies = {
       "nvim-treesitter/nvim-treesitter",
       "nvim-telescope/telescope.nvim", -- optional
     },
-  }
-  -- use 'https://gitlab.com/madyanov/svart.nvim'
-  use { "kevinhwang91/nvim-bqf" } -- better quickfix window
+  },
+  -- 'https://gitlab.com/madyanov/svart.nvim',
+  "kevinhwang91/nvim-bqf", -- better quickfix window
   -- }}}
   -- System Integration {{{
-  use {
+  {
     "junegunn/fzf",
-    run = "./install --bin",
-  }
-  use "junegunn/fzf.vim"
-  use "nvim-tree/nvim-web-devicons" -- optional, for file icon
+    build = "./install --bin",
+  },
+  "junegunn/fzf.vim",
+  "nvim-tree/nvim-web-devicons", -- optional, for file icon
   -- }}}
   -- Telescope {{{
-  use "danielpieper/telescope-tmuxinator.nvim"
-  use "jvgrootveld/telescope-zoxide"
-  use {
+  "danielpieper/telescope-tmuxinator.nvim",
+  "jvgrootveld/telescope-zoxide",
+  {
     "ellisonleao/glow.nvim",
     config = function()
       require("glow").setup()
     end,
-  }
-  use {
+  },
+  {
     "dhruvmanila/telescope-bookmarks.nvim",
-    tag = "*",
+    version = "*",
     -- Uncomment if the selected browser is Firefox, Waterfox or buku
-    -- requires = {
+    -- dependencies = {
     --   'kkharji/sqlite.lua',
     -- }
-  }
-  use "xiyaowong/telescope-emoji.nvim"
-  use "nvim-telescope/telescope-symbols.nvim"
-  use "cljoly/telescope-repo.nvim"
-  use {
+  },
+  "xiyaowong/telescope-emoji.nvim",
+  "nvim-telescope/telescope-symbols.nvim",
+  "cljoly/telescope-repo.nvim",
+  {
     "nvim-telescope/telescope.nvim",
-    requires = {
+    dependencies = {
       { "nvim-lua/popup.nvim" },
       { "nvim-lua/plenary.nvim" },
       { "nvim-telescope/telescope-live-grep-args.nvim" },
     },
-  }
-  use {
+  },
+  {
     "nvim-telescope/telescope-file-browser.nvim",
-  }
-  use {
+  },
+  {
     "nvim-telescope/telescope-fzf-native.nvim",
-    run = "make",
-  }
-  use { "smartpde/telescope-recent-files" }
+    build = "make",
+  },
+  "smartpde/telescope-recent-files",
   -- }}}
   -- LSP {{{
-  use "ray-x/lsp_signature.nvim"
-  use { "ibhagwan/fzf-lua" }
-  use { "nvim-treesitter/nvim-treesitter", run = ":TSUpdate", requires = { "nvim-treesitter/playground" } }
-  use { "tami5/lspsaga.nvim", requires = { "neovim/nvim-lspconfig" } }
-  use "onsails/lspkind-nvim"
-  use { "williamboman/mason.nvim" }
-  use "williamboman/mason-lspconfig.nvim"
-  use "neovim/nvim-lspconfig"
-  use {
+  "ray-x/lsp_signature.nvim",
+  "ibhagwan/fzf-lua",
+  { "nvim-treesitter/nvim-treesitter", build = ":TSUpdate" },
+  { "tami5/lspsaga.nvim", dependencies = { "neovim/nvim-lspconfig" } },
+  "onsails/lspkind-nvim",
+  "williamboman/mason.nvim",
+  "williamboman/mason-lspconfig.nvim",
+  "neovim/nvim-lspconfig",
+  {
     "folke/trouble.nvim",
-    requires = "kyazdani42/nvim-web-devicons",
+    dependencies = "kyazdani42/nvim-web-devicons",
     config = function()
       require("trouble").setup {}
     end,
-  }
-  use "hrsh7th/cmp-nvim-lsp-signature-help"
-  use {
+  },
+  "hrsh7th/cmp-nvim-lsp-signature-help",
+  {
     "hrsh7th/cmp-vsnip",
-    requires = {
+    dependencies = {
       "hrsh7th/vim-vsnip",
       "rafamadriz/friendly-snippets",
     },
-  }
-  use { "shortcuts/no-neck-pain.nvim", tag = "*" }
+  },
+  { "shortcuts/no-neck-pain.nvim", version = "*" },
 
-  use "leoluz/nvim-dap-go"
-  use {
+  "leoluz/nvim-dap-go",
+  {
     "rcarriga/nvim-dap-ui",
-    requires = {
+    dependencies = {
       "mfussenegger/nvim-dap",
     },
-  }
-  use {
+  },
+  {
     "nvim-neotest/neotest",
-    requires = {
+    dependencies = {
       "nvim-neotest/nvim-nio",
       "nvim-lua/plenary.nvim",
       "antoinemadec/FixCursorHold.nvim",
       "nvim-treesitter/nvim-treesitter",
     },
-  }
-  use "mfussenegger/nvim-dap-python"
+  },
+  "mfussenegger/nvim-dap-python",
   -- }}}
   -- Snippets {{{
-  use {
+  {
     "hrsh7th/nvim-cmp",
-    requires = {
+    dependencies = {
       "nvim-treesitter",
       "hrsh7th/cmp-nvim-lsp",
       "hrsh7th/cmp-buffer",
       "hrsh7th/cmp-path",
       "hrsh7th/cmp-cmdline",
     },
-  }
-  use "hrsh7th/cmp-nvim-lua"
-  use "hrsh7th/vim-vsnip"
-  use "hrsh7th/vim-vsnip-integ"
+  },
+  "hrsh7th/cmp-nvim-lua",
+  "hrsh7th/vim-vsnip",
+  "hrsh7th/vim-vsnip-integ",
   -- }}}
   -- Programming {{{
-  use "theHamsta/nvim-dap-virtual-text"
-  use "stevearc/dressing.nvim"
-  use {
+  "theHamsta/nvim-dap-virtual-text",
+  "stevearc/dressing.nvim",
+  {
     "saecki/crates.nvim",
-    requires = { "nvim-lua/plenary.nvim" },
+    dependencies = { "nvim-lua/plenary.nvim" },
     config = function()
       require("crates").setup()
     end,
-  }
-  use "simrat39/rust-tools.nvim"
-  use "IndianBoy42/tree-sitter-just"
-  use "NoahTheDuke/vim-just"
-  use "ray-x/go.nvim"
-  use "ray-x/guihua.lua" -- recommended if need floating window support
-  use "rmagatti/goto-preview"
-  use "nvim-treesitter/nvim-treesitter-textobjects"
+  },
+  "simrat39/rust-tools.nvim",
+  "IndianBoy42/tree-sitter-just",
+  "NoahTheDuke/vim-just",
+  "ray-x/go.nvim",
+  "ray-x/guihua.lua", -- recommended if need floating window support
+  "rmagatti/goto-preview",
+  "nvim-treesitter/nvim-treesitter-textobjects",
   -- }}}
   -- Markdown {{{
-  use "jubnzv/mdeval.nvim"
-  use {
+  "jubnzv/mdeval.nvim",
+  {
     "AckslD/nvim-FeMaco.lua",
     config = 'require("femaco").setup()',
-  }
-  use "sbdchd/neoformat"
-  use "ixru/nvim-markdown"
-  use "dhruvasagar/vim-open-url"
-  use {
+  },
+  "sbdchd/neoformat",
+  "ixru/nvim-markdown",
+  "dhruvasagar/vim-open-url",
+  {
     "iamcco/markdown-preview.nvim",
-    run = "cd app && npm install",
-    setup = function()
+    cmd = { "MarkdownPreviewToggle", "MarkdownPreview", "MarkdownPreviewStop" },
+    build = "cd app && yarn install",
+    init = function()
       vim.g.mkdp_filetypes = { "markdown" }
     end,
     ft = { "markdown" },
-  }
-  use "javiorfo/nvim-soil"
+  },
+  "javiorfo/nvim-soil",
 
   -- Optional for puml syntax highlighting:
-  use "javiorfo/nvim-nyctophilia"
-  use "weirongxu/plantuml-previewer.vim"
+  "javiorfo/nvim-nyctophilia",
+  "weirongxu/plantuml-previewer.vim",
   -- }}}
   -- My Plugins {{{
-  use "Piotr1215/yanksearch.nvim"
-  use "Piotr1215/typeit.nvim"
+  "Piotr1215/yanksearch.nvim",
+  "Piotr1215/typeit.nvim",
   -- }}}
   -- Look & Feel {{{
-  use { "ellisonleao/gruvbox.nvim" }
-  use "mhartington/formatter.nvim"
-  use "folke/todo-comments.nvim"
-  use "ryanoasis/vim-devicons"
-  use "xiyaowong/nvim-transparent"
-  use "bluz71/vim-moonfly-colors"
-  use "kdheepak/monochrome.nvim"
-  use "EdenEast/nightfox.nvim"
-  use "NLKNguyen/papercolor-theme"
-  use "folke/tokyonight.nvim"
-  use "rktjmp/lush.nvim"
-  use { "catppuccin/nvim", as = "catppuccin" }
-  use {
+  "ellisonleao/gruvbox.nvim",
+  "mhartington/formatter.nvim",
+  "folke/todo-comments.nvim",
+  "ryanoasis/vim-devicons",
+  "xiyaowong/nvim-transparent",
+  "bluz71/vim-moonfly-colors",
+  "kdheepak/monochrome.nvim",
+  "EdenEast/nightfox.nvim",
+  "NLKNguyen/papercolor-theme",
+  "folke/tokyonight.nvim",
+  "rktjmp/lush.nvim",
+  { "catppuccin/nvim", as = "catppuccin" },
+  {
     "nvim-lualine/lualine.nvim",
-    requires = { "kyazdani42/nvim-web-devicons", opt = true },
-  }
+    dependencies = { "kyazdani42/nvim-web-devicons", opt = true },
+  },
   -- }}}
-  use {
+  {
     "epwalsh/obsidian.nvim",
-    tag = "*",
-  }
-  if packer_bootstrap then
-    require("packer").sync()
-  end
-end)
+    version = "*",
+  },
+}
