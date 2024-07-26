@@ -4,8 +4,137 @@ local action_state = require "telescope.actions.state"
 local unpack = unpack or table.unpack
 local zoomed = false
 
--- Define a global variable to keep track of the toggle state
-_G.horizontal_scroll_enabled = false
+-- Function to get the starting position of the current header
+local function get_header_start()
+  local current_line = vim.fn.getline "."
+  if
+    current_line:match "^#%s"
+    or current_line:match "^##%s"
+    or current_line:match "^###%s"
+    or current_line:match "^####%s"
+    or current_line:match "^#####%s"
+  then
+    return vim.fn.line "."
+  end
+  local header_start = vim.fn.search("^#\\{1,5}\\s", "bnW")
+  return header_start ~= 0 and header_start or nil
+end
+
+-- Function to get the ending position of the current header section
+local function get_header_end(header_start)
+  if not header_start then
+    return nil
+  end
+  local start_row, start_col = unpack(vim.api.nvim_win_get_cursor(0))
+  vim.api.nvim_win_set_cursor(0, { header_start + 1, 0 })
+  local next_header = vim.fn.search("^#\\{1,5}\\s", "nW")
+  vim.api.nvim_win_set_cursor(0, { start_row, start_col })
+  return next_header == 0 and vim.fn.line "$" or next_header - 1
+end
+
+-- Function to select multiple headers (inner)
+local function select_inner_headers(count)
+  count = count or 1
+  local header_start = get_header_start()
+  if not header_start then
+    return
+  end
+  local final_end = get_header_end(header_start)
+  for _ = 2, count do
+    local next_start = get_header_end(header_start) + 1
+    if next_start > vim.fn.line "$" then
+      break
+    end
+    final_end = get_header_end(next_start)
+    if not final_end then
+      break
+    end
+  end
+  vim.cmd(string.format("normal! %dG", header_start + 1))
+  vim.cmd(string.format("normal! V%dG", final_end))
+end
+
+-- Function to select multiple headers (around)
+local function select_outer_headers(count)
+  count = count or 1
+  local header_start = get_header_start()
+  if not header_start then
+    return
+  end
+  local final_end = get_header_end(header_start)
+  for _ = 2, count do
+    local next_start = get_header_end(header_start) + 1
+    if next_start > vim.fn.line "$" then
+      break
+    end
+    final_end = get_header_end(next_start)
+    if not final_end then
+      break
+    end
+  end
+  vim.cmd(string.format("normal! %dG", header_start))
+  vim.cmd(string.format("normal! V%dG", final_end))
+end
+
+-- Wrapper functions to handle count
+local function select_inner_header_wrapper()
+  local count = vim.v.count1
+  select_inner_headers(count)
+end
+
+local function select_outer_header_wrapper()
+  local count = vim.v.count1
+  select_outer_headers(count)
+end
+
+-- Ensure the functions are globally accessible
+_G.select_inner_header_wrapper = select_inner_header_wrapper
+_G.select_outer_header_wrapper = select_outer_header_wrapper
+
+-- Define the key mappings for the text object
+vim.api.nvim_set_keymap("o", "ih", ":lua select_inner_header_wrapper()<CR>", { noremap = true, silent = true })
+vim.api.nvim_set_keymap("x", "ih", ":lua select_inner_header_wrapper()<CR>", { noremap = true, silent = true })
+vim.api.nvim_set_keymap("o", "ah", ":lua select_outer_header_wrapper()<CR>", { noremap = true, silent = true })
+vim.api.nvim_set_keymap("x", "ah", ":lua select_outer_header_wrapper()<CR>", { noremap = true, silent = true })
+
+function _G.AnnotateText()
+  -- Get the start and end positions of the selected text
+  local s_line, s_col = unpack(vim.api.nvim_buf_get_mark(0, "<"))
+  local e_line, e_col = unpack(vim.api.nvim_buf_get_mark(0, ">"))
+
+  -- Ensure s_line is the first and e_line is the last line of the selection
+  if s_line > e_line or (s_line == e_line and s_col > e_col) then
+    s_line, e_line = e_line, s_line
+    s_col, e_col = e_col, s_col
+  end
+
+  -- Get the lines within the selection
+  local lines = vim.api.nvim_buf_get_lines(0, s_line - 1, e_line, false)
+  local selected_text = lines[1]:sub(s_col, e_col)
+
+  -- Create the |--| line directly below the selected text
+  local dash_line = string.rep(" ", s_col - 1) .. "|" .. string.rep("-", #selected_text) .. "|"
+  local pipe_line = string.rep(" ", s_col - 1) .. "|"
+
+  -- Find the correct position to insert new vertical bars
+  local insert_pos = s_line
+  while vim.fn.getline(insert_pos):match "^%s*|" do
+    insert_pos = insert_pos + 1
+  end
+
+  -- Ensure |--| line is always added directly below the selected text
+  vim.api.nvim_buf_set_lines(0, insert_pos, insert_pos, false, { dash_line })
+
+  -- Add new | lines below the |--| line
+  local i = insert_pos + 1
+  while vim.fn.getline(i):match "^%s*|" do
+    i = i + 1
+  end
+  vim.api.nvim_buf_set_lines(0, i, i, false, { pipe_line })
+end
+
+vim.api.nvim_set_keymap("v", "<leader>an", ":lua AnnotateText()<CR>", { noremap = true, silent = true })
+-- Testing line with some words
 
 -- Function to toggle horizontal scrolling
 function ToggleHorizontalScroll()
