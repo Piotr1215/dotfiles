@@ -16,6 +16,7 @@ if not (vim.uv or vim.loop).fs_stat(lazypath) then
   end
 end
 vim.opt.rtp:prepend(lazypath)
+
 return require("lazy").setup {
   -- AI {{{
   "github/copilot.vim",
@@ -46,26 +47,12 @@ return require("lazy").setup {
   "3rd/image.nvim",
   "nosduco/remote-sshfs.nvim",
   "nvim-neotest/neotest-python",
-  "nvim-neotest/neotest-plenary",
-  {
-    "windwp/nvim-autopairs",
-    config = function()
-      require("nvim-autopairs").setup {}
-    end,
-  },
+  { "nvim-neotest/neotest-plenary", lazy = true },
+  { "nvim-lua/plenary.nvim", lazy = true },
+  { "windwp/nvim-autopairs", opts = {} },
   "jonarrien/telescope-cmdline.nvim",
-  {
-    "chrisgrieser/nvim-various-textobjs",
-    config = function()
-      require("various-textobjs").setup { useDefaultKeymaps = false }
-    end,
-  },
-  {
-    "wintermute-cell/gitignore.nvim",
-    dependencies = {
-      "nvim-telescope/telescope.nvim", -- optional: for multi-select
-    },
-  },
+  { "chrisgrieser/nvim-various-textobjs", opts = {} },
+  { "wintermute-cell/gitignore.nvim", dependencies = "nvim-telescope/telescope.nvim" },
   "ionide/Ionide-vim",
   "rcarriga/nvim-notify",
   "marcelofern/vale.nvim",
@@ -83,22 +70,9 @@ return require("lazy").setup {
   "preservim/nerdcommenter",
   "tpope/vim-fugitive",
   "Piotr1215/telescope-crossplane.nvim",
-  {
-    "jiaoshijie/undotree",
-    config = function()
-      require("undotree").setup()
-    end,
-    dependencies = {
-      "nvim-lua/plenary.nvim",
-    },
-  },
+  { "jiaoshijie/undotree", opts = {} },
   "voldikss/vim-floaterm",
-  {
-    "kylechui/nvim-surround",
-    config = function()
-      require("nvim-surround").setup {}
-    end,
-  },
+  { "kylechui/nvim-surround", opts = {} },
   "folke/which-key.nvim",
   "lukas-reineke/indent-blankline.nvim",
   "machakann/vim-swap",
@@ -126,12 +100,7 @@ return require("lazy").setup {
   -- Telescope {{{
   "danielpieper/telescope-tmuxinator.nvim",
   "jvgrootveld/telescope-zoxide",
-  {
-    "ellisonleao/glow.nvim",
-    config = function()
-      require("glow").setup()
-    end,
-  },
+  { "ellisonleao/glow.nvim", opts = {} },
   {
     "dhruvmanila/telescope-bookmarks.nvim",
     version = "*",
@@ -147,7 +116,6 @@ return require("lazy").setup {
     "nvim-telescope/telescope.nvim",
     dependencies = {
       { "nvim-lua/popup.nvim" },
-      { "nvim-lua/plenary.nvim" },
       { "nvim-telescope/telescope-live-grep-args.nvim" },
     },
   },
@@ -194,13 +162,7 @@ return require("lazy").setup {
     -- { "folke/neodev.nvim", enabled = false }, -- make sure to uninstall or disable neodev.nvim
   },
   "neovim/nvim-lspconfig",
-  {
-    "folke/trouble.nvim",
-    dependencies = "kyazdani42/nvim-web-devicons",
-    config = function()
-      require("trouble").setup {}
-    end,
-  },
+  { "folke/trouble.nvim", dependencies = "kyazdani42/nvim-web-devicons", opts = {} },
   "hrsh7th/cmp-nvim-lsp-signature-help",
   {
     "hrsh7th/cmp-vsnip",
@@ -222,7 +184,6 @@ return require("lazy").setup {
     "nvim-neotest/neotest",
     dependencies = {
       "nvim-neotest/nvim-nio",
-      "nvim-lua/plenary.nvim",
       "antoinemadec/FixCursorHold.nvim",
       "nvim-treesitter/nvim-treesitter",
     },
@@ -247,13 +208,7 @@ return require("lazy").setup {
   -- Programming {{{
   "theHamsta/nvim-dap-virtual-text",
   "stevearc/dressing.nvim",
-  {
-    "saecki/crates.nvim",
-    dependencies = { "nvim-lua/plenary.nvim" },
-    config = function()
-      require("crates").setup()
-    end,
-  },
+  { "saecki/crates.nvim", opts = {} },
   "simrat39/rust-tools.nvim",
   "IndianBoy42/tree-sitter-just",
   "NoahTheDuke/vim-just",
