@@ -38,6 +38,7 @@ return require("packer").startup(function(use)
 
   -- }}}
   -- Editor Extensions {{{
+  use { "romainl/vim-cool" }
   use "yssl/QFEnter"
   use "jesseleite/nvim-macroni"
   use "3rd/image.nvim"
@@ -57,7 +58,6 @@ return require("packer").startup(function(use)
       require("various-textobjs").setup { useDefaultKeymaps = false }
     end,
   }
-  use "lewis6991/gitsigns.nvim"
   use {
     "wintermute-cell/gitignore.nvim",
     requires = {

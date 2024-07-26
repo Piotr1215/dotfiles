@@ -1,5 +1,5 @@
 -- Colorschemes settings
-require("catppuccin").setup({
+require("catppuccin").setup {
   flavour = "mocha",
   transparent_background = false,
   term_colors = true,
@@ -15,17 +15,16 @@ require("catppuccin").setup({
     treesitter = true,
     notify = true,
     telescope = true,
-    gitsigns = true,
-  }
-})
+  },
+}
 
-require("tokyonight").setup({
-  style = "night",     -- The theme comes in three styles, `storm`, a darker variant `night` and `day`
+require("tokyonight").setup {
+  style = "night", -- The theme comes in three styles, `storm`, a darker variant `night` and `day`
   transparent = false, -- Enable this to disable setting the background color
   terminal_colors = true,
-})
+}
 
-require('nightfox').setup({
+require("nightfox").setup {
   options = {
     transparent = false,
     terminal_colors = true,
@@ -36,8 +35,8 @@ require('nightfox').setup({
     treesitter = true,
     lsp_saga = true,
     gitgutter = true,
-  }
-})
+  },
+}
 
 vim.cmd [[
 let g:PaperColor_Theme_Options = {
@@ -49,7 +48,7 @@ let g:PaperColor_Theme_Options = {
   \ }
 ]]
 
-require("transparent").setup({
+require("transparent").setup {
   extra_groups = { -- table/string: additional groups that should be cleared
     -- In particular, when you set it to 'all', that means all available groups
     -- example of akinsho/nvim-bufferline.lua
@@ -60,8 +59,8 @@ require("transparent").setup({
     "BufferLineSeparator",
     "BufferLineIndicatorSelected",
     "Telescope",
-  }
-})
+  },
+}
 
 -- Moonfly
 local winhighlight = {
@@ -72,18 +71,18 @@ vim.g.moonflyNormalFloat = true
 vim.g.moonflyWinSeparator = 2
 vim.g.moonflyTransparent = true
 vim.opt.fillchars = {
-  horiz = '━',
-  horizup = '┻',
-  horizdown = '┳',
-  vert = '┃',
-  vertleft = '┫',
-  vertright = '┣',
-  verthoriz = '╋',
+  horiz = "━",
+  horizup = "┻",
+  horizdown = "┳",
+  vert = "┃",
+  vertleft = "┫",
+  vertright = "┣",
+  verthoriz = "╋",
 }
 vim.g.termigurcolors = true
 -- Active colorscheme
 -- vim.cmd('colorscheme moonfly')
-vim.cmd('colorscheme catppuccin')
+vim.cmd "colorscheme catppuccin"
 -- vim.cmd('colorscheme nightfox')
 -- vim.cmd('colorscheme tokyonight-night')
 -- vim.cmd('colorscheme carbonfox')
