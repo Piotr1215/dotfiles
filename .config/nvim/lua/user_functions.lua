@@ -4,18 +4,13 @@ local action_state = require "telescope.actions.state"
 local unpack = unpack or table.unpack
 local zoomed = false
 
--- Function to get the starting position of the current header
+-- Lua function to select header text object
 local function get_header_start()
   local current_line = vim.fn.getline "."
-  if
-    current_line:match "^#%s"
-    or current_line:match "^##%s"
-    or current_line:match "^###%s"
-    or current_line:match "^####%s"
-    or current_line:match "^#####%s"
-  then
+  if current_line:match "^#+%s" then
     return vim.fn.line "."
   end
+
   local header_start = vim.fn.search("^#\\{1,5}\\s", "bnW")
   return header_start ~= 0 and header_start or nil
 end
@@ -25,77 +20,48 @@ local function get_header_end(header_start)
   if not header_start then
     return nil
   end
+
   local start_row, start_col = unpack(vim.api.nvim_win_get_cursor(0))
   vim.api.nvim_win_set_cursor(0, { header_start + 1, 0 })
   local next_header = vim.fn.search("^#\\{1,5}\\s", "nW")
   vim.api.nvim_win_set_cursor(0, { start_row, start_col })
+
   return next_header == 0 and vim.fn.line "$" or next_header - 1
 end
 
--- Function to select multiple headers (inner)
-local function select_inner_headers(count)
-  count = count or 1
+-- Function to select the header content (inner)
+local function select_inner_header()
   local header_start = get_header_start()
   if not header_start then
     return
   end
-  local final_end = get_header_end(header_start)
-  for _ = 2, count do
-    local next_start = get_header_end(header_start) + 1
-    if next_start > vim.fn.line "$" then
-      break
-    end
-    final_end = get_header_end(next_start)
-    if not final_end then
-      break
-    end
-  end
+
+  local header_end = get_header_end(header_start)
   vim.cmd(string.format("normal! %dG", header_start + 1))
-  vim.cmd(string.format("normal! V%dG", final_end))
+  vim.cmd(string.format("normal! V%dG", header_end))
 end
 
--- Function to select multiple headers (around)
-local function select_outer_headers(count)
-  count = count or 1
+-- Function to select the header and its content (around)
+local function select_outer_header()
   local header_start = get_header_start()
   if not header_start then
     return
   end
-  local final_end = get_header_end(header_start)
-  for _ = 2, count do
-    local next_start = get_header_end(header_start) + 1
-    if next_start > vim.fn.line "$" then
-      break
-    end
-    final_end = get_header_end(next_start)
-    if not final_end then
-      break
-    end
-  end
+
+  local header_end = get_header_end(header_start)
   vim.cmd(string.format("normal! %dG", header_start))
-  vim.cmd(string.format("normal! V%dG", final_end))
-end
-
--- Wrapper functions to handle count
-local function select_inner_header_wrapper()
-  local count = vim.v.count1
-  select_inner_headers(count)
-end
-
-local function select_outer_header_wrapper()
-  local count = vim.v.count1
-  select_outer_headers(count)
+  vim.cmd(string.format("normal! V%dG", header_end))
 end
 
 -- Ensure the functions are globally accessible
-_G.select_inner_header_wrapper = select_inner_header_wrapper
-_G.select_outer_header_wrapper = select_outer_header_wrapper
+_G.select_inner_header = select_inner_header
+_G.select_outer_header = select_outer_header
 
 -- Define the key mappings for the text object
-vim.api.nvim_set_keymap("o", "ih", ":lua select_inner_header_wrapper()<CR>", { noremap = true, silent = true })
-vim.api.nvim_set_keymap("x", "ih", ":lua select_inner_header_wrapper()<CR>", { noremap = true, silent = true })
-vim.api.nvim_set_keymap("o", "ah", ":lua select_outer_header_wrapper()<CR>", { noremap = true, silent = true })
-vim.api.nvim_set_keymap("x", "ah", ":lua select_outer_header_wrapper()<CR>", { noremap = true, silent = true })
+vim.api.nvim_set_keymap("o", "ih", ":lua select_inner_header()<CR>", { noremap = true, silent = true })
+vim.api.nvim_set_keymap("x", "ih", ":lua select_inner_header()<CR>", { noremap = true, silent = true })
+vim.api.nvim_set_keymap("o", "ah", ":lua select_outer_header()<CR>", { noremap = true, silent = true })
+vim.api.nvim_set_keymap("x", "ah", ":lua select_outer_header()<CR>", { noremap = true, silent = true })
 
 function _G.AnnotateText()
   -- Get the start and end positions of the selected text
