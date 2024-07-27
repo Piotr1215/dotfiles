@@ -6,7 +6,10 @@ require "telescope-setup"
 require "lsp"
 -- require("lsp-setup")
 require "which-key-setup"
-require "user_functions"
+-- require "user_functions"
+for _, file in ipairs(vim.fn.readdir(vim.fn.stdpath "config" .. "/lua/user_functions", [[v:val =~ '\.lua$']])) do
+  require("user_functions." .. file:gsub("%.lua$", ""))
+end
 require "projects"
 
 -- PROJECT: project-config
