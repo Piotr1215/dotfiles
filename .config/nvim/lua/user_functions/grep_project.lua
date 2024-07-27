@@ -16,6 +16,6 @@ function M.grepInProject()
   require("telescope").extensions.live_grep_args.live_grep_args { cwd = cwd }
 end
 
-vim.keymap.set("n", "<leader>fw", M.grep_project, { noremap = true, silent = true })
+vim.keymap.set("n", "<leader>fw", M.grepInProject, { noremap = true, silent = true })
 
 return M
