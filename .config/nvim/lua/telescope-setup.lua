@@ -135,7 +135,7 @@ local set_up_telescope = function()
   set_keymap(
     "n",
     "<leader>ff",
-    [[<cmd>lua require('telescope.builtin').find_files({ find_command = {'rg', '--files', '--hidden', '-g', '!.git'}, search_dirs = {get_tmux_working_directory()}, path_display = {"truncate"} })<CR>]]
+    [[<cmd>lua require('telescope.builtin').find_files({ find_command = {'rg', '--files', '--hidden', '-g', '!.git'}, search_dirs = {require('user_functions.shell_integration').get_tmux_working_directory()}, path_display = {"truncate"} })<CR>]]
   )
   -- set_keymap('n', '<leader>fw',
   -- [[<cmd>lua require('telescope').extensions.live_grep_args.live_grep_args({search_dirs = {get_tmux_working_directory()}, path_display = {"tail"}})<CR>]])
