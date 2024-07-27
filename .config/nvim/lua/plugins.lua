@@ -206,6 +206,7 @@ return require("lazy").setup {
   "hrsh7th/vim-vsnip-integ",
   -- }}}
   -- Programming {{{
+  "ii14/neorepl.nvim",
   "theHamsta/nvim-dap-virtual-text",
   "stevearc/dressing.nvim",
   { "saecki/crates.nvim", opts = {} },
