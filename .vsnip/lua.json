@@ -1,6 +1,6 @@
 {
   "macro": {
-    "prefix": ["macro"],
+    "prefix": ["keymap"],
     "body": "vim.keymap.set('n','<leader>${1}', '${2}', { remap = true, silent = false })"
   }
 }
