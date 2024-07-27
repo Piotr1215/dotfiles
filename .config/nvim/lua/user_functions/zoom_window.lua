@@ -3,11 +3,11 @@ M.zoomed = false
 
 function M.toggle_zoom()
   if M.zoomed then
-    vim.api.nvim_command "wincmd ="
+    vim.cmd "wincmd ="
     M.zoomed = false
   else
-    vim.api.nvim_command "wincmd _"
-    vim.api.nvim_command "wincmd |"
+    vim.cmd "wincmd _"
+    vim.cmd "wincmd |"
     M.zoomed = true
   end
 end
