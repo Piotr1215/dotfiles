@@ -21,6 +21,10 @@ vim.wo.foldenable = false
 vcmd "setlocal nofoldenable"
 vim.api.nvim_set_option("updatetime", 300)
 
+if vim.g.scroll_fix_enabled == nil then
+  vim.g.scroll_fix_enabled = false -- Start with scroll fix disabled
+end
+
 --Remap for dealing with word wrap
 set.gp = "git grep -n"
 set.completeopt = { "menuone", "noselect", "noinsert" }
@@ -52,3 +56,32 @@ set.incsearch = true
 set.inccommand = "split" -- preview of replacement operations
 set.laststatus = 2
 set.cmdheight = 1
+
+-- Custom f command function
+-- This is needed because ;; is mapped to enter command mode
+vim.cmd [[
+function! CustomF(backwards)
+  let l:char = nr2char(getchar())
+  if a:backwards
+    execute "normal! F" . l:char
+  else
+    execute "normal! f" . l:char
+  endif
+  nnoremap ; ;
+  vnoremap ; ;
+endfunction
+]]
+vim.cmd "command! GetCurrentFileDir lua print_current_file_dir()"
+
+-- Key mappings
+vim.api.nvim_set_keymap("n", "<leader>mr", ":lua ranger_popup_in_tmux()<CR>", { noremap = true, silent = true })
+vim.cmd "command! Fold lua _G.toggle_function_folding()"
+
+vim.api.nvim_set_keymap("n", "fld", [[<Cmd>lua _G.toggle_function_folding()<CR>]], { noremap = true, silent = false })
+vim.api.nvim_set_keymap("n", "f", ":call CustomF(0)<CR>", {})
+vim.api.nvim_set_keymap("v", "f", ":call CustomF(0)<CR>", {})
+vim.api.nvim_set_keymap("n", "F", ":call CustomF(1)<CR>", {})
+vim.api.nvim_set_keymap("v", "F", ":call CustomF(1)<CR>", {})
+vim.cmd [[
+  command! -range=% -nargs=* -complete=customlist,v:lua.my_custom_complete ProcessTasks :lua _G.process_task_list(<line1>, <line2>, <f-args>)
+]]
