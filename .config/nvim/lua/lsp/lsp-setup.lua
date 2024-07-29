@@ -72,15 +72,18 @@ require("lspconfig")["yamlls"].setup {
     },
   },
 }
+
 require("ionide").setup {
   on_attach = def.on_attach,
   capabilities = def.capabilities,
 }
+
 -- PROJECT: lsp_lines
 -- When using lsp_lines, this needs to be disabled
 vim.diagnostic.config {
-  virtual_text = false,
+  virtual_text = true,
 }
+
 lspconfig.gopls.setup {
   cmd = { "gopls" },
   -- for postfix snippets and analyzers
