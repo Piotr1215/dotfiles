@@ -162,9 +162,12 @@ function pet-select-bmk() {
 zle -N pet-select-bmk
 bindkey '^t' pet-select-bmk
 
+# Unified function definition
 function output_file_path() {
+    local search_dir="$1"
+    
     # Use fd or find to list files and pipe into fzf for selection
-    local selected_file=$(fd . | fzf)
+    local selected_file=$(fd . "$search_dir" | fzf)
 
     # Check if a file was selected
     if [[ -n $selected_file ]]; then
@@ -181,7 +184,20 @@ function output_file_path() {
 }
 
 zle -N output_file_path
-bindkey '^[f' output_file_path
+
+# Wrapper functions for key bindings
+function output_file_path_current() {
+    output_file_path "."
+}
+
+function output_file_path_home() {
+    output_file_path "$HOME"
+}
+
+zle -N output_file_path_current
+zle -N output_file_path_home
+bindkey '^[f' output_file_path_current   # Bind to Alt+f
+bindkey '^[F' output_file_path_home      # Bind to Alt+Shift+f
 
 function pet-select() {
   BUFFER=$(pet search --query "$LBUFFER")
