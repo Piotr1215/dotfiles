@@ -15,6 +15,7 @@ utils.nmap("<leader>w", ":wall<CR>") -- save all
 utils.lnmap("qq", "@q") -- close all
 utils.lnmap("qa", ":qa!<cr>") -- close all without saving
 utils.lnmap("qf", ":q!<cr>") -- close current bufferall without saving
+vim.keymap.set("n", "<leader>nn", ":bnext<CR>", { remap = true, silent = false })
 vim.keymap.set("n", "<leader>tf", ":!touch %<cr>", { silent = true, noremap = true }) -- touch file to reload observers
 -- UNMAP --
 utils.nmap("<nop>", "<Plug>NERDCommenterAltDelims") -- tab is for moving around only
@@ -146,7 +147,11 @@ utils.nmap("<leader>eX", ":%w !bash -e <cr>") -- exexute all lines and output to
 utils.nmap("<leader>el", ":.!bash -e <cr>", { silent = false }) -- execute current line and replace with result
 utils.nmap("<leader>eL", ":% !bash % <cr>") -- execute all lines and replace with result
 utils.lnmap("cx", ":!chmod +x %<cr>") -- make file executable
-utils.lnmap("ef", "<cmd>lua _G.execute_file_and_show_output()<CR>", { silent = false }) -- execute file and show output
+utils.lnmap(
+  "ef",
+  "<cmd>lua require('user_functions.shell_integration').execute_file_and_show_output()<CR>",
+  { silent = false }
+) -- execute file and show output
 utils.vmap("<Leader>pb", "w !bash share<CR>") -- upload selected to ix.io
 -- FORMATTING --
 utils.nmap("<leader>fmt", ":Pretty<CR>") -- format json with pretty
@@ -295,16 +300,9 @@ utils.lnmap("<Down>", "<Plug>SendDown", keymapOptions "Send Down")
 utils.lnmap("<Up>", "<Plug>SendUp", keymapOptions "Send Up")
 utils.lnmap("<Right>", "<Plug>SendRight", keymapOptions "Send Right")
 
--- Inlay Hints (nvim nighlty required)
-if vim.lsp.inlay_hint then
-  vim.keymap.set(
-    "n",
-    "<leader>ih",
-    "<cmd>lua vim.lsp.inlay_hint(0, nil)<CR>",
-    { silent = true, noremap = true, desc = "Toggle inlay hints" }
-  )
-end
-
+vim.keymap.set("n", "<leader>ih", function()
+  vim.lsp.inlay_hint.enable(not vim.lsp.inlay_hint.is_enabled())
+end, { silent = true, noremap = true, desc = "Toggle inlay hints" })
 -- Various text objects plugin mappings
 local keymap = vim.keymap.set
 
