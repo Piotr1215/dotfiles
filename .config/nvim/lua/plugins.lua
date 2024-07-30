@@ -41,6 +41,13 @@ return require("lazy").setup {
 
   -- }}}
   -- Editor Extensions {{{
+  {
+    "michaelb/sniprun",
+    build = "sh ./install.sh",
+    opts = {
+      display = { "Classic" },
+    },
+  },
   { "alexghergh/nvim-tmux-navigation", opts = { disable_when_zoomed = true } },
   "romainl/vim-cool",
   "yssl/QFEnter",
