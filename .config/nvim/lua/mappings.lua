@@ -19,18 +19,6 @@ vim.keymap.set("n", "<leader>nn", ":bnext<CR>", { remap = true, silent = false }
 vim.keymap.set("n", "<leader>tf", ":!touch %<cr>", { silent = true, noremap = true }) -- touch file to reload observers
 -- UNMAP --
 utils.nmap("<nop>", "<Plug>NERDCommenterAltDelims") -- tab is for moving around only
-vim.api.nvim_set_keymap("t", "<C-h>", [[<C-\><C-N><C-w>h]], { noremap = true })
-vim.api.nvim_set_keymap("t", "<C-j>", [[<C-\><C-N><C-w>j]], { noremap = true })
-vim.api.nvim_set_keymap("t", "<C-k>", [[<C-\><C-N><C-w>k]], { noremap = true })
-vim.api.nvim_set_keymap("t", "<C-l>", [[<C-\><C-N><C-w>l]], { noremap = true })
-vim.api.nvim_set_keymap("i", "<C-h>", [[<C-\><C-N><C-w>h]], { noremap = true })
-vim.api.nvim_set_keymap("i", "<C-j>", [[<C-\><C-N><C-w>j]], { noremap = true })
-vim.api.nvim_set_keymap("i", "<C-k>", [[<C-\><C-N><C-w>k]], { noremap = true })
-vim.api.nvim_set_keymap("i", "<C-l>", [[<C-\><C-N><C-w>l]], { noremap = true })
-vim.api.nvim_set_keymap("n", "<C-h>", [[<C-w>h]], { noremap = true })
-vim.api.nvim_set_keymap("n", "<C-j>", [[<C-w>j]], { noremap = true })
-vim.api.nvim_set_keymap("n", "<C-k>", [[<C-w>k]], { noremap = true })
-vim.api.nvim_set_keymap("n", "<C-l>", [[<C-w>l]], { noremap = true })
 vim.api.nvim_set_keymap("n", "<leader>tv", ":vsp term://", { noremap = true, silent = false })
 vim.api.nvim_set_keymap("n", "<leader>th", ":sp term://", { noremap = true, silent = false })
 vim.api.nvim_set_keymap("n", "<leader>ct", ":lua require('corn').toggle()<CR>", { noremap = true, silent = false })
@@ -69,14 +57,57 @@ vim.api.nvim_set_keymap("n", "<leader>kd", "", {
     notify(result, "info")
   end,
 })
-
 -- NAVIGATION --
-utils.nmap("<c-l>", "<c-w>l") -- move to right window
-utils.nmap("<c-h>", "<c-w>h") -- move to left window
+-- Mappings for navigation between tmux and vim splits with the same keybindings
+local nvim_tmux_nav = require "nvim-tmux-navigation"
+vim.keymap.set("n", "<C-h>", nvim_tmux_nav.NvimTmuxNavigateLeft, { noremap = true, silent = true })
+vim.keymap.set("n", "<C-j>", nvim_tmux_nav.NvimTmuxNavigateDown, { noremap = true, silent = true })
+vim.keymap.set("n", "<C-k>", nvim_tmux_nav.NvimTmuxNavigateUp, { noremap = true, silent = true })
+vim.keymap.set("n", "<C-l>", nvim_tmux_nav.NvimTmuxNavigateRight, { noremap = true, silent = true })
+vim.keymap.set("n", "<A-m>", nvim_tmux_nav.NvimTmuxNavigateNext, { noremap = true, silent = true })
+
+-- Insert mode mappings
+vim.keymap.set(
+  "i",
+  "<C-h>",
+  [[<C-\><C-N>:lua require("nvim-tmux-navigation").NvimTmuxNavigateLeft()<CR>]],
+  { noremap = true, silent = true }
+)
+vim.keymap.set(
+  "i",
+  "<C-j>",
+  [[<C-\><C-N>:lua require("nvim-tmux-navigation").NvimTmuxNavigateDown()<CR>]],
+  { noremap = true, silent = true }
+)
+vim.keymap.set(
+  "i",
+  "<C-k>",
+  [[<C-\><C-N>:lua require("nvim-tmux-navigation").NvimTmuxNavigateUp()<CR>]],
+  { noremap = true, silent = true }
+)
+vim.keymap.set(
+  "i",
+  "<C-l>",
+  [[<C-\><C-N>:lua require("nvim-tmux-navigation").NvimTmuxNavigateRight()<CR>]],
+  { noremap = true, silent = true }
+)
+vim.keymap.set(
+  "i",
+  "<A-m>",
+  [[<C-\><C-N>:lua require("nvim-tmux-navigation").NvimTmuxNavigateNext()<CR>]],
+  { noremap = true, silent = true }
+)
+-- Terminal mode mappings
+vim.keymap.set("t", "<C-h>", "<C-\\><C-n><C-h>", { noremap = true, silent = true })
+vim.keymap.set("t", "<C-j>", "<C-\\><C-n><C-j>", { noremap = true, silent = true })
+vim.keymap.set("t", "<C-k>", "<C-\\><C-n><C-k>", { noremap = true, silent = true })
+vim.keymap.set("t", "<C-l>", "<C-\\><C-n><C-l>", { noremap = true, silent = true })
+vim.keymap.set("t", "<A-m>", "<C-\\><C-n><A-m>", { noremap = true, silent = true })
+
 utils.nmap("<c-u>", "<c-u>zz") -- center screen after page up
 utils.nmap("<c-d>", "<c-d>zz") -- center screen after page down
-vim.keymap.set({ "n", "v" }, "<C-j>", [[10j<cr>]], opts) -- moves over virtual (wrapped) lines down
-vim.keymap.set({ "n", "v" }, "<C-k>", [[10k<cr>]], opts) -- moves over virtual (wrapped) lines up
+vim.keymap.set({ "n", "v" }, "<A-j>", [[10j<cr>]], opts) -- moves over virtual (wrapped) lines down
+vim.keymap.set({ "n", "v" }, "<A-k>", [[10k<cr>]], opts) -- moves over virtual (wrapped) lines up
 vim.api.nvim_set_keymap("n", "k", "v:count == 0 ? 'gk' : 'k'", { noremap = true, expr = true, silent = true }) -- moves up over virtual (wrapped) lines
 vim.api.nvim_set_keymap("n", "j", "v:count == 0 ? 'gj' : 'j'", { noremap = true, expr = true, silent = true }) -- moves down over virtual (wrapped) lines
 vim.api.nvim_set_keymap("n", "<Mgo-Right>", "gT", { noremap = true, silent = true }) -- move to next tab
@@ -107,7 +138,7 @@ vim.keymap.set("n", "<leader>ml", "^I-<Space>[<Space>]<Space><Esc>^j", { remap =
 utils.vmap("srt", ":!sort -n -k 2<cr>") -- sort by second column
 -- MANIPULATE TEXT --
 utils.nmap("gp", "`[v`]") -- select pasted text
-utils.imap("<C-l>", "<C-o>a") -- skip over a letter
+-- utils.imap("<C-l>", "<C-o>a") -- skip over a letter
 utils.imap("<C-n>", "<C-e><C-o>A;<ESC>") -- insert semicolon at the end of the line
 utils.nmap("<leader>LL", "O<ESC>O") -- insert 2 empty lines and go into inser mode
 utils.nmap("<leader>ll", "o<cr>") -- insert 2 empty lines and go into inser mode
@@ -137,7 +168,7 @@ utils.lnmap("cpfl", [[:let @+ = expand("%:p") . ':' . line('.')<cr>]]) -- Copy c
 utils.lnmap("cpn", ':let @+ = expand("%:t")<cr>') -- Copy current file name
 utils.nmap("<C-f>", ":Pretty<CR>") -- format json with pretty
 utils.imap("<c-d>", "<c-o>daw") -- delete word forward in insert mode
-vim.keymap.set("i", "<C-H>", "<c-w>", { noremap = true }) -- delete word forward in insert mode
+vim.keymap.set("i", "<A-H>", "<c-w>", { noremap = true }) -- delete word forward in insert mode
 utils.nmap("<leader>sp", "i<cr><esc>") -- split line in two
 -- EXTERNAL COMMANDS --
 vim.keymap.set("c", "<C-w>", "\\w*", { noremap = true }) -- copy word under cursor
