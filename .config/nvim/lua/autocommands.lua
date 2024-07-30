@@ -308,7 +308,7 @@ vim.api.nvim_create_user_command("Ghistory", function()
   end
 
   -- Display the result in a floating scratch buffer
-  _G.create_floating_scratch(content)
+  require("user_functions.utils").create_floating_scratch(content)
 end, { bang = false, desc = "Show git history for the current file" })
 
 vim.api.nvim_create_user_command("Gdiffu", function()
@@ -330,7 +330,7 @@ vim.api.nvim_create_user_command("Gdiffu", function()
   end
 
   -- Display the result in a floating scratch buffer
-  _G.create_floating_scratch(content)
+  require("user_functions.utils").create_floating_scratch(content)
 end, { bang = false })
 
 vim.cmd [[
