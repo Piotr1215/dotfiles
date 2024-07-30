@@ -214,7 +214,7 @@ function zoxider() {
 }
 
 zle -N zoxider
-bindkey '^j' zoxider
+bindkey '^[j' zoxider
 
 function f_enter() {
   BUFFER="__open-file.sh"

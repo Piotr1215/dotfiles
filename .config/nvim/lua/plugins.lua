@@ -41,6 +41,7 @@ return require("lazy").setup {
 
   -- }}}
   -- Editor Extensions {{{
+  { "alexghergh/nvim-tmux-navigation", opts = { disable_when_zoomed = true } },
   "romainl/vim-cool",
   "yssl/QFEnter",
   "jesseleite/nvim-macroni",
