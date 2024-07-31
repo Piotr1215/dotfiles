@@ -13,6 +13,18 @@ function M.reload_module(name)
   return require(name)
 end
 
+-- Function to reload the current Lua file
+function M.reload_current_file()
+  local current_file = vim.fn.expand "%:p"
+
+  if current_file:match "%.lua$" then
+    vim.cmd("luafile " .. current_file)
+    print("Reloaded file: " .. current_file)
+  else
+    print("Current file is not a Lua file: " .. current_file)
+  end
+end
+
 function M.insert_file_path()
   local actions = require "telescope.actions"
   local action_state = require "telescope.actions.state"
