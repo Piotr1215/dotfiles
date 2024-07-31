@@ -57,6 +57,9 @@ set.inccommand = "split" -- preview of replacement operations
 set.laststatus = 2
 set.cmdheight = 1
 
+-- Disable copilot on boot
+vim.b.copilot_enabled = false
+
 -- Custom f command function
 -- This is needed because ;; is mapped to enter command mode
 vim.cmd [[
@@ -74,7 +77,7 @@ endfunction
 vim.cmd "command! GetCurrentFileDir lua print_current_file_dir()"
 
 -- Key mappings
-vim.api.nvim_set_keymap("n", "<leader>mr", ":lua ranger_popup_in_tmux()<CR>", { noremap = true, silent = true })
+-- vim.api.nvim_set_keymap("n", "<leader>mr", ":lua ranger_popup_in_tmux()<CR>", { noremap = true, silent = true })
 vim.cmd "command! Fold lua _G.toggle_function_folding()"
 
 vim.api.nvim_set_keymap("n", "fld", [[<Cmd>lua _G.toggle_function_folding()<CR>]], { noremap = true, silent = false })
