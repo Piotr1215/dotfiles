@@ -1,14 +1,14 @@
-local dap, dapui = require("dap"), require("dapui")
+local dap, dapui = require "dap", require "dapui"
 
-require("dapui").setup({})
+require("dapui").setup {}
 
 dap.adapters.dockerfile = {
-  type = 'executable';
-  command = 'buildg';
-  args = { 'dap', "serve" };
+  type = "executable",
+  command = "buildg",
+  args = { "dap", "serve" },
 }
 
-require('dap-go').setup {
+require("dap-go").setup {
   -- :help dap-configuration
   dap_configurations = {
     {
@@ -27,9 +27,21 @@ require('dap-go').setup {
     -- a string that defines the port to start delve debugger.
     -- default to string "${port}" which instructs nvim-dap
     -- to start the process in a random available port
-    port = "${port}"
+    port = "${port}",
   },
 }
+
+dap.configurations.lua = {
+  {
+    type = "nlua",
+    request = "attach",
+    name = "Attach to running Neovim instance",
+  },
+}
+
+dap.adapters.nlua = function(callback, config)
+  callback { type = "server", host = config.host or "127.0.0.1", port = config.port or 8086 }
+end
 
 dap.adapters.lldb = {
   type = "executable",

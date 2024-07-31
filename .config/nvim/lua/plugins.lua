@@ -41,6 +41,7 @@ return require("lazy").setup {
 
   -- }}}
   -- Editor Extensions {{{
+  "jbyuki/one-small-step-for-vimkind",
   {
     "michaelb/sniprun",
     build = "sh ./install.sh",
@@ -109,14 +110,6 @@ return require("lazy").setup {
   "danielpieper/telescope-tmuxinator.nvim",
   "jvgrootveld/telescope-zoxide",
   { "ellisonleao/glow.nvim", opts = {} },
-  {
-    "dhruvmanila/telescope-bookmarks.nvim",
-    version = "*",
-    -- Uncomment if the selected browser is Firefox, Waterfox or buku
-    -- dependencies = {
-    --   'kkharji/sqlite.lua',
-    -- }
-  },
   "xiyaowong/telescope-emoji.nvim",
   "nvim-telescope/telescope-symbols.nvim",
   "cljoly/telescope-repo.nvim",
@@ -251,7 +244,7 @@ return require("lazy").setup {
   "weirongxu/plantuml-previewer.vim",
   -- }}}
   -- My Plugins {{{
-  "Piotr1215/yanksearch.nvim",
+  { "Piotr1215/yanksearch.nvim", dir = "/home/decoder/dev/my-mvin-plugins/yanksearch.nvim", dev = false },
   "Piotr1215/typeit.nvim",
   -- }}}
   -- Look & Feel {{{
