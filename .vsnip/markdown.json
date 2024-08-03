@@ -163,10 +163,12 @@
     "prefix": ["copy"],
     "body": "{{copy}}\n"
   },
-  "exec": {
-    "prefix": ["exec"],
-    "body": "{{exec}}\n"
-  },
+"Exec Code Snippet": {
+  "prefix": "exec",
+  "scope": "markdown",
+  "body": ["```bash", "${1:something}", "```{{exec}}", "${0}"],
+  "description": "Inserts a bash code snippet with {{exec}}"
+},
   "exec_interrupt": {
     "prefix": ["execi"],
     "body": "{{exec interrupt}}\n"
