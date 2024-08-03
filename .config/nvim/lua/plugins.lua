@@ -76,7 +76,7 @@ return require("lazy").setup {
   "mattn/emmet-vim",
   "mattn/webapi-vim",
   "mhinz/vim-startify",
-  "numToStr/Comment.nvim",
+  "preservim/nerdcommenter",
   "tpope/vim-fugitive",
   "Piotr1215/telescope-crossplane.nvim",
   { "jiaoshijie/undotree", opts = {} },
