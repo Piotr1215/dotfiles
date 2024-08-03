@@ -2,6 +2,11 @@
 # ~ works ok here
 source ~/dev/dotfiles/scripts/__reusable_variables.sh
 
+function cds() {
+  session=$(tmux display-message -p '#{session_path}')
+  cd "$session"
+}
+
 function short() {
   if [[ -z "$1" ]]; then
     echo "Folder name is required."
