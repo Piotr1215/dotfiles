@@ -82,7 +82,7 @@ t.load_extension "zoxide"
 
 -- Configure find files builtin with custom opts
 -- For neovim's config directory
-function search_dev()
+local function search_dev()
   local opts = {
     prompt_title = "Dev", -- Title for the picker
     shorten_path = false, -- Display full paths, short paths are ugly
@@ -97,16 +97,51 @@ function search_dev()
   require("telescope.builtin").find_files(opts)
 end
 
+-- Retrieve the current tmux session path
+-- This will not change when we navigate to a different pane
+local function search_tmux(visual)
+  local handle = io.popen "tmux display-message -p '#{session_path}'"
+  if not handle then
+    print "Error: Unable to open tmux handle"
+    return
+  end
+
+  local tmux_session_path = handle:read("*a"):gsub("%s+", "")
+  handle:close()
+
+  if not tmux_session_path or tmux_session_path == "" then
+    print "Error: Unable to retrieve tmux session path"
+    return
+  end
+
+  local opts = {
+    prompt_title = visual and ("Visual-Grep in " .. tmux_session_path) or ("Live-Grep in " .. tmux_session_path),
+    shorten_path = false,
+    cwd = tmux_session_path,
+    file_ignore_patterns = { ".git", ".png", "tags" },
+    initial_mode = "insert",
+    selection_strategy = "reset",
+    theme = require("telescope.themes").get_dropdown {},
+  }
+
+  if visual then
+    require("telescope.builtin").grep_string(opts)
+  else
+    require("telescope.builtin").live_grep(opts)
+  end
+end
+
 local default_opts = { noremap = true, silent = true }
+vim.keymap.set("n", "<leader>lt", function()
+  search_tmux(false)
+end, { remap = true, silent = false, desc = "Live grep in the current tmux session folder" })
+
+vim.keymap.set("v", "<leader>lt", function()
+  search_tmux(true)
+end, { remap = true, silent = false, desc = "Grep string in the current tmux session folder" })
 vim.api.nvim_set_keymap(
   "v",
-  "<leader>fsd",
-  'y<ESC>:Telescope live_grep_args default_text="<c-r>0<CR>a" /home/decoder/dev"',
-  default_opts
-)
-vim.api.nvim_set_keymap(
-  "v",
-  "<leader>fs",
+  "<leader>ls",
   'y<ESC>:Telescope live_grep default_text=<c-r>0<CR> search_dirs={"$PWD"}',
   default_opts
 )
@@ -136,8 +171,6 @@ local set_up_telescope = function()
     "<leader>ff",
     [[<cmd>lua require('telescope.builtin').find_files({ find_command = {'rg', '--files', '--hidden', '-g', '!.git'}, search_dirs = {require('user_functions.shell_integration').get_tmux_working_directory()}, path_display = {"truncate"} })<CR>]]
   )
-  -- set_keymap('n', '<leader>fw',
-  -- [[<cmd>lua require('telescope').extensions.live_grep_args.live_grep_args({search_dirs = {get_tmux_working_directory()}, path_display = {"tail"}})<CR>]])
   set_keymap("n", "<leader>fr", [[<cmd>lua require'telescope'.extensions.repo.list{search_dirs = {"~/dev"}}<CR>]])
   set_keymap("n", "<leader>fg", [[<cmd>lua require('telescope.builtin').git_files()<CR>]])
   set_keymap("n", "<leader>fo", [[<cmd>lua require('telescope.builtin').oldfiles()<CR>]])
@@ -152,9 +185,6 @@ local set_up_telescope = function()
   set_keymap("n", "<leader>re", [[<cmd>lua require('telescope.builtin').registers()<CR>]])
   set_keymap("n", "<leader>fc", [[<cmd>lua require('telescope.builtin').colorscheme()<CR>]])
   set_keymap("n", "<leader>fz", [[<cmd>lua require('telescope').extensions.zoxide.list()<CR>]])
-  set_keymap("n", "<leader>ft", ":TodoTelescope<CR>")
-  -- set_keymap('n', '<leader>rg', [[<cmd>lua require('telescope.builtin').registers()<CR>]])
-  -- set_keymap('v', '<leader>rg', [["_d <cmd>lua require('telescope.builtin').registers()<CR>]])
   set_keymap("n", "<leader>?", [[<cmd>lua require('telescope.builtin').help_tags()<CR>]])
 end
 
