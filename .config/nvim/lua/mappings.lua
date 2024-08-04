@@ -236,10 +236,6 @@ utils.lnmap("tr", ":TransparentToggle<CR>")
 -- FeMaco
 utils.lnmap("ec", ":FeMaco<CR>")
 
--- Fzf Files
-utils.lnmap("fl", ":Files<CR>")
-utils.lnmap("lg", ":FzfLua live_grep<CR>")
-
 -- Floaterm
 utils.lnmap("tt", ":FloatermToggle<CR>")
 utils.tmap("<leader>tt", "<C-\\><C-n>:FloatermToggle<CR>")

@@ -97,6 +97,50 @@ local function search_dev()
   require("telescope.builtin").find_files(opts)
 end
 
+local function search_git(visual)
+  -- Retrieve the git root path
+  local handle = io.popen "git rev-parse --show-toplevel"
+  if not handle then
+    print "Error: Unable to open git handle"
+    return
+  end
+
+  local git_root_path = handle:read("*a"):gsub("%s+", "")
+  handle:close()
+
+  if not git_root_path or git_root_path == "" then
+    print "Error: Unable to retrieve git root path"
+    return
+  end
+
+  local opts = {
+    prompt_title = visual and ("Visual-Grep in " .. git_root_path) or ("Live-Grep in " .. git_root_path),
+    shorten_path = false,
+    cwd = git_root_path,
+    file_ignore_patterns = { ".git", ".png", "tags" },
+    initial_mode = "insert",
+    selection_strategy = "reset",
+    theme = require("telescope.themes").get_dropdown {},
+  }
+
+  if visual then
+    -- Capture the selected text in visual mode
+    vim.cmd 'normal! "vy'
+    local visual_selection = vim.fn.getreg "v"
+    opts.search = visual_selection
+    require("telescope.builtin").grep_string(opts)
+  else
+    require("telescope.builtin").live_grep(opts)
+  end
+end
+
+vim.keymap.set("n", "<leader>lg", function()
+  search_git(false)
+end, { remap = true, silent = false, desc = "Live grep in the git root folder" })
+
+vim.keymap.set("v", "<leader>lg", function()
+  search_git(true)
+end, { remap = true, silent = false, desc = "Grep in the git root folder" })
 -- Retrieve the current tmux session path
 -- This will not change when we navigate to a different pane
 local function search_tmux(visual)
