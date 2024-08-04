@@ -1,6 +1,6 @@
 local dap, dapui = require "dap", require "dapui"
 
-require("dapui").setup {}
+require("dapui").setup()
 
 dap.adapters.dockerfile = {
   type = "executable",
