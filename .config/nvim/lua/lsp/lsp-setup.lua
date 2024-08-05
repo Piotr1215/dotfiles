@@ -1,7 +1,7 @@
 -- LSP and LS Installer
 require("nvim-dap-virtual-text").setup {}
-local def = require "lsp.default-lsp"
 local lspconfig = require "lspconfig"
+local def = require "lsp.default-lsp"
 lspconfig.lua_ls.setup {
   capabilities = def.capabilities,
   on_attach = def.on_attach,
