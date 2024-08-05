@@ -28,11 +28,10 @@ vim.api.nvim_create_autocmd("BufWritePost", {
 
 vim.api.nvim_create_autocmd("BufWritePost", {
   pattern = { "*.go" },
-  callback = function()
-    require("go.format").gofmt()
-  end,
+  command = ":silent! Neoformat",
   group = goSettings,
 })
+
 vim.api.nvim_create_user_command("StartEmpty", function()
   vim.cmd "enew"
   vim.bo.buftype = "nofile"
