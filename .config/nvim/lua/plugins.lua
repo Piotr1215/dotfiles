@@ -133,7 +133,6 @@ return require("lazy").setup {
   "ray-x/lsp_signature.nvim",
   "ibhagwan/fzf-lua",
   { "nvim-treesitter/nvim-treesitter", build = ":TSUpdate" },
-  { "tami5/lspsaga.nvim", dependencies = { "neovim/nvim-lspconfig" } },
   "onsails/lspkind-nvim",
   "williamboman/mason.nvim",
   "williamboman/mason-lspconfig.nvim",

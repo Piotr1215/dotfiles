@@ -166,7 +166,6 @@ utils.lnmap("cpf", ':let @+ = expand("%:p")<cr>') -- Copy current file name and 
 -- Related script: /home/decoder/dev/dotfiles/scripts/__trigger_ranger.sh:7
 utils.lnmap("cpfl", [[:let @+ = expand("%:p") . ':' . line('.')<cr>]]) -- Copy current file name, path, and line number
 utils.lnmap("cpn", ':let @+ = expand("%:t")<cr>') -- Copy current file name
-utils.nmap("<C-f>", ":Pretty<CR>") -- format json with pretty
 utils.imap("<c-d>", "<c-o>daw") -- delete word forward in insert mode
 vim.keymap.set("i", "<A-H>", "<c-w>", { noremap = true }) -- delete word forward in insert mode
 utils.nmap("<leader>sp", "i<cr><esc>") -- split line in two

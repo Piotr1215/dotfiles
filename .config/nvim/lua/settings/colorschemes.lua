@@ -33,7 +33,6 @@ require("nightfox").setup {
   modules = {
     telescope = true,
     treesitter = true,
-    lsp_saga = true,
     gitgutter = true,
   },
 }
