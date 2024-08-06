@@ -226,3 +226,9 @@ Wondering what happens if you remove the task directly from the TUI first? As of
 2. **Task Stop**: On task stop, capture the current time and compare it with the estimated duration. If the actual duration exceeds the estimated duration, an annotation is added to the task.
 
 3. **Multiple Exceeds**: If the task's actual duration exceeds the estimated duration multiple times, each occurrence should be recorded as a separate annotation.
+
+## License
+
+![kopimi_logo](https://kopimi.com/badges/modern-kopimi-logo.png) 
+
+All files and scripts in this repo are released [CC0](https://creativecommons.org/publicdomain/zero/1.0/) / [kopimi](https://kopimi.com)! in the spirit of _freedom of information_, i encourage you to fork, modify, change, share, or do whatever you like with this project!
