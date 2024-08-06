@@ -1,6 +1,5 @@
 # Global aliases
 alias -g C='| sed -r "s/\x1b\[[0-9;]*m//g" | xsel --clipboard'
-alias -g A='| apply_pattern'
 alias -g G='| grep -i --color=always'
 alias -g H=' --help'
 alias -g L='| less'
@@ -9,6 +8,7 @@ alias -g R="2>&1 | tee output.txt"
 alias -g T="| tail -n +2"
 alias -g V=' --version'
 alias -g W='| nvim -c "setlocal buftype=nofile bufhidden=wipe" -c "nnoremap <buffer> q :q!<CR>" -'
+alias -g A='| tee /tmp/nvim_buffer_input | sed -r "s/\x1b\[[0-9;]*m//g" > /tmp/nvim_buffer_cleaned && nvim -c "GpChatNew" -c "normal! Go" -c "r /tmp/nvim_buffer_cleaned" -c "normal! Gdd"'
 
 # Suffix aliases
 alias -s md=nvim
