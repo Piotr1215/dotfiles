@@ -229,6 +229,6 @@ Wondering what happens if you remove the task directly from the TUI first? As of
 
 ## License
 
-![kopimi_logo](https://kopimi.com/badges/modern-kopimi-logo.png) 
+<img src="https://kopimi.com/badges/modern-kopimi-logo.png" alt="kopimi_logo" style="width: 50%;">
 
 All files and scripts in this repo are released [CC0](https://creativecommons.org/publicdomain/zero/1.0/) / [kopimi](https://kopimi.com)! in the spirit of _freedom of information_, i encourage you to fork, modify, change, share, or do whatever you like with this project!
