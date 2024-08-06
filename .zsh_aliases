@@ -14,6 +14,7 @@ alias -g W='| nvim -c "setlocal buftype=nofile bufhidden=wipe" -c "nnoremap <buf
 alias -s md=nvim
 alias -s txt=nvim
 alias -s yaml=nvim
+alias -s html='xdg-open'
 
 # Directories and files
 alias la='/usr/bin/ls'
