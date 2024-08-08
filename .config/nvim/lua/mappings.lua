@@ -26,6 +26,9 @@ utils.nmap("L", "vg_") -- select to end of line
 -- Ensure 'notify' is required
 local notify = require "notify"
 
+vim.keymap.set("n", "<leader>_", "5<c-w>-", { remap = true, silent = false })
+vim.keymap.set("n", "<leader>+", "5<c-w>+", { remap = true, silent = false })
+
 -- Map the key to call an inline function for kubectl apply
 vim.api.nvim_set_keymap("n", "<leader>ka", "", {
   noremap = true,
