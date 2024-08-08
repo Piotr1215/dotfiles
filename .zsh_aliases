@@ -32,6 +32,7 @@ alias inc--='incus stop --stateful ubuntu'
 alias inc-='incus stop ubuntu'
 
 # Commands shadow
+alias vm="nvim -c ':lua MiniFiles.open()'"
 alias cpf=copy_and_create_folders
 alias aider='aider --model gpt-4o --dark-mode --no-auto-commits'
 alias aider-commit='aider --model gpt-4o --dark-mode'
