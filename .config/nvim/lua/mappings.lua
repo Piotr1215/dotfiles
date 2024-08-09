@@ -128,7 +128,7 @@ utils.lnmap("pa", "ggVGp") -- select all
 utils.lnmap("sa", "ggVG") -- select all
 utils.lnmap("r", ":%s/\\v/g<left><left>", { silent = false }) -- replace
 utils.lnmap("ss", ":s/", { silent = false }) -- search and replace
-utils.lnmap("SS", ":%s/", { silent = false }) -- search and replace
+utils.lnmap("SS", ":%s/\\v", { silent = false }) -- search and replace
 utils.vmap("<leader><C-s>", ":s/\\%V") -- Search only in visual selection usingb%V atom
 utils.vmap("<C-r>", '"hy:%s/\\v<C-r>h//g<left><left>', { silent = false }) -- change selection
 utils.nmap(",<space>", ":nohlsearch<CR>") -- Stop search highlight
