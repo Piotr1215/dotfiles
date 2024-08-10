@@ -4,7 +4,6 @@ require "autocommands"
 require "mappings"
 require "telescope-setup"
 require "lsp"
-require "which-key-setup"
 
 -- Load custom modules
 require "custom-completions"
