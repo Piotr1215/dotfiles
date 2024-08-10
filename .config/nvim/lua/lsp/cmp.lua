@@ -23,16 +23,19 @@ cmp.setup {
     fields = {
       "abbr",
       "kind",
+      "menu",
     },
     format = lspkind.cmp_format {
-      preset = "codicons",
-      async = true,
+      mode = "symbol_text", -- Use "symbol" to only show the icon or "symbol_text" for both icon and text
+      maxwidth = 50, -- Optional, for max width of the displayed item
+      ellipsis_char = "...", -- Optional, truncate the item if it's too long
       menu = {
         buffer = "[Buffer]",
         nvim_lsp = "[LSP]",
         nvim_lua = "[Lua]",
         projects = "[Projects]",
         emoji = "[Emoji]",
+        vsnip = "[Snippet]",
       },
     },
   },
@@ -78,6 +81,7 @@ cmp.setup {
     { name = "emoji" },
     { name = "path" },
     { name = "crates" },
+    { name = "snippets" },
     { name = "projects", priority = 100 },
   },
 }
