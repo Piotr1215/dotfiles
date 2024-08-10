@@ -17,7 +17,7 @@ compinit -d "${ZDOTDIR:-$HOME}/.zcompdump"
 # https://github.com/jeffreytse/zsh-vi-mode
 function zvm_config() {
   ZVM_LINE_INIT_MODE=$ZVM_MODE_INSERT
-  ZVM_VI_INSERT_ESCAPE_BINDKEY=kj
+  ZVM_VI_INSERT_ESCAPE_BINDKEY=\;\;
   ZVM_CURSOR_STYLE_ENABLED=false
   ZVM_VI_EDITOR=nvim
 # export KEYTIMEOUT=1
@@ -269,8 +269,6 @@ if [ -f '/home/decoder/dev/clusters/primary-dev/google-cloud-sdk/completion.zsh.
 eval "$(direnv hook zsh)"
 eval "$(starship init zsh)"
 eval "$(thefuck --alias)"
-# zprof > /tmp/zprof.out
-
 # bun completions
 [ -s "/home/decoder/.oh-my-zsh/completions/_bun" ] && source "/home/decoder/.oh-my-zsh/completions/_bun"
 
@@ -282,3 +280,4 @@ export WASMTIME_HOME="$HOME/.wasmtime"
 
 export PATH="$WASMTIME_HOME/bin:$PATH"
 if [ -f "/home/decoder/.config/fabric/fabric-bootstrap.inc" ]; then . "/home/decoder/.config/fabric/fabric-bootstrap.inc"; fi
+# zprof > /tmp/zprof.out
