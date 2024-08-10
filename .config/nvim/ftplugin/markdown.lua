@@ -75,6 +75,7 @@ local cmp = require "cmp"
 cmp.setup.buffer {
   sources = {
     { name = "vsnip" },
+    { name = "projects" },
     { name = "spell" },
     {
       name = "buffer",
