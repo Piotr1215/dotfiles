@@ -11,19 +11,22 @@ local function fetch_project_names()
   return projects
 end
 
-function source:is_available()
-  return true
-end
+-- function source:is_available()
+-- return true
+-- end
 
-function source:get_debug_name()
-  return "projects"
-end
+-- function source:get_debug_name()
+-- return "projects"
+-- end
 
-function source:get_keyword_pattern()
-  return [[\k\+]]
-end
+-- function source:get_keyword_pattern()
+-- return [[\k\+]]
+-- end
 
-function source:complete(_, callback)
+---Invoke completion (required).
+---@param params cmp.SourceCompletionApiParams
+---@param callback fun(response: lsp.CompletionResponse|nil)
+function source:complete(params, callback)
   local project_names = fetch_project_names()
   local items = {}
   for _, name in ipairs(project_names) do
@@ -32,12 +35,12 @@ function source:complete(_, callback)
   callback(items)
 end
 
-function source:resolve(completion_item, callback)
-  callback(completion_item)
-end
+-- function source:resolve(completion_item, callback)
+-- callback(completion_item)
+-- end
 
-function source:execute(completion_item, callback)
-  callback(completion_item)
-end
+-- function source:execute(completion_item, callback)
+-- callback(completion_item)
+-- end
 
 require("cmp").register_source("projects", source)
