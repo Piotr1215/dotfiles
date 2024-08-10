@@ -23,7 +23,7 @@ function source:get_keyword_pattern()
   return [[\k\+]]
 end
 
-function source:complete(params, callback)
+function source:complete(_, callback)
   local project_names = fetch_project_names()
   local items = {}
   for _, name in ipairs(project_names) do
