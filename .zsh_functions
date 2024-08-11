@@ -439,37 +439,24 @@ function repo() {
     fi
 }
 
-# Create a new tmux session with the given path in the dev folder
 function create_tmux_session() {
     local RESULT="$1"
-    zoxide add "$RESULT" &>/dev/null # add to zoxide database
+    zoxide add "$RESULT" &>/dev/null
     local FOLDER=$(basename "$RESULT")
-    local SESSION_NAME=$(echo "$FOLDER" | tr ' ' '_' | tr '.' '_' | tr ':' '_')
-
+    local SESSION_NAME=$(echo "$FOLDER" | tr ' .:' '_')
+    
     if [ -d "$RESULT/.git" ]; then
-        local GIT_BRANCH=$(git -C "$RESULT" symbolic-ref --short HEAD 2>/dev/null)
-        SESSION_NAME="$SESSION_NAME-$GIT_BRANCH"
+        SESSION_NAME+="_$(git -C "$RESULT" symbolic-ref --short HEAD 2>/dev/null)"
     fi
-
-    if tmux list-sessions -F '#S' | grep -q "^$SESSION_NAME$"; then
-        SESSION="$SESSION_NAME"
+    
+    if ! tmux has-session -t "$SESSION_NAME" 2>/dev/null; then
+        tmux new-session -d -s "$SESSION_NAME" -c "$RESULT"
+    fi
+    
+    if [ -z "$TMUX" ]; then
+        tmux attach -t "$SESSION_NAME"
     else
-        SESSION=""
-    fi
-
-    if [ -z "$TMUX" ]; then                            # not currently in tmux
-        if [ -z "$SESSION" ]; then                        # session does not exist
-            tmux new-session -s "$SESSION_NAME" -c "$RESULT" # create session and attach
-        else                                              # session exists
-            tmux attach -t "$SESSION"                        # attach to session
-        fi
-    else                                                  # currently in tmux
-        if [ -z "$SESSION" ]; then                           # session does not exist
-            tmux new-session -d -s "$SESSION_NAME" -c "$RESULT" # create session
-            tmux switch-client -t "$SESSION_NAME"               # attach to session
-        else                                                 # session exists
-            tmux switch-client -t "$SESSION"                    # switch to session
-        fi
+        tmux switch-client -t "$SESSION_NAME"
     fi
 }
 
