@@ -28,7 +28,8 @@ function zvm_after_init() {
 }
 
 # PUGINS & MODULES
-plugins=(z git kubectl zsh-autosuggestions zsh-syntax-highlighting web-search colored-man-pages zsh-vi-mode)
+# fzf-tab should be last because it binds to ^I
+plugins=(z git kubectl zsh-autosuggestions zsh-syntax-highlighting web-search colored-man-pages zsh-vi-mode fzf-tab)
 zmodload zsh/mapfile # Bring mapfile functionality similar to bash
 
 # The plugin will auto execute this zvm_after_lazy_keybindings function
@@ -50,6 +51,20 @@ setopt PUSHD_MINUS                 # exchange the meanings of '+' and '-'
 setopt CDABLE_VARS                 # expand the expression (allows 'cd -2/tmp')
 setopt extended_glob
 zstyle ':completion:*:directory-stack' list-colors '=(#b) #([0-9]#)*( *)==95=38;5;12'
+zstyle ':fzf-tab:*' fzf-command ftb-tmux-popup
+# disable sort when completing `git checkout`
+zstyle ':completion:*:git-checkout:*' sort false
+# set descriptions format to enable group support
+# NOTE: don't use escape sequences here, fzf-tab will ignore them
+zstyle ':completion:*:descriptions' format '[%d]'
+# set list-colors to enable filename colorizing
+zstyle ':completion:*' list-colors ${(s.:.)LS_COLORS}
+# force zsh not to show completion menu, which allows fzf-tab to capture the unambiguous prefix
+zstyle ':completion:*' menu no
+# preview directory's content with eza when completing cd
+zstyle ':fzf-tab:complete:cd:*' fzf-preview 'eza -1 --color=always $realpath'
+# switch group using `<` and `>`
+zstyle ':fzf-tab:*' switch-group '<' '>'
 
 # Turn history on to have cd - history
 SAVEHIST=1000
