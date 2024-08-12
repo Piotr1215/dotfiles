@@ -48,5 +48,5 @@ windows:
   - relax:
       layout: main-horizontal
       panes:
-        - clock; cmus ~/music/
+        - cmus ~/music/
         - cava
