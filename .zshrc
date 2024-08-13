@@ -215,12 +215,13 @@ bindkey '^[f' output_file_path_current   # Bind to Alt+f
 bindkey '^[F' output_file_path_home      # Bind to Alt+Shift+f
 
 function pet-select() {
-  BUFFER=$(pet search --query "$LBUFFER")
+  RBUFFER=$(pet search)
   CURSOR=$#BUFFER
   zle redisplay
 }
 
 zle -N pet-select
+stty -ixon
 bindkey '^s' pet-select
 
 function zoxider() {
