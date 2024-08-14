@@ -38,7 +38,7 @@ end
 -- Create a keymap to call the add_project_from_line function
 vim.api.nvim_set_keymap(
   "i", -- Insert mode
-  "<C-p>",
+  "<C-x>",
   [[<Cmd>lua require('user_functions.projects').add_project_from_line(vim.fn.getline('.'))<CR>]], -- Passes current line to the function
   { noremap = true, silent = false }
 )
