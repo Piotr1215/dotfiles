@@ -17,7 +17,12 @@ utils.lnmap("qq", "@q", { desc = "close all" })
 utils.lnmap("qa", ":qa!<cr>", { desc = "close all without saving" })
 utils.lnmap("qf", ":q!<cr>", { desc = "close current bufferall without saving" })
 vim.keymap.set("n", "<leader>nn", ":bnext<CR>", { remap = true, silent = false })
-vim.keymap.set("n", "<leader>tf", ":!touch %<cr>", { silent = true, noremap = true }) -- touch file to reload observers
+vim.keymap.set(
+  "n",
+  "<leader>tf",
+  ":!touch %<cr>",
+  { silent = true, noremap = true, desc = "touch file to reload observers" }
+)
 -- UNMAP --
 utils.nmap("<nop>", "<Plug>NERDCommenterAltDelims") -- tab is for moving around only
 vim.api.nvim_set_keymap("n", "<leader>tv", ":vsp term://", { noremap = true, silent = false })
@@ -112,9 +117,19 @@ utils.nmap("<c-u>", "<c-u>zz", { desc = "center screen after page up" })
 utils.nmap("<c-d>", "<c-d>zz", { desc = "center screen after page down" })
 vim.keymap.set({ "n", "v" }, "<A-j>", [[10j<cr>]], { desc = "moves over virtual (wrapped) lines down" })
 vim.keymap.set({ "n", "v" }, "<A-k>", [[10k<cr>]], { desc = "moves over virtual (wrapped) lines up" })
-vim.api.nvim_set_keymap("n", "k", "v:count == 0 ? 'gk' : 'k'", { noremap = true, expr = true, silent = true }) -- moves up over virtual (wrapped) lines
-vim.api.nvim_set_keymap("n", "j", "v:count == 0 ? 'gj' : 'j'", { noremap = true, expr = true, silent = true }) -- moves down over virtual (wrapped) lines
-vim.api.nvim_set_keymap("n", "<Mgo-Right>", "gT", { noremap = true, silent = true }) -- move to next tab
+vim.api.nvim_set_keymap(
+  "n",
+  "k",
+  "v:count == 0 ? 'gk' : 'k'",
+  { noremap = true, expr = true, silent = true, desc = "moves up over virtual (wrapped) lines" }
+)
+vim.api.nvim_set_keymap(
+  "n",
+  "j",
+  "v:count == 0 ? 'gj' : 'j'",
+  { noremap = true, expr = true, silent = true, desc = "moves down over virtual (wrapped) lines" }
+)
+vim.api.nvim_set_keymap("n", "<Mgo-Right>", "gT", { noremap = true, silent = true, desc = "move to next tab" })
 utils.nmap("<BS>", "^", { desc = "move to first non-bkgtgtgtgtlank character of the line" })
 utils.vmap("<S-PageDown>", ":m '>+1<CR>gv=gv", { desc = "Move Line Down in Visual Mode" })
 utils.vmap("<S-PageUp>", ":m '<-2<CR>gv=gv", { desc = "Move Line Up in Visual Mode" })
@@ -127,18 +142,23 @@ vim.keymap.set("n", "N", "Nzzzv", { desc = "keep cursor centered" })
 -- SEARCH AND REPLACE
 utils.lnmap("pa", "ggVGp", { desc = "select all" })
 utils.lnmap("sa", "ggVG", { desc = "select all" })
-utils.lnmap("r", ":%s/\\v/g<left><left>", { silent = false }) -- replace
-utils.lnmap("ss", ":s/", { silent = false }) -- search and replace
-utils.lnmap("SS", ":%s/\\v", { silent = false }) -- search and replace
+utils.lnmap("r", ":%s/\\v/g<left><left>", { silent = false, desc = "replace" })
+utils.lnmap("ss", ":s/", { silent = false, desc = "search and replace" })
+utils.lnmap("SS", ":%s/\\v", { silent = false, desc = "search and replace" })
 utils.vmap("<leader><C-s>", ":s/\\%V", { desc = "Search only in visual selection usingb%V atom" })
-utils.vmap("<C-r>", '"hy:%s/\\v<C-r>h//g<left><left>', { silent = false }) -- change selection
+utils.vmap("<C-r>", '"hy:%s/\\v<C-r>h//g<left><left>', { silent = false, desc = "change selection" })
 utils.nmap(",<space>", ":nohlsearch<CR>", { desc = "Stop search highlight" })
 utils.nmap("<leader>x", "*``cgn", { desc = "replace word under cursor simultaneously" })
 utils.nmap("<leader>X", "#``cgn", { desc = "replace word under cursor simultaneously" })
 -- MACROS --
 utils.xmap("<leader>Q", ":'<,'>:normal @q<CR>", { desc = "run macro from q register on visual selection" })
 utils.tmap("<ESC>", "<C-\\><C-n>", { desc = "exit terminal mode" })
-vim.keymap.set("n", "<leader>ml", "^I-<Space>[<Space>]<Space><Esc>^j", { remap = true, silent = false }) -- prepend markdown list item on line
+vim.keymap.set(
+  "n",
+  "<leader>ml",
+  "^I-<Space>[<Space>]<Space><Esc>^j",
+  { remap = true, silent = false, desc = "prepend markdown list item on line" }
+)
 utils.vmap("srt", ":!sort -n -k 2<cr>", { desc = "sort by second column" })
 -- MANIPULATE TEXT --
 utils.nmap("gp", "`[v`]", { desc = "select pasted text" })
@@ -180,14 +200,14 @@ utils.lnmap("cpf", ':let @+ = expand("%:p", { desc = "Copy current file name and
 utils.lnmap("cpfl", [[:let @+ = expand("%:p") . ':' . line('.')<cr>]]) -- Copy current file name, path, and line number
 utils.lnmap("cpn", ':let @+ = expand("%:t")<cr>') -- Copy current file name
 utils.imap("<c-d>", "<c-o>daw", { desc = "delete word forward in insert mode" })
-vim.keymap.set("i", "<A-H>", "<c-w>", { noremap = true }) -- delete word forward in insert mode
+vim.keymap.set("i", "<A-H>", "<c-w>", { noremap = true, desc = "delete word forward in insert mode" })
 utils.nmap("<leader>sp", "i<cr><esc>", { desc = "split line in two" })
 -- EXTERNAL COMMANDS --
-vim.keymap.set("c", "<C-w>", "\\w*", { noremap = true }) -- copy word under cursor
-vim.keymap.set("c", "<C-s>", "\\S*", { noremap = true }) -- copy WORD under cursor
+vim.keymap.set("c", "<C-w>", "\\w*", { noremap = true, desc = "copy word under cursor" })
+vim.keymap.set("c", "<C-s>", "\\S*", { noremap = true, desc = "copy WORD under cursor" })
 utils.nmap("<leader>ex", ":.w !bash -e <cr>", { desc = "execute current line and output to command line" })
 utils.nmap("<leader>eX", ":%w !bash -e <cr>", { desc = "exexute all lines and output to command line" })
-utils.nmap("<leader>el", ":.!bash -e <cr>", { silent = false }) -- execute current line and replace with result
+utils.nmap("<leader>el", ":.!bash -e <cr>", { silent = false, desc = "execute current line and replace with result" })
 utils.nmap("<leader>eL", ":% !bash % <cr>", { desc = "execute all lines and replace with result" })
 utils.lnmap("cx", ":!chmod +x %<cr>", { desc = "make file executable" })
 utils.lnmap(
@@ -343,135 +363,12 @@ vim.keymap.set("n", "<leader>th", function()
   vim.lsp.inlay_hint.enable(not vim.lsp.inlay_hint.is_enabled())
 end, { silent = true, noremap = true, desc = "Toggle inlay hints" })
 -- Various text objects plugin mappings
-local keymap = vim.keymap.set
 
-keymap({ "o", "x" }, "ii", "<cmd>lua require('various-textobjs').indentation('inner', 'inner')<CR>")
-keymap({ "o", "x" }, "ai", "<cmd>lua require('various-textobjs').indentation('outer', 'inner')<CR>")
-keymap({ "o", "x" }, "iI", "<cmd>lua require('various-textobjs').indentation('inner', 'inner')<CR>")
-keymap({ "o", "x" }, "aI", "<cmd>lua require('various-textobjs').indentation('outer', 'outer')<CR>")
+vim.keymap.set({ "o", "x" }, "ii", "<cmd>lua require('various-textobjs').indentation('inner', 'inner')<CR>")
+vim.keymap.set({ "o", "x" }, "ai", "<cmd>lua require('various-textobjs').indentation('outer', 'inner')<CR>")
+vim.keymap.set({ "o", "x" }, "iI", "<cmd>lua require('various-textobjs').indentation('inner', 'inner')<CR>")
+vim.keymap.set({ "o", "x" }, "aI", "<cmd>lua require('various-textobjs').indentation('outer', 'outer')<CR>")
 
-keymap({ "o", "x" }, "YOUR_MAPPING", "<cmd>lua require('various-textobjs').restOfIndentation()<CR>")
-
-keymap({ "o", "x" }, "YOUR_MAPPING", "<cmd>lua require('various-textobjs').greedyOuterIndentation('inner')<CR>")
-keymap({ "o", "x" }, "YOUR_MAPPING", "<cmd>lua require('various-textobjs').greedyOuterIndentation('outer')<CR>")
-
-keymap({ "o", "x" }, "YOUR_MAPPING", "<cmd>lua require('various-textobjs').subword('inner')<CR>")
-keymap({ "o", "x" }, "YOUR_MAPPING", "<cmd>lua require('various-textobjs').subword('outer')<CR>")
-
-keymap({ "o", "x" }, "YOUR_MAPPING", "<cmd>lua require('various-textobjs').toNextClosingBracket()<CR>")
-
-keymap({ "o", "x" }, "YOUR_MAPPING", "<cmd>lua require('various-textobjs').toNextQuotationMark()<CR>")
-
-keymap({ "o", "x" }, "YOUR_MAPPING", "<cmd>lua require('various-textobjs').anyQuote('inner')<CR>")
-keymap({ "o", "x" }, "YOUR_MAPPING", "<cmd>lua require('various-textobjs').anyQuote('outer')<CR>")
-
-keymap({ "o", "x" }, "YOUR_MAPPING", "<cmd>lua require('various-textobjs').anyBracket('inner')<CR>")
-keymap({ "o", "x" }, "YOUR_MAPPING", "<cmd>lua require('various-textobjs').anyBracket('outer')<CR>")
-
-keymap({ "o", "x" }, "YOUR_MAPPING", "<cmd>lua require('various-textobjs').restOfParagraph()<CR>")
-
-keymap({ "o", "x" }, "YOUR_MAPPING", "<cmd>lua require('various-textobjs').entireBuffer()<CR>")
-
-keymap({ "o", "x" }, "YOUR_MAPPING", "<cmd>lua require('various-textobjs').nearEoL()<CR>")
-
-keymap({ "o", "x" }, "YOUR_MAPPING", "<cmd>lua require('various-textobjs').lastChange()<CR>")
-
-keymap({ "o", "x" }, "YOUR_MAPPING", "<cmd>lua require('various-textobjs').lineCharacterwise('inner')<CR>")
-keymap({ "o", "x" }, "YOUR_MAPPING", "<cmd>lua require('various-textobjs').lineCharacterwise('outer')<CR>")
-
-keymap({ "o", "x" }, "YOUR_MAPPING", "<cmd>lua require('various-textobjs').column()<CR>")
-
-keymap({ "o", "x" }, "YOUR_MAPPING", "<cmd>lua require('various-textobjs').multiCommentedLines()<CR>")
-
-keymap({ "o", "x" }, "YOUR_MAPPING", "<cmd>lua require('various-textobjs').notebookCell('inner')<CR>")
-keymap({ "o", "x" }, "YOUR_MAPPING", "<cmd>lua require('various-textobjs').notebookCell('outer')<CR>")
-
-keymap({ "o", "x" }, "YOUR_MAPPING", "<cmd>lua require('various-textobjs').value('inner')<CR>")
-keymap({ "o", "x" }, "YOUR_MAPPING", "<cmd>lua require('various-textobjs').value('outer')<CR>")
-
-keymap({ "o", "x" }, "YOUR_MAPPING", "<cmd>lua require('various-textobjs').key('inner')<CR>")
-keymap({ "o", "x" }, "YOUR_MAPPING", "<cmd>lua require('various-textobjs').key('outer')<CR>")
-
-keymap({ "o", "x" }, "YOUR_MAPPING", "<cmd>lua require('various-textobjs').url()<CR>")
-
-keymap({ "o", "x" }, "YOUR_MAPPING", "<cmd>lua require('various-textobjs').diagnostic()<CR>")
-
-keymap({ "o", "x" }, "YOUR_MAPPING", "<cmd>lua require('various-textobjs').closedFold('inner')<CR>")
-keymap({ "o", "x" }, "YOUR_MAPPING", "<cmd>lua require('various-textobjs').closedFold('outer')<CR>")
-
-keymap({ "o", "x" }, "YOUR_MAPPING", "<cmd>lua require('various-textobjs').chainMember('inner')<CR>")
-keymap({ "o", "x" }, "YOUR_MAPPING", "<cmd>lua require('various-textobjs').chainMember('outer')<CR>")
-
-keymap({ "o", "x" }, "YOUR_MAPPING", "<cmd>lua require('various-textobjs').visibleInWindow()<CR>")
-keymap({ "o", "x" }, "YOUR_MAPPING", "<cmd>lua require('various-textobjs').restOfWindow()<CR>")
-
---------------------------------------------------------------------------------------
--- put these into the ftplugins or autocmds for the filetypes you want to use them with
-
-keymap({ "o", "x" }, "YOUR_MAPPING", "<cmd>lua require('various-textobjs').mdlink('inner')<CR>", { buffer = true })
-keymap({ "o", "x" }, "YOUR_MAPPING", "<cmd>lua require('various-textobjs').mdlink('outer')<CR>", { buffer = true })
-
-keymap({ "o", "x" }, "YOUR_MAPPING", "<cmd>lua require('various-textobjs').mdEmphasis('inner')<CR>", { buffer = true })
-keymap({ "o", "x" }, "YOUR_MAPPING", "<cmd>lua require('various-textobjs').mdEmphasis('outer')<CR>", { buffer = true })
-
-keymap(
-  { "o", "x" },
-  "YOUR_MAPPING",
-  "<cmd>lua require('various-textobjs').mdFencedCodeBlock('inner')<CR>",
-  { buffer = true }
-)
-keymap(
-  { "o", "x" },
-  "YOUR_MAPPING",
-  "<cmd>lua require('various-textobjs').mdFencedCodeBlock('outer')<CR>",
-  { buffer = true }
-)
-
-keymap(
-  { "o", "x" },
-  "YOUR_MAPPING",
-  "<cmd>lua require('various-textobjs').pyTripleQuotes('inner')<CR>",
-  { buffer = true }
-)
-keymap(
-  { "o", "x" },
-  "YOUR_MAPPING",
-  "<cmd>lua require('various-textobjs').pyTripleQuotes('outer')<CR>",
-  { buffer = true }
-)
-
-keymap({ "o", "x" }, "YOUR_MAPPING", "<cmd>lua require('various-textobjs').cssSelector('inner')<CR>", { buffer = true })
-keymap({ "o", "x" }, "YOUR_MAPPING", "<cmd>lua require('various-textobjs').cssSelector('outer')<CR>", { buffer = true })
-
-keymap(
-  { "o", "x" },
-  "YOUR_MAPPING",
-  "<cmd>lua require('various-textobjs').htmlAttribute('inner')<CR>",
-  { buffer = true }
-)
-keymap(
-  { "o", "x" },
-  "YOUR_MAPPING",
-  "<cmd>lua require('various-textobjs').htmlAttribute('outer')<CR>",
-  { buffer = true }
-)
-
-keymap(
-  { "o", "x" },
-  "YOUR_MAPPING",
-  "<cmd>lua require('various-textobjs').doubleSquareBrackets('inner')<CR>",
-  { buffer = true }
-)
-keymap(
-  { "o", "x" },
-  "YOUR_MAPPING",
-  "<cmd>lua require('various-textobjs').doubleSquareBrackets('outer')<CR>",
-  { buffer = true }
-)
-
-keymap({ "o", "x" }, "YOUR_MAPPING", "<cmd>lua require('various-textobjs').shellPipe('inner')<CR>", { buffer = true })
-keymap({ "o", "x" }, "YOUR_MAPPING", "<cmd>lua require('various-textobjs').shellPipe('outer')<CR>", { buffer = true })
---
 -- Decide there to autofill mapping based on space location
 vim.cmd [[
      function! s:check_back_space() abort
