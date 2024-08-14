@@ -41,6 +41,7 @@ return require("lazy").setup {
 
   -- }}}
   -- Editor Extensions {{{
+  "towolf/vim-helm",
   "stefandtw/quickfix-reflector.vim",
   "jbyuki/one-small-step-for-vimkind",
   {
