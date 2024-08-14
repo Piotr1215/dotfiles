@@ -1,5 +1,48 @@
 local M = {}
 
+function M.goto_next_same_indent()
+  local current_line = vim.fn.line "."
+  local current_col = vim.fn.col "."
+  local current_indent = vim.fn.indent(current_line)
+  local last_line = vim.fn.line "$"
+
+  for line = current_line + 1, last_line do
+    local line_indent = vim.fn.indent(line)
+    local line_text = vim.fn.getline(line):match "^%s*(.*)"
+
+    if line_text ~= "" then -- Skip empty lines
+      if line_indent == current_indent then
+        vim.api.nvim_win_set_cursor(0, { line, current_col })
+        return
+      elseif line_indent < current_indent then
+        -- We've moved to a parent level, stop searching
+        return
+      end
+    end
+  end
+end
+
+function M.goto_prev_same_indent()
+  local current_line = vim.fn.line "."
+  local current_col = vim.fn.col "."
+  local current_indent = vim.fn.indent(current_line)
+
+  for line = current_line - 1, 1, -1 do
+    local line_indent = vim.fn.indent(line)
+    local line_text = vim.fn.getline(line):match "^%s*(.*)"
+
+    if line_text ~= "" then -- Skip empty lines
+      if line_indent == current_indent then
+        vim.api.nvim_win_set_cursor(0, { line, current_col })
+        return
+      elseif line_indent < current_indent then
+        -- We've moved to a parent level, stop searching
+        return
+      end
+    end
+  end
+end
+
 function M.paste_and_adjust_yaml()
   -- Get the current column and line
   local start_col = vim.fn.col "."

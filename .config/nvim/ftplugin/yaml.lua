@@ -27,7 +27,21 @@ vim.api.nvim_buf_set_keymap(
   ':lua require("user_functions.navigate_folds").NavigateFold("k")<CR>',
   { noremap = true, silent = true }
 )
-
+-- Set up the mapping for YAML files
+vim.api.nvim_buf_set_keymap(
+  0,
+  "n",
+  "]]",
+  ":lua require('user_functions.yaml_helper').goto_next_same_indent()<CR>",
+  { noremap = true, silent = true, desc = "Go to next block at same indent" }
+)
+vim.api.nvim_buf_set_keymap(
+  0,
+  "n",
+  "[[",
+  ":lua require('user_functions.yaml_helper').goto_prev_same_indent()<CR>",
+  { noremap = true, silent = true, desc = "Go to next block at same indent" }
+)
 -- LSP Configuration
 require("lspconfig").yamlls.setup {
   settings = {
