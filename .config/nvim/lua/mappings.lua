@@ -9,13 +9,13 @@ utils.nmap(";;", ":", { silent = false })
 utils.vmap(";;", ":", { silent = false })
 
 -- SAVE & CLOSE --
-utils.lnmap("wa", ":wqa<cr>") -- save and close all
-utils.lnmap("wq", ":wq<cr>") -- save and close all
-utils.imap("jk", "<Esc>") -- esc and save
-utils.nmap("<leader>w", ":wall<CR>") -- save all
-utils.lnmap("qq", "@q") -- close all
-utils.lnmap("qa", ":qa!<cr>") -- close all without saving
-utils.lnmap("qf", ":q!<cr>") -- close current bufferall without saving
+utils.lnmap("wa", ":wqa<cr>", { desc = "save and close all" })
+utils.lnmap("wq", ":wq<cr>", { desc = "save and close all" })
+utils.imap("jk", "<Esc>", { desc = "esc and save" })
+utils.nmap("<leader>w", ":wall<CR>", { desc = "save all" })
+utils.lnmap("qq", "@q", { desc = "close all" })
+utils.lnmap("qa", ":qa!<cr>", { desc = "close all without saving" })
+utils.lnmap("qf", ":q!<cr>", { desc = "close current bufferall without saving" })
 vim.keymap.set("n", "<leader>nn", ":bnext<CR>", { remap = true, silent = false })
 vim.keymap.set("n", "<leader>tf", ":!touch %<cr>", { silent = true, noremap = true }) -- touch file to reload observers
 -- UNMAP --
@@ -23,7 +23,7 @@ utils.nmap("<nop>", "<Plug>NERDCommenterAltDelims") -- tab is for moving around 
 vim.api.nvim_set_keymap("n", "<leader>tv", ":vsp term://", { noremap = true, silent = false })
 vim.api.nvim_set_keymap("n", "<leader>th", ":sp term://", { noremap = true, silent = false })
 vim.api.nvim_set_keymap("n", "<leader>ct", ":lua require('corn').toggle()<CR>", { noremap = true, silent = false })
-utils.nmap("L", "vg_") -- select to end of line
+utils.nmap("L", "vg_", { desc = "select to end of line" })
 -- Ensure 'notify' is required
 local notify = require "notify"
 
@@ -108,85 +108,88 @@ vim.keymap.set("t", "<C-k>", "<C-\\><C-n><C-k>", { noremap = true, silent = true
 vim.keymap.set("t", "<C-l>", "<C-\\><C-n><C-l>", { noremap = true, silent = true })
 vim.keymap.set("t", "<A-m>", "<C-\\><C-n><A-m>", { noremap = true, silent = true })
 
-utils.nmap("<c-u>", "<c-u>zz") -- center screen after page up
-utils.nmap("<c-d>", "<c-d>zz") -- center screen after page down
-vim.keymap.set({ "n", "v" }, "<A-j>", [[10j<cr>]], opts) -- moves over virtual (wrapped) lines down
-vim.keymap.set({ "n", "v" }, "<A-k>", [[10k<cr>]], opts) -- moves over virtual (wrapped) lines up
+utils.nmap("<c-u>", "<c-u>zz", { desc = "center screen after page up" })
+utils.nmap("<c-d>", "<c-d>zz", { desc = "center screen after page down" })
+vim.keymap.set({ "n", "v" }, "<A-j>", [[10j<cr>]], { desc = "moves over virtual (wrapped) lines down" })
+vim.keymap.set({ "n", "v" }, "<A-k>", [[10k<cr>]], { desc = "moves over virtual (wrapped) lines up" })
 vim.api.nvim_set_keymap("n", "k", "v:count == 0 ? 'gk' : 'k'", { noremap = true, expr = true, silent = true }) -- moves up over virtual (wrapped) lines
 vim.api.nvim_set_keymap("n", "j", "v:count == 0 ? 'gj' : 'j'", { noremap = true, expr = true, silent = true }) -- moves down over virtual (wrapped) lines
 vim.api.nvim_set_keymap("n", "<Mgo-Right>", "gT", { noremap = true, silent = true }) -- move to next tab
-utils.nmap("<BS>", "^") -- move to first non-bkgtgtgtgtlank character of the line
-utils.vmap("<S-PageDown>", ":m '>+1<CR>gv=gv") -- Move Line Down in Visual Mode
-utils.vmap("<S-PageUp>", ":m '<-2<CR>gv=gv") -- Move Line Up in Visual Mode
-utils.nmap("<leader>k", ":m .-2<CR>==") -- Move Line Up in Normal Mode
-utils.nmap("<leader>j", ":m .+1<CR>==") -- Move Line Down in Normal Mode
-utils.nmap("<Leader>em", ":/\\V\\c\\<\\>") -- find exact match
-vim.keymap.set("n", "J", "mzJ`z") -- join lines without spaces
-vim.keymap.set("n", "n", "nzzzv") -- keep cursor centered
-vim.keymap.set("n", "N", "Nzzzv") -- keep cursor centered
+utils.nmap("<BS>", "^", { desc = "move to first non-bkgtgtgtgtlank character of the line" })
+utils.vmap("<S-PageDown>", ":m '>+1<CR>gv=gv", { desc = "Move Line Down in Visual Mode" })
+utils.vmap("<S-PageUp>", ":m '<-2<CR>gv=gv", { desc = "Move Line Up in Visual Mode" })
+utils.nmap("<leader>k", ":m .-2<CR>==", { desc = "Move Line Up in Normal Mode" })
+utils.nmap("<leader>j", ":m .+1<CR>==", { desc = "Move Line Down in Normal Mode" })
+utils.nmap("<Leader>em", ":/\\V\\c\\<\\>", { desc = "find exact match" })
+vim.keymap.set("n", "J", "mzJ`z", { desc = "join lines without spaces" })
+vim.keymap.set("n", "n", "nzzzv", { desc = "keep cursor centered" })
+vim.keymap.set("n", "N", "Nzzzv", { desc = "keep cursor centered" })
 -- SEARCH AND REPLACE
-utils.lnmap("pa", "ggVGp") -- select all
-utils.lnmap("sa", "ggVG") -- select all
+utils.lnmap("pa", "ggVGp", { desc = "select all" })
+utils.lnmap("sa", "ggVG", { desc = "select all" })
 utils.lnmap("r", ":%s/\\v/g<left><left>", { silent = false }) -- replace
 utils.lnmap("ss", ":s/", { silent = false }) -- search and replace
 utils.lnmap("SS", ":%s/\\v", { silent = false }) -- search and replace
-utils.vmap("<leader><C-s>", ":s/\\%V") -- Search only in visual selection usingb%V atom
+utils.vmap("<leader><C-s>", ":s/\\%V", { desc = "Search only in visual selection usingb%V atom" })
 utils.vmap("<C-r>", '"hy:%s/\\v<C-r>h//g<left><left>', { silent = false }) -- change selection
-utils.nmap(",<space>", ":nohlsearch<CR>") -- Stop search highlight
-utils.nmap("<leader>x", "*``cgn") -- replace word under cursor simultaneously
-utils.nmap("<leader>X", "#``cgn") -- replace word under cursor simultaneously
+utils.nmap(",<space>", ":nohlsearch<CR>", { desc = "Stop search highlight" })
+utils.nmap("<leader>x", "*``cgn", { desc = "replace word under cursor simultaneously" })
+utils.nmap("<leader>X", "#``cgn", { desc = "replace word under cursor simultaneously" })
 -- MACROS --
-utils.xmap("<leader>Q", ":'<,'>:normal @q<CR>") -- run macro from q register on visual selection
-utils.tmap("<ESC>", "<C-\\><C-n>") -- exit terminal mode
+utils.xmap("<leader>Q", ":'<,'>:normal @q<CR>", { desc = "run macro from q register on visual selection" })
+utils.tmap("<ESC>", "<C-\\><C-n>", { desc = "exit terminal mode" })
 vim.keymap.set("n", "<leader>ml", "^I-<Space>[<Space>]<Space><Esc>^j", { remap = true, silent = false }) -- prepend markdown list item on line
-utils.vmap("srt", ":!sort -n -k 2<cr>") -- sort by second column
+utils.vmap("srt", ":!sort -n -k 2<cr>", { desc = "sort by second column" })
 -- MANIPULATE TEXT --
-utils.nmap("gp", "`[v`]") -- select pasted text
--- utils.imap("<C-l>", "<C-o>a") -- skip over a letter
-utils.imap("<C-n>", "<C-e><C-o>A;<ESC>") -- insert semicolon at the end of the line
-utils.nmap("<leader>LL", "O<ESC>O") -- insert 2 empty lines and go into inser mode
-utils.nmap("<leader>ll", "o<cr>") -- insert 2 empty lines and go into inser mode
-
+utils.nmap("gp", "`[v`]", { desc = "select pasted text" })
+utils.imap("<A-l>", "<C-o>a", { desc = "skip over a letter" })
+utils.imap("<C-n>", "<C-e><C-o>A;<ESC>", { desc = "insert semicolon at the end of the line" })
+utils.nmap("<leader>LL", "O<ESC>O", { desc = "insert 2 empty lines and go into inser mode" })
+utils.nmap("<leader>ll", "o<cr>", { desc = "insert 2 empty lines and go into inser mode" })
+-- Insert empty lines above and below
 vim.keymap.set("n", "<leader>il", function()
   shell.add_empty_lines(true)
-end, { remap = true, silent = false })
+end, { remap = true, silent = false, desc = "Insert empty lines above" })
 vim.keymap.set("n", "<leader>iL", function()
   shell.add_empty_lines(false)
-end, { remap = true, silent = false })
-
-utils.nmap("<leader>i", "i<space><esc>") -- insert space
-utils.nmap("<leader>sq", ':normal viWS"<CR>') -- skip over a letter
+end, { remap = true, silent = false, desc = "Insert empty lines below" })
+utils.nmap("<leader>is", "i<space><esc>", { desc = "Insert space in normal mode" })
+utils.nmap("<leader>sq", ':normal viWS"<CR>', { desc = "skip over a letter" })
 -- REGISTRIES --
-utils.imap("<C-p>", "<C-o>:Telescope registers<cr><C-w>") -- The below mapping helps select from a register in the place of insert point
-utils.lnmap("yl", '"*yy') -- yank line to the clipboard buffer
-utils.nmap("<leader>df", ":%d<cr>") -- delete file content to black hole register
-utils.nmap("<leader>yf", ":%y<cr>") -- yank file under cusror to the clipboard buffer
-utils.nmap("<leader>yw", '"+yiw') -- yank word under cusror to the clipboard buffer
-utils.nmap("<leader>yW", '"+yiW') -- yank WORD under cusror to the clipboard buffer
-utils.lnmap("p", '"*P') -- paste from clipboard buffer before the cursor
-utils.nmap("<leader>0", '"0p') -- paste from 0 (latest yank)
-utils.nmap("<leader>1", '"1p') -- paste from 1 (latest delete)
-utils.nmap("<leader>2", '"*p') -- paste from 2 (clipboard)
-utils.nmap("<Leader>p", ":pu<CR>") -- paste from clipboard buffer after the cursor
-utils.lnmap("dl", '"_dd') -- delete line to black hole register
-utils.lnmap("d_", '"_D') -- delete till end of line to black hole register
-utils.xmap("<leader>d", '"_d') -- delete selection to black hole register
+utils.imap(
+  "<C-p>",
+  "<C-o>:Telescope registers<cr><C-w>",
+  { desc = "The below mapping helps select from a register in the place of insert point" }
+)
+utils.lnmap("yl", '"*yy', { desc = "yank line to the clipboard buffer" })
+utils.nmap("<leader>df", ":%d<cr>", { desc = "delete file content to black hole register" })
+utils.nmap("<leader>yf", ":%y<cr>", { desc = "yank file under cusror to the clipboard buffer" })
+utils.nmap("<leader>yw", '"+yiw', { desc = "yank word under cusror to the clipboard buffer" })
+utils.nmap("<leader>yW", '"+yiW', { desc = "yank WORD under cusror to the clipboard buffer" })
+utils.lnmap("p", '"*P', { desc = "paste from clipboard buffer before the cursor" })
+utils.nmap("<leader>0", '"0p', { desc = "paste from 0 (latest yank)" })
+utils.nmap("<leader>1", '"1p', { desc = "paste from 1 (latest delete)" })
+utils.nmap("<leader>2", '"*p', { desc = "paste from 2 (clipboard)" })
+utils.nmap("<Leader>p", ":pu<CR>", { desc = "paste from clipboard buffer after the cursor" })
+utils.lnmap("dl", '"_dd', { desc = "delete line to black hole register" })
+utils.lnmap("d_", '"_D', { desc = "delete till end of line to black hole register" })
+utils.xmap("<leader>d", '"_d', { desc = "delete selection to black hole register" })
 -- PATH OPERATIONS --
-utils.lnmap("cpf", ':let @+ = expand("%:p")<cr>') -- Copy current file name and path
+utils.lnmap("cpf", ':let @+ = expand("%:p", { desc = "Copy current file name and path" })<cr>')
 -- Related script: /home/decoder/dev/dotfiles/scripts/__trigger_ranger.sh:7
 utils.lnmap("cpfl", [[:let @+ = expand("%:p") . ':' . line('.')<cr>]]) -- Copy current file name, path, and line number
 utils.lnmap("cpn", ':let @+ = expand("%:t")<cr>') -- Copy current file name
-utils.imap("<c-d>", "<c-o>daw") -- delete word forward in insert mode
+utils.imap("<c-d>", "<c-o>daw", { desc = "delete word forward in insert mode" })
 vim.keymap.set("i", "<A-H>", "<c-w>", { noremap = true }) -- delete word forward in insert mode
-utils.nmap("<leader>sp", "i<cr><esc>") -- split line in two
+utils.nmap("<leader>sp", "i<cr><esc>", { desc = "split line in two" })
 -- EXTERNAL COMMANDS --
 vim.keymap.set("c", "<C-w>", "\\w*", { noremap = true }) -- copy word under cursor
 vim.keymap.set("c", "<C-s>", "\\S*", { noremap = true }) -- copy WORD under cursor
-utils.nmap("<leader>ex", ":.w !bash -e <cr>") -- execute current line and output to command line
-utils.nmap("<leader>eX", ":%w !bash -e <cr>") -- exexute all lines and output to command line
+utils.nmap("<leader>ex", ":.w !bash -e <cr>", { desc = "execute current line and output to command line" })
+utils.nmap("<leader>eX", ":%w !bash -e <cr>", { desc = "exexute all lines and output to command line" })
 utils.nmap("<leader>el", ":.!bash -e <cr>", { silent = false }) -- execute current line and replace with result
-utils.nmap("<leader>eL", ":% !bash % <cr>") -- execute all lines and replace with result
-utils.lnmap("cx", ":!chmod +x %<cr>") -- make file executable
+utils.nmap("<leader>eL", ":% !bash % <cr>", { desc = "execute all lines and replace with result" })
+utils.lnmap("cx", ":!chmod +x %<cr>", { desc = "make file executable" })
 utils.lnmap(
   "ef",
   "<cmd>lua require('user_functions.shell_integration').execute_file_and_show_output()<CR>",
@@ -336,7 +339,7 @@ utils.lnmap("<Down>", "<Plug>SendDown", keymapOptions "Send Down")
 utils.lnmap("<Up>", "<Plug>SendUp", keymapOptions "Send Up")
 utils.lnmap("<Right>", "<Plug>SendRight", keymapOptions "Send Right")
 
-vim.keymap.set("n", "<leader>ih", function()
+vim.keymap.set("n", "<leader>th", function()
   vim.lsp.inlay_hint.enable(not vim.lsp.inlay_hint.is_enabled())
 end, { silent = true, noremap = true, desc = "Toggle inlay hints" })
 -- Various text objects plugin mappings
