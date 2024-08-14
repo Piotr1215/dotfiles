@@ -1,5 +1,6 @@
 local utils = require "utils"
 local opts = { noremap = true, silent = true }
+local shell = require "user_functions.shell_integration"
 
 vim.keymap.set({ "n", "v" }, "<Space>", "<Nop>", { silent = true })
 vim.g.mapleader = " "
@@ -145,8 +146,14 @@ utils.nmap("gp", "`[v`]") -- select pasted text
 utils.imap("<C-n>", "<C-e><C-o>A;<ESC>") -- insert semicolon at the end of the line
 utils.nmap("<leader>LL", "O<ESC>O") -- insert 2 empty lines and go into inser mode
 utils.nmap("<leader>ll", "o<cr>") -- insert 2 empty lines and go into inser mode
-utils.nmap("<leader>l", ":lua add_empty_lines(true)<CR>") -- add line below without entering insert mode
-utils.nmap("<leader>L", ":lua add_empty_lines(false)<CR>") -- add line above without entering insert mode
+
+vim.keymap.set("n", "<leader>il", function()
+  shell.add_empty_lines(true)
+end, { remap = true, silent = false })
+vim.keymap.set("n", "<leader>iL", function()
+  shell.add_empty_lines(false)
+end, { remap = true, silent = false })
+
 utils.nmap("<leader>i", "i<space><esc>") -- insert space
 utils.nmap("<leader>sq", ':normal viWS"<CR>') -- skip over a letter
 -- REGISTRIES --
