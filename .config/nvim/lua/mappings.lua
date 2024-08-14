@@ -16,7 +16,6 @@ utils.nmap("<leader>w", ":wall<CR>", { desc = "save all" })
 utils.lnmap("qq", "@q", { desc = "close all" })
 utils.lnmap("qa", ":qa!<cr>", { desc = "close all without saving" })
 utils.lnmap("qf", ":q!<cr>", { desc = "close current bufferall without saving" })
-vim.keymap.set("n", "<leader>nn", ":bnext<CR>", { remap = true, silent = false })
 vim.keymap.set(
   "n",
   "<leader>tf",
@@ -29,43 +28,10 @@ vim.api.nvim_set_keymap("n", "<leader>tv", ":vsp term://", { noremap = true, sil
 vim.api.nvim_set_keymap("n", "<leader>th", ":sp term://", { noremap = true, silent = false })
 vim.api.nvim_set_keymap("n", "<leader>ct", ":lua require('corn').toggle()<CR>", { noremap = true, silent = false })
 utils.nmap("L", "vg_", { desc = "select to end of line" })
--- Ensure 'notify' is required
-local notify = require "notify"
 
 vim.keymap.set("n", "<leader>_", "5<c-w>-", { remap = true, silent = false })
 vim.keymap.set("n", "<leader>+", "5<c-w>+", { remap = true, silent = false })
 
--- Map the key to call an inline function for kubectl apply
-vim.api.nvim_set_keymap("n", "<leader>ka", "", {
-  noremap = true,
-  silent = false,
-  callback = function()
-    local current_file = vim.fn.expand "%:p"
-    local cmd = "kubectl apply -f " .. current_file
-    local handle = io.popen(cmd)
-    local result = handle:read "*a"
-    handle:close()
-
-    -- Use notify to print the result
-    notify(result, "info")
-  end,
-})
-
--- Map the key to call an inline function for kubectl delete
-vim.api.nvim_set_keymap("n", "<leader>kd", "", {
-  noremap = true,
-  silent = false,
-  callback = function()
-    local current_file = vim.fn.expand "%:p"
-    local cmd = "kubectl delete -f " .. current_file
-    local handle = io.popen(cmd)
-    local result = handle:read "*a"
-    handle:close()
-
-    -- Use notify to print the result
-    notify(result, "info")
-  end,
-})
 -- NAVIGATION --
 -- Mappings for navigation between tmux and vim splits with the same keybindings
 local nvim_tmux_nav = require "nvim-tmux-navigation"
