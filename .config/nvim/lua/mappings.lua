@@ -22,11 +22,9 @@ vim.keymap.set(
   ":!touch %<cr>",
   { silent = true, noremap = true, desc = "touch file to reload observers" }
 )
--- UNMAP --
 utils.nmap("<nop>", "<Plug>NERDCommenterAltDelims") -- tab is for moving around only
 vim.api.nvim_set_keymap("n", "<leader>tv", ":vsp term://", { noremap = true, silent = false })
 vim.api.nvim_set_keymap("n", "<leader>th", ":sp term://", { noremap = true, silent = false })
-vim.api.nvim_set_keymap("n", "<leader>ct", ":lua require('corn').toggle()<CR>", { noremap = true, silent = false })
 utils.nmap("L", "vg_", { desc = "select to end of line" })
 
 vim.keymap.set("n", "<leader>_", "5<c-w>-", { remap = true, silent = false })
@@ -101,16 +99,15 @@ utils.vmap("<S-PageDown>", ":m '>+1<CR>gv=gv", { desc = "Move Line Down in Visua
 utils.vmap("<S-PageUp>", ":m '<-2<CR>gv=gv", { desc = "Move Line Up in Visual Mode" })
 utils.nmap("<leader>k", ":m .-2<CR>==", { desc = "Move Line Up in Normal Mode" })
 utils.nmap("<leader>j", ":m .+1<CR>==", { desc = "Move Line Down in Normal Mode" })
-utils.nmap("<Leader>em", ":/\\V\\c\\<\\>", { desc = "find exact match" })
+utils.nmap("<Leader>em", ":/\\V\\c\\<\\>", { desc = "find exact match", silent = false })
 vim.keymap.set("n", "J", "mzJ`z", { desc = "join lines without spaces" })
 vim.keymap.set("n", "n", "nzzzv", { desc = "keep cursor centered" })
 vim.keymap.set("n", "N", "Nzzzv", { desc = "keep cursor centered" })
 -- SEARCH AND REPLACE
 utils.lnmap("pa", "ggVGp", { desc = "select all" })
 utils.lnmap("sa", "ggVG", { desc = "select all" })
-utils.lnmap("r", ":%s/\\v/g<left><left>", { silent = false, desc = "replace" })
-utils.lnmap("ss", ":s/", { silent = false, desc = "search and replace" })
-utils.lnmap("SS", ":%s/\\v", { silent = false, desc = "search and replace" })
+utils.lnmap("ss", ":s/\\v", { silent = false, desc = "search and replace on line" })
+utils.lnmap("SS", ":%s/\\v", { silent = false, desc = "search and replace in file" })
 utils.vmap("<leader><C-s>", ":s/\\%V", { desc = "Search only in visual selection usingb%V atom" })
 utils.vmap("<C-r>", '"hy:%s/\\v<C-r>h//g<left><left>', { silent = false, desc = "change selection" })
 utils.nmap(",<space>", ":nohlsearch<CR>", { desc = "Stop search highlight" })
@@ -130,8 +127,6 @@ utils.vmap("srt", ":!sort -n -k 2<cr>", { desc = "sort by second column" })
 utils.nmap("gp", "`[v`]", { desc = "select pasted text" })
 utils.imap("<A-l>", "<C-o>a", { desc = "skip over a letter" })
 utils.imap("<C-n>", "<C-e><C-o>A;<ESC>", { desc = "insert semicolon at the end of the line" })
-utils.nmap("<leader>LL", "O<ESC>O", { desc = "insert 2 empty lines and go into inser mode" })
-utils.nmap("<leader>ll", "o<cr>", { desc = "insert 2 empty lines and go into inser mode" })
 -- Insert empty lines above and below
 vim.keymap.set("n", "<leader>il", function()
   shell.add_empty_lines(true)
@@ -140,13 +135,17 @@ vim.keymap.set("n", "<leader>iL", function()
   shell.add_empty_lines(false)
 end, { remap = true, silent = false, desc = "Insert empty lines below" })
 utils.nmap("<leader>is", "i<space><esc>", { desc = "Insert space in normal mode" })
-utils.nmap("<leader>sq", ':normal viWS"<CR>', { desc = "skip over a letter" })
+utils.nmap("<leader>sq", ':normal viWS"<CR>', { desc = "surround with quotation" })
 -- REGISTRIES --
-utils.imap(
-  "<C-p>",
-  "<C-o>:Telescope registers<cr><C-w>",
-  { desc = "The below mapping helps select from a register in the place of insert point" }
-)
+
+vim.keymap.set("i", "<c-p>", function()
+  require("telescope.builtin").registers()
+end, {
+  remap = true,
+  silent = false,
+  desc = " and paste register in insert mode",
+})
+
 utils.lnmap("yl", '"*yy', { desc = "yank line to the clipboard buffer" })
 utils.nmap("<leader>df", ":%d<cr>", { desc = "delete file content to black hole register" })
 utils.nmap("<leader>yf", ":%y<cr>", { desc = "yank file under cusror to the clipboard buffer" })
