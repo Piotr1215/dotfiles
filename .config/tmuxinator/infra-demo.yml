@@ -1,6 +1,6 @@
 # /home/decoder/.config/tmuxinator/atosik.yml
 
-name: infra-demo
+name: conf24-platform
 root: ~/dev/infra-platform-arch
 
 # Optional tmux socket
@@ -59,7 +59,7 @@ windows:
   - infra-platform-arch:
       layout: main-horizontal
       panes:
-        - just watch_claim
+        - wm
         - clear && k9s
   - sample-app:
       layout: tiled
