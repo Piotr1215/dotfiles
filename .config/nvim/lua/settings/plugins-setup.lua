@@ -257,6 +257,12 @@ require("nvim-treesitter.configs").setup {
     "markdown",
     "dockerfile",
   },
+  -- List of parsers to ignore installing
+  ignore_install = {},
+  -- Install parsers synchronously (only applied to `ensure_installed`)
+  sync_install = false,
+  -- List of parsers to always install, useful for parsers without filetype
+  modules = {},
 
   highlight = { enable = true },
   auto_install = true,
@@ -266,8 +272,9 @@ require("nvim-treesitter.configs").setup {
     max_file_lines = nil,
   },
   indent = {
-    -- TODO:(piotr1215) This is experimental feature and breaks go indentation on new line, check back later
     enable = false,
+    -- disable yaml indenting because the grammar is too simplistic, other plugins do it better
+    disable = { "yaml" },
     additional_vim_regex_highlighting = { "markdown" },
   },
   incremental_selection = {
@@ -289,6 +296,27 @@ require("nvim-treesitter.configs").setup {
         ["<leader>b"] = "@parameter.inner",
       },
     },
+    move = {
+      enable = true,
+      disable = { "yaml" },
+      set_jumps = true, -- whether to set jumps in the jumplist
+      goto_next_start = {
+        ["]m"] = "@function.outer",
+        ["]]"] = "@class.outer",
+      },
+      goto_next_end = {
+        ["]M"] = "@function.outer",
+        ["]["] = "@class.outer",
+      },
+      goto_previous_start = {
+        ["[m"] = "@function.outer",
+        ["[["] = "@class.outer",
+      },
+      goto_previous_end = {
+        ["[M"] = "@function.outer",
+        ["[]"] = "@class.outer",
+      },
+    },
     lsp_interop = {
       enable = true,
       border = "none",
@@ -298,6 +326,7 @@ require("nvim-treesitter.configs").setup {
     },
     select = {
       enable = true,
+      disable = { "yaml" },
 
       -- Automatically jump forward to textobj, similar to targets.vim
       lookahead = true,
