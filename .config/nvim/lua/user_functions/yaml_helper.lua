@@ -43,6 +43,8 @@ function M.goto_prev_same_indent()
   end
 end
 
+-- This is not needed as [p or ]p does the same and better
+-- Leaving this as someone might want to use it, maybe it will change in the future
 function M.paste_and_adjust_yaml()
   -- Get the current column and line
   local start_col = vim.fn.col "."
