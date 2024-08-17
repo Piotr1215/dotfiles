@@ -1,0 +1,38 @@
+architecture: x86_64
+config:
+  image.architecture: amd64
+  image.description: Ubuntu mantic amd64 (20240605_07:42)
+  image.os: Ubuntu
+  image.release: mantic
+  image.serial: "20240605_07:42"
+  image.type: disk-kvm.img
+  image.variant: desktop
+  limits.memory: 12GiB
+  migration.stateful: "false"
+  volatile.base_image: e2b9cf1fd5c431dc4316fef2601a34cfd3980fc5aa8911fc3781ecb488ed8b44
+  volatile.cloud-init.instance-id: 2afb9bdc-5f64-4d2c-af38-b07433a8f22a
+  volatile.eth0.host_name: tap3f0deefd
+  volatile.eth0.hwaddr: 00:16:3e:05:fe:80
+  volatile.last_state.power: RUNNING
+  volatile.last_state.ready: "false"
+  volatile.uuid: 294fb328-b5bc-4ffe-9359-c13ec783805e
+  volatile.uuid.generation: 41f4e83f-0c5c-48a5-83d3-23dc99827e23
+  volatile.vsock_id: "4098713290"
+devices:
+  eth0:
+    network: incusbr0
+    type: nic
+  root:
+    path: /
+    pool: default
+    size: 24GB
+    type: disk
+  shared-folder:
+    path: /mnt/dev
+    source: /home/decoder/dev
+    type: disk
+ephemeral: false
+profiles:
+- default
+stateful: false
+description: ""
