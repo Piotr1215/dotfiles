@@ -104,6 +104,8 @@ fi
 # Source functions and aliases
 source ~/.zsh_aliases
 source ~/.zsh_functions
+source ~/.zsh_abbreviations
+
 # EXPORT & PATH
 export XDG_CONFIG_HOME=~/.config
 export XDG_CONFIG_DIRS=/home/decoder/dev/dotfiles/.config/nvim:$XDG_CONFIG_DIRS
@@ -176,6 +178,7 @@ function pet-select-bmk() {
 
 zle -N pet-select-bmk
 bindkey '^t' pet-select-bmk
+
 
 # Unified function definition
 function output_file_path() {

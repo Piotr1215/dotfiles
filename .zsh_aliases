@@ -68,6 +68,7 @@ alias tick='__ticker.sh'
 alias ytd='__download_youtube.sh'
 alias remind='__reminder.sh'
 alias adit='vim ~/.zsh_aliases'
+alias abit='vim ~/.zsh_abbreviations'
 alias ai='/home/decoder/go/bin/aicmd'
 alias clock="__clock.sh &"
 alias dca='mux s dca'

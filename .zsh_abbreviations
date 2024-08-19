@@ -1,0 +1,30 @@
+# Define the abbreviation
+typeset -A abbrevs
+abbrevs=(
+    "spo" '__sponge_expand'
+)
+
+# Function to expand the sponge command
+__sponge_expand() {
+    local cmd="$LBUFFER"
+    local words=("${(z)cmd}")  # Split command into words
+    local last_arg="${words[-1]}"
+    LBUFFER="$cmd | sponge $last_arg"
+}
+
+# Function to expand abbreviations
+my-expand-abbrev() {
+    local MATCH
+    LBUFFER=${LBUFFER%%(#m)[_a-zA-Z0-9]#}
+    if [[ "$MATCH" == "spo" ]]; then
+        __sponge_expand
+    else
+        LBUFFER+=$MATCH
+    fi
+    zle self-insert
+}
+
+# Create the wdget and bind it
+zle -N my-expand-abbrev
+bindkey " " my-expand-abbrev
+bindkey -M isearch " " self-insert
