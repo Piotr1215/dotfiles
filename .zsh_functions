@@ -55,7 +55,21 @@ function record() {
 }
 
 function pkill() {
-  ps aux | fzf --height 40% --layout=reverse --prompt="Select process to kill: " | awk '{print $2}' | xargs -r sudo kill
+  ps aux | 
+  fzf --height 40% \
+      --layout=reverse \
+      --header-lines=1 \
+      --prompt="Select process to kill: " \
+      --preview 'echo {}' \
+      --preview-window up:3:hidden:wrap \
+      --bind 'F2:toggle-preview' |
+  awk '{print $2}' |
+  xargs -r bash -c '
+      if ! kill "$1" 2>/dev/null; then
+          echo "Regular kill failed. Attempting with sudo..."
+          sudo kill "$1" || echo "Failed to kill process $1" >&2
+      fi
+  ' --
 }
 
 # Function to create and activate a Python virtual environment
