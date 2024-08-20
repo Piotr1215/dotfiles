@@ -127,13 +127,23 @@ utils.vmap("srt", ":!sort -n -k 2<cr>", { desc = "sort by second column" })
 utils.nmap("gp", "`[v`]", { desc = "select pasted text" })
 utils.imap("<A-l>", "<C-o>a", { desc = "skip over a letter" })
 utils.imap("<C-n>", "<C-e><C-o>A;<ESC>", { desc = "insert semicolon at the end of the line" })
+
+-- Insert empty lines above and below
+vim.keymap.set("n", "<leader>al", function()
+  shell.add_empty_lines { below = true }
+end, { remap = true, silent = false, desc = "Insert empty lines above" })
+vim.keymap.set("n", "<leader>aL", function()
+  shell.add_empty_lines { below = false }
+end, { remap = true, silent = false, desc = "Insert empty lines below" })
+
 -- Insert empty lines above and below
 vim.keymap.set("n", "<leader>il", function()
-  shell.add_empty_lines(true)
+  shell.add_empty_lines { below = true, insert = true }
 end, { remap = true, silent = false, desc = "Insert empty lines above" })
 vim.keymap.set("n", "<leader>iL", function()
-  shell.add_empty_lines(false)
+  shell.add_empty_lines { below = false, insert = true }
 end, { remap = true, silent = false, desc = "Insert empty lines below" })
+
 utils.nmap("<leader>is", "i<space><esc>", { desc = "Insert space in normal mode" })
 utils.nmap("<leader>sq", ':normal viWS"<CR>', { desc = "surround with quotation" })
 -- REGISTRIES --
