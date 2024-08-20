@@ -23,8 +23,8 @@ vim.keymap.set(
   { silent = true, noremap = true, desc = "touch file to reload observers" }
 )
 utils.nmap("<nop>", "<Plug>NERDCommenterAltDelims") -- tab is for moving around only
-vim.api.nvim_set_keymap("n", "<leader>tv", ":vsp term://", { noremap = true, silent = false })
-vim.api.nvim_set_keymap("n", "<leader>th", ":sp term://", { noremap = true, silent = false })
+vim.api.nvim_set_keymap("n", "<leader>Tsv", ":vsp term://", { noremap = true, silent = false })
+vim.api.nvim_set_keymap("n", "<leader>Tsh", ":sp term://", { noremap = true, silent = false })
 utils.nmap("L", "vg_", { desc = "select to end of line" })
 
 vim.keymap.set("n", "<leader>_", "5<c-w>-", { remap = true, silent = false })
@@ -38,7 +38,22 @@ vim.keymap.set("n", "<C-j>", nvim_tmux_nav.NvimTmuxNavigateDown, { noremap = tru
 vim.keymap.set("n", "<C-k>", nvim_tmux_nav.NvimTmuxNavigateUp, { noremap = true, silent = true })
 vim.keymap.set("n", "<C-l>", nvim_tmux_nav.NvimTmuxNavigateRight, { noremap = true, silent = true })
 vim.keymap.set("n", "<A-m>", nvim_tmux_nav.NvimTmuxNavigateNext, { noremap = true, silent = true })
-
+-- Toggle between single, double, and backtick quotes
+vim.keymap.set("n", "<leader>tq", function()
+  local line = vim.api.nvim_get_current_line()
+  local col = vim.fn.col "."
+  local new_line = line:gsub("(['\"`])(.-[^\\])%1", function(q, content)
+    if q == "'" then
+      return '"' .. content .. '"'
+    elseif q == '"' then
+      return "`" .. content .. "`"
+    else
+      return "'" .. content .. "'"
+    end
+  end)
+  vim.api.nvim_set_current_line(new_line)
+  vim.fn.cursor(vim.fn.line ".", col)
+end, { desc = "Toggle quote style" })
 -- Insert mode mappings
 vim.keymap.set(
   "i",
@@ -97,8 +112,10 @@ vim.api.nvim_set_keymap("n", "<Mgo-Right>", "gT", { noremap = true, silent = tru
 utils.nmap("<BS>", "^", { desc = "move to first non-bkgtgtgtgtlank character of the line" })
 utils.vmap("<S-PageDown>", ":m '>+1<CR>gv=gv", { desc = "Move Line Down in Visual Mode" })
 utils.vmap("<S-PageUp>", ":m '<-2<CR>gv=gv", { desc = "Move Line Up in Visual Mode" })
-utils.nmap("<leader>k", ":m .-2<CR>==", { desc = "Move Line Up in Normal Mode" })
-utils.nmap("<leader>j", ":m .+1<CR>==", { desc = "Move Line Down in Normal Mode" })
+utils.nmap("<leader>mk", ":m .-2<CR>==", { desc = "Move Line Up in Normal Mode" })
+utils.nmap("<leader>mj", ":m .+1<CR>==", { desc = "Move Line Down in Normal Mode" })
+utils.vmap("<leader>mk", ":m '<-2<CR>gv=gv", { desc = "Move Line Up in Visual Mode" })
+utils.vmap("<leader>mj", ":m '>+1<CR>gv=gv", { desc = "Move Line Down in Visual Mode" })
 utils.nmap("<Leader>em", ":/\\V\\c\\<\\>", { desc = "find exact match", silent = false })
 vim.keymap.set("n", "J", "mzJ`z", { desc = "join lines without spaces" })
 vim.keymap.set("n", "n", "nzzzv", { desc = "keep cursor centered" })
@@ -124,7 +141,7 @@ vim.keymap.set(
 )
 utils.vmap("srt", ":!sort -n -k 2<cr>", { desc = "sort by second column" })
 -- MANIPULATE TEXT --
-utils.nmap("gp", "`[v`]", { desc = "select pasted text" })
+utils.nmap("<leader>gp", "`[v`]", { desc = "select pasted text" })
 utils.imap("<A-l>", "<C-o>a", { desc = "skip over a letter" })
 utils.imap("<C-n>", "<C-e><C-o>A;<ESC>", { desc = "insert semicolon at the end of the line" })
 
@@ -170,9 +187,14 @@ utils.lnmap("dl", '"_dd', { desc = "delete line to black hole register" })
 utils.lnmap("d_", '"_D', { desc = "delete till end of line to black hole register" })
 utils.xmap("<leader>d", '"_d', { desc = "delete selection to black hole register" })
 -- PATH OPERATIONS --
-utils.lnmap("cpf", ':let @+ = expand("%:p", { desc = "Copy current file name and path" })<cr>')
+vim.keymap.set(
+  "n",
+  "<leader>cpf",
+  ':let @+ = expand("%:p")<cr>:lua print("Copied path to: " .. vim.fn.expand("%:p"))<cr>',
+  { desc = "Copy current file name and path", silent = false }
+)
 -- Related script: /home/decoder/dev/dotfiles/scripts/__trigger_ranger.sh:7
-utils.lnmap("cpfl", [[:let @+ = expand("%:p") . ':' . line('.')<cr>]]) -- Copy current file name, path, and line number
+utils.lnmap("cpl", [[:let @+ = expand("%:p") . ':' . line('.')<cr>]]) -- Copy current file name, path, and line number
 utils.lnmap("cpn", ':let @+ = expand("%:t")<cr>') -- Copy current file name
 utils.imap("<c-d>", "<c-o>daw", { desc = "delete word forward in insert mode" })
 vim.keymap.set("i", "<A-H>", "<c-w>", { noremap = true, desc = "delete word forward in insert mode" })
@@ -197,11 +219,11 @@ utils.nmap("<leader>fmt", ":Pretty<CR>") -- format json with pretty
 utils.nmap("<Leader>son", ":setlocal spell spelllang=en_us<CR>") -- set spell check on
 utils.nmap("<Leader>sof", ":set nospell<CR>") -- set spell check off
 -- GIT RELATED --
-vim.keymap.set({ "n", "v" }, "<leader>gb", ":GBrowse<cr>", opts) -- git browse current file in browser
-vim.keymap.set("n", "<leader>gc", function()
+vim.keymap.set({ "n", "v" }, "<leader>gbf", ":GBrowse<cr>", opts) -- git browse current file in browser
+vim.keymap.set("n", "<leader>gbc", function()
   vim.cmd "GBrowse!"
 end, { desc = "Copy url to current file" }) -- git browse current file and line in browser
-vim.keymap.set("v", "<leader>gc", ":GBrowse!<CR>", { noremap = true, silent = false }) -- git browse current file and selected line in browser
+vim.keymap.set("v", "<leader>gbl", ":GBrowse!<CR>", { noremap = true, silent = false }) -- git browse current file and selected line in browser
 utils.lnmap("gd", ":Gvdiffsplit<CR>") -- git diff current file
 utils.lnmap("gu", ":Gdiffu<CR>") -- git diff current file
 utils.nmap("<leader>gl", ":r !bash ~/dev/dotfiles/scripts/__generate_git_log.sh<CR>") -- generate git log
