@@ -30,19 +30,25 @@ function M.ranger_popup_in_tmux()
   os.execute(tmux_command)
 end
 
-function M.add_empty_lines(below)
+function M.add_empty_lines(opts)
+  opts = opts or {}
   local count = vim.v.count1
   local lines = {}
   for _ = 1, count do
     table.insert(lines, "")
   end
+  local current_line = vim.fn.line "."
 
-  if below then
-    vim.fn.append(vim.fn.line ".", lines)
-    vim.cmd("normal! " .. count .. "j")
+  if opts.below then
+    vim.fn.append(current_line, lines)
+    vim.api.nvim_win_set_cursor(0, { current_line + count, 0 })
   else
-    vim.fn.append(vim.fn.line "." - 1, lines)
-    vim.cmd("normal! " .. count .. "k")
+    vim.fn.append(current_line - 1, lines)
+    vim.api.nvim_win_set_cursor(0, { current_line, 0 })
+  end
+
+  if opts.insert then
+    vim.cmd "startinsert"
   end
 end
 
