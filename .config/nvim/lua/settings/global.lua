@@ -60,20 +60,6 @@ set.cmdheight = 1
 -- Disable copilot on boot
 vim.b.copilot_enabled = false
 
--- Custom f command function
--- This is needed because ;; is mapped to enter command mode
-vim.cmd [[
-function! CustomF(backwards)
-  let l:char = nr2char(getchar())
-  if a:backwards
-    execute "normal! F" . l:char
-  else
-    execute "normal! f" . l:char
-  endif
-  nnoremap ; ;
-  vnoremap ; ;
-endfunction
-]]
 vim.cmd "command! GetCurrentFileDir lua print_current_file_dir()"
 
 -- Key mappings
@@ -81,10 +67,6 @@ vim.cmd "command! GetCurrentFileDir lua print_current_file_dir()"
 vim.cmd "command! Fold lua _G.toggle_function_folding()"
 
 vim.api.nvim_set_keymap("n", "fld", [[<Cmd>lua _G.toggle_function_folding()<CR>]], { noremap = true, silent = false })
-vim.api.nvim_set_keymap("n", "f", ":call CustomF(0)<CR>", {})
-vim.api.nvim_set_keymap("v", "f", ":call CustomF(0)<CR>", {})
-vim.api.nvim_set_keymap("n", "F", ":call CustomF(1)<CR>", {})
-vim.api.nvim_set_keymap("v", "F", ":call CustomF(1)<CR>", {})
 vim.cmd [[
   command! -range=% -nargs=* -complete=customlist,v:lua.my_custom_complete ProcessTasks :lua _G.process_task_list(<line1>, <line2>, <f-args>)
 ]]

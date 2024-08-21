@@ -5,8 +5,6 @@ local shell = require "user_functions.shell_integration"
 vim.keymap.set({ "n", "v" }, "<Space>", "<Nop>", { silent = true })
 vim.g.mapleader = " "
 vim.g.maplocalleader = " "
-utils.nmap(";;", ":", { silent = false })
-utils.vmap(";;", ":", { silent = false })
 
 -- SAVE & CLOSE --
 utils.lnmap("wa", ":wqa<cr>", { desc = "save and close all" })
@@ -236,9 +234,6 @@ utils.nmap("<leader>t", "<Plug>(vsnip-select-text)") -- Select or cut text to us
 utils.xmap("<leader>t", "<Plug>(vsnip-select-text)") -- Select or cut text to use as $TM_SELECTED_TEXT in the next snippet
 utils.nmap("<leader>tc", "<Plug>(vsnip-cut-text)") -- Select or cut text to use as $TM_SELECTED_TEXT in the next snippet
 utils.xmap("<leader>tc", "<Plug>(vsnip-cut-text)") -- Select or cut text to use as $TM_SELECTED_TEXT in the next snippet
--- ABBREVIATIONS --
-vim.cmd "abb cros Crossplane"
-vim.cmd "abb tcom TODO:(piotr1215)"
 
 -- PLUGIN MAPPINGS --
 -- Mdeval
