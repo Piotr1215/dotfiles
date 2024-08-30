@@ -211,7 +211,12 @@ function M.my_custom_complete(arg_lead, cmd_line, cursor_pos)
 end
 
 vim.api.nvim_create_user_command("ProcessTaskList", function(input)
-  M.process_task_list(1, vim.api.nvim_buf_line_count(0), unpack(vim.split(input.args, " ")))
-end, { nargs = "*" })
-
+  M.process_task_list(1, vim.api.nvim_buf_line_count(0), unpack(input.fargs))
+end, {
+  nargs = "*",
+  complete = function(arg_lead, cmd_line, cursor_pos)
+    -- Call the custom completion function
+    return M.my_custom_complete(arg_lead, cmd_line, cursor_pos)
+  end,
+})
 return M
