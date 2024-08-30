@@ -38,7 +38,7 @@ fi
 
 weekdays=('Monday' 'Tuesday' 'Wednesday' 'Thursday' 'Friday')
 
-timeoff=1
+timeoff=0
 
 current_day=$(date +"%A")
 
@@ -59,7 +59,7 @@ move_alacritty_to_hdmi_0() {
 }
 
 if [[ " ${weekdays[*]} " =~ " $current_day " ]] && [[ "$timeoff" == 0 ]]; then
-	# flatpak run com.slack.Slack 2>/dev/null &
+	flatpak run com.slack.Slack 2>/dev/null &
 	nohup firefox -P "Work" about:profiles >/dev/null 2>&1 &
 	alacritty &
 	move_alacritty_to_hdmi_0
