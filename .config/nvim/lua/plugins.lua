@@ -54,7 +54,6 @@ return require("lazy").setup {
   },
   "tyru/open-browser.vim",
   "towolf/vim-helm",
-  "stefandtw/quickfix-reflector.vim",
   "jbyuki/one-small-step-for-vimkind",
   {
     "michaelb/sniprun",
