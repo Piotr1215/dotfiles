@@ -54,11 +54,25 @@ utils.omap("am", "<Cmd>lua MarkdownCodeBlock(true)<CR>")
 utils.xmap("am", "<Cmd>lua MarkdownCodeBlock(true)<CR>")
 utils.omap("im", "<Cmd>lua MarkdownCodeBlock(false)<CR>")
 utils.xmap("im", "<Cmd>lua MarkdownCodeBlock(false)<CR>")
-utils.nmap("<nop>", "<Plug>Markdown_Fold") -- tab is for moving around only
+-- utils.nmap("<nop>", "<Plug>Markdown_Fold") -- tab is for moving around only
+utils.nmap("<Tab>", "<Plug>Markdown_Fold") -- tab is for moving around only
 utils.nmap("]]", "<Plug>Markdown_MoveToNextHeader") -- tab is for moving around only;
 utils.nmap("[[", "<Plug>Markdown_MoveToPreviousHeader") -- tab is for moving around only
 utils.lnmap("ctd", "4wvg$y") -- copy description from the taskwarrior task in the markdown format
 utils.vmap("<leader>hi", ":HeaderIncrease<CR>") -- increase header level
+
+-- Makrdown.nvim settings
+vim.g.vim_markdown_folding_disabled = 0
+vim.g.vim_markdown_folding_style_pythonic = 1
+vim.g.vim_markdown_folding_level = 2
+vim.g.vim_markdown_toc_autofit = 1
+vim.g.vim_markdown_conceal = 0
+vim.g.vim_markdown_conceal_code_blocks = 0
+vim.g.vim_markdown_no_extensions_in_markdown = 1
+vim.g.vim_markdown_autowrite = 1
+vim.g.vim_markdown_follow_anchor = 1
+vim.g.vim_markdown_auto_insert_bullets = 0
+vim.g.vim_markdown_new_list_item_indent = 0
 
 -- MarkdownPreview settings
 vim.g.mkdp_browser = "/usr/bin/firefox"
@@ -99,25 +113,10 @@ cmp.setup.buffer {
 function BoldMe()
   local start_pos = vim.fn.getpos "'<"
   local end_pos = vim.fn.getpos "'>"
-  local start_line = start_pos[2]
-  local end_line = end_pos[2]
-  local start_col = start_pos[3]
-  local end_col = end_pos[3]
-
-  if end_line == start_line then
-    local line = vim.api.nvim_buf_get_lines(0, start_line - 1, start_line, false)[1]
-    local modified_line = line:sub(1, start_col - 1)
-      .. "**"
-      .. line:sub(start_col, end_col)
-      .. "**"
-      .. line:sub(end_col + 1)
-    vim.api.nvim_buf_set_lines(0, start_line - 1, start_line, false, { modified_line })
-  else
-    local lines = vim.api.nvim_buf_get_lines(0, start_line - 1, end_line, false)
-    lines[1] = lines[1]:sub(1, start_col - 1) .. "**" .. lines[1]:sub(start_col)
-    lines[#lines] = lines[#lines]:sub(1, end_col) .. "**" .. lines[#lines]:sub(end_col + 1)
-    vim.api.nvim_buf_set_lines(0, start_line - 1, end_line, false, lines)
-  end
+  local lines = vim.api.nvim_buf_get_lines(0, start_pos[2] - 1, end_pos[2], false)
+  lines[1] = lines[1]:sub(1, start_pos[3] - 1) .. "**" .. lines[1]:sub(start_pos[3])
+  lines[#lines] = lines[#lines]:sub(1, end_pos[3]) .. "**" .. lines[#lines]:sub(end_pos[3] + 1)
+  vim.api.nvim_buf_set_lines(0, start_pos[2] - 1, end_pos[2], false, lines)
 end
 
 vim.api.nvim_buf_set_keymap(0, "v", "<Leader>b", ":lua BoldMe()<CR>", { noremap = true, silent = true })
