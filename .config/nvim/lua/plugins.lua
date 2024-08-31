@@ -32,7 +32,7 @@ return require("lazy").setup {
         {
           name = "Vale",
           cmd = "Vale",
-          key = "<leader>vl",
+          key = "<leader>tl",
           pattern = "*.md",
         },
       }

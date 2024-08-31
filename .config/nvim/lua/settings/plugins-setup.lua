@@ -423,18 +423,6 @@ vim.g.indentLine_char = "⦙"
 vim.g.netrw_winsize = 30
 vim.g.netrw_banner = 0
 vim.g.netrw_keepdir = 0
--- setup for markdown snippet
-vim.g.vim_markdown_folding_disabled = 0
-vim.g.vim_markdown_folding_style_pythonic = 1
-vim.g.vim_markdown_folding_level = 2
-vim.g.vim_markdown_toc_autofit = 1
-vim.g.vim_markdown_conceal = 0
-vim.g.vim_markdown_conceal_code_blocks = 0
-vim.g.vim_markdown_no_extensions_in_markdown = 1
-vim.g.vim_markdown_autowrite = 1
-vim.g.vim_markdown_follow_anchor = 1
-vim.g.vim_markdown_auto_insert_bullets = 0
-vim.g.vim_markdown_new_list_item_indent = 0
 -- setup for syntastic
 vim.g.syntastic_always_populate_loc_list = 0
 vim.g.syntastic_auto_loc_list = 0

@@ -53,7 +53,7 @@ vim.keymap.set("n", "<leader>tq", function()
   vim.fn.cursor(vim.fn.line ".", col)
 end, { desc = "Toggle quote style" })
 -- Insert mode mappings
-vim.keymap.set({ "i", "n" }, "<leader>;", function()
+vim.keymap.set({ "i", "n" }, "<c-;>", function()
   if vim.fn.mode() == "i" then
     return vim.api.nvim_replace_termcodes("<esc>m`A;<esc>``a", true, true, true)
   else
