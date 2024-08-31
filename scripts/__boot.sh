@@ -1,16 +1,12 @@
 #!/usr/bin/env bash
 
-# Source generic error handling funcion
+# Source generic error handling function
 source __trap.sh
 
-# The set -e option instructs bash to immediately exit if any command has a non-zero exit status
-# The set -u referencing a previously undefined  variable - with the exceptions of $* and $@ - is an error
-# The set -o pipefaile if any command in a pipeline fails, that return code will be used as the return code of the whole pipeline
-# https://bit.ly/37nFgin
+# Set strict error handling
 set -eo pipefail
 
-# Add source and line number wher running in debug mode: __run_with_xtrace.sh __boot.sh
-
+# Function to display help message
 help_function() {
 	echo "Usage: __boot.sh [-h|--help]"
 	echo ""
@@ -44,28 +40,57 @@ current_day=$(date +"%A")
 
 echo "$current_day"
 
+# Function to move Alacritty to HDMI 0
 move_alacritty_to_hdmi_0() {
-	while [ -z "$(wmctrl -l | grep Alacritty)" ]; do
+	while ! wmctrl -l | grep -q Alacritty; do
 		sleep 0.5
 	done
 	wmctrl -r Alacritty -b remove,maximized_vert,maximized_horz
-
 	wmctrl -r Alacritty -e 0,1920,0,-1,-1
 	WID=$(xdotool search --onlyvisible --classname Alacritty | head -1)
 	sleep 3
 	wmctrl -r Alacritty -b add,maximized_vert,maximized_horz
-	xdotool windowactivate --sync $WID
-	xdotool windowraise $WID
+	xdotool windowactivate --sync "$WID"
+	xdotool windowraise "$WID"
 }
 
-if [[ " ${weekdays[*]} " =~ " $current_day " ]] && [[ "$timeoff" == 0 ]]; then
+# Function to modify profiles.ini
+update_profiles_ini() {
+	profile_to_set=$1
+	profiles_ini_path="$HOME/.mozilla/firefox/profiles.ini"
+
+	# Backup current profiles.ini
+	cp "$profiles_ini_path" "$profiles_ini_path.bak"
+
+	# Update the profiles.ini
+	awk -v profile="$profile_to_set" '
+    /^\[Install/ {
+        print
+        found=1
+        next
+    }
+    found && /^Default=/ {
+        sub(/=.*/, "=" profile)
+        print
+        next
+    }
+    {
+        print
+    }' "$profiles_ini_path" >"$profiles_ini_path.tmp" && mv "$profiles_ini_path.tmp" "$profiles_ini_path"
+
+	echo "Updated profiles.ini to use profile: $profile_to_set"
+}
+
+if [[ " ${weekdays[*]} " =~ $current_day ]] && [[ "$timeoff" == 0 ]]; then
+	update_profiles_ini "37uby07u.Work"
 	flatpak run com.slack.Slack 2>/dev/null &
-	nohup firefox -P "Work" about:profiles >/dev/null 2>&1 &
+	nohup firefox -P "Work" >/dev/null 2>&1 &
 	alacritty &
 	move_alacritty_to_hdmi_0
 else
-	#Weekend :)
-	nohup firefox -P "Home" about:profiles >/dev/null 2>&1 &
+	# Weekend :)
+	update_profiles_ini "bo5u6gcp.default-release-1664717216636"
+	nohup firefox -P "Home" >/dev/null 2>&1 &
 	alacritty &
 	move_alacritty_to_hdmi_0
 fi
