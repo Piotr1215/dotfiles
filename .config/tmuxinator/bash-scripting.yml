@@ -56,7 +56,7 @@ windows:
       layout: f49c,191x47,0,0{109x47,0,0[109x36,0,0,8,109x10,0,37,4],81x47,110,0[81x36,110,0,19,81x10,110,37,17]}
 
       panes:
-      - clear; echo <%= @args[0] %> | figlet | boxes | __center_text.sh | lolcat 
+      - clear && echo <%= @args[0] %> | figlet | boxes | __center_text.sh | lolcat 
       - cd ~/dev/shorts/; clear
       - ls
       - lks
