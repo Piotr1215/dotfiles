@@ -53,6 +53,14 @@ vim.keymap.set("n", "<leader>tq", function()
   vim.fn.cursor(vim.fn.line ".", col)
 end, { desc = "Toggle quote style" })
 -- Insert mode mappings
+vim.keymap.set({ "i", "n" }, "<leader>;", function()
+  if vim.fn.mode() == "i" then
+    return vim.api.nvim_replace_termcodes("<esc>m`A;<esc>``a", true, true, true)
+  else
+    return "m`A;<esc>``"
+  end
+end, { noremap = true, silent = true, expr = true, desc = "Insert semicolon at the end of the line" })
+
 vim.keymap.set(
   "i",
   "<C-h>",
