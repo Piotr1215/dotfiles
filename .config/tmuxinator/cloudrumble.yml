@@ -48,7 +48,7 @@ windows:
   - dev:
       layout: even-horizontal
       panes:
-        - ./run.sh
+        - ./run.sh <%= @args[0] %>
         - lg
   - vim:
       layout: tiled
