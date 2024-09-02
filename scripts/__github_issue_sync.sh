@@ -5,7 +5,7 @@ source /home/decoder/dev/dotfiles/scripts/__lib_taskwarrior_interop.sh
 
 set -eo pipefail
 
-# Add source and line number wher running in debug mode: __run_with_xtrace.sh github_issue_sync.sh
+# Add source and line number when running in debug mode: __run_with_xtrace.sh github_issue_sync.sh
 # Set new line and tab for word splitting
 IFS=$'\n\t'
 
@@ -15,7 +15,7 @@ log() {
 }
 
 # Removing [] from the description is needed to avoid issues with taskwarrior search engine
-# Otherwise it will create duplicate tasks for the same issue on evey sync
+# Otherwise it will create duplicate tasks for the same issue on every sync
 sanitize_task() {
 	local description=$1
 	# Remove square brackets
@@ -23,12 +23,27 @@ sanitize_task() {
 }
 
 # Retrieve and format GitHub issues
-get_issues() {
+get_github_issues() {
 	local issues
 	if ! issues=$(gh api -X GET /search/issues \
 		-f q='is:issue is:open assignee:Piotr1215' \
 		--jq '.items[] | select(.state == "open") | {id: .number, description: .title, repository: .repository_url}'); then
-		echo "Error: Unable to fetch issues"
+		echo "Error: Unable to fetch GitHub issues"
+		return 1
+	fi
+	echo "$issues"
+}
+
+# Retrieve and format Linear issues
+# TODO:(piotr1215) make sure to pull only open issues
+get_linear_issues() {
+	local issues
+	if ! issues=$(curl -s -X POST \
+		-H "Content-Type: application/json" \
+		-H "Authorization: $LINEAR_API_KEY" \
+		--data '{"query": "query { user(id: \"'"$LINEAR_USER_ID"'\") { id name assignedIssues { nodes { id title } } } }"}' \
+		https://api.linear.app/graphql | jq -r '.data.user.assignedIssues.nodes[] | {id: .id, description: .title, repository: ("linear" | ascii_downcase)}'); then
+		echo "Error: Unable to fetch Linear issues"
 		return 1
 	fi
 	echo "$issues"
@@ -36,25 +51,23 @@ get_issues() {
 
 # Synchronize issues with Taskwarrior
 sync_to_taskwarrior() {
-	local issue_line issue_id issue_description issue_repo_name issue_repo sanitized_description
+	local issue_line issue_id issue_description issue_repo_name sanitized_description
 
 	issue_line=$1
 	issue_id=$(echo "$issue_line" | jq -r '.id')
 	issue_description=$(echo "$issue_line" | jq -r '.description')
-	issue_repo_name=$(echo "$issue_line" | jq -r '.repository' | awk -F'/' '{print $6}')
-	issue_repo=$(echo "$issue_line" | jq -r '.repository' | sed -e 's/api.//' -e 's/repos\///')
+	issue_repo_name=$(echo "$issue_line" | jq -r '.repository')
 	sanitized_description=$(sanitize_task "$issue_description")
 
 	# Check if the task already exists by searching for a sanitized description
 	if ! task "$sanitized_description" &>/dev/null; then
 		# Pass the arguments as an array to maintain separation
-		local task_args=("$sanitized_description" "+github" "project:$issue_repo_name")
+		local task_args=("$sanitized_description" "+$issue_repo_name" "project:$issue_repo_name")
 
 		# Use create_task function to add a new task with attributes
 		task_id=$(create_task "${task_args[@]}") # Expand array elements as separate arguments
 
 		# Annotate the newly created task with the issue URL
-		annotate_task "$task_id" "$issue_repo/issues/$issue_id"
 		log "Task created for: $sanitized_description"
 	else
 		log "Task already exists for: $sanitized_description"
@@ -72,19 +85,19 @@ sync_github_issue() {
 	fi
 }
 
-compare_and_display_tasks_not_in_github() {
+compare_and_display_tasks_not_in_issues() {
 	local existing_task_descriptions="$1"
-	local github_issues="$2"
+	local issues_descriptions="$2"
 	local task_description
 	local issue_description
 	local issue_exists
 
-	log "Starting comparison of Taskwarrior tasks and GitHub issues."
+	log "Starting comparison of Taskwarrior tasks and issues."
 	# Convert the newline-separated string of existing task descriptions into an array
 	mapfile -t existing_task_descriptions_array <<<"$existing_task_descriptions"
 
-	# Convert the newline-separated string of GitHub issue descriptions into an array (no need to parse JSON)
-	mapfile -t github_issue_descriptions_array <<<"$github_issues"
+	# Convert the newline-separated string of issue descriptions into an array (no need to parse JSON)
+	mapfile -t issues_descriptions_array <<<"$issues_descriptions"
 
 	# Iterate over each Taskwarrior task description in the array
 	for task_description in "${existing_task_descriptions_array[@]}"; do
@@ -92,41 +105,55 @@ compare_and_display_tasks_not_in_github() {
 		local trimmed_task_description=$(echo "$task_description" | xargs)
 		# Initialize issue_exists as false
 		issue_exists=false
-		# Check if the trimmed task description exists in the GitHub issues (case-insensitive comparison)
-		for issue_description in "${github_issue_descriptions_array[@]}"; do
+		# Check if the trimmed task description exists in the issues (case-insensitive comparison)
+		for issue_description in "${issues_descriptions_array[@]}"; do
 			local trimmed_issue_description=$(echo "$issue_description" | xargs)
 			if [[ "${trimmed_task_description,,}" == "${trimmed_issue_description,,}" ]]; then
 				issue_exists=true
 				break
 			fi
 		done
-		# If the task does not exist in GitHub issues, mark it as completed
+		# If the task does not exist in issues, mark it as completed
 		if [[ "$issue_exists" == false ]]; then
 			sync_github_issue "$task_description"
 		fi
 	done
-	log "Comparison of Taskwarrior tasks and GitHub issues completed."
+	log "Comparison of Taskwarrior tasks and issues completed."
 }
 
-# Follow the Python convention and execute the main function
+# Main function to orchestrate syncing
 main() {
-	local issues
-	local existing_task_ids
 	local github_issues
-	local task_id
-	local description
+	local linear_issues
+	local existing_task_descriptions
 
-	issues=$(get_issues)
-	local formatted_issues=$(echo "$issues" | jq .)
-	log "Retrieved GitHub issues: $formatted_issues"
+	# Get GitHub issues and Linear issues
+	github_issues=$(get_github_issues)
+	linear_issues=$(get_linear_issues)
 
-	echo "$issues" | while IFS= read -r line; do
-		sync_to_taskwarrior "$(echo "$line" | jq -c '.')"
+	# Log retrieved issues
+	log "Retrieved GitHub issues: $(echo "$github_issues" | jq .)"
+	log "Retrieved Linear issues: $(echo "$linear_issues" | jq .)"
+
+	# Sync GitHub issues to Taskwarrior
+	echo "$github_issues" | jq -c '.' | while IFS= read -r line; do
+		sync_to_taskwarrior "$line"
 	done
-	existing_task_ids=$(task +github export | jq -r '.[] | select(.status == "pending") | .description' | while read -r line; do sanitize_task "$line"; done)
-	github_issues=$(echo "$issues" | jq -r '. | .description' | while read -r line; do sanitize_task "$line"; done)
 
-	compare_and_display_tasks_not_in_github "$existing_task_ids" "$github_issues"
+	# Sync Linear issues to Taskwarrior
+	echo "$linear_issues" | jq -c '.' | while IFS= read -r line; do
+		sync_to_taskwarrior "$line"
+	done
+
+	# Get existing Taskwarrior tasks
+	existing_task_descriptions=$(task +github export | jq -r '.[] | select(.status == "pending") | .description' | while read -r line; do sanitize_task "$line"; done)
+
+	# Compare and display tasks not in GitHub and Linear issues
+	compare_and_display_tasks_not_in_issues "$existing_task_descriptions" "$(
+		echo "$github_issues" | jq -r '.description'
+		echo "$linear_issues" | jq -r '.description'
+	)"
 }
+
 # Simulate entry point call
 main
