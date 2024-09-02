@@ -2,6 +2,62 @@
 # ~ works ok here
 source ~/dev/dotfiles/scripts/__reusable_variables.sh
 
+function ufp() {
+    local profile_type=$1
+    local WORK_PROFILE="37uby07u.Work"
+    local HOME_PROFILE="bo5u6gcp.default-release-1664717216636"
+
+    update_profiles_ini() {
+        local profile_to_set=$1
+        local profiles_ini_path="$HOME/.mozilla/firefox/profiles.ini"
+
+        # Backup current profiles.ini
+        cp "$profiles_ini_path" "$profiles_ini_path.bak"
+
+        # Update the profiles.ini
+        awk -v profile="$profile_to_set" '
+        /^\[Install/ {
+            print
+            found=1
+            next
+        }
+        found && /^Default=/ {
+            sub(/=.*/, "=" profile)
+            print
+            next
+        }
+        {
+            print
+        }' "$profiles_ini_path" > "$profiles_ini_path.tmp" && mv "$profiles_ini_path.tmp" "$profiles_ini_path"
+
+        echo "Updated profiles.ini to use profile: $profile_to_set"
+    }
+
+    # Check if a profile type is provided
+    if [ -z "$profile_type" ]; then
+        echo "Usage: update_firefox_profile <profile_type>"
+        echo "Accepted values: work, home"
+        return 1
+    fi
+
+    # Convert input to lowercase for case-insensitive comparison
+    profile_type=$(echo "$profile_type" | tr '[:upper:]' '[:lower:]')
+
+    # Set the profile based on the input
+    case $profile_type in
+        "work")
+            update_profiles_ini "$WORK_PROFILE"
+            ;;
+        "home")
+            update_profiles_ini "$HOME_PROFILE"
+            ;;
+        *)
+            echo "Invalid profile type. Please use 'work' or 'home'."
+            return 1
+            ;;
+    esac
+}
+
 function lsfiles() {
   ls **/*.**
 }
