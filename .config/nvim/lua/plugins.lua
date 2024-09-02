@@ -53,6 +53,7 @@ return require("lazy").setup {
   },
   },
   "tyru/open-browser.vim",
+  "gcmt/taboo.vim",
   "towolf/vim-helm",
   "jbyuki/one-small-step-for-vimkind",
   {
