@@ -2,6 +2,14 @@
 # ~ works ok here
 source ~/dev/dotfiles/scripts/__reusable_variables.sh
 
+function lsfiles() {
+  ls **/*.**
+}
+
+function lsfilesh() {
+  ls **/*.**(D)
+}
+
 function gpt() {
     local input
 
