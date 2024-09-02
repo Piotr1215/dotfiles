@@ -106,7 +106,13 @@ vim.api.nvim_set_keymap(
   "v:count == 0 ? 'gj' : 'j'",
   { noremap = true, expr = true, silent = true, desc = "moves down over virtual (wrapped) lines" }
 )
-vim.api.nvim_set_keymap("n", "<Mgo-Right>", "gT", { noremap = true, silent = true, desc = "move to next tab" })
+vim.api.nvim_set_keymap("n", "<M-l>", "<cmd>tabnext<cr>", { noremap = true, silent = true, desc = "move to next tab" })
+vim.api.nvim_set_keymap(
+  "n",
+  "<M-h>",
+  "<cmd>tabprevious<cr>",
+  { noremap = true, silent = true, desc = "move to next tab" }
+)
 utils.nmap("<BS>", "^", { desc = "move to first non-bkgtgtgtgtlank character of the line" })
 utils.vmap("<S-PageDown>", ":m '>+1<CR>gv=gv", { desc = "Move Line Down in Visual Mode" })
 utils.vmap("<S-PageUp>", ":m '<-2<CR>gv=gv", { desc = "Move Line Up in Visual Mode" })
