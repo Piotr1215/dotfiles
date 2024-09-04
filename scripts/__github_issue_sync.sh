@@ -35,13 +35,12 @@ get_github_issues() {
 }
 
 # Retrieve and format Linear issues
-# TODO:(piotr1215) make sure to pull only open issues
 get_linear_issues() {
 	local issues
 	if ! issues=$(curl -s -X POST \
 		-H "Content-Type: application/json" \
 		-H "Authorization: $LINEAR_API_KEY" \
-		--data '{"query": "query { user(id: \"'"$LINEAR_USER_ID"'\") { id name assignedIssues { nodes { id title } } } }"}' \
+		--data '{"query": "query { user(id: \"'"$LINEAR_USER_ID"'\") { id name assignedIssues(filter: { state: { name: { neq: \"Released\" } } }) { nodes { id title } } } }"}' \
 		https://api.linear.app/graphql | jq -r '.data.user.assignedIssues.nodes[] | {id: .id, description: .title, repository: ("linear" | ascii_downcase)}'); then
 		echo "Error: Unable to fetch Linear issues"
 		return 1
