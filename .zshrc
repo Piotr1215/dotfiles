@@ -217,6 +217,12 @@ zle -N output_file_path_home
 bindkey '^[f' output_file_path_current   # Bind to Alt+f
 bindkey '^[F' output_file_path_home      # Bind to Alt+Shift+f
 
+function toggle_window_pinned() {
+ ~/dev/dotfiles/scripts/__toggle_keep_top.sh 
+}
+zle -N toggle_window_pinned
+bindkey '^[w' toggle_window_pinned
+
 function pet-select() {
   RBUFFER=$(pet search)
   CURSOR=$#BUFFER
