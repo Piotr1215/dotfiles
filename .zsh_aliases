@@ -21,7 +21,7 @@ alias ls='exa --color=always --long --all --header --icons --git'
 alias lsa='exa --color=always --long --all --sort=age --reverse --header --icons'
 alias lsf='fd --max-depth=1 --type=file'
 alias tr2='tree -LC 2 --si --sort name | less'
-alias lt='exa --tree --level=2 --icons --color=always --git'
+alias lst='exa --tree --level=2 --icons --color=always --git'
 alias lsdir='ls -ld *(/om[1])'
 
 # incus aliases
@@ -73,6 +73,7 @@ alias ai='/home/decoder/go/bin/aicmd'
 alias clock="__clock.sh &"
 alias dca='mux s dca'
 alias dev='cd ~/dev'
+alias loft='cd ~/dev/loft'
 alias disk='gdu'
 alias diskusage='du -sh * | sort -h --reverse'
 alias dls="docker container ls -a"
