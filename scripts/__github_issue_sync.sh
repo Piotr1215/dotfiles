@@ -27,7 +27,7 @@ get_github_issues() {
 	local issues
 	if ! issues=$(gh api -X GET /search/issues \
 		-f q='is:issue is:open assignee:Piotr1215' \
-		--jq '.items[] | select(.state == "open") | {id: .number, description: .title, repository: .repository_url}'); then
+		--jq '.items[] | select(.state == "open") | {id: .number, description: .title, repository: .repository_url, html_url: .html_url}'); then
 		echo "Error: Unable to fetch GitHub issues"
 		return 1
 	fi
@@ -40,8 +40,8 @@ get_linear_issues() {
 	if ! issues=$(curl -s -X POST \
 		-H "Content-Type: application/json" \
 		-H "Authorization: $LINEAR_API_KEY" \
-		--data '{"query": "query { user(id: \"'"$LINEAR_USER_ID"'\") { id name assignedIssues(filter: { state: { name: { neq: \"Released\" } } }) { nodes { id title } } } }"}' \
-		https://api.linear.app/graphql | jq -r '.data.user.assignedIssues.nodes[] | {id: .id, description: .title, repository: ("linear" | ascii_downcase)}'); then
+		--data '{"query": "query { user(id: \"'"$LINEAR_USER_ID"'\") { id name assignedIssues(filter: { state: { name: { neq: \"Released\" } } }) { nodes { id title url } } } }"}' \
+		https://api.linear.app/graphql | jq -r '.data.user.assignedIssues.nodes[] | {id: .id, description: .title, repository: ("linear" | ascii_downcase), html_url: .url}'); then
 		echo "Error: Unable to fetch Linear issues"
 		return 1
 	fi
@@ -50,12 +50,13 @@ get_linear_issues() {
 
 # Synchronize issues with Taskwarrior
 sync_to_taskwarrior() {
-	local issue_line issue_id issue_description issue_repo_name sanitized_description
+	local issue_line issue_id issue_description issue_repo_name issue_url sanitized_description
 
 	issue_line=$1
 	issue_id=$(echo "$issue_line" | jq -r '.id')
 	issue_description=$(echo "$issue_line" | jq -r '.description')
 	issue_repo_name=$(echo "$issue_line" | jq -r '.repository')
+	issue_url=$(echo "$issue_line" | jq -r '.html_url')
 	sanitized_description=$(sanitize_task "$issue_description")
 
 	# Check if the task already exists by searching for a sanitized description
@@ -66,7 +67,8 @@ sync_to_taskwarrior() {
 		# Use create_task function to add a new task with attributes
 		task_id=$(create_task "${task_args[@]}") # Expand array elements as separate arguments
 
-		# Annotate the newly created task with the issue URL
+		# Annotate the newly created task with only the issue URL
+		annotate_task "$task_id" "$issue_url"
 		log "Task created for: $sanitized_description"
 	else
 		log "Task already exists for: $sanitized_description"
