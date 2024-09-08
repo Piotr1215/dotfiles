@@ -77,7 +77,7 @@ vim.g.vim_markdown_new_list_item_indent = 0
 -- MarkdownPreview settings
 vim.g.mkdp_browser = "/usr/bin/firefox"
 vim.g.mkdp_echo_preview_url = 0
-utils.nmap("<leader>mp", ":MarkdownPreview<CR>")
+utils.nmap("<leader>mp", ":MarkdownPreview<CR>:silent !bash -c 'wmctrl -a Firefox'<CR>")
 
 -- MarkdownClipboardImage settings
 utils.nmap("<leader>pi", ":call mdip#MarkdownClipboardImage()<CR>")
