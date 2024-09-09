@@ -2,6 +2,26 @@
 # ~ works ok here
 source ~/dev/dotfiles/scripts/__reusable_variables.sh
 
+alias ddg='ddg_function'
+
+# Need to alias this because regular ddg doesn't open firefox any more
+function ddg_function() {
+    web_search duckduckgo "$@"
+    wmctrl -a "$(wmctrl -l | grep -i 'firefox' | awk '{print $NF}' | head -n 1)"
+}
+
+alias ghcurrentbranch='ghcurrentbranch_function'
+
+# Need to alias this because regular ddg doesn't open firefox any more
+function ghcurrentbranch_function() {
+    if git rev-parse --is-inside-work-tree > /dev/null 2>&1; then
+        gh repo view --branch "$(git rev-parse --abbrev-ref HEAD)" --web
+        wmctrl -a "$(wmctrl -l | grep -i 'firefox' | awk '{print $NF}' | head -n 1)"
+    else
+        echo "Not a git repository."
+    fi
+}
+
 function ufp() {
     local profile_type=$1
     local WORK_PROFILE="37uby07u.Work"
