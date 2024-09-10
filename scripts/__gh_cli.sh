@@ -48,13 +48,15 @@ print_error() {
 # Common function to format and open URLs
 format_and_open() {
 	local data="$1"
-	local longest=$(echo "$data" | awk -F'|' '{ if (length($1) > max) max = length($1) } END { print max }')
-	echo "$data" | awk -v max="$longest" -F'|' '{ printf "%-" max "s | %s\n", $1, $2 }' |
-		fzf | awk -F'|' '{print $2}' | xargs xdg-open >/dev/null 2>&1
+	[ -z "$data" ] && echo "No data to display." && return 1
+
+	# Display both title and URL, then extract the URL for opening
+	echo "$data" | fzf | awk -F '###' '{print $2}' |
+		xargs -r xdg-open >/dev/null 2>&1
 }
 
 # Unified search function
-function _ghsearch() {
+_ghsearch() {
 	local search_type="$1"
 	local review_requested="$2"
 	local flags=(--state=open --json url,repository,title)
@@ -66,8 +68,10 @@ function _ghsearch() {
 		flags+=(--author "@me")
 	fi
 
+	# Format the title and URL with '###' separator and display both
 	local data=$(gh search "$search_type" "${flags[@]}" |
-		jq -r '.[] | select(.title) | "\(.title) | \(.url)"')
+		jq -r '.[] | "\(.title) ### \(.url)"') # Use '###' as a delimiter
+
 	[ -z "$data" ] && echo "No data found." && return 1
 
 	format_and_open "$data"
