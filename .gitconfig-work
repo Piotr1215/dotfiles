@@ -4,6 +4,7 @@ diff = auto
 interactive = auto
 status = auto
 [core]
+sshCommand = "ssh -i ~/.ssh/id_ed25519 -F /dev/null"
 excludesFile = ~/.gitignore
 pager = delta
 	editor = nvim
