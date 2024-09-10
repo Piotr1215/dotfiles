@@ -216,7 +216,16 @@ zle -N output_file_path_current
 zle -N output_file_path_home
 bindkey '^[f' output_file_path_current   # Bind to Alt+f
 bindkey '^[F' output_file_path_home      # Bind to Alt+Shift+f
+# Wrapper function to run the script
+function select_loft_folder() {
+    __select_loft_folder.sh
+}
 
+# Create a zle widget for the function
+zle -N select_loft_folder
+
+# Bind to Alt+l
+bindkey '^[l' select_loft_folder  # Alt+l
 function toggle_window_pinned() {
  ~/dev/dotfiles/scripts/__toggle_keep_top.sh 
 }

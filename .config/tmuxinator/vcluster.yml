@@ -1,0 +1,63 @@
+# run with mux start bash-scripting display_text="xxxxx"
+name: <%= %x(~/dev/dotfiles/scripts/__generate_session_name_from_branch.sh ~/loft/#{@settings["folder"]}).strip %>
+root: ~/loft/<%= @settings["folder"] %>
+
+# Optional tmux socket
+# socket_name: foo
+
+# Note that the pre and post options have been deprecated and will be replaced by
+# project hooks.
+
+# Project hooks
+
+# Runs on project start, always
+on_project_start: tmux rename-session -t vcluster $(basename "$(pwd)")-$(git rev-parse --abbrev-ref HEAD)
+
+# Run on project start, the first time
+# on_project_first_start: 
+
+# Run on project start, after the first time
+# on_project_restart: command
+
+# Run on project exit ( detaching from tmux session )
+# on_project_exit: rm -rf /tmp/first /tmp/second
+
+# Run on project stop
+on_project_stop: rm -rf /tmp/first /tmp/second
+
+# Runs in each window and pane before window/pane specific commands. Useful for setting up interpreter versions.
+# pre_window: rbenv shell 2.0.0-p247
+
+# Pass command line options to tmux. Useful for specifying a different tmux.conf.
+# tmux_options: -f ~/.tmux.mac.conf
+
+# Change the command to call tmux.  This can be used by derivatives/wrappers like byobu.
+# tmux_command: byobu
+
+# Specifies (by name or index) which window will be selected on project startup. If not set, the first window is used.
+startup_window: 2
+
+# Specifies (by index) which pane of the specified window will be selected on project startup. If not set, the first pane is used.
+# startup_pane: 2
+
+# Enables the display of pane titles. For example "editor" below. Defaults to false.
+enable_pane_titles: true
+
+# Configures pane title position. Can be: bottom, top, or "off". Note: "off" must be provided in quotes to avoid being interpreted as a boolean false. Defaults to top.
+pane_title_position: top
+
+# Configures pane title format. Defaults to "#{pane_index}: #{pane_title}".
+# Please see the tmux manpage for details, on valid formats.
+pane_title_format: "[ #T ]"
+
+
+windows:
+  - clusters:
+      layout: even-horizontal
+      panes:
+        - ~/dev/dotfiles/scripts/__create_kind_cluster.sh first && __create_separate_kubeconfig.sh /tmp/first && cd /tmp/first
+        - ~/dev/dotfiles/scripts/__create_kind_cluster.sh second && __create_separate_kubeconfig.sh /tmp/second && cd /tmp/second
+  - dev:
+      layout: even-horizontal 
+      panes:
+        - lg

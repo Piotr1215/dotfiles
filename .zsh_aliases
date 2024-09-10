@@ -83,7 +83,6 @@ alias dps="docker ps --format 'table {{.ID}}\t{{.Names}}\t{{.Image}}'" #docker p
 alias fdit='vim ~/.zsh_functions'
 alias gcc='git diff --stat --cached origin/master' # Git Check Commit before pushing
 alias ghc='__gh_cli.sh'
-alias ghcurrentbranch='gh repo view --branch $(git rev-parse --abbrev-ref HEAD) --web'
 alias gs='git show'
 alias home='nohup firefox -P "Home" > /dev/null 2>&1 &'
 alias lg='lazygit'
