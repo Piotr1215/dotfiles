@@ -11,7 +11,7 @@ root: ~/loft/<%= @settings["folder"] %>
 # Project hooks
 
 # Runs on project start, always
-on_project_start: tmux rename-session -t vcluster $(basename "$(pwd)")-$(git rev-parse --abbrev-ref HEAD)
+# on_project_start: 
 
 # Run on project start, the first time
 # on_project_first_start: 
@@ -20,10 +20,9 @@ on_project_start: tmux rename-session -t vcluster $(basename "$(pwd)")-$(git rev
 # on_project_restart: command
 
 # Run on project exit ( detaching from tmux session )
-# on_project_exit: rm -rf /tmp/first /tmp/second
+# on_project_exit: 
 
-# Run on project stop
-on_project_stop: rm -rf /tmp/first /tmp/second
+# on_project_stop: ~/dev/dotfiles/scripts/__delete_all_kind_clusters.sh 
 
 # Runs in each window and pane before window/pane specific commands. Useful for setting up interpreter versions.
 # pre_window: rbenv shell 2.0.0-p247
@@ -49,7 +48,6 @@ pane_title_position: top
 # Configures pane title format. Defaults to "#{pane_index}: #{pane_title}".
 # Please see the tmux manpage for details, on valid formats.
 pane_title_format: "[ #T ]"
-
 
 windows:
   - clusters:
