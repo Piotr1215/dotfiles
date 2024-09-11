@@ -3,11 +3,14 @@
 # UUID of the task to annotate
 uuid="$@"
 
-# Directory where notes are stored
-notes_dir="/home/decoder/dev/obsidian/decoder/Notes/projects/"
+# Base directory where notes are stored
+notes_dir="/home/decoder/dev/obsidian/decoder/Notes/"
 
-# Show fzf dialog to select an existing note
-filepath=$(find "$notes_dir" -type f -name '*.md' | fzf-tmux --preview "bat --color=always {}")
+# Array of subdirectories to search in
+subdirs=("areas" "meetings" "projects" "resources" "reviews")
+
+# Find files in the specified subdirectories and show fzf dialog to select an existing note
+filepath=$(find "${subdirs[@]/#/$notes_dir}" -type f -name '*.md' | fzf-tmux --preview "bat --color=always {}")
 
 # If fzf was cancelled, exit the script
 if [ -z "$filepath" ]; then
@@ -25,4 +28,5 @@ else
 	echo "Failed to annotate the task."
 fi
 
+# Open the selected note in nvim
 nvim "$filepath"
