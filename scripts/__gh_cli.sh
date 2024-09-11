@@ -82,14 +82,6 @@ function ghmyissues() {
 	_ghsearch "issues"
 }
 
-# Search for my repositories and open the selected one in a web browser
-function ghmyrepos() {
-	local data=$(gh search repos --owner "@me" --limit 300 --json url,name,owner |
-		jq -r '.[] | "\(.name) | \(.url)"')
-
-	format_and_open "$data"
-}
-
 # Search for my open PRs and open the selected one in a web browser
 function ghmyprs() {
 	_ghsearch "prs" "false"
@@ -166,9 +158,6 @@ case "$1" in
 	;;
 ghmyissues)
 	ghmyissues
-	;;
-ghmyrepos)
-	ghmyrepos
 	;;
 ghmyprs)
 	ghmyprs
