@@ -1,18 +1,4 @@
-markdown_template = '''## Description
-
-- issue description
-- background and additional context
-- optionally As a [user], I want [functionality], so that I can [benefit].
-
-## Acceptance Criteria
-
-- [ ]
-
-
-## Related
-
-- patent issues, related and blockers
-'''
+markdown_template ='piotrzan@gmail.com'
 
 # Set the clipboard content using AutoKey's built-in functionality
 clipboard.fill_clipboard(markdown_template)
