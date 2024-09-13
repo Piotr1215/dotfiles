@@ -82,7 +82,6 @@ alias dpsa="docker ps -a --format 'table {{.ID}}\t{{.Names}}\t{{.Image}}'" #dock
 alias dps="docker ps --format 'table {{.ID}}\t{{.Names}}\t{{.Image}}'" #docker ps -a with only id name and image
 alias fdit='vim ~/.zsh_functions'
 alias gcc='git diff --stat --cached origin/master' # Git Check Commit before pushing
-alias ghc='__gh_cli.sh'
 alias gs='git show'
 alias home='nohup firefox -P "Home" > /dev/null 2>&1 &'
 alias lg='lazygit'
