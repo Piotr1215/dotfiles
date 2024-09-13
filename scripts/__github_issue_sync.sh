@@ -146,8 +146,10 @@ main() {
 		sync_to_taskwarrior "$line"
 	done
 
-	# Get existing Taskwarrior tasks
-	existing_task_descriptions=$(task +github export | jq -r '.[] | select(.status == "pending") | .description' | while read -r line; do sanitize_task "$line"; done)
+	# Get existing Taskwarrior tasks (including both GitHub and Linear)
+	existing_task_descriptions=$(task +github or +linear export |
+		jq -r '.[] | select(.status == "pending") | .description' |
+		while read -r line; do sanitize_task "$line"; done)
 
 	# Compare and display tasks not in GitHub and Linear issues
 	compare_and_display_tasks_not_in_issues "$existing_task_descriptions" "$(
