@@ -88,6 +88,7 @@ source $ZSH/oh-my-zsh.sh
 source ~/.oh-my-zsh/plugins/tmuxinator/_mst 
 source ~/.oh-my-zsh/plugins/tmuxinator/_ms
 source ~/.oh-my-zsh/plugins/tmuxinator/_fifp
+source ~/scripts/__gh_cli.sh
 
 fpath=(${HOME}/.oh-my-zsh/completions/ $fpath)
 

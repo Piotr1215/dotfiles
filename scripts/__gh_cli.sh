@@ -1,54 +1,34 @@
-#!/usr/bin/env bash
+# __gh_cli.sh: A collection of GitHub utility functions for Zsh
 
-# gh_cli.sh: A CLI for GitHub utilities
 # Check for dependencies
-for cmd in "gh" "jq" "git"; do
+for cmd in gh jq git fzf; do
 	if ! command -v $cmd &>/dev/null; then
 		echo "$cmd is not installed. Please install it and try again."
-		exit 1
+		return 1
 	fi
 done
+
 # Help Menu
 function show_help() {
-	echo "Usage: gh_cli.sh [command]"
 	echo "Available commands:"
 	echo "  ghmyissues        - Search for my open issues"
-	echo "  ghmyrepos         - Search for my repositories"
 	echo "  ghmyprs           - Search for my open PRs"
+	echo "  ghmyprsreview     - Search for PRs where review is requested"
 	echo "  ghrepoprs         - List and select a PR in the current repository"
 	echo "  ghrepobranches    - Select a git branch and open its URL"
 	echo "  ghgistweb         - Select gist, preview it, output to terminal and go to web view"
 	echo "  ghgist            - Select gist, preview it, output to terminal and copy to clipboard"
 	echo "  ghnewrepo         - Create a private repo with the current directory name and description"
-}
-# Print error statement and exit
-
-print_error() {
-	local exit_code="$?"
-	local line_number="$1"
-	local cmd="$2"
-
-	if [[ "$exit_code" -eq "130" ]] || [[ "$exit_code" -eq "123" ]]; then
-		echo "Script interrupted by user." >&2
-		exit 1
-	fi
-	echo "ERROR: An error occurred in the script \"$0\" on line $line_number" >&2
-	echo "Exit Code: $exit_code" >&2
-	echo "Command: $cmd" >&2
-
-	# Print a simple stack trace
-	echo "Stack Trace:" >&2
-	for i in "${!FUNCNAME[@]}"; do
-		echo "  ${FUNCNAME[$i]}() called at line ${BASH_LINENO[$i - 1]} in ${BASH_SOURCE[$i]}" >&2
-	done
-
-	exit 1
+	echo "  ghhelp            - Show this help message"
 }
 
 # Common function to format and open URLs
-format_and_open() {
+function format_and_open() {
 	local data="$1"
-	[ -z "$data" ] && echo "No data to display." && return 1
+	if [ -z "$data" ]; then
+		echo "No data to display."
+		return 1
+	fi
 
 	# Display both title and URL, then extract the URL for opening
 	echo "$data" | fzf | awk -F '###' '{print $2}' |
@@ -56,10 +36,10 @@ format_and_open() {
 }
 
 # Unified search function
-_ghsearch() {
+function _ghsearch() {
 	local search_type="$1"
 	local review_requested="$2"
-	local flags=(--state=open --json url,repository,title)
+	local -a flags=(--state=open --json url,repository,title)
 
 	# Add author or review-requested based on the flag
 	if [ "$review_requested" = "true" ]; then
@@ -69,15 +49,18 @@ _ghsearch() {
 	fi
 
 	# Format the title and URL with '###' separator and display both
-	local data=$(gh search "$search_type" "${flags[@]}" |
+	local data=$(gh search "$search_type" "${flags[@]}" 2>/dev/null |
 		jq -r '.[] | "\(.title) ### \(.url)"') # Use '###' as a delimiter
 
-	[ -z "$data" ] && echo "No data found." && return 1
+	if [ -z "$data" ]; then
+		echo "No data found."
+		return 1
+	fi
 
 	format_and_open "$data"
 }
 
-# Search for my open PRs and open the selected one in a web browser
+# Search for my open issues and open the selected one in a web browser
 function ghmyissues() {
 	_ghsearch "issues"
 }
@@ -86,102 +69,130 @@ function ghmyissues() {
 function ghmyprs() {
 	_ghsearch "prs" "false"
 }
+
+# Search for PRs where review is requested from me
 function ghmyprsreview() {
 	_ghsearch "prs" "true"
 }
+
 # Function to list and select a PR in the current repository, then open its URL
 function ghrepoprs() {
-	# Fetch PRs in the current repository
-	pr_data=$(gh pr list --json url,number,title --limit 300 |
-		sed 's/\x1b\[[0-9;]*[a-zA-Z]//g' |
-		jq -r '.[] | "\(.number) | \(.title) | \(.url)"')
+	# Error handling within the function
+	{
+		# Fetch PRs in the current repository
+		local pr_data=$(gh pr list --json url,number,title --limit 300 2>/dev/null |
+			jq -r '.[] | "\(.number) | \(.title) | \(.url)"')
 
-	export GH_FORCE_TTY=100%
+		if [ -z "$pr_data" ]; then
+			echo "No PRs found in the current repository."
+			return 1
+		fi
 
-	# Select a PR using fzf with a preview panel
-	selected_pr=$(echo "$pr_data" | fzf --ansi \
-		--preview 'gh pr view $(awk -F"|" "{print \$1}" <<< {})' \
-		--preview-window=up:40:wrap)
+		export GH_FORCE_TTY=100%
 
-	# If no PR was selected (e.g., fzf was exited), then exit the function
-	[ -z "$selected_pr" ] && return
+		# Select a PR using fzf with a preview panel
+		local selected_pr=$(echo "$pr_data" | fzf --ansi \
+			--preview 'gh pr view $(awk -F"|" "{print \$1}" <<< {})' \
+			--preview-window=up:40:wrap)
 
-	# Extract the PR URL and remove leading/trailing whitespace
-	pr_url=$(echo "$selected_pr" | awk -F'|' '{print $3}' | xargs)
+		# If no PR was selected (e.g., fzf was exited), then exit the function
+		if [ -z "$selected_pr" ]; then
+			return
+		fi
 
-	# Open the selected PR's URL in the web browser
-	xdg-open "$pr_url" >/dev/null 2>&1
+		# Extract the PR URL and remove leading/trailing whitespace
+		local pr_url=$(echo "$selected_pr" | awk -F'|' '{print $3}' | xargs)
+
+		# Open the selected PR's URL in the web browser
+		xdg-open "$pr_url" >/dev/null 2>&1
+	} || {
+		echo "An error occurred while listing repository PRs."
+		return 1
+	}
 }
 
 # Function to select a git branch and open its URL
 function ghrepobranches() {
-	# Fetch remote branches and clean the output
-	remote_branches=$(git ls-remote --heads 2>/dev/null | awk '{print $2}' | sed 's/^refs\/heads\///')
+	{
+		# Fetch remote branches and clean the output
+		local remote_branches=$(git ls-remote --heads 2>/dev/null | awk '{print $2}' | sed 's|^refs/heads/||')
 
-	# Select a branch using fzf
-	selected_branch=$(echo "$remote_branches" | fzf --ansi \
-		--preview 'git show-branch {} | head -3' \
-		--preview-window=up:5:wrap)
+		if [ -z "$remote_branches" ]; then
+			echo "No remote branches found."
+			return 1
+		fi
 
-	# If no branch was selected (e.g., fzf was exited), then exit the function
-	[ -z "$selected_branch" ] && return
+		# Select a branch using fzf
+		local selected_branch=$(echo "$remote_branches" | fzf --ansi \
+			--preview 'git show-branch {} | head -3' \
+			--preview-window=up:5:wrap)
 
-	# Navigate to the URL of the selected branch
-	gh repo view --branch "$selected_branch" --web
+		# If no branch was selected (e.g., fzf was exited), then exit the function
+		if [ -z "$selected_branch" ]; then
+			return
+		fi
+
+		# Navigate to the URL of the selected branch
+		gh repo view --branch "$selected_branch" --web
+	} || {
+		echo "An error occurred while listing repository branches."
+		return 1
+	}
 }
 
 # Select gist, preview it, output to terminal and go to web view
 function ghgistweb() {
-	GH_FORCE_TTY=100% gh gist list --limit 1000 | fzf --ansi --preview 'GH_FORCE_TTY=100% gh gist view {1}' --preview-window up | awk '{print $1}' | xargs gh gist view --web | tee /dev/tty | xsel --clipboard
+	{
+		GH_FORCE_TTY=100%
+		local selected_gist=$(gh gist list --limit 1000 2>/dev/null | fzf --ansi \
+			--preview 'GH_FORCE_TTY=100% gh gist view {1}' --preview-window up)
+
+		if [ -z "$selected_gist" ]; then
+			return
+		fi
+
+		local gist_id=$(echo "$selected_gist" | awk '{print $1}')
+		gh gist view --web "$gist_id" | tee /dev/tty | xclip -selection clipboard
+	} || {
+		echo "An error occurred while accessing gists."
+		return 1
+	}
 }
 
 # Select gist, preview it, output to terminal and copy to clipboard
 function ghgist() {
-	GH_FORCE_TTY=100% gh gist list --limit 1000 | fzf --ansi --preview 'GH_FORCE_TTY=100% gh gist view {1}' --preview-window up | awk '{print $1}' | xargs gh gist view --raw | tee /dev/tty | xsel --clipboard
+	{
+		GH_FORCE_TTY=100%
+		local selected_gist=$(gh gist list --limit 1000 2>/dev/null | fzf --ansi \
+			--preview 'GH_FORCE_TTY=100% gh gist view {1}' --preview-window up)
+
+		if [ -z "$selected_gist" ]; then
+			return
+		fi
+
+		local gist_id=$(echo "$selected_gist" | awk '{print $1}')
+		gh gist view --raw "$gist_id" | tee /dev/tty | xclip -selection clipboard
+	} || {
+		echo "An error occurred while accessing gists."
+		return 1
+	}
 }
+
+# Create a new private repository with the current directory name and description
 function ghnewrepo() {
-	if [ -z "$2" ]; then
-		echo "Please provide a repo description"
-		exit 1
+	if [ -z "$1" ]; then
+		echo "Usage: ghnewrepo \"Repository description\""
+		return 1
 	fi
 	local repo_description="$1"
-	gh repo create "$(basename "$PWD")" --private --source=. --description "$repo_description"
+
+	gh repo create "$(basename "$PWD")" --private --source=. --description "$repo_description" || {
+		echo "An error occurred while creating the repository."
+		return 1
+	}
 }
 
-# Set the error trap
-trap 'print_error $LINENO "$BASH_COMMAND"' ERR
-
-# Argument Parsing with Help Menu
-case "$1" in
--h | --help)
+# Show help message
+function ghhelp() {
 	show_help
-	;;
-ghmyissues)
-	ghmyissues
-	;;
-ghmyprs)
-	ghmyprs
-	;;
-ghrepoprs)
-	ghrepoprs
-	;;
-ghrepobranches)
-	ghrepobranches
-	;;
-ghgistweb)
-	ghgistweb
-	;;
-ghmyprsreview)
-	ghmyprsreview
-	;;
-ghgist)
-	ghgist
-	;;
-ghnewrepo)
-	ghnewrepo "$@"
-	;;
-*)
-	echo "Invalid command"
-	show_help
-	;;
-esac
+}
