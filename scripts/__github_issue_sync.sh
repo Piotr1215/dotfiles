@@ -122,7 +122,25 @@ compare_and_display_tasks_not_in_issues() {
 	log "Comparison of Taskwarrior tasks and issues completed."
 }
 
-# Main function to orchestrate syncing
+get_existing_task_descriptions() {
+	task +github or +linear export |
+		jq -r '.[] | select(.status == "pending") | .description' |
+		while read -r line; do sanitize_task "$line"; done
+}
+
+log_issues() {
+	local issue_type="$1"
+	local issues="$2"
+	log "Retrieved $issue_type issues: $(echo "$issues" | jq .)"
+}
+
+sync_issues_to_taskwarrior() {
+	local issues="$1"
+	echo "$issues" | jq -c '.' | while IFS= read -r line; do
+		sync_to_taskwarrior "$line"
+	done
+}
+
 main() {
 	local github_issues
 	local linear_issues
@@ -132,24 +150,16 @@ main() {
 	github_issues=$(get_github_issues)
 	linear_issues=$(get_linear_issues)
 
-	# Log retrieved issues
-	log "Retrieved GitHub issues: $(echo "$github_issues" | jq .)"
-	log "Retrieved Linear issues: $(echo "$linear_issues" | jq .)"
+	# Log and sync GitHub issues
+	log_issues "GitHub" "$github_issues"
+	sync_issues_to_taskwarrior "$github_issues"
 
-	# Sync GitHub issues to Taskwarrior
-	echo "$github_issues" | jq -c '.' | while IFS= read -r line; do
-		sync_to_taskwarrior "$line"
-	done
-
-	# Sync Linear issues to Taskwarrior
-	echo "$linear_issues" | jq -c '.' | while IFS= read -r line; do
-		sync_to_taskwarrior "$line"
-	done
+	# Log and sync Linear issues
+	log_issues "Linear" "$linear_issues"
+	sync_issues_to_taskwarrior "$linear_issues"
 
 	# Get existing Taskwarrior tasks (including both GitHub and Linear)
-	existing_task_descriptions=$(task +github or +linear export |
-		jq -r '.[] | select(.status == "pending") | .description' |
-		while read -r line; do sanitize_task "$line"; done)
+	existing_task_descriptions=$(get_existing_task_descriptions)
 
 	# Compare and display tasks not in GitHub and Linear issues
 	compare_and_display_tasks_not_in_issues "$existing_task_descriptions" "$(
