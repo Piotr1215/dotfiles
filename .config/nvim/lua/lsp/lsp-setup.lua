@@ -21,6 +21,11 @@ lspconfig.lua_ls.setup {
   },
 }
 
+require("lspconfig").vale_ls.setup {
+  root_dir = lspconfig.util.root_pattern ".vale.ini",
+  filetypes = { "markdown", "mdx" },
+}
+
 require("lspconfig").marksman.setup {}
 
 local configs = require "lspconfig.configs"
