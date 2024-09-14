@@ -25,20 +25,6 @@ return require("lazy").setup {
   {
     "jellydn/hurl.nvim",
   },
-  {
-    "Piotr1215/toggler.nvim",
-    config = function()
-      require("toggler").setup {
-        {
-          name = "Vale",
-          cmd = "Vale",
-          key = "<leader>tl",
-          pattern = "*.md",
-        },
-      }
-    end,
-  },
-
   -- }}}
   -- Editor Extensions {{{
   {
@@ -78,7 +64,6 @@ return require("lazy").setup {
   { "wintermute-cell/gitignore.nvim", dependencies = "nvim-telescope/telescope.nvim" },
   "ionide/Ionide-vim",
   "rcarriga/nvim-notify",
-  "marcelofern/vale.nvim",
   "karoliskoncevicius/vim-sendtowindow",
   "tpope/vim-rhubarb",
   "nvim-neotest/nvim-nio",

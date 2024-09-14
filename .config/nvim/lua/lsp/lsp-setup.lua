@@ -21,12 +21,15 @@ lspconfig.lua_ls.setup {
   },
 }
 
-require("lspconfig").vale_ls.setup {
-  root_dir = lspconfig.util.root_pattern ".vale.ini",
-  filetypes = { "markdown", "mdx" },
-}
-
-require("lspconfig").marksman.setup {}
+-- vale_ls will autoload for all subdirectories in ~/loft/ by using .nvimrc
+-- to prevent loading it in other projects, it can be loaded manually with a User command
+vim.api.nvim_create_user_command("LspStartVale", function()
+  require("lspconfig").vale_ls.setup {
+    root_dir = require("lspconfig").util.root_pattern ".vale.ini",
+    filetypes = { "markdown", "mdx" },
+  }
+  vim.cmd "LspStart vale_ls"
+end, {})
 
 local configs = require "lspconfig.configs"
 -- Check if it's already defined for when reloading this file.
