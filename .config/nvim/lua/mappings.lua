@@ -1,251 +1,310 @@
--- Utils and Basic Settings
-local shell = require "user_functions.shell_integration"
+local utils = require "utils"
 local opts = { noremap = true, silent = true }
+local shell = require "user_functions.shell_integration"
 
--- Leader Key Configuration
+vim.keymap.set({ "n", "v" }, "<Space>", "<Nop>", { silent = true })
 vim.g.mapleader = " "
 vim.g.maplocalleader = " "
-vim.keymap.set({ "n", "v" }, "<Space>", "<Nop>", opts)
 
--- Save & Close Mappings
-vim.keymap.set("n", "<leader>wa", ":wqa<CR>", { desc = "Save and close all" })
-vim.keymap.set("n", "<leader>wq", ":wq<CR>", { desc = "Save and close current buffer" })
-vim.keymap.set("i", "jk", "<Esc>", { desc = "Exit insert mode" })
-vim.keymap.set("n", "<leader>w", ":wall<CR>", { desc = "Save all" })
-vim.keymap.set("n", "<leader>qq", "@q", { desc = "Execute macro in 'q' register" })
-vim.keymap.set("n", "<leader>qa", ":qa!<CR>", { desc = "Quit all without saving" })
-vim.keymap.set("n", "<leader>qf", ":q!<CR>", { desc = "Quit current buffer without saving" })
-vim.keymap.set("n", "<leader>tf", ":!touch %<CR>", { silent = true, desc = "Touch file to reload observers" })
-vim.keymap.set("n", "<leader>Tsv", ":vsp term://<CR>", { silent = false, desc = "Vertical split terminal" })
-vim.keymap.set("n", "<leader>Tsh", ":sp term://<CR>", { silent = false, desc = "Horizontal split terminal" })
-vim.keymap.set("n", "L", "vg_", { desc = "Select to end of line" })
+-- SAVE & CLOSE --
+utils.lnmap("wa", ":wqa<cr>", { desc = "save and close all" })
+utils.lnmap("wq", ":wq<cr>", { desc = "save and close all" })
+utils.imap("jk", "<Esc>", { desc = "esc and save" })
+utils.nmap("<leader>w", ":wall<CR>", { desc = "save all" })
+utils.lnmap("qq", "@q", { desc = "close all" })
+utils.lnmap("qa", ":qa!<cr>", { desc = "close all without saving" })
+utils.lnmap("qf", ":q!<cr>", { desc = "close current bufferall without saving" })
+vim.keymap.set(
+  "n",
+  "<leader>tf",
+  ":!touch %<cr>",
+  { silent = true, noremap = true, desc = "touch file to reload observers" }
+)
+utils.nmap("<nop>", "<Plug>NERDCommenterAltDelims") -- tab is for moving around only
+vim.api.nvim_set_keymap("n", "<leader>Tsv", ":vsp term://", { noremap = true, silent = false })
+vim.api.nvim_set_keymap("n", "<leader>Tsh", ":sp term://", { noremap = true, silent = false })
+utils.nmap("L", "vg_", { desc = "select to end of line" })
 
--- Window Resizing
-vim.keymap.set("n", "<leader>_", "5<C-w>-", { remap = true, silent = false, desc = "Decrease window height" })
-vim.keymap.set("n", "<leader>+", "5<C-w>+", { remap = true, silent = false, desc = "Increase window height" })
+vim.keymap.set("n", "<leader>_", "5<c-w>-", { remap = true, silent = false })
+vim.keymap.set("n", "<leader>+", "5<c-w>+", { remap = true, silent = false })
 
--- Navigation Mappings
+-- NAVIGATION --
+-- Mappings for navigation between tmux and vim splits with the same keybindings
 local nvim_tmux_nav = require "nvim-tmux-navigation"
--- Normal Mode
-vim.keymap.set("n", "<C-h>", nvim_tmux_nav.NvimTmuxNavigateLeft, opts)
-vim.keymap.set("n", "<C-j>", nvim_tmux_nav.NvimTmuxNavigateDown, opts)
-vim.keymap.set("n", "<C-k>", nvim_tmux_nav.NvimTmuxNavigateUp, opts)
-vim.keymap.set("n", "<C-l>", nvim_tmux_nav.NvimTmuxNavigateRight, opts)
-vim.keymap.set("n", "<A-m>", nvim_tmux_nav.NvimTmuxNavigateNext, opts)
--- Insert Mode
-vim.keymap.set("i", "<C-h>", "<Esc><Cmd>lua require('nvim-tmux-navigation').NvimTmuxNavigateLeft()<CR>", opts)
-vim.keymap.set("i", "<C-j>", "<Esc><Cmd>lua require('nvim-tmux-navigation').NvimTmuxNavigateDown()<CR>", opts)
-vim.keymap.set("i", "<C-k>", "<Esc><Cmd>lua require('nvim-tmux-navigation').NvimTmuxNavigateUp()<CR>", opts)
-vim.keymap.set("i", "<C-l>", "<Esc><Cmd>lua require('nvim-tmux-navigation').NvimTmuxNavigateRight()<CR>", opts)
-vim.keymap.set("i", "<A-m>", "<Esc><Cmd>lua require('nvim-tmux-navigation').NvimTmuxNavigateNext()<CR>", opts)
--- Terminal Mode
-vim.keymap.set("t", "<C-h>", "<C-\\><C-n><C-w>h", opts)
-vim.keymap.set("t", "<C-j>", "<C-\\><C-n><C-w>j", opts)
-vim.keymap.set("t", "<C-k>", "<C-\\><C-n><C-w>k", opts)
-vim.keymap.set("t", "<C-l>", "<C-\\><C-n><C-w>l", opts)
-vim.keymap.set("t", "<A-m>", "<C-\\><C-n><A-m>", opts)
+vim.keymap.set("n", "<C-h>", nvim_tmux_nav.NvimTmuxNavigateLeft, { noremap = true, silent = true })
+vim.keymap.set("n", "<C-j>", nvim_tmux_nav.NvimTmuxNavigateDown, { noremap = true, silent = true })
+vim.keymap.set("n", "<C-k>", nvim_tmux_nav.NvimTmuxNavigateUp, { noremap = true, silent = true })
+vim.keymap.set("n", "<C-l>", nvim_tmux_nav.NvimTmuxNavigateRight, { noremap = true, silent = true })
+vim.keymap.set("n", "<A-m>", nvim_tmux_nav.NvimTmuxNavigateNext, { noremap = true, silent = true })
+-- Toggle between single, double, and backtick quotes
+vim.keymap.set("n", "<leader>tq", function()
+  local line = vim.api.nvim_get_current_line()
+  local col = vim.fn.col "."
+  local new_line = line:gsub("(['\"`])(.-[^\\])%1", function(q, content)
+    if q == "'" then
+      return '"' .. content .. '"'
+    elseif q == '"' then
+      return "`" .. content .. "`"
+    else
+      return "'" .. content .. "'"
+    end
+  end)
+  vim.api.nvim_set_current_line(new_line)
+  vim.fn.cursor(vim.fn.line ".", col)
+end, { desc = "Toggle quote style" })
+-- Insert mode mappings
+vim.keymap.set(
+  "i",
+  "<C-h>",
+  [[<C-\><C-N>:lua require("nvim-tmux-navigation").NvimTmuxNavigateLeft()<CR>]],
+  { noremap = true, silent = true }
+)
+vim.keymap.set(
+  "i",
+  "<C-j>",
+  [[<C-\><C-N>:lua require("nvim-tmux-navigation").NvimTmuxNavigateDown()<CR>]],
+  { noremap = true, silent = true }
+)
+vim.keymap.set(
+  "i",
+  "<C-k>",
+  [[<C-\><C-N>:lua require("nvim-tmux-navigation").NvimTmuxNavigateUp()<CR>]],
+  { noremap = true, silent = true }
+)
+vim.keymap.set(
+  "i",
+  "<C-l>",
+  [[<C-\><C-N>:lua require("nvim-tmux-navigation").NvimTmuxNavigateRight()<CR>]],
+  { noremap = true, silent = true }
+)
+vim.keymap.set(
+  "i",
+  "<A-m>",
+  [[<C-\><C-N>:lua require("nvim-tmux-navigation").NvimTmuxNavigateNext()<CR>]],
+  { noremap = true, silent = true }
+)
+-- Terminal mode mappings
+vim.keymap.set("t", "<C-h>", "<C-\\><C-n><C-h>", { noremap = true, silent = true })
+vim.keymap.set("t", "<C-j>", "<C-\\><C-n><C-j>", { noremap = true, silent = true })
+vim.keymap.set("t", "<C-k>", "<C-\\><C-n><C-k>", { noremap = true, silent = true })
+vim.keymap.set("t", "<C-l>", "<C-\\><C-n><C-l>", { noremap = true, silent = true })
+vim.keymap.set("t", "<A-m>", "<C-\\><C-n><A-m>", { noremap = true, silent = true })
 
--- Scrolling and Centering
-vim.keymap.set("n", "<C-u>", "<C-u>zz", { desc = "Page up and center" })
-vim.keymap.set("n", "<C-d>", "<C-d>zz", { desc = "Page down and center" })
-vim.keymap.set({ "n", "v" }, "<A-j>", "10j", { desc = "Move down 10 lines" })
-vim.keymap.set({ "n", "v" }, "<A-k>", "10k", { desc = "Move up 10 lines" })
-vim.keymap.set("n", "k", "v:count == 0 ? 'gk' : 'k'", { expr = true, silent = true, desc = "Up over wrapped lines" })
-vim.keymap.set("n", "j", "v:count == 0 ? 'gj' : 'j'", { expr = true, silent = true, desc = "Down over wrapped lines" })
-vim.keymap.set("n", "<M-l>", "<cmd>tabnext<CR>", { desc = "Next tab" })
-vim.keymap.set("n", "<M-h>", "<cmd>tabprevious<CR>", { desc = "Previous tab" })
-vim.keymap.set("n", "<BS>", "^", { desc = "Move to first non-blank character" })
-
--- Moving Lines
-vim.keymap.set("v", "<S-PageDown>", ":m '>+1<CR>gv=gv", { desc = "Move line down in visual mode" })
-vim.keymap.set("v", "<S-PageUp>", ":m '<-2<CR>gv=gv", { desc = "Move line up in visual mode" })
-vim.keymap.set("n", "<leader>mj", ":m .+1<CR>==", { desc = "Move line down in normal mode" })
-vim.keymap.set("n", "<leader>mk", ":m .-2<CR>==", { desc = "Move line up in normal mode" })
-vim.keymap.set("v", "<leader>mj", ":m '>+1<CR>gv=gv", { desc = "Move line down in visual mode" })
-vim.keymap.set("v", "<leader>mk", ":m '<-2<CR>gv=gv", { desc = "Move line up in visual mode" })
-
--- Center Cursor After Search
-vim.keymap.set("n", "n", "nzzzv", { desc = "Next search result and center" })
-vim.keymap.set("n", "N", "Nzzzv", { desc = "Previous search result and center" })
-
--- Search and Replace
-vim.keymap.set("n", "<leader>ss", ":s/\\v", { silent = false, desc = "Search and replace on line" })
-vim.keymap.set("n", "<leader>SS", ":%s/\\v", { silent = false, desc = "Search and replace in file" })
-vim.keymap.set("v", "<leader><C-s>", ":s/\\%V", { desc = "Search in visual selection" })
-vim.keymap.set("v", "<C-r>", '"hy:%s/\\v<C-r>h//g<left><left>', { silent = false, desc = "Replace selection" })
-vim.keymap.set("n", ",<space>", ":nohlsearch<CR>", { desc = "Stop search highlight" })
-vim.keymap.set("n", "<leader>x", "*``cgn", { desc = "Replace word under cursor" })
-vim.keymap.set("n", "<leader>X", "#``cgn", { desc = "Replace word under cursor (backwards)" })
-vim.keymap.set("n", "<leader>em", ":/\\V\\c\\<\\>", { silent = false, desc = "Find exact match" })
-
--- Macros and Text Manipulation
-vim.keymap.set("x", "<leader>Q", ":'<,'>:normal @q<CR>", { desc = "Run macro from 'q' register" })
-vim.keymap.set("t", "<Esc>", "<C-\\><C-n>", { desc = "Exit terminal mode" })
+utils.nmap("<c-u>", "<c-u>zz", { desc = "center screen after page up" })
+utils.nmap("<c-d>", "<c-d>zz", { desc = "center screen after page down" })
+vim.keymap.set({ "n", "v" }, "<A-j>", [[10j<cr>]], { desc = "moves over virtual (wrapped) lines down" })
+vim.keymap.set({ "n", "v" }, "<A-k>", [[10k<cr>]], { desc = "moves over virtual (wrapped) lines up" })
+vim.api.nvim_set_keymap(
+  "n",
+  "k",
+  "v:count == 0 ? 'gk' : 'k'",
+  { noremap = true, expr = true, silent = true, desc = "moves up over virtual (wrapped) lines" }
+)
+vim.api.nvim_set_keymap(
+  "n",
+  "j",
+  "v:count == 0 ? 'gj' : 'j'",
+  { noremap = true, expr = true, silent = true, desc = "moves down over virtual (wrapped) lines" }
+)
+vim.api.nvim_set_keymap("n", "<M-l>", "<cmd>tabnext<cr>", { noremap = true, silent = true, desc = "move to next tab" })
+vim.api.nvim_set_keymap(
+  "n",
+  "<M-h>",
+  "<cmd>tabprevious<cr>",
+  { noremap = true, silent = true, desc = "move to next tab" }
+)
+utils.nmap("<BS>", "^", { desc = "move to first non-bkgtgtgtgtlank character of the line" })
+utils.vmap("<S-PageDown>", ":m '>+1<CR>gv=gv", { desc = "Move Line Down in Visual Mode" })
+utils.vmap("<S-PageUp>", ":m '<-2<CR>gv=gv", { desc = "Move Line Up in Visual Mode" })
+utils.nmap("<leader>mk", ":m .-2<CR>==", { desc = "Move Line Up in Normal Mode" })
+utils.nmap("<leader>mj", ":m .+1<CR>==", { desc = "Move Line Down in Normal Mode" })
+utils.vmap("<leader>mk", ":m '<-2<CR>gv=gv", { desc = "Move Line Up in Visual Mode" })
+utils.vmap("<leader>mj", ":m '>+1<CR>gv=gv", { desc = "Move Line Down in Visual Mode" })
+utils.nmap("<Leader>em", ":/\\V\\c\\<\\>", { desc = "find exact match", silent = false })
+vim.keymap.set("n", "J", "mzJ`z", { desc = "join lines without spaces" })
+vim.keymap.set("n", "n", "nzzzv", { desc = "keep cursor centered" })
+vim.keymap.set("n", "N", "Nzzzv", { desc = "keep cursor centered" })
+-- SEARCH AND REPLACE
+utils.lnmap("pa", "ggVGp", { desc = "select all" })
+utils.lnmap("sa", "ggVG", { desc = "select all" })
+utils.lnmap("ss", ":s/\\v", { silent = false, desc = "search and replace on line" })
+utils.lnmap("SS", ":%s/\\v", { silent = false, desc = "search and replace in file" })
+utils.vmap("<leader><C-s>", ":s/\\%V", { desc = "Search only in visual selection usingb%V atom" })
+utils.vmap("<C-r>", '"hy:%s/\\v<C-r>h//g<left><left>', { silent = false, desc = "change selection" })
+utils.nmap(",<space>", ":nohlsearch<CR>", { desc = "Stop search highlight" })
+utils.nmap("<leader>x", "*``cgn", { desc = "replace word under cursor simultaneously" })
+utils.nmap("<leader>X", "#``cgn", { desc = "replace word under cursor simultaneously" })
+-- MACROS --
+utils.xmap("<leader>Q", ":'<,'>:normal @q<CR>", { desc = "run macro from q register on visual selection" })
+utils.tmap("<ESC>", "<C-\\><C-n>", { desc = "exit terminal mode" })
 vim.keymap.set(
   "n",
   "<leader>ml",
-  "^I- [ ] <Esc>^j",
-  { remap = true, silent = false, desc = "Prepend markdown list item" }
+  "^I-<Space>[<Space>]<Space><Esc>^j",
+  { remap = true, silent = false, desc = "prepend markdown list item on line" }
 )
-vim.keymap.set("v", "srt", ":!sort -n -k 2<CR>", { desc = "Sort by second column" })
-vim.keymap.set("n", "J", "mzJ`z", { desc = "Join lines without moving cursor" })
-vim.keymap.set("n", "<leader>gp", "`[v`]", { desc = "Select pasted text" })
-vim.keymap.set("i", "<A-l>", "<C-o>a", { desc = "Skip over a letter" })
-vim.keymap.set("i", "<C-n>", "<C-e><C-o>A;<Esc>", { desc = "Insert semicolon at end of line" })
-vim.keymap.set("n", "<leader>is", "i <Esc>", { desc = "Insert space in normal mode" })
-vim.keymap.set("n", "<leader>sq", ':normal viWS"<CR>', { desc = "Surround with quotation" })
-vim.keymap.set("n", "<leader>sp", "i<CR><Esc>", { desc = "Split line" })
+utils.vmap("srt", ":!sort -n -k 2<cr>", { desc = "sort by second column" })
+-- MANIPULATE TEXT --
+utils.nmap("<leader>gp", "`[v`]", { desc = "select pasted text" })
+utils.imap("<A-l>", "<C-o>a", { desc = "skip over a letter" })
+utils.imap("<C-n>", "<C-e><C-o>A;<ESC>", { desc = "insert semicolon at the end of the line" })
 
--- Insert Empty Lines
+-- Insert empty lines above and below
 vim.keymap.set("n", "<leader>al", function()
   shell.add_empty_lines { below = true }
-end, { remap = true, silent = false, desc = "Add empty line below" })
+end, { remap = true, silent = false, desc = "Insert empty lines above" })
 vim.keymap.set("n", "<leader>aL", function()
   shell.add_empty_lines { below = false }
-end, { remap = true, silent = false, desc = "Add empty line above" })
+end, { remap = true, silent = false, desc = "Insert empty lines below" })
+
+-- Insert empty lines above and below
 vim.keymap.set("n", "<leader>il", function()
   shell.add_empty_lines { below = true, insert = true }
-end, { remap = true, silent = false, desc = "Insert empty line below and enter insert mode" })
+end, { remap = true, silent = false, desc = "Insert empty lines above" })
 vim.keymap.set("n", "<leader>iL", function()
   shell.add_empty_lines { below = false, insert = true }
-end, { remap = true, silent = false, desc = "Insert empty line above and enter insert mode" })
+end, { remap = true, silent = false, desc = "Insert empty lines below" })
 
--- Clipboard and Registers
-vim.keymap.set("i", "<C-p>", function()
+utils.nmap("<leader>is", "i<space><esc>", { desc = "Insert space in normal mode" })
+utils.nmap("<leader>sq", ':normal viWS"<CR>', { desc = "surround with quotation" })
+-- REGISTRIES --
+
+vim.keymap.set("i", "<c-p>", function()
   require("telescope.builtin").registers()
-end, { silent = false, desc = "Paste register in insert mode" })
-vim.keymap.set("n", "<leader>yl", '"+yy', { desc = "Yank line to clipboard" })
-vim.keymap.set("n", "<leader>df", ":%d<CR>", { desc = "Delete file content" })
-vim.keymap.set("n", "<leader>yf", ":%y<CR>", { desc = "Yank file content" })
-vim.keymap.set("n", "<leader>yw", '"+yiw', { desc = "Yank word under cursor to clipboard" })
-vim.keymap.set("n", "<leader>yW", '"+yiW', { desc = "Yank WORD under cursor to clipboard" })
-vim.keymap.set("n", "<leader>p", '"+p', { desc = "Paste from clipboard after cursor" })
-vim.keymap.set("n", "<leader>P", '"+P', { desc = "Paste from clipboard before cursor" })
-vim.keymap.set("n", "<leader>0", '"0p', { desc = "Paste from yank register" })
-vim.keymap.set("n", "<leader>1", '"1p', { desc = "Paste from delete register" })
-vim.keymap.set("n", "<leader>2", '"*p', { desc = "Paste from system clipboard" })
-vim.keymap.set("n", "<leader>dl", '"_dd', { desc = "Delete line without yanking" })
-vim.keymap.set("n", "<leader>d_", '"_D', { desc = "Delete to end of line without yanking" })
-vim.keymap.set("x", "<leader>d", '"_d', { desc = "Delete selection without yanking" })
+end, {
+  remap = true,
+  silent = false,
+  desc = " and paste register in insert mode",
+})
 
--- Path Operations
-vim.keymap.set("n", "<leader>cpf", function()
-  local path = vim.fn.expand "%:p"
-  vim.fn.setreg("+", path)
-  print("Copied path to clipboard: " .. path)
-end, { desc = "Copy file path" })
-vim.keymap.set("n", "<leader>cpl", function()
-  local path_line = vim.fn.expand "%:p" .. ":" .. vim.fn.line "."
-  vim.fn.setreg("+", path_line)
-  print("Copied file path and line number to clipboard: " .. path_line)
-end, { desc = "Copy file path with line number" })
-vim.keymap.set("n", "<leader>cpn", function()
-  local filename = vim.fn.expand "%:t"
-  vim.fn.setreg("+", filename)
-  print("Copied filename to clipboard: " .. filename)
-end, { desc = "Copy filename" })
-
--- External Commands
-vim.keymap.set("c", "<C-w>", "\\w*", { noremap = true, desc = "Copy word under cursor" })
-vim.keymap.set("c", "<C-s>", "\\S*", { noremap = true, desc = "Copy WORD under cursor" })
-vim.keymap.set("n", "<leader>ex", ":.w !bash -e<CR>", { desc = "Execute current line" })
-vim.keymap.set("n", "<leader>eX", ":%w !bash -e<CR>", { desc = "Execute entire file" })
-vim.keymap.set("n", "<leader>el", ":.!bash -e<CR>", { silent = false, desc = "Execute line and replace" })
-vim.keymap.set("n", "<leader>eL", ":%!bash %<CR>", { desc = "Execute file and replace" })
-vim.keymap.set("n", "<leader>cx", ":!chmod +x %<CR>", { desc = "Make file executable" })
-vim.keymap.set("n", "<leader>ef", function()
-  require("user_functions.shell_integration").execute_file_and_show_output()
-end, { silent = false, desc = "Execute file and show output" })
-vim.keymap.set("v", "<leader>pb", "w !bash share<CR>", { desc = "Upload selection to ix.io" })
-
--- Spelling
-vim.keymap.set("n", "<leader>son", ":setlocal spell spelllang=en_us<CR>", { desc = "Enable spell check" })
-vim.keymap.set("n", "<leader>sof", ":set nospell<CR>", { desc = "Disable spell check" })
-
--- Git Mappings
-vim.keymap.set({ "n", "v" }, "<leader>gbf", ":GBrowse<CR>", { desc = "Open file in browser" })
-vim.keymap.set("n", "<leader>gbc", ":GBrowse!<CR>", { desc = "Copy file URL" })
-vim.keymap.set("v", "<leader>gbl", ":GBrowse!<CR>", { silent = false, desc = "Copy selected lines URL" })
-vim.keymap.set("n", "<leader>gd", ":Gvdiffsplit<CR>", { desc = "Git diff split" })
-vim.keymap.set("n", "<leader>gu", ":Gdiffu<CR>", { desc = "Git diff update" })
+utils.lnmap("yl", '"*yy', { desc = "yank line to the clipboard buffer" })
+utils.nmap("<leader>df", ":%d<cr>", { desc = "delete file content to black hole register" })
+utils.nmap("<leader>yf", ":%y<cr>", { desc = "yank file under cusror to the clipboard buffer" })
+utils.nmap("<leader>yw", '"+yiw', { desc = "yank word under cusror to the clipboard buffer" })
+utils.nmap("<leader>yW", '"+yiW', { desc = "yank WORD under cusror to the clipboard buffer" })
+utils.lnmap("p", '"*P', { desc = "paste from clipboard buffer before the cursor" })
+utils.nmap("<leader>0", '"0p', { desc = "paste from 0 (latest yank)" })
+utils.nmap("<leader>1", '"1p', { desc = "paste from 1 (latest delete)" })
+utils.nmap("<leader>2", '"*p', { desc = "paste from 2 (clipboard)" })
+utils.nmap("<Leader>p", ":pu<CR>", { desc = "paste from clipboard buffer after the cursor" })
+utils.lnmap("dl", '"_dd', { desc = "delete line to black hole register" })
+utils.lnmap("d_", '"_D', { desc = "delete till end of line to black hole register" })
+utils.xmap("<leader>d", '"_d', { desc = "delete selection to black hole register" })
+-- PATH OPERATIONS --
 vim.keymap.set(
   "n",
-  "<leader>gl",
-  ":r !bash ~/dev/dotfiles/scripts/__generate_git_log.sh<CR>",
-  { desc = "Generate git log" }
+  "<leader>cpf",
+  ':let @+ = expand("%:p")<cr>:lua print("Copied path to: " .. vim.fn.expand("%:p"))<cr>',
+  { desc = "Copy current file name and path", silent = false }
 )
-vim.keymap.set("n", "<leader>gh", ":Gclog %<CR>", { desc = "Show git log for current file" })
+-- Related script: /home/decoder/dev/dotfiles/scripts/__trigger_ranger.sh:7
+utils.lnmap("cpl", [[:let @+ = expand("%:p") . ':' . line('.')<cr>]]) -- Copy current file name, path, and line number
+utils.lnmap("cpn", ':let @+ = expand("%:t")<cr>') -- Copy current file name
+utils.imap("<c-d>", "<c-o>daw", { desc = "delete word forward in insert mode" })
+vim.keymap.set("i", "<A-H>", "<c-w>", { noremap = true, desc = "delete word forward in insert mode" })
+utils.nmap("<leader>sp", "i<cr><esc>", { desc = "split line in two" })
+-- EXTERNAL COMMANDS --
+vim.keymap.set("c", "<C-w>", "\\w*", { noremap = true, desc = "copy word under cursor" })
+vim.keymap.set("c", "<C-s>", "\\S*", { noremap = true, desc = "copy WORD under cursor" })
+utils.nmap("<leader>ex", ":.w !bash -e <cr>", { desc = "execute current line and output to command line" })
+utils.nmap("<leader>eX", ":%w !bash -e <cr>", { desc = "exexute all lines and output to command line" })
+utils.nmap("<leader>el", ":.!bash -e <cr>", { silent = false, desc = "execute current line and replace with result" })
+utils.nmap("<leader>eL", ":% !bash % <cr>", { desc = "execute all lines and replace with result" })
+utils.lnmap("cx", ":!chmod +x %<cr>", { desc = "make file executable" })
+utils.lnmap(
+  "ef",
+  "<cmd>lua require('user_functions.shell_integration').execute_file_and_show_output()<CR>",
+  { silent = false }
+) -- execute file and show output
+utils.vmap("<Leader>pb", "w !bash share<CR>") -- upload selected to ix.io
+-- FORMATTING --
+utils.nmap("<leader>fmt", ":Pretty<CR>") -- format json with pretty
+-- SPELLING --
+utils.nmap("<Leader>son", ":setlocal spell spelllang=en_us<CR>") -- set spell check on
+utils.nmap("<Leader>sof", ":set nospell<CR>") -- set spell check off
+-- GIT RELATED --
+vim.keymap.set({ "n", "v" }, "<leader>gbf", ":GBrowse<cr>", opts) -- git browse current file in browser
+vim.keymap.set("n", "<leader>gbc", function()
+  vim.cmd "GBrowse!"
+end, { desc = "Copy url to current file" }) -- git browse current file and line in browser
+vim.keymap.set("v", "<leader>gbl", ":GBrowse!<CR>", { noremap = true, silent = false }) -- git browse current file and selected line in browser
+utils.lnmap("gd", ":Gvdiffsplit<CR>") -- git diff current file
+utils.lnmap("gu", ":Gdiffu<CR>") -- git diff current file
+utils.nmap("<leader>gl", ":r !bash ~/dev/dotfiles/scripts/__generate_git_log.sh<CR>") -- generate git log
+utils.lnmap("gh", ":Gclog %<CR>") -- show git log for current file
+-- PROGRAMMING --
+utils.imap("<expr>", "<C-l>   vsnip#available(1)  ? '<Plug>(vsnip-expand-or-jump)' : '<C-l>") -- Vsnippet expand or jump
+utils.smap("<expr>", "<C-l>   vsnip#available(1)  ? '<Plug>(vsnip-expand-or-jump)' : '<C-l>") -- Vsnippet expand or jump
+-- See https://github.com/hrsh7th/vim-vsnip/pull/50
+utils.nmap("<leader>t", "<Plug>(vsnip-select-text)") -- Select or cut text to use as $TM_SELECTED_TEXT in the next snippet
+utils.xmap("<leader>t", "<Plug>(vsnip-select-text)") -- Select or cut text to use as $TM_SELECTED_TEXT in the next snippet
+utils.nmap("<leader>tc", "<Plug>(vsnip-cut-text)") -- Select or cut text to use as $TM_SELECTED_TEXT in the next snippet
+utils.xmap("<leader>tc", "<Plug>(vsnip-cut-text)") -- Select or cut text to use as $TM_SELECTED_TEXT in the next snippet
 
--- Plugin Mappings
+-- PLUGIN MAPPINGS --
 -- Mdeval
-vim.keymap.set(
+vim.api.nvim_set_keymap(
   "n",
   "<leader>ev",
-  "<cmd>lua require('mdeval').eval_code_block()<CR>",
-  { silent = true, desc = "Evaluate code block" }
+  "<cmd>lua require 'mdeval'.eval_code_block()<CR>",
+  { silent = true, noremap = true }
 )
 
 -- Startify
-vim.keymap.set("n", "<leader>st", ":Startify<CR>", { desc = "Open Startify" })
-vim.keymap.set("n", "<leader>cd", ":cd %:p:h<CR>:pwd<CR>", { desc = "Change to file directory and print" })
+utils.lnmap("st", ":Startify<CR>") -- start Startify screen
+utils.lnmap("cd", ":cd %:p:h<CR>:pwd<CR>") -- change to current directory of active file and print out
 
 -- Telescope
-vim.keymap.set("n", "<leader>ts", "<cmd>Telescope<CR>", { desc = "Open Telescope" })
+vim.keymap.set("n", "<Leader>ts", "<cmd>Telescope<cr>", opts)
+
+-- Tmuxinator
+-- utils.lnmap("wl", ":.!echo -n \"      layout:\" $(tmux list-windows | sed -n 's/.*layout \\(.*\\)] @.*/\\1/p')<CR>")
 
 -- Transparent Plugin
-vim.keymap.set("n", "<leader>tr", ":TransparentToggle<CR>", { desc = "Toggle transparency" })
+utils.lnmap("tr", ":TransparentToggle<CR>")
 
 -- FeMaco
-vim.keymap.set("n", "<leader>ec", ":FeMaco<CR>", { desc = "Open FeMaco" })
+utils.lnmap("ec", ":FeMaco<CR>")
+
+-- Floaterm
+utils.lnmap("tt", ":FloatermToggle<CR>")
+utils.tmap("<leader>tt", "<C-\\><C-n>:FloatermToggle<CR>")
 
 -- Trouble
-vim.keymap.set("n", "<leader>xx", "<cmd>Trouble diagnostics toggle<CR>", { desc = "Toggle diagnostics" })
-vim.keymap.set(
-  "n",
-  "<leader>xX",
-  "<cmd>Trouble diagnostics toggle filter.buf=0<CR>",
-  { desc = "Toggle diagnostics for current buffer" }
-)
-vim.keymap.set(
-  "n",
-  "<leader>xd",
-  "<cmd>TroubleToggle document_diagnostics<CR>",
-  { desc = "Toggle document diagnostics" }
-)
-vim.keymap.set("n", "<leader>xl", "<cmd>TroubleToggle loclist<CR>", { desc = "Toggle location list" })
-vim.keymap.set("n", "<leader>xq", "<cmd>TroubleToggle quickfix<CR>", { desc = "Toggle quickfix list" })
-vim.keymap.set("n", "gR", "<cmd>TroubleToggle lsp_references<CR>", { desc = "Toggle LSP references" })
+vim.keymap.set("n", "<leader>xx", "<cmd>Trouble diagnostics toggle<cr>", { silent = true, noremap = true })
+vim.keymap.set("n", "<leader>xX", "<cmd>Trouble diagnostics toggle filter.buf=0<cr>", { silent = true, noremap = true })
+vim.keymap.set("n", "<leader>xd", "<cmd>TroubleToggle document_diagnostics<cr>", { silent = true, noremap = true })
+vim.keymap.set("n", "<leader>xl", "<cmd>TroubleToggle loclist<cr>", { silent = true, noremap = true })
+vim.keymap.set("n", "<leader>xq", "<cmd>TroubleToggle quickfix<cr>", { silent = true, noremap = true })
+vim.keymap.set("n", "gR", "<cmd>TroubleToggle lsp_references<cr>", { silent = true, noremap = true })
 
 -- Scrollfix
-vim.keymap.set("n", "<F2>", "<cmd>FIX 25<CR>", { desc = "Set FIX to 25" })
-vim.keymap.set("n", "<F0>", "<cmd>FIX -1<CR>", { desc = "Set FIX to -1" })
+utils.lnmap("f2", "<cmd>FIX 25<cr>")
+utils.lnmap("f0", "<cmd>FIX -1<cr>")
 
 -- Obsidian
-vim.keymap.set("v", "ol", ":ObsidianLink<CR>", { silent = false, desc = "Obsidian link" })
-vim.keymap.set("n", "oq", ":ObsidianQuickSwitch<CR>", { desc = "Obsidian quick switch" })
-vim.keymap.set("n", "on", ":ObsidianNew ", { silent = false, desc = "Obsidian new note" })
-vim.keymap.set("v", "on", ":ObsidianLinkNew ", { silent = false, desc = "Obsidian link new" })
-vim.keymap.set("n", "os", ":ObsidianSearch<CR>", { desc = "Obsidian search" })
-vim.keymap.set("n", "ob", ":ObsidianBacklinks<CR>", { desc = "Obsidian backlinks" })
-vim.keymap.set("n", "ot", ":ObsidianTags<CR>", { desc = "Obsidian tags" })
-vim.keymap.set("n", "od", ":ObsidianToday<CR>", { desc = "Obsidian today" })
+utils.vmap("ol", ":ObsidianLink<cr>", { silent = false })
+utils.lnmap("oq", ":ObsidianQuickSwitch<cr>")
+utils.lnmap("on", ":ObsidianNew ", { silent = false })
+utils.vmap("on", ":ObsidianLinkNew ", { silent = false })
+utils.lnmap("os", ":ObsidianSearch<cr>")
+utils.lnmap("ob", ":ObsidianBacklinks<cr>")
+utils.lnmap("ot", ":ObsidianTags<cr>")
+utils.lnmap("od", ":ObsidianToday<cr>")
 
 -- Copilot
-vim.keymap.set("i", "<C-s>", 'copilot#Accept("<CR>")', { silent = true, expr = true })
-vim.g.copilot_no_tab_map = true
-vim.keymap.set("n", "<leader>cpd", ":Copilot disable<CR>", { desc = "Disable Copilot" })
-vim.keymap.set("n", "<leader>cpe", ":Copilot enable<CR>", { desc = "Enable Copilot" })
+vim.cmd [[
+        imap <silent><script><expr> <C-s> copilot#Accept("\<CR>")
+        let g:copilot_no_tab_map = v:true
+]]
+utils.lnmap("cpd", ":Copilot disable<cr>", { silent = false })
+utils.lnmap("cpe", ":Copilot enable<cr>", { silent = false })
 
 -- GoTo Preview
-vim.keymap.set(
-  "n",
-  "gtp",
-  "<cmd>lua require('goto-preview').goto_preview_definition()<CR>",
-  { desc = "Goto preview definition" }
-)
+vim.keymap.set("n", "gtp", "<cmd>lua require('goto-preview').goto_preview_definition()<CR>", { noremap = true })
 
 -- Yank Matching Lines
-vim.keymap.set("n", "<leader>ya", ":YankMatchingLines<CR>", { desc = "Yank matching lines" })
+vim.api.nvim_set_keymap("n", "<Leader>ya", ":YankMatchingLines<CR>", { noremap = true, silent = true })
 
 -- GpChat
 local function keymapOptions(desc)
@@ -257,85 +316,61 @@ local function keymapOptions(desc)
   }
 end
 
+-- Restart nvim
 vim.keymap.set("n", "<leader>-", function()
   vim.fn.system "bash __restart_nvim.sh"
-end, { desc = "Restart Neovim" })
+end, { noremap = true, silent = true })
 
-vim.keymap.set({ "n", "i" }, "<C-g>r", "<cmd>GpRewrite<CR>", keymapOptions "Inline Rewrite")
-vim.keymap.set({ "n", "i" }, "<C-g>a", "<cmd>GpAppend<CR>", keymapOptions "Append")
-vim.keymap.set({ "n", "i" }, "<C-g>b", "<cmd>GpPrepend<CR>", keymapOptions "Prepend")
-vim.keymap.set({ "n", "i" }, "<C-g>e", "<cmd>GpEnew<CR>", keymapOptions "Enew")
-vim.keymap.set({ "n", "i" }, "<C-g>p", "<cmd>GpPopup<CR>", keymapOptions "Popup")
-vim.keymap.set({ "n", "i" }, "<C-g>w", "<cmd>GpWhisper<CR>", keymapOptions "Whisper")
-vim.keymap.set("v", "<C-g>r", ":<C-u>'<,'>GpRewrite<CR>", keymapOptions "Visual Rewrite")
-vim.keymap.set("v", "<C-g>a", ":<C-u>'<,'>GpAppend<CR>", keymapOptions "Visual Append")
-vim.keymap.set("v", "<C-g>b", ":<C-u>'<,'>GpPrepend<CR>", keymapOptions "Visual Prepend")
-vim.keymap.set("v", "<C-g>e", ":<C-u>'<,'>GpEnew<CR>", keymapOptions "Visual Enew")
-vim.keymap.set("v", "<C-g>p", ":<C-u>'<,'>GpPopup<CR>", keymapOptions "Visual Popup")
-vim.keymap.set({ "n", "i", "v", "x" }, "<C-g>s", "<cmd>GpStop<CR>", keymapOptions "Stop")
+vim.keymap.set({ "n", "i" }, "<C-g>r", "<cmd>GpRewrite<cr>", keymapOptions "Inline Rewrite")
+vim.keymap.set({ "n", "i" }, "<C-g>a", "<cmd>GpAppend<cr>", keymapOptions "Append")
+vim.keymap.set({ "n", "i" }, "<C-g>b", "<cmd>GpPrepend<cr>", keymapOptions "Prepend")
+vim.keymap.set({ "n", "i" }, "<C-g>e", "<cmd>GpEnew<cr>", keymapOptions "Enew")
+vim.keymap.set({ "n", "i" }, "<C-g>p", "<cmd>GpPopup<cr>", keymapOptions "Popup")
+vim.keymap.set({ "n", "i" }, "<C-g>w", "<cmd>GpWhisper<cr>", keymapOptions "Append")
+vim.keymap.set("v", "<C-g>r", ":<C-u>'<,'>GpRewrite<cr>", keymapOptions "Visual Rewrite")
+vim.keymap.set("v", "<C-g>a", ":<C-u>'<,'>GpAppend<cr>", keymapOptions "Visual Append")
+vim.keymap.set("v", "<C-g>b", ":<C-u>'<,'>GpPrepend<cr>", keymapOptions "Visual Prepend")
+vim.keymap.set("v", "<C-g>e", ":<C-u>'<,'>GpEnew<cr>", keymapOptions "Visual Enew")
+vim.keymap.set("v", "<C-g>p", ":<C-u>'<,'>GpPopup<cr>", keymapOptions "Visual Popup")
+vim.keymap.set({ "n", "i", "v", "x" }, "<C-g>s", "<cmd>GpStop<cr>", keymapOptions "Stop")
 
--- NoNeckPain
-vim.keymap.set("n", "<leader>ne", "<cmd>NoNeckPain<CR>", { desc = "Toggle NoNeckPain" })
+-- Nvim no neck pain Mappings
+utils.lnmap("ne", "<cmd>NoNeckPain<cr>")
 
--- Telescope Crossplane
-vim.keymap.set(
-  "n",
-  "<leader>tcm",
-  ":Telescope telescope-crossplane crossplane_managed<CR>",
-  { desc = "Crossplane managed" }
-)
-vim.keymap.set(
-  "n",
-  "<leader>tcr",
-  ":Telescope telescope-crossplane crossplane_resources<CR>",
-  { desc = "Crossplane resources" }
-)
+-- Nvim Telescope Crossplane Mappings
+vim.keymap.set("n", "<Leader>tcm", ":Telescope telescope-crossplane crossplane_managed<CR>")
+vim.keymap.set("n", "<Leader>tcr", ":Telescope telescope-crossplane crossplane_resources<CR>")
 
--- Mini Files
-vim.keymap.set("n", "<leader>mf", ":lua MiniFiles.open()<CR>", { desc = "Open MiniFiles" })
+vim.keymap.set("n", "<Leader>mf", ":lua MiniFiles.open()<CR>", { noremap = true, silent = true })
 
--- UndoTree
-vim.keymap.set("n", "<leader>u", function()
-  require("undotree").toggle()
-end, { desc = "Toggle UndoTree" })
+-- Undotree
+vim.keymap.set("n", "<leader>u", require("undotree").toggle, { noremap = true, silent = true })
 
--- Send to Window
-vim.keymap.set("x", "<leader><Left>", "<Plug>SendLeftV<CR>", { desc = "Send left" })
-vim.keymap.set("x", "<leader><Down>", "<Plug>SendDownV<CR>", { desc = "Send down" })
-vim.keymap.set("x", "<leader><Up>", "<Plug>SendUpV<CR>", { desc = "Send up" })
-vim.keymap.set("x", "<leader><Right>", "<Plug>SendRightV<CR>", { desc = "Send right" })
-vim.keymap.set("n", "<Left>", "<Plug>SendLeft", { desc = "Send left" })
-vim.keymap.set("n", "<Down>", "<Plug>SendDown", { desc = "Send down" })
-vim.keymap.set("n", "<Up>", "<Plug>SendUp", { desc = "Send up" })
-vim.keymap.set("n", "<Right>", "<Plug>SendRight", { desc = "Send right" })
+-- Send to window
+-- Visual mode mappings
+utils.xmap("<leader><Left>", "<Plug>SendLeftV<cr>", keymapOptions "Visual Send Left")
+utils.xmap("<leader><Down>", "<Plug>SendDownV<cr>", keymapOptions "Visual Send Down")
+utils.xmap("<leader><Up>", "<Plug>SendUpV<cr>", keymapOptions "Visual Send Up")
+utils.xmap("<leader><Right>", "<Plug>SendRightV<cr>", keymapOptions "Visual Send Right")
+utils.lnmap("<Left>", "<Plug>SendLeft", keymapOptions "Send Left")
+utils.lnmap("<Down>", "<Plug>SendDown", keymapOptions "Send Down")
+utils.lnmap("<Up>", "<Plug>SendUp", keymapOptions "Send Up")
+utils.lnmap("<Right>", "<Plug>SendRight", keymapOptions "Send Right")
 
--- Toggle Inlay Hints
 vim.keymap.set("n", "<leader>th", function()
-  vim.lsp.inlay_hint(0, nil)
-end, { desc = "Toggle inlay hints" })
+  vim.lsp.inlay_hint.enable(not vim.lsp.inlay_hint.is_enabled())
+end, { silent = true, noremap = true, desc = "Toggle inlay hints" })
+-- Various text objects plugin mappings
 
--- Various Text Objects
-vim.keymap.set(
-  { "o", "x" },
-  "ii",
-  "<cmd>lua require('various-textobjs').indentation(true, true)<CR>",
-  { desc = "Inner indentation" }
-)
-vim.keymap.set(
-  { "o", "x" },
-  "ai",
-  "<cmd>lua require('various-textobjs').indentation(false, true)<CR>",
-  { desc = "Around indentation" }
-)
-vim.keymap.set(
-  { "o", "x" },
-  "iI",
-  "<cmd>lua require('various-textobjs').indentation(true, true)<CR>",
-  { desc = "Inner indentation (lines)" }
-)
-vim.keymap.set(
-  { "o", "x" },
-  "aI",
-  "<cmd>lua require('various-textobjs').indentation(false, false)<CR>",
-  { desc = "Around indentation (lines)" }
-)
+vim.keymap.set({ "o", "x" }, "ii", "<cmd>lua require('various-textobjs').indentation('inner', 'inner')<CR>")
+vim.keymap.set({ "o", "x" }, "ai", "<cmd>lua require('various-textobjs').indentation('outer', 'inner')<CR>")
+vim.keymap.set({ "o", "x" }, "iI", "<cmd>lua require('various-textobjs').indentation('inner', 'inner')<CR>")
+vim.keymap.set({ "o", "x" }, "aI", "<cmd>lua require('various-textobjs').indentation('outer', 'outer')<CR>")
+
+-- Decide there to autofill mapping based on space location
+vim.cmd [[
+     function! s:check_back_space() abort
+       let col = col('.') - 1
+       return !col || getline('.')[col - 1]  =~# '\s'
+     endfunction
+     ]]
