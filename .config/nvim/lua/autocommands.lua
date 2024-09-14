@@ -39,7 +39,7 @@ vim.api.nvim_create_user_command("StartEmpty", function()
   vim.bo.swapfile = false
 end, {})
 
--- Function to dynamically set up Vale based on the file's directory
+-- Remove 'o' from formatoptions when opening a new buffer
 vim.api.nvim_create_autocmd("FileType", {
   pattern = "*",
   callback = function()
@@ -66,55 +66,6 @@ end, {})
 
 -- Create a user command to toggle formatoptions
 vim.api.nvim_create_user_command("ToggleFormatoptions", toggle_formatoptions_o, {})
-
-local function dynamicValeSetup()
-  -- Get the current file's directory
-  local file_path = vim.fn.expand "%:p:h"
-
-  -- Default vale_config_path
-  local default_vale_config_path = "$HOME/dev/vale/.vale.ini"
-  local vale_config_path = default_vale_config_path
-
-  -- Check if the current file is inside the crossplane-docs/content directory
-  if string.match(file_path, "crossplane%-docs/content") then
-    -- Update vale_config_path for crossplane-docs content
-    default_vale_config_path = "$HOME/dev/crossplane-docs/utils/vale/.vale.ini"
-    vale_config_path = default_vale_config_path
-  end
-
-  -- Check if .vale.ini exists in the current directory
-  local current_dir_vale_path = file_path .. "/.vale.ini"
-  if vim.fn.filereadable(current_dir_vale_path) == 1 then
-    vale_config_path = current_dir_vale_path
-  end
-
-  -- Configure Vale with the determined vale_config_path
-  require("vale").setup {
-    bin = "/usr/local/bin/vale",
-    vale_config_path = vale_config_path,
-  }
-end
-
--- Autocommand to configure Vale on entering a buffer or when the filetype is markdown
-vim.api.nvim_create_autocmd({ "BufEnter", "FileType" }, {
-  pattern = "*.md",
-  callback = function()
-    dynamicValeSetup()
-  end,
-})
--- Run Vale on markdown files in crossplane-docs
-vim.api.nvim_create_autocmd("BufWritePost", {
-  pattern = "*.md",
-  callback = function(args)
-    local file_path = vim.fn.getcwd()
-    if string.match(file_path, "crossplane%-docs/content") then
-      local current_dir = vim.fn.getcwd()
-      vim.cmd "lcd %:p:h"
-      vim.cmd ":silent! Vale"
-      vim.cmd("lcd " .. current_dir)
-    end
-  end,
-})
 
 vim.api.nvim_create_autocmd("FileType", {
   pattern = { "c", "cpp" },
