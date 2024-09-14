@@ -1,5 +1,3 @@
-package.path = package.path .. ";" .. vim.fn.expand "$HOME" .. "/.luarocks/share/lua/5.1/?/init.lua"
-package.path = package.path .. ";" .. vim.fn.expand "$HOME" .. "/.luarocks/share/lua/5.1/?.lua"
 -- Bootstrap lazy.nvim
 local lazypath = vim.fn.stdpath "data" .. "/lazy/lazy.nvim"
 if not (vim.uv or vim.loop).fs_stat(lazypath) then
@@ -53,7 +51,6 @@ return require("lazy").setup {
   "romainl/vim-cool",
   "yssl/QFEnter",
   "jesseleite/nvim-macroni",
-  "3rd/image.nvim",
   "nosduco/remote-sshfs.nvim",
   "nvim-neotest/neotest-python",
   { "nvim-neotest/neotest-plenary", lazy = true },
@@ -240,7 +237,7 @@ return require("lazy").setup {
   "weirongxu/plantuml-previewer.vim",
   -- }}}
   -- My Plugins {{{
-  { "Piotr1215/yanksearch.nvim", dir = "/home/decoder/dev/my-mvin-plugins/yanksearch.nvim", dev = false },
+  { "Piotr1215/yanksearch.nvim" },
   "Piotr1215/typeit.nvim",
   -- }}}
   -- Look & Feel {{{
