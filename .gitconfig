@@ -2,3 +2,5 @@
   path = ~/.gitconfig-work
 [includeIf "gitdir:~/dev/"]
   path = ~/.gitconfig-personal
+[core]
+	hooksPath = /home/decoder/.git-global-hooks
