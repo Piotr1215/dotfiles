@@ -63,9 +63,9 @@ report.current.filter=status:pending
 
 report.current-projects.description=List of current projects in work context
 report.current-projects.columns=project
-report.current-projects.labels=Project
+report.current-projects.labels=
 report.current-projects.sort=project+
-report.current-projects.filter=status:pending 
+report.current-projects.filter=status:pending
 
 report.tmark.description=List of tasks to report
 report.tmark.columns=project,description.desc
