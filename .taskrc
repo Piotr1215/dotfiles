@@ -33,6 +33,7 @@ include dark-green-256.theme
 color.blocked = yellow on black
 color.blocking = yellow on black
 color.tag.epic = bold green
+color.tag.review = yellow on black
 #include dark-blue-256.theme
 # include dark-violets-256.theme
 # include dark-yellow-green.theme
