@@ -307,7 +307,3 @@ export WASMTIME_HOME="$HOME/.wasmtime"
 export PATH="$WASMTIME_HOME/bin:$PATH"
 if [ -f "/home/decoder/.config/fabric/fabric-bootstrap.inc" ]; then . "/home/decoder/.config/fabric/fabric-bootstrap.inc"; fi
 # zprof > /tmp/zprof.out
-
-. "$HOME/.atuin/bin/env"
-
-eval "$(atuin init zsh)"
