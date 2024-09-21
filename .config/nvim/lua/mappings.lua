@@ -367,6 +367,17 @@ vim.keymap.set({ "o", "x" }, "ai", "<cmd>lua require('various-textobjs').indenta
 vim.keymap.set({ "o", "x" }, "iI", "<cmd>lua require('various-textobjs').indentation('inner', 'inner')<CR>")
 vim.keymap.set({ "o", "x" }, "aI", "<cmd>lua require('various-textobjs').indentation('outer', 'outer')<CR>")
 
+-- Disable the specific keybinding in normal and visual mode
+vim.api.nvim_set_keymap("n", "<Space>a", "<Nop>", { noremap = true, silent = true })
+vim.api.nvim_set_keymap("v", "<Space>a", "<Nop>", { noremap = true, silent = true })
+
+-- Avante
+vim.api.nvim_set_keymap("n", "<leader>aa", "<Plug>(AvanteAsk)", { noremap = true, silent = true })
+vim.api.nvim_set_keymap("v", "<leader>aa", "<Plug>(AvanteAsk)", { noremap = true, silent = true })
+vim.api.nvim_set_keymap("n", "<leader>ae", "<Plug>(AvanteEdit)", { noremap = true, silent = true })
+vim.api.nvim_set_keymap("v", "<leader>ae", "<Plug>(AvanteEdit)", { noremap = true, silent = true })
+vim.api.nvim_set_keymap("v", "<leader>ar", "<Plug>(AvanteRefresh)", { noremap = true, silent = true })
+
 -- Decide there to autofill mapping based on space location
 vim.cmd [[
      function! s:check_back_space() abort
