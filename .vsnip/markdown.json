@@ -76,6 +76,12 @@
     "body": ["```bash", "~~~${1:command}", "${0}", "~~~", "```"],
     "description": "Inserts slides pre-processing snippet"
   },
+    "Tmux Switch Client Code Snippet": {
+    "prefix": "tmx",
+    "scope": "markdown",
+    "body": ["```bash", "tmux switchc -t ${1}", "```", "${0}"],
+    "description": "Inserts tmux client switch snippet"
+  },
   "Parenthesis []": {
     "prefix": "par",
     "scope": "markdown",
