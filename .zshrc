@@ -143,6 +143,10 @@ export PATH="$HOME/.yarn/bin:$HOME/.config/yarn/global/node_modules/.bin:$PATH"
 export PATH=$PATH:${HOME}/bin
 export RANGER_LOAD_DEFAULT_RC=FALSE
 export RIPGREP_CONFIG_PATH=$HOME/.ripgreprc
+export COLLECT_LEARNINGS_OPT_OUT=true  # Opt out of collecting learning data
+export CLIPBOARD_NOGUI=0  # Enable GUI-based clipboard operations
+export WEATHER_LOCATION=Mittelbuchen
+
 if [ -d "$HOME/.dotnet/tools" ] ; then
     PATH="$HOME/.dotnet/tools:$PATH"
 fi
