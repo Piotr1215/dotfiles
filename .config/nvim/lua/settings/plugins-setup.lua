@@ -425,8 +425,6 @@ require("lualine").setup {
   },
 }
 
-require("avante_lib").load()
-
 require("nvim-surround").setup {
   keymaps = {
     insert = "<C-g>s",
