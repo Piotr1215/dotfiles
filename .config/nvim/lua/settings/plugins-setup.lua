@@ -28,31 +28,79 @@ require("yanksearch").setup {
   lines_below = 0,
   lines_around = 0, -- This will override lines_above and lines_below if set to a non-zero value
 }
+
 require("gp").setup {
-  require("gp").setup {
-    agents = {
-      -- Disable ChatGPT 3.5
-      {
-        name = "ChatGPT3-5",
-        disable = true,
-      },
-      {
-        name = "ChatGPT4",
-        chat = true,
-        command = true,
-        -- string with model name or table with model name and parameters
-        model = { model = "gpt-4o", temperature = 0.1, top_p = 1 },
-        -- system prompt (use this to specify the persona/role of the AI)
-        system_prompt = "You are a specialized coding AI assistant.\n\n"
-          .. "The user provided the additional info about how they would like you to respond:\n\n"
-          .. "- If you're unsure don't guess and say you don't know instead.\n"
-          .. "- Ask question if you need clarification to provide better answer.\n"
-          .. "- Think deeply and carefully from first principles step by step.\n"
-          .. "- Make your answers short, conscience, to the point and helpful.\n"
-          .. "- Produce only valid and actionable code.\n"
-          .. "- Include only essencial response like code etc, DO NOT provide explanations unless specifically asked for\n"
-          .. "- Take a deep breath; You've got this!",
-      },
+  -- default agent names set during startup, if nil last used agent is used
+  -- Claude35 or ChatGPT4
+  default_command_agent = nil,
+  default_chat_agent = nil,
+  hooks = {
+    -- Example of adding a custom command to explain selected code
+    ExplainCode = function(gp, params)
+      local template = "I have the following code from {{filename}}:\n\n"
+        .. "```{{filetype}}\n{{selection}}\n```\n\n"
+        .. "Please explain the code above."
+      local agent = gp.get_chat_agent()
+      gp.Prompt(params, gp.Target.popup, agent, template)
+    end,
+
+    -- Example of adding a custom command to write unit tests for selected code
+    WriteUnitTests = function(gp, params)
+      local template = "Here is some code from {{filename}}:\n\n"
+        .. "```{{filetype}}\n{{selection}}\n```\n\n"
+        .. "Can you generate unit tests for the code above?"
+      local agent = gp.get_command_agent()
+      gp.Prompt(params, gp.Target.vnew, agent, template)
+    end,
+
+    -- Example of adding a custom command to perform a code review
+    CodeReview = function(gp, params)
+      local template = "Please review the following code from {{filename}}:\n\n"
+        .. "```{{filetype}}\n{{selection}}\n```\n\n"
+        .. "Look for potential issues and suggest improvements."
+      local agent = gp.get_chat_agent()
+      gp.Prompt(params, gp.Target.enew "markdown", agent, template)
+    end,
+  },
+  providers = {
+    anthropic = {
+      disable = false,
+      endpoint = "https://api.anthropic.com/v1/messages",
+      secret = os.getenv "ANTHROPIC_API_KEY",
+    },
+  },
+  agents = {
+    -- Disable ChatGPT 3.5
+    {
+      name = "ChatGPT3-5",
+      disable = true,
+    },
+    {
+      provider = "anthropic",
+      name = "Claude35",
+      chat = true,
+      command = true,
+      -- string with model name or table with model name and parameters
+      model = { model = "claude-3-5-sonnet-20240620", temperature = 0.8, top_p = 1 },
+      -- system prompt (use this to specify the persona/role of the AI)
+      system_prompt = require("gp.defaults").chat_system_prompt,
+    },
+    {
+      name = "ChatGPT4",
+      chat = true,
+      command = true,
+      -- string with model name or table with model name and parameters
+      model = { model = "gpt-4o", temperature = 0.1, top_p = 1 },
+      -- system prompt (use this to specify the persona/role of the AI)
+      system_prompt = "You are a specialized coding AI assistant.\n\n"
+        .. "The user provided the additional info about how they would like you to respond:\n\n"
+        .. "- If you're unsure don't guess and say you don't know instead.\n"
+        .. "- Ask question if you need clarification to provide better answer.\n"
+        .. "- Think deeply and carefully from first principles step by step.\n"
+        .. "- Make your answers short, conscience, to the point and helpful.\n"
+        .. "- Produce only valid and actionable code.\n"
+        .. "- Include only essencial response like code etc, DO NOT provide explanations unless specifically asked for\n"
+        .. "- Take a deep breath; You've got this!",
     },
   },
 }
