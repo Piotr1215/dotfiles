@@ -1,17 +1,50 @@
+[user]
+email = piotr.zaniewski@loft.sh
+signingkey = AD69204A8804DE3A
+name = Piotr Zaniewski
+
+[core]
+sshCommand = "ssh -i ~/.ssh/id_ed25519 -F /dev/null"
+excludesFile = ~/.gitignore
+pager = delta
+editor = nvim
+
 [color]
 branch = auto
 diff = auto
 interactive = auto
 status = auto
-[core]
-sshCommand = "ssh -i ~/.ssh/id_ed25519 -F /dev/null"
-excludesFile = ~/.gitignore
-pager = delta
-	editor = nvim
-[user]
-email = piotr.zaniewski@loft.sh
-signingkey = AD69204A8804DE3A
-name = Piotr Zaniewski
+
+[init]
+defaultBranch = main
+
+[commit]
+gpgsign = true
+template = ~/.gitmessage
+
+[diff]
+colorMoved = default
+
+[merge]
+tool = fugitive
+conflictstyle = diff3
+
+[mergetool "fugitive"]
+cmd = nvim -f -c \"Gvdiffsplit!\" \"$MERGED\"
+
+[branch]
+autosetuprebase = always
+
+[push]
+default = current
+
+[interactive]
+diffFilter = delta --color-only
+
+[delta]
+navigate = true # use n and N to move between diff sections
+side-by-side = true
+
 [alias]
 s = status
 st = status
@@ -22,39 +55,18 @@ cia = commit --verbose --all
 co = checkout
 su = submodule update --init --recursive
 logg = log --graph
-; PROJECT: git-log
 add-commit = !git add -A && git commit
-	lg-detail = log --graph --decorate --pretty=format:'%C(yellow)%h%C(reset) %C(green)%ad%C(reset) %C(auto)%d%C(reset)%n%C(white)%B%C(reset)' --date=short
-	lg = log --graph --decorate --color=always --pretty=format:'%C(yellow)%h%C(reset) -%C(red)%d%C(reset) %s %C(green)(%cr)%C(reset)' --abbrev-commit
-[diff]
-#tool = vimdiff
-colorMoved = default
-[merge]
-tool = fugitive
-conflictstyle = diff3
-[push]
-	default = current
-[branch]
-autosetuprebase = always
-[init]
-defaultBranch = main
-[commit]
-gpgsign = true
-template = ~/.gitmessage
-[interactive]
-diffFilter = delta --color-only
-[delta]
-navigate = true # use n and N to move between diff sections
+lg-detail = log --graph --decorate --pretty=format:'%C(yellow)%h%C(reset) %C(green)%ad%C(reset) %C(auto)%d%C(reset)%n%C(white)%B%C(reset)' --date=short
+lg = log --graph --decorate --color=always --pretty=format:'%C(yellow)%h%C(reset) -%C(red)%d%C(reset) %s %C(green)(%cr)%C(reset)' --abbrev-commit
+
 [url "git@github.com:"]
-	insteadOf = https://github.com/
-[mergetool "fugitive"]
-	cmd = nvim -f -c \"Gvdiffsplit!\" \"$MERGED\"
+insteadOf = https://github.com/
+
 [filter "lfs"]
-	clean = git-lfs clean -- %f
-	smudge = git-lfs smudge -- %f
-	process = git-lfs filter-process
-	required = true
+clean = git-lfs clean -- %f
+smudge = git-lfs smudge -- %f
+process = git-lfs filter-process
+required = true
+
 [rerere]
-	enabled = true
-[maintenance]
-	repo = /home/decoder/dev/dotfiles
+enabled = true
