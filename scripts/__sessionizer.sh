@@ -110,8 +110,8 @@ else # argument provided
 	fi
 fi
 
-if [ "$RESULT" = "" ]; then # no result
-	exit 0                     # exit silently
+if [ -z "$RESULT" ]; then
+	exit 0
 fi
 
 if [ $HOME_SED_SAFE -eq 0 ]; then
