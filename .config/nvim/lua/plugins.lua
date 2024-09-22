@@ -19,9 +19,10 @@ return require("lazy").setup {
   -- AI {{{
   "github/copilot.vim",
   "robitx/gp.nvim",
-  "MunifTanjim/nui.nvim",
-  "jellydn/hurl.nvim",
-  "stevearc/dressing.nvim",
+  {
+    "olimorris/codecompanion.nvim",
+    config = true,
+  },
   -- }}}
   -- Editor Extensions {{{
   {
@@ -35,6 +36,9 @@ return require("lazy").setup {
     { "<c-s>", mode = { "c" }, function() require("flash").toggle() end, desc = "Toggle Flash Search" },
   },
   },
+  "MunifTanjim/nui.nvim",
+  "jellydn/hurl.nvim",
+  "stevearc/dressing.nvim",
   "tyru/open-browser.vim",
   "gcmt/taboo.vim",
   "MeanderingProgrammer/render-markdown.nvim",
