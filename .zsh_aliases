@@ -102,6 +102,7 @@ alias tuic='task current'
 alias tuid='task workdone'
 alias tuiw='task context work; tui --report current'
 alias tuih='task context home; tui --report current'
+alias timesum='__summarize_timew.py'
 alias uxp="just ~/dev/dotfiles/scripts/uxp-setup/setup_infra"
 alias uxpf="just ~/dev/dotfiles/scripts/uxp-setup/setup_infra functions"
 alias uxpm="just ~/dev/dotfiles/scripts/uxp-setup/setup_infra master"
