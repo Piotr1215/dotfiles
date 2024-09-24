@@ -46,7 +46,7 @@ startup_pane: 3
 
 windows:
   - tasks:
-      layout: f3bf,294x72,0,0{146x72,0,0[146x36,0,0,38,146x35,0,37,41],147x72,147,0,39}
+      layout: 1b3d,294x72,0,0{106x72,0,0[106x36,0,0,57,106x35,0,37,58],187x72,107,0[187x36,107,0,59,187x35,107,37,82]}
       panes:
         - tui -r workdone
         - watch timew summary :ids :day
