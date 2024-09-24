@@ -54,7 +54,7 @@ windows:
       layout: even-horizontal
       panes:
         - ~/dev/dotfiles/scripts/__create_kind_cluster.sh first && __create_separate_kubeconfig.sh /tmp/first && cd /tmp/first
-        - ~/dev/dotfiles/scripts/__create_kind_cluster.sh second && __create_separate_kubeconfig.sh /tmp/second && cd /tmp/second
+        # - ~/dev/dotfiles/scripts/__create_kind_cluster.sh second && __create_separate_kubeconfig.sh /tmp/second && cd /tmp/second
   - dev:
       layout: even-horizontal 
       panes:
