@@ -46,8 +46,8 @@ startup_pane: 3
 
 windows:
   - tasks:
-      layout: 1b3d,294x72,0,0{106x72,0,0[106x36,0,0,57,106x35,0,37,58],187x72,107,0[187x36,107,0,59,187x35,107,37,82]}
+      layout: 0bab,294x72,0,0{117x72,0,0[117x36,0,0,93,117x35,0,37,94],176x72,118,0[176x36,118,0,95,176x35,118,37,100]}
       panes:
         - tui -r workdone
-        - watch timew summary :ids :day
+        - watch zsh -c "__summarize_timew.py" --interval 10s
         - tuiw
