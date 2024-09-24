@@ -371,6 +371,9 @@ vim.keymap.set({ "o", "x" }, "aI", "<cmd>lua require('various-textobjs').indenta
 vim.api.nvim_set_keymap("n", "<Space>a", "<Nop>", { noremap = true, silent = true })
 vim.api.nvim_set_keymap("v", "<Space>a", "<Nop>", { noremap = true, silent = true })
 
+-- Expand 'cc' into 'CodeCompanion' in the command line
+vim.cmd [[cab cc CodeCompanion]]
+
 -- Decide there to autofill mapping based on space location
 vim.cmd [[
      function! s:check_back_space() abort
