@@ -2,26 +2,12 @@
 vim.notify = require "notify"
 require("mason").setup()
 
-require("neotest").setup {
-  adapters = {
-    require "neotest-python",
-  },
-}
-
-require("neotest").setup {
-  adapters = {
-    require "neotest-python" {
-      dap = { justMyCode = false },
-      args = { "-vv" },
-    },
-    require "neotest-plenary",
-  },
-}
-
 require("typeit").setup {
   default_speed = 30, -- Default typing speed (milliseconds)
   default_pause = "paragraph", -- Default pause behavior ('line' or 'paragraph')
 }
+
+require("Comment").setup()
 
 require("yanksearch").setup {
   lines_above = 0,
@@ -426,6 +412,7 @@ require("lualine").setup {
 }
 
 require("codecompanion").setup {
+  use_default_prompts = false,
   strategies = {
     chat = {
       adapter = "anthropic",
@@ -498,8 +485,6 @@ vim.g.go_highlight_operators = 1
 vim.g.go_fmt_experimental = 1
 -- Send to window
 vim.g.sendtowindow_use_defaults = 0
--- Nerdcommenter
-vim.g.NERDSpaceDelims = 1
 -- Ranger
 -- Scrollfix
 vim.g.scrollfix = -1
