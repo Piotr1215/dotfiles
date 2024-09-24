@@ -27,8 +27,8 @@ except FileNotFoundError:
     print("Taskwarrior is not installed or not found in PATH.")
     exit(1)
 
-# Define known labels
-known_labels = {'work', 'break', 'meeting', 'linear', 'next', 'call', 'subtask'}
+# Define known labels (excluding 'work' from display)
+known_labels = {'work', 'break', 'meeting', 'linear', 'next', 'call', 'subtask', 'automation', 'install', 'review'}
 
 # Run 'timew export' with the specified period and capture the JSON output
 try:
@@ -63,7 +63,7 @@ for entry in entries:
         tags = entry['tags']
         # Initialize fields
         projects = []
-        labels = []
+        labels = set()
         tasks = []
 
         # Identify project tags
@@ -71,14 +71,14 @@ for entry in entries:
             if tag in project_list:
                 projects.append(tag)
 
-        # Identify labels
+        # Identify labels (excluding 'work' from display)
         for tag in tags:
-            if tag in known_labels:
-                labels.append(tag)
+            if tag in known_labels and tag != 'work':
+                labels.add(tag)
 
         # Remaining tags are considered task descriptions
         for tag in tags:
-            if tag not in projects and tag not in labels:
+            if tag not in projects and tag not in known_labels:
                 tasks.append(tag)
 
         # Use 'Unassigned' if no project is found
@@ -89,10 +89,11 @@ for entry in entries:
         project_task_key = (project_name, task_name)
         if project_task_key not in project_task_durations:
             project_task_durations[project_task_key] = {
-                'labels': labels,
+                'labels': set(),
                 'duration': timedelta()
             }
         project_task_durations[project_task_key]['duration'] += duration
+        project_task_durations[project_task_key]['labels'].update(labels)
 
         # Check if the entry is a break
         is_break = 'break' in labels
@@ -105,7 +106,7 @@ table_rows = []
 project_summaries = {}
 for (project_name, task_name), info in project_task_durations.items():
     duration = info['duration']
-    labels = ', '.join(info['labels']) if info['labels'] else '-'
+    labels = ', '.join(sorted(info['labels'])) if info['labels'] else '-'
     duration_str = format_duration(duration)
 
     # Aggregate durations per project
