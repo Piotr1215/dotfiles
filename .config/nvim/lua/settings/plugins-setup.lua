@@ -18,7 +18,7 @@ require("yanksearch").setup {
 require("gp").setup {
   -- default agent names set during startup, if nil last used agent is used
   -- Claude35 or ChatGPT4
-  default_command_agent = nil,
+  default_command_agent = "ChatGPT4",
   default_chat_agent = nil,
   hooks = {
     -- Example of adding a custom command to explain selected code
@@ -90,7 +90,15 @@ require("gp").setup {
       -- string with model name or table with model name and parameters
       model = { model = "claude-3-5-sonnet-20240620", temperature = 0.8, top_p = 1 },
       -- system prompt (use this to specify the persona/role of the AI)
-      system_prompt = require("gp.defaults").chat_system_prompt,
+      system_prompt = "You are a specialized coding AI assistant.\n\n"
+        .. "The user provided the additional info about how they would like you to respond:\n\n"
+        .. "- If you're unsure don't guess and say you don't know instead.\n"
+        .. "- Ask question if you need clarification to provide better answer.\n"
+        .. "- Think deeply and carefully from first principles step by step.\n"
+        .. "- Make your answers short, concise, to the point and helpful.\n"
+        .. "- Produce only valid and actionable code.\n"
+        .. "- Include only essential response like code etc, DO NOT provide explanations unless specifically asked for\n"
+        .. "- Take a deep breath; You've got this!",
     },
     {
       name = "ChatGPT4",
@@ -115,15 +123,8 @@ require("gp").setup {
       name = "pplx", -- Perplexity agent
       chat = false,
       command = true,
-      model = { model = "llama-3.1-sonar-large-128k-online" }, -- Example Perplexity model
-      system_prompt = "You are an advanced internet search AI assistant.\n\n"
-        .. "The user provided the following instructions on how to handle searches and responses:\n\n"
-        .. "- Only provide up-to-date and relevant information.\n"
-        .. "- Avoid guessing, and respond with 'I don't know' if information isn't available.\n"
-        .. "- If additional clarification is needed, ask specific follow-up questions.\n"
-        .. "- Provide concise, factual answers without unnecessary elaboration.\n"
-        .. "- Prioritize clear and precise results based on the most reliable and current sources available.\n"
-        .. "- Stay calm and professional in all responses; you've got this!",
+      model = { model = "llama-3.1-sonar-large-128k-online" },
+      system_prompt = "You are specialized internet search assistant.",
     },
   },
 }
