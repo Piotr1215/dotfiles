@@ -137,12 +137,4 @@ vim.api.nvim_set_keymap(
   { noremap = true, silent = true }
 )
 
--- Map <leader>mr in normal mode to the ranger_popup_in_tmux function
-vim.api.nvim_set_keymap(
-  "n",
-  "<leader>mr",
-  "<Cmd>lua require('user_functions.shell_integration').ranger_popup_in_tmux()<CR>",
-  { noremap = true, silent = true }
-)
-
 return M
