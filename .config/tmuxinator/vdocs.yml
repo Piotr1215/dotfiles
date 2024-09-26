@@ -1,0 +1,61 @@
+# run with mux start bash-scripting display_text="xxxxx"
+name: <%= %x(~/dev/dotfiles/scripts/__generate_session_name_from_branch.sh ~/loft/vcluster-docs).strip %>
+root: ~/loft/vcluster-docs
+
+# Optional tmux socket
+# socket_name: foo
+
+# Note that the pre and post options have been deprecated and will be replaced by
+# project hooks.
+
+# Project hooks
+
+# Runs on project start, always
+# on_project_start: 
+
+# Run on project start, the first time
+on_project_first_start: xdg-open https://www.notion.so/loftsh/Platform-Nav-Proposal-v2-3d25813006b641c28b5be7c741e774a3
+
+# Run on project start, after the first time
+# on_project_restart: command
+
+# Run on project exit ( detaching from tmux session )
+# on_project_exit: 
+
+# on_project_stop: ~/dev/dotfiles/scripts/__delete_all_kind_clusters.sh 
+
+# Runs in each window and pane before window/pane specific commands. Useful for setting up interpreter versions.
+# pre_window: rbenv shell 2.0.0-p247
+
+# Pass command line options to tmux. Useful for specifying a different tmux.conf.
+# tmux_options: -f ~/.tmux.mac.conf
+
+# Change the command to call tmux.  This can be used by derivatives/wrappers like byobu.
+# tmux_command: byobu
+
+# Specifies (by name or index) which window will be selected on project startup. If not set, the first window is used.
+startup_window: 1
+
+# Specifies (by index) which pane of the specified window will be selected on project startup. If not set, the first pane is used.
+# startup_pane: 2
+
+# Enables the display of pane titles. For example "editor" below. Defaults to false.
+enable_pane_titles: true
+
+# Configures pane title position. Can be: bottom, top, or "off". Note: "off" must be provided in quotes to avoid being interpreted as a boolean false. Defaults to top.
+pane_title_position: top
+
+# Configures pane title format. Defaults to "#{pane_index}: #{pane_title}".
+# Please see the tmux manpage for details, on valid formats.
+pane_title_format: "[ #T ]"
+
+windows:
+  - clusters:
+      layout: main-horizontal
+      panes:
+        - print -z npm run start
+        - lg
+  - dev:
+      layout: even-horizontal 
+      panes:
+        - nvim
