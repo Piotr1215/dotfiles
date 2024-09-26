@@ -198,6 +198,10 @@ vim.keymap.set(
   { desc = "Copy current file name and path", silent = false }
 )
 -- Related script: /home/decoder/dev/dotfiles/scripts/__trigger_ranger.sh:7
+vim.keymap.set("n", "<leader>mr", function()
+  require("user_functions.shell_integration").ranger_popup_in_tmux()
+end, { noremap = true, silent = true })
+
 utils.lnmap("cpl", [[:let @+ = expand("%:p") . ':' . line('.')<cr>]]) -- Copy current file name, path, and line number
 utils.lnmap("cpn", ':let @+ = expand("%:t")<cr>') -- Copy current file name
 utils.imap("<c-d>", "<c-o>daw", { desc = "delete word forward in insert mode" })
