@@ -446,21 +446,6 @@ require("lualine").setup {
   },
 }
 
-require("codecompanion").setup {
-  use_default_prompts = false,
-  strategies = {
-    chat = {
-      adapter = "anthropic",
-    },
-    inline = {
-      adapter = "copilot",
-    },
-    agent = {
-      adapter = "anthropic",
-    },
-  },
-}
-
 require("nvim-surround").setup {
   keymaps = {
     insert = "<C-g>s",
