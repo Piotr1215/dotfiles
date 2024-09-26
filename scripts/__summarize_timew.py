@@ -2,18 +2,25 @@
 import json
 import subprocess
 import argparse
-from datetime import timedelta
+from datetime import timedelta, datetime
 from dateutil import parser as date_parser
 from tabulate import tabulate
 
 # Set up argument parser
 parser = argparse.ArgumentParser(description='Summarize Timewarrior entries.')
-parser.add_argument('-p', '--period', choices=['day', 'week', 'month'], default='day',
+parser.add_argument('-p', '--period', choices=['day', 'yesterday', 'week', 'month'], default='day',
                     help='Time period to summarize (default: day)')
 args = parser.parse_args()
 
 # Determine time period argument for timew
-timew_period = ':' + args.period
+if args.period == 'yesterday':
+    today_weekday = datetime.now().weekday()
+    if today_weekday == 0:  # Monday
+        timew_period = 'friday'
+    else:
+        timew_period = 'yesterday'
+else:
+    timew_period = ':' + args.period
 
 # Run 'task _projects' to get the list of projects
 try:
@@ -28,7 +35,7 @@ except FileNotFoundError:
     exit(1)
 
 # Define known labels (excluding 'work' from display)
-known_labels = {'work', 'break', 'meeting', 'linear', 'next', 'call', 'subtask', 'automation', 'install', 'review'}
+known_labels = {'work', 'break', 'meeting', 'linear', 'next', 'call', 'subtask', 'automation', 'install', 'review', 'restructure', 'todo', 'travel', 'management', 'fix'}
 
 # Run 'timew export' with the specified period and capture the JSON output
 try:
