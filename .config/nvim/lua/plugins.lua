@@ -19,10 +19,6 @@ return require("lazy").setup {
   -- AI {{{
   "github/copilot.vim",
   "robitx/gp.nvim",
-  {
-    "olimorris/codecompanion.nvim",
-    config = true,
-  },
   -- }}}
   -- Editor Extensions {{{
   {
