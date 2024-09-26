@@ -47,12 +47,31 @@ require("gp").setup {
       local agent = gp.get_chat_agent()
       gp.Prompt(params, gp.Target.enew "markdown", agent, template)
     end,
+
+    -- Custom Web Search Command using Perplexity
+    WebSearch = function(gp, params)
+      local template = "Search the internet using Perplexity for: '{{command}}'. Provide a concise answer."
+      local agent = gp.get_command_agent "pplx"
+      gp.Prompt(params, gp.Target.vnew "markdown", agent, template)
+    end,
+    -- Custom Web Search Command using Perplexity
+    WebSearchSelection = function(gp, params)
+      local template = "Seach internet using perplexity, construct search query from {{filename}}:\n\n"
+        .. "```{{filetype}}\n{{selection}}\n```\n\n"
+        .. "Provide a concise answer."
+      local agent = gp.get_command_agent "pplx"
+      gp.Prompt(params, gp.Target.vnew "markdown", agent, template)
+    end,
   },
   providers = {
     anthropic = {
       disable = false,
       endpoint = "https://api.anthropic.com/v1/messages",
       secret = os.getenv "ANTHROPIC_API_KEY",
+    },
+    pplx = {
+      endpoint = "https://api.perplexity.ai/chat/completions",
+      secret = os.getenv "PPLX_API_KEY", -- Ensure you have this set in your environment
     },
   },
   agents = {
@@ -83,10 +102,26 @@ require("gp").setup {
         .. "- If you're unsure don't guess and say you don't know instead.\n"
         .. "- Ask question if you need clarification to provide better answer.\n"
         .. "- Think deeply and carefully from first principles step by step.\n"
-        .. "- Make your answers short, conscience, to the point and helpful.\n"
+        .. "- Make your answers short, concise, to the point and helpful.\n"
         .. "- Produce only valid and actionable code.\n"
-        .. "- Include only essencial response like code etc, DO NOT provide explanations unless specifically asked for\n"
+        .. "- Include only essential response like code etc, DO NOT provide explanations unless specifically asked for\n"
         .. "- Take a deep breath; You've got this!",
+    },
+    -- Perplexity agent
+    {
+      provider = "pplx",
+      name = "pplx", -- Perplexity agent
+      chat = false,
+      command = true,
+      model = { model = "llama-3.1-sonar-large-128k-online" }, -- Example Perplexity model
+      system_prompt = "You are an advanced internet search AI assistant.\n\n"
+        .. "The user provided the following instructions on how to handle searches and responses:\n\n"
+        .. "- Only provide up-to-date and relevant information.\n"
+        .. "- Avoid guessing, and respond with 'I don't know' if information isn't available.\n"
+        .. "- If additional clarification is needed, ask specific follow-up questions.\n"
+        .. "- Provide concise, factual answers without unnecessary elaboration.\n"
+        .. "- Prioritize clear and precise results based on the most reliable and current sources available.\n"
+        .. "- Stay calm and professional in all responses; you've got this!",
     },
   },
 }

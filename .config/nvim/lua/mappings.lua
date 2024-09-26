@@ -326,7 +326,8 @@ vim.keymap.set({ "n", "i" }, "<C-g>a", "<cmd>GpAppend<cr>", keymapOptions "Appen
 vim.keymap.set({ "n", "i" }, "<C-g>b", "<cmd>GpPrepend<cr>", keymapOptions "Prepend")
 vim.keymap.set({ "n", "i" }, "<C-g>e", "<cmd>GpEnew<cr>", keymapOptions "Enew")
 vim.keymap.set({ "n", "i" }, "<C-g>p", "<cmd>GpPopup<cr>", keymapOptions "Popup")
-vim.keymap.set({ "n", "i" }, "<C-g>w", "<cmd>GpWhisper<cr>", keymapOptions "Append")
+vim.keymap.set({ "n" }, "<C-g>w", ":GpWebSearch ", {})
+vim.keymap.set({ "v" }, "<C-g>w", "<cmd>GpWebSearchSelection<cr>", keymapOptions "Vnew")
 vim.keymap.set("v", "<C-g>r", ":<C-u>'<,'>GpRewrite<cr>", keymapOptions "Visual Rewrite")
 vim.keymap.set("v", "<C-g>a", ":<C-u>'<,'>GpAppend<cr>", keymapOptions "Visual Append")
 vim.keymap.set("v", "<C-g>b", ":<C-u>'<,'>GpPrepend<cr>", keymapOptions "Visual Prepend")
@@ -373,6 +374,8 @@ vim.api.nvim_set_keymap("v", "<Space>a", "<Nop>", { noremap = true, silent = tru
 
 -- Expand 'cc' into 'CodeCompanion' in the command line
 vim.cmd [[cab cc CodeCompanion]]
+
+-- gp.nvim
 
 -- Decide there to autofill mapping based on space location
 vim.cmd [[
