@@ -14,7 +14,7 @@ root: ~/loft/vcluster-docs
 # on_project_start: 
 
 # Run on project start, the first time
-on_project_first_start: xdg-open https://www.notion.so/loftsh/Platform-Nav-Proposal-v2-3d25813006b641c28b5be7c741e774a3
+# on_project_first_start: 
 
 # Run on project start, after the first time
 # on_project_restart: command
@@ -53,7 +53,7 @@ windows:
   - clusters:
       layout: main-horizontal
       panes:
-        - print -z npm run start
+        - xdg-open https://www.notion.so/loftsh/Platform-Nav-Proposal-v2-3d25813006b641c28b5be7c741e774a3 && print -z npm run start
         - lg
   - dev:
       layout: even-horizontal 
