@@ -205,6 +205,10 @@ function output_file_path() {
 
 zle -N output_file_path
 
+source /home/decoder/dev/dotfiles/scripts/__grep_and_open.sh
+bindkey -s '^[q' 'gif\n'
+
+
 # Wrapper functions for key bindings
 function output_file_path_current() {
     output_file_path "."
