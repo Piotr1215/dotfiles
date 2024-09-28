@@ -1,16 +1,18 @@
 #!/usr/bin/env zsh
 
 gif() {
-  # Check if required commands are available
-  for cmd in rg fzf bat; do
+  for cmd in rg fzf bat tmux nvim; do
     if ! command -v $cmd &> /dev/null; then
-      echo "Error: $cmd is not installed or not in PATH" >&2
       return 1
     fi
   done
 
+  if [ -z "$TMUX" ]; then
+    return 1
+  fi
+
   local selections
-  selections=(${(f)"$(rg --line-number --no-heading --color=always --smart-case "" 2>/dev/null | \
+  selections=(${(f)"$(rg --line-number --no-heading --color=always --smart-case --hidden --glob '!.git' --glob '!node_modules' "" 2>/dev/null | \
     fzf --ansi --multi --delimiter : \
         --preview 'bat --style=numbers --color=always --highlight-line {2} {1} 2>/dev/null || echo "Preview not available"' \
         --preview-window 'up,60%,border-bottom,+{2}+3/3,~3' \
@@ -19,54 +21,72 @@ gif() {
         --exit-0)"}) || return 0
 
   if (( ${#selections} == 0 )); then
-    echo "No files selected."
     return 0
   fi
 
-  local files=()
-  local line=""
+  local -a files=()
+  local -a lines=()
+  local count=0
   for selection in $selections; do
     local file=$(echo $selection | awk -F: '{print $1}')
+    local line=$(echo $selection | awk -F: '{print $2}')
     if [[ -f "$file" ]]; then
-      files+=${file:A}
-      if (( ${#selections} == 1 )); then
-        line=$(echo $selection | awk -F: '{print $2}')
-      fi
-    else
-      echo "Warning: File not found: $file" >&2
+      files+=("${file:A}")
+      lines+=($line)
+      ((count++))
     fi
   done
 
-  if (( ${#files} == 0 )); then
-    echo "No valid files to open."
+  if (( $count == 0 )); then
     return 0
   fi
 
-  local editor=${EDITOR:-nvim}
-  if ! command -v $editor &> /dev/null; then
-    echo "Error: $editor is not installed or not in PATH" >&2
-    return 1
-  fi
+  open_files_in_nvim() {
+    local pane=$1
+    shift
+    local file_indices=("$@")
+    local nvim_cmd="nvim"
+    for index in "${file_indices[@]}"; do
+      nvim_cmd+=" +${lines[$index]} ${files[$index]}"
+    done
+    tmux send-keys -t "$pane" "$nvim_cmd" C-m
+  }
 
-  case ${#files} in
-    1)
-      if [[ -n $line ]]; then
-        $editor "${files[1]}" "+${line}"
-      else
-        $editor "${files[1]}"
-      fi
-      ;;
-    2)
-      $editor -O +'silent! normal g;' "${files[@]}"
-      ;;
-    3)
-      $editor -O "${files[1]}" -c 'wincmd j' -c "silent! vsplit ${files[2]}" -c "silent! split ${files[3]}"
-      ;;
-    4)
-      $editor -O "${files[1]}" -c "silent! vsplit ${files[2]}" -c "silent! split ${files[3]}" -c 'wincmd h' -c "silent! split ${files[4]}"
-      ;;
-    *)
-      $editor "${files[@]}"
-      ;;
-  esac
+  if (( $count == 1 )); then
+    open_files_in_nvim "$(tmux display-message -p '#P')" 1
+  else
+    local window_name="gif-$(date +%s)"
+    tmux new-window -n "$window_name"
+
+    case $count in
+      2)
+        tmux split-window -t "$window_name" -h -p 50
+        open_files_in_nvim "$window_name.1" 1
+        open_files_in_nvim "$window_name.2" 2
+        ;;
+      3)
+        tmux split-window -t "$window_name" -h -p 50
+        tmux split-window -t "$window_name.2" -v -p 50
+        open_files_in_nvim "$window_name.1" 1
+        open_files_in_nvim "$window_name.2" 2
+        open_files_in_nvim "$window_name.3" 3
+        ;;
+      *)
+        tmux split-window -t "$window_name" -h -p 50
+        tmux split-window -t "$window_name.1" -v -p 50
+        tmux split-window -t "$window_name.3" -v -p 50
+        open_files_in_nvim "$window_name.1" 1
+        open_files_in_nvim "$window_name.2" 2
+        open_files_in_nvim "$window_name.3" 3
+        local -a remaining_indices
+        for i in {4..$count}; do
+          remaining_indices+=($i)
+        done
+        open_files_in_nvim "$window_name.4" $remaining_indices
+        ;;
+    esac
+
+    tmux select-layout -t "$window_name" tiled
+  fi
 }
+
