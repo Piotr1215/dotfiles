@@ -11,13 +11,25 @@ gif() {
     return 1
   fi
 
-  local selections
-  selections=(${(f)"$(rg --line-number --no-heading --color=always --smart-case --hidden --glob '!.git' --glob '!node_modules' "" 2>/dev/null | \
+  local RG_BIND="ctrl-g:reload:rg --line-number --no-heading --color=always --smart-case --glob '!**/.git/**' --glob '!node_modules/**' '' 2>/dev/null || true"
+  local FILE_BIND="ctrl-f:reload:rg --files --glob '!**/.git/**' --glob '!node_modules/**' 2>/dev/null || true"
+
+  # Check if `fd` is installed to add directory searching capabilities
+  if command -v fd &>/dev/null; then
+    DIR_BIND="ctrl-d:change-prompt(directory> )+reload(cd $HOME && echo $HOME; fd --type d --hidden --absolute-path --color never --exclude .git --exclude node_modules)"
+  else
+    DIR_BIND="ctrl-d:change-prompt(directory> )+reload(cd $HOME && find ~+ -type d -name node_modules -prune -o -name .git -prune -o -type d -print)"
+  fi
+
+  selections=(${(f)"$(rg --line-number --no-heading --color=always --smart-case --glob '!**/.git/**' --glob '!node_modules/**' '' 2>/dev/null | \
     fzf --ansi --multi --delimiter : \
         --preview 'bat --style=numbers --color=always --highlight-line {2} {1} 2>/dev/null || echo "Preview not available"' \
         --preview-window 'up,60%,border-bottom,+{2}+3/3,~3' \
-        --bind 'change:reload:rg --line-number --no-heading --color=always --smart-case {q} 2>/dev/null || true' \
+        --bind "$FILE_BIND" \
+        --bind "$RG_BIND" \
+        --bind "$DIR_BIND" \
         --bind 'ctrl-c:abort' \
+        --header "Press Ctrl+f to search filenames, Ctrl+g to search file contents, Ctrl+d to search directories" \
         --exit-0)"}) || return 0
 
   if (( ${#selections} == 0 )); then
@@ -89,4 +101,3 @@ gif() {
     tmux select-layout -t "$window_name" tiled
   fi
 }
-
