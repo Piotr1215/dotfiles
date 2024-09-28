@@ -50,7 +50,8 @@ require("gp").setup {
 
     -- Custom Web Search Command using Perplexity
     WebSearch = function(gp, params)
-      local template = "Search the internet using Perplexity for: '{{command}}'. Provide a concise answer."
+      local template =
+        "Search the internet using Perplexity for: '{{command}}'. Provide a concise answer and include sources."
       local agent = gp.get_command_agent "pplx"
       gp.Prompt(params, gp.Target.vnew "markdown", agent, template)
     end,
@@ -60,7 +61,7 @@ require("gp").setup {
       local template = "{{filename}}:\n\n"
         .. "```{{filetype}}\n{{selection}}\n```\n\n"
         .. "{{command}}\n"
-        .. "Provide a concise answer."
+        .. "Provide a concise answer and include sources."
       local agent = gp.get_command_agent "pplx"
       gp.Prompt(params, gp.Target.vnew "markdown", agent, template, "Optional instructions:")
     end,
