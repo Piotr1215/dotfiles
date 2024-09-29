@@ -3,6 +3,30 @@
 gif() {
   local DEBUG=0
 
+  print_help() {
+    cat << EOF
+Usage: gif [OPTIONS]
+
+Search for files and open them in Neovim within tmux panes.
+
+Options:
+  --debug     Enable debug output
+  --help      Display this help message
+
+Controls:
+  Ctrl+f      Search filenames
+  Ctrl+g      Search file contents
+  Ctrl+d      Search directories
+
+Environment Variables:
+  NVIM_SEARCH_REGISTRY    Set to the search query, allowing Neovim to highlight matches
+
+Example:
+  gif             # Run the normal search and open
+  gif --debug     # Run with debug output
+EOF
+  }
+
   debug() {
     [[ $DEBUG -eq 1 ]] && echo "DEBUG: $@" >&2
   }
@@ -34,10 +58,24 @@ gif() {
     export NVIM_SEARCH_REGISTRY="$query"
   }
 
-  if [[ "$1" == "--debug" ]]; then
-    DEBUG=1
-    shift
-  fi
+  # Parse command line arguments
+  while [[ $# -gt 0 ]]; do
+    case $1 in
+      --debug)
+        DEBUG=1
+        shift
+        ;;
+      --help)
+        print_help
+        return 0
+        ;;
+      *)
+        echo "Unknown option: $1" >&2
+        print_help
+        return 1
+        ;;
+    esac
+  done
 
   for cmd in rg fzf bat tmux nvim; do
     if ! command -v $cmd &> /dev/null; then
@@ -111,10 +149,11 @@ gif() {
     tmux new-window -n "$window_name"
     case $count in
       2)
-        debug "Opening 2 files"
+        debug "Opening 2 files side-by-side"
         tmux split-window -t "$window_name" -h -p 50
         open_files_in_nvim "$window_name.1" 1
         open_files_in_nvim "$window_name.2" 2
+        tmux select-pane -t "$window_name.1"
         ;;
       3)
         debug "Opening 3 files"
