@@ -98,6 +98,6 @@ gif() {
         ;;
     esac
 
-    tmux select-layout -t "$window_name" tiled
+    tmux select-layout -t "$window_name" even-horizontal
   fi
 }
