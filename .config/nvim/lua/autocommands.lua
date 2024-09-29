@@ -83,6 +83,16 @@ vim.api.nvim_create_user_command("VT", function()
   vim.fn.termopen("zsh", { cwd = vim.fn.expand "%:p:h" })
 end, {})
 
+-- Add this to your Neovim configuration (init.lua)
+vim.api.nvim_create_autocmd("VimEnter", {
+  callback = function()
+    local search_value = os.getenv "NVIM_SEARCH_REGISTRY"
+    if search_value and #search_value > 0 then
+      vim.fn.setreg("/", search_value)
+      print("Search register set to: " .. search_value)
+    end
+  end,
+})
 -- Indentation Settings
 vim.api.nvim_create_autocmd("FileType", {
   pattern = { "c", "cpp" },
