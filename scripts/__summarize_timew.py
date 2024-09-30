@@ -8,7 +8,7 @@ from tabulate import tabulate
 
 # Set up argument parser
 parser = argparse.ArgumentParser(description='Summarize Timewarrior entries.')
-parser.add_argument('-p', '--period', choices=['day', 'yesterday', 'week', 'month'], default='day',
+parser.add_argument('-p', '--period', choices=['day', 'yesterday', 'week', 'month', 'pastweek'], default='day',
                     help='Time period to summarize (default: day)')
 args = parser.parse_args()
 
@@ -16,11 +16,22 @@ args = parser.parse_args()
 if args.period == 'yesterday':
     today_weekday = datetime.now().weekday()
     if today_weekday == 0:  # Monday
-        timew_period = 'friday'
+        timew_period_args = ['friday']
     else:
-        timew_period = 'yesterday'
+        timew_period_args = ['yesterday']
+elif args.period == 'pastweek':
+    today = datetime.now()
+    # Find the most recent Monday (last week's Monday)
+    last_monday = today - timedelta(days=today.weekday() + 7)
+    last_friday = last_monday + timedelta(days=4)
+    start_time = last_monday.strftime("%Y-%m-%dT00:00:00")
+    end_time = last_friday.strftime("%Y-%m-%dT23:59:59")
+    timew_period_args = [start_time, 'to', end_time]
+    
+    # Debug statement to verify the computed period
+    print(f"Debug: pastweek period set to '{start_time} to {end_time}'")
 else:
-    timew_period = ':' + args.period
+    timew_period_args = [f':{args.period}']
 
 # Run 'task _projects' to get the list of projects
 try:
@@ -39,10 +50,17 @@ known_labels = {'work', 'break', 'meeting', 'linear', 'next', 'call', 'subtask',
 
 # Run 'timew export' with the specified period and capture the JSON output
 try:
-    result = subprocess.run(['timew', 'export', timew_period], capture_output=True, text=True, check=True)
+    # Prepare the command based on the period
+    timew_command = ['timew', 'export'] + timew_period_args
+    # For debugging, print the exact command being run
+    print(f"Debug: Running 'timew export {' '.join(timew_command[2:])}'")
+    result = subprocess.run(timew_command, capture_output=True, text=True, check=True)
     entries = json.loads(result.stdout)
+    
+    # Debug statement to show the number of entries returned
+    print(f"Debug: Number of entries returned: {len(entries)}")
 except subprocess.CalledProcessError as e:
-    print(f"Error running 'timew export {timew_period}':", e)
+    print(f"Error running 'timew export {' '.join(timew_period_args)}':", e)
     entries = []
 except FileNotFoundError:
     print("Timewarrior is not installed or not found in PATH.")
@@ -67,7 +85,7 @@ for entry in entries:
         duration = end - start
         overall_total_duration += duration
 
-        tags = entry['tags']
+        tags = entry.get('tags', [])
         # Initialize fields
         projects = []
         labels = set()
@@ -109,7 +127,6 @@ for entry in entries:
             overall_total_breaks_duration += duration
 
 # Prepare data for the table
-table_rows = []
 project_summaries = {}
 for (project_name, task_name), info in project_task_durations.items():
     duration = info['duration']
