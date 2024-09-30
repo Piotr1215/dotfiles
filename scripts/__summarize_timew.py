@@ -28,8 +28,6 @@ elif args.period == 'pastweek':
     end_time = last_friday.strftime("%Y-%m-%dT23:59:59")
     timew_period_args = [start_time, 'to', end_time]
     
-    # Debug statement to verify the computed period
-    print(f"Debug: pastweek period set to '{start_time} to {end_time}'")
 else:
     timew_period_args = [f':{args.period}']
 
@@ -52,13 +50,9 @@ known_labels = {'work', 'break', 'meeting', 'linear', 'next', 'call', 'subtask',
 try:
     # Prepare the command based on the period
     timew_command = ['timew', 'export'] + timew_period_args
-    # For debugging, print the exact command being run
-    print(f"Debug: Running 'timew export {' '.join(timew_command[2:])}'")
     result = subprocess.run(timew_command, capture_output=True, text=True, check=True)
     entries = json.loads(result.stdout)
     
-    # Debug statement to show the number of entries returned
-    print(f"Debug: Number of entries returned: {len(entries)}")
 except subprocess.CalledProcessError as e:
     print(f"Error running 'timew export {' '.join(timew_period_args)}':", e)
     entries = []
