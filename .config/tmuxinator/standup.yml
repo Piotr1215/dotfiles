@@ -47,11 +47,14 @@ enable_pane_titles: true
 windows:
   - tasks:
       layout: even-horizontal
-      # Synchronize all panes of this window, can be enabled before or after the pane commands run.
-      # 'before' represents legacy functionality and will be deprecated in a future release, in favour of 'after'
-      # synchronize: after
       panes:
-        - __summarize_timew.py -p pastweek 
+        - |
+          <% if Time.now.monday? %>
+            <%= "__summarize_timew.py -p pastweek" %>
+          <% else %>
+            <%= "__summarize_timew.py -p week" %>
+          <% end %>
+
   - time:
       layout: main-horizontal
       panes:
