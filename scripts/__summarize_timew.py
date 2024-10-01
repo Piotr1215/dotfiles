@@ -44,7 +44,7 @@ except FileNotFoundError:
     exit(1)
 
 # Define known labels (excluding 'work' from display)
-known_labels = {'work', 'break', 'meeting', 'linear', 'next', 'call', 'subtask', 'automation', 'install', 'review', 'restructure', 'todo', 'travel', 'management', 'fix'}
+known_labels = {'work', 'break', 'meeting', 'linear', 'next', 'call', 'subtask', 'automation', 'install', 'review', 'restructure', 'todo', 'travel', 'management', 'fix', 'meetings', 'epic'}
 
 # Run 'timew export' with the specified period and capture the JSON output
 try:
