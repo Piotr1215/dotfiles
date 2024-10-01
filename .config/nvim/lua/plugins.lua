@@ -37,7 +37,6 @@ return require("lazy").setup {
   "stevearc/dressing.nvim",
   "tyru/open-browser.vim",
   "gcmt/taboo.vim",
-  "MeanderingProgrammer/render-markdown.nvim",
 
   "towolf/vim-helm",
   "jbyuki/one-small-step-for-vimkind",
