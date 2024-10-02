@@ -24,25 +24,26 @@ data.location=/home/decoder/.task
 #hooks.location=~/.config/task/hooks
 
 # Color theme (uncomment one to use)
-#include light-16.theme
-#include light-256.theme
+# include light-16.theme
+# include light-256.theme
 # include dark-16.theme
 # include dark-256.theme
-#include dark-red-256.theme
-include dark-green-256.theme
-color.blocked = yellow on black
-color.blocking = yellow on black
-color.tag.epic = bold green
-color.tag.review = bold blue
-#include dark-blue-256.theme
+# include dark-red-256.theme
+# include dark-blue-256.theme
 # include dark-violets-256.theme
 # include dark-yellow-green.theme
 # include dark-gray-256.theme
 # include dark-gray-blue-256.theme
 # include solarized-dark-256.theme
-#include solarized-light-256.theme
+# include solarized-light-256.theme
 # include no-color.theme
-#
+include dark-green-256.theme
+color.blocked = yellow on black
+color.blocking = yellow on black
+color.tag.epic = bold green
+color.tag.review = bold blue
+color.tag.bug = magenta on black
+
 # Custom reports
 report.workdone.description=List of completed tasks in the work context
 report.workdone.columns=project,description.desc,end
