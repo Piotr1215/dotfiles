@@ -81,6 +81,7 @@ HISTFILE=${ZDOTDIR:-$HOME}/.zsh_history
 # Enable animations
 gsettings set org.gnome.desktop.interface enable-animations true
 
+# Completions and scripts
 source $ZSH/oh-my-zsh.sh
 source ~/.oh-my-zsh/plugins/tmuxinator/_mst 
 source ~/.oh-my-zsh/plugins/tmuxinator/_ms
