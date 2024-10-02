@@ -27,7 +27,6 @@ elif args.period == 'pastweek':
     start_time = last_monday.strftime("%Y-%m-%dT00:00:00")
     end_time = last_friday.strftime("%Y-%m-%dT23:59:59")
     timew_period_args = [start_time, 'to', end_time]
-    
 else:
     timew_period_args = [f':{args.period}']
 
@@ -43,8 +42,19 @@ except FileNotFoundError:
     print("Taskwarrior is not installed or not found in PATH.")
     exit(1)
 
-# Define known labels (excluding 'work' from display)
-known_labels = {'work', 'break', 'meeting', 'linear', 'next', 'call', 'subtask', 'automation', 'install', 'review', 'restructure', 'todo', 'travel', 'management', 'fix', 'meetings', 'epic'}
+# Run 'task _tags' to get the list of known labels
+try:
+    result = subprocess.run(['task', '_tags'], capture_output=True, text=True, check=True)
+    known_labels = set(result.stdout.strip().split('\n'))
+    known_labels = {tag.strip().lower() for tag in known_labels if tag.strip()}
+    known_labels.add('break')  # Ensure 'break' is included
+except subprocess.CalledProcessError as e:
+    print("Error running 'task _tags':", e)
+    known_labels = set()
+    known_labels.add('break')
+except FileNotFoundError:
+    print("Taskwarrior is not installed or not found in PATH.")
+    exit(1)
 
 # Run 'timew export' with the specified period and capture the JSON output
 try:
@@ -52,7 +62,6 @@ try:
     timew_command = ['timew', 'export'] + timew_period_args
     result = subprocess.run(timew_command, capture_output=True, text=True, check=True)
     entries = json.loads(result.stdout)
-    
 except subprocess.CalledProcessError as e:
     print(f"Error running 'timew export {' '.join(timew_period_args)}':", e)
     entries = []
@@ -90,14 +99,16 @@ for entry in entries:
             if tag in project_list:
                 projects.append(tag)
 
-        # Identify labels (excluding 'work' from display)
+        # Identify labels (excluding tags already identified as projects)
         for tag in tags:
-            if tag in known_labels and tag != 'work':
-                labels.add(tag)
+            tag_lower = tag.lower()
+            if tag_lower in known_labels and tag not in projects:
+                labels.add(tag_lower)
 
         # Remaining tags are considered task descriptions
         for tag in tags:
-            if tag not in projects and tag not in known_labels:
+            tag_lower = tag.lower()
+            if tag_lower not in {p.lower() for p in projects} and tag_lower not in known_labels:
                 tasks.append(tag)
 
         # Use 'Unassigned' if no project is found
@@ -115,7 +126,7 @@ for entry in entries:
         project_task_durations[project_task_key]['labels'].update(labels)
 
         # Check if the entry is a break
-        is_break = 'break' in labels
+        is_break = 'break' in (tag.lower() for tag in tags)
 
         if is_break:
             overall_total_breaks_duration += duration
@@ -124,7 +135,9 @@ for entry in entries:
 project_summaries = {}
 for (project_name, task_name), info in project_task_durations.items():
     duration = info['duration']
-    labels = ', '.join(sorted(info['labels'])) if info['labels'] else '-'
+    # Exclude 'work' from displayed labels
+    display_labels = info['labels'] - {'work'}
+    labels_str = ', '.join(sorted(display_labels)) if display_labels else '-'
     duration_str = format_duration(duration)
 
     # Aggregate durations per project
@@ -138,7 +151,7 @@ for (project_name, task_name), info in project_task_durations.items():
 
     # Add task to project's task list
     project_summaries[project_name]['tasks'].append({
-        'Labels': labels,
+        'Labels': labels_str,
         'Task': task_name,
         'Duration': duration_str,
         'duration_td': duration
