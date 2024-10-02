@@ -58,8 +58,8 @@ report.currentall.sort=manual_priority-,project+
 report.currentall.filter=status:pending
 
 report.current.description=List of current tasks in the work context
-report.current.columns=id,entry.age,manual_priority,priority,project,tags,description.desc,entry,due.relative,duration,follow,depends,urgency
-report.current.labels=ID,Age,MP,P,Proj,Tag,Desc,Created,Due,Duration,Follow,Depends,Urg
+report.current.columns=id,entry.age,manual_priority,priority,project,tags,description.desc,entry,due.relative,follow,depends,urgency
+report.current.labels=ID,Age,MP,P,Proj,Tag,Desc,Created,Due,Follow,Depends,Urg
 report.current.sort=manual_priority-,priority-,project+
 report.current.filter=status:pending
 
@@ -112,22 +112,18 @@ uda.follow.label=follow
 uda.follow.values=Y,N
 uda.manual_priority.type=numeric
 uda.manual_priority.label=Manual Priority
-uda.duration.type=duration
-uda.duration.label=Duration
-uda.duration.default=PT30M
 
 #UserDefinedShortcuts
 uda.taskwarrior-tui.task-report.next.filter=status:pending
 uda.taskwarrior-tui.shortcuts.1=~/.config/taskwarrior-tui/shortcut-scripts/taskopen-annotation.sh
 uda.taskwarrior-tui.shortcuts.2=~/dev/dotfiles/scripts/__cycle_tmuxinator_projects.sh
 uda.taskwarrior-tui.shortcuts.3=~/dev/dotfiles/scripts/__github_issue_sync.sh
-uda.taskwarrior-tui.shortcuts.4=~/.config/taskwarrior-tui/shortcut-scripts/increase_duration.sh
+uda.taskwarrior-tui.shortcuts.4=~/.config/taskwarrior-tui/shortcut-scripts/__cycle_priority.sh
 uda.taskwarrior-tui.shortcuts.5=~/.config/taskwarrior-tui/shortcut-scripts/__decrease_task_priority.sh
 uda.taskwarrior-tui.shortcuts.6=~/.config/taskwarrior-tui/shortcut-scripts/__increase_task_priority.sh
 uda.taskwarrior-tui.shortcuts.7=~/.config/taskwarrior-tui/shortcut-scripts/__annotate_with_note.sh
 uda.taskwarrior-tui.shortcuts.8=~/.config/taskwarrior-tui/shortcut-scripts/__annotate_with_new_note.sh
-# uda.taskwarrior-tui.shortcuts.9=~/.config/taskwarrior-tui/shortcut-scripts/__switch_report.sh
-uda.taskwarrior-tui.shortcuts.9=~/.config/taskwarrior-tui/shortcut-scripts/__cycle_priority.sh
+uda.taskwarrior-tui.shortcuts.9=~/.config/taskwarrior-tui/shortcut-scripts/__switch_report.sh
 
 #Taskwarrior tui overrides
 uda.taskwarrior-tui.task-report.jump-on-task-add=true
