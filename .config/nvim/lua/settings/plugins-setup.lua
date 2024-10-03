@@ -118,6 +118,19 @@ require("gp").setup {
         .. "- Include only essential response like code etc, DO NOT provide explanations unless specifically asked for\n"
         .. "- Take a deep breath; You've got this!",
     },
+    {
+      provider = "openai",
+      name = "o1-preview",
+      chat = true,
+      command = true,
+      model = { model = "o1-preview", temperature = 0.7, top_p = 1 },
+      system_prompt = "You are a specialized coding AI assistant.\n\n"
+        .. "The user provided the additional info about how they would like you to respond:\n\n"
+        .. "- If you're unsure don't guess and say you don't know instead.\n"
+        .. "- Ask question if you need clarification to provide better answer.\n"
+        .. "- Produce only valid and actionable code.\n"
+        .. "- Include only essential response like code etc, DO NOT provide explanations unless specifically asked for\n",
+    },
     -- Perplexity agent
     {
       provider = "pplx",
