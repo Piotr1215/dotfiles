@@ -127,7 +127,7 @@ uda.taskwarrior-tui.shortcuts.9=~/.config/taskwarrior-tui/shortcut-scripts/__swi
 
 #Taskwarrior tui overrides
 uda.taskwarrior-tui.task-report.jump-on-task-add=true
-context=work
+context=home
 context.archive.read=+archive
 context.archive.write=+archive
 context.integration.read=+integration

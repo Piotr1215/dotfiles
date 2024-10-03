@@ -69,6 +69,12 @@ except FileNotFoundError:
     print("Timewarrior is not installed or not found in PATH.")
     exit(1)
 
+# Filter entries to only include those with the 'work' tag
+entries = [
+    entry for entry in entries
+    if 'tags' in entry and 'work' in [tag.lower() for tag in entry['tags']]
+]
+
 # Function to format durations
 def format_duration(td):
     hours, remainder = divmod(td.total_seconds(), 3600)
