@@ -123,7 +123,8 @@ uda.taskwarrior-tui.shortcuts.5=~/.config/taskwarrior-tui/shortcut-scripts/__dec
 uda.taskwarrior-tui.shortcuts.6=~/.config/taskwarrior-tui/shortcut-scripts/__increase_task_priority.sh
 uda.taskwarrior-tui.shortcuts.7=~/.config/taskwarrior-tui/shortcut-scripts/__annotate_with_note.sh
 uda.taskwarrior-tui.shortcuts.8=~/.config/taskwarrior-tui/shortcut-scripts/__annotate_with_new_note.sh
-uda.taskwarrior-tui.shortcuts.9=~/.config/taskwarrior-tui/shortcut-scripts/__switch_report.sh
+# The below can be free as c switches contexts
+# uda.taskwarrior-tui.shortcuts.9=
 
 #Taskwarrior tui overrides
 uda.taskwarrior-tui.task-report.jump-on-task-add=true
