@@ -1,93 +1,86 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-# create_task
-# Creates a new task in Taskwarrior with a given description and optional additional attributes.
-#
-# Usage:
-#   task_id=$(create_task "Task Description" "+label1" "+label2" "project:ProjectName")
-#
-# Arguments:
-#   $1 - The task description. This should be the first argument and in quotes if it contains spaces.
-#   $@ - Optional additional arguments for the task, such as labels (prefixed with +) and project (prefixed with project:).
-#       These should be separate arguments and not combined in a single string.
-#
-# Examples:
-#   task_id=$(create_task "Review document" "+work" "project:Documentation")
-#   This creates a task with the description "Review document", adds a "work" label, and assigns it to the "Documentation" project.
-#
-#   task_id=$(create_task "Fix bug in script" "+bugfix" "+urgent" "project:Development")
-#   This creates a task with the description "Fix bug in script", adds "bugfix" and "urgent" labels, and assigns it to the "Development" project.
-#
-# Returns:
-#   The ID of the newly created task.
+# __lib_taskwarrior_interop.sh
+# Interop functions for Taskwarrior
+
+# Create a new task in Taskwarrior with a given description and optional additional attributes.
+# Properly handle special characters in the description and other arguments.
 create_task() {
-	local description=$1
+	local description="$1"
 	shift # Now $@ contains the rest of the arguments
 
-	# Use "$@" to pass all additional arguments to task add
+	# Use an array to hold arguments to prevent word splitting
+	local task_args=()
+	for arg in "$@"; do
+		task_args+=("$arg")
+	done
+
+	# Use -- to indicate end of options, and pass the description safely
 	local output
-	output=$(task add "$description" "$@")
-	local task_id
-	task_id=$(echo "$output" | grep -o 'Created task [0-9]*.' | cut -d ' ' -f 3 | tr -d '.')
-	echo "$task_id"
+	output=$(task add "${task_args[@]}" -- "$description")
+
+	# Extract the UUID from the output using a reliable method
+	local task_uuid
+	task_uuid=$(echo "$output" | grep -Po '(?<=Created task )[a-z0-9\-]+')
+
+	echo "$task_uuid"
 }
 
-# Get task ID from description
+# Get task UUID from description with specific tags (+github or +linear)
 get_task_id_by_description() {
 	local description="$1"
-	task_id=$(task "description:$description" | grep -oPm1 "^(\d+)")
-	echo "$task_id"
+	# Use task export with tags +github or +linear and status:pending to find the task by description
+	task +github or +linear status:pending export |
+		jq -r --arg desc "$description" '.[] | select(.description == $desc) | .uuid'
 }
 
 # Annotate an existing task
 annotate_task() {
-	local task_id="$1"
+	local task_uuid="$1"
 	local annotation="$2"
-	task "$task_id" annotate "$annotation"
+	task "$task_uuid" annotate -- "$annotation"
 }
 
 # Mark a task as completed
 mark_task_completed() {
-	local task_id="$1"
-	echo "Attempting to mark task $task_id as completed..."
-	#shellcheck disable=SC1010
-	task "$task_id" done || {
-		echo "Failed to mark task $task_id as completed"
+	local task_uuid="$1"
+	echo "Attempting to mark task $task_uuid as completed..."
+	task "$task_uuid" done || {
+		echo "Failed to mark task $task_uuid as completed" >&2
 		exit 1
 	}
 }
 
 # Mark a task as pending
 mark_task_pending() {
-	local task_id="$1"
-	task "$task_id" modify status:pending
+	local task_uuid="$1"
+	task "$task_uuid" modify status:pending
 }
 
-# Add a label to a task
+# Get task labels (tags)
 get_task_labels() {
-	echo "Getting labels for task $1"
-	local task_id="$1"
-	labels=$(task _get "$task_id".tags)
-	echo "$labels"
+	local task_uuid="$1"
+	echo "Getting labels for task $task_uuid"
+	task _get "$task_uuid".tags
 }
 
-# Add a label to a task
+# Add a label (tag) to a task
 add_task_label() {
-	local task_id="$1"
+	local task_uuid="$1"
 	local label="$2"
-	task "$task_id" modify +"$label"
+	task "$task_uuid" modify +"$label"
 }
 
-# Remove a label from a task
+# Remove a label (tag) from a task
 remove_task_label() {
-	local task_id="$1"
+	local task_uuid="$1"
 	local label="$2"
-	task "$task_id" modify -"$label"
+	task "$task_uuid" modify -"$label"
 }
 
 # Set or change a task's project
 change_task_project() {
-	local task_id="$1"
+	local task_uuid="$1"
 	local project_name="$2"
-	task "$task_id" modify project:"$project_name"
+	task "$task_uuid" modify project:"$project_name"
 }
