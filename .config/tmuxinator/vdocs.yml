@@ -53,7 +53,6 @@ windows:
   - clusters:
       layout: main-horizontal
       panes:
-        - xdg-open https://www.notion.so/loftsh/Platform-Nav-Proposal-v2-3d25813006b641c28b5be7c741e774a3 && print -z npm run start
         - lg
   - dev:
       layout: even-horizontal 
