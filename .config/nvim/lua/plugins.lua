@@ -109,7 +109,8 @@ return require("lazy").setup {
     "nvim-telescope/telescope.nvim",
     dependencies = {
       { "nvim-lua/popup.nvim" },
-      { "nvim-telescope/telescope-live-grep-args.nvim" },
+      { "nvim-telescope/telescope-live-grep-args.nvim", version = "^1.0.0" },
+      { "nvim-telescope/telescope-github.nvim" },
     },
   },
   {
