@@ -1,6 +1,8 @@
 local t = require "telescope"
 local builtin = require "telescope.builtin"
 local z_utils = require "telescope._extensions.zoxide.utils"
+local lga_actions = require "telescope-live-grep-args.actions"
+local actions = require "telescope.actions"
 
 require("telescope").load_extension "file_browser"
 require("telescope").load_extension "repo"
@@ -8,8 +10,8 @@ require("telescope").load_extension "fzf"
 require("telescope").load_extension "emoji"
 require("telescope").load_extension "zoxide"
 require("telescope").load_extension "tmuxinator"
-require("telescope").load_extension "live_grep_args"
 require("telescope").load_extension "cmdline"
+require("telescope").load_extension "gh"
 
 require("telescope").setup {
   defaults = {
@@ -26,7 +28,20 @@ require("telescope").setup {
   },
   extensions = {
     live_grep_args = {
-      auto_quoting = true, -- enable auto-quoting
+      auto_quoting = true, -- enable/disable auto-quoting
+      -- define mappings, e.g.
+      mappings = { -- extend mappings
+        i = {
+          ["<C-k>"] = lga_actions.quote_prompt(),
+          ["<C-i>"] = lga_actions.quote_prompt { postfix = " --iglob " },
+          -- freeze the current list and start a fuzzy search in the frozen list
+          ["<C-space>"] = actions.to_fuzzy_refine,
+        },
+      },
+      -- ... also accepts theme settings, for example:
+      -- theme = "dropdown", -- use dropdown theme
+      -- theme = { }, -- use own theme spec
+      -- layout_config = { mirror=true }, -- mirror preview pane
     },
     fzf = {
       fuzzy = true, -- false will only do exact matching
@@ -79,23 +94,7 @@ require("telescope").setup {
 
 -- Load the extension
 t.load_extension "zoxide"
-
--- Configure find files builtin with custom opts
--- For neovim's config directory
-local function search_dev()
-  local opts = {
-    prompt_title = "Dev", -- Title for the picker
-    shorten_path = false, -- Display full paths, short paths are ugly
-    cwd = "~/dev", -- Set path to directory whose files should be shown
-    file_ignore_patterns = { ".git", ".png", "tags" }, -- Folder/files to be ignored
-    initial_mode = "insert", -- Start in insert mode
-    selection_strategy = "reset", -- Start selection from top when list changes
-    theme = require("telescope.themes").get_dropdown {}, -- Theme to be used, can be omitted to use defaults
-  }
-
-  -- Pass opts to find_files
-  require("telescope.builtin").find_files(opts)
-end
+require("telescope").load_extension "live_grep_args"
 
 local function search_git(visual)
   -- Retrieve the git root path
@@ -215,6 +214,7 @@ local set_up_telescope = function()
     "<leader>ff",
     [[<cmd>lua require('telescope.builtin').find_files({ find_command = {'rg', '--files', '--hidden', '-g', '!.git'}, search_dirs = {require('user_functions.shell_integration').get_tmux_working_directory()}, path_display = {"truncate"} })<CR>]]
   )
+  set_keymap("n", "<leader>fl", ":lua require('telescope').extensions.live_grep_args.live_grep_args()<CR>")
   set_keymap("n", "<leader>fr", [[<cmd>lua require'telescope'.extensions.repo.list{search_dirs = {"~/dev"}}<CR>]])
   set_keymap("n", "<leader>fg", [[<cmd>lua require('telescope.builtin').git_files()<CR>]])
   set_keymap("n", "<leader>fo", [[<cmd>lua require('telescope.builtin').oldfiles()<CR>]])
