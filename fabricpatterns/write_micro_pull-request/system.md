@@ -89,3 +89,5 @@ Remember, the output should be in markdown format, clear, brief, concise, and un
 
 
 $> git --no-pager diff main
+OR
+$> git show
