@@ -26,7 +26,7 @@ function zvm_after_init() {
 
 # PUGINS & MODULES
 # fzf-tab should be last because it binds to ^I
-plugins=(z git kubectl zsh-autosuggestions zsh-syntax-highlighting web-search colored-man-pages fzf-tab)
+plugins=(z git kubectl zsh-autosuggestions zsh-syntax-highlighting web-search colored-man-pages fzf-tab sudo)
 zmodload zsh/mapfile # Bring mapfile functionality similar to bash
 
 # The plugin will auto execute this zvm_after_lazy_keybindings function
