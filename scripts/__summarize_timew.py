@@ -5,6 +5,10 @@ import argparse
 from datetime import timedelta, datetime
 from dateutil import parser as date_parser
 from tabulate import tabulate
+import logging
+
+# Configure logging for debugging
+logging.basicConfig(level=logging.ERROR, format='%(levelname)s: %(message)s')
 
 # Set up argument parser
 parser = argparse.ArgumentParser(description='Summarize Timewarrior entries.')
@@ -30,30 +34,45 @@ elif args.period == 'pastweek':
 else:
     timew_period_args = [f':{args.period}']
 
+# Define task-specific tags that should be treated as tasks, not labels
+task_specific_tags = {'break', 'meetings'}
+
+# Define labels to exclude from being displayed and treated as tasks
+exclude_labels = {'github', 'work', 'linear'}
+
 # Run 'task _projects' to get the list of projects
 try:
     result = subprocess.run(['task', '_projects'], capture_output=True, text=True, check=True)
     project_list = result.stdout.strip().split('\n')
     project_list = [proj.strip() for proj in project_list if proj.strip()]
+    project_list_lower = set(p.lower() for p in project_list)
+    logging.debug(f"Projects: {project_list}")
 except subprocess.CalledProcessError as e:
-    print("Error running 'task _projects':", e)
+    logging.error("Error running 'task _projects': " + str(e))
     project_list = []
+    project_list_lower = set()
 except FileNotFoundError:
-    print("Taskwarrior is not installed or not found in PATH.")
+    logging.error("Taskwarrior is not installed or not found in PATH.")
     exit(1)
 
-# Run 'task _tags' to get the list of known labels
+# Run 'task _tags' to get the list of known labels, excluding task-specific tags and projects
 try:
     result = subprocess.run(['task', '_tags'], capture_output=True, text=True, check=True)
     known_labels = set(result.stdout.strip().split('\n'))
-    known_labels = {tag.strip().lower() for tag in known_labels if tag.strip()}
-    known_labels.add('break')  # Ensure 'break' is included
+    # Exclude task-specific tags, project names, and specified excluded labels
+    known_labels = {
+        tag.strip().lower() for tag in known_labels 
+        if tag.strip().lower() not in task_specific_tags 
+        and tag.strip().lower() not in project_list_lower
+    }
+    # Further exclude specific labels from being displayed
+    known_labels -= exclude_labels
+    logging.debug(f"Known labels (after exclusion): {known_labels}")
 except subprocess.CalledProcessError as e:
-    print("Error running 'task _tags':", e)
+    logging.error("Error running 'task _tags': " + str(e))
     known_labels = set()
-    known_labels.add('break')
 except FileNotFoundError:
-    print("Taskwarrior is not installed or not found in PATH.")
+    logging.error("Taskwarrior is not installed or not found in PATH.")
     exit(1)
 
 # Run 'timew export' with the specified period and capture the JSON output
@@ -61,13 +80,19 @@ try:
     # Prepare the command based on the period
     timew_command = ['timew', 'export'] + timew_period_args
     result = subprocess.run(timew_command, capture_output=True, text=True, check=True)
+    # Parse the entire output as a single JSON array
     entries = json.loads(result.stdout)
+    logging.debug(f"Number of entries parsed: {len(entries)}")
 except subprocess.CalledProcessError as e:
-    print(f"Error running 'timew export {' '.join(timew_period_args)}':", e)
+    logging.error(f"Error running 'timew export {' '.join(timew_period_args)}': " + str(e))
     entries = []
 except FileNotFoundError:
-    print("Timewarrior is not installed or not found in PATH.")
+    logging.error("Timewarrior is not installed or not found in PATH.")
     exit(1)
+except json.JSONDecodeError as e:
+    logging.error("Error parsing JSON from 'timew export': " + str(e))
+    logging.debug(f"JSON Output: {result.stdout}")
+    entries = []
 
 # Filter entries to only include those with the 'work' tag
 entries = [
@@ -77,9 +102,9 @@ entries = [
 
 # Function to format durations
 def format_duration(td):
-    hours, remainder = divmod(td.total_seconds(), 3600)
+    hours, remainder = divmod(int(td.total_seconds()), 3600)
     minutes, seconds = divmod(remainder, 60)
-    return f"{int(hours)}h {int(minutes)}m {int(seconds)}s"
+    return f"{hours}h {minutes}m {seconds}s"
 
 # Variables to store total durations
 overall_total_duration = timedelta()
@@ -89,10 +114,14 @@ project_task_durations = {}
 for entry in entries:
     if 'end' in entry:
         # Parse the start and end times
-        start = date_parser.isoparse(entry['start'])
-        end = date_parser.isoparse(entry['end'])
-        duration = end - start
-        overall_total_duration += duration
+        try:
+            start = date_parser.isoparse(entry['start'])
+            end = date_parser.isoparse(entry['end'])
+            duration = end - start
+            overall_total_duration += duration
+        except Exception as e:
+            logging.error(f"Error parsing dates for entry ID {entry.get('id', 'Unknown')}: {e}")
+            continue
 
         tags = entry.get('tags', [])
         # Initialize fields
@@ -102,24 +131,30 @@ for entry in entries:
 
         # Identify project tags
         for tag in tags:
-            if tag in project_list:
-                projects.append(tag)
+            if tag.lower() in project_list_lower:
+                # Retrieve the original project name with correct casing
+                original_project = next((p for p in project_list if p.lower() == tag.lower()), tag)
+                projects.append(original_project)
 
-        # Identify labels (excluding tags already identified as projects)
+        # Identify labels (excluding tags already identified as projects and task-specific tags)
         for tag in tags:
             tag_lower = tag.lower()
-            if tag_lower in known_labels and tag not in projects:
+            if tag_lower in known_labels:
                 labels.add(tag_lower)
 
-        # Remaining tags are considered task descriptions
+        # Identify tasks (task-specific tags or any tags not in known_labels, not in projects, and not in exclude_labels)
         for tag in tags:
             tag_lower = tag.lower()
-            if tag_lower not in {p.lower() for p in projects} and tag_lower not in known_labels:
+            if (tag_lower in task_specific_tags) or (
+                tag_lower not in known_labels 
+                and tag_lower not in project_list_lower 
+                and tag_lower not in exclude_labels  # **Excluded Labels from Tasks**
+            ):
                 tasks.append(tag)
 
         # Use 'Unassigned' if no project is found
         project_name = ', '.join(sorted(projects)) if projects else 'Unassigned'
-        task_name = ', '.join(tasks) if tasks else '-'
+        task_name = ', '.join(sorted(tasks)) if tasks else '-'
 
         # Aggregate durations per project and task
         project_task_key = (project_name, task_name)
@@ -141,8 +176,8 @@ for entry in entries:
 project_summaries = {}
 for (project_name, task_name), info in project_task_durations.items():
     duration = info['duration']
-    # Exclude 'work' from displayed labels
-    display_labels = info['labels'] - {'work'}
+    # Exclude 'work' and any other undesired labels from displayed labels
+    display_labels = info['labels']
     labels_str = ', '.join(sorted(display_labels)) if display_labels else '-'
     duration_str = format_duration(duration)
 
