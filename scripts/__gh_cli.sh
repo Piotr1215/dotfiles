@@ -9,16 +9,18 @@ for cmd in gh jq git fzf; do
 done
 
 # Help Menu
-function show_help() {
+function ghshowhelp() {
 	echo "Available commands:"
-	echo "  ghmyissues        - Search for my open issues"
-	echo "  ghmyprs           - Search for my open PRs"
-	echo "  ghmyprsreview     - Search for PRs where review is requested"
+	echo "  ghissues          - Search for my open issues"
+	echo "  ghprs             - Search for my open PRs"
+	echo "  ghprsreview       - Search for PRs where review is requested"
 	echo "  ghrepoprs         - List and select a PR in the current repository"
 	echo "  ghrepobranches    - Select a git branch and open its URL"
 	echo "  ghgistweb         - Select gist, preview it, output to terminal and go to web view"
 	echo "  ghgist            - Select gist, preview it, output to terminal and copy to clipboard"
 	echo "  ghnewrepo         - Create a private repo with the current directory name and description"
+	echo "  ghissuescomments  - Search for issues where I commented"
+	echo "  ghprcomments      - Search for prs where I commented"
 	echo "  ghhelp            - Show this help message"
 }
 
@@ -61,21 +63,43 @@ function _ghsearch() {
 }
 
 # Search for my open issues and open the selected one in a web browser
-function ghmyissues() {
+function ghissues() {
 	_ghsearch "issues"
 }
 
 # Search for my open PRs and open the selected one in a web browser
-function ghmyprs() {
+function ghprs() {
 	_ghsearch "prs" "false"
 }
 
 # Search for PRs where review is requested from me
-function ghmyprsreview() {
+function ghprsreview() {
 	_ghsearch "prs" "true"
 }
 
-# Function to list and select a PR in the current repository, then open its URL
+# Search for issues where I commented across ALL repositories and open the selected one in a web browser
+function ghissuescomments() {
+	data=$(gh api \
+		-H "Accept: application/vnd.github+json" \
+		-H "X-GitHub-Api-Version: 2022-11-28" \
+		"/search/issues?q=is:issue+is:open+commenter:Piotr1215" \
+		--paginate \
+		--jq '.items[] | "\(.title) ### \(.html_url)"')
+	# Call the format_and_open function with the retrieved data
+	format_and_open "$data"
+}
+function ghprcomments() {
+	data=$(gh api \
+		-H "Accept: application/vnd.github+json" \
+		-H "X-GitHub-Api-Version: 2022-11-28" \
+		"/search/issues?q=is:pr+is:open+commenter:Piotr1215" \
+		--paginate \
+		--jq '.items[] | "\(.title) ### \(.html_url)"')
+	# Call the format_and_open function with the retrieved data
+	format_and_open "$data"
+}
+# This function lists pull requests (PRs) from the current GitHub repository using the GitHub CLI.
+# It displays the PRs in a selectable list using fzf, allowing the user to preview and open a PR in a web browser.
 function ghrepoprs() {
 	# Error handling within the function
 	{
@@ -194,5 +218,5 @@ function ghnewrepo() {
 
 # Show help message
 function ghhelp() {
-	show_help
+	ghshowhelp
 }
