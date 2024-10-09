@@ -86,6 +86,15 @@ require("gp").setup {
     end,
 
     -- Example of adding a custom command to write unit tests for selected code
+    ImproveWriting = function(gp, params)
+      local template = "Here is some code from {{filename}}:\n\n"
+        .. "```{{filetype}}\n{{selection}}\n```\n\n"
+        .. "Please improve writing style and readability."
+      local agent = gp.get_command_agent()
+      gp.Prompt(params, gp.Target.rewrite, agent, template)
+    end,
+
+    -- Example of adding a custom command to write unit tests for selected code
     WriteUnitTests = function(gp, params)
       local template = "Here is some code from {{filename}}:\n\n"
         .. "```{{filetype}}\n{{selection}}\n```\n\n"
