@@ -59,7 +59,6 @@ return require("lazy").setup {
   { "wintermute-cell/gitignore.nvim", dependencies = "nvim-telescope/telescope.nvim" },
   "ionide/Ionide-vim",
   "rcarriga/nvim-notify",
-  "karoliskoncevicius/vim-sendtowindow",
   "tpope/vim-rhubarb",
   "David-Kunz/gen.nvim",
   "RRethy/nvim-align",
