@@ -1,27 +1,32 @@
 local utils = require "utils"
 local vcmd = vim.cmd
 -- Function to check if the current file is in the Obsidian repository
-local function is_in_obsidian_repo()
+local function is_docs_repo()
+  -- Get the full path of the current file's directory and normalize it
   local current_file_path = vim.fn.expand "%:p:h"
-  -- Replace '/path/to/obsidian/repo' with the actual path to your Obsidian repository
-  return string.find(current_file_path, "/home/decoder/dev/obsidian/") ~= nil
-end
-vcmd "set conceallevel=0"
+  local normalized_current_file_path = vim.fn.substitute(current_file_path, "/$", "", "")
 
+  -- Check if the normalized current path is within the specified directories
+  return vim.fn.match(normalized_current_file_path, "^/home/decoder/dev/obsidian") ~= -1
+    or vim.fn.match(normalized_current_file_path, "^/home/decoder/loft/vcluster-docs") ~= -1
+end
+
+-- Setting the text width based on the current file path
 vim.api.nvim_create_autocmd("FileType", {
   pattern = "markdown",
   callback = function()
     vim.opt_local.conceallevel = 0
+
+    if is_docs_repo() then
+      vim.bo.textwidth = 80
+    else
+      vim.bo.textwidth = 175
+    end
   end,
 })
 
 -- this setting makes markdown auto-set the 80 text width limit when typing
 -- vcmd('set fo+=a')
-if is_in_obsidian_repo() then
-  vim.bo.textwidth = 175 -- No limit for Obsidian repository
-else
-  vim.bo.textwidth = 80 -- Limit to 80 for other repositories
-end
 vcmd "setlocal spell spelllang=en_us"
 vcmd "setlocal expandtab shiftwidth=4 softtabstop=4 autoindent"
 
