@@ -352,17 +352,6 @@ vim.keymap.set("n", "<Leader>mf", ":lua MiniFiles.open()<CR>", { noremap = true,
 -- Undotree
 vim.keymap.set("n", "<leader>u", require("undotree").toggle, { noremap = true, silent = true })
 
--- Send to window
--- Visual mode mappings
-utils.xmap("<leader><Left>", "<Plug>SendLeftV<cr>", keymapOptions "Visual Send Left")
-utils.xmap("<leader><Down>", "<Plug>SendDownV<cr>", keymapOptions "Visual Send Down")
-utils.xmap("<leader><Up>", "<Plug>SendUpV<cr>", keymapOptions "Visual Send Up")
-utils.xmap("<leader><Right>", "<Plug>SendRightV<cr>", keymapOptions "Visual Send Right")
-utils.lnmap("<Left>", "<Plug>SendLeft", keymapOptions "Send Left")
-utils.lnmap("<Down>", "<Plug>SendDown", keymapOptions "Send Down")
-utils.lnmap("<Up>", "<Plug>SendUp", keymapOptions "Send Up")
-utils.lnmap("<Right>", "<Plug>SendRight", keymapOptions "Send Right")
-
 vim.keymap.set("n", "<leader>th", function()
   vim.lsp.inlay_hint.enable(not vim.lsp.inlay_hint.is_enabled())
 end, { silent = true, noremap = true, desc = "Toggle inlay hints" })
