@@ -1,9 +1,5 @@
 markdown_template = '''## Description
 
-- issue description
-- background and additional context
-- optionally As a [user], I want [functionality], so that I can [benefit].
-
 ## Acceptance Criteria
 
 - [ ]
@@ -17,8 +13,12 @@ markdown_template = '''## Description
 # Set the clipboard content using AutoKey's built-in functionality
 clipboard.fill_clipboard(markdown_template)
 
-# Sleep a little to avoid prepending the ! to text
-time.sleep(0.2)
-
 # Simulate a Shift+Insert to paste it
 keyboard.send_keys("<shift>+<insert>")
+
+# Sleep to allow the paste to complete
+time.sleep(0.1)
+
+# Move the cursor up by 4 lines to place it right after '## Description'
+keyboard.send_keys("<up>" * 4)
+keyboard.send_keys("<enter>")
