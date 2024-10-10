@@ -34,7 +34,6 @@ return require("lazy").setup {
   },
   "MunifTanjim/nui.nvim",
   "jellydn/hurl.nvim",
-  "stevearc/dressing.nvim",
   "tyru/open-browser.vim",
   "gcmt/taboo.vim",
 
@@ -200,7 +199,6 @@ return require("lazy").setup {
   -- Programming {{{
   "ii14/neorepl.nvim",
   "theHamsta/nvim-dap-virtual-text",
-  "stevearc/dressing.nvim",
   { "saecki/crates.nvim", opts = {} },
   "simrat39/rust-tools.nvim",
   "IndianBoy42/tree-sitter-just",
