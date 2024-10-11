@@ -1,0 +1,21 @@
+#!/bin/bash
+
+# Read the original and modified task JSON
+read -r original_task
+read -r modified_task
+
+# Extract the project from the original and modified tasks
+original_project=$(echo "$original_task" | jq -r '.project // ""')
+modified_project=$(echo "$modified_task" | jq -r '.project // ""')
+
+# Check if the project has changed and is not empty
+if [ "$original_project" != "$modified_project" ] && [ -n "$modified_project" ]; then
+    # Run the update_project_mappings script with the new project name
+    /home/decoder/dev/dotfiles/__update_project_mappings.sh "$modified_project"
+fi
+
+# Output the modified task JSON
+echo "$modified_task"
+
+# Status
+exit 0
