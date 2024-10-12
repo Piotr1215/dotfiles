@@ -268,10 +268,6 @@ utils.lnmap("tr", ":TransparentToggle<CR>")
 -- FeMaco
 utils.lnmap("ec", ":FeMaco<CR>")
 
--- Floaterm
-utils.lnmap("tt", ":FloatermToggle<CR>")
-utils.tmap("<leader>tt", "<C-\\><C-n>:FloatermToggle<CR>")
-
 -- Trouble
 vim.keymap.set("n", "<leader>xx", "<cmd>Trouble diagnostics toggle<cr>", { silent = true, noremap = true })
 vim.keymap.set("n", "<leader>xX", "<cmd>Trouble diagnostics toggle filter.buf=0<cr>", { silent = true, noremap = true })
