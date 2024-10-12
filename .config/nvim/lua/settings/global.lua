@@ -46,6 +46,7 @@ set.formatoptions:remove { "o" }
 set.number = true
 set.encoding = "utf-8"
 set.cursorline = true
+set.autoread = true
 
 set.expandtab = true
 set.shiftwidth = 2
@@ -58,4 +59,4 @@ set.laststatus = 2
 set.cmdheight = 1
 
 -- Disable copilot on boot
-vim.b.copilot_enabled = false
+vim.b.copilot_enabled = true

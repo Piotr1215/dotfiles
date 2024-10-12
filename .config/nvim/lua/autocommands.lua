@@ -15,13 +15,29 @@ local highlightingGroup = api.nvim_create_augroup("Highlighting", { clear = true
 -- Functions
 local function stylua_format()
   local file_path = vim.fn.expand "%:p"
-  vim.fn.jobstart({ "stylua", "--search-parent-directories", file_path }, { detach = true })
+  vim.fn.system { "stylua", "--search-parent-directories", file_path }
+  vim.cmd "e"
 end
 
 local function shfmt_format()
-  local file_path = vim.fn.expand "%"
-  vim.fn.jobstart({ "shfmt", "-l", "-w", file_path }, { detach = true })
+  local file_path = vim.fn.expand "%:p"
+  vim.fn.system { "shfmt", "-l", "-w", file_path }
+  vim.cmd "e" -- Reload the file after formatting
 end
+
+api.nvim_create_autocmd({ "FocusGained", "BufEnter", "CursorHold", "CursorHoldI" }, {
+  group = formattingGroup,
+  pattern = "*",
+  command = "if mode() != 'c' | checktime | endif",
+})
+
+api.nvim_create_autocmd("BufWritePost", {
+  group = formattingGroup,
+  pattern = { "*.sh", "*.bash" },
+  callback = function()
+    shfmt_format()
+  end,
+})
 
 local function generate_plantuml()
   local afile = vim.fn.expand "<afile>"
@@ -185,12 +201,6 @@ vim.api.nvim_create_autocmd("BufReadPost", {
 vim.api.nvim_create_autocmd("BufWritePost", {
   pattern = "*.lua",
   callback = stylua_format,
-  group = formattingGroup,
-})
-
-vim.api.nvim_create_autocmd("BufWritePost", {
-  pattern = "*.sh",
-  callback = shfmt_format,
   group = formattingGroup,
 })
 
