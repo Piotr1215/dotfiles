@@ -7,6 +7,18 @@
       "{{< /hint >}}${0}"],
     "description": "Hugo Important Hint"
   },
+  "Vale Off":{
+    "prefix": "vof",
+    "scope": "markdown",
+    "body": ["<!-- vale off -->${0}"],
+    "description": "Vale Off"
+  },
+  "Vale On":{
+    "prefix": "von",
+    "scope": "markdown",
+    "body": ["<!-- vale on -->${0}"],
+    "description": "Vale On"
+  },
   "Hugo Expand": {
     "prefix": "expand",
     "scope": "markdown",
