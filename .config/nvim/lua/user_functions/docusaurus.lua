@@ -2,16 +2,31 @@ local M = {}
 
 -- Function to recursively find all _partials directories in the repository
 local function get_all_partials_dirs()
-  local cwd = vim.fn.getcwd()
   local partials_dirs = {}
 
-  -- Use Vim's globpath to find all _partials directories recursively
-  local dirs = vim.fn.globpath(cwd, "**/_partials", true, true)
+  -- Get git repository root
+  local git_root = vim.fn.system("git rev-parse --show-toplevel"):gsub("%s+", "")
 
-  for _, dir in ipairs(dirs) do
-    table.insert(partials_dirs, dir)
+  if git_root == "" then
+    print "Not inside a git repository."
+    return partials_dirs
   end
 
+  local function scan_dir(dir)
+    local entries = vim.fn.readdir(dir)
+    for _, name in ipairs(entries) do
+      local full_path = dir .. "/" .. name
+      if vim.fn.isdirectory(full_path) == 1 then
+        if name == "_partials" then
+          table.insert(partials_dirs, full_path)
+        elseif name ~= "." and name ~= ".." then
+          scan_dir(full_path)
+        end
+      end
+    end
+  end
+
+  scan_dir(git_root)
   return partials_dirs
 end
 
