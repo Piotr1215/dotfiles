@@ -68,19 +68,18 @@ vim.api.nvim_create_user_command("R", function(opts)
   vim.api.nvim_buf_set_keymap(0, "n", "q", ":q!<CR>", { noremap = true, silent = true })
 end, { nargs = "+", complete = "shellcmd" })
 
-vim.api.nvim_create_user_command("T", function()
-  vim.cmd "split"
-  vim.cmd "resize 15"
-  vim.fn.termopen("zsh", { cwd = vim.fn.expand "%:p:h" })
-end, {})
-
 vim.api.nvim_create_user_command("TMarkn", function()
   vim.cmd [[execute "r !~/dev/dotfiles/scripts/__list_tasks_as_markdown.pl '+next'" ]]
 end, {})
 
+vim.api.nvim_create_user_command("T", function()
+  vim.cmd ":sp term://zsh"
+  vim.cmd "startinsert"
+end, {})
+
 vim.api.nvim_create_user_command("VT", function()
-  vim.cmd "vsplit"
-  vim.fn.termopen("zsh", { cwd = vim.fn.expand "%:p:h" })
+  vim.cmd ":vsp term://zsh"
+  vim.cmd "startinsert"
 end, {})
 
 -- Add this to your Neovim configuration (init.lua)

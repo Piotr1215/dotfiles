@@ -21,8 +21,6 @@ vim.keymap.set(
   { silent = true, noremap = true, desc = "touch file to reload observers" }
 )
 utils.nmap("<nop>", "<Plug>NERDCommenterAltDelims") -- tab is for moving around only
-vim.api.nvim_set_keymap("n", "<leader>Tsv", ":vsp term://", { noremap = true, silent = false })
-vim.api.nvim_set_keymap("n", "<leader>Tsh", ":sp term://", { noremap = true, silent = false })
 utils.nmap("L", "vg_", { desc = "select to end of line" })
 
 vim.keymap.set("n", "<leader>_", "5<c-w>-", { remap = true, silent = false })
