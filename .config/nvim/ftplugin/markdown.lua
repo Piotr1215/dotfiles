@@ -119,9 +119,31 @@ function BoldMe()
   local start_pos = vim.fn.getpos "'<"
   local end_pos = vim.fn.getpos "'>"
   local lines = vim.api.nvim_buf_get_lines(0, start_pos[2] - 1, end_pos[2], false)
-  lines[1] = lines[1]:sub(1, start_pos[3] - 1) .. "**" .. lines[1]:sub(start_pos[3])
-  lines[#lines] = lines[#lines]:sub(1, end_pos[3]) .. "**" .. lines[#lines]:sub(end_pos[3] + 1)
+  local num_lines = #lines
+
+  if num_lines == 1 then
+    -- Single line selection
+    local line = lines[1]
+    local start_col = start_pos[3]
+    local end_col = end_pos[3]
+    if vim.fn.mode() == "v" then
+      end_col = end_col + 1
+    end -- Adjust for visual mode
+    lines[1] = line:sub(1, start_col - 1) .. "**" .. line:sub(start_col, end_col) .. "**" .. line:sub(end_col + 1)
+  else
+    -- Multi-line selection
+    lines[1] = lines[1]:sub(1, start_pos[3] - 1) .. "**" .. lines[1]:sub(start_pos[3])
+    lines[num_lines] = lines[num_lines]:sub(1, end_pos[3]) .. "**" .. lines[num_lines]:sub(end_pos[3] + 1)
+    if vim.fn.mode() == "V" then
+      -- For line-wise visual mode, add asterisks at the beginning and end of lines
+      lines[1] = "**" .. lines[1]
+      lines[num_lines] = lines[num_lines] .. "**"
+    end
+  end
+
   vim.api.nvim_buf_set_lines(0, start_pos[2] - 1, end_pos[2], false, lines)
 end
 
+-- Set keymaps for both character-wise and line-wise visual modes
 vim.api.nvim_buf_set_keymap(0, "v", "<Leader>b", ":lua BoldMe()<CR>", { noremap = true, silent = true })
+vim.api.nvim_buf_set_keymap(0, "x", "<Leader>b", ":lua BoldMe()<CR>", { noremap = true, silent = true })
