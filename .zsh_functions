@@ -86,29 +86,61 @@ function lsfilesh() {
   ls **/*.**(D)
 }
 
-function gpt() {
-    local input
+# Variable to store the last command
+LAST_COMMAND=""
 
-    # Check if input is piped
-    if [ -t 0 ]; then
-        input="$1"
-    else
-        input=$(cat | sed -r "s/\x1b\[[0-9;]*m//g")
-    fi
+# Preexec function to capture the command
+preexec_capture_command() {
+    LAST_COMMAND="$1"
+}
+
+# Add the preexec function to the preexec array
+preexec_functions+=(preexec_capture_command)
+
+# Function to execute command and open gpt
+function execute_and_gpt() {
+    # Get the current command from the buffer
+    local cmd="$BUFFER"
+
+    # Clear the buffer
+    BUFFER=""
+
+    # Execute the command and capture its output
+    local output=$(eval "$cmd" 2>&1 | sed -r "s/\x1b\[[0-9;]*[mGKHl]//g")
 
     # Use a temporary file for the processed content
     local tmpfile=$(mktemp /tmp/nvim_buffer_cleaned.XXXXXX)
-    # Save the input to the temporary file
-    echo "$input" > $tmpfile
+    
+    # Save the command and output to the temporary file
+    echo "Command: $cmd" > $tmpfile
+    echo "Output:" >> $tmpfile
+    if [ -z "$output" ]; then
+        echo "No output received from the command." >> $tmpfile
+    else
+        echo "$output" >> $tmpfile
+    fi
 
-    # Process the input and open Neovim directly, ensuring it doesn't suspend
+    # Open Neovim with the content
     nvim -c "GpChatNew" \
-         -c "call append(line('$')-1, readfile('$tmpfile'))" \
-         -c "normal! Gdd" \
+         -c "call append(line('$'), readfile('$tmpfile'))" \
          -c "startinsert"
 
     # Remove the temporary file after usage
     rm $tmpfile
+
+    # Redraw the prompt
+    zle reset-prompt
+}
+
+# Create a widget for the execute_and_gpt function
+zle -N execute_and_gpt
+
+# Bind the widget to Alt+g (you can change this to any key combination you prefer)
+bindkey '^[^G' execute_and_gpt
+
+function gpt() {
+    nvim -c "GpChatNew" \
+         -c "startinsert"
 }
 
 function cds() {
