@@ -58,8 +58,8 @@ report.currentall.sort=manual_priority-,project+
 report.currentall.filter=status:pending
 
 report.current.description=List of current tasks in the work context
-report.current.columns=id,entry.age,manual_priority,priority,project,tags,description.desc,entry,due.relative,follow,depends,urgency
-report.current.labels=ID,Age,MP,P,Proj,Tag,Desc,Created,Due,Follow,Depends,Urg
+report.current.columns=id,entry.age,manual_priority,priority,project,tags,description.desc,entry,due.relative,follow,depends,urgency,session
+report.current.labels=ID,Age,MP,P,Proj,Tag,Desc,Created,Due,Follow,Depends,Urg,Session
 report.current.sort=manual_priority-,priority-,project+
 report.current.filter=status:pending
 
@@ -109,6 +109,8 @@ context.temp.write=+temp
 #User defined attributes
 uda.follow.type=string
 uda.follow.label=follow
+uda.session.type=string
+uda.session.label=Session
 uda.follow.values=Y,N
 uda.manual_priority.type=numeric
 uda.manual_priority.label=Manual Priority

@@ -5,32 +5,38 @@ import json
 import subprocess
 
 def main():
-    # Read the 'before' and 'after' task from stdin
-    before_json = sys.stdin.readline()
-    after_json = sys.stdin.readline()
+    try:
+        # Read the 'before' and 'after' task JSON from stdin
+        before_json = sys.stdin.readline()
+        after_json = sys.stdin.readline()
 
-    # Parse JSON
-    before = json.loads(before_json)
-    after = json.loads(after_json)
+        # Parse JSON data
+        before = json.loads(before_json)
+        after = json.loads(after_json)
 
-    # Check the 'start' attribute
-    before_has_start = 'start' in before
-    after_has_start = 'start' in after
+        # Determine if the 'start' attribute exists in before and after
+        before_has_start = 'start' in before
+        after_has_start = 'start' in after
 
-    # Get the task description
-    description = after.get('description', '').lower()
+        # Retrieve the 'session' UDA (case-sensitive)
+        session = after.get('session', '').strip()
 
-    # Check if the description matches 'fill standup forms'
-    if 'fill standup forms' in description:
-        if not before_has_start and after_has_start:
-            # Task was started
-            subprocess.Popen(['tmuxinator', 'start', 'standup'])
-        elif before_has_start and not after_has_start:
-            # Task was stopped
-            subprocess.Popen(['tmuxinator', 'stop', 'standup'])
+        # If 'session' is specified, manage tmuxinator sessions
+        if session:
+            session_name = session
+            if not before_has_start and after_has_start:
+                # Task was started: start the tmuxinator session
+                subprocess.Popen(['tmuxinator', 'start', session_name])
+            elif before_has_start and not after_has_start:
+                # Task was stopped: stop the tmuxinator session
+                subprocess.Popen(['tmuxinator', 'stop', session_name])
 
-    # Output the 'after' task unmodified
-    print(json.dumps(after))
+        # Output the 'after' task JSON unmodified
+        print(json.dumps(after))
+
+    except Exception as e:
+        # If an error occurs, exit with a non-zero status
+        sys.exit(1)
 
 if __name__ == '__main__':
     main()
