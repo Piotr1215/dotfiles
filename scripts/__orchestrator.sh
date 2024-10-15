@@ -50,12 +50,10 @@ chain_patterns() {
 	local patterns=() current_output=""
 	local session_name
 	session_name=$(tr -dc 'a-zA-Z0-9' </dev/urandom | fold -w 4 | head -n 1)
-
 	while true; do
 		echo "Selecting pattern..."
-		local pattern context user_input add_another
+		local pattern context="" user_input add_another
 		pattern=$(select_pattern)
-
 		if [[ -z "$pattern" ]]; then
 			if [[ -f /tmp/selected_pattern ]]; then
 				pattern=$(cat /tmp/selected_pattern)
@@ -68,25 +66,17 @@ chain_patterns() {
 				break
 			fi
 		fi
-
-		if [[ -z "$context" ]]; then
-			context=""
-		fi
-
 		patterns+=("$pattern")
 		echo "Pattern '$pattern' added to the chain."
 		if [[ ${#patterns[@]} -eq 1 ]]; then
 			session_name="${pattern}_${session_name}"
 		fi
-
 		echo "Enter or edit input (press Ctrl-D when finished):"
 		user_input=$(echo "${current_output:-}" | vipe --suffix=md)
-
 		echo "Executing fabric..."
 		current_output=$(execute_fabric "$pattern" "$user_input" "$session_name" "$context")
 		echo "Output from '$pattern':"
 		echo "$current_output"
-
 		read -p "Add another pattern? (y/n): " add_another
 		if [[ $add_another != "y" ]]; then
 			break
