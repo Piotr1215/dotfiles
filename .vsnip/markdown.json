@@ -94,6 +94,12 @@
     "body": ["```bash", "tmux switchc -t ${1}", "```", "${0}"],
     "description": "Inserts tmux client switch snippet"
   },
+  "Mark": {
+  "prefix": "mark",
+  "scope": "markdown",
+  "body": ["<Mark color=\"${1|lightgray,red,blue,green|}\">${2:$TM_SELECTED_TEXT}</Mark>"],
+  "description": "Wrap selected text in a Mark tag with color"
+},
   "Parenthesis []": {
     "prefix": "par",
     "scope": "markdown",
