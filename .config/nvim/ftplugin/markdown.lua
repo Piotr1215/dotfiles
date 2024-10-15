@@ -147,3 +147,21 @@ end
 -- Set keymaps for both character-wise and line-wise visual modes
 vim.api.nvim_buf_set_keymap(0, "v", "<Leader>b", ":lua BoldMe()<CR>", { noremap = true, silent = true })
 vim.api.nvim_buf_set_keymap(0, "x", "<Leader>b", ":lua BoldMe()<CR>", { noremap = true, silent = true })
+
+-- Create an autocommand for Markdown files
+vim.api.nvim_create_autocmd("FileType", {
+  pattern = { "markdown", "mdx", "mdown", "mkd", "mkdn", "markdown", "mdwn" },
+  callback = function()
+    -- Safely remove the conflicting Markdown mapping for ']c'
+    local status, _ = pcall(function()
+      vim.keymap.del("n", "]c", { buffer = true })
+    end)
+    if not status then
+      -- Optional: print or log if needed
+      -- print("No such mapping to delete for ']c'")
+    end
+
+    -- Remap 'n' mode to jump to the next change (diff jumping) within the buffer
+    vim.keymap.set("n", "]c", "]c", { noremap = true, silent = true, buffer = true })
+  end,
+})
