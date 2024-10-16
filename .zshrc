@@ -166,22 +166,21 @@ function prev() {
   sh -c "pet new `printf %q "$PREV"`"
 }
 
+function open_fabric() {
+   __orchestrator.sh
+}
+
+# Binds Ctrl+Alt+A to open_fabric
+bindkey "^X^A" open_fabric                # Ctrl+X Ctrl+A: Opens fabric script
+zle -N open_fabric
+
 function open_file_git_staged() {
    __open-file-git-staged.sh 
 }
 
 # Binds Ctrl+Alt+O to open_file_git
-bindkey "^[^O" open_file_git_staged
+bindkey "^[^O" open_file_git_staged       # Ctrl+Alt+O: Opens file in git staged
 zle -N open_file_git_staged
-
-function pet-select-bmk() {
-  BUFFER=$(pet search --tag link)
-  zle redisplay
-}
-
-zle -N pet-select-bmk
-bindkey '^t' pet-select-bmk
-
 
 # Unified function definition
 function output_file_path() {
@@ -207,7 +206,7 @@ function output_file_path() {
 zle -N output_file_path
 
 source /home/decoder/dev/dotfiles/scripts/__grep_and_open.sh
-bindkey -s '^[q' 'gif\n'
+bindkey -s '^[q' 'gif\n'                  # Alt+q: Inserts 'gif' and a newline
 
 
 # Wrapper functions for key bindings
@@ -221,14 +220,14 @@ function output_file_path_home() {
 
 zle -N output_file_path_current
 zle -N output_file_path_home
-bindkey '^[f' output_file_path_current   # Bind to Alt+f
-bindkey '^[F' output_file_path_home      # Bind to Alt+Shift+f
+bindkey '^[f' output_file_path_current # Alt+f: Outputs current file path
+bindkey '^[F' output_file_path_home # Alt+Shift+F: Outputs home file path
 
 function toggle_window_pinned() {
  ~/dev/dotfiles/scripts/__toggle_keep_top.sh 
 }
 zle -N toggle_window_pinned
-bindkey '^[w' toggle_window_pinned
+bindkey '^[w' toggle_window_pinned        # Alt+w: Toggles window pinned state
 
 function pet-select() {
   RBUFFER=$(pet search)
@@ -238,7 +237,7 @@ function pet-select() {
 
 zle -N pet-select
 stty -ixon
-bindkey '^s' pet-select
+bindkey '^s' pet-select                   # Ctrl+s: Selects pet snippet
 
 function zoxider() {
   BUFFER=$(zoxide query -i)
@@ -246,7 +245,7 @@ function zoxider() {
 }
 
 zle -N zoxider
-bindkey '^[j' zoxider
+bindkey '^[j' zoxider                     # Alt+j: Executes zoxider command
 
 function f_enter() {
   BUFFER="__open-file.sh"
@@ -254,7 +253,7 @@ function f_enter() {
 }
 
 zle -N f_enter
-bindkey '^f' f_enter
+bindkey '^f' f_enter                      # Ctrl+f: Enters f mode
 
 # PROJECT: git-log
 # function open_logg() {
@@ -271,14 +270,14 @@ function f_git_enter() {
 }
 
 zle -N f_git_enter
-bindkey '^o' f_git_enter
+bindkey '^o' f_git_enter                      # Ctrl+o: Enters git mode
 copy-line-to-clipboard() {
   echo -n $BUFFER | xclip -selection clipboard
 }
 zle -N copy-line-to-clipboard
-bindkey '^Y' copy-line-to-clipboard
-bindkey '^@' autosuggest-accept
-bindkey '^X^T' transpose-words
+bindkey '^Y' copy-line-to-clipboard       # Ctrl+Y: Copies line to clipboard
+bindkey '^@' autosuggest-accept           # Ctrl+@: Accepts autosuggestion
+bindkey '^X^T' transpose-words            # Ctrl+X Ctrl+T: Transposes words
 
 stty -ixon
 
