@@ -1,3 +1,5 @@
+# Add deno completions to search path
+if [[ ":$FPATH:" != *":/home/decoder/.zsh/completions:"* ]]; then export FPATH="/home/decoder/.zsh/completions:$FPATH"; fi
 # zmodload zsh/zprof
 # Path to your oh-my-zsh installation.
 export ZSH="${HOME}/.oh-my-zsh"
@@ -312,3 +314,4 @@ export WASMTIME_HOME="$HOME/.wasmtime"
 export PATH="$WASMTIME_HOME/bin:$PATH"
 if [ -f "/home/decoder/.config/fabric/fabric-bootstrap.inc" ]; then . "/home/decoder/.config/fabric/fabric-bootstrap.inc"; fi
 # zprof > /tmp/zprof.out
+. "/home/decoder/.deno/env"
