@@ -7,7 +7,7 @@ markdown_template = '''## Description
 
 ## Related
 
-- patent issues, related and blockers
+- parent issues, related and blockers
 '''
 
 # Set the clipboard content using AutoKey's built-in functionality
