@@ -20,6 +20,17 @@ lspconfig.lua_ls.setup {
     },
   },
 }
+local nvim_lsp = require "lspconfig"
+nvim_lsp.denols.setup {
+  on_attach = def.on_attach,
+  root_dir = nvim_lsp.util.root_pattern("deno.json", "deno.jsonc"),
+}
+
+nvim_lsp.ts_ls.setup {
+  on_attach = def.on_attach,
+  root_dir = nvim_lsp.util.root_pattern "package.json",
+  single_file_support = false,
+}
 
 -- vale_ls will autoload for all subdirectories in ~/loft/ by using .nvimrc
 -- to prevent loading it in other projects, it can be loaded manually with a User command
