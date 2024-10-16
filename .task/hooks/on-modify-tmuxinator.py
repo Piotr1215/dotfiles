@@ -27,9 +27,7 @@ def main():
             if not before_has_start and after_has_start:
                 # Task was started: start the tmuxinator session
                 subprocess.Popen(['tmuxinator', 'start', session_name])
-            elif before_has_start and not after_has_start:
-                # Task was stopped: stop the tmuxinator session
-                subprocess.Popen(['tmuxinator', 'stop', session_name])
+            # Removed the condition to stop the session when the task is stopped
 
         # Output the 'after' task JSON unmodified
         print(json.dumps(after))
