@@ -169,7 +169,9 @@ function prev() {
 }
 
 function open_fabric() {
-   __orchestrator.sh
+  alacritty --working-directory "$(pwd)" -e zsh -c '
+    __orchestrator.sh
+  '
 }
 
 # Binds Ctrl+Alt+A to open_fabric
