@@ -48,23 +48,6 @@ Panes are spread out as evenly as possible over the window in both rows and colu
 
 ---
 
-## Ranger
-
-Command hints show up whenever a mapping has multiple continuations:
-g for navigation and tabs
-r for :open_with command
-y for yank(copy)
-d for cut/delete
-p for paste
-o for sort
-. for filter_stack
-z for changing settings
-u for "undo"
-M for linemode
-+, -, = for setting access rights to files
-
----
-
 ## Moreutils
 
 The moreutils tools

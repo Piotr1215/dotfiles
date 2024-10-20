@@ -86,7 +86,7 @@ git config --global user.email "$EMAIL"
 
 process "→ install essencial packages"
 
-sudo apt install -y vim-gtk htop unzip python3-setuptools figlet tmux pydf mc wget mtr ncdu cmatrix ranger jq lolcat tmux bat locate libgraph-easy-perl stow cowsay fortune
+sudo apt install -y vim-gtk htop unzip python3-setuptools figlet tmux pydf mc wget mtr ncdu cmatrix  jq lolcat tmux bat locate libgraph-easy-perl stow cowsay fortune
 sudo apt install -y encfs fuse xclip xsel alsa-utils fd-find expect bat
 
 process "→ install tmuxinator"

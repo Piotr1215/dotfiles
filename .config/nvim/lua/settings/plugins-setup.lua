@@ -609,7 +609,6 @@ vim.g.go_highlight_operators = 1
 vim.g.go_fmt_experimental = 1
 -- Send to window
 vim.g.sendtowindow_use_defaults = 0
--- Ranger
 -- Scrollfix
 vim.g.scrollfix = -1
 vim.g.rnvimr_enable_picker = 1
@@ -626,7 +625,6 @@ vim.g.startify_skiplist = {
 vim.g.startify_commands = {
   { "Search Dev    :SPC fd", "Telescope find_files search_dirs=~/dev,--hidden,--with-filename" },
   { "Search Repos  :SPC fr", "lua require'telescope'.extensions.repo.list{search_dirs = {\"~/dev\"}}" },
-  { "Ranger        :ALT o", "RnvimrToggle" },
   { "Change Color  :SPC fc", "Telescope colorscheme" },
   { "Transparent Bg:SPC tr", "TransparentEnable" },
   { "Pick Emoji    :SPC fm", "Telescope emoji" },
@@ -637,7 +635,6 @@ vim.g.startify_bookmarks = {
   "~/.tmux.conf",
   "~/.taskrc",
   "~/.task/hooks",
-  "~/.config/ranger/rc.conf",
   "~/shortcuts.md",
   "/usr/local/share/zsh/site-functions",
   "~/dev/dotfiles/.config/nvim/lua/projects/module.lua",
