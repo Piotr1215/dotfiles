@@ -1,0 +1,9 @@
+hotKeys:
+  shift-0:
+    shortCut:    Shift-0
+    description: Viewing pods
+    command:     pods
+  q:
+    shortCut: q
+    description: Quit
+    command: q
