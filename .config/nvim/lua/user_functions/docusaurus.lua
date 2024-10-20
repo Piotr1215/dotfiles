@@ -117,29 +117,45 @@ local function insert_partial_in_buffer(bufnr, partial_name, partial_path)
   -- Get the buffer lines
   local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
 
-  local found_import = false
   local insert_pos = 1
+  local found_front_matter_start = false
+  local found_front_matter_end = false
+  local found_import = false
 
-  -- Find the front matter and import section
+  -- Find the front matter and import section from the top
   for i, line in ipairs(lines) do
-    if line:match "^---$" then
-      insert_pos = i + 1 -- Insert right after the front matter
-      print("Found front matter at line " .. i) -- Debug print
+    if not found_front_matter_start then
+      if line:match "^---$" then
+        found_front_matter_start = true
+        print("Found front matter start at line " .. i) -- Debug print
+      end
+    elseif not found_front_matter_end then
+      if line:match "^---$" then
+        found_front_matter_end = true
+        insert_pos = i + 1 -- Insert after the front matter
+        print("Found front matter end at line " .. i) -- Debug print
+      end
     elseif line:match "^import" then
       found_import = true
       insert_pos = i + 1 -- Insert after the last import
       print("Found import at line " .. i) -- Debug print
+    else
+      -- Do nothing
     end
   end
 
-  -- Insert the import statement
-  if found_import then
-    vim.api.nvim_buf_set_lines(bufnr, insert_pos - 1, insert_pos - 1, false, { import_statement })
-    print("Inserted import after the existing imports at line " .. insert_pos) -- Debug print
-  else
-    vim.api.nvim_buf_set_lines(bufnr, insert_pos - 1, insert_pos - 1, false, { "", import_statement, "" })
-    print("Inserted import after front matter at line " .. insert_pos) -- Debug print
+  -- Determine where to insert the import statement
+  if not found_front_matter_start then
+    insert_pos = 1
+    print "No front matter found, inserting at top of the file" -- Debug print
+  elseif not found_front_matter_end then
+    print "Front matter not properly closed with '---'"
+    insert_pos = insert_pos -- Keep as is, may need adjustment based on preference
   end
+
+  -- Insert the import statement
+  vim.api.nvim_buf_set_lines(bufnr, insert_pos - 1, insert_pos - 1, false, { "", import_statement, "" })
+  print("Inserted import at line " .. insert_pos) -- Debug print
 end
 
 function M.select_partial()
