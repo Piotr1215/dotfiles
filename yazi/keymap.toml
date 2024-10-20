@@ -1,0 +1,5 @@
+[[manager.prepend_keymap]]
+on   = [ "g", "d" ]
+run  = "cd ~/dev"
+desc = "Cd to ~/dev"
+
