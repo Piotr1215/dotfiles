@@ -188,12 +188,6 @@ vim.api.nvim_set_keymap(
   'y<ESC>:Telescope live_grep default_text=<c-r>0<CR> search_dirs={"$PWD"}',
   default_opts
 )
-vim.api.nvim_set_keymap(
-  "n",
-  "<leader>tm",
-  ":lua require('telescope').extensions.tmuxinator.projects{}<CR>",
-  default_opts
-)
 vim.keymap.set("n", "<leader>/", function()
   builtin.current_buffer_fuzzy_find(require("telescope.themes").get_dropdown {
     winblend = 10,
