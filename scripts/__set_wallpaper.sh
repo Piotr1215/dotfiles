@@ -35,7 +35,7 @@ set_wallpaper() {
 }
 
 CURRENT_WALLPAPER_FILE="${WALLPAPER_DIR}/CURRENT_WALLPAPER"
-cd "${WALLPAPER_DIR}" && ranger --choosefile "${CURRENT_WALLPAPER_FILE}"
+cd "${WALLPAPER_DIR}" && yazi --chooser-file "${CURRENT_WALLPAPER_FILE}"
 
 if [[ -f "${CURRENT_WALLPAPER_FILE}" ]]; then
 	selected_wallpaper=$(cat "${CURRENT_WALLPAPER_FILE}")
