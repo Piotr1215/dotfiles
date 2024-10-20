@@ -69,7 +69,7 @@ vim.api.nvim_create_user_command("OpenGitHubPR", function()
   M.open_github_pr()
 end, {})
 
-vim.cmd "cabbrev op OpenGitHubBranch"
+vim.cmd "cabbrev ob OpenGitHubBranch"
 vim.cmd "cabbrev opr OpenGitHubPR"
 
 return M
