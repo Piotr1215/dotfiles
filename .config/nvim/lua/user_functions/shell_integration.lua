@@ -16,20 +16,6 @@ function M.get_tmux_working_directory()
   end
 end
 
--- Trigger ranger in neovim inside a tmux popup
--- Current file path will be the main path
--- PROJECT: ranger-tmux-setup
-function M.ranger_popup_in_tmux()
-  -- Get the directory of the current file in Neovim
-  local current_file = vim.fn.expand "%:p:h"
-
-  -- Formulate the tmux command with either the file directory or the pane's current path
-  local tmux_command = "tmux popup -d '" .. current_file .. "' -E -h 95% -w 95% -x 100% 'ranger'"
-
-  -- Execute the tmux command
-  os.execute(tmux_command)
-end
-
 function M.add_empty_lines(opts)
   opts = opts or {}
   local count = vim.v.count1
