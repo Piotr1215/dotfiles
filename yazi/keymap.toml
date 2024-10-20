@@ -4,6 +4,12 @@ run  = "cd ~/dev"
 desc = "Cd to ~/dev"
 
 [[manager.prepend_keymap]]
+on   = [ "g", "D" ]
+run  = "cd ~/Downloads"
+desc = "Cd to ~/Downloads"
+
+
+[[manager.prepend_keymap]]
 on  = [ "!" ]
 run = 'shell "$SHELL" --block --confirm'
 desc = "Open shell here"
