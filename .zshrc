@@ -22,6 +22,15 @@ function zvm_config() {
 # export KEYTIMEOUT=1
 }
 
+function y() {
+	local tmp="$(mktemp -t "yazi-cwd.XXXXXX")" cwd
+	yazi "$@" --cwd-file="$tmp"
+	if cwd="$(command cat -- "$tmp")" && [ -n "$cwd" ] && [ "$cwd" != "$PWD" ]; then
+		builtin cd -- "$cwd"
+	fi
+	rm -f -- "$tmp"
+}
+
 function zvm_after_init() {
   zvm_bindkey viins '^Q' push-line
 }
