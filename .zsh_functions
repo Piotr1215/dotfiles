@@ -139,9 +139,12 @@ zle -N execute_and_gpt
 bindkey '^[^G' execute_and_gpt
 
 function gpt() {
+    local current_path=$(pwd)
     nvim -c "GpChatNew" \
+         -c "lcd $current_path" \
          -c "startinsert"
 }
+
 
 function cds() {
   session=$(tmux display-message -p '#{session_path}')
