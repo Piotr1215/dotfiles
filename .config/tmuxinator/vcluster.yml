@@ -1,6 +1,6 @@
 # run with mux start bash-scripting display_text="xxxxx"
-name: <%= %x(~/dev/dotfiles/scripts/__generate_session_name_from_branch.sh ~/loft/#{@settings["folder"]}).strip %>
-root: ~/loft/<%= @settings["folder"] %>
+name: <%= %x(~/dev/dotfiles/scripts/__generate_session_name_from_branch.sh ~/loft/vcluster).strip %>
+root: ~/loft/vcluster
 
 # Optional tmux socket
 # socket_name: foo
@@ -11,7 +11,7 @@ root: ~/loft/<%= @settings["folder"] %>
 # Project hooks
 
 # Runs on project start, always
-# on_project_start: 
+on_project_start:  ~/dev/dotfiles/scripts/__create_kind_cluster.sh vcluster-plane
 
 # Run on project start, the first time
 # on_project_first_start: 
@@ -34,7 +34,7 @@ root: ~/loft/<%= @settings["folder"] %>
 # tmux_command: byobu
 
 # Specifies (by name or index) which window will be selected on project startup. If not set, the first window is used.
-startup_window: 2
+startup_window: 1
 
 # Specifies (by index) which pane of the specified window will be selected on project startup. If not set, the first pane is used.
 # startup_pane: 2
@@ -50,11 +50,6 @@ pane_title_position: top
 pane_title_format: "[ #T ]"
 
 windows:
-  - clusters:
-      layout: even-horizontal
-      panes:
-        - ~/dev/dotfiles/scripts/__create_kind_cluster.sh first && __create_separate_kubeconfig.sh /tmp/first && cd /tmp/first
-        # - ~/dev/dotfiles/scripts/__create_kind_cluster.sh second && __create_separate_kubeconfig.sh /tmp/second && cd /tmp/second
   - dev:
       layout: even-horizontal 
       panes:
