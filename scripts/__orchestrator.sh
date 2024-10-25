@@ -21,7 +21,7 @@ execute_fabric() {
 
 select_pattern() {
 	fabric -l | fzf --prompt='Select Fabric Pattern (Ctrl+X to select context): ' \
-		--preview 'cat ~/.config/fabric/patterns/{}/system.md' \
+		--preview 'bat --style=plain --language=markdown --color=always ~/.config/fabric/patterns/{}/system.md' \
 		--preview-window=right:70% \
 		--bind 'ctrl-x:execute(echo {} > /tmp/selected_pattern)+abort' || echo ""
 }
@@ -36,7 +36,7 @@ select_context() {
 
 	local selected_context
 	selected_context=$(echo "$context_files" | fzf --prompt='Select Context: ' \
-		--preview 'cat {}' \
+		--preview 'bat --style=plain --language=markdown --color=always {}' \
 		--preview-window=right:70%) || return
 
 	if [[ -n "$selected_context" ]]; then
