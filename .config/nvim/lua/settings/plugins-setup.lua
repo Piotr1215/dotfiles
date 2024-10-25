@@ -176,7 +176,7 @@ require("gp").setup {
       chat = true,
       command = true,
       -- string with model name or table with model name and parameters
-      model = { model = "claude-3-5-sonnet-20240620", temperature = 0.8, top_p = 1 },
+      model = { model = "claude-3-5-sonnet-20241022", temperature = 0, top_p = 0 },
       -- system prompt (use this to specify the persona/role of the AI)
       system_prompt = "You are a specialized coding AI assistant.\n\n"
         .. "The user provided the additional info about how they would like you to respond:\n\n"
