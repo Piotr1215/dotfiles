@@ -126,11 +126,16 @@ export FZF_ALT_C_COMMAND='fd --hidden'
 export VISUAL=nvim
 export PATH=/home/decoder/.nimble/bin:$PATH
 export KUBECONFIG=~/.kube/config
+export GOPATH=/usr/local/go
+export GOBIN=/usr/local/go/bin
 export PATH="/usr/bin:/home/decoder/.local/bin:$PATH"
+export PATH=$PATH:$GOPATH/bin
 export PATH=$PATH:$HOME/.krew/bin
 export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
 export PATH=$HOME/.local/bin:$PATH
 export PATH=$HOME/scripts:$PATH
+export PATH=$HOME/go/bin:$PATH
+export PATH=$HOME/go:$PATH
 export PATH=$PATH:/usr/local/go/bin
 export PATH=$PATH:$HOME/.istioctl/bin
 export PATH=$PATH:$HOME/dev/dotfiles/scripts
@@ -296,7 +301,7 @@ source ${HOME}/kube-ps1/kube-ps1.sh
 PROMPT='$(kube_ps1)'$PROMPT
 PROMPT="$PROMPT"$'\n→ '
 
-# [[ -s "/home/decoder/.gvm/scripts/gvm" ]] && source "/home/decoder/.gvm/scripts/gvm"
+[[ -s "/home/decoder/.gvm/scripts/gvm" ]] && source "/home/decoder/.gvm/scripts/gvm"
 
 # The next line updates PATH for the Google Cloud SDK.
 if [ -f '/home/decoder/dev/clusters/primary-dev/google-cloud-sdk/path.zsh.inc' ]; then . '/home/decoder/dev/clusters/primary-dev/google-cloud-sdk/path.zsh.inc'; fi
