@@ -32,6 +32,8 @@ alias inc--='incus stop --stateful ubuntu'
 alias inc-='incus stop ubuntu'
 
 # Commands shadow
+alias xrecord='cnee --record --mouse --keyboard --out-file xnee_record.xns'
+alias xreplay='cnee --replay -f xnee_record.xns'
 alias dum='__delete_merged_branches.sh'
 alias k9s='k9s -A'
 alias branch_from_issue='__create_branch_from_issue.sh'
