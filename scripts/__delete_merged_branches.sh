@@ -6,9 +6,6 @@ git fetch origin
 # Get the list of local branches
 local_branches=$(git for-each-ref --format='%(refname:short)' refs/heads/)
 
-# Get the commit hash of origin/main
-origin_main_hash=$(git rev-parse origin/main)
-
 # Array to store deleted branches
 deleted_branches=()
 
@@ -19,8 +16,8 @@ for branch in $local_branches; do
 		continue
 	fi
 
-	# Check if origin/main is contained in the branch
-	if ! git branch --contains $origin_main_hash | grep -q "$branch"; then
+	# Check if the branch has been merged into origin/main
+	if git merge-base --is-ancestor "$branch" origin/main; then
 		# Attempt to delete the branch
 		if git branch -d "$branch" &>/dev/null; then
 			deleted_branches+=("$branch")
