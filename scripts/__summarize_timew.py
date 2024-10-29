@@ -40,15 +40,24 @@ task_specific_tags = {'break', 'meetings'}
 # Define labels to exclude from being displayed and treated as tasks
 exclude_labels = {'github', 'work', 'linear'}
 
-# Run 'task _projects' to get the list of projects
+# Run 'task all-projects' to get the complete list of projects (including closed ones)
+# Define projects to exclude (case-insensitive)
+exclude_projects = {'linear'}
+
+# Run 'task all-projects' to get the complete list of projects (including closed ones)
 try:
-    result = subprocess.run(['task', '_projects'], capture_output=True, text=True, check=True)
+    result = subprocess.run(['task', 'all-projects'], capture_output=True, text=True, check=True)
     project_list = result.stdout.strip().split('\n')
-    project_list = [proj.strip() for proj in project_list if proj.strip()]
+    # Filter out excluded projects (case-insensitive)
+    project_list = [
+        proj.strip() 
+        for proj in project_list 
+        if proj.strip() and proj.strip().lower() not in exclude_projects
+    ]
     project_list_lower = set(p.lower() for p in project_list)
     logging.debug(f"Projects: {project_list}")
 except subprocess.CalledProcessError as e:
-    logging.error("Error running 'task _projects': " + str(e))
+    logging.error("Error running 'task all-projects': " + str(e))
     project_list = []
     project_list_lower = set()
 except FileNotFoundError:
@@ -131,7 +140,7 @@ for entry in entries:
 
         # Identify project tags
         for tag in tags:
-            if tag.lower() in project_list_lower:
+            if tag.lower() in project_list_lower and tag.lower() not in exclude_projects:
                 # Retrieve the original project name with correct casing
                 original_project = next((p for p in project_list if p.lower() == tag.lower()), tag)
                 projects.append(original_project)
