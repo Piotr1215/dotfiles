@@ -243,13 +243,18 @@ bindkey '^[w' toggle_window_pinned        # Alt+w: Toggles window pinned state
 
 function pet-select() {
   RBUFFER=$(pet search)
-  CURSOR=$#BUFFER
-  zle redisplay
+  if [[ "$RBUFFER" =~ ^"xdg-open" ]]; then
+    eval "$RBUFFER" >/dev/null 2>&1 &
+    zle send-break  # This will exit the current command line
+  else
+    CURSOR=$#BUFFER
+    zle redisplay
+  fi
 }
 
 zle -N pet-select
 stty -ixon
-bindkey '^s' pet-select                   # Ctrl+s: Selects pet snippet
+bindkey '^s' pet-select  # Ctrl+s: Selects pet snippet
 
 function zoxider() {
   BUFFER=$(zoxide query -i)
