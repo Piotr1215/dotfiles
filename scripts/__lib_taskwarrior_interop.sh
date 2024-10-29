@@ -68,7 +68,15 @@ get_task_labels() {
 add_task_label() {
 	local task_uuid="$1"
 	local label="$2"
-	task "$task_uuid" modify +"$label"
+
+	# Get current task data
+	local task_data=$(task rc.json.array=on "$task_uuid" export)
+
+	# Add new tag to existing tags
+	local updated_data=$(echo "$task_data" | jq --arg new_tag "$label" '.[0].tags += [$new_tag]')
+
+	# Update task with new data
+	echo "$updated_data" | task rc.json.array=on import >/dev/null 2>&1
 }
 
 # Remove a label (tag) from a task

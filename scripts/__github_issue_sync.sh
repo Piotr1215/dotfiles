@@ -52,7 +52,13 @@ get_linear_issues() {
 		-H "Content-Type: application/json" \
 		-H "Authorization: $LINEAR_API_KEY" \
 		--data '{"query": "query { user(id: \"'"$LINEAR_USER_ID"'\") { id name assignedIssues(filter: { state: { name: { nin: [\"Released\", \"Canceled\"] } } }) { nodes { id title url } } } }"}' \
-		https://api.linear.app/graphql | jq -c '.data.user.assignedIssues.nodes[] | {id: .id, description: .title, repository: "linear", html_url: .url}'); then
+		https://api.linear.app/graphql | jq -c '.data.user.assignedIssues.nodes[] | {
+            id: .id,
+            description: .title,
+            repository: "linear",
+            html_url: .url,
+            issue_id: (.url | split("/") | .[-2])
+        }'); then
 		echo "Error: Unable to fetch Linear issues" >&2
 		return 1
 	fi
@@ -62,13 +68,14 @@ get_linear_issues() {
 # Synchronize a single issue with Taskwarrior
 sync_to_taskwarrior() {
 	local issue_line="$1"
-	local issue_id issue_description issue_repo_name issue_url task_uuid
+	local issue_id issue_description issue_repo_name issue_url task_uuid issue_number
 
 	# Parse the issue details using jq
 	issue_id=$(echo "$issue_line" | jq -r '.id')
 	issue_description=$(echo "$issue_line" | jq -r '.description')
 	issue_repo_name=$(echo "$issue_line" | jq -r '.repository' | awk -F/ '{print $NF}')
 	issue_url=$(echo "$issue_line" | jq -r '.html_url')
+	issue_number=$(echo "$issue_line" | jq -r '.issue_id')
 
 	# Log the issue being processed
 	log "Processing Issue ID: $issue_id, Description: $issue_description"
@@ -85,6 +92,8 @@ sync_to_taskwarrior() {
 			# Annotate the newly created task with the issue URL
 			annotate_task "$task_uuid" "$issue_url"
 			log "Task created and annotated for: $issue_description"
+			add_task_label "$task_uuid" "$issue_number"
+			log "Issue Number added to the task tags: $issue_description (Issue Number: $issue_number)"
 		else
 			log "Error: Failed to create task for: $issue_description" >&2
 		fi
