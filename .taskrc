@@ -58,8 +58,8 @@ report.currentall.sort=manual_priority-,project+
 report.currentall.filter=status:pending
 
 report.current.description=List of current tasks in the work context
-report.current.columns=id,entry.age,manual_priority,priority,project,tags,description.desc,entry,due.relative,follow,depends,urgency,session
-report.current.labels=ID,Age,MP,P,Proj,Tag,Desc,Created,Due,Follow,Depends,Urg,Session
+report.current.columns=id,entry.age,manual_priority,priority,project,tags,description.desc,entry,due.relative,linear_issue_id,release,follow,depends,urgency,session
+report.current.labels=ID,Age,MP,P,Proj,Tag,Desc,Created,Due,Lin,Rel,Follow,Depends,Urg,Session
 report.current.sort=manual_priority-,priority-,project+
 report.current.filter=status:pending
 
@@ -120,6 +120,10 @@ uda.session.label=Session
 uda.follow.values=Y,N
 uda.manual_priority.type=numeric
 uda.manual_priority.label=Manual Priority
+uda.release.type=string
+uda.release.label=Release
+uda.linear_issue_id.type=string
+uda.linear_issue_id.label=Linear Issue ID
 
 #UserDefinedShortcuts
 uda.taskwarrior-tui.task-report.next.filter=status:pending
