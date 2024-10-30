@@ -92,8 +92,8 @@ sync_to_taskwarrior() {
 			# Annotate the newly created task with the issue URL
 			annotate_task "$task_uuid" "$issue_url"
 			log "Task created and annotated for: $issue_description"
-			add_task_label "$task_uuid" "$issue_number"
-			log "Issue Number added to the task tags: $issue_description (Issue Number: $issue_number)"
+			task modify "$task_uuid" linear_issue_id:"$issue_number"
+			log "Issue Number added to the task uda: $issue_description (Issue Number: $issue_number)"
 		else
 			log "Error: Failed to create task for: $issue_description" >&2
 		fi
