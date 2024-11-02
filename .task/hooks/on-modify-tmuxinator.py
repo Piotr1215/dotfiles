@@ -25,15 +25,12 @@ def main():
         if session:
             session_name = session
             if not before_has_start and after_has_start:
-                # Task was started: start the tmuxinator session
                 subprocess.Popen(['tmuxinator', 'start', session_name])
-            # Removed the condition to stop the session when the task is stopped
 
-        # Output the 'after' task JSON unmodified
         print(json.dumps(after))
 
     except Exception as e:
-        # If an error occurs, exit with a non-zero status
+        print(f"Error: {str(e)}", file=sys.stderr)
         sys.exit(1)
 
 if __name__ == '__main__':
