@@ -14,7 +14,7 @@ Options:
   --help      Display this help message
 
 Controls:
-  Ctrl+f      Search filenames
+  Ctrl+f      Search filenames (narrows to files containing current search term)
   Ctrl+g      Search file contents
   Ctrl+d      Search directories
 
@@ -32,8 +32,42 @@ EOF
   }
 
   get_fzf_output() {
-    local RG_BIND="ctrl-g:reload:rg --line-number --no-heading --color=always --smart-case --glob '!**/.git/**' --glob '!node_modules/**' '' 2>/dev/null || true"
-    local FILE_BIND="ctrl-f:reload:rg --files --glob '!**/.git/**' --glob '!node_modules/**' 2>/dev/null || true"
+    # Create temporary files to store search state
+    local tmp_files="/tmp/gif-files-$$"
+    local tmp_content_query="/tmp/gif-content_query-$$"
+    
+    # Cleanup on exit
+    trap "rm -f $tmp_files $tmp_content_query" EXIT
+
+    # Modified RG_BIND to reset the file search state and save content query
+    local RG_BIND="ctrl-g:transform-query(
+      echo {q} > $tmp_content_query;
+      echo {q}
+    )+reload(
+      rm -f $tmp_files;
+      rg --line-number --no-heading --color=always --smart-case --glob '!**/.git/**' --glob '!node_modules/**' {q} 2>/dev/null || true
+    )"
+
+    # Modified FILE_BIND to preserve the current search for content
+    local FILE_BIND="ctrl-f:transform-query(
+      current_query={q};
+      if [ ! -s $tmp_content_query ]; then
+        echo \$current_query > $tmp_content_query;
+      fi;
+      rg --files-with-matches --no-messages --glob '!**/.git/**' --glob '!node_modules/**' -- \$current_query > $tmp_files;
+      echo
+    )+reload(
+      if [ -s $tmp_files ]; then
+        if [ -n {q} ]; then
+          grep -i -- {q} $tmp_files || true;
+        else
+          cat $tmp_files;
+        fi
+      else
+        echo 'No matching files found';
+      fi
+    )"
+    
     if command -v fd &>/dev/null; then
       DIR_BIND="ctrl-d:change-prompt(directory> )+reload(cd $HOME && echo $HOME; fd --type d --hidden --absolute-path --color never --exclude .git --exclude node_modules)"
     else
@@ -49,16 +83,28 @@ EOF
           --bind "$RG_BIND" \
           --bind "$DIR_BIND" \
           --bind 'ctrl-c:abort' \
-          --header "Press Ctrl+f to search filenames, Ctrl+g to search file contents, Ctrl+d to search directories"
+          --header "Type to search | Ctrl+f: narrow files (progressive) | Ctrl+g: search contents | Ctrl+d: search dirs"
   }
 
-  set_nvim_search_variable() {
+set_nvim_search_variable() {
     local raw_output="$1"
+    # Content search has priority over final query
+    local tmp_content_query="/tmp/gif-content_query-$$"
+    if [[ -f "$tmp_content_query" ]]; then
+      local saved_query=$(cat "$tmp_content_query" 2>/dev/null)
+      if [[ -n "$saved_query" ]]; then
+        debug "Using saved content query: $saved_query"
+        export NVIM_SEARCH_REGISTRY="$saved_query"
+        return
+      fi
+    fi
+    # Fallback to current query if no content query exists
     local query=$(echo "$raw_output" | head -n1)
+    debug "Using current query: $query"
     export NVIM_SEARCH_REGISTRY="$query"
   }
 
-  # Parse command line arguments
+  # Rest of the script remains exactly the same below this point
   while [[ $# -gt 0 ]]; do
     case $1 in
       --debug)
