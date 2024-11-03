@@ -278,6 +278,21 @@ bindkey '^f' f_enter                      # Ctrl+f: Enters f mode
   # zle accept-line
 # }
 
+function copy_file_content() {
+  local selected_file
+  selected_file=$(fd --type f | fzf --height 40% --reverse)
+  if [[ -n "$selected_file" ]]; then
+      xclip -selection clipboard -in "$selected_file"
+  else
+    zle -M "No file selected."
+  fi
+  zle reset-prompt
+  zle redisplay
+}
+
+zle -N copy_file_content
+bindkey '^X^F' copy_file_content     
+
 # zle -N open_logg
 # bindkey '^l' open_logg
 
