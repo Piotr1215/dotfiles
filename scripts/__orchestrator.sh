@@ -50,37 +50,61 @@ chain_patterns() {
 	local patterns=() current_output=""
 	local session_name
 	session_name=$(tr -dc 'a-zA-Z0-9' </dev/urandom | fold -w 4 | head -n 1)
+	local pattern="" context="" user_input choice
+
 	while true; do
-		echo "Selecting pattern..."
-		local pattern context="" user_input add_another
-		pattern=$(select_pattern)
 		if [[ -z "$pattern" ]]; then
-			if [[ -f /tmp/selected_pattern ]]; then
-				pattern=$(cat /tmp/selected_pattern)
-				echo "Pattern selected via Ctrl+X: $pattern"
-				rm /tmp/selected_pattern
-				echo "Selecting context..."
-				context=$(select_context)
-			else
-				echo "No pattern selected, exiting..." >&2
-				break
+			echo "Selecting pattern..."
+			pattern=$(select_pattern)
+			if [[ -z "$pattern" ]]; then
+				if [[ -f /tmp/selected_pattern ]]; then
+					pattern=$(cat /tmp/selected_pattern)
+					echo "Pattern selected: $pattern"
+					rm /tmp/selected_pattern
+					echo "Selecting context..."
+					context=$(select_context)
+				else
+					echo "No pattern selected, exiting..." >&2
+					break
+				fi
+			fi
+			patterns+=("$pattern")
+			echo "Pattern '$pattern' added to the chain."
+			if [[ ${#patterns[@]} -eq 1 ]]; then
+				session_name="${pattern}_${session_name}"
 			fi
 		fi
-		patterns+=("$pattern")
-		echo "Pattern '$pattern' added to the chain."
-		if [[ ${#patterns[@]} -eq 1 ]]; then
-			session_name="${pattern}_${session_name}"
-		fi
+
 		echo "Enter or edit input (press Ctrl-D when finished):"
 		user_input=$(echo "${current_output:-}" | vipe --suffix=md)
 		echo "Executing fabric..."
 		current_output=$(execute_fabric "$pattern" "$user_input" "$session_name" "$context")
 		echo "Output from '$pattern':"
 		echo "$current_output"
-		read -p "Add another pattern? (y/n): " add_another
-		if [[ $add_another != "y" ]]; then
+
+		echo "What would you like to do next?"
+		echo "1) Run with the same pattern"
+		echo "2) Select a new pattern"
+		echo "3) Finish and exit"
+		read -rp "Enter your choice (1/2/3): " choice
+
+		case $choice in
+		1)
+			echo "Running with the same pattern: $pattern"
+			;;
+		2)
+			pattern=""
+			context=""
+			;;
+		3)
 			break
-		fi
+			;;
+		*)
+			echo "Invalid choice. Please enter 1, 2, or 3."
+			pattern=""
+			context=""
+			;;
+		esac
 	done
 
 	if [[ -n "$current_output" ]]; then
