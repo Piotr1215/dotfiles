@@ -27,6 +27,10 @@ def main():
 
     # Define a mapping from task descriptions to actions
     TASK_ACTIONS = {
+        "meeting with denise": {
+                    "action": "open_url",
+                    "url": "https://docs.google.com/document/d/1sxvdDxMQPFfOWWHxMg8CfdFzhtrqQIeDVFOIuSgRvqk/edit?tab=t.0#heading=h.2ynhnu3nsbfx",
+                },
         "fill daily hours": {
             "action": "open_url",
             "url": "https://docs.google.com/spreadsheets/d/1PNuxU3c-RCRGDMaVLftjCTkIBYxCGJNUMhqjFeGddvQ/edit?gid=407666270#gid=407666270",
