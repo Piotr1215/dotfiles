@@ -34,7 +34,7 @@ alias inc-='incus stop ubuntu'
 # Commands shadow
 alias dum='__delete_merged_branches.sh'
 alias k9s='k9s -A'
-alias branch_from_issue='__create_branch_from_issue.sh'
+alias bfi='__create_branch_from_issue.sh'
 alias si='__search_internet.py'
 alias vids='cd /mnt/nas_vids'
 alias a=ack

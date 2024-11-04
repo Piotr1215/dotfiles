@@ -39,7 +39,7 @@ create_interactive_branch() {
 
 	read -p "Enter a name for your branch: " branch_name
 
-	new_branch="${issue_id}-${branch_name}"
+	new_branch="${issue_id}/${branch_name}"
 
 	git checkout main
 	git checkout -b "$new_branch"
