@@ -66,37 +66,45 @@ get_linear_issues() {
 }
 
 # Synchronize a single issue with Taskwarrior
+create_and_annotate_task() {
+	local issue_description="$1"
+	local issue_repo_name="$2"
+	local issue_url="$3"
+	local issue_number="$4"
+
+	log "Creating new task for issue: $issue_description"
+	task_uuid=$(create_task "$issue_description" "+$issue_repo_name" "project:$issue_repo_name")
+
+	if [[ -n "$task_uuid" ]]; then
+		annotate_task "$task_uuid" "$issue_url"
+		log "Task created and annotated for: $issue_description"
+		task modify "$task_uuid" linear_issue_id:"$issue_number"
+		log "Issue Number added to the task uda: $issue_description (Issue Number: $issue_number)"
+		if [[ "$issue_number" == *"DOC"* ]]; then
+			task modify "$task_uuid" session:vdocs
+			log "Project set to docs for: $issue_description"
+		fi
+	else
+		log "Error: Failed to create task for: $issue_description" >&2
+	fi
+}
+
 sync_to_taskwarrior() {
 	local issue_line="$1"
 	local issue_id issue_description issue_repo_name issue_url task_uuid issue_number
 
-	# Parse the issue details using jq
 	issue_id=$(echo "$issue_line" | jq -r '.id')
 	issue_description=$(echo "$issue_line" | jq -r '.description')
 	issue_repo_name=$(echo "$issue_line" | jq -r '.repository' | awk -F/ '{print $NF}')
 	issue_url=$(echo "$issue_line" | jq -r '.html_url')
 	issue_number=$(echo "$issue_line" | jq -r '.issue_id')
 
-	# Log the issue being processed
 	log "Processing Issue ID: $issue_id, Description: $issue_description"
 
-	# Check if the task already exists by searching for a task with the same description and tags
 	task_uuid=$(get_task_id_by_description "$issue_description")
 
 	if [[ -z "$task_uuid" ]]; then
-		# Task does not exist, create it
-		log "Creating new task for issue: $issue_description"
-		task_uuid=$(create_task "$issue_description" "+$issue_repo_name" "project:$issue_repo_name")
-
-		if [[ -n "$task_uuid" ]]; then
-			# Annotate the newly created task with the issue URL
-			annotate_task "$task_uuid" "$issue_url"
-			log "Task created and annotated for: $issue_description"
-			task modify "$task_uuid" linear_issue_id:"$issue_number"
-			log "Issue Number added to the task uda: $issue_description (Issue Number: $issue_number)"
-		else
-			log "Error: Failed to create task for: $issue_description" >&2
-		fi
+		create_and_annotate_task "$issue_description" "$issue_repo_name" "$issue_url" "$issue_number"
 	else
 		log "Task already exists for: $issue_description (UUID: $task_uuid)"
 	fi
