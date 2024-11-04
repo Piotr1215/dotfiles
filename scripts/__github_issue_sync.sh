@@ -82,7 +82,9 @@ create_and_annotate_task() {
 		log "Issue Number added to the task uda: $issue_description (Issue Number: $issue_number)"
 		if [[ "$issue_number" == *"DOC"* ]]; then
 			task modify "$task_uuid" session:vdocs
-			log "Project set to docs for: $issue_description"
+			log "Session set to vdocs for: $issue_description"
+			task modify "$task_uuid" project:docs-maintenance
+			log "Automatically set project to docs-maintenance for docs issues"
 		fi
 	else
 		log "Error: Failed to create task for: $issue_description" >&2
