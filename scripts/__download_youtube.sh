@@ -3,11 +3,42 @@
 set -eo pipefail
 IFS=$'\n\t'
 
+# Function to check and update yt-dlp if necessary
+# Function to check and update yt-dlp if necessary
+check_and_update_ytdlp() {
+	echo "Checking for yt-dlp updates..."
+
+	# Ensure pipx is installed
+	if ! command -v pipx &>/dev/null; then
+		echo "pipx not found. Installing pipx..."
+		python3 -m pip install --user pipx
+		python3 -m pipx ensurepath
+		source ~/.zshrc # Re-source to update PATH
+	fi
+
+	# Check if yt-dlp is installed via pipx
+	if ! pipx list | grep -q yt-dlp; then
+		echo "yt-dlp not installed via pipx. Installing..."
+		pipx install yt-dlp
+	else
+		# Update yt-dlp
+		echo "Updating yt-dlp..."
+		pipx upgrade yt-dlp
+	fi
+
+	# Verify the installation
+	yt-dlp --version
+}
+
 # Check for -mp3 flag
 convert_to_mp3=false
 if [[ "$1" == "-mp3" ]]; then
 	convert_to_mp3=true
+	shift
 fi
+
+# Always check for updates at the start
+check_and_update_ytdlp
 
 echo "Step 1: Checking the link format."
 
@@ -25,7 +56,13 @@ fi
 
 echo "Step 2: Downloading the video to $output_dir."
 
-yt-dlp -o "$output_dir/%(title)s.%(ext)s" --merge-output-format webm "$link" --no-playlist
+if ! yt-dlp -o "$output_dir/%(title)s.%(ext)s" --merge-output-format mp4 "$link" --no-playlist; then
+	echo "Download failed. Attempting to download best available format..."
+	if ! yt-dlp -o "$output_dir/%(title)s.%(ext)s" -f best "$link" --no-playlist; then
+		echo "Download failed. Please check the link and try again."
+		exit 1
+	fi
+fi
 
 video_title=$(yt-dlp --get-filename -o '%(title)s' --no-playlist "$link")
 video_file=$(find "$output_dir" -type f -iname "*${video_title}*" | head -n 1)
@@ -38,7 +75,7 @@ fi
 
 echo "Step 3: Preparing for MP3 conversion."
 
-mp3_file="${video_file%.webm}.mp3"
+mp3_file="${video_file%.*}.mp3"
 
 echo "Step 4: Converting to MP3."
 
