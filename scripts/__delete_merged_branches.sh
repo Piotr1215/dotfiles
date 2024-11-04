@@ -1,34 +1,23 @@
 #!/bin/bash
 
-# Fetch the latest changes from the remote
-git fetch origin
+set -e
 
-# Get the list of local branches
-local_branches=$(git for-each-ref --format='%(refname:short)' refs/heads/)
-
-# Array to store deleted branches
-deleted_branches=()
-
-# Loop through each local branch
-for branch in $local_branches; do
-	# Skip the current branch (usually main)
-	if [ "$branch" = "$(git rev-parse --abbrev-ref HEAD)" ]; then
-		continue
-	fi
-
-	# Check if the branch has been merged into origin/main
-	if git merge-base --is-ancestor "$branch" origin/main; then
-		# Attempt to delete the branch
-		if git branch -d "$branch" &>/dev/null; then
-			deleted_branches+=("$branch")
-		fi
-	fi
-done
-
-# Output the list of deleted branches
-if [ ${#deleted_branches[@]} -eq 0 ]; then
-	echo "No branches were deleted."
-else
-	echo "The following local branches were deleted:"
-	printf '%s\n' "${deleted_branches[@]}"
+# Ensure we're on the main branch
+current_branch=$(git rev-parse --abbrev-ref HEAD)
+if [ "$current_branch" != "main" ]; then
+	echo "Error: Please run this script from the main branch."
+	exit 1
 fi
+
+# Update local repository and remove references to deleted remote branches
+echo "Updating local repository..."
+git fetch --all --prune
+
+# Delete local branches that were merged and deleted on remote
+echo "Deleting local branches..."
+git branch -vv |
+	grep ': gone]' |
+	awk '{print $1}' |
+	xargs -r -n 1 git branch -d
+
+echo "Cleanup complete!"
