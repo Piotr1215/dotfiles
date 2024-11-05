@@ -2,7 +2,20 @@
 typeset -A abbrevs
 abbrevs=(
     "spo" '__sponge_expand'
+    "bak" '__backup_expand'
+    "ind" '__into_new_dir'
 )
+
+__into_new_dir() {
+    local cmd="$LBUFFER"
+    local words=("${(z)cmd}")
+    local last_arg="${words[-1]}"
+    # Get everything before the directory name and 'ind'
+    cmd=${cmd%% $last_arg ind}
+    # Remove any trailing spaces
+    cmd=${cmd%%[[:space:]]}
+    LBUFFER="mkdir -p $last_arg && $cmd"
+}
 
 # Function to expand the sponge command
 __sponge_expand() {
@@ -12,12 +25,21 @@ __sponge_expand() {
     LBUFFER="$cmd | sponge $last_arg"
 }
 
-# Function to expand abbreviations
+# Fixed version
+__backup_expand() {
+    local cmd="$LBUFFER"
+    # Remove 'bak' from the end of the command
+    cmd=${cmd%% bak}
+    local words=("${(z)cmd}")
+    local last_arg="${words[-1]}"
+    LBUFFER="cp -a $last_arg{,.bak-$(date +%Y%m%d-%H%M)}"
+}
+
 my-expand-abbrev() {
     local MATCH
     LBUFFER=${LBUFFER%%(#m)[_a-zA-Z0-9]#}
-    if [[ "$MATCH" == "spo" ]]; then
-        __sponge_expand
+    if [[ -n "${abbrevs[$MATCH]}" ]]; then
+        ${abbrevs[$MATCH]}
     else
         LBUFFER+=$MATCH
     fi
