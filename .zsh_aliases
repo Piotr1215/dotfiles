@@ -20,7 +20,6 @@ alias la='/usr/bin/ls'
 alias ls='exa --color=always --long --all --header --icons --git'
 alias lsa='exa --color=always --long --all --sort=age --reverse --header --icons'
 alias lsf='fd --max-depth=1 --type=file'
-alias tr2='tree -LC 2 --si --sort name | less'
 alias lst='exa --tree --level=2 --icons --color=always --git'
 alias lsdir='ls -ld *(/om[1])'
 
@@ -37,9 +36,7 @@ alias k9s='k9s -A'
 alias bfi='__create_branch_from_issue.sh'
 alias si='__search_internet.py'
 alias vids='cd /mnt/nas_vids'
-alias a=ack
 alias vm="nvim -c ':lua MiniFiles.open()'"
-alias cpf=copy_and_create_folders
 alias aider='aider --model gpt-4o --dark-mode --no-auto-commits'
 alias aider-commit='aider --model gpt-4o --dark-mode'
 alias cat='bat'
@@ -47,18 +44,13 @@ alias c='cb'
 alias df=duf
 alias diff=colordiff
 alias fd='fd --hidden'
-alias kk=/usr/bin/kubecolor
-alias lol=lolcat
-alias lu=__launch_url.sh
 alias mux=tmuxinator
 alias nv='neovide --multigrid --notabs'
-alias pfn='__print-functions.sh'
 alias ra=yazi
-alias rg='rg --hidden'
 alias vim=nvim
 alias v=nvim
 alias watch=viddy
-alias ugu='ug -Q -.'
+alias ugu='ug -Q -. --view=nvim'
 
 ## Kubernetes aliases
 alias kconf='__create_separate_kubeconfig.sh'
@@ -69,7 +61,6 @@ alias kstart='~/dev/dotfiles/scripts/__kind_manager.sh --start'
 alias kstop='~/dev/dotfiles/scripts/__kind_manager.sh --stop'
 
 # Other
-alias tick='__ticker.sh'
 alias proj='/home/decoder/dev/projector/projector'
 alias ytd='__download_youtube.sh'
 alias remind='__reminder.sh'
