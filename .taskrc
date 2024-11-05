@@ -42,6 +42,7 @@ color.blocked = yellow on black
 color.blocking = yellow on black
 color.tag.epic = bold green
 color.tag.review = bold blue
+color.tag.started = cyan
 color.tag.bug = magenta on black
 
 # Custom reports
