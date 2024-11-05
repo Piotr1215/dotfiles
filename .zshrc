@@ -58,7 +58,6 @@ setopt AUTO_PUSHD                  # pushes the old directory onto the stack
 setopt PUSHD_MINUS                 # exchange the meanings of '+' and '-'
 setopt CDABLE_VARS                 # expand the expression (allows 'cd -2/tmp')
 setopt extended_glob
-zstyle ':completion:*:directory-stack' list-colors '=(#b) #([0-9]#)*( *)==95=38;5;12'
 zstyle ':fzf-tab:*' fzf-command ftb-tmux-popup
 # disable sort when completing `git checkout`
 zstyle ':completion:*:git-checkout:*' sort false
@@ -73,6 +72,7 @@ zstyle ':completion:*' menu no
 zstyle ':fzf-tab:complete:cd:*' fzf-preview 'exa -1 --color=always $realpath'
 # switch group using `<` and `>`
 zstyle ':fzf-tab:*' switch-group '<' '>'
+zstyle ':fzf-tab:*' popup-min-size 75 20
 
 # Turn history on to have cd - history
 SAVEHIST=1000
