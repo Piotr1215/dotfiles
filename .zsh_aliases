@@ -31,7 +31,7 @@ alias inc--='incus stop --stateful ubuntu'
 alias inc-='incus stop ubuntu'
 
 # Commands shadow
-alias watchtui='nodemon -q --watch ~/dev/dotfiles/.taskrc --ext taskrc --exec "/usr/local/bin/tui --report current"'
+alias watchtui='nodemon --signal SIGTERM -q --watch ~/.taskrc --ext taskrc --exec "tui --report current"'
 alias dum='__delete_merged_branches.sh'
 alias k9s='k9s -A'
 alias bfi='__create_branch_from_issue.sh'
