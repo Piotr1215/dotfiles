@@ -38,12 +38,12 @@ data.location=/home/decoder/.task
 # include solarized-light-256.theme
 # include no-color.theme
 include dark-green-256.theme
-color.blocked = yellow on black
-color.blocking = yellow on black
-color.tag.epic = bold green
-color.tag.review = bold blue
-color.tag.started = cyan
-color.tag.bug = magenta on black
+color.blocked     = yellow on black
+color.blocking    = yellow on black
+color.tag.epic    = bold green
+color.tag.review  = bold blue
+color.tag.bug     = magenta on black
+color.tag.started = on gray5
 
 # Custom reports
 report.workdone.description=List of completed tasks in the work context
@@ -145,4 +145,11 @@ context.archive.read=+archive
 context.archive.write=+archive
 context.integration.read=+integration
 context.integration.write=+integration
-uda.taskwarrior-tui.selection.reverse=yes
+
+#Taskwarrior tui selection
+uda.taskwarrior-tui.selection.indicator=->
+uda.taskwarrior-tui.selection.bold=yes
+uda.taskwarrior-tui.selection.italic=no
+uda.taskwarrior-tui.selection.dim=yes
+uda.taskwarrior-tui.selection.blink=no
+uda.taskwarrior-tui.selection.reverse=no
