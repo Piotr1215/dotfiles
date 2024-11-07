@@ -2,6 +2,7 @@
 
 # github_issue_sync.sh
 # Synchronizes GitHub and Linear issues with Taskwarrior
+# PROJECT: taskwarrior-sync
 
 # shellcheck disable=SC2155
 source /home/decoder/dev/dotfiles/scripts/__lib_taskwarrior_interop.sh
@@ -85,6 +86,10 @@ create_and_annotate_task() {
 			log "Session set to vdocs for: $issue_description"
 			task modify "$task_uuid" project:docs-maintenance
 			log "Automatically set project to docs-maintenance for docs issues"
+		fi
+		if [[ $issue_number == *"OPS"* ]]; then
+			task modify "$task_uuid" project:operations
+			log "Automatically set project to operations for ops issues"
 		fi
 	else
 		log "Error: Failed to create task for: $issue_description" >&2
