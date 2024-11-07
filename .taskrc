@@ -43,7 +43,7 @@ color.blocking    = yellow on black
 color.tag.epic    = bold green
 color.tag.review  = bold blue
 color.tag.bug     = magenta on black
-color.tag.started = on gray5
+color.tag.started = on gray2
 
 # Custom reports
 report.workdone.description=List of completed tasks in the work context
