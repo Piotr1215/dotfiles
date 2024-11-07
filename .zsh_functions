@@ -476,6 +476,7 @@ function list_project_files() {
     echo "$rga_output"
 }
 # Wrapper function for project tags search with optional listing
+# PROJECT: project
 function fifp() {
     local mode="$1"  # Check for the '-l' flag
     if [[ "$mode" == "-l" ]]; then
