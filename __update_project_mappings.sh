@@ -1,5 +1,6 @@
 #!/bin/bash
 
+# PROJECT: project_renamer
 # __update_project_mappings.sh
 #
 # Purpose:
