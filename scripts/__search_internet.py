@@ -2,7 +2,6 @@
 import os
 import argparse
 import requests
-import pyperclip
 
 def main():
     parser = argparse.ArgumentParser(description="Query the Perplexity AI API.")
@@ -16,14 +15,12 @@ def main():
         "messages": [
             {
                 "role": "system",
-                "content": "Be precise and concise."
+                "content": "Be precise and concise and return citations and sources."
             },
             {"role": "user", "content": args.query}
         ],
-        "max_tokens": 500,  # or any other integer value you prefer
-        "temperature": 0.0,
-        "top_p": 1.0,
-        "return_citations": True, # this will only work when accepted to beta porgram
+        "temperature": 0.2,
+        "top_p": 0.9,
         "search_domain_filter": ["perplexity.ai"],
         "return_images": False,
         "return_related_questions": False,
