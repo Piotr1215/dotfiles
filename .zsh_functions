@@ -22,6 +22,19 @@ function ghcurrentbranch_function() {
     fi
 }
 
+function man() {
+    if command -v fzf >/dev/null 2>&1; then
+        # If fzf is available, use it for searching
+        local page=$(command man -k . | fzf --prompt='Man> ' | awk '{print $1}')
+        if [[ -n $page ]]; then
+            nvim +"Man $page | only"
+        fi
+    else
+        # If fzf is not available, use the argument directly
+        nvim +"Man $1 | only"
+    fi
+}
+
 function ufp() {
     local profile_type=$1
     local WORK_PROFILE="37uby07u.Work"
