@@ -1,9 +1,9 @@
 # Define the abbreviation
 typeset -A abbrevs
 abbrevs=(
-    "spo" '__sponge_expand'
-    "bak" '__backup_expand'
-    "ind" '__into_new_dir'
+    "_spo" '__sponge_expand'
+    "_bak" '__backup_expand'
+    "_ind" '__into_new_dir'
 )
 
 __into_new_dir() {
@@ -35,7 +35,7 @@ __backup_expand() {
     LBUFFER="cp -a $last_arg{,.bak-$(date +%Y%m%d-%H%M)}"
 }
 
-my-expand-abbrev() {
+expand-abbrev() {
     local MATCH
     LBUFFER=${LBUFFER%%(#m)[_a-zA-Z0-9]#}
     if [[ -n "${abbrevs[$MATCH]}" ]]; then
@@ -47,6 +47,6 @@ my-expand-abbrev() {
 }
 
 # Create the wdget and bind it
-zle -N my-expand-abbrev
-bindkey " " my-expand-abbrev
+zle -N expand-abbrev
+bindkey " " expand-abbrev
 bindkey -M isearch " " self-insert
