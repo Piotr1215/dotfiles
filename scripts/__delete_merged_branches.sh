@@ -1,23 +1,36 @@
 #!/bin/bash
 
-set -e
+# Get the list of merged branches, excluding the current branch
+branches=$(git branch --merged main | grep -v '^\*' | sed 's/^ *//')
 
-# Ensure we're on the main branch
-current_branch=$(git rev-parse --abbrev-ref HEAD)
-if [ "$current_branch" != "main" ]; then
-	echo "Error: Please run this script from the main branch."
-	exit 1
+# Check if there are any branches to delete
+if [ -z "$branches" ]; then
+	echo "No merged branches to delete."
+	exit 0
 fi
 
-# Update local repository and remove references to deleted remote branches
-echo "Updating local repository..."
-git fetch --all --prune
+# Iterate through each branch
+echo "The following branches are merged into main:"
+echo "$branches"
+echo
 
-# Delete local branches that were merged and deleted on remote
-echo "Deleting local branches..."
-git branch -vv |
-	grep ': gone]' |
-	awk '{print $1}' |
-	xargs -r -n 1 git branch -d
+for branch in $branches; do
+	# Prompt the user
+	read -p "Delete branch '$branch'? (y/n): " choice
 
-echo "Cleanup complete!"
+	case "$choice" in
+	y | Y)
+		git branch -d "$branch"
+		echo "Deleted branch $branch"
+		;;
+	n | N)
+		echo "Skipped branch $branch"
+		;;
+	*)
+		echo "Invalid choice. Skipped branch $branch"
+		;;
+	esac
+	echo
+done
+
+echo "Branch cleanup complete."
