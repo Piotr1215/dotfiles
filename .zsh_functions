@@ -115,6 +115,8 @@ function execute_and_gpt() {
     # Get the current command from the buffer
     local cmd="$BUFFER"
 
+    local current_path=$(pwd)
+
     # Clear the buffer
     BUFFER=""
 
@@ -136,7 +138,8 @@ function execute_and_gpt() {
     # Open Neovim with the content
     nvim -c "GpChatNew" \
          -c "call append(line('$'), readfile('$tmpfile'))" \
-         -c "startinsert"
+         -c "lcd $current_path" \
+         -c "startinsert" 
 
     # Remove the temporary file after usage
     rm $tmpfile
