@@ -32,7 +32,6 @@ alias inc-='incus stop ubuntu'
 
 # Commands shadow
 alias watchtui='nodemon --signal SIGTERM -q --watch ~/.taskrc --ext taskrc --exec "tui --report current"'
-alias dum='__delete_merged_branches.sh'
 alias k9s='k9s -A'
 alias bfi='__create_branch_from_issue.sh'
 alias si='__search_internet.py'
