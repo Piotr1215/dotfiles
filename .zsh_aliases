@@ -40,7 +40,6 @@ alias vm="nvim -c ':lua MiniFiles.open()'"
 alias aider='aider --model gpt-4o --dark-mode --no-auto-commits'
 alias aider-commit='aider --model gpt-4o --dark-mode'
 alias cat='bat'
-alias c='cb'
 alias df=duf
 alias diff=colordiff
 alias fd='fd --hidden'
