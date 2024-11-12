@@ -610,15 +610,24 @@ function create_tmux_session() {
     fi
 }
 
-# Adjust system volume to given percentage or display current volume
-function vol() {
-    echo "Usage: provide volume in intiger, e.g. 50 will adjust vol to 50%"
+vol() {
     if [[ -z "$1" ]]; then
-      echo "Current volume on Masteris $(amixer get Master | grep '%' | awk -F'[][]' '{ print $2 }' | head -n 1)"
+        echo "Usage: vol <volume>"
+        echo "Provide volume as an integer, e.g. 50 will adjust volume to 50%"
+        current_vol=$(amixer get PCM | grep '%' | awk -F'[][]' '{ print $2 }' | head -n 1)
+        echo "Current volume on PCM is $current_vol"
         return
     fi
-    amixer set Master "$1"% > /dev/null
-    echo "Volume set to $1%"
+    
+    if [[ "$1" =~ ^[0-9]+$ ]] && [ "$1" -ge 0 ] && [ "$1" -le 100 ]; then
+        if amixer set PCM "$1"% > /dev/null 2>&1; then
+            echo "Volume set to $1%"
+        else
+            echo "Failed to set volume. Please check your audio setup."
+        fi
+    else
+        echo "Error: Please provide a valid integer between 0 and 100."
+    fi
 }
 
 # Switch primary monitor between HDMI and DVI-D-0
