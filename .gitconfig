@@ -4,3 +4,4 @@
   path = ~/.gitconfig-personal
 [core]
 	hooksPath = /home/decoder/.git-global-hooks
+	pager = delta --side-by-side
