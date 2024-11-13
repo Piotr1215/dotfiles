@@ -22,7 +22,7 @@ function ghcurrentbranch_function() {
     fi
 }
 
-function man() {
+function nman() {
     if command -v fzf >/dev/null 2>&1; then
         # If fzf is available, use it for searching
         local page=$(command man -k . | fzf --prompt='Man> ' | awk '{print $1}')
@@ -642,32 +642,41 @@ function mon()
   fi
 }
 
-# Toggle audio output between main monitor and headset
-function sout() {
-  echo "Usage: sout toggles between\n - hdmi: plays sound via main monitor or\n - head: plays sound via main headset\n"
+function sout () {
+    echo "Usage: sout toggles between"
+    echo " - hdmi: plays sound via main monitor or"
+    echo " - head: plays sound via main headset"
+    echo
 
-  # Do some grep magic to retrieve id of output devices, * indicates active device
-  local local_output=$(wpctl status | grep Sinks: -A2 | head -3 | grep \* | grep "\d+" -Po | head -1)
-  local new_output=$(wpctl status | grep Sinks: -A2 | head -3 | grep -v \* | grep "\d+" -Po | head -1)
+    local current_output=$(wpctl status | grep Sinks: -A2 | head -3 | grep \* | grep "\d+" -Po | head -1)
+    local new_output=$(wpctl status | grep Sinks: -A2 | head -3 | grep -v \* | grep "\d+" -Po | head -1)
+    
+    if [[ -z "$current_output" || -z "$new_output" ]]; then
+        echo "Error: Unable to determine audio outputs"
+        return 1
+    fi
 
-  # Swap the the device with no star making it active and adding the star
-  wpctl set-default "$new_output"
-  local sink_name=$(wpctl status | grep Sinks: -A2 | head -3 | grep \*)
+    wpctl set-default "$new_output"
+    local sink_name=$(wpctl status | grep Sinks: -A2 | head -3 | grep \*)
 
-  vol=50%
-
-  if [[ $(echo "$sink_name" |  grep "GP106 High Definition") ]]; then
-    wpctl set-mute $(wpctl status | grep --after-context=3 " ├─ Sources:" | grep "Microphone Mono" | grep "\d+" -Po | head -n 1) 1
-    amixer set Master "$vol"
-    local_output='hdmi'
-    echo "Sound local_output set to '$=monitor, mic muted\nVolume $vol"
-  else
-    vol=75%
-    amixer set Master "$vol"
-    local_output='head'
-    echo "Sound local_output set to 31=headset\nVolume $vol"
-  fi
-} 
+    if [[ -n $(echo "$sink_name" | grep "GP106 High Definition") ]]; then
+        # HDMI mode
+        local mic_id=$(wpctl status | grep --after-context=3 " ├─ Sources:" | grep "Microphone Mono" | grep "\d+" -Po | head -n 1)
+        if [[ -n "$mic_id" ]]; then
+            wpctl set-mute "$mic_id" 1
+        else
+            echo "Warning: Unable to find microphone ID"
+        fi
+        amixer set PCM 75% > /dev/null
+        echo "Sound output set to hdmi=monitor, mic muted (if found)"
+        echo "Volume 50%"
+    else
+        # Headset mode
+        amixer set PCM 75% > /dev/null
+        echo "Sound output set to head=headset"
+        echo "Volume 75%"
+    fi
+}
 
 function ms () {
     if [[ -z $1 ]]
