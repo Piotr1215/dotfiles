@@ -73,24 +73,31 @@ create_and_annotate_task() {
 	local issue_repo_name="$2"
 	local issue_url="$3"
 	local issue_number="$4"
+	local project_name="$5"
 
 	log "Creating new task for issue: $issue_description"
-	task_uuid=$(create_task "$issue_description" "+$issue_repo_name" "project:$issue_repo_name")
+	task_uuid=$(create_task "$issue_description" "+$issue_repo_name" "project:$project_name")
 
 	if [[ -n "$task_uuid" ]]; then
 		annotate_task "$task_uuid" "$issue_url"
 		log "Task created and annotated for: $issue_description"
 		task modify "$task_uuid" linear_issue_id:"$issue_number"
-		log "Issue Number added to the task uda: $issue_description (Issue Number: $issue_number)"
+
+		# Set session:vdocs for all DOC issues
 		if [[ "$issue_number" == *"DOC"* ]]; then
 			task modify "$task_uuid" session:vdocs
-			log "Session set to vdocs for: $issue_description"
-			task modify "$task_uuid" project:docs-maintenance
-			log "Automatically set project to docs-maintenance for docs issues"
 		fi
-		if [[ $issue_number == *"OPS"* ]]; then
-			task modify "$task_uuid" project:operations
-			log "Automatically set project to operations for ops issues"
+
+		# Handle project setting
+		if [[ -n "$project_name" ]] && [[ "$project_name" != "null" ]]; then
+			local formatted_project=$(echo "$project_name" | tr '[:upper:]' '[:lower:]' | tr ' ' '-')
+			task modify "$task_uuid" project:"$formatted_project"
+		else
+			if [[ "$issue_number" == *"DOC"* ]]; then
+				task modify "$task_uuid" project:docs-maintenance
+			elif [[ "$issue_number" == *"OPS"* ]]; then
+				task modify "$task_uuid" project:operations
+			fi
 		fi
 	else
 		log "Error: Failed to create task for: $issue_description" >&2
@@ -99,20 +106,21 @@ create_and_annotate_task() {
 
 sync_to_taskwarrior() {
 	local issue_line="$1"
-	local issue_id issue_description issue_repo_name issue_url task_uuid issue_number
+	local issue_id issue_description issue_repo_name issue_url task_uuid issue_number project_name
 
 	issue_id=$(echo "$issue_line" | jq -r '.id')
 	issue_description=$(echo "$issue_line" | jq -r '.description')
 	issue_repo_name=$(echo "$issue_line" | jq -r '.repository' | awk -F/ '{print $NF}')
 	issue_url=$(echo "$issue_line" | jq -r '.html_url')
 	issue_number=$(echo "$issue_line" | jq -r '.issue_id')
+	project_name=$(echo "$issue_line" | jq -r '.project')
 
 	log "Processing Issue ID: $issue_id, Description: $issue_description"
 
 	task_uuid=$(get_task_id_by_description "$issue_description")
 
 	if [[ -z "$task_uuid" ]]; then
-		create_and_annotate_task "$issue_description" "$issue_repo_name" "$issue_url" "$issue_number"
+		create_and_annotate_task "$issue_description" "$issue_repo_name" "$issue_url" "$issue_number" "$project_name"
 	else
 		log "Task already exists for: $issue_description (UUID: $task_uuid)"
 	fi
@@ -123,11 +131,9 @@ sync_github_issue() {
 	local task_description="$1"
 	local task_uuid
 
-	# Fetch the UUID of the task matching the description and tags
 	task_uuid=$(get_task_id_by_description "$task_description")
 
 	if [[ -n "$task_uuid" ]]; then
-		# Mark the task as completed
 		mark_task_completed "$task_uuid"
 		log "Task marked as completed: $task_description (UUID: $task_uuid)"
 	else
@@ -144,20 +150,14 @@ compare_and_display_tasks_not_in_issues() {
 
 	log "Starting comparison of Taskwarrior tasks and current issues."
 
-	# Convert the newline-separated strings into arrays
 	mapfile -t existing_task_descriptions_array <<<"$existing_task_descriptions"
 	mapfile -t issues_descriptions_array <<<"$issues_descriptions"
 
-	# Iterate over each existing Taskwarrior task description
 	for task_description in "${existing_task_descriptions_array[@]}"; do
-		# Trim whitespace using sed instead of xargs to avoid issues with special characters
 		local trimmed_task_description
 		trimmed_task_description=$(trim_whitespace "$task_description")
-
-		# Initialize flag
 		issue_exists=false
 
-		# Check if this task description exists in any current issue (case-insensitive)
 		for issue_description in "${issues_descriptions_array[@]}"; do
 			local trimmed_issue_description
 			trimmed_issue_description=$(trim_whitespace "$issue_description")
@@ -167,7 +167,6 @@ compare_and_display_tasks_not_in_issues() {
 			fi
 		done
 
-		# If the task does not correspond to any current issue, mark it as completed
 		if [[ "$issue_exists" == false ]]; then
 			log "No matching issue found for task: $trimmed_task_description. Marking as completed."
 			sync_github_issue "$trimmed_task_description"
@@ -183,17 +182,9 @@ get_existing_task_descriptions() {
 		jq -r '.[] | .description'
 }
 
-# Log retrieved issues
-log_issues() {
-	local issue_type="$1"
-	local issues="$2"
-	log "Retrieved $issue_type issues: $(echo "$issues" | jq '.')"
-}
-
 # Synchronize all issues to Taskwarrior
 sync_issues_to_taskwarrior() {
 	local issues="$1"
-
 	echo "$issues" | jq -c '.' | while IFS= read -r line; do
 		sync_to_taskwarrior "$line"
 	done
@@ -203,35 +194,21 @@ sync_issues_to_taskwarrior() {
 main() {
 	local github_issues linear_issues existing_task_descriptions
 
-	# Validate necessary environment variables
 	validate_env_vars
 
-	# Fetch GitHub and Linear issues
 	github_issues=$(get_github_issues)
 	linear_issues=$(get_linear_issues)
 
-	# Check if fetching issues was successful
 	if [[ -z "$github_issues" && -z "$linear_issues" ]]; then
 		log "No issues retrieved from GitHub or Linear. Exiting."
 		exit 0
 	fi
 
-	# Log and synchronize GitHub issues
-	if [[ -n "$github_issues" ]]; then
-		log_issues "GitHub" "$github_issues"
-		sync_issues_to_taskwarrior "$github_issues"
-	fi
+	[[ -n "$github_issues" ]] && sync_issues_to_taskwarrior "$github_issues"
+	[[ -n "$linear_issues" ]] && sync_issues_to_taskwarrior "$linear_issues"
 
-	# Log and synchronize Linear issues
-	if [[ -n "$linear_issues" ]]; then
-		log_issues "Linear" "$linear_issues"
-		sync_issues_to_taskwarrior "$linear_issues"
-	fi
-
-	# Retrieve existing Taskwarrior task descriptions
 	existing_task_descriptions=$(get_existing_task_descriptions)
 
-	# Compare and mark tasks as completed if they no longer exist in issues
 	compare_and_display_tasks_not_in_issues "$existing_task_descriptions" "$(
 		echo "$github_issues" | jq -r '.description'
 		echo "$linear_issues" | jq -r '.description'
