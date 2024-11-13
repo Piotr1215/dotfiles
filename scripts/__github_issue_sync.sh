@@ -52,13 +52,14 @@ get_linear_issues() {
 	if ! issues=$(curl -s -X POST \
 		-H "Content-Type: application/json" \
 		-H "Authorization: $LINEAR_API_KEY" \
-		--data '{"query": "query { user(id: \"'"$LINEAR_USER_ID"'\") { id name assignedIssues(filter: { state: { name: { nin: [\"Released\", \"Canceled\"] } } }) { nodes { id title url } } } }"}' \
+		--data '{"query": "query { user(id: \"'"$LINEAR_USER_ID"'\") { id name assignedIssues(filter: { state: { name: { nin: [\"Released\", \"Canceled\"] } } }) { nodes { id title url project { name } } } } }"}' \
 		https://api.linear.app/graphql | jq -c '.data.user.assignedIssues.nodes[] | {
             id: .id,
             description: .title,
             repository: "linear",
             html_url: .url,
-            issue_id: (.url | split("/") | .[-2])
+            issue_id: (.url | split("/") | .[-2]),
+            project: .project.name
         }'); then
 		echo "Error: Unable to fetch Linear issues" >&2
 		return 1
