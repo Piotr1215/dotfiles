@@ -3,6 +3,7 @@ require("nvim-dap-virtual-text").setup {}
 local lspconfig = require "lspconfig"
 local def = require "lsp.default-lsp"
 lspconfig.lua_ls.setup {
+  autostart = true,
   capabilities = def.capabilities,
   on_attach = def.on_attach,
   signatureHelp = { enable = true },
