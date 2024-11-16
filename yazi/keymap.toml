@@ -1,15 +1,7 @@
-[[manager.prepend_keymap]]
-on   = [ "g", "d" ]
-run  = "cd ~/dev"
-desc = "Cd to ~/dev"
-
-[[manager.prepend_keymap]]
-on   = [ "g", "D" ]
-run  = "cd ~/Downloads"
-desc = "Cd to ~/Downloads"
-
-
-[[manager.prepend_keymap]]
-on  = [ "!" ]
-run = 'shell "$SHELL" --block --confirm'
-desc = "Open shell here"
+[manager]
+prepend_keymap = [
+    { on = [ "g", "d" ], run = "cd ~/dev", desc = "cd to ~/dev" },
+    { on = [ "g", "D" ], run = "cd ~/Downloads", desc = "cd to ~/Downloads" },
+    { on = [ "g", "t" ], run = "cd ~/dev/talks", desc = "cd to ~/dev/talks" },
+    { on = [ "!" ], run = 'shell "$SHELL" --block --confirm', desc = "Open shell here" }
+]
