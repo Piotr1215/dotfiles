@@ -11,11 +11,13 @@ if [[ ! -f "$tracks_file" ]]; then
 fi
 
 declare -A tracks
+declare -a track_order
 current_track_name=""
 
 while IFS= read -r line || [[ -n "$line" ]]; do
 	if [[ $line == \#* ]]; then
 		current_track_name=${line#\# }
+		track_order+=("$current_track_name")
 	elif [[ -n $current_track_name && -n $line ]]; then
 		tracks["$current_track_name"]="$line"
 	else
@@ -28,7 +30,8 @@ if [ ${#tracks[@]} -eq 0 ]; then
 	exit 1
 fi
 
-track_names=$(printf "%s\n" "${!tracks[@]}")
+# Use track_order array to maintain file order
+track_names=$(printf "%s\n" "${track_order[@]}")
 selected_track=$(echo "$track_names" | gum filter --fuzzy)
 
 if [[ -n $selected_track ]]; then
