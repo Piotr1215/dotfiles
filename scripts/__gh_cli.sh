@@ -1,7 +1,7 @@
 # __gh_cli.sh: A collection of GitHub utility functions for Zsh
 
 # Check for dependencies
-for cmd in gh jq git fzf; do
+for cmd in gh jq git fzf xclip; do
 	if ! command -v $cmd &>/dev/null; then
 		echo "$cmd is not installed. Please install it and try again."
 		return 1
@@ -32,8 +32,11 @@ function format_and_open() {
 		return 1
 	fi
 
-	# Display both title and URL, then extract the URL for opening
-	echo "$data" | fzf | awk -F '###' '{print $2}' |
+	echo "$data" | fzf --bind 'ctrl-y:execute-silent(echo -n {2} | xclip -selection clipboard)+change-prompt(URL copied! > )' \
+		--delimiter='###' --with-nth=1 \
+		--header "Press Ctrl+Y to copy URL to clipboard" \
+		--prompt "Select item > " |
+		awk -F '###' '{print $2}' |
 		xargs -r xdg-open >/dev/null 2>&1
 }
 
@@ -98,6 +101,7 @@ function ghprcomments() {
 	# Call the format_and_open function with the retrieved data
 	format_and_open "$data"
 }
+
 # This function lists pull requests (PRs) from the current GitHub repository using the GitHub CLI.
 # It displays the PRs in a selectable list using fzf, allowing the user to preview and open a PR in a web browser.
 function ghrepoprs() {
@@ -117,7 +121,8 @@ function ghrepoprs() {
 		# Select a PR using fzf with a preview panel
 		local selected_pr=$(echo "$pr_data" | fzf --ansi \
 			--preview 'gh pr view $(awk -F"|" "{print \$1}" <<< {})' \
-			--preview-window=up:40:wrap)
+			--preview-window=up:40:wrap \
+			--bind 'ctrl-y:execute-silent(echo -n {3} | xargs | xclip -selection clipboard)')
 
 		# If no PR was selected (e.g., fzf was exited), then exit the function
 		if [ -z "$selected_pr" ]; then
@@ -149,7 +154,8 @@ function ghrepobranches() {
 		# Select a branch using fzf
 		local selected_branch=$(echo "$remote_branches" | fzf --ansi \
 			--preview 'git show-branch {} | head -3' \
-			--preview-window=up:5:wrap)
+			--preview-window=up:5:wrap \
+			--bind 'ctrl-y:execute-silent(gh repo view --branch {} --json url --jq .url | xclip -selection clipboard)')
 
 		# If no branch was selected (e.g., fzf was exited), then exit the function
 		if [ -z "$selected_branch" ]; then
@@ -169,7 +175,8 @@ function ghgistweb() {
 	{
 		GH_FORCE_TTY=100%
 		local selected_gist=$(gh gist list --limit 1000 2>/dev/null | fzf --ansi \
-			--preview 'GH_FORCE_TTY=100% gh gist view {1}' --preview-window up)
+			--preview 'GH_FORCE_TTY=100% gh gist view {1}' --preview-window up \
+			--bind 'ctrl-y:execute-silent(echo {1} | xargs -I {} gh gist view --raw {} | xclip -selection clipboard)')
 
 		if [ -z "$selected_gist" ]; then
 			return
@@ -188,7 +195,8 @@ function ghgist() {
 	{
 		GH_FORCE_TTY=100%
 		local selected_gist=$(gh gist list --limit 1000 2>/dev/null | fzf --ansi \
-			--preview 'GH_FORCE_TTY=100% gh gist view {1}' --preview-window up)
+			--preview 'GH_FORCE_TTY=100% gh gist view {1}' --preview-window up \
+			--bind 'ctrl-y:execute-silent(echo {1} | xargs -I {} gh gist view --raw {} | xclip -selection clipboard)')
 
 		if [ -z "$selected_gist" ]; then
 			return
