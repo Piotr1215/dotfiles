@@ -4,7 +4,16 @@ abbrevs=(
     "_spo" '__sponge_expand'
     "_bak" '__backup_expand'
     "_ind" '__into_new_dir'
+    "_xrg" '__xargs_expand'
 )
+
+__xargs_expand() {
+    local cmd="$LBUFFER"
+    local words=("${(z)cmd}")
+    local xargs_cmd="${words[-1]}" 
+    cmd=${cmd% * *}
+    LBUFFER="$cmd | xargs -I {} $xargs_cmd {}"
+}
 
 __into_new_dir() {
     local cmd="$LBUFFER"
