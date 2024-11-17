@@ -293,6 +293,7 @@ vim.cmd [[
 ]]
 utils.lnmap("cpd", ":Copilot disable<cr>", { silent = false })
 utils.lnmap("cpe", ":Copilot enable<cr>", { silent = false })
+vim.keymap.set("i", "<M-w>", "<Plug>(copilot-accept-word)")
 
 -- GoTo Preview
 vim.keymap.set("n", "gtp", "<cmd>lua require('goto-preview').goto_preview_definition()<CR>", { noremap = true })
