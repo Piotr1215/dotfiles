@@ -80,8 +80,10 @@ function M.mark_task_done()
   print("Original line: ", line)
 
   -- Uncomment the line
-  vim.cmd [[execute "normal \<Plug>NERDCommenterUncomment"]]
+  vim.cmd "normal! gcc"
   line = vim.api.nvim_get_current_line()
+  -- Remove (piotr1215) from the line
+  line = string.gsub(line, "%s*%(piotr1215%)%s*", " ")
   print("Uncommented line: ", line)
 
   local patterns = { "TODO:", "HACK:", "NOTE:", "PERF:", "TEST:", "WARN:" }
@@ -118,7 +120,7 @@ function M.go_to_task_in_taskwarrior_tui()
   local original_line = vim.api.nvim_get_current_line()
 
   -- Uncomment the line
-  vim.cmd [[execute "normal \<Plug>NERDCommenterUncomment"]]
+  vim.cmd "normal! gcc"
   local uncommented_line = vim.api.nvim_get_current_line()
 
   local patterns = { "TODO:", "HACK:", "NOTE:", "PERF:", "TEST:", "WARN:" }
