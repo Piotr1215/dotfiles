@@ -7,22 +7,26 @@ task_attributes="priority,project,tags,description"
 --active-tasks:"+PENDING"
 EDITOR=nvim
 path_ext=/usr/share/taskopen/scripts
+
 [Actions]
 nvimline.target=annotations
 nvimline.labelregex=".*"
 nvimline.regex="^nvimline:(\\d+):(.*)"
 nvimline.command="/home/decoder/.config/taskwarrior-tui/shortcut-scripts/taksopen_line.sh $FILE $TASK_DESCRIPTION"
 nvimline.modes="batch,any,normal"
+
 files.target=annotations
 files.labelregex=".*"
 files.regex="^[\\.\\/~]+.*\\.(.*)"
 files.command="$EDITOR $FILE"
 files.modes="batch,any,normal"
+
 notes.target=annotations
 notes.labelregex=".*"
 notes.regex="^Notes(\\..*)?"
 notes.command="""editnote ~/Notes/tasknotes/$UUID$LAST_MATCH "$TASK_DESCRIPTION" $UUID"""
 notes.modes="batch,any,normal"
+
 url.target=annotations
 url.labelregex=".*"
 url.regex="((?:www|http).*)"

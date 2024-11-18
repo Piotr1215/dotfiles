@@ -108,6 +108,7 @@ function M.mark_task_done()
     end
   end
 end
+
 vim.api.nvim_set_keymap(
   "n",
   "<leader>dt",
@@ -145,12 +146,14 @@ function M.go_to_task_in_taskwarrior_tui()
   -- Replace the line back with the original
   vim.api.nvim_set_current_line(original_line)
 end
+
 vim.api.nvim_set_keymap(
   "n",
   "<leader>gt",
   "<Cmd>lua require('user_functions.tasks').go_to_task_in_taskwarrior_tui()<CR>",
   { noremap = true, silent = true }
 )
+
 function M.process_task_list(start_line, end_line, ...)
   local args = { ... }
   local modifiers = table.concat(args, " ")
