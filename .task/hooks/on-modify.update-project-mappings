@@ -11,7 +11,7 @@ modified_project=$(echo "$modified_task" | jq -r '.project // ""')
 # Check if the project has changed and is not empty
 if [ "$original_project" != "$modified_project" ] && [ -n "$modified_project" ]; then
     # Run the update_project_mappings script with the new project name
-    /home/decoder/dev/dotfiles/__update_project_mappings.sh "$modified_project"
+    /home/decoder/dev/dotfiles/scripts/__update_project_mappings.sh "$modified_project"
 fi
 
 # Output the modified task JSON
