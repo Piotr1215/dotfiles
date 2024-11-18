@@ -22,7 +22,6 @@
 #   )
 #
 # Dependencies:
-#   - Fabric CLI (for generating project descriptions)
 #   - jq (for JSON parsing in the calling hook script)
 #
 # File Locations:
@@ -38,13 +37,6 @@ MAPPINGS_FILE="/home/decoder/dev/dotfiles/scripts/__project_mappings.conf"
 # New project name passed as an argument
 new_project="$1"
 
-# Function to run fabric CLI
-run_fabric() {
-	local pattern=$1
-	local input=$2
-	echo "$input" | fabric --pattern "$pattern"
-}
-
 # Read the current content of the mappings file
 current_content=$(cat "$MAPPINGS_FILE")
 
@@ -53,11 +45,9 @@ existing_projects=$(grep -oP '(?<=\[")[^"]+(?="\])' "$MAPPINGS_FILE")
 
 # Check if the new project already exists
 if ! echo "$existing_projects" | grep -q "^$new_project$"; then
-	# Prepare input for Fabric agent
-	fabric_input="- $new_project"
 
-	# Run Fabric agent to get description for the new project
-	new_description=$(run_fabric "project_renamer" "$fabric_input")
+	# Transform new_project to have spaces and capitalized words
+	new_description=$(echo "$new_project" | tr '-' ' ' | sed 's/\b\(.\)/\u\1/g')
 
 	# Remove the closing parenthesis from the current content
 	updated_content="${current_content%)*}"
