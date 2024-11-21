@@ -174,7 +174,8 @@ function M.select_partial()
   -- Use Telescope to browse partial files
   require("telescope.builtin").find_files {
     prompt_title = "Select Partial",
-    search_dirs = partials_dirs, -- Use the dynamically found directories
+    search_dirs = partials_dirs,
+    path_display = { shorten = 3 }, -- Only show filename instead of full path
     attach_mappings = function(prompt_bufnr, map)
       map("i", "<CR>", function()
         local selection = require("telescope.actions.state").get_selected_entry()
