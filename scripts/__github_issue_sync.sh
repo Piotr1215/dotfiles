@@ -90,7 +90,8 @@ create_and_annotate_task() {
 
 		# Handle project setting
 		if [[ -n "$project_name" ]] && [[ "$project_name" != "null" ]]; then
-			local formatted_project=$(echo "$project_name" | tr '[:upper:]' '[:lower:]' | tr ' ' '-')
+			# Convert to lowercase, replace spaces with single hyphen, then remove duplicate hyphens
+			local formatted_project=$(echo "$project_name" | tr '[:upper:]' '[:lower:]' | tr ' ' '-' | sed 's/-\+/-/g')
 			task modify "$task_uuid" project:"$formatted_project"
 		else
 			if [[ "$issue_number" == *"DOC"* ]]; then
