@@ -56,12 +56,14 @@ windows:
           <% end %>
 
   - time:
-      layout: main-horizontal
+      layout: tiled
       panes:
       - completed:
         - __list_completed_tasks_as_markdown.pl W
       - next:
         - __list_tasks_as_markdown.pl +next W
+      - review:
+        - __list_tasks_as_markdown.pl +review W
       - pending:
         - __list_tasks_as_markdown.pl +pending W
 

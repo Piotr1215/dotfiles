@@ -51,10 +51,11 @@ pane_title_format: "[ #T ]"
 
 windows:
   - clusters:
-      layout: main-horizontal
+      layout: main-vertical
       panes:
+        - print -z npm run start
         - lg
   - dev:
       layout: even-horizontal 
       panes:
-        - nvim
+        - print -z __open-file-git.sh
