@@ -1,5 +1,4 @@
 #!/bin/bash
-
 # PROJECT: project_renamer
 # __update_project_mappings.sh
 #
@@ -45,15 +44,14 @@ existing_projects=$(grep -oP '(?<=\[")[^"]+(?="\])' "$MAPPINGS_FILE")
 
 # Check if the new project already exists
 if ! echo "$existing_projects" | grep -q "^$new_project$"; then
-
 	# Transform new_project to have spaces and capitalized words
 	new_description=$(echo "$new_project" | tr '-' ' ' | sed 's/\b\(.\)/\u\1/g')
 
 	# Remove the closing parenthesis from the current content
 	updated_content="${current_content%)*}"
 
-	# Add the new project with its description
-	updated_content+="    $new_description"$'\n'
+	# Add the new project with its description, properly formatted
+	updated_content+="    [\"$new_project\"]=\"$new_description\""$'\n'
 
 	# Add the closing parenthesis on a new line
 	updated_content+=")"

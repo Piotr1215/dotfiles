@@ -74,25 +74,26 @@ create_and_annotate_task() {
 	local issue_url="$3"
 	local issue_number="$4"
 	local project_name="$5"
-
 	log "Creating new task for issue: $issue_description"
 	task_uuid=$(create_task "$issue_description" "+$issue_repo_name" "project:$project_name")
-
 	if [[ -n "$task_uuid" ]]; then
 		annotate_task "$task_uuid" "$issue_url"
 		log "Task created and annotated for: $issue_description"
 		task modify "$task_uuid" linear_issue_id:"$issue_number"
-
 		# Set session:vdocs for all DOC issues
 		if [[ "$issue_number" == *"DOC"* ]]; then
 			task modify "$task_uuid" session:vdocs
 		fi
-
 		# Handle project setting
 		if [[ -n "$project_name" ]] && [[ "$project_name" != "null" ]]; then
 			# Convert to lowercase, replace spaces with single hyphen, then remove duplicate hyphens
 			local formatted_project=$(echo "$project_name" | tr '[:upper:]' '[:lower:]' | tr ' ' '-' | sed 's/-\+/-/g')
 			task modify "$task_uuid" project:"$formatted_project"
+
+			# Check if project name contains vcluster or cloud (case insensitive)
+			if echo "$formatted_project" | grep -qi 'vcluster\|cloud'; then
+				task modify "$task_uuid" session:vcloud
+			fi
 		else
 			if [[ "$issue_number" == *"DOC"* ]]; then
 				task modify "$task_uuid" project:docs-maintenance
