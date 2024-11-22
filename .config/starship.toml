@@ -1,5 +1,17 @@
+format = """
+$username\
+$hostname\
+$directory\
+$git_branch\
+$git_state\
+$git_status\
+$aws\
+$kubernetes\
+$nodejs\
+$cmd_duration\
+$line_break\
+$character""" # Don't print a new line at the start of the prompt
 
-# Don't print a new line at the start of the prompt
 add_newline = false
 "$schema" = 'https://starship.rs/config-schema.json'
 # Disable the package module, hiding it from the prompt completely
@@ -7,18 +19,22 @@ add_newline = false
 disabled = true
 
 # Replace the "❯" symbol in the prompt with "➜"
-[character]      # The name of the module we are configuring is "character"
+[character] # The name of the module we are configuring is "character"
 success_symbol = "[➜](bold green)"
 error_symbol = "[✗](bold red)"
 
 [custom.dockerfile]
-detect_files = ["Dockerfile"] # can specify filters but wildcards are not supported
+detect_files = [
+  "Dockerfile",
+] # can specify filters but wildcards are not supported
 format = "[ 🐋](blue bold)"
 symbol = "🐋"
 
 [aws]
-format = '\[[$symbol($profile)(\($region\))(\[$duration\])]($style)\]'
-disabled = true
+format = '[aws $symbol($profile )(\[$duration\] )]($style)'
+symbol = "󰅟 "
+style = "bold green"
+disabled = false
 
 [bun]
 format = '\[[$symbol($version)]($style)\]'

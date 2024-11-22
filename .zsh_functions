@@ -12,6 +12,26 @@ function ddg_function() {
 
 alias ghcurrentbranch='ghcurrentbranch_function'
 
+function awsp() {
+    local profile=$(aws configure list-profiles | fzf --height 20% --prompt="Select AWS Profile > ")
+    if [ ! -z "$profile" ]; then
+        if [[ $profile == *"prod"* ]]; then
+            echo "⚠️  Warning: Switching to PRODUCTION profile. Continue? (y/N)"
+            read confirm
+            if [[ $confirm != "y" ]]; then
+                return 1
+            fi
+        fi
+        export AWS_PROFILE=$profile
+        
+        # Check if credentials are expired and try SSO login if needed
+        if ! aws sts get-caller-identity &>/dev/null; then
+            echo "🔄 Credentials expired or not found. Logging in via SSO..."
+            aws sso login --profile $profile
+        fi
+    fi
+}
+
 # Need to alias this because regular ddg doesn't open firefox any more
 function ghcurrentbranch_function() {
     if git rev-parse --is-inside-work-tree > /dev/null 2>&1; then
