@@ -23,6 +23,11 @@ mouse.enabled = true
 binding = { key = "1", mods = "Control" }
 regex = "(ipfs:|ipns:|magnet:|mailto:|gemini://|gopher://|https://|http://|news:|file:|git://|ssh:|ftp://)[^\u0000-\u001F\u007F-\u009F<>\"\\s{-}\\^⟨⟩`]+"
 
+[[hints.enabled]]
+regex = '[^ ]+(?:\s*)$' 
+command = { program = "/usr/bin/tmux", args = ["split-window", "-h", "-c", "#{pane_current_path}", "sh", "-c", "nvim \"$0\""] }
+binding = { key = "2", mods = "Control" }
+
 [cursor.style]
 shape = "Block"
 
@@ -47,7 +52,6 @@ style = "Regular"
 x = 0
 y = 0
 
-
 [[mouse.bindings]]
 action = "Copy"
 mouse = "Right"
@@ -56,10 +60,11 @@ mouse = "Right"
 history = 10000
 
 [window]
+blur = true
+# PROJECT: alacritty_transparency
+opacity = 0.7
 decorations = "none"
-opacity = 1.0
 startup_mode = "Maximized"
-
 [window.dimensions]
 columns = 133
 lines = 40

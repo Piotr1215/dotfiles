@@ -1,27 +1,25 @@
 #!/usr/bin/env bash
-
-# The set -e option instructs bash to immediately exit if any command has a non-zero exit status
-# The set -u referencing a previously undefined  variable - with the exceptions of $* and $@ - is an error
-# The set -o pipefaile if any command in a pipeline fails, that return code will be used as the return code of the whole pipeline
-# https://bit.ly/37nFgin
 set -euo pipefail
-
-# Add source and line number wher running in debug mode: bash -xv test.sh
 export PS4='+(${BASH_SOURCE}:${LINENO}): ${FUNCNAME[0]:+${FUNCNAME[0]}(): }'
-
-# Set new line and tab for word splitting
 IFS=$'\n\t'
 
-config_file="$HOME/.config/alacritty/alacritty.yml"
+# PROJECT: alacritty_transparency
+config_file="$HOME/.config/alacritty/alacritty.toml"
 
-case "$(/usr/bin/yq eval '.window.opacity' "$config_file")" in
-0.9)
-	sed -i "s#  opacity: \(.*\)#  opacity: 1.0#" "$config_file"
+# Toggle Alacritty opacity
+current_opacity=$(grep 'opacity = ' "$config_file" | cut -d'=' -f2 | tr -d ' ')
+
+case "$current_opacity" in
+0.7)
+	sed -i 's/opacity = .*/opacity = 1.0/' "$config_file"
+	# When going opaque, set dark backgrounds
+	tmux set-window-option -g window-active-style 'bg=#000000'
+	tmux set-window-option -g window-style 'bg=#0B0B0B'
 	;;
-1.0)
-	sed -i "s#  opacity: \(.*\)#  opacity: 0.9#" "$config_file"
-	;;
-*)
-	sed -i "s#  opacity: \(.*\)#  opacity: 0.9#" "$config_file"
+1.0 | *)
+	sed -i 's/opacity = .*/opacity = 0.7/' "$config_file"
+	# When going transparent, set default backgrounds
+	tmux set-window-option -g window-active-style 'bg=default'
+	tmux set-window-option -g window-style 'bg=default'
 	;;
 esac

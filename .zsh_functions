@@ -495,19 +495,38 @@ function fif() {
 
 # Dedicated function to list all files associated with a given project tag
 function list_project_files() {
-    local project_tag="PROJECT: $1"
-    local ignore_case_flag=""  # Adjust as necessary for case sensitivity
-
-    cd ~/dev
-    # Use rga to find files containing the project tag, listing filenames only
-    local rga_output=$(rga --max-count=1 $ignore_case_flag --files-with-matches --no-messages "$project_tag")
-
-    # Check if any files were found
-    if [[ -z "$rga_output" ]]; then
-        echo "No files found for project $1."
+    local projects_file="$HOME/projects.txt"
+    local current_dir="$(pwd)"
+    
+    # Check if projects file exists
+    if [[ ! -f "$projects_file" ]]; then
+        echo "Error: $projects_file not found"
+        return 1
+    fi
+    
+    # Use fzf to select project from projects.txt
+    local selected_project=$(cat "$projects_file" | fzf --height=40% --border=rounded \
+        --prompt="Select project > " \
+        --preview="rga --max-count=1 'PROJECT: {}' ." \
+        --preview-window="right:50%:wrap")
+    
+    # Exit if no project selected
+    if [[ -z "$selected_project" ]]; then
         return 0
     fi
-
+    
+    # Search for project files
+    local project_tag="PROJECT: $selected_project"
+    
+    # Use rga to find files containing the project tag in current directory and subdirectories
+    local rga_output=$(rga --max-count=1 --files-with-matches --no-messages "$project_tag" .)
+    
+    # Check if any files were found
+    if [[ -z "$rga_output" ]]; then
+        echo "No files found for project $selected_project in $current_dir"
+        return 0
+    fi
+    
     # Print each file path
     echo "$rga_output"
 }
