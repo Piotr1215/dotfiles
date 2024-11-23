@@ -62,6 +62,7 @@ alias kstop='~/dev/dotfiles/scripts/__kind_manager.sh --stop'
 
 # Other
 alias aopa='~/dev/dotfiles/scripts/__toggle_alacritty_opacity.sh'
+alias atheme='~/dev/dotfiles/scripts/__swap_alacritty_theme.sh'
 alias proj='/home/decoder/dev/projector/projector'
 alias ytd='__download_youtube.sh'
 alias remind='__reminder.sh'
