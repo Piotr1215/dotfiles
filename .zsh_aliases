@@ -31,6 +31,7 @@ alias inc--='incus stop --stateful ubuntu'
 alias inc-='incus stop ubuntu'
 
 # Commands shadow
+alias lpf='list_project_files'
 alias watchtui='nodemon --signal SIGTERM -q --watch ~/.taskrc --ext taskrc --exec "tui --report current"'
 alias k9s='k9s -A'
 alias bfi='__create_branch_from_issue.sh'
@@ -60,6 +61,7 @@ alias kstart='~/dev/dotfiles/scripts/__kind_manager.sh --start'
 alias kstop='~/dev/dotfiles/scripts/__kind_manager.sh --stop'
 
 # Other
+alias aopa='~/dev/dotfiles/scripts/__toggle_alacritty_opacity.sh'
 alias proj='/home/decoder/dev/projector/projector'
 alias ytd='__download_youtube.sh'
 alias remind='__reminder.sh'

@@ -24,15 +24,23 @@ unmap_map_window() {
 	xdotool windowmap "$window"
 }
 #}}}
+
+# PROJECT: alacritty_transparency
 max_alacritty() {
 	# Get the ID of the first visible Alacritty window
 	window=$(xdotool search --onlyvisible --classname Alacritty | head -n 1)
+
 	if [ -n "$window" ]; then
-		# Unmaximize the window
+		# Minimize all windows except Alacritty
+		for win_id in $(xdotool search --onlyvisible --name ".*"); do
+			if [ "$win_id" != "$window" ]; then
+				xdotool windowminimize "$win_id"
+			fi
+		done
+
+		# Now handle the Alacritty window
 		unmap_map_window "$window"
 		maximize_window "$window"
-		# wmctrl -r Alacritty -e 0,1920,0,-1,-1
-
 		xdotool windowraise "$window"
 		xdotool windowactivate --sync "$window"
 	else
