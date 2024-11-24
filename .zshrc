@@ -278,6 +278,13 @@ bindkey '^f' f_enter                      # Ctrl+f: Enters f mode
   # zle accept-line
 # }
 
+function paste_file_content() {
+    LBUFFER="xclip -o -sel clipboard > "
+    zle reset-prompt
+}
+zle -N paste_file_content
+bindkey '^X^P' paste_file_content
+
 function copy_file_content() {
   local selected_file
   selected_file=$(fd --type f | fzf --height 40% --reverse)
