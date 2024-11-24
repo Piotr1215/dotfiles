@@ -254,6 +254,26 @@ return require("lazy").setup {
   "ray-x/guihua.lua", -- recommended if need floating window support
   "rmagatti/goto-preview",
   "nvim-treesitter/nvim-treesitter-textobjects",
+  {
+    "chrisgrieser/nvim-various-textobjs",
+    event = "VeryLazy",
+    opts = {
+      useDefaultKeymaps = true,
+      disabledKeymaps = {
+        "is",
+        "iS",
+        "as",
+        "aS",
+        "io",
+        "ao",
+        "gG",
+        "im",
+        "am",
+        "ic",
+        "ac",
+      },
+    },
+  },
   -- }}}
   -- Markdown {{{
   "jubnzv/mdeval.nvim",

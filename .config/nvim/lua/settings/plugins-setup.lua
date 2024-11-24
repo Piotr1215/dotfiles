@@ -233,7 +233,13 @@ require("gp").setup {
 require("remote-sshfs").setup {}
 
 require("mini.align").setup()
-require("mini.ai").setup()
+require("mini.ai").setup {
+  custom_textobjects = {
+    ["|"] = false, -- Disable | text object
+    n = false, -- Disable n text object
+    l = false,
+  },
+}
 require("mini.files").setup {
   windows = {
     preview = true,
