@@ -1,6 +1,6 @@
 # /home/decoder/.config/tmuxinator/atosik.yml
 
-name: SHIPPED24
+name: KCD-ACCRA
 root: ~/dev/infra-platform-arch
 
 # Optional tmux socket
