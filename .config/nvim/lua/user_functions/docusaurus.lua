@@ -33,7 +33,7 @@ end
 -- Function to convert a string to CamelCase using only the file name
 local function to_camel_case(str)
   -- Extract the file name without extension
-  local file_name = vim.fn.fnamemodify(str, ":t:r") -- ':t' for tail (file name), ':r' for root (remove extension)
+  local file_name = vim.fn.fnamemodify(str, ":t:r")
 
   local words = {}
   -- Split the file name by hyphens and underscores
@@ -44,51 +44,30 @@ local function to_camel_case(str)
   return table.concat(words)
 end
 
--- Function to calculate the relative path between two paths
-local function get_relative_path(base, target)
-  local function split_path(path)
-    local tbl = {}
-    for part in string.gmatch(path, "[^/]+") do
-      table.insert(tbl, part)
-    end
-    return tbl
-  end
+-- Function to convert file name to readable text
+local function to_readable_text(str)
+  -- Extract the file name without extension
+  local file_name = vim.fn.fnamemodify(str, ":t:r")
+  -- Replace hyphens and underscores with spaces
+  return file_name:gsub("[%-_]", " ")
+end
 
-  local base_path = vim.fn.fnamemodify(base, ":p")
-  local target_path = vim.fn.fnamemodify(target, ":p")
+-- Function to get absolute URL path
+local function get_absolute_url_path(file_path)
+  -- Get git repository root
+  local git_root = vim.fn.system("git rev-parse --show-toplevel"):gsub("%s+", "")
 
-  local base_parts = split_path(base_path)
-  local target_parts = split_path(target_path)
+  -- Remove git root from path and file extension
+  local url_path = file_path:sub(#git_root + 2) -- +2 to remove leading slash
+  url_path = vim.fn.fnamemodify(url_path, ":r")
 
-  -- Find common prefix length
-  local common_length = 0
-  for i = 1, math.min(#base_parts, #target_parts) do
-    if base_parts[i] == target_parts[i] then
-      common_length = i
-    else
-      break
-    end
-  end
+  -- Ensure forward slashes
+  url_path = url_path:gsub("\\", "/")
 
-  local relative_parts = {}
-  for _ = common_length + 1, #base_parts do
-    table.insert(relative_parts, "..")
-  end
-  for i = common_length + 1, #target_parts do
-    table.insert(relative_parts, target_parts[i])
-  end
+  -- Add leading slash
+  url_path = "/" .. url_path
 
-  local relative_path = table.concat(relative_parts, "/")
-
-  -- Ensure path uses forward slashes
-  relative_path = relative_path:gsub("\\", "/")
-
-  -- Prepend './' if the relative path doesn't start with '.' or '/'
-  if not relative_path:match "^%." and not relative_path:match "^/" then
-    relative_path = "./" .. relative_path
-  end
-
-  return relative_path
+  return url_path
 end
 
 local function insert_partial_in_buffer(bufnr, partial_name, partial_path)
@@ -103,7 +82,7 @@ local function insert_partial_in_buffer(bufnr, partial_name, partial_path)
 
   -- Insert the partial at the cursor position
   vim.api.nvim_buf_set_lines(bufnr, current_line - 1, current_line - 1, false, { partial_insert })
-  print("Partial inserted: " .. partial_insert .. " at line " .. current_line) -- Debug print
+  print("Partial inserted: " .. partial_insert .. " at line " .. current_line)
 
   -- Get the current file's directory
   local current_file_path = vim.api.nvim_buf_get_name(bufnr)
@@ -127,35 +106,49 @@ local function insert_partial_in_buffer(bufnr, partial_name, partial_path)
     if not found_front_matter_start then
       if line:match "^---$" then
         found_front_matter_start = true
-        print("Found front matter start at line " .. i) -- Debug print
       end
     elseif not found_front_matter_end then
       if line:match "^---$" then
         found_front_matter_end = true
-        insert_pos = i + 1 -- Insert after the front matter
-        print("Found front matter end at line " .. i) -- Debug print
+        insert_pos = i + 1
       end
     elseif line:match "^import" then
       found_import = true
-      insert_pos = i + 1 -- Insert after the last import
-      print("Found import at line " .. i) -- Debug print
-    else
-      -- Do nothing
+      insert_pos = i + 1
     end
-  end
-
-  -- Determine where to insert the import statement
-  if not found_front_matter_start then
-    insert_pos = 1
-    print "No front matter found, inserting at top of the file" -- Debug print
-  elseif not found_front_matter_end then
-    print "Front matter not properly closed with '---'"
-    insert_pos = insert_pos -- Keep as is, may need adjustment based on preference
   end
 
   -- Insert the import statement
   vim.api.nvim_buf_set_lines(bufnr, insert_pos - 1, insert_pos - 1, false, { "", import_statement, "" })
-  print("Inserted import at line " .. insert_pos) -- Debug print
+end
+
+-- Function to insert URL reference at cursor
+local function insert_url_reference(bufnr, target_path)
+  -- Get URL path
+  local url_path = get_absolute_url_path(target_path)
+
+  -- Get the cursor position
+  local cursor_position = vim.api.nvim_win_get_cursor(0)
+  local current_line = cursor_position[1]
+
+  -- Generate default link text from file name
+  local default_text = to_readable_text(target_path)
+
+  -- Prompt for link text with default value
+  local link_text = vim.fn.input("Enter link text: ", default_text)
+  if link_text == "" then
+    link_text = default_text
+  end
+
+  local markdown_link = string.format("[%s](%s)", link_text, url_path)
+
+  -- Insert the markdown link at cursor position
+  local line_content = vim.api.nvim_buf_get_lines(bufnr, current_line - 1, current_line, false)[1]
+  local cursor_col = cursor_position[2]
+
+  -- Split the line at cursor position and insert the link
+  local new_line = string.sub(line_content, 1, cursor_col) .. markdown_link .. string.sub(line_content, cursor_col + 1)
+  vim.api.nvim_buf_set_lines(bufnr, current_line - 1, current_line, false, { new_line })
 end
 
 function M.select_partial()
@@ -175,7 +168,7 @@ function M.select_partial()
   require("telescope.builtin").find_files {
     prompt_title = "Select Partial",
     search_dirs = partials_dirs,
-    path_display = { shorten = 3 }, -- Only show filename instead of full path
+    path_display = { shorten = 3 },
     attach_mappings = function(prompt_bufnr, map)
       map("i", "<CR>", function()
         local selection = require("telescope.actions.state").get_selected_entry()
@@ -202,7 +195,43 @@ function M.select_partial()
   }
 end
 
--- Add key binding for <leader>ip (insert partial)
+function M.insert_url_reference()
+  local current_bufnr = vim.api.nvim_get_current_buf()
+  local current_win = vim.api.nvim_get_current_win()
+
+  local git_root = vim.fn.system("git rev-parse --show-toplevel"):gsub("%s+", "")
+  if git_root == "" then
+    print "Not inside a git repository."
+    return
+  end
+
+  -- Change to git root directory
+  vim.fn.chdir(git_root)
+
+  require("telescope.builtin").find_files {
+    prompt_title = "Select MDX File to Reference",
+    search_dirs = { "." }, -- Search from current (git root) directory
+    find_command = { "find", ".", "-type", "f", "-name", "*.mdx", "!", "-path", "*/_*/*" },
+    path_display = { truncate = 3 },
+    attach_mappings = function(prompt_bufnr, map)
+      map("i", "<CR>", function()
+        local selection = require("telescope.actions.state").get_selected_entry()
+        local file_path = selection.path
+        require("telescope.actions").close(prompt_bufnr)
+        vim.api.nvim_set_current_win(current_win)
+        vim.api.nvim_set_current_buf(current_bufnr)
+        insert_url_reference(current_bufnr, file_path)
+      end)
+      return true
+    end,
+  }
+
+  -- Change back to original directory
+  vim.fn.chdir "-"
+end
+
+-- Add key bindings
 vim.api.nvim_set_keymap("n", "<leader>ip", "", { noremap = true, silent = true, callback = M.select_partial })
+vim.api.nvim_set_keymap("n", "<leader>iu", "", { noremap = true, silent = true, callback = M.insert_url_reference })
 
 return M
