@@ -12,7 +12,7 @@ function ddg_function() {
 
 alias ghcurrentbranch='ghcurrentbranch_function'
 
-function awsp() {
+function paws() {
     local profile=$(aws configure list-profiles | fzf --height 20% --prompt="Select AWS Profile > ")
     if [ ! -z "$profile" ]; then
         if [[ $profile == *"prod"* ]]; then
