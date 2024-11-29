@@ -37,7 +37,7 @@ root: ~/loft/hosted-platform
 startup_window: 1
 
 # Specifies (by index) which pane of the specified window will be selected on project startup. If not set, the first pane is used.
-# startup_pane: 2
+startup_pane: 2
 
 # Enables the display of pane titles. For example "editor" below. Defaults to false.
 enable_pane_titles: true
@@ -58,11 +58,11 @@ windows:
   - dev:
       layout: even-horizontal 
       panes:
-        - terraform-global:
+        - staging:
           - clear
-          - cd /home/decoder/loft/hosted-platform/infrastructure/terraform/staging/global
+          - cd /home/decoder/loft/hosted-platform/infrastructure/terraform/staging
           - ls
-        - terraform-regional:
+        - backent-staging:
           - clear
-          - cd /home/decoder/loft/hosted-platform/infrastructure/terraform/staging/regional
+          - cd /home/decoder/loft/hosted-platform/infrastructure/terraform/backend-staging
           - ls
