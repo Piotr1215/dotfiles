@@ -234,3 +234,13 @@ vim.api.nvim_create_autocmd("BufWritePost", {
     vim.cmd "normal! mM"
   end,
 })
+
+-- Terraform
+vim.cmd [[silent! autocmd! filetypedetect BufRead,BufNewFile *.tf]]
+vim.cmd [[autocmd BufRead,BufNewFile *.hcl set filetype=hcl]]
+vim.api.nvim_create_autocmd({ "BufWritePre" }, {
+  pattern = { "*.tf", "*.tfvars" },
+  callback = function()
+    vim.lsp.buf.format()
+  end,
+})
