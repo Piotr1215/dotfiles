@@ -37,7 +37,7 @@ root: ~/loft/vcluster-docs
 startup_window: 1
 
 # Specifies (by index) which pane of the specified window will be selected on project startup. If not set, the first pane is used.
-# startup_pane: 2
+startup_pane: 2
 
 # Enables the display of pane titles. For example "editor" below. Defaults to false.
 enable_pane_titles: true
