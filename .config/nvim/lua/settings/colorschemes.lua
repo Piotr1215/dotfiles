@@ -80,8 +80,8 @@ vim.opt.fillchars = {
 }
 vim.g.termigurcolors = true
 -- Active colorscheme
--- vim.cmd('colorscheme moonfly')
-vim.cmd "colorscheme catppuccin"
+-- vim.cmd "colorscheme moonfly"
+-- vim.cmd "colorscheme catppuccin"
 -- vim.cmd('colorscheme nightfox')
--- vim.cmd('colorscheme tokyonight-night')
+vim.cmd "colorscheme tokyonight-night"
 -- vim.cmd('colorscheme carbonfox')

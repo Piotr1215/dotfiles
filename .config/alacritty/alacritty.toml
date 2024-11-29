@@ -62,7 +62,7 @@ history = 10000
 [window]
 blur = true
 # PROJECT: alacritty_transparency
-opacity = 0.7
+opacity = 1.0
 decorations = "none"
 startup_mode = "Maximized"
 [window.dimensions]
