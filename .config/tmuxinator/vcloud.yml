@@ -58,4 +58,11 @@ windows:
   - dev:
       layout: even-horizontal 
       panes:
-        - print -z __open-file-git.sh
+        - terraform-global:
+          - clear
+          - cd /home/decoder/loft/hosted-platform/infrastructure/terraform/staging/global
+          - ls
+        - terraform-regional:
+          - clear
+          - cd /home/decoder/loft/hosted-platform/infrastructure/terraform/staging/regional
+          - ls
