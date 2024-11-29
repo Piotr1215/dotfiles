@@ -131,3 +131,4 @@ backend
 StatefulSets
 Taskwarrior
 EKS
+autoscaling
