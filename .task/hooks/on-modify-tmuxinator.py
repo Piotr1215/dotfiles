@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+
 import sys
 import json
 import subprocess
@@ -29,10 +30,14 @@ def main():
                 subprocess.Popen(['tmuxinator', 'start', session_name])
                 print(f"Started tmuxinator session: {session_name}")
             
-            # Handle session stop
+            # Handle session stop - check keep_session UDA
             elif before_has_start and not after_has_start:
-                subprocess.Popen(['tmuxinator', 'stop', session_name])
-                print(f"Stopped tmuxinator session: {session_name}")
+                keep_session = after.get('keep_session', 'N').strip().upper()
+                if keep_session != 'Y':
+                    subprocess.Popen(['tmuxinator', 'stop', session_name])
+                    print(f"Stopped tmuxinator session: {session_name}")
+                else:
+                    print(f"Keeping tmuxinator session: {session_name} (keep_session=Y)")
 
         # Output the modified task
         print(json.dumps(after))

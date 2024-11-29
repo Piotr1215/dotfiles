@@ -116,9 +116,13 @@ context.temp.write=+temp
 #User defined attributes
 uda.follow.type=string
 uda.follow.label=follow
+uda.follow.values=Y,N
+uda.keep_session.type=string
+uda.keep_session.label=follow
+uda.keep_session.values=Y,N
+uda.keep_session.default=N
 uda.session.type=string
 uda.session.label=Session
-uda.follow.values=Y,N
 uda.manual_priority.type=numeric
 uda.manual_priority.label=Manual Priority
 uda.release.type=string
