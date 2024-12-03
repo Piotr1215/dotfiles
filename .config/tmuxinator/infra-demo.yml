@@ -1,6 +1,6 @@
 # /home/decoder/.config/tmuxinator/atosik.yml
 
-name: KCD-ACCRA
+name: AzDevCom24
 root: ~/dev/infra-platform-arch
 
 # Optional tmux socket
