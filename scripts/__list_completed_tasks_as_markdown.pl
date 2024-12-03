@@ -6,9 +6,7 @@ use Time::Piece;
 
 my $t = localtime;
 my $wday = $t->wdayname;
-
 my $days_to_subtract = ($wday eq 'Mon') ? 3 : 1;
-
 my $project_mappings_file = '/home/decoder/dev/dotfiles/scripts/__project_mappings.conf';
 my $xml_script = '/home/decoder/dev/dotfiles/scripts/__format_tasks_xml.pl';
 
@@ -29,14 +27,17 @@ $xml_content =~ s{(<description>.*?)(<)(.*?</description>)}{$1&lt;$3}g;
 my $parser = XML::LibXML->new;
 my $doc = $parser->load_xml(string => $xml_content);
 
+my %tasks_today;
 my %tasks_yesterday;
 my %tasks_last_week;
 
+my $today = sprintf "%4d%02d%02d", $t->year, $t->mon, $t->mday;
 my ($sec, $min, $hour, $mday, $mon, $year) = localtime(time - $days_to_subtract * 24 * 60 * 60);
 my $yesterday = sprintf "%4d%02d%02d", $year + 1900, $mon + 1, $mday;
 
 my $last_week_days_to_subtract = 7;
-my ($sec_last, $min_last, $hour_last, $mday_last, $mon_last, $year_last) = localtime(time - $last_week_days_to_subtract * 24 * 60 * 60);
+my ($sec_last, $min_last, $hour_last, $mday_last, $mon_last, $year_last) = 
+    localtime(time - $last_week_days_to_subtract * 24 * 60 * 60);
 my $last_week_date = sprintf "%4d%02d%02d", $year_last + 1900, $mon_last + 1, $mday_last;
 
 for my $task ($doc->findnodes('/tasks/task')) {
@@ -44,10 +45,11 @@ for my $task ($doc->findnodes('/tasks/task')) {
     my $end_date = $task->findvalue('end');
     $end_date =~ s/T.*//;
     my $tags = join ' ', $task->findnodes('tags/tag/text()');
-
+    
     next unless $tags =~ /\bwork\b/;
     next if $tags =~ /\bidea\b/;
-    next unless $status eq 'completed' && ($end_date eq $yesterday || $end_date ge $last_week_date);
+    next unless $status eq 'completed' && 
+        ($end_date eq $today || $end_date eq $yesterday || $end_date ge $last_week_date);
 
     my $project_key = $task->findvalue('project') || ' ';
     my $project = $project_mappings{$project_key} || 'Unknown';
@@ -63,13 +65,25 @@ for my $task ($doc->findnodes('/tasks/task')) {
         }
     }
 
-    if ($end_date eq $yesterday) {
+    if ($end_date eq $today) {
+        push @{$tasks_today{$project}}, "$checkbox $description$anno_text";
+    } elsif ($end_date eq $yesterday) {
         push @{$tasks_yesterday{$project}}, "$checkbox $description$anno_text";
     } else {
         push @{$tasks_last_week{$project}}, "$checkbox $description$anno_text";
     }
 }
 
+print "Today\n\n";
+for my $project (sort keys %tasks_today) {
+    print "$project\n";
+    for my $task (@{$tasks_today{$project}}) {
+        print "- $task\n";
+    }
+    print "\n";
+}
+
+print "Yesterday\n\n";
 for my $project (sort keys %tasks_yesterday) {
     print "$project\n";
     for my $task (@{$tasks_yesterday{$project}}) {
@@ -79,7 +93,6 @@ for my $project (sort keys %tasks_yesterday) {
 }
 
 print "----Last Week----\n\n";
-
 for my $project (sort keys %tasks_last_week) {
     print "$project\n";
     for my $task (@{$tasks_last_week{$project}}) {
