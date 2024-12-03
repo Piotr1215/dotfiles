@@ -1,8 +1,26 @@
 #!/usr/bin/env python3
-
 import sys
 import json
 import subprocess
+
+def show_dialog(session_name):
+    try:
+        result = subprocess.run(
+            [
+                'zenity', '--question',
+                '--text', f'Close session "{session_name}"?\n\nPress Enter to keep session running',
+                '--title', 'Session Management',
+                '--ok-label', 'Close Session',
+                '--cancel-label', 'Keep Running',
+                '--default-cancel',
+                '--width', '300',
+                '--display', ':1'
+            ],
+            capture_output=True
+        )
+        return result.returncode == 0
+    except subprocess.CalledProcessError:
+        return False
 
 def main():
     try:
@@ -30,14 +48,13 @@ def main():
                 subprocess.Popen(['tmuxinator', 'start', session_name])
                 print(f"Started tmuxinator session: {session_name}")
             
-            # Handle session stop - check keep_session UDA
+            # Handle session stop - ask user
             elif before_has_start and not after_has_start:
-                keep_session = after.get('keep_session', 'N').strip().upper()
-                if keep_session != 'Y':
+                if show_dialog(session_name):
                     subprocess.Popen(['tmuxinator', 'stop', session_name])
                     print(f"Stopped tmuxinator session: {session_name}")
                 else:
-                    print(f"Keeping tmuxinator session: {session_name} (keep_session=Y)")
+                    print(f"Keeping tmuxinator session: {session_name} (user choice)")
 
         # Output the modified task
         print(json.dumps(after))
