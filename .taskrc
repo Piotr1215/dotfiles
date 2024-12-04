@@ -13,6 +13,8 @@
 #   variable=$VALUE
 
 # Use the command 'task show' to see all defaults and overrides
+# Defaults
+default.project=admin
 
 # Files
 data.location=/home/decoder/.task
@@ -152,4 +154,4 @@ uda.taskwarrior-tui.selection.bold=yes
 uda.taskwarrior-tui.selection.italic=no
 uda.taskwarrior-tui.selection.dim=yes
 uda.taskwarrior-tui.selection.blink=no
-uda.taskwarrior-tui.selection.reverse=no
+uda.taskwarrior-tui.selection.reverse=yes
