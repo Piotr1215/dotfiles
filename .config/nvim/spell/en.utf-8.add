@@ -132,3 +132,4 @@ StatefulSets
 Taskwarrior
 EKS
 autoscaling
+distros
