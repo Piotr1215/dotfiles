@@ -51,7 +51,42 @@ local function to_readable_text(str)
   -- Replace hyphens and underscores with spaces
   return file_name:gsub("[%-_]", " ")
 end
+-- Function to get relative path between two absolute paths
+local function get_relative_path(from_dir, to_path)
+  local git_root = vim.fn.system("git rev-parse --show-toplevel"):gsub("%s+", "")
 
+  -- Print paths for debugging
+  print("From dir:", from_dir)
+  print("To path:", to_path)
+  print("Git root:", git_root)
+
+  local from_rel = from_dir:sub(#git_root + 2)
+  local to_rel = to_path:sub(#git_root + 2)
+
+  print("From relative:", from_rel)
+  print("To relative:", to_rel)
+
+  local from_parts = vim.split(from_rel, "/")
+  local to_parts = vim.split(to_rel, "/")
+
+  local i = 1
+  while i <= #from_parts and i <= #to_parts and from_parts[i] == to_parts[i] do
+    i = i + 1
+  end
+
+  local result = {}
+  for _ = i, #from_parts do
+    table.insert(result, "..")
+  end
+
+  for j = i, #to_parts do
+    table.insert(result, to_parts[j])
+  end
+
+  local final_path = table.concat(result, "/")
+  print("Final path:", final_path)
+  return final_path
+end
 -- Function to get absolute URL path
 local function get_absolute_url_path(file_path)
   -- Get git repository root
