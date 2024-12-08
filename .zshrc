@@ -352,3 +352,5 @@ export PATH="$WASMTIME_HOME/bin:$PATH"
 if [ -f "/home/decoder/.config/fabric/fabric-bootstrap.inc" ]; then . "/home/decoder/.config/fabric/fabric-bootstrap.inc"; fi
 # zprof > /tmp/zprof.out
 . "/home/decoder/.deno/env"
+
+source /home/decoder/.config/broot/launcher/bash/br
