@@ -1,0 +1,19 @@
+# ~/.config/tmuxinator/vcluster-staging.yml
+
+name: vcluster-cloud-staging
+root: <%= ENV['HOME'] %>/dev/clusters/vcluster-staging
+
+pre_window: export KUBECONFIG=<%= ENV['HOME'] %>/dev/clusters/vcluster-staging/config
+on_project_start: aws eks update-kubeconfig --name hosted-platform --region us-east-1 --kubeconfig ./config
+
+windows:
+  - main:
+      layout: main-vertical
+      panes:
+        - shell:
+          - echo "Connected to staging cluster"
+          - kubectl config current-context
+        - kubectl:
+          - kubectl get nodes
+  - infrastructure:
+      root: <%= ENV['HOME'] %>/loft/hosted-platform/infrastructure
