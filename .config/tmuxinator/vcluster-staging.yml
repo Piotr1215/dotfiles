@@ -10,10 +10,7 @@ windows:
   - main:
       layout: main-vertical
       panes:
-        - shell:
-          - echo "Connected to staging cluster"
-          - kubectl config current-context
-        - kubectl:
-          - kubectl get nodes
+        - k9s:
+          - k9s
   - infrastructure:
       root: <%= ENV['HOME'] %>/loft/hosted-platform/infrastructure
