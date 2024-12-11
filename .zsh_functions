@@ -717,23 +717,13 @@ function sout () {
     fi
 }
 
-function ms () {
-    if [[ -z $1 ]]
-    then
+function ms() {
+    if [[ -z $1 ]]; then
         echo "Provide one or more tmuxinator sessions to start"
         return 1
     fi
-    
-    # Special case for 'cluster' which takes an additional argument
-    if [[ $1 == "cluster" && ! -z $2 ]]; then
-        tmuxinator start cluster $2
-        return 0
-    fi
 
-    for session in "$@"
-    do
-        tmuxinator start "$session"
-    done
+    tmuxinator start "$@"
 }
 
 # Close multiple tmuxinator sessions
