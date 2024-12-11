@@ -31,6 +31,7 @@ alias inc--='incus stop --stateful ubuntu'
 alias inc-='incus stop ubuntu'
 
 # Commands shadow
+alias br='br -sg'
 alias tf='terraform'
 alias lpf='list_project_files'
 alias watchtui='nodemon --signal SIGTERM -q --watch ~/.taskrc --ext taskrc --exec "tui --report current"'
