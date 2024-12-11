@@ -13,6 +13,8 @@ ZVM_INIT_MODE=sourcing
 autoload -Uz compinit
 compinit -d "${ZDOTDIR:-$HOME}/.zcompdump"
 
+source /home/decoder/.config/broot/launcher/bash/br
+
 # https://github.com/jeffreytse/zsh-vi-mode
 function zvm_config() {
   ZVM_LINE_INIT_MODE=$ZVM_MODE_INSERT
@@ -127,7 +129,7 @@ export VISUAL=nvim
 export PATH=/home/decoder/.nimble/bin:$PATH
 export KUBECONFIG=~/.kube/config
 export GOPATH=/usr/local/go
-export GOBIN=/usr/local/go/bin
+export GOBIN=$HOME/go/bin
 export PATH="/usr/bin:/home/decoder/.local/bin:$PATH"
 export PATH=$PATH:$GOPATH/bin
 export PATH=$PATH:$HOME/.krew/bin
@@ -328,7 +330,7 @@ source ${HOME}/kube-ps1/kube-ps1.sh
 PROMPT='$(kube_ps1)'$PROMPT
 PROMPT="$PROMPT"$'\n→ '
 
-[[ -s "/home/decoder/.gvm/scripts/gvm" ]] && source "/home/decoder/.gvm/scripts/gvm"
+# [[ -s "/home/decoder/.gvm/scripts/gvm" ]] && source "/home/decoder/.gvm/scripts/gvm"
 
 # The next line updates PATH for the Google Cloud SDK.
 if [ -f '/home/decoder/dev/clusters/primary-dev/google-cloud-sdk/path.zsh.inc' ]; then . '/home/decoder/dev/clusters/primary-dev/google-cloud-sdk/path.zsh.inc'; fi
@@ -352,5 +354,3 @@ export PATH="$WASMTIME_HOME/bin:$PATH"
 if [ -f "/home/decoder/.config/fabric/fabric-bootstrap.inc" ]; then . "/home/decoder/.config/fabric/fabric-bootstrap.inc"; fi
 # zprof > /tmp/zprof.out
 . "/home/decoder/.deno/env"
-
-source /home/decoder/.config/broot/launcher/bash/br
