@@ -52,7 +52,7 @@ get_linear_issues() {
 	if ! issues=$(curl -s -X POST \
 		-H "Content-Type: application/json" \
 		-H "Authorization: $LINEAR_API_KEY" \
-		--data '{"query": "query { user(id: \"'"$LINEAR_USER_ID"'\") { id name assignedIssues(filter: { state: { name: { nin: [\"Released\", \"Canceled\"] } } }) { nodes { id title url project { name } } } } }"}' \
+		--data '{"query": "query { user(id: \"'"$LINEAR_USER_ID"'\") { id name assignedIssues(filter: { state: { name: { nin: [\"Released\", \"Canceled\",\"Done\"] } } }) { nodes { id title url project { name } } } } }"}' \
 		https://api.linear.app/graphql | jq -c '.data.user.assignedIssues.nodes[] | {
             id: .id,
             description: .title,
@@ -92,7 +92,7 @@ create_and_annotate_task() {
 
 			# Check if project name contains vcluster or cloud (case insensitive)
 			if echo "$formatted_project" | grep -qi 'vcluster\|cloud'; then
-				task modify "$task_uuid" session:vcloud
+				task modify "$task_uuid" session:vcluster-staging
 			fi
 		else
 			if [[ "$issue_number" == *"DOC"* ]]; then
