@@ -1,5 +1,7 @@
 #!/bin/bash
 
+export DISPLAY=:1
+
 # Function to check if we're already logged into Zoom
 check_zoom_login() {
 	# Use awk to match windows that start with Zoom
@@ -43,22 +45,16 @@ zoom_window_title="Zoom Workplace"
 # Fetch the window ID for Zoom
 zoom_window_id=$(wmctrl -l | grep "$zoom_window_title" | awk '{print $1}')
 
-# Check if Zoom window is found
-if [ -z "$zoom_window_id" ]; then
-	echo "Zoom window not found."
-	exit 1
-fi
-
 # Maximize the Zoom window
 wmctrl -i -r "$zoom_window_id" -b add,maximized_vert,maximized_horz
 
 # Wait for the window to maximize and the UI to settle
-sleep 0.5
+sleep 1
 
 # Click SSO buttons in Zoom
 xdotool mousemove 1914 1150 click 1
 echo "SSO Login process initiated."
-sleep 0.5
+sleep 1
 xdotool mousemove 1959 1252 click 1
 echo "Google SSO button clicked."
 
@@ -74,7 +70,7 @@ fi
 firefox_window_id=$(wmctrl -l | grep "$firefox_window_title" | awk '{print $1}')
 wmctrl -i -r "$firefox_window_id" -b add,maximized_vert,maximized_horz
 wmctrl -i -a "$firefox_window_id"
-sleep 0.5 # Brief pause to ensure window is focused
+sleep 1
 
 # Click email selection with correct coordinates
 xdotool mousemove 2068 1061 click 1
@@ -92,7 +88,7 @@ fi
 firefox_signin_id=$(wmctrl -l | grep "$firefox_signin_title" | awk '{print $1}')
 wmctrl -i -r "$firefox_signin_id" -b add,maximized_vert,maximized_horz
 wmctrl -i -a "$firefox_signin_id"
-sleep 0.5
+sleep 1
 
 # Click continue button with correct coordinates
 xdotool mousemove 2293 1258 click 1
