@@ -17,7 +17,7 @@ local function get_all_partials_dirs()
     for _, name in ipairs(entries) do
       local full_path = dir .. "/" .. name
       if vim.fn.isdirectory(full_path) == 1 then
-        if name == "_partials" then
+        if name == "_partials" or name == "_fragments" then
           table.insert(partials_dirs, full_path)
         elseif name ~= "." and name ~= ".." then
           scan_dir(full_path)
@@ -265,8 +265,173 @@ function M.insert_url_reference()
   vim.fn.chdir "-"
 end
 
+-- Function to insert component in buffer
+local function insert_component_in_buffer(bufnr, component_name)
+  -- Switch to the buffer
+  vim.api.nvim_set_current_buf(bufnr)
+
+  -- Get the cursor position in the correct window
+  local cursor_position = vim.api.nvim_win_get_cursor(0)
+  local current_line = cursor_position[1]
+
+  local component_insert = string.format("<%s />", component_name)
+
+  -- Insert the component at the cursor position
+  vim.api.nvim_buf_set_lines(bufnr, current_line - 1, current_line - 1, false, { component_insert })
+  print("Component inserted: " .. component_insert .. " at line " .. current_line)
+
+  -- Add import statement
+  local import_statement = string.format("import %s from '@site/src/components/%s';", component_name, component_name)
+
+  -- Get the buffer lines
+  local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+
+  local insert_pos = 1
+  local found_front_matter_start = false
+  local found_front_matter_end = false
+  local found_import = false
+
+  -- Find the front matter and import section from the top
+  for i, line in ipairs(lines) do
+    if not found_front_matter_start then
+      if line:match "^---$" then
+        found_front_matter_start = true
+      end
+    elseif not found_front_matter_end then
+      if line:match "^---$" then
+        found_front_matter_end = true
+        insert_pos = i + 1
+      end
+    elseif line:match "^import" then
+      found_import = true
+      insert_pos = i + 1
+    end
+  end
+
+  -- Insert the import statement
+  vim.api.nvim_buf_set_lines(bufnr, insert_pos - 1, insert_pos - 1, false, { "", import_statement, "" })
+end
+
+function M.select_component()
+  -- Capture the current buffer and window
+  local current_bufnr = vim.api.nvim_get_current_buf()
+  local current_win = vim.api.nvim_get_current_win()
+
+  -- Set components directory path
+  local components_dir = vim.fn.expand "~/loft/vcluster-docs/src/components"
+
+  if vim.fn.isdirectory(components_dir) ~= 1 then
+    print("Components directory not found at: " .. components_dir)
+    return
+  end
+
+  -- Get list of component directories
+  local components = vim.fn.readdir(components_dir)
+  local component_entries = {}
+
+  -- Create entries for telescope
+  for _, name in ipairs(components) do
+    local full_path = components_dir .. "/" .. name
+    if vim.fn.isdirectory(full_path) == 1 then
+      table.insert(component_entries, {
+        value = name,
+        display = name,
+        ordinal = name:lower(),
+      })
+    end
+  end
+
+  -- Create picker using Telescope
+  local pickers = require "telescope.pickers"
+  local finders = require "telescope.finders"
+  local conf = require("telescope.config").values
+  local actions = require "telescope.actions"
+  local action_state = require "telescope.actions.state"
+
+  -- Function to get component file content
+  local function get_component_content(name)
+    local base_path = components_dir .. "/" .. name
+    local possible_files = {
+      "/index.js",
+      "/index.jsx",
+      "/" .. name .. ".js",
+      "/" .. name .. ".jsx",
+    }
+
+    for _, file in ipairs(possible_files) do
+      local full_path = base_path .. file
+      if vim.fn.filereadable(full_path) == 1 then
+        local content = vim.fn.readfile(full_path)
+        return table.concat(content, "\n")
+      end
+    end
+    return "No component file found"
+  end
+
+  pickers
+    .new({}, {
+      prompt_title = "Select Component",
+      finder = finders.new_table {
+        results = component_entries,
+        entry_maker = function(entry)
+          return {
+            value = entry.value,
+            display = entry.display,
+            ordinal = entry.ordinal,
+          }
+        end,
+      },
+      sorter = conf.generic_sorter {},
+      previewer = require("telescope.previewers").new_buffer_previewer {
+        title = "Component Content",
+        define_preview = function(self, entry, status)
+          local content = get_component_content(entry.value)
+          vim.api.nvim_buf_set_lines(self.state.bufnr, 0, -1, false, vim.split(content, "\n"))
+
+          -- Set filetype for syntax highlighting
+          if content:match "%.jsx?$" then
+            vim.bo[self.state.bufnr].filetype = "javascriptreact"
+          else
+            vim.bo[self.state.bufnr].filetype = "javascript"
+          end
+        end,
+      },
+      attach_mappings = function(prompt_bufnr, map)
+        actions.select_default:replace(function()
+          local selection = action_state.get_selected_entry()
+          actions.close(prompt_bufnr)
+
+          -- Switch back to the original window and buffer
+          vim.api.nvim_set_current_win(current_win)
+          vim.api.nvim_set_current_buf(current_bufnr)
+
+          -- Insert component
+          insert_component_in_buffer(current_bufnr, selection.value)
+        end)
+        return true
+      end,
+    })
+    :find()
+end
+
 -- Add key bindings
-vim.api.nvim_set_keymap("n", "<leader>ip", "", { noremap = true, silent = true, callback = M.select_partial })
-vim.api.nvim_set_keymap("n", "<leader>iu", "", { noremap = true, silent = true, callback = M.insert_url_reference })
+vim.api.nvim_set_keymap(
+  "n",
+  "<leader>ic",
+  "",
+  { noremap = true, silent = true, callback = M.select_component, desc = "Select Docusaurus Component" }
+)
+vim.api.nvim_set_keymap(
+  "n",
+  "<leader>ip",
+  "",
+  { noremap = true, silent = true, callback = M.select_partial, desc = "Select Docusaurus Partial" }
+)
+vim.api.nvim_set_keymap(
+  "n",
+  "<leader>iu",
+  "",
+  { noremap = true, silent = true, callback = M.insert_url_reference, desc = "Insert Docusaurus URL Reference" }
+)
 
 return M
