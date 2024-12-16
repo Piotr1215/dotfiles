@@ -260,6 +260,8 @@ return require("lazy").setup {
         disabledDefaults = {
           "is",
           "iS",
+          "in",
+          "iN",
           "as",
           "aS",
           "io",
