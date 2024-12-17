@@ -39,15 +39,15 @@ root: ~/dev/
 # startup_window: vim
 
 # Specifies (by index) which pane of the specified window will be selected on project startup. If not set, the first pane is used.
-startup_pane: 3
+startup_pane: 2
 
 # Controls whether the tmux session should be attached to automatically. Defaults to true.
 # attach: false
 
 windows:
   - tasks:
-      layout: 0bab,294x72,0,0{117x72,0,0[117x36,0,0,93,117x35,0,37,94],176x72,118,0[176x36,118,0,95,176x35,118,37,100]}
+      layout: 342c,294x72,0,0{82x72,0,0,25,211x72,83,0[211x42,83,0,27,211x29,83,43,28]}
       panes:
         - tui -r workdone
-        - watch zsh -c "__summarize_timew.py" --interval 10s
         - tuiw
+        - watch zsh -c "__summarize_timew.py" --interval 10s

@@ -155,3 +155,4 @@ uda.taskwarrior-tui.selection.italic=no
 uda.taskwarrior-tui.selection.dim=yes
 uda.taskwarrior-tui.selection.blink=no
 uda.taskwarrior-tui.selection.reverse=yes
+uda.taskwarrior-tui.task-report.show-info=false
