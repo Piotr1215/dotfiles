@@ -55,6 +55,12 @@ end
 
 -- User Commands
 
+vim.api.nvim_create_user_command("TmuxLayout", function()
+  local layout = vim.fn.system "tmux list-windows | sed -n 's/.*layout \\(.*\\)] @.*/\\1/p'"
+  layout = layout:gsub("^%s*(.-)%s*$", "%1") -- Trim whitespace
+  vim.api.nvim_put({ "      layout: " .. layout }, "l", true, true)
+end, {})
+
 vim.api.nvim_create_user_command("LowercaseFirstLetter", function(opts)
   local line1, line2 = opts.line1, opts.line2
   vim.cmd(string.format("%d,%ds/\\%%V\\<./\\l&/g", line1, line2))
