@@ -301,7 +301,7 @@ vim.keymap.set("n", "gtp", "<cmd>lua require('goto-preview').goto_preview_defini
 -- Yank Matching Lines
 vim.api.nvim_set_keymap("n", "<Leader>ya", ":YankMatchingLines<CR>", { noremap = true, silent = true })
 
--- GpChat
+-- GpChat gp.nvim
 local function keymapOptions(desc)
   return {
     noremap = true,
@@ -316,13 +316,26 @@ vim.keymap.set("n", "<leader>-", function()
   vim.fn.system "bash __restart_nvim.sh"
 end, { noremap = true, silent = true })
 
+vim.keymap.set({ "n", "i" }, "<C-g><C-w>w", "<cmd>GpWhisper<cr>", keymapOptions "Whisper Insert")
 vim.keymap.set({ "n", "i" }, "<C-g>r", "<cmd>GpRewrite<cr>", keymapOptions "Inline Rewrite")
+vim.keymap.set({ "n", "i" }, "<C-g><C-w>r", "<cmd>GpWhisperRewrite<cr>", keymapOptions "Whisper Rewrite")
 vim.keymap.set({ "n", "i" }, "<C-g>a", "<cmd>GpAppend<cr>", keymapOptions "Append")
 vim.keymap.set({ "n", "i" }, "<C-g>b", "<cmd>GpPrepend<cr>", keymapOptions "Prepend")
 vim.keymap.set({ "n", "i" }, "<C-g>e", "<cmd>GpEnew<cr>", keymapOptions "Enew")
 vim.keymap.set({ "n", "i" }, "<C-g>p", "<cmd>GpPopup<cr>", keymapOptions "Popup")
+vim.keymap.set({ "n", "i" }, "<C-g><C-w>a", "<cmd>GpWhisperAppend<cr>", keymapOptions "Whisper Append")
+vim.keymap.set({ "n", "i" }, "<C-g><C-w>b", "<cmd>GpWhisperPrepend<cr>", keymapOptions "Whisper Prepend")
+vim.keymap.set({ "n", "i" }, "<C-g><C-w>e", "<cmd>GpWhisperEnew<cr>", keymapOptions "Whisper Enew")
+vim.keymap.set({ "n", "i" }, "<C-g><C-w>p", "<cmd>GpWhisperPopup<cr>", keymapOptions "Whisper Popup")
 vim.keymap.set({ "n" }, "<C-g>w", ":GpWebSearch ", keymapOptions "Vnew")
 vim.keymap.set("v", "<C-g>r", ":<C-u>'<,'>GpRewrite<cr>", keymapOptions "Visual Rewrite")
+vim.keymap.set("v", "<C-g><C-w>r", ":<C-u>'<,'>GpWhisperRewrite<cr>", keymapOptions "Visual Whisper Rewrite")
+vim.keymap.set("v", "<C-g><C-w>r", ":<C-u>'<,'>GpWhisperRewrite<cr>", keymapOptions "Visual Whisper Rewrite")
+vim.keymap.set("v", "<C-g><C-w>c", ":<C-u>'<,'>GpWhisperChatPaste<cr>", keymapOptions "Visual Whisper Chat Paste")
+vim.keymap.set("v", "<C-g><C-w>a", ":<C-u>'<,'>GpWhisperAppend<cr>", keymapOptions "Visual Whisper Append")
+vim.keymap.set("v", "<C-g><C-w>b", ":<C-u>'<,'>GpWhisperPrepend<cr>", keymapOptions "Visual Whisper Prepend")
+vim.keymap.set("v", "<C-g><C-w>e", ":<C-u>'<,'>GpWhisperEnew<cr>", keymapOptions "Visual Whisper Enew")
+vim.keymap.set("v", "<C-g><C-w>p", ":<C-u>'<,'>GpWhisperPopup<cr>", keymapOptions "Visual Whisper Popup")
 vim.keymap.set("v", "<C-g>w", ":<C-u>'<,'>GpWebSearchSelection<cr>", keymapOptions "Visual Web Search")
 vim.keymap.set("v", "<C-g>c", ":<C-u>'<,'>GpChatPaste<cr>", keymapOptions "Visual Chat Paste")
 vim.keymap.set("v", "<C-g>a", ":<C-u>'<,'>GpAppend<cr>", keymapOptions "Visual Append")
