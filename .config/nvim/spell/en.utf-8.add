@@ -134,3 +134,6 @@ EKS
 autoscaling
 distros
 Painpoints
+ConfigMap
+VolumeMount
+syncer
