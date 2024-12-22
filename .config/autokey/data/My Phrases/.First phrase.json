@@ -1,0 +1,29 @@
+{
+    "type": "phrase",
+    "description": "First phrase",
+    "modes": [
+        2
+    ],
+    "usageCount": 0,
+    "prompt": false,
+    "omitTrigger": false,
+    "matchCase": false,
+    "showInTrayMenu": false,
+    "abbreviation": {
+        "abbreviations": [],
+        "backspace": true,
+        "ignoreCase": false,
+        "immediate": false,
+        "triggerInside": false,
+        "wordChars": "[\\w]"
+    },
+    "hotkey": {
+        "modifiers": [],
+        "hotKey": null
+    },
+    "filter": {
+        "regex": ".* - gedit",
+        "isRecursive": false
+    },
+    "sendMode": "kb"
+}
