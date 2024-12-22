@@ -1,0 +1,27 @@
+{
+    "type": "phrase",
+    "description": "Second phrase",
+    "modes": [],
+    "usageCount": 0,
+    "prompt": false,
+    "omitTrigger": false,
+    "matchCase": false,
+    "showInTrayMenu": false,
+    "abbreviation": {
+        "abbreviations": [],
+        "backspace": true,
+        "ignoreCase": false,
+        "immediate": false,
+        "triggerInside": false,
+        "wordChars": "[\\w]"
+    },
+    "hotkey": {
+        "modifiers": [],
+        "hotKey": null
+    },
+    "filter": {
+        "regex": null,
+        "isRecursive": false
+    },
+    "sendMode": "kb"
+}
