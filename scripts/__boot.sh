@@ -82,14 +82,14 @@ update_profiles_ini() {
 }
 
 if [[ " ${weekdays[*]} " =~ $current_day ]] && [[ "$timeoff" == 0 ]]; then
-	update_profiles_ini "37uby07u.Work"
+	update_profiles_ini "8gtkyq7h.Work"
 	flatpak run com.slack.Slack 2>/dev/null &
 	nohup firefox -P "Work" >/dev/null 2>&1 &
 	alacritty &
 	move_alacritty_to_hdmi_0
 else
 	# Weekend :)
-	update_profiles_ini "bo5u6gcp.default-release-1664717216636"
+	update_profiles_ini "g4ip39zz.default-release"
 	nohup firefox -P "Home" >/dev/null 2>&1 &
 	alacritty &
 	move_alacritty_to_hdmi_0

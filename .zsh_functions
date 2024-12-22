@@ -57,8 +57,8 @@ function nman() {
 
 function ufp() {
     local profile_type=$1
-    local WORK_PROFILE="37uby07u.Work"
-    local HOME_PROFILE="bo5u6gcp.default-release-1664717216636"
+    local WORK_PROFILE="8gtkyq7h.Work"
+    local HOME_PROFILE="g4ip39zz.default-release"
 
     update_profiles_ini() {
         local profile_to_set=$1
