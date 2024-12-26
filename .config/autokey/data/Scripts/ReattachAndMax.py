@@ -7,7 +7,7 @@ active_window_title = subprocess.getoutput("xdotool getactivewindow getwindownam
 if 'Firefox' in active_window_title:
     try:
         layout = '/home/decoder/dev/dotfiles/scripts/__layouts.sh'
-        keyboard.send_keys('<shift>+<alt>+m')  # Detaches tab into a new window
+        keyboard.send_keys('<shift>+<alt>+a')  # Attach tab into a new window
         time.sleep(0.25)  # Wait half a second for the action to complete
 
         subprocess.run([layout, "5"])
