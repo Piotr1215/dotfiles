@@ -3,7 +3,8 @@ if [[ ":$FPATH:" != *":/home/decoder/.zsh/completions:"* ]]; then export FPATH="
 # zmodload zsh/zprof
 # Path to your oh-my-zsh installation.
 export ZSH="${HOME}/.oh-my-zsh"
-
+export XDG_CONFIG_HOME="$HOME/.config"
+export XCURSOR_SIZE=24
 if [[ -z $TMUX ]]; then
   tmuxinator start poke
 fi
@@ -39,8 +40,9 @@ function zvm_after_init() {
 
 # PUGINS & MODULES
 # fzf-tab should be last because it binds to ^I
-plugins=(z git kubectl zsh-autosuggestions zsh-syntax-highlighting web-search colored-man-pages fzf-tab sudo)
+plugins=(z git kubectl zsh-autosuggestions zsh-syntax-highlighting web-search colored-man-pages sudo)
 zmodload zsh/mapfile # Bring mapfile functionality similar to bash
+source /home/decoder/dev/fzf-tab/fzf-tab.plugin.zsh
 
 # The plugin will auto execute this zvm_after_lazy_keybindings function
 # Set ZSH_CUSTOM dir if env var not present
@@ -96,10 +98,10 @@ gsettings set org.gnome.desktop.interface enable-animations true
 
 # Completions and scripts
 source $ZSH/oh-my-zsh.sh
-source ~/.oh-my-zsh/plugins/tmuxinator/_mst 
-source ~/.oh-my-zsh/plugins/tmuxinator/_ms
-source ~/.oh-my-zsh/plugins/tmuxinator/_fifp
-source ~/scripts/__gh_cli.sh
+# source ~/.oh-my-zsh/plugins/tmuxinator/_mst 
+# source ~/.oh-my-zsh/plugins/tmuxinator/_ms
+# source ~/.oh-my-zsh/plugins/tmuxinator/_fifp
+# source ~/scripts/__gh_cli.sh
 
 fpath=(${HOME}/.oh-my-zsh/completions/ $fpath)
 
@@ -323,7 +325,6 @@ bindkey '^X^T' transpose-words            # Ctrl+X Ctrl+T: Transposes words
 stty -ixon
 
 [[ /usr/local/bin/kubectl ]] && source <(kubectl completion zsh)
-[[ /usr/local/bin/kubecolor ]] && source <(kubecolor completion zsh)
 
 # Prompt
 source ${HOME}/kube-ps1/kube-ps1.sh
@@ -340,7 +341,6 @@ if [ -f '/home/decoder/dev/clusters/primary-dev/google-cloud-sdk/completion.zsh.
 
 eval "$(direnv hook zsh)"
 eval "$(starship init zsh)"
-eval "$(thefuck --alias)"
 # bun completions
 [ -s "/home/decoder/.oh-my-zsh/completions/_bun" ] && source "/home/decoder/.oh-my-zsh/completions/_bun"
 
@@ -354,3 +354,7 @@ export PATH="$WASMTIME_HOME/bin:$PATH"
 if [ -f "/home/decoder/.config/fabric/fabric-bootstrap.inc" ]; then . "/home/decoder/.config/fabric/fabric-bootstrap.inc"; fi
 # zprof > /tmp/zprof.out
 . "/home/decoder/.deno/env"
+
+export NVM_DIR="$HOME/.config/nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
+[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
