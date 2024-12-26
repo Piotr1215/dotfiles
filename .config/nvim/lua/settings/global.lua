@@ -42,6 +42,7 @@ set.lazyredraw = true -- do not redraw for macros, faster execution
 set.undofile = true -- persistent undo even after session close
 set.spellfile = vim.fn.stdpath "config" .. "/spell/en.utf-8.add"
 set.formatoptions:remove { "o" }
+set.emoji = true
 
 set.number = true
 set.encoding = "utf-8"
