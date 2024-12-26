@@ -22,6 +22,8 @@ alias lsa='exa --color=always --long --all --sort=age --reverse --header --icons
 alias lsf='fd --max-depth=1 --type=file'
 alias lst='exa --tree --level=2 --icons --color=always --git'
 alias lsdir='ls -ld *(/om[1])'
+alias tui='taskwarrior-tui'
+alias backuper="ssh 'bacuper@192.168.178.60'"
 
 # incus aliases
 alias inc='incus console ubuntu --type=vga'
