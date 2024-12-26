@@ -1,4 +1,3 @@
-[general]
 import = ["/home/decoder/.config/alacritty/themes/dracula.toml"]
 live_config_reload = true
 
@@ -46,7 +45,7 @@ style = "Bold"
 style = "Bold Italic"
 
 [font.normal]
-family = "JetbrainsMono Nerd Font"
+family = "JetBrainsMono Nerd Font"
 style = "Regular"
 
 [font.offset]
