@@ -11,9 +11,6 @@ if 'Firefox' in active_window_title:
         time.sleep(0.25)  # Wait half a second for the action to complete
 
         subprocess.run([layout, "3"])
-
-        time.sleep(0.25)  # Wait half a second for the action to complete
-        subprocess.run([layout, "3"])
     except Exception as e:
         subprocess.run(['zenity', '--error', '--text', f"An error occurred: {e}"])
 
