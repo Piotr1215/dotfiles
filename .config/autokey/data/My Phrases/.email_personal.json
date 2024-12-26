@@ -1,19 +1,21 @@
 {
     "type": "phrase",
-    "description": "First phrase",
+    "description": "email_personal",
     "modes": [
-        2
+        1
     ],
-    "usageCount": 0,
+    "usageCount": 1,
     "prompt": false,
     "omitTrigger": false,
     "matchCase": false,
     "showInTrayMenu": false,
     "abbreviation": {
-        "abbreviations": [],
+        "abbreviations": [
+            "p@@"
+        ],
         "backspace": true,
         "ignoreCase": false,
-        "immediate": false,
+        "immediate": true,
         "triggerInside": false,
         "wordChars": "[\\w]"
     },
@@ -22,7 +24,7 @@
         "hotKey": null
     },
     "filter": {
-        "regex": ".* - gedit",
+        "regex": null,
         "isRecursive": false
     },
     "sendMode": "kb"
