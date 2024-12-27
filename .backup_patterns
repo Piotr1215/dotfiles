@@ -4,7 +4,9 @@
 + /Documents/
 + /.ssh/
 + /Pictures/
++ /.local/
 + /.local/share/
++ /.local/share/**
 + /Music/
 + /music/
 
@@ -22,6 +24,7 @@
 - .nvm/
 - /Videos/tmp/
 - /Downloads/
+- /.local/**
 
 # Exclude everything else
 - /*
