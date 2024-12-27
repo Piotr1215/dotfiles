@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Exec=/home/decoder/dev/dotfiles/scripts/__boot.sh
+Hidden=false
+NoDisplay=false
+X-GNOME-Autostart-enabled=true
+Name[en_US]=Boot Script
+Name=Boot Script
+Comment[en_US]=
+Comment=
