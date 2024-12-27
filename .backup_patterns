@@ -1,0 +1,27 @@
+# Include these specific files/directories
++ /haruna_playlist.m3u
++ /.config/
++ /Documents/
++ /.ssh/
++ /Pictures/
++ /.local/share/
++ /Music/
++ /music/
+
+# Exclude patterns within included directories
+- .cache/
+- node_modules/
+- __pycache__/
+- *.pyc
+- *.tmp
+- *.temp
+- .git/
+- *.log
+- Downloads/
+- .npm/
+- .nvm/
+- /Videos/tmp/
+- /Downloads/
+
+# Exclude everything else
+- /*
