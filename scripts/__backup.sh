@@ -1,6 +1,5 @@
 #!/bin/bash
 set -eo pipefail
-
 LOG_FILE="$HOME/backup.log"
 LOCK_FILE="/tmp/backup.lock"
 
@@ -12,22 +11,34 @@ fi
 
 # Create lock file
 touch "$LOCK_FILE"
+touch "$LOG_FILE"
+echo "" >"$LOG_FILE"
 
 # Cleanup on exit
 trap 'rm -f $LOCK_FILE' EXIT
 
 {
 	date
+	echo "Backing up system files..."
+
 	rsync -ax --delete \
-		--info=progress2 \
-		--filter=". $HOME/.backup_patterns" \
+		--info=backup,stats3 \
+		--exclude-from="$HOME/.backup_patterns" \
 		--stats \
 		"$HOME/" \
 		/mnt/nas-backup/home/
-	echo "Backing up system files..."
+
+	echo "Backing up cron jobs..."
 	sudo rsync -ax --delete \
+		--info=stats1 \
 		/var/spool/cron/ \
 		/mnt/nas-backup/home/cron/
+	echo "Backing up systemd files..."
+	sudo rsync -ax --delete \
+		--info=stats1 \
+		/etc/systemd/ \
+		/mnt/nas-backup/home/systemd_backup/
+
 	echo "Backup completed successfully"
 	echo "----------------------------------------"
 } >>"$LOG_FILE" 2>&1
