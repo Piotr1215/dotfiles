@@ -1,0 +1,10 @@
+customCommands:
+  - key: '<c-a>'
+    context: 'global'
+    command: "gh repo view --branch {{.CheckedOutBranch.Name}} --web"
+    description: 'Open current branch in browser'
+
+  - key: '<c-p>'
+    context: 'global'
+    command: "gh pr view --web"
+    description: 'Open current PR in browser'
