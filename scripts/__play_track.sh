@@ -37,7 +37,7 @@ selected_track=$(echo "$track_names" | gum filter --fuzzy)
 if [[ -n $selected_track ]]; then
 	track_path="${tracks[$selected_track]}"
 	# Prepare a valid tmux session name: replace spaces, trim to 25 characters max
-	tmux_session_name=$(echo "${selected_track// /_}" | cut -c 1-25)
+	tmux_session_name=$(echo "$selected_track" | tr -c '[:alnum:]-' '_' | tr '[:upper:]' '[:lower:]' | cut -c 1-25)
 
 	# Start new tmux session in the background
 	tmux new-session -d -s "$tmux_session_name" mpv --loop-file --no-video --ytdl "$track_path"
