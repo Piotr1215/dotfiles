@@ -55,6 +55,7 @@ alias vim=nvim
 alias v=nvim
 alias watch=viddy
 alias ugu='ug -Q -. --view=nvim'
+alias dat='/home/decoder/dev/dotfiles/scripts/__dotfiles_adder.sh'
 
 ## Kubernetes aliases
 alias kconf='__create_separate_kubeconfig.sh'
