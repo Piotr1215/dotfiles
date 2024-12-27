@@ -31,3 +31,5 @@ trap 'rm -f $LOCK_FILE' EXIT
 	echo "Backup completed successfully"
 	echo "----------------------------------------"
 } >>"$LOG_FILE" 2>&1
+
+dconf dump / >/mnt/nas-backup/home/pop_os_settings_backup.ini
