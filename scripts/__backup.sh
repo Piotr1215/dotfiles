@@ -24,6 +24,10 @@ trap 'rm -f $LOCK_FILE' EXIT
 		--stats \
 		"$HOME/" \
 		/mnt/nas-backup/home/
+	echo "Backing up system files..."
+	sudo rsync -ax --delete \
+		/var/spool/cron/ \
+		/mnt/nas-backup/home/cron/
 	echo "Backup completed successfully"
 	echo "----------------------------------------"
 } >>"$LOG_FILE" 2>&1
