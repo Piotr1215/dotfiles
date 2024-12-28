@@ -33,11 +33,18 @@ trap 'rm -f $LOCK_FILE' EXIT
 		--info=stats1 \
 		/var/spool/cron/ \
 		/mnt/nas-backup/home/cron/
+
 	echo "Backing up systemd files..."
 	sudo rsync -ax --delete \
 		--info=stats1 \
 		/etc/systemd/ \
 		/mnt/nas-backup/home/systemd_backup/
+
+	echo "Backing up OBS Studio settings..."
+	sudo rsync -ax --delete \
+		--info=stats1 \
+		/home/decoder/.var/app/com.obsproject.Studio/config \
+		/mnt/nas-backup/home/obs/
 
 	echo "Backup completed successfully"
 	echo "----------------------------------------"
