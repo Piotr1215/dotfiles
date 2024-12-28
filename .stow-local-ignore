@@ -9,3 +9,4 @@ usage_statistics
 scripts
 .task
 shortcuts.md
+justfile
