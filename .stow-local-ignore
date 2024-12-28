@@ -1,5 +1,6 @@
 create-test-user.sh
 .git
+.gitignore
 .github/workflows
 README.md
 LICENSE.md
