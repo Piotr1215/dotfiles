@@ -2,7 +2,6 @@
 
 set -eo pipefail
 
-# Add source and line number wher running in debug mode: __run_with_xtrace.sh __dotfiles_adder.sh
 # Set new line and tab for word splitting
 IFS=$'\n\t'
 
@@ -35,11 +34,11 @@ fi
 # Create parent directories if needed
 mkdir -p "$(dirname "$DOTFILES_PATH")"
 
-# Copy to dotfiles
-cp -r "$SOURCE" "$DOTFILES_PATH"
+# Move to dotfiles
+mv "$SOURCE" "$DOTFILES_PATH"
 
-# Remove original and create symlink
-rm -rf "$SOURCE"
-ln -s "$DOTFILES_PATH" "$SOURCE"
+# Use Stow to create the symlink
+cd "$DOTFILES_DIR"
+stow -v -t "$HOME" .
 
-echo "Successfully added $REL_PATH to dotfiles"
+echo "Successfully added $REL_PATH to dotfiles and created symlink using Stow"
