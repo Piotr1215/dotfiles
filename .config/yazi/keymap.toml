@@ -3,6 +3,7 @@ prepend_keymap = [
     { on = [ "g", "d" ], run = "cd ~/dev", desc = "cd to ~/dev" },
     { on = [ "g", "D" ], run = "cd ~/Downloads", desc = "cd to ~/Downloads" },
     { on = [ "g", "t" ], run = "cd ~/dev/talks", desc = "cd to ~/dev/talks" },
+    { on = [ "g", "b" ], run = "cd /mnt/nas-backup/home", desc = "cd to NAS Backup Folder" },
     { on = [ "!" ], run = 'shell "$SHELL" --block --confirm', desc = "Open shell here" },
     { on = [ "m" ], run = "plugin bookmarks --args=save", desc = "Save current position as a bookmark" },
     { on = [ "'" ], run = "plugin bookmarks --args=jump", desc = "Jump to a bookmark" },
