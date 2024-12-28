@@ -130,7 +130,6 @@ export FZF_ALT_C_COMMAND='fd --hidden'
 export VISUAL=nvim
 export PATH=/home/decoder/.nimble/bin:$PATH
 export KUBECONFIG=~/.kube/config
-export GOPATH=/usr/local/go
 export GOBIN=$HOME/go/bin
 export PATH="/usr/bin:/home/decoder/.local/bin:$PATH"
 export PATH=$PATH:$GOPATH/bin
