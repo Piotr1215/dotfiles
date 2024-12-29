@@ -1,15 +1,13 @@
 # Dotfiles Repo
 
-Simple dotfiles with an installation script
+Simple dotfiles with an installation script.
 
-> I guess not so simple any more
+[![Video Thumbnail](https://img.youtube.com/vi/_ttF5InNuMI/0.jpg)](https://www.youtube.com/watch?v=_ttF5InNuMI)
 
 ## Installation
 
 Installation steps on a fresh Ubuntu/PoP_Os! distro.
 
-
-### Clone the repo and install
 
 ```bash
 git clone https://github.com/Piotr1215/dotfiles.git
@@ -26,13 +24,14 @@ Or run remotely:
 
 ### Runing `./install` will
 
-- backup existing dotfiles
 - configure git with given user and email (default values point to my user)
 - install bunch of programs and symlink them using stow
 - most notably, install neovim and configure its plugins
 
 > [!NOTE]
-> Note On Symlinks:
+> Symlinks:
+
+Any existing dotfiles will be pulled into the dotfiles repo, please make sure that you are not overwriting anything you don't want to. Check git status before committing.
 
 The install script is using `stow` to symlink whole directories and exclude others.
 You can symlink additional directories like so:
@@ -49,7 +48,7 @@ Once the dotfiles are symlinked, it is easy to forget to commit them do the repo
 (there is no indicator on the symlinked file).
 
 > [!IMPORTANT]
-> IMPORTANT: Once a file is added to the repo folder, it will be auto-committed.
+> Once a file is added to the repo folder, it will be auto-committed.
 
 Use this systemd service to automate this process
 
