@@ -6,14 +6,38 @@ Simple dotfiles with an installation script.
 
 ## Installation
 
-Installation steps on a fresh Ubuntu/PoP_Os! distro.
+Installation steps for Ubuntu/Pop!_OS:
 
-
+1. Clone the repository:
 ```bash
 git clone https://github.com/Piotr1215/dotfiles.git
-cd dotfiles
+cd dotfiles/install
+```
+
+2. Run the installation:
+```bash
 chmod +x install.sh
 ./install.sh
+```
+
+The installation script will:
+1. Install Ansible if not present
+2. Run the ansible playbook which will:
+   - Configure git with your credentials
+   - Install and configure all necessary tools and programs
+   - Set up development environment (neovim, tmux, etc.)
+   - Configure shell environment (zsh, oh-my-zsh)
+   - Install DevOps tools (kubectl, helm, etc.)
+
+### Advanced Usage
+
+You can run specific parts of the installation using Ansible tags:
+```bash
+# List all available tasks
+ansible-playbook install.yml --list-tasks
+
+# Install specific components (e.g., just Alacritty)
+ansible-playbook install.yml --tags "alacritty"
 ```
 
 Or run remotely:
