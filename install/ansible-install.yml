@@ -1,0 +1,355 @@
+---
+- name: Workstation Setup
+  hosts: localhost
+  become: true
+  gather_facts: yes
+  
+  # Enable task debugging
+  debugger: on_failed
+  vars_prompt:
+    - name: git_name
+      prompt: "Please enter your git user.name"
+      private: no
+      default: "Piotr1215"
+
+    - name: git_email
+      prompt: "Please enter your git user.email"
+      private: no
+      default: "decoder@live.com"
+
+    - name: gpg_key
+      prompt: "Please enter your GPG key (optional)"
+      private: no
+
+  vars:
+    user: "{{ ansible_user_id }}"
+    home: "{{ ansible_env.HOME }}"
+
+  tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+      tags: system_update
+
+    - name: Check last update time
+      stat:
+        path: /var/lib/apt/periodic/update-success-stamp
+      register: apt_cache_stat
+      tags: system_update
+
+    - name: Upgrade apt packages
+      apt:
+        upgrade: yes
+        update_cache: yes
+        cache_valid_time: 3600  # Only update cache if it's older than 1 hour
+        dpkg_options: 'force-confold,force-confdef'  # Avoid interactive prompts
+      async: 3600  # Allow up to 1 hour for this task
+      poll: 5  # Check status every 5 seconds
+      register: apt_upgrade_result
+
+    - name: Display upgrade results
+      debug:
+        msg: "Upgraded packages: {{ apt_upgrade_result.stdout_lines | default(['No output available']) }}"
+
+    - name: Install stow
+      apt:
+        name: stow
+        state: present
+
+    - name: Stow dotfiles
+      command: stow -v -t ~ . --adopt
+      args:
+        chdir: "{{ playbook_dir }}/.."  # Go up one directory to dotfiles root
+      register: stow_result
+
+    - name: Show stow result
+      debug:
+        var: stow_result.stdout_lines
+      when: stow_result.stdout_lines is defined
+
+    - name: Install snapd
+      apt:
+        name: snapd
+        state: present
+
+    - name: Install git and configure
+      block:
+        - name: Install git
+          apt:
+            name: git
+            state: present
+
+        - name: Configure git
+          git_config:
+            name: "{{ item.name }}"
+            scope: global
+            value: "{{ item.value }}"
+          loop:
+            - { name: "user.name", value: "{{ git_name }}" }
+            - { name: "user.email", value: "{{ git_email }}" }
+          when: git_name != "" and git_email != ""
+
+        - name: Configure git GPG signing
+          git_config:
+            name: "{{ item.name }}"
+            scope: global
+            value: "{{ item.value }}"
+          loop:
+            - { name: "user.signingkey", value: "{{ gpg_key }}" }
+            - { name: "commit.gpgsign", value: "true" }
+            - { name: "core.excludesFile", value: "{{ home }}/.gitignore" }
+          when: gpg_key != ""
+
+    - name: Install essential packages
+      apt:
+        name:
+          - vim-gtk
+          - htop
+          - unzip
+          - python3-setuptools
+          - figlet
+          - tmux
+          - pydf
+          - mc
+          - wget
+          - mtr
+          - ncdu
+          - cmatrix
+          - jq
+          - lolcat
+          - bat
+          - locate
+          - libgraph-easy-perl
+          - cowsay
+          - fortune
+          - sox
+          - toilet
+          - boxes
+          - libsox-fmt-mp3
+          - xclip
+          - xsel
+          - alsa-utils
+          - fd-find
+          - expect
+        state: present
+
+    - name: Install tmuxinator
+      gem:
+        name: tmuxinator
+        state: present
+
+    - name: Install pip
+      apt:
+        name: python3-pip
+        state: present
+
+    - name: Install exa
+      block:
+        - name: Get latest exa version
+          uri:
+            url: https://api.github.com/repos/ogham/exa/releases/latest
+            return_content: yes
+          register: exa_version_response
+
+        - name: Download and install exa
+          unarchive:
+            src: "https://github.com/ogham/exa/releases/latest/download/exa-linux-x86_64-v{{ exa_version_response.json.tag_name | regex_replace('v', '') }}.zip"
+            dest: /usr/local/bin
+            remote_src: yes
+            creates: /usr/local/bin/exa
+
+    - name: Install Rust and development tools
+      block:
+        - name: Install Rust
+          shell: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          args:
+            creates: "{{ home }}/.cargo/bin/rustc"
+
+        - name: Install cargo
+          apt:
+            name: cargo
+            state: present
+
+        - name: Install zoxide
+          command: cargo install zoxide
+          args:
+            creates: "{{ home }}/.cargo/bin/zoxide"
+
+    - name: Install PipeWire
+      block:
+        - name: Add PipeWire repository
+          apt_repository:
+            repo: ppa:pipewire-debian/pipewire-upstream
+
+        - name: Install PipeWire packages
+          apt:
+            name:
+              - pipewire
+              - pipewire-pulse
+              - pipewire-audio-client-libraries
+            state: present
+
+    - name: Install Arkade
+      shell: curl -sLS https://get.arkade.dev | sh
+      args:
+        creates: /usr/local/bin/arkade
+
+    - name: Install DevOps tools via arkade
+      command: "arkade get {{ item }}"
+      loop:
+        - kubectl
+        - helm
+        - gh
+        - k9s
+        - kind
+        - kubectx
+        - kubens
+        - yq
+        - eksctl
+        - gptscript
+        - jq
+        - kube-linter
+        - op
+        - popeye
+        - terraform
+        - trivy
+        - vcluster
+        - fzf
+        - krew
+        - just
+
+    - name: Install Go and Node.js via arkade
+      command: "arkade system install {{ item }}"
+      loop:
+        - go
+        - node
+
+    - name: Install and configure Docker
+      block:
+        - name: Install Docker
+          apt:
+            name: docker.io
+            state: present
+
+        - name: Add user to docker group
+          user:
+            name: "{{ user }}"
+            groups: docker
+            append: yes
+
+    - name: Install kube-ps1
+      git:
+        repo: https://github.com/jonmosco/kube-ps1.git
+        dest: "{{ home }}/kube-ps1"
+
+    - name: Install and configure Zsh
+      block:
+        - name: Install Zsh
+          apt:
+            name: zsh
+            state: present
+
+        - name: Remove existing oh-my-zsh
+          file:
+            path: "{{ home }}/.oh-my-zsh"
+            state: absent
+
+        - name: Install oh-my-zsh
+          shell: sh -c "$(wget -O- https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
+          args:
+            creates: "{{ home }}/.oh-my-zsh"
+
+        - name: Install Zsh plugins
+          git:
+            repo: "{{ item.repo }}"
+            dest: "{{ home }}/.oh-my-zsh/custom/plugins/{{ item.name }}"
+          loop:
+            - { repo: "https://github.com/zsh-users/zsh-autosuggestions", name: "zsh-autosuggestions" }
+            - { repo: "https://github.com/zsh-users/zsh-syntax-highlighting.git", name: "zsh-syntax-highlighting" }
+            - { repo: "https://github.com/Aloxaf/fzf-tab", name: "fzf-tab" }
+
+    - name: Install Alacritty dependencies
+      apt:
+        name:
+          - cmake
+          - pkg-config
+          - libfreetype6-dev
+          - libfontconfig1-dev
+          - libxcb-xfixes0-dev
+          - libxkbcommon-dev
+          - python3
+        state: present
+      tags: alacritty
+
+    - name: Clone Alacritty repository
+      git:
+        repo: https://github.com/alacritty/alacritty.git
+        dest: "/tmp/alacritty"
+        version: master
+      tags: alacritty
+
+    - name: Build and install Alacritty
+      command: cargo build --release
+      args:
+        chdir: "/tmp/alacritty"
+      environment:
+        PATH: "{{ ansible_env.PATH }}:{{ home }}/.cargo/bin"
+      tags: alacritty
+
+    - name: Create desktop entry
+      command: cp /tmp/alacritty/target/release/alacritty /usr/local/bin/
+      become: true
+      tags: alacritty
+
+    - name: Create Alacritty config directory
+      file:
+        path: "{{ home }}/.config/alacritty"
+        state: directory
+      tags: alacritty
+
+    - name: Install AWS CLI
+      block:
+        - name: Download AWS CLI
+          get_url:
+            url: https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip
+            dest: /tmp/awscliv2.zip
+
+        - name: Extract AWS CLI
+          unarchive:
+            src: /tmp/awscliv2.zip
+            dest: /tmp
+            remote_src: yes
+
+        - name: Install AWS CLI
+          command: /tmp/aws/install
+          args:
+            creates: /usr/local/bin/aws
+
+    - name: Install Yarn
+      npm:
+        name: yarn
+        global: yes
+
+    - name: Install Neovim
+      block:
+        - name: Download Neovim
+          get_url:
+            url: https://github.com/neovim/neovim/releases/latest/download/nvim.appimage
+            dest: /usr/local/bin/nvim
+            mode: '0755'
+
+        - name: Set ownership
+          file:
+            path: /usr/local/bin/nvim
+            owner: "{{ user }}"
+            mode: '0755'
+
+    - name: Set Zsh as default shell
+      user:
+        name: "{{ user }}"
+        shell: /usr/bin/zsh
+
+    - name: Source zshrc and exec zsh
+      shell: source ~/.zshrc && exec zsh
+      args:
+        executable: /usr/bin/zsh
