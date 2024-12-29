@@ -95,7 +95,13 @@ curl -sLS https://get.arkade.dev | sudo sh
 
 process "→ install devops tools"
 arkade get kubectl helm gh k9s kind kubectx kubens yq eksctl gptscript jq kube-linter op popeye terraform trivy vcluster fzf krew just
-arkade system install go node
+arkade system install go
+arkade system install node
+
+process "→ install docker"
+newgrp docker
+sudo usermod -aG docker $USER
+sudo apt install -y docker.io
 
 process "→ install kube-ps1"
 git clone https://github.com/jonmosco/kube-ps1.git "${HOME}"/kube-ps1/
@@ -118,6 +124,9 @@ process "→ Installing AWS CLI"
 curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
 unzip awscliv2.zip
 sudo ./aws/install
+
+process "→ Installing yarn"
+npm install --global yarn
 
 process "→ Installing Neovim"
 sudo curl -LO https://github.com/neovim/neovim/releases/latest/download/nvim.appimage
