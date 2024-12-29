@@ -143,20 +143,12 @@
         name: python3-pip
         state: present
 
-    - name: Install exa
-      block:
-        - name: Get latest exa version
-          uri:
-            url: https://api.github.com/repos/ogham/exa/releases/latest
-            return_content: yes
-          register: exa_version_response
-
-        - name: Download and install exa
-          unarchive:
-            src: "https://github.com/ogham/exa/releases/latest/download/exa-linux-x86_64-v{{ exa_version_response.json.tag_name | regex_replace('v', '') }}.zip"
-            dest: /usr/local/bin
-            remote_src: yes
-            creates: /usr/local/bin/exa
+    - name: Install exa via cargo
+      command: cargo install exa
+      environment:
+        PATH: "{{ ansible_env.PATH }}:{{ ansible_env.HOME }}/.cargo/bin"
+      register: cargo_install
+      changed_when: "'already exists' not in cargo_install.stderr"
 
     - name: Install Rust and development tools
       block:
@@ -174,6 +166,11 @@
           command: cargo install zoxide
           args:
             creates: "{{ home }}/.cargo/bin/zoxide"
+
+        - name: Install delta
+          command: cargo install git-delta
+          args:
+            creates: "{{ home }}/.cargo/bin/delta"
 
     - name: Install PipeWire
       block:
