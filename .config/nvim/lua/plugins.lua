@@ -75,20 +75,12 @@ return require("lazy").setup {
   },
   },
   "MunifTanjim/nui.nvim",
-  "jellydn/hurl.nvim",
   "stevearc/dressing.nvim",
   "tyru/open-browser.vim",
   "gcmt/taboo.vim",
 
   "towolf/vim-helm",
   "jbyuki/one-small-step-for-vimkind",
-  {
-    "michaelb/sniprun",
-    build = "sh ./install.sh",
-    opts = {
-      display = { "Classic" },
-    },
-  },
   { "alexghergh/nvim-tmux-navigation", opts = { disable_when_zoomed = true } },
   "romainl/vim-cool",
   "yssl/QFEnter",

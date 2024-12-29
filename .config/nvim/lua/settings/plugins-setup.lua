@@ -322,15 +322,6 @@ require("mdeval").setup {
   },
 }
 
-require("hurl").setup {
-  -- Specify your custom environment file name here
-  ft = "hurl",
-  env_file = {
-    ".envrc",
-  },
-  -- Other configuration options...
-}
-
 require("obsidian").setup {
   workspaces = {
     {
