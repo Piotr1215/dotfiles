@@ -48,8 +48,7 @@ EOF
       rg --line-number --no-heading --color=always --smart-case --glob '!**/.git/**' --glob '!node_modules/**' {q} 2>/dev/null || true
     )"
 
-    # Modified FILE_BIND to preserve the current search for content
-    local FILE_BIND="ctrl-f:transform-query(
+local FILE_BIND="ctrl-f:transform-query(
       current_query={q};
       if [ ! -s $tmp_content_query ]; then
         echo \$current_query > $tmp_content_query;
@@ -62,7 +61,11 @@ EOF
           grep -i -- {q} $tmp_files || true;
         else
           cat $tmp_files;
-        fi
+        fi | while IFS= read -r file; do 
+          if [ -f \"\$file\" ]; then
+            echo \"\$file:1\";
+          fi;
+        done;
       else
         echo 'No matching files found';
       fi
