@@ -9,6 +9,7 @@
 + /.local/share/**
 + /Music/
 + /music/
++ /wallpapers/
 
 # Exclude patterns within included directories
 - .cache/
