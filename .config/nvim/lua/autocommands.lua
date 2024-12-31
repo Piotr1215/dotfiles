@@ -11,6 +11,13 @@ local plantumlGroup = api.nvim_create_augroup("PlantUML", { clear = true })
 local lastCursorGroup = api.nvim_create_augroup("LastCursorPosition", { clear = true })
 local formattingGroup = api.nvim_create_augroup("AutoFormatting", { clear = true })
 local highlightingGroup = api.nvim_create_augroup("Highlighting", { clear = true })
+local copilotGroup = api.nvim_create_augroup("Copilot", { clear = true })
+
+-- Autocmds
+api.nvim_create_autocmd("VimEnter", {
+  group = copilotGroup,
+  command = "Copilot disable",
+})
 
 -- Functions
 local function stylua_format()
