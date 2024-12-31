@@ -45,7 +45,7 @@ EOF
       echo {q}
     )+reload(
       rm -f $tmp_files;
-      rg --line-number --no-heading --color=always --smart-case --glob '!**/.git/**' --glob '!node_modules/**' {q} 2>/dev/null || true
+      rg --line-number --hidden --no-heading --color=always --smart-case --glob '!**/.git/**' --glob '!node_modules/**' {q} 2>/dev/null || true
     )"
 
 local FILE_BIND="ctrl-f:transform-query(
@@ -53,7 +53,7 @@ local FILE_BIND="ctrl-f:transform-query(
       if [ ! -s $tmp_content_query ]; then
         echo \$current_query > $tmp_content_query;
       fi;
-      rg --files-with-matches --no-messages --glob '!**/.git/**' --glob '!node_modules/**' -- \$current_query > $tmp_files;
+      rg --hidden --files-with-matches --no-messages --glob '!**/.git/**' --glob '!node_modules/**' -- \$current_query > $tmp_files;
       echo
     )+reload(
       if [ -s $tmp_files ]; then
@@ -77,7 +77,7 @@ local FILE_BIND="ctrl-f:transform-query(
       DIR_BIND="ctrl-d:change-prompt(directory> )+reload(cd $HOME && find ~+ -type d -name node_modules -prune -o -name .git -prune -o -type d -print)"
     fi
 
-    rg --line-number --no-heading --color=always --smart-case --glob '!**/.git/**' --glob '!node_modules/**' '' 2>/dev/null | \
+    rg --hidden --line-number --no-heading --color=always --smart-case --glob '!**/.git/**' --glob '!node_modules/**' '' 2>/dev/null | \
       fzf --ansi --multi --delimiter : \
           --print-query \
           --preview 'bat --style=numbers --color=always --highlight-line {2} {1} 2>/dev/null || echo "Preview not available"' \
