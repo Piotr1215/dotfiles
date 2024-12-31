@@ -13,10 +13,10 @@ _G.create_script_from_command = function()
   print("Script name: " .. script_name) -- Debug message
 
   -- Create the script and make it executable
-  local script_path = vim.fn.expand("%:p:h") .. "/" .. script_name
+  local script_path = vim.fn.expand "%:p:h" .. "/" .. script_name
   print("Script path: " .. script_path) -- Debug message
-  if vim.loop.fs_stat(script_path) then
-    print("File already exists. Aborting.")
+  if vim.uv.fs_stat(script_path) then
+    print "File already exists. Aborting."
     return
   end
   local file, err = io.open(script_path, "w")
@@ -28,9 +28,17 @@ _G.create_script_from_command = function()
   file:close()
   os.execute("chmod +x " .. script_path)
 
- -- Replace the selected command with the script name
+  -- Replace the selected command with the script name
   vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "n", {})
-  local ok, err = pcall(vim.api.nvim_buf_set_text, bufnr, start_pos[1] - 1, start_pos[2], end_pos[1] - 1, end_pos[2] - 1, { "./" .. script_name })
+  local ok, err = pcall(
+    vim.api.nvim_buf_set_text,
+    bufnr,
+    start_pos[1] - 1,
+    start_pos[2],
+    end_pos[1] - 1,
+    end_pos[2] - 1,
+    { "./" .. script_name }
+  )
   if not ok then
     print("Error replacing text: " .. err)
   else
