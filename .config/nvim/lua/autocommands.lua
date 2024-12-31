@@ -1,5 +1,5 @@
 -- Variables and Initial Settings
-local sysname = vim.loop.os_uname().sysname
+local sysname = vim.uv.os_uname().sysname
 local api = vim.api
 
 -- Autocmd Groups
