@@ -1,3 +1,4 @@
+[general]
 import = ["/home/decoder/.config/alacritty/themes/dracula.toml"]
 live_config_reload = true
 
