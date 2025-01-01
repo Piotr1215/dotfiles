@@ -392,11 +392,12 @@ require("obsidian").setup {
   end,
 
   wiki_link_func = function(opts)
-    if opts.label ~= opts.path then
-      return string.format("[[%s|%s]]", opts.path, opts.label)
-    else
-      return string.format("[[%s]]", opts.path)
-    end
+    return require("obsidian.util").wiki_link_path_only(opts)
+    -- if opts.label ~= opts.path then
+    --   return string.format("[[%s|%s]]", opts.path, opts.label)
+    -- else
+    --   return string.format("[[%s]]", opts.path)
+    -- end
   end,
   completion = {
     nvim_cmp = true, -- if using nvim-cmp, otherwise set to false
