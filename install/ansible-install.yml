@@ -131,6 +131,42 @@
           - alsa-utils
           - fd-find
           - expect
+          # Additional packages
+          - tree
+          - wmctrl
+          - direnv
+          - taskwarrior
+          - ripgrep
+          - cmake
+          - duf
+          - yarn
+          - fonts-noto-color-emoji
+          - fonts-symbola
+          - fonts-emojione
+          - fonts-noto-extra
+          - scdoc
+          - fonts-lato
+          - fonts-open-sans
+          - fonts-roboto
+          - fonts-mononoki
+          - fonts-firacode
+          - gum
+          - mpv
+          - cmus
+          - cava
+          - tldr
+          - default-jdk
+          - graphviz
+          - ugrep
+          - plantuml
+          - w3m
+          - nala
+          - moreutils
+          - libnghttp2-dev
+          - imagemagick
+          - apt-file
+          - chafa
+          - libnotify-bin
         state: present
 
     - name: Install tmuxinator
