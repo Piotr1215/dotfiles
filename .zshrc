@@ -103,8 +103,6 @@ source $ZSH/oh-my-zsh.sh
 # source ~/.oh-my-zsh/plugins/tmuxinator/_fifp
 source ~/dev/dotfiles/scripts/__gh_cli.sh
 
-fpath=(${HOME}/.oh-my-zsh/completions/ $fpath)
-
 if [[ $(uname -s) == Linux ]]; then
   eval $(dircolors -p | sed -e 's/DIR 01;34/DIR 01;36/' | dircolors /dev/stdin)
 else
@@ -352,9 +350,12 @@ export WASMTIME_HOME="$HOME/.wasmtime"
 
 export PATH="$WASMTIME_HOME/bin:$PATH"
 if [ -f "/home/decoder/.config/fabric/fabric-bootstrap.inc" ]; then . "/home/decoder/.config/fabric/fabric-bootstrap.inc"; fi
-# zprof > /tmp/zprof.out
 . "/home/decoder/.deno/env"
 
 export NVM_DIR="$HOME/.config/nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
-[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
+nvm() {
+    unset -f nvm
+    [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"
+    nvm "$@"
+}
+# zprof > /tmp/zprof.out
