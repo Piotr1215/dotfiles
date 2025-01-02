@@ -11,7 +11,8 @@ $nodejs\
 $cmd_duration\
 $line_break\
 $character""" # Don't print a new line at the start of the prompt
-
+scan_timeout = 50
+command_timeout = 1000
 add_newline = false
 "$schema" = 'https://starship.rs/config-schema.json'
 # Disable the package module, hiding it from the prompt completely
