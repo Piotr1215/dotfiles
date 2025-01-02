@@ -10,6 +10,7 @@
 + /Music/
 + /music/
 + /wallpapers/
++ /.task/
 
 # Exclude patterns within included directories
 - .cache/
