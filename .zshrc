@@ -1,5 +1,3 @@
-# Add deno completions to search path
-if [[ ":$FPATH:" != *":/home/decoder/.zsh/completions:"* ]]; then export FPATH="/home/decoder/.zsh/completions:$FPATH"; fi
 # zmodload zsh/zprof
 zmodload zsh/mapfile # Bring mapfile functionality similar to bash
 
@@ -7,12 +5,15 @@ zmodload zsh/mapfile # Bring mapfile functionality similar to bash
 export ZSH="${HOME}/.oh-my-zsh"
 export XDG_CONFIG_HOME="$HOME/.config"
 export XCURSOR_SIZE=24
+
 if [[ -z $TMUX ]]; then
   tmuxinator start poke
 fi
 
 ZSH_THEME="simple" #Best theme ever
 ZVM_INIT_MODE=sourcing
+if [[ ":$FPATH:" != *":/home/decoder/.zsh/completions:"* ]]; then export FPATH="/home/decoder/.zsh/completions:$FPATH"; fi
+
 # autoload -Uz compinit
 # compinit -d "${ZDOTDIR:-$HOME}/.zcompdump" -C
 source /home/decoder/.config/broot/launcher/bash/br
@@ -41,9 +42,9 @@ function zvm_after_init() {
 
 # PUGINS & MODULES
 # fzf-tab should be last because it binds to ^I
-plugins=(z kubectl zsh-autosuggestions web-search colored-man-pages sudo)
+plugins=(z kubectl zsh-autosuggestions zsh-syntax-highlighting web-search colored-man-pages sudo)
+source /home/decoder/dev/fzf-tab/fzf-tab.plugin.zsh
 source $ZSH/oh-my-zsh.sh
-source ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
 
 # The plugin will auto execute this zvm_after_lazy_keybindings function
 # Set ZSH_CUSTOM dir if env var not present
@@ -73,6 +74,8 @@ zstyle ':completion:*:descriptions' format '[%d]'
 zstyle ':completion:*' list-colors ${(s.:.)LS_COLORS}
 # force zsh not to show completion menu, which allows fzf-tab to capture the unambiguous prefix
 zstyle ':completion:*' menu no
+zstyle ':completion:*' use-cache on
+zstyle ':completion:*' cache-path $ZSH_CACHE_DIR
 # preview directory's content with exa when completing cd
 zstyle ':fzf-tab:complete:cd:*' fzf-preview 'exa -1 --color=always $realpath'
 # switch group using `<` and `>`
@@ -106,7 +109,6 @@ source ~/dev/dotfiles/scripts/__gh_cli.sh
 source ~/.zsh_aliases
 source ~/.zsh_functions
 source ~/.zsh_abbreviations
-source /home/decoder/dev/fzf-tab/fzf-tab.plugin.zsh
 
 if [[ $(uname -s) == Linux ]]; then
   eval $(dircolors -p | sed -e 's/DIR 01;34/DIR 01;36/' | dircolors /dev/stdin)
@@ -347,23 +349,32 @@ gcloud() {
 }
 eval "$(direnv hook zsh)"
 eval "$(starship init zsh)"
-# bun completions
-[ -s "/home/decoder/.oh-my-zsh/completions/_bun" ] && source "/home/decoder/.oh-my-zsh/completions/_bun"
 
-# bun
-export BUN_INSTALL="$HOME/.bun"
-export PATH="$BUN_INSTALL/bin:$PATH"
-
-export WASMTIME_HOME="$HOME/.wasmtime"
-
-export PATH="$WASMTIME_HOME/bin:$PATH"
 if [ -f "/home/decoder/.config/fabric/fabric-bootstrap.inc" ]; then . "/home/decoder/.config/fabric/fabric-bootstrap.inc"; fi
-. "/home/decoder/.deno/env"
 
+# NVM lazy loading
+export NVM_LAZY_LOAD=true
+export NVM_COMPLETION=true
 export NVM_DIR="$HOME/.config/nvm"
+
+# This loads nvm bash_completion
+[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  
+
 nvm() {
-    unset -f nvm
-    [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"
-    nvm "$@"
+  unset -f nvm
+  [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
+  nvm "$@"
+}
+
+node() {
+  unset -f node
+  [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
+  node "$@"
+}
+
+npm() {
+  unset -f npm
+  [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
+  npm "$@"
 }
 # zprof > /tmp/zprof.out
