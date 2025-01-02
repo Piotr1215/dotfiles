@@ -1,6 +1,8 @@
 # Add deno completions to search path
 if [[ ":$FPATH:" != *":/home/decoder/.zsh/completions:"* ]]; then export FPATH="/home/decoder/.zsh/completions:$FPATH"; fi
 # zmodload zsh/zprof
+zmodload zsh/mapfile # Bring mapfile functionality similar to bash
+
 # Path to your oh-my-zsh installation.
 export ZSH="${HOME}/.oh-my-zsh"
 export XDG_CONFIG_HOME="$HOME/.config"
@@ -11,9 +13,8 @@ fi
 
 ZSH_THEME="simple" #Best theme ever
 ZVM_INIT_MODE=sourcing
-autoload -Uz compinit
-compinit -d "${ZDOTDIR:-$HOME}/.zcompdump"
-
+# autoload -Uz compinit
+# compinit -d "${ZDOTDIR:-$HOME}/.zcompdump" -C
 source /home/decoder/.config/broot/launcher/bash/br
 
 # https://github.com/jeffreytse/zsh-vi-mode
@@ -40,9 +41,9 @@ function zvm_after_init() {
 
 # PUGINS & MODULES
 # fzf-tab should be last because it binds to ^I
-plugins=(z git kubectl zsh-autosuggestions zsh-syntax-highlighting web-search colored-man-pages sudo)
-zmodload zsh/mapfile # Bring mapfile functionality similar to bash
-source /home/decoder/dev/fzf-tab/fzf-tab.plugin.zsh
+plugins=(z kubectl zsh-autosuggestions web-search colored-man-pages sudo)
+source $ZSH/oh-my-zsh.sh
+source ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
 
 # The plugin will auto execute this zvm_after_lazy_keybindings function
 # Set ZSH_CUSTOM dir if env var not present
@@ -97,11 +98,15 @@ HISTFILE=${ZDOTDIR:-$HOME}/.zsh_history
 gsettings set org.gnome.desktop.interface enable-animations true
 
 # Completions and scripts
-source $ZSH/oh-my-zsh.sh
 # source ~/.oh-my-zsh/plugins/tmuxinator/_mst 
 # source ~/.oh-my-zsh/plugins/tmuxinator/_ms
 # source ~/.oh-my-zsh/plugins/tmuxinator/_fifp
 source ~/dev/dotfiles/scripts/__gh_cli.sh
+# Source functions and aliases
+source ~/.zsh_aliases
+source ~/.zsh_functions
+source ~/.zsh_abbreviations
+source /home/decoder/dev/fzf-tab/fzf-tab.plugin.zsh
 
 if [[ $(uname -s) == Linux ]]; then
   eval $(dircolors -p | sed -e 's/DIR 01;34/DIR 01;36/' | dircolors /dev/stdin)
@@ -112,11 +117,6 @@ else
   # This prevents the 'too many files error' when running PackerSync
   ulimit -n 10240
 fi
-
-# Source functions and aliases
-source ~/.zsh_aliases
-source ~/.zsh_functions
-source ~/.zsh_abbreviations
 
 # EXPORT & PATH
 export XDG_CONFIG_HOME=~/.config
@@ -322,7 +322,11 @@ bindkey '^X^T' transpose-words            # Ctrl+X Ctrl+T: Transposes words
 
 stty -ixon
 
-[[ /usr/local/bin/kubectl ]] && source <(kubectl completion zsh)
+kubectl() {
+    unfunction "$0"
+    source <(command kubectl completion zsh)
+    $0 "$@"
+}
 
 # Prompt
 source ${HOME}/kube-ps1/kube-ps1.sh
@@ -334,9 +338,13 @@ PROMPT="$PROMPT"$'\n→ '
 # The next line updates PATH for the Google Cloud SDK.
 if [ -f '/home/decoder/dev/clusters/primary-dev/google-cloud-sdk/path.zsh.inc' ]; then . '/home/decoder/dev/clusters/primary-dev/google-cloud-sdk/path.zsh.inc'; fi
 
-# The next line enables shell command completion for gcloud.
-if [ -f '/home/decoder/dev/clusters/primary-dev/google-cloud-sdk/completion.zsh.inc' ]; then . '/home/decoder/dev/clusters/primary-dev/google-cloud-sdk/completion.zsh.inc'; fi
-
+gcloud() {
+    unfunction "$0"
+    if [ -f '/home/decoder/dev/clusters/primary-dev/google-cloud-sdk/completion.zsh.inc' ]; then 
+        . '/home/decoder/dev/clusters/primary-dev/google-cloud-sdk/completion.zsh.inc'
+    fi
+    $0 "$@"
+}
 eval "$(direnv hook zsh)"
 eval "$(starship init zsh)"
 # bun completions
