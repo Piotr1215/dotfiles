@@ -278,6 +278,7 @@ utils.lnmap("f0", "<cmd>FIX -1<cr>")
 
 -- Obsidian
 utils.vmap("ol", ":ObsidianLink<cr>", { silent = false })
+utils.lnmap("ol", ":ObsidianLinks<cr>", { silent = false })
 utils.lnmap("oq", ":ObsidianQuickSwitch<cr>")
 utils.lnmap("on", ":ObsidianNew ", { silent = false })
 utils.vmap("on", ":ObsidianLinkNew ", { silent = false })
