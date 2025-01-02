@@ -1,31 +1,31 @@
 {
-    "type": "script",
-    "description": "Copy URL in markdown",
-    "store": {},
+    "type": "phrase",
+    "description": "email_work",
     "modes": [
-        3
+        1
     ],
     "usageCount": 0,
     "prompt": false,
     "omitTrigger": false,
+    "matchCase": false,
     "showInTrayMenu": false,
     "abbreviation": {
-        "abbreviations": [],
+        "abbreviations": [
+            "w@@"
+        ],
         "backspace": true,
         "ignoreCase": false,
-        "immediate": false,
+        "immediate": true,
         "triggerInside": false,
         "wordChars": "[\\w]"
     },
     "hotkey": {
-        "modifiers": [
-            "<alt>",
-            "<ctrl>"
-        ],
-        "hotKey": "m"
+        "modifiers": [],
+        "hotKey": null
     },
     "filter": {
         "regex": null,
         "isRecursive": false
-    }
+    },
+    "sendMode": "kb"
 }

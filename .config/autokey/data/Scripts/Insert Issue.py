@@ -1,4 +1,15 @@
-markdown_template ='piotr.zaniewski@loft.sh'
+markdown_template = '''
+## Description
+
+
+
+## Acceptance Criteria
+
+- [ ]
+
+## Related
+
+'''
 
 # Set the clipboard content using AutoKey's built-in functionality
 clipboard.fill_clipboard(markdown_template)

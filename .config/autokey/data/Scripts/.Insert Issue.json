@@ -1,28 +1,27 @@
 {
     "type": "script",
-    "description": "Copy URL in markdown",
+    "description": "Insert Issue",
     "store": {},
     "modes": [
-        3
+        1
     ],
     "usageCount": 0,
     "prompt": false,
     "omitTrigger": false,
     "showInTrayMenu": false,
     "abbreviation": {
-        "abbreviations": [],
+        "abbreviations": [
+            "!it"
+        ],
         "backspace": true,
         "ignoreCase": false,
-        "immediate": false,
+        "immediate": true,
         "triggerInside": false,
         "wordChars": "[\\w]"
     },
     "hotkey": {
-        "modifiers": [
-            "<alt>",
-            "<ctrl>"
-        ],
-        "hotKey": "m"
+        "modifiers": [],
+        "hotKey": null
     },
     "filter": {
         "regex": null,
