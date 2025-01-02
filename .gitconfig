@@ -5,3 +5,5 @@
 [core]
 	hooksPath = /home/decoder/.git-global-hooks
 	pager = delta --side-by-side
+[oh-my-zsh]
+	hide-status = 1
