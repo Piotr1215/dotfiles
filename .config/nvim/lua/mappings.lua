@@ -329,6 +329,7 @@ vim.keymap.set({ "n", "i" }, "<C-g><C-w>b", "<cmd>GpWhisperPrepend<cr>", keymapO
 vim.keymap.set({ "n", "i" }, "<C-g><C-w>e", "<cmd>GpWhisperEnew<cr>", keymapOptions "Whisper Enew")
 vim.keymap.set({ "n", "i" }, "<C-g><C-w>p", "<cmd>GpWhisperPopup<cr>", keymapOptions "Whisper Popup")
 vim.keymap.set({ "n" }, "<C-g>w", ":GpWebSearch ", keymapOptions "Vnew")
+vim.keymap.set({ "n" }, "<C-g>f", "<cmd>GpChatFinder<cr>", keymapOptions "Find Chats")
 vim.keymap.set("v", "<C-g>r", ":<C-u>'<,'>GpRewrite<cr>", keymapOptions "Visual Rewrite")
 vim.keymap.set("v", "<C-g><C-w>r", ":<C-u>'<,'>GpWhisperRewrite<cr>", keymapOptions "Visual Whisper Rewrite")
 vim.keymap.set("v", "<C-g><C-w>r", ":<C-u>'<,'>GpWhisperRewrite<cr>", keymapOptions "Visual Whisper Rewrite")
