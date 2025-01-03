@@ -11,6 +11,7 @@
 + /music/
 + /wallpapers/
 + /.task/
++ /.aws/
 
 # Exclude patterns within included directories
 - .cache/
