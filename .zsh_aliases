@@ -24,6 +24,7 @@ alias lst='exa --tree --level=2 --icons --color=always --git'
 alias lsdir='ls -ld *(/om[1])'
 alias tui='taskwarrior-tui'
 alias backuper="ssh 'bacuper@192.168.178.60'"
+alias grt='cd "$(git rev-parse --show-toplevel)"'
 
 # incus aliases
 alias inc='incus console ubuntu --type=vga'
