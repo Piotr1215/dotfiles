@@ -12,11 +12,18 @@ local lastCursorGroup = api.nvim_create_augroup("LastCursorPosition", { clear = 
 local formattingGroup = api.nvim_create_augroup("AutoFormatting", { clear = true })
 local highlightingGroup = api.nvim_create_augroup("Highlighting", { clear = true })
 local copilotGroup = api.nvim_create_augroup("Copilot", { clear = true })
+local valeGroup = api.nvim_create_augroup("Vale", { clear = true })
 
 -- Autocmds
 api.nvim_create_autocmd("VimEnter", {
   group = copilotGroup,
   command = "Copilot disable",
+})
+
+api.nvim_create_autocmd("VimEnter", {
+  group = valeGroup,
+  command = "LspStartVale",
+  pattern = "*mdx",
 })
 
 -- Functions
