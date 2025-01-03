@@ -1,9 +1,9 @@
-# ~/.config/tmuxinator/vcluster-prod.yml
+# ~/.config/tmuxinator/vcluster-dev.yml
 
-name: vcluster-cloud-prod
-root: <%= ENV['HOME'] %>/loft/clusters/vcluster-prod
+name: vcluster-cloud-dev
+root: <%= ENV['HOME'] %>/loft/clusters/vcluster-dev
 
-pre_window: export KUBECONFIG=<%= ENV['HOME'] %>/loft/clusters/vcluster-prod/config
+pre_window: export KUBECONFIG=<%= ENV['HOME'] %>/loft/clusters/vcluster-dev/config
 on_project_start: aws eks update-kubeconfig --name hosted-platform --region us-east-1 --kubeconfig ./config
 
 windows:
