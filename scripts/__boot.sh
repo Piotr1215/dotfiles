@@ -82,6 +82,7 @@ update_profiles_ini() {
 }
 
 if [[ " ${weekdays[*]} " =~ $current_day ]] && [[ "$timeoff" == 0 ]]; then
+	/home/decoder/dev/dotfiles/scripts/__create_recurring_tasks.sh
 	update_profiles_ini "8gtkyq7h.Work"
 	flatpak run com.slack.Slack 2>/dev/null &
 	nohup firefox -P "Work" >/dev/null 2>&1 &
