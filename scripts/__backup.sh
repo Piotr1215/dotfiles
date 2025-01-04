@@ -9,6 +9,11 @@ if [ -f "$LOCK_FILE" ]; then
 	exit 1
 fi
 
+if ! mountpoint -q /mnt/nas-backup; then
+	echo "NAS is not mounted. Exiting." >>"$LOG_FILE"
+	exit 1
+fi
+
 # Create lock file
 touch "$LOCK_FILE"
 touch "$LOG_FILE"
@@ -22,6 +27,7 @@ trap 'rm -f $LOCK_FILE' EXIT
 	echo "Backing up system files..."
 
 	rsync -ax --delete \
+		--no-owner --no-group \
 		--info=backup,stats3 \
 		--exclude-from="$HOME/.backup_patterns" \
 		--stats \
@@ -30,18 +36,21 @@ trap 'rm -f $LOCK_FILE' EXIT
 
 	echo "Backing up cron jobs..."
 	sudo rsync -ax --delete \
+		--no-owner --no-group \
 		--info=stats1 \
 		/var/spool/cron/ \
 		/mnt/nas-backup/home/cron/
 
 	echo "Backing up systemd files..."
 	sudo rsync -ax --delete \
+		--no-owner --no-group \
 		--info=stats1 \
 		/etc/systemd/ \
 		/mnt/nas-backup/home/systemd_backup/
 
 	echo "Backing up OBS Studio settings..."
 	sudo rsync -ax --delete \
+		--no-owner --no-group \
 		--info=stats1 \
 		/home/decoder/.var/app/com.obsproject.Studio/config \
 		/mnt/nas-backup/home/obs/
@@ -49,10 +58,11 @@ trap 'rm -f $LOCK_FILE' EXIT
 	restic backup /home/decoder/.envrc
 	restic backup /home/decoder/dev/.envrc
 	restic backup /home/decoder/loft/.envrc
+	restic backup /home/decoder/.ssh/
+	restic forget --keep-last 1 --prune
 
+	echo "Badking up Gnome settings"
+	dconf dump / >/mnt/nas-backup/home/pop_os_settings_backup.ini
 	echo "Backup completed successfully"
 	echo "----------------------------------------"
 } >>"$LOG_FILE" 2>&1
-
-dconf dump / >/mnt/nas-backup/home/pop_os_settings_backup.ini
-restic forget --keep-last 1 --prune
