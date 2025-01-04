@@ -1,12 +1,7 @@
 # Include these specific files/directories
 + /haruna_playlist.m3u
-+ /.config/
 + /Documents/
-+ /.ssh/
 + /Pictures/
-+ /.local/
-+ /.local/share/
-+ /.local/share/**
 + /Music/
 + /music/
 + /wallpapers/
@@ -27,7 +22,6 @@
 - .nvm/
 - /Videos/tmp/
 - /Downloads/
-- /.local/**
 
 # Exclude everything else
 - /*
