@@ -58,6 +58,7 @@ alias v=nvim
 alias watch=viddy
 alias ugu='ug -Q -. --view=nvim'
 alias dat='/home/decoder/dev/dotfiles/scripts/__dotfiles_adder.sh'
+alias prompt='/home/decoder/dev/dotfiles/scripts/__generate_prompt_from_task.py'
 
 ## Kubernetes aliases
 alias kconf='__create_separate_kubeconfig.sh'
