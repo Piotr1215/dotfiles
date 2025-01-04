@@ -350,6 +350,10 @@ gcloud() {
 eval "$(direnv hook zsh)"
 eval "$(starship init zsh)"
 
+if [ -f "$HOME/.cargo/env" ]; then
+    . "$HOME/.cargo/env"
+fi
+
 if [ -f "/home/decoder/.config/fabric/fabric-bootstrap.inc" ]; then . "/home/decoder/.config/fabric/fabric-bootstrap.inc"; fi
 
 # NVM lazy loading
