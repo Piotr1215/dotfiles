@@ -167,6 +167,7 @@
           - apt-file
           - chafa
           - libnotify-bin
+          - restic
         state: present
 
     - name: Install tmuxinator
