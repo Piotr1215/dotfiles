@@ -2,7 +2,7 @@
 set -eo pipefail
 LOG_FILE="$HOME/backup.log"
 LOCK_FILE="/tmp/backup.lock"
-
+echo "" >"$LOG_FILE"
 # Exit if already running
 if [ -f "$LOCK_FILE" ]; then
 	echo "Backup already in progress" >>"$LOG_FILE"
@@ -59,6 +59,7 @@ trap 'rm -f $LOCK_FILE' EXIT
 	restic backup /home/decoder/dev/.envrc
 	restic backup /home/decoder/loft/.envrc
 	restic backup /home/decoder/.ssh/
+	restic backup /etc/fstab
 	restic forget --keep-last 1 --prune
 
 	echo "Badking up Gnome settings"
