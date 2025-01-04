@@ -6,6 +6,7 @@ $git_branch\
 $git_state\
 $git_status\
 $aws\
+$custom\
 $kubernetes\
 $nodejs\
 $cmd_duration\
@@ -23,6 +24,13 @@ disabled = true
 [character] # The name of the module we are configuring is "character"
 success_symbol = "[➜](bold green)"
 error_symbol = "[✗](bold red)"
+
+[custom.mount_indicator]
+when = "findmnt -T . -o FSTYPE -n | grep -q -E '^(nfs|fuse|cifs|smb)'"
+format = '[$symbol ($output)]($style)'
+symbol = "🐎"
+style = "bold yellow"
+command = "findmnt -T . -o SOURCE -n"
 
 [custom.dockerfile]
 detect_files = [
