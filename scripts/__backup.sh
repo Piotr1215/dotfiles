@@ -45,9 +45,14 @@ trap 'rm -f $LOCK_FILE' EXIT
 		--info=stats1 \
 		/home/decoder/.var/app/com.obsproject.Studio/config \
 		/mnt/nas-backup/home/obs/
+	echo "Backup env files..."
+	restic backup /home/decoder/.envrc
+	restic backup /home/decoder/dev/.envrc
+	restic backup /home/decoder/loft/.envrc
 
 	echo "Backup completed successfully"
 	echo "----------------------------------------"
 } >>"$LOG_FILE" 2>&1
 
 dconf dump / >/mnt/nas-backup/home/pop_os_settings_backup.ini
+restic forget --keep-last 1 --prune
