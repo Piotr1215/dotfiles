@@ -168,6 +168,7 @@
           - chafa
           - libnotify-bin
           - restic
+          - dunst
         state: present
 
     - name: Install tmuxinator
