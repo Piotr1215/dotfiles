@@ -2,5 +2,23 @@
   "macro": {
     "prefix": ["keymap"],
     "body": "vim.keymap.set('n','<leader>${1}', '${2}', { remap = true, silent = false })"
+  },
+  "module": {
+    "prefix": "mod",
+    "body": [
+      "local ${1:M} = {}", 
+      "",
+      "return ${1:M}"
+    ],
+    "description": "Create a basic Lua module"
+  },
+  "module function": {
+    "prefix": "mfunc",
+    "body": [
+      "function M.${1:function_name}(${2:params})",
+      "\t${0}",
+      "end"
+    ],
+    "description": "Create a function for Lua module"
   }
 }
