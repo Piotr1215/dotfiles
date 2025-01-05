@@ -234,10 +234,7 @@ utils.lnmap("gh", ":Gclog %<CR>") -- show git log for current file
 utils.imap("<expr>", "<C-l>   vsnip#available(1)  ? '<Plug>(vsnip-expand-or-jump)' : '<C-l>") -- Vsnippet expand or jump
 utils.smap("<expr>", "<C-l>   vsnip#available(1)  ? '<Plug>(vsnip-expand-or-jump)' : '<C-l>") -- Vsnippet expand or jump
 -- See https://github.com/hrsh7th/vim-vsnip/pull/50
-utils.nmap("<leader>t", "<Plug>(vsnip-select-text)") -- Select or cut text to use as $TM_SELECTED_TEXT in the next snippet
-utils.xmap("<leader>t", "<Plug>(vsnip-select-text)") -- Select or cut text to use as $TM_SELECTED_TEXT in the next snippet
-utils.nmap("<leader>tc", "<Plug>(vsnip-cut-text)") -- Select or cut text to use as $TM_SELECTED_TEXT in the next snippet
-utils.xmap("<leader>tc", "<Plug>(vsnip-cut-text)") -- Select or cut text to use as $TM_SELECTED_TEXT in the next snippet
+utils.nmap("<leader>vc", "<Plug>(vsnip-cut-text)") -- Select or cut text to use as $TM_SELECTED_TEXT in the next snippet
 
 -- PLUGIN MAPPINGS --
 -- Mdeval
