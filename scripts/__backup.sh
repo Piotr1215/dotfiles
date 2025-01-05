@@ -67,3 +67,13 @@ trap 'rm -f $LOCK_FILE' EXIT
 	echo "Backup completed successfully"
 	echo "----------------------------------------"
 } >>"$LOG_FILE" 2>&1
+
+dunstify \
+	--timeout 1000 \
+	--action="default,Open Log" \
+	--icon=drive-harddisk \
+	"Backup Complete" \
+	"System backup has finished successfully" &&
+	alacritty -e nvim \
+		-c "nnoremap q :q<CR>" \
+		"$HOME/backup.log"
