@@ -7,6 +7,16 @@
       "{{< /hint >}}${0}"],
     "description": "Hugo Important Hint"
   },
+  "bold": {
+  "prefix": ["bold", "b"],
+  "body": "**${1:$TM_SELECTED_TEXT}**$0",
+  "description": "Bold selected text"
+},
+"os-release": {
+  "prefix": ["os"],
+  "body": "${VIM:system('cat /etc/os-release')}",
+  "description": "Insert content of /etc/os-release"
+},
   "Vale Off":{
     "prefix": "vof",
     "scope": "markdown",
