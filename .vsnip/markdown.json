@@ -1,4 +1,55 @@
 {
+"slides title": {
+    "prefix": "sli_title",
+    "scope": "markdown",
+    "body": [
+      "```bash",
+      "~~~just intro_toilet ${1:Title}",
+      "",
+      "~~~",
+      "```$0"
+    ],
+    "description": "Insert slides title template"
+},
+
+"slides plantuml": {
+    "prefix": "sli_plant",
+    "scope": "markdown",
+    "body": [
+      "```bash",
+      "~~~just plantuml ${1:diagram-name}",
+      "",
+      "~~~",
+      "```$0"
+    ],
+    "description": "Insert slides plantuml template"
+},
+
+"slides digraph": {
+    "prefix": "sli_digraph",
+    "scope": "markdown",
+    "body": [
+      "```bash",
+      "~~~just digraph ${1:components}",
+      "",
+      "~~~",
+      "```$0"
+    ],
+    "description": "Insert slides digraph template"
+},
+
+"slides freetext": {
+    "prefix": "sli_freetext",
+    "scope": "markdown",
+    "body": [
+      "```bash",
+      "~~~just freetext ${1:Text}",
+      "",
+      "~~~",
+      "```$0"
+    ],
+    "description": "Insert slides freetext template"
+},
   "Hugo Important Hint":{
     "prefix": "hint",
     "scope": "markdown",
