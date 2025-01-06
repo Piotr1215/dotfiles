@@ -17,7 +17,7 @@ local function get_all_partials_dirs()
     for _, name in ipairs(entries) do
       local full_path = dir .. "/" .. name
       if vim.fn.isdirectory(full_path) == 1 then
-        if name == "_partials" or name == "_fragments" then
+        if name == "_partials" or name == "_fragments" or name == "_code" then
           table.insert(partials_dirs, full_path)
         elseif name ~= "." and name ~= ".." then
           scan_dir(full_path)
@@ -29,9 +29,57 @@ local function get_all_partials_dirs()
   scan_dir(git_root)
   return partials_dirs
 end
+local function get_repository_path(file_path)
+  local git_root = vim.fn.system("git rev-parse --show-toplevel"):gsub("%s+", "")
+  return file_path:sub(#git_root + 2) -- +2 to remove leading slash
+end
+-- Function specifically for code block imports
+function M.select_code_block()
+  -- Capture the current buffer and window
+  local current_bufnr = vim.api.nvim_get_current_buf()
+  local current_win = vim.api.nvim_get_current_win()
+
+  -- Get all _partials directories
+  local partials_dirs = get_all_partials_dirs()
+
+  if vim.tbl_isempty(partials_dirs) then
+    print "No _partials directories found in the repository."
+    return
+  end
+
+  -- Use Telescope to browse partial files
+  require("telescope.builtin").find_files {
+    prompt_title = "Select Code Block",
+    search_dirs = partials_dirs,
+    path_display = { shorten = 3 },
+    attach_mappings = function(prompt_bufnr, map)
+      map("i", "<CR>", function()
+        local selection = require("telescope.actions.state").get_selected_entry()
+        local partial_path = selection.path
+
+        -- Close Telescope before prompting
+        require("telescope.actions").close(prompt_bufnr)
+
+        -- Generate default component name based on the file name
+        local partial_name = M.to_camel_case(partial_path)
+
+        -- Prompt for the component name with default value
+        partial_name = vim.fn.input("Name the code block: ", partial_name)
+
+        -- Switch back to the original window and buffer
+        vim.api.nvim_set_current_win(current_win)
+        vim.api.nvim_set_current_buf(current_bufnr)
+
+        -- Insert code block with raw loader
+        M.insert_partial_in_buffer(current_bufnr, partial_name, partial_path, true)
+      end)
+      return true
+    end,
+  }
+end
 
 -- Function to convert a string to CamelCase using only the file name
-local function to_camel_case(str)
+function M.to_camel_case(str)
   -- Extract the file name without extension
   local file_name = vim.fn.fnamemodify(str, ":t:r")
 
@@ -45,7 +93,7 @@ local function to_camel_case(str)
 end
 
 -- Function to convert file name to readable text
-local function to_readable_text(str)
+function M.to_readable_text(str)
   -- Extract the file name without extension
   local file_name = vim.fn.fnamemodify(str, ":t:r")
   -- Replace hyphens and underscores with spaces
@@ -105,7 +153,7 @@ local function get_absolute_url_path(file_path)
   return url_path
 end
 
-local function insert_partial_in_buffer(bufnr, partial_name, partial_path)
+function M.insert_partial_in_buffer(bufnr, partial_name, partial_path, is_raw_loader)
   -- Switch to the buffer
   vim.api.nvim_set_current_buf(bufnr)
 
@@ -113,20 +161,48 @@ local function insert_partial_in_buffer(bufnr, partial_name, partial_path)
   local cursor_position = vim.api.nvim_win_get_cursor(0)
   local current_line = cursor_position[1]
 
-  local partial_insert = string.format("<%s />", partial_name)
+  local insert_text
+  if is_raw_loader then
+    -- For raw loader, create CodeBlock component with a placeholder for language
+    insert_text = string.format(
+      '<CodeBlock language="yaml" title="%s">{%s}</CodeBlock>',
+      M.to_readable_text(partial_path),
+      partial_name
+    )
+  else
+    -- For regular partials
+    insert_text = string.format("<%s />", partial_name)
+  end
 
-  -- Insert the partial at the cursor position
-  vim.api.nvim_buf_set_lines(bufnr, current_line - 1, current_line - 1, false, { partial_insert })
-  print("Partial inserted: " .. partial_insert .. " at line " .. current_line)
+  -- Insert the component at the cursor position
+  vim.api.nvim_buf_set_lines(bufnr, current_line - 1, current_line - 1, false, { insert_text })
 
-  -- Get the current file's directory
+  -- If this is a code block, position cursor between the quotes of language
+  if is_raw_loader then
+    -- Find the start of 'language="' in the line
+    local line_content = vim.api.nvim_buf_get_lines(bufnr, current_line - 1, current_line, false)[1]
+    local lang_start = string.find(line_content, 'language="')
+    if lang_start then
+      -- Position cursor between the quotes (add 10 to get between the quotes)
+      vim.api.nvim_win_set_cursor(0, { current_line, lang_start + 10 })
+    end
+  end
+
+  -- Rest of the function (imports handling) remains the same
   local current_file_path = vim.api.nvim_buf_get_name(bufnr)
   local current_file_dir = vim.fn.fnamemodify(current_file_path, ":h")
+  -- ... rest of your existing code ...
 
-  -- Calculate the relative path
-  local relative_path = get_relative_path(current_file_dir, partial_path)
-
-  local import_statement = string.format("import %s from '%s';", partial_name, relative_path)
+  local import_statement
+  if is_raw_loader then
+    -- For raw loader, use absolute path from repository root
+    local repo_path = get_repository_path(partial_path)
+    import_statement = string.format("import %s from '!!raw-loader!@site/%s';", partial_name, repo_path)
+  else
+    -- For regular partials, use relative path
+    local relative_path = get_relative_path(current_file_dir, partial_path)
+    import_statement = string.format("import %s from '%s';", partial_name, relative_path)
+  end
 
   -- Get the buffer lines
   local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
@@ -135,6 +211,7 @@ local function insert_partial_in_buffer(bufnr, partial_name, partial_path)
   local found_front_matter_start = false
   local found_front_matter_end = false
   local found_import = false
+  local has_codeblock_import = false
 
   -- Find the front matter and import section from the top
   for i, line in ipairs(lines) do
@@ -150,11 +227,23 @@ local function insert_partial_in_buffer(bufnr, partial_name, partial_path)
     elseif line:match "^import" then
       found_import = true
       insert_pos = i + 1
+      if line:match "^import CodeBlock from '@theme/CodeBlock'" then
+        has_codeblock_import = true
+      end
     end
   end
 
-  -- Insert the import statement
-  vim.api.nvim_buf_set_lines(bufnr, insert_pos - 1, insert_pos - 1, false, { "", import_statement, "" })
+  -- Insert imports
+  local imports = {}
+  if is_raw_loader and not has_codeblock_import then
+    table.insert(imports, "import CodeBlock from '@theme/CodeBlock'")
+  end
+  table.insert(imports, import_statement)
+
+  if #imports > 0 then
+    table.insert(imports, "") -- Add empty line after imports
+    vim.api.nvim_buf_set_lines(bufnr, insert_pos - 1, insert_pos - 1, false, imports)
+  end
 end
 
 -- Function to insert URL reference at cursor
@@ -167,7 +256,7 @@ local function insert_url_reference(bufnr, target_path)
   local current_line = cursor_position[1]
 
   -- Generate default link text from file name
-  local default_text = to_readable_text(target_path)
+  local default_text = M.to_readable_text(target_path)
 
   -- Prompt for link text with default value
   local link_text = vim.fn.input("Enter link text: ", default_text)
@@ -210,10 +299,10 @@ function M.select_partial()
         local partial_path = selection.path
 
         -- Generate default component name based on the file name
-        local partial_name = to_camel_case(partial_path)
+        local partial_name = M.to_camel_case(partial_path)
 
         -- Prompt for the component name with default value
-        partial_name = vim.fn.input("Name the partial (React component): ", partial_name)
+        partial_name = vim.fn.input("Name the partial: ", partial_name)
 
         -- Close Telescope before switching back
         require("telescope.actions").close(prompt_bufnr)
@@ -222,8 +311,8 @@ function M.select_partial()
         vim.api.nvim_set_current_win(current_win)
         vim.api.nvim_set_current_buf(current_bufnr)
 
-        -- Insert partial and update import section
-        insert_partial_in_buffer(current_bufnr, partial_name, partial_path)
+        -- Insert partial (always as regular import)
+        M.insert_partial_in_buffer(current_bufnr, partial_name, partial_path, false)
       end)
       return true
     end,
@@ -426,6 +515,12 @@ vim.api.nvim_set_keymap(
   "<leader>ip",
   "",
   { noremap = true, silent = true, callback = M.select_partial, desc = "Select Docusaurus Partial" }
+)
+vim.api.nvim_set_keymap(
+  "n",
+  "<leader>ib",
+  "",
+  { noremap = true, silent = true, callback = M.select_code_block, desc = "Select Docusaurus Partial" }
 )
 vim.api.nvim_set_keymap(
   "n",
