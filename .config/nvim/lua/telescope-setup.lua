@@ -201,7 +201,6 @@ local set_up_telescope = function()
   local set_keymap = function(mode, bind, cmd)
     key(mode, bind, cmd, { noremap = true, silent = true })
   end
-  set_keymap("n", "<Leader>fd", "<cmd>lua search_dev()<CR>")
   set_keymap("n", "<leader>bu", [[<cmd>lua require('telescope.builtin').buffers()<CR>]])
   set_keymap(
     "n",
@@ -216,8 +215,7 @@ local set_up_telescope = function()
   set_keymap("i", "<C-e>", "<cmd>:Telescope symbols<CR>")
   set_keymap("n", "<leader>fe", [[<cmd>Telescope emoji<CR>]])
   set_keymap("n", "<leader>ft", [[<cmd>TodoTelescope <CR>]])
-  set_keymap("n", "<leader>fsw", [[<cmd>lua require('telescope.builtin').grep_string({search_dirs = {"~/dev"}})<CR>]])
-  set_keymap("v", "<leader>fsw", [[<cmd>lua require('telescope.builtin').grep_string({search_dirs = {"~/dev"}})<CR>]])
+  set_keymap("n", "<leader>fs", [[<cmd>lua require('telescope.builtin').grep_string({search_dirs = {"~/dev"}})<CR>]])
   set_keymap("n", "<leader>fh", [[<cmd>lua require('telescope.builtin').search_history()<CR>]])
   set_keymap("n", "<leader>ds", [[<cmd>lua require('telescope.builtin').lsp_document_symbols()<CR>]])
   set_keymap("n", "<leader>fj", [[<cmd>lua require('telescope.builtin').jumplist()<CR>]])
