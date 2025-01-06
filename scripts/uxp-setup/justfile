@@ -8,29 +8,37 @@ scripts    := justfile_directory() + "/scripts"
 browse      := if os() == "linux" { "xdg-open "} else { "open" }
 copy        := if os() == "linux" { "xsel -ib"} else { "pbcopy" }
 
-export gcp_provider_version         := env_var_or_default('GCP_PROVIDER', "v0.35.0")
+export bucket_random_name           := `head -n 4096 /dev/urandom | openssl sha1 | tail -c 10`
+export gcp_provider_version         := env_var_or_default('GCP_PROVIDER', "v1.11.2")
 export azure_provider_version       := env_var_or_default('AZURE_PROVIDER', "v0.36.0")
 export aws_provider_version         := "v0.43.0"
-export k8s_version                  := "1.27.0"
+export k8s_version                  := "1.27.0" # currently not used
 export random_suffix                := `echo $RANDOM`
 export base64encoded_azure_creds    := `base64 ~/crossplane-azure-provider-key.json | tr -d "\n"`
 export base64encoded_gcp_creds      := `base64 ~/gcp-creds-platform.json | tr -d "\n"`
 export base64encoded_aws_creds      := `cat ~/.aws/credentials | grep -i 609897127049_AdministratorAccess -A3 | sed 's/609897127049_AdministratorAccess/default/' | base64 | tr -d "\n"`
-export gcp_project_id               := "squad-platform-playground"
+export gcp_project_id               := "piotr-development"
 export xp_namespace                 := "crossplane-system"
                                     
 # this list of available targets
 # targets marked with * are main targets
 default:
   @just --list --unsorted
+  echo $bucket_random_name
+
+generate_bucket_random_name:
+    #!/bin/bash
+    RANDOM_SUFFIX=$(head -n 4096 /dev/urandom | openssl sha1 | tail -c 10)
+    yq -i e ".metadata.annotations.[\"crossplane.io/external-name\"] = \"sample-deleteme-$RANDOM_SUFFIX\"" /home/decoder/dev/dotfiles/scripts/uxp-setup/yaml/bucket.yaml
+
 
 _check_mandatory_programs:
   @if ! type "kind" > /dev/null ;then echo "Please install KIND" && exit 1; fi
   @if ! type "kubectl" > /dev/null; then echo "Please install kubectl" && exit 1; fi
  
 # * setup kind cluster with ArgoCD, kubernetes and help providers
-setup_infra xp-version='stable': _check_mandatory_programs setup_kind (setup_uxp xp-version) setup_k8s setup_helm enable_metrics_server
-setup_infra_forkless xp-version='stable': _check_mandatory_programs setup_kind (setup_uxp xp-version) enable_metrics_server
+setup_infra xp-version='stable': _check_mandatory_programs setup_kind (setup_crossplane xp-version) setup_k8s setup_helm enable_metrics_server
+setup_infra_forkless xp-version='stable': _check_mandatory_programs setup_kind (setup_crossplane xp-version) enable_metrics_server
 
 # enable metrics server
 enable_metrics_server:
@@ -49,6 +57,17 @@ check_xfn:
    @echo ""
    @kubectl -n {{xp_namespace}} logs -l app=crossplane
 
+setup_gcp_configuration:
+  #!/usr/bin/env bash
+  cat <<'EOF' | kubectl apply -f -
+  apiVersion: pkg.crossplane.io/v1
+  kind: Configuration
+  metadata:
+    name: platform-ref-gcp
+  spec:
+    package: xpkg.upbound.io/upbound/platform-ref-gcp:v0.9.0
+  EOF
+
 # setup kind cluster with UXP
 setup_kind:
   #!/usr/bin/env bash
@@ -63,7 +82,7 @@ setup_kind:
   kubectl config use-context kind-"${cluster}"
 
 # setup kind cluster with UXP
-setup_uxp xp-version='stable':
+setup_crossplane xp-version='stable':
   #!/usr/bin/env bash
   echo "Debug: xp-version is {{xp-version}}"
   if kubectl get namespace {{xp_namespace}} > /dev/null 2>&1; then
@@ -74,10 +93,14 @@ setup_uxp xp-version='stable':
   fi
 
   if [[ {{xp-version}} == "stable" ]]; then
-    echo "Installing UXP version {{xp-version}}"
-    helm install uxp --namespace {{xp_namespace}} upbound-stable/universal-crossplane --devel
+    echo "Installing crossplane version {{xp-version}}"
+    helm repo add crossplane-stable https://charts.crossplane.io/stable
+    helm repo update
+    helm upgrade --install crossplane \
+       --namespace {{xp_namespace}} crossplane-stable/crossplane \
+       --set args='{"--enable-usages"}'
   elif [[ {{xp-version}} == "master" ]]; then
-    echo "Installing UXP version {{xp-version}}"
+    echo "Installing crossplane version {{xp-version}}"
     helm repo add crossplane-master https://charts.crossplane.io/master --force-update
     helm repo update
     helm upgrade --install crossplane crossplane-master/crossplane \
@@ -161,7 +184,7 @@ help_copy_node_ip:
 # get prometheus query for memory
 help_copy_prometheus_memory_metric prov:
   #!/usr/bin/env bash
-  pod=$(kubectl -n upbound-system get pod -l pkg.crossplane.io/provider=provider-{{prov}} -o name)
+  pod=$(kubectl -n crossplane-system get pod -l pkg.crossplane.io/provider=provider-{{prov}} -o name)
   pod="${pod##*/}"
   sum="sum(node_namespace_pod_container:container_memory_working_set_bytes{pod="\"$pod\"", namespace="\"upbound-system"\"})"
   echo -n "$sum" | {{copy}}
@@ -207,16 +230,17 @@ setup_azure:
   @envsubst < {{yaml}}/azure-provider-config.yaml | kubectl apply -f - 
 
 # setup GCP official provider config
-setup_gcp_provider_config:
-  @echo "Setting up GCP official provider config"
-  @kubectl config use-context kind-control-plane
-  @envsubst < {{yaml}}/gcp-provider-config.yaml | kubectl apply -f - 
+setup_gcp_secret:
+  @echo "Setup GCP secret"
+  @kubectl create secret generic gcp-secret -n crossplane-system --from-file=creds=/home/decoder/gcp-creds-platform.json
 
 # setup GCP official provider
 setup_gcp:
+  just setup_gcp_secret
   @echo "Setting up GCP official provider"
   @kubectl config use-context kind-control-plane
   @envsubst < {{yaml}}/gcp-provider.yaml | kubectl apply -f - 
+  @envsubst < {{yaml}}/gcp-provider-storage.yaml | kubectl apply -f -
   @kubectl wait --for condition=healthy --timeout=300s provider/provider-gcp
   @envsubst < {{yaml}}/gcp-provider-config.yaml | kubectl apply -f - 
 

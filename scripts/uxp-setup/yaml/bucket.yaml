@@ -2,7 +2,7 @@ apiVersion: storage.gcp.upbound.io/v1beta1
 kind: Bucket
 metadata:
   annotations:
-    crossplane.io/external-name: sample-deleteme-221133
+    crossplane.io/external-name: sample-deleteme-22113399
   name: example
 spec:
   deletionPolicy: Delete
@@ -16,7 +16,7 @@ spec:
       responseHeader:
       - Content-Type
     location: EU
-    project: squad-platform-playground
+    project: piotr-development
     storageClass: MULTI_REGIONAL
     uniformBucketLevelAccess: true
   providerConfigRef:
