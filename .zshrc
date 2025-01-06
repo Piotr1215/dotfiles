@@ -12,8 +12,6 @@ fi
 
 ZSH_THEME="simple" #Best theme ever
 ZVM_INIT_MODE=sourcing
-if [[ ":$FPATH:" != *":/home/decoder/.zsh/completions:"* ]]; then export FPATH="/home/decoder/.zsh/completions:$FPATH"; fi
-
 # autoload -Uz compinit
 # compinit -d "${ZDOTDIR:-$HOME}/.zcompdump" -C
 source /home/decoder/.config/broot/launcher/bash/br
@@ -40,11 +38,15 @@ function zvm_after_init() {
   zvm_bindkey viins '^Q' push-line
 }
 
+fpath=(${HOME}/dev/dotfiles/.zsh/completions $fpath)
+
 # PUGINS & MODULES
 # fzf-tab should be last because it binds to ^I
 plugins=(z kubectl zsh-autosuggestions zsh-syntax-highlighting web-search colored-man-pages sudo)
 source /home/decoder/dev/fzf-tab/fzf-tab.plugin.zsh
 source $ZSH/oh-my-zsh.sh
+
+source ~/dev/dotfiles/.zsh/completions/just_completions.zsh
 
 # The plugin will auto execute this zvm_after_lazy_keybindings function
 # Set ZSH_CUSTOM dir if env var not present
@@ -103,7 +105,7 @@ gsettings set org.gnome.desktop.interface enable-animations true
 # Completions and scripts
 # source ~/.oh-my-zsh/plugins/tmuxinator/_mst 
 # source ~/.oh-my-zsh/plugins/tmuxinator/_ms
-# source ~/.oh-my-zsh/plugins/tmuxinator/_fifp
+source ~/.zsh/completions/*
 source ~/dev/dotfiles/scripts/__gh_cli.sh
 # Source functions and aliases
 source ~/.zsh_aliases
@@ -337,9 +339,6 @@ PROMPT="$PROMPT"$'\n→ '
 
 # [[ -s "/home/decoder/.gvm/scripts/gvm" ]] && source "/home/decoder/.gvm/scripts/gvm"
 
-# The next line updates PATH for the Google Cloud SDK.
-if [ -f '/home/decoder/dev/clusters/primary-dev/google-cloud-sdk/path.zsh.inc' ]; then . '/home/decoder/dev/clusters/primary-dev/google-cloud-sdk/path.zsh.inc'; fi
-
 gcloud() {
     unfunction "$0"
     if [ -f '/home/decoder/dev/clusters/primary-dev/google-cloud-sdk/completion.zsh.inc' ]; then 
@@ -382,3 +381,9 @@ npm() {
   npm "$@"
 }
 # zprof > /tmp/zprof.out
+
+# The next line updates PATH for the Google Cloud SDK.
+if [ -f '/home/decoder/dev/google-cloud-sdk/path.zsh.inc' ]; then . '/home/decoder/dev/google-cloud-sdk/path.zsh.inc'; fi
+
+# The next line enables shell command completion for gcloud.
+if [ -f '/home/decoder/dev/google-cloud-sdk/completion.zsh.inc' ]; then . '/home/decoder/dev/google-cloud-sdk/completion.zsh.inc'; fi
