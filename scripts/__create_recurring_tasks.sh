@@ -40,14 +40,10 @@ if [ "$day_of_week" -le 5 ]; then
 		add_task_if_not_exists "fill standup forms" "today+8h" "session:standup"
 		add_task_if_not_exists "meeting with denise" "today+8h"
 		;;
-	2) # Tuesday
-		add_task_if_not_exists "fill standup forms" "today+8h" "session:standup"
-		;;
 	3) # Wednesday
 		add_task_if_not_exists "fill standup forms" "today+8h" "session:standup"
 		;;
 	4) # Thursday
-		add_task_if_not_exists "fill standup forms" "today+8h" "session:standup"
 		add_task_if_not_exists "fill eng presentation" "today+8h"
 		;;
 	5) # Friday
