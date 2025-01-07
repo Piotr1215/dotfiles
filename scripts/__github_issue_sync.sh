@@ -83,6 +83,7 @@ create_and_annotate_task() {
 		# Set session:vdocs for all DOC issues
 		if [[ "$issue_number" == *"DOC"* ]]; then
 			task modify "$task_uuid" session:vdocs
+			task modify "$task_uuid" +kill
 		fi
 		# Handle project setting
 		if [[ -n "$project_name" ]] && [[ "$project_name" != "null" ]]; then
