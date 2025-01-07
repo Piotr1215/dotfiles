@@ -324,6 +324,13 @@ bindkey '^Y' copy-line-to-clipboard       # Ctrl+Y: Copies line to clipboard
 bindkey '^@' autosuggest-accept           # Ctrl+@: Accepts autosuggestion
 bindkey '^X^T' transpose-words            # Ctrl+X Ctrl+T: Transposes words
 
+
+function g_checkout_branch () {
+  BUFFER='gco'
+  zle accept-line
+}
+zle -N g_checkout_branch
+bindkey '^x^g' g_checkout_branch
 stty -ixon
 
 kubectl() {

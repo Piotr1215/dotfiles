@@ -12,6 +12,10 @@ function ddg_function() {
 
 alias ghcurrentbranch='ghcurrentbranch_function'
 
+function gco() {
+  git branch | fzf | xargs -I {} git checkout {} 
+}
+
 function paws() {
     local profile=$(aws configure list-profiles | fzf --height 20% --prompt="Select AWS Profile > ")
     if [ ! -z "$profile" ]; then
