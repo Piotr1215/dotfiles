@@ -12,6 +12,9 @@ if ! mountpoint -q /mnt/nas-backup; then
 	echo "NAS is not mounted. Exiting." >>"$LOG_FILE"
 	exit 1
 fi
+
+export DISPLAY=:1
+
 # Create lock file
 touch "$LOCK_FILE"
 touch "$LOG_FILE"
