@@ -362,35 +362,10 @@ fi
 
 if [ -f "/home/decoder/.config/fabric/fabric-bootstrap.inc" ]; then . "/home/decoder/.config/fabric/fabric-bootstrap.inc"; fi
 
-# NVM lazy loading
-export NVM_LAZY_LOAD=true
-export NVM_COMPLETION=true
-export NVM_DIR="$HOME/.config/nvm"
-
-# This loads nvm bash_completion
-[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  
-
-nvm() {
-  unset -f nvm
-  [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
-  nvm "$@"
-}
-
-node() {
-  unset -f node
-  [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
-  node "$@"
-}
-
-npm() {
-  unset -f npm
-  [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
-  npm "$@"
-}
-# zprof > /tmp/zprof.out
-
 # The next line updates PATH for the Google Cloud SDK.
 if [ -f '/home/decoder/dev/google-cloud-sdk/path.zsh.inc' ]; then . '/home/decoder/dev/google-cloud-sdk/path.zsh.inc'; fi
 
 # The next line enables shell command completion for gcloud.
 if [ -f '/home/decoder/dev/google-cloud-sdk/completion.zsh.inc' ]; then . '/home/decoder/dev/google-cloud-sdk/completion.zsh.inc'; fi
+
+# zprof > /tmp/zprof.out
