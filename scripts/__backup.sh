@@ -79,7 +79,9 @@ dunstify \
 	--action="default,Open Log" \
 	--icon=drive-harddisk \
 	"Backup Complete" \
-	"System backup has finished successfully" 2>/dev/null &&
-	alacritty -e nvim \
-		-c "nnoremap q :q<CR>" \
-		"$HOME/backup.log"
+	"System backup has finished successfully" 2>/dev/null | {
+	read -r response
+	if [ "$response" = "default" ]; then
+		alacritty -e nvim -c "nnoremap q :q<CR>" "$HOME/backup.log"
+	fi
+} &
