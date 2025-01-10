@@ -4,13 +4,12 @@ name: vcluster-cloud-prod
 root: <%= ENV['HOME'] %>/loft/clusters/vcluster-prod
 
 pre_window: export KUBECONFIG=<%= ENV['HOME'] %>/loft/clusters/vcluster-prod/config
-on_project_start: aws eks update-kubeconfig --name hosted-platform --region us-east-1 --kubeconfig ./config
 
 windows:
   - main:
       layout: main-vertical
       panes:
-        - k9s:
-          - k9s
+        - main:
+          - if ! aws sts get-caller-identity &>/dev/null; then aws sso login; fi && aws eks update-kubeconfig --name hosted-platform --region us-east-1 --kubeconfig ./config
   - infrastructure:
       root: <%= ENV['HOME'] %>/loft/hosted-platform/infrastructure
