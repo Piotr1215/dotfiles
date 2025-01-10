@@ -12,7 +12,7 @@ root: ~/dev/scripts
 # Project hooks
 
 # Runs on project start, always
-# on_project_start: command
+on_project_start: __layouts.sh 9
 
 # Run on project start, the first time
 # on_project_first_start: command
@@ -36,10 +36,10 @@ root: ~/dev/scripts
 # tmux_command: byobu
 
 # Specifies (by name or index) which window will be selected on project startup. If not set, the first window is used.
-# startup_window: editor
+startup_window: time
 
 # Specifies (by index) which pane of the specified window will be selected on project startup. If not set, the first pane is used.
-startup_pane: 2
+startup_pane: 1
 
 # Controls whether the tmux session should be attached to automatically. Defaults to true.
 # attach: false
