@@ -169,6 +169,7 @@
           - libnotify-bin
           - restic
           - dunst
+          - socat
         state: present
 
     - name: Install tmuxinator
