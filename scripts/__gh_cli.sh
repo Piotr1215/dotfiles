@@ -92,14 +92,24 @@ function ghissuescomments() {
 	format_and_open "$data"
 }
 function ghprcomments() {
-	data=$(gh api \
+	local data=$(gh api \
 		-H "Accept: application/vnd.github+json" \
 		-H "X-GitHub-Api-Version: 2022-11-28" \
 		"/search/issues?q=is:pr+is:open+commenter:Piotr1215" \
 		--paginate \
-		--jq '.items[] | "\(.title) ### \(.html_url)"')
-	# Call the format_and_open function with the retrieved data
-	format_and_open "$data"
+		--jq '.items[] | "\(.title) \(.html_url)"')
+
+	if [ -z "$data" ]; then
+		echo "No data to display."
+		return 1
+	fi
+
+	echo "$data" | fzf --bind 'ctrl-y:execute-silent(echo -n {} | awk -F "https" "{print \"https\"\$2}" | xclip -selection clipboard)+change-prompt(URL copied! > )' \
+		--delimiter="###" --with-nth=1 \
+		--header "Press Ctrl+Y to copy URL to clipboard" \
+		--prompt "Select item > " |
+		awk -F 'https' '{print "https"$2}' |
+		xargs -r xdg-open >/dev/null 2>&1
 }
 
 # This function lists pull requests (PRs) from the current GitHub repository using the GitHub CLI.
