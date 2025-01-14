@@ -13,7 +13,8 @@ if ! mountpoint -q /mnt/nas-backup; then
 	exit 1
 fi
 
-export DISPLAY=:1
+export DISPLAY=:$(ls /tmp/.X11-unix/* | sed 's#/tmp/.X11-unix/X##')
+export DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$(id -u)/bus"
 
 # Create lock file
 touch "$LOCK_FILE"
@@ -59,11 +60,12 @@ RSYNC_OPTS=(
 		/mnt/nas-backup/home/obs/
 
 	echo "Backup env files..."
-	restic backup /home/decoder/.envrc
-	restic backup /home/decoder/dev/.envrc
-	restic backup /home/decoder/loft/.envrc
-	restic backup /home/decoder/.ssh/
-	restic backup /etc/fstab
+	restic backup \
+		/home/decoder/.envrc \
+		/home/decoder/dev/.envrc \
+		/home/decoder/loft/.envrc \
+		/home/decoder/.ssh/ \
+		/etc/fstab
 	restic forget --keep-last 2 --prune
 
 	echo "Backing up Gnome settings"
