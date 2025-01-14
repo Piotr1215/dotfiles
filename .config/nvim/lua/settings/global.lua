@@ -13,6 +13,7 @@ vcmd "set wildignore+=*/tmp/*,*.so,*.swp,*.zip"
 vcmd "set backspace=indent,eol,start"
 vcmd "set jumpoptions=view"
 vcmd "set sessionoptions+=tabpages,globals"
+vcmd "set cursorcolumn"
 
 -- Treesitter folding
 vim.wo.foldmethod = "expr"
