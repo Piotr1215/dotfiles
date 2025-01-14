@@ -2,6 +2,36 @@
 set -eo pipefail
 IFS=$'\n\t'
 
+check_and_update_ytdlp() {
+	local timestamp_file="${HOME}/.cache/ytdlp_last_update"
+	local current_time=$(date +%s)
+
+	# Create cache directory if it doesn't exist
+	mkdir -p "${HOME}/.cache"
+
+	# Check if timestamp file exists and is less than 24 hours old
+	if [[ -f "$timestamp_file" ]] && (($(cat "$timestamp_file") > (current_time - 86400))); then
+		return 0
+	fi
+
+	if ! command -v pipx &>/dev/null; then
+		python3 -m pip install --user pipx
+		python3 -m pipx ensurepath
+		source ~/.zshrc
+	fi
+	if ! pipx list | grep -q yt-dlp; then
+		pipx install yt-dlp
+	else
+		pipx upgrade yt-dlp
+	fi
+	yt-dlp --version
+
+	# Update timestamp
+	echo "$current_time" >"$timestamp_file"
+}
+
+check_and_update_ytdlp
+
 tracks_file="${HOME}/haruna_playlist.m3u"
 if [[ ! -f "$tracks_file" ]]; then
 	echo "Error: Track file not found at $tracks_file"
