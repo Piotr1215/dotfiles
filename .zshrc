@@ -286,7 +286,11 @@ bindkey '^f' f_enter                      # Ctrl+f: Enters f mode
 
 function paste_file_content() {
     LBUFFER="xclip -o -sel clipboard > "
-    zle reset-prompt
+    zle recursive-edit
+    local filename="${BUFFER##* }"
+    cat $filename
+    zle accept-line
+
 }
 zle -N paste_file_content
 bindkey '^X^P' paste_file_content
