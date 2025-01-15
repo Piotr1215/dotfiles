@@ -13,7 +13,7 @@ help_function() {
 	echo "Usage: __open-file-git.sh [-h|--help]"
 	echo ""
 	echo "This script opens files from the Git repository using fzf-tmux for selection and the configured editor (default: nvim) for viewing."
-	echo "It lists the files from the Git log, allows multi-selection, and opens them in different layouts depending on the number of files selected."
+	echo "It lists the 30 most recently modified files from the Git log, allows multi-selection, and opens them in different layouts depending on the number of files selected."
 	echo ""
 	echo "Options:"
 	echo "  -h, --help    Show this help message and exit."
@@ -21,12 +21,19 @@ help_function() {
 	echo "Features:"
 	echo "  - Sources a generic error handling function from __trap.sh."
 	echo "  - Gets the repository root path using 'git rev-parse --show-toplevel'."
-	echo "  - Lists files from the Git log and filters them using fzf-tmux."
-	echo "  - Opens selected files in the configured editor (default: nvim) with different layouts."
-	echo "  - Handles interruptions and errors gracefully."
-	echo "  - New: Press Ctrl+F in the fzf menu to show only files changed in the current branch."
+	echo "  - Lists 30 most recently modified files by default."
+	echo "  - Interactive file selection:"
+	echo "    * Default view: 30 most recent files"
+	echo "    * Ctrl-F: Switch to view all repository files"
+	echo "    * ESC: Return to recent files view"
+	echo "  - Multi-file selection support"
+	echo "  - Smart layout handling in editor:"
+	echo "    * 2 files: Vertical split"
+	echo "    * 3 files: One vertical, one horizontal split"
+	echo "    * 4 files: Two vertical, two horizontal splits"
+	echo "    * 5+ files: Default editor layout"
 	echo ""
-	echo "Note: This script requires Git, fzf-tmux, and a compatible editor (e.g., nvim)."
+	echo "Note: This script requires Git, fzf-tmux, bat (for preview), and a compatible editor (e.g., nvim)."
 }
 
 # Check for help argument
@@ -67,7 +74,11 @@ fi
 merge_base=$(git merge-base HEAD "$base_branch")
 
 # Generate the file list and verify each file path
-file_list=$(git ls-tree -r HEAD --name-only)
+file_list=$(
+	set +o pipefail
+	git log --name-only --format="%at" | grep -v '^[0-9]' | awk '!seen[$0]++' | head -n 30
+)
+
 existing_files=$(echo "$file_list" | while IFS= read -r file; do
 	if [ -f "$file" ]; then
 		echo "$repo_root/$file"
@@ -94,10 +105,11 @@ IFS=$'\n' files=($(get_full_file_list | fzf-tmux \
 	--multi \
 	--select-1 \
 	--exit-0 \
-	--bind "ctrl-f:reload(git diff --name-only $merge_base..HEAD || handle_fzf_error)" \
+	--bind "ctrl-f:reload(git ls-tree -r HEAD --name-only || handle_fzf_error)" \
+	--bind "esc:reload(echo \"$sorted_files\" | awk '{print \$9}' | awk '!seen[\$0]++' | grep -v '^$' || handle_fzf_error)" \
 	--bind "change:top" \
 	--info=inline \
-	--prompt "Select git files (Ctrl-f: only changed in branch) > " ||
+	--prompt "Select git files (Ctrl-f: all files, ESC: reload) > " ||
 	handle_fzf_error))
 
 # Check if any files were selected, and exit if not
