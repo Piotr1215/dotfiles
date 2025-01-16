@@ -1,6 +1,6 @@
 # run with mux start bash-scripting display_text="xxxxx"
-name: <%= %x(~/dev/dotfiles/scripts/__generate_session_name_from_branch.sh ~/loft/vcluster).strip %>
-root: ~/loft/vcluster
+name: <%= @args[0] %> 
+root: ~/loft/<%= @args[0] %>
 
 # Optional tmux socket
 # socket_name: foo
@@ -11,7 +11,7 @@ root: ~/loft/vcluster
 # Project hooks
 
 # Runs on project start, always
-on_project_start:  ~/dev/dotfiles/scripts/__create_kind_cluster.sh vcluster-plane
+# on_project_start:  ~/dev/dotfiles/scripts/__create_kind_cluster.sh vcluster-plane
 
 # Run on project start, the first time
 # on_project_first_start: 
