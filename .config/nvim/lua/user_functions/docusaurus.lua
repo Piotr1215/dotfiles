@@ -508,19 +508,19 @@ vim.api.nvim_set_keymap(
   "n",
   "<leader>ic",
   "",
-  { noremap = true, silent = true, callback = M.select_component, desc = "Select Docusaurus Component" }
+  { noremap = true, silent = true, callback = M.select_component, desc = "Insert Docusaurus Component" }
 )
 vim.api.nvim_set_keymap(
   "n",
   "<leader>ip",
   "",
-  { noremap = true, silent = true, callback = M.select_partial, desc = "Select Docusaurus Partial" }
+  { noremap = true, silent = true, callback = M.select_partial, desc = "Insert Docusaurus Partial" }
 )
 vim.api.nvim_set_keymap(
   "n",
   "<leader>ib",
   "",
-  { noremap = true, silent = true, callback = M.select_code_block, desc = "Select Docusaurus Partial" }
+  { noremap = true, silent = true, callback = M.select_code_block, desc = "Insert Docusaurus CodeBlock" }
 )
 vim.api.nvim_set_keymap(
   "n",
