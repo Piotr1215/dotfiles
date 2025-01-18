@@ -59,6 +59,3 @@ set.incsearch = true
 set.inccommand = "split" -- preview of replacement operations
 set.laststatus = 2
 set.cmdheight = 1
-
--- Disable copilot on boot
-vim.b.copilot_enabled = true
