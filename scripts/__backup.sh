@@ -65,7 +65,8 @@ RSYNC_OPTS=(
 		/home/decoder/dev/.envrc \
 		/home/decoder/loft/.envrc \
 		/home/decoder/.ssh/ \
-		/etc/fstab
+		/etc/fstab \
+		/home/decoder/loft/.nvimrc
 	restic forget --keep-last 2 --prune
 
 	echo "Backing up Gnome settings"
