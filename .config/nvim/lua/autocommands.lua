@@ -20,6 +20,13 @@ api.nvim_create_autocmd("VimEnter", {
   command = "Copilot disable",
 })
 
+api.nvim_create_autocmd({ "BufEnter", "BufRead" }, {
+  pattern = ".nvimrc",
+  callback = function()
+    vim.bo.filetype = "lua"
+  end,
+})
+
 api.nvim_create_autocmd("VimEnter", {
   group = valeGroup,
   command = "LspStartVale",
