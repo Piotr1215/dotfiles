@@ -65,6 +65,7 @@ RSYNC_OPTS=(
 		/home/decoder/dev/.envrc \
 		/home/decoder/loft/.envrc \
 		/home/decoder/.ssh/ \
+		/home/decoder/.zsh/completions/ \
 		/etc/fstab \
 		/home/decoder/loft/.nvimrc
 	restic forget --keep-last 2 --prune
