@@ -12,7 +12,7 @@ root: /usr/local/share/zsh/site-functions
 # Project hooks
 
 # Runs on project start, always
-# on_project_start: command
+on_project_start: tmux set-window-option -g automatic-rename off
 
 # Run on project start, the first time
 # on_project_first_start: command
@@ -45,10 +45,17 @@ root: /usr/local/share/zsh/site-functions
 # attach: false
 
 windows:
-  - editor:
+  - shared_completions:
       layout: main-vertical
       # Synchronize all panes of this window, can be enabled before or after the pane commands run.
       # 'before' represents legacy functionality and will be deprecated in a future release, in favour of 'after'
       # synchronize: after
       panes:
-        - ls
+        - shared:
+          - ls
+  - zsh_completions:
+      layout: main-vertical
+      root: /home/decoder/dev/dotfiles/.zsh/completions
+      panes:
+        - zsh:
+          - ls
