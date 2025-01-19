@@ -27,6 +27,13 @@ api.nvim_create_autocmd({ "BufEnter", "BufRead" }, {
   end,
 })
 
+vim.api.nvim_create_autocmd("LspAttach", {
+  pattern = "*.zshrc*",
+  callback = function()
+    vim.diagnostic.enable(false, { bufnr = 0 })
+  end,
+})
+
 api.nvim_create_autocmd("VimEnter", {
   group = valeGroup,
   command = "LspStartVale",
