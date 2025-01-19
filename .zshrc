@@ -47,6 +47,7 @@ source /home/decoder/dev/fzf-tab/fzf-tab.plugin.zsh
 source $ZSH/oh-my-zsh.sh
 
 source ~/dev/dotfiles/.zsh/completions/just_completions.zsh
+source ${HOME}/dev/dotfiles/.zsh/completions/talos_completions.zsh
 
 # The plugin will auto execute this zvm_after_lazy_keybindings function
 # Set ZSH_CUSTOM dir if env var not present
