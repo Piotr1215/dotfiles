@@ -280,18 +280,13 @@ function f_enter() {
 zle -N f_enter
 bindkey '^f' f_enter                      # Ctrl+f: Enters f mode
 
-# PROJECT: git-log
-# function open_logg() {
-  # BUFFER="logg"
-  # zle accept-line
-# }
-
 function paste_file_content() {
     LBUFFER="xclip -o -sel clipboard > "
     zle recursive-edit
     local filename="${BUFFER##* }"
     sleep 0.1
     eval "$BUFFER"
+    echo ""
     tail "$filename" | ccze -A
     zle accept-line
 }
