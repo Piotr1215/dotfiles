@@ -5,6 +5,7 @@ abbrevs=(
     "_bak" '__backup_expand'
     "_ind" '__into_new_dir'
     "_xrg" '__xargs_expand'
+    "_chmo" '__chmod_file'
 )
 
 __xargs_expand() {
@@ -24,6 +25,14 @@ __into_new_dir() {
     # Remove any trailing spaces
     cmd=${cmd%%[[:space:]]}
     LBUFFER="mkdir -p $last_arg && $cmd"
+}
+
+# Function to expand the sponge command
+__chmod_file() {
+    local cmd="$LBUFFER"
+    selected_file=$(fd --type f | fzf --height 40% --reverse)
+    LBUFFER="chmod +x $selected_file"
+    zle accept-line
 }
 
 # Function to expand the sponge command
