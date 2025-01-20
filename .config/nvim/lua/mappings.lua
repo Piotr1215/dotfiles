@@ -123,7 +123,12 @@ vim.keymap.set("n", "J", "mzJ`z", { desc = "join lines without spaces" })
 vim.keymap.set("n", "n", "nzzzv", { desc = "keep cursor centered" })
 vim.keymap.set("n", "N", "Nzzzv", { desc = "keep cursor centered" })
 -- SEARCH AND REPLACE
-utils.lnmap("pa", "ggVGp", { desc = "select all" })
+
+utils.lnmap("sw", "viwP", { desc = "Substitute word (no cutting)" })
+utils.lnmap("sw", "viwP", { desc = "Substitute word (no cutting)" })
+utils.lnmap("sp", "vipP", { desc = "Substitute inner paragraph (no cutting)" })
+utils.lnmap("sP", "vapP", { desc = "Substitute outer paragraph (no cutting)" })
+utils.lnmap("pa", "ggVGP", { desc = "select all and paste (no cutting)" })
 utils.lnmap("sa", "ggVG", { desc = "select all" })
 utils.lnmap("ss", ":s/\\v", { silent = false, desc = "search and replace on line" })
 utils.lnmap("SS", ":%s/\\v", { silent = false, desc = "search and replace in file" })
@@ -200,7 +205,7 @@ utils.lnmap("cpl", [[:let @+ = expand("%:p") . ':' . line('.')<cr>]]) -- Copy cu
 utils.lnmap("cpn", ':let @+ = expand("%:t")<cr>') -- Copy current file name
 utils.imap("<c-d>", "<c-o>daw", { desc = "delete word forward in insert mode" })
 vim.keymap.set("i", "<A-H>", "<c-w>", { noremap = true, desc = "delete word forward in insert mode" })
-utils.nmap("<leader>sp", "i<cr><esc>", { desc = "split line in two" })
+utils.nmap("<leader>sl", "i<cr><esc>", { desc = "split line in two" })
 -- EXTERNAL COMMANDS --
 vim.keymap.set("c", "<C-w>", "\\w*", { noremap = true, desc = "copy word under cursor" })
 vim.keymap.set("c", "<C-s>", "\\S*", { noremap = true, desc = "copy WORD under cursor" })
