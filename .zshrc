@@ -290,9 +290,10 @@ function paste_file_content() {
     LBUFFER="xclip -o -sel clipboard > "
     zle recursive-edit
     local filename="${BUFFER##* }"
-    cat $filename
+    sleep 0.1
+    eval "$BUFFER"
+    tail "$filename" | ccze -A
     zle accept-line
-
 }
 zle -N paste_file_content
 bindkey '^X^P' paste_file_content
@@ -305,12 +306,12 @@ function copy_file_content() {
   else
     zle -M "No file selected."
   fi
-  zle reset-prompt
-  zle redisplay
+  echo -n "File $selected_file copied"
+  zle accept-line
 }
 
 zle -N copy_file_content
-bindkey '^X^F' copy_file_content     
+bindkey '^X^Y' copy_file_content     
 
 # zle -N open_logg
 # bindkey '^l' open_logg
