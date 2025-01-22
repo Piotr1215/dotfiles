@@ -70,11 +70,12 @@ IFS=$'\n' files=($(get_full_file_list | fzf-tmux \
 	--multi \
 	--select-1 \
 	--exit-0 \
-	--bind "ctrl-f:reload(git ls-tree -r HEAD --name-only || handle_fzf_error)" \
-	--bind "esc:reload(echo \"$existing_files\" | awk '!seen[\$0]++' || handle_fzf_error)" \
+	--bind "ctrl-a:reload(git ls-tree -r HEAD --name-only || handle_fzf_error)" \
+	--bind "ctrl-f:reload(git diff-tree --no-commit-id --name-only -r $(git merge-base HEAD main)..HEAD || handle_fzf_error)" \
+	--bind "ctrl-r:reload(echo \"$existing_files\" | awk '!seen[\$0]++' || handle_fzf_error)" \
 	--bind "change:top" \
 	--info=inline \
-	--prompt "Select git files (Ctrl-f: all files, ESC: recent changes) > " ||
+	--prompt "Select git files (ctrl-a: all files, ctrl-f: current branch, default/ctrl-r: recent all branches) > " ||
 	handle_fzf_error))
 
 # Check if any files were selected, and exit if not
