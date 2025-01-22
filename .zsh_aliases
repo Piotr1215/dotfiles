@@ -43,6 +43,7 @@ alias watchtui='nodemon --signal SIGTERM -q --watch ~/.taskrc --ext taskrc --exe
 alias k9s='k9s -A'
 alias bfi='__create_branch_from_issue.sh'
 alias si='__search_internet.py'
+alias sip='__search_internet.py --pro'
 alias vids='cd /mnt/nas_vids'
 alias vm="nvim -c ':lua MiniFiles.open()'"
 alias aider='aider --model gpt-4o --dark-mode --no-auto-commits'
