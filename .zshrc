@@ -287,7 +287,12 @@ function paste_file_content() {
     sleep 0.1
     eval "$BUFFER"
     echo ""
+    echo "Content:"
     tail "$filename" | ccze -A
+    if [[ "$filename" =~ \.(sh|py)$ ]]; then
+        chmod +x "$filename"
+        echo "$filename is a script, making executable"
+    fi
     zle accept-line
 }
 zle -N paste_file_content
