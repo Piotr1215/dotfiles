@@ -201,6 +201,26 @@ vim.keymap.set(
   { desc = "Copy current file name and path", silent = false }
 )
 
+vim.api.nvim_set_keymap(
+  "n",
+  "<leader>eb",
+  [[:lua require('user_functions.shell_integration').run_cmd_in_backticks()<CR>]],
+  { noremap = true, silent = true }
+)
+
+vim.api.nvim_set_keymap(
+  "v",
+  "<leader>eb",
+  [[:lua require('user_functions.shell_integration').run_cmd_for_selection()<CR>]],
+  { noremap = true, silent = true }
+)
+vim.api.nvim_set_keymap(
+  "v",
+  "<leader>eB",
+  [[:lua require('user_functions.shell_integration').run_cmd_block()<CR>]],
+  { noremap = true, silent = true }
+)
+
 utils.lnmap("cpl", [[:let @+ = expand("%:p") . ':' . line('.')<cr>]]) -- Copy current file name, path, and line number
 utils.lnmap("cpn", ':let @+ = expand("%:t")<cr>') -- Copy current file name
 utils.imap("<c-d>", "<c-o>daw", { desc = "delete word forward in insert mode" })
