@@ -160,10 +160,13 @@ function execute_and_gpt() {
     fi
 
     # Open Neovim with the content
-    nvim -c "GpChatNew" \
-         -c "call append(line('$'), readfile('$tmpfile'))" \
-         -c "lcd $current_path" \
-         -c "startinsert" 
+   nvim -c "GpChatNew" \
+        -c "call append(line('$'), readfile('$tmpfile'))" \
+        -c "lcd $current_path" \
+        -c "normal iKeep your responses short and simple, when asked to provide command, provide only one. Do not provide explanations unless explicitly asked for." \
+        -c "normal o" \
+        -c "call timer_start(100, {-> feedkeys('A', 'n')})"
+
 
     # Remove the temporary file after usage
     rm $tmpfile
@@ -182,7 +185,9 @@ function gpt() {
     local current_path=$(pwd)
     nvim -c "GpChatNew" \
          -c "lcd $current_path" \
-         -c "startinsert"
+         -c "normal iKeep your responses short and simple, when asked to provide command, provide only one. Do not provide explanations unless explicitly asked for." \
+         -c "normal o" \
+         -c "call timer_start(100, {-> feedkeys('A', 'n')})"
 }
 
 
