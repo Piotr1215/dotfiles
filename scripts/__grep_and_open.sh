@@ -40,14 +40,13 @@ EOF
     trap "rm -f $tmp_files $tmp_content_query" EXIT
 
     # Modified RG_BIND to reset the file search state and save content query
-    local RG_BIND="ctrl-g:transform-query(
+    local RG_FIXED_BIND="ctrl-x:transform-query(
       echo {q} > $tmp_content_query;
       echo {q}
     )+reload(
       rm -f $tmp_files;
-      rg --line-number --hidden --no-heading --color=always --smart-case --glob '!**/.git/**' --glob '!node_modules/**' {q} 2>/dev/null || true
+      rg --line-number --fixed-strings --hidden --no-heading --color=always --smart-case --glob '!**/.git/**' --glob '!node_modules/**' {q} 2>/dev/null || true
     )"
-
 local FILE_BIND="ctrl-f:transform-query(
       current_query={q};
       if [ ! -s $tmp_content_query ]; then
@@ -83,10 +82,10 @@ local FILE_BIND="ctrl-f:transform-query(
           --preview 'bat --style=numbers --color=always --highlight-line {2} {1} 2>/dev/null || echo "Preview not available"' \
           --preview-window 'up,60%,border-bottom,+{2}+3/3,~3' \
           --bind "$FILE_BIND" \
-          --bind "$RG_BIND" \
+          --bind "$RG_FIXED_BIND" \
           --bind "$DIR_BIND" \
           --bind 'ctrl-c:abort' \
-          --header "Type to search | Ctrl+f: narrow files (progressive) | Ctrl+g: search contents | Ctrl+d: search dirs"
+          --header "Type to search | Ctrl+x: fixed string | Ctrl+f: narrow files (progressive) | Ctrl+d: search dirs"
   }
 
 set_nvim_search_variable() {
