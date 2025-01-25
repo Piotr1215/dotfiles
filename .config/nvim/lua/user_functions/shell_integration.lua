@@ -74,8 +74,12 @@ function M.execute_visual_selection()
   -- Create a temporary script file
   local script_path = "/tmp/nvim_exec_script.sh"
   local script_file = io.open(script_path, "w")
-  script_file:write(lines)
-  script_file:close()
+  if script_file then
+    script_file:write(lines)
+    script_file:close()
+  else
+    -- Handle error (e.g., print an error message or log it)
+  end
 
   local command = "bash " .. script_path
   require("user_functions.utils").create_floating_scratch(nil)
@@ -156,6 +160,9 @@ function M.run_cmd_for_selection()
   end
 end
 
+-- This function captures a block of text from the current selection in Neovim,
+-- writes it to a temporary file, makes the file executable, and then executes it.
+-- The output of the execution is appended to the end of the current buffer.
 function M.run_cmd_block()
   -- Capture raw selection and split into lines
   vim.cmd "normal! gvy"
@@ -210,6 +217,18 @@ function M.run_cmd_block()
   -- Cleanup and restore
   os.remove(tmpfile)
   vim.api.nvim_win_set_cursor(0, current_pos)
+end
+
+-- This function copies the content between the last pair of backticks in the current buffer to the clipboard
+function M.copy_last_backticks()
+  local total_lines = vim.api.nvim_buf_line_count(0)
+  local end_line = vim.fn.search("^```.*", "bW")
+
+  local start_line = vim.fn.search("^```.*", "bW")
+
+  local content = vim.api.nvim_buf_get_lines(0, start_line, end_line - 1, false)
+  vim.fn.setreg("+", table.concat(content, "\n"))
+  vim.api.nvim_win_set_cursor(0, { total_lines, 0 })
 end
 
 return M
