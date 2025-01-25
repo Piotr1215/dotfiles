@@ -6,6 +6,9 @@ vim.keymap.set({ "n", "v" }, "<Space>", "<Nop>", { silent = true })
 vim.g.mapleader = " "
 vim.g.maplocalleader = " "
 
+-- Abbreviations
+vim.cmd [[iabbrev gct Give me a command to]]
+
 -- SAVE & CLOSE --
 utils.lnmap("wa", ":wqa<cr>", { desc = "save and close all" })
 utils.lnmap("wq", ":wq<cr>", { desc = "save and close all" })
@@ -14,6 +17,7 @@ utils.nmap("<leader>w", ":wall<CR>", { desc = "save all" })
 utils.lnmap("qq", "@q", { desc = "close all" })
 utils.lnmap("qa", ":qa!<cr>", { desc = "close all without saving" })
 utils.lnmap("qf", ":q!<cr>", { desc = "close current bufferall without saving" })
+
 vim.keymap.set(
   "n",
   "<leader>tf",
