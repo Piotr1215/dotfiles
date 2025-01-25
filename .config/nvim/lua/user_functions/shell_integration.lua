@@ -123,4 +123,93 @@ vim.api.nvim_set_keymap(
   { noremap = true, silent = true }
 )
 
+-- Put this in your init.lua (or Lua config file):
+function M.run_cmd_in_backticks()
+  local current_pos = vim.api.nvim_win_get_cursor(0)
+  local line = vim.api.nvim_get_current_line()
+
+  -- Create header
+  local header = {
+    "",
+    "Output of " .. line .. ":",
+  }
+
+  -- Move to end, add header and execute command
+  local last_line = vim.api.nvim_buf_line_count(0)
+  vim.api.nvim_buf_set_lines(0, last_line, last_line, false, header)
+  vim.api.nvim_win_set_cursor(0, { last_line + 2, 0 })
+  local result = vim.api.nvim_exec2("read !" .. line, { output = true })
+
+  -- Restore cursor position
+  vim.api.nvim_win_set_cursor(0, current_pos)
+end
+
+function M.run_cmd_for_selection()
+  -- Get visual selection
+  vim.cmd "normal! gvy"
+  local lines = vim.fn.getreg('"'):gsub("\n$", "")
+
+  -- Split into individual lines and run command for each
+  for line in lines:gmatch "[^\n]+" do
+    vim.api.nvim_set_current_line(line)
+    M.run_cmd_in_backticks()
+  end
+end
+
+function M.run_cmd_block()
+  -- Capture raw selection and split into lines
+  vim.cmd "normal! gvy"
+  local block = vim.fn.getreg '"'
+  local block_lines = vim.split(block, "\n", { plain = true })
+
+  -- Store cursor position
+  local current_pos = vim.api.nvim_win_get_cursor(0)
+
+  -- Create temporary script file for execution
+  local tmpfile = os.tmpname()
+  local f = io.open(tmpfile, "w")
+  if not f then
+    vim.notify("Failed to create temporary file", vim.log.levels.ERROR)
+    return
+  end
+
+  local success = f:write(block)
+  if not success then
+    f:close()
+    os.remove(tmpfile)
+    vim.notify("Failed to write to temporary file", vim.log.levels.ERROR)
+    return
+  end
+
+  f:close()
+
+  local chmod_result = os.execute("chmod +x " .. tmpfile)
+  if not chmod_result then
+    os.remove(tmpfile)
+    vim.notify("Failed to make script executable", vim.log.levels.ERROR)
+    return
+  end
+
+  -- Construct header as array of lines
+  local header = {}
+  table.insert(header, "")
+  table.insert(header, "Output of execution block:")
+  table.insert(header, "```")
+  for _, line in ipairs(block_lines) do
+    table.insert(header, line)
+  end
+  table.insert(header, "```")
+  table.insert(header, "Result:")
+
+  -- Execute at buffer end
+  local last_line = vim.api.nvim_buf_line_count(0)
+  vim.api.nvim_buf_set_lines(0, last_line, last_line, false, header)
+  vim.api.nvim_win_set_cursor(0, { last_line + #header, 0 })
+  vim.api.nvim_exec2("read !" .. tmpfile, { output = true })
+
+  -- Cleanup and restore
+  os.remove(tmpfile)
+  vim.api.nvim_win_set_cursor(0, current_pos)
+end
+
 return M
