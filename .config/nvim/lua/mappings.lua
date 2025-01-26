@@ -233,6 +233,8 @@ vim.api.nvim_set_keymap(
   { noremap = true, silent = true }
 )
 
+vim.keymap.set("n", "<leader>eap", "?```<CR>k eb<c-g><c-g>", { remap = true, silent = false })
+
 utils.lnmap("cpl", [[:let @+ = expand("%:p") . ':' . line('.')<cr>]]) -- Copy current file name, path, and line number
 utils.lnmap("cpn", ':let @+ = expand("%:t")<cr>') -- Copy current file name
 utils.imap("<c-d>", "<c-o>daw", { desc = "delete word forward in insert mode" })
