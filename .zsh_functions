@@ -163,7 +163,7 @@ function execute_and_gpt() {
    nvim -c "GpChatNew" \
         -c "call append(line('$'), readfile('$tmpfile'))" \
         -c "lcd $current_path" \
-        -c "normal iKeep your responses short and simple, when asked to provide command, provide only one. Do not provide explanations unless explicitly asked for." \
+        -c "normal iKeep your responses short and simple, when asked to provide command, provide only one. Do not provide explanations unless explicitly asked for. When you need to find out something about my system or the environment, rather than asking, provide a one-liner command I can execute and which output would give you the desired information, make sure to provide only one command per answer and wait for me to execute it. When providing commands that save files, make sure to use the /home/decoder/dev path. When providing commands or code always enclose them in tripple backticks with appropriate scope, bash, python etc." \
         -c "normal o" \
         -c "call timer_start(100, {-> feedkeys('A', 'n')})"
 
@@ -185,8 +185,8 @@ function gpt() {
     local current_path=$(pwd)
     nvim -c "GpChatNew" \
          -c "lcd $current_path" \
-         -c "normal iKeep your responses short and simple, when asked to provide command, provide only one. Do not provide explanations unless explicitly asked for." \
-         -c "normal o" \
+        -c "normal iGeneric instructions: Keep your responses short and simple, when asked to provide command, provide only one. Do not provide explanations unless explicitly asked for. When you need to find out something about my system or the environment, rather than asking, provide a one-liner command I can execute and which output would give you the desired information, make sure to provide only one command per answer and wait for me to execute it. When providing commands that save files, make sure to use the /home/decoder/dev path. When providing commands or code always enclose them in tripple backticks with appropriate scope, bash, python etc. User request below:" \
+         -c "normal 2o" \
          -c "call timer_start(100, {-> feedkeys('A', 'n')})"
 }
 
