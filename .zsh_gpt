@@ -1,0 +1,60 @@
+#!/usr/bin/zsh
+
+prompt_instructions="Generic instructions: Keep your responses short and simple, when asked to provide command, provide only one. Do not provide explanations unless explicitly asked for. When you need to find out something about my system or the environment, rather than asking, provide a one-liner command I can execute and which output would give you the desired information, make sure to provide only one command per answer and wait for me to execute it. When providing commands that save files, make sure to use the /home/decoder/dev path. When providing commands or code always enclose them in tripple backticks with appropriate scope, bash, python etc. If you would like to search internet, run script /home/decoder/dev/dotfiles/scripts/__search_internet.py with your query, do this freely and often and especially any time you need additional information or want to confirm the current state. User request below:"
+
+# Function to execute command and open gpt
+function execute_and_gpt() {
+    # Get the current command from the buffer
+    local cmd="$BUFFER"
+
+    local current_path=$(pwd)
+
+    # Clear the buffer
+    BUFFER=""
+
+    # Execute the command and capture its output
+    local output=$(eval "$cmd" 2>&1 | sed -r "s/\x1b\[[0-9;]*[mGKHl]//g")
+
+    # Use a temporary file for the processed content
+    local tmpfile=$(mktemp /tmp/nvim_buffer_cleaned.XXXXXX)
+    
+    # Save the command and output to the temporary file
+    echo "Command: $cmd" > $tmpfile
+    echo "Output:" >> $tmpfile
+    if [ -z "$output" ]; then
+        echo "No output received from the command." >> $tmpfile
+    else
+        echo "$output" >> $tmpfile
+    fi
+
+    # Open Neovim with the content
+   nvim -c "GpChatNew" \
+        -c "call append(line('$'), readfile('$tmpfile'))" \
+        -c "lcd $current_path" \
+        -c "normal i$prompt_instructions" \
+        -c "normal o" \
+        -c "call timer_start(100, {-> feedkeys('A', 'n')})"
+
+
+    # Remove the temporary file after usage
+    rm $tmpfile
+
+    # Redraw the prompt
+    zle reset-prompt
+}
+
+# Create a widget for the execute_and_gpt function
+zle -N execute_and_gpt
+
+# Bind the widget to Alt+g (you can change this to any key combination you prefer)
+bindkey '^[^G' execute_and_gpt
+
+
+function gpt() {
+    local current_path=$(pwd)
+    nvim -c "GpChatNew" \
+         -c "lcd $current_path" \
+         -c "normal i$prompt_instructions" \
+         -c "normal 2o" \
+         -c "call timer_start(100, {-> feedkeys('A', 'n')})"
+}
