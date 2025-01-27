@@ -4,10 +4,13 @@ zmodload zsh/mapfile # Bring mapfile functionality similar to bash
 # Path to your oh-my-zsh installation.
 export ZSH="${HOME}/.oh-my-zsh"
 export XDG_CONFIG_HOME="$HOME/.config"
+DISABLE_AUTO_UPDATE=true
+DISABLE_MAGIC_FUNCTIONS=true
+ZSH_AUTOSUGGEST_MANUAL_REBIND=1
 export XCURSOR_SIZE=24
 
-if [[ -z $TMUX ]]; then
-  tmuxinator start poke
+if [[ -z ${TMUX+X}${ZSH_SCRIPT+X}${ZSH_EXECUTION_STRING+X} ]]; then
+  exec tmux new-session -s poke
 fi
 
 ZSH_THEME="simple" #Best theme ever
