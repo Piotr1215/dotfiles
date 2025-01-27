@@ -224,7 +224,7 @@ require("gp").setup {
       name = "pplx", -- Perplexity agent
       chat = false,
       command = true,
-      model = { model = "llama-3.1-sonar-large-128k-online" },
+      model = { model = "sonar" },
       system_prompt = "You are specialized internet search assistant.",
     },
   },
