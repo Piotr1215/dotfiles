@@ -96,6 +96,10 @@ require("yanksearch").setup {
 require("gp").setup {
   -- default agent names set during startup, if nil last used agent is used
   -- Claude35 or ChatGPT4
+  whisper = {
+    rec_cmd = { "sox", "-c", "1", "--buffer", "32", "-d", "rec.wav", "trim", "0", "60:00" },
+  },
+
   default_command_agent = "ChatGPT4",
   default_chat_agent = nil,
   hooks = {
