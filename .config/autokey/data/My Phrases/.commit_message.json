@@ -1,17 +1,21 @@
 {
     "type": "phrase",
-    "description": "Second phrase",
-    "modes": [],
+    "description": "commit_message",
+    "modes": [
+        1
+    ],
     "usageCount": 0,
     "prompt": false,
     "omitTrigger": false,
     "matchCase": false,
     "showInTrayMenu": false,
     "abbreviation": {
-        "abbreviations": [],
+        "abbreviations": [
+            "!!com"
+        ],
         "backspace": true,
         "ignoreCase": false,
-        "immediate": false,
+        "immediate": true,
         "triggerInside": false,
         "wordChars": "[\\w]"
     },
