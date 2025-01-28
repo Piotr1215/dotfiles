@@ -1,17 +1,21 @@
 {
     "type": "phrase",
-    "description": "Third phrase",
-    "modes": [],
+    "description": "branch",
+    "modes": [
+        1
+    ],
     "usageCount": 0,
     "prompt": false,
     "omitTrigger": false,
     "matchCase": false,
     "showInTrayMenu": false,
     "abbreviation": {
-        "abbreviations": [],
+        "abbreviations": [
+            "!!br"
+        ],
         "backspace": true,
         "ignoreCase": false,
-        "immediate": false,
+        "immediate": true,
         "triggerInside": false,
         "wordChars": "[\\w]"
     },

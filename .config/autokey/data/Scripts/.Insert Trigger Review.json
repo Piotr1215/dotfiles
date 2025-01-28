@@ -1,0 +1,30 @@
+{
+    "type": "script",
+    "description": "Insert Trigger Review",
+    "store": {},
+    "modes": [
+        1
+    ],
+    "usageCount": 1,
+    "prompt": false,
+    "omitTrigger": false,
+    "showInTrayMenu": false,
+    "abbreviation": {
+        "abbreviations": [
+            "!ir"
+        ],
+        "backspace": true,
+        "ignoreCase": false,
+        "immediate": true,
+        "triggerInside": false,
+        "wordChars": "[\\w]"
+    },
+    "hotkey": {
+        "modifiers": [],
+        "hotKey": null
+    },
+    "filter": {
+        "regex": null,
+        "isRecursive": false
+    }
+}
