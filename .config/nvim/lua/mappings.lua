@@ -8,6 +8,7 @@ vim.g.maplocalleader = " "
 
 -- Abbreviations
 vim.cmd [[iabbrev gct Give me a command to]]
+vim.cmd [[iabbrev ooc only one command]]
 
 -- SAVE & CLOSE --
 utils.lnmap("wa", ":wqa<cr>", { desc = "save and close all" })
@@ -174,6 +175,7 @@ end, { remap = true, silent = false, desc = "Insert empty lines below" })
 
 utils.nmap("<leader>is", "i<space><esc>", { desc = "Insert space in normal mode" })
 utils.nmap("<leader>sq", ':normal viWS"<CR>', { desc = "surround with quotation" })
+utils.nmap("<leader>s`", ":normal viWS`<CR>", { desc = "surround with backticks" })
 -- REGISTRIES --
 
 vim.keymap.set("i", "<c-p>", function()
