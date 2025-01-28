@@ -32,32 +32,25 @@ RSYNC_OPTS=(
 	--partial     # Keep partially transferred files
 	--sparse      # Handle sparse files efficiently
 	--compress    # Compress file data during transfer
-	--info=stats0 # Minimal output statistics
-	--progress    # Show simple progress
+	--info=stats2 # Minimal output statistics
 )
 
 {
 	date
 	echo "Backing up system files..."
-	rsync "${RSYNC_OPTS[@]}" \
-		--exclude-from="$HOME/.backup_patterns" \
-		"$HOME/" \
-		/mnt/nas-backup/home/
+	rsync "${RSYNC_OPTS[@]}" --exclude-from="$HOME/.backup_patterns" "$HOME/" /mnt/nas-backup/home/
 
 	echo "Backing up cron jobs..."
-	sudo rsync "${RSYNC_OPTS[@]}" \
-		/var/spool/cron/ \
-		/mnt/nas-backup/home/cron/
+	sudo rsync "${RSYNC_OPTS[@]}" /var/spool/cron/ /mnt/nas-backup/home/cron/
 
 	echo "Backing up systemd files..."
-	sudo rsync "${RSYNC_OPTS[@]}" \
-		/etc/systemd/ \
-		/mnt/nas-backup/home/systemd_backup/
+	sudo rsync "${RSYNC_OPTS[@]}" /etc/systemd/ ~/.config/systemd/user/ /mnt/nas-backup/home/systemd_backup/
 
 	echo "Backing up OBS Studio settings..."
-	sudo rsync "${RSYNC_OPTS[@]}" \
-		/home/decoder/.var/app/com.obsproject.Studio/config \
-		/mnt/nas-backup/home/obs/
+	sudo rsync "${RSYNC_OPTS[@]}" /home/decoder/.var/app/com.obsproject.Studio/config /mnt/nas-backup/home/obs/
+
+	echo "Backing up dev folder..."
+	sudo rsync "${RSYNC_OPTS[@]}" /home/decoder/dev /mnt/nas-backup/dev
 
 	echo "Backup env files..."
 	restic backup \
