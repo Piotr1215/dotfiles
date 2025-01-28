@@ -635,37 +635,50 @@ function mon()
   fi
 }
 
-function sout () {
+sout () {
     echo "Usage: sout toggles between"
     echo " - hdmi: plays sound via main monitor or"
     echo " - head: plays sound via main headset"
     echo
 
-    local current_output=$(wpctl status | grep Sinks: -A2 | head -3 | grep \* | grep "\d+" -Po | head -1)
-    local new_output=$(wpctl status | grep Sinks: -A2 | head -3 | grep -v \* | grep "\d+" -Po | head -1)
-    
-    if [[ -z "$current_output" || -z "$new_output" ]]; then
+    local current_output=$(wpctl status | grep -A 3 'Sinks:' | grep '*' | grep -oP '\d+(?=\.)' | head -n 1)
+    local hdmi_output=$(wpctl status | grep 'GP106 High Definition Audio Controller Digital Stereo' | grep -oP '\d+(?=\.)' | head -n 1)
+    local headset_output=$(wpctl status | grep 'PRO X Wireless Gaming Headset Analog Stereo' | grep -oP '\d+(?=\.)' | head -n 1)
+
+    echo "Debug: current_output=$current_output"
+    echo "Debug: hdmi_output=$hdmi_output"
+    echo "Debug: headset_output=$headset_output"
+
+    if [[ -z "$current_output" || -z "$hdmi_output" || -z "$headset_output" ]]
+    then
         echo "Error: Unable to determine audio outputs"
         return 1
     fi
 
-    wpctl set-default "$new_output"
-    local sink_name=$(wpctl status | grep Sinks: -A2 | head -3 | grep \*)
+    if [[ "$current_output" == "$hdmi_output" ]]; then
+        new_output=$headset_output
+        echo "Debug: Switching to headset"
+    else
+        new_output=$hdmi_output
+        echo "Debug: Switching to HDMI"
+    fi
 
-    if [[ -n $(echo "$sink_name" | grep "GP106 High Definition") ]]; then
-        # HDMI mode
-        local mic_id=$(wpctl status | grep --after-context=3 " ├─ Sources:" | grep "Microphone Mono" | grep "\d+" -Po | head -n 1)
+    echo "Debug: new_output=$new_output"
+
+    wpctl set-default "$new_output"
+
+    if [[ "$new_output" == "$hdmi_output" ]]; then
+        local mic_id=$(wpctl status | grep "Microphone Mono" | grep -oP '\d+(?=\.)' | head -n 1)
         if [[ -n "$mic_id" ]]; then
             wpctl set-mute "$mic_id" 1
         else
             echo "Warning: Unable to find microphone ID"
         fi
-        amixer set PCM 75% > /dev/null
+        wpctl set-volume @DEFAULT_AUDIO_SINK@ 50%
         echo "Sound output set to hdmi=monitor, mic muted (if found)"
         echo "Volume 50%"
     else
-        # Headset mode
-        amixer set PCM 75% > /dev/null
+        wpctl set-volume @DEFAULT_AUDIO_SINK@ 75%
         echo "Sound output set to head=headset"
         echo "Volume 75%"
     fi
