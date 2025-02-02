@@ -1,0 +1,38 @@
+{
+ "systemd-service": {
+   "prefix": ["service", "systemd-service"],
+   "body": [
+     "[Unit]",
+     "Description=${1:Service description}",
+     "After=${2:network.target}",
+     "",
+     "[Service]",
+     "Type=${3|simple,forking,oneshot,notify,dbus|}",
+     "Restart=${6|no,on-failure,always,on-success,on-watchdog,on-abort|}",
+     "RestartSec=${7:30}",
+     "ExecStart=${9:/path/to/executable}",
+     "",
+     "[Install]",
+     "WantedBy=${8|multi-user.target,default.target,graphical.target,network.target,network-online.target,basic.target|}",
+     "$0"
+   ],
+   "description": "Create a systemd service unit file"
+ },
+ "systemd-timer": {
+   "prefix": ["timer", "systemd-timer"],
+   "body": [
+     "[Unit]",
+     "Description=${1:Timer description}",
+     "",
+     "[Timer]",
+     "OnBootSec=${2:10min}",
+     "OnUnitActiveSec=${3:1h}",
+     "Unit=$TM_FILENAME_BASE.service  ;can be ommited, defaults to the service with the same name",
+     "",
+     "[Install]",
+     "WantedBy=${5|timers.target,multi-user.target|}",
+     "$0"
+   ],
+   "description": "Create a systemd timer unit file"
+ }
+}
