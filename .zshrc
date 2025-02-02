@@ -10,7 +10,7 @@ ZSH_AUTOSUGGEST_MANUAL_REBIND=1
 export XCURSOR_SIZE=24
 
 if [[ -z ${TMUX+X}${ZSH_SCRIPT+X}${ZSH_EXECUTION_STRING+X} ]]; then
-  exec tmux new-session -s poke
+  tmuxinator start poke
 fi
 
 ZSH_THEME="simple" #Best theme ever
