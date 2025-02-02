@@ -311,7 +311,7 @@ vim.keymap.set("n", "<leader>xq", "<cmd>TroubleToggle quickfix<cr>", { silent = 
 vim.keymap.set("n", "gR", "<cmd>TroubleToggle lsp_references<cr>", { silent = true, noremap = true })
 
 -- Scrollfix
-utils.lnmap("f2", "<cmd>FIX 25<cr>")
+utils.lnmap("f2", "<cmd>FIX 35<cr>")
 utils.lnmap("f0", "<cmd>FIX -1<cr>")
 
 -- Obsidian
