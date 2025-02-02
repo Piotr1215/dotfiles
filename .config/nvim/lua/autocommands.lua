@@ -278,3 +278,11 @@ vim.api.nvim_create_autocmd({ "BufWritePre" }, {
     vim.lsp.buf.format()
   end,
 })
+
+-- Systemd Services
+vim.api.nvim_create_autocmd({ "BufRead", "BufNewFile" }, {
+  pattern = { "*.service", "*.timer" },
+  callback = function()
+    vim.bo.filetype = "dosini"
+  end,
+})
