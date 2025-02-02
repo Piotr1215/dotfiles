@@ -33,7 +33,8 @@ alias inc='incus console ubuntu --type=vga'
 ## meaning all programs and windows will preserve
 alias inc--='incus stop --stateful ubuntu'
 alias inc-='incus stop ubuntu'
-alias talos='cd ~/dev/talos'
+alias talos='talosctl'
+alias sai='sudo apt install'
 
 # Commands shadow
 alias br='br -sg'
