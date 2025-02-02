@@ -30,7 +30,7 @@ command = { program = "/usr/bin/tmux", args = ["split-window", "-h", "-c", "#{pa
 binding = { key = "2", mods = "Control" }
 
 [cursor.style]
-shape = "Block"
+shape = "Beam"
 
 [env]
 TERM = "xterm-256color"
