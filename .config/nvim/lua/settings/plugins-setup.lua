@@ -222,6 +222,17 @@ require("gp").setup {
         .. "- Produce only valid and actionable code.\n"
         .. "- Include only essential response like code etc, DO NOT provide explanations unless specifically asked for\n",
     },
+    {
+      -- Needs this to work: https://github.com/Robitx/gp.nvim/pull/246
+      provider = "openai",
+      name = "o3-mini",
+      chat = true,
+      command = true,
+      model = { model = "o3-mini", temperature = 0.3, top_p = 1, max_completion_tokens = 1000 },
+      system_prompt = "You are a specialized coding AI assistant.\n\n"
+        .. "The user provided the additional info about how they would like you to respond:\n\n"
+        .. "- Produce only valid and actionable code.\n",
+    },
     -- Perplexity agent
     {
       provider = "pplx",
