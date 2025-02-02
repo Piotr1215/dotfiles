@@ -28,30 +28,25 @@ end
 function M.insert_file_path()
   local actions = require "telescope.actions"
   local action_state = require "telescope.actions.state"
-
   require("telescope.builtin").find_files {
     cwd = "~/dev", -- Set the directory to search
     attach_mappings = function(_, map)
       map("i", "<CR>", function(prompt_bufnr)
         local selected_file = action_state.get_selected_entry(prompt_bufnr).path
         actions.close(prompt_bufnr)
-
-        -- Replace the home directory with ~
-        selected_file = selected_file:gsub(vim.fn.expand "$HOME", "~")
-
+        -- Get absolute path
+        local absolute_path = vim.fn.fnamemodify(selected_file, ":p")
         -- Ask the user if they want to insert the full path or just the file name
         local choice = vim.fn.input "Insert full path or file name? (n[ame]/p[ath]): "
         local text_to_insert
         if choice == "p" then
-          text_to_insert = selected_file
+          text_to_insert = absolute_path
         elseif choice == "n" then
-          text_to_insert = vim.fn.fnamemodify(selected_file, ":t")
+          text_to_insert = vim.fn.fnamemodify(absolute_path, ":t")
         end
-
         -- Move the cursor back one position
         local col = vim.fn.col "." - 1
         vim.fn.cursor(vim.fn.line ".", col)
-
         -- Insert the text at the cursor position
         vim.api.nvim_put({ text_to_insert }, "c", true, true)
       end)
