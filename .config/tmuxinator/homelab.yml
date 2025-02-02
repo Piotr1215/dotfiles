@@ -48,8 +48,8 @@ windows:
   - poke:
       layout: main-vertical
       panes:
-        - k9s
+        - ls
   - edit:
       layout: tiled
       panes:
-        - ls
+        - k9s
