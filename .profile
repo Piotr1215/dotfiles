@@ -27,3 +27,5 @@ if [ -d "$HOME/.local/bin" ] ; then
 fi
 . "/home/decoder/.deno/env"
 . "$HOME/.cargo/env"
+
+if [ -e /home/decoder/.nix-profile/etc/profile.d/nix.sh ]; then . /home/decoder/.nix-profile/etc/profile.d/nix.sh; fi # added by Nix installer
