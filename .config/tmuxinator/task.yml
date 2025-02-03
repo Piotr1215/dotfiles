@@ -51,3 +51,10 @@ windows:
         - tui -r workdone
         - tuiw
         - watch zsh -c "__summarize_timew.py" --interval 10s
+  - reports:
+      layout: tiled
+      panes:
+        - watch --interval 10min "task burndown.weekly | ccze -A"
+        - watch --interval 10min "task projects | ccze -A"
+        - watch --interval 10min "task summary | ccze -A"
+        - watch --interval 10min "task minimal +triage status:pending | ccze -A"
