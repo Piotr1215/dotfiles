@@ -115,39 +115,53 @@ function ghprcomments() {
 # This function lists pull requests (PRs) from the current GitHub repository using the GitHub CLI.
 # It displays the PRs in a selectable list using fzf, allowing the user to preview and open a PR in a web browser.
 function ghrepoprs() {
-	# Error handling within the function
-	{
-		# Fetch PRs in the current repository
-		local pr_data=$(gh pr list --json url,number,title --limit 300 2>/dev/null |
-			jq -r '.[] | "\(.number) | \(.title) | \(.url)"')
+	local pr_raw pr_data selected_pr pr_url
 
-		if [ -z "$pr_data" ]; then
-			echo "No PRs found in the current repository."
-			return 1
-		fi
+	# Temporarily disable color output
+	local old_no_color=$NO_COLOR
+	export NO_COLOR=1
 
-		export GH_FORCE_TTY=100%
+	# Fetch PRs
+	pr_raw=$(gh pr list --json url,number,title --limit 300 2>&1)
+	fetch_status=$?
 
-		# Select a PR using fzf with a preview panel
-		local selected_pr=$(echo "$pr_data" | fzf --ansi \
-			--preview 'gh pr view $(awk -F"|" "{print \$1}" <<< {})' \
-			--preview-window=up:40:wrap \
-			--bind 'ctrl-y:execute-silent(echo -n {3} | xargs | xclip -selection clipboard)')
+	# Restore original NO_COLOR setting
+	export NO_COLOR=$old_no_color
 
-		# If no PR was selected (e.g., fzf was exited), then exit the function
-		if [ -z "$selected_pr" ]; then
-			return
-		fi
-
-		# Extract the PR URL and remove leading/trailing whitespace
-		local pr_url=$(echo "$selected_pr" | awk -F'|' '{print $3}' | xargs)
-
-		# Open the selected PR's URL in the web browser
-		xdg-open "$pr_url" >/dev/null 2>&1
-	} || {
-		echo "An error occurred while listing repository PRs."
+	if [ $fetch_status -ne 0 ]; then
+		echo "Error fetching PRs: $pr_raw"
 		return 1
-	}
+	fi
+
+	# Process JSON
+	pr_data=$(echo "$pr_raw" | jq -r '.[] | "\(.number) | \(.title) | \(.url)"' 2>&1)
+	jq_status=$?
+	echo "$pr_data" | head -n 3
+
+	if [ $jq_status -ne 0 ]; then
+		echo "Error processing JSON: $pr_data"
+		return 1
+	fi
+
+	if [ -z "$pr_data" ]; then
+		echo "No PRs found in the current repository."
+		return 1
+	fi
+
+	export GH_FORCE_TTY=100
+
+	selected_pr=$(echo "$pr_data" | fzf --ansi \
+		--preview 'gh pr view $(awk -F"|" "{print \$1}" <<< {})' \
+		--preview-window=up:40:wrap \
+		--bind 'ctrl-y:execute-silent(echo -n {3} | xargs | xclip -selection clipboard)')
+
+	if [ -z "$selected_pr" ]; then
+		echo "No PR selected."
+		return 1
+	fi
+
+	pr_url=$(echo "$selected_pr" | awk -F'|' '{print $3}' | xargs)
+	xdg-open "$pr_url" >/dev/null 2>&1
 }
 
 # Function to select a git branch and open its URL
