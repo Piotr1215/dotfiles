@@ -245,6 +245,25 @@ require("gp").setup {
   },
 }
 
+-- Monkey patch the dispatcher after setup
+local dispatcher = require "gp.dispatcher"
+local original_prepare_payload = dispatcher.prepare_payload
+dispatcher.prepare_payload = function(messages, model, provider)
+  local output = original_prepare_payload(messages, model, provider)
+  if provider == "openai" and model.model:sub(1, 2) == "o3" then
+    for i = #messages, 1, -1 do
+      if messages[i].role == "system" then
+        table.remove(messages, i)
+      end
+    end
+    output.max_tokens = nil
+    output.temperature = nil
+    output.top_p = nil
+    output.stream = true
+  end
+  return output
+end
+
 require("remote-sshfs").setup {}
 
 require("mini.align").setup()
