@@ -61,8 +61,8 @@ report.currentall.sort=manual_priority-,project+
 report.currentall.filter=status:pending
 
 report.current.description=List of current tasks in the work context
-report.current.columns=id,entry.age,manual_priority,priority,project,tags,description.desc,entry,due.relative,linear_issue_id,release,follow,depends,urgency,session
-report.current.labels=ID,Age,MP,P,Proj,Tag,Desc,Created,Due,Lin,Rel,Follow,Depends,Urg,Session
+report.current.columns=id,entry.age,manual_priority,priority,project,tags,description.desc,entry,due.relative,linear_issue_id,release,follow,depends,urgency,session,repo
+report.current.labels=ID,Age,MP,P,Proj,Tag,Desc,Created,Due,Lin,Rel,Follow,Depends,Urg,Session,Repo
 report.current.sort=manual_priority-,priority-,project+
 report.current.filter=status:pending -BLOCKING
 
@@ -120,6 +120,8 @@ uda.follow.type=string
 uda.follow.label=follow
 uda.session.type=string
 uda.session.label=Session
+uda.repo.type=string
+uda.repo.label=Repo
 uda.follow.values=Y,N
 uda.manual_priority.type=numeric
 uda.manual_priority.label=Manual Priority
