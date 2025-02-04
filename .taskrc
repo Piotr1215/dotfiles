@@ -67,9 +67,9 @@ report.current.sort=manual_priority-,priority-,project+
 report.current.filter=status:pending -BLOCKING -pr
 
 report.current-prs.description=List of current prs to review
-report.current-prs.columns=id,entry.age,manual_priority,priority,project,tags,description.desc,prcreated,due.relative,linear_issue_id,release,follow,depends,urgency,repo
-report.current-prs.labels=ID,Age,MP,P,Proj,Tag,Desc,PRCreated,Due,Lin,Rel,Follow,Depends,Urg,Repo
-report.current-prs.sort=manual_priority-,priority-,project+
+report.current-prs.columns=id,entry.age,priority,project,tags,description.desc,repo,urgency
+report.current-prs.labels=ID,Age,P,Proj,Tag,Desc,Repo,Urg
+report.current-prs.sort=entry-
 report.current-prs.filter=status:pending project:pr-reviews
 
 report.workdone-prs.description=List of completed tasks in the work context
@@ -132,8 +132,6 @@ uda.follow.type=string
 uda.follow.label=follow
 uda.session.type=string
 uda.session.label=Session
-uda.prcreated.type=date
-uda.prcreated.label=PRCreated
 uda.repo.type=string
 uda.repo.label=Repo
 uda.follow.values=Y,N
@@ -158,7 +156,6 @@ uda.taskwarrior-tui.shortcuts.9=~/.config/taskwarrior-tui/shortcut-scripts/__tog
 
 #Taskwarrior tui overrides
 uda.taskwarrior-tui.task-report.jump-on-task-add=true
-context=work
 context.archive.read=+archive
 context.archive.write=+archive
 context.integration.read=+integration
@@ -172,3 +169,4 @@ uda.taskwarrior-tui.selection.dim=yes
 uda.taskwarrior-tui.selection.blink=no
 uda.taskwarrior-tui.selection.reverse=yes
 uda.taskwarrior-tui.task-report.show-info=false
+context=work
