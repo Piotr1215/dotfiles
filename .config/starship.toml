@@ -9,6 +9,7 @@ $aws\
 $custom\
 $kubernetes\
 $nodejs\
+$python\
 $cmd_duration\
 $line_break\
 $character""" # Don't print a new line at the start of the prompt
