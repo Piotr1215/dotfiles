@@ -9,7 +9,7 @@ get_task_id_by_description() {
 }
 
 get_review_prs() {
-	gh search prs --review-requested Piotr1215 --owner loft-sh --state open --limit 100 --json title,url,number,repository --jq '.'
+	gh search prs --involves Piotr1215 --owner loft-sh --state open --limit 100 --json title,url,number,repository --jq '.'
 }
 
 notify() {

@@ -64,7 +64,19 @@ report.current.description=List of current tasks in the work context
 report.current.columns=id,entry.age,manual_priority,priority,project,tags,description.desc,entry,due.relative,linear_issue_id,release,follow,depends,urgency,session,repo
 report.current.labels=ID,Age,MP,P,Proj,Tag,Desc,Created,Due,Lin,Rel,Follow,Depends,Urg,Session,Repo
 report.current.sort=manual_priority-,priority-,project+
-report.current.filter=status:pending -BLOCKING
+report.current.filter=status:pending -BLOCKING -pr
+
+report.current-prs.description=List of current prs to review
+report.current-prs.columns=id,entry.age,manual_priority,priority,project,tags,description.desc,prcreated,due.relative,linear_issue_id,release,follow,depends,urgency,repo
+report.current-prs.labels=ID,Age,MP,P,Proj,Tag,Desc,PRCreated,Due,Lin,Rel,Follow,Depends,Urg,Repo
+report.current-prs.sort=manual_priority-,priority-,project+
+report.current-prs.filter=status:pending project:pr-reviews
+
+report.workdone-prs.description=List of completed tasks in the work context
+report.workdone-prs.columns=project,description.desc,end
+report.workdone-prs.labels=Proj,Desc,Done
+report.workdone-prs.sort=end-\/,project+
+report.workdone-prs.filter=status:completed +pr
 
 report.current-projects.description=List of current projects in work context
 report.current-projects.columns=project
@@ -120,6 +132,8 @@ uda.follow.type=string
 uda.follow.label=follow
 uda.session.type=string
 uda.session.label=Session
+uda.prcreated.type=date
+uda.prcreated.label=PRCreated
 uda.repo.type=string
 uda.repo.label=Repo
 uda.follow.values=Y,N
