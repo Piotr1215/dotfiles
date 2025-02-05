@@ -64,13 +64,19 @@ report.current.description=List of current tasks in the work context
 report.current.columns=id,entry.age,manual_priority,priority,project,tags,description.desc,entry,due.relative,linear_issue_id,release,follow,depends,urgency,session,repo
 report.current.labels=ID,Age,MP,P,Proj,Tag,Desc,Created,Due,Lin,Rel,Follow,Depends,Urg,Session,Repo
 report.current.sort=manual_priority-,priority-,project+
-report.current.filter=status:pending -BLOCKING -pr
+report.current.filter=status:pending -BLOCKING -pr -triage
 
 report.current-prs.description=List of current prs to review
 report.current-prs.columns=id,entry.age,priority,project,tags,description.desc,repo,urgency
 report.current-prs.labels=ID,Age,P,Proj,Tag,Desc,Repo,Urg
 report.current-prs.sort=entry-
 report.current-prs.filter=status:pending project:pr-reviews
+
+report.current-triage.description=List of triage issues
+report.current-triage.columns=id,entry.age,priority,project,tags,description.desc,repo,urgency
+report.current-triage.labels=ID,Age,P,Proj,Tag,Desc,Repo,Urg
+report.current-triage.sort=entry-
+report.current-triage.filter=status:pending +triage
 
 report.workdone-prs.description=List of completed tasks in the work context
 report.workdone-prs.columns=project,description.desc,end

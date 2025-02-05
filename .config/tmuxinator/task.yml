@@ -57,3 +57,9 @@ windows:
         - tui -r workdone-prs
         - tui -r current-prs
         - watch --interval 10min "task summary | ccze -A"
+  - triage:
+      layout: 342c,294x72,0,0{82x72,0,0,25,211x72,83,0[211x42,83,0,27,211x29,83,43,28]}
+      panes:
+        - cmatrix
+        - tui -r current-triage
+        - watch --interval 10min "task summary | ccze -A"
