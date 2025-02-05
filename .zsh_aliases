@@ -35,6 +35,7 @@ alias inc--='incus stop --stateful ubuntu'
 alias inc-='incus stop ubuntu'
 alias talos='talosctl'
 alias sai='sudo apt install'
+alias suser='systemctl --user '
 
 # Commands shadow
 alias br='br -sg'
@@ -58,12 +59,12 @@ alias nv='neovide --multigrid --notabs'
 alias ra=yazi
 alias vim=nvim
 alias v=nvim
-alias watch=viddy
 alias ugu='ug -Q -. --view=nvim'
 alias dat='/home/decoder/dev/dotfiles/scripts/__dotfiles_adder.sh'
 alias prompt='/home/decoder/dev/dotfiles/scripts/__generate_prompt_from_task.py'
 
 ## Kubernetes aliases
+alias k=kubectl
 alias kconf='__create_separate_kubeconfig.sh'
 alias kdump='kubectl get all --all-namespaces'
 alias kaf='kubectl apply -f'
