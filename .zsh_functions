@@ -12,6 +12,15 @@ function ddg_function() {
 
 alias ghcurrentbranch='ghcurrentbranch_function'
 
+function watch() {
+    if [[ $# -eq 0 ]]; then
+        command viddy
+    else
+        command viddy --shell zsh "source ~/.zsh_aliases; eval $(printf "%q " "$@")"
+    fi
+}
+
+
 function gco() {
   git branch | fzf | xargs -I {} git checkout {} 
 }
