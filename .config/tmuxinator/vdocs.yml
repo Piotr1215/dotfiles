@@ -50,7 +50,7 @@ pane_title_position: top
 pane_title_format: "[ #T ]"
 
 windows:
-  - clusters:
+  - repo:
       layout: main-vertical
       panes:
         - print -z npm run start

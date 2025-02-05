@@ -40,12 +40,13 @@ data.location=/home/decoder/.task
 # include solarized-light-256.theme
 # include no-color.theme
 include dark-green-256.theme
-color.blocked     = yellow on black
-color.blocking    = yellow on black
-color.tag.epic    = bold green
-color.tag.review  = bold blue
-color.tag.bug     = magenta on black
-color.tag.started = on gray2
+color.blocked         = yellow on black
+color.blocking        = yellow on black
+color.tag.epic        = bold green
+color.tag.review      = bold blue
+color.tag.bug         = magenta on black
+color.tag.started     = on gray2
+color.tag.pr_approved = bold green
 
 # Custom reports
 report.workdone.description=List of completed tasks in the work context
@@ -95,7 +96,6 @@ report.all-projects.columns=project
 report.all-projects.labels=
 report.all-projects.sort=project+
 
-
 report.tmark.description=List of tasks to report
 report.tmark.columns=project,description.desc
 report.tmark.labels=Proj,Desc
@@ -136,11 +136,11 @@ context.temp.write=+temp
 #User defined attributes
 uda.follow.type=string
 uda.follow.label=follow
+uda.follow.values=Y,N
 uda.session.type=string
 uda.session.label=Session
 uda.repo.type=string
 uda.repo.label=Repo
-uda.follow.values=Y,N
 uda.manual_priority.type=numeric
 uda.manual_priority.label=Manual Priority
 uda.release.type=string
