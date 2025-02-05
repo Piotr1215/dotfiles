@@ -37,8 +37,7 @@ main() {
 	local prs_added=0
 	# Get all current PR titles from GitHub
 	local gh_prs
-	gh_prs=$(get_review_prs | jq -r '.[].title | rtrimstr(" ") | ltrimstr(" ")')
-
+	gh_prs=$(get_review_prs | jq -r '.[] | "\(.title) (#\(.number))" | rtrimstr(" ") | ltrimstr(" ")')
 	# Check all pending tasks and mark done if PR is not in GitHub results
 	while read -r task_desc; do
 		if ! echo "$gh_prs" | grep -Fxq "$task_desc"; then
@@ -47,10 +46,9 @@ main() {
 			task "$task_uuid" done
 		fi
 	done < <(get_all_pending_pr_tasks)
-
 	# Create new tasks for new PRs
 	while read -r pr; do
-		pr_title=$(echo "$pr" | jq -r '.title')
+		pr_title=$(echo "$pr" | jq -r '"\(.title) (#\(.number))"')
 		pr_url=$(echo "$pr" | jq -r '.url')
 		repo_name=$(echo "$pr" | jq -r '.repository.name')
 		created_at=$(echo "$pr" | jq -r '.createdAt')
