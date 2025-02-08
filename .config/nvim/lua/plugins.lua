@@ -22,6 +22,7 @@ return require("lazy").setup {
   -- }}}
   -- Editor Extensions {{{
   ---@type LazySpec
+  { "jinh0/eyeliner.nvim" },
   {
     "mikavilpas/yazi.nvim",
     event = "VeryLazy",
@@ -65,15 +66,6 @@ return require("lazy").setup {
       excluded_modes = { "i" },
     },
   }, -- more opts
-  {
-    "folke/flash.nvim",
-    event = "VeryLazy",
-    opts = {},
-  -- stylua: ignore
-  keys = {
-    { "s", mode = { "n", "x", "o" }, function() require("flash").jump() end, desc = "Flash" },
-  },
-  },
   "MunifTanjim/nui.nvim",
   "stevearc/dressing.nvim",
   "tyru/open-browser.vim",
