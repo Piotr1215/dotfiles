@@ -55,7 +55,11 @@ def create_task(url, selected_text=""):
     if not project:
         return
 
-    task_args = [description, "+work", f"project:{project}"]
+    # Determine the tag based on the project name
+    if project.startswith("home"):
+        task_args = [description, "+home", f"project:{project}"]
+    else:
+        task_args = [description, "+work", f"project:{project}"]
     
     try:
         subprocess.run([create_task_path] + task_args, check=True)
