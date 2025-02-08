@@ -380,3 +380,4 @@ if [ -f '/home/decoder/dev/google-cloud-sdk/path.zsh.inc' ]; then . '/home/decod
 if [ -f '/home/decoder/dev/google-cloud-sdk/completion.zsh.inc' ]; then . '/home/decoder/dev/google-cloud-sdk/completion.zsh.inc'; fi
 
 # zprof > /tmp/zprof.out
+export PATH=/home/decoder/.npm-global/bin:$PATH
