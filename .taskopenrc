@@ -32,3 +32,9 @@ url.labelregex=".*"
 url.regex="((?:www|http).*)"
 url.command="open $LAST_MATCH"
 url.modes="batch,any,normal"
+
+email.target=annotations
+email.labelregex=".*"
+email.regex="^id:([^\\s]+)"
+email.command="neomutt -f notmuch://?query=id:$LAST_MATCH"
+email.modes="batch,any,normal"
