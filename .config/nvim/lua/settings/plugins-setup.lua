@@ -673,17 +673,8 @@ vim.g.startify_session_delete_buffers = 0
 vim.g.startify_skiplist = {
   "^/tmp",
 }
-vim.g.startify_commands = {
-  { "Search Dev    :SPC fd", "Telescope find_files search_dirs=~/dev,--hidden,--with-filename" },
-  { "Search Repos  :SPC fr", "lua require'telescope'.extensions.repo.list{search_dirs = {\"~/dev\"}}" },
-  { "Change Color  :SPC fc", "Telescope colorscheme" },
-  { "Transparent Bg:SPC tr", "TransparentEnable" },
-  { "Pick Emoji    :SPC fm", "Telescope emoji" },
-}
+vim.g.startify_commands = {}
 vim.g.startify_bookmarks = {
-  "~/.config/nvim/lua",
-  "~/.zshrc",
-  "~/.tmux.conf",
   "~/.taskrc",
   "~/.task/hooks",
   "~/shortcuts.md",
@@ -695,6 +686,6 @@ vim.g.startify_bookmarks = {
   "~/.config/taskwarrior-tui/shortcut-scripts",
   "~/.local/share/nvim/site/pack/packer/start",
   "~/.local/share/nvim/gp/chats",
-  "/etc/systemd/system/zoom-monitor.service",
+  "/usr/share/doc/neomutt/manual.html",
 }
 vim.g.startify_custom_header = "startify#pad(split(system('fortune -s | cowsay | lolcat; date'), '\n'))"
