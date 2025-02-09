@@ -15,4 +15,4 @@ IFS=$'\n\t'
 source __check_root.sh "$@"
 # source "${HOME}"/dev/dotfiles/scripts/__check_root.sh
 
-go-global-update && cargo install-update -a
+go-global-update && cargo upgrade
