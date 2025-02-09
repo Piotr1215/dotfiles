@@ -7,3 +7,5 @@
 	pager = delta --side-by-side
 [oh-my-zsh]
 	hide-status = 1
+[init]
+	defaultBranch = main
