@@ -38,7 +38,6 @@ if [ "$day_of_week" -le 5 ]; then
 	case $day_of_week in
 	1) # Monday
 		add_task_if_not_exists "fill standup forms" "today+8h" "session:standup"
-		add_task_if_not_exists "meeting with denise" "today+8h"
 		;;
 	3) # Wednesday
 		add_task_if_not_exists "fill standup forms" "today+8h" "session:standup"
