@@ -1,7 +1,7 @@
 # /home/decoder/.config/tmuxinator/atosik.yml
 
 name: mail
-root: ~/dev/
+root: ~/.config/mutt
 
 # Optional tmux socket
 # socket_name: foo
