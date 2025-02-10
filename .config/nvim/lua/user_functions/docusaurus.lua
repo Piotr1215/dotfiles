@@ -333,9 +333,24 @@ function M.insert_url_reference()
   vim.fn.chdir(git_root)
 
   require("telescope.builtin").find_files {
-    prompt_title = "Select MDX File to Reference",
+    prompt_title = "Select MD(X) File to Reference",
     search_dirs = { "." }, -- Search from current (git root) directory
-    find_command = { "find", ".", "-type", "f", "-name", "*.mdx", "!", "-path", "*/_*/*" },
+    find_command = {
+      "find",
+      ".",
+      "-type",
+      "f",
+      "(",
+      "-name",
+      "*.md",
+      "-o",
+      "-name",
+      "*.mdx",
+      ")",
+      "!",
+      "-path",
+      "*/_*/*",
+    },
     path_display = { truncate = 3 },
     attach_mappings = function(prompt_bufnr, map)
       map("i", "<CR>", function()
