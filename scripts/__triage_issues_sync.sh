@@ -14,11 +14,12 @@ get_triage_issues() {
 	curl -s -X POST \
 		-H "Content-Type: application/json" \
 		-H "Authorization: $LINEAR_API_KEY" \
-		--data '{"query": "query { issues(filter: {state: {name: {eq: \"Triage\"}}, team: {name: {eq: \"Docs\"}}}) { nodes { id identifier number title url team { name } } } }"}' \
+		--data '{"query": "query { issues(filter: {state: {name: {eq: \"Triage\"}}, team: {name: {in: [\"Docs\", \"Operations\"]}}}) { nodes { id identifier number title url team { name } } } }"}' \
 		https://api.linear.app/graphql | jq -r '.data.issues.nodes[]'
 }
+
 main() {
-	local issue_title issue_id issue_url task_uuid
+	local issue_title issue_id issue_url task_uuid team_name project
 	local issues_added=0
 	local linear_issues
 	linear_issues=$(get_triage_issues | jq -r '.title')
@@ -33,10 +34,19 @@ main() {
 		issue_title=$(echo "$issue" | jq -r '.title')
 		issue_id=$(echo "$issue" | jq -r '.identifier')
 		issue_url=$(echo "$issue" | jq -r '.url')
+		team_name=$(echo "$issue" | jq -r '.team.name')
+
+		# Set project based on team name
+		if [ "$team_name" = "Operations" ]; then
+			project="project:operations"
+		else
+			project="project:docs-maintenance"
+		fi
+
 		task_uuid=$(get_task_id_by_description "$issue_title")
 		if [[ -z "$task_uuid" ]]; then
 			echo "Creating new task for: $issue_title"
-			task_uuid=$(create_task "$issue_title" "+triage" "project:docs-maintenance" "session:vdocs" "linear_issue_id:$issue_id") || true
+			task_uuid=$(create_task "$issue_title" "+triage" "$project" "session:vdocs" "linear_issue_id:$issue_id") || true
 			annotate_task "$task_uuid" "$issue_url" || true
 			issues_added=$((issues_added + 1))
 		else
