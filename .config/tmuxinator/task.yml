@@ -12,7 +12,7 @@ root: ~/dev/
 # Project hooks
 
 # Runs on project start, always
-# on_project_start: nohup gnome-pomodoro &
+on_project_start: task context work
 
 # Run on project start, the first time
 # on_project_first_start: command

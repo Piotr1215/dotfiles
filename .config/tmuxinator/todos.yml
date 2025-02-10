@@ -12,7 +12,7 @@ root: ~/dev/
 # Project hooks
 
 # Runs on project start, always
-# on_project_start: nohup gnome-pomodoro &
+on_project_start: task context home
 
 # Run on project start, the first time
 # on_project_first_start: command
@@ -48,6 +48,6 @@ windows:
   - tasks:
       layout: 342c,294x72,0,0{82x72,0,0,25,211x72,83,0[211x42,83,0,27,211x29,83,43,28]}
       panes:
-        - task context home && tui -r workdone
-        - task context home && tui -r current-home
+        - tui -r workdone
+        - tui -r current-home
         - vim
