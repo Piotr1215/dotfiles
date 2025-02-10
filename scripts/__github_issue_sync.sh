@@ -216,6 +216,13 @@ main() {
 		echo "$github_issues" | jq -r '.description'
 		echo "$linear_issues" | jq -r '.description'
 	)"
+	echo "Syncing triage issues"
+
+	if systemctl --user start triage-sync.service; then
+		log "Triage issues synced successfully"
+	else
+		log "Error: Failed to sync triage issues" >&2
+	fi
 }
 
 # Execute the main function
