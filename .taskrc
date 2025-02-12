@@ -65,7 +65,13 @@ report.current.description=List of current tasks in the work context
 report.current.columns=id,entry.age,manual_priority,priority,project,tags,description.desc,entry,due.relative,linear_issue_id,release,follow,depends,urgency,session,repo
 report.current.labels=ID,Age,MP,P,Proj,Tag,Desc,Created,Due,Lin,Rel,Follow,Depends,Urg,Session,Repo
 report.current.sort=manual_priority-,priority-,project+
-report.current.filter=status:pending -BLOCKED -pr -triage project.not:home*
+report.current.filter=status:pending -BLOCKED -pr -triage -backlog project.not:home*
+
+report.backlog.description=List of current backlog tasks in the work context
+report.backlog.columns=id,entry.age,manual_priority,priority,project,tags,description.desc,entry,due.relative,linear_issue_id,release,follow,depends,urgency,session,repo
+report.backlog.labels=ID,Age,MP,P,Proj,Tag,Desc,Created,Due,Lin,Rel,Follow,Depends,Urg,Session,Repo
+report.backlog.sort=manual_priority-,priority-,project+
+report.backlog.filter=status:pending -BLOCKED -pr -triage +backlog project.not:home*
 
 report.current-home.description=List of current tasks in the home context
 report.current-home.columns=id,entry.age,priority,project,tags,description.desc,entry,due.relative,follow,depends,urgency
@@ -181,4 +187,4 @@ uda.taskwarrior-tui.selection.dim=yes
 uda.taskwarrior-tui.selection.blink=no
 uda.taskwarrior-tui.selection.reverse=yes
 uda.taskwarrior-tui.task-report.show-info=false
-context=home
+context=work

@@ -45,7 +45,7 @@ startup_pane: 2
 # attach: false
 
 windows:
-  - tasks:
+  - todo:
       layout: 342c,294x72,0,0{82x72,0,0,25,211x72,83,0[211x42,83,0,27,211x29,83,43,28]}
       panes:
         - tui -r workdone
@@ -64,9 +64,19 @@ windows:
         - viddy --interval 1h "gh pr list --repo loft-sh/hosted-platform | ccze -A"
         - viddy --interval 1h "gh pr list --repo loft-sh/loft-prod | ccze -A"
         - gh reference
+  - backlog:
+      layout: 342c,294x72,0,0{82x72,0,0,25,211x72,83,0[211x42,83,0,27,211x29,83,43,28]}
+      panes:
+        - tui -r workdone
+        - tui -r backlog
+        - viddy --interval 10min "task summary | ccze -A"
   - triage:
       layout: main-horizontal
       panes:
         - tui -r current-triage
         - viddy --interval 1h "task waiting | ccze -A"
         - viddy --interval 1h "task blocked | ccze -A"
+  - feeds:
+      layout: tiled
+      panes:
+        - newsboat -r
