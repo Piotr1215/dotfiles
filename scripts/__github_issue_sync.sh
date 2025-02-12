@@ -52,14 +52,15 @@ get_linear_issues() {
 	if ! issues=$(curl -s -X POST \
 		-H "Content-Type: application/json" \
 		-H "Authorization: $LINEAR_API_KEY" \
-		--data '{"query": "query { user(id: \"'"$LINEAR_USER_ID"'\") { id name assignedIssues(filter: { state: { name: { nin: [\"Released\", \"Canceled\",\"Done\",\"Ready for Release\"] } } }) { nodes { id title url project { name } } } } }"}' \
+		--data '{"query": "query { user(id: \"'"$LINEAR_USER_ID"'\") { id name assignedIssues(filter: { state: { name: { nin: [\"Released\", \"Canceled\",\"Done\",\"Ready for Release\"] } } }) { nodes { id title url state { name } project { name } } } } }"}' \
 		https://api.linear.app/graphql | jq -c '.data.user.assignedIssues.nodes[] | {
             id: .id,
             description: .title,
             repository: "linear",
             html_url: .url,
             issue_id: (.url | split("/") | .[-2]),
-            project: .project.name
+            project: .project.name,
+            status: .state.name
         }'); then
 		echo "Error: Unable to fetch Linear issues" >&2
 		return 1
@@ -74,12 +75,17 @@ create_and_annotate_task() {
 	local issue_url="$3"
 	local issue_number="$4"
 	local project_name="$5"
+	local issue_status="$6"
+	echo "Issue status: $issue_status"
 	log "Creating new task for issue: $issue_description"
 	task_uuid=$(create_task "$issue_description" "+$issue_repo_name" "project:$project_name")
 	if [[ -n "$task_uuid" ]]; then
 		annotate_task "$task_uuid" "$issue_url"
 		log "Task created and annotated for: $issue_description"
 		task modify "$task_uuid" linear_issue_id:"$issue_number"
+		if [[ "$issue_status" == "Backlog" ]]; then
+			task modify "$task_uuid" +backlog
+		fi
 		# Set session:vdocs for all DOC issues
 		if [[ "$issue_number" == *"DOC"* ]]; then
 			task modify "$task_uuid" session:vdocs
@@ -117,13 +123,14 @@ sync_to_taskwarrior() {
 	issue_url=$(echo "$issue_line" | jq -r '.html_url')
 	issue_number=$(echo "$issue_line" | jq -r '.issue_id')
 	project_name=$(echo "$issue_line" | jq -r '.project')
+	issue_status=$(echo "$issue_line" | jq -r '.status')
 
 	log "Processing Issue ID: $issue_id, Description: $issue_description"
 
 	task_uuid=$(get_task_id_by_description "$issue_description")
 
 	if [[ -z "$task_uuid" ]]; then
-		create_and_annotate_task "$issue_description" "$issue_repo_name" "$issue_url" "$issue_number" "$project_name"
+		create_and_annotate_task "$issue_description" "$issue_repo_name" "$issue_url" "$issue_number" "$project_name" "$issue_status"
 	else
 		log "Task already exists for: $issue_description (UUID: $task_uuid)"
 	fi
