@@ -50,7 +50,9 @@ RSYNC_OPTS=(
 	sudo rsync "${RSYNC_OPTS[@]}" /home/decoder/.var/app/com.obsproject.Studio/config /mnt/nas-backup/home/obs/
 
 	echo "Backing up dev folder..."
-	sudo rsync "${RSYNC_OPTS[@]}" /home/decoder/dev /mnt/nas-backup/dev
+	sudo rsync "${RSYNC_OPTS[@]}" /home/decoder/dev --exclude='.envrc' /mnt/nas-backup/dev
+
+	sudo rsync "${RSYNC_OPTS[@]}" /home/decoder/loft/ops /mnt/nas-backup/dev/loft
 
 	echo "Backup env files..."
 	restic backup \

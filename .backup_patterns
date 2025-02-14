@@ -22,6 +22,7 @@
 - .nvm/
 - /Videos/tmp/
 - /Downloads/
+- .envrc
 
 # Exclude everything else
 - /*
