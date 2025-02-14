@@ -39,16 +39,17 @@ on_project_start: task context work
 # startup_window: vim
 
 # Specifies (by index) which pane of the specified window will be selected on project startup. If not set, the first pane is used.
-startup_pane: 2
+startup_pane: 3
 
 # Controls whether the tmux session should be attached to automatically. Defaults to true.
 # attach: false
 
 windows:
   - todo:
-      layout: 342c,294x72,0,0{82x72,0,0,25,211x72,83,0[211x42,83,0,27,211x29,83,43,28]}
+      layout: aa75,294x72,0,0{82x72,0,0[82x42,0,0,163,82x29,0,43,169],211x72,83,0[211x42,83,0,170,211x29,83,43,181]}
       panes:
         - tui -r workdone
+        - tui -r backlog
         - tuiw
         - viddy zsh -c "__summarize_timew.py" --interval 10s
   - involved-prs:
@@ -64,12 +65,6 @@ windows:
         - viddy --interval 1h "gh pr list --repo loft-sh/hosted-platform | ccze -A"
         - viddy --interval 1h "gh pr list --repo loft-sh/loft-prod | ccze -A"
         - gh reference
-  - backlog:
-      layout: 342c,294x72,0,0{82x72,0,0,25,211x72,83,0[211x42,83,0,27,211x29,83,43,28]}
-      panes:
-        - tui -r workdone
-        - tui -r backlog
-        - viddy --interval 10min "task summary | ccze -A"
   - triage:
       layout: main-horizontal
       panes:
