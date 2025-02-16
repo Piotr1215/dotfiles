@@ -32,6 +32,8 @@ require("eyeliner").setup {
 -- Ensure that fzf-lua is installed and properly configured
 require("fzf-lua").setup()
 
+require("urlview").setup()
+
 require("Comment").setup()
 
 require("gitsigns").setup {

@@ -392,9 +392,8 @@ vim.keymap.set("n", "<Leader>tcm", ":Telescope telescope-crossplane crossplane_m
 vim.keymap.set("n", "<Leader>tcr", ":Telescope telescope-crossplane crossplane_resources<CR>")
 
 vim.keymap.set("n", "<Leader>mf", ":lua MiniFiles.open()<CR>", { noremap = true, silent = true })
-
--- Undotree
-vim.keymap.set("n", "<leader>u", require("undotree").toggle, { noremap = true, silent = true })
+vim.keymap.set("n", "<leader>uo", "<Cmd>UrlView<CR>", { desc = "View buffer URLs" })
+vim.keymap.set("n", "<leader>Uo", "<Cmd>UrlView lazy<CR>", { desc = "View Packer plugin URLs" })
 
 vim.keymap.set("n", "<leader>th", function()
   vim.lsp.inlay_hint.enable(not vim.lsp.inlay_hint.is_enabled())
