@@ -1,0 +1,22 @@
+{
+  "hook": {
+    "prefix": "hook",
+    "body": [
+      "#!/usr/bin/env python3",
+      "import sys",
+      "import json",
+      "",
+      "def main():",
+      "    try:",
+      "        # Read the 'before' and 'after' task JSON from stdin",
+      "        before_json = sys.stdin.readline()",
+      "        after_json = sys.stdin.readline()",
+      "        ",
+      "        # Parse JSON data",
+      "        before = json.loads(before_json)",
+      "        after = json.loads(after_json)",
+      "        $0"
+    ],
+    "description": "Template for Python hook script"
+  }
+}
