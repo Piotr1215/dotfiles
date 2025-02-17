@@ -43,6 +43,7 @@ include dark-green-256.theme
 color.blocked         = yellow on black
 color.blocking        = yellow on black
 color.tag.epic        = bold green
+color.tag.fresh       = bold yellow
 color.tag.review      = bold blue
 color.tag.bug         = magenta on black
 color.tag.started     = on gray2
@@ -79,10 +80,11 @@ report.current-home.labels=ID,Age,P,Proj,Tag,Desc,Created,Due,Follow,Depends,Urg
 report.current-home.sort=priority-,project+
 report.current-home.filter=status:pending
 
+# This is sorted by update date
 report.current-prs.description=List of current prs to review
 report.current-prs.columns=id,entry.age,priority,project,tags,description.desc,repo,urgency
 report.current-prs.labels=ID,Age,P,Proj,Tag,Desc,Repo,Urg
-report.current-prs.sort=entry-
+report.current-prs.sort=new_activity-
 report.current-prs.filter=status:pending project:pr-reviews
 
 report.current-triage.description=List of triage issues
@@ -149,6 +151,8 @@ context.temp.write=+temp
 uda.follow.type=string
 uda.follow.label=follow
 uda.follow.values=Y,N
+uda.new_activity.type=date
+uda.new_activity.label=New_Activity
 uda.session.type=string
 uda.session.label=Session
 uda.repo.type=string
