@@ -14,11 +14,14 @@ get_all_pending_pr_tasks() {
 }
 
 get_review_prs() {
-	gh search prs --involves Piotr1215 --owner loft-sh --state open --limit 100 --json title,url,number,repository,createdAt --jq '.'
+	gh search prs --involves Piotr1215 --owner loft-sh --state open --limit 100 \
+		--json title,url,number,repository,createdAt,updatedAt \
+		--jq '.'
 }
 
 get_approved_prs() {
-	gh search prs --involves Piotr1215 --owner loft-sh --state open --review approved --limit 100 --json title,url,number --jq '.'
+	gh search prs --involves Piotr1215 --owner loft-sh --state open --review approved --limit 100 \
+		--json title,url,number --jq '.'
 }
 
 notify() {
@@ -39,9 +42,7 @@ notify() {
 update_approved_status() {
 	local approved_prs
 	local task_uuid
-
 	approved_prs=$(get_approved_prs | jq -r '.[] | "\(.title) (#\(.number))" | rtrimstr(" ") | ltrimstr(" ")')
-
 	while read -r task_desc; do
 		if echo "$approved_prs" | grep -Fxq "$task_desc"; then
 			task_uuid=$(get_task_id_by_description "$task_desc")
@@ -56,11 +57,9 @@ update_approved_status() {
 main() {
 	local pr_title pr_url repo_name task_uuid created_at entry_ts
 	local prs_added=0
-
 	# Get all current PR titles from GitHub
 	local gh_prs
 	gh_prs=$(get_review_prs | jq -r '.[] | "\(.title) (#\(.number))" | rtrimstr(" ") | ltrimstr(" ")')
-
 	# Check all pending tasks and mark done if PR is not in GitHub results
 	while read -r task_desc; do
 		if ! echo "$gh_prs" | grep -Fxq "$task_desc"; then
@@ -69,26 +68,28 @@ main() {
 			task "$task_uuid" done
 		fi
 	done < <(get_all_pending_pr_tasks)
-
 	# Create new tasks for new PRs
 	while read -r pr; do
 		pr_title=$(echo "$pr" | jq -r '"\(.title) (#\(.number))"')
 		pr_url=$(echo "$pr" | jq -r '.url')
 		repo_name=$(echo "$pr" | jq -r '.repository.name')
 		created_at=$(echo "$pr" | jq -r '.createdAt')
+		updated_at=$(echo "$pr" | jq -r '.updatedAt')
 		entry_ts=$(date -d "$created_at" +%s)
+
 		task_uuid=$(get_task_id_by_description "$pr_title")
 		if [[ -z "$task_uuid" ]]; then
 			echo "Creating new task for PR: $pr_title"
 			task_uuid=$(create_task "$pr_title" "entry:$entry_ts" "+pr" "+kill" "project:pr-reviews" "repo:$repo_name") || true
 			annotate_task "$task_uuid" "$pr_url" || true
+			task "$task_uuid" modify "new_activity:$updated_at" || true
 			notify "$pr_title" 0
 			prs_added=$((prs_added + 1))
 		else
+			task "$task_uuid" modify "new_activity:$updated_at" || true
 			echo "Task already exists for PR: $pr_title"
 		fi
 	done < <(get_review_prs | jq -c '.[]')
-
 	# Update approved status for existing PRs
 	update_approved_status
 }
