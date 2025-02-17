@@ -53,9 +53,10 @@ windows:
         - tuiw
         - viddy zsh -c "__summarize_timew.py" --interval 10s
   - involved-prs:
-      layout: 342c,294x72,0,0{82x72,0,0,25,211x72,83,0[211x42,83,0,27,211x29,83,43,28]}
+      layout: aa75,294x72,0,0{82x72,0,0[82x42,0,0,163,82x29,0,43,169],211x72,83,0[211x42,83,0,170,211x29,83,43,181]}
       panes:
         - tui -r workdone-prs
+        - tui -r current-prs-age
         - tui -r current-prs
         - viddy --interval 10min "task summary | ccze -A"
   - tracked-prs:
