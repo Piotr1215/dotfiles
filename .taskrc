@@ -85,13 +85,13 @@ report.current-prs.description=List of current prs to review
 report.current-prs.columns=id,entry.age,priority,project,tags,description.desc,repo,urgency
 report.current-prs.labels=ID,Age,P,Proj,Tag,Desc,Repo,Urg
 report.current-prs.sort=new_activity-
-report.current-prs.filter=status:pending project:pr-reviews
+report.current-prs.filter=status:pending project:pr-reviews -hide
 
-report.current-prs-age.description=List of current prs to review
-report.current-prs-age.columns=id,entry.age,priority,project,tags,description.desc,repo,urgency
-report.current-prs-age.labels=ID,Age,P,Proj,Tag,Desc,Repo,Urg
+report.current-prs-age.description=List of current prs to review sorted by age
+report.current-prs-age.columns=id,entry.age,priority,description.desc,repo,urgency
+report.current-prs-age.labels=ID,Age,P,Desc,Repo,Urg
 report.current-prs-age.sort=entry+
-report.current-prs-age.filter=status:pending project:pr-reviews
+report.current-prs-age.filter=status:pending project:pr-reviews -hide
 
 report.current-triage.description=List of triage issues
 report.current-triage.columns=id,entry.age,priority,project,tags,description.desc,repo,urgency
