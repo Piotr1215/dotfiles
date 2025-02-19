@@ -24,9 +24,24 @@ get_all_pending_pr_tasks() {
 }
 
 get_review_prs() {
-	gh search prs --involves Piotr1215 --owner loft-sh --state open --limit 100 \
-		--json title,url,number,repository,createdAt,updatedAt \
-		--jq '.'
+	# Query PRs where you're involved (author, assignee, commenter)
+	local involved_prs
+	involved_prs=$(gh search prs --involves Piotr1215 --owner loft-sh --state open --limit 100 \
+		--json title,url,number,repository,createdAt,updatedAt)
+
+	# Query PRs where you're mentioned
+	local mentioned_prs
+	mentioned_prs=$(gh search prs --mentions Piotr1215 --owner loft-sh --state open --limit 100 \
+		--json title,url,number,repository,createdAt,updatedAt)
+
+	# Query PRs you're requested to review (includes team requests)
+	local review_prs
+	review_prs=$(gh search prs --review-requested Piotr1215 --owner loft-sh --state open --limit 100 \
+		--json title,url,number,repository,createdAt,updatedAt)
+
+	# Combine all results and remove duplicates
+	jq -s '.[0] + .[1] + .[2] | group_by(.url) | map(.[0]) | sort_by(.updatedAt) | reverse' \
+		<(echo "$involved_prs") <(echo "$mentioned_prs") <(echo "$review_prs")
 }
 
 get_approved_prs() {
@@ -87,7 +102,6 @@ main() {
 		updated_at=$(echo "$pr" | jq -r '.updatedAt')
 		# Convert the creation date to a proper ISO8601 format and then to epoch
 		entry_ts=$(date -d "$(format_date "$created_at")" +%s)
-
 		task_uuid=$(get_task_id_by_description "$pr_title")
 		if [[ -z "$task_uuid" ]]; then
 			echo "Creating new task for PR: $pr_title"
