@@ -15,7 +15,7 @@ root: ~/dev/
 on_project_start: task context work
 
 # Run on project start, the first time
-# on_project_first_start: command
+on_project_first_start: zsh -c 'direnv exec . ~/dev/dotfiles/scripts/__github_issue_sync.sh'
 
 # Run on project start, after the first time
 # on_project_restart: command
