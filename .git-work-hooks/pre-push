@@ -1,0 +1,18 @@
+#!/bin/bash
+
+echo "Hook running from: $0" >&2
+echo "Current directory: $(pwd)" >&2
+
+protected_branches=('main' 'master')
+current_branch=$(git symbolic-ref HEAD | sed -e 's,.*/\(.*\),\1,')
+
+echo "Current branch: $current_branch" >&2
+echo "Protected branches: ${protected_branches[*]}" >&2
+
+if [[ " ${protected_branches[*]} " =~ " ${current_branch} " ]]; then
+    echo "🚫 Blocking push to protected branch: $current_branch" >&2
+    exit 1
+fi
+
+echo "✅ Push allowed" >&2
+exit 0
