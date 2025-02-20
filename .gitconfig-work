@@ -8,6 +8,7 @@ sshCommand = "ssh -i ~/.ssh/id_ed25519 -F /dev/null"
 excludesFile = ~/.gitignore
 pager = delta
 editor = nvim
+hooksPath = /home/decoder/.git-work-hooks
 
 [color]
 branch = auto
