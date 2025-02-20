@@ -261,8 +261,8 @@ bindkey '^[w' toggle_window_pinned        # Alt+w: Toggles window pinned state
 
 function pet-select() {
   RBUFFER=$(pet search)
-  if [[ "$RBUFFER" =~ ^"xdg-open" ]]; then
-    eval "$RBUFFER" >/dev/null 2>&1 &
+  if [[ "$RBUFFER" =~ ^"lynx" ]]; then
+    eval "$RBUFFER" 
     zle send-break  # This will exit the current command line
   else
     CURSOR=$#BUFFER
