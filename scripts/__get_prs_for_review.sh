@@ -24,18 +24,24 @@ get_all_pending_pr_tasks() {
 }
 
 get_review_prs() {
-	jq -s '
-        # Combine personal PRs and remove duplicates
-        (.[0] + .[1] + .[2] | group_by(.url) | map(.[0])) as $personal_prs |
-        # Get team PRs
-        .[3] as $team_prs |
-        # Only return personal PRs after removing team PRs by URL
-        ($personal_prs | map(select(.url as $url | $team_prs | map(.url) | contains([$url]) | not))) | sort_by(.updatedAt) | reverse
-    ' \
-		<(gh search prs --involves Piotr1215 --owner loft-sh --state open --limit 100 --json title,url,number,repository,createdAt,updatedAt) \
-		<(gh search prs --mentions Piotr1215 --owner loft-sh --state open --limit 100 --json title,url,number,repository,createdAt,updatedAt) \
-		<(gh search prs --review-requested Piotr1215 --owner loft-sh --state open --limit 100 --json title,url,number,repository,createdAt,updatedAt) \
-		<(gh search prs --review-requested "loft-sh/eng-dev-vcluster-platform" --owner loft-sh --state open --limit 100 --json title,url,number,repository,createdAt,updatedAt)
+	# Query PRs where you're involved (author, assignee, commenter)
+	local involved_prs
+	involved_prs=$(gh search prs --involves Piotr1215 --owner loft-sh --state open --limit 100 \
+		--json title,url,number,repository,createdAt,updatedAt)
+
+	# Query PRs where you're mentioned
+	local mentioned_prs
+	mentioned_prs=$(gh search prs --mentions Piotr1215 --owner loft-sh --state open --limit 100 \
+		--json title,url,number,repository,createdAt,updatedAt)
+
+	# Query PRs you're requested to review (includes team requests)
+	local review_prs
+	review_prs=$(gh search prs --review-requested Piotr1215 --owner loft-sh --state open --limit 100 \
+		--json title,url,number,repository,createdAt,updatedAt)
+
+	# Combine all results and remove duplicates
+	jq -s '.[0] + .[1] + .[2] | group_by(.url) | map(.[0]) | sort_by(.updatedAt) | reverse' \
+		<(echo "$involved_prs") <(echo "$mentioned_prs") <(echo "$review_prs")
 }
 
 get_approved_prs() {
