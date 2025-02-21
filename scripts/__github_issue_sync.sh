@@ -101,6 +101,11 @@ create_and_annotate_task() {
 			if echo "$formatted_project" | grep -qi 'vcluster\|cloud'; then
 				task modify "$task_uuid" session:vcluster-staging
 			fi
+			# Check if project name contains vnode (case insensitive)
+			if echo "$formatted_project" | grep -qi 'vnode'; then
+				task modify "$task_uuid" repo:vnode-docs
+			fi
+
 		else
 			if [[ "$issue_number" == *"DOC"* ]]; then
 				task modify "$task_uuid" project:docs-maintenance
