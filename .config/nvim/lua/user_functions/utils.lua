@@ -1,6 +1,39 @@
 -- ~/.config/nvim/lua/user_functions/utils.lua
 local M = {}
 
+-- Key binding for this is defined in markdown.lua
+function M.bracket_link()
+  -- Get the visual selection boundaries
+  local start_line = vim.fn.line "'<"
+  local start_col = vim.fn.col "'<"
+  local end_line = vim.fn.line "'>"
+  local end_col = vim.fn.col "'>"
+
+  -- Get the selected text
+  local lines = vim.fn.getline(start_line, end_line)
+  if #lines == 0 then
+    return
+  end
+
+  -- Handle single line selection
+  if start_line == end_line then
+    lines[1] = string.sub(lines[1], start_col, end_col)
+  else
+    -- Handle multi-line selection
+    lines[1] = string.sub(lines[1], start_col)
+    lines[#lines] = string.sub(lines[#lines], 1, end_col)
+  end
+
+  local selected_text = table.concat(lines, " ")
+  local url = vim.fn.getreg "+"
+
+  -- Create the formatted link
+  local formatted_text = "[" .. selected_text .. "](" .. url .. ")"
+
+  -- Replace the selection with the formatted text
+  vim.api.nvim_buf_set_text(0, start_line - 1, start_col - 1, end_line - 1, end_col, { formatted_text })
+end
+
 function M.print_current_file_dir()
   local dir = vim.fn.expand "%:p:h"
   if dir ~= "" then

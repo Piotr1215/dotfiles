@@ -6,6 +6,13 @@ local function is_docs_repo()
     or vim.fn.match(norm_path, "^/home/decoder/loft/vcluster-docs") ~= -1
 end
 
+vim.keymap.set(
+  "v",
+  "<C-k>",
+  ':lua require("user_functions.utils").bracket_link()<CR>',
+  { noremap = true, silent = true, buffer = true }
+)
+
 -- markdown.nvim settings
 local markdown_settings = {
   no_default_key_mappings = 1,
