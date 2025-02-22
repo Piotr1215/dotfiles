@@ -1,8 +1,10 @@
-.dotfiles
+# Direnv files
 .envrc
+
+# Vim sessions and config
 *.vim
-.config/nvim/plugin/packer_compiled.lua
-.aider*
 .nvimrc.lua
 
+# Ai coding
+.aider*
 .gp.md

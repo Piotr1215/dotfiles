@@ -4,6 +4,7 @@
   path = ~/.gitconfig-personal
 [core]
 	pager = delta --side-by-side
+	excludesfile = /home/decoder/.gitignore
 [oh-my-zsh]
 	hide-status = 1
 [init]
