@@ -199,7 +199,9 @@ bindkey "^X^A" open_fabric                # Ctrl+X Ctrl+A: Opens fabric script
 zle -N open_fabric
 
 function email_analysis() {
-    alacritty --working-directory "$(pwd)" -e zsh -c "$HOME/.config/mutt/scripts/__mail_inbox_extractor.py --folder INBOX | fabric -sp email-organizer; echo '\nPress any key to close...'; read -k1"
+    local cmd
+    cmd="$HOME/.config/mutt/scripts/__mail_inbox_extractor.py | fabric -sp email-organizer; echo -e '\nPress any key to close...'; read -k1"
+    alacritty --working-directory "$(pwd)" -e zsh -c "$cmd"
 }
 zle -N email_analysis
 bindkey "^X^M" email_analysis
