@@ -11,7 +11,54 @@ function ddg_function() {
 }
 
 alias ghcurrentbranch='ghcurrentbranch_function'
+function link-homelab() {
+    local homelab_kubeconfig="/home/decoder/dev/homelab/kubeconfig"
+    local envrc_content="#!/bin/bash
+source_up
+export KUBECONFIG=$homelab_kubeconfig"
 
+    if [ -f ".envrc" ]; then
+        # Check if KUBECONFIG is already set
+        if grep -q "export KUBECONFIG=" ".envrc"; then
+            # Store the current KUBECONFIG value
+            grep "export KUBECONFIG=" ".envrc" > "/tmp/.envrc_kubeconfig_backup"
+            # Replace the KUBECONFIG line
+            sed -i "s|export KUBECONFIG=.*|export KUBECONFIG=$homelab_kubeconfig|" ".envrc"
+            echo "Updated KUBECONFIG in existing .envrc"
+        else
+            # Append KUBECONFIG export
+            echo "export KUBECONFIG=$homelab_kubeconfig" >> ".envrc"
+            echo "Added KUBECONFIG to existing .envrc"
+        fi
+    else
+        # Create new .envrc
+        echo "$envrc_content" > ".envrc"
+        echo "Created new .envrc"
+    fi
+    
+    direnv allow
+}
+
+function unlink-homelab() {
+    if [ ! -f ".envrc" ]; then
+        echo "No .envrc found"
+        return
+    fi
+
+    if [ -f "/tmp/.envrc_kubeconfig_backup" ]; then
+        # Restore previous KUBECONFIG
+        local old_kubeconfig=$(cat "/tmp/.envrc_kubeconfig_backup")
+        sed -i "s|export KUBECONFIG=.*|$old_kubeconfig|" ".envrc"
+        rm "/tmp/.envrc_kubeconfig_backup"
+        echo "Restored previous KUBECONFIG configuration"
+    else
+        # Remove the file if we created it
+        rm ".envrc"
+        echo "Removed .envrc"
+    fi
+    
+    direnv allow
+}
 function watch() {
     if [[ $# -eq 0 ]]; then
         command viddy
