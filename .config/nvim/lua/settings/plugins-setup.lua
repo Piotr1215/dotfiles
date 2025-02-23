@@ -7,31 +7,14 @@ require("typeit").setup {
   default_pause = "paragraph", -- Default pause behavior ('line' or 'paragraph')
 }
 
--- TODO: remove this setting when nvim bug is fixed
-require("dressing").setup {
-  select = {
-    enabled = true,
-    get_config = function(opts)
-      if opts.kind == "codeaction" then
-        return { enabled = false }
-      end
-    end,
-    backend = { "fzf_lua" },
-    fzf_lua = {
-      -- Customize options for fzf_lua if needed
-      -- winopts = {
-      --   height = 0.5,
-      --   width = 0.5,
-      -- },
-    },
-  },
-}
 require("eyeliner").setup {
   highlight_on_key = true, -- this must be set to true for dimming to work!
 }
 -- Ensure that fzf-lua is installed and properly configured
 require("fzf-lua").setup()
 
+--- the parameter is optional
+---@diagnostic disable-next-line: missing-parameter
 require("urlview").setup()
 
 require("Comment").setup()
@@ -73,7 +56,7 @@ require("gitsigns").setup {
       gitsigns.reset_hunk { vim.fn.line ".", vim.fn.line "v" }
     end, { desc = "Reset hunk (visual)" })
     map("n", "<leader>hS", gitsigns.stage_buffer, { desc = "Stage buffer" })
-    map("n", "<leader>hu", gitsigns.undo_stage_hunk, { desc = "Undo stage hunk" })
+    map("n", "<leader>hu", gitsigns.stage_hunk, { desc = "Undo stage hunk" })
     map("n", "<leader>hR", gitsigns.reset_buffer, { desc = "Reset buffer" })
     map("n", "<leader>hp", gitsigns.preview_hunk, { desc = "Preview hunk" })
     map("n", "<leader>hb", function()
@@ -84,7 +67,7 @@ require("gitsigns").setup {
     map("n", "<leader>hD", function()
       gitsigns.diffthis "~"
     end, { desc = "Diff this (against HEAD)" })
-    map("n", "<leader>td", gitsigns.toggle_deleted, { desc = "Toggle deleted" })
+    map("n", "<leader>td", gitsigns.preview_hunk_inline, { desc = "Toggle deleted" })
 
     -- Text object
     map({ "o", "x" }, "Ih", ":<C-U>Gitsigns select_hunk<CR>", { desc = "Select hunk" })
