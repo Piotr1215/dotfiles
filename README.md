@@ -4,6 +4,29 @@ Simple dotfiles with an installation script.
 
 [![Video Thumbnail](https://img.youtube.com/vi/_ttF5InNuMI/0.jpg)](https://www.youtube.com/watch?v=_ttF5InNuMI)
 
+## Encrypted Files
+
+This repository uses git-crypt for encrypting sensitive files. The following files are encrypted:
+
+- `.vsnip/global.json` - VSCode snippets file
+
+### Setting up git-crypt for new devices
+
+After cloning the repository, you'll need the encryption key to decrypt these files:
+
+```bash
+# Install git-crypt
+sudo apt install git-crypt
+
+# Copy the encryption key to your new machine
+# (securely transfer the .keys/git-crypt-key file)
+
+# Unlock the repository with the key
+git-crypt unlock /path/to/git-crypt-key
+```
+
+Once unlocked, encrypted files will automatically be decrypted when checked out and encrypted when committed.
+
 ## Installation
 
 Installation steps for Ubuntu/Pop!_OS:
