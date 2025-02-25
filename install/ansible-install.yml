@@ -171,6 +171,38 @@
           - restic
           - dunst
           - socat
+          # Additional useful packages
+          - autokey-gtk
+          - ccze
+          - colordiff
+          - curl
+          - diff-so-fancy
+          - dos2unix
+          - elinks
+          - encfs
+          - ffmpeg
+          - flatpak
+          - glow
+          - inotify-tools
+          - isync
+          - lua5.4
+          - luarocks
+          - lynis
+          - lynx
+          - mpop
+          - msmtp
+          - neofetch
+          - neomutt
+          - newsboat
+          - notmuch
+          - pandoc
+          - pass
+          - pet
+          - sshfs
+          - taskwarrior-tui
+          - ueberzugpp
+          - urlview
+          - yadm
         state: present
 
     - name: Install tmuxinator
