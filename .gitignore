@@ -9,3 +9,6 @@
 .aider*
 .gp.md
 CLAUDE.md
+
+# Git-crypt keys
+.keys/
