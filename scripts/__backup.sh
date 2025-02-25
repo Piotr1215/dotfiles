@@ -3,7 +3,7 @@ set -eo pipefail
 
 # =============================================================================
 # Enhanced backup script with configuration-based backup sources
-# 
+#
 # HOW TO ADD NEW BACKUP SOURCES:
 # 1. For rsync-based backups: Add a new entry to the BACKUP_SOURCES array
 #    Format: "name|source_path|destination_path|need_sudo|extra_options"
@@ -41,7 +41,7 @@ log() {
 rotate_logs() {
 	local max_logs=5
 	if [[ -f "$LOG_FILE" ]]; then
-		for ((i = $max_logs; i > 0; i--)); do
+		for ((i = max_logs; i > 0; i--)); do
 			j=$((i - 1))
 			[[ -f "$LOG_FILE.$j" ]] && mv "$LOG_FILE.$j" "$LOG_FILE.$i"
 		done
@@ -96,7 +96,8 @@ fi
 # Check available disk space
 check_disk_space() {
 	local min_space_mb=1000
-	local available_space=$(df -m "$BACKUP_ROOT" | awk 'NR==2 {print $4}')
+	local available_space
+	available_space=$(df -m "$BACKUP_ROOT" | awk 'NR==2 {print $4}')
 	if [[ $available_space -lt $min_space_mb ]]; then
 		log "ERROR" "Insufficient disk space on backup target ($available_space MB)"
 		notify_error "Low disk space on backup target: $available_space MB"
@@ -107,16 +108,21 @@ check_disk_space() {
 }
 
 # Setup display for notifications
-export DISPLAY=:$(ls /tmp/.X11-unix/* | sed 's#/tmp/.X11-unix/X##')
-export DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$(id -u)/bus"
+display_num=$(find /tmp/.X11-unix/ -type s -name "X*" | head -n 1 | sed 's#/tmp/.X11-unix/X##')
+export DISPLAY=":${display_num}"
+user_id=$(id -u)
+export DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/${user_id}/bus"
 
 # Create lock file
 touch "$LOCK_FILE"
 rotate_logs
 log "INFO" "Starting backup process"
 
+# Initialize exit code variable
+exit_code=0
+
 # Cleanup on exit
-trap 'rm -f $LOCK_FILE; log "INFO" "Backup process ended"; exit_status=$?; if [ $exit_status -ne 0 ]; then notify_error "Backup failed with status $exit_status"; fi' EXIT
+trap 'rm -f $LOCK_FILE; log "INFO" "Backup process ended"; exit_code=$?; if [ "$exit_code" -ne 0 ]; then notify_error "Backup failed with status $exit_code"; fi' EXIT
 
 # Check disk space before starting
 check_disk_space || exit 1
@@ -166,44 +172,45 @@ declare -a BACKUP_SOURCES=(
 perform_backup() {
 	local config="$1"
 	local name source_path destination_path need_sudo extra_options
-	
+
 	# Parse configuration
-	IFS='|' read -r name source_path destination_path need_sudo extra_options <<< "$config"
-	
-	# Build command
-	local cmd="rsync ${RSYNC_OPTS[*]}"
-	if [[ -n "$extra_options" ]]; then
-		cmd="$cmd $extra_options"
-	fi
-	cmd="$cmd $source_path $destination_path"
-	
+	IFS='|' read -r name source_path destination_path need_sudo extra_options <<<"$config"
+
 	# Execute with or without sudo
 	if [[ "$need_sudo" == "true" ]]; then
-		backup_with_check "$name" sudo $cmd
+		if [[ -n "$extra_options" ]]; then
+			backup_with_check "$name" sudo rsync "${RSYNC_OPTS[@]}" $extra_options $source_path "$destination_path"
+		else
+			backup_with_check "$name" sudo rsync "${RSYNC_OPTS[@]}" $source_path "$destination_path"
+		fi
 	else
-		backup_with_check "$name" $cmd
+		if [[ -n "$extra_options" ]]; then
+			backup_with_check "$name" rsync "${RSYNC_OPTS[@]}" $extra_options $source_path "$destination_path"
+		else
+			backup_with_check "$name" rsync "${RSYNC_OPTS[@]}" $source_path "$destination_path"
+		fi
 	fi
 }
 
 {
 	log "INFO" "Backup started at $(date)"
-	
+
 	# Process all backup sources
 	for backup_src in "${BACKUP_SOURCES[@]}"; do
 		perform_backup "$backup_src"
 	done
-	
+
 	# Define restic backup sources
 	declare -a RESTIC_SOURCES=(
 		"/home/decoder/.envrc"
 		"/home/decoder/dev/.envrc"
-		"/home/decoder/loft/.envrc" 
+		"/home/decoder/loft/.envrc"
 		"/home/decoder/.ssh/"
 		"/home/decoder/.zsh/completions/"
 		"/etc/fstab"
 		"/home/decoder/loft/.nvimrc"
 	)
-	
+
 	# Backup env files with restic
 	log "INFO" "Backing up env files with restic..."
 	if restic backup "${RESTIC_SOURCES[@]}"; then
@@ -228,7 +235,7 @@ perform_backup() {
 		# Add more special backups here as needed, e.g.:
 		# ["Firefox profiles"]="tar -czf \"$HOME_BACKUP/firefox_profiles.tar.gz\" ~/.mozilla/firefox"
 	)
-	
+
 	# Process special backups
 	for name in "${!SPECIAL_BACKUPS[@]}"; do
 		log "INFO" "Backing up $name..."
