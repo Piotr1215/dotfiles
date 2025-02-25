@@ -1,6 +1,22 @@
 #!/bin/bash
 set -eo pipefail
 
+# =============================================================================
+# Enhanced backup script with configuration-based backup sources
+# 
+# HOW TO ADD NEW BACKUP SOURCES:
+# 1. For rsync-based backups: Add a new entry to the BACKUP_SOURCES array
+#    Format: "name|source_path|destination_path|need_sudo|extra_options"
+#    Example: "photos|/home/user/Photos|/mnt/backup/photos|false|--exclude=raw"
+#
+# 2. For restic-based backups: Add a new path to the RESTIC_SOURCES array
+#    Example: "/home/user/important-document.txt"
+#
+# 3. For special backups (custom commands): Add to the SPECIAL_BACKUPS associative array
+#    Format: ["Backup Name"]="command to execute"
+#    Example: ["Firefox profiles"]="tar -czf \"$HOME_BACKUP/firefox.tar.gz\" ~/.mozilla"
+# =============================================================================
+
 # Configuration section
 BACKUP_ROOT="/mnt/nas-backup"
 HOME_BACKUP="${BACKUP_ROOT}/home"
@@ -134,37 +150,63 @@ fi
 # For restic backups
 export RESTIC_REPOSITORY="${SECURE_STORE}"
 
+# Define backup sources in an array for easy addition/modification
+# Format: "name|source_path|destination_path|need_sudo|extra_options"
+declare -a BACKUP_SOURCES=(
+	"system files|$USER_HOME/|$HOME_BACKUP/|false|--exclude-from=$BACKUP_PATTERNS_FILE"
+	"cron jobs|/var/spool/cron/|$HOME_BACKUP/cron/|true|"
+	"systemd files (system)|/etc/systemd/|$HOME_BACKUP/systemd_backup/system/|true|"
+	"systemd files (user)|$HOME/.config/systemd/user/|$HOME_BACKUP/systemd_backup/user/|false|"
+	"OBS Studio settings|/home/decoder/.var/app/com.obsproject.Studio/config|$HOME_BACKUP/obs/|true|"
+	"dev folder|/home/decoder/dev|$DEV_BACKUP|true|--exclude=.envrc"
+	"loft ops|/home/decoder/loft/ops|$DEV_BACKUP/loft|true|"
+)
+
+# Function to perform backup from configuration
+perform_backup() {
+	local config="$1"
+	local name source_path destination_path need_sudo extra_options
+	
+	# Parse configuration
+	IFS='|' read -r name source_path destination_path need_sudo extra_options <<< "$config"
+	
+	# Build command
+	local cmd="rsync ${RSYNC_OPTS[*]}"
+	if [[ -n "$extra_options" ]]; then
+		cmd="$cmd $extra_options"
+	fi
+	cmd="$cmd $source_path $destination_path"
+	
+	# Execute with or without sudo
+	if [[ "$need_sudo" == "true" ]]; then
+		backup_with_check "$name" sudo $cmd
+	else
+		backup_with_check "$name" $cmd
+	fi
+}
+
 {
 	log "INFO" "Backup started at $(date)"
-
-	# Backup system files
-	backup_with_check "system files" rsync "${RSYNC_OPTS[@]}" --exclude-from="$BACKUP_PATTERNS_FILE" "$USER_HOME/" "$HOME_BACKUP/"
-
-	# Backup cron jobs
-	backup_with_check "cron jobs" sudo rsync "${RSYNC_OPTS[@]}" /var/spool/cron/ "$HOME_BACKUP/cron/"
-
-	# Backup systemd files
-	backup_with_check "systemd files" sudo rsync "${RSYNC_OPTS[@]}" /etc/systemd/ ~/.config/systemd/user/ "$HOME_BACKUP/systemd_backup/"
-
-	# Backup OBS Studio settings
-	backup_with_check "OBS Studio settings" sudo rsync "${RSYNC_OPTS[@]}" /home/decoder/.var/app/com.obsproject.Studio/config "$HOME_BACKUP/obs/"
-
-	# Backup dev folder
-	backup_with_check "dev folder" sudo rsync "${RSYNC_OPTS[@]}" /home/decoder/dev --exclude='.envrc' "$DEV_BACKUP"
-
-	# Backup loft ops
-	backup_with_check "loft ops" sudo rsync "${RSYNC_OPTS[@]}" /home/decoder/loft/ops "$DEV_BACKUP/loft"
-
+	
+	# Process all backup sources
+	for backup_src in "${BACKUP_SOURCES[@]}"; do
+		perform_backup "$backup_src"
+	done
+	
+	# Define restic backup sources
+	declare -a RESTIC_SOURCES=(
+		"/home/decoder/.envrc"
+		"/home/decoder/dev/.envrc"
+		"/home/decoder/loft/.envrc" 
+		"/home/decoder/.ssh/"
+		"/home/decoder/.zsh/completions/"
+		"/etc/fstab"
+		"/home/decoder/loft/.nvimrc"
+	)
+	
 	# Backup env files with restic
 	log "INFO" "Backing up env files with restic..."
-	if restic backup \
-		/home/decoder/.envrc \
-		/home/decoder/dev/.envrc \
-		/home/decoder/loft/.envrc \
-		/home/decoder/.ssh/ \
-		/home/decoder/.zsh/completions/ \
-		/etc/fstab \
-		/home/decoder/loft/.nvimrc; then
+	if restic backup "${RESTIC_SOURCES[@]}"; then
 		log "INFO" "Restic backup completed successfully"
 	else
 		log "ERROR" "Restic backup failed"
@@ -180,13 +222,22 @@ export RESTIC_REPOSITORY="${SECURE_STORE}"
 		restic check --read-data-subset=10%
 	fi
 
-	# Backup Gnome settings
-	log "INFO" "Backing up Gnome settings..."
-	if dconf dump / >"$HOME_BACKUP/pop_os_settings_backup.ini"; then
-		log "INFO" "Gnome settings backup completed successfully"
-	else
-		log "ERROR" "Failed to backup Gnome settings"
-	fi
+	# Configuration for special backups (not using rsync)
+	declare -A SPECIAL_BACKUPS=(
+		["Gnome settings"]="dconf dump / > \"$HOME_BACKUP/pop_os_settings_backup.ini\""
+		# Add more special backups here as needed, e.g.:
+		# ["Firefox profiles"]="tar -czf \"$HOME_BACKUP/firefox_profiles.tar.gz\" ~/.mozilla/firefox"
+	)
+	
+	# Process special backups
+	for name in "${!SPECIAL_BACKUPS[@]}"; do
+		log "INFO" "Backing up $name..."
+		if eval "${SPECIAL_BACKUPS[$name]}"; then
+			log "INFO" "$name backup completed successfully"
+		else
+			log "ERROR" "Failed to backup $name"
+		fi
+	done
 
 	# Get backup size
 	backup_size=$(du -sh "$HOME_BACKUP/" | cut -f1)
