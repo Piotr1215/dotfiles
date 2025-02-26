@@ -92,11 +92,6 @@ alacritty_firefox_vertical() {
 	fi
 }
 firefox_firefox_vertical() {
-	# Get screen dimensions
-	screen_size=$(xdpyinfo | grep dimensions | awk '{print $2}')
-	screen_width=$(echo $screen_size | cut -d'x' -f1)
-	half_width=$((screen_width / 2))
-
 	# Minimize any visible Alacritty windows
 	alacritty_window=$(xdotool search --onlyvisible --classname Alacritty | head -n 1)
 	if [ -n "$alacritty_window" ]; then
@@ -115,15 +110,15 @@ firefox_firefox_vertical() {
 			xdotool windowactivate --sync "$window_id"
 			wmctrl -i -r "$window_id" -b remove,maximized_vert,maximized_horz
 
-			# Position and size windows with sync - using positions from previous working version
+			# Fixing the overlap in the middle
 			if [ $i -eq 0 ]; then
-				# Left window - positioned slightly to the left as in previous working version
-				xdotool windowsize --sync "$window_id" 1960 2154  # Using fixed width instead of calculated half_width
-				xdotool windowmove --sync "$window_id" -20 21
+				# Left window - reduce width to eliminate overlap
+				xdotool windowsize --sync "$window_id" 1870 2180
+				xdotool windowmove --sync "$window_id" -26 24
 			else
-				# Right window - positioned at fixed coordinate as in previous working version
-				xdotool windowsize --sync "$window_id" 1960 2154  # Using fixed width instead of calculated half_width
-				xdotool windowmove --sync "$window_id" 1900 21
+				# Right window - maintain right edge position
+				xdotool windowsize --sync "$window_id" 1971 2180
+				xdotool windowmove --sync "$window_id" 1920 24
 			fi
 
 			# Ensure proper activation and raise to top
