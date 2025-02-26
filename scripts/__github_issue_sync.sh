@@ -68,6 +68,33 @@ get_linear_issues() {
 	echo "$issues"
 }
 
+# Safely attempt to complete or delete a task based on its status and deletability
+handle_task_completion() {
+	local task_uuid="$1"
+	local task_description="$2"
+	local action="$3"
+	
+	# We should only handle pending tasks
+	local status
+	status=$(task _get "$task_uuid".status 2>/dev/null || echo "")
+	
+	if [[ "$status" != "pending" ]]; then
+		# Skip non-pending tasks entirely
+		return
+	fi
+	
+	local is_deletable
+	is_deletable=$(task _get "$task_uuid".deletable 2>/dev/null || echo "false")
+	
+	if [[ "$is_deletable" == "true" && "$action" == "delete" ]]; then
+		log "Deleting task $task_uuid: $task_description"
+		echo "yes" | task "$task_uuid" delete
+	else
+		log "Marking task $task_uuid as completed: $task_description"
+		mark_task_completed "$task_uuid"
+	fi
+}
+
 # Synchronize a single issue with Taskwarrior
 create_and_annotate_task() {
 	local issue_description="$1"
@@ -141,78 +168,63 @@ sync_to_taskwarrior() {
 	fi
 }
 
-# Mark a GitHub issue as completed in Taskwarrior
-sync_github_issue() {
-	local task_description="$1"
-	local task_uuid
-
-	task_uuid=$(get_task_id_by_description "$task_description")
-
-	if [[ -n "$task_uuid" ]]; then
-		mark_task_completed "$task_uuid"
-		log "Task marked as completed: $task_description (UUID: $task_uuid)"
-	else
-		log "Task UUID not found for: $task_description" >&2
-	fi
-}
-
 # Compare existing Taskwarrior tasks with current issues and mark as completed if not present
-# If a task has a linear_issue_id, it was created in Taskwarrior, so delete it instead of marking completed
+# If a task has a linear_issue_id, it was created from Linear, so try to delete it
 compare_and_display_tasks_not_in_issues() {
-	local existing_task_descriptions="$1"
 	local issues_descriptions="$2"
-	local task_description issue_description
-	local issue_exists
 
 	log "Starting comparison of Taskwarrior tasks and current issues."
 
-	mapfile -t existing_task_descriptions_array <<<"$existing_task_descriptions"
-	mapfile -t issues_descriptions_array <<<"$issues_descriptions"
-
-	for task_description in "${existing_task_descriptions_array[@]}"; do
-		local trimmed_task_description
-		trimmed_task_description=$(trim_whitespace "$task_description")
-		issue_exists=false
-
-		for issue_description in "${issues_descriptions_array[@]}"; do
-			local trimmed_issue_description
-			trimmed_issue_description=$(trim_whitespace "$issue_description")
-			if [[ "${trimmed_task_description,,}" == "${trimmed_issue_description,,}" ]]; then
-				issue_exists=true
-				break
-			fi
-		done
-
-		if [[ "$issue_exists" == false ]]; then
-			local task_uuid=$(get_task_id_by_description "$trimmed_task_description")
-			
-			if [[ -n "$task_uuid" ]]; then
-				# Check if this task has a linear_issue_id (created from Taskwarrior)
-				local linear_issue_id=$(task _get "$task_uuid".linear_issue_id 2>/dev/null || echo "")
-				
-				if [[ -n "$linear_issue_id" && "$linear_issue_id" != "null" ]]; then
-					# Task was created in Taskwarrior and has Linear ID - delete it
-					log "Task has Linear ID and is no longer assigned to me. Deleting: $trimmed_task_description"
-					echo "yes" | task "$task_uuid" delete
-				else
-					# Regular GitHub/Linear task - mark as completed
-					log "No matching issue found for task: $trimmed_task_description. Marking as completed."
-					sync_github_issue "$trimmed_task_description"
-				fi
+	# OPTIMIZATION: Only get PENDING tasks with specific tags
+	# This massively reduces the number of tasks to process
+	local task_export=$(task '+github or +linear or linear_issue_id.any:' '-triage' status:pending export)
+	
+	# Remove any empty or null entries (extra safety check)
+	task_export=$(echo "$task_export" | jq -c '[.[] | select(.status == "pending")]')
+	
+	# Extract all issue descriptions into a temporary file for faster processing
+	local issues_file=$(mktemp)
+	echo "$issues_descriptions" | tr -d '\r' | grep -v '^$' | while IFS= read -r issue; do
+		echo "${issue,,}" >> "$issues_file"
+	done
+	
+	# Debug count
+	local tasks_count=$(echo "$task_export" | jq -r '.[] | .uuid' | wc -l)
+	log "Processing $tasks_count pending tasks for comparison"
+	
+	# Process each task in a single pass using jq
+	echo "$task_export" | jq -c '.[]' | while IFS= read -r task_json; do
+		local task_uuid=$(echo "$task_json" | jq -r '.uuid')
+		local description=$(echo "$task_json" | jq -r '.description')
+		local status=$(echo "$task_json" | jq -r '.status')
+		
+		# Extra check - skip any non-pending tasks
+		if [[ "$status" != "pending" ]]; then
+			continue
+		fi
+		
+		local trimmed_desc=$(trim_whitespace "$description")
+		local lower_desc="${trimmed_desc,,}"
+		local linear_issue_id=$(echo "$task_json" | jq -r '.linear_issue_id // empty')
+		
+		# Fast grep search instead of bash loop
+		if ! grep -Fxq "$lower_desc" "$issues_file"; then
+			if [[ -n "$linear_issue_id" && "$linear_issue_id" != "null" ]]; then
+				# Task has Linear ID and is no longer assigned - try to delete it
+				log "Task has Linear ID and is no longer assigned to me: $trimmed_desc"
+				handle_task_completion "$task_uuid" "$trimmed_desc" "delete"
+			else
+				# Regular GitHub/Linear task - mark as completed
+				log "No matching issue found for task: $trimmed_desc"
+				handle_task_completion "$task_uuid" "$trimmed_desc" "complete"
 			fi
 		fi
 	done
+	
+	# Clean up
+	rm -f "$issues_file"
 
 	log "Comparison of Taskwarrior tasks and issues completed."
-}
-
-# Retrieve existing Taskwarrior task descriptions with +github or +linear tags and pending status
-# Exclude tasks tagged with +triage as they are handled separately
-get_existing_task_descriptions() {
-	# Include any tags that may indicate Linear or GitHub issues
-	# Explicitly exclude tasks with +triage tag
-	task '+github or +linear or linear_issue_id.any:' '-triage' status:pending export |
-		jq -r '.[] | .description'
 }
 
 # Synchronize all issues to Taskwarrior
@@ -231,18 +243,33 @@ find_and_delete_reassigned_tasks() {
 	log "Checking for reassigned Linear tasks..."
 	
 	# Get all tasks with linear_issue_id but exclude +triage tasks
+	# OPTIMIZATION: Only get pending tasks
 	local tasks_with_linear_id=$(task 'linear_issue_id.any:' '-triage' status:pending export)
 	
-	if [[ -z "$tasks_with_linear_id" ]]; then
-		log "No tasks with linear_issue_id found."
+	# Remove any empty or null entries (extra safety check)
+	tasks_with_linear_id=$(echo "$tasks_with_linear_id" | jq -c '[.[] | select(.status == "pending")]')
+	
+	if [[ -z "$tasks_with_linear_id" || "$tasks_with_linear_id" == "[]" ]]; then
+		log "No pending tasks with linear_issue_id found."
 		return
 	fi
+	
+	# Debug count
+	local tasks_count=$(echo "$tasks_with_linear_id" | jq -r '.[] | .uuid' | wc -l)
+	log "Processing $tasks_count pending tasks with linear_issue_id"
 	
 	# Get all linear issue IDs from the Linear API response
 	all_linear_issue_ids=$(echo "$linear_issues" | jq -r '.issue_id // empty')
 	
 	# Process each task with a linear_issue_id
 	echo "$tasks_with_linear_id" | jq -c '.[]' | while IFS= read -r task_data; do
+		local status=$(echo "$task_data" | jq -r '.status')
+		
+		# Extra check - skip any non-pending tasks
+		if [[ "$status" != "pending" ]]; then
+			continue
+		fi
+		
 		linear_issue_id=$(echo "$task_data" | jq -r '.linear_issue_id')
 		task_uuid=$(echo "$task_data" | jq -r '.uuid')
 		task_description=$(echo "$task_data" | jq -r '.description')
@@ -250,15 +277,15 @@ find_and_delete_reassigned_tasks() {
 		# If the task has a linear_issue_id but it's not in our current Linear issues,
 		# it means the task was likely reassigned to someone else
 		if ! echo "$all_linear_issue_ids" | grep -q "$linear_issue_id"; then
-			log "Task has Linear ID $linear_issue_id but is no longer assigned to me. Deleting: $task_description"
-			echo "yes" | task "$task_uuid" delete
+			log "Task has Linear ID $linear_issue_id but is no longer assigned to me: $task_description"
+			handle_task_completion "$task_uuid" "$task_description" "delete"
 		fi
 	done
 }
 
 # Main function to orchestrate the synchronization
 main() {
-	local github_issues linear_issues existing_task_descriptions
+	local github_issues linear_issues
 
 	validate_env_vars
 
@@ -277,9 +304,8 @@ main() {
 	[[ -n "$github_issues" ]] && sync_issues_to_taskwarrior "$github_issues"
 	[[ -n "$linear_issues" ]] && sync_issues_to_taskwarrior "$linear_issues"
 
-	existing_task_descriptions=$(get_existing_task_descriptions)
-
-	compare_and_display_tasks_not_in_issues "$existing_task_descriptions" "$(
+	# Directly pass issue descriptions to the optimized comparison function
+	compare_and_display_tasks_not_in_issues "" "$(
 		echo "$github_issues" | jq -r '.description'
 		echo "$linear_issues" | jq -r '.description'
 	)"
