@@ -115,15 +115,15 @@ firefox_firefox_vertical() {
 			xdotool windowactivate --sync "$window_id"
 			wmctrl -i -r "$window_id" -b remove,maximized_vert,maximized_horz
 
-			# Position and size windows with sync
+			# Position and size windows with sync - using positions from previous working version
 			if [ $i -eq 0 ]; then
-				# Left window
-				xdotool windowsize --sync "$window_id" $half_width 2154
-				xdotool windowmove --sync "$window_id" 0 21
+				# Left window - positioned slightly to the left as in previous working version
+				xdotool windowsize --sync "$window_id" 1960 2154  # Using fixed width instead of calculated half_width
+				xdotool windowmove --sync "$window_id" -20 21
 			else
-				# Right window
-				xdotool windowsize --sync "$window_id" $half_width 2154
-				xdotool windowmove --sync "$window_id" $half_width 21
+				# Right window - positioned at fixed coordinate as in previous working version
+				xdotool windowsize --sync "$window_id" 1960 2154  # Using fixed width instead of calculated half_width
+				xdotool windowmove --sync "$window_id" 1900 21
 			fi
 
 			# Ensure proper activation and raise to top
