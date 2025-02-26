@@ -30,17 +30,19 @@ max_alacritty() {
 	# Get the ID of the first visible Alacritty window
 	window=$(xdotool search --onlyvisible --classname Alacritty | head -n 1)
 	if [ -n "$window" ]; then
-		# Minimize all windows except Alacritty and Zoom
+		# Minimize all windows except Alacritty and Zoom with sync
 		for win_id in $(xdotool search --onlyvisible --name ".*"); do
 			window_class=$(xprop -id "$win_id" WM_CLASS 2>/dev/null)
 			if [ "$win_id" != "$window" ] && ! echo "$window_class" | grep -qi "zoom"; then
-				xdotool windowminimize "$win_id"
+				xdotool windowminimize --sync "$win_id"
 			fi
 		done
+		
 		# Handle the Alacritty window
-		unmap_map_window "$window"
+		minimize_window "$window"
+		xdotool windowmap --sync "$window"
 		maximize_window "$window"
-		xdotool windowraise "$window"
+		xdotool windowraise --sync "$window"
 		xdotool windowactivate --sync "$window"
 	else
 		echo "No Alacritty window found."
@@ -57,11 +59,14 @@ alacritty_firefox_vertical() {
 	window=$(xdotool search --onlyvisible --classname Alacritty | head -n 1)
 	if [ -n "$window" ]; then
 		# Handle Alacritty window - left side
-		xdotool windowunmap "$window"
-		xdotool windowmap "$window"
-		xdotool windowsize "$window" $half_width 2128
-		xdotool windowmove "$window" 0 32
+		minimize_window "$window"
+		# Use sync flag to wait for window to be mapped/visible
+		xdotool windowmap --sync "$window"
+		# Combine size and move operations with sync
+		xdotool windowsize --sync "$window" $half_width 2128
+		xdotool windowmove --sync "$window" 0 32
 		xdotool windowactivate --sync "$window"
+		xdotool windowraise --sync "$window"
 	else
 		echo "No Alacritty window found."
 	fi
@@ -69,17 +74,19 @@ alacritty_firefox_vertical() {
 	# Get the ID of the first Firefox window across all workspaces
 	firefox_window=$(xdotool search --classname Navigator | head -n 1)
 	if [ -n "$firefox_window" ]; then
-		# First, remove window decorations using window manager properties
+		# First, maximize and wait for completion
 		wmctrl -i -r "$firefox_window" -b add,maximized_vert,maximized_horz
-		sleep 0.1
-		wmctrl -i -r "$firefox_window" -b remove,maximized_vert,maximized_horz
-
-		# Now resize and position Firefox exactly at the second half of the screen
-		xdotool windowsize "$firefox_window" $half_width 2154
-		xdotool windowmove "$firefox_window" $half_width 21
-
-		# Force focus
+		# Then unmaximize and wait for completion
 		xdotool windowactivate --sync "$firefox_window"
+		wmctrl -i -r "$firefox_window" -b remove,maximized_vert,maximized_horz
+		
+		# Now resize and position Firefox exactly at the second half of the screen
+		xdotool windowsize --sync "$firefox_window" $half_width 2154
+		xdotool windowmove --sync "$firefox_window" $half_width 21
+		
+		# Force focus and ensure it's on top
+		xdotool windowactivate --sync "$firefox_window"
+		xdotool windowraise --sync "$firefox_window"
 	else
 		echo "No Firefox window found."
 	fi
@@ -93,7 +100,7 @@ firefox_firefox_vertical() {
 	# Minimize any visible Alacritty windows
 	alacritty_window=$(xdotool search --onlyvisible --classname Alacritty | head -n 1)
 	if [ -n "$alacritty_window" ]; then
-		xdotool windowminimize "$alacritty_window"
+		xdotool windowminimize --sync "$alacritty_window"
 	fi
 
 	# Get the IDs of the first two Firefox windows
@@ -105,23 +112,23 @@ firefox_firefox_vertical() {
 
 			# First, remove window decorations using window manager properties
 			wmctrl -i -r "$window_id" -b add,maximized_vert,maximized_horz
-			sleep 0.1
+			xdotool windowactivate --sync "$window_id"
 			wmctrl -i -r "$window_id" -b remove,maximized_vert,maximized_horz
 
-			# Position and size windows
+			# Position and size windows with sync
 			if [ $i -eq 0 ]; then
 				# Left window
-				xdotool windowsize "$window_id" $half_width 2154
-				xdotool windowmove "$window_id" 0 21
+				xdotool windowsize --sync "$window_id" $half_width 2154
+				xdotool windowmove --sync "$window_id" 0 21
 			else
 				# Right window
-				xdotool windowsize "$window_id" $half_width 2154
-				xdotool windowmove "$window_id" $half_width 21
+				xdotool windowsize --sync "$window_id" $half_width 2154
+				xdotool windowmove --sync "$window_id" $half_width 21
 			fi
 
-			# Ensure proper activation
-			sleep 0.2
+			# Ensure proper activation and raise to top
 			xdotool windowactivate --sync "$window_id"
+			xdotool windowraise --sync "$window_id"
 		done
 	elif [ ${#firefox_windows[@]} -eq 1 ]; then
 		echo "Only one Firefox window found."
@@ -142,31 +149,28 @@ slack_firefox_vertical() {
 	# Get the ID of the first Firefox window across all workspaces
 	slack_window=$(xdotool search --onlyvisible --classname Slack | head -n 1)
 	if [ -n "$slack_window" ]; then
-
 		minimize_window "$slack_window"
-
-		xdotool windowmap "$slack_window"
+		xdotool windowmap --sync "$slack_window"
+		
 		# Resize and move the window to the left side of the screen with exact pixel dimensions
-		xdotool windowsize "$slack_window" 1920 2128
-		xdotool windowmove "$slack_window" 0 32
+		xdotool windowsize --sync "$slack_window" 1920 2128
+		xdotool windowmove --sync "$slack_window" 0 32
 		xdotool windowactivate --sync "$slack_window"
-
+		xdotool windowraise --sync "$slack_window"
 	else
 		echo "No Slack window found."
 	fi
+	
 	firefox_window=$(xdotool search --onlyvisible --classname Navigator | head -n 1)
 	if [ -n "$firefox_window" ]; then
-		# Unmaximize the window
-
-		# Resize and move the Firefox window to the right side of the screen with exact pixel dimensions
 		minimize_window "$firefox_window"
-		# Assuming the screen resolution width is 3840, half of it is 1920
-		# Adjust the height according to your screen resolution
-		xdotool windowsize "$firefox_window" 1946 2154
-		# Move the Firefox window to the right side of the screen
-		# The x-coordinate is set to 1920 to position the window on the right half of the screen
-		xdotool windowmove "$firefox_window" 1907 21
+		xdotool windowmap --sync "$firefox_window"
+		
+		# Resize and move the Firefox window to the right side of the screen with exact pixel dimensions
+		xdotool windowsize --sync "$firefox_window" 1946 2154
+		xdotool windowmove --sync "$firefox_window" 1907 21
 		xdotool windowactivate --sync "$firefox_window"
+		xdotool windowraise --sync "$firefox_window"
 	else
 		echo "No Firefox window found."
 	fi
@@ -183,49 +187,46 @@ slack_alacritty_vertical() {
 	# Get the ID of the first Firefox window across all workspaces
 	slack_window=$(xdotool search --onlyvisible --classname Slack | head -n 1)
 	if [ -n "$slack_window" ]; then
-
 		minimize_window "$slack_window"
-
-		xdotool windowmap "$slack_window"
+		xdotool windowmap --sync "$slack_window"
+		
 		# Resize and move the window to the left side of the screen with exact pixel dimensions
-		xdotool windowsize "$slack_window" 1915 2092
-		xdotool windowmove "$slack_window" 0 13
+		xdotool windowsize --sync "$slack_window" 1915 2092
+		xdotool windowmove --sync "$slack_window" 0 13
 		xdotool windowactivate --sync "$slack_window"
-
+		xdotool windowraise --sync "$slack_window"
 	else
 		echo "No Slack window found."
 	fi
+	
 	# Get the ID of the first visible Alacritty window
 	window=$(xdotool search --onlyvisible --classname Alacritty | head -n 1)
 	if [ -n "$window" ]; then
-		# Unmaximize the window
-		xdotool windowunmap "$window"
-		# Resize the window
-		xdotool windowmap "$window"
-		# Resize and move the window to the left side of the screen with exact pixel dimensions
-		xdotool windowsize "$window" 1920 2128
-		xdotool windowmove "$window" 1907 21
+		minimize_window "$window"
+		xdotool windowmap --sync "$window"
+		
+		# Resize and move the window to the right side of the screen with exact pixel dimensions
+		xdotool windowsize --sync "$window" 1920 2128
+		xdotool windowmove --sync "$window" 1907 21
 		xdotool windowactivate --sync "$window"
-
+		xdotool windowraise --sync "$window"
 	else
 		echo "No Alacritty window found."
 	fi
 }
 max_firefox() {
-
 	# layout1.sh
-	# Get the ID of the first visible Alacritty window
+	# Get the ID of the first visible Firefox window
 	window=$(xdotool search --onlyvisible --classname Navigator | head -n 1)
 	if [ -n "$window" ]; then
-
 		minimize_window "$window"
-		# Resize the window
-		xdotool windowmap "$window"
-		# Resize and move the window to the left side of the screen with exact pixel dimensions
+		# Map window with sync
+		xdotool windowmap --sync "$window"
+		# Maximize window
 		maximize_window "$window"
-
+		# Ensure window is active and on top
 		xdotool windowactivate --sync "$window"
-		xdotool windowraise "$window"
+		xdotool windowraise --sync "$window"
 	else
 		echo "No Firefox window found."
 	fi
@@ -274,19 +275,17 @@ zoom_alacritty_horizontal() {
 	fi
 }
 max_slack() {
-
 	# Get the ID of the first visible slack window
 	window=$(xdotool search --onlyvisible --classname Slack | head -n 1)
 	if [ -n "$window" ]; then
-
 		minimize_window "$window"
-		# Resize the window
-		xdotool windowmap "$window"
-		# Resize and move the window to the left side of the screen with exact pixel dimensions
+		# Map window with sync
+		xdotool windowmap --sync "$window"
+		# Maximize window
 		maximize_window "$window"
-
+		# Ensure window is active and on top
 		xdotool windowactivate --sync "$window"
-		xdotool windowraise "$window"
+		xdotool windowraise --sync "$window"
 	else
 		echo "No Slack window found."
 	fi
@@ -314,33 +313,35 @@ firefox_firefox_alacritty() {
 
 			# Handle window decorations
 			wmctrl -i -r "$window_id" -b add,maximized_vert,maximized_horz
-			sleep 0.1
+			xdotool windowactivate --sync "$window_id"
 			wmctrl -i -r "$window_id" -b remove,maximized_vert,maximized_horz
 
-			# Set size for top half
-			xdotool windowsize "$window_id" $half_width $firefox_height
+			# Set size for top half with sync
+			xdotool windowsize --sync "$window_id" $half_width $firefox_height
 
-			# Position windows
+			# Position windows with sync
 			if [ $i -eq 0 ]; then
 				# Left window
-				xdotool windowmove "$window_id" 0 $firefox_y
+				xdotool windowmove --sync "$window_id" 0 $firefox_y
 			else
 				# Right window
-				xdotool windowmove "$window_id" $half_width $firefox_y
+				xdotool windowmove --sync "$window_id" $half_width $firefox_y
 			fi
 
 			xdotool windowactivate --sync "$window_id"
+			xdotool windowraise --sync "$window_id"
 		done
 
 		# Handle Alacritty (bottom)
 		wmctrl -i -r "$alacritty" -b add,maximized_vert,maximized_horz
-		sleep 0.1
+		xdotool windowactivate --sync "$alacritty"
 		wmctrl -i -r "$alacritty" -b remove,maximized_vert,maximized_horz
 
-		# Position Alacritty across bottom
-		xdotool windowsize "$alacritty" $screen_width $alacritty_height
-		xdotool windowmove "$alacritty" 0 $alacritty_y
+		# Position Alacritty across bottom with sync
+		xdotool windowsize --sync "$alacritty" $screen_width $alacritty_height
+		xdotool windowmove --sync "$alacritty" 0 $alacritty_y
 		xdotool windowactivate --sync "$alacritty"
+		xdotool windowraise --sync "$alacritty"
 
 	elif [ ${#firefox_windows[@]} -eq 1 ]; then
 		echo "Only one Firefox window found."
