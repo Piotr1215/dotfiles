@@ -157,6 +157,7 @@ sync_github_issue() {
 }
 
 # Compare existing Taskwarrior tasks with current issues and mark as completed if not present
+# If a task has a linear_issue_id, it was created in Taskwarrior, so delete it instead of marking completed
 compare_and_display_tasks_not_in_issues() {
 	local existing_task_descriptions="$1"
 	local issues_descriptions="$2"
@@ -183,8 +184,22 @@ compare_and_display_tasks_not_in_issues() {
 		done
 
 		if [[ "$issue_exists" == false ]]; then
-			log "No matching issue found for task: $trimmed_task_description. Marking as completed."
-			sync_github_issue "$trimmed_task_description"
+			local task_uuid=$(get_task_id_by_description "$trimmed_task_description")
+			
+			if [[ -n "$task_uuid" ]]; then
+				# Check if this task has a linear_issue_id (created from Taskwarrior)
+				local linear_issue_id=$(task _get "$task_uuid".linear_issue_id 2>/dev/null || echo "")
+				
+				if [[ -n "$linear_issue_id" && "$linear_issue_id" != "null" ]]; then
+					# Task was created in Taskwarrior and has Linear ID - delete it
+					log "Task has Linear ID and is no longer assigned to me. Deleting: $trimmed_task_description"
+					echo "yes" | task "$task_uuid" delete
+				else
+					# Regular GitHub/Linear task - mark as completed
+					log "No matching issue found for task: $trimmed_task_description. Marking as completed."
+					sync_github_issue "$trimmed_task_description"
+				fi
+			fi
 		fi
 	done
 
@@ -193,7 +208,8 @@ compare_and_display_tasks_not_in_issues() {
 
 # Retrieve existing Taskwarrior task descriptions with +github or +linear tags and pending status
 get_existing_task_descriptions() {
-	task +github or +linear status:pending export |
+	# Include any tags that may indicate Linear or GitHub issues
+	task '+github or +linear or linear_issue_id.any:' status:pending export |
 		jq -r '.[] | .description'
 }
 
@@ -202,6 +218,39 @@ sync_issues_to_taskwarrior() {
 	local issues="$1"
 	echo "$issues" | jq -c '.' | while IFS= read -r line; do
 		sync_to_taskwarrior "$line"
+	done
+}
+
+# Find tasks that have linear_issue_id but are no longer in our Linear feed
+find_and_delete_reassigned_tasks() {
+	local linear_issues="$1"
+	local all_linear_issue_ids linear_issue_id
+	
+	log "Checking for reassigned Linear tasks..."
+	
+	# Get all tasks with linear_issue_id
+	local tasks_with_linear_id=$(task 'linear_issue_id.any:' status:pending export)
+	
+	if [[ -z "$tasks_with_linear_id" ]]; then
+		log "No tasks with linear_issue_id found."
+		return
+	fi
+	
+	# Get all linear issue IDs from the Linear API response
+	all_linear_issue_ids=$(echo "$linear_issues" | jq -r '.issue_id // empty')
+	
+	# Process each task with a linear_issue_id
+	echo "$tasks_with_linear_id" | jq -c '.[]' | while IFS= read -r task_data; do
+		linear_issue_id=$(echo "$task_data" | jq -r '.linear_issue_id')
+		task_uuid=$(echo "$task_data" | jq -r '.uuid')
+		task_description=$(echo "$task_data" | jq -r '.description')
+		
+		# If the task has a linear_issue_id but it's not in our current Linear issues,
+		# it means the task was likely reassigned to someone else
+		if ! echo "$all_linear_issue_ids" | grep -q "$linear_issue_id"; then
+			log "Task has Linear ID $linear_issue_id but is no longer assigned to me. Deleting: $task_description"
+			echo "yes" | task "$task_uuid" delete
+		fi
 	done
 }
 
@@ -219,6 +268,10 @@ main() {
 		exit 0
 	fi
 
+	# Process specific deletion of reassigned Linear tasks
+	[[ -n "$linear_issues" ]] && find_and_delete_reassigned_tasks "$linear_issues"
+
+	# Normal sync process
 	[[ -n "$github_issues" ]] && sync_issues_to_taskwarrior "$github_issues"
 	[[ -n "$linear_issues" ]] && sync_issues_to_taskwarrior "$linear_issues"
 
