@@ -69,8 +69,8 @@ report.current.sort=manual_priority-,priority-,project+
 report.current.filter=status:pending -BLOCKED -pr -triage -backlog project.not:home*
 
 report.backlog.description=List of current backlog tasks in the work context
-report.backlog.columns=id,entry.age,manual_priority,priority,project,description.desc,due.relative,release,follow,depends
-report.backlog.labels=ID,Age,MP,P,Proj,Desc,Due,Rel,Follow,Depends
+report.backlog.columns=id,entry.age,manual_priority,priority,project,description.desc,due.relative,release,follow,depends,linear_issue_id
+report.backlog.labels=ID,Age,MP,P,Proj,Desc,Due,Rel,Follow,Depends,Linear
 report.backlog.sort=entry-
 report.backlog.filter=status:pending -BLOCKED -pr -triage +backlog project.not:home*
 
