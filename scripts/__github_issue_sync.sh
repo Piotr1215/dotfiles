@@ -207,9 +207,11 @@ compare_and_display_tasks_not_in_issues() {
 }
 
 # Retrieve existing Taskwarrior task descriptions with +github or +linear tags and pending status
+# Exclude tasks tagged with +triage as they are handled separately
 get_existing_task_descriptions() {
 	# Include any tags that may indicate Linear or GitHub issues
-	task '+github or +linear or linear_issue_id.any:' status:pending export |
+	# Explicitly exclude tasks with +triage tag
+	task '+github or +linear or linear_issue_id.any:' '-triage' status:pending export |
 		jq -r '.[] | .description'
 }
 
@@ -228,8 +230,8 @@ find_and_delete_reassigned_tasks() {
 	
 	log "Checking for reassigned Linear tasks..."
 	
-	# Get all tasks with linear_issue_id
-	local tasks_with_linear_id=$(task 'linear_issue_id.any:' status:pending export)
+	# Get all tasks with linear_issue_id but exclude +triage tasks
+	local tasks_with_linear_id=$(task 'linear_issue_id.any:' '-triage' status:pending export)
 	
 	if [[ -z "$tasks_with_linear_id" ]]; then
 		log "No tasks with linear_issue_id found."
