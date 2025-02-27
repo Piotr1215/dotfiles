@@ -253,6 +253,7 @@ return require("lazy").setup {
           "gG",
           "im",
           "am",
+          "!",
         },
       },
     },
