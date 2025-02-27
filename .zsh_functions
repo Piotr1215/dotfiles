@@ -10,6 +10,11 @@ function ddg_function() {
     wmctrl -a "$(wmctrl -l | grep -i 'firefox' | awk '{print $NF}' | head -n 1)"
 }
 
+function copy_last_screenshot() {
+realpath "$(\ls -t /home/decoder/Pictures/Screenshots | head -n 1)" C
+
+}
+
 alias ghcurrentbranch='ghcurrentbranch_function'
 function link-homelab() {
     local homelab_kubeconfig="/home/decoder/dev/homelab/kubeconfig"
