@@ -163,6 +163,25 @@ require("gp").setup {
     },
     {
       provider = "anthropic",
+      name = "Claude37",
+      chat = true,
+      command = true,
+      -- string with model name or table with model name and parameters
+      model = { model = "claude-3-7-sonnet-latest", temperature = 0, top_p = 0 },
+      -- system prompt (use this to specify the persona/role of the AI)
+      system_prompt = "You are a specialized coding AI assistant.\n\n"
+        .. "The user provided the additional info about how they would like you to respond:\n\n"
+        .. "- If you're unsure don't guess and say you don't know instead.\n"
+        .. "- Ask question if you need clarification to provide better answer.\n"
+        .. "- Think deeply and carefully from first principles step by step.\n"
+        .. "- Make your answers short, concise, to the point and helpful.\n"
+        .. "- Produce only valid and actionable code.\n"
+        .. "- Include only essential response like code etc, DO NOT provide explanations unless specifically asked for\n"
+        .. "- Take a deep breath; You've got this!",
+    },
+
+    {
+      provider = "anthropic",
       name = "Claude35",
       chat = true,
       command = true,
