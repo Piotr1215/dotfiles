@@ -3,6 +3,15 @@
 # github_issue_sync.sh
 # Synchronizes GitHub and Linear issues with Taskwarrior
 # PROJECT: taskwarrior-sync
+#
+# Key behaviors:
+# 1. For unassigned Linear issues: Deletes them from Taskwarrior (since they're no longer relevant to you)
+# 2. For completed Linear issues: Only marks as done if truly in a completed state
+#    (Released, Canceled, Done, Ready for Release)
+# 3. The +backlog tag is now Taskwarrior-internal and doesn't sync with Linear
+#    (users can add/remove this tag manually without affecting Linear)
+# 4. Tasks with +backlog or +review tags will NOT have their status, priority or tags
+#    modified by the sync process, regardless of Linear issue status
 
 # shellcheck disable=SC2155
 source /home/decoder/dev/dotfiles/scripts/__lib_taskwarrior_interop.sh
@@ -68,6 +77,26 @@ get_linear_issues() {
 	echo "$issues"
 }
 
+# Check the true status of a Linear issue
+check_linear_issue_status() {
+    local issue_id="$1"
+    
+    # Make API call to get the specific issue's status
+    local status
+    status=$(curl -s -X POST \
+        -H "Content-Type: application/json" \
+        -H "Authorization: $LINEAR_API_KEY" \
+        --data '{"query": "query { issue(id: \"'"$issue_id"'\") { id state { name } } }"}' \
+        https://api.linear.app/graphql | jq -r '.data.issue.state.name')
+    
+    # Check if the status indicates the issue is truly done
+    if [[ "$status" =~ ^(Released|Canceled|Done|Ready\ for\ Release)$ ]]; then
+        echo "completed"
+    else
+        echo "active" # Active but unassigned
+    fi
+}
+
 # Safely attempt to complete or delete a task based on its status and deletability
 handle_task_completion() {
 	local task_uuid="$1"
@@ -110,10 +139,36 @@ create_and_annotate_task() {
 		annotate_task "$task_uuid" "$issue_url"
 		log "Task created and annotated for: $issue_description"
 		task modify "$task_uuid" linear_issue_id:"$issue_number"
-		if [[ "$issue_status" == "Backlog" ]]; then
-			task modify "$task_uuid" +backlog
-		elif [[ "$issue_status" == "Todo" ]]; then
-			task modify "$task_uuid" +next manual_priority:1
+		
+		# Check task for special tags right after creation
+		# This handles cases where tags might have been added via hooks
+		local task_json
+		local has_backlog="false"
+		local has_review="false"
+		
+		# Use task export JSON for this specific task
+		task_json=$(task "$task_uuid" export 2>/dev/null)
+		
+		# Check for special tags
+		if [[ -n "$task_json" ]]; then
+			has_backlog=$(echo "$task_json" | jq -r '.[0].tags | if . then contains(["backlog"]) else false end')
+			has_review=$(echo "$task_json" | jq -r '.[0].tags | if . then contains(["review"]) else false end')
+			log "Special tag check for new task: has_backlog=$has_backlog, has_review=$has_review"
+		fi
+		
+		# Only apply Todo/In Progress status if no special tags are present
+		if [[ "$has_backlog" != "true" && "$has_review" != "true" ]]; then
+			# Handle Todo and In Progress statuses - backlog is now a Taskwarrior-only tag
+			if [[ "$issue_status" == "Todo" || "$issue_status" == "In Progress" ]]; then
+				# Check if manual_priority is already set
+				local current_priority
+				current_priority=$(task _get "$task_uuid".manual_priority 2>/dev/null || echo "")
+				if [[ -z "$current_priority" ]]; then
+					task modify "$task_uuid" manual_priority:1
+				fi
+			fi
+		else
+			log "New task has special tags. Skipping automatic status sync from Linear."
 		fi
 		# Set session:vdocs for all DOC issues
 		if [[ "$issue_number" == *"DOC"* ]]; then
@@ -172,22 +227,50 @@ sync_to_taskwarrior() {
 		# This ensures tags stay in sync when an issue's status changes in Linear
 		# For example:
 		# - When an issue moves to Todo, we add +next and set priority
-		# - When an issue moves back to Backlog, we remove +next and reset priority
-		# - This maintains correct workflow status in Taskwarrior
-		if [[ "$issue_status" =~ [Bb]acklog ]]; then
-			log "Issue status is Backlog, updating tags and removing priority"
-			task modify "$task_uuid" -next manual_priority:
-			task modify "$task_uuid" +backlog
-		elif [[ "$issue_status" == "Todo" ]]; then
-			log "Issue status is Todo, updating tags and setting priority"
-			task modify "$task_uuid" -backlog manual_priority:1
-			task modify "$task_uuid" +next
+		# - When an issue moves to Backlog, we remove +next and reset priority
+		# - The +backlog tag is now treated as Taskwarrior-internal and won't be automatically
+		#   added or removed when Linear status changes
+		# Check if task has +backlog or +review tags using task export JSON
+		# This is more reliable than _get for tag checking
+		local task_json
+		local has_backlog="false"
+		local has_review="false"
+		
+		# Use task export JSON for this specific task
+		task_json=$(task "$task_uuid" export 2>/dev/null)
+		
+		# Check for special tags
+		if [[ -n "$task_json" ]]; then
+			has_backlog=$(echo "$task_json" | jq -r '.[0].tags | if . then contains(["backlog"]) else false end')
+			has_review=$(echo "$task_json" | jq -r '.[0].tags | if . then contains(["review"]) else false end')
+			log "Special tag check: has_backlog=$has_backlog, has_review=$has_review"
+		fi
+		
+		# Skip modifying tags and priority if task has +backlog or +review
+		if [[ "$has_backlog" == "true" || "$has_review" == "true" ]]; then
+			log "DETECTED +backlog or +review tag. Skipping automatic status sync from Linear."
+		else
+			# Normal status sync logic when no special tags are present
+			if [[ "$issue_status" =~ [Bb]acklog ]]; then
+				log "Issue status is Backlog, removing +next tag and resetting priority"
+				task modify "$task_uuid" -next manual_priority:
+				# No longer adding +backlog automatically as it's now for manual Taskwarrior organization only
+			elif [[ "$issue_status" == "Todo" || "$issue_status" == "In Progress" ]]; then
+				log "Issue status is Todo or In Progress, checking priority"
+				# No longer removing +backlog as it's now independent of Linear status
+				# Check if manual_priority is already set
+				local current_priority
+				current_priority=$(task _get "$task_uuid".manual_priority 2>/dev/null || echo "")
+				if [[ -z "$current_priority" ]]; then
+					task modify "$task_uuid" manual_priority:1
+				fi
+			fi
 		fi
 	fi
 }
 
 # Compare existing Taskwarrior tasks with current issues and mark as completed if not present
-# If a task has a linear_issue_id, it was created from Linear, so try to delete it
+# If a task has a linear_issue_id, it was created from Linear, so check its actual status
 compare_and_display_tasks_not_in_issues() {
 	local issues_descriptions="$2"
 
@@ -228,9 +311,21 @@ compare_and_display_tasks_not_in_issues() {
 		# Fast grep search instead of bash loop
 		if ! grep -Fxq "$lower_desc" "$issues_file"; then
 			if [[ -n "$linear_issue_id" && "$linear_issue_id" != "null" ]]; then
-				# Task has Linear ID and is no longer assigned - try to delete it
-				log "Task has Linear ID and is no longer assigned to me: $trimmed_desc"
-				handle_task_completion "$task_uuid" "$trimmed_desc" "delete"
+				# Task has Linear ID and is not in current issues - check its actual status
+				log "Task with Linear ID not found in current issues: $trimmed_desc"
+				
+				# Check the actual status of the Linear issue
+				local issue_status
+				issue_status=$(check_linear_issue_status "$linear_issue_id")
+				
+				if [[ "$issue_status" == "completed" ]]; then
+					log "Issue is completed (Released/Canceled/Done/Ready for Release). Marking task as done."
+					handle_task_completion "$task_uuid" "$trimmed_desc" "complete"
+				else
+					log "Issue is still active but unassigned. Deleting task from Taskwarrior."
+					# Delete the task since it's unassigned from me
+					echo "yes" | task "$task_uuid" delete
+				fi
 			else
 				# Regular GitHub/Linear task - mark as completed
 				log "No matching issue found for task: $trimmed_desc"
@@ -293,10 +388,22 @@ find_and_delete_reassigned_tasks() {
 		task_description=$(echo "$task_data" | jq -r '.description')
 		
 		# If the task has a linear_issue_id but it's not in our current Linear issues,
-		# it means the task was likely reassigned to someone else
+		# it means the task was likely reassigned to someone else or completed
 		if ! echo "$all_linear_issue_ids" | grep -q "$linear_issue_id"; then
-			log "Task has Linear ID $linear_issue_id but is no longer assigned to me: $task_description"
-			handle_task_completion "$task_uuid" "$task_description" "delete"
+			log "Task has Linear ID $linear_issue_id but is no longer in my assigned issues: $task_description"
+			
+			# Check the actual status of the Linear issue to determine if it's completed or just unassigned
+			local issue_status
+			issue_status=$(check_linear_issue_status "$linear_issue_id")
+			
+			if [[ "$issue_status" == "completed" ]]; then
+				log "Issue is completed (Released/Canceled/Done/Ready for Release). Marking task as done."
+				handle_task_completion "$task_uuid" "$task_description" "complete"
+			else
+				log "Issue is still active but unassigned. Deleting task from Taskwarrior."
+				# Delete the task since it's unassigned from me
+				echo "yes" | task "$task_uuid" delete
+			fi
 		fi
 	done
 }
