@@ -112,6 +112,8 @@ create_and_annotate_task() {
 		task modify "$task_uuid" linear_issue_id:"$issue_number"
 		if [[ "$issue_status" == "Backlog" ]]; then
 			task modify "$task_uuid" +backlog
+		elif [[ "$issue_status" == "Todo" ]]; then
+			task modify "$task_uuid" +next manual_priority:1
 		fi
 		# Set session:vdocs for all DOC issues
 		if [[ "$issue_number" == *"DOC"* ]]; then
@@ -165,6 +167,22 @@ sync_to_taskwarrior() {
 		create_and_annotate_task "$issue_description" "$issue_repo_name" "$issue_url" "$issue_number" "$project_name" "$issue_status"
 	else
 		log "Task already exists for: $issue_description (UUID: $task_uuid)"
+		
+		# Update task tags and priority based on current Linear status
+		# This ensures tags stay in sync when an issue's status changes in Linear
+		# For example:
+		# - When an issue moves to Todo, we add +next and set priority
+		# - When an issue moves back to Backlog, we remove +next and reset priority
+		# - This maintains correct workflow status in Taskwarrior
+		if [[ "$issue_status" =~ [Bb]acklog ]]; then
+			log "Issue status is Backlog, updating tags and removing priority"
+			task modify "$task_uuid" -next manual_priority:
+			task modify "$task_uuid" +backlog
+		elif [[ "$issue_status" == "Todo" ]]; then
+			log "Issue status is Todo, updating tags and setting priority"
+			task modify "$task_uuid" -backlog manual_priority:1
+			task modify "$task_uuid" +next
+		fi
 	fi
 }
 
