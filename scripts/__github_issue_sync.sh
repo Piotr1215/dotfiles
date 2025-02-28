@@ -79,22 +79,22 @@ get_linear_issues() {
 
 # Check the true status of a Linear issue
 check_linear_issue_status() {
-    local issue_id="$1"
-    
-    # Make API call to get the specific issue's status
-    local status
-    status=$(curl -s -X POST \
-        -H "Content-Type: application/json" \
-        -H "Authorization: $LINEAR_API_KEY" \
-        --data '{"query": "query { issue(id: \"'"$issue_id"'\") { id state { name } } }"}' \
-        https://api.linear.app/graphql | jq -r '.data.issue.state.name')
-    
-    # Check if the status indicates the issue is truly done
-    if [[ "$status" =~ ^(Released|Canceled|Done|Ready\ for\ Release)$ ]]; then
-        echo "completed"
-    else
-        echo "active" # Active but unassigned
-    fi
+	local issue_id="$1"
+
+	# Make API call to get the specific issue's status
+	local status
+	status=$(curl -s -X POST \
+		-H "Content-Type: application/json" \
+		-H "Authorization: $LINEAR_API_KEY" \
+		--data '{"query": "query { issue(id: \"'"$issue_id"'\") { id state { name } } }"}' \
+		https://api.linear.app/graphql | jq -r '.data.issue.state.name')
+
+	# Check if the status indicates the issue is truly done
+	if [[ "$status" =~ ^(Released|Canceled|Done|Ready\ for\ Release)$ ]]; then
+		echo "completed"
+	else
+		echo "active" # Active but unassigned
+	fi
 }
 
 # Safely attempt to complete or delete a task based on its status and deletability
@@ -102,19 +102,19 @@ handle_task_completion() {
 	local task_uuid="$1"
 	local task_description="$2"
 	local action="$3"
-	
+
 	# We should only handle pending tasks
 	local status
 	status=$(task _get "$task_uuid".status 2>/dev/null || echo "")
-	
+
 	if [[ "$status" != "pending" ]]; then
 		# Skip non-pending tasks entirely
 		return
 	fi
-	
+
 	local is_deletable
 	is_deletable=$(task _get "$task_uuid".deletable 2>/dev/null || echo "false")
-	
+
 	if [[ "$is_deletable" == "true" && "$action" == "delete" ]]; then
 		log "Deleting task $task_uuid: $task_description"
 		echo "yes" | task "$task_uuid" delete
@@ -134,28 +134,28 @@ create_and_annotate_task() {
 	local issue_status="$6"
 	echo "Issue status: $issue_status"
 	log "Creating new task for issue: $issue_description"
-	task_uuid=$(create_task "$issue_description" "+$issue_repo_name" "project:$project_name")
+	task_uuid=$(create_task "$issue_description" "+$issue_repo_name" "+fresh" "project:$project_name")
 	if [[ -n "$task_uuid" ]]; then
 		annotate_task "$task_uuid" "$issue_url"
 		log "Task created and annotated for: $issue_description"
 		task modify "$task_uuid" linear_issue_id:"$issue_number"
-		
+
 		# Check task for special tags right after creation
 		# This handles cases where tags might have been added via hooks
 		local task_json
 		local has_backlog="false"
 		local has_review="false"
-		
+
 		# Use task export JSON for this specific task
 		task_json=$(task "$task_uuid" export 2>/dev/null)
-		
+
 		# Check for special tags
 		if [[ -n "$task_json" ]]; then
 			has_backlog=$(echo "$task_json" | jq -r '.[0].tags | if . then contains(["backlog"]) else false end')
 			has_review=$(echo "$task_json" | jq -r '.[0].tags | if . then contains(["review"]) else false end')
 			log "Special tag check for new task: has_backlog=$has_backlog, has_review=$has_review"
 		fi
-		
+
 		# Only apply Todo/In Progress status if no special tags are present
 		if [[ "$has_backlog" != "true" && "$has_review" != "true" ]]; then
 			# Handle Todo and In Progress statuses - backlog is now a Taskwarrior-only tag
@@ -222,7 +222,7 @@ sync_to_taskwarrior() {
 		create_and_annotate_task "$issue_description" "$issue_repo_name" "$issue_url" "$issue_number" "$project_name" "$issue_status"
 	else
 		log "Task already exists for: $issue_description (UUID: $task_uuid)"
-		
+
 		# Update task tags and priority based on current Linear status
 		# This ensures tags stay in sync when an issue's status changes in Linear
 		# For example:
@@ -235,17 +235,17 @@ sync_to_taskwarrior() {
 		local task_json
 		local has_backlog="false"
 		local has_review="false"
-		
+
 		# Use task export JSON for this specific task
 		task_json=$(task "$task_uuid" export 2>/dev/null)
-		
+
 		# Check for special tags
 		if [[ -n "$task_json" ]]; then
 			has_backlog=$(echo "$task_json" | jq -r '.[0].tags | if . then contains(["backlog"]) else false end')
 			has_review=$(echo "$task_json" | jq -r '.[0].tags | if . then contains(["review"]) else false end')
 			log "Special tag check: has_backlog=$has_backlog, has_review=$has_review"
 		fi
-		
+
 		# Skip modifying tags and priority if task has +backlog or +review
 		if [[ "$has_backlog" == "true" || "$has_review" == "true" ]]; then
 			log "DETECTED +backlog or +review tag. Skipping automatic status sync from Linear."
@@ -279,45 +279,45 @@ compare_and_display_tasks_not_in_issues() {
 	# OPTIMIZATION: Only get PENDING tasks with specific tags
 	# This massively reduces the number of tasks to process
 	local task_export=$(task '+github or +linear or linear_issue_id.any:' '-triage' status:pending export)
-	
+
 	# Remove any empty or null entries (extra safety check)
 	task_export=$(echo "$task_export" | jq -c '[.[] | select(.status == "pending")]')
-	
+
 	# Extract all issue descriptions into a temporary file for faster processing
 	local issues_file=$(mktemp)
 	echo "$issues_descriptions" | tr -d '\r' | grep -v '^$' | while IFS= read -r issue; do
-		echo "${issue,,}" >> "$issues_file"
+		echo "${issue,,}" >>"$issues_file"
 	done
-	
+
 	# Debug count
 	local tasks_count=$(echo "$task_export" | jq -r '.[] | .uuid' | wc -l)
 	log "Processing $tasks_count pending tasks for comparison"
-	
+
 	# Process each task in a single pass using jq
 	echo "$task_export" | jq -c '.[]' | while IFS= read -r task_json; do
 		local task_uuid=$(echo "$task_json" | jq -r '.uuid')
 		local description=$(echo "$task_json" | jq -r '.description')
 		local status=$(echo "$task_json" | jq -r '.status')
-		
+
 		# Extra check - skip any non-pending tasks
 		if [[ "$status" != "pending" ]]; then
 			continue
 		fi
-		
+
 		local trimmed_desc=$(trim_whitespace "$description")
 		local lower_desc="${trimmed_desc,,}"
 		local linear_issue_id=$(echo "$task_json" | jq -r '.linear_issue_id // empty')
-		
+
 		# Fast grep search instead of bash loop
 		if ! grep -Fxq "$lower_desc" "$issues_file"; then
 			if [[ -n "$linear_issue_id" && "$linear_issue_id" != "null" ]]; then
 				# Task has Linear ID and is not in current issues - check its actual status
 				log "Task with Linear ID not found in current issues: $trimmed_desc"
-				
+
 				# Check the actual status of the Linear issue
 				local issue_status
 				issue_status=$(check_linear_issue_status "$linear_issue_id")
-				
+
 				if [[ "$issue_status" == "completed" ]]; then
 					log "Issue is completed (Released/Canceled/Done/Ready for Release). Marking task as done."
 					handle_task_completion "$task_uuid" "$trimmed_desc" "complete"
@@ -333,7 +333,7 @@ compare_and_display_tasks_not_in_issues() {
 			fi
 		fi
 	done
-	
+
 	# Clean up
 	rm -f "$issues_file"
 
@@ -352,50 +352,50 @@ sync_issues_to_taskwarrior() {
 find_and_delete_reassigned_tasks() {
 	local linear_issues="$1"
 	local all_linear_issue_ids linear_issue_id
-	
+
 	log "Checking for reassigned Linear tasks..."
-	
+
 	# Get all tasks with linear_issue_id but exclude +triage tasks
 	# OPTIMIZATION: Only get pending tasks
 	local tasks_with_linear_id=$(task 'linear_issue_id.any:' '-triage' status:pending export)
-	
+
 	# Remove any empty or null entries (extra safety check)
 	tasks_with_linear_id=$(echo "$tasks_with_linear_id" | jq -c '[.[] | select(.status == "pending")]')
-	
+
 	if [[ -z "$tasks_with_linear_id" || "$tasks_with_linear_id" == "[]" ]]; then
 		log "No pending tasks with linear_issue_id found."
 		return
 	fi
-	
+
 	# Debug count
 	local tasks_count=$(echo "$tasks_with_linear_id" | jq -r '.[] | .uuid' | wc -l)
 	log "Processing $tasks_count pending tasks with linear_issue_id"
-	
+
 	# Get all linear issue IDs from the Linear API response
 	all_linear_issue_ids=$(echo "$linear_issues" | jq -r '.issue_id // empty')
-	
+
 	# Process each task with a linear_issue_id
 	echo "$tasks_with_linear_id" | jq -c '.[]' | while IFS= read -r task_data; do
 		local status=$(echo "$task_data" | jq -r '.status')
-		
+
 		# Extra check - skip any non-pending tasks
 		if [[ "$status" != "pending" ]]; then
 			continue
 		fi
-		
+
 		linear_issue_id=$(echo "$task_data" | jq -r '.linear_issue_id')
 		task_uuid=$(echo "$task_data" | jq -r '.uuid')
 		task_description=$(echo "$task_data" | jq -r '.description')
-		
+
 		# If the task has a linear_issue_id but it's not in our current Linear issues,
 		# it means the task was likely reassigned to someone else or completed
 		if ! echo "$all_linear_issue_ids" | grep -q "$linear_issue_id"; then
 			log "Task has Linear ID $linear_issue_id but is no longer in my assigned issues: $task_description"
-			
+
 			# Check the actual status of the Linear issue to determine if it's completed or just unassigned
 			local issue_status
 			issue_status=$(check_linear_issue_status "$linear_issue_id")
-			
+
 			if [[ "$issue_status" == "completed" ]]; then
 				log "Issue is completed (Released/Canceled/Done/Ready for Release). Marking task as done."
 				handle_task_completion "$task_uuid" "$task_description" "complete"
