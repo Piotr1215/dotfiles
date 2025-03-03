@@ -48,6 +48,7 @@ color.tag.review      = bold blue
 color.tag.bug         = magenta on black
 color.tag.started     = on gray2
 color.tag.pr_approved = bold green
+color.scheduled       = bold yellow 
 
 # Custom reports
 report.workdone.description=List of completed tasks in the work context
@@ -69,8 +70,8 @@ report.current.sort=manual_priority-,priority-,project+
 report.current.filter=status:pending -BLOCKED -pr -triage -backlog project.not:home*
 
 report.backlog.description=List of current backlog tasks in the work context
-report.backlog.columns=id,entry.age,manual_priority,priority,project,description.desc,due.relative,release,follow,depends,linear_issue_id
-report.backlog.labels=ID,Age,MP,P,Proj,Desc,Due,Rel,Follow,Depends,Linear
+report.backlog.columns=id,entry.age,manual_priority,priority,project,description.desc,due.relative,release,follow,depends,linear_issue_id,scheduled.relative,due.relative
+report.backlog.labels=ID,Age,MP,P,Proj,Desc,Due,Rel,Follow,Depends,Linear,Sched,Due
 report.backlog.sort=entry-
 report.backlog.filter=status:pending -BLOCKED -pr -triage +backlog project.not:home*
 
