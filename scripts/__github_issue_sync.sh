@@ -139,6 +139,7 @@ create_and_annotate_task() {
 		annotate_task "$task_uuid" "$issue_url"
 		log "Task created and annotated for: $issue_description"
 		task modify "$task_uuid" linear_issue_id:"$issue_number"
+                task modify "$task_uuid" +todo
 
 		# Check task for special tags right after creation
 		# This handles cases where tags might have been added via hooks
