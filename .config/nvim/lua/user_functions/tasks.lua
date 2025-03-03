@@ -69,7 +69,7 @@ end
 
 vim.api.nvim_set_keymap(
   "i",
-  "<C-T>",
+  "<C-q>",
   "<Cmd>lua require('user_functions.tasks').create_or_update_task()<CR>",
   { noremap = true, silent = true }
 )
