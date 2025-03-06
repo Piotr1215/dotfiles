@@ -69,5 +69,5 @@ windows:
       layout: main-horizontal
       panes:
         - tui -r current-triage
-        - viddy --interval 1h "task waiting | ccze -A"
+        - viddy --interval 1h "task rc.verbose=off rc._forcecolor=off rc.defaultwidth=100 rc.report.custom.description=\"Waiting tasks\" rc.report.custom.columns=id,project,wait.formatted,description.desc rc.report.custom.labels=ID,Project,Wait,Description rc.report.custom.filter=status:waiting rc.report.custom.sort=wait+ custom | ccze -A"
         - viddy --interval 1h "task blocked | ccze -A"
