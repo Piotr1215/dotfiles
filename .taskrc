@@ -83,8 +83,8 @@ report.current-home.filter=status:pending
 
 # This is sorted by update date
 report.current-prs.description=List of current prs to review
-report.current-prs.columns=id,entry.age,priority,project,tags,description.desc,repo,urgency
-report.current-prs.labels=ID,Age,P,Proj,Tag,Desc,Repo,Urg
+report.current-prs.columns=id,entry.age,priority,tags,description.desc,repo
+report.current-prs.labels=ID,Age,P,Tag,Desc,Repo
 report.current-prs.sort=new_activity-
 report.current-prs.filter=status:pending project:pr-reviews -hide
 
