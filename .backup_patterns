@@ -23,6 +23,8 @@
 - /Videos/tmp/
 - /Downloads/
 - .envrc
+- *.sqlite3-shm
+- *.sqlite3-wal
 
 # Exclude everything else
 - /*
