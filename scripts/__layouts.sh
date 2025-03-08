@@ -86,7 +86,7 @@ alacritty_firefox_vertical() {
 		
 		# Force focus and ensure it's on top
 		xdotool windowactivate --sync "$firefox_window"
-		xdotool windowraise --sync "$firefox_window"
+		xdotool windowraise "$firefox_window"
 	else
 		echo "No Firefox window found."
 	fi
@@ -367,6 +367,94 @@ alacritty_resize_9_16() {
 	fi
 }
 
+claude_alacritty_vertical() {
+	# Get screen dimensions
+	screen_size=$(xdpyinfo | grep dimensions | awk '{print $2}')
+	screen_width=$(echo $screen_size | cut -d'x' -f1)
+	half_width=$((screen_width / 2))
+
+	# Get the ID of the first visible Claude window
+	claude_window=$(xdotool search --onlyvisible --class "Claude" 2>/dev/null || xdotool search --onlyvisible --name "Claude" 2>/dev/null)
+	if [ -n "$claude_window" ]; then
+		# Handle Claude window - left side
+		minimize_window "$claude_window"
+		# Use sync flag to wait for window to be mapped/visible
+		xdotool windowmap --sync "$claude_window"
+		# Combine size and move operations with sync
+		xdotool windowsize --sync "$claude_window" $half_width 2128
+		xdotool windowmove --sync "$claude_window" 0 32
+		xdotool windowactivate --sync "$claude_window"
+		xdotool windowraise "$claude_window"
+	else
+		echo "No Claude window found."
+	fi
+
+	# Get the ID of the first Alacritty window
+	alacritty_window=$(xdotool search --onlyvisible --classname Alacritty | head -n 1)
+	if [ -n "$alacritty_window" ]; then
+		# First, maximize and wait for completion
+		wmctrl -i -r "$alacritty_window" -b add,maximized_vert,maximized_horz
+		# Then unmaximize and wait for completion
+		xdotool windowactivate --sync "$alacritty_window"
+		wmctrl -i -r "$alacritty_window" -b remove,maximized_vert,maximized_horz
+		
+		# Now resize and position Alacritty exactly at the second half of the screen
+		xdotool windowsize --sync "$alacritty_window" $half_width 2154
+		xdotool windowmove --sync "$alacritty_window" $half_width 21
+		
+		# Force focus and ensure it's on top
+		xdotool windowactivate --sync "$alacritty_window"
+		xdotool windowraise "$alacritty_window"
+	else
+		echo "No Alacritty window found."
+	fi
+}
+
+firefox_claude_vertical() {
+	# Minimize any visible Alacritty windows
+	alacritty_window=$(xdotool search --onlyvisible --classname Alacritty | head -n 1)
+	if [ -n "$alacritty_window" ]; then
+		xdotool windowminimize --sync "$alacritty_window"
+	fi
+
+	# Get the ID of the first Firefox window
+	firefox_window=$(xdotool search --onlyvisible --classname Navigator | head -n 1)
+	if [ -n "$firefox_window" ]; then
+		# First, remove window decorations using window manager properties
+		wmctrl -i -r "$firefox_window" -b add,maximized_vert,maximized_horz
+		xdotool windowactivate --sync "$firefox_window"
+		wmctrl -i -r "$firefox_window" -b remove,maximized_vert,maximized_horz
+
+		# Use the same positioning as in firefox_firefox_vertical for left window
+		xdotool windowsize --sync "$firefox_window" 1870 2180
+		xdotool windowmove --sync "$firefox_window" -26 24
+		xdotool windowactivate --sync "$firefox_window"
+		xdotool windowraise "$firefox_window"
+	else
+		echo "No Firefox window found."
+	fi
+
+	# Get the ID of the first Claude window
+	claude_window=$(xdotool search --onlyvisible --class "Claude" 2>/dev/null || xdotool search --onlyvisible --name "Claude" 2>/dev/null)
+	if [ -n "$claude_window" ]; then
+		# First, maximize and wait for completion
+		wmctrl -i -r "$claude_window" -b add,maximized_vert,maximized_horz
+		# Then unmaximize and wait for completion
+		xdotool windowactivate --sync "$claude_window"
+		wmctrl -i -r "$claude_window" -b remove,maximized_vert,maximized_horz
+		
+		# Use the same positioning as in firefox_firefox_vertical for right window
+		xdotool windowsize --sync "$claude_window" 1971 2180
+		xdotool windowmove --sync "$claude_window" 1920 24
+		
+		# Force focus and ensure it's on top
+		xdotool windowactivate --sync "$claude_window"
+		xdotool windowraise "$claude_window"
+	else
+		echo "No Claude window found."
+	fi
+}
+
 case $1 in
 1) max_alacritty ;;
 2) alacritty_firefox_vertical ;;
@@ -378,8 +466,10 @@ case $1 in
 8) firefox_firefox_alacritty ;;
 9) slack_alacritty_vertical ;;
 10) alacritty_resize_9_16 ;;
+11) claude_alacritty_vertical ;;
+12) firefox_claude_vertical ;;
 *)
-	echo "Usage: $0 {1|2|3|4|5|6|7|8|9|10}"
+	echo "Usage: $0 {1|2|3|4|5|6|7|8|9|10|11|12}"
 	exit 1
 	;;
 esac
