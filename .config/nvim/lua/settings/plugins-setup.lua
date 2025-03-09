@@ -681,7 +681,7 @@ vim.g.startify_commands = {}
 vim.g.startify_bookmarks = {
   "~/.taskrc",
   "~/.task/hooks",
-  "~/shortcuts.md",
+  "~/.config/Claude/claude_desktop_config.json",
   "/usr/local/share/zsh/site-functions",
   "~/dev/dotfiles/.config/nvim/lua/projects/module.lua",
   "~/scripts/__project_mappings.conf",
