@@ -133,42 +133,37 @@ firefox_firefox_vertical() {
 	fi
 }
 slack_firefox_vertical() {
-
+	# Find both windows upfront
 	slack=$(xdotool search --onlyvisible --classname Slack | head -n 1)
 	if [[ -z "${slack}" ]]; then
 		echo "No Slack window found"
 		alacritty_firefox_vertical
 		exit 0
 	fi
-
-	# Get the ID of the first Firefox window across all workspaces
-	slack_window=$(xdotool search --onlyvisible --classname Slack | head -n 1)
-	if [ -n "$slack_window" ]; then
-		minimize_window "$slack_window"
-		xdotool windowmap --sync "$slack_window"
-		
-		# Resize and move the window to the left side of the screen with exact pixel dimensions
-		xdotool windowsize --sync "$slack_window" 1920 2128
-		xdotool windowmove --sync "$slack_window" 0 32
-		xdotool windowactivate --sync "$slack_window"
-		xdotool windowraise --sync "$slack_window"
-	else
-		echo "No Slack window found."
+	
+	firefox_window=$(xdotool search --classname Navigator | head -n 1)
+	if [ -z "$firefox_window" ]; then
+		echo "No Firefox window found."
+		exit 0
 	fi
 	
-	firefox_window=$(xdotool search --onlyvisible --classname Navigator | head -n 1)
-	if [ -n "$firefox_window" ]; then
-		minimize_window "$firefox_window"
-		xdotool windowmap --sync "$firefox_window"
-		
-		# Resize and move the Firefox window to the right side of the screen with exact pixel dimensions
-		xdotool windowsize --sync "$firefox_window" 1946 2154
-		xdotool windowmove --sync "$firefox_window" 1907 21
-		xdotool windowactivate --sync "$firefox_window"
-		xdotool windowraise --sync "$firefox_window"
-	else
-		echo "No Firefox window found."
-	fi
+	# Fix for slowdown: Put Firefox on current desktop first
+	xdotool windowactivate --sync "$firefox_window"
+	wmctrl -i -r "$firefox_window" -b remove,maximized_vert,maximized_horz
+	
+	# Position and resize Firefox without --sync flags to avoid delays
+	xdotool windowsize "$firefox_window" 1946 2154
+	xdotool windowmove "$firefox_window" 1907 21
+	
+	# Position and resize Slack without --sync flags to avoid delays
+	wmctrl -i -r "$slack" -b remove,maximized_vert,maximized_horz
+	xdotool windowsize "$slack" 1920 2128
+	xdotool windowmove "$slack" 0 32
+	
+	# Final activation and raise
+	xdotool windowactivate "$slack"
+	sleep 0.2
+	xdotool windowactivate "$firefox_window"
 }
 slack_alacritty_vertical() {
 
