@@ -199,9 +199,15 @@ function M.insert_partial_in_buffer(bufnr, partial_name, partial_path, is_raw_lo
     local repo_path = get_repository_path(partial_path)
     import_statement = string.format("import %s from '!!raw-loader!@site/%s';", partial_name, repo_path)
   else
-    -- For regular partials, use relative path
-    local relative_path = get_relative_path(current_file_dir, partial_path)
-    import_statement = string.format("import %s from '%s';", partial_name, relative_path)
+    -- Check if partial is from docs/_partials folder
+    local repo_path = get_repository_path(partial_path)
+    if repo_path:match("^docs/") and (repo_path:match("/_partials/") or repo_path:match("^_partials/")) then
+      import_statement = string.format("import %s from '@site/%s';", partial_name, repo_path)
+    else
+      -- For other partials, use relative path
+      local relative_path = get_relative_path(current_file_dir, partial_path)
+      import_statement = string.format("import %s from '%s';", partial_name, relative_path)
+    end
   end
 
   -- Get the buffer lines
