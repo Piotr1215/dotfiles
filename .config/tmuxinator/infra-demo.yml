@@ -1,6 +1,6 @@
 # /home/decoder/.config/tmuxinator/atosik.yml
 
-name: AzDevCom24
+name: SRE Day London
 root: ~/dev/infra-platform-arch
 
 # Optional tmux socket
