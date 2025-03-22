@@ -223,7 +223,8 @@ if check_running; then
   fi
   
   # Create a flag file to indicate we're in game mode
-  echo "1" > /tmp/game_mode_active
+  mkdir -p "$HOME/.local/share/gamemode"
+  echo "1" > "$HOME/.local/share/gamemode/game_mode_active"
   
   gum style --foreground 46 --bold "✅ Ultimate Game Mode Activated! Services stopped successfully."
 else
@@ -273,7 +274,7 @@ else
   fi
   
   # Remove game mode flag
-  rm -f /tmp/game_mode_active
+  rm -f "$HOME/.local/share/gamemode/game_mode_active"
   
   gum style --foreground 46 --bold "✅ Normal Mode Restored! Services started successfully."
 fi
@@ -341,7 +342,7 @@ gum style "Memory Usage: ${before_mem_percent}% → ${after_mem_percent}% ($(gum
 gum style "Running Processes: ${before_processes} → ${after_processes} ($(gum style --foreground $process_color "${process_arrow} ${process_diff}"))"
 
 # Check if we're in game mode and show appropriate tips
-if [ -f "/tmp/game_mode_active" ]; then
+if [ -f "$HOME/.local/share/gamemode/game_mode_active" ]; then
   gum style --foreground 226 --bold "🎮 Game Mode Active"
   gum style "• System optimized for gaming performance"
 else
