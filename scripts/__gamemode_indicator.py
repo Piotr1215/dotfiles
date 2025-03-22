@@ -12,7 +12,7 @@ gi.require_version('Gtk', '3.0')
 gi.require_version('AppIndicator3', '0.1')
 from gi.repository import Gtk, AppIndicator3, GLib
 
-GAME_MODE_FLAG = "/tmp/game_mode_active"
+GAME_MODE_FLAG = os.path.expanduser("~/.local/share/gamemode/game_mode_active")
 UPDATE_INTERVAL = 2  # seconds
 SCRIPT_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), "__toggle_services.sh")
 
@@ -20,6 +20,9 @@ class GameModeIndicator:
     def __init__(self):
         self.app = "gamemode-indicator"
         self.update_lock = Lock()  # Lock for thread-safe updates
+        
+        # Ensure directory for game mode flag exists
+        os.makedirs(os.path.dirname(GAME_MODE_FLAG), exist_ok=True)
         
         # Set up signal handler for SIGUSR1
         signal.signal(signal.SIGUSR1, self.handle_update_signal)
