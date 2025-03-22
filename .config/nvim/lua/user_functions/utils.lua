@@ -137,4 +137,64 @@ function M.create_floating_scratch(content)
   vim.api.nvim_buf_set_keymap(buf, "n", "q", ":q!<CR>", { noremap = true, silent = true })
 end
 
+-- Function to insert command output at cursor position without trailing newline
+function _G.insert_command_output()
+  vim.ui.input({ prompt = "Command: " }, function(cmd)
+    if cmd then
+      local output = vim.fn.system(cmd)
+      -- Remove trailing newline
+      output = string.gsub(output, "\n$", "")
+
+      -- Get cursor position
+      local pos = vim.api.nvim_win_get_cursor(0)
+      local row, col = pos[1], pos[2]
+
+      -- Split output by newlines
+      local lines = {}
+      for line in string.gmatch(output .. "\n", "(.-)\n") do
+        table.insert(lines, line)
+      end
+
+      if #lines == 0 then
+        return
+      end
+
+      -- Get current line and split it
+      local current_line = vim.api.nvim_get_current_line()
+      local before_cursor = string.sub(current_line, 1, col)
+      local after_cursor = string.sub(current_line, col + 1)
+
+      -- Prepare new lines
+      local new_lines = {}
+
+      -- First line combines with the beginning of the current line
+      table.insert(new_lines, before_cursor .. lines[1])
+
+      -- Add middle lines as is
+      for i = 2, #lines - 1 do
+        table.insert(new_lines, lines[i])
+      end
+
+      -- Last line combines with the end of the current line
+      if #lines > 1 then
+        table.insert(new_lines, lines[#lines] .. after_cursor)
+      else
+        -- If there's only one line, we've already handled it
+        new_lines[1] = new_lines[1] .. after_cursor
+      end
+
+      -- Replace the current line with our new lines
+      vim.api.nvim_buf_set_lines(0, row - 1, row, false, new_lines)
+
+      -- Set cursor position to the end of the inserted text
+      if #lines > 1 then
+        vim.api.nvim_win_set_cursor(0, { row + #lines - 1, #lines[#lines] })
+      else
+        vim.api.nvim_win_set_cursor(0, { row, col + #lines[1] })
+      end
+    end
+  end)
+end
+
+vim.keymap.set("i", "<C-x>c", "<C-o>:lua insert_command_output()<CR>", { noremap = true, silent = true })
 return M
