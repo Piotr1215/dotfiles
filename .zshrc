@@ -350,6 +350,16 @@ function g_checkout_branch () {
 }
 zle -N g_checkout_branch
 bindkey '^x^g' g_checkout_branch
+
+# Function to edit systemd user services
+function edit_systemd_service() {
+    /home/decoder/dev/dotfiles/scripts/__edit_systemd_service.sh
+}
+
+# Binds Ctrl+X Ctrl+S to edit_systemd_service
+bindkey "^X^S" edit_systemd_service
+zle -N edit_systemd_service
+
 stty -ixon
 
 kubectl() {
