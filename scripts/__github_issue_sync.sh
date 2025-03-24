@@ -117,7 +117,7 @@ handle_task_completion() {
 
 	if [[ "$is_deletable" == "true" && "$action" == "delete" ]]; then
 		log "Deleting task $task_uuid: $task_description"
-		echo "yes" | task "$task_uuid" delete
+		task rc.confirmation=no "$task_uuid" delete
 	else
 		log "Marking task $task_uuid as completed: $task_description"
 		mark_task_completed "$task_uuid"
@@ -138,8 +138,8 @@ create_and_annotate_task() {
 	if [[ -n "$task_uuid" ]]; then
 		annotate_task "$task_uuid" "$issue_url"
 		log "Task created and annotated for: $issue_description"
-		task modify "$task_uuid" linear_issue_id:"$issue_number"
-                task modify "$task_uuid" +todo
+		task rc.confirmation=no modify "$task_uuid" linear_issue_id:"$issue_number"
+                task rc.confirmation=no modify "$task_uuid" +todo
 
 		# Check task for special tags right after creation
 		# This handles cases where tags might have been added via hooks
@@ -165,7 +165,7 @@ create_and_annotate_task() {
 				local current_priority
 				current_priority=$(task _get "$task_uuid".manual_priority 2>/dev/null || echo "")
 				if [[ -z "$current_priority" ]]; then
-					task modify "$task_uuid" manual_priority:1
+					task rc.confirmation=no modify "$task_uuid" manual_priority:1
 				fi
 			fi
 		else
@@ -173,29 +173,29 @@ create_and_annotate_task() {
 		fi
 		# Set session:vdocs for all DOC issues
 		if [[ "$issue_number" == *"DOC"* ]]; then
-			task modify "$task_uuid" session:vdocs
-			task modify "$task_uuid" +kill
+			task rc.confirmation=no modify "$task_uuid" session:vdocs
+			task rc.confirmation=no modify "$task_uuid" +kill
 		fi
 		# Handle project setting
 		if [[ -n "$project_name" ]] && [[ "$project_name" != "null" ]]; then
 			# Convert to lowercase, replace spaces with single hyphen, then remove duplicate hyphens
 			local formatted_project=$(echo "$project_name" | tr '[:upper:]' '[:lower:]' | tr ' ' '-' | sed 's/-\+/-/g')
-			task modify "$task_uuid" project:"$formatted_project"
+			task rc.confirmation=no modify "$task_uuid" project:"$formatted_project"
 
 			# Check if project name contains vcluster or cloud (case insensitive)
 			if echo "$formatted_project" | grep -qi 'vcluster\|cloud'; then
-				task modify "$task_uuid" session:vcluster-staging
+				task rc.confirmation=no modify "$task_uuid" session:vcluster-staging
 			fi
 			# Check if project name contains vnode (case insensitive)
 			if echo "$formatted_project" | grep -qi 'vnode'; then
-				task modify "$task_uuid" repo:vnode-docs
+				task rc.confirmation=no modify "$task_uuid" repo:vnode-docs
 			fi
 
 		else
 			if [[ "$issue_number" == *"DOC"* ]]; then
-				task modify "$task_uuid" project:docs-maintenance
+				task rc.confirmation=no modify "$task_uuid" project:docs-maintenance
 			elif [[ "$issue_number" == *"OPS"* ]]; then
-				task modify "$task_uuid" project:operations
+				task rc.confirmation=no modify "$task_uuid" project:operations
 			fi
 		fi
 	else
@@ -222,6 +222,8 @@ sync_to_taskwarrior() {
 	if [[ -z "$task_uuid" ]]; then
 		create_and_annotate_task "$issue_description" "$issue_repo_name" "$issue_url" "$issue_number" "$project_name" "$issue_status"
 	else
+		# Fix any issues with newlines in task_uuid
+		task_uuid=$(echo "$task_uuid" | tr -d '\n')
 		log "Task already exists for: $issue_description (UUID: $task_uuid)"
 
 		# Update task tags and priority based on current Linear status
@@ -254,7 +256,7 @@ sync_to_taskwarrior() {
 			# Normal status sync logic when no special tags are present
 			if [[ "$issue_status" =~ [Bb]acklog ]]; then
 				log "Issue status is Backlog, removing +next tag and resetting priority"
-				task modify "$task_uuid" -next manual_priority:
+				task rc.confirmation=no modify "$task_uuid" -next manual_priority:
 				# No longer adding +backlog automatically as it's now for manual Taskwarrior organization only
 			elif [[ "$issue_status" == "Todo" || "$issue_status" == "In Progress" ]]; then
 				log "Issue status is Todo or In Progress, checking priority"
@@ -263,7 +265,7 @@ sync_to_taskwarrior() {
 				local current_priority
 				current_priority=$(task _get "$task_uuid".manual_priority 2>/dev/null || echo "")
 				if [[ -z "$current_priority" ]]; then
-					task modify "$task_uuid" manual_priority:1
+					task rc.confirmation=no modify "$task_uuid" manual_priority:1
 				fi
 			fi
 		fi
@@ -325,7 +327,7 @@ compare_and_display_tasks_not_in_issues() {
 				else
 					log "Issue is still active but unassigned. Deleting task from Taskwarrior."
 					# Delete the task since it's unassigned from me
-					echo "yes" | task "$task_uuid" delete
+					task rc.confirmation=no "$task_uuid" delete
 				fi
 			else
 				# Regular GitHub/Linear task - mark as completed
@@ -403,7 +405,7 @@ find_and_delete_reassigned_tasks() {
 			else
 				log "Issue is still active but unassigned. Deleting task from Taskwarrior."
 				# Delete the task since it's unassigned from me
-				echo "yes" | task "$task_uuid" delete
+				task rc.confirmation=no "$task_uuid" delete
 			fi
 		fi
 	done
