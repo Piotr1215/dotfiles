@@ -30,8 +30,10 @@ create_task() {
 get_task_id_by_description() {
 	local description="$1"
 	# Use task export with tags +github or +linear and status:pending to find the task by description
+	# Return only the first UUID if multiple matches are found
 	task +github or +linear status:pending export |
-		jq -r --arg desc "$description" '.[] | select(.description == $desc) | .uuid'
+		jq -r --arg desc "$description" '.[] | select(.description == $desc) | .uuid' |
+		head -n 1
 }
 
 # Annotate an existing task
