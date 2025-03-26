@@ -123,6 +123,8 @@ FOLDER=$(basename "$RESULT")
 SESSION_NAME=$(echo "$FOLDER" | tr ' ' '_' | tr '.' '_' | tr ':' '_')
 
 if [ -d "$RESULT/.git" ]; then
+	# Run git fetch origin --prune when working with a git repo
+	git -C "$RESULT" fetch origin --prune &
 	GIT_BRANCH=$(git -C "$RESULT" symbolic-ref --short HEAD 2>/dev/null)
 	SESSION_NAME="$SESSION_NAME-$GIT_BRANCH"
 fi
