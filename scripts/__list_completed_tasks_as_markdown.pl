@@ -52,7 +52,7 @@ for my $task ($doc->findnodes('/tasks/task')) {
         ($end_date eq $today || $end_date eq $yesterday || $end_date ge $last_week_date);
 
     my $project_key = $task->findvalue('project') || ' ';
-    my $project = $project_mappings{$project_key} || 'Unknown';
+    my $project = $project_mappings{$project_key} || 'PRs and Reviews';
     my $url_index = 1;
     my $description = $task->findvalue('description');
     my $anno_text = "";
