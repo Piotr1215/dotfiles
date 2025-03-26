@@ -11,7 +11,12 @@ function ddg_function() {
 }
 
 function copy_last_screenshot() {
-  realpath "/home/decoder/Pictures/Screenshots/$(\ls -t /home/decoder/Pictures/Screenshots | head -n 1)" | xsel --clipboard
+    local latest_screenshot=$(\ls -t /home/decoder/Pictures/Screenshots | head -n 1)
+    local new_filename=$(echo "$latest_screenshot" | tr ' ' '_')
+    cp "/home/decoder/Pictures/Screenshots/$latest_screenshot" "./$new_filename"
+    local new_path="$(pwd)/$new_filename"
+    echo "$new_path" | xsel --clipboard
+    echo "Copied to $new_path (path is in clipboard)"
 }
 
 alias ghcurrentbranch='ghcurrentbranch_function'
