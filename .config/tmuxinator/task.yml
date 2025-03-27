@@ -49,7 +49,7 @@ windows:
       layout: aa75,294x72,0,0{82x72,0,0[82x42,0,0,163,82x29,0,43,169],211x72,83,0[211x42,83,0,170,211x29,83,43,181]}
       panes:
         - tui -r workdone
-        - tui -r current-prs
+        - tui -r current-prs-age
         - tuiw
         - tui -r backlog
   - reports:
