@@ -38,6 +38,11 @@ Style guidelines and rules that need to be adhered to:
   - Platform won't manage it (perform reconciliation)
   :::
   
+- make sure that headings have unique ids
+  EXAMPLE:
+  ## This is a heading {#this-is-a-heading}
+  ### More complex and long heading {#more-complex-and-long-heading}
+
 ## Admonitions
 
 :::note
