@@ -139,18 +139,14 @@ fi
 if [ -z "$TMUX" ]; then                              # not currently in tmux
   if [ -z "$SESSION" ]; then                         # session does not exist
     tmux new-session -s "$SESSION_NAME" -c "$RESULT" # create session and attach
-    tmux send-keys "git -C \"$RESULT\" fetch origin --prune" C-m
   else                                               # session exists
     tmux attach -t "$SESSION"                        # attach to session
-    tmux send-keys "git -C \"$RESULT\" fetch origin --prune" C-m
   fi
 else                                                    # currently in tmux
   if [ -z "$SESSION" ]; then                            # session does not exist
     tmux new-session -d -s "$SESSION_NAME" -c "$RESULT" # create session
     tmux switch-client -t "$SESSION_NAME"               # attach to session
-    tmux send-keys -t "$SESSION_NAME" "git -C \"$RESULT\" fetch origin --prune" C-m
   else                                                  # session exists
     tmux switch-client -t "$SESSION"                    # switch to session
-    tmux send-keys -t "$SESSION" "git -C \"$RESULT\" fetch origin --prune" C-m
   fi
 fi
