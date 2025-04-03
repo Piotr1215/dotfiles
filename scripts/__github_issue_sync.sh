@@ -167,6 +167,9 @@ create_and_annotate_task() {
 				if [[ -z "$current_priority" ]]; then
 					task rc.confirmation=no modify "$task_uuid" manual_priority:1
 				fi
+			elif [[ "$issue_status" == "In Review" ]]; then
+				log "Issue status is In Review, adding +review tag"
+				task rc.confirmation=no modify "$task_uuid" +review
 			fi
 		else
 			log "New task has special tags. Skipping automatic status sync from Linear."
@@ -267,6 +270,9 @@ sync_to_taskwarrior() {
 				if [[ -z "$current_priority" ]]; then
 					task rc.confirmation=no modify "$task_uuid" manual_priority:1
 				fi
+			elif [[ "$issue_status" == "In Review" ]]; then
+				log "Issue status is In Review, adding +review tag"
+				task rc.confirmation=no modify "$task_uuid" +review
 			fi
 		fi
 	fi
