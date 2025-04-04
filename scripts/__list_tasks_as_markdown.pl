@@ -39,6 +39,9 @@ my $last_week_days_to_subtract = 7;
 my ($sec_last, $min_last, $hour_last, $mday_last, $mon_last, $year_last) = localtime(time - $last_week_days_to_subtract * 24 * 60 * 60);
 my $last_week_date = sprintf "%4d%02d%02d", $year_last + 1900, $mon_last + 1, $mday_last;
 
+# Special handling for review mode
+my $is_review_mode = (@modes == 1 && $modes[0] eq 'review');
+
 for my $task ($doc->findnodes('/tasks/task')) {
   my $status = $task->findvalue('status');
   my $end_date = $task->findvalue('end');
@@ -68,7 +71,8 @@ for my $task ($doc->findnodes('/tasks/task')) {
   next unless $include_task;
 
   my $project_key = $task->findvalue('project') || ' ';
-  my $project = $project_mappings{$project_key} || 'Unknown';
+  # If in review mode, force all tasks into a single category
+  my $project = $is_review_mode ? 'PRs and Issues in Review' : ($project_mappings{$project_key} || 'Unknown');
   my $url_index = 1;
   my $description = $task->findvalue('description');
   my $anno_text = "";

@@ -27,9 +27,8 @@ $xml_content =~ s{(<description>.*?)(<)(.*?</description>)}{$1&lt;$3}g;
 my $parser = XML::LibXML->new;
 my $doc = $parser->load_xml(string => $xml_content);
 
-my %tasks_today;
-my %tasks_yesterday;
-my %tasks_last_week;
+# Use combined collection for all time periods
+my %tasks_by_project_by_period;
 
 my $today = sprintf "%4d%02d%02d", $t->year, $t->mon, $t->mday;
 my ($sec, $min, $hour, $mday, $mon, $year) = localtime(time - $days_to_subtract * 24 * 60 * 60);
@@ -65,38 +64,72 @@ for my $task ($doc->findnodes('/tasks/task')) {
         }
     }
 
+    my $period;
     if ($end_date eq $today) {
-        push @{$tasks_today{$project}}, "$checkbox $description$anno_text";
+        $period = 'today';
     } elsif ($end_date eq $yesterday) {
-        push @{$tasks_yesterday{$project}}, "$checkbox $description$anno_text";
+        $period = 'yesterday';
     } else {
-        push @{$tasks_last_week{$project}}, "$checkbox $description$anno_text";
+        $period = 'last_week';
+    }
+
+    push @{$tasks_by_project_by_period{$period}{$project}}, "$checkbox $description$anno_text";
+}
+
+# Merge today and yesterday tasks
+print "Today & Yesterday\n\n";
+
+# Get all projects from both today and yesterday to ensure consistent categories
+my %all_projects;
+for my $period ('today', 'yesterday') {
+    if (exists $tasks_by_project_by_period{$period}) {
+        for my $project (keys %{$tasks_by_project_by_period{$period}}) {
+            $all_projects{$project} = 1;
+        }
     }
 }
 
-print "Today\n\n";
-for my $project (sort keys %tasks_today) {
-    print "$project\n";
-    for my $task (@{$tasks_today{$project}}) {
-        print "- $task\n";
+my $any_tasks_printed = 0;
+
+# Print tasks by project merging today and yesterday
+for my $project (sort keys %all_projects) {
+    my @tasks;
+    
+    # Add today's tasks if any
+    if (exists $tasks_by_project_by_period{today}{$project}) {
+        push @tasks, @{$tasks_by_project_by_period{today}{$project}};
     }
-    print "\n";
+    
+    # Add yesterday's tasks if any
+    if (exists $tasks_by_project_by_period{yesterday}{$project}) {
+        push @tasks, @{$tasks_by_project_by_period{yesterday}{$project}};
+    }
+    
+    # Print project and tasks if we have any
+    if (@tasks) {
+        print "$project\n";
+        for my $task (@tasks) {
+            print "- $task\n";
+        }
+        print "\n";
+        $any_tasks_printed = 1;
+    }
 }
 
-print "Yesterday\n\n";
-for my $project (sort keys %tasks_yesterday) {
-    print "$project\n";
-    for my $task (@{$tasks_yesterday{$project}}) {
-        print "- $task\n";
-    }
-    print "\n";
+# Print a message if no tasks found
+if (!$any_tasks_printed) {
+    print "No completed tasks today or yesterday.\n\n";
 }
 
 print "----Last Week----\n\n";
-for my $project (sort keys %tasks_last_week) {
-    print "$project\n";
-    for my $task (@{$tasks_last_week{$project}}) {
-        print "- $task\n";
+if (%{$tasks_by_project_by_period{last_week}}) {
+    for my $project (sort keys %{$tasks_by_project_by_period{last_week}}) {
+        print "$project\n";
+        for my $task (@{$tasks_by_project_by_period{last_week}{$project}}) {
+            print "- $task\n";
+        }
+        print "\n";
     }
-    print "\n";
+} else {
+    print "No completed tasks last week.\n\n";
 }
