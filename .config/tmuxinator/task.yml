@@ -47,10 +47,11 @@ startup_pane: 3
 windows:
   - todo:
       layout: aa75,294x72,0,0{82x72,0,0[82x42,0,0,163,82x29,0,43,169],211x72,83,0[211x42,83,0,170,211x29,83,43,181]}
+      # Add stty to force terminal redraw on focus
       panes:
         - NCURSES_NO_UTF8_ACS=1 tui -r workdone
         - NCURSES_NO_UTF8_ACS=1 tui -r current-prs-age
-        - NCURSES_NO_UTF8_ACS=1 tuiw
+        - tuiw
         - NCURSES_NO_UTF8_ACS=1 tui -r backlog
   - reports:
       layout: tiled
@@ -68,6 +69,6 @@ windows:
   - triage:
       layout: main-horizontal
       panes:
-        - NCURSES_NO_UTF8_ACS=1 tui -r current-triage
+        - printf '\e[?1000h' && NCURSES_NO_UTF8_ACS=1 tui -r current-triage
         - viddy --interval 1h "task rc.verbose=off rc._forcecolor=off rc.defaultwidth=100 rc.report.custom.description=\"Waiting tasks\" rc.report.custom.columns=id,project,wait.formatted,description.desc rc.report.custom.labels=ID,Project,Wait,Description rc.report.custom.filter=status:waiting rc.report.custom.sort=wait+ custom | ccze -A"
         - viddy --interval 1h "task blocked | ccze -A"

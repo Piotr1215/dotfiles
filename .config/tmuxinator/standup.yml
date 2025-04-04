@@ -1,7 +1,7 @@
 # /home/decoder/.config/tmuxinator/standup.yml
 
 name: standup
-root: ~/dev/scripts
+root: ~/dev/dotfiles/scripts
 
 # Optional tmux socket
 # socket_name: foo
@@ -12,7 +12,11 @@ root: ~/dev/scripts
 # Project hooks
 
 # Runs on project start, always
-on_project_start: __layouts.sh 9
+# Set NCURSES_NO_UTF8_ACS=1 for better taskwarrior-tui rendering
+pre_window: export NCURSES_NO_UTF8_ACS=1
+
+# Run on project start, always - async for better performance
+on_project_start: nohup __layouts.sh 9 >/dev/null 2>&1 &
 
 # Run on project start, the first time
 # on_project_first_start: command
