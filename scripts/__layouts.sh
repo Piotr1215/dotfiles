@@ -42,7 +42,7 @@ max_alacritty() {
 		minimize_window "$window"
 		xdotool windowmap --sync "$window"
 		maximize_window "$window"
-		xdotool windowraise --sync "$window"
+		xdotool windowraise "$window"
 		xdotool windowactivate --sync "$window"
 	else
 		echo "No Alacritty window found."
@@ -66,7 +66,7 @@ alacritty_firefox_vertical() {
 		xdotool windowsize --sync "$window" $half_width 2128
 		xdotool windowmove --sync "$window" 0 32
 		xdotool windowactivate --sync "$window"
-		xdotool windowraise --sync "$window"
+		xdotool windowraise "$window"
 	else
 		echo "No Alacritty window found."
 	fi
@@ -123,7 +123,7 @@ firefox_firefox_vertical() {
 
 			# Ensure proper activation and raise to top
 			xdotool windowactivate --sync "$window_id"
-			xdotool windowraise --sync "$window_id"
+			xdotool windowraise "$window_id"
 		done
 	elif [ ${#firefox_windows[@]} -eq 1 ]; then
 		echo "Only one Firefox window found."
@@ -166,6 +166,7 @@ slack_firefox_vertical() {
 	xdotool windowactivate "$firefox_window"
 }
 slack_alacritty_vertical() {
+	# Fix for performance: Remove unnecessary --sync flags which cause delays
 
 	slack=$(xdotool search --onlyvisible --classname Slack | head -n 1)
 	if [[ -z "${slack}" ]]; then
@@ -174,17 +175,17 @@ slack_alacritty_vertical() {
 		exit 0
 	fi
 
-	# Get the ID of the first Firefox window across all workspaces
+	# Get the ID of the first Slack window 
 	slack_window=$(xdotool search --onlyvisible --classname Slack | head -n 1)
 	if [ -n "$slack_window" ]; then
 		minimize_window "$slack_window"
-		xdotool windowmap --sync "$slack_window"
+		xdotool windowmap "$slack_window"
 		
-		# Resize and move the window to the left side of the screen with exact pixel dimensions
-		xdotool windowsize --sync "$slack_window" 1915 2092
-		xdotool windowmove --sync "$slack_window" 0 13
-		xdotool windowactivate --sync "$slack_window"
-		xdotool windowraise --sync "$slack_window"
+		# Resize and move the window to the left side of the screen without --sync flags
+		xdotool windowsize "$slack_window" 1915 2092
+		xdotool windowmove "$slack_window" 0 13
+		xdotool windowactivate "$slack_window"
+		xdotool windowraise "$slack_window"
 	else
 		echo "No Slack window found."
 	fi
@@ -193,13 +194,13 @@ slack_alacritty_vertical() {
 	window=$(xdotool search --onlyvisible --classname Alacritty | head -n 1)
 	if [ -n "$window" ]; then
 		minimize_window "$window"
-		xdotool windowmap --sync "$window"
+		xdotool windowmap "$window"
 		
-		# Resize and move the window to the right side of the screen with exact pixel dimensions
-		xdotool windowsize --sync "$window" 1920 2128
-		xdotool windowmove --sync "$window" 1907 21
-		xdotool windowactivate --sync "$window"
-		xdotool windowraise --sync "$window"
+		# Resize and move the window to the right side of the screen without --sync flags
+		xdotool windowsize "$window" 1920 2128
+		xdotool windowmove "$window" 1907 21
+		xdotool windowactivate "$window"
+		xdotool windowraise "$window"
 	else
 		echo "No Alacritty window found."
 	fi
@@ -216,7 +217,7 @@ max_firefox() {
 		maximize_window "$window"
 		# Ensure window is active and on top
 		xdotool windowactivate --sync "$window"
-		xdotool windowraise --sync "$window"
+		xdotool windowraise "$window"
 	else
 		echo "No Firefox window found."
 	fi
@@ -275,7 +276,7 @@ max_slack() {
 		maximize_window "$window"
 		# Ensure window is active and on top
 		xdotool windowactivate --sync "$window"
-		xdotool windowraise --sync "$window"
+		xdotool windowraise "$window"
 	else
 		echo "No Slack window found."
 	fi
@@ -319,7 +320,7 @@ firefox_firefox_alacritty() {
 			fi
 
 			xdotool windowactivate --sync "$window_id"
-			xdotool windowraise --sync "$window_id"
+			xdotool windowraise "$window_id"
 		done
 
 		# Handle Alacritty (bottom)
@@ -331,7 +332,7 @@ firefox_firefox_alacritty() {
 		xdotool windowsize --sync "$alacritty" $screen_width $alacritty_height
 		xdotool windowmove --sync "$alacritty" 0 $alacritty_y
 		xdotool windowactivate --sync "$alacritty"
-		xdotool windowraise --sync "$alacritty"
+		xdotool windowraise "$alacritty"
 
 	elif [ ${#firefox_windows[@]} -eq 1 ]; then
 		echo "Only one Firefox window found."
