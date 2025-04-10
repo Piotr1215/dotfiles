@@ -220,7 +220,18 @@ sync_to_taskwarrior() {
 
 	log "Processing Issue ID: $issue_id, Description: $issue_description"
 
-	task_uuid=$(get_task_id_by_description "$issue_description")
+	# First, try to find task by linear_issue_id if available
+	local existing_task_uuid=""
+	if [[ -n "$issue_number" ]]; then
+		existing_task_uuid=$(task "linear_issue_id:$issue_number" status:pending export 2>/dev/null | jq -r '.[0].uuid' 2>/dev/null || echo "")
+	fi
+
+	# If not found by linear_issue_id, try by description
+	if [[ -z "$existing_task_uuid" ]]; then
+		existing_task_uuid=$(get_task_id_by_description "$issue_description")
+	fi
+	
+	task_uuid="$existing_task_uuid"
 
 	if [[ -z "$task_uuid" ]]; then
 		create_and_annotate_task "$issue_description" "$issue_repo_name" "$issue_url" "$issue_number" "$project_name" "$issue_status"
