@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-set -e # Exit immediately if a command exits with a non-zero status.
+set -e 
 
 # Function to install necessary tools
 install_tools() {
