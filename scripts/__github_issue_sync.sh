@@ -467,6 +467,7 @@ sync_triage_issues() {
         log "Triage issues synced successfully"
     else
         log "Error: Failed to sync triage issues" >&2
+
     fi
 }
 
