@@ -87,8 +87,8 @@ require("gp").setup {
     rec_cmd = { "sox", "-c", "1", "--buffer", "32", "-d", "rec.wav", "trim", "0", "60:00" },
   },
 
-  default_command_agent = "ChatGPT4",
-  default_chat_agent = nil,
+  default_command_agent = "Claude37",
+  default_chat_agent = "Claude37",
   hooks = {
     -- Example of adding a custom command to explain selected code
     ExplainCode = function(gp, params)
@@ -199,11 +199,11 @@ require("gp").setup {
         .. "- Take a deep breath; You've got this!",
     },
     {
-      name = "ChatGPT4",
+      name = "ChatGPT4.1",
       chat = true,
       command = true,
       -- string with model name or table with model name and parameters
-      model = { model = "gpt-4o", temperature = 0.1, top_p = 1 },
+      model = { model = "gpt-4.1", temperature = 0.1, top_p = 1 },
       -- system prompt (use this to specify the persona/role of the AI)
       system_prompt = "You are a specialized coding AI assistant.\n\n"
         .. "The user provided the additional info about how they would like you to respond:\n\n"
