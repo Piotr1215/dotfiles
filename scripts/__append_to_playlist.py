@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 import argparse
-import importlib.util
 import logging
 import os
 import subprocess
@@ -161,6 +160,7 @@ def organize_with_claude(playlist_file_path, dry_run=False):
         timeout = 90  # seconds
         backoff_factor = 2
         retry_count = 0
+        result = None
         
         while retry_count < max_retries:
             try:
@@ -199,6 +199,12 @@ def organize_with_claude(playlist_file_path, dry_run=False):
                 print(f"ERROR: Claude CLI not found at {CLAUDE_BIN}")
                 print("Set the CLAUDE_BIN environment variable to the correct path.")
                 return False
+        
+        # Check if we got a valid result
+        if result is None:
+            logging.error("Failed to get response from Claude")
+            print("ERROR: Failed to get response from Claude")
+            return False
         
         # Get organized playlist from Claude's response
         organized_playlist = result.stdout
@@ -357,7 +363,7 @@ def cleanup_temp_files():
     except Exception as e:
         logging.warning(f"Error cleaning up temporary files: {e}")
 
-def signal_handler(signum, frame):
+def signal_handler(signum, _):
     """
     Handle interruption signals gracefully by cleaning up temporary files before exiting.
     """
@@ -435,10 +441,11 @@ def main():
     success = True
     
     if args.command == 'add':
-        entry_added = append_to_playlist(args.url, args.description, args.playlist, args.dry_run)
+        # Add the URL to the playlist
+        success = append_to_playlist(args.url, args.description, args.playlist, args.dry_run)
         
         # Organize the playlist after adding unless --no-organize is specified
-        if not args.no_organize:
+        if success and not args.no_organize:
             success = organize_with_claude(args.playlist, args.dry_run)
     
     elif args.command == 'reorg':
