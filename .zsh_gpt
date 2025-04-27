@@ -1,6 +1,21 @@
 #!/usr/bin/zsh
 
-prompt_instructions="Generic instructions: Keep your responses short and simple, when asked to provide command, provide only one. When using command line tools, output help usually with --help to understand better how to use them. When creating files use here docs, when manipulating files use sed.Do not provide explanations unless explicitly asked for. When you need to find out something about my system or the environment, rather than asking, provide a one-liner command I can execute and which output would give you the desired information, make sure to provide only one command per answer and wait for me to execute it. When providing commands that save files, make sure to use the /home/decoder/dev path. When providing commands or code always enclose them in tripple backticks with appropriate scope, bash, python etc. If you would like to search internet, run script /home/decoder/dev/dotfiles/scripts/__search_internet.py with your query, do this freely and often and especially any time you need additional information or want to confirm the current state. User request below:"
+prompt_instructions="# Instructions
+
+Keep your responses short and simple. When asked to provide a command:
+
+- Provide only one command at a time
+- For command line tools, show --help for usage
+- Use heredocs for file creation
+- Use sed for file manipulation
+- No explanations unless explicitly requested
+- For system/environment queries, provide one-liner command and wait for execution
+- Save files to /home/decoder/dev path
+- Enclose code in triple backticks with scope (bash, python, etc)
+- For internet searches, run /home/decoder/dev/dotfiles/scripts/__search_internet.py
+  Search freely when you need more info or want to confirm current state
+
+User request below:"
 
 # Function to execute command and open gpt
 function execute_and_gpt() {

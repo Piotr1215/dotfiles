@@ -229,12 +229,11 @@ require("gp").setup {
         .. "- Include only essential response like code etc, DO NOT provide explanations unless specifically asked for\n",
     },
     {
-      -- Needs this to work: https://github.com/Robitx/gp.nvim/pull/246
       provider = "openai",
       name = "o3-mini",
       chat = true,
       command = true,
-      model = { model = "o3-mini", temperature = 0.3, top_p = 1, max_completion_tokens = 1000 },
+      model = { model = "o3-mini", temperature = 0.3, top_p = 1 },
       system_prompt = "You are a specialized coding AI assistant.\n\n"
         .. "The user provided the additional info about how they would like you to respond:\n\n"
         .. "- Produce only valid and actionable code.\n",
@@ -243,32 +242,13 @@ require("gp").setup {
     {
       provider = "pplx",
       name = "pplx", -- Perplexity agent
-      chat = false,
+      chat = true,
       command = true,
       model = { model = "sonar" },
       system_prompt = "You are specialized internet search assistant.",
     },
   },
 }
-
--- Monkey patch the dispatcher after setup
-local dispatcher = require "gp.dispatcher"
-local original_prepare_payload = dispatcher.prepare_payload
-dispatcher.prepare_payload = function(messages, model, provider)
-  local output = original_prepare_payload(messages, model, provider)
-  if provider == "openai" and model.model:sub(1, 2) == "o3" then
-    for i = #messages, 1, -1 do
-      if messages[i].role == "system" then
-        table.remove(messages, i)
-      end
-    end
-    output.max_tokens = nil
-    output.temperature = nil
-    output.top_p = nil
-    output.stream = true
-  end
-  return output
-end
 
 require("remote-sshfs").setup {}
 
@@ -499,7 +479,7 @@ require("nvim-treesitter.configs").setup {
   },
   textobjects = {
     swap = {
-      enable = true,
+      enable = false,
       swap_next = {
         ["<leader>a"] = "@parameter.inner",
       },
