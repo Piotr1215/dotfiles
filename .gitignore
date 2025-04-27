@@ -12,3 +12,8 @@ CLAUDE.md
 
 # Git-crypt keys
 .keys/
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
