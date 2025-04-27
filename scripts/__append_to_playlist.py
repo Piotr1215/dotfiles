@@ -4,6 +4,7 @@ import logging
 import os
 import subprocess
 import tempfile
+import time
 import pathlib
 from logging.handlers import TimedRotatingFileHandler
 import sys
@@ -125,123 +126,301 @@ def load_prompt_template():
     # Fall back to built-in template
     return CLAUDE_PROMPT
 
-def organize_with_claude(playlist_file_path, dry_run=False):
+def check_claude_cli():
     """
-    Reorganize a playlist file using Claude, with atomic write and better error handling.
+    Check if the Claude CLI is installed and working correctly.
+    Returns a tuple of (success, message)
     """
-    logging.debug(f'Calling Claude to organize playlist: {playlist_file_path}')
+    try:
+        # Check if the binary exists and is executable
+        if not os.path.exists(CLAUDE_BIN):
+            return False, f"Claude CLI not found at: {CLAUDE_BIN}"
+        
+        # Check version to ensure it's working
+        result = subprocess.run(
+            [CLAUDE_BIN, "--version"],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        
+        if result.returncode != 0:
+            return False, f"Claude CLI returned error code: {result.returncode}"
+        
+        # Successfully retrieved version
+        return True, f"Claude CLI {result.stdout.strip()} is ready"
+    except Exception as e:
+        return False, f"Error checking Claude CLI: {str(e)}"
+
+def auto_tag_entry(title, _):
+    """
+    Automatically tag an entry based on keywords in the title.
+    This is a fallback when Claude isn't available or times out.
+    
+    Args:
+        title: The title to tag
+        _: Unused parameter (kept for API compatibility)
+        
+    Returns:
+        A formatted title with genre/mood tags
+    """
+    title_lower = title.lower()
+    
+    # Define keyword mappings
+    keywords = {
+        'ambient': {
+            'calm': ['calm', 'peaceful', 'gentle', 'relaxing', 'meditation'],
+            'dark': ['dark', 'horror', 'lovecraft', 'mysterious', 'enigmatic', 'eerie'],
+            'dreamy': ['dream', 'dreamy', 'sleep', 'ethereal'],
+            'nature': ['nature', 'forest', 'rain', 'ocean', 'sea', 'wind', 'birds'],
+            'ethereal': ['ethereal', 'spacey', 'space', 'cosmic', 'universe']
+        },
+        'lofi': {
+            'chill': ['chill', 'relax', 'peace', 'study'],
+            'jazz': ['jazz'],
+            'hiphop': ['hip hop', 'hip-hop', 'hiphop', 'beats']
+        },
+        'electronic': {
+            'upbeat': ['upbeat', 'dance', 'edm', 'party'],
+            'chill': ['chill', 'downtempo'],
+            'experimental': ['experimental', 'glitch', 'idm']
+        },
+        'classical': {
+            'piano': ['piano', 'chopin', 'liszt', 'beethoven', 'mozart'],
+            'orchestral': ['orchestra', 'symphony', 'classical'],
+            'focus': ['focus', 'study', 'concentration', 'work']
+        },
+        'focus': {
+            'deep': ['deep focus', 'deep work', 'concentration'],
+            'light': ['light', 'easy', 'background'],
+            'coding': ['code', 'coding', 'programming', 'developer']
+        },
+        'instrumental': {
+            'piano': ['piano', 'keys'],
+            'guitar': ['guitar', 'acoustic'],
+            'orchestral': ['orchestra', 'strings', 'ensemble']
+        },
+        'soundtrack': {
+            'ambient': ['ambient', 'atmospheric', 'environment'],
+            'cinematic': ['cinematic', 'epic', 'movie', 'film'],
+            'mystery': ['mystery', 'detective', 'noir']
+        },
+        'techno': {
+            'cyberpunk': ['cyberpunk', 'cyber', 'futuristic', 'blade runner'],
+            'dark': ['dark', 'industrial', 'heavy', 'bass'],
+            'experimental': ['experimental', 'abstract', 'minimal']
+        }
+    }
+    
+    # Find the best match based on keywords
+    best_genre = 'AMBIENT'  # Default if no matches found
+    best_mood = 'CALM'      # Default if no matches found
+    max_matches = 0
+    
+    for genre, moods in keywords.items():
+        for mood, mood_keywords in moods.items():
+            matches = sum(1 for keyword in mood_keywords if keyword in title_lower)
+            if matches > max_matches:
+                max_matches = matches
+                best_genre = genre
+                best_mood = mood
+                
+    # Ensure we always have valid values by using the defaults if nothing matched
+    assert best_genre is not None, "Genre should never be None"
+    assert best_mood is not None, "Mood should never be None"
+    
+    # Extract potential artist if it's in brackets or parentheses
+    artist = ""
+    if '[' in title and ']' in title:
+        start = title.find('[') + 1
+        end = title.find(']', start)
+        if start < end:  # Ensure valid range
+            artist = title[start:end]
+    elif '(' in title and ')' in title:
+        start = title.find('(') + 1
+        end = title.find(')', start)
+        if start < end:  # Ensure valid range
+            artist = title[start:end]
+    
+    # If artist found, include it, otherwise just use the genre/mood
+    genre_mood_tag = f"{best_genre.upper()}/{best_mood.upper()}"
+    if artist and len(artist) > 0 and len(artist) < 30:  # Avoid using very long text in parentheses
+        artist_tag = f"[{artist.upper()}]"
+        return f"# {genre_mood_tag} {artist_tag}: {title}"
+    else:
+        return f"# {genre_mood_tag}: {title}"
+
+def tag_entry_with_claude(title, url):
+    """
+    Use Claude to tag a single playlist entry with proper genre/mood and artist information.
+    Falls back to auto-tagging if Claude times out or fails.
+    
+    Args:
+        title: The title or description of the entry
+        url: The URL of the entry
+        
+    Returns:
+        Properly formatted title with genre/mood and artist tags
+    """
+    logging.debug(f'Asking Claude to tag entry: {title}')
+    
+    # Check if Claude CLI is working
+    claude_ok, message = check_claude_cli()
+    if not claude_ok:
+        logging.warning(f"Claude not available: {message}")
+        return auto_tag_entry(title, url)
+    
+    # Prompt focused specifically on tagging one audio entry
+    prompt = f"""
+You're a music categorizer that adds genre tags to a single track.
+
+Title: {title}
+
+Task: Format this single title with the pattern: # GENRE/MOOD [ARTIST]: Title
+
+Available categories (use EXACTLY as shown with the slash):
+- AMBIENT/CALM, AMBIENT/DARK, AMBIENT/DREAMY, AMBIENT/ETHEREAL, AMBIENT/NATURE
+- ELECTRONIC/UPBEAT, ELECTRONIC/CHILL, ELECTRONIC/EXPERIMENTAL
+- FOCUS/DEEP, FOCUS/LIGHT, FOCUS/CODING
+- INSTRUMENTAL/PIANO, INSTRUMENTAL/GUITAR, INSTRUMENTAL/ORCHESTRAL
+- LOFI/JAZZ, LOFI/HIPHOP, LOFI/CHILL
+- SOUNDTRACK/AMBIENT, SOUNDTRACK/EPIC, SOUNDTRACK/CINEMATIC
+- CLASSICAL/PIANO, CLASSICAL/ORCHESTRAL, CLASSICAL/FOCUS
+- TECHNO/CYBERPUNK, TECHNO/DARK, TECHNO/EXPERIMENTAL
+- TUTORIAL/DEV, TALK/TECH, TALK/PHILOSOPHY
+
+Rules:
+1. Format MUST be: # GENRE/MOOD [ARTIST]: Title
+2. Always use ALL CAPS for GENRE/MOOD and [ARTIST]
+3. If no artist is identifiable, omit [ARTIST] part
+4. Keep existing star emoji (⭐) if present
+5. Reply ONLY with the formatted line, nothing else
+
+Examples:
+For "Dark ambient drones" → # AMBIENT/DARK: Dark ambient drones
+For "Chopin Nocturne" → # CLASSICAL/PIANO [CHOPIN]: Chopin Nocturne
+For "⭐ Coding beats" → # FOCUS/CODING: ⭐ Coding beats
+"""
+    
+    # Call Claude CLI with a longer timeout
+    try:
+        start_time = time.time()
+        result = subprocess.run(
+            [CLAUDE_BIN, '-p', prompt],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=30  # Longer timeout to account for Claude CLI
+        )
+        elapsed_time = time.time() - start_time
+        logging.debug(f'Claude responded in {elapsed_time:.2f} seconds')
+        
+        # Get Claude's response and clean it up
+        tagged_title = result.stdout.strip()
+        
+        # If Claude returned nothing useful, use auto-tagging
+        if not tagged_title:
+            logging.warning(f"Claude returned empty response for '{title}', using auto-tagging")
+            return auto_tag_entry(title, url)
+            
+        # Make sure the result starts with # for a properly formatted title
+        if tagged_title.startswith('#'):
+            return tagged_title
+        elif tagged_title.startswith('# '):
+            return tagged_title
+        else:
+            # Fix issues where Claude might not return with the # prefix
+            return f"# {tagged_title}"
+            
+    except subprocess.TimeoutExpired:
+        logging.warning(f"Claude timed out while tagging '{title}', using auto-tagging")
+        return auto_tag_entry(title, url)
+    except Exception as e:
+        logging.error(f'Error tagging entry with Claude: {str(e)}')
+        return auto_tag_entry(title, url)
+        
+def organize_playlist(playlist_file_path, dry_run=False):
+    """
+    Reorganize a playlist file using Python code for sorting and structure.
+    Only uses Claude for tagging new entries that aren't properly formatted yet.
+    """
+    logging.debug(f'Organizing playlist: {playlist_file_path}')
     
     try:
         # Read the playlist content
         playlist_content = pathlib.Path(playlist_file_path).read_text()
         
-        # Check if playlist is too large for Claude's context window
-        line_count = len(playlist_content.splitlines())
-        if line_count > MAX_PLAYLIST_LINES:
-            logging.warning(f"Playlist has {line_count} lines, which may exceed Claude's token limit")
-            print(f"WARNING: Playlist has {line_count} lines, which exceeds the recommended limit of {MAX_PLAYLIST_LINES}.")
-            print("This may cause Claude to truncate or fail to process the playlist correctly.")
-            print("Consider splitting the playlist into smaller files.")
+        # Parse the playlist into entries (title and URL pairs)
+        entries = []
+        lines = playlist_content.strip().split('\n')
+        
+        i = 0
+        while i < len(lines):
+            if lines[i].strip().startswith('#'):
+                title = lines[i].strip()
+                url = lines[i+1].strip() if i+1 < len(lines) else ""
+                
+                # Check if the title is properly formatted (has GENRE/MOOD tag)
+                title_upper = title.upper()
+                if not any(category in title_upper for category in ['AMBIENT/', 'ELECTRONIC/', 'FOCUS/', 'LOFI/', 'INSTRUMENTAL/', 'SOUNDTRACK/', 'CLASSICAL/', 'TUTORIAL/', 'TALK/', 'TECHNO/']):
+                    logging.debug(f"Found untagged entry: {title}")
+                    # Title is not properly formatted, get proper tagging from Claude
+                    title = tag_entry_with_claude(title.replace('#', '').strip(), url)
+                
+                entries.append((title, url))
+                i += 2
+            else:
+                # Skip malformed lines
+                i += 1
+        
+        # Function to extract genre/mood and artist for sorting
+        def get_sort_keys(entry):
+            title = entry[0]
             
-            if not dry_run:
-                user_input = input("Continue anyway? (y/n): ")
-                if user_input.lower() != 'y':
-                    logging.info("User aborted organization due to playlist size")
-                    return False
-        
-        # Load the prompt template from file or built-in
-        prompt_template = load_prompt_template()
-        
-        # Format the prompt with the playlist content
-        prompt = prompt_template.format(playlist_content=playlist_content)
-        
-        # Call Claude CLI with retries, backoff, and timeout
-        max_retries = 3
-        timeout = 90  # seconds
-        backoff_factor = 2
-        retry_count = 0
-        result = None
-        
-        while retry_count < max_retries:
-            try:
-                logging.debug(f'Calling Claude (attempt {retry_count + 1}/{max_retries})')
-                result = subprocess.run(
-                    [CLAUDE_BIN, '-p', prompt],
-                    capture_output=True,
-                    text=True,
-                    check=True,
-                    timeout=timeout
-                )
-                break  # Success, exit the loop
-            except subprocess.TimeoutExpired:
-                retry_count += 1
-                if retry_count >= max_retries:
-                    logging.error(f'Claude CLI timed out after {timeout} seconds (all retries exhausted)')
-                    print(f"ERROR: Claude CLI timed out after {timeout} seconds. Try again later.")
-                    return False
-                logging.warning(f'Claude CLI timed out after {timeout} seconds, retrying ({retry_count}/{max_retries})')
-                timeout *= backoff_factor  # Increase timeout for next attempt
-            except subprocess.CalledProcessError as e:
-                # Only retry on 5xx errors (server errors), not 4xx (client errors)
-                if e.returncode >= 500 and e.returncode < 600 and retry_count < max_retries:
-                    retry_count += 1
-                    wait_time = backoff_factor ** retry_count
-                    logging.warning(f'Claude CLI failed with server error {e.returncode}, retrying in {wait_time} seconds')
-                    import time
-                    time.sleep(wait_time)
-                else:
-                    logging.error(f'Claude CLI failed with error code {e.returncode}')
-                    logging.error(f'Output: {e.output}')
-                    logging.error(f'Error: {e.stderr}')
-                    return False
-            except FileNotFoundError:
-                logging.error(f'Claude CLI not found at {CLAUDE_BIN}. Set the CLAUDE_BIN environment variable to the correct path.')
-                print(f"ERROR: Claude CLI not found at {CLAUDE_BIN}")
-                print("Set the CLAUDE_BIN environment variable to the correct path.")
-                return False
-        
-        # Check if we got a valid result
-        if result is None:
-            logging.error("Failed to get response from Claude")
-            print("ERROR: Failed to get response from Claude")
-            return False
-        
-        # Get organized playlist from Claude's response
-        organized_playlist = result.stdout
-        
-        # Remove any empty lines and any introductory text from Claude
-        organized_lines = []
-        content_started = False
-        
-        for line in organized_playlist.split('\n'):
-            # Skip empty lines
-            if not line.strip():
-                continue
+            # Skip the initial # if present for parsing
+            if title.startswith('# '):
+                title = title[2:]
+            elif title.startswith('#'):
+                title = title[1:]
                 
-            # If we see a line starting with '#', then we're in the content
-            if line.strip().startswith('#'):
-                content_started = True
-                
-            # Only add lines once we've reached actual content
-            if content_started:
-                organized_lines.append(line.strip())
+            # Extract genre/mood
+            genre_mood = ""
+            if ':' in title and '/' in title:
+                parts = title.split(':', 1)[0].strip()
+                genre_mood = parts.split('[')[0].strip() if '[' in parts else parts.strip()
+            
+            # Extract artist if present
+            artist = ""
+            if '[' in title and ']' in title:
+                artist = title.split('[', 1)[1].split(']', 1)[0]
+            
+            return (genre_mood, artist, title)
         
-        cleaned_playlist = '\n'.join(organized_lines)
+        # Sort entries by genre/mood then artist
+        entries.sort(key=get_sort_keys)
+        
+        # Build the organized playlist
+        organized_content = []
+        for title, url in entries:
+            organized_content.append(title)
+            organized_content.append(url)
+        
+        organized_playlist = '\n'.join(organized_content)
         
         if dry_run:
             logging.info("Dry run - not writing changes to file")
-            print(f"--- Organized Playlist (Dry Run) ---\n{cleaned_playlist}")
+            print(f"--- Organized Playlist (Dry Run) ---\n{organized_playlist}")
             return True
         
         # Write the organized playlist back to the file atomically
-        atomic_write(playlist_file_path, cleaned_playlist)
+        atomic_write(playlist_file_path, organized_playlist)
         
-        logging.debug('Playlist successfully organized by Claude')
+        logging.debug('Playlist successfully organized')
         return True
         
     except Exception as e:
         import traceback
-        logging.error(f'Error organizing playlist with Claude: {str(e)}')
+        logging.error(f'Error organizing playlist: {str(e)}')
         logging.error(f'Traceback: {traceback.format_exc()}')
         return False
 
@@ -446,10 +625,10 @@ def main():
         
         # Organize the playlist after adding unless --no-organize is specified
         if success and not args.no_organize:
-            success = organize_with_claude(args.playlist, args.dry_run)
+            success = organize_playlist(args.playlist, args.dry_run)
     
     elif args.command == 'reorg':
-        success = organize_with_claude(args.playlist, args.dry_run)
+        success = organize_playlist(args.playlist, args.dry_run)
     
     logging.debug('Operation completed successfully.')
     
