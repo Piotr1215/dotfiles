@@ -350,6 +350,31 @@ local function keymapOptions(desc)
   }
 end
 
+local function switch(agent)
+  -- :GpAgent <name> picks chat- or command-scope automatically,
+  -- depending on the buffer you’re in :contentReference[oaicite:0]{index=0}
+  vim.cmd("GpAgent " .. agent)
+end
+
+-- <leader>a i c   →  Claude-3.7  (your “default”)
+vim.keymap.set("n", "<leader>aic", function()
+  switch "Claude37"
+end, { desc = "gp.nvim: use Claude-3.7 (Anthropic)" })
+
+-- <leader>a i o   →  GPT-4-o / o3-mini (OpenAI)
+vim.keymap.set("n", "<leader>aio", function()
+  switch "o3-mini"
+end, { desc = "gp.nvim: use o3-mini (OpenAI)" })
+
+vim.keymap.set("n", "<leader>aig", function()
+  switch "ChatGPT4.1"
+end, { desc = "gp.nvim: use GPT-4.1 (OpneAI)" })
+
+-- <leader>a i p   →  Perplexity (sonar model)
+vim.keymap.set("n", "<leader>aip", function()
+  switch "pplx"
+end, { desc = "gp.nvim: use Perplexity (sonar)" })
+
 -- Restart nvim
 vim.keymap.set("n", "<leader>-", function()
   vim.fn.system "bash __restart_nvim.sh"
