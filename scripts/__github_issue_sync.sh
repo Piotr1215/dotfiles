@@ -169,6 +169,11 @@ manage_project_settings() {
         if echo "$formatted_project" | grep -qi 'vcluster\|cloud'; then
             task rc.confirmation=no modify "$task_uuid" session:vcluster-staging
         fi
+
+        if echo "$formatted_project" | grep -qi 'vclustercloud-maintenance'; then
+            task rc.confirmation=no modify "$task_uuid" repo:hosted-platform
+        fi
+
         # Check if project name contains vnode (case insensitive)
         if echo "$formatted_project" | grep -qi 'vnode'; then
             task rc.confirmation=no modify "$task_uuid" repo:vnode-docs
