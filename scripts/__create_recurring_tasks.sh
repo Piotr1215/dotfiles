@@ -27,6 +27,15 @@ add_task_if_not_exists() {
 # Get the day of the week (1-7, where 1 is Monday)
 day_of_week=$(date +%u)
 
+# Get the day of the month (1-31)
+day_of_month=$(date +%d)
+
+# Check if it's the 1st of the month and add monthly task
+if [ "$day_of_month" -eq 1 ]; then
+	add_task_if_not_exists "cleanup hosted platform instances" "today+8h" "session:vcluster-prod"
+	echo "Monthly task check complete."
+fi
+
 # Only run daily tasks on weekdays (1-5)
 if [ "$day_of_week" -le 5 ]; then
 	# Daily tasks (weekdays only)
