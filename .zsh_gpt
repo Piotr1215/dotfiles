@@ -1,21 +1,6 @@
 #!/usr/bin/zsh
 
-prompt_instructions="# Instructions
-
-Keep your responses short and simple. When asked to provide a command:
-
-- Provide only one command at a time
-- For command line tools, show --help for usage
-- Use heredocs for file creation
-- Use sed for file manipulation
-- No explanations unless explicitly requested
-- For system/environment queries, provide one-liner command and wait for execution
-- Save files to /home/decoder/dev path
-- Enclose code in triple backticks with scope (bash, python, etc)
-- For internet searches, run /home/decoder/dev/dotfiles/scripts/__search_internet.py
-  Search freely when you need more info or want to confirm current state
-
-User request below:"
+prompt_instructions="# Instructions Keep your responses short and simple. When asked to provide a command: - Provide only one command at a time - For command line tools, show --help for usage - Use heredocs for file creation - Use sed for file manipulation - No explanations unless explicitly requested - For system/environment queries, provide one-liner command and wait for execution - Save files to /home/decoder/dev path - Enclose code in triple backticks with scope (bash, python, etc) - For internet searches, run /home/decoder/dev/dotfiles/scripts/__search_internet.py Search freely when you need more info or want to confirm current state User request below:"
 
 # Function to execute command and open gpt
 function execute_and_gpt() {
