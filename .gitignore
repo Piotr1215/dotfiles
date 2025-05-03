@@ -17,3 +17,5 @@ CLAUDE.md
 __pycache__/
 *.py[cod]
 *$py.class
+
+settings.local.json
