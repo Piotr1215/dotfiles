@@ -663,6 +663,7 @@ vim.g.startify_bookmarks = {
   "~/.task/hooks",
   "~/.config/Claude/claude_desktop_config.json",
   "/home/decoder/.claude.json",
+  "~/.cache/claude-cli-nodejs/",
   "/usr/local/share/zsh/site-functions",
   "~/dev/dotfiles/.config/nvim/lua/projects/module.lua",
   "~/scripts/__project_mappings.conf",
