@@ -673,5 +673,6 @@ vim.g.startify_bookmarks = {
   "~/.local/share/nvim/site/pack/packer/start",
   "~/.local/share/nvim/gp/chats",
   "/usr/share/doc/neomutt/manual.html",
+  "/home/decoder/.local/share/applications/",
 }
 vim.g.startify_custom_header = "startify#pad(split(system('fortune -s | cowsay | lolcat; date'), '\n'))"
