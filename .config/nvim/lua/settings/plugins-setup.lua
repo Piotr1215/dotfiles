@@ -658,21 +658,5 @@ vim.g.startify_skiplist = {
   "^/tmp",
 }
 vim.g.startify_commands = {}
-vim.g.startify_bookmarks = {
-  "~/.taskrc",
-  "~/.task/hooks",
-  "~/.config/Claude/claude_desktop_config.json",
-  "/home/decoder/.claude.json",
-  "~/.cache/claude-cli-nodejs/",
-  "/usr/local/share/zsh/site-functions",
-  "~/dev/dotfiles/.config/nvim/lua/projects/module.lua",
-  "~/scripts/__project_mappings.conf",
-  "~/.taskopenrc",
-  "~/.oh-my-zsh/plugins/tmuxinator/_mst",
-  "~/.config/taskwarrior-tui/shortcut-scripts",
-  "~/.local/share/nvim/site/pack/packer/start",
-  "~/.local/share/nvim/gp/chats",
-  "/usr/share/doc/neomutt/manual.html",
-  "/home/decoder/.local/share/applications/",
-}
+vim.g.startify_bookmarks = {}
 vim.g.startify_custom_header = "startify#pad(split(system('fortune -s | cowsay | lolcat; date'), '\n'))"

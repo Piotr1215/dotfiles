@@ -66,21 +66,6 @@ return require("lazy").setup {
       excluded_modes = { "i" },
     },
   }, -- more opts
-  {
-    "otavioschwanck/arrow.nvim",
-    dependencies = {
-      { "nvim-tree/nvim-web-devicons" },
-      -- or if using `mini.icons`
-      -- { "echasnovski/mini.icons" },
-    },
-    opts = {
-      show_icons = true,
-      leader_key = ";", -- Recommended to be a single key
-      buffer_leader_key = "m", -- Per Buffer Mappings
-      global_bookmarks = true,
-      full_path_list = { "claude_desktop_config.json" },
-    },
-  },
   "MunifTanjim/nui.nvim",
   "stevearc/dressing.nvim",
   "tyru/open-browser.vim",
