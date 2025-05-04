@@ -1,6 +1,8 @@
 local utils = require "utils"
 local opts = { noremap = true, silent = true }
 local shell = require "user_functions.shell_integration"
+-- Load sensitive mappings
+local s_mappings = require "s_mappings"
 
 vim.keymap.set({ "n", "v" }, "<Space>", "<Nop>", { silent = true })
 vim.g.mapleader = " "
