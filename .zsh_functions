@@ -19,6 +19,11 @@ function copy_last_screenshot() {
     echo "Copied to $new_path (path is in clipboard)"
 }
 
+# Launch nvim verbose explorer, function is now in scripts/__nvim_verbose.sh
+function nvim_verb() {
+    ~/dev/dotfiles/scripts/__nvim_verbose.sh "$@"
+}
+
 alias ghcurrentbranch='ghcurrentbranch_function'
 function link-homelab() {
     local homelab_kubeconfig="/home/decoder/dev/homelab/kubeconfig"
