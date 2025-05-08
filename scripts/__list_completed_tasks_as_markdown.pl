@@ -4,6 +4,8 @@ use warnings;
 use XML::LibXML;
 use Time::Piece;
 
+print "**Auto-generated status update**\n\n";
+
 my $t = localtime;
 my $wday = $t->wdayname;
 my $days_to_subtract = ($wday eq 'Mon') ? 3 : 1;
@@ -77,7 +79,6 @@ for my $task ($doc->findnodes('/tasks/task')) {
 }
 
 # Merge today and yesterday tasks
-print "Today & Yesterday\n\n";
 
 # Get all projects from both today and yesterday to ensure consistent categories
 my %all_projects;
