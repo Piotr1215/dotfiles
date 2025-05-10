@@ -1,1 +1,9 @@
 fabric-mcp
+window_manager
+playlist
+nvim-restart
+alacritty_transparency
+taskwarrior-sync
+blogs-convert
+project_renamer
+zoom-monitor
