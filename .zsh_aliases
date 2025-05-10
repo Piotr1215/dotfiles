@@ -38,6 +38,7 @@ alias sai='sudo apt install -y'
 alias suser='systemctl --user '
 
 # Commands shadow
+alias weather='curl wttr.in/${CITY}'
 alias br='br -sg'
 alias tf='terraform'
 alias lpf='list_project_files'
