@@ -1,0 +1,32 @@
+#compdef fifp
+
+# Completion script for the fifp function
+# Shows projects from ~/projects.txt when tab is pressed
+
+_fifp() {
+    local projects
+    local projects_file="$HOME/projects.txt"
+    
+    # Ensure projects file exists
+    if [[ ! -f "$projects_file" ]]; then
+        _message "Projects file not found: $projects_file"
+        return 1
+    fi
+    
+    # Read project names from the file
+    projects=( ${(f)"$(cat $projects_file)"} )
+    
+    # Define the completion function behavior
+    _arguments \
+        '-l[List all files with the specified project tag]' \
+        '*:project:->projects'
+    
+    # Handle completion for project names
+    case "$state" in
+        projects)
+            _describe -t projects 'Project' projects
+            ;;
+    esac
+}
+
+_fifp

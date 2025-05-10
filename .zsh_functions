@@ -468,11 +468,12 @@ function _fif_common() {
 
   local files
   local preview_cmd=$(printf "rga %s --pretty --context 10 '%s' {}" "$ignore_case_flag" "$*")
-  local rga_output=$(rga --max-count=1 $ignore_case_flag --files-with-matches --no-messages "$*")
+  # Removed --max-count=1 to show all matching files
+  local rga_output=$(rga $ignore_case_flag --files-with-matches --no-messages "$*")
   # PROJECT: project
   # This is used to copy file names so that they can be used a project documentaiton
   echo "$rga_output" | xsel --clipboard --input
-  IFS=$'\n' files=($(echo "$rga_output" | fzf-tmux +m --preview="$preview_cmd" --multi --select-1 --exit-0)) || return 1
+  IFS=$'\n' files=($(echo "$rga_output" | fzf +m --preview="$preview_cmd" --multi --select-1 --exit-0)) || return 1
 
   if [ ${#files[@]} -eq 0 ]; then
     echo "No files selected."
@@ -541,7 +542,8 @@ function list_project_files() {
     local project_tag="PROJECT: $selected_project"
     
     # Use rga to find files containing the project tag in current directory and subdirectories
-    local rga_output=$(rga --max-count=1 --files-with-matches --no-messages "$project_tag" .)
+    # Removed --max-count=1 to show all matching files
+    local rga_output=$(rga --files-with-matches --no-messages "$project_tag" .)
     
     # Check if any files were found
     if [[ -z "$rga_output" ]]; then
@@ -555,12 +557,27 @@ function list_project_files() {
 # Wrapper function for project tags search with optional listing
 # PROJECT: project
 function fifp() {
+    # Save current fzf-tab configuration
+    local saved_fzf_command
+    zstyle -s ':fzf-tab:*' fzf-command saved_fzf_command
+
+    # Temporarily unset fzf-command to avoid conflict with ftb-tmux-popup
+    zstyle ':fzf-tab:*' fzf-command fzf
+
     local mode="$1"  # Check for the '-l' flag
     if [[ "$mode" == "-l" ]]; then
         shift  # Remove the first argument (the '-l' flag)
         list_project_files "$*"
     else
         _fif_common "" "PROJECT: $*"
+    fi
+
+    # Restore previous fzf-tab configuration
+    if [[ -n "$saved_fzf_command" ]]; then
+        zstyle ':fzf-tab:*' fzf-command "$saved_fzf_command"
+    else
+        # If no previous config, remove the style
+        zstyle -d ':fzf-tab:*' fzf-command
     fi
 }
 
