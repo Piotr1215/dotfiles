@@ -58,15 +58,14 @@ alacritty_firefox_vertical() {
 	# Get the ID of the first Firefox window across all workspaces
 	firefox_window=$(xdotool search --classname Navigator | head -n 1)
 	if [ -n "$firefox_window" ]; then
-		# First, maximize and wait for completion
+		# First, maximize and then unmaximize
 		wmctrl -i -r "$firefox_window" -b add,maximized_vert,maximized_horz
-		# Then unmaximize and wait for completion
-		xdotool windowactivate --sync "$firefox_window"
+		xdotool windowactivate "$firefox_window"
 		wmctrl -i -r "$firefox_window" -b remove,maximized_vert,maximized_horz
 		
 		# Position Firefox on the left side using the same values as in firefox_firefox_vertical
-		xdotool windowsize --sync "$firefox_window" 1870 2180
-		xdotool windowmove --sync "$firefox_window" -26 24
+		xdotool windowsize "$firefox_window" 1870 2180
+		xdotool windowmove "$firefox_window" -26 24
 	else
 		echo "No Firefox window found."
 		return 1
@@ -77,18 +76,18 @@ alacritty_firefox_vertical() {
 	if [ -n "$alacritty_window" ]; then
 		# Handle Alacritty window - right side
 		minimize_window "$alacritty_window"
-		# Use sync flag to wait for window to be mapped/visible
-		xdotool windowmap --sync "$alacritty_window"
-		# Position Alacritty on the right side using similar settings to firefox_firefox_vertical's right side
-		xdotool windowsize --sync "$alacritty_window" 1971 2180
-		xdotool windowmove --sync "$alacritty_window" 1920 24
+		# Map window without sync
+		xdotool windowmap "$alacritty_window"
+		# Position Alacritty on the right side without sync flags
+		xdotool windowsize "$alacritty_window" 1971 2180
+		xdotool windowmove "$alacritty_window" 1920 24
 	else
 		echo "No Alacritty window found."
 		return 1
 	fi
 	
-	# Set focus to Alacritty using standard methods
-	xdotool windowactivate --sync "$alacritty_window"
+	# Set focus to Alacritty using standard methods without sync
+	xdotool windowactivate "$alacritty_window"
 	xdotool windowraise "$alacritty_window"
 }
 firefox_firefox_vertical() {
