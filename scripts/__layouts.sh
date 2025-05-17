@@ -55,22 +55,6 @@ alacritty_firefox_vertical() {
 	screen_width=$(echo $screen_size | cut -d'x' -f1)
 	half_width=$((screen_width / 2))
 
-	# Get the ID of the first visible Alacritty window
-	window=$(xdotool search --onlyvisible --classname Alacritty | head -n 1)
-	if [ -n "$window" ]; then
-		# Handle Alacritty window - left side
-		minimize_window "$window"
-		# Use sync flag to wait for window to be mapped/visible
-		xdotool windowmap --sync "$window"
-		# Combine size and move operations with sync
-		xdotool windowsize --sync "$window" $half_width 2128
-		xdotool windowmove --sync "$window" 0 32
-		xdotool windowactivate --sync "$window"
-		xdotool windowraise "$window"
-	else
-		echo "No Alacritty window found."
-	fi
-
 	# Get the ID of the first Firefox window across all workspaces
 	firefox_window=$(xdotool search --classname Navigator | head -n 1)
 	if [ -n "$firefox_window" ]; then
@@ -80,16 +64,32 @@ alacritty_firefox_vertical() {
 		xdotool windowactivate --sync "$firefox_window"
 		wmctrl -i -r "$firefox_window" -b remove,maximized_vert,maximized_horz
 		
-		# Now resize and position Firefox exactly at the second half of the screen
-		xdotool windowsize --sync "$firefox_window" $half_width 2154
-		xdotool windowmove --sync "$firefox_window" $half_width 21
-		
-		# Force focus and ensure it's on top
-		xdotool windowactivate --sync "$firefox_window"
-		xdotool windowraise "$firefox_window"
+		# Position Firefox on the left side using the same values as in firefox_firefox_vertical
+		xdotool windowsize --sync "$firefox_window" 1870 2180
+		xdotool windowmove --sync "$firefox_window" -26 24
 	else
 		echo "No Firefox window found."
+		return 1
 	fi
+
+	# Get the ID of the first visible Alacritty window
+	alacritty_window=$(xdotool search --onlyvisible --classname Alacritty | head -n 1)
+	if [ -n "$alacritty_window" ]; then
+		# Handle Alacritty window - right side
+		minimize_window "$alacritty_window"
+		# Use sync flag to wait for window to be mapped/visible
+		xdotool windowmap --sync "$alacritty_window"
+		# Position Alacritty on the right side using similar settings to firefox_firefox_vertical's right side
+		xdotool windowsize --sync "$alacritty_window" 1971 2180
+		xdotool windowmove --sync "$alacritty_window" 1920 24
+	else
+		echo "No Alacritty window found."
+		return 1
+	fi
+	
+	# Set focus to Alacritty using standard methods
+	xdotool windowactivate --sync "$alacritty_window"
+	xdotool windowraise "$alacritty_window"
 }
 firefox_firefox_vertical() {
 	# Minimize any visible Alacritty windows
