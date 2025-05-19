@@ -69,12 +69,39 @@ get_github_issues() {
 
 # Retrieve and format Linear issues
 get_linear_issues() {
-    local issues
-    if ! issues=$(curl -s -X POST \
+    local response
+    response=$(curl -s -w "\n%{http_code}" -X POST \
         -H "Content-Type: application/json" \
         -H "Authorization: $LINEAR_API_KEY" \
         --data '{"query": "query { user(id: \"'"$LINEAR_USER_ID"'\") { id name assignedIssues(filter: { state: { name: { nin: [\"Released\", \"Canceled\",\"Done\",\"Ready for Release\"] } } }) { nodes { id title url state { name } project { name } } } } }"}' \
-        https://api.linear.app/graphql | jq -c '.data.user.assignedIssues.nodes[] | {
+        https://api.linear.app/graphql)
+    
+    local http_code=$(echo "$response" | tail -1)
+    local content=$(echo "$response" | head -n -1)
+    
+    if [ "$http_code" != "200" ]; then
+        echo "Error: Linear API returned HTTP $http_code" >&2
+        echo "Response: $content" >&2
+        return 1
+    fi
+    
+    # Check if response is valid JSON
+    if ! echo "$content" | jq empty 2>/dev/null; then
+        echo "Error: Invalid JSON response from Linear API" >&2
+        echo "Response: $content" >&2
+        return 1
+    fi
+    
+    # Check for API errors in the response
+    local errors=$(echo "$content" | jq -r '.errors // empty')
+    if [ -n "$errors" ]; then
+        echo "Error: Linear API returned errors: $errors" >&2
+        return 1
+    fi
+    
+    # Parse the issues
+    local issues
+    if ! issues=$(echo "$content" | jq -c '.data.user.assignedIssues.nodes[] | {
             id: .id,
             description: .title,
             repository: "linear",
@@ -82,10 +109,11 @@ get_linear_issues() {
             issue_id: (.url | split("/") | .[-2]),
             project: .project.name,
             status: .state.name
-        }'); then
-        echo "Error: Unable to fetch Linear issues" >&2
+        }' 2>/dev/null); then
+        echo "Error: Failed to parse Linear issues" >&2
         return 1
     fi
+    
     echo "$issues"
 }
 
