@@ -243,6 +243,7 @@ utils.lnmap("cpl", [[:let @+ = expand("%:p") . ':' . line('.')<cr>]]) -- Copy cu
 utils.lnmap("cpn", ':let @+ = expand("%:t")<cr>') -- Copy current file name
 utils.imap("<c-d>", "<c-o>daw", { desc = "delete word forward in insert mode" })
 vim.keymap.set("i", "<A-H>", "<c-w>", { noremap = true, desc = "delete word forward in insert mode" })
+vim.keymap.set("i", "<A-,>", "<c-o>A,<c-o>o", { noremap = true, desc = "add coma and enter new line under" })
 utils.nmap("<leader>sl", "i<cr><esc>", { desc = "split line in two" })
 -- EXTERNAL COMMANDS --
 vim.keymap.set("c", "<C-w>", "\\w*", { noremap = true, desc = "copy word under cursor" })
