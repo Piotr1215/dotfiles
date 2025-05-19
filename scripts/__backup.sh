@@ -203,6 +203,7 @@ perform_backup() {
 	# Define restic backup sources
 	declare -a RESTIC_SOURCES=(
 		"/home/decoder/.envrc"
+		"/home/decoder/.claude.json"
 		"/home/decoder/dev/.envrc"
 		"/home/decoder/loft/.envrc"
 		"/home/decoder/.ssh/"
