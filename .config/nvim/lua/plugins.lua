@@ -23,6 +23,7 @@ return require("lazy").setup {
   -- Editor Extensions {{{
   ---@type LazySpec
   { "jinh0/eyeliner.nvim" },
+  { "mfussenegger/nvim-lint" },
   {
     "mikavilpas/yazi.nvim",
     event = "VeryLazy",

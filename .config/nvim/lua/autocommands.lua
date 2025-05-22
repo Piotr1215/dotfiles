@@ -20,6 +20,12 @@ api.nvim_create_autocmd("VimEnter", {
   command = "Copilot disable",
 })
 
+vim.api.nvim_create_autocmd({ "BufWritePost" }, {
+  callback = function()
+    require("lint").try_lint()
+  end,
+})
+
 api.nvim_create_autocmd({ "BufEnter", "BufRead" }, {
   pattern = ".nvimrc",
   callback = function()
