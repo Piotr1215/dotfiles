@@ -98,8 +98,8 @@ require("gp").setup {
     rec_cmd = { "sox", "-c", "1", "--buffer", "32", "-d", "rec.wav", "trim", "0", "60:00" },
   },
 
-  default_command_agent = "Claude37",
-  default_chat_agent = "Claude37",
+  default_command_agent = "Claude4",
+  default_chat_agent = "Claude4",
   hooks = {
     -- Example of adding a custom command to explain selected code
     ExplainCode = function(gp, params)
@@ -198,6 +198,25 @@ require("gp").setup {
       command = true,
       -- string with model name or table with model name and parameters
       model = { model = "claude-3-5-sonnet-20241022", temperature = 0, top_p = 0 },
+      -- system prompt (use this to specify the persona/role of the AI)
+      system_prompt = "You are a specialized coding AI assistant.\n\n"
+        .. "The user provided the additional info about how they would like you to respond:\n\n"
+        .. "- If you're unsure don't guess and say you don't know instead.\n"
+        .. "- Ask question if you need clarification to provide better answer.\n"
+        .. "- Think deeply and carefully from first principles step by step.\n"
+        .. "- Make your answers short, concise, to the point and helpful.\n"
+        .. "- Produce only valid and actionable code.\n"
+        .. "- Include only essential response like code etc, DO NOT provide explanations unless specifically asked for\n"
+        .. "- Take a deep breath; You've got this!",
+    },
+
+    {
+      provider = "anthropic",
+      name = "Claude4",
+      chat = true,
+      command = true,
+      -- string with model name or table with model name and parameters
+      model = { model = "claude-sonnet-4-20250514", temperature = 0, top_p = 0 },
       -- system prompt (use this to specify the persona/role of the AI)
       system_prompt = "You are a specialized coding AI assistant.\n\n"
         .. "The user provided the additional info about how they would like you to respond:\n\n"

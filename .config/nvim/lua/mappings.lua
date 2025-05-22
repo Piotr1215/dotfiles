@@ -361,8 +361,8 @@ end
 
 -- <leader>a i c   →  Claude-3.7  (your “default”)
 vim.keymap.set("n", "<leader>aic", function()
-  switch "Claude37"
-end, { desc = "gp.nvim: use Claude-3.7 (Anthropic)" })
+  switch "Claude4"
+end, { desc = "gp.nvim: use Claude-4 (Anthropic)" })
 
 -- <leader>a i o   →  GPT-4-o / o3-mini (OpenAI)
 vim.keymap.set("n", "<leader>aio", function()
