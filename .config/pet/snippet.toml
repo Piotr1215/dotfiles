@@ -1,0 +1,5 @@
+[[snippets]]
+  description = "Get available models from Anthropic API"
+  command = "curl -H \"Content-Type: application/json\" -H \"x-api-key: $ANTHROPIC_API_KEY\" -H \"anthropic-version: 2023-06-01\" https://api.anthropic.com/v1/models"
+  tag = ["anthropic", "api", "models"]
+  output = ""
