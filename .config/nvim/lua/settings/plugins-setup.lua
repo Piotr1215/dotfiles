@@ -19,6 +19,17 @@ require("urlview").setup()
 
 require("Comment").setup()
 
+vim.filetype.add {
+  pattern = {
+    [".*/.github/workflows/.*%.yml"] = "yaml.ghaction",
+    [".*/.github/workflows/.*%.yaml"] = "yaml.ghaction",
+  },
+}
+
+require("lint").linters_by_ft = {
+  ["yaml.ghaction"] = { "actionlint" },
+}
+
 require("gitsigns").setup {
   on_attach = function(bufnr)
     local gitsigns = require "gitsigns"
