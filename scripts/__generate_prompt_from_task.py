@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 
-from openai import OpenAI
+import openai
 import subprocess
-
-client = OpenAI()
 
 META_PROMPT = """
 Given a task description or existing prompt, produce a detailed system prompt to guide a language model in completing the task effectively.
@@ -54,8 +52,8 @@ The final prompt you output should adhere to the following structure below. Do n
 task_or_prompt = input("Please provide the Task, Goal, or Current Prompt: ")
 
 def generate_prompt(task_or_prompt: str):
-  completion = client.chat.completions.create(
-      model="gpt-4o",
+  completion = openai.ChatCompletion.create(
+      model="gpt-4.1",
       messages=[
           {
               "role": "system",
