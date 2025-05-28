@@ -32,7 +32,7 @@ if [ $HOME_SED_SAFE -eq 0 ]; then # $HOME should be safe to use in sed
 fi
 
 BORDER_LABEL=" sessionizer - simple tmux session manager "
-HEADER=" ctrl-s: sessions / ctrl-x: zoxide / ctrl-d: directory / ctrl-l: bookmarks"
+HEADER=" ctrl-s: sessions / ctrl-x: zoxide / ctrl-d: directory"
 PROMPT=$(get_fzf_prompt)
 SESSION_BIND="ctrl-s:change-prompt(sessions> )+reload(tmux list-sessions -F '#S')"
 ZOXIDE_BIND="ctrl-x:change-prompt(zoxide> )+reload(zoxide query -l | sed -e \"$HOME_REPLACER\")"
@@ -43,9 +43,6 @@ else # fd is not installed
   DIR_BIND="ctrl-d:change-prompt(directory> )+reload(cd $HOME && find ~+ -type d -name node_modules -prune -o -name .git -prune -o -type d -print)"
 fi
 
-# Bookmarks binding (Ctrl+l)
-BOOKMARKS_BIND="ctrl-l:change-prompt(bookmarks> )+reload(cat ~/dev/dotfiles/scripts/__bookmarks.conf)"
-
 if [ $# -eq 0 ]; then               # no argument provided
   if [ "$TMUX" = "" ]; then         # not in tmux
     if [ $TMUX_STATUS -eq 0 ]; then # tmux is running
@@ -54,7 +51,6 @@ if [ $# -eq 0 ]; then               # no argument provided
           --bind "$DIR_BIND" \
           --bind "$SESSION_BIND" \
           --bind "$ZOXIDE_BIND" \
-          --bind "$BOOKMARKS_BIND" \
           --border-label "$BORDER_LABEL" \
           --header "$HEADER" \
           --prompt "$PROMPT"
@@ -63,9 +59,8 @@ if [ $# -eq 0 ]; then               # no argument provided
       RESULT=$(
         (zoxide query -l | sed -e "$HOME_REPLACER") | fzf \
           --bind "$DIR_BIND" \
-          --bind "$BOOKMARKS_BIND" \
           --border-label "$BORDER_LABEL" \
-          --header " ctrl-d: directory / ctrl-l: bookmarks" \
+          --header " ctrl-d: directory" \
           --prompt "$PROMPT"
       )
     fi
@@ -75,7 +70,6 @@ if [ $# -eq 0 ]; then               # no argument provided
         --bind "$DIR_BIND" \
         --bind "$SESSION_BIND" \
         --bind "$ZOXIDE_BIND" \
-        --bind "$BOOKMARKS_BIND" \
         --border-label "$BORDER_LABEL" \
         --header "$HEADER" \
         --prompt "$PROMPT" \
@@ -87,7 +81,6 @@ if [ $# -eq 0 ]; then               # no argument provided
         --bind "$DIR_BIND" \
         --bind "$SESSION_BIND" \
         --bind "$ZOXIDE_BIND" \
-        --bind "$BOOKMARKS_BIND" \
         --border-label "$BORDER_LABEL" \
         --header "$HEADER" \
         --prompt "$PROMPT"
@@ -114,11 +107,6 @@ if [ -z "$RESULT" ]; then
   exit 0
 fi
 
-# Check if the result is a bookmark entry (contains semicolon)
-if [[ "$RESULT" == *";"* ]]; then
-  # Extract the path part after the semicolon
-  RESULT=$(echo "$RESULT" | cut -d ';' -f 2)
-fi
 
 if [ $HOME_SED_SAFE -eq 0 ]; then
   RESULT=$(echo "$RESULT" | sed -e "s|^~/|$HOME/|") # get real home path back
