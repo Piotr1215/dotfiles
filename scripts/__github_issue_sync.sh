@@ -267,6 +267,15 @@ update_task_status() {
             log "Issue status is In Review, adding +review tag"
             task rc.confirmation=no modify "$task_uuid" +review
         fi
+        
+        # Remove +triage tag if issue is no longer in Triage state
+        if [[ "$issue_status" != "Triage" ]]; then
+            local has_triage=$(echo "$task_json" | jq -r '.[0].tags | if . then contains(["triage"]) else false end')
+            if [[ "$has_triage" == "true" ]]; then
+                log "Issue is no longer in Triage state, removing +triage tag"
+                task rc.confirmation=no modify "$task_uuid" -triage
+            fi
+        fi
     fi
 }
 
