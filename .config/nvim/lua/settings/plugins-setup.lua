@@ -2,6 +2,9 @@
 vim.notify = require "notify"
 require("mason").setup()
 
+-- Load LuaSnip configuration early (before cmp)
+require("config.luasnip")
+
 require("typeit").setup {
   default_speed = 30, -- Default typing speed (milliseconds)
   default_pause = "paragraph", -- Default pause behavior ('line' or 'paragraph')

@@ -184,12 +184,16 @@ return require("lazy").setup {
   { "folke/trouble.nvim", dependencies = "kyazdani42/nvim-web-devicons", opts = {} },
   "hrsh7th/cmp-nvim-lsp-signature-help",
   {
-    "hrsh7th/cmp-vsnip",
+    "L3MON4D3/LuaSnip",
+    -- follow latest release.
+    version = "v2.*",
+    -- install jsregexp (optional!).
+    build = "make install_jsregexp",
     dependencies = {
-      "hrsh7th/vim-vsnip",
       "rafamadriz/friendly-snippets",
     },
   },
+  "saadparwaiz1/cmp_luasnip",
   { "shortcuts/no-neck-pain.nvim", version = "*" },
 
   "leoluz/nvim-dap-go",
@@ -221,8 +225,6 @@ return require("lazy").setup {
     },
   },
   "hrsh7th/cmp-nvim-lua",
-  "hrsh7th/vim-vsnip",
-  "hrsh7th/vim-vsnip-integ",
   -- }}}
   -- Programming {{{
   "ii14/neorepl.nvim",

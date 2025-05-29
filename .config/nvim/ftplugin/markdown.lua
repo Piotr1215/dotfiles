@@ -41,7 +41,7 @@ vim.g.mkdp_echo_preview_url = 0
 local cmp = require "cmp"
 cmp.setup.buffer {
   sources = {
-    { name = "vsnip" },
+    { name = "luasnip", priority = 90 },
     { name = "projects" },
     { name = "spell" },
     {

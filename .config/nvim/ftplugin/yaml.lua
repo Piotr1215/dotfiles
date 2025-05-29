@@ -64,7 +64,7 @@ require("lspconfig").yamlls.setup {
 local cmp = require "cmp"
 cmp.setup.buffer {
   sources = {
-    { name = "vsnip" },
+    { name = "luasnip", priority = 90 },
     { name = "nvim_lsp" },
     { name = "path" },
     {
