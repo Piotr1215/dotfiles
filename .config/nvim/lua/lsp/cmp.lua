@@ -1,6 +1,7 @@
 -- nvim-cmp
 local lspkind = require "lspkind"
 local cmp = require "cmp"
+local luasnip = require "luasnip"
 
 local has_words_before = function()
   local line, col = unpack(vim.api.nvim_win_get_cursor(0))
@@ -14,8 +15,12 @@ end
 cmp.setup {
   snippet = {
     expand = function(args)
-      vim.fn["vsnip#anonymous"](args.body)
+      require("luasnip").lsp_expand(args.body)
     end,
+  },
+  
+  completion = {
+    completeopt = "menu,menuone,noselect",
   },
 
   formatting = {
@@ -35,7 +40,7 @@ cmp.setup {
         nvim_lua = "[Lua]",
         projects = "[Projects]",
         emoji = "[Emoji]",
-        vsnip = "[Snippet]",
+        luasnip = "[Snippet]",
       },
     },
   },
@@ -55,8 +60,8 @@ cmp.setup {
     ["<Tab>"] = cmp.mapping(function(fallback)
       if cmp.visible() then
         cmp.select_next_item()
-      elseif vim.fn["vsnip#available"](1) == 1 then
-        feedkey("<Plug>(vsnip-expand-or-jump)", "")
+      elseif require("luasnip").expand_or_jumpable() then
+        require("luasnip").expand_or_jump()
       elseif has_words_before() then
         cmp.complete()
       else
@@ -67,23 +72,23 @@ cmp.setup {
     ["<S-Tab>"] = cmp.mapping(function()
       if cmp.visible() then
         cmp.select_prev_item()
-      elseif vim.fn["vsnip#jumpable"](-1) == 1 then
-        feedkey("<Plug>(vsnip-jump-prev)", "")
+      elseif require("luasnip").jumpable(-1) then
+        require("luasnip").jump(-1)
       end
     end, { "i", "s" }),
   },
 
-  sources = {
+  sources = cmp.config.sources({
     { name = "nvim_lsp" },
     { name = "nvim_lua", priority = 100 },
-    { name = "vsnip" },
+    { name = "luasnip", priority = 90 },
+    { name = "path" },
+  }, {
     { name = "buffer" },
     { name = "emoji" },
-    { name = "path" },
     { name = "crates" },
-    { name = "snippets" },
     { name = "projects", priority = 100 },
-  },
+  }),
 }
 
 -- Use buffer source for `/`

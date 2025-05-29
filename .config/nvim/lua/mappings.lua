@@ -275,10 +275,8 @@ utils.lnmap("gu", ":Gdiffu<CR>") -- git diff current file
 utils.nmap("<leader>gl", ":r !bash ~/dev/dotfiles/scripts/__generate_git_log.sh<CR>") -- generate git log
 utils.lnmap("gh", ":Gclog %<CR>") -- show git log for current file
 -- PROGRAMMING --
-utils.imap("<expr>", "<C-l>   vsnip#available(1)  ? '<Plug>(vsnip-expand-or-jump)' : '<C-l>") -- Vsnippet expand or jump
-utils.smap("<expr>", "<C-l>   vsnip#available(1)  ? '<Plug>(vsnip-expand-or-jump)' : '<C-l>") -- Vsnippet expand or jump
--- See https://github.com/hrsh7th/vim-vsnip/pull/50
-utils.nmap("<leader>vc", "<Plug>(vsnip-cut-text)") -- Select or cut text to use as $TM_SELECTED_TEXT in the next snippet
+-- LuaSnip mappings are handled in lua/config/luasnip.lua
+-- <M-l> for expand_or_jump, <M-h> for jump back, <M-j> for choice selection
 
 -- PLUGIN MAPPINGS --
 -- Mdeval
