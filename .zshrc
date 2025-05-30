@@ -375,13 +375,6 @@ PROMPT="$PROMPT"$'\n→ '
 
 # [[ -s "/home/decoder/.gvm/scripts/gvm" ]] && source "/home/decoder/.gvm/scripts/gvm"
 
-gcloud() {
-    unfunction "$0"
-    if [ -f '/home/decoder/dev/clusters/primary-dev/google-cloud-sdk/completion.zsh.inc' ]; then 
-        . '/home/decoder/dev/clusters/primary-dev/google-cloud-sdk/completion.zsh.inc'
-    fi
-    $0 "$@"
-}
 eval "$(direnv hook zsh)"
 eval "$(starship init zsh)"
 
