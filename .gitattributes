@@ -1,2 +1,3 @@
 .vsnip/global.json filter=git-crypt diff=git-crypt
 .config/nvim/lua/s_mappings.lua filter=git-crypt diff=git-crypt
+.config/tmuxinator/loft-prod.yml filter=git-crypt diff=git-crypt
