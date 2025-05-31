@@ -335,6 +335,9 @@ utils.lnmap("cpd", ":Copilot disable<cr>", { silent = false })
 utils.lnmap("cpe", ":Copilot enable<cr>", { silent = false })
 vim.keymap.set("i", "<M-w>", "<Plug>(copilot-accept-word)")
 
+-- CopilotChat
+utils.nmap("<leader>cc", ":CopilotChatToggle<CR>", { desc = "Toggle Copilot Chat" })
+
 -- GoTo Preview
 vim.keymap.set("n", "gtp", "<cmd>lua require('goto-preview').goto_preview_definition()<CR>", { noremap = true })
 
