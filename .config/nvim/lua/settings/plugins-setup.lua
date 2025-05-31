@@ -3,13 +3,14 @@ vim.notify = require "notify"
 require("mason").setup()
 
 -- Load LuaSnip configuration early (before cmp)
-require("config.luasnip")
+require "config.luasnip"
 
 require("typeit").setup {
   default_speed = 30, -- Default typing speed (milliseconds)
   default_pause = "paragraph", -- Default pause behavior ('line' or 'paragraph')
 }
 
+require("CopilotChat").setup()
 require("eyeliner").setup {
   highlight_on_key = true, -- this must be set to true for dimming to work!
 }
