@@ -166,6 +166,7 @@ declare -a BACKUP_SOURCES=(
 	"OBS Studio settings|/home/decoder/.var/app/com.obsproject.Studio/config|$HOME_BACKUP/obs/|true|"
 	"dev folder|/home/decoder/dev|$DEV_BACKUP|true|--exclude=.envrc"
 	"loft ops|/home/decoder/loft/ops|$DEV_BACKUP/loft|true|"
+        "argos scripts|/home/decoder/.config/argos/|$HOME_BACKUP/argos/|false|"
 )
 
 # Function to perform backup from configuration
