@@ -65,6 +65,7 @@ if [ "$day_of_week" -le 5 ]; then
 	add_task_if_not_exists "fill daily hours" "today+8h"
 	add_task_if_not_exists "check github notifications" "today+8h"
 	add_task_if_not_exists "respond to slack messages" "today+8h"
+	add_task_if_not_exists "check linear inbox" "today+8h"
 
 	# Day-specific tasks
 	case $day_of_week in
