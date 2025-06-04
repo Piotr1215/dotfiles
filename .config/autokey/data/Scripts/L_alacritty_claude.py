@@ -1,7 +1,7 @@
 import os
 import subprocess
 
-# Alacritty in 9:16 mode for shorts recording
+# Claude in Firefox + Alacritty layout
 layout = '/home/decoder/dev/dotfiles/scripts/__layouts.sh'
 
-subprocess.run([layout, "11"])
+subprocess.run([layout, "10"])

@@ -222,48 +222,6 @@ max_firefox() {
 	fi
 }
 # PROJECT: window_manager
-zoom_alacritty_horizontal() {
-	LEFT_MARGIN=4
-	TOP_MARGIN_ZOOM=72    # Now for Zoom
-	TOP_MARGIN_SLACK=1105 # Now for Slack
-	WINDOW_WIDTH=3832
-	WINDOW_HEIGHT=1022
-
-	alacritty=$(xdotool search --onlyvisible --classname Alacritty | head -n 1)
-	zoom=$(xdotool search --onlyvisible --name 'Meeting' | head -n 1)
-	slack=$(xdotool search --onlyvisible --classname Slack | head -n 1)
-
-	# Check if Zoom or Slack windows are found along with alacritty
-	if [[ -n "$alacritty" && -n "$zoom" ]]; then
-		echo "Both alacritty and Zoom windows found. Arranging windows."
-		# Position Zoom at the top
-		minimize_window "$zoom"
-		wmctrl -i -r "$zoom" -e 0,$LEFT_MARGIN,$TOP_MARGIN_ZOOM,$WINDOW_WIDTH,$WINDOW_HEIGHT
-		xdotool windowactivate --sync "$zoom"
-
-		# Position alacritty at the bottom
-		minimize_window "$alacritty"
-		wmctrl -i -r "$alacritty" -e 0,$LEFT_MARGIN,$TOP_MARGIN_SLACK,$WINDOW_WIDTH,1050
-		xdotool windowactivate --sync "$alacritty"
-
-	elif [[ -n "$zoom" ]]; then
-		echo "Only Zoom window found. Positioning."
-		minimize_window "$zoom"
-		maximize_window "$zoom"
-		xdotool windowactivate --sync "$zoom"
-
-	elif [[ -n "$slack" ]]; then
-		echo "Only Slack window found. Maximizing."
-		minimize_window "$slack"
-		maximize_window "$slack"
-		xdotool windowactivate --sync "$slack"
-
-	else
-		echo "No Zoom or Slack window found. Exiting."
-		alacritty_firefox_vertical
-		exit 0
-	fi
-}
 max_slack() {
 	# Get the ID of the first visible slack window
 	window=$(xdotool search --onlyvisible --classname Slack | head -n 1)
@@ -368,87 +326,71 @@ claude_alacritty_vertical() {
 	screen_width=$(echo $screen_size | cut -d'x' -f1)
 	half_width=$((screen_width / 2))
 
-	# Get the ID of the first visible Claude window
-	claude_window=$(xdotool search --onlyvisible --class "Claude" 2>/dev/null || xdotool search --onlyvisible --name "Claude" 2>/dev/null)
-	if [ -n "$claude_window" ]; then
-		# Handle Claude window - left side
-		minimize_window "$claude_window"
-		# Use sync flag to wait for window to be mapped/visible
-		xdotool windowmap --sync "$claude_window"
-		# Combine size and move operations with sync
-		xdotool windowsize --sync "$claude_window" $half_width 2128
-		xdotool windowmove --sync "$claude_window" 0 32
-		xdotool windowactivate --sync "$claude_window"
-		xdotool windowraise "$claude_window"
-	else
-		echo "No Claude window found."
-	fi
-
-	# Get the ID of the first Alacritty window
-	alacritty_window=$(xdotool search --onlyvisible --classname Alacritty | head -n 1)
-	if [ -n "$alacritty_window" ]; then
-		# First, maximize and wait for completion
-		wmctrl -i -r "$alacritty_window" -b add,maximized_vert,maximized_horz
-		# Then unmaximize and wait for completion
-		xdotool windowactivate --sync "$alacritty_window"
-		wmctrl -i -r "$alacritty_window" -b remove,maximized_vert,maximized_horz
-		
-		# Now resize and position Alacritty exactly at the second half of the screen
-		xdotool windowsize --sync "$alacritty_window" $half_width 2154
-		xdotool windowmove --sync "$alacritty_window" $half_width 21
-		
-		# Force focus and ensure it's on top
-		xdotool windowactivate --sync "$alacritty_window"
-		xdotool windowraise "$alacritty_window"
-	else
-		echo "No Alacritty window found."
-	fi
-}
-
-firefox_claude_vertical() {
-	# Minimize any visible Alacritty windows
-	alacritty_window=$(xdotool search --onlyvisible --classname Alacritty | head -n 1)
-	if [ -n "$alacritty_window" ]; then
-		xdotool windowminimize --sync "$alacritty_window"
-	fi
-
-	# Get the ID of the first Firefox window
-	firefox_window=$(xdotool search --onlyvisible --classname Navigator | head -n 1)
+	# Check if Firefox is running and handle Claude tab
+	firefox_window=$(xdotool search --classname Navigator | head -n 1)
 	if [ -n "$firefox_window" ]; then
-		# First, remove window decorations using window manager properties
-		wmctrl -i -r "$firefox_window" -b add,maximized_vert,maximized_horz
-		xdotool windowactivate --sync "$firefox_window"
-		wmctrl -i -r "$firefox_window" -b remove,maximized_vert,maximized_horz
+		# Activate Firefox and check for Claude tab
+		xdotool windowactivate "$firefox_window"
+		sleep 0.2
+		
+		# Check current URL by focusing address bar
+		xdotool key ctrl+l
+		sleep 0.2
+		xdotool key ctrl+c  # Copy current URL
+		sleep 0.1
+		xdotool key Escape
+		
+		# Check clipboard for claude.ai (simple approach)
+		current_url=$(xclip -selection clipboard -o 2>/dev/null || echo "")
+		if [[ "$current_url" != *"claude.ai"* ]]; then
+			# No Claude tab active, open new tab with Claude
+			xdotool key ctrl+t
+			sleep 0.2
+			xdotool type "https://claude.ai"
+			xdotool key Return
+			sleep 1
+		fi
+	else
+		# No Firefox running, start it with Claude
+		firefox "https://claude.ai" &
+		sleep 3
+		firefox_window=$(xdotool search --classname Navigator | head -n 1)
+	fi
 
-		# Use the same positioning as in firefox_firefox_vertical for left window
-		xdotool windowsize --sync "$firefox_window" 1870 2180
-		xdotool windowmove --sync "$firefox_window" -26 24
-		xdotool windowactivate --sync "$firefox_window"
-		xdotool windowraise "$firefox_window"
+	if [ -n "$firefox_window" ]; then
+		# First, maximize and then unmaximize
+		wmctrl -i -r "$firefox_window" -b add,maximized_vert,maximized_horz
+		xdotool windowactivate "$firefox_window"
+		wmctrl -i -r "$firefox_window" -b remove,maximized_vert,maximized_horz
+		
+		# Position Firefox on the left side using the same values as in alacritty_firefox_vertical
+		xdotool windowsize "$firefox_window" 1870 2180
+		xdotool windowmove "$firefox_window" -26 24
 	else
 		echo "No Firefox window found."
+		return 1
 	fi
 
-	# Get the ID of the first Claude window
-	claude_window=$(xdotool search --onlyvisible --class "Claude" 2>/dev/null || xdotool search --onlyvisible --name "Claude" 2>/dev/null)
-	if [ -n "$claude_window" ]; then
-		# First, maximize and wait for completion
-		wmctrl -i -r "$claude_window" -b add,maximized_vert,maximized_horz
-		# Then unmaximize and wait for completion
-		xdotool windowactivate --sync "$claude_window"
-		wmctrl -i -r "$claude_window" -b remove,maximized_vert,maximized_horz
-		
-		# Use the same positioning as in firefox_firefox_vertical for right window
-		xdotool windowsize --sync "$claude_window" 1971 2180
-		xdotool windowmove --sync "$claude_window" 1920 24
-		
-		# Force focus and ensure it's on top
-		xdotool windowactivate --sync "$claude_window"
-		xdotool windowraise "$claude_window"
+	# Get the ID of the first visible Alacritty window
+	alacritty_window=$(xdotool search --onlyvisible --classname Alacritty | head -n 1)
+	if [ -n "$alacritty_window" ]; then
+		# Handle Alacritty window - right side
+		minimize_window "$alacritty_window"
+		# Map window without sync
+		xdotool windowmap "$alacritty_window"
+		# Position Alacritty on the right side without sync flags
+		xdotool windowsize "$alacritty_window" 1971 2180
+		xdotool windowmove "$alacritty_window" 1920 24
 	else
-		echo "No Claude window found."
+		echo "No Alacritty window found."
+		return 1
 	fi
+	
+	# Set focus to Alacritty using standard methods without sync
+	xdotool windowactivate "$alacritty_window"
+	xdotool windowraise "$alacritty_window"
 }
+
 
 case $1 in
 1) max_alacritty ;;
@@ -456,15 +398,13 @@ case $1 in
 3) firefox_firefox_vertical ;;
 4) slack_firefox_vertical ;;
 5) max_firefox ;;
-6) zoom_alacritty_horizontal ;;
-7) max_slack ;;
-8) firefox_firefox_alacritty ;;
-9) slack_alacritty_vertical ;;
-10) alacritty_resize_9_16 ;;
-11) claude_alacritty_vertical ;;
-12) firefox_claude_vertical ;;
+6) max_slack ;;
+7) firefox_firefox_alacritty ;;
+8) slack_alacritty_vertical ;;
+9) alacritty_resize_9_16 ;;
+10) claude_alacritty_vertical ;;
 *)
-	echo "Usage: $0 {1|2|3|4|5|6|7|8|9|10|11|12}"
+	echo "Usage: $0 {1|2|3|4|5|6|7|8|9|10}"
 	exit 1
 	;;
 esac

@@ -3,4 +3,4 @@ import subprocess
 
 layout = '/home/decoder/dev/dotfiles/scripts/__layouts.sh'
 
-subprocess.run([layout, "7"])
+subprocess.run([layout, "6"])
