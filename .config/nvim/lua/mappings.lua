@@ -208,6 +208,12 @@ vim.keymap.set(
   ':let @+ = expand("%:p")<cr>:lua print("Copied path to: " .. vim.fn.expand("%:p"))<cr>',
   { desc = "Copy current file name and path", silent = false }
 )
+vim.keymap.set(
+  "n",
+  "<leader>cpl",
+  ':let @+ = expand("%:p").":".line(".")<cr>:lua print("Copied file name: " .. vim.fn.expand("%:t"))<cr>',
+  { desc = "Copy current file name", silent = false }
+)
 
 vim.api.nvim_set_keymap(
   "n",
