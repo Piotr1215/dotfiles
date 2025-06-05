@@ -141,6 +141,3 @@ alias play='nohup ~/dev/dotfiles/scripts/__launch_playlist.sh > /dev/null 2>&1 &
 alias play_vid='nohup ~/dev/dotfiles/scripts/__launch_playlist.sh vids_playlist > /dev/null 2>&1 &'
 alias vl='nvim ~/haruna_playlist.m3u'
 alias check_vids='~/dev/dotfiles/scripts/__check_video_download_queue.sh &'
-
-# Claude with approval monitoring
-alias claude='klod'
