@@ -250,28 +250,29 @@ function pkill() {
 }
 
 # Function to create and activate a Python virtual environment
-function mkvenv() {    # Set the environment directory name, default to 'venv' if no name provided
+function mkvenv() {
+    # Set the environment directory name, default to 'venv' if no name provided
     local env_dir=${1:-venv}
     local requirements_path="captured-requirements.txt"
     # Check if the environment already exists
-        # Create the virtual environment
-        echo "Creating new virtual environment '$env_dir'..."
-        python3 -m venv $env_dir
-        
-        # Activate the virtual environment
-        source $env_dir/bin/activate
-        
-        # Optional: Install any default packages
-        pip3 install --upgrade pip
-        pip3 install wheel
+    # Create the virtual environment
+    echo "Creating new virtual environment '$env_dir'..."
+    python3 -m venv $env_dir
+    
+    # Activate the virtual environment
+    source $env_dir/bin/activate
+    
+    # Optional: Install any default packages
+    pip3 install --upgrade pip
+    pip3 install wheel
 
-        if [ -f "$requirements_path" ]; then
-            echo "Installing packages from '$requirements_path'..."
-            pip3 install -r "$requirements_path"
-        fi
-        
-        echo "Virtual environment '$env_dir' created and activated!"
-  }
+    if [ -f "$requirements_path" ]; then
+        echo "Installing packages from '$requirements_path'..."
+        pip3 install -r "$requirements_path"
+    fi
+    
+    echo "Virtual environment '$env_dir' created and activated!"
+}
 
 function rmvenv() {
     # Check if the environment is active
@@ -295,7 +296,7 @@ function logg() {
         --preview 'echo {} | grep -o "[a-f0-9]\{7\}" | head -1 | xargs -I % git show % --color=always' \
         --preview-window=right:50%:wrap --height 100% \
         --bind 'enter:execute(echo {} | grep -o "[a-f0-9]\{7\}" | head -1 | xargs -I % sh -c "git show % | nvim -c \"setlocal buftype=nofile bufhidden=wipe noswapfile nowrap\" -c \"nnoremap <buffer> q :q!<CR>\" -")' \
-        --bind 'ctrl-e:execute(echo {} | grep -o "[a-f0-9]\{7\}" | head -1 | xargs -I % sh -c "gh browse %")' \
+        --bind 'ctrl-e:execute(echo {} | grep -o "[a-f0-9]\{7\}" | head -1 | xargs -I % sh -c "gh browse %")'
 }
 
 function saver() {
@@ -856,7 +857,7 @@ EOF
   chmod +x "$notify_script"
 
   # Strip ANSI codes before matching
-  tmux pipe-pane -o -t "$pane_id" "sed 's/\x1b\[[0-9;]*[mGKH]//g' | grep --line-buffered 'Do you want' | head -1 | xargs -I {} '$notify_script' approval"
+  tmux pipe-pane -o -t "$pane_id" "sed 's/\x1b\[[0-9;]*[mGKH]//g' | grep --line-buffered 'Do you want to' | head -1 | xargs -I {} '$notify_script' approval"
 
   # Run claude exactly as user intended - pass ALL arguments unchanged
   command claude "$@"
