@@ -38,6 +38,8 @@ alias sai='sudo apt install -y'
 alias suser='systemctl --user '
 
 # Commands shadow
+alias disk='ncdu --color dark'
+alias diskusage='du -sh * | sort -h --reverse'
 alias weather='curl wttr.in/${CITY}'
 alias br='br -sg'
 alias tf='terraform'
@@ -88,8 +90,6 @@ alias clock="__clock.sh &"
 alias dca='mux s dca'
 alias dev='cd ~/dev'
 alias loft='cd ~/loft'
-alias disk='gdu'
-alias diskusage='du -sh * | sort -h --reverse'
 alias dls="docker container ls -a"
 alias dots='cd ~/dev/dotfiles && lg'
 alias dpsa="docker ps -a --format 'table {{.ID}}\t{{.Names}}\t{{.Image}}'" #docker ps -a with only id name and image
