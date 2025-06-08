@@ -7,3 +7,6 @@ taskwarrior-sync
 blogs-convert
 project_renamer
 zoom-monitor
+project
+gpt-pilot
+ai

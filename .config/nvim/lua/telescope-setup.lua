@@ -222,6 +222,8 @@ local set_up_telescope = function()
   set_keymap("n", "<leader>re", [[<cmd>lua require('telescope.builtin').registers()<CR>]])
   set_keymap("n", "<leader>fc", [[<cmd>lua require('telescope.builtin').colorscheme()<CR>]])
   set_keymap("n", "<leader>fz", [[<cmd>lua require('telescope').extensions.zoxide.list()<CR>]])
+  set_keymap("n", "<leader>fp", [[<cmd>ProjectFiles<CR>]])
+  set_keymap("n", "<leader>fP", [[<cmd>ProjectFilesForCurrent<CR>]])
   set_keymap("n", "<leader>?", [[<cmd>lua require('telescope.builtin').help_tags()<CR>]])
 end
 
