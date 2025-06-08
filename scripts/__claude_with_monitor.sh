@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
-set -eo pipefail
-
 # PROJECT: ai
-# Wrapper script to launch claude with prompt monitoring
+# DOCUMENTATION: /home/decoder/dev/obsidian/decoder/Notes/projects/claude-notification.md
+set -eo pipefail
 
 if [ -z "$TMUX" ]; then
     echo "Error: This script must be run inside a tmux session"
@@ -32,4 +31,3 @@ sleep 0.5
 
 echo "Launching Claude..."
 claude "$@"
-
