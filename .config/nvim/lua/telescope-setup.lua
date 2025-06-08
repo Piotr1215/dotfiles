@@ -96,6 +96,9 @@ require("telescope").setup {
 t.load_extension "zoxide"
 require("telescope").load_extension "live_grep_args"
 
+-- Setup multi-open functionality for telescope file pickers
+require("user_functions.telescope_multi_open").setup()
+
 local function search_git(visual)
   -- Retrieve the git root path
   local handle = io.popen "git rev-parse --show-toplevel"
@@ -207,7 +210,7 @@ local set_up_telescope = function()
     "<leader>ff",
     [[<cmd>lua require('telescope.builtin').find_files({ find_command = {'rg', '--files', '--hidden', '-g', '!.git'}, search_dirs = {require('user_functions.shell_integration').get_tmux_working_directory()}, path_display = {"truncate"} })<CR>]]
   )
-  set_keymap("n", "<leader>fl", ":lua require('telescope').extensions.live_grep_args.live_grep_args()<CR>")
+  set_keymap("n", "<leader>fl", [[<cmd>lua require('telescope.builtin').live_grep()<CR>]])
   set_keymap("n", "<leader>fr", [[<cmd>lua require'telescope'.extensions.repo.list{search_dirs = {"~/dev"}}<CR>]])
   set_keymap("n", "<leader>fg", [[<cmd>lua require('telescope.builtin').git_files()<CR>]])
   set_keymap("n", "<leader>fo", [[<cmd>lua require('telescope.builtin').oldfiles()<CR>]])

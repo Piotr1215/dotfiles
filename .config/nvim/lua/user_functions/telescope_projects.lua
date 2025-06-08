@@ -223,7 +223,71 @@ function M.show_project_files(project_name)
             end
           else
             local current_selection = action_state.get_selected_entry()
-            vim.cmd("edit " .. current_selection.value)
+            vim.cmd("edit " .. selection.value)
+          end
+        end)
+        
+        -- Open selected files in multi-pane layout (Alt+a) - manual mapping
+        map("i", "<M-a>", function()
+          local current_picker = action_state.get_current_picker(prompt_bufnr)
+          
+          -- Get multi-selected entries first
+          local multi_selections = current_picker:get_multi_selection()
+          local selected_entries = {}
+          
+          if #multi_selections > 0 then
+            -- User has made multi-selections, use those
+            for _, entry in ipairs(multi_selections) do
+              table.insert(selected_entries, entry.value)
+            end
+          else
+            -- No multi-selections, use current selection
+            local current_selection = action_state.get_selected_entry()
+            if current_selection then
+              table.insert(selected_entries, current_selection.value)
+            end
+          end
+          
+          actions.close(prompt_bufnr)
+          
+          if #selected_entries == 0 then
+            vim.notify("No files selected", vim.log.levels.WARN)
+            return
+          end
+          
+          -- Limit the number of files to prevent "too many open files" error
+          local max_files = 20
+          if #selected_entries > max_files then
+            vim.notify("Too many files selected (" .. #selected_entries .. "). Opening first " .. max_files .. " files.", vim.log.levels.WARN)
+            local truncated = {}
+            for i = 1, max_files do
+              table.insert(truncated, selected_entries[i])
+            end
+            selected_entries = truncated
+          end
+          
+          if #selected_entries == 1 then
+            vim.cmd("edit " .. vim.fn.fnameescape(selected_entries[1]))
+          elseif #selected_entries == 2 then
+            vim.cmd("edit " .. vim.fn.fnameescape(selected_entries[1]))
+            vim.cmd("vs " .. vim.fn.fnameescape(selected_entries[2]))
+          else
+            vim.cmd("edit " .. vim.fn.fnameescape(selected_entries[1]))
+            vim.cmd("vs " .. vim.fn.fnameescape(selected_entries[2]))
+            if #selected_entries >= 3 then
+              vim.cmd("split " .. vim.fn.fnameescape(selected_entries[3]))
+            end
+            -- Open remaining files in tabs, but with a reasonable limit
+            local max_tabs = math.min(10, #selected_entries - 3) -- Max 10 additional tabs
+            for i = 4, 3 + max_tabs do
+              if selected_entries[i] then
+                vim.cmd("tabedit " .. vim.fn.fnameescape(selected_entries[i]))
+              end
+            end
+            
+            if #selected_entries > 13 then
+              vim.notify("Opened first 13 files in panes/tabs. " .. (#selected_entries - 13) .. " files skipped.", vim.log.levels.INFO)
+            end
           end
         end)
         
