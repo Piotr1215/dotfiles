@@ -30,24 +30,24 @@ return {
 
   -- Insert slides digraph template
   s("sli_digraph", {
-    t "```bash\\n~~~just digraph ",
+    t { "```bash", "~~~just digraph " },
     i(1, "components"),
-    t "\\n\\n~~~\\n```",
+    t { "", "", "~~~", "```" },
     i(0),
   }),
 
   -- Insert slides freetext template
   s("sli_freetext", {
-    t "```bash\\n~~~just freetext ",
+    t { "```bash", "~~~just freetext " },
     i(1, "Text"),
-    t "\\n\\n~~~\\n```",
+    t { "", "", "~~~", "```" },
     i(0),
   }),
 
   s("hint", {
-    t '{{< hint "important" >}}\\n',
+    t { '{{< hint "important" >}}', '' },
     i(1, "Important hint"),
-    t "\\n{{< /hint >}}",
+    t { "", "{{< /hint >}}" },
     i(0),
   }),
 
@@ -77,9 +77,10 @@ return {
   s("expand", {
     t '{{< expand "',
     i(1),
-    t '" >}}\\n',
+    t '" >}}',
+    t { "", "" },
     i(2),
-    t "\\n{{< /expand >}}",
+    t { "", "{{< /expand >}}" },
     i(0),
   }),
 
@@ -97,17 +98,17 @@ return {
   s("det", {
     t "### ",
     i(1, "TASK_DETAILS"),
-    t "\\n\\n<details>\\n<summary>click to see the answer</summary>\\n<code>",
+    t { "", "", "<details>", "<summary>click to see the answer</summary>", "<code>" },
     i(2, "ANSWER"),
-    t "</code>\\n</details>",
+    t { "</code>", "</details>" },
     i(0),
   }),
 
   -- Highlight markdown text as important, it will render differently depending on the diff highlighting tooling
   s("diff", {
-    t "```diff\\n! ",
+    t { "```diff", "! " },
     i(1, "TEXT"),
-    t " !\\n```",
+    t { " !", "```" },
     i(0),
   }),
 
@@ -132,42 +133,42 @@ return {
 
   -- Inserts YAML code snippet
   s("yml", {
-    t "```yaml\\n",
+    t { "```yaml", "" },
     i(1),
-    t "\\n```\\n",
+    t { "", "```", "" },
     i(0),
   }),
 
   -- Inserts rust code snippet
   s("rst", {
-    t "```rust\\n",
+    t { "```rust", "" },
     i(1),
-    t "\\n```\\n",
+    t { "", "```", "" },
     i(0),
   }),
 
   -- Inserts bash code snippet
   s("bsh", {
-    t "```bash\\n",
+    t { "```bash", "" },
     i(1),
-    t "\\n```\\n",
+    t { "", "```", "" },
     i(0),
   }),
 
   -- Inserts slides pre-processing snippet
   s("slides_pre", {
-    t "```bash\\n~~~",
+    t { "```bash", "~~~" },
     i(1, "command"),
-    t "\\n",
+    t { "" },
     i(0),
-    t "\\n~~~\\n```",
+    t { "", "~~~", "```" },
   }),
 
   -- Inserts tmux client switch snippet
   s("tmx", {
-    t "```bash\\ntmux switchc -t ",
+    t { "```bash", "tmux switchc -t " },
     i(1),
-    t "\\n```\\n",
+    t { "", "```", "" },
     i(0),
   }),
 
@@ -189,29 +190,29 @@ return {
 
   -- Inserts bash code snippet
   s("bshs", {
-    t "```bash\\n",
+    t { "```bash", "" },
     i(1, "$TM_SELECTED_TEXT"),
-    t "\\n```\\n",
+    t { "", "```", "" },
     i(0),
   }),
 
   -- Front matter snippet for docosaurus docs
   s("docyaml", {
-    t "---\\ntitle: ",
+    t { "---", "title: " },
     i(1, "title"),
-    t "\\nsidebar_label: ",
+    t { "", "sidebar_label: " },
     i(2, "label"),
-    t "\\ntags:\\n	- ",
+    t { "", "tags:", "	- " },
     i(3, "tag1"),
-    t "\\n	- ",
+    t { "", "	- " },
     i(4, "tag1"),
-    t "\\n---\n",
+    t { "", "---", "" },
     i(0),
   }),
 
   -- Insert header with slides theme
   s("theme", {
-    t "---\\ntheme: ~/slides-themes/theme.json\\nauthor: Piotr Zaniewski\\ndate: MMMM dd, YYYY\\npaging: Slide %d / %d\\n---",
+    t { "---", "theme: ~/slides-themes/theme.json", "author: Piotr Zaniewski", "date: MMMM dd, YYYY", "paging: Slide %d / %d", "---" },
   }),
 
   -- Insert table with 2 rows and 3 columns. First row is heading.
@@ -222,13 +223,13 @@ return {
     i(2, "Column2"),
     t "   | ",
     i(3, "Column3"),
-    t "   |\\n|-------------- | -------------- | -------------- |\\n| ",
+    t { "   |", "|-------------- | -------------- | -------------- |", "| " },
     i(4, "Item1"),
     t "    | ",
     i(5, "Item1"),
     t "     | ",
     i(6, "Item1"),
-    t "     |\\n",
+    t { "     |", "" },
     i(0),
   }),
 
@@ -268,13 +269,13 @@ return {
   }),
 
   s("blog", {
-    t "---\\ntitle: Welcome Docusaurus v2\\ndescription: ",
+    t { "---", "title: Welcome Docusaurus v2", "description: " },
     i(1),
-    t "\\ntags: [",
+    t { "", "tags: [" },
     i(2),
     t ", ",
     i(3),
-    t "]\\nimage: ./_media/\\nhide_table_of_contents: false\\n---\\n",
+    t { "]", "image: ./_media/", "hide_table_of_contents: false", "---", "" },
     i(0),
   }),
 
@@ -290,9 +291,9 @@ return {
 
   -- Inserts a bash code snippet with {{exec}}
   s("exec", {
-    t "```bash\\n",
+    t { "```bash", "" },
     i(1, "something"),
-    t "\\n```{{exec}}\\n",
+    t { "", "```{{exec}}", "" },
     i(0),
   }),
 
