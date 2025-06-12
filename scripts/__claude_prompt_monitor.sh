@@ -61,8 +61,18 @@ monitor_pane() {
         local current_window=$(tmux display-message -p '#I')
         
         local is_inactive=false
+        # Check if we're in a different tmux session/window
         if [ "$current_session" != "$TMUX_SESSION" ] || [ "$current_window" != "$TMUX_WINDOW" ]; then
             is_inactive=true
+        else
+            # Even if we're in the same tmux window, check if terminal has focus
+            if command -v xdotool >/dev/null 2>&1 && command -v xprop >/dev/null 2>&1; then
+                local active_window_class=$(xprop -id $(xdotool getactivewindow 2>/dev/null) WM_CLASS 2>/dev/null | grep -oP '"\K[^"]+' | tail -1)
+                # Check if the active window is NOT a terminal (Alacritty, gnome-terminal, xterm, etc.)
+                if [ -n "$active_window_class" ] && ! [[ "$active_window_class" =~ ^(Alacritty|gnome-terminal|Terminal|xterm|konsole|terminator|kitty|st|urxvt|rxvt)$ ]]; then
+                    is_inactive=true
+                fi
+            fi
         fi
         
         if command -v ansi2txt >/dev/null 2>&1; then
@@ -78,7 +88,7 @@ monitor_pane() {
             
             if [ "$is_inactive" = true ]; then
                 notify_prompt "$TMUX_SESSION" "$TMUX_WINDOW" "$TMUX_WINDOW_NAME" "$TMUX_PANE" "$TMUX_PANE_ID" "$TMUX_PANE_TITLE" "ready"
-                echo "Claude output detected and notification sent (session inactive)" >> "$STATE_FILE"
+                echo "Claude output detected and notification file created (session/terminal inactive)" >> "$STATE_FILE"
             else
                 echo "Claude output detected but session is active, skipping notification" >> "$STATE_FILE"
             fi
@@ -94,7 +104,7 @@ monitor_pane() {
             
             if [ "$is_inactive" = true ]; then
                 notify_prompt "$TMUX_SESSION" "$TMUX_WINDOW" "$TMUX_WINDOW_NAME" "$TMUX_PANE" "$TMUX_PANE_ID" "$TMUX_PANE_TITLE" "input"
-                echo "Prompt detected and notification sent (session inactive)" >> "$STATE_FILE"
+                echo "Prompt detected and notification file created (session/terminal inactive)" >> "$STATE_FILE"
             else
                 echo "Prompt detected but session is active, skipping notification" >> "$STATE_FILE"
             fi

@@ -38,6 +38,18 @@ IFS=':' read -r session window pane_id title <<< "$session_info"
 # Remove the notification file since we're handling it
 rm -f "$oldest_file"
 
+# First, focus the terminal window (Alacritty)
+if command -v wmctrl >/dev/null 2>&1; then
+    # Try to activate Alacritty window
+    wmctrl -x -a "Alacritty.Alacritty" 2>/dev/null || true
+elif command -v xdotool >/dev/null 2>&1; then
+    # Alternative: use xdotool to find and activate Alacritty
+    xdotool search --class "Alacritty" windowactivate 2>/dev/null || true
+fi
+
+# Small delay to ensure window activation completes
+sleep 0.1
+
 # Switch to the Claude session
 if tmux has-session -t "$session" 2>/dev/null; then
     tmux switch-client -t "$session:$window"
