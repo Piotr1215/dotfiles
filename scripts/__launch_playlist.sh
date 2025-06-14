@@ -10,4 +10,4 @@ else
 fi
 
 # Launch playlist, this will pick best available resolution for the vid
-mpv "$playlist_file"
+mpv --ontop "$playlist_file"
