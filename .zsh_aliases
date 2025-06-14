@@ -82,7 +82,6 @@ alias remind='__reminder.sh'
 alias adit='vim ~/.zsh_aliases'
 alias abit='vim ~/.zsh_abbreviations'
 alias clock="__clock.sh &"
-alias dca='mux s dca'
 alias dev='cd ~/dev'
 alias loft='cd ~/loft'
 alias dots='cd ~/dev/dotfiles && lg'
