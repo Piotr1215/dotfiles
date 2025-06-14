@@ -44,7 +44,6 @@ alias weather='curl wttr.in/${CITY}'
 alias br='br -sg'
 alias tf='terraform'
 alias lpf='list_project_files'
-alias watchtui='nodemon --signal SIGTERM -q --watch ~/.taskrc --ext taskrc --exec "tui --report current"'
 alias k9s='k9s -A'
 alias bfi='__create_branch_from_issue.sh'
 alias si='__search_internet.py'
@@ -58,10 +57,8 @@ alias df=duf
 alias diff=colordiff
 alias fd='fd --hidden'
 alias mux=tmuxinator
-alias nv='neovide --multigrid --notabs'
 alias ra=yazi
 alias vim=nvim
-alias v=nvim
 alias ugu='ug -Q -. --view=nvim'
 alias dat='/home/decoder/dev/dotfiles/scripts/__dotfiles_adder.sh'
 alias prumpt='/home/decoder/dev/dotfiles/scripts/__generate_prompt_from_task.py'
@@ -79,23 +76,19 @@ alias kstop='~/dev/dotfiles/scripts/__kind_manager.sh --stop'
 # Other
 alias aopa='~/dev/dotfiles/scripts/__toggle_alacritty_opacity.sh'
 alias atheme='~/dev/dotfiles/scripts/__swap_alacritty_theme.sh'
-alias proj='/home/decoder/dev/projector/projector'
 alias ytd='__download_youtube.sh'
 alias ytx='yt-x --preview'
 alias remind='__reminder.sh'
 alias adit='vim ~/.zsh_aliases'
 alias abit='vim ~/.zsh_abbreviations'
-alias ai='/home/decoder/go/bin/aicmd'
 alias clock="__clock.sh &"
 alias dca='mux s dca'
 alias dev='cd ~/dev'
 alias loft='cd ~/loft'
-alias dls="docker container ls -a"
 alias dots='cd ~/dev/dotfiles && lg'
 alias dpsa="docker ps -a --format 'table {{.ID}}\t{{.Names}}\t{{.Image}}'" #docker ps -a with only id name and image
 alias dps="docker ps --format 'table {{.ID}}\t{{.Names}}\t{{.Image}}'" #docker ps -a with only id name and image
 alias fdit='vim ~/.zsh_functions'
-alias gcc='git diff --stat --cached origin/master' # Git Check Commit before pushing
 alias gs='git show'
 alias home='nohup firefox -P "Home" > /dev/null 2>&1 &'
 alias lg='lazygit'
@@ -103,9 +96,7 @@ alias lvim='nvim -c "normal '\''0"'
 alias lzd='docker run --rm -it -v /var/run/docker.sock:/var/run/docker.sock -v /config/lazydocker:/.config/jesseduffield/lazydocker lazyteam/lazydocker'
 alias relog="DISPLAY=:0 gnome-session-quit --force"
 alias rest='shutdown now'
-alias revive='shutdown -r now'
 alias rm='rm -v'
-alias serve="browser-sync start -s -f . --no-notify --host localhost --port 5000"
 alias sr='omz reload'
 alias tmark='~/dev/dotfiles/scripts/__list_tasks_as_markdown.pl +pending'
 alias tmarkn='~/dev/dotfiles/scripts/__list_tasks_as_markdown.pl +next'
@@ -127,20 +118,14 @@ alias wm='watch kubectl get managed'
 alias work='nohup firefox -P "Work" > /dev/null 2>&1 &'
 alias zedit='vim ~/.zshrc'
 alias dedit='direnv edit'
-# PROJECT: project
-alias pedit='nvim ~/projects.txt'
-alias zlogin='~/dev/dotfiles/scripts/__zoom_login_helper.sh'
-
-# PROJECT: gpt-pilot
-alias pilot='cd /home/decoder/dev/gpt-pilot && docker compose up'
-alias pilot-='cd /home/decoder/dev/gpt-pilot && docker compose down'
-
 # PROJECT: playlist
 alias pt='__play_track.sh'
 alias play='nohup ~/dev/dotfiles/scripts/__launch_playlist.sh > /dev/null 2>&1 &'
 alias play_vid='nohup ~/dev/dotfiles/scripts/__launch_playlist.sh vids_playlist > /dev/null 2>&1 &'
 alias vl='nvim ~/haruna_playlist.m3u'
-alias check_vids='~/dev/dotfiles/scripts/__check_video_download_queue.sh &'
 
 # PROJECT: ai
 alias claude='/home/decoder/dev/dotfiles/scripts/__claude_with_monitor.sh'
+
+# App Shortcuts Help
+alias apphelp='/home/decoder/dev/dotfiles/scripts/__app_shortcuts_help.sh'
