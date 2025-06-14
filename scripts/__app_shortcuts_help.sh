@@ -1,13 +1,8 @@
 #!/usr/bin/env bash
 set -eo pipefail
 
-# App shortcuts help selector popup
-# Opens shortcuts search in a centered popup terminal
-
-# Create temp file for communication between processes
 TEMP_FILE=$(mktemp)
 
-# Function to load shortcuts from YAML file
 load_shortcuts_from_yaml() {
     local yaml_file="/home/decoder/dev/dotfiles/shortcuts.yaml"
     
@@ -41,12 +36,10 @@ except Exception as e:
     "
 }
 
-# Function to show all app shortcuts
 show_all_shortcuts() {
     load_shortcuts_from_yaml
 }
 
-# Function to show categories
 show_categories() {
     local yaml_file="/home/decoder/dev/dotfiles/shortcuts.yaml"
     
@@ -79,13 +72,11 @@ except Exception as e:
     "
 }
 
-# Function to show shortcuts for specific category
 show_category_shortcuts() {
     local category="$1"
     show_all_shortcuts | grep "^${category} -"
 }
 
-# Function to handle category selection
 handle_category_selection() {
     local category=$(show_categories | fzf \
         --delimiter=' - ' \
@@ -143,7 +134,6 @@ handle_category_selection() {
     fi
 }
 
-# Function to handle shortcut selection (all shortcuts with category mode option)
 handle_shortcut_selection() {
     local selection=$(show_all_shortcuts | fzf \
         --delimiter=' - ' \
@@ -170,7 +160,6 @@ handle_shortcut_selection() {
     fi
 }
 
-# Export the function so it's available in the new shell
 export -f handle_shortcut_selection
 export -f handle_category_selection
 export -f show_all_shortcuts
@@ -179,7 +168,6 @@ export -f show_category_shortcuts
 export -f load_shortcuts_from_yaml
 export TEMP_FILE
 
-# Open popup terminal and run the function
 alacritty --class app-shortcuts-popup \
     --config-file /dev/null \
     -o window.dimensions.columns=120 \
@@ -188,7 +176,6 @@ alacritty --class app-shortcuts-popup \
     -o window.position.y=660 \
     -e bash -c "handle_shortcut_selection"
 
-# After terminal closes, handle the selection in the parent process
 if [[ -f "$TEMP_FILE" ]]; then
     app=$(cat "$TEMP_FILE")
     rm -f "$TEMP_FILE"
