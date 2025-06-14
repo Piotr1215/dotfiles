@@ -329,21 +329,34 @@ claude_alacritty_vertical() {
 	# Check if Firefox is running and handle Claude tab
 	firefox_window=$(xdotool search --classname Navigator | head -n 1)
 	if [ -n "$firefox_window" ]; then
-		# Activate Firefox and check for Claude tab
+		# Activate Firefox window
 		xdotool windowactivate "$firefox_window"
 		sleep 0.2
 		
-		# Check current URL by focusing address bar
-		xdotool key ctrl+l
-		sleep 0.2
-		xdotool key ctrl+c  # Copy current URL
-		sleep 0.1
-		xdotool key Escape
+		# Search through tabs to find Claude
+		claude_found=false
+		for i in {1..20}; do  # Check up to 20 tabs
+			# Navigate to tab
+			xdotool key ctrl+$i
+			sleep 0.1
+			
+			# Get current URL
+			xdotool key ctrl+l
+			sleep 0.1
+			xdotool key ctrl+c
+			sleep 0.1
+			
+			current_url=$(xclip -selection clipboard -o 2>/dev/null || echo "")
+			xdotool key Escape
+			
+			if [[ "$current_url" == *"claude.ai"* ]]; then
+				claude_found=true
+				break
+			fi
+		done
 		
-		# Check clipboard for claude.ai (simple approach)
-		current_url=$(xclip -selection clipboard -o 2>/dev/null || echo "")
-		if [[ "$current_url" != *"claude.ai"* ]]; then
-			# No Claude tab active, open new tab with Claude
+		# If Claude tab not found, open it
+		if [ "$claude_found" = false ]; then
 			xdotool key ctrl+t
 			sleep 0.2
 			xdotool type "https://claude.ai"
