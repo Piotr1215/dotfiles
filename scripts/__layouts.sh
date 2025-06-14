@@ -30,10 +30,11 @@ max_alacritty() {
 	# Get the ID of the first visible Alacritty window
 	window=$(xdotool search --onlyvisible --classname Alacritty | head -n 1)
 	if [ -n "$window" ]; then
-		# Minimize all windows except Alacritty and Zoom with sync
+		# Minimize all windows except Alacritty, Zoom, and MPV with sync
 		for win_id in $(xdotool search --onlyvisible --name ".*"); do
 			window_class=$(xprop -id "$win_id" WM_CLASS 2>/dev/null)
-			if [ "$win_id" != "$window" ] && ! echo "$window_class" | grep -qi "zoom"; then
+			window_name=$(xprop -id "$win_id" WM_NAME 2>/dev/null | cut -d'"' -f2)
+			if [ "$win_id" != "$window" ] && ! echo "$window_class" | grep -qi "zoom" && ! echo "$window_name" | grep -qi "mpv\|\.mp4\|\.mkv\|\.avi\|\.mov\|\.webm"; then
 				xdotool windowminimize --sync "$win_id"
 			fi
 		done

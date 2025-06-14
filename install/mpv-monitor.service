@@ -1,0 +1,22 @@
+[Unit]
+Description=MPV Window Monitor Service
+After=graphical-session.target
+Wants=graphical-session.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/decoder/dev/dotfiles/scripts
+ExecStart=/home/decoder/dev/dotfiles/scripts/__mpv_monitor.sh
+Environment="DISPLAY=:1"
+Environment="XAUTHORITY=/home/decoder/.Xauthority"
+Environment="PATH=/usr/local/bin:/usr/bin:/bin"
+Environment="DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus"
+User=decoder
+Group=decoder
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
