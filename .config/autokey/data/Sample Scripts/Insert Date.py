@@ -1,2 +1,7 @@
+import subprocess
+
 output = system.exec_command("date")
-keyboard.send_keys(output)
+output = output.strip()
+
+clipboard.fill_text(output)
+keyboard.send_keys("<ctrl>+v")

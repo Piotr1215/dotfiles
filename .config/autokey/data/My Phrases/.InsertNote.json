@@ -1,17 +1,17 @@
 {
-    "type": "script",
-    "description": "Insert Trigger Review",
-    "store": {},
+    "type": "phrase",
+    "description": "InsertNote",
     "modes": [
         1
     ],
-    "usageCount": 1,
+    "usageCount": 0,
     "prompt": false,
     "omitTrigger": false,
+    "matchCase": false,
     "showInTrayMenu": false,
     "abbreviation": {
         "abbreviations": [
-            "!ir"
+            "!!in"
         ],
         "backspace": true,
         "ignoreCase": false,
@@ -26,5 +26,6 @@
     "filter": {
         "regex": null,
         "isRecursive": false
-    }
+    },
+    "sendMode": "<shift>+<insert>"
 }

@@ -1,17 +1,17 @@
 {
-    "type": "script",
-    "description": "Insert GH Note",
-    "store": {},
+    "type": "phrase",
+    "description": "InsertPR",
     "modes": [
         1
     ],
     "usageCount": 0,
     "prompt": false,
     "omitTrigger": false,
+    "matchCase": false,
     "showInTrayMenu": false,
     "abbreviation": {
         "abbreviations": [
-            "!in"
+            "!!pr"
         ],
         "backspace": true,
         "ignoreCase": false,
@@ -26,5 +26,6 @@
     "filter": {
         "regex": null,
         "isRecursive": false
-    }
+    },
+    "sendMode": "<shift>+<insert>"
 }

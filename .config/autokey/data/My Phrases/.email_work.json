@@ -11,7 +11,8 @@
     "showInTrayMenu": false,
     "abbreviation": {
         "abbreviations": [
-            "w@@"
+            "w@@",
+            "!!we"
         ],
         "backspace": true,
         "ignoreCase": false,

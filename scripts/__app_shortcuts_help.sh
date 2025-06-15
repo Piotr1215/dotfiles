@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -eo pipefail
 
+# PROJECT: shortcuts
 TEMP_FILE=$(mktemp)
 
 load_shortcuts_from_yaml() {
