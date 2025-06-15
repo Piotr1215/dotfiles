@@ -54,6 +54,13 @@ monitor_pane() {
     local looking_for_prompt=false
     local last_notification_time=0
     
+    # Enable focus events if not already enabled
+    tmux set-option -t "$TMUX_SESSION" focus-events on
+    
+    # Set up pane-focus-in hook to auto-clear notifications when manually returning to this pane
+    tmux set-hook -t "$TMUX_PANE_ID" pane-focus-in \
+        "run-shell 'rm -f /tmp/claude-notification-${TMUX_SESSION}-${TMUX_WINDOW}-${TMUX_PANE}-*'"
+    
     tmux pipe-pane -o -t "$TMUX_PANE_ID" "cat >> $MONITOR_FILE"
     
     tail -f "$MONITOR_FILE" 2>/dev/null | while IFS= read -r line; do
@@ -115,6 +122,9 @@ monitor_pane() {
 }
 
 cleanup() {
+    # Remove the pane-focus-in hook
+    tmux set-hook -u -t "$TMUX_PANE_ID" pane-focus-in 2>/dev/null || true
+    
     tmux pipe-pane -t "$TMUX_PANE_ID"
     rm -f "$MONITOR_FILE" "$STATE_FILE"
     exit 0
