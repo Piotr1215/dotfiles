@@ -10,3 +10,4 @@ zoom-monitor
 project
 gpt-pilot
 ai
+shortcuts

@@ -1,6 +1,6 @@
 {
     "type": "phrase",
-    "description": "branch",
+    "description": "IssueTemplate",
     "modes": [
         1
     ],
@@ -11,7 +11,7 @@
     "showInTrayMenu": false,
     "abbreviation": {
         "abbreviations": [
-            "!!br"
+            "!!it"
         ],
         "backspace": true,
         "ignoreCase": false,
@@ -27,5 +27,5 @@
         "regex": null,
         "isRecursive": false
     },
-    "sendMode": "kb"
+    "sendMode": "<shift>+<insert>"
 }
