@@ -343,3 +343,5 @@ zsh:
       binding: "$IFS"
     - description: "Print to terminal without hitting enter"
       binding: "print -z \"text\""
+    - description: "Accept one word from autosuggestion"
+      binding: "Ctrl + Right Arrow"
