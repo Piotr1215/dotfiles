@@ -327,48 +327,36 @@ claude_alacritty_vertical() {
 	screen_width=$(echo $screen_size | cut -d'x' -f1)
 	half_width=$((screen_width / 2))
 
-	# Check if Firefox is running and handle Claude tab
+	# Check if Firefox is running
 	firefox_window=$(xdotool search --classname Navigator | head -n 1)
+	
+	# PROJECT: brotab
+	# Check if Claude tab exists using brotab
+	claude_tab_id=""
 	if [ -n "$firefox_window" ]; then
-		# Activate Firefox window
+		# Use brotab to find Claude tab
+		claude_tab_id=$(brotab list 2>/dev/null | grep "https://claude\.ai" | head -n 1 | cut -f1)
+	fi
+	
+	if [ -n "$claude_tab_id" ]; then
+		# Claude tab exists, activate it directly using brotab
+		brotab activate "$claude_tab_id" 2>/dev/null
+		# Also ensure Firefox window is focused
 		xdotool windowactivate "$firefox_window"
-		sleep 0.2
-		
-		# Search through tabs to find Claude
-		claude_found=false
-		for i in {1..20}; do  # Check up to 20 tabs
-			# Navigate to tab
-			xdotool key ctrl+$i
-			sleep 0.1
-			
-			# Get current URL
-			xdotool key ctrl+l
-			sleep 0.1
-			xdotool key ctrl+c
-			sleep 0.1
-			
-			current_url=$(xclip -selection clipboard -o 2>/dev/null || echo "")
-			xdotool key Escape
-			
-			if [[ "$current_url" == *"claude.ai"* ]]; then
-				claude_found=true
-				break
-			fi
-		done
-		
-		# If Claude tab not found, open it
-		if [ "$claude_found" = false ]; then
-			xdotool key ctrl+t
-			sleep 0.2
-			xdotool type "https://claude.ai"
-			xdotool key Return
-			sleep 1
-		fi
 	else
-		# No Firefox running, start it with Claude
-		firefox "https://claude.ai" &
-		sleep 3
-		firefox_window=$(xdotool search --classname Navigator | head -n 1)
+		# Claude not open, open it in Firefox
+		if [ -n "$firefox_window" ]; then
+			# Firefox is running, open in new tab
+			firefox --new-tab "https://claude.ai" 2>/dev/null &
+		else
+			# No Firefox running, start it with Claude
+			firefox "https://claude.ai" 2>/dev/null &
+			sleep 2  # Give Firefox time to start
+			firefox_window=$(xdotool search --classname Navigator | head -n 1)
+		fi
+		
+		# Brief wait for tab to load
+		sleep 0.5
 	fi
 
 	if [ -n "$firefox_window" ]; then

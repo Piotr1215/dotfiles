@@ -11,3 +11,4 @@ project
 gpt-pilot
 ai
 shortcuts
+brotab
