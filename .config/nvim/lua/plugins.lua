@@ -330,7 +330,7 @@ return require("lazy").setup {
   },
   -- }}}
   {
-    "epwalsh/obsidian.nvim",
+    "obsidian-nvim/obsidian.nvim",
     version = "*",
   },
 }
