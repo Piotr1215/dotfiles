@@ -172,6 +172,10 @@ EOF
         
         # Clean up tracking file
         rm -f "$agent_tracking_file"
+        
+        # Clear tmux agent status
+        local target_pane="${TMUX_SESSION}:${TMUX_WINDOW}.${TMUX_PANE}"
+        /home/decoder/dev/dotfiles/scripts/__tmux_agent_status.sh clear "$target_pane" >/dev/null 2>&1
     else
         echo "No agent tracking file found for this session"
     fi

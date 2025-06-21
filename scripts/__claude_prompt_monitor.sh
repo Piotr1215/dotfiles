@@ -110,21 +110,36 @@ monitor_pane() {
         # Separate detection for agent registration
         if [[ "$clean_line" =~ "agentic-framework:register-agent" ]]; then
             looking_for_agent_id=true
-            # Try to extract agent name from the command
-            if [[ "$clean_line" =~ name:[[:space:]]*\"([^\"]+)\" ]]; then
+            # Try to extract agent name from the command - handle multiple formats
+            if [[ "$clean_line" =~ \"name\":[[:space:]]*\"([^\"]+)\" ]]; then
+                agent_name="${BASH_REMATCH[1]}"
+            elif [[ "$clean_line" =~ name:[[:space:]]*\"([^\"]+)\" ]]; then
+                agent_name="${BASH_REMATCH[1]}"
+            elif [[ "$clean_line" =~ \"name\":[[:space:]]*\'([^\']+)\' ]]; then
                 agent_name="${BASH_REMATCH[1]}"
             fi
-            echo "Found agent registration pattern, looking for ID" >> "$STATE_FILE"
+            echo "Found agent registration pattern, looking for ID. Agent name: $agent_name" >> "$STATE_FILE"
+        elif [[ "$clean_line" =~ "agentic-framework:unregister-agent" ]] || [[ "$clean_line" =~ unregistered[[:space:]]successfully ]]; then
+            # Agent deregistration detected
+            echo "Agent deregistration detected" >> "$STATE_FILE"
+            local target_pane="${TMUX_SESSION}:${TMUX_WINDOW}.${TMUX_PANE}"
+            /home/decoder/dev/dotfiles/scripts/__tmux_agent_status.sh clear "$target_pane" >> "$STATE_FILE" 2>&1
         elif [ "$looking_for_agent_id" = true ] && [[ "$clean_line" =~ registered[[:space:]]successfully[[:space:]]with[[:space:]]ID:[[:space:]](agent-[0-9a-z-]+) ]]; then
             local agent_id="${BASH_REMATCH[1]}"
             
             # If we didn't get agent name from command, try to extract from this line
-            if [ -z "$agent_name" ] && [[ "$clean_line" =~ Agent[[:space:]]\'([^\']+)\' ]]; then
-                agent_name="${BASH_REMATCH[1]}"
+            if [ -z "$agent_name" ]; then
+                if [[ "$clean_line" =~ Agent[[:space:]]\'([^\']+)\' ]]; then
+                    agent_name="${BASH_REMATCH[1]}"
+                elif [[ "$clean_line" =~ Agent[[:space:]]\"([^\"]+)\" ]]; then
+                    agent_name="${BASH_REMATCH[1]}"
+                elif [[ "$clean_line" =~ Agent[[:space:]]([^[:space:]]+) ]]; then
+                    agent_name="${BASH_REMATCH[1]}"
+                fi
             fi
             
             if [ -z "$agent_name" ]; then
-                agent_name="unknown"
+                agent_name="Claude"
             fi
             
             echo "Agent registered: $agent_name ($agent_id)" >> "$STATE_FILE"
@@ -141,6 +156,10 @@ monitor_pane() {
 }
 EOF
             echo "Agent tracking file created: $AGENT_TRACKING_FILE" >> "$STATE_FILE"
+            
+            # Update tmux status to show agent name
+            local target_pane="${TMUX_SESSION}:${TMUX_WINDOW}.${TMUX_PANE}"
+            /home/decoder/dev/dotfiles/scripts/__tmux_agent_status.sh set "$agent_name" "$target_pane" >> "$STATE_FILE" 2>&1
             
             looking_for_agent_id=false
             agent_name=""
@@ -177,8 +196,8 @@ cleanup() {
 }
 
 cleanup_old_files() {
-    find /tmp -name "claude_monitor_*${TMUX_SESSION}_${TMUX_WINDOW}_${TMUX_PANE}*" -type f -mmin +60 -delete 2>/dev/null || true
-    find /tmp -name "claude_agent_*${TMUX_SESSION}_${TMUX_WINDOW}_${TMUX_PANE}*" -type f -mmin +60 -delete 2>/dev/null || true
+    # Note: Removed 60-minute cleanup - agent files should persist until explicitly cleared
+    true
 }
 
 trap cleanup EXIT INT TERM
