@@ -11,6 +11,7 @@ TMUX_PANE_ID=$(tmux display-message -p '#{pane_id}')
 TMUX_PANE_TITLE=$(tmux display-message -p '#{pane_title}')
 MONITOR_FILE="/tmp/claude_monitor_${TMUX_SESSION}_${TMUX_WINDOW}_${TMUX_PANE}.txt"
 STATE_FILE="/tmp/claude_monitor_state_${TMUX_SESSION}_${TMUX_WINDOW}_${TMUX_PANE}"
+AGENT_TRACKING_FILE="/tmp/claude_agent_${TMUX_SESSION}_${TMUX_WINDOW}_${TMUX_PANE}.json"
 
 notify_prompt() {
     local session="$1"
@@ -52,7 +53,12 @@ notify_prompt() {
 
 monitor_pane() {
     local looking_for_prompt=false
+    local looking_for_agent_id=false
+    local agent_name=""
     local last_notification_time=0
+    
+    # Write session info to state file
+    echo "Monitor tracking session: $TMUX_SESSION:$TMUX_WINDOW:$TMUX_PANE" > "$STATE_FILE"
     
     # Enable focus events if not already enabled
     tmux set-option -t "$TMUX_SESSION" focus-events on
@@ -101,6 +107,45 @@ monitor_pane() {
             fi
         fi
         
+        # Separate detection for agent registration
+        if [[ "$clean_line" =~ "agentic-framework:register-agent" ]]; then
+            looking_for_agent_id=true
+            # Try to extract agent name from the command
+            if [[ "$clean_line" =~ name:[[:space:]]*\"([^\"]+)\" ]]; then
+                agent_name="${BASH_REMATCH[1]}"
+            fi
+            echo "Found agent registration pattern, looking for ID" >> "$STATE_FILE"
+        elif [ "$looking_for_agent_id" = true ] && [[ "$clean_line" =~ registered[[:space:]]successfully[[:space:]]with[[:space:]]ID:[[:space:]](agent-[0-9a-z-]+) ]]; then
+            local agent_id="${BASH_REMATCH[1]}"
+            
+            # If we didn't get agent name from command, try to extract from this line
+            if [ -z "$agent_name" ] && [[ "$clean_line" =~ Agent[[:space:]]\'([^\']+)\' ]]; then
+                agent_name="${BASH_REMATCH[1]}"
+            fi
+            
+            if [ -z "$agent_name" ]; then
+                agent_name="unknown"
+            fi
+            
+            echo "Agent registered: $agent_name ($agent_id)" >> "$STATE_FILE"
+            
+            # Create agent tracking entry
+            cat > "$AGENT_TRACKING_FILE" <<EOF
+{
+  "agent_id": "$agent_id",
+  "agent_name": "$agent_name",
+  "tmux_session": "$TMUX_SESSION",
+  "tmux_window": "$TMUX_WINDOW",
+  "tmux_pane": "$TMUX_PANE",
+  "registered_at": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+}
+EOF
+            echo "Agent tracking file created: $AGENT_TRACKING_FILE" >> "$STATE_FILE"
+            
+            looking_for_agent_id=false
+            agent_name=""
+        fi
+        
         if [[ "$clean_line" =~ "Do you want to" ]]; then
             looking_for_prompt=true
             echo "Found 'Do you want to' pattern" > "$STATE_FILE"
@@ -126,12 +171,14 @@ cleanup() {
     tmux set-hook -u -t "$TMUX_PANE_ID" pane-focus-in 2>/dev/null || true
     
     tmux pipe-pane -t "$TMUX_PANE_ID"
+    # Don't remove AGENT_TRACKING_FILE - the main wrapper needs it for deregistration
     rm -f "$MONITOR_FILE" "$STATE_FILE"
     exit 0
 }
 
 cleanup_old_files() {
     find /tmp -name "claude_monitor_*${TMUX_SESSION}_${TMUX_WINDOW}_${TMUX_PANE}*" -type f -mmin +60 -delete 2>/dev/null || true
+    find /tmp -name "claude_agent_*${TMUX_SESSION}_${TMUX_WINDOW}_${TMUX_PANE}*" -type f -mmin +60 -delete 2>/dev/null || true
 }
 
 trap cleanup EXIT INT TERM
