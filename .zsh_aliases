@@ -74,6 +74,7 @@ alias kstart='~/dev/dotfiles/scripts/__kind_manager.sh --start'
 alias kstop='~/dev/dotfiles/scripts/__kind_manager.sh --stop'
 
 # Other
+alias snd='/home/decoder/dev/dotfiles/scripts/__send_keys_to_claude.sh'
 alias aopa='~/dev/dotfiles/scripts/__toggle_alacritty_opacity.sh'
 alias atheme='~/dev/dotfiles/scripts/__swap_alacritty_theme.sh'
 alias ytd='__download_youtube.sh'
