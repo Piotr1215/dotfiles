@@ -21,7 +21,21 @@ TMUX_WINDOW=$(tmux display-message -p '#I')
 TMUX_PANE=$(tmux display-message -p '#P')
 TMUX_INSTANCE_ID="${TMUX_SESSION}:${TMUX_WINDOW}:${TMUX_PANE}"
 
+# Create broadcast tracking file for send_keys functionality
+BROADCAST_TRACKING_FILE="/tmp/claude_broadcast_${TMUX_SESSION}_${TMUX_WINDOW}_${TMUX_PANE}.json"
+cat > "$BROADCAST_TRACKING_FILE" <<EOF
+{
+  "session": "${TMUX_SESSION}",
+  "window": "${TMUX_WINDOW}",
+  "pane": "${TMUX_PANE}",
+  "instance_id": "${TMUX_INSTANCE_ID}",
+  "pid": $$,
+  "start_time": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+}
+EOF
+
 echo "Claude instance: $TMUX_INSTANCE_ID"
+echo "Broadcast tracking: $BROADCAST_TRACKING_FILE"
 echo "Agent registration will be tracked automatically"
 
 if [ ! -f "$MONITOR_SCRIPT" ]; then
@@ -169,6 +183,12 @@ cleanup() {
     
     # Deregister agent if one exists for this instance
     deregister_agent
+    
+    # Clean up broadcast tracking file
+    if [ -f "$BROADCAST_TRACKING_FILE" ]; then
+        echo "Removing broadcast tracking file..."
+        rm -f "$BROADCAST_TRACKING_FILE"
+    fi
 }
 
 trap cleanup EXIT INT TERM
