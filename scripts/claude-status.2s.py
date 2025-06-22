@@ -10,7 +10,7 @@ from datetime import datetime
 
 def get_notification_files():
     """Get all Claude notification files"""
-    pattern = "/tmp/claude-notification-*"
+    pattern = "/run/user/1000/claude-monitor/claude-notification-*"
     return glob.glob(pattern)
 
 def get_notification_count():
@@ -28,26 +28,32 @@ def get_sessions_info():
             try:
                 # Extract session info from filename: claude-notification-SESSION-WINDOW-PANE-TIMESTAMP
                 filename = os.path.basename(file_path)
-                parts = filename.split('-')
-                if len(parts) >= 5:
-                    session = parts[2]
-                    window = parts[3] 
-                    pane = parts[4]
-                    timestamp = parts[-1]
+                
+                # Parse filename from right to left to handle hyphens in session names
+                if filename.startswith("claude-notification-"):
+                    remainder = filename[len("claude-notification-"):]
                     
-                    # Read title from file content
-                    with open(file_path, 'r') as f:
-                        content = f.read().strip()
-                        title = content.split(':')[-1] if ':' in content else "Claude notification"
-                    
-                    sessions.append({
-                        'session': session,
-                        'window': window,
-                        'pane': pane,
-                        'timestamp': timestamp,
-                        'title': title,
-                        'file': file_path
-                    })
+                    # Split from the end: timestamp, pane, window, then session gets the rest
+                    parts = remainder.rsplit('-', 3)
+                    if len(parts) == 4:
+                        session = parts[0]
+                        window = parts[1]
+                        pane = parts[2]
+                        timestamp = parts[3]
+                        
+                        # Read title from file content
+                        with open(file_path, 'r') as f:
+                            content = f.read().strip()
+                            title = content.split(':')[-1] if ':' in content else "Claude notification"
+                        
+                        sessions.append({
+                            'session': session,
+                            'window': window,
+                            'pane': pane,
+                            'timestamp': timestamp,
+                            'title': title,
+                            'file': file_path
+                        })
             except Exception:
                 continue
     

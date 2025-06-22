@@ -3,7 +3,7 @@
 set -eo pipefail
 
 # Find all Claude notification files
-notification_files=(/tmp/claude-notification-*)
+notification_files=(/run/user/1000/claude-monitor/claude-notification-*)
 
 # Check if any notification files exist
 if [ ! -e "${notification_files[0]}" ]; then
@@ -56,7 +56,7 @@ if tmux has-session -t "$session" 2>/dev/null; then
     tmux select-pane -t "$pane_id"
 else
     # Session no longer exists, try the next one in files if any remain
-    if [ -n "$(ls /tmp/claude-notification-* 2>/dev/null)" ]; then
+    if [ -n "$(ls /run/user/1000/claude-monitor/claude-notification-* 2>/dev/null)" ]; then
         exec "$0"  # Recursively call self to process next notification
     fi
 fi

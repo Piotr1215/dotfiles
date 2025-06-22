@@ -9,9 +9,9 @@ TMUX_WINDOW_NAME=$(tmux display-message -p '#W')
 TMUX_PANE=$(tmux display-message -p '#P')
 TMUX_PANE_ID=$(tmux display-message -p '#{pane_id}')
 TMUX_PANE_TITLE=$(tmux display-message -p '#{pane_title}')
-MONITOR_FILE="/tmp/claude_monitor_${TMUX_SESSION}_${TMUX_WINDOW}_${TMUX_PANE}.txt"
-STATE_FILE="/tmp/claude_monitor_state_${TMUX_SESSION}_${TMUX_WINDOW}_${TMUX_PANE}"
-AGENT_TRACKING_FILE="/tmp/claude_agent_${TMUX_SESSION}_${TMUX_WINDOW}_${TMUX_PANE}.json"
+MONITOR_FILE="/run/user/1000/claude-monitor/claude_monitor_${TMUX_SESSION}_${TMUX_WINDOW}_${TMUX_PANE}.txt"
+STATE_FILE="/run/user/1000/claude-monitor/claude_monitor_state_${TMUX_SESSION}_${TMUX_WINDOW}_${TMUX_PANE}"
+AGENT_TRACKING_FILE="/run/user/1000/claude-monitor/claude_agent_${TMUX_SESSION}_${TMUX_WINDOW}_${TMUX_PANE}.json"
 
 notify_prompt() {
     local session="$1"
@@ -42,10 +42,10 @@ notify_prompt() {
     
     # Create notification file for this session/window/pane
     local timestamp=$(date +%s)
-    local notification_file="/tmp/claude-notification-${session}-${window}-${pane}-${timestamp}"
+    local notification_file="/run/user/1000/claude-monitor/claude-notification-${session}-${window}-${pane}-${timestamp}"
     
     # Check if a notification file already exists for this session/window/pane combo to prevent duplicates
-    if ! ls /tmp/claude-notification-${session}-${window}-${pane}-* 2>/dev/null | head -1 >/dev/null; then
+    if ! ls /run/user/1000/claude-monitor/claude-notification-${session}-${window}-${pane}-* 2>/dev/null | head -1 >/dev/null; then
         # Create notification file with session info
         echo "${session}:${window}:${pane_id}:${title}" > "$notification_file"
     fi
@@ -65,7 +65,7 @@ monitor_pane() {
     
     # Set up pane-focus-in hook to auto-clear notifications when manually returning to this pane
     tmux set-hook -t "$TMUX_PANE_ID" pane-focus-in \
-        "run-shell 'rm -f /tmp/claude-notification-${TMUX_SESSION}-${TMUX_WINDOW}-${TMUX_PANE}-*'"
+        "run-shell 'rm -f /run/user/1000/claude-monitor/claude-notification-${TMUX_SESSION}-${TMUX_WINDOW}-${TMUX_PANE}-*'"
     
     tmux pipe-pane -o -t "$TMUX_PANE_ID" "cat >> $MONITOR_FILE"
     
@@ -111,11 +111,14 @@ monitor_pane() {
         if [[ "$clean_line" =~ "agentic-framework:register-agent" ]]; then
             looking_for_agent_id=true
             # Try to extract agent name from the command - handle multiple formats
-            if [[ "$clean_line" =~ \"name\":[[:space:]]*\"([^\"]+)\" ]]; then
+            # Look for patterns like: "name": "TestAgent" or name: "TestAgent" with flexible spacing
+            if [[ "$clean_line" =~ \"name\"[[:space:]]*:[[:space:]]*\"([^\"]+)\" ]]; then
                 agent_name="${BASH_REMATCH[1]}"
-            elif [[ "$clean_line" =~ name:[[:space:]]*\"([^\"]+)\" ]]; then
+            elif [[ "$clean_line" =~ name[[:space:]]*:[[:space:]]*\"([^\"]+)\" ]]; then
                 agent_name="${BASH_REMATCH[1]}"
-            elif [[ "$clean_line" =~ \"name\":[[:space:]]*\'([^\']+)\' ]]; then
+            elif [[ "$clean_line" =~ \"name\"[[:space:]]*:[[:space:]]*\'([^\']+)\' ]]; then
+                agent_name="${BASH_REMATCH[1]}"
+            elif [[ "$clean_line" =~ name[[:space:]]*:[[:space:]]*\'([^\']+)\' ]]; then
                 agent_name="${BASH_REMATCH[1]}"
             fi
             echo "Found agent registration pattern, looking for ID. Agent name: $agent_name" >> "$STATE_FILE"
