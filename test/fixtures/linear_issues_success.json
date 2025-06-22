@@ -1,0 +1,29 @@
+[
+  {
+    "id": "lin_abc123",
+    "description": "Implement user dashboard",
+    "repository": "linear", 
+    "html_url": "https://linear.app/team/issue/ABC-123",
+    "issue_id": "ABC-123",
+    "project": "frontend",
+    "status": "Todo"
+  },
+  {
+    "id": "lin_def456",
+    "description": "Optimize database queries",
+    "repository": "linear",
+    "html_url": "https://linear.app/team/issue/DEF-456", 
+    "issue_id": "DEF-456",
+    "project": "backend",
+    "status": "In Progress"
+  },
+  {
+    "id": "lin_ghi789",
+    "description": "Review security protocols",
+    "repository": "linear",
+    "html_url": "https://linear.app/team/issue/GHI-789",
+    "issue_id": "GHI-789", 
+    "project": "security",
+    "status": "In Review"
+  }
+]

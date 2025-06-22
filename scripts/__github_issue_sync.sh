@@ -30,10 +30,13 @@ log() {
     echo "[$(date +'%Y-%m-%dT%H:%M:%S%z')]: $*"
 }
 
-# Function to trim leading and trailing whitespace using sed
+# Function to trim leading and trailing whitespace (hardened against command injection)
 trim_whitespace() {
     local input="$1"
-    echo "$input" | sed 's/^[ \t]*//;s/[ \t]*$//'
+    # Use parameter expansion instead of sed to avoid command injection
+    input="${input#"${input%%[![:space:]]*}"}"  # Remove leading whitespace
+    input="${input%"${input##*[![:space:]]}"}"  # Remove trailing whitespace
+    echo "$input"
 }
 
 # ====================================================
@@ -55,51 +58,90 @@ validate_env_vars() {
 # PHASE 2: DATA FETCHING
 # ====================================================
 
-# Retrieve and format GitHub issues
+# Retrieve and format GitHub issues with enhanced error handling
 get_github_issues() {
     local issues
+    local exit_code
+    
+    # Capture both output and exit code
     if ! issues=$(gh api -X GET /search/issues \
         -f q='is:issue is:open assignee:Piotr1215' \
-        --jq '.items[] | {id: .number, description: .title, repository: .repository_url, html_url: .html_url}'); then
-        echo "Error: Unable to fetch GitHub issues" >&2
+        --jq '.items[] | {id: .number, description: .title, repository: .repository_url, html_url: .html_url}' 2>&1); then
+        echo "Error: Unable to fetch GitHub issues. gh command failed." >&2
+        echo "Command output: $issues" >&2
         return 1
     fi
+    
+    # Validate JSON output
+    if ! echo "$issues" | jq empty 2>/dev/null; then
+        echo "Error: Invalid JSON response from GitHub API" >&2
+        echo "Response: $issues" >&2
+        return 1
+    fi
+    
+    # Check if we got any issues
+    if [[ -z "$issues" ]]; then
+        echo "Warning: No GitHub issues found" >&2
+        return 0
+    fi
+    
     echo "$issues"
 }
 
-# Retrieve and format Linear issues
+# Retrieve and format Linear issues with enhanced error handling
 get_linear_issues() {
     local response
-    response=$(curl -s -w "\n%{http_code}" -X POST \
+    local exit_code
+    local temp_response
+    
+    # Create temporary file for response (with proper cleanup)
+    if ! temp_response=$(mktemp); then
+        echo "Error: Failed to create temporary file" >&2
+        return 1
+    fi
+    
+    # Ensure cleanup on exit
+    trap "rm -f '$temp_response'" EXIT
+    
+    # Make API call with explicit error handling
+    if ! response=$(curl -s -w "\n%{http_code}" -X POST \
         -H "Content-Type: application/json" \
-        -H "Authorization: $LINEAR_API_KEY" \
+        -H "Authorization: ${LINEAR_API_KEY}" \
         --data '{"query": "query { user(id: \"'"$LINEAR_USER_ID"'\") { id name assignedIssues(filter: { state: { name: { nin: [\"Released\", \"Canceled\",\"Done\",\"Ready for Release\"] } } }) { nodes { id title url state { name } project { name } } } } }"}' \
-        https://api.linear.app/graphql)
+        https://api.linear.app/graphql 2>&1); then
+        echo "Error: Linear API request failed" >&2
+        rm -f "$temp_response"
+        return 1
+    fi
     
     local http_code=$(echo "$response" | tail -1)
     local content=$(echo "$response" | head -n -1)
     
-    if [ "$http_code" != "200" ]; then
+    if [[ "$http_code" -ne 200 ]]; then
         echo "Error: Linear API returned HTTP $http_code" >&2
         echo "Response: $content" >&2
+        rm -f "$temp_response"
         return 1
     fi
     
-    # Check if response is valid JSON
+    # Validate JSON response
     if ! echo "$content" | jq empty 2>/dev/null; then
         echo "Error: Invalid JSON response from Linear API" >&2
         echo "Response: $content" >&2
+        rm -f "$temp_response"
         return 1
     fi
     
     # Check for API errors in the response
-    local errors=$(echo "$content" | jq -r '.errors // empty')
-    if [ -n "$errors" ]; then
+    local errors
+    errors=$(echo "$content" | jq -r '.errors // empty')
+    if [[ -n "$errors" ]]; then
         echo "Error: Linear API returned errors: $errors" >&2
+        rm -f "$temp_response"
         return 1
     fi
     
-    # Parse the issues
+    # Parse the issues with error handling
     local issues
     if ! issues=$(echo "$content" | jq -c '.data.user.assignedIssues.nodes[] | {
             id: .id,
@@ -111,8 +153,12 @@ get_linear_issues() {
             status: .state.name
         }' 2>/dev/null); then
         echo "Error: Failed to parse Linear issues" >&2
+        rm -f "$temp_response"
         return 1
     fi
+    
+    # Cleanup
+    rm -f "$temp_response"
     
     echo "$issues"
 }
@@ -382,7 +428,17 @@ compare_and_clean_tasks() {
 
     # Extract all issue descriptions into a temporary file for faster processing
     local issues_file
-    issues_file=$(mktemp)
+    local cleanup_needed=false
+    
+    if ! issues_file=$(mktemp); then
+        echo "Error: Failed to create temporary file" >&2
+        return 1
+    fi
+    cleanup_needed=true
+
+    # Ensure cleanup on ALL exit paths
+    trap 'if [[ "$cleanup_needed" == true ]]; then rm -f "$issues_file"; fi' EXIT ERR
+    
     echo "$issues_descriptions" | tr -d '\r' | grep -v '^$' | while IFS= read -r issue; do
         echo "${issue,,}" >>"$issues_file"
     done
@@ -433,8 +489,9 @@ compare_and_clean_tasks() {
         fi
     done
 
-    # Clean up
+    # Clean up temp file
     rm -f "$issues_file"
+    cleanup_needed=false
 
     log "Comparison of Taskwarrior tasks and issues completed."
 }

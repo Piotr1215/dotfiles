@@ -1,0 +1,10 @@
+{
+  "data": {
+    "issue": {
+      "id": "lin_completed_123",
+      "state": {
+        "name": "Done"
+      }
+    }
+  }
+}
