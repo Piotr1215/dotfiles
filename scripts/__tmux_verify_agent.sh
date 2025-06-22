@@ -54,7 +54,7 @@ verify_all_agents() {
             local pane_idx=$(echo "$window_pane" | cut -d. -f2)
             
             # Check if tracking file exists
-            local tracking_file="/run/user/1000/claude-monitor/claude_agent_${session}_${window}_${pane_idx}.json"
+            local tracking_file="/tmp/claude_agent_${session}_${window}_${pane_idx}.json"
             
             if [ ! -f "$tracking_file" ]; then
                 # No tracking file, clear the agent name
@@ -94,7 +94,7 @@ verify_pane() {
     local pane_idx=$(echo "$window_pane" | cut -d. -f2)
     
     # Check tracking file
-    local tracking_file="/run/user/1000/claude-monitor/claude_agent_${session}_${window}_${pane_idx}.json"
+    local tracking_file="/tmp/claude_agent_${session}_${window}_${pane_idx}.json"
     
     if [ -f "$tracking_file" ]; then
         # SECURE JSON extraction
@@ -113,7 +113,7 @@ verify_pane() {
 # Clean up orphaned tracking files
 cleanup_orphaned() {
     # Get all tracking files
-    for tracking_file in /run/user/1000/claude-monitor/claude_agent_*.json; do
+    for tracking_file in /tmp/claude_agent_*.json; do
         [ -f "$tracking_file" ] || continue
         
         # Extract coordinates from filename using parameter expansion (safer)
