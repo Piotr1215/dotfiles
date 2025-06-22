@@ -1,0 +1,10 @@
+{
+  "errors": [
+    {
+      "message": "Authentication failed",
+      "extensions": {
+        "code": "UNAUTHENTICATED"
+      }
+    }
+  ]
+}
