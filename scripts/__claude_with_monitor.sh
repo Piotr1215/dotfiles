@@ -200,12 +200,6 @@ echo "Claude instance: $TMUX_INSTANCE_ID"
 echo "Broadcast tracking: $BROADCAST_TRACKING_FILE"
 echo "Agent registration will be tracked automatically"
 
-# Start nudging monitor if MCP server is running
-if check_mcp_server; then
-    echo "Starting nudging monitor..."
-    nohup /home/decoder/dev/dotfiles/scripts/__claude_nudging_monitor.sh start >/dev/null 2>&1 &
-fi
-
 echo "Starting Claude prompt monitor..."
 "$MONITOR_SCRIPT" start &
 MONITOR_PID=$!
