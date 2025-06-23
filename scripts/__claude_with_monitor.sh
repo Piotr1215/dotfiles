@@ -15,29 +15,6 @@ MONITOR_SCRIPT="${SCRIPT_DIR}/__claude_prompt_monitor.sh"
 MCP_SERVER_URL="http://127.0.0.1:3113"
 MCP_FRAMEWORK_DIR="/home/decoder/dev/mcp-agentic-framework"
 
-# Get tmux coordinates for instance tracking
-TMUX_SESSION=$(tmux display-message -p '#S')
-TMUX_WINDOW=$(tmux display-message -p '#I')
-TMUX_PANE=$(tmux display-message -p '#P')
-TMUX_INSTANCE_ID="${TMUX_SESSION}:${TMUX_WINDOW}:${TMUX_PANE}"
-
-# Create broadcast tracking file for send_keys functionality
-BROADCAST_TRACKING_FILE="/tmp/claude_broadcast_${TMUX_SESSION}_${TMUX_WINDOW}_${TMUX_PANE}.json"
-cat > "$BROADCAST_TRACKING_FILE" <<EOF
-{
-  "session": "${TMUX_SESSION}",
-  "window": "${TMUX_WINDOW}",
-  "pane": "${TMUX_PANE}",
-  "instance_id": "${TMUX_INSTANCE_ID}",
-  "pid": $$,
-  "start_time": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-}
-EOF
-
-echo "Claude instance: $TMUX_INSTANCE_ID"
-echo "Broadcast tracking: $BROADCAST_TRACKING_FILE"
-echo "Agent registration will be tracked automatically"
-
 if [ ! -f "$MONITOR_SCRIPT" ]; then
     echo "Error: Monitor script not found at $MONITOR_SCRIPT"
     exit 1
@@ -199,6 +176,35 @@ trap cleanup EXIT INT TERM
 
 # Start MCP server if needed
 start_mcp_server
+
+# Get tmux coordinates for instance tracking AFTER server creation
+TMUX_SESSION=$(tmux display-message -p '#S')
+TMUX_WINDOW=$(tmux display-message -p '#I')
+TMUX_PANE=$(tmux display-message -p '#P')
+TMUX_INSTANCE_ID="${TMUX_SESSION}:${TMUX_WINDOW}:${TMUX_PANE}"
+
+# Create broadcast tracking file for send_keys functionality
+BROADCAST_TRACKING_FILE="/tmp/claude_broadcast_${TMUX_SESSION}_${TMUX_WINDOW}_${TMUX_PANE}.json"
+cat > "$BROADCAST_TRACKING_FILE" <<EOF
+{
+  "session": "${TMUX_SESSION}",
+  "window": "${TMUX_WINDOW}",
+  "pane": "${TMUX_PANE}",
+  "instance_id": "${TMUX_INSTANCE_ID}",
+  "pid": $$,
+  "start_time": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+}
+EOF
+
+echo "Claude instance: $TMUX_INSTANCE_ID"
+echo "Broadcast tracking: $BROADCAST_TRACKING_FILE"
+echo "Agent registration will be tracked automatically"
+
+# Start nudging monitor if MCP server is running
+if check_mcp_server; then
+    echo "Starting nudging monitor..."
+    nohup /home/decoder/dev/dotfiles/scripts/__claude_nudging_monitor.sh start >/dev/null 2>&1 &
+fi
 
 echo "Starting Claude prompt monitor..."
 "$MONITOR_SCRIPT" start &
