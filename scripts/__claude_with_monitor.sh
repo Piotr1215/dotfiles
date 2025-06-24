@@ -69,6 +69,8 @@ start_mcp_server() {
             if check_mcp_server; then
                 echo "MCP server started successfully in tmux session: $session_name"
                 echo "To view logs: tmux attach-session -t $session_name"
+                echo "Staring web UI"
+                xdg-open "https://localhost:3113"
             else
                 echo "Warning: MCP server failed to start"
                 echo "Check tmux session: tmux attach-session -t $session_name"
