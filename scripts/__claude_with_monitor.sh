@@ -70,7 +70,7 @@ start_mcp_server() {
                 echo "MCP server started successfully in tmux session: $session_name"
                 echo "To view logs: tmux attach-session -t $session_name"
                 echo "Staring web UI"
-                xdg-open "https://localhost:3113"
+                xdg-open "http://localhost:3113"
             else
                 echo "Warning: MCP server failed to start"
                 echo "Check tmux session: tmux attach-session -t $session_name"
@@ -185,8 +185,11 @@ TMUX_WINDOW=$(tmux display-message -p '#I')
 TMUX_PANE=$(tmux display-message -p '#P')
 TMUX_INSTANCE_ID="${TMUX_SESSION}:${TMUX_WINDOW}:${TMUX_PANE}"
 
+# Sanitize session name for filename (replace / with -)
+SAFE_SESSION_NAME=$(echo "$TMUX_SESSION" | tr '/' '-')
+
 # Create broadcast tracking file for send_keys functionality
-BROADCAST_TRACKING_FILE="/tmp/claude_broadcast_${TMUX_SESSION}_${TMUX_WINDOW}_${TMUX_PANE}.json"
+BROADCAST_TRACKING_FILE="/tmp/claude_broadcast_${SAFE_SESSION_NAME}_${TMUX_WINDOW}_${TMUX_PANE}.json"
 cat > "$BROADCAST_TRACKING_FILE" <<EOF
 {
   "session": "${TMUX_SESSION}",
