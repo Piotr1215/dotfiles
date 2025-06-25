@@ -64,8 +64,10 @@ monitor_pane() {
     tmux set-option -t "$TMUX_SESSION" focus-events on
     
     # Set up pane-focus-in hook to auto-clear notifications when manually returning to this pane
+    echo "Setting pane-focus-in hook for pane $TMUX_PANE_ID (session: $TMUX_SESSION, window: $TMUX_WINDOW, pane: $TMUX_PANE)" >> "$STATE_FILE"
     tmux set-hook -t "$TMUX_PANE_ID" pane-focus-in \
-        "run-shell 'rm -f /tmp/claude-notification-${TMUX_SESSION}-${TMUX_WINDOW}-${TMUX_PANE}-*'"
+        "run-shell 'rm -f /tmp/claude-notification-${TMUX_SESSION}-${TMUX_WINDOW}-${TMUX_PANE}-*'" 2>&1 | tee -a "$STATE_FILE"
+    echo "Hook set command completed with exit code: $?" >> "$STATE_FILE"
     
     tmux pipe-pane -o -t "$TMUX_PANE_ID" "cat >> $MONITOR_FILE"
     
