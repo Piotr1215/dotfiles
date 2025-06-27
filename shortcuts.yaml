@@ -283,6 +283,12 @@ moreutils:
 zsh:
   description: "Z shell shortcuts and special parameters"
   shortcuts:
+    - description: "Reference first argument of current command line (history expansion)"
+      binding: "!#:1"
+    - description: "Reference last argument of current command line"
+      binding: "!#:$"
+    - description: "Perform text substitution on selected word"
+      binding: "!#:1:s/from/to"
     - description: "Remove from cursor to start of line"
       binding: "Ctrl + U"
     - description: "Cut from cursor to end of line"
