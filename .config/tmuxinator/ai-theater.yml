@@ -1,0 +1,13 @@
+# ~/.config/tmuxinator/vcluster-prod.yml
+
+name: ai-theater
+root: /home/decoder/dev/dotfiles
+
+windows:
+  - main:
+      layout: tiled
+      panes:
+        - ls
+        - ls
+        - ls
+        - cd /home/decoder/dev/mcp-agentic-framework/; ls
