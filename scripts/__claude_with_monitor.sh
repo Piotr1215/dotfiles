@@ -107,26 +107,21 @@ start_mcp_server() {
 deregister_agent() {
     echo "Checking for agents to deregister..."
     
-    # Look for agent tracking files by session ID pattern
-    # Files are named like: /tmp/claude_agent_<session-id>.json
+    # Look for agent tracking files by agent ID pattern
+    # Files are now named like: /tmp/claude_agent_<agent-id>.json
     for agent_tracking_file in /tmp/claude_agent_*.json; do
         if [ -f "$agent_tracking_file" ]; then
             echo "Found agent tracking file: $agent_tracking_file"
             
             # Check if this file belongs to our Claude session
-            local file_session_id=$(grep '"session_id"' "$agent_tracking_file" | sed 's/.*"session_id": "\([^"]*\)".*/\1/')
+            local file_session_id=$(jq -r '.session_id // ""' "$agent_tracking_file" 2>/dev/null)
+            local file_tmux_coords=$(jq -r '"\(.tmux_session // ""):\(.tmux_window // ""):\(.tmux_pane // "")"' "$agent_tracking_file" 2>/dev/null)
             
-            # Get our current session ID from environment or broadcast file
-            local our_session_id=""
-            if [ -f "$BROADCAST_TRACKING_FILE" ]; then
-                our_session_id=$(jq -r '.session_id // ""' "$BROADCAST_TRACKING_FILE" 2>/dev/null)
-            fi
-            
-            # Only process if session IDs match or we can't determine session
-            if [ -z "$our_session_id" ] || [ "$file_session_id" = "$our_session_id" ]; then
-                # Extract agent ID from JSON file
-                local agent_id=$(grep '"agent_id"' "$agent_tracking_file" | sed 's/.*"agent_id": "\([^"]*\)".*/\1/')
-                local agent_name=$(grep '"agent_name"' "$agent_tracking_file" | sed 's/.*"agent_name": "\([^"]*\)".*/\1/')
+            # Only process agents that match our exact tmux coordinates
+            if [ "$file_tmux_coords" = "${TMUX_SESSION}:${TMUX_WINDOW}:${TMUX_PANE}" ]; then
+                # Extract agent ID from JSON file using jq
+                local agent_id=$(jq -r '.agent_id // ""' "$agent_tracking_file" 2>/dev/null)
+                local agent_name=$(jq -r '.agent_name // ""' "$agent_tracking_file" 2>/dev/null)
         
         if [ -n "$agent_id" ]; then
             echo "Deregistering agent: $agent_name ($agent_id)"
@@ -150,13 +145,17 @@ EOF
             local response=$(curl -s -X POST \
                 -H "Content-Type: application/json" \
                 -d "$payload" \
-                "${MCP_SERVER_URL}/mcp")
+                "${MCP_SERVER_URL}/mcp" 2>/dev/null || echo '{"error": "curl failed"}')
             
             if echo "$response" | grep -q '"success":true'; then
                 echo "Agent deregistered successfully"
+            elif echo "$response" | grep -q '"error".*"Agent not found"'; then
+                # Agent already deregistered (e.g., self-deregistered) - this is fine
+                echo "Agent already deregistered: $agent_name ($agent_id)"
             else
-                echo "Warning: Failed to deregister agent"
-                echo "Response: $response"
+                # Only show warnings for actual failures, not missing agents
+                echo "Warning: Failed to deregister agent" >&2
+                echo "Response: $response" >&2
             fi
         fi
         
@@ -201,6 +200,10 @@ SAFE_SESSION_NAME=$(echo "$TMUX_SESSION" | tr '/' '-')
 
 # Create broadcast tracking file for send_keys functionality
 BROADCAST_TRACKING_FILE="/tmp/claude_broadcast_${SAFE_SESSION_NAME}_${TMUX_WINDOW}_${TMUX_PANE}.json"
+
+# Generate a unique session ID for this Claude instance
+CLAUDE_SESSION_ID=$(uuidgen || echo "session-$$-$(date +%s)")
+
 cat > "$BROADCAST_TRACKING_FILE" <<EOF
 {
   "session": "${TMUX_SESSION}",
@@ -208,6 +211,7 @@ cat > "$BROADCAST_TRACKING_FILE" <<EOF
   "pane": "${TMUX_PANE}",
   "instance_id": "${TMUX_INSTANCE_ID}",
   "pid": $$,
+  "session_id": "${CLAUDE_SESSION_ID}",
   "start_time": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 }
 EOF
@@ -215,6 +219,9 @@ EOF
 echo "Claude instance: $TMUX_INSTANCE_ID"
 echo "Broadcast tracking: $BROADCAST_TRACKING_FILE"
 echo "Agent registration handled by hooks (no pipe-pane needed)"
+
+# Export tmux coordinates for hooks to use
+export CLAUDE_TMUX_PANE="${TMUX_SESSION}:${TMUX_WINDOW}.${TMUX_PANE}"
 
 # Still start the monitor for prompt detection only
 echo "Starting Claude prompt monitor..."
