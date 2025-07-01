@@ -13,3 +13,5 @@ windows:
           - if ! aws sts get-caller-identity &>/dev/null; then aws sso login; fi && aws eks update-kubeconfig --name hosted-platform --region us-east-1 --kubeconfig ./config
   - infrastructure:
       root: <%= ENV['HOME'] %>/loft/hosted-platform/infrastructure
+  - instances-cleanup:
+      root: <%= ENV['HOME'] %>/loft/ops/vcluster-cloud-cleanup
