@@ -53,8 +53,6 @@ notify_prompt() {
 
 monitor_pane() {
     local looking_for_prompt=false
-    local looking_for_agent_id=false
-    local agent_name=""
     local last_notification_time=0
     
     # Write session info to state file
@@ -96,93 +94,11 @@ monitor_pane() {
             clean_line=$(echo "$line" | sed 's/\x1b\[[0-9;]*m//g' | sed 's/\x1b\[[0-9;]*[A-Za-z]//g')
         fi
         
+        # Notification detection is now handled by hooks
+        # The prompt monitor can be simplified or removed entirely
+        # For now, just log that we're still monitoring
         if [[ "$clean_line" =~ ^●[[:space:]] ]]; then
-            echo "Claude started outputting (found '● ' pattern)" >> "$STATE_FILE"
-            
-            echo "" > "$MONITOR_FILE"
-            
-            if [ "$is_inactive" = true ]; then
-                notify_prompt "$TMUX_SESSION" "$TMUX_WINDOW" "$TMUX_WINDOW_NAME" "$TMUX_PANE" "$TMUX_PANE_ID" "$TMUX_PANE_TITLE" "ready"
-                echo "Claude output detected and notification file created (session/terminal inactive)" >> "$STATE_FILE"
-            else
-                echo "Claude output detected but session is active, skipping notification" >> "$STATE_FILE"
-            fi
-        fi
-        
-        # Separate detection for agent registration
-        if [[ "$clean_line" =~ "agentic-framework:register-agent" ]]; then
-            looking_for_agent_id=true
-            # Try to extract agent name from the command - handle multiple formats
-            if [[ "$clean_line" =~ \"name\":[[:space:]]*\"([^\"]+)\" ]]; then
-                agent_name="${BASH_REMATCH[1]}"
-            elif [[ "$clean_line" =~ name:[[:space:]]*\"([^\"]+)\" ]]; then
-                agent_name="${BASH_REMATCH[1]}"
-            elif [[ "$clean_line" =~ \"name\":[[:space:]]*\'([^\']+)\' ]]; then
-                agent_name="${BASH_REMATCH[1]}"
-            fi
-            echo "Found agent registration pattern, looking for ID. Agent name: $agent_name" >> "$STATE_FILE"
-        elif [[ "$clean_line" =~ "agentic-framework:unregister-agent" ]] || [[ "$clean_line" =~ unregistered[[:space:]]successfully ]]; then
-            # Agent deregistration detected
-            echo "Agent deregistration detected" >> "$STATE_FILE"
-            local target_pane="${TMUX_SESSION}:${TMUX_WINDOW}.${TMUX_PANE}"
-            /home/decoder/dev/dotfiles/scripts/__tmux_agent_status.sh clear "$target_pane" >> "$STATE_FILE" 2>&1
-        elif [ "$looking_for_agent_id" = true ] && [[ "$clean_line" =~ registered[[:space:]]successfully[[:space:]]with[[:space:]]ID:[[:space:]](agent-[0-9a-z-]+) ]]; then
-            local agent_id="${BASH_REMATCH[1]}"
-            
-            # If we didn't get agent name from command, try to extract from this line
-            if [ -z "$agent_name" ]; then
-                if [[ "$clean_line" =~ Agent[[:space:]]\'([^\']+)\' ]]; then
-                    agent_name="${BASH_REMATCH[1]}"
-                elif [[ "$clean_line" =~ Agent[[:space:]]\"([^\"]+)\" ]]; then
-                    agent_name="${BASH_REMATCH[1]}"
-                elif [[ "$clean_line" =~ Agent[[:space:]]([^[:space:]]+) ]]; then
-                    agent_name="${BASH_REMATCH[1]}"
-                fi
-            fi
-            
-            if [ -z "$agent_name" ]; then
-                agent_name="Claude"
-            fi
-            
-            echo "Agent registered: $agent_name ($agent_id)" >> "$STATE_FILE"
-            
-            # Create agent tracking entry
-            cat > "$AGENT_TRACKING_FILE" <<EOF
-{
-  "agent_id": "$agent_id",
-  "agent_name": "$agent_name",
-  "tmux_session": "$TMUX_SESSION",
-  "tmux_window": "$TMUX_WINDOW",
-  "tmux_pane": "$TMUX_PANE",
-  "registered_at": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-}
-EOF
-            echo "Agent tracking file created: $AGENT_TRACKING_FILE" >> "$STATE_FILE"
-            
-            # Update tmux status to show agent name
-            local target_pane="${TMUX_SESSION}:${TMUX_WINDOW}.${TMUX_PANE}"
-            /home/decoder/dev/dotfiles/scripts/__tmux_agent_status.sh set "$agent_name" "$target_pane" >> "$STATE_FILE" 2>&1
-            
-            looking_for_agent_id=false
-            agent_name=""
-        fi
-        
-        if [[ "$clean_line" =~ "Do you want to" ]]; then
-            looking_for_prompt=true
-            echo "Found 'Do you want to' pattern" > "$STATE_FILE"
-        elif [ "$looking_for_prompt" = true ] && [[ "$clean_line" =~ "❯" ]]; then
-            echo "Found prompt indicator ❯" >> "$STATE_FILE"
-            
-            echo "" > "$MONITOR_FILE"
-            
-            if [ "$is_inactive" = true ]; then
-                notify_prompt "$TMUX_SESSION" "$TMUX_WINDOW" "$TMUX_WINDOW_NAME" "$TMUX_PANE" "$TMUX_PANE_ID" "$TMUX_PANE_TITLE" "input"
-                echo "Prompt detected and notification file created (session/terminal inactive)" >> "$STATE_FILE"
-            else
-                echo "Prompt detected but session is active, skipping notification" >> "$STATE_FILE"
-            fi
-            
-            looking_for_prompt=false
+            echo "Claude output detected (but notifications handled by hooks)" >> "$STATE_FILE"
         fi
     done
 }

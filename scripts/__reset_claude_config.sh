@@ -15,9 +15,8 @@ echo ""
 BACKUP_FILE="/tmp/claude.json.backup.$(date +%Y%m%d_%H%M%S)"
 cp "$TARGET" "$BACKUP_FILE" && echo "📁 Backed up to: $BACKUP_FILE"
 
-# Check MCP servers and hooks
+# Check MCP servers
 MCP_COUNT=$(jq '.mcpServers | length // 0' "$TARGET")
-HOOKS_COUNT=$(jq '.hooks | length // 0' "$TARGET")
 
 if [[ "$MCP_COUNT" -eq 0 ]]; then
     echo "⚠️  WARNING: NO MCP SERVERS DETECTED!"
@@ -56,16 +55,7 @@ else
     fi
 fi
 
-# Check and restore hooks if missing
-if [[ "$HOOKS_COUNT" -eq 0 ]] && [[ -f "$TEMPLATE" ]]; then
-    echo ""
-    echo "🪝 No hooks detected - restoring from template..."
-    TEMPLATE_HOOKS=$(jq '.hooks // {}' "$TEMPLATE")
-    if [[ "$TEMPLATE_HOOKS" != "{}" ]]; then
-        jq --argjson hooks "$TEMPLATE_HOOKS" '.hooks = $hooks' "$TARGET" > "$TARGET.tmp" && mv "$TARGET.tmp" "$TARGET"
-        echo "✅ Hooks restored from template!"
-    fi
-fi
+# Hooks are now managed in settings.json, not .claude.json
 
 echo ""
 echo "📊 MCP Server Status:"
@@ -85,7 +75,6 @@ echo ""
 echo "🔐 Config Summary:"
 echo "━━━━━━━━━━━━━━━━━"
 echo "  MCP Servers: $(jq '.mcpServers | length // 0' "$TARGET")"
-echo "  Hooks: $(jq '.hooks | to_entries | length // 0' "$TARGET")"
 echo "  UserID: $(jq -r '.userID' "$TARGET" | cut -c1-10)..."
 echo "  OAuth: $(jq -r '.oauthAccount.emailAddress // "not configured"' "$TARGET")"
 echo "  Projects: $(jq '.projects | length // 0' "$TARGET") (should be 0)"
