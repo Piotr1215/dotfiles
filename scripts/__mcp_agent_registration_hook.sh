@@ -14,23 +14,47 @@ SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // ""')
 find_tmux_coordinates() {
     local session_id="$1"
     
-    # Look for broadcast tracking files that match this session
+    # Try multiple strategies to find the right broadcast file
+    
+    # Strategy 1: Check CLAUDE_TMUX_PANE environment variable (if set by parent)
+    if [ -n "$CLAUDE_TMUX_PANE" ]; then
+        echo "[$(date)] Found CLAUDE_TMUX_PANE env var: $CLAUDE_TMUX_PANE" >> /tmp/mcp-agent-hook.log
+        echo "$CLAUDE_TMUX_PANE"
+        return 0
+    fi
+    
+    # Strategy 2: Find the most recently modified broadcast file (within last 60 seconds)
+    local newest_file=""
+    local newest_time=0
+    
     for broadcast_file in /tmp/claude_broadcast_*.json; do
         if [ -f "$broadcast_file" ]; then
-            # Check if file was created recently (within last hour)
-            if [ -z "$(find "$broadcast_file" -mmin +60 2>/dev/null)" ]; then
-                # Extract tmux info
-                local tmux_session=$(jq -r '.session // ""' "$broadcast_file")
-                local tmux_window=$(jq -r '.window // ""' "$broadcast_file")
-                local tmux_pane=$(jq -r '.pane // ""' "$broadcast_file")
-                
-                if [ -n "$tmux_session" ] && [ -n "$tmux_window" ] && [ -n "$tmux_pane" ]; then
-                    echo "$tmux_session:$tmux_window:$tmux_pane"
-                    return 0
-                fi
+            # Get file modification time
+            local file_time=$(stat -c %Y "$broadcast_file" 2>/dev/null || stat -f %m "$broadcast_file" 2>/dev/null)
+            local current_time=$(date +%s)
+            local age=$((current_time - file_time))
+            
+            # If file is less than 60 seconds old and newer than previous
+            if [ $age -lt 60 ] && [ $file_time -gt $newest_time ]; then
+                newest_file="$broadcast_file"
+                newest_time=$file_time
             fi
         fi
     done
+    
+    if [ -n "$newest_file" ]; then
+        echo "[$(date)] Using newest broadcast file: $newest_file (age: $(($(date +%s) - newest_time))s)" >> /tmp/mcp-agent-hook.log
+        
+        # Extract tmux info from the newest file
+        local tmux_session=$(jq -r '.session // ""' "$newest_file")
+        local tmux_window=$(jq -r '.window // ""' "$newest_file")
+        local tmux_pane=$(jq -r '.pane // ""' "$newest_file")
+        
+        if [ -n "$tmux_session" ] && [ -n "$tmux_window" ] && [ -n "$tmux_pane" ]; then
+            echo "$tmux_session:$tmux_window:$tmux_pane"
+            return 0
+        fi
+    fi
     
     return 1
 }
@@ -58,13 +82,16 @@ case "$TOOL_NAME" in
             fi
             
             if [ -n "$TMUX_COORDS" ]; then
-                # Parse coordinates
-                IFS=':' read -r TMUX_SESSION TMUX_WINDOW TMUX_PANE <<< "$TMUX_COORDS"
+                # Parse coordinates (format: session:window.pane)
+                TMUX_SESSION=$(echo "$TMUX_COORDS" | cut -d: -f1)
+                WINDOW_PANE=$(echo "$TMUX_COORDS" | cut -d: -f2)
+                TMUX_WINDOW=$(echo "$WINDOW_PANE" | cut -d. -f1)
+                TMUX_PANE=$(echo "$WINDOW_PANE" | cut -d. -f2)
                 
-                # Create agent tracking file using session ID as the key
-                # This avoids pane number confusion
-                SAFE_SESSION_ID=$(echo "$SESSION_ID" | tr -d ':' | tr '/' '-')
-                AGENT_TRACKING_FILE="/tmp/claude_agent_${SAFE_SESSION_ID}.json"
+                # Create agent tracking file using agent ID as the key
+                # This prevents multiple agents from overwriting each other
+                SAFE_AGENT_ID=$(echo "$AGENT_ID" | tr '/' '-')
+                AGENT_TRACKING_FILE="/tmp/claude_agent_${SAFE_AGENT_ID}.json"
                 
                 cat > "$AGENT_TRACKING_FILE" <<EOF
 {
@@ -79,15 +106,69 @@ case "$TOOL_NAME" in
 }
 EOF
                 
-                # Update tmux status
+                # Update tmux status with error checking
                 TARGET_PANE="${TMUX_SESSION}:${TMUX_WINDOW}.${TMUX_PANE}"
                 if [ -x "/home/decoder/dev/dotfiles/scripts/__tmux_agent_status.sh" ]; then
-                    /home/decoder/dev/dotfiles/scripts/__tmux_agent_status.sh set "$AGENT_NAME" "$TARGET_PANE" >/dev/null 2>&1
+                    echo "[$(date)] Setting tmux name '$AGENT_NAME' for pane $TARGET_PANE" >> /tmp/mcp-agent-hook.log
+                    
+                    # Try to set the agent name and capture result
+                    if /home/decoder/dev/dotfiles/scripts/__tmux_agent_status.sh set "$AGENT_NAME" "$TARGET_PANE" 2>>/tmp/mcp-agent-hook.log; then
+                        # Verify it was actually set
+                        VERIFY_NAME=$(tmux display-message -pt "$TARGET_PANE" '#{@agent_name}' 2>/dev/null || echo "")
+                        if [ "$VERIFY_NAME" = "$AGENT_NAME" ]; then
+                            echo "[$(date)] Successfully verified agent name in tmux" >> /tmp/mcp-agent-hook.log
+                        else
+                            echo "[$(date)] WARNING: Tmux name verification failed! Expected '$AGENT_NAME', got '$VERIFY_NAME'" >> /tmp/mcp-agent-hook.log
+                            # Try direct tmux command as fallback
+                            tmux set-option -pt "$TARGET_PANE" @agent_name "$AGENT_NAME" 2>>/tmp/mcp-agent-hook.log
+                        fi
+                    else
+                        echo "[$(date)] ERROR: Failed to set tmux agent name!" >> /tmp/mcp-agent-hook.log
+                    fi
                 fi
                 
                 echo "[$(date)] Agent registered: $AGENT_NAME ($AGENT_ID) in $TARGET_PANE" >> /tmp/mcp-agent-hook.log
+                
+                # Update broadcast file with agent name for future reference
+                broadcast_file="/tmp/claude_broadcast_${TMUX_SESSION//\//-}_${TMUX_WINDOW}_${TMUX_PANE}.json"
+                if [ -f "$broadcast_file" ]; then
+                    # Add agent_name to the broadcast file
+                    temp_file="${broadcast_file}.tmp"
+                    jq --arg agent "$AGENT_NAME" '. + {agent_name: $agent}' "$broadcast_file" > "$temp_file" && mv "$temp_file" "$broadcast_file"
+                    echo "[$(date)] Updated broadcast file with agent name: $AGENT_NAME" >> /tmp/mcp-agent-hook.log
+                fi
             else
-                echo "[$(date)] Agent registered: $AGENT_NAME ($AGENT_ID) - no tmux coordinates found" >> /tmp/mcp-agent-hook.log
+                echo "[$(date)] Agent registered: $AGENT_NAME ($AGENT_ID) - no broadcast file found" >> /tmp/mcp-agent-hook.log
+                
+                # Fallback: Try to set agent name in current tmux pane if we're in tmux
+                if [ -n "$TMUX" ]; then
+                    echo "[$(date)] Attempting fallback: setting name in current tmux pane" >> /tmp/mcp-agent-hook.log
+                    CURRENT_SESSION=$(tmux display-message -p '#S' 2>/dev/null)
+                    CURRENT_WINDOW=$(tmux display-message -p '#I' 2>/dev/null)
+                    CURRENT_PANE=$(tmux display-message -p '#P' 2>/dev/null)
+                    
+                    if [ -n "$CURRENT_SESSION" ] && [ -n "$CURRENT_WINDOW" ] && [ -n "$CURRENT_PANE" ]; then
+                        FALLBACK_PANE="${CURRENT_SESSION}:${CURRENT_WINDOW}.${CURRENT_PANE}"
+                        tmux set-option -p @agent_name "$AGENT_NAME" 2>>/tmp/mcp-agent-hook.log
+                        echo "[$(date)] Fallback: Set agent name in current pane $FALLBACK_PANE" >> /tmp/mcp-agent-hook.log
+                        
+                        # Update tracking file with discovered coordinates
+                        SAFE_AGENT_ID=$(echo "$AGENT_ID" | tr '/' '-')
+                        AGENT_TRACKING_FILE="/tmp/claude_agent_${SAFE_AGENT_ID}.json"
+                        cat > "$AGENT_TRACKING_FILE" <<EOF
+{
+  "agent_id": "$AGENT_ID",
+  "agent_name": "$AGENT_NAME",
+  "tmux_session": "$CURRENT_SESSION",
+  "tmux_window": "$CURRENT_WINDOW",
+  "tmux_pane": "$CURRENT_PANE",
+  "instance_id": "fallback",
+  "session_id": "$SESSION_ID",
+  "registered_at": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+}
+EOF
+                    fi
+                fi
             fi
         fi
         ;;

@@ -19,7 +19,7 @@ set_agent_name() {
     if [ -n "$agent_name" ]; then
         # Set a per-pane user option
         if [ -n "$target_pane" ]; then
-            tmux set-option -pt "$target_pane" @agent_name "$agent_name"
+            tmux set-option -t "$target_pane" @agent_name "$agent_name"
             echo "Set agent name '$agent_name' for $target_pane"
         else
             tmux set-option -p @agent_name "$agent_name"
@@ -37,7 +37,7 @@ clear_agent_name() {
     local coords=$(get_tmux_coords)
     
     if [ -n "$target_pane" ]; then
-        tmux set-option -upt "$target_pane" @agent_name
+        tmux set-option -ut "$target_pane" @agent_name
         echo "Cleared agent name for $target_pane"
     else
         tmux set-option -up @agent_name
