@@ -167,6 +167,7 @@ declare -a BACKUP_SOURCES=(
 	"dev folder|/home/decoder/dev|$DEV_BACKUP|true|--exclude=.envrc"
 	"loft ops|/home/decoder/loft/ops|$DEV_BACKUP/loft|true|"
         "argos scripts|/home/decoder/.config/argos/|$HOME_BACKUP/argos/|false|"
+	"TLP CPU config|/etc/tlp.d/|$HOME_BACKUP/tlp/|true|"
 )
 
 # Function to perform backup from configuration
