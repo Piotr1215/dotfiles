@@ -54,6 +54,9 @@ for my $task ($doc->findnodes('/tasks/task')) {
 
     my $project_key = $task->findvalue('project') || ' ';
     my $project = $project_mappings{$project_key} || 'PRs and Reviews';
+    
+    # Skip admin project tasks
+    next if $project eq 'Various admin tasks';
     my $url_index = 1;
     my $description = $task->findvalue('description');
     my $anno_text = "";
@@ -93,7 +96,10 @@ for my $period ('today', 'yesterday') {
 my $any_tasks_printed = 0;
 
 # Print tasks by project merging today and yesterday
+# First print all projects except PRs and Reviews
 for my $project (sort keys %all_projects) {
+    next if $project eq 'PRs and Reviews';  # Skip PRs and Reviews for now
+    
     my @tasks;
     
     # Add today's tasks if any
@@ -117,6 +123,31 @@ for my $project (sort keys %all_projects) {
     }
 }
 
+# Now print PRs and Reviews at the bottom
+if (exists $all_projects{'PRs and Reviews'}) {
+    my @tasks;
+    
+    # Add today's tasks if any
+    if (exists $tasks_by_project_by_period{today}{'PRs and Reviews'}) {
+        push @tasks, @{$tasks_by_project_by_period{today}{'PRs and Reviews'}};
+    }
+    
+    # Add yesterday's tasks if any
+    if (exists $tasks_by_project_by_period{yesterday}{'PRs and Reviews'}) {
+        push @tasks, @{$tasks_by_project_by_period{yesterday}{'PRs and Reviews'}};
+    }
+    
+    # Print project and tasks if we have any
+    if (@tasks) {
+        print "PRs and Reviews\n";
+        for my $task (@tasks) {
+            print "- $task\n";
+        }
+        print "\n";
+        $any_tasks_printed = 1;
+    }
+}
+
 # Print a message if no tasks found
 if (!$any_tasks_printed) {
     print "No completed tasks today or yesterday.\n\n";
@@ -124,9 +155,21 @@ if (!$any_tasks_printed) {
 
 print "----Last Week----\n\n";
 if (%{$tasks_by_project_by_period{last_week}}) {
+    # First print all projects except PRs and Reviews
     for my $project (sort keys %{$tasks_by_project_by_period{last_week}}) {
+        next if $project eq 'PRs and Reviews';  # Skip PRs and Reviews for now
+        
         print "$project\n";
         for my $task (@{$tasks_by_project_by_period{last_week}{$project}}) {
+            print "- $task\n";
+        }
+        print "\n";
+    }
+    
+    # Now print PRs and Reviews at the bottom
+    if (exists $tasks_by_project_by_period{last_week}{'PRs and Reviews'}) {
+        print "PRs and Reviews\n";
+        for my $task (@{$tasks_by_project_by_period{last_week}{'PRs and Reviews'}}) {
             print "- $task\n";
         }
         print "\n";
