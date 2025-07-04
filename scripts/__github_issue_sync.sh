@@ -107,7 +107,7 @@ get_linear_issues() {
     if ! response=$(curl -s -w "\n%{http_code}" -X POST \
         -H "Content-Type: application/json" \
         -H "Authorization: ${LINEAR_API_KEY}" \
-        --data '{"query": "query { user(id: \"'"$LINEAR_USER_ID"'\") { id name assignedIssues(filter: { state: { name: { nin: [\"Released\", \"Canceled\",\"Done\",\"Ready for Release\"] } } }) { nodes { id title url state { name } project { name } } } } }"}' \
+        --data '{"query": "query { user(id: \"'"$LINEAR_USER_ID"'\") { id name assignedIssues(filter: { state: { name: { nin: [\"Released\", \"Canceled\",\"Done\",\"Ready for Release\"] } } }) { nodes { id title url state { name } project { name } dueDate } } } }"}' \
         https://api.linear.app/graphql 2>&1); then
         echo "Error: Linear API request failed" >&2
         rm -f "$temp_response"
@@ -150,7 +150,8 @@ get_linear_issues() {
             html_url: .url,
             issue_id: (.url | split("/") | .[-2]),
             project: .project.name,
-            status: .state.name
+            status: .state.name,
+            due_date: .dueDate
         }' 2>/dev/null); then
         echo "Error: Failed to parse Linear issues" >&2
         rm -f "$temp_response"
@@ -298,11 +299,11 @@ update_task_status() {
         log "DETECTED +backlog or +review tag. Skipping automatic status sync from Linear."
     else
         # Normal status sync logic when no special tags are present
-        if [[ "$issue_status" =~ [Bb]acklog ]]; then
-            log "Issue status is Backlog, removing +next tag and resetting priority"
+        if [[ "$issue_status" =~ [Bb]acklog || "$issue_status" == "Idea" ]]; then
+            log "Issue status is Backlog/Idea, removing +next tag and resetting priority"
             task rc.confirmation=no modify "$task_uuid" -next manual_priority:
-        elif [[ "$issue_status" == "Todo" || "$issue_status" == "In Progress" ]]; then
-            log "Issue status is Todo or In Progress, checking priority"
+        elif [[ "$issue_status" == "Todo" || "$issue_status" == "In Progress" || "$issue_status" == "Investigating" ]]; then
+            log "Issue status is Todo/In Progress/Investigating, checking priority"
             # Check if manual_priority is already set
             local current_priority
             current_priority=$(task _get "$task_uuid".manual_priority 2>/dev/null || echo "")
@@ -312,6 +313,9 @@ update_task_status() {
         elif [[ "$issue_status" == "In Review" ]]; then
             log "Issue status is In Review, adding +review tag"
             task rc.confirmation=no modify "$task_uuid" +review
+        elif [[ "$issue_status" == "Parked" ]]; then
+            log "Issue status is Parked, adding +backlog tag"
+            task rc.confirmation=no modify "$task_uuid" +backlog
         fi
         
         # Remove +triage tag if issue is no longer in Triage state
@@ -337,6 +341,7 @@ create_and_annotate_task() {
     local issue_number="$4"
     local project_name="$5"
     local issue_status="$6"
+    local issue_due_date="$7"
     
     log "Creating new task for issue: $issue_description"
     local task_uuid
@@ -354,6 +359,12 @@ create_and_annotate_task() {
         # Check task for special tags right after creation
         # This handles cases where tags might have been added via hooks
         update_task_status "$task_uuid" "$issue_status"
+        
+        # Set due date if present
+        if [[ -n "$issue_due_date" && "$issue_due_date" != "null" ]]; then
+            log "Setting due date to: $issue_due_date"
+            task rc.confirmation=no modify "$task_uuid" due:"$issue_due_date"
+        fi
     else
         log "Error: Failed to create task for: $issue_description" >&2
     fi
@@ -362,7 +373,7 @@ create_and_annotate_task() {
 # Synchronize a single issue with Taskwarrior
 sync_to_taskwarrior() {
     local issue_line="$1"
-    local issue_id issue_description issue_repo_name issue_url task_uuid issue_number project_name issue_status
+    local issue_id issue_description issue_repo_name issue_url task_uuid issue_number project_name issue_status issue_due_date
 
     issue_id=$(echo "$issue_line" | jq -r '.id')
     issue_description=$(echo "$issue_line" | jq -r '.description')
@@ -371,6 +382,7 @@ sync_to_taskwarrior() {
     issue_number=$(echo "$issue_line" | jq -r '.issue_id')
     project_name=$(echo "$issue_line" | jq -r '.project')
     issue_status=$(echo "$issue_line" | jq -r '.status')
+    issue_due_date=$(echo "$issue_line" | jq -r '.due_date // empty')
 
     log "Processing Issue ID: $issue_id, Description: $issue_description"
 
@@ -389,7 +401,7 @@ sync_to_taskwarrior() {
 
     if [[ -z "$task_uuid" || "$task_uuid" == "null" ]]; then
         log "No valid existing task found - creating new task"
-        create_and_annotate_task "$issue_description" "$issue_repo_name" "$issue_url" "$issue_number" "$project_name" "$issue_status"
+        create_and_annotate_task "$issue_description" "$issue_repo_name" "$issue_url" "$issue_number" "$project_name" "$issue_status" "$issue_due_date"
     else
         # Fix any issues with newlines in task_uuid
         task_uuid=$(echo "$task_uuid" | tr -d '\n')
@@ -397,6 +409,20 @@ sync_to_taskwarrior() {
         
         # Update task status based on current Linear issue status
         update_task_status "$task_uuid" "$issue_status"
+        
+        # Update due date
+        if [[ -n "$issue_due_date" && "$issue_due_date" != "null" ]]; then
+            log "Setting due date to: $issue_due_date"
+            task rc.confirmation=no modify "$task_uuid" due:"$issue_due_date"
+        elif [[ "$issue_due_date" == "null" || -z "$issue_due_date" ]]; then
+            # Check if task currently has a due date
+            local current_due
+            current_due=$(task _get "$task_uuid".due 2>/dev/null || echo "")
+            if [[ -n "$current_due" ]]; then
+                log "Removing due date (was: $current_due)"
+                task rc.confirmation=no modify "$task_uuid" due:
+            fi
+        fi
     fi
 }
 

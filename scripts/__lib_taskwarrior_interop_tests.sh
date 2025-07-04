@@ -77,6 +77,50 @@ test_mark_task_completed() {
 	cleanup
 }
 
+# Test creating a task with due date
+test_task_with_due_date() {
+	local task_id description due_date
+	description="Task with due date"
+	due_date="2025-07-15"
+
+	task_id=$(create_task "$description" "+integration" "due:$due_date")
+
+	if task _get "$task_id".due | grep -q "202507"; then
+		report_success "create_task_with_due_date"
+	else
+		report_failure "create_task_with_due_date" "Due date was not set correctly."
+	fi
+
+	cleanup
+}
+
+# Test removing due date from a task
+test_remove_due_date() {
+	local task_id description due_date
+	description="Task to remove due date"
+	due_date="2025-07-15"
+
+	# Create task with due date
+	task_id=$(create_task "$description" "+integration" "due:$due_date")
+
+	# Verify due date is set
+	if ! task _get "$task_id".due | grep -q "202507"; then
+		report_failure "remove_due_date_setup" "Due date was not initially set."
+	fi
+
+	# Remove due date by setting due: without value
+	task rc.confirmation=no "$task_id" modify due:
+
+	# Verify due date is removed
+	if task _get "$task_id".due 2>&1 | grep -q "No matches"; then
+		report_success "remove_due_date"
+	else
+		report_failure "remove_due_date" "Due date was not removed."
+	fi
+
+	cleanup
+}
+
 cleanup
 sleep 2
 test_create_task
@@ -84,6 +128,10 @@ sleep 2
 test_annotate_task
 sleep 2
 test_mark_task_completed
+sleep 2
+test_task_with_due_date
+sleep 2
+test_remove_due_date
 
 # If all tests pass, exit with code 0
 exit 0

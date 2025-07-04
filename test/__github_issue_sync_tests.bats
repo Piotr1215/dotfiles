@@ -325,3 +325,265 @@ EOF
     [[ "$output" =~ "DETECTED +backlog" ]]
     [[ "$output" =~ "Skipping automatic status sync" ]]
 }
+
+# ====================================================
+# NEW STATUS HANDLING TESTS
+# ====================================================
+
+@test "update_task_status handles Parked status correctly" {
+    # Override task export for standard task
+    cat > "${TEST_DIR}/task" << 'EOF'
+#!/bin/bash
+case "$1" in
+    "test-uuid")
+        case "$2" in
+            "export")
+                echo '[{"uuid":"test-uuid","tags":["linear"],"status":"pending"}]'
+                ;;
+        esac
+        ;;
+    *)
+        echo "MOCK: task $*" >> "${TEST_DIR}/task_commands.log"
+        ;;
+esac
+EOF
+    chmod +x "${TEST_DIR}/task"
+    
+    run update_task_status "test-uuid" "Parked"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Issue status is Parked" ]]
+    
+    # Check that +backlog tag was added
+    grep -q "+backlog" "${TEST_DIR}/task_commands.log"
+}
+
+@test "update_task_status handles Investigating status like In Progress" {
+    # Override task export
+    cat > "${TEST_DIR}/task" << 'EOF'
+#!/bin/bash
+case "$1" in
+    "test-uuid")
+        case "$2" in
+            "export")
+                echo '[{"uuid":"test-uuid","tags":["linear"],"status":"pending"}]'
+                ;;
+        esac
+        ;;
+    "_get")
+        if [[ "$2" == *".manual_priority" ]]; then
+            echo ""
+        fi
+        ;;
+    *)
+        echo "MOCK: task $*" >> "${TEST_DIR}/task_commands.log"
+        ;;
+esac
+EOF
+    chmod +x "${TEST_DIR}/task"
+    
+    run update_task_status "test-uuid" "Investigating"
+    [ "$status" -eq 0 ]
+    
+    # Check that manual_priority was set
+    grep -q "manual_priority:1" "${TEST_DIR}/task_commands.log"
+}
+
+@test "update_task_status handles Idea status like Backlog" {
+    # Override task export
+    cat > "${TEST_DIR}/task" << 'EOF'
+#!/bin/bash
+case "$1" in
+    "test-uuid")
+        case "$2" in
+            "export")
+                echo '[{"uuid":"test-uuid","tags":["linear","next"],"status":"pending"}]'
+                ;;
+        esac
+        ;;
+    *)
+        echo "MOCK: task $*" >> "${TEST_DIR}/task_commands.log"
+        ;;
+esac
+EOF
+    chmod +x "${TEST_DIR}/task"
+    
+    run update_task_status "test-uuid" "Idea"
+    [ "$status" -eq 0 ]
+    
+    # Check that -next tag was removed and priority reset
+    grep -q -- "-next" "${TEST_DIR}/task_commands.log"
+    grep -q "manual_priority:" "${TEST_DIR}/task_commands.log"
+}
+
+# ====================================================
+# DUE DATE HANDLING TESTS
+# ====================================================
+
+@test "sync_to_taskwarrior sets due date when present" {
+    test_issue='{
+        "id":"123",
+        "description":"Test Issue with Due Date",
+        "repository":"linear",
+        "html_url":"https://linear.app/test/issue/OPS-123",
+        "issue_id":"OPS-123",
+        "project":"test-project",
+        "status":"Todo",
+        "due_date":"2025-07-10"
+    }'
+    
+    # Override task command to track due date setting
+    cat > "${TEST_DIR}/task" << 'EOF'
+#!/bin/bash
+case "$1" in
+    "linear_issue_id:OPS-123")
+        case "$2" in
+            "status:pending")
+                case "$3" in
+                    "export")
+                        echo '[{"uuid":"test-uuid-123","description":"Test Issue with Due Date","status":"pending","tags":["linear"]}]'
+                        ;;
+                esac
+                ;;
+        esac
+        ;;
+    "export")
+        echo '[{"uuid":"test-uuid-123","description":"Test Issue with Due Date","status":"pending","tags":["linear"]}]'
+        ;;
+    "_get")
+        if [[ "$2" == *".manual_priority" ]]; then
+            echo ""
+        elif [[ "$2" == *".status" ]]; then
+            echo "pending"
+        fi
+        ;;
+    "test-uuid-123")
+        case "$2" in
+            "export")
+                echo '[{"uuid":"test-uuid-123","description":"Test Issue with Due Date","status":"pending","tags":["linear"]}]'
+                ;;
+        esac
+        ;;
+    "rc.confirmation=no")
+        echo "MOCK: task $*" >> "${TEST_DIR}/task_commands.log"
+        if [[ "$*" =~ "due:" ]]; then
+            echo "MOCK: due date set" >> "${TEST_DIR}/due_dates.log"
+        fi
+        ;;
+    *)
+        echo "test-uuid-123"
+        ;;
+esac
+EOF
+    chmod +x "${TEST_DIR}/task"
+    
+    run sync_to_taskwarrior "$test_issue"
+    [ "$status" -eq 0 ]
+    
+    # Check that due date was set
+    [ -f "${TEST_DIR}/due_dates.log" ]
+    grep -q "due date set" "${TEST_DIR}/due_dates.log"
+}
+
+@test "get_linear_issues includes dueDate in response" {
+    # Override curl to return mock response with dueDate
+    cat > "${TEST_DIR}/curl" << 'EOF'
+#!/bin/bash
+if [[ "$*" =~ "linear.app" ]]; then
+    cat << 'RESPONSE'
+{
+  "data": {
+    "user": {
+      "assignedIssues": {
+        "nodes": [
+          {
+            "id": "test-id",
+            "title": "Test with due date",
+            "url": "https://linear.app/test/issue/OPS-123",
+            "state": {"name": "Parked"},
+            "project": {"name": "Test Project"},
+            "dueDate": "2025-07-10"
+          }
+        ]
+      }
+    }
+  }
+}
+200
+RESPONSE
+else
+    /usr/bin/curl "$@"
+fi
+EOF
+    chmod +x "${TEST_DIR}/curl"
+    
+    run get_linear_issues
+    [ "$status" -eq 0 ]
+    
+    # Check that output includes due_date field
+    echo "$output" | jq -e '.due_date'
+    [ $? -eq 0 ]
+}
+
+@test "sync_to_taskwarrior removes due date when null in Linear" {
+    test_issue='{
+        "id":"123",
+        "description":"Test Issue with Removed Due Date",
+        "repository":"linear",
+        "html_url":"https://linear.app/test/issue/OPS-124",
+        "issue_id":"OPS-124",
+        "project":"test-project",
+        "status":"Todo",
+        "due_date":null
+    }'
+    
+    # Override task command to track due date removal
+    cat > "${TEST_DIR}/task" << 'EOF'
+#!/bin/bash
+case "$1" in
+    "linear_issue_id:OPS-124")
+        case "$2" in
+            "status:pending")
+                case "$3" in
+                    "export")
+                        echo '[{"uuid":"test-uuid-456","description":"Test Issue with Removed Due Date","status":"pending","tags":["linear"],"due":"20250710T220000Z"}]'
+                        ;;
+                esac
+                ;;
+        esac
+        ;;
+    "test-uuid-456")
+        case "$2" in
+            "export")
+                echo '[{"uuid":"test-uuid-456","description":"Test Issue with Removed Due Date","status":"pending","tags":["linear"],"due":"20250710T220000Z"}]'
+                ;;
+        esac
+        ;;
+    "_get")
+        if [[ "$2" == *".manual_priority" ]]; then
+            echo ""
+        elif [[ "$2" == *".status" ]]; then
+            echo "pending"
+        elif [[ "$2" == "test-uuid-456.due" ]]; then
+            echo "20250710T220000Z"
+        fi
+        ;;
+    "rc.confirmation=no")
+        echo "MOCK: task $*" >> "${TEST_DIR}/task_commands.log"
+        if [[ "$*" =~ "due:" && ! "$*" =~ "due:\"" ]]; then
+            echo "MOCK: due date removed" >> "${TEST_DIR}/due_dates.log"
+        fi
+        ;;
+    *)
+        echo "test-uuid-456"
+        ;;
+esac
+EOF
+    chmod +x "${TEST_DIR}/task"
+    
+    run sync_to_taskwarrior "$test_issue"
+    [ "$status" -eq 0 ]
+    
+    # Check that due date was removed
+    [ -f "${TEST_DIR}/due_dates.log" ]
+    grep -q "due date removed" "${TEST_DIR}/due_dates.log"
+}
