@@ -66,13 +66,13 @@ report.currentall.filter=status:pending
 report.current.description=List of current tasks in the work context
 report.current.columns=id,entry.age,manual_priority,priority,project,tags,description.desc,entry,due.relative,linear_issue_id,release,follow,depends,urgency,session,repo
 report.current.labels=ID,Age,MP,P,Proj,Tag,Desc,Created,Due,Lin,Rel,Follow,Depends,Urg,Session,Repo
-report.current.sort=manual_priority-,priority-,project+
+report.current.sort=due+/,manual_priority-,priority-,project+
 report.current.filter=status:pending -BLOCKED -pr -triage -backlog project.not:home*
 
 report.backlog.description=List of current backlog tasks in the work context
 report.backlog.columns=id,entry.age,manual_priority,priority,project,tags,description.desc,due.relative,release,follow,depends,linear_issue_id,scheduled.relative,due.relative
 report.backlog.labels=ID,Age,MP,P,Proj,Tag,Desc,Due,Rel,Follow,Depends,Linear,Sched,Due
-report.backlog.sort=entry-
+report.backlog.sort=due+/,manual_priority-,priority-,project+
 report.backlog.filter=status:pending -BLOCKED -pr -triage (project.not:home* and +backlog)
 
 report.current-home.description=List of current tasks in the home context

@@ -16,7 +16,7 @@ root: ~/dev/dotfiles/scripts
 pre_window: export NCURSES_NO_UTF8_ACS=1
 
 # Run on project start, always - async for better performance
-on_project_start: nohup __layouts.sh 9 >/dev/null 2>&1 &
+on_project_start: nohup __layouts.sh 8 >/dev/null 2>&1 &
 
 # Run on project start, the first time
 # on_project_first_start: command
