@@ -19,10 +19,12 @@ set_agent_name() {
     if [ -n "$agent_name" ]; then
         # Set a per-pane user option
         if [ -n "$target_pane" ]; then
-            tmux set-option -t "$target_pane" @agent_name "$agent_name"
+            tmux set-option -pt "$target_pane" @agent_name "$agent_name"
             echo "Set agent name '$agent_name' for $target_pane"
         else
-            tmux set-option -p @agent_name "$agent_name"
+            # For current pane, still need to specify it as target
+            CURRENT_PANE=$(tmux display-message -p '#S:#I.#P')
+            tmux set-option -pt "$CURRENT_PANE" @agent_name "$agent_name"
             echo "Set agent name '$agent_name' for $coords"
         fi
     else
