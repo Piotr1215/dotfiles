@@ -35,7 +35,9 @@ if [ -n "$MESSAGE" ]; then
     
     if [ -n "$TMUX_INFO" ]; then
         IFS=':' read -r TMUX_SESSION TMUX_WINDOW TMUX_PANE <<< "$TMUX_INFO"
-        NOTIFICATION_FILE="/tmp/claude-notification-${TMUX_SESSION}-${TMUX_WINDOW}-${TMUX_PANE}-${TIMESTAMP}"
+        # Sanitize session name for filename (replace / with -)
+        SAFE_SESSION_NAME=$(echo "$TMUX_SESSION" | tr '/' '-')
+        NOTIFICATION_FILE="/tmp/claude-notification-${SAFE_SESSION_NAME}-${TMUX_WINDOW}-${TMUX_PANE}-${TIMESTAMP}"
         
         # Get pane ID (like %0, %1, etc)
         PANE_ID=$(tmux list-panes -t "${TMUX_SESSION}:${TMUX_WINDOW}" -F '#{pane_index} #{pane_id}' | grep "^$TMUX_PANE " | awk '{print $2}' || echo "%$TMUX_PANE")
@@ -50,7 +52,7 @@ if [ -n "$MESSAGE" ]; then
         fi
         
         # Check if notification already exists to prevent duplicates
-        if ! ls /tmp/claude-notification-${TMUX_SESSION}-${TMUX_WINDOW}-${TMUX_PANE}-* 2>/dev/null | head -1 >/dev/null; then
+        if ! ls /tmp/claude-notification-${SAFE_SESSION_NAME}-${TMUX_WINDOW}-${TMUX_PANE}-* 2>/dev/null | head -1 >/dev/null; then
             # Create notification file content - EXACT format for Argos
             echo "${TMUX_SESSION}:${TMUX_WINDOW}:${PANE_ID}:${TITLE}" > "$NOTIFICATION_FILE"
         fi

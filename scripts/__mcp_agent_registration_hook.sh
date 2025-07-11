@@ -130,7 +130,8 @@ EOF
                 echo "[$(date)] Agent registered: $AGENT_NAME ($AGENT_ID) in $TARGET_PANE" >> /tmp/mcp-agent-hook.log
                 
                 # Update broadcast file with agent name for future reference
-                broadcast_file="/tmp/claude_broadcast_${TMUX_SESSION//\//-}_${TMUX_WINDOW}_${TMUX_PANE}.json"
+                SAFE_SESSION_NAME=$(echo "$TMUX_SESSION" | tr '/' '-')
+                broadcast_file="/tmp/claude_broadcast_${SAFE_SESSION_NAME}_${TMUX_WINDOW}_${TMUX_PANE}.json"
                 if [ -f "$broadcast_file" ]; then
                     # Add agent_name to the broadcast file
                     temp_file="${broadcast_file}.tmp"
