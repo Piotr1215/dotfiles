@@ -11,7 +11,9 @@ TMUX_WINDOW=$(tmux display-message -p '#I')
 TMUX_WINDOW_NAME=$(tmux display-message -p '#W')
 TMUX_PANE=$(tmux display-message -p '#P')
 TMUX_PANE_ID=$(tmux display-message -p '#{pane_id}')
-STATE_FILE="/tmp/claude_monitor_state_${TMUX_SESSION}_${TMUX_WINDOW}_${TMUX_PANE}"
+# Sanitize session name for filename (replace / with -)
+SAFE_SESSION_NAME=$(echo "$TMUX_SESSION" | tr '/' '-')
+STATE_FILE="/tmp/claude_monitor_state_${SAFE_SESSION_NAME}_${TMUX_WINDOW}_${TMUX_PANE}"
 
 setup_focus_hook() {
     # Enable focus events if not already enabled
@@ -20,7 +22,7 @@ setup_focus_hook() {
     # Set up pane-focus-in hook to auto-clear notifications when manually returning to this pane
     echo "Setting pane-focus-in hook for pane $TMUX_PANE_ID (session: $TMUX_SESSION, window: $TMUX_WINDOW, pane: $TMUX_PANE)" >> "$STATE_FILE"
     tmux set-hook -t "$TMUX_PANE_ID" pane-focus-in \
-        "run-shell 'rm -f /tmp/claude-notification-${TMUX_SESSION}-${TMUX_WINDOW}-${TMUX_PANE}-*'" 2>&1 | tee -a "$STATE_FILE"
+        "run-shell 'rm -f /tmp/claude-notification-${SAFE_SESSION_NAME}-${TMUX_WINDOW}-${TMUX_PANE}-*'" 2>&1 | tee -a "$STATE_FILE"
     echo "Hook set command completed with exit code: $?" >> "$STATE_FILE"
     
     echo "Focus hook set - notifications will be cleared when returning to this pane" >> "$STATE_FILE"

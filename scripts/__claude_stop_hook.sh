@@ -49,6 +49,8 @@ create_notification() {
     
     # Parse tmux coordinates
     IFS=':' read -r TMUX_SESSION TMUX_WINDOW TMUX_PANE <<< "$tmux_info"
+    # Sanitize session name for filename (replace / with -)
+    SAFE_SESSION_NAME=$(echo "$TMUX_SESSION" | tr '/' '-')
     
     # Check if user is currently in this tmux session/window
     local current_session current_window
@@ -75,7 +77,7 @@ create_notification() {
     if [ "$is_inactive" = true ]; then
         local timestamp
         timestamp=$(date +%s)
-        local notification_file="/tmp/claude-notification-${TMUX_SESSION}-${TMUX_WINDOW}-${TMUX_PANE}-${timestamp}"
+        local notification_file="/tmp/claude-notification-${SAFE_SESSION_NAME}-${TMUX_WINDOW}-${TMUX_PANE}-${timestamp}"
         
         # Get pane ID (like %0, %1, etc)
         local pane_id
@@ -84,7 +86,7 @@ create_notification() {
         local title="Claude is ready - cycle through sessions"
         
         # Check if notification already exists to prevent duplicates
-        if ! ls "/tmp/claude-notification-${TMUX_SESSION}-${TMUX_WINDOW}-${TMUX_PANE}-"* 2>/dev/null | head -1 >/dev/null; then
+        if ! ls "/tmp/claude-notification-${SAFE_SESSION_NAME}-${TMUX_WINDOW}-${TMUX_PANE}-"* 2>/dev/null | head -1 >/dev/null; then
             # Create notification file content - EXACT format for Argos
             echo "${TMUX_SESSION}:${TMUX_WINDOW}:${pane_id}:${title}" > "$notification_file"
             echo "[$(date)] Created notification: $notification_file" >> "$LOG_FILE"
