@@ -1,4 +1,5 @@
 # /home/decoder/.config/tmuxinator/standup.yml
+# PROJECT: standup
 
 name: standup
 root: ~/dev/dotfiles/scripts
