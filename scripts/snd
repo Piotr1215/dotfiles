@@ -60,12 +60,30 @@ def main():
     
     print(f"Sending to {len(claude_panes)} Claude panes...")
     
-    # Send to each pane
+    # Send to each pane with a small delay between sends
+    import time
     for pane_id in claude_panes:
-        subprocess.run(
-            ['tmux', 'send-keys', '-t', pane_id, text, 'Enter']
+        # Send text first
+        result = subprocess.run(
+            ['tmux', 'send-keys', '-t', pane_id, text],
+            capture_output=True,
+            text=True
         )
-        print(f"✓ {pane_id}")
+        # Then send Enter separately
+        if result.returncode == 0:
+            subprocess.run(
+                ['tmux', 'send-keys', '-t', pane_id, 'C-m'],
+                capture_output=True,
+                text=True
+            )
+        
+        if result.returncode == 0:
+            print(f"✓ {pane_id}")
+        else:
+            print(f"✗ {pane_id}: {result.stderr}")
+        
+        # Small delay between panes
+        time.sleep(0.1)
 
 if __name__ == "__main__":
     main()
