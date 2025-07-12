@@ -27,7 +27,7 @@ function b() {
   # Check if message is provided
   if [ $# -eq 0 ]; then
     echo "Usage: b [-f persona] \"message\""
-    echo "Example: b -f rosie \"Hello from Rosie!\""
+    echo "Example: b -f rosie \"Hello from Human!\""
     return 1
   fi
   
@@ -36,15 +36,15 @@ function b() {
   
   # Send the message with optional persona
   if [ -n "$persona" ]; then
-    echo "$message" | __mcp_broadcast.sh -f "$persona"
+    echo "$message" | __mcp_broadcast.sh -f "$persona" && snd
   else
-    echo "$message" | __mcp_broadcast.sh
+    echo "$message" | __mcp_broadcast.sh && snd
   fi
 }
 
 # Send keys to registered Claude tmux sessions
 function snd() {
-    /home/decoder/dev/dotfiles/scripts/__send_keys_to_claude.sh "$@"
+    /home/decoder/dev/dotfiles/scripts/snd "$@"
 }
 
 # Need to alias this because regular ddg doesn't open firefox any more

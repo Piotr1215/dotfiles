@@ -1,4 +1,5 @@
 #!/usr/bin/perl
+# PROJECT: standup
 use strict;
 use warnings;
 use XML::LibXML;
@@ -78,6 +79,17 @@ for my $task ($doc->findnodes('/tasks/task')) {
   my $anno_text = "";
   my $checkbox = ($status eq 'pending') ? "[ ]" : "[x]";
   
+  # Get priority and map to emoji
+  my $priority = $task->findvalue('priority') || '';
+  my $priority_emoji = '';
+  if ($priority eq 'H') {
+    $priority_emoji = '🇭 ';
+  } elsif ($priority eq 'M') {
+    $priority_emoji = '🇲 ';
+  } elsif ($priority eq 'L') {
+    $priority_emoji = '🇱 ';
+  }
+  
   for my $anno ($task->findnodes('annotations/annotation')) {
     if ($anno->findvalue('description') =~ /(https:\/\/\S+)/) {
       $anno_text .= " [[${url_index}]]($1)";
@@ -85,7 +97,7 @@ for my $task ($doc->findnodes('/tasks/task')) {
     }
   }
   
-  push @{$tasks_by_project{$project}}, "$checkbox $description$anno_text";
+  push @{$tasks_by_project{$project}}, "$priority_emoji$checkbox $description$anno_text";
 }
 
 print "----------------\n" if $last_week;

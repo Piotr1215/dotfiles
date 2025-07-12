@@ -12,3 +12,5 @@ gpt-pilot
 ai
 shortcuts
 brotab
+git-log
+standup
