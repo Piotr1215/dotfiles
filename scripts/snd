@@ -1,0 +1,71 @@
+#!/usr/bin/env python3
+
+import sys
+import os
+import subprocess
+
+def find_claude_panes():
+    """Find all panes running __claude_with_monitor.sh"""
+    claude_panes = []
+    debug = os.environ.get('DEBUG', '0') == '1'
+    
+    if debug:
+        print("=== DETECTING __claude_with_monitor.sh PANES ===")
+    
+    # Get all panes with their PIDs
+    result = subprocess.run(
+        ['tmux', 'list-panes', '-a', '-F', '#{session_name}:#{window_index}.#{pane_index} #{pane_pid}'],
+        capture_output=True,
+        text=True
+    )
+    
+    for line in result.stdout.strip().splitlines():
+        if ' ' not in line:
+            continue
+            
+        pane_id, pane_pid = line.split(' ', 1)
+        
+        # Check child processes of this pane for __claude_with_monitor.sh
+        ps_result = subprocess.run(
+            ['ps', '--no-headers', '-o', 'args', '--ppid', pane_pid],
+            capture_output=True,
+            text=True
+        )
+        
+        if ps_result.returncode == 0 and '__claude_with_monitor.sh' in ps_result.stdout:
+            claude_panes.append(pane_id)
+            if debug:
+                print(f"✓ {pane_id} - Running __claude_with_monitor.sh")
+        elif debug:
+            print(f"  {pane_id} - Not running __claude_with_monitor.sh")
+    
+    if debug:
+        print(f"\nFound {len(claude_panes)} panes")
+    
+    return claude_panes
+
+def main():
+    # Get text
+    if len(sys.argv) > 1:
+        text = ' '.join(sys.argv[1:])
+    else:
+        text = "wake up and continue"
+    
+    # Find Claude panes
+    claude_panes = find_claude_panes()
+    
+    if not claude_panes:
+        print("No panes running __claude_with_monitor.sh found!", file=sys.stderr)
+        sys.exit(1)
+    
+    print(f"Sending to {len(claude_panes)} Claude panes...")
+    
+    # Send to each pane
+    for pane_id in claude_panes:
+        subprocess.run(
+            ['tmux', 'send-keys', '-t', pane_id, text, 'Enter']
+        )
+        print(f"✓ {pane_id}")
+
+if __name__ == "__main__":
+    main()
