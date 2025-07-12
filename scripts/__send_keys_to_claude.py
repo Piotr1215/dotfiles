@@ -77,8 +77,8 @@ def find_claude_sessions():
             # Skip current session/window/pane to avoid sending to ourselves
             if current_context and (
                 session_info['session'] == current_context['session'] and
-                session_info['window'] == current_context['window'] and
-                session_info['pane'] == current_context['pane']
+                str(session_info['window']) == str(current_context['window']) and
+                str(session_info['pane']) == str(current_context['pane'])
             ):
                 print(f"Skipping current session: {session_info['session']}:{session_info['window']}.{session_info['pane']}")
                 continue
@@ -109,7 +109,7 @@ def send_keys_to_session(session_name, window_id, pane_id, keys_to_send):
         # Find the window by index
         window = None
         for w in session.windows:
-            if w.window_index == window_id:
+            if w.window_index == str(window_id):
                 window = w
                 break
         
@@ -120,7 +120,7 @@ def send_keys_to_session(session_name, window_id, pane_id, keys_to_send):
         # Find the pane by index
         pane = None
         for p in window.panes:
-            if p.pane_index == pane_id:
+            if p.pane_index == str(pane_id):
                 pane = p
                 break
         
@@ -129,7 +129,8 @@ def send_keys_to_session(session_name, window_id, pane_id, keys_to_send):
             return False
         
         # Send the keys
-        pane.send_keys(keys_to_send)
+        # Don't send Enter key - let the user decide if they want to execute
+        pane.send_keys(keys_to_send, enter=False)
         print(f"✓ Sent to {session_name}:{window_id}.{pane_id}")
         return True
         
@@ -144,6 +145,7 @@ def main():
     parser.add_argument("-l", "--list", action="store_true", help="List all registered sessions")
     parser.add_argument("-s", "--session", help="Target specific session by name")
     parser.add_argument("-a", "--all", action="store_true", help="Send to all sessions")
+    parser.add_argument("-x", "--exclude", help="Exclude session:window.pane (e.g., main:1.3)")
     
     args = parser.parse_args()
     
