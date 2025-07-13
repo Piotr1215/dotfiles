@@ -1,89 +1,32 @@
 #!/usr/bin/env python3
 
 import sys
-import os
 import subprocess
 
-def find_claude_panes():
-    """Find all panes running __claude_with_monitor.sh"""
-    claude_panes = []
-    debug = os.environ.get('DEBUG', '0') == '1'
-    
-    if debug:
-        print("=== DETECTING __claude_with_monitor.sh PANES ===")
-    
-    # Get all panes with their PIDs
-    result = subprocess.run(
-        ['tmux', 'list-panes', '-a', '-F', '#{session_name}:#{window_index}.#{pane_index} #{pane_pid}'],
-        capture_output=True,
-        text=True
-    )
-    
-    for line in result.stdout.strip().splitlines():
-        if ' ' not in line:
-            continue
-            
-        pane_id, pane_pid = line.split(' ', 1)
-        
-        # Check child processes of this pane for __claude_with_monitor.sh
-        ps_result = subprocess.run(
-            ['ps', '--no-headers', '-o', 'args', '--ppid', pane_pid],
-            capture_output=True,
-            text=True
-        )
-        
-        if ps_result.returncode == 0 and '__claude_with_monitor.sh' in ps_result.stdout:
+# Get text to send
+text = ' '.join(sys.argv[1:]) if len(sys.argv) > 1 else "wake up and collaborate"
+
+# Find panes running __claude_with_monitor.sh
+claude_panes = []
+panes = subprocess.run(['tmux', 'list-panes', '-a', '-F', '#{session_name}:#{window_index}.#{pane_index} #{pane_pid}'], 
+                      capture_output=True, text=True).stdout.strip().splitlines()
+
+for line in panes:
+    if ' ' in line:
+        pane_id, pid = line.split(' ', 1)
+        ps = subprocess.run(['ps', '--no-headers', '-o', 'args', '--ppid', pid], 
+                           capture_output=True, text=True)
+        if '__claude_with_monitor.sh' in ps.stdout:
             claude_panes.append(pane_id)
-            if debug:
-                print(f"✓ {pane_id} - Running __claude_with_monitor.sh")
-        elif debug:
-            print(f"  {pane_id} - Not running __claude_with_monitor.sh")
-    
-    if debug:
-        print(f"\nFound {len(claude_panes)} panes")
-    
-    return claude_panes
 
-def main():
-    # Get text
-    if len(sys.argv) > 1:
-        text = ' '.join(sys.argv[1:])
-    else:
-        text = "wake up and continue"
-    
-    # Find Claude panes
-    claude_panes = find_claude_panes()
-    
-    if not claude_panes:
-        print("No panes running __claude_with_monitor.sh found!", file=sys.stderr)
-        sys.exit(1)
-    
-    print(f"Sending to {len(claude_panes)} Claude panes...")
-    
-    # Send to each pane with a small delay between sends
-    import time
-    for pane_id in claude_panes:
-        # Send text first
-        result = subprocess.run(
-            ['tmux', 'send-keys', '-t', pane_id, text],
-            capture_output=True,
-            text=True
-        )
-        # Then send Enter separately
-        if result.returncode == 0:
-            subprocess.run(
-                ['tmux', 'send-keys', '-t', pane_id, 'C-m'],
-                capture_output=True,
-                text=True
-            )
-        
-        if result.returncode == 0:
-            print(f"✓ {pane_id}")
-        else:
-            print(f"✗ {pane_id}: {result.stderr}")
-        
-        # Small delay between panes
-        time.sleep(0.1)
+if not claude_panes:
+    print("No Claude panes found!")
+    sys.exit(1)
 
-if __name__ == "__main__":
-    main()
+print(f"Sending to {len(claude_panes)} Claude panes...")
+
+# Send to each pane
+for pane in claude_panes:
+    subprocess.run(['tmux', 'send-keys', '-t', pane, text])
+    subprocess.run(['tmux', 'send-keys', '-t', pane, 'C-m'])
+    print(f"✓ {pane}")
