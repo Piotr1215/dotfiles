@@ -4,7 +4,7 @@ import sys
 import subprocess
 
 # Get text to send
-text = ' '.join(sys.argv[1:]) if len(sys.argv) > 1 else "wake up and collaborate"
+text = ' '.join(sys.argv[1:]) if len(sys.argv) > 1 else "read my broadcast and keep collaborating"
 
 # Find panes running __claude_with_monitor.sh
 claude_panes = []
