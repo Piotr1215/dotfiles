@@ -102,8 +102,8 @@ Use this systemd service to automate this process
 ### Create a service
 
 ```bash
-touch /lib/systemd/system/checkfile.service
-vim /lib/systemd/system/checkfile.service
+touch ~/.config/systemd/user/checkfile.service
+vim ~/.config/systemd/user/checkfile.service
 
 [Unit]
 Description = Run inotify-hookable in background to always sync my dotfiles with github repo
@@ -111,11 +111,11 @@ Description = Run inotify-hookable in background to always sync my dotfiles with
 [Service]
 User=decoder
 Group=decoder
-ExecStart=/bin/bash /home/decoder/scripts/zshsync.sh
+ExecStart=/bin/bash /home/decoder/dev/dotfiles/scripts/__zshsync.sh
 RestartSec=10
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=default.target
 ```
 
 ### Install inotify-hookable
@@ -139,9 +139,9 @@ done
 
 ### Enable and start the service
 
-- `sudo systemctl daemon-reload`
-- `sudo systemctl enable checkfile`
-- `sudo systemctl start checkfile`
+- `systemctl --user daemon-reload`
+- `systemctl --user enable checkfile`
+- `systemctl --user start checkfile`
 
 ### Monitor the service
 
