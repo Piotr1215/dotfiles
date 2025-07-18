@@ -1,4 +1,9 @@
 #!/bin/bash
+set -eo pipefail
+
+# Check required commands
+command -v kubectl >/dev/null 2>&1 || { echo "Error: kubectl is required but not installed."; exit 1; }
+command -v fzf >/dev/null 2>&1 || { echo "Error: fzf is required but not installed."; exit 1; }
 
 # Step 1: Select namespace
 NAMESPACE=$(kubectl get namespaces --no-headers -o custom-columns=":metadata.name" | fzf --prompt='Select Namespace: ')
@@ -28,6 +33,8 @@ if [ -z "$CONTAINER" ]; then
 fi
 
 # Step 4: Construct and execute the kubectl debug command
-KUBECTL_COMMAND="kubectl -n $NAMESPACE debug -it $POD --image=ghcr.io/superbrothers/debug --target=$CONTAINER"
+# Allow custom debug image via environment variable
+DEBUG_IMAGE="${DEBUG_IMAGE:-ghcr.io/superbrothers/debug}"
+KUBECTL_COMMAND="kubectl -n $NAMESPACE debug -it $POD --image=$DEBUG_IMAGE --target=$CONTAINER"
 echo "Running command: $KUBECTL_COMMAND"
-eval $KUBECTL_COMMAND
+eval "$KUBECTL_COMMAND"
