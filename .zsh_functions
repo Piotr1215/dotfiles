@@ -765,6 +765,8 @@ sout () {
     echo " - hdmi: plays sound via main monitor or"
     echo " - head: plays sound via main headset"
     echo
+    DEFAULT_VOLUME=75
+    VOLUME_OFFSET=25
 
     local current_output=$(wpctl status | grep -A 3 'Sinks:' | grep '*' | grep -oP '\d+(?=\.)' | head -n 1)
     local hdmi_output=$(wpctl status | grep 'GP106 High Definition Audio Controller Digital Stereo' | grep -oP '\d+(?=\.)' | head -n 1)
@@ -799,13 +801,14 @@ sout () {
         else
             echo "Warning: Unable to find microphone ID"
         fi
-        wpctl set-volume @DEFAULT_AUDIO_SINK@ 50%
+        wpctl set-volume @DEFAULT_AUDIO_SINK@ "$DEFAULT_VOLUME"%
         echo "Sound output set to hdmi=monitor, mic muted (if found)"
-        echo "Volume 50%"
+        echo "Volume $DEFAULT_VOLUME%"
     else
-        wpctl set-volume @DEFAULT_AUDIO_SINK@ 75%
+        local headset_volume=$((DEFAULT_VOLUME - VOLUME_OFFSET))
+        wpctl set-volume @DEFAULT_AUDIO_SINK@ "$headset_volume"%
         echo "Sound output set to head=headset"
-        echo "Volume 75%"
+        echo "Volume $headset_volume% (adjusted by -$VOLUME_OFFSET from default)"
     fi
 }
 
