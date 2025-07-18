@@ -1,4 +1,23 @@
 #!/usr/bin/env python3
+#
+# snd - Send messages to all Claude tmux panes
+#
+# This script broadcasts text messages to all tmux panes that are running
+# the __claude_with_monitor.sh script. It's used for quick communication
+# with multiple Claude instances during collaborative sessions.
+#
+# Usage:
+#   snd                     # Sends default message
+#   snd "your message"      # Sends custom message to all Claude panes
+#
+# The script:
+# 1. Finds all tmux panes running __claude_with_monitor.sh
+# 2. Sends the provided text (or default) to each pane
+# 3. Automatically presses Enter in each pane to submit the message
+#
+# Exit codes:
+#   0 - Success
+#   1 - No Claude panes found
 
 import sys
 import subprocess
