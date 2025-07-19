@@ -3,7 +3,7 @@
 # Test suite for __github_issue_sync.sh
 # Tests API integration, temp file cleanup, and critical functions
 
-load '../test/test_helper'
+load 'helpers/test_helper'
 
 # Setup function runs before each test
 setup() {
@@ -49,8 +49,16 @@ esac
 EOF
     chmod +x "${TEST_DIR}/task"
     
-    # Source only the functions, not the main execution
-    source <(sed '/^main$/,$d' /home/decoder/dev/dotfiles/scripts/__github_issue_sync.sh)
+    # First source the library dependency
+    source scripts/__lib_taskwarrior_interop.sh
+    
+    # Then source only the functions from the main script, not the main execution
+    # We need to use a temp file to handle the sed operation properly
+    TEMP_SCRIPT="${TEST_DIR}/github_issue_sync_functions.sh"
+    sed '/^main$/,$d' scripts/__github_issue_sync.sh > "$TEMP_SCRIPT"
+    
+    # Now source it, but skip the library source line to avoid duplicate sourcing
+    source <(grep -v '^source.*__lib_taskwarrior_interop.sh' "$TEMP_SCRIPT")
 }
 
 # Teardown function runs after each test

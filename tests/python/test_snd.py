@@ -9,8 +9,8 @@ import unittest
 import subprocess
 from unittest.mock import patch, MagicMock, call
 
-# Add parent directory to path to import the snd script
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Add scripts directory to path to import the snd script
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'scripts'))
 
 class TestSndScript(unittest.TestCase):
     """Test snd script functionality."""

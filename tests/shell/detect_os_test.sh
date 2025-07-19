@@ -12,7 +12,7 @@ export PS4='+(${BASH_SOURCE}:${LINENO}): ${FUNCNAME[0]:+${FUNCNAME[0]}(): }'
 # Set new line and tab for word splitting
 IFS=$'\n\t'
 
-source ./__detect_os.sh
+source ../../scripts/__detect_os.sh
 
 # Mock uname function
 uname() {
