@@ -9,43 +9,65 @@
 # Usage:
 #   snd                     # Sends default message
 #   snd "your message"      # Sends custom message to all Claude panes
+#   snd --agents            # Sends to agent panes only
+#   snd --agents "message"  # Sends custom message to agent panes
 #
 # The script:
-# 1. Finds all tmux panes running __claude_with_monitor.sh
+# 1. Finds all tmux panes running __claude_with_monitor.sh OR agent panes
 # 2. Sends the provided text (or default) to each pane
 # 3. Automatically presses Enter in each pane to submit the message
 #
 # Exit codes:
 #   0 - Success
-#   1 - No Claude panes found
+#   1 - No Claude/agent panes found
 
 import sys
 import subprocess
+import argparse
+
+# Parse arguments
+parser = argparse.ArgumentParser(description='Send messages to Claude tmux panes')
+parser.add_argument('text', nargs='*', help='Message to send')
+parser.add_argument('--agents', action='store_true', help='Send only to agent panes')
+args = parser.parse_args()
 
 # Get text to send
-text = ' '.join(sys.argv[1:]) if len(sys.argv) > 1 else "read my broadcast and keep collaborating"
+text = ' '.join(args.text) if args.text else "read my broadcast and keep collaborating"
 
-# Find panes running __claude_with_monitor.sh
-claude_panes = []
-panes = subprocess.run(['tmux', 'list-panes', '-a', '-F', '#{session_name}:#{window_index}.#{pane_index} #{pane_pid}'], 
-                      capture_output=True, text=True).stdout.strip().splitlines()
+# Find target panes
+target_panes = []
 
-for line in panes:
-    if ' ' in line:
-        pane_id, pid = line.split(' ', 1)
-        ps = subprocess.run(['ps', '--no-headers', '-o', 'args', '--ppid', pid], 
-                           capture_output=True, text=True)
-        if '__claude_with_monitor.sh' in ps.stdout:
-            claude_panes.append(pane_id)
+if args.agents:
+    # Get panes with @agent_name set
+    cmd = ['tmux', 'list-panes', '-a', '-F', '#{session_name}:#{window_index}.#{pane_index} #{?#{@agent_name},#{@agent_name},}']
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    for line in result.stdout.strip().splitlines():
+        parts = line.split(' ', 1)
+        if len(parts) > 1 and parts[1]:  # Has agent name
+            target_panes.append(parts[0])
+else:
+    # Original behavior - find panes running __claude_with_monitor.sh
+    panes = subprocess.run(['tmux', 'list-panes', '-a', '-F', '#{session_name}:#{window_index}.#{pane_index} #{pane_pid}'], 
+                          capture_output=True, text=True).stdout.strip().splitlines()
+    
+    for line in panes:
+        if ' ' in line:
+            pane_id, pid = line.split(' ', 1)
+            ps = subprocess.run(['ps', '--no-headers', '-o', 'args', '--ppid', pid], 
+                               capture_output=True, text=True)
+            if '__claude_with_monitor.sh' in ps.stdout:
+                target_panes.append(pane_id)
 
-if not claude_panes:
-    print("No Claude panes found!")
+if not target_panes:
+    target_type = "agent" if args.agents else "Claude"
+    print(f"No {target_type} panes found!")
     sys.exit(1)
 
-print(f"Sending to {len(claude_panes)} Claude panes...")
+target_type = "agent" if args.agents else "Claude"
+print(f"Sending to {len(target_panes)} {target_type} panes...")
 
 # Send to each pane
-for pane in claude_panes:
+for pane in target_panes:
     subprocess.run(['tmux', 'send-keys', '-t', pane, text])
     subprocess.run(['tmux', 'send-keys', '-t', pane, 'C-m'])
     print(f"✓ {pane}")
