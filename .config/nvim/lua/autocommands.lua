@@ -157,6 +157,27 @@ vim.api.nvim_create_user_command("VT", function()
   vim.cmd "startinsert"
 end, {})
 
+vim.api.nvim_create_user_command("PlantUmlOpen", function()
+  local file_path = vim.fn.expand "%:p"
+  local file_dir = vim.fn.expand "%:p:h"
+  local file_name = vim.fn.expand "%:t:r"
+  local svg_path = file_dir .. "/rendered/" .. file_name .. ".svg"
+  
+  -- Check if SVG exists
+  if vim.fn.filereadable(svg_path) == 0 then
+    -- Generate it first
+    generate_plantuml()
+    vim.fn.system { "sleep", "1" } -- Wait for generation
+  end
+  
+  -- Open the SVG
+  if sysname == "Darwin" then
+    vim.fn.system { "open", svg_path }
+  else
+    vim.fn.system { "xdg-open", svg_path }
+  end
+end, { desc = "Open rendered PlantUML diagram" })
+
 -- Add this to your Neovim configuration (init.lua)
 vim.api.nvim_create_autocmd("VimEnter", {
   callback = function()
