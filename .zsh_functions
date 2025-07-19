@@ -126,6 +126,8 @@ function viddy() {
 
 
 function gco() {
+  # Switch git branches interactively with fzf
+  git rev-parse --git-dir >/dev/null 2>&1 || { echo "Error: Not in a git repository"; return 1; }
   git branch | fzf | xargs -I {} git checkout {} 
 }
 
@@ -160,6 +162,9 @@ function ghcurrentbranch_function() {
 }
 
 function nman() {
+    # View man pages in nvim with optional fzf selection
+    command -v nvim >/dev/null 2>&1 || { echo "Error: nvim is required but not installed"; return 1; }
+    
     if command -v fzf >/dev/null 2>&1; then
         # If fzf is available, use it for searching
         local page=$(command man -k . | fzf --prompt='Man> ' | awk '{print $1}')
@@ -168,6 +173,7 @@ function nman() {
         fi
     else
         # If fzf is not available, use the argument directly
+        [[ -z "$1" ]] && { echo "Usage: nman <manual_page>"; return 1; }
         nvim +"Man $1 | only"
     fi
 }
@@ -424,6 +430,8 @@ function play_song() {
 
     # Start mpv in the background without video and redirect its output
     echo "Starting mpv..."
+    # Check if mpv is installed
+    command -v mpv >/dev/null 2>&1 || { echo "Error: mpv is required but not installed"; return 1; }
     mpv --loop-file --ytdl --no-video "$song_url" >/dev/null 2>&1 &
 
     echo "mpv process ID: $!"
@@ -676,6 +684,9 @@ function dpa() {
 
 # Add all changes to git, commit with given message, and push
 function gac() {
+  # Add all, commit with message, and push
+  git rev-parse --git-dir >/dev/null 2>&1 || { echo "Error: Not in a git repository"; return 1; }
+  [[ -z "$1" ]] && { echo "Error: Commit message required"; return 1; }
   git add .
   git commit -m "$1"
   git push
@@ -683,6 +694,9 @@ function gac() {
 
 # Add all changes to git, commit with given message and signed-off-by line, and push
 function gacs() {
+  # Add all, commit with message and sign-off, and push
+  git rev-parse --git-dir >/dev/null 2>&1 || { echo "Error: Not in a git repository"; return 1; }
+  [[ -z "$1" ]] && { echo "Error: Commit message required"; return 1; }
   git add .
   git commit -m "$1" -s
   git push
