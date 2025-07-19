@@ -14,7 +14,7 @@
 #    modified by the sync process, regardless of Linear issue status
 
 # shellcheck disable=SC2155
-source /home/decoder/dev/dotfiles/scripts/__lib_taskwarrior_interop.sh
+source "$(dirname "${BASH_SOURCE[0]}")/__lib_taskwarrior_interop.sh"
 
 set -eo pipefail
 
