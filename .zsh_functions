@@ -36,9 +36,9 @@ function b() {
   
   # Send the message with optional persona
   if [ -n "$persona" ]; then
-    echo "$message" | __mcp_broadcast.sh -f "$persona" && snd
+    echo "$message" | __mcp_broadcast.sh -f "$persona" && snd --agents
   else
-    echo "$message" | __mcp_broadcast.sh && snd
+    echo "$message" | __mcp_broadcast.sh && snd --agents
   fi
 }
 
