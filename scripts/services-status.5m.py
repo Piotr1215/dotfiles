@@ -7,48 +7,66 @@ import json
 import urllib.request
 import urllib.error
 from datetime import datetime
+import os
+import base64
+import tempfile
+import hashlib
 
 # Service configurations with status page URLs
 SERVICES = {
     "AWS": {
         "api": "https://status.aws.amazon.com/data.json",
         "status_page": "https://status.aws.amazon.com/",
-        "name": "Amazon Web Services"
+        "name": "Amazon Web Services",
+        "favicon": "https://a0.awsstatic.com/libra-css/images/site/fav/favicon.ico"
     },
     "GCP": {
         "api": "https://status.cloud.google.com/incidents.json",
         "status_page": "https://status.cloud.google.com/",
-        "name": "Google Cloud Platform"
+        "name": "Google Cloud Platform",
+        "favicon": "https://www.gstatic.com/devrel-devsite/prod/v85e39fe21f53c758adf7ff72d4b9c9b569d547f8e0e2b807668e509ad2a4914e/cloud/images/favicons/onecloud/favicon.ico"
     },
     "Azure": {
         "api": "https://status.azure.com/en-us/status/feed/",
         "status_page": "https://status.azure.com/en-us/status",
-        "name": "Microsoft Azure"
+        "name": "Microsoft Azure",
+        "favicon": "https://azure.microsoft.com/favicon.ico"
     },
     "Netlify": {
         "api": "https://www.netlifystatus.com/api/v2/status.json",
         "status_page": "https://www.netlifystatus.com/",
-        "name": "Netlify"
+        "name": "Netlify",
+        "favicon": "https://www.netlify.com/favicon.ico"
     },
     "GitHub": {
         "api": "https://www.githubstatus.com/api/v2/status.json",
         "status_page": "https://www.githubstatus.com/",
-        "name": "GitHub"
+        "name": "GitHub",
+        "favicon": "https://github.githubassets.com/favicons/favicon.png"
     },
     "Linear": {
         "api": "https://linearstatus.com/api/v2/status.json",
         "status_page": "https://linearstatus.com/",
-        "name": "Linear"
+        "name": "Linear",
+        "favicon": "https://linear.app/favicon.ico"
     },
     "GoDaddy": {
         "api": "https://status.godaddy.com/api/v2/status.json",
         "status_page": "https://status.godaddy.com/",
-        "name": "GoDaddy"
+        "name": "GoDaddy",
+        "favicon": "https://www.godaddy.com/favicon.ico"
     },
     "Claude": {
         "api": "https://status.anthropic.com/api/v2/status.json",
         "status_page": "https://status.anthropic.com/",
-        "name": "Claude"
+        "name": "Claude",
+        "favicon": "https://claude.ai/favicon.ico"
+    },
+    "Quay": {
+        "api": "https://status.redhat.com/api/v2/status.json",
+        "status_page": "https://status.redhat.com/",
+        "name": "Quay.io",
+        "favicon": "https://quay.io/static/img/favicon.ico"
     }
 }
 
@@ -61,6 +79,61 @@ ICONS = {
     "critical": "🔴",
     "unknown": "⚪"
 }
+
+# Service emoji representations
+SERVICE_EMOJIS = {
+    "AWS": "☁️",      # Cloud for AWS
+    "GCP": "🔵",      # Blue circle for Google
+    "Azure": "🔷",    # Blue diamond for Azure
+    "Netlify": "🚀",  # Rocket for Netlify deployments
+    "GitHub": "🐙",   # Octopus (Octocat) for GitHub
+    "Linear": "📋",   # Clipboard for Linear issues
+    "GoDaddy": "🌐", # Globe for domain registrar
+    "Claude": "🤖",   # Robot for AI
+    "Quay": "🐳"      # Whale/Docker for container registry
+}
+
+# Cache directory for favicons
+CACHE_DIR = os.path.join(tempfile.gettempdir(), 'argos-favicons')
+os.makedirs(CACHE_DIR, exist_ok=True)
+
+def get_cache_path(url):
+    """Generate cache file path for a favicon URL"""
+    url_hash = hashlib.md5(url.encode()).hexdigest()
+    return os.path.join(CACHE_DIR, f"{url_hash}.b64")
+
+def fetch_favicon(url, timeout=3):
+    """Fetch favicon and return as base64 encoded data"""
+    cache_path = get_cache_path(url)
+    
+    # Check cache first (cache for 24 hours)
+    if os.path.exists(cache_path):
+        cache_age = datetime.now().timestamp() - os.path.getmtime(cache_path)
+        if cache_age < 86400:  # 24 hours
+            try:
+                with open(cache_path, 'r') as f:
+                    return f.read()
+            except:
+                pass
+    
+    # Fetch fresh favicon
+    try:
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, timeout=timeout) as response:
+            favicon_data = response.read()
+            # Convert to base64
+            b64_data = base64.b64encode(favicon_data).decode('utf-8')
+            
+            # Cache the result
+            try:
+                with open(cache_path, 'w') as f:
+                    f.write(b64_data)
+            except:
+                pass
+            
+            return b64_data
+    except:
+        return None
 
 def fetch_status(url, timeout=5):
     """Fetch status from API endpoint"""
@@ -75,6 +148,22 @@ def get_claude_status():
     """Check Claude status using statuspage.io API"""
     try:
         data = fetch_status(SERVICES["Claude"]["api"])
+        if data and 'status' in data:
+            indicator = data['status'].get('indicator', 'none')
+            if indicator == 'none':
+                return "operational"
+            elif indicator == 'minor':
+                return "degraded"
+            elif indicator in ['major', 'critical']:
+                return "major"
+    except:
+        pass
+    return "unknown"
+
+def get_quay_status():
+    """Check Quay.io status using statuspage.io API"""
+    try:
+        data = fetch_status(SERVICES["Quay"]["api"])
         if data and 'status' in data:
             indicator = data['status'].get('indicator', 'none')
             if indicator == 'none':
@@ -223,7 +312,8 @@ def get_all_statuses():
         "GitHub": get_github_status(),
         "Linear": get_linear_status(),
         "GoDaddy": get_godaddy_status(),
-        "Claude": get_claude_status()
+        "Claude": get_claude_status(),
+        "Quay": get_quay_status()
     }
 
 def get_overall_status(statuses):
@@ -245,8 +335,29 @@ def main():
     statuses = get_all_statuses()
     overall_status = get_overall_status(statuses)
     
-    # Menu bar icon
-    print(f"{ICONS[overall_status]} ☁️")
+    # Get non-operational services
+    non_operational_services = [service for service, status in statuses.items() 
+                               if status != "operational"]
+    non_operational_count = len(non_operational_services)
+    
+    # Menu bar display
+    if non_operational_count > 0:
+        # Create a compact display showing affected services
+        if non_operational_count <= 4:
+            # Show service emojis for up to 4 services
+            service_emojis = []
+            for service in non_operational_services:
+                # Get emoji for service
+                emoji = SERVICE_EMOJIS.get(service, "❓")
+                service_emojis.append(emoji)
+            
+            emojis_str = "".join(service_emojis)
+            print(f"{ICONS[overall_status]} {emojis_str}")
+        else:
+            # Fall back to number if too many
+            print(f"{ICONS[overall_status]}{non_operational_count} ☁️")
+    else:
+        print(f"{ICONS[overall_status]} ☁️")
     print("---")
     
     # Service list in dropdown
@@ -255,6 +366,7 @@ def main():
     
     for service, status in statuses.items():
         icon = ICONS.get(status, ICONS["unknown"])
+        service_emoji = SERVICE_EMOJIS.get(service, "❓")
         service_info = SERVICES[service]
         color = ""
         
@@ -267,7 +379,7 @@ def main():
         else:
             color = "color=#95a5a6"
         
-        print(f"{icon} {service} | href={service_info['status_page']} {color}")
+        print(f"{service_emoji} {icon} {service} | href={service_info['status_page']} {color}")
     
     # Refresh and timestamp
     print("---")
