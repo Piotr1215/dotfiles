@@ -444,6 +444,12 @@ vim.keymap.set({ "o", "x" }, "aI", "<cmd>lua require('various-textobjs').indenta
 vim.api.nvim_set_keymap("n", "<Space>a", "<Nop>", { noremap = true, silent = true })
 vim.api.nvim_set_keymap("v", "<Space>a", "<Nop>", { noremap = true, silent = true })
 
+-- Docusaurus key bindings
+vim.keymap.set("n", "<leader>ic", "<cmd>DocusaurusInsertComponent<cr>", { desc = "Insert Docusaurus Component" })
+vim.keymap.set("n", "<leader>ip", "<cmd>DocusaurusInsertPartial<cr>", { desc = "Insert Docusaurus Partial" })
+vim.keymap.set("n", "<leader>ib", "<cmd>DocusaurusInsertCodeBlock<cr>", { desc = "Insert Docusaurus CodeBlock" })
+vim.keymap.set("n", "<leader>iu", "<cmd>DocusaurusInsertURL<cr>", { desc = "Insert Docusaurus URL Reference" })
+
 -- Decide there to autofill mapping based on space location
 vim.cmd [[
      function! s:check_back_space() abort
