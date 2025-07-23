@@ -34,6 +34,8 @@ require("lint").linters_by_ft = {
   ["yaml.ghaction"] = { "actionlint" },
 }
 
+require("docusaurus").setup()
+
 require("gitsigns").setup {
   on_attach = function(bufnr)
     local gitsigns = require "gitsigns"

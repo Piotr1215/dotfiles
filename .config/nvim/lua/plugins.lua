@@ -310,6 +310,12 @@ return require("lazy").setup {
   -- My Plugins {{{
   { "Piotr1215/yanksearch.nvim" },
   "Piotr1215/typeit.nvim",
+  {
+    "Piotr1215/docusaurus.nvim",
+    dependencies = {
+      "nvim-telescope/telescope.nvim",
+    },
+  },
   -- }}}
   -- Look & Feel {{{
   "ellisonleao/gruvbox.nvim",
