@@ -7,6 +7,12 @@ INPUT=$(cat)
 # Extract file path
 FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // .tool_input.path // ""')
 
+# Check if file is in vcluster-docs directory
+if [[ ! "$FILE_PATH" =~ ^/home/decoder/loft/vcluster-docs/ ]]; then
+    # File is not in vcluster-docs, exit silently
+    exit 0
+fi
+
 # Get human-readable output (vale returns non-zero on errors/warnings)
 vale_output=$(vale --config=/home/decoder/loft/vcluster-docs/.vale.ini "$FILE_PATH" 2>&1 || true)
 
