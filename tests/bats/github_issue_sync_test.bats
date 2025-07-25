@@ -509,7 +509,8 @@ if [[ "$*" =~ "linear.app" ]]; then
             "url": "https://linear.app/test/issue/OPS-123",
             "state": {"name": "Parked"},
             "project": {"name": "Test Project"},
-            "dueDate": "2025-07-10"
+            "dueDate": "2025-07-10",
+            "priority": 3
           }
         ]
       }
@@ -594,4 +595,213 @@ EOF
     # Check that due date was removed
     [ -f "${TEST_DIR}/due_dates.log" ]
     grep -q "due date removed" "${TEST_DIR}/due_dates.log"
+}
+
+# ====================================================
+# PRIORITY HANDLING TESTS
+# ====================================================
+
+@test "sync_to_taskwarrior sets priority:H for Linear priority 1 (Urgent)" {
+    test_issue='{
+        "id":"123",
+        "description":"Urgent Priority Issue",
+        "repository":"linear",
+        "html_url":"https://linear.app/test/issue/OPS-125",
+        "issue_id":"OPS-125",
+        "project":"test-project",
+        "status":"Todo",
+        "due_date":null,
+        "priority":1
+    }'
+    
+    # Override task command to track priority setting
+    cat > "${TEST_DIR}/task" << 'EOF'
+#!/bin/bash
+case "$1" in
+    "linear_issue_id:OPS-125")
+        case "$2" in
+            "status:pending")
+                case "$3" in
+                    "export")
+                        echo '[]'
+                        ;;
+                esac
+                ;;
+        esac
+        ;;
+    "export")
+        echo '[]'
+        ;;
+    "_get")
+        echo ""
+        ;;
+    "rc.confirmation=no")
+        echo "MOCK: task $*" >> "${TEST_DIR}/task_commands.log"
+        if [[ "$*" =~ "priority:H" ]]; then
+            echo "MOCK: priority:H set" >> "${TEST_DIR}/priority.log"
+        fi
+        ;;
+    *)
+        echo "test-uuid-789"
+        ;;
+esac
+EOF
+    chmod +x "${TEST_DIR}/task"
+    
+    run sync_to_taskwarrior "$test_issue"
+    [ "$status" -eq 0 ]
+    
+    # Check that priority:H was set
+    [ -f "${TEST_DIR}/priority.log" ]
+    grep -q "priority:H set" "${TEST_DIR}/priority.log"
+}
+
+@test "sync_to_taskwarrior sets priority:H for Linear priority 2 (High)" {
+    test_issue='{
+        "id":"456",
+        "description":"High Priority Issue",
+        "repository":"linear",
+        "html_url":"https://linear.app/test/issue/DOC-789",
+        "issue_id":"DOC-789",
+        "project":"test-project",
+        "status":"In Progress",
+        "due_date":null,
+        "priority":2
+    }'
+    
+    # Override task command to track priority setting
+    cat > "${TEST_DIR}/task" << 'EOF'
+#!/bin/bash
+case "$1" in
+    "linear_issue_id:DOC-789")
+        case "$2" in
+            "status:pending")
+                case "$3" in
+                    "export")
+                        echo '[{"uuid":"test-uuid-999","description":"High Priority Issue","status":"pending","tags":["linear"]}]'
+                        ;;
+                esac
+                ;;
+        esac
+        ;;
+    "test-uuid-999")
+        case "$2" in
+            "export")
+                echo '[{"uuid":"test-uuid-999","description":"High Priority Issue","status":"pending","tags":["linear"]}]'
+                ;;
+        esac
+        ;;
+    "_get")
+        if [[ "$2" == *".priority" ]]; then
+            echo ""
+        elif [[ "$2" == *".manual_priority" ]]; then
+            echo ""
+        elif [[ "$2" == *".status" ]]; then
+            echo "pending"
+        fi
+        ;;
+    "rc.confirmation=no")
+        echo "MOCK: task $*" >> "${TEST_DIR}/task_commands.log"
+        if [[ "$*" =~ "priority:H" ]]; then
+            echo "MOCK: priority:H set" >> "${TEST_DIR}/priority.log"
+        fi
+        ;;
+    *)
+        echo "test-uuid-999"
+        ;;
+esac
+EOF
+    chmod +x "${TEST_DIR}/task"
+    
+    run sync_to_taskwarrior "$test_issue"
+    [ "$status" -eq 0 ]
+    
+    # Check that priority:H was set
+    [ -f "${TEST_DIR}/priority.log" ]
+    grep -q "priority:H set" "${TEST_DIR}/priority.log"
+}
+
+@test "update_task_status removes priority:H when Linear priority changes from High to Medium" {
+    # Override task export to return task with high priority
+    cat > "${TEST_DIR}/task" << 'EOF'
+#!/bin/bash
+case "$1" in
+    "test-uuid")
+        case "$2" in
+            "export")
+                echo '[{"uuid":"test-uuid","tags":["linear"],"status":"pending"}]'
+                ;;
+        esac
+        ;;
+    "_get")
+        if [[ "$2" == "test-uuid.priority" ]]; then
+            echo "H"
+        else
+            echo ""
+        fi
+        ;;
+    "rc.confirmation=no")
+        echo "MOCK: task $*" >> "${TEST_DIR}/task_commands.log"
+        if [[ "$*" =~ "priority:" && ! "$*" =~ "priority:H" ]]; then
+            echo "MOCK: priority removed" >> "${TEST_DIR}/priority.log"
+        fi
+        ;;
+    *)
+        echo "MOCK: task $*" >> "${TEST_DIR}/task_commands.log"
+        ;;
+esac
+EOF
+    chmod +x "${TEST_DIR}/task"
+    
+    run update_task_status "test-uuid" "Todo" "3"
+    [ "$status" -eq 0 ]
+    
+    # Check that priority was removed
+    [ -f "${TEST_DIR}/priority.log" ]
+    grep -q "priority removed" "${TEST_DIR}/priority.log"
+}
+
+@test "get_linear_issues includes priority in response" {
+    # Override curl to return mock response with priority
+    cat > "${TEST_DIR}/curl" << 'EOF'
+#!/bin/bash
+if [[ "$*" =~ "linear.app" ]]; then
+    cat << 'RESPONSE'
+{
+  "data": {
+    "user": {
+      "assignedIssues": {
+        "nodes": [
+          {
+            "id": "test-id",
+            "title": "Test with priority",
+            "url": "https://linear.app/test/issue/OPS-111",
+            "state": {"name": "Todo"},
+            "project": {"name": "Test Project"},
+            "dueDate": null,
+            "priority": 1
+          }
+        ]
+      }
+    }
+  }
+}
+200
+RESPONSE
+else
+    /usr/bin/curl "$@"
+fi
+EOF
+    chmod +x "${TEST_DIR}/curl"
+    
+    run get_linear_issues
+    [ "$status" -eq 0 ]
+    
+    # Check that output includes priority field
+    echo "$output" | jq -e '.priority'
+    [ $? -eq 0 ]
+    
+    # Check that priority value is 1
+    local priority=$(echo "$output" | jq -r '.priority')
+    [ "$priority" = "1" ]
 }
