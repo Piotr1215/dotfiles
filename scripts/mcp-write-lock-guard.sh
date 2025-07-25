@@ -27,7 +27,7 @@ case "$TOOL_NAME" in
 esac
 
 # Read lock state
-LOCK_FILE="/var/tmp/mcp-write-lock.json"
+LOCK_FILE="$HOME/.local/state/mcp-agentic-framework/write-lock.json"
 if [ ! -f "$LOCK_FILE" ]; then
     # No lock file means unlocked
     exit 0
