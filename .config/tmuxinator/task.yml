@@ -46,13 +46,14 @@ startup_pane: 3
 
 windows:
   - todo:
-      layout: aa75,294x72,0,0{82x72,0,0[82x42,0,0,163,82x29,0,43,169],211x72,83,0[211x42,83,0,170,211x29,83,43,181]}
+      layout: 94e3,294x72,0,0{82x72,0,0[82x42,0,0,8,82x29,0,43,12],211x72,83,0[211x42,83,0,13,211x14,83,43,14,211x14,83,58,92]}
       # Add stty to force terminal redraw on focus
       panes:
         - NCURSES_NO_UTF8_ACS=1 tui -r workdone
         - NCURSES_NO_UTF8_ACS=1 tui -r current-prs-age
         - tuiw
         - NCURSES_NO_UTF8_ACS=1 tui -r backlog
+        - NCURSES_NO_UTF8_ACS=1 tui -r review
   - reports:
       layout: tiled
       panes:

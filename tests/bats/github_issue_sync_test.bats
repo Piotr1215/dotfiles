@@ -1152,3 +1152,136 @@ EOF
     [ -f "${TEST_DIR}/mutex.log" ]
     grep -q "fresh tag removed due to mutual exclusion" "${TEST_DIR}/mutex.log"
 }
+
+@test "update_task_status removes review tag when Linear status changes from In Review to In Progress" {
+    # Override task export to return task with review tag
+    cat > "${TEST_DIR}/task" << 'EOF'
+#!/bin/bash
+call_count=0
+case "$1" in
+    "test-uuid")
+        case "$2" in
+            "export")
+                # First call returns task with review tag, subsequent calls without
+                if [ ! -f "${TEST_DIR}/export_called" ]; then
+                    touch "${TEST_DIR}/export_called"
+                    echo '[{"uuid":"test-uuid","tags":["linear","review"],"status":"pending"}]'
+                else
+                    echo '[{"uuid":"test-uuid","tags":["linear"],"status":"pending"}]'
+                fi
+                ;;
+        esac
+        ;;
+    "_get")
+        echo ""
+        ;;
+    "rc.confirmation=no")
+        echo "MOCK: task $*" >> "${TEST_DIR}/task_commands.log"
+        if [[ "$*" =~ "-review" ]]; then
+            echo "MOCK: review tag removed" >> "${TEST_DIR}/review_removed.log"
+        fi
+        if [[ "$*" =~ "-fresh" ]]; then
+            echo "MOCK: fresh tag removed" >> "${TEST_DIR}/fresh_removed.log"
+        fi
+        ;;
+    *)
+        echo "MOCK: task $*" >> "${TEST_DIR}/task_commands.log"
+        ;;
+esac
+EOF
+    chmod +x "${TEST_DIR}/task"
+    
+    run update_task_status "test-uuid" "In Progress"
+    [ "$status" -eq 0 ]
+    
+    # Check that review tag was removed
+    [ -f "${TEST_DIR}/review_removed.log" ]
+    grep -q "review tag removed" "${TEST_DIR}/review_removed.log"
+    
+    # Check that the appropriate commands were logged (manual priority should be set)
+    grep -q "manual_priority:1" "${TEST_DIR}/task_commands.log"
+}
+
+@test "update_task_status removes review tag when Linear status changes from In Review to Todo" {
+    # Override task export to return task with review tag
+    cat > "${TEST_DIR}/task" << 'EOF'
+#!/bin/bash
+case "$1" in
+    "test-uuid")
+        case "$2" in
+            "export")
+                # First call returns task with review tag, subsequent calls without
+                if [ ! -f "${TEST_DIR}/export_called" ]; then
+                    touch "${TEST_DIR}/export_called"
+                    echo '[{"uuid":"test-uuid","tags":["linear","review"],"status":"pending"}]'
+                else
+                    echo '[{"uuid":"test-uuid","tags":["linear"],"status":"pending"}]'
+                fi
+                ;;
+        esac
+        ;;
+    "_get")
+        echo ""
+        ;;
+    "rc.confirmation=no")
+        echo "MOCK: task $*" >> "${TEST_DIR}/task_commands.log"
+        if [[ "$*" =~ "-review" ]]; then
+            echo "MOCK: review tag removed" >> "${TEST_DIR}/review_removed.log"
+        fi
+        if [[ "$*" =~ "manual_priority:1" ]]; then
+            echo "MOCK: priority set for Todo" >> "${TEST_DIR}/todo_priority.log"
+        fi
+        ;;
+    *)
+        echo "MOCK: task $*" >> "${TEST_DIR}/task_commands.log"
+        ;;
+esac
+EOF
+    chmod +x "${TEST_DIR}/task"
+    
+    run update_task_status "test-uuid" "Todo"
+    [ "$status" -eq 0 ]
+    
+    # Check that review tag was removed
+    [ -f "${TEST_DIR}/review_removed.log" ]
+    grep -q "review tag removed" "${TEST_DIR}/review_removed.log"
+    
+    # Check that status update logic was re-run (manual priority should be set for Todo)
+    [ -f "${TEST_DIR}/todo_priority.log" ]
+    grep -q "priority set for Todo" "${TEST_DIR}/todo_priority.log"
+}
+
+@test "update_task_status keeps review tag when Linear status remains In Review" {
+    # Override task export to return task with review tag
+    cat > "${TEST_DIR}/task" << 'EOF'
+#!/bin/bash
+case "$1" in
+    "test-uuid")
+        case "$2" in
+            "export")
+                echo '[{"uuid":"test-uuid","tags":["linear","review"],"status":"pending"}]'
+                ;;
+        esac
+        ;;
+    "_get")
+        echo ""
+        ;;
+    "rc.confirmation=no")
+        echo "MOCK: task $*" >> "${TEST_DIR}/task_commands.log"
+        if [[ "$*" =~ "-review" ]]; then
+            echo "ERROR: review tag should not be removed" >> "${TEST_DIR}/review_error.log"
+        fi
+        ;;
+    *)
+        echo "MOCK: task $*" >> "${TEST_DIR}/task_commands.log"
+        ;;
+esac
+EOF
+    chmod +x "${TEST_DIR}/task"
+    
+    run update_task_status "test-uuid" "In Review"
+    [ "$status" -eq 0 ]
+    
+    # Check that review tag was NOT removed
+    [ ! -f "${TEST_DIR}/review_error.log" ]
+}

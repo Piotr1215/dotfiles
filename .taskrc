@@ -67,7 +67,7 @@ report.current.description=List of current tasks in the work context
 report.current.columns=id,entry.age,manual_priority,priority,project,tags,description.desc,entry,due.relative,linear_issue_id,release,follow,depends,urgency,session,repo
 report.current.labels=ID,Age,MP,P,Proj,Tag,Desc,Created,Due,Lin,Rel,Follow,Depends,Urg,Session,Repo
 report.current.sort=priority-,due+/,manual_priority-,project+
-report.current.filter=status:pending -BLOCKED -pr -triage -backlog -private project.not:home*
+report.current.filter=status:pending -BLOCKED -pr -triage -backlog -private -review project.not:home*
 
 report.backlog.description=List of current backlog tasks in the work context
 report.backlog.columns=id,entry.age,manual_priority,priority,project,tags,description.desc,due.relative,release,follow,depends,linear_issue_id,scheduled.relative,due.relative
@@ -99,6 +99,12 @@ report.current-triage.columns=id,entry.age,priority,project,tags,description.des
 report.current-triage.labels=ID,Age,P,Proj,Tag,Desc,Repo,Urg
 report.current-triage.sort=entry-
 report.current-triage.filter=status:pending +triage
+
+report.review.description=List of tasks in review
+report.review.columns=id,entry.age,manual_priority,priority,project,tags,description.desc,due.relative,linear_issue_id,session,repo
+report.review.labels=ID,Age,MP,P,Proj,Tag,Desc,Due,Lin,Session,Repo
+report.review.sort=entry-,priority-,project+
+report.review.filter=status:pending +review
 
 report.workdone-prs.description=List of current prs
 report.workdone-prs.columns=project,description.desc,end
