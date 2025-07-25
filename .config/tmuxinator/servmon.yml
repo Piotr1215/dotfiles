@@ -1,0 +1,23 @@
+# Service Monitoring Session - Event-triggered
+
+name: servmon
+root: ~/
+
+# Project hooks
+on_project_start: echo "Service monitoring session started at $(date)"
+
+# Specifies (by name or index) which window will be selected on project startup
+startup_window: monitor
+
+# Specifies (by index) which pane of the specified window will be selected on project startup
+startup_pane: 1
+
+# Controls whether the tmux session should be attached to automatically. Defaults to true.
+attach: false
+
+windows:
+  - monitor:
+      layout: even-vertical
+      panes:
+        - watch -n 5 'echo -e "\033[1;36mLast Update:\033[0m $(jq -r .last_updated ~/.local/state/argos-service-monitor/services_status_state.json)\n" && echo -e "\033[1;33mDegraded Services:\033[0m" && jq -r ".statuses | to_entries | map(select(.value != \"operational\")) | .[] | \"  \\(.key): \\(.value)\"" ~/.local/state/argos-service-monitor/services_status_state.json 2>/dev/null || echo "  None" && echo -e "\n\033[1;32mOperational:\033[0m" && jq -r ".statuses | to_entries | map(select(.value == \"operational\")) | .[].key" ~/.local/state/argos-service-monitor/services_status_state.json | xargs -I {} echo "  ✓ {}"'
+        - watch -n 10 'cat ~/.local/state/argos-service-monitor/services_status_state.json | jq . -C'
