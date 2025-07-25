@@ -629,6 +629,10 @@ case "$1" in
                 ;;
         esac
         ;;
+    "add")
+        # This is for create_task - mock the creation
+        echo "Created task test-uuid-789."
+        ;;
     "export")
         echo '[]'
         ;;
@@ -640,6 +644,10 @@ case "$1" in
         if [[ "$*" =~ "priority:H" ]]; then
             echo "MOCK: priority:H set" >> "${TEST_DIR}/priority.log"
         fi
+        ;;
+    "test-uuid-789")
+        # This is for annotate_task
+        echo "Annotating task"
         ;;
     *)
         echo "test-uuid-789"
@@ -804,4 +812,343 @@ EOF
     # Check that priority value is 1
     local priority=$(echo "$output" | jq -r '.priority')
     [ "$priority" = "1" ]
+}
+
+# ====================================================
+# FRESH TAG HANDLING TESTS
+# ====================================================
+
+@test "create_and_annotate_task adds fresh tag to new tasks" {
+    # Override task command to capture tags
+    cat > "${TEST_DIR}/task" << 'EOF'
+#!/bin/bash
+# Log all calls for debugging
+echo "MOCK: called with: $*" >> "${TEST_DIR}/task_debug.log"
+
+# The create_task function calls task add with tags and description
+if [[ "$1" == "add" ]]; then
+    # Check if +fresh is in the arguments
+    if [[ "$*" =~ \+fresh ]]; then
+        echo "MOCK: fresh tag added" >> "${TEST_DIR}/fresh_tag.log"
+    fi
+    # Mock the output that task add would produce
+    echo "Created task test-uuid-fresh."
+elif [[ "$1" == "rc.confirmation=no" ]]; then
+    echo "MOCK: task $*" >> "${TEST_DIR}/task_commands.log"
+elif [[ "$1" == "test-uuid-fresh" ]]; then
+    # This is for the annotate_task call
+    echo "Annotating task"
+else
+    echo "test-uuid-fresh"
+fi
+EOF
+    chmod +x "${TEST_DIR}/task"
+    
+    run create_and_annotate_task "Test fresh issue" "linear" "https://linear.app/test/issue/TEST-100" "TEST-100" "test-project" "Backlog" "" ""
+    [ "$status" -eq 0 ]
+    
+    # Check that fresh tag was added
+    [ -f "${TEST_DIR}/fresh_tag.log" ]
+    grep -q "fresh tag added" "${TEST_DIR}/fresh_tag.log"
+}
+
+@test "update_task_status keeps fresh tag when status is Todo" {
+    # Override task export to return task with fresh tag
+    cat > "${TEST_DIR}/task" << 'EOF'
+#!/bin/bash
+case "$1" in
+    "test-uuid")
+        case "$2" in
+            "export")
+                echo '[{"uuid":"test-uuid","tags":["linear","fresh"],"status":"pending"}]'
+                ;;
+        esac
+        ;;
+    "_get")
+        echo ""
+        ;;
+    "rc.confirmation=no")
+        echo "MOCK: task $*" >> "${TEST_DIR}/task_commands.log"
+        if [[ "$*" =~ "-fresh" ]]; then
+            echo "MOCK: fresh tag removed" >> "${TEST_DIR}/fresh_tag.log"
+        fi
+        ;;
+    *)
+        echo "MOCK: task $*" >> "${TEST_DIR}/task_commands.log"
+        ;;
+esac
+EOF
+    chmod +x "${TEST_DIR}/task"
+    
+    run update_task_status "test-uuid" "Todo"
+    [ "$status" -eq 0 ]
+    
+    # Check that fresh tag was NOT removed for Todo status
+    [ ! -f "${TEST_DIR}/fresh_tag.log" ] || ! grep -q "fresh tag removed" "${TEST_DIR}/fresh_tag.log"
+}
+
+@test "update_task_status removes fresh tag when status is In Progress" {
+    # Override task export to return task with fresh tag
+    cat > "${TEST_DIR}/task" << 'EOF'
+#!/bin/bash
+case "$1" in
+    "test-uuid")
+        case "$2" in
+            "export")
+                echo '[{"uuid":"test-uuid","tags":["linear","fresh"],"status":"pending"}]'
+                ;;
+        esac
+        ;;
+    "_get")
+        echo ""
+        ;;
+    "rc.confirmation=no")
+        echo "MOCK: task $*" >> "${TEST_DIR}/task_commands.log"
+        if [[ "$*" =~ "-fresh" ]]; then
+            echo "MOCK: fresh tag removed" >> "${TEST_DIR}/fresh_tag.log"
+        fi
+        ;;
+    *)
+        echo "MOCK: task $*" >> "${TEST_DIR}/task_commands.log"
+        ;;
+esac
+EOF
+    chmod +x "${TEST_DIR}/task"
+    
+    run update_task_status "test-uuid" "In Progress"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Work has started" ]]
+    
+    # Check that fresh tag was removed
+    [ -f "${TEST_DIR}/fresh_tag.log" ]
+    grep -q "fresh tag removed" "${TEST_DIR}/fresh_tag.log"
+}
+
+@test "update_task_status removes fresh tag when status is In Review" {
+    # Override task export to return task with fresh tag
+    cat > "${TEST_DIR}/task" << 'EOF'
+#!/bin/bash
+case "$1" in
+    "test-uuid")
+        case "$2" in
+            "export")
+                echo '[{"uuid":"test-uuid","tags":["linear","fresh"],"status":"pending"}]'
+                ;;
+        esac
+        ;;
+    "rc.confirmation=no")
+        echo "MOCK: task $*" >> "${TEST_DIR}/task_commands.log"
+        if [[ "$*" =~ "-fresh" ]]; then
+            echo "MOCK: fresh tag removed" >> "${TEST_DIR}/fresh_tag.log"
+        fi
+        ;;
+    *)
+        echo "MOCK: task $*" >> "${TEST_DIR}/task_commands.log"
+        ;;
+esac
+EOF
+    chmod +x "${TEST_DIR}/task"
+    
+    run update_task_status "test-uuid" "In Review"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Issue is in review" ]]
+    
+    # Check that fresh tag was removed
+    [ -f "${TEST_DIR}/fresh_tag.log" ]
+    grep -q "fresh tag removed" "${TEST_DIR}/fresh_tag.log"
+}
+
+@test "update_task_status keeps fresh tag when status is Backlog" {
+    # Override task export to return task with fresh tag
+    cat > "${TEST_DIR}/task" << 'EOF'
+#!/bin/bash
+case "$1" in
+    "test-uuid")
+        case "$2" in
+            "export")
+                echo '[{"uuid":"test-uuid","tags":["linear","fresh"],"status":"pending"}]'
+                ;;
+        esac
+        ;;
+    "rc.confirmation=no")
+        echo "MOCK: task $*" >> "${TEST_DIR}/task_commands.log"
+        if [[ "$*" =~ "-fresh" ]]; then
+            echo "MOCK: fresh tag removed" >> "${TEST_DIR}/fresh_tag.log"
+        fi
+        ;;
+    *)
+        echo "MOCK: task $*" >> "${TEST_DIR}/task_commands.log"
+        ;;
+esac
+EOF
+    chmod +x "${TEST_DIR}/task"
+    
+    run update_task_status "test-uuid" "Backlog"
+    [ "$status" -eq 0 ]
+    
+    # Check that fresh tag was NOT removed
+    [ ! -f "${TEST_DIR}/fresh_tag.log" ] || ! grep -q "fresh tag removed" "${TEST_DIR}/fresh_tag.log"
+}
+
+@test "update_task_status handles missing fresh tag gracefully" {
+    # Override task export to return task without fresh tag
+    cat > "${TEST_DIR}/task" << 'EOF'
+#!/bin/bash
+case "$1" in
+    "test-uuid")
+        case "$2" in
+            "export")
+                echo '[{"uuid":"test-uuid","tags":["linear"],"status":"pending"}]'
+                ;;
+        esac
+        ;;
+    "_get")
+        echo ""
+        ;;
+    "rc.confirmation=no")
+        echo "MOCK: task $*" >> "${TEST_DIR}/task_commands.log"
+        ;;
+    *)
+        echo "MOCK: task $*" >> "${TEST_DIR}/task_commands.log"
+        ;;
+esac
+EOF
+    chmod +x "${TEST_DIR}/task"
+    
+    run update_task_status "test-uuid" "In Progress"
+    [ "$status" -eq 0 ]
+    
+    # Should not try to remove fresh tag when it doesn't exist
+    ! [[ "$output" =~ "removing +fresh tag" ]]
+}
+
+@test "create_and_annotate_task adds fresh tag for Todo tasks" {
+    # Override task command to capture tags
+    cat > "${TEST_DIR}/task" << 'EOF'
+#!/bin/bash
+# Log all calls for debugging
+echo "MOCK: called with: $*" >> "${TEST_DIR}/task_debug.log"
+
+# The create_task function calls task add with tags and description
+if [[ "$1" == "add" ]]; then
+    # Check if +fresh is in the arguments for Todo tasks
+    if [[ "$*" =~ \+fresh ]]; then
+        echo "CORRECT: fresh tag added for Todo" >> "${TEST_DIR}/fresh_tag.log"
+    else
+        echo "ERROR: fresh tag should be added for Todo tasks" >> "${TEST_DIR}/fresh_tag_error.log"
+    fi
+    # Mock the output that task add would produce
+    echo "Created task test-uuid-todo."
+elif [[ "$1" == "rc.confirmation=no" ]]; then
+    echo "MOCK: task $*" >> "${TEST_DIR}/task_commands.log"
+elif [[ "$1" == "test-uuid-todo" ]]; then
+    # This is for the annotate_task call
+    echo "Annotating task"
+else
+    echo "test-uuid-todo"
+fi
+EOF
+    chmod +x "${TEST_DIR}/task"
+    
+    run create_and_annotate_task "Test todo issue" "linear" "https://linear.app/test/issue/TEST-102" "TEST-102" "test-project" "Todo" "" ""
+    [ "$status" -eq 0 ]
+    
+    # Check that fresh tag was added for Todo status
+    [ ! -f "${TEST_DIR}/fresh_tag_error.log" ]
+    [ -f "${TEST_DIR}/fresh_tag.log" ]
+    grep -q "CORRECT: fresh tag added for Todo" "${TEST_DIR}/fresh_tag.log"
+}
+
+@test "create_and_annotate_task does NOT add fresh tag for In Review tasks" {
+    # Override task command to capture tags
+    cat > "${TEST_DIR}/task" << 'EOF'
+#!/bin/bash
+# Log all calls for debugging
+echo "MOCK: called with: $*" >> "${TEST_DIR}/task_debug.log"
+
+# The create_task function calls task add with tags and description
+if [[ "$1" == "add" ]]; then
+    # Check if +fresh is NOT in the arguments for In Review tasks
+    if [[ "$*" =~ \+fresh ]]; then
+        echo "ERROR: fresh tag should not be added for In Review tasks" >> "${TEST_DIR}/fresh_tag_error.log"
+    else
+        echo "CORRECT: no fresh tag for In Review" >> "${TEST_DIR}/fresh_tag.log"
+    fi
+    # Mock the output that task add would produce
+    echo "Created task test-uuid-review."
+elif [[ "$1" == "rc.confirmation=no" ]]; then
+    echo "MOCK: task $*" >> "${TEST_DIR}/task_commands.log"
+elif [[ "$1" == "test-uuid-review" ]]; then
+    # This is for the annotate_task call
+    echo "Annotating task"
+else
+    echo "test-uuid-review"
+fi
+EOF
+    chmod +x "${TEST_DIR}/task"
+    
+    run create_and_annotate_task "Test review issue" "linear" "https://linear.app/test/issue/TEST-101" "TEST-101" "test-project" "In Review" "" ""
+    [ "$status" -eq 0 ]
+    
+    # Check that fresh tag was NOT added for In Review status
+    [ ! -f "${TEST_DIR}/fresh_tag_error.log" ]
+    [ -f "${TEST_DIR}/fresh_tag.log" ]
+    grep -q "CORRECT: no fresh tag for In Review" "${TEST_DIR}/fresh_tag.log"
+}
+
+@test "sync_to_taskwarrior removes fresh tag from tasks with review tag (mutual exclusion)" {
+    test_issue='{
+        "id":"123",
+        "description":"Test Mutual Exclusion",
+        "repository":"linear",
+        "html_url":"https://linear.app/test/issue/TEST-103",
+        "issue_id":"TEST-103",
+        "project":"test-project",
+        "status":"Todo"
+    }'
+    
+    # Override task command to simulate existing task with both fresh and review tags
+    cat > "${TEST_DIR}/task" << 'EOF'
+#!/bin/bash
+case "$1" in
+    "linear_issue_id:TEST-103")
+        case "$2" in
+            "status:pending")
+                case "$3" in
+                    "export")
+                        echo '[{"uuid":"test-uuid-mutex","description":"Test Mutual Exclusion","status":"pending","tags":["linear","fresh","review"]}]'
+                        ;;
+                esac
+                ;;
+        esac
+        ;;
+    "test-uuid-mutex")
+        case "$2" in
+            "export")
+                echo '[{"uuid":"test-uuid-mutex","description":"Test Mutual Exclusion","status":"pending","tags":["linear","fresh","review"]}]'
+                ;;
+        esac
+        ;;
+    "_get")
+        echo ""
+        ;;
+    "rc.confirmation=no")
+        echo "MOCK: task $*" >> "${TEST_DIR}/task_commands.log"
+        if [[ "$*" =~ "-fresh" ]]; then
+            echo "MOCK: fresh tag removed due to mutual exclusion" >> "${TEST_DIR}/mutex.log"
+        fi
+        ;;
+    *)
+        echo "test-uuid-mutex"
+        ;;
+esac
+EOF
+    chmod +x "${TEST_DIR}/task"
+    
+    run sync_to_taskwarrior "$test_issue"
+    [ "$status" -eq 0 ]
+    
+    # Check that fresh tag was removed due to mutual exclusion with review tag
+    [ -f "${TEST_DIR}/mutex.log" ]
+    grep -q "fresh tag removed due to mutual exclusion" "${TEST_DIR}/mutex.log"
 }

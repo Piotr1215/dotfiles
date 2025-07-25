@@ -285,6 +285,7 @@ update_task_status() {
     local task_json
     local has_backlog="false"
     local has_review="false"
+    local has_fresh="false"
 
     # Use task export JSON for this specific task
     task_json=$(task "$task_uuid" export 2>/dev/null)
@@ -293,7 +294,8 @@ update_task_status() {
     if [[ -n "$task_json" ]]; then
         has_backlog=$(echo "$task_json" | jq -r '.[0].tags | if . then contains(["backlog"]) else false end')
         has_review=$(echo "$task_json" | jq -r '.[0].tags | if . then contains(["review"]) else false end')
-        log "Special tag check: has_backlog=$has_backlog, has_review=$has_review"
+        has_fresh=$(echo "$task_json" | jq -r '.[0].tags | if . then contains(["fresh"]) else false end')
+        log "Special tag check: has_backlog=$has_backlog, has_review=$has_review, has_fresh=$has_fresh"
     fi
 
     # Skip modifying tags and priority if task has +backlog or +review
@@ -312,9 +314,19 @@ update_task_status() {
             if [[ -z "$current_priority" ]]; then
                 task rc.confirmation=no modify "$task_uuid" manual_priority:1
             fi
+            # Remove fresh tag only when actual work starts (In Progress/Investigating), not Todo
+            if [[ "$has_fresh" == "true" && "$issue_status" != "Todo" ]]; then
+                log "Work has started (status=$issue_status), removing +fresh tag"
+                task rc.confirmation=no modify "$task_uuid" -fresh
+            fi
         elif [[ "$issue_status" == "In Review" ]]; then
             log "Issue status is In Review, adding +review tag"
             task rc.confirmation=no modify "$task_uuid" +review
+            # Remove fresh tag when in review
+            if [[ "$has_fresh" == "true" ]]; then
+                log "Issue is in review, removing +fresh tag"
+                task rc.confirmation=no modify "$task_uuid" -fresh
+            fi
         elif [[ "$issue_status" == "Parked" ]]; then
             log "Issue status is Parked, adding +backlog tag"
             task rc.confirmation=no modify "$task_uuid" +backlog
@@ -366,8 +378,16 @@ create_and_annotate_task() {
     local issue_priority="$8"
     
     log "Creating new task for issue: $issue_description"
+    
+    # Determine if fresh tag should be added based on status
+    # Fresh tag should be added for statuses where work hasn't started yet
+    local fresh_tag=""
+    if [[ ! "$issue_status" =~ ^(In\ Progress|Investigating|In\ Review)$ ]]; then
+        fresh_tag="+fresh"
+    fi
+    
     local task_uuid
-    task_uuid=$(create_task "$issue_description" "+$issue_repo_name" "+fresh" "project:$project_name")
+    task_uuid=$(create_task "$issue_description" "+$issue_repo_name" $fresh_tag "project:$project_name")
     
     if [[ -n "$task_uuid" ]]; then
         annotate_task "$task_uuid" "$issue_url"
@@ -435,6 +455,32 @@ sync_to_taskwarrior() {
         # Fix any issues with newlines in task_uuid
         task_uuid=$(echo "$task_uuid" | tr -d '\n')
         log "Task already exists for: $issue_description (UUID: $task_uuid)"
+        
+        # Check if task should have fresh tag but doesn't
+        local task_json
+        task_json=$(task "$task_uuid" export 2>/dev/null)
+        if [[ -n "$task_json" ]]; then
+            local has_fresh=$(echo "$task_json" | jq -r '.[0].tags | if . then contains(["fresh"]) else false end')
+            local has_started=$(echo "$task_json" | jq -r '.[0].tags | if . then contains(["started"]) else false end')
+            local has_review=$(echo "$task_json" | jq -r '.[0].tags | if . then contains(["review"]) else false end')
+            local has_start_time=$(echo "$task_json" | jq -r '.[0].start // empty')
+            
+            # Remove fresh tag if task has review tag (they are mutually exclusive)
+            if [[ "$has_fresh" == "true" && "$has_review" == "true" ]]; then
+                log "Task has both +fresh and +review tags - removing +fresh tag (mutually exclusive)"
+                task rc.confirmation=no modify "$task_uuid" -fresh
+            # Add fresh tag if:
+            # - Task doesn't have fresh tag
+            # - Task doesn't have started tag
+            # - Task doesn't have review tag (mutually exclusive)
+            # - Task has never been started (no start time in history)
+            # - Issue status indicates work hasn't actually started (Todo is still fresh)
+            elif [[ "$has_fresh" == "false" && "$has_started" == "false" && "$has_review" == "false" && -z "$has_start_time" ]] && \
+               [[ ! "$issue_status" =~ ^(In\ Progress|Investigating|In\ Review)$ ]]; then
+                log "Adding missing +fresh tag to existing task"
+                task rc.confirmation=no modify "$task_uuid" +fresh
+            fi
+        fi
         
         # Update task status based on current Linear issue status
         update_task_status "$task_uuid" "$issue_status" "$issue_priority"
