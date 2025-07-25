@@ -298,9 +298,15 @@ update_task_status() {
         log "Special tag check: has_backlog=$has_backlog, has_review=$has_review, has_fresh=$has_fresh"
     fi
 
-    # Skip modifying tags and priority if task has +backlog or +review
-    if [[ "$has_backlog" == "true" || "$has_review" == "true" ]]; then
-        log "DETECTED +backlog or +review tag. Skipping automatic status sync from Linear."
+    # Skip modifying tags and priority if task has +backlog
+    # But always check if we need to remove +review tag based on current status
+    if [[ "$has_backlog" == "true" ]]; then
+        log "DETECTED +backlog tag. Skipping automatic status sync from Linear."
+        # Still check if review tag needs to be removed
+        if [[ "$has_review" == "true" && "$issue_status" != "In Review" ]]; then
+            log "Issue is no longer In Review, removing +review tag"
+            task rc.confirmation=no modify "$task_uuid" -review
+        fi
     else
         # Normal status sync logic when no special tags are present
         if [[ "$issue_status" =~ [Bb]acklog || "$issue_status" == "Idea" ]]; then
@@ -359,6 +365,16 @@ update_task_status() {
                 task rc.confirmation=no modify "$task_uuid" priority:
             fi
         fi
+    fi
+    
+    # Always check if review tag needs to be removed based on current Linear status
+    # This handles the case where a task has review tag but Linear status changed
+    if [[ "$has_review" == "true" && "$issue_status" != "In Review" ]]; then
+        log "Task has +review tag but Linear status is '$issue_status' - removing +review tag"
+        task rc.confirmation=no modify "$task_uuid" -review
+        
+        # Re-run the status update logic now that review tag is removed
+        update_task_status "$task_uuid" "$issue_status" "$issue_priority"
     fi
 }
 
