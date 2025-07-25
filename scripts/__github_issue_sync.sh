@@ -107,7 +107,7 @@ get_linear_issues() {
     if ! response=$(curl -s -w "\n%{http_code}" -X POST \
         -H "Content-Type: application/json" \
         -H "Authorization: ${LINEAR_API_KEY}" \
-        --data '{"query": "query { user(id: \"'"$LINEAR_USER_ID"'\") { id name assignedIssues(filter: { state: { name: { nin: [\"Released\", \"Canceled\",\"Done\",\"Ready for Release\"] } } }) { nodes { id title url state { name } project { name } dueDate } } } }"}' \
+        --data '{"query": "query { user(id: \"'"$LINEAR_USER_ID"'\") { id name assignedIssues(filter: { state: { name: { nin: [\"Released\", \"Canceled\",\"Done\",\"Ready for Release\"] } } }) { nodes { id title url state { name } project { name } dueDate priority } } } }"}' \
         https://api.linear.app/graphql 2>&1); then
         echo "Error: Linear API request failed" >&2
         rm -f "$temp_response"
@@ -151,7 +151,8 @@ get_linear_issues() {
             issue_id: (.url | split("/") | .[-2]),
             project: .project.name,
             status: .state.name,
-            due_date: .dueDate
+            due_date: .dueDate,
+            priority: .priority
         }' 2>/dev/null); then
         echo "Error: Failed to parse Linear issues" >&2
         rm -f "$temp_response"
@@ -272,6 +273,7 @@ manage_project_settings() {
 update_task_status() {
     local task_uuid="$1"
     local issue_status="$2"
+    local issue_priority="$3"
     
     # Validate task UUID
     if [[ -z "$task_uuid" || "$task_uuid" == "null" ]]; then
@@ -326,6 +328,25 @@ update_task_status() {
                 task rc.confirmation=no modify "$task_uuid" -triage
             fi
         fi
+        
+        # Update priority based on Linear priority (only for non-backlog/review tasks)
+        if [[ -n "$issue_priority" && ("$issue_priority" == "1" || "$issue_priority" == "2") ]]; then
+            # Check current priority
+            local current_priority
+            current_priority=$(task _get "$task_uuid".priority 2>/dev/null || echo "")
+            if [[ "$current_priority" != "H" ]]; then
+                log "Setting priority:H for High/Urgent Linear issue (priority=$issue_priority)"
+                task rc.confirmation=no modify "$task_uuid" priority:H
+            fi
+        elif [[ -n "$issue_priority" && "$issue_priority" != "1" && "$issue_priority" != "2" ]]; then
+            # Remove high priority if Linear priority changed
+            local current_priority
+            current_priority=$(task _get "$task_uuid".priority 2>/dev/null || echo "")
+            if [[ "$current_priority" == "H" ]]; then
+                log "Removing priority:H as Linear priority changed (priority=$issue_priority)"
+                task rc.confirmation=no modify "$task_uuid" priority:
+            fi
+        fi
     fi
 }
 
@@ -342,6 +363,7 @@ create_and_annotate_task() {
     local project_name="$5"
     local issue_status="$6"
     local issue_due_date="$7"
+    local issue_priority="$8"
     
     log "Creating new task for issue: $issue_description"
     local task_uuid
@@ -358,12 +380,18 @@ create_and_annotate_task() {
         
         # Check task for special tags right after creation
         # This handles cases where tags might have been added via hooks
-        update_task_status "$task_uuid" "$issue_status"
+        update_task_status "$task_uuid" "$issue_status" "$issue_priority"
         
         # Set due date if present
         if [[ -n "$issue_due_date" && "$issue_due_date" != "null" ]]; then
             log "Setting due date to: $issue_due_date"
             task rc.confirmation=no modify "$task_uuid" due:"$issue_due_date"
+        fi
+        
+        # Set priority:H for High or Urgent Linear issues
+        if [[ -n "$issue_priority" && ("$issue_priority" == "1" || "$issue_priority" == "2") ]]; then
+            log "Setting priority:H for High/Urgent Linear issue (priority=$issue_priority)"
+            task rc.confirmation=no modify "$task_uuid" priority:H
         fi
     else
         log "Error: Failed to create task for: $issue_description" >&2
@@ -373,7 +401,7 @@ create_and_annotate_task() {
 # Synchronize a single issue with Taskwarrior
 sync_to_taskwarrior() {
     local issue_line="$1"
-    local issue_id issue_description issue_repo_name issue_url task_uuid issue_number project_name issue_status issue_due_date
+    local issue_id issue_description issue_repo_name issue_url task_uuid issue_number project_name issue_status issue_due_date issue_priority
 
     issue_id=$(echo "$issue_line" | jq -r '.id')
     issue_description=$(echo "$issue_line" | jq -r '.description')
@@ -383,6 +411,7 @@ sync_to_taskwarrior() {
     project_name=$(echo "$issue_line" | jq -r '.project')
     issue_status=$(echo "$issue_line" | jq -r '.status')
     issue_due_date=$(echo "$issue_line" | jq -r '.due_date // empty')
+    issue_priority=$(echo "$issue_line" | jq -r '.priority // empty')
 
     log "Processing Issue ID: $issue_id, Description: $issue_description"
 
@@ -401,14 +430,14 @@ sync_to_taskwarrior() {
 
     if [[ -z "$task_uuid" || "$task_uuid" == "null" ]]; then
         log "No valid existing task found - creating new task"
-        create_and_annotate_task "$issue_description" "$issue_repo_name" "$issue_url" "$issue_number" "$project_name" "$issue_status" "$issue_due_date"
+        create_and_annotate_task "$issue_description" "$issue_repo_name" "$issue_url" "$issue_number" "$project_name" "$issue_status" "$issue_due_date" "$issue_priority"
     else
         # Fix any issues with newlines in task_uuid
         task_uuid=$(echo "$task_uuid" | tr -d '\n')
         log "Task already exists for: $issue_description (UUID: $task_uuid)"
         
         # Update task status based on current Linear issue status
-        update_task_status "$task_uuid" "$issue_status"
+        update_task_status "$task_uuid" "$issue_status" "$issue_priority"
         
         # Update due date
         if [[ -n "$issue_due_date" && "$issue_due_date" != "null" ]]; then
