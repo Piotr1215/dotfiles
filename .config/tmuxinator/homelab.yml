@@ -1,6 +1,6 @@
 # /home/decoder/.config/tmuxinator/atosik.yml
 
-name: homehab
+name: homelab
 root: ~/dev/homelab
 
 # Optional tmux socket
@@ -36,7 +36,7 @@ root: ~/dev/homelab
 # tmux_command: byobu
 
 # Specifies (by name or index) which window will be selected on project startup. If not set, the first window is used.
-# startup_window: git
+startup_window: edit
 
 # Specifies (by index) which pane of the specified window will be selected on project startup. If not set, the first pane is used.
 # startup_pane: "1"
