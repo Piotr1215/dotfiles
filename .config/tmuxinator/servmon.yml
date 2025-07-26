@@ -19,5 +19,11 @@ windows:
   - monitor:
       layout: even-vertical
       panes:
-        - watch -n 5 'echo -e "\033[1;36mLast Update:\033[0m $(jq -r .last_updated ~/.local/state/argos-service-monitor/services_status_state.json)\n" && echo -e "\033[1;33mDegraded Services:\033[0m" && jq -r ".statuses | to_entries | map(select(.value != \"operational\")) | .[] | \"  \\(.key): \\(.value)\"" ~/.local/state/argos-service-monitor/services_status_state.json 2>/dev/null || echo "  None" && echo -e "\n\033[1;32mOperational:\033[0m" && jq -r ".statuses | to_entries | map(select(.value == \"operational\")) | .[].key" ~/.local/state/argos-service-monitor/services_status_state.json | xargs -I {} echo "  ✓ {}"'
-        - watch -n 10 'cat ~/.local/state/argos-service-monitor/services_status_state.json | jq . -C'
+        - |
+          watch -n 5 'echo "=== SERVICE STATUS MONITOR ===" && echo "" && \
+          echo "Last Update: $(jq -r .last_updated ~/.local/state/argos-service-monitor/services_status_state.json)" && echo "" && \
+          echo "DEGRADED SERVICES:" && \
+          jq -r ".statuses | to_entries | map(select(.value != \"operational\")) | .[] | \"  \\(.key): \\(.value)\"" ~/.local/state/argos-service-monitor/services_status_state.json 2>/dev/null || echo "  None" && echo "" && \
+          echo "OPERATIONAL:" && \
+          jq -r ".statuses | to_entries | map(select(.value == \"operational\")) | .[].key" ~/.local/state/argos-service-monitor/services_status_state.json 2>/dev/null | sed "s/^/  ✓ /"'
+        - watch -n 10 'jq . ~/.local/state/argos-service-monitor/services_status_state.json'

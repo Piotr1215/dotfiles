@@ -34,7 +34,14 @@ function list_sessions() {
 # Use fzf to select a session, removing '*' and space for active sessions
 function select_session() {
 	local selected_session=$(list_sessions | fzf --reverse | sed 's/^\* //')
-	tmuxinator start "${selected_session}" || tmux switch-client -t "${selected_session}"
+	if [[ -n "$selected_session" ]]; then
+		# Check if session already exists
+		if tmux has-session -t "$selected_session" 2>/dev/null; then
+			tmux switch-client -t "$selected_session"
+		else
+			tmuxinator start "$selected_session"
+		fi
+	fi
 }
 
 # Run the session selection
