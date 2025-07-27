@@ -46,20 +46,13 @@ windows:
   - git-dashboard:
       layout: even-horizontal
       panes:
-        - lazygit
+        - EDITOR=nvim lazygit
         - gh dash
   
-  - github-status:
-      layout: even-vertical
-      main-pane-width: 50%
+  - git-monitors:
+      layout: even-horizontal
       panes:
-        - |
-          while true; do
-            source /home/decoder/dev/dotfiles/scripts/__gh_cli.sh
-            ghrepoprs
-            echo "Press Enter to refresh..."
-            read
-          done
+        - tig --all
         - |
           while true; do
             source /home/decoder/dev/dotfiles/scripts/__gh_cli.sh
@@ -67,10 +60,3 @@ windows:
             echo "Press Enter to refresh..."
             read
           done
-  
-  - git-monitors:
-      layout: even-horizontal
-      panes:
-        - tig --all
-        - |
-          command viddy -n 2 --shell zsh "source ~/.zsh_aliases; source /home/decoder/dev/dotfiles/scripts/__gh_cli.sh; gitstatusmon"

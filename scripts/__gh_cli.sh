@@ -273,7 +273,7 @@ function ghruns() {
 	local selected=$(echo "$runs" | fzf --ansi \
 		--header $'Keys: Enter=browser | v=view logs | r=rerun\nStatus: ✓=success ✗=failed -=skipped ⟳=running' \
 		--preview 'gh run view {1} 2>/dev/null || echo "Loading..."' \
-		--preview-window=right:50%:wrap \
+		--preview-window=bottom:50%:wrap \
 		--bind 'v:execute(gh run view {1} --log | sed "s/\xEF\xBB\xBF//g" > /tmp/gh-run-log.txt && nvim -c "set nowrap" /tmp/gh-run-log.txt)' \
 		--bind 'r:execute-silent(gh run rerun {1})+reload(exit)')
 	
