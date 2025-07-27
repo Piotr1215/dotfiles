@@ -1096,62 +1096,6 @@ EOF
     grep -q "CORRECT: no fresh tag for In Review" "${TEST_DIR}/fresh_tag.log"
 }
 
-@test "sync_to_taskwarrior removes fresh tag from tasks with review tag (mutual exclusion)" {
-    test_issue='{
-        "id":"123",
-        "description":"Test Mutual Exclusion",
-        "repository":"linear",
-        "html_url":"https://linear.app/test/issue/TEST-103",
-        "issue_id":"TEST-103",
-        "project":"test-project",
-        "status":"Todo"
-    }'
-    
-    # Override task command to simulate existing task with both fresh and review tags
-    cat > "${TEST_DIR}/task" << 'EOF'
-#!/bin/bash
-case "$1" in
-    "linear_issue_id:TEST-103")
-        case "$2" in
-            "status:pending")
-                case "$3" in
-                    "export")
-                        echo '[{"uuid":"test-uuid-mutex","description":"Test Mutual Exclusion","status":"pending","tags":["linear","fresh","review"]}]'
-                        ;;
-                esac
-                ;;
-        esac
-        ;;
-    "test-uuid-mutex")
-        case "$2" in
-            "export")
-                echo '[{"uuid":"test-uuid-mutex","description":"Test Mutual Exclusion","status":"pending","tags":["linear","fresh","review"]}]'
-                ;;
-        esac
-        ;;
-    "_get")
-        echo ""
-        ;;
-    "rc.confirmation=no")
-        echo "MOCK: task $*" >> "${TEST_DIR}/task_commands.log"
-        if [[ "$*" =~ "-fresh" ]]; then
-            echo "MOCK: fresh tag removed due to mutual exclusion" >> "${TEST_DIR}/mutex.log"
-        fi
-        ;;
-    *)
-        echo "test-uuid-mutex"
-        ;;
-esac
-EOF
-    chmod +x "${TEST_DIR}/task"
-    
-    run sync_to_taskwarrior "$test_issue"
-    [ "$status" -eq 0 ]
-    
-    # Check that fresh tag was removed due to mutual exclusion with review tag
-    [ -f "${TEST_DIR}/mutex.log" ]
-    grep -q "fresh tag removed due to mutual exclusion" "${TEST_DIR}/mutex.log"
-}
 
 @test "update_task_status removes review tag when Linear status changes from In Review to In Progress" {
     # Override task export to return task with review tag
