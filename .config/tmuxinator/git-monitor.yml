@@ -43,11 +43,34 @@ root: <%= ENV['PWD'] || Dir.pwd %>
 # attach: false
 
 windows:
-  - git-monitor:
-      layout: 363b,294x72,0,0{173x72,0,0,167,120x72,174,0[120x36,174,0,168,120x35,174,37,169]}
+  - git-dashboard:
+      layout: even-horizontal
       panes:
         - lazygit
-        - watch -n 5 'git log --oneline --graph --all -20'
+        - gh dash
+  
+  - github-status:
+      layout: even-vertical
+      main-pane-width: 50%
+      panes:
         - |
-          source /home/decoder/dev/dotfiles/scripts/__gh_cli.sh
-          ghprsreview
+          while true; do
+            source /home/decoder/dev/dotfiles/scripts/__gh_cli.sh
+            ghrepoprs
+            echo "Press Enter to refresh..."
+            read
+          done
+        - |
+          while true; do
+            source /home/decoder/dev/dotfiles/scripts/__gh_cli.sh
+            ghruns
+            echo "Press Enter to refresh..."
+            read
+          done
+  
+  - git-monitors:
+      layout: even-horizontal
+      panes:
+        - tig --all
+        - |
+          command viddy -n 2 --shell zsh "source ~/.zsh_aliases; source /home/decoder/dev/dotfiles/scripts/__gh_cli.sh; gitstatusmon"

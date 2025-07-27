@@ -21,6 +21,8 @@ function ghshowhelp() {
 	echo "  ghnewrepo         - Create a private repo with the current directory name and description"
 	echo "  ghissuescomments  - Search for issues where I commented"
 	echo "  ghprcomments      - Search for prs where I commented"
+	echo "  ghruns            - Interactive workflow runs viewer"
+	echo "  gitstatusmon      - Display git status summary (for tmux panes)"
 	echo "  ghhelp            - Show this help message"
 }
 
@@ -152,7 +154,7 @@ function ghrepoprs() {
 
 	selected_pr=$(echo "$pr_data" | fzf --ansi \
 		--preview 'gh pr view $(awk -F"|" "{print \$1}" <<< {})' \
-		--preview-window=up:40:wrap \
+		--preview-window=right:50%:wrap \
 		--bind 'ctrl-y:execute-silent(echo -n {3} | xargs | xclip -selection clipboard)')
 
 	if [ -z "$selected_pr" ]; then
@@ -246,6 +248,74 @@ function ghnewrepo() {
 		echo "An error occurred while creating the repository."
 		return 1
 	}
+}
+
+# Interactive workflow runs viewer
+function ghruns() {
+	# Fetch workflow runs with proper formatting
+	local runs=$(gh run list --limit 50 --json databaseId,status,conclusion,workflowName,headBranch,createdAt 2>/dev/null | \
+		jq -r 'sort_by(.createdAt) | reverse | .[] | 
+			# Format status indicator
+			(if .conclusion == "success" then "✓"
+			elif .conclusion == "failure" then "✗"
+			elif .conclusion == "skipped" then "-"
+			elif .status == "in_progress" then "⟳"
+			else "?" end) as $status |
+			# Format: ID | date | status | branch | workflow
+			"\(.databaseId) \(.createdAt | split("T")[0]) \($status) \(.headBranch[0:25]) \(.workflowName)"')
+	
+	if [ -z "$runs" ]; then
+		echo "No workflow runs found"
+		return 1
+	fi
+	
+	# Use fzf for interactive selection
+	local selected=$(echo "$runs" | fzf --ansi \
+		--header $'Keys: Enter=browser | v=view logs | r=rerun\nStatus: ✓=success ✗=failed -=skipped ⟳=running' \
+		--preview 'gh run view {1} 2>/dev/null || echo "Loading..."' \
+		--preview-window=right:50%:wrap \
+		--bind 'v:execute(gh run view {1} --log | sed "s/\xEF\xBB\xBF//g" > /tmp/gh-run-log.txt && nvim -c "set nowrap" /tmp/gh-run-log.txt)' \
+		--bind 'r:execute-silent(gh run rerun {1})+reload(exit)')
+	
+	if [ -n "$selected" ]; then
+		local run_id=$(echo "$selected" | awk '{print $1}')
+		gh run view "$run_id" --web
+	fi
+}
+
+# Git status monitor for tmux pane
+function gitstatusmon() {
+	# Branch info
+	echo -e "\033[1;36m📍 Branch:\033[0m $(git branch --show-current) -> $(git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null || echo 'no upstream')"
+	
+	# Quick status summary
+	local staged=$(git diff --cached --numstat | wc -l)
+	local unstaged=$(git diff --numstat | wc -l)
+	local untracked=$(git ls-files --others --exclude-standard | wc -l)
+	echo -e "\033[1;32m✓ Staged:\033[0m $staged | \033[1;33m✎ Modified:\033[0m $unstaged | \033[1;31m? Untracked:\033[0m $untracked"
+	
+	# Show actual changes if any
+	if [ $staged -gt 0 ]; then
+		echo -e "\n\033[1;32m=== Staged Changes ===\033[0m"
+		git diff --cached --stat | head -5
+	fi
+	
+	if [ $unstaged -gt 0 ]; then
+		echo -e "\n\033[1;33m=== Unstaged Changes ===\033[0m"
+		git diff --stat | head -5
+	fi
+	
+	# Last commit
+	echo -e "\n\033[1;34m=== Last Commit ===\033[0m"
+	git log -1 --pretty=format:"%C(yellow)%h%C(reset) - %s %C(green)(%cr)%C(reset)"
+	
+	# PR info if exists
+	echo -e "\n\n\033[1;35m=== PR Status ===\033[0m"
+	if pr_info=$(gh pr view --json state,title 2>/dev/null); then
+		echo "$pr_info" | jq -r '"\(.state): \(.title)"'
+	else
+		echo "No PR for current branch"
+	fi
 }
 
 # Show help message
