@@ -201,6 +201,10 @@ utils.nmap("<Leader>p", ":pu<CR>", { desc = "paste from clipboard buffer after t
 utils.lnmap("dl", '"_dd', { desc = "delete line to black hole register" })
 utils.lnmap("d_", '"_D', { desc = "delete till end of line to black hole register" })
 utils.xmap("<leader>d", '"_d', { desc = "delete selection to black hole register" })
+
+-- FILE NAVIGATION --
+vim.keymap.set("n", "gF", "<C-w>vgf", { desc = "Open file under cursor in vertical split" })
+
 -- PATH OPERATIONS --
 vim.keymap.set(
   "n",
