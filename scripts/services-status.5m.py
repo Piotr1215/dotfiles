@@ -120,7 +120,7 @@ def fetch_favicon(url, timeout=3):
             try:
                 with open(cache_path, 'r') as f:
                     return f.read()
-            except:
+            except Exception:
                 pass
     
     # Fetch fresh favicon
@@ -135,11 +135,11 @@ def fetch_favicon(url, timeout=3):
             try:
                 with open(cache_path, 'w') as f:
                     f.write(b64_data)
-            except:
+            except Exception:
                 pass
             
             return b64_data
-    except:
+    except Exception:
         return None
 
 def fetch_status(url, timeout=5):
@@ -163,7 +163,7 @@ def get_claude_status():
                 return "degraded"
             elif indicator in ['major', 'critical']:
                 return "major"
-    except:
+    except Exception:
         pass
     return "unknown"
 
@@ -179,7 +179,7 @@ def get_quay_status():
                 return "degraded"
             elif indicator in ['major', 'critical']:
                 return "major"
-    except:
+    except Exception:
         pass
     return "unknown"
 
@@ -205,7 +205,7 @@ def get_aws_status():
             with urllib.request.urlopen(req, timeout=5) as response:
                 if response.status == 200:
                     return "operational"
-    except:
+    except Exception:
         pass
     return "operational"  # Default to operational for AWS
 
@@ -223,7 +223,7 @@ def get_gcp_status():
                         active_incidents += 1
             return "degraded" if active_incidents > 0 else "operational"
         return "operational"
-    except:
+    except Exception:
         pass
     return "operational"  # Default to operational
 
@@ -241,7 +241,7 @@ def get_azure_status():
                 elif 'issue' in content.lower() or 'problem' in content.lower():
                     return "degraded"
                 return "operational"  # Default to operational if page loads
-    except:
+    except Exception:
         pass
     return "unknown"
 
@@ -257,7 +257,7 @@ def get_netlify_status():
                 return "degraded"
             elif indicator in ['major', 'critical']:
                 return "major"
-    except:
+    except Exception:
         pass
     return "unknown"
 
@@ -273,7 +273,7 @@ def get_github_status():
                 return "degraded"
             elif indicator in ['major', 'critical']:
                 return "major"
-    except:
+    except Exception:
         pass
     return "unknown"
 
@@ -289,7 +289,7 @@ def get_linear_status():
                 return "degraded"
             elif indicator in ['major', 'critical']:
                 return "major"
-    except:
+    except Exception:
         pass
     return "unknown"
 
@@ -305,7 +305,7 @@ def get_godaddy_status():
                 return "degraded"
             elif indicator in ['major', 'critical']:
                 return "major"
-    except:
+    except Exception:
         pass
     return "unknown"
 
@@ -345,24 +345,23 @@ def load_previous_state():
                 # Ensure backward compatibility
                 if isinstance(data, dict) and 'statuses' not in data:
                     # Old format - just statuses
-                    return {'statuses': data, 'degradation_counts': {}, 'notification_cooldowns': {}}
+                    return {'statuses': data, 'degradation_counts': {}}
                 return data
         except:
             pass
-    return {'statuses': {}, 'degradation_counts': {}, 'notification_cooldowns': {}}
+    return {'statuses': {}, 'degradation_counts': {}}
 
-def save_current_state(statuses, degradation_counts, notification_cooldowns):
+def save_current_state(statuses, degradation_counts):
     """Save current service states to file"""
     try:
         state_data = {
             'statuses': statuses,
             'degradation_counts': degradation_counts,
-            'notification_cooldowns': notification_cooldowns,
             'last_updated': datetime.now().isoformat()
         }
         with open(STATE_FILE, 'w') as f:
             json.dump(state_data, f, indent=2)
-    except:
+    except Exception:
         pass
 
 def check_status_degradation(previous_statuses, current_statuses, degradation_counts):
@@ -371,8 +370,6 @@ def check_status_degradation(previous_statuses, current_statuses, degradation_co
     new_degradation_counts = degradation_counts.copy()
     
     for service, current_status in current_statuses.items():
-        prev_status = previous_statuses.get(service, "unknown")
-        
         # Check if service is currently degraded
         if current_status in ["degraded", "partial", "major", "critical"]:
             # Increment degradation count
@@ -399,7 +396,7 @@ def launch_servmon_session():
             subprocess.run(['tmuxinator', 'start', 'servmon'], 
                          capture_output=True)
             return True
-    except:
+    except Exception:
         pass
     return False
 
@@ -414,57 +411,9 @@ def kill_servmon_session():
             subprocess.run(['tmux', 'kill-session', '-t', 'servmon'], 
                          capture_output=True)
             return True
-    except:
+    except Exception:
         pass
     return False
-
-def should_send_notification(service, notification_cooldowns):
-    """Check if enough time has passed since last notification"""
-    COOLDOWN_MINUTES = 30  # Don't notify again for 30 minutes
-    
-    if service not in notification_cooldowns:
-        return True
-    
-    last_notified = datetime.fromisoformat(notification_cooldowns[service])
-    time_since = datetime.now() - last_notified
-    
-    return time_since.total_seconds() > (COOLDOWN_MINUTES * 60)
-
-def send_notification(degraded_services, notification_cooldowns):
-    """Send desktop notification about degraded services with cooldown"""
-    try:
-        # Filter services that are on cooldown
-        services_to_notify = []
-        new_cooldowns = notification_cooldowns.copy()
-        
-        for service, status in degraded_services:
-            if should_send_notification(service, notification_cooldowns):
-                services_to_notify.append((service, status))
-                new_cooldowns[service] = datetime.now().isoformat()
-        
-        if not services_to_notify:
-            return new_cooldowns  # All services are on cooldown
-        
-        # Build notification message
-        services_text = []
-        for service, status in services_to_notify:
-            emoji = SERVICE_EMOJIS.get(service, "❓")
-            icon = ICONS.get(status, "⚪")
-            services_text.append(f"{emoji} {service}: {icon} {status}")
-        
-        message = "Service degradation detected:\\n" + "\\n".join(services_text)
-        
-        subprocess.run([
-            'dunstify',
-            '-u', 'critical',
-            '-i', 'dialog-warning',
-            'Service Status Alert',
-            message
-        ], capture_output=True)
-        
-        return new_cooldowns
-    except:
-        return notification_cooldowns
 
 def main():
     """Main function to generate Argos output"""
@@ -476,23 +425,21 @@ def main():
     state_data = load_previous_state()
     previous_statuses = state_data.get('statuses', {})
     degradation_counts = state_data.get('degradation_counts', {})
-    notification_cooldowns = state_data.get('notification_cooldowns', {})
     
     # Check for degradations with debouncing
     degraded_services, new_degradation_counts = check_status_degradation(
         previous_statuses, statuses, degradation_counts
     )
     
-    # If services degraded (after debouncing), launch session and notify
+    # If services degraded (after debouncing), launch session
     if degraded_services:
-        session_launched = launch_servmon_session()
-        notification_cooldowns = send_notification(degraded_services, notification_cooldowns)
+        launch_servmon_session()
     elif overall_status == "operational":
         # All services are operational, kill the session if it exists
         kill_servmon_session()
     
     # Save current state for next check
-    save_current_state(statuses, new_degradation_counts, notification_cooldowns)
+    save_current_state(statuses, new_degradation_counts)
     
     # Get non-operational services
     non_operational_services = [service for service, status in statuses.items() 
