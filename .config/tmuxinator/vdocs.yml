@@ -53,9 +53,8 @@ windows:
   - repo:
       layout: main-vertical
       panes:
-        - print -z npm run start
         - lg
   - dev:
       layout: even-horizontal 
       panes:
-        - print -z __open-file-git.sh
+        - print -z npm run start
