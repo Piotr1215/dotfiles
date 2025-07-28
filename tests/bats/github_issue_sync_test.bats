@@ -1229,3 +1229,20 @@ EOF
     # Check that review tag was NOT removed
     [ ! -f "${TEST_DIR}/review_error.log" ]
 }
+
+@test "check_linear_issue_status returns active on malformed JSON" {
+    cat > "${TEST_DIR}/curl" << 'EOF'
+#!/bin/bash
+if [[ "$*" =~ "linear.app" ]]; then
+    echo '{"error": "malformed"}'
+    exit 0
+else
+    /usr/bin/curl "$@"
+fi
+EOF
+    chmod +x "${TEST_DIR}/curl"
+    
+    run check_linear_issue_status "TEST-123"
+    [ "$status" -eq 0 ]
+    [ "$output" = "active" ]
+}
