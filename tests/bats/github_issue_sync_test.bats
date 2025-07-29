@@ -309,7 +309,7 @@ EOF
     [ -f "${TEST_DIR}/task_commands.log" ] || [ "$status" -eq 0 ]
 }
 
-@test "update_task_status handles backlog tag correctly" {
+@test "update_task_status removes backlog tag when status changes to Todo" {
     # Override task export to return task with backlog tag
     cat > "${TEST_DIR}/task" << 'EOF'
 #!/bin/bash
@@ -321,6 +321,11 @@ case "$1" in
                 ;;
         esac
         ;;
+    "_get")
+        if [[ "$2" == *".manual_priority" ]]; then
+            echo ""
+        fi
+        ;;
     *)
         echo "MOCK: task $*" >> "${TEST_DIR}/task_commands.log"
         ;;
@@ -330,8 +335,9 @@ EOF
     
     run update_task_status "test-uuid" "Todo"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "DETECTED +backlog" ]]
-    [[ "$output" =~ "Skipping automatic status sync" ]]
+    [[ "$output" =~ "removing +backlog and +hold tags" ]]
+    # Check that -backlog was added to the command
+    grep -q -- "-backlog" "${TEST_DIR}/task_commands.log"
 }
 
 # ====================================================
@@ -361,8 +367,9 @@ EOF
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Issue status is Parked" ]]
     
-    # Check that +backlog tag was added
+    # Check that both +backlog and +hold tags were added
     grep -q "+backlog" "${TEST_DIR}/task_commands.log"
+    grep -q "+hold" "${TEST_DIR}/task_commands.log"
 }
 
 @test "update_task_status handles Investigating status like In Progress" {
@@ -418,9 +425,101 @@ EOF
     run update_task_status "test-uuid" "Idea"
     [ "$status" -eq 0 ]
     
-    # Check that -next tag was removed and priority reset
+    # Check that +backlog tag was added, -next tag was removed and priority reset
+    grep -q "+backlog" "${TEST_DIR}/task_commands.log"
     grep -q -- "-next" "${TEST_DIR}/task_commands.log"
     grep -q "manual_priority:" "${TEST_DIR}/task_commands.log"
+}
+
+@test "update_task_status adds backlog tag for Backlog status" {
+    # Override task export
+    cat > "${TEST_DIR}/task" << 'EOF'
+#!/bin/bash
+case "$1" in
+    "test-uuid")
+        case "$2" in
+            "export")
+                echo '[{"uuid":"test-uuid","tags":["linear"],"status":"pending"}]'
+                ;;
+        esac
+        ;;
+    *)
+        echo "MOCK: task $*" >> "${TEST_DIR}/task_commands.log"
+        ;;
+esac
+EOF
+    chmod +x "${TEST_DIR}/task"
+    
+    run update_task_status "test-uuid" "Backlog"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Issue status is Backlog/Idea, adding +backlog tag" ]]
+    
+    # Check that +backlog tag was added
+    grep -q "+backlog" "${TEST_DIR}/task_commands.log"
+    # Check that -next tag removal and priority reset also happened
+    grep -q -- "-next" "${TEST_DIR}/task_commands.log"
+    grep -q "manual_priority:" "${TEST_DIR}/task_commands.log"
+}
+
+@test "update_task_status removes backlog tag when status changes to In Review" {
+    # Override task export to return task with backlog tag
+    cat > "${TEST_DIR}/task" << 'EOF'
+#!/bin/bash
+case "$1" in
+    "test-uuid")
+        case "$2" in
+            "export")
+                echo '[{"uuid":"test-uuid","tags":["linear","backlog"],"status":"pending"}]'
+                ;;
+        esac
+        ;;
+    *)
+        echo "MOCK: task $*" >> "${TEST_DIR}/task_commands.log"
+        ;;
+esac
+EOF
+    chmod +x "${TEST_DIR}/task"
+    
+    run update_task_status "test-uuid" "In Review"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "adding +review tag and removing +backlog and +hold tags" ]]
+    
+    # Check that +review, -backlog and -hold were added to the command
+    grep -q "+review" "${TEST_DIR}/task_commands.log"
+    grep -q -- "-backlog" "${TEST_DIR}/task_commands.log"
+    grep -q -- "-hold" "${TEST_DIR}/task_commands.log"
+}
+
+@test "update_task_status removes hold tag when status changes from Parked to Todo" {
+    # Override task export to return task with hold and backlog tags
+    cat > "${TEST_DIR}/task" << 'EOF'
+#!/bin/bash
+case "$1" in
+    "test-uuid")
+        case "$2" in
+            "export")
+                echo '[{"uuid":"test-uuid","tags":["linear","backlog","hold"],"status":"pending"}]'
+                ;;
+        esac
+        ;;
+    "_get")
+        if [[ "$2" == *".manual_priority" ]]; then
+            echo ""
+        fi
+        ;;
+    *)
+        echo "MOCK: task $*" >> "${TEST_DIR}/task_commands.log"
+        ;;
+esac
+EOF
+    chmod +x "${TEST_DIR}/task"
+    
+    run update_task_status "test-uuid" "Todo"
+    [ "$status" -eq 0 ]
+    
+    # Check that both -backlog and -hold were added to the command
+    grep -q -- "-backlog" "${TEST_DIR}/task_commands.log"
+    grep -q -- "-hold" "${TEST_DIR}/task_commands.log"
 }
 
 # ====================================================
