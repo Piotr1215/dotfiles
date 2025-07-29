@@ -49,7 +49,7 @@ color.tag.bug         = magenta on black
 color.tag.started     = on gray2
 color.tag.pr_approved = bold green
 color.scheduled       = bold yellow 
-color.hold            = bold orange
+color.hold            = bold blue
 
 # Custom reports
 report.workdone.description=List of completed tasks in the work context
