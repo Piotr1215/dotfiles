@@ -298,72 +298,68 @@ update_task_status() {
         log "Special tag check: has_backlog=$has_backlog, has_review=$has_review, has_fresh=$has_fresh"
     fi
 
-    # Skip modifying tags and priority if task has +backlog
-    # But always check if we need to remove +review tag based on current status
-    if [[ "$has_backlog" == "true" ]]; then
-        log "DETECTED +backlog tag. Skipping automatic status sync from Linear."
-        # Still check if review tag needs to be removed
-        if [[ "$has_review" == "true" && "$issue_status" != "In Review" ]]; then
-            log "Issue is no longer In Review, removing +review tag"
-            task rc.confirmation=no modify "$task_uuid" -review
+    # Always sync status from Linear - Linear is the source of truth
+    # No special handling for +backlog tag - it should be synced like other tags
+    # Removed the special backlog handling - now syncing all statuses
+    
+    # Normal status sync logic from Linear
+    if [[ "$issue_status" =~ [Bb]acklog || "$issue_status" == "Idea" ]]; then
+        log "Issue status is Backlog/Idea, adding +backlog tag, removing +next and +hold tags and resetting priority"
+        task rc.confirmation=no modify "$task_uuid" +backlog -next -hold manual_priority:
+    elif [[ "$issue_status" == "Todo" || "$issue_status" == "In Progress" || "$issue_status" == "Investigating" ]]; then
+        log "Issue status is Todo/In Progress/Investigating, removing +backlog and +hold tags and checking priority"
+        # Check if manual_priority is already set
+        local current_priority
+        current_priority=$(task _get "$task_uuid".manual_priority 2>/dev/null || echo "")
+        if [[ -z "$current_priority" ]]; then
+            task rc.confirmation=no modify "$task_uuid" -backlog -hold manual_priority:1
+        else
+            # Still need to remove backlog and hold tags even if priority is already set
+            task rc.confirmation=no modify "$task_uuid" -backlog -hold
         fi
-    else
-        # Normal status sync logic when no special tags are present
-        if [[ "$issue_status" =~ [Bb]acklog || "$issue_status" == "Idea" ]]; then
-            log "Issue status is Backlog/Idea, removing +next tag and resetting priority"
-            task rc.confirmation=no modify "$task_uuid" -next manual_priority:
-        elif [[ "$issue_status" == "Todo" || "$issue_status" == "In Progress" || "$issue_status" == "Investigating" ]]; then
-            log "Issue status is Todo/In Progress/Investigating, checking priority"
-            # Check if manual_priority is already set
-            local current_priority
-            current_priority=$(task _get "$task_uuid".manual_priority 2>/dev/null || echo "")
-            if [[ -z "$current_priority" ]]; then
-                task rc.confirmation=no modify "$task_uuid" manual_priority:1
-            fi
-            # Remove fresh tag only when actual work starts (In Progress/Investigating), not Todo
-            if [[ "$has_fresh" == "true" && "$issue_status" != "Todo" ]]; then
-                log "Work has started (status=$issue_status), removing +fresh tag"
-                task rc.confirmation=no modify "$task_uuid" -fresh
-            fi
-        elif [[ "$issue_status" == "In Review" ]]; then
-            log "Issue status is In Review, adding +review tag"
-            task rc.confirmation=no modify "$task_uuid" +review
-            # Remove fresh tag when in review
-            if [[ "$has_fresh" == "true" ]]; then
-                log "Issue is in review, removing +fresh tag"
-                task rc.confirmation=no modify "$task_uuid" -fresh
-            fi
-        elif [[ "$issue_status" == "Parked" ]]; then
-            log "Issue status is Parked, adding +backlog tag"
-            task rc.confirmation=no modify "$task_uuid" +backlog
+        # Remove fresh tag only when actual work starts (In Progress/Investigating), not Todo
+        if [[ "$has_fresh" == "true" && "$issue_status" != "Todo" ]]; then
+            log "Work has started (status=$issue_status), removing +fresh tag"
+            task rc.confirmation=no modify "$task_uuid" -fresh
         fi
-        
-        # Remove +triage tag if issue is no longer in Triage state
-        if [[ "$issue_status" != "Triage" ]]; then
-            local has_triage=$(echo "$task_json" | jq -r '.[0].tags | if . then contains(["triage"]) else false end')
-            if [[ "$has_triage" == "true" ]]; then
-                log "Issue is no longer in Triage state, removing +triage tag"
-                task rc.confirmation=no modify "$task_uuid" -triage
-            fi
+    elif [[ "$issue_status" == "In Review" ]]; then
+        log "Issue status is In Review, adding +review tag and removing +backlog and +hold tags"
+        task rc.confirmation=no modify "$task_uuid" +review -backlog -hold
+        # Remove fresh tag when in review
+        if [[ "$has_fresh" == "true" ]]; then
+            log "Issue is in review, removing +fresh tag"
+            task rc.confirmation=no modify "$task_uuid" -fresh
         fi
-        
-        # Update priority based on Linear priority (only for non-backlog/review tasks)
-        if [[ -n "$issue_priority" && ("$issue_priority" == "1" || "$issue_priority" == "2") ]]; then
-            # Check current priority
-            local current_priority
-            current_priority=$(task _get "$task_uuid".priority 2>/dev/null || echo "")
-            if [[ "$current_priority" != "H" ]]; then
-                log "Setting priority:H for High/Urgent Linear issue (priority=$issue_priority)"
-                task rc.confirmation=no modify "$task_uuid" priority:H
-            fi
-        elif [[ -n "$issue_priority" && "$issue_priority" != "1" && "$issue_priority" != "2" ]]; then
-            # Remove high priority if Linear priority changed
-            local current_priority
-            current_priority=$(task _get "$task_uuid".priority 2>/dev/null || echo "")
-            if [[ "$current_priority" == "H" ]]; then
-                log "Removing priority:H as Linear priority changed (priority=$issue_priority)"
-                task rc.confirmation=no modify "$task_uuid" priority:
-            fi
+    elif [[ "$issue_status" == "Parked" ]]; then
+        log "Issue status is Parked, adding +backlog and +hold tags"
+        task rc.confirmation=no modify "$task_uuid" +backlog +hold
+    fi
+    
+    # Remove +triage tag if issue is no longer in Triage state
+    if [[ "$issue_status" != "Triage" ]]; then
+        local has_triage=$(echo "$task_json" | jq -r '.[0].tags | if . then contains(["triage"]) else false end')
+        if [[ "$has_triage" == "true" ]]; then
+            log "Issue is no longer in Triage state, removing +triage tag"
+            task rc.confirmation=no modify "$task_uuid" -triage
+        fi
+    fi
+    
+    # Update priority based on Linear priority (only for non-backlog/review tasks)
+    if [[ -n "$issue_priority" && ("$issue_priority" == "1" || "$issue_priority" == "2") ]]; then
+        # Check current priority
+        local current_priority
+        current_priority=$(task _get "$task_uuid".priority 2>/dev/null || echo "")
+        if [[ "$current_priority" != "H" ]]; then
+            log "Setting priority:H for High/Urgent Linear issue (priority=$issue_priority)"
+            task rc.confirmation=no modify "$task_uuid" priority:H
+        fi
+    elif [[ -n "$issue_priority" && "$issue_priority" != "1" && "$issue_priority" != "2" ]]; then
+        # Remove high priority if Linear priority changed
+        local current_priority
+        current_priority=$(task _get "$task_uuid".priority 2>/dev/null || echo "")
+        if [[ "$current_priority" == "H" ]]; then
+            log "Removing priority:H as Linear priority changed (priority=$issue_priority)"
+            task rc.confirmation=no modify "$task_uuid" priority:
         fi
     fi
     
