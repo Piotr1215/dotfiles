@@ -53,6 +53,7 @@ windows:
   - repo:
       layout: main-vertical
       panes:
+        - cmatrix -a -C blue
         - lg
   - dev:
       layout: even-horizontal 
