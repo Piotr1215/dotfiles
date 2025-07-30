@@ -8,7 +8,7 @@ IFS=$'\n\t'
 # Function to list tmux sessions and tmuxinator projects, mark active sessions
 function list_sessions() {
 	local all_sessions=$(tmuxinator list -n | tail -n +2 | sort)
-	local active_sessions=$(tmux ls | grep -o '^[^:]*')
+	local active_sessions=$(tmux ls | grep -o '^[^:]*' | sort)
 	local inactive_sessions=$(comm -23 <(echo "$all_sessions") <(echo "$active_sessions"))
 
 	# Arrays to hold active and inactive sessions separately
