@@ -35,18 +35,7 @@ function list_sessions() {
 function select_session() {
 	local selected_session=$(list_sessions | fzf --reverse | sed 's/^\* //')
 	if [[ -n "$selected_session" ]]; then
-		# Special handling for snippets session
-		if [[ "$selected_session" == "snippets" ]]; then
-			# Get current session and switch to snippets with proper window focus
-			local current_session=$(tmux display-message -p '#S')
-			local current_dir=$(tmux display-message -p '#{pane_current_path}')
-			
-			# Source the composite session manager functions
-			source /home/decoder/dev/dotfiles/scripts/__snippets_session_manager.sh
-			
-			# Switch to snippets with smart window focus
-			switch_to_composite "$current_session" "$current_dir"
-		elif tmux has-session -t "$selected_session" 2>/dev/null; then
+		if tmux has-session -t "$selected_session" 2>/dev/null; then
 			# Regular session switching
 			tmux switch-client -t "$selected_session"
 		else
