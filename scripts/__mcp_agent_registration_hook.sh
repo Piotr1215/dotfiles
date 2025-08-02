@@ -59,8 +59,44 @@ find_tmux_coordinates() {
     return 1
 }
 
+echo "[$(date)] Hook called with tool: $TOOL_NAME" >> /tmp/mcp-agent-hook.log
+
 case "$TOOL_NAME" in
     "mcp__agentic-framework__register-agent")
+        echo "[$(date)] Processing agent registration..." >> /tmp/mcp-agent-hook.log
+        
+        # Check if this is the first agent being registered
+        # Count files more safely
+        if [ -d /tmp ]; then
+            EXISTING_AGENTS=0
+            for f in /tmp/claude_agent_*.json; do
+                [ -e "$f" ] && EXISTING_AGENTS=$((EXISTING_AGENTS + 1))
+            done
+            echo "[$(date)] Existing agents count: $EXISTING_AGENTS" >> /tmp/mcp-agent-hook.log
+        else
+            echo "[$(date)] ERROR: /tmp directory not accessible" >> /tmp/mcp-agent-hook.log
+            EXISTING_AGENTS=1  # Assume not first to be safe
+        fi
+        
+        # If no agents exist, this is the first registration - open web UI
+        if [ "$EXISTING_AGENTS" -eq 0 ]; then
+            echo "[$(date)] First agent registration detected - opening MCP web UI" >> /tmp/mcp-agent-hook.log
+            # Try to get DISPLAY from current user's environment
+            if [ -z "$DISPLAY" ]; then
+                # Try to get it from the user's process
+                USER_DISPLAY=$(ps e -u $USER | grep -o 'DISPLAY=[^ ]*' | head -1 | cut -d= -f2)
+                export DISPLAY="${USER_DISPLAY:-:1}"
+                echo "[$(date)] Set DISPLAY=$DISPLAY" >> /tmp/mcp-agent-hook.log
+            else
+                echo "[$(date)] DISPLAY already set to: $DISPLAY" >> /tmp/mcp-agent-hook.log
+            fi
+            echo "[$(date)] Attempting to open browser with firefox..." >> /tmp/mcp-agent-hook.log
+            nohup firefox "http://192.168.178.91:3113" > /dev/null 2>&1 &
+            echo "[$(date)] firefox command executed" >> /tmp/mcp-agent-hook.log
+        else
+            echo "[$(date)] Not first agent - existing agents: $EXISTING_AGENTS" >> /tmp/mcp-agent-hook.log
+        fi
+        
         # Extract agent details
         AGENT_NAME=$(echo "$INPUT" | jq -r '.tool_input.name // "Unknown"')
         INSTANCE_ID=$(echo "$INPUT" | jq -r '.tool_input.instanceId // ""')
