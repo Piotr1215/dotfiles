@@ -11,7 +11,6 @@ import os
 import base64
 import tempfile
 import hashlib
-import subprocess
 
 # Service configurations with status page URLs
 SERVICES = {
@@ -102,7 +101,6 @@ os.makedirs(CACHE_DIR, exist_ok=True)
 STATE_DIR = os.path.join(os.path.expanduser('~'), '.local', 'state', 'argos-service-monitor')
 os.makedirs(STATE_DIR, exist_ok=True)
 STATE_FILE = os.path.join(STATE_DIR, 'services_status_state.json')
-SESSION_LAUNCHED_FILE = os.path.join(STATE_DIR, 'servmon_session_launched')
 
 def get_cache_path(url):
     """Generate cache file path for a favicon URL"""
@@ -384,36 +382,8 @@ def check_status_degradation(previous_statuses, current_statuses, degradation_co
     
     return degraded_services, new_degradation_counts
 
-def launch_servmon_session():
-    """Launch tmuxinator servmon session if not already running"""
-    try:
-        # Check if servmon session already exists
-        result = subprocess.run(['tmux', 'has-session', '-t', 'servmon'], 
-                              capture_output=True)
-        
-        if result.returncode != 0:
-            # Session doesn't exist, launch it
-            subprocess.run(['tmuxinator', 'start', 'servmon'], 
-                         capture_output=True)
-            return True
-    except Exception:
-        pass
-    return False
-
-def kill_servmon_session():
-    """Kill servmon session if it exists"""
-    try:
-        result = subprocess.run(['tmux', 'has-session', '-t', 'servmon'], 
-                              capture_output=True)
-        
-        if result.returncode == 0:
-            # Session exists, kill it
-            subprocess.run(['tmux', 'kill-session', '-t', 'servmon'], 
-                         capture_output=True)
-            return True
-    except Exception:
-        pass
-    return False
+# Removed launch_servmon_session and kill_servmon_session functions
+# These are no longer needed as we don't want to create tmux sessions
 
 def main():
     """Main function to generate Argos output"""
@@ -431,12 +401,7 @@ def main():
         previous_statuses, statuses, degradation_counts
     )
     
-    # If services degraded (after debouncing), launch session
-    if degraded_services:
-        launch_servmon_session()
-    elif overall_status == "operational":
-        # All services are operational, kill the session if it exists
-        kill_servmon_session()
+    # No longer launching or killing tmux sessions
     
     # Save current state for next check
     save_current_state(statuses, new_degradation_counts)
