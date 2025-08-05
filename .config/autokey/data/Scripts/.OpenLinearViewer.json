@@ -1,11 +1,11 @@
 {
     "type": "script",
-    "description": "OpenPetLinks",
+    "description": "OpenLinearViewer",
     "store": {},
     "modes": [
         3
     ],
-    "usageCount": 1,
+    "usageCount": 35,
     "prompt": false,
     "omitTrigger": false,
     "showInTrayMenu": false,
@@ -22,7 +22,7 @@
             "<alt>",
             "<ctrl>"
         ],
-        "hotKey": "b"
+        "hotKey": "l"
     },
     "filter": {
         "regex": null,
