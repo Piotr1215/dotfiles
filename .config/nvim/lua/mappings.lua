@@ -338,7 +338,7 @@ utils.lnmap("od", ":ObsidianToday<cr>")
 
 -- Copilot
 vim.cmd [[
-        imap <silent><script><expr> <C-s> copilot#Accept("\<CR>")
+        imap <silent><script><expr> <C-f> copilot#Accept("\<CR>")
         let g:copilot_no_tab_map = v:true
 ]]
 utils.lnmap("cpd", ":Copilot disable<cr>", { silent = false })
