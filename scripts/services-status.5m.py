@@ -67,6 +67,12 @@ SERVICES = {
         "status_page": "https://status.redhat.com/",
         "name": "Quay.io",
         "favicon": "https://quay.io/static/img/favicon.ico"
+    },
+    "Rippling": {
+        "api": "https://status.rippling.com/api/v2/status.json",
+        "status_page": "https://status.rippling.com/",
+        "name": "Rippling",
+        "favicon": "https://www.rippling.com/favicon.ico"
     }
 }
 
@@ -90,7 +96,8 @@ SERVICE_EMOJIS = {
     "Linear": "📋",   # Clipboard for Linear issues
     "GoDaddy": "🌐", # Globe for domain registrar
     "Claude": "🤖",   # Robot for AI
-    "Quay": "🐳"      # Whale/Docker for container registry
+    "Quay": "🐳",     # Whale/Docker for container registry
+    "Rippling": "💼"  # Briefcase for HR/workforce management
 }
 
 # Cache directory for favicons
@@ -307,6 +314,22 @@ def get_godaddy_status():
         pass
     return "unknown"
 
+def get_rippling_status():
+    """Check Rippling status using statuspage.io API"""
+    try:
+        data = fetch_status(SERVICES["Rippling"]["api"])
+        if data and 'status' in data:
+            indicator = data['status'].get('indicator', 'none')
+            if indicator == 'none':
+                return "operational"
+            elif indicator == 'minor':
+                return "degraded"
+            elif indicator in ['major', 'critical']:
+                return "major"
+    except Exception:
+        pass
+    return "unknown"
+
 def get_all_statuses():
     """Get status for all services"""
     return {
@@ -318,7 +341,8 @@ def get_all_statuses():
         "Linear": get_linear_status(),
         "GoDaddy": get_godaddy_status(),
         "Claude": get_claude_status(),
-        "Quay": get_quay_status()
+        "Quay": get_quay_status(),
+        "Rippling": get_rippling_status()
     }
 
 def get_overall_status(statuses):
