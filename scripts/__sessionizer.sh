@@ -87,16 +87,17 @@ if [ $# -eq 0 ]; then               # no argument provided
     )
   fi
 else # argument provided
-  zoxide query "$1" &>/dev/null
-  ZOXIDE_RESULT_EXIT_CODE=$?
-  if [ $ZOXIDE_RESULT_EXIT_CODE -eq 0 ]; then # zoxide result found
-    RESULT=$(zoxide query "$1")
-  else # no zoxide result found
-    ls "$1" &>/dev/null
-    LS_EXIT_CODE=$?
-    if [ $LS_EXIT_CODE -eq 0 ]; then # directory found
-      RESULT=$1
-    else # no directory found
+  # First check if the argument is an actual path that exists
+  if [ -e "$1" ]; then
+    # Use the actual path provided
+    RESULT=$(realpath "$1")
+  else
+    # If not a valid path, try zoxide
+    zoxide query "$1" &>/dev/null
+    ZOXIDE_RESULT_EXIT_CODE=$?
+    if [ $ZOXIDE_RESULT_EXIT_CODE -eq 0 ]; then # zoxide result found
+      RESULT=$(zoxide query "$1")
+    else # no zoxide result found
       echo "No directory found."
       exit 1
     fi
