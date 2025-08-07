@@ -50,12 +50,6 @@ SERVICES = {
         "name": "Linear",
         "favicon": "https://linear.app/favicon.ico"
     },
-    "GoDaddy": {
-        "api": "https://status.godaddy.com/api/v2/status.json",
-        "status_page": "https://status.godaddy.com/",
-        "name": "GoDaddy",
-        "favicon": "https://www.godaddy.com/favicon.ico"
-    },
     "Claude": {
         "api": "https://status.anthropic.com/api/v2/status.json",
         "status_page": "https://status.anthropic.com/",
@@ -94,7 +88,6 @@ SERVICE_EMOJIS = {
     "Netlify": "🚀",  # Rocket for Netlify deployments
     "GitHub": "🐙",   # Octopus (Octocat) for GitHub
     "Linear": "📋",   # Clipboard for Linear issues
-    "GoDaddy": "🌐", # Globe for domain registrar
     "Claude": "🤖",   # Robot for AI
     "Quay": "🐳",     # Whale/Docker for container registry
     "Rippling": "💼"  # Briefcase for HR/workforce management
@@ -298,22 +291,6 @@ def get_linear_status():
         pass
     return "unknown"
 
-def get_godaddy_status():
-    """Check GoDaddy status using statuspage.io API"""
-    try:
-        data = fetch_status(SERVICES["GoDaddy"]["api"])
-        if data and 'status' in data:
-            indicator = data['status'].get('indicator', 'none')
-            if indicator == 'none':
-                return "operational"
-            elif indicator == 'minor':
-                return "degraded"
-            elif indicator in ['major', 'critical']:
-                return "major"
-    except Exception:
-        pass
-    return "unknown"
-
 def get_rippling_status():
     """Check Rippling status using statuspage.io API"""
     try:
@@ -339,7 +316,6 @@ def get_all_statuses():
         "Netlify": get_netlify_status(),
         "GitHub": get_github_status(),
         "Linear": get_linear_status(),
-        "GoDaddy": get_godaddy_status(),
         "Claude": get_claude_status(),
         "Quay": get_quay_status(),
         "Rippling": get_rippling_status()
