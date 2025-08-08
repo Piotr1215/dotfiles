@@ -62,7 +62,7 @@ function list_sessions() {
 	# Process active sessions
 	for session in $active_sessions; do
 		if is_pinned "$session"; then
-			pinned_active+=("📌 * $session")
+			pinned_active+=("** $session")
 		elif echo "$frequencies" | grep -q "[[:space:]]$session$"; then
 			frequent_active+=("* $session")
 		else
@@ -70,10 +70,11 @@ function list_sessions() {
 		fi
 	done
 	
-	# Process inactive sessions (don't pin if not running)
+	# Process inactive sessions
 	for session in $inactive_sessions; do
-		# Only treat as frequent, not pinned, if it's not active
-		if echo "$frequencies" | grep -q "[[:space:]]$session$"; then
+		if is_pinned "$session"; then
+			pinned_inactive+=("   $session")
+		elif echo "$frequencies" | grep -q "[[:space:]]$session$"; then
 			frequent_inactive+=("  $session")
 		else
 			other_inactive+=("  $session")
@@ -101,11 +102,32 @@ function list_sessions() {
 		mapfile -t frequent_inactive < <(sort_by_frequency "${frequent_inactive[@]}")
 	fi
 	
-	# Combine all arrays in order: ALL active first, then ALL inactive
-	# Active: pinned, frequent, other
-	# Inactive: frequent, other
+	# Combine all arrays in order: task first, then other pinned, then rest
+	# Separate task from other pinned sessions
+	local -a task_session=()
+	local -a other_pinned_active=()
+	local -a other_pinned_inactive=()
+	
+	for session in "${pinned_active[@]}"; do
+		if [[ "$session" == *"task" ]]; then
+			task_session+=("$session")
+		else
+			other_pinned_active+=("$session")
+		fi
+	done
+	
+	for session in "${pinned_inactive[@]}"; do
+		if [[ "$session" == *"task" ]]; then
+			task_session+=("$session")
+		else
+			other_pinned_inactive+=("$session")
+		fi
+	done
+	
 	combined_sessions=(
-		"${pinned_active[@]}"
+		"${task_session[@]}"
+		"${other_pinned_active[@]}"
+		"${other_pinned_inactive[@]}"
 		"${frequent_active[@]}"
 		"${other_active[@]}"
 		"${frequent_inactive[@]}"
@@ -117,8 +139,8 @@ function list_sessions() {
 
 # Use fzf to select a session, removing markers and spaces
 function select_session() {
-	local selected=$(list_sessions | fzf --reverse --header="📌=pinned  *=active  Sessions sorted by frequency")
-	local selected_session=$(echo "$selected" | sed 's/^[📌* ]*//')
+	local selected=$(list_sessions | fzf --reverse --header="**=pinned active  *=active  Task always first")
+	local selected_session=$(echo "$selected" | sed 's/^[* ]*//')
 	
 	if [[ -n "$selected_session" ]]; then
 		# Track the access
