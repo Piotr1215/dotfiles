@@ -139,7 +139,7 @@ case "$MODE" in
         # Interactive selection without preview  
         selected=$(echo "$display_data" | fzf --ansi \
             --no-preview \
-            --header $'Date       │ Repository                           │     PR# │ Author          │ Title\n───────────┼──────────────────────────────────────┼─────────┼─────────────────┼──────────────────────\n✍=author  👀=review  💬=involved  📢=mentioned  📝=draft  ✅=approved  │  '"$pr_count"$' PRs\nEnter: Open  │  Ctrl-Y: Copy URL  │  Ctrl-S: Clone & Open  │  Ctrl-R: Refresh' \
+            --header $'Date       │ Repository                          │     PR# │ Author          │ Title\n───────────┼─────────────────────────────────────┼─────────┼─────────────────┼─────────────────────\n✍=author  👀=review  💬=involved  📢=mentioned  📝=draft  ✅=approved   '"$pr_count"$' PRs\nEnter: Open  │  Ctrl-Y: Copy URL  │  Ctrl-S: Clone & Open  │  Ctrl-R: Refresh' \
             --bind 'ctrl-y:execute-silent(echo {} | awk -F" │ " "{print \$3}" | tr -d " #" | xargs -I PR awk -F"\t" "\$3 == \"#PR\" {print \$6; exit}" '"$pr_data_file"' | xclip -selection clipboard)+change-prompt(URL copied! > )' \
             --bind 'ctrl-s:execute(
                 org_repo=$(echo {} | awk -F" │ " "{print \$2}" | xargs);
