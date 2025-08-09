@@ -321,7 +321,7 @@ alacritty_resize_9_16() {
 	fi
 }
 
-claude_alacritty_vertical() {
+chatgpt_alacritty_vertical() {
 	# Get screen dimensions
 	screen_size=$(xdpyinfo | grep dimensions | awk '{print $2}')
 	screen_width=$(echo $screen_size | cut -d'x' -f1)
@@ -335,7 +335,7 @@ claude_alacritty_vertical() {
 	claude_tab_id=""
 	if [ -n "$firefox_window" ]; then
 		# Use brotab to find Claude tab
-		claude_tab_id=$(brotab list 2>/dev/null | grep "https://claude\.ai" | head -n 1 | cut -f1)
+		claude_tab_id=$(brotab list 2>/dev/null | grep "https://chatgpt\.com" | head -n 1 | cut -f1)
 	fi
 	
 	if [ -n "$claude_tab_id" ]; then
@@ -347,10 +347,10 @@ claude_alacritty_vertical() {
 		# Claude not open, open it in Firefox
 		if [ -n "$firefox_window" ]; then
 			# Firefox is running, open in new tab
-			firefox --new-tab "https://claude.ai" 2>/dev/null &
+			firefox --new-tab "https://chatgpt.com" 2>/dev/null &
 		else
 			# No Firefox running, start it with Claude
-			firefox "https://claude.ai" 2>/dev/null &
+			firefox "https://chatgpt.com" 2>/dev/null &
 			sleep 2  # Give Firefox time to start
 			firefox_window=$(xdotool search --classname Navigator | head -n 1)
 		fi
@@ -404,7 +404,7 @@ case $1 in
 7) firefox_firefox_alacritty ;;
 8) slack_alacritty_vertical ;;
 9) alacritty_resize_9_16 ;;
-10) claude_alacritty_vertical ;;
+10) chatgpt_alacritty_vertical ;;
 *)
 	echo "Usage: $0 {1|2|3|4|5|6|7|8|9|10}"
 	exit 1
