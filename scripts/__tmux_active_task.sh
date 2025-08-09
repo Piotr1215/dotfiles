@@ -4,7 +4,13 @@ set -eo pipefail
 
 # Check if we're in time off mode
 is_time_off() {
-    # Check boot.sh for timeoff setting
+    # First check if it's a weekend
+    local current_day=$(date +"%A")
+    if [[ "$current_day" == "Saturday" ]] || [[ "$current_day" == "Sunday" ]]; then
+        return 0
+    fi
+    
+    # Also check boot.sh for manual timeoff setting
     local boot_script="/home/decoder/dev/dotfiles/scripts/__boot.sh"
     if [ -f "$boot_script" ]; then
         local timeoff=$(grep -E '^timeoff=' "$boot_script" | cut -d'=' -f2)
