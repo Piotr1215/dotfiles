@@ -91,7 +91,6 @@ if [[ " ${weekdays[*]} " =~ $current_day ]] && [[ "$timeoff" == 0 ]]; then
 else
 	# Weekend :)
 	update_profiles_ini "g4ip39zz.default-release"
-	nohup firefox -P "Home" >/dev/null 2>&1 &
 	alacritty &
 	move_alacritty_to_hdmi_0
 fi
