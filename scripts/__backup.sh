@@ -168,6 +168,7 @@ declare -a BACKUP_SOURCES=(
 	"loft ops|/home/decoder/loft/ops|$DEV_BACKUP/loft|true|"
         "argos scripts|/home/decoder/.config/argos/|$HOME_BACKUP/argos/|false|"
 	"TLP CPU config|/etc/tlp.d/|$HOME_BACKUP/tlp/|true|"
+	"local mail storage|/home/decoder/.local/share/mail|/mnt/nas-mail/current|false|--delete"
 )
 
 # Function to perform backup from configuration
