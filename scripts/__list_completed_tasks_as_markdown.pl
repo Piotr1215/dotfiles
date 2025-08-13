@@ -124,28 +124,46 @@ for my $project (sort keys %all_projects) {
 }
 
 # Now print PRs and Reviews at the bottom
-if (exists $all_projects{'PRs and Reviews'}) {
-    my @tasks;
+my @pr_tasks;
+
+# Skip taskwarrior PR tasks - we'll get them from GitHub directly
+
+# Get actual GitHub PRs from yesterday (or Friday if today is Monday)
+my $target_date;
+if ($wday eq 'Mon') {
+    # It's Monday, look at Friday
+    $target_date = `date -d "last Friday" +%Y-%m-%d`;
+} else {
+    # Any other day, look at yesterday
+    $target_date = `date -d "yesterday" +%Y-%m-%d`;
+}
+chomp($target_date);
+
+# Get merged PRs I authored
+my $authored_prs_json = `gh search prs --author "\@me" --owner "loft-sh" --merged --merged-at "$target_date..$target_date" --limit 50 --json url,title,number 2>/dev/null`;
+if ($authored_prs_json) {
+    my @authored_lines = `echo '$authored_prs_json' | jq -r '.[] | "[x] " + .title + " (#" + (.number | tostring) + ") [[1]](" + .url + ")"' 2>/dev/null`;
+    push @pr_tasks, map { chomp; $_ } @authored_lines;
+}
+
+# Get merged PRs I reviewed (excluding my own)
+my $reviewed_prs_json = `gh search prs --reviewed-by "\@me" --owner "loft-sh" --merged --merged-at "$target_date..$target_date" --limit 50 --json url,title,number,author 2>/dev/null`;
+if ($reviewed_prs_json) {
+    my @reviewed_lines = `echo '$reviewed_prs_json' | jq -r '.[] | select(.author.login != "decoder" and .author.login != "\@me") | "[x] " + .title + " (#" + (.number | tostring) + ") [[1]](" + .url + ")"' 2>/dev/null`;
+    push @pr_tasks, map { chomp; $_ } @reviewed_lines;
+}
+
+# Remove duplicates and print if we have any PR tasks
+if (@pr_tasks) {
+    my %seen;
+    @pr_tasks = grep { !$seen{$_}++ } @pr_tasks;
     
-    # Add today's tasks if any
-    if (exists $tasks_by_project_by_period{today}{'PRs and Reviews'}) {
-        push @tasks, @{$tasks_by_project_by_period{today}{'PRs and Reviews'}};
+    print "PRs and Reviews\n";
+    for my $task (@pr_tasks) {
+        print "- $task\n";
     }
-    
-    # Add yesterday's tasks if any
-    if (exists $tasks_by_project_by_period{yesterday}{'PRs and Reviews'}) {
-        push @tasks, @{$tasks_by_project_by_period{yesterday}{'PRs and Reviews'}};
-    }
-    
-    # Print project and tasks if we have any
-    if (@tasks) {
-        print "PRs and Reviews\n";
-        for my $task (@tasks) {
-            print "- $task\n";
-        }
-        print "\n";
-        $any_tasks_printed = 1;
-    }
+    print "\n";
+    $any_tasks_printed = 1;
 }
 
 # Print a message if no tasks found
