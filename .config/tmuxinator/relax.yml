@@ -36,10 +36,10 @@ root: ~/music
 # tmux_command: byobu
 
 # Specifies (by name or index) which window will be selected on project startup. If not set, the first window is used.
-# startup_window: dev
+startup_window: media
 
 # Specifies (by index) which pane of the specified window will be selected on project startup. If not set, the first pane is used.
-# startup_pane: 2
+startup_pane: 2
 
 # Controls whether the tmux session should be attached to automatically. Defaults to true.
 # attach: false
@@ -50,3 +50,8 @@ windows:
       panes:
         - cmus ~/music/
         - cava
+  - media:
+      layout: even-horizontal
+      panes:
+        - ytx
+        - __play_track.sh --run
