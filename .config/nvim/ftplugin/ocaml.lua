@@ -38,6 +38,21 @@ vim.keymap.set("n", "<leader>ob", ":!dune build<CR>", opts)
 -- Run dune exec for current file
 vim.keymap.set("n", "<leader>or", ":!dune exec ./%:t:r.exe<CR>", opts)
 
+-- Create OcamlRun command similar to GoRun
+vim.api.nvim_create_user_command("OcamlRun", function()
+  -- Check if in a dune project
+  if vim.fn.filereadable("dune") == 1 or vim.fn.filereadable("dune-project") == 1 then
+    -- Use dune to build and run
+    vim.cmd("!dune exec ./" .. vim.fn.expand("%:t:r") .. ".exe")
+  else
+    -- Run directly with ocaml interpreter
+    vim.cmd("!ocaml " .. vim.fn.expand("%"))
+  end
+end, { desc = "Run current OCaml file" })
+
+-- Quick run with <leader>R (capital R)
+vim.keymap.set("n", "<leader>R", ":OcamlRun<CR>", opts)
+
 -- Open utop REPL
 vim.keymap.set("n", "<leader>ou", ":terminal utop<CR>", opts)
 
