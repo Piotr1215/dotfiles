@@ -12,3 +12,4 @@ scripts
 .task
 shortcuts.md
 justfile
+.claude
