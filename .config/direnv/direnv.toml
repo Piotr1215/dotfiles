@@ -1,8 +1,11 @@
 [global]
+# Hide the long list of environment variable exports when entering directories
+# This keeps the output clean, showing only "direnv: loading .envrc"
 hide_env_diff = true
-warn_timeout = "30s"
-load_dotenv = false
-strict_env = false
 
-[whitelist]
-prefix = []
+# Warn if .envrc takes longer than 30 seconds to execute
+warn_timeout = "30s"
+
+# Don't automatically load .env files (only .envrc)
+# This is more secure as .env files are often accidentally committed
+load_dotenv = false

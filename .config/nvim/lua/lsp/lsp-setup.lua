@@ -24,6 +24,16 @@ lspconfig.lua_ls.setup {
 local nvim_lsp = require "lspconfig"
 lspconfig.terraformls.setup {}
 lspconfig.tflint.setup {}
+
+-- OCaml LSP setup for devbox environments
+lspconfig.ocamllsp.setup {
+  cmd = { "ocamllsp" }, -- Uses the one from PATH (devbox provides it)
+  capabilities = def.capabilities,
+  on_attach = def.on_attach,
+  filetypes = { "ocaml", "ocaml.menhir", "ocaml.interface", "ocaml.ocamllex", "reason" },
+  root_dir = lspconfig.util.root_pattern("*.opam", "dune-project", "dune-workspace", ".git"),
+}
+
 nvim_lsp.denols.setup {
   on_attach = def.on_attach,
   root_dir = nvim_lsp.util.root_pattern("deno.json", "deno.jsonc"),
