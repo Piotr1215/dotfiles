@@ -6,10 +6,65 @@ CONTEXT_DIR="$HOME/.config/fabric/contexts"
 THINKING_MODE=""  # Global thinking mode setting
 MODEL="gpt-4o"  # Default to GPT-4o (faster than GPT-5)
 
+parse_variables() {
+	local input="$1"
+	local -a variables=()
+	
+	# Parse lines that match VARIABLE="value" or VARIABLE=value
+	while IFS= read -r line; do
+		# Match lines like VARIABLE="value" or VARIABLE=value
+		if [[ "$line" =~ ^([A-Z_]+)=(.*)$ ]]; then
+			local var_name="${BASH_REMATCH[1]}"
+			local var_value="${BASH_REMATCH[2]}"
+			# Remove surrounding quotes if present
+			var_value="${var_value%\"}"
+			var_value="${var_value#\"}"
+			variables+=("-v=${var_name}:${var_value}")
+		fi
+	done <<< "$input"
+	
+	# Return the variables array
+	printf '%s\n' "${variables[@]}"
+}
+
+extract_content() {
+	local input="$1"
+	local content=""
+	
+	# Extract non-variable lines as content
+	while IFS= read -r line; do
+		# Skip variable assignment lines
+		if ! [[ "$line" =~ ^[A-Z_]+=.*$ ]]; then
+			if [[ -n "$content" ]]; then
+				content+=$'\n'
+			fi
+			content+="$line"
+		fi
+	done <<< "$input"
+	
+	echo "$content"
+}
+
 execute_fabric() {
 	local pattern="$1" input="$2" session="$3" context="${4:-}"
 	local cmd=("fabric" "-p" "$pattern" "--session=$session")
 	local cmd_display="fabric -p \"$pattern\" --session=\"$session\""
+
+	# Parse variables from input
+	local -a variables=()
+	mapfile -t variables < <(parse_variables "$input")
+	
+	# Extract content (non-variable lines)
+	local content
+	content=$(extract_content "$input")
+	
+	# Add variables to command
+	for var in "${variables[@]}"; do
+		if [[ -n "$var" ]]; then
+			cmd+=("$var")
+			cmd_display+=" $var"
+		fi
+	done
 
 	if [[ -n "$context" ]]; then
 		cmd+=("--context=$context")
@@ -49,7 +104,8 @@ execute_fabric() {
 
 	echo "Executing: $cmd_display" >&2
 
-	echo "$input" | "${cmd[@]}" | grep -v "Creating new session:" || true
+	# Pass only the content (non-variable lines) to fabric
+	echo "$content" | "${cmd[@]}" | grep -v "Creating new session:" || true
 }
 
 select_pattern() {
@@ -117,6 +173,25 @@ select_context() {
 	else
 		echo ""
 	fi
+}
+
+get_pattern_variables() {
+	local pattern="$1"
+	local pattern_file="$HOME/.config/fabric/patterns/$pattern/system.md"
+	local custom_pattern_file="$HOME/.config/fabric/custom_patterns/$pattern/system.md"
+	local file_to_check=""
+	
+	# Check which file exists
+	if [[ -f "$pattern_file" ]]; then
+		file_to_check="$pattern_file"
+	elif [[ -f "$custom_pattern_file" ]]; then
+		file_to_check="$custom_pattern_file"
+	else
+		return
+	fi
+	
+	# Extract variables between {{ and }}
+	grep -o '{{[A-Z_]*}}' "$file_to_check" 2>/dev/null | sed 's/{{//g; s/}}//g' | sort -u
 }
 
 chain_patterns() {
@@ -204,10 +279,23 @@ chain_patterns() {
 			vipe_content="=== CONVERSATION HISTORY (DO NOT EDIT ABOVE THIS LINE) ===\n"
 			vipe_content+="$conversation_history\n"
 			vipe_content+="\n=== YOUR NEW INPUT BELOW ===\n"
-			# Don't add current_output here - keep it clean for new input
 		else
-			# First exchange - just show the previous output if chaining
-			vipe_content="${current_output:-}"
+			# First exchange - check for pattern variables
+			local pattern_vars
+			pattern_vars=$(get_pattern_variables "$pattern")
+			
+			if [[ -n "$pattern_vars" ]]; then
+				# Prefill with variable template
+				vipe_content="# Variables for pattern: $pattern\n"
+				vipe_content+="# Fill in the values below:\n\n"
+				while IFS= read -r var; do
+					vipe_content+="${var}=\"\"\n"
+				done <<< "$pattern_vars"
+				vipe_content+="\n# Additional content (optional):\n"
+			elif [[ -n "$current_output" ]]; then
+				# Just show the previous output if chaining
+				vipe_content="${current_output:-}"
+			fi
 		fi
 		
 		# Show full history in vipe
@@ -217,7 +305,8 @@ chain_patterns() {
 		if [[ "$full_input" == *"=== YOUR NEW INPUT BELOW ==="* ]]; then
 			user_input=$(echo "$full_input" | sed -n '/=== YOUR NEW INPUT BELOW ===/,$p' | tail -n +2)
 		else
-			user_input="$full_input"
+			# Remove comment lines from the input
+			user_input=$(echo "$full_input" | grep -v '^#' | sed '/^$/d')
 		fi
 		
 		echo "Executing fabric..."
