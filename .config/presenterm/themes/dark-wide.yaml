@@ -1,0 +1,40 @@
+extends: terminal-dark
+default:
+  margin:
+    percent: 1
+  alignment: center
+slide_title:
+  alignment: center
+headings:
+  h1:
+    alignment: center
+  h2:
+    alignment: center
+  h3:
+    alignment: center
+  h4:
+    alignment: center
+  h5:
+    alignment: center
+  h6:
+    alignment: center
+code:
+  alignment: center
+  minimum_margin:
+    percent: 0
+  padding:
+    horizontal: 0
+    vertical: 0
+execution_output:
+  alignment: center
+  minimum_margin:
+    percent: 0
+  padding:
+    horizontal: 0
+    vertical: 0
+block_quote:
+  alignment: center
+  minimum_margin:
+    percent: 4
+table:
+  alignment: center
