@@ -1,0 +1,22 @@
+defaults:
+  theme: dark-wide
+  max_columns_alignment: center
+  max_rows_alignment: center
+  max_columns: 200
+  max_rows: 100
+
+snippet:
+  exec:
+    enable: true
+    custom:
+      diagrams:
+        filename: "diagram.sh"
+        commands:
+          - ["bash", "diagram.sh"]
+  exec_replace:
+    enable: true
+  render:
+    threads: 2
+
+options:
+  implicit_slide_ends: true
