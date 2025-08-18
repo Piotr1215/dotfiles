@@ -313,6 +313,9 @@ utils.lnmap("tr", ":TransparentToggle<CR>")
 -- FeMaco
 utils.lnmap("ec", ":FeMaco<CR>")
 
+-- Table Formatting
+vim.keymap.set("v", "<leader>ft", ":!column -t -s '|' -o '|'<CR>", { desc = "Format markdown table with column command" })
+
 -- Trouble
 vim.keymap.set("n", "<leader>xx", "<cmd>Trouble diagnostics toggle<cr>", { silent = true, noremap = true })
 vim.keymap.set("n", "<leader>xX", "<cmd>Trouble diagnostics toggle filter.buf=0<cr>", { silent = true, noremap = true })
