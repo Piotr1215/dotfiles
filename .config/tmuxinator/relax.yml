@@ -49,9 +49,5 @@ windows:
       layout: main-horizontal
       panes:
         - cmus ~/music/
-        - cava
-  - media:
-      layout: even-horizontal
-      panes:
-        - ytx
         - __play_track.sh --run
+        - cava

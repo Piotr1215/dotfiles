@@ -2,6 +2,31 @@
 set -eo pipefail
 IFS=$'\n\t'
 
+# Check for --help flag
+if [[ "$1" == "--help" ]] || [[ "$1" == "-h" ]]; then
+	cat <<-EOF
+	Usage: $(basename "$0") [OPTIONS]
+	
+	Play audio tracks from playlist using mpv in tmux sessions.
+	
+	OPTIONS:
+	  --run     Run in continuous mode (stay open after selection)
+	  --help    Show this help message
+	
+	BEHAVIOR:
+	  - Displays tracks from a playlist
+	  - Plays selected track in a tmux session using mpv
+	  - Only one track plays at a time (stops others automatically)
+	  - In --run mode: shows playing tracks with ► marker
+	  - Click playing track again to stop it
+	
+	REQUIREMENTS:
+	  - tmux, mpv, fzf, yt-dlp (auto-installed via pipx)
+	  - Playlist file at ~/haruna_playlist.m3u
+	EOF
+	exit 0
+fi
+
 # Check for --run flag
 RUN_MODE=false
 if [[ "$1" == "--run" ]]; then
