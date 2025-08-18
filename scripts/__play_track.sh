@@ -158,8 +158,11 @@ track_names_with_numbers=$(nl -w2 -n rz -s'. ' <<< "$track_names")
 while true; do
 	# In run mode, check for active sessions and add markers
 	if [[ "$RUN_MODE" == true ]]; then
-		# Check for active mpv sessions and mark them
-		active_sessions=$(tmux list-sessions 2>/dev/null | grep -E '^[a-z0-9_]+:' | cut -d: -f1 || true)
+		# Read the currently playing session from file
+		current_playing_session=""
+		if [[ -f "/tmp/current_music_session.txt" ]]; then
+			current_playing_session=$(cat "/tmp/current_music_session.txt" 2>/dev/null || true)
+		fi
 		
 		# Add markers to active tracks
 		marked_tracks=""
@@ -178,17 +181,26 @@ while true; do
 			fi
 			
 			# Create potential session name from full track (same logic as when creating session)
-			potential_session=$(echo "$full_track" | tr -c '[:alnum:]-' '_' | tr '[:upper:]' '[:lower:]' | cut -c 1-25)
+			# Extract just the title part for session naming
+			if [[ "$full_track" =~ ^[^:]+:\ (.+)$ ]]; then
+				song_title="${BASH_REMATCH[1]}"
+			else
+				song_title="$full_track"
+			fi
 			
-			# Check if this session exists
+			# Create session name with hash suffix for uniqueness
+			base_session=$(echo "$song_title" | tr -c '[:alnum:]-' '_' | tr '[:upper:]' '[:lower:]' | cut -c 1-45)
+			track_hash=$(echo -n "$full_track" | md5sum | cut -c 1-4)
+			potential_session="${base_session}_${track_hash}"
+			
+			# Check if this is the currently playing session
 			is_playing=false
-			for session in $active_sessions; do
-				# Check if session name matches our pattern (could be from our script)
-				if [[ "$session" == "$potential_session" ]] || [[ "$session" == "${potential_session}"* ]]; then
+			if [[ "$potential_session" == "$current_playing_session" ]]; then
+				# Also verify the session actually exists
+				if tmux has-session -t "$potential_session" 2>/dev/null; then
 					is_playing=true
-					break
 				fi
-			done
+			fi
 			
 			if $is_playing; then
 				marked_tracks+="► $line"$'\n'
@@ -240,22 +252,38 @@ if [[ -n $selected_track ]]; then
 	# Look up the original name to find the track path
 	original_name="${display_names[$selected_track]}"
 	track_path="${tracks[$original_name]}"
-	# Prepare a valid tmux session name using the clean name
-	tmux_session_name=$(echo "$selected_track" | tr -c '[:alnum:]-' '_' | tr '[:upper:]' '[:lower:]' | cut -c 1-25)
+	# Generate unique session name from the song title (not category)
+	# Extract just the title part for session naming
+	if [[ "$selected_track" =~ ^[^:]+:\ (.+)$ ]]; then
+		song_title="${BASH_REMATCH[1]}"
+	else
+		song_title="$selected_track"
+	fi
+	
+	# Create session name: lowercase, alphanumeric, max 50 chars
+	# Use more characters and add a hash suffix for uniqueness
+	base_session=$(echo "$song_title" | tr -c '[:alnum:]-' '_' | tr '[:upper:]' '[:lower:]' | cut -c 1-45)
+	# Add a short hash of the full track name for uniqueness
+	track_hash=$(echo -n "$selected_track" | md5sum | cut -c 1-4)
+	tmux_session_name="${base_session}_${track_hash}"
 
 	# Check if THIS exact session already exists (user clicked on playing track to stop it)
 	if tmux has-session -t "$tmux_session_name" 2>/dev/null; then
 		# Kill existing session
 		tmux kill-session -t "$tmux_session_name"
+		# Remove the session file since nothing is playing now
+		rm -f "/tmp/current_music_session.txt"
 		echo "Stopped: $selected_track"
 	else
-		# Kill ALL other mpv sessions first (only one track should play at a time)
-		for session in $active_sessions; do
-			# Only kill sessions that look like they're from our script (lowercase with underscores)
-			if [[ "$session" =~ ^[a-z0-9_]+$ ]] && [[ "$session" != "mail" ]] && [[ "$session" != "poke" ]] && [[ "$session" != "relax" ]]; then
-				tmux kill-session -t "$session" 2>/dev/null || true
+		# Kill the previously playing session if it exists
+		session_file="/tmp/current_music_session.txt"
+		if [[ -f "$session_file" ]]; then
+			previous_session=$(cat "$session_file")
+			if [[ -n "$previous_session" ]] && tmux has-session -t "$previous_session" 2>/dev/null; then
+				tmux kill-session -t "$previous_session" 2>/dev/null || true
+				echo "Stopped previous: $previous_session"
 			fi
-		done
+		fi
 		
 		# Create socket directory if it doesn't exist
 		socket_dir="${HOME}/.mpv_sockets"
@@ -273,6 +301,9 @@ if [[ -n $selected_track ]]; then
 			--input-ipc-server="$socket_path" \
 			"$track_path"
 
+		# Store the session name for future reference
+		echo "$tmux_session_name" > "$session_file"
+		
 		echo "Playing: $selected_track"
 	fi
 	
