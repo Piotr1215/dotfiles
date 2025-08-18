@@ -451,25 +451,41 @@ end
 
 -- Toggle +exec flag on code block
 function M.toggle_exec()
-  local line = vim.fn.getline('.')
-  local cursor_pos = vim.fn.line('.')
+  local cursor_line = vim.fn.line('.')
+  local lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
   
-  -- Find the code block start
-  local start_line = cursor_pos
-  while start_line > 1 do
-    local prev_line = vim.fn.getline(start_line - 1)
-    if prev_line:match("^```") then
-      start_line = start_line - 1
+  -- Find code block boundaries
+  local start_line = nil
+  local end_line = nil
+  
+  -- Search backwards for code block start
+  for i = cursor_line, 1, -1 do
+    if lines[i]:match("^```") then
+      start_line = i
       break
-    end
-    start_line = start_line - 1
-    if start_line < cursor_pos - 20 then
-      vim.notify("Not inside a code block", vim.log.levels.WARN)
-      return
     end
   end
   
-  local code_fence = vim.fn.getline(start_line)
+  -- If no start found, not in a code block
+  if not start_line then
+    return
+  end
+  
+  -- Search forwards for code block end
+  for i = cursor_line, #lines do
+    if i > start_line and lines[i]:match("^```") then
+      end_line = i
+      break
+    end
+  end
+  
+  -- If no end found, not in a valid code block
+  if not end_line then
+    return
+  end
+  
+  -- Now we know we're inside a code block, toggle the +exec flag
+  local code_fence = lines[start_line]
   if code_fence:match("%+exec") then
     -- Remove +exec flags
     code_fence = code_fence:gsub(" %+exec%w*", "")
