@@ -1,0 +1,11 @@
+[uda-task-report-jump-on-task-add]
+enabled = true
+
+[uda-task-report-show-info]
+enabled = false
+
+[task-report-prompt-on-done]
+enabled = false
+
+[task-report-prompt-on-delete]
+enabled = false
