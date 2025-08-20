@@ -36,7 +36,7 @@ root: ~/music
 # tmux_command: byobu
 
 # Specifies (by name or index) which window will be selected on project startup. If not set, the first window is used.
-startup_window: media
+startup_window: music
 
 # Specifies (by index) which pane of the specified window will be selected on project startup. If not set, the first pane is used.
 startup_pane: 2
@@ -45,7 +45,7 @@ startup_pane: 2
 # attach: false
 
 windows:
-  - relax:
+  - music:
       layout: main-horizontal
       panes:
         - cmus ~/music/
