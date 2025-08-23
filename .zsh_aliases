@@ -38,6 +38,7 @@ alias sai='sudo apt install -y'
 alias suser='systemctl --user '
 
 # Commands shadow
+alias lama='cd /home/decoder/dev/homelab && ollama run gpt-oss:latest'
 alias disk='ncdu --color dark'
 alias diskusage='du -sh * | sort -h --reverse'
 alias weather='curl wttr.in/${CITY}'
