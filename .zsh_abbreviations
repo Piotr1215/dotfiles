@@ -6,6 +6,8 @@ abbrevs=(
     "_ind" '__into_new_dir'
     "_xrg" '__xargs_expand'
     "_chmo" '__chmod_file'
+    "?rep" '__global_replace'
+    "?fil" '__file_replace'
 )
 
 __xargs_expand() {
@@ -35,6 +37,55 @@ __chmod_file() {
     zle accept-line
 }
 
+# Function to expand global replacement pattern  
+__global_replace() {
+    local cmd="$LBUFFER"
+    # Remove the ?rep trigger and the trailing space before ?
+    cmd=${cmd%% ?rep}
+    # Remove the trailing space and ? from pet snippet
+    cmd=${cmd% \?}
+    # For global replace, we need to save the command first then replace
+    # Using print -s to add to history, then recall with substitution
+    print -s "$cmd"
+    LBUFFER="!!:gs/NAME/"
+}
+
+# Function to replace NAME with file selection via fzf
+__file_replace() {
+    local cmd="$LBUFFER"
+    # Remove the ?fil trigger and the trailing space before ?
+    cmd=${cmd%% ?fil}
+    # Remove the trailing space and ? from pet snippet
+    cmd=${cmd% \?}
+    
+    # First, select the file
+    local replacement=$(fd -t f -d 3 . 2>/dev/null | fzf --prompt="Select file: ")
+    
+    # If user cancelled (ESC), restore original command
+    if [[ -z "$replacement" ]]; then
+        LBUFFER="$cmd ?"
+        return
+    fi
+    
+    # Now check if there's NAME in the command
+    if [[ "$cmd" == *NAME* ]]; then
+        # Replace NAME with the selected file
+        LBUFFER="${cmd//NAME/$replacement}"
+    else
+        # No NAME, so set up history substitution with the file as replacement
+        # Add command to history
+        print -s "$cmd"
+        # Escape slashes in the replacement path for sed-style substitution
+        local escaped_replacement="${replacement//\//\\/}"
+        # Create the substitution command with empty search pattern
+        # User needs to fill in what to search for
+        LBUFFER="!!:gs//$escaped_replacement/"
+        # Position cursor right after the first / so user can type what to replace
+        local prefix="!!:gs/"
+        CURSOR=${#prefix}
+    fi
+}
+
 # Function to expand the sponge command
 __sponge_expand() {
     local cmd="$LBUFFER"
@@ -55,16 +106,21 @@ __backup_expand() {
 
 expand-abbrev() {
     local MATCH
-    LBUFFER=${LBUFFER%%(#m)[_a-zA-Z0-9]#}
+    LBUFFER=${LBUFFER%%(#m)[?_a-zA-Z0-9]#}
     if [[ -n "${abbrevs[$MATCH]}" ]]; then
         ${abbrevs[$MATCH]}
+        # Don't add space for ?rep and ?fil abbreviations
+        if [[ "$MATCH" != "?rep" && "$MATCH" != "?fil" ]]; then
+            zle self-insert
+        fi
     else
         LBUFFER+=$MATCH
+        zle self-insert
     fi
-    zle self-insert
 }
 
 # Create the wdget and bind it
 zle -N expand-abbrev
 bindkey " " expand-abbrev
 bindkey -M isearch " " self-insert
+
