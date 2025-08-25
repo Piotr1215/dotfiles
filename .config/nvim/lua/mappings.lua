@@ -314,7 +314,12 @@ utils.lnmap("tr", ":TransparentToggle<CR>")
 utils.lnmap("ec", ":FeMaco<CR>")
 
 -- Table Formatting
-vim.keymap.set("v", "<leader>ft", ":!column -t -s '|' -o '|'<CR>", { desc = "Format markdown table with column command" })
+vim.keymap.set(
+  "v",
+  "<leader>ft",
+  ":!column -t -s '|' -o '|'<CR>",
+  { desc = "Format markdown table with column command" }
+)
 
 -- Trouble
 vim.keymap.set("n", "<leader>xx", "<cmd>Trouble diagnostics toggle<cr>", { silent = true, noremap = true })
@@ -347,6 +352,7 @@ vim.cmd [[
 utils.lnmap("cpd", ":Copilot disable<cr>", { silent = false })
 utils.lnmap("cpe", ":Copilot enable<cr>", { silent = false })
 vim.keymap.set("i", "<M-w>", "<Plug>(copilot-accept-word)")
+vim.keymap.set("i", "<C-s>", "<Plug>(copilot-accept-line)")
 
 -- CopilotChat
 utils.nmap("<leader>cc", ":CopilotChatToggle<CR>", { desc = "Toggle Copilot Chat" })
