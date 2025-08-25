@@ -2,20 +2,16 @@
 
 set -eo pipefail
 
-# Check if in tmux first
-if [ -z "$TMUX" ]; then
-    echo "Error: This script must be run from within a tmux session"
-    exit 1
-fi
+# Create temp file for communication between processes
+TEMP_FILE=$(mktemp)
 
-# Get current directory
-CURRENT_DIR=$(tmux display-message -p '#{pane_current_path}')
+# Function to handle link selection
+handle_link_selection() {
+    # Create a temporary directory for our fzf wrapper
+    WRAPPER_DIR=$(mktemp -d)
 
-# Create a temporary directory for our fzf wrapper
-WRAPPER_DIR=$(mktemp -d)
-
-# Create an fzf wrapper that transforms link display
-cat > "$WRAPPER_DIR/fzf" << 'EOF'
+    # Create an fzf wrapper that transforms link display
+    cat > "$WRAPPER_DIR/fzf" << 'EOF'
 #!/usr/bin/env bash
 # Create a temporary file to store the mapping
 MAPFILE=$(mktemp)
@@ -30,7 +26,15 @@ while IFS= read -r line; do
         # Output clean line for fzf
         echo "$clean_line"
     fi
-done | sort | /usr/local/bin/fzf "$@" | {
+done | sort | /usr/local/bin/fzf \
+    --height=100% \
+    --layout=reverse \
+    --info=inline \
+    --border=sharp \
+    --header='Bookmarks (Ctrl+C to exit)' \
+    --prompt='🔍 Search: ' \
+    --color='fg:#f8f8f2,bg:#282a36,hl:#bd93f9,fg+:#f8f8f2,bg+:#44475a,hl+:#bd93f9,info:#ffb86c,prompt:#50fa7b,pointer:#ff79c6,marker:#ff79c6,spinner:#ffb86c,header:#6272a4' \
+    "$@" | {
     # Read the selected clean line
     if IFS= read -r selected; then
         # Find the original line from our mapping
@@ -42,44 +46,45 @@ done | sort | /usr/local/bin/fzf "$@" | {
 rm -f "$MAPFILE"
 EOF
 
-chmod +x "$WRAPPER_DIR/fzf"
+    chmod +x "$WRAPPER_DIR/fzf"
 
-# Add our wrapper to PATH before the real fzf
-export PATH="$WRAPPER_DIR:$PATH"
+    # Add our wrapper to PATH before the real fzf
+    export PATH="$WRAPPER_DIR:$PATH"
 
-# Use pet to search - our wrapper will filter for links only
-RESULT=$(pet search)
+    # Use pet to search - our wrapper will filter for links only
+    RESULT=$(pet search)
 
-# Clean up
-rm -rf "$WRAPPER_DIR"
+    # Clean up
+    rm -rf "$WRAPPER_DIR"
 
-if [ -n "$RESULT" ]; then
-    # Links should always be xdg-open commands, but let's check anyway
-    if [[ "$RESULT" =~ ^xdg-open[[:space:]] ]]; then
-        # Use tmux run-shell to execute in proper environment
-        tmux run-shell "$RESULT && wmctrl -a Firefox"
-        exit 0
-    else
-        # Just in case it's not xdg-open, handle it normally
-        # Create a new vertical split pane
-        tmux split-window -v -c "$CURRENT_DIR"
-        
-        # Get the new pane ID
-        NEW_PANE=$(tmux display-message -p '#{pane_id}')
-        
-        # Clear the new pane
-        tmux send-keys -t "$NEW_PANE" "clear" C-m
-        
-        # Check if command has parameters (contains ?)
-        if [[ "$RESULT" =~ \? ]]; then
-            # Send command without executing, so user can edit parameters
-            tmux send-keys -t "$NEW_PANE" "$RESULT"
+    # Write the selection to temp file for parent process to handle
+    echo "$RESULT" > "$TEMP_FILE"
+}
+
+export -f handle_link_selection
+export TEMP_FILE
+
+# Open Alacritty with the link selection
+alacritty --class bookmarks-popup \
+    --config-file /dev/null \
+    -o window.dimensions.columns=120 \
+    -o window.dimensions.lines=40 \
+    -o window.position.x=1440 \
+    -o window.position.y=660 \
+    -e bash -c "handle_link_selection"
+
+# After terminal closes, handle the selection in the parent process
+if [[ -f "$TEMP_FILE" ]]; then
+    selection=$(cat "$TEMP_FILE")
+    rm -f "$TEMP_FILE"
+    
+    if [[ -n "$selection" ]]; then
+        if [[ "$selection" =~ ^xdg-open ]]; then
+            eval "$selection" &
+            wmctrl -a Firefox
         else
-            # Execute command directly
-            tmux send-keys -t "$NEW_PANE" "$RESULT" C-m
+            # Copy command to clipboard for pasting elsewhere
+            echo -n "$selection" | xclip -selection clipboard
         fi
-        
-        # Focus on the new pane
-        tmux select-pane -t "$NEW_PANE"
     fi
 fi
