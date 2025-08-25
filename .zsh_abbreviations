@@ -8,7 +8,20 @@ abbrevs=(
     "_chmo" '__chmod_file'
     "?rep" '__global_replace'
     "?fil" '__file_replace'
+    "_pad" '__pueue_add_expand'
 )
+
+__pueue_add_expand() {
+    # Remove the _pad trigger and any trailing space
+    local cmd="${LBUFFER% _pad}"
+    # Trim any trailing whitespace from cmd
+    cmd="${cmd%% }"
+    # Escape any double quotes in the command
+    cmd="${cmd//\"/\\\"}"
+    # Set the buffer but don't execute
+    LBUFFER="pueue add \"FORCE_COLOR=1 $cmd\""
+    # Don't call zle accept-line - just leave it for user to review/edit
+}
 
 __xargs_expand() {
     local cmd="$LBUFFER"
