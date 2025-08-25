@@ -13,6 +13,12 @@ if [[ ! "$FILE_PATH" =~ ^/home/decoder/loft/vcluster-docs/ ]]; then
     exit 0
 fi
 
+# Check if file is directly in vcluster-docs root (not in a subfolder)
+if [[ "$FILE_PATH" =~ ^/home/decoder/loft/vcluster-docs/[^/]+$ ]]; then
+    # File is in root directory, skip Vale check
+    exit 0
+fi
+
 # Get human-readable output (vale returns non-zero on errors/warnings)
 vale_output=$(vale --config=/home/decoder/loft/vcluster-docs/.vale.ini "$FILE_PATH" 2>&1 || true)
 
