@@ -16,16 +16,14 @@ handle_link_selection() {
 # Create a temporary file to store the mapping
 MAPFILE=$(mktemp)
 
-# Read stdin, filter for links, create mapping, and show cleaned version
+# Read stdin, create mapping, and show cleaned version
 while IFS= read -r line; do
-    if [[ "$line" =~ ^\[Link\ to ]]; then
-        # Extract the clean display name - keep only text between brackets
-        clean_line=$(echo "$line" | sed 's/^\[Link to \(.*\)\].*/[\1]/')
-        # Store mapping of clean line to original
-        echo "$clean_line|$line" >> "$MAPFILE"
-        # Output clean line for fzf
-        echo "$clean_line"
-    fi
+    # Extract the clean display name - keep only text between brackets
+    clean_line=$(echo "$line" | sed 's/^\[Link to \(.*\)\].*/[\1]/')
+    # Store mapping of clean line to original
+    echo "$clean_line|$line" >> "$MAPFILE"
+    # Output clean line for fzf
+    echo "$clean_line"
 done | sort | /usr/local/bin/fzf \
     --height=100% \
     --layout=reverse \
@@ -51,8 +49,8 @@ EOF
     # Add our wrapper to PATH before the real fzf
     export PATH="$WRAPPER_DIR:$PATH"
 
-    # Use pet to search - our wrapper will filter for links only
-    RESULT=$(pet search)
+    # Use pet to search only link snippets file
+    RESULT=$(PET_SNIPPET_FILE=/home/decoder/dev/pet-snippets/pet-links.toml pet search)
 
     # Clean up
     rm -rf "$WRAPPER_DIR"

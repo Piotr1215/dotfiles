@@ -463,9 +463,9 @@ function plink ()
     description="Link to $desc"
     tag="link"
 
-    # Use expect to interact with pet new
+    # Use expect to interact with pet new, with env var for links file
     /usr/bin/expect <<EOF
-      spawn pet new -t
+      spawn env PET_SNIPPET_FILE=/home/decoder/dev/pet-snippets/pet-links.toml pet new -t
       expect "Command>"
       send "${command_name}\r"
       expect "Description>"
