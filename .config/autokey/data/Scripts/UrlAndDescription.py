@@ -93,7 +93,11 @@ def invoke_plink(description, url):
     # Create a space-separated string of tags
     command_tag = " ".join(tags)
 
-    child = pexpect.spawn('pet new -t')
+    # Use environment variable to specify the links file
+    import os as pet_os
+    pet_env = pet_os.environ.copy()
+    pet_env['PET_SNIPPET_FILE'] = '/home/decoder/dev/pet-snippets/pet-links.toml'
+    child = pexpect.spawn('pet new -t', env=pet_env)
     child.expect('Command>')
     child.sendline(command_name)
     child.expect('Description>')
