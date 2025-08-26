@@ -864,3 +864,80 @@ function kcdebug() {
   kubectl run -i --rm --tty debug --image=busybox --restart=Never -- sh
 }
 
+# Set or show the last standup timestamp for standup reports
+function standup_date() {
+    local timestamp_file="$HOME/.local/state/standup/last_standup_timestamp"
+    local timestamp_dir="$(dirname "$timestamp_file")"
+    
+    # Ensure directory exists
+    [[ ! -d "$timestamp_dir" ]] && mkdir -p "$timestamp_dir"
+    
+    if [[ -z "$1" ]]; then
+        # No argument: show current timestamp
+        if [[ -f "$timestamp_file" ]]; then
+            local current_ts=$(cat "$timestamp_file")
+            echo "Current standup timestamp: $(date -d "@$current_ts" '+%Y-%m-%d %H:%M:%S')"
+            echo "Raw timestamp: $current_ts"
+        else
+            echo "No standup timestamp set yet"
+        fi
+        return 0
+    fi
+    
+    case "$1" in
+        reset|clear)
+            # Remove the timestamp file
+            rm -f "$timestamp_file"
+            echo "Standup timestamp cleared"
+            ;;
+        now)
+            # Set to current time
+            date +%s > "$timestamp_file"
+            echo "Standup timestamp set to now: $(date '+%Y-%m-%d %H:%M:%S')"
+            ;;
+        ago)
+            # Set to X hours/days ago
+            if [[ -z "$2" ]]; then
+                echo "Usage: standup_date ago <number> [hours|days]"
+                return 1
+            fi
+            local amount="$2"
+            local unit="${3:-hours}"
+            local seconds_ago
+            
+            case "$unit" in
+                hour|hours|h)
+                    seconds_ago=$((amount * 3600))
+                    ;;
+                day|days|d)
+                    seconds_ago=$((amount * 86400))
+                    ;;
+                *)
+                    echo "Invalid unit. Use 'hours' or 'days'"
+                    return 1
+                    ;;
+            esac
+            
+            local new_timestamp=$(($(date +%s) - seconds_ago))
+            echo "$new_timestamp" > "$timestamp_file"
+            echo "Standup timestamp set to $amount $unit ago: $(date -d "@$new_timestamp" '+%Y-%m-%d %H:%M:%S')"
+            ;;
+        *)
+            # Assume it's a date string
+            local new_timestamp=$(date -d "$*" +%s 2>/dev/null)
+            if [[ $? -ne 0 ]]; then
+                echo "Invalid date format. Examples:"
+                echo "  standup_date '2025-08-23 09:00:00'"
+                echo "  standup_date 'last Friday 9am'"
+                echo "  standup_date '2 days ago'"
+                echo "  standup_date now"
+                echo "  standup_date ago 48 hours"
+                echo "  standup_date reset"
+                return 1
+            fi
+            echo "$new_timestamp" > "$timestamp_file"
+            echo "Standup timestamp set to: $(date -d "@$new_timestamp" '+%Y-%m-%d %H:%M:%S')"
+            ;;
+    esac
+}
+
