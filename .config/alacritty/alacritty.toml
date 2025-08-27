@@ -58,14 +58,20 @@ action = "Copy"
 mouse = "Right"
 
 [scrolling]
-history = 10000
+history = 5000
+multiplier = 3
+
+# Performance optimizations for Claude CLI
+[terminal]
+osc52 = "CopyPaste"  # Better clipboard performance
 
 [window]
-blur = true
+blur = false  # Disable blur for better performance
 # PROJECT: alacritty_transparency
 opacity = 1.0
 decorations = "none"
 startup_mode = "Maximized"
+dynamic_padding = false  # Reduce redraws
 [window.dimensions]
 columns = 133
 lines = 40

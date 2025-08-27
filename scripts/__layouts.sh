@@ -23,6 +23,67 @@ unmap_map_window() {
 	xdotool windowunmap "$window"
 	xdotool windowmap "$window"
 }
+
+# Visual focus indicator - flash window or change opacity briefly
+indicate_focus() {
+	local window="$1"
+	local window_name="${2:-Window}"
+	
+	# Method 1: Brief opacity change (if compositor available)
+	if command -v xprop >/dev/null 2>&1; then
+		# Set temporary opacity for flash effect
+		xprop -id "$window" -f _NET_WM_WINDOW_OPACITY 32c -set _NET_WM_WINDOW_OPACITY 0xdddddddd
+		sleep 0.1
+		xprop -id "$window" -remove _NET_WM_WINDOW_OPACITY
+	fi
+	
+	# Method 2: Show subtle notification (optional)
+	# notify-send -t 500 -u low "Focus: $window_name" >/dev/null 2>&1 &
+}
+
+# Dim inactive Alacritty windows
+dim_inactive_alacritty() {
+	local active_window="$1"
+	for win_id in $(xdotool search --onlyvisible --classname Alacritty); do
+		if [ "$win_id" != "$active_window" ]; then
+			# Set 85% opacity for inactive Alacritty windows
+			xprop -id "$win_id" -f _NET_WM_WINDOW_OPACITY 32c -set _NET_WM_WINDOW_OPACITY 0xd9999999
+		else
+			# Full opacity for active window
+			xprop -id "$win_id" -remove _NET_WM_WINDOW_OPACITY
+		fi
+	done
+}
+
+# Reset all window opacity to normal
+reset_all_opacity() {
+	for win_id in $(xdotool search --onlyvisible --name ".*"); do
+		xprop -id "$win_id" -remove _NET_WM_WINDOW_OPACITY 2>/dev/null
+	done
+}
+
+# Dim ALL inactive windows (Firefox, Alacritty, etc)
+dim_all_inactive_windows() {
+	local active_window="$1"
+	
+	# First reset all windows to full opacity
+	reset_all_opacity
+	
+	# Then dim only the inactive ones
+	for win_id in $(xdotool search --onlyvisible --name ".*"); do
+		# Skip desktop, panels, etc
+		window_class=$(xprop -id "$win_id" WM_CLASS 2>/dev/null)
+		
+		# Check if it's a regular application window
+		if echo "$window_class" | grep -qE "firefox|Navigator|Alacritty|Slack|slack|Code|code"; then
+			if [ "$win_id" != "$active_window" ]; then
+				# Dim inactive windows to 85% opacity
+				xprop -id "$win_id" -f _NET_WM_WINDOW_OPACITY 32c -set _NET_WM_WINDOW_OPACITY 0xd9999999
+			fi
+			# Active window stays at full opacity (no action needed after reset)
+		fi
+	done
+}
 #}}}
 
 # PROJECT: alacritty_transparency
@@ -45,6 +106,12 @@ max_alacritty() {
 		maximize_window "$window"
 		xdotool windowraise "$window"
 		xdotool windowactivate --sync "$window"
+		
+		# Apply dimming to ALL inactive windows
+		dim_all_inactive_windows "$window"
+		
+		# Optional: Flash to indicate focus
+		# indicate_focus "$window" "Alacritty"
 	else
 		echo "No Alacritty window found."
 	fi
@@ -218,6 +285,9 @@ max_firefox() {
 		# Ensure window is active and on top
 		xdotool windowactivate --sync "$window"
 		xdotool windowraise "$window"
+		
+		# Apply dimming to ALL inactive windows
+		dim_all_inactive_windows "$window"
 	else
 		echo "No Firefox window found."
 	fi
