@@ -274,6 +274,10 @@ utils.nmap("<leader>fmt", ":Pretty<CR>") -- format json with pretty
 -- SPELLING --
 utils.nmap("<Leader>son", ":setlocal spell spelllang=en_us<CR>") -- set spell check on
 utils.nmap("<Leader>sof", ":set nospell<CR>") -- set spell check off
+-- LINE NUMBERS --
+vim.keymap.set("n", ",n", function()
+  vim.o.relativenumber = not vim.o.relativenumber
+end, { desc = "Toggle between relative and absolute line numbers" })
 -- GIT RELATED --
 vim.keymap.set({ "n", "v" }, "<leader>gbf", ":GBrowse<cr>", opts) -- git browse current file in browser
 vim.keymap.set("n", "<leader>gbc", function()
