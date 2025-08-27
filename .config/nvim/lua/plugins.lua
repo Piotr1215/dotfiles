@@ -17,25 +17,6 @@ vim.opt.rtp:prepend(lazypath)
 
 return require("lazy").setup {
   -- AI {{{
-  "github/copilot.vim",
-  {
-    "CopilotC-Nvim/CopilotChat.nvim",
-    branch = "main",
-    dependencies = {
-      { "github/copilot.vim" },
-      { "nvim-lua/plenary.nvim" },
-    },
-    build = "make tiktoken",
-    opts = {
-      -- NOTE: The model can be changed depending on your GitHub Copilot Chat settings.
-      -- Supported models include Claude, GPT-4, and others if enabled in your GitHub account.
-      model = "claude-3.5-sonnet", -- Default to Claude
-      window = {
-        layout = "vertical",
-        width = 0.4,
-      },
-    },
-  },
   "robitx/gp.nvim",
   -- }}}
   -- Editor Extensions {{{

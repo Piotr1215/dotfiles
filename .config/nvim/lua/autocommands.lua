@@ -11,14 +11,7 @@ local plantumlGroup = api.nvim_create_augroup("PlantUML", { clear = true })
 local lastCursorGroup = api.nvim_create_augroup("LastCursorPosition", { clear = true })
 local formattingGroup = api.nvim_create_augroup("AutoFormatting", { clear = true })
 local highlightingGroup = api.nvim_create_augroup("Highlighting", { clear = true })
-local copilotGroup = api.nvim_create_augroup("Copilot", { clear = true })
 local valeGroup = api.nvim_create_augroup("Vale", { clear = true })
-
--- Autocmds
-api.nvim_create_autocmd("VimEnter", {
-  group = copilotGroup,
-  command = "Copilot disable",
-})
 
 vim.api.nvim_create_autocmd({ "BufWritePost" }, {
   callback = function()
@@ -162,14 +155,14 @@ vim.api.nvim_create_user_command("PlantUmlOpen", function()
   local file_dir = vim.fn.expand "%:p:h"
   local file_name = vim.fn.expand "%:t:r"
   local svg_path = file_dir .. "/rendered/" .. file_name .. ".svg"
-  
+
   -- Check if SVG exists
   if vim.fn.filereadable(svg_path) == 0 then
     -- Generate it first
     generate_plantuml()
     vim.fn.system { "sleep", "1" } -- Wait for generation
   end
-  
+
   -- Open the SVG
   if sysname == "Darwin" then
     vim.fn.system { "open", svg_path }
