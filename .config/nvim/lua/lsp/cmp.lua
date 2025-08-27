@@ -105,6 +105,17 @@ cmp.setup.cmdline(":", {
   }, {
     { name = "cmdline" },
   }),
+  window = {
+    completion = cmp.config.window.bordered({
+      winhighlight = "Normal:Pmenu,FloatBorder:Pmenu,Search:None",
+      col_offset = 5,  -- Move it 5 columns to the right to uncover line numbers (even with 4-digit line numbers)
+      side_padding = 1,
+      max_height = 8,  -- Limit the height to show fewer items
+    }),
+  },
+  view = {
+    entries = { name = 'custom', selection_order = 'near_cursor' }
+  },
 })
 
 local highlight = {
