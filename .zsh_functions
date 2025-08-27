@@ -109,9 +109,8 @@ function unlink-homelab() {
         rm "/tmp/.envrc_kubeconfig_backup"
         echo "Restored previous KUBECONFIG configuration"
     else
-        # Remove the file if we created it
-        rm ".envrc"
-        echo "Removed .envrc"
+        sed -i '/export KUBECONFIG=/d' ".envrc"
+        echo "Cleared KUBECONFIG from .envrc (file preserved)"
     fi
     
     direnv allow

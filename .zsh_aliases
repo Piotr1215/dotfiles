@@ -126,7 +126,7 @@ alias play_vid='nohup ~/dev/dotfiles/scripts/__launch_playlist.sh vids_playlist 
 alias vl='nvim ~/haruna_playlist.m3u'
 
 # PROJECT: ai
-alias claude='/home/decoder/dev/dotfiles/scripts/__claude_with_monitor.sh'
+alias claude='KUBECONFIG=/home/decoder/dev/homelab/kubeconfig /home/decoder/dev/dotfiles/scripts/__claude_with_monitor.sh'
 
 # App Shortcuts Help
 alias apphelp='/home/decoder/dev/dotfiles/scripts/__app_shortcuts_help.sh'
