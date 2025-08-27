@@ -474,3 +474,6 @@ vim.cmd [[
        return !col || getline('.')[col - 1]  =~# '\s'
      endfunction
      ]]
+
+-- Load search operators module
+require('user_functions.search_operators').setup()
