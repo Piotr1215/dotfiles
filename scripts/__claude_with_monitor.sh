@@ -8,6 +8,9 @@ if [ -z "$TMUX" ]; then
     exit 1
 fi
 
+# Clean up old Claude cwd files (older than 1 hour)
+find /tmp -name "claude-*-cwd" -type f -mmin +60 -delete 2>/dev/null || true
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MONITOR_SCRIPT="${SCRIPT_DIR}/__claude_prompt_monitor.sh"
 
@@ -142,7 +145,7 @@ export CLAUDE_TMUX_PANE="${TMUX_SESSION}:${TMUX_WINDOW}.${TMUX_PANE}"
 
 # Still start the monitor for prompt detection only
 echo "Starting Claude prompt monitor..."
-"$MONITOR_SCRIPT" start &
+"$MONITOR_SCRIPT" start >/dev/null 2>&1 &
 MONITOR_PID=$!
 
 echo "Launching Claude..."

@@ -2,7 +2,8 @@
 # Claude Stop event hook - detects when Claude finishes processing and creates notifications
 set -eo pipefail
 
-LOG_FILE="/tmp/claude-stop-hook.log"
+# LOG_FILE="/tmp/claude-stop-hook.log"
+LOG_FILE="/dev/null"
 
 # Read JSON input from stdin
 INPUT=$(cat)
