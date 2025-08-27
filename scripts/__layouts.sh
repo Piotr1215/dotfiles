@@ -47,7 +47,7 @@ dim_inactive_alacritty() {
 	for win_id in $(xdotool search --onlyvisible --classname Alacritty); do
 		if [ "$win_id" != "$active_window" ]; then
 			# Set 85% opacity for inactive Alacritty windows
-			xprop -id "$win_id" -f _NET_WM_WINDOW_OPACITY 32c -set _NET_WM_WINDOW_OPACITY 0xd9999999
+			xprop -id "$win_id" -f _NET_WM_WINDOW_OPACITY 32c -set _NET_WM_WINDOW_OPACITY 0xe6666666
 		else
 			# Full opacity for active window
 			xprop -id "$win_id" -remove _NET_WM_WINDOW_OPACITY
@@ -78,7 +78,7 @@ dim_all_inactive_windows() {
 		if echo "$window_class" | grep -qE "firefox|Navigator|Alacritty|Slack|slack|Code|code"; then
 			if [ "$win_id" != "$active_window" ]; then
 				# Dim inactive windows to 85% opacity
-				xprop -id "$win_id" -f _NET_WM_WINDOW_OPACITY 32c -set _NET_WM_WINDOW_OPACITY 0xd9999999
+				xprop -id "$win_id" -f _NET_WM_WINDOW_OPACITY 32c -set _NET_WM_WINDOW_OPACITY 0xe6666666
 			fi
 			# Active window stays at full opacity (no action needed after reset)
 		fi
