@@ -19,6 +19,8 @@ checkout_pr_in_repo() {
     fi
     
     local repo_path="/home/decoder/loft/$repo"
+    local stashed=false
+    local pr_checkout_success=false
     
     # Clone or fetch the repository
     if [ ! -d "$repo_path" ]; then
@@ -32,6 +34,7 @@ checkout_pr_in_repo() {
         if git -C "$repo_path" status --porcelain | grep -q .; then
             echo "Repository has uncommitted changes, stashing..." >&2
             git -C "$repo_path" stash push -m "Auto-stash before PR $pr_num checkout"
+            stashed=true
         fi
         
         echo "Fetching latest changes..." >&2
@@ -51,10 +54,11 @@ checkout_pr_in_repo() {
     if [ -n "$pr_num" ]; then
         echo "Checking out PR #$pr_num..." >&2
         cd "$repo_path"
-        if ! gh pr checkout "$pr_num" 2>/dev/null; then
-            echo "Could not checkout PR #$pr_num (might be from a fork or closed)" >&2
-        else
+        if gh pr checkout "$pr_num" 2>/dev/null; then
             echo "Successfully checked out PR #$pr_num" >&2
+            pr_checkout_success=true
+        else
+            echo "Could not checkout PR #$pr_num (might be from a fork or closed)" >&2
         fi
     fi
     
@@ -66,6 +70,15 @@ checkout_pr_in_repo() {
     
     # Create new tmux session (ignore if it already exists)
     tmux new-session -d -s "$session_name" -c "$repo_path" 2>/dev/null || true
+    
+    # Send notification if stashing occurred
+    if [ "$stashed" = true ]; then
+        if [ -n "$pr_num" ]; then
+            tmux send-keys -t "$session_name" "echo '⚠️  Auto-stashed uncommitted changes before PR #$pr_num checkout'" C-m
+        else
+            tmux send-keys -t "$session_name" "echo '⚠️  Auto-stashed uncommitted changes'" C-m
+        fi
+    fi
     
     # Try to switch client, or attach if not in tmux
     if [ -n "$TMUX" ]; then
