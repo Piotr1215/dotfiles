@@ -389,6 +389,7 @@ require("obsidian").setup {
     },
   },
   disable_frontmatter = false,
+  legacy_commands = false,  -- Disable deprecated commands
   -- open_app_foreground = true,
   templates = {
     subdir = "Templates",
@@ -424,22 +425,6 @@ require("obsidian").setup {
     vim.fn.jobstart { "xdg-open", url } -- linux
   end,
   finder = "telescope.nvim",
-  mappings = {
-    -- Overrides the 'gf' mapping to work on markdown/wiki links within your vault.
-    ["gf"] = {
-      action = function()
-        return require("obsidian").util.gf_passthrough()
-      end,
-      opts = { noremap = false, expr = true, buffer = true },
-    },
-    -- Toggle check-boxes.
-    ["<leader>ch"] = {
-      action = function()
-        return require("obsidian").util.toggle_checkbox()
-      end,
-      opts = { buffer = true },
-    },
-  },
   note_path_func = function(spec)
     -- This is equivalent to the default behavior.
     local path = spec.dir / tostring(spec.title)

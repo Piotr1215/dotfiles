@@ -127,5 +127,14 @@ vim.api.nvim_create_autocmd("FileType", {
       vim.keymap.del("n", "]c", { buffer = 0 })
     end)
     set_keymaps()
+    
+    -- Obsidian keymaps (moved from deprecated mappings config)
+    vim.keymap.set("n", "gf", function()
+      return require("obsidian").util.gf_passthrough()
+    end, { noremap = false, expr = true, buffer = true })
+    
+    vim.keymap.set("n", "<leader>ch", function()
+      return require("obsidian").util.toggle_checkbox()
+    end, { buffer = true })
   end,
 })
