@@ -142,10 +142,47 @@ case "$MODE" in
             --header $'Date       │ Repository                          │     PR# │ Author          │ Title\n───────────┼─────────────────────────────────────┼─────────┼─────────────────┼─────────────────────\n✍=author  👀=review  💬=involved  📢=mentioned  📝=draft  ✅=approved   '"$pr_count"$' PRs\nEnter: Open  │  Ctrl-Y: Copy URL  │  Ctrl-S: Clone & Open  │  Ctrl-R: Refresh' \
             --bind 'ctrl-y:execute-silent(echo {} | awk -F" │ " "{print \$3}" | tr -d " #" | xargs -I PR awk -F"\t" "\$3 == \"#PR\" {print \$6; exit}" '"$pr_data_file"' | xclip -selection clipboard)+change-prompt(URL copied! > )' \
             --bind 'ctrl-s:execute(
-                source /home/decoder/dev/dotfiles/scripts/__lib_pr_checkout.sh;
                 org_repo=$(echo {} | awk -F" │ " "{print \$2}" | xargs);
                 pr_num=$(echo {} | awk -F" │ " "{print \$3}" | tr -d " #");
-                checkout_pr_in_repo "$org_repo" "$pr_num"
+                org=$(echo "$org_repo" | cut -d"/" -f1);
+                repo=$(echo "$org_repo" | cut -d"/" -f2);
+                repo_path="/home/decoder/loft/$repo";
+                session_name="$repo-pr$pr_num";
+                stashed=false;
+                if [ ! -d "$repo_path" ]; then
+                    echo "Cloning $org_repo...";
+                    mkdir -p "$(dirname "$repo_path")";
+                    gh repo clone "$org_repo" "$repo_path";
+                else
+                    echo "Repository exists, checking status...";
+                    if git -C "$repo_path" status --porcelain | grep -q .; then
+                        echo "Repository has uncommitted changes, stashing...";
+                        git -C "$repo_path" stash push -m "Auto-stash before PR $pr_num checkout";
+                        stashed=true;
+                    fi;
+                    echo "Fetching latest changes for $repo...";
+                    git -C "$repo_path" fetch origin --prune;
+                    if git -C "$repo_path" rev-parse --verify origin/main >/dev/null 2>&1; then
+                        git -C "$repo_path" checkout main >/dev/null 2>&1 || true;
+                        git -C "$repo_path" pull origin main --ff-only >/dev/null 2>&1 || true;
+                    elif git -C "$repo_path" rev-parse --verify origin/master >/dev/null 2>&1; then
+                        git -C "$repo_path" checkout master >/dev/null 2>&1 || true;
+                        git -C "$repo_path" pull origin master --ff-only >/dev/null 2>&1 || true;
+                    fi;
+                fi;
+                echo "Checking out PR #$pr_num...";
+                cd "$repo_path";
+                pr_checkout_success=false;
+                if gh pr checkout "$pr_num" 2>/dev/null; then
+                    pr_checkout_success=true;
+                else
+                    echo "Could not checkout PR (might be from a fork)";
+                fi;
+                tmux new-session -d -s "$session_name" -c "$repo_path" 2>/dev/null;
+                if [ "$stashed" = true ]; then
+                    tmux send-keys -t "$session_name" "echo \"⚠️  Auto-stashed uncommitted changes before PR #$pr_num checkout\"" C-m;
+                fi;
+                tmux switch-client -t "$session_name" || tmux attach-session -t "$session_name"
             )+abort' \
             --bind 'ctrl-r:reload(bash '"$0"' fzf)')
         
