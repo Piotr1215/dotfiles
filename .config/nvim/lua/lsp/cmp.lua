@@ -91,12 +91,13 @@ cmp.setup {
   }),
 }
 
--- Use buffer source for `/`
-cmp.setup.cmdline("/", {
-  sources = {
-    { name = "buffer" },
-  },
-})
+-- Disable cmp for `/` search mode (cleaner for remote operators and native search)
+-- Commenting out to use native search without completion popup
+-- cmp.setup.cmdline("/", {
+--   sources = {
+--     { name = "buffer" },
+--   },
+-- })
 
 -- Use cmdline & path source for ':'
 cmp.setup.cmdline(":", {
