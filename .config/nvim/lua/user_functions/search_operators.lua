@@ -116,8 +116,12 @@ function M.setup()
         
         local pattern = vim.fn.getreg('/')
         if not pattern or pattern == '' then
+            -- Empty pattern - user just pressed Enter without searching
+            -- For now, bail out. TODO: Could implement forward-seeking behavior here
             _G.SearchOperatorPending = {}
             vim.cmd('silent! autocmd! SearchOperatorExecute')
+            vim.g.search_operator_indicator = nil
+            vim.cmd('redrawstatus')
             return
         end
         
@@ -146,17 +150,20 @@ function M.setup()
             saved_pos_for_yank = vim.fn.getpos('.')  -- Only needed for yank to return and paste
         }
         
-        -- Show prompt
-        vim.api.nvim_echo({{'Search & yank ' .. textobj .. ': ', 'Question'}}, false, {})
+        -- Store indicator in global variable for statusline/cmdline to use
+        vim.g.search_operator_indicator = 'yank[' .. textobj .. ']'
         
-        -- Clear any existing autocmd and set up fresh one
+        -- Clear any existing autocmd and set up fresh one that handles both execution and cleanup
         vim.cmd([[
             silent! augroup! SearchOperatorExecute
             augroup SearchOperatorExecute
                 autocmd!
-                autocmd CmdlineLeave / ++once call v:lua.ExecuteSearchOperator()
+                autocmd CmdlineLeave / ++once lua ExecuteSearchOperator(); vim.g.search_operator_indicator = nil; vim.cmd('redrawstatus')
             augroup END
         ]])
+        
+        -- Redraw status to show indicator if user has it in their statusline
+        vim.cmd('redrawstatus')
         
         -- Return '/' to enter search mode
         return '/'
@@ -170,17 +177,20 @@ function M.setup()
             saved_pos_for_yank = vim.fn.getpos('.')  -- Save position for delete too
         }
         
-        -- Show prompt
-        vim.api.nvim_echo({{'Search & delete ' .. textobj .. ': ', 'Question'}}, false, {})
+        -- Store indicator in global variable for statusline/cmdline to use
+        vim.g.search_operator_indicator = 'delete[' .. textobj .. ']'
         
-        -- Clear any existing autocmd and set up fresh one
+        -- Clear any existing autocmd and set up fresh one that handles both execution and cleanup
         vim.cmd([[
             silent! augroup! SearchOperatorExecute
             augroup SearchOperatorExecute
                 autocmd!
-                autocmd CmdlineLeave / ++once call v:lua.ExecuteSearchOperator()
+                autocmd CmdlineLeave / ++once lua ExecuteSearchOperator(); vim.g.search_operator_indicator = nil; vim.cmd('redrawstatus')
             augroup END
         ]])
+        
+        -- Redraw status to show indicator if user has it in their statusline
+        vim.cmd('redrawstatus')
         
         -- Return '/' to enter search mode
         return '/'
@@ -193,17 +203,20 @@ function M.setup()
             textobj = textobj
         }
         
-        -- Show prompt
-        vim.api.nvim_echo({{'Search & change ' .. textobj .. ': ', 'Question'}}, false, {})
+        -- Store indicator in global variable for statusline/cmdline to use
+        vim.g.search_operator_indicator = 'change[' .. textobj .. ']'
         
-        -- Clear any existing autocmd and set up fresh one
+        -- Clear any existing autocmd and set up fresh one that handles both execution and cleanup
         vim.cmd([[
             silent! augroup! SearchOperatorExecute
             augroup SearchOperatorExecute
                 autocmd!
-                autocmd CmdlineLeave / ++once call v:lua.ExecuteSearchOperator()
+                autocmd CmdlineLeave / ++once lua ExecuteSearchOperator(); vim.g.search_operator_indicator = nil; vim.cmd('redrawstatus')
             augroup END
         ]])
+        
+        -- Redraw status to show indicator if user has it in their statusline
+        vim.cmd('redrawstatus')
         
         -- Return '/' to enter search mode
         return '/'
@@ -217,17 +230,20 @@ function M.setup()
             -- No saved_pos needed - we want to stay at the selection
         }
         
-        -- Show prompt
-        vim.api.nvim_echo({{'Search & select ' .. textobj .. ': ', 'Question'}}, false, {})
+        -- Store indicator in global variable for statusline/cmdline to use
+        vim.g.search_operator_indicator = 'select[' .. textobj .. ']'
         
-        -- Clear any existing autocmd and set up fresh one
+        -- Clear any existing autocmd and set up fresh one that handles both execution and cleanup
         vim.cmd([[
             silent! augroup! SearchOperatorExecute
             augroup SearchOperatorExecute
                 autocmd!
-                autocmd CmdlineLeave / ++once call v:lua.ExecuteSearchOperator()
+                autocmd CmdlineLeave / ++once lua ExecuteSearchOperator(); vim.g.search_operator_indicator = nil; vim.cmd('redrawstatus')
             augroup END
         ]])
+        
+        -- Redraw status to show indicator if user has it in their statusline
+        vim.cmd('redrawstatus')
         
         -- Return '/' to enter search mode
         return '/'
