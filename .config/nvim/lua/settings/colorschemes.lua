@@ -26,9 +26,17 @@ require("tokyonight").setup {
 
 require("nightfox").setup {
   options = {
-    transparent = true,
+    transparent = false,
     terminal_colors = true,
     dim_inactive = true,
+  },
+  palettes = {
+    carbonfox = {
+      bg1 = "#000000",  -- Pure black background
+      bg0 = "#0c0c0c",  -- Slightly lighter for contrast
+      bg2 = "#121212",  -- UI elements
+      bg3 = "#1a1a1a",  -- Selections
+    },
   },
   modules = {
     telescope = true,
@@ -83,5 +91,20 @@ vim.g.termigurcolors = true
 -- vim.cmd "colorscheme moonfly"
 -- vim.cmd "colorscheme catppuccin"
 -- vim.cmd('colorscheme nightfox')
-vim.cmd "colorscheme tokyonight-night"
--- vim.cmd('colorscheme carbonfox')
+-- vim.cmd "colorscheme tokyonight-night"
+vim.cmd('colorscheme carbonfox')
+
+-- Auto-dim when Neovim loses focus (matches tmux inactive pane color)
+vim.api.nvim_create_autocmd("FocusLost", {
+  callback = function()
+    vim.cmd("highlight Normal guibg=#0B0B0B ctermbg=232")
+    vim.cmd("highlight NormalNC guibg=#0B0B0B ctermbg=232")
+  end,
+})
+
+vim.api.nvim_create_autocmd("FocusGained", {
+  callback = function()
+    vim.cmd("highlight Normal guibg=#000000 ctermbg=16")
+    vim.cmd("highlight NormalNC guibg=#000000 ctermbg=16")
+  end,
+})
