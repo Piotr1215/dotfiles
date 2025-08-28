@@ -38,28 +38,27 @@ _G.SearchOperator = function(type)
             vim.cmd('normal! c')
             -- Force into insert mode
             vim.cmd('startinsert')
+        elseif action == 'visual' then
+            -- For visual, just select and stay in visual mode
+            vim.cmd('normal v' .. textobj)  -- Remove ! to allow mappings
+            -- Stay in visual mode - don't do anything else
         end
     end)
     
     if ok then
         if action == 'yank' and saved_pos then
-            local yanked = vim.fn.getreg('"')
             -- Restore position
             vim.fn.setpos('.', saved_pos)
             -- Don't paste - just yank only behavior
             -- vim.cmd('normal! p')
-            -- Show what was yanked
-            local preview = yanked:gsub('\n', '\\n'):sub(1, 50)
-            if #yanked > 50 then preview = preview .. '...' end
-            vim.notify('Yanked: ' .. preview, vim.log.levels.INFO)
         elseif action == 'delete' and saved_pos then
             -- Restore position after delete
             vim.fn.setpos('.', saved_pos)
         -- For change, cursor stays at the changed location in insert mode
         end
         
-        -- Clear search highlight after a delay (except for change where user is still editing)
-        if action ~= 'change' then
+        -- Clear search highlight after a delay (except for change/visual where user is still active)
+        if action ~= 'change' and action ~= 'visual' then
             vim.defer_fn(function()
                 vim.cmd('nohlsearch')
                 -- Restore original search pattern
@@ -193,6 +192,30 @@ function M.setup()
         return '/'
     end
     
+    _G.VisualSearchSetup = function(textobj)
+        -- Store pending operation
+        _G.SearchOperatorPending = {
+            action = 'visual',
+            textobj = textobj
+            -- No saved_pos needed - we want to stay at the selection
+        }
+        
+        -- Show prompt
+        vim.api.nvim_echo({{'Search & select ' .. textobj .. ': ', 'Question'}}, false, {})
+        
+        -- Clear any existing autocmd and set up fresh one
+        vim.cmd([[
+            silent! augroup! SearchOperatorExecute
+            augroup SearchOperatorExecute
+                autocmd!
+                autocmd CmdlineLeave / ++once call v:lua.ExecuteSearchOperator()
+            augroup END
+        ]])
+        
+        -- Return '/' to enter search mode
+        return '/'
+    end
+    
     -- Define text objects and operators
     local text_objects = {
         -- Quote-like objects
@@ -215,7 +238,8 @@ function M.setup()
     local operators = {
         y = { func = 'YankSearchSetup', verb = 'yank' },
         d = { func = 'DeleteSearchSetup', verb = 'delete' },
-        c = { func = 'ChangeSearchSetup', verb = 'change' }
+        c = { func = 'ChangeSearchSetup', verb = 'change' },
+        v = { func = 'VisualSearchSetup', verb = 'select' }
     }
     
     -- Generate mappings for all combinations
