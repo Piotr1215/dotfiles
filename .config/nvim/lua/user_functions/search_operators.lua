@@ -33,11 +33,9 @@ _G.SearchOperator = function(type)
             vim.cmd('sleep 150m')  -- Show selection for 150ms
             vim.cmd('normal! d')
         elseif action == 'change' then
-            -- For change, select and immediately change (no delay needed)
-            vim.cmd('normal v' .. textobj)  -- Remove ! to allow mappings
-            vim.cmd('normal! c')
-            -- Force into insert mode
-            vim.cmd('startinsert')
+            -- Use feedkeys to simulate exact user input
+            -- This should work exactly like manual typing
+            vim.api.nvim_feedkeys('c' .. textobj, 'n', false)
         elseif action == 'visual' then
             -- For visual, just select and stay in visual mode
             vim.cmd('normal v' .. textobj)  -- Remove ! to allow mappings
