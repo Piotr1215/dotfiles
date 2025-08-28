@@ -97,8 +97,14 @@ vim.cmd('colorscheme carbonfox')
 -- Auto-dim when Neovim loses focus (matches tmux inactive pane color)
 vim.api.nvim_create_autocmd("FocusLost", {
   callback = function()
-    vim.cmd("highlight Normal guibg=#0B0B0B ctermbg=232")
-    vim.cmd("highlight NormalNC guibg=#0B0B0B ctermbg=232")
+    vim.cmd("highlight Normal guibg=#1a1a1a ctermbg=234")
+    vim.cmd("highlight NormalNC guibg=#1a1a1a ctermbg=234")
+    vim.cmd("highlight StatusLine guibg=#1a1a1a ctermbg=234")
+    vim.cmd("highlight StatusLineNC guibg=#1a1a1a ctermbg=234")
+    vim.cmd("highlight TabLine guibg=#1a1a1a ctermbg=234")
+    vim.cmd("highlight TabLineFill guibg=#1a1a1a ctermbg=234")
+    vim.cmd("highlight WinBar guibg=#1a1a1a ctermbg=234")
+    vim.cmd("highlight WinBarNC guibg=#1a1a1a ctermbg=234")
   end,
 })
 
@@ -106,5 +112,11 @@ vim.api.nvim_create_autocmd("FocusGained", {
   callback = function()
     vim.cmd("highlight Normal guibg=#000000 ctermbg=16")
     vim.cmd("highlight NormalNC guibg=#000000 ctermbg=16")
+    vim.cmd("highlight StatusLine guibg=#000000 ctermbg=16")
+    vim.cmd("highlight StatusLineNC guibg=#000000 ctermbg=16")
+    vim.cmd("highlight TabLine guibg=#000000 ctermbg=16")
+    vim.cmd("highlight TabLineFill guibg=#000000 ctermbg=16")
+    vim.cmd("highlight WinBar guibg=#000000 ctermbg=16")
+    vim.cmd("highlight WinBarNC guibg=#000000 ctermbg=16")
   end,
 })
