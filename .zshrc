@@ -64,6 +64,8 @@ if [ "$funcstack[1]" = "_k3d" ]; then
     _k3d
 fi
 
+# Exclude cache and temporary directories from zoxide
+export _ZO_EXCLUDE_DIRS="$HOME/.cache:$HOME/.cache/*"
 eval "$(zoxide init zsh)"
 
 # Directory history
