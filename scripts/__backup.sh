@@ -169,6 +169,7 @@ declare -a BACKUP_SOURCES=(
         "argos scripts|/home/decoder/.config/argos/|$HOME_BACKUP/argos/|false|"
 	"TLP CPU config|/etc/tlp.d/|$HOME_BACKUP/tlp/|true|"
 	"local mail storage|/home/decoder/.local/share/mail|/mnt/nas-mail/current|false|--delete"
+	"zoxide database|/home/decoder/.local/share/zoxide/|$HOME_BACKUP/.local/share/zoxide/|false|"
 )
 
 # Function to perform backup from configuration
