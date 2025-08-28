@@ -23,18 +23,18 @@ _G.SearchOperator = function(type)
     local ok = pcall(function()
         -- Visual feedback and perform action
         if action == 'yank' then
-            vim.cmd('normal! v' .. textobj)
+            vim.cmd('normal v' .. textobj)  -- Remove ! to allow mappings
             vim.cmd('redraw')
             vim.cmd('sleep 250m')  -- Show selection for 250ms
             vim.cmd('normal! y')
         elseif action == 'delete' then
-            vim.cmd('normal! v' .. textobj)
+            vim.cmd('normal v' .. textobj)  -- Remove ! to allow mappings
             vim.cmd('redraw')
             vim.cmd('sleep 250m')  -- Show selection for 250ms
             vim.cmd('normal! d')
         elseif action == 'change' then
             -- For change, select and immediately change (no delay needed)
-            vim.cmd('normal! v' .. textobj)
+            vim.cmd('normal v' .. textobj)  -- Remove ! to allow mappings
             vim.cmd('normal! c')
             -- Force into insert mode
             vim.cmd('startinsert')
