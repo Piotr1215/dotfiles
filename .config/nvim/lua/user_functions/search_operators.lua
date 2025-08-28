@@ -221,18 +221,29 @@ function M.setup()
         -- Quote-like objects
         ['"'] = 'double quotes',
         ["'"] = 'single quotes',
+        ['`'] = 'backticks',
         -- Bracket pairs
         ['('] = 'parentheses', [')'] = 'parentheses',
         ['{'] = 'curly braces', ['}'] = 'curly braces', 
         ['['] = 'square brackets', [']'] = 'square brackets',
+        ['<'] = 'angle brackets', ['>'] = 'angle brackets',
         -- Word objects
         ['w'] = 'word', ['W'] = 'WORD (space-delimited)',
         ['b'] = 'parentheses block', ['B'] = 'curly braces block',
+        -- Line and file objects
+        ['l'] = 'line',
+        ['e'] = 'entire buffer',
         -- Other objects
         ['t'] = 'HTML/XML tags',
         ['p'] = 'paragraph',
         ['s'] = 'sentence',
         ['m'] = 'markdown code block (triple backticks)',
+        -- Common text objects (may need plugins)
+        ['i'] = 'indentation',
+        ['I'] = 'indentation with line above',
+        ['f'] = 'function',
+        ['c'] = 'class',
+        ['a'] = 'argument',
     }
     
     local operators = {
