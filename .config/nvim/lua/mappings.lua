@@ -348,19 +348,6 @@ utils.lnmap("ob", ":ObsidianBacklinks<cr>")
 utils.lnmap("ot", ":ObsidianTags<cr>")
 utils.lnmap("od", ":ObsidianToday<cr>")
 
--- Copilot
-vim.cmd [[
-        imap <silent><script><expr> <C-f> copilot#Accept("\<CR>")
-        let g:copilot_no_tab_map = v:true
-]]
-utils.lnmap("cpd", ":Copilot disable<cr>", { silent = false })
-utils.lnmap("cpe", ":Copilot enable<cr>", { silent = false })
-vim.keymap.set("i", "<M-w>", "<Plug>(copilot-accept-word)")
-vim.keymap.set("i", "<C-s>", "<Plug>(copilot-accept-line)")
-
--- CopilotChat
-utils.nmap("<leader>cc", ":CopilotChatToggle<CR>", { desc = "Toggle Copilot Chat" })
-
 -- GoTo Preview
 vim.keymap.set("n", "gtp", "<cmd>lua require('goto-preview').goto_preview_definition()<CR>", { noremap = true })
 
@@ -476,4 +463,4 @@ vim.cmd [[
      ]]
 
 -- Load search operators module
-require('user_functions.search_operators').setup()
+require("user_functions.search_operators").setup()

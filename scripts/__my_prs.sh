@@ -142,24 +142,10 @@ case "$MODE" in
             --header $'Date       │ Repository                          │     PR# │ Author          │ Title\n───────────┼─────────────────────────────────────┼─────────┼─────────────────┼─────────────────────\n✍=author  👀=review  💬=involved  📢=mentioned  📝=draft  ✅=approved   '"$pr_count"$' PRs\nEnter: Open  │  Ctrl-Y: Copy URL  │  Ctrl-S: Clone & Open  │  Ctrl-R: Refresh' \
             --bind 'ctrl-y:execute-silent(echo {} | awk -F" │ " "{print \$3}" | tr -d " #" | xargs -I PR awk -F"\t" "\$3 == \"#PR\" {print \$6; exit}" '"$pr_data_file"' | xclip -selection clipboard)+change-prompt(URL copied! > )' \
             --bind 'ctrl-s:execute(
+                source /home/decoder/dev/dotfiles/scripts/__lib_pr_checkout.sh;
                 org_repo=$(echo {} | awk -F" │ " "{print \$2}" | xargs);
                 pr_num=$(echo {} | awk -F" │ " "{print \$3}" | tr -d " #");
-                org=$(echo "$org_repo" | cut -d"/" -f1);
-                repo=$(echo "$org_repo" | cut -d"/" -f2);
-                repo_path="/home/decoder/loft/$repo";
-                if [ ! -d "$repo_path" ]; then
-                    echo "Cloning $org_repo...";
-                    mkdir -p "$(dirname "$repo_path")";
-                    gh repo clone "$org_repo" "$repo_path";
-                else
-                    echo "Fetching latest changes for $repo...";
-                    git -C "$repo_path" fetch origin --prune;
-                fi;
-                echo "Checking out PR #$pr_num...";
-                cd "$repo_path";
-                gh pr checkout "$pr_num" 2>/dev/null || echo "Could not checkout PR (might be from a fork)";
-                tmux new-session -d -s "$repo-pr$pr_num" -c "$repo_path" 2>/dev/null;
-                tmux switch-client -t "$repo-pr$pr_num" || tmux attach-session -t "$repo-pr$pr_num"
+                checkout_pr_in_repo "$org_repo" "$pr_num"
             )+abort' \
             --bind 'ctrl-r:reload(bash '"$0"' fzf)')
         

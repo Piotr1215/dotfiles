@@ -26,9 +26,6 @@ if vim.g.scroll_fix_enabled == nil then
   vim.g.scroll_fix_enabled = false -- Start with scroll fix disabled
 end
 
--- Disable GitHub Copilot by default
-vim.g.copilot_enabled = false
-
 --Remap for dealing with word wrap
 set.gp = "git grep -n"
 set.completeopt = { "menuone", "noselect", "noinsert" }
