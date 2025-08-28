@@ -41,6 +41,11 @@ vim.keymap.set("n", "<C-j>", nvim_tmux_nav.NvimTmuxNavigateDown, { noremap = tru
 vim.keymap.set("n", "<C-k>", nvim_tmux_nav.NvimTmuxNavigateUp, { noremap = true, silent = true })
 vim.keymap.set("n", "<C-l>", nvim_tmux_nav.NvimTmuxNavigateRight, { noremap = true, silent = true })
 vim.keymap.set("n", "<A-m>", nvim_tmux_nav.NvimTmuxNavigateNext, { noremap = true, silent = true })
+
+-- Visual mode navigation - just C-l and C-j since they toggle back and forth
+-- C-h collides with backspace in some terminals
+vim.keymap.set("v", "<C-j>", nvim_tmux_nav.NvimTmuxNavigateDown, { noremap = true, silent = true })
+vim.keymap.set("v", "<C-l>", nvim_tmux_nav.NvimTmuxNavigateRight, { noremap = true, silent = true })
 -- Toggle between single, double, and backtick quotes
 vim.keymap.set("n", "<leader>tq", function()
   local line = vim.api.nvim_get_current_line()
