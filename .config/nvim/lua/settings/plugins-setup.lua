@@ -621,6 +621,23 @@ require("lualine").setup {
     theme = "tokyonight",
     extensions = { "nvim-dap-ui" },
   },
+  sections = {
+    lualine_a = { 'mode' },
+    lualine_b = { 'branch', 'diff', 'diagnostics' },
+    lualine_c = { 
+      'filename',
+      -- Add search operator indicator
+      {
+        function()
+          return vim.g.search_operator_indicator or ''
+        end,
+        color = { fg = '#ff9e64', gui = 'bold' },  -- Orange bold text
+      }
+    },
+    lualine_x = { 'encoding', 'fileformat', 'filetype' },
+    lualine_y = { 'progress' },
+    lualine_z = { 'location' }
+  },
 }
 
 require("nvim-surround").setup {
