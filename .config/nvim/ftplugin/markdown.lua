@@ -82,14 +82,6 @@ vim.api.nvim_create_autocmd("FileType", {
     end
 
     -- Handle code blocks
-    local function MarkdownCodeBlock(outside)
-      vim.cmd "call search('```', 'cb')"
-      vim.cmd(outside and "normal! Vo" or "normal! j0Vo")
-      vim.cmd "call search('```')"
-      if not outside then
-        vim.cmd "normal! k"
-      end
-    end
 
     -- Set keymaps
     local function set_keymaps()
@@ -110,17 +102,8 @@ vim.api.nvim_create_autocmd("FileType", {
         vim.keymap.set(map[1], map[2], map[3], vim.tbl_extend("force", { buffer = 0, silent = true }, map[4] or {}))
       end
 
-      -- Code block text objects
-      for _, mode in ipairs { "o", "x" } do
-        for _, mapping in ipairs {
-          { "am", true },
-          { "im", false },
-        } do
-          vim.keymap.set(mode, mapping[1], function()
-            MarkdownCodeBlock(mapping[2])
-          end, { buffer = 0 })
-        end
-      end
+      -- Code block text objects are now defined globally in codeblock_textobj.lua
+      -- No need for markdown-specific version
     end
 
     pcall(function()
