@@ -24,8 +24,14 @@ _G.SearchOperator = function(type)
         vim.fn.setreg('/', pattern)
         vim.opt.hlsearch = true
         
-        -- Search for pattern
+        -- Search forward first
         local found = vim.fn.search(pattern)
+        
+        -- If not found forward, try searching backward
+        if found == 0 then
+            found = vim.fn.search(pattern, 'b')
+        end
+        
         if found == 0 then
             error('Pattern not found')
         end
