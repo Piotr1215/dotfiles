@@ -7,35 +7,20 @@ local M = {}
 -- Search operator - handles yank, delete, and change operations
 _G.SearchOperator = function(type)
     local pattern = vim.g.search_operator_pattern
-    local saved_pos = vim.g.search_operator_saved_pos
+    local saved_pos = vim.g.search_operator_saved_pos  -- Used for yank and delete
     local textobj = vim.g.search_operator_textobj
     local action = vim.g.search_operator_action
     
-    if not pattern or not saved_pos then return end
+    if not pattern or not textobj or not action then return end
     
     -- Save current register and search register
     local saved_reg = vim.fn.getreg('"')
     local saved_reg_type = vim.fn.getregtype('"')
     local saved_search = vim.fn.getreg('/')
     
-    -- Execute search and perform action
+    -- Execute action at current position (where search landed)
+    -- No need to search again - we're already at the right place
     local ok = pcall(function()
-        -- Set search register to highlight matches
-        vim.fn.setreg('/', pattern)
-        vim.opt.hlsearch = true
-        
-        -- Search forward first
-        local found = vim.fn.search(pattern)
-        
-        -- If not found forward, try searching backward
-        if found == 0 then
-            found = vim.fn.search(pattern, 'b')
-        end
-        
-        if found == 0 then
-            error('Pattern not found')
-        end
-        
         -- Visual feedback and perform action
         if action == 'yank' then
             vim.cmd('normal! v' .. textobj)
@@ -57,14 +42,15 @@ _G.SearchOperator = function(type)
     end)
     
     if ok then
-        if action == 'yank' then
+        if action == 'yank' and saved_pos then
             local yanked = vim.fn.getreg('"')
             -- Restore position
             vim.fn.setpos('.', saved_pos)
             -- Paste the yanked text
             vim.cmd('normal! p')
-        elseif action == 'delete' then
-            vim.notify('Deleted from: ' .. pattern, vim.log.levels.INFO)
+        elseif action == 'delete' and saved_pos then
+            -- Restore position after delete
+            vim.fn.setpos('.', saved_pos)
         -- For change, cursor stays at the changed location in insert mode
         end
         
@@ -77,8 +63,9 @@ _G.SearchOperator = function(type)
             end, 500)
         end
     else
-        vim.notify('Pattern not found: ' .. pattern, vim.log.levels.ERROR)
-        vim.fn.setpos('.', saved_pos)
+        if saved_pos then
+            vim.fn.setpos('.', saved_pos)
+        end
         -- Restore original register and search
         vim.fn.setreg('"', saved_reg, saved_reg_type)
         vim.fn.setreg('/', saved_search)
@@ -92,45 +79,115 @@ _G.SearchOperator = function(type)
     vim.g.search_operator_action = nil
 end
 
--- Set up the operator functions in Vimscript
+
+-- Set up the operator functions
 function M.setup()
-    vim.cmd([[
-        function! YankSearchSetup(textobj)
-            let g:search_operator_pattern = input('Search for: ')
-            if empty(g:search_operator_pattern)
-                return ''
-            endif
-            let g:search_operator_saved_pos = getpos('.')
-            let g:search_operator_textobj = a:textobj
-            let g:search_operator_action = 'yank'
-            set operatorfunc=v:lua.SearchOperator
-            return 'g@l'
-        endfunction
+    -- New approach: Store the pending operation and trigger search
+    _G.SearchOperatorPending = {}
+    
+    -- Function to be called after search completes
+    _G.ExecuteSearchOperator = function()
+        local pending = _G.SearchOperatorPending
+        if not pending or not pending.action or not pending.textobj then
+            -- Clear any stale autocmds
+            vim.cmd('silent! autocmd! SearchOperatorExecute')
+            return
+        end
         
-        function! DeleteSearchSetup(textobj)
-            let g:search_operator_pattern = input('Search for: ')
-            if empty(g:search_operator_pattern)
-                return ''
-            endif
-            let g:search_operator_saved_pos = getpos('.')
-            let g:search_operator_textobj = a:textobj
-            let g:search_operator_action = 'delete'
-            set operatorfunc=v:lua.SearchOperator
-            return 'g@l'
-        endfunction
+        local pattern = vim.fn.getreg('/')
+        if not pattern or pattern == '' then
+            _G.SearchOperatorPending = {}
+            vim.cmd('silent! autocmd! SearchOperatorExecute')
+            return
+        end
         
-        function! ChangeSearchSetup(textobj)
-            let g:search_operator_pattern = input('Search for: ')
-            if empty(g:search_operator_pattern)
-                return ''
-            endif
-            let g:search_operator_saved_pos = getpos('.')
-            let g:search_operator_textobj = a:textobj
-            let g:search_operator_action = 'change'
-            set operatorfunc=v:lua.SearchOperator
-            return 'g@l'
-        endfunction
-    ]])
+        -- Store state for operator
+        vim.g.search_operator_pattern = pattern
+        -- For yank and delete, save the original position to return to after the operation
+        -- For change, we don't need it as cursor stays in insert mode at the changed location
+        vim.g.search_operator_saved_pos = pending.saved_pos_for_yank
+        vim.g.search_operator_textobj = pending.textobj
+        vim.g.search_operator_action = pending.action
+        
+        -- Clear pending
+        _G.SearchOperatorPending = {}
+        
+        -- Set operator function and execute
+        vim.opt.operatorfunc = 'v:lua.SearchOperator'
+        vim.api.nvim_feedkeys('g@l', 'n', false)
+    end
+    
+    -- Create setup functions that initiate search
+    _G.YankSearchSetup = function(textobj)
+        -- Store pending operation
+        _G.SearchOperatorPending = {
+            action = 'yank',
+            textobj = textobj,
+            saved_pos_for_yank = vim.fn.getpos('.')  -- Only needed for yank to return and paste
+        }
+        
+        -- Show prompt
+        vim.api.nvim_echo({{'Search & yank ' .. textobj .. ': ', 'Question'}}, false, {})
+        
+        -- Clear any existing autocmd and set up fresh one
+        vim.cmd([[
+            silent! augroup! SearchOperatorExecute
+            augroup SearchOperatorExecute
+                autocmd!
+                autocmd CmdlineLeave / ++once call v:lua.ExecuteSearchOperator()
+            augroup END
+        ]])
+        
+        -- Return '/' to enter search mode
+        return '/'
+    end
+    
+    _G.DeleteSearchSetup = function(textobj)
+        -- Store pending operation
+        _G.SearchOperatorPending = {
+            action = 'delete',
+            textobj = textobj,
+            saved_pos_for_yank = vim.fn.getpos('.')  -- Save position for delete too
+        }
+        
+        -- Show prompt
+        vim.api.nvim_echo({{'Search & delete ' .. textobj .. ': ', 'Question'}}, false, {})
+        
+        -- Clear any existing autocmd and set up fresh one
+        vim.cmd([[
+            silent! augroup! SearchOperatorExecute
+            augroup SearchOperatorExecute
+                autocmd!
+                autocmd CmdlineLeave / ++once call v:lua.ExecuteSearchOperator()
+            augroup END
+        ]])
+        
+        -- Return '/' to enter search mode
+        return '/'
+    end
+    
+    _G.ChangeSearchSetup = function(textobj)
+        -- Store pending operation
+        _G.SearchOperatorPending = {
+            action = 'change',
+            textobj = textobj
+        }
+        
+        -- Show prompt
+        vim.api.nvim_echo({{'Search & change ' .. textobj .. ': ', 'Question'}}, false, {})
+        
+        -- Clear any existing autocmd and set up fresh one
+        vim.cmd([[
+            silent! augroup! SearchOperatorExecute
+            augroup SearchOperatorExecute
+                autocmd!
+                autocmd CmdlineLeave / ++once call v:lua.ExecuteSearchOperator()
+            augroup END
+        ]])
+        
+        -- Return '/' to enter search mode
+        return '/'
+    end
     
     -- Define text objects and operators
     local text_objects = {
@@ -162,17 +219,27 @@ function M.setup()
             -- Inside text object
             local key_i = ',' .. op_key .. 'i' .. obj_key
             local desc_i = 'Search & ' .. op_info.verb .. ' inside ' .. obj_name
-            vim.keymap.set('n', key_i, function() 
-                return vim.fn[op_info.func]('i' .. obj_key) 
-            end, { expr = true, desc = desc_i })
+            vim.keymap.set('n', key_i, function()
+                -- Call setup function which returns '/'
+                local result = _G[op_info.func]('i' .. obj_key)
+                if result == '/' then
+                    -- Feed the '/' key to enter search mode with incremental search
+                    vim.api.nvim_feedkeys('/', 'n', false)
+                end
+            end, { desc = desc_i })
             
             -- Around text object (skip redundant ones like ib, iB which don't have 'around' versions)
             if not (obj_key:match('[bB]')) then
                 local key_a = ',' .. op_key .. 'a' .. obj_key
                 local desc_a = 'Search & ' .. op_info.verb .. ' around ' .. obj_name
-                vim.keymap.set('n', key_a, function() 
-                    return vim.fn[op_info.func]('a' .. obj_key) 
-                end, { expr = true, desc = desc_a })
+                vim.keymap.set('n', key_a, function()
+                    -- Call setup function which returns '/'
+                    local result = _G[op_info.func]('a' .. obj_key)
+                    if result == '/' then
+                        -- Feed the '/' key to enter search mode with incremental search
+                        vim.api.nvim_feedkeys('/', 'n', false)
+                    end
+                end, { desc = desc_a })
             end
         end
     end
