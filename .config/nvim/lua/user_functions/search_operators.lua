@@ -46,8 +46,12 @@ _G.SearchOperator = function(type)
             local yanked = vim.fn.getreg('"')
             -- Restore position
             vim.fn.setpos('.', saved_pos)
-            -- Paste the yanked text
-            vim.cmd('normal! p')
+            -- Don't paste - just yank only behavior
+            -- vim.cmd('normal! p')
+            -- Show what was yanked
+            local preview = yanked:gsub('\n', '\\n'):sub(1, 50)
+            if #yanked > 50 then preview = preview .. '...' end
+            vim.notify('Yanked: ' .. preview, vim.log.levels.INFO)
         elseif action == 'delete' and saved_pos then
             -- Restore position after delete
             vim.fn.setpos('.', saved_pos)
@@ -205,6 +209,7 @@ function M.setup()
         ['t'] = 'HTML/XML tags',
         ['p'] = 'paragraph',
         ['s'] = 'sentence',
+        ['m'] = 'markdown code block (triple backticks)',
     }
     
     local operators = {
