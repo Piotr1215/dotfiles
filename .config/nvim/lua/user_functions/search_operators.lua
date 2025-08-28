@@ -25,12 +25,12 @@ _G.SearchOperator = function(type)
         if action == 'yank' then
             vim.cmd('normal v' .. textobj)  -- Remove ! to allow mappings
             vim.cmd('redraw')
-            vim.cmd('sleep 250m')  -- Show selection for 250ms
+            vim.cmd('sleep 150m')  -- Show selection for 150ms
             vim.cmd('normal! y')
         elseif action == 'delete' then
             vim.cmd('normal v' .. textobj)  -- Remove ! to allow mappings
             vim.cmd('redraw')
-            vim.cmd('sleep 250m')  -- Show selection for 250ms
+            vim.cmd('sleep 150m')  -- Show selection for 150ms
             vim.cmd('normal! d')
         elseif action == 'change' then
             -- For change, select and immediately change (no delay needed)
@@ -42,6 +42,19 @@ _G.SearchOperator = function(type)
             -- For visual, just select and stay in visual mode
             vim.cmd('normal v' .. textobj)  -- Remove ! to allow mappings
             -- Stay in visual mode - don't do anything else
+        elseif action == 'yankline' then
+            -- Yank the entire line
+            vim.cmd('normal! yy')
+        elseif action == 'deleteline' then
+            -- Delete the entire line
+            vim.cmd('normal! dd')
+        elseif action == 'changeline' then
+            -- Change the entire line
+            vim.cmd('normal! cc')
+            vim.cmd('startinsert')
+        elseif action == 'visualline' then
+            -- Visual select the entire line
+            vim.cmd('normal! V')
         end
     end)
     
@@ -54,11 +67,17 @@ _G.SearchOperator = function(type)
         elseif action == 'delete' and saved_pos then
             -- Restore position after delete
             vim.fn.setpos('.', saved_pos)
-        -- For change, cursor stays at the changed location in insert mode
+        elseif action == 'yankline' and saved_pos then
+            -- Restore position after yanking line
+            vim.fn.setpos('.', saved_pos)
+        elseif action == 'deleteline' and saved_pos then
+            -- Restore position after deleting line
+            vim.fn.setpos('.', saved_pos)
+        -- For change and visual, cursor stays at the changed/selected location
         end
         
         -- Clear search highlight after a delay (except for change/visual where user is still active)
-        if action ~= 'change' and action ~= 'visual' then
+        if action ~= 'change' and action ~= 'visual' and action ~= 'changeline' and action ~= 'visualline' then
             vim.defer_fn(function()
                 vim.cmd('nohlsearch')
                 -- Restore original search pattern
@@ -282,6 +301,40 @@ function M.setup()
                 end, { desc = desc_a })
             end
         end
+    end
+    
+    -- Special mappings for line operations (no text object needed)
+    -- Using uppercase to indicate line operations (consistent with Vim's Y/D/C/V)
+    local line_operators = {
+        Y = { action = 'yankline', verb = 'yank entire line', save_pos = true },
+        D = { action = 'deleteline', verb = 'delete entire line', save_pos = true },
+        C = { action = 'changeline', verb = 'change entire line', save_pos = false },
+        V = { action = 'visualline', verb = 'select entire line', save_pos = false }
+    }
+    
+    -- Generate line operation mappings
+    for op_key, op_info in pairs(line_operators) do
+        local key = ',' .. op_key
+        local desc = 'Search & ' .. op_info.verb
+        vim.keymap.set('n', key, function()
+            _G.SearchOperatorPending = {
+                action = op_info.action,
+                textobj = '',  -- No text object for line operations
+                saved_pos_for_yank = op_info.save_pos and vim.fn.getpos('.') or nil
+            }
+            
+            vim.api.nvim_echo({{'Search & ' .. op_info.verb .. ': ', 'Question'}}, false, {})
+            
+            vim.cmd([[
+                silent! augroup! SearchOperatorExecute
+                augroup SearchOperatorExecute
+                    autocmd!
+                    autocmd CmdlineLeave / ++once call v:lua.ExecuteSearchOperator()
+                augroup END
+            ]])
+            
+            vim.api.nvim_feedkeys('/', 'n', false)
+        end, { desc = desc })
     end
 end
 
