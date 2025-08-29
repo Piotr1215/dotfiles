@@ -175,12 +175,28 @@ case "$MODE" in
                 pr_checkout_success=false;
                 if gh pr checkout "$pr_num" 2>/dev/null; then
                     pr_checkout_success=true;
+                    # If we stashed changes and PR checkout succeeded, pop the stash
+                    if [ "$stashed" = true ]; then
+                        echo "Applying stashed changes...";
+                        if git stash pop 2>/dev/null; then
+                            echo "Successfully applied stashed changes";
+                        else
+                            echo "Warning: Could not apply stashed changes (conflicts or stash may be empty)";
+                        fi;
+                    fi;
                 else
                     echo "Could not checkout PR (might be from a fork)";
+                    # If PR checkout failed but we stashed, pop the stash back
+                    if [ "$stashed" = true ]; then
+                        echo "Restoring stashed changes since PR checkout failed...";
+                        git stash pop 2>/dev/null || echo "Warning: Could not restore stashed changes";
+                    fi;
                 fi;
                 tmux new-session -d -s "$session_name" -c "$repo_path" 2>/dev/null;
-                if [ "$stashed" = true ]; then
-                    tmux send-keys -t "$session_name" "echo \"⚠️  Auto-stashed uncommitted changes before PR #$pr_num checkout\"" C-m;
+                if [ "$stashed" = true ] && [ "$pr_checkout_success" = false ]; then
+                    tmux send-keys -t "$session_name" "echo \"⚠️  Auto-stashed changes were restored (PR checkout failed)\"" C-m;
+                elif [ "$stashed" = true ]; then
+                    tmux send-keys -t "$session_name" "echo \"✅  Auto-stashed changes were applied after PR #$pr_num checkout\"" C-m;
                 fi;
                 tmux switch-client -t "$session_name" || tmux attach-session -t "$session_name"
             )+abort' \
