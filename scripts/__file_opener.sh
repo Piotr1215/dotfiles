@@ -24,9 +24,9 @@ help_function() {
     echo "  Enter     Open in neovim"
     echo "  Ctrl+Y    Copy path to clipboard"
     echo "  Ctrl+X    Switch to zoxide"
-    echo "  Ctrl+R    Switch to current directory"
     echo "  Ctrl+D    Switch to all directories"
     echo "  Ctrl+F    Switch to all files"
+    echo "  Ctrl+B    Switch to bookmarks"
     echo "  Ctrl+C    Cancel"
     echo "  Tab       Multi-select"
 }
@@ -118,10 +118,11 @@ fi
 
 # Define keybindings for switching sources (only the useful filters)
 ZOXIDE_BIND="ctrl-x:change-prompt(zoxide> )+reload(zoxide query -l)"
-CURRENT_BIND="ctrl-r:change-prompt(current> )+reload(fd $HIDDEN $FIND_TYPE --max-depth 2 . '$(pwd)')"
 DIR_BIND="ctrl-d:change-prompt(directories> )+reload(cd $HOME && fd --type d --hidden --absolute-path --color never --exclude .git --exclude node_modules --exclude .cache --max-depth 4)"
 # Files sorted by zoxide directories
 FILE_BIND="ctrl-f:change-prompt(files> )+reload(bash -c '{ zoxide query -l | while read -r dir; do fd --type f --hidden --absolute-path --color never --exclude .git --exclude node_modules --exclude .cache --max-depth 2 . \"\$dir\" 2>/dev/null | head -20; done; fd --type f --hidden --absolute-path --color never --exclude .git --exclude node_modules --exclude .cache --max-depth 3 . \"$HOME\" 2>/dev/null; } | awk \"!seen[\\\$0]++\"')"
+# Bookmarks binding - extract and expand paths from bookmarks.conf  
+BOOKMARKS_BIND="ctrl-b:change-prompt(bookmarks> )+reload(bash -c 'while IFS=\";\" read -r name path; do path=\${path/#\\~/\$HOME}; echo \"\$path\"; done < ~/dev/dotfiles/scripts/__bookmarks.conf')"
 
 # Start with zoxide dirs + all files - best of both worlds
 OUTPUT=$( {
@@ -133,14 +134,14 @@ OUTPUT=$( {
     --multi \
     --preview '[[ -d {} ]] && (exa --color=always --long --all --header --icons --git {} 2>/dev/null || ls -la {}) || [[ -f {} ]] && (bat --color=always {} 2>/dev/null || cat {}) || echo "Preview not available"' \
     --preview-window 'right:50%:wrap' \
-    --header ' Enter: open | C-o: split | C-y: copy | C-f: files | C-x: zoxide | C-r: current | C-d: dirs' \
+    --header ' Enter: open | C-y: copy | C-f: files | C-x: zoxide | C-d: dirs | C-b: bookmarks' \
     --prompt 'all> ' \
     --bind "$ZOXIDE_BIND" \
-    --bind "$CURRENT_BIND" \
     --bind "$DIR_BIND" \
     --bind "$FILE_BIND" \
+    --bind "$BOOKMARKS_BIND" \
     --bind "ctrl-c:abort" \
-    --expect=ctrl-y,ctrl-o)
+    --expect=ctrl-y)
 
 # Parse output - first line is the key pressed, rest are selections
 KEY=$(echo "$OUTPUT" | head -1)
@@ -171,31 +172,6 @@ if [ -n "$SELECTIONS" ]; then
         plural=""
         [[ $count -gt 1 ]] && plural="s"
         echo "✓ Copied $count path$plural to clipboard"
-    elif [ "$KEY" = "ctrl-o" ]; then
-        # Open in split pane
-        # Build array of files
-        declare -a file_array
-        while IFS= read -r path; do
-            if [ -n "$path" ]; then
-                expanded_path="${path/#\~/$HOME}"
-                real_path=$(realpath "$expanded_path" 2>/dev/null || echo "$expanded_path")
-                file_array+=("$real_path")
-            fi
-        done <<< "$SELECTIONS"
-        
-        if [ ${#file_array[@]} -gt 0 ]; then
-            first_file="${file_array[0]}"
-            
-            if [ -d "$first_file" ]; then
-                # If it's a directory, create new window in current session
-                window_name=$(basename "$first_file")
-                tmux new-window -n "$window_name" -c "$first_file"
-            else
-                # If it's file(s), open in editor in split pane
-                dir_path=$(dirname "$first_file")
-                tmux split-window -h -c "$dir_path" nvim "${file_array[@]}"
-            fi
-        fi
     else
         # Default action: Open in new tmux window
         # Build array of files
