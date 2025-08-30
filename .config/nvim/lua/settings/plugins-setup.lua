@@ -626,10 +626,10 @@ require("lualine").setup {
     lualine_b = { 'branch', 'diff', 'diagnostics' },
     lualine_c = { 
       'filename',
-      -- Add search operator indicator
+      -- Add beam.nvim search operator indicator
       {
         function()
-          return vim.g.search_operator_indicator or ''
+          return vim.g.beam_search_operator_indicator or ''
         end,
         color = { fg = '#ff9e64', gui = 'bold' },  -- Orange bold text
       }

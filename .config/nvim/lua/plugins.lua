@@ -298,6 +298,18 @@ return require("lazy").setup {
     },
   },
   -- }}}
+  -- beam.nvim - Search and operate on distant text
+  {
+    dir = "/home/decoder/dev/beam.nvim",  -- Use explicit local path
+    name = "beam.nvim",
+    config = function()
+      require("beam").setup({
+        prefix = ',',
+        visual_feedback_duration = 150,
+        enable_default_text_objects = true, -- Enable beam's custom text objects (currently: im/am for markdown code blocks)
+      })
+    end,
+  },
   -- Look & Feel {{{
   "ellisonleao/gruvbox.nvim",
   "mhartington/formatter.nvim",

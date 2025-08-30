@@ -343,15 +343,15 @@ utils.lnmap("f2", "<cmd>FIX 35<cr>")
 utils.lnmap("f0", "<cmd>FIX -1<cr>")
 
 -- Obsidian
-utils.vmap("ol", ":ObsidianLink<cr>", { silent = false })
-utils.lnmap("ol", ":ObsidianLinks<cr>", { silent = false })
-utils.lnmap("oq", ":ObsidianQuickSwitch<cr>")
-utils.lnmap("on", ":ObsidianNew ", { silent = false })
-utils.vmap("on", ":ObsidianLinkNew ", { silent = false })
-utils.lnmap("os", ":ObsidianSearch<cr>")
-utils.lnmap("ob", ":ObsidianBacklinks<cr>")
-utils.lnmap("ot", ":ObsidianTags<cr>")
-utils.lnmap("od", ":ObsidianToday<cr>")
+vim.keymap.set("v", "<leader>ol", ":Obsidian link<cr>", { noremap = true, silent = false, desc = "Link selection to note" })
+vim.keymap.set("n", "<leader>ol", ":Obsidian links<cr>", { noremap = true, silent = false, desc = "Show all links in buffer" })
+vim.keymap.set("n", "<leader>oq", ":Obsidian quick_switch<cr>", { noremap = true, silent = true, desc = "Quick switch notes" })
+vim.keymap.set("n", "<leader>on", ":Obsidian new ", { noremap = true, silent = false, desc = "Create new note" })
+vim.keymap.set("v", "<leader>on", ":Obsidian link_new ", { noremap = true, silent = false, desc = "Create new note from selection" })
+vim.keymap.set("n", "<leader>os", ":Obsidian search<cr>", { noremap = true, silent = true, desc = "Search notes" })
+vim.keymap.set("n", "<leader>ob", ":Obsidian backlinks<cr>", { noremap = true, silent = true, desc = "Show backlinks" })
+vim.keymap.set("n", "<leader>ot", ":Obsidian tags<cr>", { noremap = true, silent = true, desc = "Show tags" })
+vim.keymap.set("n", "<leader>od", ":Obsidian today<cr>", { noremap = true, silent = true, desc = "Open today's note" })
 
 -- GoTo Preview
 vim.keymap.set("n", "gtp", "<cmd>lua require('goto-preview').goto_preview_definition()<CR>", { noremap = true })
@@ -466,6 +466,3 @@ vim.cmd [[
        return !col || getline('.')[col - 1]  =~# '\s'
      endfunction
      ]]
-
--- Load search operators module
-require("user_functions.search_operators").setup()
