@@ -18,7 +18,7 @@ cmp.setup {
       require("luasnip").lsp_expand(args.body)
     end,
   },
-  
+
   completion = {
     completeopt = "menu,menuone,noselect",
   },
@@ -101,37 +101,37 @@ cmp.setup {
 
 -- Use cmdline & path source for ':'
 cmp.setup.cmdline(":", {
-  mapping = cmp.mapping.preset.cmdline({
-    ['<Tab>'] = cmp.mapping(function(fallback)
+  mapping = cmp.mapping.preset.cmdline {
+    ["<Tab>"] = cmp.mapping(function(fallback)
       if cmp.visible() then
         cmp.select_next_item()
       else
         fallback()
       end
-    end, { 'c' }),
-    ['<S-Tab>'] = cmp.mapping(function(fallback)
+    end, { "c" }),
+    ["<S-Tab>"] = cmp.mapping(function(fallback)
       if cmp.visible() then
         cmp.select_prev_item()
       else
         fallback()
       end
-    end, { 'c' }),
-  }),
+    end, { "c" }),
+  },
   sources = cmp.config.sources({
     { name = "path" },
   }, {
     { name = "cmdline" },
   }),
   window = {
-    completion = cmp.config.window.bordered({
+    completion = cmp.config.window.bordered {
       winhighlight = "Normal:Pmenu,FloatBorder:Pmenu,Search:None",
-      col_offset = 5,  -- Move it 5 columns to the right to uncover line numbers (even with 4-digit line numbers)
+      col_offset = 5, -- Move it 5 columns to the right to uncover line numbers (even with 4-digit line numbers)
       side_padding = 1,
-      max_height = 8,  -- Limit the height to show fewer items
-    }),
+      max_height = 8, -- Limit the height to show fewer items
+    },
   },
   view = {
-    entries = { name = 'custom', selection_order = 'near_cursor' }
+    entries = { name = "custom", selection_order = "near_cursor" },
   },
 })
 
