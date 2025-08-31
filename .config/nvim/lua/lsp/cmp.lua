@@ -101,6 +101,22 @@ cmp.setup {
 
 -- Use cmdline & path source for ':'
 cmp.setup.cmdline(":", {
+  mapping = cmp.mapping.preset.cmdline({
+    ['<Tab>'] = cmp.mapping(function(fallback)
+      if cmp.visible() then
+        cmp.select_next_item()
+      else
+        fallback()
+      end
+    end, { 'c' }),
+    ['<S-Tab>'] = cmp.mapping(function(fallback)
+      if cmp.visible() then
+        cmp.select_prev_item()
+      else
+        fallback()
+      end
+    end, { 'c' }),
+  }),
   sources = cmp.config.sources({
     { name = "path" },
   }, {
