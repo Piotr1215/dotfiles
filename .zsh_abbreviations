@@ -8,6 +8,7 @@ abbrevs=(
     "_chmo" '__chmod_file'
     "?rep" '__global_replace'
     "?fil" '__file_replace'
+    "?filt" '__temp_file_replace'
     "_pad" '__pueue_add_expand'
 )
 
@@ -73,6 +74,42 @@ __file_replace() {
     
     # First, select the file
     local replacement=$(fd -t f -d 3 . 2>/dev/null | fzf --prompt="Select file: ")
+    
+    # If user cancelled (ESC), restore original command
+    if [[ -z "$replacement" ]]; then
+        LBUFFER="$cmd ?"
+        return
+    fi
+    
+    # Now check if there's NAME in the command
+    if [[ "$cmd" == *NAME* ]]; then
+        # Replace NAME with the selected file
+        LBUFFER="${cmd//NAME/$replacement}"
+    else
+        # No NAME, so set up history substitution with the file as replacement
+        # Add command to history
+        print -s "$cmd"
+        # Escape slashes in the replacement path for sed-style substitution
+        local escaped_replacement="${replacement//\//\\/}"
+        # Create the substitution command with empty search pattern
+        # User needs to fill in what to search for
+        LBUFFER="!!:gs//$escaped_replacement/"
+        # Position cursor right after the first / so user can type what to replace
+        local prefix="!!:gs/"
+        CURSOR=${#prefix}
+    fi
+}
+
+# Function to replace NAME with temp file selection via fzf
+__temp_file_replace() {
+    local cmd="$LBUFFER"
+    # Remove the ?filt trigger and the trailing space before ?
+    cmd=${cmd%% ?filt}
+    # Remove the trailing space and ? from pet snippet
+    cmd=${cmd% \?}
+    
+    # First, select the file from /tmp directory
+    local replacement=$(fd -t f . /tmp 2>/dev/null | fzf --prompt="Select temp file: ")
     
     # If user cancelled (ESC), restore original command
     if [[ -z "$replacement" ]]; then

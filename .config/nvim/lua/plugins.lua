@@ -81,7 +81,6 @@ return require("lazy").setup {
   { "nvim-lua/plenary.nvim", lazy = true },
   { "windwp/nvim-autopairs", opts = {} },
   "jonarrien/telescope-cmdline.nvim",
-  { "chrisgrieser/nvim-various-textobjs", opts = {} },
   { "wintermute-cell/gitignore.nvim", dependencies = "nvim-telescope/telescope.nvim" },
   "ionide/Ionide-vim",
   "rcarriga/nvim-notify",
@@ -300,14 +299,19 @@ return require("lazy").setup {
   -- }}}
   -- beam.nvim - Search and operate on distant text
   {
-    dir = "/home/decoder/dev/beam.nvim",  -- Use explicit local path
+    dir = "/home/decoder/dev/beam.nvim", -- Use explicit local path
     name = "beam.nvim",
     config = function()
-      require("beam").setup({
-        prefix = ',',
+      require("beam").setup {
+        prefix = ",",
         visual_feedback_duration = 150,
+        cross_buffer = false, -- Enable cross-buffer operations
         enable_default_text_objects = true, -- Enable beam's custom text objects (currently: im/am for markdown code blocks)
-      })
+        auto_discover_text_objects = true, -- Auto-discover all available text objects
+        show_discovery_notification = false, -- Show what was discovered
+        excluded_motions = { "Q", "R" }, -- Exclude Q and R motions from auto-discovery
+        smart_highlighting = true, -- Enable real-time context-aware search highlighting for delimiter text objects
+      }
     end,
   },
   -- Look & Feel {{{

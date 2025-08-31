@@ -332,7 +332,7 @@ require("no-neck-pain").setup {
   width = 75,
   buffers = {
     colors = {
-      background = "tokyonight-moon",
+      background = "#000000",
     },
     right = {
       enabled = false,
