@@ -88,20 +88,6 @@ local function is_significant_diff(diff)
   return true
 end
 
--- Helper: Mark file as relevant (Claude has worked on it)
-function M.mark_relevant(filepath)
-  config.relevant_files[filepath] = true
-end
-
--- Helper: Check if file is relevant
-local function is_relevant_file(filepath)
-  -- If we're tracking relevant files and this isn't one, skip it
-  if next(config.relevant_files) and not config.relevant_files[filepath] then
-    return false
-  end
-  return true
-end
-
 -- Helper: Find Claude terminal buffer
 local function find_claude_terminal()
   -- First check if buffer is in a window
@@ -204,52 +190,12 @@ local function send_to_claude(message)
   return true
 end
 
--- Alternative: Use registers and paste
-function M.send_context_via_paste()
-  local filepath = vim.fn.expand('%:p')
-  local relative_path = vim.fn.fnamemodify(filepath, ':.')
-  
-  -- Get git diff
-  local diff_cmd = string.format(
-    'git diff --unified=%d HEAD -- %s',
-    config.diff_context_lines,
-    vim.fn.shellescape(filepath)
-  )
-  local diff = vim.fn.system(diff_cmd)
-  
-  if diff == "" then
-    diff_cmd = string.format(
-      'git diff --unified=%d -- %s',
-      config.diff_context_lines,
-      vim.fn.shellescape(filepath)
-    )
-    diff = vim.fn.system(diff_cmd)
-  end
-  
-  local message = format_context_update(relative_path, diff)
-  
-  -- Put in clipboard
-  vim.fn.setreg("+", message)
-  
-  -- Find and focus Claude window
-  local buf, win = find_claude_terminal()
-  if win then
-    vim.api.nvim_set_current_win(win)
-    vim.cmd('startinsert')
-    -- Try to paste using terminal paste command
-    vim.cmd('normal! "+p')
-  end
-  
-  vim.notify("Context in clipboard - paste it in Claude!", vim.log.levels.INFO)
-end
-
 -- Main: Start Claude assistant
 function M.start_claude()
   -- Check if already running
   local existing_buf = find_claude_terminal()
   if existing_buf then
     vim.notify("Claude assistant already running", vim.log.levels.INFO)
-    M.show_claude()
     return
   end
   
@@ -292,25 +238,6 @@ function M.start_claude()
   -- Return to previous window but keep terminal in insert mode
   vim.cmd('stopinsert')  -- Stop insert mode for current window
   vim.cmd('wincmd p')
-end
-
--- Show/focus Claude window
-function M.show_claude()
-  local buf, win = find_claude_terminal()
-  if win then
-    vim.api.nvim_set_current_win(win)
-  else
-    vim.notify("Claude assistant not running. Use :ClaudeStart to begin.", vim.log.levels.WARN)
-  end
-end
-
--- Hide Claude window
-function M.hide_claude()
-  local buf, win = find_claude_terminal()
-  if win then
-    vim.api.nvim_win_close(win, false)
-    vim.notify("Claude window hidden (still running)", vim.log.levels.INFO)
-  end
 end
 
 -- Toggle Claude window
@@ -386,28 +313,15 @@ function M.send_context(force)
   local filepath = vim.fn.expand('%:p')
   local relative_path = vim.fn.fnamemodify(filepath, ':.')
   
-  -- Check if file is relevant
-  if not force and not is_relevant_file(filepath) then
-    return
-  end
   
-  -- Get git diff against HEAD
+  -- Get UNSTAGED changes only (not showing already staged work)
+  -- This way, once you stage completed work, Claude only sees new changes
   local diff_cmd = string.format(
-    'git diff --unified=%d HEAD -- %s',
+    'git diff --unified=%d -- %s',
     config.diff_context_lines,
     vim.fn.shellescape(filepath)
   )
   local diff = vim.fn.system(diff_cmd)
-  
-  -- If no diff against HEAD, try to get uncommitted changes
-  if diff == "" then
-    diff_cmd = string.format(
-      'git diff --unified=%d -- %s',
-      config.diff_context_lines,
-      vim.fn.shellescape(filepath)
-    )
-    diff = vim.fn.system(diff_cmd)
-  end
   
   -- Check if diff is significant
   if not force and not is_significant_diff(diff) then
@@ -476,33 +390,6 @@ function M.send_git_status()
   send_to_claude(message)
 end
 
--- Send work session summary
-function M.send_session_summary()
-  local timestamp = os.date("%H:%M:%S")
-  local session_time = os.difftime(os.time(), state.session_start)
-  local minutes = math.floor(session_time / 60)
-  
-  local message = string.format("\n=== FYI: Session Summary [%s] ===\n", timestamp)
-  message = message .. string.format("Session duration: %d minutes\n", minutes)
-  
-  -- Files changed in this session
-  local changed_files = vim.fn.system("git diff --name-only 2>/dev/null")
-  if changed_files ~= "" then
-    local file_count = select(2, changed_files:gsub("\n", "\n")) 
-    message = message .. string.format("\nFiles edited: %d\n", file_count)
-    message = message .. "```\n" .. changed_files .. "```\n"
-  end
-  
-  -- Overall stats
-  local diff_stat = vim.fn.system("git diff --shortstat 2>/dev/null"):gsub("\n", "")
-  if diff_stat ~= "" then
-    message = message .. "\nOverall changes: " .. diff_stat .. "\n"
-  end
-  
-  message = message .. "=== End Summary ===\n\n"
-  send_to_claude(message)
-end
-
 -- Setup periodic status updates
 local status_timer = nil
 function M.start_periodic_updates(interval_minutes)
@@ -516,7 +403,7 @@ function M.start_periodic_updates(interval_minutes)
   status_timer:start(interval_ms, interval_ms, vim.schedule_wrap(function()
     local buf = find_claude_terminal()
     if buf then
-      M.send_session_summary()
+      M.send_git_status()
     end
   end))
 end
@@ -528,11 +415,11 @@ function M.stop_periodic_updates()
   end
 end
 
--- Enable/disable context tracking
-function M.toggle_tracking()
+-- Enable/disable git diff sending on file save
+function M.toggle_git_diff_send()
   config.enabled = not config.enabled
   local status = config.enabled and "enabled" or "disabled"
-  vim.notify("Claude context tracking " .. status, vim.log.levels.INFO)
+  vim.notify("Claude git diff sending " .. status, vim.log.levels.INFO)
 end
 
 -- Setup autocmd for file saves
@@ -570,14 +457,6 @@ function M.setup()
     desc = "Start Claude assistant in terminal"
   })
   
-  vim.api.nvim_create_user_command('ClaudeShow', M.show_claude, {
-    desc = "Show/focus Claude terminal"
-  })
-  
-  vim.api.nvim_create_user_command('ClaudeHide', M.hide_claude, {
-    desc = "Hide Claude terminal window"
-  })
-  
   vim.api.nvim_create_user_command('ClaudeToggle', M.toggle_claude, {
     desc = "Toggle Claude terminal window"
   })
@@ -589,48 +468,49 @@ function M.setup()
   })
   
   vim.api.nvim_create_user_command('ClaudeSay', function(opts)
-    M.send_message(opts.args)
-  end, {
-    nargs = '+',
-    desc = "Send a message to Claude"
-  })
-  
-  vim.api.nvim_create_user_command('ClaudeToggleTracking', M.toggle_tracking, {
-    desc = "Toggle automatic context tracking"
-  })
-  
-  vim.api.nvim_create_user_command('ClaudeMarkRelevant', function()
-    local filepath = vim.fn.expand('%:p')
-    M.mark_relevant(filepath)
-    vim.notify("Marked " .. vim.fn.fnamemodify(filepath, ':.') .. " as relevant to Claude", vim.log.levels.INFO)
-  end, {
-    desc = "Mark current file as relevant for Claude context"
-  })
-  
-  vim.api.nvim_create_user_command('ClaudeClearRelevant', function()
-    config.relevant_files = {}
-    vim.notify("Cleared all relevant file markers", vim.log.levels.INFO)
-  end, {
-    desc = "Clear all relevant file markers"
-  })
-  
-  vim.api.nvim_create_user_command('ClaudeSetBatchDelay', function(opts)
-    local delay = tonumber(opts.args)
-    if delay then
-      config.filter.batch_delay_ms = delay
-      vim.notify("Batch delay set to " .. delay .. "ms", vim.log.levels.INFO)
+    local message = opts.args
+    local is_command = false
+    
+    -- Check if it starts with ! for shell command
+    if message:match("^!") then
+      local cmd = message:sub(2)  -- Remove the !
+      local output = vim.fn.system(cmd)
+      message = string.format(
+        "\n=== COMMAND EXECUTION ===\nI executed: `%s`\n\nOutput:\n```\n%s```\n\nDO NOT take any action. Just acknowledge. Stand by for further instructions.\n=== END ===\n", 
+        cmd, output
+      )
+      is_command = true
+    -- Check if it starts with : for vim command  
+    elseif message:match("^:") then
+      local cmd = message:sub(2)  -- Remove the :
+      local output = vim.fn.execute(cmd)
+      message = string.format(
+        "\n=== VIM COMMAND EXECUTION ===\nI executed: `:%s`\n\nOutput:\n```\n%s```\n\nDO NOT take any action. Just acknowledge. Stand by for further instructions.\n=== END ===\n", 
+        cmd, output
+      )
+      is_command = true
+    end
+    
+    -- Send the message
+    M.send_message(message)
+    
+    -- If it was a command, give Claude time to process before we continue
+    if is_command then
+      vim.defer_fn(function()
+        -- Just a pause to let Claude process the output
+      end, 1000)
     end
   end, {
-    nargs = 1,
-    desc = "Set batch delay in milliseconds (0 to disable)"
+    nargs = '+',
+    desc = "Send message to Claude (! for shell, : for vim command)"
+  })
+  
+  vim.api.nvim_create_user_command('ClaudeToggleGitDiffSend', M.toggle_git_diff_send, {
+    desc = "Toggle automatic git diff sending on file save"
   })
   
   vim.api.nvim_create_user_command('ClaudeStatus', M.send_git_status, {
     desc = "Send git status to Claude"
-  })
-  
-  vim.api.nvim_create_user_command('ClaudeSummary', M.send_session_summary, {
-    desc = "Send work session summary to Claude"
   })
   
   vim.api.nvim_create_user_command('ClaudeStartUpdates', function(opts)
@@ -647,26 +527,6 @@ function M.setup()
     vim.notify("Stopped periodic updates", vim.log.levels.INFO)
   end, {
     desc = "Stop periodic status updates"
-  })
-  
-  vim.api.nvim_create_user_command('ClaudeTest', function()
-    -- Test different enter methods
-    local buf, win, job_id = find_claude_terminal()
-    if job_id then
-      vim.notify("Testing enter methods...", vim.log.levels.INFO)
-      -- Test 1: Just newline
-      vim.api.nvim_chan_send(job_id, "Test 1: newline\n")
-      vim.defer_fn(function()
-        -- Test 2: Carriage return
-        vim.api.nvim_chan_send(job_id, "Test 2: CR" .. string.char(13))
-      end, 1000)
-      vim.defer_fn(function()
-        -- Test 3: Both
-        vim.api.nvim_chan_send(job_id, "Test 3: CRLF\r\n")
-      end, 2000)
-    end
-  end, {
-    desc = "Test different enter key methods"
   })
   
   -- Setup autocmd

@@ -36,6 +36,16 @@ EDIT PERMISSIONS:
 • Do NOT touch code outside the diff context
 • Keep edits minimal - just fix obvious mistakes in my recent changes
 
+GIT WORKFLOW AWARENESS:
+• FYI diffs show ONLY UNSTAGED changes (work in progress)
+• Staged files (git add) = completed work that won't appear in diffs
+• Use git commands to understand the full state:
+  - git status - see what's staged vs unstaged
+  - git diff --cached - view staged changes
+  - git diff - view unstaged changes (what FYI updates show)
+• Help stage selectively when asked: "stage only the error handling"
+• Use git add -p for interactive chunk staging
+
 WORKFLOW IN NVIM:
 • Acknowledge updates with brief context like "✓ test file updated" or "noted - added new function"
 • Keep acknowledgments to 3-5 words showing you understood the change
