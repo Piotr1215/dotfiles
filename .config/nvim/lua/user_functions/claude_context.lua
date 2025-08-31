@@ -390,6 +390,61 @@ function M.send_git_status()
   send_to_claude(message)
 end
 
+-- Send untracked/unstaged files for Claude to read
+function M.send_unstaged_files()
+  local timestamp = os.date("%H:%M:%S")
+  local git_status = vim.fn.system("git status --porcelain 2>/dev/null")
+  
+  if git_status == "" then
+    vim.notify("No changes in working directory", vim.log.levels.INFO)
+    return
+  end
+  
+  local untracked_files = {}
+  local modified_files = {}
+  
+  for line in git_status:gmatch("[^\n]+") do
+    local status_code = line:sub(1, 2)
+    local filename = line:sub(4)  -- Skip status codes and space
+    
+    if status_code == "??" then
+      table.insert(untracked_files, filename)
+    elseif status_code:match("[MA ]M") or status_code:match("M[MD ]") then
+      -- Modified in working tree (unstaged)
+      table.insert(modified_files, filename)
+    end
+  end
+  
+  if #untracked_files == 0 and #modified_files == 0 then
+    vim.notify("No untracked or modified unstaged files", vim.log.levels.INFO)
+    return
+  end
+  
+  local message = string.format("\n=== File Reading Request [%s] ===\n", timestamp)
+  
+  if #untracked_files > 0 then
+    message = message .. "Please read these NEW untracked files:\n"
+    for _, file in ipairs(untracked_files) do
+      message = message .. "• " .. file .. "\n"
+    end
+  end
+  
+  if #modified_files > 0 then
+    if #untracked_files > 0 then
+      message = message .. "\n"
+    end
+    message = message .. "These tracked files have unstaged changes (use git diff to see changes):\n"
+    for _, file in ipairs(modified_files) do
+      message = message .. "• " .. file .. "\n"
+    end
+  end
+  
+  message = message .. "\nUse your file reading tools to examine the untracked files.\n"
+  message = message .. "=== End Request ===\n\n"
+  
+  send_to_claude(message)
+end
+
 -- Setup periodic status updates
 local status_timer = nil
 function M.start_periodic_updates(interval_minutes)
@@ -527,6 +582,10 @@ function M.setup()
     vim.notify("Stopped periodic updates", vim.log.levels.INFO)
   end, {
     desc = "Stop periodic status updates"
+  })
+  
+  vim.api.nvim_create_user_command('ClaudeReadUnstaged', M.send_unstaged_files, {
+    desc = "Ask Claude to read untracked/unstaged files"
   })
   
   -- Setup autocmd
