@@ -6,8 +6,9 @@
 
 RULES_FILE="/home/decoder/.claude/commands/norm-rules.md"
 
-if [[ -f "$RULES_FILE" ]]; then
-    cat "$RULES_FILE"
-else
-    echo "Warning: Rules file not found at $RULES_FILE"
+echo "ensure to read content of $RULES_FILE"
+
+# Check if running in Neovim terminal
+if [ -n "$NVIM" ]; then
+    echo "You are running in context-awareness mode. I will automatically send you git diffs when I save files. These are FYI updates only - you don't need to respond or take any action unless I explicitly ask you a question. Just acknowledge that you understand this mode and wait for my questions."
 fi
