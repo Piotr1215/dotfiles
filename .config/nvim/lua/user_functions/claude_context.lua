@@ -126,10 +126,30 @@ end
 local function format_context_update(filepath, diff)
   local timestamp = os.date("%H:%M:%S")
   local message = string.format(
-    "\n=== FYI: Context Update [%s] ===\nFile saved: %s\nNo action needed - this is just for your awareness.\n",
+    "\n=== FYI: Context Update [%s] ===\nFile saved: %s\n",
     timestamp,
     filepath
   )
+  
+  -- Get list of other modified files (just names, keep it simple)
+  local git_status = vim.fn.system("git status --porcelain 2>/dev/null")
+  if git_status ~= "" then
+    local other_files = {}
+    local current_file = vim.fn.fnamemodify(filepath, ':.')  -- Make filepath relative for comparison
+    
+    for line in git_status:gmatch("[^\n]+") do
+      local filename = line:match("^.. (.+)$")
+      if filename and filename ~= current_file then
+        table.insert(other_files, filename)
+      end
+    end
+    
+    if #other_files > 0 then
+      message = message .. "Also modified: " .. table.concat(other_files, ", ") .. "\n"
+    end
+  end
+  
+  message = message .. "No action needed - this is just for your awareness.\n"
   
   if diff and diff ~= "" then
     -- Clean up the diff output
@@ -328,6 +348,25 @@ local function send_batched_updates()
   
   for filepath, diff in pairs(config.pending_updates) do
     message = message .. string.format("• %s\n", filepath)
+  end
+  
+  -- Get ALL modified files in workspace
+  local git_status = vim.fn.system("git status --porcelain 2>/dev/null")
+  if git_status ~= "" then
+    local all_modified = {}
+    for line in git_status:gmatch("[^\n]+") do
+      local filename = line:match("^.. (.+)$")
+      if filename and not config.pending_updates[filename] then
+        table.insert(all_modified, filename)
+      end
+    end
+    
+    if #all_modified > 0 then
+      message = message .. "\nAlso modified in workspace:\n"
+      for _, file in ipairs(all_modified) do
+        message = message .. string.format("• %s\n", file)
+      end
+    end
   end
   
   message = message .. "\nChanges:\n"

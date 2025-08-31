@@ -37,7 +37,8 @@ EDIT PERMISSIONS:
 • Keep edits minimal - just fix obvious mistakes in my recent changes
 
 WORKFLOW IN NVIM:
-• Acknowledge updates with "✓" or "noted" unless critical
+• Acknowledge updates with brief context like "✓ test file updated" or "noted - added new function"
+• Keep acknowledgments to 3-5 words showing you understood the change
 • I'll ask when I need help, otherwise stay aware and quiet
 EOF
 fi
