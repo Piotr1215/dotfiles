@@ -233,10 +233,18 @@ function M.start_claude()
     return
   end
   
+  -- Get current working directory for permissions
+  local cwd = vim.fn.getcwd()
+  
+  -- Build claude command with directory permissions and auto-accept edits
+  -- --add-dir grants access to the directory
+  -- --permission-mode acceptEdits automatically accepts all file edits without prompting
+  local claude_cmd = config.claude_path .. ' --add-dir ' .. vim.fn.shellescape(cwd) .. ' --permission-mode acceptEdits'
+  
   -- Open Claude in a vertical split on the left (40% width for Claude, 60% for editor)
   -- The $NVIM environment variable is automatically set by Neovim terminal
   local width = math.floor(vim.o.columns * 0.4)
-  vim.cmd('leftabove ' .. width .. 'vsplit term://' .. config.claude_path)
+  vim.cmd('leftabove ' .. width .. 'vsplit term://' .. claude_cmd)
   
   -- Mark this terminal as the Claude assistant
   local buf = vim.api.nvim_get_current_buf()
@@ -624,6 +632,29 @@ function M.setup()
   
   -- Setup autocmd
   M.setup_autocmd()
+  
+  -- Auto-reload files when changed externally (by Claude)
+  vim.o.autoread = true
+  vim.o.updatetime = 1000  -- Check for file changes every 1 second when idle
+  
+  -- Event-based reload
+  vim.api.nvim_create_autocmd({"FocusGained", "BufEnter", "CursorHold", "CursorHoldI"}, {
+    pattern = "*",
+    callback = function()
+      if vim.fn.mode() ~= "c" then
+        vim.cmd("checktime")
+      end
+    end,
+    desc = "Auto-reload files changed by Claude"
+  })
+  
+  -- Aggressive timer-based reload (checks every 500ms regardless of cursor movement)
+  local reload_timer = vim.loop.new_timer()
+  reload_timer:start(500, 500, vim.schedule_wrap(function()
+    if vim.fn.mode() ~= "c" then
+      vim.cmd("silent! checktime")
+    end
+  end))
   
   -- Optional keybindings (you can customize these)
   vim.keymap.set('n', '<leader>cs', M.start_claude, { desc = "Start Claude" })
