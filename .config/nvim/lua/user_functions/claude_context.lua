@@ -108,6 +108,18 @@ local function find_claude_terminal()
   return nil, nil, nil
 end
 
+-- Helper: Update status indicator for lualine
+local function update_indicator()
+  local buf = find_claude_terminal()
+  if not buf then
+    vim.g.claude_context_indicator = ''  -- Claude not running
+  elseif config.enabled then
+    vim.g.claude_context_indicator = '[C]'  -- Claude active, diffs on
+  else
+    vim.g.claude_context_indicator = '[C-off]'  -- Claude active, diffs off
+  end
+end
+
 -- Helper: Format context update message
 local function format_context_update(filepath, diff)
   local timestamp = os.date("%H:%M:%S")
@@ -135,7 +147,7 @@ local function format_context_update(filepath, diff)
     end
   end
   
-  message = message .. "No action needed - this is just for your awareness.\n"
+  message = message .. "DO NOT take any action. This is ONLY for your awareness. Wait for explicit instructions.\n"
   
   if diff and diff ~= "" then
     -- Clean up the diff output
@@ -238,14 +250,17 @@ function M.start_claude()
   -- Return to previous window but keep terminal in insert mode
   vim.cmd('stopinsert')  -- Stop insert mode for current window
   vim.cmd('wincmd p')
+  
+  -- Update indicator
+  update_indicator()
 end
 
 -- Toggle Claude window
 function M.toggle_claude()
   local buf, win = find_claude_terminal()
   if win then
-    -- Window is visible, hide it
-    M.hide_claude()
+    -- Window is visible, hide it (we need to implement this function)
+    vim.api.nvim_win_close(win, false)
   elseif buf then
     -- Buffer exists but no window, create one with same split settings
     local width = math.floor(vim.o.columns * 0.4)
@@ -256,6 +271,7 @@ function M.toggle_claude()
     -- No Claude session exists, start one
     M.start_claude()
   end
+  update_indicator()  -- Update after toggle
 end
 
 -- Batch timer for collecting multiple updates
@@ -302,6 +318,7 @@ local function send_batched_updates()
     message = message .. string.format("\n--- %s ---\n```diff\n%s\n```\n", filepath, diff)
   end
   
+  message = message .. "DO NOT take any action. This is ONLY for context. Wait for instructions.\n"
   message = message .. "=== End Context Update ===\n\n"
   
   send_to_claude(message)
@@ -357,36 +374,123 @@ function M.send_message(message)
   end
 end
 
--- Send git status update
+-- Send comprehensive git status with all diffs
 function M.send_git_status()
   local timestamp = os.date("%H:%M:%S")
-  local message = string.format("\n=== FYI: Git Status [%s] ===\n", timestamp)
+  local message = string.format("\n=== COMPREHENSIVE GIT OVERVIEW [%s] ===\n", timestamp)
   
-  -- Current branch
+  -- Current branch and upstream
   local branch = vim.fn.system("git branch --show-current 2>/dev/null"):gsub("\n", "")
-  if branch ~= "" then
-    message = message .. "Branch: " .. branch .. "\n"
+  local upstream = vim.fn.system("git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null"):gsub("\n", "")
+  message = message .. "Branch: " .. branch
+  if upstream ~= "" then
+    message = message .. " → " .. upstream
+  end
+  message = message .. "\n"
+  
+  -- Behind/ahead of upstream
+  local rev_list = vim.fn.system("git rev-list --left-right --count HEAD...@{u} 2>/dev/null"):gsub("\n", "")
+  if rev_list ~= "" then
+    local ahead, behind = rev_list:match("(%d+)%s+(%d+)")
+    if ahead and behind then
+      message = message .. string.format("↑ %s ahead, ↓ %s behind upstream\n", ahead, behind)
+    end
   end
   
-  -- Status
-  local status = vim.fn.system("git status --short 2>/dev/null")
-  if status ~= "" then
-    message = message .. "\nModified files:\n```\n" .. status .. "```\n"
+  -- File status summary
+  local status = vim.fn.system("git status --porcelain 2>/dev/null")
+  local staged_files = {}
+  local unstaged_files = {}
+  local untracked_files = {}
+  
+  for line in status:gmatch("[^\n]+") do
+    local status_code = line:sub(1, 2)
+    local filename = line:sub(4)
+    
+    if status_code:match("^[MADRC]") then
+      table.insert(staged_files, filename)
+    end
+    if status_code:match(".[MD]") then
+      table.insert(unstaged_files, filename)
+    end
+    if status_code == "??" then
+      table.insert(untracked_files, filename)
+    end
+  end
+  
+  message = message .. "\nFILE STATUS:\n"
+  if #staged_files > 0 then
+    message = message .. "Staged (" .. #staged_files .. "):\n"
+    for _, file in ipairs(staged_files) do
+      message = message .. "  + " .. file .. "\n"
+    end
+  end
+  
+  if #unstaged_files > 0 then
+    message = message .. "Unstaged (" .. #unstaged_files .. "):\n"
+    for _, file in ipairs(unstaged_files) do
+      message = message .. "  M " .. file .. "\n"
+    end
+  end
+  
+  if #untracked_files > 0 then
+    message = message .. "Untracked (" .. #untracked_files .. "):\n"
+    for _, file in ipairs(untracked_files) do
+      message = message .. "  ? " .. file .. "\n"
+    end
+  end
+  
+  -- Staged changes (what will be committed)
+  local staged_diff = vim.fn.system("git diff --cached --stat 2>/dev/null")
+  if staged_diff ~= "" then
+    message = message .. "\nSTAGED CHANGES (will be committed):\n```\n" .. staged_diff .. "```\n"
+    
+    -- Show actual staged diff (limited)
+    local staged_diff_full = vim.fn.system("git diff --cached --unified=3 2>/dev/null")
+    local lines = vim.split(staged_diff_full, "\n")
+    if #lines > 50 then
+      -- Truncate to first 50 lines
+      local truncated = table.concat(vim.list_slice(lines, 1, 50), "\n")
+      message = message .. "```diff\n" .. truncated .. "\n... (truncated, " .. (#lines - 50) .. " more lines)\n```\n"
+    elseif #lines > 1 then
+      message = message .. "```diff\n" .. staged_diff_full .. "```\n"
+    end
+  end
+  
+  -- Unstaged changes (working directory)
+  local unstaged_diff = vim.fn.system("git diff --stat 2>/dev/null")
+  if unstaged_diff ~= "" then
+    message = message .. "\nUNSTAGED CHANGES (working directory):\n```\n" .. unstaged_diff .. "```\n"
+    
+    -- Show actual unstaged diff (limited)
+    local unstaged_diff_full = vim.fn.system("git diff --unified=3 2>/dev/null")
+    local lines = vim.split(unstaged_diff_full, "\n")
+    if #lines > 50 then
+      -- Truncate to first 50 lines
+      local truncated = table.concat(vim.list_slice(lines, 1, 50), "\n")
+      message = message .. "```diff\n" .. truncated .. "\n... (truncated, " .. (#lines - 50) .. " more lines)\n```\n"
+    elseif #lines > 1 then
+      message = message .. "```diff\n" .. unstaged_diff_full .. "```\n"
+    end
   end
   
   -- Recent commits
-  local commits = vim.fn.system("git log --oneline -5 2>/dev/null")
+  local commits = vim.fn.system("git log --oneline -10 2>/dev/null")
   if commits ~= "" then
-    message = message .. "\nRecent commits:\n```\n" .. commits .. "```\n"
+    message = message .. "\nRECENT COMMITS:\n```\n" .. commits .. "```\n"
   end
   
-  -- Diff stats
-  local stats = vim.fn.system("git diff --stat 2>/dev/null")
-  if stats ~= "" then
-    message = message .. "\nChange summary:\n```\n" .. stats .. "```\n"
+  -- Stash status
+  local stash = vim.fn.system("git stash list 2>/dev/null")
+  if stash ~= "" then
+    local stash_count = select(2, stash:gsub("\n", "\n"))
+    message = message .. "\nSTASHES: " .. stash_count .. " stashed changes\n"
   end
   
-  message = message .. "=== End Status ===\n\n"
+  message = message .. "\nThis is FYI only - DO NOT take any action based on this information.\n"
+  message = message .. "Stay responsive and wait for my explicit instructions.\n"
+  message = message .. "=== End Overview ===\n\n"
+  
   send_to_claude(message)
 end
 
@@ -439,7 +543,8 @@ function M.send_unstaged_files()
     end
   end
   
-  message = message .. "\nUse your file reading tools to examine the untracked files.\n"
+  message = message .. "\nYou can read these files with your tools if I ask you to.\n"
+  message = message .. "DO NOT read them automatically - wait for my instructions.\n"
   message = message .. "=== End Request ===\n\n"
   
   send_to_claude(message)
@@ -473,8 +578,7 @@ end
 -- Enable/disable git diff sending on file save
 function M.toggle_git_diff_send()
   config.enabled = not config.enabled
-  local status = config.enabled and "enabled" or "disabled"
-  vim.notify("Claude git diff sending " .. status, vim.log.levels.INFO)
+  update_indicator()  -- Update lualine indicator
 end
 
 -- Setup autocmd for file saves
@@ -565,7 +669,7 @@ function M.setup()
   })
   
   vim.api.nvim_create_user_command('ClaudeStatus', M.send_git_status, {
-    desc = "Send git status to Claude"
+    desc = "Send comprehensive git status with diffs to Claude"
   })
   
   vim.api.nvim_create_user_command('ClaudeStartUpdates', function(opts)
@@ -616,8 +720,14 @@ function M.setup()
   
   -- Optional keybindings (you can customize these)
   vim.keymap.set('n', '<leader>cs', M.start_claude, { desc = "Start Claude" })
-  vim.keymap.set('n', '<leader>ct', M.toggle_claude, { desc = "Toggle Claude" })
-  vim.keymap.set('n', '<leader>cc', M.send_context, { desc = "Send context to Claude" })
+  vim.keymap.set('n', '<leader>ct', M.toggle_claude, { desc = "Toggle Claude window" })
+  vim.keymap.set('n', '<leader>cc', function() M.send_context(true) end, { desc = "Send context to Claude (force)" })
+  vim.keymap.set('n', '<leader>cd', M.toggle_git_diff_send, { desc = "Toggle Claude diff sending" })
+  vim.keymap.set('n', '<leader>cu', M.send_unstaged_files, { desc = "Send unstaged files list to Claude" })
+  vim.keymap.set('n', '<leader>cg', M.send_git_status, { desc = "Send comprehensive git status to Claude" })
+  
+  -- Initialize indicator
+  update_indicator()
 end
 
 -- Auto-setup when module loads
