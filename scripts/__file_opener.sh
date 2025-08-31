@@ -121,8 +121,8 @@ ZOXIDE_BIND="ctrl-x:change-prompt(zoxide> )+reload(zoxide query -l)"
 DIR_BIND="ctrl-d:change-prompt(directories> )+reload(cd $HOME && fd --type d --hidden --absolute-path --color never --exclude .git --exclude node_modules --exclude .cache --max-depth 4)"
 # Files sorted by zoxide directories
 FILE_BIND="ctrl-f:change-prompt(files> )+reload(bash -c '{ zoxide query -l | while read -r dir; do fd --type f --hidden --absolute-path --color never --exclude .git --exclude node_modules --exclude .cache --max-depth 2 . \"\$dir\" 2>/dev/null | head -20; done; fd --type f --hidden --absolute-path --color never --exclude .git --exclude node_modules --exclude .cache --max-depth 3 . \"$HOME\" 2>/dev/null; } | awk \"!seen[\\\$0]++\"')"
-# Bookmarks binding - extract and expand paths from bookmarks.conf  
-BOOKMARKS_BIND="ctrl-b:change-prompt(bookmarks> )+reload(bash -c 'while IFS=\";\" read -r name path; do path=\${path/#\\~/\$HOME}; echo \"\$path\"; done < ~/dev/dotfiles/scripts/__bookmarks.conf')"
+# Bookmarks binding - extract and expand paths from bookmarks.conf with descriptions
+BOOKMARKS_BIND="ctrl-b:change-prompt(bookmarks> )+reload(bash -c 'while IFS=\";\" read -r desc path; do path=\${path/#\\~/\$HOME}; printf \"%-60s %s\\n\" \"\$desc\" \"\$path\"; done < ~/dev/dotfiles/scripts/__bookmarks.conf')"
 
 # Start with zoxide dirs + all files - best of both worlds
 OUTPUT=$( {
@@ -153,8 +153,17 @@ if [ -n "$SELECTIONS" ]; then
     if [ "$KEY" = "ctrl-y" ]; then
         # Copy paths to clipboard (use printf to avoid trailing newline)
         result=""
-        while IFS= read -r path; do
-            if [ -n "$path" ]; then
+        while IFS= read -r line; do
+            if [ -n "$line" ]; then
+                # Check if it's a bookmark entry (has description and path)
+                # Bookmarks are formatted as "description                    path"
+                if [[ "$line" =~ ^.+[[:space:]]{2,}(.+)$ ]]; then
+                    # Extract path from bookmark format (everything after multiple spaces)
+                    path="${BASH_REMATCH[1]}"
+                else
+                    # Regular path
+                    path="$line"
+                fi
                 expanded_path="${path/#\~/$HOME}"
                 real_path=$(realpath "$expanded_path" 2>/dev/null || echo "$expanded_path")
                 if [ -z "$result" ]; then
@@ -176,8 +185,17 @@ if [ -n "$SELECTIONS" ]; then
         # Default action: Open in new tmux window
         # Build array of files
         declare -a file_array
-        while IFS= read -r path; do
-            if [ -n "$path" ]; then
+        while IFS= read -r line; do
+            if [ -n "$line" ]; then
+                # Check if it's a bookmark entry (has description and path)
+                # Bookmarks are formatted as "description                    path"
+                if [[ "$line" =~ ^.+[[:space:]]{2,}(.+)$ ]]; then
+                    # Extract path from bookmark format (everything after multiple spaces)
+                    path="${BASH_REMATCH[1]}"
+                else
+                    # Regular path
+                    path="$line"
+                fi
                 expanded_path="${path/#\~/$HOME}"
                 real_path=$(realpath "$expanded_path" 2>/dev/null || echo "$expanded_path")
                 file_array+=("$real_path")
