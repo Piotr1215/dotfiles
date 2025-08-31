@@ -1,6 +1,13 @@
 # Dotfiles Repo
 
-Simple dotfiles with an installation script.
+Personal configuration files and scripts for bootstrapping a development environment on Ubuntu/Pop!_OS. The repository includes an automated installation script and helpers for keeping your setup consistent across machines.
+
+## Features
+
+- Encrypted secrets with `git-crypt`
+- Ansible-based installation for repeatable setup
+- `stow`-powered symlink management
+- Optional auto-commit service to keep dotfiles up to date
 
 [![Video Thumbnail](https://img.youtube.com/vi/_ttF5InNuMI/0.jpg)](https://www.youtube.com/watch?v=_ttF5InNuMI)
 
@@ -69,10 +76,10 @@ Or run remotely:
 
 - `curl https://raw.githubusercontent.com/Piotr1215/dotfiles/master/install.sh | bash -s -- ${GIT_USERNAME} ${GIT_EMAIL} ${GPG_KEY}`
 
-### Runing `./install` will
+### Running `./install` will
 
 - configure git with given user and email (default values point to my user)
-- install bunch of programs and symlink them using stow
+- install a bunch of programs and symlink them using stow
 - most notably, install neovim and configure its plugins
 
 > [!NOTE]
@@ -91,7 +98,7 @@ Adding new directory or file to the dotfiles repo can be done with the [__dotfil
 
 ## Auto-config commit
 
-Once the dotfiles are symlinked, it is easy to forget to commit them do the repo
+Once the dotfiles are symlinked, it is easy to forget to commit them to the repo
 (there is no indicator on the symlinked file).
 
 > [!IMPORTANT]
@@ -163,7 +170,7 @@ wget https://raw.githubusercontent.com/Piotr1215/dotfiles/master/create-test-use
 ```
 
 ```bash
-sudo chmod +x chreate-test-user.sh
+sudo chmod +x create-test-user.sh
 ./create-test-user.sh -u "decoder" -p "testingme"
 sudo passwd decoder
 su decoder
