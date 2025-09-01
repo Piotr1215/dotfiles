@@ -5,6 +5,14 @@ source __trap.sh
 
 set -eo pipefail
 
+# Detect if running in tmux popup and adjust terminal settings
+if [[ -n "$TMUX" ]] && [[ "$TERM" == "tmux-256color" || "$TERM" == "screen-256color" ]]; then
+    # Suppress error output for terminal control sequences
+    export FZF_DEFAULT_OPTS="$FZF_DEFAULT_OPTS --no-mouse"
+    # Clear any terminal errors before starting
+    clear 2>/dev/null || true
+fi
+
 # Set new line and tab for word splitting
 IFS=$'\n\t'
 
@@ -141,7 +149,7 @@ OUTPUT=$( {
     --bind "$FILE_BIND" \
     --bind "$BOOKMARKS_BIND" \
     --bind "ctrl-c:abort" \
-    --expect=ctrl-y)
+    --expect=ctrl-y 2>/dev/null || true)
 
 # Parse output - first line is the key pressed, rest are selections
 KEY=$(echo "$OUTPUT" | head -1)
@@ -218,3 +226,6 @@ if [ -n "$SELECTIONS" ]; then
         fi
     fi
 fi
+
+# Exit cleanly
+exit 0
