@@ -259,14 +259,16 @@ end
 function M.toggle_claude()
   local buf, win = find_claude_terminal()
   if win then
-    -- Window is visible, hide it (we need to implement this function)
+    -- Window is visible, hide it and pause git diff sending
     vim.api.nvim_win_close(win, false)
+    config.enabled = false
   elseif buf then
-    -- Buffer exists but no window, create one with same split settings
+    -- Buffer exists but no window, create one and resume git diff sending
     local width = math.floor(vim.o.columns * 0.4)
     vim.cmd('leftabove ' .. width .. 'vsplit')
     vim.api.nvim_set_current_buf(buf)
     vim.cmd('wincmd p')
+    config.enabled = true
   else
     -- No Claude session exists, start one
     M.start_claude()
