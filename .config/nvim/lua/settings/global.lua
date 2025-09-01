@@ -59,3 +59,6 @@ set.incsearch = true
 set.inccommand = "split" -- preview of replacement operations
 set.laststatus = 2
 set.cmdheight = 1
+
+-- Set KUBECONFIG environment variable for homelab access
+vim.env.KUBECONFIG = '/home/decoder/dev/homelab/kubeconfig'
