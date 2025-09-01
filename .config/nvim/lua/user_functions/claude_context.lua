@@ -29,9 +29,6 @@ local state = {
   claude_win = nil,
   session_start = os.time(),
   last_status_update = 0,
-  initial_load_complete = false, -- Track if we've finished initial load
-  last_buffer_announced = nil, -- Track last buffer to avoid duplicates
-  buffer_swap_timer = nil, -- Timer for debouncing buffer swaps
   added_directories = {}, -- Track which directories we've added to Claude
 }
 
@@ -324,8 +321,6 @@ function M.stop_claude()
   state.claude_job_id = nil
   state.claude_win = nil
   state.added_directories = {}
-  state.initial_load_complete = false
-  state.last_buffer_announced = nil
   config.enabled = true
 
   -- Update indicator
@@ -640,150 +635,6 @@ function M.toggle_git_diff_send()
   update_indicator() -- Update lualine indicator
 end
 
--- Send simple buffer swap notification
-function M.send_buffer_swap()
-  local filepath = vim.fn.expand "%:p"
-  local filename = vim.fn.expand "%:t"
-  local relative_path = vim.fn.fnamemodify(filepath, ":.")
-
-  -- Skip certain files and empty buffers
-  if filepath:match "%.git/" or filepath:match "node_modules/" or filepath:match "%.log$" or filename == "" then
-    return
-  end
-
-  -- Check if we need to add a new directory to Claude
-  local current_git_root = get_git_root()
-  if current_git_root then
-    -- Check if this is a new repository we haven't added yet
-    if not state.added_directories[current_git_root] then
-      -- Send /add-dir command to Claude
-      local add_dir_msg = string.format("/add-dir %s", current_git_root)
-      send_to_claude(add_dir_msg)
-
-      -- Mark as added
-      state.added_directories[current_git_root] = true
-
-      -- Wait for add-dir to complete, then send context info
-      vim.defer_fn(function()
-        -- Send context about the new repository
-        local context_msg = string.format(
-          "\n📁 Switched to new repository: %s\n"
-            .. "   File opened: %s\n"
-            .. "   Your working directory: %s\n"
-            .. "   My current directory: %s\n"
-            .. "%s",
-          vim.fn.fnamemodify(current_git_root, ":t"), -- Just repo name
-          relative_path,
-          vim.fn.system("pwd"):gsub("\n", ""), -- Claude's pwd
-          vim.fn.getcwd(), -- Neovim's cwd
-          config.fyi_suffix
-        )
-        send_to_claude(context_msg)
-
-        -- Then send normal buffer notification
-        vim.defer_fn(function()
-          M.send_buffer_swap_internal(filepath, filename, relative_path)
-        end, 200)
-      end, 800) -- Wait for /add-dir to complete
-      return
-    end
-  else
-    -- Not in a git repo, check parent directory
-    local parent_dir = vim.fn.fnamemodify(filepath, ":h")
-    if not state.added_directories[parent_dir] then
-      -- Add the parent directory
-      local add_dir_msg = string.format("/add-dir %s", parent_dir)
-      send_to_claude(add_dir_msg)
-      state.added_directories[parent_dir] = true
-
-      -- Wait and send context
-      vim.defer_fn(function()
-        local context_msg = string.format(
-          "\n📁 Added directory (not a git repo): %s\n"
-            .. "   File opened: %s\n"
-            .. "   Your working directory: %s\n"
-            .. "   My current directory: %s\n"
-            .. "%s",
-          parent_dir,
-          relative_path,
-          vim.fn.system("pwd"):gsub("\n", ""),
-          vim.fn.getcwd(),
-          config.fyi_suffix
-        )
-        send_to_claude(context_msg)
-
-        vim.defer_fn(function()
-          M.send_buffer_swap_internal(filepath, filename, relative_path)
-        end, 200)
-      end, 800)
-      return
-    end
-  end
-
-  -- Continue with normal notification
-  M.send_buffer_swap_internal(filepath, filename, relative_path)
-end
-
--- Internal function to send the actual buffer swap message
-function M.send_buffer_swap_internal(filepath, filename, relative_path)
-  -- Start building message
-  local filetype = vim.bo.filetype ~= "" and vim.bo.filetype or "plain"
-  local message = string.format("→ %s [%s]", relative_path, filetype)
-
-  -- Get file status and diff if in git
-  local git_root = get_git_root()
-  if git_root then
-    -- Check file status
-    local has_changes = vim.fn
-      .system(string.format("git diff --name-only -- %s 2>/dev/null", vim.fn.shellescape(filepath)))
-      :gsub("\n", "")
-
-    local has_staged = vim.fn
-      .system(string.format("git diff --cached --name-only -- %s 2>/dev/null", vim.fn.shellescape(filepath)))
-      :gsub("\n", "")
-
-    local is_tracked =
-      vim.fn.system(string.format("git ls-files --error-unmatch %s 2>/dev/null", vim.fn.shellescape(filepath)))
-
-    if vim.v.shell_error ~= 0 then
-      message = message .. " (untracked)\n"
-    elseif has_staged ~= "" then
-      message = message .. " (staged)\n"
-      -- Show staged diff stats
-      local diff_stat = vim.fn
-        .system(string.format("git diff --cached --stat -- %s 2>/dev/null | tail -1", vim.fn.shellescape(filepath)))
-        :gsub("\n", "")
-      if diff_stat ~= "" then
-        message = message .. "  " .. diff_stat .. "\n"
-      end
-    elseif has_changes ~= "" then
-      message = message .. " (modified)\n"
-      -- Get diff stats for context
-      local diff_stat = vim.fn
-        .system(string.format("git diff --stat -- %s 2>/dev/null | tail -1", vim.fn.shellescape(filepath)))
-        :gsub("\n", "")
-      if diff_stat ~= "" then
-        message = message .. "  " .. diff_stat .. "\n"
-      end
-
-      -- Get short diff preview (first few lines)
-      local diff_preview =
-        vim.fn.system(string.format("git diff --unified=2 -- %s 2>/dev/null | head -20", vim.fn.shellescape(filepath)))
-      if diff_preview ~= "" and #vim.split(diff_preview, "\n") > 1 then
-        message = message .. "  Recent changes:\n```diff\n" .. diff_preview .. "\n```\n"
-      end
-    else
-      message = message .. " (clean)\n"
-    end
-  else
-    message = message .. "\n"
-  end
-
-  -- Append FYI suffix
-  message = message .. config.fyi_suffix
-
-  send_to_claude(message)
-end
 
 -- Send file information about current buffer
 function M.send_file_info()
@@ -873,6 +724,76 @@ function M.send_file_info()
   send_to_claude(message)
 end
 
+-- Check and add new directories when opening files
+function M.check_and_add_directory()
+  local filepath = vim.fn.expand "%:p"
+  local filename = vim.fn.expand "%:t"
+  
+  -- Skip certain files and empty buffers
+  if filepath:match "%.git/" or filepath:match "node_modules/" or filepath:match "%.log$" or filename == "" then
+    return
+  end
+  
+  -- Only proceed if Claude is running
+  local claude_buf = find_claude_terminal()
+  if not claude_buf then
+    return
+  end
+  
+  -- Check if we need to add a new directory to Claude
+  local current_git_root = get_git_root()
+  if current_git_root then
+    -- Check if this is a new repository we haven't added yet
+    if not state.added_directories[current_git_root] then
+      -- Send /add-dir command to Claude
+      local add_dir_msg = string.format("/add-dir %s", current_git_root)
+      send_to_claude(add_dir_msg)
+      
+      -- Mark as added
+      state.added_directories[current_git_root] = true
+      
+      -- Send context about the new repository
+      vim.defer_fn(function()
+        local context_msg = string.format(
+          "\n📁 Added new repository: %s\n" ..
+          "   Your working directory: %s\n" ..
+          "   My current directory: %s\n" ..
+          "%s",
+          vim.fn.fnamemodify(current_git_root, ":t"), -- Just repo name
+          vim.fn.system("pwd"):gsub("\n", ""), -- Claude's pwd
+          vim.fn.getcwd(), -- Neovim's cwd
+          config.fyi_suffix
+        )
+        send_to_claude(context_msg)
+      end, 800)
+    end
+  else
+    -- Not in a git repo, check parent directory
+    local parent_dir = vim.fn.fnamemodify(filepath, ":h")
+    if not state.added_directories[parent_dir] then
+      -- Add the parent directory
+      local add_dir_msg = string.format("/add-dir %s", parent_dir)
+      send_to_claude(add_dir_msg)
+      state.added_directories[parent_dir] = true
+      
+      -- Send context
+      vim.defer_fn(function()
+        local context_msg = string.format(
+          "\n📁 Added directory (not a git repo): %s\n" ..
+          "   Your working directory: %s\n" ..
+          "   My current directory: %s\n" ..
+          "%s",
+          parent_dir,
+          vim.fn.system("pwd"):gsub("\n", ""),
+          vim.fn.getcwd(),
+          config.fyi_suffix
+        )
+        send_to_claude(context_msg)
+      end, 800)
+    end
+  end
+end
+
 -- Setup autocmd for file saves
 function M.setup_autocmd()
   vim.api.nvim_create_augroup("ClaudeContext", { clear = true })
@@ -899,65 +820,17 @@ function M.setup_autocmd()
     end,
     desc = "Send git diff to Claude on file save",
   })
-
-  -- Mark initial load complete after Vim starts
-  vim.api.nvim_create_autocmd("VimEnter", {
-    group = "ClaudeContext",
-    callback = function()
-      -- Wait a bit to ensure everything is loaded
-      vim.defer_fn(function()
-        state.initial_load_complete = true
-      end, 1000) -- 1 second after VimEnter
-    end,
-    desc = "Mark initial load complete",
-  })
-
-  -- Track buffer switches (only after initial load)
+  
+  -- Check for new directories when entering buffers
   vim.api.nvim_create_autocmd("BufEnter", {
     group = "ClaudeContext",
     pattern = "*",
     callback = function()
-      -- Skip if initial load not complete or Claude not running
-      if not state.initial_load_complete or not config.enabled then
-        return
-      end
-
-      local current_buf = vim.api.nvim_get_current_buf()
-
-      -- Skip Claude's own terminal buffer
-      if vim.b[current_buf].is_claude_assistant then
-        return
-      end
-
-      -- Skip if same buffer (no actual switch)
-      if state.last_buffer_announced == current_buf then
-        return
-      end
-
-      -- Only send if Claude is running
-      local claude_buf = find_claude_terminal()
-      if claude_buf then
-        state.last_buffer_announced = current_buf
-
-        -- Cancel existing timer if any
-        if state.buffer_swap_timer then
-          state.buffer_swap_timer:stop()
-        end
-
-        -- Create debounced call (300ms delay)
-        state.buffer_swap_timer = vim.loop.new_timer()
-        state.buffer_swap_timer:start(
-          300,
-          0,
-          vim.schedule_wrap(function()
-            M.send_buffer_swap()
-            state.buffer_swap_timer = nil
-          end)
-        )
-      end
+      M.check_and_add_directory()
     end,
-    desc = "Notify Claude of buffer switches",
+    desc = "Check and add new directories to Claude"
   })
+
 end
 
 -- Initialize
