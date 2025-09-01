@@ -346,11 +346,31 @@ utils.lnmap("f2", "<cmd>FIX 35<cr>")
 utils.lnmap("f0", "<cmd>FIX -1<cr>")
 
 -- Obsidian
-vim.keymap.set("v", "<leader>ol", ":Obsidian link<cr>", { noremap = true, silent = false, desc = "Link selection to note" })
-vim.keymap.set("n", "<leader>ol", ":Obsidian links<cr>", { noremap = true, silent = false, desc = "Show all links in buffer" })
-vim.keymap.set("n", "<leader>oq", ":Obsidian quick_switch<cr>", { noremap = true, silent = true, desc = "Quick switch notes" })
+vim.keymap.set(
+  "v",
+  "<leader>ol",
+  ":Obsidian link<cr>",
+  { noremap = true, silent = false, desc = "Link selection to note" }
+)
+vim.keymap.set(
+  "n",
+  "<leader>ol",
+  ":Obsidian links<cr>",
+  { noremap = true, silent = false, desc = "Show all links in buffer" }
+)
+vim.keymap.set(
+  "n",
+  "<leader>oq",
+  ":Obsidian quick_switch<cr>",
+  { noremap = true, silent = true, desc = "Quick switch notes" }
+)
 vim.keymap.set("n", "<leader>on", ":Obsidian new ", { noremap = true, silent = false, desc = "Create new note" })
-vim.keymap.set("v", "<leader>on", ":Obsidian link_new ", { noremap = true, silent = false, desc = "Create new note from selection" })
+vim.keymap.set(
+  "v",
+  "<leader>on",
+  ":Obsidian link_new ",
+  { noremap = true, silent = false, desc = "Create new note from selection" }
+)
 vim.keymap.set("n", "<leader>os", ":Obsidian search<cr>", { noremap = true, silent = true, desc = "Search notes" })
 vim.keymap.set("n", "<leader>ob", ":Obsidian backlinks<cr>", { noremap = true, silent = true, desc = "Show backlinks" })
 vim.keymap.set("n", "<leader>ot", ":Obsidian tags<cr>", { noremap = true, silent = true, desc = "Show tags" })

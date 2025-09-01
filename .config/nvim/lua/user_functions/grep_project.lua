@@ -2,18 +2,18 @@
 local M = {}
 
 function M.grepInProject()
-  local handle = io.popen "git rev-parse --show-toplevel 2> /dev/null"
-  local gitRoot = handle and handle:read "*a" or ""
-  if handle then
-    handle:close()
-  end
+	local handle = io.popen("git rev-parse --show-toplevel 2> /dev/null")
+	local gitRoot = handle and handle:read("*a") or ""
+	if handle then
+		handle:close()
+	end
 
-  if gitRoot ~= "" then
-    gitRoot = gitRoot:gsub("%s+$", "")
-  end
+	if gitRoot ~= "" then
+		gitRoot = gitRoot:gsub("%s+$", "")
+	end
 
-  local cwd = gitRoot ~= "" and gitRoot or vim.fn.getcwd()
-  require("telescope").extensions.live_grep_args.live_grep_args { cwd = cwd }
+	local cwd = gitRoot ~= "" and gitRoot or vim.fn.getcwd()
+	require("telescope").extensions.live_grep_args.live_grep_args({ cwd = cwd })
 end
 
 -- vim.keymap.set("n", "<leader>fp", M.grepInProject, { noremap = true, silent = true })
