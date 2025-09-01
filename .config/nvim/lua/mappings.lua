@@ -151,7 +151,10 @@ utils.nmap("<leader>x", "*``cgn", { desc = "replace word under cursor simultaneo
 utils.nmap("<leader>X", "#``cgn", { desc = "replace word under cursor simultaneously" })
 -- MACROS --
 utils.xmap("<leader>Q", ":'<,'>:normal @q<CR>", { desc = "run macro from q register on visual selection" })
-utils.tmap("<ESC>", "<C-\\><C-n>", { desc = "exit terminal mode" })
+-- Use Ctrl+Space to exit terminal mode (ESC passes through to terminal apps)
+-- Note: C-` doesn't work in many terminals, C-Space is more reliable
+-- Default Neovim: CTRL-\ CTRL-N exits terminal mode
+vim.keymap.set("t", "<C-Space>", "<C-\\><C-n>", { noremap = true, silent = true, desc = "exit terminal mode" })
 vim.keymap.set(
   "n",
   "<leader>ml",

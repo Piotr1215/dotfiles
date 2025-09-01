@@ -50,5 +50,10 @@ WORKFLOW IN NVIM:
 • Acknowledge updates with brief context like "✓ test file updated" or "noted - added new function"
 • Keep acknowledgments to 3-5 words showing you understood the change
 • I'll ask when I need help, otherwise stay aware and quiet
+
+COMMAND INSTRUCTIONS:
+• If I write text starting with "cc" (claude cli), treat it as a direct instruction for you to act on
+• Examples: "cc fix the typo", "cc add error handling", "cc run tests"
+• Act immediately on cc instructions without waiting for further confirmation
 EOF
 fi
