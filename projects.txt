@@ -14,3 +14,4 @@ shortcuts
 brotab
 git-log
 standup
+project-config

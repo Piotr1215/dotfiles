@@ -306,7 +306,7 @@ return require("lazy").setup {
         prefix = ",",
         visual_feedback_duration = 150,
         cross_buffer = {
-          enabled = true, -- Enable cross-buffer operations
+          enabled = false, -- Enable cross-buffer operations
           fuzzy_finder = "telescope", -- Uses Telescope for cross-buffer (required)
           include_hidden = false,
         },
