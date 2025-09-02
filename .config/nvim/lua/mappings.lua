@@ -489,3 +489,14 @@ vim.cmd [[
        return !col || getline('.')[col - 1]  =~# '\s'
      endfunction
      ]]
+
+-- Freeze screen / scroll lock keybindings using scrollfix plugin
+vim.keymap.set("n", "<leader>zf", function()
+  if vim.g.scrollfix == -1 or vim.g.scrollfix == nil then
+    vim.g.scrollfix = 20  -- Set to 20% from top
+    print("Scroll freeze enabled at 20%")
+  else
+    vim.g.scrollfix = -1  -- Disable
+    print("Scroll freeze disabled")
+  end
+end, { desc = "Toggle scroll freeze (cursor at 20% from top)" })
