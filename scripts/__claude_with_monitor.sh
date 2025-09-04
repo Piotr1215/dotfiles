@@ -112,7 +112,7 @@ TMUX_INSTANCE_ID="${TMUX_SESSION}:${TMUX_WINDOW}:${TMUX_PANE}"
 trap cleanup EXIT INT TERM
 
 # Set MCP server URL to the Kubernetes LoadBalancer IP
-MCP_SERVER_URL="http://192.168.178.91:3113"
+MCP_SERVER_URL="http://192.168.178.95:3113"
 echo "Using MCP server from Kubernetes at ${MCP_SERVER_URL}"
 
 # Sanitize session name for filename (replace / with -)
