@@ -5,6 +5,25 @@ require("mason").setup()
 -- Load LuaSnip configuration early (before cmp)
 require "config.luasnip"
 
+-- Setup pairupai (AI pair programming)
+require("pairupai").setup {
+  provider = "claude",
+  providers = {
+    claude = {
+      path = vim.fn.exepath('claude') or "/home/decoder/.npm-global/bin/claude",
+    },
+  },
+  keymaps = {
+    toggle = "<leader>ct",
+    send_context = "<leader>cc",
+    toggle_diff = "<leader>cd",
+    send_unstaged = "<leader>cu",
+    send_git_status = "<leader>cg",
+    say = "<leader>cs",
+    send_file_info = "<leader>cf",
+  },
+}
+
 require("typeit").setup {
   default_speed = 30, -- Default typing speed (milliseconds)
   default_pause = "paragraph", -- Default pause behavior ('line' or 'paragraph')
