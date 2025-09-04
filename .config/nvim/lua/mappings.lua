@@ -17,7 +17,7 @@ utils.lnmap("wa", ":wqa<cr>", { desc = "save and close all" })
 utils.lnmap("wq", ":wq<cr>", { desc = "save and close all" })
 utils.imap("jk", "<Esc>", { desc = "esc and save" })
 utils.nmap("<leader>w", ":wall<CR>", { desc = "save all" })
-utils.lnmap("qq", "@q", { desc = "close all" })
+utils.lnmap("qq", "@q", { desc = "run macro from q register" })
 utils.lnmap("qa", ":qa!<cr>", { desc = "close all without saving" })
 utils.lnmap("qf", ":q!<cr>", { desc = "close current bufferall without saving" })
 
@@ -123,7 +123,7 @@ vim.api.nvim_set_keymap(
   "<cmd>tabprevious<cr>",
   { noremap = true, silent = true, desc = "move to next tab" }
 )
-utils.nmap("<BS>", "^", { desc = "move to first non-bkgtgtgtgtlank character of the line" })
+utils.nmap("<BS>", "^", { desc = "move to first non-blank character of the line" })
 utils.vmap("<S-PageDown>", ":m '>+1<CR>gv=gv", { desc = "Move Line Down in Visual Mode" })
 utils.vmap("<S-PageUp>", ":m '<-2<CR>gv=gv", { desc = "Move Line Up in Visual Mode" })
 utils.nmap("<leader>mk", ":m .-2<CR>==", { desc = "Move Line Up in Normal Mode" })
@@ -158,7 +158,7 @@ vim.keymap.set("t", "<C-Space>", "<C-\\><C-n>", { noremap = true, silent = true,
 vim.keymap.set(
   "n",
   "<leader>ml",
-  "^I-<Space>[<Space>]<Space><Esc>^j",
+  "^i- [ ] <Esc>^j",
   { remap = true, silent = false, desc = "prepend markdown list item on line" }
 )
 utils.vmap("srt", ":!sort -n -k 2<cr>", { desc = "sort by second column" })
@@ -255,7 +255,7 @@ vim.api.nvim_set_keymap(
   { noremap = true, silent = true }
 )
 
-vim.keymap.set("n", "<leader>rc", "?```<CR>k eb<c-g><c-g>", { remap = true, silent = false })
+vim.keymap.set("n", "<leader>rc", "?```<CR>k<leader>eb", { remap = true, silent = false, desc = "run previous code block" })
 
 utils.lnmap("cpl", [[:let @+ = expand("%:p") . ':' . line('.')<cr>]]) -- Copy current file name, path, and line number
 utils.lnmap("cpn", ':let @+ = expand("%:t")<cr>') -- Copy current file name
@@ -410,7 +410,7 @@ end, { desc = "gp.nvim: use o3-mini (OpenAI)" })
 
 vim.keymap.set("n", "<leader>aig", function()
   switch "ChatGPT4.1"
-end, { desc = "gp.nvim: use GPT-4.1 (OpneAI)" })
+end, { desc = "gp.nvim: use GPT-4.1 (OpenAI)" })
 
 -- <leader>a i p   →  Perplexity (sonar model)
 vim.keymap.set("n", "<leader>aip", function()
