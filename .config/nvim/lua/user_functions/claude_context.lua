@@ -20,6 +20,8 @@ local config = {
   pending_updates = {},
   -- Standard FYI message appended to all context updates
   fyi_suffix = "\nThis is FYI only - DO NOT take any action. Wait for explicit instructions.\n",
+  -- Experimental LSP integration
+  lsp_enabled = true, -- Set to true to enable LSP semantic context
 }
 
 -- State
@@ -30,6 +32,7 @@ local state = {
   session_start = os.time(),
   last_status_update = 0,
   added_directories = {}, -- Track which directories we've added to Claude
+  lsp_diagnostics_cache = {}, -- Cache LSP diagnostics per buffer
 }
 
 -- Helper: Check if diff is significant
@@ -131,21 +134,44 @@ local function format_context_update(filepath, diff)
   local timestamp = os.date "%H:%M:%S"
   local message = string.format("\n=== FYI: Context Update [%s] ===\nFile saved: %s\n", timestamp, filepath)
 
-  -- Get list of other modified files (just names, keep it simple)
+  -- Get statistics about other modified files (don't list them all)
   local git_status = vim.fn.system "git status --porcelain 2>/dev/null"
   if git_status ~= "" then
-    local other_files = {}
     local current_file = vim.fn.fnamemodify(filepath, ":.") -- Make filepath relative for comparison
+    local staged_count = 0
+    local modified_count = 0
+    local untracked_count = 0
 
     for line in git_status:gmatch "[^\n]+" do
+      local status_code = line:sub(1, 2)
       local filename = line:match "^.. (.+)$"
+
       if filename and filename ~= current_file then
-        table.insert(other_files, filename)
+        if status_code:match "^[MADRC]" then
+          staged_count = staged_count + 1
+        end
+        if status_code:match ".[MD]" then
+          modified_count = modified_count + 1
+        end
+        if status_code == "??" then
+          untracked_count = untracked_count + 1
+        end
       end
     end
 
-    if #other_files > 0 then
-      message = message .. "Also modified: " .. table.concat(other_files, ", ") .. "\n"
+    local other_changes = {}
+    if staged_count > 0 then
+      table.insert(other_changes, staged_count .. " staged")
+    end
+    if modified_count > 0 then
+      table.insert(other_changes, modified_count .. " modified")
+    end
+    if untracked_count > 0 then
+      table.insert(other_changes, untracked_count .. " untracked")
+    end
+
+    if #other_changes > 0 then
+      message = message .. "Other files: " .. table.concat(other_changes, ", ") .. "\n"
     end
   end
 
@@ -194,8 +220,11 @@ local function send_to_claude(message)
 
     -- Jump to end to maintain autoscroll for next output
     if win then
+      -- Use feedkeys instead of norm to avoid terminal mode conflict
       vim.api.nvim_win_call(win, function()
-        vim.cmd "norm G"
+        if vim.api.nvim_get_mode().mode ~= "t" then
+          vim.cmd "norm G"
+        end
       end)
     end
   end, 500) -- Half second delay
@@ -260,6 +289,37 @@ function M.start_claude()
     callback = function()
       vim.cmd "startinsert"
     end,
+  })
+
+  -- Add terminal-specific mappings with higher priority to override global mappings
+  -- Use vim.keymap.set with buffer option for better priority handling
+  vim.keymap.set("t", "<C-l>", "<C-\\><C-n><C-w>l", {
+    buffer = buf,
+    noremap = true,
+    silent = true,
+    desc = "Switch to right window from Claude terminal",
+  })
+
+  vim.keymap.set("t", "<C-h>", "<C-\\><C-n><C-w>h", {
+    buffer = buf,
+    noremap = true,
+    silent = true,
+    desc = "Switch to left window from Claude terminal",
+  })
+
+  -- Also override the tmux navigation for this specific buffer
+  vim.keymap.set("t", "<C-j>", "<C-\\><C-n><C-w>j", {
+    buffer = buf,
+    noremap = true,
+    silent = true,
+    desc = "Switch to window below from Claude terminal",
+  })
+
+  vim.keymap.set("t", "<C-k>", "<C-\\><C-n><C-w>k", {
+    buffer = buf,
+    noremap = true,
+    silent = true,
+    desc = "Switch to window above from Claude terminal",
   })
 
   -- Jump to last line to enable terminal's native autoscroll
@@ -329,6 +389,109 @@ function M.stop_claude()
   vim.notify("Claude session stopped", vim.log.levels.INFO)
 end
 
+-- Helper: Get LSP semantic context for current position
+local function get_lsp_context(bufnr)
+  if not config.lsp_enabled then
+    return nil
+  end
+
+  local context = {
+    diagnostics = {},
+    hover_info = nil,
+    references_count = 0,
+    definition = nil,
+  }
+
+  -- Get diagnostics for current buffer
+  local diagnostics = vim.diagnostic.get(bufnr)
+  -- Debug: Log diagnostic count
+  if #diagnostics > 0 then
+    vim.notify(string.format("Found %d diagnostics in buffer", #diagnostics), vim.log.levels.DEBUG)
+  end
+
+  for _, diag in ipairs(diagnostics) do
+    -- Get severity name
+    local severity_name = "UNKNOWN"
+    if diag.severity == vim.diagnostic.severity.ERROR then
+      severity_name = "ERROR"
+    elseif diag.severity == vim.diagnostic.severity.WARN then
+      severity_name = "WARN"
+    elseif diag.severity == vim.diagnostic.severity.INFO then
+      severity_name = "INFO"
+    elseif diag.severity == vim.diagnostic.severity.HINT then
+      severity_name = "HINT"
+    end
+
+    table.insert(context.diagnostics, {
+      line = diag.lnum + 1,
+      severity = severity_name,
+      message = diag.message,
+      source = diag.source or "unknown",
+    })
+  end
+
+  -- Get current cursor position
+  local cursor = vim.api.nvim_win_get_cursor(0)
+  local params = vim.lsp.util.make_position_params()
+
+  -- Try to get hover information (type info, docs)
+  local hover_result = vim.lsp.buf_request_sync(bufnr, "textDocument/hover", params, 1000)
+  if hover_result and next(hover_result) then
+    for _, result in pairs(hover_result) do
+      if result.result and result.result.contents then
+        context.hover_info = vim.lsp.util.convert_input_to_markdown_lines(result.result.contents)
+      end
+    end
+  end
+
+  -- Get reference count
+  local ref_result = vim.lsp.buf_request_sync(bufnr, "textDocument/references", params, 1000)
+  if ref_result and next(ref_result) then
+    for _, result in pairs(ref_result) do
+      if result.result then
+        context.references_count = #result.result
+      end
+    end
+  end
+
+  return context
+end
+
+-- Helper: Format LSP context for Claude
+local function format_lsp_context(lsp_context, filepath)
+  if not lsp_context then
+    return ""
+  end
+
+  local message = "\n=== LSP Semantic Context ===\n"
+
+  -- Add diagnostics if any
+  if #lsp_context.diagnostics > 0 then
+    message = message .. "\n**Diagnostics Found:**\n"
+    for _, diag in ipairs(lsp_context.diagnostics) do
+      message = message
+        .. string.format("  • Line %d [%s]: %s (from %s)\n", diag.line, diag.severity, diag.message, diag.source)
+    end
+  end
+
+  -- Add hover info if available
+  if lsp_context.hover_info then
+    message = message .. "\n**Type/Documentation:**\n"
+    message = message .. table.concat(lsp_context.hover_info, "\n") .. "\n"
+  end
+
+  -- Add references count
+  if lsp_context.references_count > 0 then
+    message = message
+      .. string.format(
+        "\n**References:** This code is referenced in %d other location(s)\n",
+        lsp_context.references_count
+      )
+  end
+
+  return message
+end
+
 -- Batch timer for collecting multiple updates
 local batch_timer = nil
 
@@ -339,35 +502,71 @@ local function send_batched_updates()
   end
 
   local timestamp = os.date "%H:%M:%S"
-  local message = string.format("\n=== FYI: Batched Context Update [%s] ===\nFiles changed:\n", timestamp)
+  local message = string.format("\n=== FYI: Batched Context Update [%s] ===\nFiles saved:\n", timestamp)
 
-  for filepath, diff in pairs(config.pending_updates) do
-    message = message .. string.format("• %s\n", filepath)
+  -- List files being sent with diffs
+  for filepath, _ in pairs(config.pending_updates) do
+    message = message .. string.format("• %s (diff included)\n", filepath)
   end
 
-  -- Get ALL modified files in workspace
+  -- Get other modified files and show statistics only
   local git_status = vim.fn.system "git status --porcelain 2>/dev/null"
   if git_status ~= "" then
-    local all_modified = {}
+    local other_files = {}
+    local staged_count = 0
+    local modified_count = 0
+
     for line in git_status:gmatch "[^\n]+" do
+      local status_code = line:sub(1, 2)
       local filename = line:match "^.. (.+)$"
+
       if filename and not config.pending_updates[filename] then
-        table.insert(all_modified, filename)
+        if status_code:match "^[MADRC]" then
+          staged_count = staged_count + 1
+        end
+        if status_code:match ".[MD]" then
+          modified_count = modified_count + 1
+        end
+        if #other_files < 5 then -- Show first 5 files only
+          table.insert(other_files, filename)
+        end
       end
     end
 
-    if #all_modified > 0 then
-      message = message .. "\nAlso modified in workspace:\n"
-      for _, file in ipairs(all_modified) do
-        message = message .. string.format("• %s\n", file)
+    if staged_count > 0 or modified_count > 0 then
+      message = message .. "\nOther changes in workspace:\n"
+      if staged_count > 0 then
+        message = message .. string.format("  • %d file(s) staged\n", staged_count)
+      end
+      if modified_count > 0 then
+        message = message .. string.format("  • %d file(s) modified\n", modified_count)
+      end
+      if #other_files > 0 then
+        message = message .. "  First few: " .. table.concat(other_files, ", ")
+        if staged_count + modified_count > 5 then
+          message = message .. ", ..."
+        end
+        message = message .. "\n"
       end
     end
   end
 
   message = message .. "\nChanges:\n"
 
-  for filepath, diff in pairs(config.pending_updates) do
+  -- Only include diffs for the files that were actually saved
+  for filepath, update_data in pairs(config.pending_updates) do
+    local diff = update_data.diff or update_data -- Support both old and new format
+    local lsp_context = type(update_data) == "table" and update_data.lsp_context or nil
+
     message = message .. string.format("\n--- %s ---\n```diff\n%s\n```\n", filepath, diff)
+
+    -- Add LSP context if available
+    if lsp_context then
+      local lsp_msg = format_lsp_context(lsp_context, filepath)
+      if lsp_msg ~= "" then
+        message = message .. lsp_msg
+      end
+    end
   end
 
   message = message .. config.fyi_suffix
@@ -377,24 +576,11 @@ local function send_batched_updates()
   config.pending_updates = {}
 end
 
--- Send current file context (with smart filtering)
-function M.send_context(force)
-  local filepath = vim.fn.expand "%:p"
-  local relative_path = vim.fn.fnamemodify(filepath, ":.")
-
-  -- Get UNSTAGED changes only (not showing already staged work)
-  -- This way, once you stage completed work, Claude only sees new changes
-  local diff_cmd = string.format("git diff --unified=%d -- %s", config.diff_context_lines, vim.fn.shellescape(filepath))
-  local diff = vim.fn.system(diff_cmd)
-
-  -- Check if diff is significant
-  if not force and not is_significant_diff(diff) then
-    return
-  end
-
+-- Helper function to continue sending context after LSP is ready
+local function send_context_with_lsp(filepath, relative_path, diff, lsp_context, force)
   -- If batching is enabled, add to pending updates
   if config.filter.batch_delay_ms > 0 and not force then
-    config.pending_updates[relative_path] = diff
+    config.pending_updates[relative_path] = { diff = diff, lsp_context = lsp_context }
 
     -- Cancel existing timer
     if batch_timer then
@@ -414,8 +600,49 @@ function M.send_context(force)
   else
     -- Send immediately
     local message = format_context_update(relative_path, diff)
+
+    -- Add LSP context if available
+    if lsp_context then
+      local lsp_msg = format_lsp_context(lsp_context, filepath)
+      if lsp_msg ~= "" then
+        message = message:gsub(config.fyi_suffix, lsp_msg .. "\n" .. config.fyi_suffix)
+      end
+    end
+
     send_to_claude(message)
   end
+end
+
+-- Send current file context (with smart filtering)
+function M.send_context(force)
+  local filepath = vim.fn.expand "%:p"
+  local relative_path = vim.fn.fnamemodify(filepath, ":.")
+  local bufnr = vim.api.nvim_get_current_buf()
+
+  -- Get UNSTAGED changes only (not showing already staged work)
+  -- This way, once you stage completed work, Claude only sees new changes
+  local diff_cmd = string.format("git diff --unified=%d -- %s", config.diff_context_lines, vim.fn.shellescape(filepath))
+  local diff = vim.fn.system(diff_cmd)
+
+  -- Check if diff is significant
+  if not force and not is_significant_diff(diff) then
+    return
+  end
+
+  -- Get LSP context if enabled and available
+  local lsp_context = nil
+  if config.lsp_enabled then
+    -- Add a small delay to ensure LSP diagnostics are ready
+    vim.defer_fn(function()
+      lsp_context = get_lsp_context(bufnr)
+      -- Continue with the rest of the function
+      send_context_with_lsp(filepath, relative_path, diff, lsp_context, force)
+    end, 200) -- 200ms delay for LSP to process
+    return
+  end
+
+  -- If LSP is disabled, continue without delay
+  send_context_with_lsp(filepath, relative_path, diff, nil, force)
 end
 
 -- Send arbitrary message
@@ -635,7 +862,6 @@ function M.toggle_git_diff_send()
   update_indicator() -- Update lualine indicator
 end
 
-
 -- Send file information about current buffer
 function M.send_file_info()
   local filepath = vim.fn.expand "%:p"
@@ -724,74 +950,29 @@ function M.send_file_info()
   send_to_claude(message)
 end
 
--- Check and add new directories when opening files
-function M.check_and_add_directory()
-  local filepath = vim.fn.expand "%:p"
-  local filename = vim.fn.expand "%:t"
-  
-  -- Skip certain files and empty buffers
-  if filepath:match "%.git/" or filepath:match "node_modules/" or filepath:match "%.log$" or filename == "" then
-    return
-  end
-  
+-- Manually add current directory or git root to Claude
+function M.add_current_directory()
   -- Only proceed if Claude is running
   local claude_buf = find_claude_terminal()
   if not claude_buf then
     return
   end
-  
-  -- Check if we need to add a new directory to Claude
-  local current_git_root = get_git_root()
-  if current_git_root then
-    -- Check if this is a new repository we haven't added yet
-    if not state.added_directories[current_git_root] then
-      -- Send /add-dir command to Claude
-      local add_dir_msg = string.format("/add-dir %s", current_git_root)
-      send_to_claude(add_dir_msg)
-      
-      -- Mark as added
-      state.added_directories[current_git_root] = true
-      
-      -- Send context about the new repository
-      vim.defer_fn(function()
-        local context_msg = string.format(
-          "\n📁 Added new repository: %s\n" ..
-          "   Your working directory: %s\n" ..
-          "   My current directory: %s\n" ..
-          "%s",
-          vim.fn.fnamemodify(current_git_root, ":t"), -- Just repo name
-          vim.fn.system("pwd"):gsub("\n", ""), -- Claude's pwd
-          vim.fn.getcwd(), -- Neovim's cwd
-          config.fyi_suffix
-        )
-        send_to_claude(context_msg)
-      end, 800)
-    end
-  else
-    -- Not in a git repo, check parent directory
-    local parent_dir = vim.fn.fnamemodify(filepath, ":h")
-    if not state.added_directories[parent_dir] then
-      -- Add the parent directory
-      local add_dir_msg = string.format("/add-dir %s", parent_dir)
-      send_to_claude(add_dir_msg)
-      state.added_directories[parent_dir] = true
-      
-      -- Send context
-      vim.defer_fn(function()
-        local context_msg = string.format(
-          "\n📁 Added directory (not a git repo): %s\n" ..
-          "   Your working directory: %s\n" ..
-          "   My current directory: %s\n" ..
-          "%s",
-          parent_dir,
-          vim.fn.system("pwd"):gsub("\n", ""),
-          vim.fn.getcwd(),
-          config.fyi_suffix
-        )
-        send_to_claude(context_msg)
-      end, 800)
-    end
+
+  -- Determine which directory to add
+  local dir_to_add = get_git_root() or vim.fn.getcwd()
+
+  -- Check if already added
+  if state.added_directories[dir_to_add] then
+    vim.notify("Directory already added: " .. dir_to_add, vim.log.levels.INFO)
+    return
   end
+
+  -- Mark as added and send command
+  state.added_directories[dir_to_add] = true
+  local add_dir_msg = string.format("/add-dir %s", dir_to_add)
+  send_to_claude(add_dir_msg)
+
+  vim.notify("Added directory to Claude: " .. dir_to_add, vim.log.levels.INFO)
 end
 
 -- Setup autocmd for file saves
@@ -820,17 +1001,8 @@ function M.setup_autocmd()
     end,
     desc = "Send git diff to Claude on file save",
   })
-  
-  -- Check for new directories when entering buffers
-  vim.api.nvim_create_autocmd("BufEnter", {
-    group = "ClaudeContext",
-    pattern = "*",
-    callback = function()
-      M.check_and_add_directory()
-    end,
-    desc = "Check and add new directories to Claude"
-  })
 
+  -- Removed automatic directory adding - use :ClaudeAddDir manually instead
 end
 
 -- Initialize
@@ -925,6 +1097,33 @@ function M.setup()
 
   vim.api.nvim_create_user_command("ClaudeFileInfo", M.send_file_info, {
     desc = "Send current file's git info and metadata to Claude",
+  })
+
+  vim.api.nvim_create_user_command("ClaudeAddDir", M.add_current_directory, {
+    desc = "Add current git root or working directory to Claude",
+  })
+
+  vim.api.nvim_create_user_command("ClaudeToggleLSP", function()
+    config.lsp_enabled = not config.lsp_enabled
+    local status = config.lsp_enabled and "enabled" or "disabled"
+    vim.notify("Claude LSP integration " .. status, vim.log.levels.INFO)
+
+    -- If enabled, send current buffer's LSP context immediately
+    if config.lsp_enabled then
+      local bufnr = vim.api.nvim_get_current_buf()
+      local lsp_context = get_lsp_context(bufnr)
+      if lsp_context and #lsp_context.diagnostics > 0 then
+        local filepath = vim.fn.expand "%:t"
+        local message = "\n=== LSP Integration Enabled ===\n"
+        message = message .. "Current file: " .. filepath .. "\n"
+        message = message .. format_lsp_context(lsp_context, filepath)
+        message = message .. config.fyi_suffix
+        message = message .. "=== End LSP Status ===\n\n"
+        send_to_claude(message)
+      end
+    end
+  end, {
+    desc = "Toggle LSP semantic context integration",
   })
 
   -- Setup autocmd
