@@ -83,6 +83,35 @@ vim.api.nvim_create_autocmd("FileType", {
 
     -- Handle code blocks
 
+    -- BoldMe function for making selected text bold
+    function BoldMe()
+      -- Get visual selection coordinates
+      local start_pos = vim.fn.getpos("'<")
+      local end_pos = vim.fn.getpos("'>")
+      
+      -- Get selected text
+      local lines = vim.fn.getline(start_pos[2], end_pos[2])
+      if #lines == 0 then return end
+      
+      if #lines == 1 then
+        -- Single line selection
+        local line = lines[1]
+        local selected_text = string.sub(line, start_pos[3], end_pos[3])
+        local new_text = "**" .. selected_text .. "**"
+        local new_line = string.sub(line, 1, start_pos[3] - 1) .. new_text .. string.sub(line, end_pos[3] + 1)
+        vim.fn.setline(start_pos[2], new_line)
+      else
+        -- Multi-line selection
+        lines[1] = string.sub(lines[1], start_pos[3])
+        lines[#lines] = string.sub(lines[#lines], 1, end_pos[3])
+        local selected_text = table.concat(lines, "\n")
+        local new_text = "**" .. selected_text .. "**"
+        
+        -- Replace the selection
+        vim.cmd('normal! `<v`>c' .. new_text)
+      end
+    end
+
     -- Set keymaps
     local function set_keymaps()
       local maps = {
