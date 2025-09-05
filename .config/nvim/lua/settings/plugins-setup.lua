@@ -5,22 +5,38 @@ require("mason").setup()
 -- Load LuaSnip configuration early (before cmp)
 require "config.luasnip"
 
--- Setup pairupai (AI pair programming)
-require("pairupai").setup {
+-- Setup pairup.nvim (AI pair programming)
+require("pairup").setup {
   provider = "claude",
+  
+  -- Session management
+  persist_sessions = true,
+  prompt_session_resume = false,   -- Use :PairupSessions to manually select sessions
+  auto_populate_intent = true,     -- Auto-fill intent template on start
+  intent_template = "This is just an intent declaration. I'm planning to work on the file `%s` to...",
+  suggestion_mode = true,           -- Claude provides suggestions only
+  
   providers = {
     claude = {
-      path = vim.fn.exepath('claude') or "/home/decoder/.npm-global/bin/claude",
+      path = vim.fn.exepath "claude" or "/home/decoder/.npm-global/bin/claude",
+      permission_mode = "plan",      -- Start in plan mode
+      add_dir_on_start = true,
+      default_args = {},              -- Additional default args if needed
     },
   },
-  keymaps = {
-    toggle = "<leader>ct",
-    send_context = "<leader>cc",
-    toggle_diff = "<leader>cd",
-    send_unstaged = "<leader>cu",
-    send_git_status = "<leader>cg",
-    say = "<leader>cs",
-    send_file_info = "<leader>cf",
+  
+  -- Terminal settings
+  terminal = {
+    split_position = 'left',
+    split_width = 0.4,
+    auto_insert = true,
+    auto_scroll = true,
+  },
+  
+  -- Auto-refresh for file changes
+  auto_refresh = {
+    enabled = true,
+    interval_ms = 500,
   },
 }
 
@@ -408,7 +424,7 @@ require("obsidian").setup {
     },
   },
   disable_frontmatter = false,
-  legacy_commands = false,  -- Disable deprecated commands
+  legacy_commands = false, -- Disable deprecated commands
   -- open_app_foreground = true,
   templates = {
     subdir = "Templates",
@@ -479,10 +495,12 @@ local original_set_extmark = vim.api.nvim_buf_set_extmark
 vim.api.nvim_buf_set_extmark = function(buffer, ns_id, line, col, opts)
   local ok, result = pcall(original_set_extmark, buffer, ns_id, line, col, opts)
   if not ok then
-    if result:match("Invalid 'end_col': out of range") or 
-       result:match("Invalid 'end_row': out of range") or
-       result:match("Invalid 'line': out of range") then
-      return 0  -- Return a dummy extmark id
+    if
+      result:match "Invalid 'end_col': out of range"
+      or result:match "Invalid 'end_row': out of range"
+      or result:match "Invalid 'line': out of range"
+    then
+      return 0 -- Return a dummy extmark id
     end
     error(result)
   end
@@ -641,37 +659,37 @@ require("lualine").setup {
     extensions = { "nvim-dap-ui" },
   },
   sections = {
-    lualine_a = { 'mode' },
-    lualine_b = { 'branch', 'diff', 'diagnostics' },
-    lualine_c = { 
-      'filename',
+    lualine_a = { "mode" },
+    lualine_b = { "branch", "diff", "diagnostics" },
+    lualine_c = {
+      "filename",
       -- Add beam.nvim search operator indicator
       {
         function()
-          return vim.g.beam_search_operator_indicator or ''
+          return vim.g.beam_search_operator_indicator or ""
         end,
-        color = { fg = '#ff9e64', gui = 'bold' },  -- Orange bold text
+        color = { fg = "#ff9e64", gui = "bold" }, -- Orange bold text
       },
       -- Add Claude context indicator
       {
         function()
-          return vim.g.claude_context_indicator or ''
+          return vim.g.claude_context_indicator or ""
         end,
         color = function()
           -- Different colors based on state
-          if vim.g.claude_context_indicator == '[C]' then
-            return { fg = '#00ff00', gui = 'bold' }  -- Green when diffs enabled
-          elseif vim.g.claude_context_indicator == '[C-off]' then
-            return { fg = '#ff0000', gui = 'bold' }  -- Red when diffs disabled
+          if vim.g.claude_context_indicator == "[C]" then
+            return { fg = "#00ff00", gui = "bold" } -- Green when diffs enabled
+          elseif vim.g.claude_context_indicator == "[C-off]" then
+            return { fg = "#ff0000", gui = "bold" } -- Red when diffs disabled
           else
-            return { fg = '#666666' }  -- Dim when not running
+            return { fg = "#666666" } -- Dim when not running
           end
         end,
-      }
+      },
     },
-    lualine_x = { 'encoding', 'fileformat', 'filetype' },
-    lualine_y = { 'progress' },
-    lualine_z = { 'location' }
+    lualine_x = { "encoding", "fileformat", "filetype" },
+    lualine_y = { "progress" },
+    lualine_z = { "location" },
   },
 }
 

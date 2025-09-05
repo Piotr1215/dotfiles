@@ -297,11 +297,11 @@ return require("lazy").setup {
     },
   },
   -- }}}
-  -- pairupai.nvim - AI pair programming with real-time context
+  -- pairup.nvim - AI pair programming with real-time context
   {
-    dir = "/home/decoder/dev/pairupai.nvim", -- Use explicit local path  
-    name = "pairupai.nvim",
-    -- Setup is called in lua/settings/plugins-setup.lua
+    dir = "/home/decoder/dev/pairup.nvim", -- Use explicit local path
+    name = "pairup.nvim",
+    -- Setup is done in plugins-setup.lua, just like gp.nvim
   },
   -- beam.nvim - Search and operate on distant text
   {
