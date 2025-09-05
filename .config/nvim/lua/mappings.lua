@@ -412,6 +412,15 @@ vim.keymap.set("n", "<leader>aig", function()
   switch "ChatGPT4.1"
 end, { desc = "gp.nvim: use GPT-4.1 (OpenAI)" })
 
+-- Pairup.nvim mappings (Claude Code assistant)
+vim.keymap.set('n', '<leader>ct', ':PairupToggle<cr>', { desc = 'Toggle Claude Code assistant' })
+vim.keymap.set('n', '<leader>cc', ':PairupContext<cr>', { desc = 'Send git diff context to Claude' })
+vim.keymap.set('n', '<leader>cs', ':PairupSay ', { desc = 'Send message to Claude' })
+vim.keymap.set('n', '<leader>cd', ':PairupToggleDiff<cr>', { desc = 'Toggle auto diff sending' })
+vim.keymap.set('n', '<leader>cg', ':PairupStatus<cr>', { desc = 'Send git status to Claude' })
+vim.keymap.set('n', '<leader>cf', ':PairupFileInfo<cr>', { desc = 'Send file info to Claude' })
+vim.keymap.set('n', '<leader>cu', ':PairupReadUnstaged<cr>', { desc = 'Send unstaged files to Claude' })
+
 -- <leader>a i p   →  Perplexity (sonar model)
 vim.keymap.set("n", "<leader>aip", function()
   switch "pplx"
