@@ -7,6 +7,7 @@ lspconfig.lua_ls.setup {
   capabilities = def.capabilities,
   on_attach = def.on_attach,
   signatureHelp = { enable = true },
+  root_dir = lspconfig.util.root_pattern(".luarc.json", ".git", "lua"),
 
   settings = {
     Lua = {
