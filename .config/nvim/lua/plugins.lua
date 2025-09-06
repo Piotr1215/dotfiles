@@ -317,9 +317,10 @@ return require("lazy").setup {
           include_hidden = false,
         },
         enable_default_text_objects = true, -- Enable beam's custom text objects (currently: im/am for markdown code blocks)
-        auto_discover_text_objects = true, -- Auto-discover all available text objects
+        auto_discover_custom_text_objects = true, -- Auto-discover custom text objects from plugins (mini.ai, treesitter, etc.)
         show_discovery_notification = false, -- Show what was discovered
         excluded_motions = { "Q", "R" }, -- Exclude Q and R motions from auto-discovery
+        resolved_conflicts = { "m" }, -- Mark 'm' conflict as intentional (beam's im/am coexists with your custom im/am)
         smart_highlighting = true, -- Enable real-time context-aware search highlighting for delimiter text objects
         experimental = {
           telescope_single_buffer = {

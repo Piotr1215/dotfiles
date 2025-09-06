@@ -8,35 +8,68 @@ require "config.luasnip"
 -- Setup pairup.nvim (AI pair programming)
 require("pairup").setup {
   provider = "claude",
-  
+
   -- Session management
   persist_sessions = true,
-  prompt_session_resume = false,   -- Use :PairupSessions to manually select sessions
-  auto_populate_intent = true,     -- Auto-fill intent template on start
-  intent_template = "This is just an intent declaration. I'm planning to work on the file `%s` to...",
-  suggestion_mode = true,           -- Claude provides suggestions only
-  
+  prompt_session_resume = false, -- Use :PairupSessions to manually select sessions
+  auto_populate_intent = true, -- Auto-fill intent template on start
+  intent_template = "Help me work on the file `%s`, I want to ",
+  claude_ready_pattern = 'PAIR PROGRAMMING MODE ACTIVATED!', -- Text to wait for before sending intent
+  suggestion_mode = true, -- Claude provides suggestions only
+
   providers = {
     claude = {
       path = vim.fn.exepath "claude" or "/home/decoder/.npm-global/bin/claude",
-      permission_mode = "plan",      -- Start in plan mode
+      permission_mode = "plan", -- Start in plan mode
       add_dir_on_start = true,
-      default_args = {},              -- Additional default args if needed
+      default_args = {}, -- Additional default args if needed
     },
   },
-  
+
+  -- Git integration
+  diff_context_lines = 10, -- Lines of context around changes in diffs
+  enabled = true, -- Enable/disable automatic diff sending
+
+  -- RPC settings
+  rpc_port = '127.0.0.1:6666', -- Expected TCP port for nvim --listen
+
   -- Terminal settings
   terminal = {
-    split_position = 'left',
+    split_position = "left",
     split_width = 0.4,
     auto_insert = true,
     auto_scroll = true,
   },
-  
+
+  -- Filtering settings
+  filter = {
+    ignore_whitespace_only = true, -- Ignore whitespace-only changes
+    ignore_comment_only = false, -- Don't ignore comment-only changes
+    min_change_lines = 0, -- Minimum lines changed to trigger update
+    batch_delay_ms = 500, -- Delay for batching multiple saves
+  },
+
+  -- Context update settings
+  fyi_suffix = '\nYou have received a git diff, it is your turn now to be active it our pair programming session. Take over and suggest improvements\n',
+
+  -- LSP integration
+  lsp = {
+    enabled = true, -- Enable LSP integration
+    include_diagnostics = true, -- Include LSP diagnostics in context
+    include_hover_info = true, -- Include hover information
+    include_references = true, -- Include reference information
+  },
+
   -- Auto-refresh for file changes
   auto_refresh = {
     enabled = true,
     interval_ms = 500,
+  },
+
+  -- Periodic updates
+  periodic_updates = {
+    enabled = false, -- Send periodic status updates
+    interval_minutes = 10, -- Update interval in minutes
   },
 }
 
@@ -328,6 +361,9 @@ require("mini.ai").setup {
     ["|"] = false, -- Disable | text object
     n = false, -- Disable n text object
     l = false,
+    -- Search match text object (uses last search pattern from / or ?)
+    -- Usage: da/ (delete around search), ci/ (change inner search), ya/ (yank around search)
+    ["/"] = require("user_functions.search_text_object").search_textobject,
   },
 }
 require("mini.files").setup {
