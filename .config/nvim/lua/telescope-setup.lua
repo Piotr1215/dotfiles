@@ -220,6 +220,19 @@ local set_up_telescope = function()
   set_keymap("n", "<leader>fe", [[<cmd>Telescope emoji<CR>]])
   set_keymap("n", "<leader>ft", [[<cmd>TodoTelescope <CR>]])
   set_keymap("n", "<leader>fs", [[<cmd>lua require('telescope.builtin').grep_string({search_dirs = {"~/dev"}})<CR>]])
+  -- Visual mode: search for selected text in current project/repo
+  vim.keymap.set("v", "<leader>fs", function()
+    -- Yank the selected text first
+    vim.cmd('normal! y')
+    local text = vim.fn.getreg('"')
+    -- Try to get git root, fall back to cwd
+    local git_root = vim.fn.system("git rev-parse --show-toplevel 2>/dev/null"):gsub("\n", "")
+    local search_dir = (git_root ~= "" and vim.v.shell_error == 0) and git_root or vim.fn.getcwd()
+    require('telescope.builtin').grep_string({ 
+      search = text,
+      cwd = search_dir
+    })
+  end, { noremap = true, silent = true, desc = "Search selected text in project" })
   set_keymap("n", "<leader>fh", [[<cmd>lua require('telescope.builtin').search_history()<CR>]])
   set_keymap("n", "<leader>ds", [[<cmd>lua require('telescope.builtin').lsp_document_symbols()<CR>]])
   set_keymap("n", "<leader>fj", [[<cmd>lua require('telescope.builtin').jumplist()<CR>]])
