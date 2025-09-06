@@ -34,8 +34,7 @@ rt.setup {
       vim.keymap.set("n", "[d", vim.diagnostic.goto_prev, { desc = "Go to previous diagnostic message" })
       vim.keymap.set("n", "]d", vim.diagnostic.goto_next, { desc = "Go to next diagnostic message" })
 
-      -- Find reference
-      vim.keymap.set("n", "gr", require("telescope.builtin").lsp_references, { buffer = bufnr })
+      -- Use Neovim's default grr for references
 
       -- codeaction
       vim.keymap.set("n", "<leader>ca", vim.lsp.buf.code_action, { buffer = bufnr })
