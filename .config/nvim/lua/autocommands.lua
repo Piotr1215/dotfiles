@@ -64,15 +64,9 @@ end
 api.nvim_create_autocmd({ "FocusGained", "BufEnter", "CursorHold", "CursorHoldI" }, {
   group = formattingGroup,
   pattern = "*",
-  command = "if mode() != 'c' | checktime | endif",
-})
-
-api.nvim_create_autocmd({ "FocusGained", "BufEnter", "CursorHold", "CursorHoldI" }, {
-  group = formattingGroup,
-  pattern = "*",
   callback = function()
-    local win_type = vim.fn.getcmdwintype()
-    if win_type == "" then
+    -- Skip if in command mode or command-line window
+    if vim.fn.mode() ~= 'c' and vim.fn.getcmdwintype() == "" then
       vim.cmd "checktime"
     end
   end,
