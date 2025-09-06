@@ -23,7 +23,7 @@ M.on_attach = function(_, bufnr)
   nmap("gI", vim.lsp.buf.implementation, "[G]oto [I]mplementation")
   nmap("<leader>Ic", vim.lsp.buf.incoming_calls, "[I]ncoming [C]alls")
   nmap("<leader>Oc", vim.lsp.buf.outgoing_calls, "[O]utgoing [C]alls")
-  nmap("gr", require("telescope.builtin").lsp_references, "[G]oto [R]eferences")
+  -- Use Neovim's default grr for references, removing custom gr mapping
   nmap("<leader>rn", vim.lsp.buf.rename, "Rename Symbol")
   nmap("<leader>D", vim.lsp.buf.type_definition, "Type [D]efinition")
   nmap("<leader>ds", require("telescope.builtin").lsp_document_symbols, "[D]ocument [S]ymbols")
