@@ -14,7 +14,7 @@ require("pairup").setup {
   prompt_session_resume = false, -- Use :PairupSessions to manually select sessions
   auto_populate_intent = true, -- Auto-fill intent template on start
   intent_template = "Help me work on the file `%s`, I want to ",
-  claude_ready_pattern = 'PAIR PROGRAMMING MODE ACTIVATED!', -- Text to wait for before sending intent
+  claude_ready_pattern = "PAIR PROGRAMMING MODE ACTIVATED!", -- Text to wait for before sending intent
   suggestion_mode = true, -- Claude provides suggestions only
 
   providers = {
@@ -31,7 +31,7 @@ require("pairup").setup {
   enabled = true, -- Enable/disable automatic diff sending
 
   -- RPC settings
-  rpc_port = '127.0.0.1:6666', -- Expected TCP port for nvim --listen
+  rpc_port = "127.0.0.1:6666", -- Expected TCP port for nvim --listen
 
   -- Terminal settings
   terminal = {
@@ -50,7 +50,7 @@ require("pairup").setup {
   },
 
   -- Context update settings
-  fyi_suffix = '\nYou have received a git diff, it is your turn now to be active it our pair programming session. Take over and suggest improvements\n',
+  fyi_suffix = "\nYou have received a git diff, it is your turn now to be active it our pair programming session. Take over and suggest improvements\n",
 
   -- LSP integration
   lsp = {
@@ -132,6 +132,7 @@ require("gitsigns").setup {
 
     -- Actions
     map("n", "<leader>hs", gitsigns.stage_hunk, { desc = "Stage hunk" })
+    map("n", "<leader>sh", gitsigns.select_hunk, { desc = "Stage hunk" })
     map("n", "<leader>hr", gitsigns.reset_hunk, { desc = "Reset hunk" })
     map("v", "<leader>hs", function()
       gitsigns.stage_hunk { vim.fn.line ".", vim.fn.line "v" }
