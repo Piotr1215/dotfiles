@@ -321,7 +321,17 @@ return require("lazy").setup {
         show_discovery_notification = false, -- Show what was discovered
         excluded_motions = { "Q", "R" }, -- Exclude Q and R motions from auto-discovery
         resolved_conflicts = { "m" }, -- Mark 'm' conflict as intentional (beam's im/am coexists with your custom im/am)
-        smart_highlighting = true, -- Enable real-time context-aware search highlighting for delimiter text objects
+        smart_highlighting = false, -- Enable real-time context-aware search highlighting for delimiter text objects
+        beam_scope = {
+          enabled = true, -- Enable BeamScope for scoped text objects
+          custom_scoped_text_objects = {
+            "m", -- Markdown code blocks
+            "h", -- Markdown headers
+            "L", -- URL object
+          },
+          preview_context = 3, -- Number of context lines to show before/after in preview
+          window_width = 100, -- Maximum width of the BeamScope window
+        },
         experimental = {
           telescope_single_buffer = {
             enabled = false, -- Optional: Use Telescope for single buffer too
