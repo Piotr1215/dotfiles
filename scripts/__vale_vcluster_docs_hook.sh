@@ -19,6 +19,13 @@ if [[ "$FILE_PATH" =~ ^/home/decoder/loft/vcluster-docs/[^/]+$ ]]; then
     exit 0
 fi
 
+# Check if file is in gitignore (local or global)
+# Use git check-ignore to determine if file should be ignored
+if cd /home/decoder/loft/vcluster-docs && git check-ignore "$FILE_PATH" >/dev/null 2>&1; then
+    # File is ignored by git, skip Vale check
+    exit 0
+fi
+
 # Get human-readable output (vale returns non-zero on errors/warnings)
 vale_output=$(vale --config=/home/decoder/loft/vcluster-docs/.vale.ini "$FILE_PATH" 2>&1 || true)
 
