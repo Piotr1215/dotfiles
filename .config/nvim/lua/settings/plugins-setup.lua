@@ -14,7 +14,6 @@ require("pairup").setup {
   prompt_session_resume = false, -- Use :PairupSessions to manually select sessions
   auto_populate_intent = true, -- Auto-fill intent template on start
   intent_template = "Help me work on the file `%s`, I want to ",
-  claude_ready_pattern = "PAIR PROGRAMMING MODE ACTIVATED!", -- Text to wait for before sending intent
   suggestion_mode = true, -- Claude provides suggestions only
 
   providers = {
