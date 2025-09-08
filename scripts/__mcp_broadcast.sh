@@ -5,7 +5,7 @@
 #        echo "message" | mcp-broadcast [options]
 
 # Default values
-SERVER_URL="${MCP_SERVER_URL:-http://192.168.178.91:3113}"
+SERVER_URL="${MCP_SERVER_URL:-http://192.168.178.95:3113}"
 API_KEY="${MCP_EXTERNAL_API_KEY:-test-key-123}"
 FROM="${MCP_BROADCAST_FROM:-human}"
 PRIORITY="high"
@@ -66,7 +66,7 @@ Options:
     -f, --from NAME      Sender name (default: external-broadcast)
     -p, --priority LEVEL Priority: low/normal/high (default: normal)
     -k, --api-key KEY    API key (default: test-key-123)
-    -s, --server URL     Server URL (default: http://192.168.178.91:3113)
+    -s, --server URL     Server URL (default: http://192.168.178.95:3113)
     -v, --verbose        Show detailed output
     --keep-colors        Keep ANSI color codes (default: strip them)
     -h, --help           Show this help message

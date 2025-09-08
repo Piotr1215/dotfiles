@@ -91,7 +91,7 @@ case "$TOOL_NAME" in
                 echo "[$(date)] DISPLAY already set to: $DISPLAY" >> /tmp/mcp-agent-hook.log
             fi
             echo "[$(date)] Attempting to open browser with firefox..." >> /tmp/mcp-agent-hook.log
-            nohup firefox "http://192.168.178.91:3113" > /dev/null 2>&1 &
+            nohup firefox "http://192.168.178.95:3113" > /dev/null 2>&1 &
             echo "[$(date)] firefox command executed" >> /tmp/mcp-agent-hook.log
         else
             echo "[$(date)] Not first agent - existing agents: $EXISTING_AGENTS" >> /tmp/mcp-agent-hook.log
