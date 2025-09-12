@@ -364,11 +364,12 @@ zle -N edit_systemd_service
 
 stty -ixon
 
-kubectl() {
-    unfunction "$0"
-    source <(command kubectl completion zsh)
-    $0 "$@"
-}
+# Commented out to fix compdef:153 error - conflicting with oh-my-zsh kubectl plugin
+# kubectl() {
+#     unfunction "$0"
+#     source <(command kubectl completion zsh)
+#     $0 "$@"
+# }
 
 # Prompt
 source ${HOME}/kube-ps1/kube-ps1.sh
