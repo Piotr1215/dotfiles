@@ -6,6 +6,32 @@ customCommands:
 
   - key: '<c-p>'
     context: 'global'
+    command: "git push -u origin {{.CheckedOutBranch.Name}}; (gh pr create --fill-first && gh pr view --web) || gh pr view --web"
+    description: 'Push branch and create PR (or view if exists)'
+    output: 'log'
+    
+  - key: '<c-r>'
+    context: 'global'
     command: "gh pr view --web"
     description: 'Open current PR in browser'
+    
+  - key: '<c-s>'
+    context: 'global'
+    command: "gh pr status"
+    description: 'Show PR status'
+    output: 'popup'
+    outputTitle: 'Pull Request Status'
+    
+  - key: '<c-q>'
+    context: 'global'
+    command: "gh pr checks"
+    description: 'Show PR checks'
+    output: 'popup'
+    outputTitle: 'PR Checks Status'
+    
+  - key: '<c-x>'
+    context: 'global'
+    command: "echo 'Command Log Test: $(date)'"
+    description: 'Test command log output'
+    output: 'logWithPty'
 
