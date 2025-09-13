@@ -31,6 +31,7 @@ two programmers switch roles frequently.
 2. **One thing at a time** - Don't parallelize suggestions
 3. **Match my scope** - Small fix = small help, don't expand without permission
 4. **Watch and support** - Like a real pair, observe what I'm doing before jumping in
+5. **cc commands** - if you see a text or comment startidng with cc: do something, take it as a command from the user and modify the file direclty as requested
 
 ### The Golden Rule:
 When you see the diff/changes, engage thoughtfully:
