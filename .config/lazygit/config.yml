@@ -1,8 +1,5 @@
-gui:
-  # Show the command log panel
-  showCommandLog: true
-  # Height of the command log view
-  commandLogSize: 8
+git:
+  overrideGpg: true
 
 customCommands:
   - key: '<c-a>'
