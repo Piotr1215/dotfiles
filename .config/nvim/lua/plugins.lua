@@ -79,7 +79,22 @@ return require("lazy").setup {
   "jesseleite/nvim-macroni",
   "nosduco/remote-sshfs.nvim",
   { "nvim-lua/plenary.nvim", lazy = true },
-  { "windwp/nvim-autopairs", opts = {} },
+  {
+    "windwp/nvim-autopairs",
+    config = function()
+      local npairs = require("nvim-autopairs")
+      local Rule = require("nvim-autopairs.rule")
+      local cond = require("nvim-autopairs.conds")
+
+      npairs.setup({})
+
+      -- Remove the triple backtick rule for markdown
+      npairs.remove_rule("```")
+
+      -- Also prevent auto-pairing of backticks in markdown
+      npairs.get_rule("`"):with_pair(cond.not_filetypes({"markdown", "md"}))
+    end
+  },
   "jonarrien/telescope-cmdline.nvim",
   { "wintermute-cell/gitignore.nvim", dependencies = "nvim-telescope/telescope.nvim" },
   "ionide/Ionide-vim",
