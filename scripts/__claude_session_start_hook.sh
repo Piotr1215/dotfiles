@@ -13,7 +13,7 @@ CORE PRINCIPLES:
 EOF
 
 # Additional instructions for Neovim terminal mode or when PAIR_PROGRAMMING is set
-if [ -n "$NVIM" ] || [ -n "$PAIR_PROGRAMMING" ]; then
+if [ -n "$PAIR_PROGRAMMING" ]; then
     cat <<'EOF'
 
 PAIR PROGRAMMING MODE ACTIVATED!
