@@ -9,8 +9,8 @@ customCommands:
 
   - key: '<c-p>'
     context: 'global'
-    command: "git push -u origin {{.CheckedOutBranch.Name}}; (cd $(git rev-parse --show-toplevel) && ([ -f .github/pull_request_template.md ] && gh pr create --title \"$(git log -1 --pretty=%s)\" --body-file .github/pull_request_template.md || gh pr create --title \"$(git log -1 --pretty=%s)\" --body \"\") && gh pr view --web) || gh pr view --web"
-    description: 'Push branch and create PR (or view if exists)'
+    command: "git push -u origin {{.CheckedOutBranch.Name}}; (cd $(git rev-parse --show-toplevel) && base_branch=$(git show-branch -a 2>/dev/null | grep '\\*' | grep -v \"$(git rev-parse --abbrev-ref HEAD)\" | head -n1 | sed 's/.*\\[\\(.*\\)\\].*/\\1/' | sed 's/[\\^~].*//'); base_branch=${base_branch:-$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')}; base_branch=${base_branch:-main}; ([ -f .github/pull_request_template.md ] && gh pr create --base \"$base_branch\" --title \"$(git log -1 --pretty=%s)\" --body-file .github/pull_request_template.md || gh pr create --base \"$base_branch\" --title \"$(git log -1 --pretty=%s)\" --body \"\") && gh pr view --web) || gh pr view --web"
+    description: 'Push branch and create PR against parent branch (or view if exists)'
     output: 'log'
     
   - key: '<c-r>'
