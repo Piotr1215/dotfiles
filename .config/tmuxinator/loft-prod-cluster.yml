@@ -1,82 +1,26 @@
 name: loft-prod-cluster
 root: /home/decoder/loft/clusters/loft-rocks-prod
 
-# Generate kubeconfig if it doesn't exist (moved to first window)
-
 windows:
-  # 1 ─ loft‑prod‑cluster ─────────────────────────────
   - loft-prod-cluster:
       layout: b1cf,294x72,0,0[294x65,0,0,52,294x6,0,66,56]
       panes:
         - |
-          alias kubectl="kubectl --server=http://localhost:8001"
-          alias k="kubectl --server=http://localhost:8001"
-          alias k9s="k9s --context=gke_loft-prod_us-central1_loft-prod-cluster"
-          test -f ./config || print -z "./generate-kubeconfig.sh"
-        - |
-          while [ ! -f config ]; do sleep 2; done && \
-          gcloud compute ssh kubectl-bastion \
-            --zone=us-central1-a \
-            --tunnel-through-iap \
-            --project=loft-prod \
-            --command="pkill kubectl 2>/dev/null || true; sleep 2" && \
-          gcloud compute ssh kubectl-bastion \
-            --zone=us-central1-a \
-            --tunnel-through-iap \
-            --project=loft-prod \
-            --ssh-flag="-L 8001:localhost:8001" \
-            --command="gcloud container clusters get-credentials loft-prod-cluster --zone=us-central1 --project=loft-prod; kubectl proxy --port=8001 --disable-filter --context=gke_loft-prod_us-central1_loft-prod-cluster"
-
-  # 2 ─ loft‑prod‑engineering ────────────────────────
-  - loft-prod-engineering:
-      layout: b1cf,294x72,0,0[294x65,0,0,52,294x6,0,66,56]
-      panes:
-        - |
-          alias kubectl="kubectl --server=http://localhost:8002"
-          alias k="kubectl --server=http://localhost:8002"
-          alias k9s="k9s --context=gke_loft-prod_europe-west3_loft-prod-engineering"
+          ./generate-kubeconfig.sh
           clear
         - |
-          while [ ! -f config ]; do sleep 2; done && sleep 3 && \
-          gcloud compute ssh kubectl-bastion \
-            --zone=us-central1-a \
-            --tunnel-through-iap \
-            --project=loft-prod \
-            --ssh-flag="-L 8002:localhost:8002" \
-            --command="gcloud container clusters get-credentials loft-prod-engineering --zone=europe-west3 --project=loft-prod; kubectl proxy --port=8002 --disable-filter --context=gke_loft-prod_europe-west3_loft-prod-engineering"
+          CLUSTER_ENDPOINT=$(gcloud container clusters describe loft-prod-cluster --zone=us-central1 --project=loft-prod --format="value(endpoint)")
+          ENGINEERING_ENDPOINT=$(gcloud container clusters describe loft-prod-engineering --zone=europe-west3 --project=loft-prod --format="value(endpoint)")
+          WORKER_EU_ENDPOINT=$(gcloud container clusters describe loft-prod-worker-eu --zone=europe-west3 --project=loft-prod --format="value(endpoint)")
+          WORKER_NA_ENDPOINT=$(gcloud container clusters describe loft-prod-worker-na --zone=us-west1 --project=loft-prod --format="value(endpoint)")
 
-  # 3 ─ loft‑prod‑worker‑eu ──────────────────────────
-  - loft-prod-worker-eu:
-      layout: b1cf,294x72,0,0[294x65,0,0,52,294x6,0,66,56]
-      panes:
-        - |
-          alias kubectl="kubectl --server=http://localhost:8003"
-          alias k="kubectl --server=http://localhost:8003"
-          alias k9s="k9s --context=gke_loft-prod_europe-west3_loft-prod-worker-eu"
-          clear
-        - |
-          while [ ! -f config ]; do sleep 2; done && sleep 5 && \
           gcloud compute ssh kubectl-bastion \
             --zone=us-central1-a \
             --tunnel-through-iap \
             --project=loft-prod \
-            --ssh-flag="-L 8003:localhost:8003" \
-            --command="gcloud container clusters get-credentials loft-prod-worker-eu --zone=europe-west3 --project=loft-prod; kubectl proxy --port=8003 --disable-filter --context=gke_loft-prod_europe-west3_loft-prod-worker-eu"
-
-  # 4 ─ loft‑prod‑worker‑na ──────────────────────────
-  - loft-prod-worker-na:
-      layout: b1cf,294x72,0,0[294x65,0,0,52,294x6,0,66,56]
-      panes:
-        - |
-          alias kubectl="kubectl --server=http://localhost:8004"
-          alias k="kubectl --server=http://localhost:8004"
-          alias k9s="k9s --context=gke_loft-prod_us-west1_loft-prod-worker-na"
-          clear
-        - |
-          while [ ! -f config ]; do sleep 2; done && sleep 7 && \
-          gcloud compute ssh kubectl-bastion \
-            --zone=us-central1-a \
-            --tunnel-through-iap \
-            --project=loft-prod \
-            --ssh-flag="-L 8004:localhost:8004" \
-            --command="gcloud container clusters get-credentials loft-prod-worker-na --zone=us-west1 --project=loft-prod; kubectl proxy --port=8004 --disable-filter --context=gke_loft-prod_us-west1_loft-prod-worker-na"
+            --ssh-flag="-L 8443:${CLUSTER_ENDPOINT}:443" \
+            --ssh-flag="-L 8444:${ENGINEERING_ENDPOINT}:443" \
+            --ssh-flag="-L 8445:${WORKER_EU_ENDPOINT}:443" \
+            --ssh-flag="-L 8446:${WORKER_NA_ENDPOINT}:443" \
+            --ssh-flag="-o ServerAliveInterval=60" \
+            --command="echo 'Tunnels established. Keep this window open.'; sleep infinity"
