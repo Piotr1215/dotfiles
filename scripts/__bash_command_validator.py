@@ -57,58 +57,6 @@ _VALIDATION_RULES: List[Tuple[str, str]] = [
         r"^find\s+\.",
         "Use 'fd' instead of 'find .' for better performance and cleaner output",
     ),
-
-    # Cat improvements for syntax highlighting
-    (
-        r"^cat\s+.*\.(py|js|ts|lua|rs|go|cpp|c|java|rb|sh|bash|zsh|fish|vim|yaml|yml|json|toml|md|markdown)(\s|$)",
-        "Consider 'bat' instead of 'cat' for syntax highlighting (if available)",
-    ),
-
-    # Process management
-    (
-        r"^ps aux.*grep",
-        "Use 'pgrep' or 'pidof' for finding processes by name",
-    ),
-    (
-        r"^kill -9\b",
-        "Try 'kill' (SIGTERM) first before 'kill -9' (SIGKILL) to allow graceful shutdown",
-    ),
-
-    # Archive handling
-    (
-        r"^tar -?[cxz].*f\s+",
-        "Consider using 'atool' for unified archive handling (works with tar, zip, rar, etc.)",
-    ),
-
-    # Network tools
-    (
-        r"^curl\s+-X\s+POST.*-H.*application/json",
-        "Consider using 'httpie' (http) for more readable JSON API interactions",
-    ),
-
-    # Disk usage
-    (
-        r"^du -sh\b",
-        "Consider 'dust' or 'duf' for better disk usage visualization",
-    ),
-    (
-        r"^df -h\b",
-        "Consider 'duf' for better disk free space visualization",
-    ),
-
-    # Common inefficiencies
-    (
-        r"cat.*\|.*grep",
-        "Use 'rg pattern file' directly instead of 'cat file | grep pattern'",
-    ),
-    (
-        r"grep.*\|.*wc -l",
-        "Use 'rg -c pattern' instead of 'grep pattern | wc -l' to count matches",
-    ),
-    (
-        r"find.*-exec.*rm",
-        "Use 'fd pattern --exec rm {}' or 'fd pattern -X rm' for safer deletion",
-    ),
 ]
 
 # Suggestions for tool installation (shown only once per session)
