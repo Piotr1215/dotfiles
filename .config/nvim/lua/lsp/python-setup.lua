@@ -1,9 +1,7 @@
-require "lspconfig"
 require("nvim-dap-virtual-text").setup()
 
 local def = require "lsp.default-lsp"
 
-local lspconfig = require "lspconfig"
 local util = require "lspconfig.util"
 
 local root_files = {
@@ -39,17 +37,15 @@ local function set_python_path(path)
     client.notify("workspace/didChangeConfiguration", { settings = nil })
   end
 end
-lspconfig.ruff.setup {
+vim.lsp.config("ruff", {
   capabilities = def.capabilities,
-  on_attach = def.on_attach,
   default_config = {
     filetypes = { "python" },
     single_file_support = true,
   },
-}
-lspconfig.pyright.setup {
+})
+vim.lsp.config("pyright", {
   capabilities = def.capabilities,
-  on_attach = def.on_attach,
   default_config = {
     cmd = { "pyright-langserver", "--stdio" },
     filetypes = { "python" },
@@ -86,4 +82,7 @@ https://github.com/microsoft/pyright
 `pyright`, a static type checker and language server for python
 ]],
   },
-}
+})
+
+-- Enable Python LSP servers
+vim.lsp.enable { "ruff", "pyright" }
