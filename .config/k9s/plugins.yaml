@@ -1,4 +1,53 @@
 plugins:
+  # vCluster Connect - Connect to vcluster and switch context
+  vcluster-connect:
+    shortCut: Shift-V
+    description: Toggle vCluster connection
+    dangerous: false
+    scopes:
+      - statefulsets
+      - namespaces
+      - pods
+      - deployments
+      - services
+      - all
+    command: bash
+    background: false
+    confirm: false
+    args:
+      - -c
+      - |
+        current_context=$(kubectl config current-context)
+
+        if [[ "$current_context" == vcluster_* ]]; then
+            vcluster disconnect >/dev/null 2>&1
+        else
+            target_ns="$NAMESPACE"
+            if [[ -z "$target_ns" ]] && [[ -n "$NAME" ]]; then
+                target_ns="$NAME"
+            fi
+
+            if [[ -n "$target_ns" ]]; then
+                vclusters=$(vcluster list --output json 2>/dev/null)
+                vcluster_name=$(echo "$vclusters" | jq -r --arg ns "$target_ns" '.[] | select(.Namespace == $ns) | .Name')
+
+                if [[ -n "$vcluster_name" ]]; then
+                    vcluster connect "$vcluster_name" -n "$target_ns" >/dev/null 2>&1
+                fi
+            fi
+        fi
+
+        # Restart K9s if in tmux
+        if [[ -n "$TMUX" ]]; then
+            (
+                while kill -0 $$ 2>/dev/null; do :; done
+                tmux send-keys -t "$TMUX_PANE" C-c
+                sleep 0.2
+                tmux send-keys -t "$TMUX_PANE" "k9s" Enter
+            ) &
+            disown
+        fi
+
   crd-wizard:
     shortCut: Shift-W
     description: CRD Wizard
