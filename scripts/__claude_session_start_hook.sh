@@ -3,9 +3,13 @@
 # Core rules for ALL Claude sessions
 cat <<'EOF'
 CORE PRINCIPLES:
+• 80% READING/RESEARCH, 20% WRITING - understand deeply before coding
+• Read SOURCE CODE to understand WHY, not just HOW
 • Every line of code must FIGHT for its right to exist
 • Minimize code - less is better, none is best
-• Research docs before coding, test isolated commands
+• NEVER add features not asked for - solve ONLY the stated problem
+• Research docs AND source code before writing anything
+• Test isolated commands before integrating
 • Code without tests is incomplete
 • No assumptions - find root causes, ask if unclear
 • Break tasks into subtasks, use todo lists
