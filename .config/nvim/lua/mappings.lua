@@ -2,7 +2,7 @@ local utils = require "utils"
 local opts = { noremap = true, silent = true }
 local shell = require "user_functions.shell_integration"
 -- Load sensitive mappings
-local s_mappings = require "s_mappings"
+require "s_mappings"
 
 vim.keymap.set({ "n", "v" }, "<Space>", "<Nop>", { silent = true })
 vim.g.mapleader = " "
@@ -255,7 +255,12 @@ vim.api.nvim_set_keymap(
   { noremap = true, silent = true }
 )
 
-vim.keymap.set("n", "<leader>rc", "?```<CR>k<leader>eb", { remap = true, silent = false, desc = "run previous code block" })
+vim.keymap.set(
+  "n",
+  "<leader>rc",
+  "?```<CR>k<leader>eb",
+  { remap = true, silent = false, desc = "run previous code block" }
+)
 
 utils.lnmap("cpl", [[:let @+ = expand("%:p") . ':' . line('.')<cr>]]) -- Copy current file name, path, and line number
 utils.lnmap("cpn", ':let @+ = expand("%:t")<cr>') -- Copy current file name
@@ -372,6 +377,16 @@ vim.keymap.set(
   { noremap = true, silent = false, desc = "Create new note from selection" }
 )
 vim.keymap.set("n", "<leader>os", ":Obsidian search<cr>", { noremap = true, silent = true, desc = "Search notes" })
+
+-- Copilot
+vim.cmd [[
+        imap <silent><script><expr> <C-f> copilot#Accept("\<CR>")
+        let g:copilot_no_tab_map = v:true
+]]
+utils.lnmap("cpd", ":Copilot disable<cr>", { silent = false })
+utils.lnmap("cpe", ":Copilot enable<cr>", { silent = false })
+vim.keymap.set("i", "<M-w>", "<Plug>(copilot-accept-word)")
+vim.keymap.set("i", "<C-s>", "<Plug>(copilot-accept-line)")
 vim.keymap.set("n", "<leader>ob", ":Obsidian backlinks<cr>", { noremap = true, silent = true, desc = "Show backlinks" })
 vim.keymap.set("n", "<leader>ot", ":Obsidian tags<cr>", { noremap = true, silent = true, desc = "Show tags" })
 vim.keymap.set("n", "<leader>od", ":Obsidian today<cr>", { noremap = true, silent = true, desc = "Open today's note" })
@@ -413,29 +428,29 @@ vim.keymap.set("n", "<leader>aig", function()
 end, { desc = "gp.nvim: use GPT-4.1 (OpenAI)" })
 
 -- Pairup.nvim mappings (Claude Code assistant)
-vim.keymap.set('n', '<leader>ct', ':PairupToggle<cr>', { desc = 'Toggle Claude Code assistant' })
-vim.keymap.set('n', '<leader>cc', ':PairupContext<cr>', { desc = 'Send git diff context to Claude' })
-vim.keymap.set('n', '<leader>cs', ':PairupSay ', { desc = 'Send message to Claude' })
-vim.keymap.set('n', '<leader>cd', ':PairupToggleDiff<cr>', { desc = 'Toggle auto diff sending' })
-vim.keymap.set('n', '<leader>cg', ':PairupStatus<cr>', { desc = 'Send git status to Claude' })
-vim.keymap.set('n', '<leader>cf', ':PairupFileInfo<cr>', { desc = 'Send file info to Claude' })
-vim.keymap.set('n', '<leader>cu', ':PairupReadUnstaged<cr>', { desc = 'Send unstaged files to Claude' })
+vim.keymap.set("n", "<leader>ct", ":PairupToggle<cr>", { desc = "Toggle Claude Code assistant" })
+vim.keymap.set("n", "<leader>cc", ":PairupContext<cr>", { desc = "Send git diff context to Claude" })
+vim.keymap.set("n", "<leader>cs", ":PairupSay ", { desc = "Send message to Claude" })
+vim.keymap.set("n", "<leader>cd", ":PairupToggleDiff<cr>", { desc = "Toggle auto diff sending" })
+vim.keymap.set("n", "<leader>cg", ":PairupStatus<cr>", { desc = "Send git status to Claude" })
+vim.keymap.set("n", "<leader>cf", ":PairupFileInfo<cr>", { desc = "Send file info to Claude" })
+vim.keymap.set("n", "<leader>cu", ":PairupReadUnstaged<cr>", { desc = "Send unstaged files to Claude" })
 
 -- Pairup overlay bindings (only active when Claude is running)
-vim.api.nvim_create_autocmd('BufEnter', {
-  group = vim.api.nvim_create_augroup('PairupOverlayBindings', { clear = true }),
+vim.api.nvim_create_autocmd("BufEnter", {
+  group = vim.api.nvim_create_augroup("PairupOverlayBindings", { clear = true }),
   callback = function()
-    local ok, state = pcall(require, 'pairup.utils.state')
-    if ok and state.get('claude_buf') then  -- Claude is active if buffer exists
+    local ok, state = pcall(require, "pairup.utils.state")
+    if ok and state.get "claude_buf" then -- Claude is active if buffer exists
       local opts = { buffer = true, silent = true }
-      vim.keymap.set('n', '<leader>ca', ':PairAccept<cr>', opts)
-      vim.keymap.set('n', '<leader>cr', ':PairReject<cr>', opts)
-      vim.keymap.set('n', '<leader>ce', ':PairEdit<cr>', opts)
-      vim.keymap.set('n', '<leader>co', ':PairupOverlayScope<cr>', opts)
-      vim.keymap.set('n', '<leader>cn', ':PairNext<cr>', opts)
-      vim.keymap.set('n', '<leader>cN', ':PairPrev<cr>', opts)
+      vim.keymap.set("n", "<leader>ca", ":PairAccept<cr>", opts)
+      vim.keymap.set("n", "<leader>cr", ":PairReject<cr>", opts)
+      vim.keymap.set("n", "<leader>ce", ":PairEdit<cr>", opts)
+      vim.keymap.set("n", "<leader>co", ":PairupOverlayScope<cr>", opts)
+      vim.keymap.set("n", "<leader>cn", ":PairNext<cr>", opts)
+      vim.keymap.set("n", "<leader>cN", ":PairPrev<cr>", opts)
     end
-  end
+  end,
 })
 
 -- <leader>a i p   →  Perplexity (sonar model)
@@ -519,10 +534,10 @@ vim.cmd [[
 -- Freeze screen / scroll lock keybindings using scrollfix plugin
 vim.keymap.set("n", "<leader>zf", function()
   if vim.g.scrollfix == -1 or vim.g.scrollfix == nil then
-    vim.g.scrollfix = 20  -- Set to 20% from top
-    print("Scroll freeze enabled at 20%")
+    vim.g.scrollfix = 20 -- Set to 20% from top
+    print "Scroll freeze enabled at 20%"
   else
-    vim.g.scrollfix = -1  -- Disable
-    print("Scroll freeze disabled")
+    vim.g.scrollfix = -1 -- Disable
+    print "Scroll freeze disabled"
   end
 end, { desc = "Toggle scroll freeze (cursor at 20% from top)" })

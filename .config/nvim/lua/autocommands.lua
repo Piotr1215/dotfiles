@@ -11,7 +11,14 @@ local plantumlGroup = api.nvim_create_augroup("PlantUML", { clear = true })
 local lastCursorGroup = api.nvim_create_augroup("LastCursorPosition", { clear = true })
 local formattingGroup = api.nvim_create_augroup("AutoFormatting", { clear = true })
 local highlightingGroup = api.nvim_create_augroup("Highlighting", { clear = true })
+local copilotGroup = api.nvim_create_augroup("Copilot", { clear = true })
 local valeGroup = api.nvim_create_augroup("Vale", { clear = true })
+
+-- Autocmds
+api.nvim_create_autocmd("VimEnter", {
+  group = copilotGroup,
+  command = "Copilot disable",
+})
 
 vim.api.nvim_create_autocmd({ "BufWritePost" }, {
   callback = function()
@@ -55,18 +62,22 @@ local function stylua_format()
   vim.cmd "e"
 end
 
-local function shfmt_format()
+-- stylua: ignore start
+---@diagnostic disable-next-line: unused-local
+local shfmt_format = function()
   local file_path = vim.fn.expand "%:p"
   vim.fn.system { "shfmt", "-l", "-w", file_path }
   vim.cmd "e" -- Reload the file after formatting
 end
+-- stylua: ignore end
+local _ = shfmt_format -- Reference to suppress unused warning
 
 api.nvim_create_autocmd({ "FocusGained", "BufEnter", "CursorHold", "CursorHoldI" }, {
   group = formattingGroup,
   pattern = "*",
   callback = function()
     -- Skip if in command mode or command-line window
-    if vim.fn.mode() ~= 'c' and vim.fn.getcmdwintype() == "" then
+    if vim.fn.mode() ~= "c" and vim.fn.getcmdwintype() == "" then
       vim.cmd "checktime"
     end
   end,
@@ -145,7 +156,7 @@ vim.api.nvim_create_user_command("VT", function()
 end, {})
 
 vim.api.nvim_create_user_command("PlantUmlOpen", function()
-  local file_path = vim.fn.expand "%:p"
+  -- local file_path = vim.fn.expand "%:p" -- unused
   local file_dir = vim.fn.expand "%:p:h"
   local file_name = vim.fn.expand "%:t:r"
   local svg_path = file_dir .. "/rendered/" .. file_name .. ".svg"
