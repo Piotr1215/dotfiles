@@ -193,7 +193,18 @@ return require("lazy").setup {
     },
     -- { "folke/neodev.nvim", enabled = false }, -- make sure to uninstall or disable neodev.nvim
   },
-  "neovim/nvim-lspconfig",
+  {
+    "neovim/nvim-lspconfig",
+    lazy = false,
+    priority = 100,
+    init = function()
+      -- Prevent the plugin from loading its deprecated framework
+      vim.g.lspconfig = 1
+    end,
+    config = function()
+      -- We use our own compatibility wrapper for plugins that need lspconfig
+    end,
+  },
   { "folke/trouble.nvim", dependencies = "kyazdani42/nvim-web-devicons", opts = {} },
   "hrsh7th/cmp-nvim-lsp-signature-help",
   {
@@ -244,7 +255,12 @@ return require("lazy").setup {
   "theHamsta/nvim-dap-virtual-text",
   "stevearc/dressing.nvim",
   { "saecki/crates.nvim", opts = {} },
-  "simrat39/rust-tools.nvim",
+  {
+    "mrcjkb/rustaceanvim",
+    version = "^5",
+    lazy = false,
+    ft = { "rust" },
+  },
   "IndianBoy42/tree-sitter-just",
   "NoahTheDuke/vim-just",
   "ray-x/go.nvim",

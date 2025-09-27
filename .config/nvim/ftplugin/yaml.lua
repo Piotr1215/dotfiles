@@ -42,23 +42,23 @@ vim.api.nvim_buf_set_keymap(
   ":lua require('user_functions.yaml_helper').goto_prev_same_indent()<CR>",
   { noremap = true, silent = true, desc = "Go to next block at same indent" }
 )
--- LSP Configuration
-require("lspconfig").yamlls.setup {
+-- LSP Configuration - Additional schemas for YAML files
+-- These extend the base yamlls config from lsp-setup.lua
+vim.lsp.config("yamlls", {
   settings = {
     yaml = {
-      schemas = {
+      schemas = vim.tbl_extend("force", {
+        -- Base schemas from lsp-setup.lua are already included
         kubernetes = "k8s-*.yaml",
-        ["http://json.schemastore.org/github-workflow"] = ".github/workflows/*",
-        ["http://json.schemastore.org/github-action"] = ".github/action.{yml,yaml}",
         ["http://json.schemastore.org/ansible-stable-2.9"] = "roles/tasks/**/*.{yml,yaml}",
         ["http://json.schemastore.org/prettierrc"] = ".prettierrc.{yml,yaml}",
         ["http://json.schemastore.org/kustomization"] = "kustomization.{yml,yaml}",
         ["http://json.schemastore.org/chart"] = "Chart.{yml,yaml}",
         ["http://json.schemastore.org/circleciconfig"] = ".circleci/**/*.{yml,yaml}",
-      },
+      }, {}),
     },
   },
-}
+})
 
 -- Autocompletion
 local cmp = require "cmp"

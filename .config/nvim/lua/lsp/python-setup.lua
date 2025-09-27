@@ -2,8 +2,6 @@ require("nvim-dap-virtual-text").setup()
 
 local def = require "lsp.default-lsp"
 
-local util = require "lspconfig.util"
-
 local root_files = {
   "pyproject.toml",
   "setup.py",
@@ -50,7 +48,7 @@ vim.lsp.config("pyright", {
     cmd = { "pyright-langserver", "--stdio" },
     filetypes = { "python" },
     root_dir = function(fname)
-      return util.root_pattern(unpack(root_files))(fname)
+      return vim.fs.root(fname, root_files)
     end,
     single_file_support = true,
     settings = {
