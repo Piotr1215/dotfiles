@@ -17,6 +17,7 @@ vim.opt.rtp:prepend(lazypath)
 
 return require("lazy").setup {
   -- AI {{{
+  "github/copilot.vim",
   "robitx/gp.nvim",
   -- }}}
   -- Editor Extensions {{{
@@ -82,18 +83,17 @@ return require("lazy").setup {
   {
     "windwp/nvim-autopairs",
     config = function()
-      local npairs = require("nvim-autopairs")
-      local Rule = require("nvim-autopairs.rule")
-      local cond = require("nvim-autopairs.conds")
+      local npairs = require "nvim-autopairs"
+      local cond = require "nvim-autopairs.conds"
 
-      npairs.setup({})
+      npairs.setup {}
 
       -- Remove the triple backtick rule for markdown
-      npairs.remove_rule("```")
+      npairs.remove_rule "```"
 
       -- Also prevent auto-pairing of backticks in markdown
-      npairs.get_rule("`"):with_pair(cond.not_filetypes({"markdown", "md"}))
-    end
+      npairs.get_rule("`"):with_pair(cond.not_filetypes { "markdown", "md" })
+    end,
   },
   "jonarrien/telescope-cmdline.nvim",
   { "wintermute-cell/gitignore.nvim", dependencies = "nvim-telescope/telescope.nvim" },
