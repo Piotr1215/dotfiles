@@ -180,7 +180,7 @@ function M.insert_table(rows, cols)
   table.insert(lines, "| " .. table.concat(header, " | ") .. " |")
 
   local separator = {}
-  for i = 1, cols do
+  for _ = 1, cols do
     table.insert(separator, "---")
   end
   table.insert(lines, "| " .. table.concat(separator, " | ") .. " |")
@@ -196,5 +196,73 @@ function M.insert_table(rows, cols)
   local cur_line = vim.fn.line "."
   vim.api.nvim_buf_set_lines(0, cur_line, cur_line, false, lines)
 end
+
+-- Create user commands
+vim.api.nvim_create_user_command("FormatTable", function()
+  M.format_table()
+end, { desc = "Format markdown table at cursor" })
+
+vim.api.nvim_create_user_command("InsertTable", function(opts)
+  local args = vim.split(opts.args, " ")
+  local rows = tonumber(args[1]) or 3
+  local cols = tonumber(args[2]) or 3
+  M.insert_table(rows, cols)
+end, { nargs = "*", desc = "Insert markdown table (rows cols)" })
+
+-- Remove redundant empty lines (reduce 2+ consecutive empty lines to 1)
+function M.remove_redundant_empty_lines()
+  local mode = vim.api.nvim_get_mode().mode
+  local start_line, end_line
+
+  if mode:match "^[vV]" then
+    -- Visual mode: process selection
+    start_line = vim.fn.line "'<"
+    end_line = vim.fn.line "'>"
+    vim.cmd "normal! " -- Exit visual mode
+  else
+    -- Normal mode: process entire buffer
+    start_line = 1
+    end_line = vim.fn.line "$"
+  end
+
+  -- Get lines
+  local lines = vim.api.nvim_buf_get_lines(0, start_line - 1, end_line, false)
+  local cleaned = {}
+  local prev_empty = false
+  local changes_made = false
+
+  for _, line in ipairs(lines) do
+    local is_empty = line:match "^%s*$" ~= nil
+
+    if is_empty then
+      if not prev_empty then
+        -- First empty line, keep it
+        table.insert(cleaned, line)
+        prev_empty = true
+      else
+        -- Consecutive empty line, skip it
+        changes_made = true
+      end
+    else
+      -- Non-empty line, always keep
+      table.insert(cleaned, line)
+      prev_empty = false
+    end
+  end
+
+  -- Update buffer if changes were made
+  if changes_made then
+    vim.api.nvim_buf_set_lines(0, start_line - 1, end_line, false, cleaned)
+    local removed = #lines - #cleaned
+    vim.notify(string.format("Removed %d redundant empty lines", removed), vim.log.levels.INFO)
+  else
+    vim.notify("No redundant empty lines found", vim.log.levels.INFO)
+  end
+end
+
+-- Create user command for removing redundant empty lines
+vim.api.nvim_create_user_command("RemoveEmptyLines", function()
+  M.remove_redundant_empty_lines()
+end, { desc = "Remove redundant empty lines (reduce 2+ to 1)", range = true })
 
 return M
