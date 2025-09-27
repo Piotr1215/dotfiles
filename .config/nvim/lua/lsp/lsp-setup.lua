@@ -1,6 +1,5 @@
 -- LSP and LS Installer
 require("nvim-dap-virtual-text").setup {}
-local lspconfig = require "lspconfig"
 local def = require "lsp.default-lsp"
 
 -- Configure lua_ls using the new API
@@ -8,7 +7,7 @@ vim.lsp.config("lua_ls", {
   autostart = true,
   capabilities = def.capabilities,
   signatureHelp = { enable = true },
-  root_dir = lspconfig.util.root_pattern(".luarc.json", ".git", "lua"),
+  root_dir = vim.fs.root(0, { ".luarc.json", ".git", "lua" }),
 
   settings = {
     Lua = {
@@ -23,7 +22,6 @@ vim.lsp.config("lua_ls", {
     },
   },
 })
-local nvim_lsp = require "lspconfig"
 
 -- Configure terraformls and tflint using the new API
 vim.lsp.config("terraformls", {})
@@ -34,15 +32,15 @@ vim.lsp.config("ocamllsp", {
   cmd = { "ocamllsp" }, -- Uses the one from PATH (devbox provides it)
   capabilities = def.capabilities,
   filetypes = { "ocaml", "ocaml.menhir", "ocaml.interface", "ocaml.ocamllex", "reason" },
-  root_dir = lspconfig.util.root_pattern("*.opam", "dune-project", "dune-workspace", ".git"),
+  root_dir = vim.fs.root(0, { "*.opam", "dune-project", "dune-workspace", ".git" }),
 })
 
 vim.lsp.config("denols", {
-  root_dir = nvim_lsp.util.root_pattern("deno.json", "deno.jsonc"),
+  root_dir = vim.fs.root(0, { "deno.json", "deno.jsonc" }),
 })
 
 vim.lsp.config("ts_ls", {
-  root_dir = nvim_lsp.util.root_pattern "package.json",
+  root_dir = vim.fs.root(0, { "package.json" }),
   single_file_support = false,
 })
 
@@ -50,26 +48,18 @@ vim.lsp.config("ts_ls", {
 -- to prevent loading it in other projects, it can be loaded manually with a User command
 vim.api.nvim_create_user_command("LspStartVale", function()
   vim.lsp.config("vale_ls", {
-    root_dir = require("lspconfig").util.root_pattern ".vale.ini",
+    root_dir = vim.fs.root(0, { ".vale.ini" }),
     filetypes = { "markdown", "mdx" },
   })
   vim.lsp.enable { "vale_ls" }
 end, {})
 
-local configs = require "lspconfig.configs"
--- Check if it's already defined for when reloading this file.
-configs.up = {
-  default_config = {
-    cmd = { "up", "xpls", "serve", "--verbose" },
-    filetypes = { "yaml" },
-    root_dir = lspconfig.util.root_pattern "crossplane.yaml",
-  },
-}
+-- Custom UP LSP config (using new API)
 
 vim.lsp.config("up", {
   cmd = { "up", "xpls", "serve", "--verbose" },
   filetypes = { "yaml" },
-  root_dir = lspconfig.util.root_pattern "crossplane.yaml",
+  root_dir = vim.fs.root(0, { "crossplane.yaml" }),
 })
 
 vim.lsp.config("bashls", {
