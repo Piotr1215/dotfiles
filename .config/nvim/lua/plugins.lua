@@ -374,6 +374,26 @@ return require("lazy").setup {
       }
     end,
   },
+  -- presenterm.nvim - Neovim plugin for presenterm presentations
+  {
+    dir = "/home/decoder/dev/presenterm.nvim", -- Use explicit local path
+    name = "presenterm.nvim",
+    dependencies = {
+      "nvim-telescope/telescope.nvim", -- Optional, for telescope integration
+    },
+    config = function()
+      require("presenterm").setup {
+        slide_marker = "<!-- end_slide -->",
+        partials = {
+          directory = "_partials",
+          resolve_relative = true,
+        },
+        preview = {
+          command = "presenterm",
+        },
+      }
+    end,
+  },
   -- Look & Feel {{{
   "ellisonleao/gruvbox.nvim",
   "mhartington/formatter.nvim",

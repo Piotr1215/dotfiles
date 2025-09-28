@@ -323,3 +323,106 @@ vim.api.nvim_create_autocmd({ "BufRead", "BufNewFile" }, {
     vim.bo.filetype = "dosini"
   end,
 })
+
+-- Presenterm activation for presentation files
+local function setup_presenterm_buffer_keymaps()
+  -- Check if already activated to prevent duplicate setup
+  if vim.b.presenterm_keymaps_active then
+    return
+  end
+
+  local opts = { buffer = true }
+  local presenterm = require "presenterm"
+
+  -- Navigation
+  vim.keymap.set("n", "]s", presenterm.next_slide, vim.tbl_extend("force", opts, { desc = "Next slide" }))
+  vim.keymap.set("n", "[s", presenterm.previous_slide, vim.tbl_extend("force", opts, { desc = "Previous slide" }))
+
+  -- Slide management
+  vim.keymap.set(
+    "n",
+    "<leader>sd",
+    presenterm.delete_slide,
+    vim.tbl_extend("force", opts, { desc = "Delete slide (cut)" })
+  )
+  vim.keymap.set(
+    "n",
+    "<leader>sy",
+    presenterm.yank_slide,
+    vim.tbl_extend("force", opts, { desc = "Yank slide (copy)" })
+  )
+  vim.keymap.set(
+    "n",
+    "<leader>sv",
+    presenterm.select_slide,
+    vim.tbl_extend("force", opts, { desc = "Visually select slide" })
+  )
+  vim.keymap.set("n", "<leader>ss", presenterm.split_slide, vim.tbl_extend("force", opts, { desc = "Split slide" }))
+  vim.keymap.set("n", "<leader>sl", function()
+    require("presenterm.telescope").slide_picker()
+  end, vim.tbl_extend("force", opts, { desc = "List slides" }))
+
+  -- Slide movement
+  vim.keymap.set("n", "<leader>sk", presenterm.move_slide_up, vim.tbl_extend("force", opts, { desc = "Move slide up" }))
+  vim.keymap.set(
+    "n",
+    "<leader>sj",
+    presenterm.move_slide_down,
+    vim.tbl_extend("force", opts, { desc = "Move slide down" })
+  )
+
+  -- Code blocks
+  vim.keymap.set("n", "<leader>se", presenterm.toggle_exec, vim.tbl_extend("force", opts, { desc = "Toggle +exec" }))
+  vim.keymap.set(
+    "n",
+    "<leader>sr",
+    presenterm.run_code_block,
+    vim.tbl_extend("force", opts, { desc = "Run code block" })
+  )
+
+  -- Preview and stats
+  vim.keymap.set(
+    "n",
+    "<leader>sP",
+    presenterm.preview,
+    vim.tbl_extend("force", opts, { desc = "Preview presentation" })
+  )
+  vim.keymap.set(
+    "n",
+    "<leader>sc",
+    presenterm.presentation_stats,
+    vim.tbl_extend("force", opts, { desc = "Presentation stats" })
+  )
+
+  -- Interactive reordering
+  vim.keymap.set(
+    "n",
+    "<leader>sR",
+    presenterm.interactive_reorder,
+    vim.tbl_extend("force", opts, { desc = "Reorder slides interactively" })
+  )
+
+  -- Partial picker for including markdown partials
+  vim.keymap.set("n", "<leader>sp", function()
+    require("presenterm.telescope").partial_picker()
+  end, vim.tbl_extend("force", opts, { desc = "Include partial (telescope)" }))
+
+  -- Set buffer variable to indicate keymaps are active
+  vim.b.presenterm_keymaps_active = true
+  vim.b.presenterm_active = true
+end
+
+vim.api.nvim_create_autocmd({ "BufRead", "BufNewFile" }, {
+  pattern = { "presentation.md", "*/presentations/*.md", "*/slides/*.md" },
+  callback = function()
+    -- Schedule to run after buffer is fully loaded
+    vim.schedule(function()
+      local ok, presenterm = pcall(require, "presenterm")
+      if ok then
+        presenterm.activate()
+        setup_presenterm_buffer_keymaps()
+      end
+    end)
+  end,
+  desc = "Auto-activate presenterm for presentation files",
+})

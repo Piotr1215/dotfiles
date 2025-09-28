@@ -11,9 +11,6 @@ for _, file in ipairs(vim.fn.readdir(vim.fn.stdpath "config" .. "/lua/user_funct
   require("user_functions." .. file:gsub("%.lua$", ""))
 end
 
--- Setup presenterm module
-require("user_functions.presenterm").setup()
-
 -- PROJECT: project-config
 -- Searches for a .nvimrc file from the current directory up to the root and executes it if found.
 vim.api.nvim_create_autocmd("BufEnter", {
