@@ -54,14 +54,6 @@ vim.api.nvim_create_user_command("LspStartVale", function()
   vim.lsp.enable { "vale_ls" }
 end, {})
 
--- Custom UP LSP config (using new API)
-
-vim.lsp.config("up", {
-  cmd = { "up", "xpls", "serve", "--verbose" },
-  filetypes = { "yaml" },
-  root_dir = vim.fs.root(0, { "crossplane.yaml" }),
-})
-
 vim.lsp.config("bashls", {
   filetypes = { "sh", "zsh" },
 })
@@ -129,4 +121,4 @@ vim.lsp.config("gopls", {
 })
 
 -- Enable all configured LSP servers
-vim.lsp.enable { "lua_ls", "terraformls", "tflint", "ocamllsp", "denols", "ts_ls", "up", "bashls", "yamlls", "gopls" }
+vim.lsp.enable { "lua_ls", "terraformls", "tflint", "ocamllsp", "denols", "ts_ls", "bashls", "yamlls", "gopls" }
