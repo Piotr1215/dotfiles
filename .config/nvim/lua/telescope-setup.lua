@@ -211,6 +211,11 @@ local set_up_telescope = function()
     [[<cmd>lua require('telescope.builtin').find_files({ find_command = {'rg', '--files', '--hidden', '-g', '!.git'}, search_dirs = {require('user_functions.shell_integration').get_tmux_working_directory()}, path_display = {"truncate"} })<CR>]]
   )
   set_keymap("n", "<leader>fl", [[<cmd>lua require('telescope.builtin').live_grep()<CR>]])
+  set_keymap(
+    "n",
+    "<leader>fL",
+    [[<cmd>lua require('telescope.builtin').live_grep({ cwd = vim.fn.system("git rev-parse --show-toplevel 2>/dev/null"):gsub("\n", "") })<CR>]]
+  )
   set_keymap("n", "<leader>fr", [[<cmd>lua require'telescope'.extensions.repo.list{search_dirs = {"~/dev"}}<CR>]])
   set_keymap("n", "<leader>fg", [[<cmd>lua require('telescope.builtin').git_files()<CR>]])
   set_keymap("n", "<leader>gs", [[<cmd>lua require('telescope.builtin').git_status()<CR>]])
@@ -223,15 +228,15 @@ local set_up_telescope = function()
   -- Visual mode: search for selected text in current project/repo
   vim.keymap.set("v", "<leader>fs", function()
     -- Yank the selected text first
-    vim.cmd('normal! y')
-    local text = vim.fn.getreg('"')
+    vim.cmd "normal! y"
+    local text = vim.fn.getreg '"'
     -- Try to get git root, fall back to cwd
     local git_root = vim.fn.system("git rev-parse --show-toplevel 2>/dev/null"):gsub("\n", "")
     local search_dir = (git_root ~= "" and vim.v.shell_error == 0) and git_root or vim.fn.getcwd()
-    require('telescope.builtin').grep_string({ 
+    require("telescope.builtin").grep_string {
       search = text,
-      cwd = search_dir
-    })
+      cwd = search_dir,
+    }
   end, { noremap = true, silent = true, desc = "Search selected text in project" })
   set_keymap("n", "<leader>fh", [[<cmd>lua require('telescope.builtin').search_history()<CR>]])
   set_keymap("n", "<leader>ds", [[<cmd>lua require('telescope.builtin').lsp_document_symbols()<CR>]])
