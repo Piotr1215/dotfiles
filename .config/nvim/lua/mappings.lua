@@ -1,16 +1,16 @@
-local utils = require "utils"
+local utils = require("utils")
 local opts = { noremap = true, silent = true }
-local shell = require "user_functions.shell_integration"
+local shell = require("user_functions.shell_integration")
 -- Load sensitive mappings
-require "s_mappings"
+require("s_mappings")
 
 vim.keymap.set({ "n", "v" }, "<Space>", "<Nop>", { silent = true })
 vim.g.mapleader = " "
 vim.g.maplocalleader = " "
 
 -- Abbreviations
-vim.cmd [[iabbrev gct Give me a command to]]
-vim.cmd [[iabbrev ooc only one command]]
+vim.cmd([[iabbrev gct Give me a command to]])
+vim.cmd([[iabbrev ooc only one command]])
 
 -- SAVE & CLOSE --
 utils.lnmap("wa", ":wqa<cr>", { desc = "save and close all" })
@@ -22,10 +22,10 @@ utils.lnmap("qa", ":qa!<cr>", { desc = "close all without saving" })
 utils.lnmap("qf", ":q!<cr>", { desc = "close current bufferall without saving" })
 
 vim.keymap.set(
-  "n",
-  "<leader>tf",
-  ":!touch %<cr>",
-  { silent = true, noremap = true, desc = "touch file to reload observers" }
+	"n",
+	"<leader>tf",
+	":!touch %<cr>",
+	{ silent = true, noremap = true, desc = "touch file to reload observers" }
 )
 utils.nmap("<nop>", "<Plug>NERDCommenterAltDelims") -- tab is for moving around only
 utils.nmap("L", "vg_", { desc = "select to end of line" })
@@ -35,7 +35,7 @@ vim.keymap.set("n", "<leader>+", "5<c-w>+", { remap = true, silent = false })
 
 -- NAVIGATION --
 -- Mappings for navigation between tmux and vim splits with the same keybindings
-local nvim_tmux_nav = require "nvim-tmux-navigation"
+local nvim_tmux_nav = require("nvim-tmux-navigation")
 vim.keymap.set("n", "<C-h>", nvim_tmux_nav.NvimTmuxNavigateLeft, { noremap = true, silent = true })
 vim.keymap.set("n", "<C-j>", nvim_tmux_nav.NvimTmuxNavigateDown, { noremap = true, silent = true })
 vim.keymap.set("n", "<C-k>", nvim_tmux_nav.NvimTmuxNavigateUp, { noremap = true, silent = true })
@@ -48,50 +48,50 @@ vim.keymap.set("v", "<C-j>", nvim_tmux_nav.NvimTmuxNavigateDown, { noremap = tru
 vim.keymap.set("v", "<C-l>", nvim_tmux_nav.NvimTmuxNavigateRight, { noremap = true, silent = true })
 -- Toggle between single, double, and backtick quotes
 vim.keymap.set("n", "<leader>tq", function()
-  local line = vim.api.nvim_get_current_line()
-  local col = vim.fn.col "."
-  local new_line = line:gsub("(['\"`])(.-[^\\])%1", function(q, content)
-    if q == "'" then
-      return '"' .. content .. '"'
-    elseif q == '"' then
-      return "`" .. content .. "`"
-    else
-      return "'" .. content .. "'"
-    end
-  end)
-  vim.api.nvim_set_current_line(new_line)
-  vim.fn.cursor(vim.fn.line ".", col)
+	local line = vim.api.nvim_get_current_line()
+	local col = vim.fn.col(".")
+	local new_line = line:gsub("(['\"`])(.-[^\\])%1", function(q, content)
+		if q == "'" then
+			return '"' .. content .. '"'
+		elseif q == '"' then
+			return "`" .. content .. "`"
+		else
+			return "'" .. content .. "'"
+		end
+	end)
+	vim.api.nvim_set_current_line(new_line)
+	vim.fn.cursor(vim.fn.line("."), col)
 end, { desc = "Toggle quote style" })
 -- Insert mode mappings
 vim.keymap.set(
-  "i",
-  "<C-h>",
-  [[<C-\><C-N>:lua require("nvim-tmux-navigation").NvimTmuxNavigateLeft()<CR>]],
-  { noremap = true, silent = true }
+	"i",
+	"<C-h>",
+	[[<C-\><C-N>:lua require("nvim-tmux-navigation").NvimTmuxNavigateLeft()<CR>]],
+	{ noremap = true, silent = true }
 )
 vim.keymap.set(
-  "i",
-  "<C-j>",
-  [[<C-\><C-N>:lua require("nvim-tmux-navigation").NvimTmuxNavigateDown()<CR>]],
-  { noremap = true, silent = true }
+	"i",
+	"<C-j>",
+	[[<C-\><C-N>:lua require("nvim-tmux-navigation").NvimTmuxNavigateDown()<CR>]],
+	{ noremap = true, silent = true }
 )
 vim.keymap.set(
-  "i",
-  "<C-k>",
-  [[<C-\><C-N>:lua require("nvim-tmux-navigation").NvimTmuxNavigateUp()<CR>]],
-  { noremap = true, silent = true }
+	"i",
+	"<C-k>",
+	[[<C-\><C-N>:lua require("nvim-tmux-navigation").NvimTmuxNavigateUp()<CR>]],
+	{ noremap = true, silent = true }
 )
 vim.keymap.set(
-  "i",
-  "<C-l>",
-  [[<C-\><C-N>:lua require("nvim-tmux-navigation").NvimTmuxNavigateRight()<CR>]],
-  { noremap = true, silent = true }
+	"i",
+	"<C-l>",
+	[[<C-\><C-N>:lua require("nvim-tmux-navigation").NvimTmuxNavigateRight()<CR>]],
+	{ noremap = true, silent = true }
 )
 vim.keymap.set(
-  "i",
-  "<A-m>",
-  [[<C-\><C-N>:lua require("nvim-tmux-navigation").NvimTmuxNavigateNext()<CR>]],
-  { noremap = true, silent = true }
+	"i",
+	"<A-m>",
+	[[<C-\><C-N>:lua require("nvim-tmux-navigation").NvimTmuxNavigateNext()<CR>]],
+	{ noremap = true, silent = true }
 )
 -- Terminal mode mappings
 vim.keymap.set("t", "<C-h>", "<C-\\><C-n><C-h>", { noremap = true, silent = true })
@@ -105,23 +105,23 @@ utils.nmap("<c-d>", "<c-d>zz", { desc = "center screen after page down" })
 vim.keymap.set({ "n", "v" }, "<A-j>", [[10j<cr>]], { desc = "moves over virtual (wrapped) lines down" })
 vim.keymap.set({ "n", "v" }, "<A-k>", [[10k<cr>]], { desc = "moves over virtual (wrapped) lines up" })
 vim.api.nvim_set_keymap(
-  "n",
-  "k",
-  "v:count == 0 ? 'gk' : 'k'",
-  { noremap = true, expr = true, silent = true, desc = "moves up over virtual (wrapped) lines" }
+	"n",
+	"k",
+	"v:count == 0 ? 'gk' : 'k'",
+	{ noremap = true, expr = true, silent = true, desc = "moves up over virtual (wrapped) lines" }
 )
 vim.api.nvim_set_keymap(
-  "n",
-  "j",
-  "v:count == 0 ? 'gj' : 'j'",
-  { noremap = true, expr = true, silent = true, desc = "moves down over virtual (wrapped) lines" }
+	"n",
+	"j",
+	"v:count == 0 ? 'gj' : 'j'",
+	{ noremap = true, expr = true, silent = true, desc = "moves down over virtual (wrapped) lines" }
 )
 vim.api.nvim_set_keymap("n", "<M-l>", "<cmd>tabnext<cr>", { noremap = true, silent = true, desc = "move to next tab" })
 vim.api.nvim_set_keymap(
-  "n",
-  "<M-h>",
-  "<cmd>tabprevious<cr>",
-  { noremap = true, silent = true, desc = "move to next tab" }
+	"n",
+	"<M-h>",
+	"<cmd>tabprevious<cr>",
+	{ noremap = true, silent = true, desc = "move to next tab" }
 )
 utils.nmap("<BS>", "^", { desc = "move to first non-blank character of the line" })
 utils.vmap("<S-PageDown>", ":m '>+1<CR>gv=gv", { desc = "Move Line Down in Visual Mode" })
@@ -156,10 +156,10 @@ utils.xmap("<leader>Q", ":'<,'>:normal @q<CR>", { desc = "run macro from q regis
 -- Default Neovim: CTRL-\ CTRL-N exits terminal mode
 vim.keymap.set("t", "<C-Space>", "<C-\\><C-n>", { noremap = true, silent = true, desc = "exit terminal mode" })
 vim.keymap.set(
-  "n",
-  "<leader>ml",
-  "^i- [ ] <Esc>^j",
-  { remap = true, silent = false, desc = "prepend markdown list item on line" }
+	"n",
+	"<leader>ml",
+	"^i- [ ] <Esc>^j",
+	{ remap = true, silent = false, desc = "prepend markdown list item on line" }
 )
 utils.vmap("srt", ":!sort -n -k 2<cr>", { desc = "sort by second column" })
 -- MANIPULATE TEXT --
@@ -169,18 +169,18 @@ utils.imap("<C-n>", "<C-e><C-o>A;<ESC>", { desc = "insert semicolon at the end o
 
 -- Insert empty lines above and below
 vim.keymap.set("n", "<leader>al", function()
-  shell.add_empty_lines { below = true }
+	shell.add_empty_lines({ below = true })
 end, { remap = true, silent = false, desc = "Insert empty lines above" })
 vim.keymap.set("n", "<leader>aL", function()
-  shell.add_empty_lines { below = false }
+	shell.add_empty_lines({ below = false })
 end, { remap = true, silent = false, desc = "Insert empty lines below" })
 
 -- Insert empty lines above and below
 vim.keymap.set("n", "<leader>il", function()
-  shell.add_empty_lines { below = true, insert = true }
+	shell.add_empty_lines({ below = true, insert = true })
 end, { remap = true, silent = false, desc = "Insert empty lines above" })
 vim.keymap.set("n", "<leader>iL", function()
-  shell.add_empty_lines { below = false, insert = true }
+	shell.add_empty_lines({ below = false, insert = true })
 end, { remap = true, silent = false, desc = "Insert empty lines below" })
 
 utils.nmap("<leader>is", "i<space><esc>", { desc = "Insert space in normal mode" })
@@ -189,11 +189,11 @@ utils.nmap("<leader>s`", ":normal viWS`<CR>", { desc = "surround with backticks"
 -- REGISTRIES --
 
 vim.keymap.set("i", "<c-p>", function()
-  require("telescope.builtin").registers()
+	require("telescope.builtin").registers()
 end, {
-  remap = true,
-  silent = false,
-  desc = " and paste register in insert mode",
+	remap = true,
+	silent = false,
+	desc = " and paste register in insert mode",
 })
 
 utils.lnmap("yl", '"*yy', { desc = "yank line to the clipboard buffer" })
@@ -215,51 +215,51 @@ vim.keymap.set("n", "gF", "<C-w>vgf", { desc = "Open file under cursor in vertic
 
 -- PATH OPERATIONS --
 vim.keymap.set(
-  "n",
-  "<leader>cpf",
-  ':let @+ = expand("%:p")<cr>:lua print("Copied path to: " .. vim.fn.expand("%:p"))<cr>',
-  { desc = "Copy current file name and path", silent = false }
+	"n",
+	"<leader>cpf",
+	':let @+ = expand("%:p")<cr>:lua print("Copied path to: " .. vim.fn.expand("%:p"))<cr>',
+	{ desc = "Copy current file name and path", silent = false }
 )
 vim.keymap.set(
-  "n",
-  "<leader>cpl",
-  ':let @+ = expand("%:p").":".line(".")<cr>:lua print("Copied file name: " .. vim.fn.expand("%:t"))<cr>',
-  { desc = "Copy current file name", silent = false }
+	"n",
+	"<leader>cpl",
+	':let @+ = expand("%:p").":".line(".")<cr>:lua print("Copied file name: " .. vim.fn.expand("%:t"))<cr>',
+	{ desc = "Copy current file name", silent = false }
 )
 
 vim.api.nvim_set_keymap(
-  "n",
-  "<leader>eb",
-  [[:lua require('user_functions.shell_integration').run_cmd_in_backticks()<CR>]],
-  { noremap = true, silent = true }
+	"n",
+	"<leader>eb",
+	[[:lua require('user_functions.shell_integration').run_cmd_in_backticks()<CR>]],
+	{ noremap = true, silent = true }
 )
 
 vim.api.nvim_set_keymap(
-  "n",
-  "<leader>yb",
-  [[:lua require('user_functions.shell_integration').copy_last_backticks()<CR>]],
-  { noremap = true, silent = true }
+	"n",
+	"<leader>yb",
+	[[:lua require('user_functions.shell_integration').copy_last_backticks()<CR>]],
+	{ noremap = true, silent = true }
 )
 
 vim.api.nvim_set_keymap(
-  "v",
-  "<leader>eb",
-  [[:lua require('user_functions.shell_integration').run_cmd_for_selection()<CR>]],
-  { noremap = true, silent = true }
+	"v",
+	"<leader>eb",
+	[[:lua require('user_functions.shell_integration').run_cmd_for_selection()<CR>]],
+	{ noremap = true, silent = true }
 )
 
 vim.api.nvim_set_keymap(
-  "v",
-  "<leader>eB",
-  [[:lua require('user_functions.shell_integration').run_cmd_block()<CR>]],
-  { noremap = true, silent = true }
+	"v",
+	"<leader>eB",
+	[[:lua require('user_functions.shell_integration').run_cmd_block()<CR>]],
+	{ noremap = true, silent = true }
 )
 
 vim.keymap.set(
-  "n",
-  "<leader>rc",
-  "?```<CR>k<leader>eb",
-  { remap = true, silent = false, desc = "run previous code block" }
+	"n",
+	"<leader>rc",
+	"?```<CR>k<leader>eb",
+	{ remap = true, silent = false, desc = "run previous code block" }
 )
 
 utils.lnmap("cpl", [[:let @+ = expand("%:p") . ':' . line('.')<cr>]]) -- Copy current file name, path, and line number
@@ -277,9 +277,9 @@ utils.nmap("<leader>el", ":.!bash -e <cr>", { silent = false, desc = "execute cu
 utils.nmap("<leader>eL", ":% !bash % <cr>", { desc = "execute all lines and replace with result" })
 utils.lnmap("cx", ":!chmod +x %<cr>", { desc = "make file executable" })
 utils.lnmap(
-  "ef",
-  "<cmd>lua require('user_functions.shell_integration').execute_file_and_show_output()<CR>",
-  { silent = false }
+	"ef",
+	"<cmd>lua require('user_functions.shell_integration').execute_file_and_show_output()<CR>",
+	{ silent = false }
 ) -- execute file and show output
 utils.vmap("<Leader>pb", "w !bash share<CR>") -- upload selected to ix.io
 -- FORMATTING --
@@ -289,12 +289,12 @@ utils.nmap("<Leader>son", ":setlocal spell spelllang=en_us<CR>") -- set spell ch
 utils.nmap("<Leader>sof", ":set nospell<CR>") -- set spell check off
 -- LINE NUMBERS --
 vim.keymap.set("n", ",n", function()
-  vim.o.relativenumber = not vim.o.relativenumber
+	vim.o.relativenumber = not vim.o.relativenumber
 end, { desc = "Toggle between relative and absolute line numbers" })
 -- GIT RELATED --
 vim.keymap.set({ "n", "v" }, "<leader>gbf", ":GBrowse<cr>", opts) -- git browse current file in browser
 vim.keymap.set("n", "<leader>gbc", function()
-  vim.cmd "GBrowse!"
+	vim.cmd("GBrowse!")
 end, { desc = "Copy url to current file" }) -- git browse current file and line in browser
 vim.keymap.set("v", "<leader>gbl", ":GBrowse!<CR>", { noremap = true, silent = false }) -- git browse current file and selected line in browser
 utils.lnmap("gd", ":Gvdiffsplit<CR>") -- git diff current file
@@ -308,10 +308,10 @@ utils.lnmap("gh", ":Gclog %<CR>") -- show git log for current file
 -- PLUGIN MAPPINGS --
 -- Mdeval
 vim.api.nvim_set_keymap(
-  "n",
-  "<leader>ev",
-  "<cmd>lua require 'mdeval'.eval_code_block()<CR>",
-  { silent = true, noremap = true }
+	"n",
+	"<leader>ev",
+	"<cmd>lua require 'mdeval'.eval_code_block()<CR>",
+	{ silent = true, noremap = true }
 )
 
 -- Startify
@@ -332,10 +332,10 @@ utils.lnmap("ec", ":FeMaco<CR>")
 
 -- Table Formatting
 vim.keymap.set(
-  "v",
-  "<leader>ft",
-  ":!column -t -s '|' -o '|'<CR>",
-  { desc = "Format markdown table with column command" }
+	"v",
+	"<leader>ft",
+	":!column -t -s '|' -o '|'<CR>",
+	{ desc = "Format markdown table with column command" }
 )
 
 -- Trouble
@@ -352,37 +352,37 @@ utils.lnmap("f0", "<cmd>FIX -1<cr>")
 
 -- Obsidian
 vim.keymap.set(
-  "v",
-  "<leader>ol",
-  ":Obsidian link<cr>",
-  { noremap = true, silent = false, desc = "Link selection to note" }
+	"v",
+	"<leader>ol",
+	":Obsidian link<cr>",
+	{ noremap = true, silent = false, desc = "Link selection to note" }
 )
 vim.keymap.set(
-  "n",
-  "<leader>ol",
-  ":Obsidian links<cr>",
-  { noremap = true, silent = false, desc = "Show all links in buffer" }
+	"n",
+	"<leader>ol",
+	":Obsidian links<cr>",
+	{ noremap = true, silent = false, desc = "Show all links in buffer" }
 )
 vim.keymap.set(
-  "n",
-  "<leader>oq",
-  ":Obsidian quick_switch<cr>",
-  { noremap = true, silent = true, desc = "Quick switch notes" }
+	"n",
+	"<leader>oq",
+	":Obsidian quick_switch<cr>",
+	{ noremap = true, silent = true, desc = "Quick switch notes" }
 )
 vim.keymap.set("n", "<leader>on", ":Obsidian new ", { noremap = true, silent = false, desc = "Create new note" })
 vim.keymap.set(
-  "v",
-  "<leader>on",
-  ":Obsidian link_new ",
-  { noremap = true, silent = false, desc = "Create new note from selection" }
+	"v",
+	"<leader>on",
+	":Obsidian link_new ",
+	{ noremap = true, silent = false, desc = "Create new note from selection" }
 )
 vim.keymap.set("n", "<leader>os", ":Obsidian search<cr>", { noremap = true, silent = true, desc = "Search notes" })
 
 -- Copilot
-vim.cmd [[
+vim.cmd([[
         imap <silent><script><expr> <C-f> copilot#Accept("\<CR>")
         let g:copilot_no_tab_map = v:true
-]]
+]])
 utils.lnmap("cpd", ":Copilot disable<cr>", { silent = false })
 utils.lnmap("cpe", ":Copilot enable<cr>", { silent = false })
 vim.keymap.set("i", "<M-w>", "<Plug>(copilot-accept-word)")
@@ -399,32 +399,32 @@ vim.api.nvim_set_keymap("n", "<Leader>ya", ":YankMatchingLines<CR>", { noremap =
 
 -- GpChat gp.nvim
 local function keymapOptions(desc)
-  return {
-    noremap = true,
-    silent = true,
-    nowait = true,
-    desc = "GPT prompt " .. desc,
-  }
+	return {
+		noremap = true,
+		silent = true,
+		nowait = true,
+		desc = "GPT prompt " .. desc,
+	}
 end
 
 local function switch(agent)
-  -- :GpAgent <name> picks chat- or command-scope automatically,
-  -- depending on the buffer you’re in :contentReference[oaicite:0]{index=0}
-  vim.cmd("GpAgent " .. agent)
+	-- :GpAgent <name> picks chat- or command-scope automatically,
+	-- depending on the buffer you’re in :contentReference[oaicite:0]{index=0}
+	vim.cmd("GpAgent " .. agent)
 end
 
 -- <leader>a i c   →  Claude-3.7  (your “default”)
 vim.keymap.set("n", "<leader>aic", function()
-  switch "Claude4"
+	switch("Claude4")
 end, { desc = "gp.nvim: use Claude-4 (Anthropic)" })
 
 -- <leader>a i o   →  GPT-4-o / o3-mini (OpenAI)
 vim.keymap.set("n", "<leader>aio", function()
-  switch "o3-mini"
+	switch("o3-mini")
 end, { desc = "gp.nvim: use o3-mini (OpenAI)" })
 
 vim.keymap.set("n", "<leader>aig", function()
-  switch "ChatGPT4.1"
+	switch("ChatGPT4.1")
 end, { desc = "gp.nvim: use GPT-4.1 (OpenAI)" })
 
 -- Pairup.nvim mappings (Claude Code assistant)
@@ -438,59 +438,59 @@ vim.keymap.set("n", "<leader>cu", ":PairupReadUnstaged<cr>", { desc = "Send unst
 
 -- Pairup overlay bindings (only active when Claude is running)
 vim.api.nvim_create_autocmd("BufEnter", {
-  group = vim.api.nvim_create_augroup("PairupOverlayBindings", { clear = true }),
-  callback = function()
-    local ok, state = pcall(require, "pairup.utils.state")
-    if ok and state.get "claude_buf" then -- Claude is active if buffer exists
-      local opts = { buffer = true, silent = true }
-      vim.keymap.set("n", "<leader>ca", ":PairAccept<cr>", opts)
-      vim.keymap.set("n", "<leader>cr", ":PairReject<cr>", opts)
-      vim.keymap.set("n", "<leader>ce", ":PairEdit<cr>", opts)
-      vim.keymap.set("n", "<leader>co", ":PairupOverlayScope<cr>", opts)
-      vim.keymap.set("n", "<leader>cn", ":PairNext<cr>", opts)
-      vim.keymap.set("n", "<leader>cN", ":PairPrev<cr>", opts)
-    end
-  end,
+	group = vim.api.nvim_create_augroup("PairupOverlayBindings", { clear = true }),
+	callback = function()
+		local ok, state = pcall(require, "pairup.utils.state")
+		if ok and state.get("claude_buf") then -- Claude is active if buffer exists
+			local opts = { buffer = true, silent = true }
+			vim.keymap.set("n", "<leader>ca", ":PairAccept<cr>", opts)
+			vim.keymap.set("n", "<leader>cr", ":PairReject<cr>", opts)
+			vim.keymap.set("n", "<leader>ce", ":PairEdit<cr>", opts)
+			vim.keymap.set("n", "<leader>co", ":PairupOverlayScope<cr>", opts)
+			vim.keymap.set("n", "<leader>cn", ":PairNext<cr>", opts)
+			vim.keymap.set("n", "<leader>cN", ":PairPrev<cr>", opts)
+		end
+	end,
 })
 
 -- <leader>a i p   →  Perplexity (sonar model)
 vim.keymap.set("n", "<leader>aip", function()
-  switch "pplx"
+	switch("pplx")
 end, { desc = "gp.nvim: use Perplexity (sonar)" })
 
 -- Restart nvim
 vim.keymap.set("n", "<leader>-", function()
-  vim.fn.system "bash __restart_nvim.sh"
+	vim.fn.system("bash __restart_nvim.sh")
 end, { noremap = true, silent = true })
 
-vim.keymap.set({ "n", "i" }, "<C-g><C-w>w", "<cmd>GpWhisper<cr>", keymapOptions "Whisper Insert")
-vim.keymap.set({ "n", "i" }, "<C-g>r", "<cmd>GpRewrite<cr>", keymapOptions "Inline Rewrite")
-vim.keymap.set({ "n", "i" }, "<C-g><C-w>r", "<cmd>GpWhisperRewrite<cr>", keymapOptions "Whisper Rewrite")
-vim.keymap.set({ "n", "i" }, "<C-g>a", "<cmd>GpAppend<cr>", keymapOptions "Append")
-vim.keymap.set({ "n", "i" }, "<C-g>b", "<cmd>GpPrepend<cr>", keymapOptions "Prepend")
-vim.keymap.set({ "n", "i" }, "<C-g>e", "<cmd>GpEnew<cr>", keymapOptions "Enew")
-vim.keymap.set({ "n", "i" }, "<C-g>p", "<cmd>GpPopup<cr>", keymapOptions "Popup")
-vim.keymap.set({ "n", "i" }, "<C-g><C-w>a", "<cmd>GpWhisperAppend<cr>", keymapOptions "Whisper Append")
-vim.keymap.set({ "n", "i" }, "<C-g><C-w>b", "<cmd>GpWhisperPrepend<cr>", keymapOptions "Whisper Prepend")
-vim.keymap.set({ "n", "i" }, "<C-g><C-w>e", "<cmd>GpWhisperEnew<cr>", keymapOptions "Whisper Enew")
-vim.keymap.set({ "n", "i" }, "<C-g><C-w>p", "<cmd>GpWhisperPopup<cr>", keymapOptions "Whisper Popup")
-vim.keymap.set({ "n" }, "<C-g>w", ":GpWebSearch ", keymapOptions "Vnew")
-vim.keymap.set({ "n" }, "<C-g>f", "<cmd>GpChatFinder<cr>", keymapOptions "Find Chats")
-vim.keymap.set("v", "<C-g>r", ":<C-u>'<,'>GpRewrite<cr>", keymapOptions "Visual Rewrite")
-vim.keymap.set("v", "<C-g><C-w>r", ":<C-u>'<,'>GpWhisperRewrite<cr>", keymapOptions "Visual Whisper Rewrite")
-vim.keymap.set("v", "<C-g><C-w>r", ":<C-u>'<,'>GpWhisperRewrite<cr>", keymapOptions "Visual Whisper Rewrite")
-vim.keymap.set("v", "<C-g><C-w>c", ":<C-u>'<,'>GpWhisperChatPaste<cr>", keymapOptions "Visual Whisper Chat Paste")
-vim.keymap.set("v", "<C-g><C-w>a", ":<C-u>'<,'>GpWhisperAppend<cr>", keymapOptions "Visual Whisper Append")
-vim.keymap.set("v", "<C-g><C-w>b", ":<C-u>'<,'>GpWhisperPrepend<cr>", keymapOptions "Visual Whisper Prepend")
-vim.keymap.set("v", "<C-g><C-w>e", ":<C-u>'<,'>GpWhisperEnew<cr>", keymapOptions "Visual Whisper Enew")
-vim.keymap.set("v", "<C-g><C-w>p", ":<C-u>'<,'>GpWhisperPopup<cr>", keymapOptions "Visual Whisper Popup")
-vim.keymap.set("v", "<C-g>w", ":<C-u>'<,'>GpWebSearchSelection<cr>", keymapOptions "Visual Web Search")
-vim.keymap.set("v", "<C-g>c", ":<C-u>'<,'>GpChatPaste<cr>", keymapOptions "Visual Chat Paste")
-vim.keymap.set("v", "<C-g>a", ":<C-u>'<,'>GpAppend<cr>", keymapOptions "Visual Append")
-vim.keymap.set("v", "<C-g>b", ":<C-u>'<,'>GpPrepend<cr>", keymapOptions "Visual Prepend")
-vim.keymap.set("v", "<C-g>e", ":<C-u>'<,'>GpEnew<cr>", keymapOptions "Visual Enew")
-vim.keymap.set("v", "<C-g>p", ":<C-u>'<,'>GpPopup<cr>", keymapOptions "Visual Popup")
-vim.keymap.set({ "n", "i", "v", "x" }, "<C-g>s", "<cmd>GpStop<cr>", keymapOptions "Stop")
+vim.keymap.set({ "n", "i" }, "<C-g><C-w>w", "<cmd>GpWhisper<cr>", keymapOptions("Whisper Insert"))
+vim.keymap.set({ "n", "i" }, "<C-g>r", "<cmd>GpRewrite<cr>", keymapOptions("Inline Rewrite"))
+vim.keymap.set({ "n", "i" }, "<C-g><C-w>r", "<cmd>GpWhisperRewrite<cr>", keymapOptions("Whisper Rewrite"))
+vim.keymap.set({ "n", "i" }, "<C-g>a", "<cmd>GpAppend<cr>", keymapOptions("Append"))
+vim.keymap.set({ "n", "i" }, "<C-g>b", "<cmd>GpPrepend<cr>", keymapOptions("Prepend"))
+vim.keymap.set({ "n", "i" }, "<C-g>e", "<cmd>GpEnew<cr>", keymapOptions("Enew"))
+vim.keymap.set({ "n", "i" }, "<C-g>p", "<cmd>GpPopup<cr>", keymapOptions("Popup"))
+vim.keymap.set({ "n", "i" }, "<C-g><C-w>a", "<cmd>GpWhisperAppend<cr>", keymapOptions("Whisper Append"))
+vim.keymap.set({ "n", "i" }, "<C-g><C-w>b", "<cmd>GpWhisperPrepend<cr>", keymapOptions("Whisper Prepend"))
+vim.keymap.set({ "n", "i" }, "<C-g><C-w>e", "<cmd>GpWhisperEnew<cr>", keymapOptions("Whisper Enew"))
+vim.keymap.set({ "n", "i" }, "<C-g><C-w>p", "<cmd>GpWhisperPopup<cr>", keymapOptions("Whisper Popup"))
+vim.keymap.set({ "n" }, "<C-g>w", ":GpWebSearch ", keymapOptions("Vnew"))
+vim.keymap.set({ "n" }, "<C-g>f", "<cmd>GpChatFinder<cr>", keymapOptions("Find Chats"))
+vim.keymap.set("v", "<C-g>r", ":<C-u>'<,'>GpRewrite<cr>", keymapOptions("Visual Rewrite"))
+vim.keymap.set("v", "<C-g><C-w>r", ":<C-u>'<,'>GpWhisperRewrite<cr>", keymapOptions("Visual Whisper Rewrite"))
+vim.keymap.set("v", "<C-g><C-w>r", ":<C-u>'<,'>GpWhisperRewrite<cr>", keymapOptions("Visual Whisper Rewrite"))
+vim.keymap.set("v", "<C-g><C-w>c", ":<C-u>'<,'>GpWhisperChatPaste<cr>", keymapOptions("Visual Whisper Chat Paste"))
+vim.keymap.set("v", "<C-g><C-w>a", ":<C-u>'<,'>GpWhisperAppend<cr>", keymapOptions("Visual Whisper Append"))
+vim.keymap.set("v", "<C-g><C-w>b", ":<C-u>'<,'>GpWhisperPrepend<cr>", keymapOptions("Visual Whisper Prepend"))
+vim.keymap.set("v", "<C-g><C-w>e", ":<C-u>'<,'>GpWhisperEnew<cr>", keymapOptions("Visual Whisper Enew"))
+vim.keymap.set("v", "<C-g><C-w>p", ":<C-u>'<,'>GpWhisperPopup<cr>", keymapOptions("Visual Whisper Popup"))
+vim.keymap.set("v", "<C-g>w", ":<C-u>'<,'>GpWebSearchSelection<cr>", keymapOptions("Visual Web Search"))
+vim.keymap.set("v", "<C-g>c", ":<C-u>'<,'>GpChatPaste<cr>", keymapOptions("Visual Chat Paste"))
+vim.keymap.set("v", "<C-g>a", ":<C-u>'<,'>GpAppend<cr>", keymapOptions("Visual Append"))
+vim.keymap.set("v", "<C-g>b", ":<C-u>'<,'>GpPrepend<cr>", keymapOptions("Visual Prepend"))
+vim.keymap.set("v", "<C-g>e", ":<C-u>'<,'>GpEnew<cr>", keymapOptions("Visual Enew"))
+vim.keymap.set("v", "<C-g>p", ":<C-u>'<,'>GpPopup<cr>", keymapOptions("Visual Popup"))
+vim.keymap.set({ "n", "i", "v", "x" }, "<C-g>s", "<cmd>GpStop<cr>", keymapOptions("Stop"))
 
 -- Nvim no neck pain Mappings
 utils.lnmap("ne", "<cmd>NoNeckPain<cr>")
@@ -504,7 +504,7 @@ vim.keymap.set("n", "<leader>uo", "<Cmd>UrlView<CR>", { desc = "View buffer URLs
 vim.keymap.set("n", "<leader>Uo", "<Cmd>UrlView lazy<CR>", { desc = "View Packer plugin URLs" })
 
 vim.keymap.set("n", "<leader>th", function()
-  vim.lsp.inlay_hint.enable(not vim.lsp.inlay_hint.is_enabled())
+	vim.lsp.inlay_hint.enable(not vim.lsp.inlay_hint.is_enabled())
 end, { silent = true, noremap = true, desc = "Toggle inlay hints" })
 -- Various text objects plugin mappings
 
@@ -513,10 +513,6 @@ vim.keymap.set({ "o", "x" }, "ai", "<cmd>lua require('various-textobjs').indenta
 vim.keymap.set({ "o", "x" }, "iI", "<cmd>lua require('various-textobjs').indentation('inner', 'inner')<CR>")
 vim.keymap.set({ "o", "x" }, "aI", "<cmd>lua require('various-textobjs').indentation('outer', 'outer')<CR>")
 
--- Disable the specific keybinding in normal and visual mode
-vim.api.nvim_set_keymap("n", "<Space>a", "<Nop>", { noremap = true, silent = true })
-vim.api.nvim_set_keymap("v", "<Space>a", "<Nop>", { noremap = true, silent = true })
-
 -- Docusaurus key bindings
 vim.keymap.set("n", "<leader>ic", "<cmd>DocusaurusInsertComponent<cr>", { desc = "Insert Docusaurus Component" })
 vim.keymap.set("n", "<leader>ip", "<cmd>DocusaurusInsertPartial<cr>", { desc = "Insert Docusaurus Partial" })
@@ -524,20 +520,20 @@ vim.keymap.set("n", "<leader>ib", "<cmd>DocusaurusInsertCodeBlock<cr>", { desc =
 vim.keymap.set("n", "<leader>iu", "<cmd>DocusaurusInsertURL<cr>", { desc = "Insert Docusaurus URL Reference" })
 
 -- Decide there to autofill mapping based on space location
-vim.cmd [[
+vim.cmd([[
      function! s:check_back_space() abort
        let col = col('.') - 1
        return !col || getline('.')[col - 1]  =~# '\s'
      endfunction
-     ]]
+     ]])
 
 -- Freeze screen / scroll lock keybindings using scrollfix plugin
 vim.keymap.set("n", "<leader>zf", function()
-  if vim.g.scrollfix == -1 or vim.g.scrollfix == nil then
-    vim.g.scrollfix = 20 -- Set to 20% from top
-    print "Scroll freeze enabled at 20%"
-  else
-    vim.g.scrollfix = -1 -- Disable
-    print "Scroll freeze disabled"
-  end
+	if vim.g.scrollfix == -1 or vim.g.scrollfix == nil then
+		vim.g.scrollfix = 20 -- Set to 20% from top
+		print("Scroll freeze enabled at 20%")
+	else
+		vim.g.scrollfix = -1 -- Disable
+		print("Scroll freeze disabled")
+	end
 end, { desc = "Toggle scroll freeze (cursor at 20% from top)" })

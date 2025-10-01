@@ -1,10 +1,13 @@
 -- LSP and LS Installer
+-- Testing comment for suggestions
 require("nvim-dap-virtual-text").setup {}
 local def = require "lsp.default-lsp"
 
 -- Configure lua_ls using the new API
+--
 vim.lsp.config("lua_ls", {
   autostart = true,
+  attach = def.on_attach,
   capabilities = def.capabilities,
   signatureHelp = { enable = true },
   root_dir = vim.fs.root(0, { ".luarc.json", ".git", "lua" }),
