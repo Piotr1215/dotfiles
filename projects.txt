@@ -15,3 +15,4 @@ brotab
 git-log
 standup
 project-config
+lsp_lines
