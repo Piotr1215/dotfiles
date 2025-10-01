@@ -210,10 +210,10 @@ local set_up_telescope = function()
     "<leader>ff",
     [[<cmd>lua require('telescope.builtin').find_files({ find_command = {'rg', '--files', '--hidden', '-g', '!.git'}, search_dirs = {require('user_functions.shell_integration').get_tmux_working_directory()}, path_display = {"truncate"} })<CR>]]
   )
-  set_keymap("n", "<leader>fl", [[<cmd>lua require('telescope.builtin').live_grep()<CR>]])
+  set_keymap("n", "<leader>fL", [[<cmd>lua require('telescope.builtin').live_grep()<CR>]])
   set_keymap(
     "n",
-    "<leader>fL",
+    "<leader>fl",
     [[<cmd>lua require('telescope.builtin').live_grep({ cwd = vim.fn.system("git rev-parse --show-toplevel 2>/dev/null"):gsub("\n", "") })<CR>]]
   )
   set_keymap("n", "<leader>fr", [[<cmd>lua require'telescope'.extensions.repo.list{search_dirs = {"~/dev"}}<CR>]])
