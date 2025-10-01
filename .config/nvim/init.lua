@@ -2,6 +2,7 @@ require "plugins"
 require "settings"
 require "autocommands"
 require "mappings"
+require "sidekick-mappings"
 require "telescope-setup"
 require "lsp"
 
