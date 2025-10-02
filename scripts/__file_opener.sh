@@ -5,6 +5,9 @@ source __trap.sh
 
 set -eo pipefail
 
+# Set PATH to include user binaries (tmux popup has minimal PATH)
+export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$HOME/go/bin:$PATH"
+
 # Detect if running in tmux popup and adjust terminal settings
 if [[ -n "$TMUX" ]] && [[ "$TERM" == "tmux-256color" || "$TERM" == "screen-256color" ]]; then
     # Suppress error output for terminal control sequences
