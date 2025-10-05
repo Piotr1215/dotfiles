@@ -90,6 +90,7 @@
   "scrollfix": { "branch": "master", "commit": "c80d7c944a076d6496f720cdea21314e587ed125" },
   "showkeys": { "branch": "main", "commit": "cb0a50296f11f1e585acffba8c253b9e8afc1f84" },
   "sidekick.nvim": { "branch": "main", "commit": "77432d9e7907563103566ddcaa804683b4f18a1e" },
+  "snacks.nvim": { "branch": "main", "commit": "bfe8c26dbd83f7c4fbc222787552e29b4eccfcc0" },
   "taboo.vim": { "branch": "master", "commit": "937f67ab9dc2ba1861fabc40ca367e5622c30d36" },
   "telescope-cmdline.nvim": { "branch": "main", "commit": "b1c330835563c9628ce7c095cf20772f22f93f07" },
   "telescope-crossplane.nvim": { "branch": "main", "commit": "7043051660da187078692348e7de8cf888ceee71" },

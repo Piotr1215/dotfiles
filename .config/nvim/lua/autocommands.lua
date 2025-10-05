@@ -19,50 +19,50 @@ local valeGroup = api.nvim_create_augroup("Vale", { clear = true })
 vim.g.copilot_lsp = true
 
 api.nvim_create_autocmd("VimEnter", {
-	group = copilotGroup,
-	command = "Copilot disable",
+  group = copilotGroup,
+  command = "Copilot disable",
 })
 
 vim.api.nvim_create_autocmd({ "BufWritePost" }, {
-	callback = function()
-		require("lint").try_lint()
-	end,
+  callback = function()
+    require("lint").try_lint()
+  end,
 })
 
 api.nvim_create_autocmd({ "BufEnter", "BufRead" }, {
-	pattern = ".nvimrc",
-	callback = function()
-		vim.bo.filetype = "lua"
-	end,
+  pattern = ".nvimrc",
+  callback = function()
+    vim.bo.filetype = "lua"
+  end,
 })
 
 vim.api.nvim_create_autocmd("LspAttach", {
-	callback = function(ev)
-		local client = vim.lsp.get_client_by_id(ev.data.client_id)
-		if client:supports_method("textDocument/completion") then
-			vim.lsp.completion.enable(true, client.id, ev.buf, { autotrigger = true })
-		end
-	end,
+  callback = function(ev)
+    local client = vim.lsp.get_client_by_id(ev.data.client_id)
+    if client:supports_method "textDocument/completion" then
+      vim.lsp.completion.enable(true, client.id, ev.buf, { autotrigger = true })
+    end
+  end,
 })
 
 vim.api.nvim_create_autocmd("LspAttach", {
-	pattern = "*.zshrc*",
-	callback = function()
-		vim.diagnostic.enable(false, { bufnr = 0 })
-	end,
+  pattern = "*.zshrc*",
+  callback = function()
+    vim.diagnostic.enable(false, { bufnr = 0 })
+  end,
 })
 
 api.nvim_create_autocmd("VimEnter", {
-	group = valeGroup,
-	command = "LspStartVale",
-	pattern = "*mdx",
+  group = valeGroup,
+  command = "LspStartVale",
+  pattern = "*mdx",
 })
 
 -- Functions
 local function stylua_format()
-	local file_path = vim.fn.expand("%:p")
-	vim.fn.system({ "stylua", "--search-parent-directories", file_path })
-	vim.cmd("e")
+  local file_path = vim.fn.expand "%:p"
+  vim.fn.system { "stylua", "--search-parent-directories", file_path }
+  vim.cmd "e"
 end
 
 -- stylua: ignore start
@@ -76,361 +76,253 @@ end
 local _ = shfmt_format -- Reference to suppress unused warning
 
 api.nvim_create_autocmd({ "FocusGained", "BufEnter", "CursorHold", "CursorHoldI" }, {
-	group = formattingGroup,
-	pattern = "*",
-	callback = function()
-		-- Skip if in command mode or command-line window
-		if vim.fn.mode() ~= "c" and vim.fn.getcmdwintype() == "" then
-			vim.cmd("checktime")
-		end
-	end,
+  group = formattingGroup,
+  pattern = "*",
+  callback = function()
+    -- Skip if in command mode or command-line window
+    if vim.fn.mode() ~= "c" and vim.fn.getcmdwintype() == "" then
+      vim.cmd "checktime"
+    end
+  end,
 })
 
 local function generate_plantuml()
-	local afile = vim.fn.expand("<afile>")
-	vim.fn.jobstart({
-		"java",
-		"-DPLANTUML_LIMIT_SIZE=8192",
-		"-jar",
-		"/usr/local/bin/plantuml.jar",
-		"-tsvg",
-		afile,
-		"-o",
-		"./rendered",
-	}, { detach = true })
+  local afile = vim.fn.expand "<afile>"
+  vim.fn.jobstart({
+    "java",
+    "-DPLANTUML_LIMIT_SIZE=8192",
+    "-jar",
+    "/usr/local/bin/plantuml.jar",
+    "-tsvg",
+    afile,
+    "-o",
+    "./rendered",
+  }, { detach = true })
 end
 
 -- User Commands
 
 vim.api.nvim_create_user_command("TmuxLayout", function()
-	local layout = vim.fn.system("tmux list-windows | sed -n 's/.*layout \\(.*\\)] @.*/\\1/p'")
-	layout = layout:gsub("^%s*(.-)%s*$", "%1") -- Trim whitespace
-	vim.api.nvim_put({ "      layout: " .. layout }, "l", true, true)
+  local layout = vim.fn.system "tmux list-windows | sed -n 's/.*layout \\(.*\\)] @.*/\\1/p'"
+  layout = layout:gsub("^%s*(.-)%s*$", "%1") -- Trim whitespace
+  vim.api.nvim_put({ "      layout: " .. layout }, "l", true, true)
 end, {})
 
 vim.api.nvim_create_user_command("LowercaseFirstLetter", function(opts)
-	local line1, line2 = opts.line1, opts.line2
-	vim.cmd(string.format("%d,%ds/\\%%V\\<./\\l&/g", line1, line2))
+  local line1, line2 = opts.line1, opts.line2
+  vim.cmd(string.format("%d,%ds/\\%%V\\<./\\l&/g", line1, line2))
 end, { range = true })
-vim.cmd("cnoreabbrev lc LowercaseFirstLetter")
+vim.cmd "cnoreabbrev lc LowercaseFirstLetter"
 
 vim.api.nvim_create_user_command("ClearQF", function()
-	vim.fn.setqflist({})
+  vim.fn.setqflist {}
 end, {})
 
 vim.api.nvim_create_user_command("Gdiff", function()
-	vim.cmd('execute "w !git diff --no-index -- % -"')
+  vim.cmd 'execute "w !git diff --no-index -- % -"'
 end, {})
 
 vim.api.nvim_create_user_command("Gdiffu", function()
-	vim.cmd("w")
-	local file_path = vim.fn.expand("%")
-	local result = vim.fn.systemlist({ "git", "diff", "--unified=0", "--", file_path })
-	require("user_functions.utils").create_floating_scratch(result)
+  vim.cmd "w"
+  local file_path = vim.fn.expand "%"
+  local result = vim.fn.systemlist { "git", "diff", "--unified=0", "--", file_path }
+  require("user_functions.utils").create_floating_scratch(result)
 end, {})
 
 vim.api.nvim_create_user_command("Ghistory", function()
-	local file_path = vim.fn.expand("%")
-	local result = vim.fn.systemlist({ "git", "log", "-p", "--all", "--", file_path })
-	require("user_functions.utils").create_floating_scratch(result)
+  local file_path = vim.fn.expand "%"
+  local result = vim.fn.systemlist { "git", "log", "-p", "--all", "--", file_path }
+  require("user_functions.utils").create_floating_scratch(result)
 end, { desc = "Show git history for the current file" })
 
 vim.api.nvim_create_user_command("R", function(opts)
-	vim.cmd("new")
-	vim.bo.buftype = "nofile"
-	vim.bo.bufhidden = "hide"
-	vim.bo.swapfile = false
-	vim.fn.termopen(opts.args)
-	vim.api.nvim_buf_set_keymap(0, "n", "q", ":q!<CR>", { noremap = true, silent = true })
+  vim.cmd "new"
+  vim.bo.buftype = "nofile"
+  vim.bo.bufhidden = "hide"
+  vim.bo.swapfile = false
+  vim.fn.termopen(opts.args)
+  vim.api.nvim_buf_set_keymap(0, "n", "q", ":q!<CR>", { noremap = true, silent = true })
 end, { nargs = "+", complete = "shellcmd" })
 
 vim.api.nvim_create_user_command("TMarkn", function()
-	vim.cmd([[execute "r !~/dev/dotfiles/scripts/__list_tasks_as_markdown.pl '+next'" ]])
+  vim.cmd [[execute "r !~/dev/dotfiles/scripts/__list_tasks_as_markdown.pl '+next'" ]]
 end, {})
 
 vim.api.nvim_create_user_command("T", function()
-	vim.cmd(":sp term://zsh")
-	vim.cmd("startinsert")
+  vim.cmd ":sp term://zsh"
+  vim.cmd "startinsert"
 end, {})
 
 vim.api.nvim_create_user_command("VT", function()
-	vim.cmd(":vsp term://zsh")
-	vim.cmd("startinsert")
+  vim.cmd ":vsp term://zsh"
+  vim.cmd "startinsert"
 end, {})
 
 vim.api.nvim_create_user_command("PlantUmlOpen", function()
-	-- local file_path = vim.fn.expand "%:p" -- unused
-	local file_dir = vim.fn.expand("%:p:h")
-	local file_name = vim.fn.expand("%:t:r")
-	local svg_path = file_dir .. "/rendered/" .. file_name .. ".svg"
+  -- local file_path = vim.fn.expand "%:p" -- unused
+  local file_dir = vim.fn.expand "%:p:h"
+  local file_name = vim.fn.expand "%:t:r"
+  local svg_path = file_dir .. "/rendered/" .. file_name .. ".svg"
 
-	-- Check if SVG exists
-	if vim.fn.filereadable(svg_path) == 0 then
-		-- Generate it first
-		generate_plantuml()
-		vim.fn.system({ "sleep", "1" }) -- Wait for generation
-	end
+  -- Check if SVG exists
+  if vim.fn.filereadable(svg_path) == 0 then
+    -- Generate it first
+    generate_plantuml()
+    vim.fn.system { "sleep", "1" } -- Wait for generation
+  end
 
-	-- Open the SVG
-	if sysname == "Darwin" then
-		vim.fn.system({ "open", svg_path })
-	else
-		vim.fn.system({ "xdg-open", svg_path })
-	end
+  -- Open the SVG
+  if sysname == "Darwin" then
+    vim.fn.system { "open", svg_path }
+  else
+    vim.fn.system { "xdg-open", svg_path }
+  end
 end, { desc = "Open rendered PlantUML diagram" })
 
 -- Add this to your Neovim configuration (init.lua)
 vim.api.nvim_create_autocmd("VimEnter", {
-	callback = function()
-		local search_value = os.getenv("NVIM_SEARCH_REGISTRY")
-		if search_value and #search_value > 0 then
-			vim.fn.setreg("/", search_value)
-			print("Search register set to: " .. search_value)
-		end
-	end,
+  callback = function()
+    local search_value = os.getenv "NVIM_SEARCH_REGISTRY"
+    if search_value and #search_value > 0 then
+      vim.fn.setreg("/", search_value)
+      print("Search register set to: " .. search_value)
+    end
+  end,
 })
 -- Indentation Settings
 vim.api.nvim_create_autocmd("FileType", {
-	pattern = { "c", "cpp" },
-	callback = function()
-		vim.opt_local.expandtab = true
-		vim.opt_local.shiftwidth = 2
-		vim.opt_local.softtabstop = 2
-		vim.opt_local.cindent = true
-	end,
-	group = indentSettings,
+  pattern = { "c", "cpp" },
+  callback = function()
+    vim.opt_local.expandtab = true
+    vim.opt_local.shiftwidth = 2
+    vim.opt_local.softtabstop = 2
+    vim.opt_local.cindent = true
+  end,
+  group = indentSettings,
 })
 
 vim.api.nvim_create_autocmd("FileType", {
-	pattern = "python",
-	callback = function()
-		vim.opt_local.expandtab = true
-		vim.opt_local.shiftwidth = 4
-		vim.opt_local.softtabstop = 4
-		vim.opt_local.autoindent = true
-	end,
-	group = indentSettings,
+  pattern = "python",
+  callback = function()
+    vim.opt_local.expandtab = true
+    vim.opt_local.shiftwidth = 4
+    vim.opt_local.softtabstop = 4
+    vim.opt_local.autoindent = true
+  end,
+  group = indentSettings,
 })
 
 -- YAML Settings
 vim.api.nvim_create_autocmd("BufWritePost", {
-	pattern = "*.yaml",
-	callback = function()
-		vim.cmd("silent! Neoformat")
-	end,
-	group = yamlSettings,
+  pattern = "*.yaml",
+  callback = function()
+    vim.cmd "silent! Neoformat"
+  end,
+  group = yamlSettings,
 })
 
 -- File Type Settings
 vim.api.nvim_create_autocmd({ "BufRead", "BufNewFile" }, {
-	pattern = ".envrc",
-	callback = function()
-		vim.bo.filetype = "sh"
-	end,
-	group = fileTypeSettings,
+  pattern = ".envrc",
+  callback = function()
+    vim.bo.filetype = "sh"
+  end,
+  group = fileTypeSettings,
 })
 
 vim.api.nvim_create_autocmd({ "BufRead", "BufNewFile" }, {
-	pattern = "*.hurl",
-	callback = function()
-		vim.bo.filetype = "hurl"
-	end,
-	group = fileTypeSettings,
+  pattern = "*.hurl",
+  callback = function()
+    vim.bo.filetype = "hurl"
+  end,
+  group = fileTypeSettings,
 })
 
 -- Helper Autocmds
 vim.api.nvim_create_autocmd("BufEnter", {
-	pattern = "*",
-	callback = function()
-		vim.cmd("silent! lcd %:p:h")
-	end,
-	group = helpersGroup,
+  pattern = "*",
+  callback = function()
+    vim.cmd "silent! lcd %:p:h"
+  end,
+  group = helpersGroup,
 })
 
 -- PlantUML Autocmds
 vim.api.nvim_create_autocmd("BufWritePost", {
-	pattern = "*.puml",
-	callback = generate_plantuml,
-	group = plantumlGroup,
+  pattern = "*.puml",
+  callback = generate_plantuml,
+  group = plantumlGroup,
 })
 
 if sysname == "Darwin" then
-	vim.api.nvim_create_autocmd("FileType", {
-		pattern = "plantuml",
-		callback = function()
-			local plantuml_path = vim.fn.system("which plantuml")
-			local jar_path = plantuml_path:match("(%S+plantuml%.jar)")
-			vim.g.plantuml_previewer_plantuml_jar_path = jar_path
-		end,
-		group = plantumlGroup,
-	})
+  vim.api.nvim_create_autocmd("FileType", {
+    pattern = "plantuml",
+    callback = function()
+      local plantuml_path = vim.fn.system "which plantuml"
+      local jar_path = plantuml_path:match "(%S+plantuml%.jar)"
+      vim.g.plantuml_previewer_plantuml_jar_path = jar_path
+    end,
+    group = plantumlGroup,
+  })
 end
 
 -- Restore Last Cursor Position
 vim.api.nvim_create_autocmd("BufReadPost", {
-	pattern = "*",
-	callback = function()
-		local last_pos = vim.fn.line([['"]])
-		if last_pos > 1 and last_pos <= vim.fn.line("$") and vim.bo.filetype ~= "commit" then
-			vim.cmd('normal! g`"zvzz')
-		end
-	end,
-	group = lastCursorGroup,
+  pattern = "*",
+  callback = function()
+    local last_pos = vim.fn.line [['"]]
+    if last_pos > 1 and last_pos <= vim.fn.line "$" and vim.bo.filetype ~= "commit" then
+      vim.cmd 'normal! g`"zvzz'
+    end
+  end,
+  group = lastCursorGroup,
 })
 
 -- Auto Formatting
 vim.api.nvim_create_autocmd("BufWritePost", {
-	pattern = "*.lua",
-	callback = stylua_format,
-	group = formattingGroup,
+  pattern = "*.lua",
+  callback = stylua_format,
+  group = formattingGroup,
 })
 
 -- Highlight on Yank
 vim.api.nvim_create_autocmd("TextYankPost", {
-	callback = function()
-		vim.highlight.on_yank({ higroup = "IncSearch", timeout = 250 })
-	end,
-	group = highlightingGroup,
+  callback = function()
+    vim.highlight.on_yank { higroup = "IncSearch", timeout = 250 }
+  end,
+  group = highlightingGroup,
 })
 
 -- Remove 'o' from formatoptions when opening a new buffer
 vim.api.nvim_create_autocmd("FileType", {
-	pattern = "*",
-	callback = function()
-		vim.opt_local.formatoptions:remove("o")
-	end,
+  pattern = "*",
+  callback = function()
+    vim.opt_local.formatoptions:remove "o"
+  end,
 })
 
 -- Save mark 'M' when writing mappings.lua
 vim.api.nvim_create_autocmd("BufWritePost", {
-	pattern = "mappings.lua",
-	callback = function()
-		vim.cmd("normal! mM")
-	end,
+  pattern = "mappings.lua",
+  callback = function()
+    vim.cmd "normal! mM"
+  end,
 })
 
 -- Terraform
-vim.cmd([[silent! autocmd! filetypedetect BufRead,BufNewFile *.tf]])
-vim.cmd([[autocmd BufRead,BufNewFile *.hcl set filetype=hcl]])
+vim.cmd [[silent! autocmd! filetypedetect BufRead,BufNewFile *.tf]]
+vim.cmd [[autocmd BufRead,BufNewFile *.hcl set filetype=hcl]]
 vim.api.nvim_create_autocmd({ "BufWritePre" }, {
-	pattern = { "*.tf", "*.tfvars" },
-	callback = function()
-		vim.lsp.buf.format()
-	end,
+  pattern = { "*.tf", "*.tfvars" },
+  callback = function()
+    vim.lsp.buf.format()
+  end,
 })
 
 -- Systemd Services
 vim.api.nvim_create_autocmd({ "BufRead", "BufNewFile" }, {
-	pattern = { "*.service", "*.timer" },
-	callback = function()
-		vim.bo.filetype = "dosini"
-	end,
-})
-
--- Presenterm activation for presentation files
-local function setup_presenterm_buffer_keymaps()
-	-- Check if already activated to prevent duplicate setup
-	if vim.b.presenterm_keymaps_active then
-		return
-	end
-
-	local opts = { buffer = true }
-	local presenterm = require("presenterm")
-
-	-- Navigation
-	vim.keymap.set("n", "]s", presenterm.next_slide, vim.tbl_extend("force", opts, { desc = "Next slide" }))
-	vim.keymap.set("n", "[s", presenterm.previous_slide, vim.tbl_extend("force", opts, { desc = "Previous slide" }))
-
-	-- Slide management
-	vim.keymap.set(
-		"n",
-		"<leader>sd",
-		presenterm.delete_slide,
-		vim.tbl_extend("force", opts, { desc = "Delete slide (cut)" })
-	)
-	vim.keymap.set(
-		"n",
-		"<leader>sy",
-		presenterm.yank_slide,
-		vim.tbl_extend("force", opts, { desc = "Yank slide (copy)" })
-	)
-	vim.keymap.set(
-		"n",
-		"<leader>sv",
-		presenterm.select_slide,
-		vim.tbl_extend("force", opts, { desc = "Visually select slide" })
-	)
-	vim.keymap.set("n", "<leader>ss", presenterm.split_slide, vim.tbl_extend("force", opts, { desc = "Split slide" }))
-	vim.keymap.set("n", "<leader>sl", function()
-		require("presenterm.telescope").slide_picker()
-	end, vim.tbl_extend("force", opts, { desc = "List slides" }))
-
-	-- Slide movement
-	vim.keymap.set(
-		"n",
-		"<leader>sk",
-		presenterm.move_slide_up,
-		vim.tbl_extend("force", opts, { desc = "Move slide up" })
-	)
-	vim.keymap.set(
-		"n",
-		"<leader>sj",
-		presenterm.move_slide_down,
-		vim.tbl_extend("force", opts, { desc = "Move slide down" })
-	)
-
-	-- Code blocks
-	vim.keymap.set("n", "<leader>se", presenterm.toggle_exec, vim.tbl_extend("force", opts, { desc = "Toggle +exec" }))
-	vim.keymap.set(
-		"n",
-		"<leader>sr",
-		presenterm.run_code_block,
-		vim.tbl_extend("force", opts, { desc = "Run code block" })
-	)
-
-	-- Preview and stats
-	vim.keymap.set(
-		"n",
-		"<leader>sP",
-		presenterm.preview,
-		vim.tbl_extend("force", opts, { desc = "Preview presentation" })
-	)
-	vim.keymap.set(
-		"n",
-		"<leader>sc",
-		presenterm.presentation_stats,
-		vim.tbl_extend("force", opts, { desc = "Presentation stats" })
-	)
-
-	-- Interactive reordering
-	vim.keymap.set(
-		"n",
-		"<leader>sR",
-		presenterm.interactive_reorder,
-		vim.tbl_extend("force", opts, { desc = "Reorder slides interactively" })
-	)
-
-	-- Partial picker for including markdown partials
-	vim.keymap.set("n", "<leader>sp", function()
-		require("presenterm.telescope").partial_picker()
-	end, vim.tbl_extend("force", opts, { desc = "Include partial (telescope)" }))
-
-	-- Set buffer variable to indicate keymaps are active
-	vim.b.presenterm_keymaps_active = true
-	vim.b.presenterm_active = true
-end
-
-vim.api.nvim_create_autocmd({ "BufRead", "BufNewFile" }, {
-	pattern = { "presentation.md", "*/presentations/*.md", "*/slides/*.md" },
-	callback = function()
-		-- Schedule to run after buffer is fully loaded
-		vim.schedule(function()
-			local ok, presenterm = pcall(require, "presenterm")
-			if ok then
-				presenterm.activate()
-				setup_presenterm_buffer_keymaps()
-			end
-		end)
-	end,
-	desc = "Auto-activate presenterm for presentation files",
+  pattern = { "*.service", "*.timer" },
+  callback = function()
+    vim.bo.filetype = "dosini"
+  end,
 })
