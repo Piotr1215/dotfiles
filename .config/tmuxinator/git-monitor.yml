@@ -1,4 +1,4 @@
-name: git-monitor
+name: <%= ENV['TMUXINATOR_SESSION_NAME'] || 'git-monitor' %>
 root: <%= ENV['PWD'] || Dir.pwd %>
 
 # Optional tmux socket
