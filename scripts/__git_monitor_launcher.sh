@@ -32,8 +32,8 @@ fi
 # Get folder name from git root
 FOLDER_NAME=$(basename "$GIT_ROOT")
 
-# Create session name
-SESSION_NAME="git-monitor-$FOLDER_NAME"
+# Create session name (replace periods with underscores for tmux compatibility)
+SESSION_NAME="git-monitor-${FOLDER_NAME//./_}"
 
 # Store the current session name for return
 echo "$CURRENT_SESSION" > "/tmp/tmux-git-monitor-return-${SESSION_NAME}"
@@ -48,5 +48,5 @@ else
     tmux kill-session -t "git-monitor" 2>/dev/null
     
     # Start new git-monitor session with dynamic name
-    cd "$GIT_ROOT" && tmuxinator start git-monitor -n "$SESSION_NAME"
+    cd "$GIT_ROOT" && TMUXINATOR_SESSION_NAME="$SESSION_NAME" tmuxinator start git-monitor
 fi
