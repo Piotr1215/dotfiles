@@ -38,6 +38,7 @@ alias sai='sudo apt install -y'
 alias suser='systemctl --user '
 
 # Commands shadow
+alias ghostty="/home/decoder/bin/ghostty-launcher"
 alias pledit='PET_SNIPPET_FILE=/home/decoder/dev/pet-snippets/pet-links.toml pet edit'
 alias lama='cd /home/decoder/dev/homelab && ollama run gpt-oss:latest'
 alias disk='ncdu --color dark'
