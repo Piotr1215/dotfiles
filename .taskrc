@@ -65,8 +65,8 @@ report.currentall.sort=manual_priority-,project+
 report.currentall.filter=status:pending
 
 report.current.description=List of current tasks in the work context
-report.current.columns=id,entry.age,manual_priority,priority,project,tags,description.desc,entry,due.relative,linear_issue_id,release,follow,depends,urgency,session,repo
-report.current.labels=ID,Age,MP,P,Proj,Tag,Desc,Created,Due,Lin,Rel,Follow,Depends,Urg,Session,Repo
+report.current.columns=id,entry.age,manual_priority,priority,project,tags,description.desc,entry,due.relative,linear_issue_id,cycle,release,follow,depends,urgency,session,repo
+report.current.labels=ID,Age,MP,P,Proj,Tag,Desc,Created,Due,Lin,Cyc,Rel,Follow,Depends,Urg,Session,Repo
 report.current.sort=priority-,due+/,manual_priority-,project+
 report.current.filter=status:pending -BLOCKED -pr -triage -backlog -private -review project.not:home*
 
@@ -177,6 +177,8 @@ uda.release.type=string
 uda.release.label=Release
 uda.linear_issue_id.type=string
 uda.linear_issue_id.label=Linear Issue ID
+uda.cycle.type=numeric
+uda.cycle.label=Cycle
 
 #UserDefinedShortcuts
 uda.taskwarrior-tui.task-report.next.filter=status:pending
