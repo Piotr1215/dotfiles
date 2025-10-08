@@ -53,9 +53,5 @@ windows:
   - repo:
       layout: main-vertical
       panes:
-        - cmatrix -a -C blue
-        - lg
-  - dev:
-      layout: even-horizontal 
-      panes:
-        - print -z npm run start
+        - print -z npm run start 
+        - claude --dangerously-skip-permissions
