@@ -107,7 +107,7 @@ get_linear_issues() {
     if ! response=$(curl -s -w "\n%{http_code}" -X POST \
         -H "Content-Type: application/json" \
         -H "Authorization: ${LINEAR_API_KEY}" \
-        --data '{"query": "query { user(id: \"'"$LINEAR_USER_ID"'\") { id name assignedIssues(filter: { state: { name: { nin: [\"Released\", \"Canceled\",\"Done\",\"Ready for Release\"] } } }) { nodes { id title url state { name } project { name } dueDate priority } } } }"}' \
+        --data '{"query": "query { user(id: \"'"$LINEAR_USER_ID"'\") { id name assignedIssues(filter: { state: { name: { nin: [\"Released\", \"Canceled\",\"Done\",\"Ready for Release\"] } } }) { nodes { id title url state { name } project { name } dueDate priority cycle { number } } } } }"}' \
         https://api.linear.app/graphql 2>&1); then
         echo "Error: Linear API request failed" >&2
         rm -f "$temp_response"
@@ -152,7 +152,8 @@ get_linear_issues() {
             project: .project.name,
             status: .state.name,
             due_date: .dueDate,
-            priority: .priority
+            priority: .priority,
+            cycle_number: .cycle.number
         }' 2>/dev/null); then
         echo "Error: Failed to parse Linear issues" >&2
         rm -f "$temp_response"
@@ -388,6 +389,7 @@ create_and_annotate_task() {
     local issue_status="$6"
     local issue_due_date="$7"
     local issue_priority="$8"
+    local cycle_number="$9"
     
     log "Creating new task for issue: $issue_description"
     
@@ -425,6 +427,12 @@ create_and_annotate_task() {
             log "Setting priority:H for High/Urgent Linear issue (priority=$issue_priority)"
             task rc.confirmation=no modify "$task_uuid" priority:H
         fi
+
+        # Set cycle UDA if cycle number exists
+        if [[ -n "$cycle_number" && "$cycle_number" != "null" ]]; then
+            log "Setting cycle:$cycle_number"
+            task rc.confirmation=no modify "$task_uuid" cycle:"$cycle_number"
+        fi
     else
         log "Error: Failed to create task for: $issue_description" >&2
     fi
@@ -433,7 +441,7 @@ create_and_annotate_task() {
 # Synchronize a single issue with Taskwarrior
 sync_to_taskwarrior() {
     local issue_line="$1"
-    local issue_id issue_description issue_repo_name issue_url task_uuid issue_number project_name issue_status issue_due_date issue_priority
+    local issue_id issue_description issue_repo_name issue_url task_uuid issue_number project_name issue_status issue_due_date issue_priority cycle_number
 
     issue_id=$(echo "$issue_line" | jq -r '.id')
     issue_description=$(echo "$issue_line" | jq -r '.description')
@@ -444,6 +452,7 @@ sync_to_taskwarrior() {
     issue_status=$(echo "$issue_line" | jq -r '.status')
     issue_due_date=$(echo "$issue_line" | jq -r '.due_date // empty')
     issue_priority=$(echo "$issue_line" | jq -r '.priority // empty')
+    cycle_number=$(echo "$issue_line" | jq -r '.cycle_number // empty')
 
     log "Processing Issue ID: $issue_id, Description: $issue_description"
 
@@ -462,7 +471,7 @@ sync_to_taskwarrior() {
 
     if [[ -z "$task_uuid" || "$task_uuid" == "null" ]]; then
         log "No valid existing task found - creating new task"
-        create_and_annotate_task "$issue_description" "$issue_repo_name" "$issue_url" "$issue_number" "$project_name" "$issue_status" "$issue_due_date" "$issue_priority"
+        create_and_annotate_task "$issue_description" "$issue_repo_name" "$issue_url" "$issue_number" "$project_name" "$issue_status" "$issue_due_date" "$issue_priority" "$cycle_number"
     else
         # Fix any issues with newlines in task_uuid
         task_uuid=$(echo "$task_uuid" | tr -d '\n')
@@ -508,6 +517,25 @@ sync_to_taskwarrior() {
             if [[ -n "$current_due" ]]; then
                 log "Removing due date (was: $current_due)"
                 task rc.confirmation=no modify "$task_uuid" due:
+            fi
+        fi
+
+        # Update cycle UDA
+        if [[ -n "$cycle_number" && "$cycle_number" != "null" ]]; then
+            # Check if cycle needs updating
+            local current_cycle
+            current_cycle=$(task _get "$task_uuid".cycle 2>/dev/null || echo "")
+            if [[ "$current_cycle" != "$cycle_number" ]]; then
+                log "Updating cycle to: $cycle_number (was: $current_cycle)"
+                task rc.confirmation=no modify "$task_uuid" cycle:"$cycle_number"
+            fi
+        elif [[ "$cycle_number" == "null" || -z "$cycle_number" ]]; then
+            # Check if task currently has a cycle
+            local current_cycle
+            current_cycle=$(task _get "$task_uuid".cycle 2>/dev/null || echo "")
+            if [[ -n "$current_cycle" ]]; then
+                log "Removing cycle (was: $current_cycle)"
+                task rc.confirmation=no modify "$task_uuid" cycle:
             fi
         fi
     fi
