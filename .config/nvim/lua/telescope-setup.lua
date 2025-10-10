@@ -210,13 +210,24 @@ local set_up_telescope = function()
     "<leader>ff",
     [[<cmd>lua require('telescope.builtin').find_files({ find_command = {'rg', '--files', '--hidden', '-g', '!.git'}, search_dirs = {require('user_functions.shell_integration').get_tmux_working_directory()}, path_display = {"truncate"} })<CR>]]
   )
-  set_keymap("n", "<leader>fL", [[<cmd>lua require('telescope.builtin').live_grep()<CR>]])
+  vim.keymap.set("n", "<leader>fL", function()
+    require("telescope.builtin").live_grep {
+      search_dirs = { "~/dev", "~/loft" },
+    }
+  end, { noremap = true, silent = true, desc = "Live grep in ~/dev and ~/loft" })
   set_keymap(
     "n",
     "<leader>fl",
     [[<cmd>lua require('telescope.builtin').live_grep({ cwd = vim.fn.system("git rev-parse --show-toplevel 2>/dev/null"):gsub("\n", "") })<CR>]]
   )
   set_keymap("n", "<leader>fr", [[<cmd>lua require'telescope'.extensions.repo.list{search_dirs = {"~/dev"}}<CR>]])
+  vim.keymap.set("n", "<leader>fd", function()
+    require("telescope.builtin").find_files {
+      find_command = { "rg", "--files", "--hidden", "-g", "!.git", "-g", "!node_modules" },
+      search_dirs = { "~/dev", "~/loft" },
+      path_display = { "truncate" },
+    }
+  end, { noremap = true, silent = true, desc = "Find files in ~/dev and ~/loft" })
   set_keymap("n", "<leader>fg", [[<cmd>lua require('telescope.builtin').git_files()<CR>]])
   set_keymap("n", "<leader>gs", [[<cmd>lua require('telescope.builtin').git_status()<CR>]])
   set_keymap("n", "<leader>fo", [[<cmd>lua require('telescope.builtin').oldfiles()<CR>]])
