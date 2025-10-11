@@ -16,14 +16,22 @@ handle_link_selection() {
 # Create a temporary file to store the mapping
 MAPFILE=$(mktemp)
 
-# Read stdin, create mapping, and show cleaned version
+# Read stdin, create mapping, and show cleaned version with URL
 while IFS= read -r line; do
-    # Extract the clean display name - keep only text between brackets
-    clean_line=$(echo "$line" | sed 's/^\[Link to \(.*\)\].*/[\1]/')
-    # Store mapping of clean line to original
-    echo "$clean_line|$line" >> "$MAPFILE"
-    # Output clean line for fzf
-    echo "$clean_line"
+    # Extract the clean display name - text between "Link to " and "]:"
+    clean_name=$(echo "$line" | sed -n 's/.*\[Link to \([^]]*\)\].*/\1/p')
+    # Extract the URL - text between 'xdg-open "' and '"' (or before space/hashtag)
+    url=$(echo "$line" | sed -n 's/.*xdg-open \+"\?\([^" ]*\).*/\1/p')
+    # Truncate name if too long (max 65 chars to leave room for brackets and ellipsis)
+    if [ ${#clean_name} -gt 65 ]; then
+        clean_name="${clean_name:0:65}..."
+    fi
+    # Create display line with name and URL in two columns
+    display_line=$(printf "%-70s  %s" "[$clean_name]" "$url")
+    # Store mapping of display line to original
+    echo "$display_line|$line" >> "$MAPFILE"
+    # Output display line for fzf
+    echo "$display_line"
 done | sort | /usr/local/bin/fzf \
     --height=100% \
     --layout=reverse \
@@ -62,13 +70,22 @@ EOF
 export -f handle_link_selection
 export TEMP_FILE
 
-# Open Alacritty with the link selection
+# Open Alacritty with the link selection (centered on screen)
+# Calculate center position based on screen resolution
+screen_width=$(xdpyinfo | awk '/dimensions:/ {print $2}' | cut -d'x' -f1)
+screen_height=$(xdpyinfo | awk '/dimensions:/ {print $2}' | cut -d'x' -f2)
+# Assuming ~10 pixels per column and ~20 pixels per line
+window_width=$((180 * 10))
+window_height=$((50 * 20))
+pos_x=$(((screen_width - window_width) / 2))
+pos_y=$(((screen_height - window_height) / 2))
+
 alacritty --class bookmarks-popup \
     --config-file /dev/null \
-    -o window.dimensions.columns=120 \
-    -o window.dimensions.lines=40 \
-    -o window.position.x=1440 \
-    -o window.position.y=660 \
+    -o window.dimensions.columns=180 \
+    -o window.dimensions.lines=50 \
+    -o window.position.x=$pos_x \
+    -o window.position.y=$pos_y \
     -e bash -c "handle_link_selection"
 
 # After terminal closes, handle the selection in the parent process

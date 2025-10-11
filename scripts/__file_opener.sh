@@ -135,6 +135,9 @@ FILE_BIND="ctrl-f:change-prompt(files> )+reload(bash -c '{ zoxide query -l | whi
 # Bookmarks binding - extract and expand paths from bookmarks.conf with descriptions
 BOOKMARKS_BIND="ctrl-b:change-prompt(bookmarks> )+reload(bash -c 'while IFS=\";\" read -r desc path; do path=\${path/#\\~/\$HOME}; printf \"%-60s %s\\n\" \"\$desc\" \"\$path\"; done < ~/dev/dotfiles/scripts/__bookmarks.conf')"
 
+# Copy to clipboard binding - extracts path from bookmark format or uses line as-is
+COPY_BIND="ctrl-y:execute-silent(~/dev/dotfiles/scripts/__copy_path_with_notification.sh {})+abort"
+
 # Start with zoxide dirs + all files - best of both worlds
 OUTPUT=$( {
     # First show zoxide directories (most frequently used)
@@ -151,81 +154,34 @@ OUTPUT=$( {
     --bind "$DIR_BIND" \
     --bind "$FILE_BIND" \
     --bind "$BOOKMARKS_BIND" \
+    --bind "$COPY_BIND" \
     --bind "ctrl-c:abort" \
-    --expect=ctrl-y 2>/dev/null || true)
+    2>/dev/null || true)
 
-# Parse output - first line is the key pressed, rest are selections
-KEY=$(echo "$OUTPUT" | head -1)
-# Get selections (skip first line which is the key)
-SELECTIONS=$(echo "$OUTPUT" | tail -n +2)
+# Process selections (ctrl-y is now handled by fzf binding)
+if [ -n "$OUTPUT" ]; then
+    # Build array of files from selections
+    declare -a file_array
+    while IFS= read -r line; do
+        if [ -n "$line" ]; then
+            # Use helper script to extract path from bookmarks or regular entries
+            real_path=$(~/dev/dotfiles/scripts/__extract_path_from_fzf.sh "$line")
+            file_array+=("$real_path")
+        fi
+    done <<< "$OUTPUT"
 
-if [ -n "$SELECTIONS" ]; then
-    # Process selections based on key pressed
-    if [ "$KEY" = "ctrl-y" ]; then
-        # Copy paths to clipboard (use printf to avoid trailing newline)
-        result=""
-        while IFS= read -r line; do
-            if [ -n "$line" ]; then
-                # Check if it's a bookmark entry (has description and path)
-                # Bookmarks are formatted as "description                    path"
-                if [[ "$line" =~ ^.+[[:space:]]{2,}(.+)$ ]]; then
-                    # Extract path from bookmark format (everything after multiple spaces)
-                    path="${BASH_REMATCH[1]}"
-                else
-                    # Regular path
-                    path="$line"
-                fi
-                expanded_path="${path/#\~/$HOME}"
-                real_path=$(realpath "$expanded_path" 2>/dev/null || echo "$expanded_path")
-                if [ -z "$result" ]; then
-                    result="$real_path"
-                else
-                    result="$result"$'\n'"$real_path"
-                fi
-            fi
-        done <<< "$SELECTIONS"
-        
-        # Use printf to avoid adding newline
-        printf "%s" "$result" | xclip -selection clipboard
-        
-        count=$(echo "$SELECTIONS" | wc -l)
-        plural=""
-        [[ $count -gt 1 ]] && plural="s"
-        echo "✓ Copied $count path$plural to clipboard"
-    else
-        # Default action: Open in new tmux window
-        # Build array of files
-        declare -a file_array
-        while IFS= read -r line; do
-            if [ -n "$line" ]; then
-                # Check if it's a bookmark entry (has description and path)
-                # Bookmarks are formatted as "description                    path"
-                if [[ "$line" =~ ^.+[[:space:]]{2,}(.+)$ ]]; then
-                    # Extract path from bookmark format (everything after multiple spaces)
-                    path="${BASH_REMATCH[1]}"
-                else
-                    # Regular path
-                    path="$line"
-                fi
-                expanded_path="${path/#\~/$HOME}"
-                real_path=$(realpath "$expanded_path" 2>/dev/null || echo "$expanded_path")
-                file_array+=("$real_path")
-            fi
-        done <<< "$SELECTIONS"
-        
-        if [ ${#file_array[@]} -gt 0 ]; then
-            first_file="${file_array[0]}"
-            
-            if [ -d "$first_file" ]; then
-                # If it's a directory, use sessionizer to create/switch to session
-                ~/dev/dotfiles/scripts/__sessionizer.sh "$first_file"
-            else
-                # If it's file(s), open in editor
-                dir_path=$(dirname "$first_file")
-                window_name=$(basename "$first_file")
-                # Pass files as arguments to nvim
-                tmux new-window -n "$window_name" -c "$dir_path" nvim "${file_array[@]}"
-            fi
+    if [ ${#file_array[@]} -gt 0 ]; then
+        first_file="${file_array[0]}"
+
+        if [ -d "$first_file" ]; then
+            # If it's a directory, use sessionizer to create/switch to session
+            ~/dev/dotfiles/scripts/__sessionizer.sh "$first_file"
+        else
+            # If it's file(s), open in editor
+            dir_path=$(dirname "$first_file")
+            window_name=$(basename "$first_file")
+            # Pass files as arguments to nvim
+            tmux new-window -n "$window_name" -c "$dir_path" nvim "${file_array[@]}"
         fi
     fi
 fi
