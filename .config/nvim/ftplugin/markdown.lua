@@ -84,15 +84,17 @@ vim.api.nvim_create_autocmd("FileType", {
     -- Handle code blocks
 
     -- BoldMe function for making selected text bold
-    function BoldMe()
+    local function BoldMe()
       -- Get visual selection coordinates
-      local start_pos = vim.fn.getpos("'<")
-      local end_pos = vim.fn.getpos("'>")
-      
+      local start_pos = vim.fn.getpos "'<"
+      local end_pos = vim.fn.getpos "'>"
+
       -- Get selected text
       local lines = vim.fn.getline(start_pos[2], end_pos[2])
-      if #lines == 0 then return end
-      
+      if #lines == 0 then
+        return
+      end
+
       if #lines == 1 then
         -- Single line selection
         local line = lines[1]
@@ -106,9 +108,9 @@ vim.api.nvim_create_autocmd("FileType", {
         lines[#lines] = string.sub(lines[#lines], 1, end_pos[3])
         local selected_text = table.concat(lines, "\n")
         local new_text = "**" .. selected_text .. "**"
-        
+
         -- Replace the selection
-        vim.cmd('normal! `<v`>c' .. new_text)
+        vim.cmd("normal! `<v`>c" .. new_text)
       end
     end
 
@@ -122,8 +124,8 @@ vim.api.nvim_create_autocmd("FileType", {
         { "n", "<leader>pi", ":call mdip#MarkdownClipboardImage()<CR>" },
         { "n", "ctd", "4wvg$y" },
         { "v", "<leader>hi", ":HeaderIncrease<CR>" },
-        { "v", "<Leader>b", ":lua BoldMe()<CR>" },
-        { "x", "<Leader>b", ":lua BoldMe()<CR>" },
+        { "v", "<Leader>b", BoldMe, {} },
+        { "x", "<Leader>b", BoldMe, {} },
         { "v", ",wl", [[c[<c-r>"]()<esc>]], { noremap = false } },
       }
 
@@ -139,14 +141,17 @@ vim.api.nvim_create_autocmd("FileType", {
       vim.keymap.del("n", "]c", { buffer = 0 })
     end)
     set_keymaps()
-    
+
     -- Obsidian keymaps (moved from deprecated mappings config)
     vim.keymap.set("n", "gf", function()
       return require("obsidian").util.gf_passthrough()
     end, { noremap = false, expr = true, buffer = true })
-    
+
     vim.keymap.set("n", "<leader>ch", function()
       return require("obsidian").util.toggle_checkbox()
     end, { buffer = true })
+
+    -- GitHub gist creation from visual selection
+    vim.keymap.set("v", "<leader>cg", ":CreateGist<CR>", { buffer = true, desc = "Create GitHub gist from selection" })
   end,
 })
