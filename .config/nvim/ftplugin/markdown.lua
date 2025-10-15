@@ -142,14 +142,9 @@ vim.api.nvim_create_autocmd("FileType", {
     end)
     set_keymaps()
 
-    -- Obsidian keymaps (moved from deprecated mappings config)
-    vim.keymap.set("n", "gf", function()
-      return require("obsidian").util.gf_passthrough()
-    end, { noremap = false, expr = true, buffer = true })
-
-    vim.keymap.set("n", "<leader>ch", function()
-      return require("obsidian").util.toggle_checkbox()
-    end, { buffer = true })
+    -- Obsidian keymaps are now handled by obsidian.nvim plugin config
+    -- gf - follow note links (configured in plugins-setup.lua)
+    -- <CR> - smart action: follow link or toggle checkbox (configured in plugins-setup.lua)
 
     -- GitHub gist creation from visual selection
     vim.keymap.set("v", "<leader>cg", ":CreateGist<CR>", { buffer = true, desc = "Create GitHub gist from selection" })
