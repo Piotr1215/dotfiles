@@ -268,6 +268,11 @@ manage_project_settings() {
         task rc.confirmation=no modify "$task_uuid" session:vdocs
         task rc.confirmation=no modify "$task_uuid" +kill
     fi
+
+    # Set session:ops for all OPS issues
+    if [[ "$issue_number" == *"OPS"* ]]; then
+        task rc.confirmation=no modify "$task_uuid" session:ops
+    fi
 }
 
 # Update task tags and priority based on Linear issue status

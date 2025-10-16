@@ -175,6 +175,13 @@ teardown() {
     grep -q "project:operations" "${TEST_DIR}/task_commands.log"
 }
 
+@test "manage_project_settings sets session:ops for OPS issues" {
+    run manage_project_settings "test-uuid" "" "OPS-456"
+    [ "$status" -eq 0 ]
+    # Should set session:ops for OPS issues
+    grep -q "session:ops" "${TEST_DIR}/task_commands.log"
+}
+
 # ====================================================
 # TEMP FILE CLEANUP TESTS
 # ====================================================
