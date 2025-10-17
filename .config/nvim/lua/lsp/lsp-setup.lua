@@ -49,8 +49,10 @@ vim.lsp.config("ts_ls", {
 
 -- vale_ls will autoload for all subdirectories in ~/loft/ by using .nvimrc
 -- to prevent loading it in other projects, it can be loaded manually with a User command
+-- Using custom-built vale-ls from ~/.local/bin to avoid GLIBC issues
 vim.api.nvim_create_user_command("LspStartVale", function()
   vim.lsp.config("vale_ls", {
+    cmd = { vim.fn.expand "~/.local/bin/vale-ls" },
     root_dir = vim.fs.root(0, { ".vale.ini" }),
     filetypes = { "markdown", "mdx" },
   })
