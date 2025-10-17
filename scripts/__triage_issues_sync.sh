@@ -127,7 +127,7 @@ add_new_triage_issues() {
     done < <(get_triage_issues | jq -c '.')
     
     log "Added $issues_added new triage issues"
-    return $issues_added
+    return 0
 }
 
 # ====================================================
