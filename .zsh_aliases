@@ -53,6 +53,7 @@ alias si='__search_internet.py'
 alias sip='__search_internet.py --pro'
 alias vids='cd /mnt/nas_vids'
 alias vm="nvim -c ':lua MiniFiles.open()'"
+alias mprev='~/dev/dotfiles/scripts/__mprev.sh'
 alias aider='aider --model sonnet --dark-mode --no-auto-commits'
 alias aider-commit='aider --model gpt-4o --dark-mode'
 alias cat='bat'
