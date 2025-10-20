@@ -24,7 +24,7 @@ return require("lazy").setup {
     priority = 1000,
     opts = {
       nes = {
-        enabled = true,
+        enabled = false,
         debounce = 100,
         trigger = {
           events = { "InsertLeave", "TextChanged", "CursorHold" },
