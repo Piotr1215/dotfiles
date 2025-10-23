@@ -44,10 +44,10 @@ errors_warnings=$(echo "$vale_json" | jq -r '
 # If there are errors or warnings, provide feedback
 if [ "$errors_warnings" -gt 0 ]; then
     # Return JSON with feedback for PostToolUse
-    # Use "block" to indicate issues were found (even though PostToolUse can't actually block)
+    # PostToolUse can only provide feedback, not block (edit already happened)
     reason="Vale found style issues:\n\n$vale_output"
-    jq -n --arg reason "$reason" '{decision: "block", reason: $reason}'
-    exit 2
+    jq -n --arg reason "$reason" '{"reason": $reason}'
+    exit 0
 fi
 
 # No issues found

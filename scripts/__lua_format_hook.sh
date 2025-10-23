@@ -44,7 +44,7 @@ fi
 # Check if stylua is available
 if ! command -v stylua &> /dev/null; then
     reason="stylua is not installed. Please install it with: cargo install stylua"
-    jq -n --arg reason "$reason" '{decision: "warn", reason: $reason}'
+    jq -n --arg reason "$reason" '{"reason": $reason}'
     exit 0
 fi
 
@@ -528,19 +528,8 @@ else
 fi
 
 # Output decision JSON for PostToolUse
-# ALWAYS use "block" decision to ensure diagnostics are visible to user
-# Even though PostToolUse can't actually block, "block" ensures visibility
-jq -n --arg reason "$FULL_DIAGNOSTICS" '{
-    decision: "block",
-    reason: $reason,
-    hookSpecificOutput: {
-        hookEventName: "PostToolUse"
-    }
-}'
+# PostToolUse can only provide feedback, not block (edit already happened)
+jq -n --arg reason "$FULL_DIAGNOSTICS" '{"reason": $reason}'
 
-# Exit 2 for errors, 0 for warnings (but still show them with "block" decision)
-if [ "${ERROR_COUNT:-0}" -gt 0 ]; then
-    exit 2
-else
-    exit 0
-fi
+# Always exit 0 to avoid JSON validation errors
+exit 0

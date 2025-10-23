@@ -12,13 +12,11 @@ FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // .tool_input.path // 
 
 # Exit silently if no file path
 if [[ -z "$FILE_PATH" ]]; then
-  jq -n '{decision: "allow"}'
   exit 0
 fi
 
 # Exit if file doesn't exist
 if [[ ! -f "$FILE_PATH" ]]; then
-  jq -n '{decision: "allow"}'
   exit 0
 fi
 
@@ -40,26 +38,26 @@ fi
 
 # Exit if not a bash script
 if [[ "$is_bash_script" == false ]]; then
-  jq -n '{decision: "allow"}'
   exit 0
 fi
 
 # Check if shellcheck is installed
 if ! command -v shellcheck &> /dev/null; then
   reason="shellcheck is not installed. Install: apt install shellcheck"
-  jq -n --arg reason "$reason" '{decision: "warn", reason: $reason}'
+  jq -n --arg reason "$reason" '{"reason": $reason}'
   exit 0
 fi
 
 # Run shellcheck and capture output
 FILENAME=$(basename "$FILE_PATH")
-shellcheck_output=$(shellcheck "$FILE_PATH" 2>&1 || true)
+set +e
+shellcheck_output=$(shellcheck "$FILE_PATH" 2>&1)
 shellcheck_exit=$?
+set -e
 
 # Build diagnostic message
 if [ $shellcheck_exit -eq 0 ]; then
-  # No issues found
-  jq -n '{decision: "allow"}'
+  # No issues found - silent success
   exit 0
 else
   # Issues found - show them
@@ -69,9 +67,6 @@ $shellcheck_output
 
 Fix these issues or review if they're acceptable."
 
-  jq -n --arg reason "$diagnostic" '{
-    decision: "warn",
-    reason: $reason
-  }'
+  jq -n --arg reason "$diagnostic" '{"reason": $reason}'
   exit 0
 fi

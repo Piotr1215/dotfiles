@@ -230,17 +230,8 @@ else
 fi
 
 # Output result
-jq -n --arg reason "$FINAL_MSG" '{
-    decision: "block",
-    reason: $reason,
-    hookSpecificOutput: {
-        hookEventName: "PostToolUse"
-    }
-}'
+# PostToolUse can only provide feedback, not block (edit already happened)
+jq -n --arg reason "$FINAL_MSG" '{"reason": $reason}'
 
-# Exit with appropriate code
-if [[ "$HAS_ERRORS" == true ]]; then
-    exit 2
-else
-    exit 0
-fi
+# Always exit 0 to avoid JSON validation errors
+exit 0
