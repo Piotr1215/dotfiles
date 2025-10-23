@@ -1,0 +1,94 @@
+#compdef vcluster-yaml
+
+# vcluster-yaml zsh completion
+
+_vcluster_yaml() {
+    local -a commands
+    commands=(
+        'query:Search for vCluster configuration fields'
+        'list-versions:List available vCluster versions'
+        'validate:Validate vCluster configuration'
+        'help:Display help for command'
+    )
+
+    local -a formats
+    formats=(
+        'json:JSON output format'
+        'yaml:YAML output format'
+        'table:Table output format'
+    )
+
+    local -a versions
+    versions=(
+        'main:Latest development version'
+        'v0.28.0:Version 0.28.0'
+        'v0.29.0:Version 0.29.0'
+        'v0.30.0:Version 0.30.0'
+    )
+
+    _arguments -C \
+        '(-V --version)'{-V,--version}'[output the version number]' \
+        '(-h --help)'{-h,--help}'[display help for command]' \
+        '1: :->command' \
+        '*:: :->args'
+
+    case $state in
+        command)
+            _describe 'vcluster-yaml commands' commands
+            ;;
+        args)
+            case $words[1] in
+                query)
+                    _arguments \
+                        '--file[Configuration file to search]:file:_files -g "*.yaml *.yml"' \
+                        '(-s --schema-version)'{-s,--schema-version}'[vCluster version or branch]:version:->versions' \
+                        '(-f --format)'{-f,--format}'[Output format]:format:->formats' \
+                        '(-h --help)'{-h,--help}'[display help]' \
+                        '1:query string:'
+
+                    case $state in
+                        formats)
+                            _describe 'output formats' formats
+                            ;;
+                        versions)
+                            _describe 'vCluster versions' versions
+                            ;;
+                    esac
+                    ;;
+                list-versions)
+                    _arguments \
+                        '(-f --format)'{-f,--format}'[Output format]:format:->formats' \
+                        '(-h --help)'{-h,--help}'[display help]'
+
+                    case $state in
+                        formats)
+                            _describe 'output formats' formats
+                            ;;
+                    esac
+                    ;;
+                validate)
+                    _arguments \
+                        '(-s --schema-version)'{-s,--schema-version}'[vCluster version for schema]:version:->versions' \
+                        '(-f --format)'{-f,--format}'[Output format]:format:->formats' \
+                        '(-h --help)'{-h,--help}'[display help]' \
+                        '1:file:_files -g "*.yaml *.yml"'
+
+                    case $state in
+                        formats)
+                            _describe 'output formats' formats
+                            ;;
+                        versions)
+                            _describe 'vCluster versions' versions
+                            ;;
+                    esac
+                    ;;
+                help)
+                    _describe 'vcluster-yaml commands' commands
+                    ;;
+            esac
+            ;;
+    esac
+}
+
+_vcluster_yaml "$@"
+
