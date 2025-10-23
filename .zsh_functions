@@ -58,8 +58,8 @@ function copy_last_screenshot() {
     local new_filename=$(echo "$latest_screenshot" | tr ' ' '_')
     cp "/home/decoder/Pictures/Screenshots/$latest_screenshot" "./$new_filename"
     local new_path="$(pwd)/$new_filename"
-    echo "$new_path" | xsel --clipboard
-    echo "Copied to $new_path (path is in clipboard)"
+    echo "Path to file: $new_path" | xsel --clipboard
+    echo "Path to file: $new_path"
 }
 
 # Launch nvim verbose explorer, function is now in scripts/__nvim_verbose.sh
