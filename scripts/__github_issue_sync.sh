@@ -93,26 +93,60 @@ get_linear_issues() {
     local response
     local exit_code
     local temp_response
-    
+    local max_retries=3
+    local retry_count=0
+    local wait_time=2
+
     # Create temporary file for response (with proper cleanup)
     if ! temp_response=$(mktemp); then
         echo "Error: Failed to create temporary file" >&2
         return 1
     fi
-    
+
     # Ensure cleanup on exit
     trap "rm -f '$temp_response'" EXIT
-    
-    # Make API call with explicit error handling
-    if ! response=$(curl -s -w "\n%{http_code}" -X POST \
-        -H "Content-Type: application/json" \
-        -H "Authorization: ${LINEAR_API_KEY}" \
-        --data '{"query": "query { user(id: \"'"$LINEAR_USER_ID"'\") { id name assignedIssues(filter: { state: { name: { nin: [\"Released\", \"Canceled\",\"Done\",\"Ready for Release\"] } } }) { nodes { id title url state { name } project { name } dueDate priority cycle { number } } } } }"}' \
-        https://api.linear.app/graphql 2>&1); then
-        echo "Error: Linear API request failed" >&2
-        rm -f "$temp_response"
-        return 1
-    fi
+
+    # Retry loop for API call
+    while [[ $retry_count -lt $max_retries ]]; do
+        # Make API call with explicit error handling and timeouts
+        local curl_stderr
+        curl_stderr=$(mktemp)
+        trap "rm -f '$temp_response' '$curl_stderr'" EXIT
+
+        response=$(curl -s -w "\n%{http_code}" \
+            --connect-timeout 10 \
+            --max-time 30 \
+            -X POST \
+            -H "Content-Type: application/json" \
+            -H "Authorization: ${LINEAR_API_KEY}" \
+            --data '{"query": "query { user(id: \"'"$LINEAR_USER_ID"'\") { id name assignedIssues(filter: { state: { name: { nin: [\"Released\", \"Canceled\",\"Done\",\"Ready for Release\"] } } }) { nodes { id title url state { name } project { name } dueDate priority cycle { number } } } } }"}' \
+            https://api.linear.app/graphql 2>"$curl_stderr")
+        exit_code=$?
+
+        if [[ $exit_code -eq 0 ]]; then
+            rm -f "$curl_stderr"
+            break
+        fi
+
+        # Log error and retry if not last attempt
+        local error_msg
+        error_msg=$(cat "$curl_stderr" 2>/dev/null || echo "Unknown error")
+        retry_count=$((retry_count + 1))
+
+        if [[ $retry_count -lt $max_retries ]]; then
+            echo "Warning: Linear API request failed (attempt $retry_count/$max_retries, curl exit code: $exit_code)" >&2
+            echo "Details: $error_msg" >&2
+            echo "Retrying in ${wait_time}s..." >&2
+            sleep "$wait_time"
+            wait_time=$((wait_time * 2))  # Exponential backoff
+            rm -f "$curl_stderr"
+        else
+            echo "Error: Linear API request failed after $max_retries attempts (curl exit code: $exit_code)" >&2
+            echo "Details: $error_msg" >&2
+            rm -f "$temp_response" "$curl_stderr"
+            return 1
+        fi
+    done
     
     local http_code=$(echo "$response" | tail -1)
     local content=$(echo "$response" | head -n -1)
