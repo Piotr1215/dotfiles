@@ -325,7 +325,24 @@ function copy_file_content() {
 }
 
 zle -N copy_file_content
-bindkey '^X^Y' copy_file_content     
+bindkey '^X^Y' copy_file_content
+
+function copy_file_path() {
+  local selected_file
+  local full_path
+  selected_file=$(fd --type f | fzf --height 40% --reverse)
+  if [[ -n "$selected_file" ]]; then
+      full_path=$(realpath "$selected_file")
+      echo -n "$full_path" | xclip -selection clipboard
+      echo -n "File path $full_path copied"
+  else
+    zle -M "No file selected."
+  fi
+  zle accept-line
+}
+
+zle -N copy_file_path
+bindkey '^XY' copy_file_path
 
 # zle -N open_logg
 # bindkey '^l' open_logg
