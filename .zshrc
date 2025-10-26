@@ -7,6 +7,8 @@ export XDG_CONFIG_HOME="$HOME/.config"
 DISABLE_AUTO_UPDATE=true
 DISABLE_MAGIC_FUNCTIONS=true
 ZSH_AUTOSUGGEST_MANUAL_REBIND=1
+ZSH_AUTOSUGGEST_PARTIAL_ACCEPT_WIDGETS=(forward-word)
+bindkey '^[[1;5C' forward-word  # Ctrl+Right Arrow
 export XCURSOR_SIZE=24
 
 if [[ -z ${TMUX+X}${ZSH_SCRIPT+X}${ZSH_EXECUTION_STRING+X} ]]; then
