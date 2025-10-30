@@ -32,13 +32,27 @@ if [[ "$1" == "-h" ]] || [[ "$1" == "--help" ]]; then
 	exit 0
 fi
 
-# Default to README.md if no argument provided
-file="${1:-README.md}"
-
-# Check if file exists
-if [[ ! -f "$file" ]]; then
-	echo "Error: File '$file' not found" >&2
-	exit 1
+# Handle file selection
+if [[ -z "$1" ]]; then
+	# No argument provided - try README.md first
+	if [[ -f "README.md" ]]; then
+		file="README.md"
+	else
+		# README.md not found - show fzf selector for all markdown files
+		file=$(fd -e md -e markdown | fzf --prompt="Select markdown file: " --height=40% --border)
+		if [[ -z "$file" ]]; then
+			echo "Error: No file selected" >&2
+			exit 1
+		fi
+	fi
+else
+	# Explicit argument provided
+	file="$1"
+	# Check if file exists
+	if [[ ! -f "$file" ]]; then
+		echo "Error: File '$file' not found" >&2
+		exit 1
+	fi
 fi
 
 # Check if file is a markdown file
