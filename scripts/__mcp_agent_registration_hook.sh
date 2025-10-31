@@ -164,7 +164,7 @@ EOF
                 fi
                 
                 echo "[$(date)] Agent registered: $AGENT_NAME ($AGENT_ID) in $TARGET_PANE" >> /tmp/mcp-agent-hook.log
-                
+
                 # Update broadcast file with agent name for future reference
                 SAFE_SESSION_NAME=$(echo "$TMUX_SESSION" | tr '/' '-')
                 broadcast_file="/tmp/claude_broadcast_${SAFE_SESSION_NAME}_${TMUX_WINDOW}_${TMUX_PANE}.json"
@@ -174,21 +174,24 @@ EOF
                     jq --arg agent "$AGENT_NAME" '. + {agent_name: $agent}' "$broadcast_file" > "$temp_file" && mv "$temp_file" "$broadcast_file"
                     echo "[$(date)] Updated broadcast file with agent name: $AGENT_NAME" >> /tmp/mcp-agent-hook.log
                 fi
+
+                # Output success message for PostToolUse hook
+                jq -n --arg reason "Agent '$AGENT_NAME' registered in tmux pane $TARGET_PANE" '{"reason": $reason}'
             else
                 echo "[$(date)] Agent registered: $AGENT_NAME ($AGENT_ID) - no broadcast file found" >> /tmp/mcp-agent-hook.log
-                
+
                 # Fallback: Try to set agent name in current tmux pane if we're in tmux
                 if [ -n "$TMUX" ]; then
                     echo "[$(date)] Attempting fallback: setting name in current tmux pane" >> /tmp/mcp-agent-hook.log
                     CURRENT_SESSION=$(tmux display-message -p '#S' 2>/dev/null)
                     CURRENT_WINDOW=$(tmux display-message -p '#I' 2>/dev/null)
                     CURRENT_PANE=$(tmux display-message -p '#P' 2>/dev/null)
-                    
+
                     if [ -n "$CURRENT_SESSION" ] && [ -n "$CURRENT_WINDOW" ] && [ -n "$CURRENT_PANE" ]; then
                         FALLBACK_PANE="${CURRENT_SESSION}:${CURRENT_WINDOW}.${CURRENT_PANE}"
                         tmux set-option -p @agent_name "$AGENT_NAME" 2>>/tmp/mcp-agent-hook.log
                         echo "[$(date)] Fallback: Set agent name in current pane $FALLBACK_PANE" >> /tmp/mcp-agent-hook.log
-                        
+
                         # Update tracking file with discovered coordinates
                         SAFE_AGENT_ID=$(echo "$AGENT_ID" | tr '/' '-')
                         AGENT_TRACKING_FILE="/tmp/claude_agent_${SAFE_AGENT_ID}.json"
@@ -204,27 +207,39 @@ EOF
   "registered_at": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 }
 EOF
+                        # Output success message for PostToolUse hook
+                        jq -n --arg reason "Agent '$AGENT_NAME' registered in tmux pane $FALLBACK_PANE (fallback)" '{"reason": $reason}'
+                    else
+                        # No tmux coordinates found
+                        jq -n --arg reason "Agent '$AGENT_NAME' registered (no tmux coordinates available)" '{"reason": $reason}'
                     fi
+                else
+                    # Not in tmux
+                    jq -n --arg reason "Agent '$AGENT_NAME' registered (not in tmux session)" '{"reason": $reason}'
                 fi
             fi
+        else
+            # No agent ID found
+            echo "[$(date)] WARNING: No agent ID found in registration response" >> /tmp/mcp-agent-hook.log
+            jq -n --arg reason "Agent registration completed (no agent ID in response)" '{"reason": $reason}'
         fi
         ;;
         
     "mcp__agentic-framework__unregister-agent")
         # Extract agent ID
         AGENT_ID=$(echo "$INPUT" | jq -r '.tool_input.id // ""')
-        
+
         if [ -n "$AGENT_ID" ]; then
             # Find and remove agent tracking file
             AGENT_FILE=$(grep -l "\"agent_id\": \"$AGENT_ID\"" /tmp/claude_agent_*.json 2>/dev/null | head -1)
-            
+
             if [ -n "$AGENT_FILE" ]; then
                 # Extract tmux info before removing
                 TMUX_SESSION=$(jq -r '.tmux_session // ""' "$AGENT_FILE")
                 TMUX_WINDOW=$(jq -r '.tmux_window // ""' "$AGENT_FILE")
                 TMUX_PANE=$(jq -r '.tmux_pane // ""' "$AGENT_FILE")
                 AGENT_NAME=$(jq -r '.agent_name // "Unknown"' "$AGENT_FILE")
-                
+
                 # Clear tmux status
                 if [ -n "$TMUX_SESSION" ] && [ -n "$TMUX_WINDOW" ] && [ -n "$TMUX_PANE" ]; then
                     TARGET_PANE="${TMUX_SESSION}:${TMUX_WINDOW}.${TMUX_PANE}"
@@ -232,15 +247,31 @@ EOF
                         /home/decoder/dev/dotfiles/scripts/__tmux_agent_status.sh clear "$TARGET_PANE" >/dev/null 2>&1
                     fi
                 fi
-                
+
                 # Remove tracking file
                 rm -f "$AGENT_FILE"
-                
+
                 echo "[$(date)] Agent unregistered: $AGENT_NAME ($AGENT_ID)" >> /tmp/mcp-agent-hook.log
+
+                # Output success message for PostToolUse hook
+                jq -n --arg reason "Agent '$AGENT_NAME' unregistered and tmux status cleared" '{"reason": $reason}'
             else
                 echo "[$(date)] Agent unregistered: $AGENT_ID - no tracking file found" >> /tmp/mcp-agent-hook.log
+
+                # Output success message even if no tracking file was found
+                jq -n --arg reason "Agent unregistered (no tracking file found)" '{"reason": $reason}'
             fi
+        else
+            # No agent ID provided
+            echo "[$(date)] WARNING: No agent ID provided for unregistration" >> /tmp/mcp-agent-hook.log
+            jq -n --arg reason "Agent unregistration completed" '{"reason": $reason}'
         fi
+        ;;
+
+    *)
+        # Unknown tool - no action needed
+        echo "[$(date)] Hook called for unhandled tool: $TOOL_NAME" >> /tmp/mcp-agent-hook.log
+        jq -n --arg reason "Hook executed (no action required for $TOOL_NAME)" '{"reason": $reason}'
         ;;
 esac
 
