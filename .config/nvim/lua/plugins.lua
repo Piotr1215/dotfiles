@@ -463,6 +463,39 @@ return require("lazy").setup {
     dependencies = { "kyazdani42/nvim-web-devicons", opt = true },
   },
   -- }}}
+  -- LaTeX {{{
+  {
+    "lervag/vimtex",
+    lazy = false, -- Load immediately for .tex files
+    init = function()
+      -- VimTeX configuration
+      vim.g.vimtex_view_method = "zathura"
+      vim.g.vimtex_compiler_method = "latexmk"
+
+      -- Set local leader to backslash for VimTeX commands
+      vim.g.maplocalleader = "\\"
+
+      -- Disable overfull/underfull warnings
+      vim.g.vimtex_quickfix_ignore_filters = {
+        "Underfull",
+        "Overfull",
+      }
+
+      -- Enable syntax concealment for a cleaner view
+      vim.g.vimtex_syntax_conceal = {
+        accents = 1,
+        greek = 1,
+        math_bounds = 0,
+        math_delimiters = 1,
+        math_fracs = 1,
+        math_super_sub = 1,
+        math_symbols = 1,
+        sections = 0,
+        styles = 1,
+      }
+    end,
+  },
+  -- }}}
   {
     "obsidian-nvim/obsidian.nvim",
     version = "*",
