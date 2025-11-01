@@ -6,7 +6,7 @@ require "s_mappings"
 
 vim.keymap.set({ "n", "v" }, "<Space>", "<Nop>", { silent = true })
 vim.g.mapleader = " "
-vim.g.maplocalleader = " "
+-- vim.g.maplocalleader = " "  -- Commented out: VimTeX sets this to "\" in plugins.lua
 
 -- Abbreviations
 vim.cmd [[iabbrev gct Give me a command to]]
