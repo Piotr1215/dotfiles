@@ -437,6 +437,18 @@ zsh:
     - description: "Accept one word from autosuggestion"
       binding: "Ctrl + Right Arrow"
 
+bookmarks:
+  description: "File and folder bookmarking system"
+  shortcuts:
+    - description: "Add folder/file to bookmarks"
+      binding: "addbmk -d \"Description\" <path>"
+    - description: "Open bookmarks in tmux sessionizer"
+      binding: "__sessionizer.sh (then Ctrl+L)"
+    - description: "View bookmarks in file opener"
+      binding: "__file_opener.sh (then Ctrl+B)"
+    - description: "Edit bookmarks config file"
+      binding: "nvim ~/dev/dotfiles/scripts/__bookmarks.conf"
+
 neomutt:
   description: "Terminal-based email client"
   shortcuts:
