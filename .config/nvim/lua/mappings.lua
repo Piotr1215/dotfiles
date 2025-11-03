@@ -427,32 +427,6 @@ vim.keymap.set("n", "<leader>aig", function()
   switch "ChatGPT4.1"
 end, { desc = "gp.nvim: use GPT-4.1 (OpenAI)" })
 
--- Pairup.nvim mappings (Claude Code assistant)
-vim.keymap.set("n", "<leader>ct", ":PairupToggle<cr>", { desc = "Toggle Claude Code assistant" })
-vim.keymap.set("n", "<leader>cc", ":PairupContext<cr>", { desc = "Send git diff context to Claude" })
-vim.keymap.set("n", "<leader>cs", ":PairupSay ", { desc = "Send message to Claude" })
-vim.keymap.set("n", "<leader>cd", ":PairupToggleDiff<cr>", { desc = "Toggle auto diff sending" })
-vim.keymap.set("n", "<leader>cg", ":PairupStatus<cr>", { desc = "Send git status to Claude" })
-vim.keymap.set("n", "<leader>cf", ":PairupFileInfo<cr>", { desc = "Send file info to Claude" })
-vim.keymap.set("n", "<leader>cu", ":PairupReadUnstaged<cr>", { desc = "Send unstaged files to Claude" })
-
--- Pairup overlay bindings (only active when Claude is running)
-vim.api.nvim_create_autocmd("BufEnter", {
-  group = vim.api.nvim_create_augroup("PairupOverlayBindings", { clear = true }),
-  callback = function()
-    local ok, state = pcall(require, "pairup.utils.state")
-    if ok and state.get "claude_buf" then -- Claude is active if buffer exists
-      local opts = { buffer = true, silent = true }
-      vim.keymap.set("n", "<leader>ca", ":PairAccept<cr>", opts)
-      vim.keymap.set("n", "<leader>cr", ":PairReject<cr>", opts)
-      vim.keymap.set("n", "<leader>ce", ":PairEdit<cr>", opts)
-      vim.keymap.set("n", "<leader>co", ":PairupOverlayScope<cr>", opts)
-      vim.keymap.set("n", "<leader>cn", ":PairNext<cr>", opts)
-      vim.keymap.set("n", "<leader>cN", ":PairPrev<cr>", opts)
-    end
-  end,
-})
-
 -- <leader>a i p   →  Perplexity (sonar model)
 vim.keymap.set("n", "<leader>aip", function()
   switch "pplx"

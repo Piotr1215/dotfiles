@@ -120,7 +120,7 @@ source ~/dev/dotfiles/scripts/__gh_cli.sh
 source ~/.zsh_aliases
 source ~/.zsh_functions
 source ~/.zsh_abbreviations
-source ~/.zsh_gpt
+source ~/.zsh_claude
 
 if [[ $(uname -s) == Linux ]]; then
   eval $(dircolors -p | sed -e 's/DIR 01;34/DIR 01;36/' | dircolors /dev/stdin)
