@@ -228,7 +228,11 @@ local set_up_telescope = function()
       path_display = { "truncate" },
     }
   end, { noremap = true, silent = true, desc = "Find files in ~/dev and ~/loft" })
-  set_keymap("n", "<leader>fg", [[<cmd>lua require('telescope.builtin').git_files()<CR>]])
+  set_keymap(
+    "n",
+    "<leader>fg",
+    [[<cmd>lua require('telescope.builtin').git_files({ cwd = vim.fn.environ().PWD or vim.fn.getcwd() })<CR>]]
+  )
   set_keymap("n", "<leader>gs", [[<cmd>lua require('telescope.builtin').git_status()<CR>]])
   set_keymap("n", "<leader>fo", [[<cmd>lua require('telescope.builtin').oldfiles()<CR>]])
   set_keymap("n", "<leader>fi", ":Telescope file_browser hidden=true<CR>")

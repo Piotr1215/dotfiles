@@ -45,7 +45,7 @@ return {
   }),
 
   s("hint", {
-    t { '{{< hint "important" >}}', '' },
+    t { '{{< hint "important" >}}', "" },
     i(1, "Important hint"),
     t { "", "{{< /hint >}}" },
     i(0),
@@ -212,7 +212,14 @@ return {
 
   -- Insert header with slides theme
   s("theme", {
-    t { "---", "theme: ~/slides-themes/theme.json", "author: Piotr Zaniewski", "date: MMMM dd, YYYY", "paging: Slide %d / %d", "---" },
+    t {
+      "---",
+      "theme: ~/slides-themes/theme.json",
+      "author: Piotr Zaniewski",
+      "date: MMMM dd, YYYY",
+      "paging: Slide %d / %d",
+      "---",
+    },
   }),
 
   -- Insert table with 2 rows and 3 columns. First row is heading.
@@ -313,6 +320,208 @@ return {
 
   s("imp", {
     t { "> [!IMPORTANT]", "> " },
+    i(0),
+  }),
+
+  -- Claude Code snippets (when CLAUDE_CODE_ENTRYPOINT=cli)
+
+  -- INLINE CONTEXT INJECTORS (no newline, mid-sentence use)
+
+  -- Current branch name (inline)
+  s("cl_branch", {
+    f(function()
+      local original_dir = vim.fn.environ().PWD or vim.fn.getcwd()
+      local branch =
+        vim.fn.system(string.format("cd %s && git branch --show-current", vim.fn.shellescape(original_dir)))
+      return vim.trim(branch)
+    end, {}),
+  }),
+
+  -- Git remote URL (inline)
+  s("cl_remote", {
+    f(function()
+      local original_dir = vim.fn.environ().PWD or vim.fn.getcwd()
+      local remote =
+        vim.fn.system(string.format("cd %s && git remote get-url origin", vim.fn.shellescape(original_dir)))
+      return vim.trim(remote)
+    end, {}),
+  }),
+
+  -- Last commit (inline)
+  s("cl_commit", {
+    f(function()
+      local original_dir = vim.fn.environ().PWD or vim.fn.getcwd()
+      local commit = vim.fn.system(
+        string.format("cd %s && git log -1 --pretty=format:'%%h - %%s (%%an, %%ar)'", vim.fn.shellescape(original_dir))
+      )
+      return vim.trim(commit)
+    end, {}),
+  }),
+
+  -- BLOCK CONTEXT INJECTORS (multi-line with formatting)
+
+  -- Modified files list
+  s("cl_modified", {
+    t { "Modified files:", "", "" },
+    f(function()
+      local original_dir = vim.fn.environ().PWD or vim.fn.getcwd()
+      local files = vim.fn.systemlist(string.format("cd %s && git diff --name-only", vim.fn.shellescape(original_dir)))
+      local lines = {}
+      for _, file in ipairs(files) do
+        if file ~= "" then
+          table.insert(lines, "- " .. file)
+        end
+      end
+      return lines
+    end, {}),
+    t { "", "" },
+  }),
+
+  -- Unstaged changes
+  s("cl_unstaged", {
+    t { "Unstaged changes:", "", "```diff" },
+    f(function()
+      local original_dir = vim.fn.environ().PWD or vim.fn.getcwd()
+      local diff = vim.fn.system(string.format("cd %s && git diff", vim.fn.shellescape(original_dir)))
+      return vim.split(diff, "\n")
+    end, {}),
+    t { "", "```", "", "" },
+  }),
+
+  -- Git diff insertion with formatting (CONTEXT INJECTION)
+  s("cl_gdiff", {
+    t { "Here are my recent changes:", "", "```diff" },
+    f(function()
+      local original_dir = vim.fn.environ().PWD or vim.fn.getcwd()
+      local diff = vim.fn.system(string.format("cd %s && git diff", vim.fn.shellescape(original_dir)))
+      if diff == "" then
+        return { "", "# No unstaged changes" }
+      end
+      return vim.split(diff, "\n")
+    end, {}),
+    t { "", "```", "", "" },
+    i(1, "Please review and suggest improvements."),
+    i(0),
+  }),
+
+  -- Git status with context
+  s("cl_gstat", {
+    t { "Current git status:", "", "```" },
+    f(function()
+      local original_dir = vim.fn.environ().PWD or vim.fn.getcwd()
+      local status = vim.fn.system(string.format("cd %s && git status --short", vim.fn.shellescape(original_dir)))
+      if status == "" then
+        return { "# Working tree clean" }
+      end
+      return vim.split(status, "\n")
+    end, {}),
+    t { "", "```", "", "" },
+    i(1, "Context or question about these changes"),
+    i(0),
+  }),
+
+  -- Quick context with file and diff (CONTEXT INJECTION)
+  s("cl_context", {
+    t { "**Recent changes:**", "```diff" },
+    f(function()
+      local original_dir = vim.fn.environ().PWD or vim.fn.getcwd()
+      -- Just show general diff, not file-specific when in temp buffer
+      local diff = vim.fn.system(string.format("cd %s && git diff", vim.fn.shellescape(original_dir)))
+      if diff == "" then
+        return { "", "# No unstaged changes" }
+      end
+      return vim.split(diff, "\n")
+    end, {}),
+    t { "", "```", "", "" },
+    i(1, "What I need help with"),
+    i(0),
+  }),
+
+  -- CLIPBOARD-AWARE CODE SNIPPETS (auto-detect yanked code + file path)
+
+  -- Code review with clipboard detection
+  s("cl_review", {
+    t { "Review this code for:", "- Security vulnerabilities", "- Performance issues", "- Best practices", "", "" },
+    f(function()
+      -- Get clipboard content
+      local clipboard = vim.fn.getreg "+"
+      -- Get metadata from global var (set by <leader>cy yank helper)
+      local file_path = vim.g.claude_yank_file or "unknown"
+      local line_start = vim.g.claude_yank_start or "?"
+      local line_end = vim.g.claude_yank_end or "?"
+
+      if clipboard and clipboard ~= "" then
+        local lines = { string.format("File: %s:%s-%s", file_path, line_start, line_end), "```" }
+        vim.list_extend(lines, vim.split(clipboard, "\n"))
+        table.insert(lines, "```")
+        return lines
+      end
+      return { "```", "[Paste code here or yank with <leader>cy]", "```" }
+    end, {}),
+    t { "", "" },
+    i(0),
+  }),
+
+  -- Refactor with clipboard detection
+  s("cl_refactor", {
+    t { "Refactor this code to improve readability and maintainability:", "", "" },
+    f(function()
+      local clipboard = vim.fn.getreg "+"
+      local file_path = vim.g.claude_yank_file or "unknown"
+      local line_start = vim.g.claude_yank_start or "?"
+      local line_end = vim.g.claude_yank_end or "?"
+
+      if clipboard and clipboard ~= "" then
+        local lines = { string.format("File: %s:%s-%s", file_path, line_start, line_end), "```" }
+        vim.list_extend(lines, vim.split(clipboard, "\n"))
+        table.insert(lines, "```")
+        return lines
+      end
+      return { "```", "[Paste code here or yank with <leader>cy]", "```" }
+    end, {}),
+    t { "", "" },
+    i(0),
+  }),
+
+  -- Explain code with clipboard detection
+  s("cl_explain", {
+    t { "Explain how this code works:", "", "" },
+    f(function()
+      local clipboard = vim.fn.getreg "+"
+      local file_path = vim.g.claude_yank_file or "unknown"
+      local line_start = vim.g.claude_yank_start or "?"
+      local line_end = vim.g.claude_yank_end or "?"
+
+      if clipboard and clipboard ~= "" then
+        local lines = { string.format("File: %s:%s-%s", file_path, line_start, line_end), "```" }
+        vim.list_extend(lines, vim.split(clipboard, "\n"))
+        table.insert(lines, "```")
+        return lines
+      end
+      return { "```", "[Paste code here or yank with <leader>cy]", "```" }
+    end, {}),
+    t { "", "" },
+    i(0),
+  }),
+
+  -- Write tests with clipboard detection
+  s("cl_test", {
+    t { "Write comprehensive tests for this code:", "", "" },
+    f(function()
+      local clipboard = vim.fn.getreg "+"
+      local file_path = vim.g.claude_yank_file or "unknown"
+      local line_start = vim.g.claude_yank_start or "?"
+      local line_end = vim.g.claude_yank_end or "?"
+
+      if clipboard and clipboard ~= "" then
+        local lines = { string.format("File: %s:%s-%s", file_path, line_start, line_end), "```" }
+        vim.list_extend(lines, vim.split(clipboard, "\n"))
+        table.insert(lines, "```")
+        return lines
+      end
+      return { "```", "[Paste code here or yank with <leader>cy]", "```" }
+    end, {}),
+    t { "", "" },
     i(0),
   }),
 }

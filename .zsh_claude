@@ -1,0 +1,192 @@
+#!/usr/bin/zsh
+
+prompt_instructions="CORE PRINCIPLES:
+• 80% READING/RESEARCH, 20% WRITING - understand deeply before coding
+• Read SOURCE CODE to understand WHY, not just HOW
+• Every line of code must FIGHT for its right to exist
+• Minimize code - less is better, none is best
+• NEVER add features not asked for - solve ONLY the stated problem
+• Research docs AND source code before writing anything
+• Test isolated commands before integrating
+• Code without tests is incomplete
+• No assumptions - find root causes, ask if unclear
+• Break tasks into subtasks, use todo lists
+• Only commit when explicitly asked
+
+Keep your responses concise and actionable. When providing commands or code:
+- Show one solution at a time
+- Use triple backticks with language scope
+- No explanations unless asked
+- For errors, provide the fix directly
+
+User request below:"
+
+# Function to execute command and open Claude Code with Ctrl+G
+function execute_and_claude() {
+    # Get the current command from the buffer
+    local cmd="$BUFFER"
+    local current_path=$(pwd)
+
+    # Clear the buffer
+    BUFFER=""
+
+    # Execute the command and capture its output (strip ANSI codes)
+    local output=$(eval "$cmd" 2>&1 | sed -r "s/\x1b\[[0-9;]*[mGKHl]//g")
+
+    # Create temporary file with command and output
+    local tmpfile=$(mktemp /tmp/claude_buffer.XXXXXX)
+
+    echo "$prompt_instructions" > $tmpfile
+    echo "" >> $tmpfile
+    echo "Command: $cmd" >> $tmpfile
+    echo "Output:" >> $tmpfile
+    if [ -z "$output" ]; then
+        echo "No output received from the command." >> $tmpfile
+    else
+        echo "$output" >> $tmpfile
+    fi
+
+    # Get current pane ID
+    local pane_id=$(tmux display-message -p '#{pane_id}')
+
+    # Clear the buffer
+    zle accept-line
+
+    # Use tmux to send the command directly to the pane
+    # This ensures proper TTY handling
+    tmux send-keys -t "$pane_id" "KUBECONFIG=/home/decoder/dev/homelab/kubeconfig /home/decoder/.npm-global/bin/claude" C-m
+
+    # Background task to send keys after claude starts
+    (
+        # Wait 2 seconds before first check (based on pairup.nvim:72)
+        sleep 2
+
+        # Wait for Claude CLI to be fully ready for input
+        # Look for the bottom status line that shows the model and prompt is ready
+        for i in {1..60}; do
+            pane_content=$(tmux capture-pane -t "$pane_id" -p)
+            # Check for "Sonnet" in status line - indicates full UI is rendered and ready
+            if echo "$pane_content" | grep -q "Sonnet"; then
+                # Found status line with model, wait 1 second to ensure fully ready
+                sleep 1
+                break
+            fi
+            sleep 0.1
+        done
+
+        # Send Ctrl+G to open Neovim buffer
+        tmux send-keys -t "$pane_id" C-g
+
+        # Wait for Neovim to actually open
+        for i in {1..20}; do
+            pane_content=$(tmux capture-pane -t "$pane_id" -p)
+            if echo "$pane_content" | grep -qE "(nvim|INSERT|NORMAL|/tmp/)"; then
+                break
+            fi
+            sleep 0.3
+        done
+
+        # Small wait for nvim to settle
+        sleep 0.3
+
+        # Go to command mode and read file
+        tmux send-keys -t "$pane_id" Escape
+        tmux send-keys -t "$pane_id" ":r $tmpfile" C-m
+
+        # Delete the empty first line created by :r command
+        tmux send-keys -t "$pane_id" "gg"
+        tmux send-keys -t "$pane_id" "dd"
+
+        # Search for "User request below:" and position cursor after it
+        tmux send-keys -t "$pane_id" "/User request below:" C-m
+        tmux send-keys -t "$pane_id" ":noh" C-m
+
+        # Move to end of line and open 2 lines below
+        tmux send-keys -t "$pane_id" "A"
+        tmux send-keys -t "$pane_id" C-m
+        tmux send-keys -t "$pane_id" C-m
+
+        # Cleanup temp file
+        command rm -f $tmpfile
+    ) &>/dev/null &!
+}
+
+# Function to open Claude Code with Ctrl+G and template
+function claude_prompt() {
+    local current_path=$(pwd)
+
+    # Create temporary file with just the instructions
+    local tmpfile=$(mktemp /tmp/claude_prompt.XXXXXX)
+    echo "$prompt_instructions" > $tmpfile
+    echo "" >> $tmpfile
+
+    # Get current pane ID
+    local pane_id=$(tmux display-message -p '#{pane_id}')
+
+    # Use tmux to send the command directly to the pane
+    tmux send-keys -t "$pane_id" "KUBECONFIG=/home/decoder/dev/homelab/kubeconfig /home/decoder/.npm-global/bin/claude" C-m
+
+    # Background task to send keys after claude starts
+    (
+        # Wait 2 seconds before first check (based on pairup.nvim:72)
+        sleep 2
+
+        # Wait for Claude CLI to be fully ready for input
+        # Look for the bottom status line that shows the model and prompt is ready
+        for i in {1..60}; do
+            pane_content=$(tmux capture-pane -t "$pane_id" -p)
+            # Check for "Sonnet" in status line - indicates full UI is rendered and ready
+            if echo "$pane_content" | grep -q "Sonnet"; then
+                # Found status line with model, wait 1 second to ensure fully ready
+                sleep 1
+                break
+            fi
+            sleep 0.1
+        done
+
+        # Send Ctrl+G to open Neovim buffer
+        tmux send-keys -t "$pane_id" C-g
+
+        # Wait for Neovim to actually open
+        for i in {1..20}; do
+            pane_content=$(tmux capture-pane -t "$pane_id" -p)
+            if echo "$pane_content" | grep -qE "(nvim|INSERT|NORMAL|/tmp/)"; then
+                break
+            fi
+            sleep 0.3
+        done
+
+        # Small wait for nvim to settle
+        sleep 0.3
+
+        # Go to command mode and read file
+        tmux send-keys -t "$pane_id" Escape
+        tmux send-keys -t "$pane_id" ":r $tmpfile" C-m
+
+        # Delete the empty first line created by :r command
+        tmux send-keys -t "$pane_id" "gg"
+        tmux send-keys -t "$pane_id" "dd"
+
+        # Search for "User request below:" and position cursor after it
+        tmux send-keys -t "$pane_id" "/User request below:" C-m
+        tmux send-keys -t "$pane_id" ":noh" C-m
+
+        # Move to end of line and open 2 lines below
+        tmux send-keys -t "$pane_id" "A"
+        tmux send-keys -t "$pane_id" C-m
+        tmux send-keys -t "$pane_id" C-m
+
+        # Cleanup temp file
+        command rm -f $tmpfile
+    ) &>/dev/null &!
+}
+
+# Create widgets
+zle -N execute_and_claude
+zle -N claude_prompt
+
+# Bind to Ctrl+Alt+G (replaces gpt binding)
+bindkey '^[^G' execute_and_claude
+
+# Create 'gpt' alias for backward compatibility - now opens Claude Code
+alias gpt='claude_prompt'

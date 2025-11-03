@@ -20,7 +20,16 @@ vim.g.copilot_lsp = true
 
 api.nvim_create_autocmd("VimEnter", {
   group = copilotGroup,
-  command = "Copilot disable",
+  callback = function()
+    local claude_entrypoint = vim.fn.environ().CLAUDE_CODE_ENTRYPOINT
+    if claude_entrypoint == "cli" then
+      vim.cmd "Copilot enable"
+      -- Load Claude Code helpers
+      require("claude_code").setup()
+    else
+      vim.cmd "Copilot disable"
+    end
+  end,
 })
 
 vim.api.nvim_create_autocmd({ "BufWritePost" }, {
@@ -101,6 +110,10 @@ local function generate_plantuml()
 end
 
 -- User Commands
+
+vim.api.nvim_create_user_command("PrintEnv", function()
+  vim.print(vim.fn.environ())
+end, {})
 
 vim.api.nvim_create_user_command("TmuxLayout", function()
   local layout = vim.fn.system "tmux list-windows | sed -n 's/.*layout \\(.*\\)] @.*/\\1/p'"
