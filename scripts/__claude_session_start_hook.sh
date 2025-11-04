@@ -16,6 +16,15 @@ CORE PRINCIPLES:
 • Only commit when explicitly asked
 EOF
 
+if [ -n "$HOMELAB" ]; then
+  cat <<'EOF'
+  HOMELAB MODE!
+
+  - Ensure you load the manage-homelab skill
+  - Load obsidian notes about homelab
+EOF
+fi
+
 # Additional instructions for Neovim terminal mode or when PAIR_PROGRAMMING is set
 if [ -n "$PAIR_PROGRAMMING" ]; then
     cat <<'EOF'
