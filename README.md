@@ -89,6 +89,77 @@ stow --target=/home/decoder/.config/tmuxinator tmuxinator
 
 Adding new directory or file to the dotfiles repo can be done with the [__dotfiles_adder.sh](./scripts/__dotfiles_adder.sh) script
 
+## ✨ Key Features
+
+### 🔍 Dotfiles Navigator (dfind)
+
+Ever forget what scripts, aliases, or functions you have available? With **164 scripts, 80+ aliases, and 100+ abbreviations**, discovery is a real challenge!
+
+**dfind** is a unified command palette for your entire dotfiles ecosystem - think VSCode's command palette, but for your terminal!
+
+#### What it does:
+- 🔍 **Unified search** across scripts, aliases, functions, and abbreviations
+- 👁️ **Live preview** with syntax highlighting (using bat)
+- 📊 **Usage statistics** from your shell history
+- ⚡ **Instant actions**: Execute, edit, or copy to clipboard
+- 🎨 **Beautiful fzf interface** with Dracula theme
+- 🚀 **Fast & efficient**: Indexes your dotfiles in seconds
+
+#### Usage:
+```bash
+# Command line
+dfind              # Opens the navigator
+dfind kubernetes   # Opens with "kubernetes" pre-filled in search
+
+# Keybinding
+Alt+D              # Press Alt+D from anywhere in your shell
+```
+
+#### In the navigator:
+- **Enter** - Execute script or copy command to clipboard
+- **Ctrl+E** - Edit the source file in $EDITOR
+- **Ctrl+Y** - Copy to clipboard without executing
+- **ESC** - Cancel
+
+#### Example searches:
+- `script` - Find all scripts
+- `git` - Find all git-related aliases and functions
+- `kubernetes` - Find K8s debugging tools
+- `claude` - Find Claude/AI integration scripts
+
+#### Preview window shows:
+- Full script content with syntax highlighting
+- Alias definitions and source location
+- Function implementations
+- Usage count from your history
+
+> 💡 **Pro tip**: Use dfind when you remember "I have a script for that..." but can't recall the name!
+
+### 🤖 AI Integration
+
+Deep integration with Claude CLI and GPT for AI-augmented workflows:
+- MCP (Model Context Protocol) agent management
+- Custom prompt instructions in shell functions
+- Automatic session monitoring
+- Orchestrator for running Fabric AI patterns
+- Broadcast system for multi-agent coordination
+
+### 📋 Task Management
+
+Sophisticated Taskwarrior integration:
+- 10+ custom reports (workdone, current, backlog, PRs)
+- Custom fields for Linear issues, cycles, releases
+- Weekly automated summaries
+- Issue-to-branch creation automation
+- GitHub issue synchronization
+
+### 🖥️ Workspace Management
+
+32 predefined tmuxinator sessions for different contexts:
+- AI development, Claude hooks, Homelab, K8s clusters
+- Infrastructure, Virtualization, Relax mode
+- Each with custom layouts and auto-start commands
+
 ## Auto-config commit
 
 Once the dotfiles are symlinked, it is easy to forget to commit them do the repo

@@ -66,6 +66,7 @@ alias vim=nvim
 alias rvim='nvim --listen 127.0.0.1:6666'
 alias ugu='ug -Q -. --view=nvim'
 alias dat='/home/decoder/dev/dotfiles/scripts/__dotfiles_adder.sh'
+alias dfind='/home/decoder/dev/dotfiles/scripts/__dfind.sh'
 alias prumpt='/home/decoder/dev/dotfiles/scripts/__generate_prompt_from_task.py'
 alias cal='ncal -b'
 

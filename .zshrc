@@ -372,6 +372,14 @@ function g_checkout_branch () {
 zle -N g_checkout_branch
 bindkey '^x^g' g_checkout_branch
 
+# Dotfiles navigator - unified search across scripts, aliases, functions
+function dfind_widget() {
+  __dfind.sh
+  zle reset-prompt
+}
+zle -N dfind_widget
+bindkey '^[d' dfind_widget                # Alt+d: Dotfiles navigator
+
 # Function to edit systemd user services
 function edit_systemd_service() {
     /home/decoder/dev/dotfiles/scripts/__edit_systemd_service.sh
