@@ -65,16 +65,16 @@ report.currentall.sort=manual_priority-,project+
 report.currentall.filter=status:pending
 
 report.current.description=List of current tasks in the work context
-report.current.columns=id,entry.age,manual_priority,priority,project,tags,description.desc,entry,due.relative,linear_issue_id,cycle,release,follow,depends,urgency,session,repo
-report.current.labels=ID,Age,MP,P,Proj,Tag,Desc,Created,Due,Lin,Cyc,Rel,Follow,Depends,Urg,Session,Repo
-report.current.sort=priority-,due+/,manual_priority-,project+
-report.current.filter=status:pending -BLOCKED -pr -triage -backlog -private project.not:home*
+report.current.columns=id,entry.age,priority,project,tags,description.desc,due.relative,linear_issue_id,cycle,release,follow,depends,urgency,session,repo
+report.current.labels=ID,Age,P,Proj,Tag,Desc,Due,Lin,Cyc,Rel,Follow,Depends,Urg,Session,Repo
+report.current.sort=cycle+,priority-,project+
+report.current.filter=status:pending -BLOCKED -pr -triage -backlog -pending -private project.not:home*
 
 report.backlog.description=List of current backlog tasks in the work context
-report.backlog.columns=id,entry.age,manual_priority,priority,project,description.desc,due.relative,release,follow,depends,linear_issue_id,scheduled.relative,due.relative
-report.backlog.labels=ID,Age,MP,P,Proj,Desc,Due,Rel,Follow,Depends,Linear,Sched,Due
-report.backlog.sort=due+/,manual_priority-,priority-,project+
-report.backlog.filter=status:pending -BLOCKED -pr -triage (project.not:home* and +backlog)
+report.backlog.columns=id,entry.age,priority,project,description.desc,due.relative,release,follow,depends,linear_issue_id,scheduled.relative,due.relative
+report.backlog.labels=ID,Age,P,Proj,Desc,Due,Rel,Follow,Depends,Linear,Sched,Due
+report.backlog.sort=due+/,priority-,project+
+report.backlog.filter=status:pending -BLOCKED -pr -triage project.not:home* ( +backlog or +pending )
 
 report.current-home.description=List of current tasks in the home context
 report.current-home.columns=id,entry.age,priority,project,tags,description.desc,entry,due.relative,follow,depends,urgency
@@ -186,8 +186,10 @@ uda.taskwarrior-tui.shortcuts.1=~/.config/taskwarrior-tui/shortcut-scripts/tasko
 uda.taskwarrior-tui.shortcuts.2=~/dev/dotfiles/scripts/__cycle_tmuxinator_projects.sh
 uda.taskwarrior-tui.shortcuts.3=~/dev/dotfiles/scripts/__github_issue_sync.sh
 uda.taskwarrior-tui.shortcuts.4=/home/decoder/dev/dotfiles/scripts/__create_linear_issue_docs.sh
-uda.taskwarrior-tui.shortcuts.5=~/.config/taskwarrior-tui/shortcut-scripts/__decrease_task_priority.sh
-uda.taskwarrior-tui.shortcuts.6=~/.config/taskwarrior-tui/shortcut-scripts/__increase_task_priority.sh
+# Shortcut 5: Toggle +pending tag (manual backlog)
+uda.taskwarrior-tui.shortcuts.5=~/.config/taskwarrior-tui/shortcut-scripts/__toggle_pending_label.sh
+# Shortcut 6 is available (previously used for manual_priority up)
+#uda.taskwarrior-tui.shortcuts.6=
 uda.taskwarrior-tui.shortcuts.7=~/.config/taskwarrior-tui/shortcut-scripts/__annotate_with_note.sh
 uda.taskwarrior-tui.shortcuts.8=/home/decoder/dev/dotfiles/scripts/__create_linear_issue.sh
 uda.taskwarrior-tui.shortcuts.9=~/.config/taskwarrior-tui/shortcut-scripts/__toggle_backlog_label.sh 

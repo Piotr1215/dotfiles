@@ -29,8 +29,6 @@ case "$1" in
             echo "pending"
         elif [[ "$2" == *".deletable" ]]; then
             echo "true"
-        elif [[ "$2" == *".manual_priority" ]]; then
-            echo ""
         fi
         ;;
     "export")
@@ -329,9 +327,7 @@ case "$1" in
         esac
         ;;
     "_get")
-        if [[ "$2" == *".manual_priority" ]]; then
-            echo ""
-        fi
+        echo ""
         ;;
     *)
         echo "MOCK: task $*" >> "${TEST_DIR}/task_commands.log"
@@ -392,9 +388,7 @@ case "$1" in
         esac
         ;;
     "_get")
-        if [[ "$2" == *".manual_priority" ]]; then
-            echo ""
-        fi
+        echo ""
         ;;
     *)
         echo "MOCK: task $*" >> "${TEST_DIR}/task_commands.log"
@@ -402,12 +396,13 @@ case "$1" in
 esac
 EOF
     chmod +x "${TEST_DIR}/task"
-    
+
     run update_task_status "test-uuid" "Investigating"
     [ "$status" -eq 0 ]
-    
-    # Check that manual_priority was set
-    grep -q "manual_priority:1" "${TEST_DIR}/task_commands.log"
+
+    # Check that backlog and hold tags were removed
+    grep -q -- "-backlog" "${TEST_DIR}/task_commands.log"
+    grep -q -- "-hold" "${TEST_DIR}/task_commands.log"
 }
 
 @test "update_task_status handles Idea status like Backlog" {
@@ -428,14 +423,13 @@ case "$1" in
 esac
 EOF
     chmod +x "${TEST_DIR}/task"
-    
+
     run update_task_status "test-uuid" "Idea"
     [ "$status" -eq 0 ]
-    
-    # Check that +backlog tag was added, -next tag was removed and priority reset
+
+    # Check that +backlog tag was added and -next tag was removed
     grep -q "+backlog" "${TEST_DIR}/task_commands.log"
     grep -q -- "-next" "${TEST_DIR}/task_commands.log"
-    grep -q "manual_priority:" "${TEST_DIR}/task_commands.log"
 }
 
 @test "update_task_status adds backlog tag for Backlog status" {
@@ -456,16 +450,14 @@ case "$1" in
 esac
 EOF
     chmod +x "${TEST_DIR}/task"
-    
+
     run update_task_status "test-uuid" "Backlog"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Issue status is Backlog/Idea, adding +backlog tag" ]]
-    
-    # Check that +backlog tag was added
+
+    # Check that +backlog tag was added and -next tag was removed
     grep -q "+backlog" "${TEST_DIR}/task_commands.log"
-    # Check that -next tag removal and priority reset also happened
     grep -q -- "-next" "${TEST_DIR}/task_commands.log"
-    grep -q "manual_priority:" "${TEST_DIR}/task_commands.log"
 }
 
 @test "update_task_status removes backlog tag when status changes to In Review" {
@@ -510,9 +502,7 @@ case "$1" in
         esac
         ;;
     "_get")
-        if [[ "$2" == *".manual_priority" ]]; then
-            echo ""
-        fi
+        echo ""
         ;;
     *)
         echo "MOCK: task $*" >> "${TEST_DIR}/task_commands.log"
@@ -564,10 +554,10 @@ case "$1" in
         echo '[{"uuid":"test-uuid-123","description":"Test Issue with Due Date","status":"pending","tags":["linear"]}]'
         ;;
     "_get")
-        if [[ "$2" == *".manual_priority" ]]; then
-            echo ""
-        elif [[ "$2" == *".status" ]]; then
+        if [[ "$2" == *".status" ]]; then
             echo "pending"
+        else
+            echo ""
         fi
         ;;
     "test-uuid-123")
@@ -674,12 +664,12 @@ case "$1" in
         esac
         ;;
     "_get")
-        if [[ "$2" == *".manual_priority" ]]; then
-            echo ""
-        elif [[ "$2" == *".status" ]]; then
+        if [[ "$2" == *".status" ]]; then
             echo "pending"
         elif [[ "$2" == "test-uuid-456.due" ]]; then
             echo "20250710T220000Z"
+        else
+            echo ""
         fi
         ;;
     "rc.confirmation=no")
@@ -808,10 +798,10 @@ case "$1" in
     "_get")
         if [[ "$2" == *".priority" ]]; then
             echo ""
-        elif [[ "$2" == *".manual_priority" ]]; then
-            echo ""
         elif [[ "$2" == *".status" ]]; then
             echo "pending"
+        else
+            echo ""
         fi
         ;;
     "rc.confirmation=no")
@@ -1247,9 +1237,10 @@ EOF
     # Check that review tag was removed
     [ -f "${TEST_DIR}/review_removed.log" ]
     grep -q "review tag removed" "${TEST_DIR}/review_removed.log"
-    
-    # Check that the appropriate commands were logged (manual priority should be set)
-    grep -q "manual_priority:1" "${TEST_DIR}/task_commands.log"
+
+    # Check that backlog and hold tags were removed
+    grep -q -- "-backlog" "${TEST_DIR}/task_commands.log"
+    grep -q -- "-hold" "${TEST_DIR}/task_commands.log"
 }
 
 @test "update_task_status removes review tag when Linear status changes from In Review to Todo" {
@@ -1278,8 +1269,8 @@ case "$1" in
         if [[ "$*" =~ "-review" ]]; then
             echo "MOCK: review tag removed" >> "${TEST_DIR}/review_removed.log"
         fi
-        if [[ "$*" =~ "manual_priority:1" ]]; then
-            echo "MOCK: priority set for Todo" >> "${TEST_DIR}/todo_priority.log"
+        if [[ "$*" =~ "-backlog" || "$*" =~ "-hold" ]]; then
+            echo "MOCK: backlog/hold tags removed for Todo" >> "${TEST_DIR}/todo_tags.log"
         fi
         ;;
     *)
@@ -1295,10 +1286,10 @@ EOF
     # Check that review tag was removed
     [ -f "${TEST_DIR}/review_removed.log" ]
     grep -q "review tag removed" "${TEST_DIR}/review_removed.log"
-    
-    # Check that status update logic was re-run (manual priority should be set for Todo)
-    [ -f "${TEST_DIR}/todo_priority.log" ]
-    grep -q "priority set for Todo" "${TEST_DIR}/todo_priority.log"
+
+    # Check that status update logic was re-run (backlog/hold tags should be removed for Todo)
+    [ -f "${TEST_DIR}/todo_tags.log" ]
+    grep -q "backlog/hold tags removed for Todo" "${TEST_DIR}/todo_tags.log"
 }
 
 @test "update_task_status keeps review tag when Linear status remains In Review" {

@@ -344,19 +344,11 @@ update_task_status() {
     
     # Normal status sync logic from Linear
     if [[ "$issue_status" =~ [Bb]acklog || "$issue_status" == "Idea" ]]; then
-        log "Issue status is Backlog/Idea, adding +backlog tag, removing +next and +hold tags and resetting priority"
-        task rc.confirmation=no modify "$task_uuid" +backlog -next -hold manual_priority:
+        log "Issue status is Backlog/Idea, adding +backlog tag, removing +next and +hold tags"
+        task rc.confirmation=no modify "$task_uuid" +backlog -next -hold
     elif [[ "$issue_status" == "Todo" || "$issue_status" == "In Progress" || "$issue_status" == "Investigating" ]]; then
-        log "Issue status is Todo/In Progress/Investigating, removing +backlog and +hold tags and checking priority"
-        # Check if manual_priority is already set
-        local current_priority
-        current_priority=$(task _get "$task_uuid".manual_priority 2>/dev/null || echo "")
-        if [[ -z "$current_priority" ]]; then
-            task rc.confirmation=no modify "$task_uuid" -backlog -hold manual_priority:1
-        else
-            # Still need to remove backlog and hold tags even if priority is already set
-            task rc.confirmation=no modify "$task_uuid" -backlog -hold
-        fi
+        log "Issue status is Todo/In Progress/Investigating, removing +backlog and +hold tags"
+        task rc.confirmation=no modify "$task_uuid" -backlog -hold
         # Remove fresh tag only when actual work starts (In Progress/Investigating), not Todo
         if [[ "$has_fresh" == "true" && "$issue_status" != "Todo" ]]; then
             log "Work has started (status=$issue_status), removing +fresh tag"
