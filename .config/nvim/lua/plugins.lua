@@ -15,7 +15,7 @@ if not (vim.uv or vim.uv).fs_stat(lazypath) then
 end
 vim.opt.rtp:prepend(lazypath)
 
-return require("lazy").setup {
+return require("lazy").setup({
   -- AI {{{
   "github/copilot.vim",
   {
@@ -343,15 +343,33 @@ return require("lazy").setup {
   "Piotr1215/typeit.nvim",
   {
     "Piotr1215/docusaurus.nvim",
+    dev = true,
     dependencies = {
       "nvim-telescope/telescope.nvim",
     },
+    config = function()
+      require("docusaurus").setup {
+        -- Optional: customize these if needed
+        -- components_dir = nil, -- auto-detects {git-root}/src/components
+        -- partials_dirs = { "_partials", "_fragments", "_code" },
+        -- allowed_site_paths = { "^docs/_partials/", "^docs/_fragments/", "^docs/_code/" },
+      }
+
+      -- Content insertion keymaps
+      vim.keymap.set("n", "<leader>ic", "<cmd>DocusaurusInsertComponent<cr>", { desc = "Insert Component" })
+      vim.keymap.set("n", "<leader>ip", "<cmd>DocusaurusInsertPartial<cr>", { desc = "Insert Partial" })
+      vim.keymap.set("n", "<leader>ib", "<cmd>DocusaurusInsertCodeBlock<cr>", { desc = "Insert CodeBlock" })
+      vim.keymap.set("n", "<leader>iu", "<cmd>DocusaurusInsertURL<cr>", { desc = "Insert URL" })
+
+      -- API browser keymap
+      vim.keymap.set("n", "<leader>dpa", "<cmd>DocusaurusBrowseAPI<cr>", { desc = "Browse API" })
+    end,
   },
   -- }}}
   -- beam.nvim - Search and operate on distant text
   {
-    dir = "/home/decoder/dev/beam.nvim", -- Use explicit local path
-    name = "beam.nvim",
+    "Piotr1215/beam.nvim",
+    dev = true,
     config = function()
       require("beam").setup {
         prefix = ",",
@@ -399,8 +417,8 @@ return require("lazy").setup {
   },
   -- presenterm.nvim - Neovim plugin for presenterm presentations
   {
-    dir = "/home/decoder/dev/presenterm.nvim",
-    name = "presenterm.nvim",
+    "Piotr1215/presenterm.nvim",
+    dev = true,
     dependencies = {
       "nvim-telescope/telescope.nvim",
     },
@@ -494,4 +512,10 @@ return require("lazy").setup {
     "obsidian-nvim/obsidian.nvim",
     version = "*",
   },
-}
+}, {
+  dev = {
+    path = "/home/decoder/dev",
+    patterns = {}, -- Empty means all plugins with dev = true use the dev path
+    fallback = false,
+  },
+})
