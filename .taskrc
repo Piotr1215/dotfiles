@@ -93,7 +93,7 @@ report.current-prs-age.description=List of current prs to review sorted by age
 report.current-prs-age.columns=id,entry.age,description,repo,tags
 report.current-prs-age.labels=ID,Age,Description,Repo,Tags
 report.current-prs-age.sort=entry+
-report.current-prs-age.filter=status:pending project:pr-reviews -hide
+report.current-prs-age.filter=status:pending project:pr-reviews and -hide
 
 report.current-triage.description=List of triage issues
 report.current-triage.columns=id,entry.age,priority,project,tags,description.desc,repo,urgency
