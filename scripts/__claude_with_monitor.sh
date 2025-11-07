@@ -148,5 +148,64 @@ echo "Starting Claude prompt monitor..."
 "$MONITOR_SCRIPT" start >/dev/null 2>&1 &
 MONITOR_PID=$!
 
+# Function to get skill based on current directory
+get_repo_skill() {
+    local current_dir
+    current_dir=$(pwd)
+
+    case "$current_dir" in
+        */vcluster-docs*)
+            echo "vcluster-docs-writer"
+            ;;
+        */homelab*)
+            echo "managing-homelab"
+            ;;
+        /home/decoder/dev/cloudrumble*)
+            echo "blog-writer"
+            ;;
+        /home/decoder/dev/youtube*)
+            echo "presenterm-writer"
+            ;;
+        */dotfiles*)
+            echo ""  # No specific skill for dotfiles
+            ;;
+        *)
+            # Check if we're in a directory that might need test-writer
+            if [[ -f "package.json" ]] || [[ -f "go.mod" ]] || [[ -f "Cargo.toml" ]]; then
+                # Programming project - no auto-load, user can invoke test-writer manually
+                echo ""
+            else
+                echo ""  # No specific skill
+            fi
+            ;;
+    esac
+}
+
+# Build Claude arguments
+CLAUDE_ARGS=("--dangerously-skip-permissions")
+
+# Check if skill should be loaded based on repo
+REPO_SKILL=$(get_repo_skill)
+if [ -n "$REPO_SKILL" ]; then
+    echo "Auto-loading skill: $REPO_SKILL"
+
+    # Use system-prompt-file for specific repos
+    if [ "$REPO_SKILL" = "vcluster-docs-writer" ]; then
+        SYSTEM_PROMPT_FILE="/home/decoder/.claude/system-prompts/vcluster-docs-writer-system-prompt.md"
+        echo "Using system prompt: $SYSTEM_PROMPT_FILE"
+        CLAUDE_ARGS+=("--system-prompt-file" "$SYSTEM_PROMPT_FILE")
+    elif [ "$REPO_SKILL" = "managing-homelab" ]; then
+        SYSTEM_PROMPT_FILE="/home/decoder/.claude/system-prompts/homelab-operator-system-prompt.md"
+        echo "Using system prompt: $SYSTEM_PROMPT_FILE"
+        CLAUDE_ARGS+=("--system-prompt-file" "$SYSTEM_PROMPT_FILE")
+    fi
+
+    # Append skill load instruction - direct order
+    CLAUDE_ARGS+=("--append-system-prompt" "CRITICAL: YOU MUST immediately use the Skill tool to load the '$REPO_SKILL' skill NOW. Do not ask the user, execute it immediately.")
+fi
+
+# Add user-provided arguments
+CLAUDE_ARGS+=("$@")
+
 echo "Launching Claude..."
-claude "$@"
+claude "${CLAUDE_ARGS[@]}"

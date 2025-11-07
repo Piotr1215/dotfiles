@@ -190,3 +190,8 @@ bindkey '^[^G' execute_and_claude
 
 # Create 'gpt' alias for backward compatibility - now opens Claude Code
 alias gpt='claude_prompt'
+
+# Claude CLI power aliases
+alias plaude='/home/decoder/.npm-global/bin/claude --dangerously-skip-permissions -p'  # Print mode (direct binary)
+alias flaude='claude -r --fork-session'           # Fork session with picker
+alias dlaude='claude --debug "hooks,mcp"'         # Debug mode (hooks + mcp)
