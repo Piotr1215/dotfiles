@@ -1,0 +1,68 @@
+#compdef claude-wt
+
+_claude-wt() {
+    local -a commands=(
+        'new:Create new worktree in a tmux session'
+        'clean:Delete worktrees and branches'
+        'list:List all worktrees'
+        'switch:Switch between worktrees using fzf'
+        'status:Show current worktree status'
+        'init:Initialize repository'
+        'linear-issue:Handle Linear issue worktrees'
+        'from-pr:Create worktree from GitHub PR (interactive)'
+        'from-pr-noninteractive:Create worktree from GitHub PR (non-interactive)'
+    )
+
+    _arguments -C \
+        '(- *)'{-h,--help}'[Display help message]' \
+        '(- *)'{-v,--version}'[Display application version]' \
+        '1:command:->command' \
+        '*::options:->options'
+
+    case "$state" in
+        command)
+            _describe 'command' commands
+            ;;
+        options)
+            case "${words[1]}" in
+                new)
+                    _arguments \
+                        '--query[Initial query]:query:' \
+                        '--branch[Source branch]:branch:__git_branch_names' \
+                        '--name[Branch name suffix]:name:' \
+                        '--pull[Pull latest changes]' \
+                        '--print-path[Print path to stdout]'
+                    ;;
+                clean)
+                    _arguments \
+                        '--all[Clean all sessions]' \
+                        '--scan-dir[Directory to scan]:directory:_directories' \
+                        ':branch-name:'
+                    ;;
+                list|switch)
+                    _arguments '--scan-dir[Directory to scan]:directory:_directories'
+                    ;;
+                linear-issue)
+                    _arguments \
+                        '--repo-path[Repository path]:path:_directories' \
+                        '--interactive[Enable interactive prompts]' \
+                        '--no-interactive[Disable interactive prompts]' \
+                        '--session-name[Tmux session]:session:' \
+                        ':issue-id:'
+                    ;;
+                from-pr)
+                    _arguments ':pr-number:' ':query:'
+                    ;;
+                from-pr-noninteractive)
+                    _arguments \
+                        '--repo-path[Repository path]:path:_directories' \
+                        '--session-name[Tmux session]:session:' \
+                        ':pr-number:'
+                    ;;
+            esac
+            ;;
+    esac
+}
+
+# Register with compdef (zsh will call this automatically during completion)
+compdef _claude-wt claude-wt
