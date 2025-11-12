@@ -153,6 +153,7 @@ export PATH=$HOME/go/bin:$PATH
 export PATH=$HOME/go:$PATH
 export PATH=/usr/local/go/bin:$PATH
 export PATH=$PATH:$HOME/.istioctl/bin
+export PATH=$HOME/.claude/scripts:$PATH
 export PATH=$PATH:$HOME/dev/dotfiles/scripts
 export PATH=$PATH:$HOME/.luarocks/bin
 export PATH=$PATH:$HOME/.local/bin

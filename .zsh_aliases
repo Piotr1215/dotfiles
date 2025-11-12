@@ -129,11 +129,19 @@ alias play_vid='nohup ~/dev/dotfiles/scripts/__launch_playlist.sh vids_playlist 
 alias vl='nvim ~/haruna_playlist.m3u'
 
 # PROJECT: ai
-alias claude='KUBECONFIG=/home/decoder/dev/homelab/kubeconfig /home/decoder/dev/dotfiles/scripts/__claude_with_monitor.sh'
-alias claude_clean='/home/decoder/dev/dotfiles/scripts/__claude_with_monitor.sh'
-alias claude_pair='PAIR_PROGRAMMING=true KUBECONFIG=/home/decoder/dev/homelab/kubeconfig /home/decoder/dev/dotfiles/scripts/__claude_with_monitor.sh'
-alias claude-kill='/home/decoder/dev/dotfiles/scripts/__kill_stuck_claude.sh'
-alias claude-check='/home/decoder/dev/dotfiles/scripts/__kill_stuck_claude.sh --dry-run'
+alias claude='KUBECONFIG=/home/decoder/dev/homelab/kubeconfig __claude_with_monitor.sh'
+alias claude_clean='__claude_with_monitor.sh'
+alias claude_pair='PAIR_PROGRAMMING=true KUBECONFIG=/home/decoder/dev/homelab/kubeconfig __claude_with_monitor.sh'
+alias claude-kill='__kill_stuck_claude.sh'
+alias claude-check='__kill_stuck_claude.sh --dry-run'
 
 # App Shortcuts Help
 alias apphelp='/home/decoder/dev/dotfiles/scripts/__app_shortcuts_help.sh'
+
+# Emoji Picker
+alias emo='/home/decoder/dev/dotfiles/scripts/__emoji_picker.sh'
+
+# Claude Performance Ledger
+alias strike='__claude_score.sh strike'
+alias praise='__claude_score.sh praise'
+alias scoreboard='__claude_score.sh report'
