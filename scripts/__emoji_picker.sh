@@ -59,11 +59,11 @@ main() {
     local emoji
     emoji=$(echo "$selected" | awk '{print $1}')
 
-    # Copy to clipboard
+    # Copy to clipboard and paste
     echo -n "$emoji" | xclip -selection clipboard
 
-    # Also output to stdout for potential piping
-    echo -n "$emoji"
+    # Simulate paste action (Shift+Insert)
+    xdotool key --clearmodifiers shift+Insert
 }
 
 main "$@"
