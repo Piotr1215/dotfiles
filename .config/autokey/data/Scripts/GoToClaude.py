@@ -1,2 +1,2 @@
 import subprocess
-subprocess.run(["__claude_goto.sh"])
+subprocess.run(["/home/decoder/.claude/scripts/__claude_goto.sh"])
