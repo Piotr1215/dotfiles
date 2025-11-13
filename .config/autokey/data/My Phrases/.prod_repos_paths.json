@@ -1,17 +1,17 @@
 {
     "type": "phrase",
-    "description": "InsertPR",
+    "description": "prod_repos_paths",
     "modes": [
         1
     ],
-    "usageCount": 1,
+    "usageCount": 3,
     "prompt": false,
     "omitTrigger": false,
     "matchCase": false,
     "showInTrayMenu": false,
     "abbreviation": {
         "abbreviations": [
-            "!!pull"
+            "!!prodpath"
         ],
         "backspace": true,
         "ignoreCase": false,

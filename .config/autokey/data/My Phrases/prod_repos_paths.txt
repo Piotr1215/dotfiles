@@ -1,0 +1,3 @@
+vcluster: /home/decoder/loft/vcluster
+vcluster-pro: /home/decoder/loft/vcluster-pro
+platform: /home/decoder/loft/loft-enterprise

@@ -1,6 +1,6 @@
 {
     "type": "phrase",
-    "description": "InsertPR",
+    "description": "prod_repos",
     "modes": [
         1
     ],
@@ -11,7 +11,7 @@
     "showInTrayMenu": false,
     "abbreviation": {
         "abbreviations": [
-            "!!pull"
+            "!!prodrep"
         ],
         "backspace": true,
         "ignoreCase": false,
@@ -27,5 +27,5 @@
         "regex": null,
         "isRecursive": false
     },
-    "sendMode": "<shift>+<insert>"
+    "sendMode": "kb"
 }
