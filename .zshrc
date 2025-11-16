@@ -4,6 +4,7 @@ zmodload zsh/mapfile # Bring mapfile functionality similar to bash
 # Path to your oh-my-zsh installation.
 export ZSH="${HOME}/.oh-my-zsh"
 export XDG_CONFIG_HOME="$HOME/.config"
+export CLAUDE_KEEP_WORKTREE=1  # Prevent auto-cleanup of git worktrees
 DISABLE_AUTO_UPDATE=true
 DISABLE_MAGIC_FUNCTIONS=true
 ZSH_AUTOSUGGEST_MANUAL_REBIND=1
