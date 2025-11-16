@@ -36,15 +36,15 @@ function b() {
   
   # Send the message with optional persona
   if [ -n "$persona" ]; then
-    echo "$message" | __mcp_broadcast.sh -f "$persona" && snd --agents
+    echo "$message" | /home/decoder/dev/dotfiles/scripts/__mcp_broadcast.sh -f "$persona" && snd --agents
   else
-    echo "$message" | __mcp_broadcast.sh && snd --agents
+    echo "$message" | /home/decoder/dev/dotfiles/scripts/__mcp_broadcast.sh && snd --agents
   fi
 }
 
 # Send keys to registered Claude tmux sessions
 function snd() {
-    /home/decoder/dev/dotfiles/scripts/snd "$@"
+    /home/decoder/.claude/scripts/snd "$@"
 }
 
 # Need to alias this because regular ddg doesn't open firefox any more
