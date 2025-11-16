@@ -53,3 +53,9 @@ windows:
       layout: tiled
       panes:
         - k9s
+  - dashboard:
+      layout: tiled
+      panes:
+        - viddy just k8sgpt
+        - viddy kubectl get nodes
+        - viddy 'kubectl get events -A --sort-by=.lastTimestamp | tail -20'
