@@ -1,33 +1,33 @@
 git:
   overrideGpg: true
-
 customCommands:
   - key: '<c-a>'
     context: 'global'
     command: "gh repo view --branch {{.CheckedOutBranch.Name}} --web"
     description: 'Open current branch in browser'
-
   - key: '<c-p>'
     context: 'global'
     command: "git push -u origin {{.CheckedOutBranch.Name}}; (cd $(git rev-parse --show-toplevel) && ([ -f .github/pull_request_template.md ] && gh pr create --title \"$(git log -1 --pretty=%s)\" --body-file .github/pull_request_template.md || gh pr create --title \"$(git log -1 --pretty=%s)\" --body \"\") && gh pr view --web) || gh pr view --web"
     description: 'Push branch and create PR (or view if exists)'
     output: 'log'
-    
   - key: '<c-r>'
     context: 'global'
     command: "gh pr view --web"
     description: 'Open current PR in browser'
-    
   - key: '<c-s>'
     context: 'global'
     command: "gh pr status"
     description: 'Show PR status'
     output: 'terminal'
     outputTitle: 'Pull Request Status'
-    
   - key: '<c-q>'
     context: 'global'
     command: "gh pr checks"
     description: 'Show PR checks'
     output: 'terminal'
     outputTitle: 'PR Checks Status'
+  - key: '<c-w>'
+    context: 'localBranches'
+    command: "~/.claude/scripts/__lazygit_branch_to_worktree.sh {{.SelectedLocalBranch.Name}}"
+    description: 'Convert branch to worktree'
+    output: terminal
