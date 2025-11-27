@@ -39,6 +39,31 @@ return require("lazy").setup({
     },
   },
   "robitx/gp.nvim",
+  {
+    "Piotr1215/pairup.nvim",
+    dev = true,
+    cmd = { "Pairup" },
+    keys = {
+      { "<leader>cc", "<cmd>Pairup start<cr>", desc = "Start Claude" },
+      { "<leader>ct", "<cmd>Pairup toggle<cr>", desc = "Toggle Claude terminal" },
+      { "<leader>cq", "<cmd>Pairup questions<cr>", desc = "Show uu: questions" },
+      { "<leader>cx", "<cmd>Pairup stop<cr>", desc = "Stop Claude" },
+    },
+    config = function()
+      require("pairup").setup {
+        provider = "claude",
+        providers = {
+          claude = {
+            path = "/home/decoder/.claude/scripts/__claude_with_monitor.sh",
+          },
+        },
+        auto_refresh = {
+          enabled = true,
+          interval_ms = 500,
+        },
+      }
+    end,
+  },
   -- }}}
   -- Editor Extensions {{{
   ---@type LazySpec
