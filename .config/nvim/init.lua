@@ -1,3 +1,7 @@
+-- Set leader BEFORE lazy.nvim loads (required for keys in plugin specs)
+vim.g.mapleader = " "
+vim.g.maplocalleader = " "
+
 require "plugins"
 require "settings"
 require "autocommands"
