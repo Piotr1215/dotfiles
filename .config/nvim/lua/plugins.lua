@@ -57,12 +57,19 @@ return require("lazy").setup({
         provider = "claude",
         providers = {
           claude = {
-            path = "/home/decoder/.claude/scripts/__claude_with_monitor.sh",
+            cmd = "/home/decoder/.claude/scripts/__claude_with_monitor.sh",
           },
+        },
+        terminal = {
+          auto_insert = false,
         },
         auto_refresh = {
           enabled = true,
           interval_ms = 500,
+        },
+        progress = {
+          enabled = true,
+          file = "/tmp/claude_progress",
         },
       }
     end,
