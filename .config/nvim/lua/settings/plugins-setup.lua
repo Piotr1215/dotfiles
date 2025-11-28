@@ -660,22 +660,6 @@ require("lualine").setup {
         end,
         color = { fg = "#ff9e64", gui = "bold" }, -- Orange bold text
       },
-      -- Add Claude context indicator
-      {
-        function()
-          return vim.g.claude_context_indicator or ""
-        end,
-        color = function()
-          -- Different colors based on state
-          if vim.g.claude_context_indicator == "[C]" then
-            return { fg = "#00ff00", gui = "bold" } -- Green when diffs enabled
-          elseif vim.g.claude_context_indicator == "[C-off]" then
-            return { fg = "#ff0000", gui = "bold" } -- Red when diffs disabled
-          else
-            return { fg = "#666666" } -- Dim when not running
-          end
-        end,
-      },
       -- Add Sidekick Copilot status indicator
       {
         function()
