@@ -44,10 +44,13 @@ return require("lazy").setup({
     dev = true,
     cmd = { "Pairup" },
     keys = {
-      { "<leader>cc", "<cmd>Pairup start<cr>", desc = "Start Claude" },
-      { "<leader>ct", "<cmd>Pairup toggle<cr>", desc = "Toggle Claude terminal" },
-      { "<leader>cq", "<cmd>Pairup questions<cr>", desc = "Show uu: questions" },
-      { "<leader>cx", "<cmd>Pairup stop<cr>", desc = "Stop Claude" },
+      { "<leader>cc", "<Plug>(pairup-toggle-session)", desc = "Start/Stop Claude" },
+      { "<leader>ct", "<Plug>(pairup-toggle)", desc = "Toggle Claude terminal" },
+      { "<leader>cl", "<Plug>(pairup-lsp)", desc = "Send LSP to Claude" },
+      { "<leader>cd", "<Plug>(pairup-diff)", desc = "Send git diff to Claude" },
+      { "<leader>cq", "<Plug>(pairup-questions)", desc = "Show uu: questions" },
+      { "]C", "<Plug>(pairup-next-marker)", desc = "Next cc: marker" },
+      { "[C", "<Plug>(pairup-prev-marker)", desc = "Prev cc: marker" },
     },
     config = function()
       require("pairup").setup {
