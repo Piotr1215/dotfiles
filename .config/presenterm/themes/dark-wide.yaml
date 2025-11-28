@@ -38,3 +38,6 @@ block_quote:
     percent: 4
 table:
   alignment: center
+mermaid:
+  background: transparent
+  theme: dark
