@@ -89,10 +89,6 @@ vim.lsp.config("yamlls", {
   },
 })
 
-require("ionide").setup {
-  capabilities = def.capabilities,
-}
-
 -- PROJECT: lsp_lines
 -- When using lsp_lines, this needs to be disabled
 vim.diagnostic.config {

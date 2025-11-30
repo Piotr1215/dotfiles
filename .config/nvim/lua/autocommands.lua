@@ -15,8 +15,6 @@ local copilotGroup = api.nvim_create_augroup("Copilot", { clear = true })
 local valeGroup = api.nvim_create_augroup("Vale", { clear = true })
 
 -- Autocmds
--- Enable Copilot LSP mode for sidekick NES
-vim.g.copilot_lsp = true
 
 api.nvim_create_autocmd("VimEnter", {
   group = copilotGroup,
