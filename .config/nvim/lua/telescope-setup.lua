@@ -4,15 +4,6 @@ local z_utils = require "telescope._extensions.zoxide.utils"
 local lga_actions = require "telescope-live-grep-args.actions"
 local actions = require "telescope.actions"
 
-require("telescope").load_extension "file_browser"
-require("telescope").load_extension "repo"
-require("telescope").load_extension "fzf"
-require("telescope").load_extension "emoji"
-require("telescope").load_extension "zoxide"
-require("telescope").load_extension "tmuxinator"
-require("telescope").load_extension "cmdline"
-require("telescope").load_extension "gh"
-
 require("telescope").setup {
   defaults = {
     vimgrep_arguments = {
@@ -54,10 +45,8 @@ require("telescope").setup {
     },
     emoji = {
       action = function(emoji)
-        vim.fn.setreg("*", emoji.value)
-        print([[Press p or "*p to paste this emoji]] .. emoji.value)
-        -- insert emoji when picked
-        vim.api.nvim_put({ emoji.value }, "c", false, true)
+        vim.fn.setreg("0", emoji.value)
+        vim.api.nvim_feedkeys('"0pa ', "n", false)
       end,
     },
     zoxide = {
@@ -92,9 +81,15 @@ require("telescope").setup {
   },
 }
 
--- Load the extension
+-- Load extensions (must be after setup for config to apply)
+t.load_extension "file_browser"
+t.load_extension "repo"
+t.load_extension "fzf"
+t.load_extension "emoji"
 t.load_extension "zoxide"
-require("telescope").load_extension "live_grep_args"
+t.load_extension "tmuxinator"
+t.load_extension "gh"
+t.load_extension "live_grep_args"
 
 -- Setup multi-open functionality for telescope file pickers
 require("user_functions.telescope_multi_open").setup()
@@ -236,7 +231,7 @@ local set_up_telescope = function()
   set_keymap("n", "<leader>gs", [[<cmd>lua require('telescope.builtin').git_status()<CR>]])
   set_keymap("n", "<leader>fo", [[<cmd>lua require('telescope.builtin').oldfiles()<CR>]])
   set_keymap("n", "<leader>fi", ":Telescope file_browser hidden=true<CR>")
-  set_keymap("i", "<C-e>", "<cmd>:Telescope symbols<CR>")
+  set_keymap("i", "<C-e>", "<cmd>:Telescope emoji<CR>")
   set_keymap("n", "<leader>fe", [[<cmd>Telescope emoji<CR>]])
   set_keymap("n", "<leader>ft", [[<cmd>TodoTelescope <CR>]])
   set_keymap("n", "<leader>fs", [[<cmd>lua require('telescope.builtin').grep_string({search_dirs = {"~/dev"}})<CR>]])

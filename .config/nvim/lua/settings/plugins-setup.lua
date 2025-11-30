@@ -13,8 +13,6 @@ require("typeit").setup {
 require("eyeliner").setup {
   highlight_on_key = true, -- this must be set to true for dimming to work!
 }
--- Ensure that fzf-lua is installed and properly configured
-require("fzf-lua").setup()
 
 --- the parameter is optional
 ---@diagnostic disable-next-line: missing-parameter
@@ -286,8 +284,6 @@ require("gp").setup {
   },
 }
 
-require("remote-sshfs").setup {}
-
 require("mini.align").setup()
 require("mini.ai").setup {
   custom_textobjects = {
@@ -297,6 +293,7 @@ require("mini.ai").setup {
     -- Search match text object (uses last search pattern from / or ?)
     -- Usage: da/ (delete around search), ci/ (change inner search), ya/ (yank around search)
     ["/"] = require("user_functions.search_text_object").search_textobject,
+    ["*"] = { { "%*%*()[^*]+()%*%*", "%*()[^*]+()%*" } }, -- *italic* and **bold**
   },
 }
 require("mini.files").setup {
@@ -342,11 +339,6 @@ require("no-neck-pain").setup {
       enabled = false,
     },
   },
-}
-
-require("gen").setup {
-  model = "llama3:latest",
-  show_model = true,
 }
 
 require("mdeval").setup {
@@ -653,29 +645,6 @@ require("lualine").setup {
     lualine_b = { "branch", "diff", "diagnostics" },
     lualine_c = {
       "filename",
-      -- Add beam.nvim search operator indicator
-      {
-        function()
-          return vim.g.beam_search_operator_indicator or ""
-        end,
-        color = { fg = "#ff9e64", gui = "bold" }, -- Orange bold text
-      },
-      -- Add Sidekick Copilot status indicator
-      {
-        function()
-          return " "
-        end,
-        color = function()
-          local status = require("sidekick.status").get()
-          if status then
-            return status.kind == "Error" and "DiagnosticError" or status.busy and "DiagnosticWarn" or "Special"
-          end
-        end,
-        cond = function()
-          local status = require "sidekick.status"
-          return status.get() ~= nil
-        end,
-      },
     },
     lualine_x = { "encoding", "fileformat", "filetype" },
     lualine_y = { "progress" },

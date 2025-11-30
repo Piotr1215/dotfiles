@@ -18,26 +18,6 @@ vim.opt.rtp:prepend(lazypath)
 return require("lazy").setup({
   -- AI {{{
   "github/copilot.vim",
-  {
-    "folke/sidekick.nvim",
-    lazy = false,
-    priority = 1000,
-    opts = {
-      nes = {
-        enabled = false,
-        debounce = 100,
-        trigger = {
-          events = { "InsertLeave", "TextChanged", "CursorHold" },
-        },
-      },
-      cli = {
-        mux = {
-          backend = "tmux",
-          enabled = true,
-        },
-      },
-    },
-  },
   "robitx/gp.nvim",
   {
     "Piotr1215/pairup.nvim",
@@ -125,15 +105,10 @@ return require("lazy").setup({
   "MunifTanjim/nui.nvim",
   "stevearc/dressing.nvim",
   "tyru/open-browser.vim",
-  "gcmt/taboo.vim",
-
   "towolf/vim-helm",
   "jbyuki/one-small-step-for-vimkind",
   { "alexghergh/nvim-tmux-navigation", opts = { disable_when_zoomed = true } },
-  "romainl/vim-cool",
   "yssl/QFEnter",
-  "jesseleite/nvim-macroni",
-  "nosduco/remote-sshfs.nvim",
   { "nvim-lua/plenary.nvim", lazy = true },
   {
     "windwp/nvim-autopairs",
@@ -150,12 +125,8 @@ return require("lazy").setup({
       npairs.get_rule("`"):with_pair(cond.not_filetypes { "markdown", "md" })
     end,
   },
-  "jonarrien/telescope-cmdline.nvim",
-  { "wintermute-cell/gitignore.nvim", dependencies = "nvim-telescope/telescope.nvim" },
-  "ionide/Ionide-vim",
   "rcarriga/nvim-notify",
   "tpope/vim-rhubarb",
-  "David-Kunz/gen.nvim",
   "RRethy/nvim-align",
   "vim-scripts/scrollfix",
   "echasnovski/mini.nvim",
@@ -185,19 +156,12 @@ return require("lazy").setup({
   "kevinhwang91/nvim-bqf", -- better quickfix window
   -- }}}
   -- System Integration {{{
-  {
-    "junegunn/fzf",
-    build = "./install --bin",
-  },
-  "junegunn/fzf.vim",
   "nvim-tree/nvim-web-devicons", -- optional, for file icon
   -- }}}
   -- Telescope {{{
   "danielpieper/telescope-tmuxinator.nvim",
   "jvgrootveld/telescope-zoxide",
-  { "ellisonleao/glow.nvim", opts = {} },
   "xiyaowong/telescope-emoji.nvim",
-  "nvim-telescope/telescope-symbols.nvim",
   "cljoly/telescope-repo.nvim",
   {
     "nvim-telescope/telescope.nvim",
@@ -218,7 +182,6 @@ return require("lazy").setup({
   -- }}}
   -- LSP {{{
   "ray-x/lsp_signature.nvim",
-  "ibhagwan/fzf-lua",
   { "nvim-treesitter/nvim-treesitter", build = ":TSUpdate" },
   "onsails/lspkind-nvim",
   "williamboman/mason.nvim",
@@ -306,9 +269,7 @@ return require("lazy").setup({
   "hrsh7th/cmp-nvim-lua",
   -- }}}
   -- Programming {{{
-  "ii14/neorepl.nvim",
   "theHamsta/nvim-dap-virtual-text",
-  "stevearc/dressing.nvim",
   { "saecki/crates.nvim", opts = {} },
   {
     "mrcjkb/rustaceanvim",
@@ -357,7 +318,6 @@ return require("lazy").setup({
   },
   "sbdchd/neoformat",
   "ixru/nvim-markdown",
-  "dhruvasagar/vim-open-url",
   {
     "iamcco/markdown-preview.nvim",
     cmd = { "MarkdownPreviewToggle", "MarkdownPreview", "MarkdownPreviewStop" },
@@ -367,10 +327,6 @@ return require("lazy").setup({
     end,
     ft = { "markdown" },
   },
-  "javiorfo/nvim-soil",
-
-  -- Optional for puml syntax highlighting:
-  "javiorfo/nvim-nyctophilia",
   "weirongxu/plantuml-previewer.vim",
   -- }}}
   -- My Plugins {{{
@@ -428,6 +384,7 @@ return require("lazy").setup({
             "m", -- Markdown code blocks
             "h", -- Markdown headers
             "L", -- URL object
+            "*", -- Bold/italic markdown
           },
           preview_context = 3, -- Number of context lines to show before/after in preview
           window_width = 100, -- Maximum width of the BeamScope window
@@ -442,13 +399,6 @@ return require("lazy").setup({
         },
       }
     end,
-  },
-  -- snacks.nvim - QoL plugins collection
-  {
-    "folke/snacks.nvim",
-    priority = 1000,
-    lazy = false,
-    opts = {},
   },
   -- presenterm.nvim - Neovim plugin for presenterm presentations
   {
@@ -493,17 +443,13 @@ return require("lazy").setup({
     end,
   },
   -- Look & Feel {{{
-  "ellisonleao/gruvbox.nvim",
   "mhartington/formatter.nvim",
   "folke/todo-comments.nvim",
-  "ryanoasis/vim-devicons",
   "xiyaowong/nvim-transparent",
   "bluz71/vim-moonfly-colors",
   "kdheepak/monochrome.nvim",
   "EdenEast/nightfox.nvim",
-  "NLKNguyen/papercolor-theme",
   "folke/tokyonight.nvim",
-  "rktjmp/lush.nvim",
   { "catppuccin/nvim", as = "catppuccin" },
   {
     "nvim-lualine/lualine.nvim",
