@@ -105,10 +105,8 @@ return require("lazy").setup({
   "MunifTanjim/nui.nvim",
   "stevearc/dressing.nvim",
   "tyru/open-browser.vim",
-  "towolf/vim-helm",
   "jbyuki/one-small-step-for-vimkind",
   { "alexghergh/nvim-tmux-navigation", opts = { disable_when_zoomed = true } },
-  "yssl/QFEnter",
   { "nvim-lua/plenary.nvim", lazy = true },
   {
     "windwp/nvim-autopairs",
@@ -181,7 +179,6 @@ return require("lazy").setup({
   "smartpde/telescope-recent-files",
   -- }}}
   -- LSP {{{
-  "ray-x/lsp_signature.nvim",
   { "nvim-treesitter/nvim-treesitter", build = ":TSUpdate" },
   "onsails/lspkind-nvim",
   "williamboman/mason.nvim",
@@ -243,14 +240,7 @@ return require("lazy").setup({
     "rcarriga/nvim-dap-ui",
     dependencies = {
       "mfussenegger/nvim-dap",
-    },
-  },
-  {
-    "nvim-neotest/neotest",
-    dependencies = {
       "nvim-neotest/nvim-nio",
-      "antoinemadec/FixCursorHold.nvim",
-      "nvim-treesitter/nvim-treesitter",
     },
   },
   "mfussenegger/nvim-dap-python",
@@ -314,7 +304,9 @@ return require("lazy").setup({
   "jubnzv/mdeval.nvim",
   {
     "AckslD/nvim-FeMaco.lua",
-    config = 'require("femaco").setup()',
+    config = function()
+      require("femaco").setup()
+    end,
   },
   "sbdchd/neoformat",
   "ixru/nvim-markdown",
@@ -330,8 +322,6 @@ return require("lazy").setup({
   "weirongxu/plantuml-previewer.vim",
   -- }}}
   -- My Plugins {{{
-  { "Piotr1215/yanksearch.nvim" },
-  "Piotr1215/typeit.nvim",
   {
     "Piotr1215/docusaurus.nvim",
     dev = true,
@@ -363,38 +353,17 @@ return require("lazy").setup({
     dev = true,
     config = function()
       require("beam").setup {
-        prefix = ",",
-        visual_feedback_duration = 150,
-        cross_buffer = {
-          enabled = false, -- Enable cross-buffer operations
-          fuzzy_finder = "telescope", -- Uses Telescope for cross-buffer (required)
-          include_hidden = false,
-        },
-        -- Enable beam's custom text objects (currently: im/am for markdown code blocks)
-        enable_default_text_objects = true,
-        -- Auto-discover custom text objects from plugins (mini.ai, treesitter, etc.)
         auto_discover_custom_text_objects = true,
-        show_discovery_notification = false, -- Show what was discovered
-        excluded_motions = { "Q", "R" }, -- Exclude Q and R motions from auto-discovery
-        resolved_conflicts = { "m" }, -- Mark 'm' conflict as intentional (beam's im/am coexists with your custom im/am)
-        smart_highlighting = false, -- Enable real-time context-aware search highlighting for delimiter text objects
+        excluded_motions = { "Q", "R" },
+        resolved_conflicts = { "m" },
         beam_scope = {
-          enabled = true, -- Enable BeamScope for scoped text objects
-          custom_scoped_text_objects = {
-            "m", -- Markdown code blocks
-            "h", -- Markdown headers
-            "L", -- URL object
-            "*", -- Bold/italic markdown
-          },
-          preview_context = 3, -- Number of context lines to show before/after in preview
-          window_width = 100, -- Maximum width of the BeamScope window
+          custom_scoped_text_objects = { "m", "h", "L", "*" },
+          window_width = 100,
         },
         experimental = {
           telescope_single_buffer = {
-            enabled = false, -- Optional: Use Telescope for single buffer too
-            theme = "cursor", -- Theme: 'dropdown', 'cursor', 'ivy'
-            preview = true, -- Show preview pane
-            winblend = 10, -- Window transparency (0-100)
+            theme = "cursor",
+            preview = true,
           },
         },
       }
@@ -443,7 +412,6 @@ return require("lazy").setup({
     end,
   },
   -- Look & Feel {{{
-  "mhartington/formatter.nvim",
   "folke/todo-comments.nvim",
   "xiyaowong/nvim-transparent",
   "bluz71/vim-moonfly-colors",
