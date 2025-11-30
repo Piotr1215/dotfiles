@@ -5,11 +5,6 @@ require("mason").setup()
 -- Load LuaSnip configuration early (before cmp)
 require "config.luasnip"
 
-require("typeit").setup {
-  default_speed = 30, -- Default typing speed (milliseconds)
-  default_pause = "paragraph", -- Default pause behavior ('line' or 'paragraph')
-}
-
 require("eyeliner").setup {
   highlight_on_key = true, -- this must be set to true for dimming to work!
 }
@@ -87,12 +82,6 @@ require("gitsigns").setup {
     -- Text object
     map({ "o", "x" }, "Ih", ":<C-U>Gitsigns select_hunk<CR>", { desc = "Select hunk" })
   end,
-}
-
-require("yanksearch").setup {
-  lines_above = 0,
-  lines_below = 0,
-  lines_around = 0, -- This will override lines_above and lines_below if set to a non-zero value
 }
 
 require("gp").setup {
@@ -284,7 +273,6 @@ require("gp").setup {
   },
 }
 
-require("mini.align").setup()
 require("mini.ai").setup {
   custom_textobjects = {
     ["|"] = false, -- Disable | text object
@@ -384,7 +372,9 @@ require("obsidian").setup {
       },
     },
   },
-  disable_frontmatter = false,
+  frontmatter = {
+    enabled = true,
+  },
   legacy_commands = false, -- Disable deprecated commands
   -- open_app_foreground = true,
   templates = {
