@@ -8,5 +8,6 @@ prepend_keymap = [
     { on = [ "m" ], run = "plugin bookmarks --args=save", desc = "Save current position as a bookmark" },
     { on = [ "'" ], run = "plugin bookmarks --args=jump", desc = "Jump to a bookmark" },
     { on = [ "b", "d" ], run = "plugin bookmarks --args=delete", desc = "Delete a bookmark" },
-    { on = [ "b", "D" ], run = "plugin bookmarks --args=delete_all", desc = "Delete all bookmarks" }
+    { on = [ "b", "D" ], run = "plugin bookmarks --args=delete_all", desc = "Delete all bookmarks" },
+    { on = [ "g", "f" ], run = 'search_do --via=fd --args="-E .git --type f"', desc = "Flat view files only (excludes .git)" }
 ]
