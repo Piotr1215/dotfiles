@@ -9,7 +9,12 @@ is_time_off() {
     if [[ "$current_day" == "Saturday" ]] || [[ "$current_day" == "Sunday" ]]; then
         return 0
     fi
-    
+
+    # Check runtime toggle (set by ufp home/work)
+    if [ -f "/tmp/timeoff_mode" ]; then
+        return 0
+    fi
+
     # Also check boot.sh for manual timeoff setting
     local boot_script="/home/decoder/dev/dotfiles/scripts/__boot.sh"
     if [ -f "$boot_script" ]; then
