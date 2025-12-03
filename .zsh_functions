@@ -218,13 +218,26 @@ function ufp() {
     # Convert input to lowercase for case-insensitive comparison
     profile_type=$(echo "$profile_type" | tr '[:upper:]' '[:lower:]')
 
+    update_timeoff() {
+        local value=$1
+        if [ "$value" = "1" ]; then
+            touch /tmp/timeoff_mode
+            echo "Tmux status: music mode"
+        else
+            rm -f /tmp/timeoff_mode
+            echo "Tmux status: work mode"
+        fi
+    }
+
     # Set the profile based on the input
     case $profile_type in
         "work")
             update_profiles_ini "$WORK_PROFILE"
+            update_timeoff 0
             ;;
         "home")
             update_profiles_ini "$HOME_PROFILE"
+            update_timeoff 1
             ;;
         *)
             echo "Invalid profile type. Please use 'work' or 'home'."
