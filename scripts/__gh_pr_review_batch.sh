@@ -77,14 +77,18 @@ build_review_json() {
     # Process comments if they exist
     if jq -e '.comments | type == "array" and length > 0' "$JSON_FILE" >/dev/null 2>&1; then
         comments_array=$(jq '[
-            .comments[] | 
-            select(.file != null and .line != null and .comment != null) |
+            .comments[] |
+            select(.file != null and .line != null and (.comment != null or .suggestion != null)) |
             {
                 path: .file,
                 line: (.line | tonumber),
                 body: (
                     if .suggestion and (.suggestion | type == "string") and (.suggestion | length > 0) then
-                        (.comment + "\n```suggestion\n" + .suggestion + "\n```")
+                        if .comment then
+                            (.comment + "\n```suggestion\n" + .suggestion + "\n```")
+                        else
+                            ("```suggestion\n" + .suggestion + "\n```")
+                        end
                     else
                         .comment
                     end
