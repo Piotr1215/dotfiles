@@ -299,6 +299,30 @@ tmux-copy-mode:
     - description: "Half page up"
       binding: "Ctrl + u"
 
+tmux-copy-toolkit:
+  description: "Fast pattern-based copying (tmux-copy-toolkit plugin)"
+  shortcuts:
+    - description: "Quickcopy - highlight patterns (URLs, paths, IPs, etc)"
+      binding: "Ctrl + b Q"
+    - description: "Easycopy - mark start char, mark end char, copy"
+      binding: "Ctrl + b S"
+    - description: "Linecopy - copy full lines by label"
+      binding: "Ctrl + b W"
+    - description: "Quickopen - open URLs/files in browser/app"
+      binding: "Ctrl + b P"
+    - description: "Easymotion - jump to any character (in copy-mode)"
+      binding: "s"
+    - description: "Easymotion 2-char search (in copy-mode)"
+      binding: "S s"
+    - description: "Easymotion jump to lines below (in copy-mode)"
+      binding: "S j"
+    - description: "Easymotion jump to lines above (in copy-mode)"
+      binding: "S k"
+    - description: "Next batch of matches (in quickcopy)"
+      binding: "n"
+    - description: "Open pane in nvim for text-object yanking (yip, yiw, etc)"
+      binding: "Ctrl + b Y"
+
 tmuxinator:
   description: "Tmux session manager shortcuts"
   shortcuts:
