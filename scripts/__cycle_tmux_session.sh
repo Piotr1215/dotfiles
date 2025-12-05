@@ -2,6 +2,7 @@
 set -eo pipefail
 
 # Cycle through tmux sessions, excluding relax, poke, and music sessions
+# Note: If the current session is one of these, do NOT exclude it
 # Usage: __cycle_tmux_session.sh [next|prev]
 
 direction="${1:-next}"
@@ -15,8 +16,11 @@ music_session=""
 # Get filtered sessions
 mapfile -t sessions < <(
     tmux list-sessions -F '#S' | while read -r s; do
-        [[ "$s" == "relax" || "$s" == "poke" ]] && continue
-        [[ -n "$music_session" && "$s" == "$music_session" ]] && continue
+        # Exclude relax/poke/music unless it's the current session
+        if [[ "$s" != "$current" ]]; then
+            [[ "$s" == "relax" || "$s" == "poke" ]] && continue
+            [[ -n "$music_session" && "$s" == "$music_session" ]] && continue
+        fi
         echo "$s"
     done
 )
