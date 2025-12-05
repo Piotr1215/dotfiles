@@ -95,6 +95,18 @@ vim.diagnostic.config {
   virtual_text = true,
 }
 
+vim.lsp.config("zls", {
+  capabilities = def.capabilities,
+  filetypes = { "zig", "zon" },
+  root_dir = vim.fs.root(0, { "build.zig", "zls.json", ".git" }),
+  settings = {
+    zls = {
+      prefer_ast_check_as_child_process = true,
+      warn_style = true,
+    },
+  },
+})
+
 vim.lsp.config("gopls", {
   cmd = { "gopls" },
   -- for postfix snippets and analyzers
@@ -122,4 +134,4 @@ vim.lsp.config("gopls", {
 })
 
 -- Enable all configured LSP servers
-vim.lsp.enable { "lua_ls", "terraformls", "tflint", "ocamllsp", "denols", "ts_ls", "bashls", "yamlls", "gopls" }
+vim.lsp.enable { "lua_ls", "terraformls", "tflint", "ocamllsp", "denols", "ts_ls", "bashls", "yamlls", "gopls", "zls" }
