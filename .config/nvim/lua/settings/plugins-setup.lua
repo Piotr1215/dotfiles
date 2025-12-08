@@ -273,6 +273,14 @@ require("gp").setup {
   },
 }
 
+require("mini.cmdline").setup {
+  autocomplete = {
+    enable = false,
+  },
+  autopeek = {
+    enable = true,
+  },
+}
 require("mini.ai").setup {
   custom_textobjects = {
     ["|"] = false, -- Disable | text object

@@ -128,6 +128,7 @@ return require("lazy").setup({
   "RRethy/nvim-align",
   "vim-scripts/scrollfix",
   "echasnovski/mini.nvim",
+  { "nvim-mini/mini.cmdline", version = false },
   "mattn/emmet-vim",
   "mattn/webapi-vim",
   "mhinz/vim-startify",
