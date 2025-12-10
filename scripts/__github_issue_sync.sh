@@ -276,11 +276,6 @@ manage_project_settings() {
         formatted_project=$(echo "$project_name" | tr '[:upper:]' '[:lower:]' | tr ' ' '-' | sed 's/-\+/-/g')
         task rc.confirmation=no modify "$task_uuid" project:"$formatted_project"
 
-        # Check if project name contains vcluster or cloud (case insensitive)
-        if echo "$formatted_project" | grep -qi 'vcluster\|cloud'; then
-            task rc.confirmation=no modify "$task_uuid" session:vcluster-staging
-        fi
-
         if echo "$formatted_project" | grep -qi 'vclustercloud-maintenance'; then
             task rc.confirmation=no modify "$task_uuid" repo:hosted-platform
         fi
