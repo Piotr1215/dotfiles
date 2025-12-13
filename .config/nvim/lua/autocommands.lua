@@ -178,7 +178,13 @@ vim.api.nvim_create_user_command("R", function(opts)
   vim.bo.buftype = "nofile"
   vim.bo.bufhidden = "hide"
   vim.bo.swapfile = false
-  vim.fn.termopen(cmd)
+  vim.fn.termopen(cmd, {
+    on_stdout = function()
+      vim.schedule(function()
+        vim.cmd "normal! G"
+      end)
+    end,
+  })
   vim.api.nvim_buf_set_keymap(0, "n", "q", ":q!<CR>", { noremap = true, silent = true })
 end, { nargs = "+", complete = "shellcmd" })
 
@@ -230,11 +236,21 @@ vim.api.nvim_create_autocmd("FileType", {
   end,
 })
 
--- Semantic search: :Cheat bash loop files
--- Use short keywords, skip filler words (over, the, a, etc.)
+-- Topic search: :Cheat substring (defaults to bash)
+-- Or specify language: :Cheat python list comprehension
 vim.api.nvim_create_user_command("Cheat", function(opts)
-  local query = opts.args:gsub(" ", "+")
-  vim.cmd("R curl -s cht.sh/" .. query)
+  local args = vim.split(opts.args, " ")
+  local lang = "bash"
+  local query_start = 1
+  -- Check if first arg is a known language
+  local langs =
+    { python = 1, go = 1, rust = 1, js = 1, lua = 1, c = 1, cpp = 1, java = 1, ruby = 1, perl = 1, bash = 1, sh = 1 }
+  if langs[args[1]] then
+    lang = args[1]
+    query_start = 2
+  end
+  local query = table.concat(args, "+", query_start)
+  vim.cmd("R curl -s cht.sh/" .. lang .. "/" .. query)
 end, { nargs = "+" })
 
 -- Telescope pickers for help
@@ -245,6 +261,10 @@ end, { desc = "Telescope tldr picker" })
 vim.api.nvim_create_user_command("CheatPick", function()
   require("user_functions.telescope_help").cheat()
 end, { desc = "Telescope cheat.sh picker" })
+
+vim.api.nvim_create_user_command("BashBible", function()
+  require("user_functions.telescope_help").bash_bible()
+end, { desc = "Telescope pure-bash-bible picker" })
 
 vim.api.nvim_create_user_command("TMarkn", function()
   vim.cmd [[execute "r !~/dev/dotfiles/scripts/__list_tasks_as_markdown.pl '+next'" ]]

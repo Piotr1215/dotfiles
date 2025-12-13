@@ -253,6 +253,145 @@ M.shellcheck = function(opts)
     :find()
 end
 
+-- Pure Bash Bible picker
+local bash_bible_path = vim.fn.expand "~/dev/pure-bash-bible/README.md"
+local bash_bible_cache = nil
+
+local function get_bash_bible_sections()
+  if bash_bible_cache then
+    return bash_bible_cache
+  end
+
+  local f = io.open(bash_bible_path, "r")
+  if not f then
+    vim.notify("pure-bash-bible not found at " .. bash_bible_path, vim.log.levels.ERROR)
+    return {}
+  end
+
+  local result = {}
+  local line_num = 0
+  local current_section = nil
+
+  for line in f:lines() do
+    line_num = line_num + 1
+    -- Match main sections (# HEADING)
+    local main = line:match "^# ([A-Z][A-Z ]+)$"
+    if main then
+      current_section = main
+      table.insert(result, {
+        heading = main,
+        line = line_num,
+        level = 1,
+        section = main,
+      })
+    end
+    -- Match subsections (## Heading)
+    local sub = line:match "^## (.+)$"
+    if sub then
+      table.insert(result, {
+        heading = sub,
+        line = line_num,
+        level = 2,
+        section = current_section,
+      })
+    end
+  end
+  f:close()
+
+  bash_bible_cache = result
+  return result
+end
+
+-- Get content from line to next heading of same or higher level
+local function get_section_content(start_line, level)
+  local f = io.open(bash_bible_path, "r")
+  if not f then
+    return {}
+  end
+
+  local result = {}
+  local line_num = 0
+  local collecting = false
+  -- For level 1 (# HEADING), stop at next level 1
+  -- For level 2 (## Heading), stop at next level 1 or 2
+  local stop_pattern = level == 1 and "^# [A-Z]" or "^##? "
+
+  for line in f:lines() do
+    line_num = line_num + 1
+    if line_num == start_line then
+      collecting = true
+    elseif collecting and line:match(stop_pattern) then
+      break
+    end
+    if collecting then
+      table.insert(result, line)
+    end
+  end
+  f:close()
+  return result
+end
+
+M.bash_bible = function(opts)
+  opts = opts or {}
+  pickers
+    .new(opts, {
+      prompt_title = "Pure Bash Bible",
+      finder = finders.new_table {
+        results = get_bash_bible_sections(),
+        entry_maker = function(entry)
+          local prefix = entry.level == 1 and "# " or "  "
+          return {
+            value = entry,
+            display = prefix .. entry.heading,
+            ordinal = entry.heading .. " " .. (entry.section or ""),
+          }
+        end,
+      },
+      sorter = conf.generic_sorter(opts),
+      previewer = previewers.new_buffer_previewer {
+        title = "Bash Bible",
+        define_preview = function(self, entry)
+          local bufnr = self.state.bufnr
+          local content = get_section_content(entry.value.line, entry.value.level)
+          vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, content)
+          vim.api.nvim_buf_set_option(bufnr, "filetype", "markdown")
+        end,
+      },
+      attach_mappings = function(prompt_bufnr)
+        actions.select_default:replace(function()
+          local selection = action_state.get_selected_entry()
+          actions.close(prompt_bufnr)
+          if selection then
+            -- Read full file
+            local f = io.open(bash_bible_path, "r")
+            if not f then
+              return
+            end
+            local lines = {}
+            for line in f:lines() do
+              table.insert(lines, line)
+            end
+            f:close()
+            -- Open in scratch buffer
+            vim.cmd "new"
+            vim.bo.buftype = "nofile"
+            vim.bo.bufhidden = "wipe"
+            vim.bo.swapfile = false
+            vim.bo.filetype = "markdown"
+            vim.api.nvim_buf_set_lines(0, 0, -1, false, lines)
+            vim.api.nvim_buf_set_keymap(0, "n", "q", ":q!<CR>", { noremap = true, silent = true })
+            vim.api.nvim_buf_set_keymap(0, "n", "1", ":q!<CR>", { noremap = true, silent = true })
+            -- Jump to selected line
+            vim.cmd(tostring(selection.value.line))
+            vim.cmd "normal! zt"
+          end
+        end)
+        return true
+      end,
+    })
+    :find()
+end
+
 -- All pickers (builtins + custom)
 M.all_pickers = function(opts)
   opts = opts or {}
@@ -268,6 +407,7 @@ M.all_pickers = function(opts)
   table.insert(picker_list, { name = "tldr", type = "custom" })
   table.insert(picker_list, { name = "cheat", type = "custom" })
   table.insert(picker_list, { name = "shellcheck", type = "custom" })
+  table.insert(picker_list, { name = "bash_bible", type = "custom" })
 
   table.sort(picker_list, function(a, b)
     return a.name < b.name
