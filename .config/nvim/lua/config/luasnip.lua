@@ -1,5 +1,5 @@
-local ls = require("luasnip")
-local types = require("luasnip.util.types")
+local ls = require "luasnip"
+local types = require "luasnip.util.types"
 
 -- Configure LuaSnip
 ls.config.set_config {
@@ -47,19 +47,19 @@ vim.keymap.set({ "i", "s" }, "<M-j>", function()
 end, { silent = true })
 
 -- Load friendly-snippets
-require("luasnip.loaders.from_vscode").lazy_load({
-  exclude = { "vim-vsnip", "tree-sitter-just", "gitcommit" }
-})
+require("luasnip.loaders.from_vscode").lazy_load {
+  exclude = { "vim-vsnip", "tree-sitter-just", "gitcommit" },
+}
 
 -- Load our custom converted snippets
-require("luasnip.loaders.from_lua").lazy_load({ paths = vim.fn.stdpath("config") .. "/lua/snippets" })
+require("luasnip.loaders.from_lua").lazy_load { paths = vim.fn.stdpath "config" .. "/lua/snippets" }
 
 -- Command to edit snippets for current filetype
 vim.api.nvim_create_user_command("LuaSnipEdit", function()
   local ft = vim.bo.filetype
-  local snippets_dir = vim.fn.stdpath("config") .. "/lua/snippets"
+  local snippets_dir = vim.fn.stdpath "config" .. "/lua/snippets"
   local snippet_file = snippets_dir .. "/" .. ft .. ".lua"
-  
+
   -- Create the file if it doesn't exist
   if vim.fn.filereadable(snippet_file) == 0 then
     local template = [[local ls = require("luasnip")
@@ -75,14 +75,14 @@ return {
 }]]
     vim.fn.writefile(vim.split(template, "\n"), snippet_file)
   end
-  
+
   vim.cmd("edit " .. snippet_file)
 end, { desc = "Edit snippets for current filetype" })
 
 -- Command to reload snippets
 vim.api.nvim_create_user_command("LuaSnipReload", function()
-  require("luasnip.loaders.from_lua").load({ paths = vim.fn.stdpath("config") .. "/lua/snippets" })
-  vim.notify("LuaSnip snippets reloaded!")
+  require("luasnip.loaders.from_lua").load { paths = vim.fn.stdpath "config" .. "/lua/snippets" }
+  vim.notify "LuaSnip snippets reloaded!"
 end, { desc = "Reload LuaSnip snippets" })
 
 -- Load debug commands for troubleshooting (commented out for now)
