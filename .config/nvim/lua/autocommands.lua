@@ -52,7 +52,6 @@ api.nvim_create_autocmd("BufWritePost", {
         lines = vim.split(output, "\n"),
         title = "Shellcheck: " .. vim.fn.expand "%:t",
       })
-      vim.cmd "copen"
     else
       vim.cmd "cclose"
     end
@@ -171,11 +170,15 @@ vim.api.nvim_create_user_command("Ghistory", function()
 end, { desc = "Show git history for the current file" })
 
 vim.api.nvim_create_user_command("R", function(opts)
+  -- Expand % and # BEFORE opening new buffer
+  local current = vim.fn.expand "%:p"
+  local alt = vim.fn.expand "#:p"
+  local cmd = opts.args:gsub("%%:p", current):gsub("%%", current):gsub("#", alt)
   vim.cmd "new"
   vim.bo.buftype = "nofile"
   vim.bo.bufhidden = "hide"
   vim.bo.swapfile = false
-  vim.fn.termopen(opts.args)
+  vim.fn.termopen(cmd)
   vim.api.nvim_buf_set_keymap(0, "n", "q", ":q!<CR>", { noremap = true, silent = true })
 end, { nargs = "+", complete = "shellcmd" })
 

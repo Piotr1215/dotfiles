@@ -13,8 +13,22 @@ local postfix = require("luasnip.extras.postfix").postfix
 local matches = require("luasnip.extras.postfix").matches
 
 return {
-  -- Postfix: command.var → variable=$(command) - preserves indentation
+  -- Postfix: expr.var → varname=expr (simple assignment)
   postfix({ trig = ".var", match_pattern = matches.line }, {
+    d(1, function(_, parent)
+      local line = parent.snippet.env.POSTFIX_MATCH
+      local indent = line:match "^%s*" or ""
+      local expr = line:gsub("^%s+", "")
+      return sn(nil, {
+        t(indent),
+        i(1, "var"),
+        t "=",
+        t(expr),
+      })
+    end, {}),
+  }),
+  -- Postfix: command.com → varname=$(command) (command substitution)
+  postfix({ trig = ".com", match_pattern = matches.line }, {
     d(1, function(_, parent)
       local line = parent.snippet.env.POSTFIX_MATCH
       local indent = line:match "^%s*" or ""
@@ -25,6 +39,31 @@ return {
         t "=$(",
         t(cmd),
         t ")",
+      })
+    end, {}),
+  }),
+  -- Postfix: var.len → ${#var} (string length)
+  postfix({ trig = ".len", match_pattern = matches.line }, {
+    d(1, function(_, parent)
+      local line = parent.snippet.env.POSTFIX_MATCH
+      local indent = line:match "^%s*" or ""
+      local before = line:gsub("^%s*", ""):gsub("([%w_]+)$", "")
+      local var = line:match "([%w_]+)$" or ""
+      return sn(nil, { t(indent .. before .. "${#" .. var .. "}") })
+    end, {}),
+  }),
+  -- Postfix: var.print → printf '<i1>%s<i2>\n' "$var"
+  postfix({ trig = ".print", match_pattern = matches.line }, {
+    d(1, function(_, parent)
+      local line = parent.snippet.env.POSTFIX_MATCH
+      local indent = line:match "^%s*" or ""
+      local var = line:gsub("^%s+", "")
+      return sn(nil, {
+        t(indent .. "printf '"),
+        i(1),
+        t "%s",
+        i(2),
+        t("\\n' \"$" .. var .. '"'),
       })
     end, {}),
   }),
