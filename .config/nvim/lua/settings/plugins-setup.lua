@@ -9,6 +9,11 @@ require("eyeliner").setup {
   highlight_on_key = true, -- this must be set to true for dimming to work!
 }
 
+require("typeit").setup {
+  default_speed = 30, -- Default typing speed (milliseconds)
+  default_pause = "paragraph", -- Default pause behavior ('line' or 'paragraph')
+}
+
 --- the parameter is optional
 ---@diagnostic disable-next-line: missing-parameter
 require("urlview").setup()

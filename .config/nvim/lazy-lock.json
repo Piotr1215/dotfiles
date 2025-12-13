@@ -84,6 +84,7 @@
   "tokyonight.nvim": { "branch": "main", "commit": "5da1b76e64daf4c5d410f06bcb6b9cb640da7dfd" },
   "tree-sitter-just": { "branch": "main", "commit": "bb0c898a80644de438e6efe5d88d30bf092935cd" },
   "trouble.nvim": { "branch": "main", "commit": "bd67efe408d4816e25e8491cc5ad4088e708a69a" },
+  "typeit.nvim": { "branch": "main", "commit": "245a78ac925682ad66a40e3242b0845463e2f550" },
   "urlview.nvim": { "branch": "main", "commit": "813736e6891b8dccca58aa3baaeabef032f44525" },
   "vim-commaobject": { "branch": "master", "commit": "0cb36de11bb12b5c8d92abb6d400dbb581b8f093" },
   "vim-fugitive": { "branch": "master", "commit": "61b51c09b7c9ce04e821f6cf76ea4f6f903e3cf4" },
