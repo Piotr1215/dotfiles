@@ -13,6 +13,7 @@ local formattingGroup = api.nvim_create_augroup("AutoFormatting", { clear = true
 local highlightingGroup = api.nvim_create_augroup("Highlighting", { clear = true })
 local copilotGroup = api.nvim_create_augroup("Copilot", { clear = true })
 local valeGroup = api.nvim_create_augroup("Vale", { clear = true })
+local shellcheckGroup = api.nvim_create_augroup("Shellcheck", { clear = true })
 
 -- Autocmds
 
@@ -34,6 +35,29 @@ vim.api.nvim_create_autocmd({ "BufWritePost" }, {
   callback = function()
     require("lint").try_lint()
   end,
+})
+
+-- Shellcheck on save for shell scripts
+api.nvim_create_autocmd("BufWritePost", {
+  group = shellcheckGroup,
+  pattern = { "*.sh", "*.bash" },
+  callback = function()
+    if vim.fn.executable "shellcheck" == 0 then
+      return
+    end
+
+    local output = vim.fn.system("shellcheck -f gcc " .. vim.fn.shellescape(vim.fn.expand "%"))
+    if vim.v.shell_error ~= 0 then
+      vim.fn.setqflist({}, "r", {
+        lines = vim.split(output, "\n"),
+        title = "Shellcheck: " .. vim.fn.expand "%:t",
+      })
+      vim.cmd "copen"
+    else
+      vim.cmd "cclose"
+    end
+  end,
+  desc = "Run shellcheck and populate quickfix on save",
 })
 
 api.nvim_create_autocmd({ "BufEnter", "BufRead" }, {
@@ -154,6 +178,70 @@ vim.api.nvim_create_user_command("R", function(opts)
   vim.fn.termopen(opts.args)
   vim.api.nvim_buf_set_keymap(0, "n", "q", ":q!<CR>", { noremap = true, silent = true })
 end, { nargs = "+", complete = "shellcmd" })
+
+-- Quick help: :Tldr find, :Tldr tar
+vim.api.nvim_create_user_command("Tldr", function(opts)
+  vim.cmd("R tldr " .. opts.args)
+end, { nargs = 1 })
+
+-- Bash keywords/builtins: :BashHelp for, :BashHelp while, :BashHelp if
+vim.api.nvim_create_user_command("BashHelp", function(opts)
+  vim.cmd("R bash -c 'help " .. opts.args .. "'")
+end, { nargs = 1 })
+
+-- Search bash help: :BashSearch do → finds for, while, until, select
+vim.api.nvim_create_user_command("BashSearch", function(opts)
+  vim.cmd("R bash -c 'help' 2>&1 | grep -i '" .. opts.args .. "'")
+end, { nargs = 1 })
+
+-- Shellcheck wiki: :SC SC2045 → opens wiki explanation
+vim.api.nvim_create_user_command("SC", function(opts)
+  local code = opts.args:upper():gsub("SC", "")
+  local url = "https://www.shellcheck.net/wiki/SC" .. code
+  local output = vim.fn.systemlist("curl -sL " .. url .. " | pandoc -f html -t markdown")
+  vim.cmd "new"
+  vim.bo.buftype = "nofile"
+  vim.bo.bufhidden = "wipe"
+  vim.bo.swapfile = false
+  vim.bo.filetype = "markdown"
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, output)
+  vim.api.nvim_buf_set_keymap(0, "n", "q", ":q!<CR>", { noremap = true, silent = true })
+end, { nargs = 1 })
+
+-- Quickfix/Trouble: Press K on shellcheck error to open wiki
+local function shellcheck_wiki_lookup()
+  local line = vim.fn.getline "."
+  -- Match both [SC2045] and (SC2045) formats
+  local code = line:match "[%[%(]SC(%d+)[%]%)]"
+  if code then
+    vim.cmd("SC " .. code)
+  else
+    vim.notify("No SC code found on this line", vim.log.levels.WARN)
+  end
+end
+
+vim.api.nvim_create_autocmd("FileType", {
+  pattern = { "qf", "trouble" },
+  callback = function()
+    vim.keymap.set("n", "K", shellcheck_wiki_lookup, { buffer = true, desc = "Open shellcheck wiki" })
+  end,
+})
+
+-- Semantic search: :Cheat bash loop files
+-- Use short keywords, skip filler words (over, the, a, etc.)
+vim.api.nvim_create_user_command("Cheat", function(opts)
+  local query = opts.args:gsub(" ", "+")
+  vim.cmd("R curl -s cht.sh/" .. query)
+end, { nargs = "+" })
+
+-- Telescope pickers for help
+vim.api.nvim_create_user_command("TldrPick", function()
+  require("user_functions.telescope_help").tldr()
+end, { desc = "Telescope tldr picker" })
+
+vim.api.nvim_create_user_command("CheatPick", function()
+  require("user_functions.telescope_help").cheat()
+end, { desc = "Telescope cheat.sh picker" })
 
 vim.api.nvim_create_user_command("TMarkn", function()
   vim.cmd [[execute "r !~/dev/dotfiles/scripts/__list_tasks_as_markdown.pl '+next'" ]]

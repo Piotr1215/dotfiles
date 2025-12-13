@@ -90,6 +90,7 @@ t.load_extension "zoxide"
 t.load_extension "tmuxinator"
 t.load_extension "gh"
 t.load_extension "live_grep_args"
+t.load_extension "help_pickers"
 
 -- Setup multi-open functionality for telescope file pickers
 require("user_functions.telescope_multi_open").setup()

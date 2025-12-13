@@ -276,6 +276,39 @@ utils.nmap("<leader>eX", ":%w !bash -e <cr>", { desc = "exexute all lines and ou
 utils.nmap("<leader>el", ":.!bash -e <cr>", { silent = false, desc = "execute current line and replace with result" })
 utils.nmap("<leader>eL", ":% !bash % <cr>", { desc = "execute all lines and replace with result" })
 utils.lnmap("cx", ":!chmod +x %<cr>", { desc = "make file executable" })
+
+-- Run script: opens small terminal with command ready (has shell completion)
+vim.keymap.set("n", "<leader>er", function()
+  local script = vim.fn.expand "%"
+  vim.cmd "belowright 10split | terminal"
+  local job_id = vim.b.terminal_job_id
+  -- Wait for shell to be ready, then send command
+  vim.defer_fn(function()
+    if job_id then
+      vim.fn.chansend(job_id, "./" .. script .. " ")
+    end
+  end, 500)
+  vim.cmd "startinsert"
+end, { desc = "Run script in terminal (with completion)" })
+
+-- Run bats tests: <leader>et runs test file or all tests
+vim.keymap.set("n", "<leader>et", function()
+  local file = vim.fn.expand "%"
+  local cmd = "bats "
+  -- If in a .bats file, run that file; otherwise run test/ dir
+  if file:match "%.bats$" then
+    cmd = cmd .. file
+  else
+    cmd = cmd .. "test/"
+  end
+  vim.cmd "belowright 15split | terminal"
+  local job_id = vim.b.terminal_job_id
+  vim.defer_fn(function()
+    if job_id then
+      vim.fn.chansend(job_id, cmd .. "\n")
+    end
+  end, 500)
+end, { desc = "Run bats tests" })
 utils.lnmap(
   "ef",
   "<cmd>lua require('user_functions.shell_integration').execute_file_and_show_output()<CR>",
@@ -318,8 +351,10 @@ vim.api.nvim_set_keymap(
 utils.lnmap("st", ":Startify<CR>") -- start Startify screen
 utils.lnmap("cd", ":cd %:p:h<CR>:pwd<CR>") -- change to current directory of active file and print out
 
--- Telescope
-vim.keymap.set("n", "<Leader>ts", "<cmd>Telescope<cr>", opts)
+-- Telescope (all pickers including custom)
+vim.keymap.set("n", "<Leader>ts", function()
+  require("user_functions.telescope_help").all_pickers()
+end, opts)
 
 -- Tmuxinator
 -- utils.lnmap("wl", ":.!echo -n \"      layout:\" $(tmux list-windows | sed -n 's/.*layout \\(.*\\)] @.*/\\1/p')<CR>")
