@@ -324,6 +324,10 @@ return require("lazy").setup({
   -- }}}
   -- My Plugins {{{
   {
+    "Piotr1215/typeit.nvim",
+    dev = true,
+  },
+  {
     "Piotr1215/docusaurus.nvim",
     dev = true,
     dependencies = {
