@@ -42,6 +42,20 @@ return {
       })
     end, {}),
   }),
+  -- Postfix: var.starts → "$var" == prefix*
+  postfix({ trig = ".starts", match_pattern = matches.line }, {
+    d(1, function(_, parent)
+      local line = parent.snippet.env.POSTFIX_MATCH
+      local indent = line:match "^%s*" or ""
+      local before = line:gsub("^%s*", ""):gsub("([%w_]+)$", "")
+      local var = line:match "([%w_]+)$" or ""
+      return sn(nil, {
+        t(indent .. before .. '"$' .. var .. '" == '),
+        i(1, "prefix"),
+        t "*",
+      })
+    end, {}),
+  }),
   -- Postfix: var.len → ${#var} (string length)
   postfix({ trig = ".len", match_pattern = matches.line }, {
     d(1, function(_, parent)
@@ -64,6 +78,101 @@ return {
         t "%s",
         i(2),
         t("\\n' \"$" .. var .. '"'),
+      })
+    end, {}),
+  }),
+  -- Postfix: var.count → ${#var[@]} (array length)
+  postfix({ trig = ".count", match_pattern = matches.line }, {
+    d(1, function(_, parent)
+      local line = parent.snippet.env.POSTFIX_MATCH
+      local indent = line:match "^%s*" or ""
+      local before = line:gsub("^%s*", ""):gsub("([%w_]+)$", "")
+      local var = line:match "([%w_]+)$" or ""
+      return sn(nil, { t(indent .. before .. "${#" .. var .. "[@]}") })
+    end, {}),
+  }),
+  -- Postfix: var.all → ${var[@]} (array expansion)
+  postfix({ trig = ".all", match_pattern = matches.line }, {
+    d(1, function(_, parent)
+      local line = parent.snippet.env.POSTFIX_MATCH
+      local indent = line:match "^%s*" or ""
+      local before = line:gsub("^%s*", ""):gsub("([%w_]+)$", "")
+      local var = line:match "([%w_]+)$" or ""
+      return sn(nil, { t(indent .. before .. '"${' .. var .. '[@]}"') })
+    end, {}),
+  }),
+  -- Postfix: var.lstrip → ${var##pattern} (strip from start, greedy)
+  postfix({ trig = ".lstrip", match_pattern = matches.line }, {
+    d(1, function(_, parent)
+      local line = parent.snippet.env.POSTFIX_MATCH
+      local indent = line:match "^%s*" or ""
+      local before = line:gsub("^%s*", ""):gsub("([%w_]+)$", "")
+      local var = line:match "([%w_]+)$" or ""
+      return sn(nil, {
+        t(indent .. before .. "${" .. var .. "##"),
+        i(1, "pattern"),
+        t "}",
+      })
+    end, {}),
+  }),
+  -- Postfix: var.rstrip → ${var%%pattern} (strip from end, greedy)
+  postfix({ trig = ".rstrip", match_pattern = matches.line }, {
+    d(1, function(_, parent)
+      local line = parent.snippet.env.POSTFIX_MATCH
+      local indent = line:match "^%s*" or ""
+      local before = line:gsub("^%s*", ""):gsub("([%w_]+)$", "")
+      local var = line:match "([%w_]+)$" or ""
+      return sn(nil, {
+        t(indent .. before .. "${" .. var .. "%%"),
+        i(1, "pattern"),
+        t "}",
+      })
+    end, {}),
+  }),
+  -- Postfix: var.lower → ${var,,} (lowercase)
+  postfix({ trig = ".lower", match_pattern = matches.line }, {
+    d(1, function(_, parent)
+      local line = parent.snippet.env.POSTFIX_MATCH
+      local indent = line:match "^%s*" or ""
+      local before = line:gsub("^%s*", ""):gsub("([%w_]+)$", "")
+      local var = line:match "([%w_]+)$" or ""
+      return sn(nil, { t(indent .. before .. "${" .. var .. ",,}") })
+    end, {}),
+  }),
+  -- Postfix: var.upper → ${var^^} (uppercase)
+  postfix({ trig = ".upper", match_pattern = matches.line }, {
+    d(1, function(_, parent)
+      local line = parent.snippet.env.POSTFIX_MATCH
+      local indent = line:match "^%s*" or ""
+      local before = line:gsub("^%s*", ""):gsub("([%w_]+)$", "")
+      local var = line:match "([%w_]+)$" or ""
+      return sn(nil, { t(indent .. before .. "${" .. var .. "^^}") })
+    end, {}),
+  }),
+  -- Postfix: var.default → ${var:-default} (default value)
+  postfix({ trig = ".default", match_pattern = matches.line }, {
+    d(1, function(_, parent)
+      local line = parent.snippet.env.POSTFIX_MATCH
+      local indent = line:match "^%s*" or ""
+      local before = line:gsub("^%s*", ""):gsub("([%w_]+)$", "")
+      local var = line:match "([%w_]+)$" or ""
+      return sn(nil, {
+        t(indent .. before .. "${" .. var .. ":-"),
+        i(1, "default"),
+        t "}",
+      })
+    end, {}),
+  }),
+  -- Postfix: var.ends → "$var" == *suffix
+  postfix({ trig = ".ends", match_pattern = matches.line }, {
+    d(1, function(_, parent)
+      local line = parent.snippet.env.POSTFIX_MATCH
+      local indent = line:match "^%s*" or ""
+      local before = line:gsub("^%s*", ""):gsub("([%w_]+)$", "")
+      local var = line:match "([%w_]+)$" or ""
+      return sn(nil, {
+        t(indent .. before .. '"$' .. var .. '" == *'),
+        i(1, "suffix"),
       })
     end, {}),
   }),
