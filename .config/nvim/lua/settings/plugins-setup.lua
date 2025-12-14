@@ -21,6 +21,11 @@ require("urlview").setup()
 require("Comment").setup()
 
 vim.filetype.add {
+  extension = {
+    puml = "plantuml",
+    pu = "plantuml",
+    plantuml = "plantuml",
+  },
   pattern = {
     [".*/.github/workflows/.*%.yml"] = "yaml.ghaction",
     [".*/.github/workflows/.*%.yaml"] = "yaml.ghaction",
@@ -674,7 +679,7 @@ require("nvim-surround").setup {
 -- there are some defaults for image directory and image name, you can change them
 vim.g.mdip_imgdir = "_media"
 vim.g.mdip_imgname = "image"
-vim.g["plantuml_previewer#viewer_path"] = "~/.vim/bundle/plantuml-previewer.vim/viewer"
+vim.g["plantuml_previewer#viewer_path"] = "~/.local/share/nvim/lazy/plantuml-previewer.vim/viewer"
 vim.g["plantuml_previewer#debug_mode"] = 0
 vim.g["plantuml_previewer#plantuml_jar_path"] = "/usr/local/bin/plantuml.jar"
 -- setup custom emmet snippets

@@ -321,6 +321,7 @@ return require("lazy").setup({
     ft = { "markdown" },
   },
   "weirongxu/plantuml-previewer.vim",
+  "aklt/plantuml-syntax",
   -- }}}
   -- My Plugins {{{
   {
