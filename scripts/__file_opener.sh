@@ -135,28 +135,50 @@ FILE_BIND="ctrl-f:change-prompt(files> )+reload(bash -c '{ zoxide query -l | whi
 # Bookmarks binding - extract and expand paths from bookmarks.conf with descriptions
 BOOKMARKS_BIND="ctrl-b:change-prompt(bookmarks> )+reload(bash -c 'while IFS=\";\" read -r desc path; do path=\${path/#\\~/\$HOME}; printf \"%-60s %s\\n\" \"\$desc\" \"\$path\"; done < ~/dev/dotfiles/scripts/__bookmarks.conf')"
 
+# Marker file for returning to main picker
+RETURN_MARKER="/tmp/file_opener_return_$$"
+
+# PRs binding (Ctrl+G for GitHub) - sets marker, launches PR script, then aborts to restart loop
+PR_BIND="ctrl-g:execute-silent(touch $RETURN_MARKER)+execute(~/dev/dotfiles/scripts/__my_prs.sh fzf)+abort"
+
+# Linear issues binding (Ctrl+I for Issues) - sets marker, launches Linear script, then aborts to restart loop
+LINEAR_BIND="ctrl-i:execute-silent(touch $RETURN_MARKER)+execute(~/dev/dotfiles/scripts/__linear_issue_viewer.sh)+abort"
+
 # Copy to clipboard binding - extracts path from bookmark format or uses line as-is
 COPY_BIND="ctrl-y:execute-silent(~/dev/dotfiles/scripts/__copy_path_with_notification.sh {})+abort"
 
-# Start with zoxide dirs + all files - best of both worlds
-OUTPUT=$( {
-    # First show zoxide directories (most frequently used)
-    zoxide query -l
-    # Then show all files from home, excluding cache directory
-    fd --type f --hidden --absolute-path --color never --exclude .git --exclude node_modules --exclude .cache --max-depth 4 . "$HOME"
-} | fzf \
-    --multi \
-    --preview '[[ -d {} ]] && (exa --color=always --long --all --header --icons --git {} 2>/dev/null || ls -la {}) || [[ -f {} ]] && (bat --color=always {} 2>/dev/null || cat {}) || echo "Preview not available"' \
-    --preview-window 'right:50%:wrap' \
-    --header ' Enter: open | C-y: copy | C-f: files | C-x: zoxide | C-d: dirs | C-b: bookmarks' \
-    --prompt 'all> ' \
-    --bind "$ZOXIDE_BIND" \
-    --bind "$DIR_BIND" \
-    --bind "$FILE_BIND" \
-    --bind "$BOOKMARKS_BIND" \
-    --bind "$COPY_BIND" \
-    --bind "ctrl-c:abort" \
-    2>/dev/null || true)
+# Loop to allow returning from PRs/Linear back to main picker
+while true; do
+    OUTPUT=$( {
+        # First show zoxide directories (most frequently used)
+        zoxide query -l
+        # Then show all files from home, excluding cache directory
+        fd --type f --hidden --absolute-path --color never --exclude .git --exclude node_modules --exclude .cache --max-depth 4 . "$HOME"
+    } | fzf \
+        --multi \
+        --preview '[[ -d {} ]] && (exa --color=always --long --all --header --icons --git {} 2>/dev/null || ls -la {}) || [[ -f {} ]] && (bat --color=always {} 2>/dev/null || cat {}) || echo "Preview not available"' \
+        --preview-window 'right:50%:wrap' \
+        --header ' C-f:files C-x:zoxide C-d:dirs C-b:bookmarks C-g:PRs C-i:Linear | C-y:copy' \
+        --prompt 'all> ' \
+        --bind "$ZOXIDE_BIND" \
+        --bind "$DIR_BIND" \
+        --bind "$FILE_BIND" \
+        --bind "$BOOKMARKS_BIND" \
+        --bind "$PR_BIND" \
+        --bind "$LINEAR_BIND" \
+        --bind "$COPY_BIND" \
+        --bind "ctrl-c:abort" \
+        2>/dev/null) || true
+
+    # Check if we should return to main picker (marker exists from PRs/Linear)
+    if [[ -f "$RETURN_MARKER" ]]; then
+        rm -f "$RETURN_MARKER"
+        continue  # Restart the loop, show main picker again
+    fi
+
+    # Otherwise, exit the loop (Ctrl+C on main or selection made)
+    break
+done
 
 # Process selections (ctrl-y is now handled by fzf binding)
 if [ -n "$OUTPUT" ]; then
