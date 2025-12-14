@@ -29,11 +29,6 @@ regex = '[^ ]+(?:\s*)$'
 command = { program = "/usr/bin/tmux", args = ["split-window", "-h", "-c", "#{pane_current_path}", "sh", "-c", "nvim \"$0\""] }
 binding = { key = "2", mods = "Control" }
 
-[[hints.enabled]]
-regex = '(kubectl (apply|create|delete|get secret|describe secret)|git (push|commit|tag)).*'
-command = "/home/decoder/.claude/scripts/__alacritty_kubectl_hint.sh"
-binding = { key = "3", mods = "Control" }
-
 [cursor.style]
 shape = "Beam"
 
