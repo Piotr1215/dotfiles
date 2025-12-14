@@ -147,7 +147,36 @@ main() {
     fi
 }
 
+# Output tab-separated data for fzf reload (used by __file_opener.sh)
+format_issues_data() {
+    local json_data="$1"
+    echo "$json_data" | jq -r '.data.issues.nodes[] |
+        (.priority as $p |
+            if $p == 1 then "🔴"
+            elif $p == 2 then "🟠"
+            elif $p == 3 then "🟡"
+            elif $p == 4 then "🔵"
+            else "⚪"
+            end
+        ) + " " +
+        (.updatedAt | split("T")[0]) + " │ " +
+        .team.key + "-" + .identifier + " │ " +
+        (.state.name | .[0:12]) + " │ " +
+        (if .assignee.name then .assignee.name else "Unassigned" end | .[0:12]) + " │ " +
+        (.title | .[0:50]) +
+        "\t" + .url'
+}
+
 # Execute main only if script is run directly (not sourced)
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
-    main "$@"
+    case "${1:-}" in
+        fzf-data)
+            validate_env_vars
+            issues_json=$(fetch_linear_issues)
+            format_issues_data "$issues_json"
+            ;;
+        *)
+            main "$@"
+            ;;
+    esac
 fi
