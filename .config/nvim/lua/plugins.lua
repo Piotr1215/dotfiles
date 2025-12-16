@@ -52,6 +52,9 @@ return require("lazy").setup({
           enabled = true,
           file = "/tmp/claude_progress",
         },
+        flash = {
+          scroll_to_changes = true,
+        },
       }
     end,
   },
