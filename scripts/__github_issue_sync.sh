@@ -292,8 +292,8 @@ manage_project_settings() {
         fi
     fi
 
-    # Set session:vdocs for all DOC issues
-    if [[ "$issue_number" == *"DOC"* ]]; then
+    # Set session:vdocs for Linear DOC team issues (issue_number starts with DOC)
+    if [[ "$issue_number" == DOC* ]]; then
         task rc.confirmation=no modify "$task_uuid" session:vdocs
         task rc.confirmation=no modify "$task_uuid" +kill
     fi
