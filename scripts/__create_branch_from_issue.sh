@@ -35,6 +35,8 @@ extract_issue_id() {
 }
 
 create_interactive_branch() {
+	local skip_claude=false
+	[[ "${1:-}" == "--no-claude" ]] && skip_claude=true
 	current_branches=$(git branch --format="%(refname:short)" | grep -E '^[a-zA-Z]+-[0-9]+' || true)
 	
 	linear_issues=$(get_linear_issues)
@@ -70,7 +72,7 @@ create_interactive_branch() {
 	git checkout -b "$new_branch"
 
 	# Launch Claude with the issue context
-	KUBECONFIG=/home/decoder/dev/homelab/kubeconfig __claude_with_monitor.sh "/ops-linear-issue ${issue_id}"
+	[[ "$skip_claude" == "false" ]] && KUBECONFIG=/home/decoder/dev/homelab/kubeconfig __claude_with_monitor.sh "/ops-linear-issue ${issue_id}"
 }
 
-create_interactive_branch
+create_interactive_branch "$@"

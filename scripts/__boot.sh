@@ -21,7 +21,7 @@ help_function() {
 	echo "  - Sources a generic error handling function from __trap.sh."
 	echo "  - Sets specific bash options for error handling (set -eo pipefail)."
 	echo "  - Moves Alacritty window to HDMI 0."
-	echo "  - Launches specific Firefox profiles for work or home, depending on the day."
+	echo "  - Launches specific LibreWolf profiles for work or home, depending on the day."
 	echo ""
 	echo "Note: This script includes debug options and references to other scripts."
 }
@@ -57,7 +57,7 @@ move_alacritty_to_hdmi_0() {
 # Function to modify profiles.ini
 update_profiles_ini() {
 	profile_to_set=$1
-	profiles_ini_path="$HOME/.mozilla/firefox/profiles.ini"
+	profiles_ini_path="$HOME/.var/app/io.gitlab.librewolf-community/.librewolf/profiles.ini"
 
 	# Backup current profiles.ini
 	cp "$profiles_ini_path" "$profiles_ini_path.bak"
@@ -83,14 +83,14 @@ update_profiles_ini() {
 
 if [[ " ${weekdays[*]} " =~ $current_day ]] && [[ "$timeoff" == 0 ]]; then
 	/home/decoder/dev/dotfiles/scripts/__create_recurring_tasks.sh
-	update_profiles_ini "8gtkyq7h.Work"
+	update_profiles_ini "j549qbym.Work"
 	flatpak run com.slack.Slack 2>/dev/null &
 	nohup firefox -P "Work" >/dev/null 2>&1 &
 	alacritty &
 	move_alacritty_to_hdmi_0
 else
 	# Weekend :)
-	update_profiles_ini "g4ip39zz.default-release"
+	update_profiles_ini "7fs4462i.decoder"
 	alacritty &
 	move_alacritty_to_hdmi_0
 fi

@@ -43,8 +43,8 @@ def append_to_playlist(playlist_file_path):
 # Get the active window title
 active_window_title = subprocess.getoutput("xdotool getactivewindow getwindowname")
 
-# Check if the active window is Firefox
-if 'Firefox' in active_window_title:
+# Check if the active window is a browser
+if 'Firefox' in active_window_title or 'LibreWolf' in active_window_title:
     append_to_playlist(vids_playlist_path)
     
     clipboard.fill_clipboard("")

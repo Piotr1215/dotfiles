@@ -5,7 +5,7 @@
     "modes": [
         3
     ],
-    "usageCount": 0,
+    "usageCount": 9,
     "prompt": false,
     "omitTrigger": false,
     "showInTrayMenu": false,
@@ -22,7 +22,7 @@
             "<alt>",
             "<ctrl>"
         ],
-        "hotKey": "d"
+        "hotKey": "c"
     },
     "filter": {
         "regex": null,
