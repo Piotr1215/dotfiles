@@ -179,12 +179,12 @@ function nman() {
 
 function ufp() {
     local profile_type=$1
-    local WORK_PROFILE="8gtkyq7h.Work"
-    local HOME_PROFILE="g4ip39zz.default-release"
+    local WORK_PROFILE="j549qbym.Work"
+    local HOME_PROFILE="7fs4462i.decoder"
 
     update_profiles_ini() {
         local profile_to_set=$1
-        local profiles_ini_path="$HOME/.mozilla/firefox/profiles.ini"
+        local profiles_ini_path="$HOME/.var/app/io.gitlab.librewolf-community/.librewolf/profiles.ini"
 
         # Backup current profiles.ini
         cp "$profiles_ini_path" "$profiles_ini_path.bak"

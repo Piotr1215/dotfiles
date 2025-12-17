@@ -2,10 +2,8 @@
     "type": "script",
     "description": "L_alacritty_claude",
     "store": {},
-    "modes": [
-        3
-    ],
-    "usageCount": 0,
+    "modes": [],
+    "usageCount": 1,
     "prompt": false,
     "omitTrigger": false,
     "showInTrayMenu": false,

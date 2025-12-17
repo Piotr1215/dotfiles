@@ -30,7 +30,7 @@ notes.modes="batch,any,normal"
 url.target=annotations
 url.labelregex=".*"
 url.regex="((?:www|http).*)"
-url.command="open $LAST_MATCH"
+url.command="open $LAST_MATCH 2>/dev/null"
 url.modes="batch,any,normal"
 
 email.target=annotations

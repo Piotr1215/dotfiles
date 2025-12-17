@@ -75,7 +75,7 @@ dim_all_inactive_windows() {
 		window_class=$(xprop -id "$win_id" WM_CLASS 2>/dev/null)
 		
 		# Check if it's a regular application window
-		if echo "$window_class" | grep -qE "firefox|Navigator|Alacritty|Slack|slack|Code|code"; then
+		if echo "$window_class" | grep -qE "firefox|Navigator|librewolf|Librewolf|Alacritty|Slack|slack|Code|code"; then
 			if [ "$win_id" != "$active_window" ]; then
 				# Dim inactive windows to 85% opacity
 				xprop -id "$win_id" -f _NET_WM_WINDOW_OPACITY 32c -set _NET_WM_WINDOW_OPACITY 0xe6666666
@@ -83,6 +83,15 @@ dim_all_inactive_windows() {
 			# Active window stays at full opacity (no action needed after reset)
 		fi
 	done
+}
+# Get browser window (Firefox or LibreWolf)
+get_browser_windows() {
+	xdotool search --classname Navigator 2>/dev/null
+	xdotool search --classname librewolf 2>/dev/null
+}
+get_visible_browser_window() {
+	xdotool search --onlyvisible --classname Navigator 2>/dev/null | head -n 1
+	xdotool search --onlyvisible --classname librewolf 2>/dev/null | head -n 1
 }
 #}}}
 
@@ -123,8 +132,8 @@ alacritty_firefox_vertical() {
 	screen_width=$(echo $screen_size | cut -d'x' -f1)
 	half_width=$((screen_width / 2))
 
-	# Get the ID of the first Firefox window across all workspaces
-	firefox_window=$(xdotool search --classname Navigator | head -n 1)
+	# Get the ID of the first browser window across all workspaces
+	firefox_window=$(get_browser_windows | head -n 1)
 	if [ -n "$firefox_window" ]; then
 		# First, maximize and then unmaximize
 		wmctrl -i -r "$firefox_window" -b add,maximized_vert,maximized_horz
@@ -165,8 +174,8 @@ firefox_firefox_vertical() {
 		xdotool windowminimize --sync "$alacritty_window"
 	fi
 
-	# Get the IDs of the first two Firefox windows
-	firefox_windows=($(xdotool search --classname Navigator | head -n 2))
+	# Get the IDs of the first two browser windows
+	firefox_windows=($(get_browser_windows | head -n 2))
 
 	if [ ${#firefox_windows[@]} -eq 2 ]; then
 		for i in 0 1; do
@@ -208,9 +217,9 @@ slack_firefox_vertical() {
 		exit 0
 	fi
 	
-	firefox_window=$(xdotool search --classname Navigator | head -n 1)
+	firefox_window=$(get_browser_windows | head -n 1)
 	if [ -z "$firefox_window" ]; then
-		echo "No Firefox window found."
+		echo "No browser window found."
 		exit 0
 	fi
 	
@@ -274,8 +283,8 @@ slack_alacritty_vertical() {
 }
 max_firefox() {
 	# layout1.sh
-	# Get the ID of the first visible Firefox window
-	window=$(xdotool search --onlyvisible --classname Navigator | head -n 1)
+	# Get the ID of the first visible browser window
+	window=$(get_visible_browser_window | head -n 1)
 	if [ -n "$window" ]; then
 		minimize_window "$window"
 		# Map window with sync
@@ -322,7 +331,7 @@ firefox_firefox_alacritty() {
 	alacritty_height=1028                       # Adjusted to fit remaining space
 
 	# Get window IDs
-	firefox_windows=($(xdotool search --classname Navigator | head -n 2))
+	firefox_windows=($(get_browser_windows | head -n 2))
 	alacritty=$(xdotool search --onlyvisible --classname Alacritty | head -n 1)
 
 	if [ ${#firefox_windows[@]} -eq 2 ] && [ -n "$alacritty" ]; then
@@ -397,8 +406,8 @@ chatgpt_alacritty_vertical() {
 	screen_width=$(echo $screen_size | cut -d'x' -f1)
 	half_width=$((screen_width / 2))
 
-	# Check if Firefox is running
-	firefox_window=$(xdotool search --classname Navigator | head -n 1)
+	# Check if browser is running
+	firefox_window=$(get_browser_windows | head -n 1)
 	
 	# PROJECT: brotab
 	# Check if Claude tab exists using brotab
@@ -414,15 +423,15 @@ chatgpt_alacritty_vertical() {
 		# Also ensure Firefox window is focused
 		xdotool windowactivate "$firefox_window"
 	else
-		# Claude not open, open it in Firefox
+		# ChatGPT not open, open it in browser
 		if [ -n "$firefox_window" ]; then
-			# Firefox is running, open in new tab
-			firefox --new-tab "https://chatgpt.com" 2>/dev/null &
+			# Browser is running, open in new tab
+			flatpak run io.gitlab.librewolf-community "https://chatgpt.com" 2>/dev/null &
 		else
-			# No Firefox running, start it with Claude
-			firefox "https://chatgpt.com" 2>/dev/null &
-			sleep 2  # Give Firefox time to start
-			firefox_window=$(xdotool search --classname Navigator | head -n 1)
+			# No browser running, start it with ChatGPT
+			flatpak run io.gitlab.librewolf-community "https://chatgpt.com" 2>/dev/null &
+			sleep 2  # Give browser time to start
+			firefox_window=$(get_browser_windows | head -n 1)
 		fi
 		
 		# Brief wait for tab to load
