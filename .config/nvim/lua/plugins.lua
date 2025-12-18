@@ -28,7 +28,10 @@ return require("lazy").setup({
       { "<leader>ct", "<Plug>(pairup-toggle)", desc = "Toggle Agent terminal" },
       { "<leader>cs", "<Plug>(pairup-suspend)", desc = "Suspend Agent auto-processing" },
       { "<leader>cl", "<Plug>(pairup-lsp)", desc = "Send LSP to Agent" },
-      { "<leader>cd", "<Plug>(pairup-diff)", desc = "Send git diff to Agent" },
+      { "<leader>cd", "<Plug>(pairup-conflict-diff)", desc = "Conflict diff view" },
+      { "<leader>cS", "<Plug>(pairup-scope)", desc = "Scope" },
+      { "<leader>cD", "<Plug>(pairup-diff)", desc = "Send git diff to Agent" },
+      { "<leader>co", "<Plug>(pairup-accept)", desc = "Accept changes" },
       { "<leader>cq", "<Plug>(pairup-questions)", desc = "Show uu: questions" },
       { "]C", "<Plug>(pairup-next-marker)", desc = "Next cc: marker" },
       { "[C", "<Plug>(pairup-prev-marker)", desc = "Prev cc: marker" },
@@ -50,7 +53,6 @@ return require("lazy").setup({
         },
         progress = {
           enabled = true,
-          file = "/tmp/claude_progress",
         },
         flash = {
           scroll_to_changes = true,
