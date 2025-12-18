@@ -4,28 +4,9 @@ Simple dotfiles with an installation script.
 
 [![Video Thumbnail](https://img.youtube.com/vi/_ttF5InNuMI/0.jpg)](https://www.youtube.com/watch?v=_ttF5InNuMI)
 
-## Encrypted Files
+## What are Dotfiles?
 
-This repository uses git-crypt for encrypting sensitive files. The following files are encrypted:
-
-- `.vsnip/global.json` - VSCode snippets file
-
-### Setting up git-crypt for new devices
-
-After cloning the repository, you'll need the encryption key to decrypt these files:
-
-```bash
-# Install git-crypt
-sudo apt install git-crypt
-
-# Copy the encryption key to your new machine
-# (securely transfer the .keys/git-crypt-key file)
-
-# Unlock the repository with the key
-git-crypt unlock /path/to/git-crypt-key
-```
-
-Once unlocked, encrypted files will automatically be decrypted when checked out and encrypted when committed.
+Dotfiles are configuration files for Unix-like systems, named for their leading dot (e.g., `.bashrc`, `.vimrc`). This repo stores my personal configs for easy setup across machines.
 
 ## Installation
 
@@ -44,7 +25,7 @@ chmod +x install.sh
 ```
 
 The installation script will:
-1. Install Ansible if not present
+1. Install [ansible](https://www.ansible.com/) if not present
 2. Run the ansible playbook which will:
    - Configure git with your credentials
    - Install and configure all necessary tools and programs
@@ -72,7 +53,7 @@ Or run remotely:
 ### Runing `./install` will
 
 - configure git with given user and email (default values point to my user)
-- install bunch of programs and symlink them using stow
+- install a bunch of programs and symlink them using stow
 - most notably, install neovim and configure its plugins
 
 > [!NOTE]
@@ -80,7 +61,7 @@ Or run remotely:
 
 Any existing dotfiles will be pulled into the dotfiles repo, please make sure that you are not overwriting anything you don't want to. Check git status before committing.
 
-The install script is using `stow` to symlink whole directories and exclude others.
+The installation script is using `stow` to symlink whole directories and exclude others.
 You can symlink additional directories like so:
 
 ```bash
@@ -88,6 +69,31 @@ stow --target=/home/decoder/.config/tmuxinator tmuxinator
 ```
 
 Adding new directory or file to the dotfiles repo can be done with the [__dotfiles_adder.sh](./scripts/__dotfiles_adder.sh) script
+
+## Encrypted Files
+
+This repository uses [git-crypt](https://github.com/AGWA/git-crypt) for encrypting sensitive files. The following files are encrypted:
+
+- `.vsnip/global.json` — VSCode snippets file
+
+### Setting up git-crypt for new devices
+
+After cloning the repository, you'll need the encryption key to decrypt these files:
+
+```bash
+# Install git-crypt (Debian/Ubuntu)
+sudo apt install git-crypt
+
+# For other systems, see: https://github.com/AGWA/git-crypt#installing-git-crypt
+
+# Copy the encryption key to your new machine
+# (securely transfer the .keys/git-crypt-key file)
+
+# Unlock the repository with the key
+git-crypt unlock /path/to/git-crypt-key
+```
+
+Once unlocked, encrypted files will automatically be decrypted when checked out and encrypted when committed.
 
 ## Auto-config commit
 
@@ -125,7 +131,7 @@ sudo apt install inotify-hookable -y
 ### Write script
 
 This script watches a folder with dotfiles and every time a change to a file is
-made or a new file is created, commits everything and pushes to git. This also
+made, or a new file is created, commits everything and pushes to git. This also
 works of course if the changes are made on the symlinked files.
 
 ```bash
@@ -152,7 +158,7 @@ done
 
 Creating user is only required for testing, in real installation you should already have a user (the script assumes you are running as a user).
 
-Create a user, in my case user name is `decoder`, and switch to the user
+Create a user, in my case username is `decoder`, and switch to the user
 directory.
 
 For testing purposes, password is "test", use real password for real
@@ -181,4 +187,4 @@ Last test date: 2024-12-29
 
 <img src="https://kopimi.com/badges/modern-kopimi-logo.png" alt="kopimi_logo" style="width: 25%;">
 
-All files and scripts in this repo are released [CC0](https://creativecommons.org/publicdomain/zero/1.0/) / [kopimi](https://kopimi.com)! in the spirit of _freedom of information_, i encourage you to fork, modify, change, share, or do whatever you like with this project!
+All files and scripts in this repo are released [CC0](https://creativecommons.org/publicdomain/zero/1.0/) / [kopimi](https://kopimi.com)! In the spirit of _freedom of information_, I encourage you to fork, modify, change, share, or do whatever you like with this project!
