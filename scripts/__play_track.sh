@@ -298,6 +298,7 @@ if [[ -n $selected_track ]]; then
 		# Start new tmux session with MPV using the socket
 		tmux new-session -d -s "$tmux_session_name" \
 			mpv --loop-file --no-video --ytdl \
+			--ytdl-format="bestaudio/best" \
 			--input-ipc-server="$socket_path" \
 			"$track_path"
 
