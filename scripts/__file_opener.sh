@@ -152,7 +152,7 @@ EDIT_BIND="ctrl-e:execute(name={} && name=\${name% *} && [[ -f ~/.config/tmuxina
 MUSIC_BIND="ctrl-u:execute(~/dev/dotfiles/scripts/__play_track.sh --run)+abort"
 
 # Kill current music (Ctrl+K)
-KILL_MUSIC_BIND="ctrl-k:execute-silent(session=\$(cat /tmp/current_music_session.txt 2>/dev/null) && tmux kill-session -t \"\$session\" 2>/dev/null && rm -f /tmp/current_music_session.txt)"
+KILL_MUSIC_BIND="ctrl-k:execute-silent(session=\$(cat /tmp/current_music_session.txt 2>/dev/null) && tmux kill-session -t \"\$session\" 2>/dev/null && rm -f /tmp/current_music_session.txt /tmp/current_music_session_display.txt)"
 
 # Copy to clipboard binding - extracts path from bookmark format or uses line as-is
 COPY_BIND="ctrl-y:execute-silent(~/dev/dotfiles/scripts/__copy_path_with_notification.sh {})+abort"
