@@ -21,9 +21,9 @@ help_function() {
 	echo "Features:"
 	echo "  - Opens the specified markdown file in neovim"
 	echo "  - Automatically triggers MarkdownPreview"
-	echo "  - Sets up Firefox/Alacritty side-by-side layout"
+	echo "  - Sets up LibreWolf/Alacritty side-by-side layout"
 	echo ""
-	echo "Note: This script requires markdown-preview.nvim plugin and Firefox browser."
+	echo "Note: This script requires markdown-preview.nvim plugin and LibreWolf browser."
 }
 
 # Check for help argument

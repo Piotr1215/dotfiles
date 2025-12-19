@@ -139,7 +139,9 @@ function list_sessions() {
 
 # Use fzf to select a session, removing markers and spaces
 function select_session() {
-	local selected=$(list_sessions | fzf --reverse --header="**=pinned active  *=active  Task always first")
+	local selected=$(list_sessions | fzf --reverse \
+		--header="**=pinned  *=active | C-e:kill" \
+		--bind "ctrl-e:execute-silent(echo {} | sed 's/^[* ]*//' | xargs -I{} tmux kill-session -t {})+abort")
 	local selected_session=$(echo "$selected" | sed 's/^[* ]*//')
 	
 	if [[ -n "$selected_session" ]]; then
