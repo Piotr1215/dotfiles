@@ -8,6 +8,7 @@ set -eo pipefail
 # Set PATH to include user binaries (tmux popup has minimal PATH)
 export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$HOME/go/bin:$PATH"
 
+
 # Detect if running in tmux popup and adjust terminal settings
 if [[ -n "$TMUX" ]] && [[ "$TERM" == "tmux-256color" || "$TERM" == "screen-256color" ]]; then
     # Suppress error output for terminal control sequences
@@ -144,21 +145,46 @@ PR_BIND="ctrl-g:execute-silent(touch $RETURN_MARKER)+execute(~/dev/dotfiles/scri
 # Linear issues binding (Ctrl+I for Issues) - sets marker, launches Linear script, then aborts to restart loop
 LINEAR_BIND="ctrl-i:execute-silent(touch $RETURN_MARKER)+execute(~/dev/dotfiles/scripts/__linear_issue_viewer.sh)+abort"
 
+# Edit tmuxinator config (Ctrl+E) - only works on sessions
+EDIT_BIND="ctrl-e:execute(name={} && name=\${name% *} && [[ -f ~/.config/tmuxinator/\${name}.yml ]] && nvim ~/.config/tmuxinator/\${name}.yml)+abort"
+
+# Music picker (Ctrl+U) - run music picker, closes popup on exit (can't use Ctrl+M, it's Enter)
+MUSIC_BIND="ctrl-u:execute(~/dev/dotfiles/scripts/__play_track.sh --run)+abort"
+
+# Kill current music (Ctrl+K)
+KILL_MUSIC_BIND="ctrl-k:execute-silent(session=\$(cat /tmp/current_music_session.txt 2>/dev/null) && tmux kill-session -t \"\$session\" 2>/dev/null && rm -f /tmp/current_music_session.txt)"
+
 # Copy to clipboard binding - extracts path from bookmark format or uses line as-is
 COPY_BIND="ctrl-y:execute-silent(~/dev/dotfiles/scripts/__copy_path_with_notification.sh {})+abort"
 
 # Loop to allow returning from PRs/Linear back to main picker
 while true; do
     OUTPUT=$( {
+        # All tmuxinator sessions (* = active), task first
+        active=$(tmux ls -F '#{session_name}' 2>/dev/null | tr '\n' '|')
+        for s in task $(ls ~/.config/tmuxinator/*.yml 2>/dev/null | xargs -n1 basename | sed 's/\.yml$//' | grep -v '^task$' | sort); do
+            [[ "|$active" == *"|$s|"* || "$active" == "$s|"* ]] && echo "$s *" || echo "$s"
+        done
         # First show zoxide directories (most frequently used)
         zoxide query -l
         # Then show all files from home, excluding cache directory
         fd --type f --hidden --absolute-path --color never --exclude .git --exclude node_modules --exclude .cache --max-depth 4 . "$HOME"
     } | fzf \
         --multi \
-        --preview '[[ -d {} ]] && (exa --color=always --long --all --header --icons --git {} 2>/dev/null || ls -la {}) || [[ -f {} ]] && (bat --color=always {} 2>/dev/null || cat {}) || echo "Preview not available"' \
+        --tiebreak=index \
+        --preview 'item={}; name=${item% \*};
+            if [[ -f ~/.config/tmuxinator/${name}.yml ]]; then
+                [[ "$item" == *" *" ]] && echo "=== ACTIVE ===" && tmux list-windows -t "$name" -F "  #I: #W (#P panes)" 2>/dev/null && echo ""
+                bat --color=always ~/.config/tmuxinator/${name}.yml 2>/dev/null || cat ~/.config/tmuxinator/${name}.yml
+            elif [[ -d "$item" ]]; then
+                exa --color=always --long --all --header --icons --git "$item" 2>/dev/null || ls -la "$item"
+            elif [[ -f "$item" ]]; then
+                bat --color=always "$item" 2>/dev/null || cat "$item"
+            else
+                echo "Preview not available"
+            fi' \
         --preview-window 'right:50%:wrap' \
-        --header ' C-f:files C-x:zoxide C-d:dirs C-b:bookmarks C-g:PRs C-i:Linear | C-y:copy' \
+        --header ' C-f:files C-x:zoxide C-d:dirs C-b:bookmarks C-g:PRs C-i:Linear C-e:edit C-u:music C-k:stop | C-y:copy' \
         --prompt 'all> ' \
         --bind "$ZOXIDE_BIND" \
         --bind "$DIR_BIND" \
@@ -166,6 +192,9 @@ while true; do
         --bind "$BOOKMARKS_BIND" \
         --bind "$PR_BIND" \
         --bind "$LINEAR_BIND" \
+        --bind "$EDIT_BIND" \
+        --bind "$MUSIC_BIND" \
+        --bind "$KILL_MUSIC_BIND" \
         --bind "$COPY_BIND" \
         --bind "ctrl-c:abort" \
         2>/dev/null) || true
@@ -182,11 +211,19 @@ done
 
 # Process selections (ctrl-y is now handled by fzf binding)
 if [ -n "$OUTPUT" ]; then
+    # Handle sessions (format: "name" or "name *")
+    if [[ "$OUTPUT" =~ ^([a-z0-9-]+)( \*)?$ ]]; then
+        session="${BASH_REMATCH[1]}"
+        if [[ -f ~/.config/tmuxinator/${session}.yml ]]; then
+            tmux switch-client -t "$session" 2>/dev/null || tmuxinator start "$session"
+            exit 0
+        fi
+    fi
+
     # Build array of files from selections
     declare -a file_array
     while IFS= read -r line; do
         if [ -n "$line" ]; then
-            # Use helper script to extract path from bookmarks or regular entries
             real_path=$(~/dev/dotfiles/scripts/__extract_path_from_fzf.sh "$line")
             file_array+=("$real_path")
         fi
