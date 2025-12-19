@@ -29,12 +29,16 @@ return require("lazy").setup({
       { "<leader>cs", "<Plug>(pairup-suspend)", desc = "Suspend Agent auto-processing" },
       { "<leader>cl", "<Plug>(pairup-lsp)", desc = "Send LSP to Agent" },
       { "<leader>cd", "<Plug>(pairup-conflict-diff)", desc = "Conflict diff view" },
-      { "<leader>cS", "<Plug>(pairup-scope)", desc = "Scope" },
+      { "<leader>ce", "<Plug>(pairup-proposal-edit)", desc = "Edit proposal (float)" },
       { "<leader>cD", "<Plug>(pairup-diff)", desc = "Send git diff to Agent" },
       { "<leader>co", "<Plug>(pairup-accept)", desc = "Accept changes" },
       { "<leader>cq", "<Plug>(pairup-questions)", desc = "Show uu: questions" },
+      { "<leader>cC", "<Plug>(pairup-markers)", desc = "Show cc: markers" },
+      { "<leader>cP", "<Plug>(pairup-proposals)", desc = "Show proposals" },
       { "]C", "<Plug>(pairup-next-marker)", desc = "Next cc: marker" },
       { "[C", "<Plug>(pairup-prev-marker)", desc = "Prev cc: marker" },
+      { "]p", "<Plug>(pairup-proposal-next)", desc = "Next proposal" },
+      { "[p", "<Plug>(pairup-proposal-prev)", desc = "Prev proposal" },
     },
     config = function()
       require("pairup").setup {
@@ -50,6 +54,9 @@ return require("lazy").setup({
         auto_refresh = {
           enabled = true,
           interval_ms = 500,
+        },
+        inline = {
+          auto_process = false, -- Manual: use :Pairup inline
         },
         progress = {
           enabled = true,
