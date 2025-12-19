@@ -61,219 +61,109 @@ check_and_update_ytdlp() {
 	echo "$current_time" >"$timestamp_file"
 }
 
-check_and_update_ytdlp
-
 tracks_file="${HOME}/haruna_playlist.m3u"
 if [[ ! -f "$tracks_file" ]]; then
 	echo "Error: Track file not found at $tracks_file"
 	exit 1
 fi
 
-declare -A tracks
-declare -A display_names
-declare -a track_order
-current_track_name=""
+# Parse playlist with awk - output format: "Title | CATEGORY<TAB>URL"
+# TAB separates display from URL (URL hidden by fzf delimiter)
+track_data=$(awk '
+/^# / {
+	name = substr($0, 3)
+	gsub(/ - YouTube.*/, "", name)
+	# Split into category and title
+	if (match(name, /^([^:]+): (.+)$/, m)) {
+		category = m[1]
+		title = m[2]
+	} else {
+		category = ""
+		title = name
+	}
+}
+/^http/ && name {
+	if (category) {
+		printf "%s | %s\t%s\n", title, category, $0
+	} else {
+		printf "%s\t%s\n", title, $0
+	}
+	name = ""
+}
+' "$tracks_file" | sort)
 
-while IFS= read -r line || [[ -n "$line" ]]; do
-	if [[ $line == \#* ]]; then
-		current_track_name=${line#\# }
-		clean_name="${current_track_name% - YouTube — Mozilla Firefox}"
-		display_names["$clean_name"]="$current_track_name"
-		track_order+=("$clean_name")
-	elif [[ -n $current_track_name && -n $line ]]; then
-		tracks["$current_track_name"]="$line"
-	else
-		echo "Warning: Malformed line in playlist file. Skipping."
-	fi
-done <"$tracks_file"
-
-if [ ${#tracks[@]} -eq 0 ]; then
+if [[ -z "$track_data" ]]; then
 	echo "Error: No tracks found in the playlist."
 	exit 1
 fi
 
-# Find the longest title for proper alignment
-max_title_length=0
-formatted_track_names=()
-track_to_title_map=()
-track_to_category_map=()
-
-# First pass - extract titles and categories, find max display width
-for track in "${track_order[@]}"; do
-	# Extract category/type and title parts
-	if [[ "$track" =~ ^([^:]+):\ (.+)$ ]]; then
-		category="${BASH_REMATCH[1]}"
-		title="${BASH_REMATCH[2]}"
-		
-		# Store title and category separately for length calculation
-		track_to_title_map+=("$title")
-		track_to_category_map+=("$category")
-		
-		# Calculate display width (handles emojis and unicode properly)
-		title_width=$(echo -n "$title" | wc -L)
-		if [[ $title_width -gt $max_title_length ]]; then
-			max_title_length=$title_width
-		fi
-	else
-		# If pattern doesn't match, use as is for title, empty for category
-		track_to_title_map+=("$track")
-		track_to_category_map+=("")
-		
-		# Calculate display width
-		track_width=$(echo -n "$track" | wc -L)
-		if [[ $track_width -gt $max_title_length ]]; then
-			max_title_length=$track_width
-		fi
-	fi
-done
-
-# Add some padding to max length
-max_title_length=$((max_title_length + 2))
-
-# Second pass - create formatted entries with fixed-width alignment
-for i in "${!track_to_title_map[@]}"; do
-	title="${track_to_title_map[$i]}"
-	category="${track_to_category_map[$i]}"
-	
-	# Create padded title with | separator and category in brackets
-	if [[ -n "$category" ]]; then
-		# Calculate padding needed based on display width
-		title_width=$(echo -n "$title" | wc -L)
-		padding_length=$((max_title_length - title_width))
-		padding=$(printf '%*s' "$padding_length" '')
-		
-		# Format with fixed width: "Title     | CATEGORY"
-		formatted_track_names+=("$title$padding| $category")
-	else
-		# If no category, just pad the title
-		formatted_track_names+=("$title")
-	fi
-done
-
-track_names=$(printf "%s\n" "${formatted_track_names[@]}" | sort)
-# Add line numbers for easier selection, with consistent alignment
-track_names_with_numbers=$(nl -w2 -n rz -s'. ' <<< "$track_names")
+# Add line numbers
+track_names_with_numbers=$(nl -w2 -n rz -s'. ' <<< "$track_data")
 
 # Main loop for run mode
 while true; do
 	# In run mode, check for active sessions and add markers
 	if [[ "$RUN_MODE" == true ]]; then
-		# Read the currently playing session from file
-		current_playing_session=""
-		if [[ -f "/tmp/current_music_session.txt" ]]; then
-			current_playing_session=$(cat "/tmp/current_music_session.txt" 2>/dev/null || true)
+		current_display=""
+		session_file="/tmp/current_music_session.txt"
+		display_file="/tmp/current_music_session_display.txt"
+
+		# Check if session is still running
+		if [[ -f "$session_file" ]] && [[ -f "$display_file" ]]; then
+			session_name=$(cat "$session_file" 2>/dev/null)
+			if tmux has-session -t "$session_name" 2>/dev/null; then
+				current_display=$(cat "$display_file" 2>/dev/null)
+			fi
 		fi
-		
-		# Add markers to active tracks
-		marked_tracks=""
-		while IFS= read -r line; do
-			track_only=$(echo "$line" | sed 's/^[[:space:]]*[0-9]\+\.[[:space:]]*//')
-			
-			# Reconstruct the full track name from the formatted display
-			if [[ "$track_only" =~ ^(.+)[[:space:]]*\|[[:space:]]*(.+)$ ]]; then
-				title="${BASH_REMATCH[1]}"
-				title=$(echo "$title" | sed -e 's/[[:space:]]*$//')  # Trim trailing spaces
-				category="${BASH_REMATCH[2]}"
-				category=$(echo "$category" | sed -e 's/^[[:space:]]*//')  # Trim leading spaces
-				full_track="$category: $title"
-			else
-				full_track="$track_only"
-			fi
-			
-			# Create potential session name from full track (same logic as when creating session)
-			# Extract just the title part for session naming
-			if [[ "$full_track" =~ ^[^:]+:\ (.+)$ ]]; then
-				song_title="${BASH_REMATCH[1]}"
-			else
-				song_title="$full_track"
-			fi
-			
-			# Create session name with hash suffix for uniqueness
-			base_session=$(echo "$song_title" | tr -c '[:alnum:]-' '_' | tr '[:upper:]' '[:lower:]' | cut -c 1-45)
-			track_hash=$(echo -n "$full_track" | md5sum | cut -c 1-4)
-			potential_session="${base_session}_${track_hash}"
-			
-			# Check if this is the currently playing session
-			is_playing=false
-			if [[ "$potential_session" == "$current_playing_session" ]]; then
-				# Also verify the session actually exists
-				if tmux has-session -t "$potential_session" 2>/dev/null; then
-					is_playing=true
-				fi
-			fi
-			
-			if $is_playing; then
-				marked_tracks+="► $line"$'\n'
-			else
-				marked_tracks+="  $line"$'\n'
-			fi
-		done <<< "$track_names_with_numbers"
-		
-		# Sort marked tracks so playing tracks (with ►) appear first
-		playing_tracks=$(echo -n "$marked_tracks" | grep '^►' || true)
-		not_playing_tracks=$(echo -n "$marked_tracks" | grep '^  ' || true)
-		
-		if [[ -n "$playing_tracks" && -n "$not_playing_tracks" ]]; then
-			marked_tracks="$playing_tracks"$'\n'"$not_playing_tracks"
-		elif [[ -n "$playing_tracks" ]]; then
-			marked_tracks="$playing_tracks"
-		else
-			marked_tracks="$not_playing_tracks"
-		fi
-		
-		selected_track_with_number=$(echo "$marked_tracks" | fzf --ansi --reverse --prompt="Select track: ")
+
+		# Add markers using awk (no subprocess per line)
+		marked_tracks=$(echo "$track_names_with_numbers" | awk -v playing="$current_display" '
+		{
+			# Extract display part: remove "NN. " prefix, then get part before TAB
+			line = $0
+			sub(/^[0-9]+\. /, "", line)
+			split(line, parts, "\t")
+			display = parts[1]
+
+			if (playing != "" && display == playing) {
+				print "► " $0
+			} else {
+				print "  " $0
+			}
+		}')
+
+		# Sort: playing tracks first
+		playing=$(echo "$marked_tracks" | grep '^►' || true)
+		not_playing=$(echo "$marked_tracks" | grep '^  ' || true)
+		[[ -n "$playing" ]] && marked_tracks="$playing"$'\n'"$not_playing" || marked_tracks="$not_playing"
+
+		selected_track_with_number=$(echo "$marked_tracks" | fzf --ansi --reverse --prompt="Select track: " --delimiter=$'\t' --with-nth=1)
 	else
-		selected_track_with_number=$(echo "$track_names_with_numbers" | fzf --reverse --prompt="Select track: ")
+		selected_track_with_number=$(echo "$track_names_with_numbers" | fzf --reverse --prompt="Select track: " --delimiter=$'\t' --with-nth=1)
 	fi
 	
-	# Extract just the track name (remove the number prefix and marker if present)
-	selected_formatted_track=$(echo "$selected_track_with_number" | sed 's/^[►[:space:]]*[0-9]\+\.[[:space:]]*//')
+	# Extract line (remove number prefix and marker)
+	selected_line=$(echo "$selected_track_with_number" | sed 's/^[►[:space:]]*[0-9]\+\.[[:space:]]*//')
 
-# Map back to the original track name
-if [[ "$selected_formatted_track" =~ ^(.+)[[:space:]]*\|[[:space:]]*(.+)$ ]]; then
-	title="${BASH_REMATCH[1]}"
-	title=$(echo "$title" | sed -e 's/[[:space:]]*$//')  # Trim trailing spaces
-	category="${BASH_REMATCH[2]}"
-	category=$(echo "$category" | sed -e 's/^[[:space:]]*//')  # Trim leading spaces
-	# Try to find the original track name
-	for original_track in "${track_order[@]}"; do
-		if [[ "$original_track" == "$category: $title" ]]; then
-			selected_track="$original_track"
-			break
-		fi
-	done
-else
-	# If no match, use as is (handle case where there's no category)
-	clean_title=$(echo "$selected_formatted_track" | sed -e 's/[[:space:]]*$//')
-	selected_track="$clean_title"
-fi
+	# Format: "Title | CATEGORY<TAB>URL" - extract both parts
+	display_part="${selected_line%%	*}"  # Before TAB
+	track_url="${selected_line##*	}"     # After TAB
 
-if [[ -n $selected_track ]]; then
-	# Look up the original name to find the track path
-	original_name="${display_names[$selected_track]}"
-	track_path="${tracks[$original_name]}"
-	# Generate unique session name from the song title (not category)
-	# Extract just the title part for session naming
-	if [[ "$selected_track" =~ ^[^:]+:\ (.+)$ ]]; then
-		song_title="${BASH_REMATCH[1]}"
-	else
-		song_title="$selected_track"
-	fi
-	
+if [[ -n "$track_url" && "$track_url" == http* ]]; then
+	# Extract title for session naming (before the |)
+	song_title="${display_part%% |*}"
+	song_title="${song_title## }"  # Trim leading space
+
 	# Create session name: lowercase, alphanumeric, max 50 chars
-	# Use more characters and add a hash suffix for uniqueness
 	base_session=$(echo "$song_title" | tr -c '[:alnum:]-' '_' | tr '[:upper:]' '[:lower:]' | cut -c 1-45)
-	# Add a short hash of the full track name for uniqueness
-	track_hash=$(echo -n "$selected_track" | md5sum | cut -c 1-4)
+	track_hash=$(echo -n "$display_part" | md5sum | cut -c 1-4)
 	tmux_session_name="${base_session}_${track_hash}"
 
 	# Check if THIS exact session already exists (user clicked on playing track to stop it)
 	if tmux has-session -t "$tmux_session_name" 2>/dev/null; then
-		# Kill existing session
 		tmux kill-session -t "$tmux_session_name"
-		# Remove the session file since nothing is playing now
-		rm -f "/tmp/current_music_session.txt"
-		echo "Stopped: $selected_track"
+		rm -f "/tmp/current_music_session.txt" "/tmp/current_music_session_display.txt"
+		echo "Stopped: $song_title"
 	else
 		# Kill the previously playing session if it exists
 		session_file="/tmp/current_music_session.txt"
@@ -281,37 +171,33 @@ if [[ -n $selected_track ]]; then
 			previous_session=$(cat "$session_file")
 			if [[ -n "$previous_session" ]] && tmux has-session -t "$previous_session" 2>/dev/null; then
 				tmux kill-session -t "$previous_session" 2>/dev/null || true
-				echo "Stopped previous: $previous_session"
 			fi
 		fi
-		
-		# Create socket directory if it doesn't exist
+
+		# Update yt-dlp in background (ready for next time, doesn't block playback)
+		check_and_update_ytdlp &>/dev/null &
+
+		# Create socket directory and path
 		socket_dir="${HOME}/.mpv_sockets"
 		mkdir -p "$socket_dir"
-
-		# Create unique socket path for this session
 		socket_path="${socket_dir}/${tmux_session_name}.sock"
-
-		# Remove existing socket if it exists
 		rm -f "$socket_path"
 
-		# Start new tmux session with MPV using the socket
+		# Start new tmux session with MPV
 		tmux new-session -d -s "$tmux_session_name" \
 			mpv --loop-file --no-video --ytdl \
 			--ytdl-format="bestaudio/best" \
 			--input-ipc-server="$socket_path" \
-			"$track_path"
+			"$track_url"
 
-		# Store the session name for future reference
+		# Store both session name and display part for fast matching in --run mode
 		echo "$tmux_session_name" > "$session_file"
-		
-		echo "Playing: $selected_track"
+		echo "$display_part" > "${session_file%.txt}_display.txt"
+		echo "Playing: $song_title"
 	fi
-	
+
 	# If not in run mode, exit after single operation
-	if [[ "$RUN_MODE" != true ]]; then
-		break
-	fi
+	[[ "$RUN_MODE" != true ]] && break
 else
 	echo "No track selected. Exiting."
 	exit 0
