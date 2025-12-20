@@ -4,7 +4,7 @@ import time
 def is_google_docs():
     result = subprocess.run(['xdotool', 'getactivewindow', 'getwindowname'], stdout=subprocess.PIPE)
     window_name = result.stdout.decode('utf-8')
-    return 'Google Docs' and 'Firefox' in window_name
+    return 'Google Docs' in window_name and ('Firefox' in window_name or 'LibreWolf' in window_name)
 
 def is_clipboard_url():
     content = clipboard.get_clipboard()
