@@ -4,7 +4,7 @@ import subprocess
 
 active_window_title = subprocess.getoutput("xdotool getactivewindow getwindowname")
 
-if 'Firefox' in active_window_title:
+if 'Firefox' in active_window_title or 'LibreWolf' in active_window_title:
     try:
         layout = '/home/decoder/dev/dotfiles/scripts/__layouts.sh'
         keyboard.send_keys('<shift>+<alt>+a')  # Attach tab into a new window
