@@ -149,10 +149,10 @@ LINEAR_BIND="ctrl-i:execute-silent(touch $RETURN_MARKER)+execute(~/dev/dotfiles/
 EDIT_BIND="ctrl-e:execute(name={}; name=\${name% ◀◀◀}; [[ -f ~/.config/tmuxinator/\${name}.yml ]] && nvim ~/.config/tmuxinator/\${name}.yml)+abort"
 
 # Music picker (Ctrl+U) - run music picker, closes popup on exit (can't use Ctrl+M, it's Enter)
-MUSIC_BIND="ctrl-u:execute-silent(touch $RETURN_MARKER)+execute(~/dev/dotfiles/scripts/__play_track.sh --run)+abort"
+MUSIC_BIND="ctrl-u:execute(~/dev/dotfiles/scripts/__play_track.sh --run)+abort"
 
-# Kill current music (Ctrl+K)
-KILL_MUSIC_BIND="ctrl-k:execute-silent(session=\$(cat /tmp/current_music_session.txt 2>/dev/null) && tmux kill-session -t \"\$session\" 2>/dev/null && rm -f /tmp/current_music_session.txt /tmp/current_music_session_display.txt)"
+# Kill current music (Ctrl+K) - stops music and closes popup
+KILL_MUSIC_BIND="ctrl-k:execute-silent(session=\$(cat /tmp/current_music_session.txt 2>/dev/null) && tmux kill-session -t \"\$session\" 2>/dev/null && rm -f /tmp/current_music_session.txt /tmp/current_music_session_display.txt)+abort"
 
 # Copy to clipboard binding - extracts path from bookmark format or uses line as-is
 COPY_BIND="ctrl-y:execute-silent(~/dev/dotfiles/scripts/__copy_path_with_notification.sh {})+abort"

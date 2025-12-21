@@ -196,8 +196,8 @@ if [[ -n "$track_url" && "$track_url" == http* ]]; then
 		echo "Playing: $song_title"
 	fi
 
-	# If not in run mode, exit after single operation
-	[[ "$RUN_MODE" != true ]] && break
+	# Always exit after selection
+	break
 else
 	echo "No track selected. Exiting."
 	exit 0
