@@ -449,16 +449,16 @@ require("obsidian").setup {
 
   -- Configure keymaps using callbacks (community fork API)
   callbacks = {
-    enter_note = function(_, note)
+    enter_note = function()
       -- gf to follow links (uses :Obsidian follow_link command)
       vim.keymap.set("n", "gf", "<cmd>Obsidian follow_link<cr>", {
-        buffer = note.bufnr,
+        buffer = 0,
         desc = "Follow Obsidian link",
       })
 
       -- <CR> to follow links or toggle checkboxes
       vim.keymap.set("n", "<CR>", "<cmd>Obsidian smart_action<cr>", {
-        buffer = note.bufnr,
+        buffer = 0,
         desc = "Obsidian smart action",
       })
     end,
