@@ -2,6 +2,16 @@
 # ~ works ok here
 source ~/dev/dotfiles/scripts/__reusable_variables.sh
 
+function _clipboard_copy() {
+    local data
+    data=$(cat)
+    if [[ -n "$SSH_TTY" ]]; then
+        printf '\033]52;c;%s\a' "$(printf '%s' "$data" | base64)"
+    else
+        printf '%s' "$data" | DISPLAY=:0 xsel --clipboard
+    fi
+}
+
 alias ddg='ddg_function'
 
 function b() {
@@ -671,12 +681,15 @@ function cname() {
 
 # Copy the current working directory path to the clipboard
 function cpa() {
-    if command -v xclip > /dev/null; then
-        printf "%s" "$PWD" | xclip -selection clipboard
-        printf "%s\n" "Current working directory ('$(basename "$PWD")') path copied to clipboard."
+    if [[ -n "$SSH_TTY" ]]; then
+        # OSC 52 for SSH sessions (works with alacritty, kitty, iTerm2)
+        printf '\033]52;c;%s\a' "$(printf '%s' "$PWD" | base64)"
+    elif command -v xclip > /dev/null; then
+        printf "%s" "$PWD" | DISPLAY=:0 xclip -selection clipboard
     else
-        printf "%s\n" "Error: 'xclip' command not found. Please install 'xclip' to use this function."
+        printf "%s\n" "Error: No clipboard method available." && return 1
     fi
+    printf "%s\n" "Current working directory ('$(basename "$PWD")') path copied to clipboard."
 }
 
 # Change the directory to the path stored in the clipboard
