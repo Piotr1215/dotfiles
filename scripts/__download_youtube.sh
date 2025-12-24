@@ -26,26 +26,27 @@ download_video() {
 		return 1
 	fi
 
-	if ! yt-dlp -o "$output_dir/%(title)s.%(ext)s" --merge-output-format mp4 "$link" --no-playlist; then
-		if ! yt-dlp -o "$output_dir/%(title)s.%(ext)s" -f best "$link" --no-playlist; then
+	if [ "$convert_to_mp3" = true ]; then
+		# Direct audio download with sanitized filename
+		if ! yt-dlp -x --audio-format mp3 --audio-quality 192K \
+			--restrict-filenames \
+			-o "$output_dir/%(title)s.%(ext)s" \
+			--no-playlist "$link"; then
 			echo "Download failed for: $link"
 			return 1
 		fi
-	fi
-
-	if [ "$convert_to_mp3" = true ]; then
-		video_title=$(yt-dlp --get-filename -o '%(title)s' --no-playlist "$link")
-		video_file=$(find "$output_dir" -type f -iname "*${video_title}*" | head -n 1)
-		mp3_file="${video_file%.*}.mp3"
-
-		if ffmpeg -i "$video_file" -vn -ar 44100 -ac 2 -b:a 192k "$mp3_file"; then
-			rm "$video_file"
-			filename=$(basename "$mp3_file")
-			new_mp3_file="$(echo "$filename" | sed 's/[^a-zA-Z0-9.-]//g')"
-			mv "$mp3_file" "$HOME/music/$new_mp3_file"
-		else
-			echo "MP3 conversion failed for: $link"
-			return 1
+	else
+		# Video download
+		if ! yt-dlp --restrict-filenames \
+			-o "$output_dir/%(title)s.%(ext)s" \
+			--merge-output-format mp4 \
+			--no-playlist "$link"; then
+			if ! yt-dlp --restrict-filenames \
+				-o "$output_dir/%(title)s.%(ext)s" \
+				-f best --no-playlist "$link"; then
+				echo "Download failed for: $link"
+				return 1
+			fi
 		fi
 	fi
 }
