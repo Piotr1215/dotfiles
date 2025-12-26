@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Validate the number of arguments
 if [[ "$#" -ne 3 ]]; then

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Check if a folder name was provided
 # If not, output a message and exit the script

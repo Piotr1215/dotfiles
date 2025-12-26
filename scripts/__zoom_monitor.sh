@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # PROJECT: zoom-monitor with notifications
 
 # Log file location

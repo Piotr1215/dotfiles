@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Get the current values
 status=$(tmux show-option -gqv status)

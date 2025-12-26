@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Assigns command line arguments to variables
 message="Add a pet link, create a taskwarrior task, add song to MPV playlist, create web Highlight"

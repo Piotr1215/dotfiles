@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # PROJECT: mpv-monitor with notifications
 
 LOG_FILE="/home/decoder/mpv_monitor.log"

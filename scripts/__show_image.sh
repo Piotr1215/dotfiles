@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Determine the temporary directory
 case "$(uname -a)" in

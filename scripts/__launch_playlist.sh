@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Path to the Haruna playlist file
 # PROJECT: playlist
