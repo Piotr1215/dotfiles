@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Set the filename of the script containing the functions
 FILE=~/.zsh_functions

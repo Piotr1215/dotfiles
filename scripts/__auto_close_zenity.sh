@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 (
 	zenity --info --text="$1" --width=400 &
 	pid=$!

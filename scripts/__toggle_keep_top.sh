@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Get the list of windows with their IDs and titles
 windows=$(wmctrl -l)

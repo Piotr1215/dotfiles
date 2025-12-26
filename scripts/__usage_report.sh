@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Path to the JSON file
 json_file="/home/decoder/dev/dotfiles/usage_statistics/.script_usage.json"

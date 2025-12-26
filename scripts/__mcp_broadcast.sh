@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # MCP Broadcast CLI - Send any command output or file content as broadcast
 # Usage: command | mcp-broadcast [options]
 #        mcp-broadcast [options] < file

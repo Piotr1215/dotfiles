@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # PROJECT: project_renamer
 # __update_project_mappings.sh
 #

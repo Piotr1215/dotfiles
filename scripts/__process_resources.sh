@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # This script processes resource files and extracts required fields, sorting them by kind and counting occurrences.
 process_file() {

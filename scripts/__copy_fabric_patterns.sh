@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Set the base directory
 BASE_DIR="$HOME/.config/fabric"

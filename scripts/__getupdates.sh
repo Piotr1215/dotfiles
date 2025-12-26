@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #This script gets all installations don today
 
 CURRENT_DATE=$(date +'%Y-%m-%d')

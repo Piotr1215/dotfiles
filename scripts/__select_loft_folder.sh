@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # List all subdirectories in ~/loft but exclude ~/loft itself
 selected_folder=$(find ~/loft -mindepth 1 -maxdepth 1 -type d | sed 's|.*/||' | fzf --prompt="Select a folder: ")

@@ -10,7 +10,7 @@ Dotfiles are configuration files for Unix-like systems, named for their leading 
 
 ## Installation
 
-Installation steps for Ubuntu/Pop!_OS:
+Installation steps for Debian-based systems:
 
 1. Clone the repository:
 ```bash
@@ -54,6 +54,7 @@ Or run remotely:
 
 - configure git with given user and email (default values point to my user)
 - install a bunch of programs and symlink them using stow
+- set up shell environment with zsh and oh-my-zsh configuration
 - most notably, install neovim and configure its plugins
 
 > [!NOTE]
@@ -94,65 +95,6 @@ git-crypt unlock /path/to/git-crypt-key
 ```
 
 Once unlocked, encrypted files will automatically be decrypted when checked out and encrypted when committed.
-
-## Auto-config commit
-
-Once the dotfiles are symlinked, it is easy to forget to commit them do the repo
-(there is no indicator on the symlinked file).
-
-> [!IMPORTANT]
-> Once a file is added to the repo folder, it will be auto-committed.
-
-Use this systemd service to automate this process
-
-### Create a service
-
-```bash
-touch ~/.config/systemd/user/checkfile.service
-vim ~/.config/systemd/user/checkfile.service
-
-[Unit]
-Description = Run inotify-hookable in background to always sync my dotfiles with github repo
-
-[Service]
-User=decoder
-Group=decoder
-ExecStart=/bin/bash /home/decoder/dev/dotfiles/scripts/__zshsync.sh
-RestartSec=10
-
-[Install]
-WantedBy=default.target
-```
-
-### Install inotify-hookable
-
-sudo apt install inotify-hookable -y
-
-### Write script
-
-This script watches a folder with dotfiles and every time a change to a file is
-made, or a new file is created, commits everything and pushes to git. This also
-works of course if the changes are made on the symlinked files.
-
-```bash
-cd /home/decoder/dev/dotfiles
-while true; do
-    inotify-hookable \
-     --watch-files ./ \
-     --on-modify-command "git add . && git commit -m 'auto commit' && git push origin master"
-done
-```
-
-### Enable and start the service
-
-- `systemctl --user daemon-reload`
-- `systemctl --user enable checkfile`
-- `systemctl --user start checkfile`
-
-### Monitor the service
-
-`journalctl -fu checkfile.service`
-
 
 ## Testing
 

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Check if the folder path was passed as an argument
 if [ -z "$1" ]; then
