@@ -213,6 +213,25 @@ utils.xmap("<leader>d", '"_d', { desc = "delete selection to black hole register
 -- FILE NAVIGATION --
 vim.keymap.set("n", "gF", "<C-w>vgf", { desc = "Open file under cursor in vertical split" })
 
+local function next_named_buffer()
+  local start_buf = vim.fn.bufnr()
+  vim.cmd "bnext"
+  while vim.fn.bufname() == "" and vim.fn.bufnr() ~= start_buf do
+    vim.cmd "bnext"
+  end
+end
+
+local function prev_named_buffer()
+  local start_buf = vim.fn.bufnr()
+  vim.cmd "bprevious"
+  while vim.fn.bufname() == "" and vim.fn.bufnr() ~= start_buf do
+    vim.cmd "bprevious"
+  end
+end
+
+vim.keymap.set("n", "<C-n>", next_named_buffer, { desc = "Next buffer", silent = true })
+vim.keymap.set("n", "<C-p>", prev_named_buffer, { desc = "Previous buffer", silent = true })
+
 -- PATH OPERATIONS --
 vim.keymap.set(
   "n",
