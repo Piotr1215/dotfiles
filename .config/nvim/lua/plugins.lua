@@ -39,6 +39,11 @@ return require("lazy").setup({
       { "[C", "<Plug>(pairup-prev-marker)", desc = "Prev cc: marker" },
       { "]p", "<Plug>(pairup-proposal-next)", desc = "Next proposal" },
       { "[p", "<Plug>(pairup-proposal-prev)", desc = "Prev proposal" },
+      -- Peripheral Claude
+      { "<leader>Cc", "<Plug>(pairup-peripheral-toggle-session)", desc = "Start/Stop Peripheral" },
+      { "<leader>Ct", "<Plug>(pairup-peripheral-toggle)", desc = "Toggle Peripheral terminal" },
+      { "<leader>Cs", "<Plug>(pairup-peripheral-suspend)", desc = "Suspend Peripheral auto-diff" },
+      { "<leader>Cd", "<Plug>(pairup-peripheral-diff)", desc = "Send diff to Peripheral" },
     },
     config = function()
       require("pairup").setup {
