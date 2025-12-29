@@ -2,9 +2,6 @@
 # ~ works ok here
 source ~/dev/dotfiles/scripts/__reusable_variables.sh
 
-function _clipboard_copy() {
-    ~/dev/dotfiles/scripts/__clipboard_copy.sh
-}
 
 alias ddg='ddg_function'
 
@@ -674,8 +671,12 @@ function cname() {
 }
 
 function cpa() {
-    ~/dev/dotfiles/scripts/__clipboard_copy.sh "$PWD"
-    printf "%s\n" "Copied '$(basename "$PWD")' path to clipboard."
+    if command -v xclip > /dev/null; then
+        printf "%s" "$PWD" | xclip -selection clipboard
+        printf "%s\n" "Current working directory ('$(basename "$PWD")') path copied to clipboard."
+    else
+        printf "%s\n" "Error: 'xclip' command not found. Please install 'xclip' to use this function."
+    fi
 }
 
 # Change the directory to the path stored in the clipboard
