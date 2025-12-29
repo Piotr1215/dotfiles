@@ -10,7 +10,9 @@ vim.lsp.config("lua_ls", {
   attach = def.on_attach,
   capabilities = def.capabilities,
   signatureHelp = { enable = true },
-  root_dir = vim.fs.root(0, { ".luarc.json", ".git", "lua" }),
+  root_dir = function(fname)
+    return vim.fs.root(fname, { ".luarc.json", ".git", "lua" })
+  end,
 
   settings = {
     Lua = {
@@ -32,18 +34,24 @@ vim.lsp.config("tflint", {})
 
 -- OCaml LSP setup for devbox environments
 vim.lsp.config("ocamllsp", {
-  cmd = { "ocamllsp" }, -- Uses the one from PATH (devbox provides it)
+  cmd = { "ocamllsp" },
   capabilities = def.capabilities,
   filetypes = { "ocaml", "ocaml.menhir", "ocaml.interface", "ocaml.ocamllex", "reason" },
-  root_dir = vim.fs.root(0, { "*.opam", "dune-project", "dune-workspace", ".git" }),
+  root_dir = function(fname)
+    return vim.fs.root(fname, { "*.opam", "dune-project", "dune-workspace", ".git" })
+  end,
 })
 
 vim.lsp.config("denols", {
-  root_dir = vim.fs.root(0, { "deno.json", "deno.jsonc" }),
+  root_dir = function(fname)
+    return vim.fs.root(fname, { "deno.json", "deno.jsonc" })
+  end,
 })
 
 vim.lsp.config("ts_ls", {
-  root_dir = vim.fs.root(0, { "package.json" }),
+  root_dir = function(fname)
+    return vim.fs.root(fname, { "package.json" })
+  end,
   single_file_support = false,
 })
 
@@ -53,7 +61,9 @@ vim.lsp.config("ts_ls", {
 vim.api.nvim_create_user_command("LspStartVale", function()
   vim.lsp.config("vale_ls", {
     cmd = { vim.fn.expand "~/.local/bin/vale-ls" },
-    root_dir = vim.fs.root(0, { ".vale.ini" }),
+    root_dir = function(fname)
+      return vim.fs.root(fname, { ".vale.ini" })
+    end,
     filetypes = { "markdown", "mdx" },
   })
   vim.lsp.enable { "vale_ls" }
@@ -98,7 +108,9 @@ vim.diagnostic.config {
 vim.lsp.config("zls", {
   capabilities = def.capabilities,
   filetypes = { "zig", "zon" },
-  root_dir = vim.fs.root(0, { "build.zig", "zls.json", ".git" }),
+  root_dir = function(fname)
+    return vim.fs.root(fname, { "build.zig", "zls.json", ".git" })
+  end,
   settings = {
     zls = {
       prefer_ast_check_as_child_process = true,
