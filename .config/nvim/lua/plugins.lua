@@ -380,6 +380,7 @@ return require("lazy").setup({
         auto_discover_custom_text_objects = true,
         excluded_motions = { "Q", "R" },
         resolved_conflicts = { "m" },
+        backward_prefix = ";",
         beam_scope = {
           custom_scoped_text_objects = { "m", "h", "L", "*" },
           window_width = 100,
