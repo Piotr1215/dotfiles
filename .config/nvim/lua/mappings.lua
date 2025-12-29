@@ -147,6 +147,7 @@ utils.lnmap("SS", ":%s/\\v", { silent = false, desc = "search and replace in fil
 utils.vmap("<leader><C-s>", ":s/\\%V", { desc = "Search only in visual selection usingb%V atom" })
 utils.vmap("<C-r>", '"hy:%s/\\v<C-r>h//g<left><left>', { silent = false, desc = "change selection" })
 utils.nmap(",<space>", ":nohlsearch<CR>", { desc = "Stop search highlight" })
+vim.keymap.set("v", "g<CR>", "<Plug>(openbrowser-smart-search)", { desc = "Search selection in browser" })
 utils.nmap("<leader>x", "*``cgn", { desc = "replace word under cursor simultaneously" })
 utils.nmap("<leader>X", "#``cgn", { desc = "replace word under cursor simultaneously" })
 -- MACROS --

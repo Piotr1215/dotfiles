@@ -28,6 +28,7 @@ end
 
 -- Disable GitHub Copilot by default
 vim.g.copilot_enabled = false
+vim.g.openbrowser_default_search = "duckduckgo"
 
 --Remap for dealing with word wrap
 set.gp = "git grep -n"
