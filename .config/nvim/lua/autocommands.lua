@@ -14,6 +14,36 @@ local highlightingGroup = api.nvim_create_augroup("Highlighting", { clear = true
 local copilotGroup = api.nvim_create_augroup("Copilot", { clear = true })
 local valeGroup = api.nvim_create_augroup("Vale", { clear = true })
 local shellcheckGroup = api.nvim_create_augroup("Shellcheck", { clear = true })
+local terminalGroup = api.nvim_create_augroup("Terminal", { clear = true })
+
+-- Terminal OSC Sequences
+-- OSC 7: Directory tracking (shell reports CWD changes)
+api.nvim_create_autocmd("TermRequest", {
+  group = terminalGroup,
+  callback = function(ev)
+    local val = string.gsub(ev.data.sequence, "\027]7;file://[^/]*", "")
+    if val ~= ev.data.sequence then
+      vim.bo[ev.buf].path = val
+    end
+  end,
+  desc = "Handle OSC 7 directory change requests",
+})
+
+-- OSC 133: Prompt markers (]] and [[ jump between prompts)
+local prompt_ns = api.nvim_create_namespace "terminal.prompt"
+api.nvim_create_autocmd("TermRequest", {
+  group = terminalGroup,
+  callback = function(args)
+    if string.match(args.data.sequence, "^\027]133;A") then
+      local lnum = args.data.cursor[1]
+      api.nvim_buf_set_extmark(args.buf, prompt_ns, lnum - 1, 0, {
+        sign_text = "▶",
+        sign_hl_group = "SpecialChar",
+      })
+    end
+  end,
+  desc = "Handle OSC 133 prompt markers",
+})
 
 -- Autocmds
 
