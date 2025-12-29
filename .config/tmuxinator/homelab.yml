@@ -57,5 +57,5 @@ windows:
       layout: tiled
       panes:
         - viddy just k8sgpt
-        - viddy kubectl get nodes
+        - viddy kubectl top nodes
         - viddy 'kubectl get events -A --sort-by=.lastTimestamp | grep -E "(Warning|Error)" | tail -20'
