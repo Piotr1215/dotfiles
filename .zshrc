@@ -398,6 +398,9 @@ source ${HOME}/kube-ps1/kube-ps1.sh
 PROMPT='$(kube_ps1)'$PROMPT
 PROMPT="$PROMPT"$'\n→ '
 
+# OSC 133 prompt markers for nvim terminal (]] and [[ to jump between prompts)
+precmd() { print -Pn "\e]133;A\e\\" }
+
 # [[ -s "/home/decoder/.gvm/scripts/gvm" ]] && source "/home/decoder/.gvm/scripts/gvm"
 
 eval "$(direnv hook zsh)"
