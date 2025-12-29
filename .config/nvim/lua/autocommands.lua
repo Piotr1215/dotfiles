@@ -36,8 +36,10 @@ api.nvim_create_autocmd("TermRequest", {
   callback = function(args)
     if string.match(args.data.sequence, "^\027]133;A") then
       local lnum = args.data.cursor[1]
-      api.nvim_buf_set_extmark(args.buf, prompt_ns, lnum - 1, 0, {
-        sign_text = "▶",
+      -- Get line length to position cursor at end (where you type)
+      local line = api.nvim_buf_get_lines(args.buf, lnum - 1, lnum, false)[1] or ""
+      api.nvim_buf_set_extmark(args.buf, prompt_ns, lnum - 1, #line, {
+        sign_text = "➜",
         sign_hl_group = "SpecialChar",
       })
     end
@@ -208,6 +210,7 @@ vim.api.nvim_create_user_command("R", function(opts)
   vim.bo.buftype = "nofile"
   vim.bo.bufhidden = "hide"
   vim.bo.swapfile = false
+  vim.b.no_auto_close = true
   vim.fn.termopen(cmd, {
     on_stdout = function()
       vim.schedule(function()
