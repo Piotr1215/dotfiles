@@ -2,92 +2,21 @@
 set -eo pipefail
 
 # Parse all config bindings and show in fzf popup
+# Uses confhelp for parsing, adds tealdeer integration
 # Enter = jump to line | Ctrl+G = tealdeer pages
 
 DOTFILES="$HOME/dev/dotfiles"
 TEMP_FILE=$(mktemp)
 
-parse_configs() {
-    python3 << 'PYEOF'
-import re
-import os
+FZF_COLORS='fg:#f8f8f2,bg:#282a36,hl:#bd93f9,fg+:#f8f8f2,bg+:#44475a,hl+:#bd93f9,info:#ffb86c,prompt:#50fa7b,pointer:#ff79c6,marker:#ff79c6,spinner:#ffb86c,header:#6272a4'
 
-DOTFILES = os.path.expanduser("~/dev/dotfiles")
-
-def parse_tmux():
-    path = f"{DOTFILES}/.tmux.conf"
-    if not os.path.exists(path): return
-    with open(path) as f:
-        for i, line in enumerate(f, 1):
-            if re.match(r'^bind', line.strip()):
-                m = re.match(r'bind(?:-key)?\s+(?:-n\s+)?(\S+)', line.strip())
-                if m:
-                    key = m.group(1)
-                    cmd = line.strip()[len(m.group(0)):].strip()[:50]
-                    print(f"[tmux]|{key}|{cmd}|.tmux.conf:{i}")
-
-def parse_zsh_bindkeys():
-    path = f"{DOTFILES}/.zshrc"
-    if not os.path.exists(path): return
-    with open(path) as f:
-        for i, line in enumerate(f, 1):
-            if 'bindkey' in line and not line.strip().startswith('#'):
-                m = re.search(r"bindkey\s+(?:-s\s+)?['\"]([^'\"]+)['\"]", line)
-                if m:
-                    key = m.group(1)
-                    comment = line.split('#')[1].strip() if '#' in line else ''
-                    func = re.search(r"['\"][^'\"]+['\"]\s+(\S+)", line)
-                    desc = comment if comment else (func.group(1) if func else line.strip()[:40])
-                    print(f"[bind]|{key}|{desc}|.zshrc:{i}")
-
-def parse_aliases():
-    for fname in ['.zsh_aliases', '.zsh_claude']:
-        path = f"{DOTFILES}/{fname}"
-        if not os.path.exists(path): continue
-        with open(path) as f:
-            for i, line in enumerate(f, 1):
-                m = re.match(r"alias\s+(?:-[gs]\s+)?([^=]+)=", line.strip())
-                if m:
-                    name = m.group(1).strip()
-                    val = line.split('=', 1)[1][:50].strip().strip("'\"")
-                    print(f"[alias]|{name}|{val}|{fname}:{i}")
-
-def parse_abbrevs():
-    path = f"{DOTFILES}/.zsh_abbreviations"
-    if not os.path.exists(path): return
-    with open(path) as f:
-        content = f.read()
-    match = re.search(r'abbrevs=\((.*?)\)', content, re.DOTALL)
-    if match:
-        pairs = re.findall(r'"([^"]+)"\s+\'([^\']+)\'', match.group(1))
-        for key, val in pairs:
-            print(f"[abbr]|{key}|{val}|.zsh_abbreviations:1")
-
-def parse_functions():
-    path = f"{DOTFILES}/.zsh_functions"
-    if not os.path.exists(path): return
-    with open(path) as f:
-        for i, line in enumerate(f, 1):
-            m = re.match(r'(?:function\s+)?(\w+)\s*\(\)\s*\{?', line.strip())
-            if m and not line.strip().startswith('#'):
-                print(f"[func]|{m.group(1)}|(function)|.zsh_functions:{i}")
-
-parse_tmux()
-parse_zsh_bindkeys()
-parse_aliases()
-parse_abbrevs()
-parse_functions()
-PYEOF
-}
-
-# Main loop runs inside single alacritty - no window reopening
 main_loop() {
     local mode="bindings"
 
     while true; do
         if [[ "$mode" == "bindings" ]]; then
             local selection
-            selection=$(parse_configs | column -t -s'|' | fzf \
+            selection=$(confhelp -b "$DOTFILES" | column -t -s'|' | fzf \
                 --header='Enter=jump | Ctrl+G=tealdeer pages' \
                 --bind='ctrl-g:become(echo SWITCH_TLDR)' \
                 --height=100% \
@@ -95,7 +24,7 @@ main_loop() {
                 --info=inline \
                 --border=sharp \
                 --prompt='bindings: ' \
-                --color='fg:#f8f8f2,bg:#282a36,hl:#bd93f9,fg+:#f8f8f2,bg+:#44475a,hl+:#bd93f9,info:#ffb86c,prompt:#50fa7b,pointer:#ff79c6,marker:#ff79c6,spinner:#ffb86c,header:#6272a4' \
+                --color="$FZF_COLORS" \
                 || true)
 
             if [[ "$selection" == "SWITCH_TLDR" ]]; then
@@ -130,7 +59,7 @@ main_loop() {
                 --info=inline \
                 --border=sharp \
                 --prompt='tldr: ' \
-                --color='fg:#f8f8f2,bg:#282a36,hl:#bd93f9,fg+:#f8f8f2,bg+:#44475a,hl+:#bd93f9,info:#ffb86c,prompt:#50fa7b,pointer:#ff79c6,marker:#ff79c6,spinner:#ffb86c,header:#6272a4' \
+                --color="$FZF_COLORS" \
                 || true)
             rm -f "$custom_file"
 
@@ -154,18 +83,24 @@ main_loop() {
     done
 }
 
-export -f parse_configs
 export -f main_loop
-export DOTFILES
-export TEMP_FILE
+export DOTFILES TEMP_FILE FZF_COLORS
 
-# Single alacritty window runs the loop
+# Calculate center position
+read screen_w screen_h < <(xdpyinfo | awk '/dimensions:/{print $2}' | tr 'x' ' ')
+cols=220
+lines=50
+win_w=$((cols * 9))
+win_h=$((lines * 20))
+pos_x=$(( (screen_w - win_w) / 2 ))
+pos_y=$(( (screen_h - win_h) / 2 ))
+
 alacritty --class config-bindings-popup \
     --config-file /dev/null \
-    -o window.dimensions.columns=130 \
-    -o window.dimensions.lines=40 \
-    -o window.position.x=1380 \
-    -o window.position.y=660 \
+    -o window.dimensions.columns=$cols \
+    -o window.dimensions.lines=$lines \
+    -o window.position.x=$pos_x \
+    -o window.position.y=$pos_y \
     -e bash -c "main_loop"
 
 # Handle final result
