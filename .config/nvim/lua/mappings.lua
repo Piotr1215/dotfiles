@@ -30,17 +30,42 @@ vim.keymap.set(
 utils.nmap("<nop>", "<Plug>NERDCommenterAltDelims") -- tab is for moving around only
 utils.nmap("L", "vg_", { desc = "select to end of line" })
 
-vim.keymap.set("n", "<leader>_", "5<c-w>-", { remap = true, silent = false })
-vim.keymap.set("n", "<leader>+", "5<c-w>+", { remap = true, silent = false })
+vim.keymap.set("n", "<leader>_", "5<c-w>-", { remap = true, silent = false, desc = "decrease window height" })
+vim.keymap.set("n", "<leader>+", "5<c-w>+", { remap = true, silent = false, desc = "increase window height" })
 
 -- NAVIGATION --
 -- Mappings for navigation between tmux and vim splits with the same keybindings
 local nvim_tmux_nav = require "nvim-tmux-navigation"
-vim.keymap.set("n", "<C-h>", nvim_tmux_nav.NvimTmuxNavigateLeft, { noremap = true, silent = true })
-vim.keymap.set("n", "<C-j>", nvim_tmux_nav.NvimTmuxNavigateDown, { noremap = true, silent = true })
-vim.keymap.set("n", "<C-k>", nvim_tmux_nav.NvimTmuxNavigateUp, { noremap = true, silent = true })
-vim.keymap.set("n", "<C-l>", nvim_tmux_nav.NvimTmuxNavigateRight, { noremap = true, silent = true })
-vim.keymap.set("n", "<A-m>", nvim_tmux_nav.NvimTmuxNavigateNext, { noremap = true, silent = true })
+vim.keymap.set(
+  "n",
+  "<C-h>",
+  nvim_tmux_nav.NvimTmuxNavigateLeft,
+  { noremap = true, silent = true, desc = "navigate left (vim/tmux)" }
+)
+vim.keymap.set(
+  "n",
+  "<C-j>",
+  nvim_tmux_nav.NvimTmuxNavigateDown,
+  { noremap = true, silent = true, desc = "navigate down (vim/tmux)" }
+)
+vim.keymap.set(
+  "n",
+  "<C-k>",
+  nvim_tmux_nav.NvimTmuxNavigateUp,
+  { noremap = true, silent = true, desc = "navigate up (vim/tmux)" }
+)
+vim.keymap.set(
+  "n",
+  "<C-l>",
+  nvim_tmux_nav.NvimTmuxNavigateRight,
+  { noremap = true, silent = true, desc = "navigate right (vim/tmux)" }
+)
+vim.keymap.set(
+  "n",
+  "<A-m>",
+  nvim_tmux_nav.NvimTmuxNavigateNext,
+  { noremap = true, silent = true, desc = "navigate next pane (vim/tmux)" }
+)
 
 -- Visual mode navigation - just C-l and C-j since they toggle back and forth
 -- C-h collides with backspace in some terminals
@@ -251,28 +276,28 @@ vim.api.nvim_set_keymap(
   "n",
   "<leader>eb",
   [[:lua require('user_functions.shell_integration').run_cmd_in_backticks()<CR>]],
-  { noremap = true, silent = true }
+  { noremap = true, silent = true, desc = "execute command in backticks" }
 )
 
 vim.api.nvim_set_keymap(
   "n",
   "<leader>yb",
   [[:lua require('user_functions.shell_integration').copy_last_backticks()<CR>]],
-  { noremap = true, silent = true }
+  { noremap = true, silent = true, desc = "copy text in backticks" }
 )
 
 vim.api.nvim_set_keymap(
   "v",
   "<leader>eb",
   [[:lua require('user_functions.shell_integration').run_cmd_for_selection()<CR>]],
-  { noremap = true, silent = true }
+  { noremap = true, silent = true, desc = "execute selected command" }
 )
 
 vim.api.nvim_set_keymap(
   "v",
   "<leader>eB",
   [[:lua require('user_functions.shell_integration').run_cmd_block()<CR>]],
-  { noremap = true, silent = true }
+  { noremap = true, silent = true, desc = "execute code block" }
 )
 
 vim.keymap.set(
@@ -282,8 +307,8 @@ vim.keymap.set(
   { remap = true, silent = false, desc = "run previous code block" }
 )
 
-utils.lnmap("cpl", [[:let @+ = expand("%:p") . ':' . line('.')<cr>]]) -- Copy current file name, path, and line number
-utils.lnmap("cpn", ':let @+ = expand("%:t")<cr>') -- Copy current file name
+utils.lnmap("cpl", [[:let @+ = expand("%:p") . ':' . line('.')<cr>]], { desc = "copy path:line" })
+utils.lnmap("cpn", ':let @+ = expand("%:t")<cr>', { desc = "copy filename" })
 utils.imap("<c-d>", "<c-o>daw", { desc = "delete word forward in insert mode" })
 vim.keymap.set("i", "<A-H>", "<c-w>", { noremap = true, desc = "delete word forward in insert mode" })
 vim.keymap.set("i", "<A-,>", "<c-o>A,<c-o>o", { noremap = true, desc = "add coma and enter new line under" })
@@ -332,28 +357,33 @@ end, { desc = "Run bats tests" })
 utils.lnmap(
   "ef",
   "<cmd>lua require('user_functions.shell_integration').execute_file_and_show_output()<CR>",
-  { silent = false }
-) -- execute file and show output
-utils.vmap("<Leader>pb", "w !bash share<CR>") -- upload selected to ix.io
+  { silent = false, desc = "execute file and show output" }
+)
+utils.vmap("<Leader>pb", "w !bash share<CR>", { desc = "upload to ix.io" })
 -- FORMATTING --
-utils.nmap("<leader>fmt", ":Pretty<CR>") -- format json with pretty
+utils.nmap("<leader>fmt", ":Pretty<CR>", { desc = "format json" })
 -- SPELLING --
-utils.nmap("<Leader>son", ":setlocal spell spelllang=en_us<CR>") -- set spell check on
-utils.nmap("<Leader>sof", ":set nospell<CR>") -- set spell check off
+utils.nmap("<Leader>son", ":setlocal spell spelllang=en_us<CR>", { desc = "spell check on" })
+utils.nmap("<Leader>sof", ":set nospell<CR>", { desc = "spell check off" })
 -- LINE NUMBERS --
 vim.keymap.set("n", ",n", function()
   vim.o.relativenumber = not vim.o.relativenumber
 end, { desc = "Toggle between relative and absolute line numbers" })
 -- GIT RELATED --
-vim.keymap.set({ "n", "v" }, "<leader>gbf", ":GBrowse<cr>", opts) -- git browse current file in browser
+vim.keymap.set({ "n", "v" }, "<leader>gbf", ":GBrowse<cr>", { desc = "git browse file in browser" })
 vim.keymap.set("n", "<leader>gbc", function()
   vim.cmd "GBrowse!"
 end, { desc = "Copy url to current file" }) -- git browse current file and line in browser
-vim.keymap.set("v", "<leader>gbl", ":GBrowse!<CR>", { noremap = true, silent = false }) -- git browse current file and selected line in browser
-utils.lnmap("gd", ":Gvdiffsplit<CR>") -- git diff current file
-utils.lnmap("gu", ":Gdiffu<CR>") -- git diff current file
-utils.nmap("<leader>gl", ":r !bash ~/dev/dotfiles/scripts/__generate_git_log.sh<CR>") -- generate git log
-utils.lnmap("gh", ":Gclog %<CR>") -- show git log for current file
+vim.keymap.set(
+  "v",
+  "<leader>gbl",
+  ":GBrowse!<CR>",
+  { noremap = true, silent = false, desc = "copy git url for selection" }
+)
+utils.lnmap("gd", ":Gvdiffsplit<CR>", { desc = "git diff file" })
+utils.lnmap("gu", ":Gdiffu<CR>", { desc = "git diff unstaged" })
+utils.nmap("<leader>gl", ":r !bash ~/dev/dotfiles/scripts/__generate_git_log.sh<CR>", { desc = "insert git log" })
+utils.lnmap("gh", ":Gclog %<CR>", { desc = "git history for file" })
 -- PROGRAMMING --
 -- LuaSnip mappings are handled in lua/config/luasnip.lua
 -- <M-l> for expand_or_jump, <M-h> for jump back, <M-j> for choice selection
@@ -364,12 +394,12 @@ vim.api.nvim_set_keymap(
   "n",
   "<leader>ev",
   "<cmd>lua require 'mdeval'.eval_code_block()<CR>",
-  { silent = true, noremap = true }
+  { silent = true, noremap = true, desc = "eval markdown code block" }
 )
 
 -- Startify
-utils.lnmap("st", ":Startify<CR>") -- start Startify screen
-utils.lnmap("cd", ":cd %:p:h<CR>:pwd<CR>") -- change to current directory of active file and print out
+utils.lnmap("st", ":Startify<CR>", { desc = "open Startify" })
+utils.lnmap("cd", ":cd %:p:h<CR>:pwd<CR>", { desc = "cd to file directory" })
 
 -- Telescope (all pickers including custom)
 vim.keymap.set("n", "<Leader>ts", function()
@@ -380,10 +410,10 @@ end, opts)
 -- utils.lnmap("wl", ":.!echo -n \"      layout:\" $(tmux list-windows | sed -n 's/.*layout \\(.*\\)] @.*/\\1/p')<CR>")
 
 -- Transparent Plugin
-utils.lnmap("tr", ":TransparentToggle<CR>")
+utils.lnmap("tr", ":TransparentToggle<CR>", { desc = "toggle transparent bg" })
 
 -- FeMaco
-utils.lnmap("ec", ":FeMaco<CR>")
+utils.lnmap("ec", ":FeMaco<CR>", { desc = "edit code block in popup" })
 
 -- Table Formatting
 vim.keymap.set(
@@ -402,8 +432,8 @@ vim.keymap.set("n", "<leader>xq", "<cmd>TroubleToggle quickfix<cr>", { silent = 
 vim.keymap.set("n", "gR", "<cmd>TroubleToggle lsp_references<cr>", { silent = true, noremap = true })
 
 -- Scrollfix
-utils.lnmap("f2", "<cmd>FIX 35<cr>")
-utils.lnmap("f0", "<cmd>FIX -1<cr>")
+utils.lnmap("f2", "<cmd>FIX 35<cr>", { desc = "freeze cursor at 35%" })
+utils.lnmap("f0", "<cmd>FIX -1<cr>", { desc = "unfreeze cursor" })
 
 -- Obsidian
 vim.keymap.set(
@@ -438,19 +468,29 @@ vim.cmd [[
         imap <silent><script><expr> <C-f> copilot#Accept("\<CR>")
         let g:copilot_no_tab_map = v:true
 ]]
-utils.lnmap("cpd", ":Copilot disable<cr>", { silent = false })
-utils.lnmap("cpe", ":Copilot enable<cr>", { silent = false })
-vim.keymap.set("i", "<M-w>", "<Plug>(copilot-accept-word)")
-vim.keymap.set("i", "<C-s>", "<Plug>(copilot-accept-line)")
+utils.lnmap("cpd", ":Copilot disable<cr>", { silent = false, desc = "disable Copilot" })
+utils.lnmap("cpe", ":Copilot enable<cr>", { silent = false, desc = "enable Copilot" })
+vim.keymap.set("i", "<M-w>", "<Plug>(copilot-accept-word)", { desc = "accept copilot word" })
+vim.keymap.set("i", "<C-s>", "<Plug>(copilot-accept-line)", { desc = "accept copilot line" })
 vim.keymap.set("n", "<leader>ob", ":Obsidian backlinks<cr>", { noremap = true, silent = true, desc = "Show backlinks" })
 vim.keymap.set("n", "<leader>ot", ":Obsidian tags<cr>", { noremap = true, silent = true, desc = "Show tags" })
 vim.keymap.set("n", "<leader>od", ":Obsidian today<cr>", { noremap = true, silent = true, desc = "Open today's note" })
 
 -- GoTo Preview
-vim.keymap.set("n", "gtp", "<cmd>lua require('goto-preview').goto_preview_definition()<CR>", { noremap = true })
+vim.keymap.set(
+  "n",
+  "gtp",
+  "<cmd>lua require('goto-preview').goto_preview_definition()<CR>",
+  { noremap = true, desc = "preview definition" }
+)
 
 -- Yank Matching Lines
-vim.api.nvim_set_keymap("n", "<Leader>ya", ":YankMatchingLines<CR>", { noremap = true, silent = true })
+vim.api.nvim_set_keymap(
+  "n",
+  "<Leader>ya",
+  ":YankMatchingLines<CR>",
+  { noremap = true, silent = true, desc = "yank matching lines" }
+)
 
 -- GpChat gp.nvim
 local function keymapOptions(desc)
@@ -490,7 +530,7 @@ end, { desc = "gp.nvim: use Perplexity (sonar)" })
 -- Restart nvim
 vim.keymap.set("n", "<leader>-", function()
   vim.fn.system "bash __restart_nvim.sh"
-end, { noremap = true, silent = true })
+end, { noremap = true, silent = true, desc = "restart nvim" })
 
 vim.keymap.set({ "n", "i" }, "<C-g><C-w>w", "<cmd>GpWhisper<cr>", keymapOptions "Whisper Insert")
 vim.keymap.set({ "n", "i" }, "<C-g>r", "<cmd>GpRewrite<cr>", keymapOptions "Inline Rewrite")
@@ -522,13 +562,28 @@ vim.keymap.set("v", "<C-g>p", ":<C-u>'<,'>GpPopup<cr>", keymapOptions "Visual Po
 vim.keymap.set({ "n", "i", "v", "x" }, "<C-g>s", "<cmd>GpStop<cr>", keymapOptions "Stop")
 
 -- Nvim no neck pain Mappings
-utils.lnmap("ne", "<cmd>NoNeckPain<cr>")
+utils.lnmap("ne", "<cmd>NoNeckPain<cr>", { desc = "toggle NoNeckPain centering" })
 
 -- Nvim Telescope Crossplane Mappings
-vim.keymap.set("n", "<Leader>tcm", ":Telescope telescope-crossplane crossplane_managed<CR>")
-vim.keymap.set("n", "<Leader>tcr", ":Telescope telescope-crossplane crossplane_resources<CR>")
+vim.keymap.set(
+  "n",
+  "<Leader>tcm",
+  ":Telescope telescope-crossplane crossplane_managed<CR>",
+  { desc = "crossplane managed resources" }
+)
+vim.keymap.set(
+  "n",
+  "<Leader>tcr",
+  ":Telescope telescope-crossplane crossplane_resources<CR>",
+  { desc = "crossplane resources" }
+)
 
-vim.keymap.set("n", "<Leader>mf", ":lua MiniFiles.open()<CR>", { noremap = true, silent = true })
+vim.keymap.set(
+  "n",
+  "<Leader>mf",
+  ":lua MiniFiles.open()<CR>",
+  { noremap = true, silent = true, desc = "open mini files" }
+)
 vim.keymap.set("n", "<leader>uo", "<Cmd>UrlView<CR>", { desc = "View buffer URLs" })
 vim.keymap.set("n", "<leader>Uo", "<Cmd>UrlView lazy<CR>", { desc = "View Packer plugin URLs" })
 
