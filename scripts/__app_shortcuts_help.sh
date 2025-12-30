@@ -143,8 +143,8 @@ handle_shortcut_selection() {
         --preview-window=up:3:wrap \
         --header='Enter=config | Ctrl+O=man | Ctrl+T=tldr | Ctrl+G=categories' \
         --bind='ctrl-g:execute(echo "CATEGORY_MODE" > '"$TEMP_FILE"')+abort' \
-        --bind='ctrl-t:execute-silent(app=$(echo {} | awk -F" - " "{print tolower(\$1)}"); alacritty -e bash -c "tldr $app 2>/dev/null || cheat $app 2>/dev/null || echo No tldr/cheat for $app; read" &)' \
-        --bind='ctrl-o:execute-silent(app=$(echo {} | awk -F" - " "{print tolower(\$1)}"); alacritty -e bash -c "man $app 2>/dev/null || $app --help 2>&1 | less" &)' \
+        --bind='ctrl-t:execute-silent(app=$(echo {} | awk -F" - " "{print tolower(\$1)}"); alacritty -e bash -c "tldr $app 2>/dev/null || cheat $app 2>/dev/null || echo No tldr/cheat for $app; read" &)+abort' \
+        --bind='ctrl-o:execute-silent(app=$(echo {} | awk -F" - " "{print tolower(\$1)}"); binding=$(echo {} | awk -F" - " "{print \$3}"); alacritty -e bash -c "man -P \"less +/$binding\" $app 2>/dev/null || $app --help 2>&1 | less" &)+abort' \
         --height=100% \
         --layout=reverse \
         --info=inline \
