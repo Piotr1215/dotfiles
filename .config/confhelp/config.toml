@@ -42,8 +42,10 @@ strip_quotes = true
 
 [abbrev]
 paths = [".zsh_abbreviations"]
-# Special handling: parse abbrevs=() block
-mode = "abbrev_block"
+match_line = '".*"'
+regex = '''"([^"]+)"\s+'([^']+)''''
+key_group = 1
+desc_group = 2
 type = "abbr"
 
 [function]
