@@ -1,0 +1,45 @@
+# Config-driven parser definitions for bindings help
+# Each section defines how to extract bindings from a config file
+
+[tmux]
+paths = [".tmux.conf"]
+match_line = "^bind"
+regex = 'bind(?:-key)?\s+(?:-n\s+)?(\S+)(.*)'
+# group 1 = key, group 2 = command
+key_group = 1
+desc_group = 2
+type = "tmux"
+truncate = 100
+
+[zsh-bindkey]
+paths = [".zshrc"]
+match_line = "bindkey"
+skip_comment = true
+regex = "bindkey\\s+(?:-s\\s+)?['\"]([^'\"]+)['\"]"
+key_group = 1
+# desc from trailing comment or function name
+desc_from_comment = true
+type = "bind"
+
+[alias]
+paths = [".zsh_aliases", ".zsh_claude"]
+regex = "alias\\s+(?:-[gs]\\s+)?([^=]+)=(.*)"
+key_group = 1
+desc_group = 2
+type = "alias"
+truncate = 100
+strip_quotes = true
+
+[abbrev]
+paths = [".zsh_abbreviations"]
+# Special handling: parse abbrevs=() block
+mode = "abbrev_block"
+type = "abbr"
+
+[function]
+paths = [".zsh_functions"]
+regex = '(?:function\s+)?(\w+)\s*\(\)\s*\{?'
+skip_comment = true
+key_group = 1
+desc_literal = "(function)"
+type = "func"
