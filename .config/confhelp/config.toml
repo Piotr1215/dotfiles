@@ -1,14 +1,24 @@
 # Config-driven parser definitions for bindings help
 # Each section defines how to extract bindings from a config file
 
+base_dirs = ["~/dev/dotfiles"]
+
 [tmux]
 paths = [".tmux.conf"]
-match_line = "^bind"
+match_line = "^bind(?!.*-T)"
 regex = 'bind(?:-key)?\s+(?:-n\s+)?(\S+)(.*)'
-# group 1 = key, group 2 = command
 key_group = 1
 desc_group = 2
 type = "tmux"
+truncate = 100
+
+[tmux-copy]
+paths = [".tmux.conf"]
+match_line = "-T copy-mode"
+regex = 'bind(?:-key)?\s+-T\s+\S+\s+(\S+)(.*)'
+key_group = 1
+desc_group = 2
+type = "tmux-copy"
 truncate = 100
 
 [zsh-bindkey]
@@ -43,3 +53,19 @@ skip_comment = true
 key_group = 1
 desc_literal = "(function)"
 type = "func"
+
+[nvim-utils]
+paths = [".config/nvim/lua/**/*.lua"]
+match_line = "utils\\."
+regex = 'utils\.\w+map\("([^"]+)",\s*"[^"]+",.*desc\s*=\s*"([^"]+)"'
+key_group = 1
+desc_group = 2
+type = "nvim"
+
+[nvim-keymap]
+paths = [".config/nvim/lua/**/*.lua"]
+match_line = "vim.keymap.set"
+regex = 'vim\.keymap\.set\([^,]+,\s*"([^"]+)".*desc\s*=\s*"([^"]+)"'
+key_group = 1
+desc_group = 2
+type = "nvim"
