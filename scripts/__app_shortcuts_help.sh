@@ -141,8 +141,10 @@ handle_shortcut_selection() {
         --with-nth=1,2,3 \
         --preview='echo {} | awk -F" - " "{print \"App: \" \$1 \"\nAction: \" \$2 \"\nShortcut: \" \$3}"' \
         --preview-window=up:3:wrap \
-        --header='App Shortcuts Help (Ctrl+C to exit, Ctrl+G for categories, Enter to open help)' \
+        --header='Enter=config | Ctrl+O=man | Ctrl+T=tldr | Ctrl+G=categories' \
         --bind='ctrl-g:execute(echo "CATEGORY_MODE" > '"$TEMP_FILE"')+abort' \
+        --bind='ctrl-t:execute-silent(app=$(echo {} | awk -F" - " "{print tolower(\$1)}"); alacritty -e bash -c "tldr $app 2>/dev/null || cheat $app 2>/dev/null || echo No tldr/cheat for $app; read" &)' \
+        --bind='ctrl-o:execute-silent(app=$(echo {} | awk -F" - " "{print tolower(\$1)}"); alacritty -e bash -c "man $app 2>/dev/null || $app --help 2>&1 | less" &)' \
         --height=100% \
         --layout=reverse \
         --info=inline \
@@ -155,9 +157,10 @@ handle_shortcut_selection() {
         rm -f "$TEMP_FILE"
         handle_category_selection
     elif [[ -n "$selection" ]]; then
-        # Extract the app name
-        local app=$(echo "$selection" | awk -F" - " '{print tolower($1)}')
-        echo "$app" > "$TEMP_FILE"
+        # Extract app name and binding
+        local app=$(echo "$selection" | awk -F" - " '{print $1}')
+        local binding=$(echo "$selection" | awk -F" - " '{print $3}')
+        echo "${app}|${binding}" > "$TEMP_FILE"
     fi
 }
 
@@ -178,44 +181,77 @@ alacritty --class app-shortcuts-popup \
     -e bash -c "handle_shortcut_selection"
 
 if [[ -f "$TEMP_FILE" ]]; then
-    app=$(cat "$TEMP_FILE")
+    data=$(cat "$TEMP_FILE")
     rm -f "$TEMP_FILE"
-    
+
+    app=$(echo "$data" | cut -d'|' -f1 | tr '[:upper:]' '[:lower:]')
+    binding=$(echo "$data" | cut -d'|' -f2)
+
     if [[ -n "$app" ]]; then
         # Open help for the selected app
         case "$app" in
             mpv)
-                if man mpv >/dev/null 2>&1; then
-                    alacritty -e man mpv &
+                if [[ -n "$binding" ]]; then
+                    alacritty -e nvim "+silent! /$binding" ~/.config/mpv/input.conf &
                 else
-                    alacritty -e bash -c "mpv --help 2>&1 | less" &
+                    alacritty -e nvim ~/.config/mpv/input.conf &
                 fi
                 ;;
             vim)
-                alacritty -e vim -c ':help' -c ':only' &
+                if [[ -n "$binding" ]]; then
+                    alacritty -e nvim "+silent! /$binding" ~/.config/nvim/init.lua &
+                else
+                    alacritty -e nvim ~/.config/nvim/init.lua &
+                fi
                 ;;
-            tmux|tmuxinator)
-                alacritty -e man tmux &
+            tmux|tmux-copy-mode|tmux-copy-toolkit|tmuxinator)
+                if [[ -n "$binding" ]]; then
+                    alacritty -e nvim "+silent! /$binding" ~/dev/dotfiles/.tmux.conf &
+                else
+                    alacritty -e nvim ~/dev/dotfiles/.tmux.conf &
+                fi
                 ;;
             taskwarrior)
-                if man task >/dev/null 2>&1; then
-                    alacritty -e man task &
+                if [[ -n "$binding" ]]; then
+                    alacritty -e nvim "+silent! /$binding" ~/.taskrc &
                 else
-                    alacritty -e bash -c "task help 2>&1 | less" &
+                    alacritty -e nvim ~/.taskrc &
+                fi
+                ;;
+            zsh|bookmarks)
+                if [[ -n "$binding" ]]; then
+                    alacritty -e nvim "+silent! /$binding" -O ~/dev/dotfiles/.zshrc ~/dev/dotfiles/.zsh_aliases &
+                else
+                    alacritty -e nvim -O ~/dev/dotfiles/.zshrc ~/dev/dotfiles/.zsh_aliases &
+                fi
+                ;;
+            neomutt)
+                if [[ -n "$binding" ]]; then
+                    alacritty -e nvim "+silent! /$binding" ~/dev/dotfiles/.config/neomutt/neomuttrc &
+                else
+                    alacritty -e nvim ~/dev/dotfiles/.config/neomutt/neomuttrc &
                 fi
                 ;;
             moreutils)
-                # Open moreutils man page or general info
-                alacritty -e bash -c "man moreutils 2>/dev/null || echo 'Moreutils: Collection of additional Unix utilities' | less" &
+                if [[ -n "$binding" ]]; then
+                    alacritty -e bash -c "man moreutils | less '+/$binding'" &
+                else
+                    alacritty -e man moreutils &
+                fi
+                ;;
+            claude)
+                # Open config files and search for binding
+                if [[ -n "$binding" ]]; then
+                    # Escape special chars for vim search
+                    search=$(echo "$binding" | sed 's/[\/&]/\\&/g')
+                    alacritty -e nvim "+silent! /$search" -O ~/dev/dotfiles/.tmux.conf ~/dev/dotfiles/.zsh_aliases &
+                else
+                    alacritty -e nvim -O ~/dev/dotfiles/.tmux.conf ~/dev/dotfiles/.zsh_aliases &
+                fi
                 ;;
             *)
-                # Generic handler - try man page first
-                if man "$app" >/dev/null 2>&1; then
-                    alacritty -e man "$app" &
-                else
-                    # Try --help flag
-                    alacritty -e bash -c "$app --help 2>&1 | less" &
-                fi
+                # No config file known - do nothing (use Ctrl+O for man, Ctrl+T for tldr)
+                :
                 ;;
         esac
     fi
