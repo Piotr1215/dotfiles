@@ -627,3 +627,32 @@ neomutt:
       binding: "i1"
     - description: "Switch to piotr.zaniewski@loft.sh"
       binding: "i2"
+
+CLAUDE:
+  description: "Claude Code AI assistant keybindings"
+  shortcuts:
+    # === TMUX ===
+    - description: "View pane output in nvim (3000 lines)"
+      binding: "M-Y"
+    - description: "Capture command output to clipboard"
+      binding: "M-Z"
+    - description: "Claude worktree switcher"
+      binding: "M-w"
+    - description: "Claude command/URL history (fzf)"
+      binding: "prefix + A"
+    
+    # === ZSH ALIASES ===
+    - description: "Start Claude with monitor + kubeconfig"
+      binding: "claude"
+    - description: "Start Claude without kubeconfig"
+      binding: "claude_clean"
+    - description: "Pair programming mode"
+      binding: "claude_pair"
+    - description: "Kill stuck Claude processes"
+      binding: "claude-kill"
+    - description: "Dry-run kill check"
+      binding: "claude-check"
+    
+    # === ZSH FUNCTIONS ===
+    - description: "Execute command and open Claude with output"
+      binding: "Ctrl + G"
