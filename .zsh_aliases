@@ -142,8 +142,3 @@ alias apphelp='/home/decoder/dev/dotfiles/scripts/__app_shortcuts_help.sh'
 
 # Emoji Picker
 alias emo='/home/decoder/dev/dotfiles/scripts/__emoji_picker.sh'
-
-# Claude Performance Ledger
-alias strike='__claude_score.sh strike'
-alias praise='__claude_score.sh praise'
-alias scoreboard='__claude_score.sh report'
