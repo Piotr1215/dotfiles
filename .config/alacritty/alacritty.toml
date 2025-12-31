@@ -12,6 +12,7 @@ bindings = [
   { key = "H", action = "High", mode = "Vi|~Search", mods = "Shift" },
   { key = "M", action = "Middle", mode = "Vi|~Search", mods = "Shift" },
   { key = "L", action = "Low", mode = "Vi|~Search", mods = "Shift" },
+  { key = "Return", chars = "\u001B\r", mods = "Shift" },
 ]
 
 
