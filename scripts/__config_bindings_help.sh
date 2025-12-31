@@ -17,8 +17,9 @@ main_loop() {
         if [[ "$mode" == "bindings" ]]; then
             local selection
             selection=$(confhelp -b "$DOTFILES" | column -t -s'|' | fzf \
-                --header='Enter=jump | Ctrl+G=tealdeer pages' \
+                --header='Enter=jump | Ctrl+G=tealdeer | Ctrl+O=copy' \
                 --bind='ctrl-g:become(echo SWITCH_TLDR)' \
+                --bind='ctrl-o:execute-silent(printf "%s" {} | $DOTFILES/scripts/__format_binding_for_clipboard.sh | xclip -selection clipboard)+abort' \
                 --height=100% \
                 --layout=reverse \
                 --info=inline \
