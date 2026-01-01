@@ -10,6 +10,18 @@ TEMP_FILE=$(mktemp)
 
 FZF_COLORS='fg:#f8f8f2,bg:#282a36,hl:#bd93f9,fg+:#f8f8f2,bg+:#44475a,hl+:#bd93f9,info:#ffb86c,prompt:#50fa7b,pointer:#ff79c6,marker:#ff79c6,spinner:#ffb86c,header:#6272a4'
 
+format_for_clipboard() {
+    local input file_line raw_line
+    read -r input
+    file_line=$(echo "$input" | awk '{print $NF}')
+    raw_line=$(confhelp -b "$DOTFILES" | grep -F "|${file_line}" | head -1)
+    if [[ -z "$raw_line" ]]; then
+        printf "SOURCE | KEY | COMMAND | FILE:LINE\n%s\n" "$input"
+    else
+        printf "SOURCE|KEY|COMMAND|FILE:LINE\n%s\n" "$raw_line" | column -t -s'|' -o' | '
+    fi
+}
+
 main_loop() {
     local mode="bindings"
 
@@ -19,7 +31,7 @@ main_loop() {
             selection=$(confhelp -b "$DOTFILES" | column -t -s'|' | fzf \
                 --header='Enter=jump | Ctrl+G=tealdeer | Ctrl+O=copy' \
                 --bind='ctrl-g:become(echo SWITCH_TLDR)' \
-                --bind='ctrl-o:execute-silent(printf "%s" {} | $DOTFILES/scripts/__format_binding_for_clipboard.sh | xclip -selection clipboard)+abort' \
+                --bind='ctrl-o:execute-silent(cat {+f} | bash -c format_for_clipboard | xclip -selection clipboard)+abort' \
                 --height=100% \
                 --layout=reverse \
                 --info=inline \
@@ -84,7 +96,7 @@ main_loop() {
     done
 }
 
-export -f main_loop
+export -f main_loop format_for_clipboard
 export DOTFILES TEMP_FILE FZF_COLORS
 
 # Calculate center position
