@@ -29,7 +29,7 @@ regex = "bindkey\\s+(?:-s\\s+)?['\"]([^'\"]+)['\"]"
 key_group = 1
 # desc from trailing comment or function name
 desc_from_comment = true
-type = "bind"
+type = "zsh"
 
 [alias]
 paths = [".zsh_aliases", ".zsh_claude"]
@@ -57,7 +57,7 @@ desc_literal = "(function)"
 type = "func"
 
 [nvim-utils]
-paths = [".config/nvim/lua/**/*.lua"]
+paths = [".config/nvim/lua/**/*.lua", ".config/nvim/ftplugin/**/*.lua"]
 match_line = "utils\\."
 regex = 'utils\.\w+map\("([^"]+)",\s*"[^"]+",.*desc\s*=\s*"([^"]+)"'
 key_group = 1
@@ -65,9 +65,18 @@ desc_group = 2
 type = "nvim"
 
 [nvim-keymap]
-paths = [".config/nvim/lua/**/*.lua"]
+paths = [".config/nvim/lua/**/*.lua", ".config/nvim/ftplugin/**/*.lua"]
 match_line = "vim.keymap.set"
 regex = 'vim\.keymap\.set\([^,]+,\s*"([^"]+)".*desc\s*=\s*"([^"]+)"'
 key_group = 1
 desc_group = 2
 type = "nvim"
+
+[nvim-table]
+paths = [".config/nvim/lua/**/*.lua", ".config/nvim/ftplugin/**/*.lua"]
+match_line = '^\s*\{ "[nvixso]"'
+regex = '\{ "[nvixso]",\s*"([^"]+)",\s*"?([^"]+)"?'
+key_group = 1
+desc_group = 2
+type = "nvim"
+truncate = 60
