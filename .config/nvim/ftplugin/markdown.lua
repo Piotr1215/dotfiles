@@ -34,7 +34,7 @@ for key, value in pairs(markdown_settings) do
 end
 
 -- markdown-preview settings
-vim.g.mkdp_browser = "/usr/bin/firefox"
+vim.g.mkdp_browser = "/usr/local/bin/librewolf"
 vim.g.mkdp_echo_preview_url = 0
 
 -- Setup completion
@@ -120,7 +120,7 @@ vim.api.nvim_create_autocmd("FileType", {
         { "n", "]]", "<Plug>Markdown_MoveToNextHeader" },
         { "n", "[[", "<Plug>Markdown_MoveToPreviousHeader" },
         { "n", "]c", "]c", { noremap = true } },
-        { "n", "<leader>mp", ":MarkdownPreview<CR>:silent !bash -c 'wmctrl -a Firefox'<CR>" },
+        { "n", "<leader>mp", ":MarkdownPreview<CR>:silent !bash -c 'wmctrl -a Librewolf'<CR>" },
         { "n", "<leader>pi", ":call mdip#MarkdownClipboardImage()<CR>" },
         { "n", "ctd", "4wvg$y" },
         { "v", "<leader>hi", ":HeaderIncrease<CR>" },
