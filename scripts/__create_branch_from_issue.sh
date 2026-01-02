@@ -72,7 +72,7 @@ create_interactive_branch() {
 	git checkout -b "$new_branch"
 
 	# Launch Claude with the issue context
-	[[ "$skip_claude" == "false" ]] && KUBECONFIG=/home/decoder/dev/homelab/kubeconfig __claude_with_monitor.sh "/ops-linear-issue ${issue_id}"
+	[[ "$skip_claude" == "false" ]] && KUBECONFIG=/home/decoder/dev/homelab/kubeconfig /home/decoder/.claude/scripts/__claude_with_monitor.sh "/ops-linear-issue ${issue_id}"
 }
 
 create_interactive_branch "$@"
