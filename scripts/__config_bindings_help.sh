@@ -31,7 +31,7 @@ main_loop() {
             selection=$(confhelp -b "$DOTFILES" | column -t -s'|' | fzf \
                 --header='Enter=jump | Ctrl+G=tealdeer | Ctrl+O=copy' \
                 --bind='ctrl-g:become(echo SWITCH_TLDR)' \
-                --bind='ctrl-o:execute-silent(cat {+f} | bash -c format_for_clipboard | xclip -selection clipboard)+abort' \
+                --bind='ctrl-o:execute-silent(echo "{} <- line number in file, use grep -n -C 10 to see context" | xclip -selection clipboard)+abort' \
                 --height=100% \
                 --layout=reverse \
                 --info=inline \
