@@ -527,11 +527,6 @@ vim.keymap.set("n", "<leader>aip", function()
   switch "pplx"
 end, { desc = "gp.nvim: use Perplexity (sonar)" })
 
--- Restart nvim
-vim.keymap.set("n", "<leader>-", function()
-  vim.fn.system "bash __restart_nvim.sh"
-end, { noremap = true, silent = true, desc = "restart nvim" })
-
 vim.keymap.set({ "n", "i" }, "<C-g><C-w>w", "<cmd>GpWhisper<cr>", keymapOptions "Whisper Insert")
 vim.keymap.set({ "n", "i" }, "<C-g>r", "<cmd>GpRewrite<cr>", keymapOptions "Inline Rewrite")
 vim.keymap.set({ "n", "i" }, "<C-g><C-w>r", "<cmd>GpWhisperRewrite<cr>", keymapOptions "Whisper Rewrite")
