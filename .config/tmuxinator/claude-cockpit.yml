@@ -1,66 +1,31 @@
 # Claude Autonomous Pipeline Cockpit
 # Start: tmuxinator start claude-cockpit
 # Stop:  tmuxinator stop claude-cockpit
-
 name: claude-cockpit
 root: ~/.claude
 
 on_project_start: |
-  # Ensure watcher is running (completely silent, backgrounded)
   ~/.claude/scripts/__nats_watcher.sh --daemon >/dev/null 2>&1 &
 
-on_project_stop: |
-  # Optionally stop watcher
-  # ~/.claude/scripts/__nats_watcher.sh --stop
-
-startup_window: control
+startup_window: main
 
 windows:
-  - control:
-      layout: main-horizontal
-      panes:
-        # Main control pane - run commands here
-        - echo "🎛️  CLAUDE COCKPIT" && echo "Commands:" && echo "  task <id> modify +claude  - spawn worker" && echo "  __nats_watcher.sh --status - check status" && echo "  nats pub tasks.new.test '{...}' - manual trigger"
-        # Quick status view (auto-refresh)
-        - watch -n 5 '~/.claude/scripts/__nats_watcher.sh --status 2>/dev/null'
-
-  - nats:
+  - main:
       layout: main-vertical
       panes:
-        # ERRORS - most important, top pane
-        - echo "🚨 ERRORS (tasks.error)" && nats sub -s nats://192.168.178.93:4222 "tasks.error"
-        # Live NATS message monitor
-        - echo "📡 Tasks (tasks.>)" && nats sub -s nats://192.168.178.93:4222 "tasks.>"
+        # Interactive shell - run commands here
+        -
+        # Status (compact)
+        - watch -n 5 -t '~/.claude/scripts/__nats_watcher.sh --status 2>/dev/null | grep -v "^$"'
 
-  - workers:
-      layout: main-vertical
+  - errors:
       panes:
-        # Worker session list (auto-refresh)
-        - watch -n 3 'echo "👷 Active Workers" && tmux list-windows -t claude-tasks 2>/dev/null || echo "(none)" && echo "" && echo "📁 Status Files:" && ls -la /tmp/claude_task_status/*.json 2>/dev/null || echo "(none)"'
-        # Log tail
-        - echo "📜 Watcher Log" && tail -f /tmp/nats_watcher.log 2>/dev/null || echo "No log yet"
+        - nats sub -s nats://192.168.178.93:4222 "tasks.error" 2>&1
 
-  - tasks:
-      layout: even-vertical
+  - log:
       panes:
-        # Taskwarrior view - tasks with +claude potential
-        - echo "📋 Tasks with linear_issue_id" && task linear_issue_id.any: list 2>/dev/null | head -30
-        # Recent activity
-        - watch -n 10 'echo "🕐 Recent Task Activity" && task modified:today list 2>/dev/null | head -20'
+        - tail -f /tmp/nats_watcher.log 2>/dev/null
 
-  - test:
-      layout: tiled
+  - ready:
       panes:
-        # Test publishing
-        - |
-          echo "🧪 Test Commands"
-          echo ""
-          echo "# Publish test task:"
-          echo 'nats pub -s nats://192.168.178.93:4222 tasks.new.test \'
-          echo '  '\''{"task_id":"test-001","repo":"dotfiles","linear_id":"TEST-1","worktree":"/home/decoder/dev/dotfiles"}'\'
-          echo ""
-          echo "# Check hook log:"
-          echo "cat /tmp/nats-claude-hook.log"
-          echo ""
-          echo "# Attach to worker:"
-          echo "tmux attach -t claude-tasks"
+        - watch -n 10 -t 'task linear_issue_id.any: repo.any: +PENDING list 2>/dev/null | head -20 || echo "No tasks ready for +claude"'
