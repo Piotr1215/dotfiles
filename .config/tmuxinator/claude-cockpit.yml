@@ -25,12 +25,12 @@ windows:
         - watch -n 5 '~/.claude/scripts/__nats_watcher.sh --status 2>/dev/null'
 
   - nats:
-      layout: even-horizontal
+      layout: main-vertical
       panes:
+        # ERRORS - most important, top pane
+        - echo "🚨 ERRORS (tasks.error)" && nats sub -s nats://192.168.178.93:4222 "tasks.error"
         # Live NATS message monitor
-        - echo "📡 NATS Monitor (tasks.>)" && nats sub -s nats://192.168.178.93:4222 "tasks.>"
-        # Live NATS monitor for agent protocol
-        - echo "🤖 Agent Monitor (agents.>)" && nats sub -s nats://192.168.178.93:4222 "agents.>"
+        - echo "📡 Tasks (tasks.>)" && nats sub -s nats://192.168.178.93:4222 "tasks.>"
 
   - workers:
       layout: main-vertical
