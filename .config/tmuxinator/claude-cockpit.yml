@@ -1,23 +1,17 @@
-# Claude Pipeline Control - Minimal
+# Claude Pipeline Control - Sampler Dashboard
 name: claude-cockpit
 root: ~/.claude
 
 on_project_start: |
   ~/.claude/scripts/__nats_watcher.sh --daemon >/dev/null 2>&1 &
+  # Log NATS errors to file for sampler to read
+  nats sub -s nats://192.168.178.93:4222 tasks.error >> /tmp/nats_errors.log 2>&1 &
 
 windows:
-  - work:
-      layout: main-horizontal
+  - dashboard:
+      layout: main-vertical
       panes:
-        # Shell for commands
+        # Shell for commands (main, left)
         -
-        # Compact status refreshing every 3s
-        - watch -n 3 -t '~/.claude/scripts/__nats_watcher.sh --status 2>&1 | tail -15'
-
-  - monitor:
-      layout: even-horizontal
-      panes:
-        # Errors only
-        - nats sub -s nats://192.168.178.93:4222 tasks.error
-        # Watcher log
-        - tail -f /tmp/nats_watcher.log
+        # Sampler dashboard (right)
+        - sampler -c ~/.config/sampler/claude-cockpit.yml
