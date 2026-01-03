@@ -1,0 +1,66 @@
+# Claude Autonomous Pipeline Cockpit
+# Start: tmuxinator start claude-cockpit
+# Stop:  tmuxinator stop claude-cockpit
+
+name: claude-cockpit
+root: ~/.claude
+
+on_project_start: |
+  # Ensure watcher is running
+  ~/.claude/scripts/__nats_watcher.sh --daemon 2>/dev/null || true
+
+on_project_stop: |
+  # Optionally stop watcher
+  # ~/.claude/scripts/__nats_watcher.sh --stop
+
+startup_window: control
+
+windows:
+  - control:
+      layout: main-horizontal
+      panes:
+        # Main control pane - run commands here
+        - echo "🎛️  CLAUDE COCKPIT" && echo "Commands:" && echo "  task <id> modify +claude  - spawn worker" && echo "  __nats_watcher.sh --status - check status" && echo "  nats pub tasks.new.test '{...}' - manual trigger"
+        # Quick status view (auto-refresh)
+        - watch -n 5 '~/.claude/scripts/__nats_watcher.sh --status 2>/dev/null'
+
+  - nats:
+      layout: even-horizontal
+      panes:
+        # Live NATS message monitor
+        - echo "📡 NATS Monitor (tasks.>)" && nats sub -s nats://192.168.178.93:4222 "tasks.>"
+        # Live NATS monitor for agent protocol
+        - echo "🤖 Agent Monitor (agents.>)" && nats sub -s nats://192.168.178.93:4222 "agents.>"
+
+  - workers:
+      layout: main-vertical
+      panes:
+        # Worker session list (auto-refresh)
+        - watch -n 3 'echo "👷 Active Workers" && tmux list-windows -t claude-tasks 2>/dev/null || echo "(none)" && echo "" && echo "📁 Status Files:" && ls -la /tmp/claude_task_status/*.json 2>/dev/null || echo "(none)"'
+        # Log tail
+        - echo "📜 Watcher Log" && tail -f /tmp/nats_watcher.log 2>/dev/null || echo "No log yet"
+
+  - tasks:
+      layout: even-vertical
+      panes:
+        # Taskwarrior view - tasks with +claude potential
+        - echo "📋 Tasks with linear_issue_id" && task linear_issue_id.any: list 2>/dev/null | head -30
+        # Recent activity
+        - watch -n 10 'echo "🕐 Recent Task Activity" && task modified:today list 2>/dev/null | head -20'
+
+  - test:
+      layout: tiled
+      panes:
+        # Test publishing
+        - |
+          echo "🧪 Test Commands"
+          echo ""
+          echo "# Publish test task:"
+          echo 'nats pub -s nats://192.168.178.93:4222 tasks.new.test \'
+          echo '  '\''{"task_id":"test-001","repo":"dotfiles","linear_id":"TEST-1","worktree":"/home/decoder/dev/dotfiles"}'\'
+          echo ""
+          echo "# Check hook log:"
+          echo "cat /tmp/nats-claude-hook.log"
+          echo ""
+          echo "# Attach to worker:"
+          echo "tmux attach -t claude-tasks"
