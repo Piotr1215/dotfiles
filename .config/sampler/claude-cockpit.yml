@@ -1,0 +1,65 @@
+# Claude Pipeline Dashboard
+# Run: sampler -c ~/.config/sampler/claude-cockpit.yml
+
+variables:
+  nats_url: nats://192.168.178.93:4222
+  status_dir: /tmp/claude_task_status
+
+textboxes:
+  - title: NATS Watcher Status
+    position: [[0, 0], [40, 12]]
+    rate-ms: 3000
+    sample: ~/.claude/scripts/__nats_watcher.sh --status 2>&1
+
+  - title: Recent Watcher Log
+    position: [[40, 0], [40, 12]]
+    rate-ms: 2000
+    sample: tail -15 /tmp/nats_watcher.log 2>/dev/null || echo "No log yet"
+
+  - title: NATS Errors (last 10)
+    position: [[0, 12], [80, 8]]
+    rate-ms: 5000
+    sample: |
+      if [ -f /tmp/nats_errors.log ]; then
+        tail -10 /tmp/nats_errors.log
+      else
+        echo "No errors recorded"
+      fi
+
+gauges:
+  - title: Active Tasks
+    position: [[0, 20], [26, 3]]
+    rate-ms: 3000
+    cur:
+      sample: ls /tmp/claude_task_status/*.json 2>/dev/null | wc -l || echo 0
+    max:
+      sample: echo 10
+    min:
+      sample: echo 0
+
+  - title: Running Tasks
+    position: [[27, 20], [26, 3]]
+    rate-ms: 3000
+    cur:
+      sample: grep -l '"status":"running"' /tmp/claude_task_status/*.json 2>/dev/null | wc -l || echo 0
+    max:
+      sample: echo 10
+    min:
+      sample: echo 0
+
+  - title: Done Tasks
+    position: [[54, 20], [26, 3]]
+    rate-ms: 3000
+    cur:
+      sample: grep -l '"status":"done"' /tmp/claude_task_status/*.json 2>/dev/null | wc -l || echo 0
+    max:
+      sample: echo 10
+    min:
+      sample: echo 0
+
+sparklines:
+  - title: Tasks/min
+    position: [[0, 24], [40, 5]]
+    rate-ms: 5000
+    scale: 0
+    sample: ls /tmp/claude_task_status/*.json 2>/dev/null | wc -l || echo 0
