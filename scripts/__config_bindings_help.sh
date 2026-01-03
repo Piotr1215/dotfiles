@@ -27,11 +27,10 @@ main_loop() {
 
     while true; do
         if [[ "$mode" == "bindings" ]]; then
-            local selection
-            selection=$(confhelp -b "$DOTFILES" | column -t -s'|' | fzf \
-                --header='Enter=jump | Ctrl+G=tealdeer | Ctrl+O=copy' \
-                --bind='ctrl-g:become(echo SWITCH_TLDR)' \
-                --bind='ctrl-o:execute-silent(echo "{} <- line number in file, use grep -n -C 10 to see context" | xclip -selection clipboard)+abort' \
+            local result key selection
+            result=$(confhelp -b "$DOTFILES" | column -t -s'|' | fzf \
+                --header='Enter=jump | Ctrl+P=open path | Ctrl+G=tealdeer | Ctrl+O=copy' \
+                --expect=ctrl-g,ctrl-o,ctrl-p \
                 --height=100% \
                 --layout=reverse \
                 --info=inline \
@@ -40,18 +39,43 @@ main_loop() {
                 --color="$FZF_COLORS" \
                 || true)
 
-            if [[ "$selection" == "SWITCH_TLDR" ]]; then
-                mode="tldr"
-                continue
-            elif [[ -n "$selection" ]]; then
-                local file_line=$(echo "$selection" | awk '{print $NF}')
-                local file=$(echo "$file_line" | cut -d: -f1)
-                local line=$(echo "$file_line" | cut -d: -f2)
-                echo "FILE:${DOTFILES}/${file}:${line}" > "$TEMP_FILE"
-                break
-            else
-                break
-            fi
+            key=$(echo "$result" | head -1)
+            selection=$(echo "$result" | tail -1)
+
+            case "$key" in
+                ctrl-g)
+                    mode="tldr"
+                    continue
+                    ;;
+                ctrl-o)
+                    [[ -n "$selection" ]] && printf '%s' "$selection" | xsel -ib
+                    break
+                    ;;
+                ctrl-p)
+                    if [[ -n "$selection" ]]; then
+                        local path
+                        path=$(echo "$selection" | grep -oE '(/[^ ]+|~[^ ]+|\$HOME[^ ]+)' | head -1)
+                        path="${path%\"}"  # strip trailing quote
+                        path="${path/#\~/$HOME}"
+                        path="${path/#\$HOME/$HOME}"
+                        if [[ -e "$path" ]]; then
+                            echo "OPEN_PATH:$path" > "$TEMP_FILE"
+                        fi
+                    fi
+                    break
+                    ;;
+                *)
+                    # Enter pressed or empty
+                    if [[ -n "$selection" ]]; then
+                        local file_line file line
+                        file_line=$(echo "$selection" | awk '{print $NF}')
+                        file=$(echo "$file_line" | cut -d: -f1)
+                        line=$(echo "$file_line" | cut -d: -f2)
+                        echo "FILE:${DOTFILES}/${file}:${line}" > "$TEMP_FILE"
+                    fi
+                    break
+                    ;;
+            esac
         else
             # tldr mode
             local custom_file=$(mktemp)
@@ -127,6 +151,10 @@ if [[ -f "$TEMP_FILE" ]]; then
             file=$(echo "$target" | cut -d: -f1)
             line=$(echo "$target" | cut -d: -f2)
             nohup alacritty -e nvim "+$line" "$file" >/dev/null 2>&1 &
+            ;;
+        OPEN_PATH:*)
+            path="${result#OPEN_PATH:}"
+            nohup alacritty -e nvim "$path" >/dev/null 2>&1 &
             ;;
         TLDR:*)
             page="${result#TLDR:}"

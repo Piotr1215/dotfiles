@@ -2,6 +2,7 @@
 # Each section defines how to extract bindings from a config file
 
 base_dirs = ["~/dev/dotfiles"]
+query_engines = ["nvim"]  # Enable runtime query engines (requires nvim binary)
 
 [tmux]
 paths = [".tmux.conf"]
@@ -56,27 +57,20 @@ key_group = 1
 desc_literal = "(function)"
 type = "func"
 
-[nvim-utils]
-paths = [".config/nvim/lua/**/*.lua", ".config/nvim/ftplugin/**/*.lua"]
-match_line = "utils\\."
-regex = 'utils\.\w+map\("([^"]+)",\s*"[^"]+",.*desc\s*=\s*"([^"]+)"'
-key_group = 1
-desc_group = 2
-type = "nvim"
-
-[nvim-keymap]
-paths = [".config/nvim/lua/**/*.lua", ".config/nvim/ftplugin/**/*.lua"]
-match_line = "vim.keymap.set"
-regex = 'vim\.keymap\.set\([^,]+,\s*"([^"]+)".*desc\s*=\s*"([^"]+)"'
-key_group = 1
-desc_group = 2
-type = "nvim"
-
-[nvim-table]
-paths = [".config/nvim/lua/**/*.lua", ".config/nvim/ftplugin/**/*.lua"]
-match_line = '^\s*\{ "[nvixso]"'
-regex = '\{ "[nvixso]",\s*"([^"]+)",\s*"?([^"]+)"?'
-key_group = 1
-desc_group = 2
-type = "nvim"
+[engine.nvim]
 truncate = 60
+
+[bookmarks]
+paths = ["scripts/__bookmarks.conf"]
+regex = '^([^;]+);(.+)$'
+key_group = 1
+desc_group = 2
+type = "bookmark"
+open_target = true  # --edit opens the path (desc) instead of source file
+
+[autokey]
+paths = ["scripts/__autokey_bindings.conf"]
+regex = '^([^|]+)\|(.+)$'
+key_group = 1
+desc_group = 2
+type = "autokey"
