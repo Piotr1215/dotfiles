@@ -1,31 +1,23 @@
-# Claude Autonomous Pipeline Cockpit
-# Start: tmuxinator start claude-cockpit
-# Stop:  tmuxinator stop claude-cockpit
+# Claude Pipeline Control - Minimal
 name: claude-cockpit
 root: ~/.claude
 
 on_project_start: |
   ~/.claude/scripts/__nats_watcher.sh --daemon >/dev/null 2>&1 &
 
-startup_window: main
-
 windows:
-  - main:
-      layout: main-vertical
+  - work:
+      layout: main-horizontal
       panes:
-        # Interactive shell - run commands here
+        # Shell for commands
         -
-        # Status (compact)
-        - watch -n 5 -t '~/.claude/scripts/__nats_watcher.sh --status 2>/dev/null | grep -v "^$"'
+        # Compact status refreshing every 3s
+        - watch -n 3 -t '~/.claude/scripts/__nats_watcher.sh --status 2>&1 | tail -15'
 
-  - errors:
+  - monitor:
+      layout: even-horizontal
       panes:
-        - nats sub -s nats://192.168.178.93:4222 "tasks.error" 2>&1
-
-  - log:
-      panes:
-        - tail -f /tmp/nats_watcher.log 2>/dev/null
-
-  - ready:
-      panes:
-        - watch -n 10 -t 'task linear_issue_id.any: repo.any: +PENDING list 2>/dev/null | head -20 || echo "No tasks ready for +claude"'
+        # Errors only
+        - nats sub -s nats://192.168.178.93:4222 tasks.error
+        # Watcher log
+        - tail -f /tmp/nats_watcher.log
