@@ -56,6 +56,4 @@ windows:
   - dashboard:
       layout: tiled
       panes:
-        - viddy just k8sgpt
-        - viddy kubectl top nodes
-        - viddy 'kubectl get events -A --sort-by=.lastTimestamp | grep -E "(Warning|Error)" | tail -20'
+        - sampler -c k8s-dashboard.yml
