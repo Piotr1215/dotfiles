@@ -6,8 +6,8 @@ name: claude-cockpit
 root: ~/.claude
 
 on_project_start: |
-  # Ensure watcher is running
-  ~/.claude/scripts/__nats_watcher.sh --daemon 2>/dev/null || true
+  # Ensure watcher is running (completely silent, backgrounded)
+  ~/.claude/scripts/__nats_watcher.sh --daemon >/dev/null 2>&1 &
 
 on_project_stop: |
   # Optionally stop watcher
