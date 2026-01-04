@@ -1,3 +1,4 @@
+# PROJECT: claude-automation
 # Claude Pipeline Control - Sampler Dashboard
 name: claude-cockpit
 root: ~/.claude
@@ -8,10 +9,11 @@ on_project_start: |
   nats sub -s nats://192.168.178.93:4222 tasks.error >> /tmp/nats_errors.log 2>&1 &
 
 windows:
-  - dashboard:
-      layout: main-vertical
+  - work:
       panes:
-        # Shell for commands (main, left)
         -
-        # Sampler dashboard (right)
+  - dashboard:
+      layout: even-horizontal
+      panes:
         - sampler -c ~/.config/sampler/claude-cockpit.yml
+        - ~/.claude/tools/cockpit/cockpit
