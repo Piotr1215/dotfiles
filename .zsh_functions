@@ -575,69 +575,32 @@ function fif() {
     _fif_common "--ignore-case" "$@"
 }
 
-# Dedicated function to list all files associated with a given project tag
-function list_project_files() {
-    local projects_file="$HOME/projects.txt"
-    local current_dir="$(pwd)"
-    
-    # Check if projects file exists
-    if [[ ! -f "$projects_file" ]]; then
-        echo "Error: $projects_file not found"
-        return 1
-    fi
-    
-    # Use fzf to select project from projects.txt
-    local selected_project=$(cat "$projects_file" | fzf --height=40% --border=rounded \
-        --prompt="Select project > " \
-        --preview="rga --max-count=1 'PROJECT: {}' ." \
-        --preview-window="right:50%:wrap")
-    
-    # Exit if no project selected
-    if [[ -z "$selected_project" ]]; then
-        return 0
-    fi
-    
-    # Search for project files
-    local project_tag="PROJECT: $selected_project"
-    
-    # Use rga to find files containing the project tag in current directory and subdirectories
-    # Removed --max-count=1 to show all matching files
-    local rga_output=$(rga --files-with-matches --no-messages "$project_tag" .)
-    
-    # Check if any files were found
-    if [[ -z "$rga_output" ]]; then
-        echo "No files found for project $selected_project in $current_dir"
-        return 0
-    fi
-    
-    # Print each file path
-    echo "$rga_output"
-}
-# Wrapper function for project tags search with optional listing
 # PROJECT: project
+# Directories to scan for PROJECT: tags (loaded from project_dirs.txt)
+PROJECT_DIRS=("${(@f)$(< ~/dev/dotfiles/project_dirs.txt)}")
+
+# Search files by PROJECT tag, open in nvim. Use -l to just list files.
+# Pattern requires comment prefix (#, --, //) to avoid false positives in installed packages
 function fifp() {
-    # Save current fzf-tab configuration
-    local saved_fzf_command
-    zstyle -s ':fzf-tab:*' fzf-command saved_fzf_command
+    local tag="$*"
+    local pattern="(#|--|//) PROJECT: $tag"
 
-    # Temporarily unset fzf-command to avoid conflict with ftb-tmux-popup
-    zstyle ':fzf-tab:*' fzf-command fzf
-
-    local mode="$1"  # Check for the '-l' flag
-    if [[ "$mode" == "-l" ]]; then
-        shift  # Remove the first argument (the '-l' flag)
-        list_project_files "$*"
-    else
-        _fif_common "" "PROJECT: $*"
+    if [[ "$1" == "-l" ]]; then
+        shift
+        tag="$*"
+        rg --hidden --files-with-matches --no-messages "(#|--|//) PROJECT: $tag" "${PROJECT_DIRS[@]}" 2>/dev/null
+        return
     fi
 
-    # Restore previous fzf-tab configuration
-    if [[ -n "$saved_fzf_command" ]]; then
-        zstyle ':fzf-tab:*' fzf-command "$saved_fzf_command"
-    else
-        # If no previous config, remove the style
-        zstyle -d ':fzf-tab:*' fzf-command
-    fi
+    local rg_output=$(rg --hidden --files-with-matches --no-messages "$pattern" "${PROJECT_DIRS[@]}" 2>/dev/null)
+    [[ -z "$rg_output" ]] && { echo "No files found for: PROJECT: $tag"; return 1; }
+
+    echo "$rg_output" | xsel --clipboard --input
+    IFS=$'\n' files=($(echo "$rg_output" | fzf +m --preview="rg --pretty --context 10 'PROJECT: $tag' {}" --multi --select-1 --exit-0)) || return 1
+
+    [[ ${#files[@]} -eq 0 ]] && { echo "No files selected."; return 0; }
+
+    nvim "${files[@]}"
 }
 
 # Uploads content to clbin and copies URL to clipboard, opens in browser

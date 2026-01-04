@@ -1,0 +1,4 @@
+/home/decoder/.claude
+/home/decoder/.task
+/home/decoder/dev
+/home/decoder/loft
