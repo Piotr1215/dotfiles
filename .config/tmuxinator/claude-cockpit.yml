@@ -11,6 +11,3 @@ windows:
         - ~/.claude/scripts/__agent_picker.sh --run
         - ~/.claude/scripts/__nats_watcher.sh --daemon && tail -f /tmp/nats_watcher.log
         - touch /tmp/agent_messages.log && tail -f /tmp/agent_messages.log
-  - dashboard:
-      panes:
-        - tail -50 /tmp/agent_messages.log 2>/dev/null || echo "(no messages)"
