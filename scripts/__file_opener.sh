@@ -130,7 +130,7 @@ fi
 
 # Define keybindings for switching sources (only the useful filters)
 # Ctrl+X returns to main view (all sources: sessions + zoxide + files)
-HOME_BIND="ctrl-x:change-prompt(all> )+reload(active=\$(tmux ls -F '#{session_name}' 2>/dev/null | tr '\\n' '|'); for s in task \$(ls ~/.config/tmuxinator/*.yml 2>/dev/null | xargs -n1 basename | sed 's/\\.yml\$//' | grep -v '^task\$' | sort); do [[ \"|\$active\" == *\"|\$s|\"* || \"\$active\" == \"\$s|\"* ]] && echo \"\$s ◀◀◀\" || echo \"\$s\"; done; zoxide query -l; cache=/tmp/file_opener_cache_\$USER; if [[ -f \$cache ]] && [[ \$(((\$(date +%s) - \$(stat -c %Y \$cache)))) -lt 60 ]]; then cat \$cache; else fd --type f --hidden --absolute-path --color never --exclude .git --exclude node_modules --exclude .cache --exclude image-cache --exclude plugins --exclude stats-cache.json --changed-within 7d . ~/dev ~/loft ~/.config/nvim ~/.claude 2>/dev/null | xargs stat --format '%Y %n' 2>/dev/null | sort -rn | cut -d' ' -f2- | tee \$cache; fi)"
+HOME_BIND="ctrl-x:change-prompt(all> )+reload(active=\$(tmux ls -F '#{session_name}' 2>/dev/null | tr '\\n' '|'); for s in task \$(ls ~/.config/tmuxinator/*.yml 2>/dev/null | xargs -n1 basename | sed 's/\\.yml\$//' | grep -v '^task\$' | sort); do [[ \"|\$active\" == *\"|\$s|\"* || \"\$active\" == \"\$s|\"* ]] && echo \"\$s ◀◀◀\"; done; for s in task \$(ls ~/.config/tmuxinator/*.yml 2>/dev/null | xargs -n1 basename | sed 's/\\.yml\$//' | grep -v '^task\$' | sort); do [[ \"|\$active\" == *\"|\$s|\"* || \"\$active\" == \"\$s|\"* ]] || echo \"\$s\"; done; zoxide query -l; cache=/tmp/file_opener_cache_\$USER; if [[ -f \$cache ]] && [[ \$(((\$(date +%s) - \$(stat -c %Y \$cache)))) -lt 60 ]]; then cat \$cache; else fd --type f --hidden --absolute-path --color never --exclude .git --exclude node_modules --exclude .cache --exclude image-cache --exclude plugins --exclude stats-cache.json --changed-within 7d . ~/dev ~/loft ~/.config/nvim ~/.claude 2>/dev/null | xargs stat --format '%Y %n' 2>/dev/null | sort -rn | cut -d' ' -f2- | tee \$cache; fi)"
 # Files from work directories
 FILE_BIND="ctrl-f:change-prompt(files> )+reload(cache=/tmp/file_opener_cache_\$USER; if [[ -f \$cache ]] && [[ \$(((\$(date +%s) - \$(stat -c %Y \$cache)))) -lt 60 ]]; then cat \$cache; else fd --type f --hidden --absolute-path --color never --exclude .git --exclude node_modules --exclude .cache --exclude image-cache --exclude plugins --exclude stats-cache.json --changed-within 7d . ~/dev ~/loft ~/.config/nvim ~/.claude 2>/dev/null | xargs stat --format '%Y %n' 2>/dev/null | sort -rn | cut -d' ' -f2- | tee \$cache; fi)"
 # GitHub repo search binding - search, clone/cd into repo
@@ -151,8 +151,8 @@ EDIT_BIND="ctrl-e:execute(name={}; name=\${name% ◀◀◀}; [[ -f ~/.config/tmu
 # Music picker (Ctrl+U) - run music picker, closes popup on exit (can't use Ctrl+M, it's Enter)
 MUSIC_BIND="ctrl-u:execute(~/dev/dotfiles/scripts/__play_track.sh --run)+abort"
 
-# Kill current music (Ctrl+K) - stops music and closes popup
-KILL_MUSIC_BIND="ctrl-k:execute-silent(session=\$(cat /tmp/current_music_session.txt 2>/dev/null) && tmux kill-session -t \"\$session\" 2>/dev/null && rm -f /tmp/current_music_session.txt /tmp/current_music_session_display.txt)+abort"
+# Kill selected session (Ctrl+K) - switches away if current, then kills
+KILL_SESSION_BIND="ctrl-k:execute(name={}; name=\${name% ◀◀◀}; cur=\$(tmux display-message -p '#S'); [[ \"\$name\" == \"\$cur\" ]] && { tmux switch-client -l 2>/dev/null || tmux switch-client -n 2>/dev/null; }; tmux kill-session -t \"\$name\" 2>/dev/null)+abort"
 
 # Copy to clipboard binding - extracts path from bookmark format or uses line as-is
 COPY_BIND="ctrl-y:execute-silent(~/dev/dotfiles/scripts/__copy_path_with_notification.sh {})+abort"
@@ -160,10 +160,13 @@ COPY_BIND="ctrl-y:execute-silent(~/dev/dotfiles/scripts/__copy_path_with_notific
 # Loop to allow returning from PRs/Linear back to main picker
 while true; do
     OUTPUT=$( {
-        # All tmuxinator sessions (◀◀◀ = active), task first
+        # Tmuxinator sessions: active first (bottom in fzf), then inactive
         active=$(tmux ls -F '#{session_name}' 2>/dev/null | tr '\n' '|')
         for s in task $(ls ~/.config/tmuxinator/*.yml 2>/dev/null | xargs -n1 basename | sed 's/\.yml$//' | grep -v '^task$' | sort); do
-            [[ "|$active" == *"|$s|"* || "$active" == "$s|"* ]] && echo "$s ◀◀◀" || echo "$s"
+            [[ "|$active" == *"|$s|"* || "$active" == "$s|"* ]] && echo "$s ◀◀◀"
+        done
+        for s in task $(ls ~/.config/tmuxinator/*.yml 2>/dev/null | xargs -n1 basename | sed 's/\.yml$//' | grep -v '^task$' | sort); do
+            [[ "|$active" == *"|$s|"* || "$active" == "$s|"* ]] || echo "$s"
         done
         # Zoxide directories (most frequently used) - already sorted by frecency
         zoxide query -l
@@ -193,7 +196,7 @@ while true; do
                 echo "Preview not available"
             fi' \
         --preview-window 'right:50%:wrap' \
-        --header ' C-f:files C-x:home C-b:github C-g:PRs C-i:Linear C-e:edit C-u:music C-k:stop | C-y:copy' \
+        --header ' C-f:files C-x:home C-b:github C-g:PRs C-i:Linear C-e:edit C-u:music C-k:kill | C-y:copy' \
         --prompt 'all> ' \
         --bind "$HOME_BIND" \
         --bind "$FILE_BIND" \
@@ -202,7 +205,7 @@ while true; do
         --bind "$LINEAR_BIND" \
         --bind "$EDIT_BIND" \
         --bind "$MUSIC_BIND" \
-        --bind "$KILL_MUSIC_BIND" \
+        --bind "$KILL_SESSION_BIND" \
         --bind "$COPY_BIND" \
         --bind "ctrl-c:abort" \
         2>/dev/null) || true
