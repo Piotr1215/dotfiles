@@ -140,3 +140,6 @@ alias claude-check='__kill_stuck_claude.sh --dry-run'
 # App Shortcuts Help
 alias apphelp='/home/decoder/dev/dotfiles/scripts/__config_bindings_help.sh'
 
+# Screenkey
+alias sk='pkill screenkey; __start_screenkey.sh'
+
