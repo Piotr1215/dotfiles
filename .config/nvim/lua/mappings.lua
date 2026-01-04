@@ -314,7 +314,7 @@ vim.keymap.set("i", "<A-H>", "<c-w>", { noremap = true, desc = "delete word forw
 vim.keymap.set("i", "<A-,>", "<c-o>A,<c-o>o", { noremap = true, desc = "add coma and enter new line under" })
 utils.nmap("<leader>sl", "i<cr><esc>", { desc = "split line in two" })
 -- EXTERNAL COMMANDS --
-vim.keymap.set("c", "<C-w>", "\\w*", { noremap = true, desc = "copy word under cursor" })
+vim.keymap.set("c", "<M-w>", "\\w*", { noremap = true, desc = "insert \\w* pattern" })
 vim.keymap.set("c", "<C-s>", "\\S*", { noremap = true, desc = "copy WORD under cursor" })
 utils.nmap("<leader>ex", ":.w !bash -e <cr>", { desc = "execute current line and output to command line" })
 utils.nmap("<leader>eX", ":%w !bash -e <cr>", { desc = "exexute all lines and output to command line" })

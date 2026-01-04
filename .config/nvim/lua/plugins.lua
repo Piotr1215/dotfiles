@@ -109,17 +109,6 @@ return require("lazy").setup({
       },
     },
   },
-  {
-    "nvchad/showkeys",
-    cmd = "ShowkeysToggle",
-    opts = {
-      timeout = 2,
-      maxkeys = 5,
-      position = "top-right",
-      show_count = true,
-      excluded_modes = { "i" },
-    },
-  }, -- more opts
   "MunifTanjim/nui.nvim",
   "stevearc/dressing.nvim",
   "tyru/open-browser.vim",

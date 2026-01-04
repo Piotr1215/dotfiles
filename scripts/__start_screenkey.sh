@@ -6,5 +6,14 @@ set -eo pipefail
 # Set new line and tab for word splitting
 IFS=$'\n\t'
 
-# Start screenkey with large font size and fixed position at the bottom of the screen
-screenkey &
+# Start screenkey for presentations/recordings
+screenkey \
+    --position bottom \
+    --font-size small \
+    --font "JetBrainsMono Nerd Font" \
+    --font-color "#f2f4f8" \
+    --bg-color "#161616" \
+    --timeout 2 \
+    --compr-cnt 2 \
+    --opacity 0.8 \
+    --no-systray &
