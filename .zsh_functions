@@ -5,43 +5,8 @@ source ~/dev/dotfiles/scripts/__reusable_variables.sh
 
 alias ddg='ddg_function'
 
-function b() {
-  local persona=""
-  local message=""
-  
-  # Parse options
-  while getopts "f:" opt; do
-    case $opt in
-      f)
-        persona="$OPTARG"
-        ;;
-      \?)
-        echo "Invalid option: -$OPTARG"
-        return 1
-        ;;
-    esac
-  done
-  
-  # Shift to get the remaining arguments (the message)
-  shift $((OPTIND-1))
-  
-  # Check if message is provided
-  if [ $# -eq 0 ]; then
-    echo "Usage: b [-f persona] \"message\""
-    echo "Example: b -f rosie \"Hello from Human!\""
-    return 1
-  fi
-  
-  # Get the message
-  message="$1"
-  
-  # Send the message with optional persona
-  if [ -n "$persona" ]; then
-    echo "$message" | /home/decoder/dev/dotfiles/scripts/__mcp_broadcast.sh -f "$persona" && snd --agents
-  else
-    echo "$message" | /home/decoder/dev/dotfiles/scripts/__mcp_broadcast.sh && snd --agents
-  fi
-}
+# Broadcast to all agents from human
+b() { snd --agents "[HUMAN] $*"; }
 
 # Send keys to registered Claude tmux sessions
 function snd() {

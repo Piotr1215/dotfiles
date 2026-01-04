@@ -1,19 +1,15 @@
 # PROJECT: claude-automation
-# Claude Pipeline Control - Sampler Dashboard
+# Claude Agent Cockpit - monitor agents and NATS messages
 name: claude-cockpit
 root: ~/.claude
 
 on_project_start: |
   ~/.claude/scripts/__nats_watcher.sh --daemon >/dev/null 2>&1 &
-  # Log NATS errors to file for sampler to read
-  nats sub -s nats://192.168.178.93:4222 tasks.error >> /tmp/nats_errors.log 2>&1 &
 
 windows:
-  - work:
+  - monitor:
+      layout: main-horizontal
       panes:
-        -
-  - dashboard:
-      layout: even-horizontal
-      panes:
-        - sampler -c ~/.config/sampler/claude-cockpit.yml
-        - ~/.claude/tools/cockpit/cockpit
+        - tail -f /tmp/nats_watcher.log
+        - watch -n2 ~/.claude/scripts/__list_agents.sh
+        - nats sub -s nats://192.168.178.93:4222 "agents.>"
