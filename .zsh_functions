@@ -4,8 +4,6 @@ source ~/dev/dotfiles/scripts/__reusable_variables.sh
 
 alias ddg='ddg_function'
 
-# Broadcast to all agents from human
-b() { snd --agents "[HUMAN] $*"; }
 
 # Send keys to registered Claude tmux sessions
 function snd() {
