@@ -5,6 +5,8 @@ alias -g H=' --help'
 alias -g L='| less'
 alias -g NUL="> /dev/null 2>&1"
 alias -g R="2>&1 | tee output.txt"
+alias -g S='| sed "s/^[[:space:]]*//"'
+alias CT='xclip -o -sel c | sed "s/^[[:space:]]*//" | perl -pe "chomp if eof" | xclip -sel c'
 alias -g T="| tail -n +2"
 alias -g V=' --version'
 alias -g W='| nvim -c "setlocal buftype=nofile bufhidden=wipe filetype=markdown" -c "nnoremap <buffer> q :q!<CR>" -'
