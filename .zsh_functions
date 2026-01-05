@@ -2,7 +2,6 @@
 # ~ works ok here
 source ~/dev/dotfiles/scripts/__reusable_variables.sh
 
-
 alias ddg='ddg_function'
 
 # Broadcast to all agents from human
