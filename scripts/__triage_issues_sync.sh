@@ -52,11 +52,11 @@ create_triage_task() {
     local issue_id="$2"
     local issue_url="$3"
     local project="$4"
-    local session="$5"
+    local repo="$5"
 
     log "Creating new triage task for: $issue_title"
     local task_uuid
-    task_uuid=$(create_task "$issue_title" "+triage" "$project" $session "linear_issue_id:$issue_id") || true
+    task_uuid=$(create_task "$issue_title" "+triage" "$project" $repo "linear_issue_id:$issue_id") || true
     
     # Validate task UUID
     if [[ -z "$task_uuid" || "$task_uuid" == "null" ]]; then
@@ -111,18 +111,18 @@ add_new_triage_issues() {
         issue_url=$(echo "$issue" | jq -r '.url')
         team_name=$(echo "$issue" | jq -r '.team.name')
 
-        # Set project and session based on team name
+        # Set project and repo based on team name
         if [ "$team_name" = "Operations" ]; then
             project="project:operations"
-            session=""
+            repo=""
         else
             project="project:docs-maintenance"
-            session="session:vdocs"
+            repo="repo:vcluster-docs"
         fi
 
         task_uuid=$(get_task_id_by_description "$issue_title")
         if [[ -z "$task_uuid" ]]; then
-            task_uuid=$(create_triage_task "$issue_title" "$issue_id" "$issue_url" "$project" "$session")
+            task_uuid=$(create_triage_task "$issue_title" "$issue_id" "$issue_url" "$project" "$repo")
             issues_added=$((issues_added + 1))
         else
             log "Task already exists for: $issue_title"
