@@ -130,7 +130,7 @@ fi
 
 # Define keybindings for switching sources (only the useful filters)
 # Ctrl+X returns to main view (all sources: sessions + zoxide + files)
-HOME_BIND="ctrl-x:change-prompt(all> )+reload(active=\$(tmux ls -F '#{session_name}' 2>/dev/null | tr '\\n' '|'); for s in task \$(ls ~/.config/tmuxinator/*.yml 2>/dev/null | xargs -n1 basename | sed 's/\\.yml\$//' | grep -v '^task\$' | sort); do [[ \"|\$active\" == *\"|\$s|\"* || \"\$active\" == \"\$s|\"* ]] && echo \"\$s ◀◀◀\"; done; for s in task \$(ls ~/.config/tmuxinator/*.yml 2>/dev/null | xargs -n1 basename | sed 's/\\.yml\$//' | grep -v '^task\$' | sort); do [[ \"|\$active\" == *\"|\$s|\"* || \"\$active\" == \"\$s|\"* ]] || echo \"\$s\"; done; zoxide query -l; cache=/tmp/file_opener_cache_\$USER; if [[ -f \$cache ]] && [[ \$(((\$(date +%s) - \$(stat -c %Y \$cache)))) -lt 60 ]]; then cat \$cache; else fd --type f --hidden --absolute-path --color never --exclude .git --exclude node_modules --exclude .cache --exclude image-cache --exclude plugins --exclude stats-cache.json --changed-within 7d . ~/dev ~/loft ~/.config/nvim ~/.claude 2>/dev/null | xargs stat --format '%Y %n' 2>/dev/null | sort -rn | cut -d' ' -f2- | tee \$cache; fi)"
+HOME_BIND="ctrl-x:change-prompt(all> )+reload(active=\$(tmux ls -F '#{session_name}' 2>/dev/null); active_pipe=\$(echo \"\$active\" | tr '\\n' '|'); configs=\$(ls --color=never ~/.config/tmuxinator/*.yml 2>/dev/null | xargs -n1 basename | sed 's/\\.yml\$//' | sort); echo \"\$active\" | while read -r s; do [[ -n \"\$s\" ]] && echo \"\$s ◀◀◀\"; done; echo \"\$configs\" | while read -r s; do [[ -n \"\$s\" && \"|\$active_pipe\" != *\"|\$s|\"* && \"\$active_pipe\" != \"\$s|\"* ]] && echo \"\$s\"; done; zoxide query -l; cache=/tmp/file_opener_cache_\$USER; if [[ -f \$cache ]] && [[ \$(((\$(date +%s) - \$(stat -c %Y \$cache)))) -lt 60 ]]; then cat \$cache; else fd --type f --hidden --absolute-path --color never --exclude .git --exclude node_modules --exclude .cache --exclude image-cache --exclude plugins --exclude stats-cache.json --changed-within 7d . ~/dev ~/loft ~/.config/nvim ~/.claude 2>/dev/null | xargs stat --format '%Y %n' 2>/dev/null | sort -rn | cut -d' ' -f2- | tee \$cache; fi)"
 # Files from work directories
 FILE_BIND="ctrl-f:change-prompt(files> )+reload(cache=/tmp/file_opener_cache_\$USER; if [[ -f \$cache ]] && [[ \$(((\$(date +%s) - \$(stat -c %Y \$cache)))) -lt 60 ]]; then cat \$cache; else fd --type f --hidden --absolute-path --color never --exclude .git --exclude node_modules --exclude .cache --exclude image-cache --exclude plugins --exclude stats-cache.json --changed-within 7d . ~/dev ~/loft ~/.config/nvim ~/.claude 2>/dev/null | xargs stat --format '%Y %n' 2>/dev/null | sort -rn | cut -d' ' -f2- | tee \$cache; fi)"
 # GitHub repo search binding - search, clone/cd into repo
@@ -160,13 +160,17 @@ COPY_BIND="ctrl-y:execute-silent(~/dev/dotfiles/scripts/__copy_path_with_notific
 # Loop to allow returning from PRs/Linear back to main picker
 while true; do
     OUTPUT=$( {
-        # Tmuxinator sessions: active first (bottom in fzf), then inactive
-        active=$(tmux ls -F '#{session_name}' 2>/dev/null | tr '\n' '|')
-        for s in task $(ls ~/.config/tmuxinator/*.yml 2>/dev/null | xargs -n1 basename | sed 's/\.yml$//' | grep -v '^task$' | sort); do
-            [[ "|$active" == *"|$s|"* || "$active" == "$s|"* ]] && echo "$s ◀◀◀"
+        # Sessions: ALL active first (bottom in fzf), then inactive configs
+        active_sessions=$(tmux ls -F '#{session_name}' 2>/dev/null)
+        active_pipe=$(echo "$active_sessions" | tr '\n' '|')
+        configs=$(ls --color=never ~/.config/tmuxinator/*.yml 2>/dev/null | xargs -n1 basename | sed 's/\.yml$//' | sort)
+        # All active sessions with marker
+        echo "$active_sessions" | while read -r s; do
+            [[ -n "$s" ]] && echo "$s ◀◀◀"
         done
-        for s in task $(ls ~/.config/tmuxinator/*.yml 2>/dev/null | xargs -n1 basename | sed 's/\.yml$//' | grep -v '^task$' | sort); do
-            [[ "|$active" == *"|$s|"* || "$active" == "$s|"* ]] || echo "$s"
+        # Inactive tmuxinator configs without marker
+        echo "$configs" | while read -r s; do
+            [[ -n "$s" && "|$active_pipe" != *"|$s|"* && "$active_pipe" != "$s|"* ]] && echo "$s"
         done
         # Zoxide directories (most frequently used) - already sorted by frecency
         zoxide query -l
@@ -223,10 +227,13 @@ done
 # Process selections (ctrl-y is now handled by fzf binding)
 if [ -n "$OUTPUT" ]; then
     # Handle sessions (format: "name" or "name ◀◀◀")
-    if [[ "$OUTPUT" =~ ^([a-z0-9-]+)( ◀◀◀)?$ ]]; then
+    if [[ "$OUTPUT" =~ ^([a-zA-Z0-9_-]+)( ◀◀◀)?$ ]]; then
         session="${BASH_REMATCH[1]}"
-        if [[ -f ~/.config/tmuxinator/${session}.yml ]]; then
-            tmux switch-client -t "$session" 2>/dev/null || tmuxinator start "$session"
+        # Try switch first (works for any active session), fall back to tmuxinator
+        if tmux switch-client -t "$session" 2>/dev/null; then
+            exit 0
+        elif [[ -f ~/.config/tmuxinator/${session}.yml ]]; then
+            tmuxinator start "$session"
             exit 0
         fi
     fi
