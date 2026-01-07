@@ -1,0 +1,31 @@
+#compdef snd
+
+# Completion for snd - send messages to Claude tmux panes
+
+local DB_PATH="${AGENTS_DB_PATH:-/home/decoder/.claude/data/agents.duckdb}"
+
+_snd_agents() {
+    local agents
+    agents=(${(f)"$(duckdb "$DB_PATH" -noheader -list -c "SELECT name FROM agents WHERE pane_id IS NOT NULL" 2>/dev/null)"})
+    compadd -a agents
+}
+
+_snd_groups() {
+    local groups
+    groups=(${(f)"$(duckdb "$DB_PATH" -noheader -list -c "SELECT DISTINCT COALESCE(group_name, 'default') FROM agents" 2>/dev/null)"})
+    compadd -a groups
+}
+
+_arguments -s \
+    '(-a --agents)'{-a,--agents}'[Broadcast to all agent panes]' \
+    '(-t --to)'{-t,--to}'[DM to specific agent]:agent:_snd_agents' \
+    '--exclude[Exclude agent from broadcast]:agent:_snd_agents' \
+    '--pane[Send to specific tmux pane]:pane:' \
+    '(-g --group)'{-g,--group}'[Target group(s), comma-separated]:group:_snd_groups' \
+    '--list-groups[List groups with agent counts]' \
+    '--list-agents[List registered agents]' \
+    '(-r --reply)'{-r,--reply}'[Wait for reply (first responder)]' \
+    '--timeout[Reply timeout in seconds]:seconds:' \
+    '--watch[Tail DuckDB messages]' \
+    '--kill[Deregister ALL agents]' \
+    '*:message:'
