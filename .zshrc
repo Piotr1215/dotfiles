@@ -366,6 +366,13 @@ bindkey '^Y' copy-line-to-clipboard       # Ctrl+Y: Copies line to clipboard
 bindkey '^@' autosuggest-accept           # Ctrl+@: Accepts autosuggestion
 bindkey '^X^T' transpose-words            # Ctrl+X Ctrl+T: Transposes words
 
+# Inline search-replace widget
+autoload -Uz replace-string replace-string-again
+zle -N replace-string
+zle -N replace-string-again
+bindkey '^X^R' replace-string             # Ctrl+X Ctrl+R: Search-replace in line
+bindkey '^X^N' replace-string-again       # Ctrl+X Ctrl+N: Repeat last replace
+bindkey '^[^M' accept-and-hold            # Alt+Enter: Run and keep command
 
 function g_checkout_branch () {
   BUFFER='gco'
