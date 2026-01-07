@@ -374,6 +374,16 @@ bindkey '^X^R' replace-string             # Ctrl+X Ctrl+R: Search-replace in lin
 bindkey '^X^N' replace-string-again       # Ctrl+X Ctrl+N: Repeat last replace
 bindkey '^[^M' accept-and-hold            # Alt+Enter: Run and keep command
 
+# Jump to word on current line via fzf
+jump-to-word() {
+  local words=(${(z)BUFFER})
+  local target=$(printf '%s\n' "${words[@]}" | fzf --height=10 --reverse)
+  [[ -n "$target" ]] && CURSOR=$((${BUFFER[(i)$target]} - 1))
+  zle redisplay
+}
+zle -N jump-to-word
+bindkey '^X/' jump-to-word                # Ctrl+X /: Jump to word on line
+
 function g_checkout_branch () {
   BUFFER='gco'
   zle accept-line
