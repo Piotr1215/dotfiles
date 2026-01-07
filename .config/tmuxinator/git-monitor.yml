@@ -43,10 +43,6 @@ root: <%= ENV['PWD'] || Dir.pwd %>
 # attach: false
 
 windows:
-  - lazygit:
-      layout: even-horizontal
-      panes:
-        - EDITOR=nvim lazygit
   - gh-dahsboard:
       layout: even-horizontal
       panes:
