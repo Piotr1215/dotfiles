@@ -130,9 +130,9 @@ fi
 
 # Define keybindings for switching sources (only the useful filters)
 # Ctrl+X returns to main view (all sources: sessions + zoxide + files)
-HOME_BIND="ctrl-x:change-prompt(all> )+reload(active=\$(tmux ls -F '#{session_name}' 2>/dev/null); active_pipe=\$(echo \"\$active\" | tr '\\n' '|'); configs=\$(ls --color=never ~/.config/tmuxinator/*.yml 2>/dev/null | xargs -n1 basename | sed 's/\\.yml\$//' | sort); echo \"\$active\" | while read -r s; do [[ -n \"\$s\" ]] && echo \"\$s ◀◀◀\"; done; echo \"\$configs\" | while read -r s; do [[ -n \"\$s\" && \"|\$active_pipe\" != *\"|\$s|\"* && \"\$active_pipe\" != \"\$s|\"* ]] && echo \"\$s\"; done; zoxide query -l; cache=/tmp/file_opener_cache_\$USER; if [[ -f \$cache ]] && [[ \$(((\$(date +%s) - \$(stat -c %Y \$cache)))) -lt 60 ]]; then cat \$cache; else fd --type f --hidden --absolute-path --color never --exclude .git --exclude node_modules --exclude .cache --exclude image-cache --exclude plugins --exclude stats-cache.json --changed-within 7d . ~/dev ~/loft ~/.config/nvim ~/.claude 2>/dev/null | xargs stat --format '%Y %n' 2>/dev/null | sort -rn | cut -d' ' -f2- | tee \$cache; fi)"
+HOME_BIND="ctrl-x:change-prompt(all> )+reload(active=\$(tmux ls -F '#{session_name}' 2>/dev/null); active_pipe=\$(echo \"\$active\" | tr '\\n' '|'); configs=\$(ls --color=never ~/.config/tmuxinator/*.yml 2>/dev/null | xargs -n1 basename | sed 's/\\.yml\$//' | sort); echo \"\$active\" | while read -r s; do [[ -n \"\$s\" ]] && echo \"\$s ◀◀◀\"; done; echo \"\$configs\" | while read -r s; do [[ -n \"\$s\" && \"|\$active_pipe\" != *\"|\$s|\"* && \"\$active_pipe\" != \"\$s|\"* ]] && echo \"\$s\"; done; zoxide query -l; cache=/tmp/file_opener_cache_\$USER; if [[ -f \$cache ]] && [[ \$(((\$(date +%s) - \$(stat -c %Y \$cache)))) -lt 60 ]]; then cat \$cache; else fd --type f --hidden --absolute-path --color never --exclude .git --exclude node_modules --exclude .cache --exclude image-cache --exclude plugins --exclude stats-cache.json --exclude claude-wt-worktrees --exclude vendor --changed-within 7d . ~/dev ~/loft ~/.config/nvim ~/.claude 2>/dev/null | xargs stat --format '%Y %n' 2>/dev/null | sort -rn | cut -d' ' -f2- | tee \$cache; fi)"
 # Files from work directories
-FILE_BIND="ctrl-f:change-prompt(files> )+reload(cache=/tmp/file_opener_cache_\$USER; if [[ -f \$cache ]] && [[ \$(((\$(date +%s) - \$(stat -c %Y \$cache)))) -lt 60 ]]; then cat \$cache; else fd --type f --hidden --absolute-path --color never --exclude .git --exclude node_modules --exclude .cache --exclude image-cache --exclude plugins --exclude stats-cache.json --changed-within 7d . ~/dev ~/loft ~/.config/nvim ~/.claude 2>/dev/null | xargs stat --format '%Y %n' 2>/dev/null | sort -rn | cut -d' ' -f2- | tee \$cache; fi)"
+FILE_BIND="ctrl-f:execute-silent(touch /tmp/file_opener_2d)+abort"
 # GitHub repo search binding - search, clone/cd into repo
 GITHUB_BIND="ctrl-b:execute-silent(touch $RETURN_MARKER)+execute(~/dev/dotfiles/scripts/__github_search.sh)+abort"
 
@@ -179,7 +179,7 @@ while true; do
         if [[ -f "$cache_file" ]] && [[ $(($(date +%s) - $(stat -c %Y "$cache_file"))) -lt 60 ]]; then
             cat "$cache_file"
         else
-            fd --type f --hidden --absolute-path --color never --exclude .git --exclude node_modules --exclude .cache --exclude image-cache --exclude plugins --exclude stats-cache.json --changed-within 7d . ~/dev ~/loft ~/.config/nvim ~/.claude 2>/dev/null | xargs stat --format '%Y %n' 2>/dev/null | sort -rn | cut -d' ' -f2- | tee "$cache_file"
+            fd --type f --hidden --absolute-path --color never --exclude .git --exclude node_modules --exclude .cache --exclude image-cache --exclude plugins --exclude stats-cache.json --exclude claude-wt-worktrees --exclude vendor --changed-within 7d . ~/dev ~/loft ~/.config/nvim ~/.claude 2>/dev/null | xargs stat --format '%Y %n' 2>/dev/null | sort -rn | cut -d' ' -f2- | tee "$cache_file"
         fi
     } | fzf \
         --multi \
@@ -200,7 +200,7 @@ while true; do
                 echo "Preview not available"
             fi' \
         --preview-window 'right:50%:wrap' \
-        --header ' C-f:files C-x:home C-b:github C-g:PRs C-i:Linear C-e:edit C-u:music C-k:kill | C-y:copy' \
+        --header ' C-f:30d C-x:home C-b:github C-g:PRs C-i:Linear C-e:edit C-u:music C-k:kill | C-y:copy' \
         --prompt 'all> ' \
         --bind "$HOME_BIND" \
         --bind "$FILE_BIND" \
@@ -217,10 +217,17 @@ while true; do
     # Check if we should return to main picker (marker exists from PRs/Linear)
     if [[ -f "$RETURN_MARKER" ]]; then
         rm -f "$RETURN_MARKER"
-        continue  # Restart the loop, show main picker again
+        continue
     fi
 
-    # Otherwise, exit the loop (Ctrl+C on main or selection made)
+    # Check if 2d files mode requested (streams instantly)
+    if [[ -f "/tmp/file_opener_2d" ]]; then
+        rm -f "/tmp/file_opener_2d"
+        OUTPUT=$(fd --type f --hidden --absolute-path --color never --exclude .git --exclude node_modules --exclude .cache --exclude image-cache --exclude plugins --exclude stats-cache.json --exclude claude-wt-worktrees --exclude vendor --changed-within 30d . ~/dev ~/loft ~/.config/nvim ~/.claude 2>/dev/null | xargs -P 0 stat --format '%Y %n' 2>/dev/null | sort -rn | cut -d' ' -f2- | fzf --prompt '30d> ' --preview '[[ -f {} ]] && bat --color=always {} 2>/dev/null || cat {}' --preview-window 'right:50%:wrap') || true
+        [[ -z "$OUTPUT" ]] && continue
+        break
+    fi
+
     break
 done
 
