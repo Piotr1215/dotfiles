@@ -7,8 +7,7 @@ windows:
   - monitor:
       layout: tiled
       panes:
-        - watch -c -n2 ~/.claude/scripts/__list_agents.sh
         - ~/.claude/scripts/__agent_picker.sh --run
-        - ~/.claude/scripts/__nats_watcher.sh --daemon && tail -f /tmp/nats_watcher.log
+        - journalctl --user -u nats-watcher -f -o cat -b
         - touch /tmp/agent_messages.log && tail -f /tmp/agent_messages.log
   - chat: ~/.claude/scripts/agent_chat.py
