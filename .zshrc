@@ -17,19 +17,9 @@ if [[ -z ${TMUX+X}${ZSH_SCRIPT+X}${ZSH_EXECUTION_STRING+X} ]]; then
 fi
 
 ZSH_THEME="simple" #Best theme ever
-ZVM_INIT_MODE=sourcing
 # autoload -Uz compinit
 # compinit -d "${ZDOTDIR:-$HOME}/.zcompdump" -C
 source /home/decoder/.config/broot/launcher/bash/br
-
-# https://github.com/jeffreytse/zsh-vi-mode
-function zvm_config() {
-  ZVM_LINE_INIT_MODE=$ZVM_MODE_INSERT
-  ZVM_VI_INSERT_ESCAPE_BINDKEY=\;\;
-  ZVM_CURSOR_STYLE_ENABLED=false
-  ZVM_VI_EDITOR=nvim
-# export KEYTIMEOUT=1
-}
 
 function y() {
 	local tmp="$(mktemp -t "yazi-cwd.XXXXXX")" cwd
@@ -40,23 +30,19 @@ function y() {
 	rm -f -- "$tmp"
 }
 
-function zvm_after_init() {
-  zvm_bindkey viins '^Q' push-line
-}
-
 # Add completions to this path, file names must start with underscore
 fpath=(${HOME}/dev/dotfiles/.zsh/completions $fpath)
 
 # PUGINS & MODULES
 # fzf-tab should be last because it binds to ^I
-plugins=(z kubectl zsh-autosuggestions zsh-syntax-highlighting web-search colored-man-pages sudo)
+zstyle ':zsh-jumper:' picker-opts '--height=50% --reverse --border --prompt="JUMP → "'
+plugins=(z kubectl zsh-autosuggestions zsh-syntax-highlighting web-search colored-man-pages sudo zsh-jumper)
 source /home/decoder/dev/fzf-tab/fzf-tab.plugin.zsh
 source $ZSH/oh-my-zsh.sh
 
 # source ~/dev/dotfiles/.zsh/completions/just_completions.zsh
 # source ${HOME}/dev/dotfiles/.zsh/completions/talos_completions.zsh
 
-# The plugin will auto execute this zvm_after_lazy_keybindings function
 # Set ZSH_CUSTOM dir if env var not present
 if [[ -z "$ZSH_CUSTOM" ]]; then
     ZSH_CUSTOM="$ZSH/custom"
@@ -364,6 +350,7 @@ copy-line-to-clipboard() {
 zle -N copy-line-to-clipboard
 bindkey '^Y' copy-line-to-clipboard       # Ctrl+Y: Copies line to clipboard
 bindkey '^@' autosuggest-accept           # Ctrl+@: Accepts autosuggestion
+bindkey '^Xm' set-mark-command            # Ctrl+X m: Set mark for ^X^X
 bindkey '^X^T' transpose-words            # Ctrl+X Ctrl+T: Transposes words
 
 # Inline search-replace widget
@@ -374,15 +361,6 @@ bindkey '^X^R' replace-string             # Ctrl+X Ctrl+R: Search-replace in lin
 bindkey '^X^N' replace-string-again       # Ctrl+X Ctrl+N: Repeat last replace
 bindkey '^[^M' accept-and-hold            # Alt+Enter: Run and keep command
 
-# Jump to word on current line via fzf
-jump-to-word() {
-  local words=(${(z)BUFFER})
-  local target=$(printf '%s\n' "${words[@]}" | fzf --height=10 --reverse)
-  [[ -n "$target" ]] && CURSOR=$((${BUFFER[(i)$target]} - 1))
-  zle redisplay
-}
-zle -N jump-to-word
-bindkey '^X/' jump-to-word                # Ctrl+X /: Jump to word on line
 
 function g_checkout_branch () {
   BUFFER='gco'
