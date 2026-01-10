@@ -13,7 +13,7 @@ screenkey \
     --font "JetBrainsMono Nerd Font" \
     --font-color "#f2f4f8" \
     --bg-color "#161616" \
-    --timeout 2 \
+    --timeout 3 \
     --compr-cnt 2 \
     --opacity 0.8 \
     --no-systray &
