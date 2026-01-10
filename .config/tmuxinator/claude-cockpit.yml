@@ -7,7 +7,5 @@ windows:
   - monitor:
       layout: tiled
       panes:
-        - ~/.claude/scripts/__agent_picker.sh --run
         - journalctl --user -u nats-watcher -f -o cat -b
-        - touch /tmp/agent_messages.log && tail -f /tmp/agent_messages.log
   - chat: ~/.claude/scripts/agent_chat.py
