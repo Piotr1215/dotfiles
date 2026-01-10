@@ -677,7 +677,8 @@ require("nvim-surround").setup {
 
 -- Color name (:help cterm-colors) or ANSI code
 -- there are some defaults for image directory and image name, you can change them
-vim.g.mdip_imgdir = "_media"
+vim.g.mdip_imgdir = vim.fn.expand "~/Pictures/Screenshots"
+vim.g.mdip_imgdir_absolute = 1
 vim.g.mdip_imgname = "image"
 vim.g["plantuml_previewer#viewer_path"] = "~/.local/share/nvim/lazy/plantuml-previewer.vim/viewer"
 vim.g["plantuml_previewer#debug_mode"] = 0
