@@ -1,6 +1,8 @@
 local utils = require "utils"
 local opts = { noremap = true, silent = true }
 local shell = require "user_functions.shell_integration"
+local keystroke_golf = require "user_functions.keystroke_golf"
+keystroke_golf.setup()
 -- Load sensitive mappings
 require "s_mappings"
 
