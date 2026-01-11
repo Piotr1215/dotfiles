@@ -154,8 +154,7 @@ MUSIC_BIND="ctrl-u:execute(~/dev/dotfiles/scripts/__play_track.sh --run)+abort"
 # Kill selected session (Ctrl+K) - switches away if current, then kills
 KILL_SESSION_BIND="ctrl-k:execute(name={}; name=\${name% ◀◀◀}; cur=\$(tmux display-message -p '#S'); [[ \"\$name\" == \"\$cur\" ]] && { tmux switch-client -l 2>/dev/null || tmux switch-client -n 2>/dev/null; }; tmux kill-session -t \"\$name\" 2>/dev/null)+abort"
 
-# Copy to clipboard binding - extracts path from bookmark format or uses line as-is
-COPY_BIND="ctrl-y:execute-silent(~/dev/dotfiles/scripts/__copy_path_with_notification.sh {})+abort"
+COPY_BIND="ctrl-y:execute-silent(~/dev/dotfiles/scripts/__copy_path_with_notification.sh {})+execute-silent(touch /tmp/file_opener_copied)+abort"
 
 # Loop to allow returning from PRs/Linear back to main picker
 while true; do
@@ -214,6 +213,9 @@ while true; do
         --bind "ctrl-c:abort" \
         2>/dev/null) || true
 
+    # Exit completely if copy was performed
+    [[ -f /tmp/file_opener_copied ]] && { rm -f /tmp/file_opener_copied; exit 0; }
+
     # Check if we should return to main picker (marker exists from PRs/Linear)
     if [[ -f "$RETURN_MARKER" ]]; then
         rm -f "$RETURN_MARKER"
@@ -223,7 +225,8 @@ while true; do
     # Check if 2d files mode requested (streams instantly)
     if [[ -f "/tmp/file_opener_2d" ]]; then
         rm -f "/tmp/file_opener_2d"
-        OUTPUT=$(fd --type f --hidden --absolute-path --color never --exclude .git --exclude node_modules --exclude .cache --exclude image-cache --exclude plugins --exclude stats-cache.json --exclude claude-wt-worktrees --exclude vendor --changed-within 30d . ~/dev ~/loft ~/.config/nvim ~/.claude 2>/dev/null | xargs -P 0 stat --format '%Y %n' 2>/dev/null | sort -rn | cut -d' ' -f2- | fzf --prompt '30d> ' --preview '[[ -f {} ]] && bat --color=always {} 2>/dev/null || cat {}' --preview-window 'right:50%:wrap') || true
+        OUTPUT=$(fd --type f --hidden --absolute-path --color never --exclude .git --exclude node_modules --exclude .cache --exclude image-cache --exclude plugins --exclude stats-cache.json --exclude claude-wt-worktrees --exclude vendor --changed-within 30d . ~/dev ~/loft ~/.config/nvim ~/.claude 2>/dev/null | xargs -P 0 stat --format '%Y %n' 2>/dev/null | sort -rn | cut -d' ' -f2- | fzf --prompt '30d> ' --preview '[[ -f {} ]] && bat --color=always {} 2>/dev/null || cat {}' --preview-window 'right:50%:wrap' --bind "$COPY_BIND") || true
+        [[ -f /tmp/file_opener_copied ]] && { rm -f /tmp/file_opener_copied; exit 0; }
         [[ -z "$OUTPUT" ]] && continue
         break
     fi
