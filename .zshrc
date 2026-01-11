@@ -74,8 +74,8 @@ zstyle ':completion:*' list-colors ${(s.:.)LS_COLORS}
 zstyle ':completion:*' menu no
 zstyle ':completion:*' use-cache on
 zstyle ':completion:*' cache-path $ZSH_CACHE_DIR
-# preview directory's content with exa when completing cd
-zstyle ':fzf-tab:complete:cd:*' fzf-preview 'exa -1 --color=always $realpath'
+# preview directory's content with eza when completing cd
+zstyle ':fzf-tab:complete:cd:*' fzf-preview 'eza -1 --color=always $realpath'
 # switch group using `<` and `>`
 zstyle ':fzf-tab:*' switch-group '<' '>'
 zstyle ':fzf-tab:*' popup-min-size 75 20
@@ -166,7 +166,7 @@ fi
 # source ~/.github_variables
 
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
-zvm_after_init_commands+=('[ -f ~/.fzf ] && source ~/.fzf')
+# zvm removed - using zsh-jumper now
 
 function pex() {
     pet exec
