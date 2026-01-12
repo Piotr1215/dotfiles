@@ -74,3 +74,27 @@ regex = '^([^|]+)\|(.+)$'
 key_group = 1
 desc_group = 2
 type = "autokey"
+
+[zsh-jumper]
+paths = ["~/.config/zsh-jumper/config.toml"]
+match_line = "^binding"
+regex = "binding\\s*=\\s*['\"]([^'\"]+)['\"]"
+key_group = 1
+desc_literal = "(zsh-jumper fzf action)"
+type = "zj"
+
+[zledit-actions]
+parser = "toml"
+paths = ["~/.config/zledit/config.toml"]
+binding_path = "actions"
+key = "binding"
+desc = "description"
+type = "zledit"
+
+[zledit-previewers]
+parser = "toml"
+paths = ["~/.config/zledit/config.toml"]
+binding_path = "previewers"
+key = "description"
+desc = "script"
+type = "zledit-prev"
