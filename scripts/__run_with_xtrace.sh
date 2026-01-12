@@ -46,4 +46,13 @@ echo -e "${header}"
 
 export PS4='+(${LINENO}): ${FUNCNAME[0]:+${FUNCNAME[0]}(): } \t '
 
-BASH_XTRACEFD=2 bash -x "$input_to_run" "$@"
+# Add DEBUG trap for stepping through (optional: set STEP=1 to pause each line)
+if [[ "${STEP:-}" == "1" ]]; then
+	{
+		echo 'shopt -s extdebug; set -T'
+		echo 'trap '\''echo -e "\033[36m[before]\033[0m $BASH_COMMAND"; read -n1 -s </dev/tty; echo'\'' DEBUG'
+		cat "$input_to_run"
+	} | bash -s -- "$@"
+else
+	BASH_XTRACEFD=2 bash -x "$input_to_run" "$@"
+fi
