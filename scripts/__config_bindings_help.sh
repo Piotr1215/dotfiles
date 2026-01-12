@@ -71,7 +71,12 @@ main_loop() {
                         file_line=$(echo "$selection" | awk '{print $NF}')
                         file=$(echo "$file_line" | cut -d: -f1)
                         line=$(echo "$file_line" | cut -d: -f2)
-                        echo "FILE:${DOTFILES}/${file}:${line}" > "$TEMP_FILE"
+                        # Absolute paths don't need DOTFILES prefix
+                        if [[ "$file" == /* ]]; then
+                            echo "FILE:${file}:${line}" > "$TEMP_FILE"
+                        else
+                            echo "FILE:${DOTFILES}/${file}:${line}" > "$TEMP_FILE"
+                        fi
                     fi
                     break
                     ;;
