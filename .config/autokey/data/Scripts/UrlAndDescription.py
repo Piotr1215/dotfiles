@@ -68,7 +68,9 @@ def get_website_description(url):
         return f"An error occurred: {e}"
 
 def get_custom_description(default_description):
-    command = f"zenity --entry --text 'Enter task description:' --title 'Task Description' --entry-text '{default_description}' --width 400"
+    import shlex
+    escaped_desc = shlex.quote(default_description)
+    command = f"zenity --entry --text 'Enter task description:' --title 'Task Description' --entry-text {escaped_desc} --width 400"
     try:
         task_description = subprocess.check_output(command, shell=True, text=True).strip()
         return task_description
