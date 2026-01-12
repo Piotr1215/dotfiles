@@ -16,7 +16,7 @@ TOKEN="${TOKEN%\'}"
 if [[ "$TOKEN" =~ ^https?:// ]]; then
     echo "$ZJ_BUFFER"
     echo "---ZJ_PUSHLINE---"
-    echo "flatpak run io.gitlab.librewolf-community \"$TOKEN\" &>/dev/null &"
+    echo " flatpak run io.gitlab.librewolf-community \"$TOKEN\" &>/dev/null &"
     exit 4
 fi
 
@@ -24,7 +24,7 @@ fi
 if [[ "$TOKEN" =~ ^(OPS|DOC|ENG|IT)-[0-9]+$ ]]; then
     echo "$ZJ_BUFFER"
     echo "---ZJ_PUSHLINE---"
-    echo "flatpak run io.gitlab.librewolf-community \"https://linear.app/loft/issue/$TOKEN\" &>/dev/null &"
+    echo " flatpak run io.gitlab.librewolf-community \"https://linear.app/loft/issue/$TOKEN\" &>/dev/null &"
     exit 4
 fi
 
@@ -68,7 +68,7 @@ fi
 if [[ -f "$TOKEN" || -d "$TOKEN" ]]; then
     echo "$ZJ_BUFFER"
     echo "---ZJ_PUSHLINE---"
-    echo "\${EDITOR:-vim} \"$TOKEN\""
+    echo " \${EDITOR:-vim} \"$TOKEN\""  # leading space = skip history
     exit 4
 else
     echo "# Not found: $TOKEN" >&2
