@@ -1,26 +1,26 @@
-# zsh-jumper extensibility config
+# zledit extensibility config
 
 [[previewers]]
 pattern = '(OPS|DOC|ENG|IT)-[0-9]+'
 description = 'Linear issues'
-script = '~/.config/zsh-jumper/scripts/linear-preview.sh'
+script = '~/.config/zledit/scripts/linear-preview.sh'
 
 [[previewers]]
-pattern = '^["'"'"']?\$\{?[A-Za-z_][A-Za-z0-9_]*\}?["'"'"']?$'
+pattern = '^"?\$\{?[A-Za-z_][A-Za-z0-9_]*\}?"?$'
 description = 'Env variable'
-script = '~/.config/zsh-jumper/scripts/env-preview.sh'
+script = '~/.config/zledit/scripts/env-preview.sh'
 
 [[previewers]]
 pattern = '^[A-Za-z_][A-Za-z0-9_]*=.+'
 description = 'Assignment'
-script = '~/.config/zsh-jumper/scripts/assignment-preview.sh'
+script = '~/.config/zledit/scripts/assignment-preview.sh'
 
 [[actions]]
 binding = 'ctrl-o'
 description = 'edit'
-script = '~/.config/zsh-jumper/scripts/edit-file.sh'
+script = '~/.config/zledit/scripts/edit-file.sh'
 
 [[actions]]
 binding = 'ctrl-y'
 description = 'yank'
-script = '~/.config/zsh-jumper/scripts/yank.sh'
+script = '~/.config/zledit/scripts/yank.sh'
