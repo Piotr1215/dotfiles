@@ -737,18 +737,6 @@ find_and_clean_reassigned_tasks() {
     done
 }
 
-# Sync triage issues via systemd service
-sync_triage_issues() {
-    echo "Syncing triage issues"
-
-    if systemctl --user start triage-sync.service; then
-        log "Triage issues synced successfully"
-    else
-        log "Error: Failed to sync triage issues" >&2
-
-    fi
-}
-
 # ====================================================
 # PHASE 6: MAIN EXECUTION
 # ====================================================
@@ -792,10 +780,7 @@ main() {
     
     # Run the comparison to mark tasks as completed or delete them
     compare_and_clean_tasks "$all_descriptions"
-    
-    # Sync triage issues as the final step
-    sync_triage_issues
-    
+
     log "Synchronization completed successfully"
 }
 
