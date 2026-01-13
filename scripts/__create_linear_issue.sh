@@ -18,9 +18,12 @@ TASK_DESCRIPTION=$(echo "$TASK_DETAILS" | jq -r '.[0].description')
 # Create markdown template
 DESCRIPTION=$'## Description\n\n## Acceptance Criteria\n\n- [ ]\n\n## Related'
 
+# Team config - edit when teams rename
+LINEAR_TEAM_ID="${LINEAR_DEVOPS_TEAM_ID:-$LINEAR_OPS_TEAM_ID}"
+
 # First, we need to get the user ID and state ID
 USER_QUERY=$(jq -n '{
-    query: "query { viewer { id } workflowStates(filter: { team: { id: { eq: \"'$LINEAR_OPS_TEAM_ID'\" } }, name: { eq: \"In Progress\" } }) { nodes { id } } }"
+    query: "query { viewer { id } workflowStates(filter: { team: { id: { eq: \"'"$LINEAR_TEAM_ID"'\" } }, name: { eq: \"In Progress\" } }) { nodes { id } } }"
   }')
 
 USER_RESPONSE=$(curl -s -X POST \
@@ -36,7 +39,7 @@ STATE_ID=$(echo "$USER_RESPONSE" | jq -r '.data.workflowStates.nodes[0].id')
 query=$(jq -n \
 	--arg title "$TASK_DESCRIPTION" \
 	--arg desc "$DESCRIPTION" \
-	--arg team "$LINEAR_OPS_TEAM_ID" \
+	--arg team "$LINEAR_TEAM_ID" \
 	--arg assignee "$USER_ID" \
 	--arg state "$STATE_ID" \
 	'{
@@ -75,12 +78,10 @@ response=$(curl -s -X POST \
 
 echo "Response: $response"
 
-# Extract issue ID, URL and number
+# Extract issue ID and URL
 issue_url=$(echo "$response" | jq -r '.data.issueCreate.issue.url')
-issue_number=$(echo "$response" | jq -r '.data.issueCreate.issue.number')
-
-# Construct the Linear ID (e.g., OPS-68)
-linear_issue_id="OPS-${issue_number}"
+# Extract identifier from URL (e.g., DEVOPS-68) - handles team renames automatically
+linear_issue_id=$(echo "$issue_url" | grep -oE '[A-Z]+-[0-9]+$')
 
 if [ -n "$linear_issue_id" ] && [ "$linear_issue_id" != "null" ]; then
 	task "$uuid" modify linear_issue_id:"$linear_issue_id"

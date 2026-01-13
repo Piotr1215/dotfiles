@@ -166,10 +166,10 @@ teardown() {
     grep -q "project:docs-maintenance" "${TEST_DIR}/task_commands.log"
 }
 
-@test "manage_project_settings handles OPS issues" {
-    run manage_project_settings "test-uuid" "" "OPS-456"
+@test "manage_project_settings handles DEVOPS issues" {
+    run manage_project_settings "test-uuid" "" "DEVOPS-456"
     [ "$status" -eq 0 ]
-    # Should set project:operations for OPS issues
+    # Should set project:operations for DEVOPS issues
     grep -q "project:operations" "${TEST_DIR}/task_commands.log"
 }
 
@@ -521,8 +521,8 @@ EOF
         "id":"123",
         "description":"Test Issue with Due Date",
         "repository":"linear",
-        "html_url":"https://linear.app/test/issue/OPS-123",
-        "issue_id":"OPS-123",
+        "html_url":"https://linear.app/test/issue/DEVOPS-123",
+        "issue_id":"DEVOPS-123",
         "project":"test-project",
         "status":"Todo",
         "due_date":"2025-07-10"
@@ -532,7 +532,7 @@ EOF
     cat > "${TEST_DIR}/task" << 'EOF'
 #!/bin/bash
 case "$1" in
-    "linear_issue_id:OPS-123")
+    "linear_issue_id:DEVOPS-123")
         case "$2" in
             "status:pending")
                 case "$3" in
@@ -595,7 +595,7 @@ if [[ "$*" =~ "linear.app" ]]; then
           {
             "id": "test-id",
             "title": "Test with due date",
-            "url": "https://linear.app/test/issue/OPS-123",
+            "url": "https://linear.app/test/issue/DEVOPS-123",
             "state": {"name": "Parked"},
             "project": {"name": "Test Project"},
             "dueDate": "2025-07-10",
@@ -627,8 +627,8 @@ EOF
         "id":"123",
         "description":"Test Issue with Removed Due Date",
         "repository":"linear",
-        "html_url":"https://linear.app/test/issue/OPS-124",
-        "issue_id":"OPS-124",
+        "html_url":"https://linear.app/test/issue/DEVOPS-124",
+        "issue_id":"DEVOPS-124",
         "project":"test-project",
         "status":"Todo",
         "due_date":null
@@ -638,7 +638,7 @@ EOF
     cat > "${TEST_DIR}/task" << 'EOF'
 #!/bin/bash
 case "$1" in
-    "linear_issue_id:OPS-124")
+    "linear_issue_id:DEVOPS-124")
         case "$2" in
             "status:pending")
                 case "$3" in
@@ -695,8 +695,8 @@ EOF
         "id":"123",
         "description":"Urgent Priority Issue",
         "repository":"linear",
-        "html_url":"https://linear.app/test/issue/OPS-125",
-        "issue_id":"OPS-125",
+        "html_url":"https://linear.app/test/issue/DEVOPS-125",
+        "issue_id":"DEVOPS-125",
         "project":"test-project",
         "status":"Todo",
         "due_date":null,
@@ -707,7 +707,7 @@ EOF
     cat > "${TEST_DIR}/task" << 'EOF'
 #!/bin/bash
 case "$1" in
-    "linear_issue_id:OPS-125")
+    "linear_issue_id:DEVOPS-125")
         case "$2" in
             "status:pending")
                 case "$3" in
@@ -872,7 +872,7 @@ if [[ "$*" =~ "linear.app" ]]; then
           {
             "id": "test-id",
             "title": "Test with priority",
-            "url": "https://linear.app/test/issue/OPS-111",
+            "url": "https://linear.app/test/issue/DEVOPS-111",
             "state": {"name": "Todo"},
             "project": {"name": "Test Project"},
             "dueDate": null,

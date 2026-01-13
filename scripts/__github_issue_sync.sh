@@ -21,6 +21,16 @@ set -eo pipefail
 # Set new line and tab for word splitting
 IFS=$'\n\t'
 
+# Team prefix → project mapping (edit here when teams rename)
+declare -A TEAM_PREFIX_PROJECT=(
+    ["DOC"]="docs-maintenance"
+    ["DEVOPS"]="operations"
+)
+# Team prefix → repo mapping (only for teams that need repo set)
+declare -A TEAM_PREFIX_REPO=(
+    ["DOC"]="vcluster-docs"
+)
+
 # ====================================================
 # LOGGING FUNCTIONS
 # ====================================================
@@ -285,18 +295,25 @@ manage_project_settings() {
             task rc.confirmation=no modify "$task_uuid" repo:vnode-docs
         fi
     else
-        if [[ "$issue_number" == *"DOC"* ]]; then
-            task rc.confirmation=no modify "$task_uuid" project:docs-maintenance
-        elif [[ "$issue_number" == *"OPS"* ]]; then
-            task rc.confirmation=no modify "$task_uuid" project:operations
-        fi
+        # Use team prefix config for project assignment
+        local prefix
+        for prefix in "${!TEAM_PREFIX_PROJECT[@]}"; do
+            if [[ "$issue_number" == "${prefix}-"* ]]; then
+                task rc.confirmation=no modify "$task_uuid" project:"${TEAM_PREFIX_PROJECT[$prefix]}"
+                break
+            fi
+        done
     fi
 
-    # Set repo:vcluster-docs for Linear DOC team issues (issue_number starts with DOC)
-    if [[ "$issue_number" == DOC* ]]; then
-        task rc.confirmation=no modify "$task_uuid" repo:vcluster-docs
-        task rc.confirmation=no modify "$task_uuid" +kill
-    fi
+    # Set repo and tags based on team prefix config
+    local prefix
+    for prefix in "${!TEAM_PREFIX_REPO[@]}"; do
+        if [[ "$issue_number" == "${prefix}-"* ]]; then
+            task rc.confirmation=no modify "$task_uuid" repo:"${TEAM_PREFIX_REPO[$prefix]}"
+            [[ "$prefix" == "DOC" ]] && task rc.confirmation=no modify "$task_uuid" +kill
+            break
+        fi
+    done
 }
 
 # Update task tags and priority based on Linear issue status
