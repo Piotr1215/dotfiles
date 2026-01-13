@@ -33,12 +33,15 @@ get_all_triage_tasks() {
         jq -r '.[] | .description'
 }
 
+# Team names for triage filter - edit when teams rename
+TRIAGE_TEAM_NAMES='["Docs", "Dev Ops"]'
+
 # Get all triage issues from Linear
 get_triage_issues() {
     curl -s -X POST \
         -H "Content-Type: application/json" \
         -H "Authorization: $LINEAR_API_KEY" \
-        --data '{"query": "query { issues(filter: {state: {name: {eq: \"Triage\"}}, team: {name: {in: [\"Docs\", \"Operations\"]}}}) { nodes { id identifier number title url team { name } } } }"}' \
+        --data '{"query": "query { issues(filter: {state: {name: {eq: \"Triage\"}}, team: {name: {in: '"$TRIAGE_TEAM_NAMES"'}}}) { nodes { id identifier number title url team { name } } } }"}' \
         https://api.linear.app/graphql | jq -r '.data.issues.nodes[]'
 }
 
@@ -112,7 +115,7 @@ add_new_triage_issues() {
         team_name=$(echo "$issue" | jq -r '.team.name')
 
         # Set project and repo based on team name
-        if [ "$team_name" = "Operations" ]; then
+        if [ "$team_name" = "Dev Ops" ]; then
             project="project:operations"
             repo=""
         else
