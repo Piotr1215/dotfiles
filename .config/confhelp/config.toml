@@ -98,3 +98,12 @@ binding_path = "previewers"
 key = "description"
 desc = "script"
 type = "zledit-prev"
+
+[taskwarrior-tui]
+paths = [".taskrc"]
+match_line = "uda.taskwarrior-tui.shortcuts"
+regex = 'uda\.taskwarrior-tui\.shortcuts\.(\d+)=(.+)'
+key_group = 1
+desc_group = 2
+type = "task-tui"
+truncate = 80
