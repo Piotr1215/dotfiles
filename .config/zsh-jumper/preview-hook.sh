@@ -3,7 +3,7 @@
 # TOKEN is already set and exported
 
 # Linear issues
-if [[ "$TOKEN" =~ (OPS|DOC|ENG|IT)-[0-9]+ ]]; then
+if [[ "$TOKEN" =~ (DEVOPS|DOC|ENG|IT)-[0-9]+ ]]; then
     ~/.config/zsh-jumper/scripts/linear-preview.sh
     exit 0
 fi

@@ -1,7 +1,7 @@
 # zledit extensibility config
 
 [[previewers]]
-pattern = '(OPS|DOC|ENG|IT)-[0-9]+'
+pattern = '(DEVOPS|DOC|ENG|IT)-[0-9]+'
 description = 'Linear issues'
 script = '~/.config/zledit/scripts/linear-preview.sh'
 
