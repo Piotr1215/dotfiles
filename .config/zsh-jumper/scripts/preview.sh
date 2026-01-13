@@ -19,7 +19,7 @@ export TOKEN
 
 # Custom previewers (loaded from config at shell init)
 # Check for Linear issue pattern
-if [[ "$TOKEN" =~ (OPS|DOC|ENG|IT)-[0-9]+ ]]; then
+if [[ "$TOKEN" =~ (DEVOPS|DOC|ENG|IT)-[0-9]+ ]]; then
     ~/.config/zsh-jumper/scripts/linear-preview.sh 2>/dev/null && exit 0
 fi
 

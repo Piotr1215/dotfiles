@@ -20,8 +20,8 @@ if [[ "$TOKEN" =~ ^https?:// ]]; then
     exit 4
 fi
 
-# Check if it's a Linear issue (OPS-123, DOC-456, etc.)
-if [[ "$TOKEN" =~ ^(OPS|DOC|ENG|IT)-[0-9]+$ ]]; then
+# Check if it's a Linear issue (DEVOPS-123, DOC-456, etc.)
+if [[ "$TOKEN" =~ ^(DEVOPS|DOC|ENG|IT)-[0-9]+$ ]]; then
     echo "$ZJ_BUFFER"
     echo "---ZJ_PUSHLINE---"
     echo " flatpak run io.gitlab.librewolf-community \"https://linear.app/loft/issue/$TOKEN\" &>/dev/null &"
