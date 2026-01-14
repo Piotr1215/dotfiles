@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -eo pipefail
 
-DIM_OPACITY="${DIM_OPACITY:-0xe6666666}"
+DIM_OPACITY="${DIM_OPACITY:-0xcccccccc}"
 declare -A managed_windows
 
 window_exists() {
@@ -13,9 +13,15 @@ safe_window_op() {
     window_exists "$win_id" && eval "$operation" 2>/dev/null
 }
 
+is_fullscreen() {
+    xprop -id "$1" _NET_WM_STATE 2>/dev/null | grep -q "_NET_WM_STATE_FULLSCREEN"
+}
+
 apply_focus_dimming() {
     local focused_window="$1"
     local visible_windows window_class
+
+    is_fullscreen "$focused_window" && return
 
     visible_windows=$(xdotool search --onlyvisible --name ".*" 2>/dev/null) || return
 
