@@ -215,8 +215,8 @@
         name: python3-pip
         state: present
 
-    - name: Install exa via cargo
-      command: cargo install exa
+    - name: Install eza via cargo
+      command: cargo install eza
       environment:
         PATH: "{{ ansible_env.PATH }}:{{ ansible_env.HOME }}/.cargo/bin"
       register: cargo_install
