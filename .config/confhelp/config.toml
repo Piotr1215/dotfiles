@@ -2,7 +2,7 @@
 # Each section defines how to extract bindings from a config file
 
 base_dirs = ["~/dev/dotfiles"]
-query_engines = ["nvim"]  # Enable runtime query engines (requires nvim binary)
+query_engines = ["nvim", "tmuxinator"]  # Enable runtime query engines
 
 [tmux]
 paths = [".tmux.conf"]
@@ -11,7 +11,6 @@ regex = 'bind(?:-key)?\s+(?:-n\s+)?(\S+)(.*)'
 key_group = 1
 desc_group = 2
 type = "tmux"
-truncate = 100
 
 [tmux-copy]
 paths = [".tmux.conf"]
@@ -20,7 +19,6 @@ regex = 'bind(?:-key)?\s+-T\s+\S+\s+(\S+)(.*)'
 key_group = 1
 desc_group = 2
 type = "tmux-copy"
-truncate = 100
 
 [zsh-bindkey]
 paths = [".zshrc"]
@@ -38,7 +36,6 @@ regex = "alias\\s+(?:-[gs]\\s+)?([^=]+)=(.*)"
 key_group = 1
 desc_group = 2
 type = "alias"
-truncate = 100
 strip_quotes = true
 
 [abbrev]
@@ -58,7 +55,6 @@ desc_literal = "(function)"
 type = "func"
 
 [engine.nvim]
-truncate = 60
 
 [bookmarks]
 paths = ["scripts/__bookmarks.conf"]
@@ -106,4 +102,12 @@ regex = 'uda\.taskwarrior-tui\.shortcuts\.(\d+)=(.+)'
 key_group = 1
 desc_group = 2
 type = "task-tui"
-truncate = 80
+
+[claude-prefix]
+parser = "toml"
+paths = ["~/.claude/file-suggestion.toml"]
+binding_path = "prefixes"
+key = "name"
+desc = "description"
+type = "claude-@"
+

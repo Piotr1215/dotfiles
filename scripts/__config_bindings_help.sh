@@ -28,7 +28,7 @@ main_loop() {
     while true; do
         if [[ "$mode" == "bindings" ]]; then
             local result key selection
-            result=$(confhelp -b "$DOTFILES" | column -t -s'|' | fzf \
+            result=$(confhelp -b "$DOTFILES" | awk -F'|' '{printf "%-12s %-18s %-55s %s\n", $1, $2, $3, $4}' | fzf \
                 --header='Enter=jump | Ctrl+P=open path | Ctrl+G=tealdeer | Ctrl+O=copy' \
                 --expect=ctrl-g,ctrl-o,ctrl-p \
                 --height=100% \
@@ -48,7 +48,15 @@ main_loop() {
                     continue
                     ;;
                 ctrl-o)
-                    [[ -n "$selection" ]] && printf '%s' "$selection" | xsel -ib
+                    if [[ -n "$selection" ]]; then
+                        if [[ "$selection" == *"[mux]"* ]]; then
+                            local session_file
+                            session_file=$(echo "$selection" | awk '{print $NF}' | cut -d: -f1)
+                            printf '%s' "${HOME}/.config/tmuxinator/${session_file}" | xsel -ib
+                        else
+                            printf '%s' "$selection" | xsel -ib
+                        fi
+                    fi
                     break
                     ;;
                 ctrl-p)
@@ -67,15 +75,22 @@ main_loop() {
                 *)
                     # Enter pressed or empty
                     if [[ -n "$selection" ]]; then
-                        local file_line file line
-                        file_line=$(echo "$selection" | awk '{print $NF}')
-                        file=$(echo "$file_line" | cut -d: -f1)
-                        line=$(echo "$file_line" | cut -d: -f2)
-                        # Absolute paths don't need DOTFILES prefix
-                        if [[ "$file" == /* ]]; then
-                            echo "FILE:${file}:${line}" > "$TEMP_FILE"
+                        # Check if this is a tmuxinator entry
+                        if [[ "$selection" == *"[mux]"* ]]; then
+                            local session_file
+                            session_file=$(echo "$selection" | awk '{print $NF}' | cut -d: -f1)
+                            echo "MUX_EDIT:${HOME}/.config/tmuxinator/${session_file}" > "$TEMP_FILE"
                         else
-                            echo "FILE:${DOTFILES}/${file}:${line}" > "$TEMP_FILE"
+                            local file_line file line
+                            file_line=$(echo "$selection" | awk '{print $NF}')
+                            file=$(echo "$file_line" | cut -d: -f1)
+                            line=$(echo "$file_line" | cut -d: -f2)
+                            # Absolute paths don't need DOTFILES prefix
+                            if [[ "$file" == /* ]]; then
+                                echo "FILE:${file}:${line}" > "$TEMP_FILE"
+                            else
+                                echo "FILE:${DOTFILES}/${file}:${line}" > "$TEMP_FILE"
+                            fi
                         fi
                     fi
                     break
@@ -130,7 +145,7 @@ export DOTFILES TEMP_FILE FZF_COLORS
 
 # Calculate center position
 read screen_w screen_h < <(xdpyinfo | awk '/dimensions:/{print $2}' | tr 'x' ' ')
-cols=220
+cols=150
 lines=50
 win_w=$((cols * 9))
 win_h=$((lines * 20))
@@ -156,6 +171,10 @@ if [[ -f "$TEMP_FILE" ]]; then
             file=$(echo "$target" | cut -d: -f1)
             line=$(echo "$target" | cut -d: -f2)
             nohup alacritty -e nvim "+$line" "$file" >/dev/null 2>&1 &
+            ;;
+        MUX_EDIT:*)
+            session_file="${result#MUX_EDIT:}"
+            nohup alacritty -e nvim "$session_file" >/dev/null 2>&1 &
             ;;
         OPEN_PATH:*)
             path="${result#OPEN_PATH:}"
