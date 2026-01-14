@@ -19,10 +19,10 @@ alias -s html='xdg-open'
 
 # Directories and files
 alias la='/usr/bin/ls'
-alias ls='exa --color=always --long --all --header --icons --git'
-alias lsa='exa --color=always --long --all --sort=age --reverse --header --icons'
+alias ls='eza --color=always --long --all --header --icons --git'
+alias lsa='eza --color=always --long --all --sort=age --reverse --header --icons'
 alias lsf='fd --max-depth=1 --type=file'
-alias lst='exa --tree --level=2 --icons --color=always --git'
+alias lst='eza --tree --level=2 --icons --color=always --git'
 alias lsdir='ls -ld *(/om[1])'
 alias tui='taskwarrior-tui'
 alias backuper="ssh 'bacuper@192.168.178.60'"
