@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
+# Opens FIRST annotation directly (no menu). Use taskopen for menu.
 set -euo pipefail
-export PS4='+(${BASH_SOURCE}:${LINENO}): ${FUNCNAME[0]:+${FUNCNAME[0]}(): }'
 
-if [ -z ${2+x} ]; then
-	echo "Second argument is unset" >>/tmp/taskopen_debug.log
+annot=$(task "$1" export | jq -r '.[] | .annotations[0].description // empty')
+[[ -z "$annot" ]] && exit 0
+
+if [[ "$annot" =~ ^https?:// ]]; then
+    xdg-open "$annot" 2>/dev/null &
 else
-	echo "Second argument is set to '$2'" >>/tmp/taskopen_debug.log
+    ${EDITOR:-nvim} "$annot"
 fi
-
-taskopen "$1"

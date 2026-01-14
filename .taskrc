@@ -48,6 +48,7 @@ color.tag.review      = bold blue
 color.tag.bug         = magenta on black
 color.tag.started     = on gray2
 color.tag.pr_approved = bold green
+color.tag.triaged     = bold cyan
 color.scheduled       = bold yellow 
 color.hold            = bold blue
 
@@ -74,7 +75,7 @@ report.backlog.description=List of current backlog tasks in the work context
 report.backlog.columns=id,entry.age,priority,project,tags,description.desc,due.relative,release,follow,depends,linear_issue_id,scheduled.relative,due.relative,cycle
 report.backlog.labels=ID,Age,P,Proj,Tags,Desc,Due,Rel,Follow,Depends,Linear,Sched,Due,Cyc
 report.backlog.sort=cycle+
-report.backlog.filter=status:pending -BLOCKED -pr -triage project.not:home* ( +backlog or +pending )
+report.backlog.filter=status:pending -BLOCKED -pr -triage project.not:home* +backlog
 
 report.current-home.description=List of current tasks in the home context
 report.current-home.columns=id,entry.age,priority,project,tags,description.desc,entry,due.relative,follow,depends,urgency
