@@ -53,3 +53,9 @@ brief.labelregex=".*"
 brief.regex="^brief:(.*)"
 brief.command="$EDITOR $LAST_MATCH"
 brief.modes="batch,any,normal"
+
+pr.target=annotations
+pr.labelregex=".*"
+pr.regex="^PR:(.*)"
+pr.command="open $LAST_MATCH 2>/dev/null"
+pr.modes="batch,any,normal"
