@@ -5,3 +5,4 @@
 scripts/__project_mappings.conf filter=git-crypt diff=git-crypt
 scripts/__backup.sh filter=git-crypt diff=git-crypt
 scripts/__generate_weekly_summary.sh filter=git-crypt diff=git-crypt
+.taskrc filter=git-crypt diff=git-crypt
