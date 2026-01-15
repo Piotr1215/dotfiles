@@ -38,3 +38,18 @@ email.labelregex=".*"
 email.regex="^id:([^\\s]+)"
 email.command="neomutt -f notmuch://?query=id:$LAST_MATCH"
 email.modes="batch,any,normal"
+
+# PROJECT: task-resume-annotations
+# See: ~/.claude/commands/ops-annotate-task.md, ~/.claude/scripts/__taskopen_claude_resume.sh
+# Issue: https://github.com/Piotr1215/claude/issues/42
+claude.target=annotations
+claude.labelregex=".*"
+claude.regex="^claude://.*"
+claude.command="__taskopen_claude_resume.sh $ANNOTATION"
+claude.modes="batch,any,normal"
+
+brief.target=annotations
+brief.labelregex=".*"
+brief.regex="^brief:(.*)"
+brief.command="$EDITOR $LAST_MATCH"
+brief.modes="batch,any,normal"
