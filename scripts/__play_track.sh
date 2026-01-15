@@ -37,27 +37,22 @@ check_and_update_ytdlp() {
 	local timestamp_file="${HOME}/.cache/ytdlp_last_update"
 	local current_time=$(date +%s)
 
-	# Create cache directory if it doesn't exist
 	mkdir -p "${HOME}/.cache"
 
-	# Check if timestamp file exists and is less than 24 hours old
-	if [[ -f "$timestamp_file" ]] && (($(cat "$timestamp_file") > (current_time - 86400))); then
+	# Check every 12 hours (nightly builds update frequently)
+	if [[ -f "$timestamp_file" ]] && (($(cat "$timestamp_file") > (current_time - 43200))); then
 		return 0
 	fi
 
 	if ! command -v pipx &>/dev/null; then
 		python3 -m pip install --user pipx
 		python3 -m pipx ensurepath
-		source ~/.zshrc
 	fi
-	if ! pipx list | grep -q yt-dlp; then
-		pipx install yt-dlp
-	else
-		pipx upgrade yt-dlp
-	fi
-	yt-dlp --version
 
-	# Update timestamp
+	# Install nightly build (has 403 fixes before stable release)
+	pipx install --force yt-dlp --pip-args='--pre' 2>/dev/null || \
+		pipx runpip yt-dlp install -U --pre yt-dlp 2>/dev/null
+
 	echo "$current_time" >"$timestamp_file"
 }
 
@@ -187,6 +182,7 @@ if [[ -n "$track_url" && "$track_url" == http* ]]; then
 		tmux new-session -d -s "$tmux_session_name" \
 			mpv --loop-file --no-video --ytdl \
 			--ytdl-format="bestaudio/best" \
+			--ytdl-raw-options="cookies-from-browser=firefox" \
 			--input-ipc-server="$socket_path" \
 			"$track_url"
 
