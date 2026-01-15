@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-
-# github_issue_sync.sh
-# Synchronizes GitHub and Linear issues with Taskwarrior
 # PROJECT: taskwarrior-sync
+# See: __lib_taskwarrior_interop.sh, ops-autonomous-worker.md, ops-triage-agent.md
+# Related: task-resume-annotations (uses linear_issue_id for stable refs)
+#
+# Synchronizes GitHub and Linear issues with Taskwarrior
 #
 # Key behaviors:
 # 1. For unassigned Linear issues: Deletes them from Taskwarrior (since they're no longer relevant to you)

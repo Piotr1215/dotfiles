@@ -40,7 +40,7 @@ email.command="neomutt -f notmuch://?query=id:$LAST_MATCH"
 email.modes="batch,any,normal"
 
 # PROJECT: task-resume-annotations
-# See: ~/.claude/commands/ops-annotate-task.md, ~/.claude/scripts/__taskopen_claude_resume.sh
+# See: ~/.claude/commands/ops-annotate-task.md, ~/.claude/scripts/__taskopen_claude_resume.sh, ~/.claude/scripts/__claude_session_summary_hook.py
 # Issue: https://github.com/Piotr1215/claude/issues/42
 claude.target=annotations
 claude.labelregex=".*"
@@ -53,6 +53,12 @@ brief.labelregex=".*"
 brief.regex="^brief:(.*)"
 brief.command="$EDITOR $LAST_MATCH"
 brief.modes="batch,any,normal"
+
+summary.target=annotations
+summary.labelregex=".*"
+summary.regex="^summary://(.*)"
+summary.command="$EDITOR $LAST_MATCH"
+summary.modes="batch,any,normal"
 
 pr.target=annotations
 pr.labelregex=".*"

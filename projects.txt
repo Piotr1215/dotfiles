@@ -17,3 +17,4 @@ standup
 project-config
 lsp_lines
 claude-automation
+task-resume-annotations
