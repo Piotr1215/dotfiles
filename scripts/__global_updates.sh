@@ -1,18 +1,34 @@
 #!/usr/bin/env bash
 
-# The set -e option instructs bash to immediately exit if any command has a non-zero exit status
-# The set -u referencing a previously undefined  variable - with the exceptions of $* and $@ - is an error
-# The set -o pipefaile if any command in a pipeline fails, that return code will be used as the return code of the whole pipeline
-# https://bit.ly/37nFgin
-set -euo pipefail
-
-# Add source and line number wher running in debug mode: bash -xv __global_updates.sh
-export PS4='+(${BASH_SOURCE}:${LINENO}): ${FUNCNAME[0]:+${FUNCNAME[0]}(): }'
-
-# Set new line and tab for word splitting
+set -uo pipefail
 IFS=$'\n\t'
 
-source __check_root.sh "$@"
-# source "${HOME}"/dev/dotfiles/scripts/__check_root.sh
+if ! command -v pueue &>/dev/null; then
+    echo "pueue not installed" >&2
+    exit 1
+fi
 
-go-global-update && cargo upgrade
+pueue clean
+pueue group add updates 2>/dev/null || true
+pueue parallel 4 -g updates
+
+add_update() {
+    local name="$1"
+    shift
+    if command -v "$1" &>/dev/null; then
+        pueue add -g updates -l "$name" -- "$@"
+    fi
+}
+
+add_update "apt-update" sudo apt update
+add_update "apt-upgrade" sudo apt upgrade -y
+add_update "snap" sudo snap refresh
+add_update "flatpak" flatpak update -y
+add_update "pip" pip3 install --upgrade pip
+add_update "npm" npm update -g
+add_update "tldr" tldr --update
+add_update "go" go-global-update
+add_update "cargo" cargo install-update -a
+add_update "locate" sudo updatedb
+
+echo "Tasks queued. Run: pueue status -g updates"

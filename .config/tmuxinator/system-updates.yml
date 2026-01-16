@@ -1,0 +1,10 @@
+name: system-updates
+root: ~/
+
+windows:
+  - updates:
+      layout: main-vertical
+      panes:
+        - print -z 'pueue clean && ~/dev/dotfiles/scripts/__global_updates.sh'
+        - command viddy -n 1 pueue status -g updates
+        - command viddy -n 2 pueue log -g updates -l 5
