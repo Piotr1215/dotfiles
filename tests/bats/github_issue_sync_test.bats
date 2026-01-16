@@ -51,12 +51,12 @@ EOF
     source scripts/__lib_taskwarrior_interop.sh
     
     # Then source only the functions from the main script, not the main execution
-    # We need to use a temp file to handle the sed operation properly
+    # Write to file (not process substitution) to preserve declare -A arrays
     TEMP_SCRIPT="${TEST_DIR}/github_issue_sync_functions.sh"
-    sed '/^main$/,$d' scripts/__github_issue_sync.sh > "$TEMP_SCRIPT"
-    
-    # Now source it, but skip the library source line to avoid duplicate sourcing
-    source <(grep -v '^source.*__lib_taskwarrior_interop.sh' "$TEMP_SCRIPT")
+    sed '/^main$/,$d' scripts/__github_issue_sync.sh | grep -v '^source.*__lib_taskwarrior_interop.sh' > "$TEMP_SCRIPT"
+    # Export for tests that need to re-source (bats 1.2.1 doesn't preserve associative arrays from setup)
+    export TEMP_SCRIPT
+    source "$TEMP_SCRIPT"
 }
 
 # Teardown function runs after each test
@@ -160,15 +160,17 @@ teardown() {
 }
 
 @test "manage_project_settings handles DOC issues" {
-    run manage_project_settings "test-uuid" "" "DOC-123"
-    [ "$status" -eq 0 ]
+    # Re-source to get associative arrays (bats 1.2.1 doesn't preserve from setup)
+    source "$TEMP_SCRIPT"
+    manage_project_settings "test-uuid" "" "DOC-123"
     # Should set project:docs-maintenance for DOC issues
     grep -q "project:docs-maintenance" "${TEST_DIR}/task_commands.log"
 }
 
 @test "manage_project_settings handles DEVOPS issues" {
-    run manage_project_settings "test-uuid" "" "DEVOPS-456"
-    [ "$status" -eq 0 ]
+    # Re-source to get associative arrays (bats 1.2.1 doesn't preserve from setup)
+    source "$TEMP_SCRIPT"
+    manage_project_settings "test-uuid" "" "DEVOPS-456"
     # Should set project:operations for DEVOPS issues
     grep -q "project:operations" "${TEST_DIR}/task_commands.log"
 }
