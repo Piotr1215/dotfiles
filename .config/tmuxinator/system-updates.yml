@@ -7,4 +7,4 @@ windows:
       panes:
         - print -z 'pueue clean && ~/dev/dotfiles/scripts/__global_updates.sh'
         - command viddy -n 1 pueue status -g updates
-        - command viddy -n 2 pueue log -g updates -l 5
+        - command viddy -n 2 'pueue status -g updates "status=failed" && echo "--- Failed logs ---" && pueue log -g updates -l 10 "status=failed"'
