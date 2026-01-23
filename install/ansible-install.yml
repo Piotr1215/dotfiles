@@ -155,7 +155,6 @@
           - mpv
           - cmus
           - cava
-          - tldr
           - default-jdk
           - graphviz
           - ugrep
@@ -199,7 +198,6 @@
           - pass
           - pet
           - sshfs
-          - taskwarrior-tui
           - ueberzugpp
           - urlview
           - yadm
@@ -215,34 +213,35 @@
         name: python3-pip
         state: present
 
-    - name: Install eza via cargo
-      command: cargo install eza
-      environment:
-        PATH: "{{ ansible_env.PATH }}:{{ ansible_env.HOME }}/.cargo/bin"
-      register: cargo_install
-      changed_when: "'already exists' not in cargo_install.stderr"
-
-    - name: Install Rust and development tools
+    - name: Install Rust
       block:
-        - name: Install Rust
+        - name: Install rustup
           shell: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
           args:
             creates: "{{ home }}/.cargo/bin/rustc"
 
-        - name: Install cargo
+        - name: Install system cargo
           apt:
             name: cargo
             state: present
 
-        - name: Install zoxide
-          command: cargo install zoxide
-          args:
-            creates: "{{ home }}/.cargo/bin/zoxide"
-
-        - name: Install delta
-          command: cargo install git-delta
-          args:
-            creates: "{{ home }}/.cargo/bin/delta"
+    - name: Install cargo tools
+      command: "cargo install {{ item }}"
+      environment:
+        PATH: "{{ ansible_env.PATH }}:{{ home }}/.cargo/bin"
+      loop:
+        - eza
+        - presenterm
+        - pueue
+        - stylua
+        - cargo-update
+        - agg
+        - tldr
+        - taskwarrior-tui
+        - zoxide
+        - git-delta
+      register: cargo_install
+      changed_when: "'already exists' not in cargo_install.stderr"
 
     - name: Install PipeWire
       block:
@@ -286,6 +285,11 @@
         - fzf
         - krew
         - just
+        - argocd
+        - flux
+        - mkcert
+        - terrascan
+        - crane
 
     - name: Install Go and Node.js via arkade
       command: "arkade system install {{ item }}"
@@ -394,10 +398,21 @@
           args:
             creates: /usr/local/bin/aws
 
-    - name: Install Yarn
+    - name: Install npm global packages
       npm:
-        name: yarn
+        name: "{{ item }}"
         global: yes
+      loop:
+        - yarn
+        - typescript
+        - typescript-language-server
+        - bash-language-server
+        - markdownlint-cli
+        - "@ast-grep/cli"
+        - "@mermaid-js/mermaid-cli"
+        - fixjson
+        - playwright
+        - "@anthropic-ai/claude-code"
 
     - name: Install Neovim
       block:
@@ -412,6 +427,29 @@
             path: /usr/local/bin/nvim
             owner: "{{ user }}"
             mode: '0755'
+
+    - name: Install snap packages
+      snap:
+        name: "{{ item.name }}"
+        classic: "{{ item.classic | default(false) }}"
+      loop:
+        - { name: "code", classic: true }
+        - { name: "auto-cpufreq" }
+        - { name: "tflint" }
+        - { name: "gping" }
+
+    - name: Install Go tools
+      command: "go install {{ item }}"
+      environment:
+        PATH: "{{ ansible_env.PATH }}:{{ home }}/go/bin:/usr/local/go/bin"
+        GOPATH: "{{ home }}/go"
+      loop:
+        - github.com/rhysd/actionlint/cmd/actionlint@latest
+        - github.com/go-delve/delve/cmd/dlv@latest
+        - github.com/google/go-containerregistry/cmd/crane@latest
+        - github.com/onsi/ginkgo/v2/ginkgo@latest
+        - github.com/abice/go-enum@latest
+        - github.com/Gelio/go-global-update@latest
 
     - name: Set Zsh as default shell
       user:
