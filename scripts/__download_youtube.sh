@@ -27,9 +27,10 @@ download_video() {
 	fi
 
 	if [ "$convert_to_mp3" = true ]; then
-		# Direct audio download with sanitized filename
+		# Direct audio download with sanitized filename and metadata
 		if ! yt-dlp -x --audio-format mp3 --audio-quality 192K \
 			--restrict-filenames \
+			--embed-metadata --embed-thumbnail \
 			-o "$output_dir/%(title)s.%(ext)s" \
 			--no-playlist "$link"; then
 			echo "Download failed for: $link"

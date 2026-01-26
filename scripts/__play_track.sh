@@ -6,23 +6,23 @@ IFS=$'\n\t'
 if [[ "$1" == "--help" ]] || [[ "$1" == "-h" ]]; then
 	cat <<-EOF
 	Usage: $(basename "$0") [OPTIONS]
-	
-	Play audio tracks from playlist using mpv in tmux sessions.
-	
+
+	Play audio tracks from local ~/music/ folder using mpv in tmux sessions.
+
 	OPTIONS:
 	  --run     Run in continuous mode (stay open after selection)
 	  --help    Show this help message
-	
+
 	BEHAVIOR:
-	  - Displays tracks from a playlist
+	  - Shows tracks from ~/music/*.mp3
 	  - Plays selected track in a tmux session using mpv
 	  - Only one track plays at a time (stops others automatically)
 	  - In --run mode: shows playing tracks with ► marker
 	  - Click playing track again to stop it
-	
+
 	REQUIREMENTS:
-	  - tmux, mpv, fzf, yt-dlp (auto-installed via pipx)
-	  - Playlist file at ~/haruna_playlist.m3u
+	  - tmux, mpv, fzf
+	  - Music files in ~/music/
 	EOF
 	exit 0
 fi
@@ -33,62 +33,24 @@ if [[ "$1" == "--run" ]]; then
 	RUN_MODE=true
 fi
 
-check_and_update_ytdlp() {
-	local timestamp_file="${HOME}/.cache/ytdlp_last_update"
-	local current_time=$(date +%s)
+MUSIC_DIR="${HOME}/music"
 
-	mkdir -p "${HOME}/.cache"
-
-	# Check every 12 hours (nightly builds update frequently)
-	if [[ -f "$timestamp_file" ]] && (($(cat "$timestamp_file") > (current_time - 43200))); then
-		return 0
-	fi
-
-	if ! command -v pipx &>/dev/null; then
-		python3 -m pip install --user pipx
-		python3 -m pipx ensurepath
-	fi
-
-	# Install nightly build (has 403 fixes before stable release)
-	pipx install --force yt-dlp --pip-args='--pre' 2>/dev/null || \
-		pipx runpip yt-dlp install -U --pre yt-dlp 2>/dev/null
-
-	echo "$current_time" >"$timestamp_file"
-}
-
-tracks_file="${HOME}/haruna_playlist.m3u"
-if [[ ! -f "$tracks_file" ]]; then
-	echo "Error: Track file not found at $tracks_file"
+if [[ ! -d "$MUSIC_DIR" ]]; then
+	echo "Error: Music directory not found at $MUSIC_DIR"
 	exit 1
 fi
 
-# Parse playlist with awk - output format: "Title | CATEGORY<TAB>URL"
-# TAB separates display from URL (URL hidden by fzf delimiter)
-track_data=$(awk '
-/^# / {
-	name = substr($0, 3)
-	gsub(/ - YouTube.*/, "", name)
-	# Split into category and title
-	if (match(name, /^([^:]+): (.+)$/, m)) {
-		category = m[1]
-		title = m[2]
-	} else {
-		category = ""
-		title = name
-	}
-}
-/^http/ && name {
-	if (category) {
-		printf "%s | %s\t%s\n", title, category, $0
-	} else {
-		printf "%s\t%s\n", title, $0
-	}
-	name = ""
-}
-' "$tracks_file" | sort)
+# Build track list from local files
+# Format: "Clean Title<TAB>Full Path"
+track_data=$(find "$MUSIC_DIR" -maxdepth 1 -type f -name "*.mp3" -printf '%f\t%p\n' 2>/dev/null | while IFS=$'\t' read -r filename filepath; do
+	# Clean up filename for display: remove .mp3, replace underscores with spaces
+	clean_name="${filename%.mp3}"
+	clean_name="${clean_name//_/ }"
+	echo -e "${clean_name}\t${filepath}"
+done | sort)
 
 if [[ -z "$track_data" ]]; then
-	echo "Error: No tracks found in the playlist."
+	echo "Error: No MP3 files found in $MUSIC_DIR"
 	exit 1
 fi
 
@@ -132,26 +94,24 @@ while true; do
 		not_playing=$(echo "$marked_tracks" | grep '^  ' || true)
 		[[ -n "$playing" ]] && marked_tracks="$playing"$'\n'"$not_playing" || marked_tracks="$not_playing"
 
-		selected_track_with_number=$(echo "$marked_tracks" | fzf --ansi --reverse --prompt="Select track: " --delimiter=$'\t' --with-nth=1)
+		selected_track_with_number=$(echo "$marked_tracks" | fzf --ansi --reverse --prompt="♪ " --delimiter=$'\t' --with-nth=1 --bind "ctrl-d:half-page-down,ctrl-u:half-page-up")
 	else
-		selected_track_with_number=$(echo "$track_names_with_numbers" | fzf --reverse --prompt="Select track: " --delimiter=$'\t' --with-nth=1)
+		selected_track_with_number=$(echo "$track_names_with_numbers" | fzf --reverse --prompt="♪ " --delimiter=$'\t' --with-nth=1 --bind "ctrl-d:half-page-down,ctrl-u:half-page-up")
 	fi
-	
+
 	# Extract line (remove number prefix and marker)
 	selected_line=$(echo "$selected_track_with_number" | sed 's/^[►[:space:]]*[0-9]\+\.[[:space:]]*//')
 
-	# Format: "Title | CATEGORY<TAB>URL" - extract both parts
-	display_part="${selected_line%%	*}"  # Before TAB
-	track_url="${selected_line##*	}"     # After TAB
+	# Format: "Clean Title<TAB>Full Path"
+	display_part="${selected_line%%	*}"  # Before TAB (clean title)
+	track_path="${selected_line##*	}"    # After TAB (full path)
 
-if [[ -n "$track_url" && "$track_url" == http* ]]; then
-	# Extract title for session naming (before the |)
-	song_title="${display_part%% |*}"
-	song_title="${song_title## }"  # Trim leading space
+if [[ -n "$track_path" && -f "$track_path" ]]; then
+	song_title="$display_part"
 
 	# Create session name: lowercase, alphanumeric, max 50 chars
 	base_session=$(echo "$song_title" | tr -c '[:alnum:]-' '_' | tr '[:upper:]' '[:lower:]' | cut -c 1-45)
-	track_hash=$(echo -n "$display_part" | md5sum | cut -c 1-4)
+	track_hash=$(echo -n "$track_path" | md5sum | cut -c 1-4)
 	tmux_session_name="${base_session}_${track_hash}"
 
 	# Check if THIS exact session already exists (user clicked on playing track to stop it)
@@ -169,22 +129,17 @@ if [[ -n "$track_url" && "$track_url" == http* ]]; then
 			fi
 		fi
 
-		# Update yt-dlp in background (ready for next time, doesn't block playback)
-		check_and_update_ytdlp &>/dev/null &
-
 		# Create socket directory and path
 		socket_dir="${HOME}/.mpv_sockets"
 		mkdir -p "$socket_dir"
 		socket_path="${socket_dir}/${tmux_session_name}.sock"
 		rm -f "$socket_path"
 
-		# Start new tmux session with MPV
+		# Start new tmux session with MPV (local file - simple!)
 		tmux new-session -d -s "$tmux_session_name" \
-			mpv --loop-file --no-video --ytdl \
-			--ytdl-format="bestaudio/best" \
-			--ytdl-raw-options="cookies-from-browser=firefox" \
+			mpv --loop-file --no-video \
 			--input-ipc-server="$socket_path" \
-			"$track_url"
+			"$track_path"
 
 		# Store both session name and display part for fast matching in --run mode
 		echo "$tmux_session_name" > "$session_file"
