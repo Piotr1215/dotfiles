@@ -54,3 +54,6 @@ windows:
         - NCURSES_NO_UTF8_ACS=1 tui -r backlog
         - tuiw
         - NCURSES_NO_UTF8_ACS=1 tui -r current-prs-age
+  - private:
+      panes:
+        - task context work; TERM=screen-256color NCURSES_NO_UTF8_ACS=1 tui --report private

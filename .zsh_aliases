@@ -97,6 +97,7 @@ alias dpsa="docker ps -a --format 'table {{.ID}}\t{{.Names}}\t{{.Image}}'" #dock
 alias dps="docker ps --format 'table {{.ID}}\t{{.Names}}\t{{.Image}}'" #docker ps -a with only id name and image
 alias fdit='vim ~/.zsh_functions'
 alias gs='git show'
+alias gpr='GH_PAGER= gh pr list --head $(git branch --show-current) --json number,state,url --jq "if length == 0 then \"no prs\" else .[] | \"#\\(.number) [\\(.state)] \\(.url)\" end"'
 alias firefox='flatpak run io.gitlab.librewolf-community'
 alias home='nohup flatpak run io.gitlab.librewolf-community -P "Home" > /dev/null 2>&1 &'
 alias lg='lazygit'
@@ -130,7 +131,6 @@ alias dedit='direnv edit'
 alias pt='__play_track.sh'
 alias play='nohup ~/dev/dotfiles/scripts/__launch_playlist.sh > /dev/null 2>&1 &'
 alias play_vid='nohup ~/dev/dotfiles/scripts/__launch_playlist.sh vids_playlist > /dev/null 2>&1 &'
-alias vl='nvim ~/haruna_playlist.m3u'
 
 # PROJECT: ai
 alias claude='KUBECONFIG=/home/decoder/dev/homelab/kubeconfig __claude_with_monitor.sh'
