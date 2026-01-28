@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-
+# PROJECT: taskwarrior-sync
 # __lib_taskwarrior_interop.sh
 # Interop functions for Taskwarrior
 
