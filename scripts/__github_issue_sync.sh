@@ -289,10 +289,9 @@ manage_project_settings() {
 
         if echo "$formatted_project" | grep -qi 'vclustercloud-maintenance'; then
             task rc.confirmation=no modify "$task_uuid" repo:hosted-platform
-        fi
-
-        # Check if project name contains vnode (case insensitive)
-        if echo "$formatted_project" | grep -qi 'vnode'; then
+        elif echo "$formatted_project" | grep -qi 'loft.rocks'; then
+            task rc.confirmation=no modify "$task_uuid" repo:loft-prod
+        elif echo "$formatted_project" | grep -qi 'vnode'; then
             task rc.confirmation=no modify "$task_uuid" repo:vnode-docs
         fi
     else
@@ -306,12 +305,11 @@ manage_project_settings() {
         done
     fi
 
-    # Set repo and tags based on team prefix config
+    # Set repo based on team prefix config
     local prefix
     for prefix in "${!TEAM_PREFIX_REPO[@]}"; do
         if [[ "$issue_number" == "${prefix}-"* ]]; then
             task rc.confirmation=no modify "$task_uuid" repo:"${TEAM_PREFIX_REPO[$prefix]}"
-            [[ "$prefix" == "DOC" ]] && task rc.confirmation=no modify "$task_uuid" +kill
             break
         fi
     done
@@ -440,13 +438,15 @@ create_and_annotate_task() {
     fi
     
     local task_uuid
-    task_uuid=$(create_task "$issue_description" "+$issue_repo_name" $fresh_tag "project:$project_name")
+    # Don't add +linear tag - it's redundant with linear_issue_id field
+    local repo_tag=""
+    [[ "$issue_repo_name" != "linear" ]] && repo_tag="+$issue_repo_name"
+    task_uuid=$(create_task "$issue_description" $repo_tag $fresh_tag "project:$project_name")
     
     if [[ -n "$task_uuid" ]]; then
         annotate_task "$task_uuid" "$issue_url"
         log "Task created and annotated for: $issue_description"
         task rc.confirmation=no modify "$task_uuid" linear_issue_id:"$issue_number"
-        task rc.confirmation=no modify "$task_uuid" +todo
         
         # Manage project settings
         manage_project_settings "$task_uuid" "$project_name" "$issue_number"
@@ -601,7 +601,7 @@ compare_and_clean_tasks() {
     # OPTIMIZATION: Only get PENDING tasks with specific tags
     # This massively reduces the number of tasks to process
     local task_export
-    task_export=$(task '+github or +linear or linear_issue_id.any:' '-triage' status:pending export)
+    task_export=$(task '+github or linear_issue_id.any:' '-triage' status:pending export)
 
     # Remove any empty or null entries (extra safety check)
     task_export=$(echo "$task_export" | jq -c '[.[] | select(.status == "pending")]')

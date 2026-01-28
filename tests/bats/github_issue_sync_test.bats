@@ -175,6 +175,12 @@ teardown() {
     grep -q "project:operations" "${TEST_DIR}/task_commands.log"
 }
 
+@test "manage_project_settings sets loft-prod repo for loft.rocks projects" {
+    source "$TEMP_SCRIPT"
+    manage_project_settings "test-uuid" "loft.rocks maintenance" "DEVOPS-789"
+    grep -q "repo:loft-prod" "${TEST_DIR}/task_commands.log"
+}
+
 # ====================================================
 # TEMP FILE CLEANUP TESTS
 # ====================================================
