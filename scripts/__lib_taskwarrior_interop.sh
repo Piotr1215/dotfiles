@@ -26,12 +26,12 @@ create_task() {
 	echo "$task_uuid"
 }
 
-# Get task UUID from description with specific tags (+github or +linear)
+# Get task UUID from description with specific tags (+github or linear_issue_id)
 get_task_id_by_description() {
 	local description="$1"
-	# Use task export with tags +github or +linear or linear_issue_id.any: and status:pending to find the task by description
+	# Use task export with tags +github or linear_issue_id.any: and status:pending to find the task by description
 	# Return only the first UUID if multiple matches are found
-	task '+github or +linear or linear_issue_id.any:' status:pending export |
+	task '+github or linear_issue_id.any:' status:pending export |
 		jq -r --arg desc "$description" '.[] | select(.description == $desc) | .uuid' |
 		head -n 1
 }
