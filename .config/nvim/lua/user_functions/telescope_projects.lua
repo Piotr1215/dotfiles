@@ -278,12 +278,12 @@ function M.show_project_files(project_name)
             actions.close(prompt_bufnr)
 
             if #selections > 0 then
-              for _, selection in ipairs(selections) do
-                vim.cmd("edit " .. selection.value)
+              for _, sel in ipairs(selections) do
+                vim.cmd("edit " .. sel.value)
               end
             else
               local current_selection = action_state.get_selected_entry()
-              vim.cmd("edit " .. selection.value)
+              vim.cmd("edit " .. current_selection.value)
             end
           end)
 

@@ -24,8 +24,8 @@ end
 -- end
 
 ---Invoke completion (required).
----@param params cmp.SourceCompletionApiParams
----@param callback fun(response: lsp.CompletionResponse|nil)
+---@param params table
+---@param callback fun(response: table|nil)
 function source:complete(params, callback)
   local project_names = fetch_project_names()
   local items = {}

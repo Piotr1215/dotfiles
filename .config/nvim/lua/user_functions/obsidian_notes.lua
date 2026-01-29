@@ -485,9 +485,9 @@ vim.api.nvim_create_user_command("CreateNoteWithTemplate", function(input)
 
   -- Check if last arg is a MOC name
   if moc_name:match "-MOC$" or moc_name == "(Skip - no MOC)" then
-    note_title = table.concat({ select(2, unpack(args)) }, " ", 1, #args - 2)
+    note_title = table.concat({ select(2, table.unpack(args)) }, " ", 1, #args - 2)
   else
-    note_title = table.concat({ select(2, unpack(args)) }, " ")
+    note_title = table.concat({ select(2, table.unpack(args)) }, " ")
     moc_name = nil
   end
 

@@ -1,3 +1,4 @@
+---@diagnostic disable: undefined-global
 -- Function to create the script and replace the command in the buffer
 _G.create_script_from_command = function()
   -- Get the selected command from visual mode

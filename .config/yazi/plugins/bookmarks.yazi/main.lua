@@ -1,3 +1,4 @@
+---@diagnostic disable: undefined-global
 -- stylua: ignore
 local SUPPORTED_KEYS = {
 	{ on = "0"}, { on = "1"}, { on = "2"}, { on = "3"}, { on = "4"},
