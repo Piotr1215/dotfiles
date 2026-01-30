@@ -55,7 +55,8 @@ windows:
         - tuiw
         - NCURSES_NO_UTF8_ACS=1 tui -r current-prs-age
   - private:
+      layout: 92eb,150x72,0,0[150x63,0,0,4,150x8,0,64,19]
       panes:
-        # - task context work; TERM=screen-256color NCURSES_NO_UTF8_ACS=1 tui --report private
         - KUBECONFIG=/home/decoder/dev/homelab/kubeconfig __claude_with_monitor.sh --system-prompt-file ~/.claude/system-prompts/triage-agent-system-prompt.md -- "/ops-triage-agent"
+        - nvim ~/dev/triage/messages.md
 
