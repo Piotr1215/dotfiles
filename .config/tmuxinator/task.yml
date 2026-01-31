@@ -12,7 +12,7 @@ root: ~/dev/
 # Project hooks
 
 # Runs on project start, always
-on_project_start: task context work && tmux set-option -g status-interval 1
+on_project_start: for p in $(pgrep -x claude); do ps -p $p -o args= | grep -q triage-agent-system-prompt && kill -9 $p; done 2>/dev/null; task context work && tmux set-option -g status-interval 1
 
 # Run on project start, the first time
 # This is no longer needed as the systemd service handles this now.
@@ -58,5 +58,5 @@ windows:
       layout: 92eb,150x72,0,0[150x63,0,0,4,150x8,0,64,19]
       panes:
         - KUBECONFIG=/home/decoder/dev/homelab/kubeconfig __claude_with_monitor.sh --system-prompt-file ~/.claude/system-prompts/triage-agent-system-prompt.md -- "/ops-triage-agent"
-        - nvim ~/dev/triage/messages.md
+        - nvim ~/dev/messages/messages.md
 
