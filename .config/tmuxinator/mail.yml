@@ -1,48 +1,11 @@
-# /home/decoder/.config/tmuxinator/atosik.yml
+# /home/decoder/.config/tmuxinator/mail.yml
+# PROJECT: mail-agent
 
 name: mail
 root: ~/.config/mutt
 
-# Optional tmux socket
-# socket_name: foo
-
-# Note that the pre and post options have been deprecated and will be replaced by
-# project hooks.
-
-# Project hooks
-
-# Runs on project start, always
-# on_project_start: nohup gnome-pomodoro &
-
-# Run on project start, the first time
-# on_project_first_start: command
-
-# Run on project start, after the first time
-# on_project_restart: command
-
-# Run on project exit ( detaching from tmux session )
-# on_project_exit: command
-
-# Run on project stop
-# on_project_stop: pkill gnome-pomodoro
-
-# Runs in each window and pane before window/pane specific commands. Useful for setting up interpreter versions.
-# pre_window: tmux source-file ~/.tmux.conf 
-
-# Pass command line options to tmux. Useful for specifying a different tmux.conf.
-# tmux_options: -f ~/.tmux.mac.conf
-
-# Change the command to call tmux.  This can be used by derivatives/wrappers like byobu.
-# tmux_command: byobu
-
-# Specifies (by name or index) which window will be selected on project startup. If not set, the first window is used.
-# startup_window: vim
-
 # Specifies (by index) which pane of the specified window will be selected on project startup. If not set, the first pane is used.
 startup_pane: 2
-
-# Controls whether the tmux session should be attached to automatically. Defaults to true.
-# attach: false
 
 windows:
   - mail:
@@ -51,3 +14,8 @@ windows:
         - cmatrix -a -C blue
         - neomutt
         - nvim -c "SLoad mutt"
+  - ursula:
+      layout: 92eb,150x72,0,0[150x63,0,0,4,150x8,0,64,19]
+      panes:
+        - __claude_with_monitor.sh --system-prompt-file ~/.claude/system-prompts/mail-agent-system-prompt.md -- "/ops-mail-agent"
+        - nvim ~/dev/messages/messages.md
