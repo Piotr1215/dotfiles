@@ -12,7 +12,7 @@ root: ~/dev/
 # Project hooks
 
 # Runs on project start, always
-on_project_start: for p in $(pgrep -x claude); do ps -p $p -o args= | grep -q triage-agent-system-prompt && kill -9 $p; done 2>/dev/null; task context work && tmux set-option -g status-interval 1
+# on_project_start: for p in $(pgrep -x claude); do ps -p $p -o args= | grep -q triage-agent-system-prompt && kill -9 $p; done 2>/dev/null; task context work && tmux set-option -g status-interval 1
 
 # Run on project start, the first time
 # This is no longer needed as the systemd service handles this now.

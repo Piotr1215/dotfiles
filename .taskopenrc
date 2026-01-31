@@ -1,7 +1,7 @@
 [General]
 taskbin=task
 taskargs
-no_annotation_hook="addnote $ID"
+# no_annotation_hook="addnote $ID"
 task_attributes="priority,project,tags,description"
 --sort:"urgency-,annot"
 --active-tasks:"+PENDING"

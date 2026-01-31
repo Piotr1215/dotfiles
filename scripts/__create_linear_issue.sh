@@ -81,7 +81,7 @@ echo "Response: $response"
 # Extract issue ID and URL
 issue_url=$(echo "$response" | jq -r '.data.issueCreate.issue.url')
 # Extract identifier from URL (e.g., DEVOPS-68) - handles team renames automatically
-linear_issue_id=$(echo "$issue_url" | grep -oE '[A-Z]+-[0-9]+$')
+linear_issue_id=$(echo "$issue_url" | grep -oE '[A-Z]+-[0-9]+')
 
 if [ -n "$linear_issue_id" ] && [ "$linear_issue_id" != "null" ]; then
 	task "$uuid" modify linear_issue_id:"$linear_issue_id"

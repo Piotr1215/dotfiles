@@ -6,7 +6,9 @@ root: ~/.config/mutt
 
 windows:
   - mail:
+      layout: main-vertical
       panes:
+        - cmatrix -a -C blue
         - neomutt
   - ursula:
       layout: 92eb,150x72,0,0[150x63,0,0,4,150x8,0,64,19]
