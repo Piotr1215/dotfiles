@@ -3,7 +3,7 @@
 # See: __lib_taskwarrior_interop.sh, ops-autonomous-worker.md, ops-triage-agent.md
 # Related: task-resume-annotations (uses linear_issue_id for stable refs)
 #
-# Synchronizes GitHub and Linear issues with Taskwarrior
+# Synchronizes Linear issues with Taskwarrior
 #
 # Key behaviors:
 # 1. For unassigned Linear issues: Deletes them from Taskwarrior (since they're no longer relevant to you)
@@ -13,6 +13,8 @@
 #    (users can add/remove this tag manually without affecting Linear)
 # 4. Tasks with +backlog or +review tags will NOT have their status, priority or tags
 #    modified by the sync process, regardless of Linear issue status
+#
+# Note: GitHub issue sync was removed in v1.0-with-github-sync (no GitHub issues assigned)
 
 # shellcheck disable=SC2155
 source "$(dirname "${BASH_SOURCE[0]}")/__lib_taskwarrior_interop.sh"
@@ -68,36 +70,6 @@ validate_env_vars() {
 # ====================================================
 # PHASE 2: DATA FETCHING
 # ====================================================
-
-# Retrieve and format GitHub issues with enhanced error handling
-get_github_issues() {
-    local issues
-    local exit_code
-    
-    # Capture both output and exit code
-    if ! issues=$(gh api -X GET /search/issues \
-        -f q='is:issue is:open assignee:Piotr1215' \
-        --jq '.items[] | {id: .number, description: .title, repository: .repository_url, html_url: .html_url}' 2>&1); then
-        echo "Error: Unable to fetch GitHub issues. gh command failed." >&2
-        echo "Command output: $issues" >&2
-        return 1
-    fi
-    
-    # Validate JSON output
-    if ! echo "$issues" | jq empty 2>/dev/null; then
-        echo "Error: Invalid JSON response from GitHub API" >&2
-        echo "Response: $issues" >&2
-        return 1
-    fi
-    
-    # Check if we got any issues
-    if [[ -z "$issues" ]]; then
-        echo "Warning: No GitHub issues found" >&2
-        return 0
-    fi
-    
-    echo "$issues"
-}
 
 # Retrieve and format Linear issues with enhanced error handling
 get_linear_issues() {
@@ -598,10 +570,10 @@ compare_and_clean_tasks() {
 
     log "Starting comparison of Taskwarrior tasks and current issues."
 
-    # OPTIMIZATION: Only get PENDING tasks with specific tags
+    # OPTIMIZATION: Only get PENDING tasks with Linear issue IDs
     # This massively reduces the number of tasks to process
     local task_export
-    task_export=$(task '+github or linear_issue_id.any:' '-triage' status:pending export)
+    task_export=$(task 'linear_issue_id.any:' '-triage' status:pending export)
 
     # Remove any empty or null entries (extra safety check)
     task_export=$(echo "$task_export" | jq -c '[.[] | select(.status == "pending")]')
@@ -747,38 +719,33 @@ main() {
     # Phase 1: Environment and Setup
     log "Phase 1: Validating environment variables"
     validate_env_vars
-    
+
     # Phase 2: Data Fetching
-    log "Phase 2: Fetching issues from GitHub and Linear"
-    local github_issues linear_issues
-    github_issues=$(get_github_issues)
+    log "Phase 2: Fetching issues from Linear"
+    local linear_issues
     linear_issues=$(get_linear_issues)
 
-    if [[ -z "$github_issues" && -z "$linear_issues" ]]; then
-        log "No issues retrieved from GitHub or Linear. Exiting."
+    if [[ -z "$linear_issues" ]]; then
+        log "No issues retrieved from Linear. Exiting."
         exit 0
     fi
 
     # Phase 3 & 4: Task Management & Synchronization
     log "Phase 3 & 4: Running synchronization operations"
-    
+
     # Process specific deletion of reassigned Linear tasks
-    [[ -n "$linear_issues" ]] && find_and_clean_reassigned_tasks "$linear_issues"
+    find_and_clean_reassigned_tasks "$linear_issues"
 
     # Normal sync process
-    [[ -n "$github_issues" ]] && sync_issues_to_taskwarrior "$github_issues"
-    [[ -n "$linear_issues" ]] && sync_issues_to_taskwarrior "$linear_issues"
+    sync_issues_to_taskwarrior "$linear_issues"
 
     # Phase 5: Cleanup and Maintenance
     log "Phase 5: Performing cleanup and maintenance"
-    
+
     # Compile all issue descriptions for the comparison
     local all_descriptions
-    all_descriptions=$(
-        echo "$github_issues" | jq -r '.description'
-        echo "$linear_issues" | jq -r '.description'
-    )
-    
+    all_descriptions=$(echo "$linear_issues" | jq -r '.description')
+
     # Run the comparison to mark tasks as completed or delete them
     compare_and_clean_tasks "$all_descriptions"
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 
-# Test suite for __github_issue_sync.sh
+# Test suite for __github_issue_sync.sh (Linear sync only - GitHub removed in v1.0-with-github-sync)
 # Tests API integration, temp file cleanup, and critical functions
 
 load 'helpers/test_helper'
@@ -249,19 +249,6 @@ EOF
 # ====================================================
 # API ERROR HANDLING TESTS (Mock scenarios)
 # ====================================================
-
-@test "get_github_issues handles gh command failure" {
-    # Override gh command to simulate failure
-    cat > "${TEST_DIR}/gh" << 'EOF'
-#!/bin/bash
-exit 1
-EOF
-    chmod +x "${TEST_DIR}/gh"
-    
-    run get_github_issues
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "Unable to fetch GitHub issues" ]]
-}
 
 @test "get_linear_issues handles invalid JSON response" {
     # Override curl to return invalid JSON
