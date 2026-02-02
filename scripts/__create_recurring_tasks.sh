@@ -69,17 +69,8 @@ if [ "$day_of_week" -le 5 ]; then
 
 	# Day-specific tasks
 	case $day_of_week in
-	1) # Monday
-		add_task_if_not_exists "fill standup forms" "today+8h" "session:standup"
-		;;
-	3) # Wednesday
-		add_task_if_not_exists "fill standup forms" "today+8h" "session:standup"
-		;;
 	4) # Thursday
 		add_task_if_not_exists "fill eng presentation" "today+8h"
-		;;
-	5) # Friday
-		add_task_if_not_exists "fill standup forms" "today+8h" "session:standup"
 		;;
 	esac
 	echo "Daily task check complete."
