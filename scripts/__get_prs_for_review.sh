@@ -105,7 +105,7 @@ main() {
 		task_uuid=$(get_task_id_by_description "$pr_title")
 		if [[ -z "$task_uuid" ]]; then
 			echo "Creating new task for PR: $pr_title"
-			task_uuid=$(create_task "$pr_title" "entry:$entry_ts" "+pr" "+kill" "project:pr-reviews" "repo:$repo_name") || true
+			task_uuid=$(create_task "$pr_title" "entry:$entry_ts" "+pr" "+kill" "+work" "project:pr-reviews" "repo:$repo_name") || true
 			annotate_task "$task_uuid" "$pr_url" || true
 			# On task creation, record the new_activity without adding +fresh
 			task "$task_uuid" modify "new_activity:$updated_at" || true
