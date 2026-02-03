@@ -1,0 +1,21 @@
+name: services
+root: ~/
+
+# Custom user services (regular files in ~/.config/systemd/user/)
+# Excludes: pueued, system-provided (at-spi, evolution, org.gnome, dconf)
+
+<%
+  exclude = %w[pueued at-spi dconf evolution org.gnome]
+  services = Dir.glob(File.expand_path("~/.config/systemd/user/*.service"))
+    .map { |f| File.basename(f, ".service") }
+    .reject { |s| exclude.any? { |e| s.start_with?(e) } }
+    .sort
+%>
+
+windows:
+  - monitor:
+      layout: tiled
+      panes:
+<% services.each do |svc| %>
+        - <%= svc %>: journalctl --user -f -n 50 -u <%= svc %>.service
+<% end %>

@@ -8,6 +8,10 @@ vcmd "filetype on"
 vcmd "filetype plugin indent on"
 vcmd "set clipboard=unnamedplus"
 vcmd "set winbar=%=%m%F"
+
+-- Terminal title (shows in tmux pane border)
+set.title = true
+set.titlestring = "nvim: %t" -- shows "nvim: filename"
 vcmd "set completefunc=emoji#complete"
 vcmd "set wildignore+=*/tmp/*,*.so,*.swp,*.zip"
 vcmd "set backspace=indent,eol,start"
