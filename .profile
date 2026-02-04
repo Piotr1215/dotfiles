@@ -25,7 +25,7 @@ fi
 if [ -d "$HOME/.local/bin" ] ; then
     PATH="$HOME/.local/bin:$PATH"
 fi
-. "/home/decoder/.deno/env"
-. "$HOME/.cargo/env"
+if [ -f "/home/decoder/.deno/env" ]; then . "/home/decoder/.deno/env"; fi
+if [ -f "$HOME/.cargo/env" ]; then . "$HOME/.cargo/env"; fi
 
 if [ -e /home/decoder/.nix-profile/etc/profile.d/nix.sh ]; then . /home/decoder/.nix-profile/etc/profile.d/nix.sh; fi # added by Nix installer
