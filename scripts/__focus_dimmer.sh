@@ -2,7 +2,7 @@
 # Robust focus dimmer - dims inactive windows when multiple windows are visible
 
 # Configuration
-DIM_OPACITY="${DIM_OPACITY:-0xe6666666}"  # Default: 90% opacity for inactive windows
+DIM_OPACITY="${DIM_OPACITY:-0xb3333333}"  # Default: 70% opacity for inactive windows
 CHECK_INTERVAL="${CHECK_INTERVAL:-0.5}"   # How often to check focus (seconds)
 MAX_RETRIES="${MAX_RETRIES:-3}"          # Max retries for window operations
 ERROR_COUNT=0                             # Track consecutive errors
@@ -71,8 +71,8 @@ apply_focus_dimming() {
             continue
         fi
         
-        # Only affect regular application windows
-        if echo "$window_class" | grep -qE "firefox|Navigator|Alacritty|Slack|slack|Code|code|Chrome|chromium|Obsidian|obsidian|Discord|discord|Spotify|spotify|Thunderbird|thunderbird"; then
+        # Only affect regular application windows (-i for case-insensitive)
+        if echo "$window_class" | grep -qiE "firefox|Navigator|Alacritty|Slack|Code|Chrome|Obsidian|Discord|Spotify|Thunderbird"; then
             managed_windows["$win_id"]=1
             
             if [ "$win_id" = "$focused_window" ]; then

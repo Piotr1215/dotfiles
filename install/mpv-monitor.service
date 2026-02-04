@@ -7,7 +7,7 @@ Wants=graphical-session.target
 Type=simple
 WorkingDirectory=/home/decoder/dev/dotfiles/scripts
 ExecStart=/home/decoder/dev/dotfiles/scripts/__mpv_monitor.sh
-Environment="DISPLAY=:1"
+Environment="DISPLAY=:0"
 Environment="XAUTHORITY=/home/decoder/.Xauthority"
 Environment="PATH=/usr/local/bin:/usr/bin:/bin"
 Environment="DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus"

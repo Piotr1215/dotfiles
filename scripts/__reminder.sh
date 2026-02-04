@@ -86,7 +86,7 @@ if [[ "$3" != "internal" ]]; then
 else
 	# This part is executed when scheduled by 'at'
 	while true; do
-		zenity --question --text="$message" --display=":1" \
+		zenity --question --text="$message" --display=":0" \
 			--ok-label="Acknowledged" --cancel-label="Remind me later" \
 			--width=200 --height=100
 
@@ -98,7 +98,7 @@ else
 			;;
 		1) # User clicked "Remind me later"
 			# Ask user for delay in minutes
-			delay=$(zenity --entry --title="Reminder Delay" --text="Enter delay in minutes:" --display=":1")
+			delay=$(zenity --entry --title="Reminder Delay" --text="Enter delay in minutes:" --display=":0")
 			if [[ $? -eq 0 && $delay =~ ^[0-9]+$ ]]; then
 				sleep $((delay * 60)) # Sleep for the specified amount of minutes
 			else

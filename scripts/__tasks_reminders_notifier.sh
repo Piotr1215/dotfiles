@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-export DISPLAY=:1
+export DISPLAY=:0
 
 # Get the current time and the time in one hour
 now=$(date +%s)

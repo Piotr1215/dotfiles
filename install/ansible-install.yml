@@ -195,6 +195,7 @@
           - newsboat
           - notmuch
           - pandoc
+          - nim
           - pass
           - pet
           - sshfs
@@ -202,6 +203,25 @@
           - urlview
           - yadm
         state: present
+
+    - name: Install taskopen (taskwarrior annotation opener)
+      block:
+        - name: Clone taskopen repository
+          git:
+            repo: https://github.com/jschlatow/taskopen.git
+            dest: /tmp/taskopen
+            version: master
+
+        - name: Build taskopen
+          command: make PREFIX=/usr
+          args:
+            chdir: /tmp/taskopen
+
+        - name: Install taskopen
+          command: make PREFIX=/usr install
+          args:
+            chdir: /tmp/taskopen
+          become: true
 
     - name: Install tmuxinator
       gem:

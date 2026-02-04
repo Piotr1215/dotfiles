@@ -21,7 +21,7 @@ if [[ -z "$LINEAR_API_KEY" ]] || [[ -z "$LINEAR_USER_ID" ]]; then
 fi
 
 # Set display variables for notifications
-export DISPLAY=:1
+export DISPLAY=:0
 export DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus
 
 # Run the sync script and log output

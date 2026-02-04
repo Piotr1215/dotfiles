@@ -40,6 +40,11 @@ detect_files = [
 format = "[ 🐋](blue bold)"
 symbol = "🐋"
 
+[custom.ssh]
+when = "test -n \"$SSH_CONNECTION\""
+format = "[SSH](bold red) "
+shell = ["sh"]
+
 [aws]
 format = '[aws $symbol($profile )(\[$duration\] )]($style)'
 symbol = "󰅟 "
