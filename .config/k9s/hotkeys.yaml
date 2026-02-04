@@ -1,13 +1,9 @@
 hotKeys:
   shift-0:
-    shortCut:    Shift-0
+    shortCut: Shift-0
     description: Viewing pods
-    command:     pods
-  q:
-    shortCut:    q
-    description: Quit
-    command:     q
+    command: pods
   shift-1:
-    shortCut:    Shift-1
+    shortCut: Shift-1
     description: vCluster pods only
-    command:     pods app=vcluster
+    command: pods app=vcluster
