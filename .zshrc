@@ -400,7 +400,6 @@ precmd() { print -Pn "\e]133;A\e\\" }
 
 eval "$(direnv hook zsh)"
 eval "$(starship init zsh)"
-eval "$(thefuck --alias)"
 
 if [ -f "$HOME/.cargo/env" ]; then
     . "$HOME/.cargo/env"
