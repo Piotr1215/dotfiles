@@ -1,7 +1,7 @@
 local M = {}
 
 M.capabilities = require("cmp_nvim_lsp").default_capabilities()
-vim.lsp.set_log_level "warn" -- change to "debug" for more info
+vim.lsp.log.set_level("warn") -- change to "debug" for more info
 
 -- The on_attach function is now deprecated - keymaps should be set via LspAttach autocmd
 -- Keeping this for backward compatibility with rust-tools which still uses it

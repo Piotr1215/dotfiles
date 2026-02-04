@@ -1,6 +1,6 @@
 -- Bootstrap lazy.nvim
 local lazypath = vim.fn.stdpath "data" .. "/lazy/lazy.nvim"
-if not (vim.uv or vim.uv).fs_stat(lazypath) then
+if not (vim.uv or vim.loop).fs_stat(lazypath) then
   local lazyrepo = "https://github.com/folke/lazy.nvim.git"
   local out = vim.fn.system { "git", "clone", "--filter=blob:none", "--branch=stable", lazyrepo, lazypath }
   if vim.v.shell_error ~= 0 then
@@ -492,6 +492,9 @@ return require("lazy").setup({
     version = "*",
   },
 }, {
+  rocks = {
+    enabled = false,
+  },
   dev = {
     path = "/home/decoder/dev",
     patterns = {}, -- Empty means all plugins with dev = true use the dev path

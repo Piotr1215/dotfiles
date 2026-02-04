@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-export DISPLAY=:1
+export DISPLAY=:0
 
 # Get the list of task IDs where follow is set to Y
 tasks=$(task follow.is:Y _ids)

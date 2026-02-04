@@ -34,6 +34,7 @@ binding = { key = "2", mods = "Control" }
 shape = "Beam"
 
 [env]
+__GL_SYNC_TO_VBLANK = "0"
 TERM = "xterm-256color"
 
 [font]

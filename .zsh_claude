@@ -195,3 +195,4 @@ alias gpt='claude_prompt'
 alias plaude='/home/decoder/.npm-global/bin/claude --dangerously-skip-permissions -p'  # Print mode (direct binary)
 alias flaude='claude -r --fork-session'           # Fork session with picker
 alias dlaude='claude --debug "hooks,mcp"'         # Debug mode (hooks + mcp)
+alias ccinstall='~/.claude/scripts/__claude_version_installer.sh'  # Version picker

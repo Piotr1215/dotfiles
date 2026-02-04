@@ -2,6 +2,8 @@
   path = ~/.gitconfig-work
 [includeIf "gitdir:~/dev/**"]
   path = ~/.gitconfig-personal
+[includeIf "gitdir:~/.claude/**"]
+  path = ~/.gitconfig-personal
 [core]
 	pager = delta --side-by-side
 	excludesfile = /home/decoder/.gitignore

@@ -22,7 +22,7 @@
             100
         ],
         "showToolbar": true,
-        "notificationIcon": "autokey-status",
+        "notificationIcon": "autokey-status-dark",
         "workAroundApps": ".*VirtualBox.*|krdc.Krdc",
         "triggerItemByInitial": false,
         "disabledModifiers": [],

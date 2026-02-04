@@ -35,8 +35,11 @@ fpath=(${HOME}/dev/dotfiles/.zsh/completions $fpath)
 
 # PUGINS & MODULES
 # fzf-tab should be last because it binds to ^I
-zstyle ':zsh-jumper:' picker-opts '--height=50% --reverse --border --prompt="JUMP → "'
-plugins=(z kubectl zsh-autosuggestions zsh-syntax-highlighting web-search colored-man-pages sudo zsh-jumper)
+zstyle ':zledit:' binding '^X^X'  # Ctrl+X Ctrl+X to trigger zledit
+zstyle ':zledit:' picker fzf
+zstyle ':zledit:' picker-opts '--reverse --border --prompt="JUMP → "'
+zstyle ':zledit:' config ~/.config/zledit/config.toml
+plugins=(z kubectl zsh-autosuggestions zsh-syntax-highlighting web-search colored-man-pages sudo zledit)
 source /home/decoder/dev/fzf-tab/fzf-tab.plugin.zsh
 source $ZSH/oh-my-zsh.sh
 
@@ -166,7 +169,7 @@ fi
 # source ~/.github_variables
 
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
-# zvm removed - using zsh-jumper now
+# zvm removed - using zledit now
 
 function pex() {
     pet exec
