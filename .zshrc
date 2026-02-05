@@ -384,9 +384,16 @@ stty -ixon
 
 kubectl() {
     unfunction "$0"
-    # Ensure compinit is loaded before kubectl completions
     autoload -Uz compinit && compinit -C
     source <(command kubectl completion zsh)
+    $0 "$@"
+}
+
+vcluster() {
+    unfunction "$0"
+    autoload -Uz compinit && compinit -C
+    source <(command vcluster completion zsh)
+    compdef v=vcluster
     $0 "$@"
 }
 

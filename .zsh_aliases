@@ -74,6 +74,7 @@ alias cal='ncal -b'
 
 ## Kubernetes aliases
 alias k=kubectl
+alias v=vcluster
 alias kconf='__create_separate_kubeconfig.sh'
 alias kdump='kubectl get all --all-namespaces'
 alias kaf='kubectl apply -f'
