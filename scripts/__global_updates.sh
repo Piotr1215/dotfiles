@@ -10,7 +10,7 @@ fi
 
 pueue clean
 pueue group add updates 2>/dev/null || true
-pueue parallel 4 -g updates
+pueue parallel 7 -g updates
 
 add_update() {
     local name="$1"
@@ -25,7 +25,7 @@ add_update "apt-upgrade" sudo DEBIAN_FRONTEND=noninteractive apt upgrade -y -o D
 add_update "snap" sudo snap refresh
 add_update "flatpak" flatpak update -y
 add_update "pipx" pipx upgrade-all
-add_update "npm" npm update -g
+add_update "npm" sudo npm update -g
 add_update "tldr" tldr --update
 add_update "go" go-global-update
 add_update "cargo" cargo install-update -a
