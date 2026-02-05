@@ -19,8 +19,8 @@ log_message "Monitor started"
 
 # Function to check if Zoom is running
 is_zoom_running() {
-	# Look for the main Zoom process
-	if pgrep -f "^/opt/zoom/zoom" >/dev/null 2>&1; then
+	# Look for main Zoom process (native or Flatpak)
+	if pgrep -f "^/opt/zoom/zoom|^/app/extra/zoom/zoom" >/dev/null 2>&1; then
 		return 0
 	else
 		return 1
@@ -64,8 +64,8 @@ while true; do
 			window_id=$(echo "$line" | awk '{print $1}')
 			window_title=$(echo "$line" | cut -d' ' -f4-)
 
-			# Check if it's a Zoom meeting window
-			if [ "$window_title" = "pop-os Meeting" ]; then
+			# Check if it's a Zoom meeting window (matches "Meeting" or "hostname Meeting")
+			if [[ "$window_title" == "Meeting" || "$window_title" == *" Meeting" ]]; then
 				if ! is_on_top "$window_id"; then
 					put_on_top "$window_id" "$window_title"
 				fi
