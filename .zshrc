@@ -1,7 +1,5 @@
 # zmodload zsh/zprof
 zmodload zsh/mapfile # Bring mapfile functionality similar to bash
-typeset -U path  # Dedupe PATH
-path=($path)     # Force deduplication of inherited PATH
 
 # Path to your oh-my-zsh installation.
 export ZSH="${HOME}/.oh-my-zsh"
@@ -132,20 +130,23 @@ export FZF_DEFAULT_COMMAND='fd --hidden --exclude .git'
 export FZF_CTRL_T_COMMAND='fd --hidden'
 export FZF_ALT_C_COMMAND='fd --hidden'
 export VISUAL=nvim
+export PATH=/home/decoder/.nimble/bin:$PATH
 export KUBECONFIG=${KUBECONFIG:-~/.kube/config}
 export GOBIN=$HOME/go/bin
-
-# PATH additions (each path added once)
-export PATH=$HOME/.nimble/bin:$PATH
+export PATH="/home/decoder/.local/bin:$PATH"
+export PATH=$PATH:$GOPATH/bin
+export PATH=$PATH:$HOME/.krew/bin
 export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
+export PATH=$HOME/.local/bin:$PATH
 export PATH=$HOME/scripts:$PATH
 export PATH=$HOME/go/bin:$PATH
 export PATH=$HOME/go:$PATH
 export PATH=/usr/local/go/bin:$PATH
-export PATH=$HOME/.claude/scripts:$PATH
 export PATH=$PATH:$HOME/.istioctl/bin
+export PATH=$HOME/.claude/scripts:$PATH
 export PATH=$PATH:$HOME/dev/dotfiles/scripts
 export PATH=$PATH:$HOME/.luarocks/bin
+export PATH=$PATH:$HOME/.local/bin
 export PATH=$PATH:$HOME/.arkade/bin/
 export FONTCONFIG_PATH=/etc/fonts
 export EDITOR=nvim
@@ -417,4 +418,3 @@ if [ -f '/home/decoder/dev/google-cloud-sdk/completion.zsh.inc' ]; then . '/home
 
 # zprof > /tmp/zprof.out
 export PATH=/home/decoder/.npm-global/bin:$PATH
-typeset -U path && path=($path)  # Final deduplication
