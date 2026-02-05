@@ -415,3 +415,4 @@ if [ -f '/home/decoder/dev/google-cloud-sdk/completion.zsh.inc' ]; then . '/home
 
 # zprof > /tmp/zprof.out
 export PATH=/home/decoder/.npm-global/bin:$PATH
+typeset -U path && path=($path)  # Final deduplication

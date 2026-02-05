@@ -14,5 +14,16 @@ if [[ " ${protected_branches[*]} " =~ " ${current_branch} " ]]; then
     exit 1
 fi
 
+full_branch=$(git symbolic-ref --short HEAD)
+branch_suffix="${full_branch##*/}"
+
+if [[ "$branch_suffix" =~ ^[0-9_-]+$ ]]; then
+    echo "🚫 Branch has auto-generated slug: $full_branch" >&2
+    echo "   Suffix '$branch_suffix' contains no letters - likely auto-generated" >&2
+    echo "   Rename to something meaningful:" >&2
+    echo "   git branch -m $full_branch ${full_branch%/*}/descriptive-slug" >&2
+    exit 1
+fi
+
 echo "✅ Push allowed" >&2
 exit 0
