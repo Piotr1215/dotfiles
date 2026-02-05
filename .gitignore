@@ -1,24 +1,36 @@
-# Direnv files
 .envrc
+CLAUDE.md
+.claude
+.claude-wt
+tmp/
+.mcp.json
 
-# Vim sessions and config
-*.vim
-.nvimrc.lua
-
-# Ai coding
+# AI coding tools
 .aider*
 .gp.md
-CLAUDE.md
 
-# Git-crypt keys
+# Secrets
 .keys/
 
-# Python cache files
-__pycache__/
-*.py[cod]
-*$py.class
+# Generated/cache
+ai-theater/
+.config/cmus/
 
-settings.local.json
-tmp/
-ai-theater
-.config/cmus
+# Spec-kit artifacts
+memory/
+scripts/check-task-prerequisites.sh
+scripts/common.sh
+scripts/create-new-feature.sh
+scripts/get-feature-paths.sh
+scripts/setup-plan.sh
+scripts/update-agent-context.sh
+templates/agent-file-template.md
+templates/plan-template.md
+templates/spec-template.md
+templates/tasks-template.md
+templates/commands/specify.md
+templates/commands/plan.md
+templates/commands/tasks.md
+.claude/commands/specify.md
+.claude/commands/plan.md
+.claude/commands/tasks.md
