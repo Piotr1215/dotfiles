@@ -17,5 +17,8 @@ windows:
       layout: tiled
       panes:
 <% services.each do |svc| %>
-        - <%= svc %>: journalctl --user -f -n 50 -u <%= svc %>.service
+        - printf '\033]2;<%= svc %>\033\\'; journalctl --user -f -n 50 -u <%= svc %>.service
 <% end %>
+  - sysadmin:
+      panes:
+        - __claude_with_monitor.sh --system-prompt-file ~/.claude/system-prompts/sysadmin-agent-system-prompt.md -- "/ops-sysadmin-agent"
