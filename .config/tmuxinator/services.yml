@@ -1,5 +1,5 @@
 name: services
-root: ~/
+root: ~/.claude
 
 # Custom user services (regular files in ~/.config/systemd/user/)
 # Excludes: pueued, system-provided (at-spi, evolution, org.gnome, dconf)

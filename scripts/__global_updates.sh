@@ -24,7 +24,7 @@ add_update "apt-update" sudo apt update
 add_update "apt-upgrade" sudo DEBIAN_FRONTEND=noninteractive apt upgrade -y -o Dpkg::Options::="--force-confold"
 add_update "snap" sudo snap refresh
 add_update "flatpak" flatpak update -y
-add_update "pip" pip3 install --upgrade pip
+add_update "pipx" pipx upgrade-all
 add_update "npm" npm update -g
 add_update "tldr" tldr --update
 add_update "go" go-global-update
