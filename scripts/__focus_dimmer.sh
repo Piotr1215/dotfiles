@@ -2,7 +2,7 @@
 # Robust focus dimmer - dims inactive windows when multiple windows are visible
 
 # Configuration
-DIM_OPACITY="${DIM_OPACITY:-0xb3333333}"  # Default: 70% opacity for inactive windows
+DIM_OPACITY="${DIM_OPACITY:-0xe6333333}"  # Default: 90% opacity for inactive windows
 CHECK_INTERVAL="${CHECK_INTERVAL:-0.5}"   # How often to check focus (seconds)
 MAX_RETRIES="${MAX_RETRIES:-3}"          # Max retries for window operations
 ERROR_COUNT=0                             # Track consecutive errors
