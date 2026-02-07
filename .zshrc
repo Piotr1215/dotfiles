@@ -306,13 +306,14 @@ bindkey '^X^P' paste_file_content
 
 function copy_file_content() {
   local selected_file
+  zle -I
   selected_file=$(fd --type f | fzf --height 40% --reverse)
   if [[ -n "$selected_file" ]]; then
-      xclip -selection clipboard -in "$selected_file"
+      xclip -selection clipboard < "$selected_file"
+      echo -n "File $selected_file content copied"
   else
     zle -M "No file selected."
   fi
-  echo -n "File $selected_file copied"
   zle accept-line
 }
 
