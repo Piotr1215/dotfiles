@@ -426,4 +426,4 @@ if [ -f '/home/decoder/dev/google-cloud-sdk/completion.zsh.inc' ]; then . '/home
 export PATH=/home/decoder/.npm-global/bin:$PATH
 typeset -U path && path=($path)  # Final deduplication
 export PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome
-alias stats="~/dev/homelab/claude-dashboard-swap.sh"
+alias stats="~/.claude/dashboards/claude-dashboard-swap.sh"
