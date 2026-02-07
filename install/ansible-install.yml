@@ -170,6 +170,7 @@
           - restic
           - dunst
           - socat
+          - python3-pexpect
           # Additional useful packages
           - autokey-gtk
           - ccze
