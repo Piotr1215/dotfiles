@@ -167,7 +167,7 @@ fi
 
 # source ~/.github_variables
 
-[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
+source <(fzf --zsh)
 # zvm removed - using zledit now
 
 function pex() {
