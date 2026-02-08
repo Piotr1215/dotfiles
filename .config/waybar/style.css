@@ -24,8 +24,12 @@ tooltip {
     color: #ffd700;
 }
 
-.modules-left, .modules-right {
-    padding: 2px 4px;
+.modules-left {
+    padding: 2px 8px 2px 8px;
+}
+
+.modules-right {
+    padding: 2px 12px 2px 4px;
 }
 
 .modules-center {
@@ -61,11 +65,25 @@ tooltip {
 #custom-claude,
 #custom-services,
 #custom-weather,
+#custom-tailscale,
 #custom-totp,
 #tray {
     color: #e5d9f5;
-    padding: 5px 6px;
+    padding: 5px 10px;
     font-size: 16px;
+}
+
+#tray {
+    padding: 5px 8px;
+}
+
+#tray menu {
+    background: #1e1e2e;
+    color: #e5d9f5;
+}
+
+#tray menu menuitem:hover {
+    background: #313244;
 }
 
 #clock {
@@ -94,6 +112,10 @@ tooltip {
 
 #custom-claude.warning {
     color: #ff4444;
+}
+
+#custom-tailscale {
+    color: #74c7ec;
 }
 
 #custom-totp {
