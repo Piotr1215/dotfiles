@@ -63,23 +63,6 @@ run_layout() {
 	trap - EXIT
 }
 
-# Dim ALL inactive windows
-dim_all_inactive_windows() {
-	local active_window="$1"
-	for win_id in $(xdotool search --onlyvisible --name ".*"); do
-		xprop -id "$win_id" -remove _NET_WM_WINDOW_OPACITY 2>/dev/null
-	done
-	for win_id in $(xdotool search --onlyvisible --name ".*"); do
-		local window_class
-		window_class=$(xprop -id "$win_id" WM_CLASS 2>/dev/null)
-		if echo "$window_class" | grep -qE "firefox|Navigator|librewolf|Librewolf|Alacritty|Slack|slack|Code|code"; then
-			if [ "$win_id" != "$active_window" ]; then
-				xprop -id "$win_id" -f _NET_WM_WINDOW_OPACITY 32c -set _NET_WM_WINDOW_OPACITY 0xe6666666
-			fi
-		fi
-	done
-}
-
 # Get browser window (Firefox or LibreWolf)
 get_browser_windows() {
 	xdotool search --classname Navigator 2>/dev/null
@@ -95,17 +78,7 @@ max_alacritty() {
 	local window
 	window=$(xdotool search --onlyvisible --classname Alacritty | head -n 1)
 	if [ -n "$window" ]; then
-		# Minimize all windows except Alacritty, Zoom, and MPV
-		for win_id in $(xdotool search --onlyvisible --name ".*"); do
-			local window_class window_name
-			window_class=$(xprop -id "$win_id" WM_CLASS 2>/dev/null)
-			window_name=$(xprop -id "$win_id" WM_NAME 2>/dev/null | cut -d'"' -f2)
-			if [ "$win_id" != "$window" ] && ! echo "$window_class" | grep -qi "zoom" && ! echo "$window_name" | grep -qi "mpv\|\.mp4\|\.mkv\|\.avi\|\.mov\|\.webm"; then
-				tile_minimize "$win_id"
-			fi
-		done
 		tile_max "$window"
-		dim_all_inactive_windows "$window"
 	else
 		echo "No Alacritty window found."
 	fi
@@ -174,7 +147,6 @@ max_firefox() {
 	window=$(get_visible_browser_window | head -n 1)
 	if [ -n "$window" ]; then
 		tile_max "$window"
-		dim_all_inactive_windows "$window"
 	else
 		echo "No Firefox window found."
 	fi
