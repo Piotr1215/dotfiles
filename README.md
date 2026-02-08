@@ -4,6 +4,12 @@ Simple dotfiles with an installation script.
 
 [![Video Thumbnail](https://img.youtube.com/vi/_ttF5InNuMI/0.jpg)](https://www.youtube.com/watch?v=_ttF5InNuMI)
 
+## Hyprland
+
+This repo includes a full [Hyprland](https://hypr.land/) Wayland compositor setup as an alternative desktop environment (selectable at GDM login).
+
+Config lives in `.config/hypr/` with custom scripts for window layouts, Alt+Tab cycling, emoji picker, and URL launcher. Waybar theme is Golden Noir, adapted from [JaKooLit/Hyprland-Dots](https://github.com/JaKooLit/Hyprland-Dots).
+
 ## What are Dotfiles?
 
 Dotfiles are configuration files for Unix-like systems, named for their leading dot (e.g., `.bashrc`, `.vimrc`). This repo stores my personal configs for easy setup across machines.
