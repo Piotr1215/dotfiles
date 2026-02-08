@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 
 import json
+import os
 from urllib.request import urlopen
 from urllib.parse import quote
 
 LOCATION = "Mittelbuchen"
-API_KEY = "4352a9de435f84cf435c03bd62073747"
+API_KEY = os.getenv("WEATHER_API_KEY", "")
 
 ICONS = {
     200: "\u26c8", 300: "\U0001f326", 500: "\U0001f326", 501: "\U0001f327",
