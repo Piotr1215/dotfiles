@@ -136,6 +136,7 @@ export KUBECONFIG=${KUBECONFIG:-~/.kube/config}
 export GOBIN=$HOME/go/bin
 
 # PATH additions (each path added once)
+export PATH=$HOME/.local/bin:$PATH
 export PATH=$HOME/.nimble/bin:$PATH
 export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
 export PATH=$HOME/scripts:$PATH
