@@ -181,12 +181,29 @@ function claude_prompt() {
     ) &>/dev/null &!
 }
 
+# Pick a claude command via fzf, insert on command line for editing
+function claude_picker() {
+    local cmd_dir="$HOME/.claude/commands"
+    local selection
+    selection=$(printf '%s\n' "$cmd_dir"/*.md \
+        | xargs -I{} basename {} .md \
+        | fzf --reverse --border --prompt="claude / " \
+              --preview="bat --color=always --language=md --style=plain $cmd_dir/{}.md" \
+              --preview-window=right:50%:wrap)
+    [[ -z "$selection" ]] && { zle redisplay; return; }
+    LBUFFER="__claude_with_monitor.sh -- \"/$selection "
+    RBUFFER="\""
+    zle redisplay
+}
+
 # Create widgets
 zle -N execute_and_claude
 zle -N claude_prompt
+zle -N claude_picker
 
 # Bind to Ctrl+Alt+G (replaces gpt binding)
 bindkey '^[^G' execute_and_claude
+bindkey '^[k' claude_picker
 
 # Create 'gpt' alias for backward compatibility - now opens Claude Code
 alias gpt='claude_prompt'
