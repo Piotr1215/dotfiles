@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
 set -eo pipefail
 
-# Port of ReattachAndMax.py - reattach browser tab, maximize
-title=$(hyprctl activewindow -j | jq -r '.title')
-[[ "$title" != *irefox* && "$title" != *ibreWolf* ]] && exit 0
+# Reattach detached browser tab back, then maximize (layout 5)
+CLIENTS=$(hyprctl clients -j)
+browser=$(echo "$CLIENTS" | jq -r '[.[] | select((.class == "librewolf" or .class == "LibreWolf" or .class == "firefox" or .class == "Firefox") and .mapped == true and .hidden == false)] | .[0].address // empty')
+[[ -z "$browser" ]] && exit 0
 
-wtype -M shift -M alt -k a -m alt -m shift
-sleep 0.3
+hyprctl dispatch focuswindow "address:$browser"
+sleep 0.2
+YDOTOOL_SOCKET=/tmp/.ydotool_socket ydotool key 42:1 56:1 30:1 30:0 56:0 42:0
+sleep 0.5
 ~/.config/hypr/scripts/layouts.sh 5
