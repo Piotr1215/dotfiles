@@ -1,0 +1,51 @@
+{
+    "layer": "top",
+    "position": "top",
+    "height": 30,
+    "exclusive": true,
+    "modules-left": ["hyprland/workspaces"],
+    "modules-center": ["clock"],
+    "modules-right": ["custom/weather", "custom/services", "custom/claude", "custom/system", "custom/totp", "tray"],
+
+    "hyprland/workspaces": {
+        "format": "{id}"
+    },
+    "clock": {
+        "format": "{:%a %d %b  %H:%M}",
+        "tooltip-format": "{:%Y-%m-%d %A}",
+        "on-click": "notify-send 'Waybar' 'Clock clicked'"
+    },
+    "custom/system": {
+        "exec": "~/.config/waybar/scripts/system.sh",
+        "return-type": "json",
+        "interval": 3,
+        "on-click": "notify-send 'Waybar' 'System clicked'"
+    },
+    "custom/claude": {
+        "exec": "~/.config/waybar/scripts/claude.sh",
+        "return-type": "json",
+        "interval": 30,
+        "on-click": "notify-send 'Waybar' 'Claude clicked'"
+    },
+    "custom/services": {
+        "exec": "~/.config/waybar/scripts/services.py",
+        "return-type": "json",
+        "interval": 300,
+        "on-click": "notify-send 'Waybar' 'Services clicked'"
+    },
+    "custom/weather": {
+        "exec": "~/.config/waybar/scripts/weather.py",
+        "return-type": "json",
+        "interval": 1800,
+        "on-click": "notify-send 'Waybar' 'Weather clicked'"
+    },
+    "custom/totp": {
+        "exec": "~/.config/waybar/scripts/totp.sh",
+        "return-type": "json",
+        "interval": 30,
+        "on-click": "~/.config/waybar/scripts/totp-click.sh"
+    },
+    "tray": {
+        "spacing": 10
+    }
+}
