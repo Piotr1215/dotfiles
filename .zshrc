@@ -364,6 +364,20 @@ bindkey '^X^R' replace-string             # Ctrl+X Ctrl+R: Search-replace in lin
 bindkey '^X^N' replace-string-again       # Ctrl+X Ctrl+N: Repeat last replace
 bindkey '^[^M' accept-and-hold            # Alt+Enter: Run and keep command
 
+# edit-command-line in $PWD so editor gets local file context
+function edit-command-line-here() {
+    local tmpfile="$PWD/.zsh_edit_$$.zsh"
+    print -r -- "$BUFFER" > "$tmpfile"
+    exec </dev/tty
+    ${VISUAL:-${EDITOR:-vi}} "$tmpfile"
+    BUFFER="$(<"$tmpfile")"
+    CURSOR=$#BUFFER
+    command rm -f "$tmpfile"
+    zle redisplay
+}
+zle -N edit-command-line-here
+bindkey '^X^E' edit-command-line-here
+
 
 function g_checkout_branch () {
   BUFFER='gco'
