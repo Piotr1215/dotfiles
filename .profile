@@ -33,3 +33,8 @@ if [ -e /home/decoder/.nix-profile/etc/profile.d/nix.sh ]; then . /home/decoder/
 # Generated for envman. Do not edit.
 [ -s "$HOME/.config/envman/load.sh" ] && source "$HOME/.config/envman/load.sh"
 export PATH="$HOME/dev/dotfiles/scripts:$PATH"
+
+# Auto-start Hyprland on TTY3 (GNOME runs on TTY2 via GDM)
+if [ "$(tty)" = "/dev/tty3" ] && [ -z "$WAYLAND_DISPLAY" ]; then
+    exec Hyprland
+fi
