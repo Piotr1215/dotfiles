@@ -14,7 +14,7 @@ ZSH_AUTOSUGGEST_PARTIAL_ACCEPT_WIDGETS=(forward-word)
 bindkey '^[[1;5C' forward-word  # Ctrl+Right Arrow
 export XCURSOR_SIZE=24
 
-if [[ -z ${TMUX+X}${ZSH_SCRIPT+X}${ZSH_EXECUTION_STRING+X} ]]; then
+if [[ -z ${TMUX+X}${ZSH_SCRIPT+X}${ZSH_EXECUTION_STRING+X} ]] && [[ "$(tty)" != /dev/tty* ]]; then
   tmuxinator start poke
 fi
 
