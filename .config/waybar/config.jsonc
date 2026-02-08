@@ -5,7 +5,7 @@
     "exclusive": true,
     "modules-left": ["hyprland/workspaces"],
     "modules-center": ["clock"],
-    "modules-right": ["custom/weather", "custom/tailscale", "custom/services", "custom/claude", "custom/system", "custom/totp", "tray"],
+    "modules-right": ["custom/weather", "custom/services", "custom/claude", "custom/system", "custom/totp", "tray"],
 
     "hyprland/workspaces": {
         "format": "{id}"
@@ -44,12 +44,6 @@
         "return-type": "json",
         "interval": 30,
         "on-click": "~/.config/waybar/scripts/totp-click.sh"
-    },
-    "custom/tailscale": {
-        "exec": "~/.config/waybar/scripts/tailscale.sh",
-        "return-type": "json",
-        "interval": 60,
-        "on-click": "alacritty -e bash -c 'tailscale status; read -n1'"
     },
     "tray": {
         "spacing": 10
