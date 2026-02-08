@@ -5,7 +5,7 @@
     "exclusive": true,
     "modules-left": ["hyprland/workspaces"],
     "modules-center": ["clock"],
-    "modules-right": ["custom/weather", "custom/services", "custom/claude", "custom/system", "custom/totp", "tray"],
+    "modules-right": ["custom/weather", "custom/tailscale", "custom/services", "custom/claude", "custom/system", "custom/totp", "tray"],
 
     "hyprland/workspaces": {
         "format": "{id}"
@@ -13,37 +13,43 @@
     "clock": {
         "format": "{:%a %d %b  %H:%M}",
         "tooltip-format": "{:%Y-%m-%d %A}",
-        "on-click": "notify-send 'Waybar' 'Clock clicked'"
+        "on-click": "alacritty -e bash -c 'cal -3; read -n1'"
     },
     "custom/system": {
         "exec": "~/.config/waybar/scripts/system.sh",
         "return-type": "json",
         "interval": 3,
-        "on-click": "notify-send 'Waybar' 'System clicked'"
+        "on-click": "alacritty -e btop"
     },
     "custom/claude": {
         "exec": "~/.config/waybar/scripts/claude.sh",
         "return-type": "json",
         "interval": 30,
-        "on-click": "notify-send 'Waybar' 'Claude clicked'"
+        "on-click": "librewolf https://claude.ai"
     },
     "custom/services": {
         "exec": "~/.config/waybar/scripts/services.py",
         "return-type": "json",
         "interval": 300,
-        "on-click": "notify-send 'Waybar' 'Services clicked'"
+        "on-click": "librewolf https://homepage.internal"
     },
     "custom/weather": {
         "exec": "~/.config/waybar/scripts/weather.py",
         "return-type": "json",
         "interval": 1800,
-        "on-click": "notify-send 'Waybar' 'Weather clicked'"
+        "on-click": "librewolf https://openweathermap.org/city/2871675"
     },
     "custom/totp": {
         "exec": "~/.config/waybar/scripts/totp.sh",
         "return-type": "json",
         "interval": 30,
         "on-click": "~/.config/waybar/scripts/totp-click.sh"
+    },
+    "custom/tailscale": {
+        "exec": "~/.config/waybar/scripts/tailscale.sh",
+        "return-type": "json",
+        "interval": 60,
+        "on-click": "alacritty -e bash -c 'tailscale status; read -n1'"
     },
     "tray": {
         "spacing": 10
