@@ -161,6 +161,7 @@ slack_firefox_vertical() {
 	[[ -z "$browser" ]] && { echo "No browser window found."; return 1; }
 	place "$slack" 0 "$BAR_TOP" "$HALF_W" "$USABLE_H"
 	place "$browser" "$HALF_W" "$BAR_TOP" "$HALF_W" "$USABLE_H"
+	minimize_others "$slack" "$browser"
 	focus "$browser"
 }
 
@@ -199,6 +200,7 @@ firefox_firefox_alacritty() {
 	place "${browsers[0]}" 0 "$BAR_TOP" "$HALF_W" "$top_h"
 	place "${browsers[1]}" "$HALF_W" "$BAR_TOP" "$HALF_W" "$top_h"
 	place "$alacritty" 0 "$bot_y" "$MON_W" "$bot_h"
+	minimize_others "${browsers[0]}" "${browsers[1]}" "$alacritty"
 	focus "$alacritty"
 }
 
@@ -216,6 +218,7 @@ slack_alacritty_vertical() {
 	[[ -z "$alacritty" ]] && { echo "No Alacritty window found."; return 1; }
 	place "$slack" 0 "$BAR_TOP" "$HALF_W" "$USABLE_H"
 	place "$alacritty" "$HALF_W" "$BAR_TOP" "$HALF_W" "$USABLE_H"
+	minimize_others "$slack" "$alacritty"
 	focus "$alacritty"
 }
 
