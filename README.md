@@ -81,8 +81,6 @@ Adding new directory or file to the dotfiles repo can be done with the [__dotfil
 
 This repository uses [git-crypt](https://github.com/AGWA/git-crypt) for encrypting sensitive files. The following files are encrypted:
 
-- `.vsnip/global.json` — VSCode snippets file
-
 ### Setting up git-crypt for new devices
 
 After cloning the repository, you'll need the encryption key to decrypt these files:
