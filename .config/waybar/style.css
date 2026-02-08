@@ -4,7 +4,7 @@
     font-family: "JetBrainsMono Nerd Font", "JetBrains Mono", monospace;
     font-weight: bold;
     min-height: 0;
-    font-size: 13px;
+    font-size: 15px;
 }
 
 window#waybar {
@@ -65,6 +65,7 @@ tooltip {
 #tray {
     color: #e5d9f5;
     padding: 5px 6px;
+    font-size: 16px;
 }
 
 #clock {
