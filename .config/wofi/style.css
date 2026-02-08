@@ -1,0 +1,47 @@
+/* Golden Noir - matching waybar theme */
+
+window {
+    background-color: #040406;
+    border: 1px solid #ffd700;
+    border-radius: 0px;
+    font-family: "JetBrainsMono Nerd Font", monospace;
+    font-size: 13px;
+}
+
+#input {
+    background-color: #1e1e2e;
+    color: #ffd700;
+    border: none;
+    border-bottom: 1px solid #ffd700;
+    border-radius: 0px;
+    padding: 10px;
+    font-size: 14px;
+}
+
+#inner-box {
+    background-color: transparent;
+}
+
+#outer-box {
+    padding: 5px;
+}
+
+#scroll {
+    margin: 5px 0;
+}
+
+#entry {
+    padding: 8px 10px;
+    border-radius: 0px;
+    color: #e5d9f5;
+}
+
+#entry:selected {
+    background-color: #1e1e2e;
+    color: #ffd700;
+    border: 1px solid #ffd700;
+}
+
+#text {
+    color: inherit;
+}

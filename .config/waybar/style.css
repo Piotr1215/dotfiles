@@ -1,0 +1,119 @@
+/* Golden Noir - adapted from JaKooLit/Hyprland-Dots (Krautt) */
+
+* {
+    font-family: "JetBrainsMono Nerd Font", "JetBrains Mono", monospace;
+    font-weight: bold;
+    min-height: 0;
+    font-size: 13px;
+}
+
+window#waybar {
+    background: #040406;
+    border-radius: 0px;
+    color: #e5d9f5;
+}
+
+window#waybar.hidden {
+    opacity: 0.2;
+}
+
+tooltip {
+    background: #1e1e2e;
+    border-radius: 0px;
+    border: 2px solid #11111b;
+    color: #ffd700;
+}
+
+.modules-left, .modules-right {
+    padding: 2px 4px;
+}
+
+.modules-center {
+    border-left: 1px solid #ffd700;
+    border-right: 1px solid #ffd700;
+    border-radius: 0px;
+    padding: 2px 4px;
+}
+
+#workspaces button {
+    color: #6E6A86;
+    padding: 0 4px;
+    border-radius: 0px;
+    transition: all 0.5s cubic-bezier(.55,-0.68,.48,1.682);
+}
+
+#workspaces button.active {
+    color: #ffd700;
+    background-color: black;
+    border-radius: 0px;
+    padding: 0 8px;
+    transition: all 0.3s cubic-bezier(.55,-0.68,.48,1.682);
+}
+
+#workspaces button:hover {
+    color: #ffd700;
+    border-radius: 0px;
+    transition: all 0.3s cubic-bezier(.55,-0.68,.48,1.682);
+}
+
+#clock,
+#custom-system,
+#custom-claude,
+#custom-services,
+#custom-weather,
+#custom-totp,
+#tray {
+    color: #e5d9f5;
+    padding: 5px 6px;
+}
+
+#clock {
+    color: #ffd700;
+}
+
+#custom-system {
+    color: #89b4fa;
+}
+
+#custom-weather {
+    color: #cba6f7;
+}
+
+#custom-services {
+    color: #a6e3a1;
+}
+
+#custom-services.warning {
+    color: #f39c12;
+}
+
+#custom-claude {
+    color: #f5c2e7;
+}
+
+#custom-claude.warning {
+    color: #ff4444;
+}
+
+#custom-totp {
+    color: #fab387;
+}
+
+#custom-claude.empty,
+#custom-totp.empty {
+    margin: 0;
+    padding: 0;
+    font-size: 0;
+}
+
+#tray > .passive {
+    -gtk-icon-effect: dim;
+}
+
+#tray > .needs-attention {
+    -gtk-icon-effect: highlight;
+}
+
+@keyframes blink {
+    to { color: #000000; }
+}
