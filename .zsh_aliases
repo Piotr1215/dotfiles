@@ -147,3 +147,6 @@ alias apphelp='/home/decoder/dev/dotfiles/scripts/__config_bindings_help.sh'
 # Screenkey
 alias sk='pkill screenkey; __start_screenkey.sh'
 
+# GitHub
+alias ghuser='/home/decoder/dev/dotfiles/scripts/__ghuser.sh'
+
