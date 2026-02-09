@@ -1,7 +1,7 @@
 #!/bin/zsh
 
 # Cycle through taskwarrior-tui reports
-reports=(inbox byrepo current)
+reports=(inbox byrepo byproject current)
 state_file="/tmp/tui_report_index"
 
 # Get current index
