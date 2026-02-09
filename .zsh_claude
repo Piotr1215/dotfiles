@@ -54,7 +54,7 @@ function execute_and_claude() {
 
     # Use tmux to send the command directly to the pane
     # This ensures proper TTY handling
-    tmux send-keys -t "$pane_id" "KUBECONFIG=/home/decoder/dev/homelab/kubeconfig /home/decoder/.npm-global/bin/claude" C-m
+    tmux send-keys -t "$pane_id" "KUBECONFIG=/home/decoder/dev/homelab/kubeconfig /home/decoder/.local/bin/claude" C-m
 
     # Background task to send keys after claude starts
     (
@@ -124,7 +124,7 @@ function claude_prompt() {
     local pane_id=$(tmux display-message -p '#{pane_id}')
 
     # Use tmux to send the command directly to the pane
-    tmux send-keys -t "$pane_id" "KUBECONFIG=/home/decoder/dev/homelab/kubeconfig /home/decoder/.npm-global/bin/claude" C-m
+    tmux send-keys -t "$pane_id" "KUBECONFIG=/home/decoder/dev/homelab/kubeconfig /home/decoder/.local/bin/claude" C-m
 
     # Background task to send keys after claude starts
     (
@@ -209,7 +209,7 @@ bindkey '^[k' claude_picker
 alias gpt='claude_prompt'
 
 # Claude CLI power aliases
-alias plaude='/home/decoder/.npm-global/bin/claude --dangerously-skip-permissions -p'  # Print mode (direct binary)
+alias plaude='/home/decoder/.local/bin/claude --dangerously-skip-permissions -p'  # Print mode (direct binary)
 alias flaude='claude -r --fork-session'           # Fork session with picker
 alias dlaude='claude --debug "hooks,mcp"'         # Debug mode (hooks + mcp)
 alias ccinstall='~/.claude/scripts/__claude_version_installer.sh'  # Version picker
