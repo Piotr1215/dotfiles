@@ -216,6 +216,103 @@ alacritty_resize_9_16() {
 	fi
 }
 
+slack_browser_alacritty() {
+	# 3-window layout: slack left, browser top-right, alacritty bottom-right
+	local third_w=$((WA_W / 3))
+	local two_third_w=$((WA_W - third_w))
+	local half_h=$((WA_H / 2))
+
+	local slack browser alacritty
+	slack=$(xdotool search --onlyvisible --classname Slack | head -n 1)
+	browser=$(get_visible_browser_window | head -n 1)
+	alacritty=$(xdotool search --onlyvisible --classname Alacritty | head -n 1)
+
+	if [[ -n "$slack" && -n "$browser" && -n "$alacritty" ]]; then
+		tile_place "$slack" "$WA_X" "$WA_Y" "$third_w" "$WA_H"
+		tile_place "$browser" "$third_w" "$WA_Y" "$two_third_w" "$half_h"
+		tile_place "$alacritty" "$third_w" "$((WA_Y + half_h))" "$two_third_w" "$half_h"
+	else
+		echo "Need slack, browser, and alacritty for this layout"
+	fi
+}
+
+slack_browser_browser() {
+	# 3-window layout: slack left, 2 browsers stacked right
+	local third_w=$((WA_W / 3))
+	local two_third_w=$((WA_W - third_w))
+	local half_h=$((WA_H / 2))
+
+	local slack
+	slack=$(xdotool search --onlyvisible --classname Slack | head -n 1)
+	local browsers
+	browsers=($(get_browser_windows | head -n 2))
+
+	if [[ -n "$slack" && ${#browsers[@]} -ge 2 ]]; then
+		tile_place "$slack" "$WA_X" "$WA_Y" "$third_w" "$WA_H"
+		tile_place "${browsers[0]}" "$third_w" "$WA_Y" "$two_third_w" "$half_h"
+		tile_place "${browsers[1]}" "$third_w" "$((WA_Y + half_h))" "$two_third_w" "$half_h"
+	else
+		echo "Need slack and 2 browsers for this layout"
+	fi
+}
+
+browser_browser_browser() {
+	# 3-window layout: 1 browser left, 2 browsers stacked right (comparison mode)
+	local half_w=$((WA_W / 2))
+	local half_h=$((WA_H / 2))
+
+	local browsers
+	browsers=($(get_browser_windows | head -n 3))
+
+	if [[ ${#browsers[@]} -ge 3 ]]; then
+		tile_place "${browsers[0]}" "$WA_X" "$WA_Y" "$half_w" "$WA_H"
+		tile_place "${browsers[1]}" "$half_w" "$WA_Y" "$half_w" "$half_h"
+		tile_place "${browsers[2]}" "$half_w" "$((WA_Y + half_h))" "$half_w" "$half_h"
+	else
+		echo "Need 3 browsers for this layout"
+	fi
+}
+
+browser_browser_alacritty_slack() {
+	# 4-window: 2 browsers top, slack bottom-left, alacritty bottom-right
+	# Consistent: slack=bottom-left, alacritty=bottom-right (least surprise)
+	local half_w=$((WA_W / 2))
+	local half_h=$((WA_H / 2))
+
+	local browsers alacritty slack
+	browsers=($(get_browser_windows | head -n 2))
+	alacritty=$(xdotool search --onlyvisible --classname Alacritty | head -n 1)
+	slack=$(xdotool search --onlyvisible --classname Slack | head -n 1)
+
+	if [[ ${#browsers[@]} -ge 2 && -n "$alacritty" && -n "$slack" ]]; then
+		tile_place "${browsers[0]}" "$WA_X" "$WA_Y" "$half_w" "$half_h"
+		tile_place "${browsers[1]}" "$half_w" "$WA_Y" "$half_w" "$half_h"
+		tile_place "$slack" "$WA_X" "$((WA_Y + half_h))" "$half_w" "$half_h"
+		tile_place "$alacritty" "$half_w" "$((WA_Y + half_h))" "$half_w" "$half_h"
+	else
+		echo "Need 2 browsers, alacritty, and slack for this layout"
+	fi
+}
+
+browser_browser_browser_alacritty() {
+	# 4-window: 3 browsers + alacritty (2 top, 2 bottom)
+	local half_w=$((WA_W / 2))
+	local half_h=$((WA_H / 2))
+
+	local browsers alacritty
+	browsers=($(get_browser_windows | head -n 3))
+	alacritty=$(xdotool search --onlyvisible --classname Alacritty | head -n 1)
+
+	if [[ ${#browsers[@]} -ge 3 && -n "$alacritty" ]]; then
+		tile_place "${browsers[0]}" "$WA_X" "$WA_Y" "$half_w" "$half_h"
+		tile_place "${browsers[1]}" "$half_w" "$WA_Y" "$half_w" "$half_h"
+		tile_place "${browsers[2]}" "$WA_X" "$((WA_Y + half_h))" "$half_w" "$half_h"
+		tile_place "$alacritty" "$half_w" "$((WA_Y + half_h))" "$half_w" "$half_h"
+	else
+		echo "Need 3 browsers and alacritty for this layout"
+	fi
+}
+
 chatgpt_alacritty_vertical() {
 	local firefox_window alacritty_window
 	firefox_window=$(get_browser_windows | head -n 1)
@@ -255,6 +352,18 @@ chatgpt_alacritty_vertical() {
 }
 
 
+detach_and_compare() {
+	# Called by autokey after it sends Shift+Alt+D to detach tab
+	# Just applies the side-by-side layout
+	firefox_firefox_vertical
+}
+
+reattach_and_max() {
+	# Called by autokey after it sends Shift+Alt+A to merge tab
+	# Just maximizes the browser
+	max_firefox
+}
+
 case $1 in
 1) run_layout max_alacritty ;;
 2) run_layout alacritty_firefox_vertical ;;
@@ -266,8 +375,15 @@ case $1 in
 8) run_layout slack_alacritty_vertical ;;
 9) run_layout alacritty_resize_9_16 ;;
 10) run_layout chatgpt_alacritty_vertical ;;
+11) run_layout slack_browser_alacritty ;;
+12) run_layout slack_browser_browser ;;
+13) run_layout browser_browser_browser ;;
+14) run_layout browser_browser_alacritty_slack ;;
+15) run_layout browser_browser_browser_alacritty ;;
+16) run_layout detach_and_compare ;;
+17) run_layout reattach_and_max ;;
 *)
-	echo "Usage: $0 {1|2|3|4|5|6|7|8|9|10}"
+	echo "Usage: $0 {1-17}"
 	exit 1
 	;;
 esac
