@@ -25,7 +25,7 @@ logging.basicConfig(
 
 # Configuration settings
 # Claude CLI path - read from environment or use default
-CLAUDE_BIN = os.environ.get('CLAUDE_BIN', '/home/decoder/.npm-global/bin/claude')
+CLAUDE_BIN = os.environ.get('CLAUDE_BIN', '/home/decoder/.local/bin/claude')
 
 # Maximum number of lines in a playlist before warning about token limits
 MAX_PLAYLIST_LINES = 2000
