@@ -19,6 +19,11 @@ windows:
 <% services.each do |svc| %>
         - printf '\033]2;<%= svc %>\033\\'; journalctl --user -f -n 50 -u <%= svc %>.service
 <% end %>
+  - dashboard:
+      layout: main-horizontal
+      panes:
+        - while true; do sampler -c "${HOME}/.claude-dashboard-active.yml" 2>/dev/null || sampler -c "${HOME}/.claude/dashboards/claude-dashboard-services.yml"; sleep 1; done
+        - echo "Dashboard picker: run 'claude-dashboard-swap.sh' to switch"; export PS1="swap> "; cd ~/.claude/dashboards
   - sysadmin:
       panes:
         - __claude_with_monitor.sh --system-prompt-file ~/.claude/system-prompts/sysadmin-agent-system-prompt.md -- "/ops-sysadmin-agent"
