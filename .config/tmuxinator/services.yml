@@ -1,5 +1,8 @@
 name: services
 root: ~/.claude
+on_project_start:
+  - tmux bind-key d run-shell "if [ \"$(tmux display -p '#S')\" = services ]; then ~/.claude/dashboards/claude-dashboard-swap.sh next; fi"
+  - tmux bind-key D run-shell "if [ \"$(tmux display -p '#S')\" = services ]; then ~/.claude/dashboards/claude-dashboard-swap.sh prev; fi"
 
 # Custom user services (regular files in ~/.config/systemd/user/)
 # Excludes: pueued, system-provided (at-spi, evolution, org.gnome, dconf)
@@ -23,7 +26,6 @@ windows:
       layout: main-horizontal
       panes:
         - while true; do sampler -c "${HOME}/.claude-dashboard-active.yml" 2>/dev/null || sampler -c "${HOME}/.claude/dashboards/claude-dashboard-services.yml"; sleep 1; done
-        - echo "Dashboard picker: run 'claude-dashboard-swap.sh' to switch"; export PS1="swap> "; cd ~/.claude/dashboards
   - sysadmin:
       panes:
         - __claude_with_monitor.sh --system-prompt-file ~/.claude/system-prompts/sysadmin-agent-system-prompt.md -- "/ops-sysadmin-agent"
