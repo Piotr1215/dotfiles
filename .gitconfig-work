@@ -5,7 +5,7 @@ name = Piotr Zaniewski
 
 [core]
 sshCommand = "ssh -i ~/.ssh/id_ed25519 -F /dev/null"
-excludesFile = ~/.gitignore
+excludesFile = ~/.gitignore-work
 pager = delta
 editor = nvim
 hooksPath = /home/decoder/.git-work-hooks
