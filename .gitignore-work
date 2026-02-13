@@ -1,0 +1,33 @@
+.envrc
+CLAUDE.md
+.mcp.json
+
+# AI coding tools
+.aider*
+.gp.md
+
+# Secrets
+.keys/
+
+# Generated/cache
+ai-theater/
+.config/cmus/
+
+# Spec-kit artifacts
+memory/
+scripts/check-task-prerequisites.sh
+scripts/common.sh
+scripts/create-new-feature.sh
+scripts/get-feature-paths.sh
+scripts/setup-plan.sh
+scripts/update-agent-context.sh
+templates/agent-file-template.md
+templates/plan-template.md
+templates/spec-template.md
+templates/tasks-template.md
+templates/commands/specify.md
+templates/commands/plan.md
+templates/commands/tasks.md
+.claude/commands/specify.md
+.claude/commands/plan.md
+.claude/commands/tasks.md
