@@ -1,8 +1,7 @@
 name: services
 root: ~/.claude
 on_project_start:
-  - tmux bind-key d run-shell "if [ \"$(tmux display -p '#S')\" = services ]; then ~/.claude/dashboards/claude-dashboard-swap.sh next; fi"
-  - tmux bind-key D run-shell "if [ \"$(tmux display -p '#S')\" = services ]; then ~/.claude/dashboards/claude-dashboard-swap.sh prev; fi"
+  - tmux bind-key d display-popup -E -w 50 -h 8 "~/.claude/dashboards/claude-dashboard-swap.sh"
 
 # Custom user services (regular files in ~/.config/systemd/user/)
 # Excludes: pueued, system-provided (at-spi, evolution, org.gnome, dconf)
@@ -16,12 +15,6 @@ on_project_start:
 %>
 
 windows:
-  - monitor:
-      layout: tiled
-      panes:
-<% services.each do |svc| %>
-        - printf '\033]2;<%= svc %>\033\\'; journalctl --user -f -n 50 -u <%= svc %>.service
-<% end %>
   - dashboard:
       layout: main-horizontal
       panes:
