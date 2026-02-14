@@ -457,7 +457,7 @@ return require("lazy").setup({
   -- LaTeX {{{
   {
     "lervag/vimtex",
-    lazy = false, -- Load immediately for .tex files
+    ft = "tex", -- Only load for .tex files
     init = function()
       -- VimTeX configuration
       vim.g.vimtex_view_method = "zathura"
