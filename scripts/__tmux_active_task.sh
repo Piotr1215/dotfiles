@@ -196,7 +196,7 @@ update_session() {
     # Temporarily override for per-session linear ID lookup
     local orig_session_fn=$(declare -f get_session_linear_id)
     get_session_linear_id() {
-        if [[ "$session" =~ ([a-z]+-[0-9]+)$ ]]; then
+        if [[ "$session" =~ ([a-zA-Z]+-[0-9]+)$ ]]; then
             echo "${BASH_REMATCH[1]}" | tr '[:lower:]' '[:upper:]'
         fi
     }
