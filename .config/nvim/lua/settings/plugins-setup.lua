@@ -88,6 +88,7 @@ require("gitsigns").setup {
       gitsigns.diffthis "~"
     end, { desc = "Diff this (against HEAD)" })
     map("n", "<leader>td", gitsigns.preview_hunk_inline, { desc = "Toggle deleted" })
+    map("n", "<leader>gw", gitsigns.toggle_word_diff, { desc = "Toggle word diff" })
 
     -- Text object
     map({ "o", "x" }, "Ih", ":<C-U>Gitsigns select_hunk<CR>", { desc = "Select hunk" })
@@ -424,10 +425,6 @@ require("obsidian").setup {
       ObsidianHighlightText = { bg = "#75662e" },
     },
   },
-  follow_url_func = function(url)
-    -- Open the URL in the default web browser.
-    vim.fn.jobstart { "xdg-open", url } -- linux
-  end,
   finder = "telescope.nvim",
   note_path_func = function(spec)
     -- This is equivalent to the default behavior.
@@ -497,130 +494,46 @@ vim.api.nvim_buf_set_extmark = function(buffer, ns_id, line, col, opts)
   return result
 end
 
-require("nvim-treesitter.configs").setup {
-  -- Add languages to be installed here that you want installed for treesitter
-  ensure_installed = {
-    "go",
-    "hurl",
-    "lua",
-    "rust",
-    "toml",
-    "typescript",
-    "bash",
-    "markdown_inline",
-    "markdown",
-    "dockerfile",
-  },
-  -- List of parsers to ignore installing
-  ignore_install = {},
-  -- Install parsers synchronously (only applied to `ensure_installed`)
-  sync_install = false,
-  -- List of parsers to always install, useful for parsers without filetype
-  modules = {},
+require("nvim-treesitter").setup {}
 
-  highlight = { enable = true },
-  auto_install = true,
-  rainbow = {
-    enable = true,
-    extended_mode = true,
-    max_file_lines = nil,
-  },
-  indent = {
-    enable = false,
-    -- disable yaml indenting because the grammar is too simplistic, other plugins do it better
-    disable = { "yaml" },
-    additional_vim_regex_highlighting = { "markdown" },
-  },
-  incremental_selection = {
-    enable = true,
-    keymaps = {
-      init_selection = "<c-space>",
-      node_decremental = "<c-h>",
-      node_incremental = "<c-space>",
-      scope_incremental = "<c-s>",
-    },
-  },
-  textobjects = {
-    swap = {
-      enable = false,
-      swap_next = {
-        ["<leader>a"] = "@parameter.inner",
-      },
-      swap_previous = {
-        ["<leader>b"] = "@parameter.inner",
-      },
-    },
-    move = {
-      enable = true,
-      disable = { "yaml", "markdown" },
-      set_jumps = true, -- whether to set jumps in the jumplist
-      goto_next_start = {
-        ["]m"] = "@function.outer",
-        ["]]"] = "@class.outer",
-        ["]a"] = "@parameter.inner",
-      },
-      goto_next_end = {
-        ["]M"] = "@function.outer",
-        ["]["] = "@class.outer",
-      },
-      goto_previous_start = {
-        ["[m"] = "@function.outer",
-        ["[["] = "@class.outer",
-        ["[a"] = "@parameter.inner",
-      },
-      goto_previous_end = {
-        ["[M"] = "@function.outer",
-        ["[]"] = "@class.outer",
-      },
-    },
-    lsp_interop = {
-      enable = true,
-      border = "none",
-      peek_definition_code = {
-        ["<leader>dF"] = "@function.outer",
-      },
-    },
-    select = {
-      enable = true,
-      disable = { "yaml" },
+vim.api.nvim_create_autocmd("FileType", {
+  callback = function()
+    pcall(vim.treesitter.start)
+  end,
+})
 
-      -- Automatically jump forward to textobj, similar to targets.vim
-      lookahead = true,
-
-      keymaps = {
-        -- You can use the capture groups defined in textobjects.scm
-        ["af"] = "@function.outer",
-        ["if"] = "@function.inner",
-        ["ac"] = "@class.outer",
-        -- You can optionally set descriptions to the mappings (used in the desc parameter of
-        -- nvim_buf_set_keymap) which plugins like which-key display
-        ["ic"] = { query = "@class.inner", desc = "Select inner part of a class region" },
-      },
-      -- You can choose the select mode (default is charwise 'v')
-      --
-      -- Can also be a function which gets passed a table with the keys
-      -- * query_string: eg '@function.inner'
-      -- * method: eg 'v' or 'o'
-      -- and should return the mode ('v', 'V', or '<c-v>') or a table
-      -- mapping query_strings to modes.
-      selection_modes = {
-        ["@parameter.outer"] = "v", -- charwise
-        ["@function.outer"] = "V", -- linewise
-        ["@class.outer"] = "<c-v>", -- blockwise
-      },
-      -- If you set this to `true` (default is `false`) then any textobject is
-      -- extended to include preceding or succeeding whitespace. Succeeding
-      -- whitespace has priority in order to act similarly to eg the built-in
-      -- `ap`.
-      --
-      -- Can also be a function which gets passed a table with the keys
-      -- * query_string: eg '@function.inner'
-      -- * selection_mode: eg 'v'
-      -- and should return true of false
-      include_surrounding_whitespace = false,
+require("nvim-treesitter-textobjects").setup {
+  select = {
+    lookahead = true,
+    selection_modes = {
+      ["@parameter.outer"] = "v",
+      ["@function.outer"] = "V",
+      ["@class.outer"] = "<c-v>",
     },
+  },
+  move = {
+    set_jumps = true,
   },
 }
+
+local select_to = require("nvim-treesitter-textobjects.select").select_textobject
+local move = require("nvim-treesitter-textobjects.move")
+
+vim.keymap.set({ "x", "o" }, "af", function() select_to("@function.outer", "textobjects") end)
+vim.keymap.set({ "x", "o" }, "if", function() select_to("@function.inner", "textobjects") end)
+vim.keymap.set({ "x", "o" }, "ac", function() select_to("@class.outer", "textobjects") end)
+vim.keymap.set({ "x", "o" }, "ic", function() select_to("@class.inner", "textobjects") end)
+
+vim.keymap.set({ "n", "x", "o" }, "]m", function() move.goto_next_start("@function.outer", "textobjects") end)
+vim.keymap.set({ "n", "x", "o" }, "]]", function() move.goto_next_start("@class.outer", "textobjects") end)
+vim.keymap.set({ "n", "x", "o" }, "]a", function() move.goto_next_start("@parameter.inner", "textobjects") end)
+vim.keymap.set({ "n", "x", "o" }, "]M", function() move.goto_next_end("@function.outer", "textobjects") end)
+vim.keymap.set({ "n", "x", "o" }, "][", function() move.goto_next_end("@class.outer", "textobjects") end)
+vim.keymap.set({ "n", "x", "o" }, "[m", function() move.goto_previous_start("@function.outer", "textobjects") end)
+vim.keymap.set({ "n", "x", "o" }, "[[", function() move.goto_previous_start("@class.outer", "textobjects") end)
+vim.keymap.set({ "n", "x", "o" }, "[a", function() move.goto_previous_start("@parameter.inner", "textobjects") end)
+vim.keymap.set({ "n", "x", "o" }, "[M", function() move.goto_previous_end("@function.outer", "textobjects") end)
+vim.keymap.set({ "n", "x", "o" }, "[]", function() move.goto_previous_end("@class.outer", "textobjects") end)
 
 require("femaco").setup {
   -- what to do after opening the float

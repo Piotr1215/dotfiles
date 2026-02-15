@@ -109,12 +109,10 @@ function M.mark_task_done()
   end
 end
 
-vim.api.nvim_set_keymap(
-  "n",
-  "<leader>dt",
-  "<Cmd>lua require('user_functions.tasks').mark_task_done()<CR>",
-  { noremap = true, silent = true }
-)
+vim.keymap.set("n", "<leader>dt", function()
+  vim.diagnostic.enable(not vim.diagnostic.is_enabled())
+  vim.opt_local.spell = not vim.opt_local.spell:get()
+end, { desc = "Toggle diagnostics + spell" })
 
 function M.go_to_task_in_taskwarrior_tui()
   -- Get the current line and save it as the original line
