@@ -449,6 +449,23 @@
             owner: "{{ user }}"
             mode: '0755'
 
+    - name: Install tree-sitter CLI
+      get_url:
+        url: https://github.com/tree-sitter/tree-sitter/releases/latest/download/tree-sitter-linux-x64.gz
+        dest: /tmp/tree-sitter-linux-x64.gz
+
+    - name: Extract tree-sitter binary
+      shell: gunzip -c /tmp/tree-sitter-linux-x64.gz > "{{ home }}/.local/bin/tree-sitter" && chmod +x "{{ home }}/.local/bin/tree-sitter"
+      args:
+        creates: "{{ home }}/.local/bin/tree-sitter"
+
+    - name: Install treesitter parsers
+      command: >
+        nvim --headless -c
+        'require("nvim-treesitter").install({"go","lua","rust","toml","typescript","bash","markdown","markdown_inline","dockerfile","javascript","hurl"}):wait(300000)'
+        -c 'q'
+      become: false
+
     - name: Install snap packages
       snap:
         name: "{{ item.name }}"
