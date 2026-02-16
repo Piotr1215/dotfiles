@@ -6,7 +6,7 @@
 IFS=$'\n\t'
 
 if [[ -z "$1" ]]; then
-	echo "Usage: $0 {1|2|3|4|5|6|7|8|9|10}"
+	echo "Usage: $0 {1-16}"
 	exit 1
 fi
 
@@ -203,19 +203,6 @@ firefox_firefox_alacritty() {
 	fi
 }
 
-alacritty_resize_9_16() {
-	local height=2100
-	local width=$((height * 9 / 16))
-
-	local window
-	window=$(xdotool search --onlyvisible --classname Alacritty | head -n 1)
-	if [ -n "$window" ]; then
-		tile_place "$window" 50 50 "$width" "$height"
-	else
-		echo "No Alacritty window found."
-	fi
-}
-
 slack_browser_alacritty() {
 	# 3-window layout: slack left, browser top-right, alacritty bottom-right
 	local third_w=$((WA_W / 3))
@@ -373,17 +360,16 @@ case $1 in
 6) run_layout max_slack ;;
 7) run_layout firefox_firefox_alacritty ;;
 8) run_layout slack_alacritty_vertical ;;
-9) run_layout alacritty_resize_9_16 ;;
-10) run_layout chatgpt_alacritty_vertical ;;
-11) run_layout slack_browser_alacritty ;;
-12) run_layout slack_browser_browser ;;
-13) run_layout browser_browser_browser ;;
-14) run_layout browser_browser_alacritty_slack ;;
-15) run_layout browser_browser_browser_alacritty ;;
-16) run_layout detach_and_compare ;;
-17) run_layout reattach_and_max ;;
+9) run_layout chatgpt_alacritty_vertical ;;
+10) run_layout slack_browser_alacritty ;;
+11) run_layout slack_browser_browser ;;
+12) run_layout browser_browser_browser ;;
+13) run_layout browser_browser_alacritty_slack ;;
+14) run_layout browser_browser_browser_alacritty ;;
+15) run_layout detach_and_compare ;;
+16) run_layout reattach_and_max ;;
 *)
-	echo "Usage: $0 {1-17}"
+	echo "Usage: $0 {1-16}"
 	exit 1
 	;;
 esac
