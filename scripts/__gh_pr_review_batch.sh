@@ -66,7 +66,7 @@ fi
 [[ -z "$REPO" ]] && error_exit $E_NO_REPO "Cannot determine repository"
 
 # Verify PR exists
-if ! gh pr view "$PR_NUMBER" --repo "$REPO" >/dev/null 2>&1; then
+if ! gh pr view "$PR_NUMBER" --repo "$REPO" --json number >/dev/null 2>&1; then
     error_exit $E_NO_PR "PR #$PR_NUMBER not found in $REPO"
 fi
 
