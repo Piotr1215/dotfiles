@@ -495,6 +495,7 @@ vim.api.nvim_buf_set_extmark = function(buffer, ns_id, line, col, opts)
 end
 
 require("nvim-treesitter").setup {}
+vim.opt.rtp:append(vim.fn.stdpath("data") .. "/lazy/nvim-treesitter/runtime")
 
 vim.api.nvim_create_autocmd("FileType", {
   callback = function()
