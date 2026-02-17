@@ -8,6 +8,7 @@ bindings = [
   { key = "I", chars = "\u001B[105;5u", mods = "Control" },
   { key = "Space", action = "ToggleViMode", mode = "~Search", mods = "Shift|Control" },
   { key = "Y", action = "Copy", mode = "Vi|~Search" },
+  { key = "Insert", action = "Copy", mods = "Control" },
   { key = "Insert", action = "Paste", mods = "Shift" },
   { key = "H", action = "High", mode = "Vi|~Search", mods = "Shift" },
   { key = "M", action = "Middle", mode = "Vi|~Search", mods = "Shift" },
