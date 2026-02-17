@@ -317,6 +317,14 @@ utils.imap("<c-d>", "<c-o>daw", { desc = "delete word forward in insert mode" })
 vim.keymap.set("i", "<A-H>", "<c-w>", { noremap = true, desc = "delete word forward in insert mode" })
 vim.keymap.set("i", "<A-,>", "<c-o>A,<c-o>o", { noremap = true, desc = "add coma and enter new line under" })
 utils.nmap("<leader>sl", "i<cr><esc>", { desc = "split line in two" })
+-- EXECUTE EX COMMAND FROM LINE --
+vim.keymap.set("n", "<leader><CR>", function()
+  local line = vim.api.nvim_get_current_line()
+  if line:match "^:" then
+    vim.cmd(line:sub(2))
+  end
+end, { silent = true, desc = "execute ex command from current line" })
+
 -- EXTERNAL COMMANDS --
 vim.keymap.set("c", "<M-w>", "\\w*", { noremap = true, desc = "insert \\w* pattern" })
 vim.keymap.set("c", "<C-s>", "\\S*", { noremap = true, desc = "copy WORD under cursor" })
