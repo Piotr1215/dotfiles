@@ -1,6 +1,4 @@
 .envrc
-CLAUDE.md
-.claude
 .claude-wt
 tmp/
 .mcp.json
