@@ -186,8 +186,11 @@ while true; do
         --multi \
         --tiebreak=index \
         --preview 'item={}; name=${item% ◀◀◀}; bpath=$(echo "$item" | command grep -oE "/[^ ]+$");
-            if [[ -f ~/.config/tmuxinator/${name}.yml ]]; then
-                [[ "$item" == *" ◀◀◀" ]] && echo "=== ACTIVE ===" && tmux list-windows -t "$name" -F "  #I: #W (#P panes)" 2>/dev/null && echo ""
+            if [[ "$item" == *" ◀◀◀" ]]; then
+                tmux list-windows -t "$name" -F "  #I: #W (#P panes)" 2>/dev/null
+                echo "─────────────────────────────"
+                tmux capture-pane -ep -t "$name" 2>/dev/null | command grep -v "^$" | tail -30
+            elif [[ -f ~/.config/tmuxinator/${name}.yml ]]; then
                 bat --color=always ~/.config/tmuxinator/${name}.yml 2>/dev/null || command cat ~/.config/tmuxinator/${name}.yml
             elif [[ -d "$item" ]]; then
                 exa --color=always --long --all --header --icons --git "$item" 2>/dev/null || command ls -la "$item"
