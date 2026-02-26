@@ -36,7 +36,7 @@ build_menu() {
 
     # browser + terminal + slack
     if [[ $browsers -ge 1 && $terminals -ge 1 && $slacks -ge 1 ]]; then
-        echo "$n. chat: 󰒱 󰖟 ⌨|11|slack,browser,alacritty"
+        echo "$n. chat: 󰒱 󰖟 ⌨|10|slack,browser,alacritty"
         ((n++))
     fi
 
