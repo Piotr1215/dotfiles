@@ -43,6 +43,27 @@ log() {
     echo "[$(date +'%Y-%m-%dT%H:%M:%S%z')]: $*"
 }
 
+# Strip emoji and symbol Unicode characters from descriptions to prevent matching failures
+# Emojis in Linear issue titles cause grep -Fxq and jq string comparison to break,
+# leading to duplicate task creation (e.g. DEVOPS-634 created 19 duplicates)
+sanitize_description() {
+    local desc="$1"
+    # Remove 4-byte UTF-8 sequences (U+10000+: emoticons, flags, symbols)
+    # Remove 3-byte emoji ranges:
+    #   U+2300-23FF (misc technical: ⌚⏰), U+2600-27BF (symbols: ☀✅✨❌),
+    #   U+2B00-2BFF (arrows/stars: ⭐⬆), U+FE00-FE0F (variation selectors)
+    # Remove zero-width joiner (U+200D)
+    # Then collapse whitespace and trim
+    printf '%s' "$desc" | LC_ALL=C sed \
+        -e 's/\xf0[\x80-\xbf][\x80-\xbf][\x80-\xbf]//g' \
+        -e 's/\xe2[\x8c-\x8f][\x80-\xbf]//g' \
+        -e 's/\xe2[\x98-\x9e][\x80-\xbf]//g' \
+        -e 's/\xe2[\xac-\xaf][\x80-\xbf]//g' \
+        -e 's/\xef\xb8[\x80-\x8f]//g' \
+        -e 's/\xe2\x80\x8d//g' \
+        -e 's/  */ /g' -e 's/^ //' -e 's/ $//'
+}
+
 # Function to trim leading and trailing whitespace (hardened against command injection)
 trim_whitespace() {
     local input="$1"
@@ -456,6 +477,7 @@ sync_to_taskwarrior() {
 
     issue_id=$(echo "$issue_line" | jq -r '.id')
     issue_description=$(echo "$issue_line" | jq -r '.description')
+    issue_description=$(sanitize_description "$issue_description")
     issue_repo_name=$(echo "$issue_line" | jq -r '.repository' | awk -F/ '{print $NF}')
     issue_url=$(echo "$issue_line" | jq -r '.html_url')
     issue_number=$(echo "$issue_line" | jq -r '.issue_id')
@@ -592,7 +614,7 @@ compare_and_clean_tasks() {
     trap 'if [[ "$cleanup_needed" == true ]]; then rm -f "$issues_file"; fi' EXIT ERR
     
     echo "$issues_descriptions" | tr -d '\r' | grep -v '^$' | while IFS= read -r issue; do
-        echo "${issue,,}" >>"$issues_file"
+        echo "$(sanitize_description "${issue,,}")" >>"$issues_file"
     done
 
     # Debug count
@@ -612,7 +634,7 @@ compare_and_clean_tasks() {
         fi
 
         local trimmed_desc=$(trim_whitespace "$description")
-        local lower_desc="${trimmed_desc,,}"
+        local lower_desc=$(sanitize_description "${trimmed_desc,,}")
         local linear_issue_id=$(echo "$task_json" | jq -r '.linear_issue_id // empty')
 
         # Fast grep search instead of bash loop

@@ -1315,6 +1315,86 @@ EOF
     [ ! -f "${TEST_DIR}/review_error.log" ]
 }
 
+# ====================================================
+# EMOJI SANITIZATION TESTS
+# ====================================================
+
+@test "sanitize_description strips 4-byte emoji (fire, rocket)" {
+    result=$(sanitize_description $'🔥 Fix login bug 🚀')
+    [ "$result" = "Fix login bug" ]
+}
+
+@test "sanitize_description strips 3-byte emoji (checkmark, star)" {
+    result=$(sanitize_description $'✅ Done task ⭐')
+    [ "$result" = "Done task" ]
+}
+
+@test "sanitize_description strips clock emoji" {
+    result=$(sanitize_description $'⏰ Scheduled task')
+    [ "$result" = "Scheduled task" ]
+}
+
+@test "sanitize_description preserves plain text" {
+    result=$(sanitize_description "Fix the authentication bug in login flow")
+    [ "$result" = "Fix the authentication bug in login flow" ]
+}
+
+@test "sanitize_description handles empty string" {
+    result=$(sanitize_description "")
+    [ "$result" = "" ]
+}
+
+@test "sanitize_description collapses whitespace after removal" {
+    result=$(sanitize_description $'🔥  multiple   spaces  🚀')
+    [ "$result" = "multiple spaces" ]
+}
+
+@test "sync_to_taskwarrior matches existing task despite emoji in Linear title" {
+    # Simulate: TW has sanitized description, Linear returns title with emoji
+    cat > "${TEST_DIR}/task" << 'TASKEOF'
+#!/bin/bash
+case "$1" in
+    "linear_issue_id:DEVOPS-634")
+        case "$2" in
+            "status:pending")
+                case "$3" in
+                    "export")
+                        echo '[{"uuid":"test-uuid-emoji","description":"fix the login bug","status":"pending","tags":["linear"],"linear_issue_id":"DEVOPS-634"}]'
+                        ;;
+                esac
+                ;;
+        esac
+        ;;
+    "test-uuid-emoji")
+        case "$2" in
+            "export")
+                echo '[{"uuid":"test-uuid-emoji","description":"fix the login bug","status":"pending","tags":["linear"],"linear_issue_id":"DEVOPS-634"}]'
+                ;;
+        esac
+        ;;
+    "_get")
+        echo ""
+        ;;
+    "rc.confirmation=no")
+        echo "MOCK: task $*" >> "${TEST_DIR}/task_commands.log"
+        ;;
+    *)
+        echo "test-uuid-emoji"
+        ;;
+esac
+TASKEOF
+    chmod +x "${TEST_DIR}/task"
+
+    test_issue='{"id":"abc","description":"🔥 Fix the login bug 🚀","repository":"linear","html_url":"https://linear.app/test/issue/DEVOPS-634","issue_id":"DEVOPS-634","project":"operations","status":"Todo","due_date":null,"priority":3,"cycle_number":null}'
+
+    run sync_to_taskwarrior "$test_issue"
+    [ "$status" -eq 0 ]
+
+    # Should find existing task, NOT create new one
+    [[ "$output" =~ "Task already exists" ]]
+    [[ ! "$output" =~ "Creating new task" ]]
+}
+
 @test "check_linear_issue_status returns active on malformed JSON" {
     cat > "${TEST_DIR}/curl" << 'EOF'
 #!/bin/bash
