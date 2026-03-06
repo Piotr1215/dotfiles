@@ -158,6 +158,8 @@ KILL_SESSION_BIND="ctrl-k:execute(name={}; name=\${name% ◀◀◀}; cur=\$(tmux
 
 COPY_BIND="ctrl-y:execute-silent(~/dev/dotfiles/scripts/__copy_path_with_notification.sh {})+execute-silent(touch /tmp/file_opener_copied)+abort"
 
+PASTE_BIND="tab:execute-silent(~/dev/dotfiles/scripts/__copy_path_with_notification.sh {})+execute-silent(touch /tmp/file_opener_paste)+abort"
+
 # Loop to allow returning from PRs/Linear back to main picker
 while true; do
     OUTPUT=$( {
@@ -204,7 +206,7 @@ while true; do
                 echo "Preview not available"
             fi' \
         --preview-window 'right:50%:wrap' \
-        --header ' C-f:30d C-x:home C-b:github C-g:PRs C-i:Linear C-e:edit C-u:music C-k:kill | C-y:copy' \
+        --header ' C-f:30d C-x:home C-b:github C-g:PRs C-i:Linear C-e:edit C-u:music C-k:kill | C-y:copy Tab:paste' \
         --prompt 'all> ' \
         --bind "$HOME_BIND" \
         --bind "$FILE_BIND" \
@@ -215,11 +217,21 @@ while true; do
         --bind "$MUSIC_BIND" \
         --bind "$KILL_SESSION_BIND" \
         --bind "$COPY_BIND" \
+        --bind "$PASTE_BIND" \
         --bind "ctrl-c:abort" \
         2>/dev/null) || true
 
     # Exit completely if copy was performed
     [[ -f /tmp/file_opener_copied ]] && { rm -f /tmp/file_opener_copied; exit 0; }
+
+    # Copy + paste at cursor: set tmux buffer, schedule paste after popup closes
+    if [[ -f /tmp/file_opener_paste ]]; then
+        rm -f /tmp/file_opener_paste
+        content=$(xsel --clipboard --output)
+        tmux set-buffer -- "$content"
+        tmux run-shell -b "sleep 0.1 && tmux paste-buffer"
+        exit 0
+    fi
 
     # Check if we should return to main picker (marker exists from PRs/Linear)
     if [[ -f "$RETURN_MARKER" ]]; then
@@ -230,8 +242,15 @@ while true; do
     # Check if 2d files mode requested (streams instantly)
     if [[ -f "/tmp/file_opener_2d" ]]; then
         rm -f "/tmp/file_opener_2d"
-        OUTPUT=$(fd --type f --hidden --absolute-path --color never --exclude .git --exclude node_modules --exclude .cache --exclude image-cache --exclude plugins --exclude stats-cache.json --exclude claude-wt-worktrees --exclude vendor --changed-within 30d . ~/dev ~/loft ~/.config/nvim ~/.claude 2>/dev/null | xargs -P 0 stat --format '%Y %n' 2>/dev/null | sort -rn | cut -d' ' -f2- | fzf --prompt '30d> ' --preview '[[ -f {} ]] && bat --color=always {} 2>/dev/null || cat {}' --preview-window 'right:50%:wrap' --bind "$COPY_BIND") || true
+        OUTPUT=$(fd --type f --hidden --absolute-path --color never --exclude .git --exclude node_modules --exclude .cache --exclude image-cache --exclude plugins --exclude stats-cache.json --exclude claude-wt-worktrees --exclude vendor --changed-within 30d . ~/dev ~/loft ~/.config/nvim ~/.claude 2>/dev/null | xargs -P 0 stat --format '%Y %n' 2>/dev/null | sort -rn | cut -d' ' -f2- | fzf --prompt '30d> ' --preview '[[ -f {} ]] && bat --color=always {} 2>/dev/null || cat {}' --preview-window 'right:50%:wrap' --bind "$COPY_BIND" --bind "$PASTE_BIND") || true
         [[ -f /tmp/file_opener_copied ]] && { rm -f /tmp/file_opener_copied; exit 0; }
+        if [[ -f /tmp/file_opener_paste ]]; then
+            rm -f /tmp/file_opener_paste
+            content=$(xsel --clipboard --output)
+            tmux set-buffer -- "$content"
+            tmux run-shell -b "sleep 0.1 && tmux paste-buffer"
+            exit 0
+        fi
         [[ -z "$OUTPUT" ]] && continue
         break
     fi
