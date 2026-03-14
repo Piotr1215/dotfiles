@@ -56,7 +56,7 @@ EOF
         # Check if the command starts with xdg-open
         if [[ "$RESULT" =~ ^xdg-open[[:space:]] ]]; then
             # Use tmux run-shell to execute in proper environment
-            tmux run-shell "$RESULT && wmctrl -a Firefox"
+            tmux run-shell "$RESULT && __focus_browser.sh"
             exit 0
         else
             # Create a new vertical split pane for other commands

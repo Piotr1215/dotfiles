@@ -21,7 +21,7 @@ help_function() {
 	echo "  - Sources a generic error handling function from __trap.sh."
 	echo "  - Sets specific bash options for error handling (set -eo pipefail)."
 	echo "  - Moves Alacritty window to HDMI 0."
-	echo "  - Launches specific LibreWolf profiles for work or home, depending on the day."
+	echo "  - Launches Chrome for work (weekdays) or LibreWolf for home (weekends)."
 	echo ""
 	echo "Note: This script includes debug options and references to other scripts."
 }
@@ -54,43 +54,17 @@ move_alacritty_to_hdmi_0() {
 	xdotool windowraise "$WID"
 }
 
-# Function to modify profiles.ini
-update_profiles_ini() {
-	profile_to_set=$1
-	profiles_ini_path="$HOME/.var/app/io.gitlab.librewolf-community/.librewolf/profiles.ini"
-
-	# Backup current profiles.ini
-	cp "$profiles_ini_path" "$profiles_ini_path.bak"
-
-	# Update the profiles.ini
-	awk -v profile="$profile_to_set" '
-    /^\[Install/ {
-        print
-        found=1
-        next
-    }
-    found && /^Default=/ {
-        sub(/=.*/, "=" profile)
-        print
-        next
-    }
-    {
-        print
-    }' "$profiles_ini_path" >"$profiles_ini_path.tmp" && mv "$profiles_ini_path.tmp" "$profiles_ini_path"
-
-	echo "Updated profiles.ini to use profile: $profile_to_set"
-}
-
 if [[ " ${weekdays[*]} " =~ $current_day ]] && [[ "$timeoff" == 0 ]]; then
+	rm -f /tmp/timeoff_mode
 	/home/decoder/dev/dotfiles/scripts/__create_recurring_tasks.sh
-	update_profiles_ini "j549qbym.Work"
 	flatpak run com.slack.Slack 2>/dev/null &
-	nohup firefox -P "Work" >/dev/null 2>&1 &
+	nohup google-chrome-stable >/dev/null 2>&1 &
 	alacritty &
 	move_alacritty_to_hdmi_0
 else
 	# Weekend :)
-	update_profiles_ini "7fs4462i.decoder"
+	touch /tmp/timeoff_mode
+	nohup flatpak run io.gitlab.librewolf-community >/dev/null 2>&1 &
 	alacritty &
 	move_alacritty_to_hdmi_0
 fi

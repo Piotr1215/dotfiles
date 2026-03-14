@@ -13,7 +13,8 @@ if [ "${1:-}" != "--update" ]; then
     if [ -f "$cache_file" ]; then
         cat "$cache_file"
     else
-        echo "$(date +"%a %H:%M")"
+        local m="work"; [[ -f /tmp/timeoff_mode ]] && m="home"
+        echo "$(date +"%a %H:%M") | $m"
     fi
     exit 0
 fi
@@ -69,6 +70,9 @@ get_mpv_track() {
 update_session() {
     local session="$1"
     local datetime="$(date +"%a %H:%M")"
+    local mode="work"
+    [[ -f /tmp/timeoff_mode ]] && mode="home"
+    datetime="$datetime | $mode"
     local prefix=""
 
     prefix=$(get_agent_issue "$session")

@@ -17,6 +17,8 @@ while IFS= read -r line || [[ -n "$line" ]]; do
     if [[ $line == \#* ]]; then
         current_track_name=${line#\# }
         clean_name="${current_track_name% - YouTube — Mozilla Firefox}"
+        clean_name="${clean_name% - YouTube — LibreWolf}"
+        clean_name="${clean_name% - YouTube - Google Chrome}"
         display_names["$clean_name"]="$current_track_name"
         track_order+=("$clean_name")
     elif [[ -n $current_track_name && -n $line ]]; then

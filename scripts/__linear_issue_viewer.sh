@@ -142,7 +142,7 @@ main() {
             # Open in browser (default action)
             echo "Opening: $url" >&2
             # Use tmux run-shell like the link runner does
-            tmux run-shell "xdg-open '$url' && wmctrl -a Firefox"
+            tmux run-shell "xdg-open '$url' && __focus_browser.sh"
         fi
     fi
 }

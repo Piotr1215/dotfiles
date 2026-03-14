@@ -6,7 +6,11 @@ LAYOUTS_SCRIPT="$HOME/dev/dotfiles/scripts/__layouts.sh"
 
 # Detect running apps (wmctrl for accurate count including minimized)
 count_browsers() {
-    wmctrl -l -x | grep -iE "librewolf|firefox|navigator" | wc -l
+    if [[ -f /tmp/timeoff_mode ]]; then
+        wmctrl -l -x | grep -iE "librewolf|firefox|navigator" | wc -l
+    else
+        wmctrl -l -x | grep -iE "google-chrome" | wc -l
+    fi
 }
 has_terminal() { wmctrl -l -x | grep -qi alacritty; }
 has_slack() { wmctrl -l -x | grep -qi slack; }

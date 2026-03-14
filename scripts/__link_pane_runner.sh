@@ -96,7 +96,7 @@ if [[ -f "$TEMP_FILE" ]]; then
     if [[ -n "$selection" ]]; then
         if [[ "$selection" =~ ^xdg-open ]]; then
             eval "$selection" &
-            wmctrl -a Firefox
+            __focus_browser.sh
         else
             # Copy command to clipboard for pasting elsewhere
             echo -n "$selection" | xclip -selection clipboard
