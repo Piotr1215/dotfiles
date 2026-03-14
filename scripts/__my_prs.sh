@@ -210,7 +210,7 @@ case "$MODE" in
                 url=$(awk -F'\t' "\$3 == \"#$pr_num\" {print \$6; exit}" "$pr_data_file")
                 if [ -n "$url" ]; then
                     echo "Opening: $url" >&2
-                    tmux run-shell "xdg-open '$url' && wmctrl -a Firefox"
+                    tmux run-shell "xdg-open '$url' && __focus_browser.sh"
                 fi
             fi
         fi
@@ -255,7 +255,7 @@ keybindings:
   prs:
     - key: enter
       command: >
-        tmux run-shell "xdg-open '{{.PrUrl}}' && wmctrl -a Firefox"
+        tmux run-shell "xdg-open '{{.PrUrl}}' && __focus_browser.sh"
 EOF
         
         # Launch gh dash with the custom config

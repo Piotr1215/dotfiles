@@ -63,14 +63,29 @@ run_layout() {
 	trap - EXIT
 }
 
-# Get browser window (Firefox or LibreWolf)
+# Get browser window (Chrome for work, LibreWolf for home)
+# Chrome: xdotool --classname returns helper windows that TileHelper rejects.
+# Use wmctrl for Chrome (returns correct Mutter window IDs).
 get_browser_windows() {
-	xdotool search --classname Navigator 2>/dev/null
-	xdotool search --classname librewolf 2>/dev/null
+	if [[ -f /tmp/timeoff_mode ]]; then
+		xdotool search --classname Navigator 2>/dev/null
+		xdotool search --classname librewolf 2>/dev/null
+	else
+		wmctrl -l -x | grep google-chrome | while read -r wid _rest; do printf "%d\n" "$wid"; done
+	fi
 }
 get_visible_browser_window() {
-	xdotool search --onlyvisible --classname Navigator 2>/dev/null | head -n 1
-	xdotool search --onlyvisible --classname librewolf 2>/dev/null | head -n 1
+	if [[ -f /tmp/timeoff_mode ]]; then
+		local cn result
+		for cn in Navigator librewolf; do
+			result=$(xdotool search --onlyvisible --classname "$cn" 2>/dev/null | head -n 1)
+			[[ -n "$result" ]] && { echo "$result"; return; }
+		done
+	else
+		local wid
+		wid=$(wmctrl -l -x | grep google-chrome | head -1 | awk '{print $1}')
+		[[ -n "$wid" ]] && printf "%d\n" "$wid"
+	fi
 }
 #}}}
 
@@ -315,7 +330,11 @@ chatgpt_alacritty_vertical() {
 		brotab activate "$claude_tab_id" 2>/dev/null
 		xdotool windowactivate "$firefox_window"
 	else
-		flatpak run io.gitlab.librewolf-community "https://chatgpt.com" 2>/dev/null &
+		if [[ -f /tmp/timeoff_mode ]]; then
+			flatpak run io.gitlab.librewolf-community "https://chatgpt.com" 2>/dev/null &
+		else
+			google-chrome-stable "https://chatgpt.com" 2>/dev/null &
+		fi
 		if [ -z "$firefox_window" ]; then
 			sleep 2
 			firefox_window=$(get_browser_windows | head -n 1)
