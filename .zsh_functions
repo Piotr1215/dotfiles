@@ -142,6 +142,7 @@ function nman() {
 
 function ufp() {
     local profile_type=$1
+    local profiles_ini="$HOME/.var/app/io.gitlab.librewolf-community/.librewolf/profiles.ini"
 
     if [ -z "$profile_type" ]; then
         echo "Usage: ufp <work|home>"
@@ -160,11 +161,19 @@ function ufp() {
     case $profile_type in
         "work")
             rm -f /tmp/timeoff_mode
-            echo "Mode: work (Chrome)"
+            # Swap LibreWolf default profile to Work
+            if [[ -f "$profiles_ini" ]]; then
+                sed -i.bak '/^\[InstallAA67A15BF0F93AE3\]/,/^$/{s|^Default=.*|Default=j549qbym.Work|}' "$profiles_ini"
+            fi
+            echo "Mode: work (Chrome, LibreWolf=Work)"
             ;;
         "home")
             touch /tmp/timeoff_mode
-            echo "Mode: home (LibreWolf)"
+            # Swap LibreWolf default profile to Home
+            if [[ -f "$profiles_ini" ]]; then
+                sed -i.bak '/^\[InstallAA67A15BF0F93AE3\]/,/^$/{s|^Default=.*|Default=7fs4462i.decoder|}' "$profiles_ini"
+            fi
+            echo "Mode: home (LibreWolf=Home)"
             ;;
         *)
             echo "Invalid profile type. Please use 'work' or 'home'."
@@ -172,7 +181,6 @@ function ufp() {
             ;;
     esac
 
-    # Flush tmux status cache so mode shows immediately
     __tmux_active_task.sh --update 2>/dev/null
     tmux refresh-client -S 2>/dev/null
 }
