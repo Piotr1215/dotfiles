@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 # Launch LibreWolf with YouTube (personal browser)
-nohup flatpak run io.gitlab.librewolf-community -P "Home" "https://youtube.com" > /dev/null 2>&1 &
-sleep 1
-xdotool search --classname librewolf --onlyvisible windowactivate
+# NOTE: -P "Home" breaks when profile already running (profile lock, URL silently dropped)
+flatpak run io.gitlab.librewolf-community "https://youtube.com" &
+sleep 2
+wmctrl -a librewolf
