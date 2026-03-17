@@ -54,6 +54,30 @@ tile_by_class() {
 		-m "$DBUS_IFACE.Tile" "$class" "$x" "$y" "$w" "$h" >/dev/null 2>&1
 }
 
+# Pick next browser window, cycling on repeated calls
+# Usage: wid=$(cycle_browser_window "layout_name" "${window_array[@]}")
+cycle_browser_window() {
+	local layout="$1"; shift
+	local -a windows=("$@")
+	local state_file="/tmp/layout_${layout}_last_wid"
+	local last_wid="" pick="${windows[0]}"
+
+	[[ -f "$state_file" ]] && last_wid=$(<"$state_file")
+
+	if [[ -n "$last_wid" && ${#windows[@]} -gt 1 ]]; then
+		local i
+		for i in "${!windows[@]}"; do
+			if [[ "${windows[$i]}" == "$last_wid" ]]; then
+				pick="${windows[$(( (i + 1) % ${#windows[@]} ))]}"
+				break
+			fi
+		done
+	fi
+
+	printf '%s' "$pick" > "$state_file"
+	printf '%s' "$pick"
+}
+
 # Animations wrapper
 run_layout() {
 	gsettings set org.gnome.desktop.interface enable-animations false
@@ -101,14 +125,18 @@ max_alacritty() {
 
 alacritty_firefox_vertical() {
 	local firefox_window alacritty_window
-	firefox_window=$(get_browser_windows | head -n 1)
-	if [ -z "$firefox_window" ]; then
-		echo "No Firefox window found."
+	local -a browser_windows
+	mapfile -t browser_windows < <(get_browser_windows)
+
+	if [[ ${#browser_windows[@]} -eq 0 ]]; then
+		echo "No browser window found."
 		return 1
 	fi
 
+	firefox_window=$(cycle_browser_window "alacritty_browser" "${browser_windows[@]}")
+
 	alacritty_window=$(xdotool search --onlyvisible --classname Alacritty | head -n 1)
-	if [ -z "$alacritty_window" ]; then
+	if [[ -z "$alacritty_window" ]]; then
 		echo "No Alacritty window found."
 		return 1
 	fi
@@ -317,17 +345,19 @@ browser_browser_browser_alacritty() {
 
 chatgpt_alacritty_vertical() {
 	local firefox_window alacritty_window
-	firefox_window=$(get_browser_windows | head -n 1)
+	local -a browser_windows
+	mapfile -t browser_windows < <(get_browser_windows)
 
 	# PROJECT: brotab
 	# Check if ChatGPT tab exists using brotab
 	local claude_tab_id=""
-	if [ -n "$firefox_window" ]; then
+	if [[ ${#browser_windows[@]} -gt 0 ]]; then
 		claude_tab_id=$(brotab list 2>/dev/null | grep "https://chatgpt\.com" | head -n 1 | cut -f1)
 	fi
 
-	if [ -n "$claude_tab_id" ]; then
+	if [[ -n "$claude_tab_id" ]]; then
 		brotab activate "$claude_tab_id" 2>/dev/null
+		firefox_window=$(cycle_browser_window "chatgpt_browser" "${browser_windows[@]}")
 		xdotool windowactivate "$firefox_window"
 	else
 		if [[ -f /tmp/timeoff_mode ]]; then
@@ -335,20 +365,21 @@ chatgpt_alacritty_vertical() {
 		else
 			google-chrome-stable "https://chatgpt.com" 2>/dev/null &
 		fi
-		if [ -z "$firefox_window" ]; then
+		if [[ ${#browser_windows[@]} -eq 0 ]]; then
 			sleep 2
-			firefox_window=$(get_browser_windows | head -n 1)
+			mapfile -t browser_windows < <(get_browser_windows)
 		fi
 		sleep 0.5
+		firefox_window=$(cycle_browser_window "chatgpt_browser" "${browser_windows[@]}")
 	fi
 
-	if [ -z "$firefox_window" ]; then
-		echo "No Firefox window found."
+	if [[ -z "$firefox_window" ]]; then
+		echo "No browser window found."
 		return 1
 	fi
 
 	alacritty_window=$(xdotool search --onlyvisible --classname Alacritty | head -n 1)
-	if [ -z "$alacritty_window" ]; then
+	if [[ -z "$alacritty_window" ]]; then
 		echo "No Alacritty window found."
 		return 1
 	fi
