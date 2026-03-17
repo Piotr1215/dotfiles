@@ -161,6 +161,8 @@ function ufp() {
     case $profile_type in
         "work")
             rm -f /tmp/timeoff_mode
+            export BROWSER=google-chrome
+            xdg-settings set default-web-browser google-chrome.desktop 2>/dev/null
             # Swap LibreWolf default profile to Work
             if [[ -f "$profiles_ini" ]]; then
                 sed -i.bak '/^\[InstallAA67A15BF0F93AE3\]/,/^$/{s|^Default=.*|Default=j549qbym.Work|}' "$profiles_ini"
@@ -169,6 +171,8 @@ function ufp() {
             ;;
         "home")
             touch /tmp/timeoff_mode
+            export BROWSER=librewolf
+            xdg-settings set default-web-browser io.gitlab.librewolf-community.desktop 2>/dev/null
             # Swap LibreWolf default profile to Home
             if [[ -f "$profiles_ini" ]]; then
                 sed -i.bak '/^\[InstallAA67A15BF0F93AE3\]/,/^$/{s|^Default=.*|Default=7fs4462i.decoder|}' "$profiles_ini"
