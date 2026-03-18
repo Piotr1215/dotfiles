@@ -3,7 +3,6 @@
 CLAUDE.md
 .claude-wt
 tmp/
-.mcp.json
 
 # AI coding tools
 .aider*
