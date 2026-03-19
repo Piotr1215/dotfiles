@@ -56,12 +56,6 @@ SERVICES = {
         "name": "Claude",
         "favicon": "https://claude.ai/favicon.ico"
     },
-    "Quay": {
-        "api": "https://status.redhat.com/api/v2/status.json",
-        "status_page": "https://status.redhat.com/",
-        "name": "Quay.io",
-        "favicon": "https://quay.io/static/img/favicon.ico"
-    },
     "Rippling": {
         "api": "https://status.rippling.com/api/v2/status.json",
         "status_page": "https://status.rippling.com/",
@@ -89,7 +83,6 @@ SERVICE_EMOJIS = {
     "GitHub": "🐙",   # Octopus (Octocat) for GitHub
     "Linear": "📋",   # Clipboard for Linear issues
     "Claude": "🤖",   # Robot for AI
-    "Quay": "🐳",     # Whale/Docker for container registry
     "Rippling": "💼"  # Briefcase for HR/workforce management
 }
 
@@ -153,22 +146,6 @@ def get_claude_status():
     """Check Claude status using statuspage.io API"""
     try:
         data = fetch_status(SERVICES["Claude"]["api"])
-        if data and 'status' in data:
-            indicator = data['status'].get('indicator', 'none')
-            if indicator == 'none':
-                return "operational"
-            elif indicator == 'minor':
-                return "degraded"
-            elif indicator in ['major', 'critical']:
-                return "major"
-    except Exception:
-        pass
-    return "unknown"
-
-def get_quay_status():
-    """Check Quay.io status using statuspage.io API"""
-    try:
-        data = fetch_status(SERVICES["Quay"]["api"])
         if data and 'status' in data:
             indicator = data['status'].get('indicator', 'none')
             if indicator == 'none':
@@ -317,7 +294,6 @@ def get_all_statuses():
         "GitHub": get_github_status(),
         "Linear": get_linear_status(),
         "Claude": get_claude_status(),
-        "Quay": get_quay_status(),
         "Rippling": get_rippling_status()
     }
 
