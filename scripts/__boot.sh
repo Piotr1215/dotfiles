@@ -56,6 +56,7 @@ move_alacritty_to_hdmi_0() {
 
 if [[ " ${weekdays[*]} " =~ $current_day ]] && [[ "$timeoff" == 0 ]]; then
 	rm -f /tmp/timeoff_mode
+	xdg-settings set default-web-browser google-chrome.desktop 2>/dev/null
 	/home/decoder/dev/dotfiles/scripts/__create_recurring_tasks.sh
 	flatpak run com.slack.Slack 2>/dev/null &
 	nohup google-chrome-stable >/dev/null 2>&1 &
@@ -64,6 +65,7 @@ if [[ " ${weekdays[*]} " =~ $current_day ]] && [[ "$timeoff" == 0 ]]; then
 else
 	# Weekend :)
 	touch /tmp/timeoff_mode
+	xdg-settings set default-web-browser io.gitlab.librewolf-community.desktop 2>/dev/null
 	nohup flatpak run io.gitlab.librewolf-community >/dev/null 2>&1 &
 	alacritty &
 	move_alacritty_to_hdmi_0
