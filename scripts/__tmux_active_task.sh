@@ -13,7 +13,7 @@ if [ "${1:-}" != "--update" ]; then
     if [ -f "$cache_file" ]; then
         cat "$cache_file"
     else
-        local m="work"; [[ -f /tmp/timeoff_mode ]] && m="home"
+        m="work"; [[ -f /tmp/timeoff_mode ]] && m="home"
         echo "$(date +"%a %H:%M") | $m"
     fi
     exit 0
