@@ -64,14 +64,35 @@ sed -i "s/^timeoff=.*/timeoff=$new_value/" "$boot_script"
 # Verify the change
 updated_value=$(grep -E "^timeoff=" "$boot_script" | cut -d= -f2)
 
-if [[ "$updated_value" == "$new_value" ]]; then
-	echo ""
-	echo "  $emoji  $message"
-	echo ""
-	echo "  PTO mode is now: $mode"
-	echo "  (Current setting: timeoff=$new_value)"
-	echo ""
-else
+if [[ "$updated_value" != "$new_value" ]]; then
 	echo "Error: Failed to update timeoff setting" >&2
 	exit 1
 fi
+
+# Apply runtime environment switch (mirrors ufp function)
+profiles_ini="$HOME/.var/app/io.gitlab.librewolf-community/.librewolf/profiles.ini"
+
+if [[ "$new_value" == "1" ]]; then
+	touch /tmp/timeoff_mode
+	xdg-settings set default-web-browser io.gitlab.librewolf-community.desktop 2>/dev/null
+	if [[ -f "$profiles_ini" ]]; then
+		sed -i.bak '/^\[InstallAA67A15BF0F93AE3\]/,/^$/{s|^Default=.*|Default=7fs4462i.decoder|}' "$profiles_ini"
+	fi
+else
+	rm -f /tmp/timeoff_mode
+	xdg-settings set default-web-browser google-chrome.desktop 2>/dev/null
+	if [[ -f "$profiles_ini" ]]; then
+		sed -i.bak '/^\[InstallAA67A15BF0F93AE3\]/,/^$/{s|^Default=.*|Default=j549qbym.Work|}' "$profiles_ini"
+	fi
+fi
+
+# Refresh tmux status bar
+__tmux_active_task.sh --update 2>/dev/null || true
+tmux refresh-client -S 2>/dev/null || true
+
+echo ""
+echo "  $emoji  $message"
+echo ""
+echo "  PTO mode is now: $mode"
+echo "  (Current setting: timeoff=$new_value)"
+echo ""

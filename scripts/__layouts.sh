@@ -401,6 +401,19 @@ reattach_and_max() {
 	max_firefox
 }
 
+alacritty_alacritty_vertical() {
+	local -a alacritty_windows
+	mapfile -t alacritty_windows < <(xdotool search --onlyvisible --classname Alacritty 2>/dev/null)
+
+	if [[ ${#alacritty_windows[@]} -lt 2 ]]; then
+		echo "Need at least 2 Alacritty windows."
+		return 1
+	fi
+
+	tile_left "${alacritty_windows[0]}"
+	tile_right "${alacritty_windows[1]}"
+}
+
 case $1 in
 1) run_layout max_alacritty ;;
 2) run_layout alacritty_firefox_vertical ;;
@@ -418,8 +431,9 @@ case $1 in
 14) run_layout browser_browser_browser_alacritty ;;
 15) run_layout detach_and_compare ;;
 16) run_layout reattach_and_max ;;
+17) run_layout alacritty_alacritty_vertical ;;
 *)
-	echo "Usage: $0 {1-16}"
+	echo "Usage: $0 {1-17}"
 	exit 1
 	;;
 esac
