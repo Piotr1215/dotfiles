@@ -2,9 +2,7 @@
     "type": "script",
     "description": "CreateTask",
     "store": {},
-    "modes": [
-        3
-    ],
+    "modes": [],
     "usageCount": 4,
     "prompt": false,
     "omitTrigger": false,
