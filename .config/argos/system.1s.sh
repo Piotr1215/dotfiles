@@ -1,20 +1,25 @@
 #!/usr/bin/env bash
 set -eo pipefail
 
-# CPU Usage - using mpstat
+# CPU Usage - instant read from /proc/stat
 get_cpu_usage() {
-    if command -v mpstat &> /dev/null; then
-        # Get the idle percentage from mpstat and calculate usage
-        cpu_idle=$(mpstat 1 1 | awk '/Average:/ {print $(NF)}')
-        if [ -z "$cpu_idle" ]; then
-            cpu_usage=0
-        else
-            cpu_usage=$(printf "%.0f" "$(echo "100 - $cpu_idle" | bc)")
-        fi
+    local idle_prev total_prev idle_now total_now
+    read -r _ vals < /proc/stat
+    set -- $vals
+    total_prev=$(( $1+$2+$3+$4+$5+$6+$7+${8:-0} ))
+    idle_prev=$4
+    sleep 0.2
+    read -r _ vals < /proc/stat
+    set -- $vals
+    total_now=$(( $1+$2+$3+$4+$5+$6+$7+${8:-0} ))
+    idle_now=$4
+    local diff_total=$(( total_now - total_prev ))
+    local diff_idle=$(( idle_now - idle_prev ))
+    if [ "$diff_total" -gt 0 ]; then
+        echo $(( (diff_total - diff_idle) * 100 / diff_total ))
     else
-        cpu_usage=0
+        echo 0
     fi
-    echo $cpu_usage
 }
 
 # Get all values
