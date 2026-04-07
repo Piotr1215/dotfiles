@@ -57,3 +57,7 @@ windows:
       layout: tiled
       panes:
         - sampler -c k8s-dashboard.yml
+  - memory:
+      layout: tiled
+      panes:
+        - sampler -c memory-dashboard.yml
