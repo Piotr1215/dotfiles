@@ -95,7 +95,7 @@ get_browser_windows() {
 		xdotool search --classname Navigator 2>/dev/null
 		xdotool search --classname librewolf 2>/dev/null
 	else
-		wmctrl -l -x | grep google-chrome | while read -r wid _rest; do printf "%d\n" "$wid"; done
+		wmctrl -l -x | grep google-chrome | awk '{printf "%d\n", $1}'
 	fi
 }
 get_visible_browser_window() {
@@ -390,15 +390,27 @@ chatgpt_alacritty_vertical() {
 
 
 detach_and_compare() {
-	# Called by autokey after it sends Shift+Alt+D to detach tab
-	# Just applies the side-by-side layout
+	local title
+	title=$(xdotool getactivewindow getwindowname 2>/dev/null)
+	if [[ "$title" == *"Google Chrome"* ]]; then
+		xdotool key --clearmodifiers alt+d
+	elif [[ "$title" == *Firefox* || "$title" == *LibreWolf* ]]; then
+		xdotool key --clearmodifiers shift+alt+d
+	else
+		return
+	fi
+	sleep 0.3
 	firefox_firefox_vertical
 }
 
 reattach_and_max() {
-	# Called by autokey after it sends Shift+Alt+A to merge tab
-	# Just maximizes the browser
-	max_firefox
+	local title
+	title=$(xdotool getactivewindow getwindowname 2>/dev/null)
+	if [[ "$title" == *Firefox* || "$title" == *LibreWolf* || "$title" == *"Google Chrome"* ]]; then
+		xdotool key --clearmodifiers shift+alt+a
+		sleep 0.3
+		max_firefox
+	fi
 }
 
 alacritty_alacritty_vertical() {
