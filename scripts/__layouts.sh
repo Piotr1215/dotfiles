@@ -415,7 +415,9 @@ reattach_and_max() {
 
 alacritty_alacritty_vertical() {
 	local -a alacritty_windows
-	mapfile -t alacritty_windows < <(xdotool search --onlyvisible --classname Alacritty 2>/dev/null)
+	# Sort by XID so left/right assignment is stable across invocations
+	# (xdotool's default order depends on focus/stacking and would swap sides)
+	mapfile -t alacritty_windows < <(xdotool search --onlyvisible --classname Alacritty 2>/dev/null | sort -n)
 
 	if [[ ${#alacritty_windows[@]} -lt 2 ]]; then
 		echo "Need at least 2 Alacritty windows."
