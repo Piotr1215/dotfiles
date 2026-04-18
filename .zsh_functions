@@ -5,9 +5,24 @@ source ~/dev/dotfiles/scripts/__reusable_variables.sh
 alias ddg='ddg_function'
 
 
-# Send keys to registered Claude tmux sessions
+# Thin local-plane wrapper around the agents-mcp-server `snd` binary.
+# All delivery is NATS-based. The binary accepts:
+#   snd <agent> <msg...>    DM
+#   snd -t <agent> <msg...> DM (explicit)
+#   snd -g <group> <msg...> broadcast
+# This wrapper:
+#   - adds --human by default so operator messages get the [HUMAN] prefix
+#     (pass --no-human first to opt out)
+#   - fills in AGENTS_NATS_URL from the homelab Tailscale endpoint if the
+#     shell hasn't exported it, so interactive use doesn't need setup
 function snd() {
-    /home/decoder/.claude/scripts/snd "$@"
+    local url="${AGENTS_NATS_URL:-nats://nats-nats-tailscale.tail165ec.ts.net:4222}"
+    if [[ "${1:-}" == "--no-human" ]]; then
+        shift
+        AGENTS_NATS_URL="$url" node /home/decoder/dev/agents-mcp-server/build/snd.js "$@"
+    else
+        AGENTS_NATS_URL="$url" node /home/decoder/dev/agents-mcp-server/build/snd.js --human "$@"
+    fi
 }
 
 # Need to alias this because regular ddg doesn't open firefox any more
