@@ -3,7 +3,7 @@
 # PR Session Reaper - cleans up tmux sessions and worktrees for merged PRs
 #
 # SAFETY: Only touches sessions that are:
-#   1. Registered in DuckDB agents table (agent-created)
+#   1. Registered in the client-side agent ledger (agent-created)
 #   2. Have a PR URL in TaskWarrior annotations
 #   3. PR is in MERGED state
 #   4. Worktree is clean (no uncommitted changes)
@@ -13,7 +13,7 @@ set -eo pipefail
 
 NATS_URL="${NATS_URL:-nats://192.168.178.93:4222}"
 LOG_FILE="${HOME}/.claude/logs/reaper.log"
-DB_PATH="${AGENTS_DB_PATH:-/home/decoder/.claude/data/agents.duckdb}"
+LEDGER="${AGENTS_SESSION_LEDGER:-$HOME/.claude/data/agent-sessions.tsv}"
 DRY_RUN="${DRY_RUN:-false}"
 
 mkdir -p "$(dirname "$LOG_FILE")"
@@ -28,12 +28,12 @@ notify_triage() {
     nats pub -s "$NATS_URL" "triage.reap.$event" "$payload" 2>/dev/null || true
 }
 
-# Get agent sessions from DuckDB (authoritative source)
-# Returns: agent_name|stable_pane (format: session:window.pane)
+# Get agent sessions from the client-side ledger (authoritative source).
+# The ledger is a TSV of session\tname\tgroup\tid written by
+# __mcp_agent_registration_hook.sh on register. Returns: agent_name|session.
 get_agent_sessions() {
-    [[ ! -f "$DB_PATH" ]] && return
-    duckdb "$DB_PATH" -noheader -list -separator '|' \
-        -c "SELECT name, stable_pane FROM agents WHERE stable_pane IS NOT NULL;" 2>/dev/null || true
+    [[ ! -f "$LEDGER" ]] && return
+    awk -F'\t' 'NF>=2 && $1!="" && $2!="" { print $2 "|" $1 }' "$LEDGER"
 }
 
 # Extract Linear ID from agent name (e.g., DOC-1201, DEVOPS-522)
@@ -112,12 +112,8 @@ reap_merged_sessions() {
     local blocked=0
     local skipped=0
 
-    while IFS='|' read -r agent_name stable_pane; do
-        [[ -z "$agent_name" || -z "$stable_pane" ]] && continue
-
-        # Extract session name from stable_pane (format: session:window.pane)
-        local session="${stable_pane%%:*}"
-        [[ -z "$session" ]] && continue
+    while IFS='|' read -r agent_name session; do
+        [[ -z "$agent_name" || -z "$session" ]] && continue
 
         # SAFETY: Verify tmux session exists AND matches expected name
         if ! tmux has-session -t "$session" 2>/dev/null; then
