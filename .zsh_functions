@@ -10,19 +10,29 @@ alias ddg='ddg_function'
 #   snd <agent> <msg...>    DM
 #   snd -t <agent> <msg...> DM (explicit)
 #   snd -g <group> <msg...> broadcast
+#   snd --tail              subscribe to every bus event (read-only)
+#   snd --help | -h         usage
 # This wrapper:
 #   - adds --human by default so operator messages get the [HUMAN] prefix
-#     (pass --no-human first to opt out)
+#     (pass --no-human first to opt out; auto-skipped for --tail/--help/-h
+#     since snd.ts rejects those when combined with other args)
 #   - fills in AGENTS_NATS_URL from the homelab Tailscale endpoint if the
 #     shell hasn't exported it, so interactive use doesn't need setup
 function snd() {
     local url="${AGENTS_NATS_URL:-nats://nats-nats-tailscale.tail165ec.ts.net:4222}"
-    if [[ "${1:-}" == "--no-human" ]]; then
-        shift
-        AGENTS_NATS_URL="$url" node /home/decoder/dev/agents-mcp-server/build/snd.js "$@"
-    else
-        AGENTS_NATS_URL="$url" node /home/decoder/dev/agents-mcp-server/build/snd.js --human "$@"
-    fi
+    local bin="/home/decoder/dev/agents-mcp-server/build/snd.js"
+    case "${1:-}" in
+        --no-human)
+            shift
+            AGENTS_NATS_URL="$url" node "$bin" "$@"
+            ;;
+        --tail|--help|-h)
+            AGENTS_NATS_URL="$url" node "$bin" "$@"
+            ;;
+        *)
+            AGENTS_NATS_URL="$url" node "$bin" --human "$@"
+            ;;
+    esac
 }
 
 # Need to alias this because regular ddg doesn't open firefox any more
