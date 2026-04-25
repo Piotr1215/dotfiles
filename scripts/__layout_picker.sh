@@ -46,14 +46,14 @@ build_menu() {
 
     # slack + 2 browsers
     if [[ $slacks -ge 1 && $browsers -ge 2 ]]; then
-        echo "$n. docs: 󰒱 󰖟 󰖟|12|slack,browser,browser"
+        echo "$n. docs: 󰒱 󰖟 󰖟|11|slack,browser,browser"
         ((n++))
     fi
 
     # Generate valid 4-window combos
     # 2 browsers + terminal + slack
     if [[ $browsers -ge 2 && $terminals -ge 1 && $slacks -ge 1 ]]; then
-        echo "$n. full: 󰖟 󰖟 ⌨ 󰒱|14|browser,browser,alacritty,slack"
+        echo "$n. full: 󰖟 󰖟 ⌨ 󰒱|13|browser,browser,alacritty,slack"
     fi
 }
 
