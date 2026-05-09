@@ -1,28 +1,26 @@
 {
-    "type": "script",
-    "description": "DetachAndCompare",
-    "store": {},
-    "modes": [
-        3
-    ],
-    "usageCount": 3,
-    "prompt": false,
-    "omitTrigger": false,
-    "showInTrayMenu": false,
-    "abbreviation": {
-        "abbreviations": [],
-        "backspace": true,
-        "ignoreCase": false,
-        "immediate": false,
-        "triggerInside": false,
-        "wordChars": "[\\w]"
-    },
-    "hotkey": {
-        "modifiers": [],
-        "hotKey": null
-    },
-    "filter": {
-        "regex": null,
-        "isRecursive": false
-    }
+  "type": "script",
+  "description": "DetachAndCompare",
+  "store": {},
+  "modes": [],
+  "usageCount": 3,
+  "prompt": false,
+  "omitTrigger": false,
+  "showInTrayMenu": false,
+  "abbreviation": {
+    "abbreviations": [],
+    "backspace": true,
+    "ignoreCase": false,
+    "immediate": false,
+    "triggerInside": false,
+    "wordChars": "[\\w]"
+  },
+  "hotkey": {
+    "modifiers": [],
+    "hotKey": null
+  },
+  "filter": {
+    "regex": null,
+    "isRecursive": false
+  }
 }
