@@ -29,6 +29,10 @@ alias backuper="ssh 'bacuper@192.168.178.60'"
 alias grt='cd "$(git rev-parse --show-toplevel)"'
 alias perf='system76-power profile performance'
 
+# Graphics + power mode switches (call __set_graphics_mode.sh, reboot)
+alias base='__set_graphics_mode.sh base'    # powered: nvidia + balanced (home, hotel, anywhere on AC)
+alias speak='__set_graphics_mode.sh speak'  # presenting: hybrid + battery (HDMI projector on battery; run `perf` for turbo)
+
 # incus aliases
 alias inc='incus console ubuntu --type=vga'
 ## start and stop lxc vm with hybernated state
@@ -150,10 +154,10 @@ alias sk='pkill screenkey; __start_screenkey.sh'
 # GitHub
 alias ghuser='/home/decoder/dev/dotfiles/scripts/__ghuser.sh'
 
-
 # Notion AI Meeting Notes — virtual mic that captures both my voice + remote voices.
 # Pick "NotionMic" as the mic in the Notion browser tab.
 # Zoom must keep using the real mic, otherwise remote side hears echo.
 alias notion-mic='/home/decoder/dev/dotfiles/scripts/__notion_loopback.sh up'
 alias notion-mic-off='/home/decoder/dev/dotfiles/scripts/__notion_loopback.sh down'
 alias notion-mic-status='/home/decoder/dev/dotfiles/scripts/__notion_loopback.sh status'
+
