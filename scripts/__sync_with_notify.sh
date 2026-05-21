@@ -62,5 +62,5 @@ fi
 # Success - keep log clean (last 1000 lines only)
 tail -n 1000 "$LOG_FILE" > "${LOG_FILE}.tmp" && mv "${LOG_FILE}.tmp" "$LOG_FILE" 2>/dev/null || true
 
-# Trigger auto-triage for any new untriaged tasks
-"$HOME/.claude/scripts/__auto_triage_nudge.sh" >> "$LOG_FILE" 2>&1 || true
+# Nudge is now triggered from inside __github_issue_sync.sh so both cron
+# and manual invocations produce one — see triage thread 2026-05-12.

@@ -939,6 +939,14 @@ main() {
     fi
 
     log "Synchronization completed successfully"
+
+    # Notify triage agent (both manual and cron invocations).
+    # Previously this lived only in __sync_with_notify.sh, so manual runs
+    # of this script never produced a nudge — see triage thread 2026-05-12.
+    if [[ -x "$HOME/.claude/scripts/__auto_triage_nudge.sh" ]]; then
+        log "Triggering auto-triage nudge"
+        "$HOME/.claude/scripts/__auto_triage_nudge.sh" || log "WARN: auto-triage nudge failed (continuing)"
+    fi
 }
 
 # Execute the main function
