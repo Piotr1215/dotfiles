@@ -8,7 +8,7 @@
 # Key behaviors:
 # 1. For unassigned Linear issues: Deletes them from Taskwarrior (since they're no longer relevant to you)
 # 2. For completed Linear issues: Only marks as done if truly in a completed state
-#    (Released, Canceled, Done, Ready for Release)
+#    (Released, Canceled, Done, Ready for Release, Duplicate, Archived)
 # 3. The +backlog tag is now Taskwarrior-internal and doesn't sync with Linear
 #    (users can add/remove this tag manually without affecting Linear)
 # 4. Tasks with +backlog or +review tags will NOT have their status, priority or tags
@@ -128,7 +128,7 @@ get_linear_issues() {
             -X POST \
             -H "Content-Type: application/json" \
             -H "Authorization: ${LINEAR_API_KEY}" \
-            --data '{"query": "query { user(id: \"'"$LINEAR_USER_ID"'\") { id name assignedIssues(filter: { state: { name: { nin: [\"Released\", \"Canceled\",\"Done\",\"Ready for Release\"] } } }) { nodes { id title url state { name } project { name } dueDate priority cycle { number } } } } }"}' \
+            --data '{"query": "query { user(id: \"'"$LINEAR_USER_ID"'\") { id name assignedIssues(filter: { state: { name: { nin: [\"Released\", \"Canceled\",\"Done\",\"Ready for Release\",\"Duplicate\",\"Archived\"] } } }) { nodes { id title url state { name } project { name } dueDate priority cycle { number } } } } }"}' \
             https://api.linear.app/graphql 2>"$curl_stderr")
         exit_code=$?
 
@@ -308,7 +308,7 @@ check_linear_issue_status() {
         https://api.linear.app/graphql | jq -r '.data.issue.state.name')
 
     # Check if the status indicates the issue is truly done
-    if [[ "$status" =~ ^(Released|Canceled|Done|Ready\ for\ Release)$ ]]; then
+    if [[ "$status" =~ ^(Released|Canceled|Done|Ready\ for\ Release|Duplicate|Archived)$ ]]; then
         echo "completed"
     else
         echo "active" # Active but unassigned

@@ -1406,10 +1406,61 @@ else
 fi
 EOF
     chmod +x "${TEST_DIR}/curl"
-    
+
     run check_linear_issue_status "TEST-123"
     [ "$status" -eq 0 ]
     [ "$output" = "active" ]
+}
+
+@test "check_linear_issue_status returns completed for Duplicate status" {
+    cat > "${TEST_DIR}/curl" << 'EOF'
+#!/bin/bash
+if [[ "$*" =~ "linear.app" ]]; then
+    echo '{"data":{"issue":{"id":"TEST-123","state":{"name":"Duplicate"}}}}'
+    exit 0
+else
+    /usr/bin/curl "$@"
+fi
+EOF
+    chmod +x "${TEST_DIR}/curl"
+
+    run check_linear_issue_status "TEST-123"
+    [ "$status" -eq 0 ]
+    [ "$output" = "completed" ]
+}
+
+@test "check_linear_issue_status returns completed for Archived status" {
+    cat > "${TEST_DIR}/curl" << 'EOF'
+#!/bin/bash
+if [[ "$*" =~ "linear.app" ]]; then
+    echo '{"data":{"issue":{"id":"TEST-123","state":{"name":"Archived"}}}}'
+    exit 0
+else
+    /usr/bin/curl "$@"
+fi
+EOF
+    chmod +x "${TEST_DIR}/curl"
+
+    run check_linear_issue_status "TEST-123"
+    [ "$status" -eq 0 ]
+    [ "$output" = "completed" ]
+}
+
+@test "check_linear_issue_status returns completed for Canceled status" {
+    cat > "${TEST_DIR}/curl" << 'EOF'
+#!/bin/bash
+if [[ "$*" =~ "linear.app" ]]; then
+    echo '{"data":{"issue":{"id":"TEST-123","state":{"name":"Canceled"}}}}'
+    exit 0
+else
+    /usr/bin/curl "$@"
+fi
+EOF
+    chmod +x "${TEST_DIR}/curl"
+
+    run check_linear_issue_status "TEST-123"
+    [ "$status" -eq 0 ]
+    [ "$output" = "completed" ]
 }
 
 # ====================================================
