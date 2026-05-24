@@ -1,0 +1,41 @@
+# /home/decoder/.config/tmuxinator/eve.yml (symlinked from dotfiles)
+#
+# Dedicated EVE Online intel session. Spawns the klod-daemon (chatlog tail +
+# ESI pollers), the NATS bridge that broadcasts Tier 3 / klod_summon events to
+# the `eve-fleet` agent group, the floating GTK widget that surfaces replies,
+# and a long-running Claude session (Klod) bound to the eve-companion system
+# prompt.
+#
+# Start with: tmuxinator start eve
+# Stop with:  tmuxinator stop eve  (kills panes; widget keeps running if launched detached)
+
+name: eve
+root: ~/dev/
+
+# Pre-flight: ensure config dir exists for FIFOs created by daemon.
+pre: mkdir -p ~/.config/eve-route
+
+windows:
+  - klod:
+      # 4-pane layout: top-left daemon, top-right bridge, bottom-left widget log, bottom-right Klod.
+      layout: tiled
+      panes:
+        # Pane 1: klod-daemon — chatlog tail + ESI pollers + router
+        - python3 ~/.claude/mcp-servers/code-execution/skills/eve/daemon.py --log-level INFO
+
+        # Pane 2: eve-fleet bridge — FIFO -> NATS broadcast for Klod
+        - python3 ~/.claude/mcp-servers/code-execution/skills/eve/eve_fleet_bridge.py
+
+        # Pane 3: floating widget (GTK3, always-on-top). stderr stays in pane for debugging.
+        - python3 ~/.claude/mcp-servers/code-execution/skills/eve/klod_widget.py
+
+        # Pane 4: Klod — long-running Claude session bound to the eve companion prompt.
+        # __claude_with_monitor.sh handles notifications + tmux pane name labeling.
+        - ~/.claude/scripts/__claude_with_monitor.sh --system-prompt-file ~/.claude/system-prompts/eve-companion-system-prompt.md
+
+  - intel:
+      # Secondary window for ad-hoc eve-info skill runs, kill feeds, klodctl.
+      layout: even-horizontal
+      panes:
+        - cd ~/.claude/skills/eve-info && $SHELL
+        - cd ~/.claude/mcp-servers/code-execution/skills/eve && $SHELL
