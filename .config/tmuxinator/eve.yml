@@ -38,15 +38,12 @@ on_project_stop: |
 
 windows:
   - klod:
-      # Long-running Klod Claude session. The --prompt arg triggers the
-      # bootstrap steps in the system prompt (agent_register in eve-fleet
-      # + widget hello) — without it Claude loads the prompt but idles,
-      # never registering, so klod_summon broadcasts have no subscriber.
+      # Long-running Klod Claude session. The `/ops-klod` slash command is
+      # the initial prompt — invoking the ops-klod skill binds the session
+      # to the eve-fleet agent group and runs Klod's bootstrap (mirrors the
+      # `-- "/ops-triage-agent"` pattern used by the task tmuxinator session).
       panes:
-        - >-
-          ~/.claude/scripts/__claude_with_monitor.sh
-          --system-prompt-file ~/.claude/system-prompts/eve-companion-system-prompt.md
-          --prompt "Bootstrap now: register as klod in agent group eve-fleet, push an 'online' hello to the widget FIFO, then wait for klod_summon broadcasts."
+        - ~/.claude/scripts/__claude_with_monitor.sh --system-prompt-file ~/.claude/system-prompts/eve-companion-system-prompt.md -- "/ops-klod"
 
   - log:
       # Foreground daemon log so the user can see chatlog parses, routed
