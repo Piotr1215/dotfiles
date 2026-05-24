@@ -1,40 +1,50 @@
 # /home/decoder/.config/tmuxinator/eve.yml (symlinked from dotfiles)
 #
-# Dedicated EVE Online intel session. Spawns the klod-daemon (chatlog tail +
-# ESI pollers), the NATS bridge that broadcasts Tier 3 / klod_summon events to
-# the `eve-fleet` agent group, the floating GTK widget that surfaces replies,
-# and a long-running Claude session (Klod) bound to the eve-companion system
-# prompt.
+# Dedicated EVE Online intel session. Pane 1 multiplexes the klod-daemon
+# (foreground log) with the NATS bridge + GTK widget (backgrounded, logs to
+# /tmp). Pane 2 is the long-running Klod Claude session bound to the eve
+# companion system prompt.
 #
-# Start with: tmuxinator start eve
-# Stop with:  tmuxinator stop eve  (kills panes; widget keeps running if launched detached)
+# Start: tmuxinator start eve
+# Stop:  tmuxinator stop eve  (on_project_stop reaps widget/bridge/daemon)
 
 name: eve
 root: ~/dev/
 
-# Pre-flight: ensure config dir exists for FIFOs created by daemon.
+# Ensure FIFO directory exists before daemon starts.
 on_project_start: mkdir -p ~/.config/eve-route
+
+# Reap background processes the user can't see (widget + bridge backgrounded in
+# pane 1) plus daemon if the trap didn't fire (e.g. session killed externally).
+# Lockfile removed so a re-start can take the widget lock cleanly.
+on_project_stop: |
+  pkill -TERM -f 'mcp-servers/code-execution/skills/eve/klod_widget\.py' 2>/dev/null || true
+  pkill -TERM -f 'mcp-servers/code-execution/skills/eve/eve_fleet_bridge\.py' 2>/dev/null || true
+  pkill -TERM -f 'mcp-servers/code-execution/skills/eve/daemon\.py' 2>/dev/null || true
+  rm -f ~/.config/eve-route/klod_widget.lock 2>/dev/null || true
 
 windows:
   - klod:
-      # 4-pane layout: top-left daemon, top-right bridge, bottom-left widget log, bottom-right Klod.
-      layout: tiled
+      layout: even-horizontal
       panes:
-        # Pane 1: klod-daemon — chatlog tail + ESI pollers + router
-        - python3 ~/.claude/mcp-servers/code-execution/skills/eve/daemon.py --log-level INFO
+        # Pane 1: widget + bridge backgrounded (logs to /tmp); daemon foreground.
+        # Trap kills the background siblings when the pane shell exits (Ctrl+C
+        # in daemon, SIGHUP from tmux pane kill, or tmuxinator stop).
+        - >-
+          bash -c '
+          python3 ~/.claude/mcp-servers/code-execution/skills/eve/klod_widget.py
+          >/tmp/klod_widget.log 2>&1 & WP=$!;
+          python3 ~/.claude/mcp-servers/code-execution/skills/eve/eve_fleet_bridge.py
+          >/tmp/eve_fleet_bridge.log 2>&1 & BP=$!;
+          trap "kill $WP $BP 2>/dev/null" EXIT TERM HUP INT;
+          python3 ~/.claude/mcp-servers/code-execution/skills/eve/daemon.py --log-level INFO
+          '
 
-        # Pane 2: eve-fleet bridge — FIFO -> NATS broadcast for Klod
-        - python3 ~/.claude/mcp-servers/code-execution/skills/eve/eve_fleet_bridge.py
-
-        # Pane 3: floating widget (GTK3, always-on-top). stderr stays in pane for debugging.
-        - python3 ~/.claude/mcp-servers/code-execution/skills/eve/klod_widget.py
-
-        # Pane 4: Klod — long-running Claude session bound to the eve companion prompt.
-        # __claude_with_monitor.sh handles notifications + tmux pane name labeling.
+        # Pane 2: Klod — long-running Claude bound to the eve companion prompt.
         - ~/.claude/scripts/__claude_with_monitor.sh --system-prompt-file ~/.claude/system-prompts/eve-companion-system-prompt.md
 
   - intel:
-      # Secondary window for ad-hoc eve-info skill runs, kill feeds, klodctl.
+      # Secondary window for ad-hoc eve-info skill runs and klod CLI use.
       layout: even-horizontal
       panes:
         - cd ~/.claude/skills/eve-info && $SHELL
