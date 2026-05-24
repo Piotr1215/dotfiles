@@ -14,27 +14,50 @@ name: eve
 root: ~/dev/
 
 # Launch infra processes (widget + bridge) that aren't tied to any pane.
-# After widget appears, move it to workspace 2 where EVE runs (EWMH 0-indexed
-# -> -t 1). Best-effort: retry briefly while the window manager picks it up.
+# The widget self-places on workspace 2 via a GTK map-event handler (see
+# klod_widget.py `_on_first_map`); no external wmctrl retry needed — the
+# previous backgrounded retry loop died with the parent shell, leaving the
+# widget on whichever workspace happened to be active.
 on_project_start: |
   mkdir -p ~/.config/eve-route
   nohup python3 ~/.claude/mcp-servers/code-execution/skills/eve/klod_widget.py >/tmp/klod_widget.log 2>&1 &
   nohup python3 ~/.claude/mcp-servers/code-execution/skills/eve/eve_fleet_bridge.py >/tmp/eve_fleet_bridge.log 2>&1 &
-  (
-    for _ in 1 2 3 4 5 6 7 8; do
-      wmctrl -r "Klod" -t 1 2>/dev/null && exit 0
-      sleep 1
-    done
-  ) >/dev/null 2>&1 &
 
 # Reap infra processes the user can't see; remove the widget lockfile so a
 # clean restart can take it. Fires on `tmuxinator stop` (which __kill_tmux_session.sh
-# now routes through for tmuxinator-managed sessions).
+# routes through for tmuxinator-managed sessions). Plain `tmux kill-session`
+# bypasses this hook entirely — that path leaks dangling processes.
+#
+# Cleanup order is daemon → bridge → widget so the daemon stops writing to the
+# downstream FIFOs before their readers die. SIGTERM gets a 2s grace, then
+# SIGKILL clears any straggler (pkill -TERM occasionally returns success but
+# leaves the process alive — observed 2026-05-24).
 on_project_stop: |
-  pkill -TERM -f 'mcp-servers/code-execution/skills/eve/klod_widget\.py' 2>/dev/null || true
-  pkill -TERM -f 'mcp-servers/code-execution/skills/eve/eve_fleet_bridge\.py' 2>/dev/null || true
+  # 1. Graceful stop in dependency order.
+  pkill -TERM -f 'mcp-servers/code-execution/skills/eve/klod_local_ocr\.py' 2>/dev/null || true
   pkill -TERM -f 'mcp-servers/code-execution/skills/eve/daemon\.py' 2>/dev/null || true
-  rm -f ~/.config/eve-route/klod_widget.lock 2>/dev/null || true
+  pkill -TERM -f 'mcp-servers/code-execution/skills/eve/eve_fleet_bridge\.py' 2>/dev/null || true
+  pkill -TERM -f 'mcp-servers/code-execution/skills/eve/klod_widget\.py' 2>/dev/null || true
+  sleep 2
+  # 2. Force-kill anything that ignored SIGTERM.
+  pkill -KILL -f 'mcp-servers/code-execution/skills/eve/klod_local_ocr\.py' 2>/dev/null || true
+  pkill -KILL -f 'mcp-servers/code-execution/skills/eve/daemon\.py' 2>/dev/null || true
+  pkill -KILL -f 'mcp-servers/code-execution/skills/eve/eve_fleet_bridge\.py' 2>/dev/null || true
+  pkill -KILL -f 'mcp-servers/code-execution/skills/eve/klod_widget\.py' 2>/dev/null || true
+  # 3. Remove ephemeral state. Each owning process mkfifo's its read-side on next
+  #    start (daemon→control, widget→widget, bridge→eve-fleet). The widget lock
+  #    must be cleared or the next widget launch refuses to start.
+  #    KEEP persistent state: badactors.json, contacts.json, router.yaml,
+  #    tokens.json, discord.yaml, STATUS.md, widget.pos, notify.log.
+  rm -f ~/.config/eve-route/control.fifo \
+        ~/.config/eve-route/widget.fifo \
+        ~/.config/eve-route/eve-fleet.fifo \
+        ~/.config/eve-route/klod_widget.lock 2>/dev/null || true
+  # 4. Verify. Loud warning beats silent leak.
+  if pgrep -f 'mcp-servers/code-execution/skills/eve/(klod_widget|eve_fleet_bridge|daemon)\.py' >/dev/null 2>&1; then
+    echo "[eve cleanup] WARNING: processes still alive after SIGKILL:" >&2
+    pgrep -af 'mcp-servers/code-execution/skills/eve/(klod_widget|eve_fleet_bridge|daemon)\.py' >&2
+  fi
 
 windows:
   - klod:
@@ -50,6 +73,16 @@ windows:
       # events, and rate-limit decisions in real time.
       panes:
         - python3 ~/.claude/mcp-servers/code-execution/skills/eve/daemon.py --log-level INFO
+
+  - local-ocr:
+      # Local-pane OCR poller. Gated on ~/.config/eve-route/trackers.json — the
+      # same list klodctl track add/remove writes. Per-char calibration lives in
+      # ~/.config/eve-route/local-crops.json. Emits +1 alerts as
+      # `local_unknown_in_system` events direct to the widget.
+      # Activate a char:  klod track add "Tide Mende"
+      # Calibrate a char: sleep 3 && python3 ~/.claude/mcp-servers/code-execution/skills/eve/klod_local_cal.py --char "Tide Mende"
+      panes:
+        - python3 ~/.claude/mcp-servers/code-execution/skills/eve/klod_local_ocr.py
 
   - intel:
       # Ad-hoc shells for klod CLI, eve-info script runs, ring inspection.
