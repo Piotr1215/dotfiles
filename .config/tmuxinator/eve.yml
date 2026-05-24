@@ -13,7 +13,7 @@ name: eve
 root: ~/dev/
 
 # Pre-flight: ensure config dir exists for FIFOs created by daemon.
-pre: mkdir -p ~/.config/eve-route
+on_project_start: mkdir -p ~/.config/eve-route
 
 windows:
   - klod:
