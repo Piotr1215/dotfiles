@@ -3,7 +3,7 @@
 # See: __lib_taskwarrior_interop.sh, ops-autonomous-worker.md, ops-triage-agent.md
 # Related: task-resume-annotations (uses linear_issue_id for stable refs)
 #
-# Synchronizes Linear issues with Taskwarrior
+# Synchronizes Linear issues assigned to me with Taskwarrior.
 #
 # Key behaviors:
 # 1. For unassigned Linear issues: Deletes them from Taskwarrior (since they're no longer relevant to you)
@@ -11,9 +11,11 @@
 #    (Released, Canceled, Done, Ready for Release, Duplicate, Archived)
 # 3. The +backlog tag is now Taskwarrior-internal and doesn't sync with Linear
 #    (users can add/remove this tag manually without affecting Linear)
-# 4. Tasks with +backlog or +review tags will NOT have their status, priority or tags
-#    modified by the sync process, regardless of Linear issue status
+# 4. The +triage tag is added when an assigned issue is in Triage state and
+#    removed when it transitions out. Cleanup queries do NOT exclude +triage,
+#    so stale tags reconcile against Linear's actual state.
 #
+# Note: The cross-team Triage feed was removed — only issues assigned to me sync.
 # Note: GitHub issue sync was removed in v1.0-with-github-sync (no GitHub issues assigned)
 
 # shellcheck disable=SC2155
@@ -34,10 +36,6 @@ declare -A TEAM_PREFIX_PROJECT=(
 declare -A TEAM_PREFIX_REPO=(
     ["DOC"]="vcluster-docs"
 )
-
-# Linear team names whose Triage queue is synced regardless of assignee.
-# Tasks created from this feed get +triage and surface in the backlog report.
-TRIAGE_TEAM_NAMES='["Dev Ops", "AI"]'
 
 # ====================================================
 # LOGGING FUNCTIONS
@@ -207,92 +205,6 @@ get_linear_issues() {
     rm -f "$temp_response"
     
     echo "$issues"
-}
-
-# Retrieve all Triage-status issues across the configured triage teams (any assignee).
-# Output shape matches get_linear_issues so the same sync helpers can consume it.
-get_team_triage_issues() {
-    local response
-    local exit_code
-    local max_retries=3
-    local retry_count=0
-    local wait_time=2
-
-    while [[ $retry_count -lt $max_retries ]]; do
-        local curl_stderr
-        curl_stderr=$(mktemp)
-
-        response=$(curl -s -w "\n%{http_code}" \
-            --connect-timeout 10 \
-            --max-time 30 \
-            -X POST \
-            -H "Content-Type: application/json" \
-            -H "Authorization: ${LINEAR_API_KEY}" \
-            --data '{"query": "query { issues(filter: {state: {name: {eq: \"Triage\"}}, team: {name: {in: '"$TRIAGE_TEAM_NAMES"'}}}, first: 250) { nodes { id title url state { name } project { name } dueDate priority cycle { number } } } }"}' \
-            https://api.linear.app/graphql 2>"$curl_stderr")
-        exit_code=$?
-
-        if [[ $exit_code -eq 0 ]]; then
-            rm -f "$curl_stderr"
-            break
-        fi
-
-        local error_msg
-        error_msg=$(cat "$curl_stderr" 2>/dev/null || echo "Unknown error")
-        retry_count=$((retry_count + 1))
-
-        if [[ $retry_count -lt $max_retries ]]; then
-            echo "Warning: Linear triage API request failed (attempt $retry_count/$max_retries, curl exit code: $exit_code)" >&2
-            echo "Details: $error_msg" >&2
-            echo "Retrying in ${wait_time}s..." >&2
-            sleep "$wait_time"
-            wait_time=$((wait_time * 2))
-            rm -f "$curl_stderr"
-        else
-            echo "Error: Linear triage API request failed after $max_retries attempts (curl exit code: $exit_code)" >&2
-            echo "Details: $error_msg" >&2
-            rm -f "$curl_stderr"
-            return 1
-        fi
-    done
-
-    local http_code=$(echo "$response" | tail -1)
-    local content=$(echo "$response" | head -n -1)
-
-    if [[ "$http_code" -ne 200 ]]; then
-        echo "Error: Linear triage API returned HTTP $http_code" >&2
-        echo "Response: $content" >&2
-        return 1
-    fi
-
-    if ! echo "$content" | jq empty 2>/dev/null; then
-        echo "Error: Invalid JSON response from Linear triage API" >&2
-        echo "Response: $content" >&2
-        return 1
-    fi
-
-    local errors
-    errors=$(echo "$content" | jq -r '.errors // empty')
-    if [[ -n "$errors" ]]; then
-        echo "Error: Linear triage API returned errors: $errors" >&2
-        return 1
-    fi
-
-    if ! echo "$content" | jq -c '.data.issues.nodes[] | {
-            id: .id,
-            description: .title,
-            repository: "linear",
-            html_url: .url,
-            issue_id: (.url | split("/") | .[-2]),
-            project: .project.name,
-            status: .state.name,
-            due_date: .dueDate,
-            priority: .priority,
-            cycle_number: .cycle.number
-        }' 2>/dev/null; then
-        echo "Error: Failed to parse Linear triage issues" >&2
-        return 1
-    fi
 }
 
 # Check the true status of a Linear issue
@@ -692,7 +604,7 @@ compare_and_clean_tasks() {
     # OPTIMIZATION: Only get PENDING tasks with Linear issue IDs
     # This massively reduces the number of tasks to process
     local task_export
-    task_export=$(task 'linear_issue_id.any:' '-triage' status:pending export)
+    task_export=$(task 'linear_issue_id.any:' status:pending export)
 
     # Remove any empty or null entries (extra safety check)
     task_export=$(echo "$task_export" | jq -c '[.[] | select(.status == "pending")]')
@@ -773,10 +685,9 @@ find_and_clean_reassigned_tasks() {
     
     log "Checking for reassigned Linear tasks..."
 
-    # Get all tasks with linear_issue_id but exclude +triage tasks
-    # OPTIMIZATION: Only get pending tasks
+    # OPTIMIZATION: Only get pending tasks with linear_issue_id
     local tasks_with_linear_id
-    tasks_with_linear_id=$(task 'linear_issue_id.any:' '-triage' status:pending export)
+    tasks_with_linear_id=$(task 'linear_issue_id.any:' status:pending export)
 
     # Remove any empty or null entries (extra safety check)
     tasks_with_linear_id=$(echo "$tasks_with_linear_id" | jq -c '[.[] | select(.status == "pending")]')
@@ -829,48 +740,6 @@ find_and_clean_reassigned_tasks() {
     done
 }
 
-# Delete +triage tasks whose Linear issue is no longer in any active feed.
-# Tasks without linear_issue_id are left alone (manually tagged, not script-owned).
-# Cross-team Triage issues assigned to me arrive via the main feed (also gain
-# +triage via update_task_status), so we must check both feed ID lists before
-# deleting — otherwise a freshly synced ENGUI Triage task would be wiped on the
-# same run.
-clean_removed_team_triage_tasks() {
-    local triage_issue_ids="$1"
-    local main_issue_ids="$2"
-
-    log "Cleaning up tasks no longer in any triage feed..."
-
-    local triage_tasks
-    triage_tasks=$(task '+triage' status:pending export 2>/dev/null)
-
-    if [[ -z "$triage_tasks" || "$triage_tasks" == "[]" ]]; then
-        log "No +triage tasks in taskwarrior."
-        return
-    fi
-
-    local tasks_count
-    tasks_count=$(echo "$triage_tasks" | jq -r '.[] | .uuid' | wc -l)
-    log "Processing $tasks_count +triage tasks for team-triage cleanup"
-
-    echo "$triage_tasks" | jq -c '.[]' | while IFS= read -r task_data; do
-        local linear_id=$(echo "$task_data" | jq -r '.linear_issue_id // empty')
-        local task_uuid=$(echo "$task_data" | jq -r '.uuid')
-        local task_desc=$(echo "$task_data" | jq -r '.description')
-
-        # Skip user-managed +triage tasks (no Linear linkage).
-        if [[ -z "$linear_id" || "$linear_id" == "null" ]]; then
-            continue
-        fi
-
-        if ! echo "$triage_issue_ids" | grep -Fxq "$linear_id" \
-           && ! echo "$main_issue_ids" | grep -Fxq "$linear_id"; then
-            log "Task $linear_id no longer in any triage feed: $task_desc - deleting"
-            task rc.confirmation=no "$task_uuid" delete
-        fi
-    done
-}
-
 # ====================================================
 # PHASE 6: MAIN EXECUTION
 # ====================================================
@@ -886,19 +755,7 @@ main() {
     local linear_issues
     linear_issues=$(get_linear_issues)
 
-    # Distinguish "fetch succeeded but empty" from "fetch failed" — the latter
-    # must NOT trigger triage cleanup, otherwise a transient API outage would
-    # mass-delete every team-triage task.
-    local triage_issues=""
-    local triage_fetch_ok=0
-    if triage_issues=$(get_team_triage_issues); then
-        triage_fetch_ok=1
-    else
-        log "Team triage fetch failed - skipping triage sync and cleanup this run"
-        triage_issues=""
-    fi
-
-    if [[ -z "$linear_issues" && -z "$triage_issues" ]]; then
+    if [[ -z "$linear_issues" ]]; then
         log "No issues retrieved from Linear. Exiting."
         exit 0
     fi
@@ -906,37 +763,16 @@ main() {
     # Phase 3 & 4: Task Management & Synchronization
     log "Phase 3 & 4: Running synchronization operations"
 
-    # Process specific deletion of reassigned Linear tasks (excludes +triage tasks).
-    if [[ -n "$linear_issues" ]]; then
-        find_and_clean_reassigned_tasks "$linear_issues"
-        sync_issues_to_taskwarrior "$linear_issues"
-    fi
-
-    # Sync team-triage feed AFTER assigned-to-me sync so update_task_status finds
-    # the existing task by linear_issue_id and applies +triage to it.
-    if [[ -n "$triage_issues" ]]; then
-        log "Phase 4b: Syncing team triage feed (${TRIAGE_TEAM_NAMES})"
-        sync_issues_to_taskwarrior "$triage_issues"
-    fi
+    find_and_clean_reassigned_tasks "$linear_issues"
+    sync_issues_to_taskwarrior "$linear_issues"
 
     # Phase 5: Cleanup and Maintenance
     log "Phase 5: Performing cleanup and maintenance"
 
-    # Compile descriptions from both feeds for the existing comparison cleanup.
     local all_descriptions
-    all_descriptions=$(printf '%s\n%s\n' "$linear_issues" "$triage_issues" | jq -r 'select(. != null) | .description' 2>/dev/null)
+    all_descriptions=$(echo "$linear_issues" | jq -r '.description' 2>/dev/null)
 
     compare_and_clean_tasks "$all_descriptions"
-
-    # Phase 5b: prune +triage tasks whose Linear issue dropped out of every feed.
-    # Skip cleanup entirely if the triage fetch failed — the empty ID list would
-    # otherwise look like "every triage issue disappeared".
-    if [[ "$triage_fetch_ok" == 1 ]]; then
-        local triage_issue_ids main_issue_ids
-        triage_issue_ids=$(echo "$triage_issues" | jq -r '.issue_id // empty' 2>/dev/null)
-        main_issue_ids=$(echo "$linear_issues" | jq -r '.issue_id // empty' 2>/dev/null)
-        clean_removed_team_triage_tasks "$triage_issue_ids" "$main_issue_ids"
-    fi
 
     log "Synchronization completed successfully"
 
