@@ -1,0 +1,15 @@
+# ~/.config/tmuxinator/infra-prod.yml
+
+name: infra-prod
+root: <%= ENV['HOME'] %>/loft/clusters/infra-prod
+
+pre_window: export KUBECONFIG=<%= ENV['HOME'] %>/loft/clusters/infra-prod/config
+
+windows:
+  - main:
+      layout: main-vertical
+      panes:
+        - main:
+          - if ! aws sts get-caller-identity --profile prod &>/dev/null; then aws sso login --profile prod; fi && aws eks update-kubeconfig --name vcluster-prod --region us-east-2 --kubeconfig ./config --profile prod
+  - infrastructure:
+      root: <%= ENV['HOME'] %>/loft/hosted-platform/infrastructure
