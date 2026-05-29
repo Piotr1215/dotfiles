@@ -144,8 +144,9 @@ GITHUB_BIND="ctrl-b:execute-silent(touch $RETURN_MARKER)+execute(~/dev/dotfiles/
 # PRs binding (Ctrl+G for GitHub) - sets marker, launches PR script, then aborts to restart loop
 PR_BIND="ctrl-g:execute-silent(touch $RETURN_MARKER)+execute(~/dev/dotfiles/scripts/__my_prs.sh fzf)+abort"
 
-# Linear issues binding (Ctrl+I for Issues) - sets marker, launches Linear script, then aborts to restart loop
-LINEAR_BIND="ctrl-i:execute-silent(touch $RETURN_MARKER)+execute(~/dev/dotfiles/scripts/__linear_issue_viewer.sh)+abort"
+# Linear issues binding (Ctrl+L for Linear) - sets marker, launches Linear script, then aborts to restart loop
+# NOTE: cannot use Ctrl+I — terminals send it identical to Tab (0x09), which collides with PASTE_BIND
+LINEAR_BIND="ctrl-l:execute-silent(touch $RETURN_MARKER)+execute(~/dev/dotfiles/scripts/__linear_issue_viewer.sh)+abort"
 
 # Edit tmuxinator config (Ctrl+E) - only works on sessions
 EDIT_BIND="ctrl-e:execute(name={}; name=\${name% ◀◀◀}; [[ -f ~/.config/tmuxinator/\${name}.yml ]] && nvim ~/.config/tmuxinator/\${name}.yml)+abort"
@@ -206,7 +207,7 @@ while true; do
                 echo "Preview not available"
             fi' \
         --preview-window 'right:50%:wrap' \
-        --header ' C-f:30d C-x:home C-b:github C-g:PRs C-i:Linear C-e:edit C-u:music C-k:kill | C-y:copy Tab:paste' \
+        --header ' C-f:30d C-x:home C-b:github C-g:PRs C-l:Linear C-e:edit C-u:music C-k:kill | C-y:copy Tab:paste' \
         --prompt 'all> ' \
         --bind "$HOME_BIND" \
         --bind "$FILE_BIND" \
