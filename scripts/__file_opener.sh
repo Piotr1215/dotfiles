@@ -161,6 +161,10 @@ COPY_BIND="ctrl-y:execute-silent(~/dev/dotfiles/scripts/__copy_path_with_notific
 
 PASTE_BIND="tab:execute-silent(~/dev/dotfiles/scripts/__copy_path_with_notification.sh {})+execute-silent(touch /tmp/file_opener_paste)+abort"
 
+# Agents subview (Ctrl+A) - active agents from tmux pane @agent_name options.
+# Overrides fzf's default beginning-of-line on Ctrl+A (acceptable trade).
+AGENTS_BIND="ctrl-a:execute-silent(touch /tmp/file_opener_agents)+abort"
+
 # Loop to allow returning from PRs/Linear back to main picker
 while true; do
     OUTPUT=$( {
@@ -207,7 +211,7 @@ while true; do
                 echo "Preview not available"
             fi' \
         --preview-window 'right:50%:wrap' \
-        --header ' C-f:30d C-x:home C-b:github C-g:PRs C-l:Linear C-e:edit C-u:music C-k:kill | C-y:copy Tab:paste' \
+        --header ' C-f:30d C-x:home C-b:github C-g:PRs C-l:Linear C-a:agents C-e:edit C-u:music C-k:kill | C-y:copy Tab:paste' \
         --prompt 'all> ' \
         --bind "$HOME_BIND" \
         --bind "$FILE_BIND" \
@@ -219,6 +223,7 @@ while true; do
         --bind "$KILL_SESSION_BIND" \
         --bind "$COPY_BIND" \
         --bind "$PASTE_BIND" \
+        --bind "$AGENTS_BIND" \
         --bind "ctrl-c:abort" \
         2>/dev/null) || true
 
@@ -254,6 +259,63 @@ while true; do
         fi
         [[ -z "$OUTPUT" ]] && continue
         break
+    fi
+
+    # Agents subview: active agents from tmux pane @agent_name options.
+    # Columns: AGENT | LINEAR (parsed from name) | LOCATION (session:win.pane).
+    # Enter switches the client to the agent's pane; Tab pastes the agent name.
+    if [[ -f /tmp/file_opener_agents ]]; then
+        rm -f /tmp/file_opener_agents
+        agent_table=$( {
+            printf 'AGENT\tLINEAR\tLOCATION\n'
+            tmux list-panes -a -F '#{@agent_name}|#{session_name}:#{window_index}.#{pane_index}' 2>/dev/null \
+                | awk -F'|' '$1!="" && !seen[$1]++ {
+                    name=$1; loc=$2;
+                    if (match(name, /[A-Za-z]+-[0-9]+/)) lin=toupper(substr(name, RSTART, RLENGTH)); else lin="-";
+                    printf "%s\t%s\t%s\n", name, lin, loc;
+                }'
+        } | column -t -s$'\t')
+
+        # Only the header line means no live agents -> back to main picker
+        if [[ $(printf '%s\n' "$agent_table" | wc -l) -le 1 ]]; then
+            tmux display-message "No active agents found"
+            continue
+        fi
+
+        AGENT_SEL=$(printf '%s\n' "$agent_table" | fzf \
+            --header-lines=1 \
+            --prompt 'agent> ' \
+            --header 'Enter:switch to pane  Tab:paste name  Esc:back' \
+            --preview 'n=$(echo {} | awk "{print \$1}"); tmux list-panes -a -F "#{@agent_name}|#{session_name}:#{window_index}.#{pane_index}" 2>/dev/null | awk -F"|" -v n="$n" "\$1==n{print \$2}" | while read -r p; do echo "▶ $p"; tmux capture-pane -ep -t "$p" 2>/dev/null | command grep -v "^$" | tail -20; echo; done' \
+            --preview-window 'right:55%:wrap' \
+            --bind 'tab:execute-silent(touch /tmp/file_opener_agent_paste)+accept' \
+            --bind 'ctrl-c:abort' 2>/dev/null) || true
+
+        # Nothing picked (Esc) -> back to main picker
+        [[ -z "$AGENT_SEL" ]] && continue
+
+        agent_name=$(printf '%s\n' "$AGENT_SEL" | awk '{print $1}')
+        target=$(tmux list-panes -a -F '#{@agent_name}|#{session_name}:#{window_index}.#{pane_index}' 2>/dev/null \
+            | awk -F'|' -v n="$agent_name" '$1==n{print $2; exit}')
+
+        # Tab: paste the agent name at cursor after the popup closes
+        if [[ -f /tmp/file_opener_agent_paste ]]; then
+            rm -f /tmp/file_opener_agent_paste
+            tmux set-buffer -- "$agent_name "
+            tmux run-shell -b "sleep 0.1 && tmux paste-buffer"
+            exit 0
+        fi
+
+        # Enter: switch the underlying client to the agent's pane
+        if [[ -n "$target" ]]; then
+            session="${target%%:*}"
+            winpane="${target#*:}"
+            window="${winpane%%.*}"
+            tmux switch-client -t "$session" 2>/dev/null
+            tmux select-window -t "$session:$window" 2>/dev/null
+            tmux select-pane -t "$target" 2>/dev/null
+        fi
+        exit 0
     fi
 
     break
