@@ -440,7 +440,10 @@ require("obsidian").setup {
 
   -- Use just the note name as ID (obsidian.nvim handles path resolution)
   note_id_func = function(title)
-    -- Return just the title without path or extension
+    -- Guard nil/empty title so the file does not land as nil.md
+    if not title or title == "" then
+      return os.date "%Y%m%d-%H%M%S"
+    end
     return title
   end,
 
@@ -495,7 +498,7 @@ vim.api.nvim_buf_set_extmark = function(buffer, ns_id, line, col, opts)
 end
 
 require("nvim-treesitter").setup {}
-vim.opt.rtp:append(vim.fn.stdpath("data") .. "/lazy/nvim-treesitter/runtime")
+vim.opt.rtp:append(vim.fn.stdpath "data" .. "/lazy/nvim-treesitter/runtime")
 
 vim.api.nvim_create_autocmd("FileType", {
   callback = function()
@@ -518,23 +521,51 @@ require("nvim-treesitter-textobjects").setup {
 }
 
 local select_to = require("nvim-treesitter-textobjects.select").select_textobject
-local move = require("nvim-treesitter-textobjects.move")
+local move = require "nvim-treesitter-textobjects.move"
 
-vim.keymap.set({ "x", "o" }, "af", function() select_to("@function.outer", "textobjects") end)
-vim.keymap.set({ "x", "o" }, "if", function() select_to("@function.inner", "textobjects") end)
-vim.keymap.set({ "x", "o" }, "ac", function() select_to("@class.outer", "textobjects") end)
-vim.keymap.set({ "x", "o" }, "ic", function() select_to("@class.inner", "textobjects") end)
+vim.keymap.set({ "x", "o" }, "af", function()
+  select_to("@function.outer", "textobjects")
+end)
+vim.keymap.set({ "x", "o" }, "if", function()
+  select_to("@function.inner", "textobjects")
+end)
+vim.keymap.set({ "x", "o" }, "ac", function()
+  select_to("@class.outer", "textobjects")
+end)
+vim.keymap.set({ "x", "o" }, "ic", function()
+  select_to("@class.inner", "textobjects")
+end)
 
-vim.keymap.set({ "n", "x", "o" }, "]m", function() move.goto_next_start("@function.outer", "textobjects") end)
-vim.keymap.set({ "n", "x", "o" }, "]]", function() move.goto_next_start("@class.outer", "textobjects") end)
-vim.keymap.set({ "n", "x", "o" }, "]a", function() move.goto_next_start("@parameter.inner", "textobjects") end)
-vim.keymap.set({ "n", "x", "o" }, "]M", function() move.goto_next_end("@function.outer", "textobjects") end)
-vim.keymap.set({ "n", "x", "o" }, "][", function() move.goto_next_end("@class.outer", "textobjects") end)
-vim.keymap.set({ "n", "x", "o" }, "[m", function() move.goto_previous_start("@function.outer", "textobjects") end)
-vim.keymap.set({ "n", "x", "o" }, "[[", function() move.goto_previous_start("@class.outer", "textobjects") end)
-vim.keymap.set({ "n", "x", "o" }, "[a", function() move.goto_previous_start("@parameter.inner", "textobjects") end)
-vim.keymap.set({ "n", "x", "o" }, "[M", function() move.goto_previous_end("@function.outer", "textobjects") end)
-vim.keymap.set({ "n", "x", "o" }, "[]", function() move.goto_previous_end("@class.outer", "textobjects") end)
+vim.keymap.set({ "n", "x", "o" }, "]m", function()
+  move.goto_next_start("@function.outer", "textobjects")
+end)
+vim.keymap.set({ "n", "x", "o" }, "]]", function()
+  move.goto_next_start("@class.outer", "textobjects")
+end)
+vim.keymap.set({ "n", "x", "o" }, "]a", function()
+  move.goto_next_start("@parameter.inner", "textobjects")
+end)
+vim.keymap.set({ "n", "x", "o" }, "]M", function()
+  move.goto_next_end("@function.outer", "textobjects")
+end)
+vim.keymap.set({ "n", "x", "o" }, "][", function()
+  move.goto_next_end("@class.outer", "textobjects")
+end)
+vim.keymap.set({ "n", "x", "o" }, "[m", function()
+  move.goto_previous_start("@function.outer", "textobjects")
+end)
+vim.keymap.set({ "n", "x", "o" }, "[[", function()
+  move.goto_previous_start("@class.outer", "textobjects")
+end)
+vim.keymap.set({ "n", "x", "o" }, "[a", function()
+  move.goto_previous_start("@parameter.inner", "textobjects")
+end)
+vim.keymap.set({ "n", "x", "o" }, "[M", function()
+  move.goto_previous_end("@function.outer", "textobjects")
+end)
+vim.keymap.set({ "n", "x", "o" }, "[]", function()
+  move.goto_previous_end("@class.outer", "textobjects")
+end)
 
 require("femaco").setup {
   -- what to do after opening the float
@@ -586,6 +617,21 @@ require("nvim-surround").setup {
     visual_line = "gS",
     delete = "d;",
     change = "c;",
+  },
+  surrounds = {
+    ["c"] = {
+      add = { "```", "```" },
+      find = "```.-```",
+      delete = "^(```)().-(```)()$",
+    },
+    ["C"] = {
+      add = function()
+        local lang = vim.fn.input "Language: "
+        return { { "```" .. lang }, { "```" } }
+      end,
+      find = "```.-```",
+      delete = "^(```[^\n]*\n)().-(\n```)()$",
+    },
   },
 }
 
