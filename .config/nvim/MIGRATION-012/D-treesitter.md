@@ -2,6 +2,16 @@
 
 ## VERDICT
 
+> **⚠️ EXECUTION CORRECTION (2026-05-30): this verdict's premise is wrong.**
+> Runtime keymap inspection during execution showed `an`/`in` are NOT in a free slot —
+> **`mini.ai` owns them** (`around_next`/`inside_next`, `plugins-setup.lua:295`,
+> `require("mini.ai").setup{}`). `maparg('an','x')` → `mini/ai.lua:1236`, not the native
+> `vim/_core/defaults.lua`. So native 0.12 `an`/`in` is **shadowed** and never surfaces here.
+> The static plan grepped config files and checked `nvim-various-textobjs`' `disabledDefaults`
+> but missed mini.ai entirely. **Outcome: verified no-op, no change made.** Nothing is broken —
+> the user actively uses mini.ai's `an`/`in`; the native feature simply doesn't light up on
+> those keys. The "empty slot / works for free" claim below is retained for the record but is FALSE.
+
 **Worth it? — Marginal / optional. No action required to migrate; small optional cleanup available.**
 
 - **What's gained:** Native `an` (grow to outer node) / `in` (shrink to inner node) in
