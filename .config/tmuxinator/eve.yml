@@ -7,6 +7,13 @@
 #  - Window 2 `log`  : foreground daemon log (chatlog tail + ESI pollers + router)
 #  - Window 3 `intel`: ad-hoc shells in the eve-info skill + eve scripts dir
 #
+# Local roster sampling is user-initiated via GNOME custom keybinding
+# Ctrl+Alt+L → klod_local_snap.py (clipboard-based, no background OCR loop).
+# The retired klod_local_ocr.py is kept on disk as a helpers module — snap
+# imports its ESI/classify/emit primitives but the OCR poll loop never runs.
+# Cleanup pkill stanzas still target the OCR runner: defense in depth in case
+# anyone launches it manually.
+#
 # Start: tmuxinator start eve
 # Stop:  M-e (kill_tmux_session.sh routes through `tmuxinator stop eve`)
 
@@ -73,16 +80,6 @@ windows:
       # events, and rate-limit decisions in real time.
       panes:
         - python3 ~/.claude/mcp-servers/code-execution/skills/eve/daemon.py --log-level INFO
-
-  - local-ocr:
-      # Local-pane OCR poller. Gated on ~/.config/eve-route/trackers.json — the
-      # same list klodctl track add/remove writes. Per-char calibration lives in
-      # ~/.config/eve-route/local-crops.json. Emits +1 alerts as
-      # `local_unknown_in_system` events direct to the widget.
-      # Activate a char:  klod track add "Tide Mende"
-      # Calibrate a char: sleep 3 && python3 ~/.claude/mcp-servers/code-execution/skills/eve/klod_local_cal.py --char "Tide Mende"
-      panes:
-        - python3 ~/.claude/mcp-servers/code-execution/skills/eve/klod_local_ocr.py
 
   - intel:
       # Ad-hoc shells for klod CLI, eve-info script runs, ring inspection.
