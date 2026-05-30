@@ -479,24 +479,6 @@ require("todo-comments").setup {
   },
 }
 
--- Workaround for treesitter highlighting error in Neovim 0.11+
--- Override nvim_buf_set_extmark to handle out of range errors
-local original_set_extmark = vim.api.nvim_buf_set_extmark
-vim.api.nvim_buf_set_extmark = function(buffer, ns_id, line, col, opts)
-  local ok, result = pcall(original_set_extmark, buffer, ns_id, line, col, opts)
-  if not ok then
-    if
-      result:match "Invalid 'end_col': out of range"
-      or result:match "Invalid 'end_row': out of range"
-      or result:match "Invalid 'line': out of range"
-    then
-      return 0 -- Return a dummy extmark id
-    end
-    error(result)
-  end
-  return result
-end
-
 require("nvim-treesitter").setup {}
 vim.opt.rtp:append(vim.fn.stdpath "data" .. "/lazy/nvim-treesitter/runtime")
 
