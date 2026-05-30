@@ -7,13 +7,6 @@
 #  - Window 2 `log`  : foreground daemon log (chatlog tail + ESI pollers + router)
 #  - Window 3 `intel`: ad-hoc shells in the eve-info skill + eve scripts dir
 #
-# Local roster sampling is user-initiated via GNOME custom keybinding
-# Ctrl+Alt+L → klod_local_snap.py (clipboard-based, no background OCR loop).
-# The retired klod_local_ocr.py is kept on disk as a helpers module — snap
-# imports its ESI/classify/emit primitives but the OCR poll loop never runs.
-# Cleanup pkill stanzas still target the OCR runner: defense in depth in case
-# anyone launches it manually.
-#
 # Start: tmuxinator start eve
 # Stop:  M-e (kill_tmux_session.sh routes through `tmuxinator stop eve`)
 
@@ -41,13 +34,11 @@ on_project_start: |
 # leaves the process alive — observed 2026-05-24).
 on_project_stop: |
   # 1. Graceful stop in dependency order.
-  pkill -TERM -f 'mcp-servers/code-execution/skills/eve/klod_local_ocr\.py' 2>/dev/null || true
   pkill -TERM -f 'mcp-servers/code-execution/skills/eve/daemon\.py' 2>/dev/null || true
   pkill -TERM -f 'mcp-servers/code-execution/skills/eve/eve_fleet_bridge\.py' 2>/dev/null || true
   pkill -TERM -f 'mcp-servers/code-execution/skills/eve/klod_widget\.py' 2>/dev/null || true
   sleep 2
   # 2. Force-kill anything that ignored SIGTERM.
-  pkill -KILL -f 'mcp-servers/code-execution/skills/eve/klod_local_ocr\.py' 2>/dev/null || true
   pkill -KILL -f 'mcp-servers/code-execution/skills/eve/daemon\.py' 2>/dev/null || true
   pkill -KILL -f 'mcp-servers/code-execution/skills/eve/eve_fleet_bridge\.py' 2>/dev/null || true
   pkill -KILL -f 'mcp-servers/code-execution/skills/eve/klod_widget\.py' 2>/dev/null || true
