@@ -49,6 +49,7 @@ set.splitright = true -- put new splits to the right
 set.splitbelow = true -- put new splits below
 set.lazyredraw = true -- do not redraw for macros, faster execution
 set.undofile = true -- persistent undo even after session close
+set.shada:remove "r/tmp/" -- 0.12 marks /tmp removable, dropping scratch notes from :oldfiles; user keeps scratch files there
 set.spellfile = vim.fn.stdpath "config" .. "/spell/en.utf-8.add"
 set.formatoptions:remove { "o" }
 set.emoji = true
