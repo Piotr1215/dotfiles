@@ -35,8 +35,12 @@ vim.api.nvim_create_autocmd("LspAttach", {
     end
 
     vim.bo[bufnr].omnifunc = "v:lua.vim.lsp.omnifunc"
-    vim.keymap.set("n", "[d", vim.diagnostic.goto_prev, { buffer = bufnr, desc = "Go to previous diagnostic message" })
-    vim.keymap.set("n", "]d", vim.diagnostic.goto_next, { buffer = bufnr, desc = "Go to next diagnostic message" })
+    vim.keymap.set("n", "[d", function()
+      vim.diagnostic.jump { count = -1, float = true }
+    end, { buffer = bufnr, desc = "Go to previous diagnostic message" })
+    vim.keymap.set("n", "]d", function()
+      vim.diagnostic.jump { count = 1, float = true }
+    end, { buffer = bufnr, desc = "Go to next diagnostic message" })
     vim.keymap.set("i", "<C-k>", vim.lsp.buf.signature_help, { buffer = bufnr })
     nmap("K", vim.lsp.buf.hover, "Hover Documentation")
 

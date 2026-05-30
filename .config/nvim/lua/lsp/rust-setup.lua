@@ -22,8 +22,12 @@ vim.g.rustaceanvim = {
       -- so the global LspAttach autocmd (default-lsp.lua) already sets these
       -- (K is also stock 0.12). No need to redefine them per-buffer here.
       -- Vim commands to move through diagnostics.
-      vim.keymap.set("n", "[d", vim.diagnostic.goto_prev, { desc = "Go to previous diagnostic message" })
-      vim.keymap.set("n", "]d", vim.diagnostic.goto_next, { desc = "Go to next diagnostic message" })
+      vim.keymap.set("n", "[d", function()
+        vim.diagnostic.jump { count = -1, float = true }
+      end, { desc = "Go to previous diagnostic message" })
+      vim.keymap.set("n", "]d", function()
+        vim.diagnostic.jump { count = 1, float = true }
+      end, { desc = "Go to next diagnostic message" })
 
       -- Use Neovim's default grr for references
 
