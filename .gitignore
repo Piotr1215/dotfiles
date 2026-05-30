@@ -30,3 +30,5 @@ templates/tasks-template.md
 templates/commands/specify.md
 templates/commands/plan.md
 templates/commands/tasks.md
+
+**/.claude/settings.local.json

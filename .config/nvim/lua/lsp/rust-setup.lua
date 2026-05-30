@@ -18,19 +18,21 @@ vim.g.rustaceanvim = {
         vim.cmd.RustLsp "codeAction"
       end, { buffer = bufnr, desc = "Rust code action" })
 
-      vim.keymap.set("n", "K", vim.lsp.buf.hover, { buffer = bufnr })
-      -- jump to definition
-      vim.keymap.set("n", "gd", vim.lsp.buf.definition, { buffer = bufnr })
-      -- Rename symbol
-      vim.keymap.set("n", "<leader>rn", vim.lsp.buf.rename, { buffer = bufnr })
+      -- K, gd, <leader>rn retired: rustaceanvim uses the native vim.lsp client,
+      -- so the global LspAttach autocmd (default-lsp.lua) already sets these
+      -- (K is also stock 0.12). No need to redefine them per-buffer here.
       -- Vim commands to move through diagnostics.
-      vim.keymap.set("n", "[d", vim.diagnostic.goto_prev, { desc = "Go to previous diagnostic message" })
-      vim.keymap.set("n", "]d", vim.diagnostic.goto_next, { desc = "Go to next diagnostic message" })
+      vim.keymap.set("n", "[d", function()
+        vim.diagnostic.jump { count = -1, float = true }
+      end, { desc = "Go to previous diagnostic message" })
+      vim.keymap.set("n", "]d", function()
+        vim.diagnostic.jump { count = 1, float = true }
+      end, { desc = "Go to next diagnostic message" })
 
       -- Use Neovim's default grr for references
 
-      -- codeaction
-      vim.keymap.set("n", "<leader>ca", vim.lsp.buf.code_action, { buffer = bufnr })
+      -- <leader>ca retired: set by the global LspAttach autocmd (default-lsp.lua);
+      -- code_action is also stock `gra` in 0.12.
 
       -- breakpoint
       vim.keymap.set("n", "<leader>tb", require("dap").toggle_breakpoint, { buffer = bufnr })
