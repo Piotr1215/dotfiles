@@ -34,13 +34,11 @@ on_project_start: |
 # leaves the process alive — observed 2026-05-24).
 on_project_stop: |
   # 1. Graceful stop in dependency order.
-  pkill -TERM -f 'mcp-servers/code-execution/skills/eve/klod_local_ocr\.py' 2>/dev/null || true
   pkill -TERM -f 'mcp-servers/code-execution/skills/eve/daemon\.py' 2>/dev/null || true
   pkill -TERM -f 'mcp-servers/code-execution/skills/eve/eve_fleet_bridge\.py' 2>/dev/null || true
   pkill -TERM -f 'mcp-servers/code-execution/skills/eve/klod_widget\.py' 2>/dev/null || true
   sleep 2
   # 2. Force-kill anything that ignored SIGTERM.
-  pkill -KILL -f 'mcp-servers/code-execution/skills/eve/klod_local_ocr\.py' 2>/dev/null || true
   pkill -KILL -f 'mcp-servers/code-execution/skills/eve/daemon\.py' 2>/dev/null || true
   pkill -KILL -f 'mcp-servers/code-execution/skills/eve/eve_fleet_bridge\.py' 2>/dev/null || true
   pkill -KILL -f 'mcp-servers/code-execution/skills/eve/klod_widget\.py' 2>/dev/null || true
@@ -73,16 +71,6 @@ windows:
       # events, and rate-limit decisions in real time.
       panes:
         - python3 ~/.claude/mcp-servers/code-execution/skills/eve/daemon.py --log-level INFO
-
-  - local-ocr:
-      # Local-pane OCR poller. Gated on ~/.config/eve-route/trackers.json — the
-      # same list klodctl track add/remove writes. Per-char calibration lives in
-      # ~/.config/eve-route/local-crops.json. Emits +1 alerts as
-      # `local_unknown_in_system` events direct to the widget.
-      # Activate a char:  klod track add "Tide Mende"
-      # Calibrate a char: sleep 3 && python3 ~/.claude/mcp-servers/code-execution/skills/eve/klod_local_cal.py --char "Tide Mende"
-      panes:
-        - python3 ~/.claude/mcp-servers/code-execution/skills/eve/klod_local_ocr.py
 
   - intel:
       # Ad-hoc shells for klod CLI, eve-info script runs, ring inspection.
