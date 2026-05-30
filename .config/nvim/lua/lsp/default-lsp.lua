@@ -43,8 +43,21 @@ vim.api.nvim_create_autocmd("LspAttach", {
     nmap("<leader>ca", vim.lsp.buf.code_action, "[C]ode [A]ction")
     nmap("gd", vim.lsp.buf.definition, "[G]oto [D]efinition")
     -- 0.12: LSP jump funcs honour 'switchbuf' (set in this file) so gd reuses an
-    -- existing window; gD is kept for an explicit "definition in a new vsplit".
-    nmap("gD", "<cmd>vsplit | lua vim.lsp.buf.definition()<CR>", "Open Definition in Vertical Split")
+    -- existing window. gD forces definition into a fresh vsplit — done via on_list
+    -- because 'switchbuf=useopen' would otherwise hijack a plain `:vsplit | definition`
+    -- jump back into the existing window, leaving the split empty.
+    nmap("gD", function()
+      vim.lsp.buf.definition {
+        on_list = function(result)
+          local item = result.items[1]
+          if not item then
+            return
+          end
+          vim.cmd("vsplit " .. vim.fn.fnameescape(item.filename))
+          vim.api.nvim_win_set_cursor(0, { item.lnum, math.max(item.col - 1, 0) })
+        end,
+      }
+    end, "Definition in vsplit")
     nmap("gI", vim.lsp.buf.implementation, "[G]oto [I]mplementation")
     nmap("<leader>Ic", vim.lsp.buf.incoming_calls, "[I]ncoming [C]alls")
     nmap("<leader>Oc", vim.lsp.buf.outgoing_calls, "[O]utgoing [C]alls")
