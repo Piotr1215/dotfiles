@@ -68,6 +68,9 @@ vim.api.nvim_create_autocmd("FileType", {
     -- Local settings
     vim.opt_local.conceallevel = 0
     vim.bo.textwidth = is_docs_repo() and 80 or 175
+    -- Keep textwidth for manual `gq` reflow, but never auto-insert hard line
+    -- breaks while typing (drop 't' = auto-wrap text, 'a' = auto-format paras).
+    vim.opt_local.formatoptions:remove { "t", "a" }
     vim.opt_local.spell = true
     vim.opt_local.spelllang = "en_us"
     vim.opt_local.expandtab = true
