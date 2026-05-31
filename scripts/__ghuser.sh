@@ -35,6 +35,9 @@ elif [[ $(( $(date +%s) - $(stat -c %Y "$cache_file") )) -gt $cache_ttl ]]; then
   refresh_cache &
 fi
 
+# Dump the raw cache (login|name), for reuse by other tools (e.g. value-picker).
+[[ "$1" == "--list" ]] && { cat "$cache_file"; exit 0; }
+
 if [[ -z "$1" ]]; then
   cat "$cache_file" | fzf -d'|' --with-nth=2,1 --preview 'echo "GitHub: {1}"' | cut -d'|' -f1
 else
