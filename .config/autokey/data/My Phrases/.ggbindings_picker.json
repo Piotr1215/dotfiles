@@ -1,20 +1,19 @@
 {
-  "type": "phrase",
-  "description": "email_personal",
+  "type": "script",
+  "description": "Show all ;; bindings (picker)",
+  "store": {},
   "modes": [
     1
   ],
-  "usageCount": 1,
+  "usageCount": 0,
   "prompt": false,
   "omitTrigger": false,
-  "matchCase": false,
   "showInTrayMenu": false,
   "abbreviation": {
     "abbreviations": [
-      "p@@",
-      ";;pe"
+      ";;?"
     ],
-    "backspace": true,
+    "backspace": false,
     "ignoreCase": false,
     "immediate": true,
     "triggerInside": false,
@@ -27,6 +26,5 @@
   "filter": {
     "regex": null,
     "isRecursive": false
-  },
-  "sendMode": "<shift>+<insert>"
+  }
 }

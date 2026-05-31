@@ -17,8 +17,13 @@ set -eo pipefail
 SETS_DIR="${VALUE_SETS_DIR:-$HOME/.config/value-sets}"
 
 # Shared rofi look (mirrors __layout_picker.sh).
+# Control+a is rebound from kb-move-front to kb-custom-1 so it exits with code 10,
+# our "copy the whole list to the clipboard" signal (handled by the caller).
+# -mesg advertises it.
 rofi_pick() {
     rofi -dmenu -i -p "$1" \
+        -kb-move-front "" -kb-custom-1 "Control+a" \
+        -mesg 'Ctrl+A → copy whole list to clipboard' \
         -theme-str '* {font: "JetBrainsMono Nerd Font 12";}' \
         -theme-str 'window {width: 600px; background-color: argb:ff282a36; border: 2px solid; border-color: argb:ffbd93f9; border-radius: 8px;}' \
         -theme-str 'mainbox {background-color: transparent;}' \
@@ -56,16 +61,25 @@ if [[ -z "$set_name" ]]; then
     [[ -z "$set_name" ]] && exit 0
 fi
 
-selection=$(load_set "$set_name" | rofi_pick "$set_name") || exit 0
-[[ -z "$selection" ]] && exit 0
+# If a set resolves to exactly one value, there is nothing to choose: skip rofi
+# and type it straight away. Makes status-style sets (e.g. "reboot" -> yes/no)
+# feel instant instead of popping a one-row menu.
+mapfile -t lines < <(load_set "$set_name")
 
-# "VALUE | label" -> type only VALUE; plain line -> type whole line.
-to_type="${selection%% | *}"
+dump_all=0
+if (( ${#lines[@]} == 1 )); then
+    selection="${lines[0]}"
+elif selection=$(printf '%s\n' "${lines[@]}" | rofi_pick "$set_name"); then
+    : # normal pick
+else
+    # rofi exits 10 for kb-custom-1 (Control+a) = "type the whole list".
+    # Anything else (1 = Esc) is a cancel. Read $? first, before any command.
+    [[ $? -eq 10 ]] && dump_all=1 || exit 0
+fi
 
-# Optional: erase the trigger that launched us (e.g. autokey's ";;awsid").
-# $2 = number of chars to backspace first. Done here, via the same xdotool that
-# types the value and only after rofi has closed, so it never races autokey's
-# own key injection (which left "!!aws" behind / ate the value).
+# Erase the trigger that launched us (e.g. autokey's ";;awsid"): $2 = char count.
+# Backspaces only, after rofi has closed, so it never races autokey's own key
+# injection (which left ";;aws" behind / ate the value). This is always safe.
 erase="${2:-0}"
 if [[ "$erase" =~ ^[0-9]+$ ]] && (( erase > 0 )); then
     backspaces=()
@@ -73,5 +87,19 @@ if [[ "$erase" =~ ^[0-9]+$ ]] && (( erase > 0 )); then
     xdotool key --clearmodifiers "${backspaces[@]}"
 fi
 
-# Type into the now-focused window. --clearmodifiers drops a held Super/Ctrl from the trigger key.
+# Ctrl+A (dump-all): copy the WHOLE list (value + label, one per line) to the
+# clipboard. Deliberately NEVER typed: xdotool would inject a real Enter at every
+# newline and, in a terminal, execute each line. Clipboard + manual paste keeps
+# the list inert and lets the user place it where they want.
+if (( dump_all )); then
+    printf '%s\n' "${lines[@]}" | xclip -selection clipboard
+    command -v notify-send >/dev/null 2>&1 &&
+        notify-send "Value picker" "Copied ${#lines[@]} items to clipboard"
+    exit 0
+fi
+
+# Normal pick: type the single VALUE (text before " | "). One line, no Enter, so
+# nothing executes. Multi-line content is never typed (see dump-all above).
+[[ -z "$selection" ]] && exit 0
+to_type="${selection%% | *}"
 xdotool type --clearmodifiers --delay 12 -- "$to_type"

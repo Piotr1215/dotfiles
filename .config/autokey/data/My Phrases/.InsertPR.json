@@ -1,31 +1,31 @@
 {
-    "type": "phrase",
-    "description": "InsertPR",
-    "modes": [
-        1
+  "type": "phrase",
+  "description": "InsertPR",
+  "modes": [
+    1
+  ],
+  "usageCount": 1,
+  "prompt": false,
+  "omitTrigger": false,
+  "matchCase": false,
+  "showInTrayMenu": false,
+  "abbreviation": {
+    "abbreviations": [
+      ";;pull"
     ],
-    "usageCount": 1,
-    "prompt": false,
-    "omitTrigger": false,
-    "matchCase": false,
-    "showInTrayMenu": false,
-    "abbreviation": {
-        "abbreviations": [
-            "!!pull"
-        ],
-        "backspace": true,
-        "ignoreCase": false,
-        "immediate": true,
-        "triggerInside": false,
-        "wordChars": "[\\w]"
-    },
-    "hotkey": {
-        "modifiers": [],
-        "hotKey": null
-    },
-    "filter": {
-        "regex": null,
-        "isRecursive": false
-    },
-    "sendMode": "<shift>+<insert>"
+    "backspace": true,
+    "ignoreCase": false,
+    "immediate": true,
+    "triggerInside": false,
+    "wordChars": "[\\w]"
+  },
+  "hotkey": {
+    "modifiers": [],
+    "hotKey": null
+  },
+  "filter": {
+    "regex": null,
+    "isRecursive": false
+  },
+  "sendMode": "<shift>+<insert>"
 }
