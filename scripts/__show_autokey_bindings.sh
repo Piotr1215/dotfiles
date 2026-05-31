@@ -6,6 +6,7 @@
 set -eo pipefail
 
 AUTOKEY_SCRIPTS_DIR="/home/decoder/dev/dotfiles/.config/autokey/data/Scripts"
+AUTOKEY_DATA_DIR="/home/decoder/.config/autokey/data"
 
 # Colors
 GREEN='\033[0;32m'
@@ -72,9 +73,57 @@ show_bindings_fzf() {
     done | sort | fzf --height=80% --border --header="AutoKey Shortcuts"
 }
 
+# List every ";;" abbreviation trigger (phrases AND scripts).
+# Source of truth = AutoKey JSONs, so nothing is forgotten.
+# The ";;?" discovery menu itself is excluded (don't list the opener).
+collect_bangbang() {
+    find "$AUTOKEY_DATA_DIR" -name '*.json' 2>/dev/null | while read -r f; do
+        jq -r '(.description // "") as $d
+               | (.abbreviation.abbreviations // [])[]
+               | select(startswith(";;") and . != ";;?")
+               | "\(.)\t→ \($d)"' "$f" 2>/dev/null
+    done | sort -u
+}
+
+show_bangbang() {
+    local out
+    out=$(collect_bangbang | column -t -s$'\t')
+    if [[ "${1:-}" == "--fzf" ]] && command -v fzf >/dev/null 2>&1; then
+        echo "$out" | fzf --height=80% --reverse --border --header=";; commands"
+    else
+        echo -e "${CYAN}AutoKey ;; commands${NC}"
+        echo -e "${CYAN}==================${NC}"
+        echo "$out"
+    fi
+}
+
+# Rofi version of the ;; list, for global (non-terminal) discovery.
+# Prints the selected line; caller extracts the trigger (first field).
+show_bangbang_rofi() {
+    collect_bangbang | column -t -s$'\t' | rofi -dmenu -i -p ";;" \
+        -theme-str '* {font: "JetBrainsMono Nerd Font 12";}' \
+        -theme-str 'window {width: 700px; background-color: argb:ff282a36; border: 2px solid; border-color: argb:ffbd93f9; border-radius: 8px;}' \
+        -theme-str 'mainbox {background-color: transparent;}' \
+        -theme-str 'inputbar {background-color: argb:ff44475a; text-color: argb:fff8f8f2; padding: 8px;}' \
+        -theme-str 'prompt {text-color: argb:ffbd93f9;}' \
+        -theme-str 'entry {text-color: argb:fff8f8f2;}' \
+        -theme-str 'listview {background-color: transparent; lines: 12;}' \
+        -theme-str 'element {padding: 8px; background-color: transparent; text-color: argb:fff8f8f2;}' \
+        -theme-str 'element.selected {background-color: argb:ff44475a; text-color: argb:ff50fa7b;}'
+}
+
 case "${1:-}" in
     --fzf)
         command -v fzf >/dev/null 2>&1 && show_bindings_fzf || echo "fzf not installed"
+        ;;
+    --bang)
+        show_bangbang --fzf
+        ;;
+    --bang-plain)
+        show_bangbang
+        ;;
+    --bang-rofi)
+        show_bangbang_rofi
         ;;
     *)
         show_bindings
