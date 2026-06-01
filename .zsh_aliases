@@ -102,6 +102,7 @@ alias dps="docker ps --format 'table {{.ID}}\t{{.Names}}\t{{.Image}}'" #docker p
 alias fdit='vim ~/.zsh_functions'
 alias gs='git show'
 alias gpr='GH_PAGER= gh pr list --head $(git branch --show-current) --json number,state,url --jq "if length == 0 then \"no prs\" else .[] | \"#\\(.number) [\\(.state)] \\(.url)\" end"'
+alias opn='~/dev/dotfiles/scripts/__open_repo.sh'
 alias firefox='flatpak run io.gitlab.librewolf-community'
 alias chrome='google-chrome-stable'
 alias home='nohup flatpak run io.gitlab.librewolf-community > /dev/null 2>&1 &'
