@@ -144,9 +144,10 @@ GITHUB_BIND="ctrl-b:execute-silent(touch $RETURN_MARKER)+execute(~/dev/dotfiles/
 # PRs binding (Ctrl+G for GitHub) - sets marker, launches PR script, then aborts to restart loop
 PR_BIND="ctrl-g:execute-silent(touch $RETURN_MARKER)+execute(~/dev/dotfiles/scripts/__my_prs.sh fzf)+abort"
 
-# Linear issues binding (Ctrl+L for Linear) - sets marker, launches Linear script, then aborts to restart loop
+# Linear issues binding (Ctrl+L for Linear) - launches Linear script, then aborts to exit popup
+# NOTE: no RETURN_MARKER - after viewing/opening an issue the whole popup should exit to terminal
 # NOTE: cannot use Ctrl+I — terminals send it identical to Tab (0x09), which collides with PASTE_BIND
-LINEAR_BIND="ctrl-l:execute-silent(touch $RETURN_MARKER)+execute(~/dev/dotfiles/scripts/__linear_issue_viewer.sh)+abort"
+LINEAR_BIND="ctrl-l:execute(~/dev/dotfiles/scripts/__linear_issue_viewer.sh)+abort"
 
 # Edit tmuxinator config (Ctrl+E) - only works on sessions
 EDIT_BIND="ctrl-e:execute(name={}; name=\${name% ◀◀◀}; [[ -f ~/.config/tmuxinator/\${name}.yml ]] && nvim ~/.config/tmuxinator/\${name}.yml)+abort"
