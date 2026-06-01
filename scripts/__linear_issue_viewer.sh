@@ -139,10 +139,9 @@ main() {
             echo -n "$url" | xclip -selection clipboard
             echo "✓ Copied issue URL to clipboard: $url" >&2
         else
-            # Open in browser (default action)
-            echo "Opening: $url" >&2
-            # Use tmux run-shell like the link runner does
-            tmux run-shell "xdg-open '$url' && __focus_browser.sh"
+            # Open in browser (default action), backgrounded so it doesn't block the popup.
+            # Swap to the alacritty/browser split (layout 2) once the tab is open.
+            tmux run-shell -b "xdg-open '$url' >/dev/null 2>&1 && __focus_browser.sh && ~/dev/dotfiles/scripts/__layouts.sh 2"
         fi
     fi
 }
