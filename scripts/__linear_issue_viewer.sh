@@ -120,11 +120,11 @@ main() {
     
     # Use plain fzf when already in a tmux popup
     local selected=$(echo "$formatted_issues" | fzf \
-        --header "Linear Issues ($issue_count) | Enter: Open in browser | Ctrl+Y: Copy URL | Ctrl+C: Cancel" \
+        --header "Linear Issues ($issue_count) | Enter: Open in browser | Ctrl+Y: Copy URL | Tab: paste URL | Ctrl+C: Cancel" \
         --prompt "Search issues> " \
         --preview-window="hidden" \
         --bind "ctrl-c:abort" \
-        --expect=ctrl-y)
+        --expect=ctrl-y,tab)
     
     # Parse output - first line is the key pressed, second is selection
     local key=$(echo "$selected" | head -1)
@@ -134,7 +134,12 @@ main() {
         # Extract URL from selection
         local url=$(echo "$selection" | sed -n 's/.*|URL:\(.*\)$/\1/p')
         
-        if [[ "$key" == "ctrl-y" ]]; then
+        if [[ "$key" == "tab" ]]; then
+            # Paste URL at cursor: set tmux buffer, schedule paste after popup closes
+            # (mirrors __file_opener.sh PASTE_BIND so the URL lands in the underlying pane)
+            tmux set-buffer -- "$url"
+            tmux run-shell -b "sleep 0.1 && tmux paste-buffer"
+        elif [[ "$key" == "ctrl-y" ]]; then
             # Copy URL to clipboard
             echo -n "$url" | xclip -selection clipboard
             echo "✓ Copied issue URL to clipboard: $url" >&2
