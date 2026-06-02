@@ -93,6 +93,17 @@ cmd_up() {
 	printf '  mic         = %s\n' "$default_source"
 	printf '  speaker mon = %s.monitor\n' "$default_sink"
 	printf '  pick "%s" as microphone in the Notion browser tab\n' "$mic_desc"
+
+	# The virtual mic exists, but Notion still records from whatever device its
+	# own dropdown points at. That selection is Chrome's, not ours to force, so
+	# the only safe guard is a loud reminder. Critical urgency keeps it on
+	# screen until dismissed, so a recording can't start without seeing it.
+	if command -v notify-send >/dev/null 2>&1; then
+		notify-send -u critical -i audio-input-microphone \
+			"NotionMic is live" \
+			"Select \"$mic_desc\" as the microphone in the Notion tab before recording." \
+			>/dev/null 2>&1 || true
+	fi
 }
 
 cmd_down() {
