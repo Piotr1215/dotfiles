@@ -166,6 +166,9 @@ PASTE_BIND="tab:execute-silent(~/dev/dotfiles/scripts/__copy_path_with_notificat
 # Overrides fzf's default beginning-of-line on Ctrl+A (acceptable trade).
 AGENTS_BIND="ctrl-a:execute-silent(touch /tmp/file_opener_agents)+abort"
 
+# Pane content search (Ctrl+S) - grep every pane's scrollback, jump to the match.
+SEARCH_BIND="ctrl-s:execute-silent(touch /tmp/file_opener_search)+abort"
+
 # Loop to allow returning from PRs/Linear back to main picker
 while true; do
     OUTPUT=$( {
@@ -212,7 +215,7 @@ while true; do
                 echo "Preview not available"
             fi' \
         --preview-window 'right:50%:wrap' \
-        --header ' C-f:30d C-x:home C-b:github C-g:PRs C-l:Linear C-a:agents C-e:edit C-u:music C-k:kill | C-y:copy Tab:paste' \
+        --header ' C-f:30d C-x:home C-b:github C-g:PRs C-l:Linear C-a:agents C-s:search-panes C-e:edit C-u:music C-k:kill | C-y:copy Tab:paste' \
         --prompt 'all> ' \
         --bind "$HOME_BIND" \
         --bind "$FILE_BIND" \
@@ -225,6 +228,7 @@ while true; do
         --bind "$COPY_BIND" \
         --bind "$PASTE_BIND" \
         --bind "$AGENTS_BIND" \
+        --bind "$SEARCH_BIND" \
         --bind "ctrl-c:abort" \
         2>/dev/null) || true
 
@@ -315,6 +319,69 @@ while true; do
             tmux switch-client -t "$session" 2>/dev/null
             tmux select-window -t "$session:$window" 2>/dev/null
             tmux select-pane -t "$target" 2>/dev/null
+        fi
+        exit 0
+    fi
+
+    # Pane content search subview: grep every pane's scrollback, jump to the match.
+    # One fzf row per non-empty scrollback line, tab-delimited as:
+    #   pane_id <TAB> session:win.pane <TAB> line-text
+    # fzf displays/searches fields 2,3 (location + text); field 1 (pane_id) is the
+    # hidden jump target. Enter switches the client to that pane.
+    if [[ -f /tmp/file_opener_search ]]; then
+        rm -f /tmp/file_opener_search
+        index=$(tmux list-panes -a -F '#{pane_id}|#{session_name}:#{window_index}.#{pane_index}' 2>/dev/null \
+            | while IFS='|' read -r pid loc; do
+                tmux capture-pane -p -S -3000 -t "$pid" 2>/dev/null \
+                    | tr '\t' ' ' \
+                    | command grep -vE '^[[:space:]]*$' \
+                    | while IFS= read -r line; do
+                        printf '%s\t%s\t%s\n' "$pid" "$loc" "$line"
+                    done
+            done)
+
+        if [[ -z "$index" ]]; then
+            tmux display-message "No pane content to search"
+            continue
+        fi
+
+        SEARCH_OUT=$(printf '%s\n' "$index" | fzf \
+            --delimiter='\t' \
+            --with-nth=2,3 \
+            --nth=2,3 \
+            --expect=ctrl-l \
+            --prompt 'panes> ' \
+            --header 'Enter:jump to pane  C-l:jump + goto line  Esc:back' \
+            --preview 'tmux capture-pane -ep -S -3000 -t {1} 2>/dev/null | command grep -v "^$" | tail -200' \
+            --preview-window 'right:55%:wrap' \
+            --bind 'ctrl-c:abort' 2>/dev/null) || true
+
+        # Nothing picked (Esc) -> back to main picker
+        [[ -z "$SEARCH_OUT" ]] && continue
+
+        # With --expect, line 1 is the pressed key ("" for Enter, "ctrl-l" otherwise);
+        # line 2 is the selected row: pane_id <TAB> session:win.pane <TAB> line-text.
+        search_key=$(printf '%s\n' "$SEARCH_OUT" | head -1)
+        SEARCH_SEL=$(printf '%s\n' "$SEARCH_OUT" | sed -n '2p')
+        [[ -z "$SEARCH_SEL" ]] && continue
+
+        pane_id="${SEARCH_SEL%%$'\t'*}"
+        if [[ -n "$pane_id" ]]; then
+            session=$(tmux display-message -p -t "$pane_id" '#{session_name}' 2>/dev/null)
+            window=$(tmux display-message -p -t "$pane_id" '#{window_index}' 2>/dev/null)
+            tmux switch-client -t "$session" 2>/dev/null
+            tmux select-window -t "$session:$window" 2>/dev/null
+            tmux select-pane -t "$pane_id" 2>/dev/null
+            # C-l: also drop into copy-mode positioned on the matched line.
+            # search-backward treats its arg as a regex, so escape metacharacters
+            # in the captured text to match it literally.
+            if [[ "$search_key" == "ctrl-l" ]]; then
+                rest="${SEARCH_SEL#*$'\t'}"       # session:win.pane <TAB> line-text
+                matched_text="${rest#*$'\t'}"     # line-text
+                esc=$(printf '%s' "$matched_text" | sed 's/[][\\^$.*+?(){}|]/\\&/g')
+                tmux copy-mode -t "$pane_id" 2>/dev/null
+                tmux send-keys -X -t "$pane_id" search-backward "$esc" 2>/dev/null
+            fi
         fi
         exit 0
     fi
