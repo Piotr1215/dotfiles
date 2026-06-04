@@ -1,10 +1,35 @@
+# system-updates ── one-shot system maintenance session
+#
+# What it does:
+#   1. `__global_updates.sh` cleans pueue history, sets the "updates" group to
+#      7 parallel slots, queues 8 update jobs (apt, snap, flatpak, pipx, npm,
+#      cargo, locate), then exits. The jobs run ASYNC in the pueue daemon.
+#   2. The `updates` window watches those jobs live (failures up top, full
+#      status below) via viddy.
+#   3. The `klod` window launches the sysadmin agent, which watches the jobs to
+#      completion and performs follow-up maintenance + reconfiguration.
+#
+# Start with:  tmuxinator start system-updates
+# The agent's follow-up playbook lives in:
+#   ~/.claude/system-prompts/system-updates-followup.md
+
 name: system-updates
 root: ~/
 
 windows:
+  # ── Live dashboards for the pueue "updates" group ───────────────────────────
   - updates:
       layout: main-vertical
       panes:
-        - print -z 'pueue clean && ~/dev/dotfiles/scripts/__global_updates.sh'
-        - command viddy -n 1 pueue status -g updates
+        # Top: only failed tasks + their last log lines (refresh every 2s).
         - command viddy -n 2 'pueue status -g updates "status=failed" && echo "--- Failed logs ---" && pueue log -g updates -l 10 "status=failed"'
+        # Bottom: full group status (refresh every 1s).
+        - command viddy -n 1 pueue status -g updates
+  # ── Sysadmin agent: run updates, then follow-up maintenance ────────────────
+  - klod:
+      layout: main-vertical
+      panes:
+        # The agent runs the updates, watches the pueue group to completion, then
+        # works through the follow-up playbook (cargo/rust, apt reboot+conffiles,
+        # kernel jump + NVIDIA DKMS check, flatpak/EVE-on-Steam sanity).
+        - __claude_with_monitor.sh --system-prompt-file ~/.claude/system-prompts/sysadmin-agent-system-prompt.md -- "/ops-sysadmin-agent your task is to execute pueue clean && ~/dev/dotfiles/scripts/__global_updates.sh then watch the 'updates' pueue group to completion and perform follow-up maintenance. First read ~/.claude/system-prompts/system-updates-followup.md and work through that checklist: root-cause any failed task, handle cargo/rust + yazi, check apt reboot/conffiles/held packages, verify any kernel jump has its NVIDIA DKMS module built before calling a reboot safe, and confirm flatpak/EVE-on-Steam (driver vs flatpak GL extension match, ~/Games override). Report pass/fail and the single most important action for me."
