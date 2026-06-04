@@ -53,12 +53,6 @@ is_first_working_day() {
 	return 1
 }
 
-# Check if it's the first working day of the month and add monthly tasks
-if is_first_working_day "$day_of_month" "$day_of_week"; then
-	add_task_if_not_exists "cleanup hosted platform instances" "today+8h" "repo:hosted-platform"
-	echo "Monthly task check complete."
-fi
-
 # Only run daily tasks on weekdays (1-5)
 if [ "$day_of_week" -le 5 ]; then
 	# Daily tasks (weekdays only)
