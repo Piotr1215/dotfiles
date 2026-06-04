@@ -8,7 +8,8 @@ selected_option=$(zenity --list --title="Choose an Action" \
 	--column="Actions" "Link" "Task" "Playlist" "Highlights" \
 	--multiple \
 	--separator=" " \
-	--height=220)
+	--width=480 \
+	--height=360)
 
 # Outputs the exit status and selected options separated by a newline
 echo "$selected_option"
