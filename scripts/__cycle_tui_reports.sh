@@ -22,4 +22,9 @@ pane=$(tmux display-message -p '#{session_name}:#{window_index}.#{pane_index}')
 
 # Atomic restart and set pane title
 tmux select-pane -t "$pane" -T "$report"
-tmux respawn-pane -k -t "$pane" "NCURSES_NO_UTF8_ACS=1 taskwarrior-tui -r $report"
+# respawn-pane relaunches from tmux's server environment, NOT the dead pane's
+# runtime env, so the secrets exported in ~/.envrc (LINEAR_API_KEY, etc.) are
+# lost. Shortcuts that need them (3 sync, 4/8 linear-issue) then fail with
+# "Environment variable LINEAR_API_KEY is not set" after any report cycle.
+# Source ~/.envrc before exec so the respawned tui matches a normal launch.
+tmux respawn-pane -k -t "$pane" "[ -f $HOME/.envrc ] && . $HOME/.envrc; exec env NCURSES_NO_UTF8_ACS=1 taskwarrior-tui -r $report"
