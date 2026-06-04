@@ -883,3 +883,23 @@ function standup_date() {
     esac
 }
 
+
+# Claude session bookmarks. Backed by ~/.claude/cs.py + ~/.claude/named-sessions.tsv.
+# `cs` with no arg lists bookmarks; `cs <name>` cd's to the recorded dir and
+# resumes that exact session id (resume is cwd-scoped, so the cd matters).
+cs() {
+    emulate -L zsh
+    local name="$1" out cwd id
+    if [[ -z $name ]]; then
+        python3 ~/.claude/cs.py
+        return
+    fi
+    out=$(python3 ~/.claude/cs.py --resolve "$name") || return
+    if [[ -z $out ]]; then
+        echo "no bookmarked session named '$name' (run cs to list)" >&2
+        return 1
+    fi
+    cwd=${out%%$'\t'*}
+    id=${out##*$'\t'}
+    cd "$cwd" && claude --resume "$id"
+}
