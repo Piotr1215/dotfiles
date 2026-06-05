@@ -213,3 +213,30 @@ alias plaude='/home/decoder/.local/bin/claude --dangerously-skip-permissions -p'
 alias flaude='claude -r --fork-session'           # Fork session with picker
 alias dlaude='claude --debug "hooks,mcp"'         # Debug mode (hooks + mcp)
 alias ccinstall='~/.claude/scripts/__claude_version_installer.sh'  # Version picker
+
+# Per-account Claude config routing (#91)
+#
+# The launcher (__claude_with_monitor.sh) routes work vs personal by cwd, but the
+# direct-binary entry points bypass it: `plaude` (raw /home/decoder/.local/bin/claude),
+# `cs`/resume helpers, and any keybinding that calls the binary. Setting
+# CLAUDE_CONFIG_DIR from the current directory on every `cd` makes EVERY entry
+# point inherit the correct account, so a `plaude` run inside ~/loft uses the work
+# login and one anywhere else uses personal, with no manual switch.
+#
+# Reuses the single source of truth (claude_work_predicate) the launcher and
+# picker use, so the shell and launcher can never disagree about what is "work".
+# A non-work dir explicitly unsets the var, so an inherited value can never leak
+# work routing into a personal directory.
+if [[ -f "$HOME/.claude/scripts/__lib_claude_account.sh" ]]; then
+  source "$HOME/.claude/scripts/__lib_claude_account.sh"
+  _claude_account_route() {
+    if [[ -d "$HOME/.claude-work" ]] && claude_work_predicate "$PWD"; then
+      export CLAUDE_CONFIG_DIR="$HOME/.claude-work"
+    else
+      unset CLAUDE_CONFIG_DIR
+    fi
+  }
+  autoload -Uz add-zsh-hook
+  add-zsh-hook chpwd _claude_account_route
+  _claude_account_route   # initialize for the shell's starting directory
+fi
