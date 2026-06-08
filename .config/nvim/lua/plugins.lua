@@ -142,7 +142,16 @@ return require("lazy").setup({
   "lewis6991/gitsigns.nvim",
   "tpope/vim-fugitive",
   "Piotr1215/telescope-crossplane.nvim",
-  { "kylechui/nvim-surround", opts = {} },
+  {
+    "kylechui/nvim-surround",
+    opts = {},
+    -- v4 no longer sets keymaps via setup(). Disable the default normal-mode
+    -- mappings before load so our custom ys/d;/c; bindings (in plugins-setup)
+    -- win. Insert (<C-g>s) and visual (S/gS) defaults are kept.
+    init = function()
+      vim.g.nvim_surround_no_normal_mappings = true
+    end,
+  },
   "axieax/urlview.nvim",
   "folke/which-key.nvim",
   "lukas-reineke/indent-blankline.nvim",
