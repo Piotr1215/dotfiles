@@ -1,7 +1,7 @@
 # /home/decoder/.config/tmuxinator/atosik.yml
 
 name: task
-root: ~/dev/
+root: ~/loft/
 
 # Optional tmux socket
 # socket_name: foo

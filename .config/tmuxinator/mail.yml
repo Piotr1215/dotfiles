@@ -17,6 +17,7 @@ windows:
         - neomutt
   # ursula: work-only appointments & meeting assistant
   - ursula:
+      root: ~/loft
       layout: 92eb,150x72,0,0[150x63,0,0,4,150x8,0,64,19]
       panes:
         - __claude_with_monitor.sh --system-prompt-file ~/.claude/system-prompts/mail-agent-system-prompt.md -- "/ops-mail-agent"
