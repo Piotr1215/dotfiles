@@ -428,6 +428,7 @@
         - typescript
         - typescript-language-server
         - bash-language-server
+        - yaml-language-server
         - markdownlint-cli
         - "@ast-grep/cli"
         - "@mermaid-js/mermaid-cli"
