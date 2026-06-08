@@ -164,3 +164,6 @@ alias notion-mic='/home/decoder/dev/dotfiles/scripts/__notion_loopback.sh up'
 alias notion-mic-off='/home/decoder/dev/dotfiles/scripts/__notion_loopback.sh down'
 alias notion-mic-status='/home/decoder/dev/dotfiles/scripts/__notion_loopback.sh status'
 
+
+# claude-dashboard web admin panel (on|off|toggle|status|open)
+alias ccdash="~/.claude/scripts/__claude_dashboard_ctl.sh"
