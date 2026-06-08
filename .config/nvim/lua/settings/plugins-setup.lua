@@ -441,11 +441,12 @@ require("obsidian").setup {
     return path:with_suffix ".md"
   end,
 
-  -- Always use wikilinks, not markdown links
-  preferred_link_style = "wiki",
-
-  -- Use simple link style (just note name, no path or .md extension)
-  wiki_link_func = "use_alias_only",
+  -- Always use wikilinks; shortest format = just the note name (no path/.md),
+  -- which replaces the old preferred_link_style + wiki_link_func = use_alias_only.
+  link = {
+    style = "wiki",
+    format = "shortest",
+  },
 
   -- Use just the note name as ID (obsidian.nvim handles path resolution)
   note_id_func = function(title)
@@ -473,9 +474,8 @@ require("obsidian").setup {
     end,
   },
 
-  completion = {
-    nvim_cmp = true, -- if using nvim-cmp, otherwise set to false
-  },
+  -- completion block removed: obsidian.nvim now provides completion via its
+  -- built-in obsidian-ls LSP server (the old completion.nvim_cmp is deprecated).
 }
 
 require("todo-comments").setup {
@@ -597,18 +597,8 @@ require("lualine").setup {
 }
 
 require("nvim-surround").setup {
-  keymaps = {
-    insert = "<C-g>s",
-    insert_line = "<C-g>S",
-    normal = "ys",
-    normal_cur = "yss",
-    normal_line = "yS",
-    normal_cur_line = "ySS",
-    visual = "S",
-    visual_line = "gS",
-    delete = "d;",
-    change = "c;",
-  },
+  -- v4: keymaps moved out of setup(). Default normal mappings are disabled via
+  -- vim.g.nvim_surround_no_normal_mappings (set in plugins.lua) and rebound below.
   surrounds = {
     ["c"] = {
       add = { "```", "```" },
@@ -625,6 +615,20 @@ require("nvim-surround").setup {
     },
   },
 }
+
+-- Normal-mode surround keymaps (v4 <Plug> style). delete=d; / change=c; are
+-- custom; the rest match the old defaults. Insert/visual defaults are untouched.
+vim.keymap.set("n", "ys", "<Plug>(nvim-surround-normal)", { desc = "Surround add (motion)" })
+vim.keymap.set("n", "yss", "<Plug>(nvim-surround-normal-cur)", { desc = "Surround add (current line)" })
+vim.keymap.set("n", "yS", "<Plug>(nvim-surround-normal-line)", { desc = "Surround add (motion, on new lines)" })
+vim.keymap.set(
+  "n",
+  "ySS",
+  "<Plug>(nvim-surround-normal-cur-line)",
+  { desc = "Surround add (current line, on new lines)" }
+)
+vim.keymap.set("n", "d;", "<Plug>(nvim-surround-delete)", { desc = "Surround delete" })
+vim.keymap.set("n", "c;", "<Plug>(nvim-surround-change)", { desc = "Surround change" })
 
 -- Color name (:help cterm-colors) or ANSI code
 -- there are some defaults for image directory and image name, you can change them
