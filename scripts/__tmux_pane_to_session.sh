@@ -52,9 +52,11 @@ if [[ -z "$placeholder" ]]; then
 fi
 
 # Move the issuing pane into the new session, then drop the placeholder.
+# Leave the new session detached; don't follow it. Just report it in the
+# status bar of whichever client stays active.
 if tmux join-pane -s "$pane" -t "$placeholder"; then
   tmux kill-pane -t "$placeholder"
-  tmux switch-client -t "$name" 2>/dev/null || true
+  tmux display-message "session '$name' created from current pane (detached)"
 else
   tmux kill-session -t "$name"
   tmux display-message "pane-to-session: move failed, source pane left in place"
