@@ -257,12 +257,21 @@
         - stylua
         - cargo-update
         - agg
-        - tldr
+        - tealdeer
         - taskwarrior-tui
         - zoxide
         - git-delta
       register: cargo_install
       changed_when: "'already exists' not in cargo_install.stderr"
+
+    # tealdeer needs a page cache before it will render anything, including
+    # the custom cheat pages in tealdeer-pages/ used by __config_bindings_help.sh.
+    # Without this a fresh box shows "Page cache not found" for every `tldr` call.
+    - name: Seed tealdeer page cache
+      command: "{{ home }}/.cargo/bin/tldr --update"
+      environment:
+        PATH: "{{ ansible_env.PATH }}:{{ home }}/.cargo/bin"
+      changed_when: false
 
     - name: Install PipeWire
       block:

@@ -1,0 +1,11 @@
+# Tealdeer config (dotfiles-managed, symlinked to ~/.config/tealdeer/config.toml)
+#
+# Point `tldr` at the repo's custom cheat pages so the Ctrl+Alt+H -> Ctrl+G
+# viewer (scripts/__config_bindings_help.sh) can render them. Without this,
+# `tldr <name>` only finds upstream pages and every custom page shows
+# "No preview".
+[directories]
+custom_pages_dir = "/home/decoder/dev/dotfiles/tealdeer-pages/common"
+
+[updates]
+auto_update = false
