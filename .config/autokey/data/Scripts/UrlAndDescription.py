@@ -170,9 +170,15 @@ if 'Firefox' in active_window_title or 'Chrome' in active_window_title or 'Brave
         # PROJECT: playlist
         if "Playlist" in choices:
             if "youtube.com" in domain or "youtu.be" in domain:  # Check if the domain is YouTube
-                subprocess.run(["/home/decoder/dev/dotfiles/scripts/__append_to_playlist.py", url, active_window_title, haruna_playlist_path])
+                # Download the audio to ~/music (detached, with desktop notifications)
+                # so it lands as an mp3 the Ctrl+U track picker (__play_track.sh) reads.
+                # Detached because the yt-dlp download + mp3 convert must not block AutoKey.
+                subprocess.Popen(
+                    ["/home/decoder/dev/dotfiles/scripts/__download_music_notify.sh", url, active_window_title],
+                    start_new_session=True,
+                )
             else:
-                print("The URL must be from YouTube to add to Haruna playlist.")
+                print("The URL must be from YouTube to download as audio.")
 
     clipboard.fill_clipboard("")
     clipboard.fill_selection("")
