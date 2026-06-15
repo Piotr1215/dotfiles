@@ -20,6 +20,12 @@ if [[ "$1" == "--help" ]] || [[ "$1" == "-h" ]]; then
 	  - In --run mode: shows playing tracks with ► marker
 	  - Click playing track again to stop it
 
+	FAVOURITES:
+	  - Press ctrl-f in the picker to toggle ★ favourite on the highlighted track
+	  - Press ctrl-s to filter the list to favourites only (press again for all)
+	  - Favourites show a ★ marker and sort to the top
+	  - Stored as filenames in ~/music/.favourites
+
 	REQUIREMENTS:
 	  - tmux, mpv, fzf
 	  - Music files in ~/music/
@@ -27,80 +33,138 @@ if [[ "$1" == "--help" ]] || [[ "$1" == "-h" ]]; then
 	exit 0
 fi
 
+# Music dir is overridable (env) to keep the script testable
+: "${MUSIC_DIR:=${HOME}/music}"
+FAV_FILE="${MUSIC_DIR}/.favourites"
+# Presence of this flag = picker is currently filtered to favourites only
+FILTER_FLAG="/tmp/pt_fav_filter"
+
+# Render the numbered, marked, sorted track list.
+# Output line format: "<play><fav> NN. Clean Title<TAB>Full Path"
+#   play = ► if currently playing (run mode) else space
+#   fav  = ★ if favourite else space
+# Favourites sort to the top; in run mode the playing track floats above all.
+render_list() {
+	local run_mode="$1"
+
+	# Currently playing track display name (run mode only)
+	local current_display=""
+	if [[ "$run_mode" == true ]]; then
+		local session_file="/tmp/current_music_session.txt"
+		local display_file="/tmp/current_music_session_display.txt"
+		if [[ -f "$session_file" && -f "$display_file" ]]; then
+			local session_name
+			session_name=$(cat "$session_file" 2>/dev/null)
+			if tmux has-session -t "$session_name" 2>/dev/null; then
+				current_display=$(cat "$display_file" 2>/dev/null)
+			fi
+		fi
+	fi
+
+	# Build rows: "fav_flag<TAB>clean_name<TAB>filepath", then sort favourites first
+	local rows
+	rows=$(find "$MUSIC_DIR" -maxdepth 1 -type f -name "*.mp3" -printf '%f\t%p\n' 2>/dev/null | while IFS=$'\t' read -r filename filepath; do
+		local clean_name="${filename%.mp3}"
+		clean_name="${clean_name//_/ }"
+		local fav=0
+		if [[ -f "$FAV_FILE" ]] && grep -qxF "$filename" "$FAV_FILE"; then
+			fav=1
+		fi
+		printf '%d\t%s\t%s\n' "$fav" "$clean_name" "$filepath"
+	done | sort -t$'\t' -k1,1r -k2,2)
+
+	# Favourites-only view when the filter flag is set
+	if [[ -f "$FILTER_FLAG" ]]; then
+		rows=$(printf '%s\n' "$rows" | awk -F'\t' '$1 == "1"')
+	fi
+
+	[[ -z "$rows" ]] && return 0
+
+	# Number rows and attach markers (plain text so fzf's returned line
+	# stays free of ANSI codes the selection parser would have to strip)
+	local marked
+	marked=$(printf '%s\n' "$rows" | awk -F'\t' -v playing="$current_display" '
+	{
+		play = ($2 == playing) ? "►" : " "
+		fav  = ($1 == "1") ? "★" : " "
+		printf "%s%s %02d. %s\t%s\n", play, fav, NR, $2, $3
+	}')
+
+	# In run mode, float the playing track to the very top
+	if [[ "$run_mode" == true ]]; then
+		local playing rest
+		playing=$(grep '^►' <<<"$marked" || true)
+		rest=$(grep -v '^►' <<<"$marked" || true)
+		[[ -n "$playing" ]] && marked="${playing}"$'\n'"${rest}"
+	fi
+
+	printf '%s\n' "$marked"
+}
+
+# Toggle favourite status for the track on the given picker line.
+toggle_fav() {
+	local line="$1"
+	local path="${line##*$'\t'}"
+	local base
+	base=$(basename "$path")
+	touch "$FAV_FILE"
+	if grep -qxF "$base" "$FAV_FILE"; then
+		{ grep -vxF "$base" "$FAV_FILE" || true; } >"${FAV_FILE}.tmp"
+		mv "${FAV_FILE}.tmp" "$FAV_FILE"
+	else
+		printf '%s\n' "$base" >>"$FAV_FILE"
+	fi
+}
+
+# Toggle the favourites-only filter flag.
+toggle_filter() {
+	if [[ -f "$FILTER_FLAG" ]]; then
+		rm -f "$FILTER_FLAG"
+	else
+		touch "$FILTER_FLAG"
+	fi
+}
+
+# Hidden subcommands invoked by fzf bindings (reload/toggle)
+case "$1" in
+	__render) render_list "$2"; exit 0 ;;
+	__togglefav) toggle_fav "$2"; exit 0 ;;
+	__togglefilter) toggle_filter; exit 0 ;;
+esac
+
 # Check for --run flag
 RUN_MODE=false
 if [[ "$1" == "--run" ]]; then
 	RUN_MODE=true
 fi
 
-MUSIC_DIR="${HOME}/music"
-
 if [[ ! -d "$MUSIC_DIR" ]]; then
 	echo "Error: Music directory not found at $MUSIC_DIR"
 	exit 1
 fi
 
-# Build track list from local files
-# Format: "Clean Title<TAB>Full Path"
-track_data=$(find "$MUSIC_DIR" -maxdepth 1 -type f -name "*.mp3" -printf '%f\t%p\n' 2>/dev/null | while IFS=$'\t' read -r filename filepath; do
-	# Clean up filename for display: remove .mp3, replace underscores with spaces
-	clean_name="${filename%.mp3}"
-	clean_name="${clean_name//_/ }"
-	echo -e "${clean_name}\t${filepath}"
-done | sort)
+SELF="$(readlink -f "$0")"
 
-if [[ -z "$track_data" ]]; then
-	echo "Error: No MP3 files found in $MUSIC_DIR"
-	exit 1
-fi
+# Each fresh launch starts showing all tracks, not a stale favourites filter
+rm -f "$FILTER_FLAG"
 
-# Add line numbers
-track_names_with_numbers=$(nl -w2 -n rz -s'. ' <<< "$track_data")
-
-# Main loop for run mode
+# Main loop
 while true; do
-	# In run mode, check for active sessions and add markers
-	if [[ "$RUN_MODE" == true ]]; then
-		current_display=""
-		session_file="/tmp/current_music_session.txt"
-		display_file="/tmp/current_music_session_display.txt"
-
-		# Check if session is still running
-		if [[ -f "$session_file" ]] && [[ -f "$display_file" ]]; then
-			session_name=$(cat "$session_file" 2>/dev/null)
-			if tmux has-session -t "$session_name" 2>/dev/null; then
-				current_display=$(cat "$display_file" 2>/dev/null)
-			fi
-		fi
-
-		# Add markers using awk (no subprocess per line)
-		marked_tracks=$(echo "$track_names_with_numbers" | awk -v playing="$current_display" '
-		{
-			# Extract display part: remove "NN. " prefix, then get part before TAB
-			line = $0
-			sub(/^[0-9]+\. /, "", line)
-			split(line, parts, "\t")
-			display = parts[1]
-
-			if (playing != "" && display == playing) {
-				print "► " $0
-			} else {
-				print "  " $0
-			}
-		}')
-
-		# Sort: playing tracks first
-		playing=$(echo "$marked_tracks" | grep '^►' || true)
-		not_playing=$(echo "$marked_tracks" | grep '^  ' || true)
-		[[ -n "$playing" ]] && marked_tracks="$playing"$'\n'"$not_playing" || marked_tracks="$not_playing"
-
-		selected_track_with_number=$(echo "$marked_tracks" | fzf --ansi --reverse --prompt="♪ " --delimiter=$'\t' --with-nth=1 --bind "ctrl-d:half-page-down,ctrl-u:half-page-up")
-	else
-		selected_track_with_number=$(echo "$track_names_with_numbers" | fzf --reverse --prompt="♪ " --delimiter=$'\t' --with-nth=1 --bind "ctrl-d:half-page-down,ctrl-u:half-page-up")
+	list=$(render_list "$RUN_MODE")
+	if [[ -z "$list" ]]; then
+		echo "Error: No MP3 files found in $MUSIC_DIR"
+		exit 1
 	fi
 
-	# Extract line (remove number prefix and marker)
-	selected_line=$(echo "$selected_track_with_number" | sed 's/^[►[:space:]]*[0-9]\+\.[[:space:]]*//')
+	selected_track_with_number=$(echo "$list" | fzf --ansi --reverse --prompt="♪ " \
+		--delimiter=$'\t' --with-nth=1 \
+		--header="ctrl-f: toggle ★   ctrl-s: favourites only" \
+		--bind "ctrl-d:half-page-down,ctrl-u:half-page-up" \
+		--bind "ctrl-f:execute-silent(${SELF} __togglefav {})+reload(${SELF} __render ${RUN_MODE})" \
+		--bind "ctrl-s:execute-silent(${SELF} __togglefilter)+reload(${SELF} __render ${RUN_MODE})") || true
+
+	# Extract line (strip play/fav markers and number prefix)
+	selected_line=$(echo "$selected_track_with_number" | sed -E 's/^[►★[:space:]]*[0-9]+\.[[:space:]]*//')
 
 	# Format: "Clean Title<TAB>Full Path"
 	display_part="${selected_line%%	*}"  # Before TAB (clean title)
