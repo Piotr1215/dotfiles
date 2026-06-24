@@ -162,10 +162,6 @@ COPY_BIND="ctrl-y:execute-silent(~/dev/dotfiles/scripts/__copy_path_with_notific
 
 PASTE_BIND="tab:execute-silent(~/dev/dotfiles/scripts/__copy_path_with_notification.sh {})+execute-silent(touch /tmp/file_opener_paste)+abort"
 
-# Agents subview (Ctrl+A) - active agents from tmux pane @agent_name options.
-# Overrides fzf's default beginning-of-line on Ctrl+A (acceptable trade).
-AGENTS_BIND="ctrl-a:execute-silent(touch /tmp/file_opener_agents)+abort"
-
 # Pane content search (Ctrl+S) - grep every pane's scrollback, jump to the match.
 SEARCH_BIND="ctrl-s:execute-silent(touch /tmp/file_opener_search)+abort"
 
@@ -215,7 +211,7 @@ while true; do
                 echo "Preview not available"
             fi' \
         --preview-window 'right:50%:wrap' \
-        --header ' C-f:30d C-x:home C-b:github C-g:PRs C-l:Linear C-a:agents C-s:search-panes C-e:edit C-u:music C-k:kill | C-y:copy Tab:paste' \
+        --header ' C-f:30d C-x:home C-b:github C-g:PRs C-l:Linear C-s:search-panes C-e:edit C-u:music C-k:kill | C-y:copy Tab:paste' \
         --prompt 'all> ' \
         --bind "$HOME_BIND" \
         --bind "$FILE_BIND" \
@@ -227,7 +223,6 @@ while true; do
         --bind "$KILL_SESSION_BIND" \
         --bind "$COPY_BIND" \
         --bind "$PASTE_BIND" \
-        --bind "$AGENTS_BIND" \
         --bind "$SEARCH_BIND" \
         --bind "ctrl-c:abort" \
         2>/dev/null) || true
@@ -266,112 +261,6 @@ while true; do
         break
     fi
 
-    # Agents subview: active agents from tmux pane @agent_name options.
-    # Columns: AGENT | LINEAR (parsed from name) | LOCATION (session:win.pane).
-    # Enter switches the client to the agent's pane; Tab pastes the agent name.
-    if [[ -f /tmp/file_opener_agents ]]; then
-        rm -f /tmp/file_opener_agents
-        # PR column reads the cache written by the statusline (keyed by repo root),
-        # so it's a local file lookup -- no gh, no network. Only a fast local
-        # git rev-parse per agent to map the pane path to its repo root.
-        agent_table=$( {
-            printf 'AGENT\tLINEAR\tPR\tLOCATION\n'
-            tmux list-panes -a -F '#{@agent_name}|#{session_name}:#{window_index}.#{pane_index}|#{pane_current_path}' 2>/dev/null \
-                | awk -F'|' '$1!="" && !seen[$1]++' \
-                | while IFS='|' read -r name loc path; do
-                    if [[ "$name" =~ [A-Za-z]+-[0-9]+ ]]; then
-                        lin=$(printf '%s' "${BASH_REMATCH[0]}" | tr '[:lower:]' '[:upper:]')
-                    else
-                        lin="-"
-                    fi
-                    pr="-"
-                    repo_root=$(git -C "$path" rev-parse --show-toplevel 2>/dev/null)
-                    if [[ -n "$repo_root" ]]; then
-                        pr_file="/tmp/claude-pr-cache/$(printf '%s' "$repo_root" | md5sum | cut -d' ' -f1)"
-                        [[ -f "$pr_file" ]] && pr="#$(cat "$pr_file")"
-                    fi
-                    printf '%s\t%s\t%s\t%s\n' "$name" "$lin" "$pr" "$loc"
-                done
-        } | column -t -s$'\t')
-
-        # Only the header line means no live agents -> back to main picker
-        if [[ $(printf '%s\n' "$agent_table" | wc -l) -le 1 ]]; then
-            tmux display-message "No active agents found"
-            continue
-        fi
-
-        rm -f /tmp/file_opener_agent_paste /tmp/file_opener_agent_linear /tmp/file_opener_agent_pr
-        AGENT_SEL=$(printf '%s\n' "$agent_table" | fzf \
-            --header-lines=1 \
-            --prompt 'agent> ' \
-            --header 'Enter:switch  Tab:paste name  C-l:linear  C-p:PR  Esc:back' \
-            --preview 'n=$(echo {} | awk "{print \$1}"); tmux list-panes -a -F "#{@agent_name}|#{session_name}:#{window_index}.#{pane_index}" 2>/dev/null | awk -F"|" -v n="$n" "\$1==n{print \$2}" | while read -r p; do echo "▶ $p"; tmux capture-pane -ep -t "$p" 2>/dev/null | command grep -v "^$" | tail -20; echo; done' \
-            --preview-window 'right:55%:wrap' \
-            --bind 'tab:execute-silent(touch /tmp/file_opener_agent_paste)+accept' \
-            --bind 'ctrl-l:execute-silent(touch /tmp/file_opener_agent_linear)+accept' \
-            --bind 'ctrl-p:execute-silent(touch /tmp/file_opener_agent_pr)+accept' \
-            --bind 'ctrl-c:abort' 2>/dev/null) || true
-
-        # Nothing picked (Esc) -> back to main picker
-        [[ -z "$AGENT_SEL" ]] && continue
-
-        agent_name=$(printf '%s\n' "$AGENT_SEL" | awk '{print $1}')
-        agent_lin=$(printf '%s\n' "$AGENT_SEL" | awk '{print $2}')
-        target=$(tmux list-panes -a -F '#{@agent_name}|#{session_name}:#{window_index}.#{pane_index}' 2>/dev/null \
-            | awk -F'|' -v n="$agent_name" '$1==n{print $2; exit}')
-
-        # C-l: open the agent's Linear issue in the browser, then exit the popup
-        if [[ -f /tmp/file_opener_agent_linear ]]; then
-            rm -f /tmp/file_opener_agent_linear
-            if [[ -n "$agent_lin" && "$agent_lin" != "-" ]]; then
-                tmux run-shell -b "xdg-open 'https://linear.app/loft/issue/$agent_lin' >/dev/null 2>&1 && __focus_browser.sh && ~/dev/dotfiles/scripts/__layouts.sh 2"
-            else
-                tmux display-message "no linear id for $agent_name"
-            fi
-            exit 0
-        fi
-
-        # C-p: open the agent pane's PR in the browser, then exit the popup.
-        # Prefer the url cached by the statusline (no gh); fall back to gh only
-        # if the statusline hasn't cached it yet.
-        if [[ -f /tmp/file_opener_agent_pr ]]; then
-            rm -f /tmp/file_opener_agent_pr
-            pane_path=$(tmux display-message -p -t "$target" '#{pane_current_path}' 2>/dev/null)
-            pr_url=""
-            repo_root=$(git -C "$pane_path" rev-parse --show-toplevel 2>/dev/null)
-            if [[ -n "$repo_root" ]]; then
-                url_file="/tmp/claude-pr-cache/$(printf '%s' "$repo_root" | md5sum | cut -d' ' -f1).url"
-                [[ -s "$url_file" ]] && pr_url=$(cat "$url_file")
-            fi
-            if [[ -n "$pr_url" ]]; then
-                tmux run-shell -b "xdg-open '$pr_url' >/dev/null 2>&1 && __focus_browser.sh && $HOME/dev/dotfiles/scripts/__layouts.sh 2"
-            elif [[ -n "$pane_path" ]]; then
-                tmux run-shell -b "$HOME/dev/dotfiles/scripts/__open_pane_pr.sh '$pane_path'"
-            else
-                tmux display-message "could not resolve pane path for $agent_name"
-            fi
-            exit 0
-        fi
-
-        # Tab: paste the agent name at cursor after the popup closes
-        if [[ -f /tmp/file_opener_agent_paste ]]; then
-            rm -f /tmp/file_opener_agent_paste
-            tmux set-buffer -- "$agent_name "
-            tmux run-shell -b "sleep 0.1 && tmux paste-buffer"
-            exit 0
-        fi
-
-        # Enter: switch the underlying client to the agent's pane
-        if [[ -n "$target" ]]; then
-            session="${target%%:*}"
-            winpane="${target#*:}"
-            window="${winpane%%.*}"
-            tmux switch-client -t "$session" 2>/dev/null
-            tmux select-window -t "$session:$window" 2>/dev/null
-            tmux select-pane -t "$target" 2>/dev/null
-        fi
-        exit 0
-    fi
 
     # Pane content search subview: grep every pane's scrollback, jump to the match.
     # One fzf row per non-empty scrollback line, tab-delimited as:
