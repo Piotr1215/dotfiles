@@ -1,0 +1,30 @@
+{
+  "type": "script",
+  "description": "pick an active tmux agent, types @name",
+  "store": {},
+  "modes": [
+    1
+  ],
+  "usageCount": 0,
+  "prompt": false,
+  "omitTrigger": false,
+  "showInTrayMenu": false,
+  "abbreviation": {
+    "abbreviations": [
+      ";;agents"
+    ],
+    "backspace": false,
+    "ignoreCase": false,
+    "immediate": true,
+    "triggerInside": false,
+    "wordChars": "[\\w]"
+  },
+  "hotkey": {
+    "modifiers": [],
+    "hotKey": null
+  },
+  "filter": {
+    "regex": null,
+    "isRecursive": false
+  }
+}
