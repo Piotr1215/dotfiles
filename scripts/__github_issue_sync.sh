@@ -79,11 +79,20 @@ trim_whitespace() {
 # Convert an ISO-8601 timestamp to a Unix epoch.
 # Returns 0 for empty, "null", or unparseable input so callers can compare
 # safely without tripping on missing watermarks (e.g. brand-new tasks).
+#
+# TaskWarrior `export` renders dates in basic-ISO UTC (YYYYMMDDTHHMMSSZ), which
+# `date -d` cannot parse. Normalize that form to extended ISO (with the explicit
+# Z) first so it is read as UTC, matching the Linear updatedAt side (already
+# extended ISO with Z, possibly with a .NNN fraction). Canonicalizing both sides
+# to UTC keeps the watermark comparison timezone-unambiguous.
 ts_to_epoch() {
     local ts="$1"
     if [[ -z "$ts" || "$ts" == "null" ]]; then
         echo 0
         return
+    fi
+    if [[ "$ts" =~ ^([0-9]{4})([0-9]{2})([0-9]{2})T([0-9]{2})([0-9]{2})([0-9]{2})Z$ ]]; then
+        ts="${BASH_REMATCH[1]}-${BASH_REMATCH[2]}-${BASH_REMATCH[3]}T${BASH_REMATCH[4]}:${BASH_REMATCH[5]}:${BASH_REMATCH[6]}Z"
     fi
     date -d "$ts" +%s 2>/dev/null || echo 0
 }
@@ -583,7 +592,13 @@ sync_to_taskwarrior() {
         # A +fresh task is already queued for auto-batch, so it needs no +updated.
         if [[ -n "$issue_updated_at" && "$issue_updated_at" != "null" ]]; then
             local stored_activity stored_epoch updated_epoch has_fresh_tag
-            stored_activity=$(task _get "$task_uuid".new_activity 2>/dev/null || echo "")
+            # Read the watermark from export, not `_get`. `_get` renders the
+            # stored instant as a timezone-naive local wall clock (no Z), which
+            # `ts_to_epoch` would then compare against the explicit-UTC Linear
+            # side and skew by the local offset, re-flagging every issue every
+            # run. Export renders it as explicit-UTC basic-ISO (YYYYMMDDTHHMMSSZ),
+            # which ts_to_epoch normalizes to a UTC epoch.
+            stored_activity=$(task "$task_uuid" export 2>/dev/null | jq -r '.[0].new_activity // empty')
             if [[ -z "$stored_activity" || "$stored_activity" == "null" ]]; then
                 log "No new_activity watermark yet, seeding silently to $issue_updated_at (no +updated)"
                 task rc.confirmation=no modify "$task_uuid" new_activity:"$issue_updated_at"
