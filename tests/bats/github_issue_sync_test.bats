@@ -1624,14 +1624,14 @@ case "$1" in
     "test-uuid-200")
         case "$2" in
             "export")
-                echo '[{"uuid":"test-uuid-200","description":"Resurfacing Issue","status":"pending","tags":["linear"],"linear_issue_id":"DEVOPS-200"}]'
+                # Watermark lives in export JSON as basic-ISO UTC (as real
+                # TaskWarrior renders it); older than the Linear updatedAt.
+                echo '[{"uuid":"test-uuid-200","description":"Resurfacing Issue","status":"pending","tags":["linear"],"linear_issue_id":"DEVOPS-200","new_activity":"20260626T070000Z"}]'
                 ;;
         esac
         ;;
     "_get")
-        if [[ "$2" == "test-uuid-200.new_activity" ]]; then
-            echo "2026-06-26T07:00:00.000Z"
-        elif [[ "$2" == *".status" ]]; then
+        if [[ "$2" == *".status" ]]; then
             echo "pending"
         else
             echo ""
@@ -1689,14 +1689,14 @@ case "$1" in
     "test-uuid-201")
         case "$2" in
             "export")
-                echo '[{"uuid":"test-uuid-201","description":"Stale Issue","status":"pending","tags":["linear"],"linear_issue_id":"DEVOPS-201"}]'
+                # Watermark in export basic-ISO UTC equals the Linear updatedAt
+                # (2026-06-26T07:00:00.000Z) -> same instant, no re-surface.
+                echo '[{"uuid":"test-uuid-201","description":"Stale Issue","status":"pending","tags":["linear"],"linear_issue_id":"DEVOPS-201","new_activity":"20260626T070000Z"}]'
                 ;;
         esac
         ;;
     "_get")
-        if [[ "$2" == "test-uuid-201.new_activity" ]]; then
-            echo "2026-06-26T07:00:00.000Z"
-        elif [[ "$2" == *".status" ]]; then
+        if [[ "$2" == *".status" ]]; then
             echo "pending"
         else
             echo ""
@@ -1716,6 +1716,78 @@ EOF
     [ "$status" -eq 0 ]
 
     # Equal timestamps: no watermark bump, no +updated tag
+    if [ -f "${TEST_DIR}/task_commands.log" ]; then
+        ! grep -q -- "+updated" "${TEST_DIR}/task_commands.log"
+        ! grep -q "new_activity:" "${TEST_DIR}/task_commands.log"
+    fi
+}
+
+@test "sync_to_taskwarrior does NOT re-flag when watermark and updatedAt are the same instant in different timezones (regression)" {
+    # Regression for the local-vs-UTC epoch mismatch that flooded triage:
+    # the export watermark renders as basic-ISO UTC (20260626T054613Z) while
+    # the Linear updatedAt is extended-ISO UTC with a sub-second fraction
+    # (2026-06-26T05:46:13.819Z). Both are the SAME instant. Before the fix the
+    # stored side was read timezone-naive and skewed by the local offset, so the
+    # comparison was always "newer" and every already-triaged issue got +updated
+    # on every run. After the fix both canonicalize to the same UTC epoch.
+    test_issue='{
+        "id":"abc",
+        "description":"Timezone Regression Issue",
+        "repository":"linear",
+        "html_url":"https://linear.app/test/issue/DEVOPS-204",
+        "issue_id":"DEVOPS-204",
+        "project":"operations",
+        "status":"Todo",
+        "due_date":null,
+        "priority":3,
+        "updated_at":"2026-06-26T05:46:13.819Z",
+        "cycle_number":null
+    }'
+
+    cat > "${TEST_DIR}/task" << 'EOF'
+#!/bin/bash
+case "$1" in
+    "linear_issue_id:DEVOPS-204")
+        case "$2" in
+            "status:pending")
+                case "$3" in
+                    "export")
+                        echo '[{"uuid":"test-uuid-204","description":"Timezone Regression Issue","status":"pending","tags":["linear"],"linear_issue_id":"DEVOPS-204","new_activity":"20260626T054613Z"}]'
+                        ;;
+                esac
+                ;;
+        esac
+        ;;
+    "test-uuid-204")
+        case "$2" in
+            "export")
+                # Watermark stored as TaskWarrior basic-ISO UTC: same instant as
+                # the Linear updatedAt above, only the sub-second part differs.
+                echo '[{"uuid":"test-uuid-204","description":"Timezone Regression Issue","status":"pending","tags":["linear"],"linear_issue_id":"DEVOPS-204","new_activity":"20260626T054613Z"}]'
+                ;;
+        esac
+        ;;
+    "_get")
+        if [[ "$2" == *".status" ]]; then
+            echo "pending"
+        else
+            echo ""
+        fi
+        ;;
+    "rc.confirmation=no")
+        echo "MOCK: task $*" >> "${TEST_DIR}/task_commands.log"
+        ;;
+    *)
+        echo "test-uuid-204"
+        ;;
+esac
+EOF
+    chmod +x "${TEST_DIR}/task"
+
+    run sync_to_taskwarrior "$test_issue"
+    [ "$status" -eq 0 ]
+
+    # Same instant -> must NOT bump the watermark and must NOT add +updated.
     if [ -f "${TEST_DIR}/task_commands.log" ]; then
         ! grep -q -- "+updated" "${TEST_DIR}/task_commands.log"
         ! grep -q "new_activity:" "${TEST_DIR}/task_commands.log"
@@ -1755,15 +1827,13 @@ case "$1" in
     "test-uuid-203")
         case "$2" in
             "export")
+                # No new_activity field in export -> first contact (empty watermark).
                 echo '[{"uuid":"test-uuid-203","description":"First Contact Issue","status":"pending","tags":["linear"],"linear_issue_id":"DEVOPS-203"}]'
                 ;;
         esac
         ;;
     "_get")
-        # new_activity is unset on first contact -> empty
-        if [[ "$2" == "test-uuid-203.new_activity" ]]; then
-            echo ""
-        elif [[ "$2" == *".status" ]]; then
+        if [[ "$2" == *".status" ]]; then
             echo "pending"
         else
             echo ""
