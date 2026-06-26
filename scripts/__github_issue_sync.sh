@@ -76,6 +76,18 @@ trim_whitespace() {
     echo "$input"
 }
 
+# Convert an ISO-8601 timestamp to a Unix epoch.
+# Returns 0 for empty, "null", or unparseable input so callers can compare
+# safely without tripping on missing watermarks (e.g. brand-new tasks).
+ts_to_epoch() {
+    local ts="$1"
+    if [[ -z "$ts" || "$ts" == "null" ]]; then
+        echo 0
+        return
+    fi
+    date -d "$ts" +%s 2>/dev/null || echo 0
+}
+
 # ====================================================
 # PHASE 1: ENVIRONMENT AND SETUP
 # ====================================================
@@ -126,7 +138,7 @@ get_linear_issues() {
             -X POST \
             -H "Content-Type: application/json" \
             -H "Authorization: ${LINEAR_API_KEY}" \
-            --data '{"query": "query { user(id: \"'"$LINEAR_USER_ID"'\") { id name assignedIssues(filter: { state: { name: { nin: [\"Released\", \"Canceled\",\"Done\",\"Ready for Release\",\"Duplicate\",\"Archived\"] } } }) { nodes { id title url state { name } project { name } dueDate priority cycle { number } } } } }"}' \
+            --data '{"query": "query { user(id: \"'"$LINEAR_USER_ID"'\") { id name assignedIssues(filter: { state: { name: { nin: [\"Released\", \"Canceled\",\"Done\",\"Ready for Release\",\"Duplicate\",\"Archived\"] } } }) { nodes { id title url state { name } project { name } dueDate priority updatedAt cycle { number } } } } }"}' \
             https://api.linear.app/graphql 2>"$curl_stderr")
         exit_code=$?
 
@@ -194,6 +206,7 @@ get_linear_issues() {
             status: .state.name,
             due_date: .dueDate,
             priority: .priority,
+            updated_at: .updatedAt,
             cycle_number: .cycle.number
         }' 2>/dev/null); then
         echo "Error: Failed to parse Linear issues" >&2
@@ -429,7 +442,8 @@ create_and_annotate_task() {
     local issue_due_date="$7"
     local issue_priority="$8"
     local cycle_number="$9"
-    
+    local issue_updated_at="${10}"
+
     log "Creating new task for issue: $issue_description"
     
     # Determine if fresh tag should be added based on status
@@ -474,6 +488,13 @@ create_and_annotate_task() {
             log "Setting cycle:$cycle_number"
             task rc.confirmation=no modify "$task_uuid" cycle:"$cycle_number"
         fi
+
+        # Seed the new_activity watermark with the current Linear updatedAt.
+        # No +updated tag: this is the initial baseline, not a re-surface signal.
+        if [[ -n "$issue_updated_at" && "$issue_updated_at" != "null" ]]; then
+            log "Seeding new_activity watermark to $issue_updated_at"
+            task rc.confirmation=no modify "$task_uuid" new_activity:"$issue_updated_at"
+        fi
     else
         log "Error: Failed to create task for: $issue_description" >&2
     fi
@@ -482,7 +503,7 @@ create_and_annotate_task() {
 # Synchronize a single issue with Taskwarrior
 sync_to_taskwarrior() {
     local issue_line="$1"
-    local issue_id issue_description issue_repo_name issue_url task_uuid issue_number project_name issue_status issue_due_date issue_priority cycle_number
+    local issue_id issue_description issue_repo_name issue_url task_uuid issue_number project_name issue_status issue_due_date issue_priority cycle_number issue_updated_at
 
     issue_id=$(echo "$issue_line" | jq -r '.id')
     issue_description=$(echo "$issue_line" | jq -r '.description')
@@ -495,6 +516,7 @@ sync_to_taskwarrior() {
     issue_due_date=$(echo "$issue_line" | jq -r '.due_date // empty')
     issue_priority=$(echo "$issue_line" | jq -r '.priority // empty')
     cycle_number=$(echo "$issue_line" | jq -r '.cycle_number // empty')
+    issue_updated_at=$(echo "$issue_line" | jq -r '.updated_at // empty')
 
     log "Processing Issue ID: $issue_id, Description: $issue_description"
 
@@ -513,7 +535,7 @@ sync_to_taskwarrior() {
 
     if [[ -z "$task_uuid" || "$task_uuid" == "null" ]]; then
         log "No valid existing task found - creating new task"
-        create_and_annotate_task "$issue_description" "$issue_repo_name" "$issue_url" "$issue_number" "$project_name" "$issue_status" "$issue_due_date" "$issue_priority" "$cycle_number"
+        create_and_annotate_task "$issue_description" "$issue_repo_name" "$issue_url" "$issue_number" "$project_name" "$issue_status" "$issue_due_date" "$issue_priority" "$cycle_number" "$issue_updated_at"
     else
         # Fix any issues with newlines in task_uuid
         task_uuid=$(echo "$task_uuid" | tr -d '\n')
@@ -547,7 +569,39 @@ sync_to_taskwarrior() {
         
         # Update task status based on current Linear issue status
         update_task_status "$task_uuid" "$issue_status" "$issue_priority"
-        
+
+        # Re-surface the issue when Linear shows newer activity than our watermark.
+        # new_activity stores the last-seen Linear updatedAt.
+        #
+        # First contact (empty stored watermark): seed it silently with no +updated.
+        # An empty watermark is not a real "0" baseline. Every existing task would
+        # otherwise compare real-updatedAt > empty and get flagged at once (first-run
+        # flood). Seeding silently matches the new-task seeding behavior.
+        #
+        # Genuine change (stored watermark non-empty AND issue_updated_at strictly
+        # newer): bump the watermark and mark the task +updated so triage re-looks.
+        # A +fresh task is already queued for auto-batch, so it needs no +updated.
+        if [[ -n "$issue_updated_at" && "$issue_updated_at" != "null" ]]; then
+            local stored_activity stored_epoch updated_epoch has_fresh_tag
+            stored_activity=$(task _get "$task_uuid".new_activity 2>/dev/null || echo "")
+            if [[ -z "$stored_activity" || "$stored_activity" == "null" ]]; then
+                log "No new_activity watermark yet, seeding silently to $issue_updated_at (no +updated)"
+                task rc.confirmation=no modify "$task_uuid" new_activity:"$issue_updated_at"
+            else
+                stored_epoch=$(ts_to_epoch "$stored_activity")
+                updated_epoch=$(ts_to_epoch "$issue_updated_at")
+                if [[ "$updated_epoch" -gt "$stored_epoch" ]]; then
+                    log "Linear activity is newer than watermark (was: $stored_activity), bumping new_activity to $issue_updated_at"
+                    task rc.confirmation=no modify "$task_uuid" new_activity:"$issue_updated_at"
+                    has_fresh_tag=$(task "$task_uuid" export 2>/dev/null | jq -r '.[0].tags | if . then contains(["fresh"]) else false end')
+                    if [[ "$has_fresh_tag" != "true" ]]; then
+                        log "Task is past fresh, adding +updated to re-surface for triage"
+                        task rc.confirmation=no modify "$task_uuid" +updated
+                    fi
+                fi
+            fi
+        fi
+
         # Update due date
         if [[ -n "$issue_due_date" && "$issue_due_date" != "null" ]]; then
             log "Setting due date to: $issue_due_date"

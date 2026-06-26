@@ -1587,3 +1587,236 @@ EOF
     fi
 }
 
+# ====================================================
+# ISSUE-UPDATE RE-SURFACING TESTS (new_activity watermark)
+# ====================================================
+
+@test "sync_to_taskwarrior adds +updated when Linear updatedAt is newer and task not fresh" {
+    test_issue='{
+        "id":"abc",
+        "description":"Resurfacing Issue",
+        "repository":"linear",
+        "html_url":"https://linear.app/test/issue/DEVOPS-200",
+        "issue_id":"DEVOPS-200",
+        "project":"operations",
+        "status":"Todo",
+        "due_date":null,
+        "priority":3,
+        "updated_at":"2026-06-26T08:00:00.000Z",
+        "cycle_number":null
+    }'
+
+    # Existing, non-fresh task with an older new_activity watermark.
+    cat > "${TEST_DIR}/task" << 'EOF'
+#!/bin/bash
+case "$1" in
+    "linear_issue_id:DEVOPS-200")
+        case "$2" in
+            "status:pending")
+                case "$3" in
+                    "export")
+                        echo '[{"uuid":"test-uuid-200","description":"Resurfacing Issue","status":"pending","tags":["linear"],"linear_issue_id":"DEVOPS-200"}]'
+                        ;;
+                esac
+                ;;
+        esac
+        ;;
+    "test-uuid-200")
+        case "$2" in
+            "export")
+                echo '[{"uuid":"test-uuid-200","description":"Resurfacing Issue","status":"pending","tags":["linear"],"linear_issue_id":"DEVOPS-200"}]'
+                ;;
+        esac
+        ;;
+    "_get")
+        if [[ "$2" == "test-uuid-200.new_activity" ]]; then
+            echo "2026-06-26T07:00:00.000Z"
+        elif [[ "$2" == *".status" ]]; then
+            echo "pending"
+        else
+            echo ""
+        fi
+        ;;
+    "rc.confirmation=no")
+        echo "MOCK: task $*" >> "${TEST_DIR}/task_commands.log"
+        ;;
+    *)
+        echo "test-uuid-200"
+        ;;
+esac
+EOF
+    chmod +x "${TEST_DIR}/task"
+
+    run sync_to_taskwarrior "$test_issue"
+    [ "$status" -eq 0 ]
+
+    # Watermark bumped to the new updatedAt
+    grep -q "new_activity:2026-06-26T08:00:00.000Z" "${TEST_DIR}/task_commands.log"
+    # Non-fresh task gets +updated to re-surface for triage
+    grep -q -- "+updated" "${TEST_DIR}/task_commands.log"
+}
+
+@test "sync_to_taskwarrior does NOT add +updated when updatedAt is equal or older" {
+    test_issue='{
+        "id":"abc",
+        "description":"Stale Issue",
+        "repository":"linear",
+        "html_url":"https://linear.app/test/issue/DEVOPS-201",
+        "issue_id":"DEVOPS-201",
+        "project":"operations",
+        "status":"Todo",
+        "due_date":null,
+        "priority":3,
+        "updated_at":"2026-06-26T07:00:00.000Z",
+        "cycle_number":null
+    }'
+
+    # Existing task whose watermark already matches the Linear updatedAt.
+    cat > "${TEST_DIR}/task" << 'EOF'
+#!/bin/bash
+case "$1" in
+    "linear_issue_id:DEVOPS-201")
+        case "$2" in
+            "status:pending")
+                case "$3" in
+                    "export")
+                        echo '[{"uuid":"test-uuid-201","description":"Stale Issue","status":"pending","tags":["linear"],"linear_issue_id":"DEVOPS-201"}]'
+                        ;;
+                esac
+                ;;
+        esac
+        ;;
+    "test-uuid-201")
+        case "$2" in
+            "export")
+                echo '[{"uuid":"test-uuid-201","description":"Stale Issue","status":"pending","tags":["linear"],"linear_issue_id":"DEVOPS-201"}]'
+                ;;
+        esac
+        ;;
+    "_get")
+        if [[ "$2" == "test-uuid-201.new_activity" ]]; then
+            echo "2026-06-26T07:00:00.000Z"
+        elif [[ "$2" == *".status" ]]; then
+            echo "pending"
+        else
+            echo ""
+        fi
+        ;;
+    "rc.confirmation=no")
+        echo "MOCK: task $*" >> "${TEST_DIR}/task_commands.log"
+        ;;
+    *)
+        echo "test-uuid-201"
+        ;;
+esac
+EOF
+    chmod +x "${TEST_DIR}/task"
+
+    run sync_to_taskwarrior "$test_issue"
+    [ "$status" -eq 0 ]
+
+    # Equal timestamps: no watermark bump, no +updated tag
+    if [ -f "${TEST_DIR}/task_commands.log" ]; then
+        ! grep -q -- "+updated" "${TEST_DIR}/task_commands.log"
+        ! grep -q "new_activity:" "${TEST_DIR}/task_commands.log"
+    fi
+}
+
+@test "sync_to_taskwarrior seeds new_activity silently on first contact with no +updated" {
+    test_issue='{
+        "id":"abc",
+        "description":"First Contact Issue",
+        "repository":"linear",
+        "html_url":"https://linear.app/test/issue/DEVOPS-203",
+        "issue_id":"DEVOPS-203",
+        "project":"operations",
+        "status":"Todo",
+        "due_date":null,
+        "priority":3,
+        "updated_at":"2026-06-26T08:00:00.000Z",
+        "cycle_number":null
+    }'
+
+    # Existing, non-fresh task that has NO new_activity watermark yet.
+    cat > "${TEST_DIR}/task" << 'EOF'
+#!/bin/bash
+case "$1" in
+    "linear_issue_id:DEVOPS-203")
+        case "$2" in
+            "status:pending")
+                case "$3" in
+                    "export")
+                        echo '[{"uuid":"test-uuid-203","description":"First Contact Issue","status":"pending","tags":["linear"],"linear_issue_id":"DEVOPS-203"}]'
+                        ;;
+                esac
+                ;;
+        esac
+        ;;
+    "test-uuid-203")
+        case "$2" in
+            "export")
+                echo '[{"uuid":"test-uuid-203","description":"First Contact Issue","status":"pending","tags":["linear"],"linear_issue_id":"DEVOPS-203"}]'
+                ;;
+        esac
+        ;;
+    "_get")
+        # new_activity is unset on first contact -> empty
+        if [[ "$2" == "test-uuid-203.new_activity" ]]; then
+            echo ""
+        elif [[ "$2" == *".status" ]]; then
+            echo "pending"
+        else
+            echo ""
+        fi
+        ;;
+    "rc.confirmation=no")
+        echo "MOCK: task $*" >> "${TEST_DIR}/task_commands.log"
+        ;;
+    *)
+        echo "test-uuid-203"
+        ;;
+esac
+EOF
+    chmod +x "${TEST_DIR}/task"
+
+    run sync_to_taskwarrior "$test_issue"
+    [ "$status" -eq 0 ]
+
+    # Watermark seeded silently to the current updatedAt
+    grep -q "new_activity:2026-06-26T08:00:00.000Z" "${TEST_DIR}/task_commands.log"
+    # First contact must NOT flag the task as updated
+    ! grep -q -- "+updated" "${TEST_DIR}/task_commands.log"
+}
+
+@test "create_and_annotate_task seeds new_activity with no +updated tag" {
+    # Override task command to capture create + modify calls.
+    cat > "${TEST_DIR}/task" << 'EOF'
+#!/bin/bash
+if [[ "$1" == "add" ]]; then
+    echo "Created task test-uuid-seed."
+elif [[ "$1" == "rc.confirmation=no" ]]; then
+    echo "MOCK: task $*" >> "${TEST_DIR}/task_commands.log"
+elif [[ "$1" == "test-uuid-seed" ]]; then
+    # annotate_task / export calls
+    if [[ "$2" == "export" ]]; then
+        echo '[{"uuid":"test-uuid-seed","tags":["linear","fresh"],"status":"pending"}]'
+    else
+        echo "Annotating task"
+    fi
+elif [[ "$1" == "_get" ]]; then
+    echo ""
+else
+    echo "test-uuid-seed"
+fi
+EOF
+    chmod +x "${TEST_DIR}/task"
+
+    run create_and_annotate_task "Seed issue" "linear" "https://linear.app/test/issue/DEVOPS-202" "DEVOPS-202" "operations" "Todo" "" "" "" "2026-06-26T09:00:00.000Z"
+    [ "$status" -eq 0 ]
+
+    # Initial watermark seeded
+    grep -q "new_activity:2026-06-26T09:00:00.000Z" "${TEST_DIR}/task_commands.log"
+    # New task must not be flagged as updated
+    ! grep -q -- "+updated" "${TEST_DIR}/task_commands.log"
+}
+
