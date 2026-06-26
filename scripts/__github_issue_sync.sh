@@ -525,7 +525,14 @@ sync_to_taskwarrior() {
     issue_due_date=$(echo "$issue_line" | jq -r '.due_date // empty')
     issue_priority=$(echo "$issue_line" | jq -r '.priority // empty')
     cycle_number=$(echo "$issue_line" | jq -r '.cycle_number // empty')
-    issue_updated_at=$(echo "$issue_line" | jq -r '.updated_at // empty')
+    # Strip fractional seconds (.NNN) but keep the trailing Z. TaskWarrior's
+    # date parser ignores the Z when a fraction is present and stores the
+    # wall-clock as LOCAL time, shifting the watermark by the UTC offset (e.g.
+    # -2h in Europe/Berlin) so every already-triaged issue compares "newer" and
+    # is perpetually re-flagged +updated. Writing the second-precision UTC form
+    # makes TaskWarrior store the correct instant. This single point feeds all
+    # three write sites (new-task seed, silent-seed, bump).
+    issue_updated_at=$(echo "$issue_line" | jq -r '.updated_at // empty' | sed -E 's/\.[0-9]+Z$/Z/')
 
     log "Processing Issue ID: $issue_id, Description: $issue_description"
 

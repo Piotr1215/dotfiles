@@ -1602,7 +1602,7 @@ EOF
         "status":"Todo",
         "due_date":null,
         "priority":3,
-        "updated_at":"2026-06-26T08:00:00.000Z",
+        "updated_at":"2026-06-26T05:46:13.819Z",
         "cycle_number":null
     }'
 
@@ -1626,7 +1626,7 @@ case "$1" in
             "export")
                 # Watermark lives in export JSON as basic-ISO UTC (as real
                 # TaskWarrior renders it); older than the Linear updatedAt.
-                echo '[{"uuid":"test-uuid-200","description":"Resurfacing Issue","status":"pending","tags":["linear"],"linear_issue_id":"DEVOPS-200","new_activity":"20260626T070000Z"}]'
+                echo '[{"uuid":"test-uuid-200","description":"Resurfacing Issue","status":"pending","tags":["linear"],"linear_issue_id":"DEVOPS-200","new_activity":"20260626T050000Z"}]'
                 ;;
         esac
         ;;
@@ -1650,8 +1650,12 @@ EOF
     run sync_to_taskwarrior "$test_issue"
     [ "$status" -eq 0 ]
 
-    # Watermark bumped to the new updatedAt
-    grep -q "new_activity:2026-06-26T08:00:00.000Z" "${TEST_DIR}/task_commands.log"
+    # Watermark bumped to the new updatedAt, written WITHOUT the .819 fraction.
+    # The fraction must be stripped before storing: TaskWarrior drops the Z when
+    # a .NNN fraction is present and stores the wall clock as local time, which
+    # shifts the watermark and re-floods +updated. (regression for that bug)
+    grep -q "new_activity:2026-06-26T05:46:13Z" "${TEST_DIR}/task_commands.log"
+    ! grep -q "new_activity:2026-06-26T05:46:13.819Z" "${TEST_DIR}/task_commands.log"
     # Non-fresh task gets +updated to re-surface for triage
     grep -q -- "+updated" "${TEST_DIR}/task_commands.log"
 }
@@ -1805,7 +1809,7 @@ EOF
         "status":"Todo",
         "due_date":null,
         "priority":3,
-        "updated_at":"2026-06-26T08:00:00.000Z",
+        "updated_at":"2026-06-26T05:46:13.819Z",
         "cycle_number":null
     }'
 
@@ -1852,8 +1856,9 @@ EOF
     run sync_to_taskwarrior "$test_issue"
     [ "$status" -eq 0 ]
 
-    # Watermark seeded silently to the current updatedAt
-    grep -q "new_activity:2026-06-26T08:00:00.000Z" "${TEST_DIR}/task_commands.log"
+    # Watermark seeded silently to the current updatedAt, fraction stripped.
+    grep -q "new_activity:2026-06-26T05:46:13Z" "${TEST_DIR}/task_commands.log"
+    ! grep -q "new_activity:2026-06-26T05:46:13.819Z" "${TEST_DIR}/task_commands.log"
     # First contact must NOT flag the task as updated
     ! grep -q -- "+updated" "${TEST_DIR}/task_commands.log"
 }
@@ -1881,12 +1886,86 @@ fi
 EOF
     chmod +x "${TEST_DIR}/task"
 
-    run create_and_annotate_task "Seed issue" "linear" "https://linear.app/test/issue/DEVOPS-202" "DEVOPS-202" "operations" "Todo" "" "" "" "2026-06-26T09:00:00.000Z"
+    # sync_to_taskwarrior strips the fraction before calling this, so the value
+    # arrives here already at second precision. Pass the stripped form.
+    run create_and_annotate_task "Seed issue" "linear" "https://linear.app/test/issue/DEVOPS-202" "DEVOPS-202" "operations" "Todo" "" "" "" "2026-06-26T09:00:00Z"
     [ "$status" -eq 0 ]
 
     # Initial watermark seeded
-    grep -q "new_activity:2026-06-26T09:00:00.000Z" "${TEST_DIR}/task_commands.log"
+    grep -q "new_activity:2026-06-26T09:00:00Z" "${TEST_DIR}/task_commands.log"
     # New task must not be flagged as updated
+    ! grep -q -- "+updated" "${TEST_DIR}/task_commands.log"
+}
+
+@test "sync_to_taskwarrior strips fractional seconds when seeding a brand-new task" {
+    # Brand-new issue: no existing task found, so sync_to_taskwarrior calls
+    # create_and_annotate_task. The Linear updatedAt has a .819 fraction; the
+    # seeded new_activity must be written at second precision (no fraction) so
+    # TaskWarrior stores the correct UTC instant instead of reinterpreting the
+    # wall clock as local time.
+    test_issue='{
+        "id":"abc",
+        "description":"Brand New Issue",
+        "repository":"linear",
+        "html_url":"https://linear.app/test/issue/DEVOPS-205",
+        "issue_id":"DEVOPS-205",
+        "project":"operations",
+        "status":"Todo",
+        "due_date":null,
+        "priority":3,
+        "updated_at":"2026-06-26T05:46:13.819Z",
+        "cycle_number":null
+    }'
+
+    cat > "${TEST_DIR}/task" << 'EOF'
+#!/bin/bash
+case "$1" in
+    "linear_issue_id:DEVOPS-205")
+        case "$2" in
+            "status:pending")
+                case "$3" in
+                    "export")
+                        # No existing task -> forces the create path.
+                        echo '[]'
+                        ;;
+                esac
+                ;;
+        esac
+        ;;
+    "add")
+        echo "Created task test-uuid-205."
+        ;;
+    "export")
+        echo '[]'
+        ;;
+    "_get")
+        echo ""
+        ;;
+    "rc.confirmation=no")
+        echo "MOCK: task $*" >> "${TEST_DIR}/task_commands.log"
+        ;;
+    "test-uuid-205")
+        # annotate_task / per-task export calls
+        if [[ "$2" == "export" ]]; then
+            echo '[{"uuid":"test-uuid-205","tags":["linear","fresh"],"status":"pending"}]'
+        else
+            echo "Annotating task"
+        fi
+        ;;
+    *)
+        echo "test-uuid-205"
+        ;;
+esac
+EOF
+    chmod +x "${TEST_DIR}/task"
+
+    run sync_to_taskwarrior "$test_issue"
+    [ "$status" -eq 0 ]
+
+    # Seeded watermark written at second precision, fraction dropped.
+    grep -q "new_activity:2026-06-26T05:46:13Z" "${TEST_DIR}/task_commands.log"
+    ! grep -q "new_activity:2026-06-26T05:46:13.819Z" "${TEST_DIR}/task_commands.log"
+    # New task must not be flagged as updated.
     ! grep -q -- "+updated" "${TEST_DIR}/task_commands.log"
 }
 
