@@ -443,3 +443,6 @@ export PATH=/home/decoder/.npm-global/bin:$PATH
 typeset -U path && path=($path)  # Final deduplication
 export PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome
 alias stats="~/.claude/dashboards/claude-dashboard-swap.sh"
+
+# bastion secret helper (touch-gated secrets via YubiKey): secret / secret-add
+source ~/.config/age/secret.zsh
