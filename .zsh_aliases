@@ -167,3 +167,6 @@ alias notion-mic-status='/home/decoder/dev/dotfiles/scripts/__notion_loopback.sh
 
 # claude-dashboard web admin panel (on|off|toggle|status|open)
 alias ccdash="~/.claude/scripts/__claude_dashboard_ctl.sh"
+
+# claude code status: live cockpit board (Gordon's hand-authored read), viddy 30s refresh + diff-highlight
+alias ccstatus="~/.claude/scripts/__cockpit_board.sh"
