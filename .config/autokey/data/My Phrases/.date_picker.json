@@ -1,6 +1,6 @@
 {
   "type": "script",
-  "description": "pick an active tmux agent, types @name",
+  "description": "today's date (instant)",
   "store": {},
   "modes": [
     1
@@ -11,7 +11,7 @@
   "showInTrayMenu": false,
   "abbreviation": {
     "abbreviations": [
-      ";;agent"
+      ";;date"
     ],
     "backspace": false,
     "ignoreCase": false,
