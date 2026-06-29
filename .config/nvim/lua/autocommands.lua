@@ -15,6 +15,7 @@ local copilotGroup = api.nvim_create_augroup("Copilot", { clear = true })
 local valeGroup = api.nvim_create_augroup("Vale", { clear = true })
 local shellcheckGroup = api.nvim_create_augroup("Shellcheck", { clear = true })
 local terminalGroup = api.nvim_create_augroup("Terminal", { clear = true })
+local presentermGroup = api.nvim_create_augroup("Presenterm", { clear = true })
 
 -- Terminal OSC Sequences
 -- OSC 7: Directory tracking (shell reports CWD changes)
@@ -476,4 +477,45 @@ vim.api.nvim_create_autocmd({ "BufRead", "BufNewFile" }, {
   callback = function()
     vim.bo.filetype = "dosini"
   end,
+})
+
+-- Presenterm: normalize blank lines after slide separators on save.
+-- presenterm decks accumulate blank lines after every "<!-- end_slide -->"
+-- (the plugin's new_slide seeds three). Collapse each run to exactly one blank
+-- line, except when the marker ends the file (then keep no trailing blank).
+-- Detection is by filename for now: only presentation.md is touched.
+local function presenterm_normalize_slide_gaps(bufnr)
+  local marker = "<!-- end_slide -->"
+  local lines = api.nvim_buf_get_lines(bufnr, 0, -1, false)
+  local out = {}
+  local i, n = 1, #lines
+  while i <= n do
+    out[#out + 1] = lines[i]
+    if vim.trim(lines[i]) == marker then
+      local j = i + 1
+      while j <= n and lines[j]:match "^%s*$" do
+        j = j + 1
+      end
+      if j <= n then
+        out[#out + 1] = "" -- content follows: keep exactly one blank line
+      end
+      i = j -- skip the original blank run (or stop at end of file)
+    else
+      i = i + 1
+    end
+  end
+  if not vim.deep_equal(out, lines) then
+    local view = vim.fn.winsaveview()
+    api.nvim_buf_set_lines(bufnr, 0, -1, false, out)
+    pcall(vim.fn.winrestview, view)
+  end
+end
+
+vim.api.nvim_create_autocmd("BufWritePre", {
+  group = presentermGroup,
+  pattern = "presentation.md",
+  callback = function(ev)
+    presenterm_normalize_slide_gaps(ev.buf)
+  end,
+  desc = "Collapse blank lines after presenterm end_slide markers",
 })
