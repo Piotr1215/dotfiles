@@ -55,8 +55,8 @@ windows:
         - tuiw
         - NCURSES_NO_UTF8_ACS=1 tui -r current-prs-age
   - private:
-      layout: 92eb,150x72,0,0[150x63,0,0,4,150x8,0,64,19]
+      layout: 72be,150x72,0,0[150x42,0,0,4,150x29,0,43,19]
       panes:
         - KUBECONFIG=/home/decoder/dev/homelab/kubeconfig __claude_with_monitor.sh --system-prompt-file ~/.claude/system-prompts/triage-agent-system-prompt.md -- "/ops-triage-agent"
-        - nvim +"set nowrap textwidth=0" ~/dev/messages/messages.md
+        - ~/.claude/scripts/__cockpit_board.sh
 
