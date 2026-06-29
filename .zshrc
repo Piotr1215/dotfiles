@@ -354,6 +354,46 @@ copy-line-to-clipboard() {
 zle -N copy-line-to-clipboard
 bindkey '^Y' copy-line-to-clipboard       # Ctrl+Y: Copies line to clipboard
 bindkey '^@' autosuggest-accept           # Ctrl+@: Accepts autosuggestion
+
+# Ctrl+X Ctrl+W : frequency-ranked history-word completion (replaces the word under the cursor).
+# Like an IDE dropdown - type "kube", hit the chord, pick "kubectl" from your most-used words.
+fzf-history-word() {
+  local prefix=${LBUFFER##* }
+  local word
+  word=$(fc -ln 1 \
+    | tr -cs 'A-Za-z0-9_./:@%+-' '\n' \
+    | grep -vE '^-' \
+    | grep -E '^.{2,}$' \
+    | sort | uniq -c | sort -rn \
+    | sed -E 's/^ *[0-9]+ //' \
+    | fzf --no-sort --height 40% --reverse --query "$prefix" --prompt 'history-word> ') \
+    || { zle redisplay; return }
+  LBUFFER="${LBUFFER%$prefix}$word"
+  zle reset-prompt
+}
+zle -N fzf-history-word
+bindkey '^X^W' fzf-history-word           # Ctrl+X Ctrl+W: frequency-ranked history-word completion
+
+# Ctrl+X w : fuzzy-complete a word from the current tmux pane's scrollback.
+# Sibling to ^X^W, but sources from on-screen command OUTPUT (filenames, hashes,
+# error tokens) instead of shell history - the terminal equivalent of nvim's
+# buffer-word completion. tac reverses so the nearest match wins on duplicates.
+fzf-pane-word() {
+  [[ -n "$TMUX" ]] || { zle redisplay; return }
+  local prefix=${LBUFFER##* }
+  local word
+  word=$(tmux capture-pane -p -S -100000 \
+    | tac \
+    | grep -oE '[A-Za-z0-9_./:@%+-]+' \
+    | awk '!seen[$0]++' \
+    | fzf --no-sort --exact +i --height 40% --reverse --query "$prefix" --prompt 'pane-word> ') \
+    || { zle redisplay; return }
+  LBUFFER="${LBUFFER%$prefix}$word"
+  zle reset-prompt
+}
+zle -N fzf-pane-word
+bindkey '^Xw' fzf-pane-word               # Ctrl+X w: complete a word from the tmux pane scrollback
+
 bindkey '^Xm' set-mark-command            # Ctrl+X m: Set mark for ^X^X
 bindkey '^X^T' transpose-words            # Ctrl+X Ctrl+T: Transposes words
 
