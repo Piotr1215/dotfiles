@@ -9,7 +9,9 @@ mkdir -p "$CACHE_DIR"
 # Fast path: status bar just reads pre-computed file + fresh time
 if [ "${1:-}" != "--update" ]; then
     session=$(tmux display-message -p '#S' 2>/dev/null || echo "default")
-    cache_file="$CACHE_DIR/${session}"
+    # Slashes in session names (e.g. _claude-fix/foo) are illegal in a flat
+    # filename, so map them to '-' for the cache key (matches the writer).
+    cache_file="$CACHE_DIR/${session//\//-}"
     if [ -f "$cache_file" ]; then
         cat "$cache_file"
     else
@@ -34,7 +36,10 @@ get_agent_issue() {
     command -v task &> /dev/null || return 0
     local session="$1"
     local linear_id
-    if [[ "$session" =~ ([a-zA-Z]+-[0-9]+)$ ]]; then
+    # Match the Linear ID anywhere in the session name, not just at the end.
+    # Agent sessions carry a trailing descriptor (e.g. devops-1020-rollout),
+    # so an end-anchored ($) match missed them. Mirrors __open_pane_linear.sh (M-a).
+    if [[ "$session" =~ ([a-zA-Z]+-[0-9]+) ]]; then
         linear_id=$(echo "${BASH_REMATCH[1]}" | tr '[:lower:]' '[:upper:]')
     fi
     [ -z "$linear_id" ] && return 0
@@ -80,10 +85,11 @@ update_session() {
         prefix=$(get_mpv_track)
     fi
 
+    local cache_key="${session//\//-}"
     if [ -n "$prefix" ]; then
-        echo "$prefix | $datetime" > "$CACHE_DIR/${session}"
+        echo "$prefix | $datetime" > "$CACHE_DIR/${cache_key}"
     else
-        echo "$datetime" > "$CACHE_DIR/${session}"
+        echo "$datetime" > "$CACHE_DIR/${cache_key}"
     fi
 }
 
