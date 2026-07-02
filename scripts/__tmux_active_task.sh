@@ -32,6 +32,33 @@ truncate_desc() {
     fi
 }
 
+get_pr_desc() {
+    command -v gh &> /dev/null || return 0
+    local session="$1"
+    # PR-based agent sessions are named "<repo>-pr-<num>" (e.g. vcluster-docs-pr-2340).
+    # Grab the number after "-pr-"; non-PR sessions bail out so the Linear path below
+    # stays untouched. Checked before get_agent_issue because the generic Linear regex
+    # would otherwise mis-match "pr-2340" as a bogus issue id "PR-2340".
+    local pr_num
+    if [[ "$session" =~ -pr-([0-9]+) ]]; then
+        pr_num="${BASH_REMATCH[1]}"
+    else
+        return 0
+    fi
+    # Resolve owner/repo from the session's active pane (a worktree on the PR branch),
+    # then ask gh for the PR title. Sibling of __open_pane_pr.sh (M-p), which opens the
+    # same PR in the browser.
+    local pane_path url repo title
+    pane_path=$(tmux display-message -p -t "$session" '#{pane_current_path}' 2>/dev/null) || return 0
+    [ -d "$pane_path" ] || return 0
+    url=$(git -C "$pane_path" remote get-url origin 2>/dev/null) || return 0
+    [ -n "$url" ] || return 0
+    # git@github.com:owner/repo.git or https://github.com/owner/repo.git -> owner/repo
+    repo=${url%.git}; repo=${repo#*github.com}; repo=${repo#[:/]}
+    title=$(gh pr view "$pr_num" --repo "$repo" --json title --jq '.title' 2>/dev/null) || true
+    [ -n "$title" ] && echo "🔀 $(truncate_desc "$title" 60)"
+}
+
 get_agent_issue() {
     command -v task &> /dev/null || return 0
     local session="$1"
@@ -80,7 +107,10 @@ update_session() {
     datetime="$datetime | $mode"
     local prefix=""
 
-    prefix=$(get_agent_issue "$session")
+    prefix=$(get_pr_desc "$session")
+    if [ -z "$prefix" ]; then
+        prefix=$(get_agent_issue "$session")
+    fi
     if [ -z "$prefix" ]; then
         prefix=$(get_mpv_track)
     fi
