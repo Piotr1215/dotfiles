@@ -67,13 +67,16 @@ EOF
     export PR_MOVE_PUSH_COOLDOWN=600
     export PR_MOVE_STICKY_COOLDOWN=3600
     export PR_MOVE_CYCLE_CAP=8
+    # reset contention-stub state so a session set by one test does not leak into
+    # the next (export_sessions never clears it).
+    export PR_TEST_SESSIONS="" PR_TEST_PANE_TEXT=""
 }
 teardown() { rm -rf "$TEST_DIR"; }
 
 # search fixture with one PR
-search_one() { # url number repo owner isDraft
-    jq -n --arg u "$1" --argjson n "$2" --arg r "$3" --arg o "$4" --argjson d "${5:-false}" \
-      '[{url:$u, number:$n, repository:{name:$r, nameWithOwner:($o+"/"+$r)}, isDraft:$d}]' > "$SEARCH"
+search_one() { # url number repo owner isDraft title
+    jq -n --arg u "$1" --argjson n "$2" --arg r "$3" --arg o "$4" --argjson d "${5:-false}" --arg t "${6:-}" \
+      '[{url:$u, number:$n, title:$t, repository:{name:$r, nameWithOwner:($o+"/"+$r)}, isDraft:$d}]' > "$SEARCH"
 }
 export_sessions() { export PR_TEST_SESSIONS="$1"; export PR_TEST_PANE_TEXT="${2:-}"; }
 
@@ -228,6 +231,46 @@ search_one "https://x/pr/1" 1 vcluster loft-sh
 mk_prview "https://x/pr/1" sha1 REVIEW_REQUIRED MERGEABLE SUCCESS Piotr1215 "$OLD"; run --dry-run
 mk_prview "https://x/pr/1" sha1 CHANGES_REQUESTED MERGEABLE SUCCESS Piotr1215 "$OLD"; run --dry-run
 assert_silent "dry-run never DMs even on a real movement"
+teardown
+
+echo "T12 bare ci-red on a ci(release) PR is suppressed"
+setup
+search_one "https://x/pr/1" 1 vcluster loft-sh false "ci(release): migrate sync_linear to shared action (v0.30)"
+mk_prview "https://x/pr/1" sha1 REVIEW_REQUIRED MERGEABLE SUCCESS Piotr1215 "$OLD"; run --live
+mk_prview "https://x/pr/1" sha1 REVIEW_REQUIRED MERGEABLE FAILURE Piotr1215 "$OLD"; run --live
+assert_silent "bare ci-red on ci(release) title is filtered"
+teardown
+
+echo "T13 bare ci-red on a chore(renovate) PR is suppressed"
+setup
+search_one "https://x/pr/1" 1 vcluster loft-sh false "chore(renovate): bump default vcluster version"
+mk_prview "https://x/pr/1" sha1 REVIEW_REQUIRED MERGEABLE SUCCESS Piotr1215 "$OLD"; run --live
+mk_prview "https://x/pr/1" sha1 REVIEW_REQUIRED MERGEABLE FAILURE Piotr1215 "$OLD"; run --live
+assert_silent "bare ci-red on chore(renovate) title is filtered"
+teardown
+
+echo "T14 ci-red on a substantive code PR still fires"
+setup
+search_one "https://x/pr/1" 1 vcluster loft-sh false "fix(core): correct nil deref in syncer"
+mk_prview "https://x/pr/1" sha1 REVIEW_REQUIRED MERGEABLE SUCCESS Piotr1215 "$OLD"; run --live
+mk_prview "https://x/pr/1" sha1 REVIEW_REQUIRED MERGEABLE FAILURE Piotr1215 "$OLD"; run --live
+assert_fires ci-red "ci-red still fires on a fix(): PR"
+teardown
+
+echo "T15 ci-red accompanied by changes-requested on a ci(release) PR still fires"
+setup
+search_one "https://x/pr/1" 1 vcluster loft-sh false "ci(release): migrate sync_linear to shared action (v0.30)"
+mk_prview "https://x/pr/1" sha1 REVIEW_REQUIRED MERGEABLE SUCCESS Piotr1215 "$OLD"; run --live
+mk_prview "https://x/pr/1" sha1 CHANGES_REQUESTED MERGEABLE FAILURE Piotr1215 "$OLD"; run --live
+assert_fires changes-requested "accompanied ci-red on ci(release) is not swallowed"
+teardown
+
+echo "T16 PR outside the notify scope (non-loft-sh org) never fires"
+setup
+search_one "https://x/pr/41" 41 nginx-demo Piotr1215 false "fix: real movement but wrong org"
+mk_prview "https://x/pr/41" sha1 REVIEW_REQUIRED MERGEABLE SUCCESS Piotr1215 "$OLD"; run --live
+mk_prview "https://x/pr/41" sha1 REVIEW_REQUIRED CONFLICTING SUCCESS Piotr1215 "$OLD"; run --live
+assert_silent "Piotr1215/nginx-demo is out of notify scope"
 teardown
 
 echo

@@ -23,6 +23,13 @@
 #   foreign-push       new head commit whose author is not Piotr         (edge)
 # IGNORED: Piotr's own / the agent's own push (both authored as Piotr), draft
 #   PRs, bot comments, CI green/pending, approvals (surface-only), Piotr's edits.
+# NOISE FILTER (Gordon's live-cycle feedback):
+#   - PRs outside NUDGE_ORGS (default loft-sh) are skipped entirely: the
+#     dispatcher hardcodes loft-sh URLs, so other orgs are undispatchable.
+#   - A BARE ci-red (sole reason) on a CI/dependency/release PR is suppressed,
+#     keyed on the conventional-commit title (ci(...):, chore/build(deps|renovate
+#     |release):, or a bump/pin subject). Its E2E-on-PR red is not a code defect.
+#     An accompanied ci-red still rides along with the other reason.
 #
 # Self-retrigger guard: per-PR signature keyed on headSha in the state file.
 #   First contact seeds silently (no nudge), mirroring the Linear new_activity
@@ -69,6 +76,10 @@ PUSH_COOLDOWN_SECS="${PR_MOVE_PUSH_COOLDOWN:-600}"        # skip if we pushed wi
 STICKY_COOLDOWN_SECS="${PR_MOVE_STICKY_COOLDOWN:-3600}"   # re-nudge sticky states hourly
 CYCLE_CAP="${PR_MOVE_CYCLE_CAP:-8}"                       # max pr-move DMs per cycle
 ME="${PR_MOVE_ME:-$(gh api user --jq .login 2>/dev/null || echo Piotr1215)}"
+# Notify scope: only DM for PRs whose owner is in this space/comma-separated
+# allowlist. The dispatcher (__spawn_agent.sh --pr) hardcodes loft-sh URLs, so a
+# nudge for any other org (personal/experiment repos) is undispatchable. Empty = all.
+NUDGE_ORGS="${PR_MOVE_NUDGE_ORGS:-loft-sh}"
 
 # Spend/rate-limit wall markers (same set __cockpit_state.sh uses): a session at
 # this wall is dead work, not ownership, so it must not suppress a nudge.
@@ -147,6 +158,24 @@ sticky_ready() {
     [[ "$(now_epoch)" -ge "$until_epoch" ]]
 }
 
+# ci_red_is_noise TITLE -> 0 if a BARE ci-red on this PR is expected noise: CI
+# plumbing / dependency / release-sync PRs whose E2E-on-PR red is not a code
+# defect. The conventional-commit title prefix is the only reliable signal here:
+# these PRs are Piotr-authored (so bot-author checks miss them) and carry no
+# distinguishing label. Only sole-reason ci-red is suppressed by the caller;
+# changes-requested / merge-conflict / review-comment always pass through.
+ci_red_is_noise() {
+    local t="${1,,}"
+    # ci(...) plumbing PRs, e.g. "ci(release): migrate sync_linear ..."
+    [[ "$t" =~ ^ci(\([^\)]*\))?!?: ]] && return 0
+    # chore/build dependency or release PRs
+    if [[ "$t" =~ ^(chore|build)(\([^\)]*\))?!?: ]]; then
+        [[ "$t" =~ ^(chore|build)\((deps|dependencies|renovate|dependabot|release)\) ]] && return 0
+        [[ "$t" =~ (bump|pin|renovate|dependabot|dependenc) ]] && return 0
+    fi
+    return 1
+}
+
 # --- main ---
 main() {
     local mode="LIVE"; [[ "$DRY_RUN" -eq 1 ]] && mode="DRY-RUN"
@@ -166,7 +195,7 @@ main() {
     local -a nudges=()
     local seen=0 moved=0
 
-    local pr url num repo owner ref is_draft detail sig old key
+    local pr url num repo owner ref is_draft detail sig old key title
     while read -r pr; do
         [[ -z "$pr" ]] && continue
         url=$(jq -r '.url' <<<"$pr")
@@ -174,8 +203,16 @@ main() {
         repo=$(jq -r '.repository.name // ""' <<<"$pr")
         owner=$(jq -r '(.repository.nameWithOwner // "") | split("/")[0]' <<<"$pr")
         is_draft=$(jq -r '.isDraft' <<<"$pr")
+        title=$(jq -r '.title // ""' <<<"$pr")
         [[ -z "$owner" ]] && owner="loft-sh"
         ref="$owner/$repo#$num"
+
+        # Notify scope: skip PRs outside the dispatchable orgs before any API call.
+        if [[ -n "$NUDGE_ORGS" && " ${NUDGE_ORGS//,/ } " != *" $owner "* ]]; then
+            log "skip (org '$owner' out of notify scope): $ref"
+            continue
+        fi
+
         key="$url"
         seen=$((seen + 1))
 
@@ -271,6 +308,17 @@ main() {
         # foreign-push (edge): head moved to a commit not authored by us
         if [[ "$cur_sha" != "$old_sha" && "$known" -gt 0 && "$mine" != "true" ]]; then
             reasons+=("foreign-push")
+        fi
+
+        # Suppress a BARE ci-red on CI/dependency/release PRs: the red is
+        # E2E-on-PR that does not apply, not a code defect (Gordon re-verifies
+        # regardless). Only when ci-red is the sole reason; an accompanied ci-red
+        # rides along with changes-requested/merge-conflict/review-comment. Roll
+        # back its armed cooldown so state does not imply a nudge went out.
+        if [[ ${#reasons[@]} -eq 1 && "${reasons[0]}" == "ci-red" ]] && ci_red_is_noise "$title"; then
+            log "suppress (bare ci-red, ci/deps/release PR): $ref [$title]"
+            reasons=()
+            cooldown=$(jq -c 'del(."ci-red")' <<<"$cooldown")
         fi
 
         # persist the advanced signature + refreshed cooldown regardless of fire
