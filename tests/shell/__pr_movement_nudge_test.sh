@@ -63,6 +63,10 @@ EOF
     export PR_MOVE_LOG="$TEST_DIR/log"
     export PR_MOVE_LOCK="$TEST_DIR/lock"
     export PR_MOVE_ME="Piotr1215"
+    # Self identities beyond $ME: the Claude bot login Piotr's agent pushes as.
+    # Pinned here (not left to the shipped default) so the actor-filter tests are
+    # deterministic; value matches the production default.
+    export PR_MOVE_SELF_LOGINS="claude[bot]"
     export SND_NODE_BIN="$TEST_DIR/snd.js"
     export PR_MOVE_PUSH_COOLDOWN=600
     export PR_MOVE_STICKY_COOLDOWN=3600
@@ -271,6 +275,24 @@ search_one "https://x/pr/41" 41 nginx-demo Piotr1215 false "fix: real movement b
 mk_prview "https://x/pr/41" sha1 REVIEW_REQUIRED MERGEABLE SUCCESS Piotr1215 "$OLD"; run --live
 mk_prview "https://x/pr/41" sha1 REVIEW_REQUIRED CONFLICTING SUCCESS Piotr1215 "$OLD"; run --live
 assert_silent "Piotr1215/nginx-demo is out of notify scope"
+teardown
+
+echo "T17 self: a claude[bot] head push is treated as self, not foreign-push"
+setup
+search_one "https://x/pr/1" 1 vcluster loft-sh
+mk_prview "https://x/pr/1" sha1 REVIEW_REQUIRED MERGEABLE SUCCESS Piotr1215 "$OLD"; run --live   # seed
+# the Claude bot Piotr pushes as advances head -> self identity -> silent
+mk_prview "https://x/pr/1" sha2 REVIEW_REQUIRED MERGEABLE SUCCESS "claude[bot]" "$OLD"; run --live
+assert_silent "claude[bot] head push is self, no self-retrigger"
+teardown
+
+echo "T18 external: a teammate push still fires foreign-push (not over-suppressed)"
+setup
+search_one "https://x/pr/1" 1 vcluster loft-sh
+mk_prview "https://x/pr/1" sha1 REVIEW_REQUIRED MERGEABLE SUCCESS Piotr1215 "$OLD"; run --live   # seed
+# a real collaborator's push is outside the self set -> must fire
+mk_prview "https://x/pr/1" sha2 REVIEW_REQUIRED MERGEABLE SUCCESS djwfyi "$OLD"; run --live
+assert_fires foreign-push "external teammate push still fires"
 teardown
 
 echo
