@@ -19,6 +19,12 @@ utils.lnmap("wa", ":wa<cr>", { desc = "save all" })
 utils.lnmap("wq", ":wqa<cr>", { desc = "save and close all" })
 utils.imap("jk", "<Esc>", { desc = "esc and save" })
 utils.nmap("<leader>w", ":wall<CR>", { desc = "save all" })
+-- ui2 pager: the builtin `g<` expands collapsed/[+N] output into the scrollable,
+-- searchable pager, but our config remaps `g<` to <Plug>(swap-prev). `normal!`
+-- ignores that remap and calls the builtin, so <leader>mm always opens the pager.
+vim.keymap.set("n", "<leader>mm", function()
+  vim.cmd "normal! g<"
+end, { silent = true, desc = "ui2: expand last output in pager" })
 utils.lnmap("qq", "@q", { desc = "run macro from q register" })
 utils.lnmap("qa", ":qa!<cr>", { desc = "close all without saving" })
 utils.lnmap("qf", ":q!<cr>", { desc = "close current bufferall without saving" })

@@ -2,6 +2,14 @@
 vim.g.mapleader = " "
 vim.g.maplocalleader = " "
 
+-- 0.12 ui2: redesigned message/cmdline UI. Kills "Press ENTER", highlights the
+-- cmdline as you type, makes messages/pager real buffers (g< reopens history).
+-- Experimental: lives in the vim._core.* namespace, so pcall-guard it to keep
+-- startup alive if a future release renames or removes the module.
+pcall(function()
+  require("vim._core.ui2").enable {}
+end)
+
 require "plugins"
 require "settings"
 require "autocommands"
