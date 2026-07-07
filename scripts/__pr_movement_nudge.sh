@@ -20,9 +20,10 @@
 #   review-comment     new review/comment by a non-Piotr, non-bot actor  (edge)
 #   ci-red             statusCheckRollup -> FAILURE                       (sticky)
 #   merge-conflict     mergeable -> CONFLICTING                          (sticky)
-#   foreign-push       new head commit whose author is not Piotr         (edge)
-# IGNORED: Piotr's own / the agent's own push (both authored as Piotr), draft
-#   PRs, bot comments, CI green/pending, approvals (surface-only), Piotr's edits.
+#   foreign-push       new head commit whose author is not a self login  (edge)
+# IGNORED: pushes/commits/comments by a self identity (Piotr, or the Claude bot
+#   login he pushes as -- see PR_MOVE_SELF_LOGINS), draft PRs, bot comments, CI
+#   green/pending, approvals (surface-only), Piotr's edits.
 # NOISE FILTER (Gordon's live-cycle feedback):
 #   - PRs outside NUDGE_ORGS (default loft-sh) are skipped entirely: the
 #     dispatcher hardcodes loft-sh URLs, so other orgs are undispatchable.
@@ -33,8 +34,11 @@
 #
 # Self-retrigger guard: per-PR signature keyed on headSha in the state file.
 #   First contact seeds silently (no nudge), mirroring the Linear new_activity
-#   silent-seed. Because the worker commits AS Piotr, any Piotr-authored change
-#   is by definition not a trigger.
+#   silent-seed. Any change attributable to a SELF identity is by definition not
+#   a trigger: Piotr's handle plus the Claude bot login he pushes as (the local
+#   worker commits as Piotr; the GitHub Claude app pushes/opens PRs as a bot).
+#   The self set is $ME + PR_MOVE_SELF_LOGINS (default claude[bot]). A non-self
+#   actor (a teammate's review, an external contributor's push) still fires.
 # Contention guard: skip a PR already owned by a live (non-spend-stalled) tmux
 #   session, or one Piotr/the agent pushed to within PUSH_COOLDOWN_SECS.
 #
@@ -76,6 +80,16 @@ PUSH_COOLDOWN_SECS="${PR_MOVE_PUSH_COOLDOWN:-600}"        # skip if we pushed wi
 STICKY_COOLDOWN_SECS="${PR_MOVE_STICKY_COOLDOWN:-3600}"   # re-nudge sticky states hourly
 CYCLE_CAP="${PR_MOVE_CYCLE_CAP:-8}"                       # max pr-move DMs per cycle
 ME="${PR_MOVE_ME:-$(gh api user --jq .login 2>/dev/null || echo Piotr1215)}"
+# Self identities: any actor whose movement is Piotr's own and must NOT nudge.
+# The local worker commits AS Piotr (personal and work emails both resolve to
+# $ME), but the GitHub-hosted Claude app pushes/opens PRs under a bot login, so
+# a commit/push/comment by that bot would otherwise read as a foreign actor and
+# re-trigger. Broaden "self" to $ME plus PR_MOVE_SELF_LOGINS (space/comma-
+# separated; default the Claude app's bot login). A teammate's review or an
+# external contributor's push stays outside this set and still fires.
+SELF_LOGINS_EXTRA="${PR_MOVE_SELF_LOGINS:-claude[bot]}"
+SELVES_JSON=$(jq -cn --arg me "$ME" --arg extra "$SELF_LOGINS_EXTRA" \
+    '([$me] + ($extra | [splits("[[:space:],]+")])) | map(select(. != "")) | unique')
 # Notify scope: only DM for PRs whose owner is in this space/comma-separated
 # allowlist. The dispatcher (__spawn_agent.sh --pr) hardcodes loft-sh URLs, so a
 # nudge for any other org (personal/experiment repos) is undispatchable. Empty = all.
@@ -116,10 +130,11 @@ pr_has_live_session() {
 # --- signature: reduce one PR's `gh pr view` JSON to the watched dimensions ---
 compute_sig() {
     local detail="$1"
-    jq -c --arg me "$ME" '
+    jq -c --argjson selves "$SELVES_JSON" '
+        def isself($l): ($l != null) and (($selves | index($l)) != null);
         def isbot($l): ($l|type=="string") and (($l|endswith("[bot]"))
             or ((["dependabot","dependabot-preview","renovate","codecov","github-actions","loft-bot","snyk-bot"])|index($l) != null));
-        def foreign($l): ($l != null) and ($l != $me) and (isbot($l)|not);
+        def foreign($l): ($l != null) and (isself($l)|not) and (isbot($l)|not);
         (.commits // []) as $c
         | ($c | last) as $last
         | ($last.authors // [] | map(.login)) as $la
@@ -128,7 +143,7 @@ compute_sig() {
             reviewDecision: (.reviewDecision // ""),
             mergeable: (.mergeable // "UNKNOWN"),
             lastCommitKnownAuthors: ($la | map(select(. != null and . != "")) | length),
-            lastCommitMine: (($la | index($me)) != null),
+            lastCommitMine: (any($la[]?; isself(.))),
             lastCommitDate: ($last.committedDate // $last.authoredDate // ""),
             lastForeignActivity: (
                 ([ (.reviews // [])[] | select(foreign(.author.login)) | .submittedAt ]
@@ -179,7 +194,7 @@ ci_red_is_noise() {
 # --- main ---
 main() {
     local mode="LIVE"; [[ "$DRY_RUN" -eq 1 ]] && mode="DRY-RUN"
-    log "=== PR-movement watcher starting (me=$ME, mode=$mode) ==="
+    log "=== PR-movement watcher starting (me=$ME, selves=$SELVES_JSON, mode=$mode) ==="
 
     [[ -f "$STATE_FILE" ]] || echo '{}' > "$STATE_FILE"
     local old_state; old_state=$(cat "$STATE_FILE" 2>/dev/null); [[ -n "$old_state" ]] || old_state='{}'
