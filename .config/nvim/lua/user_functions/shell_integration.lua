@@ -127,6 +127,23 @@ vim.api.nvim_set_keymap(
   { noremap = true, silent = true }
 )
 
+-- Run a shell command in a TERMINAL buffer through an interactive zsh. The
+-- terminal renders ANSI, and `-i` sources ~/.zshrc so your aliases and colors
+-- apply (e.g. `ls` -> `eza --color=always ...`). Plain :term/:! use a
+-- non-interactive shell, so coreutils `ls` runs without --color and no alias:
+-- that is why they are colorless. Buffer opens in normal mode: j/k, <C-d>/<C-u>
+-- scroll, / searches, q closes.
+function M.run_colored(args)
+  vim.cmd "botright 15new"
+  local buf = vim.api.nvim_get_current_buf()
+  vim.fn.jobstart({ vim.o.shell, "-ic", args }, { term = true })
+  vim.keymap.set("n", "q", "<cmd>bd!<cr>", { buffer = buf, nowait = true, silent = true, desc = "close run buffer" })
+end
+
+vim.api.nvim_create_user_command("Run", function(o)
+  require("user_functions.shell_integration").run_colored(o.args)
+end, { nargs = "+", complete = "shellcmd", desc = "run cmd in interactive-shell terminal (colored)" })
+
 -- Put this in your init.lua (or Lua config file):
 function M.run_cmd_in_backticks()
   local current_pos = vim.api.nvim_win_get_cursor(0)
