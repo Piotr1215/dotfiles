@@ -11,9 +11,12 @@
 #    (Released, Canceled, Done, Ready for Release, Duplicate, Archived)
 # 3. The +backlog tag is now Taskwarrior-internal and doesn't sync with Linear
 #    (users can add/remove this tag manually without affecting Linear)
-# 4. The +triage tag is added when an assigned issue is in Triage state and
-#    removed when it transitions out. Cleanup queries do NOT exclude +triage,
-#    so stale tags reconcile against Linear's actual state.
+# 4. Linear Triage-status issues are EXCLUDED from sync entirely (see the guard
+#    in sync_to_taskwarrior). Linear Triage is Piotr's own inbox gate: only
+#    issues he accepts OUT of Triage count as assigned work. Triage-status
+#    issues are never created, updated, or tagged here. They stay in the fetched
+#    feed only so the cleanup passes do not delete an already-created task while
+#    it is mid-transition; they simply are not synced as tasks.
 #
 # Note: The cross-team Triage feed was removed — only issues assigned to me sync.
 # Note: GitHub issue sync was removed in v1.0-with-github-sync (no GitHub issues assigned)
@@ -535,6 +538,18 @@ sync_to_taskwarrior() {
     issue_updated_at=$(echo "$issue_line" | jq -r '.updated_at // empty' | sed -E 's/\.[0-9]+Z$/Z/')
 
     log "Processing Issue ID: $issue_id, Description: $issue_description"
+
+    # NEVER sync a Linear issue still in Triage status. A Triage-status issue is
+    # not yet real work: it must never become a Taskwarrior task, never be
+    # auto-batched, and never be triaged/dispatched by the triage agent (Gordon).
+    # It STAYS in the fetched feed (get_linear_issues does not exclude it), so the
+    # cleanup passes still see it and do NOT delete an already-created task; we
+    # only skip create/update here while it sits in Triage. When it moves to a
+    # real status (Todo/In Progress/In Review/etc.) it syncs normally next run.
+    if [[ "$issue_status" == "Triage" ]]; then
+        log "Issue $issue_number is in Triage status - excluding from sync (not created, not updated, not triaged)"
+        return 0
+    fi
 
     # First, try to find task by linear_issue_id if available
     local existing_task_uuid=""
