@@ -1969,3 +1969,157 @@ EOF
     ! grep -q -- "+updated" "${TEST_DIR}/task_commands.log"
 }
 
+# ====================================================
+# PR ATTACHMENT SYNC TESTS
+# ====================================================
+
+@test "get_linear_issues requests attachments in its GraphQL query" {
+    # The Linear-attached PR only reaches us if the query asks for the
+    # attachments connection. Capture the outgoing request and assert it does.
+    cat > "${TEST_DIR}/curl" << 'EOF'
+#!/bin/bash
+echo "$*" >> "${TEST_DIR}/curl_args.log"
+if [[ "$*" =~ "linear.app" ]]; then
+    echo '{"data":{"user":{"assignedIssues":{"nodes":[]}}}}'
+    echo "200"
+else
+    /usr/bin/curl "$@"
+fi
+EOF
+    chmod +x "${TEST_DIR}/curl"
+
+    run get_linear_issues
+    [ "$status" -eq 0 ]
+    grep -q "attachments" "${TEST_DIR}/curl_args.log"
+}
+
+@test "get_linear_issues extracts github PR url from attachments as pr_url" {
+    # A node carrying a Linear attachment plus a GitHub PR attachment must
+    # surface the PR url (and only the PR url) as pr_url.
+    cat > "${TEST_DIR}/curl" << 'EOF'
+#!/bin/bash
+if [[ "$*" =~ "linear.app" ]]; then
+    cat << 'RESPONSE'
+{
+  "data": { "user": { "assignedIssues": { "nodes": [
+    {
+      "id": "test-id",
+      "title": "Renovate backport",
+      "url": "https://linear.app/loft/issue/DEVOPS-1063/renovate",
+      "state": {"name": "In Review"},
+      "project": {"name": "operations"},
+      "dueDate": null,
+      "priority": 3,
+      "updatedAt": "2026-07-08T10:00:00.000Z",
+      "cycle": null,
+      "attachments": { "nodes": [
+        {"url": "https://linear.app/loft/issue/DEVOPS-1063"},
+        {"url": "https://github.com/loft-sh/loft-enterprise/pull/7375"}
+      ]}
+    }
+  ]}}}
+}
+200
+RESPONSE
+else
+    /usr/bin/curl "$@"
+fi
+EOF
+    chmod +x "${TEST_DIR}/curl"
+
+    run get_linear_issues
+    [ "$status" -eq 0 ]
+    [ "$(echo "$output" | jq -r '.pr_url')" = "https://github.com/loft-sh/loft-enterprise/pull/7375" ]
+}
+
+@test "get_linear_issues yields null pr_url when no PR is attached" {
+    # A Linear-only attachment (no GitHub PR) must not invent a pr_url.
+    cat > "${TEST_DIR}/curl" << 'EOF'
+#!/bin/bash
+if [[ "$*" =~ "linear.app" ]]; then
+    cat << 'RESPONSE'
+{
+  "data": { "user": { "assignedIssues": { "nodes": [
+    {
+      "id": "test-id",
+      "title": "No PR issue",
+      "url": "https://linear.app/loft/issue/DEVOPS-1099/no-pr",
+      "state": {"name": "Todo"},
+      "project": {"name": "operations"},
+      "dueDate": null,
+      "priority": 3,
+      "updatedAt": "2026-07-08T10:00:00.000Z",
+      "cycle": null,
+      "attachments": { "nodes": [
+        {"url": "https://linear.app/loft/issue/DEVOPS-1099"}
+      ]}
+    }
+  ]}}}
+}
+200
+RESPONSE
+else
+    /usr/bin/curl "$@"
+fi
+EOF
+    chmod +x "${TEST_DIR}/curl"
+
+    run get_linear_issues
+    [ "$status" -eq 0 ]
+    [ "$(echo "$output" | jq -r '.pr_url')" = "null" ]
+}
+
+@test "sync_to_taskwarrior annotates existing task with Linear PR url" {
+    test_issue='{"id":"x","description":"Renovate backport","repository":"linear","html_url":"https://linear.app/loft/issue/DEVOPS-1063","issue_id":"DEVOPS-1063","project":"operations","status":"In Review","due_date":null,"priority":3,"cycle_number":null,"pr_url":"https://github.com/loft-sh/loft-enterprise/pull/7375"}'
+
+    cat > "${TEST_DIR}/task" << 'EOF'
+#!/bin/bash
+EXPORT='[{"uuid":"test-uuid-pr","description":"Renovate backport","status":"pending","tags":["linear"],"annotations":[]}]'
+case "$1" in
+    "linear_issue_id:DEVOPS-1063") echo "$EXPORT" ;;
+    "test-uuid-pr")
+        case "$2" in
+            "export")   echo "$EXPORT" ;;
+            "annotate") echo "MOCK: annotate $*" >> "${TEST_DIR}/annotate.log" ;;
+        esac
+        ;;
+    "_get") echo "" ;;
+    "rc.confirmation=no") echo "MOCK: task $*" >> "${TEST_DIR}/task_commands.log" ;;
+    *) echo "test-uuid-pr" ;;
+esac
+EOF
+    chmod +x "${TEST_DIR}/task"
+
+    run sync_to_taskwarrior "$test_issue"
+    [ "$status" -eq 0 ]
+    [ -f "${TEST_DIR}/annotate.log" ]
+    grep -q "pull/7375" "${TEST_DIR}/annotate.log"
+}
+
+@test "sync_to_taskwarrior does not re-annotate when PR url already present" {
+    test_issue='{"id":"x","description":"Renovate backport","repository":"linear","html_url":"https://linear.app/loft/issue/DEVOPS-1063","issue_id":"DEVOPS-1063","project":"operations","status":"In Review","due_date":null,"priority":3,"cycle_number":null,"pr_url":"https://github.com/loft-sh/loft-enterprise/pull/7375"}'
+
+    cat > "${TEST_DIR}/task" << 'EOF'
+#!/bin/bash
+EXPORT='[{"uuid":"test-uuid-pr","description":"Renovate backport","status":"pending","tags":["linear"],"annotations":[{"description":"https://github.com/loft-sh/loft-enterprise/pull/7375"}]}]'
+case "$1" in
+    "linear_issue_id:DEVOPS-1063") echo "$EXPORT" ;;
+    "test-uuid-pr")
+        case "$2" in
+            "export")   echo "$EXPORT" ;;
+            "annotate") echo "MOCK: annotate $*" >> "${TEST_DIR}/annotate.log" ;;
+        esac
+        ;;
+    "_get") echo "" ;;
+    "rc.confirmation=no") echo "MOCK: task $*" >> "${TEST_DIR}/task_commands.log" ;;
+    *) echo "test-uuid-pr" ;;
+esac
+EOF
+    chmod +x "${TEST_DIR}/task"
+
+    run sync_to_taskwarrior "$test_issue"
+    [ "$status" -eq 0 ]
+    # Guard sees the URL already annotated, so it must NOT annotate again.
+    [ ! -f "${TEST_DIR}/annotate.log" ]
+}
+
