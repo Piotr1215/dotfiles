@@ -150,7 +150,7 @@ get_linear_issues() {
             -X POST \
             -H "Content-Type: application/json" \
             -H "Authorization: ${LINEAR_API_KEY}" \
-            --data '{"query": "query { user(id: \"'"$LINEAR_USER_ID"'\") { id name assignedIssues(filter: { state: { name: { nin: [\"Released\", \"Canceled\",\"Done\",\"Ready for Release\",\"Duplicate\",\"Archived\"] } } }) { nodes { id title url state { name } project { name } dueDate priority updatedAt cycle { number } } } } }"}' \
+            --data '{"query": "query { user(id: \"'"$LINEAR_USER_ID"'\") { id name assignedIssues(filter: { state: { name: { nin: [\"Released\", \"Canceled\",\"Done\",\"Ready for Release\",\"Duplicate\",\"Archived\"] } } }) { nodes { id title url state { name } project { name } dueDate priority updatedAt cycle { number } attachments { nodes { url } } } } } }"}' \
             https://api.linear.app/graphql 2>"$curl_stderr")
         exit_code=$?
 
@@ -219,7 +219,8 @@ get_linear_issues() {
             due_date: .dueDate,
             priority: .priority,
             updated_at: .updatedAt,
-            cycle_number: .cycle.number
+            cycle_number: .cycle.number,
+            pr_url: ([.attachments.nodes[]? | select(.url != null and (.url | test("github.com.*/pull/"))) | .url] | .[0] // null)
         }' 2>/dev/null); then
         echo "Error: Failed to parse Linear issues" >&2
         rm -f "$temp_response"
@@ -443,6 +444,33 @@ update_task_status() {
 # PHASE 4: SYNCHRONIZATION OPERATIONS
 # ====================================================
 
+# Mirror a Linear-attached GitHub PR onto a task as an annotation, idempotently.
+# Linear stores PRs as issue attachments (the same source linear.get-prs reads),
+# but get_linear_issues historically never requested that connection, so a PR
+# attached in Linear never landed on the task. We ride the annotation channel the
+# +wt worktree hook already scans for /pull/ URLs (on-modify-worktree-linear-pr-
+# handler.py), rather than a github_pr UDA: an undefined UDA would be mis-parsed
+# into the task description. Re-running the sync must never duplicate the
+# annotation, so skip when the exact URL is already present. Exact-match via
+# jq index (not substring) avoids the +triage/+triaged style collision.
+attach_pr_link() {
+    local task_uuid="$1"
+    local pr_url="$2"
+
+    [[ -z "$pr_url" || "$pr_url" == "null" ]] && return 0
+    [[ -z "$task_uuid" || "$task_uuid" == "null" ]] && return 0
+
+    local has_pr
+    has_pr=$(task "$task_uuid" export 2>/dev/null \
+        | jq -r --arg u "$pr_url" '.[0].annotations // [] | map(.description) | index($u) != null')
+    if [[ "$has_pr" == "true" ]]; then
+        return 0
+    fi
+
+    log "Attaching PR link annotation: $pr_url"
+    annotate_task "$task_uuid" "$pr_url"
+}
+
 # Create a new task for an issue and annotate it
 create_and_annotate_task() {
     local issue_description="$1"
@@ -455,6 +483,7 @@ create_and_annotate_task() {
     local issue_priority="$8"
     local cycle_number="$9"
     local issue_updated_at="${10}"
+    local issue_pr_url="${11}"
 
     log "Creating new task for issue: $issue_description"
     
@@ -473,6 +502,7 @@ create_and_annotate_task() {
     
     if [[ -n "$task_uuid" ]]; then
         annotate_task "$task_uuid" "$issue_url"
+        attach_pr_link "$task_uuid" "$issue_pr_url"
         log "Task created and annotated for: $issue_description"
         task rc.confirmation=no modify "$task_uuid" linear_issue_id:"$issue_number"
         
@@ -515,7 +545,7 @@ create_and_annotate_task() {
 # Synchronize a single issue with Taskwarrior
 sync_to_taskwarrior() {
     local issue_line="$1"
-    local issue_id issue_description issue_repo_name issue_url task_uuid issue_number project_name issue_status issue_due_date issue_priority cycle_number issue_updated_at
+    local issue_id issue_description issue_repo_name issue_url task_uuid issue_number project_name issue_status issue_due_date issue_priority cycle_number issue_updated_at pr_url
 
     issue_id=$(echo "$issue_line" | jq -r '.id')
     issue_description=$(echo "$issue_line" | jq -r '.description')
@@ -536,6 +566,8 @@ sync_to_taskwarrior() {
     # makes TaskWarrior store the correct instant. This single point feeds all
     # three write sites (new-task seed, silent-seed, bump).
     issue_updated_at=$(echo "$issue_line" | jq -r '.updated_at // empty' | sed -E 's/\.[0-9]+Z$/Z/')
+    # First github.com/.../pull/ URL among the Linear issue's attachments, if any.
+    pr_url=$(echo "$issue_line" | jq -r '.pr_url // empty')
 
     log "Processing Issue ID: $issue_id, Description: $issue_description"
 
@@ -566,7 +598,7 @@ sync_to_taskwarrior() {
 
     if [[ -z "$task_uuid" || "$task_uuid" == "null" ]]; then
         log "No valid existing task found - creating new task"
-        create_and_annotate_task "$issue_description" "$issue_repo_name" "$issue_url" "$issue_number" "$project_name" "$issue_status" "$issue_due_date" "$issue_priority" "$cycle_number" "$issue_updated_at"
+        create_and_annotate_task "$issue_description" "$issue_repo_name" "$issue_url" "$issue_number" "$project_name" "$issue_status" "$issue_due_date" "$issue_priority" "$cycle_number" "$issue_updated_at" "$pr_url"
     else
         # Fix any issues with newlines in task_uuid
         task_uuid=$(echo "$task_uuid" | tr -d '\n')
@@ -600,6 +632,9 @@ sync_to_taskwarrior() {
         
         # Update task status based on current Linear issue status
         update_task_status "$task_uuid" "$issue_status" "$issue_priority"
+
+        # Backfill the Linear-attached PR onto already-synced tasks (idempotent).
+        attach_pr_link "$task_uuid" "$pr_url"
 
         # Re-surface the issue when Linear shows newer activity than our watermark.
         # new_activity stores the last-seen Linear updatedAt.
