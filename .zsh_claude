@@ -232,8 +232,13 @@ if [[ -f "$HOME/.claude/scripts/__lib_claude_account.sh" ]]; then
   _claude_account_route() {
     if [[ -d "$HOME/.claude-work" ]] && claude_work_predicate "$PWD"; then
       export CLAUDE_CONFIG_DIR="$HOME/.claude-work"
+      # Codex offload auth/config splits the same way (see __claude_with_monitor.sh):
+      # a work cwd points $CODEX_HOME at the work login, everything else uses the
+      # default ~/.codex. Also routes the plain `codex` CLI, not just the MCP server.
+      export CODEX_HOME="$HOME/.codex-work"
     else
       unset CLAUDE_CONFIG_DIR
+      unset CODEX_HOME
     fi
   }
   autoload -Uz add-zsh-hook
