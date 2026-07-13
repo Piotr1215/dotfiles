@@ -31,6 +31,22 @@ if ! git rev-parse --git-dir >/dev/null 2>&1; then
     exit 1
 fi
 
+# True when $1 is the repository's MAIN (primary) worktree — the original clone
+# that must never be deleted. Identified authoritatively: the main worktree's
+# git dir IS the common git dir, whereas a linked worktree's git dir lives under
+# <common>/worktrees/<name>. This compares resolved git dirs, not path strings,
+# so symlinks and trailing slashes cannot fool it.
+#
+# git already refuses `git worktree remove` on the main worktree, but this
+# script used to fall back to `rm -rf`, which once wiped the loft-prod main
+# clone. Every removal path is gated on this check so that can never recur.
+is_main_worktree() {
+    local wt="$1" git_dir common_dir
+    git_dir=$(git -C "$wt" rev-parse --absolute-git-dir 2>/dev/null) || return 1
+    common_dir=$(git -C "$wt" rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || return 1
+    [[ "$git_dir" == "$common_dir" ]]
+}
+
 # Refresh remote-tracking refs so deleted branches are reflected locally.
 refresh_remotes() {
     git fetch --all --prune --quiet 2>&1 || \
@@ -224,6 +240,13 @@ prompt_one() {
 # Remove a worktree: force-remove, also delete the local branch.
 remove_worktree_entry() {
     local wt="$1" branch="$2"
+    # HARD GUARD: never remove the repository's main worktree. git refuses to
+    # `worktree remove` it, and the rm -rf fallback below would otherwise wipe
+    # the real checkout. This is the line that once nuked the loft-prod clone.
+    if is_main_worktree "$wt"; then
+        echo "REFUSING to remove main worktree: $wt" >&2
+        return
+    fi
     if git worktree remove --force "$wt" 2>/dev/null; then
         echo "removed worktree: $wt"
     else
@@ -247,6 +270,8 @@ cmd_prune() {
     local candidates=()
     local row
     for row in "${gone[@]}"; do
+        IFS='|' read -r wt _ _ <<< "$row"
+        is_main_worktree "$wt" && continue
         candidates+=("WT|$row")
     done
     # Unpushed worktrees with no local commits ahead of their upstream are
@@ -254,6 +279,7 @@ cmd_prune() {
     # state is discarded by `git worktree remove --force` — no loss of commits.
     for row in "${unpushed[@]}"; do
         IFS='|' read -r wt branch upstream <<< "$row"
+        is_main_worktree "$wt" && continue
         local ahead
         ahead=$(git -C "$wt" rev-list --count "${upstream}..HEAD" 2>/dev/null || echo "?")
         if [[ "$ahead" == "0" ]]; then
@@ -390,10 +416,14 @@ cmd_sync() {
 
 # ---------------- main ----------------
 
-refresh_remotes
+# Skip the dispatch when sourced (e.g. by tests) so functions can be exercised
+# in isolation without touching remotes or the working tree.
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    refresh_remotes
 
-case "$cmd" in
-    list)  cmd_list ;;
-    prune) cmd_prune ;;
-    sync)  cmd_sync ;;
-esac
+    case "$cmd" in
+        list)  cmd_list ;;
+        prune) cmd_prune ;;
+        sync)  cmd_sync ;;
+    esac
+fi
