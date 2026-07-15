@@ -20,3 +20,8 @@ snippet:
 
 options:
   implicit_slide_ends: true
+
+mermaid:
+  # Render diagrams at 2x resolution so they fill the slide instead of
+  # rendering tiny (presenterm shows the PNG at native size; default scale is 1).
+  scale: 2
