@@ -1,0 +1,30 @@
+{
+  "type": "script",
+  "description": "home address (YubiKey-gated secret)",
+  "store": {},
+  "modes": [
+    1
+  ],
+  "usageCount": 0,
+  "prompt": false,
+  "omitTrigger": false,
+  "showInTrayMenu": false,
+  "abbreviation": {
+    "abbreviations": [
+      ";;addr"
+    ],
+    "backspace": false,
+    "ignoreCase": false,
+    "immediate": true,
+    "triggerInside": false,
+    "wordChars": "[\\w]"
+  },
+  "hotkey": {
+    "modifiers": [],
+    "hotKey": null
+  },
+  "filter": {
+    "regex": null,
+    "isRecursive": false
+  }
+}
