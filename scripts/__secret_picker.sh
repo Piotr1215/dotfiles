@@ -22,16 +22,25 @@ desc_for() {
 	' "$DESC_FILE"
 }
 
-# Shared rofi look (mirrors __value_picker.sh).
+# Shared rofi look (mirrors __value_picker.sh, but sized for this list).
+#
+# $1 = prompt, $2 = row count. Rows track the number of secrets instead of the
+# stock lines:10, which cut off the tail of the list and made whole secrets look
+# missing until you thought to scroll. Capped so a growing ~/.secrets cannot
+# produce a menu taller than the screen. Wider than 600px because rows here are
+# "NAME | description", not a bare value.
 rofi_pick() {
-	rofi -dmenu -i -p "$1" \
+	local prompt="$1" rows="${2:-10}"
+	(( rows < 3 )) && rows=3
+	(( rows > 16 )) && rows=16
+	rofi -dmenu -i -p "$prompt" \
 		-theme-str '* {font: "JetBrainsMono Nerd Font 12";}' \
-		-theme-str 'window {width: 600px; background-color: argb:ff282a36; border: 2px solid; border-color: argb:ffbd93f9; border-radius: 8px;}' \
+		-theme-str 'window {width: 900px; background-color: argb:ff282a36; border: 2px solid; border-color: argb:ffbd93f9; border-radius: 8px;}' \
 		-theme-str 'mainbox {background-color: transparent;}' \
 		-theme-str 'inputbar {background-color: argb:ff44475a; text-color: argb:fff8f8f2; padding: 8px;}' \
 		-theme-str 'prompt {text-color: argb:ffbd93f9;}' \
 		-theme-str 'entry {text-color: argb:fff8f8f2;}' \
-		-theme-str 'listview {background-color: transparent; lines: 10;}' \
+		-theme-str "listview {background-color: transparent; lines: ${rows};}" \
 		-theme-str 'element {padding: 8px; background-color: transparent; text-color: argb:fff8f8f2;}' \
 		-theme-str 'element.selected {background-color: argb:ff44475a; text-color: argb:ff50fa7b;}'
 }
@@ -65,7 +74,7 @@ for n in "${names[@]}"; do
 	[[ -n "$d" ]] && menu+=("$n | $d") || menu+=("$n")
 done
 
-choice=$(printf '%s\n' "${menu[@]}" | rofi_pick "secret") || exit 0
+choice=$(printf '%s\n' "${menu[@]}" | rofi_pick "secret" "${#menu[@]}") || exit 0
 [[ -n "$choice" ]] || exit 0
 
 # Strip the label back off, same as __value_picker.sh does with its VALUE | label.
