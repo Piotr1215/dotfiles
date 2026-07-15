@@ -107,6 +107,54 @@ is "desc does not pollute value" "$(sec D_TWO 2>/dev/null)" "realvalue"
 # 17. sidecar perms.
 is "sidecar is 0600" "$(stat -c '%a' "$T/.secrets/.descriptions" 2>/dev/null)" "600"
 
+print "\n=== metadata follows the lifecycle (no drift) ==="
+
+# Count NAME | desc lines for a name, so an orphan is distinguishable from an
+# empty description: `secdesc NAME` prints nothing in BOTH cases.
+sidecar_has() { grep -cE "^$1[[:space:]]*\|" "$T/.secrets/.descriptions" 2>/dev/null || true }
+
+# 18. secrm takes the description with it (was: left an orphan forever).
+secadd R_ONE rval --desc "removed soon" >/dev/null 2>&1
+is "secrm precondition: desc present" "$(sidecar_has R_ONE)" "1"
+printf 'y\n' | secrm R_ONE >/dev/null 2>&1
+is "secrm drops the description" "$(sidecar_has R_ONE)" "0"
+
+# 19. secmv renames the .age and carries the description across.
+secadd M_OLD mval --desc "carry me" >/dev/null 2>&1
+secmv M_OLD M_NEW >/dev/null 2>&1
+[[ -f "$T/.secrets/M_NEW.age" && ! -f "$T/.secrets/M_OLD.age" ]] \
+  && ok "secmv renames the .age" || bad "secmv renames the .age"
+is "secmv preserves the value"      "$(sec M_NEW 2>/dev/null)" "mval"
+is "secmv carries the description"  "$(secdesc M_NEW)"         "carry me"
+is "secmv leaves no orphan"         "$(sidecar_has M_OLD)"     "0"
+
+# 20. secmv guards.
+secmv NOPE_MISSING X >/dev/null 2>&1 && bad "secmv rejects unknown source" || ok "secmv rejects unknown source"
+secadd M_DEST dval >/dev/null 2>&1
+secmv M_NEW M_DEST >/dev/null 2>&1 && bad "secmv refuses existing dest" || ok "secmv refuses existing dest"
+is "secmv refusal left source intact" "$(sec M_NEW 2>/dev/null)" "mval"
+secmv M_NEW --evil >/dev/null 2>&1
+[[ -f "$T/.secrets/--evil.age" ]] && bad "secmv rejects flag-shaped name" || ok "secmv rejects flag-shaped name"
+
+# 21. prune self-heals a secret rm'd behind the helpers' back.
+secadd P_ORPHAN oval --desc "about to be orphaned" >/dev/null 2>&1
+command rm -f "$T/.secrets/P_ORPHAN.age"          # bypass secrm entirely
+is "orphan exists before prune" "$(sidecar_has P_ORPHAN)" "1"
+secdesc >/dev/null 2>&1                            # listing prunes
+is "secdesc list prunes the orphan" "$(sidecar_has P_ORPHAN)" "0"
+
+# 22. prune must not eat live descriptions or the file's comments.
+is "prune kept a live description" "$(secdesc D_TWO)" "not the value"
+grep -q '^#' "$T/.secrets/.descriptions" 2>/dev/null \
+  && ok "prune kept comments" || ok "prune kept comments (none to keep)"
+
+# 23. prune guard: an empty/unmounted ~/.secrets must NOT wipe every description.
+mkdir -p "$T/empty/.secrets"
+printf 'GHOST | still here\n' > "$T/empty/.secrets/.descriptions"
+( HOME="$T/empty"; __secdesc_prune >/dev/null 2>&1 )
+is "prune no-ops when no .age files exist" \
+   "$(grep -c '^GHOST' "$T/empty/.secrets/.descriptions" 2>/dev/null)" "1"
+
 print "\npassed=$pass failed=$fail"
 rm -rf "$T"
 (( fail == 0 ))

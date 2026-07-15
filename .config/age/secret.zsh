@@ -34,7 +34,8 @@
 #   secfile PATH NAME                                # take PATH, store as NAME
 #   (read a file secret back with `sec NAME` -> stdout; redirect or pipe as you like)
 #
-# Delete:
+# Rename / delete (NO tap; both carry the description with them):
+#   secmv OLD NEW                                    # rename, description follows
 #   secrm NAME                                       # remove ~/.secrets/NAME.age (asks to confirm)
 #
 # Model: Bitwarden is the source of truth; ~/.secrets/*.age is a local,
@@ -257,7 +258,37 @@ secrm() {
   print -u2 -n "secrm: delete $f? [y/N] "
   local ans; read -r ans
   [[ "$ans" == [yY]* ]] || { print -u2 "aborted"; return 1; }
-  rm -f -- "$f" && print -u2 "removed $name"
+  rm -f -- "$f" || return 1
+  # The description goes with it. The sidecar is a second source of truth, so
+  # anything that does not carry metadata across a lifecycle event leaves drift.
+  __secdesc_write "$name" ""
+  print -u2 "removed $name"
+}
+
+# Rename a bastion secret, carrying its description across. No tap needed.
+# Renaming with a bare `mv` instead loses the description and strands the old
+# line as an orphan, which is exactly how CF_TOKEN_FILE -> CF_TUNNEL_SECRET drifted.
+#   secmv OLD NEW
+secmv() {
+  emulate -L zsh
+  local dir="$HOME/.secrets"
+  local old="$1" new="$2"
+  [[ -n "$old" && -n "$new" ]] || { print -u2 "usage: secmv OLD NEW  (list with: sec)"; return 2; }
+  __secret_bad_name "$new" secmv && return 2
+
+  local src="${dir}/${old}.age" dst="${dir}/${new}.age"
+  [[ -e "$src" ]] || { print -u2 "secmv: no bastion secret named '$old'"; return 1; }
+  [[ -e "$dst" ]] && { print -u2 "secmv: '$new' already exists; secrm it first if you mean to replace it"; return 1; }
+
+  # Read the description before the move; __secdesc_get keys off the name only,
+  # but the prune in secdesc would drop it once the old .age is gone.
+  local desc="$(__secdesc_get "$old")"
+  mv -- "$src" "$dst" || return 1
+  if [[ -n "$desc" ]]; then
+    __secdesc_write "$old" ""
+    __secdesc_write "$new" "$desc"
+  fi
+  print -u2 "renamed $old -> $new  (verify with: sec $new)"
 }
 
 # Read one secret's description out of the sidecar. Empty output = not described.
@@ -270,6 +301,79 @@ __secdesc_get() {
     NF < 2 { next }
     $1 == want { print $2; exit }
   ' "$file"
+}
+
+# Set or delete one sidecar line. $1 = name, $2 = text (empty deletes the line).
+# Deliberately does NOT check that <name>.age exists: secrm/secmv call this after
+# the file is already gone, which is the whole point of them carrying metadata.
+# Comments and blank lines survive; the entry is rewritten in place, not appended
+# twice. Callers that need the existence check do it themselves (see secdesc).
+__secdesc_write() {
+  emulate -L zsh
+  local dir="$HOME/.secrets"
+  local file="$dir/.descriptions"
+  local name="$1" text="$2"
+
+  if [[ ! -e "$file" ]]; then
+    [[ -n "$text" ]] || return 0        # nothing to delete from a file that isn't there
+    mkdir -p "$dir" && chmod 700 "$dir"
+    : > "$file"
+  fi
+
+  local tmp="${file}.$$"
+  awk -v want="$name" '
+    /^[[:space:]]*#/ { print; next }
+    /^[[:space:]]*$/ { print; next }
+    { split($0, a, /\|/); nm = a[1]; gsub(/^[ \t]+|[ \t]+$/, "", nm)
+      if (nm == want) next
+      print }
+  ' "$file" > "$tmp" || { rm -f "$tmp"; print -u2 "secdesc: failed to rewrite $file"; return 1 }
+
+  [[ -n "$text" ]] && print -r -- "${name} | ${text}" >> "$tmp"
+  mv "$tmp" "$file" && chmod 600 "$file"
+}
+
+# Drop sidecar lines whose .age no longer exists, so a plain `rm`/`mv` done behind
+# the helpers' back self-heals instead of leaving an orphan forever. Runs on the
+# secdesc list and set paths; the picker never needs it, since it builds its menu
+# from the .age files and so cannot render an orphan in the first place.
+__secdesc_prune() {
+  emulate -L zsh
+  setopt localoptions extendedglob
+  local dir="$HOME/.secrets"
+  local file="$dir/.descriptions"
+  [[ -w "$file" ]] || return 0
+
+  # Guard: no .age files at all means the directory is empty or not mounted yet,
+  # and pruning against it would wipe every description to fix nothing.
+  local -a have=(${dir}/*.age(N))
+  (( ${#have} )) || return 0
+
+  local tmp="${file}.prune.$$" line nm
+  local -a gone=()
+  : > "$tmp" || return 1
+  while IFS= read -r line; do
+    # Keep comments, blanks, and anything that is not a NAME | desc entry.
+    if [[ "$line" == [[:space:]]#\#* || "$line" != *\|* ]]; then
+      print -r -- "$line" >> "$tmp"; continue
+    fi
+    nm="${line%%|*}"
+    nm="${nm##[[:space:]]##}"
+    nm="${nm%%[[:space:]]##}"
+    if [[ -f "${dir}/${nm}.age" ]]; then
+      print -r -- "$line" >> "$tmp"
+    else
+      gone+=("$nm")
+    fi
+  done < "$file"
+
+  # Only touch the real file when something actually changed.
+  if (( ${#gone} )); then
+    mv "$tmp" "$file" && chmod 600 "$file"
+    print -u2 "secdesc: pruned orphan description(s): ${(j:, :)gone}"
+  else
+    rm -f "$tmp"
+  fi
 }
 
 # Describe a bastion secret. The description is shown next to the name in the
@@ -290,11 +394,12 @@ __secdesc_get() {
 secdesc() {
   emulate -L zsh
   local dir="$HOME/.secrets"
-  local file="$dir/.descriptions"
   local name="$1"
 
-  # No name: list every secret, described or not.
+  # No name: list every secret, described or not. Prune first so the listing is
+  # the honest state of the sidecar and not a view over stale lines.
   if [[ -z "$name" ]]; then
+    __secdesc_prune
     local n d
     for n in ${dir}/*.age(N:t:r); do
       d="$(__secdesc_get "$n")"
@@ -317,20 +422,8 @@ secdesc() {
   shift
   local text="$*"
 
-  [[ -e "$file" ]] || { mkdir -p "$dir" && chmod 700 "$dir"; : > "$file"; }
-
-  # Rewrite without this name's line, keeping comments and blanks, then append.
-  local tmp="${file}.$$"
-  awk -v want="$name" '
-    /^[[:space:]]*#/ { print; next }
-    /^[[:space:]]*$/ { print; next }
-    { split($0, a, /\|/); nm = a[1]; gsub(/^[ \t]+|[ \t]+$/, "", nm)
-      if (nm == want) next
-      print }
-  ' "$file" > "$tmp" || { rm -f "$tmp"; print -u2 "secdesc: failed to rewrite $file"; return 1 }
-
-  [[ -n "$text" ]] && print -r -- "${name} | ${text}" >> "$tmp"
-  mv "$tmp" "$file" && chmod 600 "$file"
+  __secdesc_write "$name" "$text" || return 1
+  __secdesc_prune   # a set is a good moment to sweep anything rm'd by hand
 
   if [[ -n "$text" ]]; then
     print -u2 "secdesc: $name -> $text"
@@ -352,6 +445,8 @@ if (( $+functions[compdef] )); then
   compdef _sec sec
   compdef _sec secrm   # secrm NAME completes over existing secrets too
   compdef _sec secdesc # secdesc NAME completes over existing secrets too
+  compdef _sec secmv   # secmv OLD <TAB> completes the source name (NEW is freeform)
+  compdef _sec secmv   # secmv OLD completes; NEW is free-form by definition
 
   _secadd() {
     if (( CURRENT == 2 )); then
