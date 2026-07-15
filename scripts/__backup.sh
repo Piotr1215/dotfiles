@@ -243,8 +243,21 @@ perform_backup() {
 		"/home/decoder/loft/.nvimrc"
 		"/home/decoder/dev/cv-pipeline/jobs.db"
 		"/home/decoder/.local/share/keyrings/"
-		"/home/decoder/.local/bin/1password_monitor"
 		"/home/decoder/.local/bin/get_pw"
+		# Secret stores. None of these are caught by the home rsync sweep above:
+		# ~/.backup_patterns ends in `- /*`, so anything not explicitly `+`-included
+		# is dropped, and all three were silently unbacked up until 2026-07-15.
+		#
+		# ~/.gnupg is not optional here. The pass store is GPG ciphertext and these
+		# private keys are the only thing that opens it, so backing up one without
+		# the other restores nothing. Key material goes through restic (encrypted
+		# repo) rather than the NAS rsync, which lands plaintext on the share.
+		"/home/decoder/.gnupg/"
+		"/home/decoder/.password-store/"
+		# ~/.secrets: the .age files are re-derivable from Bitwarden through the
+		# offline X25519 backup key, but .descriptions (the labels the Ctrl+Alt+P
+		# picker renders) exists nowhere else.
+		"/home/decoder/.secrets/"
 	)
 
 	# Find and add all CLAUDE.md files from dev and loft directories (excluding worktrees)
