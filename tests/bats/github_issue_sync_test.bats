@@ -2266,3 +2266,111 @@ EOF
     [[ "$output" =~ "removing +review tag" ]]
     grep -q -- "-review" "${TEST_DIR}/task_commands.log"
 }
+
+# ====================================================
+# DESTRUCTIVE-CLEANUP FETCH GUARD
+# The reported incident: a bad/partial Linear fetch let the cleanup passes
+# complete/delete live tasks. get_linear_issues now returns non-zero on a
+# truncated feed (pageInfo.hasNextPage=true), and main() must skip BOTH
+# destructive passes whenever the fetch is incomplete or empty.
+# ====================================================
+
+@test "get_linear_issues returns non-zero and flags TRUNCATED when hasNextPage is true" {
+    cat > "${TEST_DIR}/curl" << 'EOF'
+#!/bin/bash
+if [[ "$*" =~ "linear.app" ]]; then
+    cat << 'RESPONSE'
+{
+  "data": { "user": { "assignedIssues": {
+    "nodes": [
+      {"id":"i","title":"T","url":"https://linear.app/loft/issue/DEVOPS-1/t","state":{"name":"Todo"},"project":{"name":"operations"},"dueDate":null,"priority":3,"updatedAt":"2026-07-08T10:00:00.000Z","cycle":null,"attachments":{"nodes":[]}}
+    ],
+    "pageInfo": { "hasNextPage": true }
+  }}}
+}
+200
+RESPONSE
+else
+    /usr/bin/curl "$@"
+fi
+EOF
+    chmod +x "${TEST_DIR}/curl"
+
+    run get_linear_issues
+    [ "$status" -eq 2 ]
+    [[ "$output" =~ "TRUNCATED" ]]
+    # Partial feed is still emitted so non-destructive create/update can run.
+    echo "$output" | grep -q '"issue_id":"DEVOPS-1"'
+}
+
+@test "get_linear_issues returns 0 when hasNextPage is false" {
+    cat > "${TEST_DIR}/curl" << 'EOF'
+#!/bin/bash
+if [[ "$*" =~ "linear.app" ]]; then
+    cat << 'RESPONSE'
+{
+  "data": { "user": { "assignedIssues": {
+    "nodes": [
+      {"id":"i","title":"T","url":"https://linear.app/loft/issue/DEVOPS-1/t","state":{"name":"Todo"},"project":{"name":"operations"},"dueDate":null,"priority":3,"updatedAt":"2026-07-08T10:00:00.000Z","cycle":null,"attachments":{"nodes":[]}}
+    ],
+    "pageInfo": { "hasNextPage": false }
+  }}}
+}
+200
+RESPONSE
+else
+    /usr/bin/curl "$@"
+fi
+EOF
+    chmod +x "${TEST_DIR}/curl"
+
+    run get_linear_issues
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "TRUNCATED" ]]
+}
+
+@test "main SKIPS destructive cleanup when the fetch is incomplete (non-zero)" {
+    export HOME="$TEST_DIR"   # keep main's nudge probe from finding the real script
+    get_linear_issues() { printf '%s\n' '{"issue_id":"DEVOPS-1","description":"x"}'; return 2; }
+    find_and_clean_reassigned_tasks() { echo "CLEAN1" >> "${TEST_DIR}/calls.log"; }
+    compare_and_clean_tasks() { echo "CLEAN2" >> "${TEST_DIR}/calls.log"; }
+    sync_issues_to_taskwarrior() { echo "SYNC" >> "${TEST_DIR}/calls.log"; }
+
+    run main
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "SKIPPING find_and_clean_reassigned_tasks" ]]
+    [[ "$output" =~ "SKIPPING compare_and_clean_tasks" ]]
+    grep -q "SYNC" "${TEST_DIR}/calls.log"
+    # The destructive passes must NOT have run on a partial feed.
+    ! grep -q "CLEAN1" "${TEST_DIR}/calls.log"
+    ! grep -q "CLEAN2" "${TEST_DIR}/calls.log"
+}
+
+@test "main RUNS destructive cleanup when the fetch is complete (zero)" {
+    export HOME="$TEST_DIR"
+    get_linear_issues() { printf '%s\n' '{"issue_id":"DEVOPS-1","description":"x"}'; return 0; }
+    find_and_clean_reassigned_tasks() { echo "CLEAN1" >> "${TEST_DIR}/calls.log"; }
+    compare_and_clean_tasks() { echo "CLEAN2" >> "${TEST_DIR}/calls.log"; }
+    sync_issues_to_taskwarrior() { echo "SYNC" >> "${TEST_DIR}/calls.log"; }
+
+    run main
+    [ "$status" -eq 0 ]
+    grep -q "CLEAN1" "${TEST_DIR}/calls.log"
+    grep -q "SYNC" "${TEST_DIR}/calls.log"
+    grep -q "CLEAN2" "${TEST_DIR}/calls.log"
+}
+
+@test "main does not complete/delete anything when the feed is empty" {
+    export HOME="$TEST_DIR"
+    get_linear_issues() { printf ''; return 0; }
+    find_and_clean_reassigned_tasks() { echo "CLEAN1" >> "${TEST_DIR}/calls.log"; }
+    compare_and_clean_tasks() { echo "CLEAN2" >> "${TEST_DIR}/calls.log"; }
+    sync_issues_to_taskwarrior() { echo "SYNC" >> "${TEST_DIR}/calls.log"; }
+
+    run main
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "No issues retrieved" ]]
+    # Nothing ran: no sync, no cleanup.
+    [ ! -f "${TEST_DIR}/calls.log" ]
+}
+

@@ -150,7 +150,7 @@ get_linear_issues() {
             -X POST \
             -H "Content-Type: application/json" \
             -H "Authorization: ${LINEAR_API_KEY}" \
-            --data '{"query": "query { user(id: \"'"$LINEAR_USER_ID"'\") { id name assignedIssues(filter: { state: { name: { nin: [\"Released\", \"Canceled\",\"Done\",\"Ready for Release\",\"Duplicate\",\"Archived\"] } } }) { nodes { id title url state { name } project { name } dueDate priority updatedAt cycle { number } attachments { nodes { url } } } } } }"}' \
+            --data '{"query": "query { user(id: \"'"$LINEAR_USER_ID"'\") { id name assignedIssues(filter: { state: { name: { nin: [\"Released\", \"Canceled\",\"Done\",\"Ready for Release\",\"Duplicate\",\"Archived\"] } } }) { nodes { id title url state { name } project { name } dueDate priority updatedAt cycle { number } attachments { nodes { url } } } pageInfo { hasNextPage } } } }"}' \
             https://api.linear.app/graphql 2>"$curl_stderr")
         exit_code=$?
 
@@ -229,8 +229,28 @@ get_linear_issues() {
     
     # Cleanup
     rm -f "$temp_response"
-    
+
     echo "$issues"
+
+    # SAFETY GUARD (protects the destructive cleanup passes). find_and_clean_
+    # reassigned_tasks and compare_and_clean_tasks complete/delete any task whose
+    # Linear issue is ABSENT from this feed. If Linear returned more assigned
+    # issues than fit in one page (hasNextPage=true), the feed is TRUNCATED and
+    # every issue past page one would be wrongly treated as unassigned/closed.
+    # The active (non-done) assigned set is normally well under Linear's 50-node
+    # default, so this should never fire; if it ever does, we still emit the
+    # partial feed above (so non-destructive create/update runs) but return
+    # non-zero so main() SKIPS all destructive cleanup instead of mass-completing
+    # live tasks. Do not paginate here: an unexpectedly large feed is a signal to
+    # stop and be noticed, not to silently churn through pages.
+    local has_next
+    has_next=$(echo "$content" | jq -r '.data.user.assignedIssues.pageInfo.hasNextPage')
+    if [[ "$has_next" == "true" ]]; then
+        echo "Error: Linear feed TRUNCATED (assignedIssues.pageInfo.hasNextPage=true): more assigned issues than one page. Marking fetch INCOMPLETE so destructive cleanup is skipped this run." >&2
+        return 2
+    fi
+
+    return 0
 }
 
 # Check the true status of a Linear issue
@@ -915,7 +935,8 @@ main() {
     # Phase 2: Data Fetching
     log "Phase 2: Fetching issues from Linear"
     local linear_issues
-    linear_issues=$(get_linear_issues)
+    local fetch_status=0
+    linear_issues=$(get_linear_issues) || fetch_status=$?
 
     if [[ -z "$linear_issues" ]]; then
         log "No issues retrieved from Linear. Exiting."
@@ -925,16 +946,31 @@ main() {
     # Phase 3 & 4: Task Management & Synchronization
     log "Phase 3 & 4: Running synchronization operations"
 
-    find_and_clean_reassigned_tasks "$linear_issues"
+    # DESTRUCTIVE-CLEANUP GUARD: get_linear_issues returns non-zero on any
+    # curl/HTTP/JSON/GraphQL error or a truncated feed (hasNextPage=true). Both
+    # cleanup passes complete/delete any task whose Linear issue is absent from
+    # the feed, so running them on an incomplete feed mass-completes live tasks
+    # (the reported incident). Run the destructive passes ONLY when fetch_status
+    # is 0 (complete, error-free); otherwise skip them and log loudly. The
+    # non-destructive create/update sync still runs on whatever came back.
+    if [[ "$fetch_status" -eq 0 ]]; then
+        find_and_clean_reassigned_tasks "$linear_issues"
+    else
+        log "GUARD: SKIPPING find_and_clean_reassigned_tasks — Linear fetch incomplete/errored (status $fetch_status); refusing to complete/delete tasks on a partial feed."
+    fi
+
     sync_issues_to_taskwarrior "$linear_issues"
 
     # Phase 5: Cleanup and Maintenance
     log "Phase 5: Performing cleanup and maintenance"
 
-    local all_descriptions
-    all_descriptions=$(echo "$linear_issues" | jq -r '.description' 2>/dev/null)
-
-    compare_and_clean_tasks "$all_descriptions"
+    if [[ "$fetch_status" -eq 0 ]]; then
+        local all_descriptions
+        all_descriptions=$(echo "$linear_issues" | jq -r '.description' 2>/dev/null)
+        compare_and_clean_tasks "$all_descriptions"
+    else
+        log "GUARD: SKIPPING compare_and_clean_tasks — Linear fetch incomplete/errored (status $fetch_status); tasks left untouched."
+    fi
 
     log "Synchronization completed successfully"
 
