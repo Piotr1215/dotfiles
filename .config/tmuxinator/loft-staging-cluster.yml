@@ -1,0 +1,13 @@
+name: loft-staging-cluster
+root: /home/decoder/loft/clusters/loft-rocks-staging
+
+windows:
+  - loft-staging-cluster:
+      panes:
+        - |
+          ./generate-kubeconfig.sh
+          clear
+  - infrastructure:
+      root: <%= ENV['HOME'] %>/loft/loft-prod/staging
+      panes:
+        - export KUBECONFIG=<%= ENV['HOME'] %>/loft/clusters/loft-rocks-staging/config
