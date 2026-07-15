@@ -429,14 +429,27 @@ update_task_status() {
         fi
     fi
     
-    # Always check if review tag needs to be removed based on current Linear status
-    # This handles the case where a task has review tag but Linear status changed
+    # Check if the +review tag should be removed based on current Linear status.
+    # +review has TWO meanings that must both be honored:
+    #   1. Linear status == "In Review"  (set in the branch above), and
+    #   2. the task has an attached GitHub PR (set by attach_pr_link).
+    # Piotr's reports surface +review but hide the pr-reviews mirror tasks via
+    # -pr, so +review is the glanceable "this task has an open PR" signal. A
+    # Todo/In-Progress task with an open PR must therefore KEEP +review. Only
+    # strip it when the issue is NOT In Review AND no /pull/ annotation exists.
+    # Net invariant: +review present iff (status == In Review) OR (PR attached).
     if [[ "$has_review" == "true" && "$issue_status" != "In Review" ]]; then
-        log "Task has +review tag but Linear status is '$issue_status' - removing +review tag"
-        task rc.confirmation=no modify "$task_uuid" -review
-        
-        # Re-run the status update logic now that review tag is removed
-        update_task_status "$task_uuid" "$issue_status" "$issue_priority"
+        local has_pr_annotation
+        has_pr_annotation=$(echo "$task_json" | jq -r '[.[0].annotations[]? | (.description // "") | select(test("github.com.*/pull/"))] | length > 0')
+        if [[ "$has_pr_annotation" == "true" ]]; then
+            log "Task has +review and status is '$issue_status' but a PR is attached - keeping +review (PR-glance signal)"
+        else
+            log "Task has +review tag but Linear status is '$issue_status' and no PR attached - removing +review tag"
+            task rc.confirmation=no modify "$task_uuid" -review
+
+            # Re-run the status update logic now that review tag is removed
+            update_task_status "$task_uuid" "$issue_status" "$issue_priority"
+        fi
     fi
 }
 
@@ -460,8 +473,31 @@ attach_pr_link() {
     [[ -z "$pr_url" || "$pr_url" == "null" ]] && return 0
     [[ -z "$task_uuid" || "$task_uuid" == "null" ]] && return 0
 
+    # Read the task once; drive both the +review glance-tag and the annotation.
+    local task_json
+    task_json=$(task "$task_uuid" export 2>/dev/null)
+
+    # A PR is attached, so ensure the glanceable +review tag is present. Piotr's
+    # reports surface +review while hiding the pr-reviews mirror tasks via -pr,
+    # so +review (NOT +pr) is the correct "this task has an open PR" signal;
+    # stamping +pr here would hide the task from report.current/backlog/byrepo/
+    # byproject. Idempotent via jq index (exact element, not contains which is
+    # substring in jq). Checked independently of the annotation below so an
+    # already-synced task that carries the PR annotation but predates this gets
+    # +review backfilled on the next sync. update_task_status keeps +review while
+    # a /pull/ annotation exists, so this and the strip logic agree.
+    local has_review_tag
+    has_review_tag=$(echo "$task_json" | jq -r '.[0].tags | if . then (index("review") != null) else false end')
+    if [[ "$has_review_tag" != "true" ]]; then
+        log "Adding +review tag (PR attached, glanceable signal): $pr_url"
+        task rc.confirmation=no modify "$task_uuid" +review
+    fi
+
+    # Mirror the PR URL as an annotation (the channel the +wt worktree hook
+    # scans for /pull/ URLs). Idempotent: skip when the exact URL is already
+    # present. Exact-match via jq index (not substring) avoids collisions.
     local has_pr
-    has_pr=$(task "$task_uuid" export 2>/dev/null \
+    has_pr=$(echo "$task_json" \
         | jq -r --arg u "$pr_url" '.[0].annotations // [] | map(.description) | index($u) != null')
     if [[ "$has_pr" == "true" ]]; then
         return 0

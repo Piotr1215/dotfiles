@@ -2123,3 +2123,146 @@ EOF
     [ ! -f "${TEST_DIR}/annotate.log" ]
 }
 
+# ====================================================
+# +review AS THE PR-GLANCE SIGNAL
+# Regression cover for the incident: +review (NOT +pr, which reports hide via
+# -pr) must mark any task that has an attached GitHub PR, and must survive
+# across non-In-Review statuses as long as a /pull/ annotation exists.
+# ====================================================
+
+@test "attach_pr_link adds +review when a PR is attached and tag is missing" {
+    cat > "${TEST_DIR}/task" << 'EOF'
+#!/bin/bash
+EXPORT='[{"uuid":"test-uuid","description":"t","status":"pending","tags":["linear"],"annotations":[]}]'
+case "$1" in
+    "test-uuid")
+        case "$2" in
+            "export")   echo "$EXPORT" ;;
+            "annotate") echo "MOCK: annotate $*" >> "${TEST_DIR}/annotate.log" ;;
+        esac
+        ;;
+    "_get") echo "" ;;
+    "rc.confirmation=no") echo "MOCK: task $*" >> "${TEST_DIR}/task_commands.log" ;;
+    *) echo "test-uuid" ;;
+esac
+EOF
+    chmod +x "${TEST_DIR}/task"
+
+    run attach_pr_link "test-uuid" "https://github.com/loft-sh/loft-prod/pull/522"
+    [ "$status" -eq 0 ]
+    # +review added, and it must be +review (the visible tag), never +pr.
+    grep -q -- "+review" "${TEST_DIR}/task_commands.log"
+    ! grep -q -- "+pr" "${TEST_DIR}/task_commands.log"
+    # URL also mirrored as an annotation.
+    grep -q "pull/522" "${TEST_DIR}/annotate.log"
+}
+
+@test "attach_pr_link backfills +review when PR annotation exists but tag is missing" {
+    cat > "${TEST_DIR}/task" << 'EOF'
+#!/bin/bash
+EXPORT='[{"uuid":"test-uuid","description":"t","status":"pending","tags":["linear"],"annotations":[{"description":"https://github.com/loft-sh/loft-prod/pull/522"}]}]'
+case "$1" in
+    "test-uuid")
+        case "$2" in
+            "export")   echo "$EXPORT" ;;
+            "annotate") echo "MOCK: annotate $*" >> "${TEST_DIR}/annotate.log" ;;
+        esac
+        ;;
+    "_get") echo "" ;;
+    "rc.confirmation=no") echo "MOCK: task $*" >> "${TEST_DIR}/task_commands.log" ;;
+    *) echo "test-uuid" ;;
+esac
+EOF
+    chmod +x "${TEST_DIR}/task"
+
+    run attach_pr_link "test-uuid" "https://github.com/loft-sh/loft-prod/pull/522"
+    [ "$status" -eq 0 ]
+    # Tag backfilled even though the annotation already existed.
+    grep -q -- "+review" "${TEST_DIR}/task_commands.log"
+    # Annotation NOT duplicated (exact URL already present).
+    [ ! -f "${TEST_DIR}/annotate.log" ]
+}
+
+@test "attach_pr_link is idempotent when +review and PR annotation already present" {
+    cat > "${TEST_DIR}/task" << 'EOF'
+#!/bin/bash
+EXPORT='[{"uuid":"test-uuid","description":"t","status":"pending","tags":["linear","review"],"annotations":[{"description":"https://github.com/loft-sh/loft-prod/pull/522"}]}]'
+case "$1" in
+    "test-uuid")
+        case "$2" in
+            "export")   echo "$EXPORT" ;;
+            "annotate") echo "MOCK: annotate $*" >> "${TEST_DIR}/annotate.log" ;;
+        esac
+        ;;
+    "_get") echo "" ;;
+    "rc.confirmation=no") echo "MOCK: task $*" >> "${TEST_DIR}/task_commands.log" ;;
+    *) echo "test-uuid" ;;
+esac
+EOF
+    chmod +x "${TEST_DIR}/task"
+
+    run attach_pr_link "test-uuid" "https://github.com/loft-sh/loft-prod/pull/522"
+    [ "$status" -eq 0 ]
+    # No +review modify issued, no re-annotation.
+    if [ -f "${TEST_DIR}/task_commands.log" ]; then ! grep -q -- "+review" "${TEST_DIR}/task_commands.log"; fi
+    [ ! -f "${TEST_DIR}/annotate.log" ]
+}
+
+@test "update_task_status keeps +review for In Progress task WITH a PR annotation" {
+    cat > "${TEST_DIR}/task" << 'EOF'
+#!/bin/bash
+EXPORT='[{"uuid":"test-uuid","description":"t","status":"pending","tags":["linear","review"],"annotations":[{"description":"https://github.com/loft-sh/loft-prod/pull/522"}]}]'
+case "$1" in
+    "test-uuid")
+        case "$2" in
+            "export") echo "$EXPORT" ;;
+        esac
+        ;;
+    "_get") echo "" ;;
+    "rc.confirmation=no")
+        echo "MOCK: task $*" >> "${TEST_DIR}/task_commands.log"
+        ;;
+    *) echo "MOCK: task $*" >> "${TEST_DIR}/task_commands.log" ;;
+esac
+EOF
+    chmod +x "${TEST_DIR}/task"
+
+    run update_task_status "test-uuid" "In Progress"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "keeping +review" ]]
+    # The PR-glance signal must NOT be stripped.
+    ! grep -q -- "-review" "${TEST_DIR}/task_commands.log"
+}
+
+@test "update_task_status strips +review for In Progress task WITHOUT a PR annotation" {
+    # Toggle export: first call has +review, re-run (after strip) has none, so
+    # the recursive re-run terminates.
+    cat > "${TEST_DIR}/task" << 'EOF'
+#!/bin/bash
+case "$1" in
+    "test-uuid")
+        case "$2" in
+            "export")
+                if [ ! -f "${TEST_DIR}/export_called" ]; then
+                    touch "${TEST_DIR}/export_called"
+                    echo '[{"uuid":"test-uuid","description":"t","status":"pending","tags":["linear","review"],"annotations":[]}]'
+                else
+                    echo '[{"uuid":"test-uuid","description":"t","status":"pending","tags":["linear"],"annotations":[]}]'
+                fi
+                ;;
+        esac
+        ;;
+    "_get") echo "" ;;
+    "rc.confirmation=no")
+        echo "MOCK: task $*" >> "${TEST_DIR}/task_commands.log"
+        ;;
+    *) echo "MOCK: task $*" >> "${TEST_DIR}/task_commands.log" ;;
+esac
+EOF
+    chmod +x "${TEST_DIR}/task"
+
+    run update_task_status "test-uuid" "In Progress"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "removing +review tag" ]]
+    grep -q -- "-review" "${TEST_DIR}/task_commands.log"
+}
