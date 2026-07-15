@@ -20,6 +20,13 @@
 #   secadd NAME VALUE                                # value on the command line (WARNING: shell history)
 #   secadd NAME --from-env                           # encrypt the current value of $NAME
 #   secadd NAME --from-bw "Item" [field]             # pull from Bitwarden (default field: password)
+#   secadd NAME --desc "what it is"                  # optional, combines with any form above
+#
+# Describe a secret (optional, additive; shown in the Ctrl+Alt+P rofi picker):
+#   secadd NAME --desc "text"                        # at enroll time
+#   secdesc NAME "text"                              # any time after
+#   secdesc NAME                                     # print it
+#   secdesc                                          # list every secret and its description
 #
 # Add a file (NO tap):
 #   secfile                                          # fzf-pick a file, then prompt NAME (default = filename)
@@ -106,6 +113,22 @@ __secret_name_from_path() {
 # For a whole file, use `secfile` instead.
 secadd() {
   emulate -L zsh
+
+  # Optional --desc TEXT, stripped out before anything else so every existing
+  # form below is untouched and never prompts for a description it did not ask
+  # for. Applied only after the secret is safely written.
+  local desc=""
+  local -a rest=()
+  while (( $# )); do
+    case "$1" in
+      --desc)
+        (( $# >= 2 )) || { print -u2 "secadd: --desc needs text after it"; return 2 }
+        desc="$2"; shift 2 ;;
+      *) rest+=("$1"); shift ;;
+    esac
+  done
+  set -- "${rest[@]}"
+
   local recips="$HOME/.config/age/recipients.txt"
   local dir="$HOME/.secrets"
   local name="$1"
@@ -167,6 +190,10 @@ secadd() {
   unset val
   chmod 600 "$out"
   print -u2 "wrote $out  (verify with: sec $name)"
+
+  # Only after the secret is on disk, so a bad description can never cost the value.
+  [[ -n "$desc" ]] && secdesc "$name" "$desc"
+  return 0
 }
 
 # Enroll a FILE as a bastion secret. Encrypts a COPY of the file to the recipients;
@@ -233,6 +260,85 @@ secrm() {
   rm -f -- "$f" && print -u2 "removed $name"
 }
 
+# Read one secret's description out of the sidecar. Empty output = not described.
+__secdesc_get() {
+  emulate -L zsh
+  local file="$HOME/.secrets/.descriptions"
+  [[ -r "$file" ]] || return 0
+  awk -F' *\\| *' -v want="$1" '
+    /^[[:space:]]*#/ { next }
+    NF < 2 { next }
+    $1 == want { print $2; exit }
+  ' "$file"
+}
+
+# Describe a bastion secret. The description is shown next to the name in the
+# Ctrl+Alt+P picker (scripts/__secret_picker.sh).
+#
+# Purely additive: `secadd`/`secfile` are untouched and never prompt for this. A
+# secret with no description just shows its bare name, forever, which is fine.
+# Describe something only when the name alone stops being obvious.
+#
+#   secdesc                 list every secret and its description
+#   secdesc NAME            print NAME's description
+#   secdesc NAME text...    set NAME's description (replaces any existing one)
+#   secdesc NAME ''         clear NAME's description
+#
+# The sidecar (~/.secrets/.descriptions) is PLAINTEXT by necessity: the picker
+# has to draw its menu before any tap, so descriptions cannot live inside the
+# .age files. Say what the secret IS, never any part of its value.
+secdesc() {
+  emulate -L zsh
+  local dir="$HOME/.secrets"
+  local file="$dir/.descriptions"
+  local name="$1"
+
+  # No name: list every secret, described or not.
+  if [[ -z "$name" ]]; then
+    local n d
+    for n in ${dir}/*.age(N:t:r); do
+      d="$(__secdesc_get "$n")"
+      printf '%-38s %s\n' "$n" "${d:-(no description)}"
+    done
+    return 0
+  fi
+
+  [[ -f "${dir}/${name}.age" ]] || {
+    print -u2 "secdesc: no bastion secret named '$name' (list with: sec)"
+    return 1
+  }
+
+  # Name only: print what we have.
+  if (( $# < 2 )); then
+    __secdesc_get "$name"
+    return 0
+  fi
+
+  shift
+  local text="$*"
+
+  [[ -e "$file" ]] || { mkdir -p "$dir" && chmod 700 "$dir"; : > "$file"; }
+
+  # Rewrite without this name's line, keeping comments and blanks, then append.
+  local tmp="${file}.$$"
+  awk -v want="$name" '
+    /^[[:space:]]*#/ { print; next }
+    /^[[:space:]]*$/ { print; next }
+    { split($0, a, /\|/); nm = a[1]; gsub(/^[ \t]+|[ \t]+$/, "", nm)
+      if (nm == want) next
+      print }
+  ' "$file" > "$tmp" || { rm -f "$tmp"; print -u2 "secdesc: failed to rewrite $file"; return 1 }
+
+  [[ -n "$text" ]] && print -r -- "${name} | ${text}" >> "$tmp"
+  mv "$tmp" "$file" && chmod 600 "$file"
+
+  if [[ -n "$text" ]]; then
+    print -u2 "secdesc: $name -> $text"
+  else
+    print -u2 "secdesc: cleared description for $name"
+  fi
+}
+
 # Completion. Plain zsh completion that fzf-tab renders in its picker.
 # `sec <TAB>`     -> pick from existing bastion secrets (~/.secrets/*.age)
 # `secadd <TAB>`  -> pick an exported env var (handy with --from-env)
@@ -245,6 +351,7 @@ if (( $+functions[compdef] )); then
   }
   compdef _sec sec
   compdef _sec secrm   # secrm NAME completes over existing secrets too
+  compdef _sec secdesc # secdesc NAME completes over existing secrets too
 
   _secadd() {
     if (( CURRENT == 2 )); then
