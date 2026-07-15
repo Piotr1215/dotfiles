@@ -30,7 +30,7 @@
     },
     "folders": [],
     "toggleServiceHotkey": {
-        "enabled": true,
+        "enabled": false,
         "modifiers": [
             "<shift>",
             "<super>"
@@ -38,7 +38,7 @@
         "hotKey": "k"
     },
     "configHotkey": {
-        "enabled": true,
+        "enabled": false,
         "modifiers": [
             "<super>"
         ],
