@@ -4,24 +4,15 @@
 # Shows current weather and 5-day forecast with rich details
 
 import json
-import os
+import subprocess
 from urllib.request import urlopen
-from urllib.error import URLError
+from urllib.error import URLError, HTTPError
 from urllib.parse import quote
 import datetime
 
 # Configuration
 location_name = "Mittelbuchen"
-api_key = os.getenv("WEATHER_API_KEY", "")
-if not api_key:
-    # Load from ~/.envrc if not in environment (e.g. GNOME session)
-    envrc = os.path.expanduser("~/.envrc")
-    if os.path.exists(envrc):
-        with open(envrc) as f:
-            for line in f:
-                if "WEATHER_API_KEY" in line:
-                    api_key = line.split("=", 1)[1].strip().strip("'\"")
-                    break
+pass_entry = "personal/WEATHER_API_KEY"
 units = 'metric'  # kelvin, metric, imperial
 lang = 'en'
 
@@ -57,34 +48,39 @@ def get_wind_direction(degrees):
     index = round(degrees / 22.5) % 16
     return directions[index]
 
-def get_weather_data():
-    if not api_key:
-        return None
-    
+def get_api_key():
+    result = subprocess.run(["pass", "show", pass_entry], capture_output=True, text=True)
+    if result.returncode != 0:
+        raise RuntimeError(f"pass show {pass_entry}: {result.stderr.strip() or 'failed'}")
+    key = result.stdout.strip()
+    if not key:
+        raise RuntimeError(f"pass entry {pass_entry} is empty")
+    return key
+
+def fetch(endpoint, api_key):
+    url = f'https://api.openweathermap.org/data/2.5/{endpoint}?q={quote(location_name)}&units={units}&lang={lang}&appid={api_key}'
+    # Build the message from code/reason only, and cut the cause chain: the URL
+    # carries the key and must never reach the panel or a traceback.
     try:
-        # Get current weather
-        current_url = f'https://api.openweathermap.org/data/2.5/weather?q={quote(location_name)}&units={units}&lang={lang}&appid={api_key}'
-        current_data = json.load(urlopen(current_url))
-        
-        # Get 5-day forecast
-        forecast_url = f'https://api.openweathermap.org/data/2.5/forecast?q={quote(location_name)}&units={units}&lang={lang}&appid={api_key}'
-        forecast_data = json.load(urlopen(forecast_url))
-        
-        return {
-            'current': current_data,
-            'forecast': forecast_data
-        }
-    except URLError:
-        return None
-    except Exception:
-        return None
+        return json.load(urlopen(url, timeout=15))
+    except HTTPError as e:
+        raise RuntimeError(f"{endpoint}: HTTP {e.code} {e.reason}") from None
+    except URLError as e:
+        raise RuntimeError(f"{endpoint}: {e.reason}") from None
+
+def get_weather_data():
+    api_key = get_api_key()
+    return {
+        'current': fetch('weather', api_key),
+        'forecast': fetch('forecast', api_key)
+    }
 
 def format_weather():
-    data = get_weather_data()
-    
-    if not data:
-        return "⚠️ Weather\n---\nCould not fetch weather data | color=red"
-    
+    try:
+        data = get_weather_data()
+    except Exception as e:
+        return f"⚠️ Weather\n---\n{e} | color=red size=11\n---\n🔄 Refresh | refresh=true size=11\n"
+
     current = data['current']
     forecast = data['forecast']
     
