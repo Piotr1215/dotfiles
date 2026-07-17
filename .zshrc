@@ -485,5 +485,5 @@ alias stats="~/.claude/dashboards/claude-dashboard-swap.sh"
 # bastion secret helpers (touch-gated secrets via YubiKey): sec / secadd / secfile
 source ~/.config/age/secret.zsh
 
-# password-store helpers (session secrets direnv autoloads, no gate): passadd
+# password-store helpers (session secrets direnv autoloads, no gate): passfromenv
 source ~/.config/pass/pass.zsh
