@@ -15,14 +15,15 @@
 #   sec                                              # list available bastion secrets
 #
 # Add a value (NO tap; encryption is public-key only):
-#   secadd                                           # prompt for NAME, then the value (hidden)
-#   secadd NAME                                      # prompt for the value (hidden input)
+#   secadd                                           # prompt for NAME, then the value (hidden), then a description
+#   secadd NAME                                      # prompt for the value (hidden), then a description
 #   secadd NAME VALUE                                # value on the command line (WARNING: shell history)
 #   secadd NAME --from-env                           # encrypt the current value of $NAME
 #   secadd NAME --from-bw "Item" [field]             # pull from Bitwarden (default field: password)
 #   secadd NAME --desc "what it is"                  # optional, combines with any form above
 #
 # Describe a secret (optional, additive; shown in the Ctrl+Alt+P rofi picker):
+#   secadd                                           # prompted for, when the value is prompted for
 #   secadd NAME --desc "text"                        # at enroll time
 #   secdesc NAME "text"                              # any time after
 #   secdesc NAME                                     # print it
@@ -116,9 +117,9 @@ secadd() {
   emulate -L zsh
 
   # Optional --desc TEXT, stripped out before anything else so every existing
-  # form below is untouched and never prompts for a description it did not ask
-  # for. Applied only after the secret is safely written.
+  # form below is untouched. Applied only after the secret is safely written.
   local desc=""
+  local prompted=0   # 1 once we have prompted for the value; see the desc prompt below
   local -a rest=()
   while (( $# )); do
     case "$1" in
@@ -181,6 +182,7 @@ secadd() {
       read -rs val
       print -u2 ""
       [[ -n "$val" ]] || { print -u2 "secadd: empty value, nothing written"; return 1; }
+      prompted=1
       ;;
     *)
       val="$2"   # value straight on the command line: secadd NAME VALUE
@@ -190,10 +192,21 @@ secadd() {
   printf '%s' "$val" | age -R "$recips" -o "$out"
   unset val
   chmod 600 "$out"
-  print -u2 "wrote $out  (verify with: sec $name)"
 
-  # Only after the secret is on disk, so a bad description can never cost the value.
-  [[ -n "$desc" ]] && secdesc "$name" "$desc"
+  # Ask for a description only when we already prompted for the value, so the
+  # scripted forms (NAME VALUE, --from-env, --from-bw) never block on stdin.
+  # It comes AFTER the write on purpose: the value is already safe, so a Ctrl-C
+  # here costs a description, not a secret you just typed once.
+  if (( prompted )) && [[ -z "$desc" ]]; then
+    print -u2 -n ">>> description for $name (optional, shown in the picker; Enter to skip): "
+    read -r desc
+    # The answer is still on screen, so secdesc echoing it back is noise.
+    [[ -n "$desc" ]] && secdesc "$name" "$desc" >/dev/null 2>&1
+  elif [[ -n "$desc" ]]; then
+    secdesc "$name" "$desc"
+  fi
+
+  print -u2 "wrote $out  (verify with: sec $name)"
   return 0
 }
 

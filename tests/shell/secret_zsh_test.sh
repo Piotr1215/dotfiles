@@ -94,6 +94,31 @@ is "secadd --desc sets description" "$(secdesc D_ONE)" "one desc"
 # 14. no --desc means no description entry at all.
 is "no --desc leaves description empty" "$(secdesc P_NAME)" ""
 
+# 14a. the prompted forms ask for a description as a third line.
+printf 'D_PROMPT\npromptdval\nasked at enroll time\n' | secadd >/dev/null 2>&1
+is "secadd (no args) prompts for a description" "$(secdesc D_PROMPT)" "asked at enroll time"
+is "prompted description keeps the value"       "$(sec D_PROMPT 2>/dev/null)" "promptdval"
+
+printf 'namedval\nnamed form desc\n' | secadd D_PROMPT2 >/dev/null 2>&1
+is "secadd NAME prompts for a description" "$(secdesc D_PROMPT2)" "named form desc"
+is "prompted description keeps the value"  "$(sec D_PROMPT2 2>/dev/null)" "namedval"
+
+# 14b. an empty answer at the description prompt writes no entry.
+printf 'skipval\n\n' | secadd D_SKIP >/dev/null 2>&1
+is "empty description answer writes nothing" "$(secdesc D_SKIP)" ""
+is "skipped description keeps the value"     "$(sec D_SKIP 2>/dev/null)" "skipval"
+
+# 14c. --desc given: do NOT prompt again, and do not eat the next line as a desc.
+printf 'flagval\nSHOULD_NOT_BE_READ\n' | secadd D_FLAG --desc "from the flag" >/dev/null 2>&1
+is "--desc suppresses the description prompt" "$(secdesc D_FLAG)" "from the flag"
+
+# 14d. the scripted forms must never block on or consume stdin for a description.
+secadd D_LIT_NOPROMPT litval >/dev/null 2>&1 </dev/null
+is "secadd NAME VALUE does not prompt for a description" "$(secdesc D_LIT_NOPROMPT)" ""
+export SOME_ENV2=envval2
+secadd SOME_ENV2 --from-env >/dev/null 2>&1 </dev/null
+is "secadd --from-env does not prompt for a description" "$(secdesc SOME_ENV2)" ""
+
 # 15. secdesc set/replace/clear.
 secdesc D_ONE two desc >/dev/null 2>&1
 is "secdesc replaces" "$(secdesc D_ONE)" "two desc"
