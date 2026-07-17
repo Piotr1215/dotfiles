@@ -3,6 +3,29 @@
 # SAFETY: This test script uses +testonly_temp_deleteme tag
 # NEVER change this to a tag used for real tasks!
 # This prevents accidental deletion of production data
+#
+# Every task command below runs against a THROWAWAY database, never the real one.
+# Pointing at the real DB made this suite both destructive and unrunnable there:
+#   - an active context (read filter +work) hides tasks the tests create
+#   - on-modify hooks shell out to `task`, which triggers a gc renumber mid-test
+#   - cleanup hit taskwarrior's bulk prompt and silently deleted nothing, so
+#     +testonly_temp_deleteme tasks piled up in real data
+# A private TASKDATA has no hooks, no context and no other tasks, so the suite is
+# hermetic and deterministic. It is removed on exit.
+TASKDATA="$(mktemp -d)"
+TASKRC="$(mktemp)"
+export TASKDATA TASKRC
+cat > "$TASKRC" << EOF
+data.location=$TASKDATA
+hooks=0
+confirmation=0
+bulk=0
+# Keep new-id: create_task_wrapper parses "Created task N." out of task add.
+# Dropping the override/context categories silences a TASKRC/TASKDATA override
+# banner on every single command.
+verbose=affected,new-id
+EOF
+trap 'rm -rf "$TASKDATA" "$TASKRC"' EXIT
 
 # Source the Taskwarrior interop script
 source ../../scripts/__lib_taskwarrior_interop.sh
@@ -12,11 +35,20 @@ source ../../scripts/__lib_taskwarrior_interop.sh
 create_task_wrapper() {
 	local output
 	output=$(task add "$@" 2>&1)
-	
+
 	# Extract ID - could be numeric or UUID
 	local task_id
 	task_id=$(echo "$output" | grep -oE 'Created task ([0-9]+|[a-f0-9-]{36})' | awk '{print $3}')
-	
+
+	# A numeric id is only a slot among PENDING tasks. Completing a task frees its
+	# slot, and the next gc renumber (any report command, or a hook that shells out
+	# to `task`) hands that slot to a different pending task, so a later
+	# `task _get <id>.status` silently reads the WRONG task. Resolve to the uuid,
+	# which is stable for the task's whole life.
+	if [[ "$task_id" =~ ^[0-9]+$ ]]; then
+		task_id=$(task _get "$task_id".uuid 2>/dev/null)
+	fi
+
 	echo "$task_id"
 }
 
@@ -30,7 +62,10 @@ cleanup() {
 	# Safety: Only delete tasks with our unique test tag
 	local count=$(task +testonly_temp_deleteme count 2>/dev/null || echo 0)
 	if [ "$count" -gt 0 ]; then
-		task rc.confirmation=off +testonly_temp_deleteme delete
+		# rc.bulk=0 as well: confirmation=off does NOT suppress taskwarrior's
+		# separate bulk prompt, so a cleanup of more than rc.bulk tasks stopped on
+		# "Delete task N? (yes/no/all/quit)" and deleted nothing.
+		task rc.confirmation=off rc.bulk=0 +testonly_temp_deleteme delete
 	fi
 }
 
