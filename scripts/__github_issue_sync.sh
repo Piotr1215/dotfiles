@@ -668,7 +668,10 @@ sync_to_taskwarrior() {
             local has_started=$(echo "$task_json" | jq -r '.[0].tags | if . then contains(["started"]) else false end')
             local has_review=$(echo "$task_json" | jq -r '.[0].tags | if . then contains(["review"]) else false end')
             local has_start_time=$(echo "$task_json" | jq -r '.[0].start // empty')
-            
+            # Exact match (index, not contains): `contains(["triage"])` would match
+            # "triaged" by substring, and here the reverse confusion is just as bad.
+            local has_triaged=$(echo "$task_json" | jq -r '.[0].tags | if . then (index("triaged") != null) else false end')
+
             # Remove fresh tag if task has review tag (they are mutually exclusive)
             if [[ "$has_fresh" == "true" && "$has_review" == "true" ]]; then
                 log "Task has both +fresh and +review tags - removing +fresh tag (mutually exclusive)"
@@ -678,8 +681,17 @@ sync_to_taskwarrior() {
             # - Task doesn't have started tag
             # - Task doesn't have review tag (mutually exclusive)
             # - Task has never been started (no start time in history)
+            # - Task has never been triaged: +fresh means "the sync just brought
+            #   this in, nobody has looked at it". Once Gordon triages it the task
+            #   is known work, and a held/queued/backlog task legitimately sits for
+            #   days with no +started, no +review and no start time, so the four
+            #   checks above all pass and this block kept re-adding +fresh on every
+            #   30-min run. Piotr would strip it by hand and the next sync put it
+            #   straight back (seen on DEVOPS-1082 +queued and DOC-1628 +backlog).
+            #   +triaged is the durable "already seen" marker, so it vetoes here.
             # - Issue status indicates work hasn't actually started (Todo is still fresh)
             elif [[ "$has_fresh" == "false" && "$has_started" == "false" && "$has_review" == "false" && -z "$has_start_time" ]] && \
+               [[ "$has_triaged" == "false" ]] && \
                [[ ! "$issue_status" =~ ^(In\ Progress|Investigating|In\ Review)$ ]]; then
                 log "Adding missing +fresh tag to existing task"
                 task rc.confirmation=no modify "$task_uuid" +fresh
