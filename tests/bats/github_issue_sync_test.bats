@@ -2374,3 +2374,98 @@ EOF
     [ ! -f "${TEST_DIR}/calls.log" ]
 }
 
+
+# --- +fresh must not be re-applied to already-triaged tasks -------------------
+# A held task (+queued / +backlog) sits for days with no +started, no +review and
+# no start time, so every other guard in the backfill block passes and +fresh came
+# back on each 30-min sync. Reproduced on DEVOPS-1082 (+queued) and DOC-1628
+# (+backlog): Piotr removed +fresh by hand and the next sync re-added it.
+
+# Emit a mock `task` binary whose export returns TAGS for the existing task.
+# $1 linear id, $2 uuid, $3 tags JSON array
+_mock_task_with_tags() {
+    local linear_id="$1" uuid="$2" tags="$3"
+    cat > "${TEST_DIR}/task" << EOF
+#!/bin/bash
+case "\$1" in
+    "linear_issue_id:${linear_id}")
+        if [[ "\$2" == "status:pending" && "\$3" == "export" ]]; then
+            echo '[{"uuid":"${uuid}","description":"Held Issue","status":"pending","tags":${tags},"linear_issue_id":"${linear_id}","new_activity":"20990101T000000Z"}]'
+        fi
+        ;;
+    "${uuid}")
+        if [[ "\$2" == "export" ]]; then
+            echo '[{"uuid":"${uuid}","description":"Held Issue","status":"pending","tags":${tags},"linear_issue_id":"${linear_id}","new_activity":"20990101T000000Z"}]'
+        fi
+        ;;
+    "_get")
+        if [[ "\$2" == *".status" ]]; then echo "pending"; else echo ""; fi
+        ;;
+    "rc.confirmation=no")
+        echo "MOCK: task \$*" >> "${TEST_DIR}/task_commands.log"
+        ;;
+    *)
+        echo "${uuid}"
+        ;;
+esac
+EOF
+    chmod +x "${TEST_DIR}/task"
+}
+
+_held_issue_json() {
+    local linear_id="$1" status="$2"
+    echo '{
+        "id":"held",
+        "description":"Held Issue",
+        "repository":"linear",
+        "html_url":"https://linear.app/test/issue/'"$linear_id"'",
+        "issue_id":"'"$linear_id"'",
+        "project":"operations",
+        "status":"'"$status"'",
+        "due_date":null,
+        "priority":3,
+        "updated_at":"2026-07-17T08:00:00Z",
+        "cycle_number":null
+    }'
+}
+
+@test "sync_to_taskwarrior does NOT re-add +fresh to a triaged queued task (DEVOPS-1082)" {
+    _mock_task_with_tags "DEVOPS-1082" "test-uuid-1082" '["queued","triaged","work"]'
+
+    run sync_to_taskwarrior "$(_held_issue_json DEVOPS-1082 Todo)"
+    [ "$status" -eq 0 ]
+
+    # The task was triaged, so the sync must leave it alone rather than re-flag it.
+    ! grep -q -- "+fresh" "${TEST_DIR}/task_commands.log"
+}
+
+@test "sync_to_taskwarrior does NOT re-add +fresh to a triaged backlog task (DOC-1628)" {
+    _mock_task_with_tags "DOC-1628" "test-uuid-1628" '["backlog","triaged","work"]'
+
+    run sync_to_taskwarrior "$(_held_issue_json DOC-1628 Backlog)"
+    [ "$status" -eq 0 ]
+
+    ! grep -q -- "+fresh" "${TEST_DIR}/task_commands.log"
+}
+
+@test "sync_to_taskwarrior still adds missing +fresh to an untriaged task" {
+    # The backfill itself must survive: an untriaged task that lost +fresh is a
+    # task nobody has looked at, so it still gets re-flagged.
+    _mock_task_with_tags "DEVOPS-999" "test-uuid-999" '["queued","work"]'
+
+    run sync_to_taskwarrior "$(_held_issue_json DEVOPS-999 Todo)"
+    [ "$status" -eq 0 ]
+
+    grep -q -- "+fresh" "${TEST_DIR}/task_commands.log"
+}
+
+@test "sync_to_taskwarrior does not confuse +triage with +triaged when re-adding fresh" {
+    # +triage (Linear Triage status) is NOT the triaged marker. A substring match
+    # would read "triage" as "triaged" and wrongly suppress the backfill.
+    _mock_task_with_tags "DEVOPS-998" "test-uuid-998" '["triage","work"]'
+
+    run sync_to_taskwarrior "$(_held_issue_json DEVOPS-998 Todo)"
+    [ "$status" -eq 0 ]
+
+    grep -q -- "+fresh" "${TEST_DIR}/task_commands.log"
+}
