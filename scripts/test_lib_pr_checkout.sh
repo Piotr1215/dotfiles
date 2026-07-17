@@ -8,6 +8,15 @@ set -o pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/__lib_pr_checkout.sh" 2>/dev/null || true
 
+# The lib sets -e for its own callers. Sourcing it silently turns -e back on here
+# and overrides this file's stated intent, so a single non-zero status aborts the
+# whole run instead of counting one failure. It went unnoticed because the abort
+# needs >3 worktrees: the live scan below pipes find into `head -3`, and once head
+# closes the pipe early find dies of SIGPIPE (141), which pipefail surfaces and -e
+# turns into an exit. Under 3 worktrees find finishes first and nothing fails.
+# Re-assert the mode declared at the top of this file, AFTER the source.
+set +e
+
 WORKTREE_DIR="/home/decoder/dev/claude-wt-worktrees"
 PASSED=0
 FAILED=0
