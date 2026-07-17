@@ -16,23 +16,19 @@ setup() {
     # Override PATH to use mocks
     export PATH="${TEST_DIR}:${PATH}"
 
-    # Create mock xclip command
-    cat > "${TEST_DIR}/xclip" << 'EOF'
+    # Create mock xsel command
+    # Must mock the tool the script ACTUALLY calls. This stubbed xclip long after
+    # 8b9da13c switched the script to xsel, so the stub was never invoked, no
+    # clipboard_content was ever written, and every assertion below failed while
+    # testing nothing. Keep this in step with __copy_path_with_notification.sh.
+    cat > "${TEST_DIR}/xsel" << 'EOF'
 #!/bin/bash
-# Mock xclip for testing - save to file instead of clipboard
-if [[ "$*" =~ "-selection clipboard" ]]; then
+# Mock xsel for testing - save to file instead of clipboard
+if [[ "$*" =~ "--clipboard" ]]; then
     cat > "${TEST_DIR}/clipboard_content"
 fi
 EOF
-    chmod +x "${TEST_DIR}/xclip"
-
-    # Create mock notify-send command
-    cat > "${TEST_DIR}/notify-send" << 'EOF'
-#!/bin/bash
-# Mock notify-send - log notifications
-echo "NOTIFICATION: $*" >> "${TEST_DIR}/notifications.log"
-EOF
-    chmod +x "${TEST_DIR}/notify-send"
+    chmod +x "${TEST_DIR}/xsel"
 
     # Create mock realpath command for controlled testing
     cat > "${TEST_DIR}/realpath" << 'EOF'
@@ -133,24 +129,12 @@ teardown() {
     [ "$content" = "/home/decoder/test" ]
 }
 
-@test "copy_path_with_notification sends desktop notification" {
-    run bash $REPO_ROOT/scripts/__copy_path_with_notification.sh "/home/decoder/test"
-    [ "$status" -eq 0 ]
-
-    # Check notification was sent
-    [ -f "${TEST_DIR}/notifications.log" ]
-    grep -q "Path Copied" "${TEST_DIR}/notifications.log"
-    grep -q "/home/decoder/test" "${TEST_DIR}/notifications.log"
-}
-
-@test "copy_path_with_notification respects COPY_NOTIFICATION_TIMEOUT env var" {
-    export COPY_NOTIFICATION_TIMEOUT=5000
-    run bash $REPO_ROOT/scripts/__copy_path_with_notification.sh "/tmp/test"
-    [ "$status" -eq 0 ]
-
-    # Verify timeout variable is used (not hardcoded value)
-    grep -q -- "-t 5000" "${TEST_DIR}/notifications.log"
-}
+# The desktop-notification and COPY_NOTIFICATION_TIMEOUT tests were removed here.
+# 867b40f5 ("do not display notificaiton on copy") dropped the notify-send call on
+# purpose, so they asserted a feature that no longer exists. The script keeps its
+# historical name; the notification does not. Everything below tests what the
+# script actually promises now: extract the path, put exactly that on the
+# clipboard.
 
 @test "copy_path_with_notification copies without trailing newline" {
     bash $REPO_ROOT/scripts/__copy_path_with_notification.sh "/home/decoder/test" >/dev/null 2>&1
@@ -173,13 +157,12 @@ teardown() {
     [[ "$content" == "$HOME/dev/dotfiles/scripts/__bookmarks.conf" ]]
 }
 
-@test "copy_path_with_notification extracts path from bookmark before notifying" {
+@test "copy_path_with_notification copies the extracted path, not the bookmark line" {
     bookmark_line="test description                                 /home/decoder/scripts/test.sh"
     bash $REPO_ROOT/scripts/__copy_path_with_notification.sh "$bookmark_line" >/dev/null 2>&1
 
-    # Verify notification was sent (behavior, not content)
-    [ -f "${TEST_DIR}/notifications.log" ]
     # Verify clipboard has extracted path, not full bookmark line
+    [ -f "${TEST_DIR}/clipboard_content" ]
     content=$(cat "${TEST_DIR}/clipboard_content")
     [[ "$content" == /home/decoder/scripts/test.sh ]]
 }
@@ -214,15 +197,16 @@ teardown() {
     [ "$result" = "$special_path" ]
 }
 
-@test "copy_path_with_notification handles xclip failure gracefully" {
-    # Override xclip to fail
-    cat > "${TEST_DIR}/xclip" << 'EOF'
+@test "copy_path_with_notification surfaces a clipboard failure" {
+    # Override xsel to fail
+    cat > "${TEST_DIR}/xsel" << 'EOF'
 #!/bin/bash
 exit 1
 EOF
-    chmod +x "${TEST_DIR}/xclip"
+    chmod +x "${TEST_DIR}/xsel"
 
-    # Should still complete (set -e in script will exit on xclip failure)
+    # A silent copy failure is the worst outcome here: the user thinks the path is
+    # on the clipboard and pastes something stale. set -eo pipefail must propagate.
     run bash $REPO_ROOT/scripts/__copy_path_with_notification.sh "/test/path"
     [ "$status" -ne 0 ]
 }
@@ -253,16 +237,10 @@ EOF
     # Run the copy script
     bash $REPO_ROOT/scripts/__copy_path_with_notification.sh "$fzf_selection" >/dev/null 2>&1
 
-    # Verify clipboard and notification
-    [ -f "${TEST_DIR}/clipboard_content" ]
-    [ -f "${TEST_DIR}/notifications.log" ]
-
     # Clipboard should have the path
+    [ -f "${TEST_DIR}/clipboard_content" ]
     content=$(cat "${TEST_DIR}/clipboard_content")
     [ "$content" = "$fzf_selection" ]
-
-    # Notification should mention path copied
-    grep -q "Path Copied" "${TEST_DIR}/notifications.log"
 }
 
 @test "copy_notification handles zoxide output format" {
