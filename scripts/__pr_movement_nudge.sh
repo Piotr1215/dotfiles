@@ -21,6 +21,11 @@
 #   ci-red             statusCheckRollup -> FAILURE                       (sticky)
 #   merge-conflict     mergeable -> CONFLICTING                          (sticky)
 #   foreign-push       new head commit whose author is not a self login  (edge)
+# A sticky reason names a STATE the PR sits in, so it fires ONCE on entry and
+#   then stays quiet for as long as it holds; it fires again only if it clears
+#   and returns. `notifiedSticky` in the state file is the per-PR record of what
+#   has been sent. Edge reasons carry their own baseline (headSha,
+#   lastForeignActivity) and fire per occurrence.
 # IGNORED: pushes/commits/comments by a self identity (Piotr, or the Claude bot
 #   login he pushes as -- see PR_MOVE_SELF_LOGINS), draft PRs, bot comments, CI
 #   green/pending, approvals (surface-only), Piotr's edits.
@@ -77,7 +82,6 @@ export SND_FROM="${SND_FROM:-pr-watch}"
 
 # Tunables
 PUSH_COOLDOWN_SECS="${PR_MOVE_PUSH_COOLDOWN:-600}"        # skip if we pushed within 10m
-STICKY_COOLDOWN_SECS="${PR_MOVE_STICKY_COOLDOWN:-3600}"   # re-nudge sticky states hourly
 CYCLE_CAP="${PR_MOVE_CYCLE_CAP:-8}"                       # max pr-move DMs per cycle
 ME="${PR_MOVE_ME:-$(gh api user --jq .login 2>/dev/null || echo Piotr1215)}"
 # Self identities: any actor whose movement is Piotr's own and must NOT nudge.
@@ -151,10 +155,18 @@ compute_sig() {
                 | map(select(. != null)) | (max // "")),
             changesRequested: ((.reviewDecision // "") == "CHANGES_REQUESTED"),
             checks: (
+                # A red build means a check REPORTED failure. CANCELLED does not:
+                # a concurrency group cancels the in-flight run when a new commit
+                # lands, so the rollup keeps the aborted row next to the re-run
+                # that then succeeded under the same name (observed on
+                # loft-sh/vcluster#4084: 4 CANCELLED rows, each with a same-named
+                # SUCCESS row, PR green and MERGEABLE, nudged ci-red hourly).
+                # An abort carries no verdict about the code, so it is not a
+                # trigger. NEUTRAL/SKIPPED likewise fall through to SUCCESS.
                 (.statusCheckRollup // []) as $r
                 | if ($r | length) == 0 then "NONE"
                   elif any($r[];
-                        ((.conclusion // "" | ascii_upcase) as $x | ($x=="FAILURE" or $x=="TIMED_OUT" or $x=="CANCELLED" or $x=="ERROR" or $x=="STARTUP_FAILURE"))
+                        ((.conclusion // "" | ascii_upcase) as $x | ($x=="FAILURE" or $x=="TIMED_OUT" or $x=="ERROR" or $x=="STARTUP_FAILURE"))
                         or ((.state // "" | ascii_upcase) as $s | ($s=="FAILURE" or $s=="ERROR")))
                     then "FAILURE"
                   elif any($r[];
@@ -165,12 +177,23 @@ compute_sig() {
         }' <<<"$detail"
 }
 
-# sticky_ready OLD_JSON REASON  -> 0 if the per-reason cooldown has elapsed
-sticky_ready() {
-    local old="$1" reason="$2" until_epoch
-    until_epoch=$(jq -r --arg r "$reason" '.cooldownUntil[$r] // 0' <<<"$old" 2>/dev/null || echo 0)
-    [[ "$until_epoch" =~ ^[0-9]+$ ]] || until_epoch=0
-    [[ "$(now_epoch)" -ge "$until_epoch" ]]
+# sticky_set SIG -> JSON array of the sticky reasons true in this signature, in
+# canonical report order. A sticky reason describes a STATE the PR is sitting in
+# (red build, changes requested, conflicting), so it stays true across cycles;
+# `notifiedSticky` in the state file records which of them we have already sent.
+sticky_set() {
+    jq -c '[ (if .changesRequested then "changes-requested" else empty end),
+             (if .checks == "FAILURE" then "ci-red" else empty end),
+             (if .mergeable == "CONFLICTING" then "merge-conflict" else empty end) ]' <<<"$1"
+}
+
+# sticky_new SIG_SET NOTIFIED_SET -> newline-separated reasons in SIG_SET that
+# are not yet in NOTIFIED_SET, i.e. the states entered since the last DM.
+# Bind the element ($x) BEFORE piping into $n: inside `$n | index(.)` the `.` is
+# $n itself, not the element, so that form matches nothing and silences every
+# reason.
+sticky_new() {
+    jq -r --argjson n "$2" '.[] | . as $x | select(($n | index($x)) == null)' <<<"$1"
 }
 
 # ci_red_is_noise TITLE -> 0 if a BARE ci-red on this PR is expected noise: CI
@@ -240,33 +263,37 @@ main() {
         old=$(jq -c --arg k "$key" '.[$k] // empty' <<<"$old_state" 2>/dev/null || true)
 
         # First contact: seed silently, no nudge (mirrors Linear new_activity seed).
-        # Arm the sticky cooldown for any reason ALREADY true at seed, so a
+        # Record any sticky reason ALREADY true at seed as notified, so a
         # pre-existing red build / changes-requested / conflict does not fire on
-        # the next cycle; it re-nudges only after STICKY_COOLDOWN if still true,
-        # or on a fresh transition. Edge reasons need no seed handling: their
-        # baseline (headSha, lastForeignActivity) is recorded here, so only new
-        # activity fires later.
+        # the next cycle; it fires only if it clears and comes back. Edge reasons
+        # need no seed handling: their baseline (headSha, lastForeignActivity) is
+        # recorded here, so only new activity fires later.
+        local sticky_now; sticky_now=$(sticky_set "$sig")
+
         if [[ -z "$old" ]]; then
             log "seed (first contact): $ref"
-            local seed_cd
-            seed_cd=$(jq -cn --argjson t "$(( $(now_epoch) + STICKY_COOLDOWN_SECS ))" --argjson s "$sig" \
-                'reduce ([ (if $s.changesRequested then "changes-requested" else empty end),
-                           (if $s.checks == "FAILURE" then "ci-red" else empty end),
-                           (if $s.mergeable == "CONFLICTING" then "merge-conflict" else empty end) ][]) as $r ({}; . + {($r): $t})')
-            new_state=$(jq -c --arg k "$key" --argjson s "$sig" --arg ref "$ref" --arg url "$url" --argjson cd "$seed_cd" \
-                '.[$k] = ($s + {ref:$ref, url:$url, cooldownUntil:$cd})' <<<"$new_state")
+            new_state=$(jq -c --arg k "$key" --argjson s "$sig" --arg ref "$ref" --arg url "$url" --argjson ns "$sticky_now" \
+                '.[$k] = ($s + {ref:$ref, url:$url, notifiedSticky:$ns})' <<<"$new_state")
             continue
         fi
 
-        # carry the cooldown map forward (old is non-empty here); refreshed below
-        # when a sticky reason fires.
-        local cooldown; cooldown=$(jq -c '.cooldownUntil // {}' <<<"$old" 2>/dev/null || echo '{}')
+        # Carry the notified set forward (old is non-empty here); recomputed below
+        # once we know what fired. An entry written by the pre-dedup version has no
+        # notifiedSticky: adopt the current sticky state rather than defaulting to
+        # empty, or every already-nudged PR would re-fire once on upgrade.
+        local notified
+        if jq -e 'has("notifiedSticky")' <<<"$old" >/dev/null 2>&1; then
+            notified=$(jq -c '.notifiedSticky // []' <<<"$old")
+        else
+            log "migrate (adopting current sticky state, no nudge): $ref"
+            notified="$sticky_now"
+        fi
 
         # Contention: a live worker owns it -> stay silent, but advance the
         # watermark so we do not later treat the worker's changes as new.
         if pr_has_live_session "$num"; then
-            new_state=$(jq -c --arg k "$key" --argjson s "$sig" --arg ref "$ref" --arg url "$url" --argjson cd "$cooldown" \
-                '.[$k] = ($s + {ref:$ref, url:$url, cooldownUntil:$cd})' <<<"$new_state")
+            new_state=$(jq -c --arg k "$key" --argjson s "$sig" --arg ref "$ref" --arg url "$url" --argjson ns "$notified" \
+                '.[$k] = ($s + {ref:$ref, url:$url, notifiedSticky:$ns})' <<<"$new_state")
             continue
         fi
 
@@ -278,43 +305,25 @@ main() {
             last_epoch=$(iso_to_epoch "$last_date")
             if [[ $(( $(now_epoch) - last_epoch )) -lt "$PUSH_COOLDOWN_SECS" ]]; then
                 log "skip (recent own push, cooldown): $ref"
-                new_state=$(jq -c --arg k "$key" --argjson s "$sig" --arg ref "$ref" --arg url "$url" --argjson cd "$cooldown" \
-                    '.[$k] = ($s + {ref:$ref, url:$url, cooldownUntil:$cd})' <<<"$new_state")
+                new_state=$(jq -c --arg k "$key" --argjson s "$sig" --arg ref "$ref" --arg url "$url" --argjson ns "$notified" \
+                    '.[$k] = ($s + {ref:$ref, url:$url, notifiedSticky:$ns})' <<<"$new_state")
                 continue
             fi
         fi
 
         # ---- diff old vs new; collect reasons ----
         local -a reasons=()
-        local cur_cr old_cr cur_ck old_ck cur_mg old_mg cur_fa old_fa cur_sha old_sha known
-        cur_cr=$(jq -r '.reviewDecision' <<<"$sig");           old_cr=$(jq -r '.reviewDecision' <<<"$old")
-        cur_ck=$(jq -r '.checks' <<<"$sig");                   old_ck=$(jq -r '.checks' <<<"$old")
-        cur_mg=$(jq -r '.mergeable' <<<"$sig");                old_mg=$(jq -r '.mergeable' <<<"$old")
+        local r cur_fa old_fa cur_sha old_sha known
         cur_fa=$(jq -r '.lastForeignActivity' <<<"$sig");      old_fa=$(jq -r '.lastForeignActivity' <<<"$old")
         cur_sha=$(jq -r '.headSha' <<<"$sig");                 old_sha=$(jq -r '.headSha' <<<"$old")
         known=$(jq -r '.lastCommitKnownAuthors' <<<"$sig")
 
-        # changes-requested (sticky)
-        if [[ "$cur_cr" == "CHANGES_REQUESTED" ]]; then
-            if [[ "$old_cr" != "CHANGES_REQUESTED" ]] || sticky_ready "$old" changes-requested; then
-                reasons+=("changes-requested")
-                cooldown=$(jq -c --arg r changes-requested --argjson t "$(( $(now_epoch) + STICKY_COOLDOWN_SECS ))" '. + {($r): $t}' <<<"$cooldown")
-            fi
-        fi
-        # ci-red (sticky)
-        if [[ "$cur_ck" == "FAILURE" ]]; then
-            if [[ "$old_ck" != "FAILURE" ]] || sticky_ready "$old" ci-red; then
-                reasons+=("ci-red")
-                cooldown=$(jq -c --arg r ci-red --argjson t "$(( $(now_epoch) + STICKY_COOLDOWN_SECS ))" '. + {($r): $t}' <<<"$cooldown")
-            fi
-        fi
-        # merge-conflict (sticky)
-        if [[ "$cur_mg" == "CONFLICTING" ]]; then
-            if [[ "$old_mg" != "CONFLICTING" ]] || sticky_ready "$old" merge-conflict; then
-                reasons+=("merge-conflict")
-                cooldown=$(jq -c --arg r merge-conflict --argjson t "$(( $(now_epoch) + STICKY_COOLDOWN_SECS ))" '. + {($r): $t}' <<<"$cooldown")
-            fi
-        fi
+        # Sticky reasons (changes-requested, ci-red, merge-conflict) fire only on
+        # ENTERING the state: a reason already in notifiedSticky stays silent for
+        # as long as it holds, and re-fires only if it clears and comes back.
+        while IFS= read -r r; do
+            [[ -n "$r" ]] && reasons+=("$r")
+        done < <(sticky_new "$sticky_now" "$notified")
         # review-comment (edge): new foreign activity, unless already counted as changes-requested
         if [[ -n "$cur_fa" && "$cur_fa" > "$old_fa" ]]; then
             local has_cr=0; for r in "${reasons[@]:-}"; do [[ "$r" == "changes-requested" ]] && has_cr=1; done
@@ -325,20 +334,25 @@ main() {
             reasons+=("foreign-push")
         fi
 
+        # The sticky states we will record as notified: everything true now. A
+        # reason that has cleared drops out here, so it fires again if it returns.
+        local new_notified="$sticky_now"
+
         # Suppress a BARE ci-red on CI/dependency/release PRs: the red is
         # E2E-on-PR that does not apply, not a code defect (Gordon re-verifies
         # regardless). Only when ci-red is the sole reason; an accompanied ci-red
-        # rides along with changes-requested/merge-conflict/review-comment. Roll
-        # back its armed cooldown so state does not imply a nudge went out.
+        # rides along with changes-requested/merge-conflict/review-comment. Leave
+        # ci-red OUT of the notified set so it stays un-sent and can still ride
+        # along the day a real reason lands on this PR.
         if [[ ${#reasons[@]} -eq 1 && "${reasons[0]}" == "ci-red" ]] && ci_red_is_noise "$title"; then
             log "suppress (bare ci-red, ci/deps/release PR): $ref [$title]"
             reasons=()
-            cooldown=$(jq -c 'del(."ci-red")' <<<"$cooldown")
+            new_notified=$(jq -c 'map(select(. != "ci-red"))' <<<"$new_notified")
         fi
 
-        # persist the advanced signature + refreshed cooldown regardless of fire
-        new_state=$(jq -c --arg k "$key" --argjson s "$sig" --arg ref "$ref" --arg url "$url" --argjson cd "$cooldown" \
-            '.[$k] = ($s + {ref:$ref, url:$url, cooldownUntil:$cd})' <<<"$new_state")
+        # persist the advanced signature + notified set regardless of fire
+        new_state=$(jq -c --arg k "$key" --argjson s "$sig" --arg ref "$ref" --arg url "$url" --argjson ns "$new_notified" \
+            '.[$k] = ($s + {ref:$ref, url:$url, notifiedSticky:$ns})' <<<"$new_state")
 
         if [[ ${#reasons[@]} -eq 0 ]]; then
             continue
