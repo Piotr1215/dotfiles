@@ -131,7 +131,6 @@ export FZF_BASE=/usr/bin/fzf
 export FZF_DEFAULT_COMMAND='fd --hidden --exclude .git'
 export FZF_CTRL_T_COMMAND='fd --hidden'
 export FZF_ALT_C_COMMAND='fd --hidden'
-export VISUAL=nvim
 export KUBECONFIG=${KUBECONFIG:-~/.kube/config}
 export GOBIN=$HOME/go/bin
 
@@ -149,7 +148,6 @@ export PATH=$PATH:$HOME/dev/dotfiles/scripts
 export PATH=$PATH:$HOME/.luarocks/bin
 export PATH=$PATH:$HOME/.arkade/bin/
 export FONTCONFIG_PATH=/etc/fonts
-export EDITOR=nvim
 export GH_USER=Piotr1215
 export STARSHIP_CONFIG=${HOME}/.config/starship.toml
 export PLANTUML_LIMIT_SIZE=8192
