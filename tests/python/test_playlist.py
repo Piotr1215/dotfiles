@@ -10,11 +10,13 @@ import sys
 
 # Add scripts directory to path to import the module
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'scripts'))
+# organize_with_claude was dropped in fee9f8f7 (split into tag_entry_with_claude
+# and organize_playlist). Nothing here ever used it, but the dead name in this
+# import raised ImportError at module load, which failed every test in the file.
 from __append_to_playlist import (
     normalize_url,
     append_to_playlist,
     atomic_write,
-    organize_with_claude
 )
 
 class TestNormalizeURL(unittest.TestCase):
