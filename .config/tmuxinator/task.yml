@@ -57,6 +57,5 @@ windows:
   - private:
       layout: 72be,150x72,0,0[150x42,0,0,4,150x29,0,43,19]
       panes:
-        - KUBECONFIG=/home/decoder/dev/homelab/kubeconfig __claude_with_monitor.sh --system-prompt-file ~/.claude/system-prompts/triage-agent-system-prompt.md -- "/ops-triage-agent"
+        - __claude_with_monitor.sh --system-prompt-file ~/.claude/system-prompts/triage-agent-system-prompt.md -- "/ops-triage-agent"
         - ~/.claude/scripts/__cockpit_board.sh
-

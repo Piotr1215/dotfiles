@@ -18,11 +18,11 @@
 
 `prefix + A`
 
-- Start Claude with monitor + kubeconfig:
+- Start Claude with monitor + pane-bound kubeconfig (homelab launch default):
 
 `claude`
 
-- Start Claude without kubeconfig:
+- Start Claude preserving the caller/direnv launch base:
 
 `claude_clean`
 
@@ -41,4 +41,3 @@
 - Execute command and open Claude with output:
 
 `Ctrl + G`
-
