@@ -142,10 +142,10 @@ alias play='nohup ~/dev/dotfiles/scripts/__launch_playlist.sh > /dev/null 2>&1 &
 alias play_vid='nohup ~/dev/dotfiles/scripts/__launch_playlist.sh vids_playlist > /dev/null 2>&1 &'
 
 # PROJECT: ai
-alias c='KUBECONFIG=/home/decoder/dev/homelab/kubeconfig __claude_with_monitor.sh'
-alias claude='KUBECONFIG=/home/decoder/dev/homelab/kubeconfig __claude_with_monitor.sh'
-alias claude_clean='__claude_with_monitor.sh'
-alias claude_pair='PAIR_PROGRAMMING=true KUBECONFIG=/home/decoder/dev/homelab/kubeconfig __claude_with_monitor.sh'
+alias c='__claude_with_monitor.sh'
+alias claude='__claude_with_monitor.sh'
+alias claude_clean='CLAUDE_KUBE_BASE=inherit __claude_with_monitor.sh'
+alias claude_pair='PAIR_PROGRAMMING=true __claude_with_monitor.sh'
 alias claude-kill='__kill_stuck_claude.sh'
 alias claude-check='__kill_stuck_claude.sh --dry-run'
 
