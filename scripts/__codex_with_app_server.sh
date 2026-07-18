@@ -3,19 +3,69 @@ set -eo pipefail
 
 codex_bin="${CODEX_BIN:-$HOME/.npm-global/bin/codex}"
 codex_home="${CODEX_HOME:-$HOME/.codex}"
-control_dir="$codex_home/app-server-control"
-socket_path="$control_dir/app-server-control.sock"
-pid_file="$control_dir/app-server.pid"
-log_file="$codex_home/logs/app-server.log"
+kctx_bin="${KCTX_BIN:-$HOME/.local/bin/kctx}"
+pane_key="global"
+
+bind_pane_kubeconfig() {
+    [[ -n "${TMUX:-}" && -n "${TMUX_PANE:-}" ]] || return 0
+
+    if [[ ! -x "$kctx_bin" ]]; then
+        echo "Codex cannot initialize pane Kubernetes state: $kctx_bin is not executable" >&2
+        exit 1
+    fi
+
+    local base_kubeconfig="${KUBECONFIG:-$HOME/.kube/config}"
+    local pane_kubeconfig
+    if ! pane_kubeconfig="$($kctx_bin pane env "$TMUX_PANE" --base "$base_kubeconfig")"; then
+        echo "Codex cannot initialize pane Kubernetes state for $TMUX_PANE" >&2
+        exit 1
+    fi
+
+    case "$pane_kubeconfig" in
+        */selection.yaml:*/view.yaml) ;;
+        *)
+            echo "Codex received an invalid pane kubeconfig from kctx" >&2
+            exit 1
+            ;;
+    esac
+
+    export KUBECONFIG="$pane_kubeconfig"
+
+    local selection_path="${pane_kubeconfig%%:*}"
+    local pane_dir="${selection_path%/selection.yaml}"
+    pane_key="${pane_dir##*/}"
+    if [[ -z "$pane_key" || "$pane_key" == "$pane_dir" ]]; then
+        echo "Codex could not derive the kctx pane key" >&2
+        exit 1
+    fi
+}
 
 # Commands that do not open or control an interactive TUI must keep using the
 # binary directly; most reject --remote. Bare `codex` and the interactive
 # thread-management commands attach to the managed local app-server instead.
 case "${1:-}" in
-    exec|e|review|login|logout|mcp|plugin|mcp-server|app-server|remote-control|completion|update|doctor|sandbox|debug|apply|cloud|exec-server|features|help|-h|--help|-V|--version)
+    exec|e|review)
+        bind_pane_kubeconfig
+        exec "$codex_bin" "$@"
+        ;;
+    login|logout|mcp|plugin|mcp-server|app-server|remote-control|completion|update|doctor|sandbox|debug|apply|cloud|exec-server|features|help|-h|--help|-V|--version)
         exec "$codex_bin" "$@"
         ;;
 esac
+
+bind_pane_kubeconfig
+
+# Tool subprocesses inherit the app-server environment, not the attaching
+# client's environment. A global daemon would therefore collapse all tmux
+# panes onto one KUBECONFIG. Keep one control socket per composite kctx pane key
+# so every long-lived Codex process remains pinned to its own file pair. Use a
+# collision-resistant prefix so the Unix socket remains below Linux's pathname
+# limit; the full hash remains authoritative in the kctx runtime path.
+control_key="${pane_key:0:16}"
+control_dir="$codex_home/app-server-control/$control_key"
+socket_path="$control_dir/app-server-control.sock"
+pid_file="$control_dir/app-server.pid"
+log_file="$codex_home/logs/app-server-$control_key.log"
 
 mkdir -p "$control_dir" "$(dirname "$log_file")"
 exec 9>"$control_dir/launcher.lock"
@@ -27,7 +77,7 @@ if [[ -f "$pid_file" ]]; then
 fi
 
 if [[ -z "$server_pid" ]] || ! kill -0 "$server_pid" 2>/dev/null || [[ ! -S "$socket_path" ]]; then
-    nohup "$codex_bin" app-server --listen unix:// </dev/null >>"$log_file" 2>&1 &
+    nohup "$codex_bin" app-server --listen "unix://$socket_path" </dev/null >>"$log_file" 2>&1 &
     server_pid=$!
     printf '%s\n' "$server_pid" > "$pid_file"
 
@@ -48,4 +98,4 @@ fi
 
 flock -u 9
 exec 9>&-
-exec "$codex_bin" --remote unix:// "$@"
+exec "$codex_bin" --remote "unix://$socket_path" "$@"
