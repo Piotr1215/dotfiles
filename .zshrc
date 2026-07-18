@@ -462,6 +462,23 @@ precmd() { print -Pn "\e]133;A\e\\" }
 # [[ -s "/home/decoder/.gvm/scripts/gvm" ]] && source "/home/decoder/.gvm/scripts/gvm"
 
 eval "$(direnv hook zsh)"
+
+# Let direnv drive Kubernetes by default. An explicit `kctx pick` latches a
+# pane-local override; release it from the picker to return control to direnv.
+autoload -Uz add-zsh-hook
+__kctx_apply_pane_override() {
+    [[ -n "$TMUX" ]] || return 0
+
+    local pane_kubeconfig
+    if pane_kubeconfig="$(command kctx pane override-env 2>/dev/null)"; then
+        export KUBECONFIG="$pane_kubeconfig"
+    fi
+}
+add-zsh-hook -d precmd __kctx_apply_pane_override 2>/dev/null
+add-zsh-hook -d preexec __kctx_apply_pane_override 2>/dev/null
+add-zsh-hook precmd __kctx_apply_pane_override
+add-zsh-hook preexec __kctx_apply_pane_override
+
 eval "$(starship init zsh)"
 
 if [ -f "$HOME/.cargo/env" ]; then
