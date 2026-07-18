@@ -1,0 +1,12 @@
+[Unit]
+Description=Periodically reconcile kctx connection health
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+RandomizedDelaySec=30s
+Persistent=true
+Unit=kctx-health.service
+
+[Install]
+WantedBy=timers.target
