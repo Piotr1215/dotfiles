@@ -66,12 +66,14 @@ control_dir="$codex_home/app-server-control/$control_key"
 socket_path="$control_dir/app-server-control.sock"
 pid_file="$control_dir/app-server.pid"
 log_file="$codex_home/logs/app-server-$control_key.log"
+client_lock="$control_dir/client.lock"
 
 mkdir -p "$control_dir" "$(dirname "$log_file")"
 exec 9>"$control_dir/launcher.lock"
 flock 9
 
 server_pid=""
+started_server=0
 if [[ -f "$pid_file" ]]; then
     read -r server_pid < "$pid_file" || server_pid=""
 fi
@@ -79,6 +81,7 @@ fi
 if [[ -z "$server_pid" ]] || ! kill -0 "$server_pid" 2>/dev/null || [[ ! -S "$socket_path" ]]; then
     nohup "$codex_bin" app-server --listen "unix://$socket_path" </dev/null >>"$log_file" 2>&1 &
     server_pid=$!
+    started_server=1
     printf '%s\n' "$server_pid" > "$pid_file"
 
     for _ in {1..100}; do
@@ -96,6 +99,39 @@ if [[ ! -S "$socket_path" ]]; then
     exit 1
 fi
 
+# Hold a shared client lock while this TUI is attached. The last client to exit
+# takes the exclusive lock and owns shutting down the pane-local app-server.
+exec 8>"$client_lock"
+flock -s 8
 flock -u 9
 exec 9>&-
-exec "$codex_bin" --remote "unix://$socket_path" "$@"
+
+set +e
+"$codex_bin" --remote "unix://$socket_path" "$@"
+client_status=$?
+set -e
+
+exec 9>"$control_dir/launcher.lock"
+flock 9
+flock -u 8
+if flock -n -x 8; then
+    if [[ "$server_pid" =~ ^[0-9]+$ ]] && kill -0 "$server_pid" 2>/dev/null; then
+        kill -TERM "$server_pid" 2>/dev/null || true
+        if [[ $started_server -eq 1 ]]; then
+            wait "$server_pid" 2>/dev/null || true
+        else
+            for _ in {1..20}; do
+                kill -0 "$server_pid" 2>/dev/null || break
+                sleep 0.05
+            done
+        fi
+    fi
+    if ! [[ "$server_pid" =~ ^[0-9]+$ ]] || ! kill -0 "$server_pid" 2>/dev/null; then
+        rm -f "$socket_path" "$pid_file"
+    fi
+fi
+flock -u 8
+exec 8>&-
+flock -u 9
+exec 9>&-
+exit "$client_status"
