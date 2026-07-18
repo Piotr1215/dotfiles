@@ -1,0 +1,18 @@
+{
+  "description": "Bind agents MCP registrations to their active Codex threads for DM push delivery.",
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "^mcp__agents__agent_(register|deregister)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 /home/decoder/dev/dotfiles/scripts/__codex_agent_binding_hook.py",
+            "timeout": 5,
+            "statusMessage": "Updating Codex agent nudge binding"
+          }
+        ]
+      }
+    ]
+  }
+}
