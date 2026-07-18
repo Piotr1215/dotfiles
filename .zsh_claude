@@ -214,6 +214,11 @@ alias flaude='claude -r --fork-session'           # Fork session with picker
 alias dlaude='claude --debug "hooks,mcp"'         # Debug mode (hooks + mcp)
 alias ccinstall='~/.claude/scripts/__claude_version_installer.sh'  # Version picker
 
+# Run interactive Codex sessions through its managed Unix-socket app-server.
+# The agents MCP server can then deliver inbound DMs to the active Codex thread
+# with turn/start or turn/steer, providing the push path Codex lacks in MCP.
+alias codex="$HOME/dev/dotfiles/scripts/__codex_with_app_server.sh"
+
 # Per-account Claude config routing (#91)
 #
 # The launcher (__claude_with_monitor.sh) routes work vs personal by cwd, but the
