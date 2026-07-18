@@ -39,6 +39,7 @@ help_function() {
     echo "  Ctrl+D    Switch to all directories"
     echo "  Ctrl+F    Switch to all files"
     echo "  Ctrl+B    GitHub repo search"
+    echo "  Ctrl+K    Switch Kubernetes context for this pane"
     echo "  Ctrl+C    Cancel"
     echo "  Tab       Multi-select"
 }
@@ -131,6 +132,7 @@ fi
 
 # Marker file for returning to main picker
 RETURN_MARKER="/tmp/file_opener_return_$$"
+KCTX_MARKER="/tmp/file_opener_kctx_$$"
 
 # Define keybindings for switching sources (only the useful filters)
 # Ctrl+X returns to main view (all sources: sessions + zoxide + files)
@@ -155,8 +157,9 @@ EDIT_BIND="ctrl-e:execute(name={}; name=\${name% ◀◀◀}; [[ -f ~/.config/tmu
 # Music picker (Ctrl+U) - run music picker, closes popup on exit (can't use Ctrl+M, it's Enter)
 MUSIC_BIND="ctrl-u:execute(~/dev/dotfiles/scripts/__play_track.sh --run)+abort"
 
-# Kill selected session (Ctrl+K) - switches away if current, then kills
-KILL_SESSION_BIND="ctrl-k:execute(name={}; name=\${name% ◀◀◀}; cur=\$(tmux display-message -p '#S'); [[ \"\$name\" == \"\$cur\" ]] && { tmux switch-client -l 2>/dev/null || tmux switch-client -n 2>/dev/null; }; tmux kill-session -t \"\$name\" 2>/dev/null)+abort"
+# Kubernetes context picker (Ctrl+K) - replaces this fzf view with the pane picker.
+KCTX_BIND="ctrl-k:execute-silent(touch $KCTX_MARKER)+abort"
+
 
 COPY_BIND="ctrl-y:execute-silent(~/dev/dotfiles/scripts/__copy_path_with_notification.sh {})+execute-silent(touch /tmp/file_opener_copied)+abort"
 
@@ -211,7 +214,7 @@ while true; do
                 echo "Preview not available"
             fi' \
         --preview-window 'right:50%:wrap' \
-        --header ' C-f:30d C-x:home C-b:github C-g:PRs C-l:Linear C-s:search-panes C-e:edit C-u:music C-k:kill | C-y:copy Tab:paste' \
+        --header ' C-f:30d C-x:home C-b:github C-g:PRs C-l:Linear C-s:search-panes C-e:edit C-u:music C-k:kctx | C-y:copy Tab:paste' \
         --prompt 'all> ' \
         --bind "$HOME_BIND" \
         --bind "$FILE_BIND" \
@@ -220,7 +223,7 @@ while true; do
         --bind "$LINEAR_BIND" \
         --bind "$EDIT_BIND" \
         --bind "$MUSIC_BIND" \
-        --bind "$KILL_SESSION_BIND" \
+        --bind "$KCTX_BIND" \
         --bind "$COPY_BIND" \
         --bind "$PASTE_BIND" \
         --bind "$SEARCH_BIND" \
@@ -229,6 +232,13 @@ while true; do
 
     # Exit completely if copy was performed
     [[ -f /tmp/file_opener_copied ]] && { rm -f /tmp/file_opener_copied; exit 0; }
+
+    # Replace the main picker with kctx in the same tmux popup.
+    if [[ -f "$KCTX_MARKER" ]]; then
+        rm -f "$KCTX_MARKER"
+        ~/dev/dotfiles/scripts/__kctx_popup.sh
+        exit $?
+    fi
 
     # Copy + paste at cursor: set tmux buffer, schedule paste after popup closes
     if [[ -f /tmp/file_opener_paste ]]; then
