@@ -2,6 +2,12 @@
 
 autoload -U is-at-least
 
+_kctx_tmux_panes() {
+    local -a panes
+    panes=("${(@f)$(tmux list-panes -a -F '#{pane_id}:#{session_name}:#{window_index}.#{pane_index} #{pane_current_command}' 2>/dev/null)}")
+    _describe -t panes 'tmux panes' panes
+}
+
 _kctx() {
     typeset -A opt_args
     typeset -a _arguments_options
@@ -38,7 +44,7 @@ _arguments "${_arguments_options[@]}" : \
 ;;
 (use)
 _arguments "${_arguments_options[@]}" : \
-'--pane=[Target tmux pane; defaults to TMUX_PANE]:PANE_ID:_default' \
+'--pane=[Target tmux pane; defaults to TMUX_PANE]:PANE_ID:_kctx_tmux_panes' \
 '--no-index[Bypass the catalog TTL and perform live source discovery]' \
 '(--no-index)--release[Release this pane; follow direnv or leave KUBECONFIG unset]' \
 '-h[Print help]' \
@@ -124,7 +130,7 @@ esac
 (current)
 _arguments "${_arguments_options[@]}" : \
 '--output=[Select the human summary or one stable field]:OUTPUT:(summary id label namespace json)' \
-'--pane=[Inspect a specific tmux pane; defaults to TMUX_PANE when set]:PANE_ID:_default' \
+'--pane=[Inspect a specific tmux pane; defaults to TMUX_PANE when set]:PANE_ID:_kctx_tmux_panes' \
 '-h[Print help]' \
 '--help[Print help]' \
 && ret=0
@@ -132,7 +138,7 @@ _arguments "${_arguments_options[@]}" : \
 (explain)
 _arguments "${_arguments_options[@]}" : \
 '--output=[Select text or versioned JSON output]:OUTPUT:(text json)' \
-'--pane=[Inspect a specific tmux pane; defaults to TMUX_PANE when set]:PANE_ID:_default' \
+'--pane=[Pick a pane, or inspect a specific pane id]::PANE_ID:_kctx_tmux_panes' \
 '-h[Print help]' \
 '--help[Print help]' \
 && ret=0
