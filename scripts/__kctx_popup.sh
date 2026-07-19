@@ -4,7 +4,7 @@ set -eo pipefail
 KCTX_BIN="${KCTX_BIN:-$HOME/.local/bin/kctx}"
 target_pane="$(tmux display-message -p '#{pane_id}')"
 
-if "$KCTX_BIN" pick "$target_pane"; then
+if "$KCTX_BIN" use --pane "$target_pane"; then
     picker_status=0
 else
     picker_status=$?

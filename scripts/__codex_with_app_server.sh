@@ -16,7 +16,7 @@ bind_pane_kubeconfig() {
 
     local base_kubeconfig="${KUBECONFIG:-$HOME/.kube/config}"
     local pane_kubeconfig
-    if ! pane_kubeconfig="$($kctx_bin pane env "$TMUX_PANE" --base "$base_kubeconfig")"; then
+    if ! pane_kubeconfig="$($kctx_bin runtime init "$TMUX_PANE" --base "$base_kubeconfig")"; then
         echo "Codex cannot initialize pane Kubernetes state for $TMUX_PANE" >&2
         exit 1
     fi
