@@ -1,0 +1,751 @@
+#compdef kctx
+
+autoload -U is-at-least
+
+_kctx() {
+    typeset -A opt_args
+    typeset -a _arguments_options
+    local ret=1
+
+    if is-at-least 5.2; then
+        _arguments_options=(-s -S -C)
+    else
+        _arguments_options=(-s -C)
+    fi
+
+    local context curcontext="$curcontext" state line
+    _arguments "${_arguments_options[@]}" : \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+":: :_kctx_commands" \
+"*::: :->kctx" \
+&& ret=0
+    case $state in
+    (kctx)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:kctx-command-$line[1]:"
+        case $line[1] in
+            (connections)
+_arguments "${_arguments_options[@]}" : \
+'--output=[Select human-readable table or stable one-id-per-line output]:OUTPUT:(table ids json)' \
+'--no-index[Bypass the catalog TTL and perform live source discovery]' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(use)
+_arguments "${_arguments_options[@]}" : \
+'--pane=[Target tmux pane; defaults to TMUX_PANE]:PANE_ID:_default' \
+'--no-index[Bypass the catalog TTL and perform live source discovery]' \
+'(--no-index)--release[Release this pane; follow direnv or leave KUBECONFIG unset]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'::connection -- Connection id or unambiguous display name; omit it for the picker:_default' \
+&& ret=0
+;;
+(health)
+_arguments "${_arguments_options[@]}" : \
+'--jobs=[Maximum parallel probes for --refresh]:N:_default' \
+'--output=[Select human-readable or versioned structured output]:OUTPUT:(text json)' \
+'--refresh[Probe every catalog context with bounded parallelism before listing status]' \
+'--no-index[Bypass the catalog TTL before resolving a named context]' \
+'--strict[Exit unsuccessfully when any catalog connection is not healthy]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'::context_name -- Context to probe; omit it for the overall health summary:_default' \
+&& ret=0
+;;
+(sources)
+_arguments "${_arguments_options[@]}" : \
+'--output=[Select human-readable or versioned structured output]:OUTPUT:(table json)' \
+'-h[Print help]' \
+'--help[Print help]' \
+":: :_kctx__subcmd__sources_commands" \
+"*::: :->sources" \
+&& ret=0
+
+    case $state in
+    (sources)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:kctx-sources-command-$line[1]:"
+        case $line[1] in
+            (show)
+_arguments "${_arguments_options[@]}" : \
+'--output=[Select human-readable or versioned structured output]:OUTPUT:(table json)' \
+'-h[Print help]' \
+'--help[Print help]' \
+':source -- Source id, for example `gke/loft-prod`:_default' \
+&& ret=0
+;;
+(refresh)
+_arguments "${_arguments_options[@]}" : \
+'--output=[Select human-readable or versioned structured output]:OUTPUT:(table json)' \
+'--background[Exit successfully when another refresh already holds the catalog lock]' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+":: :_kctx__subcmd__sources__subcmd__help_commands" \
+"*::: :->help" \
+&& ret=0
+
+    case $state in
+    (help)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:kctx-sources-help-command-$line[1]:"
+        case $line[1] in
+            (show)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(refresh)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+        esac
+    ;;
+esac
+;;
+(current)
+_arguments "${_arguments_options[@]}" : \
+'--output=[Select the human summary or one stable field]:OUTPUT:(summary id label namespace json)' \
+'--pane=[Inspect a specific tmux pane; defaults to TMUX_PANE when set]:PANE_ID:_default' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(explain)
+_arguments "${_arguments_options[@]}" : \
+'--output=[Select text or versioned JSON output]:OUTPUT:(text json)' \
+'--pane=[Inspect a specific tmux pane; defaults to TMUX_PANE when set]:PANE_ID:_default' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(run)
+_arguments "${_arguments_options[@]}" : \
+'-n+[Namespace in which to run the command]:NAMESPACE:_default' \
+'--namespace=[Namespace in which to run the command]:NAMESPACE:_default' \
+'--no-index[Bypass the catalog TTL and perform live source discovery]' \
+'-h[Print help]' \
+'--help[Print help]' \
+':connection -- Connection id or unambiguous display name:_default' \
+'*::args -- Command and arguments. Place `--` before command flags:_default' \
+&& ret=0
+;;
+(shell)
+_arguments "${_arguments_options[@]}" : \
+'-n+[Namespace in which to open the shell]:NAMESPACE:_default' \
+'--namespace=[Namespace in which to open the shell]:NAMESPACE:_default' \
+'--no-index[Bypass the catalog TTL and perform live source discovery]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'::connection -- Connection id or unambiguous display name; omit it for the picker:_default' \
+&& ret=0
+;;
+(credential)
+_arguments "${_arguments_options[@]}" : \
+'-h[Print help]' \
+'--help[Print help]' \
+":: :_kctx__subcmd__credential_commands" \
+"*::: :->credential" \
+&& ret=0
+
+    case $state in
+    (credential)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:kctx-credential-command-$line[1]:"
+        case $line[1] in
+            (vcluster-token)
+_arguments "${_arguments_options[@]}" : \
+'-h[Print help]' \
+'--help[Print help]' \
+':host -- Configured vCluster Platform host:_default' \
+':project -- Platform project containing the virtual cluster:_default' \
+':virtual_cluster -- Virtual cluster name:_default' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+":: :_kctx__subcmd__credential__subcmd__help_commands" \
+"*::: :->help" \
+&& ret=0
+
+    case $state in
+    (help)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:kctx-credential-help-command-$line[1]:"
+        case $line[1] in
+            (vcluster-token)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+        esac
+    ;;
+esac
+;;
+(edit-config)
+_arguments "${_arguments_options[@]}" : \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(completion)
+_arguments "${_arguments_options[@]}" : \
+'-h[Print help]' \
+'--help[Print help]' \
+'::shell -- The shell to generate the completion script for. Determined automatically if omitted:(bash elvish fish powershell zsh)' \
+&& ret=0
+;;
+(runtime)
+_arguments "${_arguments_options[@]}" : \
+'-h[Print help]' \
+'--help[Print help]' \
+":: :_kctx__subcmd__runtime_commands" \
+"*::: :->runtime" \
+&& ret=0
+
+    case $state in
+    (runtime)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:kctx-runtime-command-$line[1]:"
+        case $line[1] in
+            (init)
+_arguments "${_arguments_options[@]}" : \
+'--base=[Kubeconfig file or path list used to seed the pane view]:KUBECONFIG:_default' \
+'-h[Print help]' \
+'--help[Print help]' \
+'::pane_id -- Target tmux pane id; defaults to TMUX_PANE:_default' \
+&& ret=0
+;;
+(override)
+_arguments "${_arguments_options[@]}" : \
+'-h[Print help]' \
+'--help[Print help]' \
+'::pane_id -- Target tmux pane id; defaults to TMUX_PANE:_default' \
+&& ret=0
+;;
+(gc)
+_arguments "${_arguments_options[@]}" : \
+'--max-age-seconds=[Minimum age in seconds before a dead pane can be collected]:MAX_AGE_SECONDS:_default' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+":: :_kctx__subcmd__runtime__subcmd__help_commands" \
+"*::: :->help" \
+&& ret=0
+
+    case $state in
+    (help)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:kctx-runtime-help-command-$line[1]:"
+        case $line[1] in
+            (init)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(override)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(gc)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+        esac
+    ;;
+esac
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+":: :_kctx__subcmd__help_commands" \
+"*::: :->help" \
+&& ret=0
+
+    case $state in
+    (help)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:kctx-help-command-$line[1]:"
+        case $line[1] in
+            (connections)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(use)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(health)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(sources)
+_arguments "${_arguments_options[@]}" : \
+":: :_kctx__subcmd__help__subcmd__sources_commands" \
+"*::: :->sources" \
+&& ret=0
+
+    case $state in
+    (sources)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:kctx-help-sources-command-$line[1]:"
+        case $line[1] in
+            (show)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(refresh)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(current)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(explain)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(run)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(shell)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(credential)
+_arguments "${_arguments_options[@]}" : \
+":: :_kctx__subcmd__help__subcmd__credential_commands" \
+"*::: :->credential" \
+&& ret=0
+
+    case $state in
+    (credential)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:kctx-help-credential-command-$line[1]:"
+        case $line[1] in
+            (vcluster-token)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(edit-config)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(completion)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(runtime)
+_arguments "${_arguments_options[@]}" : \
+":: :_kctx__subcmd__help__subcmd__runtime_commands" \
+"*::: :->runtime" \
+&& ret=0
+
+    case $state in
+    (runtime)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:kctx-help-runtime-command-$line[1]:"
+        case $line[1] in
+            (init)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(override)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(gc)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+        esac
+    ;;
+esac
+}
+
+(( $+functions[_kctx_commands] )) ||
+_kctx_commands() {
+    local commands; commands=(
+'connections:List connections and cached health' \
+'use:Select or release a pane connection' \
+'health:Inspect or probe connection health' \
+'sources:Inspect and refresh connection sources' \
+'current:Show the current connection and namespace' \
+'explain:Explain the current connection' \
+'run:Run a command using a connection' \
+'shell:Open an isolated connection shell' \
+'credential:Internal renewable credential helpers used by generated kubeconfigs' \
+'edit-config:Edit the kctx config' \
+'completion:Generate shell completions' \
+'runtime:Internal tmux lifecycle operations used by shell automation' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'kctx commands' commands "$@"
+}
+(( $+functions[_kctx__subcmd__completion_commands] )) ||
+_kctx__subcmd__completion_commands() {
+    local commands; commands=()
+    _describe -t commands 'kctx completion commands' commands "$@"
+}
+(( $+functions[_kctx__subcmd__connections_commands] )) ||
+_kctx__subcmd__connections_commands() {
+    local commands; commands=()
+    _describe -t commands 'kctx connections commands' commands "$@"
+}
+(( $+functions[_kctx__subcmd__credential_commands] )) ||
+_kctx__subcmd__credential_commands() {
+    local commands; commands=(
+'vcluster-token:Retrieve a vCluster Platform ExecCredential through its configured source' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'kctx credential commands' commands "$@"
+}
+(( $+functions[_kctx__subcmd__credential__subcmd__help_commands] )) ||
+_kctx__subcmd__credential__subcmd__help_commands() {
+    local commands; commands=(
+'vcluster-token:Retrieve a vCluster Platform ExecCredential through its configured source' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'kctx credential help commands' commands "$@"
+}
+(( $+functions[_kctx__subcmd__credential__subcmd__help__subcmd__help_commands] )) ||
+_kctx__subcmd__credential__subcmd__help__subcmd__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'kctx credential help help commands' commands "$@"
+}
+(( $+functions[_kctx__subcmd__credential__subcmd__help__subcmd__vcluster-token_commands] )) ||
+_kctx__subcmd__credential__subcmd__help__subcmd__vcluster-token_commands() {
+    local commands; commands=()
+    _describe -t commands 'kctx credential help vcluster-token commands' commands "$@"
+}
+(( $+functions[_kctx__subcmd__credential__subcmd__vcluster-token_commands] )) ||
+_kctx__subcmd__credential__subcmd__vcluster-token_commands() {
+    local commands; commands=()
+    _describe -t commands 'kctx credential vcluster-token commands' commands "$@"
+}
+(( $+functions[_kctx__subcmd__current_commands] )) ||
+_kctx__subcmd__current_commands() {
+    local commands; commands=()
+    _describe -t commands 'kctx current commands' commands "$@"
+}
+(( $+functions[_kctx__subcmd__edit-config_commands] )) ||
+_kctx__subcmd__edit-config_commands() {
+    local commands; commands=()
+    _describe -t commands 'kctx edit-config commands' commands "$@"
+}
+(( $+functions[_kctx__subcmd__explain_commands] )) ||
+_kctx__subcmd__explain_commands() {
+    local commands; commands=()
+    _describe -t commands 'kctx explain commands' commands "$@"
+}
+(( $+functions[_kctx__subcmd__health_commands] )) ||
+_kctx__subcmd__health_commands() {
+    local commands; commands=()
+    _describe -t commands 'kctx health commands' commands "$@"
+}
+(( $+functions[_kctx__subcmd__help_commands] )) ||
+_kctx__subcmd__help_commands() {
+    local commands; commands=(
+'connections:List connections and cached health' \
+'use:Select or release a pane connection' \
+'health:Inspect or probe connection health' \
+'sources:Inspect and refresh connection sources' \
+'current:Show the current connection and namespace' \
+'explain:Explain the current connection' \
+'run:Run a command using a connection' \
+'shell:Open an isolated connection shell' \
+'credential:Internal renewable credential helpers used by generated kubeconfigs' \
+'edit-config:Edit the kctx config' \
+'completion:Generate shell completions' \
+'runtime:Internal tmux lifecycle operations used by shell automation' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'kctx help commands' commands "$@"
+}
+(( $+functions[_kctx__subcmd__help__subcmd__completion_commands] )) ||
+_kctx__subcmd__help__subcmd__completion_commands() {
+    local commands; commands=()
+    _describe -t commands 'kctx help completion commands' commands "$@"
+}
+(( $+functions[_kctx__subcmd__help__subcmd__connections_commands] )) ||
+_kctx__subcmd__help__subcmd__connections_commands() {
+    local commands; commands=()
+    _describe -t commands 'kctx help connections commands' commands "$@"
+}
+(( $+functions[_kctx__subcmd__help__subcmd__credential_commands] )) ||
+_kctx__subcmd__help__subcmd__credential_commands() {
+    local commands; commands=(
+'vcluster-token:Retrieve a vCluster Platform ExecCredential through its configured source' \
+    )
+    _describe -t commands 'kctx help credential commands' commands "$@"
+}
+(( $+functions[_kctx__subcmd__help__subcmd__credential__subcmd__vcluster-token_commands] )) ||
+_kctx__subcmd__help__subcmd__credential__subcmd__vcluster-token_commands() {
+    local commands; commands=()
+    _describe -t commands 'kctx help credential vcluster-token commands' commands "$@"
+}
+(( $+functions[_kctx__subcmd__help__subcmd__current_commands] )) ||
+_kctx__subcmd__help__subcmd__current_commands() {
+    local commands; commands=()
+    _describe -t commands 'kctx help current commands' commands "$@"
+}
+(( $+functions[_kctx__subcmd__help__subcmd__edit-config_commands] )) ||
+_kctx__subcmd__help__subcmd__edit-config_commands() {
+    local commands; commands=()
+    _describe -t commands 'kctx help edit-config commands' commands "$@"
+}
+(( $+functions[_kctx__subcmd__help__subcmd__explain_commands] )) ||
+_kctx__subcmd__help__subcmd__explain_commands() {
+    local commands; commands=()
+    _describe -t commands 'kctx help explain commands' commands "$@"
+}
+(( $+functions[_kctx__subcmd__help__subcmd__health_commands] )) ||
+_kctx__subcmd__help__subcmd__health_commands() {
+    local commands; commands=()
+    _describe -t commands 'kctx help health commands' commands "$@"
+}
+(( $+functions[_kctx__subcmd__help__subcmd__help_commands] )) ||
+_kctx__subcmd__help__subcmd__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'kctx help help commands' commands "$@"
+}
+(( $+functions[_kctx__subcmd__help__subcmd__run_commands] )) ||
+_kctx__subcmd__help__subcmd__run_commands() {
+    local commands; commands=()
+    _describe -t commands 'kctx help run commands' commands "$@"
+}
+(( $+functions[_kctx__subcmd__help__subcmd__runtime_commands] )) ||
+_kctx__subcmd__help__subcmd__runtime_commands() {
+    local commands; commands=(
+'init:Initialize a pane pair and print its KUBECONFIG value' \
+'override:Print the pane pair only when an explicit context override is active' \
+'gc:Remove stale state for dead tmux panes' \
+    )
+    _describe -t commands 'kctx help runtime commands' commands "$@"
+}
+(( $+functions[_kctx__subcmd__help__subcmd__runtime__subcmd__gc_commands] )) ||
+_kctx__subcmd__help__subcmd__runtime__subcmd__gc_commands() {
+    local commands; commands=()
+    _describe -t commands 'kctx help runtime gc commands' commands "$@"
+}
+(( $+functions[_kctx__subcmd__help__subcmd__runtime__subcmd__init_commands] )) ||
+_kctx__subcmd__help__subcmd__runtime__subcmd__init_commands() {
+    local commands; commands=()
+    _describe -t commands 'kctx help runtime init commands' commands "$@"
+}
+(( $+functions[_kctx__subcmd__help__subcmd__runtime__subcmd__override_commands] )) ||
+_kctx__subcmd__help__subcmd__runtime__subcmd__override_commands() {
+    local commands; commands=()
+    _describe -t commands 'kctx help runtime override commands' commands "$@"
+}
+(( $+functions[_kctx__subcmd__help__subcmd__shell_commands] )) ||
+_kctx__subcmd__help__subcmd__shell_commands() {
+    local commands; commands=()
+    _describe -t commands 'kctx help shell commands' commands "$@"
+}
+(( $+functions[_kctx__subcmd__help__subcmd__sources_commands] )) ||
+_kctx__subcmd__help__subcmd__sources_commands() {
+    local commands; commands=(
+'show:Show one source without exposing credential material' \
+'refresh:Refresh dynamic discovery and every live pane view now' \
+    )
+    _describe -t commands 'kctx help sources commands' commands "$@"
+}
+(( $+functions[_kctx__subcmd__help__subcmd__sources__subcmd__refresh_commands] )) ||
+_kctx__subcmd__help__subcmd__sources__subcmd__refresh_commands() {
+    local commands; commands=()
+    _describe -t commands 'kctx help sources refresh commands' commands "$@"
+}
+(( $+functions[_kctx__subcmd__help__subcmd__sources__subcmd__show_commands] )) ||
+_kctx__subcmd__help__subcmd__sources__subcmd__show_commands() {
+    local commands; commands=()
+    _describe -t commands 'kctx help sources show commands' commands "$@"
+}
+(( $+functions[_kctx__subcmd__help__subcmd__use_commands] )) ||
+_kctx__subcmd__help__subcmd__use_commands() {
+    local commands; commands=()
+    _describe -t commands 'kctx help use commands' commands "$@"
+}
+(( $+functions[_kctx__subcmd__run_commands] )) ||
+_kctx__subcmd__run_commands() {
+    local commands; commands=()
+    _describe -t commands 'kctx run commands' commands "$@"
+}
+(( $+functions[_kctx__subcmd__runtime_commands] )) ||
+_kctx__subcmd__runtime_commands() {
+    local commands; commands=(
+'init:Initialize a pane pair and print its KUBECONFIG value' \
+'override:Print the pane pair only when an explicit context override is active' \
+'gc:Remove stale state for dead tmux panes' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'kctx runtime commands' commands "$@"
+}
+(( $+functions[_kctx__subcmd__runtime__subcmd__gc_commands] )) ||
+_kctx__subcmd__runtime__subcmd__gc_commands() {
+    local commands; commands=()
+    _describe -t commands 'kctx runtime gc commands' commands "$@"
+}
+(( $+functions[_kctx__subcmd__runtime__subcmd__help_commands] )) ||
+_kctx__subcmd__runtime__subcmd__help_commands() {
+    local commands; commands=(
+'init:Initialize a pane pair and print its KUBECONFIG value' \
+'override:Print the pane pair only when an explicit context override is active' \
+'gc:Remove stale state for dead tmux panes' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'kctx runtime help commands' commands "$@"
+}
+(( $+functions[_kctx__subcmd__runtime__subcmd__help__subcmd__gc_commands] )) ||
+_kctx__subcmd__runtime__subcmd__help__subcmd__gc_commands() {
+    local commands; commands=()
+    _describe -t commands 'kctx runtime help gc commands' commands "$@"
+}
+(( $+functions[_kctx__subcmd__runtime__subcmd__help__subcmd__help_commands] )) ||
+_kctx__subcmd__runtime__subcmd__help__subcmd__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'kctx runtime help help commands' commands "$@"
+}
+(( $+functions[_kctx__subcmd__runtime__subcmd__help__subcmd__init_commands] )) ||
+_kctx__subcmd__runtime__subcmd__help__subcmd__init_commands() {
+    local commands; commands=()
+    _describe -t commands 'kctx runtime help init commands' commands "$@"
+}
+(( $+functions[_kctx__subcmd__runtime__subcmd__help__subcmd__override_commands] )) ||
+_kctx__subcmd__runtime__subcmd__help__subcmd__override_commands() {
+    local commands; commands=()
+    _describe -t commands 'kctx runtime help override commands' commands "$@"
+}
+(( $+functions[_kctx__subcmd__runtime__subcmd__init_commands] )) ||
+_kctx__subcmd__runtime__subcmd__init_commands() {
+    local commands; commands=()
+    _describe -t commands 'kctx runtime init commands' commands "$@"
+}
+(( $+functions[_kctx__subcmd__runtime__subcmd__override_commands] )) ||
+_kctx__subcmd__runtime__subcmd__override_commands() {
+    local commands; commands=()
+    _describe -t commands 'kctx runtime override commands' commands "$@"
+}
+(( $+functions[_kctx__subcmd__shell_commands] )) ||
+_kctx__subcmd__shell_commands() {
+    local commands; commands=()
+    _describe -t commands 'kctx shell commands' commands "$@"
+}
+(( $+functions[_kctx__subcmd__sources_commands] )) ||
+_kctx__subcmd__sources_commands() {
+    local commands; commands=(
+'show:Show one source without exposing credential material' \
+'refresh:Refresh dynamic discovery and every live pane view now' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'kctx sources commands' commands "$@"
+}
+(( $+functions[_kctx__subcmd__sources__subcmd__help_commands] )) ||
+_kctx__subcmd__sources__subcmd__help_commands() {
+    local commands; commands=(
+'show:Show one source without exposing credential material' \
+'refresh:Refresh dynamic discovery and every live pane view now' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'kctx sources help commands' commands "$@"
+}
+(( $+functions[_kctx__subcmd__sources__subcmd__help__subcmd__help_commands] )) ||
+_kctx__subcmd__sources__subcmd__help__subcmd__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'kctx sources help help commands' commands "$@"
+}
+(( $+functions[_kctx__subcmd__sources__subcmd__help__subcmd__refresh_commands] )) ||
+_kctx__subcmd__sources__subcmd__help__subcmd__refresh_commands() {
+    local commands; commands=()
+    _describe -t commands 'kctx sources help refresh commands' commands "$@"
+}
+(( $+functions[_kctx__subcmd__sources__subcmd__help__subcmd__show_commands] )) ||
+_kctx__subcmd__sources__subcmd__help__subcmd__show_commands() {
+    local commands; commands=()
+    _describe -t commands 'kctx sources help show commands' commands "$@"
+}
+(( $+functions[_kctx__subcmd__sources__subcmd__refresh_commands] )) ||
+_kctx__subcmd__sources__subcmd__refresh_commands() {
+    local commands; commands=()
+    _describe -t commands 'kctx sources refresh commands' commands "$@"
+}
+(( $+functions[_kctx__subcmd__sources__subcmd__show_commands] )) ||
+_kctx__subcmd__sources__subcmd__show_commands() {
+    local commands; commands=()
+    _describe -t commands 'kctx sources show commands' commands "$@"
+}
+(( $+functions[_kctx__subcmd__use_commands] )) ||
+_kctx__subcmd__use_commands() {
+    local commands; commands=()
+    _describe -t commands 'kctx use commands' commands "$@"
+}
+
+if [ "$funcstack[1]" = "_kctx" ]; then
+    _kctx "$@"
+else
+    compdef _kctx kctx
+fi
