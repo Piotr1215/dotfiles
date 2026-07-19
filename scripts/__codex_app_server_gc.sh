@@ -24,7 +24,7 @@ else
 fi
 
 if [[ $dry_run -eq 0 && -x "$kctx_bin" ]]; then
-    "$kctx_bin" gc --max-age-seconds 0 >/dev/null
+    "$kctx_bin" runtime gc --max-age-seconds 0 >/dev/null
 fi
 
 [[ -d "$control_root" ]] || exit 0

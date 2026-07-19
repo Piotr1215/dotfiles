@@ -463,14 +463,14 @@ precmd() { print -Pn "\e]133;A\e\\" }
 
 eval "$(direnv hook zsh)"
 
-# Let direnv drive Kubernetes by default. An explicit `kctx pick` latches a
+# Let direnv drive Kubernetes by default. An explicit `kctx use` latches a
 # pane-local override; release it from the picker to return control to direnv.
 autoload -Uz add-zsh-hook
 __kctx_apply_pane_override() {
     [[ -n "$TMUX" ]] || return 0
 
     local pane_kubeconfig
-    if pane_kubeconfig="$(command kctx pane override-env 2>/dev/null)"; then
+    if pane_kubeconfig="$(command kctx runtime override 2>/dev/null)"; then
         export KUBECONFIG="$pane_kubeconfig"
     fi
 }
