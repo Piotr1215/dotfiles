@@ -570,26 +570,27 @@ function fifp() {
     nvim "${files[@]}"
 }
 
-# Uploads content to clbin and copies URL to clipboard, opens in browser
+# Uploads the clipboard image to catbox.moe and copies the URL to clipboard, opens in browser
 function share ()
 {
     local image_path="/tmp/screenshot.png"
 
-    # Save the clipboard content to a file
-    # Adjust this command based on your system and the clipboard content
-    xclip -selection clipboard -t image/png -o > "$image_path"
-
-    # Upload the image file and parse the JSON response to get the link
-    local response=$(curl -sF "file=@$image_path" https://file.io)
-    local url=$(echo $response | jq -r '.link')
-
-    # Check if the URL is valid
-    if [[ $url != "https://file.io/"* ]]; then
-        echo "Error: Invalid URL received"
+    # Save the clipboard image (PNG) to a file; bail if there is no image on the clipboard
+    if ! xclip -selection clipboard -t image/png -o > "$image_path" 2>/dev/null || [[ ! -s "$image_path" ]]; then
+        echo "Error: no image on the clipboard (capture a region first)" >&2
         return 1
     fi
 
-    # Handle the URL (copy to clipboard, open in browser, etc.)
+    # Upload to catbox.moe (anonymous, no account, no API key). --max-time so a
+    # slow/unreachable host can never hang the shell the way the old flow did.
+    local url=$(curl -s --max-time 30 -F "reqtype=fileupload" -F "fileToUpload=@$image_path" https://catbox.moe/user/api.php)
+
+    if [[ $url != "https://files.catbox.moe/"* ]]; then
+        echo "Error: upload failed: ${url:-no response from catbox}" >&2
+        return 1
+    fi
+
+    # Copy URL to clipboard and open in browser
     echo $url | tee >(xsel -ib)
     nohup xdg-open $url >/dev/null 2>&1 &
 }
