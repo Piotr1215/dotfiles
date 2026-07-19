@@ -131,7 +131,6 @@ export FZF_BASE=/usr/bin/fzf
 export FZF_DEFAULT_COMMAND='fd --hidden --exclude .git'
 export FZF_CTRL_T_COMMAND='fd --hidden'
 export FZF_ALT_C_COMMAND='fd --hidden'
-export KUBECONFIG=${KUBECONFIG:-~/.kube/config}
 export GOBIN=$HOME/go/bin
 
 # PATH additions (each path added once)
@@ -464,16 +463,9 @@ precmd() { print -Pn "\e]133;A\e\\" }
 eval "$(direnv hook zsh)"
 
 # Let direnv drive Kubernetes by default. An explicit `kctx use` latches a
-# pane-local override; release it from the picker to return control to direnv.
+# pane-local override; release it to restore direnv or unset KUBECONFIG.
 autoload -Uz add-zsh-hook
-__kctx_apply_pane_override() {
-    [[ -n "$TMUX" ]] || return 0
-
-    local pane_kubeconfig
-    if pane_kubeconfig="$(command kctx runtime override 2>/dev/null)"; then
-        export KUBECONFIG="$pane_kubeconfig"
-    fi
-}
+source "$HOME/dev/dotfiles/scripts/__kctx_zsh_hook.zsh"
 add-zsh-hook -d precmd __kctx_apply_pane_override 2>/dev/null
 add-zsh-hook -d preexec __kctx_apply_pane_override 2>/dev/null
 add-zsh-hook precmd __kctx_apply_pane_override
