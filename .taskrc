@@ -208,7 +208,8 @@ uda.taskwarrior-tui.task-report.next.filter=status:pending
 uda.taskwarrior-tui.shortcuts.1=~/.config/taskwarrior-tui/shortcut-scripts/taskopen-annotation.sh
 uda.taskwarrior-tui.shortcuts.2=~/dev/dotfiles/scripts/__cycle_tui_reports.sh
 uda.taskwarrior-tui.shortcuts.3=~/dev/dotfiles/scripts/__github_issue_sync.sh
-uda.taskwarrior-tui.shortcuts.4=/home/decoder/dev/dotfiles/scripts/__create_linear_issue_docs.sh
+# Shortcut 4: Spawn a Claude worker with a zenity-collected directive that trumps the brief
+uda.taskwarrior-tui.shortcuts.4=/home/decoder/.claude/scripts/__spawn_claude_directive.sh
 # Shortcut 5: Toggle +claude tag
 uda.taskwarrior-tui.shortcuts.5=~/.config/taskwarrior-tui/shortcut-scripts/__toggle_claude_label.sh
 # Shortcut 6: Create new note and annotate task
