@@ -1,0 +1,14 @@
+[Unit]
+Description=Email a kctx connection refresh failure
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=6h
+StartLimitBurst=1
+
+[Service]
+Type=oneshot
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=%h/dev/dotfiles/scripts/__kctx_health_notify.sh
+Nice=10
+StandardOutput=journal
+StandardError=journal
