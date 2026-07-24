@@ -171,3 +171,8 @@ alias ccdash="~/.claude/scripts/__claude_dashboard_ctl.sh"
 
 # claude code status: live cockpit board (Gordon's hand-authored read), viddy 30s refresh + diff-highlight
 alias ccstatus="~/.claude/scripts/__cockpit_board.sh"
+
+# desktop notification history (durable log kept by notification-logger.service)
+# noti = recent, notif = follow live. GNOME popups vanish on click; this is the copyable record.
+alias noti='tail -n 40 ~/.local/state/notifications.log'
+alias notif='tail -f ~/.local/state/notifications.log'
