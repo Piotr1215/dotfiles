@@ -38,6 +38,18 @@ SERVICES = {
         "name": "Netlify",
         "favicon": "https://www.netlify.com/favicon.ico"
     },
+    "Cloudflare": {
+        # Cloudflare's top-level status.indicator reads "minor" almost
+        # chronically from per-PoP component chatter (edge datacenters in
+        # partial_outage/under_maintenance) even when the board shows "All
+        # Systems Operational". Key off posted (unresolved) incidents instead,
+        # so we only flag a real, board-level Cloudflare incident. Click-through
+        # opens the new status page UI.
+        "api": "https://www.cloudflarestatus.com/api/v2/incidents/unresolved.json",
+        "status_page": "https://new.cloudflarestatus.com/",
+        "name": "Cloudflare",
+        "favicon": "https://www.cloudflare.com/favicon.ico"
+    },
     "GitHub": {
         "api": "https://www.githubstatus.com/api/v2/status.json",
         "status_page": "https://www.githubstatus.com/",
@@ -80,6 +92,7 @@ SERVICE_EMOJIS = {
     "GCP": "🔵",      # Blue circle for Google
     "Azure": "🔷",    # Blue diamond for Azure
     "Netlify": "🚀",  # Rocket for Netlify deployments
+    "Cloudflare": "🌐", # Globe for Cloudflare (avoid orange/yellow: reads as a status light)
     "GitHub": "🐙",   # Octopus (Octocat) for GitHub
     "Linear": "📋",   # Clipboard for Linear issues
     "Claude": "🤖",   # Robot for AI
@@ -236,6 +249,31 @@ def get_netlify_status():
         pass
     return "unknown"
 
+def get_cloudflare_status():
+    """Cloudflare status from posted (unresolved) incidents, NOT the top-level
+    indicator. Cloudflare's overall indicator sits at "minor" almost chronically
+    from per-PoP component partial-outages/maintenance even when the board reads
+    "All Systems Operational", so keying off it cries wolf. We flag only on a
+    real incident on the board:
+      major/critical incident -> major   (red: it's down)
+      minor incident          -> degraded (yellow: click to see what's affected)
+      no incident             -> operational (green)
+    Maintenance is not an outage and is excluded (unresolved.json is incidents
+    only; any 'maintenance'/'none' impact also maps to operational)."""
+    try:
+        data = fetch_status(SERVICES["Cloudflare"]["api"])
+        if data is None:
+            return "unknown"
+        impacts = {inc.get('impact', 'none') for inc in data.get('incidents', [])}
+        if impacts & {'major', 'critical'}:
+            return "major"
+        if 'minor' in impacts:
+            return "degraded"
+        return "operational"
+    except Exception:
+        pass
+    return "unknown"
+
 def get_github_status():
     """Check GitHub status using statuspage.io API"""
     try:
@@ -291,6 +329,7 @@ def get_all_statuses():
         "GCP": get_gcp_status(),
         "Azure": get_azure_status(),
         "Netlify": get_netlify_status(),
+        "Cloudflare": get_cloudflare_status(),
         "GitHub": get_github_status(),
         "Linear": get_linear_status(),
         "Claude": get_claude_status(),
