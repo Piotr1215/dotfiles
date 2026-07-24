@@ -1,0 +1,16 @@
+[Unit]
+Description=Desktop notification logger (D-Bus eavesdrop -> ~/.local/state/notifications.log)
+Documentation=man:dbus-monitor(1)
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 %h/dev/dotfiles/scripts/__notification_logger.py
+Restart=always
+RestartSec=2
+Nice=10
+StandardOutput=null
+StandardError=journal
+
+[Install]
+WantedBy=default.target
