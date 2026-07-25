@@ -148,6 +148,9 @@ alias claude_clean='CLAUDE_KUBE_BASE=inherit __claude_with_monitor.sh'
 alias claude_pair='PAIR_PROGRAMMING=true __claude_with_monitor.sh'
 alias claude-kill='__kill_stuck_claude.sh'
 alias claude-check='__kill_stuck_claude.sh --dry-run'
+# TEMP (2026-07-24): resume the "pick-me-up-tmux" session after the tmux 3.7b
+# restart kills it. Delete once the upgrade is confirmed good.
+alias temp-klod='cd /home/decoder/dev && claude -r aaff54cd-fd68-4947-9697-0baf194fd446'
 
 # App Shortcuts Help
 alias apphelp='/home/decoder/dev/dotfiles/scripts/__config_bindings_help.sh'
