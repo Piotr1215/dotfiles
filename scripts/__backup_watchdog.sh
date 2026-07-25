@@ -25,7 +25,12 @@ alert() {
 	printf 'Subject: [backup] WATCHDOG: %s\nFrom: %s\nTo: %s\n\n%s\n' \
 		"$summary" "$NOTIFY_EMAIL" "$NOTIFY_EMAIL" "$summary" |
 		msmtp "$NOTIFY_EMAIL" 2>/dev/null || true
-	dunstify --urgency=critical --icon=dialog-warning \
+	# notify-send, NOT dunstify: GNOME Shell holds org.freedesktop.Notifications
+	# exclusively, so dunst cannot start here (it exits with "Name is acquired by
+	# 'gnome-shell'") and every dunstify call was a silent no-op behind `|| true`.
+	# This alert path had never once fired. notify-send reaches GNOME and is
+	# captured durably by notification-logger.service.
+	notify-send --urgency=critical --icon=dialog-warning \
 		"Backup watchdog on $host" "$summary" 2>/dev/null || true
 }
 
