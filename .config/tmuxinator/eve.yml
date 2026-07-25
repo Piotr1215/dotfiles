@@ -5,13 +5,18 @@
 #    logs to /tmp; reaped via on_project_stop)
 #  - Window 1 `klod` : long-running Klod Claude session
 #  - Window 2 `log`  : foreground daemon log (chatlog tail + ESI pollers + router)
-#  - Window 3 `intel`: ad-hoc shells in the eve-info skill + eve scripts dir
+#  - Window 3 `intel`: ad-hoc shells in the eve-info skill (~/dev/eve/.claude/
+#    skills/eve-info) + eve scripts dir
 #
 # Start: tmuxinator start eve
 # Stop:  M-e (kill_tmux_session.sh routes through `tmuxinator stop eve`)
 
 name: eve
-root: ~/dev/
+# ~/dev/eve, not ~/dev: the EVE skills are project-scoped now, living in
+# ~/dev/eve/.claude/skills. Claude Code discovers project skills under
+# <cwd>/.claude/skills, so the klod pane must start inside the eve repo or
+# `/ops-klod` resolves to nothing and Klod boots without its persona.
+root: ~/dev/eve
 
 # Launch infra processes (widget + bridge) that aren't tied to any pane.
 # The widget self-places on workspace 2 via a GTK map-event handler (see
@@ -76,5 +81,5 @@ windows:
       # Ad-hoc shells for klod CLI, eve-info script runs, ring inspection.
       layout: even-horizontal
       panes:
-        - cd ~/.claude/skills/eve-info && $SHELL
+        - cd ~/dev/eve/.claude/skills/eve-info && $SHELL
         - cd ~/.claude/mcp-servers/code-execution/skills/eve && $SHELL
