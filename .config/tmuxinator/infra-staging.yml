@@ -3,13 +3,17 @@
 name: infra-staging
 root: <%= ENV['HOME'] %>/loft/clusters/infra-staging
 
-pre_window: export KUBECONFIG=<%= ENV['HOME'] %>/loft/clusters/infra-staging/config
+# KUBECONFIG is no longer forced here: kctx owns the connection and drives it
+# per-pane (M-x -> Ctrl-k picker), so a static export would fight pane isolation.
 
 windows:
   - main:
       layout: main-vertical
       panes:
         - main:
-          - if ! aws sts get-caller-identity &>/dev/null; then aws sso login; fi && aws eks update-kubeconfig --name vcluster-staging --region us-east-2 --kubeconfig ./config
+          # Ensure the SSO session is live (shared 'default' sso-session), then let
+          # kctx latch this pane to vcluster-staging. kctx re-materializes and keeps
+          # `aws eks get-token` fresh; no manual `aws eks update-kubeconfig`.
+          - if ! aws sts get-caller-identity --profile staging &>/dev/null; then aws sso login --profile staging; fi && kctx use eks::infra-staging/us-east-2/vcluster-staging
   - infrastructure:
       root: <%= ENV['HOME'] %>/loft/hosted-platform/infrastructure
