@@ -19,48 +19,50 @@ root: ~/.claude
 # Renderer:   ~/.claude/scripts/__inject_dashboard.sh  (read-only, one-shot)
 #
 # Layout: main-vertical puts pane 1 full-height on the left and stacks the rest on
-# the right. Aggregate view needs the height (matrix plus freshness table); the two
-# feeds are single lines each and read fine in a short pane.
+# the right. Aggregate view needs the height (matrix, freshness and backend
+# tables); the feed is one line per event and reads fine beside it.
 #
 #   +----------------------+------------------+
-#   |                      |  injection       |
-#   |   injection          |  events (tail)   |
-#   |   dashboard          +------------------+
-#   |   (aggregate)        |  backend         |
-#   |                      |  latency watch   |
+#   |   injection          |  injection       |
+#   |   dashboard          |  events (tail)   |
+#   |   (aggregate)        |                  |
 #   +----------------------+------------------+
+#
+# The backend latency watch used to be a third pane running its own `watch curl`
+# loop. It is now the BACKENDS section of the dashboard, which probes in the
+# background on a 30s cache and, unlike the standalone pane, compares each latency
+# against the tightest hook timeout for that backend and raises an alarm. A raw
+# `200 0.13s` could not tell you whether a hook would have given up at 0.4s.
 
 windows:
   - injections:
       layout: main-vertical
       panes:
         # Aggregate view: per-hook hit/miss/dedup/error rates, the tool x hook
-        # coverage matrix, per-repo index freshness, and active alarms.
-        - watch -ct -n 5 '$HOME/.claude/scripts/__inject_dashboard.sh --hours 24'
+        # coverage matrix, per-repo index freshness, backend health, and alarms.
+        #
+        # main-vertical hands the main pane `main-pane-width`, which defaults to 80
+        # while these tables are ~100 wide, so the coverage matrix wrapped. Set it
+        # before the layout is applied and take the width freed by dropping the
+        # latency pane. watch reads COLUMNS once at startup, hence select-layout
+        # here rather than a resize afterwards.
+        - |
+          tmux set-window-option main-pane-width 108 >/dev/null 2>&1
+          tmux select-layout main-vertical >/dev/null 2>&1
+          watch -ct -n 5 '$HOME/.claude/scripts/__inject_dashboard.sh --hours 24 --events 8 --payloads 1 --payload-lines 12'
         # Live feed. Every hook decision as it happens, newest at the bottom.
         # --unbuffered so lines appear on write instead of at the next 4KB flush.
         # tail -F (not -f) so log trimming, which replaces the file, does not end
         # the feed.
+        # -R + fromjson? reads each line as text and drops the ones that are not
+        # valid JSON. Without it a single malformed line aborts jq and the pane
+        # goes dead silent, which is the exact failure mode this session exists to
+        # catch. Writer-side corruption is fixed in __inject_log.sh; this is the
+        # belt to that pair of braces.
         - |
           clear && echo "waiting for the first injection event..." && \
           tail -F -n 30 "$HOME/.local/state/claude-injections.jsonl" 2>/dev/null \
-            | jq -rc --unbuffered '
+            | jq -Rrc --unbuffered 'fromjson? |
                 "\((.ts//"")[11:19])  \(.status|ascii_upcase)  " +
                 "\(.hook)\(if (.channel//"") != "" then "/" + .channel else "" end)  " +
                 "\(.tool//"-")  n=\(.n//0)  \((.subject//"")[0:36])  \(.note//"")"'
-        # Are the two retrieval backends answering, and how fast? A hook that
-        # times out logs `timeout`, but that cannot tell you whether the backend
-        # is down or merely slower than the 0.4s/1.0s budgets allow.
-        - |
-          watch -t -n 30 '
-            printf "memory-api  "
-            curl -s -o /dev/null -w "%{http_code}  %{time_total}s\n" \
-              -X POST https://agent-memory.tail165ec.ts.net/v1/long-term-memory/search \
-              -H "Content-Type: application/json" \
-              -d "{\"text\":\"ping\",\"limit\":1}" --max-time 5
-            printf "r2r         "
-            curl -sk -o /dev/null -w "%{http_code}  %{time_total}s\n" \
-              -X POST https://r2r.tail165ec.ts.net/v3/retrieval/search \
-              -H "Content-Type: application/json" \
-              -d "{\"query\":\"ping\",\"search_settings\":{\"limit\":1}}" --max-time 5
-          '

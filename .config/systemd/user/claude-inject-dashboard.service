@@ -1,0 +1,26 @@
+[Unit]
+# Browser view of the Claude injection dashboard. Runs as a user service because
+# a Homepage tile pointing at a port that only exists while some tmux pane is
+# open is a dead link most of the time.
+Description=Claude injection dashboard (web view)
+# network-online, not just network.target: it binds the tailscale0 address, which
+# does not exist for the first few seconds after boot. The script also waits for
+# it and falls back to loopback, so this is belt and braces rather than the only
+# defence.
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 %h/.claude/scripts/__inject_dashboard_web.py --serve 8899
+# always, not on-failure: a dashboard tile that quietly stops answering because
+# something SIGTERMed the process is worse than one that flaps visibly.
+Restart=always
+RestartSec=3
+# Binds the tailscale0 address plus loopback, never 0.0.0.0, so the page is
+# reachable from tailnet devices but not from whatever LAN this laptop joins.
+# It has no authentication and serves stored memories and retrieved documents
+# verbatim; --loopback-only reverts that in one flag.
+
+[Install]
+WantedBy=default.target
