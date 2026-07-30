@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 
 # Service Status Monitor for Argos
-# Monitors AWS, GCP, Azure, Netlify, GitHub, Linear, and GoDaddy status pages
+# Monitors AWS, GCP, Azure, Netlify, Cloudflare, GitHub, Linear, Claude,
+# Rippling, and Spacelift status pages
 
 import json
 import urllib.request
@@ -73,6 +74,12 @@ SERVICES = {
         "status_page": "https://status.rippling.com/",
         "name": "Rippling",
         "favicon": "https://www.rippling.com/favicon.ico"
+    },
+    "Spacelift": {
+        "api": "https://spacelift.statuspage.io/api/v2/status.json",
+        "status_page": "https://spacelift.statuspage.io/",
+        "name": "Spacelift",
+        "favicon": "https://spacelift.io/favicons/favicon-32x32.png"
     }
 }
 
@@ -96,7 +103,8 @@ SERVICE_EMOJIS = {
     "GitHub": "🐙",   # Octopus (Octocat) for GitHub
     "Linear": "📋",   # Clipboard for Linear issues
     "Claude": "🤖",   # Robot for AI
-    "Rippling": "💼"  # Briefcase for HR/workforce management
+    "Rippling": "💼", # Briefcase for HR/workforce management
+    "Spacelift": "🛰️"  # Satellite for Spacelift IaC orchestration
 }
 
 # Cache directory for favicons
@@ -322,6 +330,22 @@ def get_rippling_status():
         pass
     return "unknown"
 
+def get_spacelift_status():
+    """Check Spacelift status using statuspage.io API"""
+    try:
+        data = fetch_status(SERVICES["Spacelift"]["api"])
+        if data and 'status' in data:
+            indicator = data['status'].get('indicator', 'none')
+            if indicator == 'none':
+                return "operational"
+            elif indicator == 'minor':
+                return "degraded"
+            elif indicator in ['major', 'critical']:
+                return "major"
+    except Exception:
+        pass
+    return "unknown"
+
 def get_all_statuses():
     """Get status for all services"""
     return {
@@ -333,7 +357,8 @@ def get_all_statuses():
         "GitHub": get_github_status(),
         "Linear": get_linear_status(),
         "Claude": get_claude_status(),
-        "Rippling": get_rippling_status()
+        "Rippling": get_rippling_status(),
+        "Spacelift": get_spacelift_status()
     }
 
 def get_overall_status(statuses):
