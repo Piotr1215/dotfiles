@@ -17,8 +17,19 @@ bindings = [
 ]
 
 
+# ctrl+1: open the url, then tile browser/terminal and focus the browser.
+# xdg-open alone only hands the url to Chrome; nothing on this machine tiles on
+# a new browser window (pop-shell tile-by-default is false, tile-helper only
+# dims on focus change), so the split had to be triggered by hand with
+# Ctrl+Alt+X every time. Running __layouts.sh here makes the pick do it. The
+# sleep gives Chrome time to map its window before the layout tiles it.
+# Absolute paths: alacritty is spawned from the desktop session, not a shell.
 [[hints.enabled]]
-command = "xdg-open"
+# Focus returns to the window the pick came from (this terminal) instead of the
+# browser: hint mode does not cancel on focus loss (the only stop() paths are
+# escape, no visible matches, and a pick with persist = false), so with focus
+# back here the overlay is still live and the next letter picks another url.
+command = { program = "/bin/sh", args = ["-c", "xdg-open \"$0\" >/dev/null 2>&1; sleep 1.5; /home/decoder/dev/dotfiles/scripts/__layouts.sh 18 >/dev/null 2>&1"] }
 hyperlinks = true
 post_processing = true
 persist = true
