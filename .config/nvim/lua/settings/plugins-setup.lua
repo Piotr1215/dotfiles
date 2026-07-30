@@ -631,9 +631,9 @@ vim.keymap.set("n", "d;", "<Plug>(nvim-surround-delete)", { desc = "Surround del
 vim.keymap.set("n", "c;", "<Plug>(nvim-surround-change)", { desc = "Surround change" })
 
 -- Color name (:help cterm-colors) or ANSI code
--- there are some defaults for image directory and image name, you can change them
-vim.g.mdip_imgdir = vim.fn.expand "~/Pictures/Screenshots"
-vim.g.mdip_imgdir_absolute = 1
+-- md-img-paste: only the name prefix is global. The save directory is chosen per
+-- buffer by paste_image() in ftplugin/markdown.lua, because it depends on whether
+-- the file sits in a git repo.
 vim.g.mdip_imgname = "image"
 vim.g["plantuml_previewer#viewer_path"] = "~/.local/share/nvim/lazy/plantuml-previewer.vim/viewer"
 vim.g["plantuml_previewer#debug_mode"] = 0

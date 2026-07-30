@@ -13,6 +13,35 @@ vim.keymap.set(
   { noremap = true, silent = true, buffer = true }
 )
 
+-- Image paste target for <leader>pi. mdip writes the PNG under g:mdip_imgdir but
+-- builds the inserted link from the separate g:mdip_imgdir_intext, and reads both
+-- at call time, so choose them per buffer. Inside a git repo the image belongs
+-- next to the doc: it travels with the repo and the relative link resolves. Loose
+-- markdown outside a repo still goes to ~/Pictures/Screenshots, linked absolutely
+-- so it resolves from wherever the file lives.
+local screenshots_dir = vim.fn.expand "~/Pictures/Screenshots"
+
+local function paste_image()
+  local dir = vim.fn.expand "%:p:h"
+  if dir == "" then
+    dir = vim.fn.getcwd()
+  end
+
+  if vim.fs.find(".git", { path = dir, upward = true })[1] then
+    -- mdip takes its relative branch only when g:mdip_imgdir_absolute does not
+    -- exist at all (it tests exists(), not the value), so unlet it.
+    vim.g.mdip_imgdir_absolute = nil
+    vim.g.mdip_imgdir = "img"
+    vim.g.mdip_imgdir_intext = "img"
+  else
+    vim.g.mdip_imgdir_absolute = 1
+    vim.g.mdip_imgdir = screenshots_dir
+    vim.g.mdip_imgdir_intext = screenshots_dir
+  end
+
+  vim.fn["mdip#MarkdownClipboardImage"]()
+end
+
 -- markdown.nvim settings
 local markdown_settings = {
   no_default_key_mappings = 1,
@@ -124,7 +153,7 @@ vim.api.nvim_create_autocmd("FileType", {
         { "n", "[[", "<Plug>Markdown_MoveToPreviousHeader" },
         { "n", "]c", "]c", { noremap = true } },
         { "n", "<leader>mp", ":MarkdownPreview<CR>:silent !bash -c 'wmctrl -a Librewolf'<CR>" },
-        { "n", "<leader>pi", ":call mdip#MarkdownClipboardImage()<CR>" },
+        { "n", "<leader>pi", paste_image },
         { "n", "ctd", "4wvg$y" },
         { "v", "<leader>hi", ":HeaderIncrease<CR>" },
         { "v", "<Leader>b", BoldMe, {} },
