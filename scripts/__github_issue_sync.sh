@@ -274,6 +274,168 @@ check_linear_issue_status() {
 }
 
 # ====================================================
+# PHASE 2b: GITHUB PR LIVE STATE
+#
+# Linear NEVER removes an attachment when its PR closes, so the presence of a
+# pr_url proves only that a PR once existed. GitHub is the sole source of truth
+# for whether that PR is still live, and this file had no GitHub call at all,
+# which is why +review kept being re-stamped on tasks whose PR was long dead.
+#
+# Every resolution is answered from the in-run memo first, then the on-disk TTL
+# cache, and only then from `gh`. The sync runs every 30 minutes over every
+# assigned issue, so an uncached call per task per run would be pure waste.
+# ====================================================
+
+# In-run memo: one sync pass never asks GitHub twice about the same PR.
+# -g because this file is also sourced from inside a function by the test
+# harness, where a plain `declare -A` would be function-local and every
+# subscript would then be read as an arithmetic expression.
+declare -gA PR_STATE_MEMO=()
+
+# Cross-run cache. TTL is deliberately longer than the 30-minute sync interval
+# so a steady state costs zero API calls; override both for tests.
+PR_STATE_CACHE_FILE="${PR_STATE_CACHE_FILE:-${XDG_CACHE_HOME:-$HOME/.cache}/taskwarrior-sync/pr-state.tsv}"
+PR_STATE_CACHE_TTL="${PR_STATE_CACHE_TTL:-3600}"
+
+# Look up a still-usable cached state for a PR url.
+# Echoes the state and returns 0 on a hit, returns 1 on a miss or a stale entry.
+# MERGED never expires: GitHub cannot reopen a merged PR, so that verdict is
+# terminal and re-asking would only burn rate limit.
+pr_state_cache_get() {
+    local pr_url="$1"
+    local now cached_url cached_state cached_at
+
+    [[ -r "$PR_STATE_CACHE_FILE" ]] || return 1
+    now=$(date +%s)
+
+    while IFS=$'\t' read -r cached_url cached_state cached_at; do
+        [[ "$cached_url" == "$pr_url" ]] || continue
+        [[ "$cached_at" =~ ^[0-9]+$ ]] || return 1
+        if [[ "$cached_state" == "MERGED" ]] || (( now - cached_at < PR_STATE_CACHE_TTL )); then
+            echo "$cached_state"
+            return 0
+        fi
+        return 1
+    done < "$PR_STATE_CACHE_FILE"
+
+    return 1
+}
+
+# Record a freshly resolved PR state, replacing any earlier entry for that url.
+# Cache writes are best-effort: a cache we cannot write costs an API call next
+# run, which must never be a reason to fail the sync.
+pr_state_cache_put() {
+    local pr_url="$1"
+    local pr_state="$2"
+    local cache_dir tmp_file
+
+    cache_dir=$(dirname "$PR_STATE_CACHE_FILE")
+    mkdir -p "$cache_dir" 2>/dev/null || return 0
+
+    tmp_file="${PR_STATE_CACHE_FILE}.$$"
+    : >"$tmp_file" 2>/dev/null || return 0
+    if [[ -r "$PR_STATE_CACHE_FILE" ]]; then
+        awk -F'\t' -v url="$pr_url" '$1 != url' "$PR_STATE_CACHE_FILE" >"$tmp_file" 2>/dev/null || true
+    fi
+    printf '%s\t%s\t%s\n' "$pr_url" "$pr_state" "$(date +%s)" >>"$tmp_file" 2>/dev/null || {
+        rm -f "$tmp_file"
+        return 0
+    }
+    mv -f "$tmp_file" "$PR_STATE_CACHE_FILE" 2>/dev/null || rm -f "$tmp_file"
+
+    return 0
+}
+
+# Resolve a GitHub PR url to OPEN, CLOSED, MERGED, or UNKNOWN.
+# UNKNOWN is the deliberate fail-safe verdict for a gh failure, a timeout, or an
+# unrecognized answer, and callers MUST leave the existing tag state untouched
+# on it. A tag wrongly stripped on a network blip makes live work look fresh and
+# invites a duplicate dispatch, which is worse than a tag left stale for a run.
+# UNKNOWN is never cached, so the next run retries.
+resolve_pr_state() {
+    local pr_url="$1"
+    local pr_state
+
+    if [[ -z "$pr_url" || "$pr_url" == "null" ]]; then
+        echo "UNKNOWN"
+        return 0
+    fi
+
+    if [[ -n "${PR_STATE_MEMO[$pr_url]:-}" ]]; then
+        echo "${PR_STATE_MEMO[$pr_url]}"
+        return 0
+    fi
+
+    if pr_state=$(pr_state_cache_get "$pr_url"); then
+        PR_STATE_MEMO["$pr_url"]="$pr_state"
+        echo "$pr_state"
+        return 0
+    fi
+
+    if ! pr_state=$(timeout 15 gh pr view "$pr_url" --json state -q .state 2>/dev/null); then
+        echo "Warning: could not resolve GitHub state for $pr_url - treating as UNKNOWN" >&2
+        echo "UNKNOWN"
+        return 0
+    fi
+
+    pr_state=$(trim_whitespace "$pr_state")
+    case "$pr_state" in
+        OPEN|CLOSED|MERGED) ;;
+        *)
+            echo "Warning: unexpected GitHub state '$pr_state' for $pr_url - treating as UNKNOWN" >&2
+            echo "UNKNOWN"
+            return 0
+            ;;
+    esac
+
+    PR_STATE_MEMO["$pr_url"]="$pr_state"
+    pr_state_cache_put "$pr_url" "$pr_state"
+    echo "$pr_state"
+
+    return 0
+}
+
+# Summarize the live state of every GitHub PR annotated on a task, given that
+# task's export JSON. Echoes exactly one verdict:
+#   open    - at least one annotated PR is still OPEN
+#   unknown - none open, but at least one could not be resolved
+#   closed  - every annotated PR is CLOSED or MERGED
+#   none    - the task carries no /pull/ annotation at all
+# Callers keep +review on open and unknown, and may strip it on closed and none.
+task_pr_review_verdict() {
+    local task_json="$1"
+    local pr_urls pr_url pr_state
+    local saw_pr="false"
+    local saw_unknown="false"
+
+    pr_urls=$(echo "$task_json" | jq -r '.[0].annotations[]? | (.description // "") | select(test("github.com.*/pull/"))')
+
+    while IFS= read -r pr_url; do
+        [[ -z "$pr_url" ]] && continue
+        saw_pr="true"
+        pr_state=$(resolve_pr_state "$pr_url")
+        case "$pr_state" in
+            OPEN)
+                echo "open"
+                return 0
+                ;;
+            CLOSED|MERGED) ;;
+            *) saw_unknown="true" ;;
+        esac
+    done <<<"$pr_urls"
+
+    if [[ "$saw_pr" != "true" ]]; then
+        echo "none"
+    elif [[ "$saw_unknown" == "true" ]]; then
+        echo "unknown"
+    else
+        echo "closed"
+    fi
+
+    return 0
+}
+
+# ====================================================
 # PHASE 3: TASK MANAGEMENT
 # ====================================================
 
@@ -452,24 +614,34 @@ update_task_status() {
     # Check if the +review tag should be removed based on current Linear status.
     # +review has TWO meanings that must both be honored:
     #   1. Linear status == "In Review"  (set in the branch above), and
-    #   2. the task has an attached GitHub PR (set by attach_pr_link).
+    #   2. the task has an attached GitHub PR that is still OPEN.
     # Piotr's reports surface +review but hide the pr-reviews mirror tasks via
     # -pr, so +review is the glanceable "this task has an open PR" signal. A
-    # Todo/In-Progress task with an open PR must therefore KEEP +review. Only
-    # strip it when the issue is NOT In Review AND no /pull/ annotation exists.
-    # Net invariant: +review present iff (status == In Review) OR (PR attached).
+    # Todo/In-Progress task with an open PR must therefore KEEP +review.
+    # The mere presence of a /pull/ annotation is NOT enough: the annotation, like
+    # the Linear attachment it mirrors, outlives the PR, so a closed PR used to
+    # hold +review forever and hide live ownerless work from dispatch. Ask GitHub.
+    # Net invariant: +review present iff (status == In Review) OR (open PR).
     if [[ "$has_review" == "true" && "$issue_status" != "In Review" ]]; then
-        local has_pr_annotation
-        has_pr_annotation=$(echo "$task_json" | jq -r '[.[0].annotations[]? | (.description // "") | select(test("github.com.*/pull/"))] | length > 0')
-        if [[ "$has_pr_annotation" == "true" ]]; then
-            log "Task has +review and status is '$issue_status' but a PR is attached - keeping +review (PR-glance signal)"
-        else
-            log "Task has +review tag but Linear status is '$issue_status' and no PR attached - removing +review tag"
-            task rc.confirmation=no modify "$task_uuid" -review
+        local pr_verdict
+        pr_verdict=$(task_pr_review_verdict "$task_json")
+        case "$pr_verdict" in
+            open)
+                log "Task has +review and status is '$issue_status' but an OPEN PR is attached - keeping +review (PR-glance signal)"
+                ;;
+            unknown)
+                # Fail safe: a network blip must not strip the tag and let live
+                # work be dispatched a second time.
+                log "Task has +review and status is '$issue_status' but PR state is unresolved - keeping +review (fail-safe)"
+                ;;
+            *)
+                log "Task has +review tag but Linear status is '$issue_status' and no open PR (verdict=$pr_verdict) - removing +review tag"
+                task rc.confirmation=no modify "$task_uuid" -review
 
-            # Re-run the status update logic now that review tag is removed
-            update_task_status "$task_uuid" "$issue_status" "$issue_priority"
-        fi
+                # Re-run the status update logic now that review tag is removed
+                update_task_status "$task_uuid" "$issue_status" "$issue_priority"
+                ;;
+        esac
     fi
 }
 
@@ -486,9 +658,15 @@ update_task_status() {
 # into the task description. Re-running the sync must never duplicate the
 # annotation, so skip when the exact URL is already present. Exact-match via
 # jq index (not substring) avoids the +triage/+triaged style collision.
+#
+# The annotation is unconditional history: it records that a PR existed and the
+# +wt hook still needs it. The +review tag is not, and is gated on the PR being
+# OPEN right now (see resolve_pr_state). Takes the Linear status as a third
+# argument because "In Review" grants +review independently of any PR.
 attach_pr_link() {
     local task_uuid="$1"
     local pr_url="$2"
+    local issue_status="$3"
 
     [[ -z "$pr_url" || "$pr_url" == "null" ]] && return 0
     [[ -z "$task_uuid" || "$task_uuid" == "null" ]] && return 0
@@ -497,21 +675,43 @@ attach_pr_link() {
     local task_json
     task_json=$(task "$task_uuid" export 2>/dev/null)
 
-    # A PR is attached, so ensure the glanceable +review tag is present. Piotr's
-    # reports surface +review while hiding the pr-reviews mirror tasks via -pr,
-    # so +review (NOT +pr) is the correct "this task has an open PR" signal;
-    # stamping +pr here would hide the task from report.current/backlog/byrepo/
-    # byproject. Idempotent via jq index (exact element, not contains which is
-    # substring in jq). Checked independently of the annotation below so an
-    # already-synced task that carries the PR annotation but predates this gets
-    # +review backfilled on the next sync. update_task_status keeps +review while
-    # a /pull/ annotation exists, so this and the strip logic agree.
-    local has_review_tag
+    # The +review glance-tag tracks the PR's LIVE state, never the mere existence
+    # of a Linear attachment. Piotr's reports surface +review while hiding the
+    # pr-reviews mirror tasks via -pr, so +review (NOT +pr) is the correct "this
+    # task has an open PR" signal; stamping +pr here would hide the task from
+    # report.current/backlog/byrepo/byproject. Idempotent via jq index (exact
+    # element, not contains which is substring in jq). Checked independently of
+    # the annotation below so an already-synced task that carries the PR
+    # annotation but predates this gets +review backfilled on the next sync.
+    # update_task_status resolves the same live state, so the two agree.
+    local has_review_tag pr_live_state
     has_review_tag=$(echo "$task_json" | jq -r '.[0].tags | if . then (index("review") != null) else false end')
-    if [[ "$has_review_tag" != "true" ]]; then
-        log "Adding +review tag (PR attached, glanceable signal): $pr_url"
-        task rc.confirmation=no modify "$task_uuid" +review
-    fi
+    pr_live_state=$(resolve_pr_state "$pr_url")
+
+    case "$pr_live_state" in
+        OPEN)
+            if [[ "$has_review_tag" != "true" ]]; then
+                log "Adding +review tag (PR is OPEN, glanceable signal): $pr_url"
+                task rc.confirmation=no modify "$task_uuid" +review
+            fi
+            ;;
+        CLOSED|MERGED)
+            # Linear status "In Review" is an independent signal for +review and
+            # must keep working even when the PR behind it is dead.
+            if [[ "$issue_status" == "In Review" ]]; then
+                log "PR is $pr_live_state but Linear status is In Review - keeping +review: $pr_url"
+            elif [[ "$has_review_tag" == "true" ]]; then
+                log "Removing +review tag (PR is $pr_live_state, Linear status is '$issue_status'): $pr_url"
+                task rc.confirmation=no modify "$task_uuid" -review
+            else
+                log "Not adding +review (PR is $pr_live_state, Linear status is '$issue_status'): $pr_url"
+            fi
+            ;;
+        *)
+            # Fail safe on an unresolved state: touch nothing.
+            log "PR state unresolved - leaving +review as-is: $pr_url"
+            ;;
+    esac
 
     # Mirror the PR URL as an annotation (the channel the +wt worktree hook
     # scans for /pull/ URLs). Idempotent: skip when the exact URL is already
@@ -558,7 +758,7 @@ create_and_annotate_task() {
     
     if [[ -n "$task_uuid" ]]; then
         annotate_task "$task_uuid" "$issue_url"
-        attach_pr_link "$task_uuid" "$issue_pr_url"
+        attach_pr_link "$task_uuid" "$issue_pr_url" "$issue_status"
         log "Task created and annotated for: $issue_description"
         task rc.confirmation=no modify "$task_uuid" linear_issue_id:"$issue_number"
         
@@ -702,7 +902,7 @@ sync_to_taskwarrior() {
         update_task_status "$task_uuid" "$issue_status" "$issue_priority"
 
         # Backfill the Linear-attached PR onto already-synced tasks (idempotent).
-        attach_pr_link "$task_uuid" "$pr_url"
+        attach_pr_link "$task_uuid" "$pr_url" "$issue_status"
 
         # Re-surface the issue when Linear shows newer activity than our watermark.
         # new_activity stores the last-seen Linear updatedAt.

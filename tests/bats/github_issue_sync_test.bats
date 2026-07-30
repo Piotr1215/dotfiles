@@ -46,7 +46,29 @@ case "$1" in
 esac
 EOF
     chmod +x "${TEST_DIR}/task"
-    
+
+    # Mock gh so PR live-state resolution never touches the network.
+    # Tests steer it by writing ${TEST_DIR}/pr_state (default OPEN) or by
+    # touching ${TEST_DIR}/gh_fail to simulate an outage/timeout.
+    cat > "${TEST_DIR}/gh" << 'EOF'
+#!/bin/bash
+echo "MOCK: gh $*" >> "${TEST_DIR}/gh_calls.log"
+if [ -f "${TEST_DIR}/gh_fail" ]; then
+    echo "mock gh failure" >&2
+    exit 1
+fi
+if [ -f "${TEST_DIR}/pr_state" ]; then
+    cat "${TEST_DIR}/pr_state"
+else
+    echo "OPEN"
+fi
+EOF
+    chmod +x "${TEST_DIR}/gh"
+
+    # Keep the PR-state cache inside the test dir so runs never read or poison
+    # the real one at ~/.cache/taskwarrior-sync/pr-state.tsv.
+    export PR_STATE_CACHE_FILE="${TEST_DIR}/pr-state.tsv"
+
     # First source the library dependency
     source scripts/__lib_taskwarrior_interop.sh
     
@@ -2126,11 +2148,14 @@ EOF
 # ====================================================
 # +review AS THE PR-GLANCE SIGNAL
 # Regression cover for the incident: +review (NOT +pr, which reports hide via
-# -pr) must mark any task that has an attached GitHub PR, and must survive
-# across non-In-Review statuses as long as a /pull/ annotation exists.
+# -pr) must mark any task whose attached GitHub PR is still OPEN, and must
+# survive across non-In-Review statuses for as long as that PR stays open.
+# Second incident (DEVOPS-1203): Linear keeps the attachment after the PR
+# closes, so gating on the attachment alone pinned +review on forever and hid
+# live ownerless work from dispatch. The live GitHub state decides.
 # ====================================================
 
-@test "attach_pr_link adds +review when a PR is attached and tag is missing" {
+@test "attach_pr_link adds +review when the attached PR is OPEN and tag is missing" {
     cat > "${TEST_DIR}/task" << 'EOF'
 #!/bin/bash
 EXPORT='[{"uuid":"test-uuid","description":"t","status":"pending","tags":["linear"],"annotations":[]}]'
@@ -2157,7 +2182,7 @@ EOF
     grep -q "pull/522" "${TEST_DIR}/annotate.log"
 }
 
-@test "attach_pr_link backfills +review when PR annotation exists but tag is missing" {
+@test "attach_pr_link backfills +review when an OPEN PR is annotated but tag is missing" {
     cat > "${TEST_DIR}/task" << 'EOF'
 #!/bin/bash
 EXPORT='[{"uuid":"test-uuid","description":"t","status":"pending","tags":["linear"],"annotations":[{"description":"https://github.com/loft-sh/loft-prod/pull/522"}]}]'
@@ -2208,7 +2233,7 @@ EOF
     [ ! -f "${TEST_DIR}/annotate.log" ]
 }
 
-@test "update_task_status keeps +review for In Progress task WITH a PR annotation" {
+@test "update_task_status keeps +review for In Progress task WITH an OPEN PR annotation" {
     cat > "${TEST_DIR}/task" << 'EOF'
 #!/bin/bash
 EXPORT='[{"uuid":"test-uuid","description":"t","status":"pending","tags":["linear","review"],"annotations":[{"description":"https://github.com/loft-sh/loft-prod/pull/522"}]}]'
@@ -2265,6 +2290,215 @@ EOF
     [ "$status" -eq 0 ]
     [[ "$output" =~ "removing +review tag" ]]
     grep -q -- "-review" "${TEST_DIR}/task_commands.log"
+}
+
+# ====================================================
+# +review MUST FOLLOW LIVE PR STATE (DEVOPS-1203)
+# The attached PR loft-sh/loft-enterprise#7649 has been CLOSED (never merged)
+# since 2026-07-29, but Linear kept the attachment, so every 30-minute run
+# re-stamped +review. Because +review means "not a fresh dispatch candidate",
+# the dead PR disguised live ownerless work as already sitting with a human.
+# ====================================================
+
+# Task shape shared by the live-state tests: no +review yet, no annotations.
+_write_task_mock_no_review() {
+    cat > "${TEST_DIR}/task" << 'EOF'
+#!/bin/bash
+EXPORT='[{"uuid":"test-uuid","description":"t","status":"pending","tags":["linear"],"annotations":[]}]'
+case "$1" in
+    "test-uuid")
+        case "$2" in
+            "export")   echo "$EXPORT" ;;
+            "annotate") echo "MOCK: annotate $*" >> "${TEST_DIR}/annotate.log" ;;
+        esac
+        ;;
+    "_get") echo "" ;;
+    "rc.confirmation=no") echo "MOCK: task $*" >> "${TEST_DIR}/task_commands.log" ;;
+    *) echo "test-uuid" ;;
+esac
+EOF
+    chmod +x "${TEST_DIR}/task"
+}
+
+# Same, but the task already carries +review and the PR annotation.
+_write_task_mock_with_review() {
+    cat > "${TEST_DIR}/task" << 'EOF'
+#!/bin/bash
+EXPORT='[{"uuid":"test-uuid","description":"t","status":"pending","tags":["linear","review"],"annotations":[{"description":"https://github.com/loft-sh/loft-enterprise/pull/7649"}]}]'
+case "$1" in
+    "test-uuid")
+        case "$2" in
+            "export")   echo "$EXPORT" ;;
+            "annotate") echo "MOCK: annotate $*" >> "${TEST_DIR}/annotate.log" ;;
+        esac
+        ;;
+    "_get") echo "" ;;
+    "rc.confirmation=no") echo "MOCK: task $*" >> "${TEST_DIR}/task_commands.log" ;;
+    *) echo "test-uuid" ;;
+esac
+EOF
+    chmod +x "${TEST_DIR}/task"
+}
+
+@test "attach_pr_link does NOT add +review when the attached PR is CLOSED (DEVOPS-1203)" {
+    echo "CLOSED" > "${TEST_DIR}/pr_state"
+    _write_task_mock_no_review
+
+    run attach_pr_link "test-uuid" "https://github.com/loft-sh/loft-enterprise/pull/7649" "Todo"
+    [ "$status" -eq 0 ]
+    # The whole point: a dead PR must not re-stamp the dispatch-blocking tag.
+    if [ -f "${TEST_DIR}/task_commands.log" ]; then
+        ! grep -q -- "+review" "${TEST_DIR}/task_commands.log"
+    fi
+    # The annotation is history and is still mirrored.
+    grep -q "pull/7649" "${TEST_DIR}/annotate.log"
+}
+
+@test "attach_pr_link does NOT add +review when the attached PR is MERGED" {
+    echo "MERGED" > "${TEST_DIR}/pr_state"
+    _write_task_mock_no_review
+
+    run attach_pr_link "test-uuid" "https://github.com/loft-sh/loft-enterprise/pull/7649" "Todo"
+    [ "$status" -eq 0 ]
+    if [ -f "${TEST_DIR}/task_commands.log" ]; then
+        ! grep -q -- "+review" "${TEST_DIR}/task_commands.log"
+    fi
+}
+
+@test "attach_pr_link strips a stale +review when the attached PR is CLOSED" {
+    echo "CLOSED" > "${TEST_DIR}/pr_state"
+    _write_task_mock_with_review
+
+    run attach_pr_link "test-uuid" "https://github.com/loft-sh/loft-enterprise/pull/7649" "Todo"
+    [ "$status" -eq 0 ]
+    grep -q -- "-review" "${TEST_DIR}/task_commands.log"
+}
+
+@test "attach_pr_link keeps +review on a CLOSED PR when Linear status is In Review" {
+    # "In Review" is an independent signal and must keep working.
+    echo "CLOSED" > "${TEST_DIR}/pr_state"
+    _write_task_mock_with_review
+
+    run attach_pr_link "test-uuid" "https://github.com/loft-sh/loft-enterprise/pull/7649" "In Review"
+    [ "$status" -eq 0 ]
+    if [ -f "${TEST_DIR}/task_commands.log" ]; then
+        ! grep -q -- "-review" "${TEST_DIR}/task_commands.log"
+    fi
+}
+
+@test "attach_pr_link leaves tag state untouched when gh fails (fail-safe)" {
+    # A wrong strip on a network blip can trigger a duplicate dispatch, so an
+    # unresolved state must change nothing in either direction.
+    touch "${TEST_DIR}/gh_fail"
+    _write_task_mock_with_review
+
+    run attach_pr_link "test-uuid" "https://github.com/loft-sh/loft-enterprise/pull/7649" "Todo"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "unresolved" ]]
+    if [ -f "${TEST_DIR}/task_commands.log" ]; then
+        ! grep -qE -- "[-+]review" "${TEST_DIR}/task_commands.log"
+    fi
+}
+
+@test "update_task_status strips +review when the annotated PR is CLOSED" {
+    echo "CLOSED" > "${TEST_DIR}/pr_state"
+    # Toggle export so the recursive re-run after the strip terminates.
+    cat > "${TEST_DIR}/task" << 'EOF'
+#!/bin/bash
+case "$1" in
+    "test-uuid")
+        case "$2" in
+            "export")
+                if [ ! -f "${TEST_DIR}/export_called" ]; then
+                    touch "${TEST_DIR}/export_called"
+                    echo '[{"uuid":"test-uuid","description":"t","status":"pending","tags":["linear","review"],"annotations":[{"description":"https://github.com/loft-sh/loft-enterprise/pull/7649"}]}]'
+                else
+                    echo '[{"uuid":"test-uuid","description":"t","status":"pending","tags":["linear"],"annotations":[{"description":"https://github.com/loft-sh/loft-enterprise/pull/7649"}]}]'
+                fi
+                ;;
+        esac
+        ;;
+    "_get") echo "" ;;
+    "rc.confirmation=no") echo "MOCK: task $*" >> "${TEST_DIR}/task_commands.log" ;;
+    *) echo "MOCK: task $*" >> "${TEST_DIR}/task_commands.log" ;;
+esac
+EOF
+    chmod +x "${TEST_DIR}/task"
+
+    run update_task_status "test-uuid" "Todo"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "removing +review tag" ]]
+    grep -q -- "-review" "${TEST_DIR}/task_commands.log"
+}
+
+@test "update_task_status keeps +review when the annotated PR state is unresolved" {
+    touch "${TEST_DIR}/gh_fail"
+    cat > "${TEST_DIR}/task" << 'EOF'
+#!/bin/bash
+EXPORT='[{"uuid":"test-uuid","description":"t","status":"pending","tags":["linear","review"],"annotations":[{"description":"https://github.com/loft-sh/loft-enterprise/pull/7649"}]}]'
+case "$1" in
+    "test-uuid")
+        case "$2" in
+            "export") echo "$EXPORT" ;;
+        esac
+        ;;
+    "_get") echo "" ;;
+    "rc.confirmation=no") echo "MOCK: task $*" >> "${TEST_DIR}/task_commands.log" ;;
+    *) echo "MOCK: task $*" >> "${TEST_DIR}/task_commands.log" ;;
+esac
+EOF
+    chmod +x "${TEST_DIR}/task"
+
+    run update_task_status "test-uuid" "Todo"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "fail-safe" ]]
+    if [ -f "${TEST_DIR}/task_commands.log" ]; then
+        ! grep -q -- "-review" "${TEST_DIR}/task_commands.log"
+    fi
+}
+
+@test "resolve_pr_state returns UNKNOWN and does not cache it when gh fails" {
+    touch "${TEST_DIR}/gh_fail"
+
+    run resolve_pr_state "https://github.com/loft-sh/loft-enterprise/pull/7649"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "UNKNOWN" ]]
+    # Nothing cached, so the next run retries instead of pinning a bad verdict.
+    [ ! -s "${TEST_DIR}/pr-state.tsv" ] || ! grep -q "UNKNOWN" "${TEST_DIR}/pr-state.tsv"
+}
+
+@test "resolve_pr_state caches so repeated lookups make one gh call per run" {
+    echo "CLOSED" > "${TEST_DIR}/pr_state"
+    local url="https://github.com/loft-sh/loft-enterprise/pull/7649"
+
+    # Same shell (not `run`) so the in-run memo survives across both calls.
+    [ "$(resolve_pr_state "$url")" = "CLOSED" ]
+    [ "$(resolve_pr_state "$url")" = "CLOSED" ]
+
+    [ "$(wc -l < "${TEST_DIR}/gh_calls.log")" -eq 1 ]
+    grep -q "CLOSED" "${TEST_DIR}/pr-state.tsv"
+}
+
+@test "resolve_pr_state serves a fresh cache entry without calling gh at all" {
+    printf '%s\t%s\t%s\n' "https://github.com/loft-sh/loft-enterprise/pull/7649" "CLOSED" "$(date +%s)" \
+        > "${TEST_DIR}/pr-state.tsv"
+
+    run resolve_pr_state "https://github.com/loft-sh/loft-enterprise/pull/7649"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "CLOSED" ]]
+    [ ! -f "${TEST_DIR}/gh_calls.log" ]
+}
+
+@test "resolve_pr_state re-asks gh once a cached OPEN entry is stale" {
+    # Stale beyond the TTL: the sync must notice a PR that closed since.
+    printf '%s\t%s\t%s\n' "https://github.com/loft-sh/loft-enterprise/pull/7649" "OPEN" "1" \
+        > "${TEST_DIR}/pr-state.tsv"
+    echo "CLOSED" > "${TEST_DIR}/pr_state"
+
+    run resolve_pr_state "https://github.com/loft-sh/loft-enterprise/pull/7649"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "CLOSED" ]]
+    [ -f "${TEST_DIR}/gh_calls.log" ]
 }
 
 # ====================================================

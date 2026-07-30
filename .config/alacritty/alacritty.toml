@@ -32,10 +32,16 @@ regex = "(ipfs:|ipns:|magnet:|mailto:|gemini://|gopher://|https://|http://|news:
 # mid-sentence (foo/bar.md. Ready...) still gets a hint. The match ends on the
 # extension's alnum, so a trailing sentence delimiter (the period in bar.md.) is
 # excluded; post_processing trims any other trailing punctuation as a backstop.
+# Absolute path to the source-built tmux, since alacritty is spawned from the
+# desktop session and its PATH is not the shell's. This previously pointed at
+# the /usr/bin/tmux apt package (3.4) while the server ran 3.7b; a 3.4 client
+# cannot speak the 3.7b protocol, so split-window died with "server exited
+# unexpectedly" and the hint silently did nothing. The apt tmux/tmuxinator
+# packages were removed 2026-07-27, so only 3.7b remains.
 [[hints.enabled]]
 regex = '(\.|~|/)?([A-Za-z0-9._-]+/)*[A-Za-z0-9._-]+\.[A-Za-z0-9]+'
 post_processing = true
-command = { program = "/usr/bin/tmux", args = ["split-window", "-h", "-c", "#{pane_current_path}", "sh", "-c", "nvim \"$0\""] }
+command = { program = "/usr/local/bin/tmux", args = ["split-window", "-h", "-c", "#{pane_current_path}", "sh", "-c", "nvim \"$0\""] }
 binding = { key = "2", mods = "Control" }
 
 # ctrl+3: jump the tmux client to an agent session named on the cockpit board.
