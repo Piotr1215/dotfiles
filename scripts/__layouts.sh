@@ -6,7 +6,7 @@
 IFS=$'\n\t'
 
 if [[ -z "$1" ]]; then
-	echo "Usage: $0 {1-16}"
+	echo "Usage: $0 {1-18}"
 	exit 1
 fi
 
@@ -428,6 +428,28 @@ alacritty_alacritty_vertical() {
 	tile_right "${alacritty_windows[1]}"
 }
 
+# Same split as layout 2, but focus ends on the terminal instead of the browser.
+# Used by the alacritty ctrl+1 url hint: hint mode survives focus loss, so with
+# focus back on the terminal the labels are still live and the next letter picks
+# another url. Chrome raises itself when the new tab finishes loading, which
+# lands after the tiling, so the activate is re-asserted for ~2s to win that
+# race; a single call is silently overridden.
+alacritty_firefox_vertical_focus_terminal() {
+	alacritty_firefox_vertical || return 1
+
+	local alacritty_window i
+	alacritty_window=$(xdotool search --onlyvisible --classname Alacritty | head -n 1)
+	if [[ -z "$alacritty_window" ]]; then
+		echo "No Alacritty window found." >&2
+		return 1
+	fi
+
+	for ((i = 0; i < 8; i++)); do
+		xdotool windowactivate "$alacritty_window" >/dev/null 2>&1
+		sleep 0.25
+	done
+}
+
 case $1 in
 1) run_layout max_alacritty ;;
 2) run_layout alacritty_firefox_vertical ;;
@@ -446,8 +468,9 @@ case $1 in
 15) run_layout detach_and_compare ;;
 16) run_layout reattach_and_max ;;
 17) run_layout alacritty_alacritty_vertical ;;
+18) run_layout alacritty_firefox_vertical_focus_terminal ;;
 *)
-	echo "Usage: $0 {1-17}"
+	echo "Usage: $0 {1-18}"
 	exit 1
 	;;
 esac
