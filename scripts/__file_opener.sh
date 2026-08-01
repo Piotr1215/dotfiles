@@ -38,7 +38,8 @@ help_function() {
     echo "  Ctrl+X    Switch to zoxide"
     echo "  Ctrl+D    Switch to all directories"
     echo "  Ctrl+F    Switch to all files"
-    echo "  Ctrl+B    GitHub repo search"
+    echo "  Ctrl+B    Switch to bookmarks"
+    echo "  Ctrl+O    GitHub repo search"
     echo "  Ctrl+K    Switch Kubernetes context for this pane"
     echo "  Ctrl+C    Cancel"
     echo "  Tab       Multi-select"
@@ -139,8 +140,10 @@ KCTX_MARKER="/tmp/file_opener_kctx_$$"
 HOME_BIND="ctrl-x:change-prompt(all> )+reload(active=\$(tmux ls -F '#{session_name}' 2>/dev/null); active_pipe=\$(echo \"\$active\" | tr '\\n' '|'); configs=\$(ls --color=never ~/.config/tmuxinator/*.yml 2>/dev/null | xargs -n1 basename | sed 's/\\.yml\$//' | sort); echo \"\$active\" | while read -r s; do [[ -n \"\$s\" ]] && echo \"\$s ◀◀◀\"; done; echo \"\$configs\" | while read -r s; do [[ -n \"\$s\" && \"|\$active_pipe\" != *\"|\$s|\"* && \"\$active_pipe\" != \"\$s|\"* ]] && echo \"\$s\"; done; zoxide query -l; cache=/tmp/file_opener_cache_\$USER; if [[ -f \$cache ]] && [[ \$(((\$(date +%s) - \$(stat -c %Y \$cache)))) -lt 60 ]]; then cat \$cache; else fd --type f --hidden --absolute-path --color never --exclude .git --exclude node_modules --exclude .cache --exclude image-cache --exclude plugins --exclude stats-cache.json --exclude claude-wt-worktrees --exclude vendor --changed-within 7d . ~/dev ~/loft ~/.config/nvim ~/.claude 2>/dev/null | xargs stat --format '%Y %n' 2>/dev/null | sort -rn | cut -d' ' -f2- | tee \$cache; fi)"
 # Files from work directories
 FILE_BIND="ctrl-f:execute-silent(touch /tmp/file_opener_2d)+abort"
+# Bookmarks binding - extract and expand paths from bookmarks.conf with descriptions
+BOOKMARKS_BIND="ctrl-b:change-prompt(bookmarks> )+reload(bash -c 'while IFS=\";\" read -r desc path; do path=\${path/#\\~/\$HOME}; printf \"%-60s %s\\n\" \"\$desc\" \"\$path\"; done < ~/dev/dotfiles/scripts/__bookmarks.conf')"
 # GitHub repo search binding - search, clone/cd into repo
-GITHUB_BIND="ctrl-b:execute-silent(touch $RETURN_MARKER)+execute(~/dev/dotfiles/scripts/__github_search.sh)+abort"
+GITHUB_BIND="ctrl-o:execute-silent(touch $RETURN_MARKER)+execute(~/dev/dotfiles/scripts/__github_search.sh)+abort"
 
 
 # PRs binding (Ctrl+G for GitHub) - sets marker, launches PR script, then aborts to restart loop
@@ -214,10 +217,11 @@ while true; do
                 echo "Preview not available"
             fi' \
         --preview-window 'right:50%:wrap' \
-        --header ' C-f:30d C-x:home C-b:github C-g:PRs C-l:Linear C-s:search-panes C-e:edit C-u:music C-k:kctx | C-y:copy Tab:paste' \
+        --header ' C-f:30d C-x:home C-b:marks C-o:github C-g:PRs C-l:Linear C-s:search-panes C-e:edit C-u:music C-k:kctx | C-y:copy Tab:paste' \
         --prompt 'all> ' \
         --bind "$HOME_BIND" \
         --bind "$FILE_BIND" \
+        --bind "$BOOKMARKS_BIND" \
         --bind "$GITHUB_BIND" \
         --bind "$PR_BIND" \
         --bind "$LINEAR_BIND" \
