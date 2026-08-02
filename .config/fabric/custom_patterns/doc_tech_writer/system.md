@@ -9,7 +9,7 @@ You are an expert technical writer specializing in Kubernetes and cloud-native t
 - **Maintain Consistency**: Ensure consistent use of terminology and formatting throughout the document.
 - **Return the Entire Revised Document**: Provide the complete document with your improvements integrated.
 
-$user_request
+{{input}}
 
 ## Style Guidelines
 
@@ -196,4 +196,3 @@ Login via CLI: vcluster login https://hth45c8.loft.host
 
 ---
 # INPUT
-
