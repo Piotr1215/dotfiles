@@ -10,7 +10,12 @@ from urllib.parse import quote
 SCRIPT = Path(__file__).parents[2] / "scripts" / "__codex_agent_binding_hook.py"
 
 
-def run_hook(codex_home: Path, tool_name: str, agent_name: str) -> subprocess.CompletedProcess[str]:
+def run_hook(
+    codex_home: Path,
+    tool_name: str,
+    agent_name: str,
+    socket_path: str | None = None,
+) -> subprocess.CompletedProcess[str]:
     payload = {
         "hook_event_name": "PostToolUse",
         "session_id": "thread-123",
@@ -18,6 +23,8 @@ def run_hook(codex_home: Path, tool_name: str, agent_name: str) -> subprocess.Co
         "tool_input": {"name": agent_name},
     }
     env = {**os.environ, "CODEX_HOME": str(codex_home)}
+    if socket_path is not None:
+        env["CODEX_APP_SERVER_SOCKET"] = socket_path
     return subprocess.run(
         ["python3", str(SCRIPT)], input=json.dumps(payload), text=True,
         capture_output=True, env=env, check=False,
@@ -34,6 +41,24 @@ class CodexAgentBindingHookTest(unittest.TestCase):
             self.assertEqual(result.returncode, 0)
             self.assertEqual(json.loads(binding.read_text()), {
                 "agent": "greta/kube", "thread_id": "thread-123",
+            })
+
+    def test_register_records_pane_specific_app_server_socket(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            codex_home = Path(directory)
+            result = run_hook(
+                codex_home,
+                "mcp__agents__agent_register",
+                "greta",
+                "/codex/app-server-control/pane/app-server-control.sock",
+            )
+
+            binding = codex_home / "agent-bindings" / "greta.json"
+            self.assertEqual(result.returncode, 0)
+            self.assertEqual(json.loads(binding.read_text()), {
+                "agent": "greta",
+                "thread_id": "thread-123",
+                "socket_path": "/codex/app-server-control/pane/app-server-control.sock",
             })
 
     def test_deregister_removes_the_binding(self) -> None:

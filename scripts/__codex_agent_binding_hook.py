@@ -33,7 +33,11 @@ def main() -> int:
 
     binding_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
     temporary = binding_path.with_suffix(".json.tmp")
-    temporary.write_text(json.dumps({"agent": agent_name, "thread_id": session_id}) + "\n")
+    binding = {"agent": agent_name, "thread_id": session_id}
+    socket_path = os.environ.get("CODEX_APP_SERVER_SOCKET", "")
+    if socket_path:
+        binding["socket_path"] = socket_path
+    temporary.write_text(json.dumps(binding) + "\n")
     temporary.chmod(0o600)
     temporary.replace(binding_path)
     return 0
