@@ -110,3 +110,28 @@ EOF
 	[ "$status" -eq 0 ]
 	[ "$output" = unknown ]
 }
+
+@test "catalog cache invalidates when a skill changes" {
+	local skill_file="$FIXTURE_ROOT/codex-skills/example/SKILL.md"
+	make_skill "$skill_file" first-name
+
+	run env \
+		XDG_CACHE_HOME="$FIXTURE_ROOT/cache" \
+		CODEX_SKILLS_ROOT="$FIXTURE_ROOT/codex-skills" \
+		SHARED_SKILLS_ROOT="$FIXTURE_ROOT/empty" \
+		CODEX_PLUGIN_CACHE_ROOT="$FIXTURE_ROOT/missing-cache" \
+		bash "$CATALOG_TOOL" list codex "$FIXTURE_ROOT/project"
+	[ "$status" -eq 0 ]
+	[[ "$output" == *first-name* ]]
+
+	make_skill "$skill_file" replacement-name
+	run env \
+		XDG_CACHE_HOME="$FIXTURE_ROOT/cache" \
+		CODEX_SKILLS_ROOT="$FIXTURE_ROOT/codex-skills" \
+		SHARED_SKILLS_ROOT="$FIXTURE_ROOT/empty" \
+		CODEX_PLUGIN_CACHE_ROOT="$FIXTURE_ROOT/missing-cache" \
+		bash "$CATALOG_TOOL" list codex "$FIXTURE_ROOT/project"
+	[ "$status" -eq 0 ]
+	[[ "$output" == *replacement-name* ]]
+	[[ "$output" != *first-name* ]]
+}

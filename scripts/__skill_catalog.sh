@@ -10,6 +10,7 @@ claude_settings_file="${CLAUDE_SETTINGS_FILE:-$HOME/.claude/settings.json}"
 codex_skills_root="${CODEX_SKILLS_ROOT:-$HOME/.codex/skills}"
 shared_skills_root="${SHARED_SKILLS_ROOT:-$HOME/.claude/skills}"
 codex_plugin_cache_root="${CODEX_PLUGIN_CACHE_ROOT:-$HOME/.codex/plugins/cache}"
+cache_root="${XDG_CACHE_HOME:-$HOME/.cache}/capability-picker"
 
 frontmatter_value() {
 	local file="$1" key="$2"
@@ -94,7 +95,7 @@ emit_codex_plugins() {
 	done < <(find -L "$codex_plugin_cache_root" -type f -path '*/.codex-plugin/plugin.json' -print0 2>/dev/null)
 }
 
-list_skills() {
+list_skills_uncached() {
 	local agent="$1" cwd="${2:-$PWD}"
 	{
 		if [[ "$agent" == claude ]]; then
@@ -111,6 +112,76 @@ list_skills() {
 			return 2
 		fi
 	} | awk -F '\t' '!seen[$2]++' | sort -t $'\t' -k2,2
+}
+
+emit_tree_signature() {
+	local root="$1"
+	[[ -d "$root" ]] || return 0
+	find -L "$root" -type f -name SKILL.md \
+		-printf '%p\t%T@\t%s\n' 2>/dev/null
+}
+
+emit_project_signature() {
+	local agent="$1" cwd="$2" current
+	[[ -d "$cwd" ]] || return 0
+	current="$(cd "$cwd" && pwd -P)"
+	while :; do
+		if [[ "$agent" == claude ]]; then
+			emit_tree_signature "$current/.claude/skills"
+		else
+			emit_tree_signature "$current/.codex/skills"
+			emit_tree_signature "$current/.agents/skills"
+		fi
+		[[ "$current" == / ]] && break
+		current="${current%/*}"
+		current="${current:-/}"
+	done
+}
+
+catalog_signature() {
+	local agent="$1" cwd="$2" install_path
+	printf 'catalog-v1\t%s\t%s\n' "$agent" "$(stat -c '%Y:%s' "${BASH_SOURCE[0]}")"
+	if [[ "$agent" == claude ]]; then
+		for install_path in "$claude_installed_plugins" "$claude_settings_file"; do
+			[[ -f "$install_path" ]] && stat -c '%n\t%Y\t%s' "$install_path"
+		done
+		emit_tree_signature "$claude_skills_root"
+		if [[ -f "$claude_installed_plugins" ]] && command -v jq >/dev/null 2>&1; then
+			while IFS= read -r install_path; do
+				emit_tree_signature "$install_path"
+			done < <(jq -r '.plugins[][].installPath' "$claude_installed_plugins")
+		fi
+	else
+		emit_tree_signature "$codex_skills_root"
+		emit_tree_signature "$shared_skills_root"
+		emit_tree_signature "$codex_plugin_cache_root"
+	fi
+	emit_project_signature "$agent" "$cwd"
+}
+
+list_skills() {
+	local agent="$1" cwd="${2:-$PWD}" cache_key cache_file signature_file signature cached_signature
+	if [[ "${CAPABILITY_PICKER_DISABLE_CACHE:-0}" == 1 ]]; then
+		list_skills_uncached "$agent" "$cwd"
+		return
+	fi
+
+	cache_key="$(printf '%s' "$cwd" | cksum | awk '{ print $1 }')"
+	cache_file="$cache_root/skills-$agent-$cache_key.tsv"
+	signature_file="$cache_file.signature"
+	signature="$(catalog_signature "$agent" "$cwd" | cksum | awk '{ print $1 ":" $2 }')"
+	cached_signature="$(cat "$signature_file" 2>/dev/null || true)"
+	if [[ -f "$cache_file" && "$signature" == "$cached_signature" ]]; then
+		cat "$cache_file"
+		return
+	fi
+
+	mkdir -p "$cache_root"
+	list_skills_uncached "$agent" "$cwd" > "$cache_file.tmp.$$"
+	printf '%s\n' "$signature" > "$signature_file.tmp.$$"
+	mv "$cache_file.tmp.$$" "$cache_file"
+	mv "$signature_file.tmp.$$" "$signature_file"
+	cat "$cache_file"
 }
 
 detect_agent() {
