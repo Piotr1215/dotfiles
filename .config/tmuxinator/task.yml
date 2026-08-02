@@ -57,5 +57,24 @@ windows:
   - private:
       layout: 72be,150x72,0,0[150x42,0,0,4,150x29,0,43,19]
       panes:
+        # Gordon's startup steps (register on the bus, load the devops-dev
+        # skill, read the spawn mode) live in the "## Startup" section of the
+        # system-prompt file below.
+        #
+        # Slash commands DO chain here: the TUI splits the positional string on
+        # each leading `/` and queues one expanded turn per command, in written
+        # order. Verified 2026-08-01 with `-- "/ops-triage-agent /ops-pr-review"`,
+        # which produced two `>` turns and both command bodies in context. An
+        # earlier version of this comment claimed the opposite and steered skill
+        # loading into the system prompt; that claim was wrong. Note the same
+        # string in headless `-p` mode dispatches ONLY the first command, so never
+        # test this behaviour with `-p`.
+        #
+        # root: ~/loft/ puts this pane on the WORK account
+        # (CLAUDE_CONFIG_DIR=$HOME/.claude-work). That does NOT limit the chain:
+        # ~/.claude-work/skills and ~/.claude-work/commands are symlinks to
+        # ~/.claude, so the whole personal set resolves here too.
         - __claude_with_monitor.sh --system-prompt-file ~/.claude/system-prompts/triage-agent-system-prompt.md -- "/ops-triage-agent"
+  - cockpit:
+      panes:
         - ~/.claude/scripts/__cockpit_board.sh
