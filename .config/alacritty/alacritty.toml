@@ -50,9 +50,14 @@ regex = "(ipfs:|ipns:|magnet:|mailto:|gemini://|gopher://|https://|http://|news:
 # unexpectedly" and the hint silently did nothing. The apt tmux/tmuxinator
 # packages were removed 2026-07-27, so only 3.7b remains.
 [[hints.enabled]]
-regex = '(\.|~|/)?([A-Za-z0-9._-]+/)*[A-Za-z0-9._-]+\.[A-Za-z0-9]+'
+regex = '(\.|~/|/)?([A-Za-z0-9._-]+/)*[A-Za-z0-9._-]+\.[A-Za-z0-9]+'
 post_processing = true
-command = { program = "/usr/local/bin/tmux", args = ["split-window", "-h", "-c", "#{pane_current_path}", "sh", "-c", "nvim \"$0\""] }
+# The leading ~ must be expanded here, not left to nvim. Handed a literal
+# ~/foo.md, nvim opens an empty new-file buffer while expand("%:p") still
+# reports the resolved /home/decoder/foo.md, so the path looks right and the
+# content is missing. case/set is used instead of eval because the hint captures
+# arbitrary on-screen text.
+command = { program = "/usr/local/bin/tmux", args = ["split-window", "-h", "-c", "#{pane_current_path}", "sh", "-c", 'case $0 in "~/"*) f=$HOME/${0#?/} ;; *) f=$0 ;; esac; exec nvim "$f"'] }
 binding = { key = "2", mods = "Control" }
 
 # ctrl+3: jump the tmux client to an agent session named on the cockpit board.
