@@ -39,11 +39,12 @@ pattern_roots=(
 )
 
 load_patterns() {
-	local root file name
+	local root file directory name
 	for root in "${pattern_roots[@]}"; do
 		[[ -d "$root" ]] || continue
 		while IFS= read -r -d '' file; do
-			name="$(basename "$(dirname "$file")")"
+			directory="${file%/*}"
+			name="${directory##*/}"
 			# Prefer the first root, so dotfiles-owned prompts win over copies.
 			[[ -v "pattern_files[$name]" ]] || pattern_files["$name"]="$file"
 		done < <(find -L "$root" -mindepth 2 -maxdepth 2 -type f -name system.md -print0)
