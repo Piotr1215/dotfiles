@@ -64,6 +64,7 @@ bind_pane_kubeconfig
 control_key="${pane_key:0:16}"
 control_dir="$codex_home/app-server-control/$control_key"
 socket_path="$control_dir/app-server-control.sock"
+export CODEX_APP_SERVER_SOCKET="$socket_path"
 pid_file="$control_dir/app-server.pid"
 log_file="$codex_home/logs/app-server-$control_key.log"
 client_lock="$control_dir/client.lock"
