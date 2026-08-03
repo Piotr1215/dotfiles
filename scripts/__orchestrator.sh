@@ -128,7 +128,8 @@ selection="$(printf '%s\n' "$capabilities" | fzf \
 
 IFS=$'\t' read -r capability_kind capability_name capability_file invocation _capability_source <<< "$selection"
 
-if [[ "$capability_kind" == skill ]]; then
+# Skills and commands are both invoked verbatim; only fabric prompts get edited.
+if [[ "$capability_kind" == skill || "$capability_kind" == command ]]; then
 	deliver_text "$invocation" "$capability_name"
 	exit 0
 fi
