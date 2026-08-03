@@ -98,12 +98,33 @@ extract_to_cache() {
 	fi
 	mkdir -p "$CACHE_DIR"
 	tmp="$file.$$"
-	if node "$READABLE" --url "$url" --stats >"$tmp" 2>/dev/null; then
+	EXTRACT_ERROR=""
+	if node "$READABLE" --url "$url" --stats >"$tmp" 2>"$tmp.err"; then
 		mv -f "$tmp" "$file"
+		rm -f "$tmp.err"
 		return 0
 	fi
-	rm -f "$tmp"
+	EXTRACT_ERROR=$(head -1 "$tmp.err" 2>/dev/null || true)
+	rm -f "$tmp" "$tmp.err"
 	return 1
+}
+
+# Why the last extract_to_cache failed, in the engine's own words.
+#
+# The three causes used to be printed as one guess, which is worse than
+# useless: LinkedIn answers with HTTP 999, a refusal to serve anything without
+# a session, and reading that as the JavaScript limit sends you looking for a
+# renderer that would not have helped.
+extract_failure_reason() {
+	local reason=${EXTRACT_ERROR#\[}
+	reason=${reason%\]}
+	case $reason in
+	'' | *ENOENT*) reason="fetch failed" ;;
+	'no article found' | 'no readable text extracted')
+		reason="$reason, the page most likely builds its body in JavaScript"
+		;;
+	esac
+	printf '%s' "$reason"
 }
 
 # Install the extraction engine. Readability and Turndown are the pair the
@@ -209,6 +230,26 @@ hrule() {
 	printf '\033[0m\n'
 }
 
+# Print an extract as rendered markdown.
+#
+# The file itself holds no escape codes, so that it opens clean in an editor;
+# colour is added here, at the point of printing. glow renders the document,
+# with headings styled and prose wrapped to the pane. bat only highlights the
+# source, so every "##" and "](" stays on screen, which is why it is the
+# fallback rather than the choice. Both see a pipe rather than the preview
+# pane, so the width has to be handed to them or they assume 80 columns.
+render_markdown() {
+	local file=$1 width=$2
+	if command -v glow >/dev/null 2>&1; then
+		glow --width="$width" "$file"
+	elif command -v bat >/dev/null 2>&1; then
+		bat --style=plain --color=always --paging=never \
+			--language=markdown --terminal-width="$width" "$file"
+	else
+		sed $'s/^\\[kept .* characters of page text\\]$/\033[90m&\033[0m/' "$file"
+	fi
+}
+
 # ---------------------------------------------------------------------------
 # Internal modes, invoked by the picker's key bindings.
 # ---------------------------------------------------------------------------
@@ -232,14 +273,10 @@ mode_preview() {
 
 	cached=$(cache_file "$url")
 	if extract_to_cache "$url"; then
-		# The extract ends on its last character, the way the extension writes
-		# its files, and carries no escape codes so it opens clean in an
-		# editor. Terminating the line and dimming the footer is this end's
-		# job, not the file's.
-		sed $'s/^\\[kept .* characters of page text\\]$/\033[90m&\033[0m/' "$cached"
+		render_markdown "$cached" "$width"
 		printf '\n'
 	else
-		printf '\033[31m(no page text: fetch blocked, timed out, or the page needs JavaScript)\033[0m\n'
+		printf '\033[31m(no page text: %s)\033[0m\n' "$(extract_failure_reason)"
 	fi
 }
 
@@ -257,7 +294,7 @@ emit_note() {
 		cat "$cached"
 		printf '\n'
 	else
-		printf '(no page text extracted)\n'
+		printf '(no page text: %s)\n' "$(extract_failure_reason)"
 	fi
 }
 
@@ -271,7 +308,11 @@ mode_read() {
 		emit_note "$file" "$idx" >>"$combined"
 		printf '\n\n---\n\n' >>"$combined"
 	done
-	if command -v bat >/dev/null 2>&1; then
+	# Same renderer as the preview pane, so ctrl-o and the preview do not
+	# disagree about what the same page looks like.
+	if command -v glow >/dev/null 2>&1; then
+		glow --pager "$combined"
+	elif command -v bat >/dev/null 2>&1; then
 		bat --style=plain --language=markdown --paging=always "$combined"
 	else
 		less -R "$combined"
