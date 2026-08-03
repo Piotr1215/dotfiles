@@ -243,7 +243,16 @@ function makeTurndown (baseURI) {
   return td
 }
 
+// "cloudrumble.net" is what you type; "https://cloudrumble.net" is what you
+// have to type. Anything already naming a scheme is left alone, so the
+// http(s)-only check in httpGet still sees a file: URL for what it is.
+function normalizeUrl (input) {
+  if (!input) return input
+  return /^[a-z][a-z0-9+.-]*:\/\//i.test(input) ? input : `https://${input}`
+}
+
 async function extract (url, { html = null, maxLines = 0, stats = false } = {}) {
+  url = normalizeUrl(url)
   let source = html
   if (source === null) {
     source = url ? await stackExchangeHtml(url).catch(() => null) : null
