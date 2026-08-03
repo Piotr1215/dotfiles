@@ -5,8 +5,10 @@ set -euo pipefail
 # kind<TAB>display name<TAB>SKILL.md<TAB>invocation<TAB>source
 
 claude_skills_root="${CLAUDE_SKILLS_ROOT:-$HOME/.claude/skills}"
+claude_commands_root="${CLAUDE_COMMANDS_ROOT:-$HOME/.claude/commands}"
 claude_installed_plugins="${CLAUDE_INSTALLED_PLUGINS:-$HOME/.claude/plugins/installed_plugins.json}"
 claude_settings_file="${CLAUDE_SETTINGS_FILE:-$HOME/.claude/settings.json}"
+claude_bin="${CLAUDE_BIN:-claude}"
 codex_skills_root="${CODEX_SKILLS_ROOT:-$HOME/.codex/skills}"
 shared_skills_root="${SHARED_SKILLS_ROOT:-$HOME/.claude/skills}"
 codex_plugin_cache_root="${CODEX_PLUGIN_CACHE_ROOT:-$HOME/.codex/plugins/cache}"
@@ -59,6 +61,22 @@ emit_skill_tree() {
 	done < <(find -L "$root" -type f -name SKILL.md -print0 2>/dev/null)
 }
 
+# Custom commands are invoked the same way skills are, and `/skills` lists them
+# alongside skills, so the picker has to carry them too. They are flat .md files,
+# not directories with a SKILL.md.
+emit_command_tree() {
+	local root="$1" agent="$2" source="$3"
+	local file name prefix
+	[[ -d "$root" ]] || return 0
+	[[ "$agent" == claude ]] && prefix=/ || prefix='$'
+
+	while IFS= read -r -d '' file; do
+		name="${file##*/}"
+		name="${name%.md}"
+		printf 'command\t%s\t%s\t%s%s\t%s\n' "$name" "$file" "$prefix" "$name" "$source"
+	done < <(find -L "$root" -maxdepth 1 -type f -name '*.md' -print0 2>/dev/null)
+}
+
 emit_project_skills() {
 	local agent="$1" cwd="$2" current
 	[[ -d "$cwd" ]] || return 0
@@ -66,6 +84,7 @@ emit_project_skills() {
 	while :; do
 		if [[ "$agent" == claude ]]; then
 			emit_skill_tree "$current/.claude/skills" "$agent" '' project
+			emit_command_tree "$current/.claude/commands" "$agent" project
 		else
 			emit_skill_tree "$current/.codex/skills" "$agent" '' project
 			emit_skill_tree "$current/.agents/skills" "$agent" '' project
@@ -75,18 +94,76 @@ emit_project_skills() {
 	done
 }
 
-emit_claude_plugins() {
-	local key install_path plugin_name enabled
-	[[ -f "$claude_installed_plugins" && -f "$claude_settings_file" ]] || return 0
-	command -v jq >/dev/null 2>&1 || return 0
+# Index every file a plugin could expose a capability from, keyed by the name it
+# would be invoked under. Declared locations win over vendored copies elsewhere in
+# the checkout, so a preview opens the canonical file.
+index_plugin_files() {
+	local root="$1" base file key declared
+	for base in "$root/skills" "$root/commands" "$root"; do
+		[[ -d "$base" ]] || continue
+		while IFS= read -r -d '' file; do
+			case "$file" in
+			*/SKILL.md)
+				# A skill answers to its declared name, which need not match its
+				# directory: terraform-skill ships SKILL.md at the plugin root.
+				key="${file%/SKILL.md}"
+				key="${key##*/}"
+				declared="$(frontmatter_value "$file" name)"
+				[[ -n "$declared" && ! -v "plugin_file[$declared]" ]] && plugin_file["$declared"]="$file"
+				;;
+			*)
+				key="${file##*/}"
+				key="${key%.md}"
+				;;
+			esac
+			[[ -v "plugin_file[$key]" ]] || plugin_file["$key"]="$file"
+		done < <(find -L "$base" \( -name node_modules -o -name .git \) -prune -o \
+			-type f \( -name SKILL.md -o -path '*/commands/*.md' \) -print0 2>/dev/null | sort -z)
+	done
+}
 
-	while IFS=$'\t' read -r key install_path; do
-		[[ -n "$key" && -d "$install_path" ]] || continue
-		enabled="$(jq -r --arg key "$key" '.enabledPlugins[$key] // false' "$claude_settings_file")"
-		[[ "$enabled" == true ]] || continue
-		plugin_name="${key%%@*}"
-		emit_skill_tree "$install_path" claude "$plugin_name" "plugin:$plugin_name"
-	done < <(jq -r '.plugins | to_entries[] | .key as $key | .value[] | [$key, .installPath] | @tsv' "$claude_installed_plugins")
+# Emit one plugin's capabilities. The CLI decides WHICH names the plugin owns; the
+# tree is consulted only to find the file behind a name. Without that split a
+# monorepo checkout donates every sibling plugin's skills to whichever entry
+# happens to point at the repo root, which is how /ai-platform:helm got invented.
+emit_claude_plugin() {
+	local plugin="$1" root="$2" entry file
+	local -A plugin_file=()
+	index_plugin_files "$root"
+
+	"$claude_bin" plugin details "$plugin" 2>/dev/null |
+		sed -n 's/^[[:space:]]*Skills ([0-9][0-9]*)[[:space:]]*//p' |
+		tr ',' '\n' |
+		while IFS= read -r entry; do
+			entry="${entry#"${entry%%[![:space:]]*}"}"
+			entry="${entry%"${entry##*[![:space:]]}"}"
+			[[ -n "$entry" ]] || continue
+			file="${plugin_file[$entry]:-}"
+			[[ -n "$file" ]] || continue
+			printf 'skill\t%s:%s\t%s\t/%s:%s\tplugin:%s\n' \
+				"$plugin" "$entry" "$file" "$plugin" "$entry" "$plugin"
+		done
+}
+
+# One `plugin details` call costs ~0.7s, so a dozen plugins serially would stall the
+# popup for the whole of a cache miss. Fan them out and reassemble in listing order.
+emit_claude_plugins() {
+	local id install_path plugin_name work index=0
+	command -v jq >/dev/null 2>&1 || return 0
+	command -v "$claude_bin" >/dev/null 2>&1 || return 0
+
+	work="$(mktemp -d)" || return 0
+	while IFS=$'\t' read -r id install_path; do
+		[[ -n "$id" && -d "$install_path" ]] || continue
+		plugin_name="${id%%@*}"
+		emit_claude_plugin "$plugin_name" "$install_path" > "$work/$(printf '%03d' "$index")" &
+		index=$((index + 1))
+	done < <("$claude_bin" plugin list --json 2>/dev/null |
+		jq -r '.[] | select(.enabled) | [.id, .installPath] | @tsv' 2>/dev/null)
+	wait
+
+	[[ "$index" -gt 0 ]] && cat "$work"/*
+	rm -rf "$work"
 }
 
 emit_codex_plugins() {
@@ -108,6 +185,7 @@ list_skills_uncached() {
 	{
 		if [[ "$agent" == claude ]]; then
 			emit_skill_tree "$claude_skills_root" claude '' personal
+			emit_command_tree "$claude_commands_root" claude personal
 			emit_project_skills claude "$cwd"
 			emit_claude_plugins
 		elif [[ "$agent" == codex ]]; then
@@ -129,6 +207,13 @@ emit_tree_signature() {
 		-printf '%p\t%T@\t%s\n' 2>/dev/null
 }
 
+emit_command_signature() {
+	local root="$1"
+	[[ -d "$root" ]] || return 0
+	find -L "$root" -maxdepth 1 -type f -name '*.md' \
+		-printf '%p\t%T@\t%s\n' 2>/dev/null
+}
+
 emit_project_signature() {
 	local agent="$1" cwd="$2" current
 	[[ -d "$cwd" ]] || return 0
@@ -136,6 +221,7 @@ emit_project_signature() {
 	while :; do
 		if [[ "$agent" == claude ]]; then
 			emit_tree_signature "$current/.claude/skills"
+			emit_command_signature "$current/.claude/commands"
 		else
 			emit_tree_signature "$current/.codex/skills"
 			emit_tree_signature "$current/.agents/skills"
@@ -154,9 +240,11 @@ catalog_signature() {
 			[[ -f "$install_path" ]] && stat -c '%n\t%Y\t%s' "$install_path"
 		done
 		emit_tree_signature "$claude_skills_root"
+		emit_command_signature "$claude_commands_root"
 		if [[ -f "$claude_installed_plugins" ]] && command -v jq >/dev/null 2>&1; then
 			while IFS= read -r install_path; do
 				emit_tree_signature "$install_path"
+				emit_command_signature "$install_path/commands"
 			done < <(jq -r '.plugins[][].installPath' "$claude_installed_plugins")
 		fi
 	else
