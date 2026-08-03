@@ -119,7 +119,7 @@ fi
 
 selection="$(printf '%s\n' "$capabilities" | fzf \
 	--delimiter=$'\t' \
-	--with-nth=1,2,5 \
+	--with-nth='{1}  {5}  {2}' \
 	--prompt="Library ($agent)> " \
 	--header='Enter: insert skill or edit prompt  Ctrl-e: edit source  Esc: cancel' \
 	--bind='ctrl-e:execute(nvim {3})+refresh-preview' \
