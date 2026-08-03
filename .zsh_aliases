@@ -180,3 +180,11 @@ alias ccstatus="~/.claude/scripts/__cockpit_board.sh"
 alias not='cat ~/.local/state/notifications.log'
 alias noti='tail -n 40 ~/.local/state/notifications.log'
 alias notif='tail -f ~/.local/state/notifications.log'
+
+# search with page extracts: ddgr finds the results, __readable.mjs renders
+# each page to markdown with Readability + Turndown. s/ddgx open the picker,
+# sd dumps the top hits with the first lines of each page (pipeable).
+# sd shadows the sed clone of the same name, which is deliberate: not used here.
+alias s="~/dev/dotfiles/scripts/__ddgx.sh"
+alias ddgx="~/dev/dotfiles/scripts/__ddgx.sh"
+alias sd="~/dev/dotfiles/scripts/__ddgx.sh -d"
