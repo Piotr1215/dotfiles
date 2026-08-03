@@ -2,9 +2,10 @@
 
 # Test suite for __kctx_claude_notify.sh
 #
-# The script has two jobs: decide whether a tmux pane holds a claude process,
-# and type the connection change into it. Both are exercised against mocked
-# tmux and ps, so the tests never touch the live tmux server.
+# The script has three jobs: decide whether a tmux pane holds a claude process,
+# work out whether the swap can actually reach that process, and type an honest
+# account of the change into the pane. All of it runs against mocked tmux, ps,
+# kctx and /proc, so the tests never touch the live tmux server.
 
 SCRIPT="/home/decoder/dev/dotfiles/scripts/__kctx_claude_notify.sh"
 
@@ -50,15 +51,44 @@ printf '%s\n' "${MOCK_PS_TABLE:-}"
 EOF
     chmod +x "${TEST_DIR}/ps"
 
+    # Mocked kctx: `runtime override <pane>` prints the pane pair, and fails the
+    # way the real binary does when no override is active.
+    cat > "${TEST_DIR}/kctx" << 'EOF'
+#!/usr/bin/env bash
+if [[ -z "${MOCK_KCTX_PAIR:-}" ]]; then
+    echo "Error: no pane override is active" >&2
+    exit 1
+fi
+printf '%s\n' "${MOCK_KCTX_PAIR}"
+EOF
+    chmod +x "${TEST_DIR}/kctx"
+
+    # Mocked /proc: the exec-time environment of the claude process.
+    export KCTX_NOTIFY_PROC_DIR="${TEST_DIR}/proc"
+
     # Default table: pane shell 1000 -> claude 1001.
     export MOCK_PS_TABLE=$'1000 999 zsh\n1001 1000 claude'
     export MOCK_PANE_PID=1000
     export MOCK_KCTX_DISPLAY="loft-prod/eng"
     export MOCK_KCTX_CONTEXT="gke::loft-prod/europe-west1/loft-prod-engineering"
+    export MOCK_KCTX_PAIR="/run/user/1000/kctx/abc123/selection.yaml:/run/user/1000/kctx/abc123/view.yaml"
+
+    # By default the session inherited the pane pair, the healthy launch case.
+    write_proc_env 1001 "$MOCK_KCTX_PAIR"
 }
 
 teardown() {
     rm -rf "$TEST_DIR"
+}
+
+# Write a NUL-separated environ fixture for a pid, as /proc exposes it.
+write_proc_env() {
+    local pid="$1"
+    local kubeconfig="$2"
+
+    mkdir -p "${KCTX_NOTIFY_PROC_DIR}/${pid}"
+    printf 'PATH=/usr/bin\0KUBECONFIG=%s\0TMUX_PANE=%%33\0' "$kubeconfig" \
+        > "${KCTX_NOTIFY_PROC_DIR}/${pid}/environ"
 }
 
 # Extract the literal text the script typed into the pane.
@@ -88,24 +118,26 @@ sent_text() {
     run "$SCRIPT" "%33"
     [ "$status" -eq 0 ]
     run sent_text
-    [[ "$output" == *"swapped to loft-prod/eng"* ]]
+    [[ "$output" == *"context is now loft-prod/eng"* ]]
     grep -q '^send-keys -t %33 Enter$' "$TMUX_LOG"
 }
 
 @test "finds claude nested under the monitor wrapper" {
     export MOCK_PS_TABLE=$'1000 999 zsh\n1001 1000 bash\n1002 1001 claude'
+    write_proc_env 1002 "$MOCK_KCTX_PAIR"
     run "$SCRIPT" "%33"
     [ "$status" -eq 0 ]
     run sent_text
-    [[ "$output" == *"swapped to loft-prod/eng"* ]]
+    [[ "$output" == *"context is now loft-prod/eng"* ]]
 }
 
 @test "detects claude launched directly as the pane process" {
     export MOCK_PS_TABLE=$'1000 999 claude'
+    write_proc_env 1000 "$MOCK_KCTX_PAIR"
     run "$SCRIPT" "%33"
     [ "$status" -eq 0 ]
     run sent_text
-    [[ "$output" == *"swapped to"* ]]
+    [[ "$output" == *"context is now"* ]]
 }
 
 @test "stays silent when the pane runs no claude" {
@@ -129,17 +161,64 @@ sent_text() {
     run "$SCRIPT" "%33"
     [ "$status" -eq 0 ]
     run sent_text
-    [[ "$output" == *"swapped to gke::loft-prod/europe-west1/loft-prod-engineering"* ]]
+    [[ "$output" == *"context is now gke::loft-prod/europe-west1/loft-prod-engineering"* ]]
 }
 
 @test "reports a release when the pane has no connection left" {
     export MOCK_KCTX_DISPLAY=""
     export MOCK_KCTX_CONTEXT=""
+    export MOCK_KCTX_PAIR=""
     run "$SCRIPT" "%33"
     [ "$status" -eq 0 ]
     run sent_text
     [[ "$output" == *"was released"* ]]
     [[ "$output" == *"direnv"* ]]
+    [[ "$output" == *"current-context"* ]]
+}
+
+@test "never claims the swap already reached the agent" {
+    run "$SCRIPT" "%33"
+    [ "$status" -eq 0 ]
+    run sent_text
+    [[ "$output" != *"already points at it"* ]]
+}
+
+@test "names the pane kubeconfig and asks for a verification command" {
+    run "$SCRIPT" "%33"
+    [ "$status" -eq 0 ]
+    run sent_text
+    [[ "$output" == *"kubectl config current-context"* ]]
+    [[ "$output" == *"KUBECONFIG=${MOCK_KCTX_PAIR} kubectl"* ]]
+}
+
+@test "says the swap does not reach a session launched off the pane pair" {
+    # The observed failure: a worktree .envrc exported KUBECONFIG, so claude
+    # launched on that file and every tool call resolves the old cluster.
+    write_proc_env 1001 "/home/decoder/dev/homelab/kubeconfig"
+    run "$SCRIPT" "%33"
+    [ "$status" -eq 0 ]
+    run sent_text
+    [[ "$output" == *"does NOT reach your tool calls"* ]]
+    [[ "$output" == *"KUBECONFIG=/home/decoder/dev/homelab/kubeconfig"* ]]
+    [[ "$output" == *"KUBECONFIG=${MOCK_KCTX_PAIR} kubectl"* ]]
+}
+
+@test "still reports the change when the launch environment is unreadable" {
+    rm -rf "${KCTX_NOTIFY_PROC_DIR}/1001"
+    run "$SCRIPT" "%33"
+    [ "$status" -eq 0 ]
+    run sent_text
+    [[ "$output" == *"context is now loft-prod/eng"* ]]
+    [[ "$output" != *"does NOT reach"* ]]
+}
+
+@test "still reports the change when kctx cannot name the pane pair" {
+    export MOCK_KCTX_PAIR=""
+    run "$SCRIPT" "%33"
+    [ "$status" -eq 0 ]
+    run sent_text
+    [[ "$output" == *"context is now loft-prod/eng"* ]]
+    [[ "$output" == *"kubectl config current-context"* ]]
 }
 
 @test "leaves copy-mode before typing" {
