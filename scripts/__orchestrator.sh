@@ -31,11 +31,13 @@ if [[ -z "$target_pane" ]] && command -v tmux >/dev/null 2>&1; then
 fi
 target_pane="${target_pane:-${TMUX_PANE:-}}"
 
+# Custom patterns only. The upstream fabric library adds 255 prompts written for
+# someone else's workflow, which buried the 13 that are actually mine. It stays on
+# disk for the `fabric` CLI; this picker just stops offering it.
 declare -A pattern_files=()
 pattern_roots=(
 	"$HOME/dev/dotfiles/.config/fabric/custom_patterns"
 	"$HOME/.config/fabric/custom_patterns"
-	"$HOME/.config/fabric/patterns"
 )
 
 load_patterns() {
@@ -54,7 +56,7 @@ load_patterns() {
 list_patterns() {
 	local name
 	for name in "${!pattern_files[@]}"; do
-		printf 'prompt\t%s\t%s\t-\tfabric\n' "$name" "${pattern_files[$name]}"
+		printf 'prompt\t%s\t%s\t-\tcustom\n' "$name" "${pattern_files[$name]}"
 	done | sort
 }
 
