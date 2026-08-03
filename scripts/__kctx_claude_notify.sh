@@ -3,12 +3,19 @@
 # connection just changed.
 #
 # kctx pins each pane's KUBECONFIG to a stable runtime path and rewrites the
-# selection in place, so a swap is already live for a process that is running:
-# the next kubectl a Claude session shells out to hits the new cluster. Claude
-# has no way to notice. Nothing re-reads the environment mid-session, the pane
-# border is not in its context, and the shell hook that would reassert the pair
-# cannot run while claude holds the pane. Left alone it keeps reasoning about
-# the old cluster until a command returns something that makes no sense.
+# selection in place, so a swap reaches any process that already holds that
+# path. Claude has no way to notice: nothing re-reads the environment
+# mid-session, the pane border is not in its context, and the shell hook that
+# would reassert the pair cannot run while claude holds the pane.
+#
+# What this script must not do is assert that the swap is live for the agent.
+# Every Bash tool call is a fresh shell, and its KUBECONFIG comes from the
+# claude process environment, which the profile and direnv can have set to
+# something else entirely. A worktree .envrc that exports KUBECONFIG wins over
+# the pane pair for the whole session, and the swap never reaches a single tool
+# call. An agent told "your KUBECONFIG already points at it" then reads the
+# wrong cluster with full confidence. So the message reports the change, names
+# the pane kubeconfig, and asks for one verification command.
 #
 # Usage: __kctx_claude_notify.sh <pane-id>
 #
@@ -21,17 +28,20 @@ set -eo pipefail
 readonly SETTLE_DELAY="${KCTX_NOTIFY_SETTLE_DELAY:-0.3}"
 # Claude's TUI needs the line buffered before the submit key arrives.
 readonly ENTER_DELAY="${KCTX_NOTIFY_ENTER_DELAY:-0.3}"
+readonly KCTX_BIN="${KCTX_BIN:-kctx}"
+# Overridable so the tests can supply a process environment fixture.
+readonly PROC_DIR="${KCTX_NOTIFY_PROC_DIR:-/proc}"
 
 usage() {
     echo "Usage: $(basename "$0") <pane-id>" >&2
     echo "  pane-id: tmux pane id, e.g. %33" >&2
 }
 
-# True when a claude process lives anywhere under the pane's process tree.
+# Print the pid of a claude process living under the pane's process tree.
 # claude is rarely the pane process itself: the pane holds a shell, and claude
 # sits below it, sometimes under the __claude_with_monitor.sh wrapper. One ps
 # snapshot walked upwards beats recursing with a process call per level.
-pane_runs_claude() {
+pane_claude_pid() {
     local pane="$1"
     local pane_pid
 
@@ -46,7 +56,7 @@ pane_runs_claude() {
                 p = pid
                 hops = 0
                 while (p != "" && p != "0" && hops++ < 32) {
-                    if (p == root) exit 0
+                    if (p == root) { print pid; exit 0 }
                     p = ppid[p]
                 }
             }
@@ -66,6 +76,55 @@ current_connection() {
         display="$(tmux show-options -pqv -t "$pane" @kctx_context 2>/dev/null)" || display=""
     fi
     printf '%s' "$display"
+}
+
+# The pane's selection:view pair, which is what now points at the new context.
+# Read-only, and empty unless an explicit override is active on the pane.
+pane_pair() {
+    local pane="$1"
+    local pair
+
+    pair="$("$KCTX_BIN" runtime override "$pane" 2>/dev/null)" || pair=""
+    printf '%s' "$pair"
+}
+
+# The KUBECONFIG the claude process was executed with. /proc holds the exec-time
+# environment, so this proves the launch binding and nothing later: a session
+# that never inherited the pair cannot see the swap under any circumstances.
+launch_kubeconfig() {
+    local pid="$1"
+    local environ="${PROC_DIR}/${pid}/environ"
+
+    [[ -r "$environ" ]] || return 0
+    tr '\0' '\n' <"$environ" 2>/dev/null |
+        grep -a '^KUBECONFIG=' |
+        head -1 |
+        cut -d= -f2- || true
+}
+
+# Report the change, then hand the agent a check it can run and a path it can
+# use. Never claim the swap already reached its tool calls.
+compose_message() {
+    local connection="$1"
+    local pair="$2"
+    local launch_kubeconfig="$3"
+
+    if [[ -z "$connection" ]]; then
+        printf '%s' "[kctx] The kubernetes context override on this pane was released, so KUBECONFIG follows direnv again. Confirm with 'kubectl config current-context' before acting on any cluster, and treat earlier cluster output as stale."
+        return 0
+    fi
+
+    if [[ -n "$pair" && -n "$launch_kubeconfig" && "$launch_kubeconfig" != "$pair" ]]; then
+        printf '%s' "[kctx] This pane's kubernetes context is now ${connection}, but this session launched with KUBECONFIG=${launch_kubeconfig} instead of the pane kubeconfig, so the swap does NOT reach your tool calls. Run kubectl as 'KUBECONFIG=${pair} kubectl ...', or restart the session to inherit the pane. Treat earlier cluster output as stale."
+        return 0
+    fi
+
+    if [[ -n "$pair" ]]; then
+        printf '%s' "[kctx] This pane's kubernetes context is now ${connection}, and the pane kubeconfig pointing at it is ${pair}. Your Bash calls are fresh shells whose KUBECONFIG your profile or direnv can override, so confirm with 'kubectl config current-context' before acting; if it disagrees, run kubectl as 'KUBECONFIG=${pair} kubectl ...'. Treat earlier cluster output as stale."
+        return 0
+    fi
+
+    printf '%s' "[kctx] This pane's kubernetes context is now ${connection}. Your Bash calls are fresh shells whose KUBECONFIG your profile or direnv can override, so confirm with 'kubectl config current-context' before acting on any cluster. Treat earlier cluster output as stale."
 }
 
 send_to_pane() {
@@ -92,15 +151,15 @@ main() {
         exit 1
     fi
 
-    pane_runs_claude "$pane" || exit 0
+    local claude_pid
+    claude_pid="$(pane_claude_pid "$pane")" || exit 0
+    [[ -n "$claude_pid" ]] || exit 0
 
-    local connection message
+    local connection pair launch message
     connection="$(current_connection "$pane")"
-    if [[ -n "$connection" ]]; then
-        message="[kctx] Your kubernetes context has been swapped to ${connection}. This pane's KUBECONFIG already points at it, so treat any earlier cluster output as stale."
-    else
-        message="[kctx] The kubernetes context override on this pane was released, so KUBECONFIG follows direnv again. Treat any earlier cluster output as stale."
-    fi
+    pair="$(pane_pair "$pane")"
+    launch="$(launch_kubeconfig "$claude_pid")"
+    message="$(compose_message "$connection" "$pair" "$launch")"
 
     sleep "$SETTLE_DELAY"
     send_to_pane "$pane" "$message"
