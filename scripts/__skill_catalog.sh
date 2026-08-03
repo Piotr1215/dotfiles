@@ -33,7 +33,7 @@ is_user_invocable() {
 
 emit_skill_tree() {
 	local root="$1" agent="$2" namespace="$3" source="$4"
-	local file name display invocation prefix
+	local file name display invocation prefix row_source relative_file shared_file
 	[[ -d "$root" ]] || return 0
 	[[ "$agent" == claude ]] && prefix=/ || prefix='$'
 
@@ -47,7 +47,15 @@ emit_skill_tree() {
 			display="$name"
 		fi
 		invocation="$prefix$display"
-		printf 'skill\t%s\t%s\t%s\t%s\n' "$display" "$file" "$invocation" "$source"
+		row_source="$source"
+		if [[ "$agent" == codex && "$source" == codex && "$root" == "$codex_skills_root" ]]; then
+			relative_file="${file#"${root%/}/"}"
+			shared_file="${shared_skills_root%/}/$relative_file"
+			if [[ -e "$shared_file" && "$file" -ef "$shared_file" ]]; then
+				row_source=claude
+			fi
+		fi
+		printf 'skill\t%s\t%s\t%s\t%s\n' "$display" "$file" "$invocation" "$row_source"
 	done < <(find -L "$root" -type f -name SKILL.md -print0 2>/dev/null)
 }
 
@@ -104,7 +112,7 @@ list_skills_uncached() {
 			emit_claude_plugins
 		elif [[ "$agent" == codex ]]; then
 			emit_skill_tree "$codex_skills_root" codex '' codex
-			emit_skill_tree "$shared_skills_root" codex '' personal
+			emit_skill_tree "$shared_skills_root" codex '' claude
 			emit_project_skills codex "$cwd"
 			emit_codex_plugins
 		else

@@ -60,7 +60,7 @@ EOF
 	[ -z "$output" ]
 }
 
-@test "codex lists codex and shared personal skills with dollar invocations" {
+@test "codex distinguishes native and shared Claude skills" {
 	make_skill "$FIXTURE_ROOT/codex-skills/.system/skill-creator/SKILL.md" skill-creator
 	make_skill "$FIXTURE_ROOT/shared-skills/rag-eval/SKILL.md" rag-eval
 
@@ -71,8 +71,25 @@ EOF
 		bash "$CATALOG_TOOL" list codex "$FIXTURE_ROOT/project"
 
 	[ "$status" -eq 0 ]
-	printf '%s\n' "$output" | grep -F $'\t$rag-eval\tpersonal'
+	printf '%s\n' "$output" | grep -F $'\t$rag-eval\tclaude'
 	printf '%s\n' "$output" | grep -F $'\t$skill-creator\tcodex'
+}
+
+@test "codex symlinks to Claude skills retain their real source" {
+	make_skill "$FIXTURE_ROOT/shared-skills/security-assessor/SKILL.md" security-assessor
+	mkdir -p "$FIXTURE_ROOT/codex-skills"
+	ln -s "$FIXTURE_ROOT/shared-skills/security-assessor" "$FIXTURE_ROOT/codex-skills/security-assessor"
+
+	run env \
+		CAPABILITY_PICKER_DISABLE_CACHE=1 \
+		CODEX_SKILLS_ROOT="$FIXTURE_ROOT/codex-skills" \
+		SHARED_SKILLS_ROOT="$FIXTURE_ROOT/shared-skills" \
+		CODEX_PLUGIN_CACHE_ROOT="$FIXTURE_ROOT/missing-cache" \
+		bash "$CATALOG_TOOL" list codex "$FIXTURE_ROOT/project"
+
+	[ "$status" -eq 0 ]
+	[ "$(printf '%s\n' "$output" | grep -c $'^skill\tsecurity-assessor\t')" -eq 1 ]
+	printf '%s\n' "$output" | grep -F $'\t$security-assessor\tclaude'
 }
 
 @test "codex plugin skills use the manifest name as namespace" {
