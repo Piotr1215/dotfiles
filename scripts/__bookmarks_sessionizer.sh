@@ -1,25 +1,36 @@
 #!/usr/bin/env bash
+set -eo pipefail
 
 # Select bookmark and create/switch to tmux session
-RESULT=$(cat ~/dev/dotfiles/scripts/__bookmarks.conf | fzf --header 'Bookmarks' --prompt 'bookmarks> ')
+
+BOOKMARKS_FILE="${BOOKMARKS_FILE:-$HOME/dev/dotfiles/scripts/__bookmarks.conf}"
+
+RESULT=$(fzf --header 'Bookmarks' --prompt 'bookmarks> ' < "$BOOKMARKS_FILE" || true)
 
 if [ -z "$RESULT" ]; then
   exit 0
 fi
 
 # Extract the path part after the semicolon
-RESULT=$(echo "$RESULT" | cut -d ';' -f 2)
+RESULT=$(echo "$RESULT" | cut -d ';' -f 2-)
 
 # Expand tilde to home directory
-RESULT=$(echo "$RESULT" | sed -e "s|^~/|$HOME/|")
+RESULT="${RESULT/#\~\//$HOME/}"
 
 # Resolve symlinks to get the real path
 REAL_PATH=$(readlink -f "$RESULT")
 
-# Use file command to determine if it's a file or directory
-FILE_TYPE=$(file -b "$REAL_PATH")
+# Stop before the type check. `file -b` on a missing path answers "cannot open
+# ... (No such file or directory)", and that string contains the word directory,
+# so a stale bookmark used to be treated as a folder and tmux was asked to open a
+# session in a path that is not there.
+if [ -z "$REAL_PATH" ] || [ ! -e "$REAL_PATH" ]; then
+  echo "Bookmark does not resolve: $RESULT" >&2
+  echo "Fix or remove it in $BOOKMARKS_FILE" >&2
+  exit 1
+fi
 
-if [[ "$FILE_TYPE" == *"directory"* ]]; then
+if [ -d "$REAL_PATH" ]; then
   # It's a directory
   FOLDER=$(basename "$REAL_PATH")
   SESSION_NAME=$(echo "$FOLDER" | tr ' ' '_' | tr '.' '_' | tr ':' '_')
