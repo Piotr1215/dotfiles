@@ -146,6 +146,16 @@ JSON
 	[[ "$output" == *"(https://example.com/docs/nodes/"* ]]
 }
 
+@test "extractor assumes https for a bare host" {
+	write_article_fixture
+	run node "$READABLE" --file "$FIXTURES/article.html" --url example.com
+
+	# "2md cloudrumble.net" is how anyone types a url by hand. Without a
+	# scheme new URL() throws before anything is fetched.
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"(https://example.com/docs/nodes/)"* ]]
+}
+
 @test "extractor drops the titles a tooltip library would have consumed" {
 	write_article_fixture
 	extract_fixture
