@@ -188,3 +188,7 @@ alias notif='tail -f ~/.local/state/notifications.log'
 alias s="~/dev/dotfiles/scripts/__ddgx.sh"
 alias ddgx="~/dev/dotfiles/scripts/__ddgx.sh"
 alias sd="~/dev/dotfiles/scripts/__ddgx.sh -d"
+# Any page to markdown on stdout, same engine and same settings as the
+# MarkDownload button: 2md https://example.com/post > post.md
+# In a script call __readable.mjs directly, it is already on PATH.
+alias 2md="~/dev/dotfiles/scripts/__readable.mjs --url"
