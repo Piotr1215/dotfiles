@@ -66,7 +66,6 @@ alias aider='aider --model sonnet --dark-mode --no-auto-commits'
 alias aider-commit='aider --model gpt-4o --dark-mode'
 alias cat='bat'
 alias df=duf
-alias diff=colordiff
 alias fd='fd --hidden'
 alias mux=tmuxinator
 alias ra=yazi
