@@ -31,6 +31,36 @@ codex_config_root="${CODEX_CONFIG_ROOT:-$HOME/.codex}"
 kctx_bin="${KCTX_BIN:-$HOME/.local/bin/kctx}"
 pane_key="global"
 
+# Agent spawns pass prompts by file so large multi-line tasks never travel
+# through tmux send-keys. Codex itself accepts a positional prompt, so consume
+# this launcher-only flag and append the file content as the final argument.
+prompt_file=""
+codex_args=()
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --prompt-file)
+            [[ $# -ge 2 ]] || { echo "--prompt-file requires a path" >&2; exit 2; }
+            prompt_file="$2"
+            shift 2
+            ;;
+        *)
+            codex_args+=("$1")
+            shift
+            ;;
+    esac
+done
+if [[ -n "$prompt_file" ]]; then
+    [[ -r "$prompt_file" ]] || { echo "prompt file is not readable: $prompt_file" >&2; exit 2; }
+    codex_args+=("$(<"$prompt_file")")
+fi
+set -- "${codex_args[@]}"
+
+if [[ "${CODEX_WRAPPER_DRY_RUN:-0}" == "1" ]]; then
+    jq -n --arg codex_home "$codex_home" --args \
+        '{codex_home:$codex_home,argv:$ARGS.positional}' -- "$@"
+    exit 0
+fi
+
 # Keep shared configuration and Claude-authored skills current on every
 # interactive entry point. MCP synchronization remains explicit because OAuth
 # and server probes can block startup.

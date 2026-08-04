@@ -57,3 +57,20 @@ EOF
   [ "$status" -eq 0 ]
   [ "$output" = $'loaded\tpersonal\tlibrewolf' ]
 }
+
+@test "Codex wrapper converts a prompt file into the positional prompt" {
+  prompt_file="$BATS_TEST_TMPDIR/prompt.md"
+  printf 'line one\nline two' >"$prompt_file"
+
+  run env PATH="$fixture_root/bin:$PATH" \
+    CODEX_WRAPPER_DRY_RUN=1 \
+    CODEX_CONFIG_ROOT="$fixture_root/config" \
+    "$repo_root/scripts/__codex_with_app_server.sh" \
+    --model gpt-5.6-sol --prompt-file "$prompt_file"
+
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.argv[0]' <<<"$output")" = "--model" ]
+  [ "$(jq -r '.argv[1]' <<<"$output")" = "gpt-5.6-sol" ]
+  [ "$(jq -r '.argv[2]' <<<"$output")" = $'line one\nline two' ]
+  [ "$(jq -r '.argv | index("--prompt-file")' <<<"$output")" = "null" ]
+}
