@@ -243,8 +243,40 @@ class ConfFileTest(unittest.TestCase):
         tags = [row[0].rsplit("  ", 1)[-1].strip() for row in rows]
         self.assertEqual(tags.count("#work"), 3)
         self.assertEqual(tags.count("#home"), 2)
-        # Newest first across both profiles.
         self.assertIn("[work issue]", rows[0][0])
+
+    def test_profiles_group_in_conf_order_with_recency_inside(self):
+        # Interleaved in time, so a plain newest-first sort would drop the
+        # home rows in between the work ones.
+        firefox_db(
+            self.work_db,
+            [
+                ("https://linear.app/issue/1", "work newest", 300),
+                ("https://linear.app/issue/2", "work oldest", 100),
+            ],
+        )
+        firefox_db(
+            self.home_db,
+            [
+                ("https://youtube.com/watch?v=1", "home newest", 250),
+                ("https://youtube.com/watch?v=2", "home oldest", 150),
+            ],
+        )
+        rows = self.history(self.candidates())
+        titles = [row[0].split("]")[0].lstrip("[") for row in rows]
+        self.assertEqual(
+            titles, ["work newest", "work oldest", "home newest", "home oldest"]
+        )
+
+    def test_swapping_the_conf_blocks_flips_the_groups(self):
+        # Nothing hardcodes "work": the conf order is what decides.
+        conf_text = "profile = home:%s\nprofile = work:%s\n" % (
+            self.home_db,
+            self.work_db,
+        )
+        rows = self.history(run_script(self.workdir.name, conf_text=conf_text))
+        tags = [row[0].rsplit("  ", 1)[-1].strip() for row in rows]
+        self.assertEqual(tags, ["#home"] * 2 + ["#work"] * 3)
 
     def test_conf_limit_is_applied(self):
         rows = self.history(self.candidates("limit = 2"))
