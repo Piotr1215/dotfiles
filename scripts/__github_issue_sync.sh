@@ -435,6 +435,57 @@ task_pr_review_verdict() {
     return 0
 }
 
+# Decide whether an issue that is STILL OPEN in Linear looks closable, judged
+# only by the fate of the PRs attached to it. Every issue reaching this point is
+# open by construction: get_linear_issues filters Released/Canceled/Done/Ready
+# for Release/Duplicate/Archived out of the feed, so the feed IS the open set.
+#
+# MERGED is deliberately NOT closable. A closed-unmerged PR means the attempt
+# was abandoned and nothing landed, which is what makes the issue dead. A merged
+# PR means the work shipped and the issue is waiting on a release or a status
+# move, a different situation with a different remedy.
+#
+# Echoes exactly one verdict:
+#   closable - at least one annotated PR, and every one of them CLOSED unmerged
+#   live     - at least one annotated PR is OPEN or MERGED
+#   unknown  - none open or merged, but at least one could not be resolved
+#   none     - the task carries no /pull/ annotation at all
+# Only `closable` may mark the task. Resolution rides the same memo and TTL
+# cache as task_pr_review_verdict, so within one run this costs no extra call.
+task_pr_closable_verdict() {
+    local task_json="$1"
+    local pr_urls pr_url pr_state
+    local saw_closed="false"
+    local saw_unknown="false"
+
+    pr_urls=$(echo "$task_json" | jq -r '.[0].annotations[]? | (.description // "") | select(test("github.com.*/pull/"))')
+
+    while IFS= read -r pr_url; do
+        [[ -z "$pr_url" ]] && continue
+        pr_state=$(resolve_pr_state "$pr_url")
+        case "$pr_state" in
+            OPEN|MERGED)
+                echo "live"
+                return 0
+                ;;
+            CLOSED) saw_closed="true" ;;
+            *) saw_unknown="true" ;;
+        esac
+    done <<<"$pr_urls"
+
+    # Unknown outranks closed: a single unresolved PR could be the open one, and
+    # marking an issue closable on a network blip is a wrong call on the board.
+    if [[ "$saw_unknown" == "true" ]]; then
+        echo "unknown"
+    elif [[ "$saw_closed" == "true" ]]; then
+        echo "closable"
+    else
+        echo "none"
+    fi
+
+    return 0
+}
+
 # ====================================================
 # PHASE 3: TASK MANAGEMENT
 # ====================================================
@@ -727,6 +778,48 @@ attach_pr_link() {
     annotate_task "$task_uuid" "$pr_url"
 }
 
+# Mark an open Linear issue whose PRs all died as a close candidate, with +kill.
+#
+# Linear never closes an issue when its PR is closed, and it never drops the
+# attachment either, so an abandoned attempt leaves the issue sitting open with
+# nothing behind it. Those are the issues Piotr wants to spot at a glance and
+# close in a batch, so the sync stamps them on the 30-minute run instead of
+# leaving him to open each PR by hand.
+#
+# +kill is the tag by Piotr's decision. It already means "disposable" on the
+# pr-reviews mirror tasks that __get_prs_for_review.sh creates with +kill at
+# birth, and the meaning carries over: kill it. The two populations stay
+# separable because those carry +pr and a pr-reviews project, so
+# `task +kill -pr status:pending` lists exactly the issues marked here.
+#
+# Add-only and idempotent. The tag survives a PR being reopened, which is rare
+# and visible, whereas a sync that also stripped +kill could undo a tag Piotr
+# set by hand, the same fight the +fresh backfill lost before.
+mark_closable_issue() {
+    local task_uuid="$1"
+
+    [[ -z "$task_uuid" || "$task_uuid" == "null" ]] && return 0
+
+    local task_json verdict has_kill
+    task_json=$(task "$task_uuid" export 2>/dev/null)
+    [[ -z "$task_json" ]] && return 0
+
+    verdict=$(task_pr_closable_verdict "$task_json")
+    if [[ "$verdict" != "closable" ]]; then
+        return 0
+    fi
+
+    # Exact match via jq index, never contains: contains is substring in jq and
+    # would fire on any future tag with "kill" inside it.
+    has_kill=$(echo "$task_json" | jq -r '.[0].tags | if . then (index("kill") != null) else false end')
+    if [[ "$has_kill" == "true" ]]; then
+        return 0
+    fi
+
+    log "Issue is open but every attached PR is closed unmerged - adding +kill (likely closable)"
+    task rc.confirmation=no modify "$task_uuid" +kill
+}
+
 # Create a new task for an issue and annotate it
 create_and_annotate_task() {
     local issue_description="$1"
@@ -768,6 +861,10 @@ create_and_annotate_task() {
         # Check task for special tags right after creation
         # This handles cases where tags might have been added via hooks
         update_task_status "$task_uuid" "$issue_status" "$issue_priority"
+
+        # An issue can arrive with its PR already dead (attempt abandoned before
+        # the issue was ever assigned), so judge closability on creation too.
+        mark_closable_issue "$task_uuid"
         
         # Set due date if present
         if [[ -n "$issue_due_date" && "$issue_due_date" != "null" ]]; then
@@ -903,6 +1000,10 @@ sync_to_taskwarrior() {
 
         # Backfill the Linear-attached PR onto already-synced tasks (idempotent).
         attach_pr_link "$task_uuid" "$pr_url" "$issue_status"
+
+        # Runs AFTER attach_pr_link so a PR annotation mirrored on this very run
+        # is already visible to the verdict, instead of waiting 30 minutes.
+        mark_closable_issue "$task_uuid"
 
         # Re-surface the issue when Linear shows newer activity than our watermark.
         # new_activity stores the last-seen Linear updatedAt.

@@ -2703,3 +2703,149 @@ _held_issue_json() {
 
     grep -q -- "+fresh" "${TEST_DIR}/task_commands.log"
 }
+
+# ====================================================
+# CLOSABLE-ISSUE MARKER (+kill)
+# Linear never closes an issue when its PR closes, and never drops the
+# attachment either, so an abandoned attempt leaves the issue open with nothing
+# behind it. The sync now stamps +kill on exactly that shape so the close
+# candidates are visible on the board without opening each PR by hand.
+# ====================================================
+
+# Task export shaped by the caller: $1 = tags JSON array, $2 = annotations JSON array.
+_write_task_mock_export() {
+    printf '[{"uuid":"test-uuid","description":"t","status":"pending","tags":%s,"annotations":%s}]' \
+        "$1" "$2" > "${TEST_DIR}/export.json"
+    cat > "${TEST_DIR}/task" << 'EOF'
+#!/bin/bash
+case "$1" in
+    "test-uuid")
+        case "$2" in
+            "export")   cat "${TEST_DIR}/export.json" ;;
+            "annotate") echo "MOCK: annotate $*" >> "${TEST_DIR}/annotate.log" ;;
+        esac
+        ;;
+    "_get") echo "" ;;
+    "rc.confirmation=no") echo "MOCK: task $*" >> "${TEST_DIR}/task_commands.log" ;;
+    *) echo "test-uuid" ;;
+esac
+EOF
+    chmod +x "${TEST_DIR}/task"
+}
+
+_pr_annotations() {
+    printf '[{"description":"https://linear.app/loft/issue/DEVOPS-1/t"},{"description":"%s"}]' "$1"
+}
+
+@test "task_pr_closable_verdict is closable when the only attached PR is CLOSED" {
+    echo "CLOSED" > "${TEST_DIR}/pr_state"
+    json=$(printf '[{"tags":["linear"],"annotations":%s}]' \
+        "$(_pr_annotations https://github.com/loft-sh/loft-enterprise/pull/7649)")
+
+    result=$(task_pr_closable_verdict "$json" 2>/dev/null)
+    [ "$result" = "closable" ]
+}
+
+@test "task_pr_closable_verdict is live when the attached PR is still OPEN" {
+    echo "OPEN" > "${TEST_DIR}/pr_state"
+    json=$(printf '[{"tags":["linear"],"annotations":%s}]' \
+        "$(_pr_annotations https://github.com/loft-sh/loft-prod/pull/522)")
+
+    result=$(task_pr_closable_verdict "$json" 2>/dev/null)
+    [ "$result" = "live" ]
+}
+
+@test "task_pr_closable_verdict is live when the attached PR is MERGED" {
+    # Merged work landed. The issue waits on a release or a status move, which
+    # is not the abandoned-attempt shape +kill is for.
+    echo "MERGED" > "${TEST_DIR}/pr_state"
+    json=$(printf '[{"tags":["linear"],"annotations":%s}]' \
+        "$(_pr_annotations https://github.com/loft-sh/loft-prod/pull/522)")
+
+    result=$(task_pr_closable_verdict "$json" 2>/dev/null)
+    [ "$result" = "live" ]
+}
+
+@test "task_pr_closable_verdict is live when one PR closed but another is open" {
+    # Cache pins the first PR CLOSED; the gh mock answers OPEN for the second.
+    printf '%s\t%s\t%s\n' "https://github.com/loft-sh/loft-prod/pull/1" "CLOSED" "$(date +%s)" \
+        > "${TEST_DIR}/pr-state.tsv"
+    echo "OPEN" > "${TEST_DIR}/pr_state"
+    json='[{"tags":["linear"],"annotations":[{"description":"https://github.com/loft-sh/loft-prod/pull/1"},{"description":"https://github.com/loft-sh/loft-prod/pull/2"}]}]'
+
+    result=$(task_pr_closable_verdict "$json" 2>/dev/null)
+    [ "$result" = "live" ]
+}
+
+@test "task_pr_closable_verdict is unknown when a PR state cannot be resolved" {
+    # One unresolved PR could be the open one, so a blip must never read as closable.
+    touch "${TEST_DIR}/gh_fail"
+    json=$(printf '[{"tags":["linear"],"annotations":%s}]' \
+        "$(_pr_annotations https://github.com/loft-sh/loft-enterprise/pull/7649)")
+
+    result=$(task_pr_closable_verdict "$json" 2>/dev/null)
+    [ "$result" = "unknown" ]
+}
+
+@test "task_pr_closable_verdict is none when the task has no PR annotation" {
+    json='[{"tags":["linear"],"annotations":[{"description":"https://linear.app/loft/issue/DEVOPS-1/t"}]}]'
+
+    result=$(task_pr_closable_verdict "$json" 2>/dev/null)
+    [ "$result" = "none" ]
+}
+
+@test "mark_closable_issue adds +kill when every attached PR is closed unmerged" {
+    echo "CLOSED" > "${TEST_DIR}/pr_state"
+    _write_task_mock_export '["linear","work"]' \
+        "$(_pr_annotations https://github.com/loft-sh/loft-enterprise/pull/7649)"
+
+    run mark_closable_issue "test-uuid"
+    [ "$status" -eq 0 ]
+    grep -q -- "+kill" "${TEST_DIR}/task_commands.log"
+}
+
+@test "mark_closable_issue is idempotent when +kill is already present" {
+    echo "CLOSED" > "${TEST_DIR}/pr_state"
+    _write_task_mock_export '["linear","kill"]' \
+        "$(_pr_annotations https://github.com/loft-sh/loft-enterprise/pull/7649)"
+
+    run mark_closable_issue "test-uuid"
+    [ "$status" -eq 0 ]
+    [ ! -f "${TEST_DIR}/task_commands.log" ]
+}
+
+@test "mark_closable_issue does not add +kill when the attached PR is MERGED" {
+    echo "MERGED" > "${TEST_DIR}/pr_state"
+    _write_task_mock_export '["linear","work"]' \
+        "$(_pr_annotations https://github.com/loft-sh/loft-prod/pull/522)"
+
+    run mark_closable_issue "test-uuid"
+    [ "$status" -eq 0 ]
+    [ ! -f "${TEST_DIR}/task_commands.log" ]
+}
+
+@test "mark_closable_issue does not add +kill when gh fails (fail-safe)" {
+    touch "${TEST_DIR}/gh_fail"
+    _write_task_mock_export '["linear","work"]' \
+        "$(_pr_annotations https://github.com/loft-sh/loft-enterprise/pull/7649)"
+
+    run mark_closable_issue "test-uuid"
+    [ "$status" -eq 0 ]
+    [ ! -f "${TEST_DIR}/task_commands.log" ]
+}
+
+@test "mark_closable_issue leaves a task with no PR annotation alone" {
+    _write_task_mock_export '["linear","work"]' \
+        '[{"description":"https://linear.app/loft/issue/DEVOPS-1/t"}]'
+
+    run mark_closable_issue "test-uuid"
+    [ "$status" -eq 0 ]
+    [ ! -f "${TEST_DIR}/task_commands.log" ]
+}
+
+@test "mark_closable_issue ignores an invalid task uuid" {
+    run mark_closable_issue ""
+    [ "$status" -eq 0 ]
+    run mark_closable_issue "null"
+    [ "$status" -eq 0 ]
+}

@@ -50,9 +50,14 @@ color.tag.pr_approved = bold green
 # color.tag.triaged   = bold cyan  # disabled - conflicts with review
 color.tag.claude      = bold on gray2
 color.tag.review      = bold blue
+# +kill reads as "this can be killed": the disposable pr-reviews mirrors, and
+# now also open Linear issues whose attached PRs all closed unmerged, stamped by
+# __github_issue_sync.sh. Red ground so a close candidate cannot be scrolled past.
+color.tag.kill        = bold white on red
 
-# Make review tag take highest precedence
-rule.precedence.color=tag.review,deleted,completed,active,keyword.,tag.,project.,overdue,scheduled,due.today,due,blocked,blocking,recurring,tagged,uda.
+# +kill outranks +review: a task carrying both still has a dead PR behind it,
+# and "close this" is the call worth surfacing over "someone is reviewing".
+rule.precedence.color=tag.kill,tag.review,deleted,completed,active,keyword.,tag.,project.,overdue,scheduled,due.today,due,blocked,blocking,recurring,tagged,uda.
 color.uda.priority.L  = on gray4
 color.scheduled       = bold yellow 
 color.hold            = bold blue
