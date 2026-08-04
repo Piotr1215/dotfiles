@@ -2849,3 +2849,45 @@ _pr_annotations() {
     run mark_closable_issue "null"
     [ "$status" -eq 0 ]
 }
+
+@test "task_pr_closable_verdict reads a PR url out of a prefixed annotation" {
+    # Most PR annotations on the real board are not bare urls: "pr-url:<url>",
+    # "PR:<url>", "log:PR created -- <url>". Passing the whole string to gh fails.
+    echo "CLOSED" > "${TEST_DIR}/pr_state"
+    json='[{"tags":["linear"],"annotations":[{"description":"pr-url:https://github.com/loft-sh/loft-prod/pull/544"}]}]'
+
+    result=$(task_pr_closable_verdict "$json" 2>/dev/null)
+    [ "$result" = "closable" ]
+}
+
+@test "task_pr_closable_verdict reads a PR url out of a prose annotation" {
+    # Agents write paragraphs with the url mid-sentence and punctuation after it.
+    echo "CLOSED" > "${TEST_DIR}/pr_state"
+    json='[{"tags":["linear"],"annotations":[{"description":"07-28: PR https://github.com/loft-sh/loft-prod/pull/544 (OPEN, MERGEABLE), zero reviews."}]}]'
+
+    result=$(task_pr_closable_verdict "$json" 2>/dev/null)
+    [ "$result" = "closable" ]
+}
+
+@test "task_pr_closable_verdict counts the same url quoted twice only once" {
+    # A bare annotation plus a prose mention of the same PR is the common shape;
+    # it must cost one lookup, not two.
+    echo "CLOSED" > "${TEST_DIR}/pr_state"
+    json='[{"tags":["linear"],"annotations":[{"description":"https://github.com/loft-sh/loft-prod/pull/544"},{"description":"note: https://github.com/loft-sh/loft-prod/pull/544 was closed unmerged"}]}]'
+
+    result=$(task_pr_closable_verdict "$json" 2>/dev/null)
+    [ "$result" = "closable" ]
+    [ "$(grep -c "pr view" "${TEST_DIR}/gh_calls.log")" -eq 1 ]
+}
+
+@test "task_pr_closable_verdict is live when a prose annotation hides an OPEN PR" {
+    # The blind spot in the other direction: an embedded url that is still open
+    # must veto the marker, not fall through as unresolved.
+    printf '%s\t%s\t%s\n' "https://github.com/loft-sh/loft-prod/pull/544" "CLOSED" "$(date +%s)" \
+        > "${TEST_DIR}/pr-state.tsv"
+    echo "OPEN" > "${TEST_DIR}/pr_state"
+    json='[{"tags":["linear"],"annotations":[{"description":"https://github.com/loft-sh/loft-prod/pull/544"},{"description":"08-03 PR LANDED: https://github.com/loft-sh/loft-prod/pull/588 (OPEN, MERGEABLE)"}]}]'
+
+    result=$(task_pr_closable_verdict "$json" 2>/dev/null)
+    [ "$result" = "live" ]
+}
