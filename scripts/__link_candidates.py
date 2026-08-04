@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
-"""Emit link picker candidates as "display<TAB>command" lines.
+"""Emit link picker candidates as "display<TAB>command<TAB>title<TAB>url" lines.
 
 Two sources feed the picker: recent browser history from the LibreWolf and
 Chrome profiles named in the conf, and the curated pet link snippets file.
-History comes first, grouped by profile in conf order and newest first inside
-each group; the snippets follow, alphabetically.
+Pinned rows come first, then history grouped by profile in conf order and
+newest first inside each group, then the snippets alphabetically.
 __link_pane_runner.sh pipes this into fzf with --with-nth=1, so the first
 column is what gets displayed and searched, and the second is the command
-that gets run on selection.
+that gets run on selection. The trailing title and url columns are hidden
+too: they are what ctrl-f writes to the pins file, untruncated.
 
 Settings live in __link_picker.conf, because the picker runs from a global
 hotkey and that process carries none of the shell environment. The variables
@@ -20,6 +21,10 @@ Environment:
   LINK_HISTORY_LIMIT     how many history rows to keep (default 500)
   LINK_HISTORY_PER_HOST  cap per host per profile, keeps github off the whole list
   LINK_HISTORY_DBS       colon separated paths or globs, replaces the conf profiles
+  LINK_PINS_FILE         pinned rows (default ~/.local/state/link-picker/pins)
+
+Subcommand:
+  --toggle-pin <line>    pin or unpin the row, called from the ctrl-f binding
 """
 
 import glob
@@ -27,6 +32,7 @@ import os
 import re
 import shlex
 import shutil
+import signal
 import sqlite3
 import sys
 import tempfile
@@ -41,6 +47,11 @@ CONF_FILE = os.environ.get(
     "LINK_PICKER_CONF",
     os.path.expanduser("~/dev/dotfiles/scripts/__link_picker.conf"),
 )
+
+# Pins are user state that changes on every ctrl-f, so they live outside the
+# dotfiles tree: a file in the repo would leave the working tree permanently
+# dirty, and the working tree is what cron and stow read.
+DEFAULT_PINS_FILE = "~/.local/state/link-picker/pins"
 
 # Used when the conf file names no profiles: every profile on the machine,
 # under one tag, which is the behaviour before the work/home split existed.
@@ -128,19 +139,72 @@ def url_from_command(command):
     return found.group(1).replace("\\", "") if found else ""
 
 
-def render(title, url, tag, command):
+def render(title, url, tag, command, pinned=False):
+    raw_title, raw_url = " ".join(title.split()), url
     if len(title) > TITLE_WIDTH:
         title = title[: TITLE_WIDTH - 3] + "..."
     if len(url) > URL_WIDTH:
         url = url[: URL_WIDTH - 3] + "..."
-    display = "%-*s  %-*s  %s" % (
+    display = "%s %-*s  %-*s  %s" % (
+        "*" if pinned else " ",
         TITLE_WIDTH + 2,
         "[" + title + "]",
         URL_WIDTH,
         url,
         tag,
     )
-    return display.rstrip() + "\t" + command
+    return "\t".join([display.rstrip(), command, raw_title, raw_url])
+
+
+# What makes two rows the same link. A snippet may run something that is not
+# xdg-open at all, and then the command itself is the only identity it has.
+def pin_key(url, command):
+    return dedupe_key(url) if url else command
+
+
+def pins_path(conf):
+    return os.path.expanduser(setting("LINK_PINS_FILE", "pins", DEFAULT_PINS_FILE, conf))
+
+
+# A pin stores the whole row, url, title and command, rather than a reference
+# into history. A page pinned today drops out of the history window within the
+# week, and a pin that quietly stops appearing is worse than no pin.
+def load_pins(path):
+    pins = []
+    try:
+        with open(path) as handle:
+            text = handle.read()
+    except OSError:
+        return pins
+    for line in text.splitlines():
+        fields = line.split("\t")
+        if len(fields) == 3 and fields[2]:
+            pins.append((fields[0], fields[1], fields[2]))
+    return pins
+
+
+def save_pins(path, pins):
+    parent = os.path.dirname(path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    with open(path, "w") as handle:
+        for pin in pins:
+            handle.write("\t".join(pin) + "\n")
+
+
+# Called from the ctrl-f binding with the whole picker line, hidden columns
+# included, which is where the untruncated title and url come from.
+def toggle_pin(path, line):
+    fields = line.split("\t")
+    if len(fields) < 4:
+        return
+    command, title, url = fields[1], fields[2], fields[3]
+    key = pin_key(url, command)
+    pins = load_pins(path)
+    kept = [pin for pin in pins if pin_key(pin[0], pin[2]) != key]
+    if len(kept) == len(pins):
+        kept.append((url, title, command))
+    save_pins(path, kept)
 
 
 def load_snippets():
@@ -295,23 +359,44 @@ def load_history(seen, profiles, limit, per_host_limit):
 
 def main():
     conf, profiles = load_conf()
+
+    if len(sys.argv) > 2 and sys.argv[1] == "--toggle-pin":
+        toggle_pin(pins_path(conf), sys.argv[2])
+        return
+
     history_on = setting("LINK_HISTORY", "history", "on", conf).lower() not in OFF_VALUES
     limit = int(setting("LINK_HISTORY_LIMIT", "limit", "500", conf))
     per_host_limit = int(setting("LINK_HISTORY_PER_HOST", "per_host", "30", conf))
 
-    # Snippets are resolved first whatever the display order, because they seed
-    # the dedupe: a bookmarked url then keeps its curated title instead of
-    # coming back a second time under whatever the browser tab was called.
+    # Pins are resolved first and sit at the very top, above even the newest
+    # history: a pin is the one row whose position you chose by hand.
     seen = set()
+    pinned = set()
+    lines = []
+    for url, title, command in load_pins(pins_path(conf)):
+        pinned.add(pin_key(url, command))
+        seen.add(pin_key(url, command))
+        if url:
+            seen.add((urlsplit(url).netloc.lower(), title.casefold()))
+        lines.append(render(title, url, "#pin", command, pinned=True))
+
+    # Snippets are resolved before history whatever the display order, because
+    # they seed the dedupe: a bookmarked url then keeps its curated title
+    # instead of coming back under whatever the browser tab was called.
+    # Only a pin removes a bookmark from this block, never another bookmark.
+    # Two snippets can point at one url under different descriptions, which is
+    # two ways to recall the same page, and both are worth keeping searchable.
     snippets = []
     for title, command, url in load_snippets():
-        seen.add(dedupe_key(url) if url else command)
+        key = pin_key(url, command)
+        seen.add(key)
+        if key in pinned:
+            continue
         snippets.append(render(title, url, "#link", command))
 
-    # History leads, because the picker is reached for to get back to a page
+    # History next, because the picker is reached for to get back to a page
     # from earlier today. The bookmarks are the long tail you search for by
     # name, so they sit underneath.
-    lines = []
     if history_on:
         for title, url, tag in load_history(seen, profiles, limit, per_host_limit):
             command = "xdg-open " + shlex.quote(url)
@@ -323,4 +408,8 @@ def main():
 
 
 if __name__ == "__main__":
+    # stdout is always a pipe here: fzf on the hot path, head while debugging.
+    # The default SIGPIPE disposition ends the process quietly when the reader
+    # goes away, where python's would raise a traceback into the popup.
+    signal.signal(signal.SIGPIPE, signal.SIG_DFL)
     main()

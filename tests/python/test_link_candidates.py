@@ -16,6 +16,12 @@ SNIPPETS = """
   command = "xdg-open https://zeta.example.com/docs"
 
 [[Snippets]]
+  Description = "Link to Zeta under its other name"
+  Output = ""
+  Tag = ["link"]
+  command = "xdg-open https://zeta.example.com/docs"
+
+[[Snippets]]
   Description = "Link to Alpha anchor"
   Output = ""
   Tag = ["link"]
@@ -53,7 +59,11 @@ def chrome_db(path, rows):
     conn.close()
 
 
-def run_script(workdir, dbs=(), conf_text=None, **env_overrides):
+def pins_file(workdir):
+    return Path(workdir) / "pins"
+
+
+def run_script(workdir, dbs=(), conf_text=None, args=(), **env_overrides):
     snippet_file = Path(workdir) / "pet-links.toml"
     snippet_file.write_text(SNIPPETS)
     conf_file = Path(workdir) / "picker.conf"
@@ -66,6 +76,8 @@ def run_script(workdir, dbs=(), conf_text=None, **env_overrides):
     env = {k: v for k, v in os.environ.items() if not k.startswith("LINK_")}
     env["PET_SNIPPET_FILE"] = str(snippet_file)
     env["LINK_PICKER_CONF"] = str(conf_file)
+    # Without this the default reaches the real ~/.local/state pins file.
+    env["LINK_PINS_FILE"] = str(pins_file(workdir))
     if dbs:
         env["LINK_HISTORY_DBS"] = ":".join(str(db) for db in dbs)
     elif conf_text is None:
@@ -76,7 +88,11 @@ def run_script(workdir, dbs=(), conf_text=None, **env_overrides):
     env.update(env_overrides)
 
     result = subprocess.run(
-        ["python3", str(SCRIPT)], text=True, capture_output=True, env=env, check=True
+        ["python3", str(SCRIPT), *args],
+        text=True,
+        capture_output=True,
+        env=env,
+        check=True,
     )
     return [tuple(line.split("\t")) for line in result.stdout.splitlines()]
 
@@ -133,6 +149,13 @@ class LinkCandidatesTest(unittest.TestCase):
         )
         # The display drops the escapes, the command keeps them.
         self.assertIn("https://alpha.example.com/page/#:~:text=hit", rows[0][0])
+
+    def test_two_bookmarks_on_one_url_both_stay_searchable(self):
+        # Two descriptions for one page are two ways to recall it. Only a pin
+        # collapses them, never the presence of the other bookmark.
+        rows = self.candidates()
+        zeta = [row for row in rows if row[3] == "https://zeta.example.com/docs"]
+        self.assertEqual(len(zeta), 2)
 
     def test_history_row_matching_a_snippet_is_dropped(self):
         rows = self.candidates(
@@ -283,7 +306,7 @@ class ConfFileTest(unittest.TestCase):
             ],
         )
         rows = self.history(self.candidates())
-        titles = [row[0].split("]")[0].lstrip("[") for row in rows]
+        titles = [row[0].split("]")[0].strip().lstrip("[") for row in rows]
         self.assertEqual(
             titles, ["work newest", "work oldest", "home newest", "home oldest"]
         )
@@ -321,6 +344,89 @@ class ConfFileTest(unittest.TestCase):
     def test_comments_and_blank_lines_are_ignored(self):
         rows = self.history(self.candidates("# limit = 1", "", "   ", "limit = 2"))
         self.assertEqual(len(rows), 2)
+
+
+class PinTest(unittest.TestCase):
+    """ctrl-f writes a whole row to the pins file; pinned rows float above
+    both history and the bookmarks."""
+
+    def setUp(self):
+        self.workdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.workdir.cleanup)
+        self.path = Path(self.workdir.name)
+        self.db = self.path / "places.sqlite"
+        firefox_db(
+            self.db,
+            [
+                ("https://recent.example.com/", "recent page", 300),
+                ("https://older.example.com/", "older page", 200),
+            ],
+        )
+
+    def write_pins(self, *rows):
+        pins_file(self.workdir.name).write_text(
+            "".join("\t".join(row) + "\n" for row in rows)
+        )
+
+    def candidates(self, **env):
+        return run_script(self.workdir.name, dbs=[self.db], **env)
+
+    def tag_of(self, row):
+        return row[0].rsplit("  ", 1)[-1].strip()
+
+    def test_a_pin_sits_above_history_and_bookmarks(self):
+        self.write_pins(
+            ("https://older.example.com/", "older page", "xdg-open 'https://older.example.com/'")
+        )
+        rows = self.candidates()
+        self.assertEqual(self.tag_of(rows[0]), "#pin")
+        self.assertTrue(rows[0][0].startswith("* "), rows[0][0])
+        self.assertIn("[older page]", rows[0][0])
+        # And it is not also still down in the history block.
+        self.assertEqual(len([r for r in rows if "older.example.com" in r[0]]), 1)
+
+    def test_pinning_a_bookmark_takes_it_out_of_the_link_block(self):
+        self.write_pins(
+            ("https://zeta.example.com/docs", "Zeta docs", "xdg-open https://zeta.example.com/docs")
+        )
+        rows = self.candidates()
+        zeta = [row for row in rows if "Zeta docs" in row[0]]
+        self.assertEqual(len(zeta), 1)
+        self.assertEqual(self.tag_of(zeta[0]), "#pin")
+
+    def test_a_pin_outlives_the_row_it_was_made_from(self):
+        # Nothing in history or the snippets points here any more.
+        self.write_pins(
+            ("https://gone.example.com/doc", "long gone", "xdg-open 'https://gone.example.com/doc'")
+        )
+        rows = self.candidates()
+        self.assertIn("[long gone]", rows[0][0])
+        self.assertEqual(rows[0][1], "xdg-open 'https://gone.example.com/doc'")
+
+    def test_toggle_pins_then_unpins_the_same_row(self):
+        row = self.candidates()[0]
+        self.assertEqual(self.tag_of(row), "#history")
+
+        run_script(self.workdir.name, dbs=[self.db], args=["--toggle-pin", "\t".join(row)])
+        after = self.candidates()
+        self.assertEqual(self.tag_of(after[0]), "#pin")
+        self.assertIn("[recent page]", after[0][0])
+
+        run_script(
+            self.workdir.name, dbs=[self.db], args=["--toggle-pin", "\t".join(after[0])]
+        )
+        self.assertEqual(self.tag_of(self.candidates()[0]), "#history")
+
+    def test_hidden_columns_carry_the_untruncated_title_and_url(self):
+        long_title = "a very long tab title that the display column has to cut short " * 2
+        long_url = "https://long.example.com/" + "segment/" * 20
+        firefox_db(self.db, [(long_url, long_title, 300)])
+        row = self.candidates()[0]
+        # Display is truncated, the hidden columns are not, so a pin made from
+        # this row stores the real title and url rather than "...".
+        self.assertIn("...", row[0])
+        self.assertEqual(row[2], " ".join(long_title.split()))
+        self.assertEqual(row[3], long_url)
 
 
 if __name__ == "__main__":
