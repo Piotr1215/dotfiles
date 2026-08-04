@@ -49,6 +49,7 @@ color.tag.bug         = magenta on black
 color.tag.pr_approved = bold green
 # color.tag.triaged   = bold cyan  # disabled - conflicts with review
 color.tag.claude      = bold on gray2
+color.tag.codex       = bold cyan on gray2
 color.tag.review      = bold blue
 # +kill reads as "this can be killed": the disposable pr-reviews mirrors, and
 # now also open Linear issues whose attached PRs all closed unmerged, stamped by
@@ -219,8 +220,8 @@ uda.taskwarrior-tui.shortcuts.3=~/dev/dotfiles/scripts/__github_issue_sync.sh
 uda.taskwarrior-tui.shortcuts.4=/home/decoder/.claude/scripts/__spawn_claude_directive.sh
 # Shortcut 5: Toggle +claude tag
 uda.taskwarrior-tui.shortcuts.5=~/.config/taskwarrior-tui/shortcut-scripts/__toggle_claude_label.sh
-# Shortcut 6: Create new note and annotate task
-uda.taskwarrior-tui.shortcuts.6=~/.config/taskwarrior-tui/shortcut-scripts/__annotate_with_new_note.sh
+# Shortcut 6: Toggle +codex tag
+uda.taskwarrior-tui.shortcuts.6=~/.config/taskwarrior-tui/shortcut-scripts/__toggle_codex_label.sh
 uda.taskwarrior-tui.shortcuts.7=~/.config/taskwarrior-tui/shortcut-scripts/__annotate_with_note.sh
 uda.taskwarrior-tui.shortcuts.8=/home/decoder/dev/dotfiles/scripts/__create_linear_issue.sh
 uda.taskwarrior-tui.shortcuts.9=~/.config/taskwarrior-tui/shortcut-scripts/__toggle_backlog_label.sh 
