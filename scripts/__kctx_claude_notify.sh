@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# Tell a Claude session running in a tmux pane that the pane's kubernetes
+# Tell a Claude or Codex session running in a tmux pane that the pane's kubernetes
 # connection just changed.
 #
 # kctx pins each pane's KUBECONFIG to a stable runtime path and rewrites the
 # selection in place, so a swap reaches any process that already holds that
-# path. Claude has no way to notice: nothing re-reads the environment
+# path. An agent has no way to notice: nothing re-reads the environment
 # mid-session, the pane border is not in its context, and the shell hook that
-# would reassert the pair cannot run while claude holds the pane.
+# would reassert the pair cannot run while the agent holds the pane.
 #
 # What this script must not do is assert that the swap is live for the agent.
 # Every Bash tool call is a fresh shell, and its KUBECONFIG comes from the
-# claude process environment, which the profile and direnv can have set to
+# agent process environment, which the profile and direnv can have set to
 # something else entirely. A worktree .envrc that exports KUBECONFIG wins over
 # the pane pair for the whole session, and the swap never reaches a single tool
 # call. An agent told "your KUBECONFIG already points at it" then reads the
@@ -19,14 +19,14 @@
 #
 # Usage: __kctx_claude_notify.sh <pane-id>
 #
-# No-ops when the pane holds no claude process, so it is safe to call from the
-# picker for every swap.
+# No-ops when the pane holds neither Claude nor Codex, so it is safe to call
+# from the picker for every swap.
 
 set -eo pipefail
 
 # The popup that calls this is still on screen; let it close before typing.
 readonly SETTLE_DELAY="${KCTX_NOTIFY_SETTLE_DELAY:-0.3}"
-# Claude's TUI needs the line buffered before the submit key arrives.
+# Agent TUIs need the line buffered before the submit key arrives.
 readonly ENTER_DELAY="${KCTX_NOTIFY_ENTER_DELAY:-0.3}"
 readonly KCTX_BIN="${KCTX_BIN:-kctx}"
 # Overridable so the tests can supply a process environment fixture.
@@ -37,11 +37,11 @@ usage() {
     echo "  pane-id: tmux pane id, e.g. %33" >&2
 }
 
-# Print the pid of a claude process living under the pane's process tree.
-# claude is rarely the pane process itself: the pane holds a shell, and claude
-# sits below it, sometimes under the __claude_with_monitor.sh wrapper. One ps
-# snapshot walked upwards beats recursing with a process call per level.
-pane_claude_pid() {
+# Print the pid of a Claude or Codex process living under the pane's process
+# tree. The agent is rarely the pane process itself: the pane holds a shell,
+# and the TUI sits below it, sometimes under a monitor or app-server wrapper.
+# One ps snapshot walked upwards beats recursing with a process call per level.
+pane_agent_pid() {
     local pane="$1"
     local pane_pid
 
@@ -52,7 +52,7 @@ pane_claude_pid() {
         { ppid[$1] = $2; comm[$1] = $3 }
         END {
             for (pid in comm) {
-                if (comm[pid] != "claude") continue
+                if (comm[pid] != "claude" && comm[pid] != "codex") continue
                 p = pid
                 hops = 0
                 while (p != "" && p != "0" && hops++ < 32) {
@@ -88,7 +88,7 @@ pane_pair() {
     printf '%s' "$pair"
 }
 
-# The KUBECONFIG the claude process was executed with. /proc holds the exec-time
+# The KUBECONFIG the agent process was executed with. /proc holds the exec-time
 # environment, so this proves the launch binding and nothing later: a session
 # that never inherited the pair cannot see the swap under any circumstances.
 launch_kubeconfig() {
@@ -151,14 +151,14 @@ main() {
         exit 1
     fi
 
-    local claude_pid
-    claude_pid="$(pane_claude_pid "$pane")" || exit 0
-    [[ -n "$claude_pid" ]] || exit 0
+    local agent_pid
+    agent_pid="$(pane_agent_pid "$pane")" || exit 0
+    [[ -n "$agent_pid" ]] || exit 0
 
     local connection pair launch message
     connection="$(current_connection "$pane")"
     pair="$(pane_pair "$pane")"
-    launch="$(launch_kubeconfig "$claude_pid")"
+    launch="$(launch_kubeconfig "$agent_pid")"
     message="$(compose_message "$connection" "$pair" "$launch")"
 
     sleep "$SETTLE_DELAY"
