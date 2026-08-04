@@ -58,9 +58,38 @@ usage() {
 	sed -e '1d' -e '/^[^#]/,$d' "$SELF" | sed 's/^# \{0,1\}//'
 }
 
+# A message printed into the M-g popup is gone the instant the process ends,
+# and a popup that opens and closes reads as one that never opened. When the
+# query came from the popup's own search box, hold the message on screen.
 die() {
-	echo "$*" >&2
+	printf '%s\n' "$*" >&2
+	if [[ ${POPUP_MODE:-0} -eq 1 && -e /dev/tty ]]; then
+		printf '\n\033[90mpress any key\033[0m' >&2
+		read -rsn1 </dev/tty || true
+	fi
 	exit 1
+}
+
+# Run one search. ddgr answers a throttled or refused request with an empty
+# set, exit 0, and the reason on stderr: keeping that reason is the difference
+# between "nobody has written this page" and "DuckDuckGo turned us away", and
+# without it the tool blames the query for the network's answer. Sets
+# SEARCH_ERROR and returns non-zero when nothing usable came back.
+search_ddgr() {
+	local out=$1 num=$2 query=$3 err count rc=0
+	err=$(mktemp -t ddgx-err-XXXXXX)
+	SEARCH_ERROR=''
+	ddgr --json --num "$num" --noprompt "$query" >"$out" 2>"$err" || rc=$?
+	count=$(jq 'length' "$out" 2>/dev/null || printf '0')
+	if [[ $rc -eq 0 && -n $count && $count -gt 0 ]]; then
+		rm -f "$err"
+		return 0
+	fi
+	SEARCH_ERROR=$(head -1 "$err" 2>/dev/null || true)
+	SEARCH_ERROR=${SEARCH_ERROR#\[ERROR\] }
+	[[ -z $SEARCH_ERROR ]] && SEARCH_ERROR='no results'
+	rm -f "$err"
+	return 1
 }
 
 # Preserve the script's real exit status: a kill of an already-reaped prefetch
@@ -406,19 +435,13 @@ read_value() {
 # picker with the query already spent is a dead end, and the whole point of
 # refining is to be able to try a different constraint against what you saw.
 run_query() {
-	local file=$1 num=$2 query=$3 tmp count
+	local file=$1 num=$2 query=$3 tmp
 	tmp="$file.new"
 	clear >&2 2>/dev/null || true
 	printf '\033[90m  searching for %s ...\033[0m\n' "$query" >&2
 
-	if ! ddgr --json --num "$num" --noprompt "$query" >"$tmp" 2>/dev/null; then
-		set_note "$file" "search failed, kept the previous results"
-		rm -f "$tmp"
-		return 0
-	fi
-	count=$(jq 'length' "$tmp" 2>/dev/null || printf '0')
-	if [[ -z $count || $count -eq 0 ]]; then
-		set_note "$file" "nothing for that, kept the previous results"
+	if ! search_ddgr "$tmp" "$num" "$query"; then
+		set_note "$file" "$SEARCH_ERROR, kept the previous results"
 		rm -f "$tmp"
 		return 0
 	fi
@@ -797,7 +820,7 @@ mode_pick() {
 # ---------------------------------------------------------------------------
 
 main() {
-	local num="${DDGX_NUM:-8}" dump=0 args=()
+	local num="${DDGX_NUM:-8}" dump=0 failed=0 args=()
 	DUMP_LINES=12
 
 	# Internal modes come first: they are re-entrant calls from fzf bindings.
@@ -896,6 +919,7 @@ main() {
 			return 1
 		fi
 		# Started with no query, which is how the tmux M-g popup launches it.
+		POPUP_MODE=1
 		prompt_for_query || return 0
 		if [[ -z ${TYPED_QUERY//[[:space:]]/} ]]; then
 			return 0
@@ -917,14 +941,16 @@ main() {
 	if [[ -t 1 ]]; then
 		printf '\033[90m  searching for %s ...\033[0m\r' "${args[*]}" >&2
 	fi
-	if ! ddgr --json --num "$num" --noprompt "${args[@]}" >"$RESULTS_FILE" 2>/dev/null; then
-		die "search failed"
-	fi
+	# Wipe that line whichever way the search went: a reason printed over a
+	# half-erased "searching for ..." is how "HTTP Error 202: Acceptedes
+	# finalizers ..." reaches the screen.
+	failed=0
+	search_ddgr "$RESULTS_FILE" "$num" "${args[*]}" || failed=1
 	if [[ -t 1 ]]; then
 		printf '\033[2K\r' >&2
 	fi
-	if [[ ! -s $RESULTS_FILE ]] || [[ $(jq 'length' "$RESULTS_FILE") -eq 0 ]]; then
-		die "No results."
+	if [[ $failed -eq 1 ]]; then
+		die "$SEARCH_ERROR"
 	fi
 	# What the picker refines from. Whatever shape the query arrived in, an
 	# inline "s foo bar" or a line typed into the popup, it becomes one string

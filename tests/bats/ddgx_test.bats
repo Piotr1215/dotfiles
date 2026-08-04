@@ -369,7 +369,25 @@ line four"
 	run_ddgx -d "nothing matches this"
 
 	[ "$status" -eq 1 ]
-	[[ "$output" == *"No results."* ]]
+	[[ "$output" == *"no results"* ]]
+}
+
+@test "a refused search says so instead of blaming the query" {
+	# ddgr answers a throttled request with an empty set, exit 0, and the
+	# reason on stderr. Reported as "no results" it sends you rewording a
+	# query that was never the problem.
+	cat >"$STUB_BIN/ddgr" <<'EOF'
+#!/usr/bin/env bash
+echo '[ERROR] HTTP Error 202: Accepted' >&2
+echo '[]'
+EOF
+	chmod +x "$STUB_BIN/ddgr"
+
+	run_ddgx -d "throttled"
+
+	[ "$status" -eq 1 ]
+	[[ "$output" == *"HTTP Error 202"* ]]
+	[[ "$output" != *"[ERROR]"* ]]
 }
 
 @test "no query prints usage and exits non-zero" {
@@ -626,7 +644,27 @@ run_refine() {
 	[ "$(refined_query)" = "kubernetes finalizers" ]
 	[ "$(jq 'length' "$RESULTS")" -eq 3 ]
 	run env XDG_CACHE_HOME="$CACHE_HOME" bash "$DDGX" --header "$RESULTS"
-	[[ "$output" == *"kept the previous results"* ]]
+	[[ "$output" == *"no results, kept the previous results"* ]]
+}
+
+@test "a refusal mid-refinement is not reported as an empty result set" {
+	write_search_state 'kubernetes finalizers'
+	cat >"$STUB_BIN/ddgr" <<'EOF'
+#!/usr/bin/env bash
+echo '[ERROR] HTTP Error 202: Accepted' >&2
+echo '[]'
+EOF
+	chmod +x "$STUB_BIN/ddgr"
+	stub_fzf 'site:' 'kubernetes.io'
+
+	run_refine
+
+	# Told "nothing for that", you drop a constraint that was fine. The header
+	# has to name what actually happened.
+	[ "$status" -eq 0 ]
+	[ "$(refined_query)" = "kubernetes finalizers" ]
+	run env XDG_CACHE_HOME="$CACHE_HOME" bash "$DDGX" --header "$RESULTS"
+	[[ "$output" == *"HTTP Error 202: Accepted, kept the previous results"* ]]
 }
 
 @test "reset drops every operator and keeps the words" {
