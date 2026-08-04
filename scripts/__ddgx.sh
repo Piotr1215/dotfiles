@@ -246,9 +246,10 @@ prompt_for_query() {
 	local rows cols pad i indent hint
 	rows=$(tput lines 2>/dev/null || echo 24)
 	cols=$(tput cols 2>/dev/null || echo 80)
-	# The operator hint belongs here as much as in the picker: this is the
-	# screen where you would otherwise have to recall the syntax to type it.
-	hint='tab mark  enter open  ctrl-o read  ctrl-e nvim  ctrl-s refine'
+	# Say these are the result keys. Listed bare they read as available on this
+	# screen, and ctrl-s in particular invites a press here, where read -e owns
+	# the line and there is not yet a result set to refine.
+	hint='in the results:  tab mark  enter open  ctrl-o read  ctrl-e nvim  ctrl-s refine'
 	clear 2>/dev/null || true
 
 	local width fill
