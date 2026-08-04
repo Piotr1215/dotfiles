@@ -2,7 +2,7 @@
 
 # Test suite for __kctx_claude_notify.sh
 #
-# The script has three jobs: decide whether a tmux pane holds a claude process,
+# The script has three jobs: decide whether a tmux pane holds a supported agent,
 # work out whether the swap can actually reach that process, and type an honest
 # account of the change into the pane. All of it runs against mocked tmux, ps,
 # kctx and /proc, so the tests never touch the live tmux server.
@@ -131,6 +131,16 @@ sent_text() {
     [[ "$output" == *"context is now loft-prod/eng"* ]]
 }
 
+@test "notifies a codex session running under the app-server wrapper" {
+    export MOCK_PS_TABLE=$'1000 999 zsh\n1001 1000 bash\n1002 1001 node\n1003 1002 codex'
+    write_proc_env 1003 "$MOCK_KCTX_PAIR"
+    run "$SCRIPT" "%33"
+    [ "$status" -eq 0 ]
+    run sent_text
+    [[ "$output" == *"context is now loft-prod/eng"* ]]
+    grep -q '^send-keys -t %33 Enter$' "$TMUX_LOG"
+}
+
 @test "detects claude launched directly as the pane process" {
     export MOCK_PS_TABLE=$'1000 999 claude'
     write_proc_env 1000 "$MOCK_KCTX_PAIR"
@@ -140,7 +150,7 @@ sent_text() {
     [[ "$output" == *"context is now"* ]]
 }
 
-@test "stays silent when the pane runs no claude" {
+@test "stays silent when the pane runs no supported agent" {
     export MOCK_PS_TABLE=$'1000 999 zsh\n1001 1000 vim'
     run "$SCRIPT" "%33"
     [ "$status" -eq 0 ]

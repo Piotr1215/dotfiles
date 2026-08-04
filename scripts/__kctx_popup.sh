@@ -15,10 +15,10 @@ else
 fi
 tmux refresh-client -S 2>/dev/null || true
 
-# A claude session in the target pane cannot see the swap: its environment is
-# fixed at launch and the pane border is not in its context. Nudge it, but only
-# on a real change, so re-picking the same connection stays silent. Detached so
-# the popup closes first and a slow send never holds it open.
+# A Claude or Codex session in the target pane cannot see the swap: its
+# environment is fixed at launch and the pane border is not in its context.
+# Nudge it, but only on a real change, so re-picking the same connection stays
+# silent. Detached so the popup closes first and a slow send never holds it open.
 if [[ $picker_status -eq 0 ]]; then
     connection_after="$(tmux show-options -pqv -t "$target_pane" @kctx_display 2>/dev/null || true)"
     if [[ "$connection_after" != "$connection_before" && -x "$CLAUDE_NOTIFY" ]]; then
