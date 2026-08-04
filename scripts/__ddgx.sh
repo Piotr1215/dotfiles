@@ -22,7 +22,15 @@
 #   ctrl-e   open extracts in nvim as markdown notes (kept, re-openable)
 #   ctrl-a   bookmark into pet-links.toml, the file plink writes
 #   ctrl-y   copy the URLs          ctrl-r  re-fetch (bypass cache)
-#   ctrl-d/u scroll the preview     ctrl-\  toggle the preview pane
+#   ctrl-s   refine the query       ctrl-\  toggle the preview pane
+#   ctrl-d/u scroll the preview
+#
+# ctrl-s builds the query instead of asking you to recall the syntax. Pick an
+# operator, fill in its value, and the search re-runs under the picker. site:
+# offers the domains the current results came from, filetype: offers a list,
+# and an operator already in the query arrives prefilled so narrowing it is an
+# edit. The raw query stays editable from the same menu, and a refinement that
+# finds nothing leaves the previous results standing.
 #
 # Env: DDGX_TTL (cache seconds, default 86400), DDGX_JOBS (prefetch
 # concurrency, default 6), DDGX_NUM (default result count), DDGX_EDITOR
@@ -42,6 +50,7 @@ NOTES_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/ddgx/notes"
 CACHE_TTL="${DDGX_TTL:-86400}"
 FORCE_REFETCH=0
 PET_LINKS="${DDGX_PET_FILE:-$HOME/dev/pet-snippets/pet-links.toml}"
+PICKER_KEYS='tab mark · enter open · ctrl-o read · ctrl-e nvim · ctrl-a bookmark · ctrl-y copy · ctrl-r refetch · ctrl-s refine'
 
 # Print the header comment block: everything between the shebang and the first
 # line of code, so the help text cannot drift out of sync with a line range.
@@ -58,12 +67,33 @@ die() {
 # would otherwise become the status the caller sees.
 cleanup() {
 	local status=$?
-	[[ -n ${RESULTS_FILE:-} ]] && rm -f "$RESULTS_FILE"
+	if [[ -n ${TTY_STATE:-} ]]; then
+		stty "$TTY_STATE" </dev/tty 2>/dev/null || true
+	fi
+	if [[ -n ${RESULTS_FILE:-} ]]; then
+		rm -f "$RESULTS_FILE" "$(query_file "$RESULTS_FILE")" \
+			"$(note_file "$RESULTS_FILE")" "$RESULTS_FILE.new"
+	fi
 	if [[ -n ${PREFETCH_PID:-} ]]; then
 		kill "$PREFETCH_PID" 2>/dev/null || true
 	fi
 	exit "$status"
 }
+
+# The live query and any one-line message live beside the results file. A
+# refinement runs as its own process, so a file is what it has to hand the
+# picker back its new state through.
+query_file() { printf '%s.query' "$1"; }
+note_file() { printf '%s.note' "$1"; }
+
+current_query() {
+	local qf
+	qf=$(query_file "$1")
+	[[ -s $qf ]] && head -n1 "$qf"
+	return 0
+}
+
+set_note() { printf '%s\n' "$2" >"$(note_file "$1")"; }
 
 # Path of the extract cache entry for a URL.
 cache_file() {
@@ -187,7 +217,9 @@ prompt_for_query() {
 	local rows cols pad i indent hint
 	rows=$(tput lines 2>/dev/null || echo 24)
 	cols=$(tput cols 2>/dev/null || echo 80)
-	hint='tab mark  enter open  ctrl-o read  ctrl-e nvim  ctrl-a bookmark'
+	# The operator hint belongs here as much as in the picker: this is the
+	# screen where you would otherwise have to recall the syntax to type it.
+	hint='tab mark  enter open  ctrl-o read  ctrl-e nvim  ctrl-s refine'
 	clear 2>/dev/null || true
 
 	local width fill
@@ -248,6 +280,154 @@ render_markdown() {
 	else
 		sed $'s/^\\[kept .* characters of page text\\]$/\033[90m&\033[0m/' "$file"
 	fi
+}
+
+# ---------------------------------------------------------------------------
+# Query building. Operators do most of the work in a search and almost nobody
+# types them, because the syntax has to be recalled at the moment you are
+# thinking about the question. These build it instead.
+# ---------------------------------------------------------------------------
+
+# The value an operator already carries, so editing it starts from what the
+# query says rather than from an empty line.
+query_get() {
+	local tokens=() t
+	read -ra tokens <<<"$1"
+	for t in "${tokens[@]}"; do
+		if [[ $t == "$2"* ]]; then
+			printf '%s' "${t#"$2"}"
+			return 0
+		fi
+	done
+	return 0
+}
+
+# Replace an operator's value rather than adding a second one. Two site: terms
+# in one query match nothing, so refining twice has to overwrite the first.
+# An empty value drops the operator, which is how a constraint is taken back.
+query_set() {
+	local query=$1 prefix=$2 value=$3 tokens=() out=() t
+	read -ra tokens <<<"$query"
+	for t in "${tokens[@]}"; do
+		[[ $t == "$prefix"* ]] && continue
+		out+=("$t")
+	done
+	[[ -n $value ]] && out+=("$prefix$value")
+	printf '%s' "${out[*]}"
+}
+
+# Strip every operator and keep the words. Quoted phrases go first, as a whole
+# run, because splitting on spaces would leave two thirds of one behind.
+query_reset() {
+	local bare tokens=() out=() t
+	bare=$(printf '%s' "$1" | sed 's/"[^"]*"//g')
+	read -ra tokens <<<"$bare"
+	for t in "${tokens[@]}"; do
+		case $t in
+		*:*) continue ;;
+		-?*) continue ;;
+		esac
+		out+=("$t")
+	done
+	printf '%s' "${out[*]}"
+}
+
+# The domains the current results came from, commonest first. These are the
+# site: candidates worth offering: you learn what to constrain by seeing a bad
+# result set, and the set names its own domains.
+result_domains() {
+	jq -r '.[].url' "$1" |
+		awk -F/ 'NF > 2 { print $3 }' |
+		sed 's/^www\.//' |
+		sort | uniq -c | sort -k1,1nr -k2,2 | awk '{ print $2 }'
+}
+
+# The operators DuckDuckGo answers. Google's before:, after: and AROUND(n) are
+# absent because DuckDuckGo ignores them, and bangs are absent because ddgr
+# resolves a bang to a browser redirect and hands --json an empty set.
+refine_menu() {
+	printf '%-10s %s\n' \
+		'site:' 'only this domain' \
+		'-site:' 'everything except this domain' \
+		'filetype:' 'only this kind of file' \
+		'intitle:' 'the words must be in the title' \
+		'inurl:' 'the words must be in the address' \
+		'phrase' 'an exact wording, in quotes' \
+		'exclude' 'drop results carrying a word' \
+		'edit' 'edit the whole query by hand' \
+		'reset' 'drop every operator, keep the words'
+}
+
+FILETYPES='pdf
+md
+txt
+csv
+json
+yaml
+xml
+html
+doc
+docx
+ppt
+pptx
+xls
+xlsx'
+
+# Pick a value from a list on stdin, or type one the list does not hold.
+# Returns non-zero when the pick was abandoned, which leaves the query alone.
+choose_value() {
+	local prompt=$1 out rc=0 lines=()
+	out=$(fzf --print-query --layout=reverse --prompt="$prompt" \
+		--header='enter takes the highlighted line, or type your own') || rc=$?
+	# 130 is esc or ctrl-c. Anything else is a value, including the typed
+	# query fzf prints when nothing in the list matched it.
+	[[ $rc -eq 130 ]] && return 1
+	mapfile -t lines <<<"$out"
+	if [[ ${#lines[@]} -ge 2 && -n ${lines[1]} ]]; then
+		printf '%s' "${lines[1]}"
+	else
+		printf '%s' "${lines[0]}"
+	fi
+}
+
+# Read one value with readline editing, prefilled with what the query already
+# says. The prompt and the framing go to stderr: stdout is the value.
+read_value() {
+	local prompt=$1 prefill=$2 value
+	clear >&2 2>/dev/null || true
+	printf '\033[90m%s\033[0m\n\n' 'enter accepts · ctrl-c leaves the query alone' >&2
+	read -r -e -i "$prefill" -p "$prompt > " value || return 1
+	printf '%s' "$value"
+}
+
+# Run the search again behind the picker.
+#
+# A refinement that finds nothing must leave the old set standing. An empty
+# picker with the query already spent is a dead end, and the whole point of
+# refining is to be able to try a different constraint against what you saw.
+run_query() {
+	local file=$1 num=$2 query=$3 tmp count
+	tmp="$file.new"
+	clear >&2 2>/dev/null || true
+	printf '\033[90m  searching for %s ...\033[0m\n' "$query" >&2
+
+	if ! ddgr --json --num "$num" --noprompt "$query" >"$tmp" 2>/dev/null; then
+		set_note "$file" "search failed, kept the previous results"
+		rm -f "$tmp"
+		return 0
+	fi
+	count=$(jq 'length' "$tmp" 2>/dev/null || printf '0')
+	if [[ -z $count || $count -eq 0 ]]; then
+		set_note "$file" "nothing for that, kept the previous results"
+		rm -f "$tmp"
+		return 0
+	fi
+
+	mv -f "$tmp" "$file"
+	printf '%s\n' "$query" >"$(query_file "$file")"
+	# Warm the new set detached: this process ends the moment the picker
+	# reloads, and a job of its own would go with it.
+	(batch_extract "$file" &)
 }
 
 # ---------------------------------------------------------------------------
@@ -395,6 +575,7 @@ mode_edit() {
 mode_bookmark() {
 	local file=$1 idx url title
 	shift
+	set_note "$file" 'bookmarked to pet-links.toml'
 	for idx in "$@"; do
 		url=$(result_field "$idx" "$file" url)
 		title=$(result_field "$idx" "$file" title)
@@ -435,9 +616,95 @@ mode_open() {
 	fi
 }
 
+# The picker's rows: the result index, then a numbered title with its domain.
+# A mode of its own because a refinement re-runs it through fzf's reload.
+mode_list() {
+	jq -r 'to_entries[] | "\(.key)\t\(.value.title)\t\(.value.url)"' "$1" |
+		awk -F'\t' '{
+			split($3, parts, "/")
+			printf "%s\t%2d. %s  \033[90m[%s]\033[0m\n", $1, $1 + 1, $2, parts[3]
+		}'
+}
+
+# The header: the query on top, the keys under it. The query is there because
+# after two refinements the constraints in force are no longer something you
+# can be expected to hold in your head. A note from the last action rides along
+# on the same line and is cleared once shown, so it reads as what just
+# happened rather than as part of the query.
+mode_header() {
+	local file=$1 note nf
+	nf=$(note_file "$file")
+	printf 'query: %s' "$(current_query "$file")"
+	if [[ -s $nf ]]; then
+		note=$(head -n1 "$nf")
+		rm -f "$nf"
+		printf '   (%s)' "$note"
+	fi
+	printf '\n%s\n' "$PICKER_KEYS"
+}
+
+# Build an operator onto the current query and search again.
+#
+# The builder lives here, over a result set, rather than in the search box:
+# you learn what to constrain by seeing what came back, not before it. Every
+# path out of the menu can be abandoned, and abandoning changes nothing.
+mode_refine() {
+	local file=$1 num=$2 query choice value new
+	query=$(current_query "$file")
+
+	choice=$(refine_menu | fzf --layout=reverse --prompt='refine > ' \
+		--header="query: $query") || return 0
+	choice=${choice%% *}
+
+	case $choice in
+	'site:' | '-site:')
+		value=$(result_domains "$file" | choose_value "$choice ") || return 0
+		new=$(query_set "$query" "$choice" "$value")
+		;;
+	'filetype:')
+		value=$(printf '%s\n' "$FILETYPES" | choose_value 'filetype: ') || return 0
+		new=$(query_set "$query" 'filetype:' "$value")
+		;;
+	'intitle:' | 'inurl:')
+		value=$(read_value "$choice" "$(query_get "$query" "$choice")") || return 0
+		new=$(query_set "$query" "$choice" "$value")
+		;;
+	'phrase')
+		value=$(read_value 'exact phrase' '') || return 0
+		[[ -z ${value//[[:space:]]/} ]] && return 0
+		new="$query \"$value\""
+		;;
+	'exclude')
+		value=$(read_value 'drop results with' '') || return 0
+		[[ -z ${value//[[:space:]]/} ]] && return 0
+		new="$query -$value"
+		;;
+	'edit')
+		new=$(read_value 'query' "$query") || return 0
+		;;
+	'reset')
+		new=$(query_reset "$query")
+		;;
+	*) return 0 ;;
+	esac
+
+	if [[ -z ${new//[[:space:]]/} ]]; then
+		set_note "$file" "that would leave nothing to search for"
+		return 0
+	fi
+	[[ $new == "$query" ]] && return 0
+	run_query "$file" "$num" "$new"
+}
+
 # ---------------------------------------------------------------------------
 # Main modes.
 # ---------------------------------------------------------------------------
+
+# One node process for the whole result set: eight separate runs would pay the
+# jsdom import eight times over.
+batch_extract() {
+	node "$READABLE" --batch "$1" --cache "$CACHE_DIR" --stats >/dev/null 2>&1
+}
 
 # Warm the cache for every result at once, so previews are instant instead of
 # blocking on a fetch each time the selection moves.
@@ -448,10 +715,7 @@ prefetch() {
 			[[ -n $url ]] && rm -f "$(cache_file "$url")"
 		done < <(jq -r '.[].url' "$file")
 	fi
-	# One node process for the whole result set: eight separate runs would pay
-	# the jsdom import eight times over.
-	node "$READABLE" --batch "$file" --cache "$CACHE_DIR" --stats \
-		>/dev/null 2>&1 &
+	batch_extract "$file" &
 	PREFETCH_PID=$!
 }
 
@@ -490,28 +754,32 @@ mode_dump() {
 }
 
 mode_pick() {
-	local file=$1 count selected line idx url
-	count=$(jq 'length' "$file")
+	local file=$1 num=$2 selected line idx url
 
 	prefetch "$file"
 
+	# Flow control would swallow ctrl-s before fzf ever saw it, and the M-g
+	# popup runs on a fresh pty where XON/XOFF is on by default. Restored in
+	# cleanup, so a terminal that wants ctrl-s to freeze keeps it.
+	if [[ -e /dev/tty ]]; then
+		TTY_STATE=$(stty -g </dev/tty 2>/dev/null || true)
+		[[ -n $TTY_STATE ]] && { stty -ixon </dev/tty 2>/dev/null || true; }
+	fi
+
 	selected=$(
-		jq -r 'to_entries[] | "\(.key)\t\(.value.title)\t\(.value.url)"' "$file" |
-			awk -F'\t' '{
-				split($3, parts, "/")
-				printf "%s\t%2d. %s  \033[90m[%s]\033[0m\n", $1, $1 + 1, $2, parts[3]
-			}' |
+		mode_list "$file" |
 			fzf --ansi --multi \
 				--delimiter=$'\t' --with-nth=2.. \
 				--prompt='result > ' \
-				--header="tab mark · enter open · ctrl-o read · ctrl-e nvim · ctrl-a bookmark · ctrl-y copy · ctrl-r refetch" \
+				--header="$(mode_header "$file")" \
 				--preview="$SELF --preview '$file' {1}" \
 				--preview-window='right,58%,wrap,border-left' \
 				--bind="ctrl-o:execute($SELF --read '$file' {+1})" \
 				--bind="ctrl-e:execute($SELF --edit '$file' {+1})" \
-				--bind="ctrl-a:execute-silent($SELF --bookmark '$file' {+1})+change-header(bookmarked to pet-links.toml · tab mark · enter open · ctrl-o read · ctrl-e nvim · ctrl-y copy)" \
+				--bind="ctrl-a:execute-silent($SELF --bookmark '$file' {+1})+transform-header($SELF --header '$file')" \
 				--bind="ctrl-y:execute-silent($SELF --copy '$file' {+1})" \
 				--bind="ctrl-r:execute-silent($SELF --refetch '$file' {+1})+refresh-preview" \
+				--bind="ctrl-s:execute($SELF --refine '$file' $num)+reload($SELF --list '$file')+transform-header($SELF --header '$file')" \
 				--bind='ctrl-\:change-preview-window(hidden|right,58%,wrap,border-left)' \
 				--bind='ctrl-d:preview-half-page-down' \
 				--bind='ctrl-u:preview-half-page-up' || true
@@ -563,6 +831,19 @@ main() {
 	--refetch)
 		shift
 		mode_refetch "$@"
+		return 0
+		;;
+	--list)
+		mode_list "$2"
+		return 0
+		;;
+	--header)
+		mode_header "$2"
+		return 0
+		;;
+	--refine)
+		shift
+		mode_refine "$@"
 		return 0
 		;;
 	--fetch)
@@ -645,12 +926,16 @@ main() {
 	if [[ ! -s $RESULTS_FILE ]] || [[ $(jq 'length' "$RESULTS_FILE") -eq 0 ]]; then
 		die "No results."
 	fi
+	# What the picker refines from. Whatever shape the query arrived in, an
+	# inline "s foo bar" or a line typed into the popup, it becomes one string
+	# from here on.
+	printf '%s\n' "${args[*]}" >"$(query_file "$RESULTS_FILE")"
 
 	if [[ $dump -eq 1 ]] || [[ ! -t 1 ]]; then
 		# Piped without -d: dump rather than start fzf on a headless stdout.
 		mode_dump "$RESULTS_FILE"
 	else
-		mode_pick "$RESULTS_FILE"
+		mode_pick "$RESULTS_FILE" "$num"
 	fi
 }
 

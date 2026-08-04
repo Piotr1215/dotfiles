@@ -504,3 +504,196 @@ write_two_results() {
 	[[ "$output" == *"1. Piped"* ]]
 	[[ "$output" == *"piped body"* ]]
 }
+
+# --------------------------------------------------------------------------
+# Refining the query. ctrl-s in the picker runs --refine, which rewrites the
+# query and the results in place so fzf can reload over the same files.
+# --------------------------------------------------------------------------
+
+# Stub fzf so a menu choice and a value pick are two lines of a queue. Each
+# call records what it was offered, which is how the site: values are checked
+# against the result set they are supposed to come from. A queued "@abort"
+# stands for esc.
+stub_fzf() {
+	printf '%s\n' "$@" >"$STUB_BIN/fzf.queue"
+	rm -f "$STUB_BIN/fzf.count"
+	cat >"$STUB_BIN/fzf" <<'EOF'
+#!/usr/bin/env bash
+dir=$(dirname "$0")
+n=$(cat "$dir/fzf.count" 2>/dev/null || echo 0)
+n=$((n + 1))
+echo "$n" >"$dir/fzf.count"
+cat >"$dir/fzf.stdin.$n"
+line=$(sed -n "${n}p" "$dir/fzf.queue")
+[ "$line" = "@abort" ] && exit 130
+printf '%s\n' "$line"
+EOF
+	chmod +x "$STUB_BIN/fzf"
+}
+
+# A picker mid-search: three results over two domains, and the query that
+# produced them.
+write_search_state() {
+	RESULTS="$BATS_TEST_TMPDIR/results.json"
+	printf '%s\n' '[{"title":"Finalizers","url":"https://kubernetes.io/docs/finalizers/","abstract":"a"},{"title":"A blog","url":"https://www.medium.com/p/1","abstract":"b"},{"title":"Nodes","url":"https://kubernetes.io/docs/nodes/","abstract":"c"}]' >"$RESULTS"
+	printf '%s\n' "$1" >"$RESULTS.query"
+	# The refined set, pre-cached so the warming pass has nothing to fetch.
+	seed_cache "https://kubernetes.io/only/" "the narrowed page"
+}
+
+refined_query() { head -n1 "$RESULTS.query"; }
+
+run_refine() {
+	run env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" \
+		XDG_DATA_HOME="$DATA_HOME" DDGX_TTL=0 \
+		bash "$DDGX" --refine "$RESULTS" 8
+}
+
+@test "refining by site: rewrites the query and the results under it" {
+	write_search_state 'kubernetes finalizers'
+	stub_ddgr '[{"title":"Narrowed","url":"https://kubernetes.io/only/","abstract":"z"}]'
+	stub_fzf 'site:' 'kubernetes.io'
+
+	run_refine
+
+	[ "$status" -eq 0 ]
+	[ "$(refined_query)" = "kubernetes finalizers site:kubernetes.io" ]
+	[ "$(jq -r '.[0].title' "$RESULTS")" = "Narrowed" ]
+	[ "$(jq 'length' "$RESULTS")" -eq 1 ]
+}
+
+@test "the site: values on offer are the domains the results came from" {
+	write_search_state 'kubernetes finalizers'
+	stub_ddgr '[{"title":"Narrowed","url":"https://kubernetes.io/only/","abstract":"z"}]'
+	stub_fzf 'site:' 'kubernetes.io'
+
+	run_refine
+
+	# Picking a domain out of a list beats typing one, and the list is the
+	# result set's own domains, commonest first, with www dropped.
+	[ "$status" -eq 0 ]
+	local offered="$STUB_BIN/fzf.stdin.2"
+	[ "$(head -n1 "$offered")" = "kubernetes.io" ]
+	grep -qx 'medium.com' "$offered"
+	! grep -q 'www\.' "$offered"
+}
+
+@test "refining site: twice replaces it rather than adding a second one" {
+	write_search_state 'kubernetes finalizers site:medium.com'
+	stub_ddgr '[{"title":"Narrowed","url":"https://kubernetes.io/only/","abstract":"z"}]'
+	stub_fzf 'site:' 'kubernetes.io'
+
+	run_refine
+
+	# Two site: terms in one query match nothing at all.
+	[ "$status" -eq 0 ]
+	[ "$(refined_query)" = "kubernetes finalizers site:kubernetes.io" ]
+}
+
+@test "an empty value takes the operator back off the query" {
+	write_search_state 'kubernetes finalizers site:medium.com'
+	stub_ddgr '[{"title":"Widened","url":"https://kubernetes.io/only/","abstract":"z"}]'
+	stub_fzf 'site:' ''
+
+	run_refine
+
+	[ "$status" -eq 0 ]
+	[ "$(refined_query)" = "kubernetes finalizers" ]
+}
+
+@test "an abandoned menu leaves the query and the results alone" {
+	write_search_state 'kubernetes finalizers'
+	stub_ddgr '[{"title":"Never asked for","url":"https://kubernetes.io/only/","abstract":"z"}]'
+	stub_fzf '@abort'
+
+	run_refine
+
+	[ "$status" -eq 0 ]
+	[ "$(refined_query)" = "kubernetes finalizers" ]
+	[ "$(jq 'length' "$RESULTS")" -eq 3 ]
+}
+
+@test "a refinement that finds nothing keeps the previous results" {
+	write_search_state 'kubernetes finalizers'
+	stub_ddgr '[]'
+	stub_fzf 'site:' 'nowhere.example'
+
+	run_refine
+
+	# An empty picker with the query already spent is a dead end: the point of
+	# refining is to try another constraint against the set you can still see.
+	[ "$status" -eq 0 ]
+	[ "$(refined_query)" = "kubernetes finalizers" ]
+	[ "$(jq 'length' "$RESULTS")" -eq 3 ]
+	run env XDG_CACHE_HOME="$CACHE_HOME" bash "$DDGX" --header "$RESULTS"
+	[[ "$output" == *"kept the previous results"* ]]
+}
+
+@test "reset drops every operator and keeps the words" {
+	write_search_state 'kubernetes drain site:medium.com filetype:pdf -aws "exact words"'
+	stub_ddgr '[{"title":"Widened","url":"https://kubernetes.io/only/","abstract":"z"}]'
+	stub_fzf 'reset'
+
+	run_refine
+
+	[ "$status" -eq 0 ]
+	[ "$(refined_query)" = "kubernetes drain" ]
+}
+
+@test "an excluded word is appended, and more than one may be" {
+	write_search_state 'kubernetes drain -aws'
+	stub_ddgr '[{"title":"Narrowed","url":"https://kubernetes.io/only/","abstract":"z"}]'
+	stub_fzf 'exclude'
+
+	run env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" \
+		XDG_DATA_HOME="$DATA_HOME" DDGX_TTL=0 \
+		bash "$DDGX" --refine "$RESULTS" 8 <<<"azure"
+
+	# Exclusions are not an operator with one value: every one you add says
+	# something the last one did not.
+	[ "$status" -eq 0 ]
+	[ "$(refined_query)" = "kubernetes drain -aws -azure" ]
+}
+
+@test "the raw query stays editable by hand" {
+	write_search_state 'kubernetes finalizers'
+	stub_ddgr '[{"title":"Typed","url":"https://kubernetes.io/only/","abstract":"z"}]'
+	stub_fzf 'edit'
+
+	run env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" \
+		XDG_DATA_HOME="$DATA_HOME" DDGX_TTL=0 \
+		bash "$DDGX" --refine "$RESULTS" 8 <<<'etcd defrag intitle:runbook'
+
+	# The builder must never become the only way to type a query.
+	[ "$status" -eq 0 ]
+	[ "$(refined_query)" = "etcd defrag intitle:runbook" ]
+}
+
+@test "list mode gives fzf one row per result, keyed by index" {
+	write_search_state 'kubernetes finalizers'
+
+	run bash "$DDGX" --list "$RESULTS"
+
+	[ "$status" -eq 0 ]
+	[ "${#lines[@]}" -eq 3 ]
+	[[ "${lines[0]}" == "0	"* ]]
+	[[ "${lines[0]}" == *"1. Finalizers"* ]]
+	[[ "${lines[0]}" == *"[kubernetes.io]"* ]]
+	[[ "${lines[2]}" == "2	"* ]]
+}
+
+@test "the header carries the query, and a note only until it is read" {
+	write_search_state 'kubernetes finalizers site:kubernetes.io'
+	printf 'bookmarked to pet-links.toml\n' >"$RESULTS.note"
+
+	run bash "$DDGX" --header "$RESULTS"
+	[ "$status" -eq 0 ]
+	[[ "${lines[0]}" == "query: kubernetes finalizers site:kubernetes.io"* ]]
+	[[ "${lines[0]}" == *"bookmarked to pet-links.toml"* ]]
+	[[ "${lines[1]}" == *"ctrl-s refine"* ]]
+
+	# What just happened is not part of the query: it goes once it is shown.
+	run bash "$DDGX" --header "$RESULTS"
+	[ "$status" -eq 0 ]
+	[[ "${lines[0]}" != *"bookmarked"* ]]
+}
