@@ -22,10 +22,10 @@
 #   ctrl-e   open extracts in nvim as markdown notes (kept, re-openable)
 #   ctrl-a   bookmark into pet-links.toml, the file plink writes
 #   ctrl-y   copy the URLs          ctrl-r  re-fetch (bypass cache)
-#   ctrl-t   refine the query       ctrl-\  toggle the preview pane
+#   alt-q    refine the query       ctrl-\  toggle the preview pane
 #   ctrl-d/u scroll the preview
 #
-# ctrl-t builds the query instead of asking you to recall the syntax. Pick an
+# alt-q builds the query instead of asking you to recall the syntax. Pick an
 # operator, fill in its value, and the search re-runs under the picker. site:
 # offers the domains the current results came from, filetype: offers a list,
 # and an operator already in the query arrives prefilled so narrowing it is an
@@ -50,11 +50,14 @@ NOTES_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/ddgx/notes"
 CACHE_TTL="${DDGX_TTL:-86400}"
 FORCE_REFETCH=0
 PET_LINKS="${DDGX_PET_FILE:-$HOME/dev/pet-snippets/pet-links.toml}"
-# ctrl-t, not ctrl-s. ctrl-s is XOFF: on a fresh pty, which is what the M-g
-# popup gets, the tty stops the screen and swallows everything until ctrl-q,
-# and where flow control is already off readline takes it for i-search. ctrl-t
-# is claimed by none of the tty layer, readline, tmux or fzf's own defaults.
-PICKER_KEYS='tab mark · enter open · ctrl-o read · ctrl-e nvim · ctrl-a bookmark · ctrl-y copy · ctrl-r refetch · ctrl-t refine'
+# alt-q for the refiner, because every ctrl letter is already spoken for and an
+# existing binding wins. ctrl-s is XOFF: on the fresh pty the M-g popup runs
+# on, the tty stops the screen and swallows everything until ctrl-q, and where
+# flow control is already off readline takes it for i-search. ctrl-t is
+# readline's transpose-chars. Cross-checking readline, tmux's root table, fzf's
+# defaults and the keys above leaves alt-h, alt-j, alt-q and alt-v; alt-q is
+# the one that stands for something.
+PICKER_KEYS='tab mark · enter open · ctrl-o read · ctrl-e nvim · ctrl-a bookmark · ctrl-y copy · ctrl-r refetch · alt-q refine'
 
 # Print the header comment block: everything between the shebang and the first
 # line of code, so the help text cannot drift out of sync with a line range.
@@ -250,7 +253,7 @@ prompt_for_query() {
 	# Say these are the result keys. Listed bare they read as available on this
 	# screen, where read -e owns the line and there is not yet a result set to
 	# refine.
-	hint='in the results:  tab mark  enter open  ctrl-o read  ctrl-e nvim  ctrl-t refine'
+	hint='in the results:  tab mark  enter open  ctrl-o read  ctrl-e nvim  alt-q refine'
 	clear 2>/dev/null || true
 
 	local width fill
@@ -796,7 +799,7 @@ mode_pick() {
 				--bind="ctrl-a:execute-silent($SELF --bookmark '$file' {+1})+transform-header($SELF --header '$file')" \
 				--bind="ctrl-y:execute-silent($SELF --copy '$file' {+1})" \
 				--bind="ctrl-r:execute-silent($SELF --refetch '$file' {+1})+refresh-preview" \
-				--bind="ctrl-t:execute($SELF --refine '$file' $num)+reload($SELF --list '$file')+transform-header($SELF --header '$file')" \
+				--bind="alt-q:execute($SELF --refine '$file' $num)+reload($SELF --list '$file')+transform-header($SELF --header '$file')" \
 				--bind='ctrl-\:change-preview-window(hidden|right,58%,wrap,border-left)' \
 				--bind='ctrl-d:preview-half-page-down' \
 				--bind='ctrl-u:preview-half-page-up' || true
