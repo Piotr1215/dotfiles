@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -eo pipefail
 
+export PATH="$HOME/dev/google-cloud-sdk/bin:$PATH"
+
 KCTX_BIN="${KCTX_BIN:-$HOME/.local/bin/kctx}"
 CLAUDE_NOTIFY="${KCTX_CLAUDE_NOTIFY:-$HOME/dev/dotfiles/scripts/__kctx_claude_notify.sh}"
 target_pane="$(tmux display-message -p '#{pane_id}')"
