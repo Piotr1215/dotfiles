@@ -2,10 +2,13 @@
 
 set -eo pipefail
 
-# Link picker popup. __link_candidates.py emits "display<TAB>command" lines
-# from two sources: the curated pet link snippets, and recent browser history.
+# Link picker popup. __link_candidates.py emits
+# "display<TAB>command<TAB>title<TAB>url" lines from two sources: the curated
+# pet link snippets, and recent browser history.
 # fzf shows and searches column one only (--with-nth=1) but hands back the
 # whole line, so cut recovers the command with no mapping file in between.
+# Only field 2 is cut: fields 3 and 4 are what the ctrl-f pin toggle reads,
+# and eval must never see them.
 
 CANDIDATES=/home/decoder/dev/dotfiles/scripts/__link_candidates.py
 TEMP_FILE=$(mktemp)
@@ -18,10 +21,11 @@ handle_link_selection() {
         --layout=reverse \
         --info=inline \
         --border=sharp \
-        --header='Bookmarks + history, type #link #work #home to filter (Ctrl+C to exit)' \
+        --header='ctrl-f: pin/unpin *   type #pin #link #work #home to filter (Ctrl+C to exit)' \
         --prompt='🔍 Search: ' \
+        --bind "ctrl-f:execute-silent(${CANDIDATES} --toggle-pin {})+reload(${CANDIDATES})" \
         --color='fg:#f8f8f2,bg:#282a36,hl:#bd93f9,fg+:#f8f8f2,bg+:#44475a,hl+:#bd93f9,info:#ffb86c,prompt:#50fa7b,pointer:#ff79c6,marker:#ff79c6,spinner:#ffb86c,header:#6272a4' \
-        | cut -f2- > "$TEMP_FILE"
+        | cut -f2 > "$TEMP_FILE"
 }
 
 export -f handle_link_selection
