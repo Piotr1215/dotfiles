@@ -52,8 +52,10 @@ color.tag.claude      = bold on gray2
 color.tag.review      = bold blue
 # +kill reads as "this can be killed": the disposable pr-reviews mirrors, and
 # now also open Linear issues whose attached PRs all closed unmerged, stamped by
-# __github_issue_sync.sh. Red ground so a close candidate cannot be scrolled past.
-color.tag.kill        = bold white on red
+# __github_issue_sync.sh. Still a red ground so a close candidate cannot be
+# scrolled past, but color52 (dark maroon) instead of bright red: the glare made
+# a whole-row block that dominated the report it was meant to annotate.
+color.tag.kill        = bold white on color52
 
 # +kill outranks +review: a task carrying both still has a dead PR behind it,
 # and "close this" is the call worth surfacing over "someone is reviewing".
@@ -125,8 +127,8 @@ report.inbox.sort=entry-
 report.inbox.filter=status:pending -backlog -BLOCKED project.not:home* project.not:pr-reviews
 
 report.byrepo.description=Tasks grouped by repo
-report.byrepo.columns=id,entry.age,project,tags,description.desc,due.relative,linear_issue_id,repo
-report.byrepo.labels=ID,Age,Proj,Tags,Desc,Due,Lin,Repo
+report.byrepo.columns=id,entry.age,priority,project,tags,description.desc,due.relative,linear_issue_id,repo
+report.byrepo.labels=ID,Age,P,Proj,Tags,Desc,Due,Lin,Repo
 report.byrepo.sort=repo+,entry-
 report.byrepo.filter=status:pending -BLOCKED -pr -backlog -pending -private project.not:home*
 
