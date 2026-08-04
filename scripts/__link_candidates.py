@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Emit link picker candidates as "display<TAB>command" lines.
 
-Two sources feed the picker: the curated pet link snippets file, and recent
-browser history from every LibreWolf and Chrome profile on this machine.
+Two sources feed the picker: recent browser history from the LibreWolf and
+Chrome profiles named in the conf, and the curated pet link snippets file.
+History comes first, grouped by profile in conf order and newest first inside
+each group; the snippets follow, alphabetically.
 __link_pane_runner.sh pipes this into fzf with --with-nth=1, so the first
 column is what gets displayed and searched, and the second is the command
 that gets run on selection.
@@ -297,16 +299,24 @@ def main():
     limit = int(setting("LINK_HISTORY_LIMIT", "limit", "500", conf))
     per_host_limit = int(setting("LINK_HISTORY_PER_HOST", "per_host", "30", conf))
 
-    lines = []
+    # Snippets are resolved first whatever the display order, because they seed
+    # the dedupe: a bookmarked url then keeps its curated title instead of
+    # coming back a second time under whatever the browser tab was called.
     seen = set()
+    snippets = []
     for title, command, url in load_snippets():
         seen.add(dedupe_key(url) if url else command)
-        lines.append(render(title, url, "#link", command))
+        snippets.append(render(title, url, "#link", command))
 
+    # History leads, because the picker is reached for to get back to a page
+    # from earlier today. The bookmarks are the long tail you search for by
+    # name, so they sit underneath.
+    lines = []
     if history_on:
         for title, url, tag in load_history(seen, profiles, limit, per_host_limit):
             command = "xdg-open " + shlex.quote(url)
             lines.append(render(title, url, "#" + tag, command))
+    lines.extend(snippets)
 
     if lines:
         sys.stdout.write("\n".join(lines) + "\n")

@@ -68,6 +68,11 @@ def run_script(workdir, dbs=(), conf_text=None, **env_overrides):
     env["LINK_PICKER_CONF"] = str(conf_file)
     if dbs:
         env["LINK_HISTORY_DBS"] = ":".join(str(db) for db in dbs)
+    elif conf_text is None:
+        # Neither a db nor a conf naming profiles: pin history to a path that
+        # matches nothing, or the default globs reach the real browser
+        # profiles on whatever machine this runs on.
+        env["LINK_HISTORY_DBS"] = str(Path(workdir) / "no-such-history.sqlite")
     env.update(env_overrides)
 
     result = subprocess.run(
@@ -98,14 +103,29 @@ class LinkCandidatesTest(unittest.TestCase):
     def history(self, rows):
         return [row for row in rows if "#link" not in row[0]]
 
-    def test_snippets_come_first_sorted_and_tagged(self):
+    def test_history_leads_and_snippets_follow_sorted_and_tagged(self):
         rows = self.candidates(firefox_rows=[("https://a.example.com/", "A", 100)])
-        self.assertIn("[Alpha anchor]", rows[0][0])
-        self.assertIn("#link", rows[0][0])
-        self.assertIn("[Zeta docs]", rows[1][0])
-        self.assertIn("#history", rows[2][0])
+        self.assertIn("[A]", rows[0][0])
+        self.assertIn("#history", rows[0][0])
+        self.assertIn("[Alpha anchor]", rows[1][0])
+        self.assertIn("#link", rows[1][0])
+        self.assertIn("[Zeta docs]", rows[2][0])
+
+    def test_snippets_still_win_the_dedupe_from_below(self):
+        # Order is display only: a bookmarked url must not come back a second
+        # time as a history row just because history is emitted first.
+        rows = self.candidates(
+            firefox_rows=[
+                ("https://zeta.example.com/docs", "Zeta docs the browser saw", 100),
+                ("https://fresh.example.com/", "fresh", 90),
+            ]
+        )
+        self.assertEqual(len(self.history(rows)), 1)
+        self.assertIn("[fresh]", rows[0][0])
+        self.assertIn("[Zeta docs]", rows[2][0])
 
     def test_snippet_command_survives_shell_escapes(self):
+        # No history source, so the snippets are the whole list.
         rows = self.candidates()
         self.assertEqual(
             rows[0][1],
