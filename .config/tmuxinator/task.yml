@@ -75,3 +75,6 @@ windows:
         # ~/.claude-work/skills and ~/.claude-work/commands are symlinks to
         # ~/.claude, so the whole personal set resolves here too.
         - __claude_with_monitor.sh --system-prompt-file ~/.claude/system-prompts/triage-agent-system-prompt.md -- "/ops-triage-agent"
+  - cockpit:
+      panes:
+        - ~/.claude/scripts/__cockpit_board.sh
