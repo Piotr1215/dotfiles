@@ -7,12 +7,17 @@ __link_pane_runner.sh pipes this into fzf with --with-nth=1, so the first
 column is what gets displayed and searched, and the second is the command
 that gets run on selection.
 
+Settings live in __link_picker.conf, because the picker runs from a global
+hotkey and that process carries none of the shell environment. The variables
+below still win when they are set, for one-off runs from a terminal.
+
 Environment:
   PET_SNIPPET_FILE       pet links toml (default ~/dev/pet-snippets/pet-links.toml)
+  LINK_PICKER_CONF       settings file (default ~/dev/dotfiles/scripts/__link_picker.conf)
   LINK_HISTORY           set to 0 to drop the history rows entirely
   LINK_HISTORY_LIMIT     how many history rows to keep (default 500)
-  LINK_HISTORY_PER_HOST  cap per host, keeps github off the whole list (default 30)
-  LINK_HISTORY_DBS       colon separated paths or globs, replaces the defaults
+  LINK_HISTORY_PER_HOST  cap per host per profile, keeps github off the whole list
+  LINK_HISTORY_DBS       colon separated paths or globs, replaces the conf profiles
 """
 
 import glob
@@ -30,16 +35,20 @@ from urllib.parse import urlsplit
 SNIPPET_FILE = os.environ.get(
     "PET_SNIPPET_FILE", os.path.expanduser("~/dev/pet-snippets/pet-links.toml")
 )
-HISTORY_ENABLED = os.environ.get("LINK_HISTORY", "1") != "0"
-HISTORY_LIMIT = int(os.environ.get("LINK_HISTORY_LIMIT", "500"))
-PER_HOST_LIMIT = int(os.environ.get("LINK_HISTORY_PER_HOST", "30"))
+CONF_FILE = os.environ.get(
+    "LINK_PICKER_CONF",
+    os.path.expanduser("~/dev/dotfiles/scripts/__link_picker.conf"),
+)
 
+# Used when the conf file names no profiles: every profile on the machine,
+# under one tag, which is the behaviour before the work/home split existed.
 DEFAULT_DB_GLOBS = [
     "~/.var/app/io.gitlab.librewolf-community/.librewolf/*/places.sqlite",
     "~/.librewolf/*/places.sqlite",
     "~/.mozilla/firefox/*/places.sqlite",
     "~/.config/google-chrome/*/History",
 ]
+DEFAULT_TAG = "history"
 
 # last_visit_date is microseconds since the unix epoch
 FIREFOX_QUERY = """
@@ -80,6 +89,7 @@ NOISE_HOSTS = frozenset(
 
 NOTION_HOSTS = ("notion.so", "notion.com")
 NOTION_PAGE_ID = re.compile(r"[0-9a-f]{32}")
+OFF_VALUES = frozenset(["0", "off", "no", "false"])
 UNREAD_BADGE = re.compile(r"^\(\d+\)\s*")
 XDG_OPEN_URL = re.compile(r'\s*xdg-open\s+"?([^"\s]+)')
 
@@ -153,13 +163,51 @@ def load_snippets():
     return rows
 
 
-def history_dbs():
+# "key = value", full line comments only. A repeated "profile" key accumulates,
+# which is how one tag can cover several browser profiles.
+def load_conf():
+    settings = {}
+    profiles = []
+    try:
+        with open(CONF_FILE) as handle:
+            text = handle.read()
+    except OSError:
+        return settings, profiles
+
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key, value = key.strip().lower(), value.strip()
+        if key == "profile":
+            tag, _, path = value.partition(":")
+            if tag.strip() and path.strip():
+                profiles.append((tag.strip(), os.path.expanduser(path.strip())))
+        else:
+            settings[key] = value
+    return settings, profiles
+
+
+def setting(env_name, conf_key, default, conf):
+    return os.environ.get(env_name) or conf.get(conf_key) or default
+
+
+# Yields (tag, path) so every row can carry the profile it came from.
+def history_dbs(profiles):
     override = os.environ.get("LINK_HISTORY_DBS")
-    patterns = override.split(":") if override else DEFAULT_DB_GLOBS
-    paths = []
-    for pattern in patterns:
-        paths.extend(sorted(glob.glob(os.path.expanduser(pattern))))
-    return paths
+    if override:
+        sources = [(DEFAULT_TAG, pattern) for pattern in override.split(":")]
+    elif profiles:
+        sources = profiles
+    else:
+        sources = [(DEFAULT_TAG, pattern) for pattern in DEFAULT_DB_GLOBS]
+
+    found = []
+    for tag, pattern in sources:
+        for path in sorted(glob.glob(os.path.expanduser(pattern))):
+            found.append((tag, path))
+    return found
 
 
 # The live databases are locked while the browser runs, so work on a copy.
@@ -188,25 +236,27 @@ def read_db(path, workdir, index, limit):
         conn.close()
 
 
-def load_history(seen):
+def load_history(seen, profiles, limit, per_host_limit):
     rows = []
     with tempfile.TemporaryDirectory(prefix="link-history-") as workdir:
-        for index, path in enumerate(history_dbs()):
+        for index, (tag, path) in enumerate(history_dbs(profiles)):
             try:
-                rows.extend(read_db(path, workdir, index, HISTORY_LIMIT * 4))
+                for url, title, when in read_db(path, workdir, index, limit * 4):
+                    rows.append((url, title, when, tag))
             except (OSError, sqlite3.Error) as err:
                 print("link candidates: %s: %s" % (path, err), file=sys.stderr)
 
     rows.sort(key=lambda row: row[2], reverse=True)
     hits = []
     per_host = Counter()
-    for url, title, _ in rows:
+    for url, title, _, tag in rows:
         host = urlsplit(url).netloc.lower()
         if host in NOISE_HOSTS:
             continue
         # A day of github reviewing would otherwise fill the whole budget and
-        # push every other host out of the picker.
-        if per_host[host] >= PER_HOST_LIMIT:
+        # push every other host out of the picker. Counted per profile, so work
+        # github and home github do not compete for the same slots.
+        if per_host[(tag, host)] >= per_host_limit:
             continue
         key = dedupe_key(url)
         if key in seen:
@@ -221,24 +271,29 @@ def load_history(seen):
             continue
         seen.add(key)
         seen.add(title_key)
-        per_host[host] += 1
-        hits.append((title, url))
-        if len(hits) >= HISTORY_LIMIT:
+        per_host[(tag, host)] += 1
+        hits.append((title, url, tag))
+        if len(hits) >= limit:
             break
     return hits
 
 
 def main():
+    conf, profiles = load_conf()
+    history_on = setting("LINK_HISTORY", "history", "on", conf).lower() not in OFF_VALUES
+    limit = int(setting("LINK_HISTORY_LIMIT", "limit", "500", conf))
+    per_host_limit = int(setting("LINK_HISTORY_PER_HOST", "per_host", "30", conf))
+
     lines = []
     seen = set()
     for title, command, url in load_snippets():
         seen.add(dedupe_key(url) if url else command)
         lines.append(render(title, url, "#link", command))
 
-    if HISTORY_ENABLED:
-        for title, url in load_history(seen):
+    if history_on:
+        for title, url, tag in load_history(seen, profiles, limit, per_host_limit):
             command = "xdg-open " + shlex.quote(url)
-            lines.append(render(title, url, "#history", command))
+            lines.append(render(title, url, "#" + tag, command))
 
     if lines:
         sys.stdout.write("\n".join(lines) + "\n")
