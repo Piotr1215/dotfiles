@@ -458,7 +458,17 @@ task_pr_closable_verdict() {
     local saw_closed="false"
     local saw_unknown="false"
 
-    pr_urls=$(echo "$task_json" | jq -r '.[0].annotations[]? | (.description // "") | select(test("github.com.*/pull/"))')
+    # SCAN the annotation text for PR urls, never take the whole annotation.
+    # Only 12 of the 41 PR-bearing annotations on the live board are a bare url:
+    # the other 29 carry a prefix ("pr-url:", "PR:", "log:PR created -- ") or sit
+    # inside a paragraph an agent wrote. Handing that whole string to
+    # `gh pr view` fails, which reads as UNKNOWN, and UNKNOWN never marks, so
+    # this silently saw almost nothing. scan also picks up a second PR mentioned
+    # mid-sentence, and unique keeps the same url quoted twice from costing two
+    # lookups. The character classes stop at the PR number, so trailing prose or
+    # punctuation is left behind.
+    pr_urls=$(echo "$task_json" \
+        | jq -r '[.[0].annotations[]? | (.description // "") | scan("https://github\\.com/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+/pull/[0-9]+")] | unique | .[]')
 
     while IFS= read -r pr_url; do
         [[ -z "$pr_url" ]] && continue
