@@ -807,8 +807,20 @@ attach_pr_link() {
 # set by hand, the same fight the +fresh backfill lost before.
 mark_closable_issue() {
     local task_uuid="$1"
+    local issue_status="$2"
 
     [[ -z "$task_uuid" || "$task_uuid" == "null" ]] && return 0
+
+    # Held statuses are never closable, whatever happened to the PR. A backlog,
+    # idea or parked issue is deliberately not being worked on, so its PR being
+    # closed is the expected consequence of parking it, not evidence the issue
+    # died. DEVOPS-1117 proved this on the first live run: loft-prod#544 was
+    # closed unmerged, but the issue is in Backlog on purpose and is still real
+    # work. Only an issue someone is supposedly acting on (Todo, In Progress,
+    # Investigating, In Review) is contradicted by having no live PR left.
+    if [[ "$issue_status" =~ [Bb]acklog || "$issue_status" == "Idea" || "$issue_status" == "Parked" ]]; then
+        return 0
+    fi
 
     local task_json verdict has_kill
     task_json=$(task "$task_uuid" export 2>/dev/null)
@@ -874,7 +886,7 @@ create_and_annotate_task() {
 
         # An issue can arrive with its PR already dead (attempt abandoned before
         # the issue was ever assigned), so judge closability on creation too.
-        mark_closable_issue "$task_uuid"
+        mark_closable_issue "$task_uuid" "$issue_status"
         
         # Set due date if present
         if [[ -n "$issue_due_date" && "$issue_due_date" != "null" ]]; then
@@ -1013,7 +1025,7 @@ sync_to_taskwarrior() {
 
         # Runs AFTER attach_pr_link so a PR annotation mirrored on this very run
         # is already visible to the verdict, instead of waiting 30 minutes.
-        mark_closable_issue "$task_uuid"
+        mark_closable_issue "$task_uuid" "$issue_status"
 
         # Re-surface the issue when Linear shows newer activity than our watermark.
         # new_activity stores the last-seen Linear updatedAt.

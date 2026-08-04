@@ -2799,7 +2799,7 @@ _pr_annotations() {
     _write_task_mock_export '["linear","work"]' \
         "$(_pr_annotations https://github.com/loft-sh/loft-enterprise/pull/7649)"
 
-    run mark_closable_issue "test-uuid"
+    run mark_closable_issue "test-uuid" "Todo"
     [ "$status" -eq 0 ]
     grep -q -- "+kill" "${TEST_DIR}/task_commands.log"
 }
@@ -2809,7 +2809,7 @@ _pr_annotations() {
     _write_task_mock_export '["linear","kill"]' \
         "$(_pr_annotations https://github.com/loft-sh/loft-enterprise/pull/7649)"
 
-    run mark_closable_issue "test-uuid"
+    run mark_closable_issue "test-uuid" "Todo"
     [ "$status" -eq 0 ]
     [ ! -f "${TEST_DIR}/task_commands.log" ]
 }
@@ -2819,7 +2819,7 @@ _pr_annotations() {
     _write_task_mock_export '["linear","work"]' \
         "$(_pr_annotations https://github.com/loft-sh/loft-prod/pull/522)"
 
-    run mark_closable_issue "test-uuid"
+    run mark_closable_issue "test-uuid" "Todo"
     [ "$status" -eq 0 ]
     [ ! -f "${TEST_DIR}/task_commands.log" ]
 }
@@ -2829,7 +2829,7 @@ _pr_annotations() {
     _write_task_mock_export '["linear","work"]' \
         "$(_pr_annotations https://github.com/loft-sh/loft-enterprise/pull/7649)"
 
-    run mark_closable_issue "test-uuid"
+    run mark_closable_issue "test-uuid" "Todo"
     [ "$status" -eq 0 ]
     [ ! -f "${TEST_DIR}/task_commands.log" ]
 }
@@ -2838,15 +2838,15 @@ _pr_annotations() {
     _write_task_mock_export '["linear","work"]' \
         '[{"description":"https://linear.app/loft/issue/DEVOPS-1/t"}]'
 
-    run mark_closable_issue "test-uuid"
+    run mark_closable_issue "test-uuid" "Todo"
     [ "$status" -eq 0 ]
     [ ! -f "${TEST_DIR}/task_commands.log" ]
 }
 
 @test "mark_closable_issue ignores an invalid task uuid" {
-    run mark_closable_issue ""
+    run mark_closable_issue "" "Todo"
     [ "$status" -eq 0 ]
-    run mark_closable_issue "null"
+    run mark_closable_issue "null" "Todo"
     [ "$status" -eq 0 ]
 }
 
@@ -2890,4 +2890,50 @@ _pr_annotations() {
 
     result=$(task_pr_closable_verdict "$json" 2>/dev/null)
     [ "$result" = "live" ]
+}
+
+@test "mark_closable_issue does not mark a Backlog issue whose PR is closed" {
+    # DEVOPS-1117: parked on purpose, so its PR closing is the consequence of
+    # parking it, not evidence the issue died.
+    echo "CLOSED" > "${TEST_DIR}/pr_state"
+    _write_task_mock_export '["linear","backlog"]' \
+        "$(_pr_annotations https://github.com/loft-sh/loft-prod/pull/544)"
+
+    run mark_closable_issue "test-uuid" "Backlog"
+    [ "$status" -eq 0 ]
+    [ ! -f "${TEST_DIR}/task_commands.log" ]
+}
+
+@test "mark_closable_issue does not mark an Idea or Parked issue whose PR is closed" {
+    echo "CLOSED" > "${TEST_DIR}/pr_state"
+    _write_task_mock_export '["linear"]' \
+        "$(_pr_annotations https://github.com/loft-sh/loft-prod/pull/544)"
+
+    run mark_closable_issue "test-uuid" "Idea"
+    [ "$status" -eq 0 ]
+    run mark_closable_issue "test-uuid" "Parked"
+    [ "$status" -eq 0 ]
+    [ ! -f "${TEST_DIR}/task_commands.log" ]
+}
+
+@test "mark_closable_issue still marks an In Progress issue whose PR is closed" {
+    # An issue someone is supposedly acting on IS contradicted by having no live
+    # PR left, which is the whole signal.
+    echo "CLOSED" > "${TEST_DIR}/pr_state"
+    _write_task_mock_export '["linear","work"]' \
+        "$(_pr_annotations https://github.com/loft-sh/loft-enterprise/pull/7649)"
+
+    run mark_closable_issue "test-uuid" "In Progress"
+    [ "$status" -eq 0 ]
+    grep -q -- "+kill" "${TEST_DIR}/task_commands.log"
+}
+
+@test "mark_closable_issue still marks an In Review issue whose PR is closed" {
+    echo "CLOSED" > "${TEST_DIR}/pr_state"
+    _write_task_mock_export '["linear","review"]' \
+        "$(_pr_annotations https://github.com/loft-sh/loft-enterprise/pull/7649)"
+
+    run mark_closable_issue "test-uuid" "In Review"
+    [ "$status" -eq 0 ]
+    grep -q -- "+kill" "${TEST_DIR}/task_commands.log"
 }
