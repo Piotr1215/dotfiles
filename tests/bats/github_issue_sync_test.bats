@@ -2755,15 +2755,25 @@ _pr_annotations() {
     [ "$result" = "live" ]
 }
 
-@test "task_pr_closable_verdict is live when the attached PR is MERGED" {
-    # Merged work landed. The issue waits on a release or a status move, which
-    # is not the abandoned-attempt shape +kill is for.
+@test "task_pr_closable_verdict is closable when the attached PR is MERGED" {
+    # OPEN is the only state that means still going. A merged PR with the issue
+    # still open is usually an issue nobody went back to close.
     echo "MERGED" > "${TEST_DIR}/pr_state"
     json=$(printf '[{"tags":["linear"],"annotations":%s}]' \
         "$(_pr_annotations https://github.com/loft-sh/loft-prod/pull/522)")
 
     result=$(task_pr_closable_verdict "$json" 2>/dev/null)
-    [ "$result" = "live" ]
+    [ "$result" = "closable" ]
+}
+
+@test "task_pr_closable_verdict is closable when one PR merged and another closed" {
+    printf '%s\t%s\t%s\n' "https://github.com/loft-sh/loft-prod/pull/1" "MERGED" "$(date +%s)" \
+        > "${TEST_DIR}/pr-state.tsv"
+    echo "CLOSED" > "${TEST_DIR}/pr_state"
+    json='[{"tags":["linear"],"annotations":[{"description":"https://github.com/loft-sh/loft-prod/pull/1"},{"description":"https://github.com/loft-sh/loft-prod/pull/2"}]}]'
+
+    result=$(task_pr_closable_verdict "$json" 2>/dev/null)
+    [ "$result" = "closable" ]
 }
 
 @test "task_pr_closable_verdict is live when one PR closed but another is open" {
@@ -2794,7 +2804,7 @@ _pr_annotations() {
     [ "$result" = "none" ]
 }
 
-@test "mark_closable_issue adds +kill when every attached PR is closed unmerged" {
+@test "mark_closable_issue adds +kill when the attached PR is closed unmerged" {
     echo "CLOSED" > "${TEST_DIR}/pr_state"
     _write_task_mock_export '["linear","work"]' \
         "$(_pr_annotations https://github.com/loft-sh/loft-enterprise/pull/7649)"
@@ -2814,14 +2824,14 @@ _pr_annotations() {
     [ ! -f "${TEST_DIR}/task_commands.log" ]
 }
 
-@test "mark_closable_issue does not add +kill when the attached PR is MERGED" {
+@test "mark_closable_issue adds +kill when the attached PR is MERGED" {
     echo "MERGED" > "${TEST_DIR}/pr_state"
     _write_task_mock_export '["linear","work"]' \
         "$(_pr_annotations https://github.com/loft-sh/loft-prod/pull/522)"
 
     run mark_closable_issue "test-uuid" "Todo"
     [ "$status" -eq 0 ]
-    [ ! -f "${TEST_DIR}/task_commands.log" ]
+    grep -q -- "+kill" "${TEST_DIR}/task_commands.log"
 }
 
 @test "mark_closable_issue does not add +kill when gh fails (fail-safe)" {

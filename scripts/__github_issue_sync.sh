@@ -440,22 +440,23 @@ task_pr_review_verdict() {
 # open by construction: get_linear_issues filters Released/Canceled/Done/Ready
 # for Release/Duplicate/Archived out of the feed, so the feed IS the open set.
 #
-# MERGED is deliberately NOT closable. A closed-unmerged PR means the attempt
-# was abandoned and nothing landed, which is what makes the issue dead. A merged
-# PR means the work shipped and the issue is waiting on a release or a status
-# move, a different situation with a different remedy.
+# An OPEN PR is the only state that means "still going". Everything else is a
+# finished PR: closed unmerged says the attempt was abandoned, merged says the
+# work landed. Either way nothing is in flight, and Piotr's call is that both
+# shapes are worth surfacing, since a merged PR with the issue still open is
+# usually an issue nobody went back to close.
 #
 # Echoes exactly one verdict:
-#   closable - at least one annotated PR, and every one of them CLOSED unmerged
-#   live     - at least one annotated PR is OPEN or MERGED
-#   unknown  - none open or merged, but at least one could not be resolved
+#   closable - at least one annotated PR, and not one of them still OPEN
+#   live     - at least one annotated PR is OPEN
+#   unknown  - none open, but at least one could not be resolved
 #   none     - the task carries no /pull/ annotation at all
 # Only `closable` may mark the task. Resolution rides the same memo and TTL
 # cache as task_pr_review_verdict, so within one run this costs no extra call.
 task_pr_closable_verdict() {
     local task_json="$1"
     local pr_urls pr_url pr_state
-    local saw_closed="false"
+    local saw_finished="false"
     local saw_unknown="false"
 
     # SCAN the annotation text for PR urls, never take the whole annotation.
@@ -474,20 +475,20 @@ task_pr_closable_verdict() {
         [[ -z "$pr_url" ]] && continue
         pr_state=$(resolve_pr_state "$pr_url")
         case "$pr_state" in
-            OPEN|MERGED)
+            OPEN)
                 echo "live"
                 return 0
                 ;;
-            CLOSED) saw_closed="true" ;;
+            CLOSED|MERGED) saw_finished="true" ;;
             *) saw_unknown="true" ;;
         esac
     done <<<"$pr_urls"
 
-    # Unknown outranks closed: a single unresolved PR could be the open one, and
-    # marking an issue closable on a network blip is a wrong call on the board.
+    # Unknown outranks finished: a single unresolved PR could be the open one,
+    # and marking an issue closable on a network blip is a wrong call on the board.
     if [[ "$saw_unknown" == "true" ]]; then
         echo "unknown"
-    elif [[ "$saw_closed" == "true" ]]; then
+    elif [[ "$saw_finished" == "true" ]]; then
         echo "closable"
     else
         echo "none"
