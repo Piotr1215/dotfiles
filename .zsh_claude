@@ -218,6 +218,32 @@ alias ccinstall='~/.claude/scripts/__claude_version_installer.sh'  # Version pic
 # The agents MCP server can then deliver inbound DMs to the active Codex thread
 # with turn/start or turn/steer, providing the push path Codex lacks in MCP.
 alias codex="$HOME/dev/dotfiles/scripts/__codex_with_app_server.sh"
+alias cx='codex'
+alias cxr='codex resume'
+alias cxra='codex resume --all'
+alias cxf='codex fork'
+alias cxsync='$HOME/.codex/scripts/__codex_sync.sh'
+
+# Pick a Codex skill and insert a new interactive command for editing.
+function codex_skill_picker() {
+  local skills_dir="${CODEX_HOME:-$HOME/.codex}/skills"
+  local record selection
+  record=$(fd -H -I -L -t f -d 3 '^SKILL\.md$' "$skills_dir" 2>/dev/null \
+    | while read -r skill_file; do
+        printf '%s\t%s\n' "${skill_file:h:t}" "$skill_file"
+      done \
+    | sort -u \
+    | fzf --reverse --border --delimiter=$'\t' --with-nth=1 --prompt='codex $ ' \
+      --preview='bat --color=always --language=md --style=plain {2}' \
+      --preview-window=right:55%:wrap)
+  selection="${record%%$'\t'*}"
+  [[ -n "$selection" ]] || { zle redisplay; return; }
+  LBUFFER="codex \"\$$selection "
+  RBUFFER='"'
+  zle redisplay
+}
+zle -N codex_skill_picker
+bindkey '^[K' codex_skill_picker
 
 # Per-account Claude config routing (#91)
 #

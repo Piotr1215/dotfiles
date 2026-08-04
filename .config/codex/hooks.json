@@ -1,6 +1,54 @@
 {
-  "description": "Bind agents MCP registrations to their active Codex threads for DM push delivery.",
+  "description": "Shared Codex safety, context, memory, formatting, and agent lifecycle hooks.",
   "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "^Bash$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/scripts/__block_dangerous_desktop.sh",
+            "timeout": 5,
+            "statusMessage": "Checking desktop safety"
+          },
+          {
+            "type": "command",
+            "command": "$HOME/.claude/scripts/__block_push_to_main.sh",
+            "timeout": 5,
+            "statusMessage": "Checking protected branch safety"
+          },
+          {
+            "type": "command",
+            "command": "$HOME/.claude/scripts/__guard_kubectl.sh",
+            "timeout": 5,
+            "statusMessage": "Checking Kubernetes safety"
+          },
+          {
+            "type": "command",
+            "command": "$HOME/.claude/scripts/__git_context_hook.sh",
+            "timeout": 5,
+            "statusMessage": "Loading commit conventions"
+          }
+        ]
+      },
+      {
+        "matcher": "^(apply_patch|Edit|Write)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.codex/hooks/__codex_sensitive_patch_guard.sh",
+            "timeout": 5,
+            "statusMessage": "Checking sensitive paths"
+          },
+          {
+            "type": "command",
+            "command": "$HOME/.codex/hooks/__codex_write_lock_guard.sh",
+            "timeout": 5,
+            "statusMessage": "Checking shared write lock"
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
       {
         "matcher": "^mcp__agents__agent_(register|deregister)$",
@@ -10,6 +58,99 @@
             "command": "python3 /home/decoder/dev/dotfiles/scripts/__codex_agent_binding_hook.py",
             "timeout": 5,
             "statusMessage": "Updating Codex agent nudge binding"
+          }
+        ]
+      },
+      {
+        "matcher": "^(apply_patch|Edit|Write)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.codex/hooks/__codex_post_edit_checks.sh",
+            "timeout": 180,
+            "statusMessage": "Formatting and checking edited files",
+            "additionalContextLimit": 4000
+          }
+        ]
+      },
+      {
+        "matcher": "^Bash$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/scripts/__commit_memory_hook.sh >/dev/null 2>&1",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "$HOME/.claude/scripts/__pr_annotation_hook.sh >/dev/null 2>&1",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "$HOME/.claude/scripts/__task_ledger_commit_hook.sh >/dev/null 2>&1",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 $HOME/.claude/scripts/__rag_context_hook.py",
+            "timeout": 10,
+            "statusMessage": "Retrieving relevant notes, memories, sessions, and repository context",
+            "additionalContextLimit": 5000
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/scripts/__repo_context_hook.sh",
+            "timeout": 5,
+            "statusMessage": "Loading repository retrieval context",
+            "additionalContextLimit": 3500
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.codex/hooks/__codex_session_memory_hook.sh",
+            "timeout": 3
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/scripts/__subagent_scripts_hook.sh",
+            "timeout": 5,
+            "additionalContextLimit": 1000
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/scripts/__subagent_stop_hook.sh",
+            "timeout": 5
           }
         ]
       }

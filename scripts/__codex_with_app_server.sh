@@ -1,13 +1,51 @@
 #!/usr/bin/env bash
 set -eo pipefail
 
+export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$HOME/go/bin:$PATH"
+export EDITOR="${EDITOR:-nvim}"
+export VISUAL="${VISUAL:-nvim}"
+
+# Match the Claude launch contract: resolve the current directory's environment
+# before freezing the launch-time Kubernetes base or starting the app-server.
+if command -v direnv &>/dev/null; then
+    eval "$(direnv export bash 2>/dev/null)"
+fi
+
+account_lib="$HOME/.claude/scripts/__lib_claude_account.sh"
+# shellcheck source=/dev/null
+source "$account_lib" 2>/dev/null || claude_work_predicate() { return 1; }
+
+# Cwd is the same account-routing source of truth used by Claude. Route OAuth
+# through the matching browser profile as part of the process-local environment.
+if [[ -d "$HOME/.codex-work" ]] && claude_work_predicate "$PWD"; then
+    export CODEX_HOME="$HOME/.codex-work"
+    export BROWSER="google-chrome"
+else
+    unset CODEX_HOME
+    export BROWSER="librewolf"
+fi
+
 codex_bin="${CODEX_BIN:-$HOME/.npm-global/bin/codex}"
 codex_home="${CODEX_HOME:-$HOME/.codex}"
+codex_config_root="${CODEX_CONFIG_ROOT:-$HOME/.codex}"
 kctx_bin="${KCTX_BIN:-$HOME/.local/bin/kctx}"
 pane_key="global"
 
+# Keep shared configuration and Claude-authored skills current on every
+# interactive entry point. MCP synchronization remains explicit because OAuth
+# and server probes can block startup.
+if [[ -x "$codex_config_root/scripts/__codex_skills_sync.sh" ]]; then
+    if [[ "$codex_home" == "$HOME/.codex-work" ]] \
+        && [[ -x "$codex_config_root/scripts/__codex_config_overlay.sh" ]]; then
+        "$codex_config_root/scripts/__codex_config_overlay.sh" "$codex_config_root" "$codex_home" >/dev/null
+    else
+        "$codex_config_root/scripts/__codex_skills_sync.sh" "$codex_home" >/dev/null
+    fi
+fi
+
 bind_pane_kubeconfig() {
-    [[ -n "${TMUX:-}" && -n "${TMUX_PANE:-}" ]] || return 0
+    local target_pane="${CODEX_TMUX_PANE:-${TMUX_PANE:-}}"
+    [[ -n "${TMUX:-}" && -n "$target_pane" ]] || return 0
 
     if [[ ! -x "$kctx_bin" ]]; then
         echo "Codex cannot initialize pane Kubernetes state: $kctx_bin is not executable" >&2
@@ -16,8 +54,8 @@ bind_pane_kubeconfig() {
 
     local base_kubeconfig="${KUBECONFIG:-$HOME/.kube/config}"
     local pane_kubeconfig
-    if ! pane_kubeconfig="$($kctx_bin runtime init "$TMUX_PANE" --base "$base_kubeconfig")"; then
-        echo "Codex cannot initialize pane Kubernetes state for $TMUX_PANE" >&2
+    if ! pane_kubeconfig="$($kctx_bin runtime init "$target_pane" --base "$base_kubeconfig")"; then
+        echo "Codex cannot initialize pane Kubernetes state for $target_pane" >&2
         exit 1
     fi
 
