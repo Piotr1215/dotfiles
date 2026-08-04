@@ -524,7 +524,7 @@ write_two_results() {
 }
 
 # --------------------------------------------------------------------------
-# Refining the query. ctrl-s in the picker runs --refine, which rewrites the
+# Refining the query. ctrl-t in the picker runs --refine, which rewrites the
 # query and the results in place so fzf can reload over the same files.
 # --------------------------------------------------------------------------
 
@@ -728,7 +728,7 @@ EOF
 	[ "$status" -eq 0 ]
 	[[ "${lines[0]}" == "query: kubernetes finalizers site:kubernetes.io"* ]]
 	[[ "${lines[0]}" == *"bookmarked to pet-links.toml"* ]]
-	[[ "${lines[1]}" == *"ctrl-s refine"* ]]
+	[[ "${lines[1]}" == *"ctrl-t refine"* ]]
 
 	# What just happened is not part of the query: it goes once it is shown.
 	run bash "$DDGX" --header "$RESULTS"
