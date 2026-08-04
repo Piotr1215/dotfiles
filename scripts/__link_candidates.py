@@ -237,9 +237,17 @@ def read_db(path, workdir, index, limit):
 
 
 def load_history(seen, profiles, limit, per_host_limit):
+    sources = history_dbs(profiles)
+    # The order profiles are listed in the conf is the order their rows appear
+    # in, so work sits above home. Ranking the tag rather than hardcoding
+    # "work" keeps the conf the only place that decides.
+    tag_order = {}
+    for tag, _ in sources:
+        tag_order.setdefault(tag, len(tag_order))
+
     rows = []
     with tempfile.TemporaryDirectory(prefix="link-history-") as workdir:
-        for index, (tag, path) in enumerate(history_dbs(profiles)):
+        for index, (tag, path) in enumerate(sources):
             try:
                 for url, title, when in read_db(path, workdir, index, limit * 4):
                     rows.append((url, title, when, tag))
@@ -275,6 +283,11 @@ def load_history(seen, profiles, limit, per_host_limit):
         hits.append((title, url, tag))
         if len(hits) >= limit:
             break
+    # Group the survivors by profile for display only. Which rows survive is
+    # still decided newest-first across every profile, so a heavy work day
+    # cannot spend the whole budget before home is looked at. The sort is
+    # stable, so recency still orders the rows inside each group.
+    hits.sort(key=lambda hit: tag_order.get(hit[2], len(tag_order)))
     return hits
 
 
