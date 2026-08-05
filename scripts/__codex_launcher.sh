@@ -2,9 +2,8 @@
 # Start, resume, or fork Codex with account routing derived from the working directory.
 set -eo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 account_lib="$HOME/.claude/scripts/__lib_claude_account.sh"
-codex_command="${CODEX_LAUNCH_BIN:-$SCRIPT_DIR/__codex_with_app_server.sh}"
+codex_command="${CODEX_LAUNCH_BIN:-$HOME/.codex/scripts/__codex_with_app_server.sh}"
 fallback_cwd="${CODEX_LAUNCH_CWD:-}"
 launch_cwd="$fallback_cwd"
 
