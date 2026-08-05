@@ -217,7 +217,7 @@ alias ccinstall='~/.claude/scripts/__claude_version_installer.sh'  # Version pic
 # Run interactive Codex sessions through its managed Unix-socket app-server.
 # The agents MCP server can then deliver inbound DMs to the active Codex thread
 # with turn/start or turn/steer, providing the push path Codex lacks in MCP.
-alias codex="$HOME/dev/dotfiles/scripts/__codex_with_app_server.sh"
+alias codex="$HOME/.codex/scripts/__codex_with_app_server.sh"
 alias cx='codex'
 alias cxr='codex resume'
 alias cxra='codex resume --all'
