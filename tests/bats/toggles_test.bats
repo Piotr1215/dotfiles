@@ -110,7 +110,7 @@ EOF
   [ "$status" -eq 0 ]
   [[ "$output" == *"toggle: alpha"* ]]
   [[ "$output" == *"state:  on"* ]]
-  [[ "$output" == *"runs alpha_off to turn it off"* ]]
+  [[ "$output" == *"runs alpha_off to switch to off"* ]]
   [[ "$output" == *"alpha_off ()"* ]]
   [[ "$output" == *"last result:"* ]]
   [[ "$output" == *"outcome: ok (exit 0)"* ]]
@@ -124,6 +124,30 @@ EOF
   [[ "$output" == *"refuses"* ]]
   [[ "$output" == *"sensor offline"* ]]
   [[ "$output" == *"(nothing run yet)"* ]]
+}
+
+@test "labels rename the two states in tags, records and preview" {
+  cat >>"$TOGGLES_CONF" <<EOF
+gamma_status() { [ -f "${FLAGS}/gamma" ]; }
+gamma_on() { touch "${FLAGS}/gamma"; }
+gamma_off() { rm -f "${FLAGS}/gamma"; }
+toggle_register "gamma" "gamma_status" "gamma_on" "gamma_off" "Gamma switches between travel and home." "travel" "home"
+EOF
+
+  run "$SCRIPT" __render
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"[home  ] gamma"* ]]
+  [[ "$output" == *"[off   ] alpha"* ]]
+
+  run "$SCRIPT" __flip gamma
+  [ "$status" -eq 0 ]
+  [ -f "${FLAGS}/gamma" ]
+  [[ "$(<"${TOGGLES_STATE_DIR}/gamma.last")" == *"gamma: home -> travel"* ]]
+
+  run "$SCRIPT" __preview "[travel] gamma"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"state:  travel"* ]]
+  [[ "$output" == *"switch to home"* ]]
 }
 
 @test "preview shows the registered description paragraph" {
