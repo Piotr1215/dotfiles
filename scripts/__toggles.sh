@@ -16,7 +16,7 @@ if [[ "${1:-}" == "--help" ]] || [[ "${1:-}" == "-h" ]]; then
 	  enter     flip the selected toggle(s), the board stays open and re-renders
 	  tab       multi-select, then enter flips all of them
 	  ctrl-r    re-read every state
-	  ctrl-e    edit the config in nvim
+	  ctrl-e    the toggle's own editor when registered, else the config
 	  esc       back to the launching picker, when there is one
 	  ctrl-c    quit everything, including the launching picker
 
@@ -34,6 +34,9 @@ if [[ "${1:-}" == "--help" ]] || [[ "${1:-}" == "-h" ]]; then
 	  The optional description is a short paragraph shown in the preview.
 	  Labels rename the two states for display (speak/base, active/disabled);
 	  the model underneath stays binary on/off.
+
+	  toggle_edit_action "<name>" "<command>" gives a toggle its own ctrl-e
+	  editor (a systemd toggle opens its unit file); default is the conf.
 	  The status action reports the state through its exit code:
 	    0 = on, 1 = off, any other code = unreadable (renders "[?? ]").
 	  The on/off actions set that state explicitly, they never blind-flip.
@@ -67,6 +70,7 @@ declare -A TOGGLE_OFF=()
 declare -A TOGGLE_DESC=()
 declare -A TOGGLE_LABEL_ON=()
 declare -A TOGGLE_LABEL_OFF=()
+declare -A TOGGLE_EDIT=()
 
 # Results of the last action run. Globals rather than a captured stdout because
 # callers need the output and the exit code together.
@@ -95,6 +99,29 @@ toggle_register() {
 	TOGGLE_DESC["$name"]="$desc"
 	TOGGLE_LABEL_ON["$name"]="$label_on"
 	TOGGLE_LABEL_OFF["$name"]="$label_off"
+}
+
+# Optional per-toggle editor for ctrl-e: a command or function name run in
+# the popup terminal, so TUIs work. Without one, ctrl-e opens the conf.
+toggle_edit_action() {
+	local name="$1" action="$2"
+	if [[ -z "$name" || -z "$action" ]]; then
+		printf 'toggles: toggle_edit_action needs a name and an action\n' >&2
+		return 1
+	fi
+	TOGGLE_EDIT["$name"]="$action"
+}
+
+# Ctrl-e: run the highlighted toggle's own editor when registered, otherwise
+# open the config.
+toggle_edit() {
+	local name
+	name="$(toggle_name_from_row "${1:-}")"
+	if [[ -n "$name" && -n "${TOGGLE_EDIT[$name]:-}" ]]; then
+		eval "${TOGGLE_EDIT[$name]}"
+	else
+		"${EDITOR:-nvim}" "$TOGGLES_CONF"
+	fi
 }
 
 # Display label for an internal state word. on/off stay the engine's truth;
@@ -382,7 +409,7 @@ toggle_board() {
 		--preview-window 'right:55%:wrap' \
 		--bind "enter:execute-silent('${SELF}' __flip {+})+reload('${SELF}' __render)" \
 		--bind "ctrl-r:reload('${SELF}' __render)" \
-		--bind "ctrl-e:execute(nvim '${TOGGLES_CONF}')+reload('${SELF}' __render)")" || true
+		--bind "ctrl-e:execute('${SELF}' __edit {})+reload('${SELF}' __render)")" || true
 
 	if [[ "${out%%$'\n'*}" == ctrl-c ]]; then
 		return 0
@@ -410,6 +437,7 @@ case "${1:-}" in
 	__render) toggle_render; exit 0 ;;
 	__flip) shift; toggle_flip_many "$@"; exit 0 ;;
 	__preview) shift; toggle_preview "${1:-}"; exit 0 ;;
+	__edit) shift; toggle_edit "${1:-}"; exit 0 ;;
 	__run) shift; toggle_exec_action "${1:-}" "${2:-}"; exit $? ;;
 esac
 

@@ -169,6 +169,27 @@ EOF
 # real one. This sources the actual file with a stubbed toggle_register: a
 # syntax error, a top-level side effect that fails, or a duplicate name shows
 # up here instead of at board launch. No status action ever runs.
+@test "ctrl-e runs a toggle's own edit action and falls back to the config" {
+  cat >>"$TOGGLES_CONF" <<EOF
+toggle_edit_action "alpha" "touch ${FLAGS}/alpha_edited"
+EOF
+
+  run "$SCRIPT" __edit '[off] alpha'
+  [ "$status" -eq 0 ]
+  [ -f "${FLAGS}/alpha_edited" ]
+
+  fake_editor="${BATS_TEST_TMPDIR}/fake-editor"
+  cat >"$fake_editor" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$1" > "${BATS_TEST_TMPDIR}/edit.log"
+EOF
+  chmod +x "$fake_editor"
+
+  run env EDITOR="$fake_editor" "$SCRIPT" __edit '[off] beta'
+  [ "$status" -eq 0 ]
+  [[ "$(<"${BATS_TEST_TMPDIR}/edit.log")" == "$TOGGLES_CONF" ]]
+}
+
 @test "the real config parses and registers unique toggle names" {
   run bash -c '
     declare -A seen=()
@@ -179,6 +200,7 @@ EOF
       fi
       seen[$1]=1
     }
+    toggle_edit_action() { :; }
     source "$1"
     echo "registered ${#seen[@]}"
   ' _ "${BATS_TEST_DIRNAME}/../../scripts/__toggles.conf"
