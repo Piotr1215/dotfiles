@@ -35,7 +35,8 @@ chain_on() {
 chain_off() { rm -f "${FLAGS}/chain"; }
 
 toggle_register "alpha" "alpha_status" "alpha_on" "alpha_off"
-toggle_register "beta" "beta_status" "beta_on" "beta_off"
+toggle_register "beta" "beta_status" "beta_on" "beta_off" \
+	"Beta guards the beta flag used by the fake suite."
 toggle_register "broken" "broken_status" "broken_on" "broken_off"
 toggle_register "chain" "chain_status" "chain_on" "chain_off"
 EOF
@@ -123,6 +124,21 @@ EOF
   [[ "$output" == *"refuses"* ]]
   [[ "$output" == *"sensor offline"* ]]
   [[ "$output" == *"(nothing run yet)"* ]]
+}
+
+@test "preview shows the registered description paragraph" {
+  run "$SCRIPT" __preview "[off] beta"
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Beta guards the beta flag used by the fake suite."* ]]
+}
+
+@test "a toggle without a description still previews cleanly" {
+  run "$SCRIPT" __preview "[off] alpha"
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"state:  off"* ]]
+  [[ "$output" != *"Beta guards"* ]]
 }
 
 # The suite above runs against a fake conf, so it proves nothing about the

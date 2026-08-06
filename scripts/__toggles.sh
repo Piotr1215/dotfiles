@@ -27,9 +27,10 @@ if [[ "${1:-}" == "--help" ]] || [[ "${1:-}" == "-h" ]]; then
 	CONFIG:
 	  Plain bash, sourced at startup. Each toggle is registered with:
 
-	    toggle_register "<name>" "<status>" "<on>" "<off>"
+	    toggle_register "<name>" "<status>" "<on>" "<off>" ["<description>"]
 
 	  The three actions are bash function names or single shell commands.
+	  The optional description is a short paragraph shown in the preview.
 	  The status action reports the state through its exit code:
 	    0 = on, 1 = off, any other code = unreadable (renders "[?? ]").
 	  The on/off actions set that state explicitly, they never blind-flip.
@@ -60,15 +61,17 @@ TOGGLE_ORDER=()
 declare -A TOGGLE_STATUS=()
 declare -A TOGGLE_ON=()
 declare -A TOGGLE_OFF=()
+declare -A TOGGLE_DESC=()
 
 # Results of the last action run. Globals rather than a captured stdout because
 # callers need the output and the exit code together.
 RUN_OUTPUT=""
 RUN_RC=0
 
-# Register a toggle. This is the only API the config file uses.
+# Register a toggle. This is the only API the config file uses. The fifth
+# argument is an optional short description shown in the preview panel.
 toggle_register() {
-	local name="$1" status_action="$2" on_action="$3" off_action="$4"
+	local name="$1" status_action="$2" on_action="$3" off_action="$4" desc="${5:-}"
 	if [[ -z "$name" || -z "$status_action" || -z "$on_action" || -z "$off_action" ]]; then
 		printf 'toggles: toggle_register needs name, status, on and off actions\n' >&2
 		return 1
@@ -81,6 +84,7 @@ toggle_register() {
 	TOGGLE_STATUS["$name"]="$status_action"
 	TOGGLE_ON["$name"]="$on_action"
 	TOGGLE_OFF["$name"]="$off_action"
+	TOGGLE_DESC["$name"]="$desc"
 }
 
 # Read a toggle's status action, capturing combined stdout+stderr into
@@ -281,6 +285,10 @@ toggle_preview() {
 
 	printf 'toggle: %s\n' "$name"
 	printf 'state:  %s\n\n' "$state"
+
+	if [[ -n "${TOGGLE_DESC[$name]:-}" ]]; then
+		printf '%s\n\n' "${TOGGLE_DESC[$name]}"
+	fi
 
 	case "$state" in
 		on) action="${TOGGLE_OFF[$name]}"; verb='turn it off' ;;
