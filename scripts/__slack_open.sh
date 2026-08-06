@@ -25,6 +25,58 @@ TEAMS_CONFIG="${SLACK_OPEN_TEAMS_CONFIG:-${XDG_CONFIG_HOME:-$HOME/.config}/slack
 SLACK_STATE_DIR="${SLACK_STATE_DIR:-$HOME/.var/app/com.slack.Slack/config/Slack}"
 OPENER="${SLACK_OPEN_OPENER:-xdg-open}"
 
+# Launch the opener with no controlling terminal, and never exec into it.
+#
+# Slack is an Electron app. Run in the foreground it inherits this terminal:
+# Chromium writes diagnostics to the tty and the terminal is left emitting
+# stray ^] (0x1D) until reset, and taskopen blocks until Slack exits rather than
+# returning. `exec` made it worse by replacing this process, so the app owned
+# the tty for its whole lifetime. setsid puts it in its own session with no
+# controlling terminal, which is the same isolation the other openers in this
+# repo get from `xdg-open "$url" >/dev/null 2>&1 &` (see __open_pane_pr.sh).
+#
+# SLACK_OPEN_NO_DETACH=1 runs it synchronously; the tests set it so they can
+# assert on what the stub opener recorded without racing a detached process.
+open_detached() {
+    local target="$1"
+
+    if [[ "${SLACK_OPEN_NO_DETACH:-0}" == "1" ]] || ! command -v setsid >/dev/null 2>&1; then
+        "$OPENER" "$target" </dev/null >/dev/null 2>&1 || true
+        return 0
+    fi
+
+    setsid -f "$OPENER" "$target" </dev/null >/dev/null 2>&1 || true
+    return 0
+}
+
+# Tile Slack beside the terminal once it is up, the same follow-up
+# __open_pane_pr.sh does after opening a PR. Layout 8 is
+# slack_alacritty_vertical in __layouts.sh.
+#
+# Only fires on the deep-link path: a browser fallback should not rearrange
+# windows around a Slack window that never opened. The delay exists because
+# Slack has to map its window before xdotool can find and tile it, and the whole
+# thing is detached so taskopen returns to the prompt instead of waiting.
+# SLACK_OPEN_LAYOUT=0 disables it.
+LAYOUT_SCRIPT="${SLACK_OPEN_LAYOUT_SCRIPT:-$HOME/dev/dotfiles/scripts/__layouts.sh}"
+SLACK_OPEN_LAYOUT="${SLACK_OPEN_LAYOUT:-8}"
+SLACK_OPEN_LAYOUT_DELAY="${SLACK_OPEN_LAYOUT_DELAY:-1.5}"
+
+apply_layout() {
+    [[ "$SLACK_OPEN_LAYOUT" == "0" ]] && return 0
+    [[ -x "$LAYOUT_SCRIPT" ]] || return 0
+
+    if [[ "${SLACK_OPEN_NO_DETACH:-0}" == "1" ]] || ! command -v setsid >/dev/null 2>&1; then
+        DISPLAY="${DISPLAY:-:0}" "$LAYOUT_SCRIPT" "$SLACK_OPEN_LAYOUT" >/dev/null 2>&1 || true
+        return 0
+    fi
+
+    setsid -f bash -c \
+        "sleep $SLACK_OPEN_LAYOUT_DELAY; DISPLAY=\"\${DISPLAY:-:0}\" \"$LAYOUT_SCRIPT\" \"$SLACK_OPEN_LAYOUT\"" \
+        </dev/null >/dev/null 2>&1 || true
+    return 0
+}
+
 usage() {
     cat <<'EOF'
 Usage: __slack_open.sh <slack-permalink>
@@ -121,7 +173,7 @@ main() {
         # Nothing to convert, so hand it to the browser rather than fail: the
         # user asked to open a link, not to be told about a regex.
         echo "Not a Slack message permalink, opening in browser: $url" >&2
-        exec "$OPENER" "$url"
+        open_detached "$url"; exit 0
     fi
     workspace="${BASH_REMATCH[1]}"
     channel="${BASH_REMATCH[2]}"
@@ -131,7 +183,7 @@ main() {
     local message_ts
     if ! message_ts=$(permalink_ts_to_message_ts "$raw_ts"); then
         echo "Unparseable message timestamp 'p$raw_ts', opening in browser: $url" >&2
-        exec "$OPENER" "$url"
+        open_detached "$url"; exit 0
     fi
 
     # A reply carries thread_ts; opening it addresses the thread rather than
@@ -150,13 +202,15 @@ main() {
         echo "No team id for workspace '$workspace', opening in browser instead." >&2
         echo "To open in the Slack app: run '$(basename "$0") --detect', then add a line" >&2
         echo "'$workspace <TEAM_ID>' to $TEAMS_CONFIG (or set SLACK_TEAM_ID)." >&2
-        exec "$OPENER" "$url"
+        open_detached "$url"; exit 0
     fi
 
     local deep_link="slack://channel?team=${team_id}&id=${channel}&message=${message_ts}"
     [[ -n "$thread_ts" ]] && deep_link+="&thread_ts=${thread_ts}"
 
-    exec "$OPENER" "$deep_link"
+    open_detached "$deep_link"
+    apply_layout
+    exit 0
 }
 
 main "$@"
