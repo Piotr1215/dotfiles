@@ -11,8 +11,13 @@ if [ -z "$RESULT" ]; then
   exit 0
 fi
 
-# Extract the path part after the semicolon
+# Extract the path and optional line number after the description.
 RESULT=$(echo "$RESULT" | cut -d ';' -f 2-)
+LINE_NUMBER=""
+if [[ "$RESULT" =~ ^(.*)\;([0-9]+)$ ]]; then
+  RESULT="${BASH_REMATCH[1]}"
+  LINE_NUMBER="${BASH_REMATCH[2]}"
+fi
 
 # Expand tilde to home directory
 RESULT="${RESULT/#\~\//$HOME/}"
@@ -44,6 +49,10 @@ else
   IS_FILE=true
 fi
 
+NVIM_COMMAND="nvim"
+[ -z "$LINE_NUMBER" ] || NVIM_COMMAND="$NVIM_COMMAND +$LINE_NUMBER"
+NVIM_COMMAND="$NVIM_COMMAND '$REAL_PATH'"
+
 # Check if session already exists
 if tmux list-sessions -F '#S' 2>/dev/null | grep -q "^$SESSION_NAME$"; then
   SESSION="$SESSION_NAME"
@@ -54,7 +63,7 @@ fi
 if [ -z "$TMUX" ]; then                              # not currently in tmux
   if [ -z "$SESSION" ]; then                         # session does not exist
     if [ "$IS_FILE" = true ]; then
-      tmux new-session -s "$SESSION_NAME" -c "$DIR_PATH" "nvim '$REAL_PATH'"
+      tmux new-session -s "$SESSION_NAME" -c "$DIR_PATH" "$NVIM_COMMAND"
     else
       tmux new-session -s "$SESSION_NAME" -c "$DIR_PATH"
     fi
@@ -64,7 +73,7 @@ if [ -z "$TMUX" ]; then                              # not currently in tmux
 else                                                    # currently in tmux
   if [ -z "$SESSION" ]; then                            # session does not exist
     if [ "$IS_FILE" = true ]; then
-      tmux new-session -d -s "$SESSION_NAME" -c "$DIR_PATH" "nvim '$REAL_PATH'"
+      tmux new-session -d -s "$SESSION_NAME" -c "$DIR_PATH" "$NVIM_COMMAND"
       tmux switch-client -t "$SESSION_NAME"
     else
       tmux new-session -d -s "$SESSION_NAME" -c "$DIR_PATH"

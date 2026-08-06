@@ -59,6 +59,18 @@ run_sessionizer() {
   grep -F -- "new-session -s notes_md -c $BATS_TEST_TMPDIR/dir nvim '$BATS_TEST_TMPDIR/dir/notes.md'" "$TMUX_LOG"
 }
 
+@test "a line bookmark opens nvim at that line" {
+  mkdir -p "$BATS_TEST_TMPDIR/dir"
+  touch "$BATS_TEST_TMPDIR/dir/notes.md"
+  printf 'notes setting;%s;42\n' "$BATS_TEST_TMPDIR/dir/notes.md" > "$BOOKMARKS_FILE"
+  stub_fzf "notes setting;$BATS_TEST_TMPDIR/dir/notes.md;42"
+
+  run_sessionizer
+
+  [ "$status" -eq 0 ]
+  grep -F -- "new-session -s notes_md -c $BATS_TEST_TMPDIR/dir nvim +42 '$BATS_TEST_TMPDIR/dir/notes.md'" "$TMUX_LOG"
+}
+
 # `file -b` on a missing path says "No such file or directory", and the old
 # substring check saw "directory" in that and opened a session in a path that is
 # not there.

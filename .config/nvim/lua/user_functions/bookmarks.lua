@@ -3,6 +3,20 @@ local M = {}
 
 local uv = vim.uv or vim.loop
 
+local function bookmarks_file_path()
+  return vim.env.BOOKMARKS_FILE or vim.fn.expand "~/dev/dotfiles/scripts/__bookmarks.conf"
+end
+
+local function parse_bookmark_target(target)
+  local path, line_number = target:match "^(.*);(%d+)$"
+  if path then
+    return path, tonumber(line_number)
+  end
+  return target, nil
+end
+
+M.parse_bookmark_target = parse_bookmark_target
+
 -- The path under the cursor. A mini.files buffer is named `minifiles://<id>/...`,
 -- which is a buffer URI and not a path on disk, so expand() there yields something
 -- no shell can open. Ask mini.files for the real entry instead.
@@ -27,7 +41,7 @@ local function current_fs_entry()
 end
 
 -- Add a path to bookmarks
-function M.add_path_to_bookmarks(path)
+function M.add_path_to_bookmarks(path, line_number)
   -- Validate the path exists
   if path == "" then
     vim.notify("No path provided", vim.log.levels.ERROR)
@@ -59,19 +73,24 @@ function M.add_path_to_bookmarks(path)
     -- Write commands to the temp script
     f:write "#!/bin/bash\n"
     f:write "set -eo pipefail\n\n"
-    f:write(string.format 'BOOKMARKS_FILE="$HOME/dev/dotfiles/scripts/__bookmarks.conf"\n\n')
+    f:write(string.format("BOOKMARKS_FILE=%s\n\n", vim.fn.shellescape(bookmarks_file_path())))
     f:write(string.format('DESCRIPTION="%s"\n', description:gsub('"', '\\"')))
     f:write(string.format('FILE_PATH="%s"\n\n', path:gsub('"', '\\"')))
+    f:write(string.format('LINE_NUMBER="%s"\n', line_number or ""))
+    f:write 'BOOKMARK_TARGET="$FILE_PATH"\n'
+    f:write '[ -z "$LINE_NUMBER" ] || BOOKMARK_TARGET="$BOOKMARK_TARGET;$LINE_NUMBER"\n\n'
 
-    -- Check if the bookmark already exists
-    f:write 'if grep -q "^.*;$FILE_PATH$" "$BOOKMARKS_FILE"; then\n'
-    f:write "  # Remove existing entry\n"
-    f:write '  sed -i "\\#^.*;$FILE_PATH\\$#d" "$BOOKMARKS_FILE"\n'
-    f:write "fi\n\n"
+    -- Replace only the same target. A file bookmark and several line bookmarks
+    -- in that file are distinct entries.
+    f:write ': > "$BOOKMARKS_FILE.tmp"\n'
+    f:write "while IFS= read -r BOOKMARK_LINE; do\n"
+    f:write '  [ "${BOOKMARK_LINE#*;}" = "$BOOKMARK_TARGET" ] || printf "%s\\n" "$BOOKMARK_LINE" >> "$BOOKMARKS_FILE.tmp"\n'
+    f:write 'done < "$BOOKMARKS_FILE"\n'
+    f:write 'mv "$BOOKMARKS_FILE.tmp" "$BOOKMARKS_FILE"\n\n'
 
     -- Add the new bookmark
     f:write "# Add bookmark\n"
-    f:write 'echo "$DESCRIPTION;$FILE_PATH" >> "$BOOKMARKS_FILE"\n\n'
+    f:write 'echo "$DESCRIPTION;$BOOKMARK_TARGET" >> "$BOOKMARKS_FILE"\n\n'
 
     -- Sort the bookmarks file
     f:write "# Sort the bookmarks file\n"
@@ -109,6 +128,19 @@ function M.add_current_file_to_bookmarks()
   M.add_path_to_bookmarks(path)
 end
 
+-- Add the current visual selection as a bookmark to its first line.
+function M.add_current_selection_to_bookmarks()
+  local path, fs_type = current_fs_entry()
+
+  if not path or fs_type == "directory" then
+    vim.notify("No file is open", vim.log.levels.ERROR)
+    return
+  end
+
+  local first_line = math.min(vim.fn.line "'<", vim.fn.line "'>")
+  M.add_path_to_bookmarks(path, first_line)
+end
+
 -- Add the folder holding the entry under the cursor. In mini.files a directory
 -- under the cursor bookmarks itself rather than its parent, which is what you mean
 -- when you are standing in the tree looking at it.
@@ -130,7 +162,7 @@ end
 -- Function to delete a bookmark
 function M.delete_bookmark()
   -- Get the bookmarks file path
-  local bookmarks_file = vim.fn.expand "~/dev/dotfiles/scripts/__bookmarks.conf"
+  local bookmarks_file = bookmarks_file_path()
 
   -- Read the bookmarks file
   local lines = {}
@@ -202,7 +234,7 @@ end
 -- Function to list bookmarks and open the selected one
 function M.list_bookmarks()
   -- Get the bookmarks file path
-  local bookmarks_file = vim.fn.expand "~/dev/dotfiles/scripts/__bookmarks.conf"
+  local bookmarks_file = bookmarks_file_path()
 
   -- Read the bookmarks file
   local lines = {}
@@ -227,12 +259,15 @@ function M.list_bookmarks()
   -- Parse bookmarks into a format suitable for Telescope
   local bookmarks = {}
   for _, line in ipairs(lines) do
-    local desc, path = line:match "^(.-);(.+)$"
-    if desc and path then
+    local desc, target = line:match "^(.-);(.+)$"
+    if desc and target then
+      local path, line_number = parse_bookmark_target(target)
+      local location = path .. (line_number and ":" .. line_number or "")
       table.insert(bookmarks, {
         description = desc,
         path = path,
-        display = desc .. " → " .. path,
+        line = line_number,
+        display = desc .. " → " .. location,
       })
     end
   end
@@ -263,32 +298,37 @@ function M.list_bookmarks()
           actions.close(prompt_bufnr)
           local selection = action_state.get_selected_entry()
           local path = selection.value.path
+          local line_number = selection.value.line
 
-          -- Expand path if it starts with ~
-          if path:sub(1, 1) == "~" then
-            path = vim.fn.expand(path)
-          end
-
-          -- Check if it's a file or directory
-          if vim.fn.isdirectory(path) == 1 then
-            -- Open directory in current buffer using a file explorer
-            -- Check if mini.files is available (which it is based on plugins-setup.lua)
-            local status, mini_files = pcall(require, "mini.files")
-            if status then
-              mini_files.open(path)
-            else
-              -- Fallback to netrw if mini.files isn't available
-              vim.cmd("edit " .. vim.fn.fnameescape(path))
-            end
-          else
-            -- Edit files directly
-            vim.cmd("edit " .. vim.fn.fnameescape(path))
-          end
+          M.open_bookmark(path, line_number)
         end)
         return true
       end,
     })
     :find()
+end
+
+function M.open_bookmark(path, line_number)
+  if path:sub(1, 1) == "~" then
+    path = vim.fn.expand(path)
+  end
+
+  if vim.fn.isdirectory(path) == 1 then
+    local status, mini_files = pcall(require, "mini.files")
+    if status then
+      mini_files.open(path)
+    else
+      vim.cmd("edit " .. vim.fn.fnameescape(path))
+    end
+    return
+  end
+
+  vim.cmd("edit " .. vim.fn.fnameescape(path))
+  if line_number then
+    local last_line = vim.api.nvim_buf_line_count(0)
+    vim.api.nvim_win_set_cursor(0, { math.min(line_number, last_line), 0 })
+    vim.cmd "normal! zz"
+  end
 end
 
 -- Function to open the bookmarks file directly
@@ -303,6 +343,11 @@ vim.api.nvim_set_keymap(
   "<cmd>lua require('user_functions.bookmarks').add_current_file_to_bookmarks()<CR>",
   { noremap = true, silent = true, desc = "Add current file to bookmarks" }
 )
+
+vim.keymap.set("x", "<leader>ba", M.add_current_selection_to_bookmarks, {
+  silent = true,
+  desc = "Add selected line to bookmarks",
+})
 
 vim.api.nvim_set_keymap(
   "n",
