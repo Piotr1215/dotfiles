@@ -17,20 +17,23 @@ if [[ "${1:-}" == "--help" ]] || [[ "${1:-}" == "-h" ]]; then
 	  tab       multi-select, then enter flips all of them
 	  ctrl-r    re-read every state
 	  ctrl-e    edit the config in nvim
-	  esc       quit (back to the launching picker, when there is one)
-	  ctrl-x    quit everything, including the launching picker
+	  esc       back to the launching picker, when there is one
+	  ctrl-c    quit everything, including the launching picker
 
 	OPTIONS:
 	  --return-marker <file>   touch <file> on a soft exit (esc) so a wrapping
-	                           picker knows to restart; ctrl-x leaves no marker
+	                           picker knows to restart; ctrl-c leaves no marker
 
 	CONFIG:
 	  Plain bash, sourced at startup. Each toggle is registered with:
 
-	    toggle_register "<name>" "<status>" "<on>" "<off>" ["<description>"]
+	    toggle_register "<name>" "<status>" "<on>" "<off>" \
+	        ["<description>"] ["<on-label>" "<off-label>"]
 
 	  The three actions are bash function names or single shell commands.
 	  The optional description is a short paragraph shown in the preview.
+	  Labels rename the two states for display (speak/base, active/disabled);
+	  the model underneath stays binary on/off.
 	  The status action reports the state through its exit code:
 	    0 = on, 1 = off, any other code = unreadable (renders "[?? ]").
 	  The on/off actions set that state explicitly, they never blind-flip.
@@ -62,6 +65,8 @@ declare -A TOGGLE_STATUS=()
 declare -A TOGGLE_ON=()
 declare -A TOGGLE_OFF=()
 declare -A TOGGLE_DESC=()
+declare -A TOGGLE_LABEL_ON=()
+declare -A TOGGLE_LABEL_OFF=()
 
 # Results of the last action run. Globals rather than a captured stdout because
 # callers need the output and the exit code together.
@@ -69,9 +74,12 @@ RUN_OUTPUT=""
 RUN_RC=0
 
 # Register a toggle. This is the only API the config file uses. The fifth
-# argument is an optional short description shown in the preview panel.
+# argument is an optional short description shown in the preview panel; the
+# sixth and seventh rename the two states for display (speak/base,
+# active/disabled). The model underneath stays binary on/off.
 toggle_register() {
 	local name="$1" status_action="$2" on_action="$3" off_action="$4" desc="${5:-}"
+	local label_on="${6:-on}" label_off="${7:-off}"
 	if [[ -z "$name" || -z "$status_action" || -z "$on_action" || -z "$off_action" ]]; then
 		printf 'toggles: toggle_register needs name, status, on and off actions\n' >&2
 		return 1
@@ -85,6 +93,32 @@ toggle_register() {
 	TOGGLE_ON["$name"]="$on_action"
 	TOGGLE_OFF["$name"]="$off_action"
 	TOGGLE_DESC["$name"]="$desc"
+	TOGGLE_LABEL_ON["$name"]="$label_on"
+	TOGGLE_LABEL_OFF["$name"]="$label_off"
+}
+
+# Display label for an internal state word. on/off stay the engine's truth;
+# labels only change what the board and the preview print.
+toggle_label() {
+	local name="$1" state="$2"
+	case "$state" in
+		on) printf '%s\n' "${TOGGLE_LABEL_ON[$name]:-on}" ;;
+		off) printf '%s\n' "${TOGGLE_LABEL_OFF[$name]:-off}" ;;
+		*) printf '??\n' ;;
+	esac
+}
+
+# Widest label on the board, so the tag column stays aligned.
+toggle_tag_width() {
+	local name label width=2
+	for name in "${TOGGLE_ORDER[@]}"; do
+		for label in "${TOGGLE_LABEL_ON[$name]}" "${TOGGLE_LABEL_OFF[$name]}"; do
+			if (( ${#label} > width )); then
+				width=${#label}
+			fi
+		done
+	done
+	printf '%s\n' "$width"
 }
 
 # Read a toggle's status action, capturing combined stdout+stderr into
@@ -168,9 +202,10 @@ toggle_state_file() {
 }
 
 # Strip the "[on ] " tag so fzf can pass a board row through untouched.
+# Tags are label-width, so anything bracketed counts.
 toggle_name_from_row() {
 	local row="$1"
-	if [[ "$row" =~ ^\[.{3}\][[:space:]](.+)$ ]]; then
+	if [[ "$row" =~ ^\[[^]]*\][[:space:]](.+)$ ]]; then
 		printf '%s\n' "${BASH_REMATCH[1]}"
 	else
 		printf '%s\n' "$row"
@@ -218,6 +253,8 @@ toggle_flip() {
 		return 0
 	fi
 
+	local label_from label_to
+
 	if [[ "$state" == on ]]; then
 		target=off
 		action="${TOGGLE_OFF[$name]}"
@@ -231,7 +268,9 @@ toggle_flip() {
 	if (( RUN_RC != 0 )); then
 		outcome=failed
 	fi
-	toggle_record "$name" "$state" "$target" "$action" "$outcome" "$RUN_RC" "$RUN_OUTPUT"
+	label_from="$(toggle_label "$name" "$state")"
+	label_to="$(toggle_label "$name" "$target")"
+	toggle_record "$name" "$label_from" "$label_to" "$action" "$outcome" "$RUN_RC" "$RUN_OUTPUT"
 	return 0
 }
 
@@ -253,17 +292,14 @@ toggle_flip_many() {
 	done
 }
 
-# Render the board: one tagged row per registered toggle.
+# Render the board: one tagged row per registered toggle, tags padded to the
+# widest label so the name column lines up.
 toggle_render() {
-	local name state tag
+	local name state width
+	width="$(toggle_tag_width)"
 	for name in "${TOGGLE_ORDER[@]}"; do
 		state="$(toggle_state "$name")"
-		case "$state" in
-			on) tag='[on ]' ;;
-			off) tag='[off]' ;;
-			*) tag='[?? ]' ;;
-		esac
-		printf '%s %s\n' "$tag" "$name"
+		printf '[%-*s] %s\n' "$width" "$(toggle_label "$name" "$state")" "$name"
 	done
 }
 
@@ -284,15 +320,19 @@ toggle_preview() {
 	reason="$RUN_OUTPUT"
 
 	printf 'toggle: %s\n' "$name"
-	printf 'state:  %s\n\n' "$state"
-
 	if [[ -n "${TOGGLE_DESC[$name]:-}" ]]; then
-		printf '%s\n\n' "${TOGGLE_DESC[$name]}"
+		printf '\n%s\n' "${TOGGLE_DESC[$name]}"
 	fi
 
+	local display="$state"
+	if [[ "$state" == on || "$state" == off ]]; then
+		display="$(toggle_label "$name" "$state")"
+	fi
+	printf '\nstate:  %s\n\n' "$display"
+
 	case "$state" in
-		on) action="${TOGGLE_OFF[$name]}"; verb='turn it off' ;;
-		off) action="${TOGGLE_ON[$name]}"; verb='turn it on' ;;
+		on) action="${TOGGLE_OFF[$name]}"; verb="switch to $(toggle_label "$name" off)" ;;
+		off) action="${TOGGLE_ON[$name]}"; verb="switch to $(toggle_label "$name" on)" ;;
 		*) action=''; verb='' ;;
 	esac
 
@@ -322,7 +362,7 @@ toggle_preview() {
 
 # The board itself. Flips happen in a child process so fzf stays open, then the
 # list reloads so the tags reflect what just happened. Esc is a soft exit that
-# touches the return marker so a wrapping picker restarts; ctrl-x leaves no
+# touches the return marker so a wrapping picker restarts; ctrl-c leaves no
 # marker, so the whole popup chain quits.
 toggle_board() {
 	local list out
@@ -335,17 +375,16 @@ toggle_board() {
 	out="$(printf '%s\n' "$list" | fzf \
 		--multi \
 		--reverse \
-		--expect=ctrl-x \
+		--expect=ctrl-c \
 		--prompt 'toggles> ' \
-		--header 'enter: flip   tab: multi-select   ctrl-r: refresh   ctrl-e: edit config   esc: back   ctrl-x: exit all' \
+		--header 'enter flip · tab multi · C-r refresh · C-e edit · C-c quit' \
 		--preview "'${SELF}' __preview {}" \
 		--preview-window 'right:55%:wrap' \
 		--bind "enter:execute-silent('${SELF}' __flip {+})+reload('${SELF}' __render)" \
 		--bind "ctrl-r:reload('${SELF}' __render)" \
-		--bind "ctrl-e:execute(nvim '${TOGGLES_CONF}')+reload('${SELF}' __render)" \
-		--bind 'ctrl-c:abort')" || true
+		--bind "ctrl-e:execute(nvim '${TOGGLES_CONF}')+reload('${SELF}' __render)")" || true
 
-	if [[ "${out%%$'\n'*}" == ctrl-x ]]; then
+	if [[ "${out%%$'\n'*}" == ctrl-c ]]; then
 		return 0
 	fi
 	if [[ -n "$RETURN_MARKER" ]]; then

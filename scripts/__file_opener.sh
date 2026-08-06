@@ -172,7 +172,7 @@ PASTE_BIND="tab:execute-silent(~/dev/dotfiles/scripts/__copy_path_with_notificat
 SEARCH_BIND="ctrl-s:execute-silent(touch /tmp/file_opener_search)+abort"
 
 # Toggle dashboard (Ctrl+D) - flip personal automation toggles. Esc returns
-# here (the board touches the marker); ctrl-x inside the board exits fully.
+# here (the board touches the marker); ctrl-c inside the board exits fully.
 TOGGLES_BIND="ctrl-d:execute(~/dev/dotfiles/scripts/__toggles.sh --return-marker $RETURN_MARKER)+abort"
 
 # Loop to allow returning from PRs/Linear back to main picker
