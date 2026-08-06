@@ -1,0 +1,126 @@
+#!/usr/bin/env bats
+
+setup() {
+  SCRIPT="${BATS_TEST_DIRNAME}/../../scripts/__toggles.sh"
+  FLAGS="${BATS_TEST_TMPDIR}/flags"
+  mkdir -p "$FLAGS"
+  export TOGGLES_CONF="${BATS_TEST_TMPDIR}/toggles.conf"
+  export TOGGLES_STATE_DIR="${BATS_TEST_TMPDIR}/state"
+  write_conf
+}
+
+# Fake toggles only: flag files under the test tmpdir, never the real seeds,
+# never tmux, never /tmp/timeoff_mode.
+write_conf() {
+  cat >"$TOGGLES_CONF" <<EOF
+alpha_status() { [ -f "${FLAGS}/alpha" ]; }
+alpha_on() { touch "${FLAGS}/alpha"; }
+alpha_off() { rm -f "${FLAGS}/alpha"; }
+
+beta_status() { [ -f "${FLAGS}/beta" ]; }
+beta_on() { touch "${FLAGS}/beta"; }
+beta_off() { rm -f "${FLAGS}/beta"; }
+
+broken_status() { echo "sensor offline" >&2; return 2; }
+broken_on() { touch "${FLAGS}/broken"; }
+broken_off() { rm -f "${FLAGS}/broken"; }
+
+chain_status() { [ -f "${FLAGS}/chain" ]; }
+chain_on() {
+	touch "${FLAGS}/chain_step1"
+	/bin/sh -c 'echo "step2 blew up" >&2; exit 7'
+	touch "${FLAGS}/chain_step3"
+	touch "${FLAGS}/chain"
+}
+chain_off() { rm -f "${FLAGS}/chain"; }
+
+toggle_register "alpha" "alpha_status" "alpha_on" "alpha_off"
+toggle_register "beta" "beta_status" "beta_on" "beta_off"
+toggle_register "broken" "broken_status" "broken_on" "broken_off"
+toggle_register "chain" "chain_status" "chain_on" "chain_off"
+EOF
+}
+
+@test "render tags every toggle with its current state" {
+  touch "${FLAGS}/alpha"
+
+  run "$SCRIPT" __render
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"[on ] alpha"* ]]
+  [[ "$output" == *"[off] beta"* ]]
+}
+
+@test "flip turns an off toggle on and an on toggle off" {
+  run "$SCRIPT" __flip alpha
+  [ "$status" -eq 0 ]
+  [ -f "${FLAGS}/alpha" ]
+  [[ "$(<"${TOGGLES_STATE_DIR}/alpha.last")" == *"alpha: off -> on"* ]]
+
+  run "$SCRIPT" __flip alpha
+  [ "$status" -eq 0 ]
+  [ ! -f "${FLAGS}/alpha" ]
+  [[ "$(<"${TOGGLES_STATE_DIR}/alpha.last")" == *"alpha: on -> off"* ]]
+}
+
+@test "a multi-selection flips each toggle independently" {
+  touch "${FLAGS}/alpha"
+
+  # Board rows passed through raw, tag and all, the way fzf hands over {+}
+  run "$SCRIPT" __flip '[on ] alpha' '[off] beta'
+
+  [ "$status" -eq 0 ]
+  [ ! -f "${FLAGS}/alpha" ]
+  [ -f "${FLAGS}/beta" ]
+}
+
+@test "a composite action stops at the first failing step" {
+  run "$SCRIPT" __flip chain
+
+  [ "$status" -eq 0 ]
+  [ -f "${FLAGS}/chain_step1" ]
+  [ ! -f "${FLAGS}/chain_step3" ]
+  [ ! -f "${FLAGS}/chain" ]
+
+  result="$(<"${TOGGLES_STATE_DIR}/chain.last")"
+  [[ "$result" == *"outcome: failed (exit 7)"* ]]
+  [[ "$result" == *"step2 blew up"* ]]
+}
+
+@test "an unreadable state renders the unknown tag and blocks the flip" {
+  run "$SCRIPT" __render
+  [[ "$output" == *"[?? ] broken"* ]]
+
+  run "$SCRIPT" __flip broken
+
+  [ "$status" -eq 0 ]
+  [ ! -f "${FLAGS}/broken" ]
+  result="$(<"${TOGGLES_STATE_DIR}/broken.last")"
+  [[ "$result" == *"refused"* ]]
+  [[ "$result" == *"sensor offline"* ]]
+}
+
+@test "preview shows the state, the pending action and the last result" {
+  run "$SCRIPT" __flip alpha
+  [ -f "${FLAGS}/alpha" ]
+
+  run "$SCRIPT" __preview '[on ] alpha'
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"toggle: alpha"* ]]
+  [[ "$output" == *"state:  on"* ]]
+  [[ "$output" == *"runs alpha_off to turn it off"* ]]
+  [[ "$output" == *"alpha_off ()"* ]]
+  [[ "$output" == *"last result:"* ]]
+  [[ "$output" == *"outcome: ok (exit 0)"* ]]
+}
+
+@test "preview explains a state it cannot read instead of offering a flip" {
+  run "$SCRIPT" __preview broken
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"state:  unknown"* ]]
+  [[ "$output" == *"refuses"* ]]
+  [[ "$output" == *"sensor offline"* ]]
+  [[ "$output" == *"(nothing run yet)"* ]]
+}
