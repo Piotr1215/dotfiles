@@ -79,6 +79,12 @@ teardown() {
     [[ "$result" == "$HOME/.config/nvim" ]]
 }
 
+@test "extract_path_from_fzf preserves a bookmark line number" {
+    bookmark_line=$(printf "%-60s %s" "tmux setting" "/home/decoder/dev/dotfiles/.tmux.conf:199")
+    result=$(bash "$REPO_ROOT/scripts/__extract_path_from_fzf.sh" "$bookmark_line")
+    [ "$result" = "/home/decoder/dev/dotfiles/.tmux.conf:199" ]
+}
+
 @test "extract_path_from_fzf handles bookmark with spaces in path" {
     bookmark_line=$(printf "%-60s %s" "test directory" "/tmp/my test dir")
     result=$(bash $REPO_ROOT/scripts/__extract_path_from_fzf.sh "$bookmark_line")
