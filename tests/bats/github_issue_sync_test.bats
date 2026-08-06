@@ -2947,3 +2947,184 @@ _pr_annotations() {
     [ "$status" -eq 0 ]
     grep -q -- "+kill" "${TEST_DIR}/task_commands.log"
 }
+
+# ====================================================
+# SLACK THREAD / REFERENCE LINK ANNOTATION TESTS
+# ====================================================
+
+# A Linear response carrying the attachment shapes seen live on the board.
+_write_curl_mock_with_attachments() {
+    local attachments="$1"
+    cat > "${TEST_DIR}/curl" << EOF
+#!/bin/bash
+if [[ "\$*" =~ "linear.app" ]]; then
+    cat << 'RESPONSE'
+{
+  "data": { "user": { "assignedIssues": { "nodes": [
+    {
+      "id": "test-id",
+      "title": "Slack linked issue",
+      "url": "https://linear.app/loft/issue/DEVOPS-1293/slack",
+      "state": {"name": "Todo"},
+      "project": {"name": "operations"},
+      "dueDate": null,
+      "priority": 3,
+      "updatedAt": "2026-08-05T10:00:00.000Z",
+      "cycle": null,
+      "attachments": { "nodes": ${attachments} }
+    }
+  ]}}}
+}
+200
+RESPONSE
+else
+    /usr/bin/curl "\$@"
+fi
+EOF
+    chmod +x "${TEST_DIR}/curl"
+}
+
+@test "get_linear_issues requests sourceType so link kinds can be told apart" {
+    # Without sourceType every non-PR attachment looks alike and the reference
+    # bucket cannot exclude Linear's own file uploads.
+    cat > "${TEST_DIR}/curl" << 'EOF'
+#!/bin/bash
+echo "$*" >> "${TEST_DIR}/curl_args.log"
+if [[ "$*" =~ "linear.app" ]]; then
+    echo '{"data":{"user":{"assignedIssues":{"nodes":[]}}}}'
+    echo "200"
+else
+    /usr/bin/curl "$@"
+fi
+EOF
+    chmod +x "${TEST_DIR}/curl"
+
+    run get_linear_issues
+    [ "$status" -eq 0 ]
+    grep -q "sourceType" "${TEST_DIR}/curl_args.log"
+}
+
+@test "get_linear_issues extracts slack thread permalinks as slack_urls" {
+    _write_curl_mock_with_attachments '[
+        {"url": "https://github.com/loft-sh/loft-prod/pull/612", "sourceType": "github"},
+        {"url": "https://loft-labs-inc.slack.com/archives/C0735R36BJS/p1773732437844199?cid=C0735R36BJS&thread_ts=1773674424.979789", "sourceType": "slack"}
+    ]'
+
+    run get_linear_issues
+    [ "$status" -eq 0 ]
+    [ "$(echo "$output" | jq -r '.slack_urls | length')" = "1" ]
+    [ "$(echo "$output" | jq -r '.slack_urls[0]')" = "https://loft-labs-inc.slack.com/archives/C0735R36BJS/p1773732437844199?cid=C0735R36BJS&thread_ts=1773674424.979789" ]
+    # A Slack thread is not a PR and must never leak into pr_url.
+    [ "$(echo "$output" | jq -r '.pr_url')" = "https://github.com/loft-sh/loft-prod/pull/612" ]
+}
+
+@test "get_linear_issues yields an empty slack_urls array when no thread is attached" {
+    _write_curl_mock_with_attachments '[
+        {"url": "https://github.com/loft-sh/loft-prod/pull/612", "sourceType": "github"}
+    ]'
+
+    run get_linear_issues
+    [ "$status" -eq 0 ]
+    [ "$(echo "$output" | jq -r '.slack_urls | length')" = "0" ]
+}
+
+@test "get_linear_issues buckets other reference links but skips linear file uploads" {
+    # oauthClient uploads.linear.app entries are Linear's own file blobs: they
+    # are not references a human would ever want to open from the task.
+    _write_curl_mock_with_attachments '[
+        {"url": "https://github.com/loft-sh/loft-prod/pull/612", "sourceType": "github"},
+        {"url": "https://loft-labs-inc.slack.com/archives/C073/p1773732437844199", "sourceType": "slack"},
+        {"url": "https://app.notion.com/p/3b3109408069814f9d2cdebe5f8f2415", "sourceType": "api"},
+        {"url": "https://uploads.linear.app/0aab/541a/c696", "sourceType": "oauthClient"}
+    ]'
+
+    run get_linear_issues
+    [ "$status" -eq 0 ]
+    [ "$(echo "$output" | jq -r '.link_urls | length')" = "1" ]
+    [ "$(echo "$output" | jq -r '.link_urls[0]')" = "https://app.notion.com/p/3b3109408069814f9d2cdebe5f8f2415" ]
+}
+
+@test "link_identity drops the query string and fragment" {
+    run link_identity "https://loft-labs-inc.slack.com/archives/C036/p1785876243182299?thread_ts=1785876243.182299&cid=C036"
+    [ "$status" -eq 0 ]
+    [ "$output" = "https://loft-labs-inc.slack.com/archives/C036/p1785876243182299" ]
+}
+
+@test "attach_link_annotations writes a taskopen label, colon AND space" {
+    # The space is what makes taskopen parse 'slack' as a label rather than as
+    # part of an anonymous blob, which is what .taskopenrc's labelregex selects.
+    _write_task_mock_export '["linear"]' '[]'
+
+    run attach_link_annotations "test-uuid" "slack" "https://loft-labs-inc.slack.com/archives/C036/p1785876243182299"
+    [ "$status" -eq 0 ]
+    grep -q "slack: https://loft-labs-inc.slack.com/archives/C036/p1785876243182299" "${TEST_DIR}/annotate.log"
+}
+
+@test "attach_link_annotations does not re-annotate a link already present" {
+    _write_task_mock_export '["linear"]' \
+        '[{"description":"slack: https://loft-labs-inc.slack.com/archives/C036/p1785876243182299"}]'
+
+    run attach_link_annotations "test-uuid" "slack" "https://loft-labs-inc.slack.com/archives/C036/p1785876243182299"
+    [ "$status" -eq 0 ]
+    [ ! -f "${TEST_DIR}/annotate.log" ]
+}
+
+@test "attach_link_annotations survives Linear reordering the query parameters" {
+    # Both parameter orders are live on the real board for the same thread. An
+    # exact-string check would read the reshuffle as a new link and duplicate it.
+    _write_task_mock_export '["linear"]' \
+        '[{"description":"slack: https://loft-labs-inc.slack.com/archives/C036/p1785876243182299?cid=C036&thread_ts=1785876243.182299"}]'
+
+    run attach_link_annotations "test-uuid" "slack" \
+        "https://loft-labs-inc.slack.com/archives/C036/p1785876243182299?thread_ts=1785876243.182299&cid=C036"
+    [ "$status" -eq 0 ]
+    [ ! -f "${TEST_DIR}/annotate.log" ]
+}
+
+@test "attach_link_annotations finds a link already annotated under another prefix" {
+    # Agents write URLs inside prose. Re-mirroring one as a fresh slug would put
+    # the same thread on the task twice.
+    _write_task_mock_export '["linear"]' \
+        '[{"description":"discussed here https://loft-labs-inc.slack.com/archives/C036/p1785876243182299 with the team"}]'
+
+    run attach_link_annotations "test-uuid" "slack" "https://loft-labs-inc.slack.com/archives/C036/p1785876243182299"
+    [ "$status" -eq 0 ]
+    [ ! -f "${TEST_DIR}/annotate.log" ]
+}
+
+@test "attach_link_annotations caps the number of links it mirrors" {
+    # The cap protects the taskopen picker, which is a numbered list a human
+    # reads.
+    _write_task_mock_export '["linear"]' '[]'
+    export LINK_ANNOTATION_CAP=2
+
+    run attach_link_annotations "test-uuid" "slack" "https://x.slack.com/archives/C1/p1000000000000001
+https://x.slack.com/archives/C2/p1000000000000002
+https://x.slack.com/archives/C3/p1000000000000003
+https://x.slack.com/archives/C4/p1000000000000004"
+    [ "$status" -eq 0 ]
+    [ "$(grep -c "MOCK: annotate" "${TEST_DIR}/annotate.log")" -eq 2 ]
+}
+
+@test "attach_link_annotations warns with a remedy about what the cap dropped" {
+    # A silently short list reads as 'that was everything'.
+    _write_task_mock_export '["linear"]' '[]'
+    export LINK_ANNOTATION_CAP=1
+
+    run attach_link_annotations "test-uuid" "slack" "https://x.slack.com/archives/C1/p1000000000000001
+https://x.slack.com/archives/C2/p1000000000000002
+https://x.slack.com/archives/C3/p1000000000000003"
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -q "2 further slack link"
+    echo "$output" | grep -q "LINK_ANNOTATION_CAP"
+    # Names what to do about it, not just that it happened.
+    echo "$output" | grep -q "raise the cap"
+}
+
+@test "attach_link_annotations is a no-op on an empty url list" {
+    _write_task_mock_export '["linear"]' '[]'
+
+    run attach_link_annotations "test-uuid" "slack" ""
+    [ "$status" -eq 0 ]
+    [ ! -f "${TEST_DIR}/annotate.log" ]
+}
