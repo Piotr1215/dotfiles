@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
-# Display linear issue, mpv track, or date/time for tmux status bar
+# Display linear issue, agent task, mpv track, or date/time for tmux status bar
 # Two modes: default (fast reader for status bar) and --update (async writer)
 set -eo pipefail
 
-CACHE_DIR="/tmp/tmux_task_status"
+# Overridable so the test suite can point the writer at a scratch dir instead of
+# clobbering the live status cache of whatever sessions are open.
+CACHE_DIR="${TMUX_TASK_CACHE_DIR:-/tmp/tmux_task_status}"
 mkdir -p "$CACHE_DIR"
 
 # Fast path: status bar just reads pre-computed file + fresh time
@@ -75,6 +77,25 @@ get_agent_issue() {
     [ -n "$desc" ] && echo "📋 $desc"
 }
 
+get_agent_desc() {
+    local session="$1" desc
+    # @agent_desc is a session option written by ~/.claude/scripts/__spawn_agent.sh
+    # --desc at spawn time. It covers the spawns the two lookups above cannot see:
+    # a /ops-spawn-agent worker carries neither a PR number nor a Linear id in its
+    # session name, so the status bar had nothing to show but the clock.
+    #
+    # A session option rather than a file: it is scoped to exactly the session the
+    # cache is keyed by, and it dies with the session, so a killed or respawned
+    # agent can never leave a stale description behind.
+    desc=$(tmux show-options -qv -t "$session" @agent_desc 2>/dev/null) || return 0
+    [ -n "$desc" ] || return 0
+    # '#' opens a format substitution in a tmux status string, and newlines would
+    # split the single-line cache entry. Strip both rather than trust that job
+    # output is never re-expanded.
+    desc=$(printf '%s' "${desc//\#/}" | tr -d '\n\r\t')
+    [ -n "$desc" ] && echo "🤖 $(truncate_desc "$desc" 60)"
+}
+
 get_mpv_track() {
     pgrep -x mpv > /dev/null || return 0
 
@@ -107,12 +128,26 @@ update_session() {
     datetime="$datetime | $mode"
     local prefix=""
 
-    prefix=$(get_pr_desc "$session")
+    # Order is precedence. PR and Linear are live lookups that resolve richer text
+    # than a spawn-time label, and both already work, so the explicit description
+    # slots in behind them: adding it can only fill a gap, never displace a line
+    # that renders today.
+    # `|| true` on every one of these, because each getter ends in
+    # `[ -n "$x" ] && echo ...` and so returns 1 when it finds nothing. Under
+    # `set -e` that failure propagates out of the assignment and kills the whole
+    # update: a session named like a Linear issue with no matching task (say
+    # worker-2-cleanup) aborted here and never got a cache entry written at all,
+    # so its status bar kept whatever stale line it already had. Finding nothing
+    # is the normal case for this chain, not an error.
+    prefix=$(get_pr_desc "$session") || true
     if [ -z "$prefix" ]; then
-        prefix=$(get_agent_issue "$session")
+        prefix=$(get_agent_issue "$session") || true
     fi
     if [ -z "$prefix" ]; then
-        prefix=$(get_mpv_track)
+        prefix=$(get_agent_desc "$session") || true
+    fi
+    if [ -z "$prefix" ]; then
+        prefix=$(get_mpv_track) || true
     fi
 
     local cache_key="${session//\//-}"
