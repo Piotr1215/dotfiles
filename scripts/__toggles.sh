@@ -17,7 +17,12 @@ if [[ "${1:-}" == "--help" ]] || [[ "${1:-}" == "-h" ]]; then
 	  tab       multi-select, then enter flips all of them
 	  ctrl-r    re-read every state
 	  ctrl-e    edit the config in nvim
-	  esc       quit
+	  esc       quit (back to the launching picker, when there is one)
+	  ctrl-x    quit everything, including the launching picker
+
+	OPTIONS:
+	  --return-marker <file>   touch <file> on a soft exit (esc) so a wrapping
+	                           picker knows to restart; ctrl-x leaves no marker
 
 	CONFIG:
 	  Plain bash, sourced at startup. Each toggle is registered with:
@@ -42,6 +47,13 @@ SELF="$(readlink -f "$0")"
 SCRIPT_DIR="$(dirname "$SELF")"
 : "${TOGGLES_CONF:=${SCRIPT_DIR}/__toggles.conf}"
 : "${TOGGLES_STATE_DIR:=${HOME}/.local/state/toggles}"
+
+# Soft exits touch this file so a wrapping picker knows to restart itself.
+RETURN_MARKER=""
+if [[ "${1:-}" == "--return-marker" ]]; then
+	RETURN_MARKER="${2:-}"
+	shift 2 || { printf 'toggles: --return-marker needs a path\n' >&2; exit 2; }
+fi
 
 # Registry, filled by toggle_register calls from the config file.
 TOGGLE_ORDER=()
@@ -301,26 +313,36 @@ toggle_preview() {
 }
 
 # The board itself. Flips happen in a child process so fzf stays open, then the
-# list reloads so the tags reflect what just happened.
+# list reloads so the tags reflect what just happened. Esc is a soft exit that
+# touches the return marker so a wrapping picker restarts; ctrl-x leaves no
+# marker, so the whole popup chain quits.
 toggle_board() {
-	local list
+	local list out
 	list="$(toggle_render)"
 	if [[ -z "$list" ]]; then
 		printf 'toggles: no toggles registered in %s\n' "$TOGGLES_CONF" >&2
 		exit 1
 	fi
 
-	printf '%s\n' "$list" | fzf \
+	out="$(printf '%s\n' "$list" | fzf \
 		--multi \
 		--reverse \
+		--expect=ctrl-x \
 		--prompt 'toggles> ' \
-		--header 'enter: flip   tab: multi-select   ctrl-r: refresh   ctrl-e: edit config   esc: quit' \
+		--header 'enter: flip   tab: multi-select   ctrl-r: refresh   ctrl-e: edit config   esc: back   ctrl-x: exit all' \
 		--preview "'${SELF}' __preview {}" \
 		--preview-window 'right:55%:wrap' \
 		--bind "enter:execute-silent('${SELF}' __flip {+})+reload('${SELF}' __render)" \
 		--bind "ctrl-r:reload('${SELF}' __render)" \
 		--bind "ctrl-e:execute(nvim '${TOGGLES_CONF}')+reload('${SELF}' __render)" \
-		--bind 'ctrl-c:abort' >/dev/null || true
+		--bind 'ctrl-c:abort')" || true
+
+	if [[ "${out%%$'\n'*}" == ctrl-x ]]; then
+		return 0
+	fi
+	if [[ -n "$RETURN_MARKER" ]]; then
+		touch "$RETURN_MARKER"
+	fi
 }
 
 if [[ ! -f "$TOGGLES_CONF" ]]; then

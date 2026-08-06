@@ -124,3 +124,25 @@ EOF
   [[ "$output" == *"sensor offline"* ]]
   [[ "$output" == *"(nothing run yet)"* ]]
 }
+
+# The suite above runs against a fake conf, so it proves nothing about the
+# real one. This sources the actual file with a stubbed toggle_register: a
+# syntax error, a top-level side effect that fails, or a duplicate name shows
+# up here instead of at board launch. No status action ever runs.
+@test "the real config parses and registers unique toggle names" {
+  run bash -c '
+    declare -A seen=()
+    toggle_register() {
+      if [ -n "${seen[$1]:-}" ]; then
+        echo "duplicate toggle: $1"
+        exit 1
+      fi
+      seen[$1]=1
+    }
+    source "$1"
+    echo "registered ${#seen[@]}"
+  ' _ "${BATS_TEST_DIRNAME}/../../scripts/__toggles.conf"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ ^registered\ [0-9]+$ ]]
+  [ "${output#registered }" -ge 1 ]
+}
