@@ -2706,10 +2706,11 @@ _held_issue_json() {
 
 # ====================================================
 # CLOSABLE-ISSUE MARKER (+kill)
-# Linear never closes an issue when its PR closes, and never drops the
-# attachment either, so an abandoned attempt leaves the issue open with nothing
-# behind it. The sync now stamps +kill on exactly that shape so the close
-# candidates are visible on the board without opening each PR by hand.
+# Linear never closes an issue when its PR closes or merges, and never drops the
+# attachment either, so a finished attempt leaves the issue open with nothing
+# behind it. The sync stamps +kill on exactly that shape, merged counting the
+# same as closed unmerged, so the close candidates are visible on the board
+# without opening each PR by hand.
 # ====================================================
 
 # Task export shaped by the caller: $1 = tags JSON array, $2 = annotations JSON array.

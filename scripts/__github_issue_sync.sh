@@ -911,12 +911,17 @@ attach_link_annotations() {
     return 0
 }
 
-# Mark an open Linear issue whose PRs all died as a close candidate, with +kill.
+# Mark an open Linear issue with no PR still in flight as a close candidate,
+# with +kill.
 #
-# Linear never closes an issue when its PR is closed, and it never drops the
-# attachment either, so an abandoned attempt leaves the issue sitting open with
-# nothing behind it. Those are the issues Piotr wants to spot at a glance and
-# close in a batch, so the sync stamps them on the 30-minute run instead of
+# Both finished states count, merged as well as closed unmerged. See
+# task_pr_closable_verdict for the reasoning: OPEN is the only state that means
+# work is still going.
+#
+# Linear never closes an issue when its PR closes or merges, and it never drops
+# the attachment either, so a finished attempt leaves the issue sitting open
+# with nothing behind it. Those are the issues Piotr wants to spot at a glance
+# and close in a batch, so the sync stamps them on the 30-minute run instead of
 # leaving him to open each PR by hand.
 #
 # +kill is the tag by Piotr's decision. It already means "disposable" on the
@@ -961,7 +966,7 @@ mark_closable_issue() {
         return 0
     fi
 
-    log "Issue is open but every attached PR is closed unmerged - adding +kill (likely closable)"
+    log "Issue is open but no attached PR is still open - adding +kill (likely closable)"
     task rc.confirmation=no modify "$task_uuid" +kill
 }
 
@@ -1011,8 +1016,9 @@ create_and_annotate_task() {
         # This handles cases where tags might have been added via hooks
         update_task_status "$task_uuid" "$issue_status" "$issue_priority"
 
-        # An issue can arrive with its PR already dead (attempt abandoned before
-        # the issue was ever assigned), so judge closability on creation too.
+        # An issue can arrive with its PR already finished (merged or abandoned
+        # before the issue was ever assigned), so judge closability on creation
+        # too.
         mark_closable_issue "$task_uuid" "$issue_status"
         
         # Set due date if present
