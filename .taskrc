@@ -52,14 +52,15 @@ color.tag.claude      = bold on gray2
 color.tag.codex       = bold cyan on gray2
 color.tag.review      = bold blue
 # +kill reads as "this can be killed": the disposable pr-reviews mirrors, and
-# now also open Linear issues whose attached PRs all closed unmerged, stamped by
-# __github_issue_sync.sh. Still a red ground so a close candidate cannot be
-# scrolled past, but color52 (dark maroon) instead of bright red: the glare made
-# a whole-row block that dominated the report it was meant to annotate.
+# now also open Linear issues with no attached PR still open, merged counting
+# the same as closed unmerged, stamped by __github_issue_sync.sh. Still a red
+# ground so a close candidate cannot be scrolled past, but color52 (dark maroon)
+# instead of bright red: the glare made a whole-row block that dominated the
+# report it was meant to annotate.
 color.tag.kill        = bold white on color52
 
-# +kill outranks +review: a task carrying both still has a dead PR behind it,
-# and "close this" is the call worth surfacing over "someone is reviewing".
+# +kill outranks +review: a task carrying both has no PR left in flight, and
+# "close this" is the call worth surfacing over "someone is reviewing".
 rule.precedence.color=tag.kill,tag.review,deleted,completed,active,keyword.,tag.,project.,overdue,scheduled,due.today,due,blocked,blocking,recurring,tagged,uda.
 color.uda.priority.L  = on gray4
 color.scheduled       = bold yellow 
