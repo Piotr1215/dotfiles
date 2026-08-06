@@ -17,6 +17,35 @@ if [[ "${1:-}" == "--cwd" ]]; then
 fi
 
 [[ -n "$launch_cwd" ]] || launch_cwd=$PWD
+
+action="${1:-}"
+if [[ -z "$action" ]]; then
+  picker_result=$(
+    {
+      printf '%s\n' "$launch_cwd"
+      zoxide query -l 2>/dev/null
+    } | awk 'NF && !seen[$0]++' | fzf \
+      --reverse --border --tiebreak=index \
+      --prompt='codex> ' \
+      --header='enter:new  ctrl-r:resume  ctrl-l:resume-last  ctrl-a:resume-all  ctrl-f:fork' \
+      --expect=ctrl-r,ctrl-l,ctrl-a,ctrl-f \
+      --preview='eza --color=always --icons --git {} 2>/dev/null' \
+      --preview-window=right:50%:wrap
+  ) || exit 0
+
+  picker_key=$(head -1 <<< "$picker_result")
+  launch_cwd=$(tail -1 <<< "$picker_result")
+  [[ -n "$launch_cwd" ]] || exit 0
+
+  case "$picker_key" in
+    ctrl-r) action=resume ;;
+    ctrl-l) action=resume-last ;;
+    ctrl-a) action=resume-all ;;
+    ctrl-f) action=fork ;;
+    *) action=new ;;
+  esac
+fi
+
 [[ -d "$launch_cwd" ]] || {
   echo "error: launch directory does not exist: $launch_cwd" >&2
   exit 1
@@ -39,14 +68,6 @@ if [[ -d "$HOME/.codex-work" ]] && claude_work_predicate "$launch_cwd"; then
 else
   unset CODEX_HOME
   active_codex_home="$HOME/.codex"
-fi
-
-action="${1:-}"
-if [[ -z "$action" ]]; then
-  action=$(printf '%s\n' new resume resume-last resume-all fork \
-    | fzf --reverse --border --prompt='codex > ' \
-      --preview='case {} in new) echo "Start a new Codex session";; resume) echo "Pick a session from this directory";; resume-last) echo "Resume the latest session";; resume-all) echo "Pick from every Codex session";; fork) echo "Fork an existing session";; esac')
-  [[ -n "$action" ]] || exit 0
 fi
 
 case "$action" in
