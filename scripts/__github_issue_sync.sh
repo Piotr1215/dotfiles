@@ -158,7 +158,7 @@ get_linear_issues() {
             -X POST \
             -H "Content-Type: application/json" \
             -H "Authorization: ${LINEAR_API_KEY}" \
-            --data '{"query": "query { user(id: \"'"$LINEAR_USER_ID"'\") { id name assignedIssues(filter: { state: { name: { nin: [\"Released\", \"Canceled\",\"Done\",\"Ready for Release\",\"Duplicate\",\"Archived\"] } } }) { nodes { id title url state { name } project { name } dueDate priority updatedAt cycle { number } attachments { nodes { url sourceType } } } pageInfo { hasNextPage } } } }"}' \
+            --data '{"query": "query { user(id: \"'"$LINEAR_USER_ID"'\") { id name assignedIssues(filter: { state: { name: { nin: [\"Released\", \"Canceled\",\"Done\",\"Ready for Release\",\"Duplicate\",\"Archived\"] } } }) { nodes { id title url state { name } project { name } dueDate priority updatedAt cycle { number } attachments { nodes { url sourceType metadata } } } pageInfo { hasNextPage } } } }"}' \
             https://api.linear.app/graphql 2>"$curl_stderr")
         exit_code=$?
 
@@ -216,7 +216,20 @@ get_linear_issues() {
     
     # Parse the issues with error handling
     local issues
-    if ! issues=$(echo "$content" | jq -c '.data.user.assignedIssues.nodes[] | {
+    # Channel id -> channel name, built across the WHOLE feed before any issue is
+    # shaped. Linear puts the name in attachment metadata, but not on every
+    # attachment: 7 of 8 slack attachments carry metadata.channelName and one
+    # carries an empty metadata object. The gap is recoverable because the same
+    # channel appears named on another issue, so pooling the feed resolves every
+    # channel without needing a Slack token.
+    if ! issues=$(echo "$content" | jq -c '
+        ([.data.user.assignedIssues.nodes[].attachments.nodes[]?
+          | select(.sourceType == "slack")
+          | select(.metadata.channelName != null)
+          | {key: (.metadata.channelId // (.url | capture("/archives/(?<c>[A-Za-z0-9]+)/") | .c)),
+             value: .metadata.channelName}]
+         | from_entries) as $channels
+        | .data.user.assignedIssues.nodes[] | {
             id: .id,
             description: .title,
             repository: "linear",
@@ -229,7 +242,13 @@ get_linear_issues() {
             updated_at: .updatedAt,
             cycle_number: .cycle.number,
             pr_url: ([.attachments.nodes[]? | select(.url != null and (.url | test("github.com.*/pull/"))) | .url] | .[0] // null),
-            slack_urls: ([.attachments.nodes[]? | select(.url != null and (.url | test("//[^/]*slack\\.com/archives/"))) | .url] | unique),
+            slack_urls: ([.attachments.nodes[]?
+                          | select(.url != null and (.url | test("//[^/]*slack\\.com/archives/")))
+                          | . as $a
+                          | ($a.url | capture("/archives/(?<c>[A-Za-z0-9]+)/") | .c) as $cid
+                          | (($a.metadata.channelName // $channels[$cid]) // null) as $cname
+                          | if $cname then "\($a.url) # #\($cname)" else $a.url end]
+                         | unique),
             link_urls: ([.attachments.nodes[]?
                          | select(.url != null and (.url | test("^https?://")))
                          | select((.sourceType // "") | test("^(slack|github)$") | not)
@@ -813,6 +832,11 @@ attach_pr_link() {
 # the same rule is correct for the other link kinds.
 link_identity() {
     local url="$1"
+    # Cut the trailing " # #channel" comment FIRST. Annotations carry the
+    # channel name after the url for readability, and it must not become part
+    # of the link's identity, or renaming a Slack channel would look like a new
+    # link and annotate the thread twice.
+    url="${url%%[[:space:]]*}"
     url="${url%%#*}"
     url="${url%%\?*}"
     echo "$url"

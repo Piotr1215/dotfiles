@@ -3128,3 +3128,64 @@ https://x.slack.com/archives/C3/p1000000000000003"
     [ "$status" -eq 0 ]
     [ ! -f "${TEST_DIR}/annotate.log" ]
 }
+
+# ====================================================
+# SLACK CHANNEL NAME RESOLUTION TESTS
+# ====================================================
+
+@test "get_linear_issues appends the slack channel name as a trailing comment" {
+    _write_curl_mock_with_attachments '[
+        {"url": "https://loft-labs-inc.slack.com/archives/C09R1RRK4LV/p1781520987017069", "sourceType": "slack",
+         "metadata": {"channelId": "C09R1RRK4LV", "channelName": "ai-sharing"}}
+    ]'
+
+    run get_linear_issues
+    [ "$status" -eq 0 ]
+    [ "$(echo "$output" | jq -r '.slack_urls[0]')" = "https://loft-labs-inc.slack.com/archives/C09R1RRK4LV/p1781520987017069 # #ai-sharing" ]
+}
+
+@test "get_linear_issues pools channel names across the feed to fill a gap" {
+    # Linear leaves metadata empty on some slack attachments (1 of 8 live). The
+    # same channel is named on another attachment, so the feed can resolve it
+    # without a Slack token.
+    _write_curl_mock_with_attachments '[
+        {"url": "https://loft-labs-inc.slack.com/archives/C0735R36BJS/p1773732437844199", "sourceType": "slack",
+         "metadata": {}},
+        {"url": "https://loft-labs-inc.slack.com/archives/C0735R36BJS/p1785853912810019", "sourceType": "slack",
+         "metadata": {"channelId": "C0735R36BJS", "channelName": "dev-operations"}}
+    ]'
+
+    run get_linear_issues
+    [ "$status" -eq 0 ]
+    # BOTH carry the name, including the one whose own metadata was empty.
+    [ "$(echo "$output" | jq -r '[.slack_urls[] | select(test("# #dev-operations"))] | length')" = "2" ]
+}
+
+@test "get_linear_issues leaves the url bare when no attachment names the channel" {
+    _write_curl_mock_with_attachments '[
+        {"url": "https://loft-labs-inc.slack.com/archives/CUNKNOWN1/p1773732437844199", "sourceType": "slack",
+         "metadata": {}}
+    ]'
+
+    run get_linear_issues
+    [ "$status" -eq 0 ]
+    [ "$(echo "$output" | jq -r '.slack_urls[0]')" = "https://loft-labs-inc.slack.com/archives/CUNKNOWN1/p1773732437844199" ]
+}
+
+@test "link_identity ignores a trailing channel comment" {
+    # A channel rename must not read as a new link and re-annotate the thread.
+    commented=$(link_identity "https://ws.slack.com/archives/C1/p123456789012345?cid=C1 # #dev-operations")
+    bare=$(link_identity "https://ws.slack.com/archives/C1/p123456789012345")
+    [ "$commented" = "$bare" ]
+}
+
+@test "attach_link_annotations skips a link already annotated without its comment" {
+    # Tasks annotated before channel names existed carry the bare url. They must
+    # not be annotated a second time now that the format carries a comment.
+    _write_task_mock_export '["linear"]' \
+        '[{"description":"slack: https://ws.slack.com/archives/C1/p123456789012345"}]'
+
+    run attach_link_annotations "test-uuid" "slack" "https://ws.slack.com/archives/C1/p123456789012345 # #dev-operations"
+    [ "$status" -eq 0 ]
+    [ ! -f "${TEST_DIR}/annotate.log" ]
+}

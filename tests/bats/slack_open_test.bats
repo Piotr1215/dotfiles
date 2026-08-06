@@ -22,6 +22,11 @@ EOF
     chmod +x "${TEST_DIR}/opener"
     export SLACK_OPEN_OPENER="${TEST_DIR}/opener"
 
+    # Run the opener synchronously. In production it is detached with setsid so
+    # Slack cannot hold the terminal, but a detached stub would race the
+    # assertions below.
+    export SLACK_OPEN_NO_DETACH=1
+
     # Point the team map and the Slack state at empty test locations so a real
     # ~/.config or a real Slack install can never change a result.
     export SLACK_OPEN_TEAMS_CONFIG="${TEST_DIR}/teams"
