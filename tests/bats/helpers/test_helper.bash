@@ -2,10 +2,17 @@
 
 # Test helper functions for __github_issue_sync.sh tests
 
+# Repo root, derived from this helper's own location rather than hardcoded.
+# The path used to be /home/decoder/dev/dotfiles, which meant a suite run from a
+# git worktree silently sourced the MAIN checkout: the tests passed while never
+# executing a line of the code under change.
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+export REPO_ROOT
+
 # Load the main script without executing it
 load_github_sync_functions() {
     # Source just the functions, not the main execution
-    source <(sed '/^main$/,$d' /home/decoder/dev/dotfiles/scripts/__github_issue_sync.sh)
+    source <(sed '/^main$/,$d' "${REPO_ROOT}/scripts/__github_issue_sync.sh")
 }
 
 # Mock API responses using fixtures
@@ -15,7 +22,7 @@ mock_github_api() {
 #!/bin/bash
 case "\$*" in
     *"search/issues"*)
-        cat /home/decoder/dev/dotfiles/test/fixtures/${fixture_file}
+        cat ${REPO_ROOT}/test/fixtures/${fixture_file}
         ;;
     *)
         echo "Mock GitHub API: \$*" >&2
@@ -33,7 +40,7 @@ mock_linear_api() {
     cat > "${TEST_DIR}/curl" << EOF
 #!/bin/bash
 if [[ "\$*" =~ "linear.app" ]]; then
-    cat /home/decoder/dev/dotfiles/test/fixtures/${fixture_file}
+    cat ${REPO_ROOT}/test/fixtures/${fixture_file}
     echo "${http_code}"
 else
     /usr/bin/curl "\$@"
