@@ -40,6 +40,14 @@ declare -A TEAM_PREFIX_REPO=(
     ["DOC"]="vcluster-docs"
 )
 
+# How many attachment links of ONE kind may be mirrored onto a single task.
+# The cap exists for the reading end, not the writing end: taskopen presents a
+# numbered list of actionable annotations, and Piotr has to pick from it. Linear
+# routinely carries far more than that (DOC-1675 alone holds 14 attachments, 13
+# of them PRs), so an uncapped mirror turns every pick into a hunt. Overflow is
+# always logged by attach_link_annotations, never silently dropped.
+LINK_ANNOTATION_CAP="${LINK_ANNOTATION_CAP:-3}"
+
 # ====================================================
 # LOGGING FUNCTIONS
 # ====================================================
@@ -150,7 +158,7 @@ get_linear_issues() {
             -X POST \
             -H "Content-Type: application/json" \
             -H "Authorization: ${LINEAR_API_KEY}" \
-            --data '{"query": "query { user(id: \"'"$LINEAR_USER_ID"'\") { id name assignedIssues(filter: { state: { name: { nin: [\"Released\", \"Canceled\",\"Done\",\"Ready for Release\",\"Duplicate\",\"Archived\"] } } }) { nodes { id title url state { name } project { name } dueDate priority updatedAt cycle { number } attachments { nodes { url } } } pageInfo { hasNextPage } } } }"}' \
+            --data '{"query": "query { user(id: \"'"$LINEAR_USER_ID"'\") { id name assignedIssues(filter: { state: { name: { nin: [\"Released\", \"Canceled\",\"Done\",\"Ready for Release\",\"Duplicate\",\"Archived\"] } } }) { nodes { id title url state { name } project { name } dueDate priority updatedAt cycle { number } attachments { nodes { url sourceType } } } pageInfo { hasNextPage } } } }"}' \
             https://api.linear.app/graphql 2>"$curl_stderr")
         exit_code=$?
 
@@ -220,7 +228,13 @@ get_linear_issues() {
             priority: .priority,
             updated_at: .updatedAt,
             cycle_number: .cycle.number,
-            pr_url: ([.attachments.nodes[]? | select(.url != null and (.url | test("github.com.*/pull/"))) | .url] | .[0] // null)
+            pr_url: ([.attachments.nodes[]? | select(.url != null and (.url | test("github.com.*/pull/"))) | .url] | .[0] // null),
+            slack_urls: ([.attachments.nodes[]? | select(.url != null and (.url | test("//[^/]*slack\\.com/archives/"))) | .url] | unique),
+            link_urls: ([.attachments.nodes[]?
+                         | select(.url != null and (.url | test("^https?://")))
+                         | select((.sourceType // "") | test("^(slack|github)$") | not)
+                         | select(.url | test("^https?://uploads\\.linear\\.app/") | not)
+                         | .url] | unique)
         }' 2>/dev/null); then
         echo "Error: Failed to parse Linear issues" >&2
         rm -f "$temp_response"
@@ -789,6 +803,90 @@ attach_pr_link() {
     annotate_task "$task_uuid" "$pr_url"
 }
 
+# Reduce a url to the part that identifies it across re-fetches: everything
+# before the query string and the fragment. Linear hands the SAME Slack thread
+# back with its query parameters in either order (both ?cid=..&thread_ts=.. and
+# ?thread_ts=..&cid=.. are live on the board right now), so an exact-string
+# comparison would read a parameter reshuffle as a brand-new link and annotate
+# the same thread again on some later sync. The path alone
+# (/archives/<CHANNEL>/p<TIMESTAMP>) already pins a Slack message uniquely, and
+# the same rule is correct for the other link kinds.
+link_identity() {
+    local url="$1"
+    url="${url%%#*}"
+    url="${url%%\?*}"
+    echo "$url"
+}
+
+# Mirror Linear attachment links onto a task as taskopen-labelled annotations.
+#
+# Written as "<label>: <url>" WITH the space, because that space is what makes
+# taskopen see a label at all: its annotation grammar is `(?:(\S+):\s+)?(.*)`,
+# so the older space-less "PR:https://..." form parses as one anonymous blob and
+# every action has to re-match the raw text. With a real label, .taskopenrc can
+# select on labelregex and `taskopen slack` can alias straight to one action
+# instead of printing every annotation on the task as a numbered choice.
+#
+# Add-only and idempotent. A link already present under ANY prefix is skipped,
+# matched on link_identity rather than the literal string, so re-running the
+# 30-minute sync never grows the list.
+attach_link_annotations() {
+    local task_uuid="$1"
+    local label="$2"
+    local urls="$3"
+
+    [[ -z "$task_uuid" || "$task_uuid" == "null" ]] && return 0
+    [[ -z "$urls" ]] && return 0
+
+    local task_json
+    task_json=$(task "$task_uuid" export 2>/dev/null)
+    [[ -z "$task_json" ]] && return 0
+
+    # Every url already annotated on this task, whatever prefix or prose wraps
+    # it, reduced to its identity. scan (not the whole annotation) because these
+    # links share the annotation channel with agent-written sentences.
+    local existing_ids=""
+    local seen_url
+    while IFS= read -r seen_url; do
+        [[ -z "$seen_url" ]] && continue
+        existing_ids+="$(link_identity "$seen_url")"$'\n'
+    done < <(echo "$task_json" \
+        | jq -r '[.[0].annotations[]? | (.description // "") | scan("https?://[^[:space:]]+")] | unique | .[]')
+
+    local attached=0
+    local skipped=0
+    local url identity
+    while IFS= read -r url; do
+        [[ -z "$url" || "$url" == "null" ]] && continue
+        identity=$(link_identity "$url")
+
+        # Already on the task (this run or an earlier one): never re-annotate.
+        if grep -Fxq -- "$identity" <<<"$existing_ids"; then
+            continue
+        fi
+
+        # Cap counts only links we would actually ADD, so a task that already
+        # carries three Slack threads does not report a phantom overflow.
+        if (( attached >= LINK_ANNOTATION_CAP )); then
+            skipped=$((skipped + 1))
+            continue
+        fi
+
+        log "Attaching $label link annotation: $url"
+        annotate_task "$task_uuid" "$label: $url"
+        existing_ids+="$identity"$'\n'
+        attached=$((attached + 1))
+    done <<<"$urls"
+
+    # Never truncate silently: a capped run must say what it left behind and how
+    # to see the rest, or the short list reads as "that was everything".
+    if (( skipped > 0 )); then
+        log "WARNING: $skipped further $label link(s) not annotated (cap LINK_ANNOTATION_CAP=$LINK_ANNOTATION_CAP); open the Linear issue for the full set, or raise the cap to mirror more"
+    fi
+
+    return 0
+}
+
 # Mark an open Linear issue whose PRs all died as a close candidate, with +kill.
 #
 # Linear never closes an issue when its PR is closed, and it never drops the
@@ -856,6 +954,8 @@ create_and_annotate_task() {
     local cycle_number="$9"
     local issue_updated_at="${10}"
     local issue_pr_url="${11}"
+    local issue_slack_urls="${12}"
+    local issue_link_urls="${13}"
 
     log "Creating new task for issue: $issue_description"
     
@@ -875,6 +975,8 @@ create_and_annotate_task() {
     if [[ -n "$task_uuid" ]]; then
         annotate_task "$task_uuid" "$issue_url"
         attach_pr_link "$task_uuid" "$issue_pr_url" "$issue_status"
+        attach_link_annotations "$task_uuid" "slack" "$issue_slack_urls"
+        attach_link_annotations "$task_uuid" "link" "$issue_link_urls"
         log "Task created and annotated for: $issue_description"
         task rc.confirmation=no modify "$task_uuid" linear_issue_id:"$issue_number"
         
@@ -921,7 +1023,7 @@ create_and_annotate_task() {
 # Synchronize a single issue with Taskwarrior
 sync_to_taskwarrior() {
     local issue_line="$1"
-    local issue_id issue_description issue_repo_name issue_url task_uuid issue_number project_name issue_status issue_due_date issue_priority cycle_number issue_updated_at pr_url
+    local issue_id issue_description issue_repo_name issue_url task_uuid issue_number project_name issue_status issue_due_date issue_priority cycle_number issue_updated_at pr_url slack_urls link_urls
 
     issue_id=$(echo "$issue_line" | jq -r '.id')
     issue_description=$(echo "$issue_line" | jq -r '.description')
@@ -944,6 +1046,11 @@ sync_to_taskwarrior() {
     issue_updated_at=$(echo "$issue_line" | jq -r '.updated_at // empty' | sed -E 's/\.[0-9]+Z$/Z/')
     # First github.com/.../pull/ URL among the Linear issue's attachments, if any.
     pr_url=$(echo "$issue_line" | jq -r '.pr_url // empty')
+    # Slack thread permalinks and other reference links, newline separated.
+    # Newline rather than space because IFS is $'\n\t' in this file, so a
+    # space-joined list would arrive at the callee as one unsplittable token.
+    slack_urls=$(echo "$issue_line" | jq -r '(.slack_urls // []) | .[]')
+    link_urls=$(echo "$issue_line" | jq -r '(.link_urls // []) | .[]')
 
     log "Processing Issue ID: $issue_id, Description: $issue_description"
 
@@ -974,7 +1081,7 @@ sync_to_taskwarrior() {
 
     if [[ -z "$task_uuid" || "$task_uuid" == "null" ]]; then
         log "No valid existing task found - creating new task"
-        create_and_annotate_task "$issue_description" "$issue_repo_name" "$issue_url" "$issue_number" "$project_name" "$issue_status" "$issue_due_date" "$issue_priority" "$cycle_number" "$issue_updated_at" "$pr_url"
+        create_and_annotate_task "$issue_description" "$issue_repo_name" "$issue_url" "$issue_number" "$project_name" "$issue_status" "$issue_due_date" "$issue_priority" "$cycle_number" "$issue_updated_at" "$pr_url" "$slack_urls" "$link_urls"
     else
         # Fix any issues with newlines in task_uuid
         task_uuid=$(echo "$task_uuid" | tr -d '\n')
@@ -1023,6 +1130,11 @@ sync_to_taskwarrior() {
 
         # Backfill the Linear-attached PR onto already-synced tasks (idempotent).
         attach_pr_link "$task_uuid" "$pr_url" "$issue_status"
+
+        # Same backfill for Slack threads and other reference links. Tasks that
+        # predate this feature pick their links up on the next sync.
+        attach_link_annotations "$task_uuid" "slack" "$slack_urls"
+        attach_link_annotations "$task_uuid" "link" "$link_urls"
 
         # Runs AFTER attach_pr_link so a PR annotation mirrored on this very run
         # is already visible to the verdict, instead of waiting 30 minutes.

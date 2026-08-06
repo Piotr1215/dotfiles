@@ -27,8 +27,39 @@ notes.regex="^Notes(\\..*)?"
 notes.command="""editnote ~/Notes/tasknotes/$UUID$LAST_MATCH "$TASK_DESCRIPTION" $UUID"""
 notes.modes="batch,any,normal"
 
+# PROJECT: slack-thread-annotations
+# See: scripts/__github_issue_sync.sh, scripts/__slack_open.sh
+# Slack threads and reference links mirrored from Linear attachments, written as
+# "slack: <url>" and "link: <url>". The space after the colon is deliberate: it
+# is what makes taskopen parse the word as a LABEL (its annotation grammar is
+# `(?:(\S+):\s+)?(.*)`), which is what labelregex below can then select on. The
+# older space-less "PR:<url>" form has no label, so it can only be matched as
+# raw text.
+#
+# The catch-all `url` action below matches any annotation containing http, and
+# in normal/batch mode taskopen runs only the FIRST matching action. Its
+# labelregex therefore excludes these two labels; without that exclusion `url`
+# wins and every Slack link opens in a browser. Placement in this file does NOT
+# fix it: despite what taskopenrc(5) says about config order setting priority,
+# taskopen 2.0.2 was measured resolving `url` first even with these actions
+# written above it.
+slack.target=annotations
+slack.labelregex="^slack$"
+slack.regex="(https?://[^\\s]+)"
+slack.command="__slack_open.sh $LAST_MATCH"
+slack.modes="batch,any,normal"
+
+link.target=annotations
+link.labelregex="^link$"
+link.regex="(https?://[^\\s]+)"
+link.command="open $LAST_MATCH 2>/dev/null"
+link.modes="batch,any,normal"
+
 url.target=annotations
-url.labelregex=".*"
+# Everything EXCEPT the two labels that have their own opener above. Other
+# labelled annotations ("upstream: https://...") keep falling through to here,
+# which is what they did before and still should.
+url.labelregex="^(?!slack$|link$).*"
 url.regex="((?:www|http).*)"
 url.command="open $LAST_MATCH 2>/dev/null"
 url.modes="batch,any,normal"
@@ -65,3 +96,14 @@ pr.labelregex=".*"
 pr.regex="^PR:(.*)"
 pr.command="open $LAST_MATCH 2>/dev/null"
 pr.modes="batch,any,normal"
+
+[CLI]
+# Scoping knobs, so a task carrying a brief, a Linear url, a PR, two Slack
+# threads and a Notion page does not force a hunt through a numbered list.
+# --include both restricts the actions considered AND sets their priority, so
+# these bypass the catch-all `url` action without reordering anything above.
+#   taskopen slack <filter>   jump straight to the Slack threads
+#   taskopen refs  <filter>   every external reference, nothing local
+alias.slack="normal --include=slack"
+alias.refs="any --include=slack,link,pr"
+group.refs="slack,link,pr"
