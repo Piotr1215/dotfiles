@@ -5,6 +5,7 @@ setup() {
   SOCKET_NAME="reading-margin-${BATS_TEST_NUMBER}-$$"
   MODE_FILE="${BATS_TEST_TMPDIR}/timeoff-mode"
   COMMAND_LOG="${BATS_TEST_TMPDIR}/margin-command"
+  STATUS_LOG="${BATS_TEST_TMPDIR}/margin-status"
   tmux -L "$SOCKET_NAME" -f /dev/null new-session -d -s test -x 120 -y 30
   PANE_ID="$(tmux -L "$SOCKET_NAME" display-message -p '#{pane_id}')"
   tmux -L "$SOCKET_NAME" set-environment -g TMUX_READING_MARGIN_TIMEOFF_FILE "$MODE_FILE"
@@ -12,6 +13,7 @@ setup() {
     "printf 'work\\n' > '$COMMAND_LOG'; exec sleep infinity"
   tmux -L "$SOCKET_NAME" set-environment -g TMUX_READING_MARGIN_WEEKEND_COMMAND \
     "printf 'weekend\\n' > '$COMMAND_LOG'; exec sleep infinity"
+  tmux -L "$SOCKET_NAME" set-option -g @reading_margin_default on
 }
 
 teardown() {
@@ -34,6 +36,7 @@ wait_for_command() {
   toggle_margin
 
   margin_id="$(tmux -L "$SOCKET_NAME" show-options -wqv @reading_margin_pane)"
+  [ "$(tmux -L "$SOCKET_NAME" show-options -wqv @reading_margin_visible)" = on ]
   [ "$(tmux -L "$SOCKET_NAME" list-panes -F '#{pane_id}' | wc -l)" -eq 2 ]
   [ "$(tmux -L "$SOCKET_NAME" display-message -p -t "$margin_id" '#{pane_left}')" -eq 0 ]
   margin_width="$(tmux -L "$SOCKET_NAME" display-message -p -t "$margin_id" '#{pane_width}')"
@@ -47,9 +50,26 @@ wait_for_command() {
 
   [ "$(tmux -L "$SOCKET_NAME" list-panes -F '#{pane_id}' | wc -l)" -eq 1 ]
   [ -z "$(tmux -L "$SOCKET_NAME" show-options -wqv @reading_margin_pane)" ]
+  [ "$(tmux -L "$SOCKET_NAME" show-options -wqv @reading_margin_visible)" = off ]
   [ "$(tmux -L "$SOCKET_NAME" display-message -p '#{pane_id}')" = "$PANE_ID" ]
   messages="$(tmux -L "$SOCKET_NAME" show-messages)"
   [[ "$messages" != *"Reading margin"* ]]
+}
+
+@test "layout changes restore the margin to one third in one pass" {
+  toggle_margin
+  margin_id="$(tmux -L "$SOCKET_NAME" show-options -wqv @reading_margin_pane)"
+  tmux -L "$SOCKET_NAME" set-hook -g window-layout-changed \
+    "run-shell -b \"$SCRIPT --repair-window '#{hook_window}'\""
+
+  tmux -L "$SOCKET_NAME" resize-pane -t "$margin_id" -x 55
+  for _ in {1..20}; do
+    [ "$(tmux -L "$SOCKET_NAME" display-message -p -t "$margin_id" '#{pane_width}')" -eq 39 ] && break
+    sleep 0.05
+  done
+
+  [ "$(tmux -L "$SOCKET_NAME" display-message -p -t "$margin_id" '#{pane_width}')" -eq 39 ]
+  [ "$(tmux -L "$SOCKET_NAME" show-options -wqv @reading_margin_visible)" = on ]
 }
 
 @test "reading margin spans the window beside an existing split" {
@@ -95,7 +115,7 @@ wait_for_command() {
   [ "$(tmux -L "$SOCKET_NAME" display-message -p -t "$margin_id" '#{pane_input_off}')" -eq 0 ]
 }
 
-@test "ensure mode adds one unfocused margin and skips playback sessions" {
+@test "ensure mode follows the global default knob" {
   tmux -L "$SOCKET_NAME" run-shell "$SCRIPT --ensure-session test"
   first_margin="$(tmux -L "$SOCKET_NAME" show-options -wqv @reading_margin_pane)"
   [ -n "$first_margin" ]
@@ -104,7 +124,25 @@ wait_for_command() {
   tmux -L "$SOCKET_NAME" run-shell "$SCRIPT --ensure-session test"
   [ "$(tmux -L "$SOCKET_NAME" show-options -wqv @reading_margin_pane)" = "$first_margin" ]
 
+  toggle_margin
+  tmux -L "$SOCKET_NAME" set-option -g @reading_margin_default off
+  tmux -L "$SOCKET_NAME" run-shell "$SCRIPT --ensure-session test"
+  [ "$(tmux -L "$SOCKET_NAME" list-panes -F '#{pane_id}' | wc -l)" -eq 1 ]
+  [ "$(tmux -L "$SOCKET_NAME" show-options -wqv @reading_margin_visible)" = off ]
+
   tmux -L "$SOCKET_NAME" new-session -d -s ambient_track_1a2b
   tmux -L "$SOCKET_NAME" run-shell "$SCRIPT --ensure-session ambient_track_1a2b"
   [ "$(tmux -L "$SOCKET_NAME" list-panes -t ambient_track_1a2b -F '#{pane_id}' | wc -l)" -eq 1 ]
+}
+
+@test "status reports the default and current window state" {
+  tmux -L "$SOCKET_NAME" run-shell "$SCRIPT --status '$PANE_ID' > '$STATUS_LOG'"
+  output="$(<"$STATUS_LOG")"
+  [[ "$output" == *"default=on visible=off"* ]]
+
+  toggle_margin
+  tmux -L "$SOCKET_NAME" run-shell "$SCRIPT --status '$PANE_ID' > '$STATUS_LOG'"
+  output="$(<"$STATUS_LOG")"
+  [[ "$output" == *"default=on visible=on"* ]]
+  [[ "$output" == *"width=39"* ]]
 }

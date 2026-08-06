@@ -36,7 +36,7 @@ help_function() {
     echo "  Enter     Open in neovim"
     echo "  Ctrl+Y    Copy path to clipboard"
     echo "  Ctrl+X    Switch to zoxide"
-    echo "  Ctrl+D    Switch to all directories"
+    echo "  Ctrl+D    Toggle dashboard (flip automations)"
     echo "  Ctrl+F    Switch to all files"
     echo "  Ctrl+B    Switch to bookmarks"
     echo "  Ctrl+O    GitHub repo search"
@@ -141,7 +141,7 @@ HOME_BIND="ctrl-x:change-prompt(all> )+reload(active=\$(tmux ls -F '#{session_na
 # Files from work directories
 FILE_BIND="ctrl-f:execute-silent(touch /tmp/file_opener_2d)+abort"
 # Bookmarks binding - extract and expand paths from bookmarks.conf with descriptions
-BOOKMARKS_BIND="ctrl-b:change-prompt(bookmarks> )+reload(bash -c 'while IFS=\";\" read -r desc path; do path=\${path/#\\~/\$HOME}; printf \"%-60s %s\\n\" \"\$desc\" \"\$path\"; done < ~/dev/dotfiles/scripts/__bookmarks.conf')"
+BOOKMARKS_BIND="ctrl-b:change-prompt(bookmarks> )+reload(bash -c 'while IFS=\";\" read -r desc path line; do path=\${path/#\\~/\$HOME}; [ -z \"\$line\" ] || path=\"\$path:\$line\"; printf \"%-60s %s\\n\" \"\$desc\" \"\$path\"; done < ~/dev/dotfiles/scripts/__bookmarks.conf')"
 # GitHub repo search binding - search, clone/cd into repo
 GITHUB_BIND="ctrl-o:execute-silent(touch $RETURN_MARKER)+execute(~/dev/dotfiles/scripts/__github_search.sh)+abort"
 
@@ -170,6 +170,10 @@ PASTE_BIND="tab:execute-silent(~/dev/dotfiles/scripts/__copy_path_with_notificat
 
 # Pane content search (Ctrl+S) - grep every pane's scrollback, jump to the match.
 SEARCH_BIND="ctrl-s:execute-silent(touch /tmp/file_opener_search)+abort"
+
+# Toggle dashboard (Ctrl+D) - flip personal automation toggles. Esc returns
+# here (the board touches the marker); ctrl-x inside the board exits fully.
+TOGGLES_BIND="ctrl-d:execute(~/dev/dotfiles/scripts/__toggles.sh --return-marker $RETURN_MARKER)+abort"
 
 # Loop to allow returning from PRs/Linear back to main picker
 while true; do
@@ -217,7 +221,7 @@ while true; do
                 echo "Preview not available"
             fi' \
         --preview-window 'right:50%:wrap' \
-        --header ' C-f:30d C-x:home C-b:marks C-o:github C-g:PRs C-l:Linear C-s:search-panes C-e:edit C-u:music C-k:kctx | C-y:copy Tab:paste' \
+        --header ' C-f:30d C-x:home C-b:marks C-o:github C-g:PRs C-l:Linear C-s:search-panes C-d:toggles C-e:edit C-u:music C-k:kctx | C-y:copy Tab:paste' \
         --prompt 'all> ' \
         --bind "$HOME_BIND" \
         --bind "$FILE_BIND" \
@@ -231,6 +235,7 @@ while true; do
         --bind "$COPY_BIND" \
         --bind "$PASTE_BIND" \
         --bind "$SEARCH_BIND" \
+        --bind "$TOGGLES_BIND" \
         --bind "ctrl-c:abort" \
         2>/dev/null) || true
 
@@ -358,9 +363,15 @@ if [ -n "$OUTPUT" ]; then
 
     # Build array of files from selections
     declare -a file_array
+    first_line=""
     while IFS= read -r line; do
         if [ -n "$line" ]; then
-            real_path=$(~/dev/dotfiles/scripts/__extract_path_from_fzf.sh "$line")
+            real_target=$(~/dev/dotfiles/scripts/__extract_path_from_fzf.sh "$line")
+            real_path="$real_target"
+            if [[ "$real_target" =~ ^(.*):([0-9]+)$ ]] && [ -f "${BASH_REMATCH[1]}" ]; then
+                real_path="${BASH_REMATCH[1]}"
+                [ -n "$first_line" ] || first_line="${BASH_REMATCH[2]}"
+            fi
             file_array+=("$real_path")
         fi
     done <<< "$OUTPUT"
@@ -376,7 +387,11 @@ if [ -n "$OUTPUT" ]; then
             dir_path=$(dirname "$first_file")
             window_name=$(basename "$first_file")
             # Pass files as arguments to nvim
-            tmux new-window -n "$window_name" -c "$dir_path" nvim "${file_array[@]}"
+            if [ -n "$first_line" ]; then
+                tmux new-window -n "$window_name" -c "$dir_path" nvim "+$first_line" "${file_array[@]}"
+            else
+                tmux new-window -n "$window_name" -c "$dir_path" nvim "${file_array[@]}"
+            fi
         fi
     fi
 fi

@@ -28,5 +28,10 @@ fi
 
 # Expand tilde and resolve to absolute path
 expanded_path="${path/#\~/$HOME}"
+line_suffix=""
+if [[ "$expanded_path" =~ ^(.*):([0-9]+)$ ]]; then
+    expanded_path="${BASH_REMATCH[1]}"
+    line_suffix=":${BASH_REMATCH[2]}"
+fi
 # Use printf to avoid trailing newline
-printf '%s' "$(realpath "$expanded_path" 2>/dev/null || echo "$expanded_path")"
+printf '%s%s' "$(realpath "$expanded_path" 2>/dev/null || echo "$expanded_path")" "$line_suffix"
