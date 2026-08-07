@@ -34,9 +34,12 @@ die() {
 }
 
 # Snippet files, sorted. Dotfiles and directories are skipped.
+# -L because the directory is itself a symlink (~/.config/ai-snippets points at
+# the private repo). Without it find refuses to descend and the library reads as
+# empty, which looks like "no snippets" rather than "wrong flag".
 list_files() {
     [[ -d "$SNIPPETS_DIR" ]] || return 0
-    find "$SNIPPETS_DIR" -maxdepth 1 -type f ! -name '.*' -printf '%f\n' 2>/dev/null | sort
+    find -L "$SNIPPETS_DIR" -maxdepth 1 -type f ! -name '.*' -printf '%f\n' 2>/dev/null | sort
 }
 
 label_of() { local f="$1"; f="${f%.*}"; echo "${f//[-_]/ }"; }
