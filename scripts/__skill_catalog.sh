@@ -73,6 +73,12 @@ emit_command_tree() {
 	while IFS= read -r -d '' file; do
 		name="${file##*/}"
 		name="${name%.md}"
+		# Same rule the Codex bridge enforces (VALID_NAME in
+		# sync-claude-command-skills.py), so both catalogs agree on what counts as
+		# a command. A slash command is always lowercase-kebab, so this drops docs
+		# that merely live in the commands directory: README.md was being offered
+		# as an invocable command and bridged into Codex as invalid.
+		[[ "$name" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]] || continue
 		printf 'command\t%s\t%s\t%s%s\t%s\n' "$name" "$file" "$prefix" "$name" "$source"
 	done < <(find -L "$root" -maxdepth 1 -type f -name '*.md' -print0 2>/dev/null)
 }

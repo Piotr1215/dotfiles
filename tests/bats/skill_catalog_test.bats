@@ -114,6 +114,27 @@ make_claude_stub() {
 	[[ "$output" == $'command\tdaily-rss\t'*$'\t/daily-rss\tpersonal' ]]
 }
 
+# The commands directory holds prose as well as commands. Only lowercase-kebab
+# names are invocable, which is the rule the Codex bridge already enforces, so
+# both catalogs offer the same set.
+@test "docs living in the commands directory are not offered as commands" {
+	mkdir -p "$FIXTURE_ROOT/commands"
+	printf '%s\n' '# Daily brief' > "$FIXTURE_ROOT/commands/daily-rss.md"
+	printf '%s\n' '# Naming convention' > "$FIXTURE_ROOT/commands/README.md"
+	make_claude_stub '[]'
+
+	run env \
+		CAPABILITY_PICKER_DISABLE_CACHE=1 \
+		CLAUDE_SKILLS_ROOT="$FIXTURE_ROOT/empty" \
+		CLAUDE_COMMANDS_ROOT="$FIXTURE_ROOT/commands" \
+		CLAUDE_BIN="$FIXTURE_ROOT/bin/claude" \
+		bash "$CATALOG_TOOL" list claude "$FIXTURE_ROOT/project"
+
+	[ "$status" -eq 0 ]
+	[[ "$output" == *$'command\tdaily-rss\t'* ]]
+	[[ "$output" != *README* ]]
+}
+
 @test "non-user-invocable skills are excluded" {
 	make_skill "$FIXTURE_ROOT/claude-skills/internal/SKILL.md" internal 'user-invocable: false'
 
