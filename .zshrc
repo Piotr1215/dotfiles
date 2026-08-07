@@ -179,16 +179,6 @@ function prev() {
   sh -c "pet new -t  `printf %q "$PREV"`"
 }
 
-function open_fabric() {
-  alacritty --working-directory "$(pwd)" -e zsh -c '
-    __orchestrator.sh
-  '
-}
-
-# Binds Ctrl+Alt+A to open_fabric
-bindkey "^X^A" open_fabric                # Ctrl+X Ctrl+A: Opens fabric script
-zle -N open_fabric
-
 function email_analysis() {
     local cmd
     cmd="$HOME/.config/mutt/scripts/__mail_inbox_extractor.py | fabric -sp email-organizer; echo -e '\nPress any key to close...'; read -k1"
