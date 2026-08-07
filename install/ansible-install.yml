@@ -24,6 +24,9 @@
   vars:
     user: "{{ ansible_user_id }}"
     home: "{{ ansible_env.HOME }}"
+    # Pinned upstream. Ubuntu ships 0.44.1, old enough that modern consumers
+    # reject its option set: yt-x needs --ghost, which landed in fzf 0.61.0.
+    fzf_version: "0.74.2"
 
   tasks:
     - name: Update apt cache
@@ -312,7 +315,6 @@
         - terraform
         - trivy
         - vcluster
-        - fzf
         - krew
         - just
         - argocd
@@ -320,6 +322,46 @@
         - mkcert
         - terrascan
         - crane
+
+    - name: Install fzf from upstream release
+      block:
+        - name: Download fzf archive
+          get_url:
+            url: "https://github.com/junegunn/fzf/releases/download/v{{ fzf_version }}/fzf-{{ fzf_version }}-linux_amd64.tar.gz"
+            dest: "/tmp/fzf-{{ fzf_version }}.tar.gz"
+
+        - name: Extract fzf binary
+          unarchive:
+            src: "/tmp/fzf-{{ fzf_version }}.tar.gz"
+            dest: /usr/local/bin
+            remote_src: yes
+            mode: "0755"
+
+        # Ships separately from the release tarball, and until now came only from
+        # the distro package. Seven scripts invoke it, including __sessionizer.sh
+        # and __open-file.sh. It resolves fzf through PATH, so versions must match.
+        - name: Install fzf-tmux wrapper
+          get_url:
+            url: "https://raw.githubusercontent.com/junegunn/fzf/v{{ fzf_version }}/bin/fzf-tmux"
+            dest: /usr/local/bin/fzf-tmux
+            mode: "0755"
+
+        - name: Install fzf man pages
+          get_url:
+            url: "https://raw.githubusercontent.com/junegunn/fzf/v{{ fzf_version }}/man/man1/{{ item }}"
+            dest: "/usr/local/share/man/man1/{{ item }}"
+            mode: "0644"
+          loop:
+            - fzf.1
+            - fzf-tmux.1
+
+        # The distro package is 0.44.1 and only shadows the real one in `which -a`.
+        - name: Remove distro fzf package
+          apt:
+            name: fzf
+            state: absent
+      become: true
+      tags: fzf
 
     - name: Install Go and Node.js via arkade
       command: "arkade system install {{ item }}"
