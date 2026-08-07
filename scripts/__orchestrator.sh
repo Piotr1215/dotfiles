@@ -36,9 +36,19 @@ copy_to_clipboard() {
 	fi
 }
 
+# Test the output, not the exit status: `display-message -t` reports an unknown
+# pane by printing nothing and still exiting 0, so branching on the status makes
+# the check always true and the clipboard fallback unreachable. The paste then
+# fails inside a backgrounded run-shell, where nobody sees it, and the selection
+# is lost with no error.
+pane_is_live() {
+	[[ -n "$1" ]] || return 1
+	[[ -n "$(tmux display-message -p -t "$1" '#{pane_id}' 2>/dev/null)" ]]
+}
+
 deliver_text() {
 	local content="$1" label="$2" buffer_name
-	if [[ -n "$target_pane" ]] && tmux display-message -p -t "$target_pane" '#{pane_id}' >/dev/null 2>&1; then
+	if pane_is_live "$target_pane"; then
 		buffer_name="capability-picker-${target_pane#%}-$$"
 		printf '%s' "$content" | tmux load-buffer -b "$buffer_name" -
 		# The popup owns the client until this process exits. Paste afterwards so
@@ -55,7 +65,7 @@ deliver_text() {
 
 agent="${CAPABILITY_PICKER_AGENT:-unknown}"
 pane_path="$PWD"
-if [[ -n "$target_pane" ]] && tmux display-message -p -t "$target_pane" '#{pane_id}' >/dev/null 2>&1; then
+if pane_is_live "$target_pane"; then
 	pane_command="$(tmux display-message -p -t "$target_pane" '#{pane_current_command}')"
 	pane_path="$(tmux display-message -p -t "$target_pane" '#{pane_current_path}')"
 	if [[ "$agent" == unknown ]]; then
