@@ -12,7 +12,6 @@ set -eo pipefail
 
 DOTFILES="/home/decoder/dev/dotfiles"
 BINDINGS="$DOTFILES/scripts/__show_autokey_bindings.sh"
-VALUE_PICKER="$DOTFILES/scripts/__value_picker.sh"
 AUTOKEY_DATA_DIR="/home/decoder/.config/autokey/data"
 
 selection=$("$BINDINGS" --bang-rofi) || exit 0
@@ -46,16 +45,26 @@ case "$entry_type" in
     phrase)
         txt="$dir/$name.txt"
         [[ -f "$txt" ]] || { notify-send "Bang menu" "Missing phrase: $name.txt"; exit 1; }
-        xdotool type --clearmodifiers --delay 12 --file "$txt"
+        # Paste, never type. A multi-line phrase typed with xdotool turns every
+        # newline into a real Enter, which submits the prompt (or executes the
+        # line in a terminal) halfway through the text. AutoKey's own sendMode
+        # for these phrases is <shift>+<insert> for exactly this reason.
+        saved="$(xclip -selection clipboard -o 2>/dev/null || true)"
+        xclip -selection clipboard < "$txt"
+        xdotool key --clearmodifiers shift+Insert
+        ( sleep 1; printf '%s' "$saved" | xclip -selection clipboard ) >/dev/null 2>&1 &
         ;;
     script)
         py="$dir/$name.py"
-        # Pickers built on __value_picker.sh: pull the set name (2nd arg) and run
-        # it with erase 0 (the trigger was already cleaned above).
-        set_name=$(grep -oE '__value_picker\.sh"[^]]*' "$py" 2>/dev/null \
-            | sed -E 's/.*,[[:space:]]*"([^"]+)"[[:space:]]*,.*/\1/')
-        if [[ -n "$set_name" ]]; then
-            "$VALUE_PICKER" "$set_name" 0
+        # Every script entry is a subprocess.Popen list of quoted strings, so run
+        # that argv directly instead of pattern-matching one known picker. The
+        # trailing erase count is forced to 0: the trigger was cleaned above, and
+        # a stale count would eat the user's own text.
+        mapfile -t argv < <(grep -m1 'subprocess\.Popen' "$py" 2>/dev/null \
+            | grep -oE '"[^"]*"' | tr -d '"')
+        if (( ${#argv[@]} > 0 )) && [[ -x "${argv[0]}" ]]; then
+            [[ "${argv[-1]}" =~ ^[0-9]+$ ]] && argv[-1]=0
+            "${argv[@]}"
         else
             notify-send "Bang menu" "Cannot auto-run script: $name"
             exit 1
