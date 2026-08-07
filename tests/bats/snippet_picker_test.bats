@@ -121,6 +121,25 @@ setup() {
 	[[ "$output" == *"first line here second line"* ]]
 }
 
+@test "a symlinked snippet directory is read, not reported empty" {
+	# The real layout: ~/.config/ai-snippets is a symlink into the private repo.
+	# find refuses to descend into a symlinked dir without -L, and the symptom is
+	# an empty library rather than an error, so it hides as "no snippets yet".
+	real="$BATS_TEST_TMPDIR/real-snippets"
+	mkdir -p "$real"
+	printf 'through the link\n' > "$real/linked.md"
+	rmdir "$SNIPPETS"
+	ln -s "$real" "$SNIPPETS"
+
+	run "$PICKER" --list
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"linked"* ]]
+
+	run "$PICKER" 0 linked
+	[ "$status" -eq 0 ]
+	[ "$(cat "$SPY/clipboard")" = "through the link" ]
+}
+
 @test "an empty snippet directory is an error, not an empty menu" {
 	run "$PICKER" --list
 	[ "$status" -ne 0 ]
