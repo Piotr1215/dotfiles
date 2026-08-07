@@ -6,7 +6,7 @@
   ],
   "usageCount": 3,
   "prompt": false,
-  "omitTrigger": false,
+  "omitTrigger": true,
   "matchCase": false,
   "showInTrayMenu": false,
   "abbreviation": {
@@ -15,7 +15,7 @@
     ],
     "backspace": true,
     "ignoreCase": false,
-    "immediate": true,
+    "immediate": false,
     "triggerInside": false,
     "wordChars": "[\\w]"
   },

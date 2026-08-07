@@ -6,17 +6,16 @@
   ],
   "usageCount": 1,
   "prompt": false,
-  "omitTrigger": false,
+  "omitTrigger": true,
   "matchCase": false,
   "showInTrayMenu": false,
   "abbreviation": {
     "abbreviations": [
-      "p@@",
       ";;pe"
     ],
     "backspace": true,
     "ignoreCase": false,
-    "immediate": true,
+    "immediate": false,
     "triggerInside": false,
     "wordChars": "[\\w]"
   },
