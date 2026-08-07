@@ -1,23 +1,20 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Pick an installed prompt or skill and insert it into the pane that opened us.
-# Prompts are editable; skill invocations are inserted as-is. Nothing is
-# submitted: the user keeps the final say.
+# Pick an installed skill or command and insert its invocation into the pane that
+# opened us. Nothing is submitted: the user keeps the final say.
 
 target_pane="${1:-}"
-error_log="${XDG_CACHE_HOME:-$HOME/.cache}/fabric-prompt-picker.log"
+error_log="${XDG_CACHE_HOME:-$HOME/.cache}/capability-picker.log"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-template_tool="$script_dir/__fabric_prompt_template.sh"
 skill_catalog="$script_dir/__skill_catalog.sh"
-accept_editor="$script_dir/__accept_editor.sh"
 
 report_error() {
 	local status=$? failed_command="${BASH_COMMAND:-unknown}" line="${BASH_LINENO[0]:-unknown}"
 	mkdir -p "$(dirname "$error_log")"
 	printf '%(%Y-%m-%dT%H:%M:%S%z)T status=%s line=%s command=%q\n' \
 		-1 "$status" "$line" "$failed_command" >> "$error_log"
-	printf '\nPrompt picker failed (status %s).\nLog: %s\n' "$status" "$error_log" >&2
+	printf '\nCapability picker failed (status %s).\nLog: %s\n' "$status" "$error_log" >&2
 	if [[ -t 0 ]]; then
 		read -r -p 'Press Enter to close...' _
 	fi
@@ -27,38 +24,9 @@ report_error() {
 trap report_error ERR
 
 if [[ -z "$target_pane" ]] && command -v tmux >/dev/null 2>&1; then
-	target_pane="$(tmux show-option -gqv @fabric_prompt_target 2>/dev/null || true)"
+	target_pane="$(tmux show-option -gqv @capability_picker_target 2>/dev/null || true)"
 fi
 target_pane="${target_pane:-${TMUX_PANE:-}}"
-
-# Custom patterns only. The upstream fabric library adds 255 prompts written for
-# someone else's workflow, which buried the 13 that are actually mine. It stays on
-# disk for the `fabric` CLI; this picker just stops offering it.
-declare -A pattern_files=()
-pattern_roots=(
-	"$HOME/dev/dotfiles/.config/fabric/custom_patterns"
-	"$HOME/.config/fabric/custom_patterns"
-)
-
-load_patterns() {
-	local root file directory name
-	for root in "${pattern_roots[@]}"; do
-		[[ -d "$root" ]] || continue
-		while IFS= read -r -d '' file; do
-			directory="${file%/*}"
-			name="${directory##*/}"
-			# Prefer the first root, so dotfiles-owned prompts win over copies.
-			[[ -v "pattern_files[$name]" ]] || pattern_files["$name"]="$file"
-		done < <(find -L "$root" -mindepth 2 -maxdepth 2 -type f -name system.md -print0)
-	done
-}
-
-list_patterns() {
-	local name
-	for name in "${!pattern_files[@]}"; do
-		printf 'prompt\t%s\t%s\t-\tcustom\n' "$name" "${pattern_files[$name]}"
-	done | sort
-}
 
 copy_to_clipboard() {
 	if command -v xclip >/dev/null 2>&1; then
@@ -76,7 +44,7 @@ deliver_text() {
 		# The popup owns the client until this process exits. Paste afterwards so
 		# terminal UIs receive multiline text reliably.
 		tmux run-shell -b "sleep 0.15; tmux paste-buffer -b '$buffer_name' -t '$target_pane' -d"
-		tmux set-option -gu @fabric_prompt_target 2>/dev/null || true
+		tmux set-option -gu @capability_picker_target 2>/dev/null || true
 	elif printf '%s' "$content" | copy_to_clipboard; then
 		echo "Copied to clipboard: $label" >&2
 	else
@@ -84,13 +52,6 @@ deliver_text() {
 		return 1
 	fi
 }
-
-load_patterns
-
-if [[ "${1:-}" == "--list" ]]; then
-	list_patterns | cut -f2
-	exit 0
-fi
 
 agent="${CAPABILITY_PICKER_AGENT:-unknown}"
 pane_path="$PWD"
@@ -106,16 +67,17 @@ if [[ -n "$target_pane" ]] && tmux display-message -p -t "$target_pane" '#{pane_
 	fi
 fi
 
-list_capabilities() {
-	list_patterns
-	if [[ "$agent" == claude || "$agent" == codex ]]; then
-		bash "$skill_catalog" list "$agent" "$pane_path"
-	fi
-}
+# Every capability is an agent invocation, so an agentless pane has nothing to
+# receive one. Say which pane was inspected: the usual cause is firing the picker
+# at a plain shell rather than at a running claude or codex.
+if [[ "$agent" != claude && "$agent" != codex ]]; then
+	echo "No claude or codex session in the target pane (${target_pane:-none}); nothing to insert." >&2
+	exit 1
+fi
 
-capabilities="$(list_capabilities)"
+capabilities="$(bash "$skill_catalog" list "$agent" "$pane_path")"
 if [[ -z "$capabilities" ]]; then
-	echo "No prompts or skills found." >&2
+	echo "No skills or commands found for $agent." >&2
 	exit 1
 fi
 
@@ -123,59 +85,11 @@ selection="$(printf '%s\n' "$capabilities" | fzf \
 	--delimiter=$'\t' \
 	--with-nth='{1}  {5}  {2}' \
 	--prompt="Library ($agent)> " \
-	--header='Enter: insert skill or edit prompt  Ctrl-e: edit source  Esc: cancel' \
+	--header='Enter: insert  Ctrl-e: edit source  Esc: cancel' \
 	--bind='ctrl-e:execute(nvim {3})+refresh-preview' \
 	--preview='bat --style=plain --language=markdown --color=always {3}' \
 	--preview-window='right:60%:wrap')" || exit 0
 
-IFS=$'\t' read -r capability_kind capability_name capability_file invocation _capability_source <<< "$selection"
+IFS=$'\t' read -r _capability_kind capability_name _capability_file invocation _capability_source <<< "$selection"
 
-# Skills and commands are both invoked verbatim; only fabric prompts get edited.
-if [[ "$capability_kind" == skill || "$capability_kind" == command ]]; then
-	deliver_text "$invocation" "$capability_name"
-	exit 0
-fi
-
-pattern_name="$capability_name"
-pattern_file="$capability_file"
-prompt="$(cat "$pattern_file")"
-editor_input="$(printf '%s\n' "$prompt" | bash "$template_tool" prepare)"
-edit_file="$(mktemp --suffix=.md)"
-printf '%s\n' "$editor_input" > "$edit_file"
-accept_marker="$(mktemp)"
-rm -f "$accept_marker"
-if [[ -n "${VISUAL:-}" ]]; then
-	editor_spec="$VISUAL"
-elif [[ -n "${EDITOR:-}" ]]; then
-	editor_spec="$EDITOR"
-elif command -v nvim >/dev/null 2>&1; then
-	editor_spec=nvim
-else
-	editor_spec=/usr/bin/editor
-fi
-
-if CAPABILITY_PICKER_EDITOR="$editor_spec" \
-	CAPABILITY_PICKER_ACCEPT_FILE="$accept_marker" \
-	bash "$accept_editor" "$edit_file"; then
-	if [[ ! -e "$accept_marker" ]]; then
-		rm -f "$edit_file"
-		exit 0
-	fi
-	edited_prompt="$(cat "$edit_file")"
-	rm -f "$edit_file" "$accept_marker"
-else
-	edit_status=$?
-	rm -f "$edit_file" "$accept_marker"
-	exit "$edit_status"
-fi
-
-if [[ "$edited_prompt" == *'--- FABRIC PROMPT ---'* ]]; then
-	edited_prompt="$(printf '%s\n' "$edited_prompt" | bash "$template_tool" render)"
-fi
-
-if [[ -z "${edited_prompt//[[:space:]]/}" ]]; then
-	echo "Prompt is empty; nothing inserted." >&2
-	exit 0
-fi
-
-deliver_text "$edited_prompt" "$pattern_name"
+deliver_text "$invocation" "$capability_name"
