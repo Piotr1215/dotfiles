@@ -1,19 +1,19 @@
 {
-  "type": "phrase",
-  "description": "open <target> in browser (Claude prompt phrase)",
+  "type": "script",
+  "description": "open the discussed link in the browser",
+  "store": {},
   "modes": [
     1
   ],
   "usageCount": 0,
   "prompt": false,
   "omitTrigger": false,
-  "matchCase": false,
   "showInTrayMenu": false,
   "abbreviation": {
     "abbreviations": [
-      ";;browser"
+      ";;br"
     ],
-    "backspace": true,
+    "backspace": false,
     "ignoreCase": false,
     "immediate": true,
     "triggerInside": false,
@@ -26,6 +26,5 @@
   "filter": {
     "regex": null,
     "isRecursive": false
-  },
-  "sendMode": "<shift>+<insert>"
+  }
 }

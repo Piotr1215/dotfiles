@@ -80,8 +80,39 @@ build_row() {
         | sed 's/^/    /'
 }
 
+# Deliver a body: erase the trigger that launched us, then paste. Erasing only
+# after any UI has closed keeps it from racing AutoKey's own key injection, and
+# pasting (never typing) keeps newlines from landing as real Enters.
+paste_snippet() {
+    local file="$1" erase="$2" saved i backspaces=()
+    if [[ "$erase" =~ ^[0-9]+$ ]] && (( erase > 0 )); then
+        for ((i = 0; i < erase; i++)); do backspaces+=(BackSpace); done
+        xdotool key --clearmodifiers "${backspaces[@]}"
+    fi
+    saved="$(xclip -selection clipboard -o 2>/dev/null || true)"
+    reflow "$file" | xclip -selection clipboard
+    xdotool key --clearmodifiers shift+Insert
+    # Restore is delayed because the paste is asynchronous. A shortcut that
+    # silently eats whatever was copied before is worse than no shortcut.
+    ( sleep 1; printf '%s' "$saved" | xclip -selection clipboard ) >/dev/null 2>&1 &
+}
+
 mapfile -t files < <(list_files)
 (( ${#files[@]} > 0 )) || die "No snippets in $SNIPPETS_DIR"
+
+# Direct mode: a trigger bound straight to one snippet, no menu. The name may be
+# given with or without its extension, so ";;br" survives done-check.md becoming
+# done-check.txt later.
+if [[ -n "${2:-}" ]]; then
+    want="$2"
+    direct=""
+    for f in "${files[@]}"; do
+        [[ "$f" == "$want" || "${f%.*}" == "$want" ]] && { direct="$SNIPPETS_DIR/$f"; break; }
+    done
+    [[ -n "$direct" ]] || die "No snippet named '$want' in $SNIPPETS_DIR"
+    paste_snippet "$direct" "${1:-0}"
+    exit 0
+fi
 
 if [[ "${1:-}" == "--list" ]]; then
     for f in "${files[@]}"; do build_row "$f"; echo "---"; done
@@ -143,22 +174,4 @@ if (( edit )); then
     die "No terminal found to run $editor"
 fi
 
-# Erase the trigger that launched us (e.g. ";;ai"), after rofi has closed so it
-# never races AutoKey's key injection. Same guard as __value_picker.sh.
-erase="${1:-0}"
-if [[ "$erase" =~ ^[0-9]+$ ]] && (( erase > 0 )); then
-    backspaces=()
-    for ((i = 0; i < erase; i++)); do backspaces+=(BackSpace); done
-    xdotool key --clearmodifiers "${backspaces[@]}"
-fi
-
-# Paste: stash the clipboard, put the body there, shift+Insert, put it back.
-# The restore is delayed because the paste is asynchronous, and a clipboard that
-# silently eats whatever was copied before is worse than no shortcut at all.
-saved="$(xclip -selection clipboard -o 2>/dev/null || true)"
-reflow "$file" | xclip -selection clipboard
-xdotool key --clearmodifiers shift+Insert
-(
-    sleep 1
-    printf '%s' "$saved" | xclip -selection clipboard
-) >/dev/null 2>&1 &
+paste_snippet "$file" "${1:-0}"

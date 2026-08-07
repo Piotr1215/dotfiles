@@ -58,12 +58,16 @@ case "$entry_type" in
         py="$dir/$name.py"
         # Every script entry is a subprocess.Popen list of quoted strings, so run
         # that argv directly instead of pattern-matching one known picker. The
-        # trailing erase count is forced to 0: the trigger was cleaned above, and
-        # a stale count would eat the user's own text.
+        # erase count is forced to 0: the trigger was cleaned above, and a stale
+        # count would eat the user's own text. It is the first purely numeric
+        # argument, since set names and snippet names never are.
         mapfile -t argv < <(grep -m1 'subprocess\.Popen' "$py" 2>/dev/null \
             | grep -oE '"[^"]*"' | tr -d '"')
         if (( ${#argv[@]} > 0 )) && [[ -x "${argv[0]}" ]]; then
-            [[ "${argv[-1]}" =~ ^[0-9]+$ ]] && argv[-1]=0
+            for i in "${!argv[@]}"; do
+                (( i == 0 )) && continue
+                [[ "${argv[i]}" =~ ^[0-9]+$ ]] && { argv[i]=0; break; }
+            done
             "${argv[@]}"
         else
             notify-send "Bang menu" "Cannot auto-run script: $name"
