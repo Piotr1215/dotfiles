@@ -15,15 +15,25 @@
 #   __ddgx.sh -n 15 -d etcd defrag | less -R
 #   __ddgx.sh site:kubernetes.io hpa          # ddgr syntax still works
 #
-# Keys in the picker. tab marks results, and every action below applies to the
-# whole marked set, so mark five and hit one key:
+# Keys in the picker. tab marks results, and ctrl-e, ctrl-a, ctrl-y and ctrl-r
+# apply to the whole marked set, so mark five and hit one key:
 #   tab      mark / unmark          enter   open in the browser
-#   ctrl-o   read extracts in a pager
+#   ctrl-o   do the obvious thing with whatever the preview is showing:
+#            a video or playlist opens in the player, a page whose text could
+#            not be extracted is rendered in a headless browser and shown, and
+#            anything else opens the marked extracts in a pager
 #   ctrl-e   open extracts in nvim as markdown notes (kept, re-openable)
 #   ctrl-a   bookmark into pet-links.toml, the file plink writes
 #   ctrl-y   copy the URLs          ctrl-r  re-fetch (bypass cache)
-#   alt-q    refine the query       ctrl-\  toggle the preview pane
+#   alt-q    refine the query       ctrl-v  toggle the preview pane
 #   ctrl-d/u scroll the preview
+#
+# One key rather than three. Play, render and read were ctrl-v, ctrl-x and
+# ctrl-o, three keys you had to hold in your head along with which one the row
+# under the cursor would accept. But the preview pane has already worked out
+# what the result is by the time you reach for a key: it is showing a video, or
+# it is showing the red line that says the text could not be extracted, or it
+# is showing the text. So the key asks the preview rather than asking you.
 #
 # alt-q builds the query instead of asking you to recall the syntax. Pick an
 # operator, fill in its value, and the search re-runs under the picker. site:
@@ -34,7 +44,9 @@
 #
 # Env: DDGX_TTL (cache seconds, default 86400), DDGX_JOBS (prefetch
 # concurrency, default 6), DDGX_NUM (default result count), DDGX_EDITOR
-# (ctrl-e editor, default nvim), DDGX_PET_FILE (bookmark file).
+# (ctrl-e editor, default nvim), DDGX_PET_FILE (bookmark file), DDGX_PLAYER
+# (the player ctrl-o opens a video in, default mpv), DDGX_PLAYER_ARGS (extra
+# player arguments).
 set -eo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -57,7 +69,36 @@ PET_LINKS="${DDGX_PET_FILE:-$HOME/dev/pet-snippets/pet-links.toml}"
 # readline's transpose-chars. Cross-checking readline, tmux's root table, fzf's
 # defaults and the keys above leaves alt-h, alt-j, alt-q and alt-v; alt-q is
 # the one that stands for something.
-PICKER_KEYS='tab mark · enter open · ctrl-o read · ctrl-e nvim · ctrl-a bookmark · ctrl-y copy · ctrl-r refetch · alt-q refine'
+#
+# There was an audit here for the three keys play, render and yt-x used to
+# hold. It is gone with them. A key spend is a budget nobody was asking to
+# spend: the whole of that audit bought three keys that each did one thing to
+# some rows and nothing to the others, and the fix was not a better key but
+# one fewer. What is left fits inside fzf's and readline's defaults without
+# argument.
+#
+# ctrl-v toggles the preview, taking over from ctrl-\, which never worked and
+# could not. .tmux.conf binds C-\ in the ROOT table, which answers before the
+# pane's program is offered the key at all, so tmux switched panes and fzf
+# received nothing. Every ddgx session runs inside tmux through the M-g popup,
+# so the key was dead in practice for as long as the header advertised it.
+#
+# How that was established matters, because the obvious probe gives the wrong
+# answer. `tmux send-keys` injects into the pane and BYPASSES the root table,
+# so a send-keys test shows only that fzf handles a key, never that the key
+# would reach fzf in use. The evidence is .tmux.conf's own root bindings, which
+# claim C-h, C-j, C-k, C-l and C-\ and nothing else in the ctrl space. Read the
+# config, do not probe. ctrl-v is clear there, clear of fzf's ctrl defaults
+# (a b c d e f g h i j k l n p q u w y), and free at all because collapsing
+# play, render and yt-x into ctrl-o gave three keys back.
+#
+# Two lines, because one is longer than the pane. fzf gives the header the
+# width of the result list, not of the terminal, so at the default 58% preview
+# a single line is cut around 98 columns and everything after it is simply
+# gone. A key you cannot see does not exist, so both lines have to stay short
+# enough to survive that cut. The suite measures them.
+PICKER_KEYS='tab mark · enter open · ctrl-o play, render or read · ctrl-e nvim
+ctrl-a bookmark · ctrl-y copy · ctrl-r refetch · alt-q refine · ctrl-v preview'
 
 # Print the header comment block: everything between the shebang and the first
 # line of code, so the help text cannot drift out of sync with a line range.
@@ -128,12 +169,33 @@ current_query() {
 
 set_note() { printf '%s\n' "$2" >"$(note_file "$1")"; }
 
-# Path of the extract cache entry for a URL.
-cache_file() {
-	local key
-	key=$(printf '%s' "$1" | sha1sum | cut -d' ' -f1)
-	printf '%s/%s.txt' "$CACHE_DIR" "$key"
+# Everything cached about one URL shares a name: the sha1 of the URL, with the
+# extension saying which of the three files it is. The extractor computes the
+# same key from the same URL, which is what lets the two sides find each
+# other's writes without passing paths around.
+cache_key() {
+	printf '%s' "$1" | sha1sum | cut -d' ' -f1
 }
+
+# Path of the extract cache entry for a URL.
+cache_file() { printf '%s/%s.txt' "$CACHE_DIR" "$(cache_key "$1")"; }
+
+# The sidecar the extractor writes beside an entry when the URL turned out to
+# hold a video or a playlist rather than a page: kind, title, thumbnail,
+# webpage_url and duration, as JSON. It exists if and only if there is
+# something to play, so its presence is the answer to "is this playable" and
+# this script never re-derives that answer from the URL when it is there.
+#
+# The reason for taking the extractor's word is that the extractor asked
+# yt-dlp, and yt-dlp is what will have to play the thing. A URL that looks like
+# a video and that yt-dlp cannot resolve is not playable however much it looks
+# the part, and no amount of pattern matching over a URL finds that out.
+media_file() { printf '%s/%s.media' "$CACHE_DIR" "$(cache_key "$1")"; }
+
+# The still frame, downloaded once and kept. The preview command runs again on
+# every keystroke that moves the selection, so a thumbnail fetched per keypress
+# would make the pane slower than the page extract drawn under it.
+thumb_file() { printf '%s/%s.jpg' "$CACHE_DIR" "$(cache_key "$1")"; }
 
 # True when a cache entry exists and is within TTL. TTL of 0 never expires.
 cache_fresh() {
@@ -162,7 +224,45 @@ extract_to_cache() {
 	mkdir -p "$CACHE_DIR"
 	tmp="$file.$$"
 	EXTRACT_ERROR=""
-	if node "$READABLE" --url "$url" --stats >"$tmp" 2>"$tmp.err"; then
+	# --cache is here for the sidecar, not for the text: it is what makes the
+	# extractor record that this URL held a video, and that record is the only
+	# thing telling the picker a result is playable. The text still arrives on
+	# stdout, and an empty stdout is never allowed to overwrite the entry, so an
+	# extractor that writes the file itself and one that only prints it both
+	# come out the same.
+	local rc=0
+	node "$READABLE" --url "$url" --cache "$CACHE_DIR" --stats \
+		>"$tmp" 2>"$tmp.err" || rc=$?
+	if [[ $rc -eq 0 ]]; then
+		[[ -s $tmp ]] && mv -f "$tmp" "$file"
+		rm -f "$tmp" "$tmp.err"
+		if [[ -s $file ]]; then
+			return 0
+		fi
+		EXTRACT_ERROR='the extractor returned no text'
+		return 1
+	fi
+	EXTRACT_ERROR=$(head -1 "$tmp.err" 2>/dev/null || true)
+	rm -f "$tmp" "$tmp.err"
+	return 1
+}
+
+# Escalate one URL to the deep extractor and overwrite whatever the cheap path
+# left in the cache. The engine renders the page in headless Chrome and falls
+# back to a w3m text dump of the DOM that came out, which costs 5 to 25 seconds
+# and is why nothing calls this on its own.
+#
+# Deliberately not TTL-aware, unlike extract_to_cache: you ask for this because
+# what is on screen is wrong, and a fresh-but-useless entry is precisely the
+# thing to replace. A failed render leaves the old entry standing, because a
+# thin extract still beats an empty pane.
+deep_extract() {
+	local url=$1 file tmp
+	file=$(cache_file "$url")
+	mkdir -p "$CACHE_DIR"
+	tmp="$file.$$"
+	EXTRACT_ERROR=""
+	if node "$READABLE" --deep --url "$url" --stats >"$tmp" 2>"$tmp.err"; then
 		mv -f "$tmp" "$file"
 		rm -f "$tmp.err"
 		return 0
@@ -253,7 +353,13 @@ prompt_for_query() {
 	# Say these are the result keys. Listed bare they read as available on this
 	# screen, where read -e owns the line and there is not yet a result set to
 	# refine.
-	hint='in the results:  tab mark  enter open  ctrl-o read  ctrl-e nvim  alt-q refine'
+	#
+	# A selection, not the whole list, and its length is load-bearing: this is
+	# centred on one line, and a hint that wraps pushes the cursor arithmetic
+	# below it off by a row and draws the input box in the wrong place. The keys
+	# left off it are in the picker's own header, where they apply. None of
+	# these work on this screen either, which is why the line says where they do.
+	hint='in the results:  tab mark  enter open  ctrl-o play, render or read  alt-q refine'
 	clear 2>/dev/null || true
 
 	local width fill
@@ -463,7 +569,7 @@ run_query() {
 # ---------------------------------------------------------------------------
 
 mode_preview() {
-	local file=$1 idx=$2 width url title abstract cached
+	local file=$1 idx=$2 width url title abstract cached still
 	width=$((${FZF_PREVIEW_COLUMNS:-100} - 2))
 	[[ $width -lt 40 ]] && width=40
 
@@ -473,6 +579,23 @@ mode_preview() {
 
 	printf '\033[1;36m%s\033[0m\n' "$title"
 	printf '\033[33m%s\033[0m\n\n' "$url"
+
+	if is_playable "$url"; then
+		# The still frame goes above the metadata and the transcript, so the
+		# pane opens with the one thing that says what this video is faster
+		# than any line of text under it can.
+		#
+		# Sized to a share of the pane rather than to the pane, because the
+		# text below it is the reason the result is in a search tool at all.
+		still=$((${FZF_PREVIEW_LINES:-30} * 2 / 5))
+		[[ $still -lt 8 ]] && still=8
+		[[ $still -gt 20 ]] && still=20
+		if show_still "$url" "$width" "$still"; then
+			printf '\n'
+		fi
+		printf '\033[90m(ctrl-o opens it in the player)\033[0m\n\n'
+	fi
+
 	if [[ -n $abstract ]]; then
 		printf '\033[90m%s\033[0m\n\n' "$(printf '%s' "$abstract" | fold -s -w "$width")"
 	fi
@@ -484,7 +607,11 @@ mode_preview() {
 		render_markdown "$cached" "$width"
 		printf '\n'
 	else
+		# Name the way out here rather than only in the help text. This line is
+		# the one moment the escalation means anything, and a reason with no
+		# next step is where the tool used to stop.
 		printf '\033[31m(no page text: %s)\033[0m\n' "$(extract_failure_reason)"
+		printf '\033[90m(ctrl-o loads it in a headless browser and reads that, a few seconds)\033[0m\n'
 	fi
 }
 
@@ -635,6 +762,67 @@ mode_refetch() {
 	done
 }
 
+# ctrl-o. One key, three things, chosen by what the preview pane is showing for
+# the result under the cursor.
+#
+# The choice is made from the same state the pane drew itself from, which is
+# what keeps the key honest: it cannot offer to play something the pane is not
+# showing as a video, and it cannot offer to render a page whose text is
+# already on screen.
+#
+# Nothing is done here except the render. This runs as fzf's transform action,
+# whose contract is that the command prints fzf actions and fzf performs them,
+# and that indirection is what lets one key reach three different fzf
+# mechanisms from one place:
+#
+#   play    the player is launched detached, in its own window, and the header
+#           is asked to say so. See play_detached for why the window and not
+#           the preview pane.
+#   render  the deep extractor is slow and silent, so it runs here, where fzf
+#           is already holding the picker still, and the pane is refreshed
+#           over the new cache entry afterwards.
+#   read    the pager wants the whole terminal, which is what execute() hands
+#           it. fzf restores the picker when it exits.
+#
+# The render never fires on its own when the cheap extract fails, and that is
+# still true with it behind a shared key: the deep path costs 5 to 25 seconds
+# a page, and a preview that blocked for that long while you arrowed down a
+# result list would teach you to stop moving the cursor. Spending the time on a
+# keypress is a choice, having it spent for you is not.
+mode_action() {
+	local file=$1 idx=$2 url
+	shift 2
+	url=$(result_field "$idx" "$file" url)
+
+	if is_playable "$url"; then
+		play_detached "$file" "$url"
+		printf 'transform-header(%s --header %s)' "$SELF" "$file"
+		return 0
+	fi
+
+	# No cache entry means the cheap extract could not read this page. The
+	# preview ran it before you got here, and a failed extract is never cached,
+	# so the absence of the file is the same fact the red line in the pane is
+	# reporting. Testing it costs nothing, where re-running the extract to find
+	# out would put a second fetch between the keypress and the render.
+	if [[ -n $url && ! -s $(cache_file "$url") ]]; then
+		# Set before the work as well as after. fzf holds the picker frozen for
+		# the whole of this, so if it is cut short partway the header still says
+		# what the key was doing rather than showing the last unrelated note.
+		set_note "$file" 'rendering in a browser, this takes a moment'
+		if deep_extract "$url"; then
+			set_note "$file" 'rendered the slow way'
+		else
+			set_note "$file" "still unreadable: $(extract_failure_reason)"
+		fi
+		printf 'refresh-preview+transform-header(%s --header %s)' "$SELF" "$file"
+		return 0
+	fi
+
+	# Everything else: the marked set, in a pager, exactly as ctrl-o always did.
+	printf 'execute(%s --read %s %s)' "$SELF" "$file" "$*"
+}
+
 mode_open() {
 	local url=$1
 	if [[ -n ${BROWSER:-} ]] && command -v "$BROWSER" >/dev/null 2>&1; then
@@ -642,6 +830,187 @@ mode_open() {
 	else
 		nohup xdg-open "$url" >/dev/null 2>&1 &
 	fi
+}
+
+# True when a URL names something a player can open rather than a page to read.
+#
+# Matched on hostname plus path, never on a substring of the whole URL. Search
+# results are full of pages that carry "youtube.com/watch?v=..." inside their
+# own query string, an aggregator or a redirect wrapper, and a substring test
+# hands one of those to the player, which then plays the wrapper. Cutting the
+# query and the fragment off first is what makes the host and the path mean
+# what they say.
+is_media_url() {
+	local url=$1 rest host path query=''
+	rest=${url#*://}
+	rest=${rest%%\#*}
+	# One exception to the rule above: a youtube playlist names what to play in
+	# its query and nowhere else, so the query is kept for that case alone.
+	[[ $rest == *\?* ]] && query=${rest#*\?}
+	rest=${rest%%\?*}
+	host=${rest%%/*}
+	path=${rest#"$host"}
+	host=${host%%:*}
+	host=${host,,}
+	host=${host#www.}
+
+	case $host in
+	youtube.com | m.youtube.com)
+		# /feed, /results, /@channel and the bare front page are pages, not
+		# something to hand a player: only the paths naming something to play.
+		[[ $path == /watch || $path == /shorts/?* ]] && return 0
+		# A playlist is playable too. yt-dlp resolves list= into its videos and
+		# the player takes the whole run as a queue, which is the same thing
+		# marking five results and hitting play already does.
+		[[ $path == /playlist && $query == *list=* ]]
+		;;
+	youtu.be)
+		# The whole host is the shortener, so any id at all is a video.
+		[[ $path == /?* ]]
+		;;
+	vimeo.com | player.vimeo.com)
+		# vimeo.com/76979871, and the channel and embed forms that end the same
+		# way. /upgrade and /features end in a word, so they miss.
+		[[ $path =~ ^(/[A-Za-z0-9_-]+)*/[0-9]+/?$ ]]
+		;;
+	twitch.tv | m.twitch.tv) [[ $path == /videos/?* || $path == /clips/?* ]] ;;
+	dailymotion.com) [[ $path == /video/?* ]] ;;
+	# Odysee names a video either under its channel or with a claim id after a
+	# colon; /$/download and the rest of the site have neither.
+	odysee.com) [[ $path == /@*/?* || $path == /*:* ]] ;;
+	rumble.com) [[ $path == /v*.html || $path == /embed/?* ]] ;;
+	*) return 1 ;;
+	esac
+}
+
+# Read one field out of the media sidecar. Missing file, missing field and
+# malformed JSON all come back empty, because a preview pane is the wrong place
+# to learn that a cache file was truncated.
+media_field() {
+	local sidecar=$1 field=$2
+	[[ -s $sidecar ]] || return 0
+	jq -r --arg f "$field" '.[$f] // ""' "$sidecar" 2>/dev/null || true
+}
+
+# True when this result is something to play rather than a page to read.
+#
+# The sidecar answers first and its answer is final: the extractor got it from
+# yt-dlp, which is the tool that would have to play the thing. is_media_url is
+# the fallback for the case where the extractor has not answered at all, a
+# prefetch that has not landed yet or an extract that never ran, and it is
+# still worth having because a youtu.be link is a video whether or not anything
+# has looked at it yet.
+is_playable() {
+	local url=$1
+	[[ -z $url ]] && return 1
+	if [[ -s $(media_file "$url") ]]; then
+		return 0
+	fi
+	is_media_url "$url"
+}
+
+# Seconds the URL resolve may take before the pane says so and gives up. Long
+# enough for yt-dlp to walk a playlist, short enough that a pane which is going
+# to fail says so while you are still looking at it.
+# Draw the still frame for a media result, the thumbnail the sidecar names.
+#
+# chafa's symbol output is plain text with colour, so it needs no image
+# protocol from the terminal and no cooperation from fzf: it draws inside the
+# preview border in alacritty exactly like the extract under it does.
+show_still() {
+	local url=$1 cols=$2 lines=$3 jpg thumb
+	command -v chafa >/dev/null 2>&1 || return 1
+	jpg=$(thumb_file "$url")
+	if [[ ! -s $jpg ]]; then
+		thumb=$(media_field "$(media_file "$url")" thumbnail)
+		[[ -z $thumb ]] && return 1
+		command -v curl >/dev/null 2>&1 || return 1
+		mkdir -p "$CACHE_DIR"
+		curl -fsSL --max-time 10 -o "$jpg.$$" "$thumb" >/dev/null 2>&1 ||
+			{
+				rm -f "$jpg.$$"
+				return 1
+			}
+		[[ -s $jpg.$$ ]] || {
+			rm -f "$jpg.$$"
+			return 1
+		}
+		mv -f "$jpg.$$" "$jpg"
+	fi
+	chafa --format symbols --size "${cols}x${lines}" "$jpg" 2>/dev/null
+}
+
+# Open a result in the player, in its own window, detached the way mode_open
+# detaches: the picker stays up and the player must neither own its terminal
+# nor die with the keypress that started it.
+#
+# The video does not play in the preview pane, and that was tried rather than
+# assumed. mpv's tct output does draw inside the preview border, but a 58
+# column pane is about 58 by 40 effective pixels, and at that size a video is
+# something you can identify and not something you can watch. Alacritty has
+# neither sixel nor the kitty graphics protocol, so there is no sharper version
+# of it to reach for. The still frame above stays because a single frame at
+# that size still says what the video is; motion at that size does not.
+#
+# Every stream of output is closed off. A detached player that kept stdout or
+# stderr would write over the result list from behind fzf, which is where the
+# stack of unattributable errors came from: nothing on screen said which result
+# was complaining, or that a player was complaining at all.
+# The page URL goes to the player untouched, and that is the point rather than
+# an omission. This used to pre-resolve with `yt-dlp --get-url` and hand over a
+# direct stream, which capped playback at 720p by construction: --get-url can
+# only return a progressive format, and on YouTube everything above 720p exists
+# only as separate DASH video and audio the player has to merge itself. No
+# choice of -f fixes that, so the resolve had to go rather than be retuned.
+# Given the URL, mpv applies the ytdl-format chain in the user's own mpv.conf,
+# which is where the quality preference belongs.
+play_detached() {
+	local file=$1 url=$2 player args=() log pid rc=0 reason i
+	player=${DDGX_PLAYER:-mpv}
+	if ! command -v "$player" >/dev/null 2>&1; then
+		set_note "$file" "$player not found: set DDGX_PLAYER"
+		return 0
+	fi
+	read -ra args <<<"${DDGX_PLAYER_ARGS:-}" || true
+
+	# A log file rather than /dev/null. Nothing here may reach the terminal, or
+	# it paints over the result list from behind fzf, which is where the stack
+	# of unattributable errors came from. But a player that dies on the URL has
+	# the only account of why, and discarding it is how a key comes to report
+	# "playing" over a window that never appeared.
+	mkdir -p "$CACHE_DIR"
+	log="$CACHE_DIR/player.log"
+	nohup "$player" "${args[@]}" "$url" >"$log" 2>&1 &
+	pid=$!
+
+	# A launch that is going to fail outright fails at once, before a window is
+	# mapped, so a short bounded look is enough to tell that from a launch that
+	# took. It is deliberately not a wait for playback to start: the player
+	# resolves the URL itself and that takes seconds, which is time the picker
+	# is not going to spend frozen. A failure that arrives after this window
+	# belongs to the player's own window, where the user is already looking.
+	for ((i = 0; i < 4; i++)); do
+		kill -0 "$pid" 2>/dev/null || break
+		sleep 0.25
+	done
+	if kill -0 "$pid" 2>/dev/null; then
+		# A detached launch is otherwise completely silent, and a key that looks
+		# like it did nothing is a key you press again.
+		set_note "$file" "playing in $player"
+		return 0
+	fi
+
+	wait "$pid" 2>/dev/null || rc=$?
+	if [[ $rc -eq 0 ]]; then
+		set_note "$file" "$player exited straight away"
+		return 0
+	fi
+	# The player's own words. A guess here would repeat the mistake the extract
+	# failures used to make: a generic "cannot play" sends you looking at the
+	# player when the answer is that the video is private.
+	reason=$(grep -m1 . "$log" 2>/dev/null || true)
+	[[ -z $reason ]] && reason="$player exited $rc"
+	set_note "$file" "cannot play: $reason"
 }
 
 # The picker's rows: the result index, then a numbered title with its domain.
@@ -786,6 +1155,11 @@ mode_pick() {
 
 	prefetch "$file"
 
+	# ctrl-o is a transform rather than an execute: mode_action prints the fzf
+	# actions and fzf performs them, which is how one key reaches the pager, the
+	# renderer and the preview-pane player. Its stderr goes to /dev/null because
+	# anything a dispatcher prints outside that action list is noise landing on
+	# the picker, and the pane is where a reason belongs.
 	selected=$(
 		mode_list "$file" |
 			fzf --ansi --multi \
@@ -794,13 +1168,13 @@ mode_pick() {
 				--header="$(mode_header "$file")" \
 				--preview="$SELF --preview '$file' {1}" \
 				--preview-window='right,58%,wrap,border-left' \
-				--bind="ctrl-o:execute($SELF --read '$file' {+1})" \
+				--bind="ctrl-o:transform($SELF --action '$file' {1} {+1} 2>/dev/null)" \
 				--bind="ctrl-e:execute($SELF --edit '$file' {+1})" \
 				--bind="ctrl-a:execute-silent($SELF --bookmark '$file' {+1})+transform-header($SELF --header '$file')" \
 				--bind="ctrl-y:execute-silent($SELF --copy '$file' {+1})" \
 				--bind="ctrl-r:execute-silent($SELF --refetch '$file' {+1})+refresh-preview" \
 				--bind="alt-q:execute($SELF --refine '$file' $num)+reload($SELF --list '$file')+transform-header($SELF --header '$file')" \
-				--bind='ctrl-\:change-preview-window(hidden|right,58%,wrap,border-left)' \
+				--bind='ctrl-v:change-preview-window(hidden|right,58%,wrap,border-left)' \
 				--bind='ctrl-d:preview-half-page-down' \
 				--bind='ctrl-u:preview-half-page-up' || true
 	)
@@ -851,6 +1225,11 @@ main() {
 	--refetch)
 		shift
 		mode_refetch "$@"
+		return 0
+		;;
+	--action)
+		shift
+		mode_action "$@"
 		return 0
 		;;
 	--list)

@@ -720,6 +720,349 @@ EOF
 	[[ "${lines[2]}" == "2	"* ]]
 }
 
+# --------------------------------------------------------------------------
+# Media results, and the one key that acts on them.
+#
+# ctrl-o is contextual: it plays a video in the preview pane, renders a page
+# whose text could not be extracted, or opens the marked extracts in a pager,
+# and it decides which from the same state the preview pane drew itself from.
+# It runs as fzf's transform action, so --action prints fzf actions rather than
+# performing them, and the tests below read that printed list.
+#
+# is_media_url has no mode of its own, so these reach it by sourcing the script.
+# --help makes main print the header block and return before it reaches mktemp
+# or installs a trap, which leaves the functions defined and nothing else done.
+# --------------------------------------------------------------------------
+
+is_media() {
+	run bash -c 'ddgx=$1; url=$2; source "$ddgx" --help >/dev/null 2>&1
+		is_media_url "$url"' _ "$DDGX" "$1"
+}
+
+# The player is launched detached, so the script returns before the stub has
+# necessarily written anything. Wait for the write instead of racing it.
+wait_for_line_matching() {
+	local path=$1 pattern=$2 i
+	for ((i = 0; i < 50; i++)); do
+		if grep -q "$pattern" "$path" 2>/dev/null; then
+			return 0
+		fi
+		sleep 0.1
+	done
+	return 1
+}
+
+write_media_results() {
+	printf '%s\n' '[{"title":"A conference talk","url":"https://www.youtube.com/watch?v=aaa111","abstract":"a"},{"title":"A short","url":"https://youtu.be/bbb222","abstract":"b"}]' \
+		>"$BATS_TEST_TMPDIR/results.json"
+	printf '%s\n' 'kubernetes talks' >"$BATS_TEST_TMPDIR/results.json.query"
+}
+
+# Write the sidecar __readable.mjs leaves beside a cache entry when a url turned
+# out to hold a video or a playlist. Same key as seed_cache, the sha1 of the
+# url, which is the contract the two sides find each other's writes through.
+# Its presence is what makes a result playable, so a test that wants a video
+# writes one and a test that wants a page does not.
+seed_media() {
+	local url=$1 title=$2 thumb=$3 key
+	key=$(printf '%s' "$url" | sha1sum | cut -d' ' -f1)
+	mkdir -p "$CACHE_HOME/ddgx"
+	jq -n --arg t "$title" --arg th "$thumb" --arg w "$url" \
+		'{kind:"video",title:$t,thumbnail:$th,webpage_url:$w,duration:213}' \
+		>"$CACHE_HOME/ddgx/$key.media"
+}
+
+# The player, and a yt-dlp that exists only so a test can prove it is never
+# called: ddgx must not pre-resolve, because --get-url can only return a
+# progressive format and that caps playback at 720p.
+#
+# The player stub sleeps rather than returning, because a launch that exits at
+# once is exactly what play_detached reads as a failure.
+stub_player_chain() {
+	local log=$1
+	cat >"$STUB_BIN/yt-dlp" <<EOF
+#!/usr/bin/env bash
+printf 'YTDLP %s\n' "\$*" >>"$log"
+EOF
+	cat >"$STUB_BIN/mpv" <<EOF
+#!/usr/bin/env bash
+printf 'MPV %s\n' "\$*" >>"$log"
+sleep 3
+EOF
+	chmod +x "$STUB_BIN/yt-dlp" "$STUB_BIN/mpv"
+}
+
+# The still frame: a curl that writes bytes wherever -o points, and a chafa
+# that says it drew. Stubbed rather than real so no test reaches the network
+# for a thumbnail.
+stub_still() {
+	local log=$1
+	cat >"$STUB_BIN/curl" <<EOF
+#!/usr/bin/env bash
+printf 'CURL %s\n' "\$*" >>"$log"
+while [ \$# -gt 0 ]; do
+	if [ "\$1" = "-o" ]; then
+		printf 'JPEGBYTES\n' >"\$2"
+		shift
+	fi
+	shift
+done
+EOF
+	cat >"$STUB_BIN/chafa" <<EOF
+#!/usr/bin/env bash
+printf 'CHAFA %s\n' "\$*" >>"$log"
+printf 'STILL-FRAME\n'
+EOF
+	chmod +x "$STUB_BIN/curl" "$STUB_BIN/chafa"
+}
+
+# ctrl-o. Takes the results file, the focused index, then every marked index,
+# which is what fzf's {1} and {+1} hand it.
+run_action() {
+	run env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" DDGX_TTL=0 \
+		bash "$DDGX" --action "$@"
+}
+
+# One render of the preview pane, with the pane geometry fzf would export.
+run_preview() {
+	run env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" DDGX_TTL=0 \
+		FZF_PREVIEW_COLUMNS=80 FZF_PREVIEW_LINES=24 \
+		bash "$DDGX" --preview "$BATS_TEST_TMPDIR/results.json" "$1"
+}
+
+# A video result the extractor has already answered for: sidecar, extract and
+# both stub chains in place.
+write_playable_state() {
+	local url="https://www.youtube.com/watch?v=aaa111"
+	PLAYER_LOG="$BATS_TEST_TMPDIR/player.log"
+	write_media_results
+	seed_media "$url" "A conference talk" "https://i.ytimg.com/vi/aaa111/hq.jpg"
+	seed_cache "$url" "the video's own metadata and transcript"
+	stub_player_chain "$PLAYER_LOG"
+	stub_still "$PLAYER_LOG"
+}
+
+@test "is_media_url recognises the hosts a player can open" {
+	local url
+	for url in \
+		"https://www.youtube.com/watch?v=dQw4w9WgXcQ" \
+		"https://m.youtube.com/watch?v=dQw4w9WgXcQ" \
+		"https://www.youtube.com/shorts/abc123def" \
+		"https://www.youtube.com/playlist?list=PLrAXtmRdnEQy6nuLMfO6uJhAP7CGYCzHk" \
+		"https://youtu.be/dQw4w9WgXcQ" \
+		"https://vimeo.com/76979871" \
+		"https://vimeo.com/channels/staffpicks/76979871" \
+		"https://www.twitch.tv/videos/1234567890" \
+		"https://www.twitch.tv/clips/AwkwardHelplessSalamander" \
+		"https://www.dailymotion.com/video/x8abcde" \
+		"https://odysee.com/@channel:1/some-video:2" \
+		"https://rumble.com/v1abcde-a-title.html"; do
+		is_media "$url"
+		if [ "$status" -ne 0 ]; then
+			echo "expected a media url: $url" >&2
+			return 1
+		fi
+	done
+}
+
+@test "is_media_url matches on host and path, never on a substring" {
+	local url
+	for url in \
+		"https://kubernetes.io/docs/concepts/workloads/" \
+		"https://www.youtube.com/feed/subscriptions" \
+		"https://www.youtube.com/@somechannel" \
+		"https://www.youtube.com/playlist" \
+		"https://news.example.com/story?src=https://www.youtube.com/watch?v=abc" \
+		"https://notyoutube.com/watch?v=abc" \
+		"https://example.com/blog/youtu.be/why-i-hate-shorteners" \
+		"https://vimeo.com/upgrade"; do
+		is_media "$url"
+		if [ "$status" -eq 0 ]; then
+			echo "expected not a media url: $url" >&2
+			return 1
+		fi
+	done
+}
+
+@test "ctrl-o on a video opens the player and says so in the header" {
+	write_playable_state
+
+	run_action "$BATS_TEST_TMPDIR/results.json" 0 0
+
+	[ "$status" -eq 0 ]
+	wait_for_line_matching "$PLAYER_LOG" '^MPV '
+
+	# The player takes its own window and the picker stays up, so the only sign
+	# the key did anything is the note. A detached launch is otherwise silent,
+	# and a key that looks like it did nothing is a key you press again.
+	[[ "$output" == "transform-header("* ]]
+	run bash "$DDGX" --header "$BATS_TEST_TMPDIR/results.json"
+	[[ "$output" == *"playing in mpv"* ]]
+}
+
+@test "ctrl-o on a page whose extract failed renders it in a browser" {
+	printf '%s\n' '[{"title":"Blocked","url":"https://blocked.invalid/x","abstract":"nope"}]' \
+		>"$BATS_TEST_TMPDIR/results.json"
+	local args="$BATS_TEST_TMPDIR/node.args"
+	cat >"$STUB_BIN/node" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >>"$args"
+printf 'the body only a browser could build\n'
+EOF
+	chmod +x "$STUB_BIN/node"
+
+	run_action "$BATS_TEST_TMPDIR/results.json" 0 0
+
+	# No cache entry is the same fact the red line in the pane is reporting: a
+	# failed extract is never cached, and the preview ran it before you got
+	# here. That is what picks the deep path for this row and no other.
+	[ "$status" -eq 0 ]
+	grep -q -- '--deep --url https://blocked.invalid/x --stats' "$args"
+	[[ "$output" == "refresh-preview+transform-header("* ]]
+
+	# The cache entry is replaced, not left at the extract that was too thin to
+	# read, so the refreshed preview shows the render.
+	local key
+	key=$(printf '%s' "https://blocked.invalid/x" | sha1sum | cut -d' ' -f1)
+	[ "$(cat "$CACHE_HOME/ddgx/$key.txt")" = "the body only a browser could build" ]
+
+	run bash "$DDGX" --header "$BATS_TEST_TMPDIR/results.json"
+	[[ "$output" == *"rendered the slow way"* ]]
+}
+
+@test "ctrl-o on anything else reads the marked set in a pager" {
+	write_two_results
+
+	run_action "$BATS_TEST_TMPDIR/results.json" 0 0 1
+
+	# The behaviour ctrl-o always had, kept for every row that is neither a
+	# video nor an unreadable page, and still over the marked set rather than
+	# the focused row.
+	[ "$status" -eq 0 ]
+	[[ "$output" == "execute("*" --read "* ]]
+	[[ "$output" == *"results.json 0 1)" ]]
+}
+
+@test "the sidecar decides what is playable, not the shape of the url" {
+	# A url no pattern in this script would call media, which the extractor
+	# resolved as a video anyway. The extractor asked yt-dlp, which is the tool
+	# that has to play it, so its answer is the one that counts.
+	printf '%s\n' '[{"title":"A talk","url":"https://media.example.org/talks/42","abstract":"a"}]' \
+		>"$BATS_TEST_TMPDIR/results.json"
+	local log="$BATS_TEST_TMPDIR/player.log"
+	seed_media "https://media.example.org/talks/42" "A talk" ""
+	seed_cache "https://media.example.org/talks/42" "the transcript"
+	stub_player_chain "$log"
+
+	run_action "$BATS_TEST_TMPDIR/results.json" 0 0
+
+	# is_media_url would have called this a page and sent ctrl-o to the pager.
+	[ "$status" -eq 0 ]
+	wait_for_line_matching "$log" '^MPV '
+	[[ "$output" == "transform-header("* ]]
+	grep -q '^MPV https://media.example.org/talks/42$' "$log"
+}
+
+@test "the player is handed the page url, so it can reach native quality" {
+	write_playable_state
+
+	run_action "$BATS_TEST_TMPDIR/results.json" 0 0
+	[ "$status" -eq 0 ]
+	wait_for_line_matching "$PLAYER_LOG" '^MPV '
+
+	# Pre-resolving with `yt-dlp --get-url` caps playback at 720p by
+	# construction: it can only return a progressive format, and everything
+	# above that exists on YouTube as separate DASH video and audio the player
+	# merges itself. Given the page url, mpv applies the ytdl-format chain in
+	# the user's own mpv.conf, which is where the preference belongs.
+	grep -q '^MPV https://www.youtube.com/watch?v=aaa111$' "$PLAYER_LOG"
+	! grep -q '^YTDLP ' "$PLAYER_LOG"
+}
+
+@test "the player takes its extra flags from DDGX_PLAYER_ARGS" {
+	write_playable_state
+
+	run env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" DDGX_TTL=0 \
+		DDGX_PLAYER_ARGS='--fullscreen' \
+		bash "$DDGX" --action "$BATS_TEST_TMPDIR/results.json" 0 0
+
+	[ "$status" -eq 0 ]
+	wait_for_line_matching "$PLAYER_LOG" '^MPV '
+	grep -q '^MPV --fullscreen https://www.youtube.com/watch?v=aaa111$' "$PLAYER_LOG"
+}
+
+@test "a player that dies on the url says why in the header" {
+	write_playable_state
+	cat >"$STUB_BIN/mpv" <<'EOF'
+#!/usr/bin/env bash
+echo 'Failed to recognize file format.' >&2
+exit 1
+EOF
+	chmod +x "$STUB_BIN/mpv"
+
+	run_action "$BATS_TEST_TMPDIR/results.json" 0 0
+	[ "$status" -eq 0 ]
+
+	# The errors the old keys produced arrived stacked on top of the result
+	# list, with nothing saying which result they were about or even that a
+	# player had been involved. The player's output never reaches the terminal
+	# now, so the note is the only place left for it to be reported, and a
+	# launch that failed must not read as one that worked.
+	run bash "$DDGX" --header "$BATS_TEST_TMPDIR/results.json"
+	[[ "$output" == *"cannot play: Failed to recognize file format."* ]]
+	[[ "$output" != *"playing in"* ]]
+}
+
+@test "a missing player is reported rather than silently doing nothing" {
+	write_playable_state
+	rm -f "$STUB_BIN/mpv"
+
+	run env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" DDGX_TTL=0 \
+		DDGX_PLAYER=not-a-real-player \
+		bash "$DDGX" --action "$BATS_TEST_TMPDIR/results.json" 0 0
+
+	[ "$status" -eq 0 ]
+	run bash "$DDGX" --header "$BATS_TEST_TMPDIR/results.json"
+	[[ "$output" == *"not-a-real-player not found"* ]]
+}
+
+@test "a media preview leads with the still frame, above the text" {
+	write_playable_state
+
+	run_preview 0
+	[ "$status" -eq 0 ]
+
+	# chafa's symbol output is plain text with colour, so the frame draws in the
+	# pane with no image protocol from the terminal and no help from fzf.
+	grep -q '^CHAFA .*--format symbols' "$PLAYER_LOG"
+
+	local still_at text_at
+	still_at=$(grep -n 'STILL-FRAME' <<<"$output" | head -1 | cut -d: -f1)
+	text_at=$(grep -n 'metadata and transcript' <<<"$output" | head -1 | cut -d: -f1)
+	[ -n "$still_at" ]
+	[ -n "$text_at" ]
+	[ "$still_at" -lt "$text_at" ]
+
+	# Fetched once and kept. The preview command runs again on every keystroke
+	# that moves the selection, and a thumbnail downloaded per keypress would
+	# make the pane slower than the extract drawn under it.
+	run_preview 0
+	[ "$(grep -c '^CURL ' "$PLAYER_LOG")" -eq 1 ]
+}
+
+@test "an ordinary page gets no still frame and no player" {
+	write_two_results
+	local log="$BATS_TEST_TMPDIR/player.log"
+	stub_player_chain "$log"
+	stub_still "$log"
+
+	run_preview 0
+
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"body of the first page"* ]]
+	[ ! -e "$log" ]
+}
+
 @test "the header carries the query, and a note only until it is read" {
 	write_search_state 'kubernetes finalizers site:kubernetes.io'
 	printf 'bookmarked to pet-links.toml\n' >"$RESULTS.note"
@@ -728,10 +1071,64 @@ EOF
 	[ "$status" -eq 0 ]
 	[[ "${lines[0]}" == "query: kubernetes finalizers site:kubernetes.io"* ]]
 	[[ "${lines[0]}" == *"bookmarked to pet-links.toml"* ]]
-	[[ "${lines[1]}" == *"alt-q refine"* ]]
+	[[ "${lines[1]}" == *"ctrl-o play, render or read"* ]]
+	[[ "${lines[2]}" == *"alt-q refine"* ]]
 
 	# What just happened is not part of the query: it goes once it is shown.
 	run bash "$DDGX" --header "$RESULTS"
 	[ "$status" -eq 0 ]
 	[[ "${lines[0]}" != *"bookmarked"* ]]
+}
+
+@test "no picker key is one tmux's root table answers first" {
+	# A key bound in tmux's root table is intercepted before the pane's program
+	# is offered it, so fzf never sees it. ddgx always runs inside tmux, through
+	# the M-g popup, which makes any overlap a key that silently does nothing
+	# while the header advertises it. ctrl-\ was exactly that for as long as it
+	# was in the key list.
+	#
+	# The evidence has to be the config. `tmux send-keys` injects straight into
+	# the pane and bypasses the root table, so a send-keys probe shows only that
+	# fzf handles a key, never that the key would arrive in real use, and it
+	# will tell you an intercepted key is fine.
+	local conf="$REPO_ROOT/.tmux.conf"
+	[ -f "$conf" ] || skip "no .tmux.conf in this repo"
+
+	local claimed bound key tmux_key
+	# The trailing quote-or-space matters: without it C-PageDown reads as C-P
+	# and C-M-r as C-M, and the guard starts failing keys tmux never claimed.
+	claimed=$(grep -oE "^bind(-key)? +-n +'?C-[A-Za-z\\\\]('| )" "$conf" |
+		sed "s/.*C-/C-/; s/['[:space:]]*$//" | sort -u)
+	bound=$(grep -oE -- "--bind=['\"]?ctrl-[a-z\\\\]" "$DDGX" |
+		sed 's/.*ctrl-/ctrl-/' | sort -u)
+
+	# Both sides must actually have matched something, or this passes by
+	# finding nothing and proves nothing.
+	[ -n "$claimed" ]
+	[ -n "$bound" ]
+
+	for key in $bound; do
+		tmux_key="C-${key#ctrl-}"
+		if grep -qxF "$tmux_key" <<<"$claimed"; then
+			echo "picker binds $key, but .tmux.conf claims $tmux_key at the root" >&2
+			return 1
+		fi
+	done
+}
+
+@test "every header line survives the width fzf gives the header" {
+	write_search_state 'kubernetes finalizers'
+
+	run bash "$DDGX" --header "$RESULTS"
+
+	# fzf hands the header the width of the result list, not of the terminal,
+	# so at the default 58% preview a line is cut around 98 columns and
+	# everything past the cut is simply gone. A key you cannot see does not
+	# exist, which is what made this worth a test rather than a careful eye.
+	[ "$status" -eq 0 ]
+	[ "${#lines[@]}" -eq 3 ]
+	local line
+	for line in "${lines[@]}"; do
+		[ "$(wc -L <<<"$line")" -le 98 ]
+	done
 }
