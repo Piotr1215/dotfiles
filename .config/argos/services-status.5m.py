@@ -2,7 +2,7 @@
 
 # Service Status Monitor for Argos
 # Monitors AWS, GCP, Azure, Netlify, Cloudflare, GitHub, Linear, Claude,
-# Rippling, and Spacelift status pages
+# OpenAI, Rippling, and Spacelift status pages
 
 import json
 import urllib.request
@@ -69,6 +69,14 @@ SERVICES = {
         "name": "Claude",
         "favicon": "https://claude.ai/favicon.ico"
     },
+    "OpenAI": {
+        "api": "https://status.openai.com/api/v2/status.json",
+        "status_page": "https://status.openai.com/",
+        "name": "OpenAI",
+        # openai.com and chatgpt.com both 403 the favicon to a scripted UA;
+        # the status page serves its own.
+        "favicon": "https://status.openai.com/favicon.ico"
+    },
     "Rippling": {
         "api": "https://status.rippling.com/api/v2/status.json",
         "status_page": "https://status.rippling.com/",
@@ -103,6 +111,7 @@ SERVICE_EMOJIS = {
     "GitHub": "🐙",   # Octopus (Octocat) for GitHub
     "Linear": "📋",   # Clipboard for Linear issues
     "Claude": "🤖",   # Robot for AI
+    "OpenAI": "🌀",   # Spiral for the OpenAI knot mark (blue, not a status colour)
     "Rippling": "💼", # Briefcase for HR/workforce management
     "Spacelift": "🛰️"  # Satellite for Spacelift IaC orchestration
 }
@@ -330,6 +339,22 @@ def get_rippling_status():
         pass
     return "unknown"
 
+def get_openai_status():
+    """Check OpenAI status using statuspage.io API"""
+    try:
+        data = fetch_status(SERVICES["OpenAI"]["api"])
+        if data and 'status' in data:
+            indicator = data['status'].get('indicator', 'none')
+            if indicator == 'none':
+                return "operational"
+            elif indicator == 'minor':
+                return "degraded"
+            elif indicator in ['major', 'critical']:
+                return "major"
+    except Exception:
+        pass
+    return "unknown"
+
 def get_spacelift_status():
     """Check Spacelift status using statuspage.io API"""
     try:
@@ -357,6 +382,7 @@ def get_all_statuses():
         "GitHub": get_github_status(),
         "Linear": get_linear_status(),
         "Claude": get_claude_status(),
+        "OpenAI": get_openai_status(),
         "Rippling": get_rippling_status(),
         "Spacelift": get_spacelift_status()
     }
