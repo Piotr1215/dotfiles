@@ -1,0 +1,41 @@
+@startuml
+' The decision, and nothing else: of the four things the extractor reaches out
+' to, which can a test take control of? Control flow lives in flow.puml.
+title Can a bats test control this dependency?
+
+skinparam defaultFontName DejaVu Sans
+skinparam shadowing false
+skinparam ArrowColor #444444
+skinparam rectangleBorderColor #444444
+skinparam cardBorderColor #666666
+skinparam NoteBorderColor #999999
+skinparam NoteBackgroundColor #FFF8DC
+
+rectangle "bats test" as T #EEEEEE
+rectangle "__readable.mjs\n<i>extract()</i>" as R #FEFEFE
+
+card "the document\n<i>--file flag</i>\n\n<b>YES</b>" as DOC #DDF5DD
+card "yt-dlp\n<i>run() + PATH</i>\n\n<b>YES</b>" as YTD #DDF5DD
+card "chrome / w3m\n<i>run() + PATH</i>\n\n<b>YES</b>" as BROWSER #DDF5DD
+card "the network\n<i>fetch(), line 89</i>\n\n<b>NO</b>" as NET #FFD9D9
+
+T -down-> R
+
+R -down-> DOC
+R -down-> YTD
+R -down-> BROWSER
+R -down-> NET
+
+note bottom of NET
+  No enabling point exists.
+  A test cannot switch this off,
+  so any test that reaches here
+  really does hit the internet.
+end note
+
+note bottom of YTD
+  This one alone unblocks
+  the channel-listing tests.
+end note
+
+@enduml
