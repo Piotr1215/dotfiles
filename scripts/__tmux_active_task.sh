@@ -114,11 +114,25 @@ get_claude_goal() {
     # '#' opens a format substitution in a status string, and newlines would split
     # the single-line cache entry. Same defence as get_agent_desc above.
     goal=$(printf '%s' "${goal//\#/}" | tr -d '\n\r\t')
-    # 200, not the 50-70 the other getters use. Those describe a fixed artifact
-    # (a PR title, an issue summary) that is short by nature. This is a generated
-    # sentence about work in progress, and the bar has the width: ~250 columns free
-    # on a 294-column terminal after status-left and the trailing clock.
-    [ -n "$goal" ] && echo "🤖 $(truncate_desc "$goal" 200)"
+    # THE CLOCK IS APPENDED AFTER THIS TEXT, and tmux hard-truncates the whole
+    # of status-right at status-right-length. So an over-long recap does not
+    # merely look untidy: it silently eats the clock off the right-hand end,
+    # because the clock is last in the string. That is what a 200-char cap did
+    # against a 100-char status-right-length.
+    #
+    # The budget is derived from the live tmux setting rather than guessed, so
+    # changing status-right-length keeps this correct with no second edit.
+    # 24 covers " | Sat 00:00 | home" plus the emoji and its space.
+    # `if`, NOT `[ ... ] && x`. A trailing && list returns 1 whenever the test is
+    # false, and under `set -e` that aborts the update before anything is
+    # written, leaving the bar on whatever stale line it already had. That exact
+    # shape has broken this file before.
+    local limit budget
+    limit=$(tmux show-options -gqv status-right-length 2>/dev/null)
+    case "$limit" in ''|*[!0-9]*) limit=100 ;; esac
+    budget=$(( limit - 24 ))
+    if [ "$budget" -lt 20 ]; then budget=20; fi
+    if [ -n "$goal" ]; then echo "🤖 $(truncate_desc "$goal" "$budget")"; fi
 }
 
 update_session() {
