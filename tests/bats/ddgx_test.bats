@@ -1283,3 +1283,54 @@ EOF
 	# renderer, which is never what is wrong here.
 	[[ "$output" != *"network disabled"* ]]
 }
+
+# Build a flat listing of N entries, the shape --flat-playlist returns.
+listing_json() {
+	local count=$1 total=$2 entries="" i
+	for ((i = 1; i <= count; i++)); do
+		[ -n "$entries" ] && entries="$entries,"
+		entries="$entries{\"title\":\"Video $i\",\"duration\":60}"
+	done
+	if [ "$total" = "null" ]; then
+		printf '{"title":"L","playlist_count":null,"entries":[%s]}' "$entries"
+	else
+		printf '{"title":"L","playlist_count":%s,"entries":[%s]}' "$total" "$entries"
+	fi
+}
+
+@test "media: a playlist cut by the cap says how much it dropped" {
+	# LISTING_MAX is 40 and yt-dlp still reports the real length alongside it,
+	# so the header saying 917 above a list of 40 is a disagreement the reader
+	# should not have to spot.
+	stub_ytdlp "$(listing_json 40 917)"
+
+	run_media 'https://www.youtube.com/playlist?list=PL1'
+
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"917 videos"* ]]
+	[[ "$output" == *"[showing 40 of 917]"* ]]
+}
+
+@test "media: a channel at the cap says so without inventing a total" {
+	# A channel reports playlist_count null, so there is no honest number to
+	# put after "of". It can only name what it is showing.
+	stub_ytdlp "$(listing_json 40 null)"
+
+	run_media 'https://www.youtube.com/@somechannel'
+
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"[showing the first 40, no total reported]"* ]]
+	[[ "$output" != *" of "* ]]
+}
+
+@test "media: a complete list says nothing about truncation" {
+	# Over-warning on a list that dropped nothing teaches the reader to skip
+	# the line, which costs the warning its whole value.
+	stub_ytdlp "$(listing_json 3 3)"
+
+	run_media 'https://www.youtube.com/playlist?list=PL1'
+
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"3 videos"* ]]
+	[[ "$output" != *"showing"* ]]
+}
