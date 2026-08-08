@@ -1,9 +1,0 @@
-Not a status report on your own work. Audit the topic itself: is it actually finished, or is something left half-done, broken, or inconsistent?
-
-Verify against the artifact, not against your memory of what you did. Then answer:
-- what is still pending, deferred, or deliberately skipped
-- what changed but is not wired up, tested, documented, or committed
-- what is left in a state we did not intend, including anything I have to clean up by hand
-- what is blocked on someone or something outside this session
-
-If it is genuinely finished, say finished and name the checks that prove it. Do not pad the list to look thorough.
