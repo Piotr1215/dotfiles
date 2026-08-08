@@ -83,18 +83,36 @@ results, which is the premise line 87 rests on.
 
 ## Round 1b: the diagram was doing two jobs
 
-`shape.puml` had grown into a full control-flow trace of `extract()` with the
+`<session>-shape.puml` had grown into a full control-flow trace of `extract()` with the
 seam verdicts buried in side-notes. The flowchart was ten times the size of the
 message and mostly restated the source.
 
 Split:
 
-- `shape.puml` now answers only the question being decided: of the four things
+- `<session>-shape.puml` now answers only the question being decided: of the four things
   the extractor depends on, which can a test control. Four boxes, three green,
   one red. 631x460.
-- `flow.puml` keeps the control-flow trace, which is still worth having for
+- `<session>-flow.puml` keeps the control-flow trace, which is still worth having for
   finding the branch points. Not the decision surface.
 
 Rule this came from: a diagram that only restates the prose is noise. The
 control flow restates the code. The seam verdicts do not appear in the code at
 all, which is exactly why they deserve the picture.
+
+## Round 2: closed, routing
+
+Decided: routing. `DDGX_NO_NETWORK` in `httpGet`, one branch, refuses rather
+than redirecting. Six tests drive the media branch with a PATH-stubbed yt-dlp.
+Landed as `73a7da3a`, 64/64 pass.
+
+Beat: rendering coverage, which needed an http server in the suite or a
+network-tagged test. The bug that prompted the work was routing, the 58 `--file`
+tests already cover rendering from the other side, and the gap between them is
+one function call.
+
+Reverses this if: the fallback breaks again in a way that produces readable-but
+-wrong page text rather than the wrong error. That failure is invisible to a
+routing test and would justify the http server.
+
+Not decided here, still open in plan 162: the silent `LISTING_MAX` truncation,
+and the auto-caption label, which no offline test can reach.
