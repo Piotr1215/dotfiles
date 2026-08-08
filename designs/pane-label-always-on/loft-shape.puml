@@ -1,0 +1,71 @@
+@startuml
+title Why both surfaces are empty: the label tracks a feed you cannot trigger
+
+skinparam shadowing false
+skinparam defaultTextAlignment left
+skinparam rectangle {
+  BorderColor #555
+  FontSize 12
+}
+
+legend top left
+  <b>Recap</b> = Claude Code's away_summary, end-of-turn prose. We read it. We cannot ask for one.
+  <b>Floor</b> = a label derived locally at hook time, so a pane is never blank. Does not exist today.
+  Verified: __claude_pane_label.sh :204 :239 :243 :251 :264 :274 :317 :319
+            Notes/areas/tmux-pane-label-design.md "Out of Scope" + cadence table
+            ~/.codex/hooks.json event list
+endlegend
+
+rectangle "CLAUDE PANE   (live: this pane, %63)" as C {
+  rectangle "UserPromptSubmit\n:204 state ONLY, never a label" as UPS #C8E6C9
+  rectangle "Stop\n:239 the only label writer" as STOP #C8E6C9
+
+  rectangle "ALWAYS written, every single turn\n:251 @claude_state = working / idle\n:264 @claude_glyph = : ▶ ▪ ◌\n\nLIVE NOW: state=working  glyph=▶  <b>this half works</b>" as ALWAYS #C8E6C9
+
+  rectangle "is there a recap in the transcript?\n:243 latest_summary(transcript)\n\nLIVE NOW: <b>0 records</b>" as SRC #FFCDD2
+
+  rectangle ":274   if [[ -n $label ]]" as GATE #FFE0B2
+
+  rectangle "NEVER written this session\n:317 @claude_goal   -> tmux status line\n:319 @claude_label  -> pane border\n\nLIVE NOW: <b>both empty</b>  <b>this half is dark</b>" as NEVER #FFCDD2
+}
+
+UPS --> ALWAYS
+STOP --> ALWAYS
+STOP --> SRC
+SRC --> GATE
+GATE --> NEVER
+
+note right of SRC
+  Needs roughly 3 minutes of your silence.
+  Your own doc measured it: 35 recaps,
+  min 184s, median 200s, max 362s,
+  0 of 35 under 60s.
+
+  And states the consequence outright:
+  "A session where the user keeps typing
+   produces none at all."
+
+  You have typed continuously all session.
+  So: none. The system is correct.
+end note
+
+rectangle "CODEX PANE" as X #FFCDD2 {
+  rectangle "events it HAS:\n  PreToolUse  PostToolUse  UserPromptSubmit\n  SessionStart  SessionEnd  SubagentStart/Stop\n\nevent it does NOT have:\n  <b>Stop / turn-end</b>" as XEV
+  rectangle "__claude_pane_label.sh is wired into NONE of them.\nstate, glyph, goal, label: all absent, always." as XN
+}
+XEV --> XN
+
+note bottom of X
+  Your doc, Out of Scope:
+  "Codex panes have hooks but no away_summary,
+   so they stay unlabelled."
+
+  Your stated expectation ("claude or codex MUST
+  always have those") contradicts this line.
+end note
+
+rectangle "WHERE A SECOND SOURCE WOULD GO\nfeeds the gate when no recap exists, never overwrites one\n\nAlready tried and reverted:\n  newest prompt wins  -> echoed your keyboard forever  (9141d48)\n  frozen first prompt -> froze on 'list my open prs'\n  last assistant msg  -> 'Now let me create memories...'  (45f17a4)\n\nNot yet tried:\n  <b>ornith on the Mac summarises the transcript tail on Stop</b>\n  costs no conversation turn, no frontier quota, always available" as FLOOR #E1BEE7
+
+GATE ..> FLOOR : the branch that does not exist today
+
+@enduml
