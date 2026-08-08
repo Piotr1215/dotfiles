@@ -485,3 +485,10 @@ source ~/.config/age/secret.zsh
 
 # password-store helpers (session secrets direnv autoloads, no gate): passfromenv
 source ~/.config/pass/pass.zsh
+
+# deno on PATH: yt-dlp wants a JS runtime for YouTube player extraction and warns
+# on every invocation without one. Guarded like the cargo line above, since this
+# file is stowed on machines that have no deno.
+if [ -f "$HOME/.deno/env" ]; then
+    . "$HOME/.deno/env"
+fi
