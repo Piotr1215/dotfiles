@@ -1,0 +1,14 @@
+[Unit]
+Description=Keep yt-dlp current (daily)
+
+[Timer]
+# Daily rather than weekly: YouTube ships player changes that break extraction
+# on no schedule at all, and a week of being broken is a week of failures that
+# never name the version as the cause.
+OnCalendar=daily
+# Catch up after the laptop has been off or asleep, which is most days.
+Persistent=true
+RandomizedDelaySec=30m
+
+[Install]
+WantedBy=timers.target
