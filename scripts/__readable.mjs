@@ -86,6 +86,21 @@ async function httpGet (url, { json = false, raw = false } = {}) {
   // not make us read the local disk.
   if (scheme !== 'http:' && scheme !== 'https:') throw new Error(`unsupported scheme: ${scheme}`)
 
+  // The only lever a test has on the network. Every subprocess here is reached
+  // by bare name through run(), so a stub on PATH replaces it; fetch has no
+  // equivalent, and this is the one call site that makes one.
+  //
+  // The suite's "no test fetches over the network" was never enforced, it was
+  // a side effect of every test passing --file, which skips both fetch paths.
+  // That stops holding the moment a test drives the media branch, because
+  // dropping --file is exactly what opens it. Without this an unstubbed test
+  // reaches the real internet and fails later as an unattributable flake.
+  //
+  // It refuses rather than redirecting to a fixture directory on purpose: the
+  // scheme guard above exists to keep search-driven previews off the local
+  // disk, and a fixture lever would hand that back.
+  if (process.env.DDGX_NO_NETWORK) throw new Error(`network disabled: ${url}`)
+
   const res = await fetch(url, {
     headers: {
       'User-Agent': UA,

@@ -1132,3 +1132,154 @@ EOF
 		[ "$(wc -L <<<"$line")" -le 98 ]
 	done
 }
+
+# --------------------------------------------------------------------------
+# The media branch
+#
+# extract() enters it only when html is null, so these drive __readable.mjs
+# with --url and no --file. That is also what un-gates the page path's fetch,
+# so every test here sets DDGX_NO_NETWORK: an unstubbed request must fail
+# loudly rather than reach YouTube and flake on a rate limit six months from
+# now.
+# --------------------------------------------------------------------------
+
+# yt-dlp answers --dump-single-json on stdout and nothing else is read, so a
+# stub is one heredoc. Exit 0, because the caller treats any other code as a
+# failed lookup.
+stub_ytdlp() {
+	cat >"$STUB_BIN/yt-dlp" <<EOF
+#!/usr/bin/env bash
+cat <<'JSON'
+$1
+JSON
+EOF
+	chmod +x "$STUB_BIN/yt-dlp"
+}
+
+# The other half of the contract: a yt-dlp that fails the way a marketing page
+# on a video host makes it fail.
+stub_ytdlp_failing() {
+	cat >"$STUB_BIN/yt-dlp" <<'EOF'
+#!/usr/bin/env bash
+echo 'ERROR: Unsupported URL' >&2
+exit 1
+EOF
+	chmod +x "$STUB_BIN/yt-dlp"
+}
+
+run_media() {
+	run env PATH="$STUB_BIN:$PATH" DDGX_NO_NETWORK=1 \
+		node "$READABLE" --url "$1" "${@:2}"
+}
+
+# A flat channel listing: what yt-dlp returns for /@handle with
+# --flat-playlist. No playlist_count, which is what a channel actually omits.
+channel_json() {
+	cat <<'JSON'
+{
+  "title": "Some Channel",
+  "channel": "Some Channel",
+  "webpage_url": "https://www.youtube.com/@somechannel/videos",
+  "entries": [
+    { "title": "First upload", "duration": 615 },
+    { "title": "Second upload", "duration": 3725 },
+    null
+  ]
+}
+JSON
+}
+
+@test "media: the no-network tripwire actually stops a fetch" {
+	# Guards every other test in this block: if the tripwire silently did
+	# nothing, the fallback test below would pass for the wrong reason.
+	run env DDGX_NO_NETWORK=1 node "$READABLE" --url https://example.com/post
+
+	[ "$status" -eq 1 ]
+	[[ "$output" == *"network disabled"* ]]
+}
+
+@test "media: a channel renders its video list, not the cookie banner" {
+	stub_ytdlp "$(channel_json)"
+
+	run_media 'https://www.youtube.com/@somechannel'
+
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"Some Channel"* ]]
+	[[ "$output" == *"1. First upload (10:15)"* ]]
+	[[ "$output" == *"2. Second upload (1:02:05)"* ]]
+	# The null entry is filtered, so it must not become a third line.
+	[[ "$output" != *"3. "* ]]
+}
+
+@test "media: a channel writes no sidecar, so the picker never offers to play it" {
+	stub_ytdlp "$(channel_json)"
+	local cache="$BATS_TEST_TMPDIR/mediacache"
+
+	run_media 'https://www.youtube.com/@somechannel' --cache "$cache"
+
+	[ "$status" -eq 0 ]
+	# Playing a channel means queueing every upload it has. The absence of the
+	# record is the whole mechanism that prevents it.
+	[ -z "$(find "$cache" -name '*.media' 2>/dev/null)" ]
+}
+
+@test "media: a playlist does write a sidecar" {
+	# The contrast that stops the channel assertion above being vacuous: same
+	# code path, same renderer, and the sidecar turns on.
+	stub_ytdlp '{
+	  "title": "Some Playlist",
+	  "playlist_count": 2,
+	  "webpage_url": "https://www.youtube.com/playlist?list=PL1",
+	  "entries": [
+	    { "title": "First", "duration": 60,
+	      "thumbnails": [ { "url": "https://i.ytimg.com/vi/a/hq.jpg", "width": 480 } ] }
+	  ]
+	}'
+	local cache="$BATS_TEST_TMPDIR/mediacache"
+
+	run_media 'https://www.youtube.com/playlist?list=PL1' --cache "$cache"
+
+	[ "$status" -eq 0 ]
+	local sidecar
+	sidecar=$(find "$cache" -name '*.media')
+	[ -n "$sidecar" ]
+	[[ "$(cat "$sidecar")" == *'"kind":"playlist"'* ]]
+}
+
+@test "media: a channel url reaches yt-dlp as the /videos listing" {
+	# channelListingUrl rewrites /@handle to /@handle/videos. Without it yt-dlp
+	# is handed the channel home, which is a different extraction.
+	cat >"$STUB_BIN/yt-dlp" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >"$BATS_TEST_TMPDIR/ytdlp-args"
+echo '{"title":"x","entries":[]}'
+EOF
+	chmod +x "$STUB_BIN/yt-dlp"
+
+	run_media 'https://www.youtube.com/@somechannel'
+
+	[[ "$(cat "$BATS_TEST_TMPDIR/ytdlp-args")" == *"https://www.youtube.com/@somechannel/videos"* ]]
+	[[ "$(cat "$BATS_TEST_TMPDIR/ytdlp-args")" == *"--flat-playlist"* ]]
+}
+
+@test "media: a failed lookup falls through to the page path" {
+	# vimeo.com/features is marketing, not a video, and no path pattern
+	# separates the two. The fallback is what stopped it reporting yt-dlp's
+	# 404 instead of the page. Here the page half is refused by the tripwire,
+	# so what is under test is the routing and the error precedence at the end
+	# of extract(): the reason reported must be yt-dlp's, never the fetch's.
+	stub_ytdlp_failing
+
+	run_media 'https://vimeo.com/features'
+
+	[ "$status" -eq 1 ]
+	# yt-dlp's own reason, carried out through mediaError with the ERROR:
+	# prefix stripped by toolError. Its presence proves the media branch ran
+	# and lost; its survival past the page attempt proves the precedence.
+	[[ "$output" == *"Unsupported URL"* ]]
+	# The page path was reached (that is the fallback) and it failed too, so
+	# the losing error is the network one. It must not be what gets reported:
+	# "no article found" or a fetch failure would send a reader hunting for a
+	# renderer, which is never what is wrong here.
+	[[ "$output" != *"network disabled"* ]]
+}

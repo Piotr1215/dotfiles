@@ -1,0 +1,89 @@
+@startuml
+' Round 1: where extract() touches the outside world, and which of those
+' boundaries the bats suite can already control.
+title ddgx test seam \n where extract() touches the outside
+
+skinparam defaultFontName DejaVu Sans
+skinparam shadowing false
+skinparam ArrowColor #444444
+skinparam ActivityBorderColor #444444
+skinparam ActivityBackgroundColor #FEFEFE
+skinparam ActivityDiamondBackgroundColor #F4F4F4
+skinparam NoteBorderColor #999999
+skinparam NoteBackgroundColor #FFF8DC
+
+start
+:normalizeUrl(url);
+
+if (html === null AND isMediaUrl(url)?) then (media)
+  :mediaMarkdown(url);
+  note right #DDF5DD
+    <b>SEAM EXISTS</b>
+    spawn('yt-dlp'), line 125
+    bare command name, so a
+    PATH stub takes it. The suite
+    already does exactly this for
+    ddgr (288) and mpv (781).
+  end note
+
+  if (yt-dlp succeeded?) then (yes)
+    :writeMediaSidecar + present;
+    note right
+      channel => media null (483)
+      playlist => sidecar written
+    end note
+    stop
+  else (threw)
+    :mediaError = err  (818);
+  endif
+else (--file given, or not a media host)
+endif
+
+:extractPage(url, {html});
+
+if (html supplied?) then (yes)
+  :read the document in hand;
+  note right #DDF5DD
+    <b>SEAM EXISTS</b>: --file
+    All 58 current tests enter here.
+    "No network" is a consequence
+    of this, not a rule anyone set.
+  end note
+else (html === null)
+  :stackExchangeHtml() then httpGet();
+  note right #FFD9D9
+    <b>NO SEAM</b>: fetch(), line 89
+    No enabling point exists. This is
+    the ONLY unseamed exit in the file.
+    Line 87 already refuses file: urls
+    on purpose, so a fixture-dir lever
+    would fight a written decision.
+  end note
+endif
+
+if (--deep and text came back thin?) then (yes)
+  :escalate: chrome, then w3m;
+  note right #DDF5DD
+    <b>SEAM EXISTS</b> (corrected)
+    Also goes through run() at 125.
+    There is exactly ONE spawn in
+    the file, so every subprocess
+    is PATH-addressable.
+  end note
+endif
+
+if (page path succeeded?) then (yes)
+  :return page text;
+  stop
+else (threw)
+  :throw mediaError || pageError;
+  note right #FFE9CC
+    Line 828. <b>This rule IS the fix.</b>
+    Observable without a page
+    fixture: which error comes out
+    tells you which path ran.
+  end note
+  stop
+endif
+
+@enduml
