@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Display linear issue, agent task, mpv track, or date/time for tmux status bar
+# Display linear issue, agent task, Claude pane goal, or date/time for tmux status bar
 # Two modes: default (fast reader for status bar) and --update (async writer)
 set -eo pipefail
 
@@ -96,28 +96,29 @@ get_agent_desc() {
     [ -n "$desc" ] && echo "🤖 $(truncate_desc "$desc" 60)"
 }
 
-get_mpv_track() {
-    pgrep -x mpv > /dev/null || return 0
-
-    local socket_dir="${HOME}/.mpv_sockets"
-    local title=""
-
-    if [ -d "$socket_dir" ]; then
-        for socket in "$socket_dir"/*; do
-            [ -S "$socket" ] || continue
-            title=$(echo '{"command": ["get_property", "media-title"]}' | socat - "$socket" 2>/dev/null | jq -r '.data // empty' 2>/dev/null) || true
-            [ -z "$title" ] && title=$(echo '{"command": ["get_property", "filename"]}' | socat - "$socket" 2>/dev/null | jq -r '.data // empty' 2>/dev/null) || true
-            [ -n "$title" ] && break
-        done
-    fi
-
-    [ -z "$title" ] && title=$(pgrep -a mpv | head -1 | sed 's/.*mpv //' | sed 's/^.*\///' | cut -c1-30) || true
-
-    if [ -n "$title" ]; then
-        echo "🎵 $(truncate_desc "$title" 25)"
-    else
-        echo "🎵 Playing"
-    fi
+get_claude_goal() {
+    local session="$1" goal
+    # @claude_goal is a PANE option written by ~/.claude/scripts/__claude_pane_label.sh
+    # from the first sentence of the session's newest away_summary. It covers the
+    # home case the three lookups above cannot: an interactive Claude pane carries
+    # no PR number, no Linear id, and no spawn-time --desc, so the bar said nothing
+    # about the agent sitting in front of you.
+    #
+    # display-message rather than show-options, and deliberately so: a pane option
+    # is invisible to `show-options -t <session>`, but a format resolved against a
+    # session renders the ACTIVE pane's value. That is the property that makes this
+    # work at all, because it means the bar describes the pane being looked at
+    # rather than the session as a whole.
+    goal=$(tmux display-message -p -t "$session" '#{@claude_goal}' 2>/dev/null) || return 0
+    [ -n "$goal" ] || return 0
+    # '#' opens a format substitution in a status string, and newlines would split
+    # the single-line cache entry. Same defence as get_agent_desc above.
+    goal=$(printf '%s' "${goal//\#/}" | tr -d '\n\r\t')
+    # 200, not the 50-70 the other getters use. Those describe a fixed artifact
+    # (a PR title, an issue summary) that is short by nature. This is a generated
+    # sentence about work in progress, and the bar has the width: ~250 columns free
+    # on a 294-column terminal after status-left and the trailing clock.
+    [ -n "$goal" ] && echo "🤖 $(truncate_desc "$goal" 200)"
 }
 
 update_session() {
@@ -146,8 +147,13 @@ update_session() {
     if [ -z "$prefix" ]; then
         prefix=$(get_agent_desc "$session") || true
     fi
+    # Last link, behind every explicit label: an interactive Claude pane has no
+    # PR, no Linear id and no spawn --desc, so without this the bar fell through to
+    # the bare clock and said nothing about the agent in front of you. The mpv
+    # track used to sit at the end of this chain and was removed: this bar is for
+    # what the agent is doing, and the music was crowding it out.
     if [ -z "$prefix" ]; then
-        prefix=$(get_mpv_track) || true
+        prefix=$(get_claude_goal "$session") || true
     fi
 
     local cache_key="${session//\//-}"
