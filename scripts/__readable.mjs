@@ -459,6 +459,25 @@ function playlistMarkdown (info, entries) {
   })
   if (listing.length) parts.push(listing.join('\n'))
 
+  // Say what the cap dropped, because a list that stops at 40 with nothing
+  // said looks exactly like a list of 40. The header above already prints the
+  // real total for a playlist, so without this line the two quietly disagree
+  // and the reader has to notice the arithmetic.
+  //
+  // The two cases are not symmetric, measured rather than assumed: with
+  // --playlist-end 40 a playlist over the cap still reports playlist_count as
+  // its true length (917 for one uploads list), while a channel reports null
+  // and offers no total at all. So a playlist can name what it dropped and a
+  // channel can only name what it is showing.
+  //
+  // A known total that equals what we have dropped nothing, so it stays quiet:
+  // over-warning on a complete list teaches the reader to ignore the line.
+  if (Number.isFinite(info.playlist_count) && info.playlist_count > entries.length) {
+    parts.push(`[showing ${entries.length} of ${info.playlist_count}]`)
+  } else if (!Number.isFinite(info.playlist_count) && entries.length >= LISTING_MAX) {
+    parts.push(`[showing the first ${entries.length}, no total reported]`)
+  }
+
   if (!parts.length) throw new Error('no playlist text found')
   return parts.join('\n\n')
 }
