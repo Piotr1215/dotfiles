@@ -1,0 +1,10 @@
+[Unit]
+Description=Keep yt-dlp current
+Documentation=file:///home/decoder/dev/dotfiles/scripts/__yt_dlp_autoupdate.sh
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/home/decoder/dev/dotfiles/scripts/__yt_dlp_autoupdate.sh
+# pipx writes into ~/.local/share/pipx and needs its own bin dir on PATH.
+Environment=PATH=/home/decoder/.local/bin:/usr/local/bin:/usr/bin:/bin
