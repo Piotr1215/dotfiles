@@ -78,21 +78,13 @@ out=$(STUB_GOAL="short goal" run "dotfiles")
 assert_has "says shown in full" "shown in full" "$out"
 assert_lacks "does not claim a cap"  "bar shows 60" "$out"
 
-echo "== the inspector's cap has not drifted from the writer's"
-# The inspector deliberately re-derives the cap instead of sourcing
-# __tmux_active_task.sh, so nothing but this test stops the two numbers from
-# parting company. They already did once: the writer gained the 60-char
-# headline cap while the inspector still reported the old 116.
-cap_of() { grep -oP '"\$budget" -gt \K[0-9]+' "$1" | head -1; }
-writer_cap=$(cap_of "$HOME/dev/dotfiles/scripts/__tmux_active_task.sh")
-insp_cap=$(cap_of "$SCRIPT")
-if [ -n "$writer_cap" ] && [ "$writer_cap" = "$insp_cap" ]; then
-    PASS=$((PASS + 1)); printf "  PASS: both files cap the goal at %s\n" "$insp_cap"
-else
-    FAIL=$((FAIL + 1))
-    printf "  FAIL: cap drift, writer says '%s' and inspector says '%s'\n" \
-        "$writer_cap" "$insp_cap"
-fi
+# Drift between this cap and the writer's is covered by
+# tmux_status_contract_test.sh, which runs both scripts and compares the
+# writer's real headline length against the cap reported here. A guard that
+# grepped the constant out of both files used to live at this spot and was
+# removed as unsound: it reported drift for an edit that changed the comparison
+# but not the effective cap, so it failed on a no-op while a real behavioural
+# change could slip past it.
 
 echo "== precedence: @agent_desc outranks @claude_goal"
 out=$(STUB_DESC="spawned worker" STUB_GOAL="a goal" run "dotfiles")
