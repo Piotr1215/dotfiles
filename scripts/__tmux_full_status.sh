@@ -107,13 +107,16 @@ if command -v task >/dev/null 2>&1 && [[ "$session" =~ ([a-zA-Z]+-[0-9]+) ]]; th
         | jq -r '.[0].description // empty' 2>/dev/null) || linear_desc=""
 fi
 
-agent_desc=$(tmux show-options -qv -t "$session" @agent_desc 2>/dev/null) || agent_desc=""
+# @agent_desc used to sit here, between Linear and the goal. __spawn_agent.sh
+# stopped writing it: a label fixed at spawn time outranked every later recap,
+# so a worker's bar was frozen on the instruction it was given and never showed
+# what it went on to do. The spawn seeds @claude_goal instead, which the recap
+# then replaces. The row is gone rather than left reading empty forever.
 goal=$(tmux display-message -p -t "$session" '#{@claude_goal}' 2>/dev/null) || goal=""
 
-won_pr=0 won_lin=0 won_desc=0 won_goal=0
+won_pr=0 won_lin=0 won_goal=0
 if   [ -n "$pr_title" ];    then won_pr=1
 elif [ -n "$linear_desc" ]; then won_lin=1
-elif [ -n "$agent_desc" ];  then won_desc=1
 elif [ -n "$goal" ];        then won_goal=1
 fi
 
@@ -122,10 +125,9 @@ fi
 # not rename the function, and the file is already named in the heading above.
 row "$won_pr"   "pr"     "get_pr_desc()"     60         "$pr_title"
 row "$won_lin"  "linear" "get_agent_issue()" 0          "$linear_desc"
-row "$won_desc" "desc"   "get_agent_desc()"  60         "$agent_desc"
 row "$won_goal" "goal"   "get_claude_goal()" "$budget"  "$goal"
 
-if [ "$((won_pr + won_lin + won_desc + won_goal))" -eq 0 ]; then
+if [ "$((won_pr + won_lin + won_goal))" -eq 0 ]; then
     printf '  %severy source empty, so the bar falls through to date | mode%s\n' "$dim" "$off"
 fi
 

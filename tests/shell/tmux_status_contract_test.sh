@@ -156,10 +156,15 @@ w=$(writer_source "$(run_writer)"); i=$(inspector_source "$(run_inspector)")
 assert_eq "writer picks linear"    "linear" "$w"
 assert_eq "inspector agrees"       "$w" "$i"
 
-echo "== the spawn label wins when no live lookup resolves =="
+echo "== a retired @agent_desc cannot displace the goal on either side =="
+# The spawn label used to sit between Linear and the goal. __spawn_agent.sh
+# stopped writing it, because a label fixed at spawn time outranked every later
+# recap and froze a worker's bar on the instruction it was given. A set option
+# must now be inert in both scripts, which is the half of the removal that a
+# deleted row cannot demonstrate on its own.
 set_case "spawnworker" "" "" "AGENTDESC" "CLAUDEGOAL"
 w=$(writer_source "$(run_writer)"); i=$(inspector_source "$(run_inspector)")
-assert_eq "writer picks desc"      "desc" "$w"
+assert_eq "writer ignores it"      "goal" "$w"
 assert_eq "inspector agrees"       "$w" "$i"
 
 echo "== the pane goal is the last link =="
