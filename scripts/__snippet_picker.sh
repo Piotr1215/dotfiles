@@ -46,17 +46,24 @@ label_of() { local f="$1"; f="${f%.*}"; echo "${f//[-_]/ }"; }
 
 # Reflow a body into flowing paragraphs: hard wraps are an artefact of editing
 # the file in nvim, and pasting them into a prompt box leaves ragged lines that
-# re-wrap again at the box width. Blank lines and list items are structure, so
-# they survive; everything else in a paragraph joins onto one line.
+# re-wrap again at the box width. Blank lines, list items and fenced blocks are
+# structure, so they survive; everything else in a paragraph joins onto one line.
 reflow() {
     python3 -c '
 import re, sys
 out, buf = [], []
+fenced = False
 def flush():
     if buf: out.append(" ".join(buf)); buf.clear()
 for line in open(sys.argv[1]).read().splitlines():
     s = line.strip()
-    if not s:
+    if s.startswith("```"):
+        # A fence toggles verbatim mode. A snippet that carries a template is
+        # asking to be read by position, so joining those rows destroys it.
+        flush(); out.append(line.rstrip()); fenced = not fenced
+    elif fenced:
+        out.append(line.rstrip())
+    elif not s:
         # Blank line ends a block and is itself structure worth keeping.
         flush(); out.append("")
     elif re.match(r"([-*+]|\d+[.)])\s", s):

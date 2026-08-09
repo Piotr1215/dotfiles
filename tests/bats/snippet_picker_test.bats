@@ -51,6 +51,20 @@ setup() {
 	[ "$(sed -n 4p "$SPY/clipboard")" = "- what is not wired up" ]
 }
 
+@test "reflow keeps a fenced template on its own lines" {
+	# A snippet carrying a template is asking to be read by position, so the
+	# rows must survive the paste. Joining them cost explain its whole format.
+	printf 'Use this format:\n\n```\nWHAT   the change\nWHY    the pain\n```\n\nNo preamble.\n' > "$SNIPPETS/fenced.md"
+	run "$PICKER" 0 fenced
+	[ "$status" -eq 0 ]
+	[ "$(sed -n 3p "$SPY/clipboard")" = '```' ]
+	[ "$(sed -n 4p "$SPY/clipboard")" = "WHAT   the change" ]
+	[ "$(sed -n 5p "$SPY/clipboard")" = "WHY    the pain" ]
+	[ "$(sed -n 6p "$SPY/clipboard")" = '```' ]
+	# Prose after the closing fence still reflows, so verbatim mode ended.
+	[ "$(sed -n 8p "$SPY/clipboard")" = "No preamble." ]
+}
+
 @test "paste always ends with exactly one trailing newline" {
 	# The cursor must land on a fresh line below the text whatever the file
 	# was saved with, so both extremes have to normalise to the same thing.
