@@ -86,10 +86,12 @@ assert_lacks "does not claim a cap"  "bar shows 60" "$out"
 # but not the effective cap, so it failed on a no-op while a real behavioural
 # change could slip past it.
 
-echo "== precedence: @agent_desc outranks @claude_goal"
+echo "== the retired @agent_desc source is gone, not merely empty"
+# __spawn_agent.sh stopped writing it, so a row that could only ever print
+# "empty" would be noise. A set option must no longer change what the bar shows.
 out=$(STUB_DESC="spawned worker" STUB_GOAL="a goal" run "dotfiles")
-assert_has "desc wins" "[x] desc" "$out"
-assert_has "goal is listed but not chosen" "[ ] goal" "$out"
+assert_lacks "no desc row"            "] desc" "$out"
+assert_has   "the goal wins outright" "[x] goal" "$out"
 
 echo "== every source empty falls through to the date"
 out=$(run "dotfiles")
