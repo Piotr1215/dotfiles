@@ -65,6 +65,11 @@ limit=$(tmux show-options -gqv status-right-length 2>/dev/null) || limit=""
 case "$limit" in ''|*[!0-9]*) limit=100 ;; esac
 budget=$(( limit - 24 ))
 if [ "$budget" -lt 20 ]; then budget=20; fi
+# Mirrors the headline cap in get_claude_goal. Duplicated on purpose, like the
+# precedence order above it: this file exists to disagree with the writer, and
+# it cannot do that while borrowing the writer's arithmetic. The cost is that
+# the two numbers can drift, which is what the tests are for.
+if [ "$budget" -gt 60 ]; then budget=60; fi
 
 cache_file="$CACHE_DIR/${session//\//-}"
 rendered=""
@@ -112,10 +117,13 @@ elif [ -n "$agent_desc" ];  then won_desc=1
 elif [ -n "$goal" ];        then won_goal=1
 fi
 
-row "$won_pr"   "pr"     "get_pr_desc :37"     60         "$pr_title"
-row "$won_lin"  "linear" "get_agent_issue :64" 0          "$linear_desc"
-row "$won_desc" "desc"   "get_agent_desc :80"  60         "$agent_desc"
-row "$won_goal" "goal"   "get_claude_goal :99" "$budget"  "$goal"
+# Function names, not line numbers. A ":99" is precise until the writer grows a
+# line, and then it is confidently wrong; the name survives every edit that does
+# not rename the function, and the file is already named in the heading above.
+row "$won_pr"   "pr"     "get_pr_desc()"     60         "$pr_title"
+row "$won_lin"  "linear" "get_agent_issue()" 0          "$linear_desc"
+row "$won_desc" "desc"   "get_agent_desc()"  60         "$agent_desc"
+row "$won_goal" "goal"   "get_claude_goal()" "$budget"  "$goal"
 
 if [ "$((won_pr + won_lin + won_desc + won_goal))" -eq 0 ]; then
     printf '  %severy source empty, so the bar falls through to date | mode%s\n' "$dim" "$off"
