@@ -132,6 +132,17 @@ get_claude_goal() {
     case "$limit" in ''|*[!0-9]*) limit=100 ;; esac
     budget=$(( limit - 24 ))
     if [ "$budget" -lt 20 ]; then budget=20; fi
+    # The bar carries a headline, not the recap. It used to spend every
+    # character the clock did not need, which put 116 characters of a 280
+    # character goal on screen: too long to take in at a glance and still only
+    # a fragment. prefix g now shows every source in full on demand, so the
+    # always-on line no longer has to try to say everything.
+    #
+    # 60 is get_agent_desc's cap, so all three text sources read at one width
+    # instead of the goal being twice the length of a PR title. The derived
+    # budget stays as the ceiling above it: if status-right-length ever drops
+    # below 84, the smaller number wins and the clock still survives.
+    if [ "$budget" -gt 60 ]; then budget=60; fi
     if [ -n "$goal" ]; then echo "🤖 $(truncate_desc "$goal" "$budget")"; fi
 }
 
