@@ -24,9 +24,17 @@
 #            anything else opens the marked extracts in a pager
 #   ctrl-e   open extracts in nvim as markdown notes (kept, re-openable)
 #   ctrl-a   bookmark into pet-links.toml, the file plink writes
+#   alt-h    hand the extracts to the pane you opened the popup from
 #   ctrl-y   copy the URLs          ctrl-r  re-fetch (bypass cache)
 #   alt-q    refine the query       ctrl-v  toggle the preview pane
 #   ctrl-d/u scroll the preview
+#
+# alt-h is for the agent in the pane underneath. It pastes the note PATHS, not
+# the note text, and it does not press Enter: you type what you want done with
+# them. An agent asked to fetch a page for itself cannot tell you whether it
+# was throttled, redirected or handed a stub, and WebFetch-style tools return
+# someone else's summary rather than the page. This hands over exactly the
+# markdown you just read, which you chose, from a cache you can inspect.
 #
 # One key rather than three. Play, render and read were ctrl-v, ctrl-x and
 # ctrl-o, three keys you had to hold in your head along with which one the row
@@ -52,6 +60,9 @@ set -eo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SELF="$SCRIPT_DIR/$(basename "${BASH_SOURCE[0]}")"
 READABLE="$SCRIPT_DIR/__readable.mjs"
+# Shared with __orchestrator.sh: both are popups that hand text back to the pane
+# they were opened from.
+source "$SCRIPT_DIR/__lib_pane_deliver.sh"
 MODULES_DIR="${DDGX_MODULES:-$HOME/.local/share/ddgx}"
 # The MarkDownload settings export, stowed from .config/ddgx in this repo.
 OPTIONS_FILE="${DDGX_OPTIONS:-${XDG_CONFIG_HOME:-$HOME/.config}/ddgx/markdownload-options.json}"
@@ -97,8 +108,8 @@ PET_LINKS="${DDGX_PET_FILE:-$HOME/dev/pet-snippets/pet-links.toml}"
 # a single line is cut around 98 columns and everything after it is simply
 # gone. A key you cannot see does not exist, so both lines have to stay short
 # enough to survive that cut. The suite measures them.
-PICKER_KEYS='tab mark · enter open · ctrl-o play, render or read · ctrl-e nvim
-ctrl-a bookmark · ctrl-y copy · ctrl-r refetch · alt-q refine · ctrl-v preview'
+PICKER_KEYS='tab mark · enter open · ctrl-o play, render or read · ctrl-e nvim · ctrl-v preview
+ctrl-a bookmark · ctrl-y copy · ctrl-r refetch · alt-q refine · alt-h hand to pane'
 
 # Print the header comment block: everything between the shebang and the first
 # line of code, so the help text cannot drift out of sync with a line range.
@@ -146,7 +157,8 @@ cleanup() {
 	local status=$?
 	if [[ -n ${RESULTS_FILE:-} ]]; then
 		rm -f "$RESULTS_FILE" "$(query_file "$RESULTS_FILE")" \
-			"$(note_file "$RESULTS_FILE")" "$RESULTS_FILE.new"
+			"$(note_file "$RESULTS_FILE")" "$(target_file "$RESULTS_FILE")" \
+			"$RESULTS_FILE.new"
 	fi
 	if [[ -n ${PREFETCH_PID:-} ]]; then
 		kill "$PREFETCH_PID" 2>/dev/null || true
@@ -159,6 +171,11 @@ cleanup() {
 # picker back its new state through.
 query_file() { printf '%s.query' "$1"; }
 note_file() { printf '%s.note' "$1"; }
+# The pane alt-h hands extracts back to, resolved once when the search starts
+# and pinned here for the life of it. Reading the global tmux option at send
+# time instead would hand this search's extracts to whatever pane opened a
+# popup most recently, which is not necessarily the one you pressed M-g in.
+target_file() { printf '%s.target' "$1"; }
 
 current_query() {
 	local qf
@@ -693,10 +710,15 @@ scaffold_note() {
 	sha1sum "$note" >"$stamp"
 }
 
-# Open the extracts as markdown notes, kept in a durable directory so anything
-# worth editing survives the search that produced it.
-mode_edit() {
-	local file=$1 idx title slug note notes=() editor
+# Materialise durable notes for the given result indices and print their paths,
+# one per line.
+#
+# Shared by ctrl-e, which opens them, and alt-h, which hands the paths to
+# another pane. One naming rule for both: a path you were given by alt-h has to
+# be the same file ctrl-e would have opened, or the two keys quietly disagree
+# about what "this result" means.
+note_paths() {
+	local file=$1 idx title slug note
 	shift
 	mkdir -p "$NOTES_DIR"
 	for idx in "$@"; do
@@ -704,13 +726,29 @@ mode_edit() {
 		# note behind in a directory that is meant to be durable.
 		[[ -n $(result_field "$idx" "$file" url) ]] || continue
 		title=$(result_field "$idx" "$file" title)
-		slug=$(printf '%s' "$title" | tr '[:upper:]' '[:lower:]' |
+		# Flatten whitespace FIRST. A page title carrying a newline survives the
+		# rest of this pipeline, because tr, sed and cut are all line-oriented,
+		# and the result is a path printed across two lines. Every caller reads
+		# these one-per-line, so that single result silently became two broken
+		# paths: the editor opened neither and the hand-off shipped both.
+		slug=$(printf '%s' "$title" | tr '\n\r\t' '   ' | tr '[:upper:]' '[:lower:]' |
 			sed 's/[^a-z0-9]\+/-/g; s/^-//; s/-$//' | cut -c1-60)
 		[[ -z $slug ]] && slug="result-$idx"
 		note="$NOTES_DIR/$slug.md"
 		scaffold_note "$file" "$idx" "$note"
-		notes+=("$note")
+		printf '%s\n' "$note"
 	done
+}
+
+# Open the extracts as markdown notes, kept in a durable directory so anything
+# worth editing survives the search that produced it.
+mode_edit() {
+	local file=$1 notes=() editor
+	shift
+	mapfile -t notes < <(note_paths "$file" "$@")
+	# No valid indices means no files. Opening the editor on an empty argument
+	# list drops you into a scratch buffer with no way back to the picker.
+	[[ ${#notes[@]} -gt 0 ]] || return 0
 
 	editor=${DDGX_EDITOR:-}
 	if [[ -z $editor ]]; then
@@ -721,6 +759,51 @@ mode_edit() {
 		fi
 	fi
 	"$editor" "${notes[@]}"
+}
+
+# alt-h: hand the marked extracts to the pane M-g was pressed from.
+#
+# What travels is the note PATH, never the note text. The agent in that pane
+# reads the file itself, at full fidelity, on its own schedule; a page it turns
+# out not to need costs it nothing. Pasting the markdown instead would put
+# kilobytes on an input line, which is slow, lossy at the edges, and impossible
+# to review before it is sent.
+#
+# Nothing is submitted. The paths land on the input line and you type what you
+# want done with them, which is also the safety property: a wrong send is a
+# line you clear, not a turn you interrupted.
+mode_send() {
+	local file=$1 notes=() payload target label tf
+	shift
+	mapfile -t notes < <(note_paths "$file" "$@")
+	if [[ ${#notes[@]} -eq 0 ]]; then
+		set_note "$file" 'nothing to hand off'
+		return 0
+	fi
+
+	# Read the pinned target defensively. `$(<missing)` under `set -e` kills the
+	# process before any `||` fallback runs, and the error escapes through
+	# fzf's stderr onto the picker, which is the one outcome this mode exists
+	# to avoid.
+	tf=$(target_file "$file")
+	target=""
+	[[ -r $tf ]] && target=$(<"$tf")
+	payload=$(printf '%s\n' "${notes[@]}")
+
+	if deliver_to_pane "$target" "$payload"; then
+		label=$(tmux display-message -p -t "$target" \
+			'#{session_name}:#{window_index}.#{pane_index}' 2>/dev/null || printf '%s' "$target")
+		set_note "$file" "handed ${#notes[@]} extract(s) to $label"
+		clear_popup_source_pane
+	else
+		# Say which of the two failures it was. "It did nothing" is the report
+		# that costs an evening.
+		if [[ -z $target ]]; then
+			set_note "$file" 'no source pane: alt-h works when ddgx runs from the M-g popup'
+		else
+			set_note "$file" "pane $target is gone, nothing handed off"
+		fi
+	fi
 }
 
 # Bookmark into the same pet snippet file the plink zsh function writes, and
@@ -1171,6 +1254,7 @@ mode_pick() {
 				--bind="ctrl-o:transform($SELF --action '$file' {1} {+1} 2>/dev/null)" \
 				--bind="ctrl-e:execute($SELF --edit '$file' {+1})" \
 				--bind="ctrl-a:execute-silent($SELF --bookmark '$file' {+1})+transform-header($SELF --header '$file')" \
+				--bind="alt-h:execute-silent($SELF --send '$file' {+1})+transform-header($SELF --header '$file')" \
 				--bind="ctrl-y:execute-silent($SELF --copy '$file' {+1})" \
 				--bind="ctrl-r:execute-silent($SELF --refetch '$file' {+1})+refresh-preview" \
 				--bind="alt-q:execute($SELF --refine '$file' $num)+reload($SELF --list '$file')+transform-header($SELF --header '$file')" \
@@ -1222,6 +1306,11 @@ main() {
 		mode_bookmark "$@"
 		return 0
 		;;
+	--send)
+		shift
+		mode_send "$@"
+		return 0
+		;;
 	--refetch)
 		shift
 		mode_refetch "$@"
@@ -1254,6 +1343,15 @@ main() {
 		return 0
 		;;
 	esac
+
+	# Past this point we are the top-level run, not a re-entrant call from an
+	# fzf binding. Take the hand-off target NOW, before prompt_for_query blocks
+	# on a human typing: the binding wrote it microseconds ago, and any popup
+	# opened from a second attached client meanwhile would overwrite it. Clear
+	# it in the same breath so an abandoned popup cannot leave a live pane id
+	# lying in a global for the next run to find and quietly deliver into.
+	SOURCE_PANE=$(popup_source_pane)
+	clear_popup_source_pane
 
 	while [[ $# -gt 0 ]]; do
 		case "$1" in
@@ -1311,6 +1409,7 @@ main() {
 
 	RESULTS_FILE=$(mktemp -t ddgx-results-XXXXXX.json)
 	trap cleanup EXIT INT TERM
+	printf '%s' "$SOURCE_PANE" >"$(target_file "$RESULTS_FILE")"
 
 	# The query round-trip is the one unavoidable wait, so say it is happening
 	# instead of leaving a blank screen.

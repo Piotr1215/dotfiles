@@ -23,10 +23,15 @@ report_error() {
 
 trap report_error ERR
 
-if [[ -z "$target_pane" ]] && command -v tmux >/dev/null 2>&1; then
-	target_pane="$(tmux show-option -gqv @capability_picker_target 2>/dev/null || true)"
-fi
-target_pane="${target_pane:-${TMUX_PANE:-}}"
+# Pane resolution and delivery are shared with __ddgx.sh: both are popups that
+# hand text back to the pane they were opened from, and the correct way to do
+# that is subtle enough that two copies means one wrong copy.
+source "$script_dir/__lib_pane_deliver.sh"
+
+target_pane="$(popup_source_pane "$target_pane")"
+# Consume it immediately. Abandoning this picker used to leave the option set,
+# and the next tool to read it would deliver into a pane nobody had pointed at.
+clear_popup_source_pane
 
 copy_to_clipboard() {
 	if command -v xclip >/dev/null 2>&1; then
@@ -36,25 +41,10 @@ copy_to_clipboard() {
 	fi
 }
 
-# Test the output, not the exit status: `display-message -t` reports an unknown
-# pane by printing nothing and still exiting 0, so branching on the status makes
-# the check always true and the clipboard fallback unreachable. The paste then
-# fails inside a backgrounded run-shell, where nobody sees it, and the selection
-# is lost with no error.
-pane_is_live() {
-	[[ -n "$1" ]] || return 1
-	[[ -n "$(tmux display-message -p -t "$1" '#{pane_id}' 2>/dev/null)" ]]
-}
-
 deliver_text() {
-	local content="$1" label="$2" buffer_name
-	if pane_is_live "$target_pane"; then
-		buffer_name="capability-picker-${target_pane#%}-$$"
-		printf '%s' "$content" | tmux load-buffer -b "$buffer_name" -
-		# The popup owns the client until this process exits. Paste afterwards so
-		# terminal UIs receive multiline text reliably.
-		tmux run-shell -b "sleep 0.15; tmux paste-buffer -b '$buffer_name' -t '$target_pane' -d"
-		tmux set-option -gu @capability_picker_target 2>/dev/null || true
+	local content="$1" label="$2"
+	if deliver_to_pane "$target_pane" "$content"; then
+		clear_popup_source_pane
 	elif printf '%s' "$content" | copy_to_clipboard; then
 		echo "Copied to clipboard: $label" >&2
 	else
