@@ -1334,3 +1334,310 @@ listing_json() {
 	[[ "$output" == *"3 videos"* ]]
 	[[ "$output" != *"showing"* ]]
 }
+
+# --------------------------------------------------------------------------
+# The hand-off. alt-h gives the marked results' note PATHS to the pane the M-g
+# popup was opened from, through deliver_to_pane in __lib_pane_deliver.sh.
+#
+# The pane is resolved once, when the search starts, into "<results>.target",
+# so these tests write that file rather than the global tmux option: reading the
+# option at send time is the bug the sidecar exists to prevent.
+#
+# Most of it runs against a stubbed tmux, because the thing worth locking is the
+# exact command line, and only a stub can be asked what it was handed. The one
+# test that needs a real pane starts a server of its own on a private socket.
+# --------------------------------------------------------------------------
+
+# Stub tmux so a delivery can be read back verbatim. Every call is appended to
+# a log, load-buffer's stdin is kept as the payload, and a pane counts as live
+# only when its id was named here. An unknown pane is answered the way tmux
+# answers one: nothing on stdout, exit 0. That is the whole reason pane_is_live
+# tests the output instead of the status, so the stub must not make it easier.
+stub_tmux() {
+	TMUX_LOG="$BATS_TEST_TMPDIR/tmux.log"
+	TMUX_BUFFER="$BATS_TEST_TMPDIR/tmux.buffer"
+	rm -f "$TMUX_LOG" "$TMUX_BUFFER"
+	printf '%s\n' "$@" >"$STUB_BIN/tmux.live"
+	cat >"$STUB_BIN/tmux" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >>"$TMUX_LOG"
+case "\$1" in
+display-message)
+	fmt="\${*: -1}"
+	pane=""
+	while [ \$# -gt 0 ]; do
+		[ "\$1" = "-t" ] && pane="\$2"
+		shift
+	done
+	[ -n "\$pane" ] || exit 0
+	grep -qxF "\$pane" "$STUB_BIN/tmux.live" 2>/dev/null || exit 0
+	case "\$fmt" in
+	*session_name*) printf 'search:0.1\n' ;;
+	*) printf '%s\n' "\$pane" ;;
+	esac
+	;;
+load-buffer)
+	cat >"$TMUX_BUFFER"
+	;;
+esac
+exit 0
+EOF
+	chmod +x "$STUB_BIN/tmux"
+}
+
+# The results file every hand-off test sends from, with the pane the popup was
+# opened from already pinned beside it.
+write_send_state() {
+	SEND_RESULTS="$BATS_TEST_TMPDIR/results.json"
+	write_two_results
+	printf '%s' "${1:-}" >"$(printf '%s.target' "$SEND_RESULTS")"
+}
+
+run_send() {
+	run env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" \
+		XDG_DATA_HOME="$DATA_HOME" DDGX_TTL=0 bash "$DDGX" --send "$@"
+}
+
+# What the picker would show after the key: the note, consumed on read.
+send_header() {
+	run env XDG_CACHE_HOME="$CACHE_HOME" bash "$DDGX" --header "$SEND_RESULTS"
+}
+
+@test "the picker binds alt-h to the hand-off" {
+	# fzf cannot be driven far enough here to press a key, so the binding is
+	# read from the source. A key advertised in the header and bound nowhere is
+	# a key that silently does nothing, which is the failure this file already
+	# guards for ctrl-\.
+	local bind
+	bind=$(grep -F -- '--bind="alt-h:' "$DDGX")
+
+	[ -n "$bind" ]
+	[[ "$bind" == *"--send"* ]]
+	# The marked set, {+1}, not the focused row, {1}: marking five results and
+	# handing over one is the silent half-delivery.
+	[[ "$bind" == *"{+1}"* ]]
+	# execute-silent keeps the picker drawn, and the header transform after it
+	# is the only channel mode_send's outcome has back to the screen.
+	[[ "$bind" == *"execute-silent"* ]]
+	[[ "$bind" == *"transform-header"* ]]
+
+	write_send_state '%7'
+	send_header
+	[[ "$output" == *"alt-h"* ]]
+}
+
+@test "the hand-off gives up the same notes ctrl-e opens" {
+	write_send_state '%7'
+	printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$@" > "%s/opened.txt"\n' \
+		"$BATS_TEST_TMPDIR" >"$STUB_BIN/fake-editor"
+	chmod +x "$STUB_BIN/fake-editor"
+
+	run env XDG_CACHE_HOME="$CACHE_HOME" XDG_DATA_HOME="$DATA_HOME" DDGX_TTL=0 \
+		DDGX_EDITOR="$STUB_BIN/fake-editor" \
+		bash "$DDGX" --edit "$SEND_RESULTS" 0 1
+	[ "$status" -eq 0 ]
+
+	stub_tmux '%7'
+	run_send "$SEND_RESULTS" 0 1
+	[ "$status" -eq 0 ]
+
+	# Both keys go through note_paths, so a path you were handed is the file
+	# ctrl-e would have opened. Two naming rules that agree today drift the
+	# first time either slug is touched, and then the two keys disagree about
+	# what "this result" means.
+	[ -s "$TMUX_BUFFER" ]
+	[ "$(cat "$TMUX_BUFFER")" = "$(cat "$BATS_TEST_TMPDIR/opened.txt")" ]
+	[ "$(grep -c '/ddgx/notes/' "$TMUX_BUFFER")" -eq 2 ]
+}
+
+@test "the hand-off gives up the note path, never the page text" {
+	write_send_state '%7'
+	stub_tmux '%7'
+
+	run_send "$SEND_RESULTS" 0
+
+	# The agent in that pane reads the file itself, at full fidelity. Pasting
+	# the markdown would put kilobytes on an input line, unreviewable before it
+	# is sent and lossy at the edges.
+	# A negated assertion is written as a [[ ]] comparison throughout this
+	# block, never as `! grep`: bash exempts a command whose status is inverted
+	# with ! from set -e, so `! grep -q` under bats passes whether or not the
+	# pattern is there. Measured on a mutant that pasted the text.
+	[ "$status" -eq 0 ]
+	[ "$(cat "$TMUX_BUFFER")" = "$DATA_HOME/ddgx/notes/first-hit.md" ]
+	[[ "$(cat "$TMUX_BUFFER")" != *"body of the first page"* ]]
+	# The text is not missing, it is where it belongs: in the file whose path
+	# just went over.
+	grep -q 'body of the first page' "$DATA_HOME/ddgx/notes/first-hit.md"
+
+	send_header
+	[[ "$output" == *"handed 1 extract(s) to search:0.1"* ]]
+}
+
+@test "a hand-off into a pane that is gone says so rather than failing quietly" {
+	write_send_state '%999'
+	stub_tmux '%7'
+
+	run_send "$SEND_RESULTS" 0
+
+	# display-message answers an unknown pane with an empty line and exit 0, so
+	# a check that branched on the status would call the pane live, the paste
+	# would fail inside a backgrounded run-shell where nobody sees it, and the
+	# payload would be lost with no error at all.
+	[ "$status" -eq 0 ]
+	[ ! -e "$TMUX_BUFFER" ]
+	send_header
+	[[ "$output" == *"pane %999 is gone, nothing handed off"* ]]
+	[[ "$output" != *"handed 1 extract"* ]]
+}
+
+@test "a hand-off with no source pane recorded names that as the reason" {
+	write_send_state ''
+	stub_tmux '%7'
+
+	run_send "$SEND_RESULTS" 0
+
+	# Two failures with one symptom. Running ddgx outside the M-g popup leaves
+	# nothing to deliver into, and reporting that as a dead pane sends you
+	# hunting for a pane that was never named.
+	[ "$status" -eq 0 ]
+	[ ! -e "$TMUX_BUFFER" ]
+	send_header
+	[[ "$output" == *"no source pane"* ]]
+	[[ "$output" != *"is gone"* ]]
+}
+
+@test "a hand-off of an index past the end delivers nothing" {
+	write_send_state '%7'
+	stub_tmux '%7'
+
+	run_send "$SEND_RESULTS" 99
+
+	[ "$status" -eq 0 ]
+	send_header
+	[[ "$output" == *"nothing to hand off"* ]]
+	# Not one tmux call, so there is no buffer to leak and no empty paste to
+	# land on the input line of a pane that was minding its own business.
+	[ ! -e "$TMUX_LOG" ]
+	# And no note scaffolded for a result that does not exist: the notes
+	# directory is durable, so junk written there stays.
+	[ -z "$(ls -A "$DATA_HOME/ddgx/notes" 2>/dev/null)" ]
+}
+
+@test "the hand-off pastes with -p, so a multi-line payload cannot execute" {
+	write_send_state '%7'
+	stub_tmux '%7'
+
+	run_send "$SEND_RESULTS" 0 1
+	[ "$status" -eq 0 ]
+
+	# paste-buffer without -p replays the buffer as keystrokes and every newline
+	# is an Enter, so a two-path hand-off ran the first path as a command. -p
+	# wraps the paste in bracketed-paste markers, which readline and every
+	# terminal UI treat as literal text.
+	local paste load buffer
+	paste=$(grep -F 'paste-buffer' "$TMUX_LOG")
+	[ -n "$paste" ]
+	[[ "$paste" == *"paste-buffer -p "* ]]
+
+	# Two paths, so the flag is load-bearing in this very payload rather than
+	# in some other test's.
+	[ "$(grep -c '/ddgx/notes/' "$TMUX_BUFFER")" -eq 2 ]
+
+	# The paste must name the buffer that was just loaded, or -p is protecting
+	# somebody else's bytes.
+	load=$(grep -F 'load-buffer' "$TMUX_LOG")
+	buffer=$(sed -n 's/.*load-buffer -b \([^ ]*\).*/\1/p' <<<"$load")
+	[ -n "$buffer" ]
+	[[ "$paste" == *"-b '$buffer'"* ]]
+
+	# Deferred past the popup's teardown: the popup owns the client until its
+	# process exits, and a paste issued from inside it races the handover and
+	# lands in a pane still being torn down.
+	[[ "$paste" == "run-shell -b "* ]]
+}
+
+@test "the hand-off submits nothing" {
+	write_send_state '%7'
+	stub_tmux '%7'
+
+	run_send "$SEND_RESULTS" 0 1
+	[ "$status" -eq 0 ]
+
+	# The paths land on the input line and the human types what they want done
+	# with them. A popup that submits on your behalf submits the wrong thing
+	# into a live agent, and there is no undo for that.
+	local log
+	log=$(cat "$TMUX_LOG")
+	[[ "$log" != *"send-keys"* ]]
+	[[ "$log" != *"Enter"* ]]
+	[[ "$log" != *"C-m"* ]]
+	# No trailing newline either: a payload that ends in one is a submit the
+	# moment anything replays it as keystrokes.
+	[ -n "$(tail -c1 "$TMUX_BUFFER")" ]
+}
+
+# A tmux server of this test's own, on a socket directory it created. TMUX is
+# unset for every call because a set TMUX names a socket outright and beats
+# TMUX_TMPDIR: inherited from the tmux the suite is being run from, it would aim
+# a paste at one of the reader's own panes. Probed, not assumed.
+private_tmux() {
+	env -u TMUX TMUX_TMPDIR="$TMUX_SOCKET_DIR" tmux -f /dev/null "$@"
+}
+
+# Only ever tears down a server this file started. Without the guard a bare
+# kill-server would reach the default socket, which is where the reader is.
+teardown() {
+	[ -n "${TMUX_SOCKET_DIR:-}" ] || return 0
+	private_tmux kill-server 2>/dev/null || true
+	rm -rf "$TMUX_SOCKET_DIR"
+}
+
+@test "a hand-off into a live pane lands on its input line, unsubmitted" {
+	command -v tmux >/dev/null 2>&1 || skip "tmux not installed"
+	write_send_state ''
+
+	# Under /tmp, not the test tmpdir: the socket path is a sockaddr_un and a
+	# long enough prefix makes the connect fail with "File name too long".
+	TMUX_SOCKET_DIR=$(mktemp -d /tmp/ddgx-bats-XXXXXX)
+	private_tmux new-session -d -s ddgx-handoff -x 240 -y 20 'bash --norc -i'
+
+	local i ready=0
+	for ((i = 0; i < 60; i++)); do
+		if private_tmux capture-pane -p -t ddgx-handoff | grep -q '^bash-'; then
+			ready=1
+			break
+		fi
+		sleep 0.1
+	done
+	[ "$ready" -eq 1 ]
+
+	local pane
+	pane=$(private_tmux list-panes -t ddgx-handoff -F '#{pane_id}' | head -1)
+	printf '%s' "$pane" >"$SEND_RESULTS.target"
+
+	run env -u TMUX TMUX_TMPDIR="$TMUX_SOCKET_DIR" \
+		XDG_CACHE_HOME="$CACHE_HOME" XDG_DATA_HOME="$DATA_HOME" DDGX_TTL=0 \
+		bash "$DDGX" --send "$SEND_RESULTS" 0 1
+	[ "$status" -eq 0 ]
+
+	# The paste is deferred by run-shell -b, so wait for it rather than racing.
+	local cap
+	for ((i = 0; i < 60; i++)); do
+		cap=$(private_tmux capture-pane -p -t "$pane")
+		[[ "$cap" == *"second-hit.md"* ]] && break
+		sleep 0.1
+	done
+
+	# Both paths sit on one input line, unrun. Without -p this pane shows the
+	# first path echoed as a command, "Permission denied" under it, and a second
+	# prompt: the shell executed the line the newline terminated. Measured, on
+	# this tmux and this bash, before the assertion was written.
+	[[ "$cap" == *"$DATA_HOME/ddgx/notes/first-hit.md"* ]]
+	[[ "$cap" == *"$DATA_HOME/ddgx/notes/second-hit.md"* ]]
+	[[ "$cap" != *"Permission denied"* ]]
+	[[ "$cap" != *"command not found"* ]]
+	[ "$(grep -c '^bash-' <<<"$cap")" -eq 1 ]
+	# The page text stayed in the file, as it does with the stub.
+	[[ "$cap" != *"body of the first page"* ]]
+}
