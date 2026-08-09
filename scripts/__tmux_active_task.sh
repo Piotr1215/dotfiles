@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Display linear issue, agent task, Claude pane goal, or date/time for tmux status bar
+# Display PR title, Linear issue, pane goal, or date/time for tmux status bar
 # Two modes: default (fast reader for status bar) and --update (async writer)
 set -eo pipefail
 
@@ -77,32 +77,12 @@ get_agent_issue() {
     [ -n "$desc" ] && echo "📋 $desc"
 }
 
-get_agent_desc() {
-    local session="$1" desc
-    # @agent_desc is a session option written by ~/.claude/scripts/__spawn_agent.sh
-    # --desc at spawn time. It covers the spawns the two lookups above cannot see:
-    # a /ops-spawn-agent worker carries neither a PR number nor a Linear id in its
-    # session name, so the status bar had nothing to show but the clock.
-    #
-    # A session option rather than a file: it is scoped to exactly the session the
-    # cache is keyed by, and it dies with the session, so a killed or respawned
-    # agent can never leave a stale description behind.
-    desc=$(tmux show-options -qv -t "$session" @agent_desc 2>/dev/null) || return 0
-    [ -n "$desc" ] || return 0
-    # '#' opens a format substitution in a tmux status string, and newlines would
-    # split the single-line cache entry. Strip both rather than trust that job
-    # output is never re-expanded.
-    desc=$(printf '%s' "${desc//\#/}" | tr -d '\n\r\t')
-    [ -n "$desc" ] && echo "🤖 $(truncate_desc "$desc" 60)"
-}
-
 get_claude_goal() {
     local session="$1" goal
     # @claude_goal is a PANE option written by ~/.claude/scripts/__claude_pane_label.sh
     # from the first sentence of the session's newest away_summary. It covers the
-    # home case the three lookups above cannot: an interactive Claude pane carries
-    # no PR number, no Linear id, and no spawn-time --desc, so the bar said nothing
-    # about the agent sitting in front of you.
+    # fallback case the two live lookups above cannot: an ordinary interactive or
+    # spawned pane carries no PR number or Linear id in its session name.
     #
     # display-message rather than show-options, and deliberately so: a pane option
     # is invisible to `show-options -t <session>`, but a format resolved against a
@@ -112,7 +92,7 @@ get_claude_goal() {
     goal=$(tmux display-message -p -t "$session" '#{@claude_goal}' 2>/dev/null) || return 0
     [ -n "$goal" ] || return 0
     # '#' opens a format substitution in a status string, and newlines would split
-    # the single-line cache entry. Same defence as get_agent_desc above.
+    # the single-line cache entry.
     goal=$(printf '%s' "${goal//\#/}" | tr -d '\n\r\t')
     # THE CLOCK IS APPENDED AFTER THIS TEXT, and tmux hard-truncates the whole
     # of status-right at status-right-length. So an over-long recap does not
@@ -138,26 +118,24 @@ get_claude_goal() {
     # a fragment. prefix g now shows every source in full on demand, so the
     # always-on line no longer has to try to say everything.
     #
-    # 60 is get_agent_desc's cap, so all three text sources read at one width
-    # instead of the goal being twice the length of a PR title. The derived
-    # budget stays as the ceiling above it: if status-right-length ever drops
-    # below 84, the smaller number wins and the clock still survives.
+    # 60 matches the PR title cap. The derived budget stays as the ceiling above
+    # it: if status-right-length ever drops below 84, the smaller number wins and
+    # the clock still survives.
     if [ "$budget" -gt 60 ]; then budget=60; fi
     if [ -n "$goal" ]; then echo "🤖 $(truncate_desc "$goal" "$budget")"; fi
 }
 
 update_session() {
     local session="$1"
-    local datetime="$(date +"%a %H:%M")"
+    local datetime
+    datetime=$(date +"%a %H:%M")
     local mode="work"
     [[ -f /tmp/timeoff_mode ]] && mode="home"
     datetime="$datetime | $mode"
     local prefix=""
 
     # Order is precedence. PR and Linear are live lookups that resolve richer text
-    # than a spawn-time label, and both already work, so the explicit description
-    # slots in behind them: adding it can only fill a gap, never displace a line
-    # that renders today.
+    # than the pane goal. The goal remains independently available to prefix g.
     # `|| true` on every one of these, because each getter ends in
     # `[ -n "$x" ] && echo ...` and so returns 1 when it finds nothing. Under
     # `set -e` that failure propagates out of the assignment and kills the whole
@@ -169,12 +147,9 @@ update_session() {
     if [ -z "$prefix" ]; then
         prefix=$(get_agent_issue "$session") || true
     fi
-    if [ -z "$prefix" ]; then
-        prefix=$(get_agent_desc "$session") || true
-    fi
-    # Last link, behind every explicit label: an interactive Claude pane has no
-    # PR, no Linear id and no spawn --desc, so without this the bar fell through to
-    # the bare clock and said nothing about the agent in front of you. The mpv
+    # Last link, behind the two explicit labels: ordinary panes have no PR or
+    # Linear id, so without this the bar falls through to the bare clock and says
+    # nothing about the agent in front of you. The mpv
     # track used to sit at the end of this chain and was removed: this bar is for
     # what the agent is doing, and the music was crowding it out.
     if [ -z "$prefix" ]; then
@@ -189,10 +164,17 @@ update_session() {
     fi
 }
 
-# Prevent pile-up: skip if another update is already running
-LOCK_FILE="/tmp/tmux_task_update.lock"
+# Prevent pile-up without dropping the newest goal. The hook path must return
+# at once, so a busy first writer launches one detached retry. That retry waits
+# for the current writer and then rebuilds from the latest pane options.
+LOCK_FILE="${TMUX_TASK_LOCK_FILE:-/tmp/tmux_task_update.lock}"
 exec 9>"$LOCK_FILE"
-flock -n 9 || exit 0
+if [ "${TMUX_TASK_LOCK_RETRY:-0}" = "1" ]; then
+    flock -w "${TMUX_TASK_LOCK_RETRY_WAIT:-5}" 9 || exit 0
+elif ! flock -n 9; then
+    setsid env TMUX_TASK_LOCK_RETRY=1 "$0" "$@" </dev/null >/dev/null 2>&1 &
+    exit 0
+fi
 
 # Update only the current session (or all with --update-all)
 if [ "${2:-}" = "all" ]; then
