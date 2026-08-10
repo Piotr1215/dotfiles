@@ -115,7 +115,8 @@ if [ -f "$timeoff_file" ]; then
   margin_command="${TMUX_READING_MARGIN_WEEKEND_COMMAND:-exec \"$script_dir/__play_track.sh\" --run}"
   input_flag=-e
 else
-  margin_command="${TMUX_READING_MARGIN_WORK_COMMAND:-exec \"$HOME/.claude/scripts/__cockpit_board.sh\" --vertical}"
+  session_name="$(tmux display-message -p -t "$target_pane" '#{session_name}')"
+  margin_command="${TMUX_READING_MARGIN_WORK_COMMAND:-exec \"$script_dir/__tmux_reading_margin_work.sh\" \"$session_name\" \"$window_id\"}"
   input_flag=-d
 fi
 margin_pane="$(
