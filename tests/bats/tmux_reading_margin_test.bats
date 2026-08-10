@@ -2,6 +2,7 @@
 
 setup() {
   SCRIPT="${BATS_TEST_DIRNAME}/../../scripts/__tmux_toggle_reading_margin.sh"
+  WORK_SCRIPT="${BATS_TEST_DIRNAME}/../../scripts/__tmux_reading_margin_work.sh"
   SOCKET_NAME="reading-margin-${BATS_TEST_NUMBER}-$$"
   MODE_FILE="${BATS_TEST_TMPDIR}/timeoff-mode"
   COMMAND_LOG="${BATS_TEST_TMPDIR}/margin-command"
@@ -14,6 +15,64 @@ setup() {
   tmux -L "$SOCKET_NAME" set-environment -g TMUX_READING_MARGIN_WEEKEND_COMMAND \
     "printf 'weekend\\n' > '$COMMAND_LOG'; exec sleep infinity"
   tmux -L "$SOCKET_NAME" set-option -g @reading_margin_default on
+}
+
+@test "work margin renders prefix-g status before the vertical cockpit" {
+  bin_dir="${BATS_TEST_TMPDIR}/bin"
+  mkdir -p "$bin_dir"
+  cat > "$bin_dir/tmux" <<'EOF'
+#!/usr/bin/env bash
+case "${*: -1}" in
+  '#{pane_id}') printf '%%42\n' ;;
+  '#{pane_width}') printf '%s\n' "${STUB_PANE_WIDTH:-72}" ;;
+esac
+EOF
+  cat > "$bin_dir/status" <<'EOF'
+#!/usr/bin/env bash
+printf 'status session=%s pane=%s columns=%s\n' "$1" "$2" "$COLUMNS"
+EOF
+  cat > "$bin_dir/cockpit" <<'EOF'
+#!/usr/bin/env bash
+printf 'cockpit layout=%s width=%s\n' "$COCKPIT_LAYOUT" "$COCKPIT_VERTICAL_WIDTH"
+EOF
+  chmod +x "$bin_dir/tmux" "$bin_dir/status" "$bin_dir/cockpit"
+
+  run env PATH="$bin_dir:$PATH" TMUX_PANE='%99' \
+    TMUX_READING_MARGIN_FULL_STATUS_COMMAND="$bin_dir/status" \
+    TMUX_READING_MARGIN_COCKPIT_STATE_COMMAND="$bin_dir/cockpit" \
+    "$WORK_SCRIPT" --render test '@7'
+
+  [ "$status" -eq 0 ]
+  [ "$output" = $'status session=test pane=%42 columns=72\n\ncockpit layout=vertical width=72' ]
+}
+
+@test "work margin wraps full status before the cockpit edge" {
+  bin_dir="${BATS_TEST_TMPDIR}/bin"
+  mkdir -p "$bin_dir"
+  cat > "$bin_dir/tmux" <<'EOF'
+#!/usr/bin/env bash
+case "${*: -1}" in
+  '#{pane_id}') printf '%%42\n' ;;
+  '#{pane_width}') printf '97\n' ;;
+esac
+EOF
+  cat > "$bin_dir/status" <<'EOF'
+#!/usr/bin/env bash
+printf 'status columns=%s\n' "$COLUMNS"
+EOF
+  cat > "$bin_dir/cockpit" <<'EOF'
+#!/usr/bin/env bash
+printf 'cockpit width=%s\n' "$COCKPIT_VERTICAL_WIDTH"
+EOF
+  chmod +x "$bin_dir/tmux" "$bin_dir/status" "$bin_dir/cockpit"
+
+  run env PATH="$bin_dir:$PATH" TMUX_PANE='%99' \
+    TMUX_READING_MARGIN_FULL_STATUS_COMMAND="$bin_dir/status" \
+    TMUX_READING_MARGIN_COCKPIT_STATE_COMMAND="$bin_dir/cockpit" \
+    "$WORK_SCRIPT" --render test '@7'
+
+  [ "$status" -eq 0 ]
+  [ "$output" = $'status columns=80\n\ncockpit width=97' ]
 }
 
 teardown() {
@@ -98,7 +157,7 @@ wait_for_command() {
   [ "$(tmux -L "$SOCKET_NAME" list-panes -F '#{pane_id}' | wc -l)" -eq 2 ]
 }
 
-@test "reading margin shows cockpit at work and playlist during time off" {
+@test "reading margin shows the work view at work and playlist during time off" {
   toggle_margin
   wait_for_command
   [ "$(<"$COMMAND_LOG")" = work ]

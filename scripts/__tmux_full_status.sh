@@ -39,8 +39,22 @@ case "$cols" in ''|*[!0-9]*) cols=100 ;; esac
 b=$'\033[1m'; dim=$'\033[2m'; off=$'\033[0m'
 hdr() { printf '\n%s%s%s\n' "$b" "$1" "$off"; }
 
-# Wrap long values so a 400-char goal does not run off the popup.
-wrap() { printf '%s\n' "$1" | fold -s -w "$(( cols - 6 ))" | sed 's/^/      /'; }
+# Wrap long values so a 400-char goal does not run off the popup. Keep a useful
+# floor when the same content is rendered in Alt-m's narrow one-third pane.
+wrap_width=$((cols - 6))
+if [ "$wrap_width" -lt 20 ]; then wrap_width=20; fi
+wrap() { printf '%s\n' "$1" | fold -s -w "$wrap_width" | sed 's/^/      /'; }
+
+border_row() {
+    local label="$1" text="$2" inline_width=$((cols - 22))
+    if [ "$inline_width" -lt 20 ]; then inline_width=20; fi
+    if [ "${#text}" -gt "$inline_width" ]; then
+        printf '  %-18s\n' "$label"
+        wrap "$text"
+    else
+        printf '  %-18s %s\n' "$label" "$text"
+    fi
+}
 
 # A source row: mark, label, provenance, and how much the bar kept.
 row() {
@@ -135,7 +149,7 @@ fi
 hdr "PANE BORDER  (__claude_pane_label.sh, hooks write these per pane)"
 for opt in @claude_state @claude_glyph @claude_label @claude_label_at; do
     val=$(tmux display-message -p ${pane:+-t "$pane"} "#{$opt}" 2>/dev/null) || val=""
-    printf '  %-18s %s\n' "$opt" "${val:-${dim}unset${off}}"
+    border_row "$opt" "${val:-${dim}unset${off}}"
 done
 
 if [ "$wait_for_key" = "1" ]; then
