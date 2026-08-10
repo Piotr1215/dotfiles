@@ -74,9 +74,9 @@ case "${1:-list}" in
         ;;
     claim)
         session=$(resolve_choice "${2:-}") || exit 1
-        level=$(tmux show-options -qv -t "=$session" @agent_spawn_level 2>/dev/null || true)
+        level=$(tmux show-options -qv -t "$session" @agent_spawn_level 2>/dev/null || true)
         if [[ "$level" == delegated ]]; then
-            tmux set-option -t "=$session" @agent_human_owned 1
+            tmux set-option -t "$session" @agent_human_owned 1
         fi
         printf '%s\n' "$session"
         ;;
