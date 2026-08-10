@@ -32,7 +32,6 @@ case "$1" in
       [[ "$1" == -t ]] && { target="$2"; break; }
       shift
     done
-    target="${target#=}"
     if [[ "$target" == worker-b ]]; then
       [[ "$option" == @agent_spawn_level ]] && printf 'delegated\n'
       [[ "$option" == @agent_spawn_parent ]] && printf 'orchestrator\n'
@@ -70,7 +69,7 @@ else bad "decorated worker resolves exactly"; fi
 claimed=$(PATH="$BIN:$PATH" "$SCRIPT" claim "$choice")
 if [[ "$claimed" == worker-b ]]; then ok "claimed worker resolves exactly"
 else bad "claimed worker resolves exactly"; fi
-if grep -q '^set-option -t =worker-b @agent_human_owned 1$' "$LOG"; then
+if grep -q '^set-option -t worker-b @agent_human_owned 1$' "$LOG"; then
     ok "explicit worker selection records takeover"
 else
     bad "explicit worker selection records takeover"
