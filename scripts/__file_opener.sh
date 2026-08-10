@@ -134,10 +134,11 @@ fi
 # Marker file for returning to main picker
 RETURN_MARKER="/tmp/file_opener_return_$$"
 KCTX_MARKER="/tmp/file_opener_kctx_$$"
+SESSION_CHOICES="$HOME/dev/dotfiles/scripts/__tmux_session_choices.sh"
 
 # Define keybindings for switching sources (only the useful filters)
 # Ctrl+X returns to main view (all sources: sessions + zoxide + files)
-HOME_BIND="ctrl-x:change-prompt(all> )+reload(active=\$(tmux ls -F '#{session_name}' 2>/dev/null); active_pipe=\$(echo \"\$active\" | tr '\\n' '|'); configs=\$(ls --color=never ~/.config/tmuxinator/*.yml 2>/dev/null | xargs -n1 basename | sed 's/\\.yml\$//' | sort); echo \"\$active\" | while read -r s; do [[ -n \"\$s\" ]] && echo \"\$s ◀◀◀\"; done; echo \"\$configs\" | while read -r s; do [[ -n \"\$s\" && \"|\$active_pipe\" != *\"|\$s|\"* && \"\$active_pipe\" != \"\$s|\"* ]] && echo \"\$s\"; done; zoxide query -l; cache=/tmp/file_opener_cache_\$USER; if [[ -f \$cache ]] && [[ \$(((\$(date +%s) - \$(stat -c %Y \$cache)))) -lt 60 ]]; then cat \$cache; else fd --type f --hidden --absolute-path --color never --exclude .git --exclude node_modules --exclude .cache --exclude image-cache --exclude plugins --exclude stats-cache.json --exclude claude-wt-worktrees --exclude vendor --changed-within 7d . ~/dev ~/loft ~/.config/nvim ~/.claude 2>/dev/null | xargs stat --format '%Y %n' 2>/dev/null | sort -rn | cut -d' ' -f2- | tee \$cache; fi)"
+HOME_BIND="ctrl-x:change-prompt(all> )+reload(active=\$(tmux ls -F '#{session_name}' 2>/dev/null); active_pipe=\$(echo \"\$active\" | tr '\\n' '|'); configs=\$(ls --color=never ~/.config/tmuxinator/*.yml 2>/dev/null | xargs -n1 basename | sed 's/\\.yml\$//' | sort); ~/dev/dotfiles/scripts/__tmux_session_choices.sh list; echo \"\$configs\" | while read -r s; do [[ -n \"\$s\" && \"|\$active_pipe\" != *\"|\$s|\"* && \"\$active_pipe\" != \"\$s|\"* ]] && echo \"\$s\"; done; zoxide query -l; cache=/tmp/file_opener_cache_\$USER; if [[ -f \$cache ]] && [[ \$(((\$(date +%s) - \$(stat -c %Y \$cache)))) -lt 60 ]]; then cat \$cache; else fd --type f --hidden --absolute-path --color never --exclude .git --exclude node_modules --exclude .cache --exclude image-cache --exclude plugins --exclude stats-cache.json --exclude claude-wt-worktrees --exclude vendor --changed-within 7d . ~/dev ~/loft ~/.config/nvim ~/.claude 2>/dev/null | xargs stat --format '%Y %n' 2>/dev/null | sort -rn | cut -d' ' -f2- | tee \$cache; fi)"
 # Files from work directories
 FILE_BIND="ctrl-f:execute-silent(touch /tmp/file_opener_2d)+abort"
 # Bookmarks binding - extract and expand paths from bookmarks.conf with descriptions
@@ -155,7 +156,7 @@ PR_BIND="ctrl-g:execute-silent(touch $RETURN_MARKER)+execute(~/dev/dotfiles/scri
 LINEAR_BIND="ctrl-l:execute(~/dev/dotfiles/scripts/__linear_issue_viewer.sh)+abort"
 
 # Edit tmuxinator config (Ctrl+E) - only works on sessions
-EDIT_BIND="ctrl-e:execute(name={}; name=\${name% ◀◀◀}; [[ -f ~/.config/tmuxinator/\${name}.yml ]] && nvim ~/.config/tmuxinator/\${name}.yml)+abort"
+EDIT_BIND="ctrl-e:execute(item={}; name=\$(~/dev/dotfiles/scripts/__tmux_session_choices.sh resolve \"\$item\" 2>/dev/null || printf '%s' \"\$item\"); [[ -f ~/.config/tmuxinator/\${name}.yml ]] && nvim ~/.config/tmuxinator/\${name}.yml)+abort"
 
 # Music picker (Ctrl+U) - run music picker, closes popup on exit (can't use Ctrl+M, it's Enter)
 MUSIC_BIND="ctrl-u:execute(~/dev/dotfiles/scripts/__play_track.sh --run)+abort"
@@ -183,9 +184,7 @@ while true; do
         active_pipe=$(echo "$active_sessions" | tr '\n' '|')
         configs=$(ls --color=never ~/.config/tmuxinator/*.yml 2>/dev/null | xargs -n1 basename | sed 's/\.yml$//' | sort)
         # All active sessions with marker
-        echo "$active_sessions" | while read -r s; do
-            [[ -n "$s" ]] && echo "$s ◀◀◀"
-        done
+        "$SESSION_CHOICES" list
         # Inactive tmuxinator configs without marker
         echo "$configs" | while read -r s; do
             [[ -n "$s" && "|$active_pipe" != *"|$s|"* && "$active_pipe" != "$s|"* ]] && echo "$s"
@@ -202,7 +201,7 @@ while true; do
     } | fzf \
         --multi \
         --tiebreak=index \
-        --preview 'item={}; name=${item% ◀◀◀}; bpath=$(echo "$item" | command grep -oE "/[^ ]+$");
+        --preview 'item={}; name=$(~/dev/dotfiles/scripts/__tmux_session_choices.sh resolve "$item" 2>/dev/null || printf "%s" "$item"); bpath=$(echo "$item" | command grep -oE "/[^ ]+$");
             if [[ "$item" == *" ◀◀◀" ]]; then
                 tmux list-windows -t "$name" -F "  #I: #W (#P panes)" 2>/dev/null
                 echo "─────────────────────────────"
@@ -221,7 +220,7 @@ while true; do
                 echo "Preview not available"
             fi' \
         --preview-window 'right:50%:wrap' \
-        --header ' C-f:30d C-x:home C-b:marks C-o:github C-g:PRs C-l:Linear C-s:search-panes C-d:toggles C-e:edit C-u:music C-k:kctx | C-y:copy Tab:paste' \
+        --header ' ↳ worker  C-f:30d C-x:home C-b:marks C-o:github C-g:PRs C-l:Linear C-s:search-panes C-d:toggles C-e:edit C-u:music C-k:kctx | C-y:copy Tab:paste' \
         --prompt 'all> ' \
         --bind "$HOME_BIND" \
         --bind "$FILE_BIND" \
@@ -349,9 +348,9 @@ done
 
 # Process selections (ctrl-y is now handled by fzf binding)
 if [ -n "$OUTPUT" ]; then
-    # Handle sessions (format: "name" or "name ◀◀◀")
-    if [[ "$OUTPUT" =~ ^([a-zA-Z0-9_-]+)( ◀◀◀)?$ ]]; then
-        session="${BASH_REMATCH[1]}"
+    # Handle decorated active sessions. `claim` strips hierarchy chrome and
+    # records human takeover for delegated workers before the client switches.
+    if session=$("$SESSION_CHOICES" claim "$OUTPUT" 2>/dev/null); then
         # Try switch first (works for any active session), fall back to tmuxinator
         if tmux switch-client -t "$session" 2>/dev/null; then
             exit 0
@@ -359,6 +358,9 @@ if [ -n "$OUTPUT" ]; then
             tmuxinator start "$session"
             exit 0
         fi
+    elif [[ "$OUTPUT" =~ ^[a-zA-Z0-9_-]+$ && -f ~/.config/tmuxinator/${OUTPUT}.yml ]]; then
+        tmuxinator start "$OUTPUT"
+        exit 0
     fi
 
     # Build array of files from selections
