@@ -348,9 +348,9 @@ done
 
 # Process selections (ctrl-y is now handled by fzf binding)
 if [ -n "$OUTPUT" ]; then
-    # Handle decorated active sessions. `claim` strips hierarchy chrome and
-    # records human takeover for delegated workers before the client switches.
-    if session=$("$SESSION_CHOICES" claim "$OUTPUT" 2>/dev/null); then
+    # Handle decorated active sessions. `resolve` strips hierarchy chrome back
+    # to the real session name before the client switches.
+    if session=$("$SESSION_CHOICES" resolve "$OUTPUT" 2>/dev/null); then
         # Try switch first (works for any active session), fall back to tmuxinator
         if tmux switch-client -t "$session" 2>/dev/null; then
             exit 0

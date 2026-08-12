@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Render active tmux sessions with delegated workers nested under their parent.
-# Nothing is filtered. `claim` records explicit human takeover before switching.
+# Nothing is filtered. `resolve` strips the chrome back to a real session name.
 set -euo pipefail
 
 marker=' ◀◀◀'
@@ -72,16 +72,8 @@ case "${1:-list}" in
     resolve)
         resolve_choice "${2:-}"
         ;;
-    claim)
-        session=$(resolve_choice "${2:-}") || exit 1
-        level=$(tmux show-options -qv -t "$session" @agent_spawn_level 2>/dev/null || true)
-        if [[ "$level" == delegated ]]; then
-            tmux set-option -t "$session" @agent_human_owned 1
-        fi
-        printf '%s\n' "$session"
-        ;;
     *)
-        echo "usage: ${0##*/} list|resolve <choice>|claim <choice>" >&2
+        echo "usage: ${0##*/} list|resolve <choice>" >&2
         exit 2
         ;;
 esac
