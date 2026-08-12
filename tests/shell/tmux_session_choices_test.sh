@@ -37,7 +37,6 @@ case "$1" in
       [[ "$option" == @agent_spawn_parent ]] && printf 'orchestrator\n'
     fi
     ;;
-  set-option) exit 0 ;;
 esac
 EOF
 chmod +x "$BIN/tmux"
@@ -65,14 +64,10 @@ choice=$(grep '↳ worker-b ' <<<"$out")
 resolved=$(PATH="$BIN:$PATH" "$SCRIPT" resolve "$choice")
 if [[ "$resolved" == worker-b ]]; then ok "decorated worker resolves exactly"
 else bad "decorated worker resolves exactly"; fi
-: > "$LOG"
-claimed=$(PATH="$BIN:$PATH" "$SCRIPT" claim "$choice")
-if [[ "$claimed" == worker-b ]]; then ok "claimed worker resolves exactly"
-else bad "claimed worker resolves exactly"; fi
-if grep -q '^set-option -t worker-b @agent_human_owned 1$' "$LOG"; then
-    ok "explicit worker selection records takeover"
+if ! PATH="$BIN:$PATH" "$SCRIPT" claim "$choice" 2>/dev/null; then
+    ok "claim is gone"
 else
-    bad "explicit worker selection records takeover"
+    bad "claim is gone"
 fi
 
 echo "== M-x uses the hierarchy helper =="
@@ -81,10 +76,10 @@ if grep -qF '__tmux_session_choices.sh list' "$FILE_OPENER"; then
 else
     bad "picker lists decorated sessions"
 fi
-if grep -qF "\"\$SESSION_CHOICES\" claim \"\$OUTPUT\"" "$FILE_OPENER"; then
-    ok "picker claims the selected worker"
+if grep -qF "\"\$SESSION_CHOICES\" resolve \"\$OUTPUT\"" "$FILE_OPENER"; then
+    ok "picker resolves the selected worker"
 else
-    bad "picker claims the selected worker"
+    bad "picker resolves the selected worker"
 fi
 
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"
