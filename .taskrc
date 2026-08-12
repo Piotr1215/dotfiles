@@ -46,7 +46,8 @@ color.tag.epic        = bold green
 color.tag.fresh       = bold yellow
 color.tag.bug         = magenta on black
 # color.tag.started     = on gray2
-color.tag.pr_approved = bold green
+color.tag.pr          = bold blue on black
+color.tag.pr_approved = bold green on black
 # color.tag.triaged   = bold cyan  # disabled - conflicts with review
 color.tag.claude      = bold on gray2
 color.tag.codex       = bold cyan on gray2
@@ -59,9 +60,11 @@ color.tag.review      = bold blue
 # report it was meant to annotate.
 color.tag.kill        = bold white on color52
 
-# +kill outranks +review: a task carrying both has no PR left in flight, and
-# "close this" is the call worth surfacing over "someone is reviewing".
-rule.precedence.color=tag.kill,tag.review,deleted,completed,active,keyword.,tag.,project.,overdue,scheduled,due.today,due,blocked,blocking,recurring,tagged,uda.
+# PR mirrors carry +kill because they are disposable, not because they are
+# close-candidate issues. Their explicit black ground prevents color merging
+# from leaking +kill's maroon ground into the PR row. Approved PRs stay green.
+# Issue rows do not carry +pr, so +kill keeps its existing maroon treatment.
+rule.precedence.color=tag.pr_approved,tag.pr,tag.kill,tag.review,deleted,completed,active,keyword.,tag.,project.,overdue,scheduled,due.today,due,blocked,blocking,recurring,tagged,uda.
 color.uda.priority.L  = on gray4
 color.scheduled       = bold yellow 
 color.hold            = bold blue
