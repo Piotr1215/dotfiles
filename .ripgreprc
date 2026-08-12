@@ -1,0 +1,11 @@
+# Restores the intent of dotfiles commit 40873728 (2022-09-24), "Ripgrep in
+# hidden files/directories by default". .zshrc:156 has exported
+# RIPGREP_CONFIG_PATH at this path since then, but the file itself was never
+# tracked in dotfiles, so it did not survive a machine migration. rg treats a
+# missing config path as fatal, so every rg call on this machine failed with
+# "failed to read the file specified in RIPGREP_CONFIG_PATH" before searching
+# anything. Agents read that as a clean no-match, which is the worse failure.
+--hidden
+
+# --hidden alone walks .git, which drowns real hits in object files.
+--glob=!.git/*
