@@ -14,6 +14,7 @@ setup() {
     "printf 'work\\n' > '$COMMAND_LOG'; exec sleep infinity"
   tmux -L "$SOCKET_NAME" set-environment -g TMUX_READING_MARGIN_WEEKEND_COMMAND \
     "printf 'weekend\\n' > '$COMMAND_LOG'; exec sleep infinity"
+  tmux -L "$SOCKET_NAME" set-environment -g TMUX_READING_MARGIN_DISPLAY_STATE expanded
   tmux -L "$SOCKET_NAME" set-option -g @reading_margin_default on
 }
 
@@ -77,10 +78,35 @@ EOF
 
 teardown() {
   tmux -L "$SOCKET_NAME" kill-server 2>/dev/null || true
+  if [[ -n "${ATTACHED_CLIENT_PID:-}" ]]; then
+    wait "$ATTACHED_CLIENT_PID" 2>/dev/null || true
+  fi
+  if [[ "${CLIENT_FIFO_OPEN:-}" == 1 ]]; then exec 9>&-; fi
 }
 
 toggle_margin() {
   tmux -L "$SOCKET_NAME" run-shell "$SCRIPT '$PANE_ID'"
+}
+
+sync_margin() {
+  window_id="$(tmux -L "$SOCKET_NAME" display-message -p '#{window_id}')"
+  tmux -L "$SOCKET_NAME" run-shell "$SCRIPT --sync-window '$window_id'"
+}
+
+attach_client_with_windowid() {
+  client_fifo="${BATS_TEST_TMPDIR}/client-input"
+  mkfifo "$client_fifo"
+  exec 9<>"$client_fifo"
+  CLIENT_FIFO_OPEN=1
+  WINDOWID=42 TERM=xterm tmux -L "$SOCKET_NAME" -C attach -t test <&9 \
+    >"${BATS_TEST_TMPDIR}/client.log" 2>&1 &
+  ATTACHED_CLIENT_PID=$!
+  for _ in {1..20}; do
+    client_name="$(tmux -L "$SOCKET_NAME" list-clients -F '#{client_name}' 2>/dev/null | head -n 1)"
+    [[ -n "$client_name" ]] && return 0
+    sleep 0.05
+  done
+  return 1
 }
 
 wait_for_command() {
@@ -129,6 +155,154 @@ wait_for_command() {
 
   [ "$(tmux -L "$SOCKET_NAME" display-message -p -t "$margin_id" '#{pane_width}')" -eq 39 ]
   [ "$(tmux -L "$SOCKET_NAME" show-options -wqv @reading_margin_visible)" = on ]
+}
+
+@test "tiled Alacritty zooms the work pane and expanded Alacritty restores the margin" {
+  toggle_margin
+  margin_id="$(tmux -L "$SOCKET_NAME" show-options -wqv @reading_margin_pane)"
+
+  tmux -L "$SOCKET_NAME" set-environment -g TMUX_READING_MARGIN_DISPLAY_STATE tiled
+  sync_margin
+
+  [ "$(tmux -L "$SOCKET_NAME" display-message -p '#{window_zoomed_flag}')" -eq 1 ]
+  [ "$(tmux -L "$SOCKET_NAME" display-message -p '#{pane_id}')" = "$PANE_ID" ]
+  [ "$(tmux -L "$SOCKET_NAME" show-options -wqv @reading_margin_auto_zoomed)" = "$PANE_ID" ]
+  [ "$(tmux -L "$SOCKET_NAME" show-options -wqv @reading_margin_pane)" = "$margin_id" ]
+  [ "$(tmux -L "$SOCKET_NAME" list-panes -F '#{pane_id}' | wc -l)" -eq 2 ]
+
+  tmux -L "$SOCKET_NAME" run-shell "$SCRIPT --status '$PANE_ID' > '$STATUS_LOG'"
+  [[ "$(<"$STATUS_LOG")" == *"visible=off"*"hidden=tiled"* ]]
+
+  tmux -L "$SOCKET_NAME" set-environment -g TMUX_READING_MARGIN_DISPLAY_STATE expanded
+  sync_margin
+
+  [ "$(tmux -L "$SOCKET_NAME" display-message -p '#{window_zoomed_flag}')" -eq 0 ]
+  [ -z "$(tmux -L "$SOCKET_NAME" show-options -wqv @reading_margin_auto_zoomed)" ]
+  [ "$(tmux -L "$SOCKET_NAME" show-options -wqv @reading_margin_pane)" = "$margin_id" ]
+}
+
+@test "display sync preserves a zoom the user started" {
+  toggle_margin
+  tmux -L "$SOCKET_NAME" resize-pane -Z -t "$PANE_ID"
+
+  tmux -L "$SOCKET_NAME" set-environment -g TMUX_READING_MARGIN_DISPLAY_STATE tiled
+  sync_margin
+  [ "$(tmux -L "$SOCKET_NAME" display-message -p '#{window_zoomed_flag}')" -eq 1 ]
+  [ -z "$(tmux -L "$SOCKET_NAME" show-options -wqv @reading_margin_auto_zoomed)" ]
+
+  tmux -L "$SOCKET_NAME" set-environment -g TMUX_READING_MARGIN_DISPLAY_STATE expanded
+  sync_margin
+  [ "$(tmux -L "$SOCKET_NAME" display-message -p '#{window_zoomed_flag}')" -eq 1 ]
+}
+
+@test "manual same-pane rezoom is not mistaken for automatic ownership" {
+  toggle_margin
+  tmux -L "$SOCKET_NAME" set-environment -g TMUX_READING_MARGIN_DISPLAY_STATE tiled
+  sync_margin
+
+  tmux -L "$SOCKET_NAME" run-shell "$SCRIPT --toggle-zoom '$PANE_ID'"
+  tmux -L "$SOCKET_NAME" run-shell "$SCRIPT --toggle-zoom '$PANE_ID'"
+  [ "$(tmux -L "$SOCKET_NAME" display-message -p '#{window_zoomed_flag}')" -eq 1 ]
+  [ -z "$(tmux -L "$SOCKET_NAME" show-options -wqv @reading_margin_auto_zoomed)" ]
+
+  tmux -L "$SOCKET_NAME" set-environment -g TMUX_READING_MARGIN_DISPLAY_STATE expanded
+  sync_margin
+  [ "$(tmux -L "$SOCKET_NAME" display-message -p '#{window_zoomed_flag}')" -eq 1 ]
+}
+
+@test "display sync does not unzoom a pane the user selected after auto zoom" {
+  toggle_margin
+  margin_id="$(tmux -L "$SOCKET_NAME" show-options -wqv @reading_margin_pane)"
+  tmux -L "$SOCKET_NAME" set-environment -g TMUX_READING_MARGIN_DISPLAY_STATE tiled
+  sync_margin
+
+  tmux -L "$SOCKET_NAME" resize-pane -Z -t "$PANE_ID"
+  tmux -L "$SOCKET_NAME" resize-pane -Z -t "$margin_id"
+  tmux -L "$SOCKET_NAME" set-environment -g TMUX_READING_MARGIN_DISPLAY_STATE expanded
+  sync_margin
+
+  [ "$(tmux -L "$SOCKET_NAME" display-message -p '#{window_zoomed_flag}')" -eq 1 ]
+  [ "$(tmux -L "$SOCKET_NAME" display-message -p '#{pane_id}')" = "$margin_id" ]
+  [ -z "$(tmux -L "$SOCKET_NAME" show-options -wqv @reading_margin_auto_zoomed)" ]
+}
+
+@test "overlapping display syncs keep zoom and ownership consistent" {
+  toggle_margin
+  window_id="$(tmux -L "$SOCKET_NAME" display-message -p '#{window_id}')"
+  tmux -L "$SOCKET_NAME" set-environment -g TMUX_READING_MARGIN_DISPLAY_STATE tiled
+
+  for i in {1..20}; do
+    tmux -L "$SOCKET_NAME" run-shell -b \
+      "$SCRIPT --sync-window '$window_id'; tmux wait-for -S 'margin-tiled-$i'"
+  done
+  for i in {1..20}; do tmux -L "$SOCKET_NAME" wait-for "margin-tiled-$i"; done
+  [ "$(tmux -L "$SOCKET_NAME" display-message -p '#{window_zoomed_flag}')" -eq 1 ]
+  [ "$(tmux -L "$SOCKET_NAME" show-options -wqv @reading_margin_auto_zoomed)" = "$PANE_ID" ]
+
+  tmux -L "$SOCKET_NAME" set-environment -g TMUX_READING_MARGIN_DISPLAY_STATE expanded
+  for i in {1..20}; do
+    tmux -L "$SOCKET_NAME" run-shell -b \
+      "$SCRIPT --sync-window '$window_id'; tmux wait-for -S 'margin-expanded-$i'"
+  done
+  for i in {1..20}; do tmux -L "$SOCKET_NAME" wait-for "margin-expanded-$i"; done
+  [ "$(tmux -L "$SOCKET_NAME" display-message -p '#{window_zoomed_flag}')" -eq 0 ]
+  [ -z "$(tmux -L "$SOCKET_NAME" show-options -wqv @reading_margin_auto_zoomed)" ]
+}
+
+@test "display sync reads Alacritty maximized state from X11" {
+  toggle_margin
+  bin_dir="${BATS_TEST_TMPDIR}/bin"
+  mkdir -p "$bin_dir"
+  cat > "$bin_dir/xprop" <<'EOF'
+#!/usr/bin/env bash
+printf '_NET_WM_STATE(ATOM) = %s\n' "$STUB_WM_STATE"
+EOF
+  chmod +x "$bin_dir/xprop"
+  tmux -L "$SOCKET_NAME" set-environment -gu TMUX_READING_MARGIN_DISPLAY_STATE
+  tmux -L "$SOCKET_NAME" set-environment -g PATH "$bin_dir:$PATH"
+  tmux -L "$SOCKET_NAME" set-environment -g TMUX_READING_MARGIN_X_WINDOW_ID 42
+
+  tmux -L "$SOCKET_NAME" set-environment -g STUB_WM_STATE _NET_WM_STATE_FOCUSED
+  sync_margin
+  [ "$(tmux -L "$SOCKET_NAME" display-message -p '#{window_zoomed_flag}')" -eq 1 ]
+
+  tmux -L "$SOCKET_NAME" set-environment -g STUB_WM_STATE \
+    '_NET_WM_STATE_MAXIMIZED_HORZ, _NET_WM_STATE_MAXIMIZED_VERT'
+  sync_margin
+  [ "$(tmux -L "$SOCKET_NAME" display-message -p '#{window_zoomed_flag}')" -eq 0 ]
+}
+
+@test "ensure mode uses the exact attached client's X11 window" {
+  bin_dir="${BATS_TEST_TMPDIR}/bin"
+  xprop_log="${BATS_TEST_TMPDIR}/xprop.log"
+  mkdir -p "$bin_dir"
+  cat > "$bin_dir/xprop" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$XPROP_LOG"
+printf '_NET_WM_STATE(ATOM) = %s\n' "$STUB_WM_STATE"
+EOF
+  chmod +x "$bin_dir/xprop"
+  tmux -L "$SOCKET_NAME" set-environment -gu TMUX_READING_MARGIN_DISPLAY_STATE
+  tmux -L "$SOCKET_NAME" set-environment -g PATH "$bin_dir:$PATH"
+  tmux -L "$SOCKET_NAME" set-environment -g XPROP_LOG "$xprop_log"
+  tmux -L "$SOCKET_NAME" set-environment -g STUB_WM_STATE _NET_WM_STATE_FOCUSED
+  attach_client_with_windowid
+
+  tmux -L "$SOCKET_NAME" run-shell "$SCRIPT --ensure-session test"
+
+  [ "$(tmux -L "$SOCKET_NAME" display-message -p '#{window_zoomed_flag}')" -eq 1 ]
+  [ "$(tmux -L "$SOCKET_NAME" show-options -wqv @reading_margin_auto_zoomed)" = "$PANE_ID" ]
+  grep -qF -- '-id 42 _NET_WM_STATE' "$xprop_log"
+}
+
+@test "tmux hooks sync the margin after outer-window size and session changes" {
+  config="${BATS_TEST_DIRNAME}/../../.tmux.conf"
+  grep -qF "set-hook -g client-resized" "$config"
+  grep -qF -- "--sync-client \\\"#{hook_client}\\\"" "$config"
+  grep -qF "set-hook -g client-session-changed" "$config"
+  grep -qF "set-hook -g after-select-window" "$config"
+  grep -qF -- "--toggle-client '#{client_name}' '#{pane_id}'" "$config"
+  grep -qF -- "--toggle-zoom '#{pane_id}'" "$config"
 }
 
 @test "reading margin spans the window beside an existing split" {
