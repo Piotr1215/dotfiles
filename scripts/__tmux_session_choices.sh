@@ -10,7 +10,9 @@ resolve_choice() {
     [[ "$choice" == *"$marker" ]] || return 1
     choice="${choice%"$marker"}"
     choice="${choice#"${choice%%[![:space:]]*}"}"
-    if [[ "$choice" == "↳ "* ]]; then
+    if [[ "$choice" == "- "* ]]; then
+        choice="${choice#- }"
+    elif [[ "$choice" == "↳ "* ]]; then
         choice="${choice#↳ }"
         choice="${choice%% ← *}"
     fi
@@ -57,8 +59,7 @@ list_choices() {
             "${root_by_session[$session]}" "${depth_by_session[$session]}" "$session"
     done | sort -t$'\t' -k1,1 -k2,2n -k3,3 | while IFS=$'\t' read -r _root depth session; do
         if (( depth > 0 )); then
-            printf '%*s↳ %s ← %s%s\n' "$((depth * 2))" '' "$session" \
-                "${parent_by_session[$session]}" "$marker"
+            printf '  - %s%s\n' "$session" "$marker"
         else
             printf '%s%s\n' "$session" "$marker"
         fi
