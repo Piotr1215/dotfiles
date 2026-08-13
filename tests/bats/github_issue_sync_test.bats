@@ -2705,11 +2705,11 @@ _held_issue_json() {
 }
 
 # ====================================================
-# CLOSABLE-ISSUE MARKER (+kill)
+# CLOSABLE-ISSUE MARKER (+issue_ready)
 # Linear never closes an issue when its PR closes or merges, and never drops the
 # attachment either, so a finished attempt leaves the issue open with nothing
-# behind it. The sync stamps +kill on exactly that shape, merged counting the
-# same as closed unmerged, so the close candidates are visible on the board
+# behind it. The sync stamps +issue_ready on exactly that shape, merged counting
+# the same as closed unmerged, so the close candidates are visible on the board
 # without opening each PR by hand.
 # ====================================================
 
@@ -2805,19 +2805,19 @@ _pr_annotations() {
     [ "$result" = "none" ]
 }
 
-@test "mark_closable_issue adds +kill when the attached PR is closed unmerged" {
+@test "mark_closable_issue adds +issue_ready when the attached PR is closed unmerged" {
     echo "CLOSED" > "${TEST_DIR}/pr_state"
     _write_task_mock_export '["linear","work"]' \
         "$(_pr_annotations https://github.com/loft-sh/loft-enterprise/pull/7649)"
 
     run mark_closable_issue "test-uuid" "Todo"
     [ "$status" -eq 0 ]
-    grep -q -- "+kill" "${TEST_DIR}/task_commands.log"
+    grep -q -- "+issue_ready" "${TEST_DIR}/task_commands.log"
 }
 
-@test "mark_closable_issue is idempotent when +kill is already present" {
+@test "mark_closable_issue is idempotent when +issue_ready is already present" {
     echo "CLOSED" > "${TEST_DIR}/pr_state"
-    _write_task_mock_export '["linear","kill"]' \
+    _write_task_mock_export '["linear","issue_ready"]' \
         "$(_pr_annotations https://github.com/loft-sh/loft-enterprise/pull/7649)"
 
     run mark_closable_issue "test-uuid" "Todo"
@@ -2825,17 +2825,17 @@ _pr_annotations() {
     [ ! -f "${TEST_DIR}/task_commands.log" ]
 }
 
-@test "mark_closable_issue adds +kill when the attached PR is MERGED" {
+@test "mark_closable_issue adds +issue_ready when the attached PR is MERGED" {
     echo "MERGED" > "${TEST_DIR}/pr_state"
     _write_task_mock_export '["linear","work"]' \
         "$(_pr_annotations https://github.com/loft-sh/loft-prod/pull/522)"
 
     run mark_closable_issue "test-uuid" "Todo"
     [ "$status" -eq 0 ]
-    grep -q -- "+kill" "${TEST_DIR}/task_commands.log"
+    grep -q -- "+issue_ready" "${TEST_DIR}/task_commands.log"
 }
 
-@test "mark_closable_issue does not add +kill when gh fails (fail-safe)" {
+@test "mark_closable_issue does not add +issue_ready when gh fails (fail-safe)" {
     touch "${TEST_DIR}/gh_fail"
     _write_task_mock_export '["linear","work"]' \
         "$(_pr_annotations https://github.com/loft-sh/loft-enterprise/pull/7649)"
@@ -2936,7 +2936,7 @@ _pr_annotations() {
 
     run mark_closable_issue "test-uuid" "In Progress"
     [ "$status" -eq 0 ]
-    grep -q -- "+kill" "${TEST_DIR}/task_commands.log"
+    grep -q -- "+issue_ready" "${TEST_DIR}/task_commands.log"
 }
 
 @test "mark_closable_issue still marks an In Review issue whose PR is closed" {
@@ -2946,7 +2946,7 @@ _pr_annotations() {
 
     run mark_closable_issue "test-uuid" "In Review"
     [ "$status" -eq 0 ]
-    grep -q -- "+kill" "${TEST_DIR}/task_commands.log"
+    grep -q -- "+issue_ready" "${TEST_DIR}/task_commands.log"
 }
 
 # ====================================================

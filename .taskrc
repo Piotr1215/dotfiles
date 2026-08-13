@@ -46,25 +46,28 @@ color.tag.epic        = bold green
 color.tag.fresh       = bold yellow
 color.tag.bug         = magenta on black
 # color.tag.started     = on gray2
-color.tag.pr          = bold blue on black
-color.tag.pr_approved = bold green on black
+color.tag.pr_approved = bold green
 # color.tag.triaged   = bold cyan  # disabled - conflicts with review
 color.tag.claude      = bold on gray2
 color.tag.codex       = bold cyan on gray2
 color.tag.review      = bold blue
-# +kill reads as "this can be killed": the disposable pr-reviews mirrors, and
-# now also open Linear issues with no attached PR still open, merged counting
-# the same as closed unmerged, stamped by __github_issue_sync.sh. Still a red
-# ground so a close candidate cannot be scrolled past, but color52 (dark maroon)
-# instead of bright red: the glare made a whole-row block that dominated the
-# report it was meant to annotate.
-color.tag.kill        = bold white on color52
+# +issue_ready is an open Linear issue with no PR still in flight, stamped by
+# __github_issue_sync.sh. A dark maroon ground so a close candidate cannot be
+# scrolled past; color52 rather than bright red, whose glare made a whole-row
+# block that dominated the report it was meant to annotate.
+#
+# This marker used to be +kill, shared with the disposable pr-reviews mirrors
+# that __get_prs_for_review.sh stamps at birth. One tag with two meanings could
+# not be coloured for one population and not the other: colour rules merge field
+# by field, so the ground painted every PR mirror row too, and a ground can only
+# be lifted by painting another one over it, which flattens the PR report into a
+# single block. +kill is now uncoloured and means only "disposable PR mirror",
+# which is Piotr's manual toggle in the tui.
+color.tag.issue_ready = bold white on color52
 
-# PR mirrors carry +kill because they are disposable, not because they are
-# close-candidate issues. Their explicit black ground prevents color merging
-# from leaking +kill's maroon ground into the PR row. Approved PRs stay green.
-# Issue rows do not carry +pr, so +kill keeps its existing maroon treatment.
-rule.precedence.color=tag.pr_approved,tag.pr,tag.kill,tag.review,deleted,completed,active,keyword.,tag.,project.,overdue,scheduled,due.today,due,blocked,blocking,recurring,tagged,uda.
+# +issue_ready outranks +review: a task carrying both has no PR left in flight,
+# and "close this" is the call worth surfacing over "someone is reviewing".
+rule.precedence.color=tag.issue_ready,tag.review,deleted,completed,active,keyword.,tag.,project.,overdue,scheduled,due.today,due,blocked,blocking,recurring,tagged,uda.
 color.uda.priority.L  = on gray4
 color.scheduled       = bold yellow 
 color.hold            = bold blue

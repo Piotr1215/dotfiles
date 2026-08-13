@@ -912,7 +912,7 @@ attach_link_annotations() {
 }
 
 # Mark an open Linear issue with no PR still in flight as a close candidate,
-# with +kill.
+# with +issue_ready.
 #
 # Both finished states count, merged as well as closed unmerged. See
 # task_pr_closable_verdict for the reasoning: OPEN is the only state that means
@@ -924,14 +924,18 @@ attach_link_annotations() {
 # and close in a batch, so the sync stamps them on the 30-minute run instead of
 # leaving him to open each PR by hand.
 #
-# +kill is the tag by Piotr's decision. It already means "disposable" on the
-# pr-reviews mirror tasks that __get_prs_for_review.sh creates with +kill at
-# birth, and the meaning carries over: kill it. The two populations stay
-# separable because those carry +pr and a pr-reviews project, so
-# `task +kill -pr status:pending` lists exactly the issues marked here.
+# +issue_ready is this population's own tag. It used to be +kill, shared with
+# the pr-reviews mirrors that __get_prs_for_review.sh stamps at birth, and one
+# tag carrying two meanings could not be coloured: taskwarrior colour rules
+# merge field by field, so the close-candidate ground painted every PR mirror
+# row too, and the only way to lift a ground off a row is to paint another one
+# over it, which flattens the whole PR report into one block. Splitting the tag
+# is what makes both populations colourable. `task +issue_ready status:pending`
+# lists exactly the issues marked here; +kill now means only "disposable PR
+# mirror" and stays Piotr's manual toggle there.
 #
 # Add-only and idempotent. The tag survives a PR being reopened, which is rare
-# and visible, whereas a sync that also stripped +kill could undo a tag Piotr
+# and visible, whereas a sync that also stripped it could undo a tag Piotr
 # set by hand, the same fight the +fresh backfill lost before.
 mark_closable_issue() {
     local task_uuid="$1"
@@ -950,7 +954,7 @@ mark_closable_issue() {
         return 0
     fi
 
-    local task_json verdict has_kill
+    local task_json verdict has_marker
     task_json=$(task "$task_uuid" export 2>/dev/null)
     [[ -z "$task_json" ]] && return 0
 
@@ -960,14 +964,14 @@ mark_closable_issue() {
     fi
 
     # Exact match via jq index, never contains: contains is substring in jq and
-    # would fire on any future tag with "kill" inside it.
-    has_kill=$(echo "$task_json" | jq -r '.[0].tags | if . then (index("kill") != null) else false end')
-    if [[ "$has_kill" == "true" ]]; then
+    # would fire on any future tag with "issue_ready" inside it.
+    has_marker=$(echo "$task_json" | jq -r '.[0].tags | if . then (index("issue_ready") != null) else false end')
+    if [[ "$has_marker" == "true" ]]; then
         return 0
     fi
 
-    log "Issue is open but no attached PR is still open - adding +kill (likely closable)"
-    task rc.confirmation=no modify "$task_uuid" +kill
+    log "Issue is open but no attached PR is still open - adding +issue_ready (likely closable)"
+    task rc.confirmation=no modify "$task_uuid" +issue_ready
 }
 
 # Create a new task for an issue and annotate it
