@@ -2,7 +2,7 @@
 
 # Service Status Monitor for Argos
 # Monitors AWS, GCP, Azure, Netlify, Cloudflare, GitHub, Linear, Claude,
-# OpenAI, Rippling, and Spacelift status pages
+# OpenAI, Rippling, Spacelift, and Tailscale status pages
 
 import json
 import urllib.request
@@ -88,6 +88,12 @@ SERVICES = {
         "status_page": "https://spacelift.statuspage.io/",
         "name": "Spacelift",
         "favicon": "https://spacelift.io/favicons/favicon-32x32.png"
+    },
+    "Tailscale": {
+        "api": "https://status.tailscale.com/api/v2/status.json",
+        "status_page": "https://status.tailscale.com/",
+        "name": "Tailscale",
+        "favicon": "https://status.tailscale.com/favicon.ico"
     }
 }
 
@@ -113,7 +119,8 @@ SERVICE_EMOJIS = {
     "Claude": "🤖",   # Robot for AI
     "OpenAI": "🌀",   # Spiral for the OpenAI knot mark (blue, not a status colour)
     "Rippling": "💼", # Briefcase for HR/workforce management
-    "Spacelift": "🛰️"  # Satellite for Spacelift IaC orchestration
+    "Spacelift": "🛰️", # Satellite for Spacelift IaC orchestration
+    "Tailscale": "🔗"   # Link for the Tailscale mesh network
 }
 
 # Cache directory for favicons
@@ -371,6 +378,22 @@ def get_spacelift_status():
         pass
     return "unknown"
 
+def get_tailscale_status():
+    """Check Tailscale status using statuspage.io API"""
+    try:
+        data = fetch_status(SERVICES["Tailscale"]["api"])
+        if data and 'status' in data:
+            indicator = data['status'].get('indicator', 'none')
+            if indicator == 'none':
+                return "operational"
+            elif indicator == 'minor':
+                return "degraded"
+            elif indicator in ['major', 'critical']:
+                return "major"
+    except Exception:
+        pass
+    return "unknown"
+
 def get_all_statuses():
     """Get status for all services"""
     return {
@@ -384,7 +407,8 @@ def get_all_statuses():
         "Claude": get_claude_status(),
         "OpenAI": get_openai_status(),
         "Rippling": get_rippling_status(),
-        "Spacelift": get_spacelift_status()
+        "Spacelift": get_spacelift_status(),
+        "Tailscale": get_tailscale_status()
     }
 
 def get_overall_status(statuses):
