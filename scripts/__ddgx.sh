@@ -14,6 +14,54 @@
 #   __ddgx.sh -d rust async traits            # dump mode, pipeable
 #   __ddgx.sh -n 15 -d etcd defrag | less -R
 #   __ddgx.sh site:kubernetes.io hpa          # ddgr syntax still works
+#   __ddgx.sh '? why do pods stay terminating'   # ask, answer plus its sources
+#   __ddgx.sh '?? why do pods stay terminating'  # ask harder, 15 steps
+#   __ddgx.sh -a etcd defragmentation            # the same, without the prefix
+#   __ddgx.sh --preset xhigh 'trace this claim'  # 100 steps, minutes
+#
+# Two engines, one picker. A question mark in front of the query asks the
+# Perplexity Agent API instead of searching DuckDuckGo: the answer arrives as
+# the first row, its sources fill the rest of the list, and every key that
+# works on a search result works on them. The sources come back carrying
+# title, url and snippet, which is exactly what a ddgr result carries, so
+# nothing downstream has to know which engine produced the set.
+#
+# One mark or two. ? is the low preset, five retrieval steps, the answer you
+# want before you have finished typing the question. ?? is high, fifteen steps,
+# for the question you are actually sitting with. The row says which one ran,
+# so an answer that reads thin names the cheaper preset that produced it and
+# the fix is one more keystroke next time.
+#
+# The answer being a row rather than a screen of its own is what makes the two
+# modes one tool. It previews like a result, ctrl-e keeps it as a note, and
+# alt-h hands it to the pane below, so an answer can be read, kept and passed
+# on by the keys already in your hands. The rows carry the numbers the answer
+# cited them by, so a claim and the page behind it are found by the same
+# number. The answer text itself is never rewritten, so the exact token form is
+# whatever the model wrote ([1] or [web:1]); the number is the part that has to
+# agree, and it does.
+#
+# A typed prefix rather than a key, because the search screen cannot have keys:
+# read -e owns that line, and a shortcut advertised there does nothing, which
+# is how ctrl-s came to look broken. ? is free of DuckDuckGo's operators, so
+# nothing that used to be a search stops being one.
+#
+# From a result set, alt-q offers ask, web, and over an answer, follow. That
+# menu is where a query is already rebuilt after seeing what came back, and
+# switching engine is the same move as adding an operator: you learned
+# something from the results. It costs no key and no header line, which the key
+# audit below says is the price worth refusing to pay.
+#
+# follow is the conversation. An answer that ends "I can narrow this to X or Y"
+# is inviting a second turn, and without one the offer is a dead end you can
+# only answer by starting over and typing the context back in by hand. The
+# thread id comes back with every answer and goes out with the next question,
+# so a follow-up can say "it" and mean what the last answer was about.
+#
+# The transcript is the answer row, newest turn on top. Each turn carries the
+# question, the answer, and that turn's own numbered sources, because the rows
+# under it only ever show the newest turn's: a [1] three turns up is not
+# today's [1], and the transcript has to be readable without them.
 #
 # Keys in the picker. tab marks results, and ctrl-e, ctrl-a, ctrl-y and ctrl-r
 # apply to the whole marked set, so mark five and hit one key:
@@ -31,7 +79,9 @@
 #
 # alt-h is for the agent in the pane underneath. It pastes the note PATHS, not
 # the note text, and it does not press Enter: you type what you want done with
-# them. An agent asked to fetch a page for itself cannot tell you whether it
+# them. A delivered hand-off closes the popup, because the next thing to happen
+# is you typing into the pane it just wrote to, and the search is in the way of
+# that. A hand-off that failed leaves the picker up to say so. An agent asked to fetch a page for itself cannot tell you whether it
 # was throttled, redirected or handed a stub, and WebFetch-style tools return
 # someone else's summary rather than the page. This hands over exactly the
 # markdown you just read, which you chose, from a cache you can inspect.
@@ -54,7 +104,8 @@
 # concurrency, default 6), DDGX_NUM (default result count), DDGX_EDITOR
 # (ctrl-e editor, default nvim), DDGX_PET_FILE (bookmark file), DDGX_PLAYER
 # (the player ctrl-o opens a video in, default mpv), DDGX_PLAYER_ARGS (extra
-# player arguments).
+# player arguments), DDGX_PPLX_PRESET (ask depth, default low), DDGX_ASK_CMD
+# (the ask backend, default __search_internet.py).
 set -eo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -72,6 +123,21 @@ CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/ddgx"
 NOTES_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/ddgx/notes"
 CACHE_TTL="${DDGX_TTL:-86400}"
 FORCE_REFETCH=0
+# The ask backend owns the Agent API protocol (background run, then polling)
+# so this script never speaks it. Overridable because a path resolved from
+# SCRIPT_DIR cannot be stubbed on PATH, and the suite has to stub it.
+ASK_CMD="${DDGX_ASK_CMD:-$SCRIPT_DIR/__search_internet.py}"
+# Two depths, because a question you ask in passing and a question you sit with
+# are not the same question. low is 5 retrieval steps, enough for a real answer
+# and cheap enough to type without thinking about it. high is 15 and reads like
+# what Deep Research used to cost a plan.
+#
+# xhigh and wide-research are 100 steps and minutes of waiting. They are not
+# behind a prefix on purpose: a popup you opened to answer something in passing
+# is the wrong place to start a run that long. --preset reaches them when the
+# spend is the point.
+PPLX_PRESET="${DDGX_PPLX_PRESET:-low}"
+PPLX_DEEP_PRESET="${DDGX_DEEP_PRESET:-high}"
 PET_LINKS="${DDGX_PET_FILE:-$HOME/dev/pet-snippets/pet-links.toml}"
 # alt-q for the refiner, because every ctrl letter is already spoken for and an
 # existing binding wins. ctrl-s is XOFF: on the fresh pty the M-g popup runs
@@ -151,6 +217,114 @@ search_ddgr() {
 	return 1
 }
 
+# Ask the Agent API and shape the reply into the same result set a search
+# produces: the answer as row 0, then every source it cited.
+#
+# The sources are NOT trimmed to -n, unlike a web search. The answer cites them
+# by number, so a list cut at 8 would leave a claim marked [9] pointing at a row
+# that is not on screen. The count belongs to the engine that produced the
+# answer, not to a display preference.
+#
+# Same contract as search_ddgr: writes the result set, sets SEARCH_ERROR, and
+# returns non-zero when nothing usable came back.
+search_pplx() {
+	local out=$1 query=$2 answer=$3 thread=$4 continue_id=${5:-}
+	local raw err rc=0 text turn title args=() turnfile
+	raw=$(mktemp -t ddgx-ask-XXXXXX.json)
+	err=$(mktemp -t ddgx-err-XXXXXX)
+	SEARCH_ERROR=''
+
+	args=(--json --preset "$PPLX_PRESET")
+	# The thread is what makes a follow-up able to say "it". Without the id the
+	# next question arrives with no idea what the last answer was about, which
+	# is the difference between a conversation and two unrelated searches.
+	[[ -n $continue_id ]] && args+=(--continue "$continue_id")
+
+	"$ASK_CMD" "${args[@]}" "$query" >"$raw" 2>"$err" || rc=$?
+	text=$(jq -r '.answer // ""' "$raw" 2>/dev/null || printf '')
+
+	# An answer with no sources is still an answer, so the test is whether the
+	# model said anything, not whether it cited anything.
+	if [[ $rc -ne 0 || -z ${text//[[:space:]]/} ]]; then
+		SEARCH_ERROR=$(head -1 "$err" 2>/dev/null || true)
+		[[ -z $SEARCH_ERROR ]] && SEARCH_ERROR='the answer came back empty'
+		rm -f "$raw" "$err"
+		return 1
+	fi
+
+	turn=$(sed -n '2p' "$thread" 2>/dev/null || true)
+	[[ -z $turn ]] && turn=0
+	turn=$((turn + 1))
+	# A fresh ask starts the count again: it is a new conversation, whatever the
+	# last one was about.
+	[[ -n $continue_id ]] || turn=1
+	title="answer · perplexity $PPLX_PRESET"
+	[[ $turn -gt 1 ]] && title="$title · turn $turn"
+
+	jq --arg title "$title" '
+		[{title: $title, url: "", abstract: "", ref: ""}]
+		+ [ .results[] | {
+			title: (.title // .url),
+			url: .url,
+			abstract: ((.snippet // "")
+				| if length > 300 then .[0:300] + " ..." else . end),
+			ref: (if .id == null then "" else (.id | tostring) end)
+		} ]' "$raw" >"$out"
+
+	# One turn of the transcript: the question, the answer, and the sources
+	# that answer cited, numbered as it numbered them. Each turn carries its
+	# own references because the rows only ever show the newest turn's sources,
+	# and a [1] three turns up points at a different page than today's [1].
+	turnfile=$(mktemp -t ddgx-turn-XXXXXX.md)
+	{
+		printf '## %s\n\n' "$query"
+		printf '%s\n' "$text"
+		jq -r 'if (.results | length) > 0 then
+				"", ([.results[]] | to_entries[]
+					| "[\(.value.id // (.key + 1))]: \(.value.url)")
+			else empty end' "$raw"
+	} >"$turnfile"
+
+	# Newest turn on top. The preview pane opens at the top of the file, and in
+	# a conversation the thing you just asked for is the thing you want to
+	# read; a chronological transcript would put it below a screen of history
+	# and make every follow-up start with a scroll.
+	if [[ -n $continue_id && -s $answer ]]; then
+		{
+			cat "$turnfile"
+			printf '\n---\n\n'
+			cat "$answer"
+		} >"$answer.new"
+		mv -f "$answer.new" "$answer"
+	else
+		mv -f "$turnfile" "$answer"
+	fi
+
+	{
+		jq -r '.id // ""' "$raw"
+		printf '%s\n' "$turn"
+		printf '%s\n' "$PPLX_PRESET"
+	} >"$thread"
+
+	rm -f "$raw" "$err" "$turnfile"
+	return 0
+}
+
+# Which engine produced the current set. Absent means a web search, so a set
+# written before this file knew about engines still refines correctly.
+current_engine() {
+	local ef
+	ef=$(engine_file "$1")
+	if [[ -s $ef ]]; then
+		head -n1 "$ef"
+	else
+		printf 'ddgr'
+	fi
+	return 0
+}
+
+set_engine() { printf '%s\n' "$2" >"$(engine_file "$1")"; }
+
 # Preserve the script's real exit status: a kill of an already-reaped prefetch
 # would otherwise become the status the caller sees.
 cleanup() {
@@ -158,7 +332,8 @@ cleanup() {
 	if [[ -n ${RESULTS_FILE:-} ]]; then
 		rm -f "$RESULTS_FILE" "$(query_file "$RESULTS_FILE")" \
 			"$(note_file "$RESULTS_FILE")" "$(target_file "$RESULTS_FILE")" \
-			"$RESULTS_FILE.new"
+			"$(answer_file "$RESULTS_FILE")" "$(engine_file "$RESULTS_FILE")" \
+			"$(thread_file "$RESULTS_FILE")" "$RESULTS_FILE.new"
 	fi
 	if [[ -n ${PREFETCH_PID:-} ]]; then
 		kill "$PREFETCH_PID" 2>/dev/null || true
@@ -171,6 +346,43 @@ cleanup() {
 # picker back its new state through.
 query_file() { printf '%s.query' "$1"; }
 note_file() { printf '%s.note' "$1"; }
+# The answer text for an ask set, and which engine produced the set. The engine
+# has to be recorded rather than inferred: a refinement re-runs the search, and
+# a set that came from an answer must refine into another answer rather than
+# silently turning into a web search.
+answer_file() { printf '%s.answer' "$1"; }
+engine_file() { printf '%s.engine' "$1"; }
+# The conversation: the run id a follow-up continues from on line one, how many
+# turns have been asked on line two, and the preset it is being held at on line
+# three. The count is kept rather than counted back out of the transcript,
+# because an answer is free to write its own "##" headings and a grep for them
+# would report the model's structure as turns.
+#
+# The preset is kept because a conversation started with ?? is a deep
+# conversation, and a follow-up that quietly dropped to the cheap default would
+# answer the hardest question in the thread with the least effort.
+thread_file() { printf '%s.thread' "$1"; }
+
+thread_id() {
+	local tf
+	tf=$(thread_file "$1")
+	[[ -s $tf ]] && sed -n '1p' "$tf"
+	return 0
+}
+
+thread_turns() {
+	local tf n
+	tf=$(thread_file "$1")
+	n=$(sed -n '2p' "$tf" 2>/dev/null || true)
+	printf '%s' "${n:-0}"
+}
+
+thread_preset() {
+	local tf
+	tf=$(thread_file "$1")
+	sed -n '3p' "$tf" 2>/dev/null || true
+	return 0
+}
 # The pane alt-h hands extracts back to, resolved once when the search starts
 # and pinned here for the life of it. Reading the global tmux option at send
 # time instead would hand this search's extracts to whatever pane opened a
@@ -379,6 +591,10 @@ prompt_for_query() {
 	hint='in the results:  tab mark  enter open  ctrl-o play, render or read  alt-q refine'
 	clear 2>/dev/null || true
 
+	# Both lines are centred and neither may wrap, for the same reason the hint
+	# may not: the cursor arithmetic below counts rows, and a wrapped line moves
+	# the input box off the row this draws it on.
+
 	local width fill
 	width=$((cols - 8))
 	[[ $width -gt 70 ]] && width=70
@@ -388,10 +604,11 @@ prompt_for_query() {
 	fill=$(printf '%*s' "$((width - 2))" '')
 	fill=${fill// /─}
 
-	pad=$(((rows - 7) / 2))
+	pad=$(((rows - 8) / 2))
 	for ((i = 0; i < pad; i++)); do printf '\n'; done
 
 	center "$cols" 'duckduckgo results with the page text extracted' '\033[90m'
+	center "$cols" 'start with ? to ask perplexity, ?? to ask harder' '\033[90m'
 	printf '\n'
 
 	# An input box drawn around the caret, so the popup reads as a search box
@@ -503,7 +720,15 @@ result_domains() {
 # absent because DuckDuckGo ignores them, and bangs are absent because ddgr
 # resolves a bang to a browser redirect and hands --json an empty set.
 refine_menu() {
+	# follow only exists where there is something to follow, and it goes first
+	# because a conversation is a sequence of them: alt-q, enter, type. An entry
+	# offered over a web result set would be a dead option on every search.
+	if [[ $(current_engine "${1:-}") == pplx ]]; then
+		printf '%-10s %s\n' 'follow' 'ask a follow-up in the same conversation'
+	fi
 	printf '%-10s %s\n' \
+		'ask' 'ask perplexity this, answer with its sources' \
+		'web' 'search duckduckgo for this instead' \
 		'site:' 'only this domain' \
 		'-site:' 'everything except this domain' \
 		'filetype:' 'only this kind of file' \
@@ -563,17 +788,46 @@ read_value() {
 # picker with the query already spent is a dead end, and the whole point of
 # refining is to be able to try a different constraint against what you saw.
 run_query() {
-	local file=$1 num=$2 query=$3 tmp
+	local file=$1 num=$2 query=$3 engine=${4:-} follow=${5:-0}
+	local tmp ok=0 continue_id='' held=''
 	tmp="$file.new"
+	[[ -z $engine ]] && engine=$(current_engine "$file")
 	clear >&2 2>/dev/null || true
-	printf '\033[90m  searching for %s ...\033[0m\n' "$query" >&2
 
-	if ! search_ddgr "$tmp" "$num" "$query"; then
+	if [[ $engine == pplx ]]; then
+		if [[ $follow -eq 1 ]]; then
+			continue_id=$(thread_id "$file")
+			# A conversation is held at the depth it was started at. Dropping to
+			# the cheap default here would answer the follow-up, usually the
+			# harder question, with less effort than the one that opened it.
+			held=$(thread_preset "$file")
+			[[ -n $held ]] && PPLX_PRESET=$held
+		fi
+		if [[ -n $continue_id ]]; then
+			printf '\033[90m  following up (%s) ...\033[0m\n' "$PPLX_PRESET" >&2
+		else
+			printf '\033[90m  asking perplexity (%s) about %s ...\033[0m\n' \
+				"$PPLX_PRESET" "$query" >&2
+		fi
+		search_pplx "$tmp" "$query" "$(answer_file "$file")" \
+			"$(thread_file "$file")" "$continue_id" || ok=1
+	else
+		printf '\033[90m  searching for %s ...\033[0m\n' "$query" >&2
+		search_ddgr "$tmp" "$num" "$query" || ok=1
+		# Leaving the old answer behind would keep a previous ask's text on disk
+		# under a set that no longer has a row to show it, and its thread id
+		# would let a later follow-up continue a conversation the picker has no
+		# trace of.
+		[[ $ok -eq 0 ]] && rm -f "$(answer_file "$file")" "$(thread_file "$file")"
+	fi
+
+	if [[ $ok -ne 0 ]]; then
 		set_note "$file" "$SEARCH_ERROR, kept the previous results"
 		rm -f "$tmp"
 		return 0
 	fi
 
+	set_engine "$file" "$engine"
 	mv -f "$tmp" "$file"
 	printf '%s\n' "$query" >"$(query_file "$file")"
 	# Warm the new set detached: this process ends the moment the picker
@@ -586,13 +840,27 @@ run_query() {
 # ---------------------------------------------------------------------------
 
 mode_preview() {
-	local file=$1 idx=$2 width url title abstract cached still
+	local file=$1 idx=$2 width url title abstract cached still af
 	width=$((${FZF_PREVIEW_COLUMNS:-100} - 2))
 	[[ $width -lt 40 ]] && width=40
 
 	url=$(result_field "$idx" "$file" url)
 	title=$(result_field "$idx" "$file" title)
 	abstract=$(result_field "$idx" "$file" abstract)
+
+	# The answer row. No url, so nothing to fetch and nothing to extract: the
+	# text is already here, rendered by the same renderer the extracts use so
+	# the two do not disagree about what markdown looks like.
+	if [[ -z $url ]]; then
+		af=$(answer_file "$file")
+		printf '\033[1;35m%s\033[0m\n\n' "$title"
+		if [[ -s $af ]]; then
+			render_markdown "$af" "$width"
+		else
+			printf '\033[31m(the answer is gone)\033[0m\n'
+		fi
+		return 0
+	fi
 
 	printf '\033[1;36m%s\033[0m\n' "$title"
 	printf '\033[33m%s\033[0m\n\n' "$url"
@@ -634,9 +902,26 @@ mode_preview() {
 
 # Write "# title / Source: url / extract" for one result to stdout.
 emit_note() {
-	local file=$1 idx=$2 url title cached
+	local file=$1 idx=$2 url title cached af
 	url=$(result_field "$idx" "$file" url)
 	title=$(result_field "$idx" "$file" title)
+
+	# The answer keeps and travels like a page does. Its source line names the
+	# engine and the question rather than a url, because that pair is what you
+	# would have to know to get this text again.
+	if [[ -z $url ]]; then
+		af=$(answer_file "$file")
+		printf '# %s\n\n' "$(current_query "$file")"
+		printf 'Source: %s\n\n' "$title"
+		if [[ -s $af ]]; then
+			cat "$af"
+			printf '\n'
+		else
+			printf '(the answer is gone)\n'
+		fi
+		return 0
+	fi
+
 	extract_to_cache "$url" || true
 	cached=$(cache_file "$url")
 
@@ -723,9 +1008,15 @@ note_paths() {
 	mkdir -p "$NOTES_DIR"
 	for idx in "$@"; do
 		# An index past the end of the results would otherwise leave an empty
-		# note behind in a directory that is meant to be durable.
-		[[ -n $(result_field "$idx" "$file" url) ]] || continue
+		# note behind in a directory that is meant to be durable. Title rather
+		# than url, because the answer row has a title and no url and is still a
+		# note worth keeping.
 		title=$(result_field "$idx" "$file" title)
+		[[ -n $title ]] || continue
+		# The answer's filename comes from the question. "answer-perplexity-low"
+		# would name every answer the same thing, and these notes outlive the
+		# search that produced them.
+		[[ -n $(result_field "$idx" "$file" url) ]] || title=$(current_query "$file")
 		# Flatten whitespace FIRST. A page title carrying a newline survives the
 		# rest of this pipeline, because tr, sed and cut are all line-oriented,
 		# and the result is a path printed across two lines. Every caller reads
@@ -778,6 +1069,7 @@ mode_send() {
 	mapfile -t notes < <(note_paths "$file" "$@")
 	if [[ ${#notes[@]} -eq 0 ]]; then
 		set_note "$file" 'nothing to hand off'
+		printf 'transform-header(%s --header %s)' "$SELF" "$file"
 		return 0
 	fi
 
@@ -791,18 +1083,24 @@ mode_send() {
 	payload=$(printf '%s\n' "${notes[@]}")
 
 	if deliver_to_pane "$target" "$payload"; then
-		label=$(tmux display-message -p -t "$target" \
-			'#{session_name}:#{window_index}.#{pane_index}' 2>/dev/null || printf '%s' "$target")
-		set_note "$file" "handed ${#notes[@]} extract(s) to $label"
 		clear_popup_source_pane
+		# The hand-off is the end of the search. The paths are on the input line
+		# of the pane underneath and the next thing to happen is you typing what
+		# to do with them, which the popup is sitting on top of. Nothing is
+		# reported because there is no longer a header to report into: the
+		# delivery is visible in the pane, which is a better receipt than a line
+		# of text about it.
+		printf 'abort'
 	else
-		# Say which of the two failures it was. "It did nothing" is the report
-		# that costs an evening.
+		# Say which of the two failures it was, and stay up to say it. "It did
+		# nothing" is the report that costs an evening, and a popup that closed
+		# on a failed hand-off is exactly that report.
 		if [[ -z $target ]]; then
 			set_note "$file" 'no source pane: alt-h works when ddgx runs from the M-g popup'
 		else
 			set_note "$file" "pane $target is gone, nothing handed off"
 		fi
+		printf 'transform-header(%s --header %s)' "$SELF" "$file"
 	fi
 }
 
@@ -1098,11 +1396,21 @@ play_detached() {
 
 # The picker's rows: the result index, then a numbered title with its domain.
 # A mode of its own because a refinement re-runs it through fzf's reload.
+#
+# Two numberings. A web result is numbered by position, because position is all
+# it has. An answer's source carries the number the answer itself used, so a
+# claim marked [4] and the row that backs it agree. The answer row has no
+# number and no domain: it is not somewhere you can go.
 mode_list() {
-	jq -r 'to_entries[] | "\(.key)\t\(.value.title)\t\(.value.url)"' "$1" |
+	jq -r 'to_entries[] | "\(.key)\t\(.value.title)\t\(.value.url)\t\(.value.ref // "")"' "$1" |
 		awk -F'\t' '{
+			if ($3 == "") {
+				printf "%s\t\033[1;35m▌ %s\033[0m\n", $1, $2
+				next
+			}
 			split($3, parts, "/")
-			printf "%s\t%2d. %s  \033[90m[%s]\033[0m\n", $1, $1 + 1, $2, parts[3]
+			label = ($4 == "" ? sprintf("%2d.", $1 + 1) : sprintf("[%s]", $4))
+			printf "%s\t%s %s  \033[90m[%s]\033[0m\n", $1, label, $2, parts[3]
 		}'
 }
 
@@ -1112,9 +1420,12 @@ mode_list() {
 # on the same line and is cleared once shown, so it reads as what just
 # happened rather than as part of the query.
 mode_header() {
-	local file=$1 note nf
+	local file=$1 note nf label='query'
 	nf=$(note_file "$file")
-	printf 'query: %s' "$(current_query "$file")"
+	# Which engine answered is part of what the header is for: after a switch
+	# through alt-q the same words mean two different things.
+	[[ $(current_engine "$file") == pplx ]] && label='ask'
+	printf '%s: %s' "$label" "$(current_query "$file")"
 	if [[ -s $nf ]]; then
 		note=$(head -n1 "$nf")
 		rm -f "$nf"
@@ -1132,9 +1443,45 @@ mode_refine() {
 	local file=$1 num=$2 query choice value new
 	query=$(current_query "$file")
 
-	choice=$(refine_menu | fzf --layout=reverse --prompt='refine > ' \
+	choice=$(refine_menu "$file" | fzf --layout=reverse --prompt='refine > ' \
 		--header="query: $query") || return 0
 	choice=${choice%% *}
+
+	# A follow-up replaces the query outright rather than building on it: the
+	# thread already holds what was asked before, so repeating it would ask the
+	# same question twice in one breath.
+	if [[ $choice == follow ]]; then
+		local followup
+		followup=$(read_value 'follow up' '') || return 0
+		[[ -z ${followup//[[:space:]]/} ]] && return 0
+		run_query "$file" "$num" "$followup" pplx 1
+		return 0
+	fi
+
+	# The engine switches run the query as it stands, so they return here rather
+	# than falling through to the equality check below, which exists to stop a
+	# query that did not change from costing a search. Changing engine changes
+	# the answer even when the words are identical, which is the whole point.
+	case $choice in
+	'ask' | 'web')
+		local engine=ddgr
+		[[ $choice == ask ]] && engine=pplx
+		if [[ $engine == "$(current_engine "$file")" ]]; then
+			set_note "$file" "already $choice"
+			return 0
+		fi
+		# The bare words, without the operators. site: and filetype: are
+		# DuckDuckGo syntax; handing them to an answer engine asks it to explain
+		# a search operator rather than to answer the question.
+		[[ $engine == pplx ]] && query=$(query_reset "$query")
+		if [[ -z ${query//[[:space:]]/} ]]; then
+			set_note "$file" 'nothing left to ask once the operators come off'
+			return 0
+		fi
+		run_query "$file" "$num" "$query" "$engine"
+		return 0
+		;;
+	esac
 
 	case $choice in
 	'site:' | '-site:')
@@ -1200,7 +1547,7 @@ prefetch() {
 }
 
 mode_dump() {
-	local file=$1 count width lines i url title abstract cached
+	local file=$1 count width lines i url title abstract cached ref label
 	count=$(jq 'length' "$file")
 	width=${DUMP_WIDTH:-100}
 	lines=$DUMP_LINES
@@ -1213,7 +1560,27 @@ mode_dump() {
 		title=$(result_field "$i" "$file" title)
 		abstract=$(result_field "$i" "$file" abstract)
 
-		printf '\033[1;36m%d. %s\033[0m\n' "$((i + 1))" "$title"
+		# The answer row, dumped as the answer rather than as a result with no
+		# page behind it. This is the path a pipe takes, so `-a -d question`
+		# prints the answer and then the sources under it.
+		if [[ -z $url ]]; then
+			printf '\033[1;35m%s\033[0m\n\n' "$title"
+			if [[ -s $(answer_file "$file") ]]; then
+				sed 's/^/   /' "$(answer_file "$file")"
+			fi
+			printf '\n'
+			continue
+		fi
+
+		# Numbered the way the picker numbers it: an answer's source keeps the
+		# number the answer cited it by.
+		ref=$(result_field "$i" "$file" ref)
+		if [[ -n $ref ]]; then
+			label="[$ref]"
+		else
+			label="$((i + 1))."
+		fi
+		printf '\033[1;36m%s %s\033[0m\n' "$label" "$title"
 		printf '   \033[33m%s\033[0m\n' "$url"
 		if [[ -n $abstract ]]; then
 			printf '%s\n' "$abstract" | fold -s -w "$((width - 3))" | sed 's/^/   /'
@@ -1254,7 +1621,7 @@ mode_pick() {
 				--bind="ctrl-o:transform($SELF --action '$file' {1} {+1} 2>/dev/null)" \
 				--bind="ctrl-e:execute($SELF --edit '$file' {+1})" \
 				--bind="ctrl-a:execute-silent($SELF --bookmark '$file' {+1})+transform-header($SELF --header '$file')" \
-				--bind="alt-h:execute-silent($SELF --send '$file' {+1})+transform-header($SELF --header '$file')" \
+				--bind="alt-h:transform($SELF --send '$file' {+1} 2>/dev/null)" \
 				--bind="ctrl-y:execute-silent($SELF --copy '$file' {+1})" \
 				--bind="ctrl-r:execute-silent($SELF --refetch '$file' {+1})+refresh-preview" \
 				--bind="alt-q:execute($SELF --refine '$file' $num)+reload($SELF --list '$file')+transform-header($SELF --header '$file')" \
@@ -1275,7 +1642,7 @@ mode_pick() {
 # ---------------------------------------------------------------------------
 
 main() {
-	local num="${DDGX_NUM:-8}" dump=0 failed=0 args=()
+	local num="${DDGX_NUM:-8}" dump=0 failed=0 args=() engine=ddgr query
 	DUMP_LINES=12
 
 	# Internal modes come first: they are re-entrant calls from fzf bindings.
@@ -1367,6 +1734,15 @@ main() {
 			dump=1
 			shift
 			;;
+		-a | --ask)
+			engine=pplx
+			shift
+			;;
+		--preset)
+			engine=pplx
+			PPLX_PRESET=$2
+			shift 2
+			;;
 		-l | --lines)
 			DUMP_LINES=$2
 			shift 2
@@ -1401,7 +1777,35 @@ main() {
 		args=("$TYPED_QUERY")
 	fi
 
-	command -v ddgr >/dev/null 2>&1 || die "ddgr not found"
+	# Whatever shape the query arrived in, it is one string from here on. The
+	# leading ? is a mode, not a search term: DuckDuckGo has no ? operator, so
+	# nothing that used to be a query loses meaning by being read this way.
+	query="${args[*]}"
+	if [[ $query == '?'* ]]; then
+		engine=pplx
+		# A second ? asks harder. One mark for the question you ask in passing,
+		# two for the one you sit with, which is the only depth decision worth
+		# making at the moment of typing.
+		if [[ $query == '??'* ]]; then
+			PPLX_PRESET="$PPLX_DEEP_PRESET"
+			query="${query#\?\?}"
+		else
+			query="${query#\?}"
+		fi
+		query="${query#"${query%%[![:space:]]*}"}"
+	fi
+	if [[ -z ${query//[[:space:]]/} ]]; then
+		die "nothing to search for"
+	fi
+
+	# ddgr is only needed by the engine that uses it: asking for an answer on a
+	# machine without ddgr installed is a working path, and demanding it here
+	# would refuse a search this script can perform.
+	if [[ $engine == pplx ]]; then
+		[[ -x $ASK_CMD ]] || die "missing ask backend: $ASK_CMD"
+	else
+		command -v ddgr >/dev/null 2>&1 || die "ddgr not found"
+	fi
 	command -v jq >/dev/null 2>&1 || die "jq not found"
 	command -v node >/dev/null 2>&1 || die "node not found"
 	[[ -f $READABLE ]] || die "missing extractor: $READABLE"
@@ -1412,25 +1816,35 @@ main() {
 	printf '%s' "$SOURCE_PANE" >"$(target_file "$RESULTS_FILE")"
 
 	# The query round-trip is the one unavoidable wait, so say it is happening
-	# instead of leaving a blank screen.
+	# instead of leaving a blank screen. An ask waits longer than a search, and
+	# says which engine is taking the time.
 	if [[ -t 1 ]]; then
-		printf '\033[90m  searching for %s ...\033[0m\r' "${args[*]}" >&2
+		if [[ $engine == pplx ]]; then
+			printf '\033[90m  asking perplexity (%s) about %s ...\033[0m\r' \
+				"$PPLX_PRESET" "$query" >&2
+		else
+			printf '\033[90m  searching for %s ...\033[0m\r' "$query" >&2
+		fi
 	fi
 	# Wipe that line whichever way the search went: a reason printed over a
 	# half-erased "searching for ..." is how "HTTP Error 202: Acceptedes
 	# finalizers ..." reaches the screen.
 	failed=0
-	search_ddgr "$RESULTS_FILE" "$num" "${args[*]}" || failed=1
+	if [[ $engine == pplx ]]; then
+		search_pplx "$RESULTS_FILE" "$query" "$(answer_file "$RESULTS_FILE")" \
+			"$(thread_file "$RESULTS_FILE")" || failed=1
+	else
+		search_ddgr "$RESULTS_FILE" "$num" "$query" || failed=1
+	fi
 	if [[ -t 1 ]]; then
 		printf '\033[2K\r' >&2
 	fi
 	if [[ $failed -eq 1 ]]; then
 		die "$SEARCH_ERROR"
 	fi
-	# What the picker refines from. Whatever shape the query arrived in, an
-	# inline "s foo bar" or a line typed into the popup, it becomes one string
-	# from here on.
-	printf '%s\n' "${args[*]}" >"$(query_file "$RESULTS_FILE")"
+	# What the picker refines from, and what it refines through.
+	printf '%s\n' "$query" >"$(query_file "$RESULTS_FILE")"
+	set_engine "$RESULTS_FILE" "$engine"
 
 	if [[ $dump -eq 1 ]] || [[ ! -t 1 ]]; then
 		# Piped without -d: dump rather than start fzf on a headless stdout.

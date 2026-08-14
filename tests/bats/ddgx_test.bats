@@ -1416,10 +1416,11 @@ send_header() {
 	# The marked set, {+1}, not the focused row, {1}: marking five results and
 	# handing over one is the silent half-delivery.
 	[[ "$bind" == *"{+1}"* ]]
-	# execute-silent keeps the picker drawn, and the header transform after it
-	# is the only channel mode_send's outcome has back to the screen.
-	[[ "$bind" == *"execute-silent"* ]]
-	[[ "$bind" == *"transform-header"* ]]
+	# transform, not execute-silent: mode_send prints the fzf action and fzf
+	# performs it, which is what lets one key close the popup on a delivery and
+	# keep it open on a failure. execute-silent can do neither.
+	[[ "$bind" == *"transform("* ]]
+	[[ "$bind" != *"execute-silent"* ]]
 
 	write_send_state '%7'
 	send_header
@@ -1470,8 +1471,24 @@ send_header() {
 	# just went over.
 	grep -q 'body of the first page' "$DATA_HOME/ddgx/notes/first-hit.md"
 
-	send_header
-	[[ "$output" == *"handed 1 extract(s) to search:0.1"* ]]
+	# A delivered hand-off closes the popup. The receipt is the paths sitting on
+	# the input line of the pane underneath, which is where you are about to
+	# type; a header line saying it worked would be read by nobody, because the
+	# window carrying it is gone.
+	[ "$output" = "abort" ]
+}
+
+@test "a hand-off that failed keeps the picker up to say so" {
+	write_send_state '%999'
+	stub_tmux '%7'
+
+	run_send "$SEND_RESULTS" 0
+
+	# Closing on a failed delivery turns the whole feature into "it did
+	# nothing", which is the report this file spends a paragraph avoiding.
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"transform-header"* ]]
+	[[ "$output" != *"abort"* ]]
 }
 
 @test "a hand-off into a pane that is gone says so rather than failing quietly" {
@@ -1640,4 +1657,489 @@ teardown() {
 	[ "$(grep -c '^bash-' <<<"$cap")" -eq 1 ]
 	# The page text stayed in the file, as it does with the stub.
 	[[ "$cap" != *"body of the first page"* ]]
+}
+
+# ---------------------------------------------------------------------------
+# The ask engine. Perplexity answers the question and its sources become
+# results, so every key that works on a search result works on them.
+#
+# The backend is stubbed through DDGX_ASK_CMD: __ddgx.sh resolves it from
+# SCRIPT_DIR, which PATH cannot override, and no test may reach the network or
+# spend an API credit to find out how a row is drawn.
+# ---------------------------------------------------------------------------
+
+ASK_REPLY='{"answer":"Defrag rewrites the backend db. [1]","results":[{"id":1,"title":"Maintenance","url":"https://etcd.io/docs/maintenance/","snippet":"reclaims space","date":"2026-01-01"},{"id":2,"title":"A post","url":"https://example.com/defrag","snippet":"a blog post","date":""}]}'
+
+stub_ask() {
+	cat >"$STUB_BIN/ask" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$@" >"$STUB_BIN/ask.argv"
+cat <<'JSON'
+$1
+JSON
+EOF
+	chmod +x "$STUB_BIN/ask"
+	# Sources are extracted like any other result, so keep the suite offline.
+	seed_cache "https://etcd.io/docs/maintenance/" "the maintenance page"
+	seed_cache "https://example.com/defrag" "the blog post"
+}
+
+# The query is the last argument the backend was handed.
+asked_query() { tail -n1 "$STUB_BIN/ask.argv"; }
+asked_with() { grep -qx -- "$1" "$STUB_BIN/ask.argv"; }
+
+run_ask() {
+	run env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" \
+		XDG_DATA_HOME="$DATA_HOME" DDGX_TTL=0 DDGX_ASK_CMD="$STUB_BIN/ask" \
+		bash "$DDGX" "$@"
+}
+
+# A picker mid-ask: the answer row, one source, and the sidecars that say which
+# engine produced the set and what it said.
+write_ask_state() {
+	RESULTS="$BATS_TEST_TMPDIR/results.json"
+	printf '%s\n' '[{"title":"answer · perplexity low","url":"","abstract":"","ref":""},{"title":"Maintenance","url":"https://etcd.io/docs/maintenance/","abstract":"reclaims space","ref":"1"}]' >"$RESULTS"
+	printf '%s\n' "$1" >"$RESULTS.query"
+	printf 'the answer text\n' >"$RESULTS.answer"
+	printf 'pplx\n' >"$RESULTS.engine"
+	# The conversation so far: the run a follow-up continues from, and the turn
+	# it is up to.
+	printf 'resp_seed\n1\nhigh\n' >"$RESULTS.thread"
+	seed_cache "https://etcd.io/docs/maintenance/" "the maintenance page"
+}
+
+run_ask_refine() {
+	run env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" \
+		XDG_DATA_HOME="$DATA_HOME" DDGX_TTL=0 DDGX_ASK_CMD="$STUB_BIN/ask" \
+		bash "$DDGX" --refine "$RESULTS" 8
+}
+
+@test "a leading ? asks rather than searches" {
+	stub_ask "$ASK_REPLY"
+
+	run_ask -d '? what does etcd defrag do'
+
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"Defrag rewrites the backend db"* ]]
+}
+
+@test "the ? is a mode marker and never reaches the question" {
+	stub_ask "$ASK_REPLY"
+
+	run_ask -d '? what does etcd defrag do'
+
+	# A question that arrives starting with punctuation is a different question.
+	[ "$status" -eq 0 ]
+	[ "$(asked_query)" = "what does etcd defrag do" ]
+}
+
+@test "-a asks without needing the prefix" {
+	stub_ask "$ASK_REPLY"
+
+	run_ask -d -a 'etcd defrag'
+
+	[ "$status" -eq 0 ]
+	[ "$(asked_query)" = "etcd defrag" ]
+}
+
+@test "the preset travels to the backend, and low is the default" {
+	stub_ask "$ASK_REPLY"
+
+	run_ask -d -a 'etcd defrag'
+
+	[ "$status" -eq 0 ]
+	asked_with '--preset'
+	asked_with 'low'
+}
+
+@test "DDGX_PPLX_PRESET chooses the depth" {
+	stub_ask "$ASK_REPLY"
+
+	run env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" \
+		XDG_DATA_HOME="$DATA_HOME" DDGX_TTL=0 DDGX_ASK_CMD="$STUB_BIN/ask" \
+		DDGX_PPLX_PRESET=medium bash "$DDGX" -d -a 'etcd defrag'
+
+	[ "$status" -eq 0 ]
+	asked_with 'medium'
+}
+
+@test "a source keeps the number the answer cited it by" {
+	write_ask_state 'etcd defrag'
+
+	run bash "$DDGX" --list "$RESULTS"
+
+	# The answer says [1]; the row that backs it has to say [1] too, not 2.
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"[1] Maintenance"* ]]
+}
+
+@test "a web result is still numbered by position" {
+	write_search_state 'kubernetes finalizers'
+
+	run bash "$DDGX" --list "$RESULTS"
+
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"1. Finalizers"* ]]
+}
+
+@test "the answer row carries no number and nowhere to go" {
+	write_ask_state 'etcd defrag'
+
+	run bash "$DDGX" --list "$RESULTS"
+
+	[ "$status" -eq 0 ]
+	local first
+	first=$(printf '%s\n' "$output" | sed -n '1p' | sed 's/\x1b\[[0-9;]*m//g')
+	[[ "$first" == *"answer · perplexity low"* ]]
+	# No leading index, and no domain in brackets: it is not a page.
+	[[ "$first" != *"1."* ]]
+	[[ "$first" != *"http"* ]]
+}
+
+@test "the answer previews as the answer, not as a page with no text" {
+	write_ask_state 'etcd defrag'
+
+	run env XDG_CACHE_HOME="$CACHE_HOME" bash "$DDGX" --preview "$RESULTS" 0
+
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"the answer text"* ]]
+	[[ "$output" != *"no page text"* ]]
+}
+
+@test "a source of the answer previews as its page" {
+	write_ask_state 'etcd defrag'
+
+	run env XDG_CACHE_HOME="$CACHE_HOME" bash "$DDGX" --preview "$RESULTS" 1
+
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"the maintenance page"* ]]
+}
+
+@test "the answer keeps as a note named from the question" {
+	write_ask_state 'why does etcd defrag block'
+	cat >"$STUB_BIN/fake-editor" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$@" >"$BATS_TEST_TMPDIR/edited"
+EOF
+	chmod +x "$STUB_BIN/fake-editor"
+
+	run env XDG_CACHE_HOME="$CACHE_HOME" XDG_DATA_HOME="$DATA_HOME" \
+		BATS_TEST_TMPDIR="$BATS_TEST_TMPDIR" DDGX_EDITOR="$STUB_BIN/fake-editor" \
+		bash "$DDGX" --edit "$RESULTS" 0
+
+	# Named for the question, because "answer-perplexity-low" would name every
+	# answer ever kept the same thing.
+	[ "$status" -eq 0 ]
+	local note="$DATA_HOME/ddgx/notes/why-does-etcd-defrag-block.md"
+	[ -f "$note" ]
+	grep -q 'the answer text' "$note"
+	grep -q 'why does etcd defrag block' "$note"
+}
+
+@test "the sources are not trimmed to the result count" {
+	stub_ask "$ASK_REPLY"
+
+	run_ask -d -n 1 -a 'etcd defrag'
+
+	# The answer numbers its own sources, so a list cut to -n would leave a
+	# claim marked [2] pointing at a row that is not on screen.
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"Maintenance"* ]]
+	[[ "$output" == *"A post"* ]]
+}
+
+@test "an answer that came back empty is reported rather than drawn" {
+	stub_ask '{"answer":"","results":[]}'
+
+	run_ask -d -a 'etcd defrag'
+
+	[ "$status" -ne 0 ]
+	[[ "$output" == *"empty"* ]]
+}
+
+@test "an answer with no sources is still an answer" {
+	stub_ask '{"answer":"Nothing cited, still true.","results":[]}'
+
+	run_ask -d -a 'etcd defrag'
+
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"Nothing cited, still true."* ]]
+}
+
+@test "the header says ask for a set an answer produced" {
+	write_ask_state 'etcd defrag'
+
+	run bash "$DDGX" --header "$RESULTS"
+
+	# The same words mean two different things depending on which engine ran.
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"ask: etcd defrag"* ]]
+}
+
+@test "the header says query for a web set, including one written before engines existed" {
+	write_search_state 'kubernetes finalizers'
+
+	run bash "$DDGX" --header "$RESULTS"
+
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"query: kubernetes finalizers"* ]]
+}
+
+@test "refining an ask set asks again rather than quietly searching" {
+	write_ask_state 'etcd defrag'
+	stub_ask "$ASK_REPLY"
+	stub_fzf 'edit'
+
+	# The hand-edited query arrives on stdin, the way the builder's edit entry
+	# has always taken it.
+	run env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" \
+		XDG_DATA_HOME="$DATA_HOME" DDGX_TTL=0 DDGX_ASK_CMD="$STUB_BIN/ask" \
+		bash "$DDGX" --refine "$RESULTS" 8 <<<'etcd defrag blocking'
+
+	[ "$status" -eq 0 ]
+	[ "$(asked_query)" = "etcd defrag blocking" ]
+	[ "$(head -n1 "$RESULTS.engine")" = "pplx" ]
+}
+
+@test "alt-q ask turns a web set into an answer" {
+	write_search_state 'etcd defrag'
+	stub_ask "$ASK_REPLY"
+	stub_fzf 'ask'
+
+	run_ask_refine
+
+	[ "$status" -eq 0 ]
+	[ "$(head -n1 "$RESULTS.engine")" = "pplx" ]
+	[ "$(asked_query)" = "etcd defrag" ]
+	grep -q 'Defrag rewrites' "$RESULTS.answer"
+}
+
+@test "switching to ask drops the search operators" {
+	write_search_state 'etcd defrag site:etcd.io filetype:pdf'
+	stub_ask "$ASK_REPLY"
+	stub_fzf 'ask'
+
+	run_ask_refine
+
+	# site: and filetype: are DuckDuckGo syntax. Handing them to an answer
+	# engine asks it to explain an operator instead of answering the question.
+	[ "$status" -eq 0 ]
+	[ "$(asked_query)" = "etcd defrag" ]
+}
+
+@test "switching back to web takes the answer down with it" {
+	write_ask_state 'etcd defrag'
+	stub_ddgr '[{"title":"Narrowed","url":"https://kubernetes.io/only/","abstract":"z"}]'
+	stub_fzf 'web'
+
+	run_ask_refine
+
+	# A stale answer under a set with no row to show it is a file that can only
+	# ever be read by mistake.
+	[ "$status" -eq 0 ]
+	[ "$(head -n1 "$RESULTS.engine")" = "ddgr" ]
+	[ ! -f "$RESULTS.answer" ]
+}
+
+@test "asking for the engine already in use costs nothing" {
+	write_ask_state 'etcd defrag'
+	rm -f "$STUB_BIN/ask.argv"
+	stub_ask "$ASK_REPLY"
+	rm -f "$STUB_BIN/ask.argv"
+	stub_fzf 'ask'
+
+	run_ask_refine
+
+	[ "$status" -eq 0 ]
+	[ ! -f "$STUB_BIN/ask.argv" ]
+	grep -q 'already ask' "$RESULTS.note"
+}
+
+@test "?? asks harder, and high is the default depth" {
+	stub_ask "$ASK_REPLY"
+
+	run_ask -d '?? why do pods stay terminating'
+
+	# One mark for the question asked in passing, two for the one you sit with.
+	[ "$status" -eq 0 ]
+	asked_with 'high'
+	[ "$(asked_query)" = "why do pods stay terminating" ]
+}
+
+@test "DDGX_DEEP_PRESET chooses what the second mark means" {
+	stub_ask "$ASK_REPLY"
+
+	run env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" \
+		XDG_DATA_HOME="$DATA_HOME" DDGX_TTL=0 DDGX_ASK_CMD="$STUB_BIN/ask" \
+		DDGX_DEEP_PRESET=xhigh bash "$DDGX" -d '?? trace this claim'
+
+	[ "$status" -eq 0 ]
+	asked_with 'xhigh'
+}
+
+@test "--preset reaches the depths no prefix offers" {
+	stub_ask "$ASK_REPLY"
+
+	run_ask -d --preset xhigh 'trace this claim'
+
+	# 100 steps and minutes of waiting is a deliberate spend, so it is spelled
+	# out rather than sitting one keystroke away from a passing question.
+	[ "$status" -eq 0 ]
+	asked_with 'xhigh'
+}
+
+@test "the row names the preset that produced the answer" {
+	stub_ask "$ASK_REPLY"
+
+	run_ask -d '?? why do pods stay terminating'
+
+	# An answer that reads thin should name the preset behind it, so the fix is
+	# visible: one more question mark next time.
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"answer · perplexity high"* ]]
+}
+
+# ---------------------------------------------------------------------------
+# Chat. An answer that ends "I can narrow this to X or Y" is inviting a second
+# turn, and the thread id is what lets the next question take it up.
+# ---------------------------------------------------------------------------
+
+FOLLOW_REPLY='{"id":"resp_second","answer":"Because the member blocks while it rebuilds.","results":[{"id":1,"title":"Maintenance","url":"https://etcd.io/docs/maintenance/","snippet":"blocks","date":""}]}'
+
+run_follow() {
+	run env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" \
+		XDG_DATA_HOME="$DATA_HOME" DDGX_TTL=0 DDGX_ASK_CMD="$STUB_BIN/ask" \
+		bash "$DDGX" --refine "$RESULTS" 8 <<<"$1"
+}
+
+@test "a follow-up is offered over an answer" {
+	write_ask_state 'etcd defrag'
+	stub_fzf '@abort'
+
+	run_ask_refine
+
+	[ "$status" -eq 0 ]
+	grep -q '^follow' "$STUB_BIN/fzf.stdin.1"
+}
+
+@test "a follow-up is not offered over a web search" {
+	write_search_state 'kubernetes finalizers'
+	stub_fzf '@abort'
+
+	run_ask_refine
+
+	# A dead entry on every search is worse than no entry: it reads as a
+	# feature until the day you pick it.
+	[ "$status" -eq 0 ]
+	[[ "$(cat "$STUB_BIN/fzf.stdin.1")" != *"follow"* ]]
+}
+
+@test "a follow-up carries the thread, so it can say it" {
+	write_ask_state 'etcd defrag'
+	stub_ask "$FOLLOW_REPLY"
+	stub_fzf 'follow'
+
+	run_follow 'why does it block'
+
+	# Without the id the question arrives with no idea what the last answer was
+	# about, which is two unrelated searches wearing a conversation's clothes.
+	[ "$status" -eq 0 ]
+	asked_with '--continue'
+	asked_with 'resp_seed'
+	[ "$(asked_query)" = "why does it block" ]
+}
+
+@test "a follow-up keeps the conversation and puts the newest turn on top" {
+	write_ask_state 'etcd defrag'
+	stub_ask "$FOLLOW_REPLY"
+	stub_fzf 'follow'
+
+	run_follow 'why does it block'
+
+	[ "$status" -eq 0 ]
+	# The question heads its own turn, and the turn you just asked for is the
+	# one the preview opens on.
+	[ "$(head -n1 "$RESULTS.answer")" = "## why does it block" ]
+	grep -q 'Because the member blocks' "$RESULTS.answer"
+	# Nothing said earlier is lost.
+	grep -q 'the answer text' "$RESULTS.answer"
+	local new old
+	new=$(grep -n 'Because the member blocks' "$RESULTS.answer" | cut -d: -f1)
+	old=$(grep -n 'the answer text' "$RESULTS.answer" | cut -d: -f1)
+	[ "$new" -lt "$old" ]
+}
+
+@test "each turn carries its own numbered sources" {
+	write_ask_state 'etcd defrag'
+	stub_ask "$FOLLOW_REPLY"
+	stub_fzf 'follow'
+
+	run_follow 'why does it block'
+
+	# The rows only ever show the newest turn's sources, so a [1] further up the
+	# transcript has to resolve against the turn it belongs to.
+	[ "$status" -eq 0 ]
+	grep -q '^\[1\]: https://etcd.io/docs/maintenance/' "$RESULTS.answer"
+}
+
+@test "a follow-up advances the thread and the turn count" {
+	write_ask_state 'etcd defrag'
+	stub_ask "$FOLLOW_REPLY"
+	stub_fzf 'follow'
+
+	run_follow 'why does it block'
+
+	[ "$status" -eq 0 ]
+	[ "$(sed -n '1p' "$RESULTS.thread")" = "resp_second" ]
+	[ "$(sed -n '2p' "$RESULTS.thread")" = "2" ]
+	# The depth is the one the conversation was started at, which the seeded
+	# thread records as high.
+	[ "$(jq -r '.[0].title' "$RESULTS")" = "answer · perplexity high · turn 2" ]
+}
+
+@test "a fresh ask starts a new conversation rather than continuing the last" {
+	write_ask_state 'etcd defrag'
+	stub_ask "$ASK_REPLY"
+	stub_fzf 'edit'
+
+	run env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" \
+		XDG_DATA_HOME="$DATA_HOME" DDGX_TTL=0 DDGX_ASK_CMD="$STUB_BIN/ask" \
+		bash "$DDGX" --refine "$RESULTS" 8 <<<'something else entirely'
+
+	# Rewriting the query is a new question, not the next one: continuing the
+	# thread would answer it in the shadow of a conversation it has nothing to
+	# do with.
+	[ "$status" -eq 0 ]
+	[[ "$(cat "$STUB_BIN/ask.argv")" != *"--continue"* ]]
+	[ "$(sed -n '2p' "$RESULTS.thread")" = "1" ]
+	[ "$(head -n1 "$RESULTS.answer")" = "## something else entirely" ]
+}
+
+@test "switching back to web ends the conversation" {
+	write_ask_state 'etcd defrag'
+	stub_ddgr '[{"title":"Narrowed","url":"https://kubernetes.io/only/","abstract":"z"}]'
+	stub_fzf 'web'
+
+	run_ask_refine
+
+	# A thread id under a web set would let a later follow-up continue a
+	# conversation the picker has no trace of.
+	[ "$status" -eq 0 ]
+	[ ! -f "$RESULTS.thread" ]
+}
+
+@test "a conversation is held at the depth it was started at" {
+	write_ask_state 'etcd defrag'
+	stub_ask "$FOLLOW_REPLY"
+	stub_fzf 'follow'
+
+	run_follow 'why does it block'
+
+	# The seeded thread was started at high. A follow-up that fell back to the
+	# cheap default would answer the harder question with less effort than the
+	# one that opened the conversation.
+	[ "$status" -eq 0 ]
+	asked_with 'high'
+	[[ "$(cat "$STUB_BIN/ask.argv")" != *"low"* ]]
+	[ "$(sed -n '3p' "$RESULTS.thread")" = "high" ]
 }
