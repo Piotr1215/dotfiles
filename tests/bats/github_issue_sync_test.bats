@@ -2400,6 +2400,98 @@ EOF
     fi
 }
 
+# ====================================================
+# +review MUST SURVIVE A MERGED COMPANION PR (task 43 / DEVOPS-1018)
+# Linear hands the sync only its FIRST PR attachment, so attach_pr_link judged
+# the tag on that one PR alone. Task 43 carries tailscale-acls#9 (MERGED) and
+# infrastructure#348 (OPEN, unreviewed since 2026-07-14): the merged companion
+# stripped +review nine times since 2026-08-03, one second after
+# update_task_status had correctly kept it, and each strip made live review work
+# read as unowned on the board. Both annotation orders are asserted because the
+# original hypothesis blamed annotation ordering.
+# ====================================================
+
+# gh mock that answers per PR url instead of per run, so one task can carry a
+# merged PR and an open one at the same time.
+_write_gh_mock_multi_pr() {
+    cat > "${TEST_DIR}/gh" << 'EOF'
+#!/bin/bash
+echo "MOCK: gh $*" >> "${TEST_DIR}/gh_calls.log"
+case "$*" in
+    *tailscale-acls/pull/9*)   echo "MERGED" ;;
+    *infrastructure/pull/348*) echo "OPEN" ;;
+    *infrastructure/pull/349*) echo "CLOSED" ;;
+    *) echo "OPEN" ;;
+esac
+EOF
+    chmod +x "${TEST_DIR}/gh"
+}
+
+# Task carrying +review and two PR annotations, in the order given.
+_write_task_mock_two_prs() {
+    local first_url="$1"
+    local second_url="$2"
+    cat > "${TEST_DIR}/task" << EOF
+#!/bin/bash
+EXPORT='[{"uuid":"test-uuid","description":"harden loft-router droplet network access","status":"pending","tags":["linear","review"],"annotations":[{"description":"${first_url}"},{"description":"${second_url}"}]}]'
+case "\$1" in
+    "test-uuid")
+        case "\$2" in
+            "export")   echo "\$EXPORT" ;;
+            "annotate") echo "MOCK: annotate \$*" >> "\${TEST_DIR}/annotate.log" ;;
+        esac
+        ;;
+    "_get") echo "" ;;
+    "rc.confirmation=no") echo "MOCK: task \$*" >> "\${TEST_DIR}/task_commands.log" ;;
+    *) echo "test-uuid" ;;
+esac
+EOF
+    chmod +x "${TEST_DIR}/task"
+}
+
+@test "attach_pr_link keeps +review when its MERGED PR is annotated before an OPEN one" {
+    _write_gh_mock_multi_pr
+    _write_task_mock_two_prs \
+        "https://github.com/loft-sh/tailscale-acls/pull/9" \
+        "https://github.com/loft-sh/infrastructure/pull/348"
+
+    # Linear hands us the merged companion, because it is attachment .[0].
+    run attach_pr_link "test-uuid" "https://github.com/loft-sh/tailscale-acls/pull/9" "In Progress"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "keeping +review" ]]
+    if [ -f "${TEST_DIR}/task_commands.log" ]; then
+        ! grep -q -- "-review" "${TEST_DIR}/task_commands.log"
+    fi
+}
+
+@test "attach_pr_link keeps +review when its MERGED PR is annotated after an OPEN one" {
+    _write_gh_mock_multi_pr
+    _write_task_mock_two_prs \
+        "https://github.com/loft-sh/infrastructure/pull/348" \
+        "https://github.com/loft-sh/tailscale-acls/pull/9"
+
+    run attach_pr_link "test-uuid" "https://github.com/loft-sh/tailscale-acls/pull/9" "In Progress"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "keeping +review" ]]
+    if [ -f "${TEST_DIR}/task_commands.log" ]; then
+        ! grep -q -- "-review" "${TEST_DIR}/task_commands.log"
+    fi
+}
+
+@test "attach_pr_link still strips +review when EVERY PR on the task is finished" {
+    # The keep must be gated on a live sibling, not on PR count, or the
+    # DEVOPS-1203 strip (dead PR hiding ownerless work) comes straight back.
+    _write_gh_mock_multi_pr
+    _write_task_mock_two_prs \
+        "https://github.com/loft-sh/tailscale-acls/pull/9" \
+        "https://github.com/loft-sh/infrastructure/pull/349"
+
+    run attach_pr_link "test-uuid" "https://github.com/loft-sh/tailscale-acls/pull/9" "In Progress"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Removing +review tag" ]]
+    grep -q -- "-review" "${TEST_DIR}/task_commands.log"
+}
+
 @test "update_task_status strips +review when the annotated PR is CLOSED" {
     echo "CLOSED" > "${TEST_DIR}/pr_state"
     # Toggle export so the recursive re-run after the strip terminates.
