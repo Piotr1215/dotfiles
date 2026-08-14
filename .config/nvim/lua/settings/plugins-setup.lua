@@ -104,6 +104,8 @@ require("gitsigns").setup {
   end,
 }
 
+local perplexity = require "user_functions.perplexity"
+
 require("gp").setup {
   -- default agent names set during startup, if nil last used agent is used
   -- Claude35 or ChatGPT4
@@ -150,22 +152,16 @@ require("gp").setup {
       gp.Prompt(params, gp.Target.enew "markdown", agent, template)
     end,
 
-    -- Custom Web Search Command using Perplexity
-    WebSearch = function(gp, params)
-      local template =
-        "Search the internet using Perplexity for: '{{command}}'. Provide a concise answer and include sources."
-      local agent = gp.get_command_agent "pplx"
-      gp.Prompt(params, gp.Target.vnew "markdown", agent, template)
+    -- Web search through the Perplexity Agent API
+    WebSearch = function(_, params)
+      perplexity.search(params.args)
     end,
 
-    -- Custom Web Search Command using Perplexity
-    WebSearchSelection = function(gp, params)
-      local template = "{{filename}}:\n\n"
-        .. "```{{filetype}}\n{{selection}}\n```\n\n"
-        .. "{{command}}\n"
-        .. "Provide a concise answer and include sources."
-      local agent = gp.get_command_agent "pplx"
-      gp.Prompt(params, gp.Target.vnew "markdown", agent, template, "Optional instructions:")
+    -- Web search seeded with the visual selection
+    WebSearchSelection = function(_, params)
+      local selection = table.concat(vim.api.nvim_buf_get_lines(0, params.line1 - 1, params.line2, false), "\n")
+      local query = params.args ~= "" and (params.args .. "\n\n" .. selection) or selection
+      perplexity.search(query)
     end,
   },
   providers = {
@@ -173,10 +169,6 @@ require("gp").setup {
       disable = false,
       endpoint = "https://api.anthropic.com/v1/messages",
       secret = os.getenv "ANTHROPIC_API_KEY",
-    },
-    pplx = {
-      endpoint = "https://api.perplexity.ai/chat/completions",
-      secret = os.getenv "PPLX_API_KEY", -- Ensure you have this set in your environment
     },
   },
   agents = {
@@ -280,15 +272,6 @@ require("gp").setup {
       system_prompt = "You are a specialized coding AI assistant.\n\n"
         .. "The user provided the additional info about how they would like you to respond:\n\n"
         .. "- Produce only valid and actionable code.\n",
-    },
-    -- Perplexity agent
-    {
-      provider = "pplx",
-      name = "pplx", -- Perplexity agent
-      chat = true,
-      command = true,
-      model = { model = "sonar" },
-      system_prompt = "You are specialized internet search assistant.",
     },
   },
 }
