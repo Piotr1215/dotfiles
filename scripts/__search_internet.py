@@ -16,6 +16,7 @@ A background run has no connection to lose. Verified 2026-08-14: an xhigh
 query failed at exactly 4:00 while streaming, and the same query survives here.
 """
 import argparse
+import json
 import os
 import sys
 import time
@@ -57,6 +58,19 @@ def parse_args():
         metavar="DOMAIN",
         help="Restrict sources to this domain; repeatable.",
     )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit {id, answer, results[]} as JSON. Sources carry the fields a "
+        "search result carries, so a picker can treat them as results.",
+    )
+    parser.add_argument(
+        "--continue",
+        dest="continue_from",
+        metavar="RESPONSE_ID",
+        help="Continue the thread from a previous run id, so a follow-up "
+        "question can say 'it' and mean what the last answer was about.",
+    )
     args = parser.parse_args()
     if args.pro:
         args.preset = "low"
@@ -64,14 +78,24 @@ def parse_args():
 
 
 def build_body(args):
+    # A continued turn carries only the new question: the thread already holds
+    # the system message and everything said so far, so repeating it would put
+    # the instructions in twice.
+    if args.continue_from:
+        messages = [{"type": "message", "role": "user", "content": args.query}]
+    else:
+        messages = [
+            {"type": "message", "role": "system", "content": "Be precise and concise."},
+            {"type": "message", "role": "user", "content": args.query},
+        ]
+
     body = {
         "preset": args.preset,
         "background": True,
-        "input": [
-            {"type": "message", "role": "system", "content": "Be precise and concise."},
-            {"type": "message", "role": "user", "content": args.query},
-        ],
+        "input": messages,
     }
+    if args.continue_from:
+        body["previous_response_id"] = args.continue_from
     filters = {}
     if args.recency:
         filters["search_recency_filter"] = args.recency
@@ -137,56 +161,63 @@ def cancel(session, run_id):
         pass
 
 
+def answer_text(agent_response):
+    return "".join(
+        part.get("text", "")
+        for item in agent_response.get("output") or []
+        if item.get("type") == "message"
+        for part in (item.get("content") or [])
+        if part.get("type") == "output_text"
+    )
+
+
+def collect_sources(agent_response):
+    """Every source the run cited, in order, deduped by url.
+
+    Each carries the fields a search result carries (title, url, snippet,
+    date), which is what lets a picker treat these as results rather than as
+    bare citations.
+    """
+    sources = []
+    seen = set()
+    for item in agent_response.get("output") or []:
+        if item.get("type") != "search_results":
+            continue
+        for result in item.get("results") or []:
+            url = result.get("url")
+            if not url or url in seen:
+                continue
+            seen.add(url)
+            sources.append(
+                {
+                    "id": result.get("id"),
+                    "title": result.get("title") or url,
+                    "url": url,
+                    "snippet": result.get("snippet") or "",
+                    "date": result.get("date") or "",
+                }
+            )
+    return sources
+
+
 def format_answer(agent_response):
     """Answer text plus a references block keyed by search-result id.
 
     The answer body is never rewritten: bracketed tokens also appear in code
     and slice syntax, so renumbering inline references risks corrupting it.
     """
-    output = agent_response.get("output") or []
-
-    text = "".join(
-        part.get("text", "")
-        for item in output
-        if item.get("type") == "message"
-        for part in (item.get("content") or [])
-        if part.get("type") == "output_text"
-    )
-
-    citations = []
-    ids_usable = True
-    by_id = {}
-    for item in output:
-        if item.get("type") != "search_results":
-            continue
-        for result in item.get("results") or []:
-            url = result.get("url")
-            if not url:
-                continue
-            result_id = result.get("id")
-            citations.append((result_id, url))
-            if not isinstance(result_id, int):
-                ids_usable = False
-            elif by_id.setdefault(result_id, url) != url:
-                ids_usable = False
-
-    if not citations:
+    text = answer_text(agent_response)
+    sources = collect_sources(agent_response)
+    if not sources:
         return text
 
+    ids = [source["id"] for source in sources]
+    ids_usable = all(isinstance(i, int) for i in ids) and len(set(ids)) == len(ids)
+
     references = "\n\n## References\n\n"
-    seen = set()
-    if ids_usable:
-        for result_id, url in citations:
-            if result_id in seen:
-                continue
-            seen.add(result_id)
-            references += f"[{result_id}]: {url}\n"
-    else:
-        for _, url in citations:
-            if url in seen:
-                continue
-            seen.add(url)
-            references += f"[{len(seen)}]: {url}\n"
+    for position, source in enumerate(sources, 1):
+        label = source["id"] if ids_usable else position
+        references += f"[{label}]: {source['url']}\n"
     return text + references
 
 
@@ -232,11 +263,19 @@ def main():
         detail = (agent_response.get("error") or {}).get("message") or status
         sys.exit(f"Perplexity run {status}: {detail}")
 
-    answer = format_answer(agent_response)
     if status == "incomplete":
         reason = (agent_response.get("incomplete_details") or {}).get("reason", "unknown")
         print(f"[partial answer, run incomplete: {reason}]\n", file=sys.stderr)
-    print(answer)
+
+    if args.json:
+        print(json.dumps({
+            # The id a follow-up passes back as --continue.
+            "id": agent_response.get("id") or run_id,
+            "answer": answer_text(agent_response),
+            "results": collect_sources(agent_response),
+        }))
+    else:
+        print(format_answer(agent_response))
 
 
 if __name__ == "__main__":
