@@ -543,10 +543,12 @@ vim.keymap.set("n", "<leader>aig", function()
   switch "ChatGPT4.1"
 end, { desc = "gp.nvim: use GPT-4.1 (OpenAI)" })
 
--- <leader>a i p   →  Perplexity (sonar model)
+-- <leader>a i p   →  Perplexity web search. No longer a gp.nvim agent switch:
+-- the Agent API that replaces Sonar is not chat/completions-shaped, so search
+-- runs as its own command instead of a gp provider.
 vim.keymap.set("n", "<leader>aip", function()
-  switch "pplx"
-end, { desc = "gp.nvim: use Perplexity (sonar)" })
+  require("user_functions.perplexity").prompt()
+end, { desc = "Perplexity web search (Agent API)" })
 
 vim.keymap.set({ "n", "i" }, "<C-g><C-w>w", "<cmd>GpWhisper<cr>", keymapOptions "Whisper Insert")
 vim.keymap.set({ "n", "i" }, "<C-g>r", "<cmd>GpRewrite<cr>", keymapOptions "Inline Rewrite")

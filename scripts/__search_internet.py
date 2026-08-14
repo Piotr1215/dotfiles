@@ -1,57 +1,243 @@
 #!/usr/bin/env python3
-import os
+"""Query the Perplexity Agent API and print a cited answer.
+
+Sonar and /chat/completions retire on 2026-09-27; this speaks the replacement
+POST /v1/agent surface. Presets replace model names: they bundle model, system
+prompt, tool config and step budget, and Perplexity re-tunes them with every
+frontier release, so a preset name tracks the state of the art at a stable cost
+profile. Step budgets: fast 1, low 5, medium 15, high 15, xhigh 100 (plus code
+sandbox), wide-research 100.
+
+Runs go through background mode and get polled, rather than streamed. A
+streamed run dies with its connection: something between here and Perplexity
+closes an idle SSE stream at four minutes, and an xhigh run cut that way comes
+back from a later GET with status "cancelled", the work gone and still billed.
+A background run has no connection to lose. Verified 2026-08-14: an xhigh
+query failed at exactly 4:00 while streaming, and the same query survives here.
+"""
 import argparse
+import os
+import sys
+import time
+
 import requests
 
-def main():
-    parser = argparse.ArgumentParser(description="Query the Perplexity AI API.")
+API_BASE = "https://api.perplexity.ai"
+PRESETS = ("fast", "low", "medium", "high", "xhigh", "wide-research")
+
+# xhigh and wide-research run up to 100 retrieval steps, so the ceiling is
+# generous. PPLX_MAX_WAIT overrides it for an unusually deep run.
+MAX_WAIT = int(os.getenv("PPLX_MAX_WAIT", "900"))
+HTTP_TIMEOUT = (10, 60)
+TERMINAL = ("completed", "failed", "cancelled", "incomplete")
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Query the Perplexity Agent API.")
     parser.add_argument("query", type=str, help="The query to send to the API.")
-    parser.add_argument("--pro", action="store_true", help="Use the sonar-pro model instead of sonar")
+    parser.add_argument(
+        "--preset",
+        choices=PRESETS,
+        default="fast",
+        help="Agent API preset (default: fast).",
+    )
+    parser.add_argument(
+        "--pro",
+        action="store_true",
+        help="Shorthand for --preset low, the successor to sonar-pro.",
+    )
+    parser.add_argument(
+        "--recency",
+        choices=("hour", "day", "week", "month", "year"),
+        help="Restrict sources to this recency window (default: no restriction).",
+    )
+    parser.add_argument(
+        "--domain",
+        action="append",
+        metavar="DOMAIN",
+        help="Restrict sources to this domain; repeatable.",
+    )
     args = parser.parse_args()
-    
-    model = "sonar-pro" if args.pro else "sonar"
-    url = "https://api.perplexity.ai/chat/completions"
-    
-    payload = {
-        "model": model,
-        "messages": [
-            {
-                "role": "system",
-                "content": "Be precise and concise."
-            },
-            {"role": "user", "content": args.query}
+    if args.pro:
+        args.preset = "low"
+    return args
+
+
+def build_body(args):
+    body = {
+        "preset": args.preset,
+        "background": True,
+        "input": [
+            {"type": "message", "role": "system", "content": "Be precise and concise."},
+            {"type": "message", "role": "user", "content": args.query},
         ],
-        "temperature": 0.2,
-        "top_p": 0.9,
-        "search_domain_filter": ["perplexity.ai"],
-        "return_images": False,
-        "return_related_questions": False,
-        "search_recency_filter": "month",
-        "top_k": 0,
-        "stream": False,
-        "presence_penalty": 0,
-        "frequency_penalty": 1
     }
-    
-    headers = {
-        "Authorization": f"Bearer {os.getenv('PPLX_API_KEY')}",
-        "Content-Type": "application/json"
-    }
-    
-    response = requests.request("POST", url, json=payload, headers=headers)
-    response_data = response.json()
-    
-    # Extract message content and citations
-    message = response_data["choices"][0]["message"]["content"]
-    citations = response_data["citations"]
-    
-    # Create references section
+    filters = {}
+    if args.recency:
+        filters["search_recency_filter"] = args.recency
+    if args.domain:
+        filters["search_domain_filter"] = args.domain
+    if filters:
+        body["tools"] = [{"type": "web_search", "filters": filters}]
+    return body
+
+
+def progress(message):
+    """Progress goes to stderr so stdout stays a clean answer for pipes."""
+    if sys.stderr.isatty():
+        print(f"  {message}", file=sys.stderr, flush=True)
+
+
+def count_sources(agent_response):
+    return sum(
+        len(item.get("results") or [])
+        for item in agent_response.get("output") or []
+        if item.get("type") == "search_results"
+    )
+
+
+def poll(session, run_id):
+    """Poll a background run to a terminal state and return the response object."""
+    deadline = time.monotonic() + MAX_WAIT
+    last_report = None
+    delay = 2
+
+    while True:
+        response = session.get(f"{API_BASE}/v1/agent/{run_id}", timeout=HTTP_TIMEOUT)
+        if not response.ok:
+            raise RuntimeError(f"poll failed: {response.status_code} {response.text}")
+        agent_response = response.json()
+
+        status = agent_response.get("status")
+        report = (status, count_sources(agent_response))
+        if report != last_report:
+            progress(f"{status}, {report[1]} sources")
+            last_report = report
+
+        if status in TERMINAL:
+            return agent_response
+
+        if time.monotonic() > deadline:
+            raise RuntimeError(
+                f"run {run_id} still {status} after {MAX_WAIT}s; "
+                "raise PPLX_MAX_WAIT or use a cheaper preset"
+            )
+
+        time.sleep(delay)
+        # Deep runs spend minutes between visible changes; stop hammering.
+        delay = min(delay + 1, 10)
+
+
+def cancel(session, run_id):
+    """An abandoned run keeps billing until the server hears otherwise."""
+    try:
+        session.post(f"{API_BASE}/v1/agent/{run_id}/cancel", json={}, timeout=HTTP_TIMEOUT)
+    except requests.RequestException:
+        # The run may already be terminal; nothing actionable either way.
+        pass
+
+
+def format_answer(agent_response):
+    """Answer text plus a references block keyed by search-result id.
+
+    The answer body is never rewritten: bracketed tokens also appear in code
+    and slice syntax, so renumbering inline references risks corrupting it.
+    """
+    output = agent_response.get("output") or []
+
+    text = "".join(
+        part.get("text", "")
+        for item in output
+        if item.get("type") == "message"
+        for part in (item.get("content") or [])
+        if part.get("type") == "output_text"
+    )
+
+    citations = []
+    ids_usable = True
+    by_id = {}
+    for item in output:
+        if item.get("type") != "search_results":
+            continue
+        for result in item.get("results") or []:
+            url = result.get("url")
+            if not url:
+                continue
+            result_id = result.get("id")
+            citations.append((result_id, url))
+            if not isinstance(result_id, int):
+                ids_usable = False
+            elif by_id.setdefault(result_id, url) != url:
+                ids_usable = False
+
+    if not citations:
+        return text
+
     references = "\n\n## References\n\n"
-    for i, url in enumerate(citations, 1):
-        references += f"[{i}]: {url}\n"
-    
-    # Combine and print
-    print(f"{message}{references}")
+    seen = set()
+    if ids_usable:
+        for result_id, url in citations:
+            if result_id in seen:
+                continue
+            seen.add(result_id)
+            references += f"[{result_id}]: {url}\n"
+    else:
+        for _, url in citations:
+            if url in seen:
+                continue
+            seen.add(url)
+            references += f"[{len(seen)}]: {url}\n"
+    return text + references
+
+
+def main():
+    args = parse_args()
+
+    api_key = os.getenv("PPLX_API_KEY")
+    if not api_key:
+        sys.exit("PPLX_API_KEY is not set")
+
+    session = requests.Session()
+    session.headers.update(
+        {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    )
+
+    try:
+        response = session.post(
+            f"{API_BASE}/v1/agent", json=build_body(args), timeout=HTTP_TIMEOUT
+        )
+    except requests.RequestException as error:
+        sys.exit(f"network error calling Perplexity: {error}")
+
+    if not response.ok:
+        sys.exit(f"Perplexity API error: {response.status_code} {response.text}")
+
+    run_id = response.json().get("id")
+    if not run_id:
+        sys.exit("Perplexity accepted the run but returned no id")
+    progress(f"run {run_id} ({args.preset})")
+
+    try:
+        agent_response = poll(session, run_id)
+    except KeyboardInterrupt:
+        cancel(session, run_id)
+        sys.exit(130)
+    except requests.RequestException as error:
+        sys.exit(f"network error while polling Perplexity: {error}")
+    except RuntimeError as error:
+        sys.exit(str(error))
+
+    status = agent_response.get("status")
+    if status in ("failed", "cancelled"):
+        detail = (agent_response.get("error") or {}).get("message") or status
+        sys.exit(f"Perplexity run {status}: {detail}")
+
+    answer = format_answer(agent_response)
+    if status == "incomplete":
+        reason = (agent_response.get("incomplete_details") or {}).get("reason", "unknown")
+        print(f"[partial answer, run incomplete: {reason}]\n", file=sys.stderr)
+    print(answer)
+
 
 if __name__ == "__main__":
     main()
