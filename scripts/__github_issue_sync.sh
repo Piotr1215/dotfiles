@@ -796,8 +796,21 @@ attach_pr_link() {
             if [[ "$issue_status" == "In Review" ]]; then
                 log "PR is $pr_live_state but Linear status is In Review - keeping +review: $pr_url"
             elif [[ "$has_review_tag" == "true" ]]; then
-                log "Removing +review tag (PR is $pr_live_state, Linear status is '$issue_status'): $pr_url"
-                task rc.confirmation=no modify "$task_uuid" -review
+                # $pr_url is Linear's FIRST PR attachment (get_linear_issues takes
+                # .[0]), but a task routinely carries several PRs. Judging the tag
+                # on this one alone strips +review off a task whose OTHER PR is
+                # still open, which is exactly what update_task_status decided to
+                # keep three lines earlier in the same run. Ask the task's own
+                # annotations before stripping; `unknown` keeps the tag for the
+                # same fail-safe reason update_task_status keeps it.
+                local sibling_verdict
+                sibling_verdict=$(task_pr_review_verdict "$task_json")
+                if [[ "$sibling_verdict" == "open" || "$sibling_verdict" == "unknown" ]]; then
+                    log "PR is $pr_live_state but another PR on this task is $sibling_verdict - keeping +review: $pr_url"
+                else
+                    log "Removing +review tag (PR is $pr_live_state, Linear status is '$issue_status'): $pr_url"
+                    task rc.confirmation=no modify "$task_uuid" -review
+                fi
             else
                 log "Not adding +review (PR is $pr_live_state, Linear status is '$issue_status'): $pr_url"
             fi
