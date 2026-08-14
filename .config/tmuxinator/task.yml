@@ -54,7 +54,7 @@ windows:
         - NCURSES_NO_UTF8_ACS=1 tui -r backlog
         - tuiw
         - NCURSES_NO_UTF8_ACS=1 tui -r current-prs-age
-  - private:
+  - gordon:
       layout: 72be,150x72,0,0[150x42,0,0,4,150x29,0,43,19]
       panes:
         # Gordon's startup steps (register on the bus, load the devops-dev
