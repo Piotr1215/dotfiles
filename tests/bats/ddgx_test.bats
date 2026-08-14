@@ -2143,3 +2143,90 @@ run_follow() {
 	[[ "$(cat "$STUB_BIN/ask.argv")" != *"low"* ]]
 	[ "$(sed -n '3p' "$RESULTS.thread")" = "high" ]
 }
+
+# ---------------------------------------------------------------------------
+# enter. On a page it opens the page. On the answer it asks the next question,
+# which is the whole of chat: enter, type, read, enter, type, read.
+# ---------------------------------------------------------------------------
+
+@test "the picker binds enter through the dispatcher" {
+	local bind
+	bind=$(grep -F -- '--bind="enter:' "$DDGX")
+
+	# A key that means two things has to ask what the row is, which is the same
+	# contract ctrl-o already runs on.
+	[ -n "$bind" ]
+	[[ "$bind" == *"transform("* ]]
+	[[ "$bind" == *"--enter"* ]]
+}
+
+@test "enter on the answer row asks a follow-up" {
+	write_ask_state 'etcd defrag'
+
+	run bash "$DDGX" --enter "$RESULTS" 0 8
+
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"--follow"* ]]
+	# The list is rebuilt so the new turn is on screen, and the cursor lands
+	# back on the answer ready for the next question.
+	[[ "$output" == *"reload("* ]]
+	[[ "$output" != *"accept"* ]]
+}
+
+@test "enter on a source row still opens the page" {
+	write_ask_state 'etcd defrag'
+
+	run bash "$DDGX" --enter "$RESULTS" 1 8
+
+	# Enter has always opened the thing under the cursor, and a cited page is a
+	# page.
+	[ "$status" -eq 0 ]
+	[ "$output" = "accept" ]
+}
+
+@test "enter on a web result still opens the page" {
+	write_search_state 'kubernetes finalizers'
+
+	run bash "$DDGX" --enter "$RESULTS" 0 8
+
+	[ "$status" -eq 0 ]
+	[ "$output" = "accept" ]
+}
+
+@test "the follow mode carries the thread the same way the menu entry does" {
+	write_ask_state 'etcd defrag'
+	stub_ask "$FOLLOW_REPLY"
+
+	run env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" \
+		XDG_DATA_HOME="$DATA_HOME" DDGX_TTL=0 DDGX_ASK_CMD="$STUB_BIN/ask" \
+		bash "$DDGX" --follow "$RESULTS" 8 <<<'why does it block'
+
+	[ "$status" -eq 0 ]
+	asked_with '--continue'
+	asked_with 'resp_seed'
+	[ "$(asked_query)" = "why does it block" ]
+	[ "$(sed -n '2p' "$RESULTS.thread")" = "2" ]
+}
+
+@test "following a web set says so instead of asking into nothing" {
+	write_search_state 'kubernetes finalizers'
+
+	run env XDG_CACHE_HOME="$CACHE_HOME" XDG_DATA_HOME="$DATA_HOME" \
+		bash "$DDGX" --follow "$RESULTS" 8 </dev/null
+
+	# Reachable through the menu on a set with no conversation behind it, so it
+	# has to answer rather than prompt for a question nobody can answer.
+	[ "$status" -eq 0 ]
+	grep -q 'came from a web search' "$RESULTS.note"
+}
+
+@test "the answer pane names the key that continues the conversation" {
+	write_ask_state 'etcd defrag'
+
+	run env XDG_CACHE_HOME="$CACHE_HOME" bash "$DDGX" --preview "$RESULTS" 0
+
+	# A conversation nobody knows how to continue reads as a dead end, and this
+	# file's own rule is that the pane names the key.
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"enter asks a follow-up"* ]]
+}

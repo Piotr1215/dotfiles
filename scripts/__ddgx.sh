@@ -52,11 +52,17 @@
 # something from the results. It costs no key and no header line, which the key
 # audit below says is the price worth refusing to pay.
 #
-# follow is the conversation. An answer that ends "I can narrow this to X or Y"
-# is inviting a second turn, and without one the offer is a dead end you can
-# only answer by starting over and typing the context back in by hand. The
-# thread id comes back with every answer and goes out with the next question,
-# so a follow-up can say "it" and mean what the last answer was about.
+# The conversation is enter on the answer row. An answer that ends "I can narrow
+# this to X or Y" is inviting a second turn, and without one the offer is a dead
+# end you can only answer by starting over and typing the context back in by
+# hand. The thread id comes back with every answer and goes out with the next
+# question, so a follow-up can say "it" and mean what the last answer was about.
+#
+# enter, because that is the row the cursor is already on when you finish
+# reading, and because on the answer row enter did nothing before: the row has
+# no page to open. The menu entry stays for the times you have forgotten. Every
+# turn reloads the list, which puts the cursor back on the answer, so the whole
+# of a conversation is enter, type, read, enter, type, read.
 #
 # The transcript is the answer row, newest turn on top. Each turn carries the
 # question, the answer, and that turn's own numbered sources, because the rows
@@ -853,7 +859,10 @@ mode_preview() {
 	# the two do not disagree about what markdown looks like.
 	if [[ -z $url ]]; then
 		af=$(answer_file "$file")
-		printf '\033[1;35m%s\033[0m\n\n' "$title"
+		printf '\033[1;35m%s\033[0m\n' "$title"
+		# The pane names the key, the way it does for a video. A conversation
+		# nobody knows how to continue is a feature that reads as a dead end.
+		printf '\033[90m(enter asks a follow-up)\033[0m\n\n'
 		if [[ -s $af ]]; then
 			render_markdown "$af" "$width"
 		else
@@ -1204,6 +1213,49 @@ mode_action() {
 	printf 'execute(%s --read %s %s)' "$SELF" "$file" "$*"
 }
 
+# Ask the next question in the conversation.
+#
+# A mode of its own because two keys reach it: enter on the answer row, which is
+# the one you actually use, and follow in the alt-q menu, which is where you
+# look when you have forgotten that enter does it.
+mode_follow() {
+	local file=$1 num=$2 followup
+	if [[ $(current_engine "$file") != pplx ]]; then
+		set_note "$file" 'nothing to follow: this set came from a web search'
+		return 0
+	fi
+	# The question replaces the query outright rather than building on it: the
+	# thread already holds what was asked before, so carrying the old words
+	# forward would ask the same thing twice in one breath.
+	followup=$(read_value 'follow up' '') || return 0
+	[[ -z ${followup//[[:space:]]/} ]] && return 0
+	run_query "$file" "$num" "$followup" pplx 1
+}
+
+# enter. On a page it opens the page, which is what enter has always done here.
+# On the answer it asks the next question.
+#
+# That row is where the cursor already sits when you finish reading, and a
+# conversation is a sequence of follow-ups: alt-q, enter, type was three
+# keystrokes of ceremony around the one thing you came back to do. It costs no
+# key, because enter on the answer row did nothing at all before: the row has no
+# url, and mode_pick only ever opened rows that had one.
+#
+# Same transform contract as ctrl-o: this prints the actions and fzf performs
+# them, which is what lets one key mean two things without either of them being
+# a compromise.
+mode_enter() {
+	local file=$1 idx=$2 num=$3
+
+	if [[ -n $(result_field "$idx" "$file" url) ]]; then
+		printf 'accept'
+		return 0
+	fi
+
+	printf 'execute(%s --follow %s %s)+reload(%s --list %s)+transform-header(%s --header %s)' \
+		"$SELF" "$file" "$num" "$SELF" "$file" "$SELF" "$file"
+}
+
 mode_open() {
 	local url=$1
 	if [[ -n ${BROWSER:-} ]] && command -v "$BROWSER" >/dev/null 2>&1; then
@@ -1447,14 +1499,8 @@ mode_refine() {
 		--header="query: $query") || return 0
 	choice=${choice%% *}
 
-	# A follow-up replaces the query outright rather than building on it: the
-	# thread already holds what was asked before, so repeating it would ask the
-	# same question twice in one breath.
 	if [[ $choice == follow ]]; then
-		local followup
-		followup=$(read_value 'follow up' '') || return 0
-		[[ -z ${followup//[[:space:]]/} ]] && return 0
-		run_query "$file" "$num" "$followup" pplx 1
+		mode_follow "$file" "$num"
 		return 0
 	fi
 
@@ -1618,6 +1664,7 @@ mode_pick() {
 				--header="$(mode_header "$file")" \
 				--preview="$SELF --preview '$file' {1}" \
 				--preview-window='right,58%,wrap,border-left' \
+				--bind="enter:transform($SELF --enter '$file' {1} $num 2>/dev/null)" \
 				--bind="ctrl-o:transform($SELF --action '$file' {1} {+1} 2>/dev/null)" \
 				--bind="ctrl-e:execute($SELF --edit '$file' {+1})" \
 				--bind="ctrl-a:execute-silent($SELF --bookmark '$file' {+1})+transform-header($SELF --header '$file')" \
@@ -1686,6 +1733,16 @@ main() {
 	--action)
 		shift
 		mode_action "$@"
+		return 0
+		;;
+	--enter)
+		shift
+		mode_enter "$@"
+		return 0
+		;;
+	--follow)
+		shift
+		mode_follow "$@"
 		return 0
 		;;
 	--list)
