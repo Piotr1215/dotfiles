@@ -1,31 +1,38 @@
 #compdef snd
 
-# Completion for snd - send messages to Claude tmux panes
+# Completion for snd, the agents comms bus publisher.
+#
+# Names and groups come from the live presence stream via
+# __agents_presence.sh, which agents-presence.service keeps current. The
+# previous version of this file completed from the `agents` table in
+# agents.duckdb and advertised nine flags snd no longer parses; both went stale
+# when agents-mcp-server dropped DuckDB for an in-memory registry plus NATS
+# presence, and TAB kept serving months-dead groups.
 
-local DB_PATH="${AGENTS_DB_PATH:-/home/decoder/.claude/data/agents.duckdb}"
+_snd_roster() {
+    local helper="${AGENTS_PRESENCE_HELPER:-$HOME/dev/dotfiles/scripts/__agents_presence.sh}"
+    [[ -x "$helper" ]] || return 1
+    "$helper" "$1" 2>/dev/null
+}
 
 _snd_agents() {
-    local agents
-    agents=(${(f)"$(duckdb "$DB_PATH" -noheader -list -c "SELECT name FROM agents WHERE pane_id IS NOT NULL" 2>/dev/null)"})
-    compadd -a agents
+    local -a agents
+    agents=(${(f)"$(_snd_roster --agents)"})
+    (( ${#agents} )) && _describe -t agents 'live agents' agents
 }
 
 _snd_groups() {
-    local groups
-    groups=(${(f)"$(duckdb "$DB_PATH" -noheader -list -c "SELECT DISTINCT COALESCE(group_name, 'default') FROM agents" 2>/dev/null)"})
-    compadd -a groups
+    local -a groups
+    groups=(${(f)"$(_snd_roster --groups)"})
+    (( ${#groups} )) && _describe -t groups 'live groups' groups
 }
 
 _arguments -s \
-    '(-a --agents)'{-a,--agents}'[Broadcast to all agent panes]' \
-    '(-t --to)'{-t,--to}'[DM to specific agent]:agent:_snd_agents' \
-    '--exclude[Exclude agent from broadcast]:agent:_snd_agents' \
-    '--pane[Send to specific tmux pane]:pane:' \
-    '(-g --group)'{-g,--group}'[Target group(s), comma-separated]:group:_snd_groups' \
-    '--list-groups[List groups with agent counts]' \
-    '--list-agents[List registered agents]' \
-    '(-r --reply)'{-r,--reply}'[Wait for reply (first responder)]' \
-    '--timeout[Reply timeout in seconds]:seconds:' \
-    '--watch[Tail DuckDB messages]' \
-    '--kill[Deregister ALL agents]' \
+    '(-t -g 1)-t[DM to an agent]:agent:_snd_agents' \
+    '(-t -g 1)-g[Broadcast to a group]:group:_snd_groups' \
+    '(--no-human)--human[Prefix the payload with the HUMAN marker]' \
+    '(--human)--no-human[Publish without the HUMAN marker]' \
+    '(- *)--tail[Watch every bus event, read-only]' \
+    '(- *)'{-h,--help}'[Show usage]' \
+    '1:agent:_snd_agents' \
     '*:message:'
