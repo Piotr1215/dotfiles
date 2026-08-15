@@ -21,6 +21,10 @@ set -eo pipefail
 
 SNIPPETS_DIR="${AI_SNIPPETS_DIR:-$HOME/.config/ai-snippets}"
 EXCERPT_LINES="${SNIPPET_EXCERPT_LINES:-3}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# shellcheck source=/dev/null
+source "$SCRIPT_DIR/__lib_rofi_theme.sh"
 
 # Rows are NUL-separated so a row can span several lines: rofi shows the label
 # plus an excerpt of the body, which is the whole point of the wide window.
@@ -129,7 +133,6 @@ if [[ "${1:-}" == "--list" ]]; then
     exit 0
 fi
 
-# Shared rofi look, matching __value_picker.sh but wider: the excerpt needs room.
 rofi_pick() {
     # Control+e is rofi's default kb-move-end, and rofi refuses a custom binding
     # that is already taken ("failed to set binding"), so unbind it first. Same
@@ -138,19 +141,20 @@ rofi_pick() {
     # The palette is set on `*` rather than per widget: row text is drawn by the
     # element-text child, which does not inherit a colour set on `element`, so
     # per-widget overrides alone leave the rows in the stock theme's colours.
+    # These follow the shared base deliberately: rofi applies -theme-str in
+    # order, so the later rules win for the properties they name and inherit the
+    # rest, which is what keeps this file from restating the whole palette.
+    #
+    # 12 rows, not 18: each row is ROW_HEIGHT lines tall because of the excerpt,
+    # so the shared default would draw a menu taller than the screen.
+    rofi_theme 1600 12
     rofi -dmenu -i -p snippet -sep '\0' -eh "$ROW_HEIGHT" -format i -no-custom \
         -kb-move-end "" -kb-custom-1 "Control+e" \
         -mesg 'Enter → paste    Ctrl+E → edit' \
-        -theme-str '* {font: "JetBrainsMono Nerd Font 12"; background-color: argb:ff282a36; text-color: argb:fff8f8f2;}' \
-        -theme-str 'window {width: 1000px; background-color: argb:ff282a36; border: 2px solid; border-color: argb:ffbd93f9; border-radius: 8px;}' \
-        -theme-str 'mainbox {background-color: transparent;}' \
-        -theme-str 'inputbar {background-color: argb:ff44475a; padding: 8px;}' \
-        -theme-str 'prompt {background-color: transparent; text-color: argb:ffbd93f9;}' \
-        -theme-str 'entry {background-color: transparent;}' \
+        "${ROFI_THEME[@]}" \
+        -theme-str '* {background-color: argb:ff282a36; text-color: argb:fff8f8f2;}' \
         -theme-str 'message {background-color: transparent;}' \
         -theme-str 'textbox {background-color: transparent; text-color: argb:ff6272a4;}' \
-        -theme-str 'listview {background-color: transparent; lines: 8;}' \
-        -theme-str 'element {padding: 8px;}' \
         -theme-str 'element normal.normal {background-color: transparent; text-color: argb:fff8f8f2;}' \
         -theme-str 'element alternate.normal {background-color: transparent; text-color: argb:fff8f8f2;}' \
         -theme-str 'element selected.normal {background-color: argb:ff44475a; text-color: argb:ff50fa7b;}' \

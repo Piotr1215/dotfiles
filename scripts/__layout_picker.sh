@@ -3,6 +3,10 @@
 set -eo pipefail
 
 LAYOUTS_SCRIPT="$HOME/dev/dotfiles/scripts/__layouts.sh"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# shellcheck source=/dev/null
+source "$SCRIPT_DIR/__lib_rofi_theme.sh"
 
 # Detect running apps (wmctrl for accurate count including minimized)
 count_browsers() {
@@ -67,16 +71,11 @@ if [[ "$menu_output" == "NOT_ENOUGH|0|" ]]; then
 fi
 
 display_menu=$(echo "$menu_output" | cut -d'|' -f1)
+# 900px/10, narrower than the shared default: layout names are short, and a
+# window sized for file paths would be mostly empty here.
+rofi_theme 900 10
 selection=$(echo "$display_menu" | rofi -dmenu -i -p "Layout" -format 'i' -auto-select \
-    -theme-str '* {font: "JetBrainsMono Nerd Font 12";}' \
-    -theme-str 'window {width: 400px; background-color: argb:ff282a36; border: 2px solid; border-color: argb:ffbd93f9; border-radius: 8px;}' \
-    -theme-str 'mainbox {background-color: transparent;}' \
-    -theme-str 'inputbar {background-color: argb:ff44475a; text-color: argb:fff8f8f2; padding: 8px;}' \
-    -theme-str 'prompt {text-color: argb:ffbd93f9;}' \
-    -theme-str 'entry {text-color: argb:fff8f8f2;}' \
-    -theme-str 'listview {background-color: transparent; lines: 6;}' \
-    -theme-str 'element {padding: 8px; background-color: transparent; text-color: argb:fff8f8f2;}' \
-    -theme-str 'element.selected {background-color: argb:ff44475a; text-color: argb:ff50fa7b;}')
+    "${ROFI_THEME[@]}")
 
 [[ -z "$selection" || "$selection" == "-1" ]] && exit 0
 

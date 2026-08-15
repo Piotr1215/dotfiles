@@ -15,24 +15,25 @@
 set -eo pipefail
 
 SETS_DIR="${VALUE_SETS_DIR:-$HOME/.config/value-sets}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Shared rofi look (mirrors __layout_picker.sh).
+# shellcheck source=/dev/null
+source "$SCRIPT_DIR/__lib_rofi_theme.sh"
+
 # Control+a is rebound from kb-move-front to kb-custom-1 so it exits with code 10,
 # our "copy the whole list to the clipboard" signal (handled by the caller).
 # -mesg advertises it.
+#
+# 2000px, wider than the shared default: the "skills" set carries absolute
+# SKILL.md paths and its longest row is 235 chars. The discriminator (run vs
+# file, and the skill name) sits at the END of the line, so a truncating window
+# hides exactly the part being chosen between.
 rofi_pick() {
+    rofi_theme 2000
     rofi -dmenu -i -p "$1" \
         -kb-move-front "" -kb-custom-1 "Control+a" \
         -mesg 'Ctrl+A → copy whole list to clipboard' \
-        -theme-str '* {font: "JetBrainsMono Nerd Font 12";}' \
-        -theme-str 'window {width: 600px; background-color: argb:ff282a36; border: 2px solid; border-color: argb:ffbd93f9; border-radius: 8px;}' \
-        -theme-str 'mainbox {background-color: transparent;}' \
-        -theme-str 'inputbar {background-color: argb:ff44475a; text-color: argb:fff8f8f2; padding: 8px;}' \
-        -theme-str 'prompt {text-color: argb:ffbd93f9;}' \
-        -theme-str 'entry {text-color: argb:fff8f8f2;}' \
-        -theme-str 'listview {background-color: transparent; lines: 10;}' \
-        -theme-str 'element {padding: 8px; background-color: transparent; text-color: argb:fff8f8f2;}' \
-        -theme-str 'element.selected {background-color: argb:ff44475a; text-color: argb:ff50fa7b;}'
+        "${ROFI_THEME[@]}"
 }
 
 # Names of all available sets (filenames in SETS_DIR).
