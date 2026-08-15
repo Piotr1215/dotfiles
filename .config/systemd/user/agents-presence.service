@@ -1,0 +1,16 @@
+[Unit]
+Description=Agents bus presence cache (agents.presence -> ~/.cache/agents-presence.tsv)
+Documentation=file:%h/dev/dotfiles/scripts/__agents_presence.sh
+After=network-online.target
+
+[Service]
+Type=simple
+ExecStart=%h/dev/dotfiles/scripts/__agents_presence.sh --tail
+Restart=always
+RestartSec=5
+Nice=10
+StandardOutput=null
+StandardError=journal
+
+[Install]
+WantedBy=default.target
