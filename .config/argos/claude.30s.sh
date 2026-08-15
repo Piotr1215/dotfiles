@@ -99,7 +99,11 @@ if (( bad_count == 0 )); then
         echo "| dropdown=false"
         exit 0
     fi
-    echo "<tt><b><span color='#33d17a'>C</span></b></tt> | font='monospace' size=12 dropdown=false"
+    # Same markup shape as the other applets in this bar (see hwmon's "T:50C"):
+    # a bold <tt> label, then a coloured <tt> value. Pango sizes a label from the
+    # glyphs it holds, so a lone letter sits on a different baseline than its
+    # neighbours; keeping the label-plus-value pair puts C on their line.
+    echo "<tt><b>C:</b></tt><tt><span color='#33d17a'>ok</span></tt> | font='monospace' size=12 dropdown=false"
     echo "---"
     bg=0
     for row in "${claude_rows[@]}"; do
