@@ -96,42 +96,53 @@ fi
 
 echo "---"
 
-if (( ${#orphan_rows[@]} > 0 )); then
-    echo "<b>Orphaned claude (parent gone)</b> | size=11 color=#ff4444"
-    for row in "${orphan_rows[@]}"; do
-        IFS='|' read -r pid cpu rss etime tty cmd <<< "$row"
-        echo "<b>⚠️ PID $pid</b> | color=#ff4444 size=11"
-        echo "  CPU: ${cpu}%  Mem: $((rss / 1024))MB  Up: $etime | size=10 color=#888888"
-        echo "  ${cmd:0:70} | size=10 color=#888888"
-        echo "  Kill -9 | bash='kill -9 $pid' terminal=false refresh=true size=10 color=#ff4444"
-    done
+# ACTIONS FIRST. The dropdown does not scroll, so anything below roughly a dozen
+# lines is unreachable. Listing 20 leaked monitors at three lines each pushed the
+# kill button off the bottom, which made the applet useless exactly when it had
+# something to report. Details are summarised, never enumerated per PID.
+if (( bad_count > 0 )); then
+    all_bad=("${orphan_pids[@]}" "${leaked_pids[@]}")
+    echo "<b>⚠️ Kill ALL leaked ($bad_count)</b> | bash='kill -9 ${all_bad[*]}' terminal=false refresh=true color=#ff4444 size=12"
+    if (( ${#leaked_pids[@]} > 0 && ${#orphan_pids[@]} > 0 )); then
+        echo "Kill leaked monitors only (${#leaked_pids[@]}) | bash='kill -9 ${leaked_pids[*]}' terminal=false refresh=true size=11"
+        echo "Kill orphaned claude only (${#orphan_pids[@]}) | bash='kill -9 ${orphan_pids[*]}' terminal=false refresh=true size=11"
+    fi
     echo "---"
 fi
 
-if (( ${#leaked_rows[@]} > 0 )); then
-    echo "<b>Leaked prompt monitors (pane closed)</b> | size=11 color=#ff4444"
-    for row in "${leaked_rows[@]}"; do
-        IFS='|' read -r pid cpu rss etime pane _ <<< "$row"
-        echo "<b>⚠️ PID $pid</b> (pane $pane gone) | color=#ff4444 size=11"
-        echo "  CPU: ${cpu}%  Mem: $((rss / 1024))MB  Up: $etime | size=10 color=#888888"
-        echo "  Kill -9 | bash='kill -9 $pid' terminal=false refresh=true size=10 color=#ff4444"
+if (( ${#orphan_rows[@]} > 0 )); then
+    echo "<b>Orphaned claude: ${#orphan_rows[@]}</b> (parent gone) | size=11 color=#ff4444"
+    printf '%s\n' "${orphan_rows[@]}" | head -4 | while IFS='|' read -r pid _ rss etime _ _; do
+        echo "  PID $pid  $((rss / 1024))MB  up $etime | size=10 color=#888888"
     done
+    (( ${#orphan_rows[@]} > 4 )) && echo "  and $(( ${#orphan_rows[@]} - 4 )) more | size=10 color=#888888"
+fi
+
+if (( ${#leaked_rows[@]} > 0 )); then
+    # Cap the pane list: it grows with every closed pane and a long line just
+    # makes the dropdown wide for no extra information.
+    mapfile -t dead_panes < <(printf '%s\n' "${leaked_rows[@]}" | cut -d'|' -f5 | sort -u)
+    panes="${dead_panes[*]:0:6}"
+    (( ${#dead_panes[@]} > 6 )) && panes="$panes +$(( ${#dead_panes[@]} - 6 )) more"
+    oldest=$(printf '%s\n' "${leaked_rows[@]}" | cut -d'|' -f4 | sort -r | head -1)
+    echo "<b>Leaked monitors: ${#leaked_rows[@]}</b> (pane closed) | size=11 color=#ff4444"
+    echo "  dead panes: $panes | size=10 color=#888888"
+    echo "  oldest up $oldest | size=10 color=#888888"
+fi
+
+if (( bad_count > 0 )); then
     echo "---"
 fi
 
 if (( ok_count > 0 )); then
-    echo "<b>Healthy ($ok_count)</b> | size=11"
+    bg=0
     for row in "${claude_rows[@]}"; do
-        IFS='|' read -r pid cpu rss etime tty cmd <<< "$row"
-        label=$([[ "$tty" == "?" ]] && echo "background" || echo "$tty")
-        echo "PID $pid ($label) | size=10"
-        echo "  CPU: ${cpu}%  Mem: $((rss / 1024))MB  Up: $etime | size=10 color=#888888"
+        IFS='|' read -r _ _ _ _ tty _ <<< "$row"
+        [[ "$tty" == "?" ]] && (( ++bg ))
     done
+    echo "<b>Healthy: $ok_count</b>  ($((ok_count - bg)) tty, $bg background) | size=11"
+    echo "  background = daemon + bg-pty-hosts + spare (2.1.232+) | size=10 color=#888888"
     echo "---"
 fi
 
-if (( bad_count > 0 )); then
-    all_bad=("${orphan_pids[@]}" "${leaked_pids[@]}")
-    echo "<b>Kill ALL leaked</b> | bash='kill -9 ${all_bad[*]}' terminal=false refresh=true color=#ff4444"
-fi
 echo "Refresh | refresh=true"
