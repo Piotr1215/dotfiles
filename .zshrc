@@ -390,6 +390,7 @@ zle -N replace-string-again
 bindkey '^X^R' replace-string             # Ctrl+X Ctrl+R: Search-replace in line
 bindkey '^X^N' replace-string-again       # Ctrl+X Ctrl+N: Repeat last replace
 bindkey '^[^M' accept-and-hold            # Alt+Enter: Run and keep command
+source /home/decoder/dev/dotfiles/.zsh/float-command.zsh
 
 # edit-command-line in $PWD so editor gets local file context
 function edit-command-line-here() {
