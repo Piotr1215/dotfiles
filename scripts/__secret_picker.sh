@@ -22,7 +22,11 @@
 set -eo pipefail
 
 SECRETS_DIR="$HOME/.secrets"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AGE_ID="$HOME/.config/age/yubikey-pass-bastion.txt"
+
+# shellcheck source=/dev/null
+source "$SCRIPT_DIR/__lib_rofi_theme.sh"
 DESC_FILE="$SECRETS_DIR/.descriptions"
 PASS_DIR="${PASSWORD_STORE_DIR:-$HOME/.password-store}"
 
@@ -38,31 +42,22 @@ desc_for() {
 	' "$DESC_FILE"
 }
 
-# Shared rofi look (mirrors __value_picker.sh, but sized for this list).
-#
 # $1 = prompt, $2 = row count. Rows track the number of secrets instead of the
-# stock lines:10, which cut off the tail of the list and made whole secrets look
-# missing until you thought to scroll. Capped so a growing store cannot produce a
-# menu taller than the screen; past the cap you filter by typing (-i) and rofi
-# draws a scrollbar, which the fixed lines:10 never admitted to.
+# stock lines count, which cut off the tail of the list and made whole secrets
+# look missing until you thought to scroll. Capped so a growing store cannot
+# produce a menu taller than the screen; past the cap you filter by typing (-i)
+# and rofi draws a scrollbar, which a fixed count never admitted to.
 #
-# 1200px, not 900px: rows are "tier NAME description" across two merged stores,
+# 1800px, not 1200px: rows are "tier NAME description" across two merged stores,
 # and the longest today is ~113 chars, which 900px silently truncated (it already
-# truncated the 104-char rows before the tier column existed).
+# truncated the 104-char rows before the tier column existed). The cap rose with
+# the shared font bump, since taller rows fit fewer of them on the same screen.
 rofi_pick() {
 	local prompt="$1" rows="${2:-10}"
 	(( rows < 3 )) && rows=3
-	(( rows > 22 )) && rows=22
-	rofi -dmenu -i -p "$prompt" -format i \
-		-theme-str '* {font: "JetBrainsMono Nerd Font 12";}' \
-		-theme-str 'window {width: 1200px; background-color: argb:ff282a36; border: 2px solid; border-color: argb:ffbd93f9; border-radius: 8px;}' \
-		-theme-str 'mainbox {background-color: transparent;}' \
-		-theme-str 'inputbar {background-color: argb:ff44475a; text-color: argb:fff8f8f2; padding: 8px;}' \
-		-theme-str 'prompt {text-color: argb:ffbd93f9;}' \
-		-theme-str 'entry {text-color: argb:fff8f8f2;}' \
-		-theme-str "listview {background-color: transparent; lines: ${rows};}" \
-		-theme-str 'element {padding: 8px; background-color: transparent; text-color: argb:fff8f8f2;}' \
-		-theme-str 'element.selected {background-color: argb:ff44475a; text-color: argb:ff50fa7b;}'
+	(( rows > 26 )) && rows=26
+	rofi_theme 1800 "$rows"
+	rofi -dmenu -i -p "$prompt" -format i "${ROFI_THEME[@]}"
 }
 
 # Copy to whichever clipboard this session uses (mirrors .totp-copy.sh).
