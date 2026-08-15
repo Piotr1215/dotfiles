@@ -85,14 +85,35 @@ done < <(snapshot)
 bad_count=$(( ${#orphan_pids[@]} + ${#leaked_pids[@]} ))
 ok_count=${#claude_rows[@]}
 
-if (( bad_count > 0 )); then
-    echo "<tt><b>⚠️ C:</b></tt><tt><span color='#ff4444'>$bad_count leaked</span></tt> | font='monospace' size=12 dropdown=false"
-elif (( ok_count > 0 )); then
-    echo "<tt><b>C:</b></tt><tt><span color='#888888'>${ok_count}</span></tt> | font='monospace' size=12 dropdown=false"
-else
-    echo "| dropdown=false"
+# NO HEADCOUNT IN THE PANEL. A healthy count is not actionable and it moves on
+# its own: the daemon warms and consumes spares, and every TUI that runs a
+# background session adds its own set. Showing that number trained the eye to
+# read normal churn as a problem, which is how twenty genuine leaks sat
+# unnoticed behind four healthy processes wearing a warning icon.
+#
+# So the panel is binary. Green C means checked, nothing to kill. Red with a
+# count means act. The healthy breakdown still exists one click away for the
+# rare time it is wanted, but it never competes for attention in the bar.
+if (( bad_count == 0 )); then
+    if (( ok_count == 0 )); then
+        echo "| dropdown=false"
+        exit 0
+    fi
+    echo "<tt><b><span color='#33d17a'>C</span></b></tt> | font='monospace' size=12 dropdown=false"
+    echo "---"
+    bg=0
+    for row in "${claude_rows[@]}"; do
+        IFS='|' read -r _ _ _ _ tty _ <<< "$row"
+        [[ "$tty" == "?" ]] && (( ++bg ))
+    done
+    echo "<b>Healthy: $ok_count</b>  ($((ok_count - bg)) tty, $bg background) | size=11 color=#33d17a"
+    echo "  background = daemon + bg-pty-hosts + spare (2.1.232+) | size=10 color=#888888"
+    echo "---"
+    echo "Refresh | refresh=true"
     exit 0
 fi
+
+echo "<tt><b>⚠️ C:</b></tt><tt><span color='#ff4444'>$bad_count leaked</span></tt> | font='monospace' size=12 dropdown=false"
 
 echo "---"
 
@@ -100,15 +121,13 @@ echo "---"
 # lines is unreachable. Listing 20 leaked monitors at three lines each pushed the
 # kill button off the bottom, which made the applet useless exactly when it had
 # something to report. Details are summarised, never enumerated per PID.
-if (( bad_count > 0 )); then
-    all_bad=("${orphan_pids[@]}" "${leaked_pids[@]}")
-    echo "<b>⚠️ Kill ALL leaked ($bad_count)</b> | bash='kill -9 ${all_bad[*]}' terminal=false refresh=true color=#ff4444 size=12"
-    if (( ${#leaked_pids[@]} > 0 && ${#orphan_pids[@]} > 0 )); then
-        echo "Kill leaked monitors only (${#leaked_pids[@]}) | bash='kill -9 ${leaked_pids[*]}' terminal=false refresh=true size=11"
-        echo "Kill orphaned claude only (${#orphan_pids[@]}) | bash='kill -9 ${orphan_pids[*]}' terminal=false refresh=true size=11"
-    fi
-    echo "---"
+all_bad=("${orphan_pids[@]}" "${leaked_pids[@]}")
+echo "<b>⚠️ Kill ALL leaked ($bad_count)</b> | bash='kill -9 ${all_bad[*]}' terminal=false refresh=true color=#ff4444 size=12"
+if (( ${#leaked_pids[@]} > 0 && ${#orphan_pids[@]} > 0 )); then
+    echo "Kill leaked monitors only (${#leaked_pids[@]}) | bash='kill -9 ${leaked_pids[*]}' terminal=false refresh=true size=11"
+    echo "Kill orphaned claude only (${#orphan_pids[@]}) | bash='kill -9 ${orphan_pids[*]}' terminal=false refresh=true size=11"
 fi
+echo "---"
 
 if (( ${#orphan_rows[@]} > 0 )); then
     echo "<b>Orphaned claude: ${#orphan_rows[@]}</b> (parent gone) | size=11 color=#ff4444"
@@ -130,19 +149,5 @@ if (( ${#leaked_rows[@]} > 0 )); then
     echo "  oldest up $oldest | size=10 color=#888888"
 fi
 
-if (( bad_count > 0 )); then
-    echo "---"
-fi
-
-if (( ok_count > 0 )); then
-    bg=0
-    for row in "${claude_rows[@]}"; do
-        IFS='|' read -r _ _ _ _ tty _ <<< "$row"
-        [[ "$tty" == "?" ]] && (( ++bg ))
-    done
-    echo "<b>Healthy: $ok_count</b>  ($((ok_count - bg)) tty, $bg background) | size=11"
-    echo "  background = daemon + bg-pty-hosts + spare (2.1.232+) | size=10 color=#888888"
-    echo "---"
-fi
-
+echo "---"
 echo "Refresh | refresh=true"
