@@ -155,6 +155,7 @@ schedule_delay() {
 	local message="$1"
 	local delay="$2"
 	local encoded command_output status job_id script_path
+	local display="${DISPLAY:-:0}"
 	local -a at_args
 
 	encoded="$(encode_message "$message")"
@@ -165,7 +166,7 @@ schedule_delay() {
 	else
 		at_args=("$delay")
 	fi
-	command_output="$(printf '%q --notify %q\n' "$script_path" "$encoded" | at "${at_args[@]}" 2>&1)"
+	command_output="$(printf 'DISPLAY=%q %q --notify %q\n' "$display" "$script_path" "$encoded" | at "${at_args[@]}" 2>&1)"
 	status=$?
 	if [ "$status" -ne 0 ]; then
 		printf '%s\n' "$command_output" >&2

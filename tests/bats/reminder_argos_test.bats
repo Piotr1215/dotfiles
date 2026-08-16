@@ -56,6 +56,13 @@ encode() {
   [[ "$(<"$TEST_AT_STDIN")" != *"Don't blink"* ]]
 }
 
+@test "scheduling carries the graphical display into the at job" {
+  run env DISPLAY=:77 "$REMINDER" "Show the dialog" 10m
+
+  [ "$status" -eq 0 ]
+  [[ "$(<"$TEST_AT_STDIN")" == DISPLAY=:77\ * ]]
+}
+
 @test "records merge tracked reminders with active at jobs and prune stale state" {
   active="$(encode 'Review plan')"
   stale="$(encode 'Old reminder')"
