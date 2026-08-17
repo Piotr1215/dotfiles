@@ -93,14 +93,16 @@ build_blocks() {
 
 	{
 		printf '%s\n\n' "$Q3"
-		printf '%s\n' "(type this one)"
+		printf '%s\n' "(type this one; PRs below are waiting on someone else)"
+		printf '\n'
+		render "PRs awaiting review" "$PRS_CMD" blocked
 	} >"$dir/3"
 
 	{
 		printf '%s\n\n' "$Q4"
-		printf '%s\n' "(type this one; open PRs below are the usual handoff)"
+		printf '%s\n' "(type this one; PRs below are waiting on you)"
 		printf '\n'
-		render "open PRs" "$PRS_CMD"
+		render "PRs waiting on you" "$PRS_CMD" mine
 	} >"$dir/4"
 }
 
