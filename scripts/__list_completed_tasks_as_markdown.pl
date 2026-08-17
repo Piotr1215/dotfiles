@@ -16,7 +16,13 @@ while (<$map_fh>) {
 }
 close $map_fh;
 
-my $cutoff_date = $t->epoch - (7 * 86400);
+# Optional day window. The standup asks what got done since the last one, which
+# is a day or two, while tmarkc wants the week it has always shown, so the
+# default has to stay 7: this script is called bare from .zsh_aliases:119 and
+# from the standup with an explicit number.
+my $days = (defined $ARGV[0] && $ARGV[0] =~ /^\d+$/ && $ARGV[0] > 0) ? $ARGV[0] : 7;
+
+my $cutoff_date = $t->epoch - ($days * 86400);
 my $cutoff_ymd = localtime($cutoff_date)->strftime('%Y%m%d');
 
 # Structure: {project}{day_sort|day_name} = [tasks]
