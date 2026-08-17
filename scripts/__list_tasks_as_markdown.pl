@@ -59,6 +59,16 @@ for my $task ($doc->findnodes('/tasks/task')) {
     for my $mode (@modes) {
       if ($mode eq 'pending') {
         $include_task = 1 if $status eq 'pending';
+      } elsif ($mode eq 'current') {
+        # Mirrors report.current in .taskrc:92, the report actually used to
+        # answer "what am I on today". Every other mode here matches a literal
+        # tag, and the standup needs this one because no task carries a "next"
+        # tag: the +next mode standup.yml has been asking for matches nothing
+        # at all. The -BLOCKED clause of the taskrc filter has no counterpart
+        # because task export does not emit virtual tags, and dependencies are
+        # unused here, so it would exclude nothing today.
+        $include_task = 1 if $status eq 'pending'
+          && $tags !~ /\b(?:pr|backlog|pending|private)\b/;
       } else {
         $include_task = 1 if $tags =~ /\b$mode\b/ && $status eq 'pending';
       }
