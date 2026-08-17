@@ -24,6 +24,11 @@ add_task_if_not_exists() {
 	fi
 }
 
+# Days the standup runs, as day-of-week numbers. Kept as a variable because the
+# schedule is the bot's to change, not this script's to encode: the old Mon/Wed/
+# Fri cadence lived in three hardcoded case arms and removing it took a commit.
+standup_days="${STANDUP_DAYS:-1 2 3 4 5}"
+
 # Get the day of the week (1-7, where 1 is Monday)
 day_of_week=$(date +%u)
 
@@ -61,6 +66,13 @@ if [ "$day_of_week" -le 5 ]; then
 	add_task_if_not_exists "respond to slack messages" "today+8h"
 
 	# Day-specific tasks
+	if [[ " $standup_days " == *" $day_of_week "* ]]; then
+		# session:standup is what makes this more than a reminder: the
+		# on-modify-tmuxinator hook in ~/.task/hooks reads it on start and
+		# opens the session that renders the answers.
+		add_task_if_not_exists "fill standup" "today+8h" "session:standup"
+	fi
+
 	case $day_of_week in
 	4) # Thursday
 		add_task_if_not_exists "fill eng presentation" "today+8h"
