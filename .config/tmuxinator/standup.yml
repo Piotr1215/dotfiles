@@ -62,7 +62,11 @@ windows:
 
   # One pane, because the bot asks four questions in order and each answer is
   # pasted on its own. Three panes made sense against a form you filled in one
-  # pass. `__standup_answers.sh --pick` copies a single block.
+  # pass. `__standup_answers.sh --pick` copies a single block instead.
+  #
+  # W is the global alias in .zsh_aliases, not an argument: it pipes into a
+  # throwaway markdown nvim buffer, which is what makes the blocks navigable and
+  # is why a60c78cc bothered making the paragraphs dip-friendly.
   - answers:
       panes:
-        - __standup_answers.sh
+        - __standup_answers.sh W
