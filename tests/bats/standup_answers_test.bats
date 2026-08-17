@@ -24,12 +24,14 @@ teardown() {
 }
 
 # A stub that records its arguments and replays a fixed exit status and output.
+# The PR command is called twice per run with different modes, so argv appends
+# rather than overwrites.
 stub() {
 	local path="$1" status="$2" output="$3"
 
 	command cat >"$path" <<EOF
 #!/usr/bin/env bash
-printf '%s\n' "\$@" >"${path}.argv"
+printf '%s\n' "\$@" >>"${path}.argv"
 printf '%s\n' "$output"
 exit $status
 EOF
@@ -95,10 +97,26 @@ EOF
 	[[ "$output" == *"doing the next thing"* ]]
 }
 
-@test "the two typed questions carry no fabricated content" {
+@test "the two typed questions still expect to be typed" {
 	run env STANDUP_DOW=2 "$ANSWERS"
 	[[ "$output" == *"3. Do you have any blockers?"* ]]
-	[[ "$output" == *"(type this one)"* ]]
+	[[ "$output" == *"(type this one"* ]]
+}
+
+@test "blockers ask for the PRs waiting on someone else, handoffs for those waiting on you" {
+	run env STANDUP_DOW=2 "$ANSWERS"
+	[ "$status" -eq 0 ]
+	run command cat "${STANDUP_PRS_CMD}.argv"
+	[ "$output" = "blocked
+mine" ]
+}
+
+@test "a github outage shows on both PR questions rather than reading as no PRs" {
+	stub "$STANDUP_PRS_CMD" 1 "Could not read open PRs from GitHub: 503"
+	run env STANDUP_DOW=2 "$ANSWERS"
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"PRs awaiting review unavailable"* ]]
+	[[ "$output" == *"PRs waiting on you unavailable"* ]]
 }
 
 @test "an unknown argument fails loudly instead of printing a report" {
