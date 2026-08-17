@@ -41,7 +41,7 @@ on_project_start: nohup __layouts.sh 8 >/dev/null 2>&1 &
 # tmux_command: byobu
 
 # Specifies (by name or index) which window will be selected on project startup. If not set, the first window is used.
-startup_window: time
+startup_window: answers
 
 # Specifies (by index) which pane of the specified window will be selected on project startup. If not set, the first pane is used.
 startup_pane: 1
@@ -60,12 +60,9 @@ windows:
             <%= "__summarize_timew.py -p week" %>
           <% end %>
 
-  - time:
-      layout: tiled
+  # One pane, because the bot asks four questions in order and each answer is
+  # pasted on its own. Three panes made sense against a form you filled in one
+  # pass. `__standup_answers.sh --pick` copies a single block.
+  - answers:
       panes:
-      - completed:
-        - __list_completed_tasks_as_markdown.pl W
-      - next:
-        - __list_tasks_as_markdown.pl +next W
-      - pending:
-        - __get_my_pending_prs.sh W
+        - __standup_answers.sh
