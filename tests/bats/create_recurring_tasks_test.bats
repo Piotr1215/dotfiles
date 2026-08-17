@@ -1,7 +1,9 @@
 #!/usr/bin/env bats
-# Covers the boot-time task creation, and the standup task in particular: the
-# schedule it honours, the session UDA that makes it open a tmux session rather
-# than just remind, and the guard that keeps a second boot from adding it twice.
+# Covers the boot-time task creation: the weekday gate, the Thursday extra, and
+# the guard that keeps a second boot from adding the same day's tasks twice.
+#
+# Standup is deliberately absent. It is a standing task like meetings, created
+# once and started whenever the standup happens, so nothing recreates it daily.
 
 setup() {
 	CREATE="${BATS_TEST_DIRNAME}/../../scripts/__create_recurring_tasks.sh"
@@ -29,9 +31,9 @@ teardown() {
 	rm -rf "$TMPDIR_TEST"
 }
 
-# Run the creator on a chosen weekday with a chosen standup schedule.
+# Run the creator on a chosen weekday.
 run_on() {
-	local weekday="$1" days="${2:-1 2 3 4 5}"
+	local weekday="$1"
 
 	command cat >"${STUB_BIN}/date" <<EOF
 #!/usr/bin/env bash
@@ -43,66 +45,48 @@ esac
 EOF
 	chmod +x "${STUB_BIN}/date"
 
-	run env PATH="${STUB_BIN}:$PATH" STANDUP_DAYS="$days" "$CREATE"
+	run env PATH="${STUB_BIN}:$PATH" "$CREATE"
 }
 
-added_standup() {
-	grep -q 'add .*fill standup' "$TASK_LOG"
-}
-
-@test "adds the standup task on a scheduled day" {
+@test "adds the daily tasks on a weekday" {
 	run_on 2
 	[ "$status" -eq 0 ]
-	run added_standup
-	[ "$status" -eq 0 ]
-}
 
-@test "the standup task carries the session that opens the tmux session" {
-	run_on 2
-	run grep -h 'fill standup' "$TASK_LOG"
-	[[ "$output" == *"session:standup"* ]]
-	[[ "$output" == *"project:admin"* ]]
-	[[ "$output" == *"tags:work,kill"* ]]
-}
-
-@test "honours a narrower schedule" {
-	run_on 2 "1 3 5"
-	run added_standup
-	[ "$status" -ne 0 ]
-
-	run_on 3 "1 3 5"
-	run added_standup
-	[ "$status" -eq 0 ]
+	local description
+	for description in "fill daily hours" "check notifications" "respond to slack messages"; do
+		run grep -q "add .*${description}" "$TASK_LOG"
+		[ "$status" -eq 0 ]
+	done
 }
 
 @test "adds nothing at the weekend" {
 	run_on 6
 	[ "$status" -eq 0 ]
-	run added_standup
+	run grep -q 'add ' "$TASK_LOG"
 	[ "$status" -ne 0 ]
-	[[ "$output" != *"fill standup"* ]]
 }
 
-@test "a second boot on the same day does not add it twice" {
+@test "thursday brings the eng presentation" {
+	run_on 4
+	run grep -q 'add .*fill eng presentation' "$TASK_LOG"
+	[ "$status" -eq 0 ]
+}
+
+@test "other weekdays leave the eng presentation alone" {
+	run_on 3
+	run grep -q 'fill eng presentation' "$TASK_LOG"
+	[ "$status" -ne 0 ]
+}
+
+@test "a second boot on the same day does not add anything twice" {
 	EXISTING_COUNT=1 run_on 2
 	[ "$status" -eq 0 ]
-	run added_standup
+	run grep -q 'add ' "$TASK_LOG"
 	[ "$status" -ne 0 ]
 }
 
-@test "the thursday eng presentation survives alongside the standup" {
-	run_on 4
-	run grep -c 'add ' "$TASK_LOG"
-	run grep -h 'fill eng presentation' "$TASK_LOG"
-	[ "$status" -eq 0 ]
-	run added_standup
-	[ "$status" -eq 0 ]
-}
-
-@test "the daily tasks are untouched by the standup change" {
+@test "standup is not recreated here; it is a standing task" {
 	run_on 2
-	for description in "fill daily hours" "check notifications" "respond to slack messages"; do
-		run grep -q "add .*${description}" "$TASK_LOG"
-		[ "$status" -eq 0 ]
-	done
+	run grep -qi 'standup' "$TASK_LOG"
+	[ "$status" -ne 0 ]
 }
