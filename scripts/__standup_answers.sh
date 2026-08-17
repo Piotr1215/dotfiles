@@ -23,6 +23,8 @@ COMPLETED_CMD="${STANDUP_COMPLETED_CMD:-$SCRIPTS_DIR/__list_completed_tasks_as_m
 TASKS_CMD="${STANDUP_TASKS_CMD:-$SCRIPTS_DIR/__list_tasks_as_markdown.pl}"
 PRS_CMD="${STANDUP_PRS_CMD:-$SCRIPTS_DIR/__get_my_pending_prs.sh}"
 CLIP_CMD="${STANDUP_CLIP_CMD:-xclip -selection clipboard}"
+STATE_DIR="${STANDUP_STATE_DIR:-$HOME/.local/state/standup}"
+EDITOR_CMD="${STANDUP_EDITOR_CMD:-nvim}"
 
 Q1="1. What did you accomplish yesterday?"
 Q2="2. What are focusing on today?"
@@ -75,6 +77,41 @@ render() {
 	printf '%s\n' "$out"
 }
 
+# The most recent saved answer that is not today's. Filenames are ISO dates, so
+# lexical order is chronological. "Most recent that is not today" rather than
+# "yesterday" on purpose: it survives weekends, holidays and sick days, where a
+# literal yesterday would silently recall nothing.
+previous_answers_file() {
+	local today
+	today="$(date +%F)"
+
+	[[ -d "$STATE_DIR" ]] || return 1
+
+	local found
+	found="$(command ls -1 "$STATE_DIR"/*.md 2>/dev/null | grep -v "/${today}\.md$" | tail -1)"
+	[[ -n "$found" ]] || return 1
+
+	printf '%s' "$found"
+}
+
+# The "focusing on today" section of a saved answer, verbatim.
+#
+# Verbatim rather than matched against today's completed tasks, because the
+# saved file is what was left after editing. Once "enforce S256-only PKCE on the
+# public Hydra endpoint" has been rewritten as "PKCE hardening", no string match
+# survives, and a match that fails silently produces a confident "still open"
+# about work that shipped.
+previous_focus() {
+	local file="$1"
+
+	awk '
+		/^2\. / { inside = 1; next }
+		inside && /^----/ { exit }
+		inside && /^[0-9]+\. / { exit }
+		inside { print }
+	' "$file" 2>/dev/null | sed -e '/./,$!d' -e :a -e '/^\n*$/{$d;N;};/\n$/ba'
+}
+
 # One file per question, so the picker can preview and copy a block whole.
 build_blocks() {
 	local dir="$1"
@@ -83,6 +120,17 @@ build_blocks() {
 
 	{
 		printf '%s\n\n' "$Q1"
+
+		local prev focus
+		if prev="$(previous_answers_file)"; then
+			focus="$(previous_focus "$prev")"
+			if [[ -n "$focus" ]]; then
+				printf 'On %s you said you would focus on:\n\n' "$(basename "$prev" .md)"
+				printf '%s\n\n' "$focus"
+				printf 'Completed since:\n\n'
+			fi
+		fi
+
 		render "completed tasks" "$COMPLETED_CMD" "$days"
 	} >"$dir/1"
 
@@ -131,12 +179,39 @@ pick_block() {
 			>/dev/null
 }
 
+# Same scratch buffer the W global alias opens, plus a capture on exit.
+#
+# W cannot carry the autocmd and should not: it is a general pipe used all over
+# .zsh_aliases. So the standup pane calls this instead, with W's three settings
+# reproduced exactly, and the flow stays identical.
+#
+# VimLeavePre rather than a write hook, because q is mapped to :q! and the
+# buffer is nofile: there is no save to hook. VimLeavePre still fires on a
+# discard, and it captures what is on screen at that moment, which is the point.
+# The answers pasted into the bot are the edited ones, so the generated blocks
+# are not what was said and recalling them tomorrow would recall words that were
+# deleted.
+edit_blocks() {
+	local dir="$1"
+
+	mkdir -p "$STATE_DIR"
+	local target
+	target="$STATE_DIR/$(date +%F).md"
+
+	print_all "$dir" | $EDITOR_CMD \
+		-c 'setlocal buftype=nofile bufhidden=wipe filetype=markdown' \
+		-c 'nnoremap <buffer> q :q!<CR>' \
+		-c "autocmd VimLeavePre * call writefile(getline(1,'\$'), '$target')" \
+		-
+}
+
 main() {
 	local mode="${1:-print}"
 
 	case "$mode" in
 	print | --print) ;;
 	--pick) mode="pick" ;;
+	--edit) mode="edit" ;;
 	-h | --help)
 		command sed -n '2,18p' "$0"
 		exit 0
@@ -153,11 +228,11 @@ main() {
 
 	build_blocks "$dir"
 
-	if [[ "$mode" == "pick" ]]; then
-		pick_block "$dir"
-	else
-		print_all "$dir"
-	fi
+	case "$mode" in
+	pick) pick_block "$dir" ;;
+	edit) edit_blocks "$dir" ;;
+	*) print_all "$dir" ;;
+	esac
 }
 
 main "$@"
