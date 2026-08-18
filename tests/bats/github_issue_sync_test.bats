@@ -2130,9 +2130,10 @@ EOF
 @test "sync_to_taskwarrior still adds +updated when our write predates the watermark" {
     # Linear moves updatedAt for things that write no history entry and no
     # comment, so the newest actor can be an old write of ours while the bump
-    # itself came from something else (DEVOPS-1306 on live data: bumped
-    # 2026-08-18, last history entry 2026-08-10). Our own write only silences
-    # the nudge when it happened inside the window the watermark just crossed.
+    # itself came from something else (DEVOPS-1018 on live data: bumped
+    # 2026-08-04T17:06:32Z, newest history entry 2026-07-23T14:50:33Z). Our own
+    # write only silences the nudge when it happened inside the window the
+    # watermark just crossed.
     test_issue='{
         "id":"abc",
         "description":"Stale Actor Issue",
@@ -2195,8 +2196,12 @@ EOF
 }
 
 @test "get_linear_issues asks who moved the issue last" {
-    # last_actor_id can only be filled if the query asks for the final history
-    # entry and the final comment. Without both, our own comments still nudge.
+    # last_actor_id can only be filled if the query asks for the newest history
+    # entry and the newest comment. Without both, our own comments still nudge.
+    #
+    # first, NOT last. Linear orders both connections newest first, so last: 1
+    # returns the OLDEST entry on the issue. Reading that as the newest is
+    # silently wrong rather than empty, which is why it is pinned here.
     cat > "${TEST_DIR}/curl" << 'EOF'
 #!/bin/bash
 echo "$*" >> "${TEST_DIR}/curl_args.log"
@@ -2211,8 +2216,10 @@ EOF
 
     run get_linear_issues
     [ "$status" -eq 0 ]
-    grep -qF "history(last: 1)" "${TEST_DIR}/curl_args.log"
-    grep -qF "comments(last: 1)" "${TEST_DIR}/curl_args.log"
+    grep -qF "history(first: 1)" "${TEST_DIR}/curl_args.log"
+    grep -qF "comments(first: 1)" "${TEST_DIR}/curl_args.log"
+    ! grep -qF "history(last: 1)" "${TEST_DIR}/curl_args.log"
+    ! grep -qF "comments(last: 1)" "${TEST_DIR}/curl_args.log"
 }
 
 @test "get_linear_issues takes last_actor_id from the newer of history and comment" {
