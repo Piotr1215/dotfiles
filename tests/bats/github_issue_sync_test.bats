@@ -1614,6 +1614,8 @@ EOF
 # ====================================================
 
 @test "sync_to_taskwarrior adds +updated when Linear updatedAt is newer and task not fresh" {
+    # Carries no last_actor_id, so this also pins the unknown-actor case: when
+    # Linear tells us nothing about who moved the issue, the nudge still fires.
     test_issue='{
         "id":"abc",
         "description":"Resurfacing Issue",
@@ -1994,6 +1996,289 @@ EOF
 # ====================================================
 # PR ATTACHMENT SYNC TESTS
 # ====================================================
+
+@test "sync_to_taskwarrior does NOT add +updated when the last actor is us" {
+    # Every write we make bumps Linear's updatedAt, so before the actor check
+    # each of our own comments and status changes came back as a +updated nudge
+    # on the next run. The watermark must still move, or the same write stays
+    # "newer" forever and re-fires every run.
+    test_issue='{
+        "id":"abc",
+        "description":"Self Written Issue",
+        "repository":"linear",
+        "html_url":"https://linear.app/test/issue/DEVOPS-202",
+        "issue_id":"DEVOPS-202",
+        "project":"operations",
+        "status":"Todo",
+        "due_date":null,
+        "priority":3,
+        "updated_at":"2026-06-26T05:46:13.819Z",
+        "cycle_number":null,
+        "last_actor_id":"test-user-67890",
+        "last_actor_at":"2026-06-26T05:46:13.819Z"
+    }'
+
+    cat > "${TEST_DIR}/task" << 'EOF'
+#!/bin/bash
+case "$1" in
+    "linear_issue_id:DEVOPS-202")
+        case "$2" in
+            "status:pending")
+                case "$3" in
+                    "export")
+                        echo '[{"uuid":"test-uuid-202","description":"Self Written Issue","status":"pending","tags":["linear"],"linear_issue_id":"DEVOPS-202"}]'
+                        ;;
+                esac
+                ;;
+        esac
+        ;;
+    "test-uuid-202")
+        case "$2" in
+            "export")
+                echo '[{"uuid":"test-uuid-202","description":"Self Written Issue","status":"pending","tags":["linear"],"linear_issue_id":"DEVOPS-202","new_activity":"20260626T050000Z"}]'
+                ;;
+        esac
+        ;;
+    "_get")
+        if [[ "$2" == *".status" ]]; then
+            echo "pending"
+        else
+            echo ""
+        fi
+        ;;
+    "rc.confirmation=no")
+        echo "MOCK: task $*" >> "${TEST_DIR}/task_commands.log"
+        ;;
+    *)
+        echo "test-uuid-202"
+        ;;
+esac
+EOF
+    chmod +x "${TEST_DIR}/task"
+
+    run sync_to_taskwarrior "$test_issue"
+    [ "$status" -eq 0 ]
+
+    grep -q "new_activity:2026-06-26T05:46:13Z" "${TEST_DIR}/task_commands.log"
+    ! grep -q -- "+updated" "${TEST_DIR}/task_commands.log"
+}
+
+@test "sync_to_taskwarrior still adds +updated when the last actor is someone else" {
+    # The actor check must only silence our own writes. Someone else moving the
+    # issue is exactly the nudge triage wants.
+    test_issue='{
+        "id":"abc",
+        "description":"Foreign Write Issue",
+        "repository":"linear",
+        "html_url":"https://linear.app/test/issue/DEVOPS-203",
+        "issue_id":"DEVOPS-203",
+        "project":"operations",
+        "status":"Todo",
+        "due_date":null,
+        "priority":3,
+        "updated_at":"2026-06-26T05:46:13.819Z",
+        "cycle_number":null,
+        "last_actor_id":"some-other-user",
+        "last_actor_at":"2026-06-26T05:46:13.819Z"
+    }'
+
+    cat > "${TEST_DIR}/task" << 'EOF'
+#!/bin/bash
+case "$1" in
+    "linear_issue_id:DEVOPS-203")
+        case "$2" in
+            "status:pending")
+                case "$3" in
+                    "export")
+                        echo '[{"uuid":"test-uuid-203","description":"Foreign Write Issue","status":"pending","tags":["linear"],"linear_issue_id":"DEVOPS-203"}]'
+                        ;;
+                esac
+                ;;
+        esac
+        ;;
+    "test-uuid-203")
+        case "$2" in
+            "export")
+                echo '[{"uuid":"test-uuid-203","description":"Foreign Write Issue","status":"pending","tags":["linear"],"linear_issue_id":"DEVOPS-203","new_activity":"20260626T050000Z"}]'
+                ;;
+        esac
+        ;;
+    "_get")
+        if [[ "$2" == *".status" ]]; then
+            echo "pending"
+        else
+            echo ""
+        fi
+        ;;
+    "rc.confirmation=no")
+        echo "MOCK: task $*" >> "${TEST_DIR}/task_commands.log"
+        ;;
+    *)
+        echo "test-uuid-203"
+        ;;
+esac
+EOF
+    chmod +x "${TEST_DIR}/task"
+
+    run sync_to_taskwarrior "$test_issue"
+    [ "$status" -eq 0 ]
+
+    grep -q "new_activity:2026-06-26T05:46:13Z" "${TEST_DIR}/task_commands.log"
+    grep -q -- "+updated" "${TEST_DIR}/task_commands.log"
+}
+
+@test "sync_to_taskwarrior still adds +updated when our write predates the watermark" {
+    # Linear moves updatedAt for things that write no history entry and no
+    # comment, so the newest actor can be an old write of ours while the bump
+    # itself came from something else (DEVOPS-1306 on live data: bumped
+    # 2026-08-18, last history entry 2026-08-10). Our own write only silences
+    # the nudge when it happened inside the window the watermark just crossed.
+    test_issue='{
+        "id":"abc",
+        "description":"Stale Actor Issue",
+        "repository":"linear",
+        "html_url":"https://linear.app/test/issue/DEVOPS-204",
+        "issue_id":"DEVOPS-204",
+        "project":"operations",
+        "status":"Todo",
+        "due_date":null,
+        "priority":3,
+        "updated_at":"2026-06-26T05:46:13.819Z",
+        "cycle_number":null,
+        "last_actor_id":"test-user-67890",
+        "last_actor_at":"2026-06-20T09:00:00.000Z"
+    }'
+
+    cat > "${TEST_DIR}/task" << 'EOF'
+#!/bin/bash
+case "$1" in
+    "linear_issue_id:DEVOPS-204")
+        case "$2" in
+            "status:pending")
+                case "$3" in
+                    "export")
+                        echo '[{"uuid":"test-uuid-204","description":"Stale Actor Issue","status":"pending","tags":["linear"],"linear_issue_id":"DEVOPS-204"}]'
+                        ;;
+                esac
+                ;;
+        esac
+        ;;
+    "test-uuid-204")
+        case "$2" in
+            "export")
+                echo '[{"uuid":"test-uuid-204","description":"Stale Actor Issue","status":"pending","tags":["linear"],"linear_issue_id":"DEVOPS-204","new_activity":"20260626T050000Z"}]'
+                ;;
+        esac
+        ;;
+    "_get")
+        if [[ "$2" == *".status" ]]; then
+            echo "pending"
+        else
+            echo ""
+        fi
+        ;;
+    "rc.confirmation=no")
+        echo "MOCK: task $*" >> "${TEST_DIR}/task_commands.log"
+        ;;
+    *)
+        echo "test-uuid-204"
+        ;;
+esac
+EOF
+    chmod +x "${TEST_DIR}/task"
+
+    run sync_to_taskwarrior "$test_issue"
+    [ "$status" -eq 0 ]
+
+    grep -q "new_activity:2026-06-26T05:46:13Z" "${TEST_DIR}/task_commands.log"
+    grep -q -- "+updated" "${TEST_DIR}/task_commands.log"
+}
+
+@test "get_linear_issues asks who moved the issue last" {
+    # last_actor_id can only be filled if the query asks for the final history
+    # entry and the final comment. Without both, our own comments still nudge.
+    cat > "${TEST_DIR}/curl" << 'EOF'
+#!/bin/bash
+echo "$*" >> "${TEST_DIR}/curl_args.log"
+if [[ "$*" =~ "linear.app" ]]; then
+    echo '{"data":{"user":{"assignedIssues":{"nodes":[]}}}}'
+    echo "200"
+else
+    /usr/bin/curl "$@"
+fi
+EOF
+    chmod +x "${TEST_DIR}/curl"
+
+    run get_linear_issues
+    [ "$status" -eq 0 ]
+    grep -qF "history(last: 1)" "${TEST_DIR}/curl_args.log"
+    grep -qF "comments(last: 1)" "${TEST_DIR}/curl_args.log"
+}
+
+@test "get_linear_issues takes last_actor_id from the newer of history and comment" {
+    # A comment does not create a history entry, so the newest of the two is the
+    # only honest answer to "who moved this last".
+    cat > "${TEST_DIR}/curl" << 'EOF'
+#!/bin/bash
+if [[ "$*" =~ "linear.app" ]]; then
+    cat << 'RESPONSE'
+{
+  "data": { "user": { "assignedIssues": { "nodes": [
+    {
+      "id": "test-id",
+      "title": "Commented last",
+      "url": "https://linear.app/loft/issue/DEVOPS-1063/commented",
+      "state": {"name": "Todo"},
+      "project": {"name": "operations"},
+      "dueDate": null,
+      "priority": 3,
+      "updatedAt": "2026-07-08T10:00:00.000Z",
+      "cycle": null,
+      "history": { "nodes": [
+        {"createdAt": "2026-07-08T09:00:00.000Z", "actor": {"id": "some-other-user"}}
+      ]},
+      "comments": { "nodes": [
+        {"createdAt": "2026-07-08T10:00:00.000Z", "user": {"id": "test-user-67890"}}
+      ]},
+      "attachments": { "nodes": [] }
+    },
+    {
+      "id": "test-id-2",
+      "title": "Bot wrote last",
+      "url": "https://linear.app/loft/issue/DEVOPS-1064/silent",
+      "state": {"name": "Todo"},
+      "project": {"name": "operations"},
+      "dueDate": null,
+      "priority": 3,
+      "updatedAt": "2026-07-08T10:00:00.000Z",
+      "cycle": null,
+      "history": { "nodes": [] },
+      "comments": { "nodes": [
+        {"createdAt": "2026-07-08T10:00:00.000Z", "user": null}
+      ]},
+      "attachments": { "nodes": [] }
+    }
+  ]}}}
+}
+200
+RESPONSE
+else
+    /usr/bin/curl "$@"
+fi
+EOF
+    chmod +x "${TEST_DIR}/curl"
+
+    run get_linear_issues
+    [ "$status" -eq 0 ]
+    [ "$(echo "$output" | jq -r 'select(.issue_id == "DEVOPS-1063") | .last_actor_id')" = "test-user-67890" ]
+    # The timestamp travels with the actor: without it the watermark rule cannot
+    # tell whether that actor explains the bump it is looking at.
+    [ "$(echo "$output" | jq -r 'select(.issue_id == "DEVOPS-1063") | .last_actor_at')" = "2026-07-08T10:00:00.000Z" ]
+    # A bot write carries a botActor and no user, so it reads as unknown rather
+    # than as us, and the nudge it would have silenced still fires.
+    [ "$(echo "$output" | jq -r 'select(.issue_id == "DEVOPS-1064") | .last_actor_id')" = "null" ]
+    [ "$(echo "$output" | jq -r 'select(.issue_id == "DEVOPS-1064") | .last_actor_at')" = "null" ]
+}
 
 @test "get_linear_issues requests attachments in its GraphQL query" {
     # The Linear-attached PR only reaches us if the query asks for the
