@@ -158,7 +158,7 @@ get_linear_issues() {
             -X POST \
             -H "Content-Type: application/json" \
             -H "Authorization: ${LINEAR_API_KEY}" \
-            --data '{"query": "query { user(id: \"'"$LINEAR_USER_ID"'\") { id name assignedIssues(filter: { state: { name: { nin: [\"Released\", \"Canceled\",\"Done\",\"Ready for Release\",\"Duplicate\",\"Archived\"] } } }) { nodes { id title url state { name } project { name } dueDate priority updatedAt cycle { number } history(last: 1) { nodes { createdAt actor { id } } } comments(last: 1) { nodes { createdAt user { id } } } attachments { nodes { url sourceType metadata } } } pageInfo { hasNextPage } } } }"}' \
+            --data '{"query": "query { user(id: \"'"$LINEAR_USER_ID"'\") { id name assignedIssues(filter: { state: { name: { nin: [\"Released\", \"Canceled\",\"Done\",\"Ready for Release\",\"Duplicate\",\"Archived\"] } } }) { nodes { id title url state { name } project { name } dueDate priority updatedAt cycle { number } history(first: 1) { nodes { createdAt actor { id } } } comments(first: 1) { nodes { createdAt user { id } } } attachments { nodes { url sourceType metadata } } } pageInfo { hasNextPage } } } }"}' \
             https://api.linear.app/graphql 2>"$curl_stderr")
         exit_code=$?
 
@@ -1098,10 +1098,15 @@ sync_to_taskwarrior() {
     # makes TaskWarrior store the correct instant. This single point feeds all
     # three write sites (new-task seed, silent-seed, bump).
     issue_updated_at=$(echo "$issue_line" | jq -r '.updated_at // empty' | sed -E 's/\.[0-9]+Z$/Z/')
-    # Who moved the issue last, and when: the newer of its final history entry
-    # and its final comment. Both empty when Linear exposes neither (bot and
+    # Who moved the issue last, and when: the newer of its newest history entry
+    # and its newest comment. Both empty when Linear exposes neither (bot and
     # integration writes carry a botActor and no user), which the watermark rule
     # below reads as "unknown", not as "someone else".
+    #
+    # Those two connections come from `first: 1`, NOT `last: 1`. Linear orders
+    # them newest first, so `last: 1` hands back the OLDEST entry on the issue.
+    # Read as the newest it is silently wrong: on DEVOPS-1358 it returned an
+    # 11:48:38 write by us for a bump made at 11:50:14 by a workflow bot.
     last_actor_id=$(echo "$issue_line" | jq -r '.last_actor_id // empty')
     last_actor_at=$(echo "$issue_line" | jq -r '.last_actor_at // empty')
     # First github.com/.../pull/ URL among the Linear issue's attachments, if any.
@@ -1221,10 +1226,12 @@ sync_to_taskwarrior() {
         #
         # The actor only counts when its own timestamp falls inside the window the
         # watermark just crossed. Linear moves updatedAt for things that leave no
-        # history entry and no comment (attachment re-sync above all): DEVOPS-1306
-        # was bumped on 2026-08-18 with its last history entry sitting on 2026-08-10.
-        # Reading the newest actor without that window would have called an
-        # unattributable bump ours and swallowed a real nudge.
+        # history entry and no comment (attachment re-sync above all), so the
+        # newest actor can predate the bump by a long way: DEVOPS-1018 was bumped
+        # 2026-08-04T17:06:32Z with its newest history entry sitting on
+        # 2026-07-23T14:50:33Z, twelve days earlier. Reading that actor without the
+        # window would have called an unattributable bump ours and swallowed a real
+        # nudge.
         #
         # Unknown actor (no history, no comment, or a bot write, which carries a
         # botActor and no user) keeps the old behavior and tags +updated. A missed
