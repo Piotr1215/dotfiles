@@ -158,7 +158,7 @@ get_linear_issues() {
             -X POST \
             -H "Content-Type: application/json" \
             -H "Authorization: ${LINEAR_API_KEY}" \
-            --data '{"query": "query { user(id: \"'"$LINEAR_USER_ID"'\") { id name assignedIssues(filter: { state: { name: { nin: [\"Released\", \"Canceled\",\"Done\",\"Ready for Release\",\"Duplicate\",\"Archived\"] } } }) { nodes { id title url state { name } project { name } dueDate priority updatedAt cycle { number } attachments { nodes { url sourceType metadata } } } pageInfo { hasNextPage } } } }"}' \
+            --data '{"query": "query { user(id: \"'"$LINEAR_USER_ID"'\") { id name assignedIssues(filter: { state: { name: { nin: [\"Released\", \"Canceled\",\"Done\",\"Ready for Release\",\"Duplicate\",\"Archived\"] } } }) { nodes { id title url state { name } project { name } dueDate priority updatedAt cycle { number } history(last: 1) { nodes { createdAt actor { id } } } comments(last: 1) { nodes { createdAt user { id } } } attachments { nodes { url sourceType metadata } } } pageInfo { hasNextPage } } } }"}' \
             https://api.linear.app/graphql 2>"$curl_stderr")
         exit_code=$?
 
@@ -229,7 +229,12 @@ get_linear_issues() {
           | {key: (.metadata.channelId // (.url | capture("/archives/(?<c>[A-Za-z0-9]+)/") | .c)),
              value: .metadata.channelName}]
          | from_entries) as $channels
-        | .data.user.assignedIssues.nodes[] | {
+        | .data.user.assignedIssues.nodes[]
+        | ([(.history.nodes[]? | {at: .createdAt, who: .actor.id}),
+            (.comments.nodes[]? | {at: .createdAt, who: .user.id})]
+           | map(select(.at != null and .who != null))
+           | sort_by(.at) | last) as $last_actor
+        | {
             id: .id,
             description: .title,
             repository: "linear",
@@ -241,6 +246,8 @@ get_linear_issues() {
             priority: .priority,
             updated_at: .updatedAt,
             cycle_number: .cycle.number,
+            last_actor_id: $last_actor.who,
+            last_actor_at: $last_actor.at,
             pr_url: ([.attachments.nodes[]? | select(.url != null and (.url | test("github.com.*/pull/"))) | .url] | .[0] // null),
             slack_urls: ([.attachments.nodes[]?
                           | select(.url != null and (.url | test("//[^/]*slack\\.com/archives/")))
@@ -1070,7 +1077,7 @@ create_and_annotate_task() {
 # Synchronize a single issue with Taskwarrior
 sync_to_taskwarrior() {
     local issue_line="$1"
-    local issue_id issue_description issue_repo_name issue_url task_uuid issue_number project_name issue_status issue_due_date issue_priority cycle_number issue_updated_at pr_url slack_urls link_urls
+    local issue_id issue_description issue_repo_name issue_url task_uuid issue_number project_name issue_status issue_due_date issue_priority cycle_number issue_updated_at last_actor_id last_actor_at pr_url slack_urls link_urls
 
     issue_id=$(echo "$issue_line" | jq -r '.id')
     issue_description=$(echo "$issue_line" | jq -r '.description')
@@ -1091,6 +1098,12 @@ sync_to_taskwarrior() {
     # makes TaskWarrior store the correct instant. This single point feeds all
     # three write sites (new-task seed, silent-seed, bump).
     issue_updated_at=$(echo "$issue_line" | jq -r '.updated_at // empty' | sed -E 's/\.[0-9]+Z$/Z/')
+    # Who moved the issue last, and when: the newer of its final history entry
+    # and its final comment. Both empty when Linear exposes neither (bot and
+    # integration writes carry a botActor and no user), which the watermark rule
+    # below reads as "unknown", not as "someone else".
+    last_actor_id=$(echo "$issue_line" | jq -r '.last_actor_id // empty')
+    last_actor_at=$(echo "$issue_line" | jq -r '.last_actor_at // empty')
     # First github.com/.../pull/ URL among the Linear issue's attachments, if any.
     pr_url=$(echo "$issue_line" | jq -r '.pr_url // empty')
     # Slack thread permalinks and other reference links, newline separated.
@@ -1198,8 +1211,26 @@ sync_to_taskwarrior() {
         # Genuine change (stored watermark non-empty AND issue_updated_at strictly
         # newer): bump the watermark and mark the task +updated so triage re-looks.
         # A +fresh task is already queued for auto-batch, so it needs no +updated.
+        #
+        # Our own writes are the exception. updatedAt does not say who moved the
+        # issue, so every comment or status change we made came back as a +updated
+        # nudge on the next run half an hour later, and triage re-read work it had
+        # just done. When we are the one who moved it, bump the watermark and stay
+        # quiet. The bump still has to happen: leaving it would keep the same write
+        # "newer" forever and re-fire on every run.
+        #
+        # The actor only counts when its own timestamp falls inside the window the
+        # watermark just crossed. Linear moves updatedAt for things that leave no
+        # history entry and no comment (attachment re-sync above all): DEVOPS-1306
+        # was bumped on 2026-08-18 with its last history entry sitting on 2026-08-10.
+        # Reading the newest actor without that window would have called an
+        # unattributable bump ours and swallowed a real nudge.
+        #
+        # Unknown actor (no history, no comment, or a bot write, which carries a
+        # botActor and no user) keeps the old behavior and tags +updated. A missed
+        # nudge is worse than an extra one.
         if [[ -n "$issue_updated_at" && "$issue_updated_at" != "null" ]]; then
-            local stored_activity stored_epoch updated_epoch has_fresh_tag
+            local stored_activity stored_epoch updated_epoch actor_epoch has_fresh_tag
             # Read the watermark from export, not `_get`. `_get` renders the
             # stored instant as a timezone-naive local wall clock (no Z), which
             # `ts_to_epoch` would then compare against the explicit-UTC Linear
@@ -1216,10 +1247,15 @@ sync_to_taskwarrior() {
                 if [[ "$updated_epoch" -gt "$stored_epoch" ]]; then
                     log "Linear activity is newer than watermark (was: $stored_activity), bumping new_activity to $issue_updated_at"
                     task rc.confirmation=no modify "$task_uuid" new_activity:"$issue_updated_at"
-                    has_fresh_tag=$(task "$task_uuid" export 2>/dev/null | jq -r '.[0].tags | if . then contains(["fresh"]) else false end')
-                    if [[ "$has_fresh_tag" != "true" ]]; then
-                        log "Task is past fresh, adding +updated to re-surface for triage"
-                        task rc.confirmation=no modify "$task_uuid" +updated
+                    actor_epoch=$(ts_to_epoch "$last_actor_at")
+                    if [[ -n "$last_actor_id" && "$last_actor_id" == "$LINEAR_USER_ID" && "$actor_epoch" -gt "$stored_epoch" ]]; then
+                        log "Newest activity in this window is our own write ($last_actor_at), watermark bumped without +updated"
+                    else
+                        has_fresh_tag=$(task "$task_uuid" export 2>/dev/null | jq -r '.[0].tags | if . then contains(["fresh"]) else false end')
+                        if [[ "$has_fresh_tag" != "true" ]]; then
+                            log "Task is past fresh, adding +updated to re-surface for triage"
+                            task rc.confirmation=no modify "$task_uuid" +updated
+                        fi
                     fi
                 fi
             fi
