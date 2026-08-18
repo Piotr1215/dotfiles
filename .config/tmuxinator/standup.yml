@@ -2,7 +2,7 @@
 # PROJECT: standup
 
 name: standup
-root: ~/dev/dotfiles/scripts
+root: ~/loft
 
 # Optional tmux socket
 # socket_name: foo
@@ -60,17 +60,6 @@ windows:
             <%= "__summarize_timew.py -p week" %>
           <% end %>
 
-  # One pane, because the bot asks four questions in order and each answer is
-  # pasted on its own. Three panes made sense against a form you filled in one
-  # pass. `__standup_answers.sh --pick` copies a single block instead.
-  #
-  # --edit opens the same throwaway markdown buffer the W global alias would,
-  # with W's three settings reproduced exactly, plus a capture on exit. It has
-  # to spawn nvim itself because W cannot carry the autocmd and should not: it
-  # is a general pipe used all over .zsh_aliases.
-  #
-  # The capture is what lets tomorrow recall what was said today, after the
-  # editing rather than before it.
   - answers:
       panes:
-        - __standup_answers.sh --edit
+        - __claude_with_monitor.sh --model opus --effort medium --system-prompt-file ~/dev/dotfiles/.config/tmuxinator/standup-agent.md -- "Generate the standup report now."
