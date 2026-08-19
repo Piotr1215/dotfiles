@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+set -eo pipefail
+
+# Check dotfile symlinks via stow dry-run before commit
+conflicts=$(cd ~/dev/dotfiles && stow -n -v -t /home/decoder -R . 2>&1 | grep 'existing target is' || true)
+
+if [[ -n "$conflicts" ]]; then
+    echo "🚫 Broken dotfile symlinks detected:" >&2
+    echo "$conflicts" | sed 's/.*: //' | sort -u | sed 's/^/  /' >&2
+    echo "" >&2
+    echo "Fix with: cd ~/dev/dotfiles && stow --adopt -t /home/decoder -R ." >&2
+    exit 1
+fi
+
+# Refuse to store a git-crypt file in plaintext. The local filter config has been
+# reset to `cat` three times (windows closed 2026-01-16, 2026-08-19), and every
+# commit made in those windows pushed .taskrc, __backup.sh and
+# __project_mappings.conf to a public repo unencrypted. Nothing noticed for weeks.
+if command -v git-crypt >/dev/null 2>&1 && grep -q 'filter=git-crypt' .gitattributes 2>/dev/null; then
+    leaked=$(git-crypt status 2>/dev/null | grep 'NOT ENCRYPTED' | awk '{print $2}' || true)
+
+    if [[ -n "$leaked" ]]; then
+        clean_filter=$(git config filter.git-crypt.clean || true)
+
+        echo "🚫 Files marked for git-crypt are committed in plaintext:" >&2
+        echo "$leaked" | sed 's/^/  /' >&2
+        echo "" >&2
+        if [[ "$clean_filter" != '"git-crypt" clean' ]]; then
+            # `git-crypt unlock` refuses to run on a dirty tree, and the tree is
+            # always dirty here, so restore the filters directly.
+            echo "Cause: filter.git-crypt.clean is '${clean_filter:-unset}', so git stored the files unchanged." >&2
+            echo "Fix with:" >&2
+            echo "  git config filter.git-crypt.clean '\"git-crypt\" clean'" >&2
+            echo "  git config filter.git-crypt.smudge '\"git-crypt\" smudge'" >&2
+            echo "  git-crypt status -f <files>" >&2
+        else
+            echo "Fix with: git-crypt status -f <files>" >&2
+        fi
+        exit 1
+    fi
+fi
