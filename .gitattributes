@@ -10,3 +10,4 @@ scripts/__remote_tmux_toggle.sh filter=git-crypt diff=git-crypt
 .taskrc filter=git-crypt diff=git-crypt
 .config/tmuxinator/standup.yml filter=git-crypt diff=git-crypt
 .config/tmuxinator/standup-agent.md filter=git-crypt diff=git-crypt
+tests/bats/standup_tmuxinator_test.bats filter=git-crypt diff=git-crypt
