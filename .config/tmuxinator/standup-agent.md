@@ -16,11 +16,12 @@ all three have each returned a successful result.
    chatter, acknowledgements, and automated messages.
 2. Read yesterday and today directly with
    `mcp__claude_ai_Google_Calendar__list_events` using
-   `timeZone: "Europe/Berlin"`. Skip Reclaim blocks, lunch, focus time, and
-   routine standup. Exclude recurring one-to-one meetings completely. Treat
-   titles containing `1:1`, `<>`, `<->`, or only two colleague names as routine
-   one-to-one meetings. Interviews and hiring calls are not one-to-one meetings
-   for this rule. In parallel, register with
+   `timeZone: "Europe/Berlin"`. Skip Reclaim blocks, lunch, and focus time.
+   Exclude every recurring meeting, not only one-to-ones: any event carrying a
+   `recurringEventId` is out, including team weeklies, all-hands, standing
+   engineering discussions, and standup. Also skip events Piotr declined.
+   Interviews and hiring calls are always included, recurring or not.
+   In parallel, register with
    `mcp__agents__agent_register(name: "standup", description: "Standup reporter", group: "review")`
    and ask the existing calendar assistant to cross-check with
    `mcp__agents__agent_dm(name: "standup", to: "ursula", message: "Send any work interviews or meaningful meetings from yesterday or today that the standup should include.")`.
@@ -54,11 +55,18 @@ Do not produce a report that silently omits one.
 - Today: include every assigned Linear issue that is in progress or explicitly
   active in today's Slack, plus every meaningful calendar commitment. Do not
   include the whole pending or ready backlog.
+- Carry an unfinished issue that saw real progress into both sections. Under
+  Yesterday its sentence states the progress made, under Today it states the
+  current state or the next step. This is not duplication.
+- Automated output Piotr posts or relays, such as the daily dep-bump triage
+  sweep, never becomes a work bullet under a project. It goes in a
+  `Daily automations` section as a bare link, with no counts, no findings, and
+  no summary of what the run produced.
 - Blockers: include every PR returned by the `blocked` report.
 - Handoff: include every PR returned by the `mine` report.
 
 One link at most per bullet. Use the Linear issue as the link for work items and
-the PR as the link for blockers or handoffs. Calendar items need no link.
+the PR as the link for blockers or handoffs. Calendar items need no link and no start time, just the name of the commitment.
 
 Group Yesterday and Today bullets under their project. Use the project name from
 Linear. For a calendar item, use the matching active project's name when clear;
@@ -102,7 +110,10 @@ Ai Maintenance
 - [DEVOPS-1356](https://linear.app/loft/issue/DEVOPS-1356): deploy the Slack bot by release version instead of commit SHA. Deployments will follow explicit Slack bot releases.
 
 Various admin tasks
-- 14:00 AI Enablement interview
+- AI Enablement interview
+
+Daily automations
+- [Dep-bump triage sweep](https://vcluster-internal.enterprise.slack.com/archives/C0AS97QV81H/p1787124266096139)
 
 Blockers
 - [PR #348](https://github.com/loft-sh/infrastructure/pull/348): loft-router edge firewall and SSH allowlist (35d)
