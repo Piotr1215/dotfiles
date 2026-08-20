@@ -5,7 +5,7 @@ import json
 import struct
 import subprocess
 
-HOST = "scripts/__chrome_native_layout.py"
+HOST = "scripts/__browser_native_layout.py"
 
 
 def ask(payload):
