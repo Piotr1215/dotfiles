@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "Tab Detach Toggle",
+  "version": "1.0",
+  "description": "Detach the active tab to its own window, and put it back in the window and position it came from.",
+  "permissions": [
+    "tabs",
+    "storage",
+    "nativeMessaging"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "commands": {
+    "detach-tab": {
+      "suggested_key": {
+        "default": "Ctrl+D"
+      },
+      "description": "Detach active tab to its own window"
+    },
+    "reattach-tab": {
+      "suggested_key": {
+        "default": "Ctrl+A"
+      },
+      "description": "Return the tab to the window it came from"
+    }
+  }
+}
