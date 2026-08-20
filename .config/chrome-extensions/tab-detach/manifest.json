@@ -20,7 +20,7 @@
     },
     "reattach-tab": {
       "suggested_key": {
-        "default": "Ctrl+A"
+        "default": "Alt+Shift+A"
       },
       "description": "Return the tab to the window it came from"
     }

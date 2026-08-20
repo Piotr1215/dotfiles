@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Native messaging host: lets the tab-detach chrome extension apply a layout.
+"""Native messaging host: lets the tab-detach browser extensions apply a layout.
 
-Chrome extensions cannot run local commands, so detaching a tab and tiling the
+Browser extensions cannot run local commands, so detaching a tab and tiling the
 result could previously only be joined by synthesising keystrokes back at the
 browser. That raced the window creation and fought the modifiers of whatever
 chord triggered it. The extension now calls straight through, after the window

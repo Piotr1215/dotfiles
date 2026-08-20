@@ -389,30 +389,6 @@ chatgpt_alacritty_vertical() {
 }
 
 
-detach_and_compare() {
-	local title
-	title=$(xdotool getactivewindow getwindowname 2>/dev/null)
-	if [[ "$title" == *"Google Chrome"* ]]; then
-		xdotool key --clearmodifiers alt+d
-	elif [[ "$title" == *Firefox* || "$title" == *LibreWolf* ]]; then
-		xdotool key --clearmodifiers shift+alt+d
-	else
-		return
-	fi
-	sleep 0.3
-	firefox_firefox_vertical
-}
-
-reattach_and_max() {
-	local title
-	title=$(xdotool getactivewindow getwindowname 2>/dev/null)
-	if [[ "$title" == *Firefox* || "$title" == *LibreWolf* || "$title" == *"Google Chrome"* ]]; then
-		xdotool key --clearmodifiers shift+alt+a
-		sleep 0.3
-		max_firefox
-	fi
-}
-
 alacritty_alacritty_vertical() {
 	local -a alacritty_windows
 	# Sort by XID so left/right assignment is stable across invocations
@@ -465,8 +441,6 @@ case $1 in
 12) run_layout browser_browser_browser ;;
 13) run_layout browser_browser_alacritty_slack ;;
 14) run_layout browser_browser_browser_alacritty ;;
-15) run_layout detach_and_compare ;;
-16) run_layout reattach_and_max ;;
 17) run_layout alacritty_alacritty_vertical ;;
 18) run_layout alacritty_firefox_vertical_focus_terminal ;;
 *)
