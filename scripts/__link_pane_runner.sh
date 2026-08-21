@@ -3,12 +3,19 @@
 set -eo pipefail
 
 # Link picker popup. __link_candidates.py emits
-# "display<TAB>command<TAB>title<TAB>url" lines from two sources: the curated
-# pet link snippets, and recent browser history.
-# fzf shows and searches column one only (--with-nth=1) but hands back the
-# whole line, so cut recovers the command with no mapping file in between.
-# Only field 2 is cut: fields 3 and 4 are what the ctrl-f pin toggle reads,
-# and eval must never see them.
+# "display<TAB>command<TAB>title<TAB>url" lines from the curated pet link
+# snippets, the browser's own bookmarks, and browser history.
+# fzf shows column one only (--with-nth=1) but hands back the whole line, so
+# cut recovers the command with no mapping file in between. Only field 2 is
+# cut: fields 3 and 4 are what the ctrl-f pin toggle reads, and eval must
+# never see them.
+#
+# fzf runs --disabled, so it does no matching of its own: every keystroke
+# reloads the candidates with the query attached and the Vimium C ranking in
+# __lib_vimium_rank.py decides the order. fzf's own fuzzy match scores a
+# scattered subsequence, so "triage" hit rows carrying neither the word nor
+# anything like it, and the row that did carry it lost to the noise.
+# The sleep debounces: a fast typist skips the reloads in between.
 
 CANDIDATES=/home/decoder/dev/dotfiles/scripts/__link_candidates.py
 TEMP_FILE=$(mktemp)
@@ -17,13 +24,15 @@ handle_link_selection() {
     "$CANDIDATES" | /usr/local/bin/fzf \
         --delimiter=$'\t' \
         --with-nth=1 \
+        --disabled \
         --height=100% \
         --layout=reverse \
         --info=inline \
         --border=sharp \
-        --header='ctrl-f: pin/unpin *   type #pin #link #work #home to filter (Ctrl+C to exit)' \
+        --header='ctrl-f: pin/unpin *   type #pin #link #mark #work #home to filter (Ctrl+C to exit)' \
         --prompt='🔍 Search: ' \
-        --bind "ctrl-f:execute-silent(${CANDIDATES} --toggle-pin {})+reload(${CANDIDATES})" \
+        --bind "change:reload:sleep 0.1; ${CANDIDATES} --query {q} || true" \
+        --bind "ctrl-f:execute-silent(${CANDIDATES} --toggle-pin {})+reload(${CANDIDATES} --query {q})" \
         --color='fg:#f8f8f2,bg:#282a36,hl:#bd93f9,fg+:#f8f8f2,bg+:#44475a,hl+:#bd93f9,info:#ffb86c,prompt:#50fa7b,pointer:#ff79c6,marker:#ff79c6,spinner:#ffb86c,header:#6272a4' \
         | cut -f2 > "$TEMP_FILE"
 }

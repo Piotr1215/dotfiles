@@ -35,11 +35,32 @@ CHROME_EPOCH_OFFSET = 11644473600
 def firefox_db(path, rows):
     Path(path).unlink(missing_ok=True)
     conn = sqlite3.connect(path)
-    conn.execute("create table moz_places (url text, title text, last_visit_date integer)")
+    conn.execute(
+        "create table moz_places "
+        "(id integer primary key, url text, title text, last_visit_date integer)"
+    )
     conn.executemany(
-        "insert into moz_places values (?, ?, ?)",
+        "insert into moz_places (url, title, last_visit_date) values (?, ?, ?)",
         [(url, title, int(when * 1000000)) for url, title, when in rows],
     )
+    conn.commit()
+    conn.close()
+
+
+# Firefox keeps bookmarks in a table of their own, each pointing at a
+# moz_places row. A bookmark never visited still has one, with no visit date,
+# so it belongs to the bookmarks and not to history.
+def bookmark_table(path, rows):
+    conn = sqlite3.connect(path)
+    conn.execute(
+        "create table if not exists moz_bookmarks (fk integer, type integer, title text)"
+    )
+    for url, title in rows:
+        found = conn.execute("select id from moz_places where url = ?", (url,)).fetchone()
+        if found is None:
+            cursor = conn.execute("insert into moz_places (url, title) values (?, '')", (url,))
+            found = (cursor.lastrowid,)
+        conn.execute("insert into moz_bookmarks values (?, 1, ?)", (found[0], title))
     conn.commit()
     conn.close()
 
@@ -76,8 +97,12 @@ def run_script(workdir, dbs=(), conf_text=None, args=(), **env_overrides):
     env = {k: v for k, v in os.environ.items() if not k.startswith("LINK_")}
     env["PET_SNIPPET_FILE"] = str(snippet_file)
     env["LINK_PICKER_CONF"] = str(conf_file)
-    # Without this the default reaches the real ~/.local/state pins file.
+    # Without these two the defaults reach the real ~/.local/state files, and
+    # the search would answer out of this machine's own browser history.
     env["LINK_PINS_FILE"] = str(pins_file(workdir))
+    env["LINK_CORPUS_FILE"] = str(Path(workdir) / "corpus")
+    # The corpus is built once per run rather than reused between them.
+    env["LINK_CORPUS_TTL"] = "0"
     if dbs:
         env["LINK_HISTORY_DBS"] = ":".join(str(db) for db in dbs)
     elif conf_text is None:
@@ -427,6 +452,133 @@ class PinTest(unittest.TestCase):
         self.assertIn("...", row[0])
         self.assertEqual(row[2], " ".join(long_title.split()))
         self.assertEqual(row[3], long_url)
+
+
+class SearchTest(unittest.TestCase):
+    """--query ranks the whole corpus rather than the recent few hundred rows,
+    which is what fzf used to filter. See test_vimium_rank.py for the ranking
+    itself; these are the wiring around it."""
+
+    def setUp(self):
+        self.workdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.workdir.cleanup)
+        self.path = Path(self.workdir.name)
+
+    def search(self, query, dbs=(), **env):
+        return run_script(self.workdir.name, dbs, args=["--query", query], **env)
+
+    def titles(self, rows):
+        return [row[0].split("[", 1)[1].split("]", 1)[0] for row in rows]
+
+    def tag_of(self, row):
+        return row[0].rsplit("  ", 1)[-1].strip()
+
+    def test_a_scattered_subsequence_is_not_a_hit(self):
+        # The bug this replaced fzf for: every letter of "triage" is in the
+        # second title, in order, and none of them spell it.
+        db = self.path / "places.sqlite"
+        firefox_db(db, [
+            ("https://linear.app/team/DEVOPS/triage", "Dev Ops Triage", 300),
+            ("https://linear.app/issue/E-1/x", "conTaineR snapshot And restore", 290),
+        ])
+        rows = self.search("linear triage", dbs=[db])
+        self.assertEqual(self.titles(rows), ["Dev Ops Triage"])
+
+    def test_a_row_past_the_history_limit_is_still_found(self):
+        # The list before anything is typed holds one row; the search still
+        # reaches the other twenty, which is the reach the picker was missing.
+        db = self.path / "places.sqlite"
+        firefox_db(db, [
+            ("https://e.example.com/%d" % n, "page %d" % n, 100 + n) for n in range(20)
+        ] + [("https://needle.example.com/", "the needle", 1)])
+        listed = run_script(self.workdir.name, [db], LINK_HISTORY_LIMIT="1")
+        self.assertNotIn("the needle", self.titles(listed))
+        rows = self.search("needle", dbs=[db], LINK_HISTORY_LIMIT="1")
+        self.assertEqual(self.titles(rows), ["the needle"])
+
+    def test_browser_bookmarks_join_the_corpus(self):
+        db = self.path / "places.sqlite"
+        firefox_db(db, [("https://a.example.com/", "unrelated", 300)])
+        bookmark_table(db, [("https://saved.example.com/doc", "the saved doc")])
+        rows = self.search("saved", dbs=[db])
+        self.assertEqual(self.titles(rows), ["the saved doc"])
+        self.assertEqual(self.tag_of(rows[0]), "#mark")
+
+    def test_bookmarks_can_be_turned_off(self):
+        db = self.path / "places.sqlite"
+        firefox_db(db, [("https://a.example.com/", "unrelated", 300)])
+        bookmark_table(db, [("https://saved.example.com/doc", "the saved doc")])
+        self.assertEqual(self.search("saved", dbs=[db], LINK_BOOKMARKS="0"), [])
+
+    # A places file with no bookmark tables must not take its history with it.
+    def test_a_profile_without_bookmark_tables_still_gives_history(self):
+        db = self.path / "places.sqlite"
+        firefox_db(db, [("https://a.example.com/", "findable", 300)])
+        self.assertEqual(self.titles(self.search("findable", dbs=[db])), ["findable"])
+
+    def test_snippets_are_searched_too(self):
+        rows = self.search("Zeta")
+        self.assertEqual(self.tag_of(rows[0]), "#link")
+        self.assertIn("Zeta docs", self.titles(rows))
+
+    def test_a_pin_sits_above_the_ranking(self):
+        db = self.path / "places.sqlite"
+        firefox_db(db, [("https://exact.example.com/needle", "needle", 300)])
+        pins_file(self.workdir.name).write_text(
+            "\t".join([
+                "https://pinned.example.com/",
+                "needle in a much longer pinned title",
+                "xdg-open 'https://pinned.example.com/'",
+            ]) + "\n"
+        )
+        rows = self.search("needle", dbs=[db])
+        self.assertEqual(self.tag_of(rows[0]), "#pin")
+        self.assertEqual(len(rows), 2)
+
+    def test_a_tag_narrows_without_being_searched_for(self):
+        db = self.path / "places.sqlite"
+        firefox_db(db, [("https://a.example.com/zeta", "zeta the page", 300)])
+        self.assertEqual(self.tag_of(self.search("#link zeta", dbs=[db])[0]), "#link")
+        self.assertEqual(self.titles(self.search("#history zeta", dbs=[db])),
+                         ["zeta the page"])
+
+    def test_an_empty_query_gives_the_default_list(self):
+        db = self.path / "places.sqlite"
+        firefox_db(db, [("https://a.example.com/", "A", 300)])
+        self.assertEqual(self.search("", dbs=[db]), run_script(self.workdir.name, [db]))
+
+    def test_a_tag_alone_filters_the_default_list(self):
+        db = self.path / "places.sqlite"
+        firefox_db(db, [("https://a.example.com/", "A", 300)])
+        rows = self.search("#link", dbs=[db])
+        self.assertTrue(rows)
+        self.assertEqual({self.tag_of(row) for row in rows}, {"#link"})
+
+    def test_the_result_count_is_capped(self):
+        db = self.path / "places.sqlite"
+        firefox_db(db, [
+            ("https://e.example.com/needle/%d" % n, "needle %d" % n, 100 + n)
+            for n in range(30)
+        ])
+        self.assertEqual(len(self.search("needle", dbs=[db], LINK_SEARCH_LIMIT="5")), 5)
+
+    def test_the_corpus_is_cached_and_reused(self):
+        db = self.path / "places.sqlite"
+        firefox_db(db, [("https://a.example.com/needle", "needle", 300)])
+        self.search("needle", dbs=[db])
+        corpus = self.path / "corpus"
+        self.assertTrue(corpus.exists())
+        # Rewritten by hand: the next search must answer out of it rather than
+        # go back to the database.
+        corpus.write_text("h\thistory\t300\thttps://cached.example.com/\tcached needle\n")
+        self.assertEqual(self.titles(self.search("needle", dbs=[db])), ["cached needle"])
+
+    def test_a_moved_database_rebuilds_the_cache(self):
+        db = self.path / "places.sqlite"
+        firefox_db(db, [("https://a.example.com/needle", "first needle", 300)])
+        self.search("needle", dbs=[db])
+        firefox_db(db, [("https://b.example.com/needle", "second needle", 300)])
+        self.assertEqual(self.titles(self.search("needle", dbs=[db])), ["second needle"])
 
 
 if __name__ == "__main__":

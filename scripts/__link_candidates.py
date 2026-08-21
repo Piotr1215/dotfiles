@@ -6,9 +6,21 @@ Chrome profiles named in the conf, and the curated pet link snippets file.
 Pinned rows come first, then history grouped by profile in conf order and
 newest first inside each group, then the snippets alphabetically.
 __link_pane_runner.sh pipes this into fzf with --with-nth=1, so the first
-column is what gets displayed and searched, and the second is the command
-that gets run on selection. The trailing title and url columns are hidden
-too: they are what ctrl-f writes to the pins file, untruncated.
+column is what gets displayed, and the second is the command that gets run on
+selection. The trailing title and url columns are hidden too: they are what
+ctrl-f writes to the pins file, untruncated.
+
+With --query the picker stops being a list fzf filters and becomes a search.
+fzf runs --disabled and reloads this script on every keystroke, so the ranking
+in __lib_vimium_rank.py decides what comes back and in what order, over a
+corpus far wider than the list above: every history row in every profile, plus
+the browser's own bookmarks, not the recent few hundred. Vimium C's omnibox
+found pages this picker could not, and this is why.
+
+The corpus is cached, because rebuilding it per keystroke means copying a
+hundred megabytes of locked sqlite. The cache is rebuilt when a source database
+has moved on and the cache is older than the ttl. Pins and snippets are always
+read live, so a ctrl-f pin shows up on the next keystroke.
 
 Settings live in __link_picker.conf, because the picker runs from a global
 hotkey and that process carries none of the shell environment. The variables
@@ -22,12 +34,18 @@ Environment:
   LINK_HISTORY_PER_HOST  cap per host per profile, keeps github off the whole list
   LINK_HISTORY_DBS       colon separated paths or globs, replaces the conf profiles
   LINK_PINS_FILE         pinned rows (default ~/.local/state/link-picker/pins)
+  LINK_CORPUS_FILE       search corpus cache (default ~/.local/state/link-picker/corpus)
+  LINK_CORPUS_TTL        seconds before the cache may be rebuilt (default 300)
+  LINK_SEARCH_LIMIT      how many ranked rows to return (default 200)
+  LINK_BOOKMARKS         set to 0 to drop browser bookmarks from the corpus
 
-Subcommand:
+Subcommands:
   --toggle-pin <line>    pin or unpin the row, called from the ctrl-f binding
+  --query <string>       ranked search; an empty string gives the default list
 """
 
 import glob
+import json
 import os
 import re
 import shlex
@@ -36,9 +54,16 @@ import signal
 import sqlite3
 import sys
 import tempfile
+import time
 import tomllib
 from collections import Counter
 from urllib.parse import urlsplit
+
+# Run as a script, so sys.path already carries this directory; the insert is
+# for the case where something imports this file by path instead.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+import __lib_vimium_rank as vimium  # noqa: E402
 
 SNIPPET_FILE = os.environ.get(
     "PET_SNIPPET_FILE", os.path.expanduser("~/dev/pet-snippets/pet-links.toml")
@@ -52,6 +77,15 @@ CONF_FILE = os.environ.get(
 # dotfiles tree: a file in the repo would leave the working tree permanently
 # dirty, and the working tree is what cron and stow read.
 DEFAULT_PINS_FILE = "~/.local/state/link-picker/pins"
+
+# The search corpus is derived state, so it sits next to the pins rather than
+# in the repo, for the same reason.
+DEFAULT_CORPUS_FILE = "~/.local/state/link-picker/corpus"
+
+# A running browser touches its history write ahead log constantly, so mtime
+# alone would rebuild the corpus on every keystroke. This is the floor between
+# rebuilds; within it the picker searches whatever it already has.
+DEFAULT_CORPUS_TTL = "300"
 
 # Used when the conf file names no profiles: every profile on the machine,
 # under one tag, which is the behaviour before the work/home split existed.
@@ -79,6 +113,19 @@ CHROME_QUERY = """
     where title is not null and title != '' and last_visit_time > 0
       and url like 'http%'
     order by last_visit_time desc limit ?
+"""
+
+# The same rows without the recency window, for the search corpus. A page from
+# five weeks ago is exactly what the picker could not reach before.
+FIREFOX_ALL_QUERY = FIREFOX_QUERY.replace("order by last_visit_date desc limit ?", "")
+CHROME_ALL_QUERY = CHROME_QUERY.replace("order by last_visit_time desc limit ?", "")
+
+# A bookmark's own title is what was typed when it was saved, so it beats the
+# page title; the page title is the fallback for a bookmark saved unnamed.
+FIREFOX_BOOKMARK_QUERY = """
+    select place.url, coalesce(nullif(mark.title, ''), place.title)
+    from moz_bookmarks mark join moz_places place on mark.fk = place.id
+    where mark.type = 1 and place.url like 'http%'
 """
 
 TITLE_WIDTH = 68
@@ -278,28 +325,80 @@ def history_dbs(profiles):
 
 # The live databases are locked while the browser runs, so work on a copy.
 # The write ahead log holds the newest visits, so it has to come along.
-def read_db(path, workdir, index, limit):
+def copy_db(path, workdir, index):
     copy = os.path.join(workdir, "%d.db" % index)
     shutil.copy(path, copy)
     for suffix in ("-wal", "-shm"):
         if os.path.exists(path + suffix):
             shutil.copy(path + suffix, copy + suffix)
+    return copy
 
-    conn = sqlite3.connect(copy)
+
+def db_flavour(conn):
+    tables = conn.execute("select name from sqlite_master where type = 'table'")
+    names = {row[0] for row in tables}
+    if "moz_places" in names:
+        return "firefox"
+    if "urls" in names:
+        return "chrome"
+    return ""
+
+
+def read_db(path, workdir, index, limit):
+    conn = sqlite3.connect(copy_db(path, workdir, index))
     try:
-        tables = conn.execute(
-            "select name from sqlite_master where type = 'table'"
-        ).fetchall()
-        names = {row[0] for row in tables}
-        if "moz_places" in names:
-            query = FIREFOX_QUERY
-        elif "urls" in names:
-            query = CHROME_QUERY
-        else:
+        flavour = db_flavour(conn)
+        if not flavour:
             return []
+        query = FIREFOX_QUERY if flavour == "firefox" else CHROME_QUERY
         return conn.execute(query, (limit,)).fetchall()
     finally:
         conn.close()
+
+
+# Every history row, and every bookmark the same profile holds. Chrome keeps
+# its bookmarks in a json file beside the history database rather than in it.
+def read_db_corpus(path, workdir, index, bookmarks_on):
+    conn = sqlite3.connect(copy_db(path, workdir, index))
+    try:
+        flavour = db_flavour(conn)
+        if not flavour:
+            return [], []
+        query = FIREFOX_ALL_QUERY if flavour == "firefox" else CHROME_ALL_QUERY
+        history = conn.execute(query).fetchall()
+        marks = []
+        if not bookmarks_on:
+            return history, marks
+        if flavour == "chrome":
+            return history, read_chrome_bookmarks(
+                os.path.join(os.path.dirname(path), "Bookmarks")
+            )
+        try:
+            marks = conn.execute(FIREFOX_BOOKMARK_QUERY).fetchall()
+        except sqlite3.Error:
+            # A places file without the bookmark tables still has history worth
+            # having, so this cannot be allowed to take the profile with it.
+            pass
+        return history, marks
+    finally:
+        conn.close()
+
+
+def read_chrome_bookmarks(path):
+    try:
+        with open(path) as handle:
+            data = json.load(handle)
+    except (OSError, ValueError):
+        return []
+
+    rows = []
+    stack = [root for root in data.get("roots", {}).values() if isinstance(root, dict)]
+    while stack:
+        node = stack.pop()
+        if node.get("type") == "url" and str(node.get("url", "")).startswith("http"):
+            rows.append((node["url"], node.get("name") or ""))
+        stack.extend(child for child in node.get("children", ()) if isinstance(child, dict))
+    return rows
 
 
 def load_history(seen, profiles, limit, per_host_limit):
@@ -357,13 +456,114 @@ def load_history(seen, profiles, limit, per_host_limit):
     return hits
 
 
-def main():
-    conf, profiles = load_conf()
+def corpus_path(conf):
+    return os.path.expanduser(
+        setting("LINK_CORPUS_FILE", "corpus", DEFAULT_CORPUS_FILE, conf)
+    )
 
-    if len(sys.argv) > 2 and sys.argv[1] == "--toggle-pin":
-        toggle_pin(pins_path(conf), sys.argv[2])
-        return
 
+# Which files decide whether the cache has fallen behind. The write ahead log
+# holds visits the database file does not know about yet, and Chrome keeps its
+# bookmarks beside the history rather than inside it.
+def corpus_sources(source):
+    return [source, source + "-wal", os.path.join(os.path.dirname(source), "Bookmarks")]
+
+
+# Rebuild only once a profile has moved on and the ttl has run out. A browser
+# rewrites its log every few seconds, so mtime alone would put a hundred
+# megabytes of sqlite copying on every keystroke.
+def corpus_stale(path, sources, ttl):
+    try:
+        written = os.stat(path).st_mtime
+    except OSError:
+        return True
+    if time.time() - written < ttl:
+        return False
+    for _, source in sources:
+        for candidate in corpus_sources(source):
+            try:
+                if os.stat(candidate).st_mtime > written:
+                    return True
+            except OSError:
+                continue
+    return False
+
+
+# Tabs and newlines are the row format, so they cannot survive in a field.
+def flatten(value):
+    return value.replace("\t", " ").replace("\r", " ").replace("\n", " ")
+
+
+def build_corpus(path, sources, bookmarks_on):
+    rows = []
+    with tempfile.TemporaryDirectory(prefix="link-corpus-") as workdir:
+        for index, (tag, source) in enumerate(sources):
+            try:
+                history, marks = read_db_corpus(source, workdir, index, bookmarks_on)
+            except (OSError, sqlite3.Error) as err:
+                print("link candidates: %s: %s" % (source, err), file=sys.stderr)
+                continue
+            for url, title, when in history:
+                rows.append(("h", tag, when or 0, url, title or ""))
+            for url, title in marks:
+                rows.append(("b", tag, 0, url, title or ""))
+
+    parent = os.path.dirname(path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    # Written aside and renamed, so a picker reading the cache while another
+    # rebuilds it never reads half a file.
+    scratch = "%s.%d" % (path, os.getpid())
+    try:
+        with open(scratch, "w") as handle:
+            for kind, tag, when, url, title in rows:
+                handle.write(
+                    "%s\t%s\t%.0f\t%s\t%s\n"
+                    % (kind, tag, when, flatten(url), flatten(title))
+                )
+        os.replace(scratch, path)
+    except OSError as err:
+        print("link candidates: %s: %s" % (path, err), file=sys.stderr)
+    return rows
+
+
+def load_corpus(conf, profiles):
+    path = corpus_path(conf)
+    sources = history_dbs(profiles)
+    ttl = float(setting("LINK_CORPUS_TTL", "corpus_ttl", DEFAULT_CORPUS_TTL, conf))
+    bookmarks_on = (
+        setting("LINK_BOOKMARKS", "bookmarks", "on", conf).lower() not in OFF_VALUES
+    )
+    if corpus_stale(path, sources, ttl):
+        return build_corpus(path, sources, bookmarks_on)
+
+    rows = []
+    try:
+        with open(path) as handle:
+            for line in handle:
+                fields = line.rstrip("\n").split("\t")
+                if len(fields) == 5:
+                    rows.append(
+                        (fields[0], fields[1], float(fields[2]), fields[3], fields[4])
+                    )
+    except (OSError, ValueError):
+        return build_corpus(path, sources, bookmarks_on)
+    return rows
+
+
+# A leading # is a filter on the source rather than a search term, which is how
+# #pin, #link, #mark, #work and #home narrow what gets ranked.
+def parse_query(query):
+    terms, tags = [], set()
+    for token in query.split():
+        if token.startswith("#") and len(token) > 1:
+            tags.add(token[1:].lower())
+        else:
+            terms.append(token)
+    return terms, tags
+
+
+def default_lines(conf, profiles, tags=()):
     history_on = setting("LINK_HISTORY", "history", "on", conf).lower() not in OFF_VALUES
     limit = int(setting("LINK_HISTORY_LIMIT", "limit", "500", conf))
     per_host_limit = int(setting("LINK_HISTORY_PER_HOST", "per_host", "30", conf))
@@ -372,13 +572,13 @@ def main():
     # history: a pin is the one row whose position you chose by hand.
     seen = set()
     pinned = set()
-    lines = []
+    rows = []
     for url, title, command in load_pins(pins_path(conf)):
         pinned.add(pin_key(url, command))
         seen.add(pin_key(url, command))
         if url:
             seen.add((urlsplit(url).netloc.lower(), title.casefold()))
-        lines.append(render(title, url, "#pin", command, pinned=True))
+        rows.append(("pin", render(title, url, "#pin", command, pinned=True)))
 
     # Snippets are resolved before history whatever the display order, because
     # they seed the dedupe: a bookmarked url then keeps its curated title
@@ -392,7 +592,7 @@ def main():
         seen.add(key)
         if key in pinned:
             continue
-        snippets.append(render(title, url, "#link", command))
+        snippets.append(("link", render(title, url, "#link", command)))
 
     # History next, because the picker is reached for to get back to a page
     # from earlier today. The bookmarks are the long tail you search for by
@@ -400,8 +600,99 @@ def main():
     if history_on:
         for title, url, tag in load_history(seen, profiles, limit, per_host_limit):
             command = "xdg-open " + shlex.quote(url)
-            lines.append(render(title, url, "#" + tag, command))
-    lines.extend(snippets)
+            rows.append((tag, render(title, url, "#" + tag, command)))
+    rows.extend(snippets)
+
+    if tags:
+        rows = [row for row in rows if row[0] in tags]
+    return [line for _, line in rows]
+
+
+# The search path. fzf does no matching of its own here, so what comes back and
+# in what order is entirely this function and __lib_vimium_rank.
+def run_search(conf, profiles, query):
+    terms, tags = parse_query(query)
+    if not terms:
+        return default_lines(conf, profiles, tags)
+
+    limit = int(setting("LINK_SEARCH_LIMIT", "results", "200", conf))
+    history_on = setting("LINK_HISTORY", "history", "on", conf).lower() not in OFF_VALUES
+    ranker = vimium.Ranker(terms, time.time() * 1000)
+    seen = set()
+    hits = []
+
+    # Rows enter the dedupe only once they are kept, unlike the default list.
+    # There a snippet is always shown, so shadowing its history twin is right;
+    # here a snippet the query missed would otherwise hide a row that matched.
+    def keep(group, tag, title, url, command, when, row_tags):
+        if tags and not row_tags & tags:
+            return
+        # Ranked against the shortened url the way the vomnibar does. The
+        # scheme is on every row, so it can only dilute the score.
+        text = vimium.shorten_url(url)
+        if not ranker.matches(text, title):
+            return
+        key = pin_key(url, command)
+        title_key = (urlsplit(url).netloc.lower(), title.casefold()) if url else None
+        if key in seen or (title_key and title_key in seen):
+            return
+        seen.add(key)
+        if title_key:
+            seen.add(title_key)
+        if when:
+            score = ranker.relevancy(text, title, when * 1000)
+        else:
+            score = ranker.word_relevancy(text, title)
+        hits.append((group, -score, len(hits), tag, title, url, command))
+
+    # Group 0 is the pins, so a pin that matches at all stays above the ranking
+    # rather than competing with it. Everything else is ranked against
+    # everything else, bookmarks on word relevancy and history with its visit
+    # time folded in, which is the split the extension makes.
+    for url, title, command in load_pins(pins_path(conf)):
+        keep(0, "#pin", title, url, command, 0, {"pin"})
+    for title, command, url in load_snippets():
+        keep(1, "#link", title, url, command, 0, {"link"})
+    # A tag filter naming neither the bookmarks nor a profile leaves nothing in
+    # the corpus worth reading, and reading it is the expensive part.
+    corpus_tags = {"mark"} | {tag for tag, _ in history_dbs(profiles)}
+    corpus = load_corpus(conf, profiles) if not tags or tags & corpus_tags else []
+    for kind, tag, when, url, title in corpus:
+        # Everything below this gate runs on a handful of rows. Splitting urls
+        # and cleaning titles across all seventy thousand costs several times
+        # what the ranking itself does, so nothing touches a row until its
+        # terms are known to be in it.
+        if not ranker.matches_in(url + "\n" + title):
+            continue
+        command = "xdg-open " + shlex.quote(url)
+        if kind == "b":
+            keep(1, "#mark", clean_title(title), url, command, 0, {"mark", tag})
+            continue
+        if not history_on or urlsplit(url).netloc.lower() in NOISE_HOSTS:
+            continue
+        title = clean_title(title)
+        if not title or title == url:
+            continue
+        keep(1, "#" + tag, title, url, command, when, {tag})
+
+    hits.sort()
+    return [
+        render(title, url, tag, command, pinned=group == 0)
+        for group, _, _, tag, title, url, command in hits[:limit]
+    ]
+
+
+def main():
+    conf, profiles = load_conf()
+
+    if len(sys.argv) > 2 and sys.argv[1] == "--toggle-pin":
+        toggle_pin(pins_path(conf), sys.argv[2])
+        return
+
+    if len(sys.argv) > 1 and sys.argv[1] == "--query":
+        lines = run_search(conf, profiles, sys.argv[2] if len(sys.argv) > 2 else "")
+    else:
+        lines = default_lines(conf, profiles)
 
     if lines:
         sys.stdout.write("\n".join(lines) + "\n")
