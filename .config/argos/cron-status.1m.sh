@@ -182,10 +182,15 @@ crontab -l 2>/dev/null | while IFS= read -r line; do
     # One action for every row, whatever its state: hand the job to the
     # cron-manager agent. A log-only click would leave the unknowable jobs
     # (no redirect, no wrapper) with nothing to click at all.
-    echo "${row} | font=monospace bash='${INVESTIGATE} \"${job}\"' terminal=false"
-    # Jobs that do write a log keep a direct route to it as a submenu item.
+    # A row with children renders as a menu in argos and its own action never
+    # fires, so every job carries the same children rather than only the ones
+    # holding a log. Clicking any job then behaves identically.
+    echo "${row} | font=monospace"
+    echo "--🔍 check status with agent | bash='${INVESTIGATE} \"${job}\"' terminal=false"
     if [ -n "$log_path" ] && [ -f "$log_path" ]; then
-        echo "--📄 tail ${label} log | bash='alacritty -e nvim + \"${log_path}\"' terminal=false"
+        echo "--📄 open last run log | bash='alacritty -e nvim + \"${log_path}\"' terminal=false"
+    else
+        echo "--📄 no log yet | bash='true' terminal=false"
     fi
 done
 
