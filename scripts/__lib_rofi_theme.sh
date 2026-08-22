@@ -34,6 +34,12 @@ rofi_theme() {
 		-theme-str 'inputbar {background-color: argb:ff44475a; text-color: argb:fff8f8f2; padding: 8px;}'
 		-theme-str 'prompt {text-color: argb:ffbd93f9;}'
 		-theme-str 'entry {text-color: argb:fff8f8f2;}'
+		# The -mesg box: stock rofi draws it in the default dark foreground on this
+		# dark window, so every hint line any picker advertises was unreadable. The
+		# row text is drawn by element-text, not textbox, so setting textbox here
+		# styles the message without touching the list.
+		-theme-str 'message {background-color: argb:ff44475a; padding: 8px; border-radius: 4px;}'
+		-theme-str 'textbox {background-color: transparent; text-color: argb:fff8f8f2;}'
 		-theme-str "listview {background-color: transparent; lines: ${lines};}"
 		-theme-str 'element {padding: 8px; background-color: transparent; text-color: argb:fff8f8f2;}'
 		-theme-str 'element.selected {background-color: argb:ff44475a; text-color: argb:ff50fa7b;}'
