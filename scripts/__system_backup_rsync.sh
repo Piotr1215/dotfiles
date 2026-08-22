@@ -45,6 +45,17 @@ RETRY_DELAY="${SYSTEM_BACKUP_RETRY_DELAY:-60}"
 # back after the attempt exits. tee writes it while the same output goes to
 # stdout live, which is race-free: bash waits for every stage of the pipeline.
 RSYNC_LOG="$(mktemp -t system-backup-rsync.XXXXXX)"
+
+# Seconds of ZERO rsync output before the run is called jammed and killed.
+# This is not a time limit on the backup. --info=name2 makes rsync name every
+# file it examines, unchanged ones included, so a healthy run writes to
+# $RSYNC_LOG continuously no matter how long it takes overall. A log that stops
+# growing means rsync has stopped doing anything, which on this hard NFS mount
+# means it is parked in D state waiting for a NAS that is not answering.
+# Observed 2026-08-22: the mount wedged, rsync sat in D burning 6 CPU jiffies
+# per 10s, and nothing ended it because rsync's own --timeout is a select() on
+# its socket that cannot fire from inside a blocked write.
+JAM_SECONDS="${SYSTEM_BACKUP_JAM_SECONDS:-120}"
 trap 'rm -f "$RSYNC_LOG"' EXIT
 
 log() {
@@ -102,6 +113,28 @@ human_bytes() {
 	elif [ "$b" -lt 1073741824 ]; then printf '%sM' "$(( b / 1048576 ))"
 	else printf '%sG' "$(( b / 1073741824 ))"
 	fi
+}
+
+# Kill this job's rsync when it stops producing output, so the retry loop below
+# can take over. SIGKILL, not SIGTERM: a process in uninterruptible D sleep on a
+# hard NFS mount does not take TERM, and Linux makes NFS waits killable by KILL
+# specifically. Scoped by destination so a concurrent __backup rsync is untouched.
+jam_watch() {
+	local last=-1 size still=0 p
+	while :; do
+		sleep 15
+		size=$(stat -c %s "$RSYNC_LOG" 2>/dev/null || echo 0)
+		if [ "$size" = "$last" ]; then still=$(( still + 15 )); else still=0; fi
+		last="$size"
+		[ "$still" -ge "$JAM_SECONDS" ] || continue
+		log ERROR "JAMMED: rsync produced no output for ${still}s. Killing it so the run retries."
+		for p in $(pgrep -x rsync 2>/dev/null); do
+			case "$(tr '\0' ' ' <"/proc/${p}/cmdline" 2>/dev/null)" in
+				*"$DEST"*) sudo -n kill -KILL "$p" 2>/dev/null || true ;;
+			esac
+		done
+		return 0
+	done
 }
 
 main() {
@@ -173,7 +206,7 @@ main() {
 	# ${opts[*]} would join on IFS, which is newline here, so build it explicitly.
 	log INFO "running: sudo rsync $(printf '%s ' "${opts[@]}")${SRC} ${DEST}"
 
-	local started attempt=0 barren=0 rc=0 elapsed=0
+	local started attempt=0 barren=0 rc=0 elapsed=0 jam_pid=
 	local files=0 bytes=0 total_files=0 total_bytes=0
 	started="$(date +%s)"
 
@@ -183,8 +216,12 @@ main() {
 		: > "$RSYNC_LOG"
 
 		set +e
+		jam_watch &
+		jam_pid=$!
 		sudo -n rsync "${opts[@]}" "$SRC" "$DEST" 2>&1 | tee "$RSYNC_LOG"
 		rc=${PIPESTATUS[0]}
+		kill "$jam_pid" 2>/dev/null || true
+		wait "$jam_pid" 2>/dev/null || true
 		set -e
 
 		files="$(rsync_stat 'Number of regular files transferred')"
