@@ -19,13 +19,24 @@ SESSION="cron-manager"
 job="${1:-}"
 
 if [ -n "$job" ]; then
-    directive="/ops-cron-manager investigate the single cron job '${job}'. Resolve its current state first, then act on what that state calls for: recent output if it is healthy, why it stopped if it is overdue, a root cause if it errored, or what it would take to get real signal if its state is unknowable. Report the finding and the one action worth taking."
+    directive="/ops-cron-manager show me the status of cron job '${job}'. Report what it is, when it last ran, when it runs next, and what its last run did. A click is a status check, not a bug report: most jobs are fine and 'this is healthy, nothing to do' is the expected answer. Only dig deeper if the state itself shows a problem (errored, or overdue against its own schedule), and say plainly when no action is needed."
 else
     directive="/ops-cron-manager"
 fi
 
 # Reuse the session when it is already up; a second tmuxinator start would
 # just attach anyway, and the agent pane there is already loaded.
+# Type the directive, then submit it as a separate keystroke. Claude Code's
+# prompt does not reliably accept a trailing C-m bundled into the same
+# send-keys as a long line: the Enter lands while the paste is still settling
+# and the directive sits in the prompt unsent.
+send_directive() {
+    local pane="$1"
+    tmux send-keys -t "${SESSION}:status.${pane}" -l "$directive"
+    sleep 0.4
+    tmux send-keys -t "${SESSION}:status.${pane}" Enter
+}
+
 # Resolve the agent pane by what it is running rather than by index: this
 # machine bases pane indices at 1, so a hardcoded index lands on the viddy
 # dashboard and types the directive into a pager.
@@ -38,7 +49,7 @@ agent_pane() {
 if tmux has-session -t "$SESSION" 2>/dev/null; then
     if [ -n "$job" ]; then
         pane=$(agent_pane)
-        [ -n "$pane" ] && tmux send-keys -t "${SESSION}:status.${pane}" "$directive" C-m
+        [ -n "$pane" ] && send_directive "$pane"
     fi
     if [ -n "$TMUX" ]; then
         exec tmux switch-client -t "$SESSION"
@@ -57,5 +68,5 @@ if [ -n "$job" ]; then
     done
     sleep 3
     pane=$(agent_pane)
-    [ -n "$pane" ] && tmux send-keys -t "${SESSION}:status.${pane}" "$directive" C-m
+    [ -n "$pane" ] && send_directive "$pane"
 fi

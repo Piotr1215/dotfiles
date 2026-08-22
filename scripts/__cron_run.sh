@@ -39,8 +39,19 @@ duration=$(( end_ts - start_ts ))
 
 # Keep the last run's full output for the dashboard/agent to inspect, and the
 # last line as the at-a-glance message (most scripts put their summary there).
-printf '%s\n' "$output" > "$log_file"
-last_line=$(printf '%s\n' "$output" | tail -1)
+#
+# Strip ANSI escapes on the way in: tools that colour their output (direnv's
+# "loading ~/.envrc" banner is the one that showed up here) write raw escapes
+# that render as junk in an editor and pollute the message field.
+clean=$(printf '%s' "$output" | sed -E 's/\x1b\[[0-9;]*[A-Za-z]//g')
+
+# A silent run means an empty log, not a file holding one newline.
+if [ -n "$clean" ]; then
+    printf '%s\n' "$clean" > "$log_file"
+else
+    : > "$log_file"
+fi
+last_line=$(printf '%s' "$clean" | grep -v '^[[:space:]]*$' | tail -1 || true)
 
 case "$code" in
     0) state="no-hit" ;;
