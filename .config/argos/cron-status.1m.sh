@@ -17,7 +17,11 @@ STATE_DIR="${CRON_STATE_DIR:-$HOME/.local/state/cron-jobs}"
 # end in a tmux attach that needs a real terminal.
 INVESTIGATE="alacritty -e $HOME/dev/dotfiles/scripts/__cron_investigate.sh"
 NEXT_RUN="$HOME/dev/dotfiles/scripts/__cron_next_run.py"
-TRIGGER="alacritty -e $HOME/dev/dotfiles/scripts/__cron_trigger.sh"
+# No terminal for the trigger: it detaches the run and returns, and the widget
+# is where the result shows up anyway. Paired with refresh=true on the menu
+# item, argos re-reads state the moment the trigger exits, so the row flips to
+# running immediately rather than at the next tick.
+TRIGGER="$HOME/dev/dotfiles/scripts/__cron_trigger.sh"
 
 # Argos renders every line as pango markup, so any bare `<`, `>` or `&` in a
 # row aborts the parse and GNOME prints argos's own <span font_family=...>
@@ -254,7 +258,7 @@ crontab -l 2>/dev/null | while IFS= read -r line; do
     # holding a log. Clicking any job then behaves identically.
     echo "${row} | font=monospace"
     echo "--🔍 check status with agent | bash='${INVESTIGATE} \"${job}\"' terminal=false"
-    echo "--▶ run now | bash='${TRIGGER} \"${job}\"' terminal=false"
+    echo "--▶ run now | bash='${TRIGGER} \"${job}\"' terminal=false refresh=true"
     if [ -n "$log_path" ] && [ -f "$log_path" ]; then
         echo "--📄 open last run log | bash='alacritty -e nvim + \"${log_path}\"' terminal=false"
     else
