@@ -121,13 +121,23 @@ if [ "$running" -gt 0 ]; then
     # bar, and refreshing this one every few seconds would re-parse the entire
     # crontab and close the job menu under the cursor on every tick.
     #
+    # The dot says work is in flight; its colour says whether the last results
+    # were clean. Red here does not mean the running job failed (it has not
+    # finished), it means something else is already in the error state and is
+    # worth looking at once this one lands.
+    if [ "$errors" -gt 0 ]; then
+        dot="🔴"
+    else
+        dot="🟢"
+    fi
+
     # Self-colouring emoji rather than a <span color=...> around U+25CF: in the
     # panel that span rendered plain white, verified by screenshotting the bar.
     # An emoji carries its own colour and cannot be overridden by the panel
     # theme. Both glyphs are the same width, so nothing shifts as it blinks.
     # `dropdown=false` keeps the cycle lines out of the menu, which argos would
     # otherwise prepend them to.
-    echo "🟢 ${bar} | font='monospace' size=11 dropdown=false"
+    echo "${dot} ${bar} | font='monospace' size=11 dropdown=false"
     echo "⚫ ${bar} | font='monospace' size=11 dropdown=false"
 else
     echo "${bar} | font='monospace' size=11"
