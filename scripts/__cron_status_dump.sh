@@ -33,6 +33,10 @@ state_glyph() {
         no-hit) echo "🟢" ;;
         hit) echo "🟢" ;;
         error) echo "🔴" ;;
+        # Amber, alongside stale, and pointedly not red. Red means the last run
+        # failed and wants diagnosing; interrupted means something took the
+        # machine away mid-run and the job just wants running again.
+        interrupted) echo "🟠" ;;
         stale) echo "🟠" ;;
         pending) echo "🔵" ;;
         running) echo "🟣" ;;

@@ -63,7 +63,7 @@ cron_run_heal_stale_marker() {
     t=$(mktemp)
     jq -n --arg job "$job" --argjson ts "$now" --argjson dur "$dur" \
         --argjson pid "$pid" --arg lp "$lf" \
-        '{job: $job, ts: $ts, state: "error", exit_code: 143, duration_s: $dur,
+        '{job: $job, ts: $ts, state: "interrupted", exit_code: 143, duration_s: $dur,
           message: ("interrupted: pid " + ($pid|tostring) + " disappeared without writing a final state (killed, or the machine powered off)"),
           log_path: $lp}' >"$t"
     mv "$t" "$sf"
@@ -256,6 +256,14 @@ fi
 case "$code" in
     0) state="no-hit" ;;
     2) if [ "$bash_fault" -eq 1 ]; then state="error"; else state="hit"; fi ;;
+    # Killed by a signal that means "the machine is going away", not "the job is
+    # broken". This box powers off nightly and SIGTERMs whatever is mid-run, so
+    # without this every long job wears a red badge every morning. Red has one
+    # job: say that the latest run FAILED and needs a human. An interrupted run
+    # failed at nothing, so it gets its own state and its own colour.
+    # 137 (SIGKILL) is deliberately NOT here: that is what `timeout --kill-after`
+    # sends when a job ignored SIGTERM, i.e. a genuine hang worth waking up for.
+    129|130|131|143) state="interrupted" ;;
     *) state="error" ;;
 esac
 
