@@ -12,7 +12,7 @@
 #   2. The log went silent and a healthy run looked like a stall. -v is
 #      --info=name1, which mentions only updated names, so an already-synced
 #      subtree printed nothing for 650s. rsync can report all of this itself,
-#      so ask it: --info=flist2,name2,del,progress2,stats2.
+#      so ask it: --info=flist2,name2,del,stats2 with --outbuf=L.
 #   3. A live root filesystem always has files that vanish mid-run, which rsync
 #      reports as exit 24. That is normal here and must not read as a failure.
 #
@@ -169,9 +169,13 @@ main() {
 		# Ask rsync for the report instead of inferring one. NAME2 mentions
 		# unchanged names as well as updated ones, which is what keeps an
 		# already-synced subtree from looking like a stall. FLIST2 shows the
-		# file-list build, DEL the deletions, PROGRESS2 the running total, and
-		# STATS2 the end summary that the retry loop below reads back.
-		--info=flist2,name2,del,progress2,stats2
+		# file-list build, DEL the deletions, and STATS2 the end summary that the
+		# retry loop below reads back. PROGRESS2 is deliberately absent: it writes
+		# with carriage returns rather than newlines, which collapsed the log into
+		# 13,164-character lines that neither tail -f nor nvim could show usefully.
+		# NAME2 already prints one line per file examined, so movement is visible
+		# without it.
+		--info=flist2,name2,del,stats2
 		--exclude='/home/*' --exclude='/dev/*' --exclude='/proc/*'
 		--exclude='/sys/*' --exclude='/tmp/*' --exclude='/run/*'
 		--exclude='/mnt/*' --exclude='/media/*'
