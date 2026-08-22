@@ -173,6 +173,17 @@ main() {
 		--exclude='/sys/*' --exclude='/tmp/*' --exclude='/run/*'
 		--exclude='/mnt/*' --exclude='/media/*'
 		--exclude='/recovery/' --exclude='/lost+found/'
+		# Rebuildable bulk: 156G of the 169G this job used to copy, measured
+		# 2026-08-22. Every byte of it is reproducible from a registry, from
+		# apt, or from a kernel package, and hauling it weekly across a hard
+		# NFS mount is why a full pass had not completed since 2024-12-22.
+		# /var/lib/containerd alone was 115G, 68% of the whole job.
+		--exclude='/var/lib/containerd'   # 115G  container image layers
+		--exclude='/var/lib/docker'       #  11G  container image layers
+		--exclude='/usr'                  #  24G  apt reinstalls all of it
+		--exclude='/var/cache'            #   4G  cache by definition
+		--exclude='/var/lib/snapd'        # 1.2G  snapd redownloads
+		--exclude='/boot'                 # 874M  regenerated on kernel install
 	)
 
 	log INFO "ownership is not preserved: destination is root_squash NFS without xattr support"
