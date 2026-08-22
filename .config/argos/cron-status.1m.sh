@@ -121,13 +121,14 @@ if [ "$running" -gt 0 ]; then
     # bar, and refreshing this one every few seconds would re-parse the entire
     # crontab and close the job menu under the cursor on every tick.
     #
-    # Two solid colours rather than one colour at two alphas: pango's `alpha`
-    # washed the dot toward the panel's own foreground, so it read as a grey
-    # blink instead of a green one. Same glyph at the same size on both lines,
-    # so nothing shifts position as it breathes. `dropdown=false` keeps the
-    # cycle lines out of the menu, which argos would otherwise prepend them to.
-    echo "<span color='#3bff3b'>●</span> ${bar} | font='monospace' size=11 dropdown=false"
-    echo "<span color='#1a6b1a'>●</span> ${bar} | font='monospace' size=11 dropdown=false"
+    # Self-colouring emoji rather than a <span color=...> around U+25CF: in the
+    # panel that span rendered plain white, verified by screenshotting the bar.
+    # An emoji carries its own colour and cannot be overridden by the panel
+    # theme. Both glyphs are the same width, so nothing shifts as it blinks.
+    # `dropdown=false` keeps the cycle lines out of the menu, which argos would
+    # otherwise prepend them to.
+    echo "🟢 ${bar} | font='monospace' size=11 dropdown=false"
+    echo "⚫ ${bar} | font='monospace' size=11 dropdown=false"
 else
     echo "${bar} | font='monospace' size=11"
 fi
