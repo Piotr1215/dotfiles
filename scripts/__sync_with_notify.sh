@@ -25,12 +25,19 @@ export DISPLAY=:0
 export DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus
 
 # Run the sync script and log output
-if ! /home/decoder/dev/dotfiles/scripts/__github_issue_sync.sh >> "$LOG_FILE" 2>&1; then
+# Capture rather than redirect straight to the file: the cron wrapper reads
+# stdout, so redirecting everything to /tmp left the per-job log empty on every
+# run. The file still receives the full transcript; stdout carries the outcome.
+sync_out=$(/home/decoder/dev/dotfiles/scripts/__github_issue_sync.sh 2>&1)
+sync_rc=$?
+printf '%s\n' "$sync_out" >> "$LOG_FILE"
+if [ "$sync_rc" -ne 0 ]; then
     # Get last 5 lines for context
     error_context=$(tail -n 5 "$LOG_FILE")
 
     # Try to extract a concise error message
     error_msg=$(echo "$error_context" | grep -i "error" | head -n 1 || echo "Unknown error occurred")
+    printf 'FAILED: %s\n' "$error_msg"
 
     # Show notification with action to view full log
     action=$(dunstify -u critical \
@@ -58,6 +65,10 @@ if ! /home/decoder/dev/dotfiles/scripts/__github_issue_sync.sh >> "$LOG_FILE" 2>
 
     exit 1
 fi
+
+# One line of outcome on stdout: a silent success is indistinguishable from a
+# run that never happened once the transcript goes to a different file.
+printf 'OK: %s\n' "$(printf '%s\n' "$sync_out" | grep -v '^[[:space:]]*$' | tail -1)"
 
 # Success - keep log clean (last 1000 lines only)
 tail -n 1000 "$LOG_FILE" > "${LOG_FILE}.tmp" && mv "${LOG_FILE}.tmp" "$LOG_FILE" 2>/dev/null || true
