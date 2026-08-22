@@ -108,6 +108,31 @@ else
     wlog WARN "resolves to: NOT FOUND -- this run will fail with 127"
 fi
 
+# Pre-flight the target's syntax. bash exits 2 on a syntax error, and 2 is this
+# wrapper's `hit` code, so a script that is simply broken would otherwise report
+# as a green "found something worth surfacing" and be invisible on the board.
+# Catching it here turns it into an error before the command is ever run.
+if [ -n "$resolved" ] && [ -f "$resolved" ] && head -c2 "$resolved" 2>/dev/null | grep -q '#!'; then
+    case "$(head -1 "$resolved")" in
+        *bash*|*/sh|*\ sh)
+            if ! syn=$(bash -n "$resolved" 2>&1); then
+                wlog ERROR "SYNTAX ERROR in ${resolved}, refusing to run:"
+                printf '%s\n' "$syn" | sed 's/^/    /' >>"$log_file"
+                wlog ERROR "run end: exit=2 state=error duration=0s"
+                tmp="$(mktemp)"
+                jq -n --arg job "$job" --argjson ts "$(date +%s)" \
+                    --arg msg "SYNTAX ERROR: $(printf '%s' "$syn" | head -1)" \
+                    --arg lp "$log_file" \
+                    '{job: $job, ts: $ts, state: "error", exit_code: 2, duration_s: 0,
+                      message: $msg, log_path: $lp}' >"$tmp"
+                mv "$tmp" "$status_file"
+                printf '%s\n' "$syn" >&2
+                exit 2
+            fi
+            ;;
+    esac
+fi
+
 # Publish a running marker before handing off, so a job in flight is visible
 # rather than looking idle at its last result for however long it takes. The
 # PID lets a reader tell a live run from one whose process died without ever
@@ -147,9 +172,19 @@ if [ "$after" -eq "$before" ]; then
 fi
 wlog INFO "--- end output ---"
 
+# `hit` is a deliberate signal from a job that ran. bash reports its own fatal
+# faults with the same code 2, so a run whose output carries one of those
+# diagnostics is an error however it exited. Without this a broken script paints
+# green on the board, which is worse than no signal at all.
+bash_fault=0
+if [ "$after" -gt "$before" ] && sed -n "$((before + 1)),${after}p" "$log_file" \
+        | grep -qE 'syntax error|unexpected (token|end of file)|command not found|: cannot execute'; then
+    bash_fault=1
+fi
+
 case "$code" in
     0) state="no-hit" ;;
-    2) state="hit" ;;
+    2) if [ "$bash_fault" -eq 1 ]; then state="error"; else state="hit"; fi ;;
     *) state="error" ;;
 esac
 

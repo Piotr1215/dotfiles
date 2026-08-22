@@ -64,6 +64,14 @@ passfromenv() {
   local val="${(P)name}"
   [[ -n "$val" ]] || { print -u2 "passfromenv: \$$name is empty or unset (export it first)"; return 1 }
 
+  # The other half of the XOR guard in secadd: pass must not take a name the
+  # bastion already owns, or the tap on that secret becomes decorative.
+  local owner="$(secobj locate "$name" 2>/dev/null | cut -f2)"
+  if [[ "$owner" == age || "$owner" == both ]]; then
+    print -u2 "passfromenv: '$name' already lives in the bastion. Move it instead: secobj demote $name ${store}"
+    return 1
+  fi
+
   local target="${store}/${name}"
 
   # Prompt for the overwrite ourselves. `pass insert` prompts too, but it reads
@@ -81,7 +89,7 @@ passfromenv() {
     unset val
     print -u2 "wrote $target  (verify with: pass show $target)"
     print -u2 "  pass-only: done; the secret picker discovers it automatically"
-    print -u2 "  optional .envrc: _pass_export ${name} ${target}"
+    print -u2 "  optional .envrc: secobj link ${name} <path/to/.envrc>"
   else
     unset val
     print -u2 "passfromenv: pass insert failed for $target"

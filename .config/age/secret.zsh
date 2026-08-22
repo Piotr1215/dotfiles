@@ -42,6 +42,14 @@
 # Model: Bitwarden is the source of truth; ~/.secrets/*.age is a local,
 # YubiKey-gated copy so scripts use it without plaintext in .envrc.
 
+# The object layer over both stores (scripts/__lib_secret_object.sh): membership,
+# audit, and the tier moves. `secobj audit` lists every secret that breaks the
+# one rule, `secobj promote NAME` and `secobj demote NAME SUBTREE` fix it.
+secobj() {
+  emulate -L zsh
+  "$HOME/dev/dotfiles/scripts/__lib_secret_object.sh" "$@"
+}
+
 # Read a bastion secret to stdout (asks for a YubiKey tap). No-arg lists them.
 sec() {
   emulate -L zsh
@@ -142,6 +150,16 @@ secadd() {
     [[ -n "$name" ]] || { print -u2 "secadd: no name given"; return 2; }
   fi
   __secret_bad_name "$name" secadd && return 2
+
+  # A value lives in the bastion or in pass, never both. Enrolling over a name
+  # pass already owns is how FRED_API_KEY and LINEAR_API_KEY ended up in both,
+  # one harmless-looking enroll at a time, with the tap-free copy quietly making
+  # the bastion's tap decorative.
+  local owner="$(secobj locate "$name" 2>/dev/null | cut -f2)"
+  if [[ "$owner" == pass || "$owner" == both ]]; then
+    print -u2 "secadd: '$name' already lives in pass. Move it instead: secobj promote $name"
+    return 1
+  fi
 
   [[ -r "$recips" ]] || { print -u2 "secadd: recipients file not found ($recips)"; return 1; }
   mkdir -p "$dir" && chmod 700 "$dir"
