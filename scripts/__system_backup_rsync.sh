@@ -97,8 +97,8 @@ END { printf("    · %d entries transferred in %ds\n", n, systime() - start); ff
 '
 
 # Cumulative CPU jiffies across every rsync process. /proc/PID/stat is
-# world-readable even though rsync runs under sudo, unlike /proc/PID/io, so
-# this works from the unprivileged parent.
+# world-readable even though rsync runs under sudo, so this needs no privilege.
+#
 # Let awk do the addition. Splitting its output with `read u s` looks equivalent
 # but is not: this script sets IFS to newline and tab, so read never splits on
 # the space between the two fields, u takes both numbers, and the arithmetic
@@ -111,6 +111,30 @@ rsync_cpu_jiffies() {
 		total=$(( total + ${v:-0} ))
 	done
 	printf '%s' "$total"
+}
+
+# Bytes rsync has written, summed across its processes. /proc/PID/io needs
+# privilege because rsync runs under sudo, unlike /proc/PID/stat. Worth the
+# sudo: CPU time proves the process is alive, but a run can burn CPU for an
+# hour scanning and deleting without copying anything, which is exactly what
+# the 2026-08-22 ceiling-kill turned out to be. Bytes written is the only
+# number that says work is actually landing on the NAS.
+rsync_written_bytes() {
+	local total=0 p v
+	for p in $(pgrep -x rsync 2>/dev/null); do
+		v=$(sudo -n awk '/^write_bytes:/{print $2}' "/proc/${p}/io" 2>/dev/null || echo 0)
+		total=$(( total + ${v:-0} ))
+	done
+	printf '%s' "$total"
+}
+
+human_bytes() {
+	local b="${1:-0}"
+	if   [ "$b" -lt 1024 ]; then printf '%sB' "$b"
+	elif [ "$b" -lt 1048576 ]; then printf '%sK' "$(( b / 1024 ))"
+	elif [ "$b" -lt 1073741824 ]; then printf '%sM' "$(( b / 1048576 ))"
+	else printf '%sG' "$(( b / 1073741824 ))"
+	fi
 }
 
 # `|| true` matters: with pipefail, ps exiting 1 because no rsync is left fails
@@ -127,7 +151,7 @@ rsync_states() {
 # consecutive frozen samples with a D-state process is the exact signature of
 # the 143-minute hang, so it says so instead of leaving it to be noticed later.
 heartbeat() {
-	local started="$1" last_cpu=-1 frozen=0 n=0 cpu el states
+	local started="$1" last_cpu=-1 frozen=0 n=0 cpu el states wrote
 	while :; do
 		sleep "$HEARTBEAT_SECONDS"
 		n=$(( n + 1 ))
@@ -140,10 +164,11 @@ heartbeat() {
 			frozen=0
 		fi
 		last_cpu="$cpu"
+		wrote="$(human_bytes "$(rsync_written_bytes)")"
 		if [ "$frozen" -ge 3 ] && [ "${states#*D}" != "$states" ]; then
-			log WARN "heartbeat ${n}: ${el}s elapsed, rsync cpu FROZEN at ${cpu} jiffies for $(( frozen * HEARTBEAT_SECONDS ))s with a process in D state [${states}]. This is the NFS stall signature; the ${MAX_SECONDS}s ceiling will end it."
+			log WARN "heartbeat ${n}: ${el}s elapsed, rsync cpu FROZEN at ${cpu} jiffies for $(( frozen * HEARTBEAT_SECONDS ))s with a process in D state [${states}], written ${wrote}. This is the NFS stall signature; the ${MAX_SECONDS}s ceiling will end it."
 		else
-			log INFO "heartbeat ${n}: ${el}s elapsed, rsync cpu ${cpu} jiffies, states [${states:-none}]"
+			log INFO "heartbeat ${n}: ${el}s elapsed, written ${wrote}, rsync cpu ${cpu} jiffies, states [${states:-none}]"
 		fi
 	done
 }

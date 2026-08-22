@@ -195,7 +195,10 @@ state_of() {
   # in the wrapper (state split added without updating the exit line to
   # match), tracked for a fix that makes __cron_run.sh propagate 143 for
   # interrupted runs too. Left unchecked here until that lands.
-  # [ "$status" -eq 143 ]
+  # The wrapper propagates the real code for anything that did not finish
+  # cleanly. It briefly returned 0 for an interrupted run, which told every
+  # caller the job had succeeded and hid the interruption the state records.
+  [ "$status" -eq 143 ]
   [ "$(state_of)" = "interrupted" ]
   [ "$(jq -r '.exit_code' "$STATUS")" = "143" ]
   [[ "$(cat "$LOG")" == *"exit=143 (killed by SIGTERM)"* ]]
