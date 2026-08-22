@@ -75,13 +75,25 @@ status_file="${HOME}/.local/state/cron-jobs/${job}.json"
 # exactly what makes the icon flip immediately instead of at the next tick.
 if [ ! -t 1 ]; then
     setsid bash -c "${env_prefix}${cmd}" >/dev/null 2>&1 &
+    started=0
     for _ in $(seq 1 50); do
         if [ -f "$status_file" ] &&
            [ "$(jq -r '.state // ""' "$status_file" 2>/dev/null)" = "running" ]; then
+            started=1
             break
         fi
         sleep 0.1
     done
+
+    # Say something. Without a window there is no sign a click did anything,
+    # and a silent trigger invites a second and third click on a menu whose
+    # neighbouring entry opens a file.
+    if [ "$started" -eq 1 ]; then
+        notify-send -u low "cron-manager" "started ${job}" 2>/dev/null || true
+    else
+        notify-send -u critical "cron-manager" \
+            "${job} did not report a running marker within 5s" 2>/dev/null || true
+    fi
     finished=1
     exit 0
 fi
