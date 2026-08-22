@@ -26,10 +26,19 @@ fi
 
 # Reuse the session when it is already up; a second tmuxinator start would
 # just attach anyway, and the agent pane there is already loaded.
+# Resolve the agent pane by what it is running rather than by index: this
+# machine bases pane indices at 1, so a hardcoded index lands on the viddy
+# dashboard and types the directive into a pager.
+agent_pane() {
+    tmux list-panes -t "${SESSION}:status" \
+        -F '#{pane_index} #{pane_current_command}' 2>/dev/null |
+        grep -v ' viddy$' | awk 'NR==1{print $1}'
+}
+
 if tmux has-session -t "$SESSION" 2>/dev/null; then
     if [ -n "$job" ]; then
-        # Send to the agent pane (window `status`, pane 1 per cron-manager.yml).
-        tmux send-keys -t "${SESSION}:status.1" "$directive" C-m
+        pane=$(agent_pane)
+        [ -n "$pane" ] && tmux send-keys -t "${SESSION}:status.${pane}" "$directive" C-m
     fi
     if [ -n "$TMUX" ]; then
         exec tmux switch-client -t "$SESSION"
@@ -47,5 +56,6 @@ if [ -n "$job" ]; then
         sleep 0.5
     done
     sleep 3
-    tmux send-keys -t "${SESSION}:status.1" "$directive" C-m
+    pane=$(agent_pane)
+    [ -n "$pane" ] && tmux send-keys -t "${SESSION}:status.${pane}" "$directive" C-m
 fi
