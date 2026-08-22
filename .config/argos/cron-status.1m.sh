@@ -256,14 +256,19 @@ crontab -l 2>/dev/null | while IFS= read -r line; do
     # A row with children renders as a menu in argos and its own action never
     # fires, so every job carries the same children rather than only the ones
     # holding a log. Clicking any job then behaves identically.
+    #
+    # "run now" goes last on purpose. It used to sit directly above the log
+    # item, which is the only entry here that opens a window, so an imprecise
+    # or repeated click ran the job and then opened nvim on its log. Nothing
+    # sits below it now.
     echo "${row} | font=monospace"
     echo "--🔍 check status with agent | bash='${INVESTIGATE} \"${job}\"' terminal=false"
-    echo "--▶ run now | bash='${TRIGGER} \"${job}\"' terminal=false refresh=true"
     if [ -n "$log_path" ] && [ -f "$log_path" ]; then
         echo "--📄 open last run log | bash='alacritty -e nvim + \"${log_path}\"' terminal=false"
     else
         echo "--📄 no log yet | bash='true' terminal=false"
     fi
+    echo "--▶ run now | bash='${TRIGGER} \"${job}\"' terminal=false refresh=true"
 done
 
 echo "---"
