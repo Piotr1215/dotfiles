@@ -121,11 +121,13 @@ if [ "$running" -gt 0 ]; then
     # bar, and refreshing this one every few seconds would re-parse the entire
     # crontab and close the job menu under the cursor on every tick.
     #
-    # Only the dot's alpha differs between the two lines, so nothing shifts
-    # position as it breathes. `dropdown=false` keeps the cycle lines out of
-    # the menu, which argos would otherwise prepend them to.
-    echo "<span color='#44ff44'>●</span> ${bar} | font='monospace' size=11 dropdown=false"
-    echo "<span color='#44ff44' alpha='30%'>●</span> ${bar} | font='monospace' size=11 dropdown=false"
+    # Two solid colours rather than one colour at two alphas: pango's `alpha`
+    # washed the dot toward the panel's own foreground, so it read as a grey
+    # blink instead of a green one. Same glyph at the same size on both lines,
+    # so nothing shifts position as it breathes. `dropdown=false` keeps the
+    # cycle lines out of the menu, which argos would otherwise prepend them to.
+    echo "<span color='#3bff3b'>●</span> ${bar} | font='monospace' size=11 dropdown=false"
+    echo "<span color='#1a6b1a'>●</span> ${bar} | font='monospace' size=11 dropdown=false"
 else
     echo "${bar} | font='monospace' size=11"
 fi
