@@ -22,6 +22,71 @@ set -eo pipefail
 STATE_DIR="${CRON_STATE_DIR:-$HOME/.local/state/cron-jobs}"
 mkdir -p "$STATE_DIR"
 
+# Does this pid still belong to that job's wrapper? `kill -0` alone answers the
+# wrong question: after a reboot the pid in an old marker is almost certainly
+# alive again as something unrelated, and treating that as "still running" is
+# how a stuck marker survives the very sweep meant to clear it.
+cron_run_pid_owns_job() {
+    local pid="$1" job="$2" cmdline
+    [ -r "/proc/${pid}/cmdline" ] || return 1
+    cmdline=$(tr '\0' ' ' <"/proc/${pid}/cmdline" 2>/dev/null) || return 1
+    case "$cmdline" in
+        *"__cron_run.sh ${job} "*) return 0 ;;
+    esac
+    return 1
+}
+
+# Convert a `running` marker whose process is gone into a recorded error.
+# The wrapper's TERM/INT/HUP traps cannot cover this: bash defers a trap until
+# the running foreground command returns, and the dominant killer here is the
+# nightly poweroff, whose SIGKILL cannot be trapped at all. So the marker is
+# healed at the two moments that are guaranteed to run instead: the job's next
+# start, and a --sweep-stale pass at boot. Returns 0 only when it healed one.
+cron_run_heal_stale_marker() {
+    local job="$1"
+    local sf="${STATE_DIR}/${job}.json" lf="${STATE_DIR}/${job}.log"
+    local st pid ts now dur t
+    [ -f "$sf" ] || return 1
+    st=$(jq -r '.state // ""' "$sf" 2>/dev/null) || return 1
+    [ "$st" = "running" ] || return 1
+    pid=$(jq -r '.pid // ""' "$sf" 2>/dev/null) || return 1
+    case "$pid" in ''|*[!0-9]*) return 1 ;; esac
+    if cron_run_pid_owns_job "$pid" "$job"; then return 1; fi
+
+    now=$(date +%s)
+    ts=$(jq -r '.ts // 0' "$sf" 2>/dev/null || echo "$now")
+    case "$ts" in ''|*[!0-9]*) ts=$now ;; esac
+    dur=$(( now - ts ))
+    printf '[%s] [%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" WARN \
+        "previous run (pid ${pid}, started $(date -d "@${ts}" '+%Y-%m-%d %H:%M:%S'), ${dur}s ago) left a stale running marker: the process is gone and never wrote a final state. Recording it as interrupted." \
+        >>"$lf"
+    t=$(mktemp)
+    jq -n --arg job "$job" --argjson ts "$now" --argjson dur "$dur" \
+        --argjson pid "$pid" --arg lp "$lf" \
+        '{job: $job, ts: $ts, state: "error", exit_code: 143, duration_s: $dur,
+          message: ("interrupted: pid " + ($pid|tostring) + " disappeared without writing a final state (killed, or the machine powered off)"),
+          log_path: $lp}' >"$t"
+    mv "$t" "$sf"
+    return 0
+}
+
+# Boot-time sweep: `@reboot __cron_run.sh --sweep-stale`. Nothing else clears a
+# marker left by a job the poweroff killed, and for a weekly job the next start
+# is a week away, so the dashboard would show it in-flight for that whole week.
+if [ "$1" = "--sweep-stale" ]; then
+    swept=0
+    for marker in "$STATE_DIR"/*.json; do
+        [ -e "$marker" ] || continue
+        name=$(basename "$marker" .json)
+        if cron_run_heal_stale_marker "$name"; then
+            echo "swept stale running marker: ${name}"
+            swept=$(( swept + 1 ))
+        fi
+    done
+    [ "$swept" -eq 0 ] && exit 0
+    exit 2
+fi
+
 job="$1"; shift
 if [ "$1" = "--" ]; then shift; fi
 if [ -z "$job" ] || [ $# -eq 0 ]; then
@@ -132,6 +197,12 @@ if [ -n "$resolved" ] && [ -f "$resolved" ] && head -c2 "$resolved" 2>/dev/null 
             ;;
     esac
 fi
+
+# Before the new marker overwrites the old one, salvage what the old one says.
+# A `running` marker whose process is gone is the fingerprint of a run that was
+# killed mid-flight, and overwriting it silently is how a killed run vanishes
+# from the record entirely.
+cron_run_heal_stale_marker "$job" || true
 
 # Publish a running marker before handing off, so a job in flight is visible
 # rather than looking idle at its last result for however long it takes. The

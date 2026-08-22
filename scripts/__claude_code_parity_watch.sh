@@ -20,6 +20,14 @@ STATE_FILE="${PARITY_WATCH_STATE:-$HOME/.local/state/claude-code-parity-watch.js
 RECIPIENT="${PARITY_WATCH_RECIPIENT:-piotrzan@gmail.com}"
 MAILER="${PARITY_WATCH_MAILER:-msmtp ${RECIPIENT}}"
 
+# Everything this script says goes to stdout, which is the only channel
+# __cron_run.sh can capture. Print each step before it runs and its result
+# after, so the per-job log is readable with tail -f while the job is working
+# rather than arriving in one lump when it exits.
+log() {
+	printf '[%s] [%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$1" "${*:2}"
+}
+
 api() {
 	local path="$1" token
 	local -a auth=()
@@ -45,6 +53,28 @@ write_state() {
 	mv "$tmp" "$STATE_FILE"
 }
 
+# msmtp is the fragile link here: under cron it cannot always reach the
+# password store, and it reports that only on stderr. Swallowing it meant a
+# silently undelivered report. Log what it said and return its real status.
+deliver() {
+	local subject="$1" kind="$2" merr rc
+	merr="$(mktemp)"
+	log INFO "delivering ${kind} mail to ${RECIPIENT} via '${MAILER}': ${subject}"
+	rc=0
+	sh -c "$MAILER" 2>"$merr" || rc=$?
+	if [ -s "$merr" ]; then
+		log WARN "mailer stderr:"
+		sed -e 's/^/    /' "$merr"
+	fi
+	rm -f "$merr"
+	if [ "$rc" -eq 0 ]; then
+		log INFO "mailer accepted the message"
+	else
+		log ERROR "mailer exited ${rc}, report not delivered"
+	fi
+	return "$rc"
+}
+
 send_html_mail() {
 	local subject="$1" html_body="$2"
 	{
@@ -54,7 +84,7 @@ send_html_mail() {
 		printf 'MIME-Version: 1.0\n'
 		printf 'Content-Type: text/html; charset=UTF-8\n\n'
 		printf '%s\n' "$html_body"
-	} | sh -c "$MAILER"
+	} | deliver "$subject" HTML
 }
 
 send_text_mail() {
@@ -64,27 +94,31 @@ send_text_mail() {
 		printf 'From: %s\n' "$RECIPIENT"
 		printf 'To: %s\n\n' "$RECIPIENT"
 		printf '%s\n' "$body"
-	} | sh -c "$MAILER"
+	} | deliver "$subject" text
 }
 
+log INFO "resolving latest ${REPO} release"
 latest_tag="$(api "repos/${REPO}/releases/latest" | jq -r '.tag_name // empty')"
 if [ -z "$latest_tag" ]; then
-	echo "could not resolve latest ${REPO} release" >&2
+	log ERROR "could not resolve latest ${REPO} release (github api unreachable or rate-limited)"
 	exit 1
 fi
 
 last_tag="$(read_state)"
+log INFO "latest=${latest_tag} last_checked=${last_tag:-none} state_file=${STATE_FILE}"
 
 if [ "$latest_tag" = "$last_tag" ]; then
-	echo "no-hit: still on ${latest_tag}"
+	log INFO "SUMMARY: no-hit: still on ${latest_tag}, nothing to compare"
 	exit 0
 fi
 
+log INFO "new release, fetching CHANGELOG.md"
 changelog="$(curl -fsSL --max-time 30 https://raw.githubusercontent.com/anthropics/claude-code/main/CHANGELOG.md 2>/dev/null || echo "")"
 if [ -z "$changelog" ]; then
-	echo "could not fetch CHANGELOG.md" >&2
+	log ERROR "could not fetch CHANGELOG.md from raw.githubusercontent.com"
 	exit 1
 fi
+log INFO "changelog fetched ($(wc -l <<<"$changelog") lines)"
 
 # Delta since the last checked tag, or just the newest entry on a first run.
 if [ -n "$last_tag" ]; then
@@ -93,6 +127,7 @@ else
 	delta=$(awk '/^## /{n++} n<=1{print}' <<<"$changelog")
 fi
 [ -n "$delta" ] || delta="$changelog"
+log INFO "delta since ${last_tag:-none}: $(wc -l <<<"$delta") lines, $(grep -c '^## ' <<<"$delta" || true) release headings"
 
 prompt=$(cat <<PROMPT_EOF
 Claude Code just released ${latest_tag} (previously checked: ${last_tag:-none}). Below is the CHANGELOG delta since the last check:
@@ -111,13 +146,73 @@ Output ONLY the HTML table fragment (starting with <table and ending with </tabl
 PROMPT_EOF
 )
 
-result="$(command claude --print --model claude-sonnet-5 \
+# The agent call is the slow step: it reads a whole repo and takes over a
+# minute. `claude --print` alone buffers until it exits, so the log showed a
+# header and then nothing for 83 seconds. stream-json emits an event per tool
+# call, which this filter turns into one readable line each as they arrive.
+# shellcheck disable=SC2016  # jq filter: $e and \(...) are jq syntax, not shell
+event_filter='
+(try fromjson catch empty) as $e
+| if $e.type == "system" and $e.subtype == "init" then
+    "  · agent session started (model \($e.model // "?"), \(($e.tools // []) | length) tools)"
+  elif $e.type == "assistant" then
+    ($e.message.content // [])
+    | map(
+        if .type == "tool_use" then
+          "  · " + .name + "(" + ((.input.file_path // .input.pattern // .input.path // .input.command // "") | tostring | .[0:100]) + ")"
+        elif .type == "text" and ((.text // "") | length) > 0 then
+          "  · says: " + ((.text | split("\n") | map(select(length > 0)) | .[0] // "") | .[0:120])
+        else empty end)
+    | .[]
+  elif $e.type == "user" then
+    ($e.message.content // [])
+    | map(if .type == "tool_result" then
+            "  · -> " + ((.content | if type == "array" then (map(.text // "") | join(" ")) else (tostring) end) | gsub("\\s+"; " ") | .[0:100])
+          else empty end)
+    | .[]
+  elif $e.type == "result" then
+    "  · agent finished: \($e.subtype // "?") in \((($e.duration_ms // 0) / 1000) | floor)s, \($e.num_turns // 0) turns"
+  else empty end'
+
+log INFO "invoking sonnet agent against ${AGENTS_MCP_DIR}; its tool calls stream below"
+ev_file="$(mktemp)"
+err_file="$(mktemp)"
+agent_start=$(date +%s)
+
+set +e
+command claude --print --model claude-sonnet-5 \
+	--output-format stream-json --verbose \
 	--add-dir "$AGENTS_MCP_DIR" \
 	--allowedTools "Read" "Grep" "Glob" \
-	-p "$prompt" 2>/tmp/claude-code-parity-watch-debug.log || true)"
+	-p "$prompt" 2>"$err_file" \
+	| tee "$ev_file" \
+	| jq -R --unbuffered -r "$event_filter"
+claude_rc=${PIPESTATUS[0]}
+set -e
+agent_dur=$(( $(date +%s) - agent_start ))
+
+if [ -s "$err_file" ]; then
+	log WARN "agent wrote to stderr:"
+	sed -e 's/^/    /' "$err_file"
+fi
+[ "$claude_rc" -eq 0 ] || log ERROR "agent exited ${claude_rc} after ${agent_dur}s"
+
+result="$(jq -R -r 'try fromjson catch empty | select(.type == "result") | .result // empty' "$ev_file")"
+rm -f "$ev_file" "$err_file"
+
+# An empty result used to fall through and email a report with nothing in it.
+# Erroring here is what makes the failure visible on the dashboard instead.
+if [ -z "$result" ]; then
+	log ERROR "agent produced no result payload after ${agent_dur}s (exit ${claude_rc})"
+	exit 1
+fi
+log INFO "agent returned $(printf '%s' "$result" | wc -c) bytes after ${agent_dur}s"
 
 if printf '%s' "$result" | grep -q "NOTHING_RELEVANT"; then
+	log INFO "agent found nothing touching messaging parity; recording ${latest_tag} as checked"
 	write_state "$latest_tag"
+	# Terminal lines stay bare: the wrapper lifts the last non-blank line
+	# verbatim into the dashboard message, so it must read on its own.
 	echo "no-hit: ${latest_tag} has nothing relevant to agentic-communication parity"
 	exit 0
 fi
@@ -125,21 +220,33 @@ fi
 table_html=$(printf '%s' "$result" | sed -n '/<table/,/<\/table>/p')
 
 if [ -n "$table_html" ]; then
+	log INFO "extracted comparison table ($(grep -c '<tr' <<<"$table_html" || true) rows, $(printf '%s' "$table_html" | wc -c) bytes)"
 	body="<html><body><p>Claude Code ${latest_tag} vs agents-mcp-server (previously checked: ${last_tag:-none}).</p>${table_html}</body></html>"
 	if send_html_mail "Claude Code parity check: ${latest_tag}" "$body"; then
 		write_state "$latest_tag"
 		echo "hit: emailed HTML comparison for ${latest_tag}"
 		exit 2
 	fi
+	log WARN "HTML delivery failed, falling back to a gist link"
+else
+	log WARN "agent output contained no <table>; falling back to a gist link"
 fi
 
 # HTML path failed or produced nothing usable: fall back to a secret gist link.
 gist_url=""
 if command -v gh >/dev/null 2>&1; then
+	log INFO "creating secret gist with the raw comparison"
 	tmp_md="$(mktemp --suffix=.md)"
 	printf '# Claude Code %s vs agents-mcp-server\n\n%s\n' "$latest_tag" "$result" >"$tmp_md"
 	gist_url="$(gh gist create --secret "$tmp_md" 2>/dev/null || true)"
 	rm -f "$tmp_md"
+	if [ -n "$gist_url" ]; then
+		log INFO "gist created: ${gist_url}"
+	else
+		log WARN "gh gist create produced no url"
+	fi
+else
+	log WARN "gh not on PATH, no gist fallback available"
 fi
 
 summary="Claude Code ${latest_tag} vs agents-mcp-server (previously checked: ${last_tag:-none}). The comparison table didn't render reliably inline."
