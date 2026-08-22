@@ -47,6 +47,8 @@ jobs:
           bats)
             # Run bats from repo root to ensure correct path resolution
             bats tests/bats/github_issue_sync_test.bats
+            bats tests/bats/cron_run_test.bats
+            bats tests/bats/cron_every_test.bats
             ;;
           python)
             cd tests/python
