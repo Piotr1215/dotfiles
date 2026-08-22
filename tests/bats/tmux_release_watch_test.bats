@@ -39,7 +39,7 @@ mail_sent() {
 @test "mails when a release past 3.7 appears" {
 	fixture "3.8" "open" '[{"name":"3.8"},{"name":"3.7b"}]'
 	run "$WATCH"
-	[ "$status" -eq 0 ]
+	[ "$status" -eq 2 ]
 	run mail_sent
 	[ "$status" -eq 0 ]
 	run command cat "${TMPDIR_TEST}/mail.txt"
@@ -82,7 +82,7 @@ mail_sent() {
 @test "mails when issue 5135 closes" {
 	fixture "3.7b" "closed" '[{"name":"3.7b"}]'
 	run "$WATCH"
-	[ "$status" -eq 0 ]
+	[ "$status" -eq 2 ]
 	run command cat "${TMPDIR_TEST}/mail.txt"
 	[[ "$output" == *"Subject: tmux #5135 is closed"* ]]
 	[[ "$output" == *"Floating panes discussion"* ]]
