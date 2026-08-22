@@ -15,15 +15,16 @@
 set -eo pipefail
 
 STATE_DIR="${CRON_STATE_DIR:-$HOME/.local/state/cron-jobs}"
+NEXT_RUN="$HOME/dev/dotfiles/scripts/__cron_next_run.py"
 
 human_age() {
     local then="$1" now delta
     now=$(date +%s)
     delta=$(( now - then ))
-    if   [ "$delta" -lt 60 ]; then echo "${delta}s ago"
-    elif [ "$delta" -lt 3600 ]; then echo "$(( delta / 60 ))m ago"
-    elif [ "$delta" -lt 86400 ]; then echo "$(( delta / 3600 ))h ago"
-    else echo "$(( delta / 86400 ))d ago"
+    if   [ "$delta" -lt 60 ]; then echo "${delta}s"
+    elif [ "$delta" -lt 3600 ]; then echo "$(( delta / 60 ))m"
+    elif [ "$delta" -lt 86400 ]; then echo "$(( delta / 3600 ))h"
+    else echo "$(( delta / 86400 ))d"
     fi
 }
 
@@ -58,7 +59,7 @@ expected_interval() {
     echo 172800
 }
 
-printf '%-28s %-15s %-5s %-12s %s\n' "JOB" "SCHEDULE" "STATE" "LAST RUN" "MESSAGE"
+printf '%-28s %-15s %-4s %-9s %-7s %s\n' "JOB" "SCHEDULE" "" "LAST" "NEXT" "NOTE"
 printf '%s\n' "--------------------------------------------------------------------------------"
 
 crontab -l 2>/dev/null | while IFS= read -r line; do
@@ -113,24 +114,25 @@ crontab -l 2>/dev/null | while IFS= read -r line; do
             last=$( [ -n "$ts" ] && human_age "$ts" || echo "unknown" )
             if [ -n "$ts" ] && [ "$(( $(date +%s) - ts ))" -gt "$(expected_interval "$schedule")" ]; then
                 state="stale"
-                msg="overdue: no output within its own schedule"
+                msg="overdue, stopped firing"
             else
                 state="no-hit"
-                msg="inferred from log mtime (not wrapped)"
+                msg="ok (from log mtime)"
             fi
         elif [[ "$cmd" == *__cron_run.sh* ]]; then
             # Wrapped but not yet run since; waiting, not unknowable.
             last="-"
             state="pending"
-            msg="wrapped, awaiting first run"
+            msg="awaiting first run"
         else
             last="unknown"
             state="?"
-            msg="no wrapper data, no log redirect"
+            msg="no signal available"
         fi
     fi
 
-    printf '%-28s %-15s %-5s %-12s %s\n' "$job" "$schedule" "$(state_glyph "$state")" "$last" "$msg"
+    next=$(printf '%s\n' "$schedule" | "$NEXT_RUN" 2>/dev/null || echo "-")
+    printf '%-28s %-15s %-4s %-9s %-7s %s\n' "$job" "$schedule" "$(state_glyph "$state")" "$last" "$next" "$msg"
 done
 
 printf '\n%s\n' "Wrapper-reported jobs show real state (no-hit/hit/error). Everything else is a best-effort guess from log mtimes — route through __cron_run.sh to get real signal."

@@ -20,5 +20,6 @@ windows:
   - status:
       layout: main-vertical
       panes:
-        - viddy -n 30 ~/dev/dotfiles/scripts/__cron_status_dump.sh
+        # `command` bypasses the shell alias, as in system-updates.yml.
+        - command viddy -n 30 '~/dev/dotfiles/scripts/__cron_status_dump.sh'
         - __claude_with_monitor.sh --system-prompt-file ~/.claude/system-prompts/cron-manager-agent-system-prompt.md -- "/ops-cron-manager"
