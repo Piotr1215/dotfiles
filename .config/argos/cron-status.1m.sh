@@ -81,22 +81,27 @@ expected_interval() {
 # --- tally state across every job.json for the top-bar summary -------------
 errors=0
 hits=0
+running=0
 if [ -d "$STATE_DIR" ]; then
     for f in "$STATE_DIR"/*.json; do
         [ -f "$f" ] || continue
-        st=$(jq -r '.state // ""' "$f" 2>/dev/null)
+        read -r st pid < <(jq -r '[.state // "", .pid // ""] | @tsv' "$f" 2>/dev/null || echo "")
         case "$st" in
             error) errors=$(( errors + 1 )) ;;
             hit) hits=$(( hits + 1 )) ;;
+            running)
+                # A marker whose process is gone is a run that died before it
+                # could write a result, not a live job. Without this the dot
+                # would pulse forever after a single crash.
+                if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+                    running=$(( running + 1 ))
+                fi
+                ;;
         esac
     done
 fi
 
 # Not a clock/alarm glyph: the reminders widget already owns those in the bar.
-# Deliberately no in-flight badge here: cron-running.2s.sh owns that signal.
-# Counting it in both places put two live counts side by side in the bar that
-# disagreed with each other, because this widget refreshes at 1m and a job can
-# start and finish well inside one of its ticks.
 icon="🗓"
 if [ "$errors" -gt 0 ]; then
     color="#ff4444"; badge=" ${errors}!"
@@ -106,7 +111,24 @@ else
     color="#888888"; badge=""
 fi
 
-echo "<span color='${color}'>${icon}${badge}</span> | font='monospace' size=11"
+bar="<span color='${color}'>${icon}${badge}</span>"
+
+if [ "$running" -gt 0 ]; then
+    # Two button lines make argos alternate between them every 3s on its own
+    # timer, without re-running this script (button.js: _cycleTimeout, which
+    # only starts when buttonLines.length > 1). That is the whole pulse: a
+    # dedicated fast-refreshing widget would have meant a second icon in the
+    # bar, and refreshing this one every few seconds would re-parse the entire
+    # crontab and close the job menu under the cursor on every tick.
+    #
+    # Only the dot's alpha differs between the two lines, so nothing shifts
+    # position as it breathes. `dropdown=false` keeps the cycle lines out of
+    # the menu, which argos would otherwise prepend them to.
+    echo "<span color='#44ff44'>●</span> ${bar} | font='monospace' size=11 dropdown=false"
+    echo "<span color='#44ff44' alpha='30%'>●</span> ${bar} | font='monospace' size=11 dropdown=false"
+else
+    echo "${bar} | font='monospace' size=11"
+fi
 echo "---"
 printf '<b>%s %-26s %-14s %-6s %s</b> | font=monospace\n' "  " "JOB" "SCHEDULE" "LAST" "NEXT"
 
