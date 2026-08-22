@@ -5,18 +5,24 @@
 # crontab line, which had three faults that cost a 143-minute hang on
 # 2026-08-22 and produced a log that was 554 lines of the same error:
 #
-#   1. Nothing bounded the run. The mount is NFSv4 `hard` (fstab omits `soft`,
-#      and `hard` is the default), so a NAS that stops answering blocks the
-#      writer in uninterruptible D state forever. rsync's own --timeout=600 is
-#      a select() on its socket and never fires from inside a stuck write
-#      syscall, which is exactly what happened: 573 lines in the first four
-#      seconds, then silence until it was killed 143 minutes later.
-#   2. -aAXHv asks the destination for things it cannot do. The export is
+#   1. -aAXHv asks the destination for things it cannot do. The export is
 #      root_squash, so every chown fails (554 of them, drowning the log), and
 #      the volume does not support extended attributes at all
 #      (setxattr -> ENOTSUP), so -X can only ever fail once transfers start.
+#   2. The log went silent and a healthy run looked like a stall. -v is
+#      --info=name1, which mentions only updated names, so an already-synced
+#      subtree printed nothing for 650s. rsync can report all of this itself,
+#      so ask it: --info=flist2,name2,del,progress2,stats2.
 #   3. A live root filesystem always has files that vanish mid-run, which rsync
 #      reports as exit 24. That is normal here and must not read as a failure.
+#
+# There is no wall-clock ceiling. rsync is idempotent and resumable, so a run
+# that is moving is left to finish however long it takes, and a run that fails
+# is retried rather than killed. The mount is NFSv4 `hard` (fstab omits `soft`,
+# and `hard` is the default), so a NAS that stops answering blocks the writer in
+# uninterruptible D state and nothing inside rsync can end that; such a run sits
+# until the NAS answers. The --info output above is what makes that visible in
+# the log while it is happening.
 #
 # Exit codes follow __cron_run.sh: 0 clean, 2 unused, anything else error.
 set -eo pipefail
@@ -25,20 +31,21 @@ IFS=$'\n\t'
 SRC="/"
 DEST="${SYSTEM_BACKUP_DEST:-/mnt/nas-backup/system-backup}"
 MOUNT_ROOT="${SYSTEM_BACKUP_MOUNT:-/mnt/nas-backup}"
-# Wall-clock ceiling. The machine powers off around 23:30 and this starts at
-# 13:00, so 90 minutes leaves the day free while still being far longer than a
-# healthy incremental run needs.
-MAX_SECONDS="${SYSTEM_BACKUP_MAX_SECONDS:-5400}"
-# How many transferred entries between heartbeat lines. A full system backup
-# names far too many files to log individually, but a silent log is what made
-# the hang invisible for two hours, so it still has to show liveness.
-HEARTBEAT_EVERY="${SYSTEM_BACKUP_HEARTBEAT_EVERY:-200}"
-# Seconds between time-based heartbeats. The count-based sampling above is not
-# enough on its own: rsync builds its file list and runs the receiver's
-# incremental scan before naming a single file, so a healthy run can be silent
-# for minutes, which is indistinguishable from the stall it is meant to expose.
-HEARTBEAT_SECONDS="${SYSTEM_BACKUP_HEARTBEAT_SECONDS:-30}"
 PREFLIGHT_TIMEOUT="${SYSTEM_BACKUP_PREFLIGHT_TIMEOUT:-20}"
+# Retry budget. rsync resumes with --partial, so a retry picks up where the
+# failed attempt stopped instead of starting over.
+MAX_ATTEMPTS="${SYSTEM_BACKUP_MAX_ATTEMPTS:-5}"
+# How many consecutive failed attempts that moved nothing before giving up.
+# Retrying is only worth it while attempts make forward progress; a run that
+# fails three times having transferred zero bytes is broken, not slow.
+BARREN_LIMIT="${SYSTEM_BACKUP_BARREN_LIMIT:-3}"
+RETRY_DELAY="${SYSTEM_BACKUP_RETRY_DELAY:-60}"
+
+# One attempt's rsync output, kept so the end-of-run stats block can be read
+# back after the attempt exits. tee writes it while the same output goes to
+# stdout live, which is race-free: bash waits for every stage of the pipeline.
+RSYNC_LOG="$(mktemp -t system-backup-rsync.XXXXXX)"
+trap 'rm -f "$RSYNC_LOG"' EXIT
 
 log() {
 	printf '[%s] [%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$1" "${*:2}"
@@ -58,7 +65,7 @@ preflight() {
 	opts="$(findmnt -T "$MOUNT_ROOT" -no OPTIONS 2>/dev/null || echo '?')"
 	log INFO "preflight: mounted with ${opts}"
 	case "$opts" in
-		*hard*) log WARN "preflight: mount is 'hard', so a NAS stall blocks in D state; the ${MAX_SECONDS}s ceiling below is the only backstop" ;;
+		*hard*) log WARN "preflight: mount is 'hard', so a NAS stall blocks the writer in D state and no rsync timeout can end it; such a run sits until the NAS answers" ;;
 	esac
 
 	local probe="${MOUNT_ROOT}/.backup-preflight-$$"
@@ -77,55 +84,15 @@ preflight() {
 	return 0
 }
 
-# rsync's per-file output is the only liveness signal, but a full system backup
-# names hundreds of thousands of entries. Pass every problem line through
-# untouched and sample the rest, so the log stays followable and bounded.
-# shellcheck disable=SC2016  # awk program: $0 and EVERY are awk, not shell
-throttle='
-BEGIN { n = 0; start = systime() }
-/^(Number|Total|Literal|Matched|File list|sent |total size)/ { print "    " $0; fflush(); next }
-/rsync:|rsync error|^WARNING|failed:|No such file/ { print "    ! " $0; fflush(); next }
-/^$/ { next }
-{
-    n++
-    if (n % EVERY == 0) {
-        printf("    · %d entries, %ds elapsed, at: %s\n", n, systime() - start, $0)
-        fflush()
-    }
-}
-END { printf("    · %d entries transferred in %ds\n", n, systime() - start); fflush() }
-'
-
-# Cumulative CPU jiffies across every rsync process. /proc/PID/stat is
-# world-readable even though rsync runs under sudo, so this needs no privilege.
-#
-# Let awk do the addition. Splitting its output with `read u s` looks equivalent
-# but is not: this script sets IFS to newline and tab, so read never splits on
-# the space between the two fields, u takes both numbers, and the arithmetic
-# below dies with a syntax error. Under set -e that killed the heartbeat on its
-# first tick, silently, which is the failure this whole function exists to catch.
-rsync_cpu_jiffies() {
-	local total=0 p v
-	for p in $(pgrep -x rsync 2>/dev/null); do
-		v=$(awk '{print $14 + $15}' "/proc/${p}/stat" 2>/dev/null || echo 0)
-		total=$(( total + ${v:-0} ))
-	done
-	printf '%s' "$total"
-}
-
-# Bytes rsync has written, summed across its processes. /proc/PID/io needs
-# privilege because rsync runs under sudo, unlike /proc/PID/stat. Worth the
-# sudo: CPU time proves the process is alive, but a run can burn CPU for an
-# hour scanning and deleting without copying anything, which is exactly what
-# the 2026-08-22 ceiling-kill turned out to be. Bytes written is the only
-# number that says work is actually landing on the NAS.
-rsync_written_bytes() {
-	local total=0 p v
-	for p in $(pgrep -x rsync 2>/dev/null); do
-		v=$(sudo -n awk '/^write_bytes:/{print $2}' "/proc/${p}/io" 2>/dev/null || echo 0)
-		total=$(( total + ${v:-0} ))
-	done
-	printf '%s' "$total"
+# One number out of rsync's own end-of-run stats block (--info=stats2), which is
+# the only trustworthy answer to "did this attempt move anything". rsync prints
+# the numbers with thousands separators, so strip every non-digit. An attempt
+# that died before printing its summary has no matching line and reads as 0,
+# which is exactly the "made no progress" the retry loop is looking for.
+rsync_stat() {
+	local v
+	v="$(awk -v label="$1:" 'index($0, label) == 1 { gsub(/[^0-9]/, "", $0); print; exit }' "$RSYNC_LOG" 2>/dev/null || true)"
+	printf '%s' "${v:-0}"
 }
 
 human_bytes() {
@@ -135,42 +102,6 @@ human_bytes() {
 	elif [ "$b" -lt 1073741824 ]; then printf '%sM' "$(( b / 1048576 ))"
 	else printf '%sG' "$(( b / 1073741824 ))"
 	fi
-}
-
-# `|| true` matters: with pipefail, ps exiting 1 because no rsync is left fails
-# the whole pipeline, and set -e would kill the heartbeat exactly when rsync
-# finishes.
-rsync_states() {
-	ps -o stat= -C rsync 2>/dev/null | tr -d ' ' | sort | uniq -c \
-		| awk '{printf "%sx%s ", $1, $2}' || true
-}
-
-# Proof of life, every HEARTBEAT_SECONDS, whether or not rsync is naming files.
-# Reports the two things that actually distinguish working from wedged: is any
-# rsync burning CPU, and is anything sitting in uninterruptible D state. Three
-# consecutive frozen samples with a D-state process is the exact signature of
-# the 143-minute hang, so it says so instead of leaving it to be noticed later.
-heartbeat() {
-	local started="$1" last_cpu=-1 frozen=0 n=0 cpu el states wrote
-	while :; do
-		sleep "$HEARTBEAT_SECONDS"
-		n=$(( n + 1 ))
-		cpu="$(rsync_cpu_jiffies)"
-		states="$(rsync_states)"
-		el=$(( $(date +%s) - started ))
-		if [ "$cpu" = "$last_cpu" ]; then
-			frozen=$(( frozen + 1 ))
-		else
-			frozen=0
-		fi
-		last_cpu="$cpu"
-		wrote="$(human_bytes "$(rsync_written_bytes)")"
-		if [ "$frozen" -ge 3 ] && [ "${states#*D}" != "$states" ]; then
-			log WARN "heartbeat ${n}: ${el}s elapsed, rsync cpu FROZEN at ${cpu} jiffies for $(( frozen * HEARTBEAT_SECONDS ))s with a process in D state [${states}], written ${wrote}. This is the NFS stall signature; the ${MAX_SECONDS}s ceiling will end it."
-		else
-			log INFO "heartbeat ${n}: ${el}s elapsed, written ${wrote}, rsync cpu ${cpu} jiffies, states [${states:-none}]"
-		fi
-	done
 }
 
 main() {
@@ -186,14 +117,28 @@ main() {
 	#   no -X                  : volume returns ENOTSUP for extended attributes
 	# Ownership is therefore NOT preserved in this copy. A bare-metal restore
 	# from it needs ownership reapplied separately.
+	# shellcheck disable=SC2054  # the commas belong to --info=, not to the array
 	local -a opts=(
 		-a --no-owner --no-group
+		-x                    # one file system. Without it rsync descends into
+		                      # all 19 squashfs snap mounts under /snap: 247,354
+		                      # files instead of 49, every one a read-only image
+		                      # snapd reinstalls on demand. __backup.sh has used
+		                      # -ax since it was written; this script never did,
+		                      # which is why a full pass never completed.
 		-H                    # preserve hard links
-		-v                    # per-file output, sampled by the throttle above
 		--delete
-		--partial             # keep partial transfers across a failed run
-		--timeout=600         # socket-level stall detection (does not cover D state)
-		--stats
+		--partial             # a failed attempt resumes rather than restarts
+		--timeout=600         # rsync's own I/O stall detection (a select() on its
+		                      # socket, so it cannot fire from inside a blocked
+		                      # write to a hard NFS mount; exit 30 here retries)
+		--outbuf=L            # line buffered, so the log follows live under tail -f
+		# Ask rsync for the report instead of inferring one. NAME2 mentions
+		# unchanged names as well as updated ones, which is what keeps an
+		# already-synced subtree from looking like a stall. FLIST2 shows the
+		# file-list build, DEL the deletions, PROGRESS2 the running total, and
+		# STATS2 the end summary that the retry loop below reads back.
+		--info=flist2,name2,del,progress2,stats2
 		--exclude='/home/*' --exclude='/dev/*' --exclude='/proc/*'
 		--exclude='/sys/*' --exclude='/tmp/*' --exclude='/run/*'
 		--exclude='/mnt/*' --exclude='/media/*'
@@ -209,51 +154,78 @@ main() {
 		--exclude='/var/cache'            #   4G  cache by definition
 		--exclude='/var/lib/snapd'        # 1.2G  snapd redownloads
 		--exclude='/boot'                 # 874M  regenerated on kernel install
+		# 32,168 files for 3.8G, all of it vendor installer output: az (29,804
+		# files alone), zoom, google, Signal, 1Password, Bitwarden, opentofu.
+		# Every one reinstalls from a package or a vendor script, and none of it
+		# holds config or data (that lives in ~ and is __backup.sh's job). It is
+		# also the worst possible shape for NFS: 21KB average file, so the cost
+		# is round trips, not bytes. Same reasoning that excluded /usr.
+		--exclude='/opt'                  # 3.8G  vendor installs, 32k tiny files
+		# /root is 19,583 files and 19,523 of them are cache. Excluding these two
+		# leaves ~60 real files: root's shell config, ssh, and the dotfiles that
+		# are the only reason to back /root up at all. npm repopulates its cache
+		# on first install, which is what a cache is for.
+		--exclude='/root/.npm'            # 2.0G  15,905 files, npm cache
+		--exclude='/root/.cache'          # 650M   3,618 files, cache by name
 	)
 
 	log INFO "ownership is not preserved: destination is root_squash NFS without xattr support"
-	log INFO "wall-clock ceiling ${MAX_SECONDS}s, then SIGTERM and SIGKILL 60s later"
 	# ${opts[*]} would join on IFS, which is newline here, so build it explicitly.
 	log INFO "running: sudo rsync $(printf '%s ' "${opts[@]}")${SRC} ${DEST}"
 
-	local rc=0
-	local started
+	local started attempt=0 barren=0 rc=0 elapsed=0
+	local files=0 bytes=0 total_files=0 total_bytes=0
 	started="$(date +%s)"
 
-	heartbeat "$started" &
-	local hb_pid=$!
+	while :; do
+		attempt=$(( attempt + 1 ))
+		log INFO "rsync attempt ${attempt}/${MAX_ATTEMPTS}"
+		: > "$RSYNC_LOG"
 
-	set +e
-	timeout --signal=TERM --kill-after=60 "$MAX_SECONDS" \
-		sudo -n rsync "${opts[@]}" "$SRC" "$DEST" 2>&1 \
-		| awk -v EVERY="$HEARTBEAT_EVERY" "$throttle"
-	rc=${PIPESTATUS[0]}
-	set -e
+		set +e
+		sudo -n rsync "${opts[@]}" "$SRC" "$DEST" 2>&1 | tee "$RSYNC_LOG"
+		rc=${PIPESTATUS[0]}
+		set -e
 
-	kill "$hb_pid" 2>/dev/null || true
-	wait "$hb_pid" 2>/dev/null || true
+		files="$(rsync_stat 'Number of regular files transferred')"
+		bytes="$(rsync_stat 'Total transferred file size')"
+		total_files=$(( total_files + files ))
+		total_bytes=$(( total_bytes + bytes ))
+		elapsed=$(( $(date +%s) - started ))
 
-	local elapsed=$(( $(date +%s) - started ))
+		case "$rc" in
+			0)
+				log INFO "SUMMARY: backup complete in ${elapsed}s over ${attempt} attempt(s), ${total_files} files / $(human_bytes "$total_bytes") transferred, no errors"
+				return 0
+				;;
+			24)
+				# Source files vanishing mid-run is expected on a live root.
+				log INFO "SUMMARY: backup complete in ${elapsed}s over ${attempt} attempt(s), ${total_files} files / $(human_bytes "$total_bytes") transferred (rsync 24: some source files vanished during the run, normal for a live root)"
+				return 0
+				;;
+		esac
 
-	case "$rc" in
-		0)
-			log INFO "SUMMARY: backup complete, no errors, ${elapsed}s"
-			return 0
-			;;
-		24)
-			# Source files vanishing mid-run is expected on a live root.
-			log INFO "SUMMARY: backup complete in ${elapsed}s (rsync 24: some source files vanished during the run, normal for a live root)"
-			return 0
-			;;
-		124|137)
-			log ERROR "SUMMARY: backup KILLED at the ${MAX_SECONDS}s ceiling after ${elapsed}s: the NAS stalled and the mount is hard, so rsync could not time out on its own"
+		log ERROR "attempt ${attempt} failed with rsync exit ${rc} after ${elapsed}s, having transferred ${files} files / $(human_bytes "$bytes")"
+
+		if [ "$files" -eq 0 ] && [ "$bytes" -eq 0 ]; then
+			barren=$(( barren + 1 ))
+		else
+			barren=0
+		fi
+
+		if [ "$barren" -ge "$BARREN_LIMIT" ]; then
+			log ERROR "SUMMARY: backup FAILED after ${attempt} attempts in ${elapsed}s, the last ${barren} transferring nothing at all (rsync exit ${rc}); ${total_files} files / $(human_bytes "$total_bytes") transferred in total"
 			return 1
-			;;
-		*)
-			log ERROR "SUMMARY: backup FAILED with rsync exit ${rc} after ${elapsed}s"
+		fi
+
+		if [ "$attempt" -ge "$MAX_ATTEMPTS" ]; then
+			log ERROR "SUMMARY: backup FAILED after ${attempt} attempts in ${elapsed}s, last rsync exit ${rc}; ${total_files} files / $(human_bytes "$total_bytes") transferred in total"
 			return 1
-			;;
-	esac
+		fi
+
+		log WARN "retrying in ${RETRY_DELAY}s; --partial means the next attempt resumes rather than restarts"
+		sleep "$RETRY_DELAY"
+	done
 }
 
 main "$@"
