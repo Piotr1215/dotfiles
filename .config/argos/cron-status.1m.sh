@@ -16,6 +16,7 @@ STATE_DIR="${CRON_STATE_DIR:-$HOME/.local/state/cron-jobs}"
 # x-terminal-emulator, which is not what this machine runs, and both actions
 # end in a tmux attach that needs a real terminal.
 INVESTIGATE="alacritty -e $HOME/dev/dotfiles/scripts/__cron_investigate.sh"
+NEXT_RUN="$HOME/dev/dotfiles/scripts/__cron_next_run.py"
 
 human_age() {
     local then="$1" now delta
@@ -85,7 +86,7 @@ fi
 
 echo "<span color='${color}'>${icon}${badge}</span> | font='monospace' size=11"
 echo "---"
-echo "<b>Cron jobs</b> | font=monospace"
+printf '<b>%s %-26s %-14s %-6s %s</b> | font=monospace\n' "  " "JOB" "SCHEDULE" "LAST" "NEXT"
 
 # --- one row per registered job ---------------------------------------------
 crontab -l 2>/dev/null | while IFS= read -r line; do
@@ -143,7 +144,7 @@ crontab -l 2>/dev/null | while IFS= read -r line; do
             # Wrapped but no state yet: it simply has not come round to its
             # next run since being wrapped. Waiting, not unknowable.
             state="pending"
-            age="—"
+            age="-"
             log_path=""
         else
             state="legacy"
@@ -176,7 +177,8 @@ crontab -l 2>/dev/null | while IFS= read -r line; do
     # Strip the dotfiles' leading-underscore convention for display; the bar is
     # read at a glance and `__` is noise there.
     label="${job#__}"
-    row=$(printf '%s %-26s %-14s %s' "$glyph" "$label" "$schedule" "$age")
+    next=$(printf '%s\n' "$schedule" | "$NEXT_RUN" 2>/dev/null || echo "-")
+    row=$(printf '%s %-26s %-14s %-6s %s' "$glyph" "$label" "$schedule" "$age" "$next")
     # One action for every row, whatever its state: hand the job to the
     # cron-manager agent. A log-only click would leave the unknowable jobs
     # (no redirect, no wrapper) with nothing to click at all.

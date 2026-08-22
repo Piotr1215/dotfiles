@@ -120,7 +120,7 @@ crontab -l 2>/dev/null | while IFS= read -r line; do
             fi
         elif [[ "$cmd" == *__cron_run.sh* ]]; then
             # Wrapped but not yet run since; waiting, not unknowable.
-            last="—"
+            last="-"
             state="pending"
             msg="wrapped, awaiting first run"
         else
