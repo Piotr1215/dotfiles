@@ -1,0 +1,24 @@
+# cron-manager ── command center for locally scheduled cron jobs
+#
+# What it does:
+#   1. The `status` window shows every job in `crontab -l`, its schedule, and
+#      whatever state is known for it: __cron_run.sh wrapper state
+#      (~/.local/state/cron-jobs/<job>.json — no-hit/ok/error) where a job has
+#      adopted the wrapper, else a best-effort last-write time on its log
+#      redirect for jobs that haven't been migrated yet.
+#   2. The `agent` pane loads an agent that reads the same state, diagnoses
+#      anything erroring or stale, and reports the single most important
+#      action to take.
+#
+# Start with:  tmuxinator start cron-manager
+# Agent identity: ~/.claude/system-prompts/cron-manager-agent-system-prompt.md
+
+name: cron-manager
+root: ~/
+
+windows:
+  - status:
+      layout: main-vertical
+      panes:
+        - viddy -n 30 ~/dev/dotfiles/scripts/__cron_status_dump.sh
+        - __claude_with_monitor.sh --system-prompt-file ~/.claude/system-prompts/cron-manager-agent-system-prompt.md -- "/ops-cron-manager"
