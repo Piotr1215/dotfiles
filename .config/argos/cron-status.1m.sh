@@ -17,6 +17,7 @@ STATE_DIR="${CRON_STATE_DIR:-$HOME/.local/state/cron-jobs}"
 # end in a tmux attach that needs a real terminal.
 INVESTIGATE="alacritty -e $HOME/dev/dotfiles/scripts/__cron_investigate.sh"
 NEXT_RUN="$HOME/dev/dotfiles/scripts/__cron_next_run.py"
+TRIGGER="alacritty -e $HOME/dev/dotfiles/scripts/__cron_trigger.sh"
 
 human_age() {
     local then="$1" now delta
@@ -187,6 +188,7 @@ crontab -l 2>/dev/null | while IFS= read -r line; do
     # holding a log. Clicking any job then behaves identically.
     echo "${row} | font=monospace"
     echo "--🔍 check status with agent | bash='${INVESTIGATE} \"${job}\"' terminal=false"
+    echo "--▶ run now | bash='${TRIGGER} \"${job}\"' terminal=false"
     if [ -n "$log_path" ] && [ -f "$log_path" ]; then
         echo "--📄 open last run log | bash='alacritty -e nvim + \"${log_path}\"' terminal=false"
     else

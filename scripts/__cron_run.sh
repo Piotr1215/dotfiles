@@ -67,8 +67,14 @@ jq -n --arg job "$job" --argjson ts "$end_ts" --arg state "$state" \
     > "$tmp"
 mv "$tmp" "$status_file"
 
-# Never swallow output: cron's own mailer still sees stdout/stderr on error,
-# so a job silently unwired from this convention doesn't go dark either.
-printf '%s\n' "$output"
+# Surface output only when there is something to say: an `error` or a `hit`.
+# A clean no-hit run stays silent, so cron's mailer is not handed a payload on
+# every tick. That matters here because sending fails (msmtp passwordeval
+# cannot reach the password store under cron), so every emitted byte becomes a
+# failed-delivery line in the journal rather than a mail. The full output is
+# still written to $log_file above regardless of state, so nothing goes dark.
+if [ "$state" != "no-hit" ]; then
+    printf '%s\n' "$output"
+fi
 [ "$state" = "error" ] && exit "$code"
 exit 0
