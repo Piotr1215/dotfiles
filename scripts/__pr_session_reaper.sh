@@ -19,7 +19,14 @@ DRY_RUN="${DRY_RUN:-false}"
 mkdir -p "$(dirname "$LOG_FILE")"
 
 log() {
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$LOG_FILE"
+    # Two destinations on purpose: the long-lived file keeps history across
+    # runs, and stdout is what __cron_run.sh captures into the per-job log and
+    # the JSON message field. Writing only to the file is why this job showed
+    # an empty wrapper log on every run.
+    local line
+    line="[$(date '+%Y-%m-%d %H:%M:%S')] $*"
+    printf '%s\n' "$line" >> "$LOG_FILE"
+    printf '%s\n' "$line"
 }
 
 notify_triage() {
@@ -69,13 +76,12 @@ all_prs_merged() {
 
     while IFS= read -r pr_url; do
         [[ -z "$pr_url" ]] && continue
-        ((total++))
-
+        total=$((total + 1))
         local state
         state=$(gh pr view "$pr_url" --json state -q '.state' 2>/dev/null || echo "UNKNOWN")
 
         if [[ "$state" == "MERGED" ]]; then
-            ((merged++))
+            merged=$((merged + 1))
         fi
     done <<< "$pr_urls"
 
@@ -118,7 +124,7 @@ reap_merged_sessions() {
         # SAFETY: Verify tmux session exists AND matches expected name
         if ! tmux has-session -t "$session" 2>/dev/null; then
             log "SKIP $agent_name: tmux session '$session' not found"
-            ((skipped++))
+            skipped=$((skipped + 1))
             continue
         fi
 
@@ -127,7 +133,7 @@ reap_merged_sessions() {
         linear_id=$(extract_linear_id "$agent_name")
         if [[ -z "$linear_id" ]]; then
             log "SKIP $agent_name: no Linear ID found in name"
-            ((skipped++))
+            skipped=$((skipped + 1))
             continue
         fi
 
@@ -140,7 +146,7 @@ reap_merged_sessions() {
             else
                 log "SKIP $agent_name: not all PRs merged yet ($pr_count PRs)"
             fi
-            ((skipped++))
+            skipped=$((skipped + 1))
             continue
         fi
 
@@ -157,7 +163,7 @@ reap_merged_sessions() {
             if is_worktree_dirty "$worktree"; then
                 log "BLOCKED $agent_name: dirty worktree at $worktree"
                 notify_triage "blocked" "{\"agent\":\"$agent_name\",\"session\":\"$session\",\"reason\":\"dirty worktree\",\"path\":\"$worktree\",\"pr\":\"$pr_url\"}"
-                ((blocked++))
+                blocked=$((blocked + 1))
                 continue
             fi
 
@@ -182,7 +188,7 @@ reap_merged_sessions() {
                 fi
 
                 notify_triage "success" "{\"agent\":\"$agent_name\",\"session\":\"$session\",\"prs\":\"$pr_urls\"}"
-                ((reaped++))
+                reaped=$((reaped + 1))
             fi
         else
             # No worktree - just kill session
@@ -192,15 +198,13 @@ reap_merged_sessions() {
                 log "REAP $agent_name: PR merged, no worktree"
                 tmux kill-session -t "$session" 2>/dev/null || true
                 notify_triage "success" "{\"agent\":\"$agent_name\",\"session\":\"$session\",\"prs\":\"$pr_urls\"}"
-                ((reaped++))
+                reaped=$((reaped + 1))
             fi
         fi
     done < <(get_agent_sessions)
 
     # Summary
-    if [[ $reaped -gt 0 || $blocked -gt 0 ]]; then
-        log "SUMMARY: reaped=$reaped blocked=$blocked skipped=$skipped"
-    fi
+    log "SUMMARY: reaped=$reaped blocked=$blocked skipped=$skipped"
 }
 
 # Run
