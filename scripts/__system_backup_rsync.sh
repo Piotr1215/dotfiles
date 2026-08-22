@@ -99,18 +99,26 @@ END { printf("    · %d entries transferred in %ds\n", n, systime() - start); ff
 # Cumulative CPU jiffies across every rsync process. /proc/PID/stat is
 # world-readable even though rsync runs under sudo, unlike /proc/PID/io, so
 # this works from the unprivileged parent.
+# Let awk do the addition. Splitting its output with `read u s` looks equivalent
+# but is not: this script sets IFS to newline and tab, so read never splits on
+# the space between the two fields, u takes both numbers, and the arithmetic
+# below dies with a syntax error. Under set -e that killed the heartbeat on its
+# first tick, silently, which is the failure this whole function exists to catch.
 rsync_cpu_jiffies() {
-	local total=0 p u s
+	local total=0 p v
 	for p in $(pgrep -x rsync 2>/dev/null); do
-		read -r u s <<<"$(awk '{print $14, $15}' "/proc/${p}/stat" 2>/dev/null || echo '0 0')"
-		total=$(( total + ${u:-0} + ${s:-0} ))
+		v=$(awk '{print $14 + $15}' "/proc/${p}/stat" 2>/dev/null || echo 0)
+		total=$(( total + ${v:-0} ))
 	done
 	printf '%s' "$total"
 }
 
+# `|| true` matters: with pipefail, ps exiting 1 because no rsync is left fails
+# the whole pipeline, and set -e would kill the heartbeat exactly when rsync
+# finishes.
 rsync_states() {
 	ps -o stat= -C rsync 2>/dev/null | tr -d ' ' | sort | uniq -c \
-		| awk '{printf "%s×%s ", $1, $2}'
+		| awk '{printf "%sx%s ", $1, $2}' || true
 }
 
 # Proof of life, every HEARTBEAT_SECONDS, whether or not rsync is naming files.
