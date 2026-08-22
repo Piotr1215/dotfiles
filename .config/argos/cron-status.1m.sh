@@ -93,6 +93,12 @@ if [ -d "$STATE_DIR" ]; then
         case "$st" in
             error) errors=$(( errors + 1 )) ;;
             hit) hits=$(( hits + 1 )) ;;
+            # Deliberately uncounted. The red badge is a call to action: it means
+            # a job's latest run FAILED and wants looking at. A run the nightly
+            # poweroff killed did not fail, so counting it here would summon
+            # attention every morning for nothing and teach the badge to be
+            # ignored, which costs the one signal that has to stay trustworthy.
+            interrupted) ;;
             running)
                 # A marker whose process is gone is a run that died before it
                 # could write a result, not a live job. Without this the dot
@@ -192,6 +198,15 @@ crontab -l 2>/dev/null | while IFS= read -r line; do
         ts=$(jq -r '.ts // empty' "$status_file" 2>/dev/null)
         age=$( [ -n "$ts" ] && human_age "$ts" || echo "?" )
         log_path=$(jq -r '.log_path // ""' "$status_file" 2>/dev/null)
+        # A `running` marker carries only {job, ts, state, pid} -- __cron_run.sh
+        # adds log_path only once the run finishes -- so log_path comes back
+        # empty for the one case where following the log matters most: a job
+        # in flight right now. The wrapper's log path is always predictable
+        # (${STATE_DIR}/${job}.log), so fall back to it; the existence check
+        # below still gates whether the menu item is offered.
+        if [ -z "$log_path" ]; then
+            log_path="${STATE_DIR}/${job}.log"
+        fi
     else
         # No redirect is common; a non-match must not abort the loop.
         logpath_guess=$(grep -oE '>>?\s*[^ ]+\.log' <<<"$line" | awk '{print $NF}' | tail -1 || true)
@@ -221,14 +236,21 @@ crontab -l 2>/dev/null | while IFS= read -r line; do
         hit) glyph="🟢" ;;
         no-hit) glyph="🟢" ;;
         pending) glyph="🔵" ;;
+        # Ran, then something took the machine out from under it. Amber, not
+        # red: nothing is broken and there is nothing to fix, so it must not
+        # read as "a cron job is fucked, spawn klod".
+        interrupted) glyph="🟠" ;;
         running)
-            # A marker whose process is gone means the run died before it could
-            # write a result, which is an error nobody would otherwise see.
+            # A marker whose process is gone means the run never wrote a result.
+            # Amber for the same reason: the overwhelmingly common cause is the
+            # nightly poweroff, and red has to keep meaning "the latest run
+            # failed". A genuine hang still goes red, because `timeout
+            # --kill-after` sends SIGKILL and the wrapper records 137 as error.
             pid=$(jq -r '.pid // empty' "$status_file" 2>/dev/null)
             if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
                 glyph="🟣"; age="now"
             else
-                glyph="🔴"; age="died"
+                glyph="🟠"; age="died"
             fi
             ;;
         *)
@@ -264,7 +286,14 @@ crontab -l 2>/dev/null | while IFS= read -r line; do
     echo "${row} | font=monospace"
     echo "--🔍 check status with agent | bash='${INVESTIGATE} \"${job}\"' terminal=false"
     if [ -n "$log_path" ] && [ -f "$log_path" ]; then
-        echo "--📄 open last run log | bash='alacritty -e nvim + \"${log_path}\"' terminal=false"
+        # Same command either way -- nvim opens the live-appended log same as a
+        # finished one -- only the label changes, so a running job reads as
+        # "come watch this" rather than "here's what already happened".
+        if [ "$state" = "running" ]; then
+            echo "--📄 follow live log | bash='alacritty -e nvim + \"${log_path}\"' terminal=false"
+        else
+            echo "--📄 open last run log | bash='alacritty -e nvim + \"${log_path}\"' terminal=false"
+        fi
     else
         echo "--📄 no log yet | bash='true' terminal=false"
     fi
