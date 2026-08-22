@@ -210,7 +210,8 @@ cron_run_heal_stale_marker "$job" || true
 # writing a final state.
 running_tmp="$(mktemp)"
 jq -n --arg job "$job" --argjson ts "$start_ts" --argjson pid "$$" \
-    '{job: $job, ts: $ts, state: "running", pid: $pid}' >"$running_tmp"
+    --arg lp "$log_file" \
+    '{job: $job, ts: $ts, state: "running", pid: $pid, log_path: $lp}' >"$running_tmp"
 mv "$running_tmp" "$status_file"
 
 # Stream the job's output into the log as it is produced, rather than capturing
@@ -315,5 +316,10 @@ if [ "$state" != "no-hit" ]; then
     # streamed straight to the file now, so this slice is the only copy.
     sed -n "$((before + 1)),${after}p" "$log_file" | sed 's/^    //'
 fi
-[ "$state" = "error" ] && exit "$code"
+# Propagate the real code for anything that did not finish cleanly. `error` was
+# the only case here, which meant an `interrupted` run exited 0 and told every
+# caller the job had succeeded, hiding the very interruption the state records.
+case "$state" in
+    error|interrupted) exit "$code" ;;
+esac
 exit 0
