@@ -19,6 +19,23 @@ INVESTIGATE="alacritty -e $HOME/dev/dotfiles/scripts/__cron_investigate.sh"
 NEXT_RUN="$HOME/dev/dotfiles/scripts/__cron_next_run.py"
 TRIGGER="alacritty -e $HOME/dev/dotfiles/scripts/__cron_trigger.sh"
 
+# Argos renders every line as pango markup, so any bare `<`, `>` or `&` in a
+# row aborts the parse and GNOME prints argos's own <span font_family=...>
+# wrapper as literal text. The next-run column produces `<1m` for a job about
+# to fire, which is exactly that case. Escape after padding, never before:
+# `&lt;` is four bytes but one glyph, so column widths still line up.
+#
+# The backslashes are load-bearing: since bash 5.2 an unescaped `&` in the
+# replacement half of ${var//pat/repl} means "the text that matched", so a
+# plain `&lt;` expands to `<lt;` and escapes nothing.
+esc() {
+    local s="$1"
+    s=${s//&/\&amp;}
+    s=${s//</\&lt;}
+    s=${s//>/\&gt;}
+    printf '%s' "$s"
+}
+
 human_age() {
     local then="$1" now delta
     now=$(date +%s)
@@ -76,6 +93,10 @@ if [ -d "$STATE_DIR" ]; then
 fi
 
 # Not a clock/alarm glyph: the reminders widget already owns those in the bar.
+# Deliberately no in-flight badge here: cron-running.2s.sh owns that signal.
+# Counting it in both places put two live counts side by side in the bar that
+# disagreed with each other, because this widget refreshes at 1m and a job can
+# start and finish well inside one of its ticks.
 icon="🗓"
 if [ "$errors" -gt 0 ]; then
     color="#ff4444"; badge=" ${errors}!"
@@ -161,6 +182,16 @@ crontab -l 2>/dev/null | while IFS= read -r line; do
         hit) glyph="🟢" ;;
         no-hit) glyph="🟢" ;;
         pending) glyph="🔵" ;;
+        running)
+            # A marker whose process is gone means the run died before it could
+            # write a result, which is an error nobody would otherwise see.
+            pid=$(jq -r '.pid // empty' "$status_file" 2>/dev/null)
+            if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+                glyph="🟣"; age="now"
+            else
+                glyph="🔴"; age="died"
+            fi
+            ;;
         *)
             if [ -n "$ts" ]; then
                 budget=$(expected_interval "$schedule")
@@ -179,7 +210,7 @@ crontab -l 2>/dev/null | while IFS= read -r line; do
     # read at a glance and `__` is noise there.
     label="${job#__}"
     next=$(printf '%s\n' "$schedule" | "$NEXT_RUN" 2>/dev/null || echo "-")
-    row=$(printf '%s %-26s %-14s %-6s %s' "$glyph" "$label" "$schedule" "$age" "$next")
+    row=$(esc "$(printf '%s %-26s %-14s %-6s %s' "$glyph" "$label" "$schedule" "$age" "$next")")
     # One action for every row, whatever its state: hand the job to the
     # cron-manager agent. A log-only click would leave the unknowable jobs
     # (no redirect, no wrapper) with nothing to click at all.

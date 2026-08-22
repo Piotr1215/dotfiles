@@ -35,6 +35,7 @@ state_glyph() {
         error) echo "🔴" ;;
         stale) echo "🟠" ;;
         pending) echo "🔵" ;;
+        running) echo "🟣" ;;
         *) echo "⚫" ;;
     esac
 }

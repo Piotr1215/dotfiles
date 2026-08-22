@@ -33,6 +33,16 @@ status_file="${STATE_DIR}/${job}.json"
 log_file="${STATE_DIR}/${job}.log"
 
 start_ts=$(date +%s)
+
+# Publish a running marker before handing off, so a job in flight is visible
+# rather than looking idle at its last result for however long it takes. The
+# PID lets a reader tell a live run from one whose process died without ever
+# writing a final state.
+running_tmp="$(mktemp)"
+jq -n --arg job "$job" --argjson ts "$start_ts" --argjson pid "$$" \
+    '{job: $job, ts: $ts, state: "running", pid: $pid}' >"$running_tmp"
+mv "$running_tmp" "$status_file"
+
 output=$("$@" 2>&1) && code=0 || code=$?
 end_ts=$(date +%s)
 duration=$(( end_ts - start_ts ))
