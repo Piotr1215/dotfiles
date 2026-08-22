@@ -28,9 +28,13 @@ export DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus
 # Capture rather than redirect straight to the file: the cron wrapper reads
 # stdout, so redirecting everything to /tmp left the per-job log empty on every
 # run. The file still receives the full transcript; stdout carries the outcome.
-sync_out=$(/home/decoder/dev/dotfiles/scripts/__github_issue_sync.sh 2>&1)
-sync_rc=$?
-printf '%s\n' "$sync_out" >> "$LOG_FILE"
+# tee rather than capture. Command substitution held the entire run in memory
+# and emitted nothing until the inner sync exited some 65 seconds later, so the
+# log stayed blank for the whole time the work was actually happening. Teeing
+# streams to the file and to stdout at once, which is what lets the cron
+# wrapper's log fill as the sync progresses instead of all at the end.
+/home/decoder/dev/dotfiles/scripts/__github_issue_sync.sh 2>&1 | tee -a "$LOG_FILE"
+sync_rc=${PIPESTATUS[0]}
 if [ "$sync_rc" -ne 0 ]; then
     # Get last 5 lines for context
     error_context=$(tail -n 5 "$LOG_FILE")
@@ -68,7 +72,7 @@ fi
 
 # One line of outcome on stdout: a silent success is indistinguishable from a
 # run that never happened once the transcript goes to a different file.
-printf 'OK: %s\n' "$(printf '%s\n' "$sync_out" | grep -v '^[[:space:]]*$' | tail -1)"
+printf 'OK: github issue sync completed (exit %s)\n' "$sync_rc"
 
 # Success - keep log clean (last 1000 lines only)
 tail -n 1000 "$LOG_FILE" > "${LOG_FILE}.tmp" && mv "${LOG_FILE}.tmp" "$LOG_FILE" 2>/dev/null || true
