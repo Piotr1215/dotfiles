@@ -117,31 +117,41 @@ jq -n --arg job "$job" --argjson ts "$start_ts" --argjson pid "$$" \
     '{job: $job, ts: $ts, state: "running", pid: $pid}' >"$running_tmp"
 mv "$running_tmp" "$status_file"
 
-output=$("$@" 2>&1) && code=0 || code=$?
+# Stream the job's output into the log as it is produced, rather than capturing
+# it and writing once at the end. Capturing meant a 65-second job showed a
+# header and then nothing until it exited, so the log was useless for watching
+# work in progress and `tail -f` had nothing to follow. Lines now land as they
+# happen, indented so it stays obvious which came from the job and which from
+# this wrapper.
+#
+# sed does the ANSI stripping inline (-u to stay unbuffered, or it would
+# reintroduce the very buffering this is removing). PYTHONUNBUFFERED reaches
+# the python jobs, which would otherwise block-buffer their stdout into a pipe
+# and stream nothing until exit.
+wlog INFO "--- output ---"
+before=$(wc -l <"$log_file")
+
+export PYTHONUNBUFFERED=1
+set +e
+"$@" 2>&1 | sed -u -E 's/\x1b\[[0-9;]*[A-Za-z]//g; s/^/    /' >>"$log_file"
+code=${PIPESTATUS[0]}
+set -e
+
+after=$(wc -l <"$log_file")
 end_ts=$(date +%s)
 duration=$(( end_ts - start_ts ))
 
-# Strip ANSI escapes on the way in: tools that colour their output (direnv's
-# "loading ~/.envrc" banner was the one that showed up here) write raw escapes
-# that render as junk in an editor and pollute the message field.
-clean=$(printf '%s' "$output" | sed -E 's/\x1b\[[0-9;]*[A-Za-z]//g')
+# Say so explicitly. A blank stretch between the banners reads like truncation.
+if [ "$after" -eq "$before" ]; then
+    printf '    (no output)\n' >>"$log_file"
+fi
+wlog INFO "--- end output ---"
 
 case "$code" in
     0) state="no-hit" ;;
     2) state="hit" ;;
     *) state="error" ;;
 esac
-
-# The job's own output, indented under an output banner so it is obvious which
-# lines came from the job and which from this wrapper. Silence is stated
-# explicitly rather than left as a blank stretch of file.
-if [ -n "$clean" ]; then
-    wlog INFO "--- output ---"
-    printf '%s\n' "$clean" | sed 's/^/    /' >>"$log_file"
-    wlog INFO "--- end output ---"
-else
-    wlog INFO "(no output)"
-fi
 
 # A bare exit code hides the most interesting failure here: this machine powers
 # off nightly, so a long job killed mid-run reports 143 and reads like a generic
@@ -166,7 +176,8 @@ fi
 
 # The at-a-glance message: the job's own last meaningful line when it produced
 # one, otherwise a statement that it ran, so the dashboard never shows a blank.
-last_line=$(printf '%s' "$clean" | grep -v '^[[:space:]]*$' | tail -1 || true)
+last_line=$(sed -n "$((before + 1)),${after}p" "$log_file" \
+    | sed 's/^    //' | grep -v '^[[:space:]]*$' | tail -1 || true)
 if [ -z "$last_line" ]; then
     last_line="ran, no output (exit ${code}, ${duration}s)"
 fi
@@ -186,7 +197,9 @@ mv "$tmp" "$status_file"
 # failed-delivery line in the journal rather than a mail. The full output is
 # still written to $log_file above regardless of state, so nothing goes dark.
 if [ "$state" != "no-hit" ]; then
-    printf '%s\n' "$output"
+    # Replayed out of the log rather than from a variable: the output is
+    # streamed straight to the file now, so this slice is the only copy.
+    sed -n "$((before + 1)),${after}p" "$log_file" | sed 's/^    //'
 fi
 [ "$state" = "error" ] && exit "$code"
 exit 0
