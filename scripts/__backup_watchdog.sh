@@ -48,3 +48,7 @@ else
 	# Healthy; stay silent so the watchdog itself never becomes noise.
 	echo "OK: last successful backup ${age_hours}h ago"
 fi
+
+# Terminal status is the cron wrapper's state channel: 0 no-hit, 2 hit,
+# anything else error. Do not let the last command decide it.
+exit 0

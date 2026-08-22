@@ -79,3 +79,7 @@ tail -n 1000 "$LOG_FILE" > "${LOG_FILE}.tmp" && mv "${LOG_FILE}.tmp" "$LOG_FILE"
 
 # Nudge is now triggered from inside __github_issue_sync.sh so both cron
 # and manual invocations produce one — see triage thread 2026-05-12.
+
+# Terminal status is the cron wrapper's state channel: 0 no-hit, 2 hit,
+# anything else error. Do not let the last command decide it.
+exit 0
