@@ -1,1 +1,0 @@
-../../chrome-extensions/tab-detach/background.js
