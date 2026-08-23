@@ -2,31 +2,16 @@
 
 # Completion for __claude_extended_help.sh, aliased to chelp.
 #
-# Doc slugs come from the llms.txt index the script already caches. Read it when
-# it is there and stay silent when it is not: pressing tab must never be the
-# thing that fires a network fetch.
-
-_chelp_doc_pages() {
-	local index="${XDG_CACHE_HOME:-$HOME/.cache}/claude-extended-help/llms.txt"
-	[[ -r "$index" ]] || return
-	local -a pages
-	pages=( ${(f)"$(sed -n 's|^- \[\([^]]*\)\](https://code\.claude\.com/docs/en/\([^)]*\)\.md).*|\2:\1|p' "$index" 2>/dev/null)"} )
-	(( ${#pages} )) && _describe -t pages 'doc page' pages
-}
+# Every section reads the packed claude binary on this machine, so the sections
+# are a fixed set and there is nothing to discover at completion time.
 
 _chelp() {
-	# Order is deliberate and _describe -V keeps it. The first four read the
-	# packed binary on this machine, which is the only place that information
-	# exists. The docs sections just fetch public markdown, so they sort last.
 	local -a sections=(
 		'commands:built-in slash commands with descriptions, aliases, argument hints'
 		'flags:CLI flags, including the ones --help does not list'
 		'cli:CLI subcommands'
 		'all:every section in one JSON object (implies --json)'
 		'version:the binary this script is reading'
-		'docs:reference markdown from code.claude.com'
-		'docs-list:the doc index (slug, title, summary)'
-		'docs-search:search the index, or the page bodies with --full'
 	)
 
 	_arguments -C \
@@ -48,22 +33,6 @@ _chelp() {
 			;;
 		all)
 			_arguments '--refresh[rescan the binary, ignoring the cache]'
-			;;
-		docs)
-			_arguments \
-				'--refresh[refetch the index]' \
-				'1:page:_chelp_doc_pages'
-			;;
-		docs-list)
-			_arguments \
-				'--refresh[refetch the index]' \
-				'*:term:'
-			;;
-		docs-search)
-			_arguments \
-				'--full[search the page bodies, not just the summaries]' \
-				'--refresh[refetch the index and the pages]' \
-				'*:term:'
 			;;
 		esac
 		;;
