@@ -190,6 +190,51 @@ EOF
   [[ "$(<"${BATS_TEST_TMPDIR}/edit.log")" == "$TOGGLES_CONF" ]]
 }
 
+@test "the real prompt-coach toggle reads the coach's own disabled marker" {
+  coach_state="${BATS_TEST_TMPDIR}/coach"
+  mkdir -p "$coach_state"
+
+  run env PROMPT_COACH_STATE_DIR="$coach_state" bash -c '
+    toggle_register() { :; }
+    toggle_edit_action() { :; }
+    source "$1"
+    prompt_coach_status && echo on || echo off
+  ' _ "${BATS_TEST_DIRNAME}/../../scripts/__toggles.conf"
+  [ "$output" = on ]
+
+  touch "${coach_state}/disabled"
+  run env PROMPT_COACH_STATE_DIR="$coach_state" bash -c '
+    toggle_register() { :; }
+    toggle_edit_action() { :; }
+    source "$1"
+    prompt_coach_status && echo on || echo off
+  ' _ "${BATS_TEST_DIRNAME}/../../scripts/__toggles.conf"
+  [ "$output" = off ]
+}
+
+@test "the real prompt-coach toggle flips through the control surface" {
+  stub="${BATS_TEST_TMPDIR}/tip-status-stub"
+  cat >"$stub" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$1" >> "${BATS_TEST_TMPDIR}/coach.log"
+EOF
+  chmod +x "$stub"
+
+  run bash -c '
+    toggle_register() { :; }
+    toggle_edit_action() { :; }
+    source "$1"
+    coach_status_script="$2"
+    prompt_coach_on
+    prompt_coach_off
+  ' _ "${BATS_TEST_DIRNAME}/../../scripts/__toggles.conf" "$stub"
+  [ "$status" -eq 0 ]
+
+  # Not the marker file by hand: the coach records its own state changes.
+  [[ "$(<"${BATS_TEST_TMPDIR}/coach.log")" == "--enable
+--disable" ]]
+}
+
 @test "the real config parses and registers unique toggle names" {
   run bash -c '
     declare -A seen=()
