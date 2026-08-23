@@ -73,15 +73,26 @@ write_state() {
   [ "$status" -ne 0 ]
 }
 
-@test "the widget offers mark-as-read only on a hit row" {
-  # The widget reads the live crontab, so drive it with a fake `crontab -l`
-  # naming one wrapped job whose state we control.
+# fake_crontab -> puts a `crontab -l` on PATH naming one wrapped job, so the
+# widget can be driven off a state file we control instead of the real crontab.
+fake_crontab() {
   bin="${WORK}/bin"; mkdir -p "$bin"
   cat >"${bin}/crontab" <<EOF
 #!/usr/bin/env bash
 echo '0 10 * * MON /home/decoder/dev/dotfiles/scripts/__cron_run.sh job -- /bin/true'
 EOF
   chmod +x "${bin}/crontab"
+}
+
+# aged_state <state> <seconds-ago> -> a status file timestamped into the past.
+aged_state() {
+  jq -n --arg s "$1" --argjson ts "$(( $(date +%s) - $2 ))" \
+    '{job: "job", state: $s, ts: $ts, exit_code: 2, message: "found something"}' \
+    >"$STATUS"
+}
+
+@test "the widget offers mark-as-read only on a hit row" {
+  fake_crontab
 
   write_state hit
   run env PATH="${bin}:${PATH}" "$WIDGET"
@@ -97,4 +108,53 @@ EOF
   run env PATH="${bin}:${PATH}" "$WIDGET"
   [ "$status" -eq 0 ]
   [[ "$output" != *"mark as read"* ]]
+}
+
+@test "a fresh hit lights the star" {
+  fake_crontab
+  aged_state hit 60
+  run env PATH="${bin}:${PATH}" "$WIDGET"
+  [ "$status" -eq 0 ]
+  [[ "${lines[0]}" == *"1★"* ]]
+}
+
+@test "a hit past its ttl stops counting toward the badge" {
+  fake_crontab
+  aged_state hit 172800
+  run env PATH="${bin}:${PATH}" "$WIDGET"
+  [ "$status" -eq 0 ]
+  [[ "${lines[0]}" != *"★"* ]]
+}
+
+@test "expiry does not touch the state on disk" {
+  fake_crontab
+  aged_state hit 172800
+  run env PATH="${bin}:${PATH}" "$WIDGET"
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.state' "$STATUS")" = "hit" ]
+  [ "$(jq -r '.message' "$STATUS")" = "found something" ]
+}
+
+@test "the ttl is configurable" {
+  fake_crontab
+  aged_state hit 172800
+  run env PATH="${bin}:${PATH}" CRON_HIT_TTL=604800 "$WIDGET"
+  [ "$status" -eq 0 ]
+  [[ "${lines[0]}" == *"1★"* ]]
+}
+
+@test "a hit with no timestamp counts rather than being dropped" {
+  fake_crontab
+  jq -n '{job: "job", state: "hit", exit_code: 2, message: "found something"}' >"$STATUS"
+  run env PATH="${bin}:${PATH}" "$WIDGET"
+  [ "$status" -eq 0 ]
+  [[ "${lines[0]}" == *"1★"* ]]
+}
+
+@test "an error never expires off the badge" {
+  fake_crontab
+  aged_state error 2592000
+  run env PATH="${bin}:${PATH}" "$WIDGET"
+  [ "$status" -eq 0 ]
+  [[ "${lines[0]}" == *"1!"* ]]
 }

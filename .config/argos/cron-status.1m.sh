@@ -26,6 +26,13 @@ TRIGGER="$HOME/dev/dotfiles/scripts/__cron_trigger.sh"
 # trigger: it rewrites one state file and exits, and refresh=true on the menu
 # item makes the star disappear on the click rather than a tick later.
 ACK="$HOME/dev/dotfiles/scripts/__cron_ack.sh"
+# How long a hit keeps the star lit. A hit points at something already
+# delivered (mail, a note, a log line), so its value expires: past a day the
+# star is asking for attention that was either given or deliberately skipped,
+# and either way it has stopped carrying information. The state on disk is
+# untouched, so an expired hit is still readable in the job's row, its log and
+# the status table -- only the badge stops counting it.
+HIT_TTL="${CRON_HIT_TTL:-86400}"
 
 # Argos renders every line as pango markup, so any bare `<`, `>` or `&` in a
 # row aborts the parse and GNOME prints argos's own <span font_family=...>
@@ -93,10 +100,30 @@ running=0
 if [ -d "$STATE_DIR" ]; then
     for f in "$STATE_DIR"/*.json; do
         [ -f "$f" ] || continue
-        read -r st pid < <(jq -r '[.state // "", .pid // ""] | @tsv' "$f" 2>/dev/null || echo "")
+        # join("|"), not @tsv. Space, tab and newline are IFS *whitespace* in
+        # bash, and runs of IFS whitespace collapse into one delimiter however
+        # IFS is set -- so with tabs, a job carrying no .pid (which is every
+        # finished run) shifts .ts left into $pid and leaves $hts empty. The
+        # expiry check below would then read every hit as timestamp-less and
+        # count it forever, i.e. the exact bug the TTL exists to fix. A pipe is
+        # not whitespace, so empty fields survive, and none of these three can
+        # contain one: state is a fixed word, pid and ts are digits.
+        IFS='|' read -r st pid hts < <(jq -r '[.state // "", .pid // "", .ts // ""] | join("|")' "$f" 2>/dev/null || echo "")
         case "$st" in
+            # Errors never expire. Red is not a notification, it is an open
+            # fault: it stays until a run clears it or someone fixes the job.
             error) errors=$(( errors + 1 )) ;;
-            hit) hits=$(( hits + 1 )) ;;
+            hit)
+                # A hit older than the TTL stops counting. Without this the
+                # star is latched to the last exit code, so a job on
+                # MON,WED,FRI holds one over the whole weekend and the badge
+                # teaches you to ignore it. A hit with no readable timestamp
+                # counts, because the alternative is dropping a signal on the
+                # strength of a parse failure.
+                if [ -z "$hts" ] || [ "$(( $(date +%s) - hts ))" -le "$HIT_TTL" ]; then
+                    hits=$(( hits + 1 ))
+                fi
+                ;;
             # Deliberately uncounted. The red badge is a call to action: it means
             # a job's latest run FAILED and wants looking at. A run the nightly
             # poweroff killed did not fail, so counting it here would summon
