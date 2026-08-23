@@ -3,5 +3,5 @@
   "description": "Apply a dotfiles window layout for the tab-detach extension",
   "path": "/home/decoder/dev/dotfiles/scripts/__browser_native_layout.py",
   "type": "stdio",
-  "allowed_origins": ["chrome-extension://oelonedkcpflcchfhpbjdckhjfikocmo/"]
+  "allowed_origins": ["chrome-extension://apcfkhkpkhkmcmammgkkbbdkgfcgckab/"]
 }
