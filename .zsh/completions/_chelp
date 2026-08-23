@@ -15,15 +15,18 @@ _chelp_doc_pages() {
 }
 
 _chelp() {
+	# Order is deliberate and _describe -V keeps it. The first four read the
+	# packed binary on this machine, which is the only place that information
+	# exists. The docs sections just fetch public markdown, so they sort last.
 	local -a sections=(
 		'commands:built-in slash commands with descriptions, aliases, argument hints'
 		'flags:CLI flags, including the ones --help does not list'
 		'cli:CLI subcommands'
 		'all:every section in one JSON object (implies --json)'
+		'version:the binary this script is reading'
 		'docs:reference markdown from code.claude.com'
 		'docs-list:the doc index (slug, title, summary)'
 		'docs-search:search the index, or the page bodies with --full'
-		'version:the binary this script is reading'
 	)
 
 	_arguments -C \
@@ -32,7 +35,7 @@ _chelp() {
 
 	case "$state" in
 	section)
-		_describe 'section' sections
+		_describe -V 'section' sections
 		;;
 	args)
 		case "${words[1]}" in
