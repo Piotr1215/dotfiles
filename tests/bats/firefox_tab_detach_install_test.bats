@@ -4,7 +4,8 @@
 #
 # The script rewrites LibreWolf profile files, so every test points it at a
 # throwaway profile tree through LIBREWOLF_DIR and HOSTS_DIR, and stubs flatpak
-# so the running-browser guard sees no browser.
+# so the running-browser guard sees no browser. The extension itself lives in a
+# sibling checkout, so TAB_DETACH_DIR points at a fake build too.
 
 setup() {
     TEST_DIR="$(mktemp -d)"
@@ -22,6 +23,12 @@ setup() {
     export HOSTS_DIR="${TEST_DIR}/hosts"
     mkdir -p "${LIBREWOLF_DIR}/p1.home/extensions" "${LIBREWOLF_DIR}/p2.work"
     printf '[Profile0]\nPath=p1.home\n\n[Profile1]\nPath=p2.work\n' > "${LIBREWOLF_DIR}/profiles.ini"
+
+    export TAB_DETACH_DIR="${TEST_DIR}/tab-detach"
+    mkdir -p "${TAB_DETACH_DIR}/dist/firefox"
+    printf '{"manifest_version":2,"name":"Tab Detach Toggle","version":"1.2.0"}\n' \
+        > "${TAB_DETACH_DIR}/dist/firefox/manifest.json"
+    touch "${TAB_DETACH_DIR}/dist/firefox/background.js" "${TAB_DETACH_DIR}/dist/firefox/content.js"
 }
 
 teardown() {
@@ -70,5 +77,13 @@ teardown() {
     printf '#!/bin/sh\necho io.gitlab.librewolf-community\n' > "${TEST_DIR}/bin/flatpak"
     run "${SCRIPT}"
     [ "$status" -eq 1 ]
+    [ ! -e "${LIBREWOLF_DIR}/p1.home/extensions/tab-detach@dotfiles.xpi" ]
+}
+
+@test "names the missing build instead of installing an empty xpi" {
+    export TAB_DETACH_DIR="${TEST_DIR}/absent"
+    run "${SCRIPT}"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"${TEST_DIR}/absent/dist/firefox"* ]]
     [ ! -e "${LIBREWOLF_DIR}/p1.home/extensions/tab-detach@dotfiles.xpi" ]
 }

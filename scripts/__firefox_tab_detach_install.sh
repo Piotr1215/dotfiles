@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 # Install the tab-detach extension into every LibreWolf profile and wire its
 # native messaging host. LibreWolf runs as a flatpak, so the extension cannot
-# load unpacked from this repo: the sandbox does not see it. It ships as an
+# load unpacked from a checkout: the sandbox does not see it. It ships as an
 # unsigned xpi copied into each profile, which LibreWolf accepts because it is
 # built with MOZ_REQUIRE_SIGNING empty and the pref below turned off.
+#
+# The extension itself lives in Piotr1215/tab-detach, checked out beside this
+# repo. Point TAB_DETACH_DIR elsewhere if it is not at the default.
 #
 # The host runs outside the sandbox. Firefox asks xdg-desktop-portal for it
 # when widget.use-xdg-desktop-portal.native-messaging is 1 (default 0, even
@@ -16,7 +19,8 @@
 set -eo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-EXT_DIR="${SCRIPT_DIR}/../.config/firefox-extensions/tab-detach"
+EXT_DIR="${TAB_DETACH_DIR:-$HOME/dev/tab-detach}/dist/firefox"
+HOST_DIR="${SCRIPT_DIR}/../.config/firefox-extensions/tab-detach/native-host"
 EXT_ID="tab-detach@dotfiles"
 SUPERSEDED_ID="tabenhanced@firefox" # tabdetach: moves a tab out, never back
 LIBREWOLF_DIR="${LIBREWOLF_DIR:-$HOME/.var/app/io.gitlab.librewolf-community/.librewolf}"
@@ -24,6 +28,15 @@ HOSTS_DIR="${HOSTS_DIR:-$HOME/.mozilla/native-messaging-hosts}"
 
 if flatpak ps --columns=application 2>/dev/null | grep -qx io.gitlab.librewolf-community; then
 	echo "close LibreWolf first: it owns the profile files this rewrites" >&2
+	exit 1
+fi
+
+# The extension is a sibling checkout now, so it can be absent or unbuilt. Say
+# so here: every later failure is a zip of nothing installed into every profile,
+# and the browser reports a missing extension as no chord at all.
+if [[ ! -d "$EXT_DIR" ]]; then
+	echo "no firefox build at ${EXT_DIR}" >&2
+	echo "clone Piotr1215/tab-detach and run 'node build.mjs', or set TAB_DETACH_DIR" >&2
 	exit 1
 fi
 
@@ -67,7 +80,7 @@ main() {
 	rm -f "$xpi"
 
 	mkdir -p "$HOSTS_DIR"
-	ln -sfn "$(cd "${EXT_DIR}/native-host" && pwd)/com.dotfiles.layouts.json" "${HOSTS_DIR}/com.dotfiles.layouts.json"
+	ln -sfn "$(cd "${HOST_DIR}" && pwd)/com.dotfiles.layouts.json" "${HOSTS_DIR}/com.dotfiles.layouts.json"
 	echo "host manifest linked at ${HOSTS_DIR}/com.dotfiles.layouts.json"
 	# Firefox installs a sideloaded add-on disabled (extensions.autoDisableScopes)
 	# and remembers the user's answer per add-on id, so this is a one-time step.
