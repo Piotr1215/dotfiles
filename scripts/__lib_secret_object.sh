@@ -232,7 +232,10 @@ secret_read() {
 	IFS=$'\t' read -r name owner entry refs status < <(secret_locate "$1")
 	case "$owner" in
 	age) age -d -i "$AGE_ID" "$SECRETS_DIR/$name.age" ;;
-	pass) pass show "$entry" | head -n1 ;;
+	# No `head -n1` here. That is the pass CLI convention (password on line 1,
+	# metadata below), but this store holds whole values written by passfromenv,
+	# so truncating silently returned the first line of a PEM or a JSON blob.
+	pass) pass show "$entry" ;;
 	both) secret_die "'$1' is in both stores; resolve the conflict first" ;;
 	*) secret_die "no secret named '$1'" ;;
 	esac
@@ -397,7 +400,7 @@ secret_promote() {
 	# The plaintext sits in a variable for two statements, the same trade secadd
 	# makes, and is unset immediately after.
 	local value
-	value=$(pass show "$entry" 2>/dev/null | head -n1) || value=""
+	value=$(pass show "$entry" 2>/dev/null) || value=""
 	[[ -n "$value" ]] || {
 		secret_die "pass show returned nothing for '$entry'; nothing was written"
 		return 1
@@ -430,13 +433,6 @@ secret_demote() {
 	value=$(age -d -i "$AGE_ID" "$SECRETS_DIR/$name.age" 2>/dev/null) || value=""
 	[[ -n "$value" ]] || {
 		secret_die "no tap registered for '$name'; nothing was written to pass"
-		return 1
-	}
-	# pass hands back line 1 and treats the rest as metadata, so a file secret
-	# would come back truncated. Those belong in the bastion; refuse the move.
-	[[ "$value" == *$'\n'* ]] && {
-		unset value
-		secret_die "'$name' is multi-line (a file secret); pass would truncate it to line 1"
 		return 1
 	}
 	printf '%s' "$value" | secret_write_pass "$sub/$name" || {

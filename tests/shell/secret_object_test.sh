@@ -184,10 +184,23 @@ secret_promote P_EMPTY 2>/dev/null
 is "promoting an empty entry writes no bastion copy" \
 	"$([ -e "$T/.secrets/P_EMPTY.age" ] && echo yes || echo no)" "no"
 
-printf 'line one\nline two' | secret_write_age A_MULTI
-secret_demote A_MULTI personal 2>/dev/null
-is "a multi-line secret is not demoted into pass" \
-	"$([ -e "$T/.password-store/personal/A_MULTI.gpg" ] && echo yes || echo no)" "no"
+echo "== multi-line values survive every path =="
+# Regression. secret_read truncated pass entries to line 1, so a PEM came back
+# as its BEGIN marker, and promote wrote that truncation into the bastion and
+# then deleted the original. demote used to refuse multi-line for the same
+# reason; the writer was always `pass insert -m`, so only the reader was wrong.
+multi=$'-----BEGIN PRIVATE KEY-----\nMIIsecret\n-----END PRIVATE KEY-----'
+printf '%s' "$multi" | secret_write_pass personal/P_MULTI
+is "a multi-line pass secret reads back whole" "$(secret_read P_MULTI)" "$multi"
+secret_promote P_MULTI
+is "promote keeps every line" "$(secret_read P_MULTI)" "$multi"
+is "promote moved it to the bastion" "$(field P_MULTI 2)" "age"
+
+printf '%s' "$multi" | secret_write_age A_MULTI
+secret_demote A_MULTI personal
+is "a multi-line secret demotes into pass" \
+	"$([ -e "$T/.password-store/personal/A_MULTI.gpg" ] && echo yes || echo no)" "yes"
+is "demote keeps every line" "$(secret_read A_MULTI)" "$multi"
 
 printf '\n%d passed, %d failed\n' "$pass_n" "$fail_n"
 ((fail_n == 0))
