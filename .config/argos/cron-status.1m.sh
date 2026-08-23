@@ -22,6 +22,10 @@ NEXT_RUN="$HOME/dev/dotfiles/scripts/__cron_next_run.py"
 # item, argos re-reads state the moment the trigger exits, so the row flips to
 # running immediately rather than at the next tick.
 TRIGGER="$HOME/dev/dotfiles/scripts/__cron_trigger.sh"
+# Clears a read `hit` off the badge. No terminal for the same reason as the
+# trigger: it rewrites one state file and exits, and refresh=true on the menu
+# item makes the star disappear on the click rather than a tick later.
+ACK="$HOME/dev/dotfiles/scripts/__cron_ack.sh"
 
 # Argos renders every line as pango markup, so any bare `<`, `>` or `&` in a
 # row aborts the parse and GNOME prints argos's own <span font_family=...>
@@ -296,6 +300,13 @@ crontab -l 2>/dev/null | while IFS= read -r line; do
         fi
     else
         echo "--📄 no log yet | bash='true' terminal=false"
+    fi
+    # Only a hit is ackable, and only while it is one: the badge is latched to
+    # the last exit code, so a job that runs twice a week can hold a star over
+    # mail read two days ago. Errors get no such entry on purpose (see
+    # __cron_ack.sh) -- red has to keep meaning "this wants fixing".
+    if [ "$state" = "hit" ]; then
+        echo "--★ mark as read | bash='${ACK} \"${job}\"' terminal=false refresh=true"
     fi
     echo "--▶ run now | bash='${TRIGGER} \"${job}\"' terminal=false refresh=true"
 done
