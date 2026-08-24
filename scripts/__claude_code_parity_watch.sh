@@ -19,6 +19,12 @@ AGENTS_MCP_DIR="${AGENTS_MCP_DIR:-$HOME/dev/agents-mcp-server}"
 STATE_FILE="${PARITY_WATCH_STATE:-$HOME/.local/state/claude-code-parity-watch.json}"
 RECIPIENT="${PARITY_WATCH_RECIPIENT:-piotrzan@gmail.com}"
 MAILER="${PARITY_WATCH_MAILER:-msmtp ${RECIPIENT}}"
+# Absolute, because cron's PATH is /usr/{local/,}{s,}bin:/snap/bin and claude is
+# in none of them. It used to be reachable, then the 2026-08-23 install moved it
+# under ~/.local/bin and every run since exited 127 at the agent call. Point at
+# the symlink, not versions/<n>, so a version bump keeps working. Same pin as
+# __rss_brief.sh, the other cron job that drives claude.
+CLAUDE_BIN="${PARITY_WATCH_CLAUDE_BIN:-$HOME/.local/bin/claude}"
 
 # Everything this script says goes to stdout, which is the only channel
 # __cron_run.sh can capture. Print each step before it runs and its result
@@ -174,13 +180,21 @@ event_filter='
     "  · agent finished: \($e.subtype // "?") in \((($e.duration_ms // 0) / 1000) | floor)s, \($e.num_turns // 0) turns"
   else empty end'
 
+# Checked here rather than at the top: a run that is still on the last-checked
+# release exits before this point and never needs the agent, so a missing binary
+# must not turn those quiet runs into errors.
+if [ ! -x "$CLAUDE_BIN" ]; then
+	log ERROR "claude not executable at ${CLAUDE_BIN}; set PARITY_WATCH_CLAUDE_BIN or fix the install"
+	exit 1
+fi
+
 log INFO "invoking sonnet agent against ${AGENTS_MCP_DIR}; its tool calls stream below"
 ev_file="$(mktemp)"
 err_file="$(mktemp)"
 agent_start=$(date +%s)
 
 set +e
-command claude --print --model claude-sonnet-5 \
+"$CLAUDE_BIN" --print --model claude-sonnet-5 \
 	--output-format stream-json --verbose \
 	--add-dir "$AGENTS_MCP_DIR" \
 	--allowedTools "Read" "Grep" "Glob" \
