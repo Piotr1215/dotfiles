@@ -123,7 +123,7 @@ alias tadit='vim ~/.taskrc'
 alias tuic='task current'
 alias tuid='task workdone'
 alias tuiw='task context work; TERM=screen-256color NCURSES_NO_UTF8_ACS=1 tui --report current'
-alias tuig='task context gordon; TERM=screen-256color NCURSES_NO_UTF8_ACS=1 tui --report current'
+alias tuig='task context gordon; TERM=screen-256color NCURSES_NO_UTF8_ACS=1 tui --report gordon'
 alias tuih='task context home; tui --report current'
 alias timesum='__summarize_timew.py'
 alias uxp="just ~/dev/dotfiles/scripts/uxp-setup/setup_infra"
