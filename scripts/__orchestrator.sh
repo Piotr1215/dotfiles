@@ -3,6 +3,12 @@ set -euo pipefail
 
 # Pick an installed skill or command and insert its invocation into the pane that
 # opened us. Nothing is submitted: the user keeps the final say.
+#
+# UNBOUND since 2026-08-24. M-i was this picker and went unused; the key now
+# cycles subagent sessions (__cycle_agent_session.sh). Kept because skills
+# auto-fire but commands still do not, so the catalog has a reader. Run it with
+# a pane id to get the old behaviour back:
+#   __orchestrator.sh "$(tmux display-message -p '#{pane_id}')"
 
 target_pane="${1:-}"
 error_log="${XDG_CACHE_HOME:-$HOME/.cache}/capability-picker.log"

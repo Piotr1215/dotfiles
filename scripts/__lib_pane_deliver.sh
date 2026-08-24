@@ -2,7 +2,7 @@
 # __lib_pane_deliver.sh - put text into the tmux pane a popup was opened from.
 #
 # Sourced by the popup tools that hand work back to the pane underneath them:
-# __orchestrator.sh (M-i, skill invocations) and __ddgx.sh (M-g, search result
+# __orchestrator.sh (skill invocations) and __ddgx.sh (M-g, search result
 # extracts). One copy, because both were solving the same problem and only one
 # of them had solved it correctly.
 #
