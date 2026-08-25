@@ -1,0 +1,40 @@
+{
+  "data": {
+    "issues": {
+      "nodes": [
+        {
+          "identifier": "OPS-101",
+          "title": "rotate the deploy key",
+          "url": "https://linear.app/acme/issue/OPS-101/rotate-the-deploy-key",
+          "description": "The deploy key is shared between two pipelines.\n\nSplit it so a revocation does not take both down.",
+          "state": { "name": "In Progress" },
+          "team": { "key": "OPS" },
+          "assignee": { "name": "Ada Lovelace" },
+          "priority": 2,
+          "updatedAt": "2026-08-20T09:14:00.000Z",
+          "comments": {
+            "nodes": [
+              {
+                "body": "Blocked on quokkavault until the new namespace lands.",
+                "createdAt": "2026-08-21T11:02:00.000Z",
+                "user": { "name": "Grace Hopper" }
+              }
+            ]
+          }
+        },
+        {
+          "identifier": "DOC-202",
+          "title": "document the retention window",
+          "url": "https://linear.app/acme/issue/DOC-202/document-the-retention-window",
+          "description": null,
+          "state": { "name": "Backlog" },
+          "team": { "key": "DOC" },
+          "assignee": null,
+          "priority": 0,
+          "updatedAt": "2026-08-19T16:40:00.000Z",
+          "comments": { "nodes": [] }
+        }
+      ]
+    }
+  }
+}
