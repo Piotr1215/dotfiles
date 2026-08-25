@@ -1,0 +1,35 @@
+[
+  {
+    "thread": "000000000000c569",
+    "timestamp": 1787641500,
+    "date_relative": "Today 07:05",
+    "matched": 1,
+    "total": 2,
+    "authors": "Peter Vine, Charlie Stace",
+    "subject": "Dedicated GPU Servers\tRapidSwitch\nquote attached",
+    "tags": ["inbox", "unread"],
+    "query": ["id:one@example.com", null]
+  },
+  {
+    "thread": "000000000000bf84",
+    "timestamp": 1787300000,
+    "date_relative": "Fri. 12:49",
+    "matched": 2,
+    "total": 3,
+    "authors": "Sarah Mandel",
+    "subject": "Loft Labs / Netlify Renewal Clarification",
+    "tags": ["inbox", "flagged", "replied"],
+    "query": ["id:two@example.com", null]
+  },
+  {
+    "thread": "0000000000007bc8",
+    "timestamp": 1780000000,
+    "date_relative": "2025-09-08",
+    "matched": 1,
+    "total": 1,
+    "authors": "NukeTopic",
+    "subject": "[devops] Nuke Account Cleanser Succeeded",
+    "tags": ["inbox"],
+    "query": ["id:three@example.com", null]
+  }
+]

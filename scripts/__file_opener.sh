@@ -155,6 +155,16 @@ PR_BIND="ctrl-g:execute-silent(touch $RETURN_MARKER)+execute(~/dev/dotfiles/scri
 # NOTE: cannot use Ctrl+I — terminals send it identical to Tab (0x09), which collides with PASTE_BIND
 LINEAR_BIND="ctrl-l:execute(~/dev/dotfiles/scripts/__linear_issue_viewer.sh)+abort"
 
+# Work mail binding (Ctrl+N for notmuch) - same shape as Linear above.
+# NOTE: cannot use Ctrl+M - terminals send it identical to Enter (0x0d), which
+# would hijack opening the selected item
+MAIL_BIND="ctrl-n:execute(~/dev/dotfiles/scripts/__mail_search_viewer.sh)+abort"
+
+# Raise the mail assistant (Ctrl+R for ursula). Bare, so it only switches to her
+# pane: the script types nothing without a thread id, and handing over an actual
+# thread is C-r inside the mail picker instead.
+MAIL_AGENT_BIND="ctrl-r:execute(~/dev/dotfiles/scripts/__mail_agent_spawn.sh)+abort"
+
 # Edit tmuxinator config (Ctrl+E) - only works on sessions
 EDIT_BIND="ctrl-e:execute(item={}; name=\$(~/dev/dotfiles/scripts/__tmux_session_choices.sh resolve \"\$item\" 2>/dev/null || printf '%s' \"\$item\"); [[ -f ~/.config/tmuxinator/\${name}.yml ]] && nvim ~/.config/tmuxinator/\${name}.yml)+abort"
 
@@ -220,7 +230,8 @@ while true; do
                 echo "Preview not available"
             fi' \
         --preview-window 'right:50%:wrap' \
-        --header ' ↳ worker  C-f:30d C-x:home C-b:marks C-o:github C-g:PRs C-l:Linear C-s:search-panes C-d:toggles C-e:edit C-u:music C-k:kctx | C-y:copy Tab:paste' \
+        --header ' ↳ worker  C-f:30d C-x:home C-b:marks C-o:github C-g:PRs C-l:Linear C-n:mail C-r:ursula C-s:search-panes
+ C-d:toggles C-e:edit C-u:music C-k:kctx | C-y:copy Tab:paste' \
         --prompt 'all> ' \
         --bind "$HOME_BIND" \
         --bind "$FILE_BIND" \
@@ -228,6 +239,8 @@ while true; do
         --bind "$GITHUB_BIND" \
         --bind "$PR_BIND" \
         --bind "$LINEAR_BIND" \
+        --bind "$MAIL_BIND" \
+        --bind "$MAIL_AGENT_BIND" \
         --bind "$EDIT_BIND" \
         --bind "$MUSIC_BIND" \
         --bind "$KCTX_BIND" \
