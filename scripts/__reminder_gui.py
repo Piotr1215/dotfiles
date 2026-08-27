@@ -105,6 +105,19 @@ class ReminderDialog:
         when.set_placeholder_text("10m, 2h, eod, or 14:40 tomorrow")
         self.add(content, when, True)
 
+        self.add(content, self.label("Notes (urls, paths, context)"))
+        notes = Gtk.TextView()
+        notes.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
+        notes.set_accepts_tab(False)
+        notes_buffer = notes.get_buffer()
+        notes_buffer.set_text(str(self.request.get("notes", "")))
+        notes_scroll = Gtk.ScrolledWindow()
+        notes_scroll.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+        notes_scroll.set_shadow_type(Gtk.ShadowType.IN)
+        notes_scroll.set_min_content_height(110)
+        notes_scroll.add(notes)
+        self.add(content, notes_scroll, True)
+
         error = self.label("")
         error.get_style_context().add_class("error")
         self.add(content, error)
@@ -115,7 +128,11 @@ class ReminderDialog:
             if not reminder_text or not schedule:
                 error.set_text("Enter both reminder text and a time.")
                 return
-            self.finish({"message": reminder_text, "when": schedule})
+            start, end = notes_buffer.get_bounds()
+            notes_text = notes_buffer.get_text(start, end, False).strip()
+            self.finish(
+                {"message": reminder_text, "when": schedule, "notes": notes_text}
+            )
 
         actions = self.actions(content)
         self.add_cancel(actions)
@@ -172,6 +189,20 @@ class ReminderDialog:
         window, content = self.window("Reminder", 420)
         self.add(content, self.label(str(self.request.get("message", "Reminder"))))
 
+        notes = str(self.request.get("notes", "")).strip()
+        if notes:
+            view = Gtk.TextView()
+            view.set_editable(False)
+            view.set_cursor_visible(False)
+            view.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
+            view.get_buffer().set_text(notes)
+            scroll = Gtk.ScrolledWindow()
+            scroll.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+            scroll.set_shadow_type(Gtk.ShadowType.IN)
+            scroll.set_min_content_height(90)
+            scroll.add(view)
+            self.add(content, scroll, True)
+
         snooze_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         self.add(snooze_row, self.label("Snooze for"))
         minutes = Gtk.SpinButton.new_with_range(1, 1440, 1)
@@ -181,6 +212,12 @@ class ReminderDialog:
         self.add(content, snooze_row)
 
         actions = self.actions(content)
+        # The helper owns opening: it holds the url and calls the shared
+        # taskopen opener, so this button only names the action.
+        if str(self.request.get("url", "")).strip():
+            open_link = Gtk.Button(label="Open link")
+            open_link.connect("clicked", lambda *_args: self.finish({"action": "open"}))
+            self.add(actions, open_link)
         snooze = Gtk.Button(label="Snooze")
         snooze.connect(
             "clicked",

@@ -13,7 +13,10 @@ setup() {
   export TEST_AT_ARGS="${BATS_TEST_TMPDIR}/at.args"
   export TEST_ATRM="${BATS_TEST_TMPDIR}/atrm.log"
   export TEST_NEXT_JOB="${BATS_TEST_TMPDIR}/next-job"
+  export TEST_OPENER_LOG="${BATS_TEST_TMPDIR}/opener.log"
+  export TEST_ALERT_REQUEST="${BATS_TEST_TMPDIR}/alert.json"
   export REMINDER_GUI="$BIN/reminder-gui"
+  export REMINDER_URL_OPENER="$BIN/url-opener"
   export PATH="$BIN:$PATH"
 
   : >"$TEST_ATQ"
@@ -38,11 +41,22 @@ EOF
 printf '%s\n' "$*" >>"$TEST_ATRM"
 EOF
 
-  chmod +x "$BIN/at" "$BIN/atq" "$BIN/atrm"
+  cat >"$BIN/url-opener" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >>"$TEST_OPENER_LOG"
+EOF
+
+  chmod +x "$BIN/at" "$BIN/atq" "$BIN/atrm" "$BIN/url-opener"
 }
 
 encode() {
   printf '%s' "$1" | base64 -w0
+}
+
+# A state row is "job_id \t base64(text) \t base64(notes)". Empty notes encode
+# to an empty string, so a reminder without notes still writes three fields.
+row() {
+  printf '%s\t%s\t%s' "$1" "$(encode "$2")" "$(encode "${3:-}")"
 }
 
 @test "scheduling records the at job without putting raw text in the job" {
@@ -50,7 +64,7 @@ encode() {
 
   [ "$status" -eq 0 ]
   encoded="$(encode "Don't blink")"
-  [ "$(<"$REMINDER_STATE_FILE")" = $'42\t'"$encoded" ]
+  [ "$(<"$REMINDER_STATE_FILE")" = "$(row 42 "Don't blink")" ]
   [ "$(<"$TEST_AT_ARGS")" = "now + 10 minutes" ]
   [[ "$(<"$TEST_AT_STDIN")" == *"--notify $encoded"* ]]
   [[ "$(<"$TEST_AT_STDIN")" != *"Don't blink"* ]]
@@ -78,7 +92,7 @@ EOF
   [[ "$output" == *$'42\tSun Aug 16 14:40:00 2026\t'"$active"* ]]
   [[ "$output" == *$'7\tMon Aug 17 09:00:00 2026\t'* ]]
   [[ "$output" != *$'99\t'* ]]
-  [[ "$(<"$REMINDER_STATE_FILE")" == $'42\t'"$active" ]]
+  [ "$(<"$REMINDER_STATE_FILE")" = "$(row 42 'Review plan')" ]
 }
 
 @test "editing schedules the replacement before removing the old job" {
@@ -99,7 +113,7 @@ EOF
 
   [ "$status" -eq 0 ]
   [ "$(<"$TEST_ATRM")" = "42" ]
-  [[ "$(<"$REMINDER_STATE_FILE")" == $'43\t'"$edited" ]]
+  [ "$(<"$REMINDER_STATE_FILE")" = "$(row 43 'Edited reminder')" ]
 }
 
 @test "editing only the text keeps the existing reminder time" {
@@ -122,7 +136,7 @@ EOF
   [ "$status" -eq 0 ]
   [ "$(<"$TEST_AT_ARGS")" = "-t 202608161440" ]
   [ "$(<"$TEST_ATRM")" = "42" ]
-  [[ "$(<"$REMINDER_STATE_FILE")" == $'43\t'"$edited" ]]
+  [ "$(<"$REMINDER_STATE_FILE")" = "$(row 43 'New description')" ]
 }
 
 @test "an untracked at job can be named without reading its job body" {
@@ -138,7 +152,7 @@ EOF
   run "$REMINDER" --adopt-dialog 7
 
   [ "$status" -eq 0 ]
-  [[ "$(<"$REMINDER_STATE_FILE")" == $'7\t'"$named" ]]
+  [ "$(<"$REMINDER_STATE_FILE")" = "$(row 7 'Run eval with Codex')" ]
 }
 
 @test "the GTK add form returns reminder text and schedule together" {
@@ -152,8 +166,7 @@ EOF
   run "$REMINDER" --add-dialog
 
   [ "$status" -eq 0 ]
-  encoded="$(encode 'Stand up')"
-  [[ "$(<"$REMINDER_STATE_FILE")" == $'42\t'"$encoded" ]]
+  [ "$(<"$REMINDER_STATE_FILE")" = "$(row 42 'Stand up')" ]
   [ "$(<"$TEST_AT_ARGS")" = "now + 15 minutes" ]
 }
 
@@ -201,4 +214,136 @@ EOF
   [[ "$output" == *">0</span>"* ]]
   [[ "$output" == *"No active reminders"* ]]
   [[ "$output" == *"Add reminder"* ]]
+}
+
+@test "notes travel base64 into the job body and the state row" {
+  run "$REMINDER" 'Call vodafone' 2h --note 'link: https://vodafone.de/kontakt'
+
+  [ "$status" -eq 0 ]
+  [ "$(<"$REMINDER_STATE_FILE")" = "$(row 42 'Call vodafone' 'link: https://vodafone.de/kontakt')" ]
+  [ "$(<"$TEST_AT_ARGS")" = "now + 2 hours" ]
+  [[ "$(<"$TEST_AT_STDIN")" == *"$(encode 'link: https://vodafone.de/kontakt')"* ]]
+  [[ "$(<"$TEST_AT_STDIN")" != *"vodafone.de"* ]]
+}
+
+@test "open-link prefers a labelled link over a bare url" {
+  row 42 'Call vodafone' 'context https://example.com/other
+link: https://vodafone.de/kontakt' >"$REMINDER_STATE_FILE"
+
+  run "$REMINDER" --open-link 42
+
+  [ "$status" -eq 0 ]
+  [ "$(<"$TEST_OPENER_LOG")" = "https://vodafone.de/kontakt" ]
+}
+
+@test "open-link falls back to the first bare url in the notes" {
+  row 42 'Read this' 'see https://example.com/a then https://example.com/b' >"$REMINDER_STATE_FILE"
+
+  run "$REMINDER" --open-link 42
+
+  [ "$status" -eq 0 ]
+  [ "$(<"$TEST_OPENER_LOG")" = "https://example.com/a" ]
+}
+
+@test "open-link on a reminder with no url reports instead of opening" {
+  row 42 'Plain reminder' 'just some context, no link at all' >"$REMINDER_STATE_FILE"
+  cat >"$REMINDER_GUI" <<'EOF'
+#!/usr/bin/env bash
+cat >/dev/null
+printf '{"closed":true}\n'
+EOF
+  chmod +x "$REMINDER_GUI"
+
+  run "$REMINDER" --open-link 42
+
+  [ "$status" -ne 0 ]
+  [ ! -s "$TEST_OPENER_LOG" ]
+}
+
+@test "a state row written before notes existed still edits and gains notes" {
+  printf '42\t%s\n' "$(encode 'Legacy reminder')" >"$REMINDER_STATE_FILE"
+  printf '42 Sun Aug 16 14:40:00 2026 a decoder\n' >"$TEST_ATQ"
+  printf '43\n' >"$TEST_NEXT_JOB"
+  cat >"$REMINDER_GUI" <<'EOF'
+#!/usr/bin/env bash
+cat >/dev/null
+printf '{"message":"Legacy reminder","when":"20m","notes":"link: https://example.com/x"}\n'
+EOF
+  chmod +x "$REMINDER_GUI"
+
+  run "$REMINDER" --edit-dialog 42
+
+  [ "$status" -eq 0 ]
+  [ "$(<"$TEST_ATRM")" = "42" ]
+  [ "$(<"$REMINDER_STATE_FILE")" = "$(row 43 'Legacy reminder' 'link: https://example.com/x')" ]
+}
+
+@test "a fired reminder hands its notes and resolved url to the alert" {
+  cat >"$REMINDER_GUI" <<'EOF'
+#!/usr/bin/env bash
+cat >"$TEST_ALERT_REQUEST"
+printf '{"action":""}\n'
+EOF
+  chmod +x "$REMINDER_GUI"
+
+  run "$REMINDER" --notify "$(encode 'Call vodafone')" "$(encode 'link: https://vodafone.de/kontakt')"
+
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.message' <"$TEST_ALERT_REQUEST")" = "Call vodafone" ]
+  [ "$(jq -r '.notes' <"$TEST_ALERT_REQUEST")" = "link: https://vodafone.de/kontakt" ]
+  [ "$(jq -r '.url' <"$TEST_ALERT_REQUEST")" = "https://vodafone.de/kontakt" ]
+}
+
+@test "a reminder queued before notes existed still fires" {
+  cat >"$REMINDER_GUI" <<'EOF'
+#!/usr/bin/env bash
+cat >"$TEST_ALERT_REQUEST"
+printf '{"action":""}\n'
+EOF
+  chmod +x "$REMINDER_GUI"
+
+  run "$REMINDER" --notify "$(encode 'Old style reminder')"
+
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.message' <"$TEST_ALERT_REQUEST")" = "Old style reminder" ]
+  [ "$(jq -r '.url' <"$TEST_ALERT_REQUEST")" = "" ]
+}
+
+@test "the Argos applet offers Open link and passes the job id, never the url" {
+  tracked="$(encode 'Call vodafone')"
+  noted="$(encode 'link: https://vodafone.de/kontakt')"
+  cat >"$BIN/reminder-helper" <<EOF
+#!/usr/bin/env bash
+if [ "\$1" = --records ]; then
+  printf '42\\tSun Aug 16 14:40:00 2026\\t%s\\t%s\\n' '$tracked' '$noted'
+fi
+EOF
+  chmod +x "$BIN/reminder-helper"
+
+  run env REMINDER_HELPER="$BIN/reminder-helper" "$ARGOS"
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Open link"* ]]
+  [[ "$output" == *"--open-link 42"* ]]
+  [[ "$output" == *"link: https://vodafone.de/kontakt"* ]]
+  ! grep -q "bash=.*vodafone\.de" <<<"$output"
+}
+
+@test "the Argos applet omits Open link when the notes carry no url" {
+  tracked="$(encode 'Call vodafone')"
+  noted="$(encode 'ask about the router swap')"
+  cat >"$BIN/reminder-helper" <<EOF
+#!/usr/bin/env bash
+if [ "\$1" = --records ]; then
+  printf '42\\tSun Aug 16 14:40:00 2026\\t%s\\t%s\\n' '$tracked' '$noted'
+fi
+EOF
+  chmod +x "$BIN/reminder-helper"
+
+  run env REMINDER_HELPER="$BIN/reminder-helper" "$ARGOS"
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"ask about the router swap"* ]]
+  [[ "$output" != *"Open link"* ]]
+  [[ "$output" != *"--open-link"* ]]
 }
