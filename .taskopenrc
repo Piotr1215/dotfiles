@@ -52,16 +52,19 @@ slack.modes="batch,any,normal"
 link.target=annotations
 link.labelregex="^link$"
 link.regex="(https?://[^\\s]+)"
-link.command="open $LAST_MATCH 2>/dev/null"
+link.command="__taskopen_url_open.sh $LAST_MATCH 2>/dev/null"
 link.modes="batch,any,normal"
 
+# __taskopen_url_open.sh, not a bare `open`: it opens the url AND tiles
+# browser + terminal. That tiling used to run unconditionally after every
+# taskopen call, so opening a file or a brief rearranged the desktop too.
 url.target=annotations
 # Everything EXCEPT the two labels that have their own opener above. Other
 # labelled annotations ("upstream: https://...") keep falling through to here,
 # which is what they did before and still should.
 url.labelregex="^(?!slack$|link$).*"
 url.regex="((?:www|http).*)"
-url.command="open $LAST_MATCH 2>/dev/null"
+url.command="__taskopen_url_open.sh $LAST_MATCH 2>/dev/null"
 url.modes="batch,any,normal"
 
 email.target=annotations
@@ -94,7 +97,7 @@ summary.modes="batch,any,normal"
 pr.target=annotations
 pr.labelregex=".*"
 pr.regex="^PR:(.*)"
-pr.command="open $LAST_MATCH 2>/dev/null"
+pr.command="__taskopen_url_open.sh $LAST_MATCH 2>/dev/null"
 pr.modes="batch,any,normal"
 
 [CLI]
