@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # PROJECT: ambient-triage
-# See: ops-triage-agent.md, __auto_triage_nudge.sh, __get_prs_for_review.sh,
+# See: skills/gordon/skills/gordon/references/interfaces.md,
+# __auto_triage_nudge.sh, __get_prs_for_review.sh,
 #      ~/.claude/tmp/pr-nudge-design.md (design)
 #
 # PR-movement to auto-dispatch watcher. Stage 0: DRY-RUN by default.

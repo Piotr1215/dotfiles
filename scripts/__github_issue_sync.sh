@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # PROJECT: taskwarrior-sync
-# See: __lib_taskwarrior_interop.sh, ops-autonomous-worker.md, ops-triage-agent.md
+# See: __lib_taskwarrior_interop.sh, ops-autonomous-worker.md, skills/gordon/
 # Related: task-resume-annotations (uses linear_issue_id for stable refs)
 #
 # Synchronizes Linear issues assigned to me with Taskwarrior.
