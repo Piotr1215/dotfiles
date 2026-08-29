@@ -18,6 +18,7 @@ query failed at exactly 4:00 while streaming, and the same query survives here.
 import argparse
 import json
 import os
+import subprocess
 import sys
 import time
 
@@ -221,12 +222,43 @@ def format_answer(agent_response):
     return text + references
 
 
+# The key reaches an interactive shell through direnv, which only runs from
+# ~/.zshrc. A tmux popup (M-g runs this behind __ddgx.sh) is a non-interactive
+# shell inheriting the tmux server environment, so the variable is simply absent
+# there and the search died on a machine that holds the secret. Decrypt the same
+# password-store entry _pass_export reads in ~/.envrc, by the same gpg call, so
+# the fallback cannot disagree with the export about where the value lives.
+# PPLX_PASS_ENTRY overrides the entry for a store laid out differently.
+PASS_ENTRY = os.getenv("PPLX_PASS_ENTRY", "work/PPLX_API_KEY")
+
+
+def resolve_api_key():
+    key = os.getenv("PPLX_API_KEY")
+    if key:
+        return key
+    store = os.getenv("PASSWORD_STORE_DIR") or os.path.expanduser(
+        "~/.password-store"
+    )
+    try:
+        out = subprocess.run(
+            ["gpg", "-dq", "--", os.path.join(store, PASS_ENTRY + ".gpg")],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    return out.stdout.strip() if out.returncode == 0 else ""
+
+
 def main():
     args = parse_args()
 
-    api_key = os.getenv("PPLX_API_KEY")
+    api_key = resolve_api_key()
     if not api_key:
-        sys.exit("PPLX_API_KEY is not set")
+        sys.exit(
+            "PPLX_API_KEY is not set and %s could not be decrypted" % PASS_ENTRY
+        )
 
     session = requests.Session()
     session.headers.update(

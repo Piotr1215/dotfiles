@@ -111,11 +111,34 @@ get_visible_browser_window() {
 		[[ -n "$wid" ]] && printf "%d\n" "$wid"
 	fi
 }
+# Pick the Alacritty window a layout should act on.
+# xdotool search returns windows in stacking order, so the old `head -n 1` meant
+# "bottom-most terminal in the stack": with several Alacritty windows open, each
+# attached to its own tmux session, raising any window reshuffled the list and
+# the next layout tiled a different terminal, which reads as the split randomly
+# swapping tmux sessions. Prefer the focused window so the layout uses the
+# terminal in front of you, and fall back to the lowest XID (oldest window) so
+# repeat invocations stay put. Same fix as b181293c, applied to every pick.
+get_alacritty_window() {
+	local -a windows
+	mapfile -t windows < <(xdotool search --onlyvisible --classname Alacritty 2>/dev/null | sort -n)
+	[[ ${#windows[@]} -eq 0 ]] && return 1
+
+	local active w
+	active=$(xdotool getactivewindow 2>/dev/null)
+	if [[ -n "$active" ]]; then
+		for w in "${windows[@]}"; do
+			[[ "$w" == "$active" ]] && { printf '%s\n' "$w"; return 0; }
+		done
+	fi
+
+	printf '%s\n' "${windows[0]}"
+}
 #}}}
 
 max_alacritty() {
 	local window
-	window=$(xdotool search --onlyvisible --classname Alacritty | head -n 1)
+	window=$(get_alacritty_window)
 	if [ -n "$window" ]; then
 		tile_max "$window"
 	else
@@ -124,7 +147,8 @@ max_alacritty() {
 }
 
 alacritty_firefox_vertical() {
-	local firefox_window alacritty_window
+	local alacritty_window="${1:-}"
+	local firefox_window
 	local -a browser_windows
 	mapfile -t browser_windows < <(get_browser_windows)
 
@@ -135,7 +159,7 @@ alacritty_firefox_vertical() {
 
 	firefox_window=$(cycle_browser_window "alacritty_browser" "${browser_windows[@]}")
 
-	alacritty_window=$(xdotool search --onlyvisible --classname Alacritty | head -n 1)
+	[[ -z "$alacritty_window" ]] && alacritty_window=$(get_alacritty_window)
 	if [[ -z "$alacritty_window" ]]; then
 		echo "No Alacritty window found."
 		return 1
@@ -147,7 +171,7 @@ alacritty_firefox_vertical() {
 
 firefox_firefox_vertical() {
 	local alacritty_window
-	alacritty_window=$(xdotool search --onlyvisible --classname Alacritty | head -n 1)
+	alacritty_window=$(get_alacritty_window)
 	if [ -n "$alacritty_window" ]; then
 		tile_minimize "$alacritty_window"
 	fi
@@ -214,7 +238,7 @@ slack_alacritty_vertical() {
 		exit 0
 	fi
 
-	alacritty_window=$(xdotool search --onlyvisible --classname Alacritty | head -n 1)
+	alacritty_window=$(get_alacritty_window)
 	if [ -z "$alacritty_window" ]; then
 		echo "No Alacritty window found."
 		return 1
@@ -232,7 +256,7 @@ firefox_firefox_alacritty() {
 
 	local firefox_windows alacritty
 	firefox_windows=($(get_browser_windows | head -n 2))
-	alacritty=$(xdotool search --onlyvisible --classname Alacritty | head -n 1)
+	alacritty=$(get_alacritty_window)
 
 	if [ ${#firefox_windows[@]} -eq 2 ] && [ -n "$alacritty" ]; then
 		tile_place "${firefox_windows[0]}" "$WA_X" "$WA_Y" "$half_w" "$half_h"
@@ -255,7 +279,7 @@ slack_browser_alacritty() {
 	local slack browser alacritty
 	slack=$(xdotool search --onlyvisible --classname Slack | head -n 1)
 	browser=$(get_visible_browser_window | head -n 1)
-	alacritty=$(xdotool search --onlyvisible --classname Alacritty | head -n 1)
+	alacritty=$(get_alacritty_window)
 
 	if [[ -n "$slack" && -n "$browser" && -n "$alacritty" ]]; then
 		tile_place "$slack" "$WA_X" "$WA_Y" "$third_w" "$WA_H"
@@ -311,7 +335,7 @@ browser_browser_alacritty_slack() {
 
 	local browsers alacritty slack
 	browsers=($(get_browser_windows | head -n 2))
-	alacritty=$(xdotool search --onlyvisible --classname Alacritty | head -n 1)
+	alacritty=$(get_alacritty_window)
 	slack=$(xdotool search --onlyvisible --classname Slack | head -n 1)
 
 	if [[ ${#browsers[@]} -ge 2 && -n "$alacritty" && -n "$slack" ]]; then
@@ -331,7 +355,7 @@ browser_browser_browser_alacritty() {
 
 	local browsers alacritty
 	browsers=($(get_browser_windows | head -n 3))
-	alacritty=$(xdotool search --onlyvisible --classname Alacritty | head -n 1)
+	alacritty=$(get_alacritty_window)
 
 	if [[ ${#browsers[@]} -ge 3 && -n "$alacritty" ]]; then
 		tile_place "${browsers[0]}" "$WA_X" "$WA_Y" "$half_w" "$half_h"
@@ -378,7 +402,7 @@ chatgpt_alacritty_vertical() {
 		return 1
 	fi
 
-	alacritty_window=$(xdotool search --onlyvisible --classname Alacritty | head -n 1)
+	alacritty_window=$(get_alacritty_window)
 	if [[ -z "$alacritty_window" ]]; then
 		echo "No Alacritty window found."
 		return 1
@@ -411,14 +435,17 @@ alacritty_alacritty_vertical() {
 # lands after the tiling, so the activate is re-asserted for ~2s to win that
 # race; a single call is silently overridden.
 alacritty_firefox_vertical_focus_terminal() {
-	alacritty_firefox_vertical || return 1
-
+	# Resolve the terminal before tiling: Chrome raises itself while the layout
+	# runs, so a second lookup afterwards can hand back a different window than
+	# the one that was tiled.
 	local alacritty_window i
-	alacritty_window=$(xdotool search --onlyvisible --classname Alacritty | head -n 1)
+	alacritty_window=$(get_alacritty_window)
 	if [[ -z "$alacritty_window" ]]; then
 		echo "No Alacritty window found." >&2
 		return 1
 	fi
+
+	alacritty_firefox_vertical "$alacritty_window" || return 1
 
 	for ((i = 0; i < 8; i++)); do
 		xdotool windowactivate "$alacritty_window" >/dev/null 2>&1

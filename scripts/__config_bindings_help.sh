@@ -28,7 +28,7 @@ format_for_clipboard() {
 # __ddgx.sh. Falls back to the definition, with its line, when the command names
 # no path of its own (plain tmux verbs, zsh aliases, nvim keymaps).
 binding_payload() {
-    local selection="$1" target file_line file line
+    local selection="$1" cand suffix file_line file line
 
     # A tmuxinator row's description IS its root directory, so the generic path
     # scan below would hand back the project dir instead of the session file
@@ -39,15 +39,24 @@ binding_payload() {
         return 0
     fi
 
-    target=$(echo "$selection" | grep -oE '(/[^ ]+|~[^ ]+|\$HOME[^ ]+)' | head -1)
-    target="${target%\"}"
-    target="${target%\'}"
-    target="${target/#\~/$HOME}"
-    target="${target/#\$HOME/$HOME}"
-    if [[ -n "$target" && -e "$target" ]]; then
-        printf '%s' "$target"
-        return 0
-    fi
+    # Every path-looking token, first one that is really there wins. Taking
+    # just the first match picked /dev/null out of "2>/dev/null" and stopped,
+    # because a command line is full of paths that are not the target.
+    while read -r cand; do
+        cand="${cand%[\"\',:;)]}"
+        cand="${cand/#\~/$HOME}"
+        cand="${cand/#\$HOME/$HOME}"
+        suffix=""
+        if [[ "$cand" =~ ^(.+):([0-9]+)$ ]]; then
+            cand="${BASH_REMATCH[1]}"
+            suffix=":${BASH_REMATCH[2]}"
+        fi
+        case "$cand" in /dev/*|/proc/*) continue ;; esac
+        if [[ -f "$cand" ]]; then
+            printf '%s%s' "$cand" "$suffix"
+            return 0
+        fi
+    done < <(echo "$selection" | grep -oE '(/[^ ]+|~/[^ ]+|\$HOME/[^ ]+)')
 
     file_line=$(echo "$selection" | awk '{print $NF}')
     file="${file_line%:*}"

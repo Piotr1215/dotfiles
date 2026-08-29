@@ -140,15 +140,16 @@ key = "mods+key"
 desc = "action+chars"
 type = "alacritty"
 
-# fzf sub-bindings: the keys that only exist once a picker is already open, so
-# M-x's Ctrl-L and M-g's Alt-H become findable next to the M-x and M-g that
-# reach them. Only real key names are taken; a --bind on an fzf event (start,
-# change, focus) is not a keybinding, and a $VAR indirection has no key to show.
+# fzf sub-bindings, from the generated index. The useful row is "M-x ctrl-l",
+# and its two halves live in different files: .tmux.conf says M-x runs
+# __file_opener.sh, __file_opener.sh says ctrl-l jumps to a line. confhelp reads
+# one line of one file at a time and cannot join them, so __fzf_bindings_gen.sh
+# does the join and this reads the result. Rerun the generator after adding a
+# picker key.
 [fzf]
-paths = ["scripts/*.sh", ".zsh_functions"]
-match_line = '''--bind[= ]['"]?(?:(?:ctrl|alt|shift)-|tab|enter|esc|f[0-9])'''
-regex = '''--bind[= ]['"]?((?:ctrl|alt|shift)-[a-zA-Z0-9-]+|tab|enter|esc|f[0-9]+):(.*)'''
+paths = ["scripts/__fzf_bindings.conf"]
+skip_comment = true
+regex = '^([^;]+);(.+)$'
 key_group = 1
 desc_group = 2
-truncate = 55
 type = "fzf"

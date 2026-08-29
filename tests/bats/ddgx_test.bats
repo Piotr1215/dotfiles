@@ -2230,3 +2230,580 @@ run_follow() {
 	[ "$status" -eq 0 ]
 	[[ "$output" == *"enter asks a follow-up"* ]]
 }
+
+# --------------------------------------------------------------------------
+# @ — the manual, searched over the page bodies.
+# --------------------------------------------------------------------------
+
+# A corpus of four pages standing in for the 191 real ones, holding every shape
+# the ranker has to survive: prose, a term that only appears inside markup, and
+# a page whose match is split across two lines.
+write_docs_corpus() {
+	DOCS_DIR="$BATS_TEST_TMPDIR/claude-docs"
+	mkdir -p "$DOCS_DIR/pages/agent-sdk"
+	cat >"$DOCS_DIR/llms.txt" <<'INDEX'
+# Claude Code Docs
+
+## Reference
+- [Hooks reference](https://code.claude.com/docs/en/hooks.md): Reference for hook events.
+- [Automate actions with hooks](https://code.claude.com/docs/en/hooks-guide.md): A quickstart.
+- [Settings reference](https://code.claude.com/docs/en/settings-reference.md): Every setting.
+- [Agent SDK hooks](https://code.claude.com/docs/en/agent-sdk/hooks.md): SDK hooks.
+INDEX
+	cat >"$DOCS_DIR/pages/hooks.md" <<'PAGE'
+> ## Documentation Index
+> Fetch the complete documentation index at: https://code.claude.com/docs/llms.txt
+
+# Hooks reference
+
+A matcher filters which tool calls a PreToolUse hook sees.
+The matcher is a string, and precedence runs from the narrowest.
+PreToolUse fires before the tool runs. The matcher matches the tool name.
+PAGE
+	cat >"$DOCS_DIR/pages/hooks-guide.md" <<'PAGE'
+# Automate actions with hooks
+
+<Frame>
+  <img src="x.svg" alt="A diagram naming every matcher and its precedence" data-path="images/x.svg" />
+</Frame>
+
+Hooks run shell commands. This page never says the other word.
+PAGE
+	cat >"$DOCS_DIR/pages/settings-reference.md" <<'PAGE'
+# Settings reference
+
+Project settings live in settings.json and override the user file.
+Pass --skip-checks to bypass them.
+The hookSpecificOutput:additionalContext field carries text back.
+PAGE
+	cat >"$DOCS_DIR/pages/agent-sdk/hooks.md" <<'PAGE'
+# Agent SDK hooks
+
+The SDK exposes a matcher too.
+Its precedence is documented alongside the TypeScript types.
+PAGE
+	# Seed the extract cache for every page in the corpus. Dump mode extracts
+	# what it renders, and the url a docs hit carries is the live HTML page, so
+	# without this the docs tests reach code.claude.com for real: slow, and
+	# flaky in the way that matters, since a fetch slow enough to fall back can
+	# trip the very curl tripwire these tests use to prove they stayed offline.
+	local slug
+	for slug in hooks hooks-guide settings-reference agent-sdk/hooks; do
+		seed_cache "https://code.claude.com/docs/en/$slug" "extract of $slug"
+	done
+}
+
+# curl that fails loudly. Every docs test runs against a corpus already on
+# disk, so a test that reaches the network is a test that stopped proving what
+# it says it proves.
+stub_curl_tripwire() {
+	cat >"$STUB_BIN/curl" <<'EOF'
+#!/usr/bin/env bash
+echo "curl was called: $*" >&2
+exit 99
+EOF
+	chmod +x "$STUB_BIN/curl"
+}
+
+# ddgr that fails the same way, so "scoped to the docs" is proved rather than
+# assumed: a docs search that quietly fell through to the web would die here.
+stub_ddgr_tripwire() {
+	cat >"$STUB_BIN/ddgr" <<'EOF'
+#!/usr/bin/env bash
+echo "ddgr was called: $*" >&2
+exit 99
+EOF
+	chmod +x "$STUB_BIN/ddgr"
+}
+
+run_docs() {
+	write_docs_corpus
+	stub_curl_tripwire
+	stub_ddgr_tripwire
+	run env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" \
+		XDG_DATA_HOME="$DATA_HOME" DDGX_TTL=0 DDGX_DOCS_DIR="$DOCS_DIR" \
+		DDGX_NO_NETWORK=1 \
+		bash "$DDGX" "$@"
+}
+
+# The result set as JSON, which is what the picker and every mode read, and
+# what the rendered dump wraps to the width of a pane before showing.
+run_docs_json() {
+	write_docs_corpus
+	stub_curl_tripwire
+	stub_ddgr_tripwire
+	DOCS_SET="$BATS_TEST_TMPDIR/docs-result.json"
+	run env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" \
+		XDG_DATA_HOME="$DATA_HOME" DDGX_TTL=0 DDGX_DOCS_DIR="$DOCS_DIR" \
+		DDGX_NO_NETWORK=1 \
+		bash -c "source '$DDGX' >/dev/null 2>&1 || true
+			search_docs '$DOCS_SET' 8 '$1' >/dev/null"
+}
+
+@test "a leading @ searches the manual rather than the web" {
+	run_docs -d -l 0 '@ matcher precedence'
+
+	[ "$status" -eq 0 ]
+	[[ "$output" != *"ddgr was called"* ]]
+	[[ "$output" == *"Hooks reference"* ]]
+}
+
+@test "the @ is a mode marker and never reaches the terms" {
+	# A term arriving as "@matcher" matches nothing, so a hit proves the mark
+	# came off before the search.
+	run_docs -d -l 0 '@matcher'
+
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"Hooks reference"* ]]
+}
+
+@test "--docs looks up the manual without needing the prefix" {
+	run_docs -d -l 0 --docs 'matcher precedence'
+
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"Hooks reference"* ]]
+}
+
+@test "a hit points at the page, not at the .md twin it was searched in" {
+	# The whole reason preview, ctrl-e, ctrl-a and enter need no new code: the
+	# url is the same kind of url a web result carries. The .md twin reads
+	# worse than the extractor's render of the page, and __readable.mjs refuses
+	# it outright as text/markdown.
+	run_docs -d -l 0 '@ matcher precedence'
+
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"https://code.claude.com/docs/en/hooks"* ]]
+	[[ "$output" != *"hooks.md"* ]]
+}
+
+@test "a page qualifies only when every term is in it" {
+	# hooks-guide.md holds neither word outside its markup.
+	run_docs -d -l 0 '@ matcher precedence'
+
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"Hooks reference"* ]]
+	[[ "$output" == *"Agent SDK hooks"* ]]
+	[[ "$output" != *"Automate actions with hooks"* ]]
+}
+
+@test "the snippet carries the terms, not the lines before them" {
+	# The tool this replaces reported a page's best single LINE, so a result
+	# routinely showed one term out of two and read like a false positive. The
+	# assertion reads the abstract rather than the rendered dump, which wraps
+	# the snippet across however many columns the pane happens to have.
+	run_docs_json 'matcher precedence'
+
+	[ "$status" -eq 0 ]
+	abstract=$(jq -r '.[0].abstract' "$DOCS_SET")
+	[[ "$abstract" == *"matcher"* ]]
+	[[ "$abstract" == *"precedence"* ]]
+}
+
+@test "a snippet wider than the cap keeps the match, not the run-up to it" {
+	# A window is three lines and a term can sit in the last of them, so
+	# trimming from the left edge is how a snippet arrives showing the two
+	# lines BEFORE the match and none of it.
+	write_docs_corpus
+	stub_curl_tripwire
+	# Written after the fixture, and read by a call that does not rewrite it.
+	{
+		printf '# Padding\n\n'
+		printf 'Filler prose that carries none of the words being looked for.\n'
+		printf 'More filler, equally beside the point, and quite long as well.\n'
+		printf 'At the very end of the window sits the word obscureneedle.\n'
+	} >"$DOCS_DIR/pages/settings-reference.md"
+
+	run env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" \
+		XDG_DATA_HOME="$DATA_HOME" DDGX_TTL=0 DDGX_DOCS_DIR="$DOCS_DIR" \
+		DDGX_NO_NETWORK=1 \
+		DDGX_DOCS_SNIPPET=60 bash -c "source '$DDGX' >/dev/null 2>&1 || true
+			search_docs '$BATS_TEST_TMPDIR/cut.json' 8 'obscureneedle' >/dev/null
+			jq -r '.[0].abstract' '$BATS_TEST_TMPDIR/cut.json'"
+
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"obscureneedle"* ]]
+}
+
+@test "a term found only inside markup is not a mention" {
+	# hooks-guide.md carries both words, but only in an <img> alt attribute
+	# describing a diagram. Counting that is how a search invents a hit.
+	run_docs -d -l 0 '@ matcher precedence'
+
+	[ "$status" -eq 0 ]
+	[[ "$output" != *"Automate actions with hooks"* ]]
+}
+
+@test "a term is a literal string, not a pattern" {
+	# settings.json must not match settingsXjson, which is what a term handed
+	# to a regex engine would do.
+	run_docs -d -l 0 '@ settings.json'
+
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"Settings reference"* ]]
+}
+
+@test "a flag is a term, not an exclusion" {
+	# The corpus is a CLI manual, so a query opening with a dash is far more
+	# likely to be a flag than a word to drop. Reading --flag as DuckDuckGo's
+	# "exclude this" throws the whole query away and then blames the user for
+	# an empty one.
+	run_docs -d -l 0 '@ --skip-checks'
+
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"Settings reference"* ]]
+}
+
+@test "a colon in a term is content, not an operator" {
+	run_docs -d -l 0 '@ hookSpecificOutput:additionalContext'
+
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"Settings reference"* ]]
+}
+
+@test "duckduckgo's own operators are still dropped, by name" {
+	# There is one site in the manual, so site: cannot narrow it and searching
+	# for the literal string "site:code.claude.com" finds nothing.
+	run_docs -d -l 0 '@ site:code.claude.com matcher precedence'
+
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"Hooks reference"* ]]
+}
+
+@test "a query no page satisfies relaxes rather than failing" {
+	# The old tool answered this with an error and told you to retype the query
+	# under a --full flag. The next-best set is more use than the instruction.
+	run_docs -d -l 0 '@ matcher precedence zzzznotaword'
+
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"Hooks reference"* ]]
+}
+
+@test "the relaxation says so on the header rather than passing itself off" {
+	write_docs_corpus
+	stub_curl_tripwire
+	R="$BATS_TEST_TMPDIR/relaxed.json"
+	run env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" \
+		XDG_DATA_HOME="$DATA_HOME" DDGX_TTL=0 DDGX_DOCS_DIR="$DOCS_DIR" \
+		DDGX_NO_NETWORK=1 \
+		bash -c "source '$DDGX' >/dev/null 2>&1 || true
+			search_docs '$R' 8 'matcher precedence zzzznotaword' >/dev/null
+			printf '%s' \"\$DOCS_NOTE\""
+
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"no page carries all 3 terms"* ]]
+}
+
+@test "nothing in the manual is an error naming what was looked for" {
+	run_docs -d '@ zzzznotaword qqqqnope'
+
+	[ "$status" -eq 1 ]
+	[[ "$output" == *"nothing in the docs mentions"* ]]
+	[[ "$output" == *"zzzznotaword"* ]]
+}
+
+@test "a quoted phrase is one term" {
+	run_docs -d -l 0 '@ "the matcher matches"'
+
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"Hooks reference"* ]]
+	[[ "$output" != *"Agent SDK hooks"* ]]
+}
+
+@test "a corpus already on disk is not fetched again" {
+	# The copy refreshes on the ordinary TTL. A search that re-fetched 191
+	# pages every time would be a mirror maintained by hand with extra steps.
+	run_docs -d -l 0 '@ matcher precedence'
+
+	[ "$status" -eq 0 ]
+	[[ "$output" != *"curl was called"* ]]
+}
+
+@test "a page missing from the copy is fetched, once" {
+	write_docs_corpus
+	stub_ddgr_tripwire
+	rm -f "$DOCS_DIR/pages/agent-sdk/hooks.md"
+	cat >"$STUB_BIN/curl" <<EOF
+#!/usr/bin/env bash
+echo "\$*" >>"$BATS_TEST_TMPDIR/curl.argv"
+for a in "\$@"; do
+	[ "\$prev" = "-o" ] && out="\$a"
+	prev="\$a"
+done
+printf 'The SDK exposes a matcher too and its precedence.\n' >"\$out"
+EOF
+	chmod +x "$STUB_BIN/curl"
+
+	run env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" \
+		XDG_DATA_HOME="$DATA_HOME" DDGX_TTL=0 DDGX_DOCS_DIR="$DOCS_DIR" \
+		DDGX_NO_NETWORK=1 \
+		bash "$DDGX" --docs -d -l 0 'matcher precedence'
+
+	[ "$status" -eq 0 ]
+	[ "$(grep -c 'agent-sdk/hooks.md' "$BATS_TEST_TMPDIR/curl.argv")" -eq 1 ]
+	[[ "$output" == *"Agent SDK hooks"* ]]
+}
+
+@test "a page that failed to fetch leaves no half-written file behind" {
+	# A truncated page is worse than an absent one: it still qualifies for a
+	# match and reports a hit from whichever half arrived.
+	write_docs_corpus
+	stub_ddgr_tripwire
+	rm -f "$DOCS_DIR/pages/agent-sdk/hooks.md"
+	cat >"$STUB_BIN/curl" <<'EOF'
+#!/usr/bin/env bash
+for a in "$@"; do
+	[ "$prev" = "-o" ] && out="$a"
+	prev="$a"
+done
+printf 'half a page' >"$out"
+exit 22
+EOF
+	chmod +x "$STUB_BIN/curl"
+
+	run env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" \
+		XDG_DATA_HOME="$DATA_HOME" DDGX_TTL=0 DDGX_DOCS_DIR="$DOCS_DIR" \
+		DDGX_NO_NETWORK=1 \
+		bash "$DDGX" --docs -d -l 0 'matcher precedence'
+
+	[ "$status" -eq 0 ]
+	[ ! -e "$DOCS_DIR/pages/agent-sdk/hooks.md" ]
+	[ ! -e "$DOCS_DIR/pages/agent-sdk/hooks.md.part" ]
+}
+
+@test "the header says docs for a set the manual produced" {
+	R="$BATS_TEST_TMPDIR/docs-set.json"
+	printf '%s\n' '[{"title":"Hooks reference","url":"https://code.claude.com/docs/en/hooks","abstract":"x"}]' >"$R"
+	printf 'matcher precedence\n' >"$R.query"
+	printf 'docs\n' >"$R.engine"
+
+	run env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" \
+		XDG_DATA_HOME="$DATA_HOME" DDGX_TTL=0 bash "$DDGX" --header "$R"
+
+	[ "$status" -eq 0 ]
+	[[ "${lines[0]}" == "docs: matcher precedence"* ]]
+}
+
+@test "alt-q offers the manual alongside ask and web" {
+	R="$BATS_TEST_TMPDIR/web-set.json"
+	printf '%s\n' '[{"title":"A page","url":"https://example.com/a","abstract":"x"}]' >"$R"
+	printf 'matcher\n' >"$R.query"
+
+	run env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" \
+		XDG_DATA_HOME="$DATA_HOME" DDGX_TTL=0 \
+		bash -c "source '$DDGX' >/dev/null 2>&1 || true; refine_menu '$R'"
+
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"docs"* ]]
+	[[ "$output" == *"claude code docs"* ]]
+}
+
+@test "switching to the manual drops the search operators" {
+	# site: and filetype: are DuckDuckGo's syntax, and there is only one site
+	# in the manual. Handing them over would search for the operator.
+	write_docs_corpus
+	stub_curl_tripwire
+	stub_ddgr_tripwire
+	R="$BATS_TEST_TMPDIR/switch.json"
+	printf '%s\n' '[{"title":"A page","url":"https://example.com/a","abstract":"x"}]' >"$R"
+	printf 'site:example.com matcher precedence\n' >"$R.query"
+	printf 'ddgr\n' >"$R.engine"
+	stub_fzf 'docs'
+
+	run env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" \
+		XDG_DATA_HOME="$DATA_HOME" DDGX_TTL=0 DDGX_DOCS_DIR="$DOCS_DIR" \
+		DDGX_NO_NETWORK=1 \
+		bash "$DDGX" --refine "$R" 8
+
+	[ "$status" -eq 0 ]
+	[ "$(cat "$R.engine")" = "docs" ]
+	[ "$(cat "$R.query")" = "matcher precedence" ]
+	[[ "$(cat "$R")" == *"code.claude.com"* ]]
+}
+
+@test "refining a docs set searches the manual again, not the web" {
+	write_docs_corpus
+	stub_curl_tripwire
+	stub_ddgr_tripwire
+	R="$BATS_TEST_TMPDIR/again.json"
+	printf '%s\n' '[{"title":"Hooks reference","url":"https://code.claude.com/docs/en/hooks","abstract":"x"}]' >"$R"
+	printf 'matcher\n' >"$R.query"
+	printf 'docs\n' >"$R.engine"
+	stub_fzf 'edit'
+
+	run env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" \
+		XDG_DATA_HOME="$DATA_HOME" DDGX_TTL=0 DDGX_DOCS_DIR="$DOCS_DIR" \
+		DDGX_NO_NETWORK=1 \
+		bash "$DDGX" --refine "$R" 8 <<<'settings.json' 
+
+	[ "$status" -eq 0 ]
+	[ "$(cat "$R.engine")" = "docs" ]
+	[[ "$(cat "$R")" == *"settings-reference"* ]]
+}
+
+@test "the search screen names every prefix, on a line that cannot wrap" {
+	# The prefixes are the only way into the other two engines, and the search
+	# box is the one screen where they can be advertised: read -e owns that
+	# line, so a key would do nothing there.
+	#
+	# The length is load-bearing, not cosmetic. prompt_for_query centres this
+	# line and then counts rows backwards to put the cursor inside the input
+	# box; a line that wraps moves the box a row and the caret lands on the
+	# border. The M-g popup is 90% of the terminal, so 72 columns on an
+	# 80-column screen is the width this has to survive.
+	local line
+	line=$(sed -n "s/.*center \"\$cols\" '\(start with .*\)' .*/\1/p" "$DDGX")
+
+	[ -n "$line" ]
+	[ "${#line}" -le 72 ]
+	[[ "$line" == *'?'* ]]
+	[[ "$line" == *'??'* ]]
+	[[ "$line" == *'@'* ]]
+}
+
+@test "an empty copy is the network's answer, not the query's" {
+	# "nothing in the docs mentions hooks" is a lie when no page was ever
+	# fetched, and it is the same mistake search_ddgr goes out of its way not
+	# to make: blaming the words for a fetch that never landed.
+	write_docs_corpus
+	rm -rf "${DOCS_DIR:?}/pages"
+	cat >"$STUB_BIN/curl" <<'EOF'
+#!/usr/bin/env bash
+exit 7
+EOF
+	chmod +x "$STUB_BIN/curl"
+
+	run env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" \
+		XDG_DATA_HOME="$DATA_HOME" DDGX_TTL=0 DDGX_DOCS_DIR="$DOCS_DIR" \
+		DDGX_NO_NETWORK=1 \
+		bash "$DDGX" --docs -d 'matcher precedence'
+
+	[ "$status" -eq 1 ]
+	[[ "$output" == *"docs copy is empty"* ]]
+	[[ "$output" != *"nothing in the docs mentions"* ]]
+}
+
+@test "the background extractor is not attached to the terminal" {
+	# prefetch runs the extractor in the background while fzf owns the terminal
+	# in raw mode. Sharing the tty is how the picker starts echoing ^[[A instead
+	# of moving the selection, and typing stops filtering: two processes on one
+	# terminal, and whichever touches its attributes last wins.
+	#
+	# It only bites while extraction is still running, so a warm cache
+	# reproduces it every time and a cold one hides it completely, which is the
+	# opposite of the intuition and cost an hour to pin down. Measured in tmux
+	# with a warm cache, four trials: without the redirect 2/2 garbled, with it
+	# 2/2 clean.
+	#
+	# This asserts the redirect is present rather than the behaviour, because
+	# proving the behaviour needs a pty and a picker to drive, and bats has
+	# neither. The comment carries the evidence the assertion cannot.
+	run bash -c "sed -n '/^batch_extract()/,/^}/p' '$DDGX'"
+
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"</dev/null"* ]]
+}
+
+@test "the docs preview marks the terms that put the page on the list" {
+	# A reference page runs to a thousand lines. The row's snippet says the page
+	# matched; the pane has to say where, or you are searching the page by eye
+	# for the words you just typed.
+	write_docs_corpus
+	stub_curl_tripwire
+	R="$BATS_TEST_TMPDIR/hl.json"
+	printf '%s\n' '[{"title":"Hooks reference","url":"https://code.claude.com/docs/en/hooks","abstract":"x"}]' >"$R"
+	printf 'matcher precedence\n' >"$R.query"
+	printf 'docs\n' >"$R.engine"
+	seed_cache "https://code.claude.com/docs/en/hooks" \
+		"The matcher filters tool calls and precedence runs narrowest first."
+
+	run env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" \
+		XDG_DATA_HOME="$DATA_HOME" DDGX_TTL=0 DDGX_DOCS_DIR="$DOCS_DIR" \
+		FZF_PREVIEW_COLUMNS=100 bash "$DDGX" --preview "$R" 0 </dev/null
+
+	[ "$status" -eq 0 ]
+	# Reverse video on, and turned off with 27 rather than a full reset, which
+	# would end whichever colour run the match landed inside.
+	[[ "$output" == *$'\033[7m'* ]]
+	[[ "$output" == *$'\033[27m'* ]]
+}
+
+@test "a web preview is left alone, operators and all" {
+	# DuckDuckGo's syntax is not text to look for in the page it returned.
+	R="$BATS_TEST_TMPDIR/web.json"
+	printf '%s\n' '[{"title":"A page","url":"https://example.com/a","abstract":"x"}]' >"$R"
+	printf 'site:example.com matcher\n' >"$R.query"
+	printf 'ddgr\n' >"$R.engine"
+	seed_cache "https://example.com/a" "The matcher filters tool calls."
+
+	run env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" \
+		XDG_DATA_HOME="$DATA_HOME" DDGX_TTL=0 \
+		FZF_PREVIEW_COLUMNS=100 bash "$DDGX" --preview "$R" 0 </dev/null
+
+	[ "$status" -eq 0 ]
+	[[ "$output" != *$'\033[7m'* ]]
+}
+
+@test "the refiner offers the manual nothing duckduckgo-only" {
+	# Over the manual every one of these is a lie. site: cannot narrow a corpus
+	# with one site in it, filetype: cannot narrow one with one filetype, and
+	# both are stripped before the search, so the entry re-runs the same query
+	# and reads as though it did something.
+	R="$BATS_TEST_TMPDIR/docsmenu.json"
+	printf '%s\n' '[{"title":"Hooks","url":"https://code.claude.com/docs/en/hooks","abstract":"x"}]' >"$R"
+	printf 'hooks matcher\n' >"$R.query"
+	printf 'docs\n' >"$R.engine"
+
+	run bash -c "source '$DDGX' >/dev/null 2>&1 || true; refine_menu '$R'"
+
+	[ "$status" -eq 0 ]
+	[[ "$output" != *'site:'* ]]
+	[[ "$output" != *'filetype:'* ]]
+	[[ "$output" != *'intitle:'* ]]
+	[[ "$output" != *'inurl:'* ]]
+	# The ones that do mean something over a corpus of prose.
+	[[ "$output" == *'phrase'* ]]
+	[[ "$output" == *'edit'* ]]
+	[[ "$output" == *'reset'* ]]
+}
+
+@test "exclude is not offered over the manual, because it would invert" {
+	# exclude appends -word, and the manual's parser keeps a leading dash on
+	# purpose: a corpus of CLI reference is full of --flags that would
+	# otherwise be thrown away. So excluding a word makes the search hunt FOR
+	# "-word". A menu entry that does the opposite of what it says is worse
+	# than a missing one.
+	R="$BATS_TEST_TMPDIR/exmenu.json"
+	printf '%s\n' '[{"title":"Hooks","url":"https://code.claude.com/docs/en/hooks","abstract":"x"}]' >"$R"
+	printf 'hooks matcher\n' >"$R.query"
+	printf 'docs\n' >"$R.engine"
+
+	run bash -c "source '$DDGX' >/dev/null 2>&1 || true; refine_menu '$R'"
+
+	[ "$status" -eq 0 ]
+	[[ "$output" != *'exclude'* ]]
+}
+
+@test "a leading dash stays a flag, which is why exclude cannot be offered" {
+	# The other half of the same decision, asserted where it is decided rather
+	# than only where it is worked around.
+	run bash -c "source '$DDGX' >/dev/null 2>&1 || true; docs_terms 'hooks -sdk'"
+
+	[ "$status" -eq 0 ]
+	[[ "$output" == *'-sdk'* ]]
+}
+
+@test "a web set keeps every operator the refiner ever offered" {
+	R="$BATS_TEST_TMPDIR/webmenu.json"
+	printf '%s\n' '[{"title":"A","url":"https://example.com/a","abstract":"x"}]' >"$R"
+	printf 'kubernetes finalizers\n' >"$R.query"
+	printf 'ddgr\n' >"$R.engine"
+
+	run bash -c "source '$DDGX' >/dev/null 2>&1 || true; refine_menu '$R'"
+
+	[ "$status" -eq 0 ]
+	local op
+	for op in 'site:' '-site:' 'filetype:' 'intitle:' 'inurl:' 'phrase' \
+		'exclude' 'edit' 'reset' 'ask' 'web' 'docs'; do
+		[[ "$output" == *"$op"* ]] || { echo "missing: $op"; return 1; }
+	done
+}

@@ -185,7 +185,7 @@ vim.api.nvim_set_keymap(
   "v",
   "<leader>ls",
   'y<ESC>:Telescope live_grep default_text=<c-r>0<CR> search_dirs={"$PWD"}',
-  default_opts
+  vim.tbl_extend("force", default_opts, { desc = "Live grep the visual selection in PWD" })
 )
 vim.keymap.set("n", "<leader>/", function()
   builtin.current_buffer_fuzzy_find(require("telescope.themes").get_dropdown {
@@ -197,14 +197,18 @@ end, { desc = "Find in current buffer" })
 
 local key = vim.api.nvim_set_keymap
 local set_up_telescope = function()
-  local set_keymap = function(mode, bind, cmd)
-    key(mode, bind, cmd, { noremap = true, silent = true })
+  -- opts must carry a literal `desc = "..."` at the call site: confhelp indexes
+  -- descriptions by grepping these files, so a desc passed as a variable is
+  -- invisible in the M-C-h bindings view
+  local set_keymap = function(mode, bind, cmd, opts)
+    key(mode, bind, cmd, vim.tbl_extend("force", { noremap = true, silent = true }, opts or {}))
   end
-  set_keymap("n", "<leader>bu", [[<cmd>lua require('telescope.builtin').buffers()<CR>]])
+  set_keymap("n", "<leader>bu", [[<cmd>lua require('telescope.builtin').buffers()<CR>]], { desc = "Buffers" })
   set_keymap(
     "n",
     "<leader>ff",
-    [[<cmd>lua require('telescope.builtin').find_files({ find_command = {'rg', '--files', '--hidden', '-g', '!.git'}, search_dirs = {require('user_functions.shell_integration').get_tmux_working_directory()}, path_display = {"truncate"} })<CR>]]
+    [[<cmd>lua require('telescope.builtin').find_files({ find_command = {'rg', '--files', '--hidden', '-g', '!.git'}, search_dirs = {require('user_functions.shell_integration').get_tmux_working_directory()}, path_display = {"truncate"} })<CR>]],
+    { desc = "Find files in the tmux working directory" }
   )
   vim.keymap.set("n", "<leader>fL", function()
     require("telescope.builtin").live_grep {
@@ -214,9 +218,15 @@ local set_up_telescope = function()
   set_keymap(
     "n",
     "<leader>fl",
-    [[<cmd>lua require('telescope.builtin').live_grep({ cwd = vim.fn.system("git rev-parse --show-toplevel 2>/dev/null"):gsub("\n", "") })<CR>]]
+    [[<cmd>lua require('telescope.builtin').live_grep({ cwd = vim.fn.system("git rev-parse --show-toplevel 2>/dev/null"):gsub("\n", "") })<CR>]],
+    { desc = "Live grep at the git root" }
   )
-  set_keymap("n", "<leader>fr", [[<cmd>lua require'telescope'.extensions.repo.list{search_dirs = {"~/dev"}}<CR>]])
+  set_keymap(
+    "n",
+    "<leader>fr",
+    [[<cmd>lua require'telescope'.extensions.repo.list{search_dirs = {"~/dev"}}<CR>]],
+    { desc = "Repo list under ~/dev" }
+  )
   vim.keymap.set("n", "<leader>fd", function()
     require("telescope.builtin").find_files {
       find_command = { "rg", "--files", "--hidden", "-g", "!.git", "-g", "!node_modules" },
@@ -227,15 +237,26 @@ local set_up_telescope = function()
   set_keymap(
     "n",
     "<leader>fg",
-    [[<cmd>lua require('telescope.builtin').git_files({ cwd = vim.fn.environ().PWD or vim.fn.getcwd() })<CR>]]
+    [[<cmd>lua require('telescope.builtin').git_files({ cwd = vim.fn.environ().PWD or vim.fn.getcwd() })<CR>]],
+    { desc = "Git-tracked files in PWD" }
   )
-  set_keymap("n", "<leader>gs", [[<cmd>lua require('telescope.builtin').git_status()<CR>]])
-  set_keymap("n", "<leader>fo", [[<cmd>lua require('telescope.builtin').oldfiles()<CR>]])
-  set_keymap("n", "<leader>fi", ":Telescope file_browser hidden=true<CR>")
-  set_keymap("i", "<C-e>", "<cmd>:Telescope emoji<CR>")
-  set_keymap("n", "<leader>fe", [[<cmd>Telescope emoji<CR>]])
-  set_keymap("n", "<leader>ft", [[<cmd>TodoTelescope <CR>]])
-  set_keymap("n", "<leader>fs", [[<cmd>lua require('telescope.builtin').grep_string({search_dirs = {"~/dev"}})<CR>]])
+  set_keymap("n", "<leader>gs", [[<cmd>lua require('telescope.builtin').git_status()<CR>]], { desc = "Git status" })
+  set_keymap(
+    "n",
+    "<leader>fo",
+    [[<cmd>lua require('telescope.builtin').oldfiles()<CR>]],
+    { desc = "Recently opened files" }
+  )
+  set_keymap("n", "<leader>fi", ":Telescope file_browser hidden=true<CR>", { desc = "File browser with hidden files" })
+  set_keymap("i", "<C-e>", "<cmd>:Telescope emoji<CR>", { desc = "Emoji picker (insert mode)" })
+  set_keymap("n", "<leader>fe", [[<cmd>Telescope emoji<CR>]], { desc = "Emoji picker" })
+  set_keymap("n", "<leader>ft", [[<cmd>TodoTelescope <CR>]], { desc = "Todo comments" })
+  set_keymap(
+    "n",
+    "<leader>fs",
+    [[<cmd>lua require('telescope.builtin').grep_string({search_dirs = {"~/dev"}})<CR>]],
+    { desc = "Grep string under cursor in ~/dev" }
+  )
   -- Visual mode: search for selected text in current project/repo
   vim.keymap.set("v", "<leader>fs", function()
     -- Yank the selected text first
@@ -249,15 +270,30 @@ local set_up_telescope = function()
       cwd = search_dir,
     }
   end, { noremap = true, silent = true, desc = "Search selected text in project" })
-  set_keymap("n", "<leader>fh", [[<cmd>lua require('telescope.builtin').search_history()<CR>]])
-  set_keymap("n", "<leader>ds", [[<cmd>lua require('telescope.builtin').lsp_document_symbols()<CR>]])
-  set_keymap("n", "<leader>fj", [[<cmd>lua require('telescope.builtin').jumplist()<CR>]])
-  set_keymap("n", "<leader>re", [[<cmd>lua require('telescope.builtin').registers()<CR>]])
-  set_keymap("n", "<leader>fc", [[<cmd>lua require('telescope.builtin').colorscheme()<CR>]])
-  set_keymap("n", "<leader>fz", [[<cmd>lua require('telescope').extensions.zoxide.list()<CR>]])
-  set_keymap("n", "<leader>fp", [[<cmd>ProjectFiles<CR>]])
-  set_keymap("n", "<leader>fP", [[<cmd>ProjectFilesForCurrent<CR>]])
-  set_keymap("n", "<leader>?", [[<cmd>lua require('telescope.builtin').help_tags()<CR>]])
+  set_keymap(
+    "n",
+    "<leader>fh",
+    [[<cmd>lua require('telescope.builtin').search_history()<CR>]],
+    { desc = "Search history" }
+  )
+  set_keymap(
+    "n",
+    "<leader>ds",
+    [[<cmd>lua require('telescope.builtin').lsp_document_symbols()<CR>]],
+    { desc = "LSP document symbols" }
+  )
+  set_keymap("n", "<leader>fj", [[<cmd>lua require('telescope.builtin').jumplist()<CR>]], { desc = "Jumplist" })
+  set_keymap("n", "<leader>re", [[<cmd>lua require('telescope.builtin').registers()<CR>]], { desc = "Registers" })
+  set_keymap("n", "<leader>fc", [[<cmd>lua require('telescope.builtin').colorscheme()<CR>]], { desc = "Colorschemes" })
+  set_keymap(
+    "n",
+    "<leader>fz",
+    [[<cmd>lua require('telescope').extensions.zoxide.list()<CR>]],
+    { desc = "Zoxide directory jump" }
+  )
+  set_keymap("n", "<leader>fp", [[<cmd>ProjectFiles<CR>]], { desc = "Project files (mapped project)" })
+  set_keymap("n", "<leader>fP", [[<cmd>ProjectFilesForCurrent<CR>]], { desc = "Project files (current project)" })
+  set_keymap("n", "<leader>?", [[<cmd>lua require('telescope.builtin').help_tags()<CR>]], { desc = "Help tags" })
 end
 
 set_up_telescope()

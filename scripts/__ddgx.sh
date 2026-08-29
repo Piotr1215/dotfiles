@@ -18,6 +18,8 @@
 #   __ddgx.sh '?? why do pods stay terminating'  # ask harder, 15 steps
 #   __ddgx.sh -a etcd defragmentation            # the same, without the prefix
 #   __ddgx.sh --preset xhigh 'trace this claim'  # 100 steps, minutes
+#   __ddgx.sh '@ hooks matcher precedence'       # the claude code manual
+#   __ddgx.sh --docs additionalContext           # the same, without the prefix
 #
 # Two engines, one picker. A question mark in front of the query asks the
 # Perplexity Agent API instead of searching DuckDuckGo: the answer arrives as
@@ -31,6 +33,26 @@
 # for the question you are actually sitting with. The row says which one ran,
 # so an answer that reads thin names the cheaper preset that produced it and
 # the fix is one more keystroke next time.
+#
+# @ is the manual. It searches the full text of the Claude Code docs and returns
+# the pages as results, so the words go in the same box, the rows read the same
+# way, and enter, ctrl-e, ctrl-a and alt-h do what they always do.
+#
+# It searches the page BODIES, all 943k words of them. The tool this replaces
+# searched a 5,036-word summary index, 0.6 percent of the corpus, so anything
+# more specific than a topic name missed and the fix was a --full flag you had
+# to retype after the failure. There is no flag here because there is nothing to
+# escalate to. A query no page satisfies in full relaxes to the pages carrying
+# the most of it and says so on the header, rather than failing and telling you
+# what to type next.
+#
+# The corpus is a copy, because every docs page publishes a .md twin and curl
+# pulls all 191 of them in four seconds. It refreshes on the ordinary cache TTL
+# and through ctrl-r, so nobody maintains a mirror. What the picker actually
+# opens and extracts is the HTML page: the .md twin carries Mintlify's JSX and
+# paragraph-long image alt text, and __readable.mjs renders the real page into
+# cleaner prose than its own source. The copy answers which pages, the extractor
+# answers what they say.
 #
 # The answer being a row rather than a screen of its own is what makes the two
 # modes one tool. It previews like a result, ctrl-e keeps it as a note, and
@@ -106,8 +128,10 @@
 # edit. The raw query stays editable from the same menu, and a refinement that
 # finds nothing leaves the previous results standing.
 #
-# Env: DDGX_TTL (cache seconds, default 86400), DDGX_JOBS (prefetch
-# concurrency, default 6), DDGX_NUM (default result count), DDGX_EDITOR
+# Env: DDGX_TTL (cache seconds, default 86400; also how long the docs copy
+# stands), DDGX_JOBS (prefetch concurrency, default 6), DDGX_DOCS_DIR (where the
+# docs copy lives), DDGX_DOCS_SNIPPET (snippet width, default 200),
+# DDGX_NUM (default result count), DDGX_EDITOR
 # (ctrl-e editor, default nvim), DDGX_PET_FILE (bookmark file), DDGX_PLAYER
 # (the player ctrl-o opens a video in, default mpv), DDGX_PLAYER_ARGS (extra
 # player arguments), DDGX_PPLX_PRESET (ask depth, default low), DDGX_ASK_CMD
@@ -316,6 +340,309 @@ search_pplx() {
 	return 0
 }
 
+# ---------------------------------------------------------------------------
+# The manual: code.claude.com, searched over the page bodies.
+# ---------------------------------------------------------------------------
+
+# Every docs page publishes a .md twin beside its HTML, and llms.txt lists all
+# of them, so the corpus arrives already written as markdown and needs no
+# extraction to search. 191 pages, 8.8MB, 943k words, and curl pulls the lot in
+# four seconds at this concurrency. That number is the whole argument for
+# holding a copy: the tool this replaces searched a 5k-word summary index,
+# 0.6 percent of the corpus, because a body search sounded expensive. It is not.
+#
+# The copy is only ever the search index. What the picker opens, previews and
+# keeps is the HTML page, because __readable.mjs renders it better than the
+# markdown source reads: the .md twin carries Mintlify's JSX (<Frame>, <Tip>,
+# <img> tags whose alt attribute runs to a paragraph), while the extractor turns
+# the rendered page into clean prose with GFM tables. So the corpus answers
+# "which pages", and the extraction path already in this file answers "what does
+# it say". Nothing new previews, opens, bookmarks or hands off.
+DOCS_INDEX_URL="${DDGX_DOCS_INDEX:-https://code.claude.com/docs/llms.txt}"
+DOCS_PAGE_BASE="${DDGX_DOCS_BASE:-https://code.claude.com/docs/en}"
+DOCS_DIR="${DDGX_DOCS_DIR:-$CACHE_DIR/claude-docs}"
+DOCS_JOBS="${DDGX_JOBS:-12}"
+
+# slug<TAB>title, one line per page, from the published index.
+docs_index_rows() {
+	sed -n 's|^- \[\([^]]*\)\](https://code\.claude\.com/docs/en/\([^)]*\)\.md)\(: \)\{0,1\}.*|\2\t\1|p' \
+		"$DOCS_DIR/llms.txt" 2>/dev/null || true
+}
+
+# Fetch the index, and any page missing from the copy. It refreshes on the same
+# TTL as an extract and through the same ctrl-r, so this is not a mirror anyone
+# maintains by hand; it is a cache that happens to be searched rather than read.
+#
+# A page that fails to fetch is removed rather than left half written. A
+# truncated page is worse than an absent one: it still qualifies for a match and
+# reports a hit from whichever half arrived.
+docs_corpus() {
+	local index="$DOCS_DIR/llms.txt" pages="$DOCS_DIR/pages"
+	local -a need=()
+	local slug dest
+	mkdir -p "$pages"
+	if ! cache_fresh "$index"; then
+		printf '\033[90m  refreshing the docs index ...\033[0m\r' >&2
+		if curl -fsSL "$DOCS_INDEX_URL" -o "$index.tmp" 2>/dev/null; then
+			mv -f "$index.tmp" "$index"
+		else
+			rm -f "$index.tmp"
+			# An unreachable index is only fatal with nothing already on disk.
+			# Offline, yesterday's copy answers the question perfectly well.
+			if [[ ! -s $index ]]; then
+				SEARCH_ERROR='could not reach the docs index'
+				return 1
+			fi
+		fi
+		printf '\033[2K\r' >&2
+	fi
+	while IFS=$'\t' read -r slug _; do
+		[[ -n $slug ]] || continue
+		dest="$pages/$slug.md"
+		if [[ $FORCE_REFETCH -eq 1 || ! -s $dest ]]; then
+			need+=("$slug")
+		fi
+	done < <(docs_index_rows)
+	[[ ${#need[@]} -gt 0 ]] || return 0
+	printf '\033[90m  fetching %d docs pages, once ...\033[0m\r' "${#need[@]}" >&2
+	# $1, $2 and $3 belong to the child shell, so these quotes have to stay
+	# single. A slug can carry a slash (agent-sdk/hooks), hence the mkdir.
+	# shellcheck disable=SC2016
+	printf '%s\n' "${need[@]}" |
+		xargs -r -P "$DOCS_JOBS" -I {} bash -c '
+			dest="$2/$1.md"
+			mkdir -p "${dest%/*}"
+			curl -fsSL "$3/$1.md" -o "$dest.part" \
+				&& mv -f "$dest.part" "$dest" || rm -f "$dest.part"
+		' _ {} "$pages" "$DOCS_PAGE_BASE" 2>/dev/null || true
+	printf '\033[2K\r' >&2
+	return 0
+}
+
+# Split a query into terms, taking a quoted phrase as one term.
+#
+# Only DuckDuckGo's own operators are dropped, by name, and nothing else. The
+# obvious rule, drop anything holding a colon or opening with a dash, is wrong
+# HERE in a way it is not wrong for a web search: this corpus is a CLI manual,
+# so `--dangerously-skip-permissions` and `PreToolUse:Bash` are among the most
+# likely things anyone types at it, and both would be thrown away whole,
+# leaving a query with no terms in it and an error blaming the user.
+docs_terms() {
+	printf '%s' "$1" | awk '
+		{
+			while (match($0, /"[^"]*"/)) {
+				phrase = substr($0, RSTART + 1, RLENGTH - 2)
+				if (phrase != "") print phrase
+				$0 = substr($0, 1, RSTART - 1) " " substr($0, RSTART + RLENGTH)
+			}
+			for (i = 1; i <= NF; i++)
+				if ($i !~ /^-?(site|filetype|intitle|inurl|inbody):/)
+					print $i
+		}'
+}
+
+# Rank the corpus against the terms, in one awk pass over every page.
+#
+# Two things the tool this replaces got wrong are fixed here. It reported a
+# page's best single LINE, and a page qualified when each term appeared anywhere
+# in it, so the line on screen routinely carried one term out of three and read
+# like a false positive. Here the snippet is the best WINDOW of up to three
+# consecutive lines, scored by how many distinct terms it holds, so what you
+# read is the place where the terms actually meet.
+#
+# And markup is not text. The .md twins carry JSX wrappers and <img> tags whose
+# alt attributes describe a diagram in a paragraph of prose; a term found only
+# inside one of those is not a mention of anything. Those lines are skipped for
+# matching as well as for display.
+#
+# Terms travel in the environment rather than through -v, which would read a
+# backslash in the query as the start of an escape.
+#
+# Emits: distinct<TAB>hits<TAB>slug<TAB>snippet, unsorted.
+docs_rank() {
+	local pages="$DOCS_DIR/pages"
+	local -a files=()
+	mapfile -t files < <(find "$pages" -type f -name '*.md' 2>/dev/null | sort)
+	[[ ${#files[@]} -gt 0 ]] || return 0
+	DDGX_DOCS_TERMS="$1" awk -v pages="$pages" \
+		-v maxlen="${DDGX_DOCS_SNIPPET:-200}" '
+		# Literal occurrences, because a term is a string the user typed and
+		# gsub would read settings.json as a pattern whose dot matches anything.
+		function countstr(hay, needle,   c, p) {
+			if (needle == "") return 0
+			c = 0
+			while ((p = index(hay, needle)) > 0) {
+				c++
+				hay = substr(hay, p + length(needle))
+			}
+			return c
+		}
+		# Cut a window down to width around the first term in it, not from the
+		# left edge. The window is three lines and a term can sit in the last of
+		# them, so trimming from the start is how a snippet arrives showing the
+		# two lines BEFORE the match and none of it: which is exactly the "reads
+		# like a false positive" this engine exists to stop.
+		function focus(snip,   i, p, first, low, start) {
+			if (length(snip) <= maxlen) return snip
+			low = tolower(snip)
+			first = 0
+			for (i = 1; i <= n; i++) {
+				p = index(low, t[i])
+				if (p > 0 && (first == 0 || p < first)) first = p
+			}
+			if (first == 0 || first + maxlen / 2 <= maxlen)
+				return substr(snip, 1, maxlen - 1) "…"
+			start = first - 40
+			if (start < 1) start = 1
+			return "…" substr(snip, start, maxlen - 2) "…"
+		}
+		function flush(   i, d, snip) {
+			if (file == "") return
+			d = 0
+			for (i = 1; i <= n; i++) if (seen[i]) d++
+			snip = (best_snip != "" ? best_snip : first_prose)
+			if (d > 0 && snip != "") {
+				gsub(/\t/, " ", snip)
+				gsub(/  +/, " ", snip)
+				sub(/^ +/, "", snip)
+				sub(/ +$/, "", snip)
+				printf "%d\t%d\t%s\t%s\n", d, hits, file, focus(snip)
+			}
+			file = ""
+		}
+		# Markup rather than prose: Mintlify components, raw tags, and the ">"
+		# index banner every .md twin opens with.
+		function noise(s) {
+			return (s ~ /^[[:space:]]*<\// || s ~ /^[[:space:]]*<[A-Za-z]/ \
+				|| s ~ /^[[:space:]]*\/?>[[:space:]]*$/ || s ~ /data-path=/ \
+				|| s ~ /^[[:space:]]*>[[:space:]]*(##|Fetch |Use this file)/)
+		}
+		BEGIN {
+			n = split(ENVIRON["DDGX_DOCS_TERMS"], t, "\n")
+			while (n > 0 && t[n] == "") n--
+			for (i = 1; i <= n; i++) t[i] = tolower(t[i])
+		}
+		FNR == 1 {
+			flush()
+			file = FILENAME
+			sub("^" pages "/", "", file)
+			sub(/\.md$/, "", file)
+			delete seen
+			hits = 0; best = 0; best_hits = 0; best_snip = ""; first_prose = ""
+			w1 = ""; w2 = ""; w3 = ""
+			# The slug is part of the page: a search for "hooks" should find
+			# hooks.md even where the body only ever writes "hook".
+			slugtext = tolower(file)
+			for (i = 1; i <= n; i++) if (index(slugtext, t[i])) seen[i] = 1
+		}
+		{
+			if (noise($0)) next
+			low = tolower($0)
+			for (i = 1; i <= n; i++) {
+				c = countstr(low, t[i])
+				if (c > 0) { seen[i] = 1; hits += c }
+			}
+			if (first_prose == "" && $0 ~ /[A-Za-z]/ && $0 !~ /^[[:space:]]*[#>|-]/)
+				first_prose = $0
+			# Slide a three-line window and keep the one holding the most
+			# distinct terms. A heading and the sentence under it are the
+			# commonest place for the answer to be split across two lines.
+			w1 = w2; w2 = w3; w3 = $0
+			win = tolower(w1 " " w2 " " w3)
+			d = 0; wh = 0
+			for (i = 1; i <= n; i++) {
+				c = countstr(win, t[i])
+				if (c > 0) { d++; wh += c }
+			}
+			# Ties go to the denser window. With one term every window holding
+			# it scores 1, and the first one seen is rarely the passage that
+			# explains it; the one that says the word three times usually is.
+			if (d > best || (d == best && d > 0 && wh > best_hits)) {
+				best = d; best_hits = wh
+				best_snip = w1 " " w2 " " w3
+			}
+		}
+		END { flush() }
+	' "${files[@]}"
+}
+
+# Search the manual and shape the hits into the result set a web search
+# produces. Same contract as search_ddgr and search_pplx: writes the set, sets
+# SEARCH_ERROR, returns non-zero when nothing usable came back.
+#
+# DOCS_NOTE carries the one thing the rows cannot say for themselves, which is
+# that the search was relaxed. Nothing matching every term is the case the old
+# tool answered with an error and an instruction to retype the query under a
+# flag; here the next-best set is already on screen and the note says why.
+search_docs() {
+	local out=$1 num=$2 query=$3
+	local terms ranked want total titles
+	DOCS_NOTE=''
+	SEARCH_ERROR=''
+
+	docs_corpus || return 1
+	terms=$(docs_terms "$query")
+	if [[ -z ${terms//[[:space:]]/} ]]; then
+		SEARCH_ERROR='nothing to look up in the docs'
+		return 1
+	fi
+
+	# An empty copy is the network's answer, not the query's. Reporting it as
+	# "nothing mentions hooks" is the same mistake search_ddgr goes out of its
+	# way not to make: it blames the words for a fetch that never landed.
+	if [[ -z $(find "$DOCS_DIR/pages" -type f -name '*.md' -print -quit 2>/dev/null) ]]; then
+		SEARCH_ERROR='the docs copy is empty, and the pages could not be fetched'
+		return 1
+	fi
+
+	ranked=$(docs_rank "$terms" | sort -t$'\t' -k1,1nr -k2,2nr) || true
+	if [[ -z $ranked ]]; then
+		SEARCH_ERROR="nothing in the docs mentions $(tr '\n' ' ' <<<"$terms")"
+		return 1
+	fi
+
+	# Every term, or failing that as many as any page manages. A query where
+	# four of five terms land has found the page you wanted often enough that
+	# reporting nothing is the wrong answer.
+	want=$(head -1 <<<"$ranked" | cut -f1)
+	total=$(grep -c . <<<"$terms" || true)
+	if [[ $want -lt $total ]]; then
+		DOCS_NOTE="no page carries all $total terms, showing the best $want"
+	fi
+
+	titles=$(mktemp -t ddgx-titles-XXXXXX)
+	docs_index_rows >"$titles"
+	awk -F'\t' -v want="$want" -v base="$DOCS_PAGE_BASE" -v num="$num" \
+		-v titles="$titles" '
+		function esc(s) {
+			gsub(/\\/, "\\\\", s); gsub(/"/, "\\\"", s)
+			gsub(/\t/, " ", s); gsub(/\r/, "", s)
+			return s
+		}
+		BEGIN {
+			while ((getline line < titles) > 0) {
+				split(line, p, "\t")
+				title[p[1]] = p[2]
+			}
+			printf "["
+		}
+		$1 == want && kept < num {
+			slug = $3
+			name = (slug in title && title[slug] != "") ? title[slug] : slug
+			printf "%s{\"title\":\"%s\",\"url\":\"%s/%s\",\"abstract\":\"%s\"}", \
+				(kept ? "," : ""), esc(name), base, slug, esc($4)
+			kept++
+		}
+		END { printf "]\n" }
+	' <<<"$ranked" >"$out"
+	rm -f "$titles"
+
+	if [[ $(jq 'length' "$out" 2>/dev/null || printf '0') -eq 0 ]]; then
+		SEARCH_ERROR="nothing in the docs mentions $(tr '\n' ' ' <<<"$terms")"
+		return 1
+	fi
+	return 0
+}
 # Which engine produced the current set. Absent means a web search, so a set
 # written before this file knew about engines still refines correctly.
 current_engine() {
@@ -614,7 +941,7 @@ prompt_for_query() {
 	for ((i = 0; i < pad; i++)); do printf '\n'; done
 
 	center "$cols" 'duckduckgo results with the page text extracted' '\033[90m'
-	center "$cols" 'start with ? to ask perplexity, ?? to ask harder' '\033[90m'
+	center "$cols" 'start with ? to ask perplexity, ?? harder, @ for the docs' '\033[90m'
 	printf '\n'
 
 	# An input box drawn around the caret, so the popup reads as a search box
@@ -650,6 +977,35 @@ hrule() {
 # source, so every "##" and "](" stays on screen, which is why it is the
 # fallback rather than the choice. Both see a pipe rather than the preview
 # pane, so the width has to be handed to them or they assume 80 columns.
+# Mark the query terms inside a rendered page, so the pane shows WHERE the
+# words are rather than leaving you to find them in a reference page that runs
+# to a thousand lines. The snippet in the result row says a page matched; this
+# says where.
+#
+# Reverse video rather than a colour, and \e[27m rather than \e[0m to turn it
+# off: the text arrives already carrying glow's own SGR runs, and a reset would
+# end whichever run the match happened to land inside, bleeding its colour over
+# the rest of the line.
+#
+# The alternation matches an escape sequence FIRST and hands it back untouched,
+# which is what keeps a one-letter term from matching the "m" that terminates
+# every SGR code and rewriting the colours into garbage.
+highlight_terms() {
+	local terms=$1
+	if [[ -z ${terms//[[:space:]]/} ]]; then
+		cat
+		return 0
+	fi
+	DDGX_HL_TERMS="$terms" perl -pe '
+		BEGIN {
+			@t = grep { length } split /\n/, $ENV{DDGX_HL_TERMS};
+			@t = sort { length($b) <=> length($a) } @t;
+			$re = join "|", map { quotemeta } @t;
+		}
+		s/(\e\[[0-9;]*m)|($re)/defined $1 ? $1 : "\e[7m$2\e[27m"/gie if $re;
+	'
+}
+
 render_markdown() {
 	local file=$1 width=$2
 	if command -v glow >/dev/null 2>&1; then
@@ -726,22 +1082,40 @@ result_domains() {
 # absent because DuckDuckGo ignores them, and bangs are absent because ddgr
 # resolves a bang to a browser redirect and hands --json an empty set.
 refine_menu() {
+	local engine
+	engine=$(current_engine "${1:-}")
 	# follow only exists where there is something to follow, and it goes first
 	# because a conversation is a sequence of them: alt-q, enter, type. An entry
 	# offered over a web result set would be a dead option on every search.
-	if [[ $(current_engine "${1:-}") == pplx ]]; then
+	if [[ $engine == pplx ]]; then
 		printf '%-10s %s\n' 'follow' 'ask a follow-up in the same conversation'
 	fi
 	printf '%-10s %s\n' \
 		'ask' 'ask perplexity this, answer with its sources' \
 		'web' 'search duckduckgo for this instead' \
-		'site:' 'only this domain' \
-		'-site:' 'everything except this domain' \
-		'filetype:' 'only this kind of file' \
-		'intitle:' 'the words must be in the title' \
-		'inurl:' 'the words must be in the address' \
+		'docs' 'look these words up in the claude code docs'
+	# The operators below are DuckDuckGo's, and over the manual every one of
+	# them is a lie. site: cannot narrow a corpus with one site in it and
+	# filetype: cannot narrow one with one filetype; both are stripped before
+	# the search, so the entry would re-run the same query and read as though
+	# it had done something.
+	#
+	# exclude is worse than useless there: it appends -word, and the manual's
+	# term parser keeps a leading dash on purpose, because a corpus of CLI
+	# reference is full of --flags that would otherwise be thrown away. So
+	# excluding a word makes the search hunt FOR "-word". A menu entry that
+	# does the opposite of what it says is not one to leave on the menu.
+	if [[ $engine != docs ]]; then
+		printf '%-10s %s\n' \
+			'site:' 'only this domain' \
+			'-site:' 'everything except this domain' \
+			'filetype:' 'only this kind of file' \
+			'intitle:' 'the words must be in the title' \
+			'inurl:' 'the words must be in the address' \
+			'exclude' 'drop results carrying a word'
+	fi
+	printf '%-10s %s\n' \
 		'phrase' 'an exact wording, in quotes' \
-		'exclude' 'drop results carrying a word' \
 		'edit' 'edit the whole query by hand' \
 		'reset' 'drop every operator, keep the words'
 }
@@ -800,7 +1174,11 @@ run_query() {
 	[[ -z $engine ]] && engine=$(current_engine "$file")
 	clear >&2 2>/dev/null || true
 
-	if [[ $engine == pplx ]]; then
+	if [[ $engine == docs ]]; then
+		printf '\033[90m  looking up %s in the docs ...\033[0m\n' "$query" >&2
+		search_docs "$tmp" "$num" "$query" || ok=1
+		[[ $ok -eq 0 ]] && rm -f "$(answer_file "$file")" "$(thread_file "$file")"
+	elif [[ $engine == pplx ]]; then
 		if [[ $follow -eq 1 ]]; then
 			continue_id=$(thread_id "$file")
 			# A conversation is held at the depth it was started at. Dropping to
@@ -836,6 +1214,9 @@ run_query() {
 	set_engine "$file" "$engine"
 	mv -f "$tmp" "$file"
 	printf '%s\n' "$query" >"$(query_file "$file")"
+	# A docs search that could not satisfy every term says so on the header
+	# rather than in an error, because the next-best set is already on screen.
+	[[ -n ${DOCS_NOTE:-} ]] && set_note "$file" "$DOCS_NOTE"
 	# Warm the new set detached: this process ends the moment the picker
 	# reloads, and a job of its own would go with it.
 	(batch_extract "$file" &)
@@ -898,7 +1279,15 @@ mode_preview() {
 
 	cached=$(cache_file "$url")
 	if extract_to_cache "$url"; then
-		render_markdown "$cached" "$width"
+		# Only the manual has terms worth marking: a web query carries
+		# operators, and DuckDuckGo's own syntax is not text to look for in
+		# the page it returned.
+		if [[ $(current_engine "$file") == docs ]]; then
+			render_markdown "$cached" "$width" |
+				highlight_terms "$(docs_terms "$(current_query "$file")")"
+		else
+			render_markdown "$cached" "$width"
+		fi
 		printf '\n'
 	else
 		# Name the way out here rather than only in the help text. This line is
@@ -1476,7 +1865,10 @@ mode_header() {
 	nf=$(note_file "$file")
 	# Which engine answered is part of what the header is for: after a switch
 	# through alt-q the same words mean two different things.
-	[[ $(current_engine "$file") == pplx ]] && label='ask'
+	case $(current_engine "$file") in
+	pplx) label='ask' ;;
+	docs) label='docs' ;;
+	esac
 	printf '%s: %s' "$label" "$(current_query "$file")"
 	if [[ -s $nf ]]; then
 		note=$(head -n1 "$nf")
@@ -1509,9 +1901,10 @@ mode_refine() {
 	# query that did not change from costing a search. Changing engine changes
 	# the answer even when the words are identical, which is the whole point.
 	case $choice in
-	'ask' | 'web')
+	'ask' | 'web' | 'docs')
 		local engine=ddgr
 		[[ $choice == ask ]] && engine=pplx
+		[[ $choice == docs ]] && engine=docs
 		if [[ $engine == "$(current_engine "$file")" ]]; then
 			set_note "$file" "already $choice"
 			return 0
@@ -1519,7 +1912,7 @@ mode_refine() {
 		# The bare words, without the operators. site: and filetype: are
 		# DuckDuckGo syntax; handing them to an answer engine asks it to explain
 		# a search operator rather than to answer the question.
-		[[ $engine == pplx ]] && query=$(query_reset "$query")
+		[[ $engine == pplx || $engine == docs ]] && query=$(query_reset "$query")
 		if [[ -z ${query//[[:space:]]/} ]]; then
 			set_note "$file" 'nothing left to ask once the operators come off'
 			return 0
@@ -1575,8 +1968,16 @@ mode_refine() {
 
 # One node process for the whole result set: eight separate runs would pay the
 # jsdom import eight times over.
+# stdin is closed, not inherited. prefetch runs this in the background while
+# fzf owns the terminal, and a background child holding the tty is how a picker
+# starts echoing ^[[A instead of moving: two processes in one foreground group
+# both attached to the same terminal, and whichever touches its attributes last
+# wins. It only shows up when the extraction outlives the picker's first
+# keystroke, which a set of eight large reference pages does every time and a
+# warm cache never does.
 batch_extract() {
-	node "$READABLE" --batch "$1" --cache "$CACHE_DIR" --stats >/dev/null 2>&1
+	node "$READABLE" --batch "$1" --cache "$CACHE_DIR" --stats \
+		</dev/null >/dev/null 2>&1
 }
 
 # Warm the cache for every result at once, so previews are instant instead of
@@ -1795,6 +2196,10 @@ main() {
 			engine=pplx
 			shift
 			;;
+		--docs)
+			engine=docs
+			shift
+			;;
 		--preset)
 			engine=pplx
 			PPLX_PRESET=$2
@@ -1838,7 +2243,14 @@ main() {
 	# leading ? is a mode, not a search term: DuckDuckGo has no ? operator, so
 	# nothing that used to be a query loses meaning by being read this way.
 	query="${args[*]}"
-	if [[ $query == '?'* ]]; then
+	# @ scopes the search to the Claude Code manual, the same way ? scopes it to
+	# an answer engine. DuckDuckGo has no @ operator either, and a search that
+	# opens with a bare handle is not one anybody types into this box.
+	if [[ $query == '@'* ]]; then
+		engine=docs
+		query="${query#@}"
+		query="${query#"${query%%[![:space:]]*}"}"
+	elif [[ $query == '?'* ]]; then
 		engine=pplx
 		# A second ? asks harder. One mark for the question you ask in passing,
 		# two for the one you sit with, which is the only depth decision worth
@@ -1860,6 +2272,8 @@ main() {
 	# would refuse a search this script can perform.
 	if [[ $engine == pplx ]]; then
 		[[ -x $ASK_CMD ]] || die "missing ask backend: $ASK_CMD"
+	elif [[ $engine == docs ]]; then
+		command -v curl >/dev/null 2>&1 || die "curl not found"
 	else
 		command -v ddgr >/dev/null 2>&1 || die "ddgr not found"
 	fi
@@ -1879,6 +2293,8 @@ main() {
 		if [[ $engine == pplx ]]; then
 			printf '\033[90m  asking perplexity (%s) about %s ...\033[0m\r' \
 				"$PPLX_PRESET" "$query" >&2
+		elif [[ $engine == docs ]]; then
+			printf '\033[90m  looking up %s in the docs ...\033[0m\r' "$query" >&2
 		else
 			printf '\033[90m  searching for %s ...\033[0m\r' "$query" >&2
 		fi
@@ -1890,6 +2306,8 @@ main() {
 	if [[ $engine == pplx ]]; then
 		search_pplx "$RESULTS_FILE" "$query" "$(answer_file "$RESULTS_FILE")" \
 			"$(thread_file "$RESULTS_FILE")" || failed=1
+	elif [[ $engine == docs ]]; then
+		search_docs "$RESULTS_FILE" "$num" "$query" || failed=1
 	else
 		search_ddgr "$RESULTS_FILE" "$num" "$query" || failed=1
 	fi
@@ -1902,6 +2320,7 @@ main() {
 	# What the picker refines from, and what it refines through.
 	printf '%s\n' "$query" >"$(query_file "$RESULTS_FILE")"
 	set_engine "$RESULTS_FILE" "$engine"
+	[[ -n ${DOCS_NOTE:-} ]] && set_note "$RESULTS_FILE" "$DOCS_NOTE"
 
 	if [[ $dump -eq 1 ]] || [[ ! -t 1 ]]; then
 		# Piped without -d: dump rather than start fzf on a headless stdout.

@@ -12,10 +12,10 @@
 set -eo pipefail
 
 STATE_DIR="${CRON_STATE_DIR:-$HOME/.local/state/cron-jobs}"
-# Launch through alacritty explicitly: argos's own terminal=true picks
-# x-terminal-emulator, which is not what this machine runs, and both actions
-# end in a tmux attach that needs a real terminal.
-INVESTIGATE="alacritty -e $HOME/dev/dotfiles/scripts/__cron_investigate.sh"
+# No terminal wrapper here: __cron_investigate.sh decides for itself whether to
+# focus the window already attached to the cron-manager session or to open one.
+# Wrapping it in `alacritty -e` made every click a new window.
+INVESTIGATE="$HOME/dev/dotfiles/scripts/__cron_investigate.sh"
 NEXT_RUN="$HOME/dev/dotfiles/scripts/__cron_next_run.py"
 # No terminal for the trigger: it detaches the run and returns, and the widget
 # is where the result shows up anyway. Paired with refresh=true on the menu
