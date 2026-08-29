@@ -22,26 +22,39 @@ format_for_clipboard() {
     fi
 }
 
+# Split a display row back into the four columns confhelp emitted. The padded
+# display string cannot be parsed back: a key runs to 55 characters and a
+# command holds arbitrary spaces, so neither a fixed column position nor an awk
+# field index recovers them. The raw record rides along after a tab, hidden from
+# the list by --with-nth=1.
+binding_fields() {
+    local selection="$1"
+    [[ "$selection" == *$'\t'* ]] || return 1
+    IFS='|' read -r B_TYPE B_KEY B_DESC B_LOC <<< "${selection#*$'\t'}"
+    B_TYPE="${B_TYPE//[\[\]]/}"
+}
+
 # The absolute path worth handing to someone else. A binding is remembered by
 # its key and almost never by the file it lives in, so the useful answer is the
 # script the key RUNS: M-g is defined at .tmux.conf:213 but the thing to open is
 # __ddgx.sh. Falls back to the definition, with its line, when the command names
 # no path of its own (plain tmux verbs, zsh aliases, nvim keymaps).
-binding_payload() {
-    local selection="$1" cand suffix file_line file line
+# Reads the B_* globals binding_fields sets.
+binding_source() {
+    local cand suffix file line
 
     # A tmuxinator row's description IS its root directory, so the generic path
     # scan below would hand back the project dir instead of the session file
     # that actually defines the layout.
-    if [[ "$selection" == *"[mux]"* ]]; then
-        file_line=$(echo "$selection" | awk '{print $NF}')
-        printf '%s' "${HOME}/.config/tmuxinator/${file_line%%:*}"
+    if [[ "$B_TYPE" == "mux" ]]; then
+        printf '%s' "${HOME}/.config/tmuxinator/${B_LOC%%:*}"
         return 0
     fi
 
-    # Every path-looking token, first one that is really there wins. Taking
-    # just the first match picked /dev/null out of "2>/dev/null" and stopped,
-    # because a command line is full of paths that are not the target.
+    # Every path-looking token in the command, first one that is really there
+    # wins. Taking just the first match picked /dev/null out of "2>/dev/null"
+    # and stopped, because a command line is full of paths that are not the
+    # target.
     while read -r cand; do
         cand="${cand%[\"\',:;)]}"
         cand="${cand/#\~/$HOME}"
@@ -56,11 +69,10 @@ binding_payload() {
             printf '%s%s' "$cand" "$suffix"
             return 0
         fi
-    done < <(echo "$selection" | grep -oE '(/[^ ]+|~/[^ ]+|\$HOME/[^ ]+)')
+    done < <(echo "$B_DESC" | grep -oE '(/[^ ]+|~/[^ ]+|\$HOME/[^ ]+)')
 
-    file_line=$(echo "$selection" | awk '{print $NF}')
-    file="${file_line%:*}"
-    line="${file_line##*:}"
+    file="${B_LOC%:*}"
+    line="${B_LOC##*:}"
     case "$file" in
         /*) ;;
         "~"*) file="${file/#\~/$HOME}" ;;
@@ -74,15 +86,32 @@ binding_payload() {
     fi
 }
 
+# The file to open. Enter and Ctrl+P want only this.
+binding_target() {
+    binding_fields "$1" || return 1
+    binding_source
+}
+
+# What lands in the middle of a half-typed prompt. A bare path cannot answer
+# "update the key binding here from X to M-whatever": that sentence names the
+# key, so the key has to be in the paste. The key alone is ambiguous across
+# surfaces (C is an alias and also an alacritty chord), hence the type too.
+binding_payload() {
+    binding_fields "$1" || { printf '%s' "$1"; return 0; }
+    printf '[%s] %s (%s)' "$B_TYPE" "$B_KEY" "$(binding_source)"
+}
+
 main_loop() {
     local mode="bindings"
 
     while true; do
         if [[ "$mode" == "bindings" ]]; then
             local result key selection
-            result=$(confhelp -b "$DOTFILES" | awk -F'|' '{printf "%-12s %-18s %-55s %s\n", $1, $2, $3, $4}' | fzf \
-                --header='Enter=jump | Alt+H=send to pane | Ctrl+O=copy path | Ctrl+P=open | Ctrl+G=tealdeer' \
+            result=$(confhelp -b "$DOTFILES" | awk -F'|' '{printf "%-12s %-18s %-55s %s\t%s|%s|%s|%s\n", $1, $2, $3, $4, $1, $2, $3, $4}' | fzf \
+                --header='Enter=jump | Alt+H=send to pane | Ctrl+O=copy | Ctrl+P=open | Ctrl+G=tealdeer' \
                 --expect=ctrl-g,ctrl-o,ctrl-p,alt-h \
+                --delimiter=$'\t' \
+                --with-nth=1 \
                 --height=100% \
                 --layout=reverse \
                 --info=inline \
@@ -137,7 +166,7 @@ main_loop() {
                     # not it: for a generated row that column is the index,
                     # __fzf_bindings.conf, and editing the index edits nothing.
                     if [[ -n "$selection" ]]; then
-                        echo "FILE:$(binding_payload "$selection")" > "$TEMP_FILE"
+                        echo "FILE:$(binding_target "$selection")" > "$TEMP_FILE"
                     fi
                     break
                     ;;
@@ -186,7 +215,7 @@ main_loop() {
     done
 }
 
-export -f main_loop format_for_clipboard binding_payload
+export -f main_loop format_for_clipboard binding_fields binding_source binding_target binding_payload
 export DOTFILES TEMP_FILE FZF_COLORS
 
 # Calculate center position
