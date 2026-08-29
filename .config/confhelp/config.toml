@@ -117,3 +117,25 @@ key = "name"
 desc = "description"
 type = "claude-@"
 
+# Claude Code TUI keybindings. The file nests them as bindings[].bindings, a
+# dict of key -> action rather than a list of records, which the structured
+# parser cannot walk, so match the action lines directly. The value pattern
+# (word:word) is what separates a real binding from "$schema": "https://..."
+# and "context": "Global"; a null action (space) is unquoted and skipped.
+[claude]
+paths = ["~/.claude/keybindings.json"]
+match_line = '"[^"]+"\s*:\s*"[a-zA-Z]+:[a-zA-Z]+"'
+regex = '"([^"]+)"\s*:\s*"([^"]+)"'
+key_group = 1
+desc_group = 2
+type = "claude"
+
+# Alacritty key bindings. An entry carries either an action or a chars escape
+# sequence, never both, so desc combines the two and takes whichever is set.
+[alacritty-key]
+parser = "toml"
+paths = [".config/alacritty/alacritty.toml"]
+binding_path = "keyboard.bindings"
+key = "mods+key"
+desc = "action+chars"
+type = "alacritty"
