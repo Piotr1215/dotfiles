@@ -139,3 +139,16 @@ binding_path = "keyboard.bindings"
 key = "mods+key"
 desc = "action+chars"
 type = "alacritty"
+
+# fzf sub-bindings: the keys that only exist once a picker is already open, so
+# M-x's Ctrl-L and M-g's Alt-H become findable next to the M-x and M-g that
+# reach them. Only real key names are taken; a --bind on an fzf event (start,
+# change, focus) is not a keybinding, and a $VAR indirection has no key to show.
+[fzf]
+paths = ["scripts/*.sh", ".zsh_functions"]
+match_line = '''--bind[= ]['"]?(?:(?:ctrl|alt|shift)-|tab|enter|esc|f[0-9])'''
+regex = '''--bind[= ]['"]?((?:ctrl|alt|shift)-[a-zA-Z0-9-]+|tab|enter|esc|f[0-9]+):(.*)'''
+key_group = 1
+desc_group = 2
+truncate = 55
+type = "fzf"
