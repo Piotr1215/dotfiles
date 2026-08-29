@@ -145,7 +145,7 @@
 # Env: DDGX_TTL (cache seconds, default 86400; also how long the docs copy
 # stands), DDGX_JOBS (prefetch concurrency, default 6), DDGX_DOCS_DIR (where the
 # docs copy lives), DDGX_DOCS_SNIPPET (snippet width, default 200),
-# DDGX_NUM (default result count), DDGX_EDITOR
+# DDGX_NUM (result count, default 10), DDGX_EDITOR
 # (ctrl-e editor, default nvim), DDGX_PET_FILE (bookmark file), DDGX_PLAYER
 # (the player ctrl-o opens a video in, default mpv), DDGX_PLAYER_ARGS (extra
 # player arguments), DDGX_PPLX_PRESET (ask depth, default low), DDGX_ASK_CMD
@@ -585,18 +585,25 @@ docs_rank() {
 	' "${files[@]}"
 }
 
+# Ranked pages carrying every term. This is the query contract shown in both
+# pickers: words are ANDed and a quoted phrase arrives here as one term. A
+# partial match is not a result, even when no page satisfies the whole query.
+docs_matches() {
+	local terms=$1 total
+	total=$(grep -c . <<<"$terms" || true)
+	[[ $total -gt 0 ]] || return 0
+	docs_rank "$terms" |
+		awk -F'\t' -v want="$total" '$1 == want' |
+		sort -t$'\t' -k2,2nr
+}
+
 # Search the manual and shape the hits into the result set a web search
 # produces. Same contract as search_ddgr and search_pplx: writes the set, sets
 # SEARCH_ERROR, returns non-zero when nothing usable came back.
 #
-# DOCS_NOTE carries the one thing the rows cannot say for themselves, which is
-# that the search was relaxed. Nothing matching every term is the case the old
-# tool answered with an error and an instruction to retype the query under a
-# flag; here the next-best set is already on screen and the note says why.
 search_docs() {
 	local out=$1 num=$2 query=$3
-	local terms ranked want total titles
-	DOCS_NOTE=''
+	local terms ranked titles
 	SEARCH_ERROR=''
 
 	docs_corpus || return 1
@@ -614,24 +621,15 @@ search_docs() {
 		return 1
 	fi
 
-	ranked=$(docs_rank "$terms" | sort -t$'\t' -k1,1nr -k2,2nr) || true
+	ranked=$(docs_matches "$terms") || true
 	if [[ -z $ranked ]]; then
 		SEARCH_ERROR="nothing in the docs mentions $(tr '\n' ' ' <<<"$terms")"
 		return 1
 	fi
 
-	# Every term, or failing that as many as any page manages. A query where
-	# four of five terms land has found the page you wanted often enough that
-	# reporting nothing is the wrong answer.
-	want=$(head -1 <<<"$ranked" | cut -f1)
-	total=$(grep -c . <<<"$terms" || true)
-	if [[ $want -lt $total ]]; then
-		DOCS_NOTE="no page carries all $total terms, showing the best $want"
-	fi
-
 	titles=$(mktemp -t ddgx-titles-XXXXXX)
 	docs_index_rows >"$titles"
-	awk -F'\t' -v want="$want" -v base="$DOCS_PAGE_BASE" -v num="$num" \
+	awk -F'\t' -v base="$DOCS_PAGE_BASE" -v num="$num" \
 		-v titles="$titles" '
 		function esc(s) {
 			gsub(/\\/, "\\\\", s); gsub(/"/, "\\\"", s)
@@ -645,7 +643,7 @@ search_docs() {
 			}
 			printf "["
 		}
-		$1 == want && kept < num {
+		kept < num {
 			slug = $3
 			name = (slug in title && title[slug] != "") ? title[slug] : slug
 			printf "%s{\"title\":\"%s\",\"url\":\"%s/%s\",\"abstract\":\"%s\"}", \
@@ -661,6 +659,31 @@ search_docs() {
 		return 1
 	fi
 	return 0
+}
+
+# Live rows for the opening picker. Only @ searches have a local corpus before
+# Enter. Web and answer queries deliberately emit nothing here, so typing can
+# never turn into one network request per keystroke.
+mode_suggest() {
+	local raw=${1:-} num=${2:-10} query terms ranked
+	[[ $raw == '@'* ]] || return 0
+	query=${raw#@}
+	query=${query#"${query%%[![:space:]]*}"}
+	[[ -n ${query//[[:space:]]/} ]] || return 0
+	terms=$(query_terms "$query")
+	[[ -n ${terms//[[:space:]]/} ]] || return 0
+	ranked=$(docs_matches "$terms") || true
+	[[ -n $ranked ]] || return 0
+
+	awk -F'\t' -v num="$num" '
+		NR == FNR { title[$1] = $2; next }
+		kept < num {
+			slug = $3
+			name = (slug in title && title[slug] != "") ? title[slug] : slug
+			printf "%s\t\033[1;36m%s\033[0m  \033[90m%s\033[0m\n", slug, name, $4
+			kept++
+		}
+	' <(docs_index_rows) <(printf '%s\n' "$ranked")
 }
 # Which engine produced the current set. Absent means a web search, so a set
 # written before this file knew about engines still refines correctly.
@@ -923,62 +946,21 @@ center() {
 	printf '%b%s\033[0m\n' "$color" "$text"
 }
 
-# The M-g popup opens at full size before there is anything to show. tmux
-# cannot resize a popup or nest a smaller one inside it, so rather than leave a
-# bare prompt in the corner of an empty pane, draw a search screen that fills
-# it on purpose. Sets TYPED_QUERY.
+# The first picker owns only the query. @ searches can already show matching
+# pages from the local docs copy; web and answer searches stay empty until Enter
+# so a keystroke can never spend a network request. Enter hands just the query
+# to the normal result picker, where typing searches inside that narrowed set.
 prompt_for_query() {
-	local rows cols pad i indent hint
-	rows=$(tput lines 2>/dev/null || echo 24)
-	cols=$(tput cols 2>/dev/null || echo 80)
-	# Say these are the result keys. Listed bare they read as available on this
-	# screen, where read -e owns the line and there is not yet a result set to
-	# refine.
-	#
-	# A selection, not the whole list, and its length is load-bearing: this is
-	# centred on one line, and a hint that wraps pushes the cursor arithmetic
-	# below it off by a row and draws the input box in the wrong place. The keys
-	# left off it are in the picker's own header, where they apply. None of
-	# these work on this screen either, which is why the line says where they do.
-	hint='in the results:  tab mark  enter open  ctrl-o play, render or read  alt-q refine'
-	clear 2>/dev/null || true
-
-	# Both lines are centred and neither may wrap, for the same reason the hint
-	# may not: the cursor arithmetic below counts rows, and a wrapped line moves
-	# the input box off the row this draws it on.
-
-	local width fill
-	width=$((cols - 8))
-	[[ $width -gt 70 ]] && width=70
-	[[ $width -lt 24 ]] && width=24
-	indent=$(((cols - width) / 2))
-	[[ $indent -lt 0 ]] && indent=0
-	fill=$(printf '%*s' "$((width - 2))" '')
-	fill=${fill// /─}
-
-	pad=$(((rows - 8) / 2))
-	for ((i = 0; i < pad; i++)); do printf '\n'; done
-
-	center "$cols" 'duckduckgo results with the page text extracted' '\033[90m'
-	center "$cols" 'start with ? to ask perplexity, ?? harder, @ for the docs' '\033[90m'
-	printf '\n'
-
-	# An input box drawn around the caret, so the popup reads as a search box
-	# rather than a prompt adrift on an empty screen.
-	printf '%*s\033[36m╭%s╮\033[0m\n' "$indent" '' "$fill"
-	printf '%*s\033[36m│\033[0m\033[1;33m > \033[0m%*s\033[36m│\033[0m\n' \
-		"$indent" '' "$((width - 5))" ''
-	printf '%*s\033[36m╰%s╯\033[0m\n' "$indent" '' "$fill"
-	printf '\n'
-	center "$cols" "$hint" '\033[90m'
-
-	# Back up into the box and read there. Four lines up from the cursor's
-	# resting place below the hint: hint, blank, bottom border, input line.
-	printf '\033[4A'
-	printf '\033[%dG' "$((indent + 5))"
-	TYPED_QUERY=''
-	read -r -e TYPED_QUERY || return 1
-	clear 2>/dev/null || true
+	local num=${1:-10} out rc=0
+	out=$(fzf --ansi --disabled --layout=reverse --no-multi --print-query \
+		--margin='1,6%' --input-border=rounded --input-label=' query ' \
+		--input-label-pos=2 --list-border=rounded --list-label=' live matches ' \
+		--list-label-pos=2 --info=inline-right --no-separator \
+		--delimiter=$'\t' --with-nth=2.. --prompt='search > ' \
+		--header=$'@ docs update live · ? perplexity · ?? harder\nenter searches once, then typing searches inside those pages' \
+		--bind="change:reload($SELF --suggest {q} $num)" </dev/null) || rc=$?
+	[[ $rc -eq 130 ]] && return 1
+	TYPED_QUERY=${out%%$'\n'*}
 }
 
 hrule() {
@@ -1240,9 +1222,6 @@ run_query() {
 	set_engine "$file" "$engine"
 	mv -f "$tmp" "$file"
 	printf '%s\n' "$query" >"$(query_file "$file")"
-	# A docs search that could not satisfy every term says so on the header
-	# rather than in an error, because the next-best set is already on screen.
-	[[ -n ${DOCS_NOTE:-} ]] && set_note "$file" "$DOCS_NOTE"
 	# Warm the new set detached: this process ends the moment the picker
 	# reloads, and a job of its own would go with it.
 	(batch_extract "$file" &)
@@ -2200,7 +2179,7 @@ mode_pick() {
 # ---------------------------------------------------------------------------
 
 main() {
-	local num="${DDGX_NUM:-8}" dump=0 failed=0 args=() engine=ddgr query
+	local num="${DDGX_NUM:-10}" dump=0 failed=0 args=() engine=ddgr query
 	DUMP_LINES=12
 
 	# Internal modes come first: they are re-entrant calls from fzf bindings.
@@ -2214,6 +2193,11 @@ main() {
 	--filter)
 		shift
 		mode_filter "$@"
+		return 0
+		;;
+	--suggest)
+		shift
+		mode_suggest "$@"
 		return 0
 		;;
 	--read)
@@ -2347,7 +2331,7 @@ main() {
 		fi
 		# Started with no query, which is how the tmux M-g popup launches it.
 		POPUP_MODE=1
-		prompt_for_query || return 0
+		prompt_for_query "$num" || return 0
 		if [[ -z ${TYPED_QUERY//[[:space:]]/} ]]; then
 			return 0
 		fi
@@ -2435,7 +2419,6 @@ main() {
 	# What the picker refines from, and what it refines through.
 	printf '%s\n' "$query" >"$(query_file "$RESULTS_FILE")"
 	set_engine "$RESULTS_FILE" "$engine"
-	[[ -n ${DOCS_NOTE:-} ]] && set_note "$RESULTS_FILE" "$DOCS_NOTE"
 
 	if [[ $dump -eq 1 ]] || [[ ! -t 1 ]]; then
 		# Piped without -d: dump rather than start fzf on a headless stdout.

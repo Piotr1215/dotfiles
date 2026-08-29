@@ -390,6 +390,21 @@ EOF
 	[[ "$output" != *"[ERROR]"* ]]
 }
 
+@test "web search asks for ten results by default" {
+	cat >"$STUB_BIN/ddgr" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >"$BATS_TEST_TMPDIR/ddgr.args"
+printf '%s\n' '[{"title":"One","url":"https://example.com/one","abstract":"x"}]'
+EOF
+	chmod +x "$STUB_BIN/ddgr"
+	seed_cache "https://example.com/one" "one page"
+
+	run_ddgx -d "one"
+
+	[ "$status" -eq 0 ]
+	[[ "$(cat "$BATS_TEST_TMPDIR/ddgr.args")" == *'--num 10'* ]]
+}
+
 @test "no query prints usage and exits non-zero" {
 	run_ddgx
 
@@ -2469,28 +2484,12 @@ run_docs_json() {
 	[[ "$output" == *"Hooks reference"* ]]
 }
 
-@test "a query no page satisfies relaxes rather than failing" {
-	# The old tool answered this with an error and told you to retype the query
-	# under a --full flag. The next-best set is more use than the instruction.
+@test "a docs query returns nothing unless one page carries every term" {
 	run_docs -d -l 0 '@ matcher precedence zzzznotaword'
 
-	[ "$status" -eq 0 ]
-	[[ "$output" == *"Hooks reference"* ]]
-}
-
-@test "the relaxation says so on the header rather than passing itself off" {
-	write_docs_corpus
-	stub_curl_tripwire
-	R="$BATS_TEST_TMPDIR/relaxed.json"
-	run env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" \
-		XDG_DATA_HOME="$DATA_HOME" DDGX_TTL=0 DDGX_DOCS_DIR="$DOCS_DIR" \
-		DDGX_NO_NETWORK=1 \
-		bash -c "source '$DDGX' >/dev/null 2>&1 || true
-			search_docs '$R' 8 'matcher precedence zzzznotaword' >/dev/null
-			printf '%s' \"\$DOCS_NOTE\""
-
-	[ "$status" -eq 0 ]
-	[[ "$output" == *"no page carries all 3 terms"* ]]
+	[ "$status" -eq 1 ]
+	[[ "$output" == *"nothing in the docs mentions"* ]]
+	[[ "$output" != *"Hooks reference"* ]]
 }
 
 @test "nothing in the manual is an error naming what was looked for" {
@@ -2640,24 +2639,61 @@ EOF
 	[[ "$(cat "$R")" == *"settings-reference"* ]]
 }
 
-@test "the search screen names every prefix, on a line that cannot wrap" {
-	# The prefixes are the only way into the other two engines, and the search
-	# box is the one screen where they can be advertised: read -e owns that
-	# line, so a key would do nothing there.
-	#
-	# The length is load-bearing, not cosmetic. prompt_for_query centres this
-	# line and then counts rows backwards to put the cursor inside the input
-	# box; a line that wraps moves the box a row and the caret lands on the
-	# border. The M-g popup is 90% of the terminal, so 72 columns on an
-	# 80-column screen is the width this has to survive.
-	local line
-	line=$(sed -n "s/.*center \"\$cols\" '\(start with .*\)' .*/\1/p" "$DDGX")
+@test "the opening query picker is top aligned and reloads local suggestions" {
+	cat >"$STUB_BIN/fzf" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >"$BATS_TEST_TMPDIR/fzf.args"
+cat >/dev/null
+printf '%s\n' '@ "the matcher matches"'
+printf '%s\n' $'hooks\tHooks reference\tmatching passage'
+EOF
+	chmod +x "$STUB_BIN/fzf"
 
-	[ -n "$line" ]
-	[ "${#line}" -le 72 ]
-	[[ "$line" == *'?'* ]]
-	[[ "$line" == *'??'* ]]
-	[[ "$line" == *'@'* ]]
+	run env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" \
+		DDGX_DOCS_DIR="$DOCS_DIR" bash -c \
+		"source '$DDGX' >/dev/null 2>&1 || true
+		prompt_for_query
+		printf '%s' \"\$TYPED_QUERY\""
+
+	[ "$status" -eq 0 ]
+	[ "$output" = '@ "the matcher matches"' ]
+	args=$(cat "$BATS_TEST_TMPDIR/fzf.args")
+	[[ "$args" == *'--layout=reverse'* ]]
+	[[ "$args" == *'--print-query'* ]]
+	[[ "$args" == *'change:reload('*'--suggest'* ]]
+	[[ "$args" == *'--margin=1,6%'* ]]
+	[[ "$args" == *'--input-border=rounded'* ]]
+	[[ "$args" == *'--list-border=rounded'* ]]
+	[[ "$args" == *'--info=inline-right'* ]]
+}
+
+@test "live docs suggestions are strict, quoted, and offline" {
+	write_docs_corpus
+	stub_curl_tripwire
+	stub_ddgr_tripwire
+
+	run env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" \
+		DDGX_DOCS_DIR="$DOCS_DIR" DDGX_NO_NETWORK=1 \
+		bash "$DDGX" --suggest '@ "the matcher matches"' 10
+
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"Hooks reference"* ]]
+	[[ "$output" != *"Agent SDK hooks"* ]]
+	[[ "$output" != *"curl was called"* ]]
+	[[ "$output" != *"ddgr was called"* ]]
+}
+
+@test "live suggestions show no partial rows for a failed AND" {
+	write_docs_corpus
+	stub_curl_tripwire
+	stub_ddgr_tripwire
+
+	run env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" \
+		DDGX_DOCS_DIR="$DOCS_DIR" DDGX_NO_NETWORK=1 \
+		bash "$DDGX" --suggest '@ matcher precedence zzzznotaword' 10
+
+	[ "$status" -eq 0 ]
+	[ -z "$output" ]
 }
 
 @test "an empty copy is the network's answer, not the query's" {
@@ -2931,14 +2967,14 @@ matcher Bash"
 	[ -z "$output" ]
 }
 
-@test "fzf does no matching of its own" {
-	# --disabled and the change binding are the whole mechanism: without the
-	# first, fzf filters the rows it was handed, which is the title and the
-	# domain, and the body search never runs.
-	run grep -c -e '--disabled' -e 'change:reload($SELF --filter' "$DDGX"
+@test "both fzf search stages delegate matching to page text" {
+	# Each picker disables fzf's row matcher and reloads from page text instead:
+	# the opening docs corpus first, then the narrowed result pages.
+	run grep -c -e '--disabled' -e 'change:reload($SELF --suggest' \
+		-e 'change:reload($SELF --filter' "$DDGX"
 
 	[ "$status" -eq 0 ]
-	[ "$output" -eq 2 ]
+	[ "$output" -eq 4 ]
 }
 
 @test "the manual's refiner drops the operators typing now covers" {
