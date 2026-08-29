@@ -514,6 +514,19 @@ EOF
 	grep -q 'ctrl-e:execute.*--query {q}' "$DDGX"
 }
 
+@test "quickfix mode gives nvim no positional note arguments" {
+	write_two_results
+	stub_nvim_capture
+
+	run env XDG_CACHE_HOME="$CACHE_HOME" XDG_DATA_HOME="$DATA_HOME" DDGX_TTL=0 \
+		DDGX_EDITOR="$STUB_BIN/nvim" \
+		bash "$DDGX" --edit "$BATS_TEST_TMPDIR/results.json" --query body 0 1
+
+	[ "$status" -eq 0 ]
+	! grep -Fxq "$DATA_HOME/ddgx/notes/first-hit.md" "$BATS_TEST_TMPDIR/nvim.args"
+	! grep -Fxq "$DATA_HOME/ddgx/notes/second-hit.md" "$BATS_TEST_TMPDIR/nvim.args"
+}
+
 @test "edit mode builds quickfix with the same slash-delimited ERE" {
 	write_two_results
 	stub_nvim_capture

@@ -1618,7 +1618,7 @@ mode_edit() {
 				-c 'nnoremap <silent> <C-g>n <cmd>cnext<cr>' \
 				-c 'nnoremap <silent> <C-g>p <cmd>cprevious<cr>' \
 				-c "call setqflist([], 'a', {'title': 'ddgx · Ctrl-g n next · Ctrl-g p previous'})" \
-				-c copen "${notes[@]}"
+				-c copen
 			rm -f "$quickfix"
 			return 0
 		fi
