@@ -22,6 +22,49 @@ format_for_clipboard() {
     fi
 }
 
+# The absolute path worth handing to someone else. A binding is remembered by
+# its key and almost never by the file it lives in, so the useful answer is the
+# script the key RUNS: M-g is defined at .tmux.conf:213 but the thing to open is
+# __ddgx.sh. Falls back to the definition, with its line, when the command names
+# no path of its own (plain tmux verbs, zsh aliases, nvim keymaps).
+binding_payload() {
+    local selection="$1" target file_line file line
+
+    # A tmuxinator row's description IS its root directory, so the generic path
+    # scan below would hand back the project dir instead of the session file
+    # that actually defines the layout.
+    if [[ "$selection" == *"[mux]"* ]]; then
+        file_line=$(echo "$selection" | awk '{print $NF}')
+        printf '%s' "${HOME}/.config/tmuxinator/${file_line%%:*}"
+        return 0
+    fi
+
+    target=$(echo "$selection" | grep -oE '(/[^ ]+|~[^ ]+|\$HOME[^ ]+)' | head -1)
+    target="${target%\"}"
+    target="${target%\'}"
+    target="${target/#\~/$HOME}"
+    target="${target/#\$HOME/$HOME}"
+    if [[ -n "$target" && -e "$target" ]]; then
+        printf '%s' "$target"
+        return 0
+    fi
+
+    file_line=$(echo "$selection" | awk '{print $NF}')
+    file="${file_line%:*}"
+    line="${file_line##*:}"
+    case "$file" in
+        /*) ;;
+        "~"*) file="${file/#\~/$HOME}" ;;
+        *.yml) file="$HOME/.config/tmuxinator/$file" ;;
+        *) file="$DOTFILES/$file" ;;
+    esac
+    if [[ "$line" =~ ^[0-9]+$ ]]; then
+        printf '%s:%s' "$file" "$line"
+    else
+        printf '%s' "$file"
+    fi
+}
+
 main_loop() {
     local mode="bindings"
 
@@ -29,8 +72,8 @@ main_loop() {
         if [[ "$mode" == "bindings" ]]; then
             local result key selection
             result=$(confhelp -b "$DOTFILES" | awk -F'|' '{printf "%-12s %-18s %-55s %s\n", $1, $2, $3, $4}' | fzf \
-                --header='Enter=jump | Ctrl+P=open path | Ctrl+G=tealdeer | Ctrl+O=copy' \
-                --expect=ctrl-g,ctrl-o,ctrl-p \
+                --header='Enter=jump | Alt+H=send to pane | Ctrl+O=copy path | Ctrl+P=open | Ctrl+G=tealdeer' \
+                --expect=ctrl-g,ctrl-o,ctrl-p,alt-h \
                 --height=100% \
                 --layout=reverse \
                 --info=inline \
@@ -47,15 +90,22 @@ main_loop() {
                     mode="tldr"
                     continue
                     ;;
-                ctrl-o)
+                alt-h)
+                    # Hand the path to the pane the popup was opened over, the
+                    # way M-g's alt-h hands over an extract. Pasted at the
+                    # cursor and never submitted, because this lands in the
+                    # middle of a half-typed sentence to an agent.
                     if [[ -n "$selection" ]]; then
-                        if [[ "$selection" == *"[mux]"* ]]; then
-                            local session_file
-                            session_file=$(echo "$selection" | awk '{print $NF}' | cut -d: -f1)
-                            printf '%s' "${HOME}/.config/tmuxinator/${session_file}" | xsel -ib
-                        else
-                            printf '%s' "$selection" | xsel -ib
-                        fi
+                        echo "SEND:$(binding_payload "$selection")" > "$TEMP_FILE"
+                    fi
+                    break
+                    ;;
+                ctrl-o)
+                    # The path, not the row. Copying the rendered row pasted
+                    # three padded columns and a repo-relative .tmux.conf:213
+                    # that resolves against nothing on the far end.
+                    if [[ -n "$selection" ]]; then
+                        binding_payload "$selection" | xsel -ib
                     fi
                     break
                     ;;
@@ -140,7 +190,7 @@ main_loop() {
     done
 }
 
-export -f main_loop format_for_clipboard
+export -f main_loop format_for_clipboard binding_payload
 export DOTFILES TEMP_FILE FZF_COLORS
 
 # Calculate center position
@@ -179,6 +229,18 @@ if [[ -f "$TEMP_FILE" ]]; then
         OPEN_PATH:*)
             path="${result#OPEN_PATH:}"
             nohup alacritty -e nvim "$path" >/dev/null 2>&1 &
+            ;;
+        SEND:*)
+            payload="${result#SEND:}"
+            # No @popup_source_pane to read: this popup is its own alacritty
+            # window, not a tmux display-popup, so the target is tmux's active
+            # pane, which is still the one the shortcut was pressed over.
+            source "${DOTFILES}/scripts/__lib_pane_deliver.sh"
+            target=$(tmux display-message -p '#{pane_id}' 2>/dev/null || true)
+            if ! deliver_to_pane "$target" "$payload"; then
+                printf '%s' "$payload" | xsel -ib
+                notify-send "confhelp" "no live pane, copied instead" 2>/dev/null || true
+            fi
             ;;
         TLDR:*)
             page="${result#TLDR:}"
