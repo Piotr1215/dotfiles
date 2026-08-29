@@ -1126,7 +1126,7 @@ EOF
 	# everything past the cut is simply gone. A key you cannot see does not
 	# exist, which is what made this worth a test rather than a careful eye.
 	[ "$status" -eq 0 ]
-	[ "${#lines[@]}" -eq 3 ]
+	[ "${#lines[@]}" -eq 4 ]
 	local line
 	for line in "${lines[@]}"; do
 		[ "$(wc -L <<<"$line")" -le 98 ]
@@ -2760,10 +2760,8 @@ EOF
 	[[ "$output" != *'filetype:'* ]]
 	[[ "$output" != *'intitle:'* ]]
 	[[ "$output" != *'inurl:'* ]]
-	# The ones that do mean something over a corpus of prose.
-	[[ "$output" == *'phrase'* ]]
+	# The one that still means something over a corpus of prose.
 	[[ "$output" == *'edit'* ]]
-	[[ "$output" == *'reset'* ]]
 }
 
 @test "exclude is not offered over the manual, because it would invert" {
@@ -2806,4 +2804,159 @@ EOF
 		'exclude' 'edit' 'reset' 'ask' 'web' 'docs'; do
 		[[ "$output" == *"$op"* ]] || { echo "missing: $op"; return 1; }
 	done
+}
+
+# --------------------------------------------------------------------------
+# Typing in the picker
+#
+# The box searches the page bodies already on disk, not the row fzf drew. The
+# rows carry a title and a domain; the answer is in the extract behind them.
+# --------------------------------------------------------------------------
+
+# Three results, two of them with a cached page body, one without.
+write_filter_state() {
+	FR="$BATS_TEST_TMPDIR/filter.json"
+	printf '%s\n' '[{"title":"Hooks reference","url":"https://code.claude.com/docs/en/hooks","abstract":"about hooks"},{"title":"Settings","url":"https://code.claude.com/docs/en/settings","abstract":"about settings"},{"title":"Slash commands","url":"https://code.claude.com/docs/en/slash","abstract":"about commands"}]' >"$FR"
+	printf 'hooks\n' >"$FR.query"
+	printf 'docs\n' >"$FR.engine"
+	seed_cache "https://code.claude.com/docs/en/hooks" \
+		"the PreToolUse hook fires before a tool runs
+matcher Bash"
+	seed_cache "https://code.claude.com/docs/en/settings" \
+		"settings.json holds permissions"
+}
+
+@test "typing searches the page bodies, not the row" {
+	write_filter_state
+
+	# "matcher" appears in one page and in no title.
+	run env XDG_CACHE_HOME="$CACHE_HOME" bash "$DDGX" --filter "$FR" 'matcher'
+
+	[ "$status" -eq 0 ]
+	[ "${#lines[@]}" -eq 1 ]
+	[[ "${lines[0]}" == 0* ]]
+}
+
+@test "an empty query keeps every result" {
+	write_filter_state
+
+	run env XDG_CACHE_HOME="$CACHE_HOME" bash "$DDGX" --filter "$FR" ''
+
+	[ "$status" -eq 0 ]
+	[ "${#lines[@]}" -eq 3 ]
+}
+
+@test "two words are ANDed across the page, in any order" {
+	write_filter_state
+
+	run env XDG_CACHE_HOME="$CACHE_HOME" bash "$DDGX" --filter "$FR" 'matcher tool'
+
+	[ "$status" -eq 0 ]
+	[ "${#lines[@]}" -eq 1 ]
+
+	# The same two words, one of them in a page the other is not in, keeps
+	# nothing. An OR would have kept two rows here.
+	run env XDG_CACHE_HOME="$CACHE_HOME" bash "$DDGX" --filter "$FR" 'matcher permissions'
+
+	[ "$status" -eq 0 ]
+	[ -z "$output" ]
+}
+
+@test "a quoted phrase has to appear as written" {
+	write_filter_state
+
+	run env XDG_CACHE_HOME="$CACHE_HOME" bash "$DDGX" --filter "$FR" '"before a tool"'
+	[ "$status" -eq 0 ]
+	[ "${#lines[@]}" -eq 1 ]
+
+	# The same words, wrong order: as loose terms they would all be found.
+	run env XDG_CACHE_HOME="$CACHE_HOME" bash "$DDGX" --filter "$FR" '"tool before a"'
+	[ "$status" -eq 0 ]
+	[ -z "$output" ]
+}
+
+@test "a page whose body has not landed yet is judged on its row" {
+	write_filter_state
+
+	# The third result was never cached. It stays reachable by its title
+	# rather than disappearing until the extractor catches up with it.
+	run env XDG_CACHE_HOME="$CACHE_HOME" bash "$DDGX" --filter "$FR" 'slash'
+
+	[ "$status" -eq 0 ]
+	[ "${#lines[@]}" -eq 1 ]
+	[[ "${lines[0]}" == 2* ]]
+}
+
+@test "a query nothing carries empties the list rather than failing" {
+	write_filter_state
+
+	run env XDG_CACHE_HOME="$CACHE_HOME" bash "$DDGX" --filter "$FR" 'kubernetes'
+
+	[ "$status" -eq 0 ]
+	[ -z "$output" ]
+}
+
+@test "the rows keep the index the key bindings act on" {
+	write_filter_state
+
+	run env XDG_CACHE_HOME="$CACHE_HOME" bash "$DDGX" --filter "$FR" 'settings'
+
+	[ "$status" -eq 0 ]
+	# Field one is the result's own index, not its position in the filtered
+	# list: enter, ctrl-o and the preview all read it to find the url.
+	[[ "${lines[0]}" == 1$'\t'* ]]
+}
+
+@test "the preview marks what is typed in the picker, on any engine" {
+	write_filter_state
+	printf 'ddgr\n' >"$FR.engine"
+
+	run env XDG_CACHE_HOME="$CACHE_HOME" DDGX_TTL=0 FZF_PREVIEW_COLUMNS=60 \
+		bash "$DDGX" --preview "$FR" 0 'matcher' </dev/null
+
+	[ "$status" -eq 0 ]
+	# Reverse video around the word, the same marking the manual's own terms
+	# get. A web set gets it too now: the filter kept this page for that word,
+	# so the pane has to show where it is.
+	[[ "$output" == *$'\033[7mmatcher\033[27m'* ]]
+}
+
+@test "fzf does no matching of its own" {
+	# --disabled and the change binding are the whole mechanism: without the
+	# first, fzf filters the rows it was handed, which is the title and the
+	# domain, and the body search never runs.
+	run grep -c -e '--disabled' -e 'change:reload($SELF --filter' "$DDGX"
+
+	[ "$status" -eq 0 ]
+	[ "$output" -eq 2 ]
+}
+
+@test "the manual's refiner drops the operators typing now covers" {
+	write_filter_state
+
+	run bash -c "source '$DDGX' >/dev/null 2>&1 || true; refine_menu '$FR'"
+
+	[ "$status" -eq 0 ]
+	# phrase is what typing a quoted phrase does, without re-ranking the
+	# corpus to do it, and reset drops operators from a query that has none.
+	[[ "$output" != *'phrase'* ]]
+	[[ "$output" != *'reset'* ]]
+	[[ "$output" == *'edit'* ]]
+}
+
+@test "the answer row is searched by its text, not by its title" {
+	AR="$BATS_TEST_TMPDIR/answer.json"
+	printf '%s\n' '[{"title":"perplexity (low)","url":"","abstract":""},{"title":"A source","url":"https://example.com/s","abstract":"x"}]' >"$AR"
+	printf 'why do pods stay terminating\n' >"$AR.query"
+	printf 'pplx\n' >"$AR.engine"
+	printf 'a finalizer on the object blocks deletion\n' >"$AR.answer"
+
+	# "finalizer" is in the answer text and in no title. The answer row is the
+	# one row in the set with no page to fall back to and no way to scroll
+	# back to it, so it has to be searched where its words actually are.
+	run env XDG_CACHE_HOME="$CACHE_HOME" bash "$DDGX" --filter "$AR" 'finalizer'
+
+	[ "$status" -eq 0 ]
+	[ "${#lines[@]}" -eq 1 ]
+	[[ "${lines[0]}" == 0$'\t'* ]]
 }

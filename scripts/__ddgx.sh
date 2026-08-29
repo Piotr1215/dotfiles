@@ -91,6 +91,19 @@
 # under it only ever show the newest turn's: a [1] three turns up is not
 # today's [1], and the transcript has to be readable without them.
 #
+# Typing in the picker searches the pages, not the rows. The extracts are
+# already on disk for the preview, so the box reads the page bodies and keeps
+# the results carrying every word, with the words marked where they appear.
+# Words are ANDed and a "quoted phrase" is one term, the same rule the search
+# box obeys. fzf's own matcher is off: it would have been matching a title and
+# a domain, a dozen words per result, while the pages sat unread beside it.
+#
+# Which is also why the manual's refiner is short. site: and filetype: cannot
+# narrow a corpus of one site and one filetype, exclude inverts on a corpus
+# full of --flags, and phrase and reset are now what typing does, without
+# re-ranking the corpus to do it. What is left is switching engine and editing
+# the words.
+#
 # Keys in the picker. tab marks results, and ctrl-e, ctrl-a, ctrl-y and ctrl-r
 # apply to the whole marked set, so mark five and hit one key:
 #   tab      mark / unmark          enter   open in the browser
@@ -104,6 +117,7 @@
 #   ctrl-y   copy the URLs          ctrl-r  re-fetch (bypass cache)
 #   alt-q    refine the query       ctrl-v  toggle the preview pane
 #   ctrl-d/u scroll the preview
+#   type     filter by page text, ANDed, "quoted phrase" is one term
 #
 # alt-h is for the agent in the pane underneath. It pastes the note PATHS, not
 # the note text, and it does not press Enter: you type what you want done with
@@ -199,13 +213,17 @@ PET_LINKS="${DDGX_PET_FILE:-$HOME/dev/pet-snippets/pet-links.toml}"
 # (a b c d e f g h i j k l n p q u w y), and free at all because collapsing
 # play, render and yt-x into ctrl-o gave three keys back.
 #
-# Two lines, because one is longer than the pane. fzf gives the header the
-# width of the result list, not of the terminal, so at the default 58% preview
-# a single line is cut around 98 columns and everything after it is simply
-# gone. A key you cannot see does not exist, so both lines have to stay short
-# enough to survive that cut. The suite measures them.
+# Three lines. One would be longer than the pane, and the third says what
+# typing does, which is the one thing here nobody guesses: the search box reads
+# the page bodies, not the row it is drawn next to.
+#
+# fzf gives the header the width of the result list, not of the terminal, so at
+# the default 58% preview a line is cut around 98 columns and everything after
+# it is simply gone. A key you cannot see does not exist, so every line has to
+# stay short enough to survive that cut. The suite measures them.
 PICKER_KEYS='tab mark · enter open · ctrl-o play, render or read · ctrl-e nvim · ctrl-v preview
-ctrl-a bookmark · ctrl-y copy · ctrl-r refetch · alt-q refine · alt-h hand to pane'
+ctrl-a bookmark · ctrl-y copy · ctrl-r refetch · alt-q refine · alt-h hand to pane
+type: searches inside the pages · words are ANDed · "a phrase" is one term'
 
 # Print the header comment block: everything between the shebang and the first
 # line of code, so the help text cannot drift out of sync with a line range.
@@ -1115,10 +1133,17 @@ refine_menu() {
 			'inurl:' 'the words must be in the address' \
 			'exclude' 'drop results carrying a word'
 	fi
-	printf '%-10s %s\n' \
-		'phrase' 'an exact wording, in quotes' \
-		'edit' 'edit the whole query by hand' \
-		'reset' 'drop every operator, keep the words'
+	# phrase and reset are also web-only now. Typing a "quoted phrase" in the
+	# picker searches the page bodies of the manual and marks the hits, which
+	# is what asking for an exact wording was reaching for, only without
+	# re-ranking the corpus to get it. And reset drops operators from a query
+	# the manual never had any in.
+	if [[ $engine != docs ]]; then
+		printf '%-10s %s\n' \
+			'phrase' 'an exact wording, in quotes' \
+			'reset' 'drop every operator, keep the words'
+	fi
+	printf '%-10s %s\n' 'edit' 'edit the whole query by hand'
 }
 
 FILETYPES='pdf
@@ -1228,13 +1253,24 @@ run_query() {
 # ---------------------------------------------------------------------------
 
 mode_preview() {
-	local file=$1 idx=$2 width url title abstract cached still af
+	local file=$1 idx=$2 pickq=${3:-}
+	local width url title abstract cached still af marks
 	width=$((${FZF_PREVIEW_COLUMNS:-100} - 2))
 	[[ $width -lt 40 ]] && width=40
 
 	url=$(result_field "$idx" "$file" url)
 	title=$(result_field "$idx" "$file" title)
 	abstract=$(result_field "$idx" "$file" abstract)
+
+	# What to mark in the page. The manual's own terms, because the set was
+	# built from them, plus whatever is typed in the picker right now: the
+	# filter kept this page for those words, so the pane has to show where
+	# they are. Reading a page to work out why it survived defeats the filter.
+	marks=''
+	[[ $(current_engine "$file") == docs ]] && marks=$(query_terms "$(current_query "$file")")
+	if [[ -n ${pickq//[[:space:]]/} ]]; then
+		marks=$(printf '%s\n%s' "$marks" "$(query_terms "$pickq")")
+	fi
 
 	# The answer row. No url, so nothing to fetch and nothing to extract: the
 	# text is already here, rendered by the same renderer the extracts use so
@@ -1246,7 +1282,7 @@ mode_preview() {
 		# nobody knows how to continue is a feature that reads as a dead end.
 		printf '\033[90m(enter asks a follow-up)\033[0m\n\n'
 		if [[ -s $af ]]; then
-			render_markdown "$af" "$width"
+			render_markdown "$af" "$width" | highlight_terms "$marks"
 		else
 			printf '\033[31m(the answer is gone)\033[0m\n'
 		fi
@@ -1280,15 +1316,7 @@ mode_preview() {
 
 	cached=$(cache_file "$url")
 	if extract_to_cache "$url"; then
-		# Only the manual has terms worth marking: a web query carries
-		# operators, and DuckDuckGo's own syntax is not text to look for in
-		# the page it returned.
-		if [[ $(current_engine "$file") == docs ]]; then
-			render_markdown "$cached" "$width" |
-				highlight_terms "$(query_terms "$(current_query "$file")")"
-		else
-			render_markdown "$cached" "$width"
-		fi
+		render_markdown "$cached" "$width" | highlight_terms "$marks"
 		printf '\n'
 	else
 		# Name the way out here rather than only in the help text. This line is
@@ -1845,63 +1873,74 @@ play_detached() {
 # number and no domain: it is not somewhere you can go.
 # Which results carry every term somewhere in their page TEXT.
 #
-# Typing in the picker used to be fzf matching the row, which is the title and
-# the domain: about twelve words per result, and never the thing you are
-# looking for. The pages are already on disk as markdown, extracted for the
-# preview, so the words are right there; searching the titles instead was
-# leaving the whole corpus unread.
+# Typing in the picker used to be fzf matching the row it was given, which is
+# a title and a domain: a dozen words per result, and never the sentence you
+# are looking for. The pages are already on disk as markdown, pulled for the
+# preview, so the words are right there and the list was searching past them.
 #
-# Terms are ANDed and a "quoted phrase" is one term, the same rule the manual
-# search uses, so the two boxes behave the same way and there is one thing to
-# learn rather than two.
+# Terms are ANDed and a "quoted phrase" is one term, the same rule the search
+# box obeys, so there is one thing to learn rather than two.
 #
-# A page whose extract has not landed yet falls back to its title and snippet.
-# It cannot be proved not to match, and hiding a result because the background
-# extractor has not reached it yet would make the list change under you as it
-# catches up.
+# A page whose extract has not landed yet falls back to its title, snippet and
+# url. It cannot be shown not to match, and dropping a result because the
+# background extractor has not reached it would make the list shuffle under
+# the cursor as it catches up.
+#
+# One jq pass, not one per field: this runs on every keystroke, and eight
+# results through result_field is a quarter second of jq startup per letter.
 content_indices() {
 	local file=$1 query=$2
-	local terms idx url cached hay ok term total
+	local terms line idx url rest meta cached hay ok term
+
 	terms=$(query_terms "$query")
+	meta=$(jq -r 'to_entries[] | "\(.key)\t\(.value.url // "")\t\(.value.title // "") \(.value.abstract // "")"' "$file") || return 0
+
 	if [[ -z ${terms//[[:space:]]/} ]]; then
-		jq -r 'to_entries[] | "\(.key)"' "$file"
+		printf '%s\n' "$meta" | cut -f1
 		return 0
 	fi
-	total=$(jq 'length' "$file" 2>/dev/null || printf '0')
-	for ((idx = 0; idx < total; idx++)); do
-		url=$(result_field "$idx" "$file" url)
+
+	# Split by hand rather than with read -r a b c. Tab is an IFS whitespace
+	# character, so read collapses a run of them and the answer row, whose url
+	# field is empty, hands its title over as its url.
+	while IFS= read -r line; do
+		[[ -n $line ]] || continue
+		idx=${line%%$'\t'*}
+		rest=${line#*$'\t'}
+		url=${rest%%$'\t'*}
+		rest=${rest#*$'\t'}
 		hay=''
 		if [[ -n $url ]]; then
 			cached=$(cache_file "$url")
 			[[ -s $cached ]] && hay=$cached
-		fi
-		if [[ -z $hay ]]; then
-			hay=$(mktemp -t ddgx-hay-XXXXXX)
-			{
-				result_field "$idx" "$file" title
-				result_field "$idx" "$file" abstract
-				printf '%s\n' "$url"
-			} >"$hay"
+		else
+			# The answer row carries its text in a file rather than behind a
+			# url. Judging it on its title would drop it out of the list the
+			# moment you typed a word it answered with, which is the one row
+			# in the set you cannot get back by scrolling.
+			cached=$(answer_file "$file")
+			[[ -s $cached ]] && hay=$cached
 		fi
 		ok=1
 		while IFS= read -r term; do
 			[[ -n $term ]] || continue
-			grep -qiF -- "$term" "$hay" || { ok=0; break; }
+			if [[ -n $hay ]]; then
+				grep -qiF -- "$term" "$hay" || { ok=0; break; }
+			else
+				[[ ${rest,,} == *"${term,,}"* || ${url,,} == *"${term,,}"* ]] || { ok=0; break; }
+			fi
 		done <<<"$terms"
-		[[ $hay == "$(cache_file "${url:-x}")" ]] || rm -f "$hay"
 		[[ $ok -eq 1 ]] && printf '%s\n' "$idx"
-	done
+	done <<<"$meta"
 	return 0
 }
 
-# The picker list, restricted to the results whose text carries the query.
-# fzf reloads through this on every keystroke, with its own matcher disabled.
+# The picker list, cut down to the results whose text carries the query. fzf
+# reloads through this on every keystroke with its own matcher disabled.
 mode_filter() {
 	local file=$1 query=${2:-} keep
 	keep=$(content_indices "$file" "$query")
-	if [[ -z $keep ]]; then
-		return 0
-	fi
+	[[ -n $keep ]] || return 0
 	mode_list "$file" | awk -F'\t' -v keep="$keep" '
 		BEGIN { n = split(keep, k, "\n"); for (i = 1; i <= n; i++) want[k[i]] = 1 }
 		($1 in want)
@@ -2127,9 +2166,11 @@ mode_pick() {
 		mode_list "$file" |
 			fzf --ansi --multi \
 				--delimiter=$'\t' --with-nth=2.. \
-				--prompt='result > ' \
+				--prompt='in pages > ' \
+				--disabled \
 				--header="$(mode_header "$file")" \
-				--preview="$SELF --preview '$file' {1}" \
+				--preview="$SELF --preview '$file' {1} {q}" \
+				--bind="change:reload($SELF --filter '$file' {q})+first" \
 				--preview-window='right,58%,wrap,border-left' \
 				--bind="enter:transform($SELF --enter '$file' {1} $num 2>/dev/null)" \
 				--bind="ctrl-o:transform($SELF --action '$file' {1} {+1} 2>/dev/null)" \
@@ -2138,7 +2179,7 @@ mode_pick() {
 				--bind="alt-h:transform($SELF --send '$file' {+1} 2>/dev/null)" \
 				--bind="ctrl-y:execute-silent($SELF --copy '$file' {+1})" \
 				--bind="ctrl-r:execute-silent($SELF --refetch '$file' {+1})+refresh-preview" \
-				--bind="alt-q:execute($SELF --refine '$file' $num)+reload($SELF --list '$file')+transform-header($SELF --header '$file')" \
+				--bind="alt-q:execute($SELF --refine '$file' $num)+clear-query+reload($SELF --list '$file')+transform-header($SELF --header '$file')" \
 				--bind='ctrl-v:change-preview-window(hidden|right,58%,wrap,border-left)' \
 				--bind='ctrl-d:preview-half-page-down' \
 				--bind='ctrl-u:preview-half-page-up' || true
@@ -2165,6 +2206,11 @@ main() {
 	--preview)
 		shift
 		mode_preview "$@"
+		return 0
+		;;
+	--filter)
+		shift
+		mode_filter "$@"
 		return 0
 		;;
 	--read)
