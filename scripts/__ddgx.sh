@@ -661,13 +661,17 @@ search_docs() {
 	return 0
 }
 
-# Live rows for the opening picker. Only @ searches have a local corpus before
-# Enter. Web and answer queries deliberately emit nothing here, so typing can
-# never turn into one network request per keystroke.
+# Live rows for the opening picker come from the local docs copy. An ordinary
+# query previews that corpus while Enter still searches the web once. @ keeps
+# the submitted search in docs. Answer queries stay empty until Enter, so
+# typing can never turn into one network request per keystroke.
 mode_suggest() {
 	local raw=${1:-} num=${2:-10} query terms ranked
-	[[ $raw == '@'* ]] || return 0
-	query=${raw#@}
+	case $raw in
+	'?'*) return 0 ;;
+	'@'*) query=${raw#@} ;;
+	*) query=$raw ;;
+	esac
 	query=${query#"${query%%[![:space:]]*}"}
 	[[ -n ${query//[[:space:]]/} ]] || return 0
 	terms=$(query_terms "$query")
@@ -954,10 +958,10 @@ prompt_for_query() {
 	local num=${1:-10} out rc=0
 	out=$(fzf --ansi --disabled --layout=reverse --no-multi --print-query \
 		--margin='1,6%' --input-border=rounded --input-label=' query ' \
-		--input-label-pos=2 --list-border=rounded --list-label=' live matches ' \
+		--input-label-pos=2 --list-border=rounded --list-label=' live local docs ' \
 		--list-label-pos=2 --info=inline-right --no-separator \
 		--delimiter=$'\t' --with-nth=2.. --prompt='search > ' \
-		--header=$'@ docs update live · ? perplexity · ?? harder\nenter searches once, then typing searches inside those pages' \
+		--header=$'live rows: local docs · @ keeps the search local\nenter searches once · ? perplexity · ?? harder' \
 		--bind="change:reload($SELF --suggest {q} $num)" </dev/null) || rc=$?
 	[[ $rc -eq 130 ]] && return 1
 	TYPED_QUERY=${out%%$'\n'*}

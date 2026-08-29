@@ -2683,6 +2683,34 @@ EOF
 	[[ "$output" != *"ddgr was called"* ]]
 }
 
+@test "ordinary queries preview matching local docs without network access" {
+	write_docs_corpus
+	stub_curl_tripwire
+	stub_ddgr_tripwire
+
+	run env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" \
+		DDGX_DOCS_DIR="$DOCS_DIR" DDGX_NO_NETWORK=1 \
+		bash "$DDGX" --suggest 'matcher precedence' 10
+
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"Hooks reference"* ]]
+	[[ "$output" != *"curl was called"* ]]
+	[[ "$output" != *"ddgr was called"* ]]
+}
+
+@test "answer queries make no live request and show no local preview" {
+	write_docs_corpus
+	stub_curl_tripwire
+	stub_ddgr_tripwire
+
+	run env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" \
+		DDGX_DOCS_DIR="$DOCS_DIR" DDGX_NO_NETWORK=1 \
+		bash "$DDGX" --suggest '? matcher precedence' 10
+
+	[ "$status" -eq 0 ]
+	[ -z "$output" ]
+}
+
 @test "live suggestions show no partial rows for a failed AND" {
 	write_docs_corpus
 	stub_curl_tripwire
