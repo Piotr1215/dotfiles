@@ -6,7 +6,11 @@ query_engines = ["nvim", "tmuxinator"]  # Enable runtime query engines
 
 [tmux]
 paths = [".tmux.conf"]
-match_line = "^bind(?!.*-T)"
+# -T is a flag to bind itself (the key table), so it only counts before the key.
+# Matching it anywhere silently dropped every display-popup that sets a title
+# with -T, M-g among them. (?!\S) forces the -key token to be consumed whole so
+# the engine cannot backtrack past it and skip this check.
+match_line = '^bind(?:-key)?(?!\S)(?!(?:\s+-[a-zA-Z]+)*\s+-T\b)'
 regex = 'bind(?:-key)?\s+(?:-n\s+)?(\S+)(.*)'
 key_group = 1
 desc_group = 2
@@ -14,7 +18,9 @@ type = "tmux"
 
 [tmux-copy]
 paths = [".tmux.conf"]
-match_line = "-T copy-mode"
+# Anchored for the same reason: a popup title mentioning copy-mode is not a
+# key-table binding.
+match_line = '^bind(?:-key)?(?!\S)(?:\s+-[a-zA-Z]+)*\s+-T\s+copy-mode'
 regex = 'bind(?:-key)?\s+-T\s+\S+\s+(\S+)(.*)'
 key_group = 1
 desc_group = 2
