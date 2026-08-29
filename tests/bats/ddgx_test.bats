@@ -439,6 +439,21 @@ write_two_results() {
 	seed_cache "https://example.com/2" "body of the second page"
 }
 
+stub_nvim_capture() {
+	cat >"$STUB_BIN/nvim" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$@" >"$BATS_TEST_TMPDIR/nvim.args"
+while [ "$#" -gt 0 ]; do
+	if [ "$1" = "-q" ]; then
+		cp "$2" "$BATS_TEST_TMPDIR/quickfix.txt"
+		break
+	fi
+	shift
+done
+EOF
+	chmod +x "$STUB_BIN/nvim"
+}
+
 @test "edit mode scaffolds a markdown note per marked result" {
 	write_two_results
 	printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$@" > "%s/opened.txt"\n' \
@@ -478,6 +493,39 @@ write_two_results() {
 
 	[ "$status" -eq 0 ]
 	grep -q 'my own notes' "$DATA_HOME/ddgx/notes/first-hit.md"
+}
+
+@test "edit mode opens nvim with searchable matches in quickfix" {
+	write_two_results
+	stub_nvim_capture
+
+	run env XDG_CACHE_HOME="$CACHE_HOME" XDG_DATA_HOME="$DATA_HOME" DDGX_TTL=0 \
+		DDGX_EDITOR="$STUB_BIN/nvim" \
+		bash "$DDGX" --edit "$BATS_TEST_TMPDIR/results.json" --query body 0 1
+
+	[ "$status" -eq 0 ]
+	[ "$(wc -l <"$BATS_TEST_TMPDIR/quickfix.txt")" -eq 2 ]
+	grep -q 'first-hit.md:5:body of the first page' "$BATS_TEST_TMPDIR/quickfix.txt"
+	grep -q 'second-hit.md:5:body of the second page' "$BATS_TEST_TMPDIR/quickfix.txt"
+	grep -q '^copen$' "$BATS_TEST_TMPDIR/nvim.args"
+	grep -q '<C-g>n' "$BATS_TEST_TMPDIR/nvim.args"
+	grep -q '<C-g>p' "$BATS_TEST_TMPDIR/nvim.args"
+	grep -q 'hlsearch' "$BATS_TEST_TMPDIR/nvim.args"
+	grep -q 'ctrl-e:execute.*--query {q}' "$DDGX"
+}
+
+@test "edit mode builds quickfix with the same slash-delimited ERE" {
+	write_two_results
+	stub_nvim_capture
+
+	run env XDG_CACHE_HOME="$CACHE_HOME" XDG_DATA_HOME="$DATA_HOME" DDGX_TTL=0 \
+		DDGX_EDITOR="$STUB_BIN/nvim" \
+		bash "$DDGX" --edit "$BATS_TEST_TMPDIR/results.json" \
+		--query '/first.*page/' 0 1
+
+	[ "$status" -eq 0 ]
+	[ "$(wc -l <"$BATS_TEST_TMPDIR/quickfix.txt")" -eq 1 ]
+	grep -q 'first-hit.md:5:body of the first page' "$BATS_TEST_TMPDIR/quickfix.txt"
 }
 
 @test "read mode concatenates every marked extract" {
@@ -1146,6 +1194,7 @@ EOF
 	for line in "${lines[@]}"; do
 		[ "$(wc -L <<<"$line")" -le 98 ]
 	done
+	[[ "${lines[3]}" == *'/ERE/'* ]]
 }
 
 # --------------------------------------------------------------------------
@@ -2639,7 +2688,7 @@ EOF
 	[[ "$(cat "$R")" == *"settings-reference"* ]]
 }
 
-@test "the opening query picker is top aligned and reloads local suggestions" {
+@test "the opening query picker is top aligned and reloads web suggestions" {
 	cat >"$STUB_BIN/fzf" <<EOF
 #!/usr/bin/env bash
 printf '%s\n' "\$*" >"$BATS_TEST_TMPDIR/fzf.args"
@@ -2665,6 +2714,7 @@ EOF
 	[[ "$args" == *'--input-border=rounded'* ]]
 	[[ "$args" == *'--list-border=rounded'* ]]
 	[[ "$args" == *'--info=inline-right'* ]]
+	[[ "$args" == *'live web results'* ]]
 }
 
 @test "live docs suggestions are strict, quoted, and offline" {
@@ -2683,19 +2733,84 @@ EOF
 	[[ "$output" != *"ddgr was called"* ]]
 }
 
-@test "ordinary queries preview matching local docs without network access" {
-	write_docs_corpus
+@test "ordinary queries show fresh DuckDuckGo results, not local docs" {
 	stub_curl_tripwire
-	stub_ddgr_tripwire
+	cat >"$STUB_BIN/ddgr" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >"$BATS_TEST_TMPDIR/ddgr.args"
+printf '%s\n' '[{"title":"Fresh web result","url":"https://fresh.example/release","abstract":"published now"}]'
+EOF
+	chmod +x "$STUB_BIN/ddgr"
 
 	run env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" \
-		DDGX_DOCS_DIR="$DOCS_DIR" DDGX_NO_NETWORK=1 \
+		DDGX_DOCS_DIR="$DOCS_DIR" DDGX_SUGGEST_DELAY=0 \
 		bash "$DDGX" --suggest 'matcher precedence' 10
 
 	[ "$status" -eq 0 ]
-	[[ "$output" == *"Hooks reference"* ]]
+	[[ "$output" == *"Fresh web result"* ]]
+	[[ "$output" != *"Hooks reference"* ]]
 	[[ "$output" != *"curl was called"* ]]
-	[[ "$output" != *"ddgr was called"* ]]
+	[[ "$(cat "$BATS_TEST_TMPDIR/ddgr.args")" == *'matcher precedence'* ]]
+}
+
+@test "live web search waits for typing to pause" {
+	cat >"$STUB_BIN/ddgr" <<'EOF'
+#!/usr/bin/env bash
+touch "$BATS_TEST_TMPDIR/ddgr.called"
+printf '%s\n' '[{"title":"Too soon","url":"https://fresh.example/soon","abstract":"x"}]'
+EOF
+	chmod +x "$STUB_BIN/ddgr"
+
+	run timeout 0.1 env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" \
+		DDGX_SUGGEST_DELAY=1 bash "$DDGX" --suggest 'still typing' 10
+
+	[ "$status" -eq 124 ]
+	[ ! -e "$BATS_TEST_TMPDIR/ddgr.called" ]
+}
+
+@test "enter reuses the live result set instead of asking DuckDuckGo twice" {
+	cat >"$STUB_BIN/ddgr" <<'EOF'
+#!/usr/bin/env bash
+count=0
+[ ! -s "$BATS_TEST_TMPDIR/ddgr.count" ] || count=$(cat "$BATS_TEST_TMPDIR/ddgr.count")
+printf '%s\n' "$((count + 1))" >"$BATS_TEST_TMPDIR/ddgr.count"
+printf '%s\n' '[{"title":"Fresh once","url":"https://fresh.example/once","abstract":"one request"}]'
+EOF
+	chmod +x "$STUB_BIN/ddgr"
+	seed_cache 'https://fresh.example/once' 'fresh page body'
+
+	env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" \
+		DDGX_SUGGEST_DELAY=0 bash "$DDGX" --suggest 'fresh once' 10 >/dev/null
+	[ "$(cat "$BATS_TEST_TMPDIR/ddgr.count")" -eq 1 ]
+	run_ddgx -d 'fresh once'
+
+	[ "$status" -eq 0 ]
+	[ "$(cat "$BATS_TEST_TMPDIR/ddgr.count")" -eq 1 ]
+	[[ "$output" == *"Fresh once"* ]]
+}
+
+@test "an expired live result set is searched again" {
+	cat >"$STUB_BIN/ddgr" <<'EOF'
+#!/usr/bin/env bash
+count=0
+[ ! -s "$BATS_TEST_TMPDIR/ddgr.count" ] || count=$(cat "$BATS_TEST_TMPDIR/ddgr.count")
+printf '%s\n' "$((count + 1))" >"$BATS_TEST_TMPDIR/ddgr.count"
+printf '%s\n' '[{"title":"Timed web result","url":"https://fresh.example/timed","abstract":"x"}]'
+EOF
+	chmod +x "$STUB_BIN/ddgr"
+
+	env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" \
+		DDGX_SEARCH_TTL=1 DDGX_SUGGEST_DELAY=0 \
+		bash "$DDGX" --suggest 'timed result' 10 >/dev/null
+	find "$CACHE_HOME/ddgx/searches" -type f -name '*.json' \
+		-exec touch -d '5 minutes ago' {} +
+	run env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" \
+		DDGX_SEARCH_TTL=1 DDGX_SUGGEST_DELAY=0 \
+		bash "$DDGX" --suggest 'timed result' 10
+
+	[ "$status" -eq 0 ]
+	[ "$(cat "$BATS_TEST_TMPDIR/ddgr.count")" -eq 2 ]
+	[[ "$output" == *"Timed web result"* ]]
 }
 
 @test "answer queries make no live request and show no local preview" {
@@ -2939,6 +3054,48 @@ matcher Bash"
 	[ -z "$output" ]
 }
 
+@test "a slash-delimited regex searches the page bodies" {
+	write_filter_state
+
+	run env XDG_CACHE_HOME="$CACHE_HOME" bash "$DDGX" --filter "$FR" \
+		'/PreToolUse.*before/'
+
+	[ "$status" -eq 0 ]
+	[ "${#lines[@]}" -eq 1 ]
+	[[ "${lines[0]}" == 0* ]]
+}
+
+@test "ERE matches one word, a literal space, then any word" {
+	write_filter_state
+
+	run env XDG_CACHE_HOME="$CACHE_HOME" bash "$DDGX" --filter "$FR" \
+		'/hook \w+/'
+
+	[ "$status" -eq 0 ]
+	[ "${#lines[@]}" -eq 1 ]
+	[[ "${lines[0]}" == 0* ]]
+}
+
+@test "regex metacharacters stay literal without slash delimiters" {
+	write_filter_state
+
+	run env XDG_CACHE_HOME="$CACHE_HOME" bash "$DDGX" --filter "$FR" \
+		'PreToolUse.*before'
+
+	[ "$status" -eq 0 ]
+	[ -z "$output" ]
+}
+
+@test "an invalid regex empties the list without printing an error" {
+	write_filter_state
+
+	run env XDG_CACHE_HOME="$CACHE_HOME" bash "$DDGX" --filter "$FR" \
+		'/[unterminated/'
+
+	[ "$status" -eq 0 ]
+	[ -z "$output" ]
+}
+
 @test "a page whose body has not landed yet is judged on its row" {
 	write_filter_state
 
@@ -2985,6 +3142,17 @@ matcher Bash"
 	[[ "$output" == *$'\033[7mmatcher\033[27m'* ]]
 }
 
+@test "the preview marks the text matched by a regex" {
+	write_filter_state
+	printf 'ddgr\n' >"$FR.engine"
+
+	run env XDG_CACHE_HOME="$CACHE_HOME" DDGX_TTL=0 FZF_PREVIEW_COLUMNS=60 \
+		bash "$DDGX" --preview "$FR" 0 '/PreToolUse.*before/' </dev/null
+
+	[ "$status" -eq 0 ]
+	[[ "$output" == *$'\033[7mPreToolUse hook fires before\033[27m'* ]]
+}
+
 @test "an empty refined set clears the preview without a jq error" {
 	write_filter_state
 
@@ -2997,7 +3165,8 @@ matcher Bash"
 
 @test "both fzf search stages delegate matching to page text" {
 	# Each picker disables fzf's row matcher and reloads from page text instead:
-	# the opening docs corpus first, then the narrowed result pages.
+	# DuckDuckGo supplies the opening rows, then the second picker searches the
+	# narrowed result pages.
 	run grep -c -e '--disabled' -e 'change:reload($SELF --suggest' \
 		-e 'change:reload($SELF --filter' "$DDGX"
 

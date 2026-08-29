@@ -117,7 +117,7 @@
 #   ctrl-y   copy the URLs          ctrl-r  re-fetch (bypass cache)
 #   alt-q    refine the query       ctrl-v  toggle the preview pane
 #   ctrl-d/u scroll the preview
-#   type     filter by page text, ANDed, "quoted phrase" is one term
+#   type     filter by page text, ANDed; "phrase" is exact; /pattern/ is ERE
 #
 # alt-h is for the agent in the pane underneath. It pastes the note PATHS, not
 # the note text, and it does not press Enter: you type what you want done with
@@ -145,7 +145,9 @@
 # Env: DDGX_TTL (cache seconds, default 86400; also how long the docs copy
 # stands), DDGX_JOBS (prefetch concurrency, default 6), DDGX_DOCS_DIR (where the
 # docs copy lives), DDGX_DOCS_SNIPPET (snippet width, default 200),
-# DDGX_NUM (result count, default 10), DDGX_EDITOR
+# DDGX_NUM (result count, default 10), DDGX_SEARCH_TTL (web-result cache
+# seconds, default 300), DDGX_SUGGEST_DELAY (live-search debounce, default 0.8),
+# DDGX_EDITOR
 # (ctrl-e editor, default nvim), DDGX_PET_FILE (bookmark file), DDGX_PLAYER
 # (the player ctrl-o opens a video in, default mpv), DDGX_PLAYER_ARGS (extra
 # player arguments), DDGX_PPLX_PRESET (ask depth, default low), DDGX_ASK_CMD
@@ -162,6 +164,8 @@ MODULES_DIR="${DDGX_MODULES:-$HOME/.local/share/ddgx}"
 # The MarkDownload settings export, stowed from .config/ddgx in this repo.
 OPTIONS_FILE="${DDGX_OPTIONS:-${XDG_CONFIG_HOME:-$HOME/.config}/ddgx/markdownload-options.json}"
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/ddgx"
+SEARCH_CACHE_DIR="${DDGX_SEARCH_CACHE_DIR:-$CACHE_DIR/searches}"
+SEARCH_CACHE_TTL="${DDGX_SEARCH_TTL:-300}"
 # Notes are durable: they live outside the cache so clearing extracts, or a
 # stale-cache sweep, can never take hand-edited notes with them.
 NOTES_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/ddgx/notes"
@@ -221,9 +225,9 @@ PET_LINKS="${DDGX_PET_FILE:-$HOME/dev/pet-snippets/pet-links.toml}"
 # the default 58% preview a line is cut around 98 columns and everything after
 # it is simply gone. A key you cannot see does not exist, so every line has to
 # stay short enough to survive that cut. The suite measures them.
-PICKER_KEYS='tab mark · enter open · ctrl-o play, render or read · ctrl-e nvim · ctrl-v preview
+PICKER_KEYS='tab mark · enter open · ctrl-o play, render or read · ctrl-e nvim/qf · ctrl-v preview
 ctrl-a bookmark · ctrl-y copy · ctrl-r refetch · alt-q refine · alt-h hand to pane
-type: searches inside the pages · words are ANDed · "a phrase" is one term'
+type: page text · words ANDed · "phrase" exact · /ERE/'
 
 # Print the header comment block: everything between the shebang and the first
 # line of code, so the help text cannot drift out of sync with a line range.
@@ -249,12 +253,19 @@ die() {
 # without it the tool blames the query for the network's answer. Sets
 # SEARCH_ERROR and returns non-zero when nothing usable came back.
 search_ddgr() {
-	local out=$1 num=$2 query=$3 err count rc=0
+	local out=$1 num=$2 query=$3 err count rc=0 cached
+	cached=$(search_cache_file "$num" "$query")
+	if search_cache_fresh "$cached"; then
+		cp "$cached" "$out"
+		SEARCH_ERROR=''
+		return 0
+	fi
 	err=$(mktemp -t ddgx-err-XXXXXX)
 	SEARCH_ERROR=''
 	ddgr --json --num "$num" --noprompt "$query" >"$out" 2>"$err" || rc=$?
 	count=$(jq 'length' "$out" 2>/dev/null || printf '0')
 	if [[ $rc -eq 0 && -n $count && $count -gt 0 ]]; then
+		cache_search_results "$out" "$cached"
 		rm -f "$err"
 		return 0
 	fi
@@ -460,6 +471,18 @@ query_terms() {
 		}'
 }
 
+# The second picker is literal by default. A slash at both ends is the one
+# explicit switch to regex, so code such as `const .*` stays literal while
+# `/const .*/` has pattern meaning.
+is_regex_query() {
+	[[ ${#1} -ge 3 && $1 == /*/ ]]
+}
+
+query_regex() {
+	local query=$1
+	printf '%s' "${query:1:${#query}-2}"
+}
+
 # Rank the corpus against the terms, in one awk pass over every page.
 #
 # Two things the tool this replaces got wrong are fixed here. It reported a
@@ -661,16 +684,33 @@ search_docs() {
 	return 0
 }
 
-# Live rows for the opening picker come from the local docs copy. An ordinary
-# query previews that corpus while Enter still searches the web once. @ keeps
-# the submitted search in docs. Answer queries stay empty until Enter, so
-# typing can never turn into one network request per keystroke.
-mode_suggest() {
-	local raw=${1:-} num=${2:-10} query terms ranked
+# Live rows follow the engine the query names. Plain text is DuckDuckGo. @ is
+# the explicit docs mode, and ? waits for Enter because an answer request is too
+# expensive to attach to typing.
+#
+# fzf kills the reload when another key arrives, so the sleep debounces ddgr
+# until typing pauses. The exact result set has a short TTL. Enter then reuses
+# the rows already on screen instead of asking DuckDuckGo twice.
+mode_suggest() (
+	local raw=${1:-} num=${2:-10} query terms ranked tmp cached
 	case $raw in
 	'?'*) return 0 ;;
 	'@'*) query=${raw#@} ;;
-	*) query=$raw ;;
+	*)
+		query=$raw
+		query=${query#"${query%%[![:space:]]*}"}
+		[[ ${#query} -ge ${DDGX_SUGGEST_MIN_CHARS:-3} ]] || return 0
+		cached=$(search_cache_file "$num" "$query")
+		if ! search_cache_fresh "$cached"; then
+			[[ ${DDGX_NO_NETWORK:-0} -eq 1 ]] && return 0
+			sleep "${DDGX_SUGGEST_DELAY:-0.8}"
+		fi
+		tmp=$(mktemp -t ddgx-suggest-XXXXXX.json)
+		trap 'rm -f "$tmp"' EXIT INT TERM
+		search_ddgr "$tmp" "$num" "$query" || return 0
+		mode_web_suggestions "$tmp"
+		return 0
+		;;
 	esac
 	query=${query#"${query%%[![:space:]]*}"}
 	[[ -n ${query//[[:space:]]/} ]] || return 0
@@ -688,6 +728,20 @@ mode_suggest() {
 			kept++
 		}
 	' <(docs_index_rows) <(printf '%s\n' "$ranked")
+)
+
+mode_web_suggestions() {
+	jq -r 'to_entries[] | [
+		.key,
+		(.value.title // .value.url // ""),
+		(.value.url // ""),
+		((.value.abstract // "") | gsub("[\\t\\r\\n]+"; " "))
+	] | @tsv' "$1" |
+		awk -F'\t' '{
+			split($3, parts, "/")
+			printf "%s\t%2d. \033[1;36m%s\033[0m  \033[90m[%s] · %s\033[0m\n", \
+				$1, $1 + 1, $2, parts[3], $4
+		}'
 }
 # Which engine produced the current set. Absent means a web search, so a set
 # written before this file knew about engines still refines correctly.
@@ -783,6 +837,32 @@ set_note() { printf '%s\n' "$2" >"$(note_file "$1")"; }
 # other's writes without passing paths around.
 cache_key() {
 	printf '%s' "$1" | sha1sum | cut -d' ' -f1
+}
+
+# DuckDuckGo result sets are separate from page extracts. They are keyed by the
+# exact query and result count, and expire much sooner than page text. This lets
+# the live list and Enter share one request without serving stale web results.
+search_cache_file() {
+	local num=$1 query=$2
+	printf '%s/%s.json' "$SEARCH_CACHE_DIR" \
+		"$(cache_key "ddgr"$'\n'"$num"$'\n'"$query")"
+}
+
+search_cache_fresh() {
+	local file=$1 age
+	[[ $FORCE_REFETCH -eq 0 && $SEARCH_CACHE_TTL -gt 0 && -s $file ]] || return 1
+	age=$(($(date +%s) - $(stat -c %Y "$file")))
+	[[ $age -lt $SEARCH_CACHE_TTL ]] || return 1
+	jq -e 'type == "array" and length > 0' "$file" >/dev/null 2>&1
+}
+
+cache_search_results() {
+	local source=$1 dest=$2 tmp
+	[[ $SEARCH_CACHE_TTL -gt 0 ]] || return 0
+	mkdir -p "$SEARCH_CACHE_DIR"
+	tmp=$(mktemp "$SEARCH_CACHE_DIR/.ddgx-search-XXXXXX")
+	cp "$source" "$tmp"
+	mv -f "$tmp" "$dest"
 }
 
 # Path of the extract cache entry for a URL.
@@ -950,18 +1030,19 @@ center() {
 	printf '%b%s\033[0m\n' "$color" "$text"
 }
 
-# The first picker owns only the query. @ searches can already show matching
-# pages from the local docs copy; web and answer searches stay empty until Enter
-# so a keystroke can never spend a network request. Enter hands just the query
-# to the normal result picker, where typing searches inside that narrowed set.
+# The first picker discovers pages. Plain text shows debounced DuckDuckGo rows;
+# @ and ? explicitly switch engines. Enter hands the exact query to the result
+# picker, where typing searches inside those pages from the local extract cache.
 prompt_for_query() {
-	local num=${1:-10} out rc=0
+	local num=${1:-10} out rc=0 header
+	header=$(printf 'plain: live DuckDuckGo · @ docs · ? ask · ?? harder\npause to search · web cache %ss · enter searches pages locally' \
+		"$SEARCH_CACHE_TTL")
 	out=$(fzf --ansi --disabled --layout=reverse --no-multi --print-query \
 		--margin='1,6%' --input-border=rounded --input-label=' query ' \
-		--input-label-pos=2 --list-border=rounded --list-label=' live local docs ' \
+		--input-label-pos=2 --list-border=rounded --list-label=' live web results ' \
 		--list-label-pos=2 --info=inline-right --no-separator \
 		--delimiter=$'\t' --with-nth=2.. --prompt='search > ' \
-		--header=$'live rows: local docs · @ keeps the search local\nenter searches once · ? perplexity · ?? harder' \
+		--header="$header" \
 		--bind="change:reload($SELF --suggest {q} $num)" </dev/null) || rc=$?
 	[[ $rc -eq 130 ]] && return 1
 	TYPED_QUERY=${out%%$'\n'*}
@@ -1008,6 +1089,15 @@ highlight_terms() {
 			$re = join "|", map { quotemeta } @t;
 		}
 		s/(\e\[[0-9;]*m)|($re)/defined $1 ? $1 : "\e[7m$2\e[27m"/gie if $re;
+	'
+}
+
+highlight_regex() {
+	local regex=$1
+	[[ -n $regex ]] || { cat; return 0; }
+	DDGX_HL_REGEX="$regex" perl -pe '
+		BEGIN { $re = eval { qr/$ENV{DDGX_HL_REGEX}/i }; }
+		s/(\e\[[0-9;]*m)|($re)/defined $1 ? $1 : "\e[7m$2\e[27m"/ge if $re;
 	'
 }
 
@@ -1237,7 +1327,7 @@ run_query() {
 
 mode_preview() {
 	local file=$1 idx=$2 pickq=${3:-}
-	local width url title abstract cached still af marks
+	local width url title abstract cached still af marks regex=''
 	# A content refinement can leave the picker with no rows. fzf still refreshes
 	# the preview once with an empty {1}; do not hand that to jq as --argjson.
 	[[ $idx =~ ^[0-9]+$ ]] || return 0
@@ -1254,7 +1344,9 @@ mode_preview() {
 	# they are. Reading a page to work out why it survived defeats the filter.
 	marks=''
 	[[ $(current_engine "$file") == docs ]] && marks=$(query_terms "$(current_query "$file")")
-	if [[ -n ${pickq//[[:space:]]/} ]]; then
+	if is_regex_query "$pickq"; then
+		regex=$(query_regex "$pickq")
+	elif [[ -n ${pickq//[[:space:]]/} ]]; then
 		marks=$(printf '%s\n%s' "$marks" "$(query_terms "$pickq")")
 	fi
 
@@ -1268,7 +1360,8 @@ mode_preview() {
 		# nobody knows how to continue is a feature that reads as a dead end.
 		printf '\033[90m(enter asks a follow-up)\033[0m\n\n'
 		if [[ -s $af ]]; then
-			render_markdown "$af" "$width" | highlight_terms "$marks"
+			render_markdown "$af" "$width" |
+				highlight_terms "$marks" | highlight_regex "$regex"
 		else
 			printf '\033[31m(the answer is gone)\033[0m\n'
 		fi
@@ -1302,7 +1395,8 @@ mode_preview() {
 
 	cached=$(cache_file "$url")
 	if extract_to_cache "$url"; then
-		render_markdown "$cached" "$width" | highlight_terms "$marks"
+		render_markdown "$cached" "$width" |
+			highlight_terms "$marks" | highlight_regex "$regex"
 		printf '\n'
 	else
 		# Name the way out here rather than only in the help text. This line is
@@ -1444,11 +1538,61 @@ note_paths() {
 	done
 }
 
+# Write grep-style quickfix entries for every match in the opened notes. This
+# uses the same query contract as the Stage 2 picker: slash-delimited ERE, or
+# literal AND terms with quoted phrases kept whole.
+write_quickfix_matches() {
+	local query=$1 out=$2 regex='' term note
+	shift 2
+	: >"$out"
+	if is_regex_query "$query"; then
+		regex=$(query_regex "$query")
+		grep -Eq -- "$regex" /dev/null 2>/dev/null || [[ $? -eq 1 ]] || return 0
+		for note in "$@"; do
+			grep -nEiH -- "$regex" "$note" 2>/dev/null >>"$out" || true
+		done
+	else
+		while IFS= read -r term; do
+			[[ -n $term ]] || continue
+			for note in "$@"; do
+				grep -nFiH -- "$term" "$note" >>"$out" || true
+			done
+		done < <(query_terms "$query")
+	fi
+	[[ -s $out ]] && sort -u -o "$out" "$out"
+}
+
+# A Vim search pattern matching the same text as the quickfix entries. Very
+# magic is close to ERE for explicit regex. Literal terms each switch back to
+# very nomagic and are joined as alternatives so all matches stay highlighted.
+vim_search_pattern() {
+	local query=$1 term pattern=''
+	if is_regex_query "$query"; then
+		printf '\\v%s' "$(query_regex "$query")"
+		return 0
+	fi
+	while IFS= read -r term; do
+		[[ -n $term ]] || continue
+		term=${term//\\/\\\\}
+		if [[ -z $pattern ]]; then
+			pattern="\\V$term"
+		else
+			pattern="$pattern\\m\\|\\V$term"
+		fi
+	done < <(query_terms "$query")
+	printf '%s' "$pattern"
+}
+
 # Open the extracts as markdown notes, kept in a durable directory so anything
-# worth editing survives the search that produced it.
+# worth editing survives the search that produced it. When the picker supplies
+# its query, Neovim opens every match in quickfix and keeps them highlighted.
 mode_edit() {
-	local file=$1 notes=() editor
+	local file=$1 query='' notes=() editor quickfix pattern search_cmd
 	shift
+	if [[ ${1:-} == --query ]]; then
+		query=${2:-}
+		shift 2
+	fi
 	mapfile -t notes < <(note_paths "$file" "$@")
 	# No valid indices means no files. Opening the editor on an empty argument
 	# list drops you into a scratch buffer with no way back to the picker.
@@ -1461,6 +1605,24 @@ mode_edit() {
 		else
 			editor=${EDITOR:-vi}
 		fi
+	fi
+	if [[ ${editor##*/} == nvim && -n ${query//[[:space:]]/} ]]; then
+		quickfix=$(mktemp -t ddgx-quickfix-XXXXXX)
+		write_quickfix_matches "$query" "$quickfix" "${notes[@]}"
+		if [[ -s $quickfix ]]; then
+			pattern=$(vim_search_pattern "$query")
+			pattern=${pattern//\'/\'\'}
+			search_cmd="let @/ = '$pattern' | set hlsearch"
+			"$editor" -q "$quickfix" \
+				-c "$search_cmd" \
+				-c 'nnoremap <silent> <C-g>n <cmd>cnext<cr>' \
+				-c 'nnoremap <silent> <C-g>p <cmd>cprevious<cr>' \
+				-c "call setqflist([], 'a', {'title': 'ddgx · Ctrl-g n next · Ctrl-g p previous'})" \
+				-c copen "${notes[@]}"
+			rm -f "$quickfix"
+			return 0
+		fi
+		rm -f "$quickfix"
 	fi
 	"$editor" "${notes[@]}"
 }
@@ -1864,8 +2026,8 @@ play_detached() {
 # are looking for. The pages are already on disk as markdown, pulled for the
 # preview, so the words are right there and the list was searching past them.
 #
-# Terms are ANDed and a "quoted phrase" is one term, the same rule the search
-# box obeys, so there is one thing to learn rather than two.
+# Terms are ANDed and a "quoted phrase" is one term. Slash delimiters opt into
+# regex for code-shaped searches; without them punctuation stays literal.
 #
 # A page whose extract has not landed yet falls back to its title, snippet and
 # url. It cannot be shown not to match, and dropping a result because the
@@ -1876,12 +2038,18 @@ play_detached() {
 # results through result_field is a quarter second of jq startup per letter.
 content_indices() {
 	local file=$1 query=$2
-	local terms line idx url rest meta cached hay ok term
+	local terms='' regex='' regex_rc=0 line idx url rest meta cached hay ok term
 
-	terms=$(query_terms "$query")
+	if is_regex_query "$query"; then
+		regex=$(query_regex "$query")
+		grep -Eq -- "$regex" /dev/null 2>/dev/null || regex_rc=$?
+		[[ $regex_rc -eq 2 ]] && return 0
+	else
+		terms=$(query_terms "$query")
+	fi
 	meta=$(jq -r 'to_entries[] | "\(.key)\t\(.value.url // "")\t\(.value.title // "") \(.value.abstract // "")"' "$file") || return 0
 
-	if [[ -z ${terms//[[:space:]]/} ]]; then
+	if [[ -z $regex && -z ${terms//[[:space:]]/} ]]; then
 		printf '%s\n' "$meta" | cut -f1
 		return 0
 	fi
@@ -1908,14 +2076,23 @@ content_indices() {
 			[[ -s $cached ]] && hay=$cached
 		fi
 		ok=1
-		while IFS= read -r term; do
-			[[ -n $term ]] || continue
+		if [[ -n $regex ]]; then
 			if [[ -n $hay ]]; then
-				grep -qiF -- "$term" "$hay" || { ok=0; break; }
+				grep -qiE -- "$regex" "$hay" 2>/dev/null || ok=0
 			else
-				[[ ${rest,,} == *"${term,,}"* || ${url,,} == *"${term,,}"* ]] || { ok=0; break; }
+				printf '%s\n%s\n' "$rest" "$url" |
+					grep -qiE -- "$regex" 2>/dev/null || ok=0
 			fi
-		done <<<"$terms"
+		else
+			while IFS= read -r term; do
+				[[ -n $term ]] || continue
+				if [[ -n $hay ]]; then
+					grep -qiF -- "$term" "$hay" || { ok=0; break; }
+				else
+					[[ ${rest,,} == *"${term,,}"* || ${url,,} == *"${term,,}"* ]] || { ok=0; break; }
+				fi
+			done <<<"$terms"
+		fi
 		[[ $ok -eq 1 ]] && printf '%s\n' "$idx"
 	done <<<"$meta"
 	return 0
@@ -2160,7 +2337,7 @@ mode_pick() {
 				--preview-window='right,58%,wrap,border-left' \
 				--bind="enter:transform($SELF --enter '$file' {1} $num 2>/dev/null)" \
 				--bind="ctrl-o:transform($SELF --action '$file' {1} {+1} 2>/dev/null)" \
-				--bind="ctrl-e:execute($SELF --edit '$file' {+1})" \
+				--bind="ctrl-e:execute($SELF --edit '$file' --query {q} {+1})" \
 				--bind="ctrl-a:execute-silent($SELF --bookmark '$file' {+1})+transform-header($SELF --header '$file')" \
 				--bind="alt-h:transform($SELF --send '$file' {+1} 2>/dev/null)" \
 				--bind="ctrl-y:execute-silent($SELF --copy '$file' {+1})" \
