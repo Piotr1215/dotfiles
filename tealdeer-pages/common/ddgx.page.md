@@ -7,6 +7,10 @@
 
 `type a plain query, pause, then press Enter`
 
+- Open concise help from either picker, then return with `q`:
+
+`F1`
+
 - Search literal words inside the returned pages in Stage 2:
 
 `codex agent`

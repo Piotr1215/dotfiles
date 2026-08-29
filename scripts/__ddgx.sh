@@ -116,6 +116,7 @@
 #   alt-h    hand the extracts to the pane you opened the popup from
 #   ctrl-y   copy the URLs          ctrl-r  re-fetch (bypass cache)
 #   alt-q    refine the query       ctrl-v  toggle the preview pane
+#   F1       open this concise help in a pager, q returns to the picker
 #   ctrl-d/u scroll the preview
 #   type     filter by page text, ANDed; "phrase" is exact; /pattern/ is ERE
 #
@@ -227,12 +228,22 @@ PET_LINKS="${DDGX_PET_FILE:-$HOME/dev/pet-snippets/pet-links.toml}"
 # stay short enough to survive that cut. The suite measures them.
 PICKER_KEYS='tab mark · enter open · ctrl-o play, render or read · ctrl-e nvim/qf · ctrl-v preview
 ctrl-a bookmark · ctrl-y copy · ctrl-r refetch · alt-q refine · alt-h hand to pane
-type: page text · words ANDed · "phrase" exact · /ERE/'
+F1 help · type: page text · words ANDed · "phrase" exact · /ERE/'
 
 # Print the header comment block: everything between the shebang and the first
 # line of code, so the help text cannot drift out of sync with a line range.
 usage() {
 	sed -e '1d' -e '/^[^#]/,$d' "$SELF" | sed 's/^# \{0,1\}//'
+}
+
+# The picker needs the short, example-led page rather than the full script
+# manual. Printing stays separate from the pager so the same mode is easy to
+# test and fzf can suspend itself while less owns the terminal.
+mode_help_page() {
+	if command -v tldr >/dev/null 2>&1 && tldr ddgx; then
+		return 0
+	fi
+	usage
 }
 
 # A message printed into the M-g popup is gone the instant the process ends,
@@ -1043,7 +1054,8 @@ prompt_for_query() {
 		--list-label-pos=2 --info=inline-right --no-separator \
 		--delimiter=$'\t' --with-nth=2.. --prompt='search > ' \
 		--header="$header" \
-		--bind="change:reload($SELF --suggest {q} $num)" </dev/null) || rc=$?
+		--bind="change:reload($SELF --suggest {q} $num)" \
+		--bind="f1:execute($SELF --help-page | less -R)" </dev/null) || rc=$?
 	[[ $rc -eq 130 ]] && return 1
 	TYPED_QUERY=${out%%$'\n'*}
 }
@@ -2338,6 +2350,7 @@ mode_pick() {
 				--bind="enter:transform($SELF --enter '$file' {1} $num 2>/dev/null)" \
 				--bind="ctrl-o:transform($SELF --action '$file' {1} {+1} 2>/dev/null)" \
 				--bind="ctrl-e:execute($SELF --edit '$file' --query {q} {+1})" \
+				--bind="f1:execute($SELF --help-page | less -R)" \
 				--bind="ctrl-a:execute-silent($SELF --bookmark '$file' {+1})+transform-header($SELF --header '$file')" \
 				--bind="alt-h:transform($SELF --send '$file' {+1} 2>/dev/null)" \
 				--bind="ctrl-y:execute-silent($SELF --copy '$file' {+1})" \
@@ -2379,6 +2392,10 @@ main() {
 	--suggest)
 		shift
 		mode_suggest "$@"
+		return 0
+		;;
+	--help-page)
+		mode_help_page
 		return 0
 		;;
 	--read)

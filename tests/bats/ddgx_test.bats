@@ -1207,6 +1207,7 @@ EOF
 	for line in "${lines[@]}"; do
 		[ "$(wc -L <<<"$line")" -le 98 ]
 	done
+	[[ "${lines[3]}" == *'F1 help'* ]]
 	[[ "${lines[3]}" == *'/ERE/'* ]]
 }
 
@@ -2728,6 +2729,22 @@ EOF
 	[[ "$args" == *'--list-border=rounded'* ]]
 	[[ "$args" == *'--info=inline-right'* ]]
 	[[ "$args" == *'live web results'* ]]
+}
+
+@test "F1 opens the concise help page from both picker stages" {
+	cat >"$STUB_BIN/tldr" <<'EOF'
+#!/usr/bin/env bash
+printf 'ddgx picker help\n'
+EOF
+	chmod +x "$STUB_BIN/tldr"
+	stub_ddgr_tripwire
+
+	run env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" \
+		bash "$DDGX" --help-page
+
+	[ "$status" -eq 0 ]
+	[ "$output" = 'ddgx picker help' ]
+	[ "$(grep -Fc -- '--bind="f1:execute($SELF --help-page | less -R)"' "$DDGX")" -eq 2 ]
 }
 
 @test "live docs suggestions are strict, quoted, and offline" {
