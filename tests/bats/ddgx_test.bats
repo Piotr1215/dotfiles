@@ -2786,7 +2786,7 @@ EOF
 @test "a leading dash stays a flag, which is why exclude cannot be offered" {
 	# The other half of the same decision, asserted where it is decided rather
 	# than only where it is worked around.
-	run bash -c "source '$DDGX' >/dev/null 2>&1 || true; docs_terms 'hooks -sdk'"
+	run bash -c "source '$DDGX' >/dev/null 2>&1 || true; query_terms 'hooks -sdk'"
 
 	[ "$status" -eq 0 ]
 	[[ "$output" == *'-sdk'* ]]

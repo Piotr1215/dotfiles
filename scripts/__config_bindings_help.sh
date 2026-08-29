@@ -132,25 +132,12 @@ main_loop() {
                     break
                     ;;
                 *)
-                    # Enter pressed or empty
+                    # Enter pressed or empty. Same resolver alt-h uses, so both
+                    # keys land on the same file. The row's own last column is
+                    # not it: for a generated row that column is the index,
+                    # __fzf_bindings.conf, and editing the index edits nothing.
                     if [[ -n "$selection" ]]; then
-                        # Check if this is a tmuxinator entry
-                        if [[ "$selection" == *"[mux]"* ]]; then
-                            local session_file
-                            session_file=$(echo "$selection" | awk '{print $NF}' | cut -d: -f1)
-                            echo "MUX_EDIT:${HOME}/.config/tmuxinator/${session_file}" > "$TEMP_FILE"
-                        else
-                            local file_line file line
-                            file_line=$(echo "$selection" | awk '{print $NF}')
-                            file=$(echo "$file_line" | cut -d: -f1)
-                            line=$(echo "$file_line" | cut -d: -f2)
-                            # Absolute paths don't need DOTFILES prefix
-                            if [[ "$file" == /* ]]; then
-                                echo "FILE:${file}:${line}" > "$TEMP_FILE"
-                            else
-                                echo "FILE:${DOTFILES}/${file}:${line}" > "$TEMP_FILE"
-                            fi
-                        fi
+                        echo "FILE:$(binding_payload "$selection")" > "$TEMP_FILE"
                     fi
                     break
                     ;;
@@ -227,9 +214,13 @@ if [[ -f "$TEMP_FILE" ]]; then
     case "$result" in
         FILE:*)
             target="${result#FILE:}"
-            file=$(echo "$target" | cut -d: -f1)
-            line=$(echo "$target" | cut -d: -f2)
-            nohup alacritty -e nvim "+$line" "$file" >/dev/null 2>&1 &
+            # The line is optional: a binding that names a script has no line to
+            # give, and nvim "+" with an empty count refuses to open the file.
+            if [[ "$target" =~ ^(.+):([0-9]+)$ ]]; then
+                nohup alacritty -e nvim "+${BASH_REMATCH[2]}" "${BASH_REMATCH[1]}" >/dev/null 2>&1 &
+            else
+                nohup alacritty -e nvim "$target" >/dev/null 2>&1 &
+            fi
             ;;
         MUX_EDIT:*)
             session_file="${result#MUX_EDIT:}"

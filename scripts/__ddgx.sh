@@ -419,7 +419,8 @@ docs_corpus() {
 	return 0
 }
 
-# Split a query into terms, taking a quoted phrase as one term.
+# Split a query into terms, taking a quoted phrase as one term. Shared by the
+# manual search and by the picker's content filter, so both boxes obey one rule.
 #
 # Only DuckDuckGo's own operators are dropped, by name, and nothing else. The
 # obvious rule, drop anything holding a colon or opening with a dash, is wrong
@@ -427,7 +428,7 @@ docs_corpus() {
 # so `--dangerously-skip-permissions` and `PreToolUse:Bash` are among the most
 # likely things anyone types at it, and both would be thrown away whole,
 # leaving a query with no terms in it and an error blaming the user.
-docs_terms() {
+query_terms() {
 	printf '%s' "$1" | awk '
 		{
 			while (match($0, /"[^"]*"/)) {
@@ -581,7 +582,7 @@ search_docs() {
 	SEARCH_ERROR=''
 
 	docs_corpus || return 1
-	terms=$(docs_terms "$query")
+	terms=$(query_terms "$query")
 	if [[ -z ${terms//[[:space:]]/} ]]; then
 		SEARCH_ERROR='nothing to look up in the docs'
 		return 1
@@ -1284,7 +1285,7 @@ mode_preview() {
 		# the page it returned.
 		if [[ $(current_engine "$file") == docs ]]; then
 			render_markdown "$cached" "$width" |
-				highlight_terms "$(docs_terms "$(current_query "$file")")"
+				highlight_terms "$(query_terms "$(current_query "$file")")"
 		else
 			render_markdown "$cached" "$width"
 		fi
@@ -1842,6 +1843,71 @@ play_detached() {
 # it has. An answer's source carries the number the answer itself used, so a
 # claim marked [4] and the row that backs it agree. The answer row has no
 # number and no domain: it is not somewhere you can go.
+# Which results carry every term somewhere in their page TEXT.
+#
+# Typing in the picker used to be fzf matching the row, which is the title and
+# the domain: about twelve words per result, and never the thing you are
+# looking for. The pages are already on disk as markdown, extracted for the
+# preview, so the words are right there; searching the titles instead was
+# leaving the whole corpus unread.
+#
+# Terms are ANDed and a "quoted phrase" is one term, the same rule the manual
+# search uses, so the two boxes behave the same way and there is one thing to
+# learn rather than two.
+#
+# A page whose extract has not landed yet falls back to its title and snippet.
+# It cannot be proved not to match, and hiding a result because the background
+# extractor has not reached it yet would make the list change under you as it
+# catches up.
+content_indices() {
+	local file=$1 query=$2
+	local terms idx url cached hay ok term total
+	terms=$(query_terms "$query")
+	if [[ -z ${terms//[[:space:]]/} ]]; then
+		jq -r 'to_entries[] | "\(.key)"' "$file"
+		return 0
+	fi
+	total=$(jq 'length' "$file" 2>/dev/null || printf '0')
+	for ((idx = 0; idx < total; idx++)); do
+		url=$(result_field "$idx" "$file" url)
+		hay=''
+		if [[ -n $url ]]; then
+			cached=$(cache_file "$url")
+			[[ -s $cached ]] && hay=$cached
+		fi
+		if [[ -z $hay ]]; then
+			hay=$(mktemp -t ddgx-hay-XXXXXX)
+			{
+				result_field "$idx" "$file" title
+				result_field "$idx" "$file" abstract
+				printf '%s\n' "$url"
+			} >"$hay"
+		fi
+		ok=1
+		while IFS= read -r term; do
+			[[ -n $term ]] || continue
+			grep -qiF -- "$term" "$hay" || { ok=0; break; }
+		done <<<"$terms"
+		[[ $hay == "$(cache_file "${url:-x}")" ]] || rm -f "$hay"
+		[[ $ok -eq 1 ]] && printf '%s\n' "$idx"
+	done
+	return 0
+}
+
+# The picker list, restricted to the results whose text carries the query.
+# fzf reloads through this on every keystroke, with its own matcher disabled.
+mode_filter() {
+	local file=$1 query=${2:-} keep
+	keep=$(content_indices "$file" "$query")
+	if [[ -z $keep ]]; then
+		return 0
+	fi
+	mode_list "$file" | awk -F'\t' -v keep="$keep" '
+		BEGIN { n = split(keep, k, "\n"); for (i = 1; i <= n; i++) want[k[i]] = 1 }
+		($1 in want)
+	'
+}
+
 mode_list() {
 	jq -r 'to_entries[] | "\(.key)\t\(.value.title)\t\(.value.url)\t\(.value.ref // "")"' "$1" |
 		awk -F'\t' '{
