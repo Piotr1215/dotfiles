@@ -2921,6 +2921,16 @@ matcher Bash"
 	[[ "$output" == *$'\033[7mmatcher\033[27m'* ]]
 }
 
+@test "an empty refined set clears the preview without a jq error" {
+	write_filter_state
+
+	run env XDG_CACHE_HOME="$CACHE_HOME" bash "$DDGX" --preview "$FR" '' \
+		'low priority' </dev/null
+
+	[ "$status" -eq 0 ]
+	[ -z "$output" ]
+}
+
 @test "fzf does no matching of its own" {
 	# --disabled and the change binding are the whole mechanism: without the
 	# first, fzf filters the rows it was handed, which is the title and the

@@ -1255,6 +1255,9 @@ run_query() {
 mode_preview() {
 	local file=$1 idx=$2 pickq=${3:-}
 	local width url title abstract cached still af marks
+	# A content refinement can leave the picker with no rows. fzf still refreshes
+	# the preview once with an empty {1}; do not hand that to jq as --argjson.
+	[[ $idx =~ ^[0-9]+$ ]] || return 0
 	width=$((${FZF_PREVIEW_COLUMNS:-100} - 2))
 	[[ $width -lt 40 ]] && width=40
 
