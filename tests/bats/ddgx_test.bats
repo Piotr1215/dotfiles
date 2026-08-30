@@ -2951,11 +2951,43 @@ EOF
 	[[ "$args" == *'--layout=reverse'* ]]
 	[[ "$args" == *'--print-query'* ]]
 	[[ "$args" == *'change:reload('*'--suggest'* ]]
+	[[ "$args" == *'ctrl-y:execute-silent('*'--copy-url {1})'* ]]
+	[[ "$args" == *'ctrl-o:execute-silent('*'--open-url {1})'* ]]
 	[[ "$args" == *'--margin=1,6%'* ]]
 	[[ "$args" == *'--input-border=rounded'* ]]
 	[[ "$args" == *'--list-border=rounded'* ]]
 	[[ "$args" == *'--info=inline-right'* ]]
 	[[ "$args" == *'live web results'* ]]
+	[[ "$args" == *'ctrl-o open URL'*'ctrl-y copy URL'* ]]
+}
+
+@test "the opening picker copies and opens its selected URL" {
+	cat >"$STUB_BIN/xclip" <<'EOF'
+#!/usr/bin/env bash
+cat >"$BATS_TEST_TMPDIR/copied.url"
+EOF
+	cat >"$STUB_BIN/ddgx-browser" <<'EOF'
+#!/usr/bin/env bash
+printf '%s' "$1" >"$BATS_TEST_TMPDIR/opened.url"
+EOF
+	chmod +x "$STUB_BIN/xclip" "$STUB_BIN/ddgx-browser"
+	stub_ddgr_tripwire
+
+	run env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" \
+		bash "$DDGX" --copy-url 'https://example.com/copied?a=1&b=2'
+
+	[ "$status" -eq 0 ]
+	[ "$(cat "$BATS_TEST_TMPDIR/copied.url")" = 'https://example.com/copied?a=1&b=2' ]
+
+	run env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" \
+		BROWSER=ddgx-browser bash "$DDGX" --open-url 'https://example.com/opened?a=1&b=2'
+	for _ in {1..50}; do
+		[ -s "$BATS_TEST_TMPDIR/opened.url" ] && break
+		sleep 0.01
+	done
+
+	[ "$status" -eq 0 ]
+	[ "$(cat "$BATS_TEST_TMPDIR/opened.url")" = 'https://example.com/opened?a=1&b=2' ]
 }
 
 @test "F1 opens the concise help page from both picker stages" {
@@ -2984,6 +3016,7 @@ EOF
 		bash "$DDGX" --suggest '@ "the matcher matches"' 10
 
 	[ "$status" -eq 0 ]
+	[[ "$output" == https://code.claude.com/docs/en/hooks$'\t'* ]]
 	[[ "$output" == *"Hooks reference"* ]]
 	[[ "$output" != *"Agent SDK hooks"* ]]
 	[[ "$output" != *"curl was called"* ]]
@@ -3004,6 +3037,7 @@ EOF
 		bash "$DDGX" --suggest 'matcher precedence' 10
 
 	[ "$status" -eq 0 ]
+	[[ "$output" == https://fresh.example/release$'\t'* ]]
 	[[ "$output" == *"Fresh web result"* ]]
 	[[ "$output" != *"Hooks reference"* ]]
 	[[ "$output" != *"curl was called"* ]]

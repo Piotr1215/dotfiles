@@ -730,12 +730,13 @@ mode_suggest() (
 	ranked=$(docs_matches "$terms") || true
 	[[ -n $ranked ]] || return 0
 
-	awk -F'\t' -v num="$num" '
+	awk -F'\t' -v base="$DOCS_PAGE_BASE" -v num="$num" '
 		NR == FNR { title[$1] = $2; next }
 		kept < num {
 			slug = $3
 			name = (slug in title && title[slug] != "") ? title[slug] : slug
-			printf "%s\t\033[1;36m%s\033[0m  \033[90m%s\033[0m\n", slug, name, $4
+			printf "%s/%s\t\033[1;36m%s\033[0m  \033[90m%s\033[0m\n", \
+				base, slug, name, $4
 			kept++
 		}
 	' <(docs_index_rows) <(printf '%s\n' "$ranked")
@@ -751,7 +752,7 @@ mode_web_suggestions() {
 		awk -F'\t' '{
 			split($3, parts, "/")
 			printf "%s\t%2d. \033[1;36m%s\033[0m  \033[90m[%s] · %s\033[0m\n", \
-				$1, $1 + 1, $2, parts[3], $4
+				$3, $1 + 1, $2, parts[3], $4
 		}'
 }
 # Which engine produced the current set. Absent means a web search, so a set
@@ -1048,6 +1049,7 @@ prompt_for_query() {
 	local num=${1:-10} out rc=0 header
 	header=$(printf 'plain: live DuckDuckGo · @ docs · ? ask · ?? harder\npause to search · web cache %ss · enter searches pages locally' \
 		"$SEARCH_CACHE_TTL")
+	header="$header"$'\nctrl-o open URL · ctrl-y copy URL'
 	out=$(fzf --ansi --disabled --layout=reverse --no-multi --print-query \
 		--margin='1,6%' --input-border=rounded --input-label=' query ' \
 		--input-label-pos=2 --list-border=rounded --list-label=' live web results ' \
@@ -1055,6 +1057,8 @@ prompt_for_query() {
 		--delimiter=$'\t' --with-nth=2.. --prompt='search > ' \
 		--header="$header" \
 		--bind="change:reload($SELF --suggest {q} $num)" \
+		--bind="ctrl-y:execute-silent($SELF --copy-url {1})" \
+		--bind="ctrl-o:execute-silent($SELF --open-url {1})" \
 		--bind="f1:execute($SELF --help-page | less -R)" </dev/null) || rc=$?
 	[[ $rc -eq 130 ]] && return 1
 	TYPED_QUERY=${out%%$'\n'*}
@@ -1484,6 +1488,12 @@ mode_copy() {
 	done
 	local payload
 	payload=$(printf '%s\n' "${urls[@]}")
+	copy_text "$payload"
+}
+
+copy_text() {
+	local payload=${1:-}
+	[[ -n $payload ]] || return 0
 	if command -v wl-copy >/dev/null 2>&1 && [[ -n ${WAYLAND_DISPLAY:-} ]]; then
 		printf '%s' "$payload" | wl-copy
 	elif command -v xclip >/dev/null 2>&1; then
@@ -1492,6 +1502,8 @@ mode_copy() {
 		printf '%s' "$payload" | xsel --clipboard --input
 	fi
 }
+
+mode_copy_url() { copy_text "${1:-}"; }
 
 # Write the note unless it holds edits worth protecting.
 #
@@ -1844,6 +1856,7 @@ mode_enter() {
 
 mode_open() {
 	local url=$1
+	[[ -n $url ]] || return 0
 	if [[ -n ${BROWSER:-} ]] && command -v "$BROWSER" >/dev/null 2>&1; then
 		nohup "$BROWSER" "$url" >/dev/null 2>&1 &
 	else
@@ -2414,6 +2427,16 @@ main() {
 	--copy)
 		shift
 		mode_copy "$@"
+		return 0
+		;;
+	--copy-url)
+		shift
+		mode_copy_url "${1:-}"
+		return 0
+		;;
+	--open-url)
+		shift
+		mode_open "${1:-}"
 		return 0
 		;;
 	--edit)
