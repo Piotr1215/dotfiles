@@ -49,21 +49,6 @@ get_approved_prs() {
 		--json title,url,number --jq '.'
 }
 
-notify() {
-	local task_desc="$1"
-	dunstify \
-		--timeout 10000 \
-		--action="default,View in Taskwarrior" \
-		--icon=appointment-soon \
-		"New PRs assigned for review" \
-		"${task_desc}" 2>/dev/null | {
-		read -r response
-		if [ "$response" = "default" ]; then
-			tmux switch-client -t task
-		fi
-	} &
-}
-
 update_approved_status() {
 	local approved_prs
 	local task_uuid
@@ -81,7 +66,6 @@ update_approved_status() {
 
 main() {
 	local pr_title pr_url repo_name task_uuid created_at entry_ts updated_at
-	local prs_added=0
 	# Get all current PR titles from GitHub
 	local gh_prs
 	gh_prs=$(get_review_prs | jq -r '.[] | "\(.title) (#\(.number))" | rtrimstr(" ") | ltrimstr(" ")')
@@ -109,8 +93,6 @@ main() {
 			annotate_task "$task_uuid" "$pr_url" || true
 			# On task creation, record the new_activity without adding +fresh
 			task "$task_uuid" modify "new_activity:$updated_at" || true
-			notify "$pr_title"
-			prs_added=$((prs_added + 1))
 		else
 			# For existing tasks, compare the stored new_activity with the current updatedAt
 			current_activity=$(task "$task_uuid" export | jq -r '.[0].new_activity // empty')
