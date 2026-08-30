@@ -33,6 +33,8 @@ def save_screenshot_to_file(media_folder_path):
     screenshot_filename = f"{uuid.uuid4()}.png"
     screenshot_full_path = os.path.join(media_folder_path, screenshot_filename)
 
+    os.makedirs(media_folder_path, exist_ok=True)
+
     # Save the screenshot from the clipboard to a file
     with open(screenshot_full_path, "wb") as f:
         subprocess.run(["xclip", "-selection", "clipboard", "-t", "image/png", "-o"], stdout=f)
@@ -45,7 +47,7 @@ def save_screenshot_to_file(media_folder_path):
         return None
 
 def append_to_web_highlights_with_screenshot(title, url, screenshot_full_path):
-    web_highlights_path = '/home/decoder/dev/obsidian/decoder/Notes/webhighlights.md'
+    web_highlights_path = '/home/decoder/dev/obsidian/decoder/Notes/resources/webhighlights.md'
     relative_path_to_image = os.path.relpath(screenshot_full_path, os.path.dirname(web_highlights_path))
 
     # Append the title and a link to the screenshot in the web highlights markdown file
@@ -157,7 +159,7 @@ if 'Firefox' in active_window_title or 'Chrome' in active_window_title or 'Brave
             subprocess.run(["/home/decoder/dev/dotfiles/scripts/__create_task.sh", custom_description] + tags)
             
         if "Highlights" in choices:
-           media_folder_path = '/home/decoder/dev/obsidian/decoder/Notes/_media/'
+           media_folder_path = '/home/decoder/dev/obsidian/decoder/Attachments/_media/'
            take_screenshot_interactively()
            screenshot_full_path = save_screenshot_to_file(media_folder_path)
            if screenshot_full_path:
