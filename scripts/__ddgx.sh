@@ -1415,7 +1415,7 @@ mode_preview() {
 		# the one moment the escalation means anything, and a reason with no
 		# next step is where the tool used to stop.
 		printf '\033[31m(no page text: %s)\033[0m\n' "$(extract_failure_reason)"
-		printf '\033[90m(ctrl-o loads it in a headless browser and reads that, a few seconds)\033[0m\n'
+		printf '\033[90m(ctrl-o renders it and reads that: a second remotely, a few if it falls to a local browser)\033[0m\n'
 	fi
 }
 
@@ -1777,9 +1777,17 @@ mode_action() {
 		# Set before the work as well as after. fzf holds the picker frozen for
 		# the whole of this, so if it is cut short partway the header still says
 		# what the key was doing rather than showing the last unrelated note.
-		set_note "$file" 'rendering in a browser, this takes a moment'
+		set_note "$file" 'rendering the page, this takes a moment'
 		if deep_extract "$url"; then
-			set_note "$file" 'rendered the slow way'
+			# Which rung paid for this is the one thing the note can say that
+			# the refreshed preview cannot: a second and a browser process are
+			# different costs, and the extract already names the winner in its
+			# own footer rather than being asked a second time.
+			if grep -q 'deep step 2: crawl4ai' "$(cache_file "$url")"; then
+				set_note "$file" 'rendered by the cluster renderer'
+			else
+				set_note "$file" 'rendered the slow way, in a local browser'
+			fi
 		else
 			set_note "$file" "still unreadable: $(extract_failure_reason)"
 		fi

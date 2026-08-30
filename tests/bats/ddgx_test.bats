@@ -281,6 +281,212 @@ JSON
 }
 
 # --------------------------------------------------------------------------
+# the deep ladder
+#
+# Every rung below the first is a subprocess reached by bare name, which is
+# what makes the ladder testable at all: curl, google-chrome and w3m are all
+# stubbed on PATH here. The url is under .invalid, so the fetch these tests
+# escalate from fails in the resolver on this machine rather than by asking
+# the internet, and DDGX_NO_NETWORK cannot stand in for it: that guard is the
+# thing two of these tests are about.
+# --------------------------------------------------------------------------
+
+DEEP_URL=https://blocked.invalid/x
+
+# Comfortably past DEEP_MIN, so a rung that answers with this counts as having
+# read the page rather than as one more thin result. Land under that floor and
+# the ladder keeps climbing, which is correct behaviour and a confusing test.
+cluster_markdown() {
+	printf 'The cluster renderer reached this page and read it. '
+	printf 'It is long enough to count as a page that read, which is the only '
+	printf 'thing separating a rung that worked from a rung that returned a '
+	printf 'navigation bar, and the ladder judges every rung by that one '
+	printf 'measure rather than by which tool produced it. These sentences '
+	printf 'exist to carry the character count past the floor with enough '
+	printf 'margin that nobody has to count them again after an edit, because '
+	printf 'a fixture that sits one word above a threshold is a test that '
+	printf 'fails for a reason nothing in it names.\n'
+}
+
+# curl answering the way crawl4ai does, with the body it would return. The
+# response is built once and read back by the stub, so the markdown is escaped
+# by a json encoder rather than by a heredoc inside a heredoc.
+stub_curl_ok() {
+	cluster_markdown | python3 -c \
+		'import json,sys; print(json.dumps({"markdown": sys.stdin.read(), "success": True}))' \
+		>"$BATS_TEST_TMPDIR/curl.response"
+	cat >"$STUB_BIN/curl" <<EOF
+#!/usr/bin/env bash
+cat >"$BATS_TEST_TMPDIR/curl.stdin"
+printf '%s\n' "\$*" >>"$BATS_TEST_TMPDIR/curl.args"
+cat "$BATS_TEST_TMPDIR/curl.response"
+EOF
+	chmod +x "$STUB_BIN/curl"
+}
+
+# curl's exit code carries the distinction the breaker turns on: 22 is the
+# service answering with an HTTP error, 7 is nothing listening at all.
+stub_curl_failing() {
+	cat >"$STUB_BIN/curl" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >>"$BATS_TEST_TMPDIR/curl.args"
+exit $1
+EOF
+	chmod +x "$STUB_BIN/curl"
+}
+
+stub_chrome() {
+	cat >"$STUB_BIN/google-chrome" <<EOF
+#!/usr/bin/env bash
+printf 'started\n' >>"$BATS_TEST_TMPDIR/chrome.log"
+cat "$FIXTURES/article.html"
+EOF
+	chmod +x "$STUB_BIN/google-chrome"
+}
+
+write_c4ai_config() {
+	printf '{"url":"https://renderer.invalid/md","auth":"Bearer %s","ca":"/dev/null"}\n' \
+		"secret-token-value" >"$BATS_TEST_TMPDIR/crawl4ai.json"
+}
+
+run_deep() {
+	run env PATH="$STUB_BIN:$PATH" TMPDIR="$BATS_TEST_TMPDIR" \
+		DDGX_C4AI_CONFIG="$BATS_TEST_TMPDIR/crawl4ai.json" \
+		node "$READABLE" --deep --url "$DEEP_URL" "$@"
+}
+
+@test "the cluster renderer answers first and the browser is never started" {
+	write_article_fixture
+	write_c4ai_config
+	stub_curl_ok
+	stub_chrome
+
+	run_deep
+
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"The cluster renderer reached this page"* ]]
+	[[ "$output" == *"[deep step 2: crawl4ai fit filter over the cluster renderer]"* ]]
+	# The rung that costs a second beat the one that costs eight, so the
+	# expensive one never ran. This is the whole reason it goes first.
+	[ ! -f "$BATS_TEST_TMPDIR/chrome.log" ]
+}
+
+@test "the token travels on stdin, never in the argument list" {
+	write_article_fixture
+	write_c4ai_config
+	stub_curl_ok
+	# Stubbed even though this rung should win, because the machine running
+	# the suite has a real Chrome and a rung that falls through would find it.
+	stub_chrome
+
+	run_deep
+
+	[ "$status" -eq 0 ]
+	# /proc/PID/cmdline is world readable and an argv full of bearer token is
+	# a credential handed to every process on the machine.
+	run grep -c secret-token-value "$BATS_TEST_TMPDIR/curl.args"
+	[ "$output" = "0" ]
+	grep -q secret-token-value "$BATS_TEST_TMPDIR/curl.stdin"
+	grep -q -- '--config -' "$BATS_TEST_TMPDIR/curl.args"
+}
+
+@test "a page the cluster renderer refuses falls through to the browser" {
+	write_article_fixture
+	write_c4ai_config
+	stub_curl_failing 22
+	stub_chrome
+
+	run_deep
+
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"Cordoning a node marks it unschedulable"* ]]
+	[[ "$output" == *"[deep step 3: Readability over a headless Chrome render]"* ]]
+	# The service answered, so it is up. Remembering it as down would skip it
+	# for every other page for a minute over one page it did not like.
+	[ ! -f "$BATS_TEST_TMPDIR/ddgx-crawl4ai-unreachable" ]
+}
+
+@test "an unreachable cluster is remembered, so the next page does not wait for it" {
+	write_article_fixture
+	write_c4ai_config
+	stub_curl_failing 7
+	stub_chrome
+
+	run_deep
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"[deep step 3: Readability over a headless Chrome render]"* ]]
+	[ -f "$BATS_TEST_TMPDIR/ddgx-crawl4ai-unreachable" ]
+
+	run_deep
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"[deep step 3: Readability over a headless Chrome render]"* ]]
+
+	# Once. A tunnel is down for stretches, not for single requests, and the
+	# day it is down is already the day this key is slowest.
+	[ "$(wc -l <"$BATS_TEST_TMPDIR/curl.args")" -eq 1 ]
+}
+
+@test "the rung is skipped on a machine with no renderer configured" {
+	write_article_fixture
+	stub_curl_ok
+	stub_chrome
+
+	run env PATH="$STUB_BIN:$PATH" TMPDIR="$BATS_TEST_TMPDIR" \
+		DDGX_C4AI_CONFIG="$BATS_TEST_TMPDIR/absent.json" \
+		node "$READABLE" --deep --url "$DEEP_URL"
+
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"[deep step 3: Readability over a headless Chrome render]"* ]]
+	[ ! -f "$BATS_TEST_TMPDIR/curl.args" ]
+}
+
+@test "a fetch the page refuses still reaches the ladder" {
+	write_article_fixture
+	stub_chrome
+
+	run env PATH="$STUB_BIN:$PATH" TMPDIR="$BATS_TEST_TMPDIR" \
+		DDGX_C4AI_CONFIG="$BATS_TEST_TMPDIR/absent.json" \
+		node "$READABLE" --deep --url "$DEEP_URL"
+
+	# The fetch failed and the page still read. Aborting on that failure is
+	# what kept --deep from reaching a renderer on every page that answers a
+	# script with 403, which is most of what the escalation is asked for.
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"Cordoning a node marks it unschedulable"* ]]
+}
+
+@test "the shallow path still fails on a fetch the page refuses" {
+	write_article_fixture
+	stub_chrome
+
+	run env PATH="$STUB_BIN:$PATH" node "$READABLE" --url "$DEEP_URL"
+
+	# Nothing to fall to, so the reason travels to the pane instead, and the
+	# browser stays unstarted: it is the escalation, not the default.
+	[ "$status" -ne 0 ]
+	[ ! -f "$BATS_TEST_TMPDIR/chrome.log" ]
+}
+
+@test "the network guard stops a deep extract at the fetch" {
+	write_article_fixture
+	write_c4ai_config
+	stub_curl_ok
+	stub_chrome
+
+	run env PATH="$STUB_BIN:$PATH" TMPDIR="$BATS_TEST_TMPDIR" \
+		DDGX_C4AI_CONFIG="$BATS_TEST_TMPDIR/crawl4ai.json" DDGX_NO_NETWORK=1 \
+		node "$READABLE" --deep --url "$DEEP_URL"
+
+	# Every rung under the first is a subprocess, and the guard cannot see
+	# those. If --deep swallowed this refusal the way it swallows a 403, a
+	# suite that stubs one binary would reach the internet through another.
+	[ "$status" -ne 0 ]
+	[[ "$output" == *"network disabled"* ]]
+	[ ! -f "$BATS_TEST_TMPDIR/chrome.log" ]
+	[ ! -f "$BATS_TEST_TMPDIR/curl.args" ]
+}
+
+# --------------------------------------------------------------------------
 # __ddgx.sh
 # --------------------------------------------------------------------------
 
@@ -1004,6 +1210,27 @@ EOF
 
 	run bash "$DDGX" --header "$BATS_TEST_TMPDIR/results.json"
 	[[ "$output" == *"rendered the slow way"* ]]
+}
+
+@test "ctrl-o says which renderer paid for the page" {
+	printf '%s\n' '[{"title":"Blocked","url":"https://blocked.invalid/x","abstract":"nope"}]' \
+		>"$BATS_TEST_TMPDIR/results.json"
+	# The extract names its own winner in the footer, which is where the note
+	# reads it from rather than timing the call or asking a second time.
+	cat >"$STUB_BIN/node" <<'EOF'
+#!/usr/bin/env bash
+printf 'the body the cluster renderer returned\n\n'
+printf '[deep step 2: crawl4ai fit filter over the cluster renderer]\n'
+EOF
+	chmod +x "$STUB_BIN/node"
+
+	run_action "$BATS_TEST_TMPDIR/results.json" 0 0
+	[ "$status" -eq 0 ]
+
+	# One second against eight is the difference the note is reporting. Saying
+	# "the slow way" for a rung that was not slow trains you to ignore it.
+	run bash "$DDGX" --header "$BATS_TEST_TMPDIR/results.json"
+	[[ "$output" == *"rendered by the cluster renderer"* ]]
 }
 
 @test "ctrl-o on anything else reads the marked set in a pager" {

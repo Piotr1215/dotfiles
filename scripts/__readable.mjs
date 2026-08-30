@@ -30,7 +30,7 @@ import { createRequire } from 'node:module'
 import { createHash } from 'node:crypto'
 import { spawn } from 'node:child_process'
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs'
-import { homedir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import path from 'node:path'
 
 // Dependencies live outside the dotfiles repo so 36MB of node_modules is never
@@ -716,6 +716,93 @@ function readDocument (source, url) {
 // is the single way this can mislead.
 // ---------------------------------------------------------------------------
 
+// crawl4ai renders the page somewhere else and hands back markdown. That makes
+// it the cheapest rung here, one second against the five to eight Chrome
+// costs, and the only one that fetches from a different address: a site that
+// answers this machine with 403 often answers a datacentre with the page.
+//
+// It is configured by a file this repo does not carry, because the endpoint
+// and its token are neither portable nor publishable. No file, no rung, the
+// same way a machine with no Chrome skips the next one.
+const C4AI_FILE = process.env.DDGX_C4AI_CONFIG || path.join(
+  process.env.XDG_CONFIG_HOME || path.join(homedir(), '.config'),
+  'ddgx', 'crawl4ai.json'
+)
+const C4AI_TIMEOUT_MS = parseInt(process.env.DDGX_C4AI_TIMEOUT_MS || '', 10) || 6000
+// A service on the far side of a VPN is unreachable for stretches, not for one
+// request. Without a note of that, every ctrl-o pays the full timeout on the
+// day the tunnel is down, which is already the day the escalation is slowest.
+const C4AI_BREAKER = path.join(tmpdir(), 'ddgx-crawl4ai-unreachable')
+const C4AI_BREAKER_MS = parseInt(process.env.DDGX_C4AI_BREAKER_MS || '', 10) || 60000
+
+function loadC4ai () {
+  if (process.env.DDGX_NO_NETWORK) return null
+  try {
+    const cfg = JSON.parse(readFileSync(C4AI_FILE, 'utf8'))
+    if (typeof cfg.url !== 'string' || !cfg.url) return null
+    return {
+      url: cfg.url,
+      auth: typeof cfg.auth === 'string' ? cfg.auth : '',
+      ca: typeof cfg.ca === 'string' ? cfg.ca : ''
+    }
+  } catch {
+    return null
+  }
+}
+
+function breakerOpen () {
+  try {
+    return Date.now() - JSON.parse(readFileSync(C4AI_BREAKER, 'utf8')).at < C4AI_BREAKER_MS
+  } catch {
+    return false
+  }
+}
+
+// curl rather than fetch, for three reasons that all come from this being a
+// preview path: a private CA the process was not started to trust, a connect
+// timeout separate from the total one, and a bare binary name a test can stub
+// on PATH the way it stubs the other two rungs. The request goes in on stdin
+// as a curl config file, so the token never appears in argv, where every other
+// process on the machine can read it out of /proc.
+async function clusterMarkdown (url) {
+  const cfg = loadC4ai()
+  if (!cfg || breakerOpen()) return null
+
+  const quote = value => String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+  const lines = [
+    `--url "${quote(cfg.url)}"`,
+    '--header "Content-Type: application/json"',
+    `--data "${quote(JSON.stringify({ url, f: 'fit' }))}"`,
+    '--connect-timeout 2',
+    `--max-time ${Math.ceil(C4AI_TIMEOUT_MS / 1000)}`,
+    '--silent', '--show-error', '--fail'
+  ]
+  if (cfg.auth) lines.push(`--header "Authorization: ${quote(cfg.auth)}"`)
+  if (cfg.ca) lines.push(`--cacert "${quote(cfg.ca)}"`)
+
+  const res = await run('curl', ['--config', '-'],
+    { input: lines.join('\n') + '\n', timeoutMs: C4AI_TIMEOUT_MS + 2000 })
+  if (res.missing) return null
+  // --fail turns an HTTP error into exit 22, and that is the service answering:
+  // it looked at this page and refused it. Only a transport failure means the
+  // service is not there, and only that is worth remembering for a minute.
+  if (res.code !== 0) {
+    if (res.code !== 22) {
+      try { writeFileSync(C4AI_BREAKER, JSON.stringify({ at: Date.now() })) } catch {}
+    }
+    return null
+  }
+
+  try {
+    const body = JSON.parse(res.stdout)
+    let md = body.markdown ?? body.result?.markdown ?? ''
+    if (md && typeof md === 'object') md = md.fit_markdown || md.raw_markdown || ''
+    return typeof md === 'string' && md.trim() ? md.trim() : null
+  } catch {
+    return null
+  }
+}
+
 // Chrome answers to a different name on every distribution, so the first one
 // that runs wins. A binary that is present and then fails is the page failing,
 // not the binary, so its neighbours are not tried after it.
@@ -750,12 +837,29 @@ async function escalate (url, source, first) {
     if (candidate.read.keptChars > best.read.keptChars) best = candidate
   }
 
-  // Step 2. "No article found" is usually "no article yet", the body arriving
+  // Step 2. The cheapest rung and the only one that changes address, so it
+  // goes first: it answers the JavaScript page in a second, and it is the only
+  // thing here that reaches a page which refused this machine outright.
+  const viaCluster = '[deep step 2: crawl4ai fit filter over the cluster renderer]'
+  const remote = url ? await clusterMarkdown(url) : null
+  if (remote) {
+    const kept = charCount(remote)
+    // A refused fetch counted nothing, so the page cannot have fewer
+    // characters than the ones now in hand. Reporting "kept 6895 of 0" is the
+    // stats footer lying about the rung that just rescued the page.
+    const read = {
+      totalChars: Math.max(first.totalChars, kept), markdown: remote, keptChars: kept, reason: ''
+    }
+    if (kept >= DEEP_MIN) return { read, provenance: viaCluster }
+    consider({ read, provenance: viaCluster })
+  }
+
+  // Step 3. "No article found" is usually "no article yet", the body arriving
   // in JavaScript. Give the page a browser and read the DOM it settled on.
   // A missing browser is a rung skipped, not a failure.
   const rendered = url ? await renderDom(url) : null
   let renderedTotal = first.totalChars
-  const viaChrome = '[deep step 2: Readability over a headless Chrome render]'
+  const viaChrome = '[deep step 3: Readability over a headless Chrome render]'
   if (rendered) {
     const read = readDocument(rendered, url)
     renderedTotal = read.totalChars
@@ -763,7 +867,7 @@ async function escalate (url, source, first) {
     consider({ read, provenance: viaChrome })
   }
 
-  // Step 3. A real DOM that Readability still scores at nothing means the tool
+  // Step 4. A real DOM that Readability still scores at nothing means the tool
   // is wrong for this page, not that the text is missing. Same render, no
   // second fetch: rendering twice would double the one expensive part.
   const dumped = await w3mDump(rendered || source)
@@ -771,8 +875,8 @@ async function escalate (url, source, first) {
     consider({
       read: { totalChars: renderedTotal, markdown: dumped, keptChars: charCount(dumped), reason: '' },
       provenance: rendered
-        ? '[deep step 3: w3m over that same render, Readability found no article in it]'
-        : '[deep step 3: w3m over the served html, no headless browser installed]'
+        ? '[deep step 4: w3m over that same render, Readability found no article in it]'
+        : '[deep step 4: w3m over the served html, no headless browser installed]'
     })
   }
   return best
@@ -790,13 +894,35 @@ function present (markdown, { maxLines = 0, footer = [] } = {}) {
 // to it without the two having to read each other's failures.
 async function extractPage (url, { html, maxLines, stats, deep }) {
   let source = html
+  // A page that refuses this machine outright, 403 to a script or 400 to a
+  // fetch with no session, is precisely the page the ladder was built for, and
+  // throwing here is what kept --deep from ever reaching a renderer on one.
+  // The shallow path still throws: it has no rung to fall to, and the reason
+  // it reports is the one the pane prints.
+  let refusal = null
   if (source === null) {
     source = url ? await stackExchangeHtml(url).catch(() => null) : null
-    if (source === null) source = await httpGet(url)
+    if (source === null) {
+      try {
+        source = await httpGet(url)
+      } catch (err) {
+        // DDGX_NO_NETWORK is the suite's one lever on the network, and the
+        // rungs below reach it by subprocess where the guard cannot see them.
+        // Swallowing this particular refusal would hand a test a live Chrome.
+        if (!deep || process.env.DDGX_NO_NETWORK) throw err
+        refusal = err
+        source = ''
+      }
+    }
   }
-  if (!source.trim()) throw new Error('empty document')
+  if (!source.trim()) {
+    if (!deep) throw new Error('empty document')
+    source = ''
+  }
 
-  let read = readDocument(source, url)
+  let read = source
+    ? readDocument(source, url)
+    : { totalChars: 0, markdown: '', keptChars: 0, reason: refusal ? refusal.message : 'empty document' }
   let provenance = ''
 
   if (deep && (read.reason || read.keptChars < DEEP_MIN)) {
