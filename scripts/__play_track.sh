@@ -24,6 +24,7 @@ if [[ "$1" == "--help" ]] || [[ "$1" == "-h" ]]; then
 	  - Press ctrl-f in the picker to toggle ★ favourite on the highlighted track
 	  - Press ctrl-s to filter the list to favourites only (press again for all)
 	  - Favourites show a ★ marker and sort to the top
+	  - Non-favourite tracks follow, newest file first
 	  - Stored as filenames in ~/music/.favourites
 
 	REQUIREMENTS:
@@ -43,7 +44,8 @@ FILTER_FLAG="/tmp/pt_fav_filter"
 # Output line format: "<play><fav> NN. Clean Title<TAB>Full Path"
 #   play = ► if currently playing (run mode) else space
 #   fav  = ★ if favourite else space
-# Favourites sort to the top; in run mode the playing track floats above all.
+# Favourites sort to the top (alphabetical); the rest follow newest file first.
+# In run mode the playing track floats above all.
 render_list() {
 	local run_mode="$1"
 
@@ -61,17 +63,23 @@ render_list() {
 		fi
 	fi
 
-	# Build rows: "fav_flag<TAB>clean_name<TAB>filepath", then sort favourites first
-	local rows
-	rows=$(find "$MUSIC_DIR" -maxdepth 1 -type f -name "*.mp3" -printf '%f\t%p\n' 2>/dev/null | while IFS=$'\t' read -r filename filepath; do
+	# Build rows: "fav_flag<TAB>mtime<TAB>clean_name<TAB>filepath"
+	local raw
+	raw=$(find "$MUSIC_DIR" -maxdepth 1 -type f -name "*.mp3" -printf '%T@\t%f\t%p\n' 2>/dev/null | while IFS=$'\t' read -r mtime filename filepath; do
 		local clean_name="${filename%.mp3}"
 		clean_name="${clean_name//_/ }"
 		local fav=0
 		if [[ -f "$FAV_FILE" ]] && grep -qxF "$filename" "$FAV_FILE"; then
 			fav=1
 		fi
-		printf '%d\t%s\t%s\n' "$fav" "$clean_name" "$filepath"
-	done | sort -t$'\t' -k1,1r -k2,2)
+		printf '%d\t%s\t%s\t%s\n' "$fav" "$mtime" "$clean_name" "$filepath"
+	done)
+
+	# Favourites first (alphabetical), then everything else newest file first
+	local favs others rows
+	favs=$(printf '%s\n' "$raw" | awk -F'\t' '$1 == "1"' | sort -t$'\t' -k3,3)
+	others=$(printf '%s\n' "$raw" | awk -F'\t' '$1 == "0"' | sort -t$'\t' -k2,2nr)
+	rows=$(printf '%s\n' "$favs" "$others" | grep -v '^[[:space:]]*$' || true)
 
 	# Favourites-only view when the filter flag is set
 	if [[ -f "$FILTER_FLAG" ]]; then
@@ -85,9 +93,9 @@ render_list() {
 	local marked
 	marked=$(printf '%s\n' "$rows" | awk -F'\t' -v playing="$current_display" '
 	{
-		play = ($2 == playing) ? "►" : " "
+		play = ($3 == playing) ? "►" : " "
 		fav  = ($1 == "1") ? "★" : " "
-		printf "%s%s %02d. %s\t%s\n", play, fav, NR, $2, $3
+		printf "%s%s %02d. %s\t%s\n", play, fav, NR, $3, $4
 	}')
 
 	# In run mode, float the playing track to the very top
