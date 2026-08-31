@@ -70,12 +70,26 @@ desc_group = 2
 type = "bookmark"
 open_target = true  # --edit opens the path (desc) instead of source file
 
+# Desktop-level keys, from the two generated indexes. AutoKey stores one JSON
+# per item and GNOME keeps its custom keybindings in dconf, so neither is a file
+# confhelp can regex directly; __desktop_bindings_gen.sh reads both and writes
+# these. Rerun the generator after binding a key in the AutoKey GUI or in GNOME
+# Settings, or the new key will not be in the help.
 [autokey]
 paths = ["scripts/__autokey_bindings.conf"]
+skip_comment = true
 regex = '^([^|]+)\|(.+)$'
 key_group = 1
 desc_group = 2
 type = "autokey"
+
+[gnome]
+paths = ["scripts/__gnome_bindings.conf"]
+skip_comment = true
+regex = '^([^|]+)\|(.+)$'
+key_group = 1
+desc_group = 2
+type = "gnome"
 
 [zsh-jumper]
 paths = ["~/.config/zsh-jumper/config.toml"]

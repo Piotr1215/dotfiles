@@ -107,7 +107,7 @@ main_loop() {
     while true; do
         if [[ "$mode" == "bindings" ]]; then
             local result key selection
-            result=$(confhelp -b "$DOTFILES" | awk -F'|' '{printf "%-12s %-18s %-55s %s\t%s|%s|%s|%s\n", $1, $2, $3, $4, $1, $2, $3, $4}' | fzf \
+            result=$(confhelp -b "$DOTFILES" | awk -F'|' '{printf "%-12s %-30s %-55s %s\t%s|%s|%s|%s\n", $1, $2, $3, $4, $1, $2, $3, $4}' | fzf \
                 --header='Enter=jump | Alt+H=send to pane | Ctrl+O=copy | Ctrl+P=open | Ctrl+G=tealdeer' \
                 --expect=ctrl-g,ctrl-o,ctrl-p,alt-h \
                 --delimiter=$'\t' \
@@ -218,14 +218,34 @@ main_loop() {
 export -f main_loop format_for_clipboard binding_fields binding_source binding_target binding_payload
 export DOTFILES TEMP_FILE FZF_COLORS
 
-# Calculate center position
-read screen_w screen_h < <(xdpyinfo | awk '/dimensions:/{print $2}' | tr 'x' ' ')
-cols=150
-lines=50
-win_w=$((cols * 9))
-win_h=$((lines * 20))
+# Size the popup to the screen instead of to a fixed 150x50. That fixed size was
+# picked on a 1080p display; on the 4K panel it filled a third of the screen and
+# fzf cut every row short, which is how a binding ends up looking absent when it
+# is only off the right edge.
+#
+# CELL_W and CELL_H are the alacritty default font's cell in pixels, measured on
+# this machine. They are only used to centre the window, so being a pixel out
+# shifts it slightly and breaks nothing.
+CELL_W=9
+CELL_H=19
+# Caps, so an ultrawide gets a large window rather than an unreadable one.
+MAX_COLS=320
+MAX_LINES=100
+
+read -r screen_w screen_h < <(xdpyinfo | awk '/dimensions:/{print $2}' | tr 'x' ' ')
+cols=$(( screen_w * 85 / 100 / CELL_W ))
+lines=$(( screen_h * 85 / 100 / CELL_H ))
+[ "$cols" -gt "$MAX_COLS" ] && cols=$MAX_COLS
+[ "$lines" -gt "$MAX_LINES" ] && lines=$MAX_LINES
+[ "$cols" -lt 150 ] && cols=150
+[ "$lines" -lt 40 ] && lines=40
+
+win_w=$((cols * CELL_W))
+win_h=$((lines * CELL_H))
 pos_x=$(( (screen_w - win_w) / 2 ))
 pos_y=$(( (screen_h - win_h) / 2 ))
+[ "$pos_x" -lt 0 ] && pos_x=0
+[ "$pos_y" -lt 0 ] && pos_y=0
 
 alacritty --class config-bindings-popup \
     --config-file /dev/null \
