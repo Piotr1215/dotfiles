@@ -265,6 +265,12 @@ fi
 
 if $repair; then
   if $margin_exists; then
+    # A margin pane created before 2026-08-31 was built with select-pane -d, so
+    # it silently swallows the j/k/G that scroll viddy. Creation-time flags do
+    # not apply retroactively, which left long-lived panes permanently
+    # unscrollable with no visible cause. Re-assert it on every repair so an
+    # existing pane heals itself instead of needing a toggle off and on.
+    tmux select-pane -e -t "$margin_pane" 2>/dev/null || true
     if [[ "$(window_zoomed)" == 1 ]]; then
       set_visible off
     else
@@ -305,7 +311,14 @@ if [ -f "$timeoff_file" ]; then
 else
   session_name="$(tmux display-message -p -t "$target_pane" '#{session_name}')"
   margin_command="${TMUX_READING_MARGIN_WORK_COMMAND:-exec \"$script_dir/__tmux_reading_margin_work.sh\" \"$session_name\" \"$window_id\"}"
-  input_flag=-d
+  # Input ENABLED, changed from -d on 2026-08-31. The work margin runs viddy,
+  # which scrolls with j/k/G and handles the mouse, and the asks section at the
+  # bottom is now longer than the pane. Under -d tmux dropped every keystroke
+  # before viddy saw it, so the pane looked frozen and the only diagnosis
+  # available was "viddy cannot scroll", which is false.
+  # This does not leak stray keys: input reaches a pane only while it is the
+  # active one, and the toggle re-selects the content pane on the next line.
+  input_flag=-e
 fi
 margin_pane="$(
   tmux split-window -bdfl 33% -h -t "$target_pane" -P -F '#{pane_id}' "$margin_command"

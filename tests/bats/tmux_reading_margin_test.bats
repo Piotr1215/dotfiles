@@ -36,15 +36,20 @@ EOF
 #!/usr/bin/env bash
 printf 'cockpit layout=%s width=%s\n' "$COCKPIT_LAYOUT" "$COCKPIT_VERTICAL_WIDTH"
 EOF
-  chmod +x "$bin_dir/tmux" "$bin_dir/status" "$bin_dir/cockpit"
+  cat > "$bin_dir/asks" <<'EOF'
+#!/usr/bin/env bash
+printf 'asks width=%s\n' "$TMUX_PIOTR_ASKS_WIDTH"
+EOF
+  chmod +x "$bin_dir/tmux" "$bin_dir/status" "$bin_dir/cockpit" "$bin_dir/asks"
 
   run env PATH="$bin_dir:$PATH" TMUX_PANE='%99' \
     TMUX_READING_MARGIN_FULL_STATUS_COMMAND="$bin_dir/status" \
     TMUX_READING_MARGIN_COCKPIT_STATE_COMMAND="$bin_dir/cockpit" \
+    TMUX_READING_MARGIN_ASKS_COMMAND="$bin_dir/asks" \
     "$WORK_SCRIPT" --render test '@7'
 
   [ "$status" -eq 0 ]
-  [ "$output" = $'status session=test pane=%42 columns=72\n\ncockpit layout=vertical width=72' ]
+  [ "$output" = $'status session=test pane=%42 columns=72\n\ncockpit layout=vertical width=72\n\nasks width=72' ]
 }
 
 @test "work margin wraps full status before the cockpit edge" {
@@ -67,9 +72,12 @@ printf 'cockpit width=%s\n' "$COCKPIT_VERTICAL_WIDTH"
 EOF
   chmod +x "$bin_dir/tmux" "$bin_dir/status" "$bin_dir/cockpit"
 
+  # Asks deliberately unstubbed and pointed at nothing. The section is optional,
+  # and the status wrap this test measures must not depend on it.
   run env PATH="$bin_dir:$PATH" TMUX_PANE='%99' \
     TMUX_READING_MARGIN_FULL_STATUS_COMMAND="$bin_dir/status" \
     TMUX_READING_MARGIN_COCKPIT_STATE_COMMAND="$bin_dir/cockpit" \
+    TMUX_READING_MARGIN_ASKS_COMMAND="$bin_dir/absent" \
     "$WORK_SCRIPT" --render test '@7'
 
   [ "$status" -eq 0 ]
@@ -336,7 +344,9 @@ EOF
   wait_for_command
   [ "$(<"$COMMAND_LOG")" = work ]
   margin_id="$(tmux -L "$SOCKET_NAME" show-options -wqv @reading_margin_pane)"
-  [ "$(tmux -L "$SOCKET_NAME" display-message -p -t "$margin_id" '#{pane_input_off}')" -eq 1 ]
+  # Both modes now accept input. Work mode used to be -d; that dropped every
+  # keystroke before viddy saw it, leaving the asks section unscrollable.
+  [ "$(tmux -L "$SOCKET_NAME" display-message -p -t "$margin_id" '#{pane_input_off}')" -eq 0 ]
   toggle_margin
 
   rm -f "$COMMAND_LOG"
@@ -378,4 +388,31 @@ EOF
   output="$(<"$STATUS_LOG")"
   [[ "$output" == *"default=on visible=on"* ]]
   [[ "$output" == *"width=39"* ]]
+}
+
+@test "work margin accepts input so its viddy pane can scroll" {
+  # Regression: the work branch used select-pane -d, so tmux dropped every
+  # keystroke before viddy saw it. The pane looked frozen and the only
+  # available diagnosis was "viddy cannot scroll", which is false. The asks
+  # section at the bottom is longer than the pane, so scrolling is required.
+  toggle_margin
+  margin="$(tmux -L "$SOCKET_NAME" show-options -wqv @reading_margin_pane)"
+  [ -n "$margin" ]
+  run tmux -L "$SOCKET_NAME" display-message -p -t "$margin" '#{pane_input_off}'
+  [ "$output" = "0" ]
+}
+
+@test "repair re-enables input on a margin created before the fix" {
+  # Creation-time flags do not apply retroactively, so a long-lived pane stayed
+  # unscrollable with no visible cause. Repair must heal it in place rather
+  # than requiring a toggle off and on.
+  toggle_margin
+  margin="$(tmux -L "$SOCKET_NAME" show-options -wqv @reading_margin_pane)"
+  window="$(tmux -L "$SOCKET_NAME" display-message -p '#{window_id}')"
+  tmux -L "$SOCKET_NAME" select-pane -d -t "$margin"
+  run tmux -L "$SOCKET_NAME" display-message -p -t "$margin" '#{pane_input_off}'
+  [ "$output" = "1" ]
+  tmux -L "$SOCKET_NAME" run-shell "$SCRIPT --repair-window '$window'"
+  run tmux -L "$SOCKET_NAME" display-message -p -t "$margin" '#{pane_input_off}'
+  [ "$output" = "0" ]
 }

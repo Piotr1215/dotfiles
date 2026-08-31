@@ -36,7 +36,19 @@ fi
 
 status_command="${TMUX_READING_MARGIN_FULL_STATUS_COMMAND:-$script_dir/__tmux_full_status.sh}"
 cockpit_command="${TMUX_READING_MARGIN_COCKPIT_STATE_COMMAND:-$HOME/.claude/scripts/__cockpit_state.sh}"
+asks_command="${TMUX_READING_MARGIN_ASKS_COMMAND:-$HOME/.claude/scripts/__piotr_asks_margin.sh}"
 
 COLUMNS="$status_width" "$status_command" "$session" "$source_pane"
 printf '\n'
 COCKPIT_LAYOUT=vertical COCKPIT_VERTICAL_WIDTH="$width" "$cockpit_command"
+
+# Piotr's open asks last, below the live cockpit. Deliberately the bottom
+# section: the cockpit answers "what is running now" and is read constantly,
+# while the asks list answers "what is waiting on me" and is read on a glance
+# down. It prints nothing when there are no asks, so the margin does not grow a
+# permanently empty heading.
+asks_width="$width"
+if [[ -x "$asks_command" ]]; then
+  printf '\n'
+  TMUX_PIOTR_ASKS_WIDTH="$asks_width" "$asks_command" || true
+fi
