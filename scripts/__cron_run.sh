@@ -248,8 +248,21 @@ wlog INFO "--- end output ---"
 # faults with the same code 2, so a run whose output carries one of those
 # diagnostics is an error however it exited. Without this a broken script paints
 # green on the board, which is worse than no signal at all.
+#
+# Only the first few output lines are scanned. A bash fault is fatal where it
+# happens, so its diagnostic is the first thing the run prints and the run stops
+# there. Scanning the whole block instead reclassified a healthy 98s run as an
+# error on 2026-08-31: __claude_code_parity_watch streams a subagent's tool
+# transcript into this log, one of the agent's own tool calls reported
+# "command not found: sqz", and a job that had already written its state and
+# delivered its mail was reported as failed. Any job that streams a transcript
+# is exposed to the same false positive.
 bash_fault=0
-if [ "$after" -gt "$before" ] && sed -n "$((before + 1)),${after}p" "$log_file" \
+fault_scan_end=$(( before + 5 ))
+if [ "$fault_scan_end" -gt "$after" ]; then
+    fault_scan_end="$after"
+fi
+if [ "$after" -gt "$before" ] && sed -n "$((before + 1)),${fault_scan_end}p" "$log_file" \
         | grep -qE 'syntax error|unexpected (token|end of file)|command not found|: cannot execute'; then
     bash_fault=1
 fi
