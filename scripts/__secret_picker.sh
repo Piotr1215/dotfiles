@@ -110,6 +110,29 @@ clip() {
 }
 
 note() { notify-send -t 5000 "Secret picker" "$1"; }
+
+# Both of this script's signals are markers the panel badge watches
+# (.config/argos/totp.1s.sh), not notifications. A notification for a copy you
+# just asked for is noise: it outlives the copy, steals a corner of the screen
+# and puts the secret's name there, and reading it costs more than the copy did.
+# The badge says the same thing without taking focus and is gone before you
+# paste. Same for the tap cue, which used to leave a dead "Touch the key" card
+# on screen long after the key had been touched.
+BADGE_DIR="${XDG_RUNTIME_DIR:-/run/user/$UID}"
+TOUCH_CUE="$BADGE_DIR/secret-picker-touch"
+
+# Yellow flashes: the value is on the clipboard.
+blink_key() { touch "$BADGE_DIR/secret-picker-blink"; }
+
+# Red flashing T: age is blocked on the key and wants a touch. The trap matters
+# more than the on/off pair does. `fail` exits from inside the wait, and without
+# it the T would still be asking for a touch nobody owes.
+touch_cue_on() {
+	touch "$TOUCH_CUE"
+	trap 'rm -f "$TOUCH_CUE"' EXIT
+}
+touch_cue_off() { rm -f "$TOUCH_CUE"; }
+
 fail() {
 	notify-send -u critical "Secret picker" "$1"
 	exit 1
@@ -218,17 +241,18 @@ copy)
 	if [[ "$owner" == age ]]; then
 		# Cue the tap: age blocks until the key is touched and there is no terminal
 		# here to print to, so without this the wait just looks like nothing happened.
-		notify-send -u normal -t 12000 "$ICON_AGE YubiKey" "Touch the key to unlock $name"
+		touch_cue_on
 		# A missed touch is by far the most common failure, and age-plugin-yubikey
 		# reports it as "Failed to decrypt YubiKey stanza", which reads like a
 		# key/recipient fault and sends you debugging the wrong thing. Say what it is.
 		secret_read "$name" 2>/dev/null | clip ||
 			fail "no tap registered, $name not copied. Press again and touch the key."
+		touch_cue_off
 	else
 		secret_read "$name" 2>/dev/null | clip ||
 			fail "pass show $entry failed (gpg-agent down, or entry unreadable)"
 	fi
-	note "$owner: $name copied to clipboard"
+	blink_key
 	;;
 
 edit)
@@ -299,8 +323,9 @@ demote)
 	sub=$(find "$PASS_DIR" -mindepth 1 -maxdepth 1 -type d -not -name '.git' -printf '%f\n' |
 		sort | rofi_menu "demote $name into which pass subtree") || exit 0
 	[[ -n "$sub" ]] || exit 0
-	notify-send -u normal -t 12000 "$ICON_AGE YubiKey" "Touch the key to read $name for the move"
+	touch_cue_on
 	secret_demote "$name" "$sub" || fail "demote failed for $name (no tap, or pass insert failed)"
+	touch_cue_off
 	note "$name demoted to $sub/$name; no tap guards it now"
 	;;
 
