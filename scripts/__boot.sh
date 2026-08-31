@@ -22,6 +22,7 @@ help_function() {
 	echo "  - Sets specific bash options for error handling (set -eo pipefail)."
 	echo "  - Moves Alacritty window to HDMI 0."
 	echo "  - Launches Chrome for work (weekdays) or LibreWolf for home (weekends)."
+	echo "  - Starts the task tmux session detached (weekdays)."
 	echo ""
 	echo "Note: This script includes debug options and references to other scripts."
 }
@@ -54,10 +55,24 @@ move_alacritty_to_hdmi_0() {
 	xdotool windowraise "$WID"
 }
 
+# Bring the work task session up in the background. The tui panes in it report
+# on taskwarrior, so it starts after the recurring tasks exist. --no-attach
+# keeps it off the screen: the boot alacritty still lands in poke (.zshrc), and
+# task waits in the session picker instead of costing a window of its own.
+# Absolute paths because tmux lives in /usr/local/bin and the desktop session
+# that runs this script does not source the shell rc that puts it on PATH.
+start_task_session() {
+	if /usr/local/bin/tmux has-session -t task 2>/dev/null; then
+		return 0
+	fi
+	/usr/local/bin/tmuxinator start task --no-attach >/dev/null 2>&1 || true
+}
+
 if [[ " ${weekdays[*]} " =~ $current_day ]] && [[ "$timeoff" == 0 ]]; then
 	rm -f /tmp/timeoff_mode
 	xdg-settings set default-web-browser google-chrome.desktop 2>/dev/null
 	/home/decoder/dev/dotfiles/scripts/__create_recurring_tasks.sh
+	start_task_session
 	flatpak run com.slack.Slack 2>/dev/null &
 	nohup google-chrome-stable >/dev/null 2>&1 &
 	alacritty &
