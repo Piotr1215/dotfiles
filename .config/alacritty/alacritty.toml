@@ -77,6 +77,17 @@ regex = "[A-Za-z0-9._-]+/[A-Za-z0-9._-]+#[0-9]+|[A-Z][A-Z0-9]{1,9}-[0-9]+"
 command = { program = "/home/decoder/dev/dotfiles/scripts/__linear_open.sh", args = [] }
 binding = { key = "4", mods = "Control" }
 
+# ctrl+5: open a TaskWarrior task named on screen, in a split showing its
+# annotation trail. The ASKS section of the Alt-m margin prints one
+# "task:<uuid8>" per row so a proposal is reachable and not merely readable;
+# ctrl+4 above covers the Linear id and PR ref on the same row.
+# The prefix is required. A bare hex run would match a commit sha, an object id
+# and half the output of any git command on screen.
+[[hints.enabled]]
+regex = "task:[0-9a-f]{6,}"
+command = { program = "/home/decoder/dev/dotfiles/scripts/__task_open.sh", args = [] }
+binding = { key = "5", mods = "Control" }
+
 [cursor.style]
 shape = "Beam"
 
