@@ -107,6 +107,38 @@ start_ts=$(date +%s)
 # the run ever happened. Now a silent job still leaves start/command/exit lines.
 wlog() { printf '[%s] [%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$1" "$2" >>"$log_file"; }
 
+# Taskwarrior 3.3 still documents duplicate recurring instances when more than
+# one client expands recurrence. Ordinary commands therefore run with
+# recurrence=0 from .taskrc. Any cron wrapper may become the one primary client
+# for a moment, but only while this short command holds the shared lock. A busy
+# lock is a clean skip: the process holding it is already doing the same work.
+# The lock closes with the subshell, before the wrapped job starts.
+run_taskwarrior_recurrence_primary() {
+    local task_bin lock_file lock_dir output
+
+    task_bin="${TASKWARRIOR_BIN:-$(command -v task 2>/dev/null || true)}"
+    [ -n "$task_bin" ] || return 0
+
+    lock_file="${TASKWARRIOR_RECURRENCE_LOCK:-${STATE_DIR}/.taskwarrior-recurrence.lock}"
+    lock_dir="${lock_file%/*}"
+    [ "$lock_dir" = "$lock_file" ] && lock_dir="."
+    if ! mkdir -p "$lock_dir"; then
+        wlog WARN "recurrence expansion skipped: cannot create lock directory ${lock_dir}"
+        return 0
+    fi
+
+    if ! output=$(
+        (
+            exec 9>"$lock_file" || exit 73
+            flock -n 9 || exit 0
+            "$task_bin" rc.context=none rc.recurrence=1 rc.verbose=nothing count >/dev/null
+        ) 2>&1
+    ); then
+        output="${output//$'\n'/; }"
+        wlog WARN "recurrence expansion failed: ${output:-task exited non-zero}"
+    fi
+}
+
 # Rotate so an appended log cannot grow without bound. One previous generation
 # is enough to cover "it worked last run, what changed".
 if [ -f "$log_file" ] && [ "$(stat -c %s "$log_file" 2>/dev/null || echo 0)" -gt 1048576 ]; then
@@ -213,6 +245,8 @@ jq -n --arg job "$job" --argjson ts "$start_ts" --argjson pid "$$" \
     --arg lp "$log_file" \
     '{job: $job, ts: $ts, state: "running", pid: $pid, log_path: $lp}' >"$running_tmp"
 mv "$running_tmp" "$status_file"
+
+run_taskwarrior_recurrence_primary
 
 # Stream the job's output into the log as it is produced, rather than capturing
 # it and writing once at the end. Capturing meant a 65-second job showed a
