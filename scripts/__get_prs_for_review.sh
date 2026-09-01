@@ -49,17 +49,40 @@ get_approved_prs() {
 		--json title,url,number --jq '.'
 }
 
+# Does this task currently carry the given tag?
+task_has_tag() {
+	local task_uuid="$1" tag="$2"
+	task "$task_uuid" export |
+		jq -e --arg t "$tag" 'any(.[]; (.tags // []) | index($t))' >/dev/null 2>&1
+}
+
+# Reconcile +pr_approved against the live approval state, in BOTH directions.
+# GitHub dismisses an approval when a reviewer requests changes or, on many
+# repos, when new commits land. An add-only sync leaves the tag behind after
+# that, so a PR that now needs work keeps rendering as approved and drops out
+# of view. The remove half is what makes the tag mean "approved right now"
+# instead of "was approved at some point".
+#
+# Removing on absence is safe because the universe is already loft-sh scoped:
+# main() completes any pr-reviews task whose PR is absent from the same
+# --owner loft-sh query, so a task surviving to this point is always a PR that
+# get_approved_prs would list if it were approved.
 update_approved_status() {
 	local approved_prs
 	local task_uuid
 	approved_prs=$(get_approved_prs | jq -r '.[] | "\(.title) (#\(.number))" | rtrimstr(" ") | ltrimstr(" ")')
 	while read -r task_desc; do
+		[ -n "$task_desc" ] || continue
+		task_uuid=$(get_task_id_by_description "$task_desc")
+		[ -n "$task_uuid" ] || continue
 		if echo "$approved_prs" | grep -Fxq "$task_desc"; then
-			task_uuid=$(get_task_id_by_description "$task_desc")
-			if [ -n "$task_uuid" ]; then
+			if ! task_has_tag "$task_uuid" pr_approved; then
 				echo "Marking PR as approved: $task_desc"
 				task "$task_uuid" modify +pr_approved
 			fi
+		elif task_has_tag "$task_uuid" pr_approved; then
+			echo "Clearing stale approval: $task_desc"
+			task "$task_uuid" modify -pr_approved
 		fi
 	done < <(get_all_pending_pr_tasks)
 }
