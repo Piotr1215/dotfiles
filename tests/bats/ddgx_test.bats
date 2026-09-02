@@ -1965,6 +1965,151 @@ teardown() {
 }
 
 # ---------------------------------------------------------------------------
+# alt-h from the search screen, where a row is a url and a title and nothing
+# has been through the extractor yet.
+# ---------------------------------------------------------------------------
+
+run_send_url() {
+	run env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" \
+		XDG_DATA_HOME="$DATA_HOME" DDGX_TTL=0 bash "$DDGX" --send-url "$@"
+}
+
+@test "the search screen binds alt-h to the row under the cursor" {
+	local bind
+	bind=$(grep -F -- '--bind="alt-h:transform($SELF --send-url' "$DDGX")
+
+	[ -n "$bind" ]
+	# Both hidden fields: the url and the title. Handing over {1} alone would
+	# name every note after its address.
+	[[ "$bind" == *'{1} {2}'* ]]
+	# transform, as in the result picker: the mode prints the fzf action and fzf
+	# performs it, which is what lets one key close the popup on a delivery and
+	# hold it open on a failure. execute-silent can do neither.
+	[[ "$bind" != *"execute-silent"* ]]
+
+	# A key advertised nowhere is a key nobody presses.
+	run env XDG_CACHE_HOME="$CACHE_HOME" bash "$DDGX" --suggest-header
+	[[ "$output" == *"alt-h"* ]]
+}
+
+@test "the search screen hands over the note path, never the page text" {
+	stub_tmux '%7'
+	seed_cache 'https://example.com/tag' 'the body of the claude tag page'
+
+	run_send_url '%7' 'https://example.com/tag' 'Introducing Claude Tag'
+
+	[ "$status" -eq 0 ]
+	[ "$(cat "$TMUX_BUFFER")" = "$DATA_HOME/ddgx/notes/introducing-claude-tag.md" ]
+	# A negated assertion is a [[ ]] comparison, never `! grep`: bash exempts a
+	# command whose status is inverted with ! from set -e, so `! grep -q` under
+	# bats passes whether or not the pattern is there.
+	[[ "$(cat "$TMUX_BUFFER")" != *"the body of the claude tag page"* ]]
+	grep -q 'the body of the claude tag page' \
+		"$DATA_HOME/ddgx/notes/introducing-claude-tag.md"
+	grep -qx 'Source: https://example.com/tag' \
+		"$DATA_HOME/ddgx/notes/introducing-claude-tag.md"
+	# A delivered hand-off closes the popup, as it does one screen later.
+	[ "$output" = "abort" ]
+}
+
+@test "a page the search screen never fetched is extracted on the keypress" {
+	# Nothing on that screen has been through the extractor: the rows are
+	# titles, urls and snippets, rebuilt on every keystroke, and extracting them
+	# as they scrolled past would be a fetch per letter typed. So the key that
+	# hands a page over is the thing that fetches it.
+	stub_tmux '%7'
+	cat >"$STUB_BIN/node" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >>"$BATS_TEST_TMPDIR/node.args"
+printf 'markdown built on the keypress\n'
+EOF
+	chmod +x "$STUB_BIN/node"
+
+	run_send_url '%7' 'https://example.com/cold' 'A cold page'
+
+	[ "$status" -eq 0 ]
+	[[ "$(cat "$BATS_TEST_TMPDIR/node.args")" == *"--url https://example.com/cold"* ]]
+	grep -q 'markdown built on the keypress' "$DATA_HOME/ddgx/notes/a-cold-page.md"
+	[ "$output" = "abort" ]
+}
+
+@test "both screens name the same note for the same page" {
+	# ctrl-e one screen later must open the file alt-h just handed over. Two
+	# naming rules that agree today drift the first time either is touched, and
+	# then the two keys disagree about what "this result" means.
+	stub_tmux '%7'
+	write_two_results
+
+	run_send_url '%7' 'https://example.com/1' 'First hit'
+	[ "$status" -eq 0 ]
+	local handed
+	handed=$(cat "$TMUX_BUFFER")
+
+	printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$@" > "%s/opened.txt"\n' \
+		"$BATS_TEST_TMPDIR" >"$STUB_BIN/fake-editor"
+	chmod +x "$STUB_BIN/fake-editor"
+	run env XDG_CACHE_HOME="$CACHE_HOME" XDG_DATA_HOME="$DATA_HOME" DDGX_TTL=0 \
+		DDGX_EDITOR="$STUB_BIN/fake-editor" \
+		bash "$DDGX" --edit "$BATS_TEST_TMPDIR/results.json" 0
+	[ "$status" -eq 0 ]
+
+	[ "$handed" = "$(cat "$BATS_TEST_TMPDIR/opened.txt")" ]
+}
+
+@test "a search-screen hand-off with nowhere to go keeps the picker up to say so" {
+	stub_tmux '%7'
+	seed_cache 'https://example.com/tag' 'the body'
+
+	run_send_url '' 'https://example.com/tag' 'Introducing Claude Tag'
+
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"transform-header"* ]]
+	[[ "$output" == *"suggest-header"* ]]
+	[[ "$output" != *"abort"* ]]
+
+	# The whole header comes back, not just the reason. transform-header
+	# replaces the header outright, so a mode that printed one line would take
+	# every key off the screen with it.
+	run env XDG_CACHE_HOME="$CACHE_HOME" bash "$DDGX" --suggest-header \
+		'no source pane: alt-h works when ddgx runs from the M-g popup'
+	[[ "$output" == *"no source pane"* ]]
+	[[ "$output" == *"alt-h hand the page to the pane"* ]]
+	[[ "$output" == *"live DuckDuckGo"* ]]
+}
+
+@test "a search-screen hand-off into a pane that is gone names that as the reason" {
+	stub_tmux '%7'
+	seed_cache 'https://example.com/tag' 'the body'
+
+	run_send_url '%999' 'https://example.com/tag' 'Introducing Claude Tag'
+
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"transform-header"* ]]
+	[[ "$output" != *"abort"* ]]
+	[[ "$output" == *'%999'* ]]
+}
+
+@test "live rows carry the title beside the url, hidden from the display" {
+	stub_curl_tripwire
+	cat >"$STUB_BIN/ddgr" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' '[{"title":"Introducing Claude Tag","url":"https://www.anthropic.com/news/tag","abstract":"a new way"}]'
+EOF
+	chmod +x "$STUB_BIN/ddgr"
+
+	run env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" \
+		DDGX_SUGGEST_DELAY=0 bash "$DDGX" --suggest 'claude tag' 10
+
+	[ "$status" -eq 0 ]
+	# url, plain title, then the row you see. alt-h heads the note with the
+	# title, so it travels as a field of its own rather than being unpicked from
+	# a display column carrying a position number, colour codes and a domain.
+	[ "$(printf '%s' "$output" | cut -f1)" = 'https://www.anthropic.com/news/tag' ]
+	[ "$(printf '%s' "$output" | cut -f2)" = 'Introducing Claude Tag' ]
+	[[ "$(printf '%s' "$output" | cut -f3)" == *"1. "* ]]
+}
+
+# ---------------------------------------------------------------------------
 # The ask engine. Perplexity answers the question and its sources become
 # results, so every key that works on a search result works on them.
 #
@@ -2953,6 +3098,9 @@ EOF
 	[[ "$args" == *'change:reload('*'--suggest'* ]]
 	[[ "$args" == *'ctrl-y:execute-silent('*'--copy-url {1})'* ]]
 	[[ "$args" == *'ctrl-o:execute-silent('*'--open-url {1})'* ]]
+	[[ "$args" == *'alt-h:transform('*'--send-url'* ]]
+	# The url and the title are carried, not shown: the row starts at field 3.
+	[[ "$args" == *'--with-nth=3..'* ]]
 	[[ "$args" == *'--margin=1,6%'* ]]
 	[[ "$args" == *'--input-border=rounded'* ]]
 	[[ "$args" == *'--list-border=rounded'* ]]
@@ -3018,6 +3166,9 @@ EOF
 	[ "$status" -eq 0 ]
 	[[ "$output" == https://code.claude.com/docs/en/hooks$'\t'* ]]
 	[[ "$output" == *"Hooks reference"* ]]
+	# The docs rows carry the same three fields the web rows do, so alt-h heads
+	# a docs note with its page title rather than with a coloured display line.
+	[ "$(printf '%s' "$output" | head -1 | cut -f2)" = 'Hooks reference' ]
 	[[ "$output" != *"Agent SDK hooks"* ]]
 	[[ "$output" != *"curl was called"* ]]
 	[[ "$output" != *"ddgr was called"* ]]

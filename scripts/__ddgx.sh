@@ -120,6 +120,13 @@
 #   ctrl-d/u scroll the preview
 #   type     filter by page text, ANDed; "phrase" is exact; /pattern/ is ERE
 #
+# The search screen carries three of those keys on the row under the cursor:
+# ctrl-o opens it, ctrl-y copies it, alt-h hands it over. Nothing is extracted
+# while you type, because typing is a keystroke a second and extraction is a
+# fetch and a render, so alt-h there does that work on the keypress and the
+# picker holds still for the second it takes. The note it writes is the same
+# file, under the same name, that ctrl-e would open one screen later.
+#
 # alt-h is for the agent in the pane underneath. It pastes the note PATHS, not
 # the note text, and it does not press Enter: you type what you want done with
 # them. A delivered hand-off closes the popup, because the next thing to happen
@@ -735,24 +742,30 @@ mode_suggest() (
 		kept < num {
 			slug = $3
 			name = (slug in title && title[slug] != "") ? title[slug] : slug
-			printf "%s/%s\t\033[1;36m%s\033[0m  \033[90m%s\033[0m\n", \
-				base, slug, name, $4
+			printf "%s/%s\t%s\t\033[1;36m%s\033[0m  \033[90m%s\033[0m\n", \
+				base, slug, name, name, $4
 			kept++
 		}
 	' <(docs_index_rows) <(printf '%s\n' "$ranked")
 )
 
+# Three fields, two of them hidden: the url, the plain title, then the row you
+# actually see. The title is carried rather than parsed back out of the display
+# column, which holds a position number, colour codes and a domain, and would
+# have to be unpicked by whichever key wanted the name. It is what alt-h heads
+# the note with, so it has to be the title the result came with and not a
+# best-effort reconstruction of it.
 mode_web_suggestions() {
 	jq -r 'to_entries[] | [
 		.key,
-		(.value.title // .value.url // ""),
+		((.value.title // .value.url // "") | gsub("[\\t\\r\\n]+"; " ")),
 		(.value.url // ""),
 		((.value.abstract // "") | gsub("[\\t\\r\\n]+"; " "))
 	] | @tsv' "$1" |
 		awk -F'\t' '{
 			split($3, parts, "/")
-			printf "%s\t%2d. \033[1;36m%s\033[0m  \033[90m[%s] · %s\033[0m\n", \
-				$3, $1 + 1, $2, parts[3], $4
+			printf "%s\t%s\t%2d. \033[1;36m%s\033[0m  \033[90m[%s] · %s\033[0m\n", \
+				$3, $2, $1 + 1, $2, parts[3], $4
 		}'
 }
 # Which engine produced the current set. Absent means a web search, so a set
@@ -1042,23 +1055,41 @@ center() {
 	printf '%b%s\033[0m\n' "$color" "$text"
 }
 
+# The search screen's header, and the one message a key can leave on it. It is
+# a function because the alt-h binding runs as its own process and has to redraw
+# the whole header to say anything: transform-header replaces it outright, so a
+# failure that printed only its own line would take the keys off the screen with
+# it.
+stage1_header() {
+	local note=${1:-}
+	printf 'plain: live DuckDuckGo · @ docs · ? ask · ?? harder\n'
+	printf 'pause to search · web cache %ss · enter searches pages locally\n' \
+		"$SEARCH_CACHE_TTL"
+	printf 'ctrl-o open URL · ctrl-y copy URL · alt-h hand the page to the pane'
+	[[ -n $note ]] && printf '   (%s)' "$note"
+	printf '\n'
+}
+
 # The first picker discovers pages. Plain text shows debounced DuckDuckGo rows;
 # @ and ? explicitly switch engines. Enter hands the exact query to the result
 # picker, where typing searches inside those pages from the local extract cache.
+#
+# The hand-off pane arrives as an argument and is baked into the binding, not
+# read at the keypress. main() takes it once and clears it, precisely so a popup
+# opened from a second client cannot redirect this one, and a binding that read
+# the global option itself would put that race straight back.
 prompt_for_query() {
-	local num=${1:-10} out rc=0 header
-	header=$(printf 'plain: live DuckDuckGo · @ docs · ? ask · ?? harder\npause to search · web cache %ss · enter searches pages locally' \
-		"$SEARCH_CACHE_TTL")
-	header="$header"$'\nctrl-o open URL · ctrl-y copy URL'
+	local num=${1:-10} pane=${2:-} out rc=0
 	out=$(fzf --ansi --disabled --layout=reverse --no-multi --print-query \
 		--margin='1,6%' --input-border=rounded --input-label=' query ' \
 		--input-label-pos=2 --list-border=rounded --list-label=' live web results ' \
 		--list-label-pos=2 --info=inline-right --no-separator \
-		--delimiter=$'\t' --with-nth=2.. --prompt='search > ' \
-		--header="$header" \
+		--delimiter=$'\t' --with-nth=3.. --prompt='search > ' \
+		--header="$(stage1_header)" \
 		--bind="change:reload($SELF --suggest {q} $num)" \
 		--bind="ctrl-y:execute-silent($SELF --copy-url {1})" \
 		--bind="ctrl-o:execute-silent($SELF --open-url {1})" \
+		--bind="alt-h:transform($SELF --send-url '$pane' {1} {2} 2>/dev/null)" \
 		--bind="f1:execute($SELF --help-page | less -R)" </dev/null) || rc=$?
 	[[ $rc -eq 130 ]] && return 1
 	TYPED_QUERY=${out%%$'\n'*}
@@ -1445,6 +1476,21 @@ emit_note() {
 		return 0
 	fi
 
+	emit_note_url "$url" "$title"
+}
+
+# The page half of a note, written from a url and a title rather than from a
+# row in a result set. The search screen has no result set to index into: it has
+# the line under the cursor and nothing else, and alt-h there has to produce the
+# same file this produces from a result.
+#
+# The extraction happens HERE, on the keypress, and that is the whole difference
+# between the two screens. By the time the result picker is up, prefetch has
+# already run the whole set through the extractor; on the search screen nothing
+# has been fetched at all, because the rows are rebuilt on every keystroke and
+# extracting them as they went past would be a fetch per letter typed.
+emit_note_url() {
+	local url=$1 title=$2 cached
 	extract_to_cache "$url" || true
 	cached=$(cache_file "$url")
 
@@ -1512,8 +1558,14 @@ mode_copy_url() { copy_text "${1:-}"; }
 # forever: a page that was down at the time, or an extract from an older
 # engine, would keep opening in the editor long after the cache was right.
 # The record of what was scaffolded is a checksum kept beside the notes.
+# Takes the note path and the command that writes it, so a note built from a
+# result index and a note built from a bare url share one rule about when a file
+# may be overwritten. Two copies of that rule would agree today and diverge the
+# first time either is touched, and the failure is silent: a hand-edited note
+# quietly replaced by a scaffold.
 scaffold_note() {
-	local file=$1 idx=$2 note=$3 stamp
+	local note=$1 stamp
+	shift
 	stamp="$NOTES_DIR/.scaffold/$(basename "$note").sha1"
 	mkdir -p "$(dirname "$stamp")"
 
@@ -1522,8 +1574,37 @@ scaffold_note() {
 		[[ -f $stamp ]] || return 0
 		sha1sum --status -c "$stamp" 2>/dev/null || return 0
 	fi
-	emit_note "$file" "$idx" >"$note"
+	"$@" >"$note"
 	sha1sum "$note" >"$stamp"
+}
+
+# One name for a note, wherever it was asked for. alt-h on the search screen and
+# ctrl-e in the result picker must land on the same file for the same page, or
+# the two keys disagree about what "this result" means and the second one
+# scaffolds a duplicate beside the first.
+#
+# Whitespace is flattened FIRST. A page title carrying a newline survives the
+# rest of this pipeline, because tr, sed and cut are all line-oriented, and the
+# result is a path printed across two lines. Every caller reads these
+# one-per-line, so that single result silently became two broken paths: the
+# editor opened neither and the hand-off shipped both.
+note_slug() {
+	printf '%s' "$1" | tr '\n\r\t' '   ' | tr '[:upper:]' '[:lower:]' |
+		sed 's/[^a-z0-9]\+/-/g; s/^-//; s/-$//' | cut -c1-60
+}
+
+# Materialise the note for one url and print its path. The url is the fallback
+# name because a result with no usable title still has an address, and a note
+# called "result-" would collide with the next one.
+note_path_for_url() {
+	local url=$1 title=$2 slug note
+	mkdir -p "$NOTES_DIR"
+	slug=$(note_slug "$title")
+	[[ -z $slug ]] && slug=$(note_slug "$url")
+	[[ -n $slug ]] || return 1
+	note="$NOTES_DIR/$slug.md"
+	scaffold_note "$note" emit_note_url "$url" "$title"
+	printf '%s\n' "$note"
 }
 
 # Materialise durable notes for the given result indices and print their paths,
@@ -1548,16 +1629,10 @@ note_paths() {
 		# would name every answer the same thing, and these notes outlive the
 		# search that produced them.
 		[[ -n $(result_field "$idx" "$file" url) ]] || title=$(current_query "$file")
-		# Flatten whitespace FIRST. A page title carrying a newline survives the
-		# rest of this pipeline, because tr, sed and cut are all line-oriented,
-		# and the result is a path printed across two lines. Every caller reads
-		# these one-per-line, so that single result silently became two broken
-		# paths: the editor opened neither and the hand-off shipped both.
-		slug=$(printf '%s' "$title" | tr '\n\r\t' '   ' | tr '[:upper:]' '[:lower:]' |
-			sed 's/[^a-z0-9]\+/-/g; s/^-//; s/-$//' | cut -c1-60)
+		slug=$(note_slug "$title")
 		[[ -z $slug ]] && slug="result-$idx"
 		note="$NOTES_DIR/$slug.md"
-		scaffold_note "$file" "$idx" "$note"
+		scaffold_note "$note" emit_note "$file" "$idx"
 		printf '%s\n' "$note"
 	done
 }
@@ -1701,6 +1776,53 @@ mode_send() {
 		fi
 		printf 'transform-header(%s --header %s)' "$SELF" "$file"
 	fi
+}
+
+# alt-h from the search screen, where a row is a url and a title and there is no
+# result set behind it.
+#
+# Everything the result-picker hand-off promises holds here: the path travels
+# and never the text, nothing is submitted, a delivery closes the popup and a
+# failure keeps it up to say why. What is different is that the page has not
+# been fetched yet, so the note is built on the keypress and the picker is
+# frozen for as long as that takes. It is a second on a page that answers, and
+# noticeably more on one that has to be waited out; the alternative is
+# extracting every row as it scrolls past, which is a fetch per keystroke.
+#
+# A note that says "(no page text: ...)" is still handed over. The pane below
+# gets a file naming the url and the reason, which is a better answer than a
+# hand-off that silently declines to happen.
+mode_send_url() {
+	local target=$1 url=$2 title=${3:-} note
+	if [[ -z ${url//[[:space:]]/} ]]; then
+		stage1_note_action 'nothing under the cursor to hand over'
+		return 0
+	fi
+	# A result with no title is named by its address rather than refused.
+	[[ -n ${title//[[:space:]]/} ]] || title=$url
+
+	if ! note=$(note_path_for_url "$url" "$title"); then
+		stage1_note_action 'could not make a note out of that result'
+		return 0
+	fi
+
+	if deliver_to_pane "$target" "$note"; then
+		clear_popup_source_pane
+		printf 'abort'
+		return 0
+	fi
+	if [[ -z $target ]]; then
+		stage1_note_action 'no source pane: alt-h works when ddgx runs from the M-g popup'
+	else
+		stage1_note_action "pane $target is gone, nothing handed off"
+	fi
+}
+
+# Say something on the search screen's header. The message is passed to a fresh
+# process rather than embedded in the action, because fzf ends a transform action
+# at its closing paren and a reason is the one string here that can carry one.
+stage1_note_action() {
+	printf 'transform-header(%s --suggest-header %q)' "$SELF" "$1"
 }
 
 # Bookmark into the same pet snippet file the plink zsh function writes, and
@@ -2454,6 +2576,16 @@ main() {
 		mode_send "$@"
 		return 0
 		;;
+	--send-url)
+		shift
+		mode_send_url "$@"
+		return 0
+		;;
+	--suggest-header)
+		shift
+		stage1_header "${1:-}"
+		return 0
+		;;
 	--refetch)
 		shift
 		mode_refetch "$@"
@@ -2560,7 +2692,7 @@ main() {
 		fi
 		# Started with no query, which is how the tmux M-g popup launches it.
 		POPUP_MODE=1
-		prompt_for_query "$num" || return 0
+		prompt_for_query "$num" "$SOURCE_PANE" || return 0
 		if [[ -z ${TYPED_QUERY//[[:space:]]/} ]]; then
 			return 0
 		fi
