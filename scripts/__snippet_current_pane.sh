@@ -40,7 +40,10 @@ mkdir -p "${state%/*}"
 # Sort key first, stripped again before fzf sees the line: recently picked
 # snippets ascend, everything else keeps file order behind them. fzf falls back
 # to input order for equally good matches, so recency also breaks ties mid-query.
-selected=$(grep -v '^\[Link to' | awk -v D="$desc_w" -v C="$cmd_w" -v STATE="$state" '
+tmpd=$(mktemp -d)
+trap 'rm -rf "$tmpd"' EXIT
+
+grep -v '^\[Link to' | awk -v D="$desc_w" -v C="$cmd_w" -v STATE="$state" '
 BEGIN {
     n = 0
     while ((getline line < STATE) > 0) rank[line] = ++n
@@ -59,14 +62,24 @@ BEGIN {
     if (length(rest) > C) rest = substr(rest, 1, C - 1) "…"
     key = (orig in rank) ? (1000000 - rank[orig]) : (2000000 + NR)
     printf "%d\t%-*s  %-*s\t%s\n", key, D, desc, C, rest, orig
-}' | sort -t$'\t' -k1,1n -s | cut -f2- | /usr/local/bin/fzf \
+}' | sort -t$'\t' -k1,1n -s | cut -f2- > "$tmpd/by-use"
+
+# The same rows in name order. Every description starts with its tool now, so
+# sorting on the visible column groups all the git, kubectl and apt entries
+# together, which beats the order they happened to be added in over the years.
+sort -f -t$'\t' -k1,1 "$tmpd/by-use" > "$tmpd/by-name"
+
+# ctrl-o flips between them. fzf holds no state of its own, so the marker file
+# is what remembers which order is showing.
+selected=$(/usr/local/bin/fzf \
     --exact \
     --delimiter=$'\t' \
     --with-nth=1 \
     --bind "ctrl-g:execute(~/dev/dotfiles/scripts/__snippet_tag_browser.sh)+abort" \
     --bind "ctrl-f:transform-query(printf %s {q} | sed -e \"s/^'//;t\" -e \"s/^/'/\")" \
-    --header " ctrl-g: browse by tag   |   ctrl-f: fuzzy (for typos)" \
-    "$@")
+    --bind "ctrl-o:transform:if [ -e '$tmpd/alpha' ]; then rm -f '$tmpd/alpha'; echo 'reload(cat $tmpd/by-use)'; else : > '$tmpd/alpha'; echo 'reload(cat $tmpd/by-name)'; fi" \
+    --header " ctrl-g: tag   |   ctrl-f: fuzzy   |   ctrl-o: a-z / recent" \
+    "$@" < "$tmpd/by-use")
 
 [ -n "$selected" ] || exit 0
 
