@@ -47,9 +47,13 @@ case "${1:-}" in
   ;;
 --sync-client)
   sync_client="${2:-}"
+  # An empty client is the boot case, not a typo. tmuxinator builds every
+  # session detached at login, so the hooks that pass "#{hook_client}" fire
+  # before any client exists and expand it to "". Nothing is on screen to sync,
+  # so this is the same no-op as an unresolvable pane below, and it must stay
+  # silent: a usage error here printed into the first pane that attached.
   if [[ -z "$sync_client" ]]; then
-    printf 'usage: %s --sync-client client-name\n' "${0##*/}" >&2
-    exit 2
+    exit 0
   fi
   target_pane="$(tmux display-message -p -c "$sync_client" '#{pane_id}' 2>/dev/null || true)"
   [ -n "$target_pane" ] || exit 0
