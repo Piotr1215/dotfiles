@@ -49,7 +49,8 @@ grep -v '^\[Link to' | awk -v D="$desc_w" -v C="$cmd_w" '
     --delimiter=$'\t' \
     --with-nth=1 \
     --bind "ctrl-g:execute(~/dev/dotfiles/scripts/__snippet_tag_browser.sh)+abort" \
-    --header " ctrl-g: browse by tag   |   ' prefix: fuzzy match" \
+    --bind "ctrl-f:transform-query(printf %s {q} | sed -e \"s/^'//;t\" -e \"s/^/'/\")" \
+    --header " ctrl-g: browse by tag   |   ctrl-f: fuzzy (for typos)" \
     "$@" | cut -f2-
 EOF
 
