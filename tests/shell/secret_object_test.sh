@@ -89,6 +89,18 @@ is "references are counted per object" "$(field P_ONLY 4)" "1"
 is "a reference under a different var name still counts" "$(field P_PROMO 4)" "1"
 is "an unreferenced secret has no refs" "$(field P_LINK 4)" "0"
 
+echo "== creating an object chooses exactly one store =="
+printf 'created-pass' | secret_create P_CREATED pass work
+is "create writes a pass secret into the chosen subtree" "$(secret_read P_CREATED)" "created-pass"
+is "a created pass secret has one owner" "$(field P_CREATED 3)" "work/P_CREATED"
+printf 'created-age' | secret_create A_CREATED age
+is "create writes a bastion secret" "$(secret_read A_CREATED)" "created-age"
+is "a created bastion secret has one owner" "$(field A_CREATED 2)" "age"
+printf 'replacement' | secret_create P_CREATED age 2>/dev/null
+is "create refuses an existing name" "$(secret_read P_CREATED)" "created-pass"
+printf 'bad-name' | secret_create 'BAD NAME' pass work 2>/dev/null
+is "create refuses an invalid name" "$(field 'BAD NAME' 2)" ""
+
 echo "== the invariant =="
 is "a name in both stores is a conflict" "$(field BOTH 5)" "conflict"
 is "a reference with no entry behind it dangles" "$(field GONE 5)" "dangling"

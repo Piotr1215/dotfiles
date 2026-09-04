@@ -9,6 +9,7 @@
 # that library, so the rules hold identically from the CLI.
 #
 #   Enter    copy the value to the clipboard (a bastion row taps, a pass row does not)
+#   Alt+a    add a secret to pass or the YubiKey bastion
 #   Alt+e    edit key, value and description in one buffer
 #   Alt+p    promote to the bastion (drops the .envrc references with it)
 #   Alt+d    demote to pass (costs a tap, since the value has to be read out)
@@ -34,6 +35,7 @@
 set -eo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SECRET_ADD_GUI="${SECRET_ADD_GUI:-$SCRIPT_DIR/__secret_add_gui.py}"
 
 # shellcheck source=/dev/null
 source "$SCRIPT_DIR/__lib_rofi_theme.sh"
@@ -50,7 +52,7 @@ source "$SCRIPT_DIR/__lib_secret_object.sh"
 # ~113 chars, which 900px silently truncated. The cap rose with the shared font
 # bump, since taller rows fit fewer of them on the same screen.
 #
-# Alt+e/p/d/l/x are free in stock rofi (Alt is taken only by b, f, S, period,
+# Alt+a/e/p/d/l/x are free in stock rofi (Alt is taken only by b, f, S, period,
 # grave and the digits), so unlike Control+a in __value_picker.sh none of these
 # needs its default unbound first.
 rofi_pick() {
@@ -61,6 +63,7 @@ rofi_pick() {
 	rofi -dmenu -i -p "$prompt" -format i -mesg "$MESG" \
 		-kb-custom-1 "Alt+e" -kb-custom-2 "Alt+p" -kb-custom-3 "Alt+d" \
 		-kb-custom-4 "Alt+l" -kb-custom-5 "Alt+x" -kb-custom-6 "Alt+o" \
+		-kb-custom-7 "Alt+a" \
 		"${ROFI_THEME[@]}"
 }
 
@@ -158,7 +161,7 @@ ICON_ALERT=$'\uf071'
 # Keys on one line, what the badges mean on the next. The badge legend is here
 # because a glyph nobody can name is noise: the link count in particular reads as
 # decoration until it says "this many .envrc files import this secret".
-MESG="Enter copy   Alt+e edit   Alt+o open .envrc uses   Alt+l add .envrc   Alt+p promote   Alt+d demote   Alt+x delete
+MESG="Enter copy   Alt+a add   Alt+e edit   Alt+o open .envrc uses   Alt+l add .envrc   Alt+p promote   Alt+d demote   Alt+x delete
 $ICON_AGE bastion, one tap    $ICON_PASS pass, no tap    ${ICON_REF}N referenced by N .envrc"
 
 icon_for() {
@@ -167,6 +170,39 @@ icon_for() {
 	pass) printf '%s' "$ICON_PASS" ;;
 	*) printf '%s' "$ICON_ALERT" ;;
 	esac
+}
+
+add_secret() {
+	local result store sub name value description error owner target
+	local -a gui_args=("$SECRET_ADD_GUI")
+
+	[[ -x "$SECRET_ADD_GUI" ]] || fail "secret add form is not executable: $SECRET_ADD_GUI"
+	while IFS= read -r sub; do
+		[[ -n "$sub" ]] && gui_args+=(--subtree "$sub")
+	done < <(find "$PASS_DIR" -mindepth 1 -maxdepth 1 -type d -not -name '.git' -printf '%f\n' 2>/dev/null | sort)
+
+	result=$("${gui_args[@]}" 2>/dev/null) || return 0
+	IFS=$'\x1f' read -r store sub name value description <<<"$result"
+
+	[[ -n "$name" ]] || fail "name is required"
+	[[ -n "$value" ]] || fail "value is required; nothing was written"
+	# A physical tap in OTP mode must not become the value by accident.
+	[[ ! "$value" =~ ^[cbdefghijklnrtuv]{44}$ ]] ||
+		fail "that is a YubiKey OTP, not a secret value. Nothing was written."
+
+	case "$store" in
+	pass) owner=pass; target="pass/$sub" ;;
+	YubiKey) owner=age; target="the YubiKey bastion" ;;
+	*) fail "choose pass or YubiKey" ;;
+	esac
+
+	if ! error=$(printf '%s' "$value" | secret_create "$name" "$owner" "$sub" 2>&1); then
+		unset value result
+		fail "${error#secret: }"
+	fi
+	unset value result
+	secret_desc_set "$name" "$description" || fail "$name was added, but its description could not be saved"
+	note "$name added to $target"
 }
 
 # Parallel arrays: the selection comes back as an index (rofi -format i), never
@@ -204,12 +240,13 @@ while IFS=$'\t' read -r name owner entry refs status; do
 	menu+=("$(printf '%s  %-38s %s' "$badge" "$name" "$desc")")
 done < <(secret_index)
 
-((${#menu[@]})) || fail "no secrets found in $SECRETS_DIR or $PASS_DIR"
+secret_count=${#menu[@]}
+((secret_count)) || menu=("No secrets yet. Press Alt+a to add one.")
 
 if idx=$(printf '%s\n' "${menu[@]}" | rofi_pick "secret" "${#menu[@]}"); then
-	action=copy
+	((secret_count)) && action=copy || action=add
 else
-	# rofi exits 10..14 for kb-custom-1..5 and still prints the selection.
+	# rofi exits 10..16 for kb-custom-1..7 and still prints the selection.
 	# Read $? first, before any other command clobbers it.
 	case $? in
 	10) action="edit" ;;
@@ -218,8 +255,14 @@ else
 	13) action="link" ;;
 	14) action="delete" ;;
 	15) action="refs" ;;
+	16) action="add" ;;
 	*) exit 0 ;;
 	esac
+fi
+
+if [[ "$action" == add ]]; then
+	add_secret
+	exit 0
 fi
 
 [[ "$idx" =~ ^[0-9]+$ ]] || exit 0

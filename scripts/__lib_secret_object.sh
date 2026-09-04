@@ -254,6 +254,41 @@ secret_set() {
 	esac
 }
 
+# Value on stdin. Creation chooses one owner up front, so the XOR invariant is
+# true from the first write instead of being repaired after two store-specific
+# commands happen to use the same name.
+secret_create() {
+	local name="$1" owner="$2" sub="${3:-}" clash
+	[[ -n "$name" ]] || {
+		secret_die "create needs a name"
+		return 2
+	}
+	[[ "$name" != -* && "$name" != *[![:alnum:]_.@-]* ]] || {
+		secret_die "'$name' is not a valid secret name"
+		return 2
+	}
+	clash=$(secret_locate "$name")
+	[[ -z "$clash" ]] || {
+		secret_die "'$name' already exists"
+		return 1
+	}
+
+	case "$owner" in
+	age) secret_write_age "$name" ;;
+	pass)
+		[[ -n "$sub" && "$sub" != -* && "$sub" != */* && -d "$PASS_DIR/$sub" ]] || {
+			secret_die "no pass subtree '$sub' in $PASS_DIR"
+			return 2
+		}
+		secret_write_pass "$sub/$name"
+		;;
+	*)
+		secret_die "unknown store '$owner'"
+		return 2
+		;;
+	esac
+}
+
 # --- store 3 wiring ----------------------------------------------------------
 
 # Add a reference. Store 3 requires store 2, and the var defaults to the object
@@ -475,7 +510,7 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
 	cmd="${1:-index}"
 	shift || true
 	case "$cmd" in
-	index | locate | audit | read | set | rm | rename | promote | demote | link | unlink | refs | envrc-files | desc-get | desc-set)
+	index | locate | audit | read | set | create | rm | rename | promote | demote | link | unlink | refs | envrc-files | desc-get | desc-set)
 		"secret_${cmd//-/_}" "$@"
 		;;
 	*)

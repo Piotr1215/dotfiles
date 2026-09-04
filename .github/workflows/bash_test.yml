@@ -26,6 +26,7 @@ jobs:
           pip install pytest
         elif [[ "${{ matrix.test-type }}" == "bats" ]]; then
           sudo npm install -g bats
+          sudo apt-get update && sudo apt-get install -y python3-gi gir1.2-gtk-3.0 xvfb
         elif [[ "${{ matrix.test-type }}" == "shell" ]]; then
           # Install taskwarrior for shell tests
           sudo apt-get update && sudo apt-get install -y taskwarrior
@@ -49,6 +50,7 @@ jobs:
             bats tests/bats/github_issue_sync_test.bats
             bats tests/bats/cron_run_test.bats
             bats tests/bats/cron_every_test.bats
+            bats tests/bats/secret_picker_test.bats
             ;;
           python)
             cd tests/python
