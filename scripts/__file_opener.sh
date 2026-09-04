@@ -138,7 +138,12 @@ SESSION_CHOICES="$HOME/dev/dotfiles/scripts/__tmux_session_choices.sh"
 
 # Define keybindings for switching sources (only the useful filters)
 # Ctrl+X returns to main view (all sources: sessions + zoxide + files)
-HOME_BIND="ctrl-x:change-prompt(all> )+reload(active=\$(tmux ls -F '#{session_name}' 2>/dev/null); active_pipe=\$(echo \"\$active\" | tr '\\n' '|'); configs=\$(ls --color=never ~/.config/tmuxinator/*.yml 2>/dev/null | xargs -n1 basename | sed 's/\\.yml\$//' | sort); ~/dev/dotfiles/scripts/__tmux_session_choices.sh list; echo \"\$configs\" | while read -r s; do [[ -n \"\$s\" && \"|\$active_pipe\" != *\"|\$s|\"* && \"\$active_pipe\" != \"\$s|\"* ]] && echo \"\$s\"; done; zoxide query -l; cache=/tmp/file_opener_cache_\$USER; if [[ -f \$cache ]] && [[ \$(((\$(date +%s) - \$(stat -c %Y \$cache)))) -lt 60 ]]; then cat \$cache; else fd --type f --hidden --absolute-path --color never --exclude .git --exclude node_modules --exclude .cache --exclude image-cache --exclude plugins --exclude stats-cache.json --exclude claude-wt-worktrees --exclude vendor --changed-within 7d . ~/dev ~/loft ~/.config/nvim ~/.claude 2>/dev/null | xargs stat --format '%Y %n' 2>/dev/null | sort -rn | cut -d' ' -f2- | tee \$cache; fi)"
+HOME_BIND="ctrl-x:change-prompt(all> )+reload(~/dev/dotfiles/scripts/__tmux_session_choices.sh list; zoxide query -l; cache=/tmp/file_opener_cache_\$USER; if [[ -f \$cache ]] && [[ \$(((\$(date +%s) - \$(stat -c %Y \$cache)))) -lt 60 ]]; then cat \$cache; else fd --type f --hidden --absolute-path --color never --exclude .git --exclude node_modules --exclude .cache --exclude image-cache --exclude plugins --exclude stats-cache.json --exclude claude-wt-worktrees --exclude vendor --changed-within 7d . ~/dev ~/loft ~/.config/nvim ~/.claude 2>/dev/null | xargs stat --format '%Y %n' 2>/dev/null | sort -rn | cut -d' ' -f2- | tee \$cache; fi)"
+# Sessions view (Ctrl+T for tmux) - live sessions and dormant tmuxinator configs,
+# the only place the dormant ones appear. They used to sit in the main list where
+# they outranked every path, which is the friction this key exists to remove.
+SESSIONS_BIND="ctrl-t:change-prompt(sessions> )+reload(~/dev/dotfiles/scripts/__tmux_session_choices.sh list; ~/dev/dotfiles/scripts/__tmux_session_choices.sh dormant)"
+
 # Files from work directories
 FILE_BIND="ctrl-f:execute-silent(touch /tmp/file_opener_2d)+abort"
 # Bookmarks binding - extract and expand paths from bookmarks.conf with descriptions
@@ -159,11 +164,6 @@ LINEAR_BIND="ctrl-l:execute(~/dev/dotfiles/scripts/__linear_issue_viewer.sh)+abo
 # NOTE: cannot use Ctrl+M - terminals send it identical to Enter (0x0d), which
 # would hijack opening the selected item
 MAIL_BIND="ctrl-n:execute(~/dev/dotfiles/scripts/__mail_search_viewer.sh)+abort"
-
-# Raise the mail assistant (Ctrl+R for ursula). Bare, so it only switches to her
-# pane: the script types nothing without a thread id, and handing over an actual
-# thread is C-r inside the mail picker instead.
-MAIL_AGENT_BIND="ctrl-r:execute(~/dev/dotfiles/scripts/__mail_agent_spawn.sh)+abort"
 
 # Edit tmuxinator config (Ctrl+E) - only works on sessions
 EDIT_BIND="ctrl-e:execute(item={}; name=\$(~/dev/dotfiles/scripts/__tmux_session_choices.sh resolve \"\$item\" 2>/dev/null || printf '%s' \"\$item\"); [[ -f ~/.config/tmuxinator/\${name}.yml ]] && nvim ~/.config/tmuxinator/\${name}.yml)+abort"
@@ -189,16 +189,10 @@ TOGGLES_BIND="ctrl-d:execute(~/dev/dotfiles/scripts/__toggles.sh --return-marker
 # Loop to allow returning from PRs/Linear back to main picker
 while true; do
     OUTPUT=$( {
-        # Sessions: ALL active first (bottom in fzf), then inactive configs
-        active_sessions=$(tmux ls -F '#{session_name}' 2>/dev/null)
-        active_pipe=$(echo "$active_sessions" | tr '\n' '|')
-        configs=$(ls --color=never ~/.config/tmuxinator/*.yml 2>/dev/null | xargs -n1 basename | sed 's/\.yml$//' | sort)
-        # All active sessions with marker
+        # Rank order under --tiebreak=index, first line lands at the cursor.
+        # Live sessions only: dormant tmuxinator configs live behind Ctrl-T so
+        # they stop burying the path you are typing towards.
         "$SESSION_CHOICES" list
-        # Inactive tmuxinator configs without marker
-        echo "$configs" | while read -r s; do
-            [[ -n "$s" && "|$active_pipe" != *"|$s|"* && "$active_pipe" != "$s|"* ]] && echo "$s"
-        done
         # Zoxide directories (most frequently used) - already sorted by frecency
         zoxide query -l
         # Files from work directories - use cache if fresh (<60s old), else regenerate
@@ -210,6 +204,7 @@ while true; do
         fi
     } | fzf \
         --multi \
+        --scheme=path \
         --tiebreak=index \
         --preview 'item={}; name=$(~/dev/dotfiles/scripts/__tmux_session_choices.sh resolve "$item" 2>/dev/null || printf "%s" "$item"); bpath=$(echo "$item" | command grep -oE "/[^ ]+$");
             if [[ "$item" == *" ◀◀◀" ]]; then
@@ -230,17 +225,18 @@ while true; do
                 echo "Preview not available"
             fi' \
         --preview-window 'right:50%:wrap' \
-        --header ' ↳ worker  C-f:30d C-x:home C-b:marks C-o:github C-g:PRs C-l:Linear C-n:mail C-r:ursula C-s:search-panes
- C-d:toggles C-e:edit C-u:music C-k:kctx | C-y:copy Tab:paste' \
+        --header ' go    C-t:sessions C-x:home C-f:30d C-b:marks C-o:github
+ open  C-g:PRs C-l:Linear C-n:mail C-s:panes C-k:kctx
+ act   C-d:toggles C-e:edit C-u:music C-y:copy Tab:paste' \
         --prompt 'all> ' \
         --bind "$HOME_BIND" \
+        --bind "$SESSIONS_BIND" \
         --bind "$FILE_BIND" \
         --bind "$BOOKMARKS_BIND" \
         --bind "$GITHUB_BIND" \
         --bind "$PR_BIND" \
         --bind "$LINEAR_BIND" \
         --bind "$MAIL_BIND" \
-        --bind "$MAIL_AGENT_BIND" \
         --bind "$EDIT_BIND" \
         --bind "$MUSIC_BIND" \
         --bind "$KCTX_BIND" \

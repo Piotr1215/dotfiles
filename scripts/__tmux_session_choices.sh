@@ -4,11 +4,17 @@
 set -euo pipefail
 
 marker=' ◀◀◀'
+dormant=' ○'
 
 resolve_choice() {
     local choice="$1"
-    [[ "$choice" == *"$marker" ]] || return 1
-    choice="${choice%"$marker"}"
+    if [[ "$choice" == *"$marker" ]]; then
+        choice="${choice%"$marker"}"
+    elif [[ "$choice" == *"$dormant" ]]; then
+        choice="${choice%"$dormant"}"
+    else
+        return 1
+    fi
     choice="${choice#"${choice%%[![:space:]]*}"}"
     if [[ "$choice" == "- "* ]]; then
         choice="${choice#- }"
@@ -66,15 +72,31 @@ list_choices() {
     done
 }
 
+# Tmuxinator configs with no running session. Marked so the picker reads them as
+# sessions rather than bare words sitting among absolute paths.
+list_dormant() {
+    local active session
+    active=$(tmux list-sessions -F '#{session_name}' 2>/dev/null | sort -u)
+    while IFS= read -r session; do
+        [[ -n "$session" ]] || continue
+        grep -qxF "$session" <<<"$active" && continue
+        printf '%s%s\n' "$session" "$dormant"
+    done < <(ls --color=never ~/.config/tmuxinator/*.yml 2>/dev/null \
+        | xargs -n1 basename 2>/dev/null | sed 's/\.yml$//' | sort)
+}
+
 case "${1:-list}" in
     list)
         list_choices
+        ;;
+    dormant)
+        list_dormant
         ;;
     resolve)
         resolve_choice "${2:-}"
         ;;
     *)
-        echo "usage: ${0##*/} list|resolve <choice>" >&2
+        echo "usage: ${0##*/} list|dormant|resolve <choice>" >&2
         exit 2
         ;;
 esac
