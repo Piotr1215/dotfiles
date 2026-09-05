@@ -1,0 +1,30 @@
+{
+  "type": "script",
+  "description": "live tmux pane regex expansion",
+  "store": {},
+  "modes": [
+    1
+  ],
+  "usageCount": 0,
+  "prompt": false,
+  "omitTrigger": true,
+  "showInTrayMenu": false,
+  "abbreviation": {
+    "abbreviations": [
+      ";;^"
+    ],
+    "backspace": false,
+    "ignoreCase": false,
+    "immediate": true,
+    "triggerInside": true,
+    "wordChars": "[\\w]"
+  },
+  "hotkey": {
+    "modifiers": [],
+    "hotKey": null
+  },
+  "filter": {
+    "regex": null,
+    "isRecursive": false
+  }
+}

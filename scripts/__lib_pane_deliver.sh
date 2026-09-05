@@ -59,6 +59,14 @@ pane_is_live() {
 	[[ -n "$(tmux display-message -p -t "$1" '#{pane_id}' 2>/dev/null)" ]]
 }
 
+queue_pane_buffer() {
+	local target="$1" buffer="$2"
+	tmux run-shell -b "sleep 0.15; tmux paste-buffer -p -b '$buffer' -t '$target' -d" 2>/dev/null || {
+		tmux delete-buffer -b "$buffer" 2>/dev/null || true
+		return 1
+	}
+}
+
 # deliver_to_pane <target-pane> <content>
 # Returns non-zero when the pane is gone or tmux refuses the buffer, so the
 # caller can fall back instead of reporting a success that never happened.
@@ -71,10 +79,20 @@ deliver_to_pane() {
 	# cannot consume each other's buffer.
 	buffer="pane-deliver-${target#%}-$$"
 	printf '%s' "$content" | tmux load-buffer -b "$buffer" - 2>/dev/null || return 1
-	tmux run-shell -b "sleep 0.15; tmux paste-buffer -p -b '$buffer' -t '$target' -d" 2>/dev/null || {
-		tmux delete-buffer -b "$buffer" 2>/dev/null || true
-		return 1
-	}
+	queue_pane_buffer "$target" "$buffer"
+}
+
+# deliver_file_to_pane <target-pane> <path>
+# File input avoids putting a multiline match into argv while preserving the
+# same deferred, bracketed-paste delivery used by popup text.
+deliver_file_to_pane() {
+	local target="${1:-}" path="${2:-}" buffer
+	pane_is_live "$target" || return 1
+	[[ -s $path ]] || return 1
+
+	buffer="pane-deliver-${target#%}-$$"
+	tmux load-buffer -b "$buffer" "$path" 2>/dev/null || return 1
+	queue_pane_buffer "$target" "$buffer"
 }
 
 # Clear the handover option once consumed, so a later popup opened by some
@@ -82,3 +100,8 @@ deliver_to_pane() {
 clear_popup_source_pane() {
 	tmux set-option -gu "$POPUP_SOURCE_OPTION" 2>/dev/null || true
 }
+
+if [[ ${BASH_SOURCE[0]} == "$0" ]]; then
+	[[ ${1:-} == --file ]] || exit 2
+	deliver_file_to_pane "${2:-}" "${3:-}"
+fi
