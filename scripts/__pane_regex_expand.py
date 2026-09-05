@@ -35,7 +35,12 @@ class Match:
 def clean_scrollback(text: str) -> str:
     """Remove terminal UI margins while retaining hard line boundaries."""
     margin = re.compile(r"^\s*(?:[•›]\s+)?")
-    return "\n".join(margin.sub("", line).rstrip() for line in text.splitlines())
+    private_use = re.compile(
+        r"[\ue000-\uf8ff\U000f0000-\U000ffffd\U00100000-\U0010fffd] ?"
+    )
+    return "\n".join(
+        private_use.sub("", margin.sub("", line)).rstrip() for line in text.splitlines()
+    )
 
 
 def prose_friendly_pattern(pattern: str) -> str:

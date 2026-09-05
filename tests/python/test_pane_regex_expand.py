@@ -87,6 +87,14 @@ class PaneRegexMatchTests(unittest.TestCase):
             match.text, "The stable build now passes the isolated Tab path."
         )
 
+    def test_private_use_prompt_icon_is_not_pasted_as_hidden_bytes(self):
+        text = "dotfiles [\ue0a0 master][⇡]\n"
+
+        match = self.mod.find_latest_match(text, r"^dotfiles$")
+
+        self.assertIsNotNone(match)
+        self.assertEqual(match.text, "dotfiles [master][⇡]")
+
     def test_dot_matches_newlines_and_keeps_boundaries(self):
         text = "before\nthe first line\nmiddle line\nlast line too\nafter\n"
 
