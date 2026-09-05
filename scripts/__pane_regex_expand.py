@@ -67,7 +67,7 @@ def anchored_line_prefix(pattern: str) -> str | None:
     """Return the literal locator in a complete or unfinished ``^words$`` form."""
     if not pattern.startswith("^"):
         return None
-    body = pattern[1:-1] if pattern.endswith("$") else pattern[1:]
+    body = pattern[1:-1] if has_terminal_anchor(pattern) else pattern[1:]
     if not body or re.search(r"[\\.*+?()[\]{}|^$]", body):
         return None
     return body
@@ -77,7 +77,7 @@ def open_ended_line_pattern(pattern: str) -> str | None:
     """Return the start expression in the shorthand ``^start.*$`` form."""
     if not pattern.startswith("^"):
         return None
-    body = pattern[1:-1] if pattern.endswith("$") else pattern[1:]
+    body = pattern[1:-1] if has_terminal_anchor(pattern) else pattern[1:]
     if not body.endswith(".*") or body.endswith(r"\.*"):
         return None
     start = body[:-2]
@@ -115,6 +115,14 @@ def sentence_start_pattern(pattern: str) -> str | None:
 def first_landmark_pattern(pattern: str) -> str:
     """Make the first unescaped dot-star stop at its nearest ending locator."""
     return re.sub(r"(?<!\\)\.\*(?!\?)", ".*?", pattern, count=1)
+
+
+def landmark_line_tail_pattern(pattern: str) -> str | None:
+    """Return a multiline landmark range followed by the ``$$`` line tail."""
+    body = line_tail_shorthand(pattern)
+    if body is None or re.search(r"(?<!\\)\.\*", body) is None:
+        return None
+    return first_landmark_pattern(body)
 
 
 def leading_literal(pattern: str) -> str:
@@ -195,6 +203,27 @@ def find_matches_latest(text: str, pattern: str) -> list[Match]:
     if not pattern:
         return []
 
+    landmark_tail = landmark_line_tail_pattern(pattern)
+    if landmark_tail is not None:
+        found_matches = regex_matches_latest(clean, landmark_tail)
+        matches = []
+        for found in found_matches:
+            line_end = clean.find("\n", found.end())
+            if line_end < 0:
+                line_end = len(clean)
+            start_line = clean.count("\n", 0, found.start())
+            end_line = clean.count("\n", 0, max(found.start(), line_end - 1))
+            matches.append(
+                Match(
+                    clean[found.start() : line_end],
+                    start_line,
+                    end_line,
+                    start_offset=found.start(),
+                    end_offset=line_end,
+                )
+            )
+        return matches
+
     sentence_start = sentence_start_pattern(pattern)
     if sentence_start is not None:
         sentence_pattern = f"(?:{sentence_start})[^.!?]*[.!?]"
@@ -244,7 +273,7 @@ def find_matches_latest(text: str, pattern: str) -> list[Match]:
         return matches
 
     if pattern.startswith("^"):
-        range_pattern = pattern[1:-1] if pattern.endswith("$") else pattern[1:]
+        range_pattern = pattern[1:-1] if has_terminal_anchor(pattern) else pattern[1:]
         if not range_pattern:
             return []
         range_pattern = first_landmark_pattern(range_pattern)
@@ -422,6 +451,12 @@ def ere_literal(text: str) -> str:
 
 def native_highlight_pattern(query: str, match: Match | None = None) -> str:
     """Choose the stable single-line locator for tmux's native highlighter."""
+    landmark_tail = landmark_line_tail_pattern(query)
+    if landmark_tail is not None:
+        prefix = leading_literal(landmark_tail)
+        if prefix:
+            start = prose_friendly_pattern(ere_literal(prefix))
+            return f"({start}.*[^[:space:]]|{start})"
     sentence_start = sentence_start_pattern(query)
     if sentence_start is not None:
         start = prose_friendly_pattern(sentence_start)
@@ -436,7 +471,7 @@ def native_highlight_pattern(query: str, match: Match | None = None) -> str:
         start = prose_friendly_pattern(line_start)
         return f"({start}.*[^[:space:]]|{start})"
     if query.startswith("^"):
-        body = query[1:-1] if query.endswith("$") else query[1:]
+        body = query[1:-1] if has_terminal_anchor(query) else query[1:]
         if match is not None and "\n" in match.text:
             prefix = leading_literal(body)
             if prefix:
@@ -451,9 +486,17 @@ def native_selection_start_pattern(query: str) -> str | None:
     """Return the first locator when the exact match needs a copy selection."""
     if anchored_line_prefix(query) is not None:
         return None
-    start = sentence_start_pattern(query) or line_tail_start_pattern(query)
+    start = sentence_start_pattern(query)
+    if start is None:
+        line_tail = line_tail_start_pattern(query)
+        if line_tail is not None and landmark_line_tail_pattern(query) is not None:
+            start = leading_literal(line_tail)
+            if start:
+                start = ere_literal(start)
+        else:
+            start = line_tail
     if start is None and query.startswith("^"):
-        body = query[1:-1] if query.endswith("$") else query[1:]
+        body = query[1:-1] if has_terminal_anchor(query) else query[1:]
         start = leading_literal(body)
         if start:
             start = ere_literal(start)
@@ -481,11 +524,41 @@ def selection_end_fragment(match: Match) -> tuple[str, int] | None:
     return fragment, searches
 
 
-def show_match(pane: str, query: str, match: Match | None, occurrence: int = 0) -> None:
+def native_search_occurrence(text: str, query: str, match: Match) -> int | None:
+    """Map the stored source offset to tmux's backward-search occurrence."""
+    pattern = native_selection_start_pattern(query)
+    if pattern is None:
+        return None
+    clean = clean_scrollback(text)
+    try:
+        positions = [found.start() for found in re.finditer(pattern, clean)]
+    except re.error:
+        return None
+    positions.reverse()
+    return min(
+        range(len(positions)),
+        key=lambda index: abs(positions[index] - match.start_offset),
+        default=0,
+    )
+
+
+def show_match(
+    pane: str,
+    query: str,
+    match: Match | None,
+    occurrence: int = 0,
+    *,
+    search_occurrence: int | None = None,
+) -> None:
     selection_start = (
         native_selection_start_pattern(query) if match is not None else None
     )
     selection_end = selection_end_fragment(match) if selection_start and match else None
+    search_pattern = (
+        selection_start
+        if selection_end is not None
+        else native_highlight_pattern(query, match)
+    )
     command = [
         "send-keys",
         "-X",
@@ -505,9 +578,10 @@ def show_match(pane: str, query: str, match: Match | None, occurrence: int = 0) 
         pane,
         "search-backward",
         "--",
-        native_highlight_pattern(query, match),
+        search_pattern,
     ]
-    for _ in range(occurrence):
+    repeats = search_occurrence if search_occurrence is not None else occurrence
+    for _ in range(repeats):
         command.extend([";", "send-keys", "-X", "-t", pane, "search-again"])
     if selection_end is not None:
         fragment, searches = selection_end
@@ -539,6 +613,18 @@ def show_match(pane: str, query: str, match: Match | None, occurrence: int = 0) 
                 ]
             )
         command.extend([";", "send-keys", "-X", "-t", pane, "stop-selection"])
+        command.extend(
+            [
+                ";",
+                "send-keys",
+                "-X",
+                "-t",
+                pane,
+                "search-forward-text",
+                "--",
+                f"pane-regex-clear-{time.monotonic_ns()}",
+            ]
+        )
     tmux(*command, check=False)
 
 
@@ -584,7 +670,18 @@ def update(pane: str, state_name: str, query: str) -> Match | None:
             occurrence = occurrence_for_match(captured, query, match)
             (state / "occurrence").write_text(str(occurrence))
         write_match(state, query, match)
-        show_match(pane, query, match, occurrence=occurrence)
+        search_occurrence = (
+            native_search_occurrence(captured, query, match)
+            if match is not None
+            else None
+        )
+        show_match(
+            pane,
+            query,
+            match,
+            occurrence=occurrence,
+            search_occurrence=search_occurrence,
+        )
         return match
 
 
@@ -618,7 +715,14 @@ def move_selection(pane: str, state_name: str, direction: str, query: str) -> No
         (state / "query").write_text(query)
         (state / "occurrence").write_text(str(candidate))
         write_match(state, query, match)
-        show_match(pane, query, match, occurrence=candidate)
+        search_occurrence = native_search_occurrence(captured, query, match)
+        show_match(
+            pane,
+            query,
+            match,
+            occurrence=candidate,
+            search_occurrence=search_occurrence,
+        )
 
 
 def action_for_accept(pane: str, state_name: str, query: str, *, space: bool) -> str:

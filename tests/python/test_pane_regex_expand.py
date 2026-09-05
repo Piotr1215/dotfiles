@@ -113,6 +113,14 @@ class PaneRegexMatchTests(unittest.TestCase):
         self.assertIsNotNone(match)
         self.assertEqual(match.text, "with first match")
 
+    def test_escaped_final_dollar_is_a_literal_ending_locator(self):
+        text = "before\nsession output $ and more\nafter\n"
+
+        match = self.mod.find_latest_match(text, r"^session.*\$")
+
+        self.assertIsNotNone(match)
+        self.assertEqual(match.text, "session output $")
+
     def test_open_ended_range_starts_at_match_and_stops_at_logical_line_end(self):
         text = "prefix screenshot text to reuse\nlater output\n"
 
@@ -128,6 +136,22 @@ class PaneRegexMatchTests(unittest.TestCase):
 
         self.assertIsNotNone(match)
         self.assertEqual(match.text, "screenshot text to reuse")
+
+    def test_double_dollar_extends_a_landmark_range_through_its_last_line(self):
+        text = (
+            "prefix master change\n"
+            "details\n"
+            "2 files changed, 3 insertions, 4 deletions(-)\n"
+            "after\n"
+        )
+
+        match = self.mod.find_latest_match(text, r"^master.*deletions$$")
+
+        self.assertIsNotNone(match)
+        self.assertEqual(
+            match.text,
+            "master change\ndetails\n2 files changed, 3 insertions, 4 deletions(-)",
+        )
 
     def test_sentence_shorthand_stops_after_the_first_sentence_end(self):
         text = "before\nThen this wraps\nonto the next line. Keep this out!\nafter\n"
@@ -309,7 +333,9 @@ class PaneRegexMatchTests(unittest.TestCase):
 
         self.assertEqual(match.text, "older screenshot line")
         self.assertEqual(stored, match)
-        show_match.assert_called_once_with("%1", query, match, occurrence=1)
+        show_match.assert_called_once_with(
+            "%1", query, match, occurrence=1, search_occurrence=None
+        )
 
     def test_query_refinement_keeps_the_arrow_selected_occurrence(self):
         old_query = r"^screen"
@@ -331,7 +357,9 @@ class PaneRegexMatchTests(unittest.TestCase):
 
         self.assertEqual(match.text, "screenshot line")
         self.assertEqual(occurrence, 1)
-        show_match.assert_called_once_with("%1", new_query, match, occurrence=1)
+        show_match.assert_called_once_with(
+            "%1", new_query, match, occurrence=1, search_occurrence=1
+        )
 
     def test_query_refinement_tracks_source_when_match_order_changes(self):
         old_query = r"^this"
@@ -355,7 +383,9 @@ class PaneRegexMatchTests(unittest.TestCase):
 
         self.assertEqual(match.text, "this point is selected")
         self.assertEqual(occurrence, 0)
-        show_match.assert_called_once_with("%1", new_query, match, occurrence=0)
+        show_match.assert_called_once_with(
+            "%1", new_query, match, occurrence=0, search_occurrence=None
+        )
 
     def test_trailing_anchor_space_accepts_only_a_current_match(self):
         self.assertEqual(self.mod.space_action(r"^site$", has_match=True), "accept")
