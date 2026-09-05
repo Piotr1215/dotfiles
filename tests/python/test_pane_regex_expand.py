@@ -245,6 +245,27 @@ class PaneRegexMatchTests(unittest.TestCase):
         self.assertEqual(action, "accept")
         update.assert_not_called()
 
+    def test_watcher_refresh_keeps_the_arrow_selected_occurrence(self):
+        query = r"^screen$"
+        captured = "older screenshot line\nnewer screenshot line\n"
+        with tempfile.TemporaryDirectory(prefix="pane-regex-expand-test-") as name:
+            state = Path(name)
+            (state / "query").write_text(query)
+            (state / "occurrence").write_text("1")
+            completed = self.mod.subprocess.CompletedProcess([], 0, stdout=captured)
+
+            with (
+                mock.patch.object(self.mod, "tmux", return_value=completed),
+                mock.patch.object(self.mod, "show_match") as show_match,
+            ):
+                match = self.mod.update("%1", name, query)
+
+            stored = self.mod.read_match(state, query)
+
+        self.assertEqual(match.text, "older screenshot line")
+        self.assertEqual(stored, match)
+        show_match.assert_called_once_with("%1", query, match, occurrence=1)
+
     def test_trailing_anchor_space_accepts_only_a_current_match(self):
         self.assertEqual(self.mod.space_action(r"^site$", has_match=True), "accept")
         self.assertEqual(self.mod.space_action(r"^site$", has_match=False), "no-match")

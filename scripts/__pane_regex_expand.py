@@ -392,16 +392,17 @@ def update(pane: str, state_name: str, query: str) -> Match | None:
         (state / "query").write_text(query)
         if previous_query != query or not (state / "occurrence").exists():
             (state / "occurrence").write_text("0")
+        occurrence = read_occurrence(state)
 
         captured = tmux(
             "capture-pane", "-p", "-J", "-S", "-10000", "-t", pane, capture_output=True
         ).stdout
         try:
-            match = find_latest_match(captured, query)
+            match = find_latest_match(captured, query, occurrence=occurrence)
         except re.error:
             match = None
         write_match(state, query, match)
-        show_match(pane, query, match)
+        show_match(pane, query, match, occurrence=occurrence)
         return match
 
 
