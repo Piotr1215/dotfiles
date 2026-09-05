@@ -112,6 +112,11 @@ def sentence_start_pattern(pattern: str) -> str | None:
     return start or None
 
 
+def first_landmark_pattern(pattern: str) -> str:
+    """Make the first unescaped dot-star stop at its nearest ending locator."""
+    return re.sub(r"(?<!\\)\.\*(?!\?)", ".*?", pattern, count=1)
+
+
 def leading_literal(pattern: str) -> str:
     """Return the plain-text prefix before the first regex operator."""
     literal: list[str] = []
@@ -242,6 +247,7 @@ def find_matches_latest(text: str, pattern: str) -> list[Match]:
         range_pattern = pattern[1:-1] if pattern.endswith("$") else pattern[1:]
         if not range_pattern:
             return []
+        range_pattern = first_landmark_pattern(range_pattern)
         found_matches = regex_matches_latest(clean, range_pattern)
     else:
         found_matches = regex_matches_latest(clean, pattern)

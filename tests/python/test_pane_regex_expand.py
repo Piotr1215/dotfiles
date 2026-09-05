@@ -105,6 +105,14 @@ class PaneRegexMatchTests(unittest.TestCase):
         self.assertIsNotNone(match)
         self.assertEqual(match.text, "checking one\nmiddle\nending selector")
 
+    def test_landmark_range_stops_at_the_first_ending_locator(self):
+        text = "with first match and later match\nafter\n"
+
+        match = self.mod.find_latest_match(text, r"^with.*match")
+
+        self.assertIsNotNone(match)
+        self.assertEqual(match.text, "with first match")
+
     def test_open_ended_range_starts_at_match_and_stops_at_logical_line_end(self):
         text = "prefix screenshot text to reuse\nlater output\n"
 
