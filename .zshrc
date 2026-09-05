@@ -360,25 +360,8 @@ fzf-history-word() {
 zle -N fzf-history-word
 bindkey '^X^W' fzf-history-word           # Ctrl+X Ctrl+W: frequency-ranked history-word completion
 
-# Ctrl+X w : fuzzy-complete a word from the current tmux pane's scrollback.
-# Sibling to ^X^W, but sources from on-screen command OUTPUT (filenames, hashes,
-# error tokens) instead of shell history - the terminal equivalent of nvim's
-# buffer-word completion. tac reverses so the nearest match wins on duplicates.
-fzf-pane-word() {
-  [[ -n "$TMUX" ]] || { zle redisplay; return }
-  local prefix=${LBUFFER##* }
-  local word
-  word=$(tmux capture-pane -p -S -100000 \
-    | tac \
-    | grep -oE '[A-Za-z0-9_./:@%+-]+' \
-    | awk '!seen[$0]++' \
-    | fzf --no-sort --exact +i --height 40% --reverse --query "$prefix" --prompt 'pane-word> ') \
-    || { zle redisplay; return }
-  LBUFFER="${LBUFFER%$prefix}$word"
-  zle reset-prompt
-}
-zle -N fzf-pane-word
-bindkey '^Xw' fzf-pane-word               # Ctrl+X w: complete a word from the tmux pane scrollback
+# Ctrl+X w: complete words, phrases, lines, or structured spans from pane + history.
+source "$HOME/dev/dotfiles/.zsh/pane-text-completion.zsh"
 
 bindkey '^Xm' set-mark-command            # Ctrl+X m: Set mark for ^X^X
 bindkey '^X^T' transpose-words            # Ctrl+X Ctrl+T: Transposes words
