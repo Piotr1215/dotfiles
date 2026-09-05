@@ -20,6 +20,7 @@ SCRIPT = Path(__file__).resolve()
 DELIVER = SCRIPT.with_name("__lib_pane_deliver.sh")
 INITIAL_QUERY = "^"
 INLINE_TRIGGER = ";;^"
+SENTENCE_SUFFIX = r"\ss"
 
 
 @dataclass(frozen=True)
@@ -27,6 +28,8 @@ class Match:
     text: str
     start_line: int
     end_line: int
+    start_offset: int = 0
+    end_offset: int = 0
 
 
 def clean_scrollback(text: str) -> str:
@@ -101,6 +104,14 @@ def line_tail_start_pattern(pattern: str) -> str | None:
     return line_tail_shorthand(pattern) or open_ended_line_pattern(pattern)
 
 
+def sentence_start_pattern(pattern: str) -> str | None:
+    r"""Return the locator in the shorthand ``^start\ss`` form."""
+    if not pattern.startswith("^") or not pattern.endswith(SENTENCE_SUFFIX):
+        return None
+    start = pattern[1 : -len(SENTENCE_SUFFIX)]
+    return start or None
+
+
 def leading_literal(pattern: str) -> str:
     """Return the plain-text prefix before the first regex operator."""
     literal: list[str] = []
@@ -121,10 +132,14 @@ def leading_literal(pattern: str) -> str:
     return "".join(literal)
 
 
-def regex_matches_latest(text: str, pattern: str) -> list[re.Match[str]]:
+def regex_matches_latest(
+    text: str, pattern: str, *, locator_pattern: str | None = None
+) -> list[re.Match[str]]:
     """Return viable matches from newest start to oldest start."""
     compiled = re.compile(prose_friendly_pattern(pattern), re.MULTILINE | re.DOTALL)
-    prefix = leading_literal(pattern)
+    prefix = leading_literal(
+        locator_pattern if locator_pattern is not None else pattern
+    )
     if prefix:
         prefix_pattern = re.compile(prose_friendly_pattern(re.escape(prefix)))
         starts = [candidate.start() for candidate in prefix_pattern.finditer(text)]
@@ -148,47 +163,114 @@ def latest_regex_match(text: str, pattern: str) -> re.Match[str] | None:
     return matches[0] if matches else None
 
 
-def find_latest_match(text: str, pattern: str, occurrence: int = 0) -> Match | None:
-    """Match with multiline anchors and DOTALL, starting at the latest line."""
+def regex_match_result(clean: str, found: re.Match[str]) -> Match:
+    start_line = clean.count("\n", 0, found.start())
+    end_line = clean.count("\n", 0, max(found.start(), found.end() - 1))
+    return Match(
+        found.group(0),
+        start_line,
+        end_line,
+        start_offset=found.start(),
+        end_offset=found.end(),
+    )
+
+
+def line_start_offsets(lines: list[str]) -> list[int]:
+    offsets = []
+    offset = 0
+    for line in lines:
+        offsets.append(offset)
+        offset += len(line) + 1
+    return offsets
+
+
+def find_matches_latest(text: str, pattern: str) -> list[Match]:
+    """Return every viable expansion from newest source position to oldest."""
     clean = clean_scrollback(text)
-    if not pattern or occurrence < 0:
-        return None
+    if not pattern:
+        return []
+
+    sentence_start = sentence_start_pattern(pattern)
+    if sentence_start is not None:
+        sentence_pattern = f"(?:{sentence_start})[^.!?]*[.!?]"
+        found_matches = regex_matches_latest(
+            clean, sentence_pattern, locator_pattern=sentence_start
+        )
+        return [regex_match_result(clean, found) for found in found_matches]
 
     line_prefix = anchored_line_prefix(pattern)
     if line_prefix is not None:
         compiled_prefix = re.compile(prose_friendly_pattern(re.escape(line_prefix)))
         lines = clean.splitlines()
+        offsets = line_start_offsets(lines)
         matches = []
         for index in range(len(lines) - 1, -1, -1):
             occurrences = list(compiled_prefix.finditer(lines[index]))
-            matches.extend(
-                Match(lines[index], index, index) for _ in reversed(occurrences)
-            )
-        return matches[occurrence] if occurrence < len(matches) else None
+            for found in reversed(occurrences):
+                start = offsets[index] + found.start()
+                matches.append(
+                    Match(
+                        lines[index],
+                        index,
+                        index,
+                        start_offset=start,
+                        end_offset=start + len(found.group(0)),
+                    )
+                )
+        return matches
 
     line_start_pattern = line_tail_start_pattern(pattern)
     if line_start_pattern is not None:
         lines = clean.splitlines()
+        offsets = line_start_offsets(lines)
         matches = []
         for index in range(len(lines) - 1, -1, -1):
             for found in regex_matches_latest(lines[index], line_start_pattern):
-                matches.append(Match(lines[index][found.start() :], index, index))
-        return matches[occurrence] if occurrence < len(matches) else None
+                start = offsets[index] + found.start()
+                matches.append(
+                    Match(
+                        lines[index][found.start() :],
+                        index,
+                        index,
+                        start_offset=start,
+                        end_offset=offsets[index] + len(lines[index]),
+                    )
+                )
+        return matches
 
     if pattern.startswith("^"):
         range_pattern = pattern[1:-1] if pattern.endswith("$") else pattern[1:]
         if not range_pattern:
-            return None
+            return []
         found_matches = regex_matches_latest(clean, range_pattern)
     else:
         found_matches = regex_matches_latest(clean, pattern)
+    return [regex_match_result(clean, found) for found in found_matches]
 
-    if occurrence >= len(found_matches):
+
+def find_latest_match(
+    text: str,
+    pattern: str,
+    occurrence: int = 0,
+    *,
+    anchor_offset: int | None = None,
+) -> Match | None:
+    """Select one expansion, optionally keeping its prior source position."""
+    if occurrence < 0:
         return None
-    found = found_matches[occurrence]
-    start_line = clean.count("\n", 0, found.start())
-    end_line = clean.count("\n", 0, max(found.start(), found.end() - 1))
-    return Match(found.group(0), start_line, end_line)
+    matches = find_matches_latest(text, pattern)
+    if anchor_offset is not None and matches:
+        return min(matches, key=lambda match: abs(match.start_offset - anchor_offset))
+    return matches[occurrence] if occurrence < len(matches) else None
+
+
+def occurrence_for_match(text: str, pattern: str, match: Match) -> int:
+    matches = find_matches_latest(text, pattern)
+    return min(
+        range(len(matches)),
+        key=lambda index: abs(matches[index].start_offset - match.start_offset),
+        default=0,
+    )
 
 
 def inline_erase_count(trigger_length: int, initial_query: str) -> int:
@@ -334,6 +416,12 @@ def ere_literal(text: str) -> str:
 
 def native_highlight_pattern(query: str, match: Match | None = None) -> str:
     """Choose the stable single-line locator for tmux's native highlighter."""
+    sentence_start = sentence_start_pattern(query)
+    if sentence_start is not None:
+        start = prose_friendly_pattern(sentence_start)
+        if match is not None and "\n" in match.text:
+            return f"({start}.*[^[:space:]]|{start})"
+        return f"({start})[^.!?]*[.!?]"
     locator = anchored_line_prefix(query)
     if locator is not None:
         return prose_friendly_pattern(ere_literal(locator))
@@ -353,8 +441,52 @@ def native_highlight_pattern(query: str, match: Match | None = None) -> str:
     return prose_friendly_pattern(query)
 
 
+def native_selection_start_pattern(query: str) -> str | None:
+    """Return the first locator when the exact match needs a copy selection."""
+    if anchored_line_prefix(query) is not None:
+        return None
+    start = sentence_start_pattern(query) or line_tail_start_pattern(query)
+    if start is None and query.startswith("^"):
+        body = query[1:-1] if query.endswith("$") else query[1:]
+        start = leading_literal(body)
+        if start:
+            start = ere_literal(start)
+    return prose_friendly_pattern(start) if start else None
+
+
+def selection_end_fragment(match: Match) -> tuple[str, int] | None:
+    """Return a plain-text tail and searches needed to reach the match end."""
+    text = match.text.rstrip()
+    found = re.search(r"\S+$", text)
+    if found is None:
+        return None
+    fragment = found.group(0)
+    positions = []
+    cursor = 0
+    while True:
+        position = text.find(fragment, cursor)
+        if position < 0:
+            break
+        positions.append(position)
+        cursor = position + len(fragment)
+    searches = sum(position > 0 for position in positions)
+    if searches == 0:
+        return None
+    return fragment, searches
+
+
 def show_match(pane: str, query: str, match: Match | None, occurrence: int = 0) -> None:
+    selection_start = (
+        native_selection_start_pattern(query) if match is not None else None
+    )
+    selection_end = selection_end_fragment(match) if selection_start and match else None
     command = [
+        "send-keys",
+        "-X",
+        "-t",
+        pane,
+        "clear-selection",
+        ";",
         "send-keys",
         "-X",
         "-t",
@@ -371,6 +503,36 @@ def show_match(pane: str, query: str, match: Match | None, occurrence: int = 0) 
     ]
     for _ in range(occurrence):
         command.extend([";", "send-keys", "-X", "-t", pane, "search-again"])
+    if selection_end is not None:
+        fragment, searches = selection_end
+        command.extend([";", "send-keys", "-X", "-t", pane, "begin-selection"])
+        for _ in range(searches):
+            command.extend(
+                [
+                    ";",
+                    "send-keys",
+                    "-X",
+                    "-t",
+                    pane,
+                    "search-forward-text",
+                    "--",
+                    fragment,
+                ]
+            )
+        if len(fragment) > 1:
+            command.extend(
+                [
+                    ";",
+                    "send-keys",
+                    "-X",
+                    "-N",
+                    str(len(fragment) - 1),
+                    "-t",
+                    pane,
+                    "cursor-right",
+                ]
+            )
+        command.extend([";", "send-keys", "-X", "-t", pane, "stop-selection"])
     tmux(*command, check=False)
 
 
@@ -388,9 +550,10 @@ def update(pane: str, state_name: str, query: str) -> Match | None:
         try:
             previous_query = (state / "query").read_text()
         except FileNotFoundError:
-            previous_query = None
+            previous_query = ""
+        previous_match = read_match(state, previous_query)
         (state / "query").write_text(query)
-        if previous_query != query or not (state / "occurrence").exists():
+        if not (state / "occurrence").exists():
             (state / "occurrence").write_text("0")
         occurrence = read_occurrence(state)
 
@@ -398,9 +561,22 @@ def update(pane: str, state_name: str, query: str) -> Match | None:
             "capture-pane", "-p", "-J", "-S", "-10000", "-t", pane, capture_output=True
         ).stdout
         try:
-            match = find_latest_match(captured, query, occurrence=occurrence)
+            anchor_offset = (
+                previous_match.start_offset
+                if previous_match is not None and previous_match.end_offset > 0
+                else None
+            )
+            match = find_latest_match(
+                captured,
+                query,
+                occurrence=occurrence,
+                anchor_offset=anchor_offset,
+            )
         except re.error:
             match = None
+        if match is not None and anchor_offset is not None:
+            occurrence = occurrence_for_match(captured, query, match)
+            (state / "occurrence").write_text(str(occurrence))
         write_match(state, query, match)
         show_match(pane, query, match, occurrence=occurrence)
         return match
@@ -413,11 +589,7 @@ def move_selection(pane: str, state_name: str, direction: str, query: str) -> No
     state = state_path(state_name)
     with (state / "lock").open("w") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
-        try:
-            current_query = (state / "query").read_text()
-        except FileNotFoundError:
-            current_query = ""
-        occurrence = read_occurrence(state) if current_query == query else 0
+        occurrence = read_occurrence(state)
         candidate = occurrence + 1 if direction == "older" else max(0, occurrence - 1)
 
         captured = tmux(
@@ -520,7 +692,7 @@ def fzf_command(pane: str, state: Path, initial_query: str) -> list[str]:
         "--pointer=",
         "--marker=",
         "--prompt=regex> ",
-        "--header=Up older. Down newer. Tab or Enter expands. Space after $ expands.",
+        r"--header=Up older. Down newer. \ss sentence. Tab or Enter expands.",
         f"--query={initial_query}",
         "--print-query",
         "--bind",

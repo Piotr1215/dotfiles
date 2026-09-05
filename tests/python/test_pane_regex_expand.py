@@ -121,6 +121,21 @@ class PaneRegexMatchTests(unittest.TestCase):
         self.assertIsNotNone(match)
         self.assertEqual(match.text, "screenshot text to reuse")
 
+    def test_sentence_shorthand_stops_after_the_first_sentence_end(self):
+        text = "before\nThen this wraps\nonto the next line. Keep this out!\nafter\n"
+
+        match = self.mod.find_latest_match(text, r"^Then\ss")
+
+        self.assertIsNotNone(match)
+        self.assertEqual(match.text, "Then this wraps\nonto the next line.")
+
+    def test_sentence_shorthand_accepts_question_and_exclamation_marks(self):
+        question = self.mod.find_latest_match("Can this work? Yes!", r"^Can\ss")
+        exclamation = self.mod.find_latest_match("It can work! Yes.", r"^It\ss")
+
+        self.assertEqual(question.text, "Can this work?")
+        self.assertEqual(exclamation.text, "It can work!")
+
     def test_range_search_uses_the_latest_viable_start_locator(self):
         text = "checking old selector\nchecking newest selector\n"
 
@@ -161,6 +176,28 @@ class PaneRegexMatchTests(unittest.TestCase):
 
     def test_native_highlight_accepts_smart_prose_apostrophes(self):
         self.assertEqual(self.mod.native_highlight_pattern(r"^I'm$"), "I['’]m")
+
+    def test_native_selection_spans_the_exact_wrapped_match(self):
+        match = self.mod.Match(
+            "I’m switching the native highlight through navigation", 1, 1
+        )
+
+        with mock.patch.object(self.mod, "tmux") as tmux:
+            self.mod.show_match("%1", r"^I'm.*navigation", match)
+
+        command = tmux.call_args.args
+        self.assertIn("begin-selection", command)
+        self.assertIn("search-forward-text", command)
+        self.assertIn("navigation", command)
+        self.assertIn("stop-selection", command)
+
+    def test_literal_line_locator_keeps_search_highlight_without_selection(self):
+        match = self.mod.Match("prefix checking the popup", 1, 1)
+
+        with mock.patch.object(self.mod, "tmux") as tmux:
+            self.mod.show_match("%1", r"^checking$", match)
+
+        self.assertNotIn("begin-selection", tmux.call_args.args)
 
     def test_search_starts_at_latest_output_and_moves_up(self):
         text = "the old\nold too\nthe newest\nnewest too\nafter\n"
@@ -265,6 +302,52 @@ class PaneRegexMatchTests(unittest.TestCase):
         self.assertEqual(match.text, "older screenshot line")
         self.assertEqual(stored, match)
         show_match.assert_called_once_with("%1", query, match, occurrence=1)
+
+    def test_query_refinement_keeps_the_arrow_selected_occurrence(self):
+        old_query = r"^screen"
+        new_query = r"^screen$$"
+        captured = "older screenshot line\nnewer screenshot line\n"
+        with tempfile.TemporaryDirectory(prefix="pane-regex-expand-test-") as name:
+            state = Path(name)
+            (state / "query").write_text(old_query)
+            (state / "occurrence").write_text("1")
+            completed = self.mod.subprocess.CompletedProcess([], 0, stdout=captured)
+
+            with (
+                mock.patch.object(self.mod, "tmux", return_value=completed),
+                mock.patch.object(self.mod, "show_match") as show_match,
+            ):
+                match = self.mod.update("%1", name, new_query)
+
+            occurrence = self.mod.read_occurrence(state)
+
+        self.assertEqual(match.text, "screenshot line")
+        self.assertEqual(occurrence, 1)
+        show_match.assert_called_once_with("%1", new_query, match, occurrence=1)
+
+    def test_query_refinement_tracks_source_when_match_order_changes(self):
+        old_query = r"^this"
+        new_query = r"^this p"
+        captured = "this point is selected\nnewer this other line\n"
+        old_match = self.mod.find_latest_match(captured, old_query, occurrence=1)
+        with tempfile.TemporaryDirectory(prefix="pane-regex-expand-test-") as name:
+            state = Path(name)
+            (state / "query").write_text(old_query)
+            (state / "occurrence").write_text("1")
+            self.mod.write_match(state, old_query, old_match)
+            completed = self.mod.subprocess.CompletedProcess([], 0, stdout=captured)
+
+            with (
+                mock.patch.object(self.mod, "tmux", return_value=completed),
+                mock.patch.object(self.mod, "show_match") as show_match,
+            ):
+                match = self.mod.update("%1", name, new_query)
+
+            occurrence = self.mod.read_occurrence(state)
+
+        self.assertEqual(match.text, "this point is selected")
+        self.assertEqual(occurrence, 0)
+        show_match.assert_called_once_with("%1", new_query, match, occurrence=0)
 
     def test_trailing_anchor_space_accepts_only_a_current_match(self):
         self.assertEqual(self.mod.space_action(r"^site$", has_match=True), "accept")
