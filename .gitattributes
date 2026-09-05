@@ -11,3 +11,12 @@ scripts/__remote_tmux_toggle.sh filter=git-crypt diff=git-crypt
 .config/tmuxinator/standup.yml filter=git-crypt diff=git-crypt
 .config/tmuxinator/standup-agent.md filter=git-crypt diff=git-crypt
 tests/bats/standup_tmuxinator_test.bats filter=git-crypt diff=git-crypt
+.config/tmuxinator/team-meeting-agent.md filter=git-crypt diff=git-crypt
+.config/tmuxinator/team-meeting.yml filter=git-crypt diff=git-crypt
+.config/tmuxinator/infra-staging.yml filter=git-crypt diff=git-crypt
+.config/tmuxinator/loft-staging-cluster.yml filter=git-crypt diff=git-crypt
+.config/tmuxinator/vcluster-prod.yml filter=git-crypt diff=git-crypt
+.config/tmuxinator/vcluster-staging.yml filter=git-crypt diff=git-crypt
+.config/tmuxinator/vcluster-dev.yml filter=git-crypt diff=git-crypt
+.config/tmuxinator/vcloud.yml filter=git-crypt diff=git-crypt
+.kube/kctx.yaml filter=git-crypt diff=git-crypt
