@@ -7,7 +7,8 @@ import sys
 from dataclasses import dataclass
 
 
-WORD_RE = re.compile(r"[A-Za-z0-9_./:@%+-]+")
+SHELL_PARAMETER = r"\$\{[^{}\s]+\}|\$(?:[A-Za-z_][A-Za-z0-9_]*|[0-9]+|[-@*#?$!_])"
+WORD_RE = re.compile(rf"{SHELL_PARAMETER}|[A-Za-z0-9_./:@%+-]+")
 OPEN_TO_CLOSE = {"(": ")", "[": "]", "{": "}"}
 CLOSE_TO_OPEN = {value: key for key, value in OPEN_TO_CLOSE.items()}
 QUOTE_CHARS = {'"', "'", "`"}

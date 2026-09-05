@@ -40,6 +40,10 @@ class PaneTextCandidatesTest(unittest.TestCase):
         words = self.texts("alpha repeat\nrepeat omega", "word")
         self.assertEqual(words, ["repeat", "omega", "alpha"])
 
+    def test_shell_variables_remain_whole_words(self):
+        words = self.texts("echo $please ${USER} $? $1", "word")
+        self.assertEqual(words, ["echo", "$please", "${USER}", "$?", "$1"])
+
     def test_phrase_length_is_bounded(self):
         phrases = self.texts("one two three four five six seven", "phrase")
         self.assertIn("one two three four five six", phrases)
