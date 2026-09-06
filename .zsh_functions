@@ -827,3 +827,55 @@ cs() {
     id=${out##*$'\t'}
     cd "$cwd" && claude --resume "$id"
 }
+
+# Pipe stdin to Claude and stream the answer as it is generated, then print a
+# dim footer with model, tokens and cost so a piped question is never a blind
+# spend. Reached by the `A` global alias: `make build 2>&1 A 'root cause?'`
+#
+# Two defaults, both measured on `ls /tmp A 'how many entries?'`:
+#   MAX_THINKING_TOKENS=0  94s -> 1s. Extended thinking spent 9802 tokens
+#                          deliberating over a file count. A shell pipe wants an
+#                          answer, not a deliberation.
+#   --model sonnet         chosen over haiku for answer quality; the input is
+#                          ~60k tokens of hooks and CLAUDE.md on every call, so
+#                          expect roughly $0.36 and ~10s per pipe, not $0.09/2s.
+#                          Drop to `A --model haiku` for cheap lookups.
+# Both sit before "$@", so any flag you pass wins: `... A --model sonnet`.
+#
+# The google-drive connector warning is filtered: expected noise from the deny
+# in ~/.claude commit c53160f, not a failure.
+ai_stream() {
+    MAX_THINKING_TOKENS=0 command claude -p --model sonnet \
+        --output-format stream-json --verbose --include-partial-messages "$@" \
+        2> >(grep -v 'blocked by enterprise policy' >&2) \
+    | ~/.claude/scripts/__ai_pipe.py
+}
+# Completion for ai_stream. The flag list is generated from the packed claude
+# binary by __claude_flag_spec.sh, not hand-listed: `claude --help` omits flags
+# (--brief among them) and a hand-list rots on the next release. Cached per
+# binary version, so an autoupdate regenerates it and nothing else does.
+_ai_stream() {
+    local bin cache
+    bin=${${:-~/.local/bin/claude}:A}
+    cache=${XDG_CACHE_HOME:-$HOME/.cache}/claude-flags-${bin:t}.zsh
+    if [[ ! -s $cache ]]; then
+        mkdir -p ${cache:h}
+        ~/.claude/scripts/__claude_flag_spec.sh > $cache.$$ 2>/dev/null &&
+            mv $cache.$$ $cache || { rm -f $cache.$$; return 1 }
+    fi
+    local -a spec
+    spec=( ${(f)"$(<$cache)"} )
+    _arguments -s $spec '*:prompt:'
+}
+compdef _ai_stream ai_stream
+
+# Reopen the conversation the last `A` pipe created as a normal interactive
+# session, in the directory it ran in. The pipe and the TUI are the same
+# session; -p just drives it non-interactively, so nothing is lost in the move.
+air() {
+    local state=~/.cache/ai-last-session sid dir
+    [[ -s $state ]] || { print -u2 "no A pipe recorded yet"; return 1 }
+    IFS=$'\t' read -r sid dir < $state
+    print -u2 "resuming $sid in $dir"
+    (cd -- "$dir" && __claude_with_monitor.sh --resume "$sid")
+}

@@ -78,6 +78,10 @@ zstyle ':completion:*' list-colors ${(s.:.)LS_COLORS}
 # force zsh not to show completion menu, which allows fzf-tab to capture the unambiguous prefix
 zstyle ':completion:*' menu no
 zstyle ':completion:*' use-cache on
+# Let TAB expand global aliases (A, C, G, L, R ...) in place, so completion
+# can see the real command behind them instead of an opaque single letter.
+zstyle ':completion:*' completer _expand_alias _complete _ignored
+zstyle ':completion:*:expand-alias:*' global true
 zstyle ':completion:*' cache-path $ZSH_CACHE_DIR
 # preview directory's content with eza when completing cd
 zstyle ':fzf-tab:complete:cd:*' fzf-preview 'eza -1 --color=always $realpath'

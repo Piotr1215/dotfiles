@@ -1,4 +1,11 @@
 # Global aliases
+# Pipe output to Claude and stream the answer (see ai_stream). Append your own
+# prompt and any -p flag: `make build 2>&1 A 'root cause?'`, `... A --continue`,
+# `... A --model haiku`.
+alias -g A='| ai_stream'
+# Raw, non-streaming form. Use when you want the whole reply at once or need to
+# set --output-format yourself: `... AR --output-format json | jq -r .result`
+alias -g AR='| command claude -p'
 alias -g C='| sed -r "s/\x1b\[[0-9;]*m//g" | perl -pe "chomp if eof" | xsel --clipboard'
 # Mail the command output (stdout+stderr) to self with a fixed subject. e.g. `df -h M`
 alias -g M='2>&1 | { printf "Subject: pop-os-automated-email\nFrom: piotrzan@gmail.com\nTo: piotrzan@gmail.com\n\n"; sed -r "s/\x1b\[[0-9;]*m//g"; } | msmtp piotrzan@gmail.com'
