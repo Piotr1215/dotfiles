@@ -347,3 +347,21 @@ EOF
   [[ "$output" != *"Open link"* ]]
   [[ "$output" != *"--open-link"* ]]
 }
+
+@test "a schedule at rejects fails loudly instead of losing the reminder" {
+  cat >"$BIN/at" <<'STUB'
+#!/usr/bin/env bash
+cat >/dev/null
+printf '%s\n' "$*" >"$TEST_AT_ARGS"
+printf 'syntax error. Last token seen: 16:20\nGarbled time\n' >&2
+exit 1
+STUB
+  chmod +x "$BIN/at"
+
+  run "$REMINDER" "Weekly sync" -- 'Tuesday 16:20'
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"at rejected the schedule"* ]]
+  [[ "$output" == *"Garbled time"* ]]
+  [ ! -s "$REMINDER_STATE_FILE" ]
+}

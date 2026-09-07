@@ -196,11 +196,17 @@ schedule_delay() {
 	fi
 	# Both payloads reach the job body base64-encoded, so a url, a quote or a
 	# $(...) in the notes cannot reach a shell when the job fires.
+	# `|| status=$?` rather than a following `status=$?` line: `set -e` aborts
+	# the whole script the moment a command substitution fails, so an error
+	# branch after a bare assignment is unreachable and a rejected time spec
+	# loses the reminder with no output at all. `if !` would reach the branch
+	# but zero the status, so the caller could not tell success from failure.
+	status=0
 	command_output="$(printf 'DISPLAY=%q %q --notify %q %q\n' \
-		"$display" "$script_path" "$encoded" "$encoded_notes" | at "${at_args[@]}" 2>&1)"
-	status=$?
+		"$display" "$script_path" "$encoded" "$encoded_notes" | at "${at_args[@]}" 2>&1)" \
+		|| status=$?
 	if [ "$status" -ne 0 ]; then
-		printf '%s\n' "$command_output" >&2
+		printf 'at rejected the schedule %q:\n%s\n' "$delay" "$command_output" >&2
 		return "$status"
 	fi
 
