@@ -1,0 +1,61 @@
+google-chrome/OptGuideOnDeviceModel
+google-chrome/OptGuideOnDeviceClassifierModel
+google-chrome/optimization_guide_model_store
+google-chrome/OptimizationGuideModelsManifest
+google-chrome/component_crx_cache
+google-chrome/GrShaderCache
+google-chrome/ShaderCache
+google-chrome/GraphiteDawnCache
+google-chrome/DawnGraphiteCache
+google-chrome/DawnWebGPUCache
+google-chrome/Crashpad
+google-chrome/Crash Reports
+google-chrome/BrowserMetrics*
+google-chrome/DeferredBrowserMetrics
+google-chrome/Singleton*
+google-chrome/NativeMessagingHosts/*.socket
+google-chrome/.com.google.Chrome.*
+google-chrome/*/.com.google.Chrome.*
+google-chrome/*/Cache
+google-chrome/*/Code Cache
+google-chrome/*/GPUCache
+google-chrome/*/DawnGraphiteCache
+google-chrome/*/DawnWebGPUCache
+google-chrome/*/AutofillAiModelCache
+google-chrome/*/optimization_guide_hint_cache_store
+google-chrome/*/Segmentation Platform
+google-chrome/*/File System
+google-chrome/*/IndexedDB
+google-chrome/*/Local Storage
+google-chrome/*/Service Worker
+google-chrome/*/Session Storage
+google-chrome/*/Storage
+google-chrome/*/WebStorage
+google-chrome/*/blob_storage
+google-chrome/*/SharedStorage*
+google-chrome/*/Shared Dictionary
+google-chrome/*/Sessions
+google-chrome/*/Current Session
+google-chrome/*/Current Tabs
+google-chrome/*/Last Session
+google-chrome/*/Last Tabs
+google-chrome/*/History*
+google-chrome/*/Archived History*
+google-chrome/*/Visited Links
+google-chrome/*/Top Sites*
+google-chrome/*/Favicons*
+google-chrome/*/Shortcuts*
+google-chrome/*/Cookies*
+google-chrome/*/Network
+google-chrome/*/Network Action Predictor*
+google-chrome/*/Network Persistent State
+google-chrome/*/Download Service
+google-chrome/*/DownloadMetadata
+google-chrome/*/BrowsingTopics*
+google-chrome/*/DIPS*
+google-chrome/*/InterestGroups
+google-chrome/*/Reporting and NEL*
+google-chrome/*/Safe Browsing Cookies*
+google-chrome/*/Site Characteristics Database
+google-chrome/*/WebRTC Logs
+google-chrome/*/webrtc_event_logs
