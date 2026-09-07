@@ -44,8 +44,8 @@ class EffortUdaTests(unittest.TestCase):
 
     def test_default_and_explicit_values(self):
         self.task("add", "project:effort-test", "default effort proof")
-        self.assertEqual(json.loads(self.task("export").stdout)[0]["effort"], "high")
-        for effort in ("medium", "high", "xhigh"):
+        self.assertEqual(json.loads(self.task("export").stdout)[0]["effort"], "H")
+        for effort in ("M", "H", "X"):
             with self.subTest(effort=effort):
                 self.task("1", "modify", f"effort:{effort}")
                 self.assertEqual(json.loads(self.task("export").stdout)[0]["effort"], effort)
@@ -54,10 +54,10 @@ class EffortUdaTests(unittest.TestCase):
         self.task("add", "default effort proof")
         result = self.task("1", "modify", "effort:invalid", check=False)
         self.assertNotEqual(result.returncode, 0)
-        self.assertEqual(json.loads(self.task("export").stdout)[0]["effort"], "high")
+        self.assertEqual(json.loads(self.task("export").stdout)[0]["effort"], "H")
 
     def test_report_columns_and_rendered_values(self):
-        self.task("add", "project:effort-test", "effort:xhigh", "effort report proof")
+        self.task("add", "project:effort-test", "effort:X", "effort report proof")
         config = dict(
             line.strip().split("=", 1)
             for line in (REPO / ".taskrc").read_text().splitlines()
@@ -68,10 +68,10 @@ class EffortUdaTests(unittest.TestCase):
                 columns = config[f"report.{report}.columns"].split(",")
                 labels = config[f"report.{report}.labels"].split(",")
                 self.assertEqual(len(columns), len(labels))
-                self.assertEqual(labels[columns.index("effort")], "Effort")
+                self.assertEqual(labels[columns.index("effort")], "Ef")
                 rendered = self.task(f"rc.report.{report}.filter=status:pending", report).stdout
-                self.assertIn("Effort", rendered)
-                self.assertIn("xhigh", rendered)
+                self.assertRegex(rendered, r"\bEf\b")
+                self.assertRegex(rendered, r"\bX\b")
 
     def test_selector_reads_real_task_uda(self):
         self.task("add", "selector effort proof")
@@ -93,7 +93,7 @@ class EffortUdaTests(unittest.TestCase):
         )
         dialog.chmod(0o755)
         args_file = script_dir / "dialog-args.json"
-        for effort in ("medium", "high", "xhigh"):
+        for effort in ("M", "H", "X"):
             with self.subTest(effort=effort):
                 self.task("1", "modify", f"effort:{effort}", "-codex")
                 result = subprocess.run(
@@ -110,6 +110,42 @@ class EffortUdaTests(unittest.TestCase):
                 record = json.loads(self.task("export").stdout)[0]
                 self.assertEqual(record["effort"], effort)
                 self.assertIn("codex", record["tags"])
+
+    def test_config_controls_new_task_default(self):
+        with self.config.open("a") as config:
+            config.write("uda.effort.default=M\n")
+        self.task("add", "custom default proof")
+        self.assertEqual(json.loads(self.task("export").stdout)[0]["effort"], "M")
+
+    def test_shortcut_nine_cycles_selected_task(self):
+        script = REPO / "scripts/__cycle_task_effort.sh"
+        binding = f"uda.taskwarrior-tui.shortcuts.9={script}"
+        self.assertIn(binding, (REPO / ".taskrc").read_text().splitlines())
+        self.assertTrue(os.access(script, os.X_OK))
+        self.task("add", "+codex", "cycle effort proof")
+        original = json.loads(self.task("export").stdout)[0]
+        for expected in ("X", "M", "H"):
+            result = subprocess.run(
+                [str(script), original["uuid"]], env=self.env,
+                capture_output=True, text=True, timeout=10,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            record = json.loads(self.task("export").stdout)[0]
+            self.assertEqual(record["effort"], expected)
+            self.assertEqual(record["tags"], original["tags"])
+            self.assertEqual(record["description"], original["description"])
+
+    def test_cycle_uses_config_default_for_unset_effort(self):
+        with self.config.open("a") as config:
+            config.write("uda.effort.default=M\n")
+        self.task("add", "unset effort proof")
+        self.task("1", "modify", "effort:")
+        result = subprocess.run(
+            [str(REPO / "scripts/__cycle_task_effort.sh"), "1"],
+            env=self.env, capture_output=True, text=True, timeout=10,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(self.task("export").stdout)[0]["effort"], "H")
 
 
 if __name__ == "__main__":
