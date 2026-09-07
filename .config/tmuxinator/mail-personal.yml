@@ -1,0 +1,21 @@
+# /home/decoder/.config/tmuxinator/mail.yml
+# PROJECT: mail-agent
+#
+# Two assistants:
+#   ursula = WORK appointments & meeting assistant (Gmail MCP + Google Calendar MCP). Default.
+#   greta  = full email triage (notmuch/maildir/msmtp, personal + work). Commented out below.
+# Both windows start by default: ursula (work appointments) + greta (full triage). Comment out the greta window for work-only.
+
+name: mailpersonal
+root: ~/.config/mutt
+
+windows:
+  - mail:
+      layout: main-vertical
+      panes:
+        - cmatrix -a -C blue
+        - neomutt
+  - greta:
+      layout: main-vertical
+      panes:
+        - __claude_with_monitor.sh --system-prompt-file ~/.claude/system-prompts/greta-system-prompt.md -- "/ops-mail-agent-greta"
