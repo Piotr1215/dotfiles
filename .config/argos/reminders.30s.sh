@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Argos applet for reminders. A consumer of `remind list --json` only: it never
+# touches the store, at, or cron, and every action it offers passes an id.
 
 set -o pipefail
 
@@ -24,52 +26,61 @@ if [ ! -x "$helper" ]; then
 	exit 0
 fi
 
-mapfile -t records < <("$helper" --records)
+# One record per line: fields are joined with the unit separator (a tab is
+# IFS whitespace, so read would collapse an empty repeat and shift the rest),
+# and a multi-line subject is cut to its first line before it can split a row.
+sep=$'\x1f'
+mapfile -t records < <("$helper" list --json 2>/dev/null \
+	| jq -r --arg sep "$sep" '.[] | [.id, (.when // ""), (.repeat // ""), (.title | gsub("\n"; " ")), (.url // ""), (.subject // "" | split("\n")[0]), (.overdue // false | tostring)] | join($sep)')
 count="${#records[@]}"
+overdue_count=0
+for record in "${records[@]}"; do
+	[[ "$record" == *"${sep}true" ]] && overdue_count=$((overdue_count + 1))
+done
 
 if [ "$count" -eq 0 ]; then
 	color="#666666"
+elif [ "$overdue_count" -gt 0 ]; then
+	color="#ff9944"
 else
 	color="#44ff44"
 fi
 
 echo "<tt><b>⏰:</b></tt><tt><span color='${color}'>${count}</span></tt> | font='monospace' size=12"
 echo "---"
-echo "➕ Add reminder | bash='\"$helper\" --add-dialog' terminal=false refresh=true"
+echo "➕ Add reminder | bash='\"$helper\" add-dialog' terminal=false refresh=true"
 echo "---"
 
 if [ "$count" -eq 0 ]; then
 	echo "No active reminders | color=#888888"
 else
 	for record in "${records[@]}"; do
-		IFS=$'\t' read -r job_id schedule encoded encoded_notes <<<"$record"
-		safe_schedule="$(escape_label "$schedule")"
-		if [ -n "$encoded" ]; then
-			message="$(printf '%s' "$encoded" | base64 -d 2>/dev/null || printf 'Unreadable reminder')"
-			safe_message="$(escape_label "$message")"
-			echo "${safe_message}"
-			echo "--${safe_schedule} | color=#aaaaaa size=10"
-			if [ -n "$encoded_notes" ]; then
-				notes="$(printf '%s' "$encoded_notes" | base64 -d 2>/dev/null || printf '')"
-				# One dim line of context under the schedule. The full text
-				# lives in the edit form; this is only a reminder that it exists.
-				first_line="$(printf '%s' "$notes" | head -n1)"
-				[ -n "$first_line" ] \
-					&& echo "--$(escape_label "${first_line:0:60}") | color=#aaaaaa size=10"
-				# Pass the job id, never the url: the helper resolves it from
-				# tracked state, so nothing from the notes reaches this command line.
-				printf '%s' "$notes" | grep -q 'https\?://' \
-					&& echo "--🔗 Open link | bash='\"$helper\" --open-link $job_id' terminal=false refresh=false"
-			fi
-			echo "--Edit or reschedule | bash='\"$helper\" --edit-dialog $job_id' terminal=false refresh=true"
-		else
-			echo "Untracked at job ${job_id}"
-			echo "--${safe_schedule} | color=#aaaaaa size=10"
-			echo "--Add reminder text | bash='\"$helper\" --adopt-dialog $job_id' terminal=false refresh=true"
-		fi
-		echo "--Cancel | bash='\"$helper\" --cancel-dialog $job_id' terminal=false refresh=true color=#ff6666"
+		IFS="$sep" read -r id when repeat title url subject overdue <<<"$record"
+		schedule=""
+		[ -n "$when" ] && schedule="$(date -d "$when" '+%a %d %b %H:%M' 2>/dev/null || printf '%s' "$when")"
+		[ -n "$repeat" ] && schedule="${schedule:+$schedule, }repeats $repeat"
+		when_color="#aaaaaa"
+		[ "$overdue" = true ] && when_color="#ff9944"
+		printf '%s\n' "$(escape_label "$title")"
+		echo "--$(escape_label "$schedule") | color=$when_color size=10"
+		# One dim line naming the subject. A task shows its short uuid, not
+		# its content: the dialog reads the task live when it fires.
+		case "$subject" in
+		task:*) echo "--task ${subject:5:8} | color=#aaaaaa size=10" ;;
+		text:*)
+			first_line="${subject#text:}"
+			[ -n "$first_line" ] && echo "--$(escape_label "${first_line:0:60}") | color=#aaaaaa size=10"
+			;;
+		esac
+		[ -n "$url" ] \
+			&& echo "--🔗 Open link | bash='\"$helper\" open $id' terminal=false refresh=false"
+		echo "--Snooze 1h | bash='\"$helper\" edit $id --when 1h' terminal=false refresh=true"
+		echo "--Edit | bash='\"$helper\" edit-dialog $id' terminal=false refresh=true"
+		echo "--Done | bash='\"$helper\" done $id' terminal=false refresh=true"
+		echo "--Delete | bash='\"$helper\" delete-dialog $id' terminal=false refresh=true color=#ff6666"
 	done
 fi
 
 echo "---"
+echo "Sync clocks | bash='\"$helper\" sync' terminal=false refresh=true"
 echo "Refresh | refresh=true"

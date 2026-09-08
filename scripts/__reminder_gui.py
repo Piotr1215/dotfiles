@@ -89,49 +89,65 @@ class ReminderDialog:
         title = self.request.get("title", "Reminder")
         window, content = self.window(title)
 
-        self.add(content, self.label("Reminder"))
-        message = Gtk.Entry()
-        message.set_width_chars(44)
-        message.set_hexpand(True)
-        message.set_text(str(self.request.get("message", "")))
-        message.set_placeholder_text("What should I remind you about?")
-        self.add(content, message, True)
+        self.add(content, self.label("Label"))
+        label = Gtk.Entry()
+        label.set_width_chars(44)
+        label.set_hexpand(True)
+        label.set_text(str(self.request.get("label", "")))
+        label.set_placeholder_text("What should I remind you about?")
+        self.add(content, label, True)
 
         self.add(content, self.label("When"))
         when = Gtk.Entry()
         when.set_width_chars(44)
         when.set_hexpand(True)
         when.set_text(str(self.request.get("when", "")))
-        when.set_placeholder_text("10m, 2h, eod, or 14:40 tomorrow")
+        when.set_placeholder_text("10m, 2h, eod, tomorrow, Tuesday 16:20, 2026-09-10 09:30")
         self.add(content, when, True)
 
-        self.add(content, self.label("Notes (urls, paths, context)"))
-        notes = Gtk.TextView()
-        notes.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
-        notes.set_accepts_tab(False)
-        notes_buffer = notes.get_buffer()
-        notes_buffer.set_text(str(self.request.get("notes", "")))
-        notes_scroll = Gtk.ScrolledWindow()
-        notes_scroll.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
-        notes_scroll.set_shadow_type(Gtk.ShadowType.IN)
-        notes_scroll.set_min_content_height(110)
-        notes_scroll.add(notes)
-        self.add(content, notes_scroll, True)
+        self.add(content, self.label("Repeat (optional: '0 9 * * 1' or 'every 7d')"))
+        repeat = Gtk.Entry()
+        repeat.set_width_chars(44)
+        repeat.set_hexpand(True)
+        repeat.set_text(str(self.request.get("repeat", "")))
+        self.add(content, repeat, True)
+
+        self.add(content, self.label("Subject (task:<uuid>, url:<url>, or notes)"))
+        subject = Gtk.TextView()
+        subject.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
+        subject.set_accepts_tab(False)
+        subject_buffer = subject.get_buffer()
+        subject_buffer.set_text(str(self.request.get("subject", "")))
+        subject_scroll = Gtk.ScrolledWindow()
+        subject_scroll.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+        subject_scroll.set_shadow_type(Gtk.ShadowType.IN)
+        subject_scroll.set_min_content_height(110)
+        subject_scroll.add(subject)
+        self.add(content, subject_scroll, True)
 
         error = self.label("")
         error.get_style_context().add_class("error")
         self.add(content, error)
 
         def save(*_args):
-            reminder_text = message.get_text().strip()
-            schedule = when.get_text().strip()
-            if not reminder_text or not schedule:
-                error.set_text("Enter both reminder text and a time.")
+            label_text = label.get_text().strip()
+            when_text = when.get_text().strip()
+            repeat_text = repeat.get_text().strip()
+            start, end = subject_buffer.get_bounds()
+            subject_text = subject_buffer.get_text(start, end, False).strip()
+            if not label_text and not subject_text:
+                error.set_text("Enter a label or a subject.")
                 return
-            start, end = notes_buffer.get_bounds()
-            notes_text = notes_buffer.get_text(start, end, False).strip()
+            if not when_text and not repeat_text:
+                error.set_text("Enter a time or a repeat.")
+                return
             self.finish(
-                {"message": reminder_text, "when": schedule, "notes": notes_text}
+                {
+                    "label": label_text,
+                    "when": when_text,
+                    "repeat": repeat_text,
+                    "subject": subject_text,
+                }
             )
 
         actions = self.actions(content)
@@ -144,33 +160,7 @@ class ReminderDialog:
         when.connect("activate", save)
         window.show_all()
         window.present()
-        GLib.idle_add(message.grab_focus)
-
-    def name(self):
-        window, content = self.window("Name reminder")
-        self.add(content, self.label("Add text for this existing at job."))
-        message = Gtk.Entry()
-        message.set_width_chars(44)
-        message.set_hexpand(True)
-        message.set_placeholder_text("Reminder text")
-        self.add(content, message, True)
-
-        def save(*_args):
-            value = message.get_text().strip()
-            if value:
-                self.finish({"message": value})
-
-        actions = self.actions(content)
-        self.add_cancel(actions)
-        save_button = Gtk.Button(label="Save")
-        save_button.get_style_context().add_class("suggested-action")
-        save_button.connect("clicked", save)
-        self.add(actions, save_button)
-        self.default_button(save_button)
-        message.connect("activate", save)
-        window.show_all()
-        window.present()
-        GLib.idle_add(message.grab_focus)
+        GLib.idle_add(label.grab_focus)
 
     def confirm(self):
         window, content = self.window(self.request.get("title", "Confirm"), 380)
@@ -185,17 +175,46 @@ class ReminderDialog:
         window.show_all()
         window.present()
 
-    def alert(self):
-        window, content = self.window("Reminder", 420)
-        self.add(content, self.label(str(self.request.get("message", "Reminder"))))
+    # The helper owns every consequence: it opens the url, edits the record
+    # and syncs the clocks. This dialog only names the choice. Closing it
+    # without choosing exits 1, which the helper reads as the default snooze.
+    SNOOZES = (
+        ("15m", "15 minutes"),
+        ("1h", "1 hour"),
+        ("Tomorrow 9:00", "tomorrow 9:00"),
+        ("Next Monday", "next monday 9:00"),
+    )
 
-        notes = str(self.request.get("notes", "")).strip()
-        if notes:
+    def alert(self):
+        window, content = self.window("Reminder", 460)
+        title = self.label("")
+        title.set_markup(
+            "<b>%s</b>" % GLib.markup_escape_text(str(self.request.get("title", "Reminder")))
+        )
+        self.add(content, title)
+
+        due = str(self.request.get("due", "")).strip()
+        late = str(self.request.get("late", "")).strip()
+        repeat = str(self.request.get("repeat", "")).strip()
+        parts = []
+        if due:
+            parts.append("Due %s" % due)
+        if late:
+            parts.append("%s late" % late)
+        if repeat:
+            parts.append("repeats %s" % repeat)
+        if parts:
+            when = self.label(", ".join(parts))
+            when.get_style_context().add_class("dim-label")
+            self.add(content, when)
+
+        body = str(self.request.get("body", "")).strip()
+        if body:
             view = Gtk.TextView()
             view.set_editable(False)
             view.set_cursor_visible(False)
             view.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
-            view.get_buffer().set_text(notes)
+            view.get_buffer().set_text(body)
             scroll = Gtk.ScrolledWindow()
             scroll.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
             scroll.set_shadow_type(Gtk.ShadowType.IN)
@@ -204,35 +223,29 @@ class ReminderDialog:
             self.add(content, scroll, True)
 
         snooze_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        self.add(snooze_row, self.label("Snooze for"))
-        minutes = Gtk.SpinButton.new_with_range(1, 1440, 1)
-        minutes.set_value(10)
-        self.add(snooze_row, minutes)
-        self.add(snooze_row, self.label("minutes"))
+        self.add(snooze_row, self.label("Snooze"))
+        for caption, spec in self.SNOOZES:
+            button = Gtk.Button(label=caption)
+            button.connect(
+                "clicked",
+                lambda _b, s=spec: self.finish({"action": "snooze", "when": s}),
+            )
+            self.add(snooze_row, button)
         self.add(content, snooze_row)
 
         actions = self.actions(content)
-        # The helper owns opening: it holds the url and calls the shared
-        # taskopen opener, so this button only names the action.
         if str(self.request.get("url", "")).strip():
             open_link = Gtk.Button(label="Open link")
             open_link.connect("clicked", lambda *_args: self.finish({"action": "open"}))
             self.add(actions, open_link)
-        snooze = Gtk.Button(label="Snooze")
-        snooze.connect(
-            "clicked",
-            lambda *_args: self.finish(
-                {"action": "snooze", "minutes": minutes.get_value_as_int()}
-            ),
-        )
-        self.add(actions, snooze)
-        acknowledge = Gtk.Button(label="Acknowledge")
-        acknowledge.get_style_context().add_class("suggested-action")
-        acknowledge.connect(
-            "clicked", lambda *_args: self.finish({"action": "acknowledge"})
-        )
-        self.add(actions, acknowledge)
-        self.default_button(acknowledge)
+        done_label = "Done"
+        if str(self.request.get("subject_type", "")) == "task":
+            done_label = "Task done"
+        done = Gtk.Button(label=done_label)
+        done.get_style_context().add_class("suggested-action")
+        done.connect("clicked", lambda *_args: self.finish({"action": "done"}))
+        self.add(actions, done)
+        self.default_button(done)
         window.show_all()
         window.present()
 
@@ -258,7 +271,7 @@ class ReminderDialog:
 def main():
     parser = argparse.ArgumentParser(description="GTK dialogs for the reminder helper")
     parser.add_argument("--check", action="store_true")
-    parser.add_argument("mode", nargs="?", choices=("form", "name", "confirm", "alert", "error"))
+    parser.add_argument("mode", nargs="?", choices=("form", "confirm", "alert", "error"))
     args = parser.parse_args()
 
     if args.check:

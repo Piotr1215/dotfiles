@@ -1,442 +1,815 @@
 #!/usr/bin/env bash
-
+# PROJECT: reminders
+#
+# A reminder is a pointer plus a trigger. The record holds a label, a time or a
+# repeat, an action and an optional typed subject (task:<uuid>, url:<url>,
+# text:<free text>). It never copies the subject's content: a task is read live
+# by uuid when the reminder fires.
+#
+# The JSONL store is the only truth: one record per line, append-only, the last
+# record per id wins, `gc` compacts. `sync` derives the clocks from it and is
+# never hand-written: one-shots become `at -q r -t` jobs, repeats become lines
+# in a managed crontab block wrapped by __cron_run.sh (and __cron_every.sh for
+# intervals, so a box that is off overnight still catches up). Both clocks call
+# back `fire <id>` with nothing but the id, so labels never reach a shell.
+#
+# Every fire appends one line to the fire log. Snooze is an edit of `when` plus
+# `sync`; a dismissed or dying dialog snoozes by default, so no path drops a
+# reminder.
 set -eo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-STATE_FILE="${REMINDER_STATE_FILE:-${XDG_STATE_HOME:-$HOME/.local/state}/reminders/reminders.tsv}"
-STATE_LOCK="${STATE_FILE}.lock"
+SELF="$(readlink -f "${BASH_SOURCE[0]}")"
+STATE_DIR="${REMINDER_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/reminders}"
+STORE="${REMINDER_STORE:-$STATE_DIR/reminders.jsonl}"
+FIRE_LOG="${REMINDER_LOG:-$STATE_DIR/fire.log}"
+LOCK="${STORE}.lock"
 GUI="${REMINDER_GUI:-$SCRIPT_DIR/__reminder_gui.py}"
-# The same opener .taskopenrc points its link, url and pr actions at, so a url
-# on a reminder lands in the browser and tiles the desktop exactly like a url
-# on a task does.
 URL_OPENER="${REMINDER_URL_OPENER:-$SCRIPT_DIR/__taskopen_url_open.sh}"
+CRON_RUN="${REMINDER_CRON_RUN:-$SCRIPT_DIR/__cron_run.sh}"
+CRON_EVERY="${REMINDER_CRON_EVERY:-$SCRIPT_DIR/__cron_every.sh}"
+AT_QUEUE="r"
+CRON_BEGIN="# BEGIN remind (managed by __reminder.sh sync, edits here are overwritten)"
+CRON_END="# END remind"
+DEFAULT_SNOOZE="${REMINDER_DEFAULT_SNOOZE:-15 minutes}"
+LATE_AFTER=300
 
-display_help() {
-	cat <<'EOF'
-Usage: remind <description> <time>/<opt -- time>
+usage() {
+	cat <<'USAGE'
+Usage: remind <verb> [args]
 
-Examples:
-  remind 'Take a break' 10m
-  remind 'Meeting' 2h
-  remind 'Submit report' 1d
-  remind 'Do laundry' -- 'Monday 13:00'
-  remind 'Call vodafone' 2h --note 'link: https://vodafone.de/kontakt'
-  remind --list
+  add <label> <when> [options]      one-shot reminder
+  add <label> --repeat <spec> [options]
+  list [--json] [--all]             active records (or every record with --all)
+  edit <id> [options]               change fields, then sync
+  done <id>                         mark done (a repeat keeps its schedule)
+  delete <id>
+  sync                              rebuild the at queue and the crontab block
+  gc                                compact the store to active records
+  fire <id>                         what the clocks call; runs the action
 
-Notes are free text: urls, file paths, whatever the reminder needs. A line
-written as 'link: <url>' names the url the Open action takes; otherwise the
-first url anywhere in the notes wins.
+Options for add and edit:
+  --when <spec>       10m 2h 1d 1w, tomorrow, eod, eow, or anything date -d
+                      accepts: 'Tuesday 16:20', '2026-09-10 09:30', 'next monday 9:00'
+  --repeat <spec>     5-field cron ('0 9 * * 1') or 'every 7d' (m h d w units)
+  --subject <s>       task:<uuid>, url:<url>, or free text (stored as text:)
+  --action <a>        show (default), open, exec
+  --command <cmd>     literal command for the exec action
+  --origin <o>        who created it (cli, claude, dialog, migrate)
 
-Supported date and time modifiers:
-  m: minutes
-  h: hours
-  d: days
-  w: weeks
-  y: years
-  --: escape hatch for arbitrary 'at' modifiers
-EOF
+Dialog bindings used by the Argos applet:
+  add-dialog, edit-dialog <id>, delete-dialog <id>, open <id>
+USAGE
 }
 
-encode_message() {
-	printf '%s' "$1" | base64 -w0
+die() {
+	printf '%s\n' "$*" >&2
+	exit 1
 }
 
-decode_message() {
-	printf '%s' "$1" | base64 -d 2>/dev/null
+now_iso() {
+	date +%Y-%m-%dT%H:%M:%S%:z
 }
 
-prepare_state() {
-	mkdir -p "$(dirname "$STATE_FILE")"
-	touch "$STATE_FILE" "$STATE_LOCK"
+# ---------------------------------------------------------------- store ----
+
+prepare_store() {
+	mkdir -p "$(dirname "$STORE")"
+	[ -f "$STORE" ] || : >"$STORE"
+	touch "$LOCK"
 }
 
-# State rows are "job_id \t base64(text) \t base64(notes)". Rows written before
-# notes existed carry two fields; reading them leaves notes empty, and the next
-# write brings them up to three, so the file migrates itself.
-metadata_set() {
-	local job_id="$1"
-	local encoded="$2"
-	local encoded_notes="${3:-}"
-	local temp
-
-	prepare_state
-	exec 9>"$STATE_LOCK"
+lock_store() {
+	exec 9>"$LOCK"
 	flock 9
-	temp="$(mktemp "${STATE_FILE}.XXXXXX")"
-	awk -F '\t' -v id="$job_id" '$1 != id' "$STATE_FILE" >"$temp"
-	printf '%s\t%s\t%s\n' "$job_id" "$encoded" "$encoded_notes" >>"$temp"
-	mv "$temp" "$STATE_FILE"
+}
+
+unlock_store() {
 	flock -u 9
 }
 
-metadata_remove() {
-	local job_id="$1"
-	local temp
-
-	prepare_state
-	exec 9>"$STATE_LOCK"
-	flock 9
-	temp="$(mktemp "${STATE_FILE}.XXXXXX")"
-	awk -F '\t' -v id="$job_id" '$1 != id' "$STATE_FILE" >"$temp"
-	mv "$temp" "$STATE_FILE"
-	flock -u 9
+append_record() {
+	prepare_store
+	lock_store
+	printf '%s\n' "$1" >>"$STORE"
+	unlock_store
 }
 
-metadata_get() {
-	local job_id="$1"
-	[ -f "$STATE_FILE" ] || return 1
-	awk -F '\t' -v id="$job_id" '$1 == id { print $2; found=1; exit } END { if (!found) exit 1 }' "$STATE_FILE"
+# The last record per id wins. jq keeps object insertion order, so records
+# come out in first-seen order.
+current_records() {
+	prepare_store
+	jq -c -s 'reduce .[] as $r ({}; .[$r.id] = $r) | .[]' "$STORE"
 }
 
-# Notes are optional, so a missing third field is an empty string rather than a
-# failure. Only an unknown job id is an error.
-metadata_notes() {
-	local job_id="$1"
-	[ -f "$STATE_FILE" ] || return 1
-	awk -F '\t' -v id="$job_id" '$1 == id { print $3; found=1; exit } END { if (!found) exit 1 }' "$STATE_FILE"
+active_records() {
+	current_records | jq -c -s 'map(select(.status == "active")) | sort_by(.when // "9999") | .[]'
 }
 
-prune_metadata() {
-	local active_ids="$1"
-	local temp
-	local job_id encoded encoded_notes
-	declare -A active=()
-
-	while read -r job_id _; do
-		[[ "$job_id" =~ ^[0-9]+$ ]] && active["$job_id"]=1
-	done <<<"$active_ids"
-
-	prepare_state
-	exec 9>"$STATE_LOCK"
-	flock 9
-	temp="$(mktemp "${STATE_FILE}.XXXXXX")"
-	while IFS=$'\t' read -r job_id encoded encoded_notes; do
-		[ -n "${active[$job_id]:-}" ] \
-			&& printf '%s\t%s\t%s\n' "$job_id" "$encoded" "$encoded_notes" >>"$temp"
-	done <"$STATE_FILE"
-	mv "$temp" "$STATE_FILE"
-	flock -u 9
+get_record() {
+	local id="$1" record
+	record="$(current_records | jq -c --arg id "$id" 'select(.id == $id)' | tail -n1)"
+	[ -n "$record" ] || return 1
+	printf '%s' "$record"
 }
 
-list_records() {
-	local jobs
-	local job_id day month date clock year _queue _owner rest encoded encoded_notes
-	declare -A messages=()
-	declare -A note_map=()
-
-	jobs="$(atq 2>/dev/null || true)"
-	prune_metadata "$jobs"
-
-	while IFS=$'\t' read -r job_id encoded encoded_notes; do
-		[ -n "$job_id" ] || continue
-		messages["$job_id"]="$encoded"
-		note_map["$job_id"]="$encoded_notes"
-	done <"$STATE_FILE"
-
-	while read -r job_id day month date clock year _queue _owner rest; do
-		[[ "$job_id" =~ ^[0-9]+$ ]] || continue
-		printf '%s\t%s %s %s %s %s\t%s\t%s\n' \
-			"$job_id" "$day" "$month" "$date" "$clock" "$year" \
-			"${messages[$job_id]:-}" "${note_map[$job_id]:-}"
-	done <<<"$jobs"
+# Apply a jq filter to the current record and append the result. Empty and
+# null fields are dropped so `del(.when)` and `.when = ""` both clear a field.
+update_record() {
+	local id="$1" filter="$2" record updated
+	shift 2
+	record="$(get_record "$id")" || die "No reminder with id $id."
+	updated="$(jq -c "$@" "$filter | with_entries(select(.value != null and .value != \"\"))" <<<"$record")"
+	append_record "$updated"
 }
 
-job_schedule() {
-	local wanted="$1"
-	local job_id day month date clock year _queue _owner rest
-
-	while read -r job_id day month date clock year _queue _owner rest; do
-		if [ "$job_id" = "$wanted" ]; then
-			printf '%s %s %s %s %s' "$day" "$month" "$date" "$clock" "$year"
-			return 0
-		fi
-	done < <(atq 2>/dev/null)
-	return 1
+new_id() {
+	od -An -N4 -tx1 /dev/urandom | tr -d ' \n'
 }
 
-delay_for() {
-	local value="$1"
+valid_id() {
+	[[ "$1" =~ ^[0-9a-f]{8}$ ]]
+}
 
-	case "$value" in
-	tomorrow) printf '8:00 AM tomorrow' ;;
-	eow) printf '12:00 PM next Fri' ;;
-	eod) printf '8:00 PM' ;;
+# ---------------------------------------------------------------- time -----
+
+# Any spec becomes an exact local timestamp at minute precision, which is
+# what `at -t` takes. Shorthands first, then GNU date's own grammar.
+parse_when() {
+	local spec="$1" expr
+	case "$spec" in
+	tomorrow) expr='tomorrow 9:00' ;;
+	eod) expr='today 20:00' ;;
+	eow) expr='next friday 12:00' ;;
 	*)
-		if [[ "$value" =~ ^([0-9]+)([mhdwy])$ ]]; then
+		if [[ "$spec" =~ ^([0-9]+)([mhdw])$ ]]; then
 			case "${BASH_REMATCH[2]}" in
-			m) printf 'now + %s minutes' "${BASH_REMATCH[1]}" ;;
-			h) printf 'now + %s hours' "${BASH_REMATCH[1]}" ;;
-			d) printf 'now + %s days' "${BASH_REMATCH[1]}" ;;
-			w) printf 'now + %s weeks' "${BASH_REMATCH[1]}" ;;
-			y) printf 'now + %s years' "${BASH_REMATCH[1]}" ;;
+			m) expr="${BASH_REMATCH[1]} minutes" ;;
+			h) expr="${BASH_REMATCH[1]} hours" ;;
+			d) expr="${BASH_REMATCH[1]} days" ;;
+			w) expr="${BASH_REMATCH[1]} weeks" ;;
 			esac
 		else
-			return 1
+			expr="$spec"
 		fi
 		;;
 	esac
+	date -d "$expr" +%Y-%m-%dT%H:%M:00%:z 2>/dev/null || return 1
 }
 
-schedule_delay() {
-	local message="$1"
-	local delay="$2"
-	local notes="${3:-}"
-	local encoded encoded_notes command_output status job_id script_path
-	local display="${DISPLAY:-:0}"
-	local -a at_args
+# Accepts a 5-field cron line or `every <N><unit>`; returns the normalized form.
+parse_repeat() {
+	local spec="$1"
+	if [[ "$spec" =~ ^every[[:space:]]+([0-9]+)([mhdw])$ ]]; then
+		printf 'every %s%s' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"
+		return 0
+	fi
+	local -a fields
+	read -ra fields <<<"$spec"
+	[ "${#fields[@]}" -eq 5 ] || return 1
+	local f
+	for f in "${fields[@]}"; do
+		[[ "$f" =~ ^[0-9A-Za-z*,/-]+$ ]] || return 1
+	done
+	printf '%s' "${fields[*]}"
+}
 
-	encoded="$(encode_message "$message")"
-	encoded_notes="$(encode_message "$notes")"
-	script_path="$(readlink -f "$0" 2>/dev/null || printf '%s' "$0")"
+every_seconds() {
+	[[ "$1" =~ ^every\ ([0-9]+)([mhdw])$ ]] || return 1
+	local n="${BASH_REMATCH[1]}"
+	case "${BASH_REMATCH[2]}" in
+	m) printf '%s' $((n * 60)) ;;
+	h) printf '%s' $((n * 3600)) ;;
+	d) printf '%s' $((n * 86400)) ;;
+	w) printf '%s' $((n * 604800)) ;;
+	esac
+}
 
-	if [[ "$delay" == exact:* ]]; then
-		at_args=(-t "${delay#exact:}")
+at_time() {
+	date -d "$1" +%Y%m%d%H%M
+}
+
+epoch_of() {
+	date -d "$1" +%s
+}
+
+human_when() {
+	date -d "$1" '+%a %d %b %H:%M'
+}
+
+human_duration() {
+	local s="$1"
+	if [ "$s" -ge 86400 ]; then
+		printf '%dd %dh' $((s / 86400)) $((s % 86400 / 3600))
+	elif [ "$s" -ge 3600 ]; then
+		printf '%dh %dm' $((s / 3600)) $((s % 3600 / 60))
 	else
-		at_args=("$delay")
-	fi
-	# Both payloads reach the job body base64-encoded, so a url, a quote or a
-	# $(...) in the notes cannot reach a shell when the job fires.
-	# `|| status=$?` rather than a following `status=$?` line: `set -e` aborts
-	# the whole script the moment a command substitution fails, so an error
-	# branch after a bare assignment is unreachable and a rejected time spec
-	# loses the reminder with no output at all. `if !` would reach the branch
-	# but zero the status, so the caller could not tell success from failure.
-	status=0
-	command_output="$(printf 'DISPLAY=%q %q --notify %q %q\n' \
-		"$display" "$script_path" "$encoded" "$encoded_notes" | at "${at_args[@]}" 2>&1)" \
-		|| status=$?
-	if [ "$status" -ne 0 ]; then
-		printf 'at rejected the schedule %q:\n%s\n' "$delay" "$command_output" >&2
-		return "$status"
-	fi
-
-	job_id="$(sed -n 's/^job \([0-9][0-9]*\) at.*/\1/p' <<<"$command_output" | tail -n1)"
-	if [ -z "$job_id" ]; then
-		printf 'Reminder was queued, but its at job ID could not be read.\n' >&2
-		return 1
-	fi
-
-	metadata_set "$job_id" "$encoded" "$encoded_notes"
-	printf 'Scheduled reminder as at job %s.\n' "$job_id"
-}
-
-schedule_input() {
-	local message="$1"
-	local value="$2"
-	local notes="${3:-}"
-	local delay
-
-	if delay="$(delay_for "$value")"; then
-		schedule_delay "$message" "$delay" "$notes"
-	else
-		schedule_delay "$message" "$value" "$notes"
+		printf '%dm' $((s / 60))
 	fi
 }
 
-cancel_job() {
-	local job_id="$1"
-	[[ "$job_id" =~ ^[0-9]+$ ]] || return 2
-	atrm "$job_id" || return
-	metadata_remove "$job_id"
+# This box is off roughly 23:30 to 09:00. A one-shot in that window fires at
+# boot (atd runs every overdue spool job on its first pass); a cron line pinned
+# there never fires at all, so the warning is the whole safety net.
+warn_off_window() {
+	local kind="$1" hour="$2" minute="$3"
+	if [ "$hour" -lt 9 ] || { [ "$hour" -eq 23 ] && [ "$minute" -ge 30 ]; }; then
+		if [ "$kind" = when ]; then
+			printf 'Warning: %02d:%02d is in the off window (23:30-09:00); it will fire at the next boot.\n' "$hour" "$minute" >&2
+		else
+			printf 'Warning: cron hour %02d is in the off window (23:30-09:00); a pinned repeat never fires there. Use "every <N>d" for catch-up.\n' "$hour" >&2
+		fi
+	fi
+}
+
+check_off_window() {
+	local when="$1" repeat="$2" hour minute
+	if [ -n "$when" ]; then
+		hour="$((10#$(date -d "$when" +%H)))"
+		minute="$((10#$(date -d "$when" +%M)))"
+		warn_off_window when "$hour" "$minute"
+	fi
+	if [[ "$repeat" =~ ^([0-9]+)[[:space:]]+([0-9]+)[[:space:]] ]]; then
+		warn_off_window repeat "$((10#${BASH_REMATCH[2]}))" "$((10#${BASH_REMATCH[1]}))"
+	fi
+}
+
+# ------------------------------------------------------------- subjects ----
+
+# Typed subjects keep their prefix; anything else is the reminder's own text.
+normalize_subject() {
+	local subject="$1" uuid
+	case "$subject" in
+	'') printf '' ;;
+	task:*)
+		uuid="${subject#task:}"
+		if command -v task >/dev/null 2>&1; then
+			uuid="$(task rc.verbose=nothing rc.hooks=off _get "${uuid}.uuid" 2>/dev/null || true)"
+			[ -n "$uuid" ] || die "No task matches ${subject#task:}."
+		fi
+		printf 'task:%s' "$uuid"
+		;;
+	url:*) printf '%s' "$subject" ;;
+	text:*) printf '%s' "$subject" ;;
+	*) printf 'text:%s' "$subject" ;;
+	esac
+}
+
+subject_type() {
+	case "$1" in
+	task:*) printf 'task' ;;
+	url:*) printf 'url' ;;
+	text:*) printf 'text' ;;
+	*) printf '' ;;
+	esac
 }
 
 # Mirrors .taskopenrc's annotation grammar: a "link: <url>" line wins over a
-# bare url elsewhere in the notes, so a reminder carrying several urls can say
-# which one the Open action takes.
+# bare url elsewhere in the text.
 first_url() {
-	local notes="$1"
-	local url
-
-	# -m1 caps matching LINES, not matches: with -o a line holding two urls
-	# prints both, so head picks the first either way.
-	url="$(grep -om1 '^[[:space:]]*link:[[:space:]]\+https\?://[^[:space:]]\+' <<<"$notes" \
+	local text="$1" url
+	url="$(grep -om1 '^[[:space:]]*link:[[:space:]]\+https\?://[^[:space:]]\+' <<<"$text" \
 		| head -n1 | sed 's/^[[:space:]]*link:[[:space:]]*//')" || true
 	if [ -n "$url" ]; then
 		printf '%s' "$url"
 		return 0
 	fi
-
-	url="$(grep -om1 'https\?://[^[:space:]]\+' <<<"$notes" | head -n1)" || true
+	url="$(grep -om1 'https\?://[^[:space:]]\+' <<<"$text" | head -n1)" || true
 	[ -n "$url" ] || return 1
 	printf '%s' "$url"
 }
 
-open_url() {
-	"$URL_OPENER" "$1" >/dev/null 2>&1 || return 1
+subject_url() {
+	case "$1" in
+	url:*) printf '%s' "${1#url:}" ;;
+	text:*) first_url "${1#text:}" ;;
+	*) return 1 ;;
+	esac
 }
 
-open_link() {
-	local job_id="$1"
-	local encoded notes url
+task_field() {
+	task rc.verbose=nothing rc.hooks=off _get "$1.$2" 2>/dev/null || true
+}
 
-	[[ "$job_id" =~ ^[0-9]+$ ]] || return 2
-	encoded="$(metadata_notes "$job_id")" || {
-		show_error "At job $job_id has no tracked reminder."
-		return 1
+# Live view of a subject for display. A task is read now, by uuid.
+subject_body() {
+	case "$1" in
+	task:*) task_field "${1#task:}" description ;;
+	url:*) printf '%s' "${1#url:}" ;;
+	text:*) printf '%s' "${1#text:}" ;;
+	esac
+}
+
+# Title for a record: the label, else the live task description, else the subject.
+record_title() {
+	local record="$1" label subject body
+	label="$(jq -r '.label // ""' <<<"$record")"
+	if [ -n "$label" ]; then
+		printf '%s' "$label"
+		return 0
+	fi
+	subject="$(jq -r '.subject // ""' <<<"$record")"
+	body="$(subject_body "$subject")"
+	printf '%s' "${body:-$subject}"
+}
+
+open_url() {
+	"$URL_OPENER" "$1" >/dev/null 2>&1
+}
+
+# ---------------------------------------------------------------- clocks ---
+
+# Every queue-r job, one line each: job_id <TAB> epoch <TAB> reminder id.
+# The id is the last word of the job body; the environment dump above it is
+# never parsed.
+at_jobs() {
+	local job_id day month date clock year _queue _owner rid
+	while read -r job_id day month date clock year _queue _owner; do
+		[[ "$job_id" =~ ^[0-9]+$ ]] || continue
+		rid="$(at -c "$job_id" 2>/dev/null | grep -o 'fire [0-9a-f]\{8\}[[:space:]]*$' | tail -n1 | awk '{print $2}')" || true
+		printf '%s\t%s\t%s\n' "$job_id" "$(epoch_of "$day $month $date $clock $year")" "${rid:-}"
+	done < <(atq -q "$AT_QUEUE" 2>/dev/null || true)
+}
+
+at_schedule() {
+	local id="$1" when="$2" output status=0
+	output="$(printf '%q fire %s\n' "$SELF" "$id" | at -q "$AT_QUEUE" -t "$(at_time "$when")" 2>&1)" || status=$?
+	if [ "$status" -ne 0 ]; then
+		printf 'at rejected %s for %s:\n%s\n' "$when" "$id" "$output" >&2
+		return "$status"
+	fi
+}
+
+sync_at() {
+	local -A desired=() present=()
+	local id when job_id epoch rid record created=0 removed=0 failed=0
+
+	while IFS= read -r record; do
+		id="$(jq -r '.id' <<<"$record")"
+		when="$(jq -r '.when // ""' <<<"$record")"
+		[ -n "$when" ] && desired["$id"]="$(epoch_of "$when")"
+	done < <(active_records)
+
+	while IFS=$'\t' read -r job_id epoch rid; do
+		if [ -n "$rid" ] && [ "${desired[$rid]:-}" = "$epoch" ] && [ -z "${present[$rid]:-}" ]; then
+			present["$rid"]=1
+		else
+			atrm "$job_id" && removed=$((removed + 1))
+		fi
+	done < <(at_jobs)
+
+	for id in "${!desired[@]}"; do
+		[ -n "${present[$id]:-}" ] && continue
+		when="$(get_record "$id" | jq -r '.when')"
+		if at_schedule "$id" "$when"; then
+			created=$((created + 1))
+		else
+			failed=$((failed + 1))
+		fi
+	done
+	[ "$((created + removed))" -eq 0 ] || printf 'at: %s created, %s removed\n' "$created" "$removed"
+	[ "$failed" -eq 0 ]
+}
+
+cron_line() {
+	local id="$1" repeat="$2" seconds
+	if seconds="$(every_seconds "$repeat")"; then
+		printf '*/15 * * * * %s remind-%s %s -- %s remind-%s -- %s fire %s\n' \
+			"$CRON_EVERY" "$id" "$seconds" "$CRON_RUN" "$id" "$SELF" "$id"
+	else
+		printf '%s %s remind-%s -- %s fire %s\n' "$repeat" "$CRON_RUN" "$id" "$SELF" "$id"
+	fi
+}
+
+cron_block() {
+	local record id repeat
+	printf '%s\n' "$CRON_BEGIN"
+	printf '@reboot sleep 90 && %s sync\n' "$SELF"
+	while IFS= read -r record; do
+		id="$(jq -r '.id' <<<"$record")"
+		repeat="$(jq -r '.repeat // ""' <<<"$record")"
+		[ -n "$repeat" ] && cron_line "$id" "$repeat"
+	done < <(active_records)
+	printf '%s\n' "$CRON_END"
+}
+
+sync_cron() {
+	local current stripped block updated
+	current="$(crontab -l 2>/dev/null || true)"
+	stripped="$(awk -v b="$CRON_BEGIN" -v e="$CRON_END" '$0 == b {skip=1} !skip {print} $0 == e {skip=0}' <<<"$current")"
+	block="$(cron_block)"
+	updated="$(printf '%s\n\n%s\n' "$stripped" "$block" | sed '/./,$!d')"
+	[ "$updated" != "$current" ] || return 0
+	mkdir -p "$STATE_DIR"
+	printf '%s\n' "$current" >"$STATE_DIR/crontab.previous"
+	printf '%s\n' "$updated" | crontab -
+	printf 'crontab: managed block rewritten\n'
+}
+
+cmd_sync() {
+	sync_at
+	sync_cron
+}
+
+# ------------------------------------------------------------------ log ----
+
+log_fire() {
+	local id="$1" event="$2" detail="$3" label="$4"
+	mkdir -p "$(dirname "$FIRE_LOG")"
+	printf '%s\t%s\t%s\t%s\t%s\n' "$(now_iso)" "$id" "$event" "$detail" "$(printf '%s' "$label" | tr '\t\n' '  ')" >>"$FIRE_LOG"
+}
+
+# ---------------------------------------------------------------- verbs ----
+
+parse_options() {
+	# Fills opt_* variables and positional[] from "$@".
+	opt_when="" opt_repeat="" opt_subject="" opt_action="" opt_command="" opt_origin="" opt_label=""
+	positional=()
+	while [ $# -gt 0 ]; do
+		case "$1" in
+		--when) opt_when="${2:-}"; shift 2 ;;
+		--repeat) opt_repeat="${2:-}"; shift 2 ;;
+		--subject) opt_subject="${2:-}"; shift 2 ;;
+		--action) opt_action="${2:-}"; shift 2 ;;
+		--command) opt_command="${2:-}"; shift 2 ;;
+		--origin) opt_origin="${2:-}"; shift 2 ;;
+		--label) opt_label="${2:-}"; shift 2 ;;
+		--) shift; positional+=("$@"); break ;;
+		-*) die "Unknown option $1" ;;
+		*) positional+=("$1"); shift ;;
+		esac
+	done
+}
+
+validate_action() {
+	case "$1" in
+	show | open) ;;
+	exec) [ -n "$2" ] || die "The exec action needs --command." ;;
+	*) die "Unknown action $1 (show, open, exec)." ;;
+	esac
+}
+
+cmd_add() {
+	local label when repeat subject action id record
+	parse_options "$@"
+	label="${opt_label:-${positional[0]:-}}"
+	when="${opt_when:-${positional[1]:-}}"
+	[ -n "$label" ] || [ -n "$opt_subject" ] || die "A reminder needs a label or a subject."
+	[ -n "$when" ] || [ -n "$opt_repeat" ] || die "A reminder needs a time (<when>) or --repeat."
+	if [ -n "$when" ]; then
+		when="$(parse_when "$when")" || die "Cannot parse time: $when"
+	fi
+	repeat=""
+	if [ -n "$opt_repeat" ]; then
+		repeat="$(parse_repeat "$opt_repeat")" || die "Cannot parse repeat: $opt_repeat"
+	fi
+	subject="$(normalize_subject "$opt_subject")"
+	action="${opt_action:-show}"
+	validate_action "$action" "$opt_command"
+	id="$(new_id)"
+	record="$(jq -nc --arg id "$id" --arg label "$label" --arg when "$when" --arg repeat "$repeat" \
+		--arg action "$action" --arg subject "$subject" --arg command "$opt_command" \
+		--arg created "$(now_iso)" --arg origin "${opt_origin:-cli}" \
+		'{id:$id, label:$label, when:$when, repeat:$repeat, action:$action, subject:$subject,
+		  command:$command, created:$created, origin:$origin, status:"active"}
+		 | with_entries(select(.value != ""))')"
+	append_record "$record"
+	check_off_window "$when" "$repeat"
+	cmd_sync >/dev/null
+	if [ -n "$when" ]; then
+		printf 'Added %s: %s at %s\n' "$id" "$(record_title "$record")" "$(human_when "$when")"
+	else
+		printf 'Added %s: %s, repeat %s\n' "$id" "$(record_title "$record")" "$repeat"
+	fi
+}
+
+cmd_edit() {
+	local id="$1" filter='.' when repeat subject
+	shift
+	valid_id "$id" || die "Invalid id $id."
+	get_record "$id" >/dev/null || die "No reminder with id $id."
+	parse_options "$@"
+	if [ -n "$opt_when" ]; then
+		when="$(parse_when "$opt_when")" || die "Cannot parse time: $opt_when"
+		filter="$filter | .when = \"$when\""
+		check_off_window "$when" ""
+	fi
+	if [ -n "$opt_repeat" ]; then
+		repeat="$(parse_repeat "$opt_repeat")" || die "Cannot parse repeat: $opt_repeat"
+		filter="$filter | .repeat = \$repeat"
+		check_off_window "" "$repeat"
+	fi
+	if [ -n "$opt_subject" ]; then
+		subject="$(normalize_subject "$opt_subject")"
+		filter="$filter | .subject = \$subject"
+	fi
+	[ -n "$opt_label" ] && filter="$filter | .label = \$label"
+	[ -n "$opt_action" ] && { validate_action "$opt_action" "${opt_command:-$(get_record "$id" | jq -r '.command // ""')}"; filter="$filter | .action = \$action"; }
+	[ -n "$opt_command" ] && filter="$filter | .command = \$command"
+	update_record "$id" "$filter" --arg repeat "$repeat" --arg subject "$subject" \
+		--arg label "$opt_label" --arg action "$opt_action" --arg command "$opt_command"
+	cmd_sync >/dev/null
+	printf 'Updated %s\n' "$id"
+}
+
+# A one-shot is spent; a repeat drops its pending one-shot (a snooze) only.
+mark_done() {
+	local id="$1"
+	if [ -n "$(get_record "$id" | jq -r '.repeat // ""')" ]; then
+		update_record "$id" 'del(.when)'
+	else
+		update_record "$id" '.status = "done" | del(.when)'
+	fi
+}
+
+cmd_done() {
+	local id="$1"
+	valid_id "$id" || die "Invalid id $id."
+	mark_done "$id"
+	cmd_sync >/dev/null
+	log_fire "$id" "done" manual "$(record_title "$(get_record "$id")")"
+}
+
+cmd_delete() {
+	local id="$1"
+	valid_id "$id" || die "Invalid id $id."
+	update_record "$id" '.status = "deleted"'
+	cmd_sync >/dev/null
+	printf 'Deleted %s\n' "$id"
+}
+
+cmd_list() {
+	local json=0 all=0 records
+	while [ $# -gt 0 ]; do
+		case "$1" in
+		--json) json=1 ;;
+		--all) all=1 ;;
+		*) die "Unknown option $1" ;;
+		esac
+		shift
+	done
+	if [ "$all" -eq 1 ]; then
+		records="$(current_records)"
+	else
+		records="$(active_records)"
+	fi
+	if [ "$json" -eq 1 ]; then
+		list_json "$records"
+		return 0
+	fi
+	local record id when repeat action title
+	while IFS= read -r record; do
+		[ -n "$record" ] || continue
+		id="$(jq -r '.id' <<<"$record")"
+		when="$(jq -r '.when // ""' <<<"$record")"
+		repeat="$(jq -r '.repeat // ""' <<<"$record")"
+		action="$(jq -r '.action' <<<"$record")"
+		title="$(record_title "$record")"
+		printf '%s  %-16s  %-14s  %-5s  %s\n' "$id" "${when:+$(human_when "$when")}" "$repeat" "$action" "$title"
+	done <<<"$records"
+}
+
+# Records plus derived fields UIs need: a live title, the openable url, and
+# whether the one-shot time has passed. Consumers never touch subjects.
+list_json() {
+	local records="$1" record title url when overdue now
+	now="$(date +%s)"
+	while IFS= read -r record; do
+		[ -n "$record" ] || continue
+		title="$(record_title "$record")"
+		url="$(subject_url "$(jq -r '.subject // ""' <<<"$record")")" || url=""
+		when="$(jq -r '.when // ""' <<<"$record")"
+		overdue=false
+		[ -n "$when" ] && [ "$(epoch_of "$when")" -lt "$now" ] && overdue=true
+		jq -c --arg title "$title" --arg url "$url" --argjson overdue "$overdue" \
+			'. + {title: $title, url: $url, overdue: $overdue}' <<<"$record"
+	done <<<"$records" | jq -s .
+}
+
+cmd_gc() {
+	local kept
+	prepare_store
+	lock_store
+	kept="$(jq -c -s 'reduce .[] as $r ({}; .[$r.id] = $r) | .[] | select(.status == "active")' "$STORE")"
+	printf '%s\n' "$kept" | sed '/^$/d' >"$STORE.tmp"
+	mv "$STORE.tmp" "$STORE"
+	unlock_store
+	printf 'Compacted to %s active records.\n' "$(sed -n '$=' "$STORE" || echo 0)"
+}
+
+# ----------------------------------------------------------------- fire ----
+
+show_dialog() {
+	local id="$1" record="$2" title="$3" body="$4" url="$5" due="$6" late="$7"
+	local subject repeat response action when
+	subject="$(jq -r '.subject // ""' <<<"$record")"
+	repeat="$(jq -r '.repeat // ""' <<<"$record")"
+
+	while true; do
+		response="$(jq -nc --arg title "$title" --arg body "$body" --arg url "$url" \
+			--arg due "$due" --arg late "$late" --arg type "$(subject_type "$subject")" --arg repeat "$repeat" \
+			'{title:$title, body:$body, url:$url, due:$due, late:$late, subject_type:$type, repeat:$repeat}' \
+			| "$GUI" alert)" || {
+			log_fire "$id" dismissed "snooze $DEFAULT_SNOOZE" "$title"
+			return 0
+		}
+		action="$(jq -r '.action // ""' <<<"$response")"
+		case "$action" in
+		open)
+			[ -n "$url" ] && { open_url "$url" || true; }
+			;;
+		done)
+			case "$subject" in
+			task:*) task rc.verbose=nothing "${subject#task:}" "done" >/dev/null 2>&1 || true ;;
+			esac
+			mark_done "$id"
+			cmd_sync >/dev/null
+			log_fire "$id" "done" "$action" "$title"
+			return 0
+			;;
+		snooze)
+			when="$(jq -r '.when // ""' <<<"$response")"
+			when="$(parse_when "$when")" || when="$(parse_when "$DEFAULT_SNOOZE")"
+			update_record "$id" '.when = $when' --arg when "$when"
+			cmd_sync >/dev/null
+			log_fire "$id" snoozed "$when" "$title"
+			return 0
+			;;
+		*)
+			log_fire "$id" dismissed "snooze $DEFAULT_SNOOZE" "$title"
+			return 0
+			;;
+		esac
+	done
+}
+
+cmd_fire() {
+	local id="$1" record status action subject type title body url due late command
+	valid_id "$id" || die "Invalid id $id."
+	export DISPLAY="${DISPLAY:-:0}"
+	export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=/run/user/$(id -u)/bus}"
+
+	record="$(get_record "$id")" || {
+		log_fire "$id" missing "" ""
+		return 0
 	}
-	notes="$(decode_message "$encoded")"
-	url="$(first_url "$notes")" || {
+	status="$(jq -r '.status' <<<"$record")"
+	title="$(record_title "$record")"
+	if [ "$status" != active ]; then
+		log_fire "$id" skipped "status $status" "$title"
+		return 0
+	fi
+
+	subject="$(jq -r '.subject // ""' <<<"$record")"
+	type="$(subject_type "$subject")"
+	if [ "$type" = task ]; then
+		status="$(task_field "${subject#task:}" status)"
+		case "$status" in
+		pending | waiting) ;;
+		*)
+			log_fire "$id" skipped "task ${status:-gone}" "$title"
+			mark_done "$id"
+			cmd_sync >/dev/null
+			return 0
+			;;
+		esac
+	fi
+	body="$(subject_body "$subject")"
+	url="$(subject_url "$subject")" || url=""
+
+	due="$(jq -r '.when // ""' <<<"$record")"
+	late=""
+	if [ -n "$due" ]; then
+		local late_s=$(($(date +%s) - $(epoch_of "$due")))
+		[ "$late_s" -gt "$LATE_AFTER" ] && late="$(human_duration "$late_s")"
+	fi
+	action="$(jq -r '.action' <<<"$record")"
+	log_fire "$id" fired "${action}${due:+ due $due}${late:+ late $late}" "$title"
+
+	case "$action" in
+	show)
+		# Provisional snooze before the dialog: if it dies with the session,
+		# the reminder comes back instead of vanishing.
+		update_record "$id" '.when = $when | .last_fired = $now' \
+			--arg when "$(parse_when "$DEFAULT_SNOOZE")" --arg now "$(now_iso)"
+		cmd_sync >/dev/null
+		show_dialog "$id" "$record" "$title" "$body" "$url" "${due:+$(human_when "$due")}" "$late"
+		;;
+	open)
+		update_record "$id" '.last_fired = $now' --arg now "$(now_iso)"
+		if [ -n "$url" ]; then
+			if open_url "$url"; then
+				log_fire "$id" opened "$url" "$title"
+			else
+				log_fire "$id" failed "open $url" "$title"
+			fi
+		else
+			log_fire "$id" failed "no url" "$title"
+		fi
+		mark_done "$id"
+		cmd_sync >/dev/null
+		;;
+	exec)
+		update_record "$id" '.last_fired = $now' --arg now "$(now_iso)"
+		command="$(jq -r '.command // ""' <<<"$record")"
+		local rc=0
+		bash -c "$command" || rc=$?
+		log_fire "$id" exec "rc=$rc" "$title"
+		mark_done "$id"
+		cmd_sync >/dev/null
+		;;
+	esac
+}
+
+# -------------------------------------------------------------- dialogs ----
+
+show_error() {
+	jq -nc --arg message "$1" '{message:$message}' | "$GUI" error >/dev/null 2>&1 || true
+}
+
+cmd_open() {
+	local id="$1" url
+	valid_id "$id" || die "Invalid id $id."
+	url="$(subject_url "$(get_record "$id" | jq -r '.subject // ""')")" || {
 		show_error "This reminder carries no link to open."
 		return 1
 	}
 	open_url "$url" || show_error "Could not open $url"
 }
 
-notify() {
-	local message="$1"
-	local notes="${2:-}"
-	local response action delay url
-
-	url="$(first_url "$notes")" || url=""
-
-	while true; do
-		response="$(jq -nc --arg message "$message" --arg notes "$notes" --arg url "$url" \
-			'{message:$message, notes:$notes, url:$url}' | "$GUI" alert)" || break
-		action="$(jq -r '.action // ""' <<<"$response")"
-		case "$action" in
-		open)
-			[ -n "$url" ] && { open_url "$url" || true; }
-			;;
-		acknowledge)
-			task log "$message" +reminder
-			break
-			;;
-		snooze)
-			delay="$(jq -r '.minutes // ""' <<<"$response")"
-			if [[ "$delay" =~ ^[0-9]+$ ]]; then
-				sleep $((delay * 60))
-			else
-				break
-			fi
-			;;
-		*) break ;;
-		esac
-	done
-}
-
-show_error() {
-	jq -nc --arg message "$1" '{message:$message}' | "$GUI" error >/dev/null 2>&1 || true
-}
-
-add_dialog() {
-	local response message when notes
-
+cmd_add_dialog() {
+	local response label when repeat subject
 	response="$(jq -nc '{title:"Add reminder"}' | "$GUI" form)" || return 0
-	message="$(jq -er '.message | select(length > 0)' <<<"$response")" || return 0
-	when="$(jq -er '.when | select(length > 0)' <<<"$response")" || return 0
-	notes="$(jq -r '.notes // ""' <<<"$response")"
-
-	schedule_input "$message" "$when" "$notes" || {
-		show_error "Could not schedule the reminder for: $when"
+	label="$(jq -r '.label // ""' <<<"$response")"
+	when="$(jq -r '.when // ""' <<<"$response")"
+	repeat="$(jq -r '.repeat // ""' <<<"$response")"
+	subject="$(jq -r '.subject // ""' <<<"$response")"
+	local -a args=()
+	[ -n "$label" ] && args+=(--label "$label")
+	[ -n "$when" ] && args+=(--when "$when")
+	[ -n "$repeat" ] && args+=(--repeat "$repeat")
+	[ -n "$subject" ] && args+=(--subject "$subject")
+	cmd_add "${args[@]}" --origin dialog 2>"$STATE_DIR/.dialog-error" || {
+		show_error "$(cat "$STATE_DIR/.dialog-error")"
 		return 1
 	}
 }
 
-edit_dialog() {
-	local job_id="$1"
-	local encoded response message when notes current_schedule exact_time
-
-	encoded="$(metadata_get "$job_id")" || {
-		show_error "This at job has no reminder text to edit."
+cmd_edit_dialog() {
+	local id="$1" record label when shown_when repeat subject response
+	valid_id "$id" || die "Invalid id $id."
+	record="$(get_record "$id")" || die "No reminder with id $id."
+	label="$(jq -r '.label // ""' <<<"$record")"
+	when="$(jq -r '.when // ""' <<<"$record")"
+	repeat="$(jq -r '.repeat // ""' <<<"$record")"
+	subject="$(jq -r '.subject // ""' <<<"$record")"
+	shown_when="${when:+$(date -d "$when" '+%Y-%m-%d %H:%M')}"
+	response="$(jq -nc --arg label "$label" --arg when "$shown_when" --arg repeat "$repeat" --arg subject "$subject" \
+		'{title:"Edit reminder", label:$label, when:$when, repeat:$repeat, subject:$subject}' | "$GUI" form)" || return 0
+	local -a args=()
+	local value
+	value="$(jq -r '.label // ""' <<<"$response")"
+	[ "$value" != "$label" ] && args+=(--label "$value")
+	value="$(jq -r '.when // ""' <<<"$response")"
+	[ "$value" != "$shown_when" ] && [ -n "$value" ] && args+=(--when "$value")
+	value="$(jq -r '.repeat // ""' <<<"$response")"
+	[ "$value" != "$repeat" ] && [ -n "$value" ] && args+=(--repeat "$value")
+	value="$(jq -r '.subject // ""' <<<"$response")"
+	[ "$value" != "$subject" ] && [ -n "$value" ] && args+=(--subject "$value")
+	[ "${#args[@]}" -gt 0 ] || return 0
+	cmd_edit "$id" "${args[@]}" 2>"$STATE_DIR/.dialog-error" || {
+		show_error "$(cat "$STATE_DIR/.dialog-error")"
 		return 1
 	}
-	message="$(decode_message "$encoded")" || return 1
-	notes="$(decode_message "$(metadata_notes "$job_id")")"
-	current_schedule="$(job_schedule "$job_id")" || {
-		show_error "At job $job_id is no longer active."
-		return 1
-	}
-	response="$(jq -nc --arg message "$message" --arg when "$current_schedule" --arg notes "$notes" \
-		'{title:"Edit and reschedule reminder", message:$message, when:$when, notes:$notes}' | "$GUI" form)" || return 0
-	message="$(jq -er '.message | select(length > 0)' <<<"$response")" || return 0
-	when="$(jq -er '.when | select(length > 0)' <<<"$response")" || return 0
-	notes="$(jq -r '.notes // ""' <<<"$response")"
-	if [ "$when" = "$current_schedule" ]; then
-		exact_time="$(date -d "$current_schedule" +%Y%m%d%H%M)" || {
-			show_error "Could not preserve the current reminder time."
-			return 1
-		}
-		when="exact:$exact_time"
-	fi
-
-	schedule_input "$message" "$when" "$notes" || {
-		show_error "Could not schedule the replacement for: $when"
-		return 1
-	}
-	cancel_job "$job_id"
 }
 
-cancel_dialog() {
-	local job_id="$1"
-
-	jq -nc --arg message "Cancel at job $job_id?" \
-		'{title:"Cancel reminder", message:$message, confirm_label:"Cancel reminder"}' \
+cmd_delete_dialog() {
+	local id="$1" title
+	valid_id "$id" || die "Invalid id $id."
+	title="$(record_title "$(get_record "$id")")"
+	jq -nc --arg message "Delete reminder: $title?" \
+		'{title:"Delete reminder", message:$message, confirm_label:"Delete"}' \
 		| "$GUI" confirm >/dev/null || return 0
-	cancel_job "$job_id" || show_error "Could not cancel at job $job_id."
+	cmd_delete "$id" >/dev/null
 }
 
-adopt_dialog() {
-	local job_id="$1"
-	local response message
+# ----------------------------------------------------------------- main ----
 
-	[[ "$job_id" =~ ^[0-9]+$ ]] || return 2
-	if ! atq 2>/dev/null | awk -v id="$job_id" '$1 == id { found=1 } END { exit !found }'; then
-		show_error "At job $job_id is no longer active."
-		return 1
-	fi
-	response="$(jq -nc --arg job "$job_id" '{job:$job}' | "$GUI" name)" || return 0
-	message="$(jq -er '.message | select(length > 0)' <<<"$response")" || return 0
-	metadata_set "$job_id" "$(encode_message "$message")"
-}
-
-if [[ "${3:-}" == "internal" ]]; then
-	notify "$1"
-	exit
-fi
-
-case "${1:-}" in
---notify)
-	# ${3:-} is empty for jobs queued before notes existed, which is exactly
-	# the "no notes" case, so old at jobs still fire correctly.
-	notify "$(decode_message "${2:-}")" "$(decode_message "${3:-}")"
-	;;
---open-link)
-	open_link "${2:-}"
-	;;
--l|--list)
-	atq
-	;;
---records)
-	list_records
-	;;
---add-dialog)
-	add_dialog
-	;;
---edit-dialog)
-	edit_dialog "${2:-}"
-	;;
---cancel)
-	cancel_job "${2:-}"
-	;;
---cancel-dialog)
-	cancel_dialog "${2:-}"
-	;;
---adopt-dialog)
-	adopt_dialog "${2:-}"
-	;;
--h|--help|"")
-	display_help
-	;;
-*)
-	message="$1"
-	if [ "${2:-}" = "--" ]; then
-		[ -n "${3:-}" ] || { printf 'Missing time after --.\n' >&2; exit 2; }
-		[ "${4:-}" = "--note" ] && notes="${5:-}" || notes=""
-		schedule_delay "$message" "$3" "$notes"
-	else
-		delay="$(delay_for "${2:-}")" || { printf 'Invalid time format.\n' >&2; exit 1; }
-		[ "${3:-}" = "--note" ] && notes="${4:-}" || notes=""
-		schedule_delay "$message" "$delay" "$notes"
-	fi
-	;;
+verb="${1:-}"
+[ $# -gt 0 ] && shift
+case "$verb" in
+add) cmd_add "$@" ;;
+list) cmd_list "$@" ;;
+edit) [ -n "${1:-}" ] || die "edit needs an id."; cmd_edit "$@" ;;
+done) [ -n "${1:-}" ] || die "done needs an id."; cmd_done "$1" ;;
+delete) [ -n "${1:-}" ] || die "delete needs an id."; cmd_delete "$1" ;;
+sync) cmd_sync ;;
+gc) cmd_gc ;;
+fire) [ -n "${1:-}" ] || die "fire needs an id."; cmd_fire "$1" ;;
+open) [ -n "${1:-}" ] || die "open needs an id."; cmd_open "$1" ;;
+add-dialog) cmd_add_dialog ;;
+edit-dialog) [ -n "${1:-}" ] || die "edit-dialog needs an id."; cmd_edit_dialog "$1" ;;
+delete-dialog) [ -n "${1:-}" ] || die "delete-dialog needs an id."; cmd_delete_dialog "$1" ;;
+-h | --help | "") usage ;;
+*) die "Unknown verb $verb. Try remind --help." ;;
 esac
