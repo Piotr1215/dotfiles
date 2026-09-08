@@ -271,6 +271,32 @@ only_id() {
   grep -q "	$id	dismissed	snooze" "$REMINDER_LOG"
 }
 
+@test "a re-fire while the dialog is still open refreshes the snooze instead of opening a second dialog" {
+  "$REMINDER" add "Away from desk" '2026-09-08 09:00' >/dev/null
+  id="$(only_id)"
+  cat >"$REMINDER_GUI" <<'STUB'
+#!/usr/bin/env bash
+cat >/dev/null
+printf '.\n' >>"$TEST_ALERT_REQUEST.count"
+sleep 2
+printf '{"action":"done"}\n'
+STUB
+  chmod +x "$REMINDER_GUI"
+
+  "$REMINDER" fire "$id" &
+  first=$!
+  sleep 0.5
+  run "$REMINDER" fire "$id"
+  [ "$status" -eq 0 ]
+  wait "$first"
+
+  [ "$(wc -l <"$TEST_ALERT_REQUEST.count")" -eq 1 ]
+  grep -q "	$id	skipped	dialog already open, snoozed to " "$REMINDER_LOG"
+  grep -q "	$id	done	done	Away from desk$" "$REMINDER_LOG"
+  [ "$(last_record | jq -r '.status')" = done ]
+  [ "$(last_record | jq -r '.when // "none"')" = none ]
+}
+
 @test "task done from the dialog completes the task by uuid" {
   "$REMINDER" add "" 1h --subject task:f5b77f7b-29ba-4167-a161-71d35b73b807 >/dev/null
   id="$(only_id)"

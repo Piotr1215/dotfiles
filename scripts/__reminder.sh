@@ -690,10 +690,23 @@ cmd_fire() {
 	show)
 		# Provisional snooze before the dialog: if it dies with the session,
 		# the reminder comes back instead of vanishing.
+		local snooze_until
+		snooze_until="$(parse_when "$DEFAULT_SNOOZE")"
 		update_record "$id" '.when = $when | .last_fired = $now' \
-			--arg when "$(parse_when "$DEFAULT_SNOOZE")" --arg now "$(now_iso)"
+			--arg when "$snooze_until" --arg now "$(now_iso)"
 		cmd_sync >/dev/null
+		# One dialog per reminder. The provisional snooze re-fires while an
+		# unanswered dialog is still on screen (measured: 15 minutes away from
+		# the desk produced two dialogs), so a fire that finds the lock held
+		# only refreshed the snooze above and leaves the open dialog to decide.
+		mkdir -p "$STATE_DIR"
+		exec 8>"$STATE_DIR/fire-$id.lock"
+		if ! flock -n 8; then
+			log_fire "$id" skipped "dialog already open, snoozed to $snooze_until" "$title"
+			return 0
+		fi
 		show_dialog "$id" "$record" "$title" "$body" "$url" "${due:+$(human_when "$due")}" "$late"
+		flock -u 8
 		;;
 	open)
 		update_record "$id" '.last_fired = $now' --arg now "$(now_iso)"
