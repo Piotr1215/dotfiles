@@ -879,3 +879,43 @@ air() {
     print -u2 "resuming $sid in $dir"
     (cd -- "$dir" && __claude_with_monitor.sh --resume "$sid")
 }
+
+# PROJECT: gnome-shell-stutter
+# Is the desktop stop-and-go coming back? Reads gnome-shell's size, samples its
+# main thread for 5s, and says what to do. Background: 2026-09-09, GNOME Shell 46
+# leaks every destroyed submenu item (popupmenu-leakfix@dotfiles closes it).
+function check_stutter() {
+    local pid rss cpu_s up_s ext state
+    pid=$(pgrep -x gnome-shell | head -1) || { print -u2 "gnome-shell not running"; return 1 }
+    read -r rss cpu_s up_s <<< "$(ps -o rss=,cputimes=,etimes= -p "$pid")"
+    ext=$(gnome-extensions info popupmenu-leakfix@dotfiles 2>/dev/null | awk '/State:/{print $2}')
+    printf 'gnome-shell: %d MB resident, %d min cpu over %.1f h, leakfix %s\n' \
+        $((rss / 1024)) $((cpu_s / 60)) $((up_s / 3600.0)) "${ext:-MISSING}"
+
+    # 5s of 100ms buckets on the main thread; 10 ticks = a full core for the
+    # whole bucket. A run of 3+ such buckets is the freeze you feel.
+    local prev cur d stalls=0 worst=0 run=0
+    prev=$(awk '{print $14+$15}' /proc/$pid/task/$pid/stat)
+    for _ in {1..50}; do
+        sleep 0.1
+        cur=$(awk '{print $14+$15}' /proc/$pid/task/$pid/stat)
+        d=$((cur - prev)); prev=$cur
+        if (( d >= 8 )); then run=$((run + 1)); (( run > worst )) && worst=$run
+        else (( run >= 3 )) && stalls=$((stalls + 1)); run=0; fi
+    done
+    (( run >= 3 )) && stalls=$((stalls + 1))
+    printf 'main thread: %d freezes of 300ms+ in 5s, longest %dms\n' $stalls $((worst * 100))
+
+    print
+    if (( stalls > 0 || rss > 900000 )); then
+        print "VERDICT: stuttering. Alt+F2, r, Enter restarts the shell in place (windows stay)."
+        print "Then find the new leaker: dump the heap and count dead menu items, see"
+        print "commit 06e9c506 in dotfiles for the method. Check leakfix is ACTIVE above."
+    elif (( rss > 600000 )); then
+        print "VERDICT: growing. Fine for now; if it passes 900 MB or freezes appear, restart."
+        print "Note the number and re-run in an hour: steady means done, climbing means a leak."
+    else
+        print "VERDICT: healthy. Fresh shell is ~420 MB; anything under 600 MB is normal."
+        print "If video still hops, the cause is not the shell: check the player, not here."
+    fi
+}
