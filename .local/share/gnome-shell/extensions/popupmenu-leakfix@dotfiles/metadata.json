@@ -1,0 +1,7 @@
+{
+  "name": "PopupMenu Leak Fix",
+  "description": "Releases the SignalManager tracker GNOME Shell 46 leaks for every destroyed PopupSubMenuMenuItem",
+  "uuid": "popupmenu-leakfix@dotfiles",
+  "shell-version": ["46"],
+  "url": ""
+}
