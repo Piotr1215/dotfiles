@@ -10,7 +10,7 @@ set -uo pipefail
 # known-broken 580.159.03 ships (a candidate fix worth evaluating to unpin).
 # Mails a daily status via msmtp using Piotr's header/ANSI-strip mechanism.
 
-readonly EXPECTED="580.119.02"        # pinned-good version
+readonly EXPECTED="580.173.02"        # soaked 12h with 8 EVE clients on 2026-09-04, zero VA-mapping hits (~/.local/state/nvidia-173-soak-evidence.txt)
 readonly BROKEN_LATEST="580.159.03"   # current broken latest; newer => candidate fix
 readonly MAILTO="piotrzan@gmail.com"
 readonly DRIVER_PKG="nvidia-driver-580-open"
