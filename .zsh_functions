@@ -906,14 +906,26 @@ function check_stutter() {
     (( run >= 3 )) && stalls=$((stalls + 1))
     printf 'main thread: %d freezes of 300ms+ in 5s, longest %dms\n' $stalls $((worst * 100))
 
+    # remember the last reading so the verdict reads the trend, not a fixed line:
+    # the shell sits at ~700 MB with four EVE clients composited and drops back
+    # after, which a threshold alone reports as growing
+    local state=${XDG_STATE_HOME:-$HOME/.local/state}/check_stutter.last last_rss=0 last_at=0
+    [[ -r $state ]] && read -r last_rss last_at < "$state"
+    print "$rss $(date +%s)" > "$state"
+    local delta=$(( (rss - last_rss) / 1024 )) since=$(( ($(date +%s) - last_at) / 60 ))
+    (( last_rss > 0 )) && printf 'since last check: %+d MB in %d min\n' $delta $since
+
     print
     if (( stalls > 0 || rss > 900000 )); then
         print "VERDICT: stuttering. Alt+F2, r, Enter restarts the shell in place (windows stay)."
         print "Then find the new leaker: dump the heap and count dead menu items, see"
         print "commit 06e9c506 in dotfiles for the method. Check leakfix is ACTIVE above."
+    elif (( rss > 600000 && last_rss > 0 && delta > 50 && since >= 30 )); then
+        print "VERDICT: climbing. Up $delta MB since the last check with nothing new open."
+        print "Re-run in an hour; a second climb of that size means a leak, restart and hunt it."
     elif (( rss > 600000 )); then
-        print "VERDICT: growing. Fine for now; if it passes 900 MB or freezes appear, restart."
-        print "Note the number and re-run in an hour: steady means done, climbing means a leak."
+        print "VERDICT: high but flat. Big composited windows (EVE, 4K video) hold ~700 MB"
+        print "and release it when closed; only a climb between checks means a leak."
     else
         print "VERDICT: healthy. Fresh shell is ~420 MB; anything under 600 MB is normal."
         print "If video still hops, the cause is not the shell: check the player, not here."
