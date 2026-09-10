@@ -909,9 +909,15 @@ function check_stutter() {
     # remember the last reading so the verdict reads the trend, not a fixed line:
     # the shell sits at ~700 MB with four EVE clients composited and drops back
     # after, which a threshold alone reports as growing
-    local state=${XDG_STATE_HOME:-$HOME/.local/state}/check_stutter.last last_rss=0 last_at=0
-    [[ -r $state ]] && read -r last_rss last_at < "$state"
-    print "$rss $(date +%s)" > "$state"
+    local state=${XDG_STATE_HOME:-$HOME/.local/state}/check_stutter.last last_rss=0 last_at=0 last_start=0
+    local now=$(date +%s) start=$(( $(date +%s) - up_s ))
+    [[ -r $state ]] && read -r last_rss last_at last_start < "$state"
+    print "$rss $now $start" > "$state"
+    # a different start time means a new shell (reboot, Alt+F2 r); no delta across instances
+    if (( last_rss > 0 && last_start != start )); then
+        print "since last check: shell restarted, no trend yet"
+        last_rss=0
+    fi
     local delta=$(( (rss - last_rss) / 1024 )) since=$(( ($(date +%s) - last_at) / 60 ))
     (( last_rss > 0 )) && printf 'since last check: %+d MB in %d min\n' $delta $since
 
