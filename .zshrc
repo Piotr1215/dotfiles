@@ -1,5 +1,7 @@
 # zmodload zsh/zprof
 zmodload zsh/mapfile # Bring mapfile functionality similar to bash
+typeset -U path  # Dedupe PATH
+path=($path)     # Force deduplication of inherited PATH
 
 # Path to your oh-my-zsh installation.
 export ZSH="${HOME}/.oh-my-zsh"
@@ -12,7 +14,7 @@ ZSH_AUTOSUGGEST_PARTIAL_ACCEPT_WIDGETS=(forward-word)
 bindkey '^[[1;5C' forward-word  # Ctrl+Right Arrow
 export XCURSOR_SIZE=24
 
-if [[ -z ${TMUX+X}${ZSH_SCRIPT+X}${ZSH_EXECUTION_STRING+X} ]]; then
+if [[ -z ${TMUX+X}${ZSH_SCRIPT+X}${ZSH_EXECUTION_STRING+X} ]] && [[ "$(tty)" != /dev/tty* ]]; then
   tmuxinator start poke
 fi
 
@@ -35,8 +37,11 @@ fpath=(${HOME}/dev/dotfiles/.zsh/completions $fpath)
 
 # PUGINS & MODULES
 # fzf-tab should be last because it binds to ^I
-zstyle ':zsh-jumper:' picker-opts '--height=50% --reverse --border --prompt="JUMP → "'
-plugins=(z kubectl zsh-autosuggestions zsh-syntax-highlighting web-search colored-man-pages sudo zsh-jumper)
+zstyle ':zledit:' binding '^X^X'  # Ctrl+X Ctrl+X to trigger zledit
+zstyle ':zledit:' picker fzf
+zstyle ':zledit:' picker-opts '--reverse --border --prompt="JUMP → "'
+zstyle ':zledit:' config ~/.config/zledit/config.toml
+plugins=(z kubectl zsh-autosuggestions zsh-syntax-highlighting web-search colored-man-pages sudo zledit)
 source /home/decoder/dev/fzf-tab/fzf-tab.plugin.zsh
 source $ZSH/oh-my-zsh.sh
 
@@ -73,6 +78,10 @@ zstyle ':completion:*' list-colors ${(s.:.)LS_COLORS}
 # force zsh not to show completion menu, which allows fzf-tab to capture the unambiguous prefix
 zstyle ':completion:*' menu no
 zstyle ':completion:*' use-cache on
+# Let TAB expand global aliases (A, C, G, L, R ...) in place, so completion
+# can see the real command behind them instead of an opaque single letter.
+zstyle ':completion:*' completer _expand_alias _complete _ignored
+zstyle ':completion:*:expand-alias:*' global true
 zstyle ':completion:*' cache-path $ZSH_CACHE_DIR
 # preview directory's content with eza when completing cd
 zstyle ':fzf-tab:complete:cd:*' fzf-preview 'eza -1 --color=always $realpath'
@@ -122,31 +131,25 @@ fi
 # EXPORT & PATH
 export XDG_CONFIG_HOME=~/.config
 export XDG_CONFIG_DIRS=/home/decoder/dev/dotfiles/.config/nvim:$XDG_CONFIG_DIRS
-export FZF_BASE=/usr/bin/fzf
 export FZF_DEFAULT_COMMAND='fd --hidden --exclude .git'
 export FZF_CTRL_T_COMMAND='fd --hidden'
 export FZF_ALT_C_COMMAND='fd --hidden'
-export VISUAL=nvim
-export PATH=/home/decoder/.nimble/bin:$PATH
-export KUBECONFIG=${KUBECONFIG:-~/.kube/config}
 export GOBIN=$HOME/go/bin
-export PATH="/home/decoder/.local/bin:$PATH"
-export PATH=$PATH:$GOPATH/bin
-export PATH=$PATH:$HOME/.krew/bin
-export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
+
+# PATH additions (each path added once)
 export PATH=$HOME/.local/bin:$PATH
+export PATH=$HOME/.nimble/bin:$PATH
+export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
 export PATH=$HOME/scripts:$PATH
 export PATH=$HOME/go/bin:$PATH
 export PATH=$HOME/go:$PATH
 export PATH=/usr/local/go/bin:$PATH
-export PATH=$PATH:$HOME/.istioctl/bin
 export PATH=$HOME/.claude/scripts:$PATH
+export PATH=$PATH:$HOME/.istioctl/bin
 export PATH=$PATH:$HOME/dev/dotfiles/scripts
 export PATH=$PATH:$HOME/.luarocks/bin
-export PATH=$PATH:$HOME/.local/bin
 export PATH=$PATH:$HOME/.arkade/bin/
 export FONTCONFIG_PATH=/etc/fonts
-export EDITOR=nvim
 export GH_USER=Piotr1215
 export STARSHIP_CONFIG=${HOME}/.config/starship.toml
 export PLANTUML_LIMIT_SIZE=8192
@@ -165,8 +168,8 @@ fi
 
 # source ~/.github_variables
 
-[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
-# zvm removed - using zsh-jumper now
+source <(fzf --zsh)
+# zvm removed - using zledit now
 
 function pex() {
     pet exec
@@ -179,16 +182,6 @@ function prev() {
   PREV=$(fc -lrn | head -n 1)
   sh -c "pet new -t  `printf %q "$PREV"`"
 }
-
-function open_fabric() {
-  alacritty --working-directory "$(pwd)" -e zsh -c '
-    __orchestrator.sh
-  '
-}
-
-# Binds Ctrl+Alt+A to open_fabric
-bindkey "^X^A" open_fabric                # Ctrl+X Ctrl+A: Opens fabric script
-zle -N open_fabric
 
 function email_analysis() {
     local cmd
@@ -304,13 +297,14 @@ bindkey '^X^P' paste_file_content
 
 function copy_file_content() {
   local selected_file
+  zle -I
   selected_file=$(fd --type f | fzf --height 40% --reverse)
   if [[ -n "$selected_file" ]]; then
-      xclip -selection clipboard -in "$selected_file"
+      xclip -selection clipboard < "$selected_file"
+      echo -n "File $selected_file content copied"
   else
     zle -M "No file selected."
   fi
-  echo -n "File $selected_file copied"
   zle accept-line
 }
 
@@ -350,6 +344,29 @@ copy-line-to-clipboard() {
 zle -N copy-line-to-clipboard
 bindkey '^Y' copy-line-to-clipboard       # Ctrl+Y: Copies line to clipboard
 bindkey '^@' autosuggest-accept           # Ctrl+@: Accepts autosuggestion
+
+# Ctrl+X Ctrl+W : frequency-ranked history-word completion (replaces the word under the cursor).
+# Like an IDE dropdown - type "kube", hit the chord, pick "kubectl" from your most-used words.
+fzf-history-word() {
+  local prefix=${LBUFFER##* }
+  local word
+  word=$(fc -ln 1 \
+    | tr -cs 'A-Za-z0-9_./:@%+-' '\n' \
+    | grep -vE '^-' \
+    | grep -E '^.{2,}$' \
+    | sort | uniq -c | sort -rn \
+    | sed -E 's/^ *[0-9]+ //' \
+    | fzf --no-sort --height 40% --reverse --query "$prefix" --prompt 'history-word> ') \
+    || { zle redisplay; return }
+  LBUFFER="${LBUFFER%$prefix}$word"
+  zle reset-prompt
+}
+zle -N fzf-history-word
+bindkey '^X^W' fzf-history-word           # Ctrl+X Ctrl+W: frequency-ranked history-word completion
+
+# Ctrl+X w: complete words, phrases, lines, or structured spans from pane + history.
+source "$HOME/dev/dotfiles/.zsh/pane-text-completion.zsh"
+
 bindkey '^Xm' set-mark-command            # Ctrl+X m: Set mark for ^X^X
 bindkey '^X^T' transpose-words            # Ctrl+X Ctrl+T: Transposes words
 
@@ -360,6 +377,21 @@ zle -N replace-string-again
 bindkey '^X^R' replace-string             # Ctrl+X Ctrl+R: Search-replace in line
 bindkey '^X^N' replace-string-again       # Ctrl+X Ctrl+N: Repeat last replace
 bindkey '^[^M' accept-and-hold            # Alt+Enter: Run and keep command
+source /home/decoder/dev/dotfiles/.zsh/float-command.zsh
+
+# edit-command-line in $PWD so editor gets local file context
+function edit-command-line-here() {
+    local tmpfile="$PWD/.zsh_edit_$$.zsh"
+    print -r -- "$BUFFER" > "$tmpfile"
+    exec </dev/tty
+    ${VISUAL:-${EDITOR:-vi}} "$tmpfile"
+    BUFFER="$(<"$tmpfile")"
+    CURSOR=$#BUFFER
+    command rm -f "$tmpfile"
+    zle redisplay
+}
+zle -N edit-command-line-here
+bindkey '^X^E' edit-command-line-here
 
 
 function g_checkout_branch () {
@@ -382,9 +414,16 @@ stty -ixon
 
 kubectl() {
     unfunction "$0"
-    # Ensure compinit is loaded before kubectl completions
     autoload -Uz compinit && compinit -C
     source <(command kubectl completion zsh)
+    $0 "$@"
+}
+
+vcluster() {
+    unfunction "$0"
+    autoload -Uz compinit && compinit -C
+    source <(command vcluster completion zsh)
+    compdef v=vcluster
     $0 "$@"
 }
 
@@ -399,6 +438,16 @@ precmd() { print -Pn "\e]133;A\e\\" }
 # [[ -s "/home/decoder/.gvm/scripts/gvm" ]] && source "/home/decoder/.gvm/scripts/gvm"
 
 eval "$(direnv hook zsh)"
+
+# Let direnv drive Kubernetes by default. An explicit `kctx use` latches a
+# pane-local override; release it to restore direnv or unset KUBECONFIG.
+autoload -Uz add-zsh-hook
+source "$HOME/dev/dotfiles/scripts/__kctx_zsh_hook.zsh"
+add-zsh-hook -d precmd __kctx_apply_pane_override 2>/dev/null
+add-zsh-hook -d preexec __kctx_apply_pane_override 2>/dev/null
+add-zsh-hook precmd __kctx_apply_pane_override
+add-zsh-hook preexec __kctx_apply_pane_override
+
 eval "$(starship init zsh)"
 
 if [ -f "$HOME/.cargo/env" ]; then
@@ -416,3 +465,26 @@ if [ -f '/home/decoder/dev/google-cloud-sdk/completion.zsh.inc' ]; then . '/home
 # zprof > /tmp/zprof.out
 export PATH=/home/decoder/.npm-global/bin:$PATH
 typeset -U path && path=($path)  # Final deduplication
+export PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome
+alias stats="~/.claude/dashboards/claude-dashboard-swap.sh"
+
+# bastion secret helpers (touch-gated secrets via YubiKey): sec / secadd / secfile
+source ~/.config/age/secret.zsh
+
+# password-store helpers (session secrets direnv autoloads, no gate): passfromenv
+source ~/.config/pass/pass.zsh
+
+# deno on PATH: yt-dlp wants a JS runtime for YouTube player extraction and warns
+# on every invocation without one. Guarded like the cargo line above, since this
+# file is stowed on machines that have no deno.
+if [ -f "$HOME/.deno/env" ]; then
+    . "$HOME/.deno/env"
+fi
+
+# sqz — context intelligence layer (auto-installed)
+sqz_run() {
+    "$@" 2>&1 | SQZ_CMD="$*" sqz compress
+}
+sqz_sudo() {
+    sudo "$@" 2>&1 | SQZ_CMD="sudo $*" sqz compress
+}

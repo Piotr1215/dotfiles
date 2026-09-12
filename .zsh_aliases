@@ -1,5 +1,14 @@
 # Global aliases
+# Pipe output to Claude and stream the answer (see ai_stream). Append your own
+# prompt and any -p flag: `make build 2>&1 A 'root cause?'`, `... A --continue`,
+# `... A --model haiku`.
+alias -g A='| ai_stream'
+# Raw, non-streaming form. Use when you want the whole reply at once or need to
+# set --output-format yourself: `... AR --output-format json | jq -r .result`
+alias -g AR='| command claude -p'
 alias -g C='| sed -r "s/\x1b\[[0-9;]*m//g" | perl -pe "chomp if eof" | xsel --clipboard'
+# Mail the command output (stdout+stderr) to self with a fixed subject. e.g. `df -h M`
+alias -g M='2>&1 | { printf "Subject: pop-os-automated-email\nFrom: piotrzan@gmail.com\nTo: piotrzan@gmail.com\n\n"; sed -r "s/\x1b\[[0-9;]*m//g"; } | msmtp piotrzan@gmail.com'
 alias -g G='| grep -i --color=always'
 alias -g H=' --help'
 alias -g L='| less'
@@ -29,6 +38,10 @@ alias backuper="ssh 'bacuper@192.168.178.60'"
 alias grt='cd "$(git rev-parse --show-toplevel)"'
 alias perf='system76-power profile performance'
 
+# Graphics + power mode switches (call __set_graphics_mode.sh, reboot)
+alias base='__set_graphics_mode.sh base'    # powered: nvidia + balanced (home, hotel, anywhere on AC)
+alias speak='__set_graphics_mode.sh speak'  # presenting: hybrid + battery (HDMI projector on battery; run `perf` for turbo)
+
 # incus aliases
 alias inc='incus console ubuntu --type=vga'
 ## start and stop lxc vm with hybernated state
@@ -40,7 +53,6 @@ alias sai='sudo apt install -y'
 alias suser='systemctl --user '
 
 # Commands shadow
-alias ghostty="/home/decoder/bin/ghostty-launcher"
 alias pledit='PET_SNIPPET_FILE=/home/decoder/dev/pet-snippets/pet-links.toml pet edit'
 alias lama='cd /home/decoder/dev/homelab && ollama run gpt-oss:latest'
 alias disk='ncdu --color dark'
@@ -61,7 +73,6 @@ alias aider='aider --model sonnet --dark-mode --no-auto-commits'
 alias aider-commit='aider --model gpt-4o --dark-mode'
 alias cat='bat'
 alias df=duf
-alias diff=colordiff
 alias fd='fd --hidden'
 alias mux=tmuxinator
 alias ra=yazi
@@ -74,6 +85,7 @@ alias cal='ncal -b'
 
 ## Kubernetes aliases
 alias k=kubectl
+alias v=vcluster
 alias kconf='__create_separate_kubeconfig.sh'
 alias kdump='kubectl get all --all-namespaces'
 alias kaf='kubectl apply -f'
@@ -98,8 +110,10 @@ alias dps="docker ps --format 'table {{.ID}}\t{{.Names}}\t{{.Image}}'" #docker p
 alias fdit='vim ~/.zsh_functions'
 alias gs='git show'
 alias gpr='GH_PAGER= gh pr list --head $(git branch --show-current) --json number,state,url --jq "if length == 0 then \"no prs\" else .[] | \"#\\(.number) [\\(.state)] \\(.url)\" end"'
+alias opn='~/dev/dotfiles/scripts/__open_repo.sh'
 alias firefox='flatpak run io.gitlab.librewolf-community'
-alias home='nohup flatpak run io.gitlab.librewolf-community -P "Home" > /dev/null 2>&1 &'
+alias chrome='google-chrome-stable'
+alias home='nohup flatpak run io.gitlab.librewolf-community > /dev/null 2>&1 &'
 alias lg='lazygit'
 alias lvim='nvim -c "normal '\''0"'
 alias lzd='docker run --rm -it -v /var/run/docker.sock:/var/run/docker.sock -v /config/lazydocker:/.config/jesseduffield/lazydocker lazyteam/lazydocker'
@@ -112,6 +126,7 @@ alias tmarkn='~/dev/dotfiles/scripts/__list_tasks_as_markdown.pl +next'
 alias tmarkc='~/dev/dotfiles/scripts/__list_completed_tasks_as_markdown.pl'
 alias tadi='~/dev/dotfiles/scripts/__create_task.sh'
 alias tedit='vim ~/.tmux.conf'
+alias tadit='vim ~/.taskrc'
 alias tuic='task current'
 alias tuid='task workdone'
 alias tuiw='task context work; TERM=screen-256color NCURSES_NO_UTF8_ACS=1 tui --report current'
@@ -124,7 +139,7 @@ alias uxp-="just ~/dev/dotfiles/scripts/uxp-setup/teardown"
 alias .j='just --justfile ~/dev/dotfiles/scripts/uxp-setup/justfile --working-directory ~/dev/dotfiles/scripts/uxp-setup --choose'
 alias vn='nvim /tmp/temp-$RANDOM.md'
 alias wm='watch kubectl get managed'
-alias work='nohup flatpak run io.gitlab.librewolf-community -P "Work" > /dev/null 2>&1 &'
+alias work='nohup google-chrome-stable > /dev/null 2>&1 &'
 alias zedit='vim ~/.zshrc'
 alias dedit='direnv edit'
 # PROJECT: playlist
@@ -133,11 +148,20 @@ alias play='nohup ~/dev/dotfiles/scripts/__launch_playlist.sh > /dev/null 2>&1 &
 alias play_vid='nohup ~/dev/dotfiles/scripts/__launch_playlist.sh vids_playlist > /dev/null 2>&1 &'
 
 # PROJECT: ai
-alias claude='KUBECONFIG=/home/decoder/dev/homelab/kubeconfig __claude_with_monitor.sh'
-alias claude_clean='__claude_with_monitor.sh'
-alias claude_pair='PAIR_PROGRAMMING=true KUBECONFIG=/home/decoder/dev/homelab/kubeconfig __claude_with_monitor.sh'
+alias c='__claude_with_monitor.sh'
+alias claude='__claude_with_monitor.sh'
+alias claude_clean='CLAUDE_KUBE_BASE=inherit __claude_with_monitor.sh'
+alias claude_pair='PAIR_PROGRAMMING=true __claude_with_monitor.sh'
+alias zclaude='__zclaude.sh'
 alias claude-kill='__kill_stuck_claude.sh'
 alias claude-check='__kill_stuck_claude.sh --dry-run'
+alias chelp='__claude_extended_help.sh'
+alias ctips='watch -n 1 -c __tip_status.sh'
+alias contips='__tip_status.sh --enable'
+alias cofftips='__tip_status.sh --disable'
+# TEMP (2026-07-24): resume the "pick-me-up-tmux" session after the tmux 3.7b
+# restart kills it. Delete once the upgrade is confirmed good.
+alias temp-klod='cd /home/decoder/dev && claude -r aaff54cd-fd68-4947-9697-0baf194fd446'
 
 # App Shortcuts Help
 alias apphelp='/home/decoder/dev/dotfiles/scripts/__config_bindings_help.sh'
@@ -145,3 +169,37 @@ alias apphelp='/home/decoder/dev/dotfiles/scripts/__config_bindings_help.sh'
 # Screenkey
 alias sk='pkill screenkey; __start_screenkey.sh'
 
+# GitHub
+alias ghuser='/home/decoder/dev/dotfiles/scripts/__ghuser.sh'
+
+# Notion AI Meeting Notes — virtual mic that captures both my voice + remote voices.
+# Pick "NotionMic" as the mic in the Notion browser tab.
+# Zoom must keep using the real mic, otherwise remote side hears echo.
+alias notion-mic='/home/decoder/dev/dotfiles/scripts/__notion_loopback.sh up'
+alias notion-mic-off='/home/decoder/dev/dotfiles/scripts/__notion_loopback.sh down'
+alias notion-mic-status='/home/decoder/dev/dotfiles/scripts/__notion_loopback.sh status'
+
+
+# claude-dashboard web admin panel (on|off|toggle|status|open)
+alias ccdash="~/.claude/scripts/__claude_dashboard_ctl.sh"
+
+# claude code status: live cockpit board (Gordon's hand-authored read), viddy 30s refresh + diff-highlight
+alias ccstatus="~/.claude/scripts/__cockpit_board.sh"
+
+# desktop notification history (durable log kept by notification-logger.service)
+# not = full log, noti = recent, notif = follow live. GNOME popups vanish on click; this is the copyable record.
+alias not='cat ~/.local/state/notifications.log'
+alias noti='tail -n 40 ~/.local/state/notifications.log'
+alias notif='tail -f ~/.local/state/notifications.log'
+
+# search with page extracts: ddgr finds the results, __readable.mjs renders
+# each page to markdown with Readability + Turndown. s/ddgx open the picker,
+# sd dumps the top hits with the first lines of each page (pipeable).
+# sd shadows the sed clone of the same name, which is deliberate: not used here.
+alias s="~/dev/dotfiles/scripts/__ddgx.sh"
+alias ddgx="~/dev/dotfiles/scripts/__ddgx.sh"
+alias sd="~/dev/dotfiles/scripts/__ddgx.sh -d"
+# Any page to markdown on stdout, same engine and same settings as the
+# MarkDownload button: 2md https://example.com/post > post.md
+# In a script call __readable.mjs directly, it is already on PATH.
+alias 2md="~/dev/dotfiles/scripts/__readable.mjs --url"

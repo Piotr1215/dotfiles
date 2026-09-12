@@ -54,7 +54,7 @@ function execute_and_claude() {
 
     # Use tmux to send the command directly to the pane
     # This ensures proper TTY handling
-    tmux send-keys -t "$pane_id" "KUBECONFIG=/home/decoder/dev/homelab/kubeconfig /home/decoder/.npm-global/bin/claude" C-m
+    tmux send-keys -t "$pane_id" "KUBECONFIG=/home/decoder/dev/homelab/kubeconfig /home/decoder/.local/bin/claude" C-m
 
     # Background task to send keys after claude starts
     (
@@ -124,7 +124,7 @@ function claude_prompt() {
     local pane_id=$(tmux display-message -p '#{pane_id}')
 
     # Use tmux to send the command directly to the pane
-    tmux send-keys -t "$pane_id" "KUBECONFIG=/home/decoder/dev/homelab/kubeconfig /home/decoder/.npm-global/bin/claude" C-m
+    tmux send-keys -t "$pane_id" "KUBECONFIG=/home/decoder/dev/homelab/kubeconfig /home/decoder/.local/bin/claude" C-m
 
     # Background task to send keys after claude starts
     (
@@ -181,17 +181,98 @@ function claude_prompt() {
     ) &>/dev/null &!
 }
 
+# Pick a claude command via fzf, insert on command line for editing
+function claude_picker() {
+    local cmd_dir="$HOME/.claude/commands"
+    local selection
+    selection=$(printf '%s\n' "$cmd_dir"/*.md \
+        | xargs -I{} basename {} .md \
+        | fzf --reverse --border --prompt="claude / " \
+              --preview="bat --color=always --language=md --style=plain $cmd_dir/{}.md" \
+              --preview-window=right:50%:wrap)
+    [[ -z "$selection" ]] && { zle redisplay; return; }
+    LBUFFER="__claude_with_monitor.sh -- \"/$selection "
+    RBUFFER="\""
+    zle redisplay
+}
+
 # Create widgets
 zle -N execute_and_claude
 zle -N claude_prompt
+zle -N claude_picker
 
 # Bind to Ctrl+Alt+G (replaces gpt binding)
 bindkey '^[^G' execute_and_claude
+bindkey '^[k' claude_picker
 
 # Create 'gpt' alias for backward compatibility - now opens Claude Code
 alias gpt='claude_prompt'
 
 # Claude CLI power aliases
-alias plaude='/home/decoder/.npm-global/bin/claude --dangerously-skip-permissions -p'  # Print mode (direct binary)
+alias plaude='/home/decoder/.local/bin/claude --dangerously-skip-permissions -p'  # Print mode (direct binary)
 alias flaude='claude -r --fork-session'           # Fork session with picker
 alias dlaude='claude --debug "hooks,mcp"'         # Debug mode (hooks + mcp)
+alias ccinstall='~/.claude/scripts/__claude_version_installer.sh'  # Version picker
+
+# Run interactive Codex sessions through its managed Unix-socket app-server.
+# The agents MCP server can then deliver inbound DMs to the active Codex thread
+# with turn/start or turn/steer, providing the push path Codex lacks in MCP.
+alias codex="$HOME/.codex/scripts/__codex_with_app_server.sh"
+alias cx='codex'
+alias cxr='codex resume'
+alias cxra='codex resume --all'
+alias cxf='codex fork'
+alias cxsync='$HOME/.codex/scripts/__codex_sync.sh'
+
+# Pick a Codex skill and insert a new interactive command for editing.
+function codex_skill_picker() {
+  local skills_dir="${CODEX_HOME:-$HOME/.codex}/skills"
+  local record selection
+  record=$(fd -H -I -L -t f -d 3 '^SKILL\.md$' "$skills_dir" 2>/dev/null \
+    | while read -r skill_file; do
+        printf '%s\t%s\n' "${skill_file:h:t}" "$skill_file"
+      done \
+    | sort -u \
+    | fzf --reverse --border --delimiter=$'\t' --with-nth=1 --prompt='codex $ ' \
+      --preview='bat --color=always --language=md --style=plain {2}' \
+      --preview-window=right:55%:wrap)
+  selection="${record%%$'\t'*}"
+  [[ -n "$selection" ]] || { zle redisplay; return; }
+  LBUFFER="codex \"\$$selection "
+  RBUFFER='"'
+  zle redisplay
+}
+zle -N codex_skill_picker
+bindkey '^[K' codex_skill_picker
+
+# Per-account Claude config routing (#91)
+#
+# The launcher (__claude_with_monitor.sh) routes work vs personal by cwd, but the
+# direct-binary entry points bypass it: `plaude` (raw /home/decoder/.local/bin/claude),
+# `cs`/resume helpers, and any keybinding that calls the binary. Setting
+# CLAUDE_CONFIG_DIR from the current directory on every `cd` makes EVERY entry
+# point inherit the correct account, so a `plaude` run inside ~/loft uses the work
+# login and one anywhere else uses personal, with no manual switch.
+#
+# Reuses the single source of truth (claude_work_predicate) the launcher and
+# picker use, so the shell and launcher can never disagree about what is "work".
+# A non-work dir explicitly unsets the var, so an inherited value can never leak
+# work routing into a personal directory.
+if [[ -f "$HOME/.claude/scripts/__lib_claude_account.sh" ]]; then
+  source "$HOME/.claude/scripts/__lib_claude_account.sh"
+  _claude_account_route() {
+    if [[ -d "$HOME/.claude-work" ]] && claude_work_predicate "$PWD"; then
+      export CLAUDE_CONFIG_DIR="$HOME/.claude-work"
+      # Codex offload auth/config splits the same way (see __claude_with_monitor.sh):
+      # a work cwd points $CODEX_HOME at the work login, everything else uses the
+      # default ~/.codex. Also routes the plain `codex` CLI, not just the MCP server.
+      export CODEX_HOME="$HOME/.codex-work"
+    else
+      unset CLAUDE_CONFIG_DIR
+      unset CODEX_HOME
+    fi
+  }
+  autoload -Uz add-zsh-hook
+  add-zsh-hook chpwd _claude_account_route
+  _claude_account_route   # initialize for the shell's starting directory
+fi

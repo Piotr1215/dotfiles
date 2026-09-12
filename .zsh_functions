@@ -5,9 +5,34 @@ source ~/dev/dotfiles/scripts/__reusable_variables.sh
 alias ddg='ddg_function'
 
 
-# Send keys to registered Claude tmux sessions
+# Thin local-plane wrapper around the agents-mcp-server `snd` binary.
+# All delivery is NATS-based. The binary accepts:
+#   snd <agent> <msg...>    DM
+#   snd -t <agent> <msg...> DM (explicit)
+#   snd -g <group> <msg...> broadcast
+#   snd --tail              subscribe to every bus event (read-only)
+#   snd --help | -h         usage
+# This wrapper:
+#   - adds --human by default so operator messages get the [HUMAN] prefix
+#     (pass --no-human first to opt out; auto-skipped for --tail/--help/-h
+#     since snd.ts rejects those when combined with other args)
+#   - fills in AGENTS_NATS_URL from the homelab Tailscale endpoint if the
+#     shell hasn't exported it, so interactive use doesn't need setup
 function snd() {
-    /home/decoder/.claude/scripts/snd "$@"
+    local url="${AGENTS_NATS_URL:-nats://nats-nats-tailscale.tail165ec.ts.net:4222}"
+    local bin="/home/decoder/dev/agents-mcp-server/build/snd.js"
+    case "${1:-}" in
+        --no-human)
+            shift
+            AGENTS_NATS_URL="$url" node "$bin" "$@"
+            ;;
+        --tail|--help|-h)
+            AGENTS_NATS_URL="$url" node "$bin" "$@"
+            ;;
+        *)
+            AGENTS_NATS_URL="$url" node "$bin" --human "$@"
+            ;;
+    esac
 }
 
 # Need to alias this because regular ddg doesn't open firefox any more
@@ -142,71 +167,51 @@ function nman() {
 
 function ufp() {
     local profile_type=$1
-    local WORK_PROFILE="j549qbym.Work"
-    local HOME_PROFILE="7fs4462i.decoder"
+    local profiles_ini="$HOME/.var/app/io.gitlab.librewolf-community/.librewolf/profiles.ini"
 
-    update_profiles_ini() {
-        local profile_to_set=$1
-        local profiles_ini_path="$HOME/.var/app/io.gitlab.librewolf-community/.librewolf/profiles.ini"
-
-        # Backup current profiles.ini
-        cp "$profiles_ini_path" "$profiles_ini_path.bak"
-
-        # Update the profiles.ini
-        awk -v profile="$profile_to_set" '
-        /^\[Install/ {
-            print
-            found=1
-            next
-        }
-        found && /^Default=/ {
-            sub(/=.*/, "=" profile)
-            print
-            next
-        }
-        {
-            print
-        }' "$profiles_ini_path" > "$profiles_ini_path.tmp" && mv "$profiles_ini_path.tmp" "$profiles_ini_path"
-
-        echo "Updated profiles.ini to use profile: $profile_to_set"
-    }
-
-    # Check if a profile type is provided
     if [ -z "$profile_type" ]; then
-        echo "Usage: update_firefox_profile <profile_type>"
-        echo "Accepted values: work, home"
-        return 1
+        echo "Usage: ufp <work|home>"
+        echo "  work = Chrome, tmux work status"
+        echo "  home = LibreWolf, tmux music status"
+        if [[ -f /tmp/timeoff_mode ]]; then
+            echo "Current: home (LibreWolf)"
+        else
+            echo "Current: work (Chrome)"
+        fi
+        return 0
     fi
 
-    # Convert input to lowercase for case-insensitive comparison
     profile_type=$(echo "$profile_type" | tr '[:upper:]' '[:lower:]')
 
-    update_timeoff() {
-        local value=$1
-        if [ "$value" = "1" ]; then
-            touch /tmp/timeoff_mode
-            echo "Tmux status: music mode"
-        else
-            rm -f /tmp/timeoff_mode
-            echo "Tmux status: work mode"
-        fi
-    }
-
-    # Set the profile based on the input
     case $profile_type in
         "work")
-            update_profiles_ini "$WORK_PROFILE"
-            update_timeoff 0
+            rm -f /tmp/timeoff_mode
+            export BROWSER=google-chrome
+            xdg-settings set default-web-browser google-chrome.desktop 2>/dev/null
+            # Swap LibreWolf default profile to Work
+            if [[ -f "$profiles_ini" ]]; then
+                sed -i.bak '/^\[InstallAA67A15BF0F93AE3\]/,/^$/{s|^Default=.*|Default=j549qbym.Work|}' "$profiles_ini"
+            fi
+            echo "Mode: work (Chrome, LibreWolf=Work)"
             ;;
         "home")
-            update_profiles_ini "$HOME_PROFILE"
-            update_timeoff 1
+            touch /tmp/timeoff_mode
+            export BROWSER=librewolf
+            xdg-settings set default-web-browser io.gitlab.librewolf-community.desktop 2>/dev/null
+            # Swap LibreWolf default profile to Home
+            if [[ -f "$profiles_ini" ]]; then
+                sed -i.bak '/^\[InstallAA67A15BF0F93AE3\]/,/^$/{s|^Default=.*|Default=7fs4462i.decoder|}' "$profiles_ini"
+            fi
+            echo "Mode: home (LibreWolf=Home)"
             ;;
         *)
             echo "Invalid profile type. Please use 'work' or 'home'."
             return 1
             ;;
     esac
+
+    __tmux_active_task.sh --update 2>/dev/null
+    tmux refresh-client -S 2>/dev/null
 }
 
 function lsfiles() {
@@ -565,26 +570,27 @@ function fifp() {
     nvim "${files[@]}"
 }
 
-# Uploads content to clbin and copies URL to clipboard, opens in browser
+# Uploads the clipboard image to catbox.moe and copies the URL to clipboard, opens in browser
 function share ()
 {
     local image_path="/tmp/screenshot.png"
 
-    # Save the clipboard content to a file
-    # Adjust this command based on your system and the clipboard content
-    xclip -selection clipboard -t image/png -o > "$image_path"
-
-    # Upload the image file and parse the JSON response to get the link
-    local response=$(curl -sF "file=@$image_path" https://file.io)
-    local url=$(echo $response | jq -r '.link')
-
-    # Check if the URL is valid
-    if [[ $url != "https://file.io/"* ]]; then
-        echo "Error: Invalid URL received"
+    # Save the clipboard image (PNG) to a file; bail if there is no image on the clipboard
+    if ! xclip -selection clipboard -t image/png -o > "$image_path" 2>/dev/null || [[ ! -s "$image_path" ]]; then
+        echo "Error: no image on the clipboard (capture a region first)" >&2
         return 1
     fi
 
-    # Handle the URL (copy to clipboard, open in browser, etc.)
+    # Upload to catbox.moe (anonymous, no account, no API key). --max-time so a
+    # slow/unreachable host can never hang the shell the way the old flow did.
+    local url=$(curl -s --max-time 30 -F "reqtype=fileupload" -F "fileToUpload=@$image_path" https://catbox.moe/user/api.php)
+
+    if [[ $url != "https://files.catbox.moe/"* ]]; then
+        echo "Error: upload failed: ${url:-no response from catbox}" >&2
+        return 1
+    fi
+
+    # Copy URL to clipboard and open in browser
     echo $url | tee >(xsel -ib)
     nohup xdg-open $url >/dev/null 2>&1 &
 }
@@ -596,15 +602,12 @@ function cname() {
 }
 
 function cpa() {
-    if [[ -n "$SSH_CONNECTION" || -z "$DISPLAY" ]]; then
-        printf '\033]52;c;%s\a' "$(printf "%s" "$PWD" | base64 | tr -d '\n')"
-    elif command -v xclip > /dev/null; then
+    if command -v xclip > /dev/null; then
         printf "%s" "$PWD" | xclip -selection clipboard
+        printf "%s\n" "Current working directory ('$(basename "$PWD")') path copied to clipboard."
     else
         printf "%s\n" "Error: 'xclip' command not found. Please install 'xclip' to use this function."
-        return 1
     fi
-    printf "%s\n" "Current working directory ('$(basename "$PWD")') path copied to clipboard."
 }
 
 # Change the directory to the path stored in the clipboard
@@ -804,80 +807,133 @@ function kcdebug() {
   kubectl run -i --rm --tty debug --image=busybox --restart=Never -- sh
 }
 
-# Set or show the last standup timestamp for standup reports
-function standup_date() {
-    local timestamp_file="$HOME/.local/state/standup/last_standup_timestamp"
-    local timestamp_dir="$(dirname "$timestamp_file")"
-    
-    # Ensure directory exists
-    [[ ! -d "$timestamp_dir" ]] && mkdir -p "$timestamp_dir"
-    
-    if [[ -z "$1" ]]; then
-        # No argument: show current timestamp
-        if [[ -f "$timestamp_file" ]]; then
-            local current_ts=$(cat "$timestamp_file")
-            echo "Current standup timestamp: $(date -d "@$current_ts" '+%Y-%m-%d %H:%M:%S')"
-            echo "Raw timestamp: $current_ts"
-        else
-            echo "No standup timestamp set yet"
-        fi
-        return 0
+
+# Claude session bookmarks. Backed by ~/.claude/cs.py + ~/.claude/named-sessions.tsv.
+# `cs` with no arg lists bookmarks; `cs <name>` cd's to the recorded dir and
+# resumes that exact session id (resume is cwd-scoped, so the cd matters).
+cs() {
+    emulate -L zsh
+    local name="$1" out cwd id
+    if [[ -z $name ]]; then
+        python3 ~/.claude/cs.py
+        return
     fi
-    
-    case "$1" in
-        reset|clear)
-            # Remove the timestamp file
-            rm -f "$timestamp_file"
-            echo "Standup timestamp cleared"
-            ;;
-        now)
-            # Set to current time
-            date +%s > "$timestamp_file"
-            echo "Standup timestamp set to now: $(date '+%Y-%m-%d %H:%M:%S')"
-            ;;
-        ago)
-            # Set to X hours/days ago
-            if [[ -z "$2" ]]; then
-                echo "Usage: standup_date ago <number> [hours|days]"
-                return 1
-            fi
-            local amount="$2"
-            local unit="${3:-hours}"
-            local seconds_ago
-            
-            case "$unit" in
-                hour|hours|h)
-                    seconds_ago=$((amount * 3600))
-                    ;;
-                day|days|d)
-                    seconds_ago=$((amount * 86400))
-                    ;;
-                *)
-                    echo "Invalid unit. Use 'hours' or 'days'"
-                    return 1
-                    ;;
-            esac
-            
-            local new_timestamp=$(($(date +%s) - seconds_ago))
-            echo "$new_timestamp" > "$timestamp_file"
-            echo "Standup timestamp set to $amount $unit ago: $(date -d "@$new_timestamp" '+%Y-%m-%d %H:%M:%S')"
-            ;;
-        *)
-            # Assume it's a date string
-            local new_timestamp=$(date -d "$*" +%s 2>/dev/null)
-            if [[ $? -ne 0 ]]; then
-                echo "Invalid date format. Examples:"
-                echo "  standup_date '2025-08-23 09:00:00'"
-                echo "  standup_date 'last Friday 9am'"
-                echo "  standup_date '2 days ago'"
-                echo "  standup_date now"
-                echo "  standup_date ago 48 hours"
-                echo "  standup_date reset"
-                return 1
-            fi
-            echo "$new_timestamp" > "$timestamp_file"
-            echo "Standup timestamp set to: $(date -d "@$new_timestamp" '+%Y-%m-%d %H:%M:%S')"
-            ;;
-    esac
+    out=$(python3 ~/.claude/cs.py --resolve "$name") || return
+    if [[ -z $out ]]; then
+        echo "no bookmarked session named '$name' (run cs to list)" >&2
+        return 1
+    fi
+    cwd=${out%%$'\t'*}
+    id=${out##*$'\t'}
+    cd "$cwd" && claude --resume "$id"
 }
 
+# Pipe stdin to Claude and stream the answer as it is generated, then print a
+# dim footer with model, tokens and cost so a piped question is never a blind
+# spend. Reached by the `A` global alias: `make build 2>&1 A 'root cause?'`
+#
+# Two defaults, both measured on `ls /tmp A 'how many entries?'`:
+#   MAX_THINKING_TOKENS=0  94s -> 1s. Extended thinking spent 9802 tokens
+#                          deliberating over a file count. A shell pipe wants an
+#                          answer, not a deliberation.
+#   --model sonnet         chosen over haiku for answer quality; the input is
+#                          ~60k tokens of hooks and CLAUDE.md on every call, so
+#                          expect roughly $0.36 and ~10s per pipe, not $0.09/2s.
+#                          Drop to `A --model haiku` for cheap lookups.
+# Both sit before "$@", so any flag you pass wins: `... A --model sonnet`.
+#
+# The google-drive connector warning is filtered: expected noise from the deny
+# in ~/.claude commit c53160f, not a failure.
+ai_stream() {
+    MAX_THINKING_TOKENS=0 command claude -p --model sonnet \
+        --output-format stream-json --verbose --include-partial-messages "$@" \
+        2> >(grep -v 'blocked by enterprise policy' >&2) \
+    | ~/.claude/scripts/__ai_pipe.py
+}
+# Completion for ai_stream. The flag list is generated from the packed claude
+# binary by __claude_flag_spec.sh, not hand-listed: `claude --help` omits flags
+# (--brief among them) and a hand-list rots on the next release. Cached per
+# binary version, so an autoupdate regenerates it and nothing else does.
+_ai_stream() {
+    local bin cache
+    bin=${${:-~/.local/bin/claude}:A}
+    cache=${XDG_CACHE_HOME:-$HOME/.cache}/claude-flags-${bin:t}.zsh
+    if [[ ! -s $cache ]]; then
+        mkdir -p ${cache:h}
+        ~/.claude/scripts/__claude_flag_spec.sh > $cache.$$ 2>/dev/null &&
+            mv $cache.$$ $cache || { rm -f $cache.$$; return 1 }
+    fi
+    local -a spec
+    spec=( ${(f)"$(<$cache)"} )
+    _arguments -s $spec '*:prompt:'
+}
+compdef _ai_stream ai_stream
+
+# Reopen the conversation the last `A` pipe created as a normal interactive
+# session, in the directory it ran in. The pipe and the TUI are the same
+# session; -p just drives it non-interactively, so nothing is lost in the move.
+air() {
+    local state=~/.cache/ai-last-session sid dir
+    [[ -s $state ]] || { print -u2 "no A pipe recorded yet"; return 1 }
+    IFS=$'\t' read -r sid dir < $state
+    print -u2 "resuming $sid in $dir"
+    (cd -- "$dir" && __claude_with_monitor.sh --resume "$sid")
+}
+
+# PROJECT: gnome-shell-stutter
+# Is the desktop stop-and-go coming back? Reads gnome-shell's size, samples its
+# main thread for 5s, and says what to do. Background: 2026-09-09, GNOME Shell 46
+# leaks every destroyed submenu item (popupmenu-leakfix@dotfiles closes it).
+function check_stutter() {
+    local pid rss cpu_s up_s ext state
+    pid=$(pgrep -x gnome-shell | head -1) || { print -u2 "gnome-shell not running"; return 1 }
+    read -r rss cpu_s up_s <<< "$(ps -o rss=,cputimes=,etimes= -p "$pid")"
+    ext=$(gnome-extensions info popupmenu-leakfix@dotfiles 2>/dev/null | awk '/State:/{print $2}')
+    printf 'gnome-shell: %d MB resident, %d min cpu over %.1f h, leakfix %s\n' \
+        $((rss / 1024)) $((cpu_s / 60)) $((up_s / 3600.0)) "${ext:-MISSING}"
+
+    # 5s of 100ms buckets on the main thread; 10 ticks = a full core for the
+    # whole bucket. A run of 3+ such buckets is the freeze you feel.
+    local prev cur d stalls=0 worst=0 run=0
+    prev=$(awk '{print $14+$15}' /proc/$pid/task/$pid/stat)
+    for _ in {1..50}; do
+        sleep 0.1
+        cur=$(awk '{print $14+$15}' /proc/$pid/task/$pid/stat)
+        d=$((cur - prev)); prev=$cur
+        if (( d >= 8 )); then run=$((run + 1)); (( run > worst )) && worst=$run
+        else (( run >= 3 )) && stalls=$((stalls + 1)); run=0; fi
+    done
+    (( run >= 3 )) && stalls=$((stalls + 1))
+    printf 'main thread: %d freezes of 300ms+ in 5s, longest %dms\n' $stalls $((worst * 100))
+
+    # remember the last reading so the verdict reads the trend, not a fixed line:
+    # the shell sits at ~700 MB with four EVE clients composited and drops back
+    # after, which a threshold alone reports as growing
+    local state=${XDG_STATE_HOME:-$HOME/.local/state}/check_stutter.last last_rss=0 last_at=0 last_start=0
+    local now=$(date +%s) start=$(( $(date +%s) - up_s ))
+    [[ -r $state ]] && read -r last_rss last_at last_start < "$state"
+    print "$rss $now $start" > "$state"
+    # a different start time means a new shell (reboot, Alt+F2 r); no delta across instances
+    if (( last_rss > 0 && last_start != start )); then
+        print "since last check: shell restarted, no trend yet"
+        last_rss=0
+    fi
+    local delta=$(( (rss - last_rss) / 1024 )) since=$(( ($(date +%s) - last_at) / 60 ))
+    (( last_rss > 0 )) && printf 'since last check: %+d MB in %d min\n' $delta $since
+
+    print
+    if (( stalls > 0 || rss > 900000 )); then
+        print "VERDICT: stuttering. Alt+F2, r, Enter restarts the shell in place (windows stay)."
+        print "Then find the new leaker: dump the heap and count dead menu items, see"
+        print "commit 06e9c506 in dotfiles for the method. Check leakfix is ACTIVE above."
+    elif (( rss > 600000 && last_rss > 0 && delta > 50 && since >= 30 )); then
+        print "VERDICT: climbing. Up $delta MB since the last check with nothing new open."
+        print "Re-run in an hour; a second climb of that size means a leak, restart and hunt it."
+    elif (( rss > 600000 )); then
+        print "VERDICT: high but flat. Big composited windows (EVE, 4K video) hold ~700 MB"
+        print "and release it when closed; only a climb between checks means a leak."
+    else
+        print "VERDICT: healthy. Fresh shell is ~420 MB; anything under 600 MB is normal."
+        print "If video still hops, the cause is not the shell: check the player, not here."
+    fi
+}
