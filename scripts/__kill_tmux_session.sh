@@ -19,6 +19,15 @@ current_session=$(tmux display-message -p '#S' 2>/dev/null || echo "")
         if [ "$session_to_kill" = "$current_session" ]; then
             tmux switch-client -l 2>/dev/null || tmux switch-client -n 2>/dev/null || true
         fi
-        tmux kill-session -t "$session_to_kill"
+        # Prefer `tmuxinator stop` when the session matches a tmuxinator
+        # project — it runs on_project_stop hooks (cleanup of background
+        # processes, FIFOs, lockfiles) before killing the session. Falls
+        # back to raw kill-session for ad-hoc sessions.
+        if command -v tmuxinator >/dev/null 2>&1 \
+            && tmuxinator list 2>/dev/null | tr -s ' ' '\n' | grep -qx "$session_to_kill"; then
+            tmuxinator stop "$session_to_kill"
+        else
+            tmux kill-session -t "$session_to_kill"
+        fi
     fi
 done
