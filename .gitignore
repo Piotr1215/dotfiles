@@ -37,3 +37,7 @@ templates/commands/tasks.md
 .claude/commands/plan.md
 .claude/commands/tasks.md
 __pycache__/
+
+# zsh edit-command-line scratch files. One of these held a live tailscale
+# auth key in plaintext on 2026-09-12; they must never be committable.
+.zsh_edit_*.zsh
