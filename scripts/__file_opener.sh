@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # Source generic error handling function
-source __trap.sh
+source ~/dev/dotfiles/scripts/__trap.sh
 
 set -eo pipefail
 
@@ -36,9 +36,11 @@ help_function() {
     echo "  Enter     Open in neovim"
     echo "  Ctrl+Y    Copy path to clipboard"
     echo "  Ctrl+X    Switch to zoxide"
-    echo "  Ctrl+D    Switch to all directories"
+    echo "  Ctrl+D    Toggle dashboard (flip automations)"
     echo "  Ctrl+F    Switch to all files"
-    echo "  Ctrl+B    GitHub repo search"
+    echo "  Ctrl+B    Switch to bookmarks"
+    echo "  Ctrl+O    GitHub repo search"
+    echo "  Ctrl+K    Switch Kubernetes context for this pane"
     echo "  Ctrl+C    Cancel"
     echo "  Tab       Multi-select"
 }
@@ -128,49 +130,69 @@ else
     PREVIEW_CMD='[[ -d {} ]] && (exa --color=always --long --all --header --icons --git {} 2>/dev/null || ls -la {}) || (bat --color=always {} 2>/dev/null || cat {})'
 fi
 
-# Define keybindings for switching sources (only the useful filters)
-# Ctrl+X returns to main view (all sources: sessions + zoxide + files)
-HOME_BIND="ctrl-x:change-prompt(all> )+reload(active=\$(tmux ls -F '#{session_name}' 2>/dev/null); active_pipe=\$(echo \"\$active\" | tr '\\n' '|'); configs=\$(ls --color=never ~/.config/tmuxinator/*.yml 2>/dev/null | xargs -n1 basename | sed 's/\\.yml\$//' | sort); echo \"\$active\" | while read -r s; do [[ -n \"\$s\" ]] && echo \"\$s ◀◀◀\"; done; echo \"\$configs\" | while read -r s; do [[ -n \"\$s\" && \"|\$active_pipe\" != *\"|\$s|\"* && \"\$active_pipe\" != \"\$s|\"* ]] && echo \"\$s\"; done; zoxide query -l; cache=/tmp/file_opener_cache_\$USER; if [[ -f \$cache ]] && [[ \$(((\$(date +%s) - \$(stat -c %Y \$cache)))) -lt 60 ]]; then cat \$cache; else fd --type f --hidden --absolute-path --color never --exclude .git --exclude node_modules --exclude .cache --exclude image-cache --exclude plugins --exclude stats-cache.json --exclude claude-wt-worktrees --exclude vendor --changed-within 7d . ~/dev ~/loft ~/.config/nvim ~/.claude 2>/dev/null | xargs stat --format '%Y %n' 2>/dev/null | sort -rn | cut -d' ' -f2- | tee \$cache; fi)"
-# Files from work directories
-FILE_BIND="ctrl-f:execute-silent(touch /tmp/file_opener_2d)+abort"
-# GitHub repo search binding - search, clone/cd into repo
-GITHUB_BIND="ctrl-b:execute-silent(touch $RETURN_MARKER)+execute(~/dev/dotfiles/scripts/__github_search.sh)+abort"
 
 # Marker file for returning to main picker
 RETURN_MARKER="/tmp/file_opener_return_$$"
+KCTX_MARKER="/tmp/file_opener_kctx_$$"
+SESSION_CHOICES="$HOME/dev/dotfiles/scripts/__tmux_session_choices.sh"
+
+# Define keybindings for switching sources (only the useful filters)
+# Ctrl+X returns to main view (all sources: sessions + zoxide + files)
+HOME_BIND="ctrl-x:change-prompt(all> )+reload(~/dev/dotfiles/scripts/__tmux_session_choices.sh list; zoxide query -l; cache=/tmp/file_opener_cache_\$USER; if [[ -f \$cache ]] && [[ \$(((\$(date +%s) - \$(stat -c %Y \$cache)))) -lt 60 ]]; then cat \$cache; else fd --type f --hidden --absolute-path --color never --exclude .git --exclude node_modules --exclude .cache --exclude image-cache --exclude plugins --exclude stats-cache.json --exclude claude-wt-worktrees --exclude vendor --changed-within 7d . ~/dev ~/loft ~/.config/nvim ~/.claude 2>/dev/null | xargs stat --format '%Y %n' 2>/dev/null | sort -rn | cut -d' ' -f2- | tee \$cache; fi)"
+# Sessions view (Ctrl+T for tmux) - live sessions and dormant tmuxinator configs,
+# the only place the dormant ones appear. They used to sit in the main list where
+# they outranked every path, which is the friction this key exists to remove.
+SESSIONS_BIND="ctrl-t:change-prompt(sessions> )+reload(~/dev/dotfiles/scripts/__tmux_session_choices.sh list; ~/dev/dotfiles/scripts/__tmux_session_choices.sh dormant)"
+
+# Files from work directories
+FILE_BIND="ctrl-f:execute-silent(touch /tmp/file_opener_2d)+abort"
+# Bookmarks binding - extract and expand paths from bookmarks.conf with descriptions
+BOOKMARKS_BIND="ctrl-b:change-prompt(bookmarks> )+reload(bash -c 'while IFS=\";\" read -r desc path line; do path=\${path/#\\~/\$HOME}; [ -z \"\$line\" ] || path=\"\$path:\$line\"; printf \"%-60s %s\\n\" \"\$desc\" \"\$path\"; done < ~/dev/dotfiles/scripts/__bookmarks.conf')"
+# GitHub repo search binding - search, clone/cd into repo
+GITHUB_BIND="ctrl-o:execute-silent(touch $RETURN_MARKER)+execute(~/dev/dotfiles/scripts/__github_search.sh)+abort"
+
 
 # PRs binding (Ctrl+G for GitHub) - sets marker, launches PR script, then aborts to restart loop
 PR_BIND="ctrl-g:execute-silent(touch $RETURN_MARKER)+execute(~/dev/dotfiles/scripts/__my_prs.sh fzf)+abort"
 
-# Linear issues binding (Ctrl+I for Issues) - sets marker, launches Linear script, then aborts to restart loop
-LINEAR_BIND="ctrl-i:execute-silent(touch $RETURN_MARKER)+execute(~/dev/dotfiles/scripts/__linear_issue_viewer.sh)+abort"
+# Linear issues binding (Ctrl+L for Linear) - launches Linear script, then aborts to exit popup
+# NOTE: no RETURN_MARKER - after viewing/opening an issue the whole popup should exit to terminal
+# NOTE: cannot use Ctrl+I — terminals send it identical to Tab (0x09), which collides with PASTE_BIND
+LINEAR_BIND="ctrl-l:execute(~/dev/dotfiles/scripts/__linear_issue_viewer.sh)+abort"
+
+# Work mail binding (Ctrl+N for notmuch) - same shape as Linear above.
+# NOTE: cannot use Ctrl+M - terminals send it identical to Enter (0x0d), which
+# would hijack opening the selected item
+MAIL_BIND="ctrl-n:execute(~/dev/dotfiles/scripts/__mail_search_viewer.sh)+abort"
 
 # Edit tmuxinator config (Ctrl+E) - only works on sessions
-EDIT_BIND="ctrl-e:execute(name={}; name=\${name% ◀◀◀}; [[ -f ~/.config/tmuxinator/\${name}.yml ]] && nvim ~/.config/tmuxinator/\${name}.yml)+abort"
+EDIT_BIND="ctrl-e:execute(item={}; name=\$(~/dev/dotfiles/scripts/__tmux_session_choices.sh resolve \"\$item\" 2>/dev/null || printf '%s' \"\$item\"); [[ -f ~/.config/tmuxinator/\${name}.yml ]] && nvim ~/.config/tmuxinator/\${name}.yml)+abort"
 
 # Music picker (Ctrl+U) - run music picker, closes popup on exit (can't use Ctrl+M, it's Enter)
 MUSIC_BIND="ctrl-u:execute(~/dev/dotfiles/scripts/__play_track.sh --run)+abort"
 
-# Kill selected session (Ctrl+K) - switches away if current, then kills
-KILL_SESSION_BIND="ctrl-k:execute(name={}; name=\${name% ◀◀◀}; cur=\$(tmux display-message -p '#S'); [[ \"\$name\" == \"\$cur\" ]] && { tmux switch-client -l 2>/dev/null || tmux switch-client -n 2>/dev/null; }; tmux kill-session -t \"\$name\" 2>/dev/null)+abort"
+# Kubernetes context picker (Ctrl+K) - replaces this fzf view with the pane picker.
+KCTX_BIND="ctrl-k:execute-silent(touch $KCTX_MARKER)+abort"
+
 
 COPY_BIND="ctrl-y:execute-silent(~/dev/dotfiles/scripts/__copy_path_with_notification.sh {})+execute-silent(touch /tmp/file_opener_copied)+abort"
+
+PASTE_BIND="tab:execute-silent(~/dev/dotfiles/scripts/__copy_path_with_notification.sh {})+execute-silent(touch /tmp/file_opener_paste)+abort"
+
+# Pane content search (Ctrl+S) - grep every pane's scrollback, jump to the match.
+SEARCH_BIND="ctrl-s:execute-silent(touch /tmp/file_opener_search)+abort"
+
+# Toggle dashboard (Ctrl+D) - flip personal automation toggles. Esc returns
+# here (the board touches the marker); ctrl-c inside the board exits fully.
+TOGGLES_BIND="ctrl-d:execute(~/dev/dotfiles/scripts/__toggles.sh --return-marker $RETURN_MARKER)+abort"
 
 # Loop to allow returning from PRs/Linear back to main picker
 while true; do
     OUTPUT=$( {
-        # Sessions: ALL active first (bottom in fzf), then inactive configs
-        active_sessions=$(tmux ls -F '#{session_name}' 2>/dev/null)
-        active_pipe=$(echo "$active_sessions" | tr '\n' '|')
-        configs=$(ls --color=never ~/.config/tmuxinator/*.yml 2>/dev/null | xargs -n1 basename | sed 's/\.yml$//' | sort)
-        # All active sessions with marker
-        echo "$active_sessions" | while read -r s; do
-            [[ -n "$s" ]] && echo "$s ◀◀◀"
-        done
-        # Inactive tmuxinator configs without marker
-        echo "$configs" | while read -r s; do
-            [[ -n "$s" && "|$active_pipe" != *"|$s|"* && "$active_pipe" != "$s|"* ]] && echo "$s"
-        done
+        # Rank order under --tiebreak=index, first line lands at the cursor.
+        # Live sessions only: dormant tmuxinator configs live behind Ctrl-T so
+        # they stop burying the path you are typing towards.
+        "$SESSION_CHOICES" list
         # Zoxide directories (most frequently used) - already sorted by frecency
         zoxide query -l
         # Files from work directories - use cache if fresh (<60s old), else regenerate
@@ -182,10 +204,14 @@ while true; do
         fi
     } | fzf \
         --multi \
+        --scheme=path \
         --tiebreak=index \
-        --preview 'item={}; name=${item% ◀◀◀}; bpath=$(echo "$item" | command grep -oE "/[^ ]+$");
-            if [[ -f ~/.config/tmuxinator/${name}.yml ]]; then
-                [[ "$item" == *" ◀◀◀" ]] && echo "=== ACTIVE ===" && tmux list-windows -t "$name" -F "  #I: #W (#P panes)" 2>/dev/null && echo ""
+        --preview 'item={}; name=$(~/dev/dotfiles/scripts/__tmux_session_choices.sh resolve "$item" 2>/dev/null || printf "%s" "$item"); bpath=$(echo "$item" | command grep -oE "/[^ ]+$");
+            if [[ "$item" == *" ◀◀◀" ]]; then
+                tmux list-windows -t "$name" -F "  #I: #W (#P panes)" 2>/dev/null
+                echo "─────────────────────────────"
+                tmux capture-pane -ep -t "$name" 2>/dev/null | command grep -v "^$" | tail -30
+            elif [[ -f ~/.config/tmuxinator/${name}.yml ]]; then
                 bat --color=always ~/.config/tmuxinator/${name}.yml 2>/dev/null || command cat ~/.config/tmuxinator/${name}.yml
             elif [[ -d "$item" ]]; then
                 exa --color=always --long --all --header --icons --git "$item" 2>/dev/null || command ls -la "$item"
@@ -199,22 +225,46 @@ while true; do
                 echo "Preview not available"
             fi' \
         --preview-window 'right:50%:wrap' \
-        --header ' C-f:30d C-x:home C-b:github C-g:PRs C-i:Linear C-e:edit C-u:music C-k:kill | C-y:copy' \
+        --header ' go    C-t:sessions C-x:home C-f:30d C-b:marks C-o:github
+ open  C-g:PRs C-l:Linear C-n:mail C-s:panes C-k:kctx
+ act   C-d:toggles C-e:edit C-u:music C-y:copy Tab:paste' \
         --prompt 'all> ' \
         --bind "$HOME_BIND" \
+        --bind "$SESSIONS_BIND" \
         --bind "$FILE_BIND" \
+        --bind "$BOOKMARKS_BIND" \
         --bind "$GITHUB_BIND" \
         --bind "$PR_BIND" \
         --bind "$LINEAR_BIND" \
+        --bind "$MAIL_BIND" \
         --bind "$EDIT_BIND" \
         --bind "$MUSIC_BIND" \
-        --bind "$KILL_SESSION_BIND" \
+        --bind "$KCTX_BIND" \
         --bind "$COPY_BIND" \
+        --bind "$PASTE_BIND" \
+        --bind "$SEARCH_BIND" \
+        --bind "$TOGGLES_BIND" \
         --bind "ctrl-c:abort" \
         2>/dev/null) || true
 
     # Exit completely if copy was performed
     [[ -f /tmp/file_opener_copied ]] && { rm -f /tmp/file_opener_copied; exit 0; }
+
+    # Replace the main picker with kctx in the same tmux popup.
+    if [[ -f "$KCTX_MARKER" ]]; then
+        rm -f "$KCTX_MARKER"
+        ~/dev/dotfiles/scripts/__kctx_popup.sh
+        exit $?
+    fi
+
+    # Copy + paste at cursor: set tmux buffer, schedule paste after popup closes
+    if [[ -f /tmp/file_opener_paste ]]; then
+        rm -f /tmp/file_opener_paste
+        content=$(xsel --clipboard --output)
+        tmux set-buffer -- "$content"
+        tmux run-shell -b "sleep 0.1 && tmux paste-buffer"
+        exit 0
+    fi
 
     # Check if we should return to main picker (marker exists from PRs/Linear)
     if [[ -f "$RETURN_MARKER" ]]; then
@@ -225,10 +275,81 @@ while true; do
     # Check if 2d files mode requested (streams instantly)
     if [[ -f "/tmp/file_opener_2d" ]]; then
         rm -f "/tmp/file_opener_2d"
-        OUTPUT=$(fd --type f --hidden --absolute-path --color never --exclude .git --exclude node_modules --exclude .cache --exclude image-cache --exclude plugins --exclude stats-cache.json --exclude claude-wt-worktrees --exclude vendor --changed-within 30d . ~/dev ~/loft ~/.config/nvim ~/.claude 2>/dev/null | xargs -P 0 stat --format '%Y %n' 2>/dev/null | sort -rn | cut -d' ' -f2- | fzf --prompt '30d> ' --preview '[[ -f {} ]] && bat --color=always {} 2>/dev/null || cat {}' --preview-window 'right:50%:wrap' --bind "$COPY_BIND") || true
+        OUTPUT=$(fd --type f --hidden --absolute-path --color never --exclude .git --exclude node_modules --exclude .cache --exclude image-cache --exclude plugins --exclude stats-cache.json --exclude claude-wt-worktrees --exclude vendor --changed-within 30d . ~/dev ~/loft ~/.config/nvim ~/.claude 2>/dev/null | xargs -P 0 stat --format '%Y %n' 2>/dev/null | sort -rn | cut -d' ' -f2- | fzf --prompt '30d> ' --preview '[[ -f {} ]] && bat --color=always {} 2>/dev/null || cat {}' --preview-window 'right:50%:wrap' --bind "$COPY_BIND" --bind "$PASTE_BIND") || true
         [[ -f /tmp/file_opener_copied ]] && { rm -f /tmp/file_opener_copied; exit 0; }
+        if [[ -f /tmp/file_opener_paste ]]; then
+            rm -f /tmp/file_opener_paste
+            content=$(xsel --clipboard --output)
+            tmux set-buffer -- "$content"
+            tmux run-shell -b "sleep 0.1 && tmux paste-buffer"
+            exit 0
+        fi
         [[ -z "$OUTPUT" ]] && continue
         break
+    fi
+
+
+    # Pane content search subview: grep every pane's scrollback, jump to the match.
+    # One fzf row per non-empty scrollback line, tab-delimited as:
+    #   pane_id <TAB> session:win.pane <TAB> line-text
+    # fzf displays/searches fields 2,3 (location + text); field 1 (pane_id) is the
+    # hidden jump target. Enter switches the client to that pane.
+    if [[ -f /tmp/file_opener_search ]]; then
+        rm -f /tmp/file_opener_search
+        index=$(tmux list-panes -a -F '#{pane_id}|#{session_name}:#{window_index}.#{pane_index}' 2>/dev/null \
+            | while IFS='|' read -r pid loc; do
+                tmux capture-pane -p -S -3000 -t "$pid" 2>/dev/null \
+                    | tr '\t' ' ' \
+                    | command grep -vE '^[[:space:]]*$' \
+                    | while IFS= read -r line; do
+                        printf '%s\t%s\t%s\n' "$pid" "$loc" "$line"
+                    done
+            done)
+
+        if [[ -z "$index" ]]; then
+            tmux display-message "No pane content to search"
+            continue
+        fi
+
+        SEARCH_OUT=$(printf '%s\n' "$index" | fzf \
+            --delimiter='\t' \
+            --with-nth=2,3 \
+            --nth=2,3 \
+            --expect=ctrl-l \
+            --prompt 'panes> ' \
+            --header 'Enter:jump to pane  C-l:jump + goto line  Esc:back' \
+            --preview 'tmux capture-pane -ep -S -3000 -t {1} 2>/dev/null | command grep -v "^$" | tail -200' \
+            --preview-window 'right:55%:wrap' \
+            --bind 'ctrl-c:abort' 2>/dev/null) || true
+
+        # Nothing picked (Esc) -> back to main picker
+        [[ -z "$SEARCH_OUT" ]] && continue
+
+        # With --expect, line 1 is the pressed key ("" for Enter, "ctrl-l" otherwise);
+        # line 2 is the selected row: pane_id <TAB> session:win.pane <TAB> line-text.
+        search_key=$(printf '%s\n' "$SEARCH_OUT" | head -1)
+        SEARCH_SEL=$(printf '%s\n' "$SEARCH_OUT" | sed -n '2p')
+        [[ -z "$SEARCH_SEL" ]] && continue
+
+        pane_id="${SEARCH_SEL%%$'\t'*}"
+        if [[ -n "$pane_id" ]]; then
+            session=$(tmux display-message -p -t "$pane_id" '#{session_name}' 2>/dev/null)
+            window=$(tmux display-message -p -t "$pane_id" '#{window_index}' 2>/dev/null)
+            tmux switch-client -t "$session" 2>/dev/null
+            tmux select-window -t "$session:$window" 2>/dev/null
+            tmux select-pane -t "$pane_id" 2>/dev/null
+            # C-l: also drop into copy-mode positioned on the matched line.
+            # search-backward treats its arg as a regex, so escape metacharacters
+            # in the captured text to match it literally.
+            if [[ "$search_key" == "ctrl-l" ]]; then
+                rest="${SEARCH_SEL#*$'\t'}"       # session:win.pane <TAB> line-text
+                matched_text="${rest#*$'\t'}"     # line-text
+                esc=$(printf '%s' "$matched_text" | sed 's/[][\\^$.*+?(){}|]/\\&/g')
+                tmux copy-mode -t "$pane_id" 2>/dev/null
+                tmux send-keys -X -t "$pane_id" search-backward "$esc" 2>/dev/null
+            fi
+        fi
+        exit 0
     fi
 
     break
@@ -236,9 +357,9 @@ done
 
 # Process selections (ctrl-y is now handled by fzf binding)
 if [ -n "$OUTPUT" ]; then
-    # Handle sessions (format: "name" or "name ◀◀◀")
-    if [[ "$OUTPUT" =~ ^([a-zA-Z0-9_-]+)( ◀◀◀)?$ ]]; then
-        session="${BASH_REMATCH[1]}"
+    # Handle decorated active sessions. `resolve` strips hierarchy chrome back
+    # to the real session name before the client switches.
+    if session=$("$SESSION_CHOICES" resolve "$OUTPUT" 2>/dev/null); then
         # Try switch first (works for any active session), fall back to tmuxinator
         if tmux switch-client -t "$session" 2>/dev/null; then
             exit 0
@@ -246,13 +367,22 @@ if [ -n "$OUTPUT" ]; then
             tmuxinator start "$session"
             exit 0
         fi
+    elif [[ "$OUTPUT" =~ ^[a-zA-Z0-9_-]+$ && -f ~/.config/tmuxinator/${OUTPUT}.yml ]]; then
+        tmuxinator start "$OUTPUT"
+        exit 0
     fi
 
     # Build array of files from selections
     declare -a file_array
+    first_line=""
     while IFS= read -r line; do
         if [ -n "$line" ]; then
-            real_path=$(~/dev/dotfiles/scripts/__extract_path_from_fzf.sh "$line")
+            real_target=$(~/dev/dotfiles/scripts/__extract_path_from_fzf.sh "$line")
+            real_path="$real_target"
+            if [[ "$real_target" =~ ^(.*):([0-9]+)$ ]] && [ -f "${BASH_REMATCH[1]}" ]; then
+                real_path="${BASH_REMATCH[1]}"
+                [ -n "$first_line" ] || first_line="${BASH_REMATCH[2]}"
+            fi
             file_array+=("$real_path")
         fi
     done <<< "$OUTPUT"
@@ -268,7 +398,11 @@ if [ -n "$OUTPUT" ]; then
             dir_path=$(dirname "$first_file")
             window_name=$(basename "$first_file")
             # Pass files as arguments to nvim
-            tmux new-window -n "$window_name" -c "$dir_path" nvim "${file_array[@]}"
+            if [ -n "$first_line" ]; then
+                tmux new-window -n "$window_name" -c "$dir_path" nvim "+$first_line" "${file_array[@]}"
+            else
+                tmux new-window -n "$window_name" -c "$dir_path" nvim "${file_array[@]}"
+            fi
         fi
     fi
 fi
