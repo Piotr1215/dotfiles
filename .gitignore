@@ -36,3 +36,4 @@ templates/commands/tasks.md
 .claude/commands/specify.md
 .claude/commands/plan.md
 .claude/commands/tasks.md
+scripts/__pycache__
