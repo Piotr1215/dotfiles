@@ -84,7 +84,7 @@ binding = { key = "4", mods = "Control" }
 # The prefix is required. A bare hex run would match a commit sha, an object id
 # and half the output of any git command on screen.
 [[hints.enabled]]
-regex = "task:[0-9a-f]{6,}"
+regex = "task: ?[0-9a-f]{6,}"
 command = { program = "/home/decoder/dev/dotfiles/scripts/__task_open.sh", args = [] }
 binding = { key = "5", mods = "Control" }
 

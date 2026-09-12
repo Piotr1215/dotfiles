@@ -24,7 +24,10 @@ fi
 
 # Accept the hint token, a bare uuid prefix, or a numeric id, since the hint
 # regex is shared with whatever else happens to be on screen.
+# The agenda's property line reads `:task: <uuid>`, so the hint may carry a
+# space after the prefix.
 uuid="${token#task:}"
+uuid="${uuid# }"
 if [[ ! "$uuid" =~ ^[0-9a-fA-F-]+$ ]]; then
   printf 'not a task reference: %s\n' "$token" >&2
   exit 2

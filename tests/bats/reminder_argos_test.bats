@@ -15,6 +15,14 @@ setup() {
   export REMINDER_LOG="${REMINDER_STATE_DIR}/fire.log"
   export REMINDER_GUI="$BIN/reminder-gui"
   export REMINDER_URL_OPENER="$BIN/url-opener"
+  export REMINDER_TASK_OPENER="$BIN/task-opener"
+  export REMINDER_MAILER="$BIN/mailer"
+  export TEST_MAIL_LOG="${BATS_TEST_TMPDIR}/mail.log"
+  printf '#!/usr/bin/env bash\n{ printf "subject: %%s\\n" "$1"; cat; } >>"$TEST_MAIL_LOG"\n' >"$BIN/mailer"
+  chmod +x "$BIN/mailer"
+  export TEST_TASK_OPENER_LOG="${BATS_TEST_TMPDIR}/task-opener.log"
+  printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$1" >"$TEST_TASK_OPENER_LOG"\n' >"$BIN/task-opener"
+  chmod +x "$BIN/task-opener"
   export REMINDER_CRON_RUN="/opt/cron/__cron_run.sh"
   export REMINDER_CRON_EVERY="/opt/cron/__cron_every.sh"
   export TEST_ATQ="${BATS_TEST_TMPDIR}/atq"
@@ -23,6 +31,7 @@ setup() {
   export TEST_ATRM="${BATS_TEST_TMPDIR}/atrm.log"
   export TEST_NEXT_JOB="${BATS_TEST_TMPDIR}/next-job"
   export TEST_CRONTAB="${BATS_TEST_TMPDIR}/crontab"
+  export CRON_EVERY_STAMP_DIR="${BATS_TEST_TMPDIR}/cron-every"
   export TEST_OPENER_LOG="${BATS_TEST_TMPDIR}/opener.log"
   export TEST_TASK_LOG="${BATS_TEST_TMPDIR}/task.log"
   export TEST_TASK_STATUS="${BATS_TEST_TMPDIR}/task.status"
@@ -211,7 +220,7 @@ only_id() {
 }
 
 @test "list --json reports the last record per id with a title and url" {
-  "$REMINDER" add "Old label" '2026-09-10 09:30' --subject 'link: https://vodafone.de/kontakt' >/dev/null
+  "$REMINDER" add "Old label" "$(date -d '+1 day' '+%Y-%m-%d 09:30')" --subject 'link: https://vodafone.de/kontakt' >/dev/null
   id="$(only_id)"
   "$REMINDER" edit "$id" --label "New label" >/dev/null
 
@@ -474,15 +483,75 @@ STUB
   [ "$output" = "GTK 3 ready; position=center-always" ]
 }
 
-@test "the Argos applet renders from list --json with safe labels and id-only actions" {
+@test "edit with no options opens the record as a form and applies what changed" {
+  "$REMINDER" add "pto off" '2026-09-27 22:00' --action exec --command '/x/__toggles.sh __run pto-mode off' >/dev/null
+  id="$(only_id)"
+  cat >"$BIN/form-editor" <<'STUB'
+#!/usr/bin/env bash
+cp "$1" "$TEST_FORM_SEEN"
+sed -i -e 's#/x/#/y/#' -e 's/^when: .*/when: 2026-09-27 21:30/' "$1"
+STUB
+  chmod +x "$BIN/form-editor"
+  export TEST_FORM_SEEN="${BATS_TEST_TMPDIR}/form"
+
+  run env XDG_RUNTIME_DIR="$BATS_TEST_TMPDIR" REMINDER_EDITOR="$BIN/form-editor" "$REMINDER" edit "$id"
+
+  [ "$status" -eq 0 ]
+  [ "$output" = "Updated $id" ]
+  grep -q "^# pto off  \[$id\]" "$TEST_FORM_SEEN"
+  grep -q '^when: 2026-09-27 22:00$' "$TEST_FORM_SEEN"
+  grep -q '^action: exec$' "$TEST_FORM_SEEN"
+  grep -q '^command: /x/__toggles.sh __run pto-mode off$' "$TEST_FORM_SEEN"
+  [ "$(last_record | jq -r '.command')" = "/y/__toggles.sh __run pto-mode off" ]
+  [ "$(last_record | jq -r '.when')" = "2026-09-27T21:30:00$(date -d 2026-09-27 +%:z)" ]
+  tail -n1 "$TEST_AT_LOG" | grep -q -- '-q r -t 202609272130'
+  ! ls "$BATS_TEST_TMPDIR"/remind-edit.* >/dev/null 2>&1
+}
+
+@test "an untouched form changes nothing and an aborted editor leaves the record alone" {
+  "$REMINDER" add "Keep me" '2026-09-27 22:00' >/dev/null
+  id="$(only_id)"
+  before="$(wc -l <"$REMINDER_STORE")"
+
+  run env XDG_RUNTIME_DIR="$BATS_TEST_TMPDIR" REMINDER_EDITOR=true "$REMINDER" edit "$id"
+  [ "$status" -eq 0 ]
+  [ "$output" = "Unchanged $id" ]
+  [ "$(wc -l <"$REMINDER_STORE")" -eq "$before" ]
+
+  run env XDG_RUNTIME_DIR="$BATS_TEST_TMPDIR" REMINDER_EDITOR=false "$REMINDER" edit "$id"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"nothing changed"* ]]
+  [ "$(wc -l <"$REMINDER_STORE")" -eq "$before" ]
+  ! ls "$BATS_TEST_TMPDIR"/remind-edit.* >/dev/null 2>&1
+}
+
+@test "the form refuses exec without a command and can switch an exec back to show" {
+  "$REMINDER" add "pto off" '2026-09-27 22:00' --action exec --command '/x/y' >/dev/null
+  id="$(only_id)"
+  printf '#!/usr/bin/env bash\nsed -i "s#^command:.*#command:#" "$1"\n' >"$BIN/clear-command"
+  printf '#!/usr/bin/env bash\nsed -i -e "s/^action:.*/action: show/" -e "s#^command:.*#command:#" "$1"\n' >"$BIN/to-show"
+  chmod +x "$BIN/clear-command" "$BIN/to-show"
+
+  run env REMINDER_EDITOR="$BIN/clear-command" "$REMINDER" edit "$id"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"exec action needs a command"* ]]
+  [ "$(last_record | jq -r '.command')" = "/x/y" ]
+
+  run env REMINDER_EDITOR="$BIN/to-show" "$REMINDER" edit "$id"
+  [ "$status" -eq 0 ]
+  [ "$(last_record | jq -r '.action')" = show ]
+  [ "$(last_record | jq -r '.command // "gone"')" = gone ]
+}
+
+@test "the Argos applet shows the count, the overdue count, and opens the agenda" {
   cat >"$BIN/reminder-helper" <<'STUB'
 #!/usr/bin/env bash
 if [ "$1" = list ]; then
   cat <<'JSON'
 [
- {"id":"0a1b2c3d","label":"Plan | <review>","when":"2026-09-10T09:30:00+02:00","action":"show","status":"active","title":"Plan | <review>","url":"https://vodafone.de/kontakt","subject":"text:link: https://vodafone.de/kontakt","overdue":false},
+ {"id":"0a1b2c3d","label":"Plan | <review>","when":"2026-09-10T09:30:00+02:00","action":"show","status":"active","title":"Plan | <review>","url":"https://vodafone.de/kontakt","subject":"text:link: https://vodafone.de/kontakt","overdue":true},
  {"id":"deadbeef","label":"Weekly","repeat":"0 9 * * 1","action":"show","status":"active","title":"Weekly","url":"","overdue":false},
- {"id":"0badf00d","label":"Briefing","when":"2026-09-11T09:00:00+02:00","action":"show","status":"active","title":"Briefing","url":"","subject":"text:first line of context\nsecond line\nthird line","overdue":false}
+ {"id":"e8ec0000","label":"pto off","when":"2026-09-27T22:00:00+02:00","action":"exec","command":"/x/__toggles.sh __run pto-mode off","status":"active","title":"pto off","url":"","overdue":false}
 ]
 JSON
 fi
@@ -492,18 +561,331 @@ STUB
   run env REMINDER_HELPER="$BIN/reminder-helper" "$ARGOS"
 
   [ "$status" -eq 0 ]
-  [[ "$output" == *">3</span>"* ]]
-  [[ "$output" == *"Plan ¦ &lt;review&gt;"* ]]
-  [[ "$output" == *"--first line of context |"* ]]
+  [[ "$output" == *"color='#ff9944'>3</span>"* ]]
+  [[ "$output" == *"1 overdue | color=#ff9944"* ]]
+  [[ "$output" == *"Open agenda | bash='/usr/local/bin/tmux new-window -n reminders \"$BIN/reminder-helper\" agenda'"* ]]
+  [[ "$output" == *"add-dialog"* ]]
+  [[ "$output" != *"Plan"* ]]
+  [[ "$output" != *"vodafone"* ]]
+  [[ "$output" != *"__toggles"* ]]
+}
+
+@test "an exec repeat is silent on 0, retires itself on a 2 hit, and survives an error" {
+  "$REMINDER" add "Seats check" --repeat 'every 7d' --action exec --command "cat $BATS_TEST_TMPDIR/verdict; exit \$(cat $BATS_TEST_TMPDIR/rc)" >/dev/null
+  id="$(only_id)"
+  gui_returns '{"action":"dismiss"}'
+
+  printf 'nothing yet\n' >"$BATS_TEST_TMPDIR/verdict"; printf '0\n' >"$BATS_TEST_TMPDIR/rc"
+  run "$REMINDER" fire "$id"
+  [ "$status" -eq 0 ]
+  [ "$(last_record | jq -r '.status')" = active ]
+  [ ! -s "$TEST_ALERT_REQUEST" ]
+  grep -q "	$id	exec	rc=0	" "$REMINDER_LOG"
+
+  printf 'broken pipe\n' >"$BATS_TEST_TMPDIR/verdict"; printf '1\n' >"$BATS_TEST_TMPDIR/rc"
+  run "$REMINDER" fire "$id"
+  [ "$status" -eq 0 ]
+  [ "$(last_record | jq -r '.status')" = active ]
+  [ "$(last_record | jq -r '.repeat')" = "every 7d" ]
+  [ "$(jq -r '.body' "$TEST_ALERT_REQUEST")" = $'exit 1\nbroken pipe' ]
+  # dismissed: the provisional snooze stands, so this run comes back
+  [ -n "$(last_record | jq -r '.when // ""')" ]
+
+  printf 'seats: 3 available\n' >"$BATS_TEST_TMPDIR/verdict"; printf '2\n' >"$BATS_TEST_TMPDIR/rc"
+  : >"$TEST_ALERT_REQUEST"
+  gui_returns '{"action":"done"}'
+  run "$REMINDER" fire "$id"
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.body' "$TEST_ALERT_REQUEST")" = "seats: 3 available" ]
+  [ "$(jq -r '.title' "$TEST_ALERT_REQUEST")" = "Seats check" ]
+  [ "$(last_record | jq -r '.status')" = done ]
+  [ "$(last_record | jq -r '.repeat // "gone"')" = gone ]
+  ! grep -q "remind-$id" "$TEST_CRONTAB"
+}
+
+@test "notify mail: a hit is mailed and the reminder is done without a dialog" {
+  "$REMINDER" add "tmux watch" --repeat '26 10 * * 1' --action exec --command "echo 'tmux 3.8 released'; exit 2" --notify mail >/dev/null
+  id="$(only_id)"
+  gui_returns '{"action":"dismiss"}'
+
+  run "$REMINDER" fire "$id"
+
+  [ "$status" -eq 0 ]
+  [ ! -s "$TEST_ALERT_REQUEST" ]
+  grep -q '^subject: tmux watch$' "$TEST_MAIL_LOG"
+  grep -q '^tmux 3.8 released$' "$TEST_MAIL_LOG"
+  [ "$(last_record | jq -r '.status')" = done ]
+  ! grep -q "remind-$id" "$TEST_CRONTAB"
+}
+
+@test "notify silent: the command told you itself, the hit just retires the reminder" {
+  "$REMINDER" add "self-mailing watch" --repeat '26 10 * * 1' --action exec --command "exit 2" --notify silent >/dev/null
+  id="$(only_id)"
+  gui_returns '{"action":"dismiss"}'
+
+  run "$REMINDER" fire "$id"
+
+  [ "$status" -eq 0 ]
+  [ ! -s "$TEST_ALERT_REQUEST" ]
+  [ ! -f "$TEST_MAIL_LOG" ]
+  [ "$(last_record | jq -r '.status')" = done ]
+}
+
+@test "notify mail on a show reminder mails the body on the date" {
+  "$REMINDER" add "Renew the domain" '2026-09-27 09:00' --subject 'url:https://example.com/renew' --notify mail >/dev/null
+  id="$(only_id)"
+
+  run "$REMINDER" fire "$id"
+
+  [ "$status" -eq 0 ]
+  grep -q '^subject: Renew the domain$' "$TEST_MAIL_LOG"
+  grep -q 'https://example.com/renew' "$TEST_MAIL_LOG"
+  [ "$(last_record | jq -r '.status')" = done ]
+  grep -q "	$id	mailed	" "$REMINDER_LOG"
+}
+
+@test "the agenda renders and applies :notify:" {
+  "$REMINDER" add "tmux watch" --repeat '26 10 * * 1' --action exec --command "/x/watch.sh" --notify silent >/dev/null
+  id="$(only_id)"
+  run "$REMINDER" agenda render
+  [[ "$output" == *"   :notify: silent"* ]]
+
+  agenda="${BATS_TEST_TMPDIR}/agenda.org"
+  "$REMINDER" agenda render | sed 's/^   :notify: silent$/   :notify: mail/' >"$agenda"
+  run "$REMINDER" agenda apply "$agenda"
+  [ "$status" -eq 0 ]
+  [ "$(last_record | jq -r '.notify')" = mail ]
+
+  "$REMINDER" agenda render | sed '/^   :notify:/d' >"$agenda"
+  run "$REMINDER" agenda apply "$agenda"
+  [ "$(last_record | jq -r '.notify // "dialog"')" = dialog ]
+}
+
+@test "on-hit and on-miss run the branch with the check output on stdin, and chain" {
+  "$REMINDER" add "revert check" --repeat 'every 1d' --action exec \
+    --command "cat $BATS_TEST_TMPDIR/verdict; exit \$(cat $BATS_TEST_TMPDIR/rc)" \
+    --on-hit "cat >$BATS_TEST_TMPDIR/hit && $BIN/mailer 'reverted'" \
+    --on-miss "cat >$BATS_TEST_TMPDIR/miss" --notify silent >/dev/null
+  id="$(only_id)"
+
+  printf 'still there\n' >"$BATS_TEST_TMPDIR/verdict"; printf '0\n' >"$BATS_TEST_TMPDIR/rc"
+  run "$REMINDER" fire "$id"
+  [ "$status" -eq 0 ]
+  [ "$(<"$BATS_TEST_TMPDIR/miss")" = "still there" ]
+  [ ! -f "$BATS_TEST_TMPDIR/hit" ]
+  [ "$(last_record | jq -r '.status')" = active ]
+  grep -q "	$id	on_miss	rc=0	" "$REMINDER_LOG"
+
+  printf 'gone\n' >"$BATS_TEST_TMPDIR/verdict"; printf '2\n' >"$BATS_TEST_TMPDIR/rc"
+  run "$REMINDER" fire "$id"
+  [ "$status" -eq 0 ]
+  [ "$(<"$BATS_TEST_TMPDIR/hit")" = "gone" ]
+  grep -q '^subject: reverted$' "$TEST_MAIL_LOG"
+  [ "$(last_record | jq -r '.status')" = done ]
+  grep -q "	$id	on_hit	rc=0	" "$REMINDER_LOG"
+
+  run "$REMINDER" agenda render
+  [[ "$output" != *"revert check"* ]]
+}
+
+@test "a failing on-hit keeps a repeating reminder alive and reports the hook, not a hit" {
+  "$REMINDER" add "download on release" --repeat 'every 1d' --action exec \
+    --command "echo 3.8 is out; exit 2" \
+    --on-hit "echo no space left; exit 1" --notify mail >/dev/null
+  id="$(only_id)"
+
+  run "$REMINDER" fire "$id"
+  [ "$status" -eq 0 ]
+  grep -q "	$id	on_hit	rc=1	" "$REMINDER_LOG"
+  grep -q '^subject: error: download on release$' "$TEST_MAIL_LOG"
+  grep -q '^on-hit exit 1$' "$TEST_MAIL_LOG"
+  grep -q '^no space left$' "$TEST_MAIL_LOG"
+  grep -q '^3.8 is out$' "$TEST_MAIL_LOG"
+  ! grep -q '^subject: download on release$' "$TEST_MAIL_LOG"
+  [ "$(last_record | jq -r '.status')" = active ]
+  [ "$(last_record | jq -r '.repeat')" = "every 1d" ]
+  run "$REMINDER" agenda render
+  [[ "$output" == *"download on release"* ]]
+}
+
+@test "the agenda round-trips :on-hit: and :on-miss:" {
+  "$REMINDER" add "watch" --repeat 'every 1d' --action exec --command /x/check.sh --on-hit '/x/y.sh && /x/mail.sh "yes"' >/dev/null
+  id="$(only_id)"
+  run "$REMINDER" agenda render
+  [[ "$output" == *'   :on-hit: /x/y.sh && /x/mail.sh "yes"'* ]]
+  agenda="${BATS_TEST_TMPDIR}/agenda.org"
+  "$REMINDER" agenda render | sed "s|^   :id: $id\$|   :on-miss: /x/mail.sh \"not yet\"\n   :id: $id|" >"$agenda"
+  run "$REMINDER" agenda apply "$agenda"
+  [ "$status" -eq 0 ]
+  [ "$(last_record | jq -r '.on_miss')" = '/x/mail.sh "not yet"' ]
+  [ "$(last_record | jq -r '.on_hit')" = '/x/y.sh && /x/mail.sh "yes"' ]
+}
+
+@test "a hit on an exec repeat that is snoozed keeps a one-shot and no schedule" {
+  "$REMINDER" add "Seats check" --repeat 'every 7d' --action exec --command "echo found; exit 2" >/dev/null
+  id="$(only_id)"
+  gui_returns '{"action":"snooze","when":"2026-09-12 09:00"}'
+
+  run "$REMINDER" fire "$id"
+
+  [ "$status" -eq 0 ]
+  [ "$(last_record | jq -r '.status')" = active ]
+  [ "$(last_record | jq -r '.repeat // "gone"')" = gone ]
+  [ "$(last_record | jq -r '.when')" = "2026-09-12T09:00:00$(date -d 2026-09-12 +%:z)" ]
+  ! grep -q "remind-$id" "$TEST_CRONTAB"
+  tail -n1 "$TEST_AT_LOG" | grep -q -- '-q r -t 202609120900'
+}
+
+@test "the dialog's Open task on a task reminder opens the task, not a link" {
+  "$REMINDER" add "Review it" '2026-09-27 22:00' --subject task:abcdef12-0000-0000-0000-000000000000 >/dev/null
+  id="$(only_id)"
+  printf 'pending\n' >"$TEST_TASK_STATUS"
+  # open re-shows the dialog, so the stub answers open once, then closes
+  cat >"$REMINDER_GUI" <<STUB
+#!/usr/bin/env bash
+cat >"\$TEST_ALERT_REQUEST"
+if [ -f "$BATS_TEST_TMPDIR/opened-once" ]; then echo '{"closed":true}'; else touch "$BATS_TEST_TMPDIR/opened-once"; echo '{"action":"open"}'; fi
+STUB
+  chmod +x "$REMINDER_GUI"
+
+  run "$REMINDER" fire "$id"
+
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.subject_type' "$TEST_ALERT_REQUEST")" = task ]
+  [ "$(<"$TEST_TASK_OPENER_LOG")" = "task:abcdef12-0000-0000-0000-000000000000" ]
+  [ ! -s "$TEST_OPENER_LOG" ]
+}
+
+@test "sync drops the cron-every stamp of a retired interval repeat and keeps live ones" {
+  "$REMINDER" add "Weekly" --repeat 'every 7d' >/dev/null
+  live="$(only_id)"
+  mkdir -p "$CRON_EVERY_STAMP_DIR"
+  printf '1789000000\n' >"$CRON_EVERY_STAMP_DIR/remind-$live"
+  printf '1789000000\n' >"$CRON_EVERY_STAMP_DIR/remind-deadbeef"
+  printf '1789000000\n' >"$CRON_EVERY_STAMP_DIR/r2r-session-sync-full"
+
+  run "$REMINDER" sync
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"stamp: dropped remind-deadbeef"* ]]
+  [ -f "$CRON_EVERY_STAMP_DIR/remind-$live" ]
+  [ ! -f "$CRON_EVERY_STAMP_DIR/remind-deadbeef" ]
+  [ -f "$CRON_EVERY_STAMP_DIR/r2r-session-sync-full" ]
+
+  "$REMINDER" delete "$live" >/dev/null
+  [ ! -f "$CRON_EVERY_STAMP_DIR/remind-$live" ]
+}
+
+@test "agenda render groups by horizon with org timestamps and detail lines" {
+  "$REMINDER" add "pto off" '2026-09-27 22:00' --action exec --command '/x/__toggles.sh __run pto-mode off' >/dev/null
+  "$REMINDER" add "Weekly" --repeat '0 9 * * 1' --subject 'text:first line
+second line' >/dev/null
+  "$REMINDER" add "Soon" "$(date -d '+2 hours' '+%Y-%m-%d %H:%M')" >/dev/null
+  "$REMINDER" add "Gone" '2020-01-01 09:00' >/dev/null
+
+  run "$REMINDER" agenda render
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"* Overdue"* ]]
+  [[ "$output" == *"* Today"* ]]
+  [[ "$output" == *"* Later"* ]]
+  [[ "$output" == *"* Recurring"* ]]
+  [[ "$output" == *"** <2026-09-27 Sun 22:00> pto off"* ]]
+  [[ "$output" == *"   :action: exec"* ]]
+  [[ "$output" == *"   :runs: /x/__toggles.sh __run pto-mode off"* ]]
+  [[ "$output" == *"** <0 9 * * 1> Weekly"* ]]
+  [[ "$output" == *"   :notes: first line"* ]]
+  [[ "$output" != *":subject:"* ]]
   [[ "$output" != *"second line"* ]]
-  [[ "$output" == *"--Thu 10 Sep 09:30 |"* ]]
-  [[ "$output" == *"open 0a1b2c3d"* ]]
-  [[ "$output" == *"edit-dialog 0a1b2c3d"* ]]
-  [[ "$output" == *"done 0a1b2c3d"* ]]
-  [[ "$output" == *"delete-dialog 0a1b2c3d"* ]]
-  [[ "$output" == *"--repeats 0 9 * * 1 |"* ]]
-  [[ "$output" != *"open deadbeef"* ]]
-  ! grep "bash=" <<<"$output" | grep -q "vodafone.de"
+  [[ "$output" != *"subject: null"* ]]
+  [[ "$output" != *":action: show"* ]]
+  [[ "$output" == *"   :id: "* ]]
+  # sections come in horizon order
+  overdue_at="$(grep -n '^\* Overdue' <<<"$output" | cut -d: -f1)"
+  later_at="$(grep -n '^\* Later' <<<"$output" | cut -d: -f1)"
+  recurring_at="$(grep -n '^\* Recurring' <<<"$output" | cut -d: -f1)"
+  [ "$overdue_at" -lt "$later_at" ]
+  [ "$later_at" -lt "$recurring_at" ]
+}
+
+@test "agenda apply edits changed lines, deletes removed ones, and adds id-less ones" {
+  "$REMINDER" add "pto off" '2026-09-27 22:00' --action exec --command '/x/__toggles.sh __run pto-mode off' >/dev/null
+  pto="$(only_id)"
+  "$REMINDER" add "Drop me" '2026-09-28 09:00' >/dev/null
+  "$REMINDER" add "Weekly" --repeat '0 9 * * 1' >/dev/null
+  weekly="$(jq -r 'select(.label == "Weekly") | .id' "$REMINDER_STORE")"
+  drop="$(jq -r 'select(.label == "Drop me") | .id' "$REMINDER_STORE")"
+  agenda="${BATS_TEST_TMPDIR}/agenda.org"
+  cat >"$agenda" <<EOF
+#+TITLE: Reminders
+# comment
+* Later
+
+** <2026-09-27 Sun 21:30> pto off, renamed
+   :action: exec
+   :runs: /y/__toggles.sh __run pto-mode off
+   :id: $pto
+
+* Recurring
+
+** <0 9 * * 1> Weekly
+   :id: $weekly
+
+** <2026-10-01 Thu 10:00> Dentist
+
+** <every 7d> Read the newsletter
+   :action: open
+   :url: https://example.com/news
+EOF
+
+  run "$REMINDER" agenda apply "$agenda"
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Updated $pto"* ]]
+  [[ "$output" == *"Unchanged $weekly"* ]]
+  [[ "$output" == *"Deleted $drop"* ]]
+  [[ "$output" == *"Added "*"Dentist"* ]]
+  rec="$(jq -c -s 'reduce .[] as $r ({}; .[$r.id] = $r) | .[]' "$REMINDER_STORE")"
+  [ "$(jq -r --arg id "$pto" 'select(.id == $id) | .label' <<<"$rec")" = "pto off, renamed" ]
+  [ "$(jq -r --arg id "$pto" 'select(.id == $id) | .when' <<<"$rec")" = "2026-09-27T21:30:00$(date -d 2026-09-27 +%:z)" ]
+  [ "$(jq -r --arg id "$pto" 'select(.id == $id) | .command' <<<"$rec")" = "/y/__toggles.sh __run pto-mode off" ]
+  [ "$(jq -r --arg id "$drop" 'select(.id == $id) | .status' <<<"$rec")" = deleted ]
+  [ "$(jq -r 'select(.label == "Dentist") | .when' <<<"$rec")" = "2026-10-01T10:00:00$(date -d 2026-10-01 +%:z)" ]
+  [ "$(jq -r 'select(.label == "Dentist") | .action' <<<"$rec")" = show ]
+  [ "$(jq -r 'select(.label == "Read the newsletter") | .repeat' <<<"$rec")" = "every 7d" ]
+  [ "$(jq -r 'select(.label == "Read the newsletter") | .action' <<<"$rec")" = open ]
+  [ "$(jq -r 'select(.label == "Read the newsletter") | .subject' <<<"$rec")" = "url:https://example.com/news" ]
+  [ "$(jq -r 'select(.label == "Read the newsletter") | .origin' <<<"$rec")" = agenda ]
+  grep -q -- '-q r -t 202609272130' "$TEST_AT_LOG"
+}
+
+@test "agenda apply refuses a line it cannot read before writing anything" {
+  "$REMINDER" add "Keep" '2026-09-27 22:00' >/dev/null
+  id="$(only_id)"
+  before="$(wc -l <"$REMINDER_STORE")"
+  agenda="${BATS_TEST_TMPDIR}/agenda.org"
+  printf '** <2026-09-27 Sun 23:00> Keep\n   :id: %s\nthis is not a reminder line\n' "$id" >"$agenda"
+
+  run "$REMINDER" agenda apply "$agenda"
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Line 3: cannot read it"* ]]
+  [ "$(wc -l <"$REMINDER_STORE")" -eq "$before" ]
+}
+
+@test "bare remind is the agenda: renders to the state file, runs the editor, and applies" {
+  "$REMINDER" add "Move me" '2026-09-27 22:00' >/dev/null
+  id="$(only_id)"
+  printf '#!/usr/bin/env bash\nsed -i "s/22:00/20:00/" "$1"\n' >"$BIN/agenda-editor"
+  chmod +x "$BIN/agenda-editor"
+
+  run env REMINDER_EDITOR="$BIN/agenda-editor" "$REMINDER"
+
+  [ "$status" -eq 0 ]
+  [ -f "$REMINDER_STATE_DIR/agenda.org" ]
+  grep -q "^\*\* <2026-09-27 Sun 20:00> Move me" "$REMINDER_STATE_DIR/agenda.org"
+  grep -q "^   :id: $id" "$REMINDER_STATE_DIR/agenda.org"
+  [ "$(last_record | jq -r '.when')" = "2026-09-27T20:00:00$(date -d 2026-09-27 +%:z)" ]
 }
 
 @test "the empty Argos applet stays available for adding a reminder" {
@@ -516,7 +898,8 @@ STUB
   run env REMINDER_HELPER="$BIN/reminder-helper" "$ARGOS"
 
   [ "$status" -eq 0 ]
-  [[ "$output" == *">0</span>"* ]]
-  [[ "$output" == *"No active reminders"* ]]
+  [[ "$output" == *"color='#666666'>0</span>"* ]]
+  [[ "$output" != *"overdue"* ]]
+  [[ "$output" == *"Open agenda"* ]]
   [[ "$output" == *"add-dialog"* ]]
 }

@@ -241,6 +241,9 @@ class ReminderDialog:
         done_label = "Done"
         if str(self.request.get("subject_type", "")) == "task":
             done_label = "Task done"
+            open_task = Gtk.Button(label="Open task")
+            open_task.connect("clicked", lambda *_args: self.finish({"action": "open"}))
+            self.add(actions, open_task)
         done = Gtk.Button(label=done_label)
         done.get_style_context().add_class("suggested-action")
         done.connect("clicked", lambda *_args: self.finish({"action": "done"}))
