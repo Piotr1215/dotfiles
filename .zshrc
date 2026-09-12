@@ -15,7 +15,7 @@ bindkey '^[[1;5C' forward-word  # Ctrl+Right Arrow
 export XCURSOR_SIZE=24
 
 if [[ -z ${TMUX+X}${ZSH_SCRIPT+X}${ZSH_EXECUTION_STRING+X} ]] && [[ "$(tty)" != /dev/tty* ]]; then
-  tmuxinator start poke
+  tmuxinator start poke --suppress-tmux-version-warning
 fi
 
 ZSH_THEME="simple" #Best theme ever
@@ -469,10 +469,14 @@ export PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome
 alias stats="~/.claude/dashboards/claude-dashboard-swap.sh"
 
 # bastion secret helpers (touch-gated secrets via YubiKey): sec / secadd / secfile
-source ~/.config/age/secret.zsh
+if [ -f "$HOME/.config/age/secret.zsh" ]; then
+    source "$HOME/.config/age/secret.zsh"
+fi
 
 # password-store helpers (session secrets direnv autoloads, no gate): passfromenv
-source ~/.config/pass/pass.zsh
+if [ -f "$HOME/.config/pass/pass.zsh" ]; then
+    source "$HOME/.config/pass/pass.zsh"
+fi
 
 # deno on PATH: yt-dlp wants a JS runtime for YouTube player extraction and warns
 # on every invocation without one. Guarded like the cargo line above, since this
