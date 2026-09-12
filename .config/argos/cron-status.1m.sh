@@ -26,6 +26,14 @@ TRIGGER="$HOME/dev/dotfiles/scripts/__cron_trigger.sh"
 # trigger: it rewrites one state file and exits, and refresh=true on the menu
 # item makes the star disappear on the click rather than a tick later.
 ACK="$HOME/dev/dotfiles/scripts/__cron_ack.sh"
+# Opens the crontab in nvim on the job's own line and installs the edit on
+# save; the description line of every row is the click that gets there. A new
+# tmux window in the session of the most recent client, the terminal in front
+# of Piotr, same shape as the reminders applet: not alacritty (lands outside
+# tmux) and not a popup (cannot stack on another). Absolute tmux path because
+# argos runs outside the shell PATH. The window closes when nvim exits.
+EDIT="$HOME/dev/dotfiles/scripts/__cron_edit.sh"
+TMUX_BIN="/usr/local/bin/tmux"
 # How long a hit keeps the star lit. A hit points at something already
 # delivered (mail, a note, a log line), so its value expires: past a day the
 # star is asking for attention that was either given or deliberately skipped,
@@ -61,236 +69,112 @@ human_age() {
     fi
 }
 
-# Rough upper bound, in seconds, on how long a job may legitimately go quiet.
-# Only precise enough to separate "ran on schedule" from "silently stopped" —
-# healthchecks.io's dead-man's-switch idea, applied without a server.
-expected_interval() {
-    local sched="$1" min hour dom mon dow
-    case "$sched" in
-        @reboot) echo 2592000; return ;;      # only at boot; never call stale
-        @daily|@midnight) echo 172800; return ;;
-        @hourly) echo 7200; return ;;
-        @weekly) echo 1209600; return ;;
-        @monthly) echo 5184000; return ;;
-    esac
-    read -r min hour dom mon dow <<<"$sched"
-    # Grace is 2x the nominal period, so one missed tick isn't an alarm.
-    if [[ "$min" == */* ]]; then
-        echo $(( ${min#*/} * 60 * 2 )); return
-    fi
-    if [[ "$min" == *,* ]]; then
-        echo 7200; return                      # a few times an hour
-    fi
-    if [[ "$hour" == "*" ]]; then
-        echo 7200; return                      # hourly at a fixed minute
-    fi
-    if [[ "$hour" == */* ]]; then
-        echo $(( ${hour#*/} * 3600 * 2 )); return
-    fi
-    if [[ "$dow" != "*" || "$dom" != "*" || "$mon" != "*" ]]; then
-        echo 1209600; return                   # weekly-or-rarer
-    fi
-    echo 172800                                # daily at a fixed time
-}
+# Parser and staleness budget are shared with __cron_status_dump.sh; see the
+# lib for why they left this file.
+# shellcheck source=/home/decoder/dev/dotfiles/scripts/__lib_cron_view.sh
+source "$HOME/dev/dotfiles/scripts/__lib_cron_view.sh"
 
-# --- tally state across every job.json for the top-bar summary -------------
+# --- one pass over the registry: a row per job, plus the tallies -----------
+# The registry is the crontab, so a state file left behind by a deleted job
+# cannot light the badge: it has no row, so it has no vote. (A hit from a
+# retired reply-watcher held a star for hours that way.) Rows are buffered
+# because argos wants the bar line first and the tallies are only known at
+# the end.
 errors=0
 hits=0
+overdue=0
 running=0
-if [ -d "$STATE_DIR" ]; then
-    for f in "$STATE_DIR"/*.json; do
-        [ -f "$f" ] || continue
-        # join("|"), not @tsv. Space, tab and newline are IFS *whitespace* in
-        # bash, and runs of IFS whitespace collapse into one delimiter however
-        # IFS is set -- so with tabs, a job carrying no .pid (which is every
-        # finished run) shifts .ts left into $pid and leaves $hts empty. The
-        # expiry check below would then read every hit as timestamp-less and
-        # count it forever, i.e. the exact bug the TTL exists to fix. A pipe is
-        # not whitespace, so empty fields survive, and none of these three can
-        # contain one: state is a fixed word, pid and ts are digits.
-        IFS='|' read -r st pid hts < <(jq -r '[.state // "", .pid // "", .ts // ""] | join("|")' "$f" 2>/dev/null || echo "")
-        case "$st" in
-            # Errors never expire. Red is not a notification, it is an open
-            # fault: it stays until a run clears it or someone fixes the job.
-            error) errors=$(( errors + 1 )) ;;
-            hit)
-                # A hit older than the TTL stops counting. Without this the
-                # star is latched to the last exit code, so a job on
-                # MON,WED,FRI holds one over the whole weekend and the badge
-                # teaches you to ignore it. A hit with no readable timestamp
-                # counts, because the alternative is dropping a signal on the
-                # strength of a parse failure.
-                if [ -z "$hts" ] || [ "$(( $(date +%s) - hts ))" -le "$HIT_TTL" ]; then
-                    hits=$(( hits + 1 ))
-                fi
-                ;;
-            # Deliberately uncounted. The red badge is a call to action: it means
-            # a job's latest run FAILED and wants looking at. A run the nightly
-            # poweroff killed did not fail, so counting it here would summon
-            # attention every morning for nothing and teach the badge to be
-            # ignored, which costs the one signal that has to stay trustworthy.
-            interrupted) ;;
-            running)
-                # A marker whose process is gone is a run that died before it
-                # could write a result, not a live job. Without this the dot
-                # would pulse forever after a single crash.
-                if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
-                    running=$(( running + 1 ))
-                fi
-                ;;
-        esac
-    done
-fi
+rows=""
+attention=""
+now=$(date +%s)
 
-# Not a clock/alarm glyph: the reminders widget already owns those in the bar.
-icon="🗓"
-if [ "$errors" -gt 0 ]; then
-    color="#ff4444"; badge=" ${errors}!"
-elif [ "$hits" -gt 0 ]; then
-    color="#44ff44"; badge=" ${hits}★"
-else
-    color="#888888"; badge=""
-fi
-
-bar="<span color='${color}'>${icon}${badge}</span>"
-
-if [ "$running" -gt 0 ]; then
-    # Two button lines make argos alternate between them every 3s on its own
-    # timer, without re-running this script (button.js: _cycleTimeout, which
-    # only starts when buttonLines.length > 1). That is the whole pulse: a
-    # dedicated fast-refreshing widget would have meant a second icon in the
-    # bar, and refreshing this one every few seconds would re-parse the entire
-    # crontab and close the job menu under the cursor on every tick.
-    #
-    # The dot says work is in flight; its colour says whether the last results
-    # were clean. Red here does not mean the running job failed (it has not
-    # finished), it means something else is already in the error state and is
-    # worth looking at once this one lands.
-    if [ "$errors" -gt 0 ]; then
-        dot="🔴"
-    else
-        dot="🟢"
-    fi
-
-    # Self-colouring emoji rather than a <span color=...> around U+25CF: in the
-    # panel that span rendered plain white, verified by screenshotting the bar.
-    # An emoji carries its own colour and cannot be overridden by the panel
-    # theme. Both glyphs are the same width, so nothing shifts as it blinks.
-    # `dropdown=false` keeps the cycle lines out of the menu, which argos would
-    # otherwise prepend them to.
-    echo "${dot} ${bar} | font='monospace' size=11 dropdown=false"
-    echo "⚫ ${bar} | font='monospace' size=11 dropdown=false"
-else
-    echo "${bar} | font='monospace' size=11"
-fi
-echo "---"
-printf '<b>%s %-26s %-14s %-6s %s</b> | font=monospace\n' "  " "JOB" "SCHEDULE" "LAST" "NEXT"
-
-# --- one row per registered job ---------------------------------------------
-crontab -l 2>/dev/null | while IFS= read -r line; do
-    [[ -z "$line" || "$line" == \#* ]] && continue
-    [[ "$line" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]] && continue
-
-    if [[ "$line" == @* ]]; then
-        schedule=$(awk '{print $1}' <<<"$line")
-        cmd=$(awk '{$1=""; print substr($0,2)}' <<<"$line")
-    else
-        schedule=$(awk '{print $1, $2, $3, $4, $5}' <<<"$line")
-        cmd=$(awk '{for(i=6;i<=NF;i++) printf "%s ", $i; print ""}' <<<"$line")
-    fi
-    # A wrapped line names its own job: `__cron_run.sh <job-name> -- ...`.
-    # That name is authoritative, so take it verbatim and never re-derive it
-    # from the command (which would resolve to the wrapper itself).
-    if [[ "$cmd" == *__cron_run.sh* ]]; then
-        job=$(sed -E 's/.*__cron_run\.sh[[:space:]]+([^[:space:]]+).*/\1/' <<<"$cmd")
-    else
-        # Unwrapped legacy line: name after its first real script, skipping
-        # env assignments, sudo, and shell preamble.
-        script=$(grep -oE '(/[^ ]+)?/[A-Za-z0-9_.-]+\.(sh|py)' <<<"$cmd" | head -1 || true)
-        if [ -n "$script" ]; then
-            job=$(basename "$script" | sed 's/\.[^.]*$//')
-        else
-            job=$(basename "$(awk '{for(i=1;i<=NF;i++) if ($i !~ /=/ && $i != "sudo") {print $i; exit}}' <<<"$cmd")")
-        fi
-        case "$cmd" in
-            *--full*) job="${job}-full" ;;
-            *--reconcile*) job="${job}-reconcile" ;;
-        esac
-        [[ "$line" == @reboot* ]] && job="${job}-reboot"
-    fi
-    [ -n "$job" ] || continue
-
+while IFS=$'\t' read -r schedule job cmd purpose; do
     # Reset per row: a leaked $ts from the previous job would paint an
     # unknowable job green off someone else's timestamp.
-    ts=""
+    ts=""; msg=""; age="?"; log_path=""
     status_file="${STATE_DIR}/${job}.json"
     if [ -f "$status_file" ]; then
-        state=$(jq -r '.state // "?"' "$status_file" 2>/dev/null)
-        ts=$(jq -r '.ts // empty' "$status_file" 2>/dev/null)
-        age=$( [ -n "$ts" ] && human_age "$ts" || echo "?" )
+        IFS='|' read -r state ts pid msg < <(jq -r '[.state // "?", .ts // "", .pid // "", (.message // "" | gsub("\n"; " "))] | join("|")' "$status_file" 2>/dev/null || echo "?|||")
+        [ -n "$ts" ] && age=$(human_age "$ts")
         log_path=$(jq -r '.log_path // ""' "$status_file" 2>/dev/null)
-        # A `running` marker carries only {job, ts, state, pid} -- __cron_run.sh
-        # adds log_path only once the run finishes -- so log_path comes back
-        # empty for the one case where following the log matters most: a job
-        # in flight right now. The wrapper's log path is always predictable
-        # (${STATE_DIR}/${job}.log), so fall back to it; the existence check
-        # below still gates whether the menu item is offered.
-        if [ -z "$log_path" ]; then
-            log_path="${STATE_DIR}/${job}.log"
-        fi
+        # A `running` marker carries only {job, ts, state, pid}; the wrapper
+        # adds log_path once the run finishes. The path is predictable, so
+        # fall back to it; the existence check below still gates the menu.
+        [ -z "$log_path" ] && log_path="${STATE_DIR}/${job}.log"
     else
         # No redirect is common; a non-match must not abort the loop.
-        logpath_guess=$(grep -oE '>>?\s*[^ ]+\.log' <<<"$line" | awk '{print $NF}' | tail -1 || true)
+        logpath_guess=$(grep -oE '>>?\s*[^ ]+\.log' <<<"$cmd" | awk '{print $NF}' | tail -1 || true)
         logpath_guess="${logpath_guess/#\~/$HOME}"
         if [ -n "$logpath_guess" ] && [ -f "$logpath_guess" ]; then
             ts=$(stat -c %Y "$logpath_guess" 2>/dev/null || echo "")
-            age=$( [ -n "$ts" ] && human_age "$ts" || echo "?" )
+            [ -n "$ts" ] && age=$(human_age "$ts")
             state="legacy"
             log_path="$logpath_guess"
         elif [[ "$cmd" == *__cron_run.sh* ]]; then
-            # Wrapped but no state yet: it simply has not come round to its
-            # next run since being wrapped. Waiting, not unknowable.
+            # Wrapped but no state yet: it has not come round to its next run
+            # since being wrapped. Waiting, not unknowable.
             state="pending"
             age="-"
-            log_path=""
         else
             state="legacy"
-            age="?"
-            log_path="$logpath_guess"
         fi
     fi
 
-    # Wrapper state is authoritative. Without it, fall back to staleness:
-    # ran within its expected window = green, overdue = amber, unknowable = grey.
+    words=$(cron_human_schedule "$schedule" "$cmd")
+    # Wrapper state is authoritative for the LAST run. Age is authoritative
+    # for whether there has been one recently enough: a green result older
+    # than the schedule allows is a job that stopped firing, and that is the
+    # failure the wrapper cannot see because it never ran.
     case "$state" in
-        error) glyph="🔴" ;;
-        hit) glyph="🟢" ;;
-        no-hit) glyph="🟢" ;;
+        error)
+            glyph="🔴"; errors=$(( errors + 1 ))
+            attention+="🔴 ${job#__} failed: ${msg:0:70}|${job}"$'\n'
+            ;;
+        hit|no-hit)
+            if cron_spent "$msg"; then
+                # Ran fine and told us its purpose is over: a tripped
+                # verificator still on the schedule. Retire it.
+                glyph="✅"; age="done"
+                attention+="✅ ${job#__} has done its job, retire the line|${job}"$'\n'
+            elif cron_overdue "$ts" "$schedule" "$cmd"; then
+                glyph="🟠"; overdue=$(( overdue + 1 ))
+                attention+="🟠 ${job#__} has not run for ${age} (${words})|${job}"$'\n'
+            else
+                glyph="🟢"
+                # A hit older than the TTL stops counting. The star is latched
+                # to the last exit code, so a MON,WED,FRI job would hold one
+                # over the whole weekend and teach the badge to be ignored.
+                if [ "$state" = "hit" ] && { [ -z "$ts" ] || [ $(( now - ts )) -le "$HIT_TTL" ]; }; then
+                    hits=$(( hits + 1 ))
+                fi
+            fi
+            ;;
         pending) glyph="🔵" ;;
         # Ran, then something took the machine out from under it. Amber, not
         # red: nothing is broken and there is nothing to fix, so it must not
-        # read as "a cron job is fucked, spawn klod".
+        # read as "a cron job is fucked, spawn klod". Uncounted for the same
+        # reason: the poweroff would summon attention every morning.
         interrupted) glyph="🟠" ;;
         running)
-            # A marker whose process is gone means the run never wrote a result.
-            # Amber for the same reason: the overwhelmingly common cause is the
-            # nightly poweroff, and red has to keep meaning "the latest run
-            # failed". A genuine hang still goes red, because `timeout
-            # --kill-after` sends SIGKILL and the wrapper records 137 as error.
-            pid=$(jq -r '.pid // empty' "$status_file" 2>/dev/null)
+            # A marker whose process is gone is a run that died before it
+            # could write a result, not a live job. A genuine hang still goes
+            # red: `timeout --kill-after` sends SIGKILL and the wrapper
+            # records 137 as error.
             if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
-                glyph="🟣"; age="now"
+                glyph="🟣"; age="now"; running=$(( running + 1 ))
             else
                 glyph="🟠"; age="died"
+                attention+="🟠 ${job#__} died mid-run (the nightly poweroff, usually); run it again|${job}"$'\n'
             fi
             ;;
         *)
+            # Legacy: no wrapper, so staleness is the only signal there is.
             if [ -n "$ts" ]; then
-                budget=$(expected_interval "$schedule")
-                if [ "$(( $(date +%s) - ts ))" -le "$budget" ]; then
-                    glyph="🟢"
+                if cron_overdue "$ts" "$schedule" "$cmd"; then
+                    glyph="🟠"; overdue=$(( overdue + 1 ))
+                    attention+="🟠 ${job#__} has not run for ${age} (${words})|${job}"$'\n'
                 else
-                    glyph="🟠"
+                    glyph="🟢"
                 fi
             else
                 glyph="⚫"
@@ -302,42 +186,84 @@ crontab -l 2>/dev/null | while IFS= read -r line; do
     # read at a glance and `__` is noise there.
     label="${job#__}"
     next=$(printf '%s\n' "$schedule" | "$NEXT_RUN" 2>/dev/null || echo "-")
-    row=$(esc "$(printf '%s %-26s %-14s %-6s %s' "$glyph" "$label" "$schedule" "$age" "$next")")
+    # Purpose before schedule: "what is this" is the question a glance asks.
+    # The row shows the first 54 characters; the full sentence is the first
+    # line of the row's submenu, so a click reads the rest.
+    short="$purpose"
+    [ "${#short}" -gt 54 ] && short="${short:0:53}…"
+    row=$(esc "$(printf '%s %-26s %-54s %-20s %-5s %s' "$glyph" "${label:0:26}" "$short" "$words" "$age" "$next")")
     # One action for every row, whatever its state: hand the job to the
-    # cron-manager agent. A log-only click would leave the unknowable jobs
-    # (no redirect, no wrapper) with nothing to click at all.
-    # A row with children renders as a menu in argos and its own action never
-    # fires, so every job carries the same children rather than only the ones
-    # holding a log. Clicking any job then behaves identically.
+    # cron-manager agent. A row with children renders as a menu in argos and
+    # its own action never fires, so every job carries the same children.
     #
-    # "run now" goes last on purpose. It used to sit directly above the log
-    # item, which is the only entry here that opens a window, so an imprecise
-    # or repeated click ran the job and then opened nvim on its log. Nothing
-    # sits below it now.
-    echo "${row} | font=monospace"
-    echo "--🔍 check status with agent | bash='${INVESTIGATE} \"${job}\"' terminal=false"
+    # "run now" goes last on purpose: it used to sit directly above the log
+    # item, the only entry that opens a window, so an imprecise or repeated
+    # click ran the job and then opened nvim on its log.
+    rows+="${row} | font=monospace"$'\n'
+    rows+="--✎ $(esc "${purpose:-no description yet; click to add a comment line above the job}") | bash='${TMUX_BIN} new-window -n crontab \"${EDIT}\" \"${job}\"' terminal=false refresh=true"$'\n'
+    rows+="--🔍 check status with agent | bash='${INVESTIGATE} \"${job}\"' terminal=false"$'\n'
     if [ -n "$log_path" ] && [ -f "$log_path" ]; then
-        # Same command either way -- nvim opens the live-appended log same as a
-        # finished one -- only the label changes, so a running job reads as
-        # "come watch this" rather than "here's what already happened".
         if [ "$state" = "running" ]; then
-            echo "--📄 follow live log | bash='alacritty -e nvim + \"${log_path}\"' terminal=false"
+            rows+="--📄 follow live log | bash='alacritty -e nvim + \"${log_path}\"' terminal=false"$'\n'
         else
-            echo "--📄 open last run log | bash='alacritty -e nvim + \"${log_path}\"' terminal=false"
+            rows+="--📄 open last run log | bash='alacritty -e nvim + \"${log_path}\"' terminal=false"$'\n'
         fi
     else
-        echo "--📄 no log yet | bash='true' terminal=false"
+        rows+="--📄 no log yet | bash='true' terminal=false"$'\n'
     fi
-    # Only a hit is ackable, and only while it is one: the badge is latched to
-    # the last exit code, so a job that runs twice a week can hold a star over
-    # mail read two days ago. Errors get no such entry on purpose (see
-    # __cron_ack.sh) -- red has to keep meaning "this wants fixing".
+    # Only a hit is ackable, and only while it is one. Errors get no such
+    # entry on purpose (see __cron_ack.sh): red has to keep meaning "this
+    # wants fixing".
     if [ "$state" = "hit" ]; then
-        echo "--★ mark as read | bash='${ACK} \"${job}\"' terminal=false refresh=true"
+        rows+="--★ mark as read | bash='${ACK} \"${job}\"' terminal=false refresh=true"$'\n'
     fi
-    echo "--▶ run now | bash='${TRIGGER} \"${job}\"' terminal=false refresh=true"
-done
+    rows+="--▶ run now | bash='${TRIGGER} \"${job}\"' terminal=false refresh=true"$'\n'
+done < <(cron_registry)
 
+# --- the bar ----------------------------------------------------------------
+# Not a clock/alarm glyph: the reminders widget already owns those in the bar.
+# Red is an open fault and never expires. Amber is a job that stopped firing:
+# nothing failed, so it is not red, but it is the failure that hides longest,
+# so it is not silent either. Green is unread findings.
+icon="🗓"
+if [ "$errors" -gt 0 ]; then
+    color="#ff4444"; badge=" ${errors}!"
+elif [ "$overdue" -gt 0 ]; then
+    color="#ffaa00"; badge=" ${overdue}⌛"
+elif [ "$hits" -gt 0 ]; then
+    color="#44ff44"; badge=" ${hits}★"
+else
+    color="#888888"; badge=""
+fi
+bar="<span color='${color}'>${icon}${badge}</span>"
+
+if [ "$running" -gt 0 ]; then
+    # Two button lines make argos alternate between them every 3s on its own
+    # timer, without re-running this script (button.js: _cycleTimeout). That
+    # is the whole pulse. The dot says work is in flight; its colour says
+    # whether the last results were clean. Self-colouring emoji rather than a
+    # <span color=...>: in the panel that span rendered plain white.
+    if [ "$errors" -gt 0 ]; then dot="🔴"; else dot="🟢"; fi
+    echo "${dot} ${bar} | font='monospace' size=11 dropdown=false"
+    echo "⚫ ${bar} | font='monospace' size=11 dropdown=false"
+else
+    echo "${bar} | font='monospace' size=11"
+fi
+echo "---"
+# What needs a person, in words, before the table. Each line is one click
+# straight to the agent on that job; no submenu to open first. Nothing here
+# means nothing needs doing, and the table below is only for the curious.
+if [ -n "$attention" ]; then
+    while IFS='|' read -r text job; do
+        [ -n "$text" ] || continue
+        echo "$(esc "$text") | bash='${INVESTIGATE} \"${job}\"' terminal=false"
+    done <<<"$attention"
+else
+    echo "Nothing needs you. | color=#888888"
+fi
+echo "---"
+printf '<b>%s %-26s %-54s %-20s %-5s %s</b> | font=monospace\n' "  " "JOB" "WHAT IT DOES" "SCHEDULE" "LAST" "NEXT"
+printf '%s' "$rows"
 echo "---"
 echo "🖥 Open cron-manager | bash='${INVESTIGATE}' terminal=false"
 echo "Refresh now | refresh=true"

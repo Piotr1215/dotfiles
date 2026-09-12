@@ -38,71 +38,22 @@ state_glyph() {
         # machine away mid-run and the job just wants running again.
         interrupted) echo "🟠" ;;
         stale) echo "🟠" ;;
+        # Ran clean and said its purpose is over (a tripped verificator).
+        spent) echo "✅" ;;
         pending) echo "🔵" ;;
         running) echo "🟣" ;;
         *) echo "⚫" ;;
     esac
 }
 
-# Rough upper bound, in seconds, on how long a job may legitimately go quiet.
-# Only precise enough to separate "ran on schedule" from "silently stopped".
-expected_interval() {
-    local sched="$1" min hour dom mon dow
-    case "$sched" in
-        @reboot) echo 2592000; return ;;
-        @daily|@midnight) echo 172800; return ;;
-        @hourly) echo 7200; return ;;
-        @weekly) echo 1209600; return ;;
-        @monthly) echo 5184000; return ;;
-    esac
-    read -r min hour dom mon dow <<<"$sched"
-    if [[ "$min" == */* ]]; then echo $(( ${min#*/} * 60 * 2 )); return; fi
-    if [[ "$min" == *,* ]]; then echo 7200; return; fi
-    if [[ "$hour" == "*" ]]; then echo 7200; return; fi
-    if [[ "$hour" == */* ]]; then echo $(( ${hour#*/} * 3600 * 2 )); return; fi
-    if [[ "$dow" != "*" || "$dom" != "*" || "$mon" != "*" ]]; then echo 1209600; return; fi
-    echo 172800
-}
+# Parser and staleness budget are shared with the argos widget.
+# shellcheck source=/home/decoder/dev/dotfiles/scripts/__lib_cron_view.sh
+source "$HOME/dev/dotfiles/scripts/__lib_cron_view.sh"
 
-printf '%-28s %-15s %-4s %-9s %-7s %s\n' "JOB" "SCHEDULE" "" "LAST" "NEXT" "NOTE"
-printf '%s\n' "--------------------------------------------------------------------------------"
+printf '%-34s %-54s %-19s %-4s %-9s %-7s %s\n' "JOB" "WHAT IT DOES" "SCHEDULE" "" "LAST" "NEXT" "NOTE"
+printf '%s\n' "-------------------------------------------------------------------------------------------------------------------------------------------------"
 
-crontab -l 2>/dev/null | while IFS= read -r line; do
-    # Skip comments, blank lines, and bare env-var assignments (no leading whitespace, no digit/*/@ start).
-    [[ -z "$line" || "$line" == \#* ]] && continue
-    [[ "$line" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]] && continue
-
-    # First 5 whitespace-separated fields are the schedule; @special forms count as one field.
-    if [[ "$line" == @* ]]; then
-        schedule=$(awk '{print $1}' <<<"$line")
-        cmd=$(awk '{$1=""; print substr($0,2)}' <<<"$line")
-    else
-        schedule=$(awk '{print $1, $2, $3, $4, $5}' <<<"$line")
-        cmd=$(awk '{for(i=6;i<=NF;i++) printf "%s ", $i; print ""}' <<<"$line")
-    fi
-
-    # A wrapped line names its own job: `__cron_run.sh <job-name> -- ...`.
-    # That name is authoritative, so take it verbatim and never re-derive it
-    # from the command (which would resolve to the wrapper itself).
-    if [[ "$cmd" == *__cron_run.sh* ]]; then
-        job=$(sed -E 's/.*__cron_run\.sh[[:space:]]+([^[:space:]]+).*/\1/' <<<"$cmd")
-    else
-        # Unwrapped legacy line: name after its first real script, skipping
-        # env assignments, sudo, and shell preamble.
-        script=$(grep -oE '(/[^ ]+)?/[A-Za-z0-9_.-]+\.(sh|py)' <<<"$cmd" | head -1 || true)
-        if [ -n "$script" ]; then
-            job=$(basename "$script" | sed 's/\.[^.]*$//')
-        else
-            job=$(basename "$(awk '{for(i=1;i<=NF;i++) if ($i !~ /=/ && $i != "sudo") {print $i; exit}}' <<<"$cmd")")
-        fi
-        case "$cmd" in
-            *--full*) job="${job}-full" ;;
-            *--reconcile*) job="${job}-reconcile" ;;
-        esac
-        [[ "$line" == @reboot* ]] && job="${job}-reboot"
-    fi
-    [ -n "$job" ] || continue
-
+while IFS=$'\t' read -r schedule job cmd purpose; do
     ts=""
     status_file="${STATE_DIR}/${job}.json"
     if [ -f "$status_file" ]; then
@@ -110,14 +61,27 @@ crontab -l 2>/dev/null | while IFS= read -r line; do
         state=$(jq -r '.state // "?"' "$status_file" 2>/dev/null)
         msg=$(jq -r '.message // ""' "$status_file" 2>/dev/null)
         last=$( [ -n "$ts" ] && human_age "$ts" || echo "unknown" )
+        # The wrapper reports the last run. Whether there has been one lately
+        # is a separate question, and the one a green state file cannot answer.
+        case "$state" in
+            hit|no-hit)
+                if cron_spent "$msg"; then
+                    state="spent"
+                    msg="tripped, still scheduled: retire this line"
+                elif cron_overdue "$ts" "$schedule" "$cmd"; then
+                    state="stale"
+                    msg="overdue: last ran ${last} ago, stopped firing"
+                fi
+                ;;
+        esac
     else
         # Fallback: last-write time of a redirected log, if the line has one.
         # No redirect is the common case, so a non-match must not abort the loop.
-        logpath=$(grep -oE '>>?\s*[^ ]+\.log' <<<"$line" | awk '{print $NF}' | tail -1 || true)
+        logpath=$(grep -oE '>>?\s*[^ ]+\.log' <<<"$cmd" | awk '{print $NF}' | tail -1 || true)
         if [ -n "$logpath" ] && [ -f "${logpath/#\~/$HOME}" ]; then
             ts=$(stat -c %Y "${logpath/#\~/$HOME}" 2>/dev/null || echo "")
             last=$( [ -n "$ts" ] && human_age "$ts" || echo "unknown" )
-            if [ -n "$ts" ] && [ "$(( $(date +%s) - ts ))" -gt "$(expected_interval "$schedule")" ]; then
+            if cron_overdue "$ts" "$schedule" "$cmd"; then
                 state="stale"
                 msg="overdue, stopped firing"
             else
@@ -137,7 +101,8 @@ crontab -l 2>/dev/null | while IFS= read -r line; do
     fi
 
     next=$(printf '%s\n' "$schedule" | "$NEXT_RUN" 2>/dev/null || echo "-")
-    printf '%-28s %-15s %-4s %-9s %-7s %s\n' "$job" "$schedule" "$(state_glyph "$state")" "$last" "$next" "$msg"
-done
+    [ "${#purpose}" -gt 54 ] && purpose="${purpose:0:53}…"
+    printf '%-34s %-54s %-19s %-4s %-9s %-7s %s\n' "$job" "$purpose" "$(cron_human_schedule "$schedule" "$cmd")" "$(state_glyph "$state")" "$last" "$next" "$msg"
+done < <(cron_registry)
 
-printf '\n%s\n' "Wrapper-reported jobs show real state (no-hit/hit/error). Everything else is a best-effort guess from log mtimes — route through __cron_run.sh to get real signal."
+printf '\n%s\n' "Wrapper-reported jobs show real state (no-hit/hit/error). Everything else is a best-effort guess from log mtimes; route through __cron_run.sh to get real signal. Reminders are not listed: the reminders applet owns them."
