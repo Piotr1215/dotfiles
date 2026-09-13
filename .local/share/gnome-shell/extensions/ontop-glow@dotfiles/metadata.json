@@ -1,0 +1,7 @@
+{
+  "name": "On Top Glow",
+  "description": "Draws a glow around always-on-top windows",
+  "uuid": "ontop-glow@dotfiles",
+  "shell-version": ["46"],
+  "url": ""
+}
