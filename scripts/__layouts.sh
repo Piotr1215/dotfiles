@@ -17,13 +17,26 @@ DBUS_DEST="org.gnome.Shell"
 DBUS_PATH="/org/gnome/Shell/Extensions/TileHelper"
 DBUS_IFACE="org.gnome.Shell.Extensions.TileHelper"
 
-# Parse GNOME work area once (accounts for top panel)
-IFS=' ' read -r WA_X WA_Y WA_W WA_H < <(wmctrl -d | head -1 | sed 's/.*WA: \([0-9]*\),\([0-9]*\) \([0-9]*\)x\([0-9]*\).*/\1 \2 \3 \4/')
+# Work area of the target screen (xrandr primary, or LAYOUT_MONITOR), clipped
+# to the GNOME work area so the top panel is excluded. Every layout is laid out
+# inside this rectangle, so it never spans a second monitor. See __lib_screen.sh.
+source "$(dirname "${BASH_SOURCE[0]}")/__lib_screen.sh"
+IFS=' ' read -r WA_X WA_Y WA_W WA_H < <(get_target_work_area)
 IFS=$'\n\t'
+if [[ -z "${WA_W:-}" ]]; then
+	echo "Cannot determine screen work area (xrandr/wmctrl)." >&2
+	exit 1
+fi
+
+# Font size follows the main screen too. Idempotent, so this costs one xrandr
+# call per keypress and only rewrites the import when the desk changed.
+"$(dirname "${BASH_SOURCE[0]}")/__alacritty_font_scale.sh" 2>/dev/null || true
+"$(dirname "${BASH_SOURCE[0]}")/__panel_adapt.sh" 2>/dev/null || true
 
 # Derived work area dimensions
 HALF_W=$((WA_W / 2))
 HALF_H=$((WA_H / 2))
+MID_X=$((WA_X + HALF_W))
 
 # Tile window by X11 window ID (synchronous unmaximize + move_resize_frame inside Mutter)
 tile_place() {
@@ -33,10 +46,14 @@ tile_place() {
 }
 
 tile_left() { tile_place "$1" "$WA_X" "$WA_Y" "$HALF_W" "$WA_H"; }
-tile_right() { tile_place "$1" "$HALF_W" "$WA_Y" "$HALF_W" "$WA_H"; }
+tile_right() { tile_place "$1" "$MID_X" "$WA_Y" "$HALF_W" "$WA_H"; }
 
+# Mutter maximizes onto the monitor the window is on, so a window sitting on
+# the laptop screen would fill that screen. Place it on the target work area
+# first, then maximize.
 tile_max() {
 	local wid="$1"
+	tile_place "$wid" "$WA_X" "$WA_Y" "$WA_W" "$WA_H"
 	gdbus call --session -d "$DBUS_DEST" -o "$DBUS_PATH" \
 		-m "$DBUS_IFACE.MaximizeXid" "$wid" >/dev/null 2>&1
 }
@@ -87,29 +104,27 @@ run_layout() {
 	trap - EXIT
 }
 
-# Get browser window (Chrome for work, LibreWolf for home)
-# Chrome: xdotool --classname returns helper windows that TileHelper rejects.
-# Use wmctrl for Chrome (returns correct Mutter window IDs).
-get_browser_windows() {
+# Get browser windows (Chrome for work, LibreWolf for home).
+# xdotool search --classname also returns helper and popup windows, which
+# TileHelper rejects, and in time-off mode the LibreWolf helper was paired with
+# the real window so the cycle alternated onto a window that never moved. wmctrl
+# lists managed toplevel windows only, with the window IDs Mutter knows.
+browser_class_pattern() {
 	if [[ -f /tmp/timeoff_mode ]]; then
-		xdotool search --classname Navigator 2>/dev/null
-		xdotool search --classname librewolf 2>/dev/null
+		printf 'librewolf'
 	else
-		wmctrl -l -x | grep google-chrome | awk '{printf "%d\n", $1}'
+		printf 'google-chrome'
 	fi
 }
+get_browser_windows() {
+	local pat wid
+	pat=$(browser_class_pattern)
+	while IFS=' ' read -r wid _ cls _; do
+		[[ "${cls,,}" == *"$pat"* ]] && printf '%d\n' "$wid"
+	done < <(wmctrl -l -x 2>/dev/null)
+}
 get_visible_browser_window() {
-	if [[ -f /tmp/timeoff_mode ]]; then
-		local cn result
-		for cn in Navigator librewolf; do
-			result=$(xdotool search --onlyvisible --classname "$cn" 2>/dev/null | head -n 1)
-			[[ -n "$result" ]] && { echo "$result"; return; }
-		done
-	else
-		local wid
-		wid=$(wmctrl -l -x | grep google-chrome | head -1 | awk '{print $1}')
-		[[ -n "$wid" ]] && printf "%d\n" "$wid"
-	fi
+	get_browser_windows | head -n 1
 }
 # Pick the Alacritty window a layout should act on.
 # xdotool search returns windows in stacking order, so the old `head -n 1` meant
@@ -260,7 +275,7 @@ firefox_firefox_alacritty() {
 
 	if [ ${#firefox_windows[@]} -eq 2 ] && [ -n "$alacritty" ]; then
 		tile_place "${firefox_windows[0]}" "$WA_X" "$WA_Y" "$half_w" "$half_h"
-		tile_place "${firefox_windows[1]}" "$half_w" "$WA_Y" "$half_w" "$half_h"
+		tile_place "${firefox_windows[1]}" "$((WA_X + half_w))" "$WA_Y" "$half_w" "$half_h"
 		tile_place "$alacritty" "$WA_X" "$bottom_y" "$WA_W" "$half_h"
 	elif [ ${#firefox_windows[@]} -eq 1 ]; then
 		echo "Only one Firefox window found."
@@ -283,8 +298,8 @@ slack_browser_alacritty() {
 
 	if [[ -n "$slack" && -n "$browser" && -n "$alacritty" ]]; then
 		tile_place "$slack" "$WA_X" "$WA_Y" "$third_w" "$WA_H"
-		tile_place "$browser" "$third_w" "$WA_Y" "$two_third_w" "$half_h"
-		tile_place "$alacritty" "$third_w" "$((WA_Y + half_h))" "$two_third_w" "$half_h"
+		tile_place "$browser" "$((WA_X + third_w))" "$WA_Y" "$two_third_w" "$half_h"
+		tile_place "$alacritty" "$((WA_X + third_w))" "$((WA_Y + half_h))" "$two_third_w" "$half_h"
 	else
 		echo "Need slack, browser, and alacritty for this layout"
 	fi
@@ -303,8 +318,8 @@ slack_browser_browser() {
 
 	if [[ -n "$slack" && ${#browsers[@]} -ge 2 ]]; then
 		tile_place "$slack" "$WA_X" "$WA_Y" "$third_w" "$WA_H"
-		tile_place "${browsers[0]}" "$third_w" "$WA_Y" "$two_third_w" "$half_h"
-		tile_place "${browsers[1]}" "$third_w" "$((WA_Y + half_h))" "$two_third_w" "$half_h"
+		tile_place "${browsers[0]}" "$((WA_X + third_w))" "$WA_Y" "$two_third_w" "$half_h"
+		tile_place "${browsers[1]}" "$((WA_X + third_w))" "$((WA_Y + half_h))" "$two_third_w" "$half_h"
 	else
 		echo "Need slack and 2 browsers for this layout"
 	fi
@@ -320,8 +335,8 @@ browser_browser_browser() {
 
 	if [[ ${#browsers[@]} -ge 3 ]]; then
 		tile_place "${browsers[0]}" "$WA_X" "$WA_Y" "$half_w" "$WA_H"
-		tile_place "${browsers[1]}" "$half_w" "$WA_Y" "$half_w" "$half_h"
-		tile_place "${browsers[2]}" "$half_w" "$((WA_Y + half_h))" "$half_w" "$half_h"
+		tile_place "${browsers[1]}" "$((WA_X + half_w))" "$WA_Y" "$half_w" "$half_h"
+		tile_place "${browsers[2]}" "$((WA_X + half_w))" "$((WA_Y + half_h))" "$half_w" "$half_h"
 	else
 		echo "Need 3 browsers for this layout"
 	fi
@@ -340,9 +355,9 @@ browser_browser_alacritty_slack() {
 
 	if [[ ${#browsers[@]} -ge 2 && -n "$alacritty" && -n "$slack" ]]; then
 		tile_place "${browsers[0]}" "$WA_X" "$WA_Y" "$half_w" "$half_h"
-		tile_place "${browsers[1]}" "$half_w" "$WA_Y" "$half_w" "$half_h"
+		tile_place "${browsers[1]}" "$((WA_X + half_w))" "$WA_Y" "$half_w" "$half_h"
 		tile_place "$slack" "$WA_X" "$((WA_Y + half_h))" "$half_w" "$half_h"
-		tile_place "$alacritty" "$half_w" "$((WA_Y + half_h))" "$half_w" "$half_h"
+		tile_place "$alacritty" "$((WA_X + half_w))" "$((WA_Y + half_h))" "$half_w" "$half_h"
 	else
 		echo "Need 2 browsers, alacritty, and slack for this layout"
 	fi
@@ -359,9 +374,9 @@ browser_browser_browser_alacritty() {
 
 	if [[ ${#browsers[@]} -ge 3 && -n "$alacritty" ]]; then
 		tile_place "${browsers[0]}" "$WA_X" "$WA_Y" "$half_w" "$half_h"
-		tile_place "${browsers[1]}" "$half_w" "$WA_Y" "$half_w" "$half_h"
+		tile_place "${browsers[1]}" "$((WA_X + half_w))" "$WA_Y" "$half_w" "$half_h"
 		tile_place "${browsers[2]}" "$WA_X" "$((WA_Y + half_h))" "$half_w" "$half_h"
-		tile_place "$alacritty" "$half_w" "$((WA_Y + half_h))" "$half_w" "$half_h"
+		tile_place "$alacritty" "$((WA_X + half_w))" "$((WA_Y + half_h))" "$half_w" "$half_h"
 	else
 		echo "Need 3 browsers and alacritty for this layout"
 	fi

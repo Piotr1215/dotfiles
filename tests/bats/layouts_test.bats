@@ -65,3 +65,18 @@ pick() {
   # split (layout 17) which needs the sorted pair, not a single window.
   [ "$output" -eq 2 ]
 }
+
+# The work area no longer starts at 0,0 when a laptop panel sits left of the
+# main screen, so a width used as an x coordinate lands on the wrong screen.
+@test "no tile call uses a bare width as its x coordinate" {
+  run grep -nE 'tile_place [^ ]+ "\$(HALF_W|half_w|third_w|two_third_w)"' "$LAYOUTS"
+  [ "$status" -eq 1 ]
+  [ -z "$output" ]
+}
+
+@test "work area comes from the screen lib, not the raw wmctrl bounding box" {
+  run grep -c 'wmctrl -d' "$LAYOUTS"
+  [ "$output" -eq 0 ]
+  run grep -c 'get_target_work_area' "$LAYOUTS"
+  [ "$output" -eq 1 ]
+}

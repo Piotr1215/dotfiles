@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -eo pipefail
 
+# Panel label size follows the main screen width (see panel_label_size).
+source /home/decoder/dev/dotfiles/scripts/__lib_screen.sh
+PANEL_SIZE=$(panel_label_size 12)
+
 # CPU package temp
 pkg_temp=$(cat /sys/class/thermal/thermal_zone0/temp 2>/dev/null)
 pkg_temp=$((pkg_temp / 1000))
@@ -49,8 +53,11 @@ fan1_color=$(color_for_fan "$fan1")
 fan2_color=$(color_for_fan "$fan2")
 epp_color=$(color_for_epp "$epp")
 
-# Panel line
-echo "<tt><b>T:</b></tt><tt><span color='${temp_color}'>${pkg_temp}C</span></tt> | font='monospace' size=12 dropdown=false"
+# Panel line. The leading spaces (kept by trim=false) pad this button out to
+# the same gap the system monitor puts between its own CPU/GPU/VRAM/RAM
+# fields, so T: reads as the next field of that row instead of a separate
+# button jammed against RAM. Argos strips leading whitespace otherwise.
+echo "<tt>  <b>T:</b></tt><tt><span color='${temp_color}'>${pkg_temp}C</span></tt> | font='monospace' size=${PANEL_SIZE} dropdown=false trim=false"
 
 # Dropdown
 echo "---"

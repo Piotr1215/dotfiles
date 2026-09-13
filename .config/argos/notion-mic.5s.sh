@@ -12,6 +12,10 @@
 #
 # See: https://github.com/Piotr1215/claude/issues/137
 
+# Panel label size follows the main screen width (see panel_label_size).
+source /home/decoder/dev/dotfiles/scripts/__lib_screen.sh
+PANEL_SIZE=$(panel_label_size 11 letterless)
+
 set -eo pipefail
 
 readonly loopback="$HOME/dev/dotfiles/scripts/__notion_loopback.sh"
@@ -69,9 +73,9 @@ fi
 # UP   = mic icon + green dot; visually obvious the routing is live.
 # DOWN = dim mic icon only.
 if [[ "$state" == "up" ]]; then
-	echo "🎙 <span color='#44ff44'>●</span> | font='monospace' size=11"
+	echo "🎙 <span color='#44ff44'>●</span> | font='monospace' size=${PANEL_SIZE}"
 else
-	echo "<span color='#888888'>🎙</span> | font='monospace' size=11"
+	echo "<span color='#888888'>🎙</span> | font='monospace' size=${PANEL_SIZE}"
 fi
 
 # --- dropdown -------------------------------------------------------------

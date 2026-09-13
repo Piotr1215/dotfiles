@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -eo pipefail
 
+# Panel label size follows the main screen width (see panel_label_size).
+source /home/decoder/dev/dotfiles/scripts/__lib_screen.sh
+PANEL_SIZE=$(panel_label_size 12)
+
 # Claude process monitor for Argos
 # Alert icon only for genuinely leaked processes.
 #
@@ -105,7 +109,7 @@ if (( bad_count == 0 )); then
     # glyphs it holds and a lone "C" got its own metrics. And an UPPERCASE value,
     # because lowercase "ok" is all x-height: its baseline matched "50C" exactly
     # and it still read as sitting low, having no glyph reaching cap height.
-    echo "<tt><b>C:</b></tt><tt><span color='#33d17a'>OK</span></tt> | font='monospace' size=12 dropdown=false"
+    echo "<tt><b>C:</b></tt><tt><span color='#33d17a'>OK</span></tt> | font='monospace' size=${PANEL_SIZE} dropdown=false"
     echo "---"
     bg=0
     for row in "${claude_rows[@]}"; do
@@ -119,7 +123,7 @@ if (( bad_count == 0 )); then
     exit 0
 fi
 
-echo "<tt><b>⚠️ C:</b></tt><tt><span color='#ff4444'>$bad_count leaked</span></tt> | font='monospace' size=12 dropdown=false"
+echo "<tt><b>⚠️ C:</b></tt><tt><span color='#ff4444'>$bad_count leaked</span></tt> | font='monospace' size=${PANEL_SIZE} dropdown=false"
 
 echo "---"
 

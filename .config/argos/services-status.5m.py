@@ -13,6 +13,15 @@ import base64
 import tempfile
 import hashlib
 
+# Narrow main screen: the panel overflows and GNOME clips every label, so
+# shorten this one. Mirrors panel_compact in scripts/__lib_screen.sh.
+def panel_compact():
+    import subprocess
+    return subprocess.run(
+        ["bash", "-c", "source /home/decoder/dev/dotfiles/scripts/__lib_screen.sh; panel_compact"],
+        capture_output=True).returncode == 0
+
+
 # Service configurations with status page URLs
 SERVICES = {
     "AWS": {
@@ -502,7 +511,9 @@ def main():
     non_operational_count = len(non_operational_services)
     
     # Menu bar display
-    if non_operational_count > 0:
+    if panel_compact():
+        print(f"{ICONS[overall_status]}")
+    elif non_operational_count > 0:
         # Create a compact display showing affected services
         if non_operational_count <= 4:
             # Show service emojis for up to 4 services

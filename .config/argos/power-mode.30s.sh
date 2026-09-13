@@ -8,6 +8,10 @@
 # Refresh: 30s (from filename suffix). Argos hides the panel item if stdout
 # is empty, so an early `exit 0` while AC is connected keeps the panel clean.
 
+# Panel label size follows the main screen width (see panel_label_size).
+source /home/decoder/dev/dotfiles/scripts/__lib_screen.sh
+PANEL_SIZE=$(panel_label_size 11)
+
 set -eo pipefail
 
 # --- AC gate --------------------------------------------------------------
@@ -80,7 +84,7 @@ esac
 # --- panel line (% omitted — GNOME shows it natively) ---------------------
 # Layout: [icon] [N|H|I] [draw]W [Wh remaining] @ [time] — Wh lets you do
 # your own worst-case math; the @time is upower's instantaneous projection.
-echo "<span color='${color}'>${icon} ${gfx_tag} ${draw_fmt} ${energy_fmt} @${ttempty_short}</span> | font='monospace' size=11"
+echo "<span color='${color}'>${icon} ${gfx_tag} ${draw_fmt} ${energy_fmt} @${ttempty_short}</span> | font='monospace' size=${PANEL_SIZE}"
 echo "---"
 echo "<b>Power state</b> (battery) | font=monospace"
 echo "AC: disconnected"

@@ -4,6 +4,12 @@
 # opened in the editor. A consumer of `remind list --json` only: it never
 # touches the store, at, or cron.
 
+# Panel label size comes from the screen lib. "R:" rather than an alarm emoji:
+# the panel draws a label with no Latin letter about 20 percent larger than its
+# neighbours, so a letter keeps it in line with C:OK and T:57C.
+source /home/decoder/dev/dotfiles/scripts/__lib_screen.sh
+PANEL_SIZE=$(panel_label_size 12)
+
 set -o pipefail
 
 if [ -n "${REMINDER_HELPER:-}" ]; then
@@ -14,7 +20,7 @@ else
 fi
 
 if [ ! -x "$helper" ]; then
-	echo "<tt><b>⏰:</b></tt><tt><span color='#ff4444'>?</span></tt> | font='monospace' size=12"
+	echo "<tt><b>R:</b></tt><tt><span color='#ff4444'>?</span></tt> | font='monospace' size=${PANEL_SIZE}"
 	echo "---"
 	echo "Reminder helper is unavailable"
 	exit 0
@@ -35,7 +41,7 @@ else
 	color="#44ff44"
 fi
 
-echo "<tt><b>⏰:</b></tt><tt><span color='${color}'>${count}</span></tt> | font='monospace' size=12"
+echo "<tt><b>R:</b></tt><tt><span color='${color}'>${count}</span></tt> | font='monospace' size=${PANEL_SIZE}"
 echo "---"
 [ "$overdue_count" -gt 0 ] && echo "$overdue_count overdue | color=#ff9944"
 # A new window in the session of the most recent client, the terminal in front

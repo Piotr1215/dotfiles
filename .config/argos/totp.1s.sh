@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 set -eo pipefail
 
+# Panel label size comes from the screen lib. "K" rather than a key emoji: the
+# panel draws a label with no Latin letter about 20 percent larger than its
+# neighbours, so a letter keeps it in line with C:OK and T:57C. The copied
+# flash now colours the count instead of swapping the glyph.
+source /home/decoder/dev/dotfiles/scripts/__lib_screen.sh
+PANEL_SIZE=$(panel_label_size 12)
+
 # The YubiKey's OATH accounts as a panel badge, and the two signals the secret
 # picker sends here instead of sending notifications: a red flashing T while age
 # blocks waiting for the key to be touched, and a yellow flash once the value is
@@ -77,7 +84,7 @@ fi
 
 # $1 = glyph, already carrying its own colour, $2 = colour for the count.
 badge() {
-    printf "<tt><b>%s:</b></tt><tt><span color='%s'>%s</span></tt> | font='monospace' size=12" "$1" "$2" "$count"
+    printf "<tt><b>%s:</b></tt><tt><span color='%s'>%s</span></tt> | font='monospace' size=${PANEL_SIZE}" "$1" "$2" "$count"
 }
 
 # $1 = colour for the whole label. T for touch, so the glyph is a letter and one
@@ -96,7 +103,7 @@ badge() {
 # This is the same quirk cron-status.1m.sh worked around by reaching for
 # self-colouring emoji. A letter has no such option.
 touch_badge() {
-    printf "<tt> </tt><tt><span color='%s'><b>T</b>:%s</span></tt> | font='monospace' size=12" "$1" "$count"
+    printf "<tt> </tt><tt><span color='%s'><b>T</b>:%s</span></tt> | font='monospace' size=${PANEL_SIZE}" "$1" "$count"
 }
 
 resting_colour='#44ff44'
@@ -127,11 +134,11 @@ copied)
     # and the flash are both mid-tone glyphs and swapping one for the other read
     # as a wobble rather than a blink. Flash first, so the copy is acknowledged
     # on the tick rather than 800ms into it.
-    echo "$(badge "🟡" '#ffdd00') dropdown=false"
-    echo "$(badge "⚫" '#222222') dropdown=false"
+    echo "$(badge "K" '#ffdd00') dropdown=false"
+    echo "$(badge "K" '#222222') dropdown=false"
     ;;
 *)
-    echo "$(badge "🔑" "$resting_colour")"
+    echo "$(badge "K" "$resting_colour")"
     ;;
 esac
 

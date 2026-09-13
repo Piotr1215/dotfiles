@@ -1,5 +1,8 @@
 [general]
-import = ["/home/decoder/.config/alacritty/themes/dracula.toml"]
+# font-size.toml is generated per machine by scripts/__alacritty_font_scale.sh
+# (font size from the main screen's pixel pitch). The main file is loaded last
+# and would override it, so font.size lives only in the import.
+import = ["/home/decoder/.config/alacritty/themes/dracula.toml", "/home/decoder/.config/alacritty/font-size.toml"]
 live_config_reload = true
 
 [keyboard]
@@ -97,7 +100,6 @@ TERM = "xterm-256color"
 
 [font]
 builtin_box_drawing = true
-size = 16.0
 
 [font.bold]
 style = "Bold"

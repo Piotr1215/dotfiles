@@ -9,6 +9,10 @@
 # Click actions: view a job's log, or open the cron-manager tmuxinator
 # session for a full diagnosis. Refresh: 1m (from filename suffix).
 
+# Panel label size follows the main screen width (see panel_label_size).
+source /home/decoder/dev/dotfiles/scripts/__lib_screen.sh
+PANEL_SIZE=$(panel_label_size 11 letterless)
+
 set -eo pipefail
 
 STATE_DIR="${CRON_STATE_DIR:-$HOME/.local/state/cron-jobs}"
@@ -244,10 +248,10 @@ if [ "$running" -gt 0 ]; then
     # whether the last results were clean. Self-colouring emoji rather than a
     # <span color=...>: in the panel that span rendered plain white.
     if [ "$errors" -gt 0 ]; then dot="🔴"; else dot="🟢"; fi
-    echo "${dot} ${bar} | font='monospace' size=11 dropdown=false"
-    echo "⚫ ${bar} | font='monospace' size=11 dropdown=false"
+    echo "${dot} ${bar} | font='monospace' size=${PANEL_SIZE} dropdown=false"
+    echo "⚫ ${bar} | font='monospace' size=${PANEL_SIZE} dropdown=false"
 else
-    echo "${bar} | font='monospace' size=11"
+    echo "${bar} | font='monospace' size=${PANEL_SIZE}"
 fi
 echo "---"
 # What needs a person, in words, before the table. Each line is one click

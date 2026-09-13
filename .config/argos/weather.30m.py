@@ -10,8 +10,25 @@ from urllib.error import URLError, HTTPError
 from urllib.parse import quote
 import datetime
 
+# Narrow main screen: the panel overflows and GNOME clips every label, so
+# shorten this one. Mirrors panel_compact in scripts/__lib_screen.sh.
+def panel_compact():
+    import subprocess
+    return subprocess.run(
+        ["bash", "-c", "source /home/decoder/dev/dotfiles/scripts/__lib_screen.sh; panel_compact"],
+        capture_output=True).returncode == 0
+
+
+def panel_label_size(normal):
+    import subprocess
+    out = subprocess.run(
+        ["bash", "-c", f"source /home/decoder/dev/dotfiles/scripts/__lib_screen.sh; panel_label_size {normal}"],
+        capture_output=True, text=True).stdout.strip()
+    return out or str(normal)
+
+
 # Configuration
-location_name = "Mittelbuchen"
+location_name = "Korinthos,GR"
 pass_entry = "personal/WEATHER_API_KEY"
 units = 'metric'  # kelvin, metric, imperial
 lang = 'en'
@@ -79,7 +96,7 @@ def format_weather():
     try:
         data = get_weather_data()
     except Exception as e:
-        return f"⚠️ Weather\n---\n{e} | color=red size=11\n---\n🔄 Refresh | refresh=true size=11\n"
+        return f"{'⚠️' if panel_compact() else '⚠️ Weather'}\n---\n{e} | color=red size=11\n---\n🔄 Refresh | refresh=true size=11\n"
 
     current = data['current']
     forecast = data['forecast']
@@ -95,7 +112,7 @@ def format_weather():
     description = current['weather'][0]['description'].title()
     
     # Menu bar display (pango markup for consistent font/color, avoid ° which breaks pango)
-    output = f"<tt><b>{icon}</b></tt><tt><span color='#87ceeb'>{temp}C</span></tt> | font='monospace' size=12 dropdown=false\n"
+    output = f"<tt><b>{icon}</b></tt><tt><span color='#87ceeb'>{temp}C</span></tt> | font='monospace' size={panel_label_size(12)} dropdown=false\n"
     output += "---\n"
     
     # Current conditions header

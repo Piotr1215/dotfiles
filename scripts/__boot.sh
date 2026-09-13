@@ -2,6 +2,7 @@
 
 # Source generic error handling function
 source __trap.sh
+source "$(dirname "${BASH_SOURCE[0]}")/__lib_screen.sh"
 
 # Set strict error handling
 set -eo pipefail
@@ -41,13 +42,19 @@ current_day=$(date +"%A")
 
 echo "$current_day"
 
-# Function to move Alacritty to HDMI 0
-move_alacritty_to_hdmi_0() {
+# Move the boot Alacritty onto the main screen (xrandr primary) and maximize it
+# there. The origin comes from __lib_screen.sh, so this holds for a single 4k
+# screen at home (origin 0,0) and for a laptop panel beside an external monitor.
+move_alacritty_to_main_screen() {
+	/home/decoder/dev/dotfiles/scripts/__alacritty_font_scale.sh 2>/dev/null || true
+	/home/decoder/dev/dotfiles/scripts/__panel_adapt.sh 2>/dev/null || true
+	local wa_x wa_y
+	IFS=' ' read -r wa_x wa_y _ _ < <(get_target_work_area)
 	while ! wmctrl -l | grep -q Alacritty; do
 		sleep 0.5
 	done
 	wmctrl -r Alacritty -b remove,maximized_vert,maximized_horz
-	wmctrl -r Alacritty -e 0,1920,0,-1,-1
+	wmctrl -r Alacritty -e "0,${wa_x:-0},${wa_y:-0},-1,-1"
 	WID=$(xdotool search --onlyvisible --classname Alacritty | head -1)
 	sleep 3
 	wmctrl -r Alacritty -b add,maximized_vert,maximized_horz
@@ -76,12 +83,12 @@ if [[ " ${weekdays[*]} " =~ $current_day ]] && [[ "$timeoff" == 0 ]]; then
 	flatpak run com.slack.Slack 2>/dev/null &
 	nohup google-chrome-stable >/dev/null 2>&1 &
 	alacritty &
-	move_alacritty_to_hdmi_0
+	move_alacritty_to_main_screen
 else
 	# Weekend :)
 	touch /tmp/timeoff_mode
 	xdg-settings set default-web-browser io.gitlab.librewolf-community.desktop 2>/dev/null
 	nohup flatpak run io.gitlab.librewolf-community >/dev/null 2>&1 &
 	alacritty &
-	move_alacritty_to_hdmi_0
+	move_alacritty_to_main_screen
 fi

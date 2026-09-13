@@ -44,12 +44,12 @@ blink_at_age() {
 	touch -d "@$(($(date +%s) - $1))" "$BLINK"
 }
 
-@test "idle panel shows one line: the key and the account count" {
+@test "idle panel shows one line: the K badge and the account count" {
 	run "$APPLET"
 	[ "$status" -eq 0 ]
 	local lines_out; lines_out="$(button_lines "$output")"
 	[ "$(wc -l <<< "$lines_out")" -eq 1 ]
-	[[ "$lines_out" == *"🔑"* ]]
+	[[ "$lines_out" == *"<b>K:</b>"* ]]
 	[[ "$lines_out" == *">2<"* ]]
 }
 
@@ -62,8 +62,10 @@ blink_at_age() {
 	[ "$(wc -l <<< "$lines_out")" -eq 2 ]
 	# Yellow first: the cycler shows line one immediately, so the copy is
 	# acknowledged on the tick rather than 800ms into it.
-	[[ "$(sed -n 1p <<< "$lines_out")" == *"🟡"* ]]
-	[[ "$(sed -n 2p <<< "$lines_out")" == *"⚫"* ]]
+	# The glyph stays "K" (a letterless label renders oversized on the panel);
+	# the count colour carries the flash.
+	[[ "$(sed -n 1p <<< "$lines_out")" == *"color='#ffdd00'"* ]]
+	[[ "$(sed -n 2p <<< "$lines_out")" == *"color='#222222'"* ]]
 	# Argos prepends cycle lines to the menu unless they opt out, which would
 	# push the account list down behind two junk rows.
 	[ "$(grep -c 'dropdown=false' <<< "$lines_out")" -eq 2 ]
@@ -85,7 +87,7 @@ blink_at_age() {
 	[ "$status" -eq 0 ]
 	local lines_out; lines_out="$(button_lines "$output")"
 	[ "$(wc -l <<< "$lines_out")" -eq 1 ]
-	[[ "$lines_out" == *"🔑"* ]]
+	[[ "$lines_out" == *"<b>K:</b>"* ]]
 	# Left behind, the marker would be re-read as a copy that happened in the
 	# past and the badge would flash on every future tick.
 	[ ! -f "$BLINK" ]
@@ -153,7 +155,7 @@ blink_at_age() {
 	run "$APPLET"
 	[ "$status" -eq 0 ]
 	[ "$(wc -l <<< "$(button_lines "$output")")" -eq 1 ]
-	[[ "$(button_lines "$output")" == *"🔑"* ]]
+	[[ "$(button_lines "$output")" == *"<b>K:</b>"* ]]
 	[ ! -f "$TOUCH" ]
 }
 

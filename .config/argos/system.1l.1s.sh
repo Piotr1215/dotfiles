@@ -95,8 +95,14 @@ fi
 cpu_formatted=$(printf "%3d%%" $cpu_usage)
 mem_formatted=$(printf "%3d%%" $mem_percent)
 
-# Build the single line output with reasonable spacing (3 spaces)
+# The label lives in the panel's left box (the "1l" in the filename), which
+# holds only the workspace pill, so it keeps the full readable form on every
+# desk. The right box is bounded by the clock, and on a 1080p main screen the
+# other indicators need all of it. Only the font size follows the screen.
+source /home/decoder/dev/dotfiles/scripts/__lib_screen.sh
+PANEL_SIZE=$(panel_label_size 12)
 spacing="   "
+l_cpu="CPU:"; l_gpu="GPU:"; l_vram="VRAM:"; l_ram="RAM:"
 
 # Output as ONE LINE with consistent spacing
-echo "<tt><b>CPU:</b></tt><tt><span color='${cpu_color}'>${cpu_formatted}</span></tt>${spacing}<tt><b>GPU:</b></tt><tt><span color='${gpu_color}'>${gpu_text}</span></tt>${spacing}<tt><b>VRAM:</b></tt><tt><span color='${vram_color}'>${vram_text}</span></tt>${spacing}<tt><b>RAM:</b></tt><tt><span color='${mem_color}'>${mem_formatted}</span></tt> | font='monospace' size=12 dropdown=false"
+echo "<tt><b>${l_cpu}</b></tt><tt><span color='${cpu_color}'>${cpu_formatted}</span></tt>${spacing}<tt><b>${l_gpu}</b></tt><tt><span color='${gpu_color}'>${gpu_text}</span></tt>${spacing}<tt><b>${l_vram}</b></tt><tt><span color='${vram_color}'>${vram_text}</span></tt>${spacing}<tt><b>${l_ram}</b></tt><tt><span color='${mem_color}'>${mem_formatted}</span></tt> | font='monospace' size=${PANEL_SIZE} dropdown=false"
