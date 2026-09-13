@@ -82,6 +82,26 @@ EOF
 	grep -q '^shift+print (S-Print)|Flameshot share  /bin/true$' "$GNOME_OUT"
 }
 
+@test "monitor-move keys are indexed once per accelerator, keypad twins dropped" {
+	cat > "$STUB_BIN/gsettings" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+	*"pop-shell pop-monitor-left") printf "['<Super><Shift>Left', '<Super><Shift>KP_Left']\n" ;;
+	*"pop-shell pop-monitor-up") printf "['<Super><Shift><Primary>Up', '<Super><Shift><Primary>k']\n" ;;
+	*"wm.keybindings move-to-monitor-right") printf "['<Control><Shift><Alt><Super>l']\n" ;;
+	*"wm.keybindings move-to-monitor-down") printf "@as []\n" ;;
+esac
+EOF
+	chmod +x "$STUB_BIN/gsettings"
+	bash "$GEN"
+	grep -qx 'super+shift+left (S-Super-Left)|Move window to left monitor (pop-shell)  gsettings org.gnome.shell.extensions.pop-shell pop-monitor-left' "$GNOME_OUT"
+	grep -q '^super+ctrl+shift+up (C-S-Super-Up)|Move window to upper monitor (pop-shell)' "$GNOME_OUT"
+	grep -q '^super+ctrl+shift+k (C-S-Super-k)|Move window to upper monitor (pop-shell)' "$GNOME_OUT"
+	grep -q '^super+ctrl+alt+shift+l (M-C-S-Super-l)|Move window to right monitor (GNOME)' "$GNOME_OUT"
+	run grep -c 'KP_\|lower monitor' "$GNOME_OUT"
+	[ "$output" = "0" ]
+}
+
 @test "without gsettings the gnome index is left alone, not emptied" {
 	printf 'keep me\n' > "$GNOME_OUT"
 	write_item SecretPicker '{"description":"SecretPicker","modes":[3],"hotkey":{"modifiers":["<alt>","<ctrl>"],"hotKey":"p"}}'
