@@ -145,13 +145,16 @@ rofi_pick() {
     # order, so the later rules win for the properties they name and inherit the
     # rest, which is what keeps this file from restating the whole palette.
     #
-    # 12 rows, not 18: each row is ROW_HEIGHT lines tall because of the excerpt,
-    # so the shared default would draw a menu taller than the screen.
-    rofi_theme 1600 12
+    # Height is a share of the monitor rofi opens on, not a row count. Each row
+    # is ROW_HEIGHT lines tall, so a fixed 12 rows drew a 1520px window that ran
+    # off a 1080px screen. Once the window height is set, rofi fits as many rows
+    # as that height holds, so one rule suits the 4k desk and the laptop desk.
+    rofi_theme 1600
     rofi -dmenu -i -p snippet -sep '\0' -eh "$ROW_HEIGHT" -format i -no-custom \
         -kb-move-end "" -kb-custom-1 "Control+e" \
         -mesg 'Enter → paste    Ctrl+E → edit' \
         "${ROFI_THEME[@]}" \
+        -theme-str 'window {height: 90%;}' \
         -theme-str '* {background-color: argb:ff282a36; text-color: argb:fff8f8f2;}' \
         -theme-str 'message {background-color: transparent;}' \
         -theme-str 'textbox {background-color: transparent; text-color: argb:ff6272a4;}' \

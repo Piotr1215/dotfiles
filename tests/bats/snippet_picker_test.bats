@@ -154,6 +154,24 @@ setup() {
 	[ "$(cat "$SPY/clipboard")" = "through the link" ]
 }
 
+@test "the menu height is a share of the monitor, not a pixel or row count" {
+	# Rows are several lines tall, so a fixed row count drew a window taller
+	# than a 1080px screen. A percentage is resolved against whichever monitor
+	# rofi opens on. The stub records argv and picks nothing, so no paste runs.
+	cat > "$STUB_BIN/rofi" <<-STUB
+		#!/usr/bin/env bash
+		printf '%s\n' "\$@" > "$SPY/rofi.args"
+		exit 1
+	STUB
+	chmod +x "$STUB_BIN/rofi"
+	printf 'body\n' > "$SNIPPETS/a.md"
+
+	run "$PICKER" 0
+	[ "$status" -eq 0 ]
+	grep -qE '^window \{height: [0-9]+%;\}$' "$SPY/rofi.args"
+	[ ! -s "$SPY/xdotool.log" ]
+}
+
 @test "an empty snippet directory is an error, not an empty menu" {
 	run "$PICKER" --list
 	[ "$status" -ne 0 ]
