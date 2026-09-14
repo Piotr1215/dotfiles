@@ -13,7 +13,7 @@ set -eo pipefail
 # =============================================================================
 
 NOTIFY_EMAIL="piotrzan@gmail.com"
-SUCCESS_STAMP="$HOME/.local/state/backup-last-success"
+SUCCESS_STAMP="${BACKUP_SUCCESS_STAMP:-$HOME/.local/state/backup-last-success}"
 MAX_AGE_HOURS="${MAX_AGE_HOURS:-25}"
 
 host=$(hostname)
@@ -34,21 +34,26 @@ alert() {
 		"Backup watchdog on $host" "$summary" 2>/dev/null || true
 }
 
+# Terminal status is the cron wrapper's state channel: 0 no-hit, 2 hit,
+# anything else error. An alert is a hit and must say so on stdout too: the
+# alert paths used to exit 0 silently, so the wrapper recorded no-hit with
+# "(no output)" on 09-13 and 09-14 while the stamp was 62h old (#181).
+stale() {
+	alert "$1"
+	echo "ALERT: $1"
+	exit 2
+}
+
 if [[ ! -f "$SUCCESS_STAMP" ]]; then
-	alert "No successful backup on record (stamp $SUCCESS_STAMP missing). Backup may never have completed since the watchdog was installed."
-	exit 0
+	stale "No successful backup on record (stamp $SUCCESS_STAMP missing). Backup may never have completed since the watchdog was installed."
 fi
 
 last=$(cat "$SUCCESS_STAMP" 2>/dev/null || echo 0)
 age_hours=$(((now - last) / 3600))
 
 if ((age_hours >= MAX_AGE_HOURS)); then
-	alert "Last successful backup was ${age_hours}h ago (threshold ${MAX_AGE_HOURS}h). Nightly backup has not completed cleanly. Check ~/backup.log and whether /mnt/nas-backup is mounted."
-else
-	# Healthy; stay silent so the watchdog itself never becomes noise.
-	echo "OK: last successful backup ${age_hours}h ago"
+	stale "Last successful backup was ${age_hours}h ago (threshold ${MAX_AGE_HOURS}h). Nightly backup has not completed cleanly. Check ~/backup.log and whether /mnt/nas-backup is mounted."
 fi
 
-# Terminal status is the cron wrapper's state channel: 0 no-hit, 2 hit,
-# anything else error. Do not let the last command decide it.
+echo "OK: last successful backup ${age_hours}h ago"
 exit 0
