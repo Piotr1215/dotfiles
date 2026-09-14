@@ -28,17 +28,18 @@ _float_command_without_marker() {
 _float_command_launch() {
     emulate -L zsh
 
-    local pane_id
-    local -i float_x=176 float_y=2
+    # Percentages of the window, the same geometry as M-f in .tmux.conf: fixed
+    # columns only fit a wide window, and tmux refuses a float that overflows.
+    local pane_id float_x=53% float_y=2
 
     if tmux list-panes -t "$TMUX_PANE" -F '#{pane_floating_flag}' 2>/dev/null \
         | command grep -q '^1$'; then
-        float_x=172
+        float_x=51%
         float_y=4
     fi
 
     pane_id=$(tmux new-pane -P -F '#{pane_id}' -c "$PWD" \
-        -x 117 -y 36 -X "$float_x" -Y "$float_y" zsh) || return 1
+        -x 45% -y 80% -X "$float_x" -Y "$float_y" zsh) || return 1
     [[ -n $pane_id ]] || return 1
 
     tmux send-keys -t "$pane_id" -l -- "$1" || return 1

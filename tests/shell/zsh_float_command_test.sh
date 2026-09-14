@@ -93,11 +93,11 @@ if [[ ${new_pane_args[1]} == new-pane \
     && ${new_pane_args[5]} == -c \
     && ${new_pane_args[6]} == "$PWD" \
     && ${new_pane_args[7]} == -x \
-    && ${new_pane_args[8]} == 117 \
+    && ${new_pane_args[8]} == 45% \
     && ${new_pane_args[9]} == -y \
-    && ${new_pane_args[10]} == 36 \
+    && ${new_pane_args[10]} == 80% \
     && ${new_pane_args[11]} == -X \
-    && ${new_pane_args[12]} == 176 \
+    && ${new_pane_args[12]} == 53% \
     && ${new_pane_args[13]} == -Y \
     && ${new_pane_args[14]} == 2 \
     && ${new_pane_args[15]} == zsh \
@@ -138,11 +138,11 @@ second_pane_args=( )
 while IFS= read -r -d '' entry; do
     second_pane_args+=( "$entry" )
 done < "$tmpdir/new-pane.log"
-if [[ ${second_pane_args[12]} == 172 && ${second_pane_args[14]} == 4 ]]; then
+if [[ ${second_pane_args[12]} == 51% && ${second_pane_args[14]} == 4 ]]; then
     print -r -- "ok - offsets a second float like a card"
     (( passed++ ))
 else
-    print -u2 -r -- "not ok - second float position=${second_pane_args[12]:-missing},${second_pane_args[14]:-missing} expected=172,4"
+    print -u2 -r -- "not ok - second float position=${second_pane_args[12]:-missing},${second_pane_args[14]:-missing} expected=51%,4"
     (( failed++ ))
 fi
 
