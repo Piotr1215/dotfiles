@@ -681,6 +681,35 @@ agenda_section() {
 	fi
 }
 
+# How the record's last firing ended, from the fire log: the time it fired and
+# what followed (verdict, failed hook, dialog answer). Read only, apply skips
+# it: the log is the truth for what happened, the store for what should.
+agenda_last() {
+	local id="$1" last
+	[ -f "$FIRE_LOG" ] || return 0
+	last="$(awk -F '\t' -v id="$id" '
+		function add(s) { out = out == "" ? s : out ", " s }
+		$2 != id { next }
+		$3 == "fired" { at = $1; out = ""; next }
+		$3 == "skipped" { at = $1; out = "skipped: " $4; next }
+		at == "" { next }
+		$3 == "exec" { rc = substr($4, 4); add(rc == 0 ? "no hit" : rc == 2 ? "hit" : "error (exit " rc ")"); next }
+		$3 == "on_hit" || $3 == "on_miss" {
+			rc = substr($4, 4)
+			if (rc != 0) add(($3 == "on_hit" ? "on-hit" : "on-miss") " failed (exit " rc ")")
+			next
+		}
+		$3 == "done" || $3 == "mailed" || $3 == "opened" || $3 == "snoozed" { add($3); next }
+		$3 == "dismissed" { add("dismissed (" $4 ")"); next }
+		$3 == "failed" { add("failed: " $4); next }
+		END { if (at != "") printf "%s\t%s\n", at, out == "" ? "fired" : out }
+	' "$FIRE_LOG")"
+	[ -n "$last" ] || return 0
+	printf '   :last: [%s] %s\n' "$(agenda_stamp "${last%%$'\t'*}")" "${last#*$'\t'}"
+	[ -f "$RUNS_DIR/$id.log" ] && printf '   :log: %s/%s.log\n' "${RUNS_DIR/#$HOME/\~}" "$id"
+	return 0
+}
+
 agenda_line() {
 	local record="$1" id when repeat action command subject stamps notify on_hit on_miss
 	id="$(jq -r '.id' <<<"$record")"
@@ -706,6 +735,7 @@ agenda_line() {
 	url:*) printf '   :url: %s\n' "${subject#url:}" ;;
 	text:*) printf '   :notes: %s\n' "${subject#text:}" ;;
 	esac
+	agenda_last "$id"
 	printf '   :id: %s\n\n' "$id"
 	return 0
 }
@@ -741,6 +771,8 @@ agenda_render() {
 #      :task: <uuid>                     what it points at: a task (ctrl+5 opens it),
 #      :url: <link>                      a link, or
 #      :notes: free text                 notes; one of the three per reminder
+#      :last: [date] outcome             read only: how the last firing ended
+#      :log: path                        read only: output of recent exec runs (ctrl+2 opens it)
 #      :id: 9ed4fac6                     leave it alone; omit on a heading you add
 HEAD
 	for section in "${sections[@]}"; do
@@ -812,7 +844,7 @@ agenda_apply() {
 			agenda_prop "$line" || die "Line $n: cannot read it: $line"
 			case "$prop_key" in
 			id) get_record "$prop_value" >/dev/null || die "Line $n: no reminder with id $prop_value." ;;
-			action | runs | notify | on-hit | on-miss | task | url | notes | subject) ;;
+			action | runs | notify | on-hit | on-miss | task | url | notes | subject | last | log) ;;
 			*) die "Line $n: unknown property :$prop_key:" ;;
 			esac
 			;;
@@ -1063,6 +1095,28 @@ guarded_dialog() {
 	flock -u 8
 }
 
+RUNS_DIR="$STATE_DIR/runs"
+RUN_LOG_LINES="${REMINDER_RUN_LOG_LINES:-2000}"
+
+# Append one exec run to the reminder's run log: the check's command, exit
+# and output, then the hook's if one ran. The fire log keeps only exit codes
+# and the mail lands in an inbox, so this file is where the why stays readable.
+# Trimmed to the newest RUN_LOG_LINES so a daily check cannot grow it forever.
+log_run() {
+	local id="$1" rc="$2" command="$3" output="$4" field="$5" hook="$6" hrc="$7" hook_output="$8" file
+	mkdir -p "$RUNS_DIR"
+	file="$RUNS_DIR/$id.log"
+	{
+		printf '=== %s exit %s\n$ %s\n' "$(now_iso)" "$rc" "$command"
+		[ -n "$output" ] && printf '%s\n' "$output"
+		if [ -n "$hook" ]; then
+			printf -- '--- %s exit %s\n$ %s\n' "${field//_/-}" "$hrc" "$hook"
+			[ -n "$hook_output" ] && printf '%s\n' "$hook_output"
+		fi
+	} >>"$file"
+	tail -n "$RUN_LOG_LINES" "$file" >"$file.tmp" && mv "$file.tmp" "$file"
+}
+
 # The branch after a check: on_hit after exit 2, on_miss after exit 0, the
 # check's output on stdin. Plain shell, so `y.sh && __mail_me.sh "done"`
 # chains. A hook's own failure is logged, never fatal: the verdict stands.
@@ -1075,6 +1129,7 @@ run_branch() {
 	esac
 	hook="$(jq -r ".$field // \"\"" <<<"$record")"
 	[ -n "$hook" ] || return 0
+	BRANCH_HOOK="$hook" BRANCH_FIELD="$field"
 	BRANCH_OUTPUT="$(printf '%s\n' "$output" | bash -c "$hook" 2>&1)" || hrc=$?
 	BRANCH_RC="$hrc"
 	log_fire "$id" "$field" "rc=$hrc" "$title"
@@ -1162,8 +1217,9 @@ cmd_fire() {
 		output="$(bash -c "$command" 2>&1)" || rc=$?
 		log_fire "$id" exec "rc=$rc" "$title"
 		notify="$(jq -r '.notify // "dialog"' <<<"$record")"
-		BRANCH_RC=0 BRANCH_OUTPUT=""
+		BRANCH_RC=0 BRANCH_OUTPUT="" BRANCH_HOOK="" BRANCH_FIELD=""
 		run_branch "$id" "$record" "$rc" "$output" "$title"
+		log_run "$id" "$rc" "$command" "$output" "$BRANCH_FIELD" "$BRANCH_HOOK" "$BRANCH_RC" "$BRANCH_OUTPUT"
 		# A hit whose on-hit hook failed is not done: the condition held but
 		# the action did not happen, so report it and keep the schedule for
 		# a retry.

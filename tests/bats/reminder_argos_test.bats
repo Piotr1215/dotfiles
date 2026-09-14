@@ -708,6 +708,57 @@ STUB
   [[ "$output" == *"download on release"* ]]
 }
 
+@test "the agenda shows how the last firing ended, where its output is, and apply ignores both" {
+  "$REMINDER" add "tmux watch" --repeat 'every 1d' --action exec \
+    --command "echo checked; exit \$(cat $BATS_TEST_TMPDIR/rc)" \
+    --on-hit "echo no pattern given; exit 1" --notify mail >/dev/null
+  id="$(only_id)"
+  stamp='\[[^]]+\]'
+  run "$REMINDER" agenda render
+  [[ "$output" != *$'\n   :last:'* ]]
+
+  printf '0\n' >"$BATS_TEST_TMPDIR/rc"
+  "$REMINDER" fire "$id" >/dev/null
+  run "$REMINDER" agenda render
+  grep -Eq "^   :last: $stamp no hit$" <<<"$output"
+
+  printf '2\n' >"$BATS_TEST_TMPDIR/rc"
+  "$REMINDER" fire "$id" >/dev/null
+  run "$REMINDER" agenda render
+  grep -Eq "^   :last: $stamp hit, on-hit failed \(exit 1\)$" <<<"$output"
+  grep -q "^   :log: .*/runs/$id.log$" <<<"$output"
+
+  runlog="$REMINDER_STATE_DIR/runs/$id.log"
+  grep -Eq '^=== .* exit 0$' "$runlog"
+  grep -Eq '^=== .* exit 2$' "$runlog"
+  [ "$(grep -c '^checked$' "$runlog")" -eq 2 ]
+  grep -q '^--- on-hit exit 1$' "$runlog"
+  grep -q '^\$ echo no pattern given; exit 1$' "$runlog"
+  grep -q '^no pattern given$' "$runlog"
+
+  agenda="${BATS_TEST_TMPDIR}/agenda.org"
+  "$REMINDER" agenda render \
+    | sed -e 's/^   :last: .*/   :last: [2020-01-01 Wed 00:00] edited/' -e 's|^   :log: .*|   :log: /nowhere.log|' >"$agenda"
+  before="$(last_record)"
+  run "$REMINDER" agenda apply "$agenda"
+  [ "$status" -eq 0 ]
+  [ "$(last_record)" = "$before" ]
+}
+
+@test "the run log keeps only the newest lines" {
+  export REMINDER_RUN_LOG_LINES=4
+  "$REMINDER" add "chatty" --repeat 'every 1d' --action exec --command "seq 1 3" --notify silent >/dev/null
+  id="$(only_id)"
+
+  "$REMINDER" fire "$id" >/dev/null
+  "$REMINDER" fire "$id" >/dev/null
+
+  runlog="$REMINDER_STATE_DIR/runs/$id.log"
+  [ "$(wc -l <"$runlog")" -eq 4 ]
+  [ "$(head -n1 "$runlog")" = '$ seq 1 3' ]
+  [ "$(tail -n1 "$runlog")" = 3 ]
+}
+
 @test "the agenda round-trips :on-hit: and :on-miss:" {
   "$REMINDER" add "watch" --repeat 'every 1d' --action exec --command /x/check.sh --on-hit '/x/y.sh && /x/mail.sh "yes"' >/dev/null
   id="$(only_id)"
