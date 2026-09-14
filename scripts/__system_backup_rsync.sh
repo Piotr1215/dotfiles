@@ -18,11 +18,11 @@
 #
 # There is no wall-clock ceiling. rsync is idempotent and resumable, so a run
 # that is moving is left to finish however long it takes, and a run that fails
-# is retried rather than killed. The mount is NFSv4 `hard` (fstab omits `soft`,
-# and `hard` is the default), so a NAS that stops answering blocks the writer in
-# uninterruptible D state and nothing inside rsync can end that; such a run sits
-# until the NAS answers. The --info output above is what makes that visible in
-# the log while it is happening.
+# is retried rather than killed. Since 2026-09-14 fstab mounts the NAS `soft`
+# (timeo=150,retrans=3) through the pop-os relay, so a NAS that stops answering
+# fails the writer with an I/O error after about two minutes instead of holding
+# it in D state forever; that attempt fails and the retry loop takes over (#181).
+# The --info output above is what makes a stall visible in the log.
 #
 # Exit codes follow __cron_run.sh: 0 clean, 2 unused, anything else error.
 set -eo pipefail
@@ -67,25 +67,32 @@ log() {
 preflight() {
 	log INFO "preflight: checking ${MOUNT_ROOT}"
 
-	if ! findmnt -T "$MOUNT_ROOT" >/dev/null 2>&1; then
+	# mountpoint, not `findmnt -T`: -T resolves any path to the mount containing
+	# it, so an unmounted ${MOUNT_ROOT} answered with / and passed (#181). An
+	# automount stub still counts as a mountpoint while the NAS is unreachable,
+	# which is why the write probe below is the real test.
+	if ! timeout "$PREFLIGHT_TIMEOUT" mountpoint -q "$MOUNT_ROOT"; then
 		log ERROR "preflight: ${MOUNT_ROOT} is not a mount point"
 		return 1
 	fi
 
+	# -k 5 SIGKILLs a touch stuck in an NFS wait, which SIGTERM does not end.
+	local probe="${MOUNT_ROOT}/.backup-preflight-$$"
+	if ! timeout -k 5 "$PREFLIGHT_TIMEOUT" touch "$probe" 2>/dev/null; then
+		log ERROR "preflight: cannot write to ${MOUNT_ROOT} within ${PREFLIGHT_TIMEOUT}s (NAS down, read-only, or already stalled)"
+		return 1
+	fi
+	timeout -k 5 "$PREFLIGHT_TIMEOUT" rm -f "$probe" 2>/dev/null || true
+	log INFO "preflight: ${MOUNT_ROOT} is writable"
+
+	# Read the options after the probe: it triggered the automount, and before it
+	# only the autofs stub is there to report.
 	local opts
-	opts="$(findmnt -T "$MOUNT_ROOT" -no OPTIONS 2>/dev/null || echo '?')"
+	opts="$(findmnt -M "$MOUNT_ROOT" -t nfs,nfs4 -no OPTIONS 2>/dev/null || echo '?')"
 	log INFO "preflight: mounted with ${opts}"
 	case "$opts" in
 		*hard*) log WARN "preflight: mount is 'hard', so a NAS stall blocks the writer in D state and no rsync timeout can end it; such a run sits until the NAS answers" ;;
 	esac
-
-	local probe="${MOUNT_ROOT}/.backup-preflight-$$"
-	if ! timeout "$PREFLIGHT_TIMEOUT" touch "$probe" 2>/dev/null; then
-		log ERROR "preflight: cannot write to ${MOUNT_ROOT} within ${PREFLIGHT_TIMEOUT}s (NAS down, read-only, or already stalled)"
-		return 1
-	fi
-	timeout "$PREFLIGHT_TIMEOUT" rm -f "$probe" 2>/dev/null || true
-	log INFO "preflight: ${MOUNT_ROOT} is writable"
 
 	if ! timeout "$PREFLIGHT_TIMEOUT" sudo -n mkdir -p "$DEST" 2>/dev/null; then
 		log ERROR "preflight: cannot create ${DEST} (sudo -n unavailable, or NAS stalled)"
