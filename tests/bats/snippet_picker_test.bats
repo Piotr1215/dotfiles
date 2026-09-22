@@ -154,10 +154,9 @@ setup() {
 	[ "$(cat "$SPY/clipboard")" = "through the link" ]
 }
 
-@test "the menu height is a share of the monitor, not a pixel or row count" {
-	# Rows are several lines tall, so a fixed row count drew a window taller
-	# than a 1080px screen. A percentage is resolved against whichever monitor
-	# rofi opens on. The stub records argv and picks nothing, so no paste runs.
+@test "the menu height cap accounts for multi-line rows" {
+	# Rows are several lines tall, so the shared theme needs their height to cap
+	# the visible row count within 80% of a 1080px monitor.
 	cat > "$STUB_BIN/rofi" <<-STUB
 		#!/usr/bin/env bash
 		printf '%s\n' "\$@" > "$SPY/rofi.args"
@@ -165,10 +164,11 @@ setup() {
 	STUB
 	chmod +x "$STUB_BIN/rofi"
 	printf 'body\n' > "$SNIPPETS/a.md"
+	export ROFI_PICKER_MONITOR_HEIGHT=1080
 
 	run "$PICKER" 0
 	[ "$status" -eq 0 ]
-	grep -qE '^window \{height: [0-9]+%;\}$' "$SPY/rofi.args"
+	grep -q '^listview {background-color: transparent; lines: 6;}$' "$SPY/rofi.args"
 	[ ! -s "$SPY/xdotool.log" ]
 }
 
