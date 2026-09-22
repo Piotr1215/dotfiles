@@ -249,7 +249,8 @@ function short() {
   clear
 }
 
-function cfp() {
+# Copy a file's absolute path to the clipboard
+function copypath() {
     local file_path="$1"
     local full_path=$(realpath "$file_path")
     echo -n "$full_path" | xclip -selection clipboard
