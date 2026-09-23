@@ -1076,3 +1076,19 @@ STUB
   [ "$status" -eq 0 ]
   grep -q '^# BEGIN remind' "$TEST_CRONTAB"
 }
+
+@test "two concurrent edits of one reminder both land" {
+  "$REMINDER" add "Base" 1h >/dev/null
+  id="$(only_id)"
+  real_jq="$(command -v jq)"
+  # A slow update widens the read-then-append window two unlocked edits raced through.
+  printf '#!/usr/bin/env bash\ncase "$*" in *"with_entries(select(.value != null"*) sleep 0.5 ;; esac\nexec %s "$@"\n' "$real_jq" >"$BIN/jq"
+  chmod +x "$BIN/jq"
+
+  "$REMINDER" edit "$id" --label "New label" >/dev/null &
+  "$REMINDER" edit "$id" --subject 'text:new note' >/dev/null &
+  wait
+
+  [ "$(last_record | jq -r '.label')" = "New label" ]
+  [ "$(last_record | jq -r '.subject')" = "text:new note" ]
+}

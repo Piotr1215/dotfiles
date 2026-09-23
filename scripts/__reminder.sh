@@ -137,12 +137,17 @@ get_record() {
 
 # Apply a jq filter to the current record and append the result. Empty and
 # null fields are dropped so `del(.when)` and `.when = ""` both clear a field.
+# The read, the filter and the append share one lock: two writers that each
+# read the same record and appended a full replacement lost one edit.
 update_record() {
 	local id="$1" filter="$2" record updated
 	shift 2
+	prepare_store
+	lock_store
 	record="$(get_record "$id")" || die "No reminder with id $id."
 	updated="$(jq -c "$@" "$filter | with_entries(select(.value != null and .value != \"\"))" <<<"$record")"
-	append_record "$updated"
+	printf '%s\n' "$updated" >>"$STORE"
+	unlock_store
 }
 
 new_id() {
@@ -963,13 +968,10 @@ cmd_edit() {
 }
 
 # A one-shot is spent; a repeat drops its pending one-shot (a snooze) only.
+# A repeat keeps its schedule and loses only the pending one-shot. One filter,
+# so the repeat check and the write see the same record.
 mark_done() {
-	local id="$1"
-	if [ -n "$(get_record "$id" | jq -r '.repeat // ""')" ]; then
-		update_record "$id" 'del(.when)'
-	else
-		update_record "$id" '.status = "done" | del(.when)'
-	fi
+	update_record "$1" 'if (.repeat // "") != "" then del(.when) else .status = "done" | del(.when) end'
 }
 
 cmd_done() {
