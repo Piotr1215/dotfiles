@@ -59,7 +59,8 @@ Agenda format (org): one ** heading per reminder, properties indented below.
   done <id>                         mark done (a repeat keeps its schedule)
   delete <id>
   sync                              rebuild the at queue and the crontab block
-  gc                                compact the store to active records
+  gc                                compact the store to active records, drop stale fire locks
+  compact                           one line per reminder, done and deleted kept (runs at boot)
   fire <id>                         what the clocks call; runs the action
 
 Options for add and edit:
@@ -404,7 +405,7 @@ cron_line() {
 cron_block() {
 	local record id repeat
 	printf '%s\n' "$CRON_BEGIN"
-	printf '@reboot sleep 90 && %s sync\n' "$SELF"
+	printf '@reboot sleep 90 && %s sync; %s compact\n' "$SELF" "$SELF"
 	while IFS= read -r record; do
 		id="$(jq -r '.id' <<<"$record")"
 		repeat="$(jq -r '.repeat // ""' <<<"$record")"
@@ -1023,15 +1024,44 @@ list_json() {
 	done <<<"$records" | jq -s .
 }
 
-cmd_gc() {
-	local kept
+# Rewrite the store to one line per id, the current record, filtered by $1.
+rewrite_store() {
 	prepare_store
 	lock_store
-	kept="$(jq -c -s 'reduce .[] as $r ({}; .[$r.id] = $r) | .[] | select(.status == "active")' "$STORE")"
-	printf '%s\n' "$kept" | sed '/^$/d' >"$STORE.tmp"
+	jq -c -s "reduce .[] as \$r ({}; .[\$r.id] = \$r) | .[] | $1" "$STORE" >"$STORE.tmp"
 	mv "$STORE.tmp" "$STORE"
 	unlock_store
+}
+
+# A fire lock outlives its dialog as an empty file. Drop the ones whose
+# reminder can no longer fire, and only while nobody holds them: an open
+# dialog keeps its lock, so cleanup never lets a second dialog in.
+drop_stale_locks() {
+	local lock id active
+	active="$(active_records | jq -r '.id')"
+	for lock in "$STATE_DIR"/fire-*.lock; do
+		[ -f "$lock" ] || continue
+		id="${lock##*/fire-}"
+		id="${id%.lock}"
+		grep -qxF "$id" <<<"$active" && continue
+		flock -n "$lock" rm -f "$lock" && printf 'lock: dropped %s\n' "${lock##*/}"
+	done
+	return 0
+}
+
+# gc forgets done and deleted reminders.
+cmd_gc() {
+	rewrite_store 'select(.status == "active")'
 	printf 'Compacted to %s active records.\n' "$(sed -n '$=' "$STORE" || echo 0)"
+	drop_stale_locks
+}
+
+# compact forgets only superseded lines: every id keeps its current record,
+# done and deleted included, so nothing a reader sees changes. Runs at boot.
+cmd_compact() {
+	rewrite_store '.'
+	printf 'Compacted to %s records.\n' "$(sed -n '$=' "$STORE" || echo 0)"
+	drop_stale_locks
 }
 
 # ----------------------------------------------------------------- fire ----
@@ -1385,6 +1415,7 @@ done) [ -n "${1:-}" ] || die "done needs an id."; cmd_done "$1" ;;
 delete) [ -n "${1:-}" ] || die "delete needs an id."; cmd_delete "$1" ;;
 sync) cmd_sync ;;
 gc) cmd_gc ;;
+compact) cmd_compact ;;
 fire) [ -n "${1:-}" ] || die "fire needs an id."; cmd_fire "$1" ;;
 open) [ -n "${1:-}" ] || die "open needs an id."; cmd_open "$1" ;;
 add-dialog) cmd_add_dialog ;;

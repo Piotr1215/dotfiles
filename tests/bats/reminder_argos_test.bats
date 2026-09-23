@@ -175,7 +175,7 @@ only_id() {
   grep -q '^0 5 \* \* 1 /usr/bin/backup$' "$TEST_CRONTAB"
   grep -q '^# BEGIN remind' "$TEST_CRONTAB"
   grep -q "^0 9 \* \* 1 /opt/cron/__cron_run.sh remind-$id -- .*__reminder.sh fire $id$" "$TEST_CRONTAB"
-  grep -q "^@reboot sleep 90 && .*__reminder.sh sync$" "$TEST_CRONTAB"
+  grep -q "^@reboot sleep 90 && .*__reminder.sh sync; .*__reminder.sh compact$" "$TEST_CRONTAB"
   grep -q '^# END remind$' "$TEST_CRONTAB"
   ! grep -q 'Weekly review' "$TEST_CRONTAB"
 }
@@ -991,4 +991,58 @@ STUB
   printf '0\n' >"$BATS_TEST_TMPDIR/rc"; "$REMINDER" fire "$id" >/dev/null
   printf '1\n' >"$BATS_TEST_TMPDIR/rc"; "$REMINDER" fire "$id" >/dev/null
   [ "$(awk -F '\t' -v id="$id" '$2 == id && $3 == "error" {d = $4} END {print d}' "$REMINDER_LOG")" = "last words" ]
+}
+
+@test "compact keeps every reminder's current record, drops superseded lines, and runs at boot after sync" {
+  "$REMINDER" add "Keep" 1h >/dev/null
+  keep="$(only_id)"
+  "$REMINDER" edit "$keep" --label "Keep edited" >/dev/null
+  "$REMINDER" add "Deleted" 1h >/dev/null
+  deleted="$(only_id)"
+  "$REMINDER" delete "$deleted" >/dev/null
+  before="$(jq -c -s 'reduce .[] as $r ({}; .[$r.id] = $r) | [.[]]' "$REMINDER_STORE")"
+
+  run "$REMINDER" compact
+
+  [ "$status" -eq 0 ]
+  [ "$(wc -l <"$REMINDER_STORE")" -eq 2 ]
+  [ "$(jq -c -s '.' "$REMINDER_STORE")" = "$before" ]
+  [ "$(jq -r "select(.id == \"$deleted\") | .status" "$REMINDER_STORE")" = deleted ]
+  grep -q "^@reboot sleep 90 && .*__reminder.sh sync; .*__reminder.sh compact$" "$TEST_CRONTAB"
+}
+
+@test "cleanup drops fire locks of reminders that cannot fire, unless a dialog still holds one" {
+  "$REMINDER" add "Live" 1h >/dev/null
+  live="$(only_id)"
+  "$REMINDER" add "Spent" 1h >/dev/null
+  spent="$(only_id)"
+  "$REMINDER" done "$spent" >/dev/null
+  "$REMINDER" add "Held" 1h >/dev/null
+  held="$(only_id)"
+  "$REMINDER" delete "$held" >/dev/null
+  for id in "$live" "$spent" "$held" deadbeef; do : >"$REMINDER_STATE_DIR/fire-$id.lock"; done
+  exec 6>"$REMINDER_STATE_DIR/fire-$held.lock"
+  flock 6
+
+  run "$REMINDER" compact
+  exec 6>&-
+
+  [ "$status" -eq 0 ]
+  [ -f "$REMINDER_STATE_DIR/fire-$live.lock" ]
+  [ -f "$REMINDER_STATE_DIR/fire-$held.lock" ]
+  [ ! -f "$REMINDER_STATE_DIR/fire-$spent.lock" ]
+  [ ! -f "$REMINDER_STATE_DIR/fire-deadbeef.lock" ]
+  [[ "$output" == *"lock: dropped fire-$spent.lock"* ]]
+}
+
+@test "gc drops stale fire locks too" {
+  "$REMINDER" add "Spent" 1h >/dev/null
+  spent="$(only_id)"
+  "$REMINDER" done "$spent" >/dev/null
+  : >"$REMINDER_STATE_DIR/fire-$spent.lock"
+
+  run "$REMINDER" gc
+
+  [ "$status" -eq 0 ]
+  [ ! -f "$REMINDER_STATE_DIR/fire-$spent.lock" ]
 }
