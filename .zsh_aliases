@@ -6,10 +6,6 @@ alias -g A='| ai_stream'
 # Semantic gate: all output, stdout and stderr, goes to class as is and passes
 # on only when the local model says yes. `ls -lgp Q 'is this an error?' A 'rca'`
 alias -g Q='2>&1 | class -p'
-# Paste: the clipboard as a command's output, so pasted text never passes
-# through shell quoting. Chains with the suffix aliases:
-# `P Q 'is this positive?' A 'why'`, `P A 'summarize'`, `P | class 'q'`
-alias P='xsel -ob'
 # Raw, non-streaming form. Use when you want the whole reply at once or need to
 # set --output-format yourself: `... AR --output-format json | jq -r .result`
 alias -g AR='| command claude -p'

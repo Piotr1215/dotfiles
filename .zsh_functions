@@ -878,6 +878,22 @@ _ai_stream() {
 }
 compdef _ai_stream ai_stream
 
+# Paste: the clipboard as a command's output, so pasted text never passes
+# through shell quoting. Chains with the suffix aliases:
+# `P Q 'is this positive?' A 'why'`, `P A 'summarize'`, `P | class 'q'`
+#
+# A dim preview of what is being pasted goes to the terminal first: a stale
+# clipboard (the prompt lines copied a minute ago) otherwise gets judged
+# silently. It is written to /dev/tty, not stderr, because Q merges stderr
+# into the pipe and class would judge the preview too.
+P() {
+    local clip
+    clip=$(xsel -ob) || return
+    local head=${${clip[1,100]}//$'\n'/ }
+    { print -r -- $'\e[2m'"P: ${head}$( (( ${#clip} > 100 )) && print -n '…') (${#clip} chars)"$'\e[0m' > /dev/tty } 2>/dev/null
+    print -r -- "$clip"
+}
+
 # Reopen the conversation the last `A` pipe created as a normal interactive
 # session, in the directory it ran in. The pipe and the TUI are the same
 # session; -p just drives it non-interactively, so nothing is lost in the move.
