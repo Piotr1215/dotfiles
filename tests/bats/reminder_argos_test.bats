@@ -17,6 +17,8 @@ setup() {
   export REMINDER_URL_OPENER="$BIN/url-opener"
   export REMINDER_TASK_OPENER="$BIN/task-opener"
   export REMINDER_MAILER="$BIN/mailer"
+  # This store is not the default one; at, atq, atrm and crontab are stubs.
+  export REMINDER_OWN_CLOCKS=1
   export TEST_MAIL_LOG="${BATS_TEST_TMPDIR}/mail.log"
   printf '#!/usr/bin/env bash\n{ printf "subject: %%s\\n" "$1"; cat; } >>"$TEST_MAIL_LOG"\n' >"$BIN/mailer"
   chmod +x "$BIN/mailer"
@@ -1045,4 +1047,32 @@ STUB
 
   [ "$status" -eq 0 ]
   [ ! -f "$REMINDER_STATE_DIR/fire-$spent.lock" ]
+}
+
+@test "a store that is not the default one refuses to touch the shared clocks" {
+  "$REMINDER" add "Weekly" --repeat 'every 7d' >/dev/null
+  printf '7 Mon Aug 17 09:00:00 2026 r decoder\n' >>"$TEST_ATQ"
+  printf '/x/__reminder.sh fire deadbeef\n' >"$TEST_AT_BODIES/7"
+  mkdir -p "$CRON_EVERY_STAMP_DIR"; : >"$CRON_EVERY_STAMP_DIR/remind-deadbeef"
+  : >"$TEST_AT_LOG"; crontab_before="$(<"$TEST_CRONTAB")"
+
+  run env -u REMINDER_OWN_CLOCKS "$REMINDER" sync
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"not the default store"* ]]
+  [ ! -s "$TEST_ATRM" ]
+  [ ! -s "$TEST_AT_LOG" ]
+  [ "$(<"$TEST_CRONTAB")" = "$crontab_before" ]
+  [ -f "$CRON_EVERY_STAMP_DIR/remind-deadbeef" ]
+}
+
+@test "the default store drives the clocks without the override, however it is named" {
+  xdg="$BATS_TEST_TMPDIR/xdg"
+
+  run env -u REMINDER_OWN_CLOCKS -u REMINDER_STATE_DIR -u REMINDER_STORE XDG_STATE_HOME="$xdg" "$REMINDER" sync
+  [ "$status" -eq 0 ]
+
+  run env -u REMINDER_OWN_CLOCKS -u REMINDER_STORE XDG_STATE_HOME="$xdg" REMINDER_STATE_DIR="$xdg/reminders/../reminders" "$REMINDER" sync
+  [ "$status" -eq 0 ]
+  grep -q '^# BEGIN remind' "$TEST_CRONTAB"
 }

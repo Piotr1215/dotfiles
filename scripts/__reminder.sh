@@ -20,7 +20,8 @@ set -eo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SELF="$(readlink -f "${BASH_SOURCE[0]}")"
-STATE_DIR="${REMINDER_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/reminders}"
+DEFAULT_STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/reminders"
+STATE_DIR="${REMINDER_STATE_DIR:-$DEFAULT_STATE_DIR}"
 STORE="${REMINDER_STORE:-$STATE_DIR/reminders.jsonl}"
 FIRE_LOG="${REMINDER_LOG:-$STATE_DIR/fire.log}"
 LOCK="${STORE}.lock"
@@ -442,11 +443,22 @@ sync_stamps() {
 	done
 }
 
+# The at queue, the crontab block and the cron-every stamps are one per user,
+# not one per store. A sync from any other store reaps every job and repeat it
+# does not know: a scratch-store smoke test on 2026-09-08 took 7 real jobs.
+# Only the default store drives them, unless REMINDER_OWN_CLOCKS says the
+# clocks are this store's own (the tests, which stub at and crontab).
+own_clocks() {
+	[ -n "${REMINDER_OWN_CLOCKS:-}" ] && return 0
+	[ "$(realpath -m "$STORE")" = "$(realpath -m "$DEFAULT_STATE_DIR/reminders.jsonl")" ]
+}
+
 # Sync reads the at queue, then schedules what is missing. Two unlocked passes
 # both saw a job missing and both scheduled it; every duplicate fired, and each
 # fire synced again, so on 2026-09-09 one reminder fired 2, 4, then 7 times.
 cmd_sync() {
 	local rc=0
+	own_clocks || die "sync: $STORE is not the default store, so it may not touch the shared at queue, crontab or cron-every stamps."
 	mkdir -p "$STATE_DIR"
 	exec 7>"$STATE_DIR/sync.lock"
 	flock 7
