@@ -1327,7 +1327,7 @@ cmd_fire() {
 			case "$notify" in
 			mail) printf '%s\n' "$output" | "$MAILER" "$title"; update_record "$id" '.status = "done" | del(.when)'; cmd_sync >/dev/null ;;
 			silent) update_record "$id" '.status = "done" | del(.when)'; cmd_sync >/dev/null ;;
-			*) guarded_dialog "$id" "$record" "$title" "$output" "$url" "$due" "$late" ;;
+			*) guarded_dialog "$id" "$record" "$title" "$output" "$url" "${due:+$(human_when "$due")}" "$late" ;;
 			esac
 			;;
 		*)
@@ -1336,7 +1336,7 @@ cmd_fire() {
 			case "$notify" in
 			mail) printf '%s\n%s\n' "$err_label" "$output" | "$MAILER" "error: $title"; mark_done "$id"; cmd_sync >/dev/null ;;
 			silent) mark_done "$id"; cmd_sync >/dev/null ;;
-			*) guarded_dialog "$id" "$record" "$title" "$err_label"$'\n'"$output" "$url" "$due" "$late" ;;
+			*) guarded_dialog "$id" "$record" "$title" "$err_label"$'\n'"$output" "$url" "${due:+$(human_when "$due")}" "$late" ;;
 			esac
 			;;
 		esac

@@ -1092,3 +1092,16 @@ STUB
   [ "$(last_record | jq -r '.label')" = "New label" ]
   [ "$(last_record | jq -r '.subject')" = "text:new note" ]
 }
+
+@test "exec error and hit dialogs show the due time the way show dialogs do" {
+  "$REMINDER" add "check" "$(date -d '+3 days' '+%Y-%m-%d 10:00')" --action exec --command "exit \$(cat $BATS_TEST_TMPDIR/rc)" >/dev/null
+  id="$(only_id)"
+  gui_returns '{"action":"dismiss"}'
+
+  for rc in 1 2; do
+    printf '%s\n' "$rc" >"$BATS_TEST_TMPDIR/rc"
+    when="$(last_record | jq -r '.when')"
+    "$REMINDER" fire "$id" >/dev/null
+    [ "$(jq -r '.due' "$TEST_ALERT_REQUEST")" = "$(date -d "$when" '+%a %d %b %H:%M')" ]
+  done
+}
