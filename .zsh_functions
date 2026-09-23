@@ -845,8 +845,16 @@ cs() {
 #
 # The google-drive connector warning is filtered: expected noise from the deny
 # in ~/.claude commit c53160f, not a failure.
+#
+# Empty piped input means an upstream gate said no, so there is nothing to ask
+# about and no call is made: `make 2>&1 | class -p "is this an error?" A 'rca'`.
 ai_stream() {
-    MAX_THINKING_TOKENS=0 command claude -p --model sonnet \
+    local input
+    if [[ ! -t 0 ]]; then
+        input=$(cat)
+        [[ -n $input ]] || return 0
+    fi
+    print -rn -- "$input" | MAX_THINKING_TOKENS=0 command claude -p --model sonnet \
         --output-format stream-json --verbose --include-partial-messages "$@" \
         2> >(grep -v 'blocked by enterprise policy' >&2) \
     | ~/.claude/scripts/__ai_pipe.py

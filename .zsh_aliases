@@ -3,6 +3,9 @@
 # prompt and any -p flag: `make build 2>&1 A 'root cause?'`, `... A --continue`,
 # `... A --model haiku`.
 alias -g A='| ai_stream'
+# Semantic gate: all output, stdout and stderr, goes to class as is and passes
+# on only when the local model says yes. `ls -lgp Q 'is this an error?' A 'rca'`
+alias -g Q='2>&1 | class -p'
 # Raw, non-streaming form. Use when you want the whole reply at once or need to
 # set --output-format yourself: `... AR --output-format json | jq -r .result`
 alias -g AR='| command claude -p'
