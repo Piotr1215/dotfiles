@@ -441,10 +441,20 @@ sync_stamps() {
 	done
 }
 
+# Sync reads the at queue, then schedules what is missing. Two unlocked passes
+# both saw a job missing and both scheduled it; every duplicate fired, and each
+# fire synced again, so on 2026-09-09 one reminder fired 2, 4, then 7 times.
 cmd_sync() {
-	sync_at
-	sync_cron
-	sync_stamps
+	local rc=0
+	mkdir -p "$STATE_DIR"
+	exec 7>"$STATE_DIR/sync.lock"
+	flock 7
+	sync_at || rc=$?
+	sync_cron || rc=$?
+	sync_stamps || rc=$?
+	flock -u 7
+	exec 7>&-
+	return "$rc"
 }
 
 # ------------------------------------------------------------------ log ----

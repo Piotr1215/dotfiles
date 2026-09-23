@@ -956,3 +956,17 @@ STUB
   [[ "$output" == *"Open agenda"* ]]
   [[ "$output" == *"add-dialog"* ]]
 }
+
+@test "concurrent syncs schedule one at job per reminder" {
+  "$REMINDER" add "Once" '2099-01-01 09:00' >/dev/null
+  : >"$TEST_ATQ"
+  # A slow atq widens the read-then-schedule window two unlocked syncs raced
+  # through on 2026-09-09, when one reminder fired 2, 4, then 7 times.
+  printf '#!/usr/bin/env bash\nsleep 0.5\ncat "$TEST_ATQ"\n' >"$BIN/atq"
+
+  "$REMINDER" sync >/dev/null &
+  "$REMINDER" sync >/dev/null &
+  wait
+
+  [ "$(grep -c . "$TEST_ATQ")" -eq 1 ]
+}
