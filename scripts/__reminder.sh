@@ -711,6 +711,7 @@ agenda_last() {
 		}
 		$3 == "done" || $3 == "mailed" || $3 == "opened" || $3 == "snoozed" { add($3); next }
 		$3 == "dismissed" { add("dismissed (" $4 ")"); next }
+		$3 == "error" { add($4); next }
 		$3 == "failed" { add("failed: " $4); next }
 		END { if (at != "") printf "%s\t%s\n", at, out == "" ? "fired" : out }
 	' "$FIRE_LOG")"
@@ -1145,6 +1146,25 @@ run_branch() {
 	log_fire "$id" "$field" "rc=$hrc" "$title"
 }
 
+# How long a check has been failing, from the fire log: nothing for a first
+# error, "7 errors in a row since <first>" once it repeats. A 0 or 2 verdict
+# ends a streak.
+error_streak() {
+	awk -F '\t' -v id="$1" '
+		$2 != id || $3 != "exec" { next }
+		$4 == "rc=0" || $4 == "rc=2" { n = 0; next }
+		{ if (n++ == 0) since = $1 }
+		END { if (n > 1) printf "%d errors in a row since %s", n, since }
+	' "$FIRE_LOG"
+}
+
+# The line that says why a check failed: its last non-empty output line, one
+# line and bounded so the fire log stays one record per line. The full output
+# is in the run log.
+error_reason() {
+	printf '%s\n' "$1" | tr '\t' ' ' | sed '/^[[:space:]]*$/d' | tail -n1 | cut -c1-300
+}
+
 cmd_fire() {
 	local id="$1" record status action subject type title body url due late command notify
 	valid_id "$id" || die "Invalid id $id."
@@ -1239,6 +1259,20 @@ cmd_fire() {
 			err_label="on-hit exit $BRANCH_RC"
 			output="$BRANCH_OUTPUT"$'\n---\n'"$output"
 		fi
+		local streak reason
+		case "$verdict" in
+		0 | 2) ;;
+		hook_failed)
+			reason="$(error_reason "$BRANCH_OUTPUT")"
+			log_fire "$id" error "${reason:-no output}" "$title"
+			;;
+		*)
+			streak="$(error_streak "$id")"
+			reason="$(error_reason "$output")"
+			err_label="$err_label${streak:+, $streak}"
+			log_fire "$id" error "${streak:+$streak: }${reason:-no output}" "$title"
+			;;
+		esac
 		case "$verdict" in
 		0) mark_done "$id"; cmd_sync >/dev/null ;;
 		2)

@@ -725,7 +725,7 @@ STUB
   printf '2\n' >"$BATS_TEST_TMPDIR/rc"
   "$REMINDER" fire "$id" >/dev/null
   run "$REMINDER" agenda render
-  grep -Eq "^   :last: $stamp hit, on-hit failed \(exit 1\)$" <<<"$output"
+  grep -Eq "^   :last: $stamp hit, on-hit failed \(exit 1\), no pattern given$" <<<"$output"
   grep -q "^   :log: .*/runs/$id.log$" <<<"$output"
 
   runlog="$REMINDER_STATE_DIR/runs/$id.log"
@@ -969,4 +969,26 @@ STUB
   wait
 
   [ "$(grep -c . "$TEST_ATQ")" -eq 1 ]
+}
+
+@test "a failing check records its reason and how long it has failed, and a clean run resets the count" {
+  "$REMINDER" add "canary" --repeat '36 10 * * *' --action exec --notify mail \
+    --command "echo progress; printf 'ERROR: aws exit 255:\tToken has expired\n\nlast words\n' >&2; exit \$(cat $BATS_TEST_TMPDIR/rc)" >/dev/null
+  id="$(only_id)"
+  printf '1\n' >"$BATS_TEST_TMPDIR/rc"
+
+  "$REMINDER" fire "$id" >/dev/null
+  first="$(awk -F '\t' -v id="$id" '$2 == id && $3 == "exec" {print $1}' "$REMINDER_LOG")"
+  "$REMINDER" fire "$id" >/dev/null
+
+  [ "$(awk -F '\t' -v id="$id" '$2 == id && $3 == "error" {n++} END {print n}' "$REMINDER_LOG")" -eq 2 ]
+  last="$(awk -F '\t' -v id="$id" '$2 == id && $3 == "error" {d = $4} END {print d}' "$REMINDER_LOG")"
+  [ "$last" = "2 errors in a row since $first: last words" ]
+  [ "$(grep -c "^exit 1, 2 errors in a row since $first$" "$TEST_MAIL_LOG")" -eq 1 ]
+  run "$REMINDER" agenda render
+  grep -Fq "error (exit 1), 2 errors in a row since $first: last words" <<<"$output"
+
+  printf '0\n' >"$BATS_TEST_TMPDIR/rc"; "$REMINDER" fire "$id" >/dev/null
+  printf '1\n' >"$BATS_TEST_TMPDIR/rc"; "$REMINDER" fire "$id" >/dev/null
+  [ "$(awk -F '\t' -v id="$id" '$2 == id && $3 == "error" {d = $4} END {print d}' "$REMINDER_LOG")" = "last words" ]
 }
