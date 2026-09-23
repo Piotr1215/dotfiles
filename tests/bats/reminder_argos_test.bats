@@ -828,7 +828,9 @@ STUB
 }
 
 @test "agenda render groups by horizon with org timestamps and detail lines" {
-  "$REMINDER" add "pto off" '2026-09-27 22:00' --action exec --command '/x/__toggles.sh __run pto-mode off' >/dev/null
+  # Relative, so the fixture stays under Later: a fixed date drifts into This week.
+  later="$(date -d '+30 days' +%F) 22:00"
+  "$REMINDER" add "pto off" "$later" --action exec --command '/x/__toggles.sh __run pto-mode off' >/dev/null
   "$REMINDER" add "Weekly" --repeat '0 9 * * 1' --subject 'text:first line
 second line' >/dev/null
   "$REMINDER" add "Soon" "$(date -d '+2 hours' '+%Y-%m-%d %H:%M')" >/dev/null
@@ -841,7 +843,7 @@ second line' >/dev/null
   [[ "$output" == *"* Today"* ]]
   [[ "$output" == *"* Later"* ]]
   [[ "$output" == *"* Recurring"* ]]
-  [[ "$output" == *"** <2026-09-27 Sun 22:00> pto off"* ]]
+  [[ "$output" == *"** <$(date -d "$later" '+%Y-%m-%d %a %H:%M')> pto off"* ]]
   [[ "$output" == *"   :action: exec"* ]]
   [[ "$output" == *"   :runs: /x/__toggles.sh __run pto-mode off"* ]]
   [[ "$output" == *"** <0 9 * * 1> Weekly"* ]]
