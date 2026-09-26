@@ -46,7 +46,6 @@ echo "$current_day"
 # there. The origin comes from __lib_screen.sh, so this holds for a single 4k
 # screen at home (origin 0,0) and for a laptop panel beside an external monitor.
 move_alacritty_to_main_screen() {
-	/home/decoder/dev/dotfiles/scripts/__alacritty_font_scale.sh 2>/dev/null || true
 	/home/decoder/dev/dotfiles/scripts/__panel_adapt.sh 2>/dev/null || true
 	local wa_x wa_y
 	IFS=' ' read -r wa_x wa_y _ _ < <(get_target_work_area)
@@ -74,6 +73,11 @@ start_task_session() {
 	fi
 	/usr/local/bin/tmuxinator start task --no-attach >/dev/null 2>&1 || true
 }
+
+# Size the font for this desk before alacritty starts. Written after the launch,
+# the change lands before alacritty watches its imports and the boot window
+# keeps the previous desk's size.
+/home/decoder/dev/dotfiles/scripts/__alacritty_font_scale.sh 2>/dev/null || true
 
 if [[ " ${weekdays[*]} " =~ $current_day ]] && [[ "$timeoff" == 0 ]]; then
 	rm -f /tmp/timeoff_mode

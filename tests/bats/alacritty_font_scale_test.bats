@@ -75,6 +75,23 @@ XR_NO_MM='HDMI-1 connected primary 1920x1080+0+0 (normal) 0mm x 0mm'
   grep -q '^size = 17.0$' "$FONT_FILE"
 }
 
+@test "boot writes the font file before it launches alacritty" {
+  local boot="${BATS_TEST_DIRNAME}/../../scripts/__boot.sh"
+  # Top-level lines only: a call inside a function runs when the function does.
+  run awk '
+    /^[a-z_]+\(\) *\{/ { infn = 1 }
+    infn && /^\}/ { infn = 0; next }
+    infn || /^[[:space:]]*#/ { next }
+    /__alacritty_font_scale\.sh/ && !s { s = NR }
+    /^[[:space:]]*alacritty &/ && !l { l = NR }
+    END { print s + 0, l + 0 }
+  ' "$boot"
+  read -r scale_line launch_line <<<"$output"
+  [ "$scale_line" -gt 0 ]
+  [ "$launch_line" -gt 0 ]
+  [ "$scale_line" -lt "$launch_line" ]
+}
+
 @test "alacritty.toml imports the generated file and carries no font size of its own" {
   local toml="${BATS_TEST_DIRNAME}/../../.config/alacritty/alacritty.toml"
   grep -q 'font-size.toml' "$toml"
