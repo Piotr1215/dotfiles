@@ -68,6 +68,11 @@ vim.keymap.set(
   nvim_tmux_nav.NvimTmuxNavigateRight,
   { noremap = true, silent = true, desc = "navigate right (vim/tmux)" }
 )
+-- <C-l> above replaces the default that clears multicursors (:h mcursor-clear),
+-- so <Esc> clears them instead, the same way the default does.
+vim.keymap.set("n", "<Esc>", function()
+  vim.api.nvim_buf_clear_namespace(0, vim.api.nvim_create_namespace "nvim.multicursor", 0, -1)
+end, { silent = true, desc = "clear multicursors" })
 vim.keymap.set(
   "n",
   "<A-m>",
