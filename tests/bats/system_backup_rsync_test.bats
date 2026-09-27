@@ -25,6 +25,8 @@ echo "rsync \$*" >>"${CALLS}"
 case " \$* " in
   *" -n -d "*) exit "\${RSYNC_PREFLIGHT_RC:-0}" ;;
 esac
+# Go silent the way one large file in flight does: no output until it lands.
+sleep "\${RSYNC_SILENT_SECONDS:-0}"
 echo "Number of regular files transferred: 0"
 echo "Total transferred file size: 0 bytes"
 EOF
@@ -102,4 +104,30 @@ on_lan() {
   [[ "$output" == *"transport: off LAN and pop-os did not answer (rsync exit 12)"* ]]
   [[ "$output" == *"preflight: ${WORK}/nas is not a mount point"* ]]
   [ "$(wc -l <"$CALLS")" -eq 1 ]
+}
+
+# The jam watchdog kills an rsync that prints nothing for JAM_SECONDS, which is
+# how a writer wedged on the NAS mount shows itself. Over ssh the same silence is
+# one large file in flight: on 2026-09-26 it killed a 242M plocate.db transfer
+# three times running and failed the run having moved nothing.
+@test "on LAN the jam watchdog still trips when rsync goes silent" {
+  on_lan
+  SHM_DEST="$(mktemp -d /dev/shm/system-backup-test.XXXXXX)"
+
+  RSYNC_SILENT_SECONDS=5 SYSTEM_BACKUP_JAM_SECONDS=2 SYSTEM_BACKUP_JAM_POLL=1 \
+    SYSTEM_BACKUP_MOUNT=/dev/shm SYSTEM_BACKUP_DEST="$SHM_DEST" run "$SCRIPT"
+
+  [[ "$output" == *"JAMMED: rsync produced no output"* ]]
+}
+
+@test "off LAN over ssh a long silent transfer is left to finish, not killed as jammed" {
+  mkdir -p "${WORK}/nas"
+
+  RSYNC_SILENT_SECONDS=5 SYSTEM_BACKUP_JAM_SECONDS=2 SYSTEM_BACKUP_JAM_POLL=1 \
+    SYSTEM_BACKUP_MOUNT="${WORK}/nas" SYSTEM_BACKUP_DEST="${WORK}/nas/system-backup" run "$SCRIPT"
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"transport: off LAN, rsync goes over ssh through pop-os"* ]]
+  [[ "$output" != *"JAMMED"* ]]
+  [[ "$output" == *"SUMMARY: backup complete"* ]]
 }

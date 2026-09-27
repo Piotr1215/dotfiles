@@ -69,7 +69,14 @@ RSYNC_LOG="$(mktemp -t system-backup-rsync.XXXXXX)"
 # Observed 2026-08-22: the mount wedged, rsync sat in D burning 6 CPU jiffies
 # per 10s, and nothing ended it because rsync's own --timeout is a select() on
 # its socket that cannot fire from inside a blocked write.
+# NFS path only. Over ssh the local rsync writes to a socket, never to the mount,
+# so it cannot wedge in D state and --timeout=600 does catch a dead link. There
+# the silence is one large file in flight (--info=name2 names it once, then says
+# nothing until it lands), and killing it with SIGKILL also throws away the
+# --partial file, so every retry restarts it: 2026-09-26 lost three attempts to
+# a 242M plocate.db that way and moved nothing.
 JAM_SECONDS="${SYSTEM_BACKUP_JAM_SECONDS:-120}"
+JAM_POLL="${SYSTEM_BACKUP_JAM_POLL:-15}"
 trap 'rm -f "$RSYNC_LOG"' EXIT
 
 log() {
@@ -143,9 +150,9 @@ human_bytes() {
 jam_watch() {
 	local last=-1 size still=0 p
 	while :; do
-		sleep 15
+		sleep "$JAM_POLL"
 		size=$(stat -c %s "$RSYNC_LOG" 2>/dev/null || echo 0)
-		if [ "$size" = "$last" ]; then still=$(( still + 15 )); else still=0; fi
+		if [ "$size" = "$last" ]; then still=$(( still + JAM_POLL )); else still=0; fi
 		last="$size"
 		[ "$still" -ge "$JAM_SECONDS" ] || continue
 		log ERROR "JAMMED: rsync produced no output for ${still}s. Killing it so the run retries."
@@ -258,6 +265,9 @@ main() {
 
 	log INFO "ownership is not preserved: destination is root_squash NFS without xattr support"
 	# ${opts[*]} would join on IFS, which is newline here, so build it explicitly.
+	if [ "${#TRANSPORT_OPTS[@]}" -gt 0 ]; then
+		log INFO "jam watchdog off: over ssh rsync's own --timeout=600 catches a dead link"
+	fi
 	log INFO "running: sudo rsync $(printf '%s ' "${opts[@]}" "${TRANSPORT_OPTS[@]}")${SRC} ${TARGET}"
 
 	local started attempt=0 barren=0 rc=0 elapsed=0 jam_pid=
@@ -270,12 +280,17 @@ main() {
 		: > "$RSYNC_LOG"
 
 		set +e
-		jam_watch &
-		jam_pid=$!
+		jam_pid=
+		if [ "${#TRANSPORT_OPTS[@]}" -eq 0 ]; then
+			jam_watch &
+			jam_pid=$!
+		fi
 		sudo -n rsync "${opts[@]}" "${TRANSPORT_OPTS[@]}" "$SRC" "$TARGET" 2>&1 | tee "$RSYNC_LOG"
 		rc=${PIPESTATUS[0]}
-		kill "$jam_pid" 2>/dev/null || true
-		wait "$jam_pid" 2>/dev/null || true
+		if [ -n "$jam_pid" ]; then
+			kill "$jam_pid" 2>/dev/null || true
+			wait "$jam_pid" 2>/dev/null || true
+		fi
 		set -e
 
 		files="$(rsync_stat 'Number of regular files transferred')"
