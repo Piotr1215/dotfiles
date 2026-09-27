@@ -110,55 +110,12 @@ return require("lazy").setup({
   },
   "MunifTanjim/nui.nvim",
   {
-    -- Command line in a popup mid-screen. Only the cmdline: ui2 (init.lua)
-    -- keeps messages, and cmp keeps completion.
-    "folke/noice.nvim",
-    event = "VeryLazy",
-    dependencies = { "MunifTanjim/nui.nvim" },
-    opts = {
-      cmdline = {
-        view = "cmdline_popup",
-        -- Show the typed : / ? instead of noice's icons.
-        format = {
-          cmdline = { conceal = false, icon = false },
-          search_down = { conceal = false, icon = false },
-          search_up = { conceal = false, icon = false },
-        },
-      },
-      messages = { enabled = false },
-      popupmenu = { enabled = false },
-      notify = { enabled = false },
-      lsp = {
-        progress = { enabled = false },
-        hover = { enabled = false },
-        signature = { enabled = false },
-        message = { enabled = false },
-      },
-    },
-    config = function(_, opts)
-      require("noice").setup(opts)
-      -- ui2 still draws the cmdline on its bottom line as well, so hide that
-      -- window while the popup is up. vim._core.ui2 is internal: pcall-guard.
-      local function hide_ui2_cmdline(hide)
-        local ok, ui2 = pcall(require, "vim._core.ui2")
-        local win = ok and ui2.wins and ui2.wins.cmd
-        if win and vim.api.nvim_win_is_valid(win) and (hide or vim.o.cmdheight > 0) then
-          vim.api.nvim_win_set_config(win, { hide = hide })
-        end
-      end
-      local group = vim.api.nvim_create_augroup("noice_ui2_cmdline", { clear = true })
-      vim.api.nvim_create_autocmd("CmdlineEnter", {
-        group = group,
-        callback = function()
-          hide_ui2_cmdline(true)
-        end,
-      })
-      vim.api.nvim_create_autocmd("CmdlineLeave", {
-        group = group,
-        callback = function()
-          hide_ui2_cmdline(false)
-        end,
-      })
+    -- Centers ui2's command line while typing (ui2 is enabled in init.lua).
+    -- Fork: keeps 'cmdheight' as set and anchors the cmp menu under it.
+    "Piotr1215/tiny-cmdline.nvim",
+    dev = true,
+    init = function()
+      vim.g.tiny_cmdline = { manage_cmdheight = false }
     end,
   },
   "stevearc/dressing.nvim",
