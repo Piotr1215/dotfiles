@@ -261,8 +261,14 @@ zle -N pet-select
 stty -ixon
 bindkey '^s' pet-select                   # Ctrl+s: Selects pet snippet
 
+# ctrl-y copies the highlighted path and closes, same as M-x. zoxide passes its
+# own fzf flags as arguments and only reads FZF_DEFAULT_OPTS, so the bind rides
+# there; {2..} is the path, field 1 is the score. An empty pick (Esc, ctrl-y)
+# keeps the command line instead of wiping it.
 function zoxider() {
-  BUFFER=$(zoxide query -i)
+  local dir
+  dir=$(FZF_DEFAULT_OPTS="$FZF_DEFAULT_OPTS --bind='ctrl-y:execute-silent($HOME/dev/dotfiles/scripts/__copy_path_with_notification.sh {2..})+abort'" zoxide query -i) || { zle reset-prompt; return }
+  BUFFER=$dir
   zle accept-line
 }
 
