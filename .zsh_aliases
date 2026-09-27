@@ -185,6 +185,8 @@ alias notion-mic-status='/home/decoder/dev/dotfiles/scripts/__notion_loopback.sh
 
 # claude-dashboard web admin panel (on|off|toggle|status|open)
 alias ccdash="~/.claude/scripts/__claude_dashboard_ctl.sh"
+# injection dashboard web view: starts the service if down and opens it; `ragdash semif` jumps to the semif panel
+alias ragdash="~/.claude/scripts/__inject_dashboard_open.sh"
 
 # claude code status: live cockpit board (Gordon's hand-authored read), viddy 30s refresh + diff-highlight
 alias ccstatus="~/.claude/scripts/__cockpit_board.sh"
