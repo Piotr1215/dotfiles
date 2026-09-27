@@ -21,6 +21,8 @@ return require("lazy").setup({
   "robitx/gp.nvim",
   {
     "Piotr1215/pairup.nvim",
+    -- Off for now; its ]C and [C take multicursor's cursor jumps.
+    enabled = false,
     dev = true,
     cmd = { "Pairup" },
     keys = {
