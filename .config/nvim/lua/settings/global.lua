@@ -47,7 +47,7 @@ set.hlsearch = true
 set.updatetime = 300
 set.splitright = true -- put new splits to the right
 set.splitbelow = true -- put new splits below
-set.lazyredraw = true -- do not redraw for macros, faster execution
+-- lazyredraw stays off: noice.nvim (plugins.lua) draws its cmdline popup on redraw
 set.undofile = true -- persistent undo even after session close
 set.shada:remove "r/tmp/" -- 0.12 marks /tmp removable, dropping scratch notes from :oldfiles; user keeps scratch files there
 set.spellfile = vim.fn.stdpath "config" .. "/spell/en.utf-8.add"
