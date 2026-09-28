@@ -102,6 +102,41 @@ EOF
 	[ "$output" = "0" ]
 }
 
+@test "a window-manager key rebound from its default is indexed, a default one is not" {
+	cat > "$STUB_BIN/gsettings" <<'EOF'
+#!/usr/bin/env bash
+wm=org.gnome.desktop.wm.keybindings
+case "$*" in
+	"list-recursively $wm")
+		if [ "$GSETTINGS_BACKEND" = memory ]; then
+			printf '%s\n' "$wm close ['<Alt>F4']" "$wm minimize ['<Super>h']" \
+				"$wm show-desktop @as []" "$wm switch-windows ['<Alt>Tab']" \
+				"$wm move-to-monitor-left ['<Super><Shift>Left']"
+		else
+			printf '%s\n' "$wm close ['<Alt>F4', '<Super>q']" "$wm minimize @as []" \
+				"$wm show-desktop ['<Super>d']" "$wm switch-windows ['<Alt>Tab']" \
+				"$wm move-to-monitor-left ['<Control><Shift><Alt><Super>h']"
+		fi ;;
+	"get $wm close") printf "['<Alt>F4', '<Super>q']\n" ;;
+	"get $wm minimize") printf "@as []\n" ;;
+	"get $wm show-desktop") printf "['<Super>d']\n" ;;
+	"get $wm switch-windows") printf "['<Alt>Tab']\n" ;;
+	"get $wm move-to-monitor-left") printf "['<Control><Shift><Alt><Super>h']\n" ;;
+esac
+EOF
+	chmod +x "$STUB_BIN/gsettings"
+	bash "$GEN"
+	grep -qx 'super+q (Super-q)|Close (GNOME)  gsettings org.gnome.desktop.wm.keybindings close' "$GNOME_OUT"
+	grep -q '^alt+f4 (M-F4)|Close (GNOME)' "$GNOME_OUT"
+	grep -q '^super+d (Super-d)|Show desktop (GNOME)' "$GNOME_OUT"
+	# Left at its default, and cleared to free the key: neither is Piotr's binding.
+	run grep -c 'Switch windows\|Minimize' "$GNOME_OUT"
+	[ "$output" = "0" ]
+	# The curated monitor-move label wins; the key is not listed twice.
+	run grep -c 'move-to-monitor-left' "$GNOME_OUT"
+	[ "$output" = "1" ]
+}
+
 @test "without gsettings the gnome index is left alone, not emptied" {
 	printf 'keep me\n' > "$GNOME_OUT"
 	write_item SecretPicker '{"description":"SecretPicker","modes":[3],"hotkey":{"modifiers":["<alt>","<ctrl>"],"hotKey":"p"}}'

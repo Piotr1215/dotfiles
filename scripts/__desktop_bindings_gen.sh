@@ -114,10 +114,10 @@ gnome_records() {
 }
 
 # Window-manager keys are not custom keybindings: each lives in a fixed schema
-# key and holds a list of accelerators. Only the monitor moves are indexed.
-# Super+Shift+arrows moves a window to the next screen and Alt+Shift+arrows
-# resizes a tmux pane, one modifier apart, and the help is where that gets
-# checked.
+# key and holds a list of accelerators. The monitor moves are always indexed,
+# under hand-written labels. Super+Shift+arrows moves a window to the next
+# screen and Alt+Shift+arrows resizes a tmux pane, one modifier apart, and the
+# help is where that gets checked.
 WM_KEYS=(
     "org.gnome.shell.extensions.pop-shell pop-monitor-left|Move window to left monitor (pop-shell)"
     "org.gnome.shell.extensions.pop-shell pop-monitor-right|Move window to right monitor (pop-shell)"
@@ -129,9 +129,47 @@ WM_KEYS=(
     "org.gnome.desktop.wm.keybindings move-to-monitor-down|Move window to lower monitor (GNOME)"
 )
 
+# Every other window-manager key is indexed once it differs from its default.
+# super+q, super+m and super+shift+h were rebound in GNOME Settings and never
+# reached the help, because only the monitor moves above were listed. The
+# memory backend ignores the user's dconf and reports schema defaults, so a
+# key whose value differs is one Piotr set. A key cleared to free its
+# accelerator (minimize, for super+h) has nothing to list and drops out.
+WM_SCHEMAS=(
+    org.gnome.desktop.wm.keybindings
+    org.gnome.shell.keybindings
+    org.gnome.mutter.keybindings
+    org.gnome.mutter.wayland.keybindings
+    org.gnome.settings-daemon.plugins.media-keys
+    org.gnome.shell.extensions.pop-shell
+)
+
+# "<schema> <key>|<label>" for each rebound key WM_KEYS does not already name.
+rebound_wm_keys() {
+    local schema
+    for schema in "${WM_SCHEMAS[@]}"; do
+        CURATED="$(printf '%s\n' "${WM_KEYS[@]%%|*}")" awk '
+            BEGIN { n = split(ENVIRON["CURATED"], c, "\n"); for (i = 1; i <= n; i++) curated[c[i]] = 1 }
+            { value = substr($0, length($1) + length($2) + 3) }
+            FILENAME == ARGV[1] { def[$2] = value; next }
+            # Accelerator lists only; custom-keybindings is a list of dconf paths.
+            value !~ /^(\[|@as)/ || $2 == "custom-keybindings" { next }
+            ($1 " " $2) in curated || value == def[$2] { next }
+            {
+                label = $2
+                gsub("-", " ", label)
+                print $1 " " $2 "|" toupper(substr(label, 1, 1)) substr(label, 2) " (GNOME)"
+            }
+        ' <(GSETTINGS_BACKEND=memory gsettings list-recursively "$schema" 2>/dev/null) \
+          <(gsettings list-recursively "$schema" 2>/dev/null)
+    done
+}
+
 gnome_wm_records() {
     local entry schema key label accel
-    for entry in "${WM_KEYS[@]}"; do
+    local -a entries
+    mapfile -t entries < <(printf '%s\n' "${WM_KEYS[@]}"; rebound_wm_keys)
+    for entry in "${entries[@]}"; do
         read -r schema key <<< "${entry%%|*}"
         label="${entry#*|}"
         # "['<Super><Shift>Left', '<Super><Shift>KP_Left']", or "@as []" when
