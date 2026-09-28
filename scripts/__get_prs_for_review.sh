@@ -26,17 +26,17 @@ get_all_pending_pr_tasks() {
 get_review_prs() {
 	# Query PRs where you're involved (author, assignee, commenter)
 	local involved_prs
-	involved_prs=$(gh search prs --involves Piotr1215 --owner loft-sh --state open --limit 100 \
+	involved_prs=$(gh search prs --involves Piotr1215 --owner loft-sh --state open --limit 1000 \
 		--json title,url,number,repository,createdAt,updatedAt)
 
 	# Query PRs where you're mentioned
 	local mentioned_prs
-	mentioned_prs=$(gh search prs --mentions Piotr1215 --owner loft-sh --state open --limit 100 \
+	mentioned_prs=$(gh search prs --mentions Piotr1215 --owner loft-sh --state open --limit 1000 \
 		--json title,url,number,repository,createdAt,updatedAt)
 
 	# Query PRs you're requested to review (includes team requests)
 	local review_prs
-	review_prs=$(gh search prs --review-requested Piotr1215 --owner loft-sh --state open --limit 100 \
+	review_prs=$(gh search prs --review-requested Piotr1215 --owner loft-sh --state open --limit 1000 \
 		--json title,url,number,repository,createdAt,updatedAt)
 
 	# Combine all results and remove duplicates
@@ -45,7 +45,7 @@ get_review_prs() {
 }
 
 get_approved_prs() {
-	gh search prs --involves Piotr1215 --owner loft-sh --state open --review approved --limit 100 \
+	gh search prs --involves Piotr1215 --owner loft-sh --state open --review approved --limit 1000 \
 		--json title,url,number --jq '.'
 }
 
