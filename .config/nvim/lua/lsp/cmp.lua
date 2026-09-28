@@ -39,6 +39,7 @@ cmp.setup {
         nvim_lsp = "[LSP]",
         nvim_lua = "[Lua]",
         projects = "[Projects]",
+        models = "[Models]",
         emoji = "[Emoji]",
         luasnip = "[Snippet]",
       },
