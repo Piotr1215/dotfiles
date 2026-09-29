@@ -1144,6 +1144,19 @@ sync_to_taskwarrior() {
     
     task_uuid="$existing_task_uuid"
 
+    # Carry a Linear title rename onto the task, so its description keeps
+    # matching the feed. Only for a match by linear_issue_id: that match is
+    # authoritative, while a description match already means the titles agree.
+    if [[ -n "$task_uuid" && "$task_uuid" != "null" && -n "$issue_number" ]]; then
+        local current_description
+        current_description=$(task _get "$task_uuid".description 2>/dev/null || echo "")
+        if [[ -n "$current_description" && "$current_description" != "$issue_description" ]] && \
+           [[ "$(task _get "$task_uuid".linear_issue_id 2>/dev/null)" == "$issue_number" ]]; then
+            log "Linear title changed for $issue_number - updating task description"
+            task rc.confirmation=no modify "$task_uuid" "description:$issue_description"
+        fi
+    fi
+
     if [[ -z "$task_uuid" || "$task_uuid" == "null" ]]; then
         log "No valid existing task found - creating new task"
         create_and_annotate_task "$issue_description" "$issue_repo_name" "$issue_url" "$issue_number" "$project_name" "$issue_status" "$issue_due_date" "$issue_priority" "$cycle_number" "$issue_updated_at" "$pr_url" "$slack_urls" "$link_urls"
@@ -1316,8 +1329,17 @@ sync_issues_to_taskwarrior() {
 # ====================================================
 
 # Compare existing Taskwarrior tasks with current issues and mark as completed if not present
+#
+# $2 is the feed's Linear issue ids, one per line. A task whose id is in the
+# feed is live whatever its description says, so it is never touched here.
+# Matching only by description deleted a task every time its Linear title was
+# renamed: the create pass then rebuilt it bare 30 minutes later, losing its
+# tags, annotations and triage (DEVOPS-1018, DEVOPS-1537, DEVOPS-1562 on
+# 2026-09-28/29). Tasks absent from the feed are find_and_clean_reassigned_tasks'
+# job, which decides by id.
 compare_and_clean_tasks() {
     local issues_descriptions="$1"
+    local feed_issue_ids="${2:-}"
 
     log "Starting comparison of Taskwarrior tasks and current issues."
 
@@ -1365,6 +1387,12 @@ compare_and_clean_tasks() {
         local trimmed_desc=$(trim_whitespace "$description")
         local lower_desc=$(sanitize_description "${trimmed_desc,,}")
         local linear_issue_id=$(echo "$task_json" | jq -r '.linear_issue_id // empty')
+
+        # Exact line match: a substring test would let DEVOPS-10 claim DEVOPS-1018.
+        if [[ -n "$linear_issue_id" && -n "$feed_issue_ids" ]] && \
+           grep -Fxq "$linear_issue_id" <<< "$feed_issue_ids"; then
+            continue
+        fi
 
         # Fast grep search instead of bash loop
         if ! grep -Fxq "$lower_desc" "$issues_file"; then
@@ -1505,7 +1533,9 @@ main() {
     if [[ "$fetch_status" -eq 0 ]]; then
         local all_descriptions
         all_descriptions=$(echo "$linear_issues" | jq -r '.description' 2>/dev/null)
-        compare_and_clean_tasks "$all_descriptions"
+        local all_issue_ids
+        all_issue_ids=$(echo "$linear_issues" | jq -r '.issue_id // empty' 2>/dev/null)
+        compare_and_clean_tasks "$all_descriptions" "$all_issue_ids"
     else
         log "GUARD: SKIPPING compare_and_clean_tasks — Linear fetch incomplete/errored (status $fetch_status); tasks left untouched."
     fi

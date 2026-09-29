@@ -218,6 +218,76 @@ teardown() {
     [ "$status" -le 1 ]
 }
 
+# A pending task with a stale title, as the sync sees it after a Linear rename.
+write_stale_title_task_mock() {
+    local linear_id="$1"
+    cat > "${TEST_DIR}/task" << EOF
+#!/bin/bash
+case "\$1" in
+    "linear_issue_id.any:")
+        echo '[{"uuid":"stale-uuid","description":"old title","status":"pending","linear_issue_id":"${linear_id}"}]'
+        ;;
+    "_get")
+        [[ "\$2" == *".status" ]] && echo "pending"
+        [[ "\$2" == *".deletable" ]] && echo "true"
+        ;;
+    "rc.confirmation=no")
+        echo "MOCK: task \$*" >> "${TEST_DIR}/task_commands.log"
+        ;;
+esac
+EOF
+    chmod +x "${TEST_DIR}/task"
+    check_linear_issue_status() { echo "active"; }
+}
+
+@test "compare_and_clean_tasks keeps a task whose Linear id is still in the feed after a rename" {
+    write_stale_title_task_mock "DEVOPS-1018"
+
+    run compare_and_clean_tasks "new title" $'DEVOPS-7\nDEVOPS-1018'
+    [ "$status" -eq 0 ]
+    ! grep -q "delete" "${TEST_DIR}/task_commands.log" 2>/dev/null
+    ! grep -q "stale-uuid" "${TEST_DIR}/task_commands.log" 2>/dev/null
+}
+
+@test "compare_and_clean_tasks matches feed ids exactly, not by substring" {
+    write_stale_title_task_mock "DEVOPS-10"
+
+    run compare_and_clean_tasks "new title" "DEVOPS-1018"
+    [ "$status" -eq 0 ]
+    grep -q "stale-uuid delete" "${TEST_DIR}/task_commands.log"
+}
+
+@test "sync_to_taskwarrior carries a Linear title rename onto the task found by id" {
+    test_issue='{"id":"1","description":"new title","repository":"linear","html_url":"https://linear.app/t/issue/DEVOPS-1018","issue_id":"DEVOPS-1018","project":"p","status":"In Progress"}'
+    cat > "${TEST_DIR}/task" << 'EOF'
+#!/bin/bash
+case "$1" in
+    "linear_issue_id:DEVOPS-1018")
+        echo '[{"uuid":"id-uuid","description":"old title","status":"pending","tags":["triaged"],"linear_issue_id":"DEVOPS-1018"}]'
+        ;;
+    "_get")
+        case "$2" in
+            *.description) echo "old title" ;;
+            *.linear_issue_id) echo "DEVOPS-1018" ;;
+            *.status) echo "pending" ;;
+        esac
+        ;;
+    "id-uuid")
+        echo '[{"uuid":"id-uuid","description":"old title","status":"pending","tags":["triaged"],"linear_issue_id":"DEVOPS-1018"}]'
+        ;;
+    "rc.confirmation=no")
+        echo "MOCK: task $*" >> "${TEST_DIR}/task_commands.log"
+        ;;
+esac
+EOF
+    chmod +x "${TEST_DIR}/task"
+
+    run sync_to_taskwarrior "$test_issue"
+    [ "$status" -eq 0 ]
+    grep -q "modify id-uuid description:new title" "${TEST_DIR}/task_commands.log"
+    ! grep -q " add " "${TEST_DIR}/task_commands.log"
+}
+
 @test "temp file cleanup on script interruption" {
     # Test that trap handlers clean up temp files on script interruption
     
