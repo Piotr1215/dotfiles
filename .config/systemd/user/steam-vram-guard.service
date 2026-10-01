@@ -1,0 +1,15 @@
+[Unit]
+Description=Free VRAM and start GameMode while Steam runs (stops Ollama, registers Steam)
+After=default.target
+
+[Service]
+Type=simple
+ExecStart=%h/dev/dotfiles/scripts/__steam_vram_guard.sh
+Restart=always
+RestartSec=5
+Nice=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target
