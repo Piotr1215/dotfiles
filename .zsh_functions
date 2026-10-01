@@ -837,10 +837,11 @@ cs() {
 #   MAX_THINKING_TOKENS=0  94s -> 1s. Extended thinking spent 9802 tokens
 #                          deliberating over a file count. A shell pipe wants an
 #                          answer, not a deliberation.
-#   --model sonnet         chosen over haiku for answer quality; the input is
-#                          ~60k tokens of hooks and CLAUDE.md on every call, so
-#                          expect roughly $0.36 and ~10s per pipe, not $0.09/2s.
-#                          Drop to `A --model haiku` for cheap lookups.
+#   --model opus           chosen for answer quality. It reaches for tools: the
+#                          benchmark ran shell calls to recount /tmp, 997k input
+#                          tokens over several turns, $2.84 and 74s. Sonnet
+#                          answered from the pipe for about $0.36 and 10s.
+#                          Drop to `A --model sonnet` or `haiku` for cheap lookups.
 # Both sit before "$@", so any flag you pass wins: `... A --model sonnet`.
 #
 # The google-drive connector warning is filtered: expected noise from the deny
@@ -854,7 +855,7 @@ ai_stream() {
         input=$(cat)
         [[ -n $input ]] || return 0
     fi
-    print -rn -- "$input" | MAX_THINKING_TOKENS=0 command claude -p --model sonnet \
+    print -rn -- "$input" | MAX_THINKING_TOKENS=0 command claude -p --model opus \
         --output-format stream-json --verbose --include-partial-messages "$@" \
         2> >(grep -v 'blocked by enterprise policy' >&2) \
     | ~/.claude/scripts/__ai_pipe.py
