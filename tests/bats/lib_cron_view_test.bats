@@ -107,6 +107,41 @@ EOF
     cron_overdue "$(( now - 15 * 86400 ))" '50 * * * *' "$cmd"
 }
 
+@test "overdue: hours the machine was off do not count against a sub-daily job" {
+    local now; now=$(date +%s)
+    # Last ran 13h ago, powered off overnight, booted 80 minutes ago: the 2h
+    # job has not had its first tick yet.
+    CRON_VIEW_BOOT_TS=$(( now - 4800 ))
+    run cron_overdue "$(( now - 13 * 3600 ))" '15 */2 * * *'
+    [ "$status" -ne 0 ]
+    # Same night, four minutes after boot: a 5-minute job is not late either.
+    CRON_VIEW_BOOT_TS=$(( now - 240 ))
+    run cron_overdue "$(( now - 13 * 3600 ))" '*/5 * * * *'
+    [ "$status" -ne 0 ]
+}
+
+@test "overdue: a sub-daily job still silent a full budget after boot is overdue" {
+    local now; now=$(date +%s)
+    CRON_VIEW_BOOT_TS=$(( now - 5 * 3600 ))
+    cron_overdue "$(( now - 13 * 3600 ))" '15 */2 * * *'
+}
+
+@test "overdue: a run after boot is measured from the run, not the boot" {
+    local now; now=$(date +%s)
+    CRON_VIEW_BOOT_TS=$(( now - 10 * 3600 ))
+    run cron_overdue "$(( now - 3600 ))" '15 */2 * * *'
+    [ "$status" -ne 0 ]
+    cron_overdue "$(( now - 5 * 3600 ))" '15 */2 * * *'
+}
+
+@test "overdue: a fresh boot does not excuse a daily or weekly job" {
+    local now; now=$(date +%s)
+    local cmd="$EVERY r2r-full 604800 -- $RUN __r2r_sync-full -- /home/x/s.sh"
+    CRON_VIEW_BOOT_TS=$(( now - 600 ))
+    cron_overdue "$(( now - 20 * 86400 ))" '0 7 * * *'
+    cron_overdue "$(( now - 15 * 86400 ))" '50 * * * *' "$cmd"
+}
+
 @test "overdue: no timestamp is never overdue" {
     ! cron_overdue "" '0 7 * * *'
 }

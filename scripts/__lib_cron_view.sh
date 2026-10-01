@@ -118,10 +118,26 @@ cron_expected_interval() {
 
 # True when a run stamped at epoch $1 is older than schedule $2 (and the
 # command's own guard, $3) allows.
+#
+# A sub-daily job is measured from the current boot when it last ran before
+# it. The machine is off about eleven hours a night, longer than any sub-daily
+# budget, so every such job read "stopped firing" from boot until its first
+# tick: the 2-hourly sweep nudge showed amber for 90 minutes each morning with
+# nothing wrong. A daily or rarer budget already spans a night, and anchoring
+# it at boot would hide a job dead for weeks behind each morning's restart.
+# The boot time is the kernel's btime; a test may set CRON_VIEW_BOOT_TS.
 cron_overdue() {
-    local ts="$1" sched="$2" cmd="${3:-}"
+    local ts="$1" sched="$2" cmd="${3:-}" budget since
     [ -n "$ts" ] || return 1
-    [ "$(( $(date +%s) - ts ))" -gt "$(cron_expected_interval "$sched" "$cmd")" ]
+    budget=$(cron_expected_interval "$sched" "$cmd")
+    since="$ts"
+    if [ "$budget" -lt 172800 ]; then
+        : "${CRON_VIEW_BOOT_TS:=$(awk '$1 == "btime" {print $2; exit}' /proc/stat 2>/dev/null)}"
+        if [[ "$CRON_VIEW_BOOT_TS" =~ ^[0-9]+$ ]] && [ "$CRON_VIEW_BOOT_TS" -gt "$since" ]; then
+            since="$CRON_VIEW_BOOT_TS"
+        fi
+    fi
+    [ "$(( $(date +%s) - since ))" -gt "$budget" ]
 }
 
 # True when the wrapper message says the job's own purpose is spent: a
