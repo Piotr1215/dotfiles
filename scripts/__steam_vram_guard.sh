@@ -12,7 +12,9 @@
 #   an idle Steam at 88C package (2026-10-01). The guard never writes CPU sysfs
 #   itself: EVE's max_perf_pct 60 plus turbo re-raise is measured for four EVE
 #   clients and lives in the EVE wrapper, and holding it for every game ran a
-#   non-EVE shader compile at 86C.
+#   non-EVE shader compile at 86C. The one exception is on exit: balanced does
+#   not clear the battery profile's absolute 2.7GHz ceiling, so once turbo is
+#   back the guard lifts every policy to its own hardware maximum.
 #
 # Usage: __steam_vram_guard.sh          poll forever (the user service runs this)
 #        __steam_vram_guard.sh --once   one check, for tests and manual runs
@@ -20,6 +22,9 @@ set -eo pipefail
 
 state_file="${STEAM_VRAM_GUARD_STATE:-${XDG_RUNTIME_DIR:-/tmp}/steam-vram-guard.stopped}"
 thermal_state="${STEAM_VRAM_GUARD_THERMAL_STATE:-${XDG_RUNTIME_DIR:-/tmp}/steam-vram-guard.thermal}"
+ceiling_state="${STEAM_VRAM_GUARD_CEILING_STATE:-${XDG_RUNTIME_DIR:-/tmp}/steam-vram-guard.ceiling}"
+pstate_dir="${STEAM_VRAM_GUARD_PSTATE_DIR:-/sys/devices/system/cpu/intel_pstate}"
+cpufreq_dir="${STEAM_VRAM_GUARD_CPUFREQ_DIR:-/sys/devices/system/cpu/cpufreq}"
 interval="${STEAM_VRAM_GUARD_INTERVAL:-2}"
 
 # Print the pid of this user's Steam client, or nothing when Steam is not running.
@@ -49,6 +54,24 @@ thermal_engage() {
   touch "$thermal_state"
 }
 
+# Lift the battery profile's 2.7GHz ceiling once balanced has turned turbo back
+# on. Until then intel_pstate collapses cpuinfo_max_freq to the capped value, so
+# copying it would lift nothing. Per policy, because the P-core and E-core
+# clusters have different maximums.
+ceiling_restore() {
+  local policy max
+  [[ "$(<"$pstate_dir/no_turbo")" == 0 ]] || return 0
+  for policy in "$cpufreq_dir"/policy*; do
+    [[ -e "$policy/cpuinfo_max_freq" ]] || continue
+    max="$(<"$policy/cpuinfo_max_freq")"
+    if [[ "$(<"$policy/scaling_max_freq")" != "$max" ]]; then
+      sudo -n tee "$policy/scaling_max_freq" >/dev/null <<<"$max"
+    fi
+  done
+  rm -f "$ceiling_state"
+  echo "steam gone, cpu ceiling lifted"
+}
+
 # One reconcile step between Steam's state, Ollama's, GameMode's, and the CPU's.
 guard_tick() {
   local pid
@@ -61,6 +84,7 @@ guard_tick() {
     fi
     gamemode_register "$pid"
     thermal_engage
+    rm -f "$ceiling_state"
     return
   fi
   if [[ -e "$state_file" ]]; then
@@ -71,7 +95,11 @@ guard_tick() {
   if [[ -e "$thermal_state" ]]; then
     system76-power profile balanced >/dev/null
     rm -f "$thermal_state"
+    touch "$ceiling_state"
     echo "steam gone, balanced profile restored"
+  fi
+  if [[ -e "$ceiling_state" ]]; then
+    ceiling_restore
   fi
 }
 

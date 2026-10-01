@@ -11,7 +11,9 @@
 # performance with turbo and no clamp. Steam now holds the system76-power
 # battery profile for the whole session and balanced comes back when it exits.
 # The guard never writes CPU sysfs: carrying EVE's max_perf_pct 60 plus turbo
-# re-raise to every game ran a non-EVE shader compile at 86C.
+# re-raise to every game ran a non-EVE shader compile at 86C. Balanced does not
+# clear the battery profile's absolute 2.7GHz ceiling, so after Steam exits the
+# guard lifts every policy back to its hardware maximum once turbo is back.
 
 setup() {
   GUARD="${BATS_TEST_DIRNAME}/../../scripts/__steam_vram_guard.sh"
@@ -21,6 +23,7 @@ setup() {
   S76_CALLS="${WORK}/system76-calls"
   export STEAM_VRAM_GUARD_STATE="${WORK}/stopped-by-guard"
   export STEAM_VRAM_GUARD_THERMAL_STATE="${WORK}/thermal-engaged"
+  export STEAM_VRAM_GUARD_CEILING_STATE="${WORK}/ceiling-pending"
 
   # A fake sysfs that already holds the EVE values, so only tests that change
   # it expect writes.
@@ -176,6 +179,55 @@ teardown() {
   [ "$status" -eq 0 ]
   [ "$(cat "$S76_CALLS")" = "profile balanced" ]
   [ ! -e "$STEAM_VRAM_GUARD_THERMAL_STATE" ]
+}
+
+@test "steam gone after the guard engaged battery marks the ceiling for lifting" {
+  touch "$STEAM_VRAM_GUARD_THERMAL_STATE"
+  echo 1 >"$STEAM_VRAM_GUARD_PSTATE_DIR/no_turbo"
+
+  STEAM_UP=0 run "$GUARD" --once
+
+  [ "$status" -eq 0 ]
+  [ -e "$STEAM_VRAM_GUARD_CEILING_STATE" ]
+  [ ! -e "$CALLS" ]
+}
+
+@test "a pending ceiling with turbo back lifts each policy to its hardware maximum" {
+  touch "$STEAM_VRAM_GUARD_CEILING_STATE"
+  mkdir -p "$STEAM_VRAM_GUARD_CPUFREQ_DIR/policy1"
+  echo 4700000 >"$STEAM_VRAM_GUARD_CPUFREQ_DIR/policy1/cpuinfo_max_freq"
+  echo 2700000 >"$STEAM_VRAM_GUARD_CPUFREQ_DIR/policy0/scaling_max_freq"
+  echo 2700000 >"$STEAM_VRAM_GUARD_CPUFREQ_DIR/policy1/scaling_max_freq"
+
+  STEAM_UP=0 run "$GUARD" --once
+
+  [ "$status" -eq 0 ]
+  grep -qxF -- "-n tee ${STEAM_VRAM_GUARD_CPUFREQ_DIR}/policy0/scaling_max_freq <- 5400000" "$CALLS"
+  grep -qxF -- "-n tee ${STEAM_VRAM_GUARD_CPUFREQ_DIR}/policy1/scaling_max_freq <- 4700000" "$CALLS"
+  [ ! -e "$STEAM_VRAM_GUARD_CEILING_STATE" ]
+}
+
+@test "a pending ceiling waits while turbo is still off, cpuinfo is collapsed then" {
+  touch "$STEAM_VRAM_GUARD_CEILING_STATE"
+  echo 1 >"$STEAM_VRAM_GUARD_PSTATE_DIR/no_turbo"
+  echo 2700000 >"$STEAM_VRAM_GUARD_CPUFREQ_DIR/policy0/scaling_max_freq"
+
+  STEAM_UP=0 run "$GUARD" --once
+
+  [ "$status" -eq 0 ]
+  [ ! -e "$CALLS" ]
+  [ -e "$STEAM_VRAM_GUARD_CEILING_STATE" ]
+}
+
+@test "steam coming back drops a pending ceiling lift, battery owns the ceiling again" {
+  touch "$STEAM_VRAM_GUARD_CEILING_STATE"
+  echo 2700000 >"$STEAM_VRAM_GUARD_CPUFREQ_DIR/policy0/scaling_max_freq"
+
+  STEAM_UP=1 run "$GUARD" --once
+
+  [ "$status" -eq 0 ]
+  [ ! -e "$CALLS" ]
+  [ ! -e "$STEAM_VRAM_GUARD_CEILING_STATE" ]
 }
 
 @test "steam gone with no thermal record leaves the power profile alone" {
