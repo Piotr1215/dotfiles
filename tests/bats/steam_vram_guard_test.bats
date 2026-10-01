@@ -8,10 +8,10 @@
 # the Steam client under GameMode, which until then only EVE launches started.
 #
 # GameMode alone ran an idle Steam at 88C package: it lifted the governor to
-# performance with turbo and no clamp. Steam now gets the EVE wrapper's thermal
-# settings for the whole session: system76-power battery, then max_perf_pct 60,
-# turbo on, and the battery profile's 2.7GHz ceiling lifted, re-asserted while
-# Steam runs. Balanced comes back when Steam exits.
+# performance with turbo and no clamp. Steam now holds the system76-power
+# battery profile for the whole session and balanced comes back when it exits.
+# The guard never writes CPU sysfs: carrying EVE's max_perf_pct 60 plus turbo
+# re-raise to every game ran a non-EVE shader compile at 86C.
 
 setup() {
   GUARD="${BATS_TEST_DIRNAME}/../../scripts/__steam_vram_guard.sh"
@@ -157,7 +157,7 @@ teardown() {
   [ -e "$STEAM_VRAM_GUARD_THERMAL_STATE" ]
 }
 
-@test "steam up after battery clamped the cpu re-raises pct, turbo and the ceiling" {
+@test "steam up with the battery clamp in place leaves cpu sysfs alone" {
   echo 50 >"$STEAM_VRAM_GUARD_PSTATE_DIR/max_perf_pct"
   echo 1 >"$STEAM_VRAM_GUARD_PSTATE_DIR/no_turbo"
   echo 2700000 >"$STEAM_VRAM_GUARD_CPUFREQ_DIR/policy0/scaling_max_freq"
@@ -165,9 +165,7 @@ teardown() {
   STEAM_UP=1 run "$GUARD" --once
 
   [ "$status" -eq 0 ]
-  grep -qxF -- "-n tee ${STEAM_VRAM_GUARD_PSTATE_DIR}/max_perf_pct <- 60" "$CALLS"
-  grep -qxF -- "-n tee ${STEAM_VRAM_GUARD_PSTATE_DIR}/no_turbo <- 0" "$CALLS"
-  grep -qxF -- "-n tee ${STEAM_VRAM_GUARD_CPUFREQ_DIR}/policy0/scaling_max_freq <- 5400000" "$CALLS"
+  [ ! -e "$CALLS" ]
 }
 
 @test "steam gone after the guard engaged battery restores balanced and clears the record" {
