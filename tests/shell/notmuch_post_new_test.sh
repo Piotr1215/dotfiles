@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# The notmuch post-new hook hands both email specs to semif and never fails
-# notmuch new: no semif, a failing semif, or a full error log all exit 0.
+# The notmuch post-new hook hands both email specs to classif and never fails
+# notmuch new: no classif, a failing classif, or a full error log all exit 0.
 set -eo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -15,20 +15,20 @@ check() { # $1=name $2=expected $3=actual
   if [[ "$2" == "$3" ]]; then pass=$((pass + 1)); else fail=$((fail + 1)); echo "FAIL: $1: want [$2] got [$3]"; fi
 }
 
-# $1=exit code of the fake semif (empty: no semif at all)
+# $1=exit code of the fake classif (empty: no classif at all)
 run_hook() {
   local home="$work/home-$RANDOM"
   mkdir -p "$home/.local/bin"
   if [[ -n "$1" ]]; then
-    printf '#!/bin/sh\necho "$@" > "%s/args"\necho "semif broke" >&2\nexit %s\n' "$home" "$1" > "$home/.local/bin/semif"
-    chmod +x "$home/.local/bin/semif"
+    printf '#!/bin/sh\necho "$@" > "%s/args"\necho "classif broke" >&2\nexit %s\n' "$home" "$1" > "$home/.local/bin/classif"
+    chmod +x "$home/.local/bin/classif"
   fi
   HOME="$home" XDG_STATE_HOME="$home/state" PATH="/usr/bin:/bin" bash "$HOOK"
   echo "$?:$home"
 }
 
 out="$(run_hook "")"
-check "no semif exits 0" 0 "${out%%:*}"
+check "no classif exits 0" 0 "${out%%:*}"
 
 out="$(run_hook 0)"
 home="${out#*:}"
@@ -36,16 +36,16 @@ check "passes both specs with their tags" "notmuch email-bulk=bulk email-action=
 
 out="$(run_hook 1)"
 home="${out#*:}"
-check "a failing semif exits 0" 0 "${out%%:*}"
-check "semif's stderr lands in the error log" "semif broke" "$(cat "$home/state/semif/notmuch.err")"
+check "a failing classif exits 0" 0 "${out%%:*}"
+check "classif's stderr lands in the error log" "classif broke" "$(cat "$home/state/classif/notmuch.err")"
 
 home="$work/full"
-mkdir -p "$home/.local/bin" "$home/state/semif"
-head -c 1048577 /dev/zero | tr '\0' x > "$home/state/semif/notmuch.err"
-printf '#!/bin/sh\necho again >&2\nexit 1\n' > "$home/.local/bin/semif"
-chmod +x "$home/.local/bin/semif"
+mkdir -p "$home/.local/bin" "$home/state/classif"
+head -c 1048577 /dev/zero | tr '\0' x > "$home/state/classif/notmuch.err"
+printf '#!/bin/sh\necho again >&2\nexit 1\n' > "$home/.local/bin/classif"
+chmod +x "$home/.local/bin/classif"
 HOME="$home" XDG_STATE_HOME="$home/state" PATH="/usr/bin:/bin" bash "$HOOK"
-check "a full error log starts over" "again" "$(cat "$home/state/semif/notmuch.err")"
+check "a full error log starts over" "again" "$(cat "$home/state/classif/notmuch.err")"
 
 echo "$pass passed, $fail failed"
 [[ "$fail" -eq 0 ]]

@@ -3,7 +3,7 @@
 # __steam_vram_guard.sh frees the GPU for Steam: it stops the system Ollama
 # service the moment a Steam client appears, and starts it again once Steam is
 # gone, but only when the guard was the one that stopped it. The EVE launch
-# wrapper only pauses semif, so Steam's own shader replay and any non-EVE game
+# wrapper only pauses classif, so Steam's own shader replay and any non-EVE game
 # still competed with a resident llama3.2 for VRAM (2026-10-01). It also puts
 # the Steam client under GameMode, which until then only EVE launches started.
 #
