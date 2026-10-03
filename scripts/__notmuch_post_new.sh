@@ -8,6 +8,7 @@ set -eo pipefail
 
 # cron runs mailsync with a bare PATH, and classif lives in ~/.local/bin.
 PATH="${HOME}/.local/bin:${PATH}"
+# __classif_notmuch.py loads classif from PATH as a library.
 command -v classif >/dev/null 2>&1 || exit 0
 
 err_log="${XDG_STATE_HOME:-${HOME}/.local/state}/classif/notmuch.err"
@@ -17,5 +18,5 @@ if [[ "$(stat -c %s "$err_log" 2>/dev/null || echo 0)" -gt 1048576 ]]; then
   : > "$err_log" || true
 fi
 
-timeout 180 classif notmuch email-bulk=bulk email-action=action >/dev/null 2>>"$err_log" || true
+timeout 180 "${HOME}/dev/dotfiles/scripts/__classif_notmuch.py" email-bulk=bulk email-action=action >/dev/null 2>>"$err_log" || true
 exit 0
