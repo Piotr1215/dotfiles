@@ -8,5 +8,9 @@ skip_global_compinit=1
 export EDITOR=nvim
 export VISUAL=nvim
 
+# classif: keep the model loaded until `classif pause` unloads it. A call that
+# finds it unloaded pays a 3 to 5 s cold load; every call must stay under 1 s.
+export CLASSIF_KEEP_ALIVE=-1
+
 if [ -e /home/decoder/.nix-profile/etc/profile.d/nix.sh ]; then . /home/decoder/.nix-profile/etc/profile.d/nix.sh; fi # added by Nix installer
 . "$HOME/.cargo/env"
