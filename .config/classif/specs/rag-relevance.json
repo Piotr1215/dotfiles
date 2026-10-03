@@ -1,0 +1,96 @@
+{
+  "question": "Would this chunk help answer the query: {query}",
+  "text": "{chunk}",
+  "fields": {
+    "query": 1000,
+    "chunk": 420
+  },
+  "collapse": [
+    "query"
+  ],
+  "labels": [
+    "yes",
+    "no"
+  ],
+  "model": "winnow:12b-q4_K_M",
+  "hosts": [
+    "localhost:11434"
+  ],
+  "num_ctx": 32768,
+  "budget": 1.0,
+  "threshold": {
+    "no": 0.9915
+  },
+  "smoke": [
+    {
+      "query": "why did the log rotation delete rows written by other processes?",
+      "chunk": "fix(log): stop rotation from deleting rows other writers append\n\nRotation read the file, kept the newest 5000 lines and wrote the result back. A writer that appended between the read and the write lost its rows, so the dashboard showed gaps nobody could explain. Rotation now takes the lock every writer takes, and a test appends from a second process during a rotation.",
+      "expect": "yes"
+    },
+    {
+      "query": "why did the deploy job hang when a prompt appeared in CI?",
+      "chunk": "fix(ci): answer the confirmation prompt in unattended deploy jobs\n\nThe deploy script asks for confirmation before it replaces a release. In CI nobody is there to answer, so the job sat until the six hour timeout and the pipeline showed it as running the whole time. The script now detects a missing terminal and fails at once unless --yes is passed.",
+      "expect": "yes"
+    },
+    {
+      "query": "what counts as a release being finished?",
+      "chunk": "fix(release): make a published tag the definition of done\n\nThe release script reported success after building the artifacts, before the tag was pushed. Twice a release was announced that nobody could install. The script now pushes the tag, waits for the registry to list the version, and only then prints done.",
+      "expect": "yes"
+    },
+    {
+      "query": "why was passing a profile name as --region a problem?",
+      "chunk": "fix(cli): reject a profile name passed as --region\n\nA command run with --region staging never starts. The provider answers with an unknown region error inside the worker while the launcher itself reports success, so the failure is invisible from the outside. The launcher now checks the region against the known list and exits 2 with the valid names.",
+      "expect": "yes"
+    },
+    {
+      "query": "why did a missing object fail eight times in the sync queue?",
+      "chunk": "fix(sync): fail a missing object at once, not eight times\n\nA bucket was recreated, leaving a queued job pointed at an object that no longer exists. The worker classified that as retryable, so the queue spent its whole budget on it: 8 attempts across four hours of backoff, each certain to fail, ending in an alert that read like a capacity problem.",
+      "expect": "yes"
+    },
+    {
+      "query": "why were PNG and SVG put back in the upload allowlist?",
+      "chunk": "fix(upload): put PNG and SVG back in the allowlist\n\nSupport reported that avatar uploads failed for every user since Tuesday. The allowlist refactor kept only JPEG because the test fixture held a single JPEG file. The list names all three types again, and the test uploads one file of each.",
+      "expect": "yes"
+    },
+    {
+      "query": "does a cached response count as a successful health check?",
+      "chunk": "fix(health): a cached response is not a successful health check\n\nThe probe requested the status page through the CDN, so it kept passing for ten minutes after the backend died. The probe now sends Cache-Control: no-cache and checks a header only the origin sets, so a stale copy fails the check.",
+      "expect": "yes"
+    },
+    {
+      "query": "why was passing a profile name as --region a problem?",
+      "chunk": "fix(log): stop rotation from deleting rows other writers append\n\nRotation read the file, kept the newest 5000 lines and wrote the result back. A writer that appended between the read and the write lost its rows, so the dashboard showed gaps nobody could explain. Rotation now takes the lock every writer takes, and a test appends from a second process during a rotation.",
+      "expect": "no"
+    },
+    {
+      "query": "why did a missing object fail eight times in the sync queue?",
+      "chunk": "fix(ci): answer the confirmation prompt in unattended deploy jobs\n\nThe deploy script asks for confirmation before it replaces a release. In CI nobody is there to answer, so the job sat until the six hour timeout and the pipeline showed it as running the whole time. The script now detects a missing terminal and fails at once unless --yes is passed.",
+      "expect": "no"
+    },
+    {
+      "query": "why were PNG and SVG put back in the upload allowlist?",
+      "chunk": "fix(release): make a published tag the definition of done\n\nThe release script reported success after building the artifacts, before the tag was pushed. Twice a release was announced that nobody could install. The script now pushes the tag, waits for the registry to list the version, and only then prints done.",
+      "expect": "no"
+    },
+    {
+      "query": "does a cached response count as a successful health check?",
+      "chunk": "fix(cli): reject a profile name passed as --region\n\nA command run with --region staging never starts. The provider answers with an unknown region error inside the worker while the launcher itself reports success, so the failure is invisible from the outside. The launcher now checks the region against the known list and exits 2 with the valid names.",
+      "expect": "no"
+    },
+    {
+      "query": "why did the log rotation delete rows written by other processes?",
+      "chunk": "fix(sync): fail a missing object at once, not eight times\n\nA bucket was recreated, leaving a queued job pointed at an object that no longer exists. The worker classified that as retryable, so the queue spent its whole budget on it: 8 attempts across four hours of backoff, each certain to fail, ending in an alert that read like a capacity problem.",
+      "expect": "no"
+    },
+    {
+      "query": "why did the deploy job hang when a prompt appeared in CI?",
+      "chunk": "fix(upload): put PNG and SVG back in the allowlist\n\nSupport reported that avatar uploads failed for every user since Tuesday. The allowlist refactor kept only JPEG because the test fixture held a single JPEG file. The list names all three types again, and the test uploads one file of each.",
+      "expect": "no"
+    },
+    {
+      "query": "what counts as a release being finished?",
+      "chunk": "fix(health): a cached response is not a successful health check\n\nThe probe requested the status page through the CDN, so it kept passing for ten minutes after the backend died. The probe now sends Cache-Control: no-cache and checks a header only the origin sets, so a stale copy fails the check.",
+      "expect": "no"
+    }
+  ]
+}

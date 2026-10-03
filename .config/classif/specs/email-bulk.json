@@ -16,7 +16,8 @@
   ],
   "model": "llama3.2:3b",
   "hosts": [
-    "localhost:11434"
+    "pop-os-1.tail165ec.ts.net:11434",
+    "192.168.178.125:11434"
   ],
   "num_ctx": 2048,
   "threshold": {},
