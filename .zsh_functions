@@ -848,7 +848,7 @@ cs() {
 # in ~/.claude commit c53160f, not a failure.
 #
 # Empty piped input means an upstream gate said no, so there is nothing to ask
-# about and no call is made: `make 2>&1 | class -p "is this an error?" A 'rca'`.
+# about and no call is made: `make 2>&1 | classif -p "is this an error?" A 'rca'`.
 ai_stream() {
     local input
     if [[ ! -t 0 ]]; then
