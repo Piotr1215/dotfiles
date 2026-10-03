@@ -1,0 +1,13 @@
+[Unit]
+Description=Judge new headlines against every tripwire
+Documentation=file:///home/decoder/dev/dotfiles/scripts/__tripwire.sh
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# classif in ~/.local/bin, yq in /usr/local/bin.
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=%h/dev/dotfiles/scripts/__tripwire.sh run
+Nice=10
+TimeoutStartSec=10min
