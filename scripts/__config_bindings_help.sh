@@ -8,7 +8,32 @@ set -eo pipefail
 DOTFILES="$HOME/dev/dotfiles"
 TEMP_FILE=$(mktemp)
 
+source "$DOTFILES/scripts/__lib_alacritty_popup.sh"
+
 FZF_COLORS='fg:#f8f8f2,bg:#282a36,hl:#bd93f9,fg+:#f8f8f2,bg+:#44475a,hl+:#bd93f9,info:#ffb86c,prompt:#50fa7b,pointer:#ff79c6,marker:#ff79c6,spinner:#ffb86c,header:#6272a4'
+
+# Dracula, matching the link picker: the source badge purple, the key green,
+# the description plain, the location dimmed.
+C_SOURCE=$'\033[38;2;189;147;249m'
+C_KEY=$'\033[38;2;80;250;123m'
+C_DIM=$'\033[38;2;98;114;164m'
+C_RESET=$'\033[0m'
+
+# confhelp parses every config file, 0.4s of a popup that should be on screen
+# at once. The list is served from the last run's output and refreshed in the
+# background as the popup opens, so a changed binding shows from the launch
+# after the change. Ctrl+O still asks confhelp live.
+BINDINGS_CACHE="${CONFIG_BINDINGS_CACHE:-$HOME/.local/state/config-bindings/bindings}"
+
+refresh_bindings_cache() {
+    mkdir -p "$(dirname "$BINDINGS_CACHE")"
+    confhelp -b "$DOTFILES" > "$BINDINGS_CACHE.$$" && mv "$BINDINGS_CACHE.$$" "$BINDINGS_CACHE"
+}
+
+bindings_list() {
+    [[ -s "$BINDINGS_CACHE" ]] || refresh_bindings_cache
+    cat "$BINDINGS_CACHE"
+}
 
 format_for_clipboard() {
     local input file_line raw_line
@@ -107,11 +132,16 @@ main_loop() {
     while true; do
         if [[ "$mode" == "bindings" ]]; then
             local result key selection
-            result=$(confhelp -b "$DOTFILES" | awk -F'|' '{printf "%-12s %-30s %-55s %s\t%s|%s|%s|%s\n", $1, $2, $3, $4, $1, $2, $3, $4}' | fzf \
-                --header='Enter=jump | Alt+H=send to pane | Ctrl+O=copy | Ctrl+P=open | Ctrl+G=tealdeer' \
+            result=$(bindings_list | awk -F'|' \
+                -v src="$C_SOURCE" -v key="$C_KEY" -v dim="$C_DIM" -v reset="$C_RESET" \
+                '{ k = $2; if (length(k) > 30) k = substr(k, 1, 27) "..."; d = $3; if (length(d) > 55) d = substr(d, 1, 52) "..."; printf "%s%-12s%s %s%-30s%s %-55s %s%s%s\t%s|%s|%s|%s\n", src, $1, reset, key, k, reset, d, dim, $4, reset, $1, $2, $3, $4}' | fzf \
+                --header=$'enter: jump to definition   alt-h: send path to pane   ctrl-o: copy   ctrl-p: open script   ctrl-g: tldr pages   esc: quit\ntype to search, words in any order, typos ok' \
                 --expect=ctrl-g,ctrl-o,ctrl-p,alt-h \
+                --ansi -i \
                 --delimiter=$'\t' \
                 --with-nth=1 \
+                --preview='printf "%s\n" {2} | awk -F"|" "{ print \$3; print \$4 }"' \
+                --preview-window=down,2,wrap,border-top \
                 --height=100% \
                 --layout=reverse \
                 --info=inline \
@@ -173,8 +203,11 @@ main_loop() {
             esac
         else
             # tldr mode
-            local custom_file=$(mktemp)
-            ls -1 "${DOTFILES}/tealdeer-pages/common"/*.page.md 2>/dev/null | xargs -I{} basename {} .page.md > "$custom_file"
+            local custom_file page
+            custom_file=$(mktemp)
+            for page in "${DOTFILES}/tealdeer-pages/common"/*.page.md; do
+                [[ -e "$page" ]] && basename "$page" .page.md
+            done > "$custom_file"
             local selection
             selection=$( {
                 sed 's/$/ [custom]/' "$custom_file"
@@ -186,6 +219,7 @@ main_loop() {
                 --bind='ctrl-e:become(echo EDIT_PAGE:{})' \
                 --preview='page={};page=${page% \[custom\]};tldr "$page" 2>/dev/null || echo "No preview"' \
                 --preview-window=right:60%:wrap \
+                -i \
                 --height=100% \
                 --layout=reverse \
                 --info=inline \
@@ -216,44 +250,17 @@ main_loop() {
 }
 
 export -f main_loop format_for_clipboard binding_fields binding_source binding_target binding_payload
-export DOTFILES TEMP_FILE FZF_COLORS
+export -f bindings_list refresh_bindings_cache
+export DOTFILES TEMP_FILE FZF_COLORS BINDINGS_CACHE C_SOURCE C_KEY C_DIM C_RESET
 
-# Size the popup to the screen instead of to a fixed 150x50. That fixed size was
-# picked on a 1080p display; on the 4K panel it filled a third of the screen and
-# fzf cut every row short, which is how a binding ends up looking absent when it
-# is only off the right edge.
-#
-# CELL_W and CELL_H are the alacritty default font's cell in pixels, measured on
-# this machine. They are only used to centre the window, so being a pixel out
-# shifts it slightly and breaks nothing.
-CELL_W=9
-CELL_H=19
-# Caps, so an ultrawide gets a large window rather than an unreadable one.
-MAX_COLS=320
-MAX_LINES=100
+# Bring the binding list up to date while the popup opens; see bindings_list.
+[[ -s "$BINDINGS_CACHE" ]] && refresh_bindings_cache >/dev/null 2>&1 &
 
-read -r screen_w screen_h < <(xdpyinfo | awk '/dimensions:/{print $2}' | tr 'x' ' ')
-cols=$(( screen_w * 85 / 100 / CELL_W ))
-lines=$(( screen_h * 85 / 100 / CELL_H ))
-[ "$cols" -gt "$MAX_COLS" ] && cols=$MAX_COLS
-[ "$lines" -gt "$MAX_LINES" ] && lines=$MAX_LINES
-[ "$cols" -lt 150 ] && cols=150
-[ "$lines" -lt 40 ] && lines=40
-
-win_w=$((cols * CELL_W))
-win_h=$((lines * CELL_H))
-pos_x=$(( (screen_w - win_w) / 2 ))
-pos_y=$(( (screen_h - win_h) / 2 ))
-[ "$pos_x" -lt 0 ] && pos_x=0
-[ "$pos_y" -lt 0 ] && pos_y=0
-
-alacritty --class config-bindings-popup \
-    --config-file /dev/null \
-    -o window.dimensions.columns=$cols \
-    -o window.dimensions.lines=$lines \
-    -o window.position.x=$pos_x \
-    -o window.position.y=$pos_y \
-    -e bash -c "main_loop"
+# The window is the link picker's, from the popup lib: the same 172x40 cells
+# at the per-machine font size, centred. The rows are built to fit it, with
+# the description clipped at 55 columns, so no binding sits off the right
+# edge looking absent; the preview line under the list carries the full text.
+alacritty_popup config-bindings-popup bash -c "main_loop"
 
 # Handle final result
 if [[ -f "$TEMP_FILE" ]]; then

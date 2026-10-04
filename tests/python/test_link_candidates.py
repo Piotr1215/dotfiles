@@ -1,4 +1,5 @@
 import os
+import re
 import sqlite3
 import subprocess
 import tempfile
@@ -30,6 +31,27 @@ SNIPPETS = """
 
 # Chrome stores microseconds since 1601-01-01, Firefox since the unix epoch.
 CHROME_EPOCH_OFFSET = 11644473600
+
+ANSI = re.compile(r"\x1b\[[0-9;]*m")
+
+
+# The display column: a pin marker, the title padded to its column, the url
+# padded to its column, the tag. Colour codes wrap the url and the tag, so
+# every reading of the column strips them first.
+def plain(row):
+    return ANSI.sub("", row[0])
+
+
+def title_of(row):
+    return plain(row)[2:].split("  ", 1)[0].strip()
+
+
+def tag_of(row):
+    return plain(row).rsplit("  ", 1)[-1].strip()
+
+
+def titles(rows):
+    return [title_of(row) for row in rows]
 
 
 def firefox_db(path, rows):
@@ -98,10 +120,10 @@ def run_script(workdir, dbs=(), conf_text=None, args=(), **env_overrides):
     env["PET_SNIPPET_FILE"] = str(snippet_file)
     env["LINK_PICKER_CONF"] = str(conf_file)
     # Without these two the defaults reach the real ~/.local/state files, and
-    # the search would answer out of this machine's own browser history.
+    # the stream would carry this machine's own browser history.
     env["LINK_PINS_FILE"] = str(pins_file(workdir))
     env["LINK_CORPUS_FILE"] = str(Path(workdir) / "corpus")
-    # The corpus is built once per run rather than reused between them.
+    # The tail is built once per run rather than reused between them.
     env["LINK_CORPUS_TTL"] = "0"
     if dbs:
         env["LINK_HISTORY_DBS"] = ":".join(str(db) for db in dbs)
@@ -142,15 +164,15 @@ class LinkCandidatesTest(unittest.TestCase):
         return run_script(self.workdir.name, dbs, **env)
 
     def history(self, rows):
-        return [row for row in rows if "#link" not in row[0]]
+        return [row for row in rows if tag_of(row) != "#link"]
 
     def test_history_leads_and_snippets_follow_sorted_and_tagged(self):
         rows = self.candidates(firefox_rows=[("https://a.example.com/", "A", 100)])
-        self.assertIn("[A]", rows[0][0])
-        self.assertIn("#history", rows[0][0])
-        self.assertIn("[Alpha anchor]", rows[1][0])
-        self.assertIn("#link", rows[1][0])
-        self.assertIn("[Zeta docs]", rows[2][0])
+        self.assertEqual(title_of(rows[0]), "A")
+        self.assertEqual(tag_of(rows[0]), "#history")
+        self.assertEqual(title_of(rows[1]), "Alpha anchor")
+        self.assertEqual(tag_of(rows[1]), "#link")
+        self.assertEqual(title_of(rows[2]), "Zeta docs")
 
     def test_snippets_still_win_the_dedupe_from_below(self):
         # Order is display only: a bookmarked url must not come back a second
@@ -162,8 +184,8 @@ class LinkCandidatesTest(unittest.TestCase):
             ]
         )
         self.assertEqual(len(self.history(rows)), 1)
-        self.assertIn("[fresh]", rows[0][0])
-        self.assertIn("[Zeta docs]", rows[2][0])
+        self.assertEqual(title_of(rows[0]), "fresh")
+        self.assertEqual(title_of(rows[2]), "Zeta docs")
 
     def test_snippet_command_survives_shell_escapes(self):
         # No history source, so the snippets are the whole list.
@@ -172,8 +194,9 @@ class LinkCandidatesTest(unittest.TestCase):
             rows[0][1],
             r"xdg-open https://alpha.example.com/page/\#:\~:text\=hit",
         )
-        # The display drops the escapes, the command keeps them.
-        self.assertIn("https://alpha.example.com/page/#:~:text=hit", rows[0][0])
+        # The display drops the escapes and the scheme, the command keeps them.
+        self.assertIn("alpha.example.com/page/#:~:text=hit", plain(rows[0]))
+        self.assertEqual(rows[0][3], "https://alpha.example.com/page/#:~:text=hit")
 
     def test_two_bookmarks_on_one_url_both_stay_searchable(self):
         # Two descriptions for one page are two ways to recall it. Only a pin
@@ -196,10 +219,10 @@ class LinkCandidatesTest(unittest.TestCase):
                 ("https://app.notion.com/p/loftsh/%s?pvs=55" % page, "(7) Runbook | Notion", 200),
             ]
         )
-        notion = [row for row in rows if "notion" in row[0]]
+        notion = [row for row in rows if "notion" in row[3]]
         self.assertEqual(len(notion), 1)
         # Newest visit wins, and the unread badge and app suffix are stripped.
-        self.assertIn("[Runbook]", notion[0][0])
+        self.assertEqual(title_of(notion[0]), "Runbook")
         self.assertIn("app.notion.com", notion[0][1])
 
     def test_search_engine_rows_are_dropped(self):
@@ -209,9 +232,7 @@ class LinkCandidatesTest(unittest.TestCase):
                 ("https://keep.example.com/x", "Keep me", 90),
             ]
         )
-        history = self.history(rows)
-        self.assertEqual(len(history), 1)
-        self.assertIn("[Keep me]", history[0][0])
+        self.assertEqual(titles(self.history(rows)), ["Keep me"])
 
     def test_same_title_on_one_host_collapses(self):
         rows = self.candidates(
@@ -222,6 +243,20 @@ class LinkCandidatesTest(unittest.TestCase):
         )
         self.assertEqual(len(self.history(rows)), 1)
 
+    # A repo root and its /tree/main view share a title. The root is the
+    # address worth keeping, whichever of the two was opened last.
+    def test_the_shortest_url_wins_a_title_collision(self):
+        rows = self.candidates(
+            firefox_rows=[
+                ("https://github.com/me/classif/tree/main", "me/classif: a shell if", 300),
+                ("https://other.example.com/", "other", 200),
+                ("https://github.com/me/classif", "me/classif: a shell if", 100),
+            ]
+        )
+        history = self.history(rows)
+        self.assertEqual(titles(history), ["me/classif: a shell if", "other"])
+        self.assertEqual(history[0][3], "https://github.com/me/classif")
+
     def test_per_host_cap_keeps_a_busy_host_from_taking_over(self):
         rows = self.candidates(
             firefox_rows=[
@@ -231,10 +266,8 @@ class LinkCandidatesTest(unittest.TestCase):
             ],
             LINK_HISTORY_PER_HOST="1",
         )
-        history = self.history(rows)
-        self.assertEqual(len(history), 2)
-        self.assertIn("[first pr]", history[0][0])
-        self.assertIn("[other page]", history[1][0])
+        # The capped row is not lost: it comes back in the tail.
+        self.assertEqual(titles(self.history(rows)), ["first pr", "other page", "second pr"])
 
     def test_history_limit_and_kill_switch(self):
         firefox_rows = [
@@ -242,7 +275,8 @@ class LinkCandidatesTest(unittest.TestCase):
             ("https://two.example.com/", "two", 90),
         ]
         capped = self.candidates(firefox_rows=firefox_rows, LINK_HISTORY_LIMIT="1")
-        self.assertEqual(len(self.history(capped)), 1)
+        self.assertEqual(titles(self.history(capped)), ["one", "two"])
+        self.assertEqual(tag_of(capped[0]), "#history")
 
         off = self.candidates(firefox_rows=firefox_rows, LINK_HISTORY="0")
         self.assertEqual(self.history(off), [])
@@ -262,9 +296,22 @@ class LinkCandidatesTest(unittest.TestCase):
                 ("https://good.example.com/", "Good", 90),
             ]
         )
-        history = self.history(rows)
-        self.assertEqual(len(history), 1)
-        self.assertIn("[Good]", history[0][0])
+        self.assertEqual(titles(self.history(rows)), ["Good"])
+
+    # fzf reads the colour out of the display column (--ansi) and nothing
+    # else may carry it: field 2 is eval'd, 3 and 4 are written to the pins.
+    def test_colour_lives_in_the_display_column_only(self):
+        rows = self.candidates(firefox_rows=[("https://a.example.com/", "A", 100)])
+        for row in rows:
+            self.assertIn("\x1b[", row[0])
+            for field in row[1:]:
+                self.assertNotIn("\x1b", field)
+
+    def test_the_hidden_key_column_is_the_dedupe_key(self):
+        rows = self.candidates(
+            firefox_rows=[("https://A.example.com/path/?x=1", "A", 100)]
+        )
+        self.assertEqual(rows[0][4], "a.example.com/path?x=1")
 
 
 class ConfFileTest(unittest.TestCase):
@@ -303,15 +350,20 @@ class ConfFileTest(unittest.TestCase):
     def candidates(self, *extra, **env):
         return run_script(self.workdir.name, conf_text=self.conf(*extra), **env)
 
-    def history(self, rows):
-        return [row for row in rows if "#link" not in row[0]]
+    # The recent block: everything above the snippets. The tail below them
+    # is covered by StreamTest.
+    def recent(self, rows):
+        for index, row in enumerate(rows):
+            if tag_of(row) == "#link":
+                return rows[:index]
+        return rows
 
     def test_profile_tag_rides_on_its_rows(self):
-        rows = self.history(self.candidates())
-        tags = [row[0].rsplit("  ", 1)[-1].strip() for row in rows]
+        rows = self.recent(self.candidates())
+        tags = [tag_of(row) for row in rows]
         self.assertEqual(tags.count("#work"), 3)
         self.assertEqual(tags.count("#home"), 2)
-        self.assertIn("[work issue]", rows[0][0])
+        self.assertEqual(title_of(rows[0]), "work issue")
 
     def test_profiles_group_in_conf_order_with_recency_inside(self):
         # Interleaved in time, so a plain newest-first sort would drop the
@@ -330,10 +382,9 @@ class ConfFileTest(unittest.TestCase):
                 ("https://youtube.com/watch?v=2", "home oldest", 150),
             ],
         )
-        rows = self.history(self.candidates())
-        titles = [row[0].split("]")[0].strip().lstrip("[") for row in rows]
+        rows = self.recent(self.candidates())
         self.assertEqual(
-            titles, ["work newest", "work oldest", "home newest", "home oldest"]
+            titles(rows), ["work newest", "work oldest", "home newest", "home oldest"]
         )
 
     def test_swapping_the_conf_blocks_flips_the_groups(self):
@@ -342,32 +393,29 @@ class ConfFileTest(unittest.TestCase):
             self.home_db,
             self.work_db,
         )
-        rows = self.history(run_script(self.workdir.name, conf_text=conf_text))
-        tags = [row[0].rsplit("  ", 1)[-1].strip() for row in rows]
-        self.assertEqual(tags, ["#home"] * 2 + ["#work"] * 3)
+        rows = self.recent(run_script(self.workdir.name, conf_text=conf_text))
+        self.assertEqual([tag_of(row) for row in rows], ["#home"] * 2 + ["#work"] * 3)
 
     def test_conf_limit_is_applied(self):
-        rows = self.history(self.candidates("limit = 2"))
-        self.assertEqual(len(rows), 2)
+        self.assertEqual(len(self.recent(self.candidates("limit = 2"))), 2)
 
     def test_env_beats_conf(self):
-        rows = self.history(self.candidates("limit = 2", LINK_HISTORY_LIMIT="4"))
+        rows = self.recent(self.candidates("limit = 2", LINK_HISTORY_LIMIT="4"))
         self.assertEqual(len(rows), 4)
 
     def test_conf_can_switch_history_off(self):
-        self.assertEqual(self.history(self.candidates("history = off")), [])
+        rows = self.candidates("history = off")
+        self.assertEqual({tag_of(row) for row in rows}, {"#link"})
 
     def test_per_host_cap_counts_within_a_profile(self):
         # github.com appears in both profiles: a cap of 1 keeps one row from
         # each, rather than letting work github consume the only slot.
-        rows = self.history(self.candidates("per_host = 1"))
+        rows = self.recent(self.candidates("per_host = 1"))
         github = [row for row in rows if "github.com" in row[1]]
-        self.assertEqual(len(github), 2)
-        self.assertIn("#work", [row[0].rsplit("  ", 1)[-1].strip() for row in github])
-        self.assertIn("#home", [row[0].rsplit("  ", 1)[-1].strip() for row in github])
+        self.assertEqual(sorted(tag_of(row) for row in github), ["#home", "#work"])
 
     def test_comments_and_blank_lines_are_ignored(self):
-        rows = self.history(self.candidates("# limit = 1", "", "   ", "limit = 2"))
+        rows = self.recent(self.candidates("# limit = 1", "", "   ", "limit = 2"))
         self.assertEqual(len(rows), 2)
 
 
@@ -396,28 +444,25 @@ class PinTest(unittest.TestCase):
     def candidates(self, **env):
         return run_script(self.workdir.name, dbs=[self.db], **env)
 
-    def tag_of(self, row):
-        return row[0].rsplit("  ", 1)[-1].strip()
-
     def test_a_pin_sits_above_history_and_bookmarks(self):
         self.write_pins(
             ("https://older.example.com/", "older page", "xdg-open 'https://older.example.com/'")
         )
         rows = self.candidates()
-        self.assertEqual(self.tag_of(rows[0]), "#pin")
-        self.assertTrue(rows[0][0].startswith("* "), rows[0][0])
-        self.assertIn("[older page]", rows[0][0])
-        # And it is not also still down in the history block.
-        self.assertEqual(len([r for r in rows if "older.example.com" in r[0]]), 1)
+        self.assertEqual(tag_of(rows[0]), "#pin")
+        self.assertTrue(plain(rows[0]).startswith("* "), plain(rows[0]))
+        self.assertEqual(title_of(rows[0]), "older page")
+        # And it is not also still down in the history block or the tail.
+        self.assertEqual(len([r for r in rows if "older.example.com" in r[3]]), 1)
 
     def test_pinning_a_bookmark_takes_it_out_of_the_link_block(self):
         self.write_pins(
             ("https://zeta.example.com/docs", "Zeta docs", "xdg-open https://zeta.example.com/docs")
         )
         rows = self.candidates()
-        zeta = [row for row in rows if "Zeta docs" in row[0]]
+        zeta = [row for row in rows if title_of(row) == "Zeta docs"]
         self.assertEqual(len(zeta), 1)
-        self.assertEqual(self.tag_of(zeta[0]), "#pin")
+        self.assertEqual(tag_of(zeta[0]), "#pin")
 
     def test_a_pin_outlives_the_row_it_was_made_from(self):
         # Nothing in history or the snippets points here any more.
@@ -425,22 +470,22 @@ class PinTest(unittest.TestCase):
             ("https://gone.example.com/doc", "long gone", "xdg-open 'https://gone.example.com/doc'")
         )
         rows = self.candidates()
-        self.assertIn("[long gone]", rows[0][0])
+        self.assertEqual(title_of(rows[0]), "long gone")
         self.assertEqual(rows[0][1], "xdg-open 'https://gone.example.com/doc'")
 
     def test_toggle_pins_then_unpins_the_same_row(self):
         row = self.candidates()[0]
-        self.assertEqual(self.tag_of(row), "#history")
+        self.assertEqual(tag_of(row), "#history")
 
         run_script(self.workdir.name, dbs=[self.db], args=["--toggle-pin", "\t".join(row)])
         after = self.candidates()
-        self.assertEqual(self.tag_of(after[0]), "#pin")
-        self.assertIn("[recent page]", after[0][0])
+        self.assertEqual(tag_of(after[0]), "#pin")
+        self.assertEqual(title_of(after[0]), "recent page")
 
         run_script(
             self.workdir.name, dbs=[self.db], args=["--toggle-pin", "\t".join(after[0])]
         )
-        self.assertEqual(self.tag_of(self.candidates()[0]), "#history")
+        self.assertEqual(tag_of(self.candidates()[0]), "#history")
 
     def test_hidden_columns_carry_the_untruncated_title_and_url(self):
         long_title = "a very long tab title that the display column has to cut short " * 2
@@ -449,136 +494,184 @@ class PinTest(unittest.TestCase):
         row = self.candidates()[0]
         # Display is truncated, the hidden columns are not, so a pin made from
         # this row stores the real title and url rather than "...".
-        self.assertIn("...", row[0])
+        self.assertIn("...", plain(row))
         self.assertEqual(row[2], " ".join(long_title.split()))
         self.assertEqual(row[3], long_url)
 
 
-class SearchTest(unittest.TestCase):
-    """--query ranks the whole corpus rather than the recent few hundred rows,
-    which is what fzf used to filter. See test_vimium_rank.py for the ranking
-    itself; these are the wiring around it."""
+class StreamTest(unittest.TestCase):
+    """Below the recent rows and the snippets comes the long tail: every
+    bookmark and history row the profiles hold, rendered once into a cache
+    and streamed from it, so fzf searches all of it. fzf does the matching;
+    these cover what is in the stream and in what order."""
 
     def setUp(self):
         self.workdir = tempfile.TemporaryDirectory()
         self.addCleanup(self.workdir.cleanup)
         self.path = Path(self.workdir.name)
+        self.db = self.path / "places.sqlite"
+        self.corpus = self.path / "corpus"
 
-    def search(self, query, dbs=(), **env):
-        return run_script(self.workdir.name, dbs, args=["--query", query], **env)
+    def stream(self, **env):
+        return run_script(self.workdir.name, [self.db], **env)
 
-    def titles(self, rows):
-        return [row[0].split("[", 1)[1].split("]", 1)[0] for row in rows]
+    # Everything after the snippets, which close the recent block.
+    def tail(self, rows):
+        last = max((i for i, row in enumerate(rows) if tag_of(row) == "#link"), default=-1)
+        return rows[last + 1 :]
 
-    def tag_of(self, row):
-        return row[0].rsplit("  ", 1)[-1].strip()
-
-    def test_a_scattered_subsequence_is_not_a_hit(self):
-        # The bug this replaced fzf for: every letter of "triage" is in the
-        # second title, in order, and none of them spell it.
-        db = self.path / "places.sqlite"
-        firefox_db(db, [
-            ("https://linear.app/team/DEVOPS/triage", "Dev Ops Triage", 300),
-            ("https://linear.app/issue/E-1/x", "conTaineR snapshot And restore", 290),
-        ])
-        rows = self.search("linear triage", dbs=[db])
-        self.assertEqual(self.titles(rows), ["Dev Ops Triage"])
-
-    def test_a_row_past_the_history_limit_is_still_found(self):
-        # The list before anything is typed holds one row; the search still
-        # reaches the other twenty, which is the reach the picker was missing.
-        db = self.path / "places.sqlite"
-        firefox_db(db, [
+    def test_a_row_past_the_history_limit_is_still_streamed(self):
+        # The recent block holds one row; the stream still reaches the other
+        # twenty, which is the reach the picker was missing.
+        firefox_db(self.db, [
             ("https://e.example.com/%d" % n, "page %d" % n, 100 + n) for n in range(20)
         ] + [("https://needle.example.com/", "the needle", 1)])
-        listed = run_script(self.workdir.name, [db], LINK_HISTORY_LIMIT="1")
-        self.assertNotIn("the needle", self.titles(listed))
-        rows = self.search("needle", dbs=[db], LINK_HISTORY_LIMIT="1")
-        self.assertEqual(self.titles(rows), ["the needle"])
+        rows = self.stream(LINK_HISTORY_LIMIT="1")
+        self.assertEqual(titles(rows)[0], "page 19")
+        self.assertEqual(titles(rows).count("the needle"), 1)
+        self.assertEqual(titles(self.tail(rows))[-1], "the needle")
 
-    def test_browser_bookmarks_join_the_corpus(self):
-        db = self.path / "places.sqlite"
-        firefox_db(db, [("https://a.example.com/", "unrelated", 300)])
-        bookmark_table(db, [("https://saved.example.com/doc", "the saved doc")])
-        rows = self.search("saved", dbs=[db])
-        self.assertEqual(self.titles(rows), ["the saved doc"])
-        self.assertEqual(self.tag_of(rows[0]), "#mark")
+    def test_the_tail_is_bookmarks_first_then_history_newest_first(self):
+        firefox_db(self.db, [
+            ("https://old.example.com/", "old page", 100),
+            ("https://older.example.com/", "older page", 50),
+            ("https://new.example.com/", "new page", 300),
+        ])
+        bookmark_table(self.db, [("https://saved.example.com/doc", "the saved doc")])
+        rows = self.stream(LINK_HISTORY_LIMIT="1")
+        self.assertEqual(titles(self.tail(rows)), ["the saved doc", "old page", "older page"])
+        self.assertEqual(tag_of(self.tail(rows)[0]), "#mark")
+        self.assertEqual(tag_of(self.tail(rows)[1]), "#history")
 
     def test_bookmarks_can_be_turned_off(self):
-        db = self.path / "places.sqlite"
-        firefox_db(db, [("https://a.example.com/", "unrelated", 300)])
-        bookmark_table(db, [("https://saved.example.com/doc", "the saved doc")])
-        self.assertEqual(self.search("saved", dbs=[db], LINK_BOOKMARKS="0"), [])
+        firefox_db(self.db, [("https://a.example.com/", "unrelated", 300)])
+        bookmark_table(self.db, [("https://saved.example.com/doc", "the saved doc")])
+        self.assertNotIn("the saved doc", titles(self.stream(LINK_BOOKMARKS="0")))
 
     # A places file with no bookmark tables must not take its history with it.
-    def test_a_profile_without_bookmark_tables_still_gives_history(self):
-        db = self.path / "places.sqlite"
-        firefox_db(db, [("https://a.example.com/", "findable", 300)])
-        self.assertEqual(self.titles(self.search("findable", dbs=[db])), ["findable"])
+    def test_a_profile_without_bookmark_tables_still_fills_the_tail(self):
+        firefox_db(self.db, [
+            ("https://a.example.com/", "findable", 300),
+            ("https://b.example.com/", "also findable", 200),
+        ])
+        rows = self.stream(LINK_HISTORY_LIMIT="1")
+        self.assertEqual(titles(self.tail(rows)), ["also findable"])
 
-    def test_snippets_are_searched_too(self):
-        rows = self.search("Zeta")
-        self.assertEqual(self.tag_of(rows[0]), "#link")
-        self.assertIn("Zeta docs", self.titles(rows))
+    def test_the_tail_repeats_nothing_the_recent_block_holds(self):
+        # The same page under a query string, and the same title under a
+        # second path, both collapse onto the recent row.
+        firefox_db(self.db, [
+            ("https://a.example.com/doc", "the doc", 300),
+            ("https://a.example.com/doc?utm=1", "the doc", 200),
+            ("https://a.example.com/doc/changes", "the doc", 100),
+            ("https://zeta.example.com/docs", "Zeta docs as the browser saw it", 90),
+        ])
+        rows = self.stream()
+        self.assertEqual(titles(rows).count("the doc"), 1)
+        self.assertEqual(len([r for r in rows if "zeta.example.com" in r[3]]), 2)
+        self.assertEqual(self.tail(rows), [])
 
-    def test_a_pin_sits_above_the_ranking(self):
-        db = self.path / "places.sqlite"
-        firefox_db(db, [("https://exact.example.com/needle", "needle", 300)])
-        pins_file(self.workdir.name).write_text(
-            "\t".join([
-                "https://pinned.example.com/",
-                "needle in a much longer pinned title",
-                "xdg-open 'https://pinned.example.com/'",
+    def test_the_tail_keeps_the_shortest_url_for_a_title(self):
+        firefox_db(self.db, [
+            ("https://a.example.com/", "recent", 300),
+            ("https://github.com/me/classif/tree/main", "me/classif: a shell if", 200),
+            ("https://github.com/me/classif", "me/classif: a shell if", 100),
+        ])
+        tail = self.tail(self.stream(LINK_HISTORY_LIMIT="1"))
+        self.assertEqual(titles(tail), ["me/classif: a shell if"])
+        self.assertEqual(tail[0][3], "https://github.com/me/classif")
+        self.assertEqual(tail[0][1], "xdg-open https://github.com/me/classif")
+
+    def test_a_shorter_tail_url_replaces_the_recent_rows_address(self):
+        # The branch view is today's page, the root sits in the tail: the
+        # recent row keeps its place and takes the root address.
+        firefox_db(self.db, [
+            ("https://github.com/me/classif/tree/main", "me/classif: a shell if", 300),
+            ("https://github.com/me/classif", "me/classif: a shell if", 100),
+        ])
+        rows = self.stream(LINK_HISTORY_LIMIT="1")
+        self.assertEqual(titles(rows).count("me/classif: a shell if"), 1)
+        self.assertEqual(rows[0][3], "https://github.com/me/classif")
+        self.assertEqual(rows[0][1], "xdg-open https://github.com/me/classif")
+        self.assertEqual(tag_of(rows[0]), "#history")
+
+    def test_a_cache_in_an_older_format_is_rebuilt(self):
+        firefox_db(self.db, [
+            ("https://a.example.com/", "recent", 300),
+            ("https://b.example.com/", "tail row", 200),
+        ])
+        self.corpus.write_text("h\thistory\t200\thttps://b.example.com/\told format\n")
+        self.assertEqual(titles(self.tail(self.stream(LINK_HISTORY_LIMIT="1"))), ["tail row"])
+
+    def test_search_engine_rows_stay_out_of_the_tail(self):
+        firefox_db(self.db, [
+            ("https://keep.example.com/", "keep", 300),
+            ("https://duckduckgo.com/?q=netflix", "netflix at DuckDuckGo", 200),
+            ("https://also.example.com/", "also", 100),
+        ])
+        rows = self.stream(LINK_HISTORY_LIMIT="1")
+        self.assertEqual(titles(self.tail(rows)), ["also"])
+
+    def test_the_tail_is_cached_and_streamed_from_the_cache(self):
+        firefox_db(self.db, [
+            ("https://a.example.com/", "recent", 300),
+            ("https://b.example.com/", "tail row", 200),
+        ])
+        self.stream(LINK_HISTORY_LIMIT="1")
+        self.assertTrue(self.corpus.exists())
+        # Rewritten by hand: the next stream must answer out of it rather than
+        # go back to the database.
+        self.corpus.write_text(
+            "#link-picker-corpus 2\n" + "\t".join([
+                "  cached row",
+                "xdg-open 'https://cached.example.com/'",
+                "cached row",
+                "https://cached.example.com/",
+                "cached.example.com",
             ]) + "\n"
         )
-        rows = self.search("needle", dbs=[db])
-        self.assertEqual(self.tag_of(rows[0]), "#pin")
-        self.assertEqual(len(rows), 2)
+        self.assertEqual(titles(self.tail(self.stream(LINK_HISTORY_LIMIT="1"))), ["cached row"])
 
-    def test_a_tag_narrows_without_being_searched_for(self):
-        db = self.path / "places.sqlite"
-        firefox_db(db, [("https://a.example.com/zeta", "zeta the page", 300)])
-        self.assertEqual(self.tag_of(self.search("#link zeta", dbs=[db])[0]), "#link")
-        self.assertEqual(self.titles(self.search("#history zeta", dbs=[db])),
-                         ["zeta the page"])
-
-    def test_an_empty_query_gives_the_default_list(self):
-        db = self.path / "places.sqlite"
-        firefox_db(db, [("https://a.example.com/", "A", 300)])
-        self.assertEqual(self.search("", dbs=[db]), run_script(self.workdir.name, [db]))
-
-    def test_a_tag_alone_filters_the_default_list(self):
-        db = self.path / "places.sqlite"
-        firefox_db(db, [("https://a.example.com/", "A", 300)])
-        rows = self.search("#link", dbs=[db])
-        self.assertTrue(rows)
-        self.assertEqual({self.tag_of(row) for row in rows}, {"#link"})
-
-    def test_the_result_count_is_capped(self):
-        db = self.path / "places.sqlite"
-        firefox_db(db, [
-            ("https://e.example.com/needle/%d" % n, "needle %d" % n, 100 + n)
-            for n in range(30)
+    def test_refresh_rebuilds_the_cache_once_a_database_moved_on(self):
+        firefox_db(self.db, [
+            ("https://a.example.com/", "recent", 300),
+            ("https://b.example.com/", "first tail", 200),
         ])
-        self.assertEqual(len(self.search("needle", dbs=[db], LINK_SEARCH_LIMIT="5")), 5)
+        self.stream(LINK_HISTORY_LIMIT="1")
+        firefox_db(self.db, [
+            ("https://a.example.com/", "recent", 300),
+            ("https://c.example.com/", "second tail", 200),
+        ])
+        run_script(self.workdir.name, [self.db], args=["--refresh"])
+        self.assertEqual(titles(self.tail(self.stream(LINK_HISTORY_LIMIT="1"))), ["second tail"])
 
-    def test_the_corpus_is_cached_and_reused(self):
-        db = self.path / "places.sqlite"
-        firefox_db(db, [("https://a.example.com/needle", "needle", 300)])
-        self.search("needle", dbs=[db])
-        corpus = self.path / "corpus"
-        self.assertTrue(corpus.exists())
-        # Rewritten by hand: the next search must answer out of it rather than
-        # go back to the database.
-        corpus.write_text("h\thistory\t300\thttps://cached.example.com/\tcached needle\n")
-        self.assertEqual(self.titles(self.search("needle", dbs=[db])), ["cached needle"])
+    # The rebuild used to run inline on the keystroke that found the cache
+    # stale, and fzf killed it on the next key. The popup now takes the cache
+    # as it is; the runner refreshes it in the background as the popup opens.
+    def test_the_popup_never_rebuilds_the_cache_itself(self):
+        firefox_db(self.db, [
+            ("https://a.example.com/", "recent", 300),
+            ("https://b.example.com/", "first tail", 200),
+        ])
+        self.stream(LINK_HISTORY_LIMIT="1")
+        firefox_db(self.db, [
+            ("https://a.example.com/", "recent", 300),
+            ("https://c.example.com/", "second tail", 200),
+        ])
+        self.assertEqual(titles(self.tail(self.stream(LINK_HISTORY_LIMIT="1"))), ["first tail"])
 
-    def test_a_moved_database_rebuilds_the_cache(self):
-        db = self.path / "places.sqlite"
-        firefox_db(db, [("https://a.example.com/needle", "first needle", 300)])
-        self.search("needle", dbs=[db])
-        firefox_db(db, [("https://b.example.com/needle", "second needle", 300)])
-        self.assertEqual(self.titles(self.search("needle", dbs=[db])), ["second needle"])
+    def test_refresh_within_the_ttl_leaves_the_cache_alone(self):
+        firefox_db(self.db, [
+            ("https://a.example.com/", "recent", 300),
+            ("https://b.example.com/", "first tail", 200),
+        ])
+        self.stream(LINK_HISTORY_LIMIT="1")
+        firefox_db(self.db, [
+            ("https://a.example.com/", "recent", 300),
+            ("https://c.example.com/", "second tail", 200),
+        ])
+        run_script(self.workdir.name, [self.db], args=["--refresh"], LINK_CORPUS_TTL="3600")
+        self.assertEqual(titles(self.tail(self.stream(LINK_HISTORY_LIMIT="1"))), ["first tail"])
 
 
 if __name__ == "__main__":

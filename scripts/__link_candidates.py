@@ -1,26 +1,35 @@
 #!/usr/bin/env python3
-"""Emit link picker candidates as "display<TAB>command<TAB>title<TAB>url" lines.
+"""Emit link picker rows as "display<TAB>command<TAB>title<TAB>url<TAB>key".
 
-Two sources feed the picker: recent browser history from the LibreWolf and
-Chrome profiles named in the conf, and the curated pet link snippets file.
-Pinned rows come first, then history grouped by profile in conf order and
-newest first inside each group, then the snippets alphabetically.
-__link_pane_runner.sh pipes this into fzf with --with-nth=1, so the first
-column is what gets displayed, and the second is the command that gets run on
-selection. The trailing title and url columns are hidden too: they are what
-ctrl-f writes to the pins file, untruncated.
+Three sources feed the picker: the curated pet link snippets, the browser's
+own bookmarks, and browser history from the LibreWolf and Chrome profiles
+named in the conf. Pinned rows come first, then recent history grouped by
+profile in conf order and newest first inside each group, then the snippets
+alphabetically, then the long tail: every bookmark and every history row the
+profiles hold, newest first. The tail is what a search reaches that the recent
+list does not; Vimium C's omnibox found pages this picker could not until it
+was there.
 
-With --query the picker stops being a list fzf filters and becomes a search.
-fzf runs --disabled and reloads this script on every keystroke, so the ranking
-in __lib_vimium_rank.py decides what comes back and in what order, over a
-corpus far wider than the list above: every history row in every profile, plus
-the browser's own bookmarks, not the recent few hundred. Vimium C's omnibox
-found pages this picker could not, and this is why.
+__link_pane_runner.sh pipes this into fzf once. fzf matches, ranks and
+highlights; this script decides only what is in the list and in what order.
+fzf's history scheme keeps that order among equal matches, so a page seen
+today sits above the same word on a page from last year. The ranking that
+used to live here (a port of Vimium C's) needed a subprocess per keystroke and
+matched a typed word only unbroken, so "classifreadme" found nothing; fzf
+finds classif/README.md and puts it first.
 
-The corpus is cached, because rebuilding it per keystroke means copying a
-hundred megabytes of locked sqlite. The cache is rebuilt when a source database
-has moved on and the cache is older than the ttl. Pins and snippets are always
-read live, so a ctrl-f pin shows up on the next keystroke.
+The display column carries colour, which fzf --ansi reads: the title plain,
+the url dimmed, the source tag in its own colour. The hidden columns carry
+the command to run on selection, the untruncated title and url that ctrl-f
+writes to the pins file and fzf also matches against (--nth=1,3,4), and the
+dedupe key. The runner cuts field 2 only, so eval never sees the rest.
+
+The long tail is cached rendered, because building it means copying a hundred
+megabytes of locked sqlite and formatting seventy thousand rows. --refresh
+rebuilds it when a source database has moved on and the cache is older than
+the ttl; the runner starts that in the background as the popup opens, so the
+popup never waits on it. Pins, snippets and the recent rows are always read
+live, so a ctrl-f pin shows up on the next reload.
 
 Settings live in __link_picker.conf, because the picker runs from a global
 hotkey and that process carries none of the shell environment. The variables
@@ -30,18 +39,17 @@ Environment:
   PET_SNIPPET_FILE       pet links toml (default ~/dev/pet-snippets/pet-links.toml)
   LINK_PICKER_CONF       settings file (default ~/dev/dotfiles/scripts/__link_picker.conf)
   LINK_HISTORY           set to 0 to drop the history rows entirely
-  LINK_HISTORY_LIMIT     how many history rows to keep (default 500)
+  LINK_HISTORY_LIMIT     how many recent history rows to keep (default 500)
   LINK_HISTORY_PER_HOST  cap per host per profile, keeps github off the whole list
   LINK_HISTORY_DBS       colon separated paths or globs, replaces the conf profiles
   LINK_PINS_FILE         pinned rows (default ~/.local/state/link-picker/pins)
-  LINK_CORPUS_FILE       search corpus cache (default ~/.local/state/link-picker/corpus)
+  LINK_CORPUS_FILE       rendered long tail (default ~/.local/state/link-picker/corpus)
   LINK_CORPUS_TTL        seconds before the cache may be rebuilt (default 300)
-  LINK_SEARCH_LIMIT      how many ranked rows to return (default 200)
-  LINK_BOOKMARKS         set to 0 to drop browser bookmarks from the corpus
+  LINK_BOOKMARKS         set to 0 to leave browser bookmarks out of the tail
 
 Subcommands:
   --toggle-pin <line>    pin or unpin the row, called from the ctrl-f binding
-  --query <string>       ranked search; an empty string gives the default list
+  --refresh              rebuild the long tail if it has fallen behind
 """
 
 import glob
@@ -59,12 +67,6 @@ import tomllib
 from collections import Counter
 from urllib.parse import urlsplit
 
-# Run as a script, so sys.path already carries this directory; the insert is
-# for the case where something imports this file by path instead.
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
-import __lib_vimium_rank as vimium  # noqa: E402
-
 SNIPPET_FILE = os.environ.get(
     "PET_SNIPPET_FILE", os.path.expanduser("~/dev/pet-snippets/pet-links.toml")
 )
@@ -78,14 +80,18 @@ CONF_FILE = os.environ.get(
 # dirty, and the working tree is what cron and stow read.
 DEFAULT_PINS_FILE = "~/.local/state/link-picker/pins"
 
-# The search corpus is derived state, so it sits next to the pins rather than
-# in the repo, for the same reason.
+# The long tail is derived state, so it sits next to the pins rather than in
+# the repo, for the same reason.
 DEFAULT_CORPUS_FILE = "~/.local/state/link-picker/corpus"
 
 # A running browser touches its history write ahead log constantly, so mtime
-# alone would rebuild the corpus on every keystroke. This is the floor between
-# rebuilds; within it the picker searches whatever it already has.
+# alone would rebuild the tail on every launch. This is the floor between
+# rebuilds; within it the picker streams whatever it already has.
 DEFAULT_CORPUS_TTL = "300"
+
+# First line of the cache. A cache written by an earlier format would stream
+# as garbage rows, so one that does not open with this is rebuilt.
+CORPUS_FORMAT = "#link-picker-corpus 2"
 
 # Used when the conf file names no profiles: every profile on the machine,
 # under one tag, which is the behaviour before the work/home split existed.
@@ -115,7 +121,7 @@ CHROME_QUERY = """
     order by last_visit_time desc limit ?
 """
 
-# The same rows without the recency window, for the search corpus. A page from
+# The same rows without the recency window, for the long tail. A page from
 # five weeks ago is exactly what the picker could not reach before.
 FIREFOX_ALL_QUERY = FIREFOX_QUERY.replace("order by last_visit_date desc limit ?", "")
 CHROME_ALL_QUERY = CHROME_QUERY.replace("order by last_visit_time desc limit ?", "")
@@ -128,8 +134,21 @@ FIREFOX_BOOKMARK_QUERY = """
     where mark.type = 1 and place.url like 'http%'
 """
 
-TITLE_WIDTH = 68
-URL_WIDTH = 95
+TITLE_WIDTH = 70
+URL_WIDTH = 80
+
+# Dracula, the same palette the runner hands fzf. The url is dimmed to the
+# comment colour so the eye lands on the title; the tag names its source.
+RESET = "\x1b[0m"
+DIM = "\x1b[38;2;98;114;164m"
+TAG_COLOURS = {
+    "#pin": "\x1b[38;2;255;121;198m",
+    "#link": "\x1b[38;2;80;250;123m",
+    "#mark": "\x1b[38;2;189;147;249m",
+    "#work": "\x1b[38;2;255;184;108m",
+    "#home": "\x1b[38;2;139;233;253m",
+}
+PIN_MARK = TAG_COLOURS["#pin"] + "*" + RESET
 
 # Search engines and login redirects: every row is a dead end in a link picker.
 NOISE_HOSTS = frozenset(
@@ -152,6 +171,7 @@ NOTION_PAGE_ID = re.compile(r"[0-9a-f]{32}")
 OFF_VALUES = frozenset(["0", "off", "no", "false"])
 UNREAD_BADGE = re.compile(r"^\(\d+\)\s*")
 XDG_OPEN_URL = re.compile(r'\s*xdg-open\s+"?([^"\s]+)')
+SCHEME = re.compile(r"^https?://", re.IGNORECASE)
 
 
 # Strip the noise a browser tab title carries: the unread counter Notion and
@@ -179,6 +199,14 @@ def dedupe_key(url):
     return key.lower()
 
 
+# Same page under a different path (a PR and its /changes tab, a repo and its
+# /tree/main view) shares a title, so this collapses what the url key cannot.
+# Where titles collide the shortest url is kept, because that is the
+# canonical address: the repo root, not the branch view it redirected to.
+def title_key(url, title):
+    return (urlsplit(url).netloc.lower(), title.casefold())
+
+
 # Snippet commands carry shell escapes (\# and \~ in anchors); undo them for
 # display only. The command itself is passed through untouched.
 def url_from_command(command):
@@ -186,21 +214,32 @@ def url_from_command(command):
     return found.group(1).replace("\\", "") if found else ""
 
 
+def clip(text, width):
+    return text if len(text) <= width else text[: width - 3] + "..."
+
+
+# The scheme is on every row, so showing it only costs the eight columns the
+# interesting end of the url needed.
+def display_url(url):
+    return SCHEME.sub("", url).rstrip("/")
+
+
 def render(title, url, tag, command, pinned=False):
-    raw_title, raw_url = " ".join(title.split()), url
-    if len(title) > TITLE_WIDTH:
-        title = title[: TITLE_WIDTH - 3] + "..."
-    if len(url) > URL_WIDTH:
-        url = url[: URL_WIDTH - 3] + "..."
-    display = "%s %-*s  %-*s  %s" % (
-        "*" if pinned else " ",
-        TITLE_WIDTH + 2,
-        "[" + title + "]",
+    title = " ".join(title.split())
+    colour = TAG_COLOURS.get(tag, DIM)
+    display = "%s %-*s  %s%-*s%s  %s%s%s" % (
+        PIN_MARK if pinned else " ",
+        TITLE_WIDTH,
+        clip(title, TITLE_WIDTH),
+        DIM,
         URL_WIDTH,
-        url,
+        clip(display_url(url), URL_WIDTH),
+        RESET,
+        colour,
         tag,
+        RESET,
     )
-    return "\t".join([display.rstrip(), command, raw_title, raw_url])
+    return "\t".join([display, command, title, url, pin_key(url, command)])
 
 
 # What makes two rows the same link. A snippet may run something that is not
@@ -304,6 +343,10 @@ def load_conf():
 
 def setting(env_name, conf_key, default, conf):
     return os.environ.get(env_name) or conf.get(conf_key) or default
+
+
+def switched_on(env_name, conf_key, conf):
+    return setting(env_name, conf_key, "on", conf).lower() not in OFF_VALUES
 
 
 # Yields (tag, path) so every row can carry the profile it came from.
@@ -422,6 +465,7 @@ def load_history(seen, profiles, limit, per_host_limit):
     rows.sort(key=lambda row: row[2], reverse=True)
     hits = []
     per_host = Counter()
+    shortest = {}
     for url, title, _, tag in rows:
         host = urlsplit(url).netloc.lower()
         if host in NOISE_HOSTS:
@@ -437,13 +481,16 @@ def load_history(seen, profiles, limit, per_host_limit):
         title = clean_title(title)
         if not title or title == url:
             continue
-        # Same page under a different path (a PR and its /changes tab) shares a
-        # title, so this collapses what the url key cannot.
-        title_key = (host, title.casefold())
-        if title_key in seen:
+        by_title = (host, title.casefold())
+        if by_title in seen:
+            index = shortest.get(by_title)
+            if index is not None and len(url) < len(hits[index][1]):
+                hits[index] = (title, url, hits[index][2])
+                seen.add(key)
             continue
         seen.add(key)
-        seen.add(title_key)
+        seen.add(by_title)
+        shortest[by_title] = len(hits)
         per_host[(tag, host)] += 1
         hits.append((title, url, tag))
         if len(hits) >= limit:
@@ -471,7 +518,7 @@ def corpus_sources(source):
 
 # Rebuild only once a profile has moved on and the ttl has run out. A browser
 # rewrites its log every few seconds, so mtime alone would put a hundred
-# megabytes of sqlite copying on every keystroke.
+# megabytes of sqlite copying on every launch.
 def corpus_stale(path, sources, ttl):
     try:
         written = os.stat(path).st_mtime
@@ -494,7 +541,10 @@ def flatten(value):
     return value.replace("\t", " ").replace("\r", " ").replace("\n", " ")
 
 
-def build_corpus(path, sources, bookmarks_on):
+# The long tail, rendered and in its final order: bookmarks first, since each
+# was saved on purpose, then history newest first. Deduped the way the recent
+# list is, so a page reached under three query strings is one row.
+def build_corpus(path, sources, bookmarks_on, history_on):
     rows = []
     with tempfile.TemporaryDirectory(prefix="link-corpus-") as workdir:
         for index, (tag, source) in enumerate(sources):
@@ -503,10 +553,38 @@ def build_corpus(path, sources, bookmarks_on):
             except (OSError, sqlite3.Error) as err:
                 print("link candidates: %s: %s" % (source, err), file=sys.stderr)
                 continue
-            for url, title, when in history:
-                rows.append(("h", tag, when or 0, url, title or ""))
             for url, title in marks:
-                rows.append(("b", tag, 0, url, title or ""))
+                rows.append((0, 0, "#mark", url, title or ""))
+            if history_on:
+                for url, title, when in history:
+                    rows.append((1, -(when or 0), "#" + tag, url, title or ""))
+    rows.sort(key=lambda row: row[:2])
+
+    seen = set()
+    shortest = {}
+    lines = []
+    for group, _, tag, url, title in rows:
+        url, title = flatten(url), flatten(title)
+        host = urlsplit(url).netloc.lower()
+        if group and host in NOISE_HOSTS:
+            continue
+        title = clean_title(title)
+        if not title or title == url:
+            continue
+        key, by_title = dedupe_key(url), (host, title.casefold())
+        if key in seen:
+            continue
+        if by_title in seen:
+            index, kept_url, kept_tag = shortest[by_title]
+            if len(url) < len(kept_url):
+                shortest[by_title] = (index, url, kept_tag)
+                lines[index] = render(title, url, kept_tag, "xdg-open " + shlex.quote(url))
+            seen.add(key)
+            continue
+        seen.add(key)
+        seen.add(by_title)
+        shortest[by_title] = (len(lines), url, tag)
+        lines.append(render(title, url, tag, "xdg-open " + shlex.quote(url)))
 
     parent = os.path.dirname(path)
     if parent:
@@ -516,55 +594,57 @@ def build_corpus(path, sources, bookmarks_on):
     scratch = "%s.%d" % (path, os.getpid())
     try:
         with open(scratch, "w") as handle:
-            for kind, tag, when, url, title in rows:
-                handle.write(
-                    "%s\t%s\t%.0f\t%s\t%s\n"
-                    % (kind, tag, when, flatten(url), flatten(title))
-                )
+            handle.write(CORPUS_FORMAT + "\n")
+            for line in lines:
+                handle.write(line + "\n")
         os.replace(scratch, path)
     except OSError as err:
         print("link candidates: %s: %s" % (path, err), file=sys.stderr)
-    return rows
+    return lines
 
 
-def load_corpus(conf, profiles):
+# The --refresh subcommand. The runner starts this in the background as the
+# popup opens. It once ran inline on the keystroke that found the cache stale,
+# where fzf killed it as soon as the next key arrived, left the half written
+# scratch file behind, and started it over on the key after that.
+def refresh_corpus(conf, profiles):
     path = corpus_path(conf)
     sources = history_dbs(profiles)
     ttl = float(setting("LINK_CORPUS_TTL", "corpus_ttl", DEFAULT_CORPUS_TTL, conf))
-    bookmarks_on = (
-        setting("LINK_BOOKMARKS", "bookmarks", "on", conf).lower() not in OFF_VALUES
-    )
     if corpus_stale(path, sources, ttl):
-        return build_corpus(path, sources, bookmarks_on)
+        build_corpus(
+            path,
+            sources,
+            switched_on("LINK_BOOKMARKS", "bookmarks", conf),
+            switched_on("LINK_HISTORY", "history", conf),
+        )
 
-    rows = []
+
+# The popup takes the cache as it is. Only a missing, unreadable or outdated
+# cache is built here, which is the first run on a machine and nothing after.
+# Read as bytes and decoded by hand: the text layer's newline handling costs
+# more than the read and the decode together on fourteen megabytes.
+def load_corpus(conf, profiles):
+    path = corpus_path(conf)
     try:
-        with open(path) as handle:
-            for line in handle:
-                fields = line.rstrip("\n").split("\t")
-                if len(fields) == 5:
-                    rows.append(
-                        (fields[0], fields[1], float(fields[2]), fields[3], fields[4])
-                    )
-    except (OSError, ValueError):
-        return build_corpus(path, sources, bookmarks_on)
-    return rows
+        with open(path, "rb") as handle:
+            lines = handle.read().decode("utf-8", "replace").split("\n")
+        if lines and lines[0] == CORPUS_FORMAT:
+            return lines[1:]
+    except OSError:
+        pass
+    return build_corpus(
+        path,
+        history_dbs(profiles),
+        switched_on("LINK_BOOKMARKS", "bookmarks", conf),
+        switched_on("LINK_HISTORY", "history", conf),
+    )
 
 
-# A leading # is a filter on the source rather than a search term, which is how
-# #pin, #link, #mark, #work and #home narrow what gets ranked.
-def parse_query(query):
-    terms, tags = [], set()
-    for token in query.split():
-        if token.startswith("#") and len(token) > 1:
-            tags.add(token[1:].lower())
-        else:
-            terms.append(token)
-    return terms, tags
-
-
-def default_lines(conf, profiles, tags=()):
-    history_on = setting("LINK_HISTORY", "history", "on", conf).lower() not in OFF_VALUES
+def default_rows(conf, profiles):
+    """The recent block as (title, url, tag, command, pinned) rows: pins,
+    today's history grouped by profile, the snippets."""
+    history_on = switched_on("LINK_HISTORY", "history", conf)
     limit = int(setting("LINK_HISTORY_LIMIT", "limit", "500", conf))
     per_host_limit = int(setting("LINK_HISTORY_PER_HOST", "per_host", "30", conf))
 
@@ -577,8 +657,8 @@ def default_lines(conf, profiles, tags=()):
         pinned.add(pin_key(url, command))
         seen.add(pin_key(url, command))
         if url:
-            seen.add((urlsplit(url).netloc.lower(), title.casefold()))
-        rows.append(("pin", render(title, url, "#pin", command, pinned=True)))
+            seen.add(title_key(url, title))
+        rows.append((title, url, "#pin", command, True))
 
     # Snippets are resolved before history whatever the display order, because
     # they seed the dedupe: a bookmarked url then keeps its curated title
@@ -592,94 +672,64 @@ def default_lines(conf, profiles, tags=()):
         seen.add(key)
         if key in pinned:
             continue
-        snippets.append(("link", render(title, url, "#link", command)))
+        snippets.append((title, url, "#link", command, False))
 
     # History next, because the picker is reached for to get back to a page
     # from earlier today. The bookmarks are the long tail you search for by
     # name, so they sit underneath.
     if history_on:
         for title, url, tag in load_history(seen, profiles, limit, per_host_limit):
-            command = "xdg-open " + shlex.quote(url)
-            rows.append((tag, render(title, url, "#" + tag, command)))
+            rows.append((title, url, "#" + tag, "xdg-open " + shlex.quote(url), False))
     rows.extend(snippets)
-
-    if tags:
-        rows = [row for row in rows if row[0] in tags]
-    return [line for _, line in rows]
+    return rows
 
 
-# The search path. fzf does no matching of its own here, so what comes back and
-# in what order is entirely this function and __lib_vimium_rank.
-def run_search(conf, profiles, query):
-    terms, tags = parse_query(query)
-    if not terms:
-        return default_lines(conf, profiles, tags)
+# The recent block goes out first and is flushed, so fzf is on screen with it
+# while the tail streams in behind. A tail row is dropped when the recent
+# block already holds its page, by key or by host and title, which is the
+# dedupe the recent block applies to itself; a tail row with a shorter url
+# for a history row's title hands that url over first, so the repo root wins
+# over the branch view whichever was seen last. Pins and snippets keep the
+# url they were written with.
+def stream(conf, profiles, out):
+    recent = default_rows(conf, profiles)
+    tail = load_corpus(conf, profiles)
 
-    limit = int(setting("LINK_SEARCH_LIMIT", "results", "200", conf))
-    history_on = setting("LINK_HISTORY", "history", "on", conf).lower() not in OFF_VALUES
-    ranker = vimium.Ranker(terms, time.time() * 1000)
     seen = set()
-    hits = []
+    titles = {}
+    for index, (title, url, tag, command, _) in enumerate(recent):
+        seen.add(pin_key(url, command))
+        if url:
+            seen.add(title_key(url, title))
+            titles.setdefault(title.casefold(), index)
 
-    # Rows enter the dedupe only once they are kept, unlike the default list.
-    # There a snippet is always shown, so shadowing its history twin is right;
-    # here a snippet the query missed would otherwise hide a row that matched.
-    def keep(group, tag, title, url, command, when, row_tags):
-        if tags and not row_tags & tags:
-            return
-        # Ranked against the shortened url the way the vomnibar does. The
-        # scheme is on every row, so it can only dilute the score.
-        text = vimium.shorten_url(url)
-        if not ranker.matches(text, title):
-            return
-        key = pin_key(url, command)
-        title_key = (urlsplit(url).netloc.lower(), title.casefold()) if url else None
-        if key in seen or (title_key and title_key in seen):
-            return
-        seen.add(key)
-        if title_key:
-            seen.add(title_key)
-        if when:
-            score = ranker.relevancy(text, title, when * 1000)
-        else:
-            score = ranker.word_relevancy(text, title)
-        hits.append((group, -score, len(hits), tag, title, url, command))
+    # The cache may predate a flip of the history switch, so the switch is
+    # applied here too: with history off only the bookmarks stream.
+    history_on = switched_on("LINK_HISTORY", "history", conf)
 
-    # Group 0 is the pins, so a pin that matches at all stays above the ranking
-    # rather than competing with it. Everything else is ranked against
-    # everything else, bookmarks on word relevancy and history with its visit
-    # time folded in, which is the split the extension makes.
-    for url, title, command in load_pins(pins_path(conf)):
-        keep(0, "#pin", title, url, command, 0, {"pin"})
-    for title, command, url in load_snippets():
-        keep(1, "#link", title, url, command, 0, {"link"})
-    # A tag filter naming neither the bookmarks nor a profile leaves nothing in
-    # the corpus worth reading, and reading it is the expensive part.
-    corpus_tags = {"mark"} | {tag for tag, _ in history_dbs(profiles)}
-    corpus = load_corpus(conf, profiles) if not tags or tags & corpus_tags else []
-    for kind, tag, when, url, title in corpus:
-        # Everything below this gate runs on a handful of rows. Splitting urls
-        # and cleaning titles across all seventy thousand costs several times
-        # what the ranking itself does, so nothing touches a row until its
-        # terms are known to be in it.
-        if not ranker.matches_in(url + "\n" + title):
+    # The title check splits the url, which across seventy thousand rows costs
+    # more than the whole stream, so it runs only where the title collides.
+    kept = []
+    for line in tail:
+        fields = line.split("\t")
+        if len(fields) < 5 or fields[4] in seen:
             continue
-        command = "xdg-open " + shlex.quote(url)
-        if kind == "b":
-            keep(1, "#mark", clean_title(title), url, command, 0, {"mark", tag})
+        if not history_on and "#mark" not in fields[0]:
             continue
-        if not history_on or urlsplit(url).netloc.lower() in NOISE_HOSTS:
+        index = titles.get(fields[2].casefold())
+        if index is not None and title_key(fields[3], fields[2]) in seen:
+            title, url, tag, command, pinned = recent[index]
+            if tag not in ("#pin", "#link") and len(fields[3]) < len(url):
+                recent[index] = (title, fields[3], tag, fields[1], pinned)
             continue
-        title = clean_title(title)
-        if not title or title == url:
-            continue
-        keep(1, "#" + tag, title, url, command, when, {tag})
+        kept.append(line)
 
-    hits.sort()
-    return [
-        render(title, url, tag, command, pinned=group == 0)
-        for group, _, _, tag, title, url, command in hits[:limit]
-    ]
+    lines = [render(*row) for row in recent]
+    if lines:
+        out.write("\n".join(lines) + "\n")
+        out.flush()
+    if kept:
+        out.write("\n".join(kept) + "\n")
 
 
 def main():
@@ -689,13 +739,11 @@ def main():
         toggle_pin(pins_path(conf), sys.argv[2])
         return
 
-    if len(sys.argv) > 1 and sys.argv[1] == "--query":
-        lines = run_search(conf, profiles, sys.argv[2] if len(sys.argv) > 2 else "")
-    else:
-        lines = default_lines(conf, profiles)
+    if len(sys.argv) > 1 and sys.argv[1] == "--refresh":
+        refresh_corpus(conf, profiles)
+        return
 
-    if lines:
-        sys.stdout.write("\n".join(lines) + "\n")
+    stream(conf, profiles, sys.stdout)
 
 
 if __name__ == "__main__":
