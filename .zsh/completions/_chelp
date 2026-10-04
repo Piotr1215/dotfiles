@@ -10,6 +10,7 @@ _chelp() {
 		'commands:built-in slash commands with descriptions, aliases, argument hints'
 		'flags:CLI flags, including the ones --help does not list'
 		'cli:CLI subcommands'
+		'plugins:builtin plugins and whether this build lets you enable them'
 		'all:every section in one JSON object (implies --json)'
 		'version:the binary this script is reading'
 	)
@@ -24,7 +25,7 @@ _chelp() {
 		;;
 	args)
 		case "${words[1]}" in
-		commands|flags|cli)
+		commands|flags|cli|plugins)
 			_arguments \
 				'--table[aligned columns, the default]' \
 				'--tsv[tab separated, stays greppable]' \
