@@ -17,9 +17,9 @@
     "localhost:11434"
   ],
   "num_ctx": 32768,
-  "budget": 1.0,
+  "budget": 1.5,
   "threshold": {
-    "no": 0.9915
+    "no": 0.95
   },
   "smoke": [
     {
