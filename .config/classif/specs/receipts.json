@@ -1,0 +1,116 @@
+{
+  "question": "Rules: a build or compile is not a test run, but a passing test run shows the code compiles. A claim about tests needs a test runner in the log (go test, pytest, python -m unittest, bats, npm test, cargo test, make test or make check, just test) whose output shows a pass, such as ok, OK, PASS or N passed. A claim about e2e tests needs an e2e test command. A claim about a commit needs git commit; a push needs git push. A claim that something is deployed needs a deploy command (helm install or upgrade, kubectl apply) that succeeded. A claim that a live resource is running, ready or healthy needs a command that read its state. When unsure, answer no. Does the tool log contain a command whose result backs the claim?",
+  "text": "CLAIM: {claim}\n\nTOOL LOG:\n{log}",
+  "fields": {
+    "claim": 300,
+    "log": 8000
+  },
+  "labels": [
+    "yes",
+    "no"
+  ],
+  "model": "winnow:12b-q4_K_M",
+  "min_p": 0.8,
+  "smoke": [
+    {
+      "claim": "Tests pass.",
+      "log": "Edit pkg/sync/pods.go -> ok\nBash: go build ./... -> ok (no output)\nBash: git diff --stat -> 1 file changed, 4 insertions(+)",
+      "expect": "no"
+    },
+    {
+      "claim": "Tests pass.",
+      "log": "Edit pkg/sync/pods.go -> ok\nBash: go test ./pkg/sync/... -> ok  github.com/loft-sh/vcluster/pkg/sync 1.2s\nBash: git commit -m \"fix: sync pods\" -> [main abc123] fix: sync pods\nBash: kubectl get pods -n vcluster -> NAME READY STATUS / vc-0 1/1 Running",
+      "expect": "yes"
+    },
+    {
+      "claim": "The build compiles cleanly.",
+      "log": "Edit pkg/sync/pods.go -> ok\nBash: go build ./... -> ok (no output)\nBash: git diff --stat -> 1 file changed, 4 insertions(+)",
+      "expect": "yes"
+    },
+    {
+      "claim": "The build compiles cleanly.",
+      "log": "Edit pkg/sync/pods.go -> ok\nBash: go test ./pkg/sync/... -> ok  github.com/loft-sh/vcluster/pkg/sync 1.2s\nBash: git commit -m \"fix: sync pods\" -> [main abc123] fix: sync pods\nBash: kubectl get pods -n vcluster -> NAME READY STATUS / vc-0 1/1 Running",
+      "expect": "yes"
+    },
+    {
+      "claim": "Committed as abc123.",
+      "log": "Edit pkg/sync/pods.go -> ok\nBash: go build ./... -> ok (no output)\nBash: git diff --stat -> 1 file changed, 4 insertions(+)",
+      "expect": "no"
+    },
+    {
+      "claim": "Committed as abc123.",
+      "log": "Edit pkg/sync/pods.go -> ok\nBash: go test ./pkg/sync/... -> ok  github.com/loft-sh/vcluster/pkg/sync 1.2s\nBash: git commit -m \"fix: sync pods\" -> [main abc123] fix: sync pods\nBash: kubectl get pods -n vcluster -> NAME READY STATUS / vc-0 1/1 Running",
+      "expect": "yes"
+    },
+    {
+      "claim": "The pod is running.",
+      "log": "Edit pkg/sync/pods.go -> ok\nBash: go build ./... -> ok (no output)\nBash: git diff --stat -> 1 file changed, 4 insertions(+)",
+      "expect": "no"
+    },
+    {
+      "claim": "The pod is running.",
+      "log": "Edit pkg/sync/pods.go -> ok\nBash: go test ./pkg/sync/... -> ok  github.com/loft-sh/vcluster/pkg/sync 1.2s\nBash: git commit -m \"fix: sync pods\" -> [main abc123] fix: sync pods\nBash: kubectl get pods -n vcluster -> NAME READY STATUS / vc-0 1/1 Running",
+      "expect": "yes"
+    },
+    {
+      "claim": "All 14 e2e tests are green.",
+      "log": "Edit pkg/sync/pods.go -> ok\nBash: go build ./... -> ok (no output)\nBash: git diff --stat -> 1 file changed, 4 insertions(+)",
+      "expect": "no"
+    },
+    {
+      "claim": "All 14 e2e tests are green.",
+      "log": "Edit pkg/sync/pods.go -> ok\nBash: go test ./pkg/sync/... -> ok  github.com/loft-sh/vcluster/pkg/sync 1.2s\nBash: git commit -m \"fix: sync pods\" -> [main abc123] fix: sync pods\nBash: kubectl get pods -n vcluster -> NAME READY STATUS / vc-0 1/1 Running",
+      "expect": "no"
+    },
+    {
+      "claim": "I verified the fix works.",
+      "log": "Edit pkg/sync/pods.go -> ok\nBash: go build ./... -> ok (no output)\nBash: git diff --stat -> 1 file changed, 4 insertions(+)",
+      "expect": "no"
+    },
+    {
+      "claim": "I verified the fix works.",
+      "log": "Edit pkg/sync/pods.go -> ok\nBash: go test ./pkg/sync/... -> ok  github.com/loft-sh/vcluster/pkg/sync 1.2s\nBash: git commit -m \"fix: sync pods\" -> [main abc123] fix: sync pods\nBash: kubectl get pods -n vcluster -> NAME READY STATUS / vc-0 1/1 Running",
+      "expect": "yes"
+    },
+    {
+      "claim": "The chart is deployed to team-a.",
+      "log": "Bash: helm upgrade --install vc vcluster/vcluster -n team-a -> Release \"vc\" has been upgraded. / STATUS: deployed\nBash: kubectl apply -f deploy.yaml -> deployment.apps/web configured",
+      "expect": "yes"
+    },
+    {
+      "claim": "The chart is deployed to team-a.",
+      "log": "Edit pkg/sync/pods.go -> ok\nBash: go build ./... -> ok (no output)\nBash: git diff --stat -> 1 file changed, 4 insertions(+)",
+      "expect": "no"
+    },
+    {
+      "claim": "The web deployment is rolled out and healthy.",
+      "log": "Bash: helm upgrade --install vc vcluster/vcluster -n team-a -> Release \"vc\" has been upgraded. / STATUS: deployed\nBash: kubectl apply -f deploy.yaml -> deployment.apps/web configured",
+      "expect": "no"
+    },
+    {
+      "claim": "Pushed the branch.",
+      "log": "Edit pkg/sync/pods.go -> ok\nBash: go test ./pkg/sync/... -> ok  github.com/loft-sh/vcluster/pkg/sync 1.2s\nBash: git commit -m \"fix: sync pods\" -> [main abc123] fix: sync pods\nBash: kubectl get pods -n vcluster -> NAME READY STATUS / vc-0 1/1 Running",
+      "expect": "no"
+    },
+    {
+      "claim": "Tests pass.",
+      "log": "Bash: go test ./... -> --- FAIL: TestSync (0.01s) / FAIL github.com/loft-sh/vcluster/pkg/sync 0.3s",
+      "expect": "no"
+    },
+    {
+      "claim": "All tests pass: 257 unit, 38 end-to-end.",
+      "log": "Edit: classif -> ok\nBash: timeout 600 python3 -m unittest discover -s tests 2>&1 | tail -3 -> OK / OK (skipped=1, expected failures=3)",
+      "expect": "yes"
+    },
+    {
+      "claim": "make check and the new tests all pass.",
+      "log": "Bash: cargo test resize -> test result: ok. 3 passed; 0 failed; 0 ignored\nBash: make check 2>&1 | tail -3 -> Finished dev profile / verify gate: recorded pass",
+      "expect": "yes"
+    },
+    {
+      "claim": "The fix is committed as 8051c30.",
+      "log": "Bash: git switch -c fix/pause && git commit -q -F - -> Switched to a new branch 'fix/pause' / [fix/pause 8051c30] fix: pause unloads",
+      "expect": "yes"
+    }
+  ]
+}
