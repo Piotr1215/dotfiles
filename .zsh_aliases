@@ -176,6 +176,8 @@ alias ghshare='/home/decoder/dev/dotfiles/scripts/__ghshare.sh'
 alias -g GS='| /home/decoder/dev/dotfiles/scripts/__ghshare.sh'
 alias -s asc='/home/decoder/dev/dotfiles/scripts/__ghshare.sh -d'
 alias -s age='/home/decoder/dev/dotfiles/scripts/__ghshare.sh -d'
+# jev asks TypeSafe's Jev one typed question: jev "is this an error?" <input>, -c a,b,c to pick, -s low,mid,high to score
+alias jev='/home/decoder/dev/dotfiles/scripts/__jev.sh'
 
 # Notion AI Meeting Notes — virtual mic that captures both my voice + remote voices.
 # Pick "NotionMic" as the mic in the Notion browser tab.
