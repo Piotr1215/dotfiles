@@ -171,6 +171,7 @@ alias sk='pkill screenkey; __start_screenkey.sh'
 
 # GitHub
 alias ghuser='/home/decoder/dev/dotfiles/scripts/__ghuser.sh'
+alias ghshare='/home/decoder/dev/dotfiles/scripts/__ghshare.sh'
 
 # Notion AI Meeting Notes — virtual mic that captures both my voice + remote voices.
 # Pick "NotionMic" as the mic in the Notion browser tab.
