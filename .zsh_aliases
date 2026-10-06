@@ -172,6 +172,10 @@ alias sk='pkill screenkey; __start_screenkey.sh'
 # GitHub
 alias ghuser='/home/decoder/dev/dotfiles/scripts/__ghuser.sh'
 alias ghshare='/home/decoder/dev/dotfiles/scripts/__ghshare.sh'
+# GS pipes into ghshare: a secret gets encrypted to a colleague, a block gets decrypted; secret.asc or secret.age opens itself
+alias -g GS='| /home/decoder/dev/dotfiles/scripts/__ghshare.sh'
+alias -s asc='/home/decoder/dev/dotfiles/scripts/__ghshare.sh -d'
+alias -s age='/home/decoder/dev/dotfiles/scripts/__ghshare.sh -d'
 
 # Notion AI Meeting Notes — virtual mic that captures both my voice + remote voices.
 # Pick "NotionMic" as the mic in the Notion browser tab.

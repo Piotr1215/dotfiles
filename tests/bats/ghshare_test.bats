@@ -10,7 +10,8 @@ setup() {
 	TMP=$(mktemp -d)
 	export GHSHARE_NO_CLIPBOARD=1
 	export GHSHARE_GITHUB_BASE="file://$TMP/gh"
-	mkdir -p "$TMP/gh"
+	export GHSHARE_KEY_DIR="$TMP/ssh"
+	mkdir -p "$TMP/gh" "$TMP/ssh"
 }
 
 teardown() {
@@ -20,8 +21,8 @@ teardown() {
 
 # Publish a fresh ed25519 SSH key as $TMP/gh/<login>.keys.
 publish_ssh() {
-	ssh-keygen -q -t ed25519 -N '' -f "$TMP/id_$1" >/dev/null
-	cp "$TMP/id_$1.pub" "$TMP/gh/$1.keys"
+	ssh-keygen -q -t ed25519 -N '' -f "$TMP/ssh/id_$1" >/dev/null
+	cp "$TMP/ssh/id_$1.pub" "$TMP/gh/$1.keys"
 }
 
 # Publish a fresh GPG key with an encryption subkey as $TMP/gh/<login>.gpg.
@@ -46,7 +47,7 @@ ciphertext() {
 	[ "$status" -eq 0 ]
 	[[ "$output" == *"Encrypted for @alice"* ]]
 	[[ "$output" == *"age -d"* ]]
-	ciphertext "$output" | age -d -i "$TMP/id_alice" >"$TMP/out"
+	ciphertext "$output" | age -d -i "$TMP/ssh/id_alice" >"$TMP/out"
 	[ "$(cat "$TMP/out")" = "s3cret-key" ]
 }
 
@@ -91,4 +92,78 @@ ciphertext() {
 	run bash -c "printf 'x' | '$SCRIPT' '../etc/passwd'"
 	[ "$status" -eq 1 ]
 	[[ "$output" == *"not a GitHub login"* ]]
+}
+
+@test "ghshare -d decrypts an age block with the matching SSH identity" {
+	publish_ssh frank
+	run bash -c "printf 'round-trip' | '$SCRIPT' frank"
+	[ "$status" -eq 0 ]
+	run bash -c "printf '%s\\n' \"\$1\" | '$SCRIPT' -d" _ "$output"
+	[ "$status" -eq 0 ]
+	[ "$output" = "round-trip" ]
+}
+
+@test "ghshare -d decrypts a PGP block with the user's keyring" {
+	publish_gpg grace
+	run bash -c "printf 'round-trip' | '$SCRIPT' grace"
+	[ "$status" -eq 0 ]
+	export GNUPGHOME="$TMP/gnupg"
+	run bash -c "printf '%s\\n' \"\$1\" | '$SCRIPT' -d" _ "$output"
+	[ "$status" -eq 0 ]
+	[ "$output" = "round-trip" ]
+}
+
+@test "ghshare -d without a block says so" {
+	run bash -c "printf 'just some text' | '$SCRIPT' -d"
+	[ "$status" -eq 1 ]
+	[[ "$output" == *"no encrypted block"* ]]
+}
+
+@test "ghshare -d reads a saved block from a file, as the asc suffix alias calls it" {
+	publish_ssh heidi
+	run bash -c "printf 'from-file' | '$SCRIPT' heidi"
+	[ "$status" -eq 0 ]
+	printf '%s\n' "$output" >"$TMP/secret.age"
+	run "$SCRIPT" -d "$TMP/secret.age"
+	[ "$status" -eq 0 ]
+	[ "$output" = "from-file" ]
+}
+
+@test "a piped block is opened without -d, so the GS alias works both ways" {
+	publish_ssh ivan
+	run bash -c "printf 'auto' | '$SCRIPT' ivan"
+	[ "$status" -eq 0 ]
+	run bash -c "printf '%s\\n' \"\$1\" | '$SCRIPT'" _ "$output"
+	[ "$status" -eq 0 ]
+	[ "$output" = "auto" ]
+}
+
+@test "a saved block passed as a file argument is opened" {
+	publish_gpg judy
+	run bash -c "printf 'by-path' | '$SCRIPT' judy"
+	[ "$status" -eq 0 ]
+	printf '%s\n' "$output" >"$TMP/secret.asc"
+	export GNUPGHOME="$TMP/gnupg"
+	run "$SCRIPT" "$TMP/secret.asc"
+	[ "$status" -eq 0 ]
+	[ "$output" = "by-path" ]
+}
+
+@test "a CMS block opens with a PEM private key from the key dir" {
+	openssl req -x509 -newkey rsa:2048 -nodes -subj /CN=kim -days 1 \
+		-keyout "$TMP/ssh/kim.pem" -out "$TMP/kim.crt" 2>/dev/null
+	printf 'pki-secret' | openssl cms -encrypt -aes256 -outform PEM "$TMP/kim.crt" >"$TMP/msg.pem"
+	run "$SCRIPT" "$TMP/msg.pem"
+	[ "$status" -eq 0 ]
+	[ "$output" = "pki-secret" ]
+}
+
+@test "a piped block meant for someone else fails instead of being re-shared" {
+	publish_ssh leo
+	run bash -c "printf 'not-yours' | '$SCRIPT' leo"
+	[ "$status" -eq 0 ]
+	rm "$TMP/ssh/id_leo"
+	run bash -c "printf '%s\\n' \"\$1\" | '$SCRIPT'" _ "$output"
+	[ "$status" -eq 1 ]
+	[[ "$output" == *"not for any of your keys"* ]]
 }
