@@ -87,17 +87,38 @@ update_approved_status() {
 	done < <(get_all_pending_pr_tasks)
 }
 
+# Is the PR behind this task still open, asked of the PR itself?
+# GitHub search can silently return a partial result set, and absence from one
+# search is not proof the PR closed. Returns 0 (keep the task) when the PR is
+# open or its state cannot be read, 1 when the task has no PR URL or the PR is
+# closed or merged.
+pr_still_open() {
+	local task_uuid="$1" pr_url state
+	pr_url=$(task "$task_uuid" export |
+		jq -r '[.[0].annotations[]?.description | select(test("^https://github.com/[^/]+/[^/]+/pull/[0-9]+$"))][0] // empty')
+	[ -n "$pr_url" ] || return 1
+	state=$(gh pr view "$pr_url" --json state -q .state 2>/dev/null) || return 0
+	[ "$state" = "OPEN" ]
+}
+
 main() {
 	local pr_title pr_url repo_name task_uuid created_at entry_ts updated_at
-	# Get all current PR titles from GitHub
-	local gh_prs
-	gh_prs=$(get_review_prs | jq -r '.[] | "\(.title) (#\(.number))" | rtrimstr(" ") | ltrimstr(" ")')
-	# Check all pending tasks and mark done if PR is not in GitHub results
+	# Fetch once and use the same snapshot to complete and to create. Two fetches
+	# disagreed often enough to complete and recreate ~50 tasks per run.
+	local review_json gh_prs
+	review_json=$(get_review_prs)
+	gh_prs=$(echo "$review_json" | jq -r '.[] | "\(.title) (#\(.number))" | rtrimstr(" ") | ltrimstr(" ")')
+	# Complete a pending task only when its PR is missing from the search AND
+	# the PR itself is no longer open.
 	while read -r task_desc; do
-		if ! echo "$gh_prs" | grep -Fxq "$task_desc"; then
-			echo "Marking task as done: $task_desc"
+		if ! grep -Fxq -- "$task_desc" <<<"$gh_prs"; then
 			task_uuid=$(get_task_id_by_description "$task_desc")
-			task "$task_uuid" done
+			[ -n "$task_uuid" ] || continue
+			if pr_still_open "$task_uuid"; then
+				continue
+			fi
+			echo "Marking task as done: $task_desc"
+			task "$task_uuid" "done"
 		fi
 	done < <(get_all_pending_pr_tasks)
 	# Create new tasks for new PRs or update existing ones
@@ -133,7 +154,7 @@ main() {
 			fi
 			echo "Task already exists for PR: $pr_title"
 		fi
-	done < <(get_review_prs | jq -c '.[]')
+	done < <(echo "$review_json" | jq -c '.[]')
 	# Update approved status for existing PRs
 	update_approved_status
 }
