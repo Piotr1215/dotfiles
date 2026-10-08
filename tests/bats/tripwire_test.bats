@@ -125,12 +125,11 @@ add_wire() {
   [[ "$output" == *"broken: the news feed did not answer"* ]]
 }
 
-@test "while classif is paused nothing is fetched or judged" {
+@test "with CLASSIF=0 nothing is fetched or judged" {
   add_wire
   feed "a1:old"
-  touch "${BATS_TEST_TMPDIR}/classif/paused"
   stub curl 'echo "curl $*" >>"$LOG"'
-  run "$SCRIPT" run
+  CLASSIF=0 run "$SCRIPT" run
   [ "$status" -eq 0 ]
   [ ! -s "$LOG" ]
 }

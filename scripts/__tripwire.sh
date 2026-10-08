@@ -21,12 +21,11 @@
 # nothing trips. After that each new headline is judged once, and only a yes at
 # p 0.8 or more trips. A feed or model that fails fires the action once with
 # the reason, and once more when the wire works again, so a broken wire is loud
-# instead of quiet. While classif is paused (classif pause) runs do nothing.
+# instead of quiet. With CLASSIF=0 runs do nothing.
 set -eo pipefail
 
 wires="${TRIPWIRE_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/tripwire/wires}"
 state="${XDG_STATE_HOME:-$HOME/.local/state}/tripwire"
-classif_state="$(dirname "${CLASSIF_LOG:-${XDG_STATE_HOME:-$HOME/.local/state}/classif/log.jsonl}")"
 snd="${TRIPWIRE_SND:-$HOME/dev/agents-mcp-server/build/snd.js}"
 min_p=0.8
 
@@ -132,8 +131,8 @@ run_wire() {
 
 cmd_run() {
 	local name failed=0
-	if [[ "${CLASSIF:-1}" == 0 || -f "$classif_state/paused" ]]; then
-		echo "tripwire: classif is paused; nothing judged" >&2
+	if [[ "${CLASSIF:-1}" == 0 ]]; then
+		echo "tripwire: classif is off (CLASSIF=0); nothing judged" >&2
 		return 0
 	fi
 	[[ -d "$wires" ]] || return 0
