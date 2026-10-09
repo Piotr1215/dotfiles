@@ -494,3 +494,6 @@ sqz_run() {
 sqz_sudo() {
     sudo "$@" 2>&1 | SQZ_CMD="sudo $*" sqz compress
 }
+
+# opencode
+export PATH=/home/decoder/.opencode/bin:$PATH
