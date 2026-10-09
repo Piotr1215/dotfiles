@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Next blog post: rank the repos I worked on recently by how good a next post
-# each would make. classif rank asks every repo each question below; a repo's
+# each would make. classif each asks every repo each question below; a repo's
 # score is the product of the p of the answer each question wants.
 #
 #   __next_blog.sh [-k N] [-w] [DAYS]   rank repos with commits of mine in the
@@ -119,10 +119,10 @@ rank_repos() {
 	echo
 	table="$(for q in "${asked[@]}"; do
 		IFS=$'\t' read -r name want question <<<"$q"
-		classif rank -j "$question" -c "${ctx[$name]}" <<<"$cands" |
-			jq -c --arg name "$name" --arg want "$want" '{name: $name, want: $want, ranking}'
+		classif each -j "$question" -c "${ctx[$name]}" <<<"$cands" |
+			jq -c --arg name "$name" --arg want "$want" '{name: $name, want: $want, items}'
 	done | jq -rs --argjson top "${top:-0}" '
-		(map({key: .name, value: (.ranking | map({key: .name, value: .}) | from_entries)}) | from_entries) as $a
+		(map({key: .name, value: (.items | map({key: .name, value: .}) | from_entries)}) | from_entries) as $a
 		| map(.name) as $qs | (map({key: .name, value: .want}) | from_entries) as $want
 		| (["score"] + $qs + ["repo"] | @tsv),
 		  ([$a[$qs[0]] | keys_unsorted[] as $repo | select(all($qs[]; $a[.][$repo]))
@@ -143,8 +143,8 @@ rank_repos() {
 		IFS=$'\t' read -r name want question <<<"$q"
 		echo "  $name, $want counts; + raised p(yes)"
 		jq -c --arg repo "$repo" 'select(.name == $repo)' <<<"$cands" |
-			classif rank -j -w "$question" -c "${ctx[$name]}" |
-			jq -r '.ranking[0] | if .unmarked then "\tnot marked, \(.unmarked)"
+			classif each -j -w "$question" -c "${ctx[$name]}" |
+			jq -r '.items[0] | if .unmarked then "\tnot marked, \(.unmarked)"
 				elif (.marks | length) == 0 then "\t(no single line moves it)"
 				else .marks[] | "\(.delta)\t\(if .from == "context" then "context: " else "" end)\(.line)" end' |
 			awk -F '\t' '$1 == "" { print "    " $2; next } { printf "    %+.3f  %s\n", $1, $2 }'

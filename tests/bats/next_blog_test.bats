@@ -1,8 +1,8 @@
 #!/usr/bin/env bats
 
 # __next_blog.sh asks every recently active repo its questions through
-# classif rank and ranks the repos by the product of the p each question
-# wants. These tests stub classif rank and check which repos become
+# classif each and ranks the repos by the product of the p each question
+# wants. These tests stub classif each and check which repos become
 # candidates, what reaches the model as context, how the answers rank the
 # repos and which lines are marked. git and jq run for real.
 
@@ -17,14 +17,14 @@ setup() {
   echo '[{"title":"Zsh Tricks"}]' >"$T/site/src/data/blogs.json"
   export NEXT_BLOG_POSTS="$T/site/blog" NEXT_BLOG_ROOTS="$T/dev:$T/solo" NEXT_BLOG_FEEDBACK="$T/medium.tsv"
   : >"$LOG"
-  # classif rank: story 0.9 with alpha's commit line, else 0.5. told: beta
+  # classif each: story 0.9 with alpha's commit line, else 0.5. told: beta
   # 0.8, else 0.1. liked: alpha 0.9, others 0.2. A repo named broken is
   # unscored. -w marks each line of the top text whose removal moves p.
   cat >"$T/bin/classif" <<'STUB'
 #!/usr/bin/env python3
 import json, os, sys
 args = sys.argv[1:]
-assert args.pop(0) == "rank"
+assert args.pop(0) == "each"
 ctx = args[args.index("-c") + 1]
 q = next(a for i, a in enumerate(args) if not a.startswith("-") and (i == 0 or args[i - 1] != "-c"))
 with open(os.environ["LOG"], "a") as f:
@@ -40,7 +40,7 @@ def p_yes(text):
 rows = []
 for c in (json.loads(l) for l in sys.stdin if l.strip()):
     if "Project: broken" in c["text"]:
-        print(f"classif rank: {c['name']}: unscored: stub", file=sys.stderr)
+        print(f"classif each: {c['name']}: unscored: stub", file=sys.stderr)
         continue
     y = p_yes(c["text"])
     rows.append({"name": c["name"], "score": y, "label": "yes" if y >= 0.5 else "no",
@@ -55,7 +55,7 @@ if "-w" in args:
     rows[0]["marks"] = [m for m in rows[0]["marks"] if m["delta"]]
 for r in rows:
     del r["text"]
-print(json.dumps({"question": q, "ranking": rows}))
+print(json.dumps({"question": q, "items": rows}))
 STUB
   chmod +x "$T/bin/classif"
   export PATH="$T/bin:$PATH"
