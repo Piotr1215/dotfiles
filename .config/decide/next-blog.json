@@ -1,0 +1,25 @@
+{
+  "question": "Which recently active repo should the next CloudRumble post be about?",
+  "candidates": "__next_blog.sh candidates",
+  "criteria": [
+    {
+      "name": "story",
+      "want": "yes",
+      "question": "Does this work hold a story a developer could follow and reproduce in a hands-on blog post?",
+      "context": "CloudRumble is a developer blog: hands-on posts about terminal workflows, Neovim, tmux, Kubernetes, homelab and local AI tooling that a reader can follow and reproduce."
+    },
+    {
+      "name": "new",
+      "want": "no",
+      "question": "Does one of the published posts already tell the story of this work?",
+      "context_cmd": "__next_blog.sh published"
+    },
+    {
+      "name": "liked",
+      "want": "yes",
+      "question": "Is this work on the same kind of topic as the posts readers responded to most?",
+      "when": "__next_blog.sh liked >/dev/null",
+      "context_cmd": "__next_blog.sh liked"
+    }
+  ]
+}
