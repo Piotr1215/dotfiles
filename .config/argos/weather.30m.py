@@ -4,6 +4,8 @@
 # Shows current weather and 5-day forecast with rich details
 
 import json
+import os
+import re
 import subprocess
 from urllib.request import urlopen
 from urllib.error import URLError, HTTPError
@@ -28,7 +30,7 @@ def panel_label_size(normal):
 
 
 # Configuration
-location_name = "Mittelbuchen,DE"
+envrc_path = os.path.expanduser("~/.envrc")
 pass_entry = "personal/WEATHER_API_KEY"
 units = 'metric'  # kelvin, metric, imperial
 lang = 'en'
@@ -74,8 +76,27 @@ def get_api_key():
         raise RuntimeError(f"pass entry {pass_entry} is empty")
     return key
 
-def fetch(endpoint, api_key):
-    url = f'https://api.openweathermap.org/data/2.5/{endpoint}?q={quote(location_name)}&units={units}&lang={lang}&appid={api_key}'
+# $CITY from the env, else the last `export CITY=` line in ~/.envrc. argos runs
+# this with no direnv, so the env is usually empty; read the one line instead of
+# sourcing the file, which would decrypt every pass entry in it.
+def get_city():
+    city = os.environ.get("CITY", "").strip()
+    if city:
+        return city
+    try:
+        with open(envrc_path) as f:
+            for line in f:
+                m = re.fullmatch(r"""export CITY=(["']?)([^"'\n]+)\1\s*""", line)
+                if m:
+                    city = m.group(2).strip()
+    except OSError as e:
+        raise RuntimeError(f"CITY unset and {envrc_path}: {e.strerror}") from None
+    if not city:
+        raise RuntimeError(f"CITY unset and no export CITY= line in {envrc_path}")
+    return city
+
+def fetch(endpoint, city, api_key):
+    url = f'https://api.openweathermap.org/data/2.5/{endpoint}?q={quote(city)}&units={units}&lang={lang}&appid={api_key}'
     # Build the message from code/reason only, and cut the cause chain: the URL
     # carries the key and must never reach the panel or a traceback.
     try:
@@ -86,10 +107,11 @@ def fetch(endpoint, api_key):
         raise RuntimeError(f"{endpoint}: {e.reason}") from None
 
 def get_weather_data():
+    city = get_city()
     api_key = get_api_key()
     return {
-        'current': fetch('weather', api_key),
-        'forecast': fetch('forecast', api_key)
+        'current': fetch('weather', city, api_key),
+        'forecast': fetch('forecast', city, api_key)
     }
 
 def format_weather():
@@ -179,5 +201,5 @@ def format_weather():
     
     return output
 
-# Main execution
-print(format_weather())
+if __name__ == "__main__":
+    print(format_weather())
