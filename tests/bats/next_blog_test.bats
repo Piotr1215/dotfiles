@@ -1,15 +1,16 @@
 #!/usr/bin/env bats
 
-# __next_blog.sh ranks recently active repos as next blog posts from three
-# yes/no answers classif gives per repo. These tests stub classif and check
-# which repos become candidates, how the answers rank them, what reaches the
-# model as context, and what happens when classif cannot score. git runs for
-# real on throwaway repos.
+# __next_blog.sh ranks recently active repos as next blog posts from yes/no
+# answers classif gives per repo, marks the lines the top answers rest on and
+# records the decision. These tests stub classif and check which repos become
+# candidates, how the answers rank them, what reaches the model as context,
+# which lines are marked, what the record holds, and what happens when
+# classif cannot score. git runs for real on throwaway repos.
 
 setup() {
   SCRIPT="${BATS_TEST_DIRNAME}/../../scripts/__next_blog.sh"
   T="$BATS_TEST_TMPDIR"
-  export LOG="$T/log" GIT_CONFIG_GLOBAL="$T/gitconfig"
+  export LOG="$T/log" GIT_CONFIG_GLOBAL="$T/gitconfig" XDG_STATE_HOME="$T/state"
   git config --global user.email me@example.com
   git config --global user.name me
   mkdir -p "$T/bin" "$T/dev" "$T/site/blog" "$T/site/src/data"
@@ -17,7 +18,8 @@ setup() {
   echo '[{"title":"Zsh Tricks"}]' >"$T/site/src/data/blogs.json"
   export NEXT_BLOG_POSTS="$T/site/blog" NEXT_BLOG_ROOTS="$T/dev:$T/solo" NEXT_BLOG_FEEDBACK="$T/medium.tsv"
   : >"$LOG"
-  # story: alpha 0.9, others 0.5. told: beta 0.8. liked: alpha 0.9, others 0.2.
+  # story: 0.9 with alpha's commit line, else 0.5. told: beta 0.8, else 0.1.
+  # liked: alpha 0.9, others 0.2.
   # A repo named broken is unscored.
   stub classif '
 text="$(cat)"; q="${@: -1}"; ctx="${*: -2:1}"
@@ -25,7 +27,7 @@ echo "Q $q" >>"$LOG"; echo "C $ctx" >>"$LOG"
 [[ "$text" == *"Project: broken"* ]] && exit 2
 y=0.5
 case "$q" in
-  *"hold a story"*) [[ "$text" == *"Project: alpha"* ]] && y=0.9 ;;
+  *"hold a story"*) [[ "$text" == *"- feat: work in alpha"* ]] && y=0.9 ;;
   *"already tell"*) y=0.1; [[ "$text" == *"Project: beta"* ]] && y=0.8 ;;
   *"readers responded"*) y=0.2; [[ "$text" == *"Project: alpha"* ]] && y=0.9 ;;
 esac
@@ -68,7 +70,7 @@ repo() {
   [ "$status" -eq 0 ]
   mapfile -t rows <<<"$output"
   [[ "${rows[0]}" == score*repo ]]
-  [[ "${rows[1]}" == 0.810*0.9*0.9*-*alpha ]]
+  [[ "${rows[1]}" == 0.810*0.9*0.9*alpha ]]
   [[ "${rows[2]}" == 0.450*gamma ]]
   [[ "${rows[3]}" == 0.100*beta ]]
 }
@@ -109,4 +111,39 @@ repo() {
   run "$SCRIPT"
   [ "$status" -eq 1 ]
   [[ "$output" == *"no repo has commits in the last 30 days"* ]]
+}
+
+@test "the top repo's marks are the lines whose removal moves each answer" {
+  repo "$T/dev/alpha"
+  repo "$T/dev/gamma"
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"why alpha: lines whose removal moves the answer most"* ]]
+  [[ "$output" == *$'  story\n    +0.400  - feat: work in alpha\n  new\n    (no single line moves it)'* ]]
+  [[ "$output" != *"why gamma"* ]]
+}
+
+@test "-x 0 marks nothing, -x 2 marks the top two" {
+  repo "$T/dev/alpha"
+  repo "$T/dev/gamma"
+  run "$SCRIPT" -x 0
+  [ "$status" -eq 0 ]
+  [[ "$output" != *why* ]]
+  run "$SCRIPT" -x 2
+  [[ "$output" == *"why alpha"* && "$output" == *"why gamma"* ]]
+}
+
+@test "the record holds the criteria with their context, every p, the texts and the marks" {
+  repo "$T/dev/alpha"
+  repo "$T/dev/beta"
+  run "$SCRIPT" 7
+  [ "$status" -eq 0 ]
+  record="$(ls "$XDG_STATE_HOME"/next-blog/*.json)"
+  [[ "$output" == *"next-blog: record in $record"* ]]
+  [ "$(jq -c '[.days, (.criteria | map([.name, .want]))]' "$record")" = '[7,[["story","yes"],["new","no"]]]' ]
+  jq -e '.criteria[1].context | contains("Paste tmux Scrollback")' "$record"
+  [ "$(jq -c '.ranking | map([.repo, .p.story, .p.new])' "$record")" = '[["alpha",0.9,0.9],["beta",0.5,0.2]]' ]
+  jq -e '.ranking[0].text | startswith("Project: alpha\nRecent commits:\n- feat: work in alpha")' "$record"
+  [ "$(jq -r '.ranking[0].marks.story[0].line' "$record")" = "- feat: work in alpha" ]
+  jq -e '.ranking[1] | has("marks") | not' "$record"
 }
