@@ -18,6 +18,14 @@ get_task_id_by_description() {
 		jq -r --arg desc "$description" '.[] | select(.description == ($desc | rtrimstr(" ") | ltrimstr(" "))) | .uuid'
 }
 
+# Find the pending pr-reviews task that tracks this PR URL. A PR keeps its URL
+# across a retitle; its "title (#number)" description does not.
+get_task_id_by_url() {
+	local url="$1"
+	task status:pending project:pr-reviews export |
+		jq -r --arg u "$url" '[.[] | select(any(.annotations[]?; .description == $u)) | .uuid][0] // empty'
+}
+
 get_all_pending_pr_tasks() {
 	task status:pending project:pr-reviews export |
 		jq -r '.[] | .description'
@@ -131,6 +139,15 @@ main() {
 		# Convert the creation date to a proper ISO8601 format and then to epoch
 		entry_ts=$(date -d "$(format_date "$created_at")" +%s)
 		task_uuid=$(get_task_id_by_description "$pr_title")
+		# Renovate retitles on every version bump. Without the URL lookup each
+		# retitle created a second task while the open PR kept the first alive.
+		if [[ -z "$task_uuid" ]]; then
+			task_uuid=$(get_task_id_by_url "$pr_url")
+			if [[ -n "$task_uuid" ]]; then
+				echo "PR retitled, renaming task: $pr_title"
+				task "$task_uuid" modify "description:$pr_title" || true
+			fi
+		fi
 		if [[ -z "$task_uuid" ]]; then
 			echo "Creating new task for PR: $pr_title"
 			task_uuid=$(create_task "$pr_title" "entry:$entry_ts" "+pr" "+kill" "+work" "project:pr-reviews" "repo:$repo_name") || true
