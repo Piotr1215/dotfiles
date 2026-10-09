@@ -28,7 +28,7 @@ def panel_label_size(normal):
 
 
 # Configuration
-location_name = "Korinthos,GR"
+location_name = "Mittelbuchen,DE"
 pass_entry = "personal/WEATHER_API_KEY"
 units = 'metric'  # kelvin, metric, imperial
 lang = 'en'
