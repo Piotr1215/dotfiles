@@ -106,7 +106,7 @@ rows() {
   [ "$status" -eq 0 ]
   mapfile -t r < <(rows)
   [[ "${r[0]}" == 0.729*alpha ]]
-  [[ "${r[1]}" == 0.090*0.200*gamma ]]
+  [[ "${r[1]}" == 0.090*"no 0.800"*gamma ]]
   grep -A1 'Medium posts readers responded to most' "$LOG" | grep -q 'Kubernetes Tools'
   grep -q 'A Quiet Post' "$LOG"
 }
