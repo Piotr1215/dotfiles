@@ -22,10 +22,13 @@ setup() {
 		{"type":"user","message":{"role":"user","content":"<bash-stdout>yes 0.9</bash-stdout><bash-stderr></bash-stderr>"}}
 		{"type":"user","message":{"role":"user","content":[{"type":"text","text":"two\nlines"},{"type":"text","text":"<system-reminder>x</system-reminder>"}]}}
 		{"type":"user","message":{"role":"user","content":"This session is being continued from a previous conversation that ran out of context."}}
+		{"type":"queue-operation","operation":"enqueue","content":"typed mid-turn"}
+		{"type":"attachment","attachment":{"type":"queued_command","prompt":"typed mid-turn"}}
+		{"type":"user","message":{"role":"user","content":[{"type":"text","text":"[Request interrupted by user]"}]}}
 	JSONL
 	run "$SAID" "$f"
 	[ "$status" -eq 0 ]
-	[ "$output" = "$(printf 'is this any good?\n\n! classif "q" -s\n\ntwo\nlines\n')" ]
+	[ "$output" = "$(printf 'is this any good?\n\n! classif "q" -s\n\ntwo\nlines\n\ntyped mid-turn\n')" ]
 }
 
 @test "a codex rollout gives the typed messages, not its instructions or environment" {

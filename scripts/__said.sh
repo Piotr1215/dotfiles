@@ -29,13 +29,17 @@ if head -1 "$file" | jq -e '.type == "session_meta"' >/dev/null 2>&1; then
 		| select((startswith("<") or startswith("# AGENTS.md")) | not)
 		| . + "\n"' "$file"
 else
-	jq -r 'select(.type == "user" and .isMeta != true) | .message.content
+	# Messages typed while Claude works are queued_command attachments.
+	jq -r 'select((.type == "user" and .isMeta != true)
+			or (.type == "attachment" and .attachment.type == "queued_command"))
+		| if .type == "attachment" then .attachment.prompt else .message.content end
 		| if type == "string" then .
 		  else map(select(.type == "text") | .text | select(startswith("<") | not)) | join("\n") end
 		| select(length > 0)
 		| if startswith("<bash-input>") then "! " + (sub("^<bash-input>"; "") | sub("</bash-input>\\s*$"; "")) end
 		| select((startswith("<")
 			or startswith("This session is being continued from a previous conversation")
-			or startswith("Here is a note offered by a side agent")) | not)
+			or startswith("Here is a note offered by a side agent")
+			or startswith("[Request interrupted by user")) | not)
 		| . + "\n"' "$file"
 fi | sed '$ { /^$/d }'
