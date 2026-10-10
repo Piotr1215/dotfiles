@@ -25,10 +25,12 @@ setup() {
 		{"type":"queue-operation","operation":"enqueue","content":"typed mid-turn"}
 		{"type":"attachment","attachment":{"type":"queued_command","prompt":"typed mid-turn"}}
 		{"type":"user","message":{"role":"user","content":[{"type":"text","text":"[Request interrupted by user]"}]}}
+		{"type":"user","message":{"role":"user","content":"<command-message>sc</command-message>\n<command-name>/sc</command-name>\n<command-args>add one\nfor me</command-args>"}}
+		{"type":"user","message":{"role":"user","content":"<command-name>/clear</command-name>\n<command-args></command-args>"}}
 	JSONL
 	run "$SAID" "$f"
 	[ "$status" -eq 0 ]
-	[ "$output" = "$(printf 'is this any good?\n\n! classif "q" -s\n\ntwo\nlines\n\ntyped mid-turn\n')" ]
+	[ "$output" = "$(printf 'is this any good?\n\n! classif "q" -s\n\ntwo\nlines\n\ntyped mid-turn\n\n/sc add one\nfor me\n\n/clear\n')" ]
 }
 
 @test "a codex rollout gives the typed messages, not its instructions or environment" {

@@ -2,7 +2,7 @@
 # What the user typed in a Claude Code or Codex session, one message per
 # paragraph, without the harness text around it: tool results, reminders,
 # skill bodies, a Codex session's instructions and environment. Commands run
-# with ! come out as "! command". For piping on: `said | classif "..." -s`.
+# with ! come out as "! command", slash commands as "/name args". For piping on: `said | classif "..." -s`.
 #
 # Usage: said [SESSION_FILE]
 #   No file: the session this command runs under, as from a ! command in
@@ -37,6 +37,11 @@ else
 		  else map(select(.type == "text") | .text | select(startswith("<") | not)) | join("\n") end
 		| select(length > 0)
 		| if startswith("<bash-input>") then "! " + (sub("^<bash-input>"; "") | sub("</bash-input>\\s*$"; "")) end
+		| if test("<command-name>") then
+			([capture("<command-name>(?<n>[^<]*)</command-name>").n,
+			  (capture("<command-args>(?<a>[\\s\\S]*)</command-args>").a // "")]
+			 | map(select(length > 0)) | join(" "))
+		  end
 		| select((startswith("<")
 			or startswith("This session is being continued from a previous conversation")
 			or startswith("Here is a note offered by a side agent")
