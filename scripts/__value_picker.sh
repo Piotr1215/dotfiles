@@ -67,6 +67,10 @@ fi
 # feel instant instead of popping a one-row menu.
 mapfile -t lines < <(load_set "$set_name")
 
+# A live set with nothing to offer (;;session outside Claude or Codex) opens no
+# menu and erases nothing, so the trigger stays as typed.
+(( ${#lines[@]} == 0 )) && exit 0
+
 dump_all=0
 if (( ${#lines[@]} == 1 )); then
     selection="${lines[0]}"
