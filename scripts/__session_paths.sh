@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Session files of the Claude Code and Codex sessions in the focused window,
 # one "PATH | label" line each: the ;;session value-set. Prints nothing when
-# that window runs neither, so the trigger stays as typed.
+# that window runs neither, so the trigger stays as typed. With --here, the
+# session this command runs under instead, as from a ! command in Claude Code.
 #
 # The focused window's process tree is searched; when a tmux client runs in
 # it, the pane that client shows is searched instead, so a session in another
@@ -49,6 +50,12 @@ on_screen() {
 	while read -r p; do subtree "$p"; done <<< "$panes"
 }
 
+# Print PID and the processes it runs under, up to init.
+ancestors() {
+	awk -v p="$1" '{ parent[$1] = $2 }
+		END { while (p > 1 && !(p in seen)) { print p; seen[p]; p = parent[p] } }' <<< "$procs"
+}
+
 # Print the command name of PID.
 comm_of() {
 	awk -v p="$1" '$1 == p { print $3; exit }' <<< "$procs"
@@ -91,9 +98,15 @@ codex_sessions() {
 }
 
 rollouts=$(open_rollouts)
-on_screen | sort -u | while read -r pid; do
+if [[ "${1:-}" == --here ]]; then
+	pids=$(ancestors "${SESSION_FROM_PID:-$$}")
+else
+	pids=$(on_screen | sort -u)
+fi
+[[ -n "$pids" ]] || exit 0
+while read -r pid; do
 	case "$(comm_of "$pid")" in
 	claude) claude_session "$pid" ;;
 	codex) codex_sessions "$pid" ;;
 	esac
-done | sort -u
+done <<< "$pids" | sort -u

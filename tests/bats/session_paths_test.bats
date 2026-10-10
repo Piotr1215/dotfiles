@@ -129,3 +129,15 @@ rollout() {
 	run "$SCRIPT"
 	[ "$output" = "$CLAUDE_HOME/projects/-home-x/dddd.jsonl | claude p13" ]
 }
+
+@test "--here finds the claude session this command runs under, not the one on screen" {
+	export WINDOW_PID=10 SESSION_FROM_PID=33
+	proc 10 1 alacritty; proc 11 10 tmux
+	proc 20 1 bash; proc 21 20 claude
+	proc 30 1 bash; proc 31 30 claude; proc 32 31 zsh; proc 33 32 bash
+	echo "11 20" > "$BATS_TEST_TMPDIR/clients"
+	claude 21 aaaa; claude 31 eeee
+	run "$SCRIPT" --here
+	[ "$status" -eq 0 ]
+	[ "$output" = "$CLAUDE_HOME/projects/-home-x/eeee.jsonl | claude p31" ]
+}
