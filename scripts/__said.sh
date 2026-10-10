@@ -9,7 +9,8 @@
 #   Claude Code. Else the file, as ;;session types it.
 set -eo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Resolved through the ~/.local/bin/said symlink to where the helper lives.
+SCRIPT_DIR="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
 
 file="${1:-}"
 if [[ -z "$file" ]]; then

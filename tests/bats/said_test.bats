@@ -48,3 +48,10 @@ setup() {
 	[ "$status" -eq 1 ]
 	[[ "$output" == *"pass a session file"* ]]
 }
+
+@test "run through a symlink on PATH it still finds its helper" {
+	ln -s "$SAID" "$BATS_TEST_TMPDIR/said"
+	run env SESSION_FROM_PID=1 "$BATS_TEST_TMPDIR/said"
+	[ "$status" -eq 1 ]
+	[[ "$output" == *"pass a session file"* ]]
+}
