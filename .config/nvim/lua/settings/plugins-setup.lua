@@ -285,6 +285,11 @@ require("mini.cmdline").setup {
   },
 }
 require("mini.ai").setup {
+  -- Free an/in for the built-in treesitter selection (:help v_an, MiniAi-default-an-in)
+  mappings = {
+    around_next = "aN",
+    inside_next = "iN",
+  },
   custom_textobjects = {
     ["|"] = false, -- Disable | text object
     n = false, -- Disable n text object
