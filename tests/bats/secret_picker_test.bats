@@ -100,7 +100,7 @@ write_form() {
 	grep -q 'value is required' "$NOTIFY_LOG"
 }
 
-@test "the GTK form is centered, masks values, and defaults to work" {
+@test "the GTK form is centered, shows values, and defaults to work" {
 	if [[ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]]; then
 		run "$GTK_GUI" --check --subtree personal --subtree work
 	else
@@ -108,5 +108,5 @@ write_form() {
 	fi
 
 	[ "$status" -eq 0 ]
-	[ "$output" = "GTK 3 ready; position=center-always; value-hidden=true; default-subtree=work" ]
+	[ "$output" = "GTK 3 ready; position=center-always; value-hidden=false; default-subtree=work" ]
 }

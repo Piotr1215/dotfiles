@@ -21,7 +21,7 @@ def default_subtree(subtrees):
 
 def value_entry():
     entry = Gtk.Entry()
-    entry.set_visibility(False)
+    entry.set_visibility(True)
     entry.set_input_purpose(Gtk.InputPurpose.PASSWORD)
     return entry
 
