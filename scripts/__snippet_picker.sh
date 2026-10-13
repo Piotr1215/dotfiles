@@ -17,11 +17,18 @@
 # Usage:
 #   __snippet_picker.sh [erase]   erase = chars to backspace first (the trigger)
 #   __snippet_picker.sh --list    print the rows and exit (no GUI, for testing)
+#   __snippet_picker.sh --click PANE X LINE
+#                                 paste the snippet named at column X of a Claude
+#                                 snippets row into tmux PANE (see .tmux.conf)
+#
+# Every delivered snippet appends "<epoch>\t<name>" to the usage log. The Claude
+# snippets row ranks by it, so usage means picks from anywhere, not one app's.
 set -eo pipefail
 
 SNIPPETS_DIR="${AI_SNIPPETS_DIR:-$HOME/.config/ai-snippets}"
 EXCERPT_LINES="${SNIPPET_EXCERPT_LINES:-3}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+USAGE_LOG="${AI_SNIPPETS_USAGE_LOG:-${XDG_STATE_HOME:-$HOME/.local/state}/ai-snippets/usage.tsv}"
 
 # shellcheck source=/dev/null
 source "$SCRIPT_DIR/__lib_rofi_theme.sh"
@@ -94,6 +101,29 @@ build_row() {
         | sed 's/^/    /'
 }
 
+# Record one use. Never fails the paste: an unwritable state dir costs the
+# ranking one data point, not the snippet.
+log_use() {
+    local name
+    name="$(basename "$1")"
+    name="${name%.*}"
+    { mkdir -p "$(dirname "$USAGE_LOG")" && printf '%s\t%s\n' "$(date +%s)" "$name" >> "$USAGE_LOG"; } 2>/dev/null || true
+}
+
+# The snippet named at column X (0-based) of a Claude snippets row, drawn as
+# "snippets  a: explain  b: check-subagents". The hotkey and the name are the
+# target; the gaps and the "snippets" label name nothing.
+name_at() {
+    python3 -c '
+import re, sys
+line, x = sys.argv[1], int(sys.argv[2])
+for m in re.finditer(r"(?<!\S)[a-z0-9]: (\S+)", line):
+    if m.start() <= x < m.end():
+        print(m.group(1))
+        break
+' "$1" "$2"
+}
+
 # Deliver a body: erase the trigger that launched us, then paste. Erasing only
 # after any UI has closed keeps it from racing AutoKey's own key injection, and
 # pasting (never typing) keeps newlines from landing as real Enters.
@@ -109,21 +139,40 @@ paste_snippet() {
     # Restore is delayed because the paste is asynchronous. A shortcut that
     # silently eats whatever was copied before is worse than no shortcut.
     ( sleep 1; printf '%s' "$saved" | xclip -selection clipboard ) >/dev/null 2>&1 &
+    log_use "$file"
+}
+
+# Path of the snippet called NAME, with or without its extension, so ";;br"
+# survives done-check.md becoming done-check.txt later.
+resolve() {
+    local f
+    for f in "${files[@]}"; do
+        [[ "$f" == "$1" || "${f%.*}" == "$1" ]] && { echo "$SNIPPETS_DIR/$f"; return 0; }
+    done
+    return 1
 }
 
 mapfile -t files < <(list_files)
 (( ${#files[@]} > 0 )) || die "No snippets in $SNIPPETS_DIR"
 
-# Direct mode: a trigger bound straight to one snippet, no menu. The name may be
-# given with or without its extension, so ";;br" survives done-check.md becoming
-# done-check.txt later.
+# Click mode: tmux hands over a click on the Claude snippets row, which Claude
+# Code cannot take itself outside fullscreen (it turns mouse reporting off). A
+# bracketed paste into the clicked pane lands as a draft, so a multi-line body
+# never submits halfway and the clipboard is left alone.
+if [[ "${1:-}" == "--click" ]]; then
+    pane="${2:?pane}"
+    name="$(name_at "${4:-}" "${3:?column}")"
+    [[ -n "$name" ]] || exit 0
+    file="$(resolve "$name")" || die "No snippet named '$name' in $SNIPPETS_DIR"
+    reflow "$file" | tmux load-buffer -b ai-snippet -
+    tmux paste-buffer -p -d -b ai-snippet -t "$pane"
+    log_use "$file"
+    exit 0
+fi
+
+# Direct mode: a trigger bound straight to one snippet, no menu.
 if [[ -n "${2:-}" ]]; then
-    want="$2"
-    direct=""
-    for f in "${files[@]}"; do
-        [[ "$f" == "$want" || "${f%.*}" == "$want" ]] && { direct="$SNIPPETS_DIR/$f"; break; }
-    done
-    [[ -n "$direct" ]] || die "No snippet named '$want' in $SNIPPETS_DIR"
+    direct="$(resolve "$2")" || die "No snippet named '$2' in $SNIPPETS_DIR"
     paste_snippet "$direct" "${1:-0}"
     exit 0
 fi

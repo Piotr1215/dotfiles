@@ -28,9 +28,62 @@ setup() {
 		echo "\$*" >> "$SPY/xdotool.log"
 	STUB
 
-	chmod +x "$STUB_BIN/xclip" "$STUB_BIN/xdotool"
+	# tmux stub: record each call; load-buffer keeps stdin as the buffer body.
+	cat > "$STUB_BIN/tmux" <<-STUB
+		#!/usr/bin/env bash
+		echo "\$*" >> "$SPY/tmux.log"
+		[ "\$1" = "load-buffer" ] && cat > "$SPY/tmux-buffer"
+		exit 0
+	STUB
+
+	chmod +x "$STUB_BIN/xclip" "$STUB_BIN/xdotool" "$STUB_BIN/tmux"
 	export PATH="$STUB_BIN:$PATH"
 	export AI_SNIPPETS_DIR="$SNIPPETS"
+	export AI_SNIPPETS_USAGE_LOG="$BATS_TEST_TMPDIR/state/usage.tsv"
+}
+
+ROW="snippets  a: check-subagents  b: session-summary  c: just-act"
+
+@test "a direct paste appends one use to the usage log" {
+	printf 'body\n' > "$SNIPPETS/just-act.md"
+	run "$PICKER" 0 just-act
+	[ "$status" -eq 0 ]
+	[ "$(wc -l < "$AI_SNIPPETS_USAGE_LOG")" -eq 1 ]
+	[[ "$(cat "$AI_SNIPPETS_USAGE_LOG")" =~ ^[0-9]+$'\t'just-act$ ]]
+}
+
+@test "a click on a name in the snippets row pastes it bracketed into that pane" {
+	printf 'Close this session\ncleanly.\n' > "$SNIPPETS/session-summary.md"
+	run "$PICKER" --click %7 35 "$ROW"
+	[ "$status" -eq 0 ]
+	[ "$(cat "$SPY/tmux-buffer")" = "Close this session cleanly." ]
+	grep -qx 'paste-buffer -p -d -b ai-snippet -t %7' "$SPY/tmux.log"
+	[ "$(cut -f2 "$AI_SNIPPETS_USAGE_LOG")" = "session-summary" ]
+	[ ! -e "$SPY/xdotool.log" ]
+}
+
+@test "a click on the hotkey letter counts as the name" {
+	printf 'x\n' > "$SNIPPETS/check-subagents.md"
+	run "$PICKER" --click %7 10 "$ROW"
+	[ "$status" -eq 0 ]
+	[ "$(cut -f2 "$AI_SNIPPETS_USAGE_LOG")" = "check-subagents" ]
+}
+
+@test "a click on a gap or the row label pastes nothing" {
+	printf 'x\n' > "$SNIPPETS/check-subagents.md"
+	for x in 0 4 28; do
+		run "$PICKER" --click %7 "$x" "$ROW"
+		[ "$status" -eq 0 ]
+	done
+	[ ! -e "$SPY/tmux.log" ]
+	[ ! -e "$AI_SNIPPETS_USAGE_LOG" ]
+}
+
+@test "a click on a snippet that is gone fails loudly" {
+	printf 'x\n' > "$SNIPPETS/other.md"
+	run "$PICKER" --click %7 35 "$ROW"
+	[ "$status" -ne 0 ]
+	[[ "$output" == *"No snippet named 'session-summary'"* ]]
 }
 
 @test "reflow joins a hard-wrapped paragraph into one line" {
