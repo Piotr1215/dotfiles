@@ -360,8 +360,10 @@ if [ -n "$OUTPUT" ]; then
     # Handle decorated active sessions. `resolve` strips hierarchy chrome back
     # to the real session name before the client switches.
     if session=$("$SESSION_CHOICES" resolve "$OUTPUT" 2>/dev/null); then
-        # Try switch first (works for any active session), fall back to tmuxinator
-        if tmux switch-client -t "$session" 2>/dev/null; then
+        # Try switch first (works for any active session), fall back to tmuxinator.
+        # `=` matches the name exactly: a bare `task` is a prefix target that
+        # switched to a live taskwarrior-tui-main instead of starting task.
+        if tmux switch-client -t "=$session" 2>/dev/null; then
             exit 0
         elif [[ -f ~/.config/tmuxinator/${session}.yml ]]; then
             tmuxinator start "$session"
