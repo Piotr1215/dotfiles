@@ -12,8 +12,8 @@ import unittest
 REPO = Path(__file__).resolve().parents[2]
 REPORTS = (
     "currentall", "current", "private", "backlog", "current-home",
-    "current-prs", "current-prs-age", "review", "inbox", "byrepo", "byproject",
-    "workdone", "workdone-prs",
+    "review", "inbox", "byrepo", "byproject",
+    "workdone",
 )
 
 

@@ -717,8 +717,8 @@ update_task_status() {
     # +review has TWO meanings that must both be honored:
     #   1. Linear status == "In Review"  (set in the branch above), and
     #   2. the task has an attached GitHub PR that is still OPEN.
-    # Piotr's reports surface +review but hide the pr-reviews mirror tasks via
-    # -pr, so +review is the glanceable "this task has an open PR" signal. A
+    # Piotr's reports surface +review but hide +pr tasks via -pr, so +review
+    # is the glanceable "this task has an open PR" signal. A
     # Todo/In-Progress task with an open PR must therefore KEEP +review.
     # The mere presence of a /pull/ annotation is NOT enough: the annotation, like
     # the Linear attachment it mirrors, outlives the PR, so a closed PR used to
@@ -778,8 +778,8 @@ attach_pr_link() {
     task_json=$(task "$task_uuid" export 2>/dev/null)
 
     # The +review glance-tag tracks the PR's LIVE state, never the mere existence
-    # of a Linear attachment. Piotr's reports surface +review while hiding the
-    # pr-reviews mirror tasks via -pr, so +review (NOT +pr) is the correct "this
+    # of a Linear attachment. Piotr's reports surface +review while hiding
+    # +pr tasks via -pr, so +review (NOT +pr) is the correct "this
     # task has an open PR" signal; stamping +pr here would hide the task from
     # report.current/backlog/byrepo/byproject. Idempotent via jq index (exact
     # element, not contains which is substring in jq). Checked independently of
@@ -944,15 +944,7 @@ attach_link_annotations() {
 # and close in a batch, so the sync stamps them on the 30-minute run instead of
 # leaving him to open each PR by hand.
 #
-# +issue_ready is this population's own tag. It used to be +kill, shared with
-# the pr-reviews mirrors that __get_prs_for_review.sh stamps at birth, and one
-# tag carrying two meanings could not be coloured: taskwarrior colour rules
-# merge field by field, so the close-candidate ground painted every PR mirror
-# row too, and the only way to lift a ground off a row is to paint another one
-# over it, which flattens the whole PR report into one block. Splitting the tag
-# is what makes both populations colourable. `task +issue_ready status:pending`
-# lists exactly the issues marked here; +kill now means only "disposable PR
-# mirror" and stays Piotr's manual toggle there.
+# `task +issue_ready status:pending` lists exactly the issues marked here.
 #
 # Add-only and idempotent. The tag survives a PR being reopened, which is rare
 # and visible, whereas a sync that also stripped it could undo a tag Piotr

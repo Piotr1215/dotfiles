@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # PROJECT: ambient-triage
 # See: skills/gordon/skills/gordon/references/interfaces.md,
-# __auto_triage_nudge.sh, __get_prs_for_review.sh,
+# __auto_triage_nudge.sh,
 #      ~/.claude/tmp/pr-nudge-design.md (design)
 #
 # PR-movement to auto-dispatch watcher. Stage 0: DRY-RUN by default.
@@ -12,9 +12,9 @@
 # pull->form->decide and dispatches a NORMAL worker (__spawn_agent.sh --pr,
 # defaults to /ops-autonomous-worker), never the review panel.
 #
-# Wired as ExecStartPost on gh-pr-review-sync.service so it inherits that
-# service's 15-min cadence. It enumerates independently and cross-org, so it
-# does not depend on the shared project:pr-reviews task dataset.
+# Runs from gh-pr-review-sync.service (ExecStart) on its 15-min timer. It
+# enumerates PRs itself, cross-org, and reads no taskwarrior tasks. The PR
+# task sync that once shared this unit was discontinued on 2026-10-13.
 #
 # Movements that FIRE (authored, open, non-draft PRs):
 #   changes-requested  reviewDecision -> CHANGES_REQUESTED               (sticky)
