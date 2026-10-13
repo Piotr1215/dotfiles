@@ -18,9 +18,17 @@ esac
   exit 2
 }
 
-current_tags=$(task _tags "$uuid")
+# _get reads one task. `_tags <uuid>` and a bare UUID filter load every task
+# in the database; `<id> uuid:<uuid>` reads pending tasks only. A completed
+# task has id 0 and keeps the bare UUID.
+current_tags=$(task _get "$uuid.tags")
+id=$(task _get "$uuid.id")
+filter=("$uuid")
+if [[ -n "$id" && "$id" != 0 ]]; then
+  filter=("$id" "uuid:$uuid")
+fi
 if grep -qw "$runner" <<<"$current_tags"; then
-  task rc.bulk=0 rc.confirmation=off "$uuid" modify "-$runner"
+  task rc.bulk=0 rc.confirmation=off rc.verbose=nothing "${filter[@]}" modify "-$runner"
 else
-  task rc.bulk=0 rc.confirmation=off "$uuid" modify "+$runner" "-$other"
+  task rc.bulk=0 rc.confirmation=off rc.verbose=nothing "${filter[@]}" modify "+$runner" "-$other"
 fi

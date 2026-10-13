@@ -8,10 +8,16 @@ setup() {
 
   cat >"$fixture_bin/task" <<'EOF'
 #!/usr/bin/env bash
-if [[ "$1" == "_tags" ]]; then
-  printf '%s\n' "${TASK_TEST_TAGS:-}"
-  exit 0
-fi
+case "$1 $2" in
+  "_get "*.tags)
+    printf '%s\n' "${TASK_TEST_TAGS:-}" | tr ' ' ','
+    exit 0
+    ;;
+  "_get "*.id)
+    printf '%s\n' "${TASK_TEST_ID:-0}"
+    exit 0
+    ;;
+esac
 printf '%s\n' "$*" >>"$TASK_TEST_LOG"
 EOF
   chmod +x "$fixture_bin/task"
@@ -36,6 +42,16 @@ EOF
   [ "$status" -eq 0 ]
   grep -Fq "task-uuid modify -codex" "$task_log"
   ! grep -Fq "+claude" "$task_log"
+}
+
+@test "agent toggle names a pending task by guarded id" {
+  run env PATH="$fixture_bin:$PATH" TASK_TEST_TAGS="work" TASK_TEST_ID=42 \
+    TASK_TEST_LOG="$task_log" \
+    "$repo_root/.config/taskwarrior-tui/shortcut-scripts/__toggle_agent_label.sh" \
+    claude task-uuid
+
+  [ "$status" -eq 0 ]
+  grep -Fq " 42 uuid:task-uuid modify +claude -codex" "$task_log"
 }
 
 @test "agent toggle rejects an unknown runner" {
