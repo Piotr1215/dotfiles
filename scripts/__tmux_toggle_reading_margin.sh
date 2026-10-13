@@ -89,6 +89,22 @@ fi
 if ! $repair && [[ -z "${window_id:-}" ]]; then
   window_id="$(tmux display-message -p -t "$target_pane" '#{window_id}')"
 fi
+# A window named in @reading_margin_skip_windows ("session:window" pairs,
+# space separated) never gets a margin from the toggle, the default knob or the
+# resize hooks. Its layout carries the margin content in a fixed pane of its
+# own, and a margin or an automatic zoom would squeeze that layout. Manual zoom
+# still works there, as a plain tmux zoom.
+window_key="$(tmux display-message -p -t "$window_id" '#{session_name}:#{window_name}' 2>/dev/null || true)"
+if [[ -n "$window_key" && " $(tmux show-options -gqv @reading_margin_skip_windows) " == *" $window_key "* ]]; then
+  if $manual_zoom; then
+    tmux resize-pane -Z -t "$target_pane"
+  elif $status; then
+    printf 'reading-margin skipped window=%s (%s)\n' "$window_id" "$window_key"
+  elif ! $ensure && ! $repair && ! $sync; then
+    tmux display-message "Reading margin is off in $window_key"
+  fi
+  exit 0
+fi
 # Resize, layout, and selection hooks may overlap. Keep each window's zoom and
 # ownership marker as one serialized state transition.
 lock_file="${XDG_RUNTIME_DIR:-/tmp}/tmux-reading-margin-$UID-${window_id#@}.lock"

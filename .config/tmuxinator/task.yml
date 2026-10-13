@@ -47,10 +47,12 @@ startup_pane: 3
 
 windows:
   - todo:
-      layout: 9731,255x61,0,0{65x61,0,0[65x36,0,0,1,65x24,0,37,2],189x61,66,0[189x30,66,0,3,189x30,66,31,4]}
+      layout: 0294,255x61,0,0{84x61,0,0[84x40,0,0,1,84x20,0,41,2],170x61,85,0[170x30,85,0,3,170x30,85,31,4]}
       # Add stty to force terminal redraw on focus
       panes:
-        - NCURSES_NO_UTF8_ACS=1 tui -r workdone
+        # The work margin (status, cockpit, asks) as a fixed pane. This window
+        # is in @reading_margin_skip_windows, so M-m never overlays it.
+        - ~/dev/dotfiles/scripts/__tmux_reading_margin_work.sh task "$(tmux display-message -p -t "$TMUX_PANE" '#{window_id}')"
         - NCURSES_NO_UTF8_ACS=1 tui -r backlog
         - tuiw
         # Gordon sits under the current report, in the pane the PR review
