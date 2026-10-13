@@ -47,16 +47,14 @@ startup_pane: 3
 
 windows:
   - todo:
-      layout: dcc2,294x72,0,0{82x72,0,0[82x42,0,0,9,82x29,0,43,10],211x72,83,0[211x42,83,0,11,211x29,83,43,12]}
+      layout: 9731,255x61,0,0{65x61,0,0[65x36,0,0,1,65x24,0,37,2],189x61,66,0[189x30,66,0,3,189x30,66,31,4]}
       # Add stty to force terminal redraw on focus
       panes:
         - NCURSES_NO_UTF8_ACS=1 tui -r workdone
         - NCURSES_NO_UTF8_ACS=1 tui -r backlog
         - tuiw
-        - NCURSES_NO_UTF8_ACS=1 tui -r current-prs-age
-  - gordon:
-      layout: 72be,150x72,0,0[150x42,0,0,4,150x29,0,43,19]
-      panes:
+        # Gordon sits under the current report, in the pane the PR review
+        # report used to hold.
         # The small system prompt holds Gordon's values and authority boundary.
         # The gordon plugin loads operating context progressively. Its
         # SessionStart hook restores the main skill after /clear or compaction.
