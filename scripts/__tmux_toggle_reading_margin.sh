@@ -89,6 +89,13 @@ fi
 if ! $repair && [[ -z "${window_id:-}" ]]; then
   window_id="$(tmux display-message -p -t "$target_pane" '#{window_id}')"
 fi
+# Hooks run in the background, so the window can close between the lookup above
+# and a later write. tmux prints such a failure as "returned 1" into whatever
+# pane is on screen. A closed window has nothing left to fix: exit clean.
+# display-message exits 0 on a missing target, so test its output instead.
+if $repair || $sync || $ensure; then
+  trap 'rc=$?; ((rc)) && [[ -z "$(tmux display-message -p -t "$window_id" "#{window_id}" 2>/dev/null)" ]] && exit 0' EXIT
+fi
 # A window named in @reading_margin_skip_windows ("session:window" pairs,
 # space separated) never gets a margin from the toggle, the default knob or the
 # resize hooks. Its layout carries the margin content in a fixed pane of its

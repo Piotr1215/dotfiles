@@ -435,3 +435,24 @@ EOF
   run tmux -L "$SOCKET_NAME" display-message -p -t "$margin" '#{pane_input_off}'
   [ "$output" = "0" ]
 }
+
+@test "repair exits clean when its window closes mid-run" {
+  # Layout hooks run in the background, so a window can close between the
+  # script's first lookup and a later write. tmux printed each such run as
+  # "returned 1" into whatever pane the user was looking at.
+  window="$(tmux -L "$SOCKET_NAME" new-window -dP -F '#{window_id}')"
+  bin_dir="${BATS_TEST_TMPDIR}/bin"
+  mkdir -p "$bin_dir"
+  cat > "$bin_dir/tmux" <<STUB
+#!/usr/bin/env bash
+$(command -v tmux) -L "$SOCKET_NAME" "\$@"; rc=\$?
+$(command -v tmux) -L "$SOCKET_NAME" kill-window -t "$window" 2>/dev/null
+exit \$rc
+STUB
+  chmod +x "$bin_dir/tmux"
+
+  run env PATH="$bin_dir:$PATH" "$SCRIPT" --repair-window "$window"
+
+  [ "$status" -eq 0 ]
+  [ "$(tmux -L "$SOCKET_NAME" list-windows -F '#{window_id}' | grep -c "^$window\$")" -eq 0 ]
+}
