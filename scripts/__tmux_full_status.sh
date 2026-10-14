@@ -45,17 +45,6 @@ wrap_width=$((cols - 6))
 if [ "$wrap_width" -lt 20 ]; then wrap_width=20; fi
 wrap() { printf '%s\n' "$1" | fold -s -w "$wrap_width" | sed 's/^/      /'; }
 
-border_row() {
-    local label="$1" text="$2" inline_width=$((cols - 22))
-    if [ "$inline_width" -lt 20 ]; then inline_width=20; fi
-    if [ "${#text}" -gt "$inline_width" ]; then
-        printf '  %-18s\n' "$label"
-        wrap "$text"
-    else
-        printf '  %-18s %s\n' "$label" "$text"
-    fi
-}
-
 # A source row: mark, label, provenance, and how much the bar kept.
 row() {
     local won="$1" label="$2" prov="$3" cap="$4" text="$5"
@@ -144,13 +133,6 @@ row "$won_goal" "goal"   "get_claude_goal()" "$budget"  "$goal"
 if [ "$((won_pr + won_lin + won_goal))" -eq 0 ]; then
     printf '  %severy source empty, so the bar falls through to date | mode%s\n' "$dim" "$off"
 fi
-
-# --- pane border, a separate producer entirely ----------------------------
-hdr "PANE BORDER  (__claude_pane_label.sh, hooks write these per pane)"
-for opt in @claude_state @claude_glyph @claude_label @claude_label_at; do
-    val=$(tmux display-message -p ${pane:+-t "$pane"} "#{$opt}" 2>/dev/null) || val=""
-    border_row "$opt" "${val:-${dim}unset${off}}"
-done
 
 if [ "$wait_for_key" = "1" ]; then
     printf '\n  %spress any key%s ' "$dim" "$off"

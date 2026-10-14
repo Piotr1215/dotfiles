@@ -97,11 +97,10 @@ echo "== every source empty falls through to the date"
 out=$(run "dotfiles")
 assert_has "says all sources are empty" "every source empty" "$out"
 
-echo "== long pane labels wrap instead of crossing a narrow status view"
-long_label="$(printf 'l%.0s' {1..100})"
-out=$(STUB_LABEL="$long_label" run "dotfiles")
-assert_lacks "does not print the whole label on one line" "$long_label" "$out"
-assert_has "keeps the complete wrapped label" "$(printf 'l%.0s' {1..94})" "$out"
+echo "== the pane border section is not shown"
+out=$(STUB_LABEL="Bash tmux list-sessions" run "dotfiles")
+assert_lacks "no pane border heading" "PANE BORDER" "$out"
+assert_lacks "no pane label value"    "Bash tmux list-sessions" "$out"
 
 echo "== an over-long cached line reports the characters tmux cuts"
 printf '%s' "$(printf 'x%.0s' {1..170})" > "$CACHE/dotfiles"
