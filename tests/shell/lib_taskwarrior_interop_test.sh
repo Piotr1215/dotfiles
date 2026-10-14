@@ -20,7 +20,6 @@ data.location=$TASKDATA
 hooks=0
 confirmation=0
 bulk=0
-# Keep new-id: create_task_wrapper parses "Created task N." out of task add.
 # Dropping the override/context categories silences a TASKRC/TASKDATA override
 # banner on every single command.
 verbose=affected,new-id
@@ -29,33 +28,6 @@ trap 'rm -rf "$TASKDATA" "$TASKRC"' EXIT
 
 # Source the Taskwarrior interop script
 source ../../scripts/__lib_taskwarrior_interop.sh
-
-# Wrapper for create_task that handles version differences
-# In CI, taskwarrior might return numeric IDs instead of UUIDs
-create_task_wrapper() {
-	local output
-	output=$(task add "$@" 2>&1)
-
-	# Extract ID - could be numeric or UUID
-	local task_id
-	task_id=$(echo "$output" | grep -oE 'Created task ([0-9]+|[a-f0-9-]{36})' | awk '{print $3}')
-
-	# A numeric id is only a slot among PENDING tasks. Completing a task frees its
-	# slot, and the next gc renumber (any report command, or a hook that shells out
-	# to `task`) hands that slot to a different pending task, so a later
-	# `task _get <id>.status` silently reads the WRONG task. Resolve to the uuid,
-	# which is stable for the task's whole life.
-	if [[ "$task_id" =~ ^[0-9]+$ ]]; then
-		task_id=$(task _get "$task_id".uuid 2>/dev/null)
-	fi
-
-	echo "$task_id"
-}
-
-# Override create_task for testing to ensure we get a valid ID
-create_task() {
-	create_task_wrapper "$@"
-}
 
 # Helper function to clean up tasks created during testing
 cleanup() {
@@ -241,6 +213,29 @@ test_create_task_special_chars() {
 	cleanup
 }
 
+# Test that create_task returns a handle that survives a renumber.
+# A numeric id is only a slot among pending tasks: completing an earlier task and
+# then running any gc command shifts every later id down by one. The Linear sync
+# creates a task, then annotates it several commands later, so a concurrent
+# `task done` elsewhere made the second annotate fail with "No tasks specified."
+test_create_task_survives_renumber() {
+	local first second
+	first=$(create_task "Renumber first" "+testonly_temp_deleteme")
+	second=$(create_task "Renumber second" "+testonly_temp_deleteme")
+
+	task "$first" done >/dev/null 2>&1
+	task list >/dev/null 2>&1
+
+	if annotate_task "$second" "after renumber" >/dev/null 2>&1 &&
+		task _get "$second".description | grep -qx "Renumber second"; then
+		report_success "create_task_survives_renumber"
+	else
+		report_failure "create_task_survives_renumber" "handle '$second' no longer names the task it created"
+	fi
+
+	cleanup
+}
+
 # Test error handling for invalid operations
 test_invalid_task_operations() {
 	local invalid_uuid="00000000-0000-0000-0000-000000000000"
@@ -279,6 +274,8 @@ sleep 2
 test_create_task_special_chars
 sleep 2
 test_invalid_task_operations
+sleep 2
+test_create_task_survives_renumber
 
 # If all tests pass, exit with code 0
 exit 0

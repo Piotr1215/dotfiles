@@ -15,9 +15,13 @@ create_task() {
 		task_args+=("$arg")
 	done
 
-	# Use -- to indicate end of options, and pass the description safely
+	# Use -- to indicate end of options, and pass the description safely.
+	# new-uuid makes add print the uuid instead of the numeric id. An id is only a
+	# slot among pending tasks: a `task done` in another process plus any gc
+	# renumbers it, so a caller that annotates later hits "No tasks specified."
+	# The override sits after `add` because test mocks match on $1 == add.
 	local output
-	output=$(task add "${task_args[@]}" -- "$description")
+	output=$(task add rc.verbose=new-uuid "${task_args[@]}" -- "$description")
 
 	# Extract the UUID from the output using a reliable method
 	local task_uuid
