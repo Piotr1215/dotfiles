@@ -963,3 +963,10 @@ function check_stutter() {
         print "If video still hops, the cause is not the shell: check the player, not here."
     fi
 }
+
+# Magic 8-ball on classif: `8ball should I go to sleep?`. The answer is the
+# model's likeliest, so the same question always gets the same one, and "it is
+# certain" exits 0 for use as a gate. The alias stops zsh globbing a trailing
+# `?`; it must follow the function, or it rewrites the definition.
+8ball() { classif "$*" -e "it is certain,most likely,ask again later,very doubtful,my sources say no" }
+alias 8ball='noglob 8ball'
