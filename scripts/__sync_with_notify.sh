@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 
-# Log file for debugging
-LOG_FILE="/tmp/github-issue-sync.log"
+# Log file for debugging. Both paths are overridable for the tests.
+LOG_FILE="${SYNC_LOG_FILE:-/tmp/github-issue-sync.log}"
+SYNC_SCRIPT="${SYNC_SCRIPT:-/home/decoder/dev/dotfiles/scripts/__github_issue_sync.sh}"
 
 # Set up environment for the sync script
 if [[ -f "$HOME/.envrc" ]]; then
@@ -33,7 +34,7 @@ export DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus
 # log stayed blank for the whole time the work was actually happening. Teeing
 # streams to the file and to stdout at once, which is what lets the cron
 # wrapper's log fill as the sync progresses instead of all at the end.
-/home/decoder/dev/dotfiles/scripts/__github_issue_sync.sh 2>&1 | tee -a "$LOG_FILE"
+"$SYNC_SCRIPT" 2>&1 | tee -a "$LOG_FILE"
 sync_rc=${PIPESTATUS[0]}
 if [ "$sync_rc" -ne 0 ]; then
     # Get last 5 lines for context
@@ -50,20 +51,23 @@ if [ "$sync_rc" -ne 0 ]; then
         "✗ Sync failed" \
         "$error_msg\n\nLog: file://$LOG_FILE")
 
-    # Handle user action
+    # Handle user action. Viewers get their own stdio: cron pipes this script
+    # into the job log, and a viewer that inherits the pipe keeps the job
+    # "running" until it closes. cosmic-edit did that for the whole 2026-10-14
+    # morning and wrote its theme errors into the cron log as it went.
     case "$action" in
         view)
             # Open log in default text editor or less
             if command -v xdg-open &> /dev/null; then
-                xdg-open "$LOG_FILE" &
+                xdg-open "$LOG_FILE" >/dev/null 2>&1 &
             else
                 # Fallback: open in terminal with less
-                x-terminal-emulator -e less "$LOG_FILE" &
+                x-terminal-emulator -e less "$LOG_FILE" >/dev/null 2>&1 &
             fi
             ;;
         tail)
             # Open terminal tailing the log
-            x-terminal-emulator -e bash -c "tail -f '$LOG_FILE'; exec bash" &
+            x-terminal-emulator -e bash -c "tail -f '$LOG_FILE'; exec bash" >/dev/null 2>&1 &
             ;;
     esac
 
