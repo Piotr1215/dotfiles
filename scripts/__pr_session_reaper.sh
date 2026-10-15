@@ -7,6 +7,7 @@
 #   2. Have a PR URL in TaskWarrior annotations
 #   3. PR is in MERGED state
 #   4. Worktree is clean (no uncommitted changes)
+#   5. Worktree holds no commit missing from every remote ref and PR head
 #
 # Run via cron every 5 minutes
 set -eo pipefail
@@ -90,6 +91,36 @@ all_prs_merged() {
 }
 
 
+# Print the head commit of every PR for a Linear issue, space-separated. A merged
+# PR's head is the last commit the worker pushed, which survives a squash merge
+# and a pruned remote branch, so it is the right floor for "already pushed".
+get_pr_heads() {
+    local linear_id="$1"
+    local pr_url head
+    while IFS= read -r pr_url; do
+        [[ -z "$pr_url" ]] && continue
+        head=$(gh pr view "$pr_url" --json headRefOid -q '.headRefOid' 2>/dev/null || echo "")
+        [[ -n "$head" ]] && printf '%s ' "$head"
+    done < <(get_pr_urls_for_linear_id "$linear_id")
+}
+
+# Check if a worktree holds commits that exist nowhere else: not on any remote
+# ref and not behind any PR head. git worktree remove --force would destroy them.
+# A path outside git has nothing to lose. A git error inside a repo fails closed.
+has_unpushed_commits() {
+    local path="$1"
+    shift
+    git -C "$path" rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 1
+    local -a known=()
+    local head
+    for head in "$@"; do
+        git -C "$path" cat-file -e "${head}^{commit}" 2>/dev/null && known+=("$head")
+    done
+    local count
+    count=$(git -C "$path" rev-list --count HEAD --not --remotes "${known[@]}" 2>/dev/null) || return 0
+    [[ "$count" -gt 0 ]]
+}
+
 # Get worktree path from tmux session
 get_worktree_path() {
     local session="$1"
@@ -162,7 +193,18 @@ reap_merged_sessions() {
             # SAFETY: Check for uncommitted changes
             if is_worktree_dirty "$worktree"; then
                 log "BLOCKED $agent_name: dirty worktree at $worktree"
-                notify_triage "blocked" "{\"agent\":\"$agent_name\",\"session\":\"$session\",\"reason\":\"dirty worktree\",\"path\":\"$worktree\",\"pr\":\"$pr_url\"}"
+                notify_triage "blocked" "{\"agent\":\"$agent_name\",\"session\":\"$session\",\"reason\":\"dirty worktree\",\"path\":\"$worktree\",\"prs\":\"$pr_urls\"}"
+                blocked=$((blocked + 1))
+                continue
+            fi
+
+            # SAFETY: Check for commits that were never pushed
+            local pr_heads
+            pr_heads=$(get_pr_heads "$linear_id")
+            # shellcheck disable=SC2086 # pr_heads is a space-separated sha list
+            if has_unpushed_commits "$worktree" $pr_heads; then
+                log "BLOCKED $agent_name: unpushed commits at $worktree"
+                notify_triage "blocked" "{\"agent\":\"$agent_name\",\"session\":\"$session\",\"reason\":\"unpushed commits\",\"path\":\"$worktree\",\"prs\":\"$pr_urls\"}"
                 blocked=$((blocked + 1))
                 continue
             fi
@@ -171,7 +213,7 @@ reap_merged_sessions() {
             if [[ "$DRY_RUN" == "true" ]]; then
                 log "DRY-RUN would reap: $agent_name session=$session worktree=$worktree"
             else
-                log "REAP $agent_name: PR merged, worktree clean"
+                log "REAP $agent_name: PR merged, worktree clean and pushed"
 
                 # Kill tmux session
                 tmux kill-session -t "$session" 2>/dev/null || true
@@ -207,9 +249,10 @@ reap_merged_sessions() {
     log "SUMMARY: reaped=$reaped blocked=$blocked skipped=$skipped"
 }
 
-# Run
-reap_merged_sessions
-
-# Terminal status is the cron wrapper's state channel: 0 no-hit, 2 hit,
-# anything else error. Do not let the last command decide it.
-exit 0
+# Run only when executed, so tests can source the guards.
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+    reap_merged_sessions
+    # Terminal status is the cron wrapper's state channel: 0 no-hit, 2 hit,
+    # anything else error. Do not let the last command decide it.
+    exit 0
+fi
