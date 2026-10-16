@@ -42,17 +42,12 @@ if [ "$DEGRADED_COUNT" -gt 0 ]; then
         log_message "Degraded services still present ($DEGRADED_COUNT). Session already running."
     fi
 else
-    # All services operational
+    # All services operational. Only Piotr closes tmux sessions (2026-10-16), so
+    # recovery is a notification and the servmon session stays for him to close.
     if [ "$SESSION_EXISTS" = true ]; then
-        # Kill servmon session
-        log_message "All services operational. Killing servmon session..."
-        tmux kill-session -t servmon
-        
-        # Send notification
-        dunstify -u normal -i dialog-information "Service Status Update" "All services operational. Monitoring session closed."
-        
-        log_message "Session killed. All services operational."
+        dunstify -u normal -i dialog-information "Service Status Update" "All services operational. Close the servmon session when you are done with it."
+        log_message "All services operational. servmon session left open."
     else
-        log_message "All services operational. No session to kill."
+        log_message "All services operational. No servmon session."
     fi
 fi
