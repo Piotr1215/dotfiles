@@ -10,7 +10,9 @@ if [[ "$1" == "--help" ]] || [[ "$1" == "-h" ]]; then
 	Play audio tracks from local ~/music/ folder using mpv in tmux sessions.
 
 	OPTIONS:
-	  --run     Run in continuous mode (stay open after selection)
+	  --run     Mark the playing track with ► and float it to the top
+	  --stay    Return to the picker after each selection instead of exiting
+	            (the reading margin pane uses this so it outlives a pick)
 	  --help    Show this help message
 
 	BEHAVIOR:
@@ -34,11 +36,12 @@ if [[ "$1" == "--help" ]] || [[ "$1" == "-h" ]]; then
 	exit 0
 fi
 
-# Music dir is overridable (env) to keep the script testable
+# Music and state dirs are overridable (env) to keep the script testable
 : "${MUSIC_DIR:=${HOME}/music}"
+: "${PLAY_TRACK_STATE_DIR:=/tmp}"
 FAV_FILE="${MUSIC_DIR}/.favourites"
 # Presence of this flag = picker is currently filtered to favourites only
-FILTER_FLAG="/tmp/pt_fav_filter"
+FILTER_FLAG="${PLAY_TRACK_STATE_DIR}/pt_fav_filter"
 
 # Render the numbered, marked, sorted track list.
 # Output line format: "<play><fav> NN. Clean Title<TAB>Full Path"
@@ -52,8 +55,8 @@ render_list() {
 	# Currently playing track display name (run mode only)
 	local current_display=""
 	if [[ "$run_mode" == true ]]; then
-		local session_file="/tmp/current_music_session.txt"
-		local display_file="/tmp/current_music_session_display.txt"
+		local session_file="${PLAY_TRACK_STATE_DIR}/current_music_session.txt"
+		local display_file="${PLAY_TRACK_STATE_DIR}/current_music_session_display.txt"
 		if [[ -f "$session_file" && -f "$display_file" ]]; then
 			local session_name
 			session_name=$(cat "$session_file" 2>/dev/null)
@@ -140,11 +143,14 @@ case "$1" in
 	__togglefilter) toggle_filter; exit 0 ;;
 esac
 
-# Check for --run flag
 RUN_MODE=false
-if [[ "$1" == "--run" ]]; then
-	RUN_MODE=true
-fi
+STAY_MODE=false
+for arg in "$@"; do
+	case "$arg" in
+		--run) RUN_MODE=true ;;
+		--stay) STAY_MODE=true ;;
+	esac
+done
 
 if [[ ! -d "$MUSIC_DIR" ]]; then
 	echo "Error: Music directory not found at $MUSIC_DIR"
@@ -189,11 +195,11 @@ if [[ -n "$track_path" && -f "$track_path" ]]; then
 	# Check if THIS exact session already exists (user clicked on playing track to stop it)
 	if tmux has-session -t "$tmux_session_name" 2>/dev/null; then
 		tmux kill-session -t "$tmux_session_name"
-		rm -f "/tmp/current_music_session.txt" "/tmp/current_music_session_display.txt"
+		rm -f "${PLAY_TRACK_STATE_DIR}/current_music_session.txt" "${PLAY_TRACK_STATE_DIR}/current_music_session_display.txt"
 		echo "Stopped: $song_title"
 	else
 		# Kill the previously playing session if it exists
-		session_file="/tmp/current_music_session.txt"
+		session_file="${PLAY_TRACK_STATE_DIR}/current_music_session.txt"
 		if [[ -f "$session_file" ]]; then
 			previous_session=$(cat "$session_file")
 			if [[ -n "$previous_session" ]] && tmux has-session -t "$previous_session" 2>/dev/null; then
@@ -219,8 +225,8 @@ if [[ -n "$track_path" && -f "$track_path" ]]; then
 		echo "Playing: $song_title"
 	fi
 
-	# Always exit after selection
-	break
+	# The Ctrl+U popup closes on a pick; a --stay pane belongs to its owner
+	[[ "$STAY_MODE" == true ]] || break
 else
 	echo "No track selected. Exiting."
 	exit 0

@@ -333,7 +333,7 @@ fi
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 timeoff_file="${TMUX_READING_MARGIN_TIMEOFF_FILE:-/tmp/timeoff_mode}"
 if [ -f "$timeoff_file" ]; then
-  margin_command="${TMUX_READING_MARGIN_WEEKEND_COMMAND:-exec \"$script_dir/__play_track.sh\" --run}"
+  margin_command="${TMUX_READING_MARGIN_WEEKEND_COMMAND:-exec \"$script_dir/__play_track.sh\" --run --stay}"
   input_flag=-e
 else
   session_name="$(tmux display-message -p -t "$target_pane" '#{session_name}')"
