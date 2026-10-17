@@ -15,7 +15,25 @@ setup() {
   tmux -L "$SOCKET_NAME" set-environment -g TMUX_READING_MARGIN_WEEKEND_COMMAND \
     "printf 'weekend\\n' > '$COMMAND_LOG'; exec sleep infinity"
   tmux -L "$SOCKET_NAME" set-environment -g TMUX_READING_MARGIN_DISPLAY_STATE expanded
+  # No visualizer unless a test asks for one, whether or not cava is installed.
+  tmux -L "$SOCKET_NAME" set-environment -g TMUX_READING_MARGIN_VISUALIZER ''
   tmux -L "$SOCKET_NAME" set-option -g @reading_margin_default on
+}
+
+# Time-off mode with a stub visualizer that runs until it is signalled.
+use_visualizer() {
+  touch "$MODE_FILE"
+  printf '#!/usr/bin/env bash\nexec sleep infinity\n' > "${BATS_TEST_TMPDIR}/visualizer"
+  chmod +x "${BATS_TEST_TMPDIR}/visualizer"
+  tmux -L "$SOCKET_NAME" set-environment -g TMUX_READING_MARGIN_VISUALIZER "${BATS_TEST_TMPDIR}/visualizer"
+}
+
+wait_for_pane_count() {
+  for _ in {1..40}; do
+    [ "$(tmux -L "$SOCKET_NAME" list-panes -F '#{pane_id}' | wc -l)" -eq "$1" ] && return
+    sleep 0.05
+  done
+  return 1
 }
 
 @test "work margin renders prefix-g status before the vertical cockpit" {
@@ -455,4 +473,63 @@ STUB
 
   [ "$status" -eq 0 ]
   [ "$(tmux -L "$SOCKET_NAME" list-windows -F '#{window_id}' | grep -c "^$window\$")" -eq 0 ]
+}
+
+@test "time-off margin stacks a visualizer under the picker" {
+  use_visualizer
+  toggle_margin
+
+  margin_id="$(tmux -L "$SOCKET_NAME" show-options -wqv @reading_margin_pane)"
+  visualizer_id="$(tmux -L "$SOCKET_NAME" show-options -wqv @reading_margin_visualizer_pane)"
+  [ -n "$visualizer_id" ]
+  [ "$(tmux -L "$SOCKET_NAME" list-panes -F '#{pane_id}' | wc -l)" -eq 3 ]
+  [ "$(tmux -L "$SOCKET_NAME" display-message -p -t "$visualizer_id" '#{pane_left}')" -eq 0 ]
+  [ "$(tmux -L "$SOCKET_NAME" display-message -p -t "$visualizer_id" '#{pane_top}')" -gt 0 ]
+  [ "$(tmux -L "$SOCKET_NAME" display-message -p -t "$visualizer_id" '#{pane_input_off}')" -eq 1 ]
+  margin_height="$(tmux -L "$SOCKET_NAME" display-message -p -t "$margin_id" '#{pane_height}')"
+  visualizer_height="$(tmux -L "$SOCKET_NAME" display-message -p -t "$visualizer_id" '#{pane_height}')"
+  [ "$margin_height" -gt "$visualizer_height" ]
+  [ "$(tmux -L "$SOCKET_NAME" display-message -p '#{pane_id}')" = "$PANE_ID" ]
+}
+
+@test "work margin never gets a visualizer" {
+  use_visualizer
+  rm -f "$MODE_FILE"
+  toggle_margin
+
+  [ "$(tmux -L "$SOCKET_NAME" list-panes -F '#{pane_id}' | wc -l)" -eq 2 ]
+  [ -z "$(tmux -L "$SOCKET_NAME" show-options -wqv @reading_margin_visualizer_pane)" ]
+}
+
+@test "toggling the margin off takes the visualizer with it" {
+  use_visualizer
+  toggle_margin
+  wait_for_pane_count 3
+  toggle_margin
+
+  wait_for_pane_count 1
+  [ "$(tmux -L "$SOCKET_NAME" display-message -p '#{pane_id}')" = "$PANE_ID" ]
+}
+
+@test "the visualizer ends when the picker exits on its own" {
+  use_visualizer
+  toggle_margin
+  margin_id="$(tmux -L "$SOCKET_NAME" show-options -wqv @reading_margin_pane)"
+  wait_for_pane_count 3
+
+  tmux -L "$SOCKET_NAME" send-keys -t "$margin_id" C-c
+  wait_for_pane_count 1
+}
+
+@test "tiled auto zoom never picks the visualizer" {
+  use_visualizer
+  toggle_margin
+  visualizer_id="$(tmux -L "$SOCKET_NAME" show-options -wqv @reading_margin_visualizer_pane)"
+  [ -n "$visualizer_id" ]
+  tmux -L "$SOCKET_NAME" select-pane -t "$visualizer_id"
+
+  tmux -L "$SOCKET_NAME" set-environment -g TMUX_READING_MARGIN_DISPLAY_STATE tiled
+  sync_margin
+
+  [ "$(tmux -L "$SOCKET_NAME" show-options -wqv @reading_margin_auto_zoomed)" = "$PANE_ID" ]
 }

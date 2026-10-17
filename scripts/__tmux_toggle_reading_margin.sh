@@ -147,8 +147,11 @@ auto_zoom_active() {
 }
 
 content_pane() {
-  tmux list-panes -t "$window_id" -F '#{pane_id}|#{pane_active}' | awk -F'|' -v margin="$margin_pane" '
-    $1 != margin {
+  # The time-off visualizer sits under the margin and is never content either.
+  tmux list-panes -t "$window_id" -F '#{pane_id}|#{pane_active}' |
+    awk -F'|' -v margin="$margin_pane" \
+      -v visualizer="$(tmux show-options -wqv -t "$window_id" @reading_margin_visualizer_pane)" '
+    $1 != margin && $1 != visualizer {
       if ($2 == 1) { print $1; found = 1; exit }
       if (first == "") first = $1
     }
@@ -332,8 +335,12 @@ if $ensure && [[ "$(tmux show-options -gqv @reading_margin_default)" != on ]]; t
 fi
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 timeoff_file="${TMUX_READING_MARGIN_TIMEOFF_FILE:-/tmp/timeoff_mode}"
+show_visualizer=false
 if [ -f "$timeoff_file" ]; then
   margin_command="${TMUX_READING_MARGIN_WEEKEND_COMMAND:-exec \"$script_dir/__play_track.sh\" --run --stay}"
+  # A spectrum under the picker whenever the visualizer is installed. An empty
+  # TMUX_READING_MARGIN_VISUALIZER turns it off.
+  command -v "${TMUX_READING_MARGIN_VISUALIZER-cava}" >/dev/null 2>&1 && show_visualizer=true
   input_flag=-e
 else
   session_name="$(tmux display-message -p -t "$target_pane" '#{session_name}')"
@@ -354,5 +361,17 @@ tmux set-option -w -t "$window_id" @reading_margin_pane "$margin_pane"
 margin_exists=true
 set_visible on
 tmux select-pane "$input_flag" -T ' ' -t "$margin_pane"
+tmux set-option -wu -t "$window_id" @reading_margin_visualizer_pane 2>/dev/null || true
+if $show_visualizer; then
+  # The visualizer watches the margin pane and ends itself once it is gone, so
+  # the toggle, the picker's Esc and a closed margin all take it along.
+  visualizer_pane="$(
+    tmux split-window -vd -l 35% -t "$margin_pane" -P -F '#{pane_id}' \
+      "exec \"$script_dir/__tmux_reading_margin_visualizer.sh\" \"$margin_pane\""
+  )"
+  tmux set-option -w -t "$window_id" @reading_margin_visualizer_pane "$visualizer_pane"
+  # Input off, so a stray q never quits cava.
+  tmux select-pane -d -T ' ' -t "$visualizer_pane"
+fi
 tmux select-pane -t "$target_pane"
 sync_display_state "$(display_state)"
