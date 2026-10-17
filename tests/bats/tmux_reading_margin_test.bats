@@ -486,7 +486,7 @@ STUB
   [ "$(tmux -L "$SOCKET_NAME" display-message -p -t "$visualizer_id" '#{pane_left}')" -eq 0 ]
   [ "$(tmux -L "$SOCKET_NAME" display-message -p -t "$visualizer_id" '#{pane_top}')" -gt 0 ]
   [ "$(tmux -L "$SOCKET_NAME" display-message -p -t "$visualizer_id" '#{pane_input_off}')" -eq 0 ]
-  [ "$(tmux -L "$SOCKET_NAME" display-message -p -t "$visualizer_id" '#{pane_title}')" = 'cava (f/b cycle colors)' ]
+  [ "$(tmux -L "$SOCKET_NAME" display-message -p -t "$visualizer_id" '#{pane_title}')" = 'cava  f/b colors  ↑↓ sensitivity  ←→ bars  q quit' ]
   margin_height="$(tmux -L "$SOCKET_NAME" display-message -p -t "$margin_id" '#{pane_height}')"
   visualizer_height="$(tmux -L "$SOCKET_NAME" display-message -p -t "$visualizer_id" '#{pane_height}')"
   [ "$margin_height" -gt "$visualizer_height" ]
