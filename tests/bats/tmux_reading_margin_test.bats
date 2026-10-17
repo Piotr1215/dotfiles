@@ -485,7 +485,7 @@ STUB
   [ "$(tmux -L "$SOCKET_NAME" list-panes -F '#{pane_id}' | wc -l)" -eq 3 ]
   [ "$(tmux -L "$SOCKET_NAME" display-message -p -t "$visualizer_id" '#{pane_left}')" -eq 0 ]
   [ "$(tmux -L "$SOCKET_NAME" display-message -p -t "$visualizer_id" '#{pane_top}')" -gt 0 ]
-  [ "$(tmux -L "$SOCKET_NAME" display-message -p -t "$visualizer_id" '#{pane_input_off}')" -eq 1 ]
+  [ "$(tmux -L "$SOCKET_NAME" display-message -p -t "$visualizer_id" '#{pane_input_off}')" -eq 0 ]
   margin_height="$(tmux -L "$SOCKET_NAME" display-message -p -t "$margin_id" '#{pane_height}')"
   visualizer_height="$(tmux -L "$SOCKET_NAME" display-message -p -t "$visualizer_id" '#{pane_height}')"
   [ "$margin_height" -gt "$visualizer_height" ]
