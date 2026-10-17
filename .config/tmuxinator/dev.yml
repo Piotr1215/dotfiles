@@ -1,6 +1,6 @@
-# /home/decoder/.config/tmuxinator/atosik.yml
+# /home/decoder/.config/tmuxinator/dev.yml
 
-name: loft
+name: dev
 root: ~/dev/
 
 # Optional tmux socket
