@@ -372,7 +372,7 @@ if $show_visualizer; then
   tmux set-option -w -t "$window_id" @reading_margin_visualizer_pane "$visualizer_pane"
   # Input stays on for cava's own keys: f and b cycle colors, arrows tune the
   # bars. Keys reach it only while it is the active pane.
-  tmux select-pane -T ' ' -t "$visualizer_pane"
+  tmux select-pane -T 'cava (f/b cycle colors)' -t "$visualizer_pane"
 fi
 tmux select-pane -t "$target_pane"
 sync_display_state "$(display_state)"
