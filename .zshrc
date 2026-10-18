@@ -349,6 +349,47 @@ copy-line-to-clipboard() {
 }
 zle -N copy-line-to-clipboard
 bindkey '^Y' copy-line-to-clipboard       # Ctrl+Y: Copies line to clipboard
+
+# A pipe alias binds only to the last command, so `a; b C` copies b alone.
+# Wrap a line of several commands that ends in C or CC in braces before running
+# it, so the alias gets the whole line. The group runs in a subshell: a cd or
+# export on that line does not stick.
+wrap-clip-alias-line() {
+  setopt localoptions extendedglob
+  unset __clip_typed_line
+  local typed=$BUFFER body clip
+  # A line recalled before the history hook below existed may carry the
+  # braces already; unwrap it so they never stack.
+  if [[ $typed == $'{\n'*$'\n} 'C(|C)[[:space:]]# ]]; then
+    clip=${${typed%%[[:space:]]#}##*[[:space:]]}
+    body=${${typed#$'{\n'}%$'\n} '*}
+    typed="$body $clip"
+  fi
+  # PREBUFFER holds earlier lines of an unfinished command; leave those alone.
+  if [[ -z $PREBUFFER && $typed =~ $'[;&|\n]' && $typed =~ '[[:space:]]C{1,2}[[:space:]]*$' ]]; then
+    body=${typed%%[[:space:]]#}
+    clip=${body##*[[:space:]]}
+    body=${body%[[:space:]]$clip}
+    BUFFER=$'{\n'"$body"$'\n} '"$clip"
+    __clip_typed_line=$typed
+  fi
+  # Hand off to the F floating-pane widget (.zsh/float-command.zsh) when loaded.
+  if (( ${+widgets[_float_command_accept_line]} )); then
+    zle _float_command_accept_line
+  else
+    zle accept-line
+  fi
+}
+zle -N wrap-clip-alias-line
+
+# History keeps the line as typed, not the braces wrap-clip-alias-line added.
+__clip_alias_history() {
+  [[ -n $__clip_typed_line ]] || return 0
+  print -sr -- "$__clip_typed_line"
+  unset __clip_typed_line
+  return 1
+}
+zshaddhistory_functions+=(__clip_alias_history)
 bindkey '^@' autosuggest-accept           # Ctrl+@: Accepts autosuggestion
 
 # Ctrl+X Ctrl+W : frequency-ranked history-word completion (replaces the word under the cursor).
@@ -384,6 +425,10 @@ bindkey '^X^R' replace-string             # Ctrl+X Ctrl+R: Search-replace in lin
 bindkey '^X^N' replace-string-again       # Ctrl+X Ctrl+N: Repeat last replace
 bindkey '^[^M' accept-and-hold            # Alt+Enter: Run and keep command
 source /home/decoder/dev/dotfiles/.zsh/float-command.zsh
+# Enter: wrap `a; b C` lines, then run through the float widget. Bound after
+# float-command.zsh, which binds the same keys.
+bindkey '^M' wrap-clip-alias-line
+bindkey '^J' wrap-clip-alias-line
 
 # edit-command-line in $PWD so editor gets local file context
 function edit-command-line-here() {

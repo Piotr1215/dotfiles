@@ -233,6 +233,15 @@ preexec_capture_command() {
 # Add the preexec function to the preexec array
 preexec_functions+=(preexec_capture_command)
 
+# Copy the typed command line and its output to the clipboard, the way C copies
+# output alone. Reads the line from LAST_COMMAND and drops the trailing CC, and
+# the braces wrap-clip-alias-line (.zshrc) puts around a multi-command line.
+__copy_cmd_and_output() {
+    local cmd="${${LAST_COMMAND%%[[:space:]]#}%[[:space:]]CC}"
+    [[ $cmd == $'{\n'*$'\n}' ]] && cmd=${${cmd#$'{\n'}%$'\n}'}
+    { print -r -- "$ $cmd"; cat } | sed -r "s/\x1b\[[0-9;]*m//g" | perl -pe "chomp if eof" | xsel --clipboard
+}
+
 function cds() {
   session=$(tmux display-message -p '#{session_path}')
   cd "$session"

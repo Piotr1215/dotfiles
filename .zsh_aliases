@@ -10,6 +10,8 @@ alias -g Q='2>&1 | classif -p'
 # set --output-format yourself: `... AR --output-format json | jq -r .result`
 alias -g AR='| command claude -p'
 alias -g C='| sed -r "s/\x1b\[[0-9;]*m//g" | perl -pe "chomp if eof" | xsel --clipboard'
+# Copy the command line and its output (stdout+stderr): `ls -la CC`
+alias -g CC='2>&1 | __copy_cmd_and_output'
 # Mail the command output (stdout+stderr) to self with a fixed subject. e.g. `df -h M`
 alias -g M='2>&1 | { printf "Subject: pop-os-automated-email\nFrom: piotrzan@gmail.com\nTo: piotrzan@gmail.com\n\n"; sed -r "s/\x1b\[[0-9;]*m//g"; } | msmtp piotrzan@gmail.com'
 alias -g G='| grep -i --color=always'
