@@ -239,7 +239,7 @@ preexec_functions+=(preexec_capture_command)
 __copy_cmd_and_output() {
     local cmd="${${LAST_COMMAND%%[[:space:]]#}%[[:space:]]CC}"
     [[ $cmd == $'{\n'*$'\n}' ]] && cmd=${${cmd#$'{\n'}%$'\n}'}
-    { print -r -- "$ $cmd"; cat } | sed -r "s/\x1b\[[0-9;]*m//g" | perl -pe "chomp if eof" | xsel --clipboard
+    tee >({ print -r -- "$ $cmd"; cat } | sed -r "s/\x1b\[[0-9;]*m//g" | perl -pe "chomp if eof" | xsel --clipboard)
 }
 
 function cds() {
