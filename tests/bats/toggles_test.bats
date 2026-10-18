@@ -190,6 +190,21 @@ EOF
   [[ "$(<"${BATS_TEST_TMPDIR}/edit.log")" == "$TOGGLES_CONF" ]]
 }
 
+@test "an info action prints live output in the preview and only there" {
+  cat >>"$TOGGLES_CONF" <<EOF
+toggle_info_action "alpha" "echo scored-42-rows"
+EOF
+
+  run "$SCRIPT" __preview "[off] alpha"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"info:"* ]]
+  [[ "$output" == *"scored-42-rows"* ]]
+
+  run "$SCRIPT" __preview "[off] beta"
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"info:"* ]]
+}
+
 @test "the real config parses and registers unique toggle names" {
   run bash -c '
     declare -A seen=()
@@ -201,6 +216,7 @@ EOF
       seen[$1]=1
     }
     toggle_edit_action() { :; }
+    toggle_info_action() { :; }
     source "$1"
     echo "registered ${#seen[@]}"
   ' _ "${BATS_TEST_DIRNAME}/../../scripts/__toggles.conf"

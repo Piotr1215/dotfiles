@@ -37,6 +37,8 @@ if [[ "${1:-}" == "--help" ]] || [[ "${1:-}" == "-h" ]]; then
 
 	  toggle_edit_action "<name>" "<command>" gives a toggle its own ctrl-e
 	  editor (a systemd toggle opens its unit file); default is the conf.
+	  toggle_info_action "<name>" "<command>" adds live, read-only output
+	  to the toggle's preview, printed under its state.
 	  The status action reports the state through its exit code:
 	    0 = on, 1 = off, any other code = unreadable (renders "[?? ]").
 	  The on/off actions set that state explicitly, they never blind-flip.
@@ -71,6 +73,7 @@ declare -A TOGGLE_DESC=()
 declare -A TOGGLE_LABEL_ON=()
 declare -A TOGGLE_LABEL_OFF=()
 declare -A TOGGLE_EDIT=()
+declare -A TOGGLE_INFO=()
 
 # Results of the last action run. Globals rather than a captured stdout because
 # callers need the output and the exit code together.
@@ -110,6 +113,26 @@ toggle_edit_action() {
 		return 1
 	fi
 	TOGGLE_EDIT["$name"]="$action"
+}
+
+# Optional per-toggle live info for the preview: a read-only command or
+# function whose output the preview prints under the state, so a toggle can
+# show what it is doing (counts, last events), not just whether it is on. It
+# runs on every cursor move, so like a status action it must not write state.
+toggle_info_action() {
+	local name="$1" action="$2"
+	if [[ -z "$name" || -z "$action" ]]; then
+		printf 'toggles: toggle_info_action needs a name and an action\n' >&2
+		return 1
+	fi
+	TOGGLE_INFO["$name"]="$action"
+}
+
+# Run a toggle's info action, combined stdout+stderr, capped so a chatty
+# command cannot push the rest of the preview off screen.
+toggle_info() {
+	local name="$1"
+	( set +e; eval "${TOGGLE_INFO[$name]}" ) 2>&1 | head -n 40
 }
 
 # Ctrl-e: run the highlighted toggle's own editor when registered, otherwise
@@ -356,6 +379,12 @@ toggle_preview() {
 		display="$(toggle_label "$name" "$state")"
 	fi
 	printf '\nstate:  %s\n\n' "$display"
+
+	if [[ -n "${TOGGLE_INFO[$name]:-}" ]]; then
+		printf 'info:\n'
+		toggle_info "$name"
+		printf '\n'
+	fi
 
 	case "$state" in
 		on) action="${TOGGLE_OFF[$name]}"; verb="switch to $(toggle_label "$name" off)" ;;
