@@ -23,6 +23,10 @@ setup() {
 	# The default path renders a thin page on the cluster, so a test that does
 	# not point this at a config of its own would reach the real renderer.
 	export DDGX_C4AI_CONFIG="$BATS_TEST_TMPDIR/absent-crawl4ai.json"
+	# alt-v calls the YouTube API by default. A test that does not stub it must
+	# fail to fetch, never spend the real quota.
+	export DDGX_VIDEOS_CMD="$BATS_TEST_TMPDIR/no-videos-cmd"
+	export DDGX_YOUTUBE_CONFIG="$BATS_TEST_TMPDIR/absent-youtube.json"
 
 	MODULES_DIR="${DDGX_MODULES:-$HOME/.local/share/ddgx}"
 	if [ ! -d "$MODULES_DIR/node_modules/@mozilla/readability" ]; then
@@ -489,6 +493,166 @@ run_deep() {
 	[[ "$output" == *"network disabled"* ]]
 	[ ! -f "$BATS_TEST_TMPDIR/chrome.log" ]
 	[ ! -f "$BATS_TEST_TMPDIR/curl.args" ]
+}
+
+# --------------------------------------------------------------------------
+# alt-v, your own channel
+#
+# The listing script is stubbed: it prints the json __get_youtube_videos.py
+# --json --comments would, and counts how often it was asked.
+# --------------------------------------------------------------------------
+
+write_videos_json() {
+	cat >"$BATS_TEST_TMPDIR/videos.json" <<'JSON'
+[{"id":"7D1k1l-Q8rA","url":"https://www.youtube.com/watch?v=7D1k1l-Q8rA","title":"10 Built-in Neovim Features","views":16393,"likes":719,"comment_count":34,"published_at":"2026-01-04","duration":1292,"short":false,"description":"Shell filters and multicursor, all built in.","comments":[{"author":"@Patterner","likes":6,"text":"still magical<br>to me <a href=\"https://x\">link</a>","replies":[{"author":"@piotr1215","likes":1,"text":"glad it helped"}]}]},
+ {"id":"shortid0001","url":"https://www.youtube.com/watch?v=shortid0001","title":"One tmux trick","views":812,"likes":40,"comment_count":0,"published_at":"2025-11-02","duration":45,"short":true,"description":"","comments":[]}]
+JSON
+}
+
+stub_videos_cmd() {
+	cat >"$STUB_BIN/videos-cmd" <<EOF
+#!/usr/bin/env bash
+count=0
+[ ! -s "$BATS_TEST_TMPDIR/videos.count" ] || count=\$(cat "$BATS_TEST_TMPDIR/videos.count")
+printf '%s\n' "\$((count + 1))" >"$BATS_TEST_TMPDIR/videos.count"
+printf '%s\n' "\$*" >"$BATS_TEST_TMPDIR/videos.args"
+printf '%s %s\n' "\${YOUTUBE_API_KEY:-}" "\${YOUTUBE_CHANNEL_ID:-}" >"$BATS_TEST_TMPDIR/videos.env"
+cat "$BATS_TEST_TMPDIR/videos.json"
+EOF
+	chmod +x "$STUB_BIN/videos-cmd"
+}
+
+run_videos() {
+	run env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" \
+		DDGX_VIDEOS_CMD="$STUB_BIN/videos-cmd" \
+		YOUTUBE_API_KEY=test-key YOUTUBE_CHANNEL_ID=UCtest "$@" \
+		bash "$DDGX" --videos "$BATS_TEST_TMPDIR/results.json"
+}
+
+@test "alt-v lists the channel newest first with the stats on the row" {
+	write_two_results
+	write_videos_json
+	stub_videos_cmd
+
+	run_videos
+
+	[ "$status" -eq 0 ]
+	R="$BATS_TEST_TMPDIR/results.json"
+	[ "$(jq -r '.[0].title' "$R")" = '10 Built-in Neovim Features' ]
+	[ "$(jq -r '.[0].abstract' "$R")" = '16,393 views · 719 likes · 34 comments · 2026-01-04' ]
+	[ "$(jq -r '.[1].abstract' "$R")" = '812 views · 40 likes · 0 comments · 2025-11-02 · short' ]
+	[ "$(cat "$R.engine")" = videos ]
+	[ "$(cat "$R.typing")" = pages ]
+	[ "$(cat "$BATS_TEST_TMPDIR/videos.args")" = '--json --comments' ]
+	run env XDG_CACHE_HOME="$CACHE_HOME" bash "$DDGX" --header "$R"
+	[[ "${lines[0]}" == 'videos: your channel'* ]]
+}
+
+@test "a video's preview carries its stats and comments, and is playable" {
+	write_two_results
+	write_videos_json
+	stub_videos_cmd
+	run_videos
+	# The thumbnail is the one thing the preview would fetch.
+	stub_curl_failing 7
+
+	run env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" FZF_PREVIEW_COLUMNS=80 \
+		bash "$DDGX" --preview "$BATS_TEST_TMPDIR/results.json" 0 '' </dev/null
+
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"(ctrl-o opens it in the player)"* ]]
+	[[ "$output" == *"21:32"* ]]
+	[[ "$output" == *"Shell filters and multicursor"* ]]
+	# Display html flattened to text: a <br> is a space and a link its words.
+	[[ "$output" == *"@Patterner (6 likes): still magical to me link"* ]]
+	[[ "$output" == *"@piotr1215: glad it helped"* ]]
+	sidecar=$(find "$CACHE_HOME/ddgx" -name '*.media' | head -1)
+	[ "$(jq -r .kind "$sidecar")" = video ]
+}
+
+@test "typing after alt-v filters the videos, and ctrl-f leaves an empty search box" {
+	write_two_results
+	write_videos_json
+	stub_videos_cmd
+	run_videos
+	R="$BATS_TEST_TMPDIR/results.json"
+
+	run env XDG_CACHE_HOME="$CACHE_HOME" bash "$DDGX" --videos-box "$R"
+	[ "$output" = 'change-prompt(in videos > )+clear-query' ]
+
+	run env XDG_CACHE_HOME="$CACHE_HOME" bash "$DDGX" --typed "$R" 10 'magical'
+	[ "${#lines[@]}" -eq 1 ]
+	[[ "${lines[0]}" == 0$'\t'* ]]
+
+	# Back to the web: "your channel" in the box would be searched for.
+	run env XDG_CACHE_HOME="$CACHE_HOME" bash "$DDGX" --toggle "$R"
+	[[ "$output" == *'change-prompt(search > )+change-query:' ]]
+}
+
+@test "a second alt-v within the hour costs no fetch" {
+	write_two_results
+	write_videos_json
+	stub_videos_cmd
+
+	run_videos
+	run_videos
+
+	[ "$status" -eq 0 ]
+	[ "$(cat "$BATS_TEST_TMPDIR/videos.count")" -eq 1 ]
+}
+
+@test "a failed fetch keeps the set on screen and says so" {
+	write_two_results
+	printf '#!/usr/bin/env bash\nexit 1\n' >"$STUB_BIN/videos-cmd"
+	chmod +x "$STUB_BIN/videos-cmd"
+
+	run_videos
+
+	[ "$status" -eq 0 ]
+	[ "$(jq -r '.[0].title' "$BATS_TEST_TMPDIR/results.json")" = 'First hit' ]
+	grep -q 'could not fetch your videos' "$BATS_TEST_TMPDIR/results.json.note"
+	run env XDG_CACHE_HOME="$CACHE_HOME" bash "$DDGX" --videos-box "$BATS_TEST_TMPDIR/results.json"
+	[ -z "$output" ]
+}
+
+@test "with no key anywhere, alt-v says where to put one and fetches nothing" {
+	write_two_results
+	write_videos_json
+	stub_videos_cmd
+
+	run env -u YOUTUBE_API_KEY -u YOUTUBE_CHANNEL_ID PATH="$STUB_BIN:$PATH" \
+		XDG_CACHE_HOME="$CACHE_HOME" DDGX_VIDEOS_CMD="$STUB_BIN/videos-cmd" \
+		bash "$DDGX" --videos "$BATS_TEST_TMPDIR/results.json"
+
+	[ "$status" -eq 0 ]
+	[ ! -f "$BATS_TEST_TMPDIR/videos.count" ]
+	grep -q 'absent-youtube.json' "$BATS_TEST_TMPDIR/results.json.note"
+}
+
+@test "the popup decrypts the key from pass, because it does not load ~/.envrc" {
+	write_two_results
+	write_videos_json
+	stub_videos_cmd
+	printf '{"channel":"UCfromconfig","key_pass":"personal/YT"}\n' >"$BATS_TEST_TMPDIR/youtube.json"
+	cat >"$STUB_BIN/gpg" <<EOF
+#!/usr/bin/env bash
+[ "\${*: -1}" = "$BATS_TEST_TMPDIR/store/personal/YT.gpg" ] && printf 'key-from-pass'
+EOF
+	chmod +x "$STUB_BIN/gpg"
+
+	run env -u YOUTUBE_API_KEY -u YOUTUBE_CHANNEL_ID PATH="$STUB_BIN:$PATH" \
+		XDG_CACHE_HOME="$CACHE_HOME" DDGX_VIDEOS_CMD="$STUB_BIN/videos-cmd" \
+		DDGX_YOUTUBE_CONFIG="$BATS_TEST_TMPDIR/youtube.json" \
+		PASSWORD_STORE_DIR="$BATS_TEST_TMPDIR/store" \
+		bash "$DDGX" --videos "$BATS_TEST_TMPDIR/results.json"
+
+	[ "$status" -eq 0 ]
+	[ "$(cat "$BATS_TEST_TMPDIR/videos.env")" = 'key-from-pass UCfromconfig' ]
+	[ "$(cat "$BATS_TEST_TMPDIR/results.json.engine")" = videos ]
+}
+
+@test "alt-v is bound in the picker" {
+	grep -qF "alt-v:execute(\$SELF --videos" "$DDGX"
 }
 
 # --------------------------------------------------------------------------

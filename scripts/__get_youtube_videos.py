@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import googleapiclient.discovery
+import googleapiclient.errors
 import os
 import argparse
 from prettytable import PrettyTable
@@ -7,6 +8,7 @@ from datetime import datetime
 import html
 import subprocess
 import json
+import re
 import sys
 
 # Replace with your API key and channel ID from environment variables
@@ -57,10 +59,24 @@ def get_video_comments(video_id, max_results=100):
             if not next_page_token:
                 break
                 
+    # Never print the error itself: its message carries the request url, and
+    # the url carries the API key.
+    except googleapiclient.errors.HttpError as e:
+        details = e.error_details if isinstance(e.error_details, list) else []
+        reason = details[0].get('reason', '') if details else ''
+        print(f"No comments for {video_id}: HTTP {e.resp.status} {reason}".rstrip(), file=sys.stderr)
     except Exception as e:
-        print(f"Error fetching comments: {e}")
+        print(f"No comments for {video_id}: {type(e).__name__}", file=sys.stderr)
     
     return comments
+
+def iso_seconds(duration):
+    """PT1H2M3S as seconds."""
+    match = re.fullmatch(r'P(?:(\d+)D)?T?(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?', duration or '')
+    if not match:
+        return 0
+    days, hours, minutes, seconds = (int(g or 0) for g in match.groups())
+    return ((days * 24 + hours) * 60 + minutes) * 60 + seconds
 
 def get_all_video_data(channel_id, fetch_comments=False):
     videos = []
@@ -68,11 +84,16 @@ def get_all_video_data(channel_id, fetch_comments=False):
     seen_ids = set()  # Track video IDs to prevent duplicates
     next_page_token = None
 
+    # The uploads playlist rather than search: search is an index that drops
+    # videos from one call to the next (96, then 90, an hour apart) and costs
+    # 100 quota units a page, where the playlist lists every upload for 1.
+    uploads = 'UU' + channel_id[2:]
+
     while True:
-        # Fetch video titles in batches using pagination
-        request = youtube.search().list(
-            part='snippet',
-            channelId=channel_id,
+        # Fetch video IDs in batches using pagination
+        request = youtube.playlistItems().list(
+            part='contentDetails',
+            playlistId=uploads,
             maxResults=50,
             pageToken=next_page_token  # Handle pagination
         )
@@ -80,13 +101,12 @@ def get_all_video_data(channel_id, fetch_comments=False):
 
         video_ids = []
 
-        # Collect video IDs and titles
+        # Collect video IDs
         for item in response['items']:
-            if item['id']['kind'] == 'youtube#video':
-                video_id = item['id']['videoId']
-                if video_id not in seen_ids:  # Only add if not seen before
-                    video_ids.append(video_id)
-                    seen_ids.add(video_id)
+            video_id = item['contentDetails']['videoId']
+            if video_id not in seen_ids:  # Only add if not seen before
+                video_ids.append(video_id)
+                seen_ids.add(video_id)
 
         # Fetch detailed information about each video
         if video_ids:  # Only make request if we have new videos
@@ -109,7 +129,10 @@ def get_all_video_data(channel_id, fetch_comments=False):
                     "title": title,
                     "views": views,
                     "likes": likes,
-                    "published_at": published_at
+                    "comment_count": int(video['statistics'].get('commentCount', '0')),
+                    "published_at": published_at,
+                    "duration": iso_seconds(duration),
+                    "description": video['snippet'].get('description', '')
                 }
                 
                 # Fetch comments if requested
@@ -397,13 +420,22 @@ parser.add_argument('--shorts', action='store_true', help='Include shorts statis
 parser.add_argument('--date', action='store_true', help='Sort by publication date instead of views')
 parser.add_argument('--comments', action='store_true', help='Fetch and display comments for videos')
 parser.add_argument('--fzf', action='store_true', help='Interactive selection mode using fzf')
+parser.add_argument('--json', action='store_true', help='Print videos and shorts as one JSON list, newest first')
 args = parser.parse_args()
 
 # Get videos and shorts with views and likes
-print("Fetching video data..." + (" (this may take longer with comments)" if args.comments else ""))
+print("Fetching video data..." + (" (this may take longer with comments)" if args.comments else ""), file=sys.stderr)
 videos, shorts = get_all_video_data(channel_id, fetch_comments=args.comments)
 
-if args.fzf:
+if args.json:
+    # For ddgx's alt-v, which reads stdout as data.
+    everything = [dict(v, short=False) for v in videos] + [dict(s, short=True) for s in shorts]
+    everything.sort(key=lambda v: v['published_at'], reverse=True)
+    for v in everything:
+        v['url'] = f"https://www.youtube.com/watch?v={v['id']}"
+    json.dump(everything, sys.stdout)
+    print()
+elif args.fzf:
     # Interactive fzf mode
     interactive_fzf_selection(videos, shorts, args.shorts)
 else:

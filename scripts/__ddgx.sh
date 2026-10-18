@@ -125,6 +125,8 @@
 #   alt-h    hand the extracts to the pane you opened the popup from
 #   ctrl-y   copy the URLs          ctrl-r  re-fetch (bypass cache)
 #   alt-q    refine the query       ctrl-v  toggle the preview pane
+#   alt-v    your YouTube channel: every upload newest first, stats on the
+#            row, description and comments in the preview, typing filters
 #   F1       open this concise help in a pager, q returns to the picker
 #   ctrl-d/u scroll the preview
 #   type     the query; after ctrl-f, the page text, ANDed; "phrase" is
@@ -200,6 +202,17 @@ ASK_CMD="${DDGX_ASK_CMD:-$SCRIPT_DIR/__search_internet.py}"
 PPLX_PRESET="${DDGX_PPLX_PRESET:-low}"
 PPLX_DEEP_PRESET="${DDGX_DEEP_PRESET:-high}"
 PET_LINKS="${DDGX_PET_FILE:-$HOME/dev/pet-snippets/pet-links.toml}"
+# alt-v lists your own channel through __get_youtube_videos.py. A fetch walks
+# every upload and its comments, about 130 quota units and 13 seconds, from a
+# daily budget the youtube-summary skill spends too, so it stands for an hour.
+VIDEOS_CMD="${DDGX_VIDEOS_CMD:-$SCRIPT_DIR/__get_youtube_videos.py}"
+VIDEOS_FILE="$CACHE_DIR/videos.json"
+VIDEOS_TTL="${DDGX_VIDEOS_TTL:-3600}"
+# The M-g popup does not load ~/.envrc, which is where an interactive shell
+# gets the API key (decrypted from pass) and the channel id. This names both
+# for the popup: {"channel": "UC...", "key_pass": "personal/YOUTUBE_API_KEY"}.
+# The key is named by its pass entry, never written down.
+YOUTUBE_CONFIG="${DDGX_YOUTUBE_CONFIG:-${XDG_CONFIG_HOME:-$HOME/.config}/ddgx/youtube.json}"
 # alt-q for the refiner, because every ctrl letter is already spoken for and an
 # existing binding wins. ctrl-s is XOFF: on the fresh pty the M-g popup runs
 # on, the tty stops the screen and swallows everything until ctrl-q, and where
@@ -239,11 +252,12 @@ PET_LINKS="${DDGX_PET_FILE:-$HOME/dev/pet-snippets/pet-links.toml}"
 # it is simply gone. A key you cannot see does not exist, so every line has to
 # stay short enough to survive that cut. The suite measures them.
 PICKER_KEYS='tab mark · enter open · ctrl-o play, render or read · ctrl-e nvim/qf · ctrl-v preview
-ctrl-a bookmark · ctrl-y copy · ctrl-r refetch · alt-q refine · alt-h hand to pane'
+ctrl-a bookmark · ctrl-y copy · ctrl-r refetch · alt-q refine · alt-h hand to pane · alt-v videos'
 WEB_KEYS='F1 help · type: search · @ docs · ? ask (enter) · ?? harder · ctrl-f in pages'
 PAGE_KEYS='F1 help · type: page text, ANDed · "phrase" exact · /ERE/ · ctrl-f the query'
 WEB_PROMPT='search > '
 PAGE_PROMPT='in pages > '
+VIDEOS_PROMPT='in videos > '
 
 # Print the header comment block: everything between the shebang and the first
 # line of code, so the help text cannot drift out of sync with a line range.
@@ -744,6 +758,9 @@ box_text() {
 	query=$(current_query "$file")
 	[[ -n $query ]] || return 0
 	case $(current_engine "$file") in
+	# A channel listing was not searched for, so there is nothing to put back,
+	# and "your channel" left in the box would be searched for on the next pause.
+	videos) return 0 ;;
 	docs) printf '@ %s' "$query" ;;
 	pplx)
 		if [[ $(thread_preset "$file") == "$PPLX_DEEP_PRESET" ]]; then
@@ -852,7 +869,15 @@ mode_toggle() {
 		return 0
 	fi
 	printf 'pages\n' >"$(typing_file "$file")"
-	printf 'change-prompt(%s)+clear-query' "$PAGE_PROMPT"
+	printf 'change-prompt(%s)+clear-query' "$(page_prompt "$file")"
+}
+
+page_prompt() {
+	if [[ $(current_engine "$1") == videos ]]; then
+		printf '%s' "$VIDEOS_PROMPT"
+	else
+		printf '%s' "$PAGE_PROMPT"
+	fi
 }
 
 # Put the set's query back in the box, pointing at the web. change-query goes
@@ -1955,6 +1980,102 @@ mode_action() {
 # A mode of its own because two keys reach it: enter on the answer row, which is
 # the one you actually use, and follow in the alt-q menu, which is where you
 # look when you have forgotten that enter does it.
+# Fill in the YouTube key and channel id the environment lacks, from
+# YOUTUBE_CONFIG. The key decrypts the way ~/.envrc's _pass_export does it.
+youtube_env() {
+	local entry store
+	if [[ -z ${YOUTUBE_CHANNEL_ID:-} && -s $YOUTUBE_CONFIG ]]; then
+		YOUTUBE_CHANNEL_ID=$(jq -r '.channel // empty' "$YOUTUBE_CONFIG" 2>/dev/null) || true
+	fi
+	if [[ -z ${YOUTUBE_API_KEY:-} && -s $YOUTUBE_CONFIG ]]; then
+		entry=$(jq -r '.key_pass // empty' "$YOUTUBE_CONFIG" 2>/dev/null) || true
+		store=${PASSWORD_STORE_DIR:-$HOME/.password-store}
+		if [[ -n $entry ]]; then
+			YOUTUBE_API_KEY=$(gpg -dq -- "$store/$entry.gpg" 2>/dev/null) || true
+		fi
+	fi
+	export YOUTUBE_CHANNEL_ID YOUTUBE_API_KEY
+	[[ -n ${YOUTUBE_CHANNEL_ID:-} && -n ${YOUTUBE_API_KEY:-} ]]
+}
+
+videos_fresh() {
+	[[ -s $VIDEOS_FILE ]] || return 1
+	[[ $(($(date +%s) - $(stat -c %Y "$VIDEOS_FILE"))) -lt $VIDEOS_TTL ]]
+}
+
+# One video's page text: the stats, the description and the comments. The
+# title leads it because typing filters on this text, and a title is what you
+# remember a video by. Comments arrive as the API's display html.
+VIDEO_MARKDOWN_JQ='
+def commas: tostring | if length <= 3 then . else (.[0:length-3] | commas) + "," + .[length-3:] end;
+def pad: tostring | if length < 2 then "0" + . else . end;
+def clock: if . >= 3600 then "\(./3600|floor):\(.%3600/60|floor|pad):\(.%60|pad)" else "\(./60|floor):\(.%60|pad)" end;
+def plain: gsub("<br>"; " ") | gsub("<[^>]+>"; "") | gsub("\n"; " ");
+def stats: "\(.views|commas) views · \(.likes|commas) likes · \(.comment_count|commas) comments · \(.published_at)";
+def comment: "- \(.author) (\(.likes) likes): \(.text|plain)" + ((.replies // []) | map("\n  - \(.author): \(.text|plain)") | join(""));
+def page: "# \(.title)\n\n" + stats + " · " + (.duration|clock) + (if .short then " · short" else "" end)
+	+ "\n\n" + (.description // "") + "\n\n## Comments\n\n"
+	+ ((.comments // []) | if length == 0 then "No comments." else map(comment) | join("\n") end);
+'
+
+# alt-v. Your own channel becomes the set on screen: every upload, newest
+# first, with its stats on the row and its description and comments as the
+# page text, so the preview reads like any other result and typing filters
+# the list the way it filters pages.
+#
+# The extracts are written here rather than fetched: the listing already holds
+# what yt-dlp would need 129 calls and a rate limit to find. The sidecar beside
+# each one is the record the extractor leaves for a video it read, and the one
+# thing that tells ctrl-o to play the row rather than open a pager.
+mode_videos() {
+	local file=$1 tmp url md media
+	clear >&2 2>/dev/null || true
+	if ! videos_fresh; then
+		if ! youtube_env; then
+			set_note "$file" "no YouTube key or channel id, see $YOUTUBE_CONFIG"
+			return 0
+		fi
+		printf '\033[90m  fetching your videos and their comments ...\033[0m\n' >&2
+		mkdir -p "$CACHE_DIR"
+		tmp="$VIDEOS_FILE.$$"
+		# stderr stays shut: an API error message carries the request url, and
+		# the url carries the key.
+		if ! "$VIDEOS_CMD" --json --comments >"$tmp" 2>/dev/null ||
+			! jq -e 'type == "array" and length > 0' "$tmp" >/dev/null 2>&1; then
+			rm -f "$tmp"
+			set_note "$file" 'could not fetch your videos, kept the previous results'
+			return 0
+		fi
+		mv -f "$tmp" "$VIDEOS_FILE"
+	fi
+
+	mkdir -p "$CACHE_DIR"
+	while IFS=$'\t' read -r url md media; do
+		[[ -n $url ]] || continue
+		base64 -d <<<"$md" >"$(cache_file "$url")"
+		base64 -d <<<"$media" >"$(media_file "$url")"
+	done < <(jq -r "$VIDEO_MARKDOWN_JQ"'
+		.[] | [.url, (page | @base64),
+			({kind: "video", title, thumbnail: "https://i.ytimg.com/vi/\(.id)/hqdefault.jpg",
+				webpage_url: .url, duration} | tojson | @base64)] | @tsv' "$VIDEOS_FILE")
+
+	jq "$VIDEO_MARKDOWN_JQ"'
+		[.[] | {title, url, abstract: (stats + (if .short then " · short" else "" end))}]' \
+		"$VIDEOS_FILE" >"$file.new" && mv -f "$file.new" "$file"
+	set_engine "$file" videos
+	printf '%s\n' 'your channel' >"$(query_file "$file")"
+	rm -f "$(answer_file "$file")" "$(thread_file "$file")"
+	printf 'pages\n' >"$(typing_file "$file")"
+}
+
+# After alt-v the box filters the videos. A fetch that failed left the set and
+# the box as they were, so there is nothing to change.
+mode_videos_box() {
+	local file=$1
+	[[ $(current_engine "$file") == videos && $(typing_mode "$file") == pages ]] || return 0
+	printf 'change-prompt(%s)+clear-query' "$VIDEOS_PROMPT"
+}
+
 mode_follow() {
 	local file=$1 num=$2 followup
 	if [[ $(current_engine "$file") != pplx ]]; then
@@ -2323,6 +2444,7 @@ mode_header() {
 	case $(current_engine "$file") in
 	pplx) label='ask' ;;
 	docs) label='docs' ;;
+	videos) label='videos' ;;
 	esac
 	query=$(current_query "$file")
 	if [[ -n $query ]]; then
@@ -2548,6 +2670,7 @@ mode_pick() {
 				--bind="ctrl-y:execute-silent($SELF --copy '$file' {+1})" \
 				--bind="ctrl-r:execute-silent($SELF --refetch '$file' {+1})+refresh-preview" \
 				--bind="alt-q:execute($SELF --refine '$file' $num)+reload($SELF --list '$file')+transform($SELF --box '$file')" \
+				--bind="alt-v:execute($SELF --videos '$file')+reload($SELF --list '$file')+transform($SELF --videos-box '$file')" \
 				--bind='ctrl-v:change-preview-window(hidden|right,58%,wrap,border-left)' \
 				--bind='ctrl-d:preview-half-page-down' \
 				--bind='ctrl-u:preview-half-page-up' || true
@@ -2597,6 +2720,14 @@ main() {
 	--submit)
 		shift
 		mode_submit "$@"
+		return 0
+		;;
+	--videos)
+		mode_videos "$2"
+		return 0
+		;;
+	--videos-box)
+		mode_videos_box "$2"
 		return 0
 		;;
 	--help-page)

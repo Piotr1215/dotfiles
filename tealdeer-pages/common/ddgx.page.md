@@ -15,6 +15,10 @@
 
 `Enter`
 
+- List your own YouTube channel, stats on the row and comments in the preview; typing filters it:
+
+`Alt + v`
+
 - Open concise help, then return with `q`:
 
 `F1`
