@@ -63,10 +63,10 @@
 # whatever the model wrote ([1] or [web:1]); the number is the part that has to
 # agree, and it does.
 #
-# A typed prefix rather than a key, because the search screen cannot have keys:
-# read -e owns that line, and a shortcut advertised there does nothing, which
-# is how ctrl-s came to look broken. ? is free of DuckDuckGo's operators, so
-# nothing that used to be a search stops being one.
+# A typed prefix rather than a key, because the prefix travels with the words:
+# the box holds the whole request, so editing it is editing the search. ? is
+# free of DuckDuckGo's operators, so nothing that used to be a search stops
+# being one.
 #
 # From a result set, alt-q offers ask, web, and over an answer, follow. That
 # menu is where a query is already rebuilt after seeing what came back, and
@@ -91,22 +91,31 @@
 # under it only ever show the newest turn's: a [1] three turns up is not
 # today's [1], and the transcript has to be readable without them.
 #
-# Typing in the picker searches the pages, not the rows. The extracts are
-# already on disk for the preview, so the box reads the page bodies and keeps
-# the results carrying every word, with the words marked where they appear.
-# Words are ANDed and a "quoted phrase" is one term, the same rule the search
-# box obeys. fzf's own matcher is off: it would have been matching a title and
-# a domain, a dozen words per result, while the pages sat unread beside it.
+# One screen, and typing is the search. The list reloads with DuckDuckGo's rows
+# once you pause, @ searches the manual on every keystroke, and ? waits for
+# enter because an answer is too expensive to attach to typing. The preview and
+# every key below work on those rows as they arrive. There used to be a search
+# screen in front of this one, live rows with three keys and no preview, and
+# reading anything meant pressing enter to get past it.
+#
+# ctrl-f turns the same box on the pages already found. The extracts are on
+# disk for the preview, so it reads the page bodies and keeps the results
+# carrying every word, with the words marked where they appear. Words are ANDed
+# and a "quoted phrase" is one term. ctrl-f again puts the query back. fzf's
+# own matcher is off in both: it would match a title and a domain, a dozen
+# words per result, while the pages sat unread beside it.
 #
 # Which is also why the manual's refiner is short. site: and filetype: cannot
 # narrow a corpus of one site and one filetype, exclude inverts on a corpus
-# full of --flags, and phrase and reset are now what typing does, without
-# re-ranking the corpus to do it. What is left is switching engine and editing
-# the words.
+# full of --flags, and phrase and reset are what typing in the pages does,
+# without re-ranking the corpus to do it. What is left is switching engine and
+# editing the words.
 #
 # Keys in the picker. tab marks results, and ctrl-e, ctrl-a, ctrl-y and ctrl-r
 # apply to the whole marked set, so mark five and hit one key:
-#   tab      mark / unmark          enter   open in the browser
+#   tab      mark / unmark          enter   open in the browser, or send a
+#                                           query the rows do not answer yet
+#   ctrl-f   type into the page text instead of the query, and back
 #   ctrl-o   do the obvious thing with whatever the preview is showing:
 #            a video or playlist opens in the player, a page whose text could
 #            not be extracted is rendered in a headless browser and shown, and
@@ -118,20 +127,16 @@
 #   alt-q    refine the query       ctrl-v  toggle the preview pane
 #   F1       open this concise help in a pager, q returns to the picker
 #   ctrl-d/u scroll the preview
-#   type     filter by page text, ANDed; "phrase" is exact; /pattern/ is ERE
-#
-# The search screen carries three of those keys on the row under the cursor:
-# ctrl-o opens it, ctrl-y copies it, alt-h hands it over. Nothing is extracted
-# while you type, because typing is a keystroke a second and extraction is a
-# fetch and a render, so alt-h there does that work on the keypress and the
-# picker holds still for the second it takes. The note it writes is the same
-# file, under the same name, that ctrl-e would open one screen later.
+#   type     the query; after ctrl-f, the page text, ANDed; "phrase" is
+#            exact; /pattern/ is ERE
 #
 # alt-h is for the agent in the pane underneath. It pastes the note PATHS, not
 # the note text, and it does not press Enter: you type what you want done with
-# them. A delivered hand-off closes the popup, because the next thing to happen
-# is you typing into the pane it just wrote to, and the search is in the way of
-# that. A hand-off that failed leaves the picker up to say so. An agent asked to fetch a page for itself cannot tell you whether it
+# them. A page the prefetch has not reached yet is extracted on the keypress,
+# and the picker holds still for the second it takes. A delivered hand-off
+# closes the popup, because the next thing to happen is you typing into the
+# pane it just wrote to, and the search is in the way of that. A hand-off that
+# failed leaves the picker up to say so. An agent asked to fetch a page for itself cannot tell you whether it
 # was throttled, redirected or handed a stub, and WebFetch-style tools return
 # someone else's summary rather than the page. This hands over exactly the
 # markdown you just read, which you chose, from a cache you can inspect.
@@ -226,16 +231,19 @@ PET_LINKS="${DDGX_PET_FILE:-$HOME/dev/pet-snippets/pet-links.toml}"
 # play, render and yt-x into ctrl-o gave three keys back.
 #
 # Three lines. One would be longer than the pane, and the third says what
-# typing does, which is the one thing here nobody guesses: the search box reads
-# the page bodies, not the row it is drawn next to.
+# typing does right now, which is the one thing here nobody guesses: ctrl-f
+# moves the box between the query and the page bodies, and the line follows it.
 #
 # fzf gives the header the width of the result list, not of the terminal, so at
 # the default 58% preview a line is cut around 98 columns and everything after
 # it is simply gone. A key you cannot see does not exist, so every line has to
 # stay short enough to survive that cut. The suite measures them.
 PICKER_KEYS='tab mark · enter open · ctrl-o play, render or read · ctrl-e nvim/qf · ctrl-v preview
-ctrl-a bookmark · ctrl-y copy · ctrl-r refetch · alt-q refine · alt-h hand to pane
-F1 help · type: page text · words ANDed · "phrase" exact · /ERE/'
+ctrl-a bookmark · ctrl-y copy · ctrl-r refetch · alt-q refine · alt-h hand to pane'
+WEB_KEYS='F1 help · type: search · @ docs · ? ask (enter) · ?? harder · ctrl-f in pages'
+PAGE_KEYS='F1 help · type: page text, ANDed · "phrase" exact · /ERE/ · ctrl-f the query'
+WEB_PROMPT='search > '
+PAGE_PROMPT='in pages > '
 
 # Print the header comment block: everything between the shebang and the first
 # line of code, so the help text cannot drift out of sync with a line range.
@@ -254,8 +262,8 @@ mode_help_page() {
 }
 
 # A message printed into the M-g popup is gone the instant the process ends,
-# and a popup that opens and closes reads as one that never opened. When the
-# query came from the popup's own search box, hold the message on screen.
+# and a popup that opens and closes reads as one that never opened. When ddgx
+# was started bare, the way the popup starts it, hold the message on screen.
 die() {
 	printf '%s\n' "$*" >&2
 	if [[ ${POPUP_MODE:-0} -eq 1 && -e /dev/tty ]]; then
@@ -702,72 +710,181 @@ search_docs() {
 	return 0
 }
 
-# Live rows follow the engine the query names. Plain text is DuckDuckGo. @ is
-# the explicit docs mode, and ? waits for Enter because an answer request is too
-# expensive to attach to typing.
+# Read the engine off the front of a query. ? and ?? ask, @ is the manual, and
+# anything else is a DuckDuckGo search. Sets PARSED_ENGINE, PARSED_QUERY with
+# the mark and the outer whitespace gone, and PARSED_PRESET, which only ?? sets.
+parse_query() {
+	local q=${1-}
+	PARSED_ENGINE=ddgr
+	PARSED_PRESET=''
+	q=${q#"${q%%[![:space:]]*}"}
+	if [[ $q == '@'* ]]; then
+		PARSED_ENGINE=docs
+		q=${q#@}
+	elif [[ $q == '??'* ]]; then
+		# A second ? asks harder. One mark for the question you ask in passing,
+		# two for the one you sit with, which is the only depth decision worth
+		# making at the moment of typing.
+		PARSED_ENGINE=pplx
+		PARSED_PRESET=$PPLX_DEEP_PRESET
+		q=${q#\?\?}
+	elif [[ $q == '?'* ]]; then
+		PARSED_ENGINE=pplx
+		q=${q#\?}
+	fi
+	q=${q#"${q%%[![:space:]]*}"}
+	PARSED_QUERY=${q%"${q##*[![:space:]]}"}
+}
+
+# The box text that asks for the set on screen: the query with its engine's mark
+# back in front. alt-q and a follow-up change the set without anyone typing, and
+# the box has to keep saying what the rows answer.
+box_text() {
+	local file=$1 query
+	query=$(current_query "$file")
+	[[ -n $query ]] || return 0
+	case $(current_engine "$file") in
+	docs) printf '@ %s' "$query" ;;
+	pplx)
+		if [[ $(thread_preset "$file") == "$PPLX_DEEP_PRESET" ]]; then
+			printf '?? %s' "$query"
+		else
+			printf '? %s' "$query"
+		fi
+		;;
+	*) printf '%s' "$query" ;;
+	esac
+}
+
+# Whether the box already asks for the set on screen. Spacing is not part of a
+# query, so a trailing space typed on the way to the next word costs nothing.
+set_matches() {
+	local file=$1 raw=${2-} held
+	parse_query "$raw"
+	[[ $PARSED_ENGINE == "$(current_engine "$file")" ]] || return 1
+	[[ $(squeeze "$PARSED_QUERY") == "$(squeeze "$(current_query "$file")")" ]] || return 1
+	if [[ $PARSED_ENGINE == pplx ]]; then
+		# ? and ?? over the same words are two questions: the depth is part of
+		# what was asked.
+		held=$(thread_preset "$file")
+		[[ -z $held || ${PARSED_PRESET:-$PPLX_PRESET} == "$held" ]] || return 1
+	fi
+	return 0
+}
+
+squeeze() { printf '%s' "$1" | tr -s '[:space:]' ' ' | sed 's/^ //; s/ $//'; }
+
+# Which way typing points: at the query (web) or, after ctrl-f, at the page text
+# of the set on screen. One change binding reads this, so the box never has to
+# be rebound to change what it means.
+typing_mode() {
+	local tf
+	tf=$(typing_file "$1")
+	if [[ -s $tf ]]; then
+		head -n1 "$tf"
+	else
+		printf 'web'
+	fi
+	return 0
+}
+
+# What a keystroke in the box does.
+mode_typed() {
+	local file=$1 num=$2 raw=${3-}
+	if [[ $(typing_mode "$file") == pages ]]; then
+		mode_filter "$file" "$raw"
+	else
+		mode_live "$file" "$num" "$raw"
+	fi
+}
+
+# The search behind the box. fzf kills the reload when another key arrives, so
+# the sleep debounces DuckDuckGo until typing pauses, and a query the search
+# cache already holds skips it. @ is local and runs on every keystroke. ? waits
+# for enter, because an answer is too expensive to attach to typing, and the
+# rows on screen stay until it is sent.
 #
-# fzf kills the reload when another key arrives, so the sleep debounces ddgr
-# until typing pauses. The exact result set has a short TTL. Enter then reuses
-# the rows already on screen instead of asking DuckDuckGo twice.
-mode_suggest() (
-	local raw=${1:-} num=${2:-10} query terms ranked tmp cached
-	case $raw in
-	'?'*) return 0 ;;
-	'@'*) query=${raw#@} ;;
-	*)
-		query=$raw
-		query=${query#"${query%%[![:space:]]*}"}
-		[[ ${#query} -ge ${DDGX_SUGGEST_MIN_CHARS:-3} ]] || return 0
-		cached=$(search_cache_file "$num" "$query")
-		if ! search_cache_fresh "$cached"; then
-			[[ ${DDGX_NO_NETWORK:-0} -eq 1 ]] && return 0
+# run_query keeps the old set when a search fails and leaves the reason as the
+# header note, so a throttled DuckDuckGo says so instead of emptying the list.
+# Its output goes nowhere: this process's stdout is the list fzf is reading,
+# and the extraction it starts in the background would hold that pipe open
+# until every page was fetched.
+mode_live() {
+	local file=$1 num=$2 raw=${3-}
+	parse_query "$raw"
+	if [[ $PARSED_ENGINE == pplx ]] || set_matches "$file" "$raw"; then
+		mode_list "$file"
+		return 0
+	fi
+	if [[ $PARSED_ENGINE == docs ]]; then
+		if [[ -z $(query_terms "$PARSED_QUERY") ]]; then
+			mode_list "$file"
+			return 0
+		fi
+	else
+		if [[ ${#PARSED_QUERY} -lt ${DDGX_SUGGEST_MIN_CHARS:-3} ]]; then
+			mode_list "$file"
+			return 0
+		fi
+		if ! search_cache_fresh "$(search_cache_file "$num" "$PARSED_QUERY")"; then
+			if [[ ${DDGX_NO_NETWORK:-0} -eq 1 ]]; then
+				mode_list "$file"
+				return 0
+			fi
 			sleep "${DDGX_SUGGEST_DELAY:-0.8}"
 		fi
-		tmp=$(mktemp -t ddgx-suggest-XXXXXX.json)
-		trap 'rm -f "$tmp"' EXIT INT TERM
-		search_ddgr "$tmp" "$num" "$query" || return 0
-		mode_web_suggestions "$tmp"
-		return 0
-		;;
-	esac
-	query=${query#"${query%%[![:space:]]*}"}
-	[[ -n ${query//[[:space:]]/} ]] || return 0
-	terms=$(query_terms "$query")
-	[[ -n ${terms//[[:space:]]/} ]] || return 0
-	ranked=$(docs_matches "$terms") || true
-	[[ -n $ranked ]] || return 0
-
-	awk -F'\t' -v base="$DOCS_PAGE_BASE" -v num="$num" '
-		NR == FNR { title[$1] = $2; next }
-		kept < num {
-			slug = $3
-			name = (slug in title && title[slug] != "") ? title[slug] : slug
-			printf "%s/%s\t%s\t\033[1;36m%s\033[0m  \033[90m%s\033[0m\n", \
-				base, slug, name, name, $4
-			kept++
-		}
-	' <(docs_index_rows) <(printf '%s\n' "$ranked")
-)
-
-# Three fields, two of them hidden: the url, the plain title, then the row you
-# actually see. The title is carried rather than parsed back out of the display
-# column, which holds a position number, colour codes and a domain, and would
-# have to be unpicked by whichever key wanted the name. It is what alt-h heads
-# the note with, so it has to be the title the result came with and not a
-# best-effort reconstruction of it.
-mode_web_suggestions() {
-	jq -r 'to_entries[] | [
-		.key,
-		((.value.title // .value.url // "") | gsub("[\\t\\r\\n]+"; " ")),
-		(.value.url // ""),
-		((.value.abstract // "") | gsub("[\\t\\r\\n]+"; " "))
-	] | @tsv' "$1" |
-		awk -F'\t' '{
-			split($3, parts, "/")
-			printf "%s\t%s\t%2d. \033[1;36m%s\033[0m  \033[90m[%s] · %s\033[0m\n", \
-				$3, $2, $1 + 1, $2, parts[3], $4
-		}'
+	fi
+	run_query "$file" "$num" "$PARSED_QUERY" "$PARSED_ENGINE" >/dev/null 2>&1 || true
+	mode_list "$file"
 }
+
+# ctrl-f: point the box at the page text of the set on screen, or back at the
+# query. Going back puts the set's own query in the box rather than whatever
+# was there, because that is what the rows are the answer to.
+#
+# The header is redrawn here because the mode line has to follow the box, and
+# an empty box changed to an empty box fires no reload to redraw it.
+mode_toggle() {
+	local file=$1
+	printf 'transform-header(%s --header %s)+' "$SELF" "$file"
+	if [[ $(typing_mode "$file") == pages ]]; then
+		mode_box "$file"
+		return 0
+	fi
+	printf 'pages\n' >"$(typing_file "$file")"
+	printf 'change-prompt(%s)+clear-query' "$PAGE_PROMPT"
+}
+
+# Put the set's query back in the box, pointing at the web. change-query goes
+# last because its argument runs to the end of the action list, which is also
+# what lets a query carry quotes and parens without any escaping.
+#
+# No header here. alt-q and a follow-up reload the list before this runs, and
+# the load that ends the reload draws the header. Drawing it here as well would
+# show a note and then draw over it, and a note is shown once.
+mode_box() {
+	local file=$1
+	printf 'web\n' >"$(typing_file "$file")"
+	printf 'change-prompt(%s)+change-query:%s' "$WEB_PROMPT" "$(box_text "$file")"
+}
+
+# enter on a query the rows do not answer yet: run it now. This is the only way
+# an ask is sent, and it skips the pause for a search typed faster than the
+# debounce. The query travels in a file, because the action that runs it is
+# printed for fzf to parse and a query is free to carry the parens that would
+# end it.
+mode_submit() {
+	local file=$1 num=$2 sf raw
+	sf=$(submit_file "$file")
+	[[ -s $sf ]] || return 0
+	raw=$(<"$sf")
+	rm -f "$sf"
+	parse_query "$raw"
+	[[ -n $PARSED_QUERY ]] || return 0
+	[[ -n $PARSED_PRESET ]] && PPLX_PRESET=$PARSED_PRESET
+	run_query "$file" "$num" "$PARSED_QUERY" "$PARSED_ENGINE"
+}
+
 # Which engine produced the current set. Absent means a web search, so a set
 # written before this file knew about engines still refines correctly.
 current_engine() {
@@ -791,7 +908,8 @@ cleanup() {
 		rm -f "$RESULTS_FILE" "$(query_file "$RESULTS_FILE")" \
 			"$(note_file "$RESULTS_FILE")" "$(target_file "$RESULTS_FILE")" \
 			"$(answer_file "$RESULTS_FILE")" "$(engine_file "$RESULTS_FILE")" \
-			"$(thread_file "$RESULTS_FILE")" "$RESULTS_FILE.new"
+			"$(thread_file "$RESULTS_FILE")" "$(typing_file "$RESULTS_FILE")" \
+			"$(submit_file "$RESULTS_FILE")" "$RESULTS_FILE.new"
 	fi
 	if [[ -n ${PREFETCH_PID:-} ]]; then
 		kill "$PREFETCH_PID" 2>/dev/null || true
@@ -820,6 +938,9 @@ engine_file() { printf '%s.engine' "$1"; }
 # conversation, and a follow-up that quietly dropped to the cheap default would
 # answer the hardest question in the thread with the least effort.
 thread_file() { printf '%s.thread' "$1"; }
+# Which way the box points, and a query enter has asked to run.
+typing_file() { printf '%s.typing' "$1"; }
+submit_file() { printf '%s.submit' "$1"; }
 
 thread_id() {
 	local tf
@@ -1053,46 +1174,6 @@ center() {
 	[[ $pad -lt 0 ]] && pad=0
 	printf '%*s' "$pad" ''
 	printf '%b%s\033[0m\n' "$color" "$text"
-}
-
-# The search screen's header, and the one message a key can leave on it. It is
-# a function because the alt-h binding runs as its own process and has to redraw
-# the whole header to say anything: transform-header replaces it outright, so a
-# failure that printed only its own line would take the keys off the screen with
-# it.
-stage1_header() {
-	local note=${1:-}
-	printf 'plain: live DuckDuckGo · @ docs · ? ask · ?? harder\n'
-	printf 'pause to search · web cache %ss · enter searches pages locally\n' \
-		"$SEARCH_CACHE_TTL"
-	printf 'ctrl-o open URL · ctrl-y copy URL · alt-h hand the page to the pane'
-	[[ -n $note ]] && printf '   (%s)' "$note"
-	printf '\n'
-}
-
-# The first picker discovers pages. Plain text shows debounced DuckDuckGo rows;
-# @ and ? explicitly switch engines. Enter hands the exact query to the result
-# picker, where typing searches inside those pages from the local extract cache.
-#
-# The hand-off pane arrives as an argument and is baked into the binding, not
-# read at the keypress. main() takes it once and clears it, precisely so a popup
-# opened from a second client cannot redirect this one, and a binding that read
-# the global option itself would put that race straight back.
-prompt_for_query() {
-	local num=${1:-10} pane=${2:-} out rc=0
-	out=$(fzf --ansi --disabled --layout=reverse --no-multi --print-query \
-		--margin='1,6%' --input-border=rounded --input-label=' query ' \
-		--input-label-pos=2 --list-border=rounded --list-label=' live web results ' \
-		--list-label-pos=2 --info=inline-right --no-separator \
-		--delimiter=$'\t' --with-nth=3.. --prompt='search > ' \
-		--header="$(stage1_header)" \
-		--bind="change:reload($SELF --suggest {q} $num)" \
-		--bind="ctrl-y:execute-silent($SELF --copy-url {1})" \
-		--bind="ctrl-o:execute-silent($SELF --open-url {1})" \
-		--bind="alt-h:transform($SELF --send-url '$pane' {1} {2} 2>/dev/null)" \
-		--bind="f1:execute($SELF --help-page | less -R)" </dev/null) || rc=$?
-	[[ $rc -eq 130 ]] && return 1
-	TYPED_QUERY=${out%%$'\n'*}
 }
 
 hrule() {
@@ -1375,6 +1456,9 @@ run_query() {
 mode_preview() {
 	local file=$1 idx=$2 pickq=${3:-}
 	local width url title abstract cached still af marks regex=''
+	# {q} is the page filter only after ctrl-f. Before it, the box holds the
+	# query, and marking a question's every word on a page reads as a match.
+	[[ $(typing_mode "$file") == pages ]] || pickq=''
 	# A content refinement can leave the picker with no rows. fzf still refreshes
 	# the preview once with an empty {1}; do not hand that to jq as --argjson.
 	[[ $idx =~ ^[0-9]+$ ]] || return 0
@@ -1479,16 +1563,12 @@ emit_note() {
 	emit_note_url "$url" "$title"
 }
 
-# The page half of a note, written from a url and a title rather than from a
-# row in a result set. The search screen has no result set to index into: it has
-# the line under the cursor and nothing else, and alt-h there has to produce the
-# same file this produces from a result.
+# The page half of a note, written from a url and a title.
 #
-# The extraction happens HERE, on the keypress, and that is the whole difference
-# between the two screens. By the time the result picker is up, prefetch has
-# already run the whole set through the extractor; on the search screen nothing
-# has been fetched at all, because the rows are rebuilt on every keystroke and
-# extracting them as they went past would be a fetch per letter typed.
+# The extraction happens HERE, on the keypress, when the cache does not have
+# the page yet. Rows arrive while you type and the prefetch starts with them,
+# so alt-h or ctrl-e pressed the moment a row shows up would otherwise make a
+# note out of a page nobody has fetched.
 emit_note_url() {
 	local url=$1 title=$2 cached
 	extract_to_cache "$url" || true
@@ -1549,8 +1629,6 @@ copy_text() {
 	fi
 }
 
-mode_copy_url() { copy_text "${1:-}"; }
-
 # Write the note unless it holds edits worth protecting.
 #
 # A note you have typed into is yours and never gets overwritten. One you only
@@ -1558,11 +1636,10 @@ mode_copy_url() { copy_text "${1:-}"; }
 # forever: a page that was down at the time, or an extract from an older
 # engine, would keep opening in the editor long after the cache was right.
 # The record of what was scaffolded is a checksum kept beside the notes.
-# Takes the note path and the command that writes it, so a note built from a
-# result index and a note built from a bare url share one rule about when a file
-# may be overwritten. Two copies of that rule would agree today and diverge the
-# first time either is touched, and the failure is silent: a hand-edited note
-# quietly replaced by a scaffold.
+# Takes the note path and the command that writes it, so the rule about when a
+# file may be overwritten lives in one place. Two copies of that rule would
+# agree today and diverge the first time either is touched, and the failure is
+# silent: a hand-edited note quietly replaced by a scaffold.
 scaffold_note() {
 	local note=$1 stamp
 	shift
@@ -1578,10 +1655,9 @@ scaffold_note() {
 	sha1sum "$note" >"$stamp"
 }
 
-# One name for a note, wherever it was asked for. alt-h on the search screen and
-# ctrl-e in the result picker must land on the same file for the same page, or
-# the two keys disagree about what "this result" means and the second one
-# scaffolds a duplicate beside the first.
+# One name for a note, wherever it was asked for. alt-h and ctrl-e must land on
+# the same file for the same page, or the two keys disagree about what "this
+# result" means and the second one scaffolds a duplicate beside the first.
 #
 # Whitespace is flattened FIRST. A page title carrying a newline survives the
 # rest of this pipeline, because tr, sed and cut are all line-oriented, and the
@@ -1591,20 +1667,6 @@ scaffold_note() {
 note_slug() {
 	printf '%s' "$1" | tr '\n\r\t' '   ' | tr '[:upper:]' '[:lower:]' |
 		sed 's/[^a-z0-9]\+/-/g; s/^-//; s/-$//' | cut -c1-60
-}
-
-# Materialise the note for one url and print its path. The url is the fallback
-# name because a result with no usable title still has an address, and a note
-# called "result-" would collide with the next one.
-note_path_for_url() {
-	local url=$1 title=$2 slug note
-	mkdir -p "$NOTES_DIR"
-	slug=$(note_slug "$title")
-	[[ -z $slug ]] && slug=$(note_slug "$url")
-	[[ -n $slug ]] || return 1
-	note="$NOTES_DIR/$slug.md"
-	scaffold_note "$note" emit_note_url "$url" "$title"
-	printf '%s\n' "$note"
 }
 
 # Materialise durable notes for the given result indices and print their paths,
@@ -1692,6 +1754,8 @@ mode_edit() {
 		query=${2:-}
 		shift 2
 	fi
+	# Matches only mean something for the page filter, as in the preview.
+	[[ $(typing_mode "$file") == pages ]] || query=''
 	mapfile -t notes < <(note_paths "$file" "$@")
 	# No valid indices means no files. Opening the editor on an empty argument
 	# list drops you into a scratch buffer with no way back to the picker.
@@ -1776,53 +1840,6 @@ mode_send() {
 		fi
 		printf 'transform-header(%s --header %s)' "$SELF" "$file"
 	fi
-}
-
-# alt-h from the search screen, where a row is a url and a title and there is no
-# result set behind it.
-#
-# Everything the result-picker hand-off promises holds here: the path travels
-# and never the text, nothing is submitted, a delivery closes the popup and a
-# failure keeps it up to say why. What is different is that the page has not
-# been fetched yet, so the note is built on the keypress and the picker is
-# frozen for as long as that takes. It is a second on a page that answers, and
-# noticeably more on one that has to be waited out; the alternative is
-# extracting every row as it scrolls past, which is a fetch per keystroke.
-#
-# A note that says "(no page text: ...)" is still handed over. The pane below
-# gets a file naming the url and the reason, which is a better answer than a
-# hand-off that silently declines to happen.
-mode_send_url() {
-	local target=$1 url=$2 title=${3:-} note
-	if [[ -z ${url//[[:space:]]/} ]]; then
-		stage1_note_action 'nothing under the cursor to hand over'
-		return 0
-	fi
-	# A result with no title is named by its address rather than refused.
-	[[ -n ${title//[[:space:]]/} ]] || title=$url
-
-	if ! note=$(note_path_for_url "$url" "$title"); then
-		stage1_note_action 'could not make a note out of that result'
-		return 0
-	fi
-
-	if deliver_to_pane "$target" "$note"; then
-		clear_popup_source_pane
-		printf 'abort'
-		return 0
-	fi
-	if [[ -z $target ]]; then
-		stage1_note_action 'no source pane: alt-h works when ddgx runs from the M-g popup'
-	else
-		stage1_note_action "pane $target is gone, nothing handed off"
-	fi
-}
-
-# Say something on the search screen's header. The message is passed to a fresh
-# process rather than embedded in the action, because fzf ends a transform action
-# at its closing paren and a reason is the one string here that can carry one.
-stage1_note_action() {
-	printf 'transform-header(%s --suggest-header %q)' "$SELF" "$1"
 }
 
 # Bookmark into the same pet snippet file the plink zsh function writes, and
@@ -1965,14 +1982,29 @@ mode_follow() {
 # them, which is what lets one key mean two things without either of them being
 # a compromise.
 mode_enter() {
-	local file=$1 idx=$2 num=$3
+	local file=$1 idx=$2 num=$3 raw=${4-}
+
+	# A query the rows do not answer yet is sent, whatever row the cursor is on:
+	# the row belongs to the last query, and opening it would answer a question
+	# you have just stopped asking.
+	if [[ $(typing_mode "$file") == web && -n ${raw//[[:space:]]/} ]] &&
+		! set_matches "$file" "$raw"; then
+		printf '%s' "$raw" >"$(submit_file "$file")"
+		# The box keeps what you typed: it is the query of the set that is
+		# about to arrive, and after a failed search it is the query to fix.
+		printf 'execute(%s --submit %s %s)+reload(%s --list %s)' \
+			"$SELF" "$file" "$num" "$SELF" "$file"
+		return 0
+	fi
+	# An empty list leaves nothing under the cursor to act on.
+	[[ $idx =~ ^[0-9]+$ ]] || return 0
 
 	if [[ -n $(result_field "$idx" "$file" url) ]]; then
 		printf 'accept'
 		return 0
 	fi
 
-	printf 'execute(%s --follow %s %s)+reload(%s --list %s)+transform-header(%s --header %s)' \
+	printf 'execute(%s --follow %s %s)+reload(%s --list %s)+transform(%s --box %s)' \
 		"$SELF" "$file" "$num" "$SELF" "$file" "$SELF" "$file"
 }
 
@@ -2284,7 +2316,7 @@ mode_list() {
 # on the same line and is cleared once shown, so it reads as what just
 # happened rather than as part of the query.
 mode_header() {
-	local file=$1 note nf label='query'
+	local file=$1 note nf query label='query'
 	nf=$(note_file "$file")
 	# Which engine answered is part of what the header is for: after a switch
 	# through alt-q the same words mean two different things.
@@ -2292,13 +2324,24 @@ mode_header() {
 	pplx) label='ask' ;;
 	docs) label='docs' ;;
 	esac
-	printf '%s: %s' "$label" "$(current_query "$file")"
+	query=$(current_query "$file")
+	if [[ -n $query ]]; then
+		printf '%s: %s' "$label" "$query"
+	else
+		# A bare start has no query to name, so the line says what the box takes.
+		printf 'type to search · @ the docs · ? to ask'
+	fi
 	if [[ -s $nf ]]; then
 		note=$(head -n1 "$nf")
 		rm -f "$nf"
 		printf '   (%s)' "$note"
 	fi
 	printf '\n%s\n' "$PICKER_KEYS"
+	if [[ $(typing_mode "$file") == pages ]]; then
+		printf '%s\n' "$PAGE_KEYS"
+	else
+		printf '%s\n' "$WEB_KEYS"
+	fi
 }
 
 # Build an operator onto the current query and search again.
@@ -2471,7 +2514,7 @@ mode_dump() {
 }
 
 mode_pick() {
-	local file=$1 num=$2 selected line idx url
+	local file=$1 num=$2 box=${3-} selected line idx url
 
 	prefetch "$file"
 
@@ -2480,17 +2523,23 @@ mode_pick() {
 	# renderer and the preview-pane player. Its stderr goes to /dev/null because
 	# anything a dispatcher prints outside that action list is noise landing on
 	# the picker, and the pane is where a reason belongs.
+	#
+	# The box opens holding the query that built the set, so editing it is
+	# refining it. load fires when a reload has finished, which is when the
+	# header can say what the new set is and why a search kept the old one.
 	selected=$(
 		mode_list "$file" |
 			fzf --ansi --multi \
 				--delimiter=$'\t' --with-nth=2.. \
-				--prompt='in pages > ' \
+				--prompt="$WEB_PROMPT" --query="$box" \
 				--disabled \
 				--header="$(mode_header "$file")" \
 				--preview="$SELF --preview '$file' {1} {q}" \
-				--bind="change:reload($SELF --filter '$file' {q})+first" \
+				--bind="change:reload($SELF --typed '$file' $num {q} 2>/dev/null)+first" \
+				--bind="load:transform-header($SELF --header '$file')" \
 				--preview-window='right,58%,wrap,border-left' \
-				--bind="enter:transform($SELF --enter '$file' {1} $num 2>/dev/null)" \
+				--bind="enter:transform($SELF --enter '$file' {1} $num {q} 2>/dev/null)" \
+				--bind="ctrl-f:transform($SELF --toggle '$file' 2>/dev/null)" \
 				--bind="ctrl-o:transform($SELF --action '$file' {1} {+1} 2>/dev/null)" \
 				--bind="ctrl-e:execute($SELF --edit '$file' --query {q} {+1})" \
 				--bind="f1:execute($SELF --help-page | less -R)" \
@@ -2498,7 +2547,7 @@ mode_pick() {
 				--bind="alt-h:transform($SELF --send '$file' {+1} 2>/dev/null)" \
 				--bind="ctrl-y:execute-silent($SELF --copy '$file' {+1})" \
 				--bind="ctrl-r:execute-silent($SELF --refetch '$file' {+1})+refresh-preview" \
-				--bind="alt-q:execute($SELF --refine '$file' $num)+clear-query+reload($SELF --list '$file')+transform-header($SELF --header '$file')" \
+				--bind="alt-q:execute($SELF --refine '$file' $num)+reload($SELF --list '$file')+transform($SELF --box '$file')" \
 				--bind='ctrl-v:change-preview-window(hidden|right,58%,wrap,border-left)' \
 				--bind='ctrl-d:preview-half-page-down' \
 				--bind='ctrl-u:preview-half-page-up' || true
@@ -2532,9 +2581,22 @@ main() {
 		mode_filter "$@"
 		return 0
 		;;
-	--suggest)
+	--typed)
 		shift
-		mode_suggest "$@"
+		mode_typed "$@"
+		return 0
+		;;
+	--toggle)
+		mode_toggle "$2"
+		return 0
+		;;
+	--box)
+		mode_box "$2"
+		return 0
+		;;
+	--submit)
+		shift
+		mode_submit "$@"
 		return 0
 		;;
 	--help-page)
@@ -2551,16 +2613,6 @@ main() {
 		mode_copy "$@"
 		return 0
 		;;
-	--copy-url)
-		shift
-		mode_copy_url "${1:-}"
-		return 0
-		;;
-	--open-url)
-		shift
-		mode_open "${1:-}"
-		return 0
-		;;
 	--edit)
 		shift
 		mode_edit "$@"
@@ -2574,16 +2626,6 @@ main() {
 	--send)
 		shift
 		mode_send "$@"
-		return 0
-		;;
-	--send-url)
-		shift
-		mode_send_url "$@"
-		return 0
-		;;
-	--suggest-header)
-		shift
-		stage1_header "${1:-}"
 		return 0
 		;;
 	--refetch)
@@ -2630,8 +2672,8 @@ main() {
 	esac
 
 	# Past this point we are the top-level run, not a re-entrant call from an
-	# fzf binding. Take the hand-off target NOW, before prompt_for_query blocks
-	# on a human typing: the binding wrote it microseconds ago, and any popup
+	# fzf binding. Take the hand-off target NOW, before the picker blocks on a
+	# human typing: the binding wrote it microseconds ago, and any popup
 	# opened from a second attached client meanwhile would overwrite it. Clear
 	# it in the same breath so an abandoned popup cannot leave a live pane id
 	# lying in a global for the next run to find and quietly deliver into.
@@ -2690,47 +2732,31 @@ main() {
 			usage
 			return 1
 		fi
-		# Started with no query, which is how the tmux M-g popup launches it.
+		# Started with no query, which is how the tmux M-g popup launches it. It
+		# opens straight onto the picker, where typing is the search.
 		POPUP_MODE=1
-		prompt_for_query "$num" "$SOURCE_PANE" || return 0
-		if [[ -z ${TYPED_QUERY//[[:space:]]/} ]]; then
-			return 0
-		fi
-		args=("$TYPED_QUERY")
 	fi
 
 	# Whatever shape the query arrived in, it is one string from here on. The
-	# leading ? is a mode, not a search term: DuckDuckGo has no ? operator, so
-	# nothing that used to be a query loses meaning by being read this way.
-	query="${args[*]}"
-	# @ scopes the search to the Claude Code manual, the same way ? scopes it to
-	# an answer engine. DuckDuckGo has no @ operator either, and a search that
-	# opens with a bare handle is not one anybody types into this box.
-	if [[ $query == '@'* ]]; then
-		engine=docs
-		query="${query#@}"
-		query="${query#"${query%%[![:space:]]*}"}"
-	elif [[ $query == '?'* ]]; then
-		engine=pplx
-		# A second ? asks harder. One mark for the question you ask in passing,
-		# two for the one you sit with, which is the only depth decision worth
-		# making at the moment of typing.
-		if [[ $query == '??'* ]]; then
-			PPLX_PRESET="$PPLX_DEEP_PRESET"
-			query="${query#\?\?}"
-		else
-			query="${query#\?}"
-		fi
-		query="${query#"${query%%[![:space:]]*}"}"
-	fi
-	if [[ -z ${query//[[:space:]]/} ]]; then
+	# leading mark is a mode, not a search term: DuckDuckGo has neither ? nor @
+	# as an operator, so nothing that used to be a query loses meaning by being
+	# read this way. A flag picked the engine already when there is no mark.
+	parse_query "${args[*]}"
+	query=$PARSED_QUERY
+	[[ $PARSED_ENGINE != ddgr ]] && engine=$PARSED_ENGINE
+	[[ -n $PARSED_PRESET ]] && PPLX_PRESET=$PARSED_PRESET
+	if [[ -z $query && ( ${POPUP_MODE:-0} -ne 1 || $dump -eq 1 ) ]]; then
 		die "nothing to search for"
 	fi
 
 	# ddgr is only needed by the engine that uses it: asking for an answer on a
 	# machine without ddgr installed is a working path, and demanding it here
-	# would refuse a search this script can perform.
-	if [[ $engine == pplx ]]; then
+	# would refuse a search this script can perform. A bare start has not
+	# picked an engine yet, and a missing one says so on the header the first
+	# time typing reaches for it.
+	if [[ -z $query ]]; then
+		:
+	elif [[ $engine == pplx ]]; then
 		[[ -x $ASK_CMD ]] || die "missing ask backend: $ASK_CMD"
 	elif [[ $engine == docs ]]; then
 		command -v curl >/dev/null 2>&1 || die "curl not found"
@@ -2746,46 +2772,51 @@ main() {
 	trap cleanup EXIT INT TERM
 	printf '%s' "$SOURCE_PANE" >"$(target_file "$RESULTS_FILE")"
 
-	# The query round-trip is the one unavoidable wait, so say it is happening
-	# instead of leaving a blank screen. An ask waits longer than a search, and
-	# says which engine is taking the time.
-	if [[ -t 1 ]]; then
-		if [[ $engine == pplx ]]; then
-			printf '\033[90m  asking perplexity (%s) about %s ...\033[0m\r' \
-				"$PPLX_PRESET" "$query" >&2
-		elif [[ $engine == docs ]]; then
-			printf '\033[90m  looking up %s in the docs ...\033[0m\r' "$query" >&2
-		else
-			printf '\033[90m  searching for %s ...\033[0m\r' "$query" >&2
-		fi
-	fi
-	# Wipe that line whichever way the search went: a reason printed over a
-	# half-erased "searching for ..." is how "HTTP Error 202: Acceptedes
-	# finalizers ..." reaches the screen.
-	failed=0
-	if [[ $engine == pplx ]]; then
-		search_pplx "$RESULTS_FILE" "$query" "$(answer_file "$RESULTS_FILE")" \
-			"$(thread_file "$RESULTS_FILE")" || failed=1
-	elif [[ $engine == docs ]]; then
-		search_docs "$RESULTS_FILE" "$num" "$query" || failed=1
+	if [[ -z $query ]]; then
+		printf '[]\n' >"$RESULTS_FILE"
+		set_engine "$RESULTS_FILE" ddgr
 	else
-		search_ddgr "$RESULTS_FILE" "$num" "$query" || failed=1
+		# The query round-trip is the one unavoidable wait, so say it is happening
+		# instead of leaving a blank screen. An ask waits longer than a search, and
+		# says which engine is taking the time.
+		if [[ -t 1 ]]; then
+			if [[ $engine == pplx ]]; then
+				printf '\033[90m  asking perplexity (%s) about %s ...\033[0m\r' \
+					"$PPLX_PRESET" "$query" >&2
+			elif [[ $engine == docs ]]; then
+				printf '\033[90m  looking up %s in the docs ...\033[0m\r' "$query" >&2
+			else
+				printf '\033[90m  searching for %s ...\033[0m\r' "$query" >&2
+			fi
+		fi
+		# Wipe that line whichever way the search went: a reason printed over a
+		# half-erased "searching for ..." is how "HTTP Error 202: Acceptedes
+		# finalizers ..." reaches the screen.
+		failed=0
+		if [[ $engine == pplx ]]; then
+			search_pplx "$RESULTS_FILE" "$query" "$(answer_file "$RESULTS_FILE")" \
+				"$(thread_file "$RESULTS_FILE")" || failed=1
+		elif [[ $engine == docs ]]; then
+			search_docs "$RESULTS_FILE" "$num" "$query" || failed=1
+		else
+			search_ddgr "$RESULTS_FILE" "$num" "$query" || failed=1
+		fi
+		if [[ -t 1 ]]; then
+			printf '\033[2K\r' >&2
+		fi
+		if [[ $failed -eq 1 ]]; then
+			die "$SEARCH_ERROR"
+		fi
+		# What the picker refines from, and what it refines through.
+		printf '%s\n' "$query" >"$(query_file "$RESULTS_FILE")"
+		set_engine "$RESULTS_FILE" "$engine"
 	fi
-	if [[ -t 1 ]]; then
-		printf '\033[2K\r' >&2
-	fi
-	if [[ $failed -eq 1 ]]; then
-		die "$SEARCH_ERROR"
-	fi
-	# What the picker refines from, and what it refines through.
-	printf '%s\n' "$query" >"$(query_file "$RESULTS_FILE")"
-	set_engine "$RESULTS_FILE" "$engine"
 
 	if [[ $dump -eq 1 ]] || [[ ! -t 1 ]]; then
 		# Piped without -d: dump rather than start fzf on a headless stdout.
 		mode_dump "$RESULTS_FILE"
 	else
-		mode_pick "$RESULTS_FILE" "$num"
+		mode_pick "$RESULTS_FILE" "$num" "$(box_text "$RESULTS_FILE")"
 	fi
 }
 

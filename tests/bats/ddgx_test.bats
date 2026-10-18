@@ -704,6 +704,7 @@ EOF
 @test "edit mode opens nvim with searchable matches in quickfix" {
 	write_two_results
 	stub_nvim_capture
+	printf 'pages\n' >"$BATS_TEST_TMPDIR/results.json.typing"
 
 	run env XDG_CACHE_HOME="$CACHE_HOME" XDG_DATA_HOME="$DATA_HOME" DDGX_TTL=0 \
 		DDGX_EDITOR="$STUB_BIN/nvim" \
@@ -723,6 +724,7 @@ EOF
 @test "quickfix mode gives nvim no positional note arguments" {
 	write_two_results
 	stub_nvim_capture
+	printf 'pages\n' >"$BATS_TEST_TMPDIR/results.json.typing"
 
 	run env XDG_CACHE_HOME="$CACHE_HOME" XDG_DATA_HOME="$DATA_HOME" DDGX_TTL=0 \
 		DDGX_EDITOR="$STUB_BIN/nvim" \
@@ -736,6 +738,7 @@ EOF
 @test "edit mode builds quickfix with the same slash-delimited ERE" {
 	write_two_results
 	stub_nvim_capture
+	printf 'pages\n' >"$BATS_TEST_TMPDIR/results.json.typing"
 
 	run env XDG_CACHE_HOME="$CACHE_HOME" XDG_DATA_HOME="$DATA_HOME" DDGX_TTL=0 \
 		DDGX_EDITOR="$STUB_BIN/nvim" \
@@ -1435,6 +1438,16 @@ EOF
 		[ "$(wc -L <<<"$line")" -le 98 ]
 	done
 	[[ "${lines[3]}" == *'F1 help'* ]]
+	[[ "${lines[3]}" == *'ctrl-f in pages'* ]]
+
+	# The page filter's own line, after ctrl-f, has to fit as well.
+	printf 'pages\n' >"$RESULTS.typing"
+	run bash "$DDGX" --header "$RESULTS"
+	[ "$status" -eq 0 ]
+	[ "${#lines[@]}" -eq 4 ]
+	for line in "${lines[@]}"; do
+		[ "$(wc -L <<<"$line")" -le 98 ]
+	done
 	[[ "${lines[3]}" == *'/ERE/'* ]]
 }
 
@@ -1962,151 +1975,6 @@ teardown() {
 	[ "$(grep -c '^bash-' <<<"$cap")" -eq 1 ]
 	# The page text stayed in the file, as it does with the stub.
 	[[ "$cap" != *"body of the first page"* ]]
-}
-
-# ---------------------------------------------------------------------------
-# alt-h from the search screen, where a row is a url and a title and nothing
-# has been through the extractor yet.
-# ---------------------------------------------------------------------------
-
-run_send_url() {
-	run env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" \
-		XDG_DATA_HOME="$DATA_HOME" DDGX_TTL=0 bash "$DDGX" --send-url "$@"
-}
-
-@test "the search screen binds alt-h to the row under the cursor" {
-	local bind
-	bind=$(grep -F -- '--bind="alt-h:transform($SELF --send-url' "$DDGX")
-
-	[ -n "$bind" ]
-	# Both hidden fields: the url and the title. Handing over {1} alone would
-	# name every note after its address.
-	[[ "$bind" == *'{1} {2}'* ]]
-	# transform, as in the result picker: the mode prints the fzf action and fzf
-	# performs it, which is what lets one key close the popup on a delivery and
-	# hold it open on a failure. execute-silent can do neither.
-	[[ "$bind" != *"execute-silent"* ]]
-
-	# A key advertised nowhere is a key nobody presses.
-	run env XDG_CACHE_HOME="$CACHE_HOME" bash "$DDGX" --suggest-header
-	[[ "$output" == *"alt-h"* ]]
-}
-
-@test "the search screen hands over the note path, never the page text" {
-	stub_tmux '%7'
-	seed_cache 'https://example.com/tag' 'the body of the claude tag page'
-
-	run_send_url '%7' 'https://example.com/tag' 'Introducing Claude Tag'
-
-	[ "$status" -eq 0 ]
-	[ "$(cat "$TMUX_BUFFER")" = "$DATA_HOME/ddgx/notes/introducing-claude-tag.md" ]
-	# A negated assertion is a [[ ]] comparison, never `! grep`: bash exempts a
-	# command whose status is inverted with ! from set -e, so `! grep -q` under
-	# bats passes whether or not the pattern is there.
-	[[ "$(cat "$TMUX_BUFFER")" != *"the body of the claude tag page"* ]]
-	grep -q 'the body of the claude tag page' \
-		"$DATA_HOME/ddgx/notes/introducing-claude-tag.md"
-	grep -qx 'Source: https://example.com/tag' \
-		"$DATA_HOME/ddgx/notes/introducing-claude-tag.md"
-	# A delivered hand-off closes the popup, as it does one screen later.
-	[ "$output" = "abort" ]
-}
-
-@test "a page the search screen never fetched is extracted on the keypress" {
-	# Nothing on that screen has been through the extractor: the rows are
-	# titles, urls and snippets, rebuilt on every keystroke, and extracting them
-	# as they scrolled past would be a fetch per letter typed. So the key that
-	# hands a page over is the thing that fetches it.
-	stub_tmux '%7'
-	cat >"$STUB_BIN/node" <<EOF
-#!/usr/bin/env bash
-printf '%s\n' "\$*" >>"$BATS_TEST_TMPDIR/node.args"
-printf 'markdown built on the keypress\n'
-EOF
-	chmod +x "$STUB_BIN/node"
-
-	run_send_url '%7' 'https://example.com/cold' 'A cold page'
-
-	[ "$status" -eq 0 ]
-	[[ "$(cat "$BATS_TEST_TMPDIR/node.args")" == *"--url https://example.com/cold"* ]]
-	grep -q 'markdown built on the keypress' "$DATA_HOME/ddgx/notes/a-cold-page.md"
-	[ "$output" = "abort" ]
-}
-
-@test "both screens name the same note for the same page" {
-	# ctrl-e one screen later must open the file alt-h just handed over. Two
-	# naming rules that agree today drift the first time either is touched, and
-	# then the two keys disagree about what "this result" means.
-	stub_tmux '%7'
-	write_two_results
-
-	run_send_url '%7' 'https://example.com/1' 'First hit'
-	[ "$status" -eq 0 ]
-	local handed
-	handed=$(cat "$TMUX_BUFFER")
-
-	printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$@" > "%s/opened.txt"\n' \
-		"$BATS_TEST_TMPDIR" >"$STUB_BIN/fake-editor"
-	chmod +x "$STUB_BIN/fake-editor"
-	run env XDG_CACHE_HOME="$CACHE_HOME" XDG_DATA_HOME="$DATA_HOME" DDGX_TTL=0 \
-		DDGX_EDITOR="$STUB_BIN/fake-editor" \
-		bash "$DDGX" --edit "$BATS_TEST_TMPDIR/results.json" 0
-	[ "$status" -eq 0 ]
-
-	[ "$handed" = "$(cat "$BATS_TEST_TMPDIR/opened.txt")" ]
-}
-
-@test "a search-screen hand-off with nowhere to go keeps the picker up to say so" {
-	stub_tmux '%7'
-	seed_cache 'https://example.com/tag' 'the body'
-
-	run_send_url '' 'https://example.com/tag' 'Introducing Claude Tag'
-
-	[ "$status" -eq 0 ]
-	[[ "$output" == *"transform-header"* ]]
-	[[ "$output" == *"suggest-header"* ]]
-	[[ "$output" != *"abort"* ]]
-
-	# The whole header comes back, not just the reason. transform-header
-	# replaces the header outright, so a mode that printed one line would take
-	# every key off the screen with it.
-	run env XDG_CACHE_HOME="$CACHE_HOME" bash "$DDGX" --suggest-header \
-		'no source pane: alt-h works when ddgx runs from the M-g popup'
-	[[ "$output" == *"no source pane"* ]]
-	[[ "$output" == *"alt-h hand the page to the pane"* ]]
-	[[ "$output" == *"live DuckDuckGo"* ]]
-}
-
-@test "a search-screen hand-off into a pane that is gone names that as the reason" {
-	stub_tmux '%7'
-	seed_cache 'https://example.com/tag' 'the body'
-
-	run_send_url '%999' 'https://example.com/tag' 'Introducing Claude Tag'
-
-	[ "$status" -eq 0 ]
-	[[ "$output" == *"transform-header"* ]]
-	[[ "$output" != *"abort"* ]]
-	[[ "$output" == *'%999'* ]]
-}
-
-@test "live rows carry the title beside the url, hidden from the display" {
-	stub_curl_tripwire
-	cat >"$STUB_BIN/ddgr" <<'EOF'
-#!/usr/bin/env bash
-printf '%s\n' '[{"title":"Introducing Claude Tag","url":"https://www.anthropic.com/news/tag","abstract":"a new way"}]'
-EOF
-	chmod +x "$STUB_BIN/ddgr"
-
-	run env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" \
-		DDGX_SUGGEST_DELAY=0 bash "$DDGX" --suggest 'claude tag' 10
-
-	[ "$status" -eq 0 ]
-	# url, plain title, then the row you see. alt-h heads the note with the
-	# title, so it travels as a field of its own rather than being unpicked from
-	# a display column carrying a position number, colour codes and a domain.
-	[ "$(printf '%s' "$output" | cut -f1)" = 'https://www.anthropic.com/news/tag' ]
-	[ "$(printf '%s' "$output" | cut -f2)" = 'Introducing Claude Tag' ]
-	[[ "$(printf '%s' "$output" | cut -f3)" == *"1. "* ]]
 }
 
 # ---------------------------------------------------------------------------
@@ -3074,71 +2942,7 @@ EOF
 	[[ "$(cat "$R")" == *"settings-reference"* ]]
 }
 
-@test "the opening query picker is top aligned and reloads web suggestions" {
-	cat >"$STUB_BIN/fzf" <<EOF
-#!/usr/bin/env bash
-printf '%s\n' "\$*" >"$BATS_TEST_TMPDIR/fzf.args"
-cat >/dev/null
-printf '%s\n' '@ "the matcher matches"'
-printf '%s\n' $'hooks\tHooks reference\tmatching passage'
-EOF
-	chmod +x "$STUB_BIN/fzf"
-
-	run env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" \
-		DDGX_DOCS_DIR="$DOCS_DIR" bash -c \
-		"source '$DDGX' >/dev/null 2>&1 || true
-		prompt_for_query
-		printf '%s' \"\$TYPED_QUERY\""
-
-	[ "$status" -eq 0 ]
-	[ "$output" = '@ "the matcher matches"' ]
-	args=$(cat "$BATS_TEST_TMPDIR/fzf.args")
-	[[ "$args" == *'--layout=reverse'* ]]
-	[[ "$args" == *'--print-query'* ]]
-	[[ "$args" == *'change:reload('*'--suggest'* ]]
-	[[ "$args" == *'ctrl-y:execute-silent('*'--copy-url {1})'* ]]
-	[[ "$args" == *'ctrl-o:execute-silent('*'--open-url {1})'* ]]
-	[[ "$args" == *'alt-h:transform('*'--send-url'* ]]
-	# The url and the title are carried, not shown: the row starts at field 3.
-	[[ "$args" == *'--with-nth=3..'* ]]
-	[[ "$args" == *'--margin=1,6%'* ]]
-	[[ "$args" == *'--input-border=rounded'* ]]
-	[[ "$args" == *'--list-border=rounded'* ]]
-	[[ "$args" == *'--info=inline-right'* ]]
-	[[ "$args" == *'live web results'* ]]
-	[[ "$args" == *'ctrl-o open URL'*'ctrl-y copy URL'* ]]
-}
-
-@test "the opening picker copies and opens its selected URL" {
-	cat >"$STUB_BIN/xclip" <<'EOF'
-#!/usr/bin/env bash
-cat >"$BATS_TEST_TMPDIR/copied.url"
-EOF
-	cat >"$STUB_BIN/ddgx-browser" <<'EOF'
-#!/usr/bin/env bash
-printf '%s' "$1" >"$BATS_TEST_TMPDIR/opened.url"
-EOF
-	chmod +x "$STUB_BIN/xclip" "$STUB_BIN/ddgx-browser"
-	stub_ddgr_tripwire
-
-	run env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" \
-		bash "$DDGX" --copy-url 'https://example.com/copied?a=1&b=2'
-
-	[ "$status" -eq 0 ]
-	[ "$(cat "$BATS_TEST_TMPDIR/copied.url")" = 'https://example.com/copied?a=1&b=2' ]
-
-	run env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" \
-		BROWSER=ddgx-browser bash "$DDGX" --open-url 'https://example.com/opened?a=1&b=2'
-	for _ in {1..50}; do
-		[ -s "$BATS_TEST_TMPDIR/opened.url" ] && break
-		sleep 0.01
-	done
-
-	[ "$status" -eq 0 ]
-	[ "$(cat "$BATS_TEST_TMPDIR/opened.url")" = 'https://example.com/opened?a=1&b=2' ]
-}
-
-@test "F1 opens the concise help page from both picker stages" {
+@test "F1 opens the concise help page from the picker" {
 	cat >"$STUB_BIN/tldr" <<'EOF'
 #!/usr/bin/env bash
 printf 'ddgx picker help\n'
@@ -3151,78 +2955,158 @@ EOF
 
 	[ "$status" -eq 0 ]
 	[ "$output" = 'ddgx picker help' ]
-	[ "$(grep -Fc -- '--bind="f1:execute($SELF --help-page | less -R)"' "$DDGX")" -eq 2 ]
+	[ "$(grep -Fc -- '--bind="f1:execute($SELF --help-page | less -R)"' "$DDGX")" -eq 1 ]
 }
 
-@test "live docs suggestions are strict, quoted, and offline" {
-	write_docs_corpus
-	stub_curl_tripwire
-	stub_ddgr_tripwire
+# ---------------------------------------------------------------------------
+# One screen. Typing searches, ctrl-f points the same box at the pages already
+# found, and enter sends whatever the rows do not answer yet. --typed is the
+# change binding, so these drive exactly what a keystroke runs.
+# ---------------------------------------------------------------------------
 
-	run env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" \
-		DDGX_DOCS_DIR="$DOCS_DIR" DDGX_NO_NETWORK=1 \
-		bash "$DDGX" --suggest '@ "the matcher matches"' 10
-
-	[ "$status" -eq 0 ]
-	[[ "$output" == https://code.claude.com/docs/en/hooks$'\t'* ]]
-	[[ "$output" == *"Hooks reference"* ]]
-	# The docs rows carry the same three fields the web rows do, so alt-h heads
-	# a docs note with its page title rather than with a coloured display line.
-	[ "$(printf '%s' "$output" | head -1 | cut -f2)" = 'Hooks reference' ]
-	[[ "$output" != *"Agent SDK hooks"* ]]
-	[[ "$output" != *"curl was called"* ]]
-	[[ "$output" != *"ddgr was called"* ]]
+# An empty set, the way a bare start opens the picker.
+write_live_state() {
+	LIVE="$BATS_TEST_TMPDIR/live.json"
+	# A new picker: no query, note or typing mode left over from the last one.
+	rm -f "$LIVE".*
+	printf '[]\n' >"$LIVE"
+	printf 'ddgr\n' >"$LIVE.engine"
 }
 
-@test "ordinary queries show fresh DuckDuckGo results, not local docs" {
-	stub_curl_tripwire
-	cat >"$STUB_BIN/ddgr" <<'EOF'
+# The extraction a search starts in the background reaches for every result
+# page. Recorded and answered here, so no test fetches one.
+stub_node_quiet() {
+	cat >"$STUB_BIN/node" <<EOF
 #!/usr/bin/env bash
-printf '%s\n' "$*" >"$BATS_TEST_TMPDIR/ddgr.args"
-printf '%s\n' '[{"title":"Fresh web result","url":"https://fresh.example/release","abstract":"published now"}]'
+printf '%s\n' "\$*" >>"$BATS_TEST_TMPDIR/node.args"
+exit 0
+EOF
+	chmod +x "$STUB_BIN/node"
+}
+
+stub_ddgr_counting() {
+	cat >"$STUB_BIN/ddgr" <<EOF
+#!/usr/bin/env bash
+count=0
+[ ! -s "$BATS_TEST_TMPDIR/ddgr.count" ] || count=\$(cat "$BATS_TEST_TMPDIR/ddgr.count")
+printf '%s\n' "\$((count + 1))" >"$BATS_TEST_TMPDIR/ddgr.count"
+printf '%s\n' "\$*" >"$BATS_TEST_TMPDIR/ddgr.args"
+printf '%s\n' '$1'
 EOF
 	chmod +x "$STUB_BIN/ddgr"
+}
 
+stub_ask_tripwire() {
+	cat >"$STUB_BIN/ask" <<EOF
+#!/usr/bin/env bash
+touch "$BATS_TEST_TMPDIR/ask.called"
+exit 99
+EOF
+	chmod +x "$STUB_BIN/ask"
+}
+
+run_typed() {
+	local file=$1
+	shift
 	run env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" \
-		DDGX_DOCS_DIR="$DOCS_DIR" DDGX_SUGGEST_DELAY=0 \
-		bash "$DDGX" --suggest 'matcher precedence' 10
+		XDG_DATA_HOME="$DATA_HOME" DDGX_DOCS_DIR="${DOCS_DIR:-$BATS_TEST_TMPDIR/no-docs}" \
+		DDGX_SUGGEST_DELAY=0 DDGX_ASK_CMD="$STUB_BIN/ask" \
+		bash "$DDGX" --typed "$file" 10 "$@"
+}
+
+@test "typing a web query searches and becomes the set on screen" {
+	write_live_state
+	stub_node_quiet
+	stub_curl_tripwire
+	stub_ddgr_counting '[{"title":"Fresh web result","url":"https://fresh.example/release","abstract":"published now"}]'
+
+	run_typed "$LIVE" 'matcher precedence'
 
 	[ "$status" -eq 0 ]
-	[[ "$output" == https://fresh.example/release$'\t'* ]]
-	[[ "$output" == *"Fresh web result"* ]]
-	[[ "$output" != *"Hooks reference"* ]]
-	[[ "$output" != *"curl was called"* ]]
+	[ "${#lines[@]}" -eq 1 ]
+	[[ "${lines[0]}" == 0$'\t'*"Fresh web result"* ]]
+	[ "$(cat "$LIVE.query")" = 'matcher precedence' ]
+	[ "$(cat "$LIVE.engine")" = 'ddgr' ]
 	[[ "$(cat "$BATS_TEST_TMPDIR/ddgr.args")" == *'matcher precedence'* ]]
 }
 
-@test "live web search waits for typing to pause" {
-	cat >"$STUB_BIN/ddgr" <<'EOF'
-#!/usr/bin/env bash
-touch "$BATS_TEST_TMPDIR/ddgr.called"
-printf '%s\n' '[{"title":"Too soon","url":"https://fresh.example/soon","abstract":"x"}]'
-EOF
-	chmod +x "$STUB_BIN/ddgr"
+@test "typing @ searches the manual, strictly and offline" {
+	write_live_state
+	write_docs_corpus
+	stub_node_quiet
+	stub_curl_tripwire
+	stub_ddgr_tripwire
 
-	run timeout 0.1 env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" \
-		DDGX_SUGGEST_DELAY=1 bash "$DDGX" --suggest 'still typing' 10
+	run_typed "$LIVE" '@ "the matcher matches"'
 
-	[ "$status" -eq 124 ]
-	[ ! -e "$BATS_TEST_TMPDIR/ddgr.called" ]
+	[ "$status" -eq 0 ]
+	[[ "${lines[0]}" == 0$'\t'*"Hooks reference"* ]]
+	[ "$(jq -r '.[0].title' "$LIVE")" = 'Hooks reference' ]
+	[[ "$output" != *"Agent SDK hooks"* ]]
+	[ "$(cat "$LIVE.engine")" = 'docs' ]
+	[ "$(cat "$LIVE.query")" = '"the matcher matches"' ]
 }
 
-@test "enter reuses the live result set instead of asking DuckDuckGo twice" {
-	cat >"$STUB_BIN/ddgr" <<'EOF'
-#!/usr/bin/env bash
-count=0
-[ ! -s "$BATS_TEST_TMPDIR/ddgr.count" ] || count=$(cat "$BATS_TEST_TMPDIR/ddgr.count")
-printf '%s\n' "$((count + 1))" >"$BATS_TEST_TMPDIR/ddgr.count"
-printf '%s\n' '[{"title":"Fresh once","url":"https://fresh.example/once","abstract":"one request"}]'
-EOF
-	chmod +x "$STUB_BIN/ddgr"
+@test "a docs query no page satisfies leaves no partial rows" {
+	write_live_state
+	write_docs_corpus
+	stub_node_quiet
+	stub_curl_tripwire
+	stub_ddgr_tripwire
+
+	run_typed "$LIVE" '@ matcher precedence zzzznotaword'
+
+	[ "$status" -eq 0 ]
+	[ -z "$output" ]
+	# The reason rides on the header, not in the list.
+	grep -q 'zzzznotaword' "$LIVE.note"
+}
+
+@test "live web search waits for typing to pause" {
+	write_live_state
+	stub_node_quiet
+	stub_ddgr_counting '[{"title":"Too soon","url":"https://fresh.example/soon","abstract":"x"}]'
+
+	run timeout 0.1 env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" \
+		DDGX_SUGGEST_DELAY=1 bash "$DDGX" --typed "$LIVE" 10 'still typing'
+
+	[ "$status" -eq 124 ]
+	[ ! -e "$BATS_TEST_TMPDIR/ddgr.count" ]
+}
+
+@test "a short web query waits for more letters" {
+	write_live_state
+	stub_node_quiet
+	stub_ddgr_counting '[]'
+
+	run_typed "$LIVE" 'ku'
+
+	[ "$status" -eq 0 ]
+	[ ! -e "$BATS_TEST_TMPDIR/ddgr.count" ]
+}
+
+@test "the query the rows already answer costs no search" {
+	write_search_state 'kubernetes finalizers'
+	stub_node_quiet
+	stub_ddgr_counting '[]'
+
+	# Spacing is not part of a query: a trailing space on the way to the next
+	# word must not throw the set away.
+	run_typed "$RESULTS" ' kubernetes  finalizers '
+
+	[ "$status" -eq 0 ]
+	[ "${#lines[@]}" -eq 3 ]
+	[[ "${lines[0]}" == *"Finalizers"* ]]
+	[ ! -e "$BATS_TEST_TMPDIR/ddgr.count" ]
+}
+
+@test "a search typed live is not asked of DuckDuckGo twice" {
+	write_live_state
+	stub_node_quiet
+	stub_ddgr_counting '[{"title":"Fresh once","url":"https://fresh.example/once","abstract":"one request"}]'
 	seed_cache 'https://fresh.example/once' 'fresh page body'
 
-	env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" \
-		DDGX_SUGGEST_DELAY=0 bash "$DDGX" --suggest 'fresh once' 10 >/dev/null
+	run_typed "$LIVE" 'fresh once'
 	[ "$(cat "$BATS_TEST_TMPDIR/ddgr.count")" -eq 1 ]
 	run_ddgx -d 'fresh once'
 
@@ -3231,54 +3115,241 @@ EOF
 	[[ "$output" == *"Fresh once"* ]]
 }
 
-@test "an expired live result set is searched again" {
-	cat >"$STUB_BIN/ddgr" <<'EOF'
-#!/usr/bin/env bash
-count=0
-[ ! -s "$BATS_TEST_TMPDIR/ddgr.count" ] || count=$(cat "$BATS_TEST_TMPDIR/ddgr.count")
-printf '%s\n' "$((count + 1))" >"$BATS_TEST_TMPDIR/ddgr.count"
-printf '%s\n' '[{"title":"Timed web result","url":"https://fresh.example/timed","abstract":"x"}]'
-EOF
-	chmod +x "$STUB_BIN/ddgr"
+@test "an expired result set is searched again" {
+	write_live_state
+	stub_node_quiet
+	stub_ddgr_counting '[{"title":"Timed web result","url":"https://fresh.example/timed","abstract":"x"}]'
 
 	env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" \
 		DDGX_SEARCH_TTL=1 DDGX_SUGGEST_DELAY=0 \
-		bash "$DDGX" --suggest 'timed result' 10 >/dev/null
+		bash "$DDGX" --typed "$LIVE" 10 'timed result' >/dev/null
 	find "$CACHE_HOME/ddgx/searches" -type f -name '*.json' \
 		-exec touch -d '5 minutes ago' {} +
+	# A new picker, so the rows on screen do not already answer it.
+	write_live_state
 	run env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" \
 		DDGX_SEARCH_TTL=1 DDGX_SUGGEST_DELAY=0 \
-		bash "$DDGX" --suggest 'timed result' 10
+		bash "$DDGX" --typed "$LIVE" 10 'timed result'
 
 	[ "$status" -eq 0 ]
 	[ "$(cat "$BATS_TEST_TMPDIR/ddgr.count")" -eq 2 ]
 	[[ "$output" == *"Timed web result"* ]]
 }
 
-@test "answer queries make no live request and show no local preview" {
+@test "a throttled search keeps the rows and says why on the header" {
+	write_search_state 'kubernetes finalizers'
+	stub_node_quiet
+	cat >"$STUB_BIN/ddgr" <<'EOF'
+#!/usr/bin/env bash
+echo '[ERROR] HTTP Error 202: Accepted' >&2
+printf '[]\n'
+EOF
+	chmod +x "$STUB_BIN/ddgr"
+
+	run_typed "$RESULTS" 'etcd defrag'
+
+	[ "$status" -eq 0 ]
+	[ "${#lines[@]}" -eq 3 ]
+	[[ "${lines[0]}" == *"Finalizers"* ]]
+	run env XDG_CACHE_HOME="$CACHE_HOME" bash "$DDGX" --header "$RESULTS"
+	[[ "${lines[0]}" == *"202"* ]]
+	[[ "${lines[0]}" == *"kept the previous results"* ]]
+}
+
+@test "a question waits for enter and leaves the rows alone" {
+	write_search_state 'kubernetes finalizers'
 	write_docs_corpus
+	stub_node_quiet
 	stub_curl_tripwire
 	stub_ddgr_tripwire
+	stub_ask_tripwire
+
+	run_typed "$RESULTS" '? matcher precedence'
+
+	[ "$status" -eq 0 ]
+	[ "${#lines[@]}" -eq 3 ]
+	[ ! -e "$BATS_TEST_TMPDIR/ask.called" ]
+	[ "$(cat "$RESULTS.query")" = 'kubernetes finalizers' ]
+}
+
+@test "ctrl-f points typing at the pages, and back at the query" {
+	write_filter_state
+	stub_ddgr_tripwire
+
+	run env XDG_CACHE_HOME="$CACHE_HOME" bash "$DDGX" --toggle "$FR"
+	[ "$status" -eq 0 ]
+	[[ "$output" == *'change-prompt(in pages > )'* ]]
+	[[ "$output" == *'transform-header('* ]]
+	[[ "$output" == *'+clear-query' ]]
+	[ "$(cat "$FR.typing")" = 'pages' ]
+
+	# The same keystroke binding now filters by page text.
+	run_typed "$FR" 'PreToolUse'
+	[ "$status" -eq 0 ]
+	[ "${#lines[@]}" -eq 1 ]
+	[[ "${lines[0]}" == *"Hooks reference"* ]]
+	[ ! -e "$BATS_TEST_TMPDIR/ddgr.called" ]
+	run env XDG_CACHE_HOME="$CACHE_HOME" bash "$DDGX" --header "$FR"
+	[[ "${lines[3]}" == *'/ERE/'* ]]
+
+	# Back again: the box gets the set's own query, mark and all.
+	run env XDG_CACHE_HOME="$CACHE_HOME" bash "$DDGX" --toggle "$FR"
+	[ "$status" -eq 0 ]
+	[[ "$output" == *'change-prompt(search > )'* ]]
+	[[ "$output" == *'+change-query:@ hooks' ]]
+	[ "$(cat "$FR.typing")" = 'web' ]
+	run env XDG_CACHE_HOME="$CACHE_HOME" bash "$DDGX" --header "$FR"
+	[[ "${lines[3]}" == *'ctrl-f in pages'* ]]
+}
+
+@test "the box carries each engine's mark, and the depth an ask was held at" {
+	write_ask_state 'etcd defrag'
+	run env XDG_CACHE_HOME="$CACHE_HOME" bash "$DDGX" --box "$RESULTS"
+	[[ "$output" == *'+change-query:?? etcd defrag' ]]
+	# No header here: the reload before it ends in a load that draws one, and
+	# a second draw would wipe the note the first one showed.
+	[[ "$output" != *'transform-header'* ]]
+
+	printf 'resp_seed\n1\nlow\n' >"$RESULTS.thread"
+	run env XDG_CACHE_HOME="$CACHE_HOME" bash "$DDGX" --box "$RESULTS"
+	[[ "$output" == *'+change-query:? etcd defrag' ]]
+
+	write_search_state 'kubernetes finalizers site:kubernetes.io'
+	printf 'ddgr\n' >"$RESULTS.engine"
+	rm -f "$RESULTS.thread"
+	run env XDG_CACHE_HOME="$CACHE_HOME" bash "$DDGX" --box "$RESULTS"
+	[[ "$output" == *'+change-query:kubernetes finalizers site:kubernetes.io' ]]
+}
+
+@test "enter sends a query the rows do not answer yet" {
+	write_search_state 'kubernetes finalizers'
+
+	run bash "$DDGX" --enter "$RESULTS" 0 8 '?? why do pods stay terminating'
+
+	[ "$status" -eq 0 ]
+	[[ "$output" == *'--submit'* ]]
+	[[ "$output" == *'reload('* ]]
+	[[ "$output" != 'accept' ]]
+	# The query waits in a file: the action is printed for fzf to parse, and a
+	# query is free to carry the paren that would end it.
+	[ "$(cat "$RESULTS.submit")" = '?? why do pods stay terminating' ]
+	[[ "$output" != *'why do pods'* ]]
+}
+
+@test "the sent query runs at the depth its mark asked for" {
+	write_search_state 'kubernetes finalizers'
+	stub_ask "$ASK_REPLY"
+	printf '%s' '?? why do pods stay terminating' >"$RESULTS.submit"
 
 	run env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" \
-		DDGX_DOCS_DIR="$DOCS_DIR" DDGX_NO_NETWORK=1 \
-		bash "$DDGX" --suggest '? matcher precedence' 10
+		XDG_DATA_HOME="$DATA_HOME" DDGX_TTL=0 DDGX_ASK_CMD="$STUB_BIN/ask" \
+		bash "$DDGX" --submit "$RESULTS" 8
+
+	[ "$status" -eq 0 ]
+	[ "$(asked_query)" = 'why do pods stay terminating' ]
+	asked_with 'high'
+	[ "$(cat "$RESULTS.engine")" = 'pplx' ]
+	[ "$(cat "$RESULTS.query")" = 'why do pods stay terminating' ]
+	[ ! -e "$RESULTS.submit" ]
+}
+
+@test "enter on the query the rows answer opens the row" {
+	write_search_state 'kubernetes finalizers'
+
+	run bash "$DDGX" --enter "$RESULTS" 0 8 'kubernetes finalizers'
+
+	[ "$status" -eq 0 ]
+	[ "$output" = "accept" ]
+}
+
+@test "enter in the page filter opens the row, whatever is typed" {
+	write_filter_state
+	printf 'pages\n' >"$FR.typing"
+
+	run bash "$DDGX" --enter "$FR" 0 8 'PreToolUse'
+
+	[ "$status" -eq 0 ]
+	[ "$output" = "accept" ]
+}
+
+@test "enter on an empty list with nothing typed does nothing" {
+	write_live_state
+
+	run bash "$DDGX" --enter "$LIVE" '' 8 ''
 
 	[ "$status" -eq 0 ]
 	[ -z "$output" ]
 }
 
-@test "live suggestions show no partial rows for a failed AND" {
-	write_docs_corpus
-	stub_curl_tripwire
-	stub_ddgr_tripwire
+@test "the query box's words are not marked as page matches" {
+	# Before ctrl-f the box holds the query, a question included, and marking
+	# its every word would read as a filter that is not running.
+	write_two_results
+	local r="$BATS_TEST_TMPDIR/results.json" plain
+	printf 'first\n' >"$r.query"
 
-	run env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" \
-		DDGX_DOCS_DIR="$DOCS_DIR" DDGX_NO_NETWORK=1 \
-		bash "$DDGX" --suggest '@ matcher precedence zzzznotaword' 10
+	run env XDG_CACHE_HOME="$CACHE_HOME" bash "$DDGX" --preview "$r" 0 ''
+	[ "$status" -eq 0 ]
+	plain=$output
+	[[ "$plain" == *"body of the first page"* ]]
+
+	run env XDG_CACHE_HOME="$CACHE_HOME" bash "$DDGX" --preview "$r" 0 'body'
+	[ "$status" -eq 0 ]
+	[ "$output" = "$plain" ]
+
+	printf 'pages\n' >"$r.typing"
+	run env XDG_CACHE_HOME="$CACHE_HOME" bash "$DDGX" --preview "$r" 0 'body'
+	[ "$status" -eq 0 ]
+	[ "$output" != "$plain" ]
+}
+
+@test "a page the prefetch has not reached is extracted on the alt-h keypress" {
+	stub_tmux '%7'
+	local r="$BATS_TEST_TMPDIR/cold.json"
+	printf '%s\n' '[{"title":"A cold page","url":"https://example.com/cold","abstract":"x"}]' >"$r"
+	printf '%%7' >"$r.target"
+	cat >"$STUB_BIN/node" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >>"$BATS_TEST_TMPDIR/node.args"
+printf 'markdown built on the keypress\n'
+EOF
+	chmod +x "$STUB_BIN/node"
+
+	run_send "$r" 0
 
 	[ "$status" -eq 0 ]
-	[ -z "$output" ]
+	[[ "$(cat "$BATS_TEST_TMPDIR/node.args")" == *"--url https://example.com/cold"* ]]
+	grep -q 'markdown built on the keypress' "$DATA_HOME/ddgx/notes/a-cold-page.md"
+	[ "$output" = "abort" ]
+}
+
+@test "a bare start opens the picker on an empty set, with no search" {
+	stub_ddgr_tripwire
+	stub_curl_tripwire
+	stub_tmux
+	cat >"$STUB_BIN/fzf" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$@" >"$BATS_TEST_TMPDIR/fzf.args"
+cat >"$BATS_TEST_TMPDIR/fzf.stdin"
+exit 130
+EOF
+	chmod +x "$STUB_BIN/fzf"
+
+	# A tty on stdin is what makes a bare start the popup rather than a pipe.
+	run script -qec "env PATH='$STUB_BIN:$PATH' XDG_CACHE_HOME='$CACHE_HOME' \
+		XDG_DATA_HOME='$DATA_HOME' bash '$DDGX'" /dev/null </dev/null
+
+	[ "$status" -eq 0 ]
+	[[ "$output" != *"was called"* ]]
+	local args
+	args=$(cat "$BATS_TEST_TMPDIR/fzf.args")
+	grep -qx -- '--query=' <<<"$args"
+	grep -qx -- '--prompt=search > ' <<<"$args"
+	[[ "$args" == *'change:reload('*'--typed'* ]]
+	[[ "$args" == *'load:transform-header('* ]]
+	[[ "$args" == *'ctrl-f:transform('*'--toggle'* ]]
+	[[ "$args" == *'type to search'* ]]
+	[ ! -s "$BATS_TEST_TMPDIR/fzf.stdin" ]
 }
 
 @test "an empty copy is the network's answer, not the query's" {
@@ -3573,6 +3644,7 @@ matcher Bash"
 @test "the preview marks what is typed in the picker, on any engine" {
 	write_filter_state
 	printf 'ddgr\n' >"$FR.engine"
+	printf 'pages\n' >"$FR.typing"
 
 	run env XDG_CACHE_HOME="$CACHE_HOME" DDGX_TTL=0 FZF_PREVIEW_COLUMNS=60 \
 		bash "$DDGX" --preview "$FR" 0 'matcher' </dev/null
@@ -3587,6 +3659,7 @@ matcher Bash"
 @test "the preview marks the text matched by a regex" {
 	write_filter_state
 	printf 'ddgr\n' >"$FR.engine"
+	printf 'pages\n' >"$FR.typing"
 
 	run env XDG_CACHE_HOME="$CACHE_HOME" DDGX_TTL=0 FZF_PREVIEW_COLUMNS=60 \
 		bash "$DDGX" --preview "$FR" 0 '/PreToolUse.*before/' </dev/null
@@ -3605,15 +3678,15 @@ matcher Bash"
 	[ -z "$output" ]
 }
 
-@test "both fzf search stages delegate matching to page text" {
-	# Each picker disables fzf's row matcher and reloads from page text instead:
-	# DuckDuckGo supplies the opening rows, then the second picker searches the
-	# narrowed result pages.
-	run grep -c -e '--disabled' -e 'change:reload($SELF --suggest' \
-		-e 'change:reload($SELF --filter' "$DDGX"
+@test "the one picker reads typing itself and never matches rows" {
+	# fzf's matcher is off and every keystroke goes through one dispatcher,
+	# which searches or filters the pages depending on where ctrl-f left the
+	# box. A second change binding would mean a second screen.
+	run grep -c -F -e '--disabled' -e 'change:reload($SELF --typed' "$DDGX"
 
 	[ "$status" -eq 0 ]
-	[ "$output" -eq 4 ]
+	[ "$output" -eq 2 ]
+	[ "$(grep -c -F 'reload($SELF --filter' "$DDGX")" -eq 0 ]
 }
 
 @test "the manual's refiner drops the operators typing now covers" {

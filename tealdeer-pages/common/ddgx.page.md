@@ -1,17 +1,29 @@
 # ddgx
 
-> Terminal DuckDuckGo search with readable page extracts.
+> Terminal DuckDuckGo search with readable page extracts, on one screen.
 > Plain text searches the web. `@` searches Claude Code docs. `?` asks Perplexity.
 
-- Search fresh DuckDuckGo results in Stage 1:
+- Search the web: type, then pause:
 
-`type a plain query, pause, then press Enter`
+`{{query}}`
 
-- Open concise help from either picker, then return with `q`:
+- Ask Perplexity, at a harder preset with `??`, then send it:
+
+`? {{question}}, then Enter`
+
+- Open the selected result, or send a query the rows do not answer yet:
+
+`Enter`
+
+- Open concise help, then return with `q`:
 
 `F1`
 
-- Search literal words inside the returned pages in Stage 2:
+- Switch the box to the page text and back:
+
+`Ctrl + f`
+
+- Search literal words inside the returned pages, after `Ctrl + f`:
 
 `codex agent`
 
@@ -19,7 +31,7 @@
 
 `"codex agent"`
 
-- Use an extended regular expression in Stage 2:
+- Use an extended regular expression inside the pages:
 
 `/{{ERE pattern}}/`
 
