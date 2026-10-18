@@ -68,12 +68,6 @@
 # free of DuckDuckGo's operators, so nothing that used to be a search stops
 # being one.
 #
-# From a result set, alt-q offers ask, web, and over an answer, follow. That
-# menu is where a query is already rebuilt after seeing what came back, and
-# switching engine is the same move as adding an operator: you learned
-# something from the results. It costs no key and no header line, which the key
-# audit below says is the price worth refusing to pay.
-#
 # The conversation is enter on the answer row. An answer that ends "I can narrow
 # this to X or Y" is inviting a second turn, and without one the offer is a dead
 # end you can only answer by starting over and typing the context back in by
@@ -82,9 +76,9 @@
 #
 # enter, because that is the row the cursor is already on when you finish
 # reading, and because on the answer row enter did nothing before: the row has
-# no page to open. The menu entry stays for the times you have forgotten. Every
-# turn reloads the list, which puts the cursor back on the answer, so the whole
-# of a conversation is enter, type, read, enter, type, read.
+# no page to open. Every turn reloads the list, which puts the cursor back on
+# the answer, so the whole of a conversation is enter, type, read, enter, type,
+# read.
 #
 # The transcript is the answer row, newest turn on top. Each turn carries the
 # question, the answer, and that turn's own numbered sources, because the rows
@@ -105,12 +99,6 @@
 # own matcher is off in both: it would match a title and a domain, a dozen
 # words per result, while the pages sat unread beside it.
 #
-# Which is also why the manual's refiner is short. site: and filetype: cannot
-# narrow a corpus of one site and one filetype, exclude inverts on a corpus
-# full of --flags, and phrase and reset are what typing in the pages does,
-# without re-ranking the corpus to do it. What is left is switching engine and
-# editing the words.
-#
 # Keys in the picker. tab marks results, and ctrl-e, ctrl-a, ctrl-y and ctrl-r
 # apply to the whole marked set, so mark five and hit one key:
 #   tab      mark / unmark          enter   open in the browser, or send a
@@ -124,7 +112,7 @@
 #   ctrl-a   bookmark into pet-links.toml, the file plink writes
 #   alt-h    hand the extracts to the pane you opened the popup from
 #   ctrl-y   copy the URLs          ctrl-r  re-fetch (bypass cache)
-#   alt-q    refine the query       ctrl-v  toggle the preview pane
+#   ctrl-v   toggle the preview pane
 #   alt-v    your YouTube channel: every upload newest first, stats on the
 #            row, description and comments in the preview, typing filters
 #   F1       open this concise help in a pager, q returns to the picker
@@ -149,13 +137,6 @@
 # what the result is by the time you reach for a key: it is showing a video, or
 # it is showing the red line that says the text could not be extracted, or it
 # is showing the text. So the key asks the preview rather than asking you.
-#
-# alt-q builds the query instead of asking you to recall the syntax. Pick an
-# operator, fill in its value, and the search re-runs under the picker. site:
-# offers the domains the current results came from, filetype: offers a list,
-# and an operator already in the query arrives prefilled so narrowing it is an
-# edit. The raw query stays editable from the same menu, and a refinement that
-# finds nothing leaves the previous results standing.
 #
 # Env: DDGX_TTL (cache seconds, default 86400; also how long the docs copy
 # stands), DDGX_JOBS (prefetch concurrency, default 6), DDGX_DOCS_DIR (where the
@@ -213,13 +194,13 @@ VIDEOS_TTL="${DDGX_VIDEOS_TTL:-3600}"
 # for the popup: {"channel": "UC...", "key_pass": "personal/YOUTUBE_API_KEY"}.
 # The key is named by its pass entry, never written down.
 YOUTUBE_CONFIG="${DDGX_YOUTUBE_CONFIG:-${XDG_CONFIG_HOME:-$HOME/.config}/ddgx/youtube.json}"
-# alt-q for the refiner, because every ctrl letter is already spoken for and an
-# existing binding wins. ctrl-s is XOFF: on the fresh pty the M-g popup runs
+# A new key is an alt key, because every ctrl letter is already spoken for and
+# an existing binding wins. ctrl-s is XOFF: on the fresh pty the M-g popup runs
 # on, the tty stops the screen and swallows everything until ctrl-q, and where
 # flow control is already off readline takes it for i-search. ctrl-t is
 # readline's transpose-chars. Cross-checking readline, tmux's root table, fzf's
-# defaults and the keys above leaves alt-h, alt-j, alt-q and alt-v; alt-q is
-# the one that stands for something.
+# defaults and the keys above leaves alt-h, alt-j, alt-q and alt-v. alt-h and
+# alt-v are spent; alt-j and alt-q are free.
 #
 # There was an audit here for the three keys play, render and yt-x used to
 # hold. It is gone with them. A key spend is a budget nobody was asking to
@@ -252,7 +233,7 @@ YOUTUBE_CONFIG="${DDGX_YOUTUBE_CONFIG:-${XDG_CONFIG_HOME:-$HOME/.config}/ddgx/yo
 # it is simply gone. A key you cannot see does not exist, so every line has to
 # stay short enough to survive that cut. The suite measures them.
 PICKER_KEYS='tab mark · enter open · ctrl-o play, render or read · ctrl-e nvim/qf · ctrl-v preview
-ctrl-a bookmark · ctrl-y copy · ctrl-r refetch · alt-q refine · alt-h hand to pane · alt-v videos'
+ctrl-a bookmark · ctrl-y copy · ctrl-r refetch · alt-h hand to pane · alt-v videos'
 WEB_KEYS='F1 help · type: search · @ docs · ? ask (enter) · ?? harder · ctrl-f in pages'
 PAGE_KEYS='F1 help · type: page text, ANDed · "phrase" exact · /ERE/ · ctrl-f the query'
 WEB_PROMPT='search > '
@@ -751,8 +732,8 @@ parse_query() {
 }
 
 # The box text that asks for the set on screen: the query with its engine's mark
-# back in front. alt-q and a follow-up change the set without anyone typing, and
-# the box has to keep saying what the rows answer.
+# back in front. A follow-up changes the set without anyone typing, and the box
+# has to keep saying what the rows answer.
 box_text() {
 	local file=$1 query
 	query=$(current_query "$file")
@@ -884,8 +865,8 @@ page_prompt() {
 # last because its argument runs to the end of the action list, which is also
 # what lets a query carry quotes and parens without any escaping.
 #
-# No header here. alt-q and a follow-up reload the list before this runs, and
-# the load that ends the reload draws the header. Drawing it here as well would
+# No header here. A follow-up reloads the list before this runs, and the load
+# that ends the reload draws the header. Drawing it here as well would
 # show a note and then draw over it, and a note is shown once.
 mode_box() {
 	local file=$1
@@ -911,7 +892,7 @@ mode_submit() {
 }
 
 # Which engine produced the current set. Absent means a web search, so a set
-# written before this file knew about engines still refines correctly.
+# written before this file knew about engines still reads correctly.
 current_engine() {
 	local ef
 	ef=$(engine_file "$1")
@@ -943,14 +924,13 @@ cleanup() {
 }
 
 # The live query and any one-line message live beside the results file. A
-# refinement runs as its own process, so a file is what it has to hand the
+# search from the box runs as its own process, so a file is what it has to hand the
 # picker back its new state through.
 query_file() { printf '%s.query' "$1"; }
 note_file() { printf '%s.note' "$1"; }
 # The answer text for an ask set, and which engine produced the set. The engine
-# has to be recorded rather than inferred: a refinement re-runs the search, and
-# a set that came from an answer must refine into another answer rather than
-# silently turning into a web search.
+# has to be recorded rather than inferred: a set that came from an answer must
+# read back as one rather than silently turning into a web search.
 answer_file() { printf '%s.answer' "$1"; }
 engine_file() { printf '%s.engine' "$1"; }
 # The conversation: the run id a follow-up continues from on line one, how many
@@ -1266,147 +1246,6 @@ render_markdown() {
 	fi
 }
 
-# ---------------------------------------------------------------------------
-# Query building. Operators do most of the work in a search and almost nobody
-# types them, because the syntax has to be recalled at the moment you are
-# thinking about the question. These build it instead.
-# ---------------------------------------------------------------------------
-
-# The value an operator already carries, so editing it starts from what the
-# query says rather than from an empty line.
-query_get() {
-	local tokens=() t
-	read -ra tokens <<<"$1"
-	for t in "${tokens[@]}"; do
-		if [[ $t == "$2"* ]]; then
-			printf '%s' "${t#"$2"}"
-			return 0
-		fi
-	done
-	return 0
-}
-
-# Replace an operator's value rather than adding a second one. Two site: terms
-# in one query match nothing, so refining twice has to overwrite the first.
-# An empty value drops the operator, which is how a constraint is taken back.
-query_set() {
-	local query=$1 prefix=$2 value=$3 tokens=() out=() t
-	read -ra tokens <<<"$query"
-	for t in "${tokens[@]}"; do
-		[[ $t == "$prefix"* ]] && continue
-		out+=("$t")
-	done
-	[[ -n $value ]] && out+=("$prefix$value")
-	printf '%s' "${out[*]}"
-}
-
-# Strip every operator and keep the words. Quoted phrases go first, as a whole
-# run, because splitting on spaces would leave two thirds of one behind.
-query_reset() {
-	local bare tokens=() out=() t
-	bare=$(printf '%s' "$1" | sed 's/"[^"]*"//g')
-	read -ra tokens <<<"$bare"
-	for t in "${tokens[@]}"; do
-		case $t in
-		*:*) continue ;;
-		-?*) continue ;;
-		esac
-		out+=("$t")
-	done
-	printf '%s' "${out[*]}"
-}
-
-# The domains the current results came from, commonest first. These are the
-# site: candidates worth offering: you learn what to constrain by seeing a bad
-# result set, and the set names its own domains.
-result_domains() {
-	jq -r '.[].url' "$1" |
-		awk -F/ 'NF > 2 { print $3 }' |
-		sed 's/^www\.//' |
-		sort | uniq -c | sort -k1,1nr -k2,2 | awk '{ print $2 }'
-}
-
-# The operators DuckDuckGo answers. Google's before:, after: and AROUND(n) are
-# absent because DuckDuckGo ignores them, and bangs are absent because ddgr
-# resolves a bang to a browser redirect and hands --json an empty set.
-refine_menu() {
-	local engine
-	engine=$(current_engine "${1:-}")
-	# follow only exists where there is something to follow, and it goes first
-	# because a conversation is a sequence of them: alt-q, enter, type. An entry
-	# offered over a web result set would be a dead option on every search.
-	if [[ $engine == pplx ]]; then
-		printf '%-10s %s\n' 'follow' 'ask a follow-up in the same conversation'
-	fi
-	printf '%-10s %s\n' \
-		'ask' 'ask perplexity this, answer with its sources' \
-		'web' 'search duckduckgo for this instead' \
-		'docs' 'look these words up in the claude code docs'
-	# The operators below are DuckDuckGo's, and over the manual every one of
-	# them is a lie. site: cannot narrow a corpus with one site in it and
-	# filetype: cannot narrow one with one filetype; both are stripped before
-	# the search, so the entry would re-run the same query and read as though
-	# it had done something.
-	#
-	# exclude is worse than useless there: it appends -word, and the manual's
-	# term parser keeps a leading dash on purpose, because a corpus of CLI
-	# reference is full of --flags that would otherwise be thrown away. So
-	# excluding a word makes the search hunt FOR "-word". A menu entry that
-	# does the opposite of what it says is not one to leave on the menu.
-	if [[ $engine != docs ]]; then
-		printf '%-10s %s\n' \
-			'site:' 'only this domain' \
-			'-site:' 'everything except this domain' \
-			'filetype:' 'only this kind of file' \
-			'intitle:' 'the words must be in the title' \
-			'inurl:' 'the words must be in the address' \
-			'exclude' 'drop results carrying a word'
-	fi
-	# phrase and reset are also web-only now. Typing a "quoted phrase" in the
-	# picker searches the page bodies of the manual and marks the hits, which
-	# is what asking for an exact wording was reaching for, only without
-	# re-ranking the corpus to get it. And reset drops operators from a query
-	# the manual never had any in.
-	if [[ $engine != docs ]]; then
-		printf '%-10s %s\n' \
-			'phrase' 'an exact wording, in quotes' \
-			'reset' 'drop every operator, keep the words'
-	fi
-	printf '%-10s %s\n' 'edit' 'edit the whole query by hand'
-}
-
-FILETYPES='pdf
-md
-txt
-csv
-json
-yaml
-xml
-html
-doc
-docx
-ppt
-pptx
-xls
-xlsx'
-
-# Pick a value from a list on stdin, or type one the list does not hold.
-# Returns non-zero when the pick was abandoned, which leaves the query alone.
-choose_value() {
-	local prompt=$1 out rc=0 lines=()
-	out=$(fzf --print-query --layout=reverse --prompt="$prompt" \
-		--header='enter takes the highlighted line, or type your own') || rc=$?
-	# 130 is esc or ctrl-c. Anything else is a value, including the typed
-	# query fzf prints when nothing in the list matched it.
-	[[ $rc -eq 130 ]] && return 1
-	mapfile -t lines <<<"$out"
-	if [[ ${#lines[@]} -ge 2 && -n ${lines[1]} ]]; then
-		printf '%s' "${lines[1]}"
-	else
-		printf '%s' "${lines[0]}"
-	fi
-}
-
 # Read one value with readline editing, prefilled with what the query already
 # says. The prompt and the framing go to stderr: stdout is the value.
 read_value() {
@@ -1419,9 +1258,9 @@ read_value() {
 
 # Run the search again behind the picker.
 #
-# A refinement that finds nothing must leave the old set standing. An empty
-# picker with the query already spent is a dead end, and the whole point of
-# refining is to be able to try a different constraint against what you saw.
+# A search that finds nothing must leave the old set standing. An empty picker
+# with the query already spent is a dead end, and the point of searching again
+# is to try different words against what you saw.
 run_query() {
 	local file=$1 num=$2 query=$3 engine=${4:-} follow=${5:-0}
 	local tmp ok=0 continue_id='' held=''
@@ -1484,7 +1323,7 @@ mode_preview() {
 	# {q} is the page filter only after ctrl-f. Before it, the box holds the
 	# query, and marking a question's every word on a page reads as a match.
 	[[ $(typing_mode "$file") == pages ]] || pickq=''
-	# A content refinement can leave the picker with no rows. fzf still refreshes
+	# The page filter can leave the picker with no rows. fzf still refreshes
 	# the preview once with an empty {1}; do not hand that to jq as --argjson.
 	[[ $idx =~ ^[0-9]+$ ]] || return 0
 	width=$((${FZF_PREVIEW_COLUMNS:-100} - 2))
@@ -1975,11 +1814,6 @@ mode_action() {
 	printf 'execute(%s --read %s %s)' "$SELF" "$file" "$*"
 }
 
-# Ask the next question in the conversation.
-#
-# A mode of its own because two keys reach it: enter on the answer row, which is
-# the one you actually use, and follow in the alt-q menu, which is where you
-# look when you have forgotten that enter does it.
 # Fill in the YouTube key and channel id the environment lacks, from
 # YOUTUBE_CONFIG. The key decrypts the way ~/.envrc's _pass_export does it.
 youtube_env() {
@@ -2076,6 +1910,7 @@ mode_videos_box() {
 	printf 'change-prompt(%s)+clear-query' "$VIDEOS_PROMPT"
 }
 
+# Ask the next question in the conversation: enter on the answer row.
 mode_follow() {
 	local file=$1 num=$2 followup
 	if [[ $(current_engine "$file") != pplx ]]; then
@@ -2094,7 +1929,7 @@ mode_follow() {
 # On the answer it asks the next question.
 #
 # That row is where the cursor already sits when you finish reading, and a
-# conversation is a sequence of follow-ups: alt-q, enter, type was three
+# conversation is a sequence of follow-ups: a menu, enter, type was three
 # keystrokes of ceremony around the one thing you came back to do. It costs no
 # key, because enter on the answer row did nothing at all before: the row has no
 # url, and mode_pick only ever opened rows that had one.
@@ -2321,7 +2156,7 @@ play_detached() {
 }
 
 # The picker's rows: the result index, then a numbered title with its domain.
-# A mode of its own because a refinement re-runs it through fzf's reload.
+# A mode of its own because every search re-runs it through fzf's reload.
 #
 # Two numberings. A web result is numbered by position, because position is all
 # it has. An answer's source carries the number the answer itself used, so a
@@ -2432,7 +2267,7 @@ mode_list() {
 }
 
 # The header: the query on top, the keys under it. The query is there because
-# after two refinements the constraints in force are no longer something you
+# after a few edits the constraints in force are no longer something you
 # can be expected to hold in your head. A note from the last action rides along
 # on the same line and is cleared once shown, so it reads as what just
 # happened rather than as part of the query.
@@ -2440,7 +2275,7 @@ mode_header() {
 	local file=$1 note nf query label='query'
 	nf=$(note_file "$file")
 	# Which engine answered is part of what the header is for: after a switch
-	# through alt-q the same words mean two different things.
+	# from ? to @ the same words mean two different things.
 	case $(current_engine "$file") in
 	pplx) label='ask' ;;
 	docs) label='docs' ;;
@@ -2464,90 +2299,6 @@ mode_header() {
 	else
 		printf '%s\n' "$WEB_KEYS"
 	fi
-}
-
-# Build an operator onto the current query and search again.
-#
-# The builder lives here, over a result set, rather than in the search box:
-# you learn what to constrain by seeing what came back, not before it. Every
-# path out of the menu can be abandoned, and abandoning changes nothing.
-mode_refine() {
-	local file=$1 num=$2 query choice value new
-	query=$(current_query "$file")
-
-	choice=$(refine_menu "$file" | fzf --layout=reverse --prompt='refine > ' \
-		--header="query: $query") || return 0
-	choice=${choice%% *}
-
-	if [[ $choice == follow ]]; then
-		mode_follow "$file" "$num"
-		return 0
-	fi
-
-	# The engine switches run the query as it stands, so they return here rather
-	# than falling through to the equality check below, which exists to stop a
-	# query that did not change from costing a search. Changing engine changes
-	# the answer even when the words are identical, which is the whole point.
-	case $choice in
-	'ask' | 'web' | 'docs')
-		local engine=ddgr
-		[[ $choice == ask ]] && engine=pplx
-		[[ $choice == docs ]] && engine=docs
-		if [[ $engine == "$(current_engine "$file")" ]]; then
-			set_note "$file" "already $choice"
-			return 0
-		fi
-		# The bare words, without the operators. site: and filetype: are
-		# DuckDuckGo syntax; handing them to an answer engine asks it to explain
-		# a search operator rather than to answer the question.
-		[[ $engine == pplx || $engine == docs ]] && query=$(query_reset "$query")
-		if [[ -z ${query//[[:space:]]/} ]]; then
-			set_note "$file" 'nothing left to ask once the operators come off'
-			return 0
-		fi
-		run_query "$file" "$num" "$query" "$engine"
-		return 0
-		;;
-	esac
-
-	case $choice in
-	'site:' | '-site:')
-		value=$(result_domains "$file" | choose_value "$choice ") || return 0
-		new=$(query_set "$query" "$choice" "$value")
-		;;
-	'filetype:')
-		value=$(printf '%s\n' "$FILETYPES" | choose_value 'filetype: ') || return 0
-		new=$(query_set "$query" 'filetype:' "$value")
-		;;
-	'intitle:' | 'inurl:')
-		value=$(read_value "$choice" "$(query_get "$query" "$choice")") || return 0
-		new=$(query_set "$query" "$choice" "$value")
-		;;
-	'phrase')
-		value=$(read_value 'exact phrase' '') || return 0
-		[[ -z ${value//[[:space:]]/} ]] && return 0
-		new="$query \"$value\""
-		;;
-	'exclude')
-		value=$(read_value 'drop results with' '') || return 0
-		[[ -z ${value//[[:space:]]/} ]] && return 0
-		new="$query -$value"
-		;;
-	'edit')
-		new=$(read_value 'query' "$query") || return 0
-		;;
-	'reset')
-		new=$(query_reset "$query")
-		;;
-	*) return 0 ;;
-	esac
-
-	if [[ -z ${new//[[:space:]]/} ]]; then
-		set_note "$file" "that would leave nothing to search for"
-		return 0
-	fi
-	[[ $new == "$query" ]] && return 0
-	run_query "$file" "$num" "$new"
 }
 
 # ---------------------------------------------------------------------------
@@ -2647,7 +2398,7 @@ mode_pick() {
 	# the picker, and the pane is where a reason belongs.
 	#
 	# The box opens holding the query that built the set, so editing it is
-	# refining it. load fires when a reload has finished, which is when the
+	# searching again. load fires when a reload has finished, which is when the
 	# header can say what the new set is and why a search kept the old one.
 	selected=$(
 		mode_list "$file" |
@@ -2669,7 +2420,6 @@ mode_pick() {
 				--bind="alt-h:transform($SELF --send '$file' {+1} 2>/dev/null)" \
 				--bind="ctrl-y:execute-silent($SELF --copy '$file' {+1})" \
 				--bind="ctrl-r:execute-silent($SELF --refetch '$file' {+1})+refresh-preview" \
-				--bind="alt-q:execute($SELF --refine '$file' $num)+reload($SELF --list '$file')+transform($SELF --box '$file')" \
 				--bind="alt-v:execute($SELF --videos '$file')+reload($SELF --list '$file')+transform($SELF --videos-box '$file')" \
 				--bind='ctrl-v:change-preview-window(hidden|right,58%,wrap,border-left)' \
 				--bind='ctrl-d:preview-half-page-down' \
@@ -2785,11 +2535,6 @@ main() {
 		;;
 	--header)
 		mode_header "$2"
-		return 0
-		;;
-	--refine)
-		shift
-		mode_refine "$@"
 		return 0
 		;;
 	--fetch)
@@ -2938,7 +2683,7 @@ main() {
 		if [[ $failed -eq 1 ]]; then
 			die "$SEARCH_ERROR"
 		fi
-		# What the picker refines from, and what it refines through.
+		# What the box starts from, and which engine answered.
 		printf '%s\n' "$query" >"$(query_file "$RESULTS_FILE")"
 		set_engine "$RESULTS_FILE" "$engine"
 	fi

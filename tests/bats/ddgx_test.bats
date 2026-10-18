@@ -1140,30 +1140,9 @@ EOF
 }
 
 # --------------------------------------------------------------------------
-# Refining the query. alt-q in the picker runs --refine, which rewrites the
-# query and the results in place so fzf can reload over the same files.
+# A set on disk. The modes below run over the results file and its sidecars,
+# the way the picker's bindings call them.
 # --------------------------------------------------------------------------
-
-# Stub fzf so a menu choice and a value pick are two lines of a queue. Each
-# call records what it was offered, which is how the site: values are checked
-# against the result set they are supposed to come from. A queued "@abort"
-# stands for esc.
-stub_fzf() {
-	printf '%s\n' "$@" >"$STUB_BIN/fzf.queue"
-	rm -f "$STUB_BIN/fzf.count"
-	cat >"$STUB_BIN/fzf" <<'EOF'
-#!/usr/bin/env bash
-dir=$(dirname "$0")
-n=$(cat "$dir/fzf.count" 2>/dev/null || echo 0)
-n=$((n + 1))
-echo "$n" >"$dir/fzf.count"
-cat >"$dir/fzf.stdin.$n"
-line=$(sed -n "${n}p" "$dir/fzf.queue")
-[ "$line" = "@abort" ] && exit 130
-printf '%s\n' "$line"
-EOF
-	chmod +x "$STUB_BIN/fzf"
-}
 
 # A picker mid-search: three results over two domains, and the query that
 # produced them.
@@ -1171,156 +1150,8 @@ write_search_state() {
 	RESULTS="$BATS_TEST_TMPDIR/results.json"
 	printf '%s\n' '[{"title":"Finalizers","url":"https://kubernetes.io/docs/finalizers/","abstract":"a"},{"title":"A blog","url":"https://www.medium.com/p/1","abstract":"b"},{"title":"Nodes","url":"https://kubernetes.io/docs/nodes/","abstract":"c"}]' >"$RESULTS"
 	printf '%s\n' "$1" >"$RESULTS.query"
-	# The refined set, pre-cached so the warming pass has nothing to fetch.
+	# The next set, pre-cached so the warming pass has nothing to fetch.
 	seed_cache "https://kubernetes.io/only/" "the narrowed page"
-}
-
-refined_query() { head -n1 "$RESULTS.query"; }
-
-run_refine() {
-	run env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" \
-		XDG_DATA_HOME="$DATA_HOME" DDGX_TTL=0 \
-		bash "$DDGX" --refine "$RESULTS" 8
-}
-
-@test "refining by site: rewrites the query and the results under it" {
-	write_search_state 'kubernetes finalizers'
-	stub_ddgr '[{"title":"Narrowed","url":"https://kubernetes.io/only/","abstract":"z"}]'
-	stub_fzf 'site:' 'kubernetes.io'
-
-	run_refine
-
-	[ "$status" -eq 0 ]
-	[ "$(refined_query)" = "kubernetes finalizers site:kubernetes.io" ]
-	[ "$(jq -r '.[0].title' "$RESULTS")" = "Narrowed" ]
-	[ "$(jq 'length' "$RESULTS")" -eq 1 ]
-}
-
-@test "the site: values on offer are the domains the results came from" {
-	write_search_state 'kubernetes finalizers'
-	stub_ddgr '[{"title":"Narrowed","url":"https://kubernetes.io/only/","abstract":"z"}]'
-	stub_fzf 'site:' 'kubernetes.io'
-
-	run_refine
-
-	# Picking a domain out of a list beats typing one, and the list is the
-	# result set's own domains, commonest first, with www dropped.
-	[ "$status" -eq 0 ]
-	local offered="$STUB_BIN/fzf.stdin.2"
-	[ "$(head -n1 "$offered")" = "kubernetes.io" ]
-	grep -qx 'medium.com' "$offered"
-	! grep -q 'www\.' "$offered"
-}
-
-@test "refining site: twice replaces it rather than adding a second one" {
-	write_search_state 'kubernetes finalizers site:medium.com'
-	stub_ddgr '[{"title":"Narrowed","url":"https://kubernetes.io/only/","abstract":"z"}]'
-	stub_fzf 'site:' 'kubernetes.io'
-
-	run_refine
-
-	# Two site: terms in one query match nothing at all.
-	[ "$status" -eq 0 ]
-	[ "$(refined_query)" = "kubernetes finalizers site:kubernetes.io" ]
-}
-
-@test "an empty value takes the operator back off the query" {
-	write_search_state 'kubernetes finalizers site:medium.com'
-	stub_ddgr '[{"title":"Widened","url":"https://kubernetes.io/only/","abstract":"z"}]'
-	stub_fzf 'site:' ''
-
-	run_refine
-
-	[ "$status" -eq 0 ]
-	[ "$(refined_query)" = "kubernetes finalizers" ]
-}
-
-@test "an abandoned menu leaves the query and the results alone" {
-	write_search_state 'kubernetes finalizers'
-	stub_ddgr '[{"title":"Never asked for","url":"https://kubernetes.io/only/","abstract":"z"}]'
-	stub_fzf '@abort'
-
-	run_refine
-
-	[ "$status" -eq 0 ]
-	[ "$(refined_query)" = "kubernetes finalizers" ]
-	[ "$(jq 'length' "$RESULTS")" -eq 3 ]
-}
-
-@test "a refinement that finds nothing keeps the previous results" {
-	write_search_state 'kubernetes finalizers'
-	stub_ddgr '[]'
-	stub_fzf 'site:' 'nowhere.example'
-
-	run_refine
-
-	# An empty picker with the query already spent is a dead end: the point of
-	# refining is to try another constraint against the set you can still see.
-	[ "$status" -eq 0 ]
-	[ "$(refined_query)" = "kubernetes finalizers" ]
-	[ "$(jq 'length' "$RESULTS")" -eq 3 ]
-	run env XDG_CACHE_HOME="$CACHE_HOME" bash "$DDGX" --header "$RESULTS"
-	[[ "$output" == *"no results, kept the previous results"* ]]
-}
-
-@test "a refusal mid-refinement is not reported as an empty result set" {
-	write_search_state 'kubernetes finalizers'
-	cat >"$STUB_BIN/ddgr" <<'EOF'
-#!/usr/bin/env bash
-echo '[ERROR] HTTP Error 202: Accepted' >&2
-echo '[]'
-EOF
-	chmod +x "$STUB_BIN/ddgr"
-	stub_fzf 'site:' 'kubernetes.io'
-
-	run_refine
-
-	# Told "nothing for that", you drop a constraint that was fine. The header
-	# has to name what actually happened.
-	[ "$status" -eq 0 ]
-	[ "$(refined_query)" = "kubernetes finalizers" ]
-	run env XDG_CACHE_HOME="$CACHE_HOME" bash "$DDGX" --header "$RESULTS"
-	[[ "$output" == *"HTTP Error 202: Accepted, kept the previous results"* ]]
-}
-
-@test "reset drops every operator and keeps the words" {
-	write_search_state 'kubernetes drain site:medium.com filetype:pdf -aws "exact words"'
-	stub_ddgr '[{"title":"Widened","url":"https://kubernetes.io/only/","abstract":"z"}]'
-	stub_fzf 'reset'
-
-	run_refine
-
-	[ "$status" -eq 0 ]
-	[ "$(refined_query)" = "kubernetes drain" ]
-}
-
-@test "an excluded word is appended, and more than one may be" {
-	write_search_state 'kubernetes drain -aws'
-	stub_ddgr '[{"title":"Narrowed","url":"https://kubernetes.io/only/","abstract":"z"}]'
-	stub_fzf 'exclude'
-
-	run env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" \
-		XDG_DATA_HOME="$DATA_HOME" DDGX_TTL=0 \
-		bash "$DDGX" --refine "$RESULTS" 8 <<<"azure"
-
-	# Exclusions are not an operator with one value: every one you add says
-	# something the last one did not.
-	[ "$status" -eq 0 ]
-	[ "$(refined_query)" = "kubernetes drain -aws -azure" ]
-}
-
-@test "the raw query stays editable by hand" {
-	write_search_state 'kubernetes finalizers'
-	stub_ddgr '[{"title":"Typed","url":"https://kubernetes.io/only/","abstract":"z"}]'
-	stub_fzf 'edit'
-
-	run env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" \
-		XDG_DATA_HOME="$DATA_HOME" DDGX_TTL=0 \
-		bash "$DDGX" --refine "$RESULTS" 8 <<<'etcd defrag intitle:runbook'
-
-	# The builder must never become the only way to type a query.
-	[ "$status" -eq 0 ]
-	[ "$(refined_query)" = "etcd defrag intitle:runbook" ]
 }
 
 @test "list mode gives fzf one row per result, keyed by index" {
@@ -1709,7 +1540,7 @@ EOF
 	[[ "${lines[0]}" == "query: kubernetes finalizers site:kubernetes.io"* ]]
 	[[ "${lines[0]}" == *"bookmarked to pet-links.toml"* ]]
 	[[ "${lines[1]}" == *"ctrl-o play, render or read"* ]]
-	[[ "${lines[2]}" == *"alt-q refine"* ]]
+	[[ "${lines[2]}" == *"alt-h hand to pane"* ]]
 
 	# What just happened is not part of the query: it goes once it is shown.
 	run bash "$DDGX" --header "$RESULTS"
@@ -2358,10 +2189,12 @@ write_ask_state() {
 	seed_cache "https://etcd.io/docs/maintenance/" "the maintenance page"
 }
 
-run_ask_refine() {
+# Send a query from the box, the way enter does once the rows stop answering it.
+run_submit() {
+	printf '%s' "$1" >"$RESULTS.submit"
 	run env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" \
 		XDG_DATA_HOME="$DATA_HOME" DDGX_TTL=0 DDGX_ASK_CMD="$STUB_BIN/ask" \
-		bash "$DDGX" --refine "$RESULTS" 8
+		bash "$DDGX" --submit "$RESULTS" 8
 }
 
 @test "a leading ? asks rather than searches" {
@@ -2535,74 +2368,16 @@ EOF
 	[[ "$output" == *"query: kubernetes finalizers"* ]]
 }
 
-@test "refining an ask set asks again rather than quietly searching" {
-	write_ask_state 'etcd defrag'
-	stub_ask "$ASK_REPLY"
-	stub_fzf 'edit'
-
-	# The hand-edited query arrives on stdin, the way the builder's edit entry
-	# has always taken it.
-	run env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" \
-		XDG_DATA_HOME="$DATA_HOME" DDGX_TTL=0 DDGX_ASK_CMD="$STUB_BIN/ask" \
-		bash "$DDGX" --refine "$RESULTS" 8 <<<'etcd defrag blocking'
-
-	[ "$status" -eq 0 ]
-	[ "$(asked_query)" = "etcd defrag blocking" ]
-	[ "$(head -n1 "$RESULTS.engine")" = "pplx" ]
-}
-
-@test "alt-q ask turns a web set into an answer" {
-	write_search_state 'etcd defrag'
-	stub_ask "$ASK_REPLY"
-	stub_fzf 'ask'
-
-	run_ask_refine
-
-	[ "$status" -eq 0 ]
-	[ "$(head -n1 "$RESULTS.engine")" = "pplx" ]
-	[ "$(asked_query)" = "etcd defrag" ]
-	grep -q 'Defrag rewrites' "$RESULTS.answer"
-}
-
-@test "switching to ask drops the search operators" {
-	write_search_state 'etcd defrag site:etcd.io filetype:pdf'
-	stub_ask "$ASK_REPLY"
-	stub_fzf 'ask'
-
-	run_ask_refine
-
-	# site: and filetype: are DuckDuckGo syntax. Handing them to an answer
-	# engine asks it to explain an operator instead of answering the question.
-	[ "$status" -eq 0 ]
-	[ "$(asked_query)" = "etcd defrag" ]
-}
-
 @test "switching back to web takes the answer down with it" {
 	write_ask_state 'etcd defrag'
 	stub_ddgr '[{"title":"Narrowed","url":"https://kubernetes.io/only/","abstract":"z"}]'
-	stub_fzf 'web'
-
-	run_ask_refine
+	run_submit 'etcd defrag'
 
 	# A stale answer under a set with no row to show it is a file that can only
 	# ever be read by mistake.
 	[ "$status" -eq 0 ]
 	[ "$(head -n1 "$RESULTS.engine")" = "ddgr" ]
 	[ ! -f "$RESULTS.answer" ]
-}
-
-@test "asking for the engine already in use costs nothing" {
-	write_ask_state 'etcd defrag'
-	rm -f "$STUB_BIN/ask.argv"
-	stub_ask "$ASK_REPLY"
-	rm -f "$STUB_BIN/ask.argv"
-	stub_fzf 'ask'
-
-	run_ask_refine
-
-	[ "$status" -eq 0 ]
-	[ ! -f "$STUB_BIN/ask.argv" ]
-	grep -q 'already ask' "$RESULTS.note"
 }
 
 @test "?? asks harder, and high is the default depth" {
@@ -2659,35 +2434,12 @@ FOLLOW_REPLY='{"id":"resp_second","answer":"Because the member blocks while it r
 run_follow() {
 	run env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" \
 		XDG_DATA_HOME="$DATA_HOME" DDGX_TTL=0 DDGX_ASK_CMD="$STUB_BIN/ask" \
-		bash "$DDGX" --refine "$RESULTS" 8 <<<"$1"
-}
-
-@test "a follow-up is offered over an answer" {
-	write_ask_state 'etcd defrag'
-	stub_fzf '@abort'
-
-	run_ask_refine
-
-	[ "$status" -eq 0 ]
-	grep -q '^follow' "$STUB_BIN/fzf.stdin.1"
-}
-
-@test "a follow-up is not offered over a web search" {
-	write_search_state 'kubernetes finalizers'
-	stub_fzf '@abort'
-
-	run_ask_refine
-
-	# A dead entry on every search is worse than no entry: it reads as a
-	# feature until the day you pick it.
-	[ "$status" -eq 0 ]
-	[[ "$(cat "$STUB_BIN/fzf.stdin.1")" != *"follow"* ]]
+		bash "$DDGX" --follow "$RESULTS" 8 <<<"$1"
 }
 
 @test "a follow-up carries the thread, so it can say it" {
 	write_ask_state 'etcd defrag'
 	stub_ask "$FOLLOW_REPLY"
-	stub_fzf 'follow'
 
 	run_follow 'why does it block'
 
@@ -2702,7 +2454,6 @@ run_follow() {
 @test "a follow-up keeps the conversation and puts the newest turn on top" {
 	write_ask_state 'etcd defrag'
 	stub_ask "$FOLLOW_REPLY"
-	stub_fzf 'follow'
 
 	run_follow 'why does it block'
 
@@ -2722,7 +2473,6 @@ run_follow() {
 @test "each turn carries its own numbered sources" {
 	write_ask_state 'etcd defrag'
 	stub_ask "$FOLLOW_REPLY"
-	stub_fzf 'follow'
 
 	run_follow 'why does it block'
 
@@ -2735,7 +2485,6 @@ run_follow() {
 @test "a follow-up advances the thread and the turn count" {
 	write_ask_state 'etcd defrag'
 	stub_ask "$FOLLOW_REPLY"
-	stub_fzf 'follow'
 
 	run_follow 'why does it block'
 
@@ -2750,11 +2499,8 @@ run_follow() {
 @test "a fresh ask starts a new conversation rather than continuing the last" {
 	write_ask_state 'etcd defrag'
 	stub_ask "$ASK_REPLY"
-	stub_fzf 'edit'
 
-	run env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" \
-		XDG_DATA_HOME="$DATA_HOME" DDGX_TTL=0 DDGX_ASK_CMD="$STUB_BIN/ask" \
-		bash "$DDGX" --refine "$RESULTS" 8 <<<'something else entirely'
+	run_submit '? something else entirely'
 
 	# Rewriting the query is a new question, not the next one: continuing the
 	# thread would answer it in the shadow of a conversation it has nothing to
@@ -2768,9 +2514,7 @@ run_follow() {
 @test "switching back to web ends the conversation" {
 	write_ask_state 'etcd defrag'
 	stub_ddgr '[{"title":"Narrowed","url":"https://kubernetes.io/only/","abstract":"z"}]'
-	stub_fzf 'web'
-
-	run_ask_refine
+	run_submit 'etcd defrag'
 
 	# A thread id under a web set would let a later follow-up continue a
 	# conversation the picker has no trace of.
@@ -2781,7 +2525,6 @@ run_follow() {
 @test "a conversation is held at the depth it was started at" {
 	write_ask_state 'etcd defrag'
 	stub_ask "$FOLLOW_REPLY"
-	stub_fzf 'follow'
 
 	run_follow 'why does it block'
 
@@ -3215,63 +2958,6 @@ EOF
 
 	[ "$status" -eq 0 ]
 	[[ "${lines[0]}" == "docs: matcher precedence"* ]]
-}
-
-@test "alt-q offers the manual alongside ask and web" {
-	R="$BATS_TEST_TMPDIR/web-set.json"
-	printf '%s\n' '[{"title":"A page","url":"https://example.com/a","abstract":"x"}]' >"$R"
-	printf 'matcher\n' >"$R.query"
-
-	run env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" \
-		XDG_DATA_HOME="$DATA_HOME" DDGX_TTL=0 \
-		bash -c "source '$DDGX' >/dev/null 2>&1 || true; refine_menu '$R'"
-
-	[ "$status" -eq 0 ]
-	[[ "$output" == *"docs"* ]]
-	[[ "$output" == *"claude code docs"* ]]
-}
-
-@test "switching to the manual drops the search operators" {
-	# site: and filetype: are DuckDuckGo's syntax, and there is only one site
-	# in the manual. Handing them over would search for the operator.
-	write_docs_corpus
-	stub_curl_tripwire
-	stub_ddgr_tripwire
-	R="$BATS_TEST_TMPDIR/switch.json"
-	printf '%s\n' '[{"title":"A page","url":"https://example.com/a","abstract":"x"}]' >"$R"
-	printf 'site:example.com matcher precedence\n' >"$R.query"
-	printf 'ddgr\n' >"$R.engine"
-	stub_fzf 'docs'
-
-	run env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" \
-		XDG_DATA_HOME="$DATA_HOME" DDGX_TTL=0 DDGX_DOCS_DIR="$DOCS_DIR" \
-		DDGX_NO_NETWORK=1 \
-		bash "$DDGX" --refine "$R" 8
-
-	[ "$status" -eq 0 ]
-	[ "$(cat "$R.engine")" = "docs" ]
-	[ "$(cat "$R.query")" = "matcher precedence" ]
-	[[ "$(cat "$R")" == *"code.claude.com"* ]]
-}
-
-@test "refining a docs set searches the manual again, not the web" {
-	write_docs_corpus
-	stub_curl_tripwire
-	stub_ddgr_tripwire
-	R="$BATS_TEST_TMPDIR/again.json"
-	printf '%s\n' '[{"title":"Hooks reference","url":"https://code.claude.com/docs/en/hooks","abstract":"x"}]' >"$R"
-	printf 'matcher\n' >"$R.query"
-	printf 'docs\n' >"$R.engine"
-	stub_fzf 'edit'
-
-	run env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" \
-		XDG_DATA_HOME="$DATA_HOME" DDGX_TTL=0 DDGX_DOCS_DIR="$DOCS_DIR" \
-		DDGX_NO_NETWORK=1 \
-		bash "$DDGX" --refine "$R" 8 <<<'settings.json' 
-
-	[ "$status" -eq 0 ]
-	[ "$(cat "$R.engine")" = "docs" ]
-	[[ "$(cat "$R")" == *"settings-reference"* ]]
 }
 
 @test "F1 opens the concise help page from the picker" {
@@ -3767,44 +3453,6 @@ EOF
 	[[ "$output" != *$'\033[7m'* ]]
 }
 
-@test "the refiner offers the manual nothing duckduckgo-only" {
-	# Over the manual every one of these is a lie. site: cannot narrow a corpus
-	# with one site in it, filetype: cannot narrow one with one filetype, and
-	# both are stripped before the search, so the entry re-runs the same query
-	# and reads as though it did something.
-	R="$BATS_TEST_TMPDIR/docsmenu.json"
-	printf '%s\n' '[{"title":"Hooks","url":"https://code.claude.com/docs/en/hooks","abstract":"x"}]' >"$R"
-	printf 'hooks matcher\n' >"$R.query"
-	printf 'docs\n' >"$R.engine"
-
-	run bash -c "source '$DDGX' >/dev/null 2>&1 || true; refine_menu '$R'"
-
-	[ "$status" -eq 0 ]
-	[[ "$output" != *'site:'* ]]
-	[[ "$output" != *'filetype:'* ]]
-	[[ "$output" != *'intitle:'* ]]
-	[[ "$output" != *'inurl:'* ]]
-	# The one that still means something over a corpus of prose.
-	[[ "$output" == *'edit'* ]]
-}
-
-@test "exclude is not offered over the manual, because it would invert" {
-	# exclude appends -word, and the manual's parser keeps a leading dash on
-	# purpose: a corpus of CLI reference is full of --flags that would
-	# otherwise be thrown away. So excluding a word makes the search hunt FOR
-	# "-word". A menu entry that does the opposite of what it says is worse
-	# than a missing one.
-	R="$BATS_TEST_TMPDIR/exmenu.json"
-	printf '%s\n' '[{"title":"Hooks","url":"https://code.claude.com/docs/en/hooks","abstract":"x"}]' >"$R"
-	printf 'hooks matcher\n' >"$R.query"
-	printf 'docs\n' >"$R.engine"
-
-	run bash -c "source '$DDGX' >/dev/null 2>&1 || true; refine_menu '$R'"
-
-	[ "$status" -eq 0 ]
-	[[ "$output" != *'exclude'* ]]
-}
-
 @test "a leading dash stays a flag, which is why exclude cannot be offered" {
 	# The other half of the same decision, asserted where it is decided rather
 	# than only where it is worked around.
@@ -3812,22 +3460,6 @@ EOF
 
 	[ "$status" -eq 0 ]
 	[[ "$output" == *'-sdk'* ]]
-}
-
-@test "a web set keeps every operator the refiner ever offered" {
-	R="$BATS_TEST_TMPDIR/webmenu.json"
-	printf '%s\n' '[{"title":"A","url":"https://example.com/a","abstract":"x"}]' >"$R"
-	printf 'kubernetes finalizers\n' >"$R.query"
-	printf 'ddgr\n' >"$R.engine"
-
-	run bash -c "source '$DDGX' >/dev/null 2>&1 || true; refine_menu '$R'"
-
-	[ "$status" -eq 0 ]
-	local op
-	for op in 'site:' '-site:' 'filetype:' 'intitle:' 'inurl:' 'phrase' \
-		'exclude' 'edit' 'reset' 'ask' 'web' 'docs'; do
-		[[ "$output" == *"$op"* ]] || { echo "missing: $op"; return 1; }
-	done
 }
 
 # --------------------------------------------------------------------------
@@ -4000,7 +3632,7 @@ matcher Bash"
 	[[ "$output" == *$'\033[7mPreToolUse hook fires before\033[27m'* ]]
 }
 
-@test "an empty refined set clears the preview without a jq error" {
+@test "an empty filtered set clears the preview without a jq error" {
 	write_filter_state
 
 	run env XDG_CACHE_HOME="$CACHE_HOME" bash "$DDGX" --preview "$FR" '' \
@@ -4019,19 +3651,6 @@ matcher Bash"
 	[ "$status" -eq 0 ]
 	[ "$output" -eq 2 ]
 	[ "$(grep -c -F 'reload($SELF --filter' "$DDGX")" -eq 0 ]
-}
-
-@test "the manual's refiner drops the operators typing now covers" {
-	write_filter_state
-
-	run bash -c "source '$DDGX' >/dev/null 2>&1 || true; refine_menu '$FR'"
-
-	[ "$status" -eq 0 ]
-	# phrase is what typing a quoted phrase does, without re-ranking the
-	# corpus to do it, and reset drops operators from a query that has none.
-	[[ "$output" != *'phrase'* ]]
-	[[ "$output" != *'reset'* ]]
-	[[ "$output" == *'edit'* ]]
 }
 
 @test "the answer row is searched by its text, not by its title" {
