@@ -423,7 +423,9 @@ zle -N replace-string
 zle -N replace-string-again
 bindkey '^X^R' replace-string             # Ctrl+X Ctrl+R: Search-replace in line
 bindkey '^X^N' replace-string-again       # Ctrl+X Ctrl+N: Repeat last replace
-bindkey '^[^M' accept-and-hold            # Alt+Enter: Run and keep command
+# Shift+Enter: newline without running, as in Claude Code. Alacritty sends ESC CR
+# for Shift+Enter, the same bytes as Alt+Enter, so both keys insert the newline.
+bindkey '^[^M' self-insert-unmeta
 source /home/decoder/dev/dotfiles/.zsh/float-command.zsh
 # Enter: wrap `a; b C` lines, then run through the float widget. Bound after
 # float-command.zsh, which binds the same keys.
