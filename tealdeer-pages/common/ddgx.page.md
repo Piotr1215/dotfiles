@@ -11,6 +11,10 @@
 
 `? {{question}}, then Enter`
 
+- Ask a follow-up in the same conversation: Enter on the answer row, type, Enter (an empty Enter goes back):
+
+`Enter, {{follow-up}}, Enter`
+
 - Open the selected result, or send a query the rows do not answer yet:
 
 `Enter`

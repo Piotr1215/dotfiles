@@ -68,17 +68,18 @@
 # free of DuckDuckGo's operators, so nothing that used to be a search stops
 # being one.
 #
-# The conversation is enter on the answer row. An answer that ends "I can narrow
+# The conversation is the box. An answer that ends "I can narrow
 # this to X or Y" is inviting a second turn, and without one the offer is a dead
 # end you can only answer by starting over and typing the context back in by
 # hand. The thread id comes back with every answer and goes out with the next
 # question, so a follow-up can say "it" and mean what the last answer was about.
 #
-# enter, because that is the row the cursor is already on when you finish
-# reading, and because on the answer row enter did nothing before: the row has
-# no page to open. Every turn reloads the list, which puts the cursor back on
-# the answer, so the whole of a conversation is enter, type, read, enter, type,
-# read.
+# enter on the answer row points the box at the conversation: the prompt turns
+# to "follow up >", typing searches nothing, and enter sends what you typed as
+# the next turn. That row is where the cursor already is when you finish
+# reading, and it has no page to open. Every turn reloads the list, which puts
+# the cursor back on the answer, so the whole of a conversation is enter, type,
+# enter, read. An empty enter puts the query back in the box.
 #
 # The transcript is the answer row, newest turn on top. Each turn carries the
 # question, the answer, and that turn's own numbered sources, because the rows
@@ -101,8 +102,9 @@
 #
 # Keys in the picker. tab marks results, and ctrl-e, ctrl-a, ctrl-y and ctrl-r
 # apply to the whole marked set, so mark five and hit one key:
-#   tab      mark / unmark          enter   open in the browser, or send a
-#                                           query the rows do not answer yet
+#   tab      mark / unmark          enter   open in the browser, send a query
+#                                           the rows do not answer yet, or on
+#                                           the answer, ask a follow-up
 #   ctrl-f   type into the page text instead of the query, and back
 #   ctrl-o   do the obvious thing with whatever the preview is showing:
 #            a video or playlist opens in the player, a page whose text could
@@ -236,8 +238,10 @@ PICKER_KEYS='tab mark · enter open · ctrl-o play, render or read · ctrl-e nvi
 ctrl-a bookmark · ctrl-y copy · ctrl-r refetch · alt-h hand to pane · alt-v videos'
 WEB_KEYS='F1 help · type: search · @ docs · ? ask (enter) · ?? harder · ctrl-f in pages'
 PAGE_KEYS='F1 help · type: page text, ANDed · "phrase" exact · /ERE/ · ctrl-f the query'
+FOLLOW_KEYS='F1 help · type: the next question in this conversation · enter sends · empty enter: back'
 WEB_PROMPT='search > '
 PAGE_PROMPT='in pages > '
+FOLLOW_PROMPT='follow up > '
 VIDEOS_PROMPT='in videos > '
 
 # Print the header comment block: everything between the shebang and the first
@@ -772,9 +776,10 @@ set_matches() {
 
 squeeze() { printf '%s' "$1" | tr -s '[:space:]' ' ' | sed 's/^ //; s/ $//'; }
 
-# Which way typing points: at the query (web) or, after ctrl-f, at the page text
-# of the set on screen. One change binding reads this, so the box never has to
-# be rebound to change what it means.
+# Which way typing points: at the query (web), after ctrl-f at the page text of
+# the set on screen (pages), or after enter on the answer at the next question
+# (follow). One change binding reads this, so the box never has to be rebound
+# to change what it means.
 typing_mode() {
 	local tf
 	tf=$(typing_file "$1")
@@ -789,11 +794,12 @@ typing_mode() {
 # What a keystroke in the box does.
 mode_typed() {
 	local file=$1 num=$2 raw=${3-}
-	if [[ $(typing_mode "$file") == pages ]]; then
-		mode_filter "$file" "$raw"
-	else
-		mode_live "$file" "$num" "$raw"
-	fi
+	case $(typing_mode "$file") in
+	pages) mode_filter "$file" "$raw" ;;
+	# A follow-up is an ask, sent on enter, so until then the rows stay.
+	follow) mode_list "$file" ;;
+	*) mode_live "$file" "$num" "$raw" ;;
+	esac
 }
 
 # The search behind the box. fzf kills the reload when another key arrives, so
@@ -1246,16 +1252,6 @@ render_markdown() {
 	fi
 }
 
-# Read one value with readline editing, prefilled with what the query already
-# says. The prompt and the framing go to stderr: stdout is the value.
-read_value() {
-	local prompt=$1 prefill=$2 value
-	clear >&2 2>/dev/null || true
-	printf '\033[90m%s\033[0m\n\n' 'enter accepts · ctrl-c leaves the query alone' >&2
-	read -r -e -i "$prefill" -p "$prompt > " value || return 1
-	printf '%s' "$value"
-}
-
 # Run the search again behind the picker.
 #
 # A search that finds nothing must leave the old set standing. An empty picker
@@ -1353,7 +1349,7 @@ mode_preview() {
 		printf '\033[1;35m%s\033[0m\n' "$title"
 		# The pane names the key, the way it does for a video. A conversation
 		# nobody knows how to continue is a feature that reads as a dead end.
-		printf '\033[90m(enter asks a follow-up)\033[0m\n\n'
+		printf '\033[90m(enter, then type a follow-up)\033[0m\n\n'
 		if [[ -s $af ]]; then
 			render_markdown "$af" "$width" |
 				highlight_terms "$marks" | highlight_regex "$regex"
@@ -1910,9 +1906,13 @@ mode_videos_box() {
 	printf 'change-prompt(%s)+clear-query' "$VIDEOS_PROMPT"
 }
 
-# Ask the next question in the conversation: enter on the answer row.
+# Ask the next question in the conversation: what enter sent from the follow-up
+# box, in the submit file for the same reason a sent query is.
 mode_follow() {
-	local file=$1 num=$2 followup
+	local file=$1 num=$2 sf followup
+	sf=$(submit_file "$file")
+	followup=$(cat "$sf" 2>/dev/null || true)
+	rm -f "$sf"
 	if [[ $(current_engine "$file") != pplx ]]; then
 		set_note "$file" 'nothing to follow: this set came from a web search'
 		return 0
@@ -1920,25 +1920,37 @@ mode_follow() {
 	# The question replaces the query outright rather than building on it: the
 	# thread already holds what was asked before, so carrying the old words
 	# forward would ask the same thing twice in one breath.
-	followup=$(read_value 'follow up' '') || return 0
 	[[ -z ${followup//[[:space:]]/} ]] && return 0
 	run_query "$file" "$num" "$followup" pplx 1
 }
 
 # enter. On a page it opens the page, which is what enter has always done here.
-# On the answer it asks the next question.
+# On the answer it points the box at the next question, and in that box it
+# sends the question.
 #
-# That row is where the cursor already sits when you finish reading, and a
-# conversation is a sequence of follow-ups: a menu, enter, type was three
-# keystrokes of ceremony around the one thing you came back to do. It costs no
-# key, because enter on the answer row did nothing at all before: the row has no
-# url, and mode_pick only ever opened rows that had one.
+# That row is where the cursor already sits when you finish reading. It costs
+# no key, because enter on the answer row did nothing at all before: the row
+# has no url, and mode_pick only ever opened rows that had one. The question is
+# typed in the box rather than a prompt of its own, so the answer stays on
+# screen while you write the next one.
 #
 # Same transform contract as ctrl-o: this prints the actions and fzf performs
 # them, which is what lets one key mean two things without either of them being
 # a compromise.
 mode_enter() {
 	local file=$1 idx=$2 num=$3 raw=${4-}
+
+	if [[ $(typing_mode "$file") == follow ]]; then
+		if [[ -z ${raw//[[:space:]]/} ]]; then
+			printf 'transform-header(%s --header %s)+' "$SELF" "$file"
+			mode_box "$file"
+			return 0
+		fi
+		printf '%s' "$raw" >"$(submit_file "$file")"
+		printf 'execute(%s --follow %s %s)+reload(%s --list %s)+transform(%s --box %s)' \
+			"$SELF" "$file" "$num" "$SELF" "$file" "$SELF" "$file"
+		return 0
+	fi
 
 	# A query the rows do not answer yet is sent, whatever row the cursor is on:
 	# the row belongs to the last query, and opening it would answer a question
@@ -1960,8 +1972,11 @@ mode_enter() {
 		return 0
 	fi
 
-	printf 'execute(%s --follow %s %s)+reload(%s --list %s)+transform(%s --box %s)' \
-		"$SELF" "$file" "$num" "$SELF" "$file" "$SELF" "$file"
+	# The header is redrawn because its last line follows the box, and an
+	# empty box cleared fires no reload to redraw it.
+	printf 'follow\n' >"$(typing_file "$file")"
+	printf 'transform-header(%s --header %s)+change-prompt(%s)+clear-query' \
+		"$SELF" "$file" "$FOLLOW_PROMPT"
 }
 
 mode_open() {
@@ -2294,11 +2309,11 @@ mode_header() {
 		printf '   (%s)' "$note"
 	fi
 	printf '\n%s\n' "$PICKER_KEYS"
-	if [[ $(typing_mode "$file") == pages ]]; then
-		printf '%s\n' "$PAGE_KEYS"
-	else
-		printf '%s\n' "$WEB_KEYS"
-	fi
+	case $(typing_mode "$file") in
+	pages) printf '%s\n' "$PAGE_KEYS" ;;
+	follow) printf '%s\n' "$FOLLOW_KEYS" ;;
+	*) printf '%s\n' "$WEB_KEYS" ;;
+	esac
 }
 
 # ---------------------------------------------------------------------------

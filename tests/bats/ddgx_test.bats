@@ -1611,6 +1611,16 @@ EOF
 		[ "$(wc -L <<<"$line")" -le 98 ]
 	done
 	[[ "${lines[3]}" == *'/ERE/'* ]]
+
+	# And the follow-up box's.
+	printf 'follow\n' >"$RESULTS.typing"
+	run bash "$DDGX" --header "$RESULTS"
+	[ "$status" -eq 0 ]
+	[ "${#lines[@]}" -eq 4 ]
+	for line in "${lines[@]}"; do
+		[ "$(wc -L <<<"$line")" -le 98 ]
+	done
+	[[ "${lines[3]}" == *'empty enter: back'* ]]
 }
 
 # --------------------------------------------------------------------------
@@ -2431,10 +2441,13 @@ EOF
 
 FOLLOW_REPLY='{"id":"resp_second","answer":"Because the member blocks while it rebuilds.","results":[{"id":1,"title":"Maintenance","url":"https://etcd.io/docs/maintenance/","snippet":"blocks","date":""}]}'
 
+# Send a follow-up the way enter does from the follow-up box: the question
+# waits in the submit file.
 run_follow() {
+	printf '%s' "$1" >"$RESULTS.submit"
 	run env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" \
 		XDG_DATA_HOME="$DATA_HOME" DDGX_TTL=0 DDGX_ASK_CMD="$STUB_BIN/ask" \
-		bash "$DDGX" --follow "$RESULTS" 8 <<<"$1"
+		bash "$DDGX" --follow "$RESULTS" 8
 }
 
 @test "a follow-up carries the thread, so it can say it" {
@@ -2538,8 +2551,8 @@ run_follow() {
 }
 
 # ---------------------------------------------------------------------------
-# enter. On a page it opens the page. On the answer it asks the next question,
-# which is the whole of chat: enter, type, read, enter, type, read.
+# enter. On a page it opens the page. On the answer it points the box at the
+# next question, and there it sends it: enter, type, enter, read.
 # ---------------------------------------------------------------------------
 
 @test "the picker binds enter through the dispatcher" {
@@ -2553,17 +2566,69 @@ run_follow() {
 	[[ "$bind" == *"--enter"* ]]
 }
 
-@test "enter on the answer row asks a follow-up" {
+@test "enter on the answer row turns the box into the follow-up" {
 	write_ask_state 'etcd defrag'
 
 	run bash "$DDGX" --enter "$RESULTS" 0 8
 
+	# The question is typed on the same screen, under the answer it follows:
+	# nothing here may take the terminal away from the picker.
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"change-prompt(follow up > )"* ]]
+	[[ "$output" == *"clear-query"* ]]
+	[[ "$output" != *"execute("* ]]
+	[[ "$output" != *"accept"* ]]
+	[ "$(cat "$RESULTS.typing")" = follow ]
+}
+
+@test "enter in the follow-up box sends the question into the conversation" {
+	write_ask_state 'etcd defrag'
+	printf 'follow\n' >"$RESULTS.typing"
+
+	run bash "$DDGX" --enter "$RESULTS" 0 8 'why does it (still) block'
+
+	# The list is rebuilt so the new turn is on screen, and the box goes back
+	# to the query once the turn is in.
 	[ "$status" -eq 0 ]
 	[[ "$output" == *"--follow"* ]]
-	# The list is rebuilt so the new turn is on screen, and the cursor lands
-	# back on the answer ready for the next question.
 	[[ "$output" == *"reload("* ]]
-	[[ "$output" != *"accept"* ]]
+	[[ "$output" == *"--box"* ]]
+	# The question waits in a file: parens in it would end the printed action.
+	[ "$(cat "$RESULTS.submit")" = 'why does it (still) block' ]
+	[[ "$output" != *'still'* ]]
+}
+
+@test "an empty enter in the follow-up box puts the query back" {
+	write_ask_state 'etcd defrag'
+	printf 'follow\n' >"$RESULTS.typing"
+
+	run bash "$DDGX" --enter "$RESULTS" 0 8 ''
+
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"change-prompt(search > )"* ]]
+	# The seeded conversation runs at high, so its mark is ??.
+	[[ "$output" == *"change-query:?? etcd defrag" ]]
+	[ "$(cat "$RESULTS.typing")" = web ]
+	[ ! -e "$RESULTS.submit" ]
+}
+
+@test "typing a follow-up searches nothing until enter" {
+	write_ask_state 'etcd defrag'
+	printf 'follow\n' >"$RESULTS.typing"
+	stub_ddgr '[{"title":"Narrowed","url":"https://kubernetes.io/only/","abstract":"z"}]'
+	stub_ask "$FOLLOW_REPLY"
+
+	run env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" \
+		XDG_DATA_HOME="$DATA_HOME" DDGX_TTL=0 DDGX_ASK_CMD="$STUB_BIN/ask" \
+		DDGX_SUGGEST_DELAY=0 bash "$DDGX" --typed "$RESULTS" 8 'why does it block'
+
+	# Plain words in the web box would be a DuckDuckGo search on the pause.
+	# Here they are half a question, and the answer stays on screen.
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"answer · perplexity"* ]]
+	[ "$(head -n1 "$RESULTS.engine")" = pplx ]
+	[ "$(head -n1 "$RESULTS.query")" = 'etcd defrag' ]
+	[ ! -e "$STUB_BIN/ask.argv" ]
 }
 
 @test "enter on a source row still opens the page" {
@@ -2586,15 +2651,14 @@ run_follow() {
 	[ "$output" = "accept" ]
 }
 
-@test "the follow mode carries the thread the same way the menu entry does" {
+@test "the follow mode sends the waiting question and spends the file" {
 	write_ask_state 'etcd defrag'
 	stub_ask "$FOLLOW_REPLY"
 
-	run env PATH="$STUB_BIN:$PATH" XDG_CACHE_HOME="$CACHE_HOME" \
-		XDG_DATA_HOME="$DATA_HOME" DDGX_TTL=0 DDGX_ASK_CMD="$STUB_BIN/ask" \
-		bash "$DDGX" --follow "$RESULTS" 8 <<<'why does it block'
+	run_follow 'why does it block'
 
 	[ "$status" -eq 0 ]
+	[ ! -e "$RESULTS.submit" ]
 	asked_with '--continue'
 	asked_with 'resp_seed'
 	[ "$(asked_query)" = "why does it block" ]
@@ -2604,11 +2668,10 @@ run_follow() {
 @test "following a web set says so instead of asking into nothing" {
 	write_search_state 'kubernetes finalizers'
 
-	run env XDG_CACHE_HOME="$CACHE_HOME" XDG_DATA_HOME="$DATA_HOME" \
-		bash "$DDGX" --follow "$RESULTS" 8 </dev/null
+	run_follow 'why does it block'
 
-	# Reachable through the menu on a set with no conversation behind it, so it
-	# has to answer rather than prompt for a question nobody can answer.
+	# enter only opens the follow-up box over an answer, but the mode answers
+	# for itself rather than asking a question with no conversation behind it.
 	[ "$status" -eq 0 ]
 	grep -q 'came from a web search' "$RESULTS.note"
 }
@@ -2621,7 +2684,7 @@ run_follow() {
 	# A conversation nobody knows how to continue reads as a dead end, and this
 	# file's own rule is that the pane names the key.
 	[ "$status" -eq 0 ]
-	[[ "$output" == *"enter asks a follow-up"* ]]
+	[[ "$output" == *"enter, then type a follow-up"* ]]
 }
 
 # --------------------------------------------------------------------------
