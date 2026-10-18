@@ -264,6 +264,8 @@
         - taskwarrior-tui
         - zoxide
         - git-delta
+        - llmfit
+        - grex
       register: cargo_install
       changed_when: "'already exists' not in cargo_install.stderr"
 
