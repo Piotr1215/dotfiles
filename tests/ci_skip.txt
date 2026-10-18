@@ -1,8 +1,9 @@
 # Test files CI does not run, each with the failure seen on a clean
 # ubuntu-26.04 runner. Fix the test, then delete its line here.
 # A cause marked "undiagnosed" names the first failing test only.
-# "runner only" files pass in a clean ubuntu:26.04 container and fail on
-# the GitHub-hosted runner; the CI log does not show why.
+# "git-crypt" files read a file .gitattributes encrypts, which CI checks
+# out as ciphertext. "runner only" files pass in a clean ubuntu:26.04
+# container and fail on the GitHub-hosted runner for a reason not found.
 
 tests/bats/codex_launcher_test.bats            # undiagnosed: "routes Loft repositories to the work account" exits non-zero
 tests/bats/cron_ack_test.bats                  # undiagnosed: "a fresh hit lights the star"
@@ -14,17 +15,17 @@ tests/bats/next_blog_test.bats                 # undiagnosed: "DAYS reaches the 
 tests/bats/nvim_models_completion_test.bats    # undiagnosed: "models.env completion resolves roles and candidates"
 tests/bats/pr_movement_nudge_test.bats         # setup fails sourcing the extracted functions (fns.sh line 73)
 tests/bats/skill_catalog_test.bats             # runner only, passes in an ubuntu:26.04 container: "claude lists personal skills with slash invocations"
-tests/bats/task_agent_shortcuts_test.bats      # runner only, passes in an ubuntu:26.04 container: "taskwarrior shortcuts keep 5 for Claude and assign 6 to Codex"
-tests/bats/taskwarrior_recurrence_test.bats    # runner only, passes in an ubuntu:26.04 container: task show recurrence exits non-zero
+tests/bats/task_agent_shortcuts_test.bats      # git-crypt: reads .taskrc
+tests/bats/taskwarrior_recurrence_test.bats    # git-crypt: reads .taskrc
 tests/bats/reminder_argos_test.bats            # undiagnosed: "the GTK reminder UI passes its dependency check"
-tests/bats/standup_tmuxinator_test.bats        # undiagnosed: "standup starts the live AI reporter"
+tests/bats/standup_tmuxinator_test.bats        # git-crypt: the test file itself is encrypted
 tests/bats/tmux_pane_menu_test.bats            # undiagnosed: private_tmux helper fails in the first test
 tests/bats/tmux_reading_margin_test.bats       # undiagnosed: "time-off margin stacks a visualizer under the picker"
 tests/bats/totp_argos_blink_test.bats          # undiagnosed: "idle panel shows one line: the K badge and the account count"
 tests/bats/tripwire_test.bats                  # undiagnosed: "the first run arms the wire"
 tests/shell/kctx_zsh_hook_test.sh              # sources the hook by its /home/decoder path
 tests/shell/secret_zsh_test.sh                 # undiagnosed: secadd prompts come back empty
-tests/shell/taskwarrior_issue_ready_colors_test.sh # runner only, passes in an ubuntu:26.04 container: exits 1 with no output
+tests/shell/taskwarrior_issue_ready_colors_test.sh # git-crypt: reads .taskrc
 tests/shell/tmux_float_binding_test.sh         # builds the .tmux.conf path as "$0/../../.tmux.conf", not a directory
 tests/shell/tmux_pane_cycle_binding_test.sh    # builds the .tmux.conf path as "$0/../../.tmux.conf", not a directory
 tests/python/test_pane_text_candidates.py      # asserts 'explain unique-target', gets 'explain uni'
