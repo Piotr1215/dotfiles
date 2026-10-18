@@ -18,10 +18,14 @@
 // Twitch, Dailymotion, Odysee and Rumble. A YouTube playlist reads as its
 // track listing.
 //
-// --deep escalates a page Readability cannot read, and only when asked for,
+// A pdf reads through pdftotext, and so does the pdf a viewer page frames. A
+// page Readability reads thin gets one more try on the default path, a render
+// on the crawl4ai cluster when one is configured, because that costs a
+// request and no local process. --deep goes further, and only when asked for,
 // because it spends seconds and a browser: headless Chrome renders the page,
 // then w3m lays that render out as text if the page turns out not to be an
-// article at all. Every escalated extract says which step produced it.
+// article at all. Every rescued or escalated extract says which step produced
+// it.
 //
 // Exits 1 when a page cannot be fetched or holds no article, so callers can
 // avoid caching a failure.
@@ -65,9 +69,10 @@ const LISTING_MAX = 40
 // this, where a paragraph stops being a wall of text.
 const PARAGRAPH_CHARS = 450
 
-// --deep only. A page that keeps less than this did not read, whatever the
-// extractor claims: 154 characters of a nav bar is a failure wearing a
-// success's clothes. Overridable because the right floor is per corpus.
+// A page that keeps less than this did not read, whatever the extractor
+// claims: 154 characters of a nav bar is a failure wearing a success's
+// clothes. The default path's cluster try and --deep both judge by it.
+// Overridable because the right floor is per corpus.
 const DEEP_MIN = parseInt(process.env.DDGX_DEEP_MIN || '', 10) || 400
 const RENDER_BUDGET_MS = 8000
 const RENDER_TIMEOUT_MS = 25000
@@ -75,12 +80,15 @@ const W3M_TIMEOUT_MS = 10000
 // Wide enough that w3m's wrapping is not the thing you notice first. It has to
 // wrap something: it is a text dumper, not a markdown converter.
 const W3M_COLS = 100
+const PDF_TIMEOUT_MS = 15000
 
 // ---------------------------------------------------------------------------
 // Fetching
 // ---------------------------------------------------------------------------
 
-async function httpGet (url, { json = false, raw = false } = {}) {
+const PAGE_ACCEPT = 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.8'
+
+async function httpResponse (url, accept) {
   const scheme = new URL(url).protocol
   // Previews are driven by search results; a file: or gopher: URL there must
   // not make us read the local disk.
@@ -102,26 +110,32 @@ async function httpGet (url, { json = false, raw = false } = {}) {
   if (process.env.DDGX_NO_NETWORK) throw new Error(`network disabled: ${url}`)
 
   const res = await fetch(url, {
-    headers: {
-      'User-Agent': UA,
-      Accept: json ? 'application/json' : 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.8',
-      'Accept-Language': 'en-US,en;q=0.9'
-    },
+    headers: { 'User-Agent': UA, Accept: accept, 'Accept-Language': 'en-US,en;q=0.9' },
     redirect: 'follow',
     signal: AbortSignal.timeout(TIMEOUT_MS)
   })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
-  if (json) return res.json()
+  return res
+}
 
-  const ctype = res.headers.get('content-type') || ''
-  // The gate exists to keep a pdf or a zip away from the html parser. A
-  // caption track is text/vtt and would fail it, so that one caller opts out
-  // rather than the gate widening for every page fetch: yt-dlp already told us
-  // the url is a subtitle file.
-  if (!raw && ctype && !/html|xml|text\/plain/i.test(ctype)) {
-    throw new Error(`not a web page: ${ctype.split(';')[0].trim()}`)
+async function httpGet (url, { json = false } = {}) {
+  const res = await httpResponse(url, json ? 'application/json' : PAGE_ACCEPT)
+  return json ? res.json() : res.text()
+}
+
+// The page path's fetch, with the gate that keeps a zip or an image away from
+// the html parser. A pdf is the one other answer worth reading, so it comes
+// back as bytes for pdftotext. Servers label pdfs as generic binaries often
+// enough that the magic number decides, not the label.
+async function fetchPage (url) {
+  const res = await httpResponse(url, PAGE_ACCEPT)
+  const ctype = (res.headers.get('content-type') || '').split(';')[0].trim()
+  if (/^application\/pdf$|octet-stream$/i.test(ctype)) {
+    const bytes = Buffer.from(await res.arrayBuffer())
+    if (bytes.subarray(0, 5).toString('latin1') === '%PDF-') return { pdf: bytes }
   }
-  return res.text()
+  if (ctype && !/html|xml|text\/plain/i.test(ctype)) throw new Error(`not a web page: ${ctype}`)
+  return { html: await res.text() }
 }
 
 // ---------------------------------------------------------------------------
@@ -537,7 +551,7 @@ async function mediaMarkdown (url) {
     // The caption url is signed and short lived, and it came out of the call
     // already made. Asking yt-dlp for the subtitles separately is a second hit
     // on the same video, which YouTube answers with HTTP 429.
-    const prose = await httpGet(track.url, { raw: true }).then(vttToProse).catch(() => '')
+    const prose = await httpGet(track.url).then(vttToProse).catch(() => '')
     // Say which kind it is. A machine transcript mishears, and on the test
     // video "A full commitment's" arrives as "I feel commitments": quotable
     // looking text that the speaker never said. Under a bare heading the two
@@ -682,16 +696,55 @@ function normalizeUrl (input) {
 
 const charCount = text => text.replace(/\s+/g, ' ').trim().length
 
+// pdftotext keeps the page's line breaks and marks each page with a form
+// feed. Markdown joins the broken lines back into paragraphs on its own; the
+// bullets need saying, or a list renders as one run-on line.
+async function pdfRead (bytes) {
+  const res = await run('pdftotext', ['-q', '-enc', 'UTF-8', '-', '-'],
+    { input: bytes, timeoutMs: PDF_TIMEOUT_MS })
+  if (res.missing) throw new Error('a pdf, and pdftotext is not installed')
+  if (res.code !== 0) throw new Error(toolError(res, 'pdftotext could not read this pdf'))
+  const markdown = res.stdout
+    .replace(/\f/g, '\n\n')
+    .replace(/^[ \t]*[•◦▪●][ \t]*/gm, '- ')
+    .replace(/[ \t]+$/gm, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+  const keptChars = charCount(markdown)
+  // A scan is a pdf of pictures of text. pdftotext is right to find nothing.
+  const reason = keptChars < MIN_CHARS ? 'a pdf with no text layer, most likely a scan' : ''
+  return { totalChars: keptChars, markdown, keptChars, reason, pdf: true }
+}
+
+// Nothing was dropped, so "kept N of M" would be a tautology, the same as for
+// a video. What the reader needs is where the text came from.
+const pdfFooter = (read, framed) =>
+  `[${read.keptChars} characters of pdf text via pdftotext${framed ? ', from the file this page frames' : ''}]`
+
+// A viewer page that frames a pdf has no text of its own: the document is the
+// frame. Looked up before Readability runs, because Readability rewrites the
+// document it scores.
+function framedPdf (document) {
+  for (const el of document.querySelectorAll('iframe[src], embed[src], object[data]')) {
+    try {
+      const href = new URL(el.getAttribute('src') || el.getAttribute('data'), document.baseURI)
+      if (/^https?:$/.test(href.protocol) && /\.pdf$/i.test(href.pathname)) return href.href
+    } catch {}
+  }
+  return null
+}
+
 // One pass of the reader over one document. This is the whole of the default
 // path, and the rung --deep escalates from, so it reports a thin result rather
 // than throwing on it: only the caller knows whether a better attempt is left.
 function readDocument (source, url) {
   const dom = new JSDOM(source, url ? { url } : {})
   const totalChars = charCount(dom.window.document.body?.textContent || '')
+  const frame = framedPdf(dom.window.document)
 
   const article = new Readability(dom.window.document).parse()
   if (!article || !article.content) {
-    return { totalChars, markdown: '', keptChars: 0, reason: 'no article found' }
+    return { totalChars, markdown: '', keptChars: 0, reason: 'no article found', frame }
   }
 
   const markdown = makeTurndown(dom.window.document.baseURI).turndown(article.content).trim()
@@ -700,8 +753,10 @@ function readDocument (source, url) {
   // handful of characters is worse than reporting no text, which is the
   // honest answer for a shell page whose content arrives via JavaScript.
   const reason = keptChars < MIN_CHARS ? 'no readable text extracted' : ''
-  return { totalChars, markdown, keptChars, reason }
+  return { totalChars, markdown, keptChars, reason, frame }
 }
+
+const thin = read => Boolean(read.reason) || read.keptChars < DEEP_MIN
 
 // ---------------------------------------------------------------------------
 // Deep escalation
@@ -710,16 +765,17 @@ function readDocument (source, url) {
 // and the one where it keeps 154 of 253798 characters and that gets cached as
 // a success. Both mean the page did not read.
 //
-// The ladder answers each with the next tool up, under --deep and nowhere
-// else, so the default path and what it costs are untouched. Each rung says so
-// in the output, because an escalated extract that looks like an ordinary one
-// is the single way this can mislead.
+// The ladder answers each with the next tool up. The cluster rung runs on the
+// default path as well, because it costs one request and no local process;
+// Chrome and w3m run under --deep and nowhere else. Each rung says so in the
+// output, because an escalated extract that looks like an ordinary one is the
+// single way this can mislead.
 // ---------------------------------------------------------------------------
 
 // crawl4ai renders the page somewhere else and hands back markdown. That makes
-// it the cheapest rung here, one second against the five to eight Chrome
-// costs, and the only one that fetches from a different address: a site that
-// answers this machine with 403 often answers a datacentre with the page.
+// it the cheapest rung here, no local process at all, and the only one that
+// fetches from a different address: a site that answers this machine with 403
+// often answers a datacentre with the page.
 //
 // It is configured by a file this repo does not carry, because the endpoint
 // and its token are neither portable nor publishable. No file, no rung, the
@@ -728,12 +784,25 @@ const C4AI_FILE = process.env.DDGX_C4AI_CONFIG || path.join(
   process.env.XDG_CONFIG_HOME || path.join(homedir(), '.config'),
   'ddgx', 'crawl4ai.json'
 )
-const C4AI_TIMEOUT_MS = parseInt(process.env.DDGX_C4AI_TIMEOUT_MS || '', 10) || 6000
+const C4AI_TIMEOUT_MS = parseInt(process.env.DDGX_C4AI_TIMEOUT_MS || '', 10) || 15000
+// Seconds the render waits after the load event. A bot challenge (IMDb's AWS
+// WAF) is a page that runs a script and reloads itself: /md answered before
+// that script finished and returned the challenge, and waiting for the network
+// to go idle never ended on IMDb within 20s. Load plus three seconds read its
+// 25000 characters in 7s.
+const C4AI_SETTLE_S = 3
 // A service on the far side of a VPN is unreachable for stretches, not for one
 // request. Without a note of that, every ctrl-o pays the full timeout on the
 // day the tunnel is down, which is already the day the escalation is slowest.
 const C4AI_BREAKER = path.join(tmpdir(), 'ddgx-crawl4ai-unreachable')
 const C4AI_BREAKER_MS = parseInt(process.env.DDGX_C4AI_BREAKER_MS || '', 10) || 60000
+// A render that came back thin comes back thin again for a while: a page's
+// protection or its JavaScript does not change between two previews. Without
+// a note of that, every preview of a dead row, and the ctrl-o after it, pays
+// for the render again.
+const C4AI_THIN_MS = parseInt(process.env.DDGX_C4AI_THIN_MS || '', 10) || 600000
+const thinMarker = url =>
+  path.join(tmpdir(), `ddgx-crawl4ai-thin-${createHash('sha1').update(url).digest('hex')}`)
 
 function loadC4ai () {
   if (process.env.DDGX_NO_NETWORK) return null
@@ -750,12 +819,16 @@ function loadC4ai () {
   }
 }
 
-function breakerOpen () {
+function noteFresh (file, ttlMs) {
   try {
-    return Date.now() - JSON.parse(readFileSync(C4AI_BREAKER, 'utf8')).at < C4AI_BREAKER_MS
+    return Date.now() - JSON.parse(readFileSync(file, 'utf8')).at < ttlMs
   } catch {
     return false
   }
+}
+
+function writeNote (file) {
+  try { writeFileSync(file, JSON.stringify({ at: Date.now() })) } catch {}
 }
 
 // curl rather than fetch, for three reasons that all come from this being a
@@ -764,15 +837,36 @@ function breakerOpen () {
 // on PATH the way it stubs the other two rungs. The request goes in on stdin
 // as a curl config file, so the token never appears in argv, where every other
 // process on the machine can read it out of /proc.
+//
+// null means the service was never asked, or is not there. An answer with no
+// markdown in it is still an answer: the service looked at the page.
 async function clusterMarkdown (url) {
   const cfg = loadC4ai()
-  if (!cfg || breakerOpen()) return null
+  if (!cfg || noteFresh(C4AI_BREAKER, C4AI_BREAKER_MS)) return null
 
+  // The config names /md, which takes no wait, so the request goes to /crawl
+  // beside it.
+  const endpoint = new URL('crawl', cfg.url).href
+  const request = {
+    urls: [url],
+    crawler_config: {
+      type: 'CrawlerRunConfig',
+      params: {
+        wait_until: 'load',
+        delay_before_return_html: C4AI_SETTLE_S,
+        page_timeout: Math.max(C4AI_TIMEOUT_MS - (C4AI_SETTLE_S + 1) * 1000, 3000),
+        markdown_generator: {
+          type: 'DefaultMarkdownGenerator',
+          params: { content_filter: { type: 'PruningContentFilter', params: {} } }
+        }
+      }
+    }
+  }
   const quote = value => String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"')
   const lines = [
-    `--url "${quote(cfg.url)}"`,
+    `--url "${quote(endpoint)}"`,
     '--header "Content-Type: application/json"',
-    `--data "${quote(JSON.stringify({ url, f: 'fit' }))}"`,
+    `--data "${quote(JSON.stringify(request))}"`,
     '--connect-timeout 2',
     `--max-time ${Math.ceil(C4AI_TIMEOUT_MS / 1000)}`,
     '--silent', '--show-error', '--fail'
@@ -788,19 +882,58 @@ async function clusterMarkdown (url) {
   // service is not there, and only that is worth remembering for a minute.
   if (res.code !== 0) {
     if (res.code !== 22) {
-      try { writeFileSync(C4AI_BREAKER, JSON.stringify({ at: Date.now() })) } catch {}
+      writeNote(C4AI_BREAKER)
+      return null
     }
-    return null
+    return ''
   }
 
   try {
     const body = JSON.parse(res.stdout)
-    let md = body.markdown ?? body.result?.markdown ?? ''
+    const result = body.results?.[0] ?? body
+    if (result.success === false) return ''
+    let md = result.markdown ?? ''
     if (md && typeof md === 'object') md = md.fit_markdown || md.raw_markdown || ''
-    return typeof md === 'string' && md.trim() ? md.trim() : null
+    return typeof md === 'string' ? md.trim() : ''
   } catch {
-    return null
+    return ''
   }
+}
+
+// The cluster rung as a read, judged by the same floor as every other rung.
+async function clusterRead (url, first) {
+  if (!url || noteFresh(thinMarker(url), C4AI_THIN_MS)) return null
+  const markdown = await clusterMarkdown(url)
+  if (markdown === null) return null
+  const kept = charCount(markdown)
+  if (kept < DEEP_MIN) writeNote(thinMarker(url))
+  if (!kept) return null
+  // A refused fetch counted nothing, so the page cannot have fewer
+  // characters than the ones now in hand. Reporting "kept 6895 of 0" is the
+  // stats footer lying about the rung that just rescued the page.
+  return {
+    totalChars: Math.max(first.totalChars, kept),
+    markdown,
+    keptChars: kept,
+    reason: kept < MIN_CHARS ? 'no readable text extracted' : ''
+  }
+}
+
+// The second try for a page that read thin: the pdf a viewer page frames, then
+// the cluster render. A framed pdf is the document itself, so it wins whenever
+// it holds text; the render has to beat what Readability kept.
+async function rescue (url, first) {
+  if (first.frame) {
+    const framed = await fetchPage(first.frame)
+      .then(page => page.pdf ? pdfRead(page.pdf) : null)
+      .catch(() => null)
+    if (framed && !framed.reason) return { read: framed, provenance: pdfFooter(framed, true) }
+  }
+  const remote = await clusterRead(url, first)
+  if (remote && !remote.reason && remote.keptChars > first.keptChars) {
+    return { read: remote, provenance: '[step 2: crawl4ai fit filter over the cluster renderer]' }
+  }
+  return { read: first, provenance: '' }
 }
 
 // Chrome answers to a different name on every distribution, so the first one
@@ -837,22 +970,9 @@ async function escalate (url, source, first) {
     if (candidate.read.keptChars > best.read.keptChars) best = candidate
   }
 
-  // Step 2. The cheapest rung and the only one that changes address, so it
-  // goes first: it answers the JavaScript page in a second, and it is the only
-  // thing here that reaches a page which refused this machine outright.
-  const viaCluster = '[deep step 2: crawl4ai fit filter over the cluster renderer]'
-  const remote = url ? await clusterMarkdown(url) : null
-  if (remote) {
-    const kept = charCount(remote)
-    // A refused fetch counted nothing, so the page cannot have fewer
-    // characters than the ones now in hand. Reporting "kept 6895 of 0" is the
-    // stats footer lying about the rung that just rescued the page.
-    const read = {
-      totalChars: Math.max(first.totalChars, kept), markdown: remote, keptChars: kept, reason: ''
-    }
-    if (kept >= DEEP_MIN) return { read, provenance: viaCluster }
-    consider({ read, provenance: viaCluster })
-  }
+  // Step 2, the cluster render, already ran in rescue(): it is the cheapest
+  // rung and the only one that changes address, so it goes first on every
+  // path, and only what it could not read reaches this function.
 
   // Step 3. "No article found" is usually "no article yet", the body arriving
   // in JavaScript. Give the page a browser and read the DOM it settled on.
@@ -904,7 +1024,13 @@ async function extractPage (url, { html, maxLines, stats, deep }) {
     source = url ? await stackExchangeHtml(url).catch(() => null) : null
     if (source === null) {
       try {
-        source = await httpGet(url)
+        const page = await fetchPage(url)
+        if (page.pdf) {
+          const read = await pdfRead(page.pdf)
+          if (read.reason) throw new Error(read.reason)
+          return present(read.markdown, { maxLines, footer: [pdfFooter(read, false)] })
+        }
+        source = page.html
       } catch (err) {
         // DDGX_NO_NETWORK is the suite's one lever on the network, and the
         // rungs below reach it by subprocess where the guard cannot see them.
@@ -923,15 +1049,22 @@ async function extractPage (url, { html, maxLines, stats, deep }) {
   let read = source
     ? readDocument(source, url)
     : { totalChars: 0, markdown: '', keptChars: 0, reason: refusal ? refusal.message : 'empty document' }
+  const firstReason = read.reason
   let provenance = ''
 
-  if (deep && (read.reason || read.keptChars < DEEP_MIN)) {
+  // --file hands over one document to read, and only that, unless --deep asks
+  // for more: the rescue fetches, and a test fixture must not reach a cluster.
+  if ((html === null || deep) && thin(read)) {
+    ({ read, provenance } = await rescue(url, read))
+  }
+
+  if (deep && thin(read)) {
     const better = await escalate(url, source, read)
     provenance = better.provenance
     // Every rung came back thin, so there is nothing worth handing back as a
     // success. Someone who asked for --deep gets the failure, not a nav bar,
     // and keeps the reason the shallow path would have given.
-    if (better.read.keptChars < DEEP_MIN) throw new Error(read.reason || 'no readable text extracted')
+    if (better.read.keptChars < DEEP_MIN) throw new Error(firstReason || 'no readable text extracted')
     read = better.read
   }
   if (read.reason) throw new Error(read.reason)
@@ -939,7 +1072,7 @@ async function extractPage (url, { html, maxLines, stats, deep }) {
   const footer = []
   // Make dropped content visible rather than silent: this is how you tell
   // whether the reader threw away half the page.
-  if (stats) footer.push(`[kept ${read.keptChars} of ${read.totalChars} characters of page text]`)
+  if (stats && !read.pdf) footer.push(`[kept ${read.keptChars} of ${read.totalChars} characters of page text]`)
   // Same place, same shape, because it answers the neighbouring question: not
   // how much of the page survived, but which tool went and got it.
   if (provenance) footer.push(provenance)

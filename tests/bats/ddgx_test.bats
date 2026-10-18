@@ -3,7 +3,8 @@
 # Covers the search hybrid: __readable.mjs (Mozilla Readability + Turndown)
 # and __ddgx.sh's result rendering. No test fetches over the network: the
 # extractor is fed local fixtures, ddgr is stubbed, and the dump/preview modes
-# read a pre-seeded cache.
+# read a pre-seeded cache. The pdf and rescue tests serve their fixtures from
+# a loopback server, because --file skips the fetch they start from.
 
 setup() {
 	REPO_ROOT="$(cd "$(dirname "$BATS_TEST_FILENAME")/../.." && pwd)"
@@ -19,6 +20,9 @@ setup() {
 	# MarkDownload's stock settings rather than whatever this machine's
 	# exported ones happen to be.
 	export DDGX_OPTIONS="$BATS_TEST_TMPDIR/absent-options.json"
+	# The default path renders a thin page on the cluster, so a test that does
+	# not point this at a config of its own would reach the real renderer.
+	export DDGX_C4AI_CONFIG="$BATS_TEST_TMPDIR/absent-crawl4ai.json"
 
 	MODULES_DIR="${DDGX_MODULES:-$HOME/.local/share/ddgx}"
 	if [ ! -d "$MODULES_DIR/node_modules/@mozilla/readability" ]; then
@@ -308,12 +312,13 @@ cluster_markdown() {
 	printf 'fails for a reason nothing in it names.\n'
 }
 
-# curl answering the way crawl4ai does, with the body it would return. The
-# response is built once and read back by the stub, so the markdown is escaped
-# by a json encoder rather than by a heredoc inside a heredoc.
+# curl answering the way crawl4ai's /crawl does, with the body it would return.
+# The response is built once and read back by the stub, so the markdown is
+# escaped by a json encoder rather than by a heredoc inside a heredoc. The
+# markdown it carries is cluster_markdown's unless a test passes its own.
 stub_curl_ok() {
-	cluster_markdown | python3 -c \
-		'import json,sys; print(json.dumps({"markdown": sys.stdin.read(), "success": True}))' \
+	{ if [ $# -gt 0 ]; then printf '%s\n' "$1"; else cluster_markdown; fi; } | python3 -c \
+		'import json,sys; md=sys.stdin.read(); print(json.dumps({"success": True, "results": [{"success": True, "markdown": {"raw_markdown": md, "fit_markdown": md}}]}))' \
 		>"$BATS_TEST_TMPDIR/curl.response"
 	cat >"$STUB_BIN/curl" <<EOF
 #!/usr/bin/env bash
@@ -365,9 +370,9 @@ run_deep() {
 
 	[ "$status" -eq 0 ]
 	[[ "$output" == *"The cluster renderer reached this page"* ]]
-	[[ "$output" == *"[deep step 2: crawl4ai fit filter over the cluster renderer]"* ]]
-	# The rung that costs a second beat the one that costs eight, so the
-	# expensive one never ran. This is the whole reason it goes first.
+	[[ "$output" == *"[step 2: crawl4ai fit filter over the cluster renderer]"* ]]
+	# The rung with no local process beat the one that starts a browser, so
+	# the expensive one never ran. This is the whole reason it goes first.
 	[ ! -f "$BATS_TEST_TMPDIR/chrome.log" ]
 }
 
@@ -484,6 +489,168 @@ run_deep() {
 	[[ "$output" == *"network disabled"* ]]
 	[ ! -f "$BATS_TEST_TMPDIR/chrome.log" ]
 	[ ! -f "$BATS_TEST_TMPDIR/curl.args" ]
+}
+
+# --------------------------------------------------------------------------
+# Pdfs and the default path's rescue
+#
+# Both start from a page this process fetched, which --file skips, so the
+# fixtures are served from loopback. Python picks the port and prints it; -u
+# keeps that line out of a buffer, and 3>&- keeps bats from waiting on the
+# server after the test.
+# --------------------------------------------------------------------------
+
+serve_fixtures() {
+	python3 -u -m http.server 0 --bind 127.0.0.1 --directory "$FIXTURES" \
+		>"$BATS_TEST_TMPDIR/http.log" 2>&1 3>&- &
+	HTTP_PID=$!
+	local i
+	for i in $(seq 50); do
+		SERVED=$(sed -nE 's#.*(http://127\.0\.0\.1:[0-9]+/).*#\1#p' "$BATS_TEST_TMPDIR/http.log" | head -1)
+		[ -z "$SERVED" ] || return 0
+		sleep 0.1
+	done
+	return 1
+}
+
+run_served() {
+	run env PATH="$STUB_BIN:$PATH" TMPDIR="$BATS_TEST_TMPDIR" \
+		DDGX_C4AI_CONFIG="$BATS_TEST_TMPDIR/crawl4ai.json" \
+		node "$READABLE" "$@"
+}
+
+# Not a pdf a reader could open: the stub is what reads it, and it only
+# records the magic number the extractor sniffed for.
+write_pdf_fixture() {
+	printf '%%PDF-1.7\nthe stub reads this, not poppler\n' >"$FIXTURES/$1"
+}
+
+# pdftotext as poppler answers: hard line breaks, a form feed between pages,
+# bullets the way the pdf drew them.
+stub_pdftotext() {
+	cat >"$STUB_BIN/pdftotext" <<EOF
+#!/usr/bin/env bash
+head -c 5 >"$BATS_TEST_TMPDIR/pdftotext.magic"
+cat >/dev/null
+printf 'Surge protection data sheet\n\nThe panel survives a strike that would\ntake a lesser one down.\n\f• Rated for 300 kA\n• Replaceable modules\n'
+EOF
+	chmod +x "$STUB_BIN/pdftotext"
+}
+
+# A page whose body arrives by script, the shape IMDb serves.
+write_shell_fixture() {
+	printf '%s\n' '<!doctype html><html><head><title>A name page</title>' \
+		'<script src="/app.js"></script></head><body><div id="root"></div></body></html>' \
+		>"$FIXTURES/shell.html"
+}
+
+@test "a pdf link reads through pdftotext" {
+	write_pdf_fixture sheet.pdf
+	stub_pdftotext
+	serve_fixtures
+
+	run_served --url "${SERVED}sheet.pdf" --stats
+
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"Surge protection data sheet"* ]]
+	[[ "$output" == *"- Rated for 300 kA"* ]]
+	[[ "$output" == *"characters of pdf text via pdftotext]"* ]]
+	# Nothing was dropped, so a kept-N-of-N line would only be noise.
+	[[ "$output" != *"[kept "* ]]
+	[ "$(cat "$BATS_TEST_TMPDIR/pdftotext.magic")" = '%PDF-' ]
+}
+
+@test "a pdf served as a generic binary is still read as one" {
+	write_pdf_fixture sheet.bin
+	stub_pdftotext
+	serve_fixtures
+
+	run_served --url "${SERVED}sheet.bin"
+
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"Surge protection data sheet"* ]]
+}
+
+@test "a viewer page that frames a pdf reads as the pdf" {
+	write_pdf_fixture sheet.pdf
+	printf '%s\n' '<!doctype html><html><head><title>Download</title></head><body>' \
+		'<iframe src="/sheet.pdf?x-sign=abc" id="mainFrame"></iframe></body></html>' \
+		>"$FIXTURES/viewer.html"
+	stub_pdftotext
+	write_c4ai_config
+	stub_curl_ok
+	serve_fixtures
+
+	run_served --url "${SERVED}viewer.html"
+
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"Surge protection data sheet"* ]]
+	[[ "$output" == *"from the file this page frames]"* ]]
+	# The document was in hand, so nothing was rendered to find it.
+	[ ! -f "$BATS_TEST_TMPDIR/curl.args" ]
+}
+
+@test "a page that builds its body in JavaScript is rendered on the cluster without --deep" {
+	write_shell_fixture
+	write_c4ai_config
+	stub_curl_ok
+	stub_chrome
+	serve_fixtures
+
+	run_served --url "${SERVED}shell.html"
+
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"The cluster renderer reached this page"* ]]
+	[[ "$output" == *"[step 2: crawl4ai fit filter over the cluster renderer]"* ]]
+	[ ! -f "$BATS_TEST_TMPDIR/chrome.log" ]
+	# /crawl, and told to wait: /md answers before a bot challenge has run.
+	grep -q 'https://renderer.invalid/crawl"' "$BATS_TEST_TMPDIR/curl.stdin"
+	grep -q 'wait_until' "$BATS_TEST_TMPDIR/curl.stdin"
+	grep -q 'delay_before_return_html' "$BATS_TEST_TMPDIR/curl.stdin"
+}
+
+@test "a thin render is remembered, so the next preview does not ask again" {
+	write_shell_fixture
+	write_c4ai_config
+	stub_curl_ok 'Tap to unmute'
+	serve_fixtures
+
+	run_served --url "${SERVED}shell.html"
+	[ "$status" -ne 0 ]
+	[[ "$output" == *"no article found"* ]]
+
+	run_served --url "${SERVED}shell.html"
+	[ "$status" -ne 0 ]
+	[[ "$output" == *"no article found"* ]]
+
+	[ "$(wc -l <"$BATS_TEST_TMPDIR/curl.args")" -eq 1 ]
+}
+
+@test "a document handed over with --file never reaches the cluster" {
+	write_shell_fixture
+	write_c4ai_config
+	stub_curl_ok
+
+	run_served --file "$FIXTURES/shell.html" --url "$DEEP_URL"
+
+	[ "$status" -ne 0 ]
+	[[ "$output" == *"no article found"* ]]
+	[ ! -f "$BATS_TEST_TMPDIR/curl.args" ]
+}
+
+@test "a scanned pdf says why it holds no text" {
+	write_pdf_fixture scan.pdf
+	cat >"$STUB_BIN/pdftotext" <<'EOF'
+#!/usr/bin/env bash
+cat >/dev/null
+EOF
+	chmod +x "$STUB_BIN/pdftotext"
+	serve_fixtures
+
+	run_served --url "${SERVED}scan.pdf"
+
+	[ "$status" -ne 0 ]
+	[[ "$output" == *"no text layer, most likely a scan"* ]]
 }
 
 # --------------------------------------------------------------------------
@@ -1223,14 +1390,14 @@ EOF
 	cat >"$STUB_BIN/node" <<'EOF'
 #!/usr/bin/env bash
 printf 'the body the cluster renderer returned\n\n'
-printf '[deep step 2: crawl4ai fit filter over the cluster renderer]\n'
+printf '[step 2: crawl4ai fit filter over the cluster renderer]\n'
 EOF
 	chmod +x "$STUB_BIN/node"
 
 	run_action "$BATS_TEST_TMPDIR/results.json" 0 0
 	[ "$status" -eq 0 ]
 
-	# One second against eight is the difference the note is reporting. Saying
+	# A remote render against a local browser is what the note reports. Saying
 	# "the slow way" for a rung that was not slow trains you to ignore it.
 	run bash "$DDGX" --header "$BATS_TEST_TMPDIR/results.json"
 	[[ "$output" == *"rendered by the cluster renderer"* ]]
@@ -1923,6 +2090,7 @@ private_tmux() {
 # Only ever tears down a server this file started. Without the guard a bare
 # kill-server would reach the default socket, which is where the reader is.
 teardown() {
+	[ -z "${HTTP_PID:-}" ] || kill "$HTTP_PID" 2>/dev/null || true
 	[ -n "${TMUX_SOCKET_DIR:-}" ] || return 0
 	private_tmux kill-server 2>/dev/null || true
 	rm -rf "$TMUX_SOCKET_DIR"

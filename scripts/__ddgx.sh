@@ -1534,7 +1534,7 @@ mode_preview() {
 		# the one moment the escalation means anything, and a reason with no
 		# next step is where the tool used to stop.
 		printf '\033[31m(no page text: %s)\033[0m\n' "$(extract_failure_reason)"
-		printf '\033[90m(ctrl-o renders it and reads that: a second remotely, a few if it falls to a local browser)\033[0m\n'
+		printf '\033[90m(ctrl-o renders it in a browser and reads that: a few seconds)\033[0m\n'
 	fi
 }
 
@@ -1931,10 +1931,10 @@ mode_action() {
 		set_note "$file" 'rendering the page, this takes a moment'
 		if deep_extract "$url"; then
 			# Which rung paid for this is the one thing the note can say that
-			# the refreshed preview cannot: a second and a browser process are
-			# different costs, and the extract already names the winner in its
+			# the refreshed preview cannot: a remote render and a local browser
+			# are different costs, and the extract already names the winner in its
 			# own footer rather than being asked a second time.
-			if grep -q 'deep step 2: crawl4ai' "$(cache_file "$url")"; then
+			if grep -q 'step 2: crawl4ai' "$(cache_file "$url")"; then
 				set_note "$file" 'rendered by the cluster renderer'
 			else
 				set_note "$file" 'rendered the slow way, in a local browser'
