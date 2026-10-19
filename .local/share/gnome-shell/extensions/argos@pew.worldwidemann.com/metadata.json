@@ -1,0 +1,13 @@
+{
+  "uuid": "argos@pew.worldwidemann.com",
+  "name": "Argos",
+  "description": "Create GNOME Shell extensions in seconds",
+  "url": "https://github.com/p-e-w/argos",
+  "shell-version": [
+    "45",
+    "46",
+    "47",
+    "48",
+    "49"
+  ]
+}
