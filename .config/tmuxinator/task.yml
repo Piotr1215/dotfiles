@@ -63,4 +63,4 @@ windows:
         # root: ~/loft/ selects the WORK account; the shared skills overlay makes
         # the local gordon@skills-dir plugin available there.
         # The model is the `gordon` role in ~/.claude/models.env, read at launch.
-        - __claude_with_monitor.sh --system-prompt-file ~/.claude/system-prompts/triage-agent-system-prompt.md --plugin-dir ~/.claude/mods/notify-watch --model "$(~/.claude/scripts/__models.sh get gordon)" -- "/gordon:gordon"
+        - __claude_with_monitor.sh --system-prompt-file ~/.claude/system-prompts/triage-agent-system-prompt.md --model "$(~/.claude/scripts/__models.sh get gordon)" -- "/gordon:gordon"
