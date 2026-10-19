@@ -48,7 +48,7 @@ esac
 EOF
   cat > "$bin_dir/status" <<'EOF'
 #!/usr/bin/env bash
-printf 'status session=%s pane=%s columns=%s\n' "$1" "$2" "$COLUMNS"
+printf 'status session=%s pane=%s flags=%s columns=%s\n' "$1" "$2" "$3" "$COLUMNS"
 EOF
   cat > "$bin_dir/cockpit" <<'EOF'
 #!/usr/bin/env bash
@@ -67,7 +67,7 @@ EOF
     "$WORK_SCRIPT" --render test '@7'
 
   [ "$status" -eq 0 ]
-  [ "$output" = $'status session=test pane=%42 columns=72\n\ncockpit layout=vertical width=72\n\nasks width=72' ]
+  [ "$output" = $'status session=test pane=%42 flags=--no-sources columns=72\n\ncockpit layout=vertical width=72\n\nasks width=72' ]
 }
 
 @test "work margin wraps full status before the cockpit edge" {

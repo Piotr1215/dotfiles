@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Show prefix-g's full status above the live vertical cockpit in the work margin.
+# Show the rendered status line above the live vertical cockpit in the work margin.
 
 set -eo pipefail
 
@@ -38,7 +38,7 @@ status_command="${TMUX_READING_MARGIN_FULL_STATUS_COMMAND:-$script_dir/__tmux_fu
 cockpit_command="${TMUX_READING_MARGIN_COCKPIT_STATE_COMMAND:-$HOME/.claude/scripts/__cockpit_state.sh}"
 asks_command="${TMUX_READING_MARGIN_ASKS_COMMAND:-$HOME/.claude/scripts/__piotr_asks_margin.sh}"
 
-COLUMNS="$status_width" "$status_command" "$session" "$source_pane"
+COLUMNS="$status_width" "$status_command" "$session" "$source_pane" --no-sources
 printf '\n'
 COCKPIT_LAYOUT=vertical COCKPIT_VERTICAL_WIDTH="$width" "$cockpit_command"
 
