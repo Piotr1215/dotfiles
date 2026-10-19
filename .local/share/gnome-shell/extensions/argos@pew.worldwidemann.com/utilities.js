@@ -249,11 +249,22 @@ export function ansiToMarkup(text) {
 // with those of spawn_async (non-blocking execution).
 // Based on https://github.com/optimisme/gjs-examples/blob/master/assets/spawn.js.
 export function spawnWithCallback(workingDirectory, argv, envp, flags, childSetup, callback) {
+  // LOCAL PATCH (dotfiles): with flags 0 GLib double-forks the whole shell,
+  // and the main thread waits out the page-table copy: 80-100 ms from an
+  // 800 MB process, which froze video once per second with two 1s scripts.
+  // These three flags take GLib's posix_spawn (vfork) path, ~1 ms at any
+  // size. Cost: the 4 shell fds without O_CLOEXEC leak into the scripts.
+  // Needs null workingDirectory and childSetup, which every caller passes.
+  // Reapply after an argos update, which overwrites this file.
+  flags |= GLib.SpawnFlags.DO_NOT_REAP_CHILD | GLib.SpawnFlags.LEAVE_DESCRIPTORS_OPEN |
+    GLib.SpawnFlags.CLOEXEC_PIPES;
   let [success, pid, stdinFile, stdoutFile, stderrFile] = GLib.spawn_async_with_pipes(
     workingDirectory, argv, envp, flags, childSetup);
 
   if (!success)
     return;
+
+  GLib.child_watch_add(GLib.PRIORITY_DEFAULT, pid, () => GLib.spawn_close_pid(pid));
 
   GLib.close(stdinFile);
   GLib.close(stderrFile);
