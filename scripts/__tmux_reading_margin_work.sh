@@ -7,7 +7,7 @@ if [[ "${1:-}" != "--render" ]]; then
   session="${1:-$(tmux display-message -p '#{session_name}')}"
   window="${2:-$(tmux display-message -p '#{window_id}')}"
   viddy="${TMUX_READING_MARGIN_VIDDY_COMMAND:-viddy}"
-  exec "$viddy" --interval 15 --differences --no-title \
+  exec "$viddy" --interval 5 --differences --no-title \
     "$0" --render "$session" "$window"
 fi
 
