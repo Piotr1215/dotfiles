@@ -31,6 +31,9 @@ setup() {
   mkdir -p "$REMINDER_STATE_DIR" "$TEST_AT_BODIES"
   : >"$NOTIFY_LOG"
   : >"$TEST_CRONTAB"
+  # A first pass with no cursor starts at the end of the log; these tests
+  # write popups before their first pass, so the cursor starts at 0.
+  printf '0' >"$REMINDER_STATE_DIR/notify.cursor"
 
   cat >"$BIN/at" <<'STUB'
 #!/usr/bin/env bash
@@ -119,17 +122,21 @@ standup_popup() {
   [ "$(cat "$BATS_TEST_TMPDIR/env.txt")" = "$(tail -n1 "$NOTIFY_LOG")" ]
 }
 
-@test "a popup older than the freshness window is skipped, logged as stale, and reported to Gordon" {
+@test "a popup older than the freshness window is skipped and logged as stale, silently" {
   id="$(standup_rule)"
   standup_popup '20 minutes ago'
+  standup_popup '13 days ago'
   "$REMINDER" match
   [ ! -f "$TEST_TMUXINATOR_LOG" ]
   grep -q $'\t'"$id"$'\tstale\tpopup 20m old' "$REMINDER_LOG"
+  grep -q $'\t'"$id"$'\tstale\tpopup 13d 0h old' "$REMINDER_LOG"
   ! grep -q fired "$REMINDER_LOG"
-  tail -n1 "$NOTIFY_LOG" | grep -q $'\treminder\tskipped: start standup session\tpopup 20m old'
-  # Gordon's line is a reminder record: it never triggers again.
+  # Nothing reaches Gordon: the mod already showed him the popup while the
+  # watcher was down, so a line here would be a duplicate.
+  ! grep -q $'\treminder\t' "$NOTIFY_LOG"
+  [ "$(grep -c . "$NOTIFY_LOG")" -eq 2 ]
   "$REMINDER" match
-  [ "$(grep -c stale "$REMINDER_LOG")" -eq 1 ]
+  [ "$(grep -c stale "$REMINDER_LOG")" -eq 2 ]
   [ ! -f "$TEST_TMUXINATOR_LOG" ]
   # The window is a knob.
   REMINDER_NOTIFY_WINDOW=3600 standup_popup '20 minutes ago'
@@ -247,6 +254,20 @@ standup_popup() {
   standup_popup
   "$REMINDER" match
   [ ! -f "$TEST_TMUXINATOR_LOG" ]
+}
+
+@test "a first pass with no cursor starts at the end of the log and fires nothing" {
+  id="$(standup_rule)"
+  rm -f "$REMINDER_STATE_DIR/notify.cursor"
+  standup_popup
+  "$REMINDER" match
+  [ ! -f "$TEST_TMUXINATOR_LOG" ]
+  [ "$(cat "$REMINDER_STATE_DIR/notify.cursor")" = "$(stat -c %s "$NOTIFY_LOG")" ]
+  sleep 1
+  standup_popup
+  "$REMINDER" match
+  [ "$(cat "$TEST_TMUXINATOR_LOG")" = "start standup --no-attach" ]
+  grep -q $'\t'"$id"$'\tfired' "$REMINDER_LOG"
 }
 
 @test "watch runs match passes until stopped and touches the heartbeat" {

@@ -31,7 +31,8 @@ Rejected: a hook inside `__notification_logger.py` (a matching bug would stop th
 - At most once per popup and reminder: the cursor is written before any fire; `notify.seen` covers cursor resets.
 - Popup text in a shell: the popup travels as stdin and an env var; the at job body carries only the id and a hex token; `.command` is the only text `bash -c` sees, and it is the author's.
 - Loop: a record whose app field is `reminder` (the engine's own gordon lines) never triggers, so an error line cannot re-match.
-- Watcher down, crashed or never enabled: the heartbeat goes stale, the mod stops applying the patterns, and Gordon sees the popup and the note. A popup that landed inside the 30 second gap is skipped as `stale` when the watcher returns, and that skip sends Gordon one line, so no match ends in a log file alone.
+- Watcher down, crashed or never enabled: the heartbeat goes stale, the mod stops applying the patterns, and Gordon sees the popup and the note. A match the watcher finds late is logged as `stale` and nothing more: Gordon already had the popup, and a line per old match replays history into his session (six such lines on the first live run, before the first pass started at EOF).
+- First run with no cursor: starts at the end of the log, the mod's rule, so history never fires or logs.
 - Hung command: `timeout` (`REMINDER_NOTIFY_TIMEOUT`, 120s) ends it and the run is an error.
 - Delayed fire while the box was off: atd runs overdue queue `n` jobs at boot; `fire.log` records `late`.
 

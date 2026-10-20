@@ -1588,16 +1588,17 @@ queue_delayed_fire() {
 	log_fire "$id" queued "fire in $delay ($token)" "$title"
 }
 
-# One line of the notification log: fires, queues, or skips every active
-# on-notify record it matches. Stale (older than NOTIFY_WINDOW, the watcher
-# was down) and seen (the cursor was reset) popups never fire; a stale match
-# tells Gordon, since the mod hid the popup on the strength of this watcher.
+# One line of the notification log against the pass's on-notify records:
+# fires, queues, or skips each one it matches. Stale (older than
+# NOTIFY_WINDOW, the watcher was down) and seen (the cursor was reset) popups
+# never fire and are only logged: the mod stops hiding popups while the
+# heartbeat is stale, so Gordon already saw what a down watcher missed.
 match_line() {
-	local line="$1" now="$2" ts app age key id delay title matches
+	local line="$1" now="$2" rules="$3" ts app age key id delay title matches
 	[[ "$line" =~ ^([0-9]{4}-[0-9]{2}-[0-9]{2}\ [0-9]{2}:[0-9]{2}:[0-9]{2})$'\t'([^$'\t']*)$'\t' ]] || return 0
 	ts="${BASH_REMATCH[1]}" app="${BASH_REMATCH[2]}"
 	[ "$app" != reminder ] || return 0
-	matches="$(active_records | jq -c --arg line "$line" 'select(.on_notify) | (.on_notify as $re | select(try ($line | test($re)) catch false))')"
+	matches="$(jq -c --arg line "$line" '.on_notify as $re | select(try ($line | test($re)) catch false)' <<<"$rules")"
 	[ -n "$matches" ] || return 0
 	age=$((now - $(epoch_of "$ts")))
 	key="$(printf '%s' "$line" | sha1sum | cut -c1-40)"
@@ -1607,7 +1608,6 @@ match_line() {
 		title="$(record_title "$record")"
 		if [ "$age" -gt "$NOTIFY_WINDOW" ]; then
 			log_fire "$id" stale "popup $(human_duration "$age") old" "$title"
-			notify_gordon "skipped: $title" "popup $(human_duration "$age") old when the trigger watcher saw it, no action taken: $line" || true
 			continue
 		fi
 		if grep -qF $'\t'"$id:$key" "$NOTIFY_SEEN" 2>/dev/null; then
@@ -1638,7 +1638,12 @@ cmd_match() {
 	fi
 	[ -f "$NOTIFY_LOG" ] || return 0
 	size="$(stat -c %s "$NOTIFY_LOG")"
-	[ -f "$NOTIFY_CURSOR" ] && cursor="$(cat "$NOTIFY_CURSOR")"
+	if [ ! -f "$NOTIFY_CURSOR" ]; then
+		# No cursor yet: start at the end, so a first run does not walk history.
+		printf '%s' "$size" >"$NOTIFY_CURSOR"
+		return 0
+	fi
+	cursor="$(cat "$NOTIFY_CURSOR")"
 	[[ "$cursor" =~ ^[0-9]+$ ]] || cursor=0
 	# The byte before the cursor must be a newline: command substitution
 	# strips one, so a non-empty result is a cursor inside a rewritten line.
@@ -1657,10 +1662,16 @@ cmd_match() {
 		return 0
 	fi
 	printf '%s' "$((cursor + complete))" >"$NOTIFY_CURSOR.tmp" && mv "$NOTIFY_CURSOR.tmp" "$NOTIFY_CURSOR"
-	while IFS= read -r line; do
-		[ -n "$line" ] || continue
-		match_line "$line" "$now"
-	done < <(head -c "$complete" "$chunk")
+	# The records are read once per pass, not once per line: a backlog of a
+	# few hundred lines against the store per line took minutes.
+	local rules
+	rules="$(active_records | jq -c 'select(.on_notify)')"
+	if [ -n "$rules" ]; then
+		while IFS= read -r line; do
+			[ -n "$line" ] || continue
+			match_line "$line" "$now" "$rules"
+		done < <(head -c "$complete" "$chunk")
+	fi
 	rm -f "$chunk"
 }
 
