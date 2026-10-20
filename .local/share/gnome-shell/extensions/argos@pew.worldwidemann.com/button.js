@@ -43,6 +43,16 @@ class ArgosButton extends PanelMenu.Button {
     this.connect("destroy", this._onDestroy.bind(this));
 
     this._updateRunning = false;
+    this._lastOutput = null;
+    this._menuSource = null;
+    this._pendingMenu = null;
+
+    // LOCAL PATCH (dotfiles): a menu that changed while closed is built when
+    // it opens, see _processOutput.
+    this.menu.connect("open-state-changed", (menu, open) => {
+      if (open && this._pendingMenu !== null)
+        this._buildMenu();
+    });
 
     this._update();
 
@@ -92,7 +102,15 @@ class ArgosButton extends PanelMenu.Button {
           if (this._isDestroyed)
             return;
 
-          this._processOutput(standardOutput.split("\n"));
+          // LOCAL PATCH (dotfiles): skip a run whose output did not change,
+          // unless the button cycles: reprocessing restarts the cycle, and
+          // totp's one-flash-per-tick needs that. _processOutput says why
+          // rebuilding is costly. Reapply after an argos update, which
+          // overwrites this file.
+          if (standardOutput !== this._lastOutput || this._cycleTimeout !== null) {
+            this._processOutput(standardOutput.split("\n"));
+            this._lastOutput = standardOutput;
+          }
 
           if (this._updateInterval !== null) {
             this._updateTimeout =
@@ -114,6 +132,10 @@ class ArgosButton extends PanelMenu.Button {
   _processOutput(output) {
     let buttonLines = [];
     let dropdownLines = [];
+    // LOCAL PATCH (dotfiles): the raw lines, to tell a label-only change from
+    // a menu change.
+    let buttonSource = [];
+    let dropdownSource = [];
 
     let dropdownMode = false;
 
@@ -127,12 +149,12 @@ class ArgosButton extends PanelMenu.Button {
         dropdownMode = true;
       } else if (dropdownMode) {
         dropdownLines.push(line);
+        dropdownSource.push(output[i]);
       } else {
         buttonLines.push(line);
+        buttonSource.push(output[i]);
       }
     }
-
-    this.menu.removeAll();
 
     if (this._cycleTimeout !== null) {
       GLib.source_remove(this._cycleTimeout);
@@ -153,14 +175,42 @@ class ArgosButton extends PanelMenu.Button {
       let i = 0;
       // LOCAL PATCH (dotfiles): was timeout_add_seconds(..., 3, ...). Argos's
       // 3s line cycle is too slow to read as a pulse; 800ms breathes. Only
-      // cron-status.1m.sh emits more than one button line, so nothing else
-      // cycles. Reapply after an argos update, which overwrites this file.
+      // cron-status.1m.sh and totp.1s.sh's flashes emit more than one button
+      // line, so nothing else cycles. Reapply after an argos update, which
+      // overwrites this file.
       this._cycleTimeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 800, () => {
         i++;
         this._lineView.setLine(buttonLines[i % buttonLines.length]);
         return true;
       });
+    }
 
+    // LOCAL PATCH (dotfiles): build the menu only when it changed, and only
+    // once it is open. Menu items are JS subclasses, so gjs holds them by
+    // toggle ref, and destroying one schedules a forced full GC 10s later
+    // (gjs 1.80 object.cpp, toggle_down). Upstream rebuilt every menu on
+    // every run, so any applet whose output changed within 10s
+    // (system.1l.1s.sh's label every second, hwmon.2l.10s.sh's menu every
+    // 10s) stalled the shell 35-55 ms every 10s. Button lines join the menu
+    // only when there are several.
+    const menuSource = (buttonLines.length > 1 ? buttonSource.join("\n") : "") +
+      "\n---\n" + dropdownSource.join("\n");
+    if (menuSource === this._menuSource)
+      return;
+    this._menuSource = menuSource;
+    this._pendingMenu = {buttonLines, dropdownLines};
+    // An empty menu refuses to open, so the first one is built at once.
+    if (this.menu.isOpen || this.menu.numMenuItems === 0)
+      this._buildMenu();
+  }
+
+  _buildMenu() {
+    const {buttonLines, dropdownLines} = this._pendingMenu;
+    this._pendingMenu = null;
+
+    this.menu.removeAll();
+
+    if (buttonLines.length > 1) {
       for (let j = 0; j < buttonLines.length; j++) {
         if (buttonLines[j].dropdown !== "false")
           this.menu.addMenuItem(new ArgosMenuItem(this, buttonLines[j]));
