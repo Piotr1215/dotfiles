@@ -20,3 +20,4 @@ tests/bats/standup_tmuxinator_test.bats filter=git-crypt diff=git-crypt
 .config/tmuxinator/vcluster-dev.yml filter=git-crypt diff=git-crypt
 .config/tmuxinator/vcloud.yml filter=git-crypt diff=git-crypt
 .kube/kctx.yaml filter=git-crypt diff=git-crypt
+.zsh_aliases.work filter=git-crypt diff=git-crypt

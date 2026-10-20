@@ -216,3 +216,14 @@ alias sd="~/dev/dotfiles/scripts/__ddgx.sh -d"
 # MarkDownload button: 2md https://example.com/post > post.md
 # In a script call __readable.mjs directly, it is already on PATH.
 alias 2md="~/dev/dotfiles/scripts/__readable.mjs --url"
+
+# Load work aliases only after git-crypt decrypts this checkout.
+() {
+  local work_aliases="${${(%):-%x}:A:h}/.zsh_aliases.work"
+  local work_header
+  if [[ -r "$work_aliases" ]] &&
+      IFS= read -r work_header < "$work_aliases" &&
+      [[ "$work_header" == '# git-crypt work aliases' ]]; then
+    source "$work_aliases"
+  fi
+}
