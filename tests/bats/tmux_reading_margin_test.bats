@@ -64,6 +64,30 @@ EOF
   [ "$output" = $'cockpit layout=vertical width=72\n\nasks width=72' ]
 }
 
+@test "work margin passes a waiting-on-permission agent row through unchanged" {
+  bin_dir="${BATS_TEST_TMPDIR}/bin"
+  mkdir -p "$bin_dir"
+  printf '#!/usr/bin/env bash\n' > "$bin_dir/tmux"
+  cat > "$bin_dir/cockpit" <<'EOF'
+#!/usr/bin/env bash
+printf 'AGENT:   claude-tmux-kill-ask\nSTATUS:  waiting: permission 20m\n'
+EOF
+  chmod +x "$bin_dir/tmux" "$bin_dir/cockpit"
+
+  run env PATH="$bin_dir:$PATH" TMUX_PANE='%99' \
+    TMUX_READING_MARGIN_COCKPIT_STATE_COMMAND="$bin_dir/cockpit" \
+    TMUX_READING_MARGIN_ASKS_COMMAND="$bin_dir/absent" \
+    "$WORK_SCRIPT" --render test '@7'
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"STATUS:  waiting: permission 20m"* ]]
+}
+
+@test "work margin default cockpit command is the script that reads @agent_wait" {
+  grep -q '@agent_wait' "$HOME/.claude/scripts/__cockpit_state.sh"
+  [ -x "$HOME/.claude/scripts/__agent_wait.sh" ]
+}
+
 @test "work margin skips the asks section when its command is absent" {
   bin_dir="${BATS_TEST_TMPDIR}/bin"
   mkdir -p "$bin_dir"
