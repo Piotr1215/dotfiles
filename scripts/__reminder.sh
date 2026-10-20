@@ -37,6 +37,7 @@ CRON_BEGIN="# BEGIN remind (managed by __reminder.sh sync, edits here are overwr
 CRON_END="# END remind"
 DEFAULT_SNOOZE="${REMINDER_DEFAULT_SNOOZE:-15 minutes}"
 LATE_AFTER=300
+NOTIFY_LOG="${NOTIFY_LOG:-${XDG_STATE_HOME:-$HOME/.local/state}/notifications.log}"
 
 usage() {
 	cat <<'USAGE'
@@ -78,6 +79,8 @@ Options for add and edit:
                       verdict: 0 silent, 2 hit (shows output, retires the reminder,
                       a repeat too), else error (shows output, keeps the schedule)
   --origin <o>        who created it (cli, claude, dialog, migrate)
+  --to <r>            piotr (default, a dialog) or gordon (a line in the notification
+                      log that Gordon's session reads; falls back to the dialog)
 
 Dialog bindings used by the Argos applet:
   add-dialog, edit-dialog <id>, delete-dialog <id>, open <id>
@@ -487,7 +490,7 @@ log_fire() {
 
 parse_options() {
 	# Fills opt_* variables and positional[] from "$@".
-	opt_when="" opt_repeat="" opt_subject="" opt_action="" opt_command="" opt_origin="" opt_label="" opt_notify="" opt_on_hit="" opt_on_miss=""
+	opt_when="" opt_repeat="" opt_subject="" opt_action="" opt_command="" opt_origin="" opt_label="" opt_notify="" opt_on_hit="" opt_on_miss="" opt_to=""
 	positional=()
 	while [ $# -gt 0 ]; do
 		case "$1" in
@@ -500,6 +503,7 @@ parse_options() {
 		--on-hit) opt_on_hit="${2:-}"; shift 2 ;;
 		--on-miss) opt_on_miss="${2:-}"; shift 2 ;;
 		--origin) opt_origin="${2:-}"; shift 2 ;;
+		--to) opt_to="${2:-}"; shift 2 ;;
 		--label) opt_label="${2:-}"; shift 2 ;;
 		--) shift; positional+=("$@"); break ;;
 		-*) die "Unknown option $1" ;;
@@ -512,6 +516,13 @@ validate_notify() {
 	case "$1" in
 	'' | dialog | mail | silent) ;;
 	*) die "Unknown notify $1 (dialog, mail, silent)." ;;
+	esac
+}
+
+validate_to() {
+	case "$1" in
+	'' | piotr | gordon) ;;
+	*) die "Unknown recipient $1 (piotr, gordon)." ;;
 	esac
 }
 
@@ -541,14 +552,15 @@ cmd_add() {
 	action="${opt_action:-show}"
 	validate_action "$action" "$opt_command"
 	validate_notify "$opt_notify"
+	validate_to "$opt_to"
 	id="$(new_id)"
 	record="$(jq -nc --arg id "$id" --arg label "$label" --arg when "$when" --arg repeat "$repeat" \
 		--arg action "$action" --arg subject "$subject" --arg command "$opt_command" \
 		--arg notify "$opt_notify" --arg on_hit "$opt_on_hit" --arg on_miss "$opt_on_miss" \
-		--arg created "$(now_iso)" --arg origin "${opt_origin:-cli}" \
+		--arg created "$(now_iso)" --arg origin "${opt_origin:-cli}" --arg to "$opt_to" \
 		'{id:$id, label:$label, when:$when, repeat:$repeat, action:$action, subject:$subject,
 		  command:$command, notify:$notify, on_hit:$on_hit, on_miss:$on_miss,
-		  created:$created, origin:$origin, status:"active"}
+		  created:$created, origin:$origin, to:$to, status:"active"}
 		 | with_entries(select(.value != ""))')"
 	append_record "$record"
 	check_off_window "$when" "$repeat"
@@ -958,11 +970,12 @@ cmd_edit() {
 	[ -n "$opt_action" ] && { validate_action "$opt_action" "${opt_command:-$(get_record "$id" | jq -r '.command // ""')}"; filter="$filter | .action = \$action"; }
 	[ -n "$opt_command" ] && filter="$filter | .command = \$command"
 	[ -n "$opt_notify" ] && { validate_notify "$opt_notify"; filter="$filter | .notify = \$notify"; }
+	[ -n "$opt_to" ] && { validate_to "$opt_to"; filter="$filter | .to = \$to"; }
 	[ -n "$opt_on_hit" ] && filter="$filter | .on_hit = \$on_hit"
 	[ -n "$opt_on_miss" ] && filter="$filter | .on_miss = \$on_miss"
 	update_record "$id" "$filter" --arg repeat "$repeat" --arg subject "$subject" \
 		--arg label "$opt_label" --arg action "$opt_action" --arg command "$opt_command" --arg notify "$opt_notify" \
-		--arg on_hit "$opt_on_hit" --arg on_miss "$opt_on_miss"
+		--arg on_hit "$opt_on_hit" --arg on_miss "$opt_on_miss" --arg to "$opt_to"
 	cmd_sync >/dev/null
 	printf 'Updated %s\n' "$id"
 }
@@ -1133,6 +1146,23 @@ show_dialog() {
 # re-fires while an unanswered dialog is still on screen (measured: 15 minutes
 # away from the desk produced two dialogs), so a fire that finds the lock held
 # only refreshed the snooze and leaves the open dialog to decide.
+# Hand a fired reminder to Gordon: one line in the notification log in the
+# logger's format (time, app, summary, body, tab separated). One printf into an
+# O_APPEND file, capped under PIPE_BUF, so it cannot interleave with the
+# logger. Returns non-zero when the append fails, so callers fall back to the
+# dialog and nothing is lost.
+notify_gordon() {
+	local title="$1" body="$2" summary line
+	summary="$(printf '%s' "$title" | tr '\t\n' '  ')"
+	body="$(printf '%s' "$body" | tr '\t\n' '  ' | head -c 3000)"
+	line="$(printf '%s\t%s\t%s\t%s' "$(date '+%F %T')" reminder "$summary" "$body")"
+	printf '%s\n' "$line" >>"$NOTIFY_LOG" 2>/dev/null
+}
+
+record_to() {
+	jq -r '.to // "piotr"' <<<"$1"
+}
+
 guarded_dialog() {
 	local id="$1" record="$2" title="$3" body="$4" url="$5" due="$6" late="$7"
 	local snooze_until
@@ -1255,7 +1285,13 @@ cmd_fire() {
 	case "$action" in
 	show)
 		notify="$(jq -r '.notify // "dialog"' <<<"$record")"
+		if [ "$(record_to "$record")" = gordon ] && notify_gordon "$title" "$body${url:+ $url}"; then notify=gordon; fi
 		case "$notify" in
+		gordon)
+			mark_done "$id"
+			cmd_sync >/dev/null
+			log_fire "$id" delivered gordon "$title"
+			;;
 		mail)
 			printf '%s\n%s\n' "$body" "${url:+$url}" | "$MAILER" "$title"
 			mark_done "$id"
@@ -1324,7 +1360,9 @@ cmd_fire() {
 			# (Done and Snooze both work); by mail or silently there is nothing
 			# left to ask, so the reminder is done.
 			update_record "$id" 'del(.repeat)'
+			if [ "$(record_to "$record")" = gordon ] && notify_gordon "$title" "$output"; then notify=gordon; fi
 			case "$notify" in
+			gordon) update_record "$id" '.status = "done" | del(.when)'; cmd_sync >/dev/null; log_fire "$id" delivered gordon "$title" ;;
 			mail) printf '%s\n' "$output" | "$MAILER" "$title"; update_record "$id" '.status = "done" | del(.when)'; cmd_sync >/dev/null ;;
 			silent) update_record "$id" '.status = "done" | del(.when)'; cmd_sync >/dev/null ;;
 			*) guarded_dialog "$id" "$record" "$title" "$output" "$url" "${due:+$(human_when "$due")}" "$late" ;;
@@ -1333,7 +1371,9 @@ cmd_fire() {
 		*)
 			# An error keeps the schedule (a repeat retries on its own). A dialog
 			# asks what to do with this run; mail reports it and moves on.
+			if [ "$(record_to "$record")" = gordon ] && notify_gordon "error: $title" "$err_label $output"; then notify=gordon; fi
 			case "$notify" in
+			gordon) log_fire "$id" delivered "gordon error" "$title" ;;
 			mail) printf '%s\n%s\n' "$err_label" "$output" | "$MAILER" "error: $title"; mark_done "$id"; cmd_sync >/dev/null ;;
 			silent) mark_done "$id"; cmd_sync >/dev/null ;;
 			*) guarded_dialog "$id" "$record" "$title" "$err_label"$'\n'"$output" "$url" "${due:+$(human_when "$due")}" "$late" ;;

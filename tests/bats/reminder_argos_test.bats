@@ -17,6 +17,7 @@ setup() {
   export REMINDER_URL_OPENER="$BIN/url-opener"
   export REMINDER_TASK_OPENER="$BIN/task-opener"
   export REMINDER_MAILER="$BIN/mailer"
+  export NOTIFY_LOG="${BATS_TEST_TMPDIR}/notifications.log"
   # This store is not the default one; at, atq, atrm and crontab are stubs.
   export REMINDER_OWN_CLOCKS=1
   export TEST_MAIL_LOG="${BATS_TEST_TMPDIR}/mail.log"
@@ -252,6 +253,74 @@ only_id() {
   [ -n "$(last_record | jq -r '.last_fired')" ]
   grep -q "	$id	fired	show due 2026-09-08T09:00:00.* late .*	Call vodafone$" "$REMINDER_LOG"
   grep -q "	$id	done	done	Call vodafone$" "$REMINDER_LOG"
+}
+
+@test "a gordon reminder appends one logger-format line and opens no dialog" {
+  "$REMINDER" add "verify: budget note" '2026-09-08 09:00' --subject 'check the branch events' --to gordon >/dev/null
+  id="$(only_id)"
+  [ "$(last_record | jq -r '.to')" = gordon ]
+  gui_returns '{"action":"done"}'
+  rm -f "$TEST_ALERT_REQUEST"
+
+  run "$REMINDER" fire "$id"
+
+  [ "$status" -eq 0 ]
+  [ ! -e "$TEST_ALERT_REQUEST" ]
+  [ "$(wc -l <"$NOTIFY_LOG")" -eq 1 ]
+  [[ "$(<"$NOTIFY_LOG")" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}\ [0-9:]{8}$'\t'reminder$'\t'"verify: budget note"$'\t'"check the branch events"$ ]]
+  [ "$(last_record | jq -r '.status')" = done ]
+  grep -q "	$id	delivered	gordon	verify: budget note$" "$REMINDER_LOG"
+}
+
+@test "a gordon reminder falls back to the dialog when the log append fails" {
+  mkdir "$BATS_TEST_TMPDIR/notdir"
+  export NOTIFY_LOG="$BATS_TEST_TMPDIR/notdir"
+  "$REMINDER" add "verify: fallback" '2026-09-08 09:00' --to gordon >/dev/null
+  id="$(only_id)"
+  gui_returns '{"action":"done"}'
+
+  run "$REMINDER" fire "$id"
+
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.title' "$TEST_ALERT_REQUEST")" = "verify: fallback" ]
+  [ "$(last_record | jq -r '.status')" = done ]
+}
+
+@test "a piotr reminder still takes the dialog path and writes no log line" {
+  "$REMINDER" add "Call vodafone" '2026-09-08 09:00' --to piotr >/dev/null
+  id="$(only_id)"
+  gui_returns '{"action":"done"}'
+
+  run "$REMINDER" fire "$id"
+
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.title' "$TEST_ALERT_REQUEST")" = "Call vodafone" ]
+  [ ! -e "$NOTIFY_LOG" ]
+}
+
+@test "a gordon exec hit delivers the output to the log and retires the repeat" {
+  "$REMINDER" add "verify: hit" --repeat '0 9 * * 1' --action exec --command 'echo found it; exit 2' --notify mail --to gordon >/dev/null
+  id="$(only_id)"
+  rm -f "$TEST_MAIL_LOG"
+
+  run "$REMINDER" fire "$id"
+
+  [ "$status" -eq 0 ]
+  [ ! -e "$TEST_MAIL_LOG" ]
+  [[ "$(<"$NOTIFY_LOG")" == *$'\treminder\tverify: hit\tfound it' ]]
+  [ "$(last_record | jq -r '.status')" = done ]
+}
+
+@test "edit --to switches the recipient and rejects unknown ones" {
+  "$REMINDER" add "Switch me" '2026-09-08 09:00' >/dev/null
+  id="$(only_id)"
+
+  run "$REMINDER" edit "$id" --to gordon
+  [ "$status" -eq 0 ]
+  [ "$(last_record | jq -r '.to')" = gordon ]
+
+  run "$REMINDER" edit "$id" --to bob
+  [ "$status" -ne 0 ]
 }
 
 @test "snooze is an edit of when plus sync" {
