@@ -132,6 +132,10 @@ STATE_DIR = os.path.join(os.path.expanduser('~'), '.local', 'state', 'argos-serv
 os.makedirs(STATE_DIR, exist_ok=True)
 STATE_FILE = os.path.join(STATE_DIR, 'services_status_state.json')
 
+# Providers whose feed failed this run. The board still shows its default
+# status for them, but the Gordon notifier ignores them (no transition).
+FEED_ERRORS = set()
+
 def get_cache_path(url):
     """Generate cache file path for a favicon URL"""
     url_hash = hashlib.md5(url.encode()).hexdigest()
@@ -211,15 +215,21 @@ def get_aws_status():
                             break
             return "degraded" if has_issues else "operational"
         else:
-            # Try simpler health check endpoint
-            health_url = "https://health.aws.amazon.com/health/status"
+            FEED_ERRORS.add("AWS")
+            # Try simpler health check endpoint = "https://health.aws.amazon.com/health/status"
             req = urllib.request.Request(health_url, headers={'User-Agent': 'Mozilla/5.0'})
             with urllib.request.urlopen(req, timeout=5) as response:
                 if response.status == 200:
                     return "operational"
     except Exception:
-        pass
+        FEED_ERRORS.add("AWS")
     return "operational"  # Default to operational for AWS
+
+def gcp_active_incidents(data):
+    """Return the GCP incidents that have no 'end' (still active)."""
+    if not isinstance(data, list):
+        return []
+    return [i for i in data if isinstance(i, dict) and not i.get('end', None)]
 
 def get_gcp_status():
     """Check GCP status"""
@@ -227,16 +237,14 @@ def get_gcp_status():
         data = fetch_status(SERVICES["GCP"]["api"])
         if data and isinstance(data, list):
             # Check only for active/ongoing incidents
-            active_incidents = 0
-            for incident in data:
-                if isinstance(incident, dict):
-                    # Check if incident is not resolved
-                    if not incident.get('end', None):
-                        active_incidents += 1
-            return "degraded" if active_incidents > 0 else "operational"
+            return "degraded" if gcp_active_incidents(data) else "operational"
+        # No feed: the board keeps showing operational, but the Gordon
+        # notifier must not read this as a recovery.
+        FEED_ERRORS.add("GCP")
         return "operational"
     except Exception:
         pass
+    FEED_ERRORS.add("GCP")
     return "operational"  # Default to operational
 
 def get_azure_status():
@@ -472,6 +480,162 @@ def check_status_degradation(previous_statuses, current_statuses, degradation_co
     
     return degraded_services, new_degradation_counts
 
+
+# ---- Gordon notifications ---------------------------------------------------
+# Gordon reads ~/.local/state/notifications.log (same record format as
+# __reminder.sh notify_gordon): "date time<TAB>app<TAB>summary<TAB>body".
+# One line per provider transition into or out of an outage, never per run.
+# Env overrides (tests): ARGOS_NOTIFY_LOG, ARGOS_STATE_DIR.
+
+GORDON_STATE_NAME = 'gordon_notified_state.json'
+
+def notify_log_path():
+    """Path of the notifications log Gordon watches."""
+    override = os.environ.get('ARGOS_NOTIFY_LOG')
+    if override:
+        return override
+    base = os.environ.get('XDG_STATE_HOME') or os.path.join(os.path.expanduser('~'), '.local', 'state')
+    return os.path.join(base, 'notifications.log')
+
+def _one_line(text):
+    return ' '.join(str(text).replace('\t', ' ').replace('\n', ' ').replace('\r', ' ').split())
+
+def append_gordon_line(summary, body):
+    """Append one record to the log. A single O_APPEND write, capped under
+    PIPE_BUF, so it cannot interleave with other writers. True on success."""
+    summary = _one_line(summary)[:300]
+    body = _one_line(body).encode('utf-8')[:3000].decode('utf-8', 'ignore')
+    line = f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\targos\t{summary}\t{body}\n"
+    try:
+        fd = os.open(notify_log_path(), os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o644)
+        try:
+            os.write(fd, line.encode('utf-8'))
+        finally:
+            os.close(fd)
+        return True
+    except OSError:
+        return False
+
+def _status_dir():
+    return os.environ.get('ARGOS_STATE_DIR') or STATE_DIR
+
+def _join(items, limit):
+    items = [i for i in items if i]
+    shown = ', '.join(items[:limit])
+    return shown + (f" (+{len(items) - limit} more)" if len(items) > limit else '')
+
+def describe_gcp(data):
+    """(title, impacted) for the active GCP incidents in the incidents feed."""
+    active = gcp_active_incidents(data)
+    if not active:
+        return None, ''
+    active.sort(key=lambda i: i.get('begin') or '', reverse=True)
+    title = active[0].get('external_desc') or active[0].get('service_name') or 'incident'
+    locations, products = [], []
+    for inc in active:
+        recent = inc.get('most_recent_update') or {}
+        for loc in (recent.get('affected_locations') or inc.get('currently_affected_locations') or []):
+            name = loc.get('title') or loc.get('id') if isinstance(loc, dict) else None
+            if name and name not in locations:
+                locations.append(name)
+        for prod in inc.get('affected_products') or []:
+            name = prod.get('title') if isinstance(prod, dict) else None
+            if name and name not in products:
+                products.append(name)
+    parts = []
+    if len(active) > 1:
+        parts.append(f"{len(active)} active incidents")
+    if locations:
+        parts.append("regions: " + _join(locations, 8))
+    if products:
+        parts.append("products: " + _join(products, 8))
+    return title, '; '.join(parts)
+
+def describe_statuspage(url):
+    """(title, impacted) from a statuspage.io unresolved incidents feed."""
+    data = fetch_status(url) if url else None
+    incidents = (data or {}).get('incidents') or []
+    if not incidents:
+        return None, ''
+    title = incidents[0].get('name') or 'incident'
+    components = []
+    for inc in incidents:
+        for comp in inc.get('components') or []:
+            if comp.get('name') and comp['name'] not in components:
+                components.append(comp['name'])
+    return title, ("components: " + _join(components, 8)) if components else ''
+
+def describe_outage(service):
+    """Best-effort (title, impacted) for a provider that just went down."""
+    try:
+        api = SERVICES[service]['api']
+        if service == 'GCP':
+            title, impacted = describe_gcp(fetch_status(api))
+        elif api.endswith('/status.json'):
+            title, impacted = describe_statuspage(api[:-len('status.json')] + 'incidents/unresolved.json')
+        elif api.endswith('/incidents/unresolved.json'):
+            title, impacted = describe_statuspage(api)
+        else:
+            title, impacted = None, ''
+    except Exception:
+        title, impacted = None, ''
+    return title or 'status page reports an outage', impacted
+
+def notify_transitions(statuses):
+    """Append one Gordon line per provider that crossed into or out of a
+    non-operational state since the last run. The first run (no state file)
+    and any provider seen for the first time are recorded without a line.
+    State is written atomically, after the append, so a failed append is
+    retried next run instead of lost."""
+    state_path = os.path.join(_status_dir(), GORDON_STATE_NAME)
+    prev = None
+    try:
+        with open(state_path) as f:
+            loaded = json.load(f)
+        if isinstance(loaded, dict):
+            prev = loaded
+    except (OSError, ValueError):
+        prev = None
+    new = dict(prev or {})
+    for service, status in statuses.items():
+        # A failed or unreadable feed is not an observation.
+        if service in FEED_ERRORS or status == "unknown":
+            continue
+        current = "operational" if status == "operational" else "outage"
+        old = new.get(service)
+        if not isinstance(old, dict) or old.get('state') not in ("operational", "outage"):
+            new[service] = {'state': current}
+            continue
+        if old['state'] == current:
+            continue
+        info = SERVICES[service]
+        if current == "outage":
+            title, impacted = describe_outage(service)
+            summary = f"{service} outage: {title}"
+            body = f"Provider: {info['name']}. State: {status}."
+            if impacted:
+                body += f" Impacted {impacted}."
+            body += f" Status: {info['status_page']}"
+            entry = {'state': 'outage', 'title': title}
+        else:
+            summary = f"{service} recovered"
+            body = f"Provider: {info['name']}. State: operational."
+            if old.get('title'):
+                body += f" Was: {old['title']}."
+            body += f" Status: {info['status_page']}"
+            entry = {'state': 'operational'}
+        if append_gordon_line(summary, body):
+            new[service] = entry
+    if new != prev:
+        try:
+            os.makedirs(_status_dir(), exist_ok=True)
+            fd, tmp = tempfile.mkstemp(dir=_status_dir(), prefix='.gordon-state-')
+            with os.fdopen(fd, 'w') as f:
+                json.dump(new, f, indent=2)
+            os.replace(tmp, state_path)
+        except OSError:
+            pass
+
 # Removed launch_servmon_session and kill_servmon_session functions
 # These are no longer needed as we don't want to create tmux sessions
 
@@ -491,8 +655,12 @@ def main():
         previous_statuses, statuses, degradation_counts
     )
     
-    # No longer launching or killing tmux sessions
-    
+    # Tell Gordon about transitions; never let it break the board
+    try:
+        notify_transitions(statuses)
+    except Exception:
+        pass
+
     # Save current state for next check
     save_current_state(statuses, new_degradation_counts)
     
