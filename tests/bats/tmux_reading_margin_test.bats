@@ -88,6 +88,23 @@ EOF
   [ -x "$HOME/.claude/scripts/__agent_wait.sh" ]
 }
 
+@test "cockpit highlights waiting-on-human statuses in bold reverse red" {
+  script="$HOME/.claude/scripts/__cockpit_state.sh"
+  fn="$(sed -n '/^status_color() {/,/^}/p' "$script")"
+  alert="$(grep -m1 '^c_alert=' "$script")"
+  run bash -c "c_grn=G c_ylw=Y c_red=R; $alert; $fn
+    for s in input 'waiting: permission 20m' blocked working idle done; do
+      printf '%s=%q\n' \"\$s\" \"\$(status_color \"\$s\")\"
+    done"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"input=$'\\E[1;7;31m'"* ]]
+  [[ "$output" == *"waiting: permission 20m=$'\\E[1;7;31m'"* ]]
+  [[ "$output" == *"blocked=R"* ]]
+  [[ "$output" == *"working=G"* ]]
+  [[ "$output" == *"idle=Y"* ]]
+  [[ "$output" == *"done=G"* ]]
+}
+
 @test "work margin skips the asks section when its command is absent" {
   bin_dir="${BATS_TEST_TMPDIR}/bin"
   mkdir -p "$bin_dir"
