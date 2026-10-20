@@ -23,12 +23,19 @@ setup() {
     PRVIEW_DIR="$TEST_DIR/prviews"; mkdir -p "$PRVIEW_DIR"
     OUTBOX="$TEST_DIR/outbox"; : > "$OUTBOX"
     SEARCH="$TEST_DIR/search.json"; echo '[]' > "$SEARCH"
+    REVREQ="$TEST_DIR/revreq.json"; echo '[]' > "$REVREQ"
 
     # stub: gh
     cat > "$BIN/gh" <<'EOF'
 #!/usr/bin/env bash
 case "$1 $2" in
-  "search prs") cat "$GH_SEARCH_FIXTURE" ;;
+  "search prs")
+     case "$*" in
+       *user-review-requested:*)
+          [ -f "$GH_REVREQ_FIXTURE.fail" ] && exit 1
+          cat "$GH_REVREQ_FIXTURE" ;;
+       *) cat "$GH_SEARCH_FIXTURE" ;;
+     esac ;;
   "pr view")
      url="$3"
      f="$GH_PRVIEW_DIR/$(printf '%s' "$url" | sed 's#[^A-Za-z0-9]#_#g').json"
@@ -57,6 +64,7 @@ EOF
 
     export PATH="$BIN:$PATH"
     export GH_SEARCH_FIXTURE="$SEARCH"
+    export GH_REVREQ_FIXTURE="$REVREQ"
     export GH_PRVIEW_DIR="$PRVIEW_DIR"
     export PR_TEST_OUTBOX="$OUTBOX"
     export PR_MOVE_STATE="$TEST_DIR/state.json"
@@ -81,6 +89,23 @@ teardown() { rm -rf "$TEST_DIR"; }
 search_one() { # url number repo owner isDraft title
     jq -n --arg u "$1" --argjson n "$2" --arg r "$3" --arg o "$4" --argjson d "${5:-false}" --arg t "${6:-}" \
       '[{url:$u, number:$n, title:$t, repository:{name:$r, nameWithOwner:($o+"/"+$r)}, isDraft:$d}]' > "$SEARCH"
+}
+# direct-review-request fixture: one PR per "url number owner/repo author type isDraft" arg
+revreq() {
+    local spec out='[]' u n r a t d
+    for spec in "$@"; do
+        read -r u n r a t d <<<"$spec"
+        out=$(jq -c --arg u "$u" --argjson n "$n" --arg r "$r" --arg a "$a" --arg t "$t" --argjson d "$d" \
+            '. + [{url:$u, number:$n, repository:{nameWithOwner:$r}, isDraft:$d, author:{login:$a, type:$t}}]' <<<"$out")
+    done
+    echo "$out" > "$REVREQ"
+}
+assert_requested() { # line description
+    if grep -qxF "$1" "$OUTBOX" 2>/dev/null; then
+        PASS=$((PASS+1)); echo "  PASS: $2"
+    else
+        FAIL=$((FAIL+1)); echo "  FAIL: $2 (outbox: $(outbox | tr '\n' '|'))"
+    fi
 }
 export_sessions() { export PR_TEST_SESSIONS="$1"; export PR_TEST_PANE_TEXT="${2:-}"; }
 
@@ -293,6 +318,46 @@ mk_prview "https://x/pr/1" sha1 REVIEW_REQUIRED MERGEABLE SUCCESS Piotr1215 "$OL
 # a real collaborator's push is outside the self set -> must fire
 mk_prview "https://x/pr/1" sha2 REVIEW_REQUIRED MERGEABLE SUCCESS djwfyi "$OLD"; run --live
 assert_fires foreign-push "external teammate push still fires"
+teardown
+
+echo "T19 direct review request: seed silent, a new request fires once"
+setup
+revreq "https://x/pull/20 20 loft-sh/architecture vcauesantos User false"; run --live
+assert_silent "requests already open at first contact seed silently"
+revreq "https://x/pull/20 20 loft-sh/architecture vcauesantos User false" \
+       "https://x/pull/7 7 loft-sh/community-metrics saiyam1814 User false"; run --live
+assert_requested "review-request: loft-sh/community-metrics#7 from saiyam1814 https://x/pull/7" "a new direct request fires with ref and author"
+run --live
+assert_silent "a request still pending does not re-fire"
+teardown
+
+echo "T20 direct review request: bot, self and draft PRs never fire"
+setup
+revreq; run --live
+revreq "https://x/pull/52 52 loft-sh/vskills-mcp-server dependabot[bot] Bot false" \
+       "https://x/pull/60 60 loft-sh/hosted-platform renovate Bot false" \
+       "https://x/pull/61 61 loft-sh/vcluster Piotr1215 User false" \
+       "https://x/pull/62 62 loft-sh/vcluster someone User true"; run --live
+assert_silent "bot, self and draft requests are skipped"
+teardown
+
+echo "T21 direct review request: cleared then re-requested fires again"
+setup
+revreq; run --live
+revreq "https://x/pull/7 7 loft-sh/community-metrics saiyam1814 User false"; run --live
+revreq; run --live
+assert_silent "a cleared request is silent"
+revreq "https://x/pull/7 7 loft-sh/community-metrics saiyam1814 User false"; run --live
+assert_requested "review-request: loft-sh/community-metrics#7 from saiyam1814 https://x/pull/7" "a re-request fires again"
+teardown
+
+echo "T22 direct review request: a failed search keeps the set"
+setup
+revreq "https://x/pull/7 7 loft-sh/community-metrics saiyam1814 User false"; run --live
+touch "$REVREQ.fail"; run --live
+assert_silent "a failed search sends nothing"
+rm -f "$REVREQ.fail"; run --live
+assert_silent "recovery does not re-fire a request already seen"
 teardown
 
 echo

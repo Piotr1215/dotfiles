@@ -38,6 +38,14 @@
 #     |release):, or a bump/pin subject). Its E2E-on-PR red is not a code defect.
 #     An accompanied ci-red still rides along with the other reason.
 #
+# Direct review requests (someone else's PR) send `review-request: <ref> from
+#   <author> <url>`. GitHub's user-review-requested: qualifier matches only a
+#   request naming Piotr himself, never one to a team he is in, which is the
+#   noise he closes on sight. Each request fires once when it appears and drops
+#   out of state once reviewed or withdrawn, so a re-request fires again. Bot,
+#   self and draft PRs are skipped. NUDGE_ORGS does not apply: Gordon surfaces
+#   these to Piotr rather than dispatching them. First contact seeds silently.
+#
 # Self-retrigger guard: per-PR signature keyed on headSha in the state file.
 #   First contact seeds silently (no nudge), mirroring the Linear new_activity
 #   silent-seed. Any change attributable to a SELF identity is by definition not
@@ -215,6 +223,25 @@ ci_red_is_noise() {
     return 1
 }
 
+# review_requests_human REQS -> REQS narrowed to non-draft PRs opened by a human
+# other than Piotr. Dependency bots request him directly on every bump.
+review_requests_human() {
+    jq -c --argjson selves "$SELVES_JSON" '
+        map(select((.isDraft | not)
+            and ((.author.login // "") as $a
+                 | $a != "" and (.author.type // "") != "Bot"
+                   and ($a | endswith("[bot]") | not)
+                   and (($selves | index($a)) == null))))' <<<"$1"
+}
+
+# review_requests_new REQS SEEN -> one "ref<TAB>author<TAB>url" line per PR in
+# REQS whose url is not in the SEEN array. Bind the PR before piping into $seen,
+# for the same reason as sticky_new.
+review_requests_new() {
+    jq -r --argjson seen "$2" '.[] | . as $p | select(($seen | index($p.url)) == null)
+        | ["\($p.repository.nameWithOwner)#\($p.number)", $p.author.login, $p.url] | @tsv' <<<"$1"
+}
+
 # --- main ---
 main() {
     local mode="LIVE"; [[ "$DRY_RUN" -eq 1 ]] && mode="DRY-RUN"
@@ -364,6 +391,29 @@ main() {
         log "MOVED: $msg"
         nudges+=("$msg")
     done < <(jq -c '.[]' <<<"$prs")
+
+    # Direct review requests on other people's PRs. A failed search keeps the
+    # previous set, or every open request would re-fire once the search recovers.
+    local reqs
+    if reqs=$(gh search prs --state open --limit 100 \
+                --json url,number,repository,isDraft,author -- "user-review-requested:$ME" 2>/dev/null) \
+            && jq -e 'type == "array"' <<<"$reqs" >/dev/null 2>&1; then
+        reqs=$(review_requests_human "$reqs")
+        if jq -e 'has("_reviewRequests")' <<<"$old_state" >/dev/null; then
+            local seen_reqs author
+            seen_reqs=$(jq -c '._reviewRequests' <<<"$old_state")
+            while IFS=$'\t' read -r ref author url; do
+                [[ -z "$url" ]] && continue
+                log "REQUESTED: review-request: $ref from $author $url"
+                nudges+=("review-request: $ref from $author $url")
+            done < <(review_requests_new "$reqs" "$seen_reqs")
+        else
+            log "seed (first contact): $(jq 'length' <<<"$reqs") direct review request(s)"
+        fi
+        new_state=$(jq -c --argjson u "$(jq -c 'map(.url)' <<<"$reqs")" '._reviewRequests = $u' <<<"$new_state")
+    else
+        log "WARN: direct review-request search failed; keeping the previous set"
+    fi
 
     # stamp lastNudgedAt on the whole run and write state atomically
     local tmp; tmp=$(mktemp "${STATE_FILE}.XXXXXX") || { log "ERROR: mktemp failed"; return 1; }
