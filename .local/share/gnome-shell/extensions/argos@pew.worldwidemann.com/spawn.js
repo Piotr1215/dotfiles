@@ -1,0 +1,52 @@
+// LOCAL PATCH (dotfiles): argos's script launcher, kept free of shell imports
+// so a plain gjs test can run it. utilities.js re-exports it. Reapply after an
+// argos update, which overwrites utilities.js.
+//
+// GNOME Shell replaces GLib.spawn_async_with_pipes for every extension
+// (ui/environment.js, wrapSpawnFunction) with Shell.util_spawn_async_with_pipes,
+// which hands GLib a child_setup. Any child_setup sends GLib down its fork()
+// path, so each launch copied the page tables of the 560 MB shell and then
+// blocked the main thread reading the exec report pipe: ~20 ms per launch,
+// twice a second with the two 1s scripts, seen as video stutter.
+//
+// Gio.Subprocess is not wrapped. With no cwd, no child_setup and INHERIT_FDS it
+// takes GLib's posix_spawn (vfork) path. Costs: shell fds without O_CLOEXEC
+// leak into the scripts, and the wrapper's RLIMIT_NOFILE restore is skipped,
+// which changes nothing while the shell's own soft limit is the default 1024.
+
+import Gio from 'gi://Gio';
+
+/**
+ * Run argv and pass its whole stdout to callback once it exits.
+ * flags and childSetup stay in the upstream signature but are ignored: a
+ * child_setup would bring the fork back. A workingDirectory is honoured,
+ * at the cost of the fork path.
+ * @param {string|null} workingDirectory - cwd for the child, null to inherit
+ * @param {string[]} argv - absolute path of the script, then its arguments
+ * @param {string[]} envp - full environment as KEY=VALUE strings
+ * @param {number} flags - ignored
+ * @param {Function|null} childSetup - ignored
+ * @param {Function} callback - receives stdout, "" if it could not be read
+ */
+export function spawnWithCallback(workingDirectory, argv, envp, flags, childSetup, callback) {
+  const launcher = new Gio.SubprocessLauncher({
+    flags: Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_SILENCE |
+      Gio.SubprocessFlags.INHERIT_FDS,
+  });
+  launcher.set_environ(envp);
+  if (workingDirectory)
+    launcher.set_cwd(workingDirectory);
+
+  const proc = launcher.spawnv(argv);
+  proc.communicate_async(null, null, (source, result) => {
+    let output = "";
+    try {
+      const [, stdout] = source.communicate_finish(result);
+      if (stdout)
+        output = new TextDecoder().decode(stdout.toArray());
+    } catch (error) {
+      logError(error, `argos: reading output of ${argv[0]}`);
+    }
+    callback(output);
+  });
+}
