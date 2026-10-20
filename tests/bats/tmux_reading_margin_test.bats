@@ -219,16 +219,15 @@ wait_for_command() {
   return 1
 }
 
-@test "reading margin toggles a left third without taking focus" {
+@test "reading margin toggles a left column without taking focus" {
   toggle_margin
 
   margin_id="$(tmux -L "$SOCKET_NAME" show-options -wqv @reading_margin_pane)"
   [ "$(tmux -L "$SOCKET_NAME" show-options -wqv @reading_margin_visible)" = on ]
   [ "$(tmux -L "$SOCKET_NAME" list-panes -F '#{pane_id}' | wc -l)" -eq 2 ]
   [ "$(tmux -L "$SOCKET_NAME" display-message -p -t "$margin_id" '#{pane_left}')" -eq 0 ]
-  margin_width="$(tmux -L "$SOCKET_NAME" display-message -p -t "$margin_id" '#{pane_width}')"
-  [ "$margin_width" -ge 38 ]
-  [ "$margin_width" -le 40 ]
+  # 74 of 255 columns scaled to the 120 column test window.
+  [ "$(tmux -L "$SOCKET_NAME" display-message -p -t "$margin_id" '#{pane_width}')" -eq 35 ]
   [ "$(tmux -L "$SOCKET_NAME" display-message -p '#{pane_id}')" = "$PANE_ID" ]
   messages="$(tmux -L "$SOCKET_NAME" show-messages)"
   [[ "$messages" != *"Reading margin"* ]]
@@ -243,7 +242,25 @@ wait_for_command() {
   [[ "$messages" != *"Reading margin"* ]]
 }
 
-@test "layout changes restore the margin to one third in one pass" {
+@test "reading margin is as wide as the task todo window's left column" {
+  # The todo window carries the margin content in a fixed pane, so the two sit
+  # side by side when switching sessions. Its layout is the source of truth.
+  layout="$(sed -n 's/^ *layout: //p' "${BATS_TEST_DIRNAME}/../../.config/tmuxinator/task.yml")"
+  [[ "$layout" =~ ^[0-9a-f]{4},([0-9]+)x([0-9]+),0,0\{([0-9]+)x[0-9]+,0,0[^,]*,.*,([0-9]+)x[0-9]+,([0-9]+),0\[ ]]
+  layout_width="${BASH_REMATCH[1]}"
+  layout_height="${BASH_REMATCH[2]}"
+  left_width="${BASH_REMATCH[3]}"
+  right_width="${BASH_REMATCH[4]}"
+  tmux -L "$SOCKET_NAME" resize-window -t test -x "$layout_width" -y "$layout_height"
+
+  toggle_margin
+
+  margin_id="$(tmux -L "$SOCKET_NAME" show-options -wqv @reading_margin_pane)"
+  [ "$(tmux -L "$SOCKET_NAME" display-message -p -t "$margin_id" '#{pane_width}')" -eq "$left_width" ]
+  [ "$(tmux -L "$SOCKET_NAME" display-message -p -t "$PANE_ID" '#{pane_width}')" -eq "$right_width" ]
+}
+
+@test "layout changes restore the margin width in one pass" {
   toggle_margin
   margin_id="$(tmux -L "$SOCKET_NAME" show-options -wqv @reading_margin_pane)"
   tmux -L "$SOCKET_NAME" set-hook -g window-layout-changed \
@@ -251,11 +268,11 @@ wait_for_command() {
 
   tmux -L "$SOCKET_NAME" resize-pane -t "$margin_id" -x 55
   for _ in {1..20}; do
-    [ "$(tmux -L "$SOCKET_NAME" display-message -p -t "$margin_id" '#{pane_width}')" -eq 39 ] && break
+    [ "$(tmux -L "$SOCKET_NAME" display-message -p -t "$margin_id" '#{pane_width}')" -eq 35 ] && break
     sleep 0.05
   done
 
-  [ "$(tmux -L "$SOCKET_NAME" display-message -p -t "$margin_id" '#{pane_width}')" -eq 39 ]
+  [ "$(tmux -L "$SOCKET_NAME" display-message -p -t "$margin_id" '#{pane_width}')" -eq 35 ]
   [ "$(tmux -L "$SOCKET_NAME" show-options -wqv @reading_margin_visible)" = on ]
 }
 
@@ -500,7 +517,7 @@ EOF
   tmux -L "$SOCKET_NAME" run-shell "$SCRIPT --status '$PANE_ID' > '$STATUS_LOG'"
   output="$(<"$STATUS_LOG")"
   [[ "$output" == *"default=on visible=on"* ]]
-  [[ "$output" == *"width=39"* ]]
+  [[ "$output" == *"width=35"* ]]
 }
 
 @test "work margin accepts input so its viddy pane can scroll" {

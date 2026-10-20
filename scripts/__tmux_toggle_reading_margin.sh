@@ -241,15 +241,26 @@ clear_auto_zoom() {
   tmux set-option -wu -t "$window_id" @reading_margin_auto_zoomed 2>/dev/null || true
 }
 
+# The margin is as wide as the left column of the task session's todo window,
+# which holds the same content in a fixed pane: 74 of 255 columns in the layout
+# in .config/tmuxinator/task.yml. Scale that ratio to the window, rounded, so a
+# 255 column window gets exactly 74 and the two read the same side by side.
+# The bats suite checks these numbers against task.yml.
+margin_width_for() {
+  local margin_cols=74 layout_cols=255 width
+  width=$((($1 * margin_cols + layout_cols / 2) / layout_cols))
+  ((width > 0)) || width=1
+  printf '%s\n' "$width"
+}
+
 repair_width() {
   local expected_width margin_width window_width
   [[ "$(window_zoomed)" == 1 ]] && return 0
   window_width="$(tmux display-message -p -t "$window_id" '#{window_width}')"
   margin_width="$(tmux display-message -p -t "$margin_pane" '#{pane_width}')"
-  expected_width=$((window_width * 33 / 100))
-  ((expected_width > 0)) || expected_width=1
+  expected_width="$(margin_width_for "$window_width")"
   if ((margin_width != expected_width)); then
-    tmux resize-pane -t "$margin_pane" -x 33%
+    tmux resize-pane -t "$margin_pane" -x "$expected_width"
   fi
 }
 
@@ -354,8 +365,9 @@ else
   # active one, and the toggle re-selects the content pane on the next line.
   input_flag=-e
 fi
+margin_width="$(margin_width_for "$(tmux display-message -p -t "$window_id" '#{window_width}')")"
 margin_pane="$(
-  tmux split-window -bdfl 33% -h -t "$target_pane" -P -F '#{pane_id}' "$margin_command"
+  tmux split-window -bdfl "$margin_width" -h -t "$target_pane" -P -F '#{pane_id}' "$margin_command"
 )"
 tmux set-option -w -t "$window_id" @reading_margin_pane "$margin_pane"
 margin_exists=true
