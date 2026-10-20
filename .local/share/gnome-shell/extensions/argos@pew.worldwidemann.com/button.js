@@ -47,12 +47,16 @@ class ArgosButton extends PanelMenu.Button {
     this._menuSource = null;
     this._pendingMenu = null;
 
-    // LOCAL PATCH (dotfiles): a menu that changed while closed is built when
-    // it opens, see _processOutput.
-    this.menu.connect("open-state-changed", (menu, open) => {
-      if (open && this._pendingMenu !== null)
+    // LOCAL PATCH (dotfiles): a menu that changed while closed is built just
+    // before it opens, see _processOutput. Before open, not in its
+    // open-state-changed: separators hide themselves from that signal, and a
+    // handler connected while it is being emitted misses that emission.
+    const openMenu = this.menu.open.bind(this.menu);
+    this.menu.open = (animate) => {
+      if (this._pendingMenu !== null)
         this._buildMenu();
-    });
+      openMenu(animate);
+    };
 
     this._update();
 

@@ -35,7 +35,17 @@ class StubButton extends GObject.Object {
             addMenuItem(item) { this.items.push(item); },
             get numMenuItems() { return this.items.length; },
             connect(signal, fn) { if (signal === 'open-state-changed') handlers.push(fn); },
-            setOpen(open) { this.isOpen = open; for (const fn of handlers) fn(this, open); },
+            // Like the shell's: emission walks a copy of the handler list, and
+            // the separators hide themselves from it, so whatever the menu
+            // holds when the emission starts is what that open draws.
+            open() {
+                if (this.isOpen)
+                    return;
+                this.isOpen = true;
+                this.drawn = this.items.filter(i => i.text).map(i => i.text);
+                for (const fn of [...handlers]) fn(this, true);
+            },
+            close() { this.isOpen = false; for (const fn of [...handlers]) fn(this, false); },
         };
     }
 });
@@ -79,7 +89,8 @@ export function getActor(obj) {
 EOF
     # Each argument is one run's output, or OPEN / CLOSE for the menu.
     # Prints the rebuild count after each step, the labels set in order (the
-    # first is argos's placeholder), and the item texts of the built menu.
+    # first is argos's placeholder), the item texts of the built menu, and
+    # those the menu held when its last open began.
     cat >"$WORK/run.js" <<'EOF'
 import Gio from 'gi://Gio';
 import ArgosButton from './button.js';
@@ -91,8 +102,10 @@ script.output = steps[0];
 const button = new ArgosButton(Gio.File.new_for_path('/x/test.1s.sh'), {updateInterval: null});
 const counts = [rebuilds.count];
 for (const step of steps.slice(1)) {
-    if (step === 'OPEN' || step === 'CLOSE') {
-        button.menu.setOpen(step === 'OPEN');
+    if (step === 'OPEN') {
+        button.menu.open();
+    } else if (step === 'CLOSE') {
+        button.menu.close();
     } else {
         script.output = step;
         button.update();
@@ -102,6 +115,7 @@ for (const step of steps.slice(1)) {
 print(counts.join(' '));
 print(shown.slice(1).join(','));
 print(button.menu.items.filter(i => i.text).map(i => i.text).join(','));
+print((button.menu.drawn ?? []).join(','));
 EOF
 }
 
@@ -135,6 +149,7 @@ teardown() {
     [ "$status" -eq 0 ]
     [ "${lines[0]}" = "1 1 1 2 2" ]
     [ "${lines[2]}" = "c" ]
+    [ "${lines[3]}" = "c" ]
 }
 
 @test "a menu change while open is built at once" {
