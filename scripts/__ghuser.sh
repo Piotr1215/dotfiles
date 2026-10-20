@@ -21,7 +21,19 @@ refresh_cache() {
   done
   query+=" }"
 
-  gh api graphql -f query="$query" --jq '.data | to_entries[] | "\(.value.login)|\(.value.name // "")"' > "$cache_file"
+  # SSO email per login, the fallback for members whose GitHub profile has no name.
+  # Needs org admin; without it every member keeps only the profile name.
+  # shellcheck disable=SC2016  # $endCursor is a GraphQL variable, not shell
+  local sso_query='query($endCursor: String) { organization(login: "loft-sh") { samlIdentityProvider {
+    externalIdentities(first: 100, after: $endCursor) { pageInfo { hasNextPage endCursor }
+      nodes { user { login } samlIdentity { nameId } } } } } }'
+  local sso
+  sso=$(gh api graphql --paginate -f query="$sso_query" \
+    --jq '.data.organization.samlIdentityProvider.externalIdentities.nodes[] | select(.user) | "\(.user.login)|\(.samlIdentity.nameId // "")"' 2>/dev/null || true)
+
+  gh api graphql -f query="$query" --jq '.data | to_entries[] | "\(.value.login)|\(.value.name // "")"' |
+    awk -F'|' -v sso="$sso" 'BEGIN { n = split(sso, rows, "\n"); for (i = 1; i <= n; i++) { split(rows[i], f, "|"); email[f[1]] = f[2] } }
+      { name = $2; if (name == "" && ($1 in email)) name = email[$1]; print $1 "|" name }' > "$cache_file"
   echo "Done (${#logins[@]} users)." >&2
 }
 
