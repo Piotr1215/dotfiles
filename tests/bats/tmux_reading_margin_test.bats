@@ -226,8 +226,8 @@ wait_for_command() {
   [ "$(tmux -L "$SOCKET_NAME" show-options -wqv @reading_margin_visible)" = on ]
   [ "$(tmux -L "$SOCKET_NAME" list-panes -F '#{pane_id}' | wc -l)" -eq 2 ]
   [ "$(tmux -L "$SOCKET_NAME" display-message -p -t "$margin_id" '#{pane_left}')" -eq 0 ]
-  # 65 of 255 columns scaled to the 120 column test window.
-  [ "$(tmux -L "$SOCKET_NAME" display-message -p -t "$margin_id" '#{pane_width}')" -eq 31 ]
+  # 74 of 255 columns scaled to the 120 column test window.
+  [ "$(tmux -L "$SOCKET_NAME" display-message -p -t "$margin_id" '#{pane_width}')" -eq 35 ]
   [ "$(tmux -L "$SOCKET_NAME" display-message -p '#{pane_id}')" = "$PANE_ID" ]
   messages="$(tmux -L "$SOCKET_NAME" show-messages)"
   [[ "$messages" != *"Reading margin"* ]]
@@ -268,11 +268,11 @@ wait_for_command() {
 
   tmux -L "$SOCKET_NAME" resize-pane -t "$margin_id" -x 55
   for _ in {1..20}; do
-    [ "$(tmux -L "$SOCKET_NAME" display-message -p -t "$margin_id" '#{pane_width}')" -eq 31 ] && break
+    [ "$(tmux -L "$SOCKET_NAME" display-message -p -t "$margin_id" '#{pane_width}')" -eq 35 ] && break
     sleep 0.05
   done
 
-  [ "$(tmux -L "$SOCKET_NAME" display-message -p -t "$margin_id" '#{pane_width}')" -eq 31 ]
+  [ "$(tmux -L "$SOCKET_NAME" display-message -p -t "$margin_id" '#{pane_width}')" -eq 35 ]
   [ "$(tmux -L "$SOCKET_NAME" show-options -wqv @reading_margin_visible)" = on ]
 }
 
@@ -517,7 +517,7 @@ EOF
   tmux -L "$SOCKET_NAME" run-shell "$SCRIPT --status '$PANE_ID' > '$STATUS_LOG'"
   output="$(<"$STATUS_LOG")"
   [[ "$output" == *"default=on visible=on"* ]]
-  [[ "$output" == *"width=31"* ]]
+  [[ "$output" == *"width=35"* ]]
 }
 
 @test "work margin accepts input so its viddy pane can scroll" {
