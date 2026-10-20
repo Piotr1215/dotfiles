@@ -102,18 +102,6 @@ out=$(STUB_LABEL="Bash tmux list-sessions" run "dotfiles")
 assert_lacks "no pane border heading" "PANE BORDER" "$out"
 assert_lacks "no pane label value"    "Bash tmux list-sessions" "$out"
 
-echo "== --no-sources keeps the rendered line and drops the sources"
-# Alt-m's margin passes it. The rendered line stays, every source row goes.
-printf 'cached line' > "$CACHE/dotfiles"
-out=$(PATH="$BIN:$PATH" TMUX_TASK_CACHE_DIR="$CACHE" COLUMNS=100 STUB_GOAL="a goal" \
-    bash "$SCRIPT" "dotfiles" '%9' --no-sources 2>&1)
-assert_has   "keeps the rendered heading" "RENDERED NOW" "$out"
-assert_has   "keeps the cached line"      "cached line" "$out"
-assert_lacks "no sources heading"         "SOURCES" "$out"
-assert_lacks "no goal row"                "] goal" "$out"
-assert_lacks "no goal text"               "a goal" "$out"
-rm -f "$CACHE"/*
-
 echo "== an over-long cached line reports the characters tmux cuts"
 printf '%s' "$(printf 'x%.0s' {1..170})" > "$CACHE/dotfiles"
 out=$(run "dotfiles")

@@ -36,19 +36,14 @@ wait_for_pane_count() {
   return 1
 }
 
-@test "work margin renders prefix-g status before the vertical cockpit" {
+@test "work margin renders the vertical cockpit then the asks, with no status section" {
   bin_dir="${BATS_TEST_TMPDIR}/bin"
   mkdir -p "$bin_dir"
   cat > "$bin_dir/tmux" <<'EOF'
 #!/usr/bin/env bash
 case "${*: -1}" in
-  '#{pane_id}') printf '%%42\n' ;;
   '#{pane_width}') printf '%s\n' "${STUB_PANE_WIDTH:-72}" ;;
 esac
-EOF
-  cat > "$bin_dir/status" <<'EOF'
-#!/usr/bin/env bash
-printf 'status session=%s pane=%s flags=%s columns=%s\n' "$1" "$2" "$3" "$COLUMNS"
 EOF
   cat > "$bin_dir/cockpit" <<'EOF'
 #!/usr/bin/env bash
@@ -58,48 +53,39 @@ EOF
 #!/usr/bin/env bash
 printf 'asks width=%s\n' "$TMUX_PIOTR_ASKS_WIDTH"
 EOF
-  chmod +x "$bin_dir/tmux" "$bin_dir/status" "$bin_dir/cockpit" "$bin_dir/asks"
+  chmod +x "$bin_dir/tmux" "$bin_dir/cockpit" "$bin_dir/asks"
 
   run env PATH="$bin_dir:$PATH" TMUX_PANE='%99' \
-    TMUX_READING_MARGIN_FULL_STATUS_COMMAND="$bin_dir/status" \
     TMUX_READING_MARGIN_COCKPIT_STATE_COMMAND="$bin_dir/cockpit" \
     TMUX_READING_MARGIN_ASKS_COMMAND="$bin_dir/asks" \
     "$WORK_SCRIPT" --render test '@7'
 
   [ "$status" -eq 0 ]
-  [ "$output" = $'status session=test pane=%42 flags=--no-sources columns=72\n\ncockpit layout=vertical width=72\n\nasks width=72' ]
+  [ "$output" = $'cockpit layout=vertical width=72\n\nasks width=72' ]
 }
 
-@test "work margin wraps full status before the cockpit edge" {
+@test "work margin skips the asks section when its command is absent" {
   bin_dir="${BATS_TEST_TMPDIR}/bin"
   mkdir -p "$bin_dir"
   cat > "$bin_dir/tmux" <<'EOF'
 #!/usr/bin/env bash
 case "${*: -1}" in
-  '#{pane_id}') printf '%%42\n' ;;
   '#{pane_width}') printf '97\n' ;;
 esac
-EOF
-  cat > "$bin_dir/status" <<'EOF'
-#!/usr/bin/env bash
-printf 'status columns=%s\n' "$COLUMNS"
 EOF
   cat > "$bin_dir/cockpit" <<'EOF'
 #!/usr/bin/env bash
 printf 'cockpit width=%s\n' "$COCKPIT_VERTICAL_WIDTH"
 EOF
-  chmod +x "$bin_dir/tmux" "$bin_dir/status" "$bin_dir/cockpit"
+  chmod +x "$bin_dir/tmux" "$bin_dir/cockpit"
 
-  # Asks deliberately unstubbed and pointed at nothing. The section is optional,
-  # and the status wrap this test measures must not depend on it.
   run env PATH="$bin_dir:$PATH" TMUX_PANE='%99' \
-    TMUX_READING_MARGIN_FULL_STATUS_COMMAND="$bin_dir/status" \
     TMUX_READING_MARGIN_COCKPIT_STATE_COMMAND="$bin_dir/cockpit" \
     TMUX_READING_MARGIN_ASKS_COMMAND="$bin_dir/absent" \
     "$WORK_SCRIPT" --render test '@7'
 
   [ "$status" -eq 0 ]
-  [ "$output" = $'status columns=80\n\ncockpit width=97' ]
+  [ "$output" = 'cockpit width=97' ]
 }
 
 teardown() {

@@ -20,18 +20,12 @@ CACHE_DIR="${TMUX_TASK_CACHE_DIR:-/tmp/tmux_task_status}"
 # display-popup runs its command under default-shell, which is zsh, and zsh's
 # read has no -n: `read -rsn1` in the binding died with "bad option: -1" before
 # the popup had finished drawing. Inside the script the bash shebang applies.
-#
-# --no-sources drops the SOURCES section. Alt-m's margin passes it: there the
-# rendered line is what matters, and the provenance rows only push the cockpit
-# down. It also skips the gh and task lookups on every 15s refresh.
 wait_for_key=0
-show_sources=1
 args=()
 for a in "$@"; do
     case "$a" in
-        --wait)       wait_for_key=1 ;;
-        --no-sources) show_sources=0 ;;
-        *)            args+=("$a") ;;
+        --wait) wait_for_key=1 ;;
+        *)      args+=("$a") ;;
     esac
 done
 
@@ -103,46 +97,44 @@ else
         "$dim" "$cache_file" "$off"
 fi
 
-if [ "$show_sources" = "1" ]; then
-    # --- the sources, untruncated, in the writer's precedence order -----------
-    hdr "SOURCES  first non-empty wins   (__tmux_active_task.sh)"
+# --- the sources, untruncated, in the writer's precedence order -----------
+hdr "SOURCES  first non-empty wins   (__tmux_active_task.sh)"
 
-    pr_title=""
-    if [[ "$session" =~ -pr-([0-9]+) ]] && command -v gh >/dev/null 2>&1; then
-        pr_num="${BASH_REMATCH[1]}"
-        pr_title=$(gh pr view "$pr_num" --json title --jq '.title' 2>/dev/null) || pr_title=""
-    fi
+pr_title=""
+if [[ "$session" =~ -pr-([0-9]+) ]] && command -v gh >/dev/null 2>&1; then
+    pr_num="${BASH_REMATCH[1]}"
+    pr_title=$(gh pr view "$pr_num" --json title --jq '.title' 2>/dev/null) || pr_title=""
+fi
 
-    linear_desc=""
-    if command -v task >/dev/null 2>&1 && [[ "$session" =~ ([a-zA-Z]+-[0-9]+) ]]; then
-        lid=$(printf '%s' "${BASH_REMATCH[1]}" | tr '[:lower:]' '[:upper:]')
-        linear_desc=$(task rc.verbose=nothing "linear_issue_id:$lid" export 2>/dev/null \
-            | jq -r '.[0].description // empty' 2>/dev/null) || linear_desc=""
-    fi
+linear_desc=""
+if command -v task >/dev/null 2>&1 && [[ "$session" =~ ([a-zA-Z]+-[0-9]+) ]]; then
+    lid=$(printf '%s' "${BASH_REMATCH[1]}" | tr '[:lower:]' '[:upper:]')
+    linear_desc=$(task rc.verbose=nothing "linear_issue_id:$lid" export 2>/dev/null \
+        | jq -r '.[0].description // empty' 2>/dev/null) || linear_desc=""
+fi
 
-    # @agent_desc used to sit here, between Linear and the goal. __spawn_agent.sh
-    # stopped writing it: a label fixed at spawn time outranked every later recap,
-    # so a worker's bar was frozen on the instruction it was given and never showed
-    # what it went on to do. The spawn seeds @claude_goal instead, which the recap
-    # then replaces. The row is gone rather than left reading empty forever.
-    goal=$(tmux display-message -p -t "$session" '#{@claude_goal}' 2>/dev/null) || goal=""
+# @agent_desc used to sit here, between Linear and the goal. __spawn_agent.sh
+# stopped writing it: a label fixed at spawn time outranked every later recap,
+# so a worker's bar was frozen on the instruction it was given and never showed
+# what it went on to do. The spawn seeds @claude_goal instead, which the recap
+# then replaces. The row is gone rather than left reading empty forever.
+goal=$(tmux display-message -p -t "$session" '#{@claude_goal}' 2>/dev/null) || goal=""
 
-    won_pr=0 won_lin=0 won_goal=0
-    if   [ -n "$pr_title" ];    then won_pr=1
-    elif [ -n "$linear_desc" ]; then won_lin=1
-    elif [ -n "$goal" ];        then won_goal=1
-    fi
+won_pr=0 won_lin=0 won_goal=0
+if   [ -n "$pr_title" ];    then won_pr=1
+elif [ -n "$linear_desc" ]; then won_lin=1
+elif [ -n "$goal" ];        then won_goal=1
+fi
 
-    # Function names, not line numbers. A ":99" is precise until the writer grows a
-    # line, and then it is confidently wrong; the name survives every edit that does
-    # not rename the function, and the file is already named in the heading above.
-    row "$won_pr"   "pr"     "get_pr_desc()"     60         "$pr_title"
-    row "$won_lin"  "linear" "get_agent_issue()" 0          "$linear_desc"
-    row "$won_goal" "goal"   "get_claude_goal()" "$budget"  "$goal"
+# Function names, not line numbers. A ":99" is precise until the writer grows a
+# line, and then it is confidently wrong; the name survives every edit that does
+# not rename the function, and the file is already named in the heading above.
+row "$won_pr"   "pr"     "get_pr_desc()"     60         "$pr_title"
+row "$won_lin"  "linear" "get_agent_issue()" 0          "$linear_desc"
+row "$won_goal" "goal"   "get_claude_goal()" "$budget"  "$goal"
 
-    if [ "$((won_pr + won_lin + won_goal))" -eq 0 ]; then
-        printf '  %severy source empty, so the bar falls through to date | mode%s\n' "$dim" "$off"
-    fi
+if [ "$((won_pr + won_lin + won_goal))" -eq 0 ]; then
+    printf '  %severy source empty, so the bar falls through to date | mode%s\n' "$dim" "$off"
 fi
 
 if [ "$wait_for_key" = "1" ]; then
