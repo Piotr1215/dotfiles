@@ -242,12 +242,12 @@ clear_auto_zoom() {
 }
 
 # The margin is as wide as the left column of the task session's todo window,
-# which holds the same content in a fixed pane: 74 of 255 columns in the layout
+# which holds the same content in a fixed pane: 65 of 255 columns in the layout
 # in .config/tmuxinator/task.yml. Scale that ratio to the window, rounded, so a
-# 255 column window gets exactly 74 and the two read the same side by side.
+# 255 column window gets exactly 65 and the two read the same side by side.
 # The bats suite checks these numbers against task.yml.
 margin_width_for() {
-  local margin_cols=74 layout_cols=255 width
+  local margin_cols=65 layout_cols=255 width
   width=$((($1 * margin_cols + layout_cols / 2) / layout_cols))
   ((width > 0)) || width=1
   printf '%s\n' "$width"

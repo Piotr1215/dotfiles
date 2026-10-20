@@ -47,7 +47,7 @@ startup_pane: 3
 
 windows:
   - todo:
-      layout: 377e,255x61,0,0{74x61,0,0[74x45,0,0,1,74x15,0,46,2],180x61,75,0[180x21,75,0,3,180x39,75,22,4]}
+      layout: 05af,255x61,0,0{65x61,0,0[65x45,0,0,1,65x15,0,46,2],189x61,66,0[189x26,66,0,3,189x34,66,27,4]}
       # Add stty to force terminal redraw on focus
       panes:
         # The work margin (status, cockpit, asks) as a fixed pane. This window
