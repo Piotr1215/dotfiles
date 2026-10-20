@@ -8,8 +8,9 @@
 # Routing rule (first match wins):
 #   1. A full GitHub PR URL, https://github.com/<org>/<repo>/pull/<n>, opens as-is.
 #   2. A short PR ref, <owner>/<repo>#<n>, becomes
-#      https://github.com/<owner>/<repo>/pull/<n>. A bare #<n> is NOT handled
-#      (no repo context, too ambiguous).
+#      https://github.com/<owner>/<repo>/pull/<n>. A <repo>#<n> with no owner,
+#      the form the Alt-m cockpit's PRS: row prints for loft-sh, takes the loft-sh
+#      owner. A bare #<n> is NOT handled (no repo context, too ambiguous).
 #   3. Otherwise a Linear issue id (TEAM-NUMBER) opens
 #      https://linear.app/loft/issue/<ID>. The team prefix is validated against
 #      the live Linear team-key list, pulled once via the API and cached, so a
@@ -20,6 +21,7 @@
 # Usage:
 #   __linear_open.sh DEVOPS-1027
 #   __linear_open.sh loft-sh/vcluster#8234
+#   __linear_open.sh vcluster#8234
 #   __linear_open.sh https://github.com/loft-sh/vcluster/pull/8234
 #   LINEAR_OPEN_DRYRUN=1 __linear_open.sh DEVOPS-1027   # print, do not open
 set -eo pipefail
@@ -63,6 +65,14 @@ if [[ -n "$pr_ref" ]]; then
     owner_repo="${pr_ref%#*}"
     number="${pr_ref##*#}"
     open_browser "https://github.com/$owner_repo/pull/$number"
+    exit 0
+fi
+
+# A <repo>#<n> with no owner is a loft-sh PR. Anchored: the hint hands over the
+# match alone, and a ref inside other text is not this form.
+repo_ref=$(grep -xE '[A-Za-z0-9._-]+#[0-9]+' <<<"$raw" || true)
+if [[ -n "$repo_ref" ]]; then
+    open_browser "https://github.com/loft-sh/${repo_ref%#*}/pull/${repo_ref##*#}"
     exit 0
 fi
 

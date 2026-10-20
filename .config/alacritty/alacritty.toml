@@ -71,13 +71,16 @@ command = { program = "/home/decoder/dev/dotfiles/scripts/__tmux_jump.sh", args 
 binding = { key = "3", mods = "Control" }
 
 # ctrl+4: open a Linear issue id (TEAM-NUMBER) or a GitHub PR ref in the browser.
-# Matches either a short PR ref (<owner>/<repo>#<n>) or a Linear id. The regex is
-# broad; __linear_open.sh dispatches: PR refs become github.com/.../pull/<n>, and
-# Linear ids are validated against the live team-key list (cached) so stray matches
-# do not open a bogus page. Full https github PR URLs are already covered by ctrl+1.
+# Matches a short PR ref (<owner>/<repo>#<n>, or <repo>#<n> for loft-sh as the
+# Alt-m cockpit's PRS: row prints it) or a Linear id. The regex is broad;
+# __linear_open.sh dispatches: PR refs become github.com/.../pull/<n>, and Linear
+# ids are validated against the live team-key list (cached) so stray matches do
+# not open a bogus page. Full https github PR URLs are already covered by ctrl+1.
+# mouse.enabled makes the same refs clickable, like the urls of ctrl+1.
 [[hints.enabled]]
-regex = "[A-Za-z0-9._-]+/[A-Za-z0-9._-]+#[0-9]+|[A-Z][A-Z0-9]{1,9}-[0-9]+"
+regex = "([A-Za-z0-9._-]+/)?[A-Za-z0-9._-]+#[0-9]+|[A-Z][A-Z0-9]{1,9}-[0-9]+"
 command = { program = "/home/decoder/dev/dotfiles/scripts/__linear_open.sh", args = [] }
+mouse.enabled = true
 binding = { key = "4", mods = "Control" }
 
 # ctrl+5: open a TaskWarrior task named on screen, in a split showing its
