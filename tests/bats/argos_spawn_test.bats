@@ -18,7 +18,7 @@ import {spawnWithCallback} from 'file://$EXT/spawn.js';
 for (const f of ['spawn_async', 'spawn_async_with_pipes', 'spawn_async_with_fds', 'spawn_async_with_pipes_and_fds'])
     GLib[f] = () => { throw new Error('GLib.' + f + ' called'); };
 const loop = new GLib.MainLoop(null, false);
-spawnWithCallback(null, ['$WORK/script.sh'], [...GLib.get_environ(), 'ARGOS_VERSION=2'], 0, null, out => {
+spawnWithCallback(null, [ARGV[0] ?? '$WORK/script.sh'], [...GLib.get_environ(), 'ARGOS_VERSION=2'], 0, null, out => {
     print(out.trimEnd());
     loop.quit();
 });
@@ -47,6 +47,17 @@ teardown() {
     run timeout 20 gjs -m "$WORK/run.js"
     [ "$status" -eq 0 ]
     [ "$output" = "$(printf 'line one\nversion=2')" ]
+}
+
+@test "callback fires at stdout EOF, not when the script exits" {
+    command -v gjs >/dev/null || skip "gjs not installed"
+    printf '#!/bin/sh\necho early\nexec >&-\nsleep 3\n' >"$WORK/closes.sh"
+    chmod +x "$WORK/closes.sh"
+    local start=$SECONDS
+    run timeout 20 gjs -m "$WORK/run.js" "$WORK/closes.sh"
+    [ "$status" -eq 0 ]
+    [ "$output" = "early" ]
+    [ $((SECONDS - start)) -lt 2 ]
 }
 
 @test "the script is launched through vfork, never fork" {
