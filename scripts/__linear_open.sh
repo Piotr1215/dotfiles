@@ -39,15 +39,17 @@ TTL=86400 # refresh the key list at most once a day
 raw="${1:-}"
 [[ -z "$raw" ]] && exit 0
 
-# open_browser: emit OPEN in dry-run, otherwise hand the url to the browser the
-# same way the Linear path always has.
+# open_browser: emit OPEN in dry-run, otherwise hand the url to the taskopen url
+# opener, which taskwarrior-tui also uses: it opens the browser, tiles it 50/50
+# beside the terminal (layout 2) and raises it.
+URL_OPENER="${LINEAR_OPEN_URL_OPENER:-$(dirname -- "${BASH_SOURCE[0]}")/__taskopen_url_open.sh}"
 open_browser() {
     local url="$1"
     if [[ -n "${LINEAR_OPEN_DRYRUN:-}" ]]; then
         echo "OPEN $url"
         return
     fi
-    setsid xdg-open "$url" >/dev/null 2>&1 &
+    setsid "$URL_OPENER" "$url" >/dev/null 2>&1 &
 }
 
 # --- GitHub PR routing -----------------------------------------------------

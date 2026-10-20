@@ -37,6 +37,24 @@ hint_regex() {
   [ "$output" = 'OPEN https://linear.app/loft/issue/DEVOPS-1693' ]
 }
 
+@test "a real open goes through the url opener that tiles the browser" {
+  log="${BATS_TEST_TMPDIR}/opener.log"
+  printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$*" > "%s"\n' "$log" > "${BATS_TEST_TMPDIR}/opener"
+  chmod +x "${BATS_TEST_TMPDIR}/opener"
+  unset LINEAR_OPEN_DRYRUN
+  LINEAR_OPEN_URL_OPENER="${BATS_TEST_TMPDIR}/opener" run "$SCRIPT" 'vcluster-docs#1234'
+  [ "$status" -eq 0 ]
+  for _ in {1..40}; do [ -s "$log" ] && break; sleep 0.05; done
+  [ "$(<"$log")" = 'https://github.com/loft-sh/vcluster-docs/pull/1234' ]
+}
+
+@test "the default url opener is the taskopen one that applies layout 2" {
+  run grep -F '__taskopen_url_open.sh' "$SCRIPT"
+  [ "$status" -eq 0 ]
+  run grep -F 'TASKOPEN_URL_LAYOUT:-2' "${BATS_TEST_DIRNAME}/../../scripts/__taskopen_url_open.sh"
+  [ "$status" -eq 0 ]
+}
+
 @test "the ctrl+4 hint finds each ref on a cockpit PRS row" {
   regex="$(hint_regex)"
   [ -n "$regex" ]
