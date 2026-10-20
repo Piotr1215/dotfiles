@@ -360,6 +360,13 @@ rm -f "$REVREQ.fail"; run --live
 assert_silent "recovery does not re-fire a request already seen"
 teardown
 
+echo "T23 direct review request outside loft-sh still fires (NUDGE_ORGS does not apply)"
+setup
+revreq; run --live
+revreq "https://x/pull/3 3 vClusterLabs-Experiments/vbilling saiyam1814 User false"; run --live
+assert_requested "review-request: vClusterLabs-Experiments/vbilling#3 from saiyam1814 https://x/pull/3" "a non-loft-sh direct request fires"
+teardown
+
 echo
 echo "==== $PASS passed, $FAIL failed ===="
 [ "$FAIL" -eq 0 ]
