@@ -88,21 +88,70 @@ EOF
   [ -x "$HOME/.claude/scripts/__agent_wait.sh" ]
 }
 
-@test "cockpit highlights waiting-on-human statuses in bold reverse red" {
+@test "cockpit gives each status its own colour" {
   script="$HOME/.claude/scripts/__cockpit_state.sh"
   fn="$(sed -n '/^status_color() {/,/^}/p' "$script")"
-  alert="$(grep -m1 '^c_alert=' "$script")"
-  run bash -c "c_grn=G c_ylw=Y c_red=R; $alert; $fn
-    for s in input 'waiting: permission 20m' blocked working idle done; do
+  defs="$(sed -n '/^c_hdr=/,/^c_alert=/p' "$script")"
+  run bash -c "$defs; $fn
+    for s in 'waiting: permission 20m' 'waiting: dialog' input blocked stalled live working ready 'in review' done idle; do
       printf '%s=%q\n' \"\$s\" \"\$(status_color \"\$s\")\"
     done"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"input=$'\\E[1;7;31m'"* ]]
-  [[ "$output" == *"waiting: permission 20m=$'\\E[1;7;31m'"* ]]
-  [[ "$output" == *"blocked=R"* ]]
-  [[ "$output" == *"working=G"* ]]
-  [[ "$output" == *"idle=Y"* ]]
-  [[ "$output" == *"done=G"* ]]
+  [[ "$output" == *"waiting: permission 20m=$'\\E[1;97;41m'"* ]]
+  [[ "$output" == *"waiting: dialog=$'\\E[1;97;41m'"* ]]
+  [[ "$output" == *"input=$'\\E[1;38;5;208m'"* ]]
+  [[ "$output" == *"blocked=$'\\E[31m'"* ]]
+  [[ "$output" == *"stalled=$'\\E[35m'"* ]]
+  [[ "$output" == *"live=$'\\E[32m'"* ]]
+  [[ "$output" == *"working=$'\\E[1;32m'"* ]]
+  [[ "$output" == *"ready=$'\\E[36m'"* ]]
+  [[ "$output" == *"in review=$'\\E[34m'"* ]]
+  [[ "$output" == *"done=$'\\E[90m'"* ]]
+  [[ "$output" == *"idle=$'\\E[33m'"* ]]
+}
+
+@test "cockpit colours avoid the sequences viddy drops" {
+  # viddy reads a leading 0; as a reset that loses the colour, and ignores 7.
+  run grep -E "^c_[a-z]+=.*\\\\033\[(0;|[0-9;]*;7[;m]|7[;m])" "$HOME/.claude/scripts/__cockpit_state.sh"
+  [ "$status" -ne 0 ]
+}
+
+@test "cockpit detects an approval dialog from a captured screen" {
+  script="$HOME/.claude/scripts/__cockpit_state.sh"
+  fn="$(sed -n '/^screen_has_dialog() {/,/^}/p' "$script")"
+  dialog=$' Bash command\n\n Hook PreToolUse:Bash requires confirmation for this command:\n rm outside /tmp and ~/.cache: /home/x (rm-gate on the toggle board)\n\n Do you want to proceed?\n ❯ 1. Yes\n   2. No\n\n Esc to cancel · Tab to amend\n'
+  quoted="$dialog$(printf 'agent output line\n%.0s' $(seq 20))"
+  run bash -c "$fn; printf '%s' \"\$1\" | screen_has_dialog" _ "$dialog"
+  [ "$status" -eq 0 ]
+  run bash -c "$fn; printf '%s' \"\$1\" | screen_has_dialog" _ "$quoted"
+  [ "$status" -ne 0 ]
+  run bash -c "$fn; printf '%s' 'just a shell prompt' | screen_has_dialog"
+  [ "$status" -ne 0 ]
+}
+
+@test "agent_wait stamps a resume on a prompt and a set then clear leaves no wait" {
+  bin_dir="${BATS_TEST_TMPDIR}/bin"; mkdir -p "$bin_dir"
+  cat > "$bin_dir/tmux" <<'EOF'
+#!/usr/bin/env bash
+state="$STUB_TMUX_STATE"
+case "$1" in
+  show-options) grep "^$5=" "$state" 2>/dev/null | head -1 | cut -d= -f2- ;;
+  set-option)
+    if [[ "$2" == -put ]]; then sed -i "/^$5=/d" "$state" 2>/dev/null || true
+    else sed -i "/^$4=/d" "$state" 2>/dev/null || true; printf '%s=%s\n' "$4" "$5" >> "$state"; fi ;;
+esac
+EOF
+  chmod +x "$bin_dir/tmux"
+  : > "$BATS_TEST_TMPDIR/state"
+  wait_sh="$HOME/.claude/scripts/__agent_wait.sh"
+  env_=(env PATH="$bin_dir:$PATH" TMUX_PANE=%9 STUB_TMUX_STATE="$BATS_TEST_TMPDIR/state")
+  printf '{"hook_event_name":"PermissionRequest"}' | "${env_[@]}" "$wait_sh" set
+  grep -q '^@agent_wait=permission ' "$BATS_TEST_TMPDIR/state"
+  printf '{"hook_event_name":"PostToolUse"}' | "${env_[@]}" "$wait_sh" clear
+  ! grep -q '^@agent_wait=' "$BATS_TEST_TMPDIR/state"
+  ! grep -q '^@agent_resumed=' "$BATS_TEST_TMPDIR/state"
+  printf '{"hook_event_name":"UserPromptSubmit"}' | "${env_[@]}" "$wait_sh" clear
+  grep -Eq '^@agent_resumed=[0-9]+$' "$BATS_TEST_TMPDIR/state"
 }
 
 @test "work margin skips the asks section when its command is absent" {
