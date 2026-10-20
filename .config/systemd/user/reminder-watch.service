@@ -1,0 +1,16 @@
+[Unit]
+Description=Reminder notification triggers (notifications.log -> remind match)
+Documentation=file:%h/dev/dotfiles/docs/notify-triggers.md
+After=graphical-session.target notification-logger.service
+
+[Service]
+Type=simple
+ExecStart=%h/dev/dotfiles/scripts/__reminder.sh watch
+Restart=always
+RestartSec=2
+Nice=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target

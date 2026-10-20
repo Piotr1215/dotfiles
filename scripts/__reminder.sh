@@ -38,6 +38,19 @@ CRON_END="# END remind"
 DEFAULT_SNOOZE="${REMINDER_DEFAULT_SNOOZE:-15 minutes}"
 LATE_AFTER=300
 NOTIFY_LOG="${NOTIFY_LOG:-${XDG_STATE_HOME:-$HOME/.local/state}/notifications.log}"
+# Notification triggers (docs/notify-triggers.md): `watch` tails NOTIFY_LOG from
+# its own cursor and fires every active on_notify record a popup matches. A
+# delayed fire goes to at queue n, which sync never rebuilds, with the popup in
+# a match file named by a token; the job body carries the id and the token only.
+NOTIFY_AT_QUEUE="n"
+NOTIFY_CURSOR="$STATE_DIR/notify.cursor"
+NOTIFY_SEEN="$STATE_DIR/notify.seen"
+NOTIFY_ALIVE="$STATE_DIR/notify.alive"
+NOTIFY_PATTERNS="$STATE_DIR/notify-patterns.txt"
+MATCH_DIR="$STATE_DIR/matches"
+NOTIFY_WINDOW="${REMINDER_NOTIFY_WINDOW:-900}"
+NOTIFY_TIMEOUT="${REMINDER_NOTIFY_TIMEOUT:-120}"
+NOTIFY_POLL="${REMINDER_NOTIFY_POLL:-5}"
 
 usage() {
 	cat <<'USAGE'
@@ -45,6 +58,8 @@ Usage: remind [<verb> [args]]   (no verb: the agenda, the whole list in $EDITOR)
 
   add <label> <when> [options]      one-shot reminder
   add <label> --repeat <spec> [options]
+  add <label> --on-notify <regex> --action exec --command <cmd> [--delay 10m]
+                                    fires on every desktop popup the regex matches
   list [--json] [--all]             active records (or every record with --all)
   edit <id> [options]               change fields, then sync
   edit <id>                         open the record in $EDITOR, apply what changed
@@ -63,12 +78,20 @@ Agenda format (org): one ** heading per reminder, properties indented below.
   sync                              rebuild the at queue and the crontab block
   gc                                compact the store to active records, drop stale fire locks
   compact                           one line per reminder, done and deleted kept (runs at boot)
-  fire <id>                         what the clocks call; runs the action
+  fire <id> [token]                 what the clocks call; runs the action
+  match                             one pass over new notification log lines
+  watch                             match forever (reminder-watch.service)
 
 Options for add and edit:
   --when <spec>       10m 2h 1d 1w, tomorrow, eod, eow, or anything date -d
                       accepts: 'Tuesday 16:20', '2026-09-10 09:30', 'next monday 9:00'
   --repeat <spec>     5-field cron ('0 9 * * 1') or 'every 7d' (m h d w units)
+  --on-notify <re>    regex over a whole notification log record
+                      "date time<TAB>app<TAB>summary<TAB>body"; the reminder stays
+                      active and runs its exec command once per matching popup,
+                      popup on stdin and in $REMINDER_MATCH; exit 0 is success,
+                      anything else reaches Gordon (--to gordon) or your mail
+  --delay <spec>      with --on-notify: fire that long after the popup (10m 2h), via at
   --subject <s>       task:<uuid>, url:<url>, or free text (stored as text:)
   --action <a>        show (default), open, exec
   --notify <n>        dialog (default), mail, or silent: how a hit or a show reaches you
@@ -473,9 +496,25 @@ cmd_sync() {
 	sync_at || rc=$?
 	sync_cron || rc=$?
 	sync_stamps || rc=$?
+	sync_patterns || rc=$?
 	flock -u 7
 	exec 7>&-
 	return "$rc"
+}
+
+# The notify-watch mod drops a popup an active on-notify reminder claims, so
+# it never reaches Gordon twice. It reads this file, one regex per line in
+# ignore.txt's format, derived here like the clocks. Written whole and moved
+# into place, so a reader never sees half a list.
+sync_patterns() {
+	local block current=""
+	block="$(active_records | jq -r 'select(.on_notify) | .on_notify')"
+	[ -f "$NOTIFY_PATTERNS" ] && current="$(cat "$NOTIFY_PATTERNS")"
+	[ "$block" != "$current" ] || return 0
+	mkdir -p "$STATE_DIR"
+	printf '%s\n' "$block" | sed '/^$/d' >"$NOTIFY_PATTERNS.tmp"
+	mv "$NOTIFY_PATTERNS.tmp" "$NOTIFY_PATTERNS"
+	printf 'patterns: %s on-notify rule(s) written\n' "$(grep -c '' "$NOTIFY_PATTERNS" || true)"
 }
 
 # ------------------------------------------------------------------ log ----
@@ -490,12 +529,14 @@ log_fire() {
 
 parse_options() {
 	# Fills opt_* variables and positional[] from "$@".
-	opt_when="" opt_repeat="" opt_subject="" opt_action="" opt_command="" opt_origin="" opt_label="" opt_notify="" opt_on_hit="" opt_on_miss="" opt_to=""
+	opt_when="" opt_repeat="" opt_subject="" opt_action="" opt_command="" opt_origin="" opt_label="" opt_notify="" opt_on_hit="" opt_on_miss="" opt_to="" opt_on_notify="" opt_delay=""
 	positional=()
 	while [ $# -gt 0 ]; do
 		case "$1" in
 		--when) opt_when="${2:-}"; shift 2 ;;
 		--repeat) opt_repeat="${2:-}"; shift 2 ;;
+		--on-notify) opt_on_notify="${2:-}"; shift 2 ;;
+		--delay) opt_delay="${2:-}"; shift 2 ;;
 		--subject) opt_subject="${2:-}"; shift 2 ;;
 		--action) opt_action="${2:-}"; shift 2 ;;
 		--command) opt_command="${2:-}"; shift 2 ;;
@@ -534,13 +575,47 @@ validate_action() {
 	esac
 }
 
+# A pattern is compiled by jq's test, the dialect the notify-watch mod's
+# RegExp shares for these records (\t for the field separator, no lookbehind).
+# Compile it now so a typo fails the add, not every match pass.
+validate_pattern() {
+	[ -n "$1" ] || die "--on-notify needs a regex."
+	jq -ne --arg re "$1" '"" | test($re) | true' >/dev/null 2>&1 || die "Cannot compile pattern: $1"
+}
+
+# A delay is `<N><unit>` like the shorthands parse_when takes; returned as is.
+parse_delay() {
+	[[ "$1" =~ ^[0-9]+[mhdw]$ ]] || return 1
+	printf '%s' "$1"
+}
+
+delay_seconds() {
+	every_seconds "every $1"
+}
+
+# The three trigger kinds exclude each other: a popup-triggered reminder has
+# no clock, so sync never schedules it and a dialog never snoozes it.
+validate_trigger() {
+	local when="$1" repeat="$2" on_notify="$3" delay="$4" action="$5"
+	if [ -n "$on_notify" ]; then
+		if [ -n "$when" ] || [ -n "$repeat" ]; then die "--on-notify takes no time or repeat."; fi
+		[ "$action" = exec ] || die "--on-notify needs --action exec."
+		validate_pattern "$on_notify"
+	else
+		[ -z "$delay" ] || die "--delay needs --on-notify."
+	fi
+	if [ -n "$delay" ]; then
+		parse_delay "$delay" >/dev/null || die "Cannot parse delay: $delay (10m 2h 1d 1w)"
+	fi
+}
+
 cmd_add() {
 	local label when repeat subject action id record
 	parse_options "$@"
 	label="${opt_label:-${positional[0]:-}}"
 	when="${opt_when:-${positional[1]:-}}"
 	[ -n "$label" ] || [ -n "$opt_subject" ] || die "A reminder needs a label or a subject."
-	[ -n "$when" ] || [ -n "$opt_repeat" ] || die "A reminder needs a time (<when>) or --repeat."
+	[ -n "$when" ] || [ -n "$opt_repeat" ] || [ -n "$opt_on_notify" ] || die "A reminder needs a time (<when>), --repeat, or --on-notify."
 	if [ -n "$when" ]; then
 		when="$(parse_when "$when")" || die "Cannot parse time: $when"
 	fi
@@ -551,6 +626,7 @@ cmd_add() {
 	subject="$(normalize_subject "$opt_subject")"
 	action="${opt_action:-show}"
 	validate_action "$action" "$opt_command"
+	validate_trigger "$when" "$repeat" "$opt_on_notify" "$opt_delay" "$action"
 	validate_notify "$opt_notify"
 	validate_to "$opt_to"
 	id="$(new_id)"
@@ -558,7 +634,9 @@ cmd_add() {
 		--arg action "$action" --arg subject "$subject" --arg command "$opt_command" \
 		--arg notify "$opt_notify" --arg on_hit "$opt_on_hit" --arg on_miss "$opt_on_miss" \
 		--arg created "$(now_iso)" --arg origin "${opt_origin:-cli}" --arg to "$opt_to" \
-		'{id:$id, label:$label, when:$when, repeat:$repeat, action:$action, subject:$subject,
+		--arg on_notify "$opt_on_notify" --arg delay "$opt_delay" \
+		'{id:$id, label:$label, when:$when, repeat:$repeat, on_notify:$on_notify, delay:$delay,
+		  action:$action, subject:$subject,
 		  command:$command, notify:$notify, on_hit:$on_hit, on_miss:$on_miss,
 		  created:$created, origin:$origin, to:$to, status:"active"}
 		 | with_entries(select(.value != ""))')"
@@ -567,6 +645,8 @@ cmd_add() {
 	cmd_sync >/dev/null
 	if [ -n "$when" ]; then
 		printf 'Added %s: %s at %s\n' "$id" "$(record_title "$record")" "$(human_when "$when")"
+	elif [ -n "$opt_on_notify" ]; then
+		printf 'Added %s: %s on popup /%s/%s\n' "$id" "$(record_title "$record")" "$opt_on_notify" "${opt_delay:+, after $opt_delay}"
 	else
 		printf 'Added %s: %s, repeat %s\n' "$id" "$(record_title "$record")" "$repeat"
 	fi
@@ -584,6 +664,8 @@ edit_form_write() {
 		printf '# %s  [%s]. Edit, save, quit.\n' "$(record_title "$record")" "$id"
 		printf '# when     10m 2h 1d 1w, tomorrow, eod, eow, or anything date -d takes\n'
 		printf '# repeat   5-field cron or "every 7d"; empty makes it a one-shot\n'
+		printf '# on-notify  regex over a popup log record; fires the exec once per match, no when or repeat\n'
+		printf '# delay    with on-notify: fire that long after the popup (10m 2h)\n'
 		printf '# subject  task:<uuid>, url:<url>, or free text\n'
 		printf '# action   show, open, exec\n'
 		printf '# command  what exec runs; empty clears it\n'
@@ -593,6 +675,8 @@ edit_form_write() {
 		printf 'label: %s\n' "$(jq -r '.label // ""' <<<"$record")"
 		printf 'when: %s\n' "$when"
 		printf 'repeat: %s\n' "$(jq -r '.repeat // ""' <<<"$record")"
+		printf 'on-notify: %s\n' "$(jq -r '.on_notify // ""' <<<"$record")"
+		printf 'delay: %s\n' "$(jq -r '.delay // ""' <<<"$record")"
 		printf 'subject: %s\n' "$(jq -r '.subject // ""' <<<"$record")"
 		printf 'action: %s\n' "$(jq -r '.action // "show"' <<<"$record")"
 		printf 'command: %s\n' "$(jq -r '.command // ""' <<<"$record")"
@@ -613,9 +697,11 @@ edit_form_field() {
 # changes nothing and an emptied field clears the stored value. Prints
 # Updated or Unchanged; the caller syncs the clocks.
 edit_apply() {
-	local id="$1" label="$2" when="$3" repeat="$4" subject="$5" action="$6" command="$7" notify="${8:-}" on_hit="${9:-}" on_miss="${10:-}"
+	local id="$1" label="$2" when="$3" repeat="$4" subject="$5" action="$6" command="$7" notify="${8:-}" on_hit="${9:-}" on_miss="${10:-}" on_notify="${11:-}" delay="${12:-}"
 	local record filter='.' cur_when cur_subject
 	record="$(get_record "$id")"
+	[ -n "$action" ] || action=show
+	validate_trigger "$when" "$repeat" "$on_notify" "$delay" "$action"
 	cur_when="$(jq -r '.when // ""' <<<"$record")"
 	if [ -n "$when" ]; then
 		when="$(parse_when "$when")" || die "Cannot parse time: $when"
@@ -657,13 +743,15 @@ edit_apply() {
 	fi
 	[ "$on_hit" != "$(jq -r '.on_hit // ""' <<<"$record")" ] && filter="$filter | .on_hit = \$on_hit"
 	[ "$on_miss" != "$(jq -r '.on_miss // ""' <<<"$record")" ] && filter="$filter | .on_miss = \$on_miss"
+	[ "$on_notify" != "$(jq -r '.on_notify // ""' <<<"$record")" ] && filter="$filter | .on_notify = \$on_notify"
+	[ "$delay" != "$(jq -r '.delay // ""' <<<"$record")" ] && filter="$filter | .delay = \$delay"
 	if [ "$filter" = '.' ]; then
 		printf 'Unchanged %s\n' "$id"
 		return 0
 	fi
 	update_record "$id" "$filter" --arg when "$when" --arg repeat "$repeat" --arg subject "$subject" \
 		--arg label "$label" --arg action "$action" --arg command "$command" --arg notify "$notify" \
-		--arg on_hit "$on_hit" --arg on_miss "$on_miss"
+		--arg on_hit "$on_hit" --arg on_miss "$on_miss" --arg on_notify "$on_notify" --arg delay "$delay"
 	printf 'Updated %s\n' "$id"
 }
 
@@ -681,7 +769,8 @@ cmd_edit_form() {
 	edit_apply "$id" "$(edit_form_field "$form" label)" "$(edit_form_field "$form" when)" \
 		"$(edit_form_field "$form" repeat)" "$(edit_form_field "$form" subject)" \
 		"$(edit_form_field "$form" action)" "$(edit_form_field "$form" command)" \
-		"$(edit_form_field "$form" notify)" "$(edit_form_field "$form" on-hit)" "$(edit_form_field "$form" on-miss)"
+		"$(edit_form_field "$form" notify)" "$(edit_form_field "$form" on-hit)" "$(edit_form_field "$form" on-miss)" \
+		"$(edit_form_field "$form" on-notify)" "$(edit_form_field "$form" delay)"
 	cmd_sync >/dev/null
 }
 
@@ -701,9 +790,15 @@ agenda_stamp() {
 
 # Which heading a record belongs under, from its when relative to today.
 agenda_section() {
-	local when="$1" repeat="$2" day today
+	local when="$1" repeat="$2" on_notify="${3:-}" day today
 	if [ -z "$when" ]; then
-		[ -n "$repeat" ] && printf 'Recurring' || printf 'Unscheduled'
+		if [ -n "$repeat" ]; then
+			printf 'Recurring'
+		elif [ -n "$on_notify" ]; then
+			printf 'On popup'
+		else
+			printf 'Unscheduled'
+		fi
 		return 0
 	fi
 	day="$(date -d "$when" +%F)"
@@ -730,10 +825,11 @@ agenda_last() {
 	last="$(awk -F '\t' -v id="$id" '
 		function add(s) { out = out == "" ? s : out ", " s }
 		$2 != id { next }
-		$3 == "fired" { at = $1; out = ""; next }
-		$3 == "skipped" { at = $1; out = "skipped: " $4; next }
+		$3 == "fired" { at = $1; out = ""; popup = ($4 ~ /on popup/); next }
+		$3 == "skipped" || $3 == "stale" { at = $1; out = $3 ": " $4; next }
+		$3 == "queued" { at = $1; out = $4; next }
 		at == "" { next }
-		$3 == "exec" { rc = substr($4, 4); add(rc == 0 ? "no hit" : rc == 2 ? "hit" : "error (exit " rc ")"); next }
+		$3 == "exec" { rc = substr($4, 4); add(rc == 0 ? (popup ? "ok" : "no hit") : rc == 2 ? "hit" : "error (exit " rc ")"); next }
 		$3 == "on_hit" || $3 == "on_miss" {
 			rc = substr($4, 4)
 			if (rc != 0) add(($3 == "on_hit" ? "on-hit" : "on-miss") " failed (exit " rc ")")
@@ -752,17 +848,21 @@ agenda_last() {
 }
 
 agenda_line() {
-	local record="$1" id when repeat action command subject stamps notify on_hit on_miss
+	local record="$1" id when repeat action command subject stamps notify on_hit on_miss on_notify delay
 	id="$(jq -r '.id' <<<"$record")"
 	when="$(jq -r '.when // ""' <<<"$record")"
 	repeat="$(jq -r '.repeat // ""' <<<"$record")"
+	on_notify="$(jq -r '.on_notify // ""' <<<"$record")"
+	delay="$(jq -r '.delay // ""' <<<"$record")"
 	action="$(jq -r '.action // "show"' <<<"$record")"
 	command="$(jq -r '.command // ""' <<<"$record")"
 	subject="$(jq -r '(.subject // "") | split("\n") | .[0] // ""' <<<"$record")"
 	stamps=""
 	[ -n "$when" ] && stamps="<$(agenda_stamp "$when")>"
 	[ -n "$repeat" ] && stamps="${stamps:+$stamps }<$repeat>"
-	printf '** %s %s\n' "$stamps" "$(record_title "$record")"
+	printf '** %s%s\n' "${stamps:+$stamps }" "$(record_title "$record")"
+	[ -n "$on_notify" ] && printf '   :on-notify: %s\n' "$on_notify"
+	[ -n "$delay" ] && printf '   :delay: %s\n' "$delay"
 	[ "$action" != show ] && printf '   :action: %s\n' "$action"
 	[ "$action" = exec ] && printf '   :runs: %s\n' "$command"
 	notify="$(jq -r '.notify // ""' <<<"$record")"
@@ -783,13 +883,13 @@ agenda_line() {
 
 agenda_render() {
 	local section record when repeat
-	local -a sections=(Overdue Today Tomorrow 'This week' Later Recurring Unscheduled)
+	local -a sections=(Overdue Today Tomorrow 'This week' Later Recurring 'On popup' Unscheduled)
 	local -A bucket=()
 	while IFS= read -r record; do
 		[ -n "$record" ] || continue
 		when="$(jq -r '.when // ""' <<<"$record")"
 		repeat="$(jq -r '.repeat // ""' <<<"$record")"
-		section="$(agenda_section "$when" "$repeat")"
+		section="$(agenda_section "$when" "$repeat" "$(jq -r '.on_notify // ""' <<<"$record")")"
 		bucket["$section"]+="$(agenda_line "$record")"$'\n\n'
 	done < <(active_records)
 	cat <<'HEAD'
@@ -802,6 +902,9 @@ agenda_render() {
 #   ** <0 9 * * 1> title                 repeat at wall-clock times: 5-field cron
 #   ** <every 7d> title                  repeat by interval (m h d w), catches up if
 #                                        the laptop was off; <date> <repeat> = snoozed
+#   ** title                             no stamp: fires on a popup (see :on-notify:)
+#      :on-notify: regex                 over a popup log record; runs :runs: once per match
+#      :delay: 10m                       with :on-notify:, that long after the popup
 #      :action: open | exec              omitted means show a dialog
 #      :runs: command                    for exec; exit 2 is a hit: stops the repeat, then
 #      :notify: mail | silent            the hit goes to a dialog (default), your mail, or
@@ -844,11 +947,13 @@ agenda_flush() {
 	[ -n "$cur_open" ] || return 0
 	if [ -n "$cur_id" ]; then
 		seen+=("$cur_id")
-		edit_apply "$cur_id" "$cur_title" "$cur_when" "$cur_repeat" "$cur_subject" "$cur_action" "$cur_command" "$cur_notify" "$cur_on_hit" "$cur_on_miss"
+		edit_apply "$cur_id" "$cur_title" "$cur_when" "$cur_repeat" "$cur_subject" "$cur_action" "$cur_command" "$cur_notify" "$cur_on_hit" "$cur_on_miss" "$cur_on_notify" "$cur_delay"
 	else
 		local -a args=()
 		[ -n "$cur_when" ] && args+=(--when "$cur_when")
 		[ -n "$cur_repeat" ] && args+=(--repeat "$cur_repeat")
+		[ -n "$cur_on_notify" ] && args+=(--on-notify "$cur_on_notify")
+		[ -n "$cur_delay" ] && args+=(--delay "$cur_delay")
 		[ -n "$cur_subject" ] && args+=(--subject "$cur_subject")
 		[ -n "$cur_action" ] && args+=(--action "$cur_action")
 		[ -n "$cur_command" ] && args+=(--command "$cur_command")
@@ -870,7 +975,7 @@ agenda_prop() {
 
 agenda_apply() {
 	local file="$1" line n=0 id prop_key prop_value
-	local cur_open="" cur_id="" cur_title="" cur_when="" cur_repeat="" cur_subject="" cur_action="" cur_command="" cur_notify="" cur_on_hit="" cur_on_miss=""
+	local cur_open="" cur_id="" cur_title="" cur_when="" cur_repeat="" cur_subject="" cur_action="" cur_command="" cur_notify="" cur_on_hit="" cur_on_miss="" cur_on_notify="" cur_delay=""
 	local line_when line_repeat line_title
 	local -a seen=() active
 	[ -f "$file" ] || die "No agenda file at $file."
@@ -885,7 +990,7 @@ agenda_apply() {
 			agenda_prop "$line" || die "Line $n: cannot read it: $line"
 			case "$prop_key" in
 			id) get_record "$prop_value" >/dev/null || die "Line $n: no reminder with id $prop_value." ;;
-			action | runs | notify | on-hit | on-miss | task | url | notes | subject | last | log) ;;
+			action | runs | notify | on-hit | on-miss | on-notify | delay | task | url | notes | subject | last | log) ;;
 			*) die "Line $n: unknown property :$prop_key:" ;;
 			esac
 			;;
@@ -896,7 +1001,7 @@ agenda_apply() {
 		'' | '#'* | '* '* | '*') continue ;;
 		'** '*)
 			agenda_flush
-			cur_open=1 cur_id="" cur_subject="" cur_command="" cur_action="" cur_notify="" cur_on_hit="" cur_on_miss=""
+			cur_open=1 cur_id="" cur_subject="" cur_command="" cur_action="" cur_notify="" cur_on_hit="" cur_on_miss="" cur_on_notify="" cur_delay=""
 			agenda_parse_heading "${line#\*\* }"
 			cur_when="$line_when" cur_repeat="$line_repeat" cur_title="$line_title"
 			;;
@@ -909,6 +1014,8 @@ agenda_apply() {
 			notify) cur_notify="$prop_value" ;;
 			on-hit) cur_on_hit="$prop_value" ;;
 			on-miss) cur_on_miss="$prop_value" ;;
+			on-notify) cur_on_notify="$prop_value" ;;
+			delay) cur_delay="$prop_value" ;;
 			task) cur_subject="task:$prop_value" ;;
 			url) cur_subject="url:$prop_value" ;;
 			notes) cur_subject="text:$prop_value" ;;
@@ -973,9 +1080,19 @@ cmd_edit() {
 	[ -n "$opt_to" ] && { validate_to "$opt_to"; filter="$filter | .to = \$to"; }
 	[ -n "$opt_on_hit" ] && filter="$filter | .on_hit = \$on_hit"
 	[ -n "$opt_on_miss" ] && filter="$filter | .on_miss = \$on_miss"
+	# The merged record must still be one trigger kind: a snooze (--when) on
+	# an on-notify record would hand it to the at queue with no popup to pass.
+	local cur
+	cur="$(get_record "$id")"
+	validate_trigger "${when:-$(jq -r '.when // ""' <<<"$cur")}" "${repeat:-$(jq -r '.repeat // ""' <<<"$cur")}" \
+		"${opt_on_notify:-$(jq -r '.on_notify // ""' <<<"$cur")}" "${opt_delay:-$(jq -r '.delay // ""' <<<"$cur")}" \
+		"${opt_action:-$(jq -r '.action // "show"' <<<"$cur")}"
+	[ -n "$opt_on_notify" ] && filter="$filter | .on_notify = \$on_notify"
+	[ -n "$opt_delay" ] && filter="$filter | .delay = \$delay"
 	update_record "$id" "$filter" --arg repeat "$repeat" --arg subject "$subject" \
 		--arg label "$opt_label" --arg action "$opt_action" --arg command "$opt_command" --arg notify "$opt_notify" \
-		--arg on_hit "$opt_on_hit" --arg on_miss "$opt_on_miss" --arg to "$opt_to"
+		--arg on_hit "$opt_on_hit" --arg on_miss "$opt_on_miss" --arg to "$opt_to" \
+		--arg on_notify "$opt_on_notify" --arg delay "$opt_delay"
 	cmd_sync >/dev/null
 	printf 'Updated %s\n' "$id"
 }
@@ -1022,15 +1139,21 @@ cmd_list() {
 		list_json "$records"
 		return 0
 	fi
-	local record id when repeat action title
+	local record id when repeat action title on_notify delay
 	while IFS= read -r record; do
 		[ -n "$record" ] || continue
 		id="$(jq -r '.id' <<<"$record")"
 		when="$(jq -r '.when // ""' <<<"$record")"
 		repeat="$(jq -r '.repeat // ""' <<<"$record")"
+		on_notify="$(jq -r '.on_notify // ""' <<<"$record")"
+		delay="$(jq -r '.delay // ""' <<<"$record")"
 		action="$(jq -r '.action' <<<"$record")"
 		title="$(record_title "$record")"
-		printf '%s  %-16s  %-14s  %-5s  %s\n' "$id" "${when:+$(human_when "$when")}" "$repeat" "$action" "$title"
+		if [ -n "$on_notify" ]; then
+			printf '%s  %-16s  %-14s  %-5s  %s\n' "$id" "on popup" "${delay:++$delay}" "$action" "$title"
+		else
+			printf '%s  %-16s  %-14s  %-5s  %s\n' "$id" "${when:+$(human_when "$when")}" "$repeat" "$action" "$title"
+		fi
 	done <<<"$records"
 }
 
@@ -1076,11 +1199,19 @@ drop_stale_locks() {
 	return 0
 }
 
+# A match file outlives its at job only when atd dropped the job; a day is
+# longer than any delay in use.
+drop_stale_matches() {
+	[ -d "$MATCH_DIR" ] || return 0
+	find "$MATCH_DIR" -type f -mmin +1440 -delete 2>/dev/null || true
+}
+
 # gc forgets done and deleted reminders.
 cmd_gc() {
 	rewrite_store 'select(.status == "active")'
 	printf 'Compacted to %s active records.\n' "$(sed -n '$=' "$STORE" || echo 0)"
 	drop_stale_locks
+	drop_stale_matches
 }
 
 # compact forgets only superseded lines: every id keeps its current record,
@@ -1255,6 +1386,10 @@ cmd_fire() {
 		log_fire "$id" skipped "status $status" "$title"
 		return 0
 	fi
+	if [ -n "$(jq -r '.on_notify // ""' <<<"$record")" ]; then
+		fire_on_notify "$id" "$record" "$title" "${2:-}"
+		return 0
+	fi
 
 	subject="$(jq -r '.subject // ""' <<<"$record")"
 	type="$(subject_type "$subject")"
@@ -1390,6 +1525,160 @@ show_error() {
 	jq -nc --arg message "$1" '{message:$message}' | "$GUI" error >/dev/null 2>&1 || true
 }
 
+# ------------------------------------------------------ notify triggers ----
+
+# The popup reaches the command as stdin and $REMINDER_MATCH, never as text in
+# the command line, so a summary like `$(rm -rf ~)` is inert. Exit 0 is the
+# whole verdict: success is silent, anything else reaches Gordon (the record's
+# --to), mail (--notify mail), or an error dialog. The record stays active.
+fire_on_notify() {
+	local id="$1" record="$2" title="$3" token="$4" match="" command rc=0 output notify
+	if [ -n "$token" ]; then
+		[[ "$token" =~ ^[0-9a-f]{16}$ ]] || die "Invalid match token $token."
+		if ! match="$(cat "$MATCH_DIR/$token" 2>/dev/null)"; then
+			log_fire "$id" missing "match $token" "$title"
+			return 0
+		fi
+		rm -f "$MATCH_DIR/$token"
+	else
+		match="${REMINDER_MATCH:-}"
+	fi
+	log_fire "$id" fired "exec on popup${token:+ (delayed)}" "$title"
+	update_record "$id" '.last_fired = $now' --arg now "$(now_iso)"
+	command="$(jq -r '.command // ""' <<<"$record")"
+	output="$(printf '%s\n' "$match" | REMINDER_MATCH="$match" timeout "$NOTIFY_TIMEOUT" bash -c "$command" 2>&1)" || rc=$?
+	log_fire "$id" exec "rc=$rc" "$title"
+	log_run "$id" "$rc" "$command" "$output" "" "" 0 ""
+	[ "$rc" -eq 0 ] && return 0
+	local streak reason err_label
+	streak="$(error_streak "$id")"
+	reason="$(error_reason "$output")"
+	err_label="exit $rc"
+	[ "$rc" -eq 124 ] && err_label="timed out after ${NOTIFY_TIMEOUT}s"
+	err_label="$err_label${streak:+, $streak}"
+	log_fire "$id" error "${streak:+$streak: }${reason:-no output}" "$title"
+	notify="$(jq -r '.notify // ""' <<<"$record")"
+	if [ "$(record_to "$record")" = gordon ] && notify_gordon "error: $title" "$err_label $output"; then
+		log_fire "$id" delivered "gordon error" "$title"
+	elif [ "$notify" = mail ]; then
+		printf '%s\n%s\n' "$err_label" "$output" | "$MAILER" "error: $title"
+		log_fire "$id" mailed error "$title"
+	else
+		show_error "error: $title"$'\n'"$err_label"$'\n'"$output"
+	fi
+}
+
+# A delayed fire: the popup goes to a match file, the at job body carries the
+# reminder id and the file's token only. Queue n is never rebuilt by sync, so
+# the job survives every add, edit and done.
+queue_delayed_fire() {
+	local id="$1" line="$2" delay="$3" title="$4" token minutes output status=0
+	mkdir -p "$MATCH_DIR"
+	token="$(new_id)$(new_id)"
+	printf '%s\n' "$line" >"$MATCH_DIR/$token"
+	minutes=$(($(delay_seconds "$delay") / 60))
+	[ "$minutes" -ge 1 ] || minutes=1
+	output="$(printf '%q fire %s %s\n' "$SELF" "$id" "$token" | at -q "$NOTIFY_AT_QUEUE" "now + $minutes minutes" 2>&1)" || status=$?
+	if [ "$status" -ne 0 ]; then
+		rm -f "$MATCH_DIR/$token"
+		log_fire "$id" error "at rejected the delayed fire: $(error_reason "$output")" "$title"
+		notify_gordon "error: $title" "at rejected the delayed fire: $output" || true
+		return 1
+	fi
+	log_fire "$id" queued "fire in $delay ($token)" "$title"
+}
+
+# One line of the notification log: fires, queues, or skips every active
+# on-notify record it matches. Stale (older than NOTIFY_WINDOW, the watcher
+# was down) and seen (the cursor was reset) popups never fire; a stale match
+# tells Gordon, since the mod hid the popup on the strength of this watcher.
+match_line() {
+	local line="$1" now="$2" ts app age key id delay title matches
+	[[ "$line" =~ ^([0-9]{4}-[0-9]{2}-[0-9]{2}\ [0-9]{2}:[0-9]{2}:[0-9]{2})$'\t'([^$'\t']*)$'\t' ]] || return 0
+	ts="${BASH_REMATCH[1]}" app="${BASH_REMATCH[2]}"
+	[ "$app" != reminder ] || return 0
+	matches="$(active_records | jq -c --arg line "$line" 'select(.on_notify) | (.on_notify as $re | select(try ($line | test($re)) catch false))')"
+	[ -n "$matches" ] || return 0
+	age=$((now - $(epoch_of "$ts")))
+	key="$(printf '%s' "$line" | sha1sum | cut -c1-40)"
+	while IFS= read -r record; do
+		[ -n "$record" ] || continue
+		id="$(jq -r '.id' <<<"$record")"
+		title="$(record_title "$record")"
+		if [ "$age" -gt "$NOTIFY_WINDOW" ]; then
+			log_fire "$id" stale "popup $(human_duration "$age") old" "$title"
+			notify_gordon "skipped: $title" "popup $(human_duration "$age") old when the trigger watcher saw it, no action taken: $line" || true
+			continue
+		fi
+		if grep -qF $'\t'"$id:$key" "$NOTIFY_SEEN" 2>/dev/null; then
+			log_fire "$id" skipped "already fired for this popup" "$title"
+			continue
+		fi
+		printf '%s\t%s:%s\n' "$now" "$id" "$key" >>"$NOTIFY_SEEN"
+		delay="$(jq -r '.delay // ""' <<<"$record")"
+		if [ -n "$delay" ]; then
+			queue_delayed_fire "$id" "$line" "$delay" "$title" || true
+		else
+			REMINDER_MATCH="$line" "$SELF" fire "$id" </dev/null || true
+		fi
+	done <<<"$matches"
+}
+
+# One pass: the complete lines past the cursor. The cursor moves before any
+# fire, so a crash mid-command cannot replay the popup; notify.seen covers a
+# cursor reset (the logger trims the file in place, which shrinks it).
+cmd_match() {
+	own_clocks || die "match: $STORE is not the default store, so it may not fire reminders or queue at jobs."
+	mkdir -p "$STATE_DIR"
+	local now size cursor=0 chunk total partial complete
+	now="$(date +%s)"
+	touch "$NOTIFY_ALIVE"
+	if [ -f "$NOTIFY_SEEN" ]; then
+		awk -F '\t' -v cutoff="$((now - NOTIFY_WINDOW))" '$1 >= cutoff' "$NOTIFY_SEEN" >"$NOTIFY_SEEN.tmp" && mv "$NOTIFY_SEEN.tmp" "$NOTIFY_SEEN"
+	fi
+	[ -f "$NOTIFY_LOG" ] || return 0
+	size="$(stat -c %s "$NOTIFY_LOG")"
+	[ -f "$NOTIFY_CURSOR" ] && cursor="$(cat "$NOTIFY_CURSOR")"
+	[[ "$cursor" =~ ^[0-9]+$ ]] || cursor=0
+	# The byte before the cursor must be a newline: command substitution
+	# strips one, so a non-empty result is a cursor inside a rewritten line.
+	if [ "$cursor" -gt "$size" ] || { [ "$cursor" -gt 0 ] && [ -n "$(tail -c +"$cursor" "$NOTIFY_LOG" | head -c1)" ]; }; then
+		cursor=0
+	fi
+	[ "$cursor" -lt "$size" ] || return 0
+	chunk="$(mktemp "${XDG_RUNTIME_DIR:-/tmp}/remind-match.XXXXXX")"
+	tail -c +"$((cursor + 1))" "$NOTIFY_LOG" >"$chunk"
+	total="$(wc -c <"$chunk")"
+	partial=0
+	[ "$(tail -c1 "$chunk")" = "" ] || partial="$(tail -n1 "$chunk" | wc -c)"
+	complete=$((total - partial))
+	if [ "$complete" -le 0 ]; then
+		rm -f "$chunk"
+		return 0
+	fi
+	printf '%s' "$((cursor + complete))" >"$NOTIFY_CURSOR.tmp" && mv "$NOTIFY_CURSOR.tmp" "$NOTIFY_CURSOR"
+	while IFS= read -r line; do
+		[ -n "$line" ] || continue
+		match_line "$line" "$now"
+	done < <(head -c "$complete" "$chunk")
+	rm -f "$chunk"
+}
+
+# The service loop: a pass per change to the log, or every NOTIFY_POLL seconds
+# so a missed inotify event costs seconds, not a popup.
+cmd_watch() {
+	own_clocks || die "watch: $STORE is not the default store."
+	trap 'exit 0' TERM INT
+	while :; do
+		cmd_match || printf 'match pass failed with %s\n' "$?" >&2
+		if [ -f "$NOTIFY_LOG" ] && command -v inotifywait >/dev/null 2>&1; then
+			inotifywait -qq -e modify -e close_write -e move_self -t "$NOTIFY_POLL" "$NOTIFY_LOG" 2>/dev/null || true
+		else
+			sleep "$NOTIFY_POLL"
+		fi
+	done
+}
+
 cmd_open() {
 	local id="$1" url
 	valid_id "$id" || die "Invalid id $id."
@@ -1470,7 +1759,9 @@ delete) [ -n "${1:-}" ] || die "delete needs an id."; cmd_delete "$1" ;;
 sync) cmd_sync ;;
 gc) cmd_gc ;;
 compact) cmd_compact ;;
-fire) [ -n "${1:-}" ] || die "fire needs an id."; cmd_fire "$1" ;;
+fire) [ -n "${1:-}" ] || die "fire needs an id."; cmd_fire "$1" "${2:-}" ;;
+match) cmd_match ;;
+watch) cmd_watch ;;
 open) [ -n "${1:-}" ] || die "open needs an id."; cmd_open "$1" ;;
 add-dialog) cmd_add_dialog ;;
 edit-dialog) [ -n "${1:-}" ] || die "edit-dialog needs an id."; cmd_edit_dialog "$1" ;;
