@@ -357,8 +357,8 @@ else
   session_name="$(tmux display-message -p -t "$target_pane" '#{session_name}')"
   margin_command="${TMUX_READING_MARGIN_WORK_COMMAND:-exec \"$script_dir/__tmux_reading_margin_work.sh\" \"$session_name\" \"$window_id\"}"
   # Input ENABLED, changed from -d on 2026-08-31. The work margin runs viddy,
-  # which scrolls with j/k/G and handles the mouse, and the asks section at the
-  # bottom is now longer than the pane. Under -d tmux dropped every keystroke
+  # which scrolls with j/k/G and handles the mouse, and the cockpit under the
+  # Focus block can outgrow the pane. Under -d tmux dropped every keystroke
   # before viddy saw it, so the pane looked frozen and the only diagnosis
   # available was "viddy cannot scroll", which is false.
   # This does not leak stray keys: input reaches a pane only while it is the

@@ -36,7 +36,7 @@ wait_for_pane_count() {
   return 1
 }
 
-@test "work margin renders the vertical cockpit then the asks, with no status section" {
+@test "work margin renders focus then the vertical cockpit, with no status section" {
   bin_dir="${BATS_TEST_TMPDIR}/bin"
   mkdir -p "$bin_dir"
   cat > "$bin_dir/tmux" <<'EOF'
@@ -49,19 +49,19 @@ EOF
 #!/usr/bin/env bash
 printf 'cockpit layout=%s width=%s\n' "$COCKPIT_LAYOUT" "$COCKPIT_VERTICAL_WIDTH"
 EOF
-  cat > "$bin_dir/asks" <<'EOF'
+  cat > "$bin_dir/focus" <<'EOF'
 #!/usr/bin/env bash
-printf 'asks width=%s\n' "$TMUX_PIOTR_ASKS_WIDTH"
+printf 'focus %s\n' "$*"
 EOF
-  chmod +x "$bin_dir/tmux" "$bin_dir/cockpit" "$bin_dir/asks"
+  chmod +x "$bin_dir/tmux" "$bin_dir/cockpit" "$bin_dir/focus"
 
   run env PATH="$bin_dir:$PATH" TMUX_PANE='%99' \
     TMUX_READING_MARGIN_COCKPIT_STATE_COMMAND="$bin_dir/cockpit" \
-    TMUX_READING_MARGIN_ASKS_COMMAND="$bin_dir/asks" \
+    TMUX_READING_MARGIN_FOCUS_COMMAND="$bin_dir/focus" \
     "$WORK_SCRIPT" --render test '@7'
 
   [ "$status" -eq 0 ]
-  [ "$output" = $'cockpit layout=vertical width=72\n\nasks width=72' ]
+  [ "$output" = $'focus render --width 72\n\ncockpit layout=vertical width=72' ]
 }
 
 @test "work margin passes a waiting-on-permission agent row through unchanged" {
@@ -76,7 +76,7 @@ EOF
 
   run env PATH="$bin_dir:$PATH" TMUX_PANE='%99' \
     TMUX_READING_MARGIN_COCKPIT_STATE_COMMAND="$bin_dir/cockpit" \
-    TMUX_READING_MARGIN_ASKS_COMMAND="$bin_dir/absent" \
+    TMUX_READING_MARGIN_FOCUS_COMMAND="$bin_dir/absent" \
     "$WORK_SCRIPT" --render test '@7'
 
   [ "$status" -eq 0 ]
@@ -154,7 +154,7 @@ EOF
   grep -Eq '^@agent_resumed=[0-9]+$' "$BATS_TEST_TMPDIR/state"
 }
 
-@test "work margin skips the asks section when its command is absent" {
+@test "work margin skips the focus section when its command is absent" {
   bin_dir="${BATS_TEST_TMPDIR}/bin"
   mkdir -p "$bin_dir"
   cat > "$bin_dir/tmux" <<'EOF'
@@ -171,7 +171,7 @@ EOF
 
   run env PATH="$bin_dir:$PATH" TMUX_PANE='%99' \
     TMUX_READING_MARGIN_COCKPIT_STATE_COMMAND="$bin_dir/cockpit" \
-    TMUX_READING_MARGIN_ASKS_COMMAND="$bin_dir/absent" \
+    TMUX_READING_MARGIN_FOCUS_COMMAND="$bin_dir/absent" \
     "$WORK_SCRIPT" --render test '@7'
 
   [ "$status" -eq 0 ]
@@ -456,7 +456,7 @@ EOF
   [ "$(<"$COMMAND_LOG")" = work ]
   margin_id="$(tmux -L "$SOCKET_NAME" show-options -wqv @reading_margin_pane)"
   # Both modes now accept input. Work mode used to be -d; that dropped every
-  # keystroke before viddy saw it, leaving the asks section unscrollable.
+  # keystroke before viddy saw it, leaving the cockpit unscrollable.
   [ "$(tmux -L "$SOCKET_NAME" display-message -p -t "$margin_id" '#{pane_input_off}')" -eq 0 ]
   toggle_margin
 
@@ -523,8 +523,8 @@ EOF
 @test "work margin accepts input so its viddy pane can scroll" {
   # Regression: the work branch used select-pane -d, so tmux dropped every
   # keystroke before viddy saw it. The pane looked frozen and the only
-  # available diagnosis was "viddy cannot scroll", which is false. The asks
-  # section at the bottom is longer than the pane, so scrolling is required.
+  # available diagnosis was "viddy cannot scroll", which is false. The cockpit
+  # below the fixed Focus block can outgrow the pane, so scrolling is required.
   toggle_margin
   margin="$(tmux -L "$SOCKET_NAME" show-options -wqv @reading_margin_pane)"
   [ -n "$margin" ]

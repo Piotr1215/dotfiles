@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Show the live vertical cockpit, then Piotr's open asks, in the work margin.
+# Show Piotr's Top Three Focus, then the live vertical cockpit, in the work margin.
 
 set -eo pipefail
 
@@ -25,17 +25,15 @@ fi
 case "$width" in ''|*[!0-9]*) width=100 ;; esac
 
 cockpit_command="${TMUX_READING_MARGIN_COCKPIT_STATE_COMMAND:-$HOME/.claude/scripts/__cockpit_state.sh}"
-asks_command="${TMUX_READING_MARGIN_ASKS_COMMAND:-$HOME/.claude/scripts/__piotr_asks_margin.sh}"
+focus_command="${TMUX_READING_MARGIN_FOCUS_COMMAND:-$HOME/.claude/scripts/__focus.py}"
+
+# Focus first. It is a fixed eight-line block (three items and the handoff
+# line), so it stays above the fold and never needs scrolling, while the
+# cockpit below can run long. The block only reads its cache and the ledger;
+# ranking happens in systemd, never here.
+if [[ -x "$focus_command" ]]; then
+  "$focus_command" render --width "$width" || true
+  printf '\n'
+fi
 
 COCKPIT_LAYOUT=vertical COCKPIT_VERTICAL_WIDTH="$width" "$cockpit_command"
-
-# Piotr's open asks last, below the live cockpit. Deliberately the bottom
-# section: the cockpit answers "what is running now" and is read constantly,
-# while the asks list answers "what is waiting on me" and is read on a glance
-# down. It prints nothing when there are no asks, so the margin does not grow a
-# permanently empty heading.
-asks_width="$width"
-if [[ -x "$asks_command" ]]; then
-  printf '\n'
-  TMUX_PIOTR_ASKS_WIDTH="$asks_width" "$asks_command" || true
-fi
