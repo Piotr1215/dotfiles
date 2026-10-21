@@ -204,6 +204,15 @@ tags_of() {
   [ "$(tags_of w1)" = "waiting/me " ]
 }
 
+@test "mail Piotr sends only to himself waits on nobody" {
+  deliver "piotrzan@gmail.com/[Gmail]/Sent Mail" note "piotrzan@gmail.com" "piotrzan@gmail.com" "[kctx AUTH] login" "Cc: piotr.zaniewski@loft.sh"
+  deliver "piotrzan@gmail.com/[Gmail]/Sent Mail" fwd "piotrzan@gmail.com" "daniel@vcluster.com" "Fwd: renewal" "Cc: piotr.zaniewski@loft.sh"
+  notmuch new --quiet
+
+  [ -z "$(tags_of note)" ]
+  [ "$(tags_of fwd)" = "waiting/them " ]
+}
+
 @test "a draft or a trashed mail from Piotr does not answer the thread" {
   deliver "$WORK_INBOX" d1 "Dan <dan@mend.io>" "piotr.zaniewski@loft.sh" "question"
   notmuch new --quiet

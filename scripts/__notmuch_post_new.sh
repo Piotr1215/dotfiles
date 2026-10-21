@@ -24,7 +24,7 @@
 #
 # Waiting tags. For each thread with a message touched since the last run and
 # dated within MAIL_EVENTS_DAYS, the latest live message decides:
-#   waiting/them  it is from Piotr
+#   waiting/them  it is from Piotr and to someone else
 #   waiting/me    it is from someone else, Piotr is in To, and it carries no
 #                 bulk signal
 #   neither       anything else
@@ -112,6 +112,11 @@ addrs_of() {
 
 has_self() {
     [[ -n "$1" ]] && addrs_of "$1" | grep -qxF -f <(printf '%s\n' "$SELF_ADDRS")
+}
+
+# has_other <header>: true when it names an address that is not Piotr's.
+has_other() {
+    addrs_of "$1" | grep -qvxF -f <(printf '%s\n' "$SELF_ADDRS")
 }
 
 is_self() {
@@ -219,7 +224,8 @@ waiting_ops() {
     if [[ -n "$latest" ]]; then
         split_from "$(jq -r '.headers.From // ""' <<<"$latest")"
         if is_self "$from_addr"; then
-            want=them
+            # Mail Piotr sends only to himself waits on nobody.
+            has_other "$(jq -r '(.headers.To // "") + ", " + (.headers.Cc // "")' <<<"$latest")" && want=them
         elif [[ "$(addressing "$(jq -r '.headers.To // ""' <<<"$latest")" "")" == direct &&
             "$(bulk_of "$(jq -r '.filename[0]' <<<"$latest")" "$from_addr")" == - ]]; then
             want=me
