@@ -18,12 +18,15 @@
 #      shows a message twice
 #   4. runs `notmuch new`, which fires the post-new hook
 #
-# INBOX is synced last on purpose. The post-new hook decides a message's event
-# the first time it sees the message id, and only a copy in INBOX makes one; an
-# All Mail or Sent copy indexed before its INBOX copy would swallow the event.
+# INBOX is synced last so a mail's INBOX copy is indexed in the same run as its
+# All Mail or Sent copy. The post-new hook holds a mail back until its INBOX
+# copy lands, so the order keeps Gordon's event prompt rather than correct.
 #
 # A failed mbsync is retried once: about 4% of syncs hit a socket timeout on
-# one of imap.gmail.com's IPv6 addresses, and the retry resolves another.
+# one of imap.gmail.com's IPv6 addresses, and the retry resolves another. When
+# both tries fail, a transient systemd timer runs the same event again after
+# MAIL_SYNC_RETRY_SECS, once, so the mail does not wait for the next event or
+# the two-hourly full sync.
 #
 # Usage:
 #   __mail_idle_sync.sh <account> <mailbox> [<event>]
@@ -34,7 +37,9 @@
 # Env: MAIL_SYNC_STATE (lock dir), MAIL_SYNC_LASTRUN (mailsync's marker),
 # MAIL_SYNC_MAILDIR (mail root), MAIL_SYNC_LOCK_SECS (lock wait, default 600),
 # MAIL_SYNC_WAIT_FOR (process names to wait out, default "mbsync mailsync"),
-# MAIL_SYNC_WAIT_SECS (how long, default 300), MAILSYNC_MUTE (no popups).
+# MAIL_SYNC_WAIT_SECS (how long, default 300), MAIL_SYNC_RETRY_SECS (delay of
+# the deferred run, default 60), MAIL_SYNC_DEFERRED (set on that run, which
+# schedules no further one), MAILSYNC_MUTE (no popups).
 # NOTMUCH_CONFIG picks the database.
 set -eo pipefail
 
@@ -44,6 +49,7 @@ MAIL_ROOT="${MAIL_SYNC_MAILDIR:-$HOME/.local/share/mail}"
 LOCK_SECS="${MAIL_SYNC_LOCK_SECS:-600}"
 WAIT_FOR="${MAIL_SYNC_WAIT_FOR:-mbsync mailsync}"
 WAIT_SECS="${MAIL_SYNC_WAIT_SECS:-300}"
+RETRY_SECS="${MAIL_SYNC_RETRY_SECS:-60}"
 
 log() {
     printf '%s %s\n' "$(date '+%H:%M:%S.%3N')" "$*"
@@ -84,6 +90,30 @@ sync_target() {
     fi
     log "ERROR: mbsync $target failed twice"
     return 1
+}
+
+# defer_retry <account> <mailbox> <event>: runs this script with the same
+# arguments and settings once more in RETRY_SECS, from a transient user timer
+# named after the account and mailbox. A timer still pending for that box
+# refuses the name, so a box never queues two.
+defer_retry() {
+    local unit name
+    local -a env=(--setenv=MAIL_SYNC_DEFERRED=1 --setenv=PATH="$PATH")
+    if [[ -n "$MAIL_SYNC_DEFERRED" ]]; then
+        log "deferred run failed too, no further retry"
+        return 0
+    fi
+    for name in NOTMUCH_CONFIG MAILSYNC_MUTE "${!MAIL_SYNC_@}"; do
+        if [[ -n "${!name:-}" ]]; then env+=(--setenv="$name=${!name}"); fi
+    done
+    unit="mail-idle-retry-$(systemd-escape "$1-$2")"
+    if systemd-run --user --quiet --collect --unit="$unit" --on-active="$RETRY_SECS" \
+        --timer-property=AccuracySec=1s \
+        "${env[@]}" "$(readlink -f "$0")" "$1" "$2" "$3" >/dev/null 2>&1; then
+        log "retry scheduled in ${RETRY_SECS}s as $unit"
+    else
+        log "WARN: retry not scheduled, one may be pending as $unit"
+    fi
 }
 
 elapsed() {
@@ -131,7 +161,7 @@ notify_new() {
 }
 
 main() {
-    local account="$1" mailbox="$2" event="${3:-}" rc=0 start target
+    local account="$1" mailbox="$2" event="${3:-}" rc=0 synced=0 start target
     local -a targets=()
     if [[ -z "$account" || -z "$mailbox" ]]; then
         echo "usage: ${0##*/} <account> <mailbox> [<event>]" >&2
@@ -156,8 +186,12 @@ main() {
     wait_external
 
     for target in "${targets[@]}"; do
-        sync_target "$target" || rc=1
+        sync_target "$target" || synced=1
     done
+    if ((synced != 0)); then
+        rc=1
+        defer_retry "$account" "$mailbox" "$event"
+    fi
     notify_new "$account"
 
     # A file, not a pipe: a hook child that outlives notmuch must not hold

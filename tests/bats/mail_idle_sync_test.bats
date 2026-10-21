@@ -74,13 +74,20 @@ EOF
 printf '%s|' "\$@" >>"${WORK}/popups.log"
 echo >>"${WORK}/popups.log"
 EOF
+  # systemd-run: records one argument per line; fails while
+  # systemd-run.fail exists, as a unit name already loaded does.
+  cat >"${WORK}/bin/systemd-run" <<EOF
+#!/usr/bin/env bash
+printf '%s\\n' "\$@" >>"${WORK}/systemd-run.log"
+[[ ! -e "${WORK}/systemd-run.fail" ]]
+EOF
   chmod +x "${WORK}/bin/"*
   export PATH="${WORK}/bin:${PATH}"
 
   export MAIL_SYNC_STATE="${WORK}/state"
   export MAIL_SYNC_LASTRUN="${WORK}/mailsynclastrun"
   export MAIL_SYNC_MAILDIR="$MAILDIR"
-  unset MAILSYNC_MUTE
+  unset MAILSYNC_MUTE MAIL_SYNC_DEFERRED
   N=0
   mkdir -p "${MAILDIR}/${ACCT}/INBOX"/{cur,new,tmp}
   notmuch new --quiet
@@ -208,6 +215,7 @@ popups() {
   [[ "$output" == *"retrying"* ]]
   [ "$(calls | wc -l)" -eq 2 ]
   [ "$(notmuch count id:e1@test)" -eq 1 ]
+  [ ! -e "${WORK}/systemd-run.log" ]
 }
 
 @test "mbsync failing twice exits 1 and still indexes what is there" {
@@ -216,6 +224,50 @@ popups() {
   [ "$status" -eq 1 ]
   [[ "$output" == *"failed twice"* ]]
   [ "$(cat "${WORK}/hook.log")" = "post-new 0" ]
+}
+
+@test "mbsync failing twice schedules one deferred run of the same event" {
+  echo 2 >"${WORK}/mbsync.fail"
+  run "$SCRIPT" "$ACCT" "[Gmail]/Sent Mail" "New Email"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"retry scheduled in 60s"* ]]
+  log="$(cat "${WORK}/systemd-run.log")"
+  grep -qx -- '--user' <<<"$log"
+  grep -qx -- '--collect' <<<"$log"
+  grep -qx -- '--on-active=60' <<<"$log"
+  grep -qx -- '--timer-property=AccuracySec=1s' <<<"$log"
+  grep -qx -- '--setenv=MAIL_SYNC_DEFERRED=1' <<<"$log"
+  grep -qFx -- "--setenv=NOTMUCH_CONFIG=${NOTMUCH_CONFIG}" <<<"$log"
+  grep -qFx -- "--setenv=MAIL_SYNC_STATE=${MAIL_SYNC_STATE}" <<<"$log"
+  grep -qFx -- "--setenv=MAIL_SYNC_MAILDIR=${MAILDIR}" <<<"$log"
+  grep -qFx -- "--unit=mail-idle-retry-$(systemd-escape "${ACCT}-[Gmail]/Sent Mail")" <<<"$log"
+  [ "$(tail -n 4 <<<"$log")" = "$(printf '%s\n' "$(readlink -f "$SCRIPT")" "$ACCT" "[Gmail]/Sent Mail" "New Email")" ]
+}
+
+@test "a deferred run that fails again schedules nothing" {
+  export MAIL_SYNC_DEFERRED=1
+  echo 2 >"${WORK}/mbsync.fail"
+  run "$SCRIPT" "$ACCT" INBOX "New Email"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"no further retry"* ]]
+  [ ! -e "${WORK}/systemd-run.log" ]
+}
+
+@test "a retry already pending for the box leaves the run's result alone" {
+  touch "${WORK}/systemd-run.fail"
+  echo 2 >"${WORK}/mbsync.fail"
+  run "$SCRIPT" "$ACCT" INBOX "New Email"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"retry not scheduled"* ]]
+  [ "$(cat "${WORK}/hook.log")" = "post-new 0" ]
+}
+
+@test "a failed notmuch new schedules no mbsync retry" {
+  printf '#!/usr/bin/env bash\nexit 1\n' >"${WORK}/bin/notmuch"
+  chmod +x "${WORK}/bin/notmuch"
+  run "$SCRIPT" "$ACCT" INBOX "New Email"
+  [ "$status" -eq 1 ]
+  [ ! -e "${WORK}/systemd-run.log" ]
 }
 
 @test "more than five new mails make one summary popup" {
