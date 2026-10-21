@@ -4,8 +4,9 @@
 # Gordon and keeps two waiting tags current on every thread it touches.
 #
 # Linked as notmuch/hooks/post-new, the hook_dir in the tracked .notmuch-config,
-# so it runs after every
-# `notmuch new`: mailsync from cron every 30 minutes, or a run by hand.
+# so it runs after every `notmuch new`: __mail_idle_sync.sh on each IMAP IDLE
+# event (goimapnotify.service), the mailsync backstop every 2 hours, or a run
+# by hand.
 #
 # Events. A message is new when its lastmod is past the last run's revision and
 # its id is not in the seen set. Lastmod alone is not enough, because reading
