@@ -3,7 +3,8 @@
 # notmuch post-new hook. Turns each new mail into one structured event for
 # Gordon and keeps two waiting tags current on every thread it touches.
 #
-# Linked as ~/.local/share/mail/.notmuch/hooks/post-new, so it runs after every
+# Linked as notmuch/hooks/post-new, the hook_dir in the tracked .notmuch-config,
+# so it runs after every
 # `notmuch new`: mailsync from cron every 30 minutes, or a run by hand.
 #
 # Events. A message is new when its lastmod is past the last run's revision and
