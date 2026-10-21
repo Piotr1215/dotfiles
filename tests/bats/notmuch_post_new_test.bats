@@ -38,6 +38,15 @@ echo "\$*" >>"${WORK}/thread-watch.log"
 exit 0
 EOF
   chmod +x "$MAIL_EVENTS_THREAD_WATCH"
+  export MAIL_EVENTS_HANDOFF_CHECK="${WORK}/bin/handoff-check"
+  cat >"$MAIL_EVENTS_HANDOFF_CHECK" <<EOF
+#!/usr/bin/env bash
+echo "\$*" >>"${WORK}/handoff-check.log"
+[[ -e "${WORK}/handoff-check.fail" ]] && { echo "boom"; exit 1; }
+[[ -e "${WORK}/handoff-check.hang" ]] && sleep 60
+exit 0
+EOF
+  chmod +x "$MAIL_EVENTS_HANDOFF_CHECK"
 
   WORK_INBOX="piotr.zaniewski@loft.sh/INBOX"
   N=0
@@ -306,6 +315,61 @@ cleared_count() {
 
   grep -qx 'check-source mail' "${WORK}/thread-watch.log"
   [ "$(grep -c . "${WORK}/thread-watch.log")" -eq 2 ]
+}
+
+@test "every run closes discharged mail handoffs" {
+  deliver "$WORK_INBOX" h1 "Dan <dan@mend.io>" "piotr.zaniewski@loft.sh" "x"
+  notmuch new --quiet
+
+  grep -qx -- '--close --kind mail-sent' "${WORK}/handoff-check.log"
+}
+
+@test "a failing handoff check neither fails the hook nor logs an error" {
+  touch "${WORK}/handoff-check.fail"
+  run "$HOOK"
+  [ "$status" -eq 0 ]
+  [ "$(record_count)" -eq 0 ]
+  grep -qx 'check-source mail' "${WORK}/thread-watch.log"
+}
+
+@test "a hanging handoff check is cut off by its timeout" {
+  touch "${WORK}/handoff-check.hang"
+  start=$(date +%s)
+  MAIL_EVENTS_HANDOFF_TIMEOUT=1 run "$HOOK"
+  [ "$status" -eq 0 ]
+  [ $(( $(date +%s) - start )) -lt 10 ]
+}
+
+@test "a sent reply closes its mail handoff through the real board check" {
+  check="$HOME/.claude/scripts/__gordon_board_check.sh"
+  [[ -x "$check" ]] || skip "board check not installed"
+  command -v task >/dev/null || skip "task not installed"
+  export MAIL_EVENTS_HANDOFF_CHECK="$check" BOARD_CHECK_SND="" BOARD_CHECK_LOCK="${WORK}/board.lock"
+  export TASKRC="${WORK}/taskrc" TASKDATA="${WORK}/task"
+  mkdir -p "$TASKDATA"
+  printf 'data.location=%s\nhooks=off\nconfirmation=no\nnews.version=99.0.0\n' "$TASKDATA" >"$TASKRC"
+
+  deliver "$WORK_INBOX" m1 "Dan <dan@mend.io>" "piotr.zaniewski@loft.sh" "MSA"
+  notmuch new --quiet
+  thread="$(notmuch search --output=threads id:m1@test | sed 's/^thread://')"
+  task add +piotr send the Mend reply >/dev/null
+  task 1 annotate "close-when: mail-sent $thread" >/dev/null
+
+  # A draft in the thread is not evidence.
+  deliver "piotr.zaniewski@loft.sh/[Gmail]/Drafts" m2 "piotr.zaniewski@loft.sh" "dan@mend.io" "Re: MSA" \
+    "In-Reply-To: <m1@test>" "References: <m1@test>"
+  notmuch new --quiet
+  notmuch tag +draft id:m2@test
+  "$HOOK"
+  [ "$(task status:pending +piotr count)" -eq 1 ]
+
+  # The sent reply, dated after the annotation, closes it.
+  mkdir -p "${MAILDIR}/sent/new"
+  printf 'From: piotr.zaniewski@vcluster.com\nTo: dan@mend.io\nSubject: Re: MSA\nMessage-ID: <m3@test>\nDate: %s\nIn-Reply-To: <m1@test>\nReferences: <m1@test>\n\nsent\n' \
+    "$(date -R -d '+1 minute')" >"${MAILDIR}/sent/new/m3.test"
+  notmuch new --quiet
+  [ "$(task status:pending +piotr count)" -eq 0 ]
+  task status:completed export | grep -q "Discharged automatically: Piotr sent mail in thread $thread"
 }
 
 @test "a thread-watch failure becomes one error record and a failing hook" {

@@ -62,6 +62,8 @@
 #
 # Env: MAIL_EVENTS_STATE (state dir), MAIL_EVENTS_LOG (event log),
 # MAIL_EVENTS_THREAD_WATCH (thread-watch script, skipped when not executable),
+# MAIL_EVENTS_HANDOFF_CHECK (Gordon's board check, skipped when not executable),
+# MAIL_EVENTS_HANDOFF_TIMEOUT (seconds it may take, default 20),
 # MAIL_EVENTS_DAYS (event and touch window, default 30), MAIL_EVENTS_SEEN_DAYS
 # (how long a seen id is kept, default 60). NOTMUCH_CONFIG picks the database.
 set -eo pipefail
@@ -72,6 +74,7 @@ PATH="${PATH}:/usr/local/bin"
 STATE_DIR="${MAIL_EVENTS_STATE:-$HOME/.local/state/mail-events}"
 EVENT_LOG="${MAIL_EVENTS_LOG:-$HOME/.local/state/notifications.log}"
 THREAD_WATCH="${MAIL_EVENTS_THREAD_WATCH:-$HOME/.claude/scripts/__thread_watch.sh}"
+HANDOFF_CHECK="${MAIL_EVENTS_HANDOFF_CHECK:-$HOME/.claude/scripts/__gordon_board_check.sh}"
 DAYS="${MAIL_EVENTS_DAYS:-30}"
 SEEN_DAYS="${MAIL_EVENTS_SEEN_DAYS:-60}"
 SELF_ADDRS=""
@@ -307,6 +310,7 @@ run_hook() {
     fi
     if [[ "$last_uuid" != "$uuid" || ! "$last" =~ ^[0-9]+$ || ! -f "$STATE_DIR/seen" ]]; then
         seed "$revision"
+        discharge_handoffs
         check_watches
         return 0
     fi
@@ -334,7 +338,17 @@ run_hook() {
         mv -f "$STATE_DIR/seen.tmp" "$STATE_DIR/seen"
     fi
     printf '%s %s\n' "$uuid" "$rev" >"$STATE_DIR/revision"
+    discharge_handoffs
     check_watches
+}
+
+# Close a mail handoff (`close-when: mail-sent <thread>`) once Piotr's sent
+# reply lands, so it leaves his margin on the sync that carries the evidence
+# rather than whenever Gordon next looks. Bounded and failure-tolerant: a
+# broken check never fails mail indexing.
+discharge_handoffs() {
+    [[ -x "$HANDOFF_CHECK" ]] || return 0
+    timeout "${MAIL_EVENTS_HANDOFF_TIMEOUT:-20}" "$HANDOFF_CHECK" --close --kind mail-sent >/dev/null 2>&1 || true
 }
 
 # Mail thread-watch subscriptions learn about new mail from this hook.
