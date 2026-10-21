@@ -147,6 +147,21 @@ tags_of() {
   [ "$(record_count)" -eq 0 ]
 }
 
+@test "a mail indexed from All Mail first fires once its INBOX copy lands" {
+  deliver "piotr.zaniewski@loft.sh/[Gmail]/All Mail" af1 "Josh <josh@mend.io>" "piotr.zaniewski@loft.sh" "PTO until Monday"
+  notmuch new --quiet
+  [ "$(record_count)" -eq 0 ]
+
+  deliver "$WORK_INBOX" af1 "Josh <josh@mend.io>" "piotr.zaniewski@loft.sh" "PTO until Monday"
+  notmuch new --quiet
+  [ "$(record_count)" -eq 1 ]
+  [[ "$(records)" == *"from:josh@mend.io | PTO until Monday" ]]
+
+  notmuch tag -unread -- id:af1@test
+  notmuch new --quiet
+  [ "$(record_count)" -eq 1 ]
+}
+
 @test "cc only, no address of Piotr's, and bulk signals are named" {
   deliver "$WORK_INBOX" cc1 "Ann <ann@example.com>" "bob@example.com" "fyi" "Cc: Piotr <PIOTR.ZANIEWSKI@loft.sh>"
   deliver "$WORK_INBOX" none1 "Ann <ann@example.com>" "team@loft.sh" "to the group"
@@ -227,6 +242,30 @@ cleared_count() {
 
   [ "$(cleared_count)" = 1 ]
   [ "$(tags_of c1)" = "waiting/me " ]
+}
+
+@test "gordon/cleared survives tagging on a thread whose mail never reached INBOX" {
+  deliver "piotrzan@gmail.com/1. Newsletters" nl "News <news@example.com>" "piotrzan@gmail.com" "weekly"
+  notmuch new --quiet
+  notmuch tag +gordon/cleared -- id:nl@test
+  notmuch new --quiet
+  notmuch tag -unread -- id:nl@test
+  notmuch new --quiet
+
+  [ "$(cleared_count)" = 1 ]
+}
+
+@test "an INBOX copy landing after an All Mail copy removes gordon/cleared" {
+  deliver "piotr.zaniewski@loft.sh/[Gmail]/All Mail" af2 "Josh <josh@mend.io>" "piotr.zaniewski@loft.sh" "late inbox"
+  notmuch new --quiet
+  notmuch tag +gordon/cleared -- id:af2@test
+  notmuch new --quiet
+  [ "$(cleared_count)" = 1 ]
+
+  deliver "$WORK_INBOX" af2 "Josh <josh@mend.io>" "piotr.zaniewski@loft.sh" "late inbox"
+  notmuch new --quiet
+
+  [ "$(cleared_count)" = 0 ]
 }
 
 @test "a new message from someone else removes gordon/cleared" {

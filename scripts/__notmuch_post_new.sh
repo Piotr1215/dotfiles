@@ -11,7 +11,11 @@
 # Events. A message is new when its lastmod is past the last run's revision and
 # its id is not in the seen set. Lastmod alone is not enough, because reading
 # or tagging a mail moves its lastmod too. The seen set is seeded on the first
-# run, so history never fires. For each new message from someone other than
+# run, so history never fires. An id joins the seen set once it has a file in
+# an INBOX folder or is Piotr's own. Until then it waits in the pending set
+# and is checked again when an INBOX copy appears: syncs can index a gmail
+# All Mail copy before the INBOX copy, and deciding on first sight lost that
+# mail's event. For each new message from someone other than
 # Piotr with a file in an INBOX folder (the scope of mailsync's popup), one
 # record goes to notifications.log, the file notify-watch follows with a byte
 # cursor. The event therefore waits there while Gordon is down, and no second
@@ -46,8 +50,9 @@
 # processed it so the morning sweep (tag:waiting/me and not tag:gordon/cleared)
 # stops surfacing it. The hook removes it from every thread that receives a new
 # message, from anyone, so a fresh reply re-arms the sweep. New means an id
-# outside the seen set, not a lastmod bump: tagging or reading a mail moves its
-# lastmod too and must not undo the clearing. waiting/* is untouched by it.
+# outside the seen and pending sets, or a pending id whose INBOX copy just
+# landed, not a lastmod bump: tagging or reading a mail moves its lastmod too
+# and must not undo the clearing. waiting/* is untouched by it.
 #
 # Then every mail thread-watch subscription is checked
 # (`__thread_watch.sh check-source mail`).
@@ -203,7 +208,8 @@ id_query() {
 }
 
 # event_for <message id>: appends the record for one new message, unless it
-# is Piotr's own or has no file in an INBOX folder.
+# is Piotr's own or has no file in an INBOX folder. Returns 3 for the latter,
+# so the id stays pending until an INBOX copy lands.
 event_for() {
     local id="$1" msg tid file inbox account addressed bulk subject dbpath
     msg="$(notmuch show --format=json --body=false --entire-thread=false "$(id_query "$id")" |
@@ -212,7 +218,7 @@ event_for() {
     split_from "$(jq -r '.headers.From // ""' <<<"$msg")"
     is_self "$from_addr" && return 0
     inbox="$(jq -r '[.filename[] | select(test("/INBOX/(cur|new)/[^/]*$"))][0] // empty' <<<"$msg")"
-    [[ -n "$inbox" ]] || return 0
+    [[ -n "$inbox" ]] || return 3
     tid="$(notmuch search --output=threads "$(id_query "$id")" | head -n1)"
     tid="${tid#thread:}"
     dbpath="$(notmuch config get database.path)"
@@ -293,12 +299,14 @@ seed() {
     local now
     now="$(date +%s)"
     notmuch search --output=messages "date:${SEEN_DAYS}days.." | sed "s/^id://; s/\$/\t${now}/" >"$STATE_DIR/seen"
+    : >"$STATE_DIR/pending"
     printf '%s\n' "$1" >"$STATE_DIR/revision"
 }
 
 run_hook() {
-    local revision uuid rev last_uuid last now id tid
-    local -a fresh=() touched=()
+    local revision uuid rev last_uuid last now id tid rc
+    local -a fresh=() touched=() check=() arrived=()
+    local -A pending=() inboxed=()
     mkdir -p "$STATE_DIR"
     exec 8>"$STATE_DIR/lock"
     flock -w 120 8 || fail "another post-new run held $STATE_DIR/lock past 120s"
@@ -322,12 +330,36 @@ run_hook() {
         mapfile -t fresh < <(notmuch search --uuid="$uuid" --output=messages \
             "lastmod:$((last + 1))..${rev} and date:${DAYS}days.." | sed 's/^id://' |
             awk -F'\t' 'NR == FNR {seen[$1] = 1; next} !($0 in seen)' "$STATE_DIR/seen" -)
+        # A pending id is checked again only once it has an INBOX copy. arrived
+        # collects first sightings and pending ids that settle, for rearm.
+        [[ -f "$STATE_DIR/pending" ]] || : >"$STATE_DIR/pending"
+        while IFS=$'\t' read -r id _; do [[ -z "$id" ]] || pending[$id]=1; done <"$STATE_DIR/pending"
+        while read -r id; do [[ -z "$id" ]] || inboxed[$id]=1; done < <(notmuch search --uuid="$uuid" --output=messages \
+            "lastmod:$((last + 1))..${rev} and date:${DAYS}days.. and folder:/INBOX$/" | sed 's/^id://')
         for id in "${fresh[@]}"; do
-            event_for "$id" || fail "cannot build the event for message $id"
-            printf '%s\t%s\n' "$id" "$now" >>"$STATE_DIR/seen"
+            if [[ -z "${pending[$id]:-}" || -n "${inboxed[$id]:-}" ]]; then
+                check+=("$id")
+            fi
         done
-        if ((${#fresh[@]} > 0)); then
-            rearm "${fresh[@]}" || fail "cannot re-arm gordon/cleared"
+        for id in "${check[@]}"; do
+            rc=0
+            event_for "$id" || rc=$?
+            case "$rc" in
+            0)
+                printf '%s\t%s\n' "$id" "$now" >>"$STATE_DIR/seen"
+                arrived+=("$id")
+                ;;
+            3)
+                if [[ -z "${pending[$id]:-}" ]]; then
+                    printf '%s\t%s\n' "$id" "$now" >>"$STATE_DIR/pending"
+                    arrived+=("$id")
+                fi
+                ;;
+            *) fail "cannot build the event for message $id" ;;
+            esac
+        done
+        if ((${#arrived[@]} > 0)); then
+            rearm "${arrived[@]}" || fail "cannot re-arm gordon/cleared"
         fi
         mapfile -t touched < <(notmuch search --uuid="$uuid" --output=threads \
             "lastmod:$((last + 1))..${rev} and date:${DAYS}days.." | sed 's/^thread://')
@@ -337,6 +369,10 @@ run_hook() {
         # Forget ids older than SEEN_DAYS.
         awk -F'\t' -v cut="$((now - SEEN_DAYS * 86400))" '$2 >= cut' "$STATE_DIR/seen" >"$STATE_DIR/seen.tmp"
         mv -f "$STATE_DIR/seen.tmp" "$STATE_DIR/seen"
+        # Drop pending ids that are now seen, or older than SEEN_DAYS.
+        awk -F'\t' -v cut="$((now - SEEN_DAYS * 86400))" 'NR == FNR {seen[$1] = 1; next} !($1 in seen) && $2 >= cut' \
+            "$STATE_DIR/seen" "$STATE_DIR/pending" >"$STATE_DIR/pending.tmp"
+        mv -f "$STATE_DIR/pending.tmp" "$STATE_DIR/pending"
     fi
     printf '%s %s\n' "$uuid" "$rev" >"$STATE_DIR/revision"
     discharge_handoffs
