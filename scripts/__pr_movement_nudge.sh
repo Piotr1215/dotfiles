@@ -53,8 +53,12 @@
 #   worker commits as Piotr; the GitHub Claude app pushes/opens PRs as a bot).
 #   The self set is $ME + PR_MOVE_SELF_LOGINS (default claude[bot]). A non-self
 #   actor (a teammate's review, an external contributor's push) still fires.
-# Contention guard: skip a PR already owned by a live (non-spend-stalled) tmux
-#   session, or one Piotr/the agent pushed to within PUSH_COOLDOWN_SECS.
+# Contention guard: a PR owned by a live (non-spend-stalled) tmux session is
+#   handled by that worker, so Gordon must not dispatch a second one. The event
+#   is still delivered, never dropped: the same line goes to the owner on the
+#   bus (its session name is its bus name) and to triage marked "(owned by
+#   <session>)", so Gordon can act if the worker is idle or finished. A PR
+#   Piotr/the agent pushed to within PUSH_COOLDOWN_SECS is skipped (unowned only).
 #
 # LIMITATION (Stage 0): inline review-thread replies are not in `gh pr view
 #   --json`; they surface indirectly via the carrying review / updatedAt. A
@@ -120,14 +124,18 @@ STALL_RE='spend limit|rate-limit-options|Add funds|wait for limit to reset|usage
 log() { echo "[$(date '+%Y-%m-%dT%H:%M:%S%z')] $*" | tee -a "$LOG_FILE"; }
 
 # Send a DM to triage over the NATS comms bus (same path as __auto_triage_nudge.sh).
-send_dm() { node "$SND_NODE_BIN" -t triage "$1" 2>&1; }
+# send_dm MSG [TARGET] -> DM MSG to TARGET (default triage).
+send_dm() { node "$SND_NODE_BIN" -t "${2:-triage}" "$1" 2>&1; }
 
 now_epoch() { date +%s; }
 iso_to_epoch() { date -d "$1" +%s 2>/dev/null || echo 0; }
 
 # --- contention: a live, non-spend-stalled tmux session owns this PR? ---
+# On a match, sets OWNER_SESSION to the owning session name.
+OWNER_SESSION=""
 pr_has_live_session() {
     local num="$1" sess pane
+    OWNER_SESSION=""
     while IFS= read -r sess; do
         [[ -z "$sess" ]] && continue
         # match "<repo>-pr-<num>" or "<repo>-pr<num>" with a numeric boundary so
@@ -139,6 +147,7 @@ pr_has_live_session() {
                 continue
             fi
             log "  contention: live session $sess owns pr-$num"
+            OWNER_SESSION="$sess"
             return 0
         fi
     done < <(tmux list-sessions -F '#{session_name}' 2>/dev/null || true)
@@ -263,7 +272,7 @@ main() {
     log "authored open PRs: $total"
 
     local new_state="$old_state"
-    local -a nudges=()
+    local -a nudges=() owners=()
     local seen=0 moved=0
 
     local pr url num repo owner ref is_draft detail sig old key title
@@ -322,19 +331,19 @@ main() {
             notified="$sticky_now"
         fi
 
-        # Contention: a live worker owns it -> stay silent, but advance the
-        # watermark so we do not later treat the worker's changes as new.
-        if pr_has_live_session "$num"; then
-            new_state=$(jq -c --arg k "$key" --argjson s "$sig" --arg ref "$ref" --arg url "$url" --argjson ns "$notified" \
-                '.[$k] = ($s + {ref:$ref, url:$url, notifiedSticky:$ns})' <<<"$new_state")
-            continue
-        fi
+        # Contention: a live worker owns it. Detect events as usual, but the
+        # delivery below goes to the owner and to triage (marked owned), so a
+        # review or approval landing while the worker is idle is never lost.
+        local owner=""
+        pr_has_live_session "$num" && owner="$OWNER_SESSION"
 
         # Push cooldown: we (Piotr or the agent, same login) pushed recently.
+        # Not applied to an owned PR: the owner's own push would otherwise
+        # swallow a review that arrives right after it.
         local mine last_date last_epoch
         mine=$(jq -r '.lastCommitMine' <<<"$sig")
         last_date=$(jq -r '.lastCommitDate' <<<"$sig")
-        if [[ "$mine" == "true" && -n "$last_date" ]]; then
+        if [[ -z "$owner" && "$mine" == "true" && -n "$last_date" ]]; then
             last_epoch=$(iso_to_epoch "$last_date")
             if [[ $(( $(now_epoch) - last_epoch )) -lt "$PUSH_COOLDOWN_SECS" ]]; then
                 log "skip (recent own push, cooldown): $ref"
@@ -395,6 +404,7 @@ main() {
         local msg="pr-move: $ref $reason_str $url"
         log "MOVED: $msg"
         nudges+=("$msg")
+        owners+=("$owner")
     done < <(jq -c '.[]' <<<"$prs")
 
     # Direct review requests on other people's PRs. A failed search keeps the
@@ -411,6 +421,7 @@ main() {
                 [[ -z "$url" ]] && continue
                 log "REQUESTED: review-request: $ref from $author $url"
                 nudges+=("review-request: $ref from $author $url")
+                owners+=("")
             done < <(review_requests_new "$reqs" "$seen_reqs")
         else
             log "seed (first contact): $(jq 'length' <<<"$reqs") direct review request(s)"
@@ -432,10 +443,16 @@ main() {
             log "cycle cap $CYCLE_CAP reached; deferring $dropped nudge(s) to next cycle"
             break
         fi
+        local own="${owners[$i]}" tmsg="${nudges[$i]}"
+        [[ -n "$own" ]] && tmsg="${nudges[$i]} (owned by $own)"
         if [[ "$DRY_RUN" -eq 1 ]]; then
-            log "[DRY-RUN] would send -> ${nudges[$i]}"
+            [[ -n "$own" ]] && log "[DRY-RUN] would send to $own -> ${nudges[$i]}"
+            log "[DRY-RUN] would send -> $tmsg"
         else
-            send_dm "${nudges[$i]}" | while read -r line; do log "  snd: $line"; done
+            if [[ -n "$own" ]]; then
+                send_dm "${nudges[$i]}" "$own" | while read -r line; do log "  snd($own): $line"; done
+            fi
+            send_dm "$tmsg" | while read -r line; do log "  snd: $line"; done
         fi
         sent=$((sent + 1))
     done

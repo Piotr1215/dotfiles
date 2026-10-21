@@ -44,11 +44,15 @@ case "$1 $2" in
   *) echo "[]" ;;
 esac
 EOF
-    # stub: node snd.js -t triage <msg>  -> append msg to outbox
+    # stub: node snd.js -t <target> <msg>  -> triage msgs to outbox, every DM
+    # (never a real bus send) as "<target>: <msg>" to the all-DMs file
     cat > "$BIN/node" <<'EOF'
 #!/usr/bin/env bash
-shift 3   # drop <snd.js> -t triage
-printf '%s\n' "$*" >> "$PR_TEST_OUTBOX"
+target="$3"
+shift 3   # drop <snd.js> -t <target>
+printf '%s: %s\n' "$target" "$*" >> "$PR_TEST_OUTBOX_ALL"
+[ "$target" = triage ] && printf '%s\n' "$*" >> "$PR_TEST_OUTBOX"
+exit 0
 EOF
     # stub: tmux (contention)
     cat > "$BIN/tmux" <<'EOF'
@@ -67,6 +71,8 @@ EOF
     export GH_REVREQ_FIXTURE="$REVREQ"
     export GH_PRVIEW_DIR="$PRVIEW_DIR"
     export PR_TEST_OUTBOX="$OUTBOX"
+    OUTBOX_ALL="$TEST_DIR/outbox_all"; : > "$OUTBOX_ALL"
+    export PR_TEST_OUTBOX_ALL="$OUTBOX_ALL"
     export PR_MOVE_STATE="$TEST_DIR/state.json"
     export PR_MOVE_LOG="$TEST_DIR/log"
     export PR_MOVE_LOCK="$TEST_DIR/lock"
@@ -133,7 +139,7 @@ mk_prview() { # url sha reviewDecision mergeable checks(SUCCESS|FAILURE|NONE) co
         commits:[{oid:$sha, committedDate:$cd, authoredDate:$cd, authors:[{login:$cl}]}]}' > "$f"
 }
 
-run() { : > "$OUTBOX"; bash "$SCRIPT" "${1:---live}" >/dev/null 2>&1; }
+run() { : > "$OUTBOX"; : > "$OUTBOX_ALL"; bash "$SCRIPT" "${1:---live}" >/dev/null 2>&1; }
 outbox() { cat "$OUTBOX" 2>/dev/null; }
 
 assert_fires() { # reason description
@@ -141,6 +147,20 @@ assert_fires() { # reason description
         PASS=$((PASS+1)); echo "  PASS: $2"
     else
         FAIL=$((FAIL+1)); echo "  FAIL: $2 (outbox: $(outbox | tr '\n' '|'))"
+    fi
+}
+assert_dm() { # "target: line" description (exact line among all DMs)
+    if grep -qxF "$1" "$OUTBOX_ALL" 2>/dev/null; then
+        PASS=$((PASS+1)); echo "  PASS: $2"
+    else
+        FAIL=$((FAIL+1)); echo "  FAIL: $2 (all DMs: $(tr '\n' '|' < "$OUTBOX_ALL"))"
+    fi
+}
+assert_no_dms() { # description
+    if [ -s "$OUTBOX_ALL" ]; then
+        FAIL=$((FAIL+1)); echo "  FAIL: $1 (got: $(tr '\n' '|' < "$OUTBOX_ALL"))"
+    else
+        PASS=$((PASS+1)); echo "  PASS: $1"
     fi
 }
 assert_silent() { # description
@@ -220,7 +240,10 @@ mk_prview "https://x/pr/1" sha1 REVIEW_REQUIRED MERGEABLE SUCCESS Piotr1215 "$OL
 # a live worker session owns pr-1 -> silent even though CI goes red
 export_sessions "vcluster-pr-1" ""
 mk_prview "https://x/pr/1" sha1 REVIEW_REQUIRED MERGEABLE FAILURE Piotr1215 "$OLD"; run --live
-assert_silent "live session on the PR suppresses the nudge"
+assert_dm "vcluster-pr-1: pr-move: loft-sh/vcluster#1 ci-red https://x/pr/1" "owner session gets the event on the bus"
+assert_dm "triage: pr-move: loft-sh/vcluster#1 ci-red https://x/pr/1 (owned by vcluster-pr-1)" "triage gets the same line marked owned"
+run --live
+assert_no_dms "an owned sticky event does not re-fire"
 # same session but spend-stalled -> not an owner, so it fires
 setup
 search_one "https://x/pr/1" 1 vcluster loft-sh
@@ -228,6 +251,22 @@ mk_prview "https://x/pr/1" sha1 REVIEW_REQUIRED MERGEABLE SUCCESS Piotr1215 "$OL
 export_sessions "vcluster-pr-1" "You have hit your spend limit"
 mk_prview "https://x/pr/1" sha1 REVIEW_REQUIRED MERGEABLE FAILURE Piotr1215 "$OLD"; run --live
 assert_fires ci-red "spend-stalled session does not suppress"
+teardown
+
+echo "T7b contention: an approval-style event on an owned PR reaches owner and triage"
+setup
+search_one "https://x/pr/8801" 8801 loft-enterprise loft-sh
+mk_prview "https://x/pr/8801" sha1 REVIEW_REQUIRED MERGEABLE SUCCESS Piotr1215 "$OLD"; run --live
+export_sessions "loft-enterprise-pr-8801" ""
+mk_prview "https://x/pr/8801" sha1 REVIEW_REQUIRED MERGEABLE SUCCESS Piotr1215 "$OLD" "denis" "$NEW"; run --live
+assert_dm "loft-enterprise-pr-8801: pr-move: loft-sh/loft-enterprise#8801 review-comment https://x/pr/8801" "owner gets the review-comment"
+assert_dm "triage: pr-move: loft-sh/loft-enterprise#8801 review-comment https://x/pr/8801 (owned by loft-enterprise-pr-8801)" "triage gets it marked owned"
+# the owner's own fresh push must not swallow a review that follows it
+mk_prview "https://x/pr/8801" sha1 REVIEW_REQUIRED MERGEABLE SUCCESS Piotr1215 "$RECENT" "caue" "2026-07-02T11:00:00Z"; run --live
+assert_dm "loft-enterprise-pr-8801: pr-move: loft-sh/loft-enterprise#8801 review-comment https://x/pr/8801" "push cooldown does not drop an owned event"
+# dry-run sends nothing even when owned
+mk_prview "https://x/pr/8801" sha1 REVIEW_REQUIRED MERGEABLE SUCCESS Piotr1215 "$OLD" "denis" "2026-07-02T12:00:00Z"; run --dry-run
+assert_no_dms "dry-run on an owned PR sends no DM"
 teardown
 
 echo "T8 push cooldown: our own recent push is skipped"
