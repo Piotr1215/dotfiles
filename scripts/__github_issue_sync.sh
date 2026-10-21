@@ -29,6 +29,34 @@ set -eo pipefail
 # Set new line and tab for word splitting
 IFS=$'\n\t'
 
+# A task hidden with a future `wait:` has status "waiting", not "pending", so a
+# bare `status:pending` lookup cannot see it. The sync then decided no task
+# existed for the issue and created a duplicate (DEVOPS-1706, 21 Oct). Every
+# lookup that decides whether a task exists, or which tasks to update or
+# delete, uses this filter instead. Updates never touch `wait:`, so a waiting
+# task stays hidden.
+TASK_LIVE_FILTER=( '(status:pending or status:waiting)' )
+
+# Run task with the active context disabled, so a context such as `work` cannot
+# hide a task from a lookup or a uuid-addressed update. rc.context=none goes at
+# the end, or before `--` where that ends option parsing (`add`, `annotate`),
+# so argument positions that tests match on stay put. `_get` takes only DOM
+# references and a uuid reference ignores context, so it passes through.
+task() {
+    if (($# == 0)) || [[ "$1" == _get ]]; then
+        command task "$@"
+        return
+    fi
+    local args=("$@") i
+    for i in "${!args[@]}"; do
+        if [[ "${args[i]}" == -- ]]; then
+            command task "${args[@]:0:i}" rc.context=none "${args[@]:i}"
+            return
+        fi
+    done
+    command task "${args[@]}" rc.context=none
+}
+
 # Team prefix → project mapping (edit here when teams rename)
 declare -A TEAM_PREFIX_PROJECT=(
     ["DOC"]="docs-maintenance"
@@ -1143,7 +1171,7 @@ sync_to_taskwarrior() {
     # First, try to find task by linear_issue_id if available
     local existing_task_uuid=""
     if [[ -n "$issue_number" ]]; then
-        existing_task_uuid=$(task "linear_issue_id:$issue_number" status:pending export 2>/dev/null | jq -r '.[0].uuid' 2>/dev/null || echo "")
+        existing_task_uuid=$(task "linear_issue_id:$issue_number" "${TASK_LIVE_FILTER[@]}" export 2>/dev/null | jq -r '.[0].uuid' 2>/dev/null || echo "")
     fi
 
     # If not found by linear_issue_id, try by description
@@ -1355,7 +1383,7 @@ compare_and_clean_tasks() {
     # OPTIMIZATION: Only get PENDING tasks with Linear issue IDs
     # This massively reduces the number of tasks to process
     local task_export
-    task_export=$(task 'linear_issue_id.any:' status:pending export)
+    task_export=$(task 'linear_issue_id.any:' "${TASK_LIVE_FILTER[@]}" export)
 
     # Remove any empty or null entries (extra safety check)
     task_export=$(echo "$task_export" | jq -c '[.[] | select(.status == "pending")]')
@@ -1445,7 +1473,7 @@ find_and_clean_reassigned_tasks() {
 
     # OPTIMIZATION: Only get pending tasks with linear_issue_id
     local tasks_with_linear_id
-    tasks_with_linear_id=$(task 'linear_issue_id.any:' status:pending export)
+    tasks_with_linear_id=$(task 'linear_issue_id.any:' "${TASK_LIVE_FILTER[@]}" export)
 
     # Remove any empty or null entries (extra safety check)
     tasks_with_linear_id=$(echo "$tasks_with_linear_id" | jq -c '[.[] | select(.status == "pending")]')

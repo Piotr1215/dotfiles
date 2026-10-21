@@ -316,6 +316,43 @@ EOF
     [ "$output" = "active" ]
 }
 
+# Real TaskWarrior against a throwaway TASKDATA/TASKRC, never the live database.
+use_real_task_in_sandbox() {
+    local real_task
+    real_task="$(PATH="${PATH#"${TEST_DIR}:"}" type -P task)"
+    printf '#!/bin/bash\nexec %q "$@" </dev/null\n' "$real_task" > "${TEST_DIR}/task"
+    chmod +x "${TEST_DIR}/task"
+    export TASKDATA="${TEST_DIR}/taskdata" TASKRC="${TEST_DIR}/taskrc"
+    mkdir -p "$TASKDATA"
+    printf 'data.location=%s\nuda.linear_issue_id.type=string\nconfirmation=off\nverbose=nothing\nhooks=off\n' "$TASKDATA" > "$TASKRC"
+}
+
+@test "sync_to_taskwarrior leaves a waiting task with the same linear_issue_id alone and creates no duplicate" {
+    use_real_task_in_sandbox
+    task add "old title" linear_issue_id:DEVOPS-1706 wait:2030-01-01 >/dev/null
+    test_issue='{"id":"1","description":"new title","repository":"linear","html_url":"https://linear.app/t/issue/DEVOPS-1706","issue_id":"DEVOPS-1706","project":"p","status":"In Progress"}'
+
+    run sync_to_taskwarrior "$test_issue"
+    [ "$status" -eq 0 ]
+    run task rc.context=none linear_issue_id:DEVOPS-1706 export
+    [ "$(jq length <<<"$output")" -eq 1 ]
+    [ "$(jq -r '.[0].wait' <<<"$output")" = "20291231T230000Z" ]
+    # export reports status "pending" for a waiting task; the filter knows better
+    run task rc.context=none linear_issue_id:DEVOPS-1706 status:waiting count
+    [ "$output" = "1" ]
+}
+
+@test "sync lookups see a waiting task even when the active context would hide it" {
+    use_real_task_in_sandbox
+    printf 'context.work.read=+work\ncontext=work\n' >> "$TASKRC"
+    task rc.context=none add "hidden" linear_issue_id:DEVOPS-1706 wait:2030-01-01 >/dev/null
+
+    run bash -c 'task linear_issue_id:DEVOPS-1706 status:pending export | jq length'
+    [ "$output" = "0" ]
+    run task 'linear_issue_id.any:' "${TASK_LIVE_FILTER[@]}" export
+    [ "$(jq length <<<"$output")" -eq 1 ]
+}
+
 @test "sync_to_taskwarrior carries a Linear title rename onto the task found by id" {
     test_issue='{"id":"1","description":"new title","repository":"linear","html_url":"https://linear.app/t/issue/DEVOPS-1018","issue_id":"DEVOPS-1018","project":"p","status":"In Progress"}'
     cat > "${TEST_DIR}/task" << 'EOF'
@@ -680,7 +717,7 @@ EOF
 case "$1" in
     "linear_issue_id:DEVOPS-123")
         case "$2" in
-            "status:pending")
+            "(status:pending or status:waiting)")
                 case "$3" in
                     "export")
                         echo '[{"uuid":"test-uuid-123","description":"Test Issue with Due Date","status":"pending","tags":["linear"]}]'
@@ -786,7 +823,7 @@ EOF
 case "$1" in
     "linear_issue_id:DEVOPS-124")
         case "$2" in
-            "status:pending")
+            "(status:pending or status:waiting)")
                 case "$3" in
                     "export")
                         echo '[{"uuid":"test-uuid-456","description":"Test Issue with Removed Due Date","status":"pending","tags":["linear"],"due":"20250710T220000Z"}]'
@@ -855,7 +892,7 @@ EOF
 case "$1" in
     "linear_issue_id:DEVOPS-125")
         case "$2" in
-            "status:pending")
+            "(status:pending or status:waiting)")
                 case "$3" in
                     "export")
                         echo '[]'
@@ -918,7 +955,7 @@ EOF
 case "$1" in
     "linear_issue_id:DOC-789")
         case "$2" in
-            "status:pending")
+            "(status:pending or status:waiting)")
                 case "$3" in
                     "export")
                         echo '[{"uuid":"test-uuid-999","description":"High Priority Issue","status":"pending","tags":["linear"]}]'
@@ -1507,7 +1544,7 @@ EOF
 case "$1" in
     "linear_issue_id:DEVOPS-634")
         case "$2" in
-            "status:pending")
+            "(status:pending or status:waiting)")
                 case "$3" in
                     "export")
                         echo '[{"uuid":"test-uuid-emoji","description":"fix the login bug","status":"pending","tags":["linear"],"linear_issue_id":"DEVOPS-634"}]'
@@ -1765,7 +1802,7 @@ EOF
 case "$1" in
     "linear_issue_id:DEVOPS-200")
         case "$2" in
-            "status:pending")
+            "(status:pending or status:waiting)")
                 case "$3" in
                     "export")
                         echo '[{"uuid":"test-uuid-200","description":"Resurfacing Issue","status":"pending","tags":["linear"],"linear_issue_id":"DEVOPS-200"}]'
@@ -1834,7 +1871,7 @@ EOF
 case "$1" in
     "linear_issue_id:DEVOPS-201")
         case "$2" in
-            "status:pending")
+            "(status:pending or status:waiting)")
                 case "$3" in
                     "export")
                         echo '[{"uuid":"test-uuid-201","description":"Stale Issue","status":"pending","tags":["linear"],"linear_issue_id":"DEVOPS-201"}]'
@@ -1906,7 +1943,7 @@ EOF
 case "$1" in
     "linear_issue_id:DEVOPS-204")
         case "$2" in
-            "status:pending")
+            "(status:pending or status:waiting)")
                 case "$3" in
                     "export")
                         echo '[{"uuid":"test-uuid-204","description":"Timezone Regression Issue","status":"pending","tags":["linear"],"linear_issue_id":"DEVOPS-204","new_activity":"20260626T054613Z"}]'
@@ -1972,7 +2009,7 @@ EOF
 case "$1" in
     "linear_issue_id:DEVOPS-203")
         case "$2" in
-            "status:pending")
+            "(status:pending or status:waiting)")
                 case "$3" in
                     "export")
                         echo '[{"uuid":"test-uuid-203","description":"First Contact Issue","status":"pending","tags":["linear"],"linear_issue_id":"DEVOPS-203"}]'
@@ -2075,7 +2112,7 @@ EOF
 case "$1" in
     "linear_issue_id:DEVOPS-205")
         case "$2" in
-            "status:pending")
+            "(status:pending or status:waiting)")
                 case "$3" in
                     "export")
                         # No existing task -> forces the create path.
@@ -2152,7 +2189,7 @@ EOF
 case "$1" in
     "linear_issue_id:DEVOPS-202")
         case "$2" in
-            "status:pending")
+            "(status:pending or status:waiting)")
                 case "$3" in
                     "export")
                         echo '[{"uuid":"test-uuid-202","description":"Self Written Issue","status":"pending","tags":["linear"],"linear_issue_id":"DEVOPS-202"}]'
@@ -2216,7 +2253,7 @@ EOF
 case "$1" in
     "linear_issue_id:DEVOPS-203")
         case "$2" in
-            "status:pending")
+            "(status:pending or status:waiting)")
                 case "$3" in
                     "export")
                         echo '[{"uuid":"test-uuid-203","description":"Foreign Write Issue","status":"pending","tags":["linear"],"linear_issue_id":"DEVOPS-203"}]'
@@ -2284,7 +2321,7 @@ EOF
 case "$1" in
     "linear_issue_id:DEVOPS-204")
         case "$2" in
-            "status:pending")
+            "(status:pending or status:waiting)")
                 case "$3" in
                     "export")
                         echo '[{"uuid":"test-uuid-204","description":"Stale Actor Issue","status":"pending","tags":["linear"],"linear_issue_id":"DEVOPS-204"}]'
@@ -3136,7 +3173,7 @@ _mock_task_with_tags() {
 #!/bin/bash
 case "\$1" in
     "linear_issue_id:${linear_id}")
-        if [[ "\$2" == "status:pending" && "\$3" == "export" ]]; then
+        if [[ "\$2" == "(status:pending or status:waiting)" && "\$3" == "export" ]]; then
             echo '[{"uuid":"${uuid}","description":"Held Issue","status":"pending","tags":${tags},"linear_issue_id":"${linear_id}","new_activity":"20990101T000000Z"}]'
         fi
         ;;
@@ -3724,5 +3761,5 @@ EOF2
 
     run create_and_annotate_task "Repo issue" "linear" "https://linear.app/test/issue/ENG-5" "ENG-5" "operations" "Todo" "" "" "" "2026-06-26T09:00:00Z"
     [ "$status" -eq 0 ]
-    grep -q 'modify test-uuid-repo linear_issue_id:ENG-5 repo:$' "${TEST_DIR}/task_commands.log"
+    grep -Eq 'modify test-uuid-repo linear_issue_id:ENG-5 repo:( rc\.context=none)?$' "${TEST_DIR}/task_commands.log"
 }
