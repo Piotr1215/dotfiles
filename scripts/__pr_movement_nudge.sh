@@ -73,6 +73,11 @@ set -eo pipefail
 LOG_FILE="${PR_MOVE_LOG:-/tmp/pr-movement-nudge.log}"
 STATE_FILE="${PR_MOVE_STATE:-$HOME/.claude/data/pr-watermarks.json}"
 LOCK_FILE="${PR_MOVE_LOCK:-/tmp/pr-movement-nudge.lock}"
+# Gordon's handoff checker. This cycle never sees a merge (it lists open PRs
+# only); the real-time close rides pr-watch's merged prompt through
+# __handoff_discharge_prompt_hook.sh. This call is the backstop for a PR no
+# live session tracks. Skipped when not executable.
+HANDOFF_CHECK="${PR_MOVE_HANDOFF_CHECK:-$HOME/.claude/scripts/__gordon_board_check.sh}"
 
 DRY_RUN=1
 case "${1:-}" in
@@ -434,6 +439,11 @@ main() {
         fi
         sent=$((sent + 1))
     done
+
+    if [[ "$DRY_RUN" -eq 0 && -x "$HANDOFF_CHECK" ]]; then
+        timeout 120 "$HANDOFF_CHECK" --close --kind pr-merged,pr-closed 2>&1 |
+            while read -r line; do log "  handoff: $line"; done || true
+    fi
 
     log "=== done: seen=$seen moved=$moved sent=$([[ $DRY_RUN -eq 1 ]] && echo 0 || echo $sent) (mode=$mode) ==="
 }

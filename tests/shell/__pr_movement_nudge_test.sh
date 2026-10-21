@@ -79,6 +79,9 @@ EOF
     export PR_MOVE_PUSH_COOLDOWN=600
     export PR_MOVE_STICKY_COOLDOWN=3600
     export PR_MOVE_CYCLE_CAP=8
+    export PR_MOVE_HANDOFF_CHECK="$BIN/handoff-check"
+    printf '#!/usr/bin/env bash\necho "$*" >> "%s"\n' "$TEST_DIR/handoff.calls" > "$PR_MOVE_HANDOFF_CHECK"
+    chmod +x "$PR_MOVE_HANDOFF_CHECK"
     # reset contention-stub state so a session set by one test does not leak into
     # the next (export_sessions never clears it).
     export PR_TEST_SESSIONS="" PR_TEST_PANE_TEXT=""
@@ -365,6 +368,17 @@ setup
 revreq; run --live
 revreq "https://x/pull/3 3 vClusterLabs-Experiments/vbilling saiyam1814 User false"; run --live
 assert_requested "review-request: vClusterLabs-Experiments/vbilling#3 from saiyam1814 https://x/pull/3" "a non-loft-sh direct request fires"
+teardown
+
+echo "T24 live cycle closes discharged PR handoffs as a backstop; dry-run does not"
+setup
+search_one "https://x/pull/1" 1 vcluster loft-sh
+run --dry-run
+if [ ! -e "$TEST_DIR/handoff.calls" ]; then PASS=$((PASS+1)); echo "  PASS: dry-run leaves handoffs alone"; else FAIL=$((FAIL+1)); echo "  FAIL: dry-run ran the handoff check"; fi
+run --live
+if grep -qx -- "--close --kind pr-merged,pr-closed" "$TEST_DIR/handoff.calls" 2>/dev/null; then PASS=$((PASS+1)); echo "  PASS: live cycle runs the scoped close"; else FAIL=$((FAIL+1)); echo "  FAIL: live cycle did not run the close"; fi
+printf '#!/usr/bin/env bash\nexit 3\n' > "$PR_MOVE_HANDOFF_CHECK"
+if run --live; then PASS=$((PASS+1)); echo "  PASS: a failing check does not fail the cycle"; else FAIL=$((FAIL+1)); echo "  FAIL: a failing check failed the cycle"; fi
 teardown
 
 echo
