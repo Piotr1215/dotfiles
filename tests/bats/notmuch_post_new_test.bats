@@ -77,7 +77,11 @@ tags_of() {
   notmuch search --output=tags "id:$1@test" | grep '^waiting/' | tr '\n' ' ' || true
 }
 
-@test "the first run seeds: existing mail fires nothing" {
+@test "the first run seeds silently: existing mail fires nothing" {
+  rm -rf "$MAIL_EVENTS_STATE"
+  run "$HOOK"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
   [ "$(record_count)" -eq 0 ]
   [ -s "${MAIL_EVENTS_STATE}/seen" ]
   grep -q 'old@test' "${MAIL_EVENTS_STATE}/seen"

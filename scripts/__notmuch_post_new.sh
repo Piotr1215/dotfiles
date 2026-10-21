@@ -257,7 +257,9 @@ run_hook() {
 
     revision="$(db_revision)" || fail "cannot read the notmuch revision"
     read -r uuid rev <<<"$revision"
-    read -r last_uuid last <"$STATE_DIR/revision" 2>/dev/null || true
+    if [[ -f "$STATE_DIR/revision" ]]; then
+        read -r last_uuid last <"$STATE_DIR/revision" || true
+    fi
     if [[ "$last_uuid" != "$uuid" || ! "$last" =~ ^[0-9]+$ || ! -f "$STATE_DIR/seen" ]]; then
         seed "$revision"
         check_watches
