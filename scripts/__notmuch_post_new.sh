@@ -40,6 +40,13 @@
 # count. Piotr's addresses are notmuch's user.primary_email and
 # user.other_email.
 #
+# Gordon owns a third tag, gordon/cleared, set on a thread after Gordon has
+# processed it so the morning sweep (tag:waiting/me and not tag:gordon/cleared)
+# stops surfacing it. The hook removes it from every thread that receives a new
+# message, from anyone, so a fresh reply re-arms the sweep. New means an id
+# outside the seen set, not a lastmod bump: tagging or reading a mail moves its
+# lastmod too and must not undo the clearing. waiting/* is untouched by it.
+#
 # Then every mail thread-watch subscription is checked
 # (`__thread_watch.sh check-source mail`).
 #
@@ -247,6 +254,19 @@ waiting_ops() {
     esac
 }
 
+# rearm <message id>...: removes gordon/cleared from the thread of each new
+# message, in one batch.
+rearm() {
+    local id tid ops=""
+    for id in "$@"; do
+        tid="$(notmuch search --output=threads "$(id_query "$id")" | head -n1)"
+        [[ -n "$tid" ]] || continue
+        ops+="-gordon/cleared -- $tid and tag:gordon/cleared"$'\n'
+    done
+    [[ -n "${ops//$'\n'/}" ]] || return 0
+    notmuch tag --batch <<<"$ops"
+}
+
 # recompute <thread id>...: applies waiting_ops for each thread in one batch.
 recompute() {
     local tid ops=""
@@ -300,6 +320,9 @@ run_hook() {
             event_for "$id" || fail "cannot build the event for message $id"
             printf '%s\t%s\n' "$id" "$now" >>"$STATE_DIR/seen"
         done
+        if ((${#fresh[@]} > 0)); then
+            rearm "${fresh[@]}" || fail "cannot re-arm gordon/cleared"
+        fi
         mapfile -t touched < <(notmuch search --uuid="$uuid" --output=threads \
             "lastmod:$((last + 1))..${rev} and date:${DAYS}days.." | sed 's/^thread://')
         if ((${#touched[@]} > 0)); then

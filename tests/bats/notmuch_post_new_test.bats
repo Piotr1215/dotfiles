@@ -204,6 +204,52 @@ tags_of() {
   [ "$(tags_of w1)" = "waiting/me " ]
 }
 
+cleared_count() {
+  notmuch count --output=threads 'tag:gordon/cleared'
+}
+
+@test "gordon/cleared survives runs with no new mail, tagging and reading included" {
+  deliver "$WORK_INBOX" c1 "Dan <dan@mend.io>" "piotr.zaniewski@vcluster.com" "terms"
+  notmuch new --quiet
+  notmuch tag +gordon/cleared -- id:c1@test
+  notmuch new --quiet
+  notmuch tag -unread -- id:c1@test
+  notmuch new --quiet
+
+  [ "$(cleared_count)" = 1 ]
+  [ "$(tags_of c1)" = "waiting/me " ]
+}
+
+@test "a new message from someone else removes gordon/cleared" {
+  deliver "$WORK_INBOX" c1 "Dan <dan@mend.io>" "piotr.zaniewski@vcluster.com" "terms"
+  notmuch new --quiet
+  notmuch tag +gordon/cleared -- id:c1@test
+  notmuch new --quiet
+  [ "$(cleared_count)" = 1 ]
+
+  deliver "$WORK_INBOX" c2 "Dan <dan@mend.io>" "piotr.zaniewski@vcluster.com" "Re: terms" \
+    "In-Reply-To: <c1@test>" "References: <c1@test>"
+  notmuch new --quiet
+
+  [ "$(cleared_count)" = 0 ]
+  [ "$(tags_of c1)" = "waiting/me " ]
+}
+
+@test "a new message from Piotr also removes gordon/cleared" {
+  deliver "$WORK_INBOX" c1 "Dan <dan@mend.io>" "piotr.zaniewski@vcluster.com" "terms"
+  notmuch new --quiet
+  notmuch tag +gordon/cleared -- id:c1@test
+  notmuch new --quiet
+  [ "$(cleared_count)" = 1 ]
+
+  deliver "piotr.zaniewski@loft.sh/[Gmail]/Sent Mail" c2 "Piotr Zaniewski <piotr.zaniewski@vcluster.com>" "dan@mend.io" "Re: terms" \
+    "In-Reply-To: <c1@test>" "References: <c1@test>"
+  notmuch new --quiet
+
+  [ "$(cleared_count)" = 0 ]
+  [ "$(tags_of c1)" = "waiting/them " ]
+}
+
 @test "mail Piotr sends only to himself waits on nobody" {
   deliver "piotrzan@gmail.com/[Gmail]/Sent Mail" note "piotrzan@gmail.com" "piotrzan@gmail.com" "[kctx AUTH] login" "Cc: piotr.zaniewski@loft.sh"
   deliver "piotrzan@gmail.com/[Gmail]/Sent Mail" fwd "piotrzan@gmail.com" "daniel@vcluster.com" "Fwd: renewal" "Cc: piotr.zaniewski@loft.sh"
