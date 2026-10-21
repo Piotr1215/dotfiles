@@ -27,8 +27,8 @@ case "$width" in ''|*[!0-9]*) width=100 ;; esac
 cockpit_command="${TMUX_READING_MARGIN_COCKPIT_STATE_COMMAND:-$HOME/.claude/scripts/__cockpit_state.sh}"
 focus_command="${TMUX_READING_MARGIN_FOCUS_COMMAND:-$HOME/.claude/scripts/__focus.py}"
 
-# Focus first. It is a fixed eight-line block (three items and the handoff
-# line), so it stays above the fold and never needs scrolling, while the
+# Focus first. It is a fixed eleven-line block (three spaced items and the
+# handoff line), so it stays above the fold and never needs scrolling, while the
 # cockpit below can run long. The block only reads its cache and the ledger;
 # ranking happens in systemd, never here.
 if [[ -x "$focus_command" ]]; then
