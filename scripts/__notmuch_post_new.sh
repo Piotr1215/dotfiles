@@ -26,9 +26,16 @@
 # dated within MAIL_EVENTS_DAYS, the latest live message decides:
 #   waiting/them  it is from Piotr
 #   waiting/me    it is from someone else, Piotr is in To, and it carries no
-#                 bulk signal (List-Id, List-Unsubscribe, Precedence bulk,
-#                 list or junk, Auto-Submitted, a noreply sender)
+#                 bulk signal
 #   neither       anything else
+#
+# Bulk signals mark mail no person wrote to Piotr: list-id, list-unsubscribe,
+# precedence (bulk, list, junk), auto-submitted, esp (a mailing service's
+# header or Message-ID domain, e.g. Feedback-ID, SendGrid, Amazon SES),
+# calendar (a Google Calendar notification), noreply, and role (a shared
+# address such as service@, support@, order@, info@). Measured on the live
+# database: without esp, calendar and role, 162 of 171 waiting/me threads were
+# Amazon, PayPal, SendGrid and similar notifications.
 # Drafts, and messages whose every file sits in Drafts, Trash or Spam, do not
 # count. Piotr's addresses are notmuch's user.primary_email and
 # user.other_email.
@@ -139,9 +146,15 @@ split_from() {
     [[ -n "$from_name" ]] || from_name="$from_addr"
 }
 
+# Mailing services, by header and by Message-ID domain.
+ESP_HEADERS='^(feedback-id|x-ses-outgoing|x-sg-eid|x-pm-message-id|x-mailgun-[a-z-]+|x-mc-user|x-mandrill-[a-z-]+|x-hs-cid|x-campaign[a-z-]*|x-csa-complaints|x-sfmc-[a-z-]+):'
+ESP_MSGID='^message-id:.*@([a-z0-9.-]+\.)?(amazonses\.com|mailersend\.net|mtasv\.net|sendgrid\.net|mailgun\.(org|net)|mcsv\.net|mandrillapp\.com|amplemarket\.com|hubspotemail\.net)>'
+# Shared addresses no single person answers from.
+ROLE_LOCAL='^(service|support|order|orders|shop|onlineshop|servicecenter|info|hello|hi|communications|newsletter|newsletters|news|notification|notifications|notify|alert|alerts|billing|invoice|invoices|receipt|receipts|account|accounts|marketing|team|cs|careers|jobs|events|feedback|admin|security|postmaster|bounce|bounces)$'
+
 # bulk_of <file> <from address>: the bulk signals, comma joined, or -.
 bulk_of() {
-    local file="$1" addr="$2" head=""
+    local file="$1" head="" local_part="${2%%@*}"
     local -a sig=()
     if [[ -r "$file" ]]; then
         # The header block with folded lines joined.
@@ -153,7 +166,12 @@ bulk_of() {
     if grep -qi '^auto-submitted:' <<<"$head" && ! grep -qiE '^auto-submitted:[[:space:]]*no[[:space:]]*$' <<<"$head"; then
         sig+=(auto-submitted)
     fi
-    [[ "${addr%%@*}" =~ (^|[._+-])(no-?reply|do-?not-?reply|donotreply|mailer-daemon)([._+-]|$) ]] && sig+=(noreply)
+    if grep -qiE "$ESP_HEADERS" <<<"$head" || grep -qiE "$ESP_MSGID" <<<"$head"; then
+        sig+=(esp)
+    fi
+    grep -qiE '^(sender:.*calendar-notification@google\.com|x-google-calendar-notification:)' <<<"$head" && sig+=(calendar)
+    [[ "$local_part" =~ (^|[._+-])(no[._-]?reply|do[._-]?not[._-]?reply|mailer-daemon)([._+-]|$) ]] && sig+=(noreply)
+    [[ "$local_part" =~ $ROLE_LOCAL ]] && sig+=(role)
     if ((${#sig[@]} == 0)); then
         echo -
     else

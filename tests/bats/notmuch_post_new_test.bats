@@ -55,11 +55,13 @@ teardown() {
 deliver() {
   local folder="$1" id="$2" from="$3" to="$4" subject="$5"
   shift 5
+  local mid="${id}@test"
+  [[ "$id" == *@* ]] && { mid="$id"; id="${id%%@*}"; }
   N=$((N + 1))
   mkdir -p "${MAILDIR}/${folder}"/{cur,new,tmp}
   {
     printf 'From: %s\nTo: %s\nSubject: %s\n' "$from" "$to" "$subject"
-    printf 'Message-ID: <%s@test>\nDate: %s\n' "$id" "$(date -R -d "-$((100 - N)) minutes")"
+    printf 'Message-ID: <%s>\nDate: %s\n' "$mid" "$(date -R -d "-$((100 - N)) minutes")"
     [[ $# -gt 0 ]] && printf '%s\n' "$@"
     printf '\nbody of %s\n' "$id"
   } >"${MAILDIR}/${folder}/new/${N}.${id}.test"
@@ -147,6 +149,28 @@ tags_of() {
   grep -q 'to:cc bulk:- ' "$MAIL_EVENTS_LOG"
   grep -q 'to:none bulk:- ' "$MAIL_EVENTS_LOG"
   grep -q 'to:direct bulk:list-id,list-unsubscribe,precedence,auto-submitted,noreply ' "$MAIL_EVENTS_LOG"
+}
+
+@test "mailing services, calendar notices and shared addresses are bulk; a person on gmail is not" {
+  deliver "$WORK_INBOX" "ses@eu-west-1.amazonses.com" "Amazon.de <versandbestaetigung@amazon.de>" "piotrzan@gmail.com" "Dispatched"
+  deliver "$WORK_INBOX" sg "DigitalOcean <support@digitalocean.com>" "piotr.zaniewski@loft.sh" "ticket" "X-SG-EID: abc"
+  deliver "$WORK_INBOX" fb "Tailscale <kelsea@tailscale.com>" "piotr.zaniewski@loft.sh" "renewal" "Feedback-ID: 1:2:3"
+  deliver "$WORK_INBOX" cal "Jake <jake@sentinelone.com>" "piotr.zaniewski@loft.sh" "Invitation: review" \
+    "Sender: Google Calendar <calendar-notification@google.com>"
+  deliver "$WORK_INBOX" pp "PayPal <service@paypal.de>" "piotrzan@gmail.com" "Receipt"
+  deliver "$WORK_INBOX" nr "Apple <no_reply@email.apple.com>" "piotrzan@gmail.com" "Your receipt"
+  deliver "$WORK_INBOX" "CAH8wpK@mail.gmail.com" "Dan <dan@mend.io>" "piotr.zaniewski@loft.sh" "terms" "X-Gm-Message-State: x"
+  notmuch new --quiet
+
+  grep -q 'from:versandbestaetigung@amazon.de | Dispatched' <(grep 'bulk:esp ' "$MAIL_EVENTS_LOG")
+  grep -q 'bulk:esp,role account:.* from:support@digitalocean.com' "$MAIL_EVENTS_LOG"
+  grep -q 'bulk:esp account:.* from:kelsea@tailscale.com' "$MAIL_EVENTS_LOG"
+  grep -q 'bulk:calendar account:.* from:jake@sentinelone.com' "$MAIL_EVENTS_LOG"
+  grep -q 'bulk:role account:.* from:service@paypal.de' "$MAIL_EVENTS_LOG"
+  grep -q 'bulk:noreply account:.* from:no_reply@email.apple.com' "$MAIL_EVENTS_LOG"
+  grep -q 'bulk:- account:.* from:dan@mend.io' "$MAIL_EVENTS_LOG"
+  [ "$(notmuch count --output=threads tag:waiting/me)" -eq 1 ]
+  [ "$(notmuch search --output=messages tag:waiting/me)" = "id:CAH8wpK@mail.gmail.com" ]
 }
 
 @test "Auto-Submitted: no is not a bulk signal" {
