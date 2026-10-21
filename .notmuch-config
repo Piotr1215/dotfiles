@@ -1,0 +1,16 @@
+[database]
+path=/home/decoder/.local/share/mail
+hook_dir=/home/decoder/dev/dotfiles/notmuch/hooks
+[user]
+name=piotrzan
+primary_email=piotrzan@gmail.com
+other_email=piotr.zaniewski@loft.sh;piotr.zaniewski@vcluster.com;
+[new]
+tags=unread;inbox;
+ignore=.mbsyncstate;.uidvalidity
+[search]
+exclude_tags=deleted;spam;
+[maildir]
+synchronize_flags=true
+[crypto]
+gpg_path=gpg
