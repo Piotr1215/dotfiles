@@ -107,7 +107,7 @@ EOF
   [[ "$output" == *"ready=$'\\E[36m'"* ]]
   [[ "$output" == *"in review=$'\\E[34m'"* ]]
   [[ "$output" == *"done=$'\\E[90m'"* ]]
-  [[ "$output" == *"idle=$'\\E[33m'"* ]]
+  [[ "$output" == *"idle=$'\\E[90m'"* ]]
 }
 
 @test "cockpit colours avoid the sequences viddy drops" {
