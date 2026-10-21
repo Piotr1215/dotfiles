@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Open a TaskWarrior task from a `task:<uuid-prefix>` Alacritty hint (ctrl+5).
 #
-# The asks section of the Alt-m margin (~/.claude/scripts/__piotr_asks_margin.sh)
-# prints one of these per row so a proposal is reachable, not just readable.
+# Focus in the Alt-m margin (~/.claude/scripts/__focus.py render) prints one of
+# these per item so a focus item is reachable, not just readable.
 #
 # WHY A SPLIT RUNNING `task information` RATHER THAN taskwarrior-tui: the tui
 # takes no filter argument (`taskwarrior-tui --help` offers only -d, -c,
