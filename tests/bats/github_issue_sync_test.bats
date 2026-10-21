@@ -237,7 +237,7 @@ case "\$1" in
 esac
 EOF
     chmod +x "${TEST_DIR}/task"
-    check_linear_issue_status() { echo "active"; }
+    check_linear_issue_status() { echo "unassigned"; }
 }
 
 @test "compare_and_clean_tasks keeps a task whose Linear id is still in the feed after a rename" {
@@ -255,6 +255,65 @@ EOF
     run compare_and_clean_tasks "new title" "DEVOPS-1018"
     [ "$status" -eq 0 ]
     grep -q "stale-uuid delete" "${TEST_DIR}/task_commands.log"
+}
+
+@test "compare_and_clean_tasks keeps a task whose issue is absent from the feed but assigned to me" {
+    write_stale_title_task_mock "DEVOPS-1708"
+    check_linear_issue_status() { echo "active"; }
+
+    run compare_and_clean_tasks "new title" "DEVOPS-7"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Keeping task" ]]
+    ! grep -q "delete" "${TEST_DIR}/task_commands.log" 2>/dev/null
+}
+
+@test "find_and_clean_reassigned_tasks keeps a task whose issue is absent from the feed but assigned to me" {
+    write_stale_title_task_mock "DEVOPS-1708"
+    check_linear_issue_status() { echo "active"; }
+
+    run find_and_clean_reassigned_tasks '{"issue_id":"DEVOPS-7"}'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Keeping task" ]]
+    ! grep -q "delete" "${TEST_DIR}/task_commands.log" 2>/dev/null
+}
+
+@test "find_and_clean_reassigned_tasks deletes a task whose issue is confirmed reassigned" {
+    write_stale_title_task_mock "DEVOPS-1708"
+    check_linear_issue_status() { echo "unassigned"; }
+
+    run find_and_clean_reassigned_tasks '{"issue_id":"DEVOPS-7"}'
+    [ "$status" -eq 0 ]
+    grep -q "stale-uuid delete" "${TEST_DIR}/task_commands.log"
+}
+
+@test "check_linear_issue_status returns active for an open issue assigned to me" {
+    cat > "${TEST_DIR}/curl" << EOF
+#!/bin/bash
+echo '{"data":{"issue":{"id":"u1","state":{"name":"Backlog"},"assignee":{"id":"${LINEAR_USER_ID}"}}}}'
+EOF
+    chmod +x "${TEST_DIR}/curl"
+    run check_linear_issue_status "DEVOPS-1708"
+    [ "$output" = "active" ]
+}
+
+@test "check_linear_issue_status returns unassigned for an open issue assigned to someone else" {
+    cat > "${TEST_DIR}/curl" << 'EOF'
+#!/bin/bash
+echo '{"data":{"issue":{"id":"u1","state":{"name":"Todo"},"assignee":{"id":"someone-else"}}}}'
+EOF
+    chmod +x "${TEST_DIR}/curl"
+    run check_linear_issue_status "DEVOPS-1708"
+    [ "$output" = "unassigned" ]
+}
+
+@test "check_linear_issue_status returns active when the lookup finds no issue" {
+    cat > "${TEST_DIR}/curl" << 'EOF'
+#!/bin/bash
+echo '{"data":{"issue":null},"errors":[{"message":"not found"}]}'
+EOF
+    chmod +x "${TEST_DIR}/curl"
+    run check_linear_issue_status "DEVOPS-1708"
+    [ "$output" = "active" ]
 }
 
 @test "sync_to_taskwarrior carries a Linear title rename onto the task found by id" {

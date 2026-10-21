@@ -293,23 +293,38 @@ get_linear_issues() {
     return 0
 }
 
-# Check the true status of a Linear issue
+# Look up one Linear issue directly and classify it. Echoes one of:
+#   completed   the issue is in a done state (Released/Canceled/Done/...)
+#   unassigned  the issue exists and is confirmed not assigned to LINEAR_USER_ID
+#   active      anything else: assigned to me, or the lookup is inconclusive
+#               (API error, malformed JSON, issue not returned)
+# Callers delete a task only on "unassigned". "active" means keep: the issue is
+# either still mine or we cannot prove otherwise. This matters because the feed
+# is fetched once at the start of a run, so an issue created and linked while the
+# run is in flight is absent from the feed yet fully valid. DEVOPS-1708 lost its
+# task that way on 2026-10-21: the feed was fetched at 10:00:02Z, the issue was
+# created at 10:00:27Z, and the old lookup treated every non-done state as
+# "unassigned" and deleted the task at 10:01:00Z.
 check_linear_issue_status() {
     local issue_id="$1"
 
-    # Make API call to get the specific issue's status
-    local status
-    status=$(curl -s -X POST \
+    local reply status issue_found assignee_id
+    reply=$(curl -s -X POST \
         -H "Content-Type: application/json" \
         -H "Authorization: $LINEAR_API_KEY" \
-        --data '{"query": "query { issue(id: \"'"$issue_id"'\") { id state { name } } }"}' \
-        https://api.linear.app/graphql | jq -r '.data.issue.state.name')
+        --data '{"query": "query { issue(id: \"'"$issue_id"'\") { id state { name } assignee { id } } }"}' \
+        https://api.linear.app/graphql)
 
-    # Check if the status indicates the issue is truly done
+    status=$(jq -r '.data.issue.state.name // empty' <<<"$reply" 2>/dev/null)
+    issue_found=$(jq -r '.data.issue.id // empty' <<<"$reply" 2>/dev/null)
+    assignee_id=$(jq -r '.data.issue.assignee.id // empty' <<<"$reply" 2>/dev/null)
+
     if [[ "$status" =~ ^(Released|Canceled|Done|Ready\ for\ Release|Duplicate|Archived)$ ]]; then
         echo "completed"
+    elif [[ -n "$issue_found" && "$assignee_id" != "$LINEAR_USER_ID" ]]; then
+        echo "unassigned"
     else
-        echo "active" # Active but unassigned
+        echo "active"
     fi
 }
 
@@ -1401,10 +1416,11 @@ compare_and_clean_tasks() {
                 if [[ "$issue_status" == "completed" ]]; then
                     log "Issue is completed (Released/Canceled/Done/Ready for Release). Marking task as done."
                     handle_task_completion "$task_uuid" "$trimmed_desc" "complete"
-                else
-                    log "Issue is still active but unassigned. Deleting task from Taskwarrior."
-                    # Delete the task since it's unassigned from me
+                elif [[ "$issue_status" == "unassigned" ]]; then
+                    log "Issue is confirmed unassigned from me. Deleting task from Taskwarrior."
                     task rc.confirmation=no "$task_uuid" delete
+                else
+                    log "Issue $linear_issue_id is absent from the feed but still assigned to me or unverifiable. Keeping task."
                 fi
             else
                 # Regular GitHub/Linear task - mark as completed
@@ -1473,10 +1489,11 @@ find_and_clean_reassigned_tasks() {
             if [[ "$issue_status" == "completed" ]]; then
                 log "Issue is completed (Released/Canceled/Done/Ready for Release). Marking task as done."
                 handle_task_completion "$task_uuid" "$task_description" "complete"
-            else
-                log "Issue is still active but unassigned. Deleting task from Taskwarrior."
-                # Delete the task since it's unassigned from me
+            elif [[ "$issue_status" == "unassigned" ]]; then
+                log "Issue is confirmed unassigned from me. Deleting task from Taskwarrior."
                 task rc.confirmation=no "$task_uuid" delete
+            else
+                log "Issue $linear_issue_id is absent from the feed but still assigned to me or unverifiable. Keeping task."
             fi
         fi
     done
