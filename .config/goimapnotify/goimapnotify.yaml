@@ -1,0 +1,47 @@
+# PROJECT: mail-attention
+# goimapnotify: one IMAP IDLE connection per watched mailbox. Each event runs
+# __mail_idle_sync.sh, which syncs that mailbox and INBOX with mbsync, shows
+# mailsync's popups and runs `notmuch new`, so the post-new hook hands new
+# and sent mail to Gordon within seconds. Runs as goimapnotify.service.
+#
+# %s is the mailbox, shell quoted by goimapnotify. {{.Reason}} tells a real
+# event from the sync goimapnotify issues each time a watcher connects.
+#
+# All Mail is watched for loft.sh only, where a scoped sync takes 0.6s, so mail
+# a Gmail filter files under a label lands at once. The gmail account's All
+# Mail holds about 15k messages and a scoped sync takes 11s, which would hold
+# up every other event, so its label-only mail arrives with the next full sync.
+#
+# idleLogoutTimeout re-issues IDLE every 10 minutes on the same connection, a
+# keepalive that notices a dead connection sooner than the default 25.
+networkCheckInterval: 30
+connectivityHosts:
+  - imap.gmail.com:993
+configurations:
+  - host: imap.gmail.com
+    port: 993
+    tls: true
+    tlsOptions:
+      starttls: false
+    idleLogoutTimeout: 10
+    username: piotr.zaniewski@loft.sh
+    alias: piotr.zaniewski@loft.sh
+    passwordCMD: /home/decoder/dev/dotfiles/scripts/__mail_passcmd.sh piotr.zaniewski@loft.sh
+    onNewMail: /home/decoder/dev/dotfiles/scripts/__mail_idle_sync.sh piotr.zaniewski@loft.sh %s '{{.Reason}}'
+    boxes:
+      - mailbox: INBOX
+      - mailbox: "[Gmail]/Sent Mail"
+      - mailbox: "[Gmail]/All Mail"
+  - host: imap.gmail.com
+    port: 993
+    tls: true
+    tlsOptions:
+      starttls: false
+    idleLogoutTimeout: 10
+    username: piotrzan@gmail.com
+    alias: piotrzan@gmail.com
+    passwordCMD: /home/decoder/dev/dotfiles/scripts/__mail_passcmd.sh piotrzan@gmail.com
+    onNewMail: /home/decoder/dev/dotfiles/scripts/__mail_idle_sync.sh piotrzan@gmail.com %s '{{.Reason}}'
+    boxes:
+      - mailbox: INBOX
+      - mailbox: "[Gmail]/Sent Mail"

@@ -1,0 +1,16 @@
+[Unit]
+Description=IMAP IDLE mail watcher (goimapnotify -> __mail_idle_sync.sh -> notmuch new)
+Documentation=file:%h/dev/dotfiles/.config/goimapnotify/goimapnotify.yaml
+After=graphical-session.target
+
+[Service]
+Type=simple
+Environment=PATH=%h/go/bin:%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=%h/go/bin/goimapnotify -conf %h/.config/goimapnotify/goimapnotify.yaml
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target
