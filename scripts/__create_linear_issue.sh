@@ -84,7 +84,13 @@ issue_url=$(echo "$response" | jq -r '.data.issueCreate.issue.url')
 linear_issue_id=$(echo "$issue_url" | grep -oE '[A-Z]+-[0-9]+')
 
 if [ -n "$linear_issue_id" ] && [ "$linear_issue_id" != "null" ]; then
-	task "$uuid" modify linear_issue_id:"$linear_issue_id"
+	# uda.repo.default=no-repo marks a task with no repo; once it has an issue the
+	# repo must be unset again so the team-prefix derivation and triage apply.
+	if [ "$(task _get "${uuid}.repo" 2>/dev/null)" = "no-repo" ]; then
+		task "$uuid" modify linear_issue_id:"$linear_issue_id" repo:
+	else
+		task "$uuid" modify linear_issue_id:"$linear_issue_id"
+	fi
 	task "$uuid" annotate "$issue_url"
 else
 	echo "Failed to create Linear issue"

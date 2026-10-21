@@ -3644,3 +3644,26 @@ https://x.slack.com/archives/C3/p1000000000000003"
     [ "$status" -eq 0 ]
     [ ! -f "${TEST_DIR}/annotate.log" ]
 }
+
+@test "create_and_annotate_task clears the repo default on a synced issue" {
+    # uda.repo.default=no-repo stamps every new task. A Linear task must start
+    # with repo unset or the team-prefix derivation in on-modify-nats-claude.py
+    # is skipped and triage's "+triaged with empty repo" nudge never fires.
+    cat > "${TEST_DIR}/task" << 'EOF2'
+#!/bin/bash
+if [[ "$1" == "add" ]]; then
+    echo "Created task test-uuid-repo."
+elif [[ "$1" == "rc.confirmation=no" ]]; then
+    echo "MOCK: task $*" >> "${TEST_DIR}/task_commands.log"
+elif [[ "$1" == "_get" ]]; then
+    echo ""
+else
+    echo "test-uuid-repo"
+fi
+EOF2
+    chmod +x "${TEST_DIR}/task"
+
+    run create_and_annotate_task "Repo issue" "linear" "https://linear.app/test/issue/ENG-5" "ENG-5" "operations" "Todo" "" "" "" "2026-06-26T09:00:00Z"
+    [ "$status" -eq 0 ]
+    grep -q 'modify test-uuid-repo linear_issue_id:ENG-5 repo:$' "${TEST_DIR}/task_commands.log"
+}

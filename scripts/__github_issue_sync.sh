@@ -1023,7 +1023,9 @@ create_and_annotate_task() {
         attach_link_annotations "$task_uuid" "slack" "$issue_slack_urls"
         attach_link_annotations "$task_uuid" "link" "$issue_link_urls"
         log "Task created and annotated for: $issue_description"
-        task rc.confirmation=no modify "$task_uuid" linear_issue_id:"$issue_number"
+        # uda.repo.default=no-repo stamps every new task; a synced issue must start
+        # with repo unset so triage and the team-prefix derivation still decide it.
+        task rc.confirmation=no modify "$task_uuid" linear_issue_id:"$issue_number" repo:
         
         # Manage project settings
         manage_project_settings "$task_uuid" "$project_name" "$issue_number"
