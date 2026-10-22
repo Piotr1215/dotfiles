@@ -351,6 +351,141 @@ class EntryPointTest(unittest.TestCase):
             self.assertEqual(list(state.parent.iterdir()), [state])
 
 
+class BotRuleTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.module = load_module()
+
+    def bot_pull(self, **changes):
+        value = {
+            "state": "open", "title": "chore(deps): bump example to 1.1", "body": "",
+            "user": {"type": "Bot", "login": "example-dependency[bot]"},
+            "requested_reviewers": [], "assignees": [],
+        }
+        value.update(changes)
+        return value
+
+    def exercise(self, pr, reason="subscribed", apply=True, refreshed_pr=None,
+                 refreshed_reason=None, viewer=None, expected_done=False, expected_status=0):
+        item = notification(reason=reason)
+        current = copy.deepcopy(item)
+        if refreshed_reason is not None:
+            current["reason"] = refreshed_reason
+        calls, lines = [], []
+        pr_reads = 0
+
+        def api(method, endpoint, paginate=False):
+            nonlocal pr_reads
+            calls.append((method, endpoint, paginate))
+            if (method, endpoint) == ("GET", LIST):
+                return [[copy.deepcopy(item)]]
+            if (method, endpoint) == ("GET", PR):
+                pr_reads += 1
+                return copy.deepcopy(refreshed_pr if pr_reads > 1 and refreshed_pr is not None else pr)
+            if (method, endpoint) == ("GET", "/user"):
+                if isinstance(viewer, Exception):
+                    raise viewer
+                return copy.deepcopy(viewer if viewer is not None else {"login": "viewer"})
+            if (method, endpoint) == ("GET", "/notifications/threads/1"):
+                self.assertTrue(apply)
+                return copy.deepcopy(current)
+            if (method, endpoint) == ("DELETE", "/notifications/threads/1"):
+                self.assertTrue(apply)
+                self.assertTrue(expected_done, "Protected notification was deleted")
+                return None
+            self.fail(f"Unexpected API call: {(method, endpoint, paginate)}")
+
+        status = self.module.cleanup(api, apply=apply, output=lines.append)
+        self.assertEqual(status, expected_status, lines)
+        self.assertTrue(lines[-1].startswith("SUMMARY:"), lines)
+        self.assertEqual(sum(call[0] == "DELETE" for call in calls), int(expected_done), lines)
+        self.assertIn(f"done={int(expected_done)}", lines[-1])
+        if expected_done:
+            self.assertEqual(calls[-3:], [
+                ("GET", "/notifications/threads/1", False),
+                ("GET", PR, False), ("DELETE", "/notifications/threads/1", False),
+            ])
+        return calls, lines
+
+    def test_open_bot_pull_request_is_cleared(self):
+        calls, lines = self.exercise(self.bot_pull(), expected_done=True)
+        self.assertEqual(calls.count(("GET", "/user", False)), 1)
+        self.assertIn("bot_done=1", lines[-1])
+
+    def test_bot_rule_does_not_depend_on_title_or_labels(self):
+        for title in ("docs: explain configuration", "fix: change authorization behavior"):
+            with self.subTest(title=title):
+                self.exercise(self.bot_pull(title=title), expected_done=True)
+
+    def test_known_service_accounts_are_treated_as_bots(self):
+        for login in ("renovate", "dependabot[bot]", "loft-bot", "vcluster-bot-approver"):
+            with self.subTest(login=login):
+                self.exercise(self.bot_pull(user={"type": "User", "login": login}), expected_done=True)
+
+    def test_personal_notification_reasons_are_protected(self):
+        for reason in ("mention", "team_mention", "assign"):
+            with self.subTest(reason=reason):
+                self.exercise(self.bot_pull(), reason=reason)
+
+    def test_body_review_and_assignment_protect_viewer(self):
+        for changes in (
+            {"body": "Please check this, @viewer."},
+            {"requested_reviewers": [{"login": "viewer"}]},
+            {"assignees": [{"login": "viewer"}]},
+            {"requested_reviewers": [{"login": "VIEWER"}]},
+        ):
+            with self.subTest(changes=changes):
+                self.exercise(self.bot_pull(**changes))
+
+    def test_other_users_and_longer_login_do_not_protect(self):
+        self.exercise(self.bot_pull(body="Thanks @viewer-tools",
+                      requested_reviewers=[{"login": "someone-else"}],
+                      assignees=[{"login": "someone-else"}]), expected_done=True)
+
+    def test_human_chore_and_security_fix_are_retained(self):
+        for title in ("chore(deps): bump example to 1.1", "fix(deps): resolve a security advisory"):
+            with self.subTest(title=title):
+                calls, _ = self.exercise(self.bot_pull(title=title,
+                    user={"type": "User", "login": "human-contributor"}))
+                self.assertNotIn(("GET", "/user", False), calls)
+
+    def test_new_personal_target_or_human_author_blocks_delete(self):
+        for changes in (
+            {"body": "Please review @viewer"},
+            {"requested_reviewers": [{"login": "viewer"}]},
+            {"assignees": [{"login": "viewer"}]},
+            {"user": {"type": "User", "login": "human-contributor"}},
+        ):
+            with self.subTest(changes=changes):
+                self.exercise(self.bot_pull(), refreshed_pr=self.bot_pull(**changes))
+
+    def test_new_reason_blocks_delete_even_with_same_timestamp(self):
+        for reason in ("mention", "team_mention", "assign"):
+            with self.subTest(reason=reason):
+                self.exercise(self.bot_pull(), refreshed_reason=reason)
+
+    def test_preview_never_deletes_open_bot_notification(self):
+        _, lines = self.exercise(self.bot_pull(), apply=False)
+        self.assertIn("candidates=1", lines[-1])
+
+    def test_unknown_viewer_fails_closed(self):
+        for viewer in (self.module.APIError("Forbidden", status=403), {}, {"login": None}, {"login": ""}):
+            with self.subTest(viewer=viewer):
+                self.exercise(self.bot_pull(), viewer=viewer, expected_status=1)
+
+    def test_missing_personal_target_metadata_fails_closed(self):
+        for key in ("body", "requested_reviewers", "assignees"):
+            with self.subTest(key=key):
+                metadata = self.bot_pull()
+                del metadata[key]
+                self.exercise(metadata, expected_status=1)
+
+    def test_closed_personally_tagged_pr_still_clears_without_viewer(self):
+        calls, _ = self.exercise(self.bot_pull(state="closed", body="@viewer",
+                    requested_reviewers=[{"login": "viewer"}]), reason="mention", expected_done=True)
+        self.assertNotIn(("GET", "/user", False), calls)
+
+
 class CronIntegrationTest(unittest.TestCase):
     def test_documented_entry_is_recognized_by_the_cron_widget(self):
         root = SCRIPT.parents[1]

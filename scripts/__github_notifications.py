@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # PROJECT: github-notifications
-"""Preview or mark closed and merged pull-request notifications Done.
+"""Preview or mark closed and unrequested bot pull-request notifications Done.
 
 Uses the existing gh login. Preview is the default; --apply enables writes.
 Run through __cron_run.sh for the local cron dashboard and audit log.
@@ -18,6 +18,9 @@ import tempfile
 
 NOTIFICATIONS = "/notifications?all=true&per_page=50"
 PR_URL = re.compile(r"https://api\.github\.com(/repos/[^/?#]+/[^/?#]+/pulls/[0-9]+)\Z")
+BOT_LOGINS = {"renovate", "renovate[bot]", "dependabot", "dependabot[bot]",
+              "loft-bot", "vcluster-bot-approver"}
+PERSONAL_REASONS = {"mention", "team_mention", "assign"}
 
 
 class APIError(Exception):
@@ -47,13 +50,68 @@ def github_api(method, endpoint, paginate=False):
         raise APIError("GitHub returned invalid JSON; retry the run") from exc
 
 
+def is_bot_pr(pr):
+    """Use GitHub's author type and explicit service accounts, never the title."""
+    author = pr.get("user")
+    return (isinstance(author, dict)
+            and (author.get("type") == "Bot"
+                 or str(author.get("login", "")).casefold() in BOT_LOGINS))
+
+
+def matching_rule(thread, pr, get_viewer):
+    """Closed PRs always qualify; open bot PRs qualify without a personal target."""
+    if not isinstance(pr, dict) or pr.get("state") not in ("open", "closed"):
+        raise APIError("Unknown PR state; retain the thread and retry")
+    if pr["state"] == "closed":
+        return "closed"
+    if not is_bot_pr(pr):
+        return None
+    reason = thread.get("reason")
+    if not isinstance(reason, str):
+        raise APIError("Unknown notification reason; retain it and retry")
+    if reason in PERSONAL_REASONS:
+        return None
+    viewer = get_viewer().casefold()
+    for field in ("requested_reviewers", "assignees"):
+        people = pr.get(field)
+        if not isinstance(people, list) or any(
+                not isinstance(person, dict) or not isinstance(person.get("login"), str)
+                for person in people):
+            raise APIError("Cannot confirm personal review or assignment; retain it and retry")
+        if any(person["login"].casefold() == viewer for person in people):
+            return None
+    if "body" not in pr or (pr["body"] is not None and not isinstance(pr["body"], str)):
+        raise APIError("Cannot confirm personal mentions; retain it and retry")
+    if re.search(r"(?<![\w-])@" + re.escape(viewer) + r"(?![\w-])", pr["body"] or "", re.I):
+        return None
+    return "bot"
+
+
 def cleanup(api, apply=False, output=print, receipts=None, on_done=None):
     """Plan with GETs, then recheck each eligible thread and PR before DELETE."""
     receipts = receipts if receipts is not None else {}
-    counts = dict(scanned=0, candidates=0, done=0, kept=0, skipped=0, errors=0)
+    counts = dict(scanned=0, candidates=0, done=0, kept=0, skipped=0, errors=0,
+                  closed_done=0, bot_done=0, personal_kept=0)
     candidates = []
     pull_requests = {}
+    identity = {}
     mode = "apply" if apply else "preview"
+
+    def get_viewer():
+        """Resolve identity once; a failure must not make a bot thread eligible."""
+        if "error" in identity:
+            raise identity["error"]
+        if "login" not in identity:
+            try:
+                user = api("GET", "/user")
+                if not isinstance(user, dict) or not isinstance(user.get("login"), str) or not user["login"]:
+                    raise APIError("Cannot identify the signed-in user; retain bot threads and check gh login")
+                identity["login"] = user["login"]
+            except APIError as exc:
+                identity["error"] = exc
+                raise
+        return identity["login"]
+
     try:
         pages = api("GET", NOTIFICATIONS, paginate=True)
         if not isinstance(pages, list) or any(not isinstance(page, list) for page in pages):
@@ -91,14 +149,16 @@ def cleanup(api, apply=False, output=print, receipts=None, on_done=None):
                 if endpoint not in pull_requests:
                     pull_requests[endpoint] = api("GET", endpoint)
                 pr = pull_requests[endpoint]
-                if not isinstance(pr, dict) or pr.get("state") not in ("open", "closed"):
-                    raise APIError("Unknown PR state; retain the thread and retry")
-                if pr["state"] == "open":
+                rule = matching_rule(thread, pr, get_viewer)
+                if rule is None:
                     counts["kept"] += 1
+                    if is_bot_pr(pr):
+                        counts["personal_kept"] += 1
+                        output(f"KEEP: thread={identifier} personally targeted bot PR")
                     continue
                 counts["candidates"] += 1
                 candidates.append((identifier, updated, endpoint, subject))
-                output(f"CANDIDATE: thread={identifier} pr={endpoint} state=closed")
+                output(f"CANDIDATE: thread={identifier} pr={endpoint} rule={rule}")
             except APIError as exc:
                 if exc.status == 404:
                     counts["skipped"] += 1
@@ -121,16 +181,18 @@ def cleanup(api, apply=False, output=print, receipts=None, on_done=None):
                         output(f"SKIP: thread={identifier} changed; reconsider next run")
                         continue
                     pr = api("GET", endpoint)
-                    if not isinstance(pr, dict) or pr.get("state") not in ("open", "closed"):
-                        raise APIError("Unknown PR state during recheck; retain it and retry")
-                    if pr["state"] != "closed":
+                    rule = matching_rule(current, pr, get_viewer)
+                    if rule is None:
                         counts["kept"] += 1
-                        output(f"KEEP: thread={identifier} PR reopened")
+                        if is_bot_pr(pr):
+                            counts["personal_kept"] += 1
+                        output(f"KEEP: thread={identifier} current rules no longer match")
                         continue
                     api("DELETE", thread_path)
                     counts["done"] += 1
+                    counts[rule + "_done"] += 1
                     receipts[identifier] = updated
-                    output(f"DONE: thread={identifier} pr={endpoint}")
+                    output(f"DONE: thread={identifier} pr={endpoint} rule={rule}")
                     if on_done is not None:
                         on_done(receipts)
                 except APIError as exc:
