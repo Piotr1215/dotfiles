@@ -59,7 +59,11 @@ SND_NODE_BIN="${SND_NODE_BIN:-/home/decoder/dev/agents-mcp-server/build/snd.js}"
 AGENTS_NATS_URL_DEFAULT="nats://nats-nats-tailscale.tail165ec.ts.net:4222"
 export AGENTS_NATS_URL="${AGENTS_NATS_URL:-$AGENTS_NATS_URL_DEFAULT}"
 export SND_FROM="${SND_FROM:-cron-watch}"
-NUDGE_TO="${CRON_ERROR_NUDGE_TO:-triage}"
+# Who hears it: CRON_ERROR_NUDGE_TO when set, else Kendra (intake) while she
+# holds Gordon's routine stream, else triage. __intake_route.sh answers, and is
+# asked only when there is something to send: it can wait on the bus.
+INTAKE_ROUTE_BIN="${INTAKE_ROUTE_BIN:-$HOME/.claude/scripts/__intake_route.sh}"
+NUDGE_TO="${CRON_ERROR_NUDGE_TO:-}"
 
 DRY_RUN=0
 case "${1:-}" in
@@ -75,6 +79,17 @@ log() { printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*"; }
 
 # Send one line to the pane over the agents bus.
 send_dm() { node "$SND_NODE_BIN" -t "$NUDGE_TO" "$1"; }
+
+# Prints the recipient: the explicit one, else intake or triage by the route.
+nudge_target() {
+    if [ -n "$NUDGE_TO" ]; then
+        printf '%s\n' "$NUDGE_TO"
+    elif [ "$("$INTAKE_ROUTE_BIN" 2>/dev/null)" = intake ]; then
+        echo intake
+    else
+        echo triage
+    fi
+}
 
 # Jobs currently reporting `error`, one name per line. Only the wrapper's own
 # states count here: `stale` and `pending` are guesses the dashboard derives
@@ -138,6 +153,7 @@ main() {
     if [ "$cold_start" -eq 1 ] && [ -n "$new_jobs" ]; then
         log "cold start: seeding ${errors_n} already-broken job(s) silently: $(tr '\n' ' ' <<<"$new_jobs")"
     elif [ -n "$new_jobs" ]; then
+        NUDGE_TO=$(nudge_target)
         while IFS= read -r job; do
             [ -n "$job" ] || continue
             line=$(notice_for "$job")
