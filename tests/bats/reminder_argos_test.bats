@@ -255,6 +255,38 @@ only_id() {
   grep -q "	$id	done	done	Call vodafone$" "$REMINDER_LOG"
 }
 
+@test "done + copy spends the one-shot and puts the reminder text on the clipboard" {
+  export REMINDER_CLIPBOARD="$BIN/clipboard"
+  printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$*" >"$BATS_TEST_TMPDIR/clip.args"\ncat >"$BATS_TEST_TMPDIR/clip.txt"\n' >"$BIN/clipboard"
+  chmod +x "$BIN/clipboard"
+  "$REMINDER" add 'Check $(rm -rf ~) for #8813' '2026-09-08 09:00' --subject 'link: https://vodafone.de/kontakt' >/dev/null
+  id="$(only_id)"
+  gui_returns '{"action":"done","copy":true}'
+
+  run "$REMINDER" fire "$id"
+
+  [ "$status" -eq 0 ]
+  [ "$(last_record | jq -r '.status')" = done ]
+  [ "$(<"$BATS_TEST_TMPDIR/clip.args")" = "-selection clipboard" ]
+  [ "$(<"$BATS_TEST_TMPDIR/clip.txt")" = 'Check $(rm -rf ~) for #8813'$'\n\n''link: https://vodafone.de/kontakt' ]
+  grep -q "	$id	done	done copied	Check" "$REMINDER_LOG"
+}
+
+@test "done + copy still spends the one-shot when the clipboard fails" {
+  export REMINDER_CLIPBOARD="$BIN/clipboard"
+  printf '#!/usr/bin/env bash\nexit 1\n' >"$BIN/clipboard"
+  chmod +x "$BIN/clipboard"
+  "$REMINDER" add "Ping triage" '2026-09-08 09:00' >/dev/null
+  id="$(only_id)"
+  gui_returns '{"action":"done","copy":true}'
+
+  run "$REMINDER" fire "$id"
+
+  [ "$status" -eq 0 ]
+  [ "$(last_record | jq -r '.status')" = done ]
+  grep -q "	$id	done	done copy-failed	Ping triage$" "$REMINDER_LOG"
+}
+
 @test "a gordon reminder appends one logger-format line and opens no dialog" {
   "$REMINDER" add "verify: budget note" '2026-09-08 09:00' --subject 'check the branch events' --to gordon >/dev/null
   id="$(only_id)"

@@ -28,6 +28,7 @@ LOCK="${STORE}.lock"
 GUI="${REMINDER_GUI:-$SCRIPT_DIR/__reminder_gui.py}"
 URL_OPENER="${REMINDER_URL_OPENER:-$SCRIPT_DIR/__taskopen_url_open.sh}"
 TASK_OPENER="${REMINDER_TASK_OPENER:-$SCRIPT_DIR/__task_open.sh}"
+CLIPBOARD="${REMINDER_CLIPBOARD:-xclip}"
 MAILER="${REMINDER_MAILER:-$SCRIPT_DIR/__mail_me.sh}"
 CRON_RUN="${REMINDER_CRON_RUN:-$SCRIPT_DIR/__cron_run.sh}"
 CRON_EVERY="${REMINDER_CRON_EVERY:-$SCRIPT_DIR/__cron_every.sh}"
@@ -370,6 +371,17 @@ record_title() {
 
 open_url() {
 	"$URL_OPENER" "$1" >/dev/null 2>&1
+}
+
+# "Done + copy" in the dialog: most reminders are prompts meant for an agent,
+# so the text goes to the clipboard for pasting into a session. xclip forks a
+# child that owns the selection after this job exits; its output goes to
+# /dev/null so nothing waits on the child.
+copy_reminder() {
+	local title="$1" body="$2" url="$3" text="$1"
+	[ -n "$body" ] && text="$text"$'\n\n'"$body"
+	[ -n "$url" ] && [[ "$body" != *"$url"* ]] && text="$text"$'\n'"$url"
+	printf '%s' "$text" | "$CLIPBOARD" -selection clipboard >/dev/null 2>&1
 }
 
 # ---------------------------------------------------------------- clocks ---
@@ -1252,6 +1264,9 @@ show_dialog() {
 			case "$subject" in
 			task:*) task rc.verbose=nothing "${subject#task:}" "done" >/dev/null 2>&1 || true ;;
 			esac
+			if [ "$(jq -r '.copy // false' <<<"$response")" = true ]; then
+				if copy_reminder "$title" "$body" "$url"; then action="done copied"; else action="done copy-failed"; fi
+			fi
 			mark_done "$id"
 			cmd_sync >/dev/null
 			log_fire "$id" "done" "$action" "$title"
