@@ -983,11 +983,11 @@ alias 8ball='noglob 8ball'
 # Judge on classif-chat: `judge "horrible machine needs a hobby"`. Five random
 # dictionary words are the verdicts to pick from, new on every call, and -w
 # names the chat lines that swung it. The choices print first, the run is
-# copied as CC copies it, and flags after the text go to classif. classif always
-# offers none and random words rarely fit, so the question asks for a pick
-# anyway; that tilts the model, it cannot rule none out.
+# copied as CC copies it, and flags after the text go to classif. The question
+# is for show, it lands in the copied run: classif always offers none and random
+# words rarely answer a real question, so it is only asked for the funniest word.
 judge() {
     local choices=$(rg -x '[a-z]+' /usr/share/dict/words | shuf -n 5 | paste -sd,)
     { print -r -- "Possible choices: ${choices//,/, }"
-      classif-chat "$1 (pick the funniest word, even if none fits)" -e "$choices" -w "${@:2}" } 2>&1 | __copy_cmd_and_output
+      classif-chat "which of these words is the funniest?" -e "$choices" -w "${@:2}" } 2>&1 | __copy_cmd_and_output
 }
