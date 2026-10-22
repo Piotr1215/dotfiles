@@ -979,3 +979,8 @@ function check_stutter() {
 # `?`; it must follow the function, or it rewrites the definition.
 8ball() { classif "$*" -e "it is certain,most likely,ask again later,very doubtful,my sources say no" }
 alias 8ball='noglob 8ball'
+
+# Judge on classif-chat: `judge "horrible machine needs a hobby"`. Five random
+# dictionary words are the verdicts to pick from, new on every call, and -w
+# names the chat lines that swung it. Flags after the text go to classif.
+judge() { classif-chat "$1" -e "$(rg -x '[a-z]+' /usr/share/dict/words | shuf -n 5 | paste -sd,)" -w "${@:2}" }
