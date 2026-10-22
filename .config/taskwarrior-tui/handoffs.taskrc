@@ -1,0 +1,7 @@
+# Launch rc for the handoffs report (__cycle_tui_reports.sh passes it with --taskrc).
+# context.work.read is `+work -gordon -piotr`, and a report filter cannot lift a
+# context, so this rc drops the context. The report filter (+piotr) does the rest.
+include ~/.taskrc
+context=none
+# The detail pane (task info) carries the handoff brief in its annotations.
+uda.taskwarrior-tui.task-report.show-info=true

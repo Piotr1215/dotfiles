@@ -1,8 +1,12 @@
 #!/bin/zsh
 
 # Cycle through taskwarrior-tui reports
-reports=(inbox byrepo byproject current)
-state_file="/tmp/tui_report_index"
+reports=(inbox byrepo byproject handoffs current)
+state_file="${TUI_REPORT_STATE_FILE:-/tmp/tui_report_index}"
+tmux_bin="${TUI_REPORT_TMUX:-tmux}"
+# handoffs shows +piotr tasks, which context.work.read hides, so it launches on an
+# rc that drops the context and turns the detail pane on (brief = annotations).
+handoffs_rc="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/../.config/taskwarrior-tui/handoffs.taskrc"
 
 # Get current index
 if [[ -f "$state_file" ]]; then
@@ -18,13 +22,15 @@ echo "$idx" > "$state_file"
 report="${reports[$idx]}"
 
 # Get the active pane
-pane=$(tmux display-message -p '#{session_name}:#{window_index}.#{pane_index}')
+pane=$("$tmux_bin" display-message -p '#{session_name}:#{window_index}.#{pane_index}')
 
 # Atomic restart and set pane title
-tmux select-pane -t "$pane" -T "$report"
+"$tmux_bin" select-pane -t "$pane" -T "$report"
 # respawn-pane relaunches from tmux's server environment, NOT the dead pane's
 # runtime env, so the secrets exported in ~/.envrc (LINEAR_API_KEY, etc.) are
 # lost. Shortcuts that need them (3 sync, 4/8 linear-issue) then fail with
 # "Environment variable LINEAR_API_KEY is not set" after any report cycle.
 # Source ~/.envrc before exec so the respawned tui matches a normal launch.
-tmux respawn-pane -k -t "$pane" "[ -f $HOME/.envrc ] && . $HOME/.envrc; exec env NCURSES_NO_UTF8_ACS=1 taskwarrior-tui -r $report"
+tui_args="-r $report"
+[[ "$report" == handoffs ]] && tui_args="--taskrc $handoffs_rc -r $report"
+"$tmux_bin" respawn-pane -k -t "$pane" "[ -f $HOME/.envrc ] && . $HOME/.envrc; exec env NCURSES_NO_UTF8_ACS=1 taskwarrior-tui $tui_args"
