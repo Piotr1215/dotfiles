@@ -64,3 +64,8 @@ windows:
         # the local gordon@skills-dir plugin available there.
         # The model is the `gordon` role in ~/.claude/models.env, read at launch.
         - __claude_with_monitor.sh --system-prompt-file ~/.claude/system-prompts/triage-agent-system-prompt.md --model "$(~/.claude/scripts/__models.sh get gordon)" -- "/gordon:gordon"
+  # Kendra takes Gordon's routine event stream (popups, auto-triage nudges,
+  # task-closed notices, PR movement) and registers on the bus as intake, which
+  # also names the pane. While this window is down everything reaches Gordon as
+  # before. The model is the `intake` role in ~/.claude/models.env.
+  - kendra: __claude_with_monitor.sh --system-prompt-file ~/.claude/system-prompts/intake-agent-system-prompt.md --model "$(~/.claude/scripts/__models.sh get intake)" -- "Start your shift. Register as intake and catch up on the bus."
