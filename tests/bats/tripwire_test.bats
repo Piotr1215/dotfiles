@@ -1,20 +1,20 @@
 #!/usr/bin/env bats
 
-# __tripwire.sh watches a news search and acts when classif says a new headline
+# __tripwire.sh watches a news search and acts when Jev says a new headline
 # meets a wire's condition. These tests stub the feed (curl), the judge
-# (classif) and every action, and check when a wire arms, trips, stays quiet
+# (Jev, through TRIPWIRE_JEV) and every action, and check when a wire arms, trips, stays quiet
 # and fails loud. yq and jq run for real.
 
 setup() {
   SCRIPT="${BATS_TEST_DIRNAME}/../../scripts/__tripwire.sh"
   export XDG_CONFIG_HOME="${BATS_TEST_TMPDIR}/config" XDG_STATE_HOME="${BATS_TEST_TMPDIR}/state"
-  export CLASSIF_LOG="${BATS_TEST_TMPDIR}/classif/log.jsonl" TRIPWIRE_SND="${BATS_TEST_TMPDIR}/snd.js"
+  export TRIPWIRE_JEV="${BATS_TEST_TMPDIR}/bin/jev" TRIPWIRE_SND="${BATS_TEST_TMPDIR}/snd.js"
   export FEED="${BATS_TEST_TMPDIR}/feed.xml" LOG="${BATS_TEST_TMPDIR}/log"
   mkdir -p "${BATS_TEST_TMPDIR}/bin" "${BATS_TEST_TMPDIR}/classif"
   : >"$LOG"
   stub curl '[[ -n "$FEED_FAIL" ]] && exit 22; cat "$FEED"'
-  # A headline holding "squeeze" meets the condition; CLASSIF_FAIL makes the judge unscored.
-  stub classif 'echo "classif $*" >>"$LOG"; [[ -n "$CLASSIF_FAIL" ]] && exit 2; grep -q squeeze && exit 0; exit 1'
+  # A headline holding "squeeze" scores 0.95, any other 0.05; JEV_P forces a score; JEV_FAIL makes the judge unscored.
+  stub jev 'echo "jev $*" >>"$LOG"; [[ -n "$JEV_FAIL" ]] && exit 1; [[ -n "$JEV_P" ]] && { echo "$JEV_P"; exit 0; }; grep -q squeeze && { echo 0.95; exit 0; }; echo 0.05'
   stub notify-send 'echo "notify $*" >>"$LOG"'
   stub node 'echo "node $*" >>"$LOG"'
   export PATH="${BATS_TEST_TMPDIR}/bin:$PATH"
@@ -61,7 +61,7 @@ add_wire() {
   run "$SCRIPT" run
   [ "$status" -eq 0 ]
   [ "$(wc -l <"$XDG_STATE_HOME/tripwire/vmware.seen")" -eq 2 ]
-  ! grep -q '^classif\|^notify' "$LOG"
+  ! grep -q '^jev\|^notify' "$LOG"
 }
 
 @test "a feed of one headline arms on that headline, and an empty feed arms on none" {
@@ -85,18 +85,18 @@ add_wire() {
   [[ "$output" == *"Broadcom moves to squeeze partners"* ]]
   [ "$(grep -c '^notify' "$LOG")" -eq 1 ]
   grep -q '^notify tripwire: vmware Broadcom moves to squeeze partners' "$LOG"
-  [ "$(grep -c '^classif' "$LOG")" -eq 2 ]
+  [ "$(grep -c '^jev' "$LOG")" -eq 2 ]
   run "$SCRIPT" run
-  [ "$(grep -c '^classif' "$LOG")" -eq 2 ]
+  [ "$(grep -c '^jev' "$LOG")" -eq 2 ]
 }
 
-@test "the judge gets the headline with today's date as context and the confidence bar" {
+@test "the judge asks Jev the condition about the headline" {
   add_wire
   feed "a1:old"
   "$SCRIPT" run
   feed "a1:old" "b2:Broadcom squeeze"
   "$SCRIPT" run
-  grep -q '^classif -t 0.8 Does Broadcom squeeze partners? -c /' "$LOG"
+  grep -q '^jev Does Broadcom squeeze partners?$' "$LOG"
 }
 
 @test "an unscored headline stays unseen and the wire fails loud once, then says when it recovers" {
@@ -104,11 +104,11 @@ add_wire() {
   feed "a1:old"
   "$SCRIPT" run
   feed "a1:old" "b2:Broadcom squeeze"
-  CLASSIF_FAIL=1 run "$SCRIPT" run
+  JEV_FAIL=1 run "$SCRIPT" run
   [ "$status" -eq 1 ]
   ! grep -qx b2 "$XDG_STATE_HOME/tripwire/vmware.seen"
   [ "$(grep -c 'is broken' "$LOG")" -eq 1 ]
-  CLASSIF_FAIL=1 run "$SCRIPT" run
+  JEV_FAIL=1 run "$SCRIPT" run
   [ "$(grep -c 'is broken' "$LOG")" -eq 1 ]
   run "$SCRIPT" run
   [ "$status" -eq 0 ]
@@ -159,4 +159,27 @@ add_wire() {
   [[ "$output" == *"Broadcom squeeze"* ]]
   [[ "$output" != *"ships a release"* ]]
   [ ! -d "$XDG_STATE_HOME/tripwire" ]
+}
+
+@test "only a yes at p 0.8 or more trips: 0.79 stays quiet, 0.80 trips" {
+  add_wire
+  feed "a1:old"
+  "$SCRIPT" run
+  feed "a1:old" "b2:Broadcom squeeze"
+  JEV_P=0.79 run "$SCRIPT" run
+  [ "$status" -eq 0 ]
+  ! grep -q '^notify' "$LOG"
+  feed "a1:old" "b2:Broadcom squeeze" "c3:Broadcom squeeze again"
+  JEV_P=0.80 run "$SCRIPT" run
+  [ "$(grep -c '^notify tripwire: vmware' "$LOG")" -eq 1 ]
+}
+
+@test "an answer that is not a number counts as unscored" {
+  add_wire
+  feed "a1:old"
+  "$SCRIPT" run
+  feed "a1:old" "b2:Broadcom squeeze"
+  JEV_P="no answer" run "$SCRIPT" run
+  [ "$status" -eq 1 ]
+  grep -q 'jev could not judge' "$LOG"
 }

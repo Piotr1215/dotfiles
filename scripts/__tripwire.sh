@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Tripwires: watch a news search and act when a new headline meets a condition
 # only a model can judge. "Broadcom squeezes VMware partners" has no keyword a
-# grep could wait on; classif reads each new headline and answers yes or no.
+# grep could wait on; Jev reads each new headline and answers yes or no.
 #
 # A wire is a file in ~/.config/tripwire/wires/NAME:
 #   query=VMware Broadcom
@@ -21,13 +21,15 @@
 # nothing trips. After that each new headline is judged once, and only a yes at
 # p 0.8 or more trips. A feed or model that fails fires the action once with
 # the reason, and once more when the wire works again, so a broken wire is loud
-# instead of quiet. With CLASSIF=0 runs do nothing.
+# instead of quiet. With CLASSIF=0 runs do nothing (the switch keeps its old name).
 set -eo pipefail
 
 wires="${TRIPWIRE_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/tripwire/wires}"
 state="${XDG_STATE_HOME:-$HOME/.local/state}/tripwire"
 snd="${TRIPWIRE_SND:-$HOME/dev/agents-mcp-server/build/snd.js}"
 min_p=0.8
+# Jev, TypeSafe's decisioning model, judges each headline (classif and its local models are suspended).
+jev="${TRIPWIRE_JEV:-$HOME/dev/dotfiles/scripts/__jev.sh}"
 
 die() {
 	echo "tripwire: $*" >&2
@@ -45,11 +47,15 @@ headlines() {
 		yq -p xml -o tsv '[.rss.channel.item] | flatten | .[] | select(. != null) | [.guid."+content", .pubDate, .title, .link]' 2>/dev/null
 }
 
-# classif's exit code for one headline against the condition, with today's date as context.
+# Jev's yes probability for one headline against the condition, as an exit code
+# (0 at or above min_p, 1 below, 2 when Jev gave no answer), with today's date as context.
 judge() {
-	local condition="$1" date="$2" title="$3"
-	printf 'Published: %s\nHeadline: %s\n' "$date" "$title" |
-		classif -t "$min_p" "$condition" -c <(echo "Today's date:"; date) >/dev/null 2>&1
+	local condition="$1" date="$2" title="$3" p
+	p="$(printf "Today's date: %s\nPublished: %s\nHeadline: %s\n" "$(date)" "$date" "$title" |
+		"$jev" "$condition" 2>/dev/null)" || return 2
+	[[ "$p" =~ ^[0-9]*\.?[0-9]+$ ]] || return 2
+	awk -v p="$p" -v t="$min_p" 'BEGIN { exit !(p >= t) }' && return 0
+	return 1
 }
 
 # Fire a wire's action: name, action, date, title, link.
@@ -121,7 +127,7 @@ run_wire() {
 		1 | 3) echo "$id" >>"$seen" ;;
 		*)
 			# Unscored: the headline stays unseen, so the next run judges it again.
-			broken "$name" "classif could not judge (exit $rc)" "$action"
+			broken "$name" "jev could not judge (exit $rc)" "$action"
 			return 1
 			;;
 		esac
@@ -132,7 +138,7 @@ run_wire() {
 cmd_run() {
 	local name failed=0
 	if [[ "${CLASSIF:-1}" == 0 ]]; then
-		echo "tripwire: classif is off (CLASSIF=0); nothing judged" >&2
+		echo "tripwire: judging is off (CLASSIF=0); nothing judged" >&2
 		return 0
 	fi
 	[[ -d "$wires" ]] || return 0
