@@ -1,10 +1,7 @@
 # Ollama hosts for classif in preference order, one host:port[=model] per line.
 # A host without a model runs classif's default model. CLASSIF_HOSTS overrides
 # this file with the same entries, comma separated.
-#
-# Suspended 22 Oct 2026 per Piotr, use Jev: classif and every local model host
-# are off. The entries are kept commented for restore.
-# localhost:11434
-# Piotrs-MacBook-Pro.local:11434=llama3.2:3b
-# 192.168.178.125:11434=llama3.2:3b
-# pop-os-1.tail165ec.ts.net:11434=llama3.2:3b
+localhost:11434
+Piotrs-MacBook-Pro.local:11434=llama3.2:3b
+192.168.178.125:11434=llama3.2:3b
+pop-os-1.tail165ec.ts.net:11434=llama3.2:3b
