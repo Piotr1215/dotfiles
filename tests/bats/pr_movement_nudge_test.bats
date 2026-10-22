@@ -154,10 +154,12 @@ e2e_setup() {
     DMS="${TEST_DIR}/dms"; : > "$DMS"
     TASKS_FILE="${TEST_DIR}/tasks.json"; echo '[]' > "$TASKS_FILE"
     SEARCH_FILE="${TEST_DIR}/search.json"; echo '[]' > "$SEARCH_FILE"
+    MERGED_FILE="${TEST_DIR}/merged.json"; echo '[]' > "$MERGED_FILE"
+    BOT_FILE="${TEST_DIR}/bot.json"; echo '[]' > "$BOT_FILE"
     ROUTE_FILE="${TEST_DIR}/route"; echo triage > "$ROUTE_FILE"
     TMUX_SESSIONS_FILE="${TEST_DIR}/tmux-sessions"; : > "$TMUX_SESSIONS_FILE"
-    export BIN GQL_DIR GH_LOG DMS TASKS_FILE SEARCH_FILE ROUTE_FILE TMUX_SESSIONS_FILE
-    export GH_GQL_FAIL="${TEST_DIR}/gql-fail"
+    export BIN GQL_DIR GH_LOG DMS TASKS_FILE SEARCH_FILE MERGED_FILE BOT_FILE ROUTE_FILE TMUX_SESSIONS_FILE
+    export GH_GQL_FAIL="${TEST_DIR}/gql-fail" GH_SOURCES_FAIL="${TEST_DIR}/sources-fail"
 
     cat > "$BIN/gh" <<'STUB'
 #!/usr/bin/env bash
@@ -165,11 +167,22 @@ case "$1 $2" in
   "search prs")
     case "$*" in
       *user-review-requested:*) echo '[]' ;;
-      *) cat "$SEARCH_FILE" ;;
+      *) echo "other: $*" >> "$GH_LOG"; echo '[]' ;;
     esac ;;
   "api user") echo Piotr1215 ;;
   "api graphql")
     q=""; for a in "$@"; do case "$a" in query=*) q="${a#query=}" ;; esac; done
+    # The sources call: Piotr's open PRs (SEARCH_FILE), his merged ones
+    # (MERGED_FILE, [{owner, repo, num}]) and the backport bot's (BOT_FILE).
+    if grep -q '^  viewer {' <<<"$q"; then
+      echo "sources bot=$(grep -oE 'user\(login: "[^"]+"\)' <<<"$q")" >> "$GH_LOG"
+      [ ! -f "$GH_SOURCES_FAIL" ] || { echo "stub: sources error" >&2; exit 1; }
+      jq -n --slurpfile a "$SEARCH_FILE" --slurpfile m "$MERGED_FILE" --slurpfile b "$BOT_FILE" '
+        {data: {viewer: {open: {pageInfo: {hasNextPage: false}, nodes: $a[0]},
+                         merged: {nodes: [$m[0][] | {number: .num, repository: {nameWithOwner: "\(.owner)/\(.repo)"}}]}},
+                bot: {pullRequests: {pageInfo: {hasNextPage: false}, nodes: $b[0]}}}}'
+      exit 0
+    fi
     echo "graphql aliases=$(grep -cE '^p[0-9]+: repository' <<<"$q")" >> "$GH_LOG"
     if [ -f "$GH_GQL_FAIL" ] && grep -qF "$(cat "$GH_GQL_FAIL")" <<<"$q"; then
       echo "stub: server error" >&2; exit 1
@@ -249,11 +262,19 @@ gql_node() {
         > "$GQL_DIR/$(tr 'A-Z' 'a-z' <<<"${o}_${r}_${n}").json"
 }
 
-# set_search OWNER REPO NUM: Piotr's one open authored PR.
+# set_search OWNER REPO NUM: Piotr's one open authored PR (viewer.open).
 set_search() {
     jq -n --arg o "$1" --arg r "$2" --argjson n "$3" \
         '[{url: "https://github.com/\($o)/\($r)/pull/\($n)", number: $n, title: "feat: work",
            repository: {name: $r, nameWithOwner: "\($o)/\($r)"}, isDraft: false}]' > "$SEARCH_FILE"
+}
+
+# bot_pr OWNER REPO NUM TITLE [BODY]: one open PR in the backport bot's list.
+bot_pr() {
+    jq --arg o "$1" --arg r "$2" --argjson n "$3" --arg t "$4" --arg b "${5:-}" \
+        '. + [{url: "https://github.com/\($o)/\($r)/pull/\($n)", number: $n, title: $t, body: $b, isDraft: false,
+               repository: {name: $r, nameWithOwner: "\($o)/\($r)"}}]' "$BOT_FILE" > "${BOT_FILE}.new" \
+        && mv "${BOT_FILE}.new" "$BOT_FILE"
 }
 
 # run_nudge [MODE]: one cycle of the real script (default --live).
@@ -660,4 +681,94 @@ one_merge_event() {
     [ "$(jq -r '.watched' "$PR_MOVE_SUMMARY")" = "3" ]
     # the state file keeps no meta key, so nothing that walks it meets a non-PR row
     [ "$(jq -r 'keys[] | select(startswith("_"))' "$PR_MOVE_STATE")" = "_reviewRequests" ]
+}
+
+# --- backports, sources and delivery ------------------------------------------------
+
+@test "backport: a bot backport of Piotr's merged PR is watched, reports ci-red and merged, then retires" {
+    # loft-enterprise#8833 merged and the bot opened #8851-#8857; none were
+    # authored by Piotr or task-linked, so none were watched (22 Oct 2026).
+    e2e_setup
+    echo '[{"owner":"loft-sh","repo":"loft-enterprise","num":8833}]' > "$MERGED_FILE"
+    bot_pr loft-sh loft-enterprise 8851 "[release-4.6] fix(ci): skip the mirror release step on sync push runs (#8833)" \
+        $'Backport from `main` to `release-4.6`\n\nOriginal PR Nr.: #8833\n'
+    gql_node loft-sh loft-enterprise 8851 OPEN REVIEW_REQUIRED MERGEABLE SUCCESS Piotr1215 loft-bot
+    run_nudge
+    [ -z "$(dms)" ]
+    grep -q "backports: 1" "${TEST_DIR}/log"
+    gql_node loft-sh loft-enterprise 8851 OPEN REVIEW_REQUIRED MERGEABLE FAILURE Piotr1215 loft-bot
+    run_nudge
+    [ "$(dms)" = "triage: pr-move: loft-sh/loft-enterprise#8851 ci-red https://github.com/loft-sh/loft-enterprise/pull/8851 (backport of loft-sh/loft-enterprise#8833)" ]
+    : > "$DMS"
+    # merged: gone from the bot's open list, fetched once more and reported
+    echo '[]' > "$BOT_FILE"
+    gql_node loft-sh loft-enterprise 8851 MERGED REVIEW_REQUIRED MERGEABLE SUCCESS Piotr1215 loft-bot
+    run_nudge
+    [ "$(dms)" = "triage: pr-move: loft-sh/loft-enterprise#8851 merged https://github.com/loft-sh/loft-enterprise/pull/8851 (backport of loft-sh/loft-enterprise#8833)" ]
+    : > "$DMS"; : > "$GH_LOG"
+    run_nudge
+    [ -z "$(dms)" ]
+    [ "$(gql_calls)" -eq 0 ]
+    [ "$(jq 'has("https://github.com/loft-sh/loft-enterprise/pull/8851")' "$PR_MOVE_STATE")" = "false" ]
+}
+
+@test "backport: the body line names a task-linked parent, and the parent's task rides along" {
+    e2e_setup
+    add_task 22db7da1-0000-0000-0000-000000000000 pending "fix https://github.com/loft-sh/vcluster-pro/pull/2600"
+    gql_node loft-sh vcluster-pro 2600 MERGED REVIEW_REQUIRED MERGEABLE SUCCESS someone someone
+    bot_pr loft-sh vcluster-pro 2620 "[v0.37] fix: re-assert tenant content" $'Backport\n\nOriginal PR Nr.: #2600\n'
+    gql_node loft-sh vcluster-pro 2620 OPEN REVIEW_REQUIRED MERGEABLE SUCCESS someone loft-bot
+    run_nudge
+    [ -z "$(dms)" ]
+    gql_node loft-sh vcluster-pro 2620 CLOSED REVIEW_REQUIRED MERGEABLE SUCCESS someone loft-bot
+    run_nudge
+    [ "$(dms)" = "triage: pr-move: loft-sh/vcluster-pro#2620 closed https://github.com/loft-sh/vcluster-pro/pull/2620 task:22db7da1 (backport of loft-sh/vcluster-pro#2600)" ]
+}
+
+@test "backport: a bot PR naming no parent, or a parent neither Piotr's nor task-linked, is not watched" {
+    e2e_setup
+    echo '[{"owner":"loft-sh","repo":"loft-enterprise","num":8833}]' > "$MERGED_FILE"
+    bot_pr loft-sh loft-enterprise 8776 "[release-4.12] fix(logging): log patch bodies only at debug (#8700)"
+    bot_pr loft-sh loft-enterprise 8053 "licenses: update loft licenses"
+    # same number, other repo: the parent must be in the backport's own repo
+    bot_pr loft-sh vcluster 99 "[v0.30] fix: x (#8833)"
+    run_nudge
+    [ "$(gql_calls)" -eq 0 ]
+    grep -q "backports: 0" "${TEST_DIR}/log"
+}
+
+@test "sources: authored PRs come from the viewer, and a failed sources call prunes nothing" {
+    e2e_setup
+    set_search loft-sh vcluster 7
+    gql_node loft-sh vcluster 7 OPEN
+    run_nudge
+    grep -q '^sources ' "$GH_LOG"
+    ! grep -q '^other: search prs' "$GH_LOG"
+    touch "$GH_SOURCES_FAIL"
+    PR_MOVE_TRACK_WINDOW=-1 run_nudge
+    grep -q "WARN: authored PR query failed" "${TEST_DIR}/log"
+    grep -q "WARN: loft-bot PR query failed" "${TEST_DIR}/log"
+    [ "$(jq 'has("https://github.com/loft-sh/vcluster/pull/7")' "$PR_MOVE_STATE")" = "true" ]
+}
+
+@test "sources: an empty PR_MOVE_BACKPORT_BOT leaves the bot out of the query" {
+    e2e_setup
+    PR_MOVE_BACKPORT_BOT= run_nudge
+    grep -qx "sources bot=" "$GH_LOG"
+    run_nudge
+    grep -qx 'sources bot=user(login: "loft-bot")' "$GH_LOG"
+}
+
+@test "delivery: lines past the cycle cap ride in one more DM, none dropped" {
+    # State is written before delivery, so the old "deferring to next cycle"
+    # dropped every line past the cap for good.
+    e2e_setup
+    many_task_prs 4
+    run_nudge
+    local i
+    for i in 1 2 3 4; do gql_node loft-sh vcluster "$i" MERGED; done
+    PR_MOVE_CYCLE_CAP=2 run_nudge
+    [ "$(grep -c '^triage: ' "$DMS")" -eq 2 ]
+    for i in 1 2 3 4; do grep -q "pr-move: loft-sh/vcluster#$i merged" "$DMS"; done
+    grep -q "cycle cap 2 reached; 3 line(s) ride in one DM" "${TEST_DIR}/log"
 }

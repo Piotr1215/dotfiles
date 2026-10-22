@@ -34,14 +34,20 @@ case "$1 $2" in
        *user-review-requested:*)
           [ -f "$GH_REVREQ_FIXTURE.fail" ] && exit 1
           cat "$GH_REVREQ_FIXTURE" ;;
-       *) cat "$GH_SEARCH_FIXTURE" ;;
+       *) echo "[]" ;;
      esac ;;
   "api graphql")
+     q=""; for a in "$@"; do case "$a" in query=*) q="${a#query=}" ;; esac; done
+     # The sources call: Piotr's open PRs come from the search fixture.
+     if grep -q '^  viewer {' <<<"$q"; then
+        jq -c '{data: {viewer: {open: {pageInfo: {hasNextPage: false}, nodes: .}, merged: {nodes: []}},
+                       bot: {pullRequests: {pageInfo: {hasNextPage: false}, nodes: []}}}}' "$GH_SEARCH_FIXTURE"
+        exit 0
+     fi
      # The batched fetch: one aliased repository(...).pullRequest(...) per PR.
      # Answer each from the same view-shaped fixtures `gh pr view` once served,
      # re-shaped into the GraphQL PullRequest the script maps back.
      echo graphql >> "$GH_CALLS_LOG"
-     q=""; for a in "$@"; do case "$a" in query=*) q="${a#query=}" ;; esac; done
      resp='{"data":{}}'
      while IFS= read -r line; do
         al=$(sed -E 's/^(p[0-9]+):.*/\1/' <<<"$line")

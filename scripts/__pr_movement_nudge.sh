@@ -22,11 +22,24 @@
 #   task(s). A PR no source names any more keeps its entry for PR_MOVE_TRACK_WINDOW
 #   (3 days): one that merged or closed meanwhile is reported (the `merged` and
 #   `closed` edge), one still open is retired when the window ends.
+#   Also the backport bot's (PR_MOVE_BACKPORT_BOT, default loft-bot; empty turns
+#   it off) open PRs whose title ends "(#N)" or whose body carries "Original PR
+#   Nr.: #N", where #N in the same repo is a PR Piotr authored (open, or among
+#   his 100 most recent merged) or one a pending task links. Their lines end in
+#   ` (backport of <owner>/<repo>#N)` and name the parent's tasks. Once a
+#   backport merges or closes it leaves the bot's open list, is fetched once
+#   more to report it, and is retired.
 #
 # Runs from gh-pr-review-sync.service (ExecStart) on its 15-min timer, cross-org.
 # The PR task sync that once shared this unit was discontinued on 2026-10-13.
 #
-# COST: one `gh search prs` plus one `gh api graphql` call per PR_MOVE_GQL_CHUNK
+# SOURCES: one `gh api graphql` call reads Piotr's open PRs (viewer, which is
+#   complete: `gh search prs --author @me` returned 37, 34 and 48 of his 51 open
+#   PRs in three calls a minute apart on 22 Oct 2026, and the PRs it dropped went
+#   unwatched for that cycle), his 100 most recent merged PRs, and the backport
+#   bot's open PRs. Over 100 in either open list logs a WARN.
+#
+# COST: the sources call plus one `gh api graphql` call per PR_MOVE_GQL_CHUNK
 #   (default 25) PRs, each query holding one aliased repository(...).pullRequest(...)
 #   field per PR. ~100 PRs is four calls, not one `gh pr view` each. A chunk that
 #   fails logs a WARN and skips only its PRs. Measured 22 Oct 2026: 0.27 s per PR
@@ -95,6 +108,11 @@
 #   can be added to GQL_PR_FRAGMENT if needed. Check rows beyond the first 100
 #   contexts of a PR's newest commit are not read.
 #
+# DELIVERY: one DM per line up to PR_MOVE_CYCLE_CAP (default 8) per cycle. Past
+#   the cap the remaining lines ride together in one more DM, one per line, so a
+#   burst (a parent's seven backports merging at once) is never dropped: state is
+#   written before delivery, so an unsent line would be lost for good.
+#
 # Usage:
 #   __pr_movement_nudge.sh            # DRY-RUN (default): log only, no DM
 #   __pr_movement_nudge.sh --dry-run  # same, explicit
@@ -126,6 +144,9 @@ GQL_CHUNK="${PR_MOVE_GQL_CHUNK:-25}"
 # An entry no source names any more is still fetched once to catch a merge when
 # it was last seen open within this window (default 3 days).
 TRACK_WINDOW_SECS="${PR_MOVE_TRACK_WINDOW:-259200}"
+# The login that opens backport PRs; empty turns the backport source off.
+BACKPORT_BOT="${PR_MOVE_BACKPORT_BOT-loft-bot}"
+[[ -z "$BACKPORT_BOT" || "$BACKPORT_BOT" =~ ^[A-Za-z0-9-]+$ ]] || BACKPORT_BOT=""
 
 DRY_RUN=1
 case "${1:-}" in
@@ -171,6 +192,15 @@ log() { echo "[$(date '+%Y-%m-%dT%H:%M:%S%z')] $*" | tee -a "$LOG_FILE"; }
 # Send a DM over the NATS comms bus (same path as __auto_triage_nudge.sh).
 # send_dm MSG [TARGET] -> DM MSG to TARGET (default triage).
 send_dm() { node "$SND_NODE_BIN" -t "${2:-triage}" "$1" 2>&1; }
+
+# deliver MSG TARGET: send it, or in dry-run only log what would be sent.
+deliver() {
+    if [[ "$DRY_RUN" -eq 1 ]]; then
+        log "[DRY-RUN] would send to $2 -> $1"
+    else
+        send_dm "$1" "$2" | while read -r line; do log "  snd($2): $line"; done
+    fi
+}
 
 now_epoch() { date +%s; }
 iso_to_epoch() { date -d "$1" +%s 2>/dev/null || echo 0; }
@@ -317,6 +347,45 @@ resolve_target() {
     esac
 }
 
+# sources_query -> the one GraphQL query behind the watch list's own sources:
+# viewer.open (Piotr's open PRs), viewer.merged (his 100 most recently created
+# merged PRs, the parents a backport can name) and, unless BACKPORT_BOT is
+# empty, bot (that login's open PRs, with the body that names a parent).
+sources_query() {
+    local bot=""
+    [[ -z "$BACKPORT_BOT" ]] || bot="
+  bot: user(login: \"$BACKPORT_BOT\") { pullRequests(states: OPEN, first: 100) { pageInfo { hasNextPage } nodes { url number title body isDraft repository { nameWithOwner name } } } }"
+    printf '%s\n' "query {
+  viewer {
+    open: pullRequests(states: OPEN, first: 100) { pageInfo { hasNextPage } nodes { url number title isDraft repository { nameWithOwner name } } }
+    merged: pullRequests(states: MERGED, last: 100, orderBy: {field: CREATED_AT, direction: ASC}) { nodes { number repository { nameWithOwner } } }
+  }$bot
+}"
+}
+
+# backport_items BOT_PRS PARENTS LINKS -> JSON array of the backport PRs to
+# watch: the bot's open PRs whose title ends "(#N)" or whose body carries
+# "Original PR Nr.: #N", where N in the same repo is in PARENTS (lowercase refs
+# of PRs Piotr authored) or linked by a pending task (LINKS, task_pr_links).
+# Item: owner, repo, num, url, title, isDraft, backportOf (the parent ref) and
+# tasks (the uuid8s of the tasks linking the parent).
+backport_items() {
+    jq -c --argjson parents "$2" --argjson links "$3" '
+        def lc: ascii_downcase;
+        ($links | map({key: ("\(.owner)/\(.repo)#\(.num)" | lc), value: .task})
+         | group_by(.key) | map({key: .[0].key, value: (map(.value) | unique)}) | from_entries) as $lt
+        | [ .[]
+            | (.repository.nameWithOwner // "") as $nwo
+            | select($nwo | test("^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$"))
+            | ( ((.title // "") | capture("\\(#(?<n>[0-9]+)\\)\\s*$") | .n)
+                // ((.body // "") | capture("Original PR Nr\\.:\\s*#(?<n>[0-9]+)") | .n) ) as $pn
+            | "\($nwo)#\($pn)" as $parent
+            | ($parent | lc) as $pk
+            | select((($parents | index($pk)) != null) or ($lt[$pk] != null))
+            | {owner: ($nwo | split("/")[0]), repo: ($nwo | split("/")[1]), num: .number, url: (.url // ""),
+               title: (.title // ""), isDraft: (.isDraft // false), backportOf: $parent, tasks: ($lt[$pk] // [])} ]' <<<"$1"
+}
+
 # task_pr_links -> JSON array of {owner, repo, num, task}: one row per GitHub PR
 # URL (https://github.com/<owner>/<repo>/pull/<n>) found in the description or
 # an annotation of any PENDING task, with the first 8 characters of the task
@@ -332,26 +401,28 @@ task_pr_links() {
         | unique' <<<"$out"
 }
 
-# build_watch AUTHORED LINKS CUTOFF < STATE -> JSON array, one item per PR to
-# look at, merged from three sources: Piotr's open authored PRs (AUTHORED, the
-# `gh search prs` rows), PRs linked from pending tasks (LINKS, task_pr_links),
-# and PRs the state file saw open at or after CUTOFF (epoch) that neither source names
-# any more, which are fetched once to catch a merge or close and then dropped.
+# build_watch AUTHORED LINKS CUTOFF [BACKPORTS] < STATE -> JSON array, one item
+# per PR to look at, merged from four sources: Piotr's open authored PRs
+# (AUTHORED, the viewer.open rows), PRs linked from pending tasks (LINKS,
+# task_pr_links), backport PRs (BACKPORTS, backport_items), and PRs the state
+# file saw open at or after CUTOFF (epoch) that no source names any more, which
+# are fetched once to catch a merge or close and then dropped.
 # Item: key (lowercase owner/repo#n), owner, repo, num, url, title, isDraft,
-# authored, tasks (uuid8 list), watch (named by a live source), skey (state key,
-# "" when new), terminal ("merged"/"closed"/""), skip ("org", "draft",
-# "terminal" or "" to fetch it). Order follows first appearance.
+# authored, tasks (uuid8 list), backportOf (parent ref or ""), watch (named by a
+# live source), skey (state key, "" when new), terminal ("merged"/"closed"/""),
+# skip ("org", "draft", "terminal" or "" to fetch it). Order follows first
+# appearance.
 build_watch() {
     local orgs
     orgs=$(jq -cn --arg o "${NUDGE_ORGS//,/ }" '$o | [splits("[[:space:]]+")] | map(select(. != "") | ascii_downcase)')
-    jq -c --argjson authored "$1" --argjson links "$2" --argjson cutoff "$3" --argjson orgs "$orgs" '
+    jq -c --argjson authored "$1" --argjson links "$2" --argjson cutoff "$3" --argjson backports "${4:-[]}" --argjson orgs "$orgs" '
         def lc: ascii_downcase;
         def ok: test("^[A-Za-z0-9._-]+$");
         (to_entries
          | map(select((.key | startswith("_") | not) and (.value | type == "object") and ((.value.ref // "") != ""))
                | {key: (.value.ref | lc),
                   value: {sk: .key, term: (.value.terminal // ""), seen: (.value.seenOpen // 0),
-                          tasks: (.value.tasks // []), url: (.value.url // .key)}})
+                          tasks: (.value.tasks // []), url: (.value.url // .key), bp: (.value.backportOf // "")}})
          | from_entries) as $idx
         | ( [ $authored[]
               | ((.repository.nameWithOwner // "") | split("/")) as $p
@@ -360,10 +431,11 @@ build_watch() {
                  title: (.title // ""), isDraft: (.isDraft // false), authored: true, tasks: []} ]
             + [ $links[] | {owner, repo, num, url: "https://github.com/\(.owner)/\(.repo)/pull/\(.num)",
                             title: "", isDraft: false, authored: false, tasks: [.task]} ]
+            + [ $backports[] | {owner, repo, num, url, title, isDraft, authored: false, tasks, backportOf} ]
             + [ $idx | to_entries[] | select(.value.seen >= $cutoff)
                 | (.key | capture("^(?<o>[^/]+)/(?<r>[^#]+)#(?<n>[0-9]+)$")?) as $c | select($c != null)
                 | {owner: $c.o, repo: $c.r, num: ($c.n | tonumber), url: .value.url, title: "",
-                   isDraft: false, authored: false, tasks: .value.tasks, tracked: true} ] ) as $all
+                   isDraft: false, authored: false, tasks: .value.tasks, backportOf: .value.bp, tracked: true} ] ) as $all
         | $all | to_entries | map(.value + {rank: .key})
         | map(select((.owner | ok) and (.repo | ok) and (.num | type == "number")))
         | map(. + {key: ("\(.owner)/\(.repo)#\(.num)" | lc)})
@@ -371,6 +443,7 @@ build_watch() {
         | map( (any(.[]; .tracked | not)) as $live
                | (sort_by(if .authored then 0 elif .tracked then 2 else 1 end) | .[0])
                  + { authored: any(.[]; .authored), watch: $live, rank: (map(.rank) | min),
+                     backportOf: ([.[] | .backportOf // "" | select(. != "")] | first // ""),
                      tasks: ([.[] | select((.tracked | not) or ($live | not)) | .tasks[]] | unique) } )
         | sort_by(.rank)
         | map(. + {skey: ($idx[.key].sk // ""), terminal: ($idx[.key].term // "")})
@@ -396,6 +469,12 @@ finish_state() {
                    else . end
             end)'
 }
+
+# jq expression for a state entry's backport marker, given --arg bp: the parent
+# ref, so a backport fetched once more after it leaves the bot's open list still
+# names its parent.
+# shellcheck disable=SC2016  # jq variables, expanded by jq
+BP_JQ='(if $bp == "" then {} else {backportOf: $bp} end)'
 
 # GraphQL selection for one PR: what compute_sig reads (the `gh pr view --json`
 # fields number,url,title,isDraft,headRefOid,reviewDecision,mergeable,reviews,
@@ -506,25 +585,44 @@ main() {
     # Sources. A source that fails never reads as "nothing there": it only
     # stops state from being pruned (healthy=0), so a flaky search cannot erase
     # what we already track.
-    local authored links healthy=1
-    # Open authored PRs, all orgs (cross-org fixes the loft-sh-only gap).
-    if ! authored=$(gh search prs --author "@me" --state open --limit 100 \
-            --json url,number,title,repository,isDraft 2>/dev/null) \
-        || ! jq -e 'type == "array"' <<<"$authored" >/dev/null 2>&1; then
-        log "WARN: authored PR search failed; tracked PRs stay as they are"
+    local authored links src backports parents='[]' botprs='[]' healthy=1
+    # Open authored PRs (all orgs), recent merged ones and the backport bot's
+    # open PRs, in one call. gh exits 1 when one field errors and still prints
+    # the rest, so stdout is judged, not the exit status.
+    src=$(gh api graphql -f query="$(sources_query)" 2>/dev/null) || true
+    if jq -e '(.data.viewer.open.nodes | type) == "array"' <<<"$src" >/dev/null 2>&1; then
+        authored=$(jq -c '.data.viewer.open.nodes' <<<"$src")
+        parents=$(jq -c '[.data.viewer.open.nodes[], (.data.viewer.merged.nodes // [])[]
+                          | "\(.repository.nameWithOwner)#\(.number)" | ascii_downcase] | unique' <<<"$src")
+        if jq -e '.data.viewer.open.pageInfo.hasNextPage == true' <<<"$src" >/dev/null 2>&1; then
+            log "WARN: over 100 open authored PRs; only the first 100 are read"; healthy=0
+        fi
+    else
+        log "WARN: authored PR query failed; tracked PRs stay as they are"
         authored='[]'; healthy=0
+    fi
+    if [[ -n "$BACKPORT_BOT" ]]; then
+        if jq -e '(.data.bot.pullRequests.nodes | type) == "array"' <<<"$src" >/dev/null 2>&1; then
+            botprs=$(jq -c '.data.bot.pullRequests.nodes' <<<"$src")
+            if jq -e '.data.bot.pullRequests.pageInfo.hasNextPage == true' <<<"$src" >/dev/null 2>&1; then
+                log "WARN: over 100 open $BACKPORT_BOT PRs; only the first 100 are read"; healthy=0
+            fi
+        else
+            log "WARN: $BACKPORT_BOT PR query failed; backports stay as they are"; healthy=0
+        fi
     fi
     # PRs linked from pending tasks, any tag.
     if ! links=$(task_pr_links); then
         log "WARN: pending task export failed; task-linked PRs not refreshed"
         links='[]'; healthy=0
     fi
-    log "authored open PRs: $(jq 'length' <<<"$authored"); task-linked PR refs: $(jq 'map([.owner, .repo, .num] | join("/") | ascii_downcase) | unique | length' <<<"$links")"
+    backports=$(backport_items "$botprs" "$parents" "$links") || { log "WARN: reading backports failed"; backports='[]'; healthy=0; }
+    log "authored open PRs: $(jq 'length' <<<"$authored"); task-linked PR refs: $(jq 'map([.owner, .repo, .num] | join("/") | ascii_downcase) | unique | length' <<<"$links"); backports: $(jq 'length' <<<"$backports")"
 
     local now; now=$(now_epoch)
     local cutoff=$(( now - TRACK_WINDOW_SECS ))
     local watch
-    watch=$(build_watch "$authored" "$links" "$cutoff" <<<"$old_state") \
+    watch=$(build_watch "$authored" "$links" "$cutoff" "$backports" <<<"$old_state") \
         || { log "ERROR: building the watch list failed"; return 1; }
 
     # Notify scope and drafts are settled before any API call.
@@ -550,12 +648,12 @@ main() {
     local -a nudges=() owners=()
     local moved=0
 
-    local item key org repo num is_authored skey tracked_only
-    local url ref title detail pstate old sig tasks_json tasks_csv task_sfx foreign_ok
+    local item key org repo num is_authored skey tracked_only backport_of
+    local url ref title detail pstate old sig tasks_json tasks_csv task_sfx bp_sfx foreign_ok
     while read -r item; do
         [[ -z "$item" ]] && continue
-        IFS=$'\x1f' read -r key org repo num is_authored skey tracked_only < <(
-            jq -r '[.key, .owner, .repo, (.num | tostring), (.authored | tostring), .skey, ((.watch | not) | tostring)] | join("\u001f")' <<<"$item")
+        IFS=$'\x1f' read -r key org repo num is_authored skey tracked_only backport_of < <(
+            jq -r '[.key, .owner, .repo, (.num | tostring), (.authored | tostring), .skey, ((.watch | not) | tostring), (.backportOf // "")] | join("\u001f")' <<<"$item")
         # fetch_details already logged why a PR has no data.
         detail=$(jq -c --arg k "$key" '.[$k] // empty' "$DETAILS_FILE")
         [[ -n "$detail" ]] || continue
@@ -567,6 +665,7 @@ main() {
         tasks_json=$(jq -c '.tasks' <<<"$item")
         tasks_csv=$(jq -r 'join(",")' <<<"$tasks_json")
         task_sfx=""; [[ -n "$tasks_csv" ]] && task_sfx=" task:$tasks_csv"
+        bp_sfx=""; [[ -n "$backport_of" ]] && bp_sfx=" (backport of $backport_of)"
         pstate=$(jq -r '.state // "OPEN"' <<<"$detail")
         old=$(jq -c --arg k "$skey" '.[$k] // empty' <<<"$old_state" 2>/dev/null || true)
 
@@ -585,8 +684,8 @@ main() {
         # neither fetched nor reported again.
         if [[ "$pstate" == "MERGED" || "$pstate" == "CLOSED" ]]; then
             local term="${pstate,,}"
-            new_state=$(jq -c --arg k "$skey" --arg ref "$ref" --arg url "$url" --arg t "$term" --argjson now "$now" --argjson tasks "$tasks_json" \
-                '.[$k] = {ref:$ref, url:$url, terminal:$t, terminalAt:$now, tasks:$tasks}' <<<"$new_state")
+            new_state=$(jq -c --arg k "$skey" --arg ref "$ref" --arg url "$url" --arg t "$term" --argjson now "$now" --argjson tasks "$tasks_json" --arg bp "$backport_of" \
+                ".[\$k] = ({ref:\$ref, url:\$url, terminal:\$t, terminalAt:\$now, tasks:\$tasks} + $BP_JQ)" <<<"$new_state")
             if [[ -z "$old" ]] || ! jq -e 'has("seenOpen")' <<<"$old" >/dev/null 2>&1; then
                 log "seed (first contact, already $term): $ref"
                 continue
@@ -596,7 +695,7 @@ main() {
             fi
             pr_has_live_session "$num" && owner="$OWNER_SESSION"
             moved=$((moved + 1))
-            local tmsg_term="pr-move: $ref $term $url$task_sfx"
+            local tmsg_term="pr-move: $ref $term $url$task_sfx$bp_sfx"
             log "MOVED: $tmsg_term"
             nudges+=("$tmsg_term")
             owners+=("$owner")
@@ -633,8 +732,8 @@ main() {
 
         if [[ -z "$old" ]]; then
             log "seed (first contact): $ref"
-            new_state=$(jq -c --arg k "$skey" --argjson s "$sig" --arg ref "$ref" --arg url "$url" --argjson ns "$sticky_now" --argjson now "$now" \
-                '.[$k] = ($s + {ref:$ref, url:$url, notifiedSticky:$ns, seenOpen:$now})' <<<"$new_state")
+            new_state=$(jq -c --arg k "$skey" --argjson s "$sig" --arg ref "$ref" --arg url "$url" --argjson ns "$sticky_now" --argjson now "$now" --arg bp "$backport_of" \
+                ".[\$k] = (\$s + {ref:\$ref, url:\$url, notifiedSticky:\$ns, seenOpen:\$now} + $BP_JQ)" <<<"$new_state")
             continue
         fi
 
@@ -662,8 +761,8 @@ main() {
             last_epoch=$(iso_to_epoch "$last_date")
             if [[ $(( $(now_epoch) - last_epoch )) -lt "$PUSH_COOLDOWN_SECS" ]]; then
                 log "skip (recent own push, cooldown): $ref"
-                new_state=$(jq -c --arg k "$skey" --argjson s "$sig" --arg ref "$ref" --arg url "$url" --argjson ns "$notified" --argjson now "$now" \
-                    '.[$k] = ($s + {ref:$ref, url:$url, notifiedSticky:$ns, seenOpen:$now})' <<<"$new_state")
+                new_state=$(jq -c --arg k "$skey" --argjson s "$sig" --arg ref "$ref" --arg url "$url" --argjson ns "$notified" --argjson now "$now" --arg bp "$backport_of" \
+                    ".[\$k] = (\$s + {ref:\$ref, url:\$url, notifiedSticky:\$ns, seenOpen:\$now} + $BP_JQ)" <<<"$new_state")
                 continue
             fi
         fi
@@ -716,15 +815,15 @@ main() {
         fi
 
         # persist the advanced signature + notified set regardless of fire
-        new_state=$(jq -c --arg k "$skey" --argjson s "$sig" --arg ref "$ref" --arg url "$url" --argjson ns "$new_notified" --argjson now "$now" \
-            '.[$k] = ($s + {ref:$ref, url:$url, notifiedSticky:$ns, seenOpen:$now})' <<<"$new_state")
+        new_state=$(jq -c --arg k "$skey" --argjson s "$sig" --arg ref "$ref" --arg url "$url" --argjson ns "$new_notified" --argjson now "$now" --arg bp "$backport_of" \
+            ".[\$k] = (\$s + {ref:\$ref, url:\$url, notifiedSticky:\$ns, seenOpen:\$now} + $BP_JQ)" <<<"$new_state")
 
         if [[ ${#reasons[@]} -eq 0 ]]; then
             continue
         fi
         moved=$((moved + 1))
         local reason_str; reason_str=$(IFS=,; echo "${reasons[*]}")
-        local msg="pr-move: $ref $reason_str $url$task_sfx"
+        local msg="pr-move: $ref $reason_str $url$task_sfx$bp_sfx"
         log "MOVED: $msg"
         nudges+=("$msg")
         owners+=("$owner")
@@ -762,25 +861,29 @@ main() {
     echo "$new_state" | jq '.' > "$tmp" && mv "$tmp" "$STATE_FILE"
     write_summary "$watched"
 
-    # deliver, capped per cycle
-    local sent=0 i
+    # Deliver: one DM per line up to the cap; past it the rest ride together in
+    # one more DM, one line each. State is already written, so a line left
+    # unsent here would be lost for good.
+    local total=${#nudges[@]} sent=0 i own tmsg
+    local -a out=() overflow=()
     for i in "${!nudges[@]}"; do
-        if [[ "$sent" -ge "$CYCLE_CAP" ]]; then
-            local dropped=$(( ${#nudges[@]} - sent ))
-            log "cycle cap $CYCLE_CAP reached; deferring $dropped nudge(s) to next cycle"
-            break
+        own="${owners[$i]}" tmsg="${nudges[$i]}"
+        if [[ -n "$own" ]]; then
+            tmsg="${nudges[$i]} (owned by $own)"
+            deliver "${nudges[$i]}" "$own"
         fi
-        local own="${owners[$i]}" tmsg="${nudges[$i]}"
-        [[ -n "$own" ]] && tmsg="${nudges[$i]} (owned by $own)"
-        if [[ "$DRY_RUN" -eq 1 ]]; then
-            [[ -n "$own" ]] && log "[DRY-RUN] would send to $own -> ${nudges[$i]}"
-            log "[DRY-RUN] would send to $target -> $tmsg"
+        if (( total <= CYCLE_CAP || ${#out[@]} < CYCLE_CAP - 1 )); then
+            out+=("$tmsg")
         else
-            if [[ -n "$own" ]]; then
-                send_dm "${nudges[$i]}" "$own" | while read -r line; do log "  snd($own): $line"; done
-            fi
-            send_dm "$tmsg" "$target" | while read -r line; do log "  snd($target): $line"; done
+            overflow+=("$tmsg")
         fi
+    done
+    if (( ${#overflow[@]} > 0 )); then
+        log "cycle cap $CYCLE_CAP reached; ${#overflow[@]} line(s) ride in one DM"
+        out+=("$(printf '%s\n' "${overflow[@]}")")
+    fi
+    for tmsg in "${out[@]}"; do
+        deliver "$tmsg" "$target"
         sent=$((sent + 1))
     done
 
