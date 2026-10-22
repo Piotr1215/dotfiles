@@ -94,13 +94,25 @@ regex = "task: ?[0-9a-f]{6,}"
 command = { program = "/home/decoder/dev/dotfiles/scripts/__task_open.sh", args = [] }
 binding = { key = "5", mods = "Control" }
 
-# ctrl+6: read the brief of a TaskWarrior task named by a full uuid, in a popup.
-# Matches the uuid inside a picker token like @"<uuid>|-|repo|title" or a bare
-# uuid; __task_brief.sh --popup prints description, tags and annotations
-# (oldest first). ctrl+5 above takes the shorter `task:<prefix>` form.
+# ctrl+6: act on a TaskWarrior task named on screen, in a popup. Matches a full
+# uuid (inside a picker token like @"<uuid>|-|repo|title" or bare) or a handoff
+# ref from the Alt-m board: 4 hex chars then a space ("843f Grant Kai push?").
+# __task_brief.sh --actions shows the brief (description, tags, annotations
+# oldest first) with keys: q/Esc close, Enter types the task's picker token into
+# Gordon's prompt, s types "/ops-spawn-agent <token> ". Nothing is submitted.
+# A ref is resolved against pending tasks (several matches get a pick list); a
+# full uuid opens any task. ctrl+5 above takes the `task:<prefix>` form.
+# Regex semantics (alacritty 0.17.0; the man page only says "each line", so read
+# in alacritty_terminal 0.26.0 and run against a Term): a lazy DFA restarts at
+# every match, ^ never matches at a row start and Unicode \b does not compile.
+# Rows are space padded, so (^|\s) is the nearest thing to a line start; it also
+# admits a ref-like word mid-title, which the popup answers with "no pending task
+# matches". The trailing space keeps hashes and longer hex runs out, and (?-i:)
+# stops DEAD or FEED matching (a pattern without capitals is case-insensitive).
+# A bare hex run is not matched, see the ctrl+5 comment.
 [[hints.enabled]]
-regex = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
-command = { program = "/home/decoder/dev/dotfiles/scripts/__task_brief.sh", args = ["--popup"] }
+regex = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|(?-i:(^|\\s)[0-9a-f]{4} )"
+command = { program = "/home/decoder/dev/dotfiles/scripts/__task_brief.sh", args = ["--actions"] }
 mouse.enabled = true
 binding = { key = "6", mods = "Control" }
 

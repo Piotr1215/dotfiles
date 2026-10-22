@@ -13,8 +13,18 @@ setup() {
 #!/bin/bash
 echo "$*" >> "${TEST_DIR}/task_calls"
 case "$*" in
+  *843f1111-aaaa*) echo '[{"uuid":"843f1111-aaaa-4bbb-8ccc-000000000001","status":"pending","description":"Grant Kai push on loft-sh/kine?","repo":"no-repo","annotations":[]}]' ;;
+  *7deb2222-aaaa*) echo '[{"uuid":"7deb2222-aaaa-4bbb-8ccc-000000000002","status":"pending","description":"Get PR 8827 approved","repo":"loft-sh/vcluster-pro","linear_issue_id":"DEVOPS-1717","annotations":[]}]' ;;
+  *7deb3333-aaaa*) echo '[{"uuid":"7deb3333-aaaa-4bbb-8ccc-000000000003","status":"pending","description":"Second 7deb task","repo":"no-repo","annotations":[]}]' ;;
   *35ad51ef*) cat << 'JSON'
 [{"uuid":"35ad51ef-988d-4d3e-b0b3-312f557d3ba0","status":"pending","description":"PAM onboarding flags still off: track activation?","project":"flows","tags":["piotr","handoff"],"annotations":[{"entry":"20261022T090000Z","description":"second note"},{"entry":"20261021T090000Z","description":"first note: yes means open the tracking issue"}]}]
+JSON
+  ;;
+  *status:pending*) cat << 'JSON'
+[{"uuid":"843f1111-aaaa-4bbb-8ccc-000000000001","status":"pending","description":"Grant Kai push on loft-sh/kine?","repo":"no-repo"},
+ {"uuid":"7deb2222-aaaa-4bbb-8ccc-000000000002","status":"pending","description":"Get PR 8827 approved","repo":"loft-sh/vcluster-pro","linear_issue_id":"DEVOPS-1717"},
+ {"uuid":"7deb3333-aaaa-4bbb-8ccc-000000000003","status":"pending","description":"Second 7deb task","repo":"no-repo"},
+ {"uuid":"35ad51ef-988d-4d3e-b0b3-312f557d3ba0","status":"pending","description":"PAM onboarding flags still off: track activation?","repo":"no-repo"}]
 JSON
   ;;
   *) echo "[]" ;;
@@ -23,9 +33,23 @@ STUB
     chmod +x "${TEST_DIR}/task"
     cat > "${TEST_DIR}/tmux" << 'STUB'
 #!/bin/bash
+echo "$*" >> "${TEST_DIR}/tmux_calls"
+if [ "$1" = list-panes ]; then
+  [ -n "${STUB_NO_GORDON:-}" ] || { echo "%1 task"; echo "%4 triage"; }
+  exit 0
+fi
 echo "$*" > "${TEST_DIR}/tmux_args"
 STUB
     chmod +x "${TEST_DIR}/tmux"
+    # Stands in for nvim: consumes the brief and exits with STUB_NVIM_RC, the
+    # code the real key maps produce (0 close, 10 Enter, 11 s).
+    cat > "${TEST_DIR}/nvim" << 'STUB'
+#!/bin/bash
+cat > "${TEST_DIR}/nvim_stdin"
+exit "${STUB_NVIM_RC:-0}"
+STUB
+    chmod +x "${TEST_DIR}/nvim"
+    export TASK_BRIEF_NVIM_COMMAND="${TEST_DIR}/nvim"
     export TASK_BRIEF_TASK_COMMAND="${TEST_DIR}/task"
     export TASK_BRIEF_TMUX_COMMAND="${TEST_DIR}/tmux"
 }
@@ -78,4 +102,98 @@ teardown() {
     [ "$status" -eq 0 ]
     grep -q 'display-popup' "${TEST_DIR}/tmux_args"
     grep -q '35ad51ef-988d-4d3e-b0b3-312f557d3ba0' "${TEST_DIR}/tmux_args"
+}
+
+# --actions: 4-hex handoff ref from the Alt-m board
+
+@test "--actions opens a popup that runs the actions mode for the ref" {
+    run "$SCRIPT" --actions ' 843f G'
+    [ "$status" -eq 0 ]
+    grep -q 'display-popup' "${TEST_DIR}/tmux_args"
+    grep -q -- "--actions-run '843f'" "${TEST_DIR}/tmux_args"
+}
+
+@test "unique ref resolves, shows the brief and the key legend" {
+    STUB_NVIM_RC=0 run "$SCRIPT" --actions-run 843f
+    [ "$status" -eq 0 ]
+    grep -q 'Grant Kai push' "${TEST_DIR}/nvim_stdin"
+    grep -q '\[Enter\] unfurl' "${TEST_DIR}/nvim_stdin"
+}
+
+@test "ref resolution reads pending tasks with hooks off" {
+    STUB_NVIM_RC=0 run "$SCRIPT" --actions-run 843f
+    grep -q 'status:pending' "${TEST_DIR}/task_calls"
+    grep -q 'rc.hooks=off' "${TEST_DIR}/task_calls"
+    ! grep -Eq ' (modify|annotate|done|add|delete)' "${TEST_DIR}/task_calls"
+}
+
+@test "ref with no pending task says so and sends nothing" {
+    run "$SCRIPT" --actions-run beef </dev/null
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"no pending task matches beef"* ]]
+    [ ! -f "${TEST_DIR}/nvim_stdin" ]
+    ! grep -q send-keys "${TEST_DIR}/tmux_calls" 2>/dev/null
+}
+
+@test "ambiguous ref lists the matches and the pick opens that task" {
+    STUB_NVIM_RC=0 run "$SCRIPT" --actions-run 7deb <<<"2"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"matches 2 pending tasks"* ]]
+    [[ "$output" == *"7deb2222"* ]]
+    [[ "$output" == *"7deb3333"* ]]
+    grep -q 'Second 7deb task' "${TEST_DIR}/nvim_stdin"
+}
+
+@test "ambiguous ref cancelled by another key opens nothing" {
+    run "$SCRIPT" --actions-run 7deb <<<"x"
+    [ "$status" -eq 0 ]
+    [ ! -f "${TEST_DIR}/nvim_stdin" ]
+}
+
+@test "Enter sends the no-repo task token literally, without Enter" {
+    STUB_NVIM_RC=10 run "$SCRIPT" --actions-run 843f
+    [ "$status" -eq 0 ]
+    line=$(grep send-keys "${TEST_DIR}/tmux_calls")
+    [[ "$line" == 'send-keys -t %4 -l -- @"843f1111-aaaa-4bbb-8ccc-000000000001|-|no-repo|Grant Kai push on loft-sh/kine?"' ]]
+    [ "$(grep -c send-keys "${TEST_DIR}/tmux_calls")" -eq 1 ]
+    ! grep -Eq 'Enter|C-m' "${TEST_DIR}/tmux_calls"
+}
+
+@test "token for a Linear task carries the linear id and repo" {
+    STUB_NVIM_RC=10 run "$SCRIPT" --actions-run 7deb <<<"1"
+    line=$(grep send-keys "${TEST_DIR}/tmux_calls")
+    [[ "$line" == 'send-keys -t %4 -l -- @"7deb2222-aaaa-4bbb-8ccc-000000000002|DEVOPS-1717|loft-sh/vcluster-pro|Get PR 8827 approved"' ]]
+}
+
+@test "s sends the spawn prefix, the token and a trailing space" {
+    STUB_NVIM_RC=11 run "$SCRIPT" --actions-run 843f
+    [ "$status" -eq 0 ]
+    line=$(grep send-keys "${TEST_DIR}/tmux_calls")
+    [[ "$line" == 'send-keys -t %4 -l -- /ops-spawn-agent @"843f1111-aaaa-4bbb-8ccc-000000000001|-|no-repo|Grant Kai push on loft-sh/kine?" ' ]]
+    ! grep -Eq 'Enter|C-m' "${TEST_DIR}/tmux_calls"
+}
+
+@test "q or Esc sends nothing" {
+    STUB_NVIM_RC=0 run "$SCRIPT" --actions-run 843f
+    [ "$status" -eq 0 ]
+    ! grep -q send-keys "${TEST_DIR}/tmux_calls"
+}
+
+@test "no Gordon pane fails with a short message and sends nothing" {
+    STUB_NO_GORDON=1 STUB_NVIM_RC=10 run "$SCRIPT" --actions-run 843f </dev/null
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"no Gordon pane"* ]]
+    ! grep -q send-keys "${TEST_DIR}/tmux_calls"
+}
+
+@test "Gordon pane is looked up by @agent_name" {
+    STUB_NVIM_RC=10 run "$SCRIPT" --actions-run 843f
+    grep -q "list-panes -a -F #{pane_id} #{@agent_name}" "${TEST_DIR}/tmux_calls"
+}
+
+@test "a full uuid opens the actions view regardless of status" {
+    STUB_NVIM_RC=10 run "$SCRIPT" --actions-run 843f1111-aaaa-4bbb-8ccc-000000000001
+    [ "$status" -eq 0 ]
+    ! grep -q 'status:pending' "${TEST_DIR}/task_calls"
+    grep -q 'send-keys -t %4 -l -- @"843f1111-aaaa' "${TEST_DIR}/tmux_calls"
 }
