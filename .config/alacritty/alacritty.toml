@@ -94,6 +94,16 @@ regex = "task: ?[0-9a-f]{6,}"
 command = { program = "/home/decoder/dev/dotfiles/scripts/__task_open.sh", args = [] }
 binding = { key = "5", mods = "Control" }
 
+# ctrl+6: read the brief of a TaskWarrior task named by a full uuid, in a popup.
+# Matches the uuid inside a picker token like @"<uuid>|-|repo|title" or a bare
+# uuid; __task_brief.sh --popup prints description, tags and annotations
+# (oldest first). ctrl+5 above takes the shorter `task:<prefix>` form.
+[[hints.enabled]]
+regex = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+command = { program = "/home/decoder/dev/dotfiles/scripts/__task_brief.sh", args = ["--popup"] }
+mouse.enabled = true
+binding = { key = "6", mods = "Control" }
+
 [cursor.style]
 shape = "Beam"
 
