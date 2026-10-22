@@ -99,7 +99,8 @@ binding = { key = "5", mods = "Control" }
 # ref from the Alt-m board: 4 hex chars then a space ("843f Grant Kai push?").
 # __task_brief.sh --actions shows the brief (description, tags, annotations
 # oldest first) with keys: q/Esc close, Enter types the task's picker token into
-# Gordon's prompt, s types "/ops-spawn-agent <token> ". Nothing is submitted.
+# Gordon's prompt, s types "/ops-spawn-agent <token> ", d marks the task done.
+# Typed text is never submitted.
 # A ref is resolved against pending tasks (several matches get a pick list); a
 # full uuid opens any task. ctrl+5 above takes the `task:<prefix>` form.
 # Regex semantics (alacritty 0.17.0; the man page only says "each line", so read

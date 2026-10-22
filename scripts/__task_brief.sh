@@ -14,8 +14,9 @@
 #                                             from the Alt-m board. Keys:
 #                                             q/Esc close, Enter unfurl the task
 #                                             token into Gordon's prompt, s the
-#                                             same prefixed with /ops-spawn-agent.
-#                                             Text is typed, never submitted.
+#                                             same prefixed with /ops-spawn-agent,
+#                                             d marks the task done. Text is
+#                                             typed, never submitted.
 # <token> may be a full uuid, a prefix, `task:<prefix>`, or a whole
 # `@"<uuid>|..."` picker token; the first uuid-looking run is used.
 # A ref that matches several pending tasks opens a pick list first.
@@ -161,7 +162,7 @@ actions_run() {
 
   tmpf=$(mktemp)
   {
-    printf '[Enter] unfurl into Gordon   [s] spawn   [q/Esc] close\n\n'
+    printf '[Enter] unfurl into Gordon   [s] spawn   [d] done   [q/Esc] close\n\n'
     print_brief "$id"
   } >"$tmpf"
 
@@ -171,12 +172,15 @@ actions_run() {
     -c 'nnoremap <silent> <Esc> :qa!<CR>' \
     -c 'nnoremap <silent> <CR> :cq 10<CR>' \
     -c 'nnoremap <silent> s :cq 11<CR>' \
+    -c 'nnoremap <silent> d :cq 12<CR>' \
     - <"$tmpf" || rc=$?
   rm -f "$tmpf"
 
   case "$rc" in
     10) token=$(build_token "$id"); send_to_gordon "$token" ;;
     11) token=$(build_token "$id"); send_to_gordon "/ops-spawn-agent $token " ;;
+    # Hooks stay on: closing is a real write, unlike the reads above.
+    12) "$task_bin" rc.confirmation=no rc.verbose=nothing "$id" 'done' >/dev/null ;;
     *) return 0 ;;
   esac
 }

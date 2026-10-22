@@ -197,3 +197,17 @@ teardown() {
     ! grep -q 'status:pending' "${TEST_DIR}/task_calls"
     grep -q 'send-keys -t %4 -l -- @"843f1111-aaaa' "${TEST_DIR}/tmux_calls"
 }
+
+@test "d marks the task done with hooks on and sends nothing" {
+    STUB_NVIM_RC=12 run "$SCRIPT" --actions-run 843f
+    [ "$status" -eq 0 ]
+    line=$(grep ' done' "${TEST_DIR}/task_calls")
+    [[ "$line" == *"843f1111-aaaa-4bbb-8ccc-000000000001 done" ]]
+    [[ "$line" != *"rc.hooks=off"* ]]
+    ! grep -q send-keys "${TEST_DIR}/tmux_calls"
+}
+
+@test "the legend names the d key" {
+    STUB_NVIM_RC=0 run "$SCRIPT" --actions-run 843f
+    grep -q '\[d\] done' "${TEST_DIR}/nvim_stdin"
+}
