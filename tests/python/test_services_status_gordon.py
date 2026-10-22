@@ -45,7 +45,7 @@ def test_first_run_records_state_and_appends_nothing(board):
     board.notify_transitions({"GCP": "degraded", "GitHub": "operational"})
     assert lines(board) == []
     state = (board.log.parent / "state" / board.GORDON_STATE_NAME).read_text()
-    assert '"outage"' in state and '"operational"' in state
+    assert '"degraded"' in state and '"operational"' in state
 
 
 def test_transition_appends_once_and_repeat_appends_nothing(board):
@@ -56,7 +56,7 @@ def test_transition_appends_once_and_repeat_appends_nothing(board):
     assert len(out) == 1
     date, app, summary, body = out[0].split("\t")
     assert app == "argos"
-    assert summary == "GCP outage: Multiple services are experiencing issues in the europe-west2 region."
+    assert summary == "GCP degraded: Multiple services are experiencing issues in the europe-west2 region."
     assert "London (europe-west2)" in body
     assert "AlloyDB for PostgreSQL" in body
     assert "Old resolved thing" not in body and "Iowa" not in body
@@ -64,11 +64,88 @@ def test_transition_appends_once_and_repeat_appends_nothing(board):
     assert "degraded" in body
 
 
-def test_severity_change_inside_outage_appends_nothing(board):
+def test_severity_change_inside_outage_appends_one_line_each_way(board):
     board.notify_transitions({"GCP": "operational"})
     board.notify_transitions({"GCP": "degraded"})
     board.notify_transitions({"GCP": "major"})
+    board.notify_transitions({"GCP": "major"})
+    board.notify_transitions({"GCP": "degraded"})
+    out = lines(board)
+    assert [r.split("\t")[2].split(":")[0] for r in out] == ["GCP degraded", "GCP now outage", "GCP now degraded"]
+
+
+def statuspage(board, monkeypatch, pages):
+    """Serves pages[url suffix] for every statuspage fetch; a missing suffix
+    is a failed fetch."""
+    def fetch(url, timeout=5):
+        for suffix, data in pages.items():
+            if url.endswith(suffix):
+                return data
+        return None
+    monkeypatch.setattr(board, "fetch_status", fetch)
+
+
+def comps(**states):
+    return {"components": [{"name": n.replace("_", " "), "status": s, "group": False} for n, s in states.items()]
+            + [{"name": "GitHub", "status": "degraded_performance", "group": True}]}
+
+
+def test_component_changes_while_degraded_append_an_update(board, monkeypatch):
+    incidents = {"incidents": []}
+    pages = {"incidents/unresolved.json": incidents, "components.json": comps(GitHub_Pull_Requests="degraded_performance")}
+    statuspage(board, monkeypatch, pages)
+    board.notify_transitions({"Spacelift": "operational"})
+    board.notify_transitions({"Spacelift": "degraded"})
+    board.notify_transitions({"Spacelift": "degraded"})
+    pages["components.json"] = comps(GitHub_Pull_Requests="partial_outage", Worker_Pools="degraded_performance")
+    incidents["incidents"] = [{"name": "Delayed runs"}]
+    board.notify_transitions({"Spacelift": "degraded"})
+    board.notify_transitions({"Spacelift": "degraded"})
+    out = lines(board)
+    assert len(out) == 2
+    _, _, summary, body = out[0].split("\t")
+    assert summary == "Spacelift degraded: status page reports an outage"
+    assert "Components: GitHub Pull Requests (degraded)." in body
+    _, _, summary, body = out[1].split("\t")
+    assert summary == "Spacelift update: Delayed runs"
+    assert "new incident: Delayed runs" in body
+    assert "GitHub Pull Requests degraded -> partial outage" in body
+    assert "+Worker Pools (degraded)" in body
+    # A group component is not an affected component of its own.
+    assert "(degraded), GitHub (" not in body
+
+
+def test_a_failed_details_fetch_is_not_a_change(board, monkeypatch):
+    pages = {"incidents/unresolved.json": {"incidents": []}, "components.json": comps(Runs="degraded_performance")}
+    statuspage(board, monkeypatch, pages)
+    board.notify_transitions({"Spacelift": "operational"})
+    board.notify_transitions({"Spacelift": "degraded"})
+    del pages["components.json"]
+    board.notify_transitions({"Spacelift": "degraded"})
     assert len(lines(board)) == 1
+
+
+def test_cloudflare_components_are_never_read(board, monkeypatch):
+    seen = []
+    def fetch(url, timeout=5):
+        seen.append(url)
+        return {"incidents": [{"name": "Network issues", "impact": "minor"}]} if url.endswith("unresolved.json") else None
+    monkeypatch.setattr(board, "fetch_status", fetch)
+    board.notify_transitions({"Cloudflare": "operational"})
+    board.notify_transitions({"Cloudflare": "degraded"})
+    assert not any(u.endswith("components.json") for u in seen)
+    assert lines(board)[0].split("\t")[2] == "Cloudflare degraded: Network issues"
+
+
+def test_an_outage_recorded_by_the_two_state_notifier_is_adopted_silently(board):
+    state = board.log.parent / "state"
+    state.mkdir()
+    (state / board.GORDON_STATE_NAME).write_text('{"GCP": {"state": "outage", "title": "old"}}')
+    board.notify_transitions({"GCP": "degraded"})
+    board.notify_transitions({"GCP": "degraded"})
+    assert lines(board) == []
+    board.notify_transitions({"GCP": "operational"})
+    assert lines(board)[0].split("\t")[2] == "GCP recovered"
 
 
 def test_recovery_appends_once(board):
