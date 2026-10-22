@@ -982,6 +982,9 @@ alias 8ball='noglob 8ball'
 
 # Judge on classif-chat: `judge "horrible machine needs a hobby"`. Five random
 # dictionary words are the verdicts to pick from, new on every call, and -w
-# names the chat lines that swung it. The run is copied as CC copies it, and
-# flags after the text go to classif.
-judge() { classif-chat "$1" -e "$(rg -x '[a-z]+' /usr/share/dict/words | shuf -n 5 | paste -sd,)" -w "${@:2}" 2>&1 | __copy_cmd_and_output }
+# names the chat lines that swung it. The choices print first, the run is
+# copied as CC copies it, and flags after the text go to classif.
+judge() {
+    local choices=$(rg -x '[a-z]+' /usr/share/dict/words | shuf -n 5 | paste -sd,)
+    { print -r -- "Possible choices: ${choices//,/, }"; classif-chat "$1" -e "$choices" -w "${@:2}" } 2>&1 | __copy_cmd_and_output
+}
