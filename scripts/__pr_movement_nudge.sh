@@ -6,22 +6,52 @@
 #
 # PR-movement to auto-dispatch watcher. Stage 0: DRY-RUN by default.
 #
-# Detects movement on Piotr's OPEN AUTHORED PRs and DMs the `triage` agent
-# (Gordon) one `pr-move:` line per genuinely-moved PR, mirroring how
-# __auto_triage_nudge.sh nudges Gordon after the Linear sync. Gordon then runs
-# pull->form->decide and dispatches a NORMAL worker (__spawn_agent.sh --pr,
-# defaults to /ops-autonomous-worker), never the review panel.
+# Detects movement on the PRs it watches and DMs one `pr-move:` line per
+# genuinely-moved PR, mirroring how __auto_triage_nudge.sh nudges Gordon after
+# the Linear sync. Delivery goes to Kendra (`intake`) while she is live, else to
+# Gordon (`triage`): __intake_route.sh decides, once per run (INTAKE_ROUTE_BIN).
+# Gordon then runs pull->form->decide and dispatches a NORMAL worker
+# (__spawn_agent.sh --pr, defaults to /ops-autonomous-worker), never the review
+# panel.
 #
-# Runs from gh-pr-review-sync.service (ExecStart) on its 15-min timer. It
-# enumerates PRs itself, cross-org, and reads no taskwarrior tasks. The PR
-# task sync that once shared this unit was discontinued on 2026-10-13.
+# WATCHED PRs: Piotr's open authored PRs, plus every GitHub PR linked
+#   (https://github.com/<owner>/<repo>/pull/<n>) from the description or an
+#   annotation of any PENDING taskwarrior task, any tag (`rc.context=none`, so
+#   hidden +gordon tasks count; dependabot and other bot PRs included). A line
+#   for a task-linked PR ends in ` task:<uuid8>[,<uuid8>]`, naming the owning
+#   task(s). A PR no source names any more keeps its entry for PR_MOVE_TRACK_WINDOW
+#   (3 days): one that merged or closed meanwhile is reported (the `merged` and
+#   `closed` edge), one still open is retired when the window ends.
 #
-# Movements that FIRE (authored, open, non-draft PRs):
+# Runs from gh-pr-review-sync.service (ExecStart) on its 15-min timer, cross-org.
+# The PR task sync that once shared this unit was discontinued on 2026-10-13.
+#
+# COST: one `gh search prs` plus one `gh api graphql` call per PR_MOVE_GQL_CHUNK
+#   (default 25) PRs, each query holding one aliased repository(...).pullRequest(...)
+#   field per PR. ~100 PRs is four calls, not one `gh pr view` each. A chunk that
+#   fails logs a WARN and skips only its PRs. Measured 22 Oct 2026: 0.27 s per PR
+#   server side (10 PRs 3.7 s, 20 PRs 5.5 s, 30 PRs 8.1 s) against GitHub's 10 s
+#   GraphQL timeout, so 25 keeps a margin that 30 does not.
+#
+# STATUS LINE: each run writes {"watched": N, "updated": ISO, "epoch": N} to
+#   PR_MOVE_SUMMARY (default pr-watch-summary.json beside the state file) so the
+#   status line shows the count without a gh call or parsing the state file.
+#
+# Movements that FIRE (open, non-draft PRs):
 #   changes-requested  reviewDecision -> CHANGES_REQUESTED               (sticky)
 #   review-comment     new review/comment by a non-Piotr, non-bot actor  (edge)
 #   ci-red             statusCheckRollup -> FAILURE                       (sticky)
 #   merge-conflict     mergeable -> CONFLICTING                          (sticky)
 #   foreign-push       new head commit whose author is not a self login  (edge)
+#                      (only on a PR a self login authored: on someone else's
+#                      task-linked PR every push is theirs)
+#   merged / closed    the PR left the open state                        (terminal)
+# merged and closed fire ONCE, on the edge from open to that state, then the PR
+#   stays quiet (and is no longer fetched) while a task still links it. A PR
+#   first seen already merged or closed seeds silently, so a task that cites a
+#   long-merged PR does not replay history. The owning task is closed or
+#   annotated by the receiver; __gordon_board_check.sh keeps closing +piotr
+#   handoffs whose close-when PR merged (the backstop below), and is not repeated.
 # A sticky reason names a STATE the PR sits in, so it fires ONCE on entry and
 #   then stays quiet for as long as it holds; it fires again only if it clears
 #   and returns. `notifiedSticky` in the state file is the per-PR record of what
@@ -54,20 +84,23 @@
 #   The self set is $ME + PR_MOVE_SELF_LOGINS (default claude[bot]). A non-self
 #   actor (a teammate's review, an external contributor's push) still fires.
 # Contention guard: a PR owned by a live (non-spend-stalled) tmux session is
-#   handled by that worker, so Gordon must not dispatch a second one. The event
-#   is still delivered, never dropped: the same line goes to the owner on the
-#   bus (its session name is its bus name) and to triage marked "(owned by
-#   <session>)", so Gordon can act if the worker is idle or finished. A PR
+#   handled by that worker, so the receiver must not dispatch a second one. The
+#   event is still delivered, never dropped: the same line goes to the owner on
+#   the bus (its session name is its bus name) and to the target marked "(owned
+#   by <session>)", so it can act if the worker is idle or finished. A PR
 #   Piotr/the agent pushed to within PUSH_COOLDOWN_SECS is skipped (unowned only).
 #
-# LIMITATION (Stage 0): inline review-thread replies are not in `gh pr view
-#   --json`; they surface indirectly via the carrying review / updatedAt. A
-#   later GraphQL enrichment can add reviewThreads if needed.
+# LIMITATION: inline review-thread replies are not fetched (reviews and PR
+#   comments are); they surface indirectly via the carrying review. reviewThreads
+#   can be added to GQL_PR_FRAGMENT if needed. Check rows beyond the first 100
+#   contexts of a PR's newest commit are not read.
 #
 # Usage:
 #   __pr_movement_nudge.sh            # DRY-RUN (default): log only, no DM
 #   __pr_movement_nudge.sh --dry-run  # same, explicit
-#   __pr_movement_nudge.sh --live     # send pr-move: DMs to triage
+#   __pr_movement_nudge.sh --live     # send pr-move: DMs to intake, else triage
+# Dry-run still advances the state file, like --live; point PR_MOVE_STATE at a
+# copy to rehearse without consuming real movements.
 set -eo pipefail
 
 # env for cron/systemd (node on PATH, bus env, gh auth)
@@ -82,6 +115,17 @@ LOCK_FILE="${PR_MOVE_LOCK:-/tmp/pr-movement-nudge.lock}"
 # __handoff_discharge_prompt_hook.sh. This call is the backstop for a PR no
 # live session tracks. Skipped when not executable.
 HANDOFF_CHECK="${PR_MOVE_HANDOFF_CHECK:-$HOME/.claude/scripts/__gordon_board_check.sh}"
+# The status line's view of this run: a tiny file, so a render never parses the
+# state file or calls gh.
+SUMMARY_FILE="${PR_MOVE_SUMMARY:-${STATE_FILE%/*}/pr-watch-summary.json}"
+# Who receives the DMs: prints `intake` or `triage`. Stubbed by tests.
+INTAKE_ROUTE_BIN="${INTAKE_ROUTE_BIN:-$HOME/.claude/scripts/__intake_route.sh}"
+# PRs per `gh api graphql` call.
+GQL_CHUNK="${PR_MOVE_GQL_CHUNK:-25}"
+[[ "$GQL_CHUNK" =~ ^[1-9][0-9]*$ ]] || GQL_CHUNK=25
+# An entry no source names any more is still fetched once to catch a merge when
+# it was last seen open within this window (default 3 days).
+TRACK_WINDOW_SECS="${PR_MOVE_TRACK_WINDOW:-259200}"
 
 DRY_RUN=1
 case "${1:-}" in
@@ -91,8 +135,9 @@ case "${1:-}" in
 esac
 
 # Delivery: identical to __auto_triage_nudge.sh (Node snd -> agents.dm.<b64url>).
-# No presence gate; NATS Core drops if triage is not subscribed. SND_FROM marks
-# origin so the bus shows the nudge as watcher-originated.
+# No presence gate here (resolve_target holds it); NATS Core drops if the target
+# is not subscribed. SND_FROM marks origin so the bus shows the nudge as
+# watcher-originated.
 SND_NODE_BIN="${SND_NODE_BIN:-/home/decoder/dev/agents-mcp-server/build/snd.js}"
 AGENTS_NATS_URL_DEFAULT="nats://nats-nats-tailscale.tail165ec.ts.net:4222"
 export AGENTS_NATS_URL="${AGENTS_NATS_URL:-$AGENTS_NATS_URL_DEFAULT}"
@@ -123,7 +168,7 @@ STALL_RE='spend limit|rate-limit-options|Add funds|wait for limit to reset|usage
 
 log() { echo "[$(date '+%Y-%m-%dT%H:%M:%S%z')] $*" | tee -a "$LOG_FILE"; }
 
-# Send a DM to triage over the NATS comms bus (same path as __auto_triage_nudge.sh).
+# Send a DM over the NATS comms bus (same path as __auto_triage_nudge.sh).
 # send_dm MSG [TARGET] -> DM MSG to TARGET (default triage).
 send_dm() { node "$SND_NODE_BIN" -t "${2:-triage}" "$1" 2>&1; }
 
@@ -256,6 +301,195 @@ review_requests_new() {
         | ["\($p.repository.nameWithOwner)#\($p.number)", $p.author.login, $p.url] | @tsv' <<<"$1"
 }
 
+# resolve_target -> `intake` or `triage`: who receives this run's DMs. Kendra
+# (`intake`) takes routine events off Gordon (`triage`) while she is live. The
+# rule lives in one helper, __intake_route.sh; a missing helper, a failure, or
+# any other output means triage, exactly as before she existed.
+resolve_target() {
+    local t=""
+    if [[ -x "$INTAKE_ROUTE_BIN" ]]; then
+        t=$(timeout 30 "$INTAKE_ROUTE_BIN" 2>/dev/null) || t=""
+    fi
+    t="${t//[[:space:]]/}"
+    case "$t" in
+        intake | triage) printf '%s' "$t" ;;
+        *) printf 'triage' ;;
+    esac
+}
+
+# task_pr_links -> JSON array of {owner, repo, num, task}: one row per GitHub PR
+# URL (https://github.com/<owner>/<repo>/pull/<n>) found in the description or
+# an annotation of any PENDING task, with the first 8 characters of the task
+# uuid. Context none, so hidden +gordon tasks count. Fails when task does.
+task_pr_links() {
+    local out
+    out=$(task rc.context=none rc.verbose=nothing rc.hooks=off rc.confirmation=no status:pending export 2>/dev/null) || return 1
+    jq -c '
+        [ .[]? | select(.status == "pending") | (.uuid // "")[0:8] as $u
+          | ([.description // ""] + [(.annotations // [])[]? | .description // ""])[]
+          | scan("(?i)https?://github\\.com/([A-Za-z0-9._-]+)/([A-Za-z0-9._-]+)/pull/([0-9]+)")
+          | {owner: .[0], repo: .[1], num: (.[2] | tonumber), task: $u} ]
+        | unique' <<<"$out"
+}
+
+# build_watch AUTHORED LINKS CUTOFF < STATE -> JSON array, one item per PR to
+# look at, merged from three sources: Piotr's open authored PRs (AUTHORED, the
+# `gh search prs` rows), PRs linked from pending tasks (LINKS, task_pr_links),
+# and PRs the state file saw open at or after CUTOFF (epoch) that neither source names
+# any more, which are fetched once to catch a merge or close and then dropped.
+# Item: key (lowercase owner/repo#n), owner, repo, num, url, title, isDraft,
+# authored, tasks (uuid8 list), watch (named by a live source), skey (state key,
+# "" when new), terminal ("merged"/"closed"/""), skip ("org", "draft",
+# "terminal" or "" to fetch it). Order follows first appearance.
+build_watch() {
+    local orgs
+    orgs=$(jq -cn --arg o "${NUDGE_ORGS//,/ }" '$o | [splits("[[:space:]]+")] | map(select(. != "") | ascii_downcase)')
+    jq -c --argjson authored "$1" --argjson links "$2" --argjson cutoff "$3" --argjson orgs "$orgs" '
+        def lc: ascii_downcase;
+        def ok: test("^[A-Za-z0-9._-]+$");
+        (to_entries
+         | map(select((.key | startswith("_") | not) and (.value | type == "object") and ((.value.ref // "") != ""))
+               | {key: (.value.ref | lc),
+                  value: {sk: .key, term: (.value.terminal // ""), seen: (.value.seenOpen // 0),
+                          tasks: (.value.tasks // []), url: (.value.url // .key)}})
+         | from_entries) as $idx
+        | ( [ $authored[]
+              | ((.repository.nameWithOwner // "") | split("/")) as $p
+              | {owner: (if ($p | length) == 2 and $p[0] != "" then $p[0] else "loft-sh" end),
+                 repo: (.repository.name // ($p[1] // "")), num: .number, url: (.url // ""),
+                 title: (.title // ""), isDraft: (.isDraft // false), authored: true, tasks: []} ]
+            + [ $links[] | {owner, repo, num, url: "https://github.com/\(.owner)/\(.repo)/pull/\(.num)",
+                            title: "", isDraft: false, authored: false, tasks: [.task]} ]
+            + [ $idx | to_entries[] | select(.value.seen >= $cutoff)
+                | (.key | capture("^(?<o>[^/]+)/(?<r>[^#]+)#(?<n>[0-9]+)$")?) as $c | select($c != null)
+                | {owner: $c.o, repo: $c.r, num: ($c.n | tonumber), url: .value.url, title: "",
+                   isDraft: false, authored: false, tasks: .value.tasks, tracked: true} ] ) as $all
+        | $all | to_entries | map(.value + {rank: .key})
+        | map(select((.owner | ok) and (.repo | ok) and (.num | type == "number")))
+        | map(. + {key: ("\(.owner)/\(.repo)#\(.num)" | lc)})
+        | group_by(.key)
+        | map( (any(.[]; .tracked | not)) as $live
+               | (sort_by(if .authored then 0 elif .tracked then 2 else 1 end) | .[0])
+                 + { authored: any(.[]; .authored), watch: $live, rank: (map(.rank) | min),
+                     tasks: ([.[] | select((.tracked | not) or ($live | not)) | .tasks[]] | unique) } )
+        | sort_by(.rank)
+        | map(. + {skey: ($idx[.key].sk // ""), terminal: ($idx[.key].term // "")})
+        | map((.owner | lc) as $o
+              | . + {skip: (if ($orgs | length) > 0 and (($orgs | index($o)) == null) then "org"
+                          elif .isDraft then "draft"
+                          elif (.authored | not) and .terminal != "" then "terminal"
+                          else "" end)})'
+}
+
+# finish_state LIVE CUTOFF PRUNE < STATE -> STATE with the owning tasks stamped
+# on every entry a live source still names (LIVE: lowercase ref -> task list).
+# With PRUNE=1 it also drops entries no source names that are terminal or were
+# last seen open before CUTOFF, which retires the entries of PRs long merged.
+# PRUNE=0 (a source failed) drops nothing, so a flaky search cannot erase state.
+finish_state() {
+    jq -c --argjson live "$1" --argjson cutoff "$2" --argjson prune "$3" '
+        with_entries(
+            if (.key | startswith("_")) or (.value | type != "object") then .
+            else ((.value.ref // "") | ascii_downcase) as $r
+                 | if $live[$r] != null then .value += {tasks: $live[$r]}
+                   elif $prune == 1 and (((.value.terminal // "") != "") or ((.value.seenOpen // 0) < $cutoff)) then empty
+                   else . end
+            end)'
+}
+
+# GraphQL selection for one PR: what compute_sig reads (the `gh pr view --json`
+# fields number,url,title,isDraft,headRefOid,reviewDecision,mergeable,reviews,
+# comments,commits,statusCheckRollup,author) plus state/merged/closed. Only the
+# newest commit is read: compute_sig takes `last`, and its rollup is the head's.
+GQL_PR_FRAGMENT='fragment F on PullRequest {
+  number url title isDraft state merged closed
+  headRefOid reviewDecision mergeable
+  author { login }
+  reviews(last: 100) { nodes { author { login } submittedAt } }
+  comments(last: 100) { nodes { author { login } createdAt } }
+  commits(last: 1) { nodes { commit {
+    oid committedDate authoredDate
+    authors(first: 10) { nodes { user { login } } }
+    statusCheckRollup { contexts(first: 100) { nodes {
+      __typename
+      ... on CheckRun { name status conclusion }
+      ... on StatusContext { context state }
+    } } }
+  } } }
+}'
+
+# jq def mapping the GraphQL PullRequest above onto the `gh pr view --json`
+# shape compute_sig consumes, so the signature code does not change.
+GQL_VIEW_JQ='
+    def nodes: (. // {}) | (.nodes // []);
+    def view: {
+        number, url, title, isDraft, state, merged, closed, headRefOid, reviewDecision, mergeable,
+        author: {login: (.author.login // null)},
+        reviews: [ (.reviews | nodes)[] | {author: {login: (.author.login // null)}, submittedAt} ],
+        comments: [ (.comments | nodes)[] | {author: {login: (.author.login // null)}, createdAt} ],
+        commits: [ (.commits | nodes)[] | .commit | {oid, committedDate, authoredDate,
+                   authors: [ (.authors | nodes)[] | {login: (.user.login // null)} ]} ],
+        statusCheckRollup: ((.commits | nodes | last | .commit.statusCheckRollup.contexts | nodes) // [])
+    };'
+
+# gql_to_view PR_JSON -> the PullRequest node as a `gh pr view --json` object.
+gql_to_view() {
+    jq -c "$GQL_VIEW_JQ"' view' <<<"$1"
+}
+
+# gql_query ITEMS -> one query with an aliased repository(...).pullRequest(...)
+# field per item (p0, p1, ...). Owner and repo passed build_watch's name check.
+gql_query() {
+    jq -r --arg frag "$GQL_PR_FRAGMENT" '
+        "query {\n"
+        + ([to_entries[] | "p\(.key): repository(owner: \"\(.value.owner)\", name: \"\(.value.repo)\") { pullRequest(number: \(.value.num)) { ...F } }"] | join("\n"))
+        + "\n}\n" + $frag' <<<"$1"
+}
+
+# fetch_details ITEMS OUT_FILE -> OUT_FILE holds {lowercase ref: view-shaped PR}
+# for every PR GitHub returned, read GQL_CHUNK PRs per `gh api graphql` call
+# (ceil(N/GQL_CHUNK) calls, not N). gh exits 1 and still prints the data when one
+# alias fails (a repo that is gone), so stdout is judged, not the exit status. A
+# chunk with no data logs a WARN and skips only its PRs.
+fetch_details() {
+    local items="$1" out_file="$2" total i=0 chunk q resp k
+    echo '{}' > "$out_file"
+    total=$(jq 'length' <<<"$items")
+    while (( i < total )); do
+        chunk=$(jq -c --argjson i "$i" --argjson n "$GQL_CHUNK" '.[$i:$i+$n]' <<<"$items")
+        q=$(gql_query "$chunk")
+        resp=$(gh api graphql -f query="$q" 2>"${out_file}.err") || true
+        if jq -e '(.data | type) == "object"' <<<"$resp" >/dev/null 2>&1; then
+            jq -c --argjson chunk "$chunk" --slurpfile acc "$out_file" "$GQL_VIEW_JQ"'
+                $acc[0] + ( [ range(0; $chunk | length) as $i
+                              | (.data["p\($i)"].pullRequest // null) as $pr | select($pr != null)
+                              | {($chunk[$i].key): ($pr | view)} ] | add // {} )' <<<"$resp" > "${out_file}.tmp" \
+                && mv "${out_file}.tmp" "$out_file"
+            while IFS= read -r k; do
+                [[ -n "$k" ]] && log "WARN: no GraphQL data for $k (not found or no access); skipping"
+            done < <(jq -r --argjson chunk "$chunk" \
+                '[range(0; $chunk | length) as $i | select(.data["p\($i)"].pullRequest == null) | $chunk[$i].key] | .[]' <<<"$resp")
+        else
+            log "WARN: graphql chunk at offset $i failed ($(jq 'length' <<<"$chunk") PR(s)): $(head -c 200 "${out_file}.err" | tr '\n' ' ' | sed 's/ *$//'); skipping them this cycle"
+        fi
+        i=$(( i + GQL_CHUNK ))
+    done
+}
+
+# write_summary WATCHED -> the status line's view of this run, in a tiny file of
+# its own so the render never parses the state file or calls gh. Epoch lets a
+# reader judge staleness without parsing the ISO stamp.
+write_summary() {
+    local tmp
+    tmp=$(mktemp "${SUMMARY_FILE}.XXXXXX") || return 0
+    if jq -cn --argjson w "$1" --arg u "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --argjson e "$(now_epoch)" \
+        '{watched: $w, updated: $u, epoch: $e}' > "$tmp"; then
+        mv "$tmp" "$SUMMARY_FILE"
+    else
+        rm -f "$tmp"
+    fi
+}
+
 # --- main ---
 main() {
     local mode="LIVE"; [[ "$DRY_RUN" -eq 1 ]] && mode="DRY-RUN"
@@ -264,45 +498,130 @@ main() {
     [[ -f "$STATE_FILE" ]] || echo '{}' > "$STATE_FILE"
     local old_state; old_state=$(cat "$STATE_FILE" 2>/dev/null); [[ -n "$old_state" ]] || old_state='{}'
 
-    # Enumerate open authored PRs, all orgs (cross-org fixes the loft-sh-only gap).
-    local prs
-    prs=$(gh search prs --author "@me" --state open --limit 100 \
-            --json url,number,title,repository,isDraft 2>/dev/null || echo '[]')
-    local total; total=$(jq 'length' <<<"$prs")
-    log "authored open PRs: $total"
+    # Resolved once per run: every DM below goes to Kendra (intake) while she is
+    # live, else to Gordon (triage).
+    local target; target=$(resolve_target)
+    log "delivery target: $target"
+
+    # Sources. A source that fails never reads as "nothing there": it only
+    # stops state from being pruned (healthy=0), so a flaky search cannot erase
+    # what we already track.
+    local authored links healthy=1
+    # Open authored PRs, all orgs (cross-org fixes the loft-sh-only gap).
+    if ! authored=$(gh search prs --author "@me" --state open --limit 100 \
+            --json url,number,title,repository,isDraft 2>/dev/null) \
+        || ! jq -e 'type == "array"' <<<"$authored" >/dev/null 2>&1; then
+        log "WARN: authored PR search failed; tracked PRs stay as they are"
+        authored='[]'; healthy=0
+    fi
+    # PRs linked from pending tasks, any tag.
+    if ! links=$(task_pr_links); then
+        log "WARN: pending task export failed; task-linked PRs not refreshed"
+        links='[]'; healthy=0
+    fi
+    log "authored open PRs: $(jq 'length' <<<"$authored"); task-linked PR refs: $(jq 'map([.owner, .repo, .num] | join("/") | ascii_downcase) | unique | length' <<<"$links")"
+
+    local now; now=$(now_epoch)
+    local cutoff=$(( now - TRACK_WINDOW_SECS ))
+    local watch
+    watch=$(build_watch "$authored" "$links" "$cutoff" <<<"$old_state") \
+        || { log "ERROR: building the watch list failed"; return 1; }
+
+    # Notify scope and drafts are settled before any API call.
+    local skip sref
+    while IFS=$'\t' read -r skip sref; do
+        case "$skip" in
+            org)   log "skip (org '${sref%%/*}' out of notify scope): $sref" ;;
+            draft) log "skip (draft): $sref" ;;
+        esac
+    done < <(jq -r '.[] | select(.watch and (.skip == "org" or .skip == "draft")) | [.skip, "\(.owner)/\(.repo)#\(.num)"] | @tsv' <<<"$watch")
+
+    local seen; seen=$(jq '[.[] | select(.watch and (.skip == "" or .skip == "draft"))] | length' <<<"$watch")
+    local fetch_items; fetch_items=$(jq -c 'map(select(.skip == ""))' <<<"$watch")
+    local polled; polled=$(jq 'length' <<<"$fetch_items")
+    local watched; watched=$(jq '[.[] | select(.watch)] | length' <<<"$fetch_items")
+    log "polling $polled PR(s), $watched watched, in $(( (polled + GQL_CHUNK - 1) / GQL_CHUNK )) graphql call(s)"
+
+    DETAILS_FILE=$(mktemp "${TMPDIR:-/tmp}/pr-move-details.XXXXXX") || { log "ERROR: mktemp failed"; return 1; }
+    trap 'rm -f "$DETAILS_FILE" "${DETAILS_FILE}.tmp" "${DETAILS_FILE}.err"' EXIT
+    fetch_details "$fetch_items" "$DETAILS_FILE"
 
     local new_state="$old_state"
     local -a nudges=() owners=()
-    local seen=0 moved=0
+    local moved=0
 
-    local pr url num repo owner ref is_draft detail sig old key title
-    while read -r pr; do
-        [[ -z "$pr" ]] && continue
-        url=$(jq -r '.url' <<<"$pr")
-        num=$(jq -r '.number' <<<"$pr")
-        repo=$(jq -r '.repository.name // ""' <<<"$pr")
-        owner=$(jq -r '(.repository.nameWithOwner // "") | split("/")[0]' <<<"$pr")
-        is_draft=$(jq -r '.isDraft' <<<"$pr")
-        title=$(jq -r '.title // ""' <<<"$pr")
-        [[ -z "$owner" ]] && owner="loft-sh"
-        ref="$owner/$repo#$num"
+    local item key org repo num is_authored skey tracked_only
+    local url ref title detail pstate old sig tasks_json tasks_csv task_sfx foreign_ok
+    while read -r item; do
+        [[ -z "$item" ]] && continue
+        IFS=$'\x1f' read -r key org repo num is_authored skey tracked_only < <(
+            jq -r '[.key, .owner, .repo, (.num | tostring), (.authored | tostring), .skey, ((.watch | not) | tostring)] | join("\u001f")' <<<"$item")
+        # fetch_details already logged why a PR has no data.
+        detail=$(jq -c --arg k "$key" '.[$k] // empty' "$DETAILS_FILE")
+        [[ -n "$detail" ]] || continue
 
-        # Notify scope: skip PRs outside the dispatchable orgs before any API call.
-        if [[ -n "$NUDGE_ORGS" && " ${NUDGE_ORGS//,/ } " != *" $owner "* ]]; then
-            log "skip (org '$owner' out of notify scope): $ref"
+        url=$(jq -r '.url // empty' <<<"$detail"); [[ -n "$url" ]] || url=$(jq -r '.url' <<<"$item")
+        ref=$(jq -r --arg d "$org/$repo#$num" '(.url // "" | capture("github\\.com/(?<o>[^/]+)/(?<r>[^/]+)/pull/(?<n>[0-9]+)")? | "\(.o)/\(.r)#\(.n)") // $d' <<<"$detail")
+        title=$(jq -r '.title // ""' <<<"$item"); [[ -n "$title" ]] || title=$(jq -r '.title // ""' <<<"$detail")
+        [[ -n "$skey" ]] || skey="$url"
+        tasks_json=$(jq -c '.tasks' <<<"$item")
+        tasks_csv=$(jq -r 'join(",")' <<<"$tasks_json")
+        task_sfx=""; [[ -n "$tasks_csv" ]] && task_sfx=" task:$tasks_csv"
+        pstate=$(jq -r '.state // "OPEN"' <<<"$detail")
+        old=$(jq -c --arg k "$skey" '.[$k] // empty' <<<"$old_state" 2>/dev/null || true)
+
+        # Contention: a live worker owns it. Detect events as usual, but the
+        # delivery below goes to the owner and to the target (marked owned), so a
+        # review or approval landing while the worker is idle is never lost.
+        local owner=""
+
+        # ---- merged / closed: terminal, fires once on the edge ----
+        # Seen open before (`seenOpen`, written below each time an open PR is
+        # fetched) and gone terminal now is the edge. First contact seeds
+        # silently, like every other reason, so a task that cites a long-merged
+        # PR does not replay history. That includes an entry from before
+        # `seenOpen` existed: it records a PR open at some past date, not at the
+        # last cycle. The entry is kept as terminal so a PR that stays linked is
+        # neither fetched nor reported again.
+        if [[ "$pstate" == "MERGED" || "$pstate" == "CLOSED" ]]; then
+            local term="${pstate,,}"
+            new_state=$(jq -c --arg k "$skey" --arg ref "$ref" --arg url "$url" --arg t "$term" --argjson now "$now" --argjson tasks "$tasks_json" \
+                '.[$k] = {ref:$ref, url:$url, terminal:$t, terminalAt:$now, tasks:$tasks}' <<<"$new_state")
+            if [[ -z "$old" ]] || ! jq -e 'has("seenOpen")' <<<"$old" >/dev/null 2>&1; then
+                log "seed (first contact, already $term): $ref"
+                continue
+            fi
+            if jq -e '(.terminal // "") != ""' <<<"$old" >/dev/null 2>&1; then
+                continue
+            fi
+            pr_has_live_session "$num" && owner="$OWNER_SESSION"
+            moved=$((moved + 1))
+            local tmsg_term="pr-move: $ref $term $url$task_sfx"
+            log "MOVED: $tmsg_term"
+            nudges+=("$tmsg_term")
+            owners+=("$owner")
             continue
         fi
 
-        key="$url"
-        seen=$((seen + 1))
+        # Back open after a terminal state (reopened): first contact again.
+        if [[ -n "$old" ]] && jq -e '(.terminal // "") != ""' <<<"$old" >/dev/null 2>&1; then old=""; fi
 
-        [[ "$is_draft" == "true" ]] && { log "skip (draft): $ref"; continue; }
+        # Tracked only to catch a merge or close, and it is still open: no source
+        # names it now. Leave its entry alone, without refreshing seenOpen, so it
+        # ages out of the track window. Dropping it at once would lose the
+        # baseline whenever `gh search` skips a PR for a cycle (it does: the
+        # authored count moved 42 to 41 and back between two runs minutes apart).
+        if [[ "$tracked_only" == "true" ]]; then
+            log "idle (no source names it, still open): $ref"
+            continue
+        fi
 
-        detail=$(gh pr view "$url" --json number,url,title,isDraft,headRefOid,reviewDecision,mergeable,reviews,comments,commits,statusCheckRollup,author 2>/dev/null) \
-            || { log "WARN: gh pr view failed for $ref"; continue; }
+        if [[ "$(jq -r '.isDraft // false' <<<"$detail")" == "true" ]]; then
+            log "skip (draft): $ref"
+            continue
+        fi
 
         sig=$(compute_sig "$detail") || { log "WARN: sig compute failed for $ref"; continue; }
-        old=$(jq -c --arg k "$key" '.[$k] // empty' <<<"$old_state" 2>/dev/null || true)
 
         # First contact: seed silently, no nudge (mirrors Linear new_activity seed).
         # Record any sticky reason ALREADY true at seed as notified, so a
@@ -314,8 +633,8 @@ main() {
 
         if [[ -z "$old" ]]; then
             log "seed (first contact): $ref"
-            new_state=$(jq -c --arg k "$key" --argjson s "$sig" --arg ref "$ref" --arg url "$url" --argjson ns "$sticky_now" \
-                '.[$k] = ($s + {ref:$ref, url:$url, notifiedSticky:$ns})' <<<"$new_state")
+            new_state=$(jq -c --arg k "$skey" --argjson s "$sig" --arg ref "$ref" --arg url "$url" --argjson ns "$sticky_now" --argjson now "$now" \
+                '.[$k] = ($s + {ref:$ref, url:$url, notifiedSticky:$ns, seenOpen:$now})' <<<"$new_state")
             continue
         fi
 
@@ -331,10 +650,6 @@ main() {
             notified="$sticky_now"
         fi
 
-        # Contention: a live worker owns it. Detect events as usual, but the
-        # delivery below goes to the owner and to triage (marked owned), so a
-        # review or approval landing while the worker is idle is never lost.
-        local owner=""
         pr_has_live_session "$num" && owner="$OWNER_SESSION"
 
         # Push cooldown: we (Piotr or the agent, same login) pushed recently.
@@ -347,10 +662,18 @@ main() {
             last_epoch=$(iso_to_epoch "$last_date")
             if [[ $(( $(now_epoch) - last_epoch )) -lt "$PUSH_COOLDOWN_SECS" ]]; then
                 log "skip (recent own push, cooldown): $ref"
-                new_state=$(jq -c --arg k "$key" --argjson s "$sig" --arg ref "$ref" --arg url "$url" --argjson ns "$notified" \
-                    '.[$k] = ($s + {ref:$ref, url:$url, notifiedSticky:$ns})' <<<"$new_state")
+                new_state=$(jq -c --arg k "$skey" --argjson s "$sig" --arg ref "$ref" --arg url "$url" --argjson ns "$notified" --argjson now "$now" \
+                    '.[$k] = ($s + {ref:$ref, url:$url, notifiedSticky:$ns, seenOpen:$now})' <<<"$new_state")
                 continue
             fi
+        fi
+
+        # foreign-push means "someone else pushed to MY PR". On a task-linked PR
+        # another person authored, every push is theirs, so it stays quiet there.
+        foreign_ok=0
+        if [[ "$is_authored" == "true" ]] || jq -e --argjson selves "$SELVES_JSON" \
+            '(.author.login // "") as $l | ($selves | index($l)) != null' <<<"$detail" >/dev/null 2>&1; then
+            foreign_ok=1
         fi
 
         # ---- diff old vs new; collect reasons ----
@@ -372,7 +695,7 @@ main() {
             [[ "$has_cr" -eq 0 ]] && reasons+=("review-comment")
         fi
         # foreign-push (edge): head moved to a commit not authored by us
-        if [[ "$cur_sha" != "$old_sha" && "$known" -gt 0 && "$mine" != "true" ]]; then
+        if [[ "$cur_sha" != "$old_sha" && "$known" -gt 0 && "$mine" != "true" && "$foreign_ok" -eq 1 ]]; then
             reasons+=("foreign-push")
         fi
 
@@ -393,19 +716,19 @@ main() {
         fi
 
         # persist the advanced signature + notified set regardless of fire
-        new_state=$(jq -c --arg k "$key" --argjson s "$sig" --arg ref "$ref" --arg url "$url" --argjson ns "$new_notified" \
-            '.[$k] = ($s + {ref:$ref, url:$url, notifiedSticky:$ns})' <<<"$new_state")
+        new_state=$(jq -c --arg k "$skey" --argjson s "$sig" --arg ref "$ref" --arg url "$url" --argjson ns "$new_notified" --argjson now "$now" \
+            '.[$k] = ($s + {ref:$ref, url:$url, notifiedSticky:$ns, seenOpen:$now})' <<<"$new_state")
 
         if [[ ${#reasons[@]} -eq 0 ]]; then
             continue
         fi
         moved=$((moved + 1))
         local reason_str; reason_str=$(IFS=,; echo "${reasons[*]}")
-        local msg="pr-move: $ref $reason_str $url"
+        local msg="pr-move: $ref $reason_str $url$task_sfx"
         log "MOVED: $msg"
         nudges+=("$msg")
         owners+=("$owner")
-    done < <(jq -c '.[]' <<<"$prs")
+    done < <(jq -c '.[]' <<<"$fetch_items")
 
     # Direct review requests on other people's PRs. A failed search keeps the
     # previous set, or every open request would re-fire once the search recovers.
@@ -431,9 +754,13 @@ main() {
         log "WARN: direct review-request search failed; keeping the previous set"
     fi
 
-    # stamp lastNudgedAt on the whole run and write state atomically
+    # Name the owning tasks on what a live source still names, retire the rest,
+    # and write state atomically.
+    local live; live=$(jq -c 'map(select(.watch)) | map({key: .key, value: .tasks}) | from_entries' <<<"$watch")
+    new_state=$(finish_state "$live" "$cutoff" "$healthy" <<<"$new_state")
     local tmp; tmp=$(mktemp "${STATE_FILE}.XXXXXX") || { log "ERROR: mktemp failed"; return 1; }
     echo "$new_state" | jq '.' > "$tmp" && mv "$tmp" "$STATE_FILE"
+    write_summary "$watched"
 
     # deliver, capped per cycle
     local sent=0 i
@@ -447,12 +774,12 @@ main() {
         [[ -n "$own" ]] && tmsg="${nudges[$i]} (owned by $own)"
         if [[ "$DRY_RUN" -eq 1 ]]; then
             [[ -n "$own" ]] && log "[DRY-RUN] would send to $own -> ${nudges[$i]}"
-            log "[DRY-RUN] would send -> $tmsg"
+            log "[DRY-RUN] would send to $target -> $tmsg"
         else
             if [[ -n "$own" ]]; then
                 send_dm "${nudges[$i]}" "$own" | while read -r line; do log "  snd($own): $line"; done
             fi
-            send_dm "$tmsg" | while read -r line; do log "  snd: $line"; done
+            send_dm "$tmsg" "$target" | while read -r line; do log "  snd($target): $line"; done
         fi
         sent=$((sent + 1))
     done
@@ -462,7 +789,7 @@ main() {
             while read -r line; do log "  handoff: $line"; done || true
     fi
 
-    log "=== done: seen=$seen moved=$moved sent=$([[ $DRY_RUN -eq 1 ]] && echo 0 || echo $sent) (mode=$mode) ==="
+    log "=== done: seen=$seen watched=$watched moved=$moved sent=$([[ $DRY_RUN -eq 1 ]] && echo 0 || echo $sent) (mode=$mode) ==="
 }
 
 # Serialize runs (manual invocation must not race the systemd one).

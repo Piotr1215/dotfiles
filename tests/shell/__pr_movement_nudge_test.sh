@@ -36,10 +36,35 @@ case "$1 $2" in
           cat "$GH_REVREQ_FIXTURE" ;;
        *) cat "$GH_SEARCH_FIXTURE" ;;
      esac ;;
-  "pr view")
-     url="$3"
-     f="$GH_PRVIEW_DIR/$(printf '%s' "$url" | sed 's#[^A-Za-z0-9]#_#g').json"
-     if [ -f "$f" ]; then cat "$f"; else echo '{}'; fi ;;
+  "api graphql")
+     # The batched fetch: one aliased repository(...).pullRequest(...) per PR.
+     # Answer each from the same view-shaped fixtures `gh pr view` once served,
+     # re-shaped into the GraphQL PullRequest the script maps back.
+     echo graphql >> "$GH_CALLS_LOG"
+     q=""; for a in "$@"; do case "$a" in query=*) q="${a#query=}" ;; esac; done
+     resp='{"data":{}}'
+     while IFS= read -r line; do
+        al=$(sed -E 's/^(p[0-9]+):.*/\1/' <<<"$line")
+        o=$(sed -E 's/.*owner: "([^"]+)".*/\1/' <<<"$line")
+        r=$(sed -E 's/.*name: "([^"]+)".*/\1/' <<<"$line")
+        n=$(sed -E 's/.*number: ([0-9]+).*/\1/' <<<"$line")
+        url=$(jq -r --arg o "$o/$r" --argjson n "$n" \
+              '[.[] | select(.repository.nameWithOwner == $o and .number == $n) | .url] | first // empty' "$GH_SEARCH_FIXTURE")
+        [ -n "$url" ] || url="https://github.com/$o/$r/pull/$n"
+        f="$GH_PRVIEW_DIR/$(printf '%s' "$url" | sed 's#[^A-Za-z0-9]#_#g').json"
+        [ -f "$f" ] || f=/dev/stdin
+        node=$( { [ "$f" = /dev/stdin ] && echo '{}' || cat "$f"; } | jq -c --arg url "$url" --argjson n "$n" '
+            . as $v | {number: $n, url: $url, title: (.title // ""), isDraft: (.isDraft // false), state: (.state // "OPEN"),
+             headRefOid: .headRefOid, reviewDecision: .reviewDecision, mergeable: .mergeable,
+             author: (.author // null),
+             reviews: {nodes: (.reviews // [])}, comments: {nodes: (.comments // [])},
+             commits: {nodes: [ ((.commits // []) | last // empty)
+                | {commit: {oid, committedDate, authoredDate,
+                            authors: {nodes: [ (.authors // [])[] | {user: {login: .login}} ]},
+                            statusCheckRollup: {contexts: {nodes: ($v.statusCheckRollup // [])}}}} ]}}')
+        resp=$(jq -c --arg a "$al" --argjson node "$node" '.data[$a] = {pullRequest: $node}' <<<"$resp")
+     done < <(grep -oE 'p[0-9]+: repository\(owner: "[^"]+", name: "[^"]+"\) \{ pullRequest\(number: [0-9]+\)' <<<"$q")
+     printf '%s\n' "$resp" ;;
   "api user") echo "Piotr1215" ;;
   *) echo "[]" ;;
 esac
@@ -64,12 +89,28 @@ case "$1" in
   *) : ;;
 esac
 EOF
-    chmod +x "$BIN/gh" "$BIN/node" "$BIN/tmux"
+    # stub: task. The script reads PR links from pending tasks; the fixture is
+    # the `task export` JSON, empty by default so this machine's real tasks
+    # never leak into a run.
+    cat > "$BIN/task" <<'EOF'
+#!/usr/bin/env bash
+cat "$PR_TEST_TASKS"
+EOF
+    # stub: the intake routing helper; prints triage unless a test says otherwise
+    cat > "$BIN/intake-route" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "${PR_TEST_ROUTE:-triage}"
+EOF
+    chmod +x "$BIN/gh" "$BIN/node" "$BIN/tmux" "$BIN/task" "$BIN/intake-route"
 
     export PATH="$BIN:$PATH"
     export GH_SEARCH_FIXTURE="$SEARCH"
     export GH_REVREQ_FIXTURE="$REVREQ"
     export GH_PRVIEW_DIR="$PRVIEW_DIR"
+    export GH_CALLS_LOG="$TEST_DIR/gh_calls"; : > "$GH_CALLS_LOG"
+    export PR_TEST_TASKS="$TEST_DIR/tasks.json"; echo '[]' > "$PR_TEST_TASKS"
+    export INTAKE_ROUTE_BIN="$BIN/intake-route"
+    export PR_MOVE_SUMMARY="$TEST_DIR/summary.json"
     export PR_TEST_OUTBOX="$OUTBOX"
     OUTBOX_ALL="$TEST_DIR/outbox_all"; : > "$OUTBOX_ALL"
     export PR_TEST_OUTBOX_ALL="$OUTBOX_ALL"
