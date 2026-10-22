@@ -280,3 +280,21 @@ standup_popup() {
   [ "$(cat "$TEST_TMUXINATOR_LOG")" = "start standup --no-attach" ]
   [ -f "$REMINDER_STATE_DIR/notify.alive" ]
 }
+
+@test "watch with a thread url subscribes instead of running the daemon" {
+  cat >"$BIN/tw" <<'STUB'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >"$TEST_TW_LOG"
+STUB
+  chmod +x "$BIN/tw"
+  export TEST_TW_LOG="${BATS_TEST_TMPDIR}/tw.log"
+  THREAD_WATCH_BIN="$BIN/tw" run timeout 10 "$REMINDER" watch "https://x.slack.com/archives/C1/p1" --task abc </dev/null
+  [ "$status" -eq 0 ]
+  [ "$(cat "$TEST_TW_LOG")" = "subscribe https://x.slack.com/archives/C1/p1 --task abc" ]
+}
+
+@test "watch with arguments fails fast when the subscriber is missing" {
+  THREAD_WATCH_BIN="$BIN/missing" run timeout 10 "$REMINDER" watch "https://x/p1" </dev/null
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"not found"* ]]
+}

@@ -81,6 +81,8 @@ Agenda format (org): one ** heading per reminder, properties indented below.
   fire <id> [token]                 what the clocks call; runs the action
   match                             one pass over new notification log lines
   watch                             match forever (reminder-watch.service)
+  watch <thread-url> [--task <uuid>] [--label t] [--every 30m]
+                                    subscribe to a thread (__thread_watch.sh subscribe)
 
 Options for add and edit:
   --when <spec>       10m 2h 1d 1w, tomorrow, eod, eow, or anything date -d
@@ -1690,6 +1692,15 @@ cmd_watch() {
 	done
 }
 
+# `watch <thread-url> [--task <uuid>] ...` subscribes to a thread. Bare `watch`
+# is the notification daemon, so arguments must never fall through to it: it
+# ignores them and loops forever.
+cmd_watch_thread() {
+	local bin="${THREAD_WATCH_BIN:-$HOME/.claude/scripts/__thread_watch.sh}"
+	[ -x "$bin" ] || die "watch: $bin not found or not executable."
+	exec "$bin" subscribe "$@" </dev/null
+}
+
 cmd_open() {
 	local id="$1" url
 	valid_id "$id" || die "Invalid id $id."
@@ -1772,7 +1783,7 @@ gc) cmd_gc ;;
 compact) cmd_compact ;;
 fire) [ -n "${1:-}" ] || die "fire needs an id."; cmd_fire "$1" "${2:-}" ;;
 match) cmd_match ;;
-watch) cmd_watch ;;
+watch) if [ $# -gt 0 ]; then cmd_watch_thread "$@"; else cmd_watch; fi ;;
 open) [ -n "${1:-}" ] || die "open needs an id."; cmd_open "$1" ;;
 add-dialog) cmd_add_dialog ;;
 edit-dialog) [ -n "${1:-}" ] || die "edit-dialog needs an id."; cmd_edit_dialog "$1" ;;
