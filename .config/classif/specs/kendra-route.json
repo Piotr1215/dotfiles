@@ -1,0 +1,86 @@
+{
+  "question": "Kendra is Piotr's intake clerk. She reads every event record before Gordon, Piotr's assistant, and handles each one along one route:\nnoise: nobody needs it: a newsletter, marketing, cold sales or recruiting outreach, spam, a bot report or reminder with no ask, a test record, a duplicate popup.\nreceipt: worth a log line, nothing to do: Piotr's own post or reaction, an acknowledgement, a status update with no ask, a provider status change.\nupdate: routine bookkeeping Kendra does herself: a reply, comment, review, status change or merge that updates work already tracked, so a task gets annotated or closed.\nescalate: needs Gordon's judgment: a failure, alert, incident or outage that may need action, a dispatch or policy question, anything unclear.\npiotr: a person, not a bot, asks or mentions Piotr or his team, or writes to him directly in a DM or mail.\nWhich route fits this event record?",
+  "text": "EVENT RECORD (date time, app, summary, body):\n{record}",
+  "fields": {
+    "record": 1000
+  },
+  "collapse": [
+    "record"
+  ],
+  "labels": [
+    "noise",
+    "receipt",
+    "update",
+    "escalate",
+    "piotr"
+  ],
+  "model": "winnow:12b-q4_K_M",
+  "hosts": [
+    "localhost:11434"
+  ],
+  "num_ctx": 32768,
+  "budget": 20,
+  "threshold": {},
+  "smoke": [
+    {
+      "record": "2026-10-20 09:12:04\tmail\t📧Acme Weekly:\tthread:000000000000a101 to:direct bulk:list-id,list-unsubscribe,esp account:piotrzan@gmail.com folder:1-newsletters from:news@acmeweekly.com | 5 things platform teams shipped this week",
+      "expect": "noise"
+    },
+    {
+      "record": "2026-10-20 09:30:11\tmail\t📧Jordan Vale:\tthread:000000000000a102 to:direct bulk:- account:piotr.zaniewski@loft.sh folder:spam from:jordan@talentbridge-hire.co | Exciting remote opportunity for a Staff SRE",
+      "expect": "noise"
+    },
+    {
+      "record": "2026-10-20 10:02:44\t\t[vcluster-internal] in #cloud-accounts-notifications\tSandbox Bot (bot): Sandbox sandbox-aws-account-x1y2 torn down after TTL expiry",
+      "expect": "noise"
+    },
+    {
+      "record": "2026-10-20 10:15:00\tslack-self\t💬Piotr Zaniewski in #dev-operations:\tkind:reaction ch:C01AAAAAAA ts:1792500000.000100 | :white_check_mark: on Morgan's deploy message",
+      "expect": "receipt"
+    },
+    {
+      "record": "2026-10-20 10:20:31\targos\tGitHub recovered\tProvider: GitHub. State: operational. Was: Incident with Actions. Status: https://www.githubstatus.com/",
+      "expect": "receipt"
+    },
+    {
+      "record": "2026-10-20 10:41:09\tslack\t💬Morgan Lee in #dev-operations:\tkind:thread ch:C01AAAAAAA ts:1792500100.000200 thread:1792500000.000100 | thanks, all green now",
+      "expect": "receipt"
+    },
+    {
+      "record": "2026-10-20 11:03:12\t\t[vcluster-internal] from Linear\t@Morgan Lee commented on DEVOPS-1900 Rotate the runner token: PR merged, prod rollout done for all four services",
+      "expect": "update"
+    },
+    {
+      "record": "2026-10-20 11:20:45\tslack-watch\t💬Sam Ortiz in C02BBBBBBB:\tdelivered | the fix is on main now, tagged v1.4.2, closing my side",
+      "expect": "update"
+    },
+    {
+      "record": "2026-10-20 11:35:02\t\t[vcluster-internal] from Linear\t✅ GitHub changed issue status to Released on DEVOPS-1901 Backport the linker fix",
+      "expect": "update"
+    },
+    {
+      "record": "2026-10-20 12:01:33\tsystemd\t⚙ goimapnotify.service failed\texit-code | IMAP IDLE watcher stopped after 5 restarts",
+      "expect": "escalate"
+    },
+    {
+      "record": "2026-10-20 12:14:50\tspacelift\tCould not notify VCS:\tkind:vcs-failure severity:error target:stack/prod-loft-router id:01ABCDEF count:3 link:https://loft.app.spacelift.io/stack/prod-loft-router | could not query GitHub API: 500",
+      "expect": "escalate"
+    },
+    {
+      "record": "2026-10-20 12:30:07\tslack\t💬Grafana in #infra-alerts:\tkind:alert ch:C03CCCCCCC ts:1792501000.000300 | FIRING: LicenseServiceDown on mgmt, 3 pods crashlooping",
+      "expect": "escalate"
+    },
+    {
+      "record": "2026-10-20 13:05:41\t\t[vcluster-internal] from Riley Chen\tHi Piotr, can you give me access to the sandbox Spacelift space before Friday's demo?",
+      "expect": "piotr"
+    },
+    {
+      "record": "2026-10-20 13:22:18\tmail\t📧Dana Brooks:\tthread:000000000000a103 to:direct bulk:- account:piotr.zaniewski@loft.sh folder:inbox from:dana.brooks@partnerco.com | Re: Customer tunnels, can we meet Thursday?",
+      "expect": "piotr"
+    },
+    {
+      "record": "2026-10-20 13:40:56\tslack\t💬Avery Kim in #dev-pr-reviews:\tkind:mention ch:C04DDDDDDD ts:1792502000.000400 | @ops-team could someone review the backport PR today? it blocks the release",
+      "expect": "piotr"
+    }
+  ]
+}
