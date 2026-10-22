@@ -19,8 +19,9 @@
 #   4. runs `notmuch new`, which fires the post-new hook
 #
 # INBOX is synced last so a mail's INBOX copy is indexed in the same run as its
-# All Mail or Sent copy. The post-new hook holds a mail back until its INBOX
-# copy lands, so the order keeps Gordon's event prompt rather than correct.
+# All Mail or Sent copy. The post-new hook fires on a mail's first sight and
+# names the folder it found, so the order keeps an inbox mail's record saying
+# folder:inbox rather than all-mail.
 #
 # A failed mbsync is retried once: about 4% of syncs hit a socket timeout on
 # one of imap.gmail.com's IPv6 addresses, and the retry resolves another. When

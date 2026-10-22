@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # PROJECT: mail-attention
 # notmuch post-new hook. Turns each new mail into one structured event for
-# Gordon and keeps two waiting tags current on every thread it touches.
+# Kendra (Gordon while she is down) and keeps two waiting tags current on
+# every thread it touches.
 #
 # Linked as notmuch/hooks/post-new, the hook_dir in the tracked .notmuch-config,
 # so it runs after every `notmuch new`: __mail_idle_sync.sh on each IMAP IDLE
@@ -11,17 +12,23 @@
 # Events. A message is new when its lastmod is past the last run's revision and
 # its id is not in the seen set. Lastmod alone is not enough, because reading
 # or tagging a mail moves its lastmod too. The seen set is seeded on the first
-# run, so history never fires. An id joins the seen set once it has a file in
-# an INBOX folder or is Piotr's own. Until then it waits in the pending set
-# and is checked again when an INBOX copy appears: syncs can index a gmail
-# All Mail copy before the INBOX copy, and deciding on first sight lost that
-# mail's event. For each new message from someone other than
-# Piotr with a file in an INBOX folder (the scope of mailsync's popup), one
-# record goes to notifications.log, the file notify-watch follows with a byte
-# cursor. The event therefore waits there while Gordon is down, and no second
+# run, so history never fires. Every new message from someone other than
+# Piotr yields one record on first sight, whatever folder its files sit in:
+# INBOX, a Gmail label that skips the inbox, Spam, Trash or All Mail alone.
+# Filtering is notify-watch's ignore.txt, never this hook. The record goes to
+# notifications.log, the file notify-watch follows with a byte cursor. The
+# event therefore waits there while Kendra and Gordon are down, and no second
 # desktop popup appears:
 #
-#   <date time>\tmail\t📧<name>:\tthread:<id> to:<direct|cc|none> bulk:<signals|-> account:<acct> from:<addr> | <subject>
+#   <date time>\tmail\t📧<name>:\tthread:<id> to:<direct|cc|none> bulk:<signals|-> account:<acct> folder:<folder> from:<addr> | <subject>
+#
+# folder is the message's best home: inbox when any file sits in INBOX, else
+# spam or trash, else its label, else a Gmail system folder (important), else
+# all-mail. It is lowercased, with every run of other characters turned into
+# one "-" ("4. Amazon" is 4-amazon), so the record stays space-free before
+# " | ". __mail_idle_sync.sh syncs INBOX last, so an inbox mail's INBOX copy is
+# indexed with its All Mail copy; loft.sh label mail, whose label folder only
+# the two-hourly full sync fetches, is all-mail.
 #
 # The summary matches the mutt-wizard popup's "📧<name>:", so ignore.txt sender
 # rules carry over. Metadata leads the body so notify-watch's 300 character cut
@@ -50,9 +57,8 @@
 # processed it so the morning sweep (tag:waiting/me and not tag:gordon/cleared)
 # stops surfacing it. The hook removes it from every thread that receives a new
 # message, from anyone, so a fresh reply re-arms the sweep. New means an id
-# outside the seen and pending sets, or a pending id whose INBOX copy just
-# landed, not a lastmod bump: tagging or reading a mail moves its lastmod too
-# and must not undo the clearing. waiting/* is untouched by it.
+# outside the seen set, not a lastmod bump: tagging or reading a mail moves its
+# lastmod too and must not undo the clearing. waiting/* is untouched by it.
 #
 # Then every mail thread-watch subscription is checked
 # (`__thread_watch.sh check-source mail`).
@@ -202,34 +208,46 @@ bulk_of() {
     fi
 }
 
+# The best home of a message, from notmuch show JSON, as "<account>\t<folder>";
+# see the folder field above. $root is the database path with a trailing /.
+# shellcheck disable=SC2016 # jq program, not shell
+JQ_HOME='[.filename[] | ltrimstr($root) | capture("^(?<acct>[^/]+)/(?<box>.+)/(cur|new|tmp)/[^/]*$")]
+    | map(. + {rank: (if .box == "INBOX" then 0
+        elif .box == "[Gmail]/Spam" or .box == "[Gmail]/Trash" then 1
+        elif .box == "[Gmail]/All Mail" then 4
+        elif (.box | startswith("[Gmail]/")) then 3
+        else 2 end)})
+    | sort_by(.rank, .box) | first // empty
+    | (.box | ltrimstr("[Gmail]/") | ascii_downcase | gsub("[^a-z0-9]+"; "-") | ltrimstr("-") | rtrimstr("-")) as $f
+    | "\(.acct)\t\(if $f == "" then "other" else $f end)"'
+
 # id_query <message id>: a notmuch term for it, quoted.
 id_query() {
     printf 'id:"%s"' "${1//\"/\"\"}"
 }
 
 # event_for <message id>: appends the record for one new message, unless it
-# is Piotr's own or has no file in an INBOX folder. Returns 3 for the latter,
-# so the id stays pending until an INBOX copy lands.
+# is Piotr's own.
 event_for() {
-    local id="$1" msg tid file inbox account addressed bulk subject dbpath
+    local id="$1" msg tid file home account folder addressed bulk subject dbpath
     msg="$(notmuch show --format=json --body=false --entire-thread=false "$(id_query "$id")" |
         jq -c "[$JQ_MESSAGES | select(.match)][0] // empty")"
     [[ -n "$msg" ]] || return 0
     split_from "$(jq -r '.headers.From // ""' <<<"$msg")"
     is_self "$from_addr" && return 0
-    inbox="$(jq -r '[.filename[] | select(test("/INBOX/(cur|new)/[^/]*$"))][0] // empty' <<<"$msg")"
-    [[ -n "$inbox" ]] || return 3
+    dbpath="$(notmuch config get database.path)"
+    home="$(jq -r --arg root "${dbpath%/}/" "$JQ_HOME" <<<"$msg")"
+    account="${home%%$'\t'*}"
+    folder="${home#*$'\t'}"
+    [[ -n "$home" ]] || account=unknown folder=unknown
     tid="$(notmuch search --output=threads "$(id_query "$id")" | head -n1)"
     tid="${tid#thread:}"
-    dbpath="$(notmuch config get database.path)"
-    account="${inbox#"${dbpath%/}"/}"
-    account="${account%%/*}"
     addressed="$(addressing "$(jq -r '.headers.To // ""' <<<"$msg")" "$(jq -r '.headers.Cc // ""' <<<"$msg")")"
     file="$(jq -r '.filename[0]' <<<"$msg")"
     bulk="$(bulk_of "$file" "$from_addr")"
     subject="$(jq -r '.headers.Subject // ""' <<<"$msg")"
     append_record "📧${from_name:0:80}:" \
-        "thread:${tid} to:${addressed} bulk:${bulk} account:${account} from:${from_addr} | ${subject:0:200}"
+        "thread:${tid} to:${addressed} bulk:${bulk} account:${account} folder:${folder} from:${from_addr} | ${subject:0:200}"
 }
 
 # waiting_ops <thread id>: prints the notmuch tag batch lines that bring the
@@ -299,14 +317,12 @@ seed() {
     local now
     now="$(date +%s)"
     notmuch search --output=messages "date:${SEEN_DAYS}days.." | sed "s/^id://; s/\$/\t${now}/" >"$STATE_DIR/seen"
-    : >"$STATE_DIR/pending"
     printf '%s\n' "$1" >"$STATE_DIR/revision"
 }
 
 run_hook() {
-    local revision uuid rev last_uuid last now id tid rc
-    local -a fresh=() touched=() check=() arrived=()
-    local -A pending=() inboxed=()
+    local revision uuid rev last_uuid last now id
+    local -a fresh=() touched=()
     mkdir -p "$STATE_DIR"
     exec 8>"$STATE_DIR/lock"
     flock -w 120 8 || fail "another post-new run held $STATE_DIR/lock past 120s"
@@ -330,36 +346,12 @@ run_hook() {
         mapfile -t fresh < <(notmuch search --uuid="$uuid" --output=messages \
             "lastmod:$((last + 1))..${rev} and date:${DAYS}days.." | sed 's/^id://' |
             awk -F'\t' 'NR == FNR {seen[$1] = 1; next} !($0 in seen)' "$STATE_DIR/seen" -)
-        # A pending id is checked again only once it has an INBOX copy. arrived
-        # collects first sightings and pending ids that settle, for rearm.
-        [[ -f "$STATE_DIR/pending" ]] || : >"$STATE_DIR/pending"
-        while IFS=$'\t' read -r id _; do [[ -z "$id" ]] || pending[$id]=1; done <"$STATE_DIR/pending"
-        while read -r id; do [[ -z "$id" ]] || inboxed[$id]=1; done < <(notmuch search --uuid="$uuid" --output=messages \
-            "lastmod:$((last + 1))..${rev} and date:${DAYS}days.. and folder:/INBOX$/" | sed 's/^id://')
         for id in "${fresh[@]}"; do
-            if [[ -z "${pending[$id]:-}" || -n "${inboxed[$id]:-}" ]]; then
-                check+=("$id")
-            fi
+            event_for "$id" || fail "cannot build the event for message $id"
+            printf '%s\t%s\n' "$id" "$now" >>"$STATE_DIR/seen"
         done
-        for id in "${check[@]}"; do
-            rc=0
-            event_for "$id" || rc=$?
-            case "$rc" in
-            0)
-                printf '%s\t%s\n' "$id" "$now" >>"$STATE_DIR/seen"
-                arrived+=("$id")
-                ;;
-            3)
-                if [[ -z "${pending[$id]:-}" ]]; then
-                    printf '%s\t%s\n' "$id" "$now" >>"$STATE_DIR/pending"
-                    arrived+=("$id")
-                fi
-                ;;
-            *) fail "cannot build the event for message $id" ;;
-            esac
-        done
-        if ((${#arrived[@]} > 0)); then
-            rearm "${arrived[@]}" || fail "cannot re-arm gordon/cleared"
+        if ((${#fresh[@]} > 0)); then
+            rearm "${fresh[@]}" || fail "cannot re-arm gordon/cleared"
         fi
         mapfile -t touched < <(notmuch search --uuid="$uuid" --output=threads \
             "lastmod:$((last + 1))..${rev} and date:${DAYS}days.." | sed 's/^thread://')
@@ -369,10 +361,6 @@ run_hook() {
         # Forget ids older than SEEN_DAYS.
         awk -F'\t' -v cut="$((now - SEEN_DAYS * 86400))" '$2 >= cut' "$STATE_DIR/seen" >"$STATE_DIR/seen.tmp"
         mv -f "$STATE_DIR/seen.tmp" "$STATE_DIR/seen"
-        # Drop pending ids that are now seen, or older than SEEN_DAYS.
-        awk -F'\t' -v cut="$((now - SEEN_DAYS * 86400))" 'NR == FNR {seen[$1] = 1; next} !($1 in seen) && $2 >= cut' \
-            "$STATE_DIR/seen" "$STATE_DIR/pending" >"$STATE_DIR/pending.tmp"
-        mv -f "$STATE_DIR/pending.tmp" "$STATE_DIR/pending"
     fi
     printf '%s %s\n' "$uuid" "$rev" >"$STATE_DIR/revision"
     discharge_handoffs

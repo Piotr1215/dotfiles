@@ -110,7 +110,7 @@ tags_of() {
   [[ "$line" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}\ [0-9]{2}:[0-9]{2}:[0-9]{2}$'\t'mail$'\t'📧Smith,\ Dan:$'\t' ]]
   tid="$(notmuch search --output=threads id:m1@test)"
   body="$(cut -f4 <<<"$line")"
-  [ "$body" = "${tid} to:direct bulk:- account:piotr.zaniewski@loft.sh from:dan.smith@mend.io | Mend terms and DPA for review" ]
+  [ "$body" = "${tid} to:direct bulk:- account:piotr.zaniewski@loft.sh folder:inbox from:dan.smith@mend.io | Mend terms and DPA for review" ]
 }
 
 @test "a second run, and reading the mail, fire nothing more" {
@@ -140,23 +140,50 @@ tags_of() {
   [ "$(record_count)" -eq 0 ]
 }
 
-@test "mail outside INBOX fires nothing" {
+@test "mail in a label that skips the inbox is one record naming its label" {
   deliver "piotrzan@gmail.com/1. Newsletters" nl "News <news@example.com>" "piotrzan@gmail.com" "weekly"
+  deliver "piotrzan@gmail.com/[Gmail]/All Mail" nl "News <news@example.com>" "piotrzan@gmail.com" "weekly"
   notmuch new --quiet
 
-  [ "$(record_count)" -eq 0 ]
+  [ "$(record_count)" -eq 1 ]
+  [[ "$(records)" == *" account:piotrzan@gmail.com folder:1-newsletters from:news@example.com | weekly" ]]
 }
 
-@test "a mail indexed from All Mail first fires once its INBOX copy lands" {
+# Regression, 2026-10-22: the hook fired only for a message with an INBOX copy,
+# so 38 of 61 mails that day (Spam, labels that skip the inbox, Important, All
+# Mail alone, Trash) reached nobody and sat in a pending set forever.
+@test "every new mail from someone else is one record, whatever folder it sits in" {
+  deliver "$WORK_INBOX" f1 "Ann <ann@example.com>" "piotr.zaniewski@loft.sh" "inbox"
+  deliver "piotr.zaniewski@loft.sh/[Gmail]/All Mail" f1 "Ann <ann@example.com>" "piotr.zaniewski@loft.sh" "inbox"
+  deliver "piotr.zaniewski@loft.sh/OpsNotifications" f2 "'GitHub' via Dev Ops <devops@loft.sh>" "devops@loft.sh" "[devops] access approved"
+  deliver "piotr.zaniewski@loft.sh/[Gmail]/All Mail" f2 "'GitHub' via Dev Ops <devops@loft.sh>" "devops@loft.sh" "[devops] access approved"
+  deliver "piotr.zaniewski@loft.sh/[Gmail]/Spam" f3 "Doron Harel <doron@example.co>" "piotr.zaniewski@loft.sh" "candidate"
+  deliver "piotr.zaniewski@loft.sh/[Gmail]/Trash" f4 "Hermes <hermes@example.com>" "piotr.zaniewski@loft.sh" "trashed on the phone"
+  deliver "piotrzan@gmail.com/[Gmail]/Important" f5 "Bank <bank@example.com>" "piotrzan@gmail.com" "statement"
+  deliver "piotr.zaniewski@loft.sh/[Gmail]/All Mail" f6 "Archived <arch@example.com>" "piotr.zaniewski@loft.sh" "archived unread"
+  deliver "piotrzan@gmail.com/[Gmail]/Spam" f7 "Piotr Zaniewski <piotrzan@gmail.com>" "piotrzan@gmail.com" "self in spam"
+  notmuch new --quiet
+
+  [ "$(record_count)" -eq 6 ]
+  for want in "folder:inbox from:ann@example.com" "folder:opsnotifications from:devops@loft.sh" \
+    "folder:spam from:doron@example.co" "folder:trash from:hermes@example.com" \
+    "folder:important from:bank@example.com" "folder:all-mail from:arch@example.com"; do
+    [ "$(records | grep -cF " $want | ")" -eq 1 ]
+  done
+
+  notmuch tag -unread -- '*'
+  notmuch new --quiet
+  [ "$(record_count)" -eq 6 ]
+}
+
+@test "a mail indexed from All Mail first fires once, and its later INBOX copy fires nothing" {
   deliver "piotr.zaniewski@loft.sh/[Gmail]/All Mail" af1 "Josh <josh@mend.io>" "piotr.zaniewski@loft.sh" "PTO until Monday"
   notmuch new --quiet
-  [ "$(record_count)" -eq 0 ]
+  [ "$(record_count)" -eq 1 ]
+  [[ "$(records)" == *"folder:all-mail from:josh@mend.io | PTO until Monday" ]]
 
   deliver "$WORK_INBOX" af1 "Josh <josh@mend.io>" "piotr.zaniewski@loft.sh" "PTO until Monday"
   notmuch new --quiet
-  [ "$(record_count)" -eq 1 ]
-  [[ "$(records)" == *"from:josh@mend.io | PTO until Monday" ]]
-
   notmuch tag -unread -- id:af1@test
   notmuch new --quiet
   [ "$(record_count)" -eq 1 ]
@@ -255,7 +282,7 @@ cleared_count() {
   [ "$(cleared_count)" = 1 ]
 }
 
-@test "an INBOX copy landing after an All Mail copy removes gordon/cleared" {
+@test "a later INBOX copy of a mail already seen leaves gordon/cleared alone" {
   deliver "piotr.zaniewski@loft.sh/[Gmail]/All Mail" af2 "Josh <josh@mend.io>" "piotr.zaniewski@loft.sh" "late inbox"
   notmuch new --quiet
   notmuch tag +gordon/cleared -- id:af2@test
@@ -265,7 +292,7 @@ cleared_count() {
   deliver "$WORK_INBOX" af2 "Josh <josh@mend.io>" "piotr.zaniewski@loft.sh" "late inbox"
   notmuch new --quiet
 
-  [ "$(cleared_count)" = 0 ]
+  [ "$(cleared_count)" = 1 ]
 }
 
 @test "a new message from someone else removes gordon/cleared" {
