@@ -247,3 +247,19 @@ EOF
   [ "$observed_pid" = "$wrapper_pid" ]
   [ "$(state_of)" = "no-hit" ]
 }
+
+@test "the running marker carries the last finished run's duration" {
+  mkdir -p "$CRON_STATE_DIR"
+  echo '{"job":"job","ts":1,"state":"no-hit","exit_code":0,"duration_s":42}' >"$STATUS"
+  peek="$(job_script peek.sh '#!/usr/bin/env bash' "jq -c '[.state, .prev_duration_s]' \"$STATUS\" >\"${WORK}/seen\"")"
+  run "$CRON_RUN" job -- "$peek"
+  [ "$status" -eq 0 ]
+  [ "$(cat "${WORK}/seen")" = '["running",42]' ]
+}
+
+@test "a first run's marker has no previous duration" {
+  peek="$(job_script peek.sh '#!/usr/bin/env bash' "jq -c '.prev_duration_s' \"$STATUS\" >\"${WORK}/seen\"")"
+  run "$CRON_RUN" job -- "$peek"
+  [ "$status" -eq 0 ]
+  [ "$(cat "${WORK}/seen")" = 'null' ]
+}

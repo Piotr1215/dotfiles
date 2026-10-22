@@ -239,11 +239,16 @@ cron_run_heal_stale_marker "$job" || true
 # Publish a running marker before handing off, so a job in flight is visible
 # rather than looking idle at its last result for however long it takes. The
 # PID lets a reader tell a live run from one whose process died without ever
-# writing a final state.
+# writing a final state. prev_duration_s carries the last finished run's
+# duration across the marker, so __cron_error_nudge.sh can tell an overrun from
+# a job that is always slow.
+prev_duration=$(jq -r 'if .state == "running" then .prev_duration_s else .duration_s end // empty' \
+    "$status_file" 2>/dev/null || true)
+case "$prev_duration" in ''|*[!0-9]*) prev_duration=null ;; esac
 running_tmp="$(mktemp)"
 jq -n --arg job "$job" --argjson ts "$start_ts" --argjson pid "$$" \
-    --arg lp "$log_file" \
-    '{job: $job, ts: $ts, state: "running", pid: $pid, log_path: $lp}' >"$running_tmp"
+    --arg lp "$log_file" --argjson prev "$prev_duration" \
+    '{job: $job, ts: $ts, state: "running", pid: $pid, log_path: $lp, prev_duration_s: $prev}' >"$running_tmp"
 mv "$running_tmp" "$status_file"
 
 run_taskwarrior_recurrence_primary

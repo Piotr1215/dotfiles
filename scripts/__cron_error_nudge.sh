@@ -51,6 +51,15 @@ LOCK_FILE="${CRON_ERROR_NUDGE_LOCK:-/tmp/cron-error-nudge.lock}"
 # blind-spot note above.
 SELF_JOB="${CRON_ERROR_NUDGE_SELF:-__cron_error_nudge}"
 
+# OVERRUNS. A run still alive past max(CRON_OVERRUN_MIN_S, CRON_OVERRUN_FACTOR x
+# the job's previous duration) is announced once, keyed by job and start time,
+# so the next run of the same job can be announced again. __cron_run.sh carries
+# the previous duration into the running marker as prev_duration_s. Like
+# errors, a cold start (no overrun state file) seeds silently.
+OVERRUN_STATE="${CRON_OVERRUN_NUDGE_STATE:-$HOME/.claude/data/cron-overrun-nudged.json}"
+OVERRUN_MIN_S="${CRON_OVERRUN_MIN_S:-1800}"
+OVERRUN_FACTOR="${CRON_OVERRUN_FACTOR:-4}"
+
 # Delivery: the Node snd binary publishing to the NATS agents comms bus, the
 # same transport __auto_triage_nudge.sh and __pr_movement_nudge.sh use to reach
 # the live pane. Nothing new is invented here. SND_FROM labels the origin so
@@ -103,6 +112,83 @@ errored_jobs() {
         [ "$(jq -r '.state // ""' "$f" 2>/dev/null)" = "error" ] && printf '%s\n' "$job"
     done
     return 0
+}
+
+# True while pid is the wrapper of that job's run (mirrors
+# cron_run_pid_owns_job in __cron_run.sh: a bare kill -0 would match whatever
+# reused the pid after a reboot).
+run_alive() {
+    local cmdline
+    [ -r "/proc/$1/cmdline" ] || return 1
+    cmdline=$(tr '\0' ' ' <"/proc/$1/cmdline" 2>/dev/null) || return 1
+    case "$cmdline" in *"__cron_run.sh $2 "*) return 0 ;; esac
+    return 1
+}
+
+# Runs past their overrun limit, one "<job>@<start ts><TAB><notice>" per line.
+overrunning_runs() {
+    local f now job st ts pid prev log limit age
+    now=$(date +%s)
+    for f in "$STATE_DIR"/*.json; do
+        [ -e "$f" ] || continue
+        IFS=$'\t' read -r job st ts pid prev log < <(jq -r \
+            '[.job // "", .state // "", .ts // 0, .pid // "", .prev_duration_s // 0, .log_path // "-"] | @tsv' \
+            "$f" 2>/dev/null) || continue
+        [ "$st" = running ] || continue
+        [ "$job" != "$SELF_JOB" ] || continue
+        case "$ts$pid$prev" in *[!0-9]*|'') continue ;; esac
+        run_alive "$pid" "$job" || continue
+        limit=$((prev * OVERRUN_FACTOR))
+        [ "$limit" -ge "$OVERRUN_MIN_S" ] || limit="$OVERRUN_MIN_S"
+        age=$((now - ts))
+        [ "$age" -gt "$limit" ] || continue
+        printf '%s@%s\tcron-overrun: %s running %sm (previous run %ss) pid %s :: log %s\n' \
+            "$job" "$ts" "$job" "$((age / 60))" "$prev" "$pid" "$log"
+    done
+    return 0
+}
+
+# Announces each run that newly passed its limit; sets OVERRUN_N (announced)
+# and OVERRUN_FAILED (1 when a delivery failed). Runs that ended drop off the
+# state; a failed delivery stays off it so the next tick retries.
+announce_overruns() {
+    OVERRUN_N=0
+    OVERRUN_FAILED=0
+    local runs told keys key line cold=0 sent="" tmp
+    runs=$(overrunning_runs)
+    keys=$(cut -f1 <<<"$runs" | grep -v '^$' || true)
+    if [ ! -f "$OVERRUN_STATE" ]; then
+        cold=1
+        told='[]'
+    else
+        told=$(jq -c 'if type == "array" then . else [] end' "$OVERRUN_STATE" 2>/dev/null || echo '[]')
+    fi
+    told=$(jq -cn --argjson t "$told" --arg k "$keys" '($k | split("\n")) as $c | $t | map(select(. as $x | $c | index($x)))')
+    if [ "$cold" -eq 1 ]; then
+        [ -z "$keys" ] || log "cold start: seeding overrun(s) silently: $(tr '\n' ' ' <<<"$keys")"
+        sent="$keys"
+    else
+        while IFS=$'\t' read -r key line; do
+            [ -n "$key" ] || continue
+            jq -e --arg k "$key" 'index($k)' <<<"$told" >/dev/null && continue
+            NUDGE_TO=$(nudge_target)
+            if [ "$DRY_RUN" -eq 1 ]; then
+                log "would send to ${NUDGE_TO}: $line"
+            elif send_dm "$line" >/dev/null 2>&1; then
+                log "sent to ${NUDGE_TO}: $line"
+            else
+                log "ERROR: delivery failed for overrun $key"
+                OVERRUN_FAILED=1
+                continue
+            fi
+            sent+="${key}"$'\n'
+            OVERRUN_N=$((OVERRUN_N + 1))
+        done <<<"$runs"
+    fi
+    mkdir -p "$(dirname "$OVERRUN_STATE")"
+    tmp=$(mktemp "${OVERRUN_STATE}.XXXXXX") || { log "ERROR: mktemp failed"; OVERRUN_FAILED=1; return 0; }
+    jq -cn --argjson t "$told" --arg s "$sent" '$t + ($s | split("\n") | map(select(. != ""))) | unique' >"$tmp" &&
+        mv "$tmp" "$OVERRUN_STATE"
 }
 
 # The notice itself. One line, scannable, and it names the log so the next move
@@ -188,13 +274,16 @@ main() {
     tmp=$(mktemp "${NUDGE_STATE}.XXXXXX") || { log "ERROR: mktemp failed"; return 1; }
     printf '%s\n' "$final" >"$tmp" && mv "$tmp" "$NUDGE_STATE"
 
+    announce_overruns
+    [ "$OVERRUN_FAILED" -eq 0 ] || rc=1
+
     # Unconditional summary: the wrapper lifts the last non-blank line into the
     # JSON `message` the dashboard shows, and a tally printed only when
     # something happened is indistinguishable from a job that never ran.
-    echo "SUMMARY: mode=$mode errors=$errors_n announced=$announced_n cleared=$cleared_n"
+    echo "SUMMARY: mode=$mode errors=$errors_n announced=$announced_n cleared=$cleared_n overruns=$OVERRUN_N"
 
     [ "$rc" -ne 0 ] && return 1
-    [ "$announced_n" -gt 0 ] && return 2
+    [ "$((announced_n + OVERRUN_N))" -gt 0 ] && return 2
     return 0
 }
 
