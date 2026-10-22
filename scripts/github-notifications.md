@@ -47,10 +47,11 @@ every 15 minutes, Monday to Friday, from 08:07 through 19:52.
 
 ```cron
 # Mark merged and closed GitHub pull request notifications Done.
-7,22,37,52 8-19 * * 1-5 /usr/bin/flock -n "$HOME/.local/state/github-notifications/cron.lock" "$HOME/dev/dotfiles/scripts/__cron_run.sh" __github_notifications -- /usr/bin/python3 -u "$HOME/.local/libexec/__github_notifications.py" --apply
+7,22,37,52 8-19 * * 1-5 /usr/bin/flock -n "$HOME/.local/state/github-notifications/cron.lock" $HOME/dev/dotfiles/scripts/__cron_run.sh __github_notifications -- /usr/bin/python3 -u "$HOME/.local/libexec/__github_notifications.py" --apply
 ```
 
 The outer lock prevents overlapping cron wrappers from interleaving logs.
+The wrapper path stays unquoted so the existing cron widget can parse its job name.
 Successful runs return 0 and stay quiet. Each run writes a summary to the cron
 dashboard and `~/.local/state/cron-jobs/__github_notifications.log`, without
 sending a notification. The companion JSON file records the last run's status

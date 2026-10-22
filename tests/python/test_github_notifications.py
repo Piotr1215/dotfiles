@@ -6,6 +6,8 @@ import fcntl
 import importlib.util
 import io
 import json
+import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -347,6 +349,27 @@ class EntryPointTest(unittest.TestCase):
             self.module.save_receipts(state, {"1": "2026-10-22T08:00:00Z"})
             self.assertEqual(json.loads(state.read_text()), {"1": "2026-10-22T08:00:00Z"})
             self.assertEqual(list(state.parent.iterdir()), [state])
+
+
+class CronIntegrationTest(unittest.TestCase):
+    def test_documented_entry_is_recognized_by_the_cron_widget(self):
+        root = SCRIPT.parents[1]
+        documentation = (root / "scripts/github-notifications.md").read_text()
+        entries = [line for line in documentation.splitlines() if line.startswith("7,22,37,52 ")]
+        self.assertEqual(len(entries), 1)
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = Path(directory) / "crontab"
+            fixture.write_text("# Mark closed PR notifications Done.\n" + entries[0] + "\n")
+            environment = dict(os.environ, CRON_REGISTRY_FILE=str(fixture))
+            result = subprocess.run(
+                ["bash", "-c", 'source "$1"; cron_registry', "cron-fixture",
+                 str(root / "scripts/__lib_cron_view.sh")],
+                env=environment, capture_output=True, text=True, check=True,
+            )
+        fields = result.stdout.rstrip("\n").split("\t")
+        self.assertEqual(fields[0], "7,22,37,52 8-19 * * 1-5")
+        self.assertEqual(fields[1], "__github_notifications")
+        self.assertEqual(fields[3], "Mark closed PR notifications Done.")
 
 
 if __name__ == "__main__":
