@@ -984,10 +984,10 @@ alias 8ball='noglob 8ball'
 # dictionary words are the verdicts to pick from, new on every call, and -w
 # names the chat lines that swung it. The choices print first, the run is
 # copied as CC copies it, and flags after the text go to classif. The question
-# is for show, it lands in the copied run: classif always offers none and random
-# words rarely answer a real question, so it is only asked for the funniest word.
+# is for show, it lands in the copied run: classif is only asked for the
+# funniest word, and --force leaves none out so one of the five always wins.
 judge() {
     local choices=$(rg -x '[a-z]+' /usr/share/dict/words | shuf -n 5 | paste -sd,)
     { print -r -- "Possible choices: ${choices//,/, }"
-      classif-chat "which of these words is the funniest?" -e "$choices" -w "${@:2}" } 2>&1 | __copy_cmd_and_output
+      classif-chat "which of these words is the funniest?" -e "$choices" --force -w "${@:2}" } 2>&1 | __copy_cmd_and_output
 }
