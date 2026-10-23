@@ -36,14 +36,14 @@ case "$1 $2" in
 	fi ;;
 "pr list") cat "$FIX/prs.json" ;;
 "pr view") cat "$FIX/pr_view.json" ;;
-"run list")
-	if [[ "$*" != *--json* ]]; then echo "RUNS $*"; exit 0; fi
-	# Each poll reads the next runs.N.json and stays on the last one.
+"api "*/check-runs*)
+	# Each poll reads the next checks.N.json and stays on the last one.
 	n=$(($(cat "$FIX/polls" 2>/dev/null || echo 0) + 1))
 	echo "$n" >"$FIX/polls"
-	f="$FIX/runs.$n.json"
-	[[ -f "$f" ]] || f=$(ls "$FIX"/runs.*.json | sort -V | tail -n1)
+	f="$FIX/checks.$n.json"
+	[[ -f "$f" ]] || f=$(ls "$FIX"/checks.*.json | sort -V | tail -n1)
 	cat "$f" ;;
+"api "*/status) if [[ -f "$FIX/status.json" ]]; then cat "$FIX/status.json"; else echo '{"statuses":[]}'; fi ;;
 esac
 EOF
 	# rofi keeps the menu it was shown and picks the row starting with $FIX/pick;
@@ -205,52 +205,77 @@ typed() { grep '^xdotool type' "$SPY/all.log" | sed 's/^xdotool type --clearmodi
 	grep -qxF "tmux new-pane -d -x 90% -y 30% -X 5% -Y 2 -t %9 $WATCH --follow loft-sh/ai-agents 156 $SHA" "$SPY/all.log"
 }
 
-@test "watch outside tmux prints the runs once" {
+check_json() { printf '{"status":"%s","conclusion":"%s","name":"%s","output":{"title":"%s"}}' "$@"; }
+checks() { printf '{"check_runs":[%s]}\n' "$(IFS=,; echo "$*")"; }
+
+@test "watch outside tmux prints the checks once" {
 	printf '{"mergeCommit":{"oid":"%s"}}\n' "$SHA" >"$FIX/pr_view.json"
+	checks "$(check_json completed success test "")" >"$FIX/checks.1.json"
+	echo '{"statuses":[{"context":"ci/legacy","state":"pending","description":"waiting"}]}' >"$FIX/status.json"
 	run "$WATCH" loft-sh/ai-agents 156
 	[ "$status" -eq 0 ]
-	[ "$output" = "RUNS run list --repo loft-sh/ai-agents --commit $SHA" ]
+	[[ "$(sed -n 1p <<<"$output")" =~ ^ok\ +test\ *$ ]]
+	[[ "$(sed -n 2p <<<"$output")" =~ ^running\ +ci/legacy\ +waiting$ ]]
+	grep -qF "gh $PWD|api repos/loft-sh/ai-agents/commits/$SHA/check-runs?per_page=100" "$SPY/all.log"
 	! grep -q '^tmux' "$SPY/all.log"
 }
-
-run_json() { printf '{"status":"%s","conclusion":"%s","workflowName":"%s","event":"push","databaseId":1,"displayTitle":"t"}' "$@"; }
 
 follow() {
 	PR_MERGE_WATCH_INTERVAL=0 PR_MERGE_WATCH_LINGER=0 PR_MERGE_WATCH_NO_RUNS="${NO_RUNS:-180}" \
 		run "$WATCH" --follow loft-sh/ai-agents 156 "$SHA" </dev/null
 }
 
-@test "follow closes once every run has passed on two polls in a row" {
-	echo "[$(run_json in_progress "" test)]" >"$FIX/runs.1.json"
-	echo "[$(run_json completed success test),$(run_json completed skipped lint)]" >"$FIX/runs.2.json"
+@test "follow closes once every check has passed on two polls in a row" {
+	checks "$(check_json in_progress "" test "")" >"$FIX/checks.1.json"
+	checks "$(check_json completed success test "")" "$(check_json completed skipped lint "")" >"$FIX/checks.2.json"
 	follow
 	[ "$status" -eq 0 ]
-	[[ "$output" == *"All runs passed, closing."* ]]
+	[[ "$output" == *"All checks passed, closing."* ]]
 	[ "$(cat "$FIX/polls")" = 3 ]
 }
 
-@test "follow waits for a workflow that starts after the others passed" {
-	echo "[$(run_json completed success test)]" >"$FIX/runs.1.json"
-	echo "[$(run_json completed success test),$(run_json queued "" deploy)]" >"$FIX/runs.2.json"
-	echo "[$(run_json completed success test),$(run_json completed success deploy)]" >"$FIX/runs.3.json"
+@test "follow waits for a check that starts after the others passed" {
+	checks "$(check_json completed success test "")" >"$FIX/checks.1.json"
+	checks "$(check_json completed success test "")" "$(check_json queued "" deploy "")" >"$FIX/checks.2.json"
+	checks "$(check_json completed success test "")" "$(check_json completed success deploy "")" >"$FIX/checks.3.json"
 	follow
 	[ "$status" -eq 0 ]
 	[ "$(cat "$FIX/polls")" = 4 ]
 }
 
-@test "follow keeps a failed run on screen instead of closing" {
-	echo "[$(run_json completed success test),$(run_json completed failure validate)]" >"$FIX/runs.1.json"
+@test "follow keeps a Spacelift run awaiting confirmation open with the ;;spacelift hint" {
+	checks "$(check_json completed success spacelift/flows-staging/tracked "0 to add")" \
+		"$(check_json in_progress "" spacelift/flows-main/tracked "Changes are awaiting confirmation")" >"$FIX/checks.1.json"
+	checks "$(check_json completed success spacelift/flows-staging/tracked "0 to add")" \
+		"$(check_json completed success spacelift/flows-main/tracked "0 to add")" >"$FIX/checks.2.json"
+	follow
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"confirm  spacelift/flows-main/tracked"*"awaiting confirmation"* ]]
+	[[ "$output" == *"A Spacelift run waits for confirmation: type ;;spacelift."* ]]
+	[[ "$output" == *"All checks passed, closing."* ]]
+}
+
+@test "follow keeps a failed check on screen instead of closing" {
+	checks "$(check_json completed success test "")" "$(check_json completed failure validate "")" >"$FIX/checks.1.json"
 	follow
 	[ "$status" -eq 1 ]
-	[[ "$output" == *"A run failed. q closes."* ]]
+	[[ "$output" == *"A check failed. q closes."* ]]
 	[[ "$output" != *"closing"* ]]
 }
 
-@test "follow gives up when no run starts" {
-	echo "[]" >"$FIX/runs.1.json"
+@test "follow counts a failed commit status as a failure" {
+	checks "$(check_json completed success test "")" >"$FIX/checks.1.json"
+	echo '{"statuses":[{"context":"ci/legacy","state":"error","description":"boom"}]}' >"$FIX/status.json"
+	follow
+	[ "$status" -eq 1 ]
+	[[ "$output" == *"A check failed. q closes."* ]]
+}
+
+@test "follow gives up when no check starts" {
+	checks >"$FIX/checks.1.json"
 	NO_RUNS=0 follow
 	[ "$status" -eq 0 ]
-	[[ "$output" == *"No runs started for 0123456, closing."* ]]
+	[[ "$output" == *"No checks started for 0123456, closing."* ]]
 }
 
 @test "follow rejects a malformed sha" {
