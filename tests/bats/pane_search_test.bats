@@ -17,6 +17,7 @@ setup() {
 case "$1" in
   list-panes)
     printf '%s\n' '%1|task|1|1|triage' '%2|task|2|1|intake' '%3|task|1|3|' '%4|task|1|4|' '%5|sess-x|1|1|'
+    [[ -n "${EXTRA_PANES:-}" ]] && printf '%s\n' "$EXTRA_PANES"
     ;;
   capture-pane)
     pane="${*: -1}"
@@ -91,7 +92,29 @@ teardown() {
     rm -f "$PANE_SEARCH_ORDER_CACHE"
     run pane_search_index agents
     labels=$(printf '%s\n' "$output" | cut -f2 | uniq | paste -sd, -)
-    [ "$labels" = "intake" ]
+    # %99 is dropped; gordon, an agent pane the order lacks, goes last.
+    [ "$labels" = "intake,gordon" ]
+}
+
+@test "a worker started after the cached order is still searched (strike 2961e418)" {
+    # 23 Oct 10:05Z: Piotr searched the agents view for text in a new worker's
+    # pane (the one with ;;merge) and got nothing until the refresh landed.
+    run pane_search_index agents
+    export EXTRA_PANES='%6|scripts-merge|1|2|scripts-merge'
+    printf ';;merge\nmerge picker done\n' > "${TEST_DIR}/cap%6"
+    export PANE_SEARCH_ORDER_CMD="false"
+    run pane_search_index agents
+    [[ "$output" == *$'%6\tscripts-merge\t;;merge'* ]]
+    labels=$(printf '%s\n' "$output" | cut -f2 | uniq | paste -sd, -)
+    [ "$labels" = "sess-x,intake,gordon,scripts-merge" ]
+}
+
+@test "a new pane without @agent_name stays out of the agents view" {
+    run pane_search_index agents
+    export EXTRA_PANES='%7|scratch|1|1|'
+    printf 'scratch shell\n' > "${TEST_DIR}/cap%7"
+    run pane_search_index agents
+    [[ "$output" != *"scratch shell"* ]]
 }
 
 @test "order is cached so a second open does not recompute" {

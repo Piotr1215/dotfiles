@@ -23,8 +23,11 @@ pane_search_agent_order_live() {
 # Rendering the board takes seconds, so the picker reads a cached order
 # (PANE_SEARCH_ORDER_CACHE) and refreshes it in the background. Fresh (under
 # 60s) or stale (under 1h) cache is used as is; stale also triggers a refresh.
-# No usable cache: compute synchronously. A pane the cache does not know yet is
-# missing from the agents view until the refresh lands; the all view has it.
+# No usable cache: compute synchronously. A live pane with @agent_name that the
+# cache does not know yet (a worker started since the cache was written) is
+# listed after the ordered panes, so a stale cache never hides an agent: on
+# 23 Oct (strike 2961e418) Piotr searched a new worker's text and found nothing
+# until the background refresh landed.
 pane_search_agent_order() {
     local cache="${PANE_SEARCH_ORDER_CACHE:-/tmp/pane_search_order_${USER:-u}}" age=-1
     [[ -s "$cache" ]] && age=$(($(date +%s) - $(stat -c %Y "$cache")))
@@ -75,13 +78,14 @@ pane_search_index() {
     # shellcheck disable=SC2064
     trap "rm -rf '$tmp'" RETURN
 
-    declare -A loc_of label_of
+    declare -A loc_of label_of agent_of
     local -a all_ids=() ids=() jobs_pids=()
     while IFS='|' read -r pid sess win pidx aname; do
         [[ -n "$pid" ]] || continue
         all_ids+=("$pid")
         loc_of[$pid]="$sess:$win.$pidx"
         label_of[$pid]="$(pane_search_label "$sess" "$aname")"
+        agent_of[$pid]="$aname"
     done < <(tmux list-panes -a -F '#{pane_id}|#{session_name}|#{window_index}|#{pane_index}|#{@agent_name}' 2>/dev/null)
 
     # The order lookup is slow (it renders the whole board), so run it beside
@@ -105,6 +109,12 @@ pane_search_index() {
             seen+="$pid "
             ids+=("$pid")
         done <"$tmp/order"
+        # Agent panes the order does not know yet go last instead of missing.
+        for pid in "${all_ids[@]}"; do
+            [[ -n "${agent_of[$pid]:-}" && "$seen" != *" $pid "* ]] || continue
+            seen+="$pid "
+            ids+=("$pid")
+        done
     fi
 
     for pid in "${ids[@]}"; do
