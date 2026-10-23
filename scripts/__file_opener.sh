@@ -131,6 +131,10 @@ else
 fi
 
 
+PANE_SEARCH_LIB="$HOME/dev/dotfiles/scripts/__lib_pane_search.sh"
+# shellcheck source=/dev/null
+source "$PANE_SEARCH_LIB"
+
 # Marker file for returning to main picker
 RETURN_MARKER="/tmp/file_opener_return_$$"
 KCTX_MARKER="/tmp/file_opener_kctx_$$"
@@ -296,15 +300,7 @@ while true; do
     # hidden jump target. Enter switches the client to that pane.
     if [[ -f /tmp/file_opener_search ]]; then
         rm -f /tmp/file_opener_search
-        index=$(tmux list-panes -a -F '#{pane_id}|#{session_name}:#{window_index}.#{pane_index}' 2>/dev/null \
-            | while IFS='|' read -r pid loc; do
-                tmux capture-pane -p -S -3000 -t "$pid" 2>/dev/null \
-                    | tr '\t' ' ' \
-                    | command grep -vE '^[[:space:]]*$' \
-                    | while IFS= read -r line; do
-                        printf '%s\t%s\t%s\n' "$pid" "$loc" "$line"
-                    done
-            done)
+        index=$(pane_search_index agents)
 
         if [[ -z "$index" ]]; then
             tmux display-message "No pane content to search"
@@ -316,8 +312,9 @@ while true; do
             --with-nth=2,3 \
             --nth=2,3 \
             --expect=ctrl-l \
-            --prompt 'panes> ' \
-            --header 'Enter:jump to pane  C-l:jump + goto line  Esc:back' \
+            --prompt 'agents> ' \
+            --header 'Enter:jump to pane  C-l:jump + goto line  C-t:all panes/agents  Esc:back' \
+            --bind "ctrl-t:transform:[[ \$FZF_PROMPT == 'agents> ' ]] && echo 'change-prompt(panes> )+reload(bash $PANE_SEARCH_LIB pane_search_index all)' || echo 'change-prompt(agents> )+reload(bash $PANE_SEARCH_LIB pane_search_index agents)'" \
             --preview 'tmux capture-pane -ep -S -3000 -t {1} 2>/dev/null | command grep -v "^$" | tail -200' \
             --preview-window 'right:55%:wrap' \
             --bind 'ctrl-c:abort' 2>/dev/null) || true
