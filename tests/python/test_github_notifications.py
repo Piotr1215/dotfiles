@@ -486,6 +486,200 @@ class BotRuleTest(unittest.TestCase):
         self.assertNotIn(("GET", "/user", False), calls)
 
 
+RECORD_REPO = {"full_name": "example/project"}
+
+
+class RecordTest(unittest.TestCase):
+    """Every new notification event becomes one `github` record for Kendra,
+    written before the cleanup marks its thread Done. Gap: on 23 Oct the cron
+    marked Piotr's merged flows#135 Done at 14:37Z and nothing ever recorded it,
+    while gh showed 22 live items and notifications.log held none."""
+
+    ISSUE = "/repos/example/project/issues/7"
+    COMMENT = "/repos/example/project/issues/comments/99"
+
+    @classmethod
+    def setUpClass(cls):
+        cls.module = load_module()
+
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.dir.cleanup)
+        self.log = Path(self.dir.name) / "notifications.log"
+
+    def recorder(self, api, recorded=None, watched=(), direct=(), first_since=None, write=True):
+        return self.module.Recorder(api, self.log, {} if recorded is None else recorded,
+                                    set(watched), set(direct), first_since=first_since,
+                                    write=write, output=lambda _: None, now=0)
+
+    def fake(self, responses, log_at_delete=None):
+        calls = []
+
+        def api(method, endpoint, paginate=False):
+            calls.append((method, endpoint))
+            if method == "DELETE":
+                if log_at_delete is not None:
+                    log_at_delete.append(self.log.read_text() if self.log.exists() else "")
+                return None
+            if endpoint not in responses:
+                raise AssertionError(f"Unexpected API call: {(method, endpoint)}")
+            value = responses[endpoint]
+            if isinstance(value, Exception):
+                raise value
+            return copy.deepcopy(value)
+        return api, calls
+
+    def records(self):
+        return self.log.read_text().splitlines() if self.log.exists() else []
+
+    def issue_thread(self, **changes):
+        value = notification("5", reason="mention", repository=RECORD_REPO, subject={
+            "type": "Issue", "title": "flaky e2e on main",
+            "url": "https://api.github.com" + self.ISSUE,
+            "latest_comment_url": "https://api.github.com" + self.COMMENT})
+        value.update(changes)
+        return value
+
+    def test_issue_mention_records_the_comment_and_its_author(self):
+        api, _ = self.fake({
+            LIST: [[self.issue_thread()]], "/user": {"login": "viewer"},
+            self.COMMENT: {"user": {"login": "dan", "type": "User"}, "body": "@viewer can you\nlook?",
+                           "html_url": "https://github.com/example/project/issues/7#issuecomment-99"}})
+        rec = self.recorder(api)
+        self.assertEqual(self.module.cleanup(api, apply=True, output=lambda _: None, recorder=rec), 0)
+        [line] = self.records()
+        cols = line.split("\t")
+        self.assertEqual(cols[1:3], ["github", "🐙dan on example/project#7:"])
+        self.assertIn("kind:mention type:Issue who:other thread:5 at:2026-10-22T08:00:00Z "
+                      "link:https://github.com/example/project/issues/7#issuecomment-99 | ", cols[3])
+        self.assertTrue(cols[3].endswith("| commented: @viewer can you look? · flaky e2e on main"))
+        for token in cols[3].split(" | ")[0].split(" "):  # notify-watch's fields() rule
+            self.assertRegex(token, r"^[a-z_]+:\S*$")
+        self.assertEqual(rec.recorded, {"5": "2026-10-22T08:00:00Z"})
+
+    def test_merged_pull_request_is_recorded_before_it_is_marked_done(self):
+        item = notification(reason="author", repository=RECORD_REPO)
+        merged = {"state": "closed", "merged": True, "merged_by": {"login": "viewer", "type": "User"}}
+        at_delete = []
+        api, calls = self.fake({
+            LIST: [[item]], PR: merged, "/notifications/threads/1": item, "/user": {"login": "viewer"},
+            "/repos/example/project/issues/123/comments?since=2026-10-22T07:45:00Z&per_page=100": []},
+            log_at_delete=at_delete)
+        rec = self.recorder(api)
+        self.assertEqual(self.module.cleanup(api, apply=True, output=lambda _: None, recorder=rec), 0)
+        self.assertEqual(calls[-1], ("DELETE", "/notifications/threads/1"))
+        self.assertEqual(len(at_delete), 1)
+        self.assertIn("🐙viewer on example/project#123:\tkind:author type:PullRequest who:self", at_delete[0])
+        self.assertIn("| merged · ", at_delete[0])
+
+    def test_pr_watch_prs_and_direct_review_requests_are_covered_quietly(self):
+        link = "https://github.com/example/project/pull/123"
+        for watched, direct, reason in (({link}, (), "comment"), ((), {link}, "review_requested")):
+            with self.subTest(reason=reason):
+                api, _ = self.fake({LIST: [[notification(reason=reason, repository=RECORD_REPO)]],
+                                    PR: {"state": "open", "user": {"login": "dan", "type": "User"}}})
+                rec = self.recorder(api, watched=watched, direct=direct)
+                self.module.cleanup(api, apply=True, output=lambda _: None, recorder=rec)
+                self.assertEqual(self.records(), [])
+                self.assertEqual(rec.counts["covered"], 1)
+                self.assertEqual(rec.recorded, {"1": "2026-10-22T08:00:00Z"})
+
+    def test_a_team_review_request_on_a_human_pr_is_recorded(self):
+        item = notification(reason="review_requested", repository=RECORD_REPO)
+        api, _ = self.fake({LIST: [[item]], PR: {"state": "open", "user": {"login": "dan", "type": "User"}},
+                            "/repos/example/project/issues/123/comments?since=2026-10-22T07:45:00Z&per_page=100": []})
+        rec = self.recorder(api, direct={"https://github.com/example/project/pull/999"})
+        self.module.cleanup(api, apply=True, output=lambda _: None, recorder=rec)
+        [line] = self.records()
+        self.assertIn("\t🐙example/project#123:\tkind:review_requested type:PullRequest who:-", line)
+
+    def test_an_open_bot_pr_nobody_asked_about_stays_quiet(self):
+        bot = {"state": "open", "body": "", "user": {"type": "Bot", "login": "renovate[bot]"},
+               "requested_reviewers": [], "assignees": []}
+        item = notification(reason="review_requested", repository=RECORD_REPO)
+        api, _ = self.fake({LIST: [[item]], PR: bot, "/user": {"login": "viewer"}})
+        rec = self.recorder(api)
+        self.module.cleanup(api, apply=False, output=lambda _: None, recorder=rec)
+        self.assertEqual(self.records(), [])
+        self.assertEqual(rec.counts["bot_quiet"], 1)
+
+    def test_an_unchanged_thread_is_recorded_once(self):
+        api, _ = self.fake({LIST: [[self.issue_thread()]], "/user": {"login": "viewer"},
+                            self.COMMENT: {"user": {"login": "dan"}, "body": "hi"}})
+        rec = self.recorder(api)
+        self.module.cleanup(api, apply=True, output=lambda _: None, recorder=rec)
+        self.module.cleanup(api, apply=True, output=lambda _: None, recorder=rec)
+        self.assertEqual(len(self.records()), 1)
+
+    def test_first_run_seeds_threads_older_than_its_window(self):
+        api, calls = self.fake({LIST: [[self.issue_thread()]]})
+        rec = self.recorder(api, first_since=self.module.epoch_of("2026-10-22T09:00:00Z"))
+        self.module.cleanup(api, apply=True, output=lambda _: None, recorder=rec)
+        self.assertEqual(self.records(), [])
+        self.assertEqual(rec.counts["seeded"], 1)
+        self.assertEqual(rec.recorded, {"5": "2026-10-22T08:00:00Z"})
+        self.assertNotIn(("GET", self.COMMENT), calls)
+
+    def test_a_failed_comment_read_still_records_the_title(self):
+        api, _ = self.fake({LIST: [[self.issue_thread()]],
+                            self.COMMENT: self.module.APIError("boom", 502)})
+        rec = self.recorder(api)
+        self.assertEqual(self.module.cleanup(api, apply=True, output=lambda _: None, recorder=rec), 0)
+        [line] = self.records()
+        self.assertIn("\t🐙example/project#7:\tkind:mention type:Issue who:-", line)
+        self.assertTrue(line.endswith("| Issue mention · flaky e2e on main"))
+
+    def test_a_log_that_cannot_be_written_stops_recording_and_keeps_the_thread_unrecorded(self):
+        api, _ = self.fake({LIST: [[self.issue_thread()]], "/user": {"login": "viewer"},
+                            self.COMMENT: {"user": {"login": "dan"}, "body": "hi"}})
+        rec = self.recorder(api)
+        lines = []
+        with mock.patch.object(self.module.os, "open", side_effect=PermissionError("denied")):
+            status = self.module.cleanup(api, apply=True, output=lines.append, recorder=rec)
+        self.assertEqual(status, 1)
+        self.assertIn("ERROR: cannot append to notifications.log", "\n".join(lines))
+        self.assertEqual(rec.recorded, {})
+        self.assertTrue(rec.failed)
+        self.assertIn("recorded=0", lines[-1])
+
+    def test_preview_prints_records_and_writes_nothing(self):
+        api, _ = self.fake({LIST: [[self.issue_thread()]], "/user": {"login": "viewer"},
+                            self.COMMENT: {"user": {"login": "dan"}, "body": "hi"}})
+        lines = []
+        rec = self.module.Recorder(api, self.log, {}, set(), set(), write=False, output=lines.append, now=0)
+        self.module.cleanup(api, apply=False, output=lines.append, recorder=rec)
+        self.assertFalse(self.log.exists())
+        self.assertTrue(any(line.startswith("RECORD: ") and "commented: hi" in line for line in lines))
+
+    def test_entry_point_saves_recorded_and_no_record_writes_nothing(self):
+        state = Path(self.dir.name) / "state" / "done.json"
+        api, _ = self.fake({LIST: [[]]})
+        with mock.patch.object(self.module, "github_api", api):
+            self.assertEqual(self.module.main(["--apply", "--state-file", str(state), "--log", str(self.log),
+                                               "--pr-watch-state", str(Path(self.dir.name) / "none.json")]), 0)
+            self.assertEqual(json.loads((state.parent / "recorded.json").read_text()), {})
+            (state.parent / "recorded.json").unlink()
+            self.assertEqual(self.module.main(["--apply", "--no-record", "--state-file", str(state)]), 0)
+            self.assertFalse((state.parent / "recorded.json").exists())
+
+    def test_pr_watch_sets_read_its_state_and_fail_open(self):
+        path = Path(self.dir.name) / "pr-watermarks.json"
+        path.write_text(json.dumps({"_reviewRequests": ["https://github.com/a/b/pull/2"],
+                                    "https://github.com/a/b/pull/1": {"headSha": "x"}}))
+        self.assertEqual(self.module.pr_watch_sets(path),
+                         ({"https://github.com/a/b/pull/1"}, {"https://github.com/a/b/pull/2"}))
+        self.assertEqual(self.module.pr_watch_sets(path.with_name("missing.json")), (set(), set()))
+
+    def test_html_url_maps_api_subjects(self):
+        self.assertEqual(self.module.html_url("https://api.github.com/repos/a/b/pulls/3", "a/b"),
+                         "https://github.com/a/b/pull/3")
+        self.assertEqual(self.module.html_url("https://api.github.com/repos/a/b/issues/3", "a/b"),
+                         "https://github.com/a/b/issues/3")
+        self.assertEqual(self.module.html_url("https://api.github.com/repos/a/b/releases/9", "a/b"),
+                         "https://github.com/a/b/releases")
+        self.assertEqual(self.module.html_url(None, "a/b"), "https://github.com/a/b")
+
+
 class CronIntegrationTest(unittest.TestCase):
     def test_documented_entry_is_recognized_by_the_cron_widget(self):
         root = SCRIPT.parents[1]

@@ -93,6 +93,20 @@ To stop automatic cleanup, remove only this comment and cron entry. Done threads
 remain in GitHub's Done view for its documented retention period. The script
 neither unsubscribes from threads nor changes review requests.
 
+## Records for Kendra
+
+Before any rule marks a thread Done, each new notification event becomes one `github` line in `~/.local/state/notifications.log`, which events-shipper publishes as `events.github.<reason>`:
+
+```
+<stamp>	github	🐙<actor> on <repo>#<n>:	kind:<reason> type:<subject type> who:<self|other|bot|-> thread:<id> at:<updated_at> link:<url> | <what> · <title>
+```
+
+`<what>` is the newest comment (`commented: ...`), `merged` or `closed` for a closed PR, else the subject type and reason. The comment comes from `latest_comment_url`, or for a PR from its issue comments updated in the 15 minutes before the thread; a run reads at most 15 comments.
+
+No record is written for a PR that pr-watch already reports (a key in `~/.claude/data/pr-watermarks.json`, or a direct review request in its `_reviewRequests`) or for an open bot PR the bot rule marks Done. `recorded.json` beside `done.json` maps thread id to the `updated_at` last recorded, so a thread records again only when it moves. Without that file a run records the last 2 hours and seeds older threads silently. Preview prints each line as `RECORD:` and writes nothing. A log that cannot be appended to stops recording for that run and returns an error.
+
+Options: `--no-record`, `--log PATH` (else `GITHUB_NOTIFY_LOG`, then `NOTIFY_LOG`), `--pr-watch-state PATH` (else `GITHUB_NOTIFY_PR_WATCH`). `__intake_source_health.sh` in `~/.claude` shows the cron run as `github-notifications` and the newest record as `last:github`.
+
 ## Tests
 
 ```sh
@@ -100,7 +114,7 @@ python3 -m unittest discover -s tests/python -p test_github_notifications.py -v
 ```
 
 Offline tests cover preview, open and closed PRs, pagination, changed/reopened
-threads, unknown metadata, API failures, receipt persistence and overlapping runs.
+threads, unknown metadata, API failures, receipt persistence, overlapping runs and the Kendra records.
 The repository's Python CI discovers the test file automatically.
 
 API and inbox behavior:
