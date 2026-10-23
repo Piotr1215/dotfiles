@@ -53,14 +53,23 @@ notify() {
 	return 0
 }
 
-# owner/repo of the focused tmux pane's directory, via gh's own remote lookup.
+# Directory of the pane you are looking at: the active pane of the session the
+# most recently used tmux client shows. AutoKey runs outside tmux, and a bare
+# `tmux display-message` there resolves the session with the newest activity,
+# which is whichever agent printed last, not the one on screen.
+focused_dir() {
+	tmux list-clients -F '#{client_activity} #{pane_current_path}' 2>/dev/null |
+		sort -rn | head -n1 | cut -d' ' -f2-
+}
+
+# owner/repo of the focused pane's directory, via gh's own remote lookup.
 resolve_repo() {
 	if [[ -n "${PR_MERGE_REPO:-}" ]]; then
 		printf '%s\n' "$PR_MERGE_REPO"
 		return 0
 	fi
 	local dir="${PR_MERGE_DIR:-}"
-	[[ -z "$dir" ]] && dir=$(tmux display-message -p '#{pane_current_path}' 2>/dev/null)
+	[[ -z "$dir" ]] && dir=$(focused_dir)
 	[[ -n "$dir" && -d "$dir" ]] || return 1
 	(cd "$dir" && gh repo view --json nameWithOwner) | jq -r '.nameWithOwner // empty'
 }

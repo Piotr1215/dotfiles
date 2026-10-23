@@ -20,7 +20,7 @@ setup() {
 	cat >"$STUB_BIN/tmux" <<'EOF'
 #!/usr/bin/env bash
 echo "tmux $*" >> "$SPY/all.log"
-[[ "$1" == "display-message" ]] && cat "$FIX/pane_path"
+[[ "$1" == "list-clients" ]] && cat "$FIX/clients"
 exit 0
 EOF
 	cat >"$STUB_BIN/gh" <<'EOF'
@@ -79,12 +79,12 @@ typed() { grep '^xdotool type' "$SPY/all.log" | sed 's/^xdotool type --clearmodi
 	! grep -q '^rofi\|^xdotool' "$SPY/all.log"
 }
 
-@test "the repo is resolved in the focused tmux pane's directory" {
+@test "the repo is resolved in the pane of the most recently used tmux client" {
 	unset PR_MERGE_DIR
-	echo "$BATS_TEST_TMPDIR/repo" >"$FIX/pane_path"
+	printf '%s\n' "100 /elsewhere" "300 $BATS_TEST_TMPDIR/repo" "200 /older" >"$FIX/clients"
 	run "$PICKER" 7
 	[ "$status" -eq 0 ]
-	grep -q "^tmux display-message -p #{pane_current_path}" "$SPY/all.log"
+	grep -q "^tmux list-clients -F #{client_activity} #{pane_current_path}" "$SPY/all.log"
 	grep -qF "gh $BATS_TEST_TMPDIR/repo|repo view --json nameWithOwner" "$SPY/all.log"
 	grep -q '|pr list --repo loft-sh/ai-agents --state open' "$SPY/all.log"
 }
