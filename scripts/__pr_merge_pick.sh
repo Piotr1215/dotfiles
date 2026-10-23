@@ -10,8 +10,11 @@
 # floating tmux pane that follows the workflow runs on the merge commit.
 #
 # --admin (bypass branch protection) is added when the checks pass and the merge
-# is still blocked, typically by a missing review. Failing or pending checks and
-# drafts never get it. The rofi row says "bypass" for those PRs before you pick.
+# is still blocked, typically by a missing review. While the checks still run,
+# the typed line first waits for them and merges only if they all pass:
+#   !gh pr checks <n> --repo <owner/repo> --watch --fail-fast >/dev/null && gh pr merge ... --admin && ...
+# Failing checks and drafts never get --admin. The rofi row says "bypass" or
+# "bypass after checks" for those PRs before you pick.
 #
 # Usage: __pr_merge_pick.sh [erase]   erase = trigger length to backspace
 #
@@ -126,6 +129,11 @@ declare -A author draft state checks
 bypass() {
 	[[ "${checks[$1]}" == "ok" && "${state[$1]}" == "BLOCKED" && "${draft[$1]}" != "true" ]]
 }
+
+# Whether PR $1 gets --admin once its running checks pass.
+bypass_after_checks() {
+	[[ "${checks[$1]}" == "pending" && "${state[$1]}" == "BLOCKED" && "${draft[$1]}" != "true" ]]
+}
 labels=()
 for row in "${rows[@]}"; do
 	IFS=$'\x1f' read -r n a d r m c t <<<"$row"
@@ -133,6 +141,7 @@ for row in "${rows[@]}"; do
 	flags="checks $c, $(review_label "$r")"
 	[[ "$d" == "true" ]] && flags+=", draft"
 	bypass "$n" && flags+=", bypass"
+	bypass_after_checks "$n" && flags+=", bypass after checks"
 	labels+=("#$n  $t  [$flags]  @$a")
 done
 
@@ -152,9 +161,13 @@ fi
 
 method=$(merge_method "$repo" || true)
 [[ "$method" =~ ^(squash|merge|rebase)$ ]] || method=squash
-admin=""
+admin="" wait=""
 bypass "$n" && admin=" --admin"
+if bypass_after_checks "$n"; then
+	admin=" --admin"
+	wait="gh pr checks $n --repo $repo --watch --fail-fast >/dev/null && "
+fi
 
 xdotool type --clearmodifiers --delay 12 -- \
-	"!gh pr merge $n --repo $repo --$method$admin && __pr_merge_watch.sh $repo $n"
+	"!${wait}gh pr merge $n --repo $repo --$method$admin && __pr_merge_watch.sh $repo $n"
 open_pr "https://github.com/$repo/pull/$n"

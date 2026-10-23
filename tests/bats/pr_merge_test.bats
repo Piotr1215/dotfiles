@@ -71,7 +71,9 @@ EOF
  {"number":158,"title":"chore: wip","author":{"login":"mate"},"isDraft":true,"reviewDecision":"","mergeStateStatus":"BLOCKED",
   "statusCheckRollup":[{"status":"IN_PROGRESS","conclusion":""}]},
  {"number":159,"title":"docs: clean","author":{"login":"mate"},"isDraft":false,"reviewDecision":"APPROVED","mergeStateStatus":"CLEAN",
-  "statusCheckRollup":[]}
+  "statusCheckRollup":[]},
+ {"number":160,"title":"fix: running","author":{"login":"Piotr1215"},"isDraft":false,"reviewDecision":"REVIEW_REQUIRED","mergeStateStatus":"BLOCKED",
+  "statusCheckRollup":[{"status":"COMPLETED","conclusion":"SUCCESS"},{"status":"IN_PROGRESS","conclusion":""}]}
 ]
 EOF
 }
@@ -110,6 +112,7 @@ typed() { grep '^xdotool type' "$SPY/all.log" | sed 's/^xdotool type --clearmodi
 	[ "$(sed -n 2p "$SPY/rofi.in")" = "#157  feat: red  [checks fail, no review]  @mate" ]
 	[ "$(sed -n 3p "$SPY/rofi.in")" = "#158  chore: wip  [checks pending, no review, draft]  @mate" ]
 	[ "$(sed -n 4p "$SPY/rofi.in")" = "#159  docs: clean  [checks none, approved]  @mate" ]
+	[ "$(sed -n 5p "$SPY/rofi.in")" = "#160  fix: running  [checks pending, review required, bypass after checks]  @Piotr1215" ]
 }
 
 @test "Esc types nothing and opens no browser" {
@@ -131,6 +134,13 @@ typed() { grep '^xdotool type' "$SPY/all.log" | sed 's/^xdotool type --clearmodi
 	echo "#157 " >"$FIX/pick"
 	run "$PICKER" 7
 	[ "$(typed)" = "!gh pr merge 157 --repo loft-sh/ai-agents --squash && __pr_merge_watch.sh loft-sh/ai-agents 157" ]
+}
+
+@test "a blocked PR with running checks waits for them, then merges with --admin" {
+	echo "#160 " >"$FIX/pick"
+	run "$PICKER" 7
+	[ "$status" -eq 0 ]
+	[ "$(typed)" = "!gh pr checks 160 --repo loft-sh/ai-agents --watch --fail-fast >/dev/null && gh pr merge 160 --repo loft-sh/ai-agents --squash --admin && __pr_merge_watch.sh loft-sh/ai-agents 160" ]
 }
 
 @test "a draft never gets --admin" {
