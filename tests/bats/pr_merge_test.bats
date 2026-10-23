@@ -21,6 +21,7 @@ setup() {
 #!/usr/bin/env bash
 echo "tmux $*" >> "$SPY/all.log"
 [[ "$1" == "list-clients" ]] && cat "$FIX/clients"
+[[ "$1" == "show-options" ]] && cat "$FIX/pane_export" 2>/dev/null
 exit 0
 EOF
 	cat >"$STUB_BIN/gh" <<'EOF'
@@ -35,7 +36,10 @@ case "$1 $2" in
 	else echo '{"squashMergeAllowed":true,"mergeCommitAllowed":true,"rebaseMergeAllowed":true}'
 	fi ;;
 "pr list") cat "$FIX/prs.json" ;;
-"pr view") cat "$FIX/pr_view.json" ;;
+"pr view")
+	# A PR a pr-watch list names answers its own view.N file.
+	f="$FIX/view.$(printf '%s' "$3" | tr -c 'A-Za-z0-9' _).json"
+	if [[ -f "$f" ]]; then cat "$f"; else cat "$FIX/pr_view.json"; fi ;;
 "api "*/check-runs*)
 	# Each poll reads the next checks.N.json and stays on the last one.
 	n=$(($(cat "$FIX/polls" 2>/dev/null || echo 0) + 1))
@@ -59,7 +63,7 @@ EOF
 	export PATH="$STUB_BIN:$PATH"
 	export PR_MERGE_DIR="$BATS_TEST_TMPDIR/repo" PR_MERGE_NO_DETACH=1 PR_MERGE_LAYOUT_DELAY=0
 	export PR_MERGE_LAYOUT_SCRIPT="$STUB_BIN/layout"
-	unset PR_MERGE_REPO PR_MERGE_OPEN TMUX TMUX_PANE
+	unset PR_MERGE_REPO PR_MERGE_OPEN TMUX TMUX_PANE PR_PICK_WATCH_FILE
 
 	echo "loft-sh/ai-agents" >"$FIX/name"
 	cat >"$FIX/prs.json" <<'EOF'
@@ -80,6 +84,24 @@ EOF
 
 typed() { grep '^xdotool type' "$SPY/all.log" | sed 's/^xdotool type --clearmodifiers --delay 12 -- //'; }
 
+# One PR as gh pr view answers it: repo, number, state, title, merge state.
+view() {
+	printf '{"number":%s,"title":"%s","url":"https://github.com/%s/pull/%s","author":{"login":"Piotr1215"},"isDraft":false,"reviewDecision":"REVIEW_REQUIRED","mergeStateStatus":"%s","state":"%s","statusCheckRollup":[{"status":"COMPLETED","conclusion":"SUCCESS"}]}\n' \
+		"$2" "$4" "$1" "$2" "$5" "$3" >"$FIX/view.$(printf '%s' "https://github.com/$1/pull/$2" | tr -c 'A-Za-z0-9' _).json"
+}
+
+# A worker's pr-watch list (scope all): open PRs in two repos other than the
+# pane's, one merged since, and an entry that is no PR URL.
+watched_list() {
+	cat >"$FIX/watched.json" <<'EOF'
+{"scope":"all","prs":[{"url":"https://github.com/loft-sh/flows/pull/54"},{"url":"https://github.com/loft-sh/vcluster-docs/pull/9"},
+ {"url":"https://github.com/loft-sh/flows/pull/50"},{"url":"https://github.com/loft-sh/flows/pull/1;rm"}]}
+EOF
+	view loft-sh/flows 54 OPEN "fix: retry" BLOCKED
+	view loft-sh/vcluster-docs 9 OPEN "docs: page" CLEAN
+	view loft-sh/flows 50 MERGED "feat: gone" CLEAN
+}
+
 @test "no GitHub repo in the focused pane opens no menu and leaves the trigger" {
 	rm "$FIX/name"
 	run "$PICKER" 7
@@ -90,10 +112,11 @@ typed() { grep '^xdotool type' "$SPY/all.log" | sed 's/^xdotool type --clearmodi
 
 @test "the repo is resolved in the pane of the most recently used tmux client" {
 	unset PR_MERGE_DIR
-	printf '%s\n' "100 /elsewhere" "300 $BATS_TEST_TMPDIR/repo" "200 /older" >"$FIX/clients"
+	printf '%s\n' "100 %1 /elsewhere" "300 %7 $BATS_TEST_TMPDIR/repo" "200 %3 /older" >"$FIX/clients"
 	run "$PICKER" 7
 	[ "$status" -eq 0 ]
-	grep -q "^tmux list-clients -F #{client_activity} #{pane_current_path}" "$SPY/all.log"
+	grep -q "^tmux list-clients -F #{client_activity} #{pane_id} #{pane_current_path}" "$SPY/all.log"
+	grep -qx "tmux show-options -pqv -t %7 @pr_watch_export" "$SPY/all.log"
 	grep -qF "gh $BATS_TEST_TMPDIR/repo|repo view --json nameWithOwner" "$SPY/all.log"
 	grep -q '|pr list --repo loft-sh/ai-agents --state open' "$SPY/all.log"
 }
@@ -113,6 +136,49 @@ typed() { grep '^xdotool type' "$SPY/all.log" | sed 's/^xdotool type --clearmodi
 	[ "$(sed -n 3p "$SPY/rofi.in")" = "#158  chore: wip  [checks pending, no review, draft]  @mate" ]
 	[ "$(sed -n 4p "$SPY/rofi.in")" = "#159  docs: clean  [checks none, approved]  @mate" ]
 	[ "$(sed -n 5p "$SPY/rofi.in")" = "#160  fix: running  [checks pending, review required, bypass after checks]  @Piotr1215" ]
+}
+
+@test "a worker pane's pr-watch list is the menu: its open PRs from every repo, not the pane's repo" {
+	watched_list
+	PR_PICK_WATCH_FILE="$FIX/watched.json" run "$PICKER" 7
+	[ "$status" -eq 0 ]
+	[ "$(cat "$SPY/rofi.in")" = "$(printf '%s\n' \
+		'loft-sh/flows#54  fix: retry  [checks ok, review required, bypass]  @Piotr1215' \
+		'loft-sh/vcluster-docs#9  docs: page  [checks ok, review required]  @Piotr1215')" ]
+	grep -q '^rofi .*merge watched PRs' "$SPY/all.log"
+	! grep -q '|pr list' "$SPY/all.log"
+	! grep -qF 'pull/1;rm' "$SPY/all.log"
+}
+
+@test "a watched PR from another repo merges in its own repo, with that repo's method" {
+	watched_list
+	echo '{"squashMergeAllowed":false,"mergeCommitAllowed":true,"rebaseMergeAllowed":true}' >"$FIX/repo.json"
+	echo "loft-sh/vcluster-docs#9 " >"$FIX/pick"
+	PR_PICK_WATCH_FILE="$FIX/watched.json" run "$PICKER" 7
+	[ "$status" -eq 0 ]
+	grep -q '|repo view loft-sh/vcluster-docs --json squashMergeAllowed' "$SPY/all.log"
+	[ "$(typed)" = "!gh pr merge 9 --repo loft-sh/vcluster-docs --merge && __pr_merge_watch.sh loft-sh/vcluster-docs 9" ]
+	grep -qx 'xdg-open https://github.com/loft-sh/vcluster-docs/pull/9' "$SPY/all.log"
+}
+
+@test "the list is the one the focused pane names in @pr_watch_export" {
+	unset PR_MERGE_DIR
+	watched_list
+	printf '%s\n' "300 %7 $BATS_TEST_TMPDIR/repo" >"$FIX/clients"
+	echo "$FIX/watched.json" >"$FIX/pane_export"
+	echo "loft-sh/flows#54 " >"$FIX/pick"
+	run "$PICKER" 7
+	[ "$status" -eq 0 ]
+	[ "$(typed)" = "!gh pr merge 54 --repo loft-sh/flows --squash --admin && __pr_merge_watch.sh loft-sh/flows 54" ]
+}
+
+@test "a pr-watch list with no open PR left falls back to the pane's repo" {
+	echo '{"scope":"all","prs":[{"url":"https://github.com/loft-sh/flows/pull/50"}]}' >"$FIX/watched.json"
+	view loft-sh/flows 50 MERGED "feat: gone" CLEAN
+	PR_PICK_WATCH_FILE="$FIX/watched.json" run "$PICKER" 7
+	[ "$status" -eq 0 ]
+	grep -q '|pr list --repo loft-sh/ai-agents --state open' "$SPY/all.log"
+	[ "$(sed -n 1p "$SPY/rofi.in")" = "#156  fix: own  [checks ok, review required, bypass]  @Piotr1215" ]
 }
 
 @test "Esc types nothing and opens no browser" {

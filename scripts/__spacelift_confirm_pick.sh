@@ -8,10 +8,15 @@
 #   !spacectl stack confirm --id <stack> --run <run> --tail
 # The leading ! runs it from a Claude Code prompt; --tail follows the apply.
 #
+# In a worker pane the runs on stacks its pr-watch PRs plan or apply on come
+# first, marked "watched": the list is the file the pane names in
+# @pr_watch_export (__lib_pr_watch_export.sh), from any repo the worker touched.
+#
 # Usage: __spacelift_confirm_pick.sh [erase]   erase = trigger length to backspace
 #
 # Env: SPACELIFT_CONFIRM_URL (account URL, default from the current spacectl
-# profile), SPACELIFT_CONFIRM_OPEN=0 (no browser).
+# profile), SPACELIFT_CONFIRM_OPEN=0 (no browser), PR_PICK_WATCH_FILE (the
+# pr-watch list to rank by; empty for none).
 set -eo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -23,6 +28,8 @@ SPACECTL_CONFIG="${SPACECTL_CONFIG:-$HOME/.spacelift/config.json}"
 
 # shellcheck source=/dev/null
 source "$SCRIPT_DIR/__lib_rofi_theme.sh"
+# shellcheck source=/dev/null
+source "$SCRIPT_DIR/__lib_pr_watch_export.sh"
 
 notify() {
 	command -v notify-send >/dev/null 2>&1 && notify-send "Spacelift confirm" "$1"
@@ -67,7 +74,17 @@ RUN_JQ='first(.[] | select(.state == "UNCONFIRMED")) // empty
   | [$stack, .id, (.commit.hash // "" | .[0:7]),
      (if .delta then "+\(.delta.addCount) ~\(.delta.changeCount) -\(.delta.deleteCount)" else "plan ?" end),
      (.title // "" | gsub("[\u001f\n]"; " "))] | join("\u001f")'
-ids=() runs=() labels=()
+# Stacks the focused pane's watched PRs plan or apply on.
+declare -A watched
+watch_file=$(pr_watch_file "$(focused_pane | cut -d' ' -f1)")
+if [[ -n "$watch_file" ]]; then
+	while read -r s; do
+		[[ "$s" =~ ^[A-Za-z0-9_-]+$ ]] && watched[$s]=1
+	done < <(jq -r '.prs[]? | (.plans[]?, .applies[]?) | .stack // empty' "$watch_file" 2>/dev/null || true)
+fi
+
+# Watched stacks' runs are collected apart and listed first.
+ids=() runs=() labels=() w_ids=() w_runs=() w_labels=()
 for stack in "${stacks[@]}"; do
 	[[ "$stack" =~ ^[A-Za-z0-9_-]+$ ]] || continue
 	runs_json=$(spacectl stack run list --id "$stack" --max-results 5 -o json 2>/dev/null) || continue
@@ -75,9 +92,13 @@ for stack in "${stacks[@]}"; do
 	[[ -n "$row" ]] || continue
 	IFS=$'\x1f' read -r s r c d t <<<"$row"
 	[[ "$r" =~ ^[A-Z0-9]+$ ]] || continue
-	ids+=("$s") runs+=("$r")
-	labels+=("$s  $t  [$d, $c]")
+	if [[ -n "${watched[$s]:-}" ]]; then
+		w_ids+=("$s") w_runs+=("$r") w_labels+=("$s  $t  [$d, $c, watched]")
+	else
+		ids+=("$s") runs+=("$r") labels+=("$s  $t  [$d, $c]")
+	fi
 done
+ids=("${w_ids[@]}" "${ids[@]}") runs=("${w_runs[@]}" "${runs[@]}") labels=("${w_labels[@]}" "${labels[@]}")
 if ((${#labels[@]} == 0)); then
 	notify "No Spacelift runs wait for confirmation"
 	exit 0

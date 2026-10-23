@@ -1,8 +1,8 @@
 #!/usr/bin/env bats
 #
 # Covers __spacelift_confirm_pick.sh (;;spacelift) without a display or network:
-# spacectl, rofi, xdotool and the browser are stubbed and append to one ordered
-# log, so a test reads what was listed, typed and opened.
+# spacectl, rofi, xdotool, tmux and the browser are stubbed and append to one
+# ordered log, so a test reads what was listed, typed and opened.
 
 RUN=01M5M4D20GQYEJY10VYFFYNJW4
 
@@ -16,6 +16,14 @@ setup() {
 	for tool in xdotool notify-send xdg-open layout; do
 		printf '#!/usr/bin/env bash\necho "%s $*" >> "$SPY/all.log"\n' "$tool" >"$STUB_BIN/$tool"
 	done
+	# tmux answers the focused client and the pane's pr-watch list file.
+	cat >"$STUB_BIN/tmux" <<'EOF'
+#!/usr/bin/env bash
+echo "tmux $*" >> "$SPY/all.log"
+[[ "$1" == "list-clients" ]] && cat "$FIX/clients" 2>/dev/null
+[[ "$1" == "show-options" ]] && cat "$FIX/pane_export" 2>/dev/null
+exit 0
+EOF
 	cat >"$STUB_BIN/spacectl" <<'EOF'
 #!/usr/bin/env bash
 echo "spacectl $*" >> "$SPY/all.log"
@@ -40,7 +48,7 @@ EOF
 	export PATH="$STUB_BIN:$PATH"
 	export SPACELIFT_CONFIRM_NO_DETACH=1 SPACELIFT_CONFIRM_LAYOUT_DELAY=0
 	export SPACELIFT_CONFIRM_LAYOUT_SCRIPT="$STUB_BIN/layout" SPACELIFT_CONFIRM_URL="https://loft.app.spacelift.io"
-	unset SPACELIFT_CONFIRM_OPEN
+	unset SPACELIFT_CONFIRM_OPEN PR_PICK_WATCH_FILE
 
 	cat >"$FIX/stacks.json" <<'EOF'
 [{"id":"flows-main","state":"UNCONFIRMED"},{"id":"flows-staging","state":"FINISHED"},
@@ -69,6 +77,22 @@ typed() { grep '^xdotool type' "$SPY/all.log" | sed 's/^xdotool type --clearmodi
 	grep -qF "xdotool key --clearmodifiers BackSpace BackSpace BackSpace BackSpace BackSpace BackSpace BackSpace BackSpace BackSpace BackSpace BackSpace" "$SPY/all.log"
 	grep -qF "xdg-open https://loft.app.spacelift.io/stack/flows-main/run/$RUN" "$SPY/all.log"
 	grep -qF "layout 18" "$SPY/all.log"
+}
+
+@test "runs on stacks the focused worker's watched PRs plan or apply on come first, marked watched" {
+	printf '%s\n' "300 %7 /home/u/loft/no-repo" >"$FIX/clients"
+	echo "$FIX/watched.json" >"$FIX/pane_export"
+	cat >"$FIX/watched.json" <<'EOF'
+{"scope":"all","prs":[{"url":"https://github.com/loft-sh/tailscale-acls/pull/3","plans":[],
+ "applies":[{"stack":"tailscale-pam","url":"https://loft.app.spacelift.io/stack/tailscale-pam/run/01M5PAM0000000000000000000","phase":"confirm"}]}]}
+EOF
+	echo "tailscale-pam" >"$FIX/pick"
+	run "$PICKER" 11
+	[ "$status" -eq 0 ]
+	grep -qx "tmux show-options -pqv -t %7 @pr_watch_export" "$SPY/all.log"
+	[ "$(sed -n 1p "$SPY/rofi.in")" = "tailscale-pam  feat: pam services  [plan ?, 725f7e2, watched]" ]
+	[ "$(sed -n 2p "$SPY/rofi.in")" = "flows-main  feat(pam): turn on receipts (#131)  [+0 ~1 -4, 98d7de6]" ]
+	[ "$(typed)" = "!spacectl stack confirm --id tailscale-pam --run 01M5PAM0000000000000000000 --tail" ]
 }
 
 @test "the trigger is erased only after rofi closes" {
