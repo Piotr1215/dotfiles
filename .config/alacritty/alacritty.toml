@@ -63,10 +63,12 @@ post_processing = true
 command = { program = "/usr/local/bin/tmux", args = ["split-window", "-h", "-c", "#{pane_current_path}", "sh", "-c", 'case $0 in "~/"*) f=$HOME/${0#?/} ;; *) f=$0 ;; esac; exec nvim "$f"'] }
 binding = { key = "2", mods = "Control" }
 
-# ctrl+3: jump the tmux client to an agent session named on the cockpit board.
-# Matches a "jump:<ISSUE-ID>" token; __tmux_jump.sh resolves it to the live session.
+# ctrl+3: jump the tmux client to an agent's window named on the cockpit board.
+# Matches "jump:<name>" (jump:gordon, jump:kendra, an agent tag, a session or an
+# issue id) and "jump:<session>:<window>", which the cockpit prints when two rows
+# share a name. __tmux_jump.sh resolves it to the agent's pane.
 [[hints.enabled]]
-regex = "jump:[A-Za-z0-9._-]+"
+regex = "jump:[A-Za-z0-9._-]+(:[A-Za-z0-9._-]+)?"
 command = { program = "/home/decoder/dev/dotfiles/scripts/__tmux_jump.sh", args = [] }
 binding = { key = "3", mods = "Control" }
 
