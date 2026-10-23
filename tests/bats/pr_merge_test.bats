@@ -36,7 +36,14 @@ case "$1 $2" in
 	fi ;;
 "pr list") cat "$FIX/prs.json" ;;
 "pr view") cat "$FIX/pr_view.json" ;;
-"run list") echo "RUNS $*" ;;
+"run list")
+	if [[ "$*" != *--json* ]]; then echo "RUNS $*"; exit 0; fi
+	# Each poll reads the next runs.N.json and stays on the last one.
+	n=$(($(cat "$FIX/polls" 2>/dev/null || echo 0) + 1))
+	echo "$n" >"$FIX/polls"
+	f="$FIX/runs.$n.json"
+	[[ -f "$f" ]] || f=$(ls "$FIX"/runs.*.json | sort -V | tail -n1)
+	cat "$f" ;;
 esac
 EOF
 	# rofi keeps the menu it was shown and picks the row starting with $FIX/pick;
@@ -185,7 +192,7 @@ typed() { grep '^xdotool type' "$SPY/all.log" | sed 's/^xdotool type --clearmodi
 	printf '{"mergeCommit":{"oid":"%s"}}\n' "$SHA" >"$FIX/pr_view.json"
 	TMUX=/tmp/x TMUX_PANE=%9 run "$WATCH" loft-sh/ai-agents 156
 	[ "$status" -eq 0 ]
-	grep -qxF "tmux new-pane -d -x 90% -y 30% -X 5% -Y 2 -t %9 viddy -n 10s -t 'gh run list --repo loft-sh/ai-agents --commit $SHA'" "$SPY/all.log"
+	grep -qxF "tmux new-pane -d -x 90% -y 30% -X 5% -Y 2 -t %9 $WATCH --follow loft-sh/ai-agents 156 $SHA" "$SPY/all.log"
 }
 
 @test "watch outside tmux prints the runs once" {
@@ -194,4 +201,50 @@ typed() { grep '^xdotool type' "$SPY/all.log" | sed 's/^xdotool type --clearmodi
 	[ "$status" -eq 0 ]
 	[ "$output" = "RUNS run list --repo loft-sh/ai-agents --commit $SHA" ]
 	! grep -q '^tmux' "$SPY/all.log"
+}
+
+run_json() { printf '{"status":"%s","conclusion":"%s","workflowName":"%s","event":"push","databaseId":1,"displayTitle":"t"}' "$@"; }
+
+follow() {
+	PR_MERGE_WATCH_INTERVAL=0 PR_MERGE_WATCH_LINGER=0 PR_MERGE_WATCH_NO_RUNS="${NO_RUNS:-180}" \
+		run "$WATCH" --follow loft-sh/ai-agents 156 "$SHA" </dev/null
+}
+
+@test "follow closes once every run has passed on two polls in a row" {
+	echo "[$(run_json in_progress "" test)]" >"$FIX/runs.1.json"
+	echo "[$(run_json completed success test),$(run_json completed skipped lint)]" >"$FIX/runs.2.json"
+	follow
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"All runs passed, closing."* ]]
+	[ "$(cat "$FIX/polls")" = 3 ]
+}
+
+@test "follow waits for a workflow that starts after the others passed" {
+	echo "[$(run_json completed success test)]" >"$FIX/runs.1.json"
+	echo "[$(run_json completed success test),$(run_json queued "" deploy)]" >"$FIX/runs.2.json"
+	echo "[$(run_json completed success test),$(run_json completed success deploy)]" >"$FIX/runs.3.json"
+	follow
+	[ "$status" -eq 0 ]
+	[ "$(cat "$FIX/polls")" = 4 ]
+}
+
+@test "follow keeps a failed run on screen instead of closing" {
+	echo "[$(run_json completed success test),$(run_json completed failure validate)]" >"$FIX/runs.1.json"
+	follow
+	[ "$status" -eq 1 ]
+	[[ "$output" == *"A run failed. q closes."* ]]
+	[[ "$output" != *"closing"* ]]
+}
+
+@test "follow gives up when no run starts" {
+	echo "[]" >"$FIX/runs.1.json"
+	NO_RUNS=0 follow
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"No runs started for 0123456, closing."* ]]
+}
+
+@test "follow rejects a malformed sha" {
+	run "$WATCH" --follow loft-sh/ai-agents 156 "abc;rm"
+	[ "$status" -eq 1 ]
+	[ ! -e "$SPY/all.log" ]
 }
