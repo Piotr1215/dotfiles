@@ -7,7 +7,8 @@ setup() {
     TEST_DIR="$(mktemp -d)"
     REPO_ROOT="$(cd "$(dirname "${BATS_TEST_FILENAME}")/../.." && pwd)"
     SCRIPT="${REPO_ROOT}/scripts/__task_brief.sh"
-    export TEST_DIR SCRIPT
+    FIXTURES="${REPO_ROOT}/tests/fixtures/task_brief"
+    export TEST_DIR SCRIPT FIXTURES
 
     cat > "${TEST_DIR}/task" << 'STUB'
 #!/bin/bash
@@ -20,6 +21,8 @@ case "$*" in
 [{"uuid":"35ad51ef-988d-4d3e-b0b3-312f557d3ba0","status":"pending","description":"PAM onboarding flags still off: track activation?","project":"flows","tags":["piotr","handoff"],"annotations":[{"entry":"20261022T090000Z","description":"second note"},{"entry":"20261021T090000Z","description":"first note: yes means open the tracking issue"}]}]
 JSON
   ;;
+  *7f81e678*) cat "${FIXTURES}/7f81-2026-10-23T0924Z.json" ;;
+  *fc0f43be*) cat "${FIXTURES}/fc0f-2026-10-23T1115Z.json" ;;
   *status:pending*) cat << 'JSON'
 [{"uuid":"843f1111-aaaa-4bbb-8ccc-000000000001","status":"pending","description":"Grant Kai push on loft-sh/kine?","repo":"no-repo"},
  {"uuid":"7deb2222-aaaa-4bbb-8ccc-000000000002","status":"pending","description":"Get PR 8827 approved","repo":"loft-sh/vcluster-pro","linear_issue_id":"DEVOPS-1717"},
@@ -63,8 +66,48 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" == *"PAM onboarding flags still off"* ]]
     [[ "$output" == *"tags:    piotr handoff"* ]]
-    first=${output%%second note*}
+    history=${output#*History, oldest first:}
+    first=${history%%second note*}
     [[ "$first" == *"first note"* ]]
+}
+
+# Handoff 7f81 as it stood when Piotr asked "what this is?" (23 Oct 09:24Z) and
+# "what's with 7f?" (09:34Z): the options sat in a long 22 Oct note and the
+# reply in the next one. The lead now puts them above the history.
+@test "the 7f81 brief leads with the latest note, the options and the reply" {
+    TASK_BRIEF_WIDTH=400 run "$SCRIPT" 7f81e678
+    [ "$status" -eq 0 ]
+    lead=${output%%uuid:*}
+    [[ "$lead" == *"Latest: 10-22 08:39Z Live check 10:40: infrastructure ruleset 10216949"*"A shrinks to one change"* ]]
+    [[ "$lead" == *"Effect: A (recommended): add eng-merge-devops in PR mode to those two; unblocks Piotr everywhere. B: also add"* ]]
+    [[ "$lead" == *"Reply: Reply 'A': Gordon hands you the PUT. 'B': also org rulesets."* ]]
+    [[ "$lead" != *"Decided:"* ]]
+    [[ "${output#*History, oldest first:}" == *"Step 2 of 'add us to bypass"* ]]
+}
+
+# Handoff fc0f after Piotr answered (11:12) and Gordon offered a narrower reading (11:14).
+@test "an answered handoff leads with Piotr's answer and the newer offer" {
+    TASK_BRIEF_WIDTH=400 run "$SCRIPT" fc0f43be
+    [ "$status" -eq 0 ]
+    lead=${output%%uuid:*}
+    [[ "$lead" == *'Decided: 10-23 11:11Z Piotr 11:12: "fc0f c: yeah sure'* ]]
+    [[ "$lead" == *'Reply: Offer to Piotr 11:14: reply "only fc0f" and Gordon returns'* ]]
+    [[ "$lead" == *'Latest: 10-23 11:14Z His 11:13 "we shall see"'* ]]
+    # The options were answered: they are history now, not the effect.
+    [[ "$lead" != *"Effect:"* ]]
+}
+
+@test "a task with no notes prints no lead and no history header" {
+    run "$SCRIPT" 843f1111-aaaa
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"History"* ]]
+    [[ "$output" != *"Latest:"* ]]
+}
+
+@test "a plain note shows as Latest above the history" {
+    run "$SCRIPT" 35ad51ef
+    lead=${output%%uuid:*}
+    [[ "$lead" == *"Latest: 10-22 09:00Z second note"* ]]
 }
 
 @test "accepts a full picker token" {

@@ -1,0 +1,25 @@
+[
+  {
+    "uuid": "fc0f43be-37ed-489d-a7a5-5115a411b1a3",
+    "status": "pending",
+    "description": "Should worker PR merge go-aheads sit on your board?",
+    "tags": [
+      "gordon",
+      "work"
+    ],
+    "annotations": [
+      {
+        "entry": "20261023T104811Z",
+        "description": "Strike 6c6d8b4b (judge, not in your words): a245 'merge cgroups#4 (Jan approved, green)?' went on your board at 10:02Z through a raw task modify, which skips the PR-row guard in __tw.sh (2581774). Family fixed four times this week, so no fifth fix without you. Two readings: a real go-ahead for the worker to merge, or PR work pr-watch already carries. Options: (a) merge go-aheads stay off your board and the worker merges once approved and green; (b) they stay on your board as decisions; (c) block raw task writes in Gordon's pane so the guard always runs. Reply fc0f a, b or c."
+      },
+      {
+        "entry": "20261023T111106Z",
+        "description": "Piotr 11:12: \"fc0f c: yeah sure, I don't fully understand the impact but those decisions are too low level for me\". Option c taken; reflect worker implementing."
+      },
+      {
+        "entry": "20261023T111443Z",
+        "description": "Offer to Piotr 11:14: reply \"only fc0f\" and Gordon returns 8777, 3bdd, 6da1, b39e, 0163 to his board and keeps the old repeat-to-board rule (local commits, revertible). His 11:13 \"we shall see\" left the broad reading standing."
+      }
+    ]
+  }
+]

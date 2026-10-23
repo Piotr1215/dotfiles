@@ -89,16 +89,57 @@ print_brief() {
     return 1
   fi
 
-  jq -r '.[0] |
+  jq -r "$LEAD_JQ"'
+    .[0] | lead as $lead |
     "\(.description)\n" +
+    ($lead | map(.k + ": " + .v + "\n") | join("")) +
     "uuid:    \(.uuid)\n" +
     "status:  \(.status)" + (if .project then "  project: \(.project)" else "" end) + "\n" +
     (if (.tags // []) | length > 0 then "tags:    \(.tags | join(" "))\n" else "" end) +
     (if .due then "due:     \(.due)\n" else "" end) +
+    (if (.annotations // []) | length > 0 then "\nHistory, oldest first:\n" else "" end) +
     ((.annotations // []) | sort_by(.entry)
       | map("\n[\(.entry)]\n\(.description)") | join("\n"))' <<<"$json" |
     fold -s -w "$width"
 }
+
+# jq defs for the lead lines, printed above the history so the decision is
+# read first (Piotr asked "what this is?" and "what's with 7f?" about handoff
+# 7f81 on 23 Oct, whose answer sat in its newest note, below a long first one).
+# Sentences of the notes are sorted into: Decided (Piotr's newest answer, "Piotr
+# chose A.", "Piotr 11:12: ..."), Effect (what a choice does: the options of the
+# newest note that lists them, "A (recommended): ...", or the right side of
+# "'<ref> yes' = ..."; after an answer, the rest of that note), Reply (the reply
+# he can give, from the newest note that offers one, when newer than his
+# answer) and Latest (whatever the newest note says beyond those lines).
+LEAD_JQ=$(cat <<'JQ'
+  def sents: [splits("(?<=[.?!])\\s+(?=[A-Z0-9'\"(<])")] | map(select(test("\\S")));
+  def is_reply: test("^(Reply|Answer)\\b|\\b[Rr]eply\\s+(['\"]|[0-9a-f]{4}\\b)|^Proposal:|^'[^']{1,24}'\\s*[:=]");
+  def is_option: test("^(Options?:|[A-D]( \\(recommended\\))?:|\\([a-d]\\)\\s)|\\(recommended\\)");
+  def is_decision: (is_reply | not) and test("(?<!to )\\bPiotr( [0-9]{1,2}:[0-9]{2})?( (chose|picked|answered|approved|declined|decided|said)\\b|:)");
+  def stamp: (.entry // "") | if length >= 13 then "\(.[4:6])-\(.[6:8]) \(.[9:11]):\(.[11:13])Z " else "" end;
+  def lead:
+    ((.annotations // []) | sort_by(.entry) | map(. + {s: (.description | sents)})) as $a
+    | def last_with(f): [range(0; $a | length) as $i | select(any($a[$i].s[]; f)) | $i] | last // -1;
+      last_with(is_reply) as $r | last_with(is_option) as $o | last_with(is_decision) as $d
+    | (if $d >= 0 then ($a[$d] | stamp) + ($a[$d].s | map(select(is_decision)) | join(" ")) else "" end) as $decided
+    | (if $r > $d then $a[$r].s | map(select(is_reply)) else [] end) as $reply
+    | (if $r > $d then
+         (if $o > $d then $a[$o].s | map(select(is_option))
+          else $reply | map(select(test(" = ")) | sub("^.*? = "; "")) end)
+       elif $d >= 0 then $a[$d].s | map(select((is_decision or is_reply) | not))
+       else [] end) as $effect
+    | ($decided + " " + ($effect + $reply | join(" "))) as $shown
+    | (if ($a | length) > 0 then
+         ($a[-1] | stamp) as $st
+         | $a[-1].s | map(select(. as $x | $shown | contains($x) | not)) | join(" ")
+         | if . == "" then "" else $st + . end
+       else "" end) as $latest
+    | [ {k: "Decided", v: $decided}, {k: "Latest", v: $latest},
+        {k: "Effect", v: ($effect | join(" "))}, {k: "Reply", v: ($reply | join(" "))} ]
+    | map(select(.v != ""));
+JQ
+)
 
 # Wait for a key so a popup message can be read before -E closes it.
 pause() {

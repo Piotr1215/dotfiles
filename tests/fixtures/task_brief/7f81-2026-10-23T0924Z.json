@@ -1,0 +1,21 @@
+[
+  {
+    "uuid": "7f81e678-a9c3-4710-a4af-b30946ed51e0",
+    "status": "pending",
+    "description": "Merge bypass scope: just you, or the whole DevOps team?",
+    "tags": [
+      "piotr",
+      "work"
+    ],
+    "annotations": [
+      {
+        "entry": "20261022T081733Z",
+        "description": "Step 2 of 'add us to bypass, all ci everywhere' (sweep 22 Oct 10:20, /tmp/claude-1000/-home-decoder-loft/22b6fe06-933a-4b3f-a399-d4e9ae6603f1/scratchpad/ruleset-sweep.json). Piotr as org admin already bypasses org rulesets 2954529 (312 repos, 1 approval) and 2949889 (7 prod repos) and classic protection. Gaps for him: vcluster repo ruleset 18479778 (code owner review) and infrastructure 10216949 (1 approval). A (recommended): add eng-merge-devops in PR mode to those two; unblocks Piotr everywhere. B: also add eng-merge-devops to org rulesets 2954529 and 2949889, so all 4 members self-merge in 312 repos incl. the 7 prod repos with no second reviewer; weakens SOC2 change-review control, and classic protection on loft-enterprise/vcluster/vcluster-pro/admin-apis/loft-prod still blocks non-admins. Reply '<ref> A' or '<ref> B'."
+      },
+      {
+        "entry": "20261022T083908Z",
+        "description": "Live check 10:40: infrastructure ruleset 10216949 already lets eng-enablement (Piotr active) bypass always, so A shrinks to one change: add eng-merge-devops (id 18793507, PR mode) to vcluster ruleset 18479778 (unchanged since 22 Jul). Reply 'A': Gordon hands you the PUT. 'B': also org rulesets."
+      }
+    ]
+  }
+]
