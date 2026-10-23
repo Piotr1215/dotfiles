@@ -1,0 +1,30 @@
+{
+  "type": "script",
+  "description": "merge a PR of the focused repo, watch its runs",
+  "store": {},
+  "modes": [
+    1
+  ],
+  "usageCount": 0,
+  "prompt": false,
+  "omitTrigger": true,
+  "showInTrayMenu": false,
+  "abbreviation": {
+    "abbreviations": [
+      ";;merge"
+    ],
+    "backspace": false,
+    "ignoreCase": false,
+    "immediate": false,
+    "triggerInside": true,
+    "wordChars": "[\\w]"
+  },
+  "hotkey": {
+    "modifiers": [],
+    "hotKey": null
+  },
+  "filter": {
+    "regex": null,
+    "isRecursive": false
+  }
+}
