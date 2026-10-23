@@ -113,6 +113,22 @@ tags_of() {
   [ "$body" = "${tid} to:direct bulk:- account:piotr.zaniewski@loft.sh folder:inbox from:dan.smith@mend.io | Mend terms and DPA for review" ]
 }
 
+@test "a tool's notification mail carries svc, other mail none" {
+  deliver "$WORK_INBOX" z1 "Zoom <no-reply@zoom.us>" "piotr.zaniewski@loft.sh" "Meeting assets are ready"
+  deliver "$WORK_INBOX" d1 "Ann (Google Docs) <comments-noreply@docs.google.com>" "piotr.zaniewski@loft.sh" "Plan - @piotr added you"
+  deliver "$WORK_INBOX" f1 "Figma <no-reply@email.figma.com>" "piotr.zaniewski@loft.sh" "Ann replied to your comment"
+  deliver "$WORK_INBOX" r1 "Ramp <communications@ramp.com>" "piotr.zaniewski@loft.sh" "Your weekly digest"
+  deliver "$WORK_INBOX" p1 "Dan <dan@mend.io>" "piotr.zaniewski@loft.sh" "terms"
+  notmuch new --quiet
+
+  [ "$(record_count)" -eq 5 ]
+  grep -q 'from:no-reply@zoom.us svc:zoom | Meeting assets are ready$' "$MAIL_EVENTS_LOG"
+  grep -q 'from:comments-noreply@docs.google.com svc:gdocs | Plan - @piotr added you$' "$MAIL_EVENTS_LOG"
+  grep -q 'from:no-reply@email.figma.com svc:figma | ' "$MAIL_EVENTS_LOG"
+  grep -q 'from:communications@ramp.com svc:ramp | ' "$MAIL_EVENTS_LOG"
+  grep -q 'from:dan@mend.io | terms$' "$MAIL_EVENTS_LOG"
+}
+
 @test "a second run, and reading the mail, fire nothing more" {
   deliver "$WORK_INBOX" m1 "Dan <dan@mend.io>" "piotr.zaniewski@loft.sh" "terms"
   notmuch new --quiet

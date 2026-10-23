@@ -20,7 +20,11 @@
 # event therefore waits there while Kendra and Gordon are down, and no second
 # desktop popup appears:
 #
-#   <date time>\tmail\t📧<name>:\tthread:<id> to:<direct|cc|none> bulk:<signals|-> account:<acct> folder:<folder> from:<addr> | <subject>
+#   <date time>\tmail\t📧<name>:\tthread:<id> to:<direct|cc|none> bulk:<signals|-> account:<acct> folder:<folder> from:<addr> [svc:<service>] | <subject>
+#
+# svc names the tool a notification mail comes from (gdocs, gdrive, figma,
+# zoom, reclaim, ramp, notion), so Kendra routes it as that source's event
+# and __intake_source_health.sh shows its last record. Other mail has no svc.
 #
 # folder is the message's best home: inbox when any file sits in INBOX, else
 # spam or trash, else its label, else a Gmail system folder (important), else
@@ -226,10 +230,24 @@ id_query() {
     printf 'id:"%s"' "${1//\"/\"\"}"
 }
 
+# svc_of <from address>: the tool a notification mail comes from, or nothing.
+# Senders measured on the live database (365 days, 23 Oct 2026).
+svc_of() {
+    case "$1" in
+        comments-noreply@docs.google.com) echo gdocs ;;
+        drive-shares-dm-noreply@google.com | drive-shares-noreply@google.com) echo gdrive ;;
+        *@figma.com | *.figma.com) echo figma ;;
+        *@zoom.us | *.zoom.us) echo zoom ;;
+        *@reclaim.ai) echo reclaim ;;
+        *@ramp.com) echo ramp ;;
+        *@notion.so | *.notion.so | *@makenotion.com) echo notion ;;
+    esac
+}
+
 # event_for <message id>: appends the record for one new message, unless it
 # is Piotr's own.
 event_for() {
-    local id="$1" msg tid file home account folder addressed bulk subject dbpath
+    local id="$1" msg tid file home account folder addressed bulk subject dbpath svc
     msg="$(notmuch show --format=json --body=false --entire-thread=false "$(id_query "$id")" |
         jq -c "[$JQ_MESSAGES | select(.match)][0] // empty")"
     [[ -n "$msg" ]] || return 0
@@ -246,8 +264,9 @@ event_for() {
     file="$(jq -r '.filename[0]' <<<"$msg")"
     bulk="$(bulk_of "$file" "$from_addr")"
     subject="$(jq -r '.headers.Subject // ""' <<<"$msg")"
+    svc="$(svc_of "$from_addr")"
     append_record "📧${from_name:0:80}:" \
-        "thread:${tid} to:${addressed} bulk:${bulk} account:${account} folder:${folder} from:${from_addr} | ${subject:0:200}"
+        "thread:${tid} to:${addressed} bulk:${bulk} account:${account} folder:${folder} from:${from_addr}${svc:+ svc:$svc} | ${subject:0:200}"
 }
 
 # waiting_ops <thread id>: prints the notmuch tag batch lines that bring the
