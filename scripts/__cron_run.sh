@@ -107,6 +107,19 @@ start_ts=$(date +%s)
 # the run ever happened. Now a silent job still leaves start/command/exit lines.
 wlog() { printf '[%s] [%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$1" "$2" >>"$log_file"; }
 
+# Ingest pause (the toggle board's ingest switch): a feed job Piotr paused is a
+# clean skip, like a held lock. The state file keeps the last real run, and the
+# health table reads the job as paused rather than late. No library, no gate.
+ingest_lib="${INGEST_PAUSE_LIB:-$HOME/.claude/scripts/__lib_ingest_pause.sh}"
+if [ -r "$ingest_lib" ]; then
+    # shellcheck source=/dev/null
+    . "$ingest_lib"
+    if ingest_paused_job "$job"; then
+        wlog INFO "skipped: ingest paused since $(ingest_since)"
+        exit 0
+    fi
+fi
+
 # Taskwarrior 3.3 still documents duplicate recurring instances when more than
 # one client expands recurrence. Ordinary commands therefore run with
 # recurrence=0 from .taskrc. Any cron wrapper may become the one primary client

@@ -263,3 +263,43 @@ EOF
   [ "$status" -eq 0 ]
   [ "$(cat "${WORK}/seen")" = 'null' ]
 }
+
+# The ingest toggle pauses feed jobs through a flag file the shared library
+# reads. A paused feed must not run and must leave its last state alone, so the
+# health table reads it as paused, not as a fresh run.
+@test "a paused ingest job is skipped and keeps its last state" {
+  mkdir -p "$CRON_STATE_DIR"
+  echo '{"job":"__linear_feed","ts":1,"state":"no-hit"}' >"${CRON_STATE_DIR}/__linear_feed.json"
+  export INGEST_PAUSE_FLAG="${WORK}/ingest-paused"
+  echo "2026-10-23T19:30:00+02:00" >"$INGEST_PAUSE_FLAG"
+  job="$(job_script feed.sh '#!/usr/bin/env bash' "touch \"${WORK}/ran\"")"
+
+  run "$CRON_RUN" __linear_feed -- "$job"
+
+  [ "$status" -eq 0 ]
+  [ ! -e "${WORK}/ran" ]
+  [ "$(jq -r '.ts' "${CRON_STATE_DIR}/__linear_feed.json")" = "1" ]
+  grep -q 'skipped: ingest paused since 2026-10-23T19:30:00+02:00' "${CRON_STATE_DIR}/__linear_feed.log"
+}
+
+@test "the ingest pause leaves jobs outside the feed list running" {
+  export INGEST_PAUSE_FLAG="${WORK}/ingest-paused"
+  touch "$INGEST_PAUSE_FLAG"
+  job="$(job_script other.sh '#!/usr/bin/env bash' "touch \"${WORK}/ran\"")"
+
+  run "$CRON_RUN" job -- "$job"
+
+  [ "$status" -eq 0 ]
+  [ -e "${WORK}/ran" ]
+  [ "$(state_of)" = "no-hit" ]
+}
+
+@test "without the pause flag a feed job runs" {
+  export INGEST_PAUSE_FLAG="${WORK}/ingest-paused"
+  job="$(job_script feed.sh '#!/usr/bin/env bash' "touch \"${WORK}/ran\"")"
+
+  run "$CRON_RUN" __linear_feed -- "$job"
+
+  [ "$status" -eq 0 ]
+  [ -e "${WORK}/ran" ]
+}
