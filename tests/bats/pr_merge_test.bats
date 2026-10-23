@@ -185,7 +185,7 @@ typed() { grep '^xdotool type' "$SPY/all.log" | sed 's/^xdotool type --clearmodi
 	printf '{"mergeCommit":{"oid":"%s"}}\n' "$SHA" >"$FIX/pr_view.json"
 	TMUX=/tmp/x TMUX_PANE=%9 run "$WATCH" loft-sh/ai-agents 156
 	[ "$status" -eq 0 ]
-	grep -qxF "tmux new-pane -d -x 45% -y 80% -X 53% -Y 2 -t %9 viddy -n 10s -t 'gh run list --repo loft-sh/ai-agents --commit $SHA'" "$SPY/all.log"
+	grep -qxF "tmux new-pane -d -x 90% -y 30% -X 5% -Y 2 -t %9 viddy -n 10s -t 'gh run list --repo loft-sh/ai-agents --commit $SHA'" "$SPY/all.log"
 }
 
 @test "watch outside tmux prints the runs once" {

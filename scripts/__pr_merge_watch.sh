@@ -26,5 +26,5 @@ if [[ -z "${TMUX:-}" ]]; then
 	$runs
 	exit 0
 fi
-tmux new-pane -d -x 45% -y 80% -X 53% -Y 2 ${TMUX_PANE:+-t "$TMUX_PANE"} "viddy -n 10s -t '$runs'"
+tmux new-pane -d -x 90% -y 30% -X 5% -Y 2 ${TMUX_PANE:+-t "$TMUX_PANE"} "viddy -n 10s -t '$runs'"
 echo "Watching runs for $repo#$pr (${sha:0:7}) in a floating pane; q closes it."
