@@ -1,88 +1,100 @@
 #!/usr/bin/env bash
 set -eo pipefail
 
-# Cycle through delegated subagent sessions. The exact mirror of
-# __cycle_tmux_session.sh, which skips these on purpose: between them, Alt-PgUp
-# and Alt-PgDn walk your own sessions and this key walks the workers, so neither
-# ring ever buries the other.
+# Cycle through every live agent pane in the order the Alt-m cockpit lists them.
 #
-# WHY: Alt-m's margin already renders the whole board (__cockpit_state.sh, one
-# row per live worker with a "jump:<session>" cell), but that cell is a hint no
-# key acts on. With ten workers up, reaching one meant reading its name off the
-# margin and hand-driving switch-client. The board had no legs.
+# WHY: this key used to walk only delegated sessions, in tmux's own session
+# order, so it jumped around while the cockpit showed another order entirely.
+# The order now comes from __cockpit_state.sh itself (COCKPIT_LAYOUT=order, the
+# sorted rows the board renders), so the ring cannot drift from the list. Gordon
+# and intake share the `task` session in different windows, so the ring steps
+# by pane, not by session.
 #
-# Membership is @agent_spawn_level == delegated, the session option
-# __spawn_agent.sh:445 stamps at spawn. Not @agent_name, which is a PANE option
-# every worker pane carries and which would have made this a pane ring rather
-# than a session ring; and not "is claude running here", which would sweep your
-# own sessions back in and defeat the split above.
+# Next is the entry after the one holding the current pane, wrapping at the end.
+# From a pane that is not an agent, next enters at the first entry and prev at
+# the last.
 #
-# Usage: __cycle_agent_session.sh [next|prev]
-# Only next is bound (Alt-i). prev exists because the ring logic is the same
-# four lines either way, so a second binding costs nothing later.
+# Usage: __cycle_agent_session.sh [next|prev] [current-pane-id]
+# Only next is bound (Alt-i).
 
 direction="${1:-next}"
 
 # Reject anything that is not a direction rather than treating it as prev, which
-# is what an "is it next?" test silently does with a typo. Caught by running
-# this with a --dry flag it never had: the script read that as prev and switched
-# a live client into a worker session. A key binding is not the only caller.
+# is what an "is it next?" test silently does with a typo. A key binding is not
+# the only caller.
 if [[ "$direction" != "next" && "$direction" != "prev" ]]; then
     printf 'usage: %s [next|prev]\n' "${0##*/}" >&2
     exit 2
 fi
 
-current=$(tmux display-message -p '#S')
+state="${COCKPIT_STATE:-$HOME/.claude/scripts/__cockpit_state.sh}"
+cache_dir="${CYCLE_AGENT_CACHE_DIR:-${XDG_RUNTIME_DIR:-/tmp}/cycle-agent-order}"
+cache="$cache_dir/order"
+ttl="${CYCLE_AGENT_TTL:-8}"
+mkdir -p "$cache_dir"
 
-session_spawn_level() {
-    tmux show-options -qv -t "$1" @agent_spawn_level 2>/dev/null || true
+# The cockpit render takes seconds, far too slow for a key press. Read the last
+# render from a cache and refresh it in the background when it is older than the
+# ttl. Presses inside the ttl all see one frozen order, so the ring does not
+# reshuffle while you step through it. Only a cold cache renders inline.
+refresh_cache() {
+    (
+        flock -n 9 || exit 0
+        COCKPIT_LAYOUT=order "$state" > "$cache.$$" 2>/dev/null \
+            && [ -s "$cache.$$" ] && mv -f "$cache.$$" "$cache"
+        rm -f "$cache.$$"
+    ) 9>"$cache_dir/lock"
 }
 
-mapfile -t sessions < <(
-    tmux list-sessions -F '#S' | while read -r s; do
-        [[ "$(session_spawn_level "$s")" == "delegated" ]] && echo "$s"
-    done
-)
+if [[ ! -s "$cache" ]]; then
+    refresh_cache
+elif [[ -z "$(find "$cache" -mmin -"$(awk -v t="$ttl" 'BEGIN{printf "%.4f", t/60}')" 2>/dev/null)" ]]; then
+    refresh_cache </dev/null >/dev/null 2>&1 &
+    disown
+fi
 
-(( ${#sessions[@]} == 0 )) && exit 0
+# The pane the client is on arrives from the binding (#{pane_id} is expanded by
+# run-shell); fall back to asking tmux when run by hand.
+current="${2:-$(tmux display-message -p '#{pane_id}')}"
+
+[[ -r "$cache" ]] || exit 0
+
+# Drop panes that died since the render, so a stale cache never targets a ghost.
+mapfile -t live < <(tmux list-panes -a -F '#{pane_id}')
+panes=()
+while IFS= read -r p; do
+    for l in "${live[@]}"; do [[ "$l" == "$p" ]] && { panes+=("$p"); break; }; done
+done < "$cache"
+
+(( ${#panes[@]} == 0 )) && exit 0
 
 current_idx=-1
-for i in "${!sessions[@]}"; do
-    [[ "${sessions[$i]}" == "$current" ]] && { current_idx=$i; break; }
+for i in "${!panes[@]}"; do
+    [[ "${panes[$i]}" == "$current" ]] && { current_idx=$i; break; }
 done
 
-# Entering the ring from outside it, which is the common case: this key is
-# pressed from a working session, not from a worker. Enter at the end the
-# direction implies rather than always at the top, so one press of a prev
-# binding does not mean "go to the first one".
 if (( current_idx == -1 )); then
     if [[ "$direction" == "next" ]]; then
         idx=0
     else
-        idx=$(( ${#sessions[@]} - 1 ))
+        idx=$(( ${#panes[@]} - 1 ))
     fi
 else
-    # Already inside a one-session ring: stepping would switch to where you
-    # already are, and tmux would redraw for nothing.
-    (( ${#sessions[@]} <= 1 )) && exit 0
+    # A one-entry ring that already holds the current pane has nowhere to go.
+    (( ${#panes[@]} <= 1 )) && exit 0
     if [[ "$direction" == "next" ]]; then
-        idx=$(( (current_idx + 1) % ${#sessions[@]} ))
+        idx=$(( (current_idx + 1) % ${#panes[@]} ))
     else
-        idx=$(( (current_idx - 1 + ${#sessions[@]}) % ${#sessions[@]} ))
+        idx=$(( (current_idx - 1 + ${#panes[@]}) % ${#panes[@]} ))
     fi
 fi
 
-target="${sessions[$idx]}"
-tmux switch-client -t "$target"
+target="${panes[$idx]}"
 
-# Land on the pane you can type into. A spawned worker session is two panes, a
-# viddy monitor at .1 and the agent at .2, and switch-client restores whichever
-# was last active there. Visit a worker, click its monitor to read, cycle away,
-# and every later arrival puts the cursor in viddy. The agent pane is the one
-# carrying @agent_name, so ask for it by that rather than by index.
-agent_pane=$(tmux list-panes -s -t "$target" -F '#{pane_id} #{@agent_name}' 2>/dev/null \
-    | awk 'NF > 1 { print $1; exit }')
-[[ -n "$agent_pane" ]] && tmux select-window -t "$target:$(tmux display-message -p -t "$agent_pane" '#{window_index}')" 2>/dev/null
-[[ -n "$agent_pane" ]] && tmux select-pane -t "$agent_pane" 2>/dev/null
+# switch-client picks the session; the window and pane are selected by id so a
+# shared session (task) lands on the right agent, not on whatever was active.
+tmux switch-client -t "$target"
+tmux select-window -t "$target" 2>/dev/null || true
+tmux select-pane -t "$target" 2>/dev/null || true
 
 exit 0

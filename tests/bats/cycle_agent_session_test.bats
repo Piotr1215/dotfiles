@@ -1,5 +1,11 @@
 #!/usr/bin/env bats
 
+# M-i walks the panes __cockpit_state.sh lists, in its order. The cockpit is
+# stubbed with a script that prints a fixed pane order, so these tests pin the
+# cycler's own logic (next, wrap, entry from a non-agent pane, pane landing).
+# The order itself is tested against the real renderer in
+# ~/.claude/tests/test_cockpit_state_vertical.sh.
+
 setup() {
   SCRIPT="${BATS_TEST_DIRNAME}/../../scripts/__cycle_agent_session.sh"
   SOCKET="cycle-agent-${BATS_TEST_NUMBER}-$$"
@@ -7,32 +13,41 @@ setup() {
   : > "$CMDLOG"
   tmux -L "$SOCKET" -f /dev/null new-session -d -s home -x 120 -y 30
 
-  # The script calls `tmux` by name and takes no socket argument, so a wrapper
-  # on PATH is the only seam. It does three jobs:
-  #
-  #   1. pins every call to the test server
-  #   2. answers "what session am I in" from FAKE_CURRENT_SESSION. A headless
-  #      test server has no attached client, so the real display-message has no
-  #      current session to report.
-  #   3. logs and swallows switch-client, for the same reason: with no client
-  #      there is nothing to switch and real tmux would fail. Which session the
-  #      script CHOSE is the logic under test, so the log is the assertion
-  #      surface. select-window and select-pane still run for real, because
-  #      those work without a client and their effect is observable.
+  # Layout mirrors the real shared case: gordon and intake are two windows of
+  # the one `task` session, and the other agents live in their own sessions.
+  GORDON=$(tmux -L "$SOCKET" new-session -d -s task -P -F '#{pane_id}')
+  INTAKE=$(tmux -L "$SOCKET" new-window -d -t task -P -F '#{pane_id}')
+  ITIN=$(tmux -L "$SOCKET" new-session -d -s itinerary -P -F '#{pane_id}')
+  SLACK=$(tmux -L "$SOCKET" new-session -d -s slackbot -P -F '#{pane_id}')
+  HOMELAB=$(tmux -L "$SOCKET" new-session -d -s homelab -P -F '#{pane_id}')
+  PLAIN=$(tmux -L "$SOCKET" list-panes -t home -F '#{pane_id}' | head -1)
+
+  # Cockpit order: gordon, its subagents, a later agent, then intake last.
+  STATE="${BATS_TEST_TMPDIR}/state"
+  printf '#!/usr/bin/env bash\n[ "$COCKPIT_LAYOUT" = order ] || exit 1\nprintf "%%s\\n" %s %s %s %s %s\n' \
+    "$GORDON" "$ITIN" "$SLACK" "$HOMELAB" "$INTAKE" > "$STATE"
+  chmod +x "$STATE"
+
+  # The script calls `tmux` by name and takes no socket, so a wrapper on PATH is
+  # the seam. It pins calls to the test server, answers "which pane am I in" from
+  # FAKE_CURRENT_PANE (a headless server has no attached client), and logs and
+  # swallows switch-client for the same reason. Which pane the script CHOSE is
+  # the logic under test, so the log is the assertion surface. select-window and
+  # select-pane still run for real.
   BIN="${BATS_TEST_TMPDIR}/bin"
   mkdir -p "$BIN"
-  cat > "$BIN/tmux" <<EOF
+  cat > "$BIN/tmux" <<EOS
 #!/usr/bin/env bash
 printf '%s\n' "\$*" >> "$CMDLOG"
-if [ "\$1" = display-message ] && [ "\$2" = -p ] && [ "\$3" = '#S' ]; then
-  printf '%s\n' "\$FAKE_CURRENT_SESSION"
+if [ "\$1" = display-message ] && [ "\$2" = -p ] && [ "\$3" = '#{pane_id}' ]; then
+  printf '%s\n' "\$FAKE_CURRENT_PANE"
   exit 0
 fi
 if [ "\$1" = switch-client ]; then
   exit 0
 fi
 exec $(command -v tmux) -L "$SOCKET" "\$@"
-EOF
+EOS
   chmod +x "$BIN/tmux"
 }
 
@@ -41,115 +56,100 @@ teardown() {
 }
 
 cycle_from() {
-  run env PATH="$BIN:$PATH" FAKE_CURRENT_SESSION="$1" "$SCRIPT" "${2:-next}"
-}
-
-spawn_agent_session() {
-  local name="$1"
-  tmux -L "$SOCKET" new-session -d -s "$name"
-  tmux -L "$SOCKET" set-option -t "$name" @agent_spawn_level delegated
-  tmux -L "$SOCKET" set-option -pt "$name" @agent_name "$name"
+  run env PATH="$BIN:$PATH" COCKPIT_STATE="$STATE" CYCLE_AGENT_CACHE_DIR="$BATS_TEST_TMPDIR/cache" \
+    FAKE_CURRENT_PANE="$1" "$SCRIPT" "${2:-next}" "$1"
 }
 
 switched_to() {
   grep -oP '(?<=^switch-client -t ).*' "$CMDLOG" | tail -1
 }
 
-@test "a session with no delegated marker is not in the ring" {
-  tmux -L "$SOCKET" new-session -d -s plain
-  cycle_from home next
+@test "next steps through the cockpit order one entry at a time" {
+  cycle_from "$GORDON"
   [ "$status" -eq 0 ]
-  [ -z "$(switched_to)" ]
+  [ "$(switched_to)" = "$ITIN" ]
+  cycle_from "$ITIN"
+  [ "$(switched_to)" = "$SLACK" ]
+  cycle_from "$HOMELAB"
+  [ "$(switched_to)" = "$INTAKE" ]
 }
 
-@test "pressing the key outside the ring enters at the first subagent" {
-  spawn_agent_session bravo
-  spawn_agent_session alfa
-  cycle_from home next
+@test "next wraps from the last entry back to the first" {
+  cycle_from "$INTAKE"
   [ "$status" -eq 0 ]
-  [ "$(switched_to)" = alfa ]
+  [ "$(switched_to)" = "$GORDON" ]
 }
 
-@test "cycling steps to the next subagent and wraps past the last" {
-  spawn_agent_session alfa
-  spawn_agent_session bravo
-  cycle_from alfa next
-  [ "$status" -eq 0 ]
-  [ "$(switched_to)" = bravo ]
-
-  cycle_from bravo next
-  [ "$status" -eq 0 ]
-  [ "$(switched_to)" = alfa ]
+@test "gordon and intake share the task session but are separate stops" {
+  cycle_from "$HOMELAB"
+  [ "$(switched_to)" = "$INTAKE" ]
+  # Intake is selected as its own window inside task, not just the session.
+  [ "$(tmux -L "$SOCKET" display-message -p -t "$INTAKE" '#{window_active}')" -eq 1 ]
+  [ "$(tmux -L "$SOCKET" display-message -p -t "$GORDON" '#{window_active}')" -eq 0 ]
+  cycle_from "$INTAKE"
+  [ "$(switched_to)" = "$GORDON" ]
+  [ "$(tmux -L "$SOCKET" display-message -p -t "$GORDON" '#{window_active}')" -eq 1 ]
 }
 
-# The whole point of the split: Alt-PgUp/PgDn walk your own sessions and skip
-# delegated workers, this key walks the workers and skips yours. A regular
-# session must never be a destination here, however many of them exist.
-@test "your own sessions are never entered by this ring" {
-  tmux -L "$SOCKET" new-session -d -s work
-  tmux -L "$SOCKET" new-session -d -s notes
-  spawn_agent_session alfa
-  spawn_agent_session bravo
-  cycle_from alfa next
-  [ "$status" -eq 0 ]
-  [ "$(switched_to)" = bravo ]
-  cycle_from bravo next
-  [ "$status" -eq 0 ]
-  [ "$(switched_to)" = alfa ]
-  ! grep -qE '^switch-client -t (work|notes|home)$' "$CMDLOG"
+@test "a pane that is not an agent enters at the first entry" {
+  cycle_from "$PLAIN"
+  [ "$(switched_to)" = "$GORDON" ]
 }
 
-@test "prev walks the ring backwards and enters at the last from outside" {
-  spawn_agent_session alfa
-  spawn_agent_session bravo
-  cycle_from home prev
-  [ "$status" -eq 0 ]
-  [ "$(switched_to)" = bravo ]
-
-  cycle_from bravo prev
-  [ "$status" -eq 0 ]
-  [ "$(switched_to)" = alfa ]
+@test "prev walks backwards, wraps, and enters at the last from outside" {
+  cycle_from "$ITIN" prev
+  [ "$(switched_to)" = "$GORDON" ]
+  cycle_from "$GORDON" prev
+  [ "$(switched_to)" = "$INTAKE" ]
+  cycle_from "$PLAIN" prev
+  [ "$(switched_to)" = "$INTAKE" ]
 }
 
-@test "a one-session ring does not switch to where you already are" {
-  spawn_agent_session alfa
-  cycle_from alfa next
+@test "an empty cockpit does nothing" {
+  printf '#!/usr/bin/env bash\nexit 0\n' > "$STATE"
+  cycle_from "$GORDON"
   [ "$status" -eq 0 ]
-  [ -z "$(switched_to)" ]
+  ! grep -q '^switch-client' "$CMDLOG"
 }
 
-@test "a lone subagent is still reachable from outside the ring" {
-  spawn_agent_session alfa
-  cycle_from home next
-  [ "$status" -eq 0 ]
-  [ "$(switched_to)" = alfa ]
-}
-
-# A spawned worker session is a viddy monitor pane plus the agent pane, and
-# switch-client restores whichever was last active. Visit a worker, click its
-# monitor to read it, cycle away, and every later arrival drops the cursor into
-# viddy where you cannot type.
-@test "arrival selects the agent pane, not the monitor pane beside it" {
-  spawn_agent_session alfa
-  monitor=$(tmux -L "$SOCKET" split-window -d -t alfa -P -F '#{pane_id}')
-  tmux -L "$SOCKET" select-pane -t "$monitor"
-  [ "$(tmux -L "$SOCKET" display-message -p -t "$monitor" '#{pane_active}')" -eq 1 ]
-
-  cycle_from home next
-  [ "$status" -eq 0 ]
-  agent_pane=$(tmux -L "$SOCKET" list-panes -s -t alfa -F '#{pane_id} #{@agent_name}' | awk 'NF > 1 { print $1; exit }')
-  [ "$(tmux -L "$SOCKET" display-message -p -t "$agent_pane" '#{pane_active}')" -eq 1 ]
-  [ "$(tmux -L "$SOCKET" display-message -p -t "$monitor" '#{pane_active}')" -eq 0 ]
-}
-
-# An "is it next?" test treats every typo as prev. Running this with a --dry
-# flag it never had switched a live client into a worker session, silently.
-@test "an argument that is not a direction is refused, not read as prev" {
-  spawn_agent_session alfa
-  spawn_agent_session bravo
-  cycle_from home --dry
+@test "a bad direction is rejected without switching" {
+  cycle_from "$GORDON" --dry
   [ "$status" -eq 2 ]
-  [ -z "$(switched_to)" ]
+  ! grep -q '^switch-client' "$CMDLOG"
+}
+
+@test "a warm cache is used without rendering the cockpit" {
+  cycle_from "$GORDON"
+  # Replace the renderer with one that would hang; a press inside the ttl must not run it.
+  printf '#!/usr/bin/env bash\nsleep 5\nexit 1\n' > "$STATE"
+  start=$(date +%s%N)
+  cycle_from "$ITIN"
+  elapsed=$(( ($(date +%s%N) - start) / 1000000 ))
+  [ "$(switched_to)" = "$SLACK" ]
+  [ "$elapsed" -lt 150 ]
+}
+
+@test "a stale cache is used now and refreshed in the background" {
+  cycle_from "$GORDON"
+  touch -d '1 minute ago' "$BATS_TEST_TMPDIR/cache/order"
+  printf '#!/usr/bin/env bash\nsleep 1\nprintf "%%s\\n" %s %s\n' "$INTAKE" "$GORDON" > "$STATE"
+  start=$(date +%s%N)
+  cycle_from "$GORDON"
+  elapsed=$(( ($(date +%s%N) - start) / 1000000 ))
+  [ "$(switched_to)" = "$ITIN" ]
+  [ "$elapsed" -lt 150 ]
+  for _ in $(seq 40); do
+    [ "$(head -1 "$BATS_TEST_TMPDIR/cache/order")" = "$INTAKE" ] && break
+    sleep 0.1
+  done
+  [ "$(head -1 "$BATS_TEST_TMPDIR/cache/order")" = "$INTAKE" ]
+}
+
+@test "a pane that died since the render is skipped" {
+  cycle_from "$GORDON"
+  tmux -L "$SOCKET" kill-session -t itinerary
+  cycle_from "$GORDON"
+  [ "$(switched_to)" = "$SLACK" ]
 }
 
 @test "the tmux binding drives the cycler with no popup" {
@@ -160,9 +160,7 @@ switched_to() {
   ! grep -qE '^bind -n M-i .*__orchestrator\.sh' "$config"
 }
 
-# The two rings are complements. If __cycle_tmux_session.sh ever stops excluding
-# delegated sessions, both keys would walk the workers and this one loses its
-# reason to exist, so the split is asserted rather than assumed.
-@test "the session cycler still excludes what this cycler includes" {
-  grep -q 'delegated' "${BATS_TEST_DIRNAME}/../../scripts/__cycle_tmux_session.sh"
+@test "the other session switchers are not bound to this script" {
+  config="${BATS_TEST_DIRNAME}/../../.tmux.conf"
+  ! grep -E '(M|C)-(PageUp|PageDown)' "$config" | grep -q __cycle_agent_session
 }
