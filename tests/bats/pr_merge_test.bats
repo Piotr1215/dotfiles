@@ -6,6 +6,8 @@
 
 SHA=0123456789abcdef0123456789abcdef01234567
 
+load helpers/pr_watch_fixture
+
 setup() {
 	REPO_ROOT="$(cd "$(dirname "$BATS_TEST_FILENAME")/../.." && pwd)"
 	PICKER="$REPO_ROOT/scripts/__pr_merge_pick.sh"
@@ -22,6 +24,8 @@ setup() {
 echo "tmux $*" >> "$SPY/all.log"
 [[ "$1" == "list-clients" ]] && cat "$FIX/clients"
 [[ "$1" == "show-options" ]] && cat "$FIX/pane_export" 2>/dev/null
+[[ "$1" == "capture-pane" ]] && cat "$FIX/screen" 2>/dev/null
+[[ "$1" == "display-message" ]] && cat "$FIX/pane_pid" 2>/dev/null
 exit 0
 EOF
 	cat >"$STUB_BIN/gh" <<'EOF'
@@ -61,6 +65,9 @@ grep -m1 -F "$(cat "$FIX/pick")" "$SPY/rofi.in"
 EOF
 	chmod +x "$STUB_BIN"/*
 	export PATH="$STUB_BIN:$PATH"
+	# Where the pr-watch list sources are looked for, empty until a test fills them.
+	export PR_PICK_CLAUDE_DIRS="$BATS_TEST_TMPDIR/claude" PR_PICK_RUNTIME="$BATS_TEST_TMPDIR/run"
+	export PR_PICK_PROC="$BATS_TEST_TMPDIR/proc" PR_PICK_CACHE="$BATS_TEST_TMPDIR/cache"
 	export PR_MERGE_DIR="$BATS_TEST_TMPDIR/repo" PR_MERGE_NO_DETACH=1 PR_MERGE_LAYOUT_DELAY=0
 	export PR_MERGE_LAYOUT_SCRIPT="$STUB_BIN/layout"
 	unset PR_MERGE_REPO PR_MERGE_OPEN TMUX TMUX_PANE PR_PICK_WATCH_FILE
@@ -179,6 +186,81 @@ EOF
 	[ "$status" -eq 0 ]
 	grep -q '|pr list --repo loft-sh/ai-agents --state open' "$SPY/all.log"
 	[ "$(sed -n 1p "$SPY/rofi.in")" = "#156  fix: own  [checks ok, review required, bypass]  @Piotr1215" ]
+}
+
+# The flows-pam-flags-on worker: a Claude session started before its pane had
+# @pr_watch_export, whose pr-watch watches PRs in three repos.
+pam_flags_pane() {
+	unset PR_MERGE_DIR
+	printf '%s\n' "300 $PAM_PANE $BATS_TEST_TMPDIR/repo" >"$FIX/clients"
+	claude_registry "$PAM_PANE" "$PAM_SID" "$PR_PICK_CLAUDE_DIRS"
+	pam_flags_screen >"$FIX/screen"
+	view loft-sh/eng-infra-config 66 OPEN "feat(alerts): alert on pam publish failures" BLOCKED
+	view loft-sh/loft-prod 924 OPEN "feat(flows): turn the pam flags on" BLOCKED
+	view loft-sh/flows 134 OPEN "feat(pam): turn the flags on" CLEAN
+}
+
+@test "a running Claude pane without @pr_watch_export lists every PR its pr-watch band shows, from every repo" {
+	pam_flags_pane
+	run "$PICKER" 7
+	[ "$status" -eq 0 ]
+	grep -qx "tmux capture-pane -p -e -t $PAM_PANE" "$SPY/all.log"
+	[ "$(cat "$SPY/rofi.in")" = "$(printf '%s\n' \
+		'loft-sh/eng-infra-config#66  feat(alerts): alert on pam publish failures  [checks ok, review required, bypass]  @Piotr1215' \
+		'loft-sh/loft-prod#924  feat(flows): turn the pam flags on  [checks ok, review required, bypass]  @Piotr1215' \
+		'loft-sh/flows#134  feat(pam): turn the flags on  [checks ok, review required]  @Piotr1215')" ]
+	! grep -q '|pr list' "$SPY/all.log"
+	! grep -qF 'pull/68' "$SPY/all.log"
+	! grep -qF 'pull/135' "$SPY/all.log"
+}
+
+@test "a band PR picked from a running Claude pane merges in its own repo" {
+	pam_flags_pane
+	echo "loft-sh/loft-prod#924 " >"$FIX/pick"
+	run "$PICKER" 7
+	[ "$status" -eq 0 ]
+	[ "$(typed)" = "!gh pr merge 924 --repo loft-sh/loft-prod --squash --admin && __pr_merge_watch.sh loft-sh/loft-prod 924" ]
+}
+
+@test "the file pr-watch keeps for the pane's Claude session wins over its band" {
+	pam_flags_pane
+	mkdir -p "$PR_PICK_RUNTIME/pr-watch/sessions"
+	echo '{"scope":"repo","prs":[{"url":"https://github.com/loft-sh/flows/pull/134"}]}' >"$PR_PICK_RUNTIME/pr-watch/sessions/$PAM_SID.json"
+	run "$PICKER" 7
+	[ "$status" -eq 0 ]
+	[ "$(cat "$SPY/rofi.in")" = 'loft-sh/flows#134  feat(pam): turn the flags on  [checks ok, review required]  @Piotr1215' ]
+	! grep -q '^tmux capture-pane' "$SPY/all.log"
+}
+
+@test "a Claude process that exited no longer stands for the pane" {
+	pam_flags_pane
+	sed -i 's/"pid":[0-9]*/"pid":999999999/' "$PR_PICK_CLAUDE_DIRS"/sessions/*.json
+	run "$PICKER" 7
+	[ "$status" -eq 0 ]
+	! grep -q '^tmux capture-pane' "$SPY/all.log"
+	grep -q '|pr list --repo loft-sh/ai-agents --state open' "$SPY/all.log"
+}
+
+@test "a Codex pane lists the PRs the pr-watch adapter keeps for the threads it runs" {
+	unset PR_MERGE_DIR
+	local home="$BATS_TEST_TMPDIR/codex-work" thread=01a16866-28e2-7000-b7e8-fabb3469b2a9
+	printf '%s\n' "300 %68 $BATS_TEST_TMPDIR/repo" >"$FIX/clients"
+	echo "$$" >"$FIX/pane_pid"
+	mkdir -p "$PR_PICK_PROC/$$/fd" "$home/plugins/data/agent-plugins/dce07efd"
+	ln -s "$home/sessions/2026/10/23/rollout-2026-10-23T12-54-48-$thread.jsonl" "$PR_PICK_PROC/$$/fd/7"
+	ln -s /dev/null "$PR_PICK_PROC/$$/fd/8"
+	cat >"$home/plugins/data/agent-plugins/dce07efd/$thread.json" <<EOF
+{"version":1,"sessionId":"$thread","watcher":{"scope":"all","prs":{
+ "https://github.com/loft-sh/eng-infra-config/pull/66":{"url":"https://github.com/loft-sh/eng-infra-config/pull/66","plans":[],"applies":[]},
+ "https://github.com/loft-sh/flows/pull/134":{"url":"https://github.com/loft-sh/flows/pull/134","plans":[{"stack":"flows-main"}],"applies":[]}}}}
+EOF
+	view loft-sh/eng-infra-config 66 OPEN "feat(alerts): alert on pam publish failures" BLOCKED
+	view loft-sh/flows 134 OPEN "feat(pam): turn the flags on" CLEAN
+	run "$PICKER" 7
+	[ "$status" -eq 0 ]
+	[ "$(cat "$SPY/rofi.in")" = "$(printf '%s\n' \
+		'loft-sh/eng-infra-config#66  feat(alerts): alert on pam publish failures  [checks ok, review required, bypass]  @Piotr1215' \
+		'loft-sh/flows#134  feat(pam): turn the flags on  [checks ok, review required]  @Piotr1215')" ]
 }
 
 @test "Esc types nothing and opens no browser" {

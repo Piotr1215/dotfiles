@@ -6,6 +6,8 @@
 
 RUN=01M5M4D20GQYEJY10VYFFYNJW4
 
+load helpers/pr_watch_fixture
+
 setup() {
 	REPO_ROOT="$(cd "$(dirname "$BATS_TEST_FILENAME")/../.." && pwd)"
 	PICKER="$REPO_ROOT/scripts/__spacelift_confirm_pick.sh"
@@ -22,6 +24,8 @@ setup() {
 echo "tmux $*" >> "$SPY/all.log"
 [[ "$1" == "list-clients" ]] && cat "$FIX/clients" 2>/dev/null
 [[ "$1" == "show-options" ]] && cat "$FIX/pane_export" 2>/dev/null
+[[ "$1" == "capture-pane" ]] && cat "$FIX/screen" 2>/dev/null
+[[ "$1" == "display-message" ]] && cat "$FIX/pane_pid" 2>/dev/null
 exit 0
 EOF
 	cat >"$STUB_BIN/spacectl" <<'EOF'
@@ -46,6 +50,9 @@ echo $((n - 1))
 EOF
 	chmod +x "$STUB_BIN"/*
 	export PATH="$STUB_BIN:$PATH"
+	# Where the pr-watch list sources are looked for, empty until a test fills them.
+	export PR_PICK_CLAUDE_DIRS="$BATS_TEST_TMPDIR/claude" PR_PICK_RUNTIME="$BATS_TEST_TMPDIR/run"
+	export PR_PICK_PROC="$BATS_TEST_TMPDIR/proc" PR_PICK_CACHE="$BATS_TEST_TMPDIR/cache"
 	export SPACELIFT_CONFIRM_NO_DETACH=1 SPACELIFT_CONFIRM_LAYOUT_DELAY=0
 	export SPACELIFT_CONFIRM_LAYOUT_SCRIPT="$STUB_BIN/layout" SPACELIFT_CONFIRM_URL="https://loft.app.spacelift.io"
 	unset SPACELIFT_CONFIRM_OPEN PR_PICK_WATCH_FILE
@@ -93,6 +100,21 @@ EOF
 	[ "$(sed -n 1p "$SPY/rofi.in")" = "tailscale-pam  feat: pam services  [plan ?, 725f7e2, watched]" ]
 	[ "$(sed -n 2p "$SPY/rofi.in")" = "flows-main  feat(pam): turn on receipts (#131)  [+0 ~1 -4, 98d7de6]" ]
 	[ "$(typed)" = "!spacectl stack confirm --id tailscale-pam --run 01M5PAM0000000000000000000 --tail" ]
+}
+
+@test "a running Claude pane without @pr_watch_export ranks the stacks its pr-watch band shows" {
+	printf '%s\n' "300 $PAM_PANE /home/u/loft/flows" >"$FIX/clients"
+	claude_registry "$PAM_PANE" "$PAM_SID" "$PR_PICK_CLAUDE_DIRS"
+	pam_flags_screen >"$FIX/screen"
+	echo '[{"id":"tailscale-pam","state":"UNCONFIRMED"},{"id":"flows-main","state":"UNCONFIRMED"},{"id":"loft-rocks","state":"UNCONFIRMED"}]' >"$FIX/stacks.json"
+	echo '[{"id":"01M5ROCKS00000000000000000","state":"UNCONFIRMED","commit":{"hash":"1234567abc"},"delta":null,"title":"feat(flows): turn the pam flags on (#924)"}]' >"$FIX/runs.loft-rocks.json"
+	echo "loft-rocks" >"$FIX/pick"
+	run "$PICKER" 11
+	[ "$status" -eq 0 ]
+	[ "$(sed -n 1p "$SPY/rofi.in")" = "flows-main  feat(pam): turn on receipts (#131)  [+0 ~1 -4, 98d7de6, watched]" ]
+	[ "$(sed -n 2p "$SPY/rofi.in")" = "loft-rocks  feat(flows): turn the pam flags on (#924)  [plan ?, 1234567, watched]" ]
+	[ "$(sed -n 3p "$SPY/rofi.in")" = "tailscale-pam  feat: pam services  [plan ?, 725f7e2]" ]
+	[ "$(typed)" = "!spacectl stack confirm --id loft-rocks --run 01M5ROCKS00000000000000000 --tail" ]
 }
 
 @test "the trigger is erased only after rofi closes" {

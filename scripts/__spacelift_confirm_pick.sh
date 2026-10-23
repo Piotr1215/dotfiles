@@ -8,9 +8,9 @@
 #   !spacectl stack confirm --id <stack> --run <run> --tail
 # The leading ! runs it from a Claude Code prompt; --tail follows the apply.
 #
-# In a worker pane the runs on stacks its pr-watch PRs plan or apply on come
-# first, marked "watched": the list is the file the pane names in
-# @pr_watch_export (__lib_pr_watch_export.sh), from any repo the worker touched.
+# In an agent pane the runs on stacks its pr-watch PRs plan or apply on come
+# first, marked "watched": __lib_pr_watch_export.sh finds that list for Claude
+# and Codex panes, from any repo the agent touched.
 #
 # Usage: __spacelift_confirm_pick.sh [erase]   erase = trigger length to backspace
 #

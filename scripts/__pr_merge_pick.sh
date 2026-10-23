@@ -4,10 +4,10 @@
 # rofi, types a merge command for the pick, and opens the PR in the browser
 # tiled beside the terminal, the way the ctrl+1 alacritty hint does.
 #
-# A worker pane lists the PRs its pr-watch watches instead (owner/repo#N rows),
-# from every repo: workers often span repos, so the pane's own repo is the wrong
-# list there. The list comes from the file the pane names in @pr_watch_export
-# (__lib_pr_watch_export.sh); with no open PR in it, the pane's repo is listed.
+# An agent pane lists the PRs its pr-watch watches instead (owner/repo#N rows),
+# from every repo: agents often span repos, so the pane's own repo is the wrong
+# list there. __lib_pr_watch_export.sh finds that list for Claude and Codex
+# panes, running ones included; with no open PR in it, the pane's repo is listed.
 #
 # Typed as one line, no Enter, so nothing runs until you press it:
 #   !gh pr merge <n> --repo <owner/repo> --<method> [--admin] && __pr_merge_watch.sh <owner/repo> <n>
@@ -77,14 +77,22 @@ resolve_repo() {
 	(cd "$dir" && gh repo view --json nameWithOwner) | jq -r '.nameWithOwner // empty'
 }
 
-# The open PRs a pr-watch list file names, as one JSON array of gh views. An
-# entry that is no PR URL is skipped, and so is a PR merged or closed since.
+# The open PRs a pr-watch list file names, as one JSON array of gh views in
+# the list's order. An entry that is no PR URL is skipped, and so is a PR
+# merged or closed since. The views run in parallel: a long session's list
+# names a dozen PRs, most of them merged.
 watched_prs() {
-	local url
-	jq -r '.prs[]?.url // empty' "$1" 2>/dev/null | while read -r url; do
+	local url dir i=0
+	dir=$(mktemp -d) || return 1
+	while read -r url; do
 		[[ "$url" =~ ^https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/pull/[0-9]+$ ]] || continue
-		gh pr view "$url" --json number,title,url,author,state,isDraft,reviewDecision,mergeStateStatus,statusCheckRollup || true
-	done | jq -s '[.[] | select(.state == "OPEN")]'
+		i=$((i + 1))
+		gh pr view "$url" --json number,title,url,author,state,isDraft,reviewDecision,mergeStateStatus,statusCheckRollup \
+			>"$dir/$(printf '%04d' "$i").json" 2>/dev/null &
+	done < <(jq -r '.prs[]?.url // empty' "$1" 2>/dev/null)
+	wait
+	cat "$dir"/*.json 2>/dev/null | jq -s '[.[] | select(.state == "OPEN")]'
+	rm -rf "$dir"
 }
 
 # The repo's preferred merge method: squash, then merge commit, then rebase.
