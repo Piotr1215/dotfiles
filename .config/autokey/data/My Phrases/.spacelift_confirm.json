@@ -1,0 +1,30 @@
+{
+  "type": "script",
+  "description": "confirm a waiting Spacelift run, open it",
+  "store": {},
+  "modes": [
+    1
+  ],
+  "usageCount": 0,
+  "prompt": false,
+  "omitTrigger": true,
+  "showInTrayMenu": false,
+  "abbreviation": {
+    "abbreviations": [
+      ";;spacelift"
+    ],
+    "backspace": false,
+    "ignoreCase": false,
+    "immediate": false,
+    "triggerInside": true,
+    "wordChars": "[\\w]"
+  },
+  "hotkey": {
+    "modifiers": [],
+    "hotKey": null
+  },
+  "filter": {
+    "regex": null,
+    "isRecursive": false
+  }
+}
