@@ -9,6 +9,10 @@ DOTFILES="$HOME/dev/dotfiles"
 TEMP_FILE=$(mktemp)
 
 source "$DOTFILES/scripts/__lib_alacritty_popup.sh"
+source "$DOTFILES/scripts/__lib_pane_deliver.sh"
+
+# The pane alt-h hands the binding to, read before the popup takes focus.
+SOURCE_PANE=$(focused_client_pane || true)
 
 FZF_COLORS='fg:#f8f8f2,bg:#282a36,hl:#bd93f9,fg+:#f8f8f2,bg+:#44475a,hl+:#bd93f9,info:#ffb86c,prompt:#50fa7b,pointer:#ff79c6,marker:#ff79c6,spinner:#ffb86c,header:#6272a4'
 
@@ -289,11 +293,9 @@ if [[ -f "$TEMP_FILE" ]]; then
         SEND:*)
             payload="${result#SEND:}"
             # No @popup_source_pane to read: this popup is its own alacritty
-            # window, not a tmux display-popup, so the target is tmux's active
-            # pane, which is still the one the shortcut was pressed over.
-            source "${DOTFILES}/scripts/__lib_pane_deliver.sh"
-            target=$(tmux display-message -p '#{pane_id}' 2>/dev/null || true)
-            if ! deliver_to_pane "$target" "$payload"; then
+            # window, not a tmux display-popup. SOURCE_PANE is the pane the
+            # attached client showed when the shortcut was pressed.
+            if ! deliver_to_pane "$SOURCE_PANE" "$payload"; then
                 printf '%s' "$payload" | xsel -ib
                 notify-send "confhelp" "no live pane, copied instead" 2>/dev/null || true
             fi

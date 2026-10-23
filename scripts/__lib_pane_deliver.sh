@@ -49,6 +49,16 @@ popup_source_pane() {
 	printf '%s' "$pane"
 }
 
+# The pane on screen: the active pane of the client that last had input. For
+# a picker launched from a global hotkey (AutoKey), outside any tmux popup.
+# A bare `tmux display-message` there answers from the TMUX and TMUX_PANE the
+# launcher inherited, which name the pane AutoKey was last restarted from,
+# whatever is on screen now.
+focused_client_pane() {
+	tmux list-clients -F '#{client_activity} #{pane_id}' 2>/dev/null |
+		sort -rn | head -n1 | cut -d' ' -f2
+}
+
 # Test the output, not the exit status: `display-message -t` reports an unknown
 # pane by printing nothing and still exiting 0, so branching on the status makes
 # the check always true and any fallback unreachable. The paste then fails
