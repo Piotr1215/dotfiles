@@ -24,6 +24,7 @@ from datetime import datetime
 LOG = os.path.expanduser("~/.local/state/notifications.log")
 MAX_BYTES = 512 * 1024   # trim once the log grows past this...
 KEEP_LINES = 1000        # ...down to this many most-recent lines
+TRIM_GRACE = 0.2         # seconds a writer that opened the old file gets to finish
 DEDUP_WINDOW = 2.0       # seconds; collapse identical back-to-back repeats
 
 # A string field opens with `string "` and closes on the line whose last
@@ -79,13 +80,30 @@ def parse(lines):
 
 
 def trim_if_big():
+    """Swap in a file holding the last KEEP_LINES lines, by rename.
+
+    Producers append with open, write, close, so rewriting the log in place
+    lost every line appended between the read and the rewrite. After the
+    rename, lines that still reached the old file through a descriptor
+    opened before it are drained into the new one after TRIM_GRACE.
+    """
     try:
         if os.path.getsize(LOG) <= MAX_BYTES:
             return
-        with open(LOG) as f:
-            lines = f.readlines()
-        with open(LOG, "w") as f:
-            f.writelines(lines[-KEEP_LINES:])
+        tmp = LOG + ".trim"
+        with open(LOG, "rb") as old:
+            data = old.read()
+            kept = data[:data.rfind(b"\n") + 1]   # a half-written line is drained below
+            with open(tmp, "wb") as f:
+                f.writelines(kept.splitlines(keepends=True)[-KEEP_LINES:])
+            os.chmod(tmp, os.fstat(old.fileno()).st_mode & 0o7777)
+            os.replace(tmp, LOG)
+            time.sleep(TRIM_GRACE)
+            old.seek(len(kept))
+            late = old.read()
+        if late:
+            with open(LOG, "ab") as f:
+                f.write(late)
     except OSError:
         pass
 
