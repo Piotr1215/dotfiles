@@ -299,7 +299,7 @@ only_id() {
   [ "$status" -eq 0 ]
   [ ! -e "$TEST_ALERT_REQUEST" ]
   [ "$(wc -l <"$NOTIFY_LOG")" -eq 1 ]
-  [[ "$(<"$NOTIFY_LOG")" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}\ [0-9:]{8}$'\t'reminder$'\t'"verify: budget note"$'\t'"check the branch events"$ ]]
+  [[ "$(<"$NOTIFY_LOG")" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}\ [0-9:]{8}$'\t'reminder$'\t'"verify: budget note"$'\t'"id:$id | check the branch events"$ ]]
   [ "$(last_record | jq -r '.status')" = done ]
   grep -q "	$id	delivered	gordon	verify: budget note$" "$REMINDER_LOG"
 }
@@ -339,7 +339,7 @@ only_id() {
 
   [ "$status" -eq 0 ]
   [ ! -e "$TEST_MAIL_LOG" ]
-  [[ "$(<"$NOTIFY_LOG")" == *$'\treminder\tverify: hit\tfound it' ]]
+  [[ "$(<"$NOTIFY_LOG")" == *$'\treminder\tverify: hit\t'"id:$id | found it" ]]
   [ "$(last_record | jq -r '.status')" = done ]
 }
 
