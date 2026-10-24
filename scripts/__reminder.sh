@@ -1298,11 +1298,12 @@ show_dialog() {
 # logger's format (time, app, summary, body, tab separated). One printf into an
 # O_APPEND file, capped under PIPE_BUF, so it cannot interleave with the
 # logger. Returns non-zero when the append fails, so callers fall back to the
-# dialog and nothing is lost.
+# dialog and nothing is lost. The body leads with id:<id> | , the metadata
+# form the events shipper reads, so intake's s finds the reminder.
 notify_gordon() {
-	local title="$1" body="$2" summary line
+	local id="$1" title="$2" body="$3" summary line
 	summary="$(printf '%s' "$title" | tr '\t\n' '  ')"
-	body="$(printf '%s' "$body" | tr '\t\n' '  ' | head -c 3000)"
+	body="id:$id | $(printf '%s' "$body" | tr '\t\n' '  ' | head -c 3000)"
 	line="$(printf '%s\t%s\t%s\t%s' "$(date '+%F %T')" reminder "$summary" "$body")"
 	printf '%s\n' "$line" >>"$NOTIFY_LOG" 2>/dev/null
 }
@@ -1437,7 +1438,7 @@ cmd_fire() {
 	case "$action" in
 	show)
 		notify="$(jq -r '.notify // "dialog"' <<<"$record")"
-		if [ "$(record_to "$record")" = gordon ] && notify_gordon "$title" "$body${url:+ $url}"; then notify=gordon; fi
+		if [ "$(record_to "$record")" = gordon ] && notify_gordon "$id" "$title" "$body${url:+ $url}"; then notify=gordon; fi
 		case "$notify" in
 		gordon)
 			mark_done "$id"
@@ -1512,7 +1513,7 @@ cmd_fire() {
 			# (Done and Snooze both work); by mail or silently there is nothing
 			# left to ask, so the reminder is done.
 			update_record "$id" 'del(.repeat)'
-			if [ "$(record_to "$record")" = gordon ] && notify_gordon "$title" "$output"; then notify=gordon; fi
+			if [ "$(record_to "$record")" = gordon ] && notify_gordon "$id" "$title" "$output"; then notify=gordon; fi
 			case "$notify" in
 			gordon) update_record "$id" '.status = "done" | del(.when)'; cmd_sync >/dev/null; log_fire "$id" delivered gordon "$title" ;;
 			mail) printf '%s\n' "$output" | "$MAILER" "$title"; update_record "$id" '.status = "done" | del(.when)'; cmd_sync >/dev/null ;;
@@ -1523,7 +1524,7 @@ cmd_fire() {
 		*)
 			# An error keeps the schedule (a repeat retries on its own). A dialog
 			# asks what to do with this run; mail reports it and moves on.
-			if [ "$(record_to "$record")" = gordon ] && notify_gordon "error: $title" "$err_label $output"; then notify=gordon; fi
+			if [ "$(record_to "$record")" = gordon ] && notify_gordon "$id" "error: $title" "$err_label $output"; then notify=gordon; fi
 			case "$notify" in
 			gordon) log_fire "$id" delivered "gordon error" "$title" ;;
 			mail) printf '%s\n%s\n' "$err_label" "$output" | "$MAILER" "error: $title"; mark_done "$id"; cmd_sync >/dev/null ;;
@@ -1575,7 +1576,7 @@ fire_on_notify() {
 	err_label="$err_label${streak:+, $streak}"
 	log_fire "$id" error "${streak:+$streak: }${reason:-no output}" "$title"
 	notify="$(jq -r '.notify // ""' <<<"$record")"
-	if [ "$(record_to "$record")" = gordon ] && notify_gordon "error: $title" "$err_label $output"; then
+	if [ "$(record_to "$record")" = gordon ] && notify_gordon "$id" "error: $title" "$err_label $output"; then
 		log_fire "$id" delivered "gordon error" "$title"
 	elif [ "$notify" = mail ]; then
 		printf '%s\n%s\n' "$err_label" "$output" | "$MAILER" "error: $title"
@@ -1599,7 +1600,7 @@ queue_delayed_fire() {
 	if [ "$status" -ne 0 ]; then
 		rm -f "$MATCH_DIR/$token"
 		log_fire "$id" error "at rejected the delayed fire: $(error_reason "$output")" "$title"
-		notify_gordon "error: $title" "at rejected the delayed fire: $output" || true
+		notify_gordon "$id" "error: $title" "at rejected the delayed fire: $output" || true
 		return 1
 	fi
 	log_fire "$id" queued "fire in $delay ($token)" "$title"

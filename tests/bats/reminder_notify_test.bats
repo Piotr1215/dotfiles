@@ -208,7 +208,7 @@ standup_popup() {
   printf '#!/usr/bin/env bash\nprintf "no such project\\n"; exit 3\n' >"$BIN/tmuxinator"
   standup_popup
   "$REMINDER" match
-  tail -n1 "$NOTIFY_LOG" | grep -q $'\treminder\terror: start standup session\texit 3 no such project'
+  tail -n1 "$NOTIFY_LOG" | grep -q $'\treminder\terror: start standup session\tid:'"$id"' | exit 3 no such project'
   grep -q $'\t'"$id"$'\terror\tno such project' "$REMINDER_LOG"
   grep -q $'\t'"$id"$'\tdelivered\tgordon error' "$REMINDER_LOG"
   [ "$(jq -r '.status' "$REMINDER_STORE" | tail -n1)" = active ]
@@ -223,10 +223,10 @@ standup_popup() {
   "$REMINDER" match
   grep -q 'subject: error: start standup session' "$TEST_MAIL_LOG"
   # A hung command ends as an error, not a stuck watcher.
-  "$REMINDER" add "hang" --on-notify '\tnotify-send\thang\t' --action exec --command 'sleep 30' --to gordon >/dev/null
+  hang="$("$REMINDER" add "hang" --on-notify '\tnotify-send\thang\t' --action exec --command 'sleep 30' --to gordon | grep -oE '[0-9a-f]{8}' | head -n1)"
   popup now notify-send hang "zzz"
   REMINDER_NOTIFY_TIMEOUT=1 "$REMINDER" match
-  tail -n1 "$NOTIFY_LOG" | grep -q $'\treminder\terror: hang\ttimed out after 1s'
+  tail -n1 "$NOTIFY_LOG" | grep -q $'\treminder\terror: hang\tid:'"$hang"' | timed out after 1s'
 }
 
 @test "edit, agenda and done treat an on-notify reminder as its own trigger kind" {
