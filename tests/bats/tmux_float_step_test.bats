@@ -15,11 +15,8 @@ at() { # position -> "left top width height"
     top-left) echo "1 1 58 18" ;;
     top-centre) echo "71 1 58 18" ;;
     top-right) echo "141 1 58 18" ;;
-    centre-left) echo "1 16 58 18" ;;
     centre) echo "71 16 58 18" ;;
-    centre-right) echo "141 16 58 18" ;;
     bottom-left) echo "1 31 58 18" ;;
-    bottom-centre) echo "71 31 58 18" ;;
     bottom-right) echo "141 31 58 18" ;;
   esac
 }
@@ -29,34 +26,41 @@ step() { # from direction -> target
   float_target "$2" $(at "$1") 200 50
 }
 
-@test "arrows keep the other axis, so corners are reachable" {
-  [ "$(step top-centre left)" = top-left ]
-  [ "$(step top-left down)" = centre-left ]
-  [ "$(step centre-left down)" = bottom-left ]
-  [ "$(step bottom-left right)" = bottom-centre ]
-  [ "$(step bottom-centre right)" = bottom-right ]
-  [ "$(step bottom-right up)" = centre-right ]
-  [ "$(step centre-right left)" = centre ]
-  [ "$(step centre up)" = top-centre ]
+@test "arrows go round the four corners and keep the other axis" {
+  [ "$(step top-left right)" = top-right ]
+  [ "$(step top-right down)" = bottom-right ]
+  [ "$(step bottom-right left)" = bottom-left ]
+  [ "$(step bottom-left up)" = top-left ]
 }
 
-@test "an arrow toward the edge a float already touches leaves it there" {
+@test "an arrow toward the side a float is already on leaves it in that corner" {
   [ "$(step top-left left)" = top-left ]
   [ "$(step top-left up)" = top-left ]
   [ "$(step bottom-right right)" = bottom-right ]
   [ "$(step bottom-right down)" = bottom-right ]
 }
 
-@test "a full-width float counts as centred on that axis" {
-  [ "$(float_target right 1 1 198 18 200 50)" = top-right ]
-  [ "$(float_target down 1 1 198 48 200 50)" = bottom-centre ]
+@test "arrows never stop at an edge centre" {
+  for from in top-left top-centre top-right centre bottom-left bottom-right; do
+    for dir in left right up down; do
+      case "$(step "$from" "$dir")" in
+        top-left | top-right | bottom-left | bottom-right) ;;
+        *) return 1 ;;
+      esac
+    done
+  done
 }
 
-@test "a float touching no edge is placed by its centre" {
-  # centre column 100 of 200 is the middle third; row centre 30 of 50 is too
-  [ "$(float_target left 70 20 60 20 200 50)" = centre-left ]
-  # centre column 30 is the first third
-  [ "$(float_target up 10 20 40 20 200 50)" = top-left ]
+@test "from the centre an arrow goes to the top-left side of the tie" {
+  [ "$(step centre left)" = top-left ]
+  [ "$(step centre right)" = top-right ]
+  [ "$(step centre down)" = bottom-left ]
+}
+
+@test "a float touching no edge goes by its centre" {
+  # centre (150, 40) of 200x50 is right and bottom
+  [ "$(float_target up 120 30 60 20 200 50)" = top-right ]
+  [ "$(float_target left 120 30 60 20 200 50)" = bottom-left ]
 }
 
 @test "an unknown direction fails" {
@@ -64,7 +68,7 @@ step() { # from direction -> target
   [ "$status" -ne 0 ]
 }
 
-@test "on a real tmux server the script steps a float and leaves a tiled pane" {
+@test "on a real tmux server the script moves a float and leaves a tiled pane" {
   command -v tmux >/dev/null || skip "tmux not installed"
   local sock="float-step-$$"
   tmux -L "$sock" -f /dev/null new-session -d -s t -x 200 -y 50
@@ -76,9 +80,9 @@ step() { # from direction -> target
   float=$(tmux -L "$sock" display -p -t t '#{pane_id}')
   tiled=$(tmux -L "$sock" list-panes -t t -F '#{pane_floating_flag} #{pane_id}' | awk '$1==0{print $2; exit}')
   path=$(tmux -L "$sock" display -p '#{socket_path}')
-  tmux -L "$sock" move-pane -t "$float" -P top-centre
+  tmux -L "$sock" move-pane -t "$float" -P top-left
 
-  TMUX="$path,0,0" "$script" left "$float"
+  TMUX="$path,0,0" "$script" right "$float"
   geo=$(tmux -L "$sock" display -p -t "$float" '#{pane_left} #{pane_top}')
   TMUX="$path,0,0" "$script" down "$float"
   geo2=$(tmux -L "$sock" display -p -t "$float" '#{pane_left} #{pane_top}')
@@ -87,8 +91,8 @@ step() { # from direction -> target
   after=$(tmux -L "$sock" display -p -t "$tiled" '#{pane_left} #{pane_top} #{pane_width}')
   tmux -L "$sock" kill-server
 
-  [ "$geo" = "1 1" ]
-  [ "$geo2" = "1 16" ]
+  [ "$geo" = "141 1" ]
+  [ "$geo2" = "141 31" ]
   [ "$status" -eq 0 ]
   [ "$before" = "$after" ]
 }

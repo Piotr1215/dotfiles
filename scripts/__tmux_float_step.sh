@@ -1,75 +1,43 @@
 #!/usr/bin/env bash
 set -eo pipefail
 
-# Step a floating tmux pane one cell across the 3x3 grid of move-pane -P
-# positions. Each arrow keeps the other axis: Left from top-centre lands on
-# top-left, so corners are two presses away. Snapping straight to an edge
-# centre moved floats along a plus shape and never reached a corner.
+# Move a floating tmux pane between the four corners with the arrow keys.
+# Left and Right pick the left or right corner and keep the row; Up and Down
+# pick the top or bottom corner and keep the column. Snapping to an edge centre
+# moved floats along a plus shape and never reached a corner. Centring stays on
+# its own key (c).
 # Usage: __tmux_float_step.sh left|right|up|down [target-pane]
 # A tiled target is left alone.
 
-# float_axis prints low, mid or high for one axis of a float.
-# A float touching exactly one edge sits at that edge. One touching both, or
-# neither, is placed by its centre: the first third is low, the last high.
+# float_axis prints low or high for one axis of a float: the half its centre
+# is in, the exact middle counting as low. A float on one edge always has its
+# centre on that half, so the edges need no separate check.
 # Args: start size span, e.g. pane_left pane_width window_width.
 float_axis() {
 	local start="$1" size="$2" span="$3"
-	local end=$((start + size)) low=0 high=0 centre
-	if ((start <= 2)); then low=1; fi
-	if ((end >= span - 2)); then high=1; fi
-	if ((low != high)); then
-		if ((low)); then echo low; else echo high; fi
-		return 0
-	fi
-	if ((low)); then
-		echo mid
-		return 0
-	fi
-	centre=$((start + size / 2))
-	if ((centre * 3 < span)); then
-		echo low
-	elif ((centre * 3 > 2 * span)); then
-		echo high
-	else
-		echo mid
-	fi
+	if (((start + size / 2) * 2 <= span)); then echo low; else echo high; fi
 }
 
-# axis_step moves one axis value a cell toward low or high, stopping at the edge.
-# Args: value (low|mid|high) toward (low|high).
-axis_step() {
-	local value="$1" toward="$2"
-	if [[ "$toward" == low ]]; then
-		if [[ "$value" == high ]]; then echo mid; else echo low; fi
-	else
-		if [[ "$value" == low ]]; then echo mid; else echo high; fi
-	fi
-}
-
-# float_target prints the move-pane -P position one step from a float's cell.
+# float_target prints the corner one arrow press moves a float to.
 # Args: direction pane_left pane_top pane_width pane_height window_width window_height.
 float_target() {
 	local dir="$1" left="$2" top="$3" width="$4" height="$5" ww="$6" wh="$7"
-	local col row name_row name_col
+	local col row
 	col=$(float_axis "$left" "$width" "$ww")
 	row=$(float_axis "$top" "$height" "$wh")
 	case "$dir" in
-		left) col=$(axis_step "$col" low) ;;
-		right) col=$(axis_step "$col" high) ;;
-		up) row=$(axis_step "$row" low) ;;
-		down) row=$(axis_step "$row" high) ;;
+		left) col=low ;;
+		right) col=high ;;
+		up) row=low ;;
+		down) row=high ;;
 		*)
 			echo "unknown direction: $dir" >&2
 			return 1
 			;;
 	esac
-	case "$row" in low) name_row=top ;; mid) name_row=centre ;; high) name_row=bottom ;; esac
-	case "$col" in low) name_col=left ;; mid) name_col=centre ;; high) name_col=right ;; esac
-	if [[ "$name_row" == centre && "$name_col" == centre ]]; then
-		echo centre
-	else
-		echo "$name_row-$name_col"
-	fi
+	if [[ "$row" == low ]]; then row=top; else row=bottom; fi
+	if [[ "$col" == low ]]; then col=left; else col=right; fi
+	echo "$row-$col"
 }
 
 # main reads the target pane's geometry and moves it if it is a float.
