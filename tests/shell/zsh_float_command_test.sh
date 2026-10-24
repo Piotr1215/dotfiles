@@ -67,6 +67,9 @@ case $1 in
         done > "$FLOAT_TMUX_NEW_PANE_LOG"
         print -r -- '%42'
         ;;
+    move-pane)
+        print -r -- "$*" >> "$FLOAT_TMUX_MOVE_PANE_LOG"
+        ;;
     send-keys)
         print -rn -- __CALL__$'\0' >> "$FLOAT_TMUX_SEND_KEYS_LOG"
         for arg in "$@"; do
@@ -78,6 +81,7 @@ STUB
 chmod +x "$tmpdir/bin/tmux"
 
 FLOAT_TMUX_NEW_PANE_LOG="$tmpdir/new-pane.log" \
+FLOAT_TMUX_MOVE_PANE_LOG="$tmpdir/move-pane.log" \
 FLOAT_TMUX_SEND_KEYS_LOG="$tmpdir/send-keys.log" \
 PATH="$tmpdir/bin:$PATH" \
     _float_command_launch 'printf "%s\n" "a b" W'
@@ -93,20 +97,24 @@ if [[ ${new_pane_args[1]} == new-pane \
     && ${new_pane_args[5]} == -c \
     && ${new_pane_args[6]} == "$PWD" \
     && ${new_pane_args[7]} == -x \
-    && ${new_pane_args[8]} == 45% \
+    && ${new_pane_args[8]} == 50% \
     && ${new_pane_args[9]} == -y \
-    && ${new_pane_args[10]} == 80% \
-    && ${new_pane_args[11]} == -X \
-    && ${new_pane_args[12]} == 53% \
-    && ${new_pane_args[13]} == -Y \
-    && ${new_pane_args[14]} == 2 \
-    && ${new_pane_args[15]} == zsh \
-    && ${#new_pane_args} == 15 ]]; then
-    print -r -- "ok - creates the same persistent Zsh as M-z before the command"
+    && ${new_pane_args[10]} == 50% \
+    && ${new_pane_args[11]} == zsh \
+    && ${#new_pane_args} == 11 ]]; then
+    print -r -- "ok - opens a quarter-window persistent Zsh before the command"
     (( passed++ ))
 else
     print -u2 -r -- "not ok - persistent pane launcher arguments differ"
     print -u2 -r -- "got: ${(j: | :)new_pane_args}"
+    (( failed++ ))
+fi
+
+if [[ "$(<"$tmpdir/move-pane.log")" == "move-pane -t %42 -P top-right" ]]; then
+    print -r -- "ok - snaps the first float to the top-right corner"
+    (( passed++ ))
+else
+    print -u2 -r -- "not ok - first float snap: $(<"$tmpdir/move-pane.log" 2>/dev/null)"
     (( failed++ ))
 fi
 
@@ -128,8 +136,10 @@ else
     (( failed++ ))
 fi
 
+: > "$tmpdir/move-pane.log"
 FLOAT_EXISTING_FLOATS=1 \
 FLOAT_TMUX_NEW_PANE_LOG="$tmpdir/new-pane.log" \
+FLOAT_TMUX_MOVE_PANE_LOG="$tmpdir/move-pane.log" \
 FLOAT_TMUX_SEND_KEYS_LOG="$tmpdir/send-keys.log" \
 PATH="$tmpdir/bin:$PATH" \
     _float_command_launch 'printf second'
@@ -138,11 +148,13 @@ second_pane_args=( )
 while IFS= read -r -d '' entry; do
     second_pane_args+=( "$entry" )
 done < "$tmpdir/new-pane.log"
-if [[ ${second_pane_args[12]} == 51% && ${second_pane_args[14]} == 4 ]]; then
-    print -r -- "ok - offsets a second float like a card"
+if [[ ${second_pane_args[8]} == 50% && ${second_pane_args[10]} == 50% \
+    && ${second_pane_args[12]} == 48% && ${second_pane_args[14]} == 2 \
+    && ! -s "$tmpdir/move-pane.log" ]]; then
+    print -r -- "ok - offsets a second quarter float like a card, unsnapped"
     (( passed++ ))
 else
-    print -u2 -r -- "not ok - second float position=${second_pane_args[12]:-missing},${second_pane_args[14]:-missing} expected=51%,4"
+    print -u2 -r -- "not ok - second float: ${(j: | :)second_pane_args} snap=$(<"$tmpdir/move-pane.log")"
     (( failed++ ))
 fi
 
