@@ -112,11 +112,17 @@
 #   the cap the remaining lines ride together in one more DM, one per line, so a
 #   burst (a parent's seven backports merging at once) is never dropped: state is
 #   written before delivery, so an unsent line would be lost for good.
+# RECORDS: before its DM, every line is also appended to notifications.log
+#   (PR_MOVE_NOTIFY_LOG) as one `github` record, the source the GitHub
+#   notifications cron writes, so a PR move reaches the EVENTS stream and
+#   intake's github row even when no agent is on the bus to take the DM:
+#     <date time>\tgithub\t🐙<ref>:\tkind:pr-move|review-request via:pr-watch link:<url> | <line>
+#   The DM stays until the records are proven to reach Kendra and Gordon.
 #
 # Usage:
 #   __pr_movement_nudge.sh            # DRY-RUN (default): log only, no DM
 #   __pr_movement_nudge.sh --dry-run  # same, explicit
-#   __pr_movement_nudge.sh --live     # send pr-move: DMs to intake, else triage
+#   __pr_movement_nudge.sh --live     # send pr-move: DMs to intake, else triage, and write the records
 # Dry-run still advances the state file, like --live; point PR_MOVE_STATE at a
 # copy to rehearse without consuming real movements.
 set -eo pipefail
@@ -136,6 +142,8 @@ HANDOFF_CHECK="${PR_MOVE_HANDOFF_CHECK:-$HOME/.claude/scripts/__gordon_board_che
 # The status line's view of this run: a tiny file, so a render never parses the
 # state file or calls gh.
 SUMMARY_FILE="${PR_MOVE_SUMMARY:-${STATE_FILE%/*}/pr-watch-summary.json}"
+# The event log the shipper follows: each line also lands here as a record.
+NOTIFY_LOG="${PR_MOVE_NOTIFY_LOG:-$HOME/.local/state/notifications.log}"
 # Who receives the DMs: prints `intake` or `triage`. Stubbed by tests.
 INTAKE_ROUTE_BIN="${INTAKE_ROUTE_BIN:-$HOME/.claude/scripts/__intake_route.sh}"
 # PRs per `gh api graphql` call.
@@ -199,6 +207,22 @@ deliver() {
         log "[DRY-RUN] would send to $2 -> $1"
     else
         send_dm "$1" "$2" | while read -r line; do log "  snd($2): $line"; done
+    fi
+}
+
+# record LINE: append LINE to notifications.log as one `github` record (see
+# RECORDS above), or in dry-run only log it. A failed append is logged and the
+# DM still goes.
+record() {
+    local ref url="-" rec
+    read -r _ ref _ <<<"$1"
+    if [[ "$1" =~ https://github\.com/[^[:space:]]+/pull/[0-9]+ ]]; then url="${BASH_REMATCH[0]}"; fi
+    rec=$(printf '%s\tgithub\t🐙%s:\tkind:%s via:pr-watch link:%s | %s' \
+        "$(date '+%Y-%m-%d %H:%M:%S')" "$ref" "${1%%:*}" "$url" "${1//[$'\t\n']/ }")
+    if [[ "$DRY_RUN" -eq 1 ]]; then
+        log "[DRY-RUN] would record -> $rec"
+    elif ! printf '%s\n' "$rec" >> "$NOTIFY_LOG"; then
+        log "ERROR: cannot append to $NOTIFY_LOG: $1"
     fi
 }
 
@@ -870,6 +894,9 @@ main() {
         own="${owners[$i]}" tmsg="${nudges[$i]}"
         if [[ -n "$own" ]]; then
             tmsg="${nudges[$i]} (owned by $own)"
+        fi
+        record "$tmsg"
+        if [[ -n "$own" ]]; then
             deliver "${nudges[$i]}" "$own"
         fi
         if (( total <= CYCLE_CAP || ${#out[@]} < CYCLE_CAP - 1 )); then

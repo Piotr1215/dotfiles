@@ -17,6 +17,7 @@ setup() {
     export PR_MOVE_SUMMARY="${TEST_DIR}/summary.json"
     export PR_MOVE_LOG="${TEST_DIR}/log"
     export PR_MOVE_LOCK="${TEST_DIR}/lock"
+    export PR_MOVE_NOTIFY_LOG="${TEST_DIR}/notifications.log"
     export PR_MOVE_ME="Piotr1215"
     export PR_MOVE_SELF_LOGINS="claude[bot]"
     export PR_MOVE_HANDOFF_CHECK="${TEST_DIR}/no-handoff-check"
@@ -658,6 +659,54 @@ one_merge_event() {
     run_nudge --dry-run
     [ -z "$(dms)" ]
     grep -q "\[DRY-RUN\] would send to intake -> pr-move: loft-sh/vcluster#21 merged" "${TEST_DIR}/log"
+    [ ! -s "$PR_MOVE_NOTIFY_LOG" ]
+    grep -q "\[DRY-RUN\] would record -> .*kind:pr-move via:pr-watch" "${TEST_DIR}/log"
+}
+
+# --- records in notifications.log ----------------------------------------------
+
+@test "records: each line also lands in notifications.log as one github record" {
+    e2e_setup
+    one_merge_event
+    [ "$(wc -l < "$PR_MOVE_NOTIFY_LOG")" -eq 1 ]
+    IFS=$'\t' read -r stamp app head body < "$PR_MOVE_NOTIFY_LOG"
+    [[ "$stamp" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}\ [0-9]{2}:[0-9]{2}:[0-9]{2}$ ]]
+    [ "$app" = "github" ]
+    [ "$head" = "🐙loft-sh/vcluster#21:" ]
+    [ "$body" = "kind:pr-move via:pr-watch link:https://github.com/loft-sh/vcluster/pull/21 | pr-move: loft-sh/vcluster#21 merged https://github.com/loft-sh/vcluster/pull/21 task:7debf451" ]
+}
+
+@test "records: an owned PR is recorded once, marked (owned by ...)" {
+    e2e_setup
+    echo "vcluster-pr-21" > "$TMUX_SESSIONS_FILE"
+    one_merge_event
+    [ "$(grep -c . "$DMS")" -eq 2 ]
+    [ "$(wc -l < "$PR_MOVE_NOTIFY_LOG")" -eq 1 ]
+    grep -q '| pr-move: loft-sh/vcluster#21 merged .* (owned by vcluster-pr-21)$' "$PR_MOVE_NOTIFY_LOG"
+}
+
+@test "records: lines past the cycle cap get one record each" {
+    e2e_setup
+    many_task_prs 4
+    run_nudge
+    local i
+    for i in 1 2 3 4; do gql_node loft-sh vcluster "$i" MERGED; done
+    PR_MOVE_CYCLE_CAP=2 run_nudge
+    [ "$(wc -l < "$PR_MOVE_NOTIFY_LOG")" -eq 4 ]
+    for i in 1 2 3 4; do grep -q "	🐙loft-sh/vcluster#$i:	kind:pr-move " "$PR_MOVE_NOTIFY_LOG"; done
+}
+
+@test "records: a log it cannot append to is logged and the DM still goes" {
+    e2e_setup
+    export PR_MOVE_NOTIFY_LOG="${TEST_DIR}"
+    one_merge_event
+    [ "$(dms)" = "triage: pr-move: loft-sh/vcluster#21 merged https://github.com/loft-sh/vcluster/pull/21 task:7debf451" ]
+    grep -q "ERROR: cannot append to ${TEST_DIR}: pr-move: loft-sh/vcluster#21 merged" "${TEST_DIR}/log"
+}
+
+@test "record: a review request is kind review-request and keeps its author" {
+    DRY_RUN=0 record "review-request: loft-sh/vcluster#9 from alice https://github.com/loft-sh/vcluster/pull/9"
+    [ "$(cut -f2- "$PR_MOVE_NOTIFY_LOG")" = "github	🐙loft-sh/vcluster#9:	kind:review-request via:pr-watch link:https://github.com/loft-sh/vcluster/pull/9 | review-request: loft-sh/vcluster#9 from alice https://github.com/loft-sh/vcluster/pull/9" ]
 }
 
 # --- status-line summary ----------------------------------------------------------

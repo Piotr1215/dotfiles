@@ -123,6 +123,7 @@ EOF
     export PR_MOVE_STATE="$TEST_DIR/state.json"
     export PR_MOVE_LOG="$TEST_DIR/log"
     export PR_MOVE_LOCK="$TEST_DIR/lock"
+    export PR_MOVE_NOTIFY_LOG="$TEST_DIR/notifications.log"
     export PR_MOVE_ME="Piotr1215"
     # Self identities beyond $ME: the Claude bot login Piotr's agent pushes as.
     # Pinned here (not left to the shipped default) so the actor-filter tests are
