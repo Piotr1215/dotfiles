@@ -29,13 +29,15 @@ _float_command_launch() {
     emulate -L zsh
 
     # The same geometry as M-f in .tmux.conf: a quarter of the window snapped
-    # to the top-right corner, or 2% left and 2 rows down when a float is up.
+    # to the top-right corner, or with N floats up, 2N% left and 2N rows down.
     local pane_id
+    local -i floats
     local -a place=( )
 
-    if tmux list-panes -t "$TMUX_PANE" -F '#{pane_floating_flag}' 2>/dev/null \
-        | command grep -q '^1$'; then
-        place=( -X 48% -Y 2 )
+    floats=$(tmux list-panes -t "$TMUX_PANE" -F '#{pane_floating_flag}' 2>/dev/null \
+        | command grep -c '^1$')
+    if (( floats > 0 )); then
+        place=( -X $(( 50 - 2 * floats ))% -Y $(( 2 * floats )) )
     fi
 
     pane_id=$(tmux new-pane -P -F '#{pane_id}' -c "$PWD" \

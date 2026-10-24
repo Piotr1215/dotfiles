@@ -59,7 +59,10 @@ cat > "$tmpdir/bin/tmux" <<'STUB'
 #!/usr/bin/env zsh
 case $1 in
     list-panes)
-        [[ ${FLOAT_EXISTING_FLOATS:-0} == 1 ]] && print -r -- 1
+        print -r -- 0
+        for (( i = 0; i < ${FLOAT_EXISTING_FLOATS:-0}; i++ )); do
+            print -r -- 1
+        done
         ;;
     new-pane)
         for arg in "$@"; do
@@ -155,6 +158,28 @@ if [[ ${second_pane_args[8]} == 50% && ${second_pane_args[10]} == 50% \
     (( passed++ ))
 else
     print -u2 -r -- "not ok - second float: ${(j: | :)second_pane_args} snap=$(<"$tmpdir/move-pane.log")"
+    (( failed++ ))
+fi
+
+: > "$tmpdir/move-pane.log"
+FLOAT_EXISTING_FLOATS=3 \
+FLOAT_TMUX_NEW_PANE_LOG="$tmpdir/new-pane.log" \
+FLOAT_TMUX_MOVE_PANE_LOG="$tmpdir/move-pane.log" \
+FLOAT_TMUX_SEND_KEYS_LOG="$tmpdir/send-keys.log" \
+PATH="$tmpdir/bin:$PATH" \
+    _float_command_launch 'printf fourth'
+
+fourth_pane_args=( )
+while IFS= read -r -d '' entry; do
+    fourth_pane_args+=( "$entry" )
+done < "$tmpdir/new-pane.log"
+if [[ ${fourth_pane_args[11]} == -X && ${fourth_pane_args[12]} == 44% \
+    && ${fourth_pane_args[13]} == -Y && ${fourth_pane_args[14]} == 6 \
+    && ! -s "$tmpdir/move-pane.log" ]]; then
+    print -r -- "ok - a fourth float fans out three cards down"
+    (( passed++ ))
+else
+    print -u2 -r -- "not ok - fourth float: ${(j: | :)fourth_pane_args} snap=$(<"$tmpdir/move-pane.log")"
     (( failed++ ))
 fi
 
