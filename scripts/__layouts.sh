@@ -149,11 +149,42 @@ get_alacritty_window() {
 
 	printf '%s\n' "${windows[0]}"
 }
+
+# Pick the Alacritty window max_alacritty should maximize, cycling on repeat.
+# get_alacritty_window keeps the focused terminal so split layouts stay put,
+# which made ctrl+alt+a land on the same window on every press, so a second
+# terminal (the Super+r remote one) was unreachable. Pressed from a terminal,
+# this moves to the next one by XID and wraps. Pressed from any other window,
+# it brings back the terminal raised last, the top Alacritty entry in
+# _NET_CLIENT_LIST_STACKING (bottom to top), else the lowest XID.
+next_alacritty_window() {
+	local -a windows
+	mapfile -t windows < <(xdotool search --onlyvisible --classname Alacritty 2>/dev/null | sort -n)
+	[[ ${#windows[@]} -eq 0 ]] && return 1
+
+	local active i
+	active=$(xdotool getactivewindow 2>/dev/null)
+	for i in "${!windows[@]}"; do
+		if [[ "${windows[$i]}" == "$active" ]]; then
+			printf '%s\n' "${windows[$(((i + 1) % ${#windows[@]}))]}"
+			return 0
+		fi
+	done
+
+	local -A is_term=()
+	local w top=""
+	for w in "${windows[@]}"; do is_term[$w]=1; done
+	while read -r w; do
+		printf -v w '%d' "$w" 2>/dev/null || continue
+		[[ -n "${is_term[$w]:-}" ]] && top="$w"
+	done < <(xprop -root _NET_CLIENT_LIST_STACKING 2>/dev/null | sed -n 's/.*# //p' | tr ',' '\n' | tr -d ' ')
+	printf '%s\n' "${top:-${windows[0]}}"
+}
 #}}}
 
 max_alacritty() {
 	local window
-	window=$(get_alacritty_window)
+	window=$(next_alacritty_window)
 	if [ -n "$window" ]; then
 		tile_max "$window"
 	else

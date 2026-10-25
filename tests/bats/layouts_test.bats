@@ -48,6 +48,68 @@ pick() {
   [ "$output" = "62914565" ]
 }
 
+# Same harness for next_alacritty_window, with xprop stubbed to a scripted
+# _NET_CLIENT_LIST_STACKING (bottom to top, hex, as xprop prints it).
+pick_next() {
+  local stack="$1" active="$2" stacking="$3"
+  STACK="$stack" ACTIVE="$active" STACKING="$stacking" bash -c '
+    IFS=$'"'"'\n\t'"'"'
+    source <(sed -n "/^next_alacritty_window()/,/^}/p" "'"$LAYOUTS"'")
+    xdotool() {
+      case "$1 $2" in
+        "search --onlyvisible") [[ -n "$STACK" ]] && tr " " "\n" <<< "$STACK" ;;
+        "getactivewindow ") [[ -n "$ACTIVE" ]] && printf "%s\n" "$ACTIVE" ;;
+      esac
+      return 0
+    }
+    xprop() {
+      [[ -n "$STACKING" ]] && printf "_NET_CLIENT_LIST_STACKING(WINDOW): window id # %s\n" "$STACKING"
+      return 0
+    }
+    next_alacritty_window
+  '
+}
+
+@test "max alacritty from a terminal moves to the next terminal by xid" {
+  run pick_next "96468997 62914565" 62914565 ""
+  [ "$status" -eq 0 ]
+  [ "$output" = "96468997" ]
+}
+
+@test "max alacritty wraps from the newest terminal to the oldest" {
+  run pick_next "96468997 62914565" 96468997 ""
+  [ "$output" = "62914565" ]
+}
+
+@test "max alacritty with one terminal keeps it" {
+  run pick_next "62914565" 62914565 ""
+  [ "$output" = "62914565" ]
+}
+
+@test "max alacritty from another window brings back the terminal raised last" {
+  # 0x3c00017 is a browser; 0x5c00005 (96468997) sits above 0x3c00005 (62914565).
+  run pick_next "62914565 96468997" 62914583 "0x3c00005, 0x3c00017, 0x5c00005"
+  [ "$output" = "96468997" ]
+
+  run pick_next "62914565 96468997" 62914583 "0x5c00005, 0x3c00017, 0x3c00005"
+  [ "$output" = "62914565" ]
+}
+
+@test "max alacritty without a stacking list falls back to the lowest xid" {
+  run pick_next "96468997 62914565" 73400324 ""
+  [ "$output" = "62914565" ]
+}
+
+@test "max alacritty with no terminal fails" {
+  run pick_next "" 73400324 ""
+  [ "$status" -eq 1 ]
+}
+
+@test "max alacritty cycles instead of reusing the split-layout pick" {
+  run grep -A3 '^max_alacritty()' "$LAYOUTS"
+  [[ "$output" == *'next_alacritty_window'* ]]
+}
+
 @test "no active window falls back to the lowest xid" {
   run pick "96468997 62914565" ""
   [ "$output" = "62914565" ]
@@ -61,9 +123,10 @@ pick() {
 
 @test "every alacritty pick goes through the helper" {
   run grep -c 'classname Alacritty' "$LAYOUTS"
-  # Two direct searches survive by design: the helper itself, and the two-window
-  # split (layout 17) which needs the sorted pair, not a single window.
-  [ "$output" -eq 2 ]
+  # Three direct searches survive by design: the two helpers (focused pick for
+  # splits, cycling pick for max), and the two-window split (layout 17) which
+  # needs the sorted pair, not a single window.
+  [ "$output" -eq 3 ]
 }
 
 # The work area no longer starts at 0,0 when a laptop panel sits left of the
