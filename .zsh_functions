@@ -975,9 +975,10 @@ function check_stutter() {
 
 # Magic 8-ball on classif: `8ball should I go to sleep?`. The answer is the
 # model's likeliest, so the same question always gets the same one, and "it is
-# certain" exits 0 for use as a gate. The alias stops zsh globbing a trailing
-# `?`; it must follow the function, or it rewrites the definition.
-8ball() { classif "$*" -e "it is certain,most likely,ask again later,very doubtful,my sources say no" }
+# certain" exits 0 for use as a gate. --force leaves none out, so one of the
+# five always answers. The alias stops zsh globbing a trailing `?`; it must
+# follow the function, or it rewrites the definition.
+8ball() { classif "$*" -e "it is certain,most likely,ask again later,very doubtful,my sources say no" --force }
 alias 8ball='noglob 8ball'
 
 # Judge on classif-chat: `judge "horrible machine needs a hobby"`. Five random
