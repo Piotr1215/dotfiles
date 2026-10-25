@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Delegated agent sessions stay in tmux and explicit selectors, but the normal
-# M-PageUp/PageDown cycle skips them. A delegated current session remains in the
-# cycle so an explicit jump into one never traps the user there.
+# Agent sessions from /ops-spawn-agent carry @agent_spawn_level=delegated. The
+# M-PageUp/PageDown cycle used to skip them, so it and M-i walked different
+# sets; now it visits them in tmux order like any other session. Passive
+# sessions (relax) are still skipped unless cycling starts there.
 
 SCRIPT="$HOME/dev/dotfiles/scripts/__cycle_tmux_session.sh"
 T=$(mktemp -d)
@@ -73,19 +74,25 @@ cycle() {
     cat "$SWITCH_LOG"
 }
 
-echo "== normal cycling skips delegated sessions =="
-assert_eq "next skips a delegated worker" "regular-b" \
+echo "== normal cycling visits delegated sessions =="
+assert_eq "next lands on a delegated worker" "delegated-a" \
     "$(cycle regular-a 'regular-a delegated-a regular-b' delegated-a)"
-assert_eq "previous skips a delegated worker" "regular-a" \
+assert_eq "previous lands on a delegated worker" "delegated-a" \
     "$(cycle regular-b 'regular-a delegated-a regular-b' delegated-a prev)"
 
-echo "== cycling from a delegated session still works =="
+echo "== cycling between delegated sessions =="
 sessions='regular-a delegated-a delegated-b regular-b'
 delegated='delegated-a delegated-b'
-assert_eq "next leaves the current delegated worker" "regular-b" \
+assert_eq "next steps to the next delegated worker" "delegated-b" \
     "$(cycle delegated-a "$sessions" "$delegated")"
-assert_eq "previous leaves the current delegated worker" "regular-a" \
+assert_eq "previous steps back to the regular session" "regular-a" \
     "$(cycle delegated-a "$sessions" "$delegated" prev)"
+
+echo "== passive sessions are still skipped =="
+assert_eq "next skips relax" "regular-b" \
+    "$(cycle regular-a 'regular-a relax regular-b' '')"
+assert_eq "cycling out of relax still works" "regular-b" \
+    "$(cycle relax 'regular-a relax regular-b' '')"
 
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"
 [[ "$FAIL" -eq 0 ]]
