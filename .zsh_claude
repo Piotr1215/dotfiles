@@ -214,6 +214,43 @@ alias flaude='claude -r --fork-session'           # Fork session with picker
 alias dlaude='claude --debug "hooks,mcp"'         # Debug mode (hooks + mcp)
 alias ccinstall='~/.claude/scripts/__claude_version_installer.sh'  # Version picker
 
+# Work API keys from `pass work/`, billed per token instead of the subscription.
+# Each command takes an optional leading -k NAME to use work/NAME instead of the
+# default ANTHROPIC_SRE_AGENT_KEY. The key goes only to the child process (or the
+# script's own --pass lookup), never into this shell's environment.
+
+# Claude Code on a work key in the current dir: klaude [-k NAME] [claude args...]
+function klaude() {
+  local name=ANTHROPIC_SRE_AGENT_KEY key
+  if [[ "$1" == "-k" ]]; then
+    [[ -n "$2" ]] || { echo "usage: klaude [-k NAME] [claude args...]" >&2; return 1; }
+    name="$2"; shift 2
+  fi
+  key="$(pass show "work/$name" | head -1)"
+  [[ -n "$key" ]] || { echo "klaude: no key in pass work/$name" >&2; return 1; }
+  ANTHROPIC_API_KEY="$key" command claude "$@"
+}
+
+# One Messages API call on a work key: kapi [-k NAME] --model M [--prompt-file F] [args...] (prompt on stdin otherwise)
+function kapi() {
+  local name=ANTHROPIC_SRE_AGENT_KEY
+  if [[ "$1" == "-k" ]]; then
+    [[ -n "$2" ]] || { echo "usage: kapi [-k NAME] --model MODEL [args...]" >&2; return 1; }
+    name="$2"; shift 2
+  fi
+  command python3 "$HOME/.claude/scripts/__claude_api_run.py" --pass "work/$name" "$@"
+}
+
+# Ad hoc managed agent turn in the SRE workspace, prints its console URL: kcma [-k NAME] --name SLUG --out FILE [args...]
+function kcma() {
+  local name=ANTHROPIC_SRE_AGENT_KEY
+  if [[ "$1" == "-k" ]]; then
+    [[ -n "$2" ]] || { echo "usage: kcma [-k NAME] --name SLUG --out FILE [args...]" >&2; return 1; }
+    name="$2"; shift 2
+  fi
+  command python3 "$HOME/.claude/scripts/__cma_adhoc.py" --pass "work/$name" "$@"
+}
+
 # Run interactive Codex sessions through its managed Unix-socket app-server.
 # The agents MCP server can then deliver inbound DMs to the active Codex thread
 # with turn/start or turn/steer, providing the push path Codex lacks in MCP.
