@@ -371,12 +371,17 @@ check_linear_issue_status() {
 #   - state type still triage. An issue that left Triage is never touched
 #     (DEVOPS-1735 went Triage -> Parked by someone else).
 #   - assigned to LINEAR_USER_ID.
-#   - Piotr made the assignment: he is the creator, or the asksRequester.
-#     Linear Asks sets asksRequester to whoever's :ticket: reaction filed the
-#     issue, while creator is the Slack author (DEVOPS-1736: creator Jan
-#     Roehrich, asksRequester Piotr). Triage responsibility also auto-assigns
-#     other people's asks to him (DEVOPS-1715, asksRequester Caue); those stay
-#     his inbox items, as ~/.claude 3d8de4d intended.
+#   - Piotr made the assignment: the newest history entry that set the assignee
+#     to LINEAR_USER_ID has actor LINEAR_USER_ID, no botActor, and no
+#     triageResponsibilityAutoAssigned flag. Creator and asksRequester prove
+#     nothing: DEVOPS triage responsibility auto-assigns every issue entering
+#     Triage to him, including asks he files for someone else with a :ticket:
+#     reaction. That auto-assignment records the asksRequester as actor, so
+#     only the flag tells it apart (DEVOPS-1738, 26 Oct 14:58:18: actor Piotr,
+#     botActor null, triageResponsibilityAutoAssigned true; he then reassigned
+#     it to Caue). An issue created already assigned has no assignment entry
+#     at all (DEVOPS-1730). No readable history or no assignment entry means
+#     nobody can tell who assigned it, so the issue stays.
 #   - Linear's triage agent has commented. Its pass sets the project and labels
 #     through history first and posts its comment, from the "Linear" workflow
 #     bot, last (DEVOPS-1736: project 13:20:06, label 13:21:02, comment
@@ -392,16 +397,31 @@ linear_graphql() {
         https://api.linear.app/graphql
 }
 
+# Print the fresh lookup reply triage_to_todo_verdict reads. Linear returns
+# history newest first, so the 50 entries hold the latest assignment unless 50
+# later changes buried it, and then the verdict fails closed.
+triage_issue_lookup() {
+    linear_graphql "$(jq -nc --arg id "$1" '{
+        query: "query($id: String!) { issue(id: $id) { id state { name type } assignee { id } history(first: 50) { nodes { createdAt actor { id } botActor { type name } toAssignee { id } triageResponsibilityAutoAssigned } } comments(first: 50) { nodes { botActor { name type } } } team { states(filter: { type: { eq: \"unstarted\" } }) { nodes { id name type } } } } }",
+        variables: {id: $id}}')"
+}
+
 # Read an issue lookup reply on stdin and echo "move <todo-state-id>" or
 # "skip <reason>". Any reply it cannot read is a skip.
 triage_to_todo_verdict() {
     jq -r --arg me "$LINEAR_USER_ID" '
         .data.issue as $i
+        | ([$i.history.nodes[]? | select(.toAssignee.id? == $me)] | sort_by(.createdAt) | last) as $a
         | if $i == null then "skip lookup returned no issue"
           elif $i.state.type != "triage" then "skip no longer in Triage (\($i.state.name))"
           elif ($i.assignee.id // "") != $me then "skip not assigned to me"
-          elif ($i.creator.id // "") != $me and ($i.asksRequester.id // "") != $me
-            then "skip someone else made the assignment"
+          elif ($i.history.nodes | type) != "array"
+            then "skip cannot tell who assigned it: issue history unreadable"
+          elif $a == null then "skip cannot tell who assigned it: no assignment to me in issue history"
+          elif $a.triageResponsibilityAutoAssigned == true
+            then "skip Linear triage responsibility assigned it, not me"
+          elif $a.botActor != null then "skip bot \($a.botActor.name // $a.botActor.type) assigned it, not me"
+          elif ($a.actor.id // "") != $me then "skip someone else assigned it to me"
           elif ([$i.comments.nodes[]? | select(.botActor.type == "workflow" and .botActor.name == "Linear")] | length) == 0
             then "skip Linear triage pass has not commented yet"
           else ([$i.team.states.nodes[]? | select(.type == "unstarted" and .name == "Todo")] | first) as $todo
@@ -418,9 +438,7 @@ move_triage_issue_to_todo() {
 
     [[ -n "$issue_number" ]] || return 1
 
-    reply=$(linear_graphql "$(jq -nc --arg id "$issue_number" '{
-        query: "query($id: String!) { issue(id: $id) { id state { name type } assignee { id } creator { id } asksRequester { id } comments(first: 50) { nodes { botActor { name type } } } team { states(filter: { type: { eq: \"unstarted\" } }) { nodes { id name type } } } } }",
-        variables: {id: $id}}')") || reply=""
+    reply=$(triage_issue_lookup "$issue_number") || reply=""
     verdict=$(triage_to_todo_verdict <<<"$reply")
     if [[ "$verdict" != "move "* ]]; then
         log "Triage $issue_number stays in Triage: ${verdict#skip }"

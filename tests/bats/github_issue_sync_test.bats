@@ -3768,25 +3768,42 @@ EOF2
 # TRIAGE TO TODO TESTS
 # ====================================================
 
-# DEVOPS-1736 as it sat in Triage on 26 Oct 2026, before Gordon moved it by
-# hand: filed through Linear Asks from Piotr's :ticket: reaction on Jan
-# Roehrich's Slack message, so Jan is the creator and Piotr the asksRequester
-# and assignee; Linear's triage agent set the project and label, then
-# commented. Ids are the real ones, except Piotr's, which is the suite's
-# LINEAR_USER_ID.
-devops_1736_in_triage() {
+# DEVOPS-1738 as it sat in Triage on 26 Oct 2026: filed through Linear Asks
+# from Piotr's :ticket: reaction on Kai Hulme's Slack message, so Kai is the
+# creator and Piotr the asksRequester; Linear's triage agent commented. History
+# comes newest first, as Linear returns it: the creation entry, then one
+# assignment to Piotr. The real one was triage responsibility's
+# (triage_responsibility_assignment); this base swaps in Piotr assigning it to
+# himself by hand, so the base case moves. Ids are the real ones, except
+# Piotr's, which is the suite's LINEAR_USER_ID.
+devops_1738_in_triage() {
     jq -nc --arg me "$LINEAR_USER_ID" '{data: {issue: {
-        id: "devops-1736-uuid",
+        id: "devops-1738-uuid",
         state: {name: "Triage", type: "triage"},
         assignee: {id: $me},
-        creator: {id: "789fc73a-52b9-41f2-8f93-7a63f7acf0d6"},
+        creator: {id: "24959e22-023a-458a-aa35-4270a7eaa7e8"},
         asksRequester: {id: $me},
+        history: {nodes: [
+            {createdAt: "2026-10-26T14:59:09.698Z", actor: {id: $me}, botActor: null,
+             toAssignee: {id: $me}, triageResponsibilityAutoAssigned: null},
+            {createdAt: "2026-10-26T14:58:18.328Z", actor: {id: $me}, botActor: null,
+             toAssignee: null, triageResponsibilityAutoAssigned: null}
+        ]},
         comments: {nodes: [
             {botActor: {name: "Linear", type: "workflow"}},
             {botActor: null}
         ]},
         team: {states: {nodes: [{id: "ba72121d-bddf-4d62-96aa-c722bfe915b3", name: "Todo", type: "unstarted"}]}}
     }}}'
+}
+
+# The assignment entry DEVOPS-1738 really carried: triage responsibility
+# auto-assigned it to Piotr at creation, and Linear records the asksRequester,
+# Piotr, as the actor with no botActor. Only the flag marks it.
+triage_responsibility_assignment() {
+    jq -nc --arg me "$LINEAR_USER_ID" '{createdAt: "2026-10-26T14:58:18.328Z",
+        actor: {id: $me}, botActor: null, toAssignee: {id: $me},
+        triageResponsibilityAutoAssigned: true}'
 }
 
 # Linear mock for the move. A lookup gets $1, a mutation gets
@@ -3808,29 +3825,90 @@ no_mutation_sent() {
     ! grep -q issueUpdate "${TEST_DIR}/curl_calls.log"
 }
 
-@test "triage to todo moves DEVOPS-1736: in Triage, assigned to Piotr by his ticket ask, triage pass done" {
-    write_triage_curl_mock "$(devops_1736_in_triage)"
+@test "triage to todo moves an issue Piotr assigned to himself by hand once the triage pass is done" {
+    write_triage_curl_mock "$(devops_1738_in_triage)"
 
-    run move_triage_issue_to_todo "DEVOPS-1736"
+    run move_triage_issue_to_todo "DEVOPS-1738"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "TRIAGE->TODO: moved DEVOPS-1736 from Triage to Todo" ]]
+    [[ "$output" =~ "TRIAGE->TODO: moved DEVOPS-1738 from Triage to Todo" ]]
     grep issueUpdate "${TEST_DIR}/curl_calls.log" | grep -q 'ba72121d-bddf-4d62-96aa-c722bfe915b3'
-    grep issueUpdate "${TEST_DIR}/curl_calls.log" | grep -q 'devops-1736-uuid'
+    grep issueUpdate "${TEST_DIR}/curl_calls.log" | grep -q 'devops-1738-uuid'
 }
 
-@test "triage to todo moves a Triage issue Piotr created himself" {
-    write_triage_curl_mock "$(devops_1736_in_triage | jq -c --arg me "$LINEAR_USER_ID" \
-        '.data.issue.creator = {id: $me} | .data.issue.asksRequester = null')"
+@test "triage to todo asks Linear who made each assignment" {
+    write_triage_curl_mock "$(devops_1738_in_triage)"
 
-    run move_triage_issue_to_todo "DEVOPS-1736"
-    [ "$status" -eq 0 ]
-    grep -q issueUpdate "${TEST_DIR}/curl_calls.log"
+    run move_triage_issue_to_todo "DEVOPS-1738"
+    grep -v issueUpdate "${TEST_DIR}/curl_calls.log" | grep -q 'history(first: 50) { nodes { createdAt actor { id } botActor { type name } toAssignee { id } triageResponsibilityAutoAssigned }'
+}
+
+@test "triage to todo leaves an issue triage responsibility auto-assigned to Piotr from his own ticket ask" {
+    # DEVOPS-1738 as it really was: Piotr is the asksRequester and the
+    # recorded actor, yet Linear assigned it, not Piotr.
+    write_triage_curl_mock "$(devops_1738_in_triage | jq -c --argjson a "$(triage_responsibility_assignment)" \
+        '.data.issue.history.nodes = [$a]')"
+
+    run move_triage_issue_to_todo "DEVOPS-1738"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "stays in Triage: Linear triage responsibility assigned it, not me" ]]
+    no_mutation_sent
+}
+
+@test "triage to todo goes by the most recent assignment to Piotr" {
+    # Piotr once assigned it by hand; triage responsibility assigned it again later.
+    write_triage_curl_mock "$(devops_1738_in_triage | jq -c --argjson a "$(triage_responsibility_assignment)" \
+        '.data.issue.history.nodes = [($a | .createdAt = "2026-10-26T16:00:00.000Z")] + .data.issue.history.nodes')"
+
+    run move_triage_issue_to_todo "DEVOPS-1738"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "stays in Triage: Linear triage responsibility assigned it, not me" ]]
+    no_mutation_sent
+}
+
+@test "triage to todo leaves an issue another person assigned to Piotr" {
+    write_triage_curl_mock "$(devops_1738_in_triage | jq -c '.data.issue.history.nodes[0].actor = {id: "caue-id"}')"
+
+    run move_triage_issue_to_todo "DEVOPS-1738"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "stays in Triage: someone else assigned it to me" ]]
+    no_mutation_sent
+}
+
+@test "triage to todo leaves an issue a bot assigned to Piotr" {
+    write_triage_curl_mock "$(devops_1738_in_triage | jq -c \
+        '.data.issue.history.nodes[0].actor = null | .data.issue.history.nodes[0].botActor = {type: "workflow", name: "Linear"}')"
+
+    run move_triage_issue_to_todo "DEVOPS-1738"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "stays in Triage: bot Linear assigned it, not me" ]]
+    no_mutation_sent
+}
+
+@test "triage to todo leaves the issue when its history is unreadable" {
+    write_triage_curl_mock "$(devops_1738_in_triage | jq -c '.data.issue.history = null | .errors = [{message: "history failed"}]')"
+
+    run move_triage_issue_to_todo "DEVOPS-1738"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "stays in Triage: cannot tell who assigned it: issue history unreadable" ]]
+    no_mutation_sent
+}
+
+@test "triage to todo leaves an issue Piotr created already assigned: no assignment entry" {
+    # DEVOPS-1730 shape: an issue created with its assignee set has no history
+    # entry for that assignment, so creator Piotr proves nothing.
+    write_triage_curl_mock "$(devops_1738_in_triage | jq -c --arg me "$LINEAR_USER_ID" \
+        '.data.issue.creator = {id: $me} | .data.issue.history.nodes |= map(select(.toAssignee == null))')"
+
+    run move_triage_issue_to_todo "DEVOPS-1738"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "stays in Triage: cannot tell who assigned it: no assignment to me in issue history" ]]
+    no_mutation_sent
 }
 
 @test "triage to todo leaves an issue not assigned to Piotr untouched" {
-    write_triage_curl_mock "$(devops_1736_in_triage | jq -c '.data.issue.assignee = {id: "caue-id"}')"
+    write_triage_curl_mock "$(devops_1738_in_triage | jq -c '.data.issue.assignee = {id: "caue-id"}')"
 
-    run move_triage_issue_to_todo "DEVOPS-1736"
+    run move_triage_issue_to_todo "DEVOPS-1738"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "stays in Triage: not assigned to me" ]]
     no_mutation_sent
@@ -3839,9 +3917,9 @@ no_mutation_sent() {
 @test "triage to todo leaves an issue that already left Triage untouched" {
     # DEVOPS-1735: someone else moved it Triage -> Parked between the feed
     # fetch and the move. The fresh lookup must win over the feed.
-    write_triage_curl_mock "$(devops_1736_in_triage | jq -c '.data.issue.state = {name: "Parked", type: "started"}')"
+    write_triage_curl_mock "$(devops_1738_in_triage | jq -c '.data.issue.state = {name: "Parked", type: "started"}')"
 
-    run move_triage_issue_to_todo "DEVOPS-1736"
+    run move_triage_issue_to_todo "DEVOPS-1738"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "stays in Triage: no longer in Triage (Parked)" ]]
     no_mutation_sent
@@ -3849,54 +3927,44 @@ no_mutation_sent() {
 
 @test "triage to todo waits until the Linear triage pass has commented" {
     # Mid-pass: the project is set, the agent's comment is not there yet.
-    write_triage_curl_mock "$(devops_1736_in_triage | jq -c '.data.issue.comments.nodes = [{botActor: null}]')"
+    write_triage_curl_mock "$(devops_1738_in_triage | jq -c '.data.issue.comments.nodes = [{botActor: null}]')"
 
-    run move_triage_issue_to_todo "DEVOPS-1736"
+    run move_triage_issue_to_todo "DEVOPS-1738"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "stays in Triage: Linear triage pass has not commented yet" ]]
     no_mutation_sent
 }
 
-@test "triage to todo leaves an issue someone else asked for and Linear auto-assigned to Piotr" {
-    # DEVOPS-1715 shape: Caue's ticket, assigned to Piotr by triage
-    # responsibility. Still Piotr's inbox item (~/.claude 3d8de4d).
-    write_triage_curl_mock "$(devops_1736_in_triage | jq -c '.data.issue.creator = null | .data.issue.asksRequester = {id: "caue-id"}')"
-
-    run move_triage_issue_to_todo "DEVOPS-1736"
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "stays in Triage: someone else made the assignment" ]]
-    no_mutation_sent
-}
-
 @test "triage to todo keeps the issue in Triage when Linear rejects the move" {
-    write_triage_curl_mock "$(devops_1736_in_triage)"
+    write_triage_curl_mock "$(devops_1738_in_triage)"
     printf '%s' '{"data":null,"errors":[{"message":"Entity not found: Issue"}]}' > "${TEST_DIR}/mutation.json"
 
-    run move_triage_issue_to_todo "DEVOPS-1736"
+    run move_triage_issue_to_todo "DEVOPS-1738"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "WARN: TRIAGE->TODO: move failed for DEVOPS-1736" ]]
+    [[ "$output" =~ "WARN: TRIAGE->TODO: move failed for DEVOPS-1738" ]]
 }
 
 @test "sync_to_taskwarrior syncs a moved Triage issue as Todo on the same run" {
-    write_triage_curl_mock "$(devops_1736_in_triage)"
+    write_triage_curl_mock "$(devops_1738_in_triage)"
     # No task exists yet, so the sync creates one. Record what it was given.
     create_and_annotate_task() { echo "CREATED $4 status=$6"; }
-    local feed_line='{"id":"devops-1736-uuid","description":"GCP_E2E_PROJECT_ID variable in loft-enterprise","repository":"linear","html_url":"https://linear.app/loft/issue/DEVOPS-1736/x","issue_id":"DEVOPS-1736","project":"Cloud Infrastructure Maintenance","status":"Triage"}'
+    local feed_line='{"id":"devops-1738-uuid","description":"Release pipeline ask","repository":"linear","html_url":"https://linear.app/loft/issue/DEVOPS-1738/x","issue_id":"DEVOPS-1738","project":"GitHub Asks","status":"Triage"}'
 
     run sync_to_taskwarrior "$feed_line"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "TRIAGE->TODO: moved DEVOPS-1736" ]]
+    [[ "$output" =~ "TRIAGE->TODO: moved DEVOPS-1738" ]]
     [[ ! "$output" =~ "excluding from sync" ]]
-    [[ "$output" =~ "CREATED DEVOPS-1736 status=Todo" ]]
+    [[ "$output" =~ "CREATED DEVOPS-1738 status=Todo" ]]
 }
 
 @test "sync_to_taskwarrior still excludes a Triage issue it does not move" {
-    write_triage_curl_mock "$(devops_1736_in_triage | jq -c '.data.issue.assignee = {id: "caue-id"}')"
-    local feed_line='{"id":"devops-1736-uuid","description":"GCP_E2E_PROJECT_ID variable in loft-enterprise","repository":"linear","html_url":"https://linear.app/loft/issue/DEVOPS-1736/x","issue_id":"DEVOPS-1736","project":"Cloud Infrastructure Maintenance","status":"Triage"}'
+    write_triage_curl_mock "$(devops_1738_in_triage | jq -c --argjson a "$(triage_responsibility_assignment)" \
+        '.data.issue.history.nodes = [$a]')"
+    local feed_line='{"id":"devops-1738-uuid","description":"Release pipeline ask","repository":"linear","html_url":"https://linear.app/loft/issue/DEVOPS-1738/x","issue_id":"DEVOPS-1738","project":"GitHub Asks","status":"Triage"}'
 
     run sync_to_taskwarrior "$feed_line"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "DEVOPS-1736 is in Triage status - excluding from sync" ]]
+    [[ "$output" =~ "DEVOPS-1738 is in Triage status - excluding from sync" ]]
     no_mutation_sent
     [ ! -f "${TEST_DIR}/task_commands.log" ]
 }
