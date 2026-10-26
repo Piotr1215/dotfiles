@@ -21,35 +21,19 @@ DESCRIPTION=$'## Description\n\n## Acceptance Criteria\n\n- [ ]\n\n## Related'
 # Team config - edit when teams rename
 LINEAR_TEAM_ID="${LINEAR_DEVOPS_TEAM_ID:-$LINEAR_OPS_TEAM_ID}"
 
-# First, we need to get the user ID and state ID
-USER_QUERY=$(jq -n '{
-    query: "query { viewer { id } workflowStates(filter: { team: { id: { eq: \"'"$LINEAR_TEAM_ID"'\" } }, name: { eq: \"In Progress\" } }) { nodes { id } } }"
-  }')
-
-USER_RESPONSE=$(curl -s -X POST \
-	-H "Content-Type: application/json" \
-	-H "Authorization: $LINEAR_API_KEY" \
-	--data "$USER_QUERY" \
-	https://api.linear.app/graphql)
-
-USER_ID=$(echo "$USER_RESPONSE" | jq -r '.data.viewer.id')
-STATE_ID=$(echo "$USER_RESPONSE" | jq -r '.data.workflowStates.nodes[0].id')
-
+# No assignee and no state: Linear files the issue unassigned in the team's
+# default state (Triage), and Piotr assigns it by hand.
 # Construct the GraphQL mutation using jq
 query=$(jq -n \
 	--arg title "$TASK_DESCRIPTION" \
 	--arg desc "$DESCRIPTION" \
 	--arg team "$LINEAR_TEAM_ID" \
-	--arg assignee "$USER_ID" \
-	--arg state "$STATE_ID" \
 	'{
-    query: "mutation IssueCreate($title: String!, $desc: String!, $team: String!, $assignee: String!, $state: String!) {
+    query: "mutation IssueCreate($title: String!, $desc: String!, $team: String!) {
       issueCreate(input: {
         title: $title,
         description: $desc,
-        teamId: $team,
-        assigneeId: $assignee,
-        stateId: $state
+        teamId: $team
       }) {
         success
         issue {
@@ -63,9 +47,7 @@ query=$(jq -n \
     variables: {
       title: $title,
       desc: $desc,
-      team: $team,
-      assignee: $assignee,
-      state: $state
+      team: $team
     }
   }')
 
