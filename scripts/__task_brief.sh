@@ -205,7 +205,7 @@ print_rows() {
       | sort_by(.entry) | last | if . == null then null
         else .description | sub("^\\s*brief:\\s*"; ""; "i") end;
     .[] | (what // brief // "" | clean | cut(110)) as $w
-    | "\(.uuid)|\(.linear_issue_id // "-")|\(.repo // "-")|\(.description)"
+    | "\(.uuid)|\(.linear_issue_id // "-")|\(.repo // "-")|\(.description | clean)"
       + (if $w == "" then "" else " [\($w)]" end)'
 }
 
