@@ -399,6 +399,12 @@ require("obsidian").setup {
     time_format = "%H:%M",
   },
   new_notes_location = "notes_subdir",
+  -- Daily notes live where Obsidian and __daily_note.sh put them, so
+  -- :Obsidian yesterday and :Obsidian dailies find the same files.
+  daily_notes = {
+    folder = "_Current",
+    template = "Daily.md",
+  },
   -- Optional, configure additional syntax highlighting / extmarks.
   ui = {
     enable = false, -- set to false to disable all additional syntax features

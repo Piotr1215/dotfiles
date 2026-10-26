@@ -500,7 +500,7 @@ vim.keymap.set("i", "<M-w>", "<Plug>(copilot-accept-word)", { desc = "accept cop
 vim.keymap.set("i", "<C-s>", "<Plug>(copilot-accept-line)", { desc = "accept copilot line" })
 vim.keymap.set("n", "<leader>ob", ":Obsidian backlinks<cr>", { noremap = true, silent = true, desc = "Show backlinks" })
 vim.keymap.set("n", "<leader>ot", ":Obsidian tags<cr>", { noremap = true, silent = true, desc = "Show tags" })
-vim.keymap.set("n", "<leader>od", ":Obsidian today<cr>", { noremap = true, silent = true, desc = "Open today's note" })
+vim.keymap.set("n", "<leader>od", "<cmd>Today<cr>", { noremap = true, silent = true, desc = "Open today's note" })
 
 -- GoTo Preview
 vim.keymap.set(

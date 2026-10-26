@@ -495,4 +495,16 @@ vim.api.nvim_create_user_command("CreateNoteWithTemplate", function(input)
   M.create_note_with_template(template_type, note_title, moc_name)
 end, { nargs = "+" })
 
+-- :Today opens today's daily note. __daily_note.sh makes it from the vault's
+-- template when missing and prints its path; Gordon pins the same file.
+vim.api.nvim_create_user_command("Today", function()
+  local script = vim.env.DAILY_NOTE_CMD or vim.fn.expand "~/dev/dotfiles/scripts/__daily_note.sh"
+  local res = vim.system({ script }, { text = true }):wait()
+  if res.code ~= 0 then
+    vim.notify("daily note failed: " .. vim.trim(res.stderr or ""), vim.log.levels.ERROR)
+    return
+  end
+  vim.cmd.edit(vim.fn.fnameescape(vim.trim(res.stdout)))
+end, { desc = "Open today's daily note" })
+
 return M
