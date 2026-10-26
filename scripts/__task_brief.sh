@@ -22,6 +22,8 @@
 #                                             the "Your step:" sentence of the
 #                                             newest brief: note and its URLs.
 #                                             Exit 3 when the task has no what:.
+#   task export | __task_brief.sh --rows      picker rows from task export JSON
+#                                             on stdin, see print_rows.
 # The newest `what:` note (one or two plain sentences: the thing, why it exists,
 # why it is Piotr's) prints as `What:` right under the title. On 26 Oct Piotr
 # picked 3b9d with the @task picker and asked "what is this?" again: the brief
@@ -45,16 +47,19 @@ case "${1:-}" in
   --actions) mode=actions; shift ;;
   --actions-run) mode=actions_run; shift ;;
   --card) mode=card; shift ;;
+  --rows) mode=rows; shift ;;
 esac
 
 token="${1:-}"
-if [[ -z "$token" ]]; then
+if [[ -z "$token" && "$mode" != rows ]]; then
   printf 'usage: %s [--popup|--actions] <uuid-or-prefix>\n' "${0##*/}" >&2
   exit 2
 fi
 
 # Pull the first hex/dash run of 4+ chars out of whatever was passed.
-if [[ "$token" =~ ([0-9a-fA-F][0-9a-fA-F-]{3,35}) ]]; then
+if [[ "$mode" == rows ]]; then
+  uuid=""
+elif [[ "$token" =~ ([0-9a-fA-F][0-9a-fA-F-]{3,35}) ]]; then
   uuid="${BASH_REMATCH[1]}"
 else
   printf 'not a task reference: %s\n' "$token" >&2
@@ -185,6 +190,25 @@ print_card() {
   printf '%s\n' "$out"
 }
 
+# Picker rows for the @task mention, from task export JSON on stdin:
+#   <uuid>|<linear id or ->|<repo or ->|<title> [<what>]
+# The first three fields and the title are what the token always carried, so
+# __gordon_task_mention.sh still finds the uuid. The bracket holds the newest
+# what: note, else the newest brief: note, cut to 110 characters. Quotes and
+# pipes are dropped from it: a quote would end the @"..." token early. WHY:
+# the picker row was a bare title and Piotr asked "what is this" every pick.
+print_rows() {
+  jq -r "$LEAD_JQ"'
+    def clean: gsub("[\"|\n\r]+"; " ") | gsub("\\s+"; " ") | sub("^ "; "") | sub(" $"; "");
+    def cut(n): if length <= n then . else .[0:n] | sub("\\s+\\S*$"; "") | . + "..." end;
+    def brief: [(.annotations // [])[] | select(.description | test("^\\s*brief:"; "i"))]
+      | sort_by(.entry) | last | if . == null then null
+        else .description | sub("^\\s*brief:\\s*"; ""; "i") end;
+    .[] | (what // brief // "" | clean | cut(110)) as $w
+    | "\(.uuid)|\(.linear_issue_id // "-")|\(.repo // "-")|\(.description)"
+      + (if $w == "" then "" else " [\($w)]" end)'
+}
+
 # Wait for a key so a popup message can be read before -E closes it.
 pause() {
   printf '%s\n(press any key)\n' "$1"
@@ -272,6 +296,11 @@ actions_run() {
 
 if [[ "$mode" == actions_run ]]; then
   actions_run "$uuid"
+  exit $?
+fi
+
+if [[ "$mode" == rows ]]; then
+  print_rows
   exit $?
 fi
 
