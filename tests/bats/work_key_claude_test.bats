@@ -1,7 +1,8 @@
 #!/usr/bin/env bats
 
 # Drives klaude, kapi and kcma from .zsh_claude in a bare zsh with stub pass,
-# claude and python3 on PATH. The stub key is fake; no real API is called.
+# claude and python3 on PATH and a stub claude launcher under the fake HOME.
+# The stub key is fake; no real API is called.
 
 setup() {
 	REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../.." && pwd)"
@@ -18,17 +19,24 @@ printf '%s\n' "$*" >>"$STUB_LOG/pass.args"
 [ "$2" = "work/MISSING" ] && { echo "Error: $2 is not in the password store." >&2; exit 1; }
 printf 'sk-fake-%s-SECRET\nsecond-line-SECRET\n' "${2#work/}"
 EOF
-	# claude and python3 record the key they inherit and their args, one per line.
-	for stub in claude python3; do
-		cat >"$STUB_BIN/$stub" <<EOF
+	chmod +x "$STUB_BIN/pass"
+	# claude, python3 and the launcher record the key they inherit and their args,
+	# one per line, under the log name given as the second argument.
+	mkdir -p "$FAKE_HOME/.claude/scripts"
+	make_stub "$STUB_BIN/claude" claude
+	make_stub "$STUB_BIN/python3" python3
+	make_stub "$FAKE_HOME/.claude/scripts/__claude_with_monitor.sh" launcher
+}
+
+make_stub() {
+	cat >"$1" <<EOF
 #!/bin/sh
-printf '%s\n' "\${ANTHROPIC_API_KEY-unset}" >"\$STUB_LOG/$stub.key"
-printf '<%s>\n' "\$@" >"\$STUB_LOG/$stub.args"
-echo "$stub ran"
+printf '%s\n' "\${ANTHROPIC_API_KEY-unset}" >"\$STUB_LOG/$2.key"
+printf '<%s>\n' "\$@" >"\$STUB_LOG/$2.args"
+echo "$2 ran"
 echo "console: https://console.example/session" >&2
 EOF
-	done
-	chmod +x "$STUB_BIN"/*
+	chmod +x "$1"
 }
 
 # Source .zsh_claude in zsh -f, run one command, then report the caller's state.
@@ -43,23 +51,25 @@ assert_no_leak() {
 	[[ "$output" == *"after=unset key=unset"* ]]
 }
 
-@test "klaude hands the default key to claude as ANTHROPIC_API_KEY with args intact" {
+@test "klaude hands the default key to the claude launcher with args intact" {
 	run_in_zsh klaude -p 'hello world' '' '*' '$HOME' --model "a b"
 
 	[ "$status" -eq 0 ]
 	[ "$(cat "$STUB_LOG/pass.args")" = "show work/ANTHROPIC_SRE_AGENT_KEY" ]
-	[ "$(cat "$STUB_LOG/claude.key")" = "sk-fake-ANTHROPIC_SRE_AGENT_KEY-SECRET" ]
-	[ "$(cat "$STUB_LOG/claude.args")" = "$(printf '<%s>\n' -p 'hello world' '' '*' '$HOME' --model 'a b')" ]
+	[ "$(cat "$STUB_LOG/launcher.key")" = "sk-fake-ANTHROPIC_SRE_AGENT_KEY-SECRET" ]
+	[ "$(cat "$STUB_LOG/launcher.args")" = "$(printf '<%s>\n' -p 'hello world' '' '*' '$HOME' --model 'a b')" ]
+	[ ! -e "$STUB_LOG/claude.args" ]
 	assert_no_leak
 }
 
-@test "klaude -k NAME reads work/NAME and drops -k from claude's args" {
+@test "klaude -k NAME reads work/NAME and drops -k from the launcher's args" {
 	run_in_zsh klaude -k CLAUDE_API_QA_KEY --resume abc
 
 	[ "$status" -eq 0 ]
 	[ "$(cat "$STUB_LOG/pass.args")" = "show work/CLAUDE_API_QA_KEY" ]
-	[ "$(cat "$STUB_LOG/claude.key")" = "sk-fake-CLAUDE_API_QA_KEY-SECRET" ]
-	[ "$(cat "$STUB_LOG/claude.args")" = "$(printf '<%s>\n' --resume abc)" ]
+	[ "$(cat "$STUB_LOG/launcher.key")" = "sk-fake-CLAUDE_API_QA_KEY-SECRET" ]
+	[ "$(cat "$STUB_LOG/launcher.args")" = "$(printf '<%s>\n' --resume abc)" ]
+	[ ! -e "$STUB_LOG/claude.args" ]
 	assert_no_leak
 }
 
@@ -67,6 +77,7 @@ assert_no_leak() {
 	run_in_zsh klaude -k MISSING
 
 	[ "$status" -eq 1 ]
+	[ ! -e "$STUB_LOG/launcher.args" ]
 	[ ! -e "$STUB_LOG/claude.args" ]
 	[[ "$output" == *"klaude: no key in pass work/MISSING"* ]]
 }
