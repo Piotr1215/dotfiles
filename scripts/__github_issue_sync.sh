@@ -380,8 +380,10 @@ check_linear_issue_status() {
 #     only the flag tells it apart (DEVOPS-1738, 26 Oct 14:58:18: actor Piotr,
 #     botActor null, triageResponsibilityAutoAssigned true; he then reassigned
 #     it to Caue). An issue created already assigned has no assignment entry
-#     at all (DEVOPS-1730). No readable history or no assignment entry means
-#     nobody can tell who assigned it, so the issue stays.
+#     at all (DEVOPS-1730); it counts as his only when he created it outside
+#     Linear Asks (creator LINEAR_USER_ID, asksRequester null) and the history
+#     page is whole. Triage responsibility always writes an entry, so its
+#     assignments still stay. Unreadable history means the issue stays.
 #   - Linear's triage agent has commented. Its pass sets the project and labels
 #     through history first and posts its comment, from the "Linear" workflow
 #     bot, last (DEVOPS-1736: project 13:20:06, label 13:21:02, comment
@@ -399,33 +401,49 @@ linear_graphql() {
 
 # Print the fresh lookup reply triage_to_todo_verdict reads. Linear returns
 # history newest first, so the 50 entries hold the latest assignment unless 50
-# later changes buried it, and then the verdict fails closed.
+# later changes buried it; hasNextPage tells the verdict the page is partial.
 triage_issue_lookup() {
     linear_graphql "$(jq -nc --arg id "$1" '{
-        query: "query($id: String!) { issue(id: $id) { id state { name type } assignee { id } history(first: 50) { nodes { createdAt actor { id } botActor { type name } toAssignee { id } triageResponsibilityAutoAssigned } } comments(first: 50) { nodes { botActor { name type } } } team { states(filter: { type: { eq: \"unstarted\" } }) { nodes { id name type } } } } }",
+        query: "query($id: String!) { issue(id: $id) { id state { name type } assignee { id } creator { id } asksRequester { id } history(first: 50) { pageInfo { hasNextPage } nodes { createdAt actor { id } botActor { type name } toAssignee { id } triageResponsibilityAutoAssigned } } comments(first: 50) { nodes { botActor { name type } } } team { states(filter: { type: { eq: \"unstarted\" } }) { nodes { id name type } } } } }",
         variables: {id: $id}}')"
 }
 
 # Read an issue lookup reply on stdin and echo "move <todo-state-id>" or
 # "skip <reason>". Any reply it cannot read is a skip.
+#
+# $who is "mine" when Piotr made the assignment. With an assignment entry, the
+# entry decides. Without one, the issue was created already assigned, and it
+# counts as his only when the reply is error free, the history page is whole
+# (so no entry was cut off), he is the creator, and asksRequester is null (not
+# filed through Linear Asks).
 triage_to_todo_verdict() {
     jq -r --arg me "$LINEAR_USER_ID" '
-        .data.issue as $i
-        | ([$i.history.nodes[]? | select(.toAssignee.id? == $me)] | sort_by(.createdAt) | last) as $a
+        . as $r
+        | .data.issue as $i
         | if $i == null then "skip lookup returned no issue"
           elif $i.state.type != "triage" then "skip no longer in Triage (\($i.state.name))"
           elif ($i.assignee.id // "") != $me then "skip not assigned to me"
           elif ($i.history.nodes | type) != "array"
             then "skip cannot tell who assigned it: issue history unreadable"
-          elif $a == null then "skip cannot tell who assigned it: no assignment to me in issue history"
-          elif $a.triageResponsibilityAutoAssigned == true
-            then "skip Linear triage responsibility assigned it, not me"
-          elif $a.botActor != null then "skip bot \($a.botActor.name // $a.botActor.type) assigned it, not me"
-          elif ($a.actor.id // "") != $me then "skip someone else assigned it to me"
-          elif ([$i.comments.nodes[]? | select(.botActor.type == "workflow" and .botActor.name == "Linear")] | length) == 0
-            then "skip Linear triage pass has not commented yet"
-          else ([$i.team.states.nodes[]? | select(.type == "unstarted" and .name == "Todo")] | first) as $todo
-            | if $todo == null then "skip team has no Todo state" else "move \($todo.id)" end
+          else ([$i.history.nodes[] | select(.toAssignee.id? == $me)] | sort_by(.createdAt) | last) as $a
+            | (if $a == null then
+                 (if $r.errors == null and $i.history.pageInfo.hasNextPage == false
+                     and ($i.creator.id // "") == $me
+                     and ($i | has("asksRequester")) and $i.asksRequester == null
+                  then "mine"
+                  else "skip cannot tell who assigned it: no assignment to me in issue history, and I did not create it outside Linear Asks"
+                  end)
+               elif $a.triageResponsibilityAutoAssigned == true
+                 then "skip Linear triage responsibility assigned it, not me"
+               elif $a.botActor != null then "skip bot \($a.botActor.name // $a.botActor.type) assigned it, not me"
+               elif ($a.actor.id // "") != $me then "skip someone else assigned it to me"
+               else "mine" end) as $who
+            | if $who != "mine" then $who
+              elif ([$i.comments.nodes[]? | select(.botActor.type == "workflow" and .botActor.name == "Linear")] | length) == 0
+                then "skip Linear triage pass has not commented yet"
+              else ([$i.team.states.nodes[]? | select(.type == "unstarted" and .name == "Todo")] | first) as $todo
+                | if $todo == null then "skip team has no Todo state" else "move \($todo.id)" end
+              end
           end' 2>/dev/null || echo "skip unreadable lookup"
 }
 

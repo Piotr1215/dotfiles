@@ -3783,7 +3783,7 @@ devops_1738_in_triage() {
         assignee: {id: $me},
         creator: {id: "24959e22-023a-458a-aa35-4270a7eaa7e8"},
         asksRequester: {id: $me},
-        history: {nodes: [
+        history: {pageInfo: {hasNextPage: false}, nodes: [
             {createdAt: "2026-10-26T14:59:09.698Z", actor: {id: $me}, botActor: null,
              toAssignee: {id: $me}, triageResponsibilityAutoAssigned: null},
             {createdAt: "2026-10-26T14:58:18.328Z", actor: {id: $me}, botActor: null,
@@ -3839,7 +3839,7 @@ no_mutation_sent() {
     write_triage_curl_mock "$(devops_1738_in_triage)"
 
     run move_triage_issue_to_todo "DEVOPS-1738"
-    grep -v issueUpdate "${TEST_DIR}/curl_calls.log" | grep -q 'history(first: 50) { nodes { createdAt actor { id } botActor { type name } toAssignee { id } triageResponsibilityAutoAssigned }'
+    grep -v issueUpdate "${TEST_DIR}/curl_calls.log" | grep -q 'creator { id } asksRequester { id } history(first: 50) { pageInfo { hasNextPage } nodes { createdAt actor { id } botActor { type name } toAssignee { id } triageResponsibilityAutoAssigned }'
 }
 
 @test "triage to todo leaves an issue triage responsibility auto-assigned to Piotr from his own ticket ask" {
@@ -3893,15 +3893,60 @@ no_mutation_sent() {
     no_mutation_sent
 }
 
-@test "triage to todo leaves an issue Piotr created already assigned: no assignment entry" {
-    # DEVOPS-1730 shape: an issue created with its assignee set has no history
-    # entry for that assignment, so creator Piotr proves nothing.
-    write_triage_curl_mock "$(devops_1738_in_triage | jq -c --arg me "$LINEAR_USER_ID" \
-        '.data.issue.creator = {id: $me} | .data.issue.history.nodes |= map(select(.toAssignee == null))')"
+# DEVOPS-1730 shape: Piotr created it already assigned to himself, outside
+# Linear Asks, so its history has no assignment entry.
+created_by_piotr_already_assigned() {
+    devops_1738_in_triage | jq -c --arg me "$LINEAR_USER_ID" \
+        '.data.issue.creator = {id: $me} | .data.issue.asksRequester = null
+         | .data.issue.history.nodes |= map(select(.toAssignee == null))'
+}
 
-    run move_triage_issue_to_todo "DEVOPS-1738"
+@test "triage to todo moves an issue Piotr created already assigned to himself outside Linear Asks" {
+    write_triage_curl_mock "$(created_by_piotr_already_assigned)"
+
+    run move_triage_issue_to_todo "DEVOPS-1730"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "TRIAGE->TODO: moved DEVOPS-1730 from Triage to Todo" ]]
+}
+
+@test "triage to todo leaves an issue with no assignment entry that Piotr filed through Linear Asks" {
+    write_triage_curl_mock "$(created_by_piotr_already_assigned | jq -c --arg me "$LINEAR_USER_ID" \
+        '.data.issue.asksRequester = {id: $me}')"
+
+    run move_triage_issue_to_todo "DEVOPS-1730"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "stays in Triage: cannot tell who assigned it: no assignment to me in issue history" ]]
+    no_mutation_sent
+}
+
+@test "triage to todo leaves an issue with no assignment entry that someone else created" {
+    write_triage_curl_mock "$(created_by_piotr_already_assigned | jq -c '.data.issue.creator = {id: "caue-id"}')"
+
+    run move_triage_issue_to_todo "DEVOPS-1730"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "stays in Triage: cannot tell who assigned it: no assignment to me in issue history" ]]
+    no_mutation_sent
+}
+
+@test "triage to todo leaves an issue with no assignment entry in a partial history page" {
+    # 50 newer changes could hide a triage responsibility assignment.
+    write_triage_curl_mock "$(created_by_piotr_already_assigned | jq -c '.data.issue.history.pageInfo.hasNextPage = true')"
+
+    run move_triage_issue_to_todo "DEVOPS-1730"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "stays in Triage: cannot tell who assigned it: no assignment to me in issue history" ]]
+    no_mutation_sent
+}
+
+@test "triage to todo leaves an issue Piotr created unassigned that triage responsibility then assigned to him" {
+    # The create scripts file issues unassigned (5c6c0c08); triage
+    # responsibility's assignment leaves an entry, and the entry decides.
+    write_triage_curl_mock "$(created_by_piotr_already_assigned | jq -c --argjson a "$(triage_responsibility_assignment)" \
+        '.data.issue.history.nodes = [$a] + .data.issue.history.nodes')"
+
+    run move_triage_issue_to_todo "DEVOPS-1730"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "stays in Triage: Linear triage responsibility assigned it, not me" ]]
     no_mutation_sent
 }
 
