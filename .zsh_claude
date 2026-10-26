@@ -222,15 +222,22 @@ alias ccinstall='~/.claude/scripts/__claude_version_installer.sh'  # Version pic
 # Claude Code on a work key in the current dir: klaude [-k NAME] [claude args...]
 # Launches through the same __claude_with_monitor.sh as the `claude` alias (kube
 # isolation, monitor, account routing), called by path so no alias is needed.
+# The key reaches Claude through an inline apiKeyHelper, not ANTHROPIC_API_KEY:
+# interactive Claude Code checks an env key against customApiKeyResponses in
+# .claude.json and silently falls back to the subscription when it was ever
+# declined, while apiKeyHelper ranks above the /login subscription with no
+# approval step. KLAUDE_KEY_NAME (the entry name, never the key) tells the
+# statusline the session is on a work key.
 function klaude() {
-  local name=ANTHROPIC_SRE_AGENT_KEY key
+  local name=ANTHROPIC_SRE_AGENT_KEY
   if [[ "$1" == "-k" ]]; then
     [[ -n "$2" ]] || { echo "usage: klaude [-k NAME] [claude args...]" >&2; return 1; }
     name="$2"; shift 2
   fi
-  key="$(pass show "work/$name" | head -1)"
-  [[ -n "$key" ]] || { echo "klaude: no key in pass work/$name" >&2; return 1; }
-  ANTHROPIC_API_KEY="$key" "$HOME/.claude/scripts/__claude_with_monitor.sh" "$@"
+  [[ "$name" != *[^A-Za-z0-9_.-]* ]] || { echo "klaude: bad key name: $name" >&2; return 1; }
+  pass show "work/$name" | head -1 | grep -q . || { echo "klaude: no key in pass work/$name" >&2; return 1; }
+  env -u ANTHROPIC_API_KEY KLAUDE_KEY_NAME="$name" "$HOME/.claude/scripts/__claude_with_monitor.sh" \
+    --settings "{\"apiKeyHelper\":\"pass show work/$name | head -1\"}" "$@"
 }
 
 # One Messages API call on a work key: kapi [-k NAME] --model M [--prompt-file F] [args...] (prompt on stdin otherwise)
