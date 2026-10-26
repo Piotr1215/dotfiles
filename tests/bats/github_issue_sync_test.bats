@@ -3763,3 +3763,140 @@ EOF2
     [ "$status" -eq 0 ]
     grep -Eq 'modify test-uuid-repo linear_issue_id:ENG-5 repo:( rc\.context=none)?$' "${TEST_DIR}/task_commands.log"
 }
+
+# ====================================================
+# TRIAGE TO TODO TESTS
+# ====================================================
+
+# DEVOPS-1736 as it sat in Triage on 26 Oct 2026, before Gordon moved it by
+# hand: filed through Linear Asks from Piotr's :ticket: reaction on Jan
+# Roehrich's Slack message, so Jan is the creator and Piotr the asksRequester
+# and assignee; Linear's triage agent set the project and label, then
+# commented. Ids are the real ones, except Piotr's, which is the suite's
+# LINEAR_USER_ID.
+devops_1736_in_triage() {
+    jq -nc --arg me "$LINEAR_USER_ID" '{data: {issue: {
+        id: "devops-1736-uuid",
+        state: {name: "Triage", type: "triage"},
+        assignee: {id: $me},
+        creator: {id: "789fc73a-52b9-41f2-8f93-7a63f7acf0d6"},
+        asksRequester: {id: $me},
+        comments: {nodes: [
+            {botActor: {name: "Linear", type: "workflow"}},
+            {botActor: null}
+        ]},
+        team: {states: {nodes: [{id: "ba72121d-bddf-4d62-96aa-c722bfe915b3", name: "Todo", type: "unstarted"}]}}
+    }}}'
+}
+
+# Linear mock for the move. A lookup gets $1, a mutation gets
+# ${TEST_DIR}/mutation.json (a confirmed move by default), and every call is
+# logged so a test can prove no mutation went out.
+write_triage_curl_mock() {
+    printf '%s' "$1" > "${TEST_DIR}/lookup.json"
+    printf '%s' '{"data":{"issueUpdate":{"success":true,"issue":{"state":{"name":"Todo","type":"unstarted"}}}}}' \
+        > "${TEST_DIR}/mutation.json"
+    cat > "${TEST_DIR}/curl" << 'MOCK'
+#!/bin/bash
+echo "$*" >> "${TEST_DIR}/curl_calls.log"
+if [[ "$*" == *issueUpdate* ]]; then cat "${TEST_DIR}/mutation.json"; else cat "${TEST_DIR}/lookup.json"; fi
+MOCK
+    chmod +x "${TEST_DIR}/curl"
+}
+
+no_mutation_sent() {
+    ! grep -q issueUpdate "${TEST_DIR}/curl_calls.log"
+}
+
+@test "triage to todo moves DEVOPS-1736: in Triage, assigned to Piotr by his ticket ask, triage pass done" {
+    write_triage_curl_mock "$(devops_1736_in_triage)"
+
+    run move_triage_issue_to_todo "DEVOPS-1736"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "TRIAGE->TODO: moved DEVOPS-1736 from Triage to Todo" ]]
+    grep issueUpdate "${TEST_DIR}/curl_calls.log" | grep -q 'ba72121d-bddf-4d62-96aa-c722bfe915b3'
+    grep issueUpdate "${TEST_DIR}/curl_calls.log" | grep -q 'devops-1736-uuid'
+}
+
+@test "triage to todo moves a Triage issue Piotr created himself" {
+    write_triage_curl_mock "$(devops_1736_in_triage | jq -c --arg me "$LINEAR_USER_ID" \
+        '.data.issue.creator = {id: $me} | .data.issue.asksRequester = null')"
+
+    run move_triage_issue_to_todo "DEVOPS-1736"
+    [ "$status" -eq 0 ]
+    grep -q issueUpdate "${TEST_DIR}/curl_calls.log"
+}
+
+@test "triage to todo leaves an issue not assigned to Piotr untouched" {
+    write_triage_curl_mock "$(devops_1736_in_triage | jq -c '.data.issue.assignee = {id: "caue-id"}')"
+
+    run move_triage_issue_to_todo "DEVOPS-1736"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "stays in Triage: not assigned to me" ]]
+    no_mutation_sent
+}
+
+@test "triage to todo leaves an issue that already left Triage untouched" {
+    # DEVOPS-1735: someone else moved it Triage -> Parked between the feed
+    # fetch and the move. The fresh lookup must win over the feed.
+    write_triage_curl_mock "$(devops_1736_in_triage | jq -c '.data.issue.state = {name: "Parked", type: "started"}')"
+
+    run move_triage_issue_to_todo "DEVOPS-1736"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "stays in Triage: no longer in Triage (Parked)" ]]
+    no_mutation_sent
+}
+
+@test "triage to todo waits until the Linear triage pass has commented" {
+    # Mid-pass: the project is set, the agent's comment is not there yet.
+    write_triage_curl_mock "$(devops_1736_in_triage | jq -c '.data.issue.comments.nodes = [{botActor: null}]')"
+
+    run move_triage_issue_to_todo "DEVOPS-1736"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "stays in Triage: Linear triage pass has not commented yet" ]]
+    no_mutation_sent
+}
+
+@test "triage to todo leaves an issue someone else asked for and Linear auto-assigned to Piotr" {
+    # DEVOPS-1715 shape: Caue's ticket, assigned to Piotr by triage
+    # responsibility. Still Piotr's inbox item (~/.claude 3d8de4d).
+    write_triage_curl_mock "$(devops_1736_in_triage | jq -c '.data.issue.creator = null | .data.issue.asksRequester = {id: "caue-id"}')"
+
+    run move_triage_issue_to_todo "DEVOPS-1736"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "stays in Triage: someone else made the assignment" ]]
+    no_mutation_sent
+}
+
+@test "triage to todo keeps the issue in Triage when Linear rejects the move" {
+    write_triage_curl_mock "$(devops_1736_in_triage)"
+    printf '%s' '{"data":null,"errors":[{"message":"Entity not found: Issue"}]}' > "${TEST_DIR}/mutation.json"
+
+    run move_triage_issue_to_todo "DEVOPS-1736"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "WARN: TRIAGE->TODO: move failed for DEVOPS-1736" ]]
+}
+
+@test "sync_to_taskwarrior syncs a moved Triage issue as Todo on the same run" {
+    write_triage_curl_mock "$(devops_1736_in_triage)"
+    # No task exists yet, so the sync creates one. Record what it was given.
+    create_and_annotate_task() { echo "CREATED $4 status=$6"; }
+    local feed_line='{"id":"devops-1736-uuid","description":"GCP_E2E_PROJECT_ID variable in loft-enterprise","repository":"linear","html_url":"https://linear.app/loft/issue/DEVOPS-1736/x","issue_id":"DEVOPS-1736","project":"Cloud Infrastructure Maintenance","status":"Triage"}'
+
+    run sync_to_taskwarrior "$feed_line"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "TRIAGE->TODO: moved DEVOPS-1736" ]]
+    [[ ! "$output" =~ "excluding from sync" ]]
+    [[ "$output" =~ "CREATED DEVOPS-1736 status=Todo" ]]
+}
+
+@test "sync_to_taskwarrior still excludes a Triage issue it does not move" {
+    write_triage_curl_mock "$(devops_1736_in_triage | jq -c '.data.issue.assignee = {id: "caue-id"}')"
+    local feed_line='{"id":"devops-1736-uuid","description":"GCP_E2E_PROJECT_ID variable in loft-enterprise","repository":"linear","html_url":"https://linear.app/loft/issue/DEVOPS-1736/x","issue_id":"DEVOPS-1736","project":"Cloud Infrastructure Maintenance","status":"Triage"}'
+
+    run sync_to_taskwarrior "$feed_line"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "DEVOPS-1736 is in Triage status - excluding from sync" ]]
+    no_mutation_sent
+    [ ! -f "${TEST_DIR}/task_commands.log" ]
+}

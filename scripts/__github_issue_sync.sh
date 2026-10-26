@@ -17,6 +17,8 @@
 #    issues are never created, updated, or tagged here. They stay in the fetched
 #    feed only so the cleanup passes do not delete an already-created task while
 #    it is mid-transition; they simply are not synced as tasks.
+# 5. Exception to 4: a Triage issue Piotr assigned to himself is moved to Todo
+#    once Linear's triage pass has commented, then synced (PHASE 2a).
 #
 # Note: The cross-team Triage feed was removed — only issues assigned to me sync.
 # Note: GitHub issue sync was removed in v1.0-with-github-sync (no GitHub issues assigned)
@@ -354,6 +356,89 @@ check_linear_issue_status() {
     else
         echo "active"
     fi
+}
+
+# ====================================================
+# PHASE 2a: TRIAGE TO TODO
+#
+# Piotr, 26 Oct 2026: "on the issues I assign for myself, feel free to change
+# status from triage to todo once the automated loop runs so they sync with our
+# taskwarrior". A Triage issue never syncs (see sync_to_taskwarrior), so until
+# something moves it, it never reaches Taskwarrior. Gordon used to move these by
+# hand (gordon references/tasks.md); the sync now does it on every run.
+#
+# Moved only when a fresh lookup shows all of:
+#   - state type still triage. An issue that left Triage is never touched
+#     (DEVOPS-1735 went Triage -> Parked by someone else).
+#   - assigned to LINEAR_USER_ID.
+#   - Piotr made the assignment: he is the creator, or the asksRequester.
+#     Linear Asks sets asksRequester to whoever's :ticket: reaction filed the
+#     issue, while creator is the Slack author (DEVOPS-1736: creator Jan
+#     Roehrich, asksRequester Piotr). Triage responsibility also auto-assigns
+#     other people's asks to him (DEVOPS-1715, asksRequester Caue); those stay
+#     his inbox items, as ~/.claude 3d8de4d intended.
+#   - Linear's triage agent has commented. Its pass sets the project and labels
+#     through history first and posts its comment, from the "Linear" workflow
+#     bot, last (DEVOPS-1736: project 13:20:06, label 13:21:02, comment
+#     13:21:11). A project alone can be set mid-pass.
+# ====================================================
+
+# POST one GraphQL body to Linear and print the raw reply.
+linear_graphql() {
+    curl -s --connect-timeout 10 --max-time 30 -X POST \
+        -H "Content-Type: application/json" \
+        -H "Authorization: $LINEAR_API_KEY" \
+        --data "$1" \
+        https://api.linear.app/graphql
+}
+
+# Read an issue lookup reply on stdin and echo "move <todo-state-id>" or
+# "skip <reason>". Any reply it cannot read is a skip.
+triage_to_todo_verdict() {
+    jq -r --arg me "$LINEAR_USER_ID" '
+        .data.issue as $i
+        | if $i == null then "skip lookup returned no issue"
+          elif $i.state.type != "triage" then "skip no longer in Triage (\($i.state.name))"
+          elif ($i.assignee.id // "") != $me then "skip not assigned to me"
+          elif ($i.creator.id // "") != $me and ($i.asksRequester.id // "") != $me
+            then "skip someone else made the assignment"
+          elif ([$i.comments.nodes[]? | select(.botActor.type == "workflow" and .botActor.name == "Linear")] | length) == 0
+            then "skip Linear triage pass has not commented yet"
+          else ([$i.team.states.nodes[]? | select(.type == "unstarted" and .name == "Todo")] | first) as $todo
+            | if $todo == null then "skip team has no Todo state" else "move \($todo.id)" end
+          end' 2>/dev/null || echo "skip unreadable lookup"
+}
+
+# Move one Triage issue to its team's Todo state when triage_to_todo_verdict
+# allows it. Returns 0 only when Linear confirms the move, so the caller can sync
+# the issue as Todo on this same run; any other outcome leaves it in Triage.
+move_triage_issue_to_todo() {
+    local issue_number="$1"
+    local reply verdict issue_uuid state_id result
+
+    [[ -n "$issue_number" ]] || return 1
+
+    reply=$(linear_graphql "$(jq -nc --arg id "$issue_number" '{
+        query: "query($id: String!) { issue(id: $id) { id state { name type } assignee { id } creator { id } asksRequester { id } comments(first: 50) { nodes { botActor { name type } } } team { states(filter: { type: { eq: \"unstarted\" } }) { nodes { id name type } } } } }",
+        variables: {id: $id}}')") || reply=""
+    verdict=$(triage_to_todo_verdict <<<"$reply")
+    if [[ "$verdict" != "move "* ]]; then
+        log "Triage $issue_number stays in Triage: ${verdict#skip }"
+        return 1
+    fi
+
+    state_id="${verdict#move }"
+    issue_uuid=$(jq -r '.data.issue.id' <<<"$reply")
+    result=$(linear_graphql "$(jq -nc --arg id "$issue_uuid" --arg state "$state_id" '{
+        query: "mutation($id: String!, $state: String!) { issueUpdate(id: $id, input: { stateId: $state }) { success issue { state { name type } } } }",
+        variables: {id: $id, state: $state}}')") || result=""
+    if [[ "$(jq -r '.data.issueUpdate.success // false' <<<"$result" 2>/dev/null)" == "true" ]]; then
+        log "TRIAGE->TODO: moved $issue_number from Triage to Todo (assigned to me by me, Linear triage pass done)"
+        return 0
+    fi
+
+    log "WARN: TRIAGE->TODO: move failed for $issue_number, left in Triage: $(jq -c '.errors // .' <<<"$result" 2>/dev/null || echo "no reply")"
+    return 1
 }
 
 # ====================================================
@@ -1163,9 +1248,17 @@ sync_to_taskwarrior() {
     # cleanup passes still see it and do NOT delete an already-created task; we
     # only skip create/update here while it sits in Triage. When it moves to a
     # real status (Todo/In Progress/In Review/etc.) it syncs normally next run.
+    #
+    # The one exception is an issue Piotr assigned to himself whose Linear
+    # triage pass has run: move_triage_issue_to_todo moves it to Todo, and it
+    # syncs as Todo on this same run.
     if [[ "$issue_status" == "Triage" ]]; then
-        log "Issue $issue_number is in Triage status - excluding from sync (not created, not updated, not triaged)"
-        return 0
+        if move_triage_issue_to_todo "$issue_number"; then
+            issue_status="Todo"
+        else
+            log "Issue $issue_number is in Triage status - excluding from sync (not created, not updated, not triaged)"
+            return 0
+        fi
     fi
 
     # First, try to find task by linear_issue_id if available
