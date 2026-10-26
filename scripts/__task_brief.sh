@@ -17,6 +17,15 @@
 #                                             same prefixed with /ops-spawn-agent,
 #                                             d marks the task done. Text is
 #                                             typed, never submitted.
+#   __task_brief.sh --card <token>            a short card for the @task
+#                                             instant answer: ref, title, What:,
+#                                             the "Your step:" sentence of the
+#                                             newest brief: note and its URLs.
+#                                             Exit 3 when the task has no what:.
+# The newest `what:` note (one or two plain sentences: the thing, why it exists,
+# why it is Piotr's) prints as `What:` right under the title. On 26 Oct Piotr
+# picked 3b9d with the @task picker and asked "what is this?" again: the brief
+# was a log in Gordon's shorthand with no plain sentence saying what it was.
 # <token> may be a full uuid, a prefix, `task:<prefix>`, or a whole
 # `@"<uuid>|..."` picker token; the first uuid-looking run is used.
 # A ref that matches several pending tasks opens a pick list first.
@@ -35,6 +44,7 @@ case "${1:-}" in
   --popup) mode=popup; shift ;;
   --actions) mode=actions; shift ;;
   --actions-run) mode=actions_run; shift ;;
+  --card) mode=card; shift ;;
 esac
 
 token="${1:-}"
@@ -92,6 +102,7 @@ print_brief() {
   jq -r "$LEAD_JQ"'
     .[0] | lead as $lead |
     "\(.description)\n" +
+    (what // "" | if . == "" then "" else "What: \(.)\n" end) +
     ($lead | map(.k + ": " + .v + "\n") | join("")) +
     "uuid:    \(.uuid)\n" +
     "status:  \(.status)" + (if .project then "  project: \(.project)" else "" end) + "\n" +
@@ -118,8 +129,14 @@ LEAD_JQ=$(cat <<'JQ'
   def is_option: test("^(Options?:|[A-D]( \\(recommended\\))?:|\\([a-d]\\)\\s)|\\(recommended\\)");
   def is_decision: (is_reply | not) and test("(?<!to )\\bPiotr( [0-9]{1,2}:[0-9]{2})?( (chose|picked|answered|approved|declined|decided|said)\\b|:)");
   def stamp: (.entry // "") | if length >= 13 then "\(.[4:6])-\(.[6:8]) \(.[9:11]):\(.[11:13])Z " else "" end;
+  def what_re: "^\\s*what:\\s*(?=\\S)";
+  def is_what: .description | test(what_re; "i");
+  # The newest what: note of a task, without its prefix, or null.
+  def what: [(.annotations // [])[] | select(is_what)] | sort_by(.entry) | last
+    | if . == null then null else .description | sub(what_re; ""; "i") end;
   def lead:
-    ((.annotations // []) | sort_by(.entry) | map(. + {s: (.description | sents)})) as $a
+    ((.annotations // []) | map(select(is_what | not)) | sort_by(.entry)
+      | map(. + {s: (.description | sents)})) as $a
     | def last_with(f): [range(0; $a | length) as $i | select(any($a[$i].s[]; f)) | $i] | last // -1;
       last_with(is_reply) as $r | last_with(is_option) as $o | last_with(is_decision) as $d
     | (if $d >= 0 then ($a[$d] | stamp) + ($a[$d].s | map(select(is_decision)) | join(" ")) else "" end) as $decided
@@ -140,6 +157,33 @@ LEAD_JQ=$(cat <<'JQ'
     | map(select(.v != ""));
 JQ
 )
+
+# Print the instant-answer card of task $1: ref and title, What:, the "Your
+# step:" (or "What you decide:") sentence of the newest brief: note, then each
+# URL of that note the sentence does not already show. Unwrapped, so URLs stay
+# whole. Returns 1 for no task, 3 for a task with no what: note.
+print_card() {
+  local json out
+  json=$(tw "$1" export 2>/dev/null) || json=""
+  if ! jq -e 'type == "array" and length > 0' >/dev/null 2>&1 <<<"$json"; then
+    printf 'no task matches %s\n' "$1" >&2
+    return 1
+  fi
+  out=$(jq -r "$LEAD_JQ"'
+    def urls: [scan("https?://[^\\s<>\"`]+") | sub("[.,;:)\\]]+$"; "")]
+      | reduce .[] as $u ([]; if any(.[]; . == $u) then . else . + [$u] end);
+    .[0] | what as $what | select($what != null)
+    | ([(.annotations // [])[] | select(.description | test("^\\s*brief:"; "i"))]
+        | sort_by(.entry) | last | .description // "") as $brief
+    | ($brief | sents | map(select(test("(^|\\s)(Your step|What you decide):")))
+        | last // "" | sub("^.*?(?=(Your step|What you decide):)"; "")) as $step
+    | [ "\(.uuid[0:4])  \(.description)", "What: \($what)",
+        (if $step != "" then $step else empty end),
+        ($brief | urls[] | select(. as $u | $step | contains($u) | not)) ]
+    | join("\n")' <<<"$json")
+  [[ -n "$out" ]] || return 3
+  printf '%s\n' "$out"
+}
 
 # Wait for a key so a popup message can be read before -E closes it.
 pause() {
@@ -229,6 +273,12 @@ actions_run() {
 if [[ "$mode" == actions_run ]]; then
   actions_run "$uuid"
   exit $?
+fi
+
+if [[ "$mode" == card ]]; then
+  rc=0
+  print_card "$uuid" || rc=$?
+  exit "$rc"
 fi
 
 print_brief "$uuid" || exit 1

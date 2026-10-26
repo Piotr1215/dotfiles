@@ -23,6 +23,13 @@ JSON
   ;;
   *7f81e678*) cat "${FIXTURES}/7f81-2026-10-23T0924Z.json" ;;
   *fc0f43be*) cat "${FIXTURES}/fc0f-2026-10-23T1115Z.json" ;;
+  *3b9d8a8c*) cat "${FIXTURES}/3b9d-2026-10-26.json" ;;
+  *31c0f89e*) cat << 'JSON'
+[{"uuid":"31c0f89e-0000-4000-8000-000000000004","status":"pending","description":"Muse Slack app for Tom: deny until vendor checks?","annotations":[
+ {"entry":"20261026T090145Z","description":"brief: Tom asked to install Muse. What you decide: how to answer the request: https://loft-labs-inc.slack.com/archives/D0BM7HMDDQB/p1792954856792359"},
+ {"entry":"20261026T100000Z","description":"What: Tom Brightbill asked to install an AI triage app across our Slack workspace."}]}]
+JSON
+  ;;
   *status:pending*) cat << 'JSON'
 [{"uuid":"843f1111-aaaa-4bbb-8ccc-000000000001","status":"pending","description":"Grant Kai push on loft-sh/kine?","repo":"no-repo"},
  {"uuid":"7deb2222-aaaa-4bbb-8ccc-000000000002","status":"pending","description":"Get PR 8827 approved","repo":"loft-sh/vcluster-pro","linear_issue_id":"DEVOPS-1717"},
@@ -253,4 +260,63 @@ teardown() {
 @test "the legend names the d key" {
     STUB_NVIM_RC=0 run "$SCRIPT" --actions-run 843f
     grep -q '\[d\] done' "${TEST_DIR}/nvim_stdin"
+}
+
+# The what: note. On 26 Oct Piotr picked 3b9d with the @task picker and asked
+# "what is this?" again: its notes were a log with no plain sentence saying
+# what the task was.
+
+@test "the newest what: note prints right under the title" {
+    TASK_BRIEF_WIDTH=400 run "$SCRIPT" 3b9d8a8c
+    [ "$status" -eq 0 ]
+    [ "${lines[0]}" = "cap Anthropic spend before AI backports go live" ]
+    [[ "${lines[1]}" == "What: Caue's GitHub Action resolves backport conflicts with Claude"*"is yours." ]]
+    [[ "$output" != *"What: an older what line"* ]]
+}
+
+@test "a what: note never becomes the Latest line" {
+    TASK_BRIEF_WIDTH=400 run "$SCRIPT" 3b9d8a8c
+    lead=${output%%uuid:*}
+    [[ "$lead" == *"Latest: 10-26 08:38Z pr merged: github-actions#329"* ]]
+    [[ "$lead" != *"Latest: 10-26 10:00Z"* ]]
+}
+
+@test "a task with no what: note prints no What line" {
+    run "$SCRIPT" 35ad51ef
+    [[ "$output" != *"What:"* ]]
+}
+
+@test "--card prints ref, title, What, the step sentence and the other URLs" {
+    run "$SCRIPT" --card '@"3b9d8a8c-8b20-4c8a-be3e-53be97a5e53e|-|no-repo|cap"'
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 4 ]
+    [ "${lines[0]}" = "3b9d  cap Anthropic spend before AI backports go live" ]
+    [[ "${lines[1]}" == "What: Caue's GitHub Action resolves"* ]]
+    [ "${lines[2]}" = "Your step: set or confirm the cap in the Anthropic console: https://console.anthropic.com/settings/limits ." ]
+    [ "${lines[3]}" = "https://github.com/loft-sh/github-actions/pull/330" ]
+}
+
+@test "--card takes a What you decide sentence and a capitalised What: note" {
+    run "$SCRIPT" --card 31c0f89e
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "What: Tom Brightbill asked to install an AI triage app across our Slack workspace." ]
+    [ "${lines[2]}" = "What you decide: how to answer the request: https://loft-labs-inc.slack.com/archives/D0BM7HMDDQB/p1792954856792359" ]
+    [ "${#lines[@]}" -eq 3 ]
+}
+
+@test "--card exits 3 with no output for a task without a what: note" {
+    run "$SCRIPT" --card 35ad51ef
+    [ "$status" -eq 3 ]
+    [ -z "$output" ]
+}
+
+@test "--card on an unknown task fails" {
+    run "$SCRIPT" --card deadbeef
+    [ "$status" -eq 1 ]
+}
+
+@test "--card is read only" {
+    run "$SCRIPT" --card 3b9d8a8c
+    grep -q 'rc.hooks=off' "${TEST_DIR}/task_calls"
+    ! grep -Eq ' (modify|annotate|done|add|delete)' "${TEST_DIR}/task_calls"
 }

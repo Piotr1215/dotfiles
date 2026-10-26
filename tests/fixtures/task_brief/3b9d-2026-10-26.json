@@ -1,0 +1,30 @@
+[
+  {
+    "uuid": "3b9d8a8c-8b20-4c8a-be3e-53be97a5e53e",
+    "status": "pending",
+    "description": "cap Anthropic spend before AI backports go live",
+    "project": "admin",
+    "tags": [
+      "piotr",
+      "work"
+    ],
+    "annotations": [
+      {
+        "entry": "20261026T082618Z",
+        "description": "brief: Caue's AI backport resolver (github-actions#330) merged 26 Oct 08:25Z: https://github.com/loft-sh/github-actions/pull/330 . It calls Claude through ai-step with the loft-enterprise ANTHROPIC_API_KEY. Nobody has confirmed a spend limit exists. Your step: set or confirm the cap in the Anthropic console: https://console.anthropic.com/settings/limits . Owner row 1072093e, see https://github.com/loft-sh/github-actions/pull/330 again."
+      },
+      {
+        "entry": "20261026T083805Z",
+        "description": "pr merged: github-actions#329 (a3d77d1, 08:25Z) and #330 (3f61ec9, 08:25Z) | gh pr view -> MERGED; task outcome not reached"
+      },
+      {
+        "entry": "20261026T090000Z",
+        "description": "what: an older what line that a newer one replaces."
+      },
+      {
+        "entry": "20261026T100000Z",
+        "description": "what: Caue's GitHub Action resolves backport conflicts with Claude and bills the loft-enterprise Anthropic key. Nobody has confirmed a spend limit on that key, and setting one before the tool is switched on is yours."
+      }
+    ]
+  }
+]
