@@ -240,23 +240,100 @@ function klaude() {
     --settings "{\"apiKeyHelper\":\"pass show work/$name | head -1\"}" "$@"
 }
 
-# One Messages API call on a work key: kapi [-k NAME] --model M [--prompt-file F] [args...] (prompt on stdin otherwise)
+# One dim line on stderr, the way classif prints its own: only at a terminal, so pipes
+# and files stay clean. _k_dim PROG TEXT
+function _k_dim() {
+  [[ -t 2 && -n "$2" ]] && print -r -- $'\e[2m'"$1: $2"$'\e[0m' >&2
+  return 0
+}
+
+# Model ids for `kapi -m <TAB>` and `kp -m <TAB>`, one id:display name per line, read only
+# from the cache `kapi --refresh-models` writes (id<TAB>name<TAB>effort levels). A missing
+# cache or one older than a day refreshes in the background, at most once per 10 minutes.
+function _k_model_ids() {
+  local cache="$HOME/.local/state/claude-runs/models.txt" line
+  local -a fresh tried
+  fresh=($cache(N.mh-24)) tried=($cache.try(N.mm-10))
+  if (( ! ${#fresh} && ! ${#tried} )); then
+    mkdir -p "${cache:h}" && : >"$cache.try"
+    ( kapi --refresh-models </dev/null >/dev/null 2>&1 & )
+  fi
+  [[ -r "$cache" ]] || return 0
+  for line in "${(@f)$(<"$cache")}"; do
+    [[ -n "$line" ]] && print -r -- "${line%%$'\t'*}:${${line#*$'\t'}%%$'\t'*}"
+  done
+}
+
+# The effort to send MODEL when WANT is asked: WANT unless the models cache lists the model
+# without it, then the highest level at or below WANT it takes (empty: none) and one notice.
+function _k_effort_for() {
+  local model="$1" want="$2" cache="$HOME/.local/state/claude-runs/models.txt" line levels pick l
+  local -a order=(low medium high xhigh max)
+  [[ -n "$want" && -r "$cache" ]] || { print -r -- "$want"; return; }
+  for line in "${(@f)$(<"$cache")}"; do
+    [[ "${line%%$'\t'*}" == "$model" ]] && levels="${line##*$'\t'}"
+  done
+  if [[ -z "$levels" || "$levels" == "?" || ",$levels," == *",$want,"* ]]; then
+    print -r -- "$want"; return
+  fi
+  for l in "${order[@]}"; do
+    [[ ",$levels," == *",$l,"* ]] && pick="$l"
+    [[ "$l" == "$want" ]] && break
+  done
+  if [[ -n "$pick" ]]; then
+    echo "effort $want not accepted by $model; using $pick" >&2
+  else
+    echo "effort $want not accepted by $model; sending no effort" >&2
+  fi
+  print -r -- "$pick"
+}
+
+# One Messages API call on a work key (__claude_api_run.py, run with the anthropic SDK via uv):
+#   kapi [-k NAME] -m MODEL [--effort LEVEL] [--prompt-file F] [--out F] [args...]   prompt on stdin otherwise
+#   kapi [-k NAME] --refresh-models                                                    refresh the -m completion cache
+# Effort defaults to xhigh; a model that rejects it runs at the highest level it accepts,
+# with one notice. Prints the runner's JSON line, then a dim cost line at a terminal.
 function kapi() {
   local name=ANTHROPIC_SRE_AGENT_KEY
   if [[ "$1" == "-k" ]]; then
-    [[ -n "$2" ]] || { echo "usage: kapi [-k NAME] --model MODEL [args...]" >&2; return 1; }
+    [[ -n "$2" ]] || { echo "usage: kapi [-k NAME] -m MODEL [args...]" >&2; return 1; }
     name="$2"; shift 2
   fi
-  command python3 "$HOME/.claude/scripts/__claude_api_run.py" --pass "work/$name" "$@"
+  local -a py=(uv run --quiet --with anthropic python3 "$HOME/.claude/scripts/__claude_api_run.py" --pass "work/$name")
+  if [[ "$1" == --refresh-models ]]; then
+    "${py[@]}" --list-models </dev/null
+    return
+  fi
+  local -a effort
+  (( ${@[(I)--effort*]} )) || effort=(--effort xhigh)
+  local record rc
+  record=$("${py[@]}" "${effort[@]}" "$@"); rc=$?
+  print -r -- "$record"
+  _k_dim kapi "$(print -r -- "$record" | jq -r 'select(.input_tokens != null)
+    | "in \(.input_tokens) out \(.output_tokens) cache read \(.cache_read_input_tokens) write \(.cache_creation_input_tokens), estimate $\(.usd_estimate // "?")"' 2>/dev/null)"
+  return $rc
 }
 
+function _kapi() {
+  local -a models
+  if [[ "${words[CURRENT-1]}" == (-m|--model) ]]; then
+    models=("${(@f)$(_k_model_ids)}")
+    models=(${models:#})
+    (( ${#models} )) && _describe 'model' models
+  fi
+}
+(( $+functions[compdef] )) && compdef _kapi kapi
+
 # Managed agents in the SRE workspace (__cma_adhoc.py, run with the anthropic SDK via uv).
-#   kcma [-k NAME] --name SLUG --out FILE [args...]   ad hoc claude-adhoc-SLUG turn
-#   kcma [-k NAME] [--keep] [AGENT] [prompt...]       run an existing agent
+#   kcma [-k NAME] --name SLUG [--out FILE] [args...]   ad hoc claude-adhoc-SLUG turn
+#   kcma [-k NAME] [--keep] [AGENT] [prompt...]         run an existing agent
+#   kcma [-k NAME] --session ID [prompt...]             follow-up turn in a session kept with --keep
+#   kcma [-k NAME] --delete ID                          delete a kept session
 # Without --name, AGENT (tab-completed from the cache --list writes) picks the agent, else
 # fzf lists every agent with model and description; KCMA_PICK=AGENT skips fzf. The prompt
 # is the remaining args, else stdin, else $EDITOR. The Console link prints when the session
-# starts and the answer at the end. The session is deleted unless --keep.
+# starts and the answer at the end. The session is deleted unless --keep; a kept session
+# prints its delete command. Every run ends with a dim cost line at a terminal.
 function kcma() {
   local name=ANTHROPIC_SRE_AGENT_KEY
   if [[ "$1" == "-k" ]]; then
@@ -264,28 +341,52 @@ function kcma() {
     name="$2"; shift 2
   fi
   local -a py=(uv run --quiet --with anthropic python3 "$HOME/.claude/scripts/__cma_adhoc.py" --pass "work/$name")
-  if (( ${@[(Ie)--name]} || ${@[(Ie)--list]} || ${@[(Ie)--agent-id]} || ${@[(Ie)--help]} )); then
+  local record rc
+  if (( ${@[(Ie)--list]} || ${@[(Ie)--help]} )); then
     "${py[@]}" "$@"
     return
   fi
-  local -a keep
-  [[ "$1" == "--keep" ]] && { keep=(--keep); shift; }
-  local rows pick prompt tmp record dir="$HOME/.local/state/claude-runs"
-  rows=$("${py[@]}" --list </dev/null) || { echo "kcma: listing agents failed: $rows" >&2; return 1; }
-  local want="${KCMA_PICK:-}"
-  [[ -z "$want" && -n "$1" ]] && print -r -- "$rows" | jq -e --arg n "$1" 'select(.name == $n)' >/dev/null && { want="$1"; shift; }
-  if [[ -n "$want" ]]; then
-    pick=$(print -r -- "$rows" | jq -r --arg n "$want" 'select(.name == $n) | .id' | head -1)
-    [[ -n "$pick" ]] || { echo "kcma: no agent named $want" >&2; return 1; }
-  else
-    command -v fzf >/dev/null || { echo "kcma: fzf is not installed" >&2; return 1; }
-    pick=$(print -r -- "$rows" \
-      | jq -r '[.id, .name, (.model // "?"), (.description // "")] | @tsv' \
-      | fzf --reverse --border --delimiter=$'\t' --with-nth=2.. --prompt='kcma / ')
-    pick="${pick%%$'\t'*}"
-    [[ -n "$pick" ]] || return 1
+  if (( ${@[(Ie)--name]} || ${@[(Ie)--agent-id]} )); then
+    record=$("${py[@]}" "$@"); rc=$?
+    print -r -- "$record"
+    _kcma_tail "$record"
+    return $rc
   fi
-  prompt="$*"
+  if [[ "$1" == --delete ]]; then
+    [[ -n "$2" ]] || { echo "usage: kcma [-k NAME] --delete SESSION_ID" >&2; return 1; }
+    record=$("${py[@]}" --delete-session "$2" </dev/null)
+    if [[ "$(print -r -- "$record" | jq -r .deleted 2>/dev/null)" == true ]]; then
+      echo "deleted $2"
+    else
+      print -r -- "$record" >&2
+      return 1
+    fi
+    return
+  fi
+  local -a target keep
+  local rows pick dir="$HOME/.local/state/claude-runs"
+  if [[ "$1" == --session ]]; then
+    [[ -n "$2" ]] || { echo "usage: kcma [-k NAME] --session SESSION_ID [prompt...]" >&2; return 1; }
+    target=(--session-id "$2"); shift 2
+  else
+    [[ "$1" == "--keep" ]] && { keep=(--keep); shift; }
+    rows=$("${py[@]}" --list </dev/null) || { echo "kcma: listing agents failed: $rows" >&2; return 1; }
+    local want="${KCMA_PICK:-}"
+    [[ -z "$want" && -n "$1" ]] && print -r -- "$rows" | jq -e --arg n "$1" 'select(.name == $n)' >/dev/null && { want="$1"; shift; }
+    if [[ -n "$want" ]]; then
+      pick=$(print -r -- "$rows" | jq -r --arg n "$want" 'select(.name == $n) | .id' | head -1)
+      [[ -n "$pick" ]] || { echo "kcma: no agent named $want" >&2; return 1; }
+    else
+      command -v fzf >/dev/null || { echo "kcma: fzf is not installed" >&2; return 1; }
+      pick=$(print -r -- "$rows" \
+        | jq -r '[.id, .name, (.model // "?"), (.description // "")] | @tsv' \
+        | fzf --reverse --border --delimiter=$'\t' --with-nth=2.. --prompt='kcma / ')
+      pick="${pick%%$'\t'*}"
+      [[ -n "$pick" ]] || return 1
+    fi
+    target=(--agent-id "$pick")
+  fi
+  local prompt="$*" tmp
   if [[ -z "$prompt" && ! -t 0 ]]; then
     prompt=$(command cat)
   elif [[ -z "$prompt" ]]; then
@@ -296,13 +397,22 @@ function kcma() {
   [[ -n "${prompt//[[:space:]]/}" ]] || { echo "kcma: empty prompt" >&2; return 1; }
   mkdir -p "$dir"
   local out="$dir/kcma-$(date +%Y%m%d-%H%M%S)-$$.md"
-  record=$("${py[@]}" --agent-id "$pick" "${keep[@]}" --out "$out" <<<"$prompt")
+  record=$("${py[@]}" "${target[@]}" "${keep[@]}" --out "$out" <<<"$prompt")
   if [[ -s "$out" ]]; then
     command cat "$out"
   else
     print -r -- "$record" >&2
   fi
+  _kcma_tail "$record"
   [[ "$(print -r -- "$record" | jq -r .status 2>/dev/null)" == ok ]]
+}
+
+# After a kcma run: the delete command for a kept session, then the dim cost line.
+function _kcma_tail() {
+  local sid
+  sid=$(print -r -- "$1" | jq -r 'select(.deleted == false and .session_id != null) | .session_id' 2>/dev/null)
+  [[ -n "$sid" ]] && echo "session $sid kept; follow up: kcma --session $sid \"...\"; delete: kcma --delete $sid" >&2
+  _k_dim kcma "$(print -r -- "$1" | jq -r '.cost_line // empty' 2>/dev/null)"
 }
 
 # Cached agent names for `kcma <TAB>`, one name:description per line; never calls the API.
@@ -322,11 +432,13 @@ function _kcma() {
 
 # Headless one-shot Claude Code in the current dir on a work key, read-only tools by default:
 #   kp [-k NAME] [-m MODEL] [-e EFFORT] [-t TOOLS] "prompt"   (prompt on stdin otherwise)
-# Prints the session line first, then the answer, then one cost line. The prompt, result
-# JSON and stderr land in ~/.local/state/claude-runs/kp-*.
+# Effort defaults to xhigh; a model the models cache lists without it runs at the highest
+# level it takes, with one notice. Prints the session line first, then the answer, then a
+# dim cost line at a terminal. The prompt, result JSON and stderr land in
+# ~/.local/state/claude-runs/kp-*.
 function kp() {
   local usage='usage: kp [-k NAME] [-m MODEL] [-e EFFORT] [-t TOOLS] "prompt"'
-  local key=ANTHROPIC_SRE_AGENT_KEY model=sonnet effort=medium
+  local key=ANTHROPIC_SRE_AGENT_KEY model=sonnet effort=xhigh
   local tools='Read,Grep,Glob,Bash(rg:*),Bash(fd:*),Bash(ls:*),Bash(sed:*)'
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -342,6 +454,7 @@ function kp() {
   local prompt="$*"
   [[ -z "$prompt" && ! -t 0 ]] && prompt=$(command cat)
   [[ -n "${prompt//[[:space:]]/}" ]] || { echo "$usage" >&2; return 1; }
+  effort=$(_k_effort_for "$model" "$effort")
   local dir="$HOME/.local/state/claude-runs"
   local base="$dir/kp-$(date +%Y%m%d-%H%M%S)-$$" line summary
   mkdir -p "$dir"
@@ -351,10 +464,21 @@ function kp() {
     | { IFS= read -r line && print -r -- "$line"; summary=$(command cat) }
   local rc=${pipestatus[1]}
   jq -r '.result // empty' "$base.json" 2>/dev/null
-  print -r -- "$summary" | jq -r '"cost $\(.total_cost_usd // "?") turns \(.num_turns // "?") \(((.duration_ms // 0) / 1000) | floor)s \(.subtype // "error")"' 2>/dev/null \
-    || print -r -- "$summary"
+  _k_dim kp "$(print -r -- "$summary" | jq -r '"cost $\(.total_cost_usd // "?") turns \(.num_turns // "?") \(((.duration_ms // 0) / 1000) | floor)s \(.subtype // "error")"' 2>/dev/null \
+    || print -r -- "$summary")"
   return $rc
 }
+
+function _kp() {
+  local -a models
+  if [[ "${words[CURRENT-1]}" == -m ]]; then
+    models=('haiku:Claude Code alias' 'sonnet:Claude Code alias' 'opus:Claude Code alias'
+      'fable:Claude Code alias' "${(@f)$(_k_model_ids)}")
+    models=(${models:#})
+    _describe 'model' models
+  fi
+}
+(( $+functions[compdef] )) && compdef _kp kp
 
 # Run interactive Codex sessions through its managed Unix-socket app-server.
 # The agents MCP server can then deliver inbound DMs to the active Codex thread

@@ -1,7 +1,9 @@
 #!/usr/bin/env bats
 
 # Drives klaude, kapi, kcma and kp from .zsh_claude in a bare zsh with stub pass,
-# claude and python3 on PATH and a stub claude launcher under the fake HOME.
+# claude, python3 and uv on PATH and a stub claude launcher under the fake HOME.
+# run_tty runs the same under a pseudo-terminal (script) for the dim cost lines,
+# which print only when stderr is a terminal.
 # The stub key is fake; no real API is called. klaude hands Claude an inline
 # apiKeyHelper through --settings, so the tests run that helper the way Claude
 # Code does to prove which pass entry it reads.
@@ -29,9 +31,12 @@ EOF
 	make_stub "$STUB_BIN/python3" python3
 	make_stub "$FAKE_HOME/.claude/scripts/__claude_with_monitor.sh" launcher
 
-	# uv stands in for `uv run --with anthropic python3 __cma_adhoc.py`: --list prints the
-	# fixture agents, a run records its args and stdin, prints the console line, writes
-	# PICK-OK to --out and prints an ok record.
+	# uv stands in for `uv run --with anthropic python3 <script>`. For __claude_api_run.py it
+	# records its args, answers --list-models with one id and writes the models cache, else
+	# prints a run record with tokens. For __cma_adhoc.py --list prints the fixture agents,
+	# --delete-session prints a deleted record, and a run records its args and stdin, prints
+	# the console line, writes PICK-OK to --out and prints an ok record with a cost line that
+	# keeps the session under --keep or --session-id.
 	cat >"$STUB_LOG/rows.jsonl" <<'EOF'
 {"id": "agent_k", "name": "sre-k8s-diagnostician", "model": "claude-opus-5-5", "description": "Reads pods"}
 {"id": "agent_p", "name": "claude-adhoc-probe", "model": "claude-haiku-5-5", "description": ""}
@@ -39,14 +44,32 @@ EOF
 	cat >"$STUB_BIN/uv" <<'EOF'
 #!/bin/sh
 printf '%s\n' "${ANTHROPIC_API_KEY-unset}" >"$STUB_LOG/uv.key"
+case " $* " in
+*__claude_api_run.py*)
+	printf '<%s>\n' "$@" >"$STUB_LOG/uv.api.args"
+	case " $* " in *" --list-models "*)
+		mkdir -p "$HOME/.local/state/claude-runs"
+		printf 'claude-opus-5-5\tClaude Opus 5.5\tlow,medium,high,xhigh,max\n' >"$HOME/.local/state/claude-runs/models.txt"
+		printf 'claude-opus-5-5\n'; exit 0 ;;
+	esac
+	echo "REPLY-TEXT" >&2
+	echo '{"verdict": "ok", "input_tokens": 12, "output_tokens": 3, "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0, "usd_estimate": 0.0004}'
+	exit 0 ;;
+esac
 case " $* " in *" --list "*) printf '<%s>\n' "$@" >"$STUB_LOG/uv.list.args"; cat "$STUB_LOG/rows.jsonl"; exit 0 ;; esac
+case " $* " in *" --delete-session "*)
+	printf '<%s>\n' "$@" >"$STUB_LOG/uv.delete.args"
+	[ -n "$STUB_DELETE_FAIL" ] && { echo '{"deleted": false, "error": "RuntimeError", "status": "error"}'; exit 1; }
+	echo '{"deleted": true, "session_id": "sesn_k", "status": "ok"}'; exit 0 ;;
+esac
 printf '<%s>\n' "$@" >"$STUB_LOG/uv.args"
 cat >"$STUB_LOG/uv.stdin"
 echo "console: https://console.example/session" >&2
-out="" prev=""
+out="" prev="" deleted=true
 for a in "$@"; do [ "$prev" = "--out" ] && out="$a"; prev="$a"; done
+case " $* " in *" --keep "*|*" --session-id "*) deleted=false ;; esac
 [ -n "$out" ] && echo "PICK-OK" >"$out"
-echo '{"status": "ok"}'
+echo "{\"status\": \"ok\", \"session_id\": \"sesn_k\", \"deleted\": $deleted, \"cost_line\": \"in 9 out 3 cache read 0 write 0, estimate \$0.0001\"}"
 EOF
 	chmod +x "$STUB_BIN/uv"
 	# fzf picks the row whose second column is $FZF_CHOOSE and records its options.
@@ -83,6 +106,21 @@ echo "console: https://console.example/session" >&2
 EOF
 	chmod +x "$1"
 }
+
+# Like run_in_zsh under a pseudo-terminal, so [[ -t 2 ]] holds; stdin is /dev/null.
+run_tty() {
+	local driver="$BATS_TEST_TMPDIR/driver.sh"
+	{
+		printf 'exec env -u ANTHROPIC_API_KEY HOME=%q PATH=%q STUB_LOG=%q zsh -f -c %q zsh %q' \
+			"$FAKE_HOME" "$STUB_BIN:$PATH" "$STUB_LOG" 'source "$1"; shift; "$@"' "$ZSH_FILE"
+		printf ' %q' "$@"
+		printf ' </dev/null\n'
+	} >"$driver"
+	run script -qefc "bash $driver" /dev/null
+}
+
+DIM=$'\e[2m'
+END=$'\e[0m'
 
 # Source .zsh_claude in zsh -f, run one command, then report the caller's state.
 run_in_zsh() {
@@ -173,18 +211,122 @@ assert_no_leak() {
 	[[ "$output" == *"usage: klaude"* ]]
 }
 
-@test "kapi passes the default pass entry and args to the API runner" {
+UV_PY='run --quiet --with anthropic python3'
+
+# Expected uv argv for the API runner: the uv/python prefix, the script, then the given args.
+api_argv() {
+	printf '<%s>\n' $UV_PY "$FAKE_HOME/.claude/scripts/__claude_api_run.py" "$@"
+}
+
+@test "kapi runs the API runner through uv at effort xhigh and prints its record, no cost line off a terminal" {
 	run_in_zsh kapi --model claude-opus-5-5 --prompt-file 'my prompt.txt'
 
 	[ "$status" -eq 0 ]
 	[ ! -e "$STUB_LOG/pass.args" ]
-	[ "$(cat "$STUB_LOG/python3.key")" = "unset" ]
-	[ "$(cat "$STUB_LOG/python3.args")" = "$(printf '<%s>\n' "$FAKE_HOME/.claude/scripts/__claude_api_run.py" \
-		--pass work/ANTHROPIC_SRE_AGENT_KEY --model claude-opus-5-5 --prompt-file 'my prompt.txt')" ]
+	[ "$(cat "$STUB_LOG/uv.key")" = "unset" ]
+	[ "$(cat "$STUB_LOG/uv.api.args")" = "$(api_argv --pass work/ANTHROPIC_SRE_AGENT_KEY --effort xhigh \
+		--model claude-opus-5-5 --prompt-file 'my prompt.txt')" ]
+	[[ "$output" == *'"verdict": "ok"'* ]]
+	[[ "$output" != *"kapi: in"* ]]
 	assert_no_leak
 }
 
-UV_PY='run --quiet --with anthropic python3'
+@test "kapi keeps an explicit effort and -k entry" {
+	run_in_zsh kapi -k CLAUDE_API_QA_KEY -m claude-haiku-5-5 --effort=low
+
+	[ "$status" -eq 0 ]
+	[ "$(cat "$STUB_LOG/uv.api.args")" = "$(api_argv --pass work/CLAUDE_API_QA_KEY -m claude-haiku-5-5 --effort=low)" ]
+}
+
+@test "kapi at a terminal ends with a dim cost line after the reply" {
+	run_tty kapi -m claude-haiku-5-5
+
+	[ "$status" -eq 0 ]
+	[[ "$output" == *REPLY-TEXT*"${DIM}kapi: in 12 out 3 cache read 0 write 0, estimate \$0.0004${END}"* ]]
+}
+
+@test "kapi --refresh-models lists models through the runner and writes the cache" {
+	run_in_zsh kapi --refresh-models
+
+	[ "$status" -eq 0 ]
+	[ "$(cat "$STUB_LOG/uv.api.args")" = "$(api_argv --pass work/ANTHROPIC_SRE_AGENT_KEY --list-models)" ]
+	[[ "$output" == *claude-opus-5-5* ]]
+	[ -s "$FAKE_HOME/.local/state/claude-runs/models.txt" ]
+}
+
+models_cache() {
+	mkdir -p "$FAKE_HOME/.local/state/claude-runs"
+	printf '%s\t%s\t%s\n' claude-opus-5-5 'Claude Opus 5.5' low,medium,high,xhigh,max \
+		claude-sonnet-4-6 'Claude Sonnet 4.6' low,medium,high,max claude-haiku-4-5 'Claude Haiku 4.5' - \
+		>"$FAKE_HOME/.local/state/claude-runs/models.txt"
+}
+
+# Run a completion function with a stub _describe that prints the candidates it gets:
+# complete_in_zsh FUNCTION WORD... (the last word is the one being completed).
+complete_in_zsh() {
+	run env HOME="$FAKE_HOME" PATH="$STUB_BIN:$PATH" STUB_LOG="$STUB_LOG" zsh -f -c '
+source "$1"; _describe() { print -rl -- "${(@P)2}"; }
+words=("${@:3}"); CURRENT=${#words}; "$2"' zsh "$ZSH_FILE" "$@"
+}
+
+@test "kapi -m completes model ids from a fresh cache without calling the API" {
+	models_cache
+	complete_in_zsh _kapi kapi -m ''
+
+	[ "$status" -eq 0 ]
+	[ "$output" = "$(printf '%s\n' 'claude-opus-5-5:Claude Opus 5.5' 'claude-sonnet-4-6:Claude Sonnet 4.6' 'claude-haiku-4-5:Claude Haiku 4.5')" ]
+	sleep 0.3
+	[ ! -e "$STUB_LOG/uv.api.args" ]
+}
+
+@test "kapi --model completion on a day-old cache serves it and refreshes in the background" {
+	models_cache
+	touch -d '2 days ago' "$FAKE_HOME/.local/state/claude-runs/models.txt"
+	complete_in_zsh _kapi kapi --model ''
+
+	[ "$status" -eq 0 ]
+	[[ "$output" == "claude-opus-5-5:Claude Opus 5.5"* ]]
+	for _ in 1 2 3 4 5 6 7 8 9 10; do [ -e "$STUB_LOG/uv.api.args" ] && break; sleep 0.2; done
+	grep -qx -- '<--list-models>' "$STUB_LOG/uv.api.args"
+}
+
+@test "a refresh attempt within ten minutes is not repeated" {
+	mkdir -p "$FAKE_HOME/.local/state/claude-runs"
+	touch "$FAKE_HOME/.local/state/claude-runs/models.txt.try"
+	complete_in_zsh _kapi kapi -m ''
+
+	[ -z "$output" ]
+	sleep 0.5
+	[ ! -e "$STUB_LOG/uv.api.args" ]
+}
+
+@test "kp -m completes the Claude Code aliases then the cached ids" {
+	models_cache
+	complete_in_zsh _kp kp -m ''
+
+	[ "$status" -eq 0 ]
+	[ "$(printf '%s\n' "$output" | cut -d: -f1 | tr '\n' ' ')" = "haiku sonnet opus fable claude-opus-5-5 claude-sonnet-4-6 claude-haiku-4-5 " ]
+}
+
+@test "kp drops effort to the highest level a cached model takes, with one notice" {
+	models_cache
+	run_in_zsh kp -m claude-sonnet-4-6 'hi' </dev/null
+
+	[ "$status" -eq 0 ]
+	[ "$(sed -n 5,6p "$STUB_LOG/headless.args")" = "$(printf '<%s>\n' --effort high)" ]
+	[[ "$output" == *"effort xhigh not accepted by claude-sonnet-4-6; using high"* ]]
+}
+
+@test "kp sends no effort to a cached model that takes none, and xhigh to one that takes it" {
+	models_cache
+	run_in_zsh kp -m claude-haiku-4-5 'hi' </dev/null
+	[ "$(sed -n 5,6p "$STUB_LOG/headless.args")" = "$(printf '<%s>\n' --effort '')" ]
+	[[ "$output" == *"effort xhigh not accepted by claude-haiku-4-5; sending no effort"* ]]
+
+	run_in_zsh kp -m claude-opus-5-5 'hi' </dev/null
+	[ "$(sed -n 5,6p "$STUB_LOG/headless.args")" = "$(printf '<%s>\n' --effort xhigh)" ]
+	[[ "$output" != *"not accepted"* ]]
+}
 
 # Expected uv argv: the fixed uv/python prefix, the script, then the given args.
 uv_argv() {
@@ -192,6 +334,7 @@ uv_argv() {
 }
 
 @test "kcma -k NAME --name passes straight through to the adhoc script" {
+	cd "$BATS_TEST_TMPDIR"
 	run_in_zsh kcma -k ANTHROPIC_PR_REVIEW_SWARM_KEY --name probe --out 'out file.md' </dev/null
 
 	[ "$status" -eq 0 ]
@@ -199,7 +342,15 @@ uv_argv() {
 	[ "$(cat "$STUB_LOG/uv.args")" = "$(uv_argv --pass work/ANTHROPIC_PR_REVIEW_SWARM_KEY --name probe --out 'out file.md')" ]
 	[ ! -e "$STUB_LOG/uv.list.args" ]
 	[[ "$output" == *"console: https://console.example/session"* ]]
+	[[ "$output" == *'"status": "ok"'* ]]
 	assert_no_leak
+}
+
+@test "kcma --name with no --out leaves the default to the script" {
+	run_in_zsh kcma --name probe </dev/null
+
+	[ "$status" -eq 0 ]
+	[ "$(cat "$STUB_LOG/uv.args")" = "$(uv_argv --pass work/ANTHROPIC_SRE_AGENT_KEY --name probe)" ]
 }
 
 @test "kcma with no agent lists agents in fzf and runs the pick with the stdin prompt" {
@@ -226,6 +377,70 @@ uv_argv() {
 	[ "$(sed -n '9,11p' "$STUB_LOG/uv.args")" = "$(printf '<%s>\n' --agent-id agent_p --keep)" ]
 	[ "$(cat "$STUB_LOG/uv.stdin")" = "Reply with exactly PICK-OK" ]
 	[[ "$output" == *PICK-OK* ]]
+}
+
+@test "kcma --keep prints the follow-up and delete commands after the answer" {
+	run_in_zsh kcma --keep claude-adhoc-probe hi </dev/null
+
+	[ "$status" -eq 0 ]
+	[[ "$output" == *PICK-OK*'session sesn_k kept; follow up: kcma --session sesn_k "..."; delete: kcma --delete sesn_k'* ]]
+}
+
+@test "kcma without --keep prints no kept-session line" {
+	run_in_zsh kcma claude-adhoc-probe hi </dev/null
+
+	[ "$status" -eq 0 ]
+	[[ "$output" != *"kept"* ]]
+}
+
+@test "kcma --session sends a follow-up turn to that session and keeps it" {
+	run_in_zsh kcma --session sesn_k Reply with exactly TURN-2 </dev/null
+
+	[ "$status" -eq 0 ]
+	[ ! -e "$STUB_LOG/uv.list.args" ]
+	[ "$(sed -n 1,8p "$STUB_LOG/uv.args")" = "$(uv_argv --pass work/ANTHROPIC_SRE_AGENT_KEY)" ]
+	[ "$(sed -n 9,11p "$STUB_LOG/uv.args")" = "$(printf '<%s>\n' --session-id sesn_k --out)" ]
+	[ "$(cat "$STUB_LOG/uv.stdin")" = "Reply with exactly TURN-2" ]
+	[[ "$output" == *PICK-OK*"delete: kcma --delete sesn_k"* ]]
+}
+
+@test "kcma --session with no id prints usage and runs nothing" {
+	run_in_zsh kcma --session </dev/null
+
+	[ "$status" -eq 1 ]
+	[ ! -e "$STUB_LOG/uv.args" ]
+	[[ "$output" == *"usage: kcma [-k NAME] --session"* ]]
+}
+
+@test "kcma --delete deletes the session through the script" {
+	run_in_zsh kcma -k CLAUDE_API_QA_KEY --delete sesn_k
+
+	[ "$status" -eq 0 ]
+	[ "$(cat "$STUB_LOG/uv.delete.args")" = "$(uv_argv --pass work/CLAUDE_API_QA_KEY --delete-session sesn_k)" ]
+	[[ "$output" == *"deleted sesn_k"* ]]
+}
+
+@test "kcma --delete failure prints the record and fails" {
+	STUB_DELETE_FAIL=1 run_in_zsh kcma --delete sesn_k
+
+	[ "$status" -eq 1 ]
+	[[ "$output" == *'"deleted": false'* ]]
+	[[ "$output" != *"deleted sesn_k"* ]]
+}
+
+@test "kcma runs end with a dim cost line at a terminal and none off it" {
+	run_tty kcma claude-adhoc-probe hi
+	[ "$status" -eq 0 ]
+	[[ "$output" == *PICK-OK*"${DIM}kcma: in 9 out 3 cache read 0 write 0, estimate \$0.0001${END}"* ]]
+
+	run_tty kcma --session sesn_k hi
+	[[ "$output" == *PICK-OK*"kept"*"${DIM}kcma: in 9 out 3"* ]]
+
+	run_tty kcma --name probe
+	[[ "$output" == *"${DIM}kcma: in 9 out 3"* ]]
+
+	run_in_zsh kcma claude-adhoc-probe hi </dev/null
+	[[ "$output" != *"kcma: in"* ]]
 }
 
 @test "kcma KCMA_PICK bypasses fzf and a first word that is no agent stays in the prompt" {
@@ -263,13 +478,21 @@ uv_argv() {
 	[ "$status" -eq 0 ]
 	local args
 	args="$(cat "$STUB_LOG/headless.args")"
-	[ "$(printf '%s\n' "$args" | sed -n 1,10p)" = "$(printf '<%s>\n' --key ANTHROPIC_SRE_AGENT_KEY --model sonnet --effort medium \
+	[ "$(printf '%s\n' "$args" | sed -n 1,10p)" = "$(printf '<%s>\n' --key ANTHROPIC_SRE_AGENT_KEY --model sonnet --effort xhigh \
 		--allowed-tools 'Read,Grep,Glob,Bash(rg:*),Bash(fd:*),Bash(ls:*),Bash(sed:*)' --cwd "$BATS_TEST_TMPDIR")" ]
 	[[ "$args" == *"<$FAKE_HOME/.local/state/claude-runs/kp-"*".prompt>"* ]]
 	[ "$(cat "$STUB_LOG/headless.prompt")" = "what does this repo do?" ]
 	[ "$(printf '%s\n' "$output" | sed -n 1,3p)" = "$(printf '%s\n' 'session 11111111-2222-3333-4444-555555555555' \
-		ANSWER-TEXT 'cost $0.0123 turns 2 4s success')" ]
+		ANSWER-TEXT 'after=unset key=unset keyname=unset')" ]
 	assert_no_leak
+}
+
+@test "kp at a terminal ends with a dim cost line" {
+	cd "$BATS_TEST_TMPDIR"
+	run_tty kp 'what does this repo do?'
+
+	[ "$status" -eq 0 ]
+	[[ "$output" == *ANSWER-TEXT*"${DIM}kp: cost \$0.0123 turns 2 4s success${END}"* ]]
 }
 
 @test "kp takes -k -m -e -t and a prompt on stdin" {
