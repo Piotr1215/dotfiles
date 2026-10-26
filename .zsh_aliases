@@ -199,6 +199,9 @@ alias ragdash="~/.claude/scripts/__inject_dashboard_open.sh"
 # claude code status: live cockpit board (Gordon's hand-authored read), viddy 30s refresh + diff-highlight
 alias ccstatus="~/.claude/scripts/__cockpit_board.sh"
 
+# Gordon handoffs waiting on me: walk each pending +piotr task with its ref, title and detail
+alias handoffs="~/.claude/scripts/__focus.py walk"
+
 # desktop notification history (durable log kept by notification-logger.service)
 # not = full log, noti = recent, notif = follow live. GNOME popups vanish on click; this is the copyable record.
 alias not='cat ~/.local/state/notifications.log'
