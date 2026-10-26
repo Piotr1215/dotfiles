@@ -519,3 +519,29 @@ vim.api.nvim_create_autocmd("BufWritePre", {
   end,
   desc = "Collapse blank lines after presenterm end_slide markers",
 })
+
+-- Gordon handoffs file: a save sends what Piotr typed under each item to Gordon
+-- (notes it on the task, DMs triage). The script does the work; this only
+-- fires it for exactly this path and reports the outcome.
+local handoffsGroup = api.nvim_create_augroup("GordonHandoffs", { clear = true })
+local handoffs_path = vim.fn.expand "~/.local/state/gordon/handoffs.md"
+vim.api.nvim_create_autocmd("BufWritePost", {
+  group = handoffsGroup,
+  pattern = handoffs_path,
+  callback = function()
+    local script = vim.fn.expand "~/.claude/scripts/__handoffs_file.py"
+    vim.system({ script, "save" }, { text = true }, function(res)
+      vim.schedule(function()
+        if res.code == 0 then
+          local sent = vim.trim(res.stdout or "")
+          if sent ~= "" then
+            vim.notify("sent to Gordon: " .. sent, vim.log.levels.INFO)
+          end
+        else
+          vim.notify("handoffs save failed: " .. vim.trim(res.stderr or ""), vim.log.levels.ERROR)
+        end
+      end)
+    end)
+  end,
+  desc = "Deliver handoff replies to Gordon on save",
+})
