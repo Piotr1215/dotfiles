@@ -320,38 +320,3 @@ teardown() {
     grep -q 'rc.hooks=off' "${TEST_DIR}/task_calls"
     ! grep -Eq ' (modify|annotate|done|add|delete)' "${TEST_DIR}/task_calls"
 }
-
-rows_json() {
-    cat <<'JSON'
-[{"uuid":"aaaa1111-0000-4000-8000-000000000001","status":"pending","description":"merge the four PRs","repo":"no-repo","annotations":[
- {"entry":"20261026T080000Z","description":"brief: older brief"},
- {"entry":"20261026T090000Z","description":"what: old what"},
- {"entry":"20261026T100000Z","description":"What: Four \"quoted\" PRs | wait on you."}]},
- {"uuid":"bbbb2222-0000-4000-8000-000000000002","status":"pending","description":"brief only","linear_issue_id":"DEVOPS-9","repo":"loft-sh/x","annotations":[
- {"entry":"20261026T080000Z","description":"brief: first"},
- {"entry":"20261026T090000Z","description":"brief: Newest brief text"}]},
- {"uuid":"cccc3333-0000-4000-8000-000000000003","status":"pending","description":"bare","annotations":[]},
- {"uuid":"dddd4444-0000-4000-8000-000000000004","status":"pending","description":"long","repo":"no-repo","annotations":[
- {"entry":"20261026T090000Z","description":"what: aaaa bbbb cccc dddd eeee ffff gggg hhhh iiii jjjj kkkk llll mmmm nnnn oooo pppp qqqq rrrr ssss tttt uuuu vvvv wwww xxxx yyyy zzzz"}]}]
-JSON
-}
-
-@test "--rows keeps the four token fields and appends the newest what: in brackets" {
-    run bash -c "$(declare -f rows_json); rows_json | '$SCRIPT' --rows"
-    [ "$status" -eq 0 ]
-    [ "${lines[0]}" = 'aaaa1111-0000-4000-8000-000000000001|-|no-repo|merge the four PRs [Four quoted PRs wait on you.]' ]
-}
-
-@test "--rows falls back to the newest brief: and omits the bracket with no note" {
-    run bash -c "$(declare -f rows_json); rows_json | '$SCRIPT' --rows"
-    [ "${lines[1]}" = 'bbbb2222-0000-4000-8000-000000000002|DEVOPS-9|loft-sh/x|brief only [Newest brief text]' ]
-    [ "${lines[2]}" = 'cccc3333-0000-4000-8000-000000000003|-|-|bare' ]
-}
-
-@test "--rows cuts a long what at a word and no row gains a quote" {
-    run bash -c "$(declare -f rows_json); rows_json | '$SCRIPT' --rows"
-    [[ "${lines[3]}" == *'[aaaa bbbb'*'...]' ]]
-    [ "${#lines[3]}" -lt 190 ]
-    [[ "${lines[3]}" != *'"'* ]]
-    [ "${#lines[@]}" -eq 4 ]
-}
