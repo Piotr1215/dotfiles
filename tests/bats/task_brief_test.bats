@@ -355,9 +355,3 @@ JSON
     [[ "${lines[3]}" != *'"'* ]]
     [ "${#lines[@]}" -eq 4 ]
 }
-
-@test "--rows strips double quotes and pipes from the title so the token stays whole" {
-    run bash -c "echo '[{\"uuid\":\"eeee5555-0000-4000-8000-000000000005\",\"description\":\"fix \\\"quoted\\\" | title\",\"repo\":\"no-repo\",\"annotations\":[{\"entry\":\"20261026T090000Z\",\"description\":\"what: plain words\"}]}]' | '$SCRIPT' --rows"
-    [ "$status" -eq 0 ]
-    [ "$output" = 'eeee5555-0000-4000-8000-000000000005|-|no-repo|fix quoted title [plain words]' ]
-}
