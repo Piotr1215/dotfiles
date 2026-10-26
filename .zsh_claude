@@ -250,14 +250,110 @@ function kapi() {
   command python3 "$HOME/.claude/scripts/__claude_api_run.py" --pass "work/$name" "$@"
 }
 
-# Ad hoc managed agent turn in the SRE workspace, prints its console URL: kcma [-k NAME] --name SLUG --out FILE [args...]
+# Managed agents in the SRE workspace (__cma_adhoc.py, run with the anthropic SDK via uv).
+#   kcma [-k NAME] --name SLUG --out FILE [args...]   ad hoc claude-adhoc-SLUG turn
+#   kcma [-k NAME] [--keep] [AGENT] [prompt...]       run an existing agent
+# Without --name, AGENT (tab-completed from the cache --list writes) picks the agent, else
+# fzf lists every agent with model and description; KCMA_PICK=AGENT skips fzf. The prompt
+# is the remaining args, else stdin, else $EDITOR. The Console link prints when the session
+# starts and the answer at the end. The session is deleted unless --keep.
 function kcma() {
   local name=ANTHROPIC_SRE_AGENT_KEY
   if [[ "$1" == "-k" ]]; then
-    [[ -n "$2" ]] || { echo "usage: kcma [-k NAME] --name SLUG --out FILE [args...]" >&2; return 1; }
+    [[ -n "$2" ]] || { echo "usage: kcma [-k NAME] [--keep] [AGENT] [prompt...]" >&2; return 1; }
     name="$2"; shift 2
   fi
-  command python3 "$HOME/.claude/scripts/__cma_adhoc.py" --pass "work/$name" "$@"
+  local -a py=(uv run --quiet --with anthropic python3 "$HOME/.claude/scripts/__cma_adhoc.py" --pass "work/$name")
+  if (( ${@[(Ie)--name]} || ${@[(Ie)--list]} || ${@[(Ie)--agent-id]} || ${@[(Ie)--help]} )); then
+    "${py[@]}" "$@"
+    return
+  fi
+  local -a keep
+  [[ "$1" == "--keep" ]] && { keep=(--keep); shift; }
+  local rows pick prompt tmp record dir="$HOME/.local/state/claude-runs"
+  rows=$("${py[@]}" --list </dev/null) || { echo "kcma: listing agents failed: $rows" >&2; return 1; }
+  local want="${KCMA_PICK:-}"
+  [[ -z "$want" && -n "$1" ]] && print -r -- "$rows" | jq -e --arg n "$1" 'select(.name == $n)' >/dev/null && { want="$1"; shift; }
+  if [[ -n "$want" ]]; then
+    pick=$(print -r -- "$rows" | jq -r --arg n "$want" 'select(.name == $n) | .id' | head -1)
+    [[ -n "$pick" ]] || { echo "kcma: no agent named $want" >&2; return 1; }
+  else
+    command -v fzf >/dev/null || { echo "kcma: fzf is not installed" >&2; return 1; }
+    pick=$(print -r -- "$rows" \
+      | jq -r '[.id, .name, (.model // "?"), (.description // "")] | @tsv' \
+      | fzf --reverse --border --delimiter=$'\t' --with-nth=2.. --prompt='kcma / ')
+    pick="${pick%%$'\t'*}"
+    [[ -n "$pick" ]] || return 1
+  fi
+  prompt="$*"
+  if [[ -z "$prompt" && ! -t 0 ]]; then
+    prompt=$(command cat)
+  elif [[ -z "$prompt" ]]; then
+    tmp=$(mktemp "${TMPDIR:-/tmp}/kcma.XXXXXX.md")
+    ${=EDITOR:-vi} "$tmp"
+    prompt=$(<"$tmp"); command rm -f "$tmp"
+  fi
+  [[ -n "${prompt//[[:space:]]/}" ]] || { echo "kcma: empty prompt" >&2; return 1; }
+  mkdir -p "$dir"
+  local out="$dir/kcma-$(date +%Y%m%d-%H%M%S)-$$.md"
+  record=$("${py[@]}" --agent-id "$pick" "${keep[@]}" --out "$out" <<<"$prompt")
+  if [[ -s "$out" ]]; then
+    command cat "$out"
+  else
+    print -r -- "$record" >&2
+  fi
+  [[ "$(print -r -- "$record" | jq -r .status 2>/dev/null)" == ok ]]
+}
+
+# Cached agent names for `kcma <TAB>`, one name:description per line; never calls the API.
+function _kcma_agent_names() {
+  local cache="$HOME/.local/state/claude-runs/cma_agents.txt"
+  [[ -r "$cache" ]] && print -rl -- "${(@f)$(<"$cache")}"
+}
+
+function _kcma() {
+  local -a agents
+  agents=("${(@f)$(_kcma_agent_names)}")
+  if (( CURRENT == 2 )) || { (( CURRENT == 3 )) && [[ "${words[2]}" == --keep ]]; }; then
+    (( ${#agents} )) && [[ -n "${agents[1]}" ]] && _describe 'managed agent' agents
+  fi
+}
+(( $+functions[compdef] )) && compdef _kcma kcma
+
+# Headless one-shot Claude Code in the current dir on a work key, read-only tools by default:
+#   kp [-k NAME] [-m MODEL] [-e EFFORT] [-t TOOLS] "prompt"   (prompt on stdin otherwise)
+# Prints the session line first, then the answer, then one cost line. The prompt, result
+# JSON and stderr land in ~/.local/state/claude-runs/kp-*.
+function kp() {
+  local usage='usage: kp [-k NAME] [-m MODEL] [-e EFFORT] [-t TOOLS] "prompt"'
+  local key=ANTHROPIC_SRE_AGENT_KEY model=sonnet effort=medium
+  local tools='Read,Grep,Glob,Bash(rg:*),Bash(fd:*),Bash(ls:*),Bash(sed:*)'
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -k|-m|-e|-t)
+        [[ -n "$2" ]] || { echo "$usage" >&2; return 1; }
+        case "$1" in -k) key="$2" ;; -m) model="$2" ;; -e) effort="$2" ;; -t) tools="$2" ;; esac
+        shift 2 ;;
+      --) shift; break ;;
+      -*) echo "$usage" >&2; return 1 ;;
+      *) break ;;
+    esac
+  done
+  local prompt="$*"
+  [[ -z "$prompt" && ! -t 0 ]] && prompt=$(command cat)
+  [[ -n "${prompt//[[:space:]]/}" ]] || { echo "$usage" >&2; return 1; }
+  local dir="$HOME/.local/state/claude-runs"
+  local base="$dir/kp-$(date +%Y%m%d-%H%M%S)-$$" line summary
+  mkdir -p "$dir"
+  print -r -- "$prompt" >"$base.prompt"
+  "$HOME/.claude/scripts/__claude_headless_run.sh" --key "$key" --model "$model" --effort "$effort" \
+    --allowed-tools "$tools" --cwd "$PWD" --prompt-file "$base.prompt" --out "$base.json" \
+    | { IFS= read -r line && print -r -- "$line"; summary=$(command cat) }
+  local rc=${pipestatus[1]}
+  jq -r '.result // empty' "$base.json" 2>/dev/null
+  print -r -- "$summary" | jq -r '"cost $\(.total_cost_usd // "?") turns \(.num_turns // "?") \(((.duration_ms // 0) / 1000) | floor)s \(.subtype // "error")"' 2>/dev/null \
+    || print -r -- "$summary"
+  return $rc
 }
 
 # Run interactive Codex sessions through its managed Unix-socket app-server.
