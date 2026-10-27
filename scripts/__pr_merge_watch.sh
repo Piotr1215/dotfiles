@@ -45,6 +45,20 @@ usage() {
 
 valid_repo() { [[ "$1" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; }
 
+# Print the next floating pane position after the floats already in this window.
+# Keep a two-cell card offset while the 90% wide watcher remains on screen.
+floating_pane_offset() {
+	local pane=$1 floating_panes
+	if [[ -n "$pane" ]]; then
+		floating_panes=$(tmux list-panes -t "$pane" -F '#{pane_floating_flag}' \
+			| awk '$0 == "1" { count++ } END { print count + 0 }')
+	else
+		floating_panes=$(tmux list-panes -F '#{pane_floating_flag}' \
+			| awk '$0 == "1" { count++ } END { print count + 0 }')
+	fi
+	printf '%s%% %s\n' "$((2 + 2 * floating_panes))" "$((2 + 2 * floating_panes))"
+}
+
 # Block until q, or until stdin closes.
 wait_for_q() {
 	local key
@@ -109,6 +123,11 @@ if [[ "${1:-}" == "--follow" ]]; then
 	if ! valid_repo "${2:-}" || [[ ! "${3:-}" =~ ^[0-9]+$ || ! "${4:-}" =~ ^[0-9a-f]{40}$ ]]; then
 		usage
 	fi
+	# A window may override the global remain-on-exit setting. Ensure this
+	# watch closes when its command exits, regardless of that setting.
+	if [[ -n "${TMUX:-}" && -n "${TMUX_PANE:-}" ]]; then
+		tmux set-option -p -t "$TMUX_PANE" remain-on-exit off
+	fi
 	follow "$2" "$3" "$4"
 	exit
 fi
@@ -130,6 +149,7 @@ if [[ -z "${TMUX:-}" ]]; then
 	checks "$repo" "$sha" | jq -r "$ROWS_JQ" | column -t -s $'\t'
 	exit 0
 fi
-tmux new-pane -d -x 90% -y 30% -X 5% -Y 2 ${TMUX_PANE:+-t "$TMUX_PANE"} \
+read -r offset_x offset_y <<<"$(floating_pane_offset "$TMUX_PANE")"
+tmux new-pane -d -x 90% -y 30% -X "$offset_x" -Y "$offset_y" ${TMUX_PANE:+-t "$TMUX_PANE"} \
 	"$SELF --follow $repo $pr $sha"
 echo "Watching checks for $repo#$pr (${sha:0:7}) in a floating pane; it closes when they pass."

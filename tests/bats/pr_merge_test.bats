@@ -22,6 +22,7 @@ setup() {
 	cat >"$STUB_BIN/tmux" <<'EOF'
 #!/usr/bin/env bash
 echo "tmux $*" >> "$SPY/all.log"
+[[ "$1" == "list-panes" && -f "$FIX/floating_panes" ]] && cat "$FIX/floating_panes"
 [[ "$1" == "list-clients" ]] && cat "$FIX/clients"
 [[ "$1" == "show-options" ]] && cat "$FIX/pane_export" 2>/dev/null
 [[ "$1" == "capture-pane" ]] && cat "$FIX/screen" 2>/dev/null
@@ -346,11 +347,13 @@ EOF
 	! grep -q '^tmux' "$SPY/all.log"
 }
 
-@test "watch floats a viddy pane over the merge commit's runs" {
+@test "watch offsets its floating pane from existing floats" {
 	printf '{"mergeCommit":{"oid":"%s"}}\n' "$SHA" >"$FIX/pr_view.json"
+	printf '1\n1\n1\n' >"$FIX/floating_panes"
 	TMUX=/tmp/x TMUX_PANE=%9 run "$WATCH" loft-sh/ai-agents 156
 	[ "$status" -eq 0 ]
-	grep -qxF "tmux new-pane -d -x 90% -y 30% -X 5% -Y 2 -t %9 $WATCH --follow loft-sh/ai-agents 156 $SHA" "$SPY/all.log"
+	grep -qxF 'tmux list-panes -t %9 -F #{pane_floating_flag}' "$SPY/all.log"
+	grep -qxF "tmux new-pane -d -x 90% -y 30% -X 8% -Y 8 -t %9 $WATCH --follow loft-sh/ai-agents 156 $SHA" "$SPY/all.log"
 }
 
 check_json() { printf '{"status":"%s","conclusion":"%s","name":"%s","output":{"title":"%s"}}' "$@"; }
@@ -380,6 +383,14 @@ follow() {
 	[ "$status" -eq 0 ]
 	[[ "$output" == *"All checks passed, closing."* ]]
 	[ "$(cat "$FIX/polls")" = 3 ]
+}
+
+@test "follow overrides remain-on-exit for its own pane" {
+	checks "$(check_json completed success test "")" >"$FIX/checks.1.json"
+	TMUX=/tmp/x TMUX_PANE=%17 follow
+	[ "$status" -eq 0 ]
+	grep -qxF 'tmux set-option -p -t %17 remain-on-exit off' "$SPY/all.log"
+	[ "$(cat "$FIX/polls")" = 2 ]
 }
 
 @test "follow waits for a check that starts after the others passed" {
