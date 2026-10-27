@@ -65,7 +65,9 @@ windows:
         # The model is the `gordon` role in ~/.claude/models.env, read at launch.
         # The first prompt also loads model-router, which governs every
         # delegation; without it Gordon spawned general-purpose by default.
-        - PR_WATCH_SCOPE=all __claude_with_monitor.sh --system-prompt-file ~/.claude/system-prompts/triage-agent-system-prompt.md --model "$(~/.claude/scripts/__models.sh get gordon)" -- "/gordon:gordon Then invoke the model-router skill with the Skill tool before any other work."
+        # PR_WATCH_SCOPE=ai: pr-watch polls the PRs the transcript mentions and
+        # Gordon picks the band rows, so Piotr sees the PRs agents work on.
+        - PR_WATCH_SCOPE=ai __claude_with_monitor.sh --system-prompt-file ~/.claude/system-prompts/triage-agent-system-prompt.md --model "$(~/.claude/scripts/__models.sh get gordon)" -- "/gordon:gordon Then invoke the model-router skill with the Skill tool before any other work."
   # Kendra takes Gordon's routine event stream (popups, auto-triage nudges,
   # task-closed notices, PR movement) and registers on the bus as intake, which
   # also names the pane. While this window is down everything reaches Gordon as
