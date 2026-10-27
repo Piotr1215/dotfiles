@@ -1,5 +1,6 @@
 .envrc
-.claude/
+.claude/*
+!.claude/skills/
 .claude-wt
 tmp/
 
