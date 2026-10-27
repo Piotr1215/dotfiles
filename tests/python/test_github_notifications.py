@@ -19,6 +19,11 @@ LIST = "/notifications?all=true&per_page=50"
 PR = "/repos/example/project/pulls/123"
 
 
+# No test may append to the live feed-errors.jsonl.
+_FEED_ERRORS_DIR = tempfile.TemporaryDirectory()
+os.environ["FEED_ERRORS_LOG"] = str(Path(_FEED_ERRORS_DIR.name) / "feed-errors.jsonl")
+
+
 def load_module():
     spec = importlib.util.spec_from_file_location("github_notifications", SCRIPT)
     module = importlib.util.module_from_spec(spec)
@@ -699,6 +704,67 @@ class CronIntegrationTest(unittest.TestCase):
         self.assertEqual(fields[0], "7,22,37,52 8-19 * * 1-5")
         self.assertEqual(fields[1], "__github_notifications")
         self.assertEqual(fields[3], "Mark closed PR notifications Done.")
+
+
+class FeedErrorsTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.module = load_module()
+
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.dir.cleanup)
+        self.log = Path(self.dir.name) / "feed-errors.jsonl"
+        patcher = mock.patch.dict(os.environ, {"FEED_ERRORS_LOG": str(self.log)})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def call(self, result=None, side_effect=None, endpoint="/notifications?all=true&per_page=50"):
+        with mock.patch.object(self.module.subprocess, "run", return_value=result, side_effect=side_effect):
+            with self.assertRaises(self.module.APIError):
+                self.module.github_api("GET", endpoint)
+
+    def lines(self):
+        if not self.log.exists():
+            return []
+        return [json.loads(x) for x in self.log.read_text().splitlines()]
+
+    def test_429_is_a_throttle(self):
+        self.call(mock.Mock(returncode=1, stdout="", stderr="gh: Too Many Requests (HTTP 429)"))
+        [line] = self.lines()
+        self.assertEqual((line["source"], line["kind"]), ("github", "throttle"))
+        self.assertEqual(line["detail"], "GET /notifications HTTP 429")
+
+    def test_403_rate_limit_is_a_throttle(self):
+        self.call(mock.Mock(returncode=1, stdout="", stderr="gh: API rate limit exceeded for user (HTTP 403)"))
+        self.assertEqual([x["kind"] for x in self.lines()], ["throttle"])
+
+    def test_server_error_and_auth_failure_are_errors(self):
+        self.call(mock.Mock(returncode=1, stdout="", stderr="gh: Bad Gateway (HTTP 502)"))
+        self.call(mock.Mock(returncode=1, stdout="", stderr="gh: Bad credentials (HTTP 401)"))
+        self.assertEqual([(x["kind"], x["detail"]) for x in self.lines()],
+                         [("error", "GET /notifications HTTP 502"), ("error", "GET /notifications HTTP 401")])
+
+    def test_unreachable_gh_and_invalid_json_are_errors(self):
+        self.call(side_effect=subprocess.TimeoutExpired("gh", 120))
+        self.call(mock.Mock(returncode=0, stdout="<html>", stderr=""))
+        self.assertEqual([x["detail"] for x in self.lines()],
+                         ["GET /notifications: TimeoutExpired", "GET /notifications: invalid JSON"])
+
+    def test_not_found_is_an_answer_not_a_failure(self):
+        self.call(mock.Mock(returncode=1, stdout="", stderr="gh: Not Found (HTTP 404)"), endpoint="/notifications/threads/1")
+        self.assertEqual(self.lines(), [])
+
+    def test_full_log_moves_to_dot_one(self):
+        self.log.write_text("x" * (self.module.FEED_ERRORS_MAX + 1))
+        self.call(mock.Mock(returncode=1, stdout="", stderr="gh: Bad Gateway (HTTP 502)"))
+        self.assertEqual(len(self.log.with_name("feed-errors.jsonl.1").read_text()), self.module.FEED_ERRORS_MAX + 1)
+        self.assertEqual([x["kind"] for x in self.lines()], ["error"])
+
+    def test_unwritable_log_never_fails_the_call(self):
+        os.environ["FEED_ERRORS_LOG"] = str(Path(self.dir.name) / "missing-file-as-dir" / "x")
+        (Path(self.dir.name) / "missing-file-as-dir").write_text("")
+        self.call(mock.Mock(returncode=1, stdout="", stderr="gh: Bad Gateway (HTTP 502)"))
 
 
 if __name__ == "__main__":

@@ -55,22 +55,53 @@ class APIError(Exception):
         self.status = status
 
 
+FEED_ERRORS_MAX = 1 << 20
+
+
+def record_feed_error(kind, detail):
+    """Append one failed call to feed-errors.jsonl, which the intake table counts
+    as 429s and ERRORS for the github row. Past FEED_ERRORS_MAX the file moves to
+    .1 first. Never raises: a failure to record must not fail the run."""
+    path = Path(os.environ.get("FEED_ERRORS_LOG", Path.home() / ".local/state/feed-errors.jsonl"))
+    line = json.dumps({"at": datetime.now().astimezone().isoformat(timespec="seconds"),
+                       "source": "github", "kind": kind, "detail": detail[:200]}) + "\n"
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if path.exists() and path.stat().st_size > FEED_ERRORS_MAX:
+            os.replace(path, path.with_name(path.name + ".1"))
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+        try:
+            os.write(fd, line.encode())
+        finally:
+            os.close(fd)
+    except OSError:
+        pass
+
+
 def github_api(method, endpoint, paginate=False):
     """Call gh without a shell or printing credentials or response bodies."""
     command = ["gh", "api", "--hostname", "github.com", "--method", method, endpoint]
     if paginate:
         command += ["--paginate", "--slurp"]
+    where = f"{method} {endpoint.split('?')[0]}"
     try:
         result = subprocess.run(command, capture_output=True, text=True, timeout=120)
     except (OSError, subprocess.TimeoutExpired) as exc:
+        record_feed_error("error", f"{where}: {exc.__class__.__name__}")
         raise APIError("gh could not complete the request; check gh and connectivity") from exc
     if result.returncode:
         match = re.search(r"HTTP ([0-9]{3})", result.stderr)
         status = int(match.group(1)) if match else None
+        # A 404 is a deleted thread or PR, an answer the run handles, not a failure.
+        if status == 429 or (status == 403 and "rate limit" in result.stderr.lower()):
+            record_feed_error("throttle", f"{where} HTTP {status}")
+        elif status != 404:
+            record_feed_error("error", f"{where} HTTP {status}" if status else f"{where}: gh exit {result.returncode}")
         raise APIError("GitHub request failed; check gh authentication and API access", status)
     try:
         return json.loads(result.stdout) if result.stdout.strip() else None
     except json.JSONDecodeError as exc:
+        record_feed_error("error", f"{where}: invalid JSON")
         raise APIError("GitHub returned invalid JSON; retry the run") from exc
 
 
