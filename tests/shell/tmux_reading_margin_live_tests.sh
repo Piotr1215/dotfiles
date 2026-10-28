@@ -5,7 +5,6 @@ repo=${DOTFILES_REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}
 actual_cockpit="$HOME/.claude/scripts/__cockpit_state.sh"
 real_claude_scripts="$HOME/.claude/scripts"
 tmux_bin=$(command -v tmux)
-viddy_bin=$(command -v viddy)
 export TMUX_BIN="$tmux_bin"
 root=$(mktemp -d /tmp/mm-margin-test.XXXXXX)
 socket="margin-regression-$$-$RANDOM"
@@ -68,19 +67,25 @@ fixture() {
 }
 : > "$COCKPIT_PROC_DIR/agents"
 fixture "$pane" 900001 alpha
+tmux set-option -p -t "$pane" @claude_state working
+tmux set-option -p -t "$pane" @agent_model 'codex · snapshot-model'
+tmux set-option -p -t "$pane" @agent_prs 'loft-sh/repo#123'
 tmux resize-window -t margin -x 23
 out=$(render); assert_has "$out" 'alpha'; assert_not "$out" 'Loading cockpit'; printf 'ok 5 - narrow roster\n'
 tmux resize-window -t margin -x 100
 second=$(tmux split-window -h -P -F '#{pane_id}' -t "$pane" 'sleep 300')
 fixture "$second" 900002 beta
 out=$(render); assert_has "$out" 'alpha'; assert_has "$out" 'beta'; printf 'ok 6 - added pane\n'
+assert_has "$out" 'working'
+assert_has "$out" 'snapshot-model'
+assert_has "$out" 'repo#123'
 tmux kill-pane -t "$second"
 out=$(render); assert_has "$out" 'alpha'; assert_not "$out" 'beta'; printf 'ok 7 - removed pane\n'
-# Start the real viddy entrypoint in its own window, with a short board that
-# remains visible at 23 columns. The runner sets all test paths explicitly.
+# Start the real refresh loop, retaining a logical line to test narrow and wide
+# redraws. The runner sets all test paths explicitly.
 cat > "$root/short-cockpit" <<'SHORT'
 #!/usr/bin/env bash
-printf 'board %s %s\n' "$COCKPIT_VERTICAL_WIDTH" "$(cat "$HOME/roster")"
+printf 'LATEST:  alpha beta gamma delta epsilon\n'
 SHORT
 chmod +x "$root/short-cockpit"
 cat > "$root/runner" <<RUNNER
@@ -88,7 +93,6 @@ cat > "$root/runner" <<RUNNER
 export HOME='$HOME' XDG_CACHE_HOME='$XDG_CACHE_HOME' XDG_RUNTIME_DIR='$XDG_RUNTIME_DIR' TASKRC='$TASKRC'
 export PATH='$PATH' TEST_SOCKET='$TEST_SOCKET' TMUX_BIN='$TMUX_BIN'
 export TMUX_READING_MARGIN_FOCUS_COMMAND='$root/focus' TMUX_READING_MARGIN_COCKPIT_STATE_COMMAND='$root/short-cockpit'
-export TMUX_READING_MARGIN_VIDDY_COMMAND='$viddy_bin'
 exec '$repo/scripts/__tmux_reading_margin_work.sh' margin
 RUNNER
 chmod +x "$root/runner"
@@ -109,8 +113,10 @@ wait_frame() {
   printf 'frame never contained %q: %s\n' "$expected" "$frame" >&2
   return 1
 }
-wait_frame 'board 60 beta'
+wait_frame 'LATEST:  alpha beta gamma delta epsilon'
 tmux resize-window -t margin:viddy -x 23
-wait_frame 'board 23 beta'
-printf 'ok 8 - viddy redraws after resize\n'
+wait_frame 'LATEST:  alpha beta'
+tmux resize-window -t margin:viddy -x 60
+wait_frame 'LATEST:  alpha beta gamma delta epsilon'
+printf 'ok 8 - refresh loop reflows after resize\n'
 printf '8 margin regression checks passed\n'
