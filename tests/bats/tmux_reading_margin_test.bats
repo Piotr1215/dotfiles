@@ -489,11 +489,10 @@ EOF
   [ "$(tmux -L "$SOCKET_NAME" list-panes -t ambient_track_1a2b -F '#{pane_id}' | wc -l)" -eq 1 ]
 }
 
-@test "a window in the skip list never gets a margin" {
+@test "a skipped window permits a manual margin and keeps its resize hooks" {
   tmux -L "$SOCKET_NAME" rename-window -t test todo
   tmux -L "$SOCKET_NAME" set-option -g @reading_margin_skip_windows 'other:main test:todo'
 
-  toggle_margin
   tmux -L "$SOCKET_NAME" run-shell "$SCRIPT --ensure-session test"
   sync_margin
   [ "$(tmux -L "$SOCKET_NAME" list-panes -F '#{pane_id}' | wc -l)" -eq 1 ]
@@ -502,10 +501,30 @@ EOF
   tmux -L "$SOCKET_NAME" run-shell "$SCRIPT --status '$PANE_ID' > '$STATUS_LOG'"
   [[ "$(<"$STATUS_LOG")" == *"skipped"*"(test:todo)"* ]]
 
-  tmux -L "$SOCKET_NAME" split-window -d
+  toggle_margin
+  margin_id="$(tmux -L "$SOCKET_NAME" show-options -wqv @reading_margin_pane)"
+  [ -n "$margin_id" ]
+  sync_margin
+  [ "$(tmux -L "$SOCKET_NAME" show-options -wqv @reading_margin_pane)" = "$margin_id" ]
   tmux -L "$SOCKET_NAME" run-shell "$SCRIPT --toggle-zoom '$PANE_ID'"
   [ "$(tmux -L "$SOCKET_NAME" display-message -p '#{window_zoomed_flag}')" -eq 1 ]
   [ "$(tmux -L "$SOCKET_NAME" list-panes -F '#{pane_id}' | wc -l)" -eq 2 ]
+}
+
+@test "legacy viewer upgrades once without replacing the content pane" {
+  tmux -L "$SOCKET_NAME" set-environment -gu TMUX_READING_MARGIN_WORK_COMMAND
+  legacy_work="$(realpath "$WORK_SCRIPT")"
+  tmux -L "$SOCKET_NAME" split-window -bd -h -t "$PANE_ID" -P -F '#{pane_id}' \
+    "exec viddy --interval 5 --no-title $legacy_work --render test @0" > "$BATS_TEST_TMPDIR/legacy-id"
+  old_margin="$(cat "$BATS_TEST_TMPDIR/legacy-id")"
+  tmux -L "$SOCKET_NAME" set-option -w @reading_margin_pane "$old_margin"
+  tmux -L "$SOCKET_NAME" run-shell "$SCRIPT --upgrade-legacy '$PANE_ID'"
+  new_margin="$(tmux -L "$SOCKET_NAME" show-options -wqv @reading_margin_pane)"
+  [ -n "$new_margin" ]
+  [ "$new_margin" != "$old_margin" ]
+  [ "$(tmux -L "$SOCKET_NAME" display-message -p -t "$PANE_ID" '#{pane_id}')" = "$PANE_ID" ]
+  tmux -L "$SOCKET_NAME" run-shell "$SCRIPT --upgrade-legacy '$PANE_ID'"
+  [ "$(tmux -L "$SOCKET_NAME" show-options -wqv @reading_margin_pane)" = "$new_margin" ]
 }
 
 @test "status reports the default and current window state" {

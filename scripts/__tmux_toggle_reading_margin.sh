@@ -8,7 +8,13 @@ status=false
 sync=false
 sync_client=""
 manual_zoom=false
+upgrade_legacy=false
 case "${1:-}" in
+--upgrade-legacy)
+  target_pane="${2:-}"
+  [[ -n "$target_pane" ]] || { printf 'usage: %s --upgrade-legacy content-pane\n' "${0##*/}" >&2; exit 2; }
+  upgrade_legacy=true
+  ;;
 --ensure-session)
   session_name="${2:-}"
   if [[ -z "$session_name" ]]; then
@@ -96,21 +102,20 @@ fi
 if $repair || $sync || $ensure; then
   trap 'rc=$?; ((rc)) && [[ -z "$(tmux display-message -p -t "$window_id" "#{window_id}" 2>/dev/null)" ]] && exit 0' EXIT
 fi
-# A window named in @reading_margin_skip_windows ("session:window" pairs,
-# space separated) never gets a margin from the toggle, the default knob or the
-# resize hooks. Its layout carries the margin content in a fixed pane of its
-# own, and a margin or an automatic zoom would squeeze that layout. Manual zoom
-# still works there, as a plain tmux zoom.
+# Skipped windows have a fixed margin at startup. Do not add another one
+# automatically, but allow a manual toggle to replace a fixed pane that was
+# closed. Once created, the managed margin must receive resize hooks as usual.
 window_key="$(tmux display-message -p -t "$window_id" '#{session_name}:#{window_name}' 2>/dev/null || true)"
 if [[ -n "$window_key" && " $(tmux show-options -gqv @reading_margin_skip_windows) " == *" $window_key "* ]]; then
-  if $manual_zoom; then
-    tmux resize-pane -Z -t "$target_pane"
-  elif $status; then
-    printf 'reading-margin skipped window=%s (%s)\n' "$window_id" "$window_key"
-  elif ! $ensure && ! $repair && ! $sync; then
-    tmux display-message "Reading margin is off in $window_key"
+  tracked_margin="$(tmux show-options -wqv -t "$window_id" @reading_margin_pane)"
+  if [[ -z "$tracked_margin" ]] && { $ensure || $repair || $sync || $status || $manual_zoom; }; then
+    if $manual_zoom; then
+      tmux resize-pane -Z -t "$target_pane"
+    elif $status; then
+      printf 'reading-margin skipped window=%s (%s)\n' "$window_id" "$window_key"
+    fi
+    exit 0
   fi
-  exit 0
 fi
 # Resize, layout, and selection hooks may overlap. Keep each window's zoom and
 # ownership marker as one serialized state transition.
@@ -122,6 +127,19 @@ margin_exists=false
 if [[ -n "$margin_pane" ]] &&
   [[ "$(tmux display-message -p -t "$margin_pane" '#{window_id}' 2>/dev/null || true)" == "$window_id" ]]; then
   margin_exists=true
+fi
+
+if $upgrade_legacy; then
+  $margin_exists || exit 0
+  [[ "$target_pane" != "$margin_pane" ]] || exit 0
+  viewer_pid="$(tmux display-message -p -t "$margin_pane" '#{pane_pid}')"
+  [[ "$viewer_pid" =~ ^[0-9]+$ && -r "/proc/$viewer_pid/cmdline" ]] || exit 0
+  mapfile -d '' -t viewer_args < "/proc/$viewer_pid/cmdline"
+  viewer_name="${viewer_args[0]:-}"
+  [[ "${viewer_name##*/}" == viddy && "${viewer_args[1]:-}" == --interval &&
+     "${viewer_args[2]:-}" == 5 && "${viewer_args[3]:-}" == --no-title &&
+     "${viewer_args[4]:-}" == "$HOME/dev/dotfiles/scripts/__tmux_reading_margin_work.sh" &&
+     "${viewer_args[5]:-}" == --render ]] || exit 0
 fi
 
 set_visible() {
@@ -336,7 +354,7 @@ if $margin_exists; then
   set_visible off
   tmux kill-pane -t "$margin_pane"
   tmux set-option -wu -t "$window_id" @reading_margin_pane
-  exit 0
+  if ! $upgrade_legacy; then exit 0; fi
 fi
 
 tmux set-option -wu -t "$window_id" @reading_margin_pane 2>/dev/null || true

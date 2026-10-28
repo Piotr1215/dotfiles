@@ -8,8 +8,8 @@ if [[ "${1:-}" != "--render" && "${1:-}" != "--cached-render" ]]; then
   window="${2:-$(tmux display-message -p '#{window_id}')}"
   viddy="${TMUX_READING_MARGIN_VIDDY_COMMAND:-viddy}"
   # Viddy redraws its old snapshot on SIGWINCH but only re-runs the command at
-  # its interval. Check twice a second so a new pane width reaches the renderer.
-  exec "$viddy" --interval 0.5 --no-title \
+  # its interval. Reflow the cached board at viddy's shortest interval.
+  exec "$viddy" --interval 0.1 --no-title \
     "$0" --cached-render "$session" "$window"
 fi
 
@@ -26,9 +26,8 @@ if [[ -n "${TMUX_PANE:-}" ]]; then
   width="$(tmux display-message -p -t "$TMUX_PANE" '#{pane_width}' 2>/dev/null || true)"
 fi
 case "$width" in ''|*[!0-9]*) width=100 ;; esac
-if (( width < 20 )); then
-  placeholder='pane too narrow'
-  printf '%s\n' "${placeholder:0:width}"
+if (( width < 24 )); then
+  printf '\n'
   exit 0
 fi
 
@@ -39,18 +38,32 @@ focus_command="${TMUX_READING_MARGIN_FOCUS_COMMAND:-$HOME/.claude/scripts/__focu
 # handoff line), so it stays above the fold and never needs scrolling, while the
 # cockpit below can run long. The block only reads its cache and the ledger;
 # ranking happens in systemd, never here.
+if [[ "$mode" == --cached-render ]]; then
+  cache_root="${XDG_RUNTIME_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}}/reading-margin"
+  (umask 077; mkdir -p "$cache_root")
+  key=$(printf '%s\0%s' "${TMUX:-}" "${TMUX_PANE:-}" | sha256sum)
+  cache="$cache_root/${key%% *}"
+fi
+
 if [[ -x "$focus_command" ]]; then
-  "$focus_command" render --width "$width" || true
+  if [[ "$mode" == --cached-render ]]; then
+    focus_cache="$cache.focus-$width"
+    if [[ -z $(find "$focus_cache" -mmin -0.0833 2>/dev/null) ]]; then
+      focus_tmp="$focus_cache.$BASHPID"
+      if "$focus_command" render --width "$width" >"$focus_tmp"; then
+        mv -f "$focus_tmp" "$focus_cache"
+      fi
+    fi
+    [[ -f "$focus_cache" ]] && cat "$focus_cache"
+  else
+    "$focus_command" render --width "$width" || true
+  fi
   printf '\n'
 fi
 
 if [[ "$mode" == --cached-render ]]; then
   # Collect the expensive tmux and TaskWarrior state in the background. Keep
   # an unwrapped snapshot so a resize only needs a fast reflow of that data.
-  cache_root="${XDG_RUNTIME_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}}/reading-margin"
-  (umask 077; mkdir -p "$cache_root")
-  key=$(printf '%s\0%s' "${TMUX:-}" "${TMUX_PANE:-}" | sha256sum)
-  cache="$cache_root/${key%% *}"
   if [[ -z $(find "$cache" -mmin -0.0833 2>/dev/null) ]]; then
     (
       flock -n 9 || exit 0

@@ -51,7 +51,7 @@ windows:
       # Add stty to force terminal redraw on focus
       panes:
         # The work margin (Focus, then the cockpit) as a fixed pane. This window
-        # is in @reading_margin_skip_windows, so M-m never overlays it.
+        # is in @reading_margin_skip_windows, so it gets no automatic overlay.
         - ~/dev/dotfiles/scripts/__tmux_reading_margin_work.sh task "$(tmux display-message -p -t "$TMUX_PANE" '#{window_id}')"
         - NCURSES_NO_UTF8_ACS=1 tui -r backlog
         - tuiw

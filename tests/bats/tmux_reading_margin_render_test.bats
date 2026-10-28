@@ -38,5 +38,29 @@ SCRIPT
   printf '12\n' >"$WIDTH_FILE"
   run timeout 1 "$work" --cached-render test '@1'
   [ "$status" -eq 0 ]
-  [ "$output" = 'pane too nar' ]
+  [ -z "$output" ]
+  printf '1\n' >"$WIDTH_FILE"
+  run timeout 1 "$work" --cached-render test '@1'
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "focus is cached at each width and redrawn when the width changes" {
+  focus="$BATS_TEST_TMPDIR/bin/focus"
+  cat >"$focus" <<'SCRIPT'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$FOCUS_CALLS"
+printf 'focus at %s\n' "$3"
+SCRIPT
+  chmod +x "$focus"
+  export TMUX_READING_MARGIN_FOCUS_COMMAND="$focus" FOCUS_CALLS="$BATS_TEST_TMPDIR/focus-calls"
+  printf '35\n' >"$WIDTH_FILE"
+  run "$work" --cached-render test '@1'
+  [[ "$output" == *'focus at 35'* ]]
+  run "$work" --cached-render test '@1'
+  [ "$(wc -l <"$FOCUS_CALLS")" -eq 1 ]
+  printf '52\n' >"$WIDTH_FILE"
+  run "$work" --cached-render test '@1'
+  [[ "$output" == *'focus at 52'* ]]
+  [ "$(wc -l <"$FOCUS_CALLS")" -eq 2 ]
 }
