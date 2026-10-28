@@ -4,6 +4,7 @@
 # asked of them. Every test reads the store, the stub logs, or the fire log.
 
 setup() {
+  REAL_TASK="$(command -v task)"
   REMINDER="${BATS_TEST_DIRNAME}/../../scripts/__reminder.sh"
   GTK_GUI="${BATS_TEST_DIRNAME}/../../scripts/__reminder_gui.py"
   ARGOS="${BATS_TEST_DIRNAME}/../../.config/argos/reminders.30s.sh"
@@ -730,7 +731,7 @@ STUB
   run "$REMINDER" fire "$id"
   [ "$status" -eq 0 ]
   [ ! -s "$TEST_ALERT_REQUEST" ]
-  grep -q "^rc.verbose=new-uuid rc.confirmation=off add +piotr +work +reminder +success -- reminder-report: Seats check$" "$TEST_TASK_LOG"
+  grep -q "^rc.verbose=new-uuid rc.confirmation=off add tags:work,reminder,packet-report,success -- packet-report: Seats check$" "$TEST_TASK_LOG"
   grep -q "00000000-0000-4000-8000-000000000002 annotate -- brief: seats: 3 available " "$TEST_TASK_LOG"
   grep -q "00000000-0000-4000-8000-000000000001 annotate -- recovered " "$TEST_TASK_LOG"
   [ "$(last_record | jq -r '.status')" = done ]
@@ -785,14 +786,13 @@ STUB
   [ "$status" -eq 0 ]
   grep -q '^- Outcome: success (exit 2)$' "$trace"
   grep -q '^slot 14:20$' "$trace"
-  grep -q '^## Action: on-hit (exit 0)$' "$trace"
+  grep -q '^## Action 1: on-hit (done, attempts 1)$' "$trace"
+  grep -q '^### Attempt 1 (exit 0)$' "$trace"
   grep -q '^booked train$' "$trace"
   grep -q "	$id	exec	rc=2	" "$trace"
-  grep -q '^rc.verbose=new-uuid rc.confirmation=off add +piotr +work +reminder +success -- reminder-report: LLMday agenda$' "$TEST_TASK_LOG"
+  grep -q '^rc.verbose=new-uuid rc.confirmation=off add tags:work,reminder,packet-report,success -- packet-report: LLMday agenda$' "$TEST_TASK_LOG"
   grep -q "annotate -- what: Reminder $id finished with success: LLMday agenda\." "$TEST_TASK_LOG"
-  grep -q 'annotate -- done-when: manual Piotr reviews the report then closes it\.$' "$TEST_TASK_LOG"
   grep -q "annotate -- trace: $trace$" "$TEST_TASK_LOG"
-  grep -Fq "annotate -- $trace" "$TEST_TASK_LOG"
   grep -q "annotate -- link: https://llmday.com$" "$TEST_TASK_LOG"
   grep -q "	$id	reported	success task 00000000-0000-4000-8000-000000000001	" "$REMINDER_LOG"
 }
@@ -808,10 +808,8 @@ STUB
   [ "$status" -eq 0 ]
   [ ! -e "$BATS_TEST_TMPDIR/hit" ]
   [ "$(<"$BATS_TEST_TMPDIR/fail")" = "PR closed unmerged" ]
-  grep -q '^rc.verbose=new-uuid rc.confirmation=off add +piotr +work +reminder +failure -- reminder-report: PR reaction$' "$TEST_TASK_LOG"
+  grep -q '^rc.verbose=new-uuid rc.confirmation=off add tags:work,reminder,packet-report,failure -- packet-report: PR reaction$' "$TEST_TASK_LOG"
   grep -q "annotate -- what: Reminder $id finished with failure: PR reaction\." "$TEST_TASK_LOG"
-  grep -q 'annotate -- done-when: manual Piotr reviews the report then closes it\.$' "$TEST_TASK_LOG"
-  grep -Fq "annotate -- $REMINDER_STATE_DIR/reports/$id/brief.md" "$TEST_TASK_LOG"
   [ "$(last_record | jq -r '.status')" = done ]
 }
 
@@ -831,8 +829,7 @@ STUB
   [ "$(grep -c run "$BATS_TEST_TMPDIR/runs")" -eq 1 ]
   [ "$(last_record | jq -r '.status')" = done ]
   [ "$(last_record | jq -r '.report_pending // "gone"')" = gone ]
-  grep -q '^rc.verbose=new-uuid rc.confirmation=off add +piotr +work +reminder +success -- reminder-report: once$' "$TEST_TASK_LOG"
-  grep -q 'annotate -- done-when: manual Piotr reviews the report then closes it\.$' "$TEST_TASK_LOG"
+  grep -q '^rc.verbose=new-uuid rc.confirmation=off add tags:work,reminder,packet-report,success -- packet-report: once$' "$TEST_TASK_LOG"
 }
 
 @test "one error task per failing packet: the same reason adds nothing, a new reason one note" {
@@ -866,7 +863,7 @@ STUB
   [ ! -s "$TEST_ALERT_REQUEST" ]
   grep -q '^subject: success: tmux watch$' "$TEST_MAIL_LOG"
   grep -q '^tmux 3.8 released$' "$TEST_MAIL_LOG"
-  grep -q -- '+success -- reminder-report: tmux watch$' "$TEST_TASK_LOG"
+  grep -q -- 'tags:work,reminder,packet-report,success -- packet-report: tmux watch$' "$TEST_TASK_LOG"
   [ "$(last_record | jq -r '.status')" = done ]
   ! grep -q "remind-$id" "$TEST_CRONTAB"
 }
@@ -881,7 +878,7 @@ STUB
   [ "$status" -eq 0 ]
   [ ! -s "$TEST_ALERT_REQUEST" ]
   [ ! -f "$TEST_MAIL_LOG" ]
-  grep -q -- '+success -- reminder-report: self-mailing watch$' "$TEST_TASK_LOG"
+  grep -q -- 'tags:work,reminder,packet-report,success -- packet-report: self-mailing watch$' "$TEST_TASK_LOG"
   [ "$(last_record | jq -r '.status')" = done ]
 }
 
@@ -1023,7 +1020,7 @@ STUB
   run "$REMINDER" agenda apply "$agenda"
   [ "$status" -eq 0 ]
   [ "$(last_record | jq -r '.on_miss')" = '/x/mail.sh "not yet"' ]
-  [ "$(last_record | jq -r '.on_hit')" = '/x/y.sh && /x/mail.sh "yes"' ]
+  [ "$(last_record | jq -r '.on_hit[0]')" = '/x/y.sh && /x/mail.sh "yes"' ]
 }
 
 @test "the dialog's Open task on a task reminder opens the task, not a link" {
@@ -1443,4 +1440,198 @@ STUB
 
   run "$REMINDER" list
   [[ "$output" == *"by Wed 18 Nov 09:00"*"PR reaction" ]]
+}
+
+
+@test "repeated verdict actions store arrays and edit replaces only the supplied branch" {
+  "$REMINDER" add "actions" --repeat 'every 1d' --deadline 30d --action exec --command true \
+    --on-hit 'echo hit one' --on-hit 'echo hit two' \
+    --on-fail 'echo fail one' --on-fail 'echo fail two' --on-miss 'echo miss' >/dev/null
+  id="$(only_id)"
+  last_record | jq -e '.on_hit == ["echo hit one", "echo hit two"] and .on_fail == ["echo fail one", "echo fail two"] and .on_miss == "echo miss"' >/dev/null
+
+  run "$REMINDER" edit "$id" --on-hit 'echo replacement one' --on-hit 'echo replacement two'
+  [ "$status" -eq 0 ]
+  last_record | jq -e '.on_hit == ["echo replacement one", "echo replacement two"] and .on_fail == ["echo fail one", "echo fail two"] and .on_miss == "echo miss"' >/dev/null
+}
+
+@test "success actions receive check output and run in order before reporting" {
+  "$REMINDER" add "ordered success" --repeat 'every 1d' --deadline 30d --action exec \
+    --command "echo check-output; exit 2" \
+    --on-hit "printf 'first:' >>$BATS_TEST_TMPDIR/order; cat >>$BATS_TEST_TMPDIR/order" \
+    --on-hit "printf 'second:' >>$BATS_TEST_TMPDIR/order; cat >>$BATS_TEST_TMPDIR/order" >/dev/null
+  id="$(only_id)"
+  run "$REMINDER" fire "$id"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$BATS_TEST_TMPDIR/order")" = "$(printf 'first:check-output\nsecond:check-output')" ]
+  [ "$(last_record | jq -r '.status')" = done ]
+  [ "$(grep -c 'add tags:work,reminder,packet-report,success' "$TEST_TASK_LOG")" -eq 1 ]
+}
+
+@test "failed verdict action is retried alone after later actions run" {
+  for verdict in 2 3; do
+    : >"$TEST_TASK_LOG"
+    order="$BATS_TEST_TMPDIR/order-$verdict"
+    attempts="$BATS_TEST_TMPDIR/attempts-$verdict"
+    checks="$BATS_TEST_TMPDIR/checks-$verdict"
+    flag=--on-hit; [ "$verdict" -eq 3 ] && flag=--on-fail
+    "$REMINDER" add "retry $verdict" --repeat 'every 1d' --deadline 30d --action exec \
+      --command "echo check >>$checks; echo original; exit $verdict" \
+      "$flag" "echo first >>$order; cat >/dev/null; echo first-output" \
+      "$flag" "cat >>$attempts; echo middle >>$order; [ \$(wc -l <$attempts) -gt 1 ] || { echo failed-output; exit 1; }; echo recovered-output" \
+      "$flag" "echo last >>$order; cat >/dev/null; echo last-output" >/dev/null
+    id="$(only_id)"
+
+    run "$REMINDER" fire "$id"
+    [ "$status" -eq 0 ]
+    [ "$(cat "$order")" = "$(printf 'first\nmiddle\nlast')" ]
+    [ "$(last_record | jq -r '.status')" = active ]
+    ! grep -q 'add tags:work,reminder,packet-report,' "$TEST_TASK_LOG"
+
+    run "$REMINDER" fire "$id"
+    [ "$status" -eq 0 ]
+    [ "$(cat "$checks")" = check ]
+    [ "$(cat "$order")" = "$(printf 'first\nmiddle\nlast\nmiddle')" ]
+    [ "$(cat "$attempts")" = "$(printf 'original\noriginal')" ]
+    [ "$(last_record | jq -r '.status')" = done ]
+    [ "$(grep -c 'add tags:work,reminder,packet-report,' "$TEST_TASK_LOG")" -eq 1 ]
+    trace="$REMINDER_STATE_DIR/reports/$id/brief.md"
+    grep -Fq 'first-output' "$trace"
+    grep -Fq 'failed-output' "$trace"
+    grep -Fq 'recovered-output' "$trace"
+    grep -Fq 'last-output' "$trace"
+    grep -Fq "echo first >>$order" "$trace"
+    grep -Fq "echo last >>$order" "$trace"
+    branch=on-hit; [ "$verdict" -eq 3 ] && branch=on-fail
+    grep -q "^## Action 1: $branch (done, attempts 1)$" "$trace"
+    grep -q "^## Action 2: $branch (done, attempts 2)$" "$trace"
+    grep -q "^## Action 3: $branch (done, attempts 1)$" "$trace"
+    grep -q '^### Attempt 1 (exit 1)$' "$trace"
+    grep -q '^### Attempt 2 (exit 0)$' "$trace"
+  done
+}
+
+@test "legacy string verdict actions run without rewriting the record on read" {
+  "$REMINDER" add "legacy" --repeat 'every 1d' --deadline 30d --action exec \
+    --command 'echo legacy-input; exit 2' --on-hit "cat >$BATS_TEST_TMPDIR/legacy" >/dev/null
+  id="$(only_id)"
+  jq -c 'if (.on_hit | type) == "array" then .on_hit = .on_hit[0] else . end' "$REMINDER_STORE" >"$REMINDER_STORE.tmp"
+  mv "$REMINDER_STORE.tmp" "$REMINDER_STORE"
+  before="$(cat "$REMINDER_STORE")"
+  run "$REMINDER" list --json
+  [ "$status" -eq 0 ]
+  [ "$(cat "$REMINDER_STORE")" = "$before" ]
+  run "$REMINDER" fire "$id"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$BATS_TEST_TMPDIR/legacy")" = legacy-input ]
+  [ "$(last_record | jq -r '.status')" = done ]
+}
+
+
+@test "agenda round-trips repeated verdict actions" {
+  "$REMINDER" add "multiple actions" --repeat 'every 1d' --deadline 30d --action exec --command true \
+    --on-hit 'echo first hit' --on-hit 'echo second hit' \
+    --on-fail 'echo first fail' --on-fail 'echo second fail' >/dev/null
+  id="$(only_id)"
+  agenda="$BATS_TEST_TMPDIR/actions.org"
+  "$REMINDER" agenda render >"$agenda"
+  [ "$(grep -c '^   :on-hit:' "$agenda")" -eq 2 ]
+  [ "$(grep -c '^   :on-fail:' "$agenda")" -eq 2 ]
+  grep -q '^   :on-hit: echo first hit$' "$agenda"
+  grep -q '^   :on-hit: echo second hit$' "$agenda"
+  grep -q '^   :on-fail: echo first fail$' "$agenda"
+  grep -q '^   :on-fail: echo second fail$' "$agenda"
+  before="$(last_record)"
+  run "$REMINDER" agenda apply "$agenda"
+  [ "$status" -eq 0 ]
+  [ "$(last_record)" = "$before" ]
+  sed -i 's/echo second hit/echo changed hit/' "$agenda"
+  run "$REMINDER" agenda apply "$agenda"
+  [ "$status" -eq 0 ]
+  last_record | jq -e '.on_hit == ["echo first hit", "echo changed hit"] and .on_fail == ["echo first fail", "echo second fail"]' >/dev/null
+}
+
+@test "concurrent fires run one check and create one report" {
+  "$REMINDER" add "concurrent" --repeat 'every 1d' --deadline 30d --action exec \
+    --command "echo check >>$BATS_TEST_TMPDIR/checks; sleep 1; exit 2" \
+    --on-hit "echo action >>$BATS_TEST_TMPDIR/actions" >/dev/null
+  id="$(only_id)"
+  "$REMINDER" fire "$id" >/dev/null &
+  first=$!
+  "$REMINDER" fire "$id" >/dev/null &
+  second=$!
+  wait "$first"
+  wait "$second"
+  [ "$(wc -l <"$BATS_TEST_TMPDIR/checks")" -eq 1 ]
+  [ "$(wc -l <"$BATS_TEST_TMPDIR/actions")" -eq 1 ]
+  [ "$(grep -c 'add tags:work,reminder,packet-report,success' "$TEST_TASK_LOG")" -eq 1 ]
+  [ "$(last_record | jq -r '.status')" = done ]
+}
+
+@test "edit form round-trips repeated verdict actions" {
+  "$REMINDER" add "form actions" --repeat 'every 1d' --deadline 30d --action exec --command true \
+    --on-hit 'echo hit one' --on-hit 'echo hit two' --on-fail 'echo fail one' --on-fail 'echo fail two' >/dev/null
+  id="$(only_id)"
+  export TEST_FORM_SEEN="$BATS_TEST_TMPDIR/form"
+  cat >"$BIN/actions-editor" <<'STUB'
+#!/usr/bin/env bash
+cp "$1" "$TEST_FORM_SEEN"
+sed -i 's/^on-hit: echo hit two$/on-hit: echo changed/' "$1"
+STUB
+  chmod +x "$BIN/actions-editor"
+  run env XDG_RUNTIME_DIR="$BATS_TEST_TMPDIR" REMINDER_EDITOR="$BIN/actions-editor" "$REMINDER" edit "$id"
+  [ "$status" -eq 0 ]
+  [ "$(grep -c '^on-hit:' "$TEST_FORM_SEEN")" -eq 2 ]
+  [ "$(grep -c '^on-fail:' "$TEST_FORM_SEEN")" -eq 2 ]
+  last_record | jq -e '.on_hit == ["echo hit one", "echo changed"] and .on_fail == ["echo fail one", "echo fail two"]' >/dev/null
+}
+
+
+@test "real Taskwarrior preserves packet tags and titles in an isolated database" {
+  [ -x "$REAL_TASK" ] || skip "Taskwarrior is not installed"
+  export TASKDATA="$BATS_TEST_TMPDIR/task-data" TASKRC="$BATS_TEST_TMPDIR/taskrc"
+  mkdir -p "$TASKDATA"
+  printf 'data.location=%s\nconfirmation=no\nhooks=0\n' "$TASKDATA" >"$TASKRC"
+  ln -sf "$REAL_TASK" "$BIN/task"
+  "$REMINDER" add "real report title" --repeat 'every 1d' --deadline 30d --action exec \
+    --command 'echo finished; exit 2' \
+    --on-hit "task rc.hooks=off rc.confirmation=off add tags:work,reminder,packet-task -- packet-task: action title" >/dev/null
+  id="$(only_id)"
+  run env TASKRC="$TASKRC" TASKDATA="$TASKDATA" "$REMINDER" fire "$id"
+  [ "$status" -eq 0 ]
+  run bash -c '"$1" rc.hooks=off export 2>/dev/null' _ "$REAL_TASK"
+  [ "$status" -eq 0 ]
+  jq -e 'any(.[]; .description == "packet-report: real report title" and (["work", "reminder", "packet-report", "success"] - .tags | length == 0) and (.tags | index("piotr") | not) and ([.annotations[]?.description] | any(startswith("done-when:")) | not))' <<<"$output" >/dev/null
+  jq -e 'any(.[]; .description == "packet-task: action title" and (["work", "reminder", "packet-task"] - .tags | length == 0))' <<<"$output" >/dev/null
+  report_uuid="$(jq -r '.[] | select(.description == "packet-report: real report title") | .uuid' <<<"$output")"
+  action_uuid="$(jq -r '.[] | select(.description == "packet-task: action title") | .uuid' <<<"$output")"
+  run "$REAL_TASK" rc.hooks=off rc.confirmation=off "$action_uuid" modify tags:work,reminder,packet-task,verified
+  [ "$status" -eq 0 ]
+  run bash -c '"$1" rc.hooks=off export 2>/dev/null' _ "$REAL_TASK"
+  [ "$status" -eq 0 ]
+  jq -e 'any(.[]; .description == "packet-task: action title" and (["work", "reminder", "packet-task", "verified"] - .tags | length == 0))' <<<"$output" >/dev/null
+
+  command -v taskopen >/dev/null || skip "taskopen is not installed"
+  run taskopen batch --config="${BATS_TEST_DIRNAME}/../../.taskopenrc" --include=files --execute='printf "%s\n" "$FILE"' "$report_uuid"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"$REMINDER_STATE_DIR/reports/$id/brief.md"* ]]
+}
+
+@test "a latched verdict awaiting an action retry suppresses the deadline alert" {
+  "$REMINDER" add "latched deadline" --repeat 'every 1d' --deadline '2026-01-01 09:00' --action exec \
+    --command 'echo verdict; exit 2' --on-hit 'echo action failed; exit 1' >/dev/null
+  id="$(only_id)"
+  "$REMINDER" fire "$id" >/dev/null
+  [ "$(last_record | jq -r '.status')" = active ]
+  last_record | jq -e '.verdict != null' >/dev/null
+  before="$(last_record | jq -c '.verdict')"
+  gui_returns '{"action":"delete"}'
+  rm -f "$TEST_ALERT_REQUEST"
+
+  run "$REMINDER" deadline "$id"
+  [ "$status" -eq 0 ]
+  [ ! -e "$TEST_ALERT_REQUEST" ]
+  [ ! -s "$NOTIFY_LOG" ]
+  [ "$(last_record | jq -r '.status')" = active ]
+  [ "$(last_record | jq -c '.verdict')" = "$before" ]
 }
