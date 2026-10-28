@@ -16,6 +16,15 @@
 # Every fire appends one line to the fire log. Snooze is an edit of `when` plus
 # `sync`; a dismissed or dying dialog snoozes by default, so no path drops a
 # reminder.
+#
+# An exec reminder is a packet: a check, the actions it runs, and a deadline.
+# The check's exit code is the verdict: 0 not yet, 2 success, 3 failure, else
+# an execution error. Success or failure completes the packet once: its hook
+# runs, a trace (reports/<id>/brief.md) and a report task are written, and only
+# then does it retire. An execution error opens one task for an AI and keeps
+# the schedule. The deadline is the one reminder on a clock: when it passes with
+# neither verdict, Piotr gets the form (extend, send to AI, delete) and Gordon a
+# line; the packet keeps running.
 set -eo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -28,8 +37,13 @@ LOCK="${STORE}.lock"
 GUI="${REMINDER_GUI:-$SCRIPT_DIR/__reminder_gui.py}"
 URL_OPENER="${REMINDER_URL_OPENER:-$SCRIPT_DIR/__taskopen_url_open.sh}"
 TASK_OPENER="${REMINDER_TASK_OPENER:-$SCRIPT_DIR/__task_open.sh}"
-CLIPBOARD="${REMINDER_CLIPBOARD:-xclip}"
 MAILER="${REMINDER_MAILER:-$SCRIPT_DIR/__mail_me.sh}"
+# Send to AI: Gordon over the agents bus when his pane is up, else a new
+# Claude window in the attached tmux session.
+SND="${REMINDER_SND:-$HOME/.claude/scripts/snd}"
+TMUX_BIN="${REMINDER_TMUX:-tmux}"
+CLAUDE_LAUNCHER="${REMINDER_CLAUDE:-$HOME/.claude/scripts/__claude_with_monitor.sh}"
+AI_CWD="${REMINDER_AI_CWD:-$HOME/dev/dotfiles}"
 CRON_RUN="${REMINDER_CRON_RUN:-$SCRIPT_DIR/__cron_run.sh}"
 CRON_EVERY="${REMINDER_CRON_EVERY:-$SCRIPT_DIR/__cron_every.sh}"
 STAMP_DIR="${CRON_EVERY_STAMP_DIR:-$HOME/.local/state/cron-every}"
@@ -58,7 +72,7 @@ usage() {
 Usage: remind [<verb> [args]]   (no verb: the agenda, the whole list in $EDITOR)
 
   add <label> <when> [options]      one-shot reminder
-  add <label> --repeat <spec> [options]
+  add <label> --repeat <spec> [options]   an exec repeat needs --deadline
   add <label> --on-notify <regex> --action exec --command <cmd> [--delay 10m]
                                     fires on every desktop popup the regex matches
   list [--json] [--all]             active records (or every record with --all)
@@ -80,6 +94,7 @@ Agenda format (org): one ** heading per reminder, properties indented below.
   gc                                compact the store to active records, drop stale fire locks
   compact                           one line per reminder, done and deleted kept (runs at boot)
   fire <id> [token]                 what the clocks call; runs the action
+  deadline <id>                     what the deadline clock calls; shows the form
   match                             one pass over new notification log lines
   watch                             match forever (reminder-watch.service)
   watch <thread-url> [--task <uuid>] [--label t] [--every 30m]
@@ -95,15 +110,21 @@ Options for add and edit:
                       popup on stdin and in $REMINDER_MATCH; exit 0 is success,
                       anything else reaches Gordon (--to gordon) or your mail
   --delay <spec>      with --on-notify: fire that long after the popup (10m 2h), via at
+  --deadline <spec>   when the check must have settled, same specs as --when; past
+                      it with no verdict you get the form (extend, send to AI, delete)
+                      and Gordon a line; the packet keeps running
   --subject <s>       task:<uuid>, url:<url>, or free text (stored as text:)
   --action <a>        show (default), open, exec
-  --notify <n>        dialog (default), mail, or silent: how a hit or a show reaches you
-  --on-hit <shell>    runs after an exec hit, check output on stdin (chain with &&);
-                      if it fails the reminder reports and keeps its schedule
-  --on-miss <shell>   runs after an exec miss (exit 0), same
+  --notify <n>        dialog (default), mail, or silent: how a show reaches you; mail
+                      also copies an exec verdict or error
+  --on-hit <shell>    runs after success (exit 2), check output on stdin (chain with &&)
+  --on-fail <shell>   runs after failure (exit 3), same
+  --on-miss <shell>   runs after not yet (exit 0), same; a failing hook is an
+                      execution error and the schedule stays
   --command <cmd>     literal command for the exec action; its exit code is the
-                      verdict: 0 silent, 2 hit (shows output, retires the reminder,
-                      a repeat too), else error (shows output, keeps the schedule)
+                      verdict: 0 not yet, 2 success, 3 failure (both write the trace
+                      and a report task, then retire it), else an execution error
+                      (one task for Gordon, the schedule stays)
   --origin <o>        who created it (cli, claude, dialog, migrate)
   --to <r>            piotr (default, a dialog) or gordon (a line in the notification
                       log that Gordon's session reads; falls back to the dialog)
@@ -373,62 +394,61 @@ open_url() {
 	"$URL_OPENER" "$1" >/dev/null 2>&1
 }
 
-# "Done + copy" in the dialog: most reminders are prompts meant for an agent,
-# so the text goes to the clipboard for pasting into a session. xclip forks a
-# child that owns the selection after this job exits; its output goes to
-# /dev/null so nothing waits on the child.
-copy_reminder() {
-	local title="$1" body="$2" url="$3" text="$1"
-	[ -n "$body" ] && text="$text"$'\n\n'"$body"
-	[ -n "$url" ] && [[ "$body" != *"$url"* ]] && text="$text"$'\n'"$url"
-	printf '%s' "$text" | "$CLIPBOARD" -selection clipboard >/dev/null 2>&1
-}
 
 # ---------------------------------------------------------------- clocks ---
 
-# Every queue-r job, one line each: job_id <TAB> epoch <TAB> reminder id.
-# The id is the last word of the job body; the environment dump above it is
-# never parsed.
+# Every queue-r job, one line each: job_id <TAB> epoch <TAB> verb:id. The
+# body ends in `fire <id>` (the reminder's time) or `deadline <id>` (its
+# deadline); the environment dump above it is never parsed.
 at_jobs() {
-	local job_id day month date clock year _queue _owner rid
+	local job_id day month date clock year _queue _owner key
 	while read -r job_id day month date clock year _queue _owner; do
 		[[ "$job_id" =~ ^[0-9]+$ ]] || continue
-		rid="$(at -c "$job_id" 2>/dev/null | grep -o 'fire [0-9a-f]\{8\}[[:space:]]*$' | tail -n1 | awk '{print $2}')" || true
-		printf '%s\t%s\t%s\n' "$job_id" "$(epoch_of "$day $month $date $clock $year")" "${rid:-}"
+		key="$(at -c "$job_id" 2>/dev/null | grep -oE '(fire|deadline) [0-9a-f]{8}[[:space:]]*$' | tail -n1 | awk '{print $1 ":" $2}')" || true
+		printf '%s\t%s\t%s\n' "$job_id" "$(epoch_of "$day $month $date $clock $year")" "${key:-}"
 	done < <(atq -q "$AT_QUEUE" 2>/dev/null || true)
 }
 
 at_schedule() {
-	local id="$1" when="$2" output status=0
-	output="$(printf '%q fire %s\n' "$SELF" "$id" | at -q "$AT_QUEUE" -t "$(at_time "$when")" 2>&1)" || status=$?
+	local key="$1" when="$2" output status=0
+	output="$(printf '%q %s %s\n' "$SELF" "${key%%:*}" "${key#*:}" | at -q "$AT_QUEUE" -t "$(at_time "$when")" 2>&1)" || status=$?
 	if [ "$status" -ne 0 ]; then
-		printf 'at rejected %s for %s:\n%s\n' "$when" "$id" "$output" >&2
+		printf 'at rejected %s for %s:\n%s\n' "$when" "$key" "$output" >&2
 		return "$status"
 	fi
 }
 
+# When the deadline clock should ring: the deadline, or the retry a dismissed
+# form left; nothing once Piotr handled this deadline (sent it to AI). A time
+# already past is kept as is: at runs it at once.
+deadline_due() {
+	jq -r 'if (.deadline // "") == "" or .deadline_seen == .deadline then ""
+		else (.deadline_retry // .deadline) end' <<<"$1"
+}
+
 sync_at() {
-	local -A desired=() present=()
-	local id when job_id epoch rid record created=0 removed=0 failed=0
+	local -A desired=() present=() due_at=()
+	local id when job_id epoch key record created=0 removed=0 failed=0
 
 	while IFS= read -r record; do
 		id="$(jq -r '.id' <<<"$record")"
 		when="$(jq -r '.when // ""' <<<"$record")"
-		[ -n "$when" ] && desired["$id"]="$(epoch_of "$when")"
+		[ -n "$when" ] && desired["fire:$id"]="$(epoch_of "$when")" due_at["fire:$id"]="$when"
+		when="$(deadline_due "$record")"
+		[ -n "$when" ] && desired["deadline:$id"]="$(epoch_of "$when")" due_at["deadline:$id"]="$when"
 	done < <(active_records)
 
-	while IFS=$'\t' read -r job_id epoch rid; do
-		if [ -n "$rid" ] && [ "${desired[$rid]:-}" = "$epoch" ] && [ -z "${present[$rid]:-}" ]; then
-			present["$rid"]=1
+	while IFS=$'\t' read -r job_id epoch key; do
+		if [ -n "$key" ] && [ "${desired[$key]:-}" = "$epoch" ] && [ -z "${present[$key]:-}" ]; then
+			present["$key"]=1
 		else
 			atrm "$job_id" && removed=$((removed + 1))
 		fi
 	done < <(at_jobs)
 
-	for id in "${!desired[@]}"; do
-		[ -n "${present[$id]:-}" ] && continue
-		when="$(get_record "$id" | jq -r '.when')"
-		if at_schedule "$id" "$when"; then
+	for key in "${!desired[@]}"; do
+		[ -n "${present[$key]:-}" ] && continue
+		if at_schedule "$key" "${due_at[$key]}"; then
 			created=$((created + 1))
 		else
 			failed=$((failed + 1))
@@ -543,11 +563,13 @@ log_fire() {
 
 parse_options() {
 	# Fills opt_* variables and positional[] from "$@".
-	opt_when="" opt_repeat="" opt_subject="" opt_action="" opt_command="" opt_origin="" opt_label="" opt_notify="" opt_on_hit="" opt_on_miss="" opt_to="" opt_on_notify="" opt_delay=""
+	opt_when="" opt_repeat="" opt_subject="" opt_action="" opt_command="" opt_origin="" opt_label="" opt_notify="" opt_on_hit="" opt_on_miss="" opt_to="" opt_on_notify="" opt_delay="" opt_deadline="" opt_on_fail=""
 	positional=()
 	while [ $# -gt 0 ]; do
 		case "$1" in
 		--when) opt_when="${2:-}"; shift 2 ;;
+		--deadline) opt_deadline="${2:-}"; shift 2 ;;
+		--on-fail) opt_on_fail="${2:-}"; shift 2 ;;
 		--repeat) opt_repeat="${2:-}"; shift 2 ;;
 		--on-notify) opt_on_notify="${2:-}"; shift 2 ;;
 		--delay) opt_delay="${2:-}"; shift 2 ;;
@@ -624,7 +646,7 @@ validate_trigger() {
 }
 
 cmd_add() {
-	local label when repeat subject action id record
+	local label when repeat subject action id record deadline=""
 	parse_options "$@"
 	label="${opt_label:-${positional[0]:-}}"
 	when="${opt_when:-${positional[1]:-}}"
@@ -637,10 +659,18 @@ cmd_add() {
 	if [ -n "$opt_repeat" ]; then
 		repeat="$(parse_repeat "$opt_repeat")" || die "Cannot parse repeat: $opt_repeat"
 	fi
+	if [ -n "$opt_deadline" ]; then
+		deadline="$(parse_when "$opt_deadline")" || die "Cannot parse deadline: $opt_deadline"
+	fi
 	subject="$(normalize_subject "$opt_subject")"
 	action="${opt_action:-show}"
 	validate_action "$action" "$opt_command"
 	validate_trigger "$when" "$repeat" "$opt_on_notify" "$opt_delay" "$action"
+	# A repeating check with no deadline is a cron job: nothing ever says it
+	# stopped making sense. Popup rules are event handlers and stay open.
+	if [ "$action" = exec ] && [ -n "$repeat" ] && [ -z "$deadline" ]; then
+		die "An exec repeat needs --deadline: when must it have succeeded or failed?"
+	fi
 	validate_notify "$opt_notify"
 	validate_to "$opt_to"
 	id="$(new_id)"
@@ -649,20 +679,22 @@ cmd_add() {
 		--arg notify "$opt_notify" --arg on_hit "$opt_on_hit" --arg on_miss "$opt_on_miss" \
 		--arg created "$(now_iso)" --arg origin "${opt_origin:-cli}" --arg to "$opt_to" \
 		--arg on_notify "$opt_on_notify" --arg delay "$opt_delay" \
+		--arg deadline "$deadline" --arg on_fail "$opt_on_fail" \
 		'{id:$id, label:$label, when:$when, repeat:$repeat, on_notify:$on_notify, delay:$delay,
-		  action:$action, subject:$subject,
-		  command:$command, notify:$notify, on_hit:$on_hit, on_miss:$on_miss,
+		  deadline:$deadline, action:$action, subject:$subject,
+		  command:$command, notify:$notify, on_hit:$on_hit, on_fail:$on_fail, on_miss:$on_miss,
 		  created:$created, origin:$origin, to:$to, status:"active"}
 		 | with_entries(select(.value != ""))')"
 	append_record "$record"
 	check_off_window "$when" "$repeat"
 	cmd_sync >/dev/null
+	local by="${deadline:+, deadline $(human_when "$deadline")}"
 	if [ -n "$when" ]; then
-		printf 'Added %s: %s at %s\n' "$id" "$(record_title "$record")" "$(human_when "$when")"
+		printf 'Added %s: %s at %s%s\n' "$id" "$(record_title "$record")" "$(human_when "$when")" "$by"
 	elif [ -n "$opt_on_notify" ]; then
-		printf 'Added %s: %s on popup /%s/%s\n' "$id" "$(record_title "$record")" "$opt_on_notify" "${opt_delay:+, after $opt_delay}"
+		printf 'Added %s: %s on popup /%s/%s%s\n' "$id" "$(record_title "$record")" "$opt_on_notify" "${opt_delay:+, after $opt_delay}" "$by"
 	else
-		printf 'Added %s: %s, repeat %s\n' "$id" "$(record_title "$record")" "$repeat"
+		printf 'Added %s: %s, repeat %s%s\n' "$id" "$(record_title "$record")" "$repeat" "$by"
 	fi
 }
 
@@ -670,25 +702,30 @@ cmd_add() {
 # comments on top, the way the secret picker edits an entry. `when` is shown
 # the way `add` accepts it, not as the stored ISO string.
 edit_form_write() {
-	local record="$1" form="$2" id when
+	local record="$1" form="$2" id when deadline
 	id="$(jq -r '.id' <<<"$record")"
 	when="$(jq -r '.when // ""' <<<"$record")"
 	[ -n "$when" ] && when="$(date -d "$when" '+%Y-%m-%d %H:%M')"
+	deadline="$(jq -r '.deadline // ""' <<<"$record")"
+	[ -n "$deadline" ] && deadline="$(date -d "$deadline" '+%Y-%m-%d %H:%M')"
 	{
 		printf '# %s  [%s]. Edit, save, quit.\n' "$(record_title "$record")" "$id"
 		printf '# when     10m 2h 1d 1w, tomorrow, eod, eow, or anything date -d takes\n'
 		printf '# repeat   5-field cron or "every 7d"; empty makes it a one-shot\n'
+		printf '# deadline when the check must have succeeded or failed, same specs as when\n'
 		printf '# on-notify  regex over a popup log record; fires the exec once per match, no when or repeat\n'
 		printf '# delay    with on-notify: fire that long after the popup (10m 2h)\n'
 		printf '# subject  task:<uuid>, url:<url>, or free text\n'
 		printf '# action   show, open, exec\n'
 		printf '# command  what exec runs; empty clears it\n'
 		printf '# notify   dialog, mail, or silent\n'
-		printf '# on-hit   shell run after a hit (exit 2), check output on stdin; a failing hook keeps the schedule\n'
-		printf '# on-miss  shell run after a miss (exit 0), same\n'
+		printf '# on-hit   shell run after success (exit 2), check output on stdin; a failing hook keeps the schedule\n'
+		printf '# on-fail  shell run after failure (exit 3), same\n'
+		printf '# on-miss  shell run after not yet (exit 0), same\n'
 		printf 'label: %s\n' "$(jq -r '.label // ""' <<<"$record")"
 		printf 'when: %s\n' "$when"
 		printf 'repeat: %s\n' "$(jq -r '.repeat // ""' <<<"$record")"
+		printf 'deadline: %s\n' "$deadline"
 		printf 'on-notify: %s\n' "$(jq -r '.on_notify // ""' <<<"$record")"
 		printf 'delay: %s\n' "$(jq -r '.delay // ""' <<<"$record")"
 		printf 'subject: %s\n' "$(jq -r '.subject // ""' <<<"$record")"
@@ -696,6 +733,7 @@ edit_form_write() {
 		printf 'command: %s\n' "$(jq -r '.command // ""' <<<"$record")"
 		printf 'notify: %s\n' "$(jq -r '.notify // "dialog"' <<<"$record")"
 		printf 'on-hit: %s\n' "$(jq -r '.on_hit // ""' <<<"$record")"
+		printf 'on-fail: %s\n' "$(jq -r '.on_fail // ""' <<<"$record")"
 		printf 'on-miss: %s\n' "$(jq -r '.on_miss // ""' <<<"$record")"
 	} >"$form"
 }
@@ -711,7 +749,7 @@ edit_form_field() {
 # changes nothing and an emptied field clears the stored value. Prints
 # Updated or Unchanged; the caller syncs the clocks.
 edit_apply() {
-	local id="$1" label="$2" when="$3" repeat="$4" subject="$5" action="$6" command="$7" notify="${8:-}" on_hit="${9:-}" on_miss="${10:-}" on_notify="${11:-}" delay="${12:-}"
+	local id="$1" label="$2" when="$3" repeat="$4" subject="$5" action="$6" command="$7" notify="${8:-}" on_hit="${9:-}" on_miss="${10:-}" on_notify="${11:-}" delay="${12:-}" deadline="${13:-}" on_fail="${14:-}"
 	local record filter='.' cur_when cur_subject
 	record="$(get_record "$id")"
 	[ -n "$action" ] || action=show
@@ -730,6 +768,12 @@ edit_apply() {
 			check_off_window "" "$repeat"
 		fi
 		filter="$filter | .repeat = \$repeat"
+	fi
+	if [ -n "$deadline" ]; then
+		deadline="$(parse_when "$deadline")" || die "Cannot parse deadline: $deadline"
+	fi
+	if [ "$deadline" != "$(jq -r '.deadline // ""' <<<"$record")" ]; then
+		filter="$filter | .deadline = \$deadline | del(.deadline_seen, .deadline_retry)"
 	fi
 	# A multi-line subject is shown by its first line only; matching that
 	# first line means it was left alone.
@@ -756,6 +800,7 @@ edit_apply() {
 		filter="$filter | .notify = \$notify"
 	fi
 	[ "$on_hit" != "$(jq -r '.on_hit // ""' <<<"$record")" ] && filter="$filter | .on_hit = \$on_hit"
+	[ "$on_fail" != "$(jq -r '.on_fail // ""' <<<"$record")" ] && filter="$filter | .on_fail = \$on_fail"
 	[ "$on_miss" != "$(jq -r '.on_miss // ""' <<<"$record")" ] && filter="$filter | .on_miss = \$on_miss"
 	[ "$on_notify" != "$(jq -r '.on_notify // ""' <<<"$record")" ] && filter="$filter | .on_notify = \$on_notify"
 	[ "$delay" != "$(jq -r '.delay // ""' <<<"$record")" ] && filter="$filter | .delay = \$delay"
@@ -765,7 +810,8 @@ edit_apply() {
 	fi
 	update_record "$id" "$filter" --arg when "$when" --arg repeat "$repeat" --arg subject "$subject" \
 		--arg label "$label" --arg action "$action" --arg command "$command" --arg notify "$notify" \
-		--arg on_hit "$on_hit" --arg on_miss "$on_miss" --arg on_notify "$on_notify" --arg delay "$delay"
+		--arg on_hit "$on_hit" --arg on_miss "$on_miss" --arg on_notify "$on_notify" --arg delay "$delay" \
+		--arg deadline "$deadline" --arg on_fail "$on_fail"
 	printf 'Updated %s\n' "$id"
 }
 
@@ -784,7 +830,8 @@ cmd_edit_form() {
 		"$(edit_form_field "$form" repeat)" "$(edit_form_field "$form" subject)" \
 		"$(edit_form_field "$form" action)" "$(edit_form_field "$form" command)" \
 		"$(edit_form_field "$form" notify)" "$(edit_form_field "$form" on-hit)" "$(edit_form_field "$form" on-miss)" \
-		"$(edit_form_field "$form" on-notify)" "$(edit_form_field "$form" delay)"
+		"$(edit_form_field "$form" on-notify)" "$(edit_form_field "$form" delay)" \
+		"$(edit_form_field "$form" deadline)" "$(edit_form_field "$form" on-fail)"
 	cmd_sync >/dev/null
 }
 
@@ -843,13 +890,15 @@ agenda_last() {
 		$3 == "skipped" || $3 == "stale" { at = $1; out = $3 ": " $4; next }
 		$3 == "queued" { at = $1; out = $4; next }
 		at == "" { next }
-		$3 == "exec" { rc = substr($4, 4); add(rc == 0 ? (popup ? "ok" : "no hit") : rc == 2 ? "hit" : "error (exit " rc ")"); next }
-		$3 == "on_hit" || $3 == "on_miss" {
+		$3 == "deadline" { at = $1; out = "deadline " $4; next }
+		$3 == "exec" { rc = substr($4, 4); add(rc == 0 ? (popup ? "ok" : "no hit") : rc == 2 ? "success" : rc == 3 ? "failure" : "error (exit " rc ")"); next }
+		$3 == "on_hit" || $3 == "on_fail" || $3 == "on_miss" {
 			rc = substr($4, 4)
-			if (rc != 0) add(($3 == "on_hit" ? "on-hit" : "on-miss") " failed (exit " rc ")")
+			if (rc != 0) add(substr($3, 1, 2) "-" substr($3, 4) " failed (exit " rc ")")
 			next
 		}
-		$3 == "done" || $3 == "mailed" || $3 == "opened" || $3 == "snoozed" { add($3); next }
+		$3 == "reported" { add("reported: " $4); next }
+		$3 == "done" || $3 == "mailed" || $3 == "opened" || $3 == "snoozed" || $3 == "extended" || $3 == "sent" { add($3); next }
 		$3 == "dismissed" { add("dismissed (" $4 ")"); next }
 		$3 == "error" { add($4); next }
 		$3 == "failed" { add("failed: " $4); next }
@@ -862,7 +911,7 @@ agenda_last() {
 }
 
 agenda_line() {
-	local record="$1" id when repeat action command subject stamps notify on_hit on_miss on_notify delay
+	local record="$1" id when repeat action command subject stamps notify on_hit on_fail on_miss on_notify delay deadline
 	id="$(jq -r '.id' <<<"$record")"
 	when="$(jq -r '.when // ""' <<<"$record")"
 	repeat="$(jq -r '.repeat // ""' <<<"$record")"
@@ -875,6 +924,8 @@ agenda_line() {
 	[ -n "$when" ] && stamps="<$(agenda_stamp "$when")>"
 	[ -n "$repeat" ] && stamps="${stamps:+$stamps }<$repeat>"
 	printf '** %s%s\n' "${stamps:+$stamps }" "$(record_title "$record")"
+	deadline="$(jq -r '.deadline // ""' <<<"$record")"
+	[ -n "$deadline" ] && printf '   :deadline: <%s>\n' "$(agenda_stamp "$deadline")"
 	[ -n "$on_notify" ] && printf '   :on-notify: %s\n' "$on_notify"
 	[ -n "$delay" ] && printf '   :delay: %s\n' "$delay"
 	[ "$action" != show ] && printf '   :action: %s\n' "$action"
@@ -883,6 +934,8 @@ agenda_line() {
 	[ -n "$notify" ] && printf '   :notify: %s\n' "$notify"
 	on_hit="$(jq -r '.on_hit // ""' <<<"$record")"
 	[ -n "$on_hit" ] && printf '   :on-hit: %s\n' "$on_hit"
+	on_fail="$(jq -r '.on_fail // ""' <<<"$record")"
+	[ -n "$on_fail" ] && printf '   :on-fail: %s\n' "$on_fail"
 	on_miss="$(jq -r '.on_miss // ""' <<<"$record")"
 	[ -n "$on_miss" ] && printf '   :on-miss: %s\n' "$on_miss"
 	case "$subject" in
@@ -917,15 +970,19 @@ agenda_render() {
 #   ** <every 7d> title                  repeat by interval (m h d w), catches up if
 #                                        the laptop was off; <date> <repeat> = snoozed
 #   ** title                             no stamp: fires on a popup (see :on-notify:)
+#      :deadline: <2026-11-18 Wed 09:00> the check must have settled by then; past it you
+#                                        get the form (extend, send to AI, delete)
 #      :on-notify: regex                 over a popup log record; runs :runs: once per match
 #      :delay: 10m                       with :on-notify:, that long after the popup
 #      :action: open | exec              omitted means show a dialog
-#      :runs: command                    for exec; exit 2 is a hit: stops the repeat, then
-#      :notify: mail | silent            the hit goes to a dialog (default), your mail, or
-#                                        nowhere because the command already told you
-#      :on-hit: shell                    runs after a hit, check output on stdin; chain with &&;
-#                                        if it fails the hit is reported and the reminder stays for a retry
-#      :on-miss: shell                   runs after a miss (exit 0), e.g. __mail_me.sh "not yet"
+#      :runs: command                    for exec; exit 0 not yet, 2 success, 3 failure: both
+#                                        write a report task and retire it; else an error task
+#      :notify: mail | silent            a show goes to a dialog (default), your mail, or
+#                                        nowhere; mail also copies an exec verdict
+#      :on-hit: shell                    runs after success, check output on stdin; chain with &&;
+#                                        if it fails that is an error and the reminder stays for a retry
+#      :on-fail: shell                   runs after failure (exit 3), same
+#      :on-miss: shell                   runs after not yet (exit 0), e.g. __mail_me.sh "not yet"
 #      :task: <uuid>                     what it points at: a task (ctrl+5 opens it),
 #      :url: <link>                      a link, or
 #      :notes: free text                 notes; one of the three per reminder
@@ -961,11 +1018,13 @@ agenda_flush() {
 	[ -n "$cur_open" ] || return 0
 	if [ -n "$cur_id" ]; then
 		seen+=("$cur_id")
-		edit_apply "$cur_id" "$cur_title" "$cur_when" "$cur_repeat" "$cur_subject" "$cur_action" "$cur_command" "$cur_notify" "$cur_on_hit" "$cur_on_miss" "$cur_on_notify" "$cur_delay"
+		edit_apply "$cur_id" "$cur_title" "$cur_when" "$cur_repeat" "$cur_subject" "$cur_action" "$cur_command" "$cur_notify" "$cur_on_hit" "$cur_on_miss" "$cur_on_notify" "$cur_delay" "$cur_deadline" "$cur_on_fail"
 	else
 		local -a args=()
 		[ -n "$cur_when" ] && args+=(--when "$cur_when")
 		[ -n "$cur_repeat" ] && args+=(--repeat "$cur_repeat")
+		[ -n "$cur_deadline" ] && args+=(--deadline "$cur_deadline")
+		[ -n "$cur_on_fail" ] && args+=(--on-fail "$cur_on_fail")
 		[ -n "$cur_on_notify" ] && args+=(--on-notify "$cur_on_notify")
 		[ -n "$cur_delay" ] && args+=(--delay "$cur_delay")
 		[ -n "$cur_subject" ] && args+=(--subject "$cur_subject")
@@ -989,7 +1048,7 @@ agenda_prop() {
 
 agenda_apply() {
 	local file="$1" line n=0 id prop_key prop_value
-	local cur_open="" cur_id="" cur_title="" cur_when="" cur_repeat="" cur_subject="" cur_action="" cur_command="" cur_notify="" cur_on_hit="" cur_on_miss="" cur_on_notify="" cur_delay=""
+	local cur_open="" cur_id="" cur_title="" cur_when="" cur_repeat="" cur_subject="" cur_action="" cur_command="" cur_notify="" cur_on_hit="" cur_on_miss="" cur_on_notify="" cur_delay="" cur_deadline="" cur_on_fail=""
 	local line_when line_repeat line_title
 	local -a seen=() active
 	[ -f "$file" ] || die "No agenda file at $file."
@@ -1004,7 +1063,7 @@ agenda_apply() {
 			agenda_prop "$line" || die "Line $n: cannot read it: $line"
 			case "$prop_key" in
 			id) get_record "$prop_value" >/dev/null || die "Line $n: no reminder with id $prop_value." ;;
-			action | runs | notify | on-hit | on-miss | on-notify | delay | task | url | notes | subject | last | log) ;;
+			action | runs | notify | on-hit | on-fail | on-miss | on-notify | delay | deadline | task | url | notes | subject | last | log) ;;
 			*) die "Line $n: unknown property :$prop_key:" ;;
 			esac
 			;;
@@ -1015,7 +1074,7 @@ agenda_apply() {
 		'' | '#'* | '* '* | '*') continue ;;
 		'** '*)
 			agenda_flush
-			cur_open=1 cur_id="" cur_subject="" cur_command="" cur_action="" cur_notify="" cur_on_hit="" cur_on_miss="" cur_on_notify="" cur_delay=""
+			cur_open=1 cur_id="" cur_subject="" cur_command="" cur_action="" cur_notify="" cur_on_hit="" cur_on_miss="" cur_on_notify="" cur_delay="" cur_deadline="" cur_on_fail=""
 			agenda_parse_heading "${line#\*\* }"
 			cur_when="$line_when" cur_repeat="$line_repeat" cur_title="$line_title"
 			;;
@@ -1027,6 +1086,8 @@ agenda_apply() {
 			runs) cur_command="$prop_value" ;;
 			notify) cur_notify="$prop_value" ;;
 			on-hit) cur_on_hit="$prop_value" ;;
+			on-fail) cur_on_fail="$prop_value" ;;
+			deadline) cur_deadline="$(sed 's/^<\(.*\)>$/\1/' <<<"$prop_value")" ;;
 			on-miss) cur_on_miss="$prop_value" ;;
 			on-notify) cur_on_notify="$prop_value" ;;
 			delay) cur_delay="$prop_value" ;;
@@ -1093,7 +1154,13 @@ cmd_edit() {
 	[ -n "$opt_notify" ] && { validate_notify "$opt_notify"; filter="$filter | .notify = \$notify"; }
 	[ -n "$opt_to" ] && { validate_to "$opt_to"; filter="$filter | .to = \$to"; }
 	[ -n "$opt_on_hit" ] && filter="$filter | .on_hit = \$on_hit"
+	[ -n "$opt_on_fail" ] && filter="$filter | .on_fail = \$on_fail"
 	[ -n "$opt_on_miss" ] && filter="$filter | .on_miss = \$on_miss"
+	local deadline=""
+	if [ -n "$opt_deadline" ]; then
+		deadline="$(parse_when "$opt_deadline")" || die "Cannot parse deadline: $opt_deadline"
+		filter="$filter | .deadline = \$deadline | del(.deadline_seen, .deadline_retry)"
+	fi
 	# The merged record must still be one trigger kind: a snooze (--when) on
 	# an on-notify record would hand it to the at queue with no popup to pass.
 	local cur
@@ -1106,7 +1173,8 @@ cmd_edit() {
 	update_record "$id" "$filter" --arg repeat "$repeat" --arg subject "$subject" \
 		--arg label "$opt_label" --arg action "$opt_action" --arg command "$opt_command" --arg notify "$opt_notify" \
 		--arg on_hit "$opt_on_hit" --arg on_miss "$opt_on_miss" --arg to "$opt_to" \
-		--arg on_notify "$opt_on_notify" --arg delay "$opt_delay"
+		--arg on_notify "$opt_on_notify" --arg delay "$opt_delay" \
+		--arg on_fail "$opt_on_fail" --arg deadline "$deadline"
 	cmd_sync >/dev/null
 	printf 'Updated %s\n' "$id"
 }
@@ -1153,7 +1221,7 @@ cmd_list() {
 		list_json "$records"
 		return 0
 	fi
-	local record id when repeat action title on_notify delay
+	local record id when repeat action title on_notify delay deadline by
 	while IFS= read -r record; do
 		[ -n "$record" ] || continue
 		id="$(jq -r '.id' <<<"$record")"
@@ -1161,12 +1229,14 @@ cmd_list() {
 		repeat="$(jq -r '.repeat // ""' <<<"$record")"
 		on_notify="$(jq -r '.on_notify // ""' <<<"$record")"
 		delay="$(jq -r '.delay // ""' <<<"$record")"
+		deadline="$(jq -r '.deadline // ""' <<<"$record")"
 		action="$(jq -r '.action' <<<"$record")"
 		title="$(record_title "$record")"
+		by="${deadline:+by $(human_when "$deadline")}"
 		if [ -n "$on_notify" ]; then
-			printf '%s  %-16s  %-14s  %-5s  %s\n' "$id" "on popup" "${delay:++$delay}" "$action" "$title"
+			printf '%s  %-16s  %-14s  %-19s  %-5s  %s\n' "$id" "on popup" "${delay:++$delay}" "$by" "$action" "$title"
 		else
-			printf '%s  %-16s  %-14s  %-5s  %s\n' "$id" "${when:+$(human_when "$when")}" "$repeat" "$action" "$title"
+			printf '%s  %-16s  %-14s  %-19s  %-5s  %s\n' "$id" "${when:+$(human_when "$when")}" "$repeat" "$by" "$action" "$title"
 		fi
 	done <<<"$records"
 }
@@ -1238,16 +1308,24 @@ cmd_compact() {
 
 # ----------------------------------------------------------------- fire ----
 
+# The form behind a show reminder and a passed deadline (kind show or
+# deadline). The GUI only names the choice; every consequence is here. Open
+# loops back to the form. Extend moves the reminder's time, or the deadline;
+# Send to AI hands the state report to Gordon or a new Claude; Delete deletes;
+# Done (show only) spends it. Closing without a choice leaves the provisional
+# retry the caller set, so the form comes back.
 show_dialog() {
-	local id="$1" record="$2" title="$3" body="$4" url="$5" due="$6" late="$7"
-	local subject repeat response action when
+	local id="$1" record="$2" title="$3" body="$4" url="$5" due="$6" late="$7" kind="${8:-show}"
+	local subject repeat response action when pick
 	subject="$(jq -r '.subject // ""' <<<"$record")"
 	repeat="$(jq -r '.repeat // ""' <<<"$record")"
+	pick="$(date -d 'tomorrow 9:00' '+%Y-%m-%d %H:%M')"
 
 	while true; do
 		response="$(jq -nc --arg title "$title" --arg body "$body" --arg url "$url" \
 			--arg due "$due" --arg late "$late" --arg type "$(subject_type "$subject")" --arg repeat "$repeat" \
-			'{title:$title, body:$body, url:$url, due:$due, late:$late, subject_type:$type, repeat:$repeat}' \
+			--arg kind "$kind" --arg pick "$pick" \
+			'{kind:$kind, title:$title, body:$body, url:$url, due:$due, late:$late, subject_type:$type, repeat:$repeat, pick:$pick}' \
 			| "$GUI" alert)" || {
 			log_fire "$id" dismissed "snooze $DEFAULT_SNOOZE" "$title"
 			return 0
@@ -1261,23 +1339,42 @@ show_dialog() {
 			esac
 			;;
 		done)
+			[ "$kind" = show ] || continue
 			case "$subject" in
 			task:*) task rc.verbose=nothing "${subject#task:}" "done" >/dev/null 2>&1 || true ;;
 			esac
-			if [ "$(jq -r '.copy // false' <<<"$response")" = true ]; then
-				if copy_reminder "$title" "$body" "$url"; then action="done copied"; else action="done copy-failed"; fi
-			fi
 			mark_done "$id"
 			cmd_sync >/dev/null
 			log_fire "$id" "done" "$action" "$title"
 			return 0
 			;;
-		snooze)
+		extend | snooze)
 			when="$(jq -r '.when // ""' <<<"$response")"
 			when="$(parse_when "$when")" || when="$(parse_when "$DEFAULT_SNOOZE")"
-			update_record "$id" '.when = $when' --arg when "$when"
+			if [ "$kind" = deadline ]; then
+				update_record "$id" '.deadline = $when | del(.deadline_retry, .deadline_seen)' --arg when "$when"
+				log_fire "$id" extended "$when" "$title"
+			else
+				update_record "$id" '.when = $when' --arg when "$when"
+				log_fire "$id" snoozed "$when" "$title"
+			fi
 			cmd_sync >/dev/null
-			log_fire "$id" snoozed "$when" "$title"
+			return 0
+			;;
+		ai)
+			send_to_ai "$id" "$title" "$body" "$kind" || return 0
+			if [ "$kind" = deadline ]; then
+				update_record "$id" '.deadline_seen = .deadline | del(.deadline_retry)'
+			else
+				mark_done "$id"
+			fi
+			cmd_sync >/dev/null
+			return 0
+			;;
+		delete)
+			update_record "$id" '.status = "deleted"'
+			cmd_sync >/dev/null
+			log_fire "$id" deleted "from the $kind form" "$title"
 			return 0
 			;;
 		*)
@@ -1286,6 +1383,55 @@ show_dialog() {
 			;;
 		esac
 	done
+}
+
+# ------------------------------------------------------------ send to AI ---
+
+# Gordon's pane: the bus agent `triage` (or `gordon`) a tmux pane carries in
+# @agent_name. Prints "<pane_id> <agent>" or nothing.
+gordon_pane() {
+	"$TMUX_BIN" list-panes -a -F '#{pane_id} #{@agent_name}' 2>/dev/null |
+		awk '$2 == "triage" || $2 == "gordon" { print $1, $2; exit }'
+}
+
+ai_prompt() {
+	local id="$1" title="$2" report="$3" kind="$4" ask
+	if [ "$kind" = deadline ]; then
+		ask="Its deadline passed with neither the success nor the failure condition met. Work with Piotr on its conditions: change the check, extend the deadline (remind edit $id --deadline <when>), or delete it."
+	else
+		ask="Work with Piotr on what it asks for, then mark it done or move it (remind edit $id --when <when>)."
+	fi
+	printf 'Piotr sent reminder %s to you from its form: %s\n\n%s\n\n%s Load the reminder skill; `remind list --json | jq '"'"'.[] | select(.id == "%s")'"'"'` shows the record.' \
+		"$id" "$title" "$report" "$ask" "$id"
+}
+
+# Gordon when his pane is up: a DM on the agents bus, then Piotr's terminal
+# moves to that pane so the conversation is in front of him. Otherwise, or
+# when the DM fails, a new Claude window in the attached tmux session.
+send_to_ai() {
+	local id="$1" title="$2" report="$3" kind="$4" prompt pane="" agent="" client session
+	prompt="$(ai_prompt "$id" "$title" "$report" "$kind")"
+	read -r pane agent < <(gordon_pane) || true
+	client="$("$TMUX_BIN" list-clients -F '#{client_name}' 2>/dev/null | head -n1)" || true
+	if [ -n "$pane" ] && SND_FROM=reminder timeout 20 "$SND" --no-human -t "$agent" "${prompt:0:1500}" >/dev/null 2>&1; then
+		if [ -n "$client" ]; then
+			"$TMUX_BIN" switch-client -c "$client" -t "$pane" >/dev/null 2>&1 || true
+			"$TMUX_BIN" select-window -t "$pane" >/dev/null 2>&1 || true
+			"$TMUX_BIN" select-pane -t "$pane" >/dev/null 2>&1 || true
+		fi
+		log_fire "$id" sent "gordon ($agent)" "$title"
+		return 0
+	fi
+	if [ -n "$client" ]; then
+		session="$("$TMUX_BIN" display-message -p -c "$client" '#{session_name}' 2>/dev/null)" || session=""
+		if "$TMUX_BIN" new-window ${session:+-t "$session:"} -c "$AI_CWD" -n "remind-$id" -- "$CLAUDE_LAUNCHER" "$prompt" >/dev/null 2>&1; then
+			log_fire "$id" sent "new claude window" "$title"
+			return 0
+		fi
+	fi
+	log_fire "$id" error "send to AI: no Gordon pane and no tmux client for a new Claude" "$title"
+	show_error "Could not send reminder $id to an AI: Gordon is not running and no tmux client is attached for a new Claude window."
+	return 1
 }
 
 # Provisional snooze, one-dialog lock, then the dialog decides. The snooze
@@ -1351,13 +1497,15 @@ log_run() {
 	tail -n "$RUN_LOG_LINES" "$file" >"$file.tmp" && mv "$file.tmp" "$file"
 }
 
-# The branch after a check: on_hit after exit 2, on_miss after exit 0, the
-# check's output on stdin. Plain shell, so `y.sh && __mail_me.sh "done"`
-# chains. A hook's own failure is logged, never fatal: the verdict stands.
+# The branch after a check: on_hit after exit 2, on_fail after exit 3,
+# on_miss after exit 0, the check's output on stdin. Plain shell, so
+# `y.sh && __mail_me.sh "done"` chains. A hook that fails turns the run into
+# an execution error (cmd_fire); it is logged here.
 run_branch() {
 	local id="$1" record="$2" rc="$3" output="$4" title="$5" hook field hrc=0
 	case "$rc" in
 	2) field=on_hit ;;
+	3) field=on_fail ;;
 	0) field=on_miss ;;
 	*) return 0 ;;
 	esac
@@ -1375,7 +1523,7 @@ run_branch() {
 error_streak() {
 	awk -F '\t' -v id="$1" '
 		$2 != id || $3 != "exec" { next }
-		$4 == "rc=0" || $4 == "rc=2" { n = 0; next }
+		$4 == "rc=0" || $4 == "rc=2" || $4 == "rc=3" { n = 0; next }
 		{ if (n++ == 0) since = $1 }
 		END { if (n > 1) printf "%d errors in a row since %s", n, since }
 	' "$FIRE_LOG"
@@ -1386,6 +1534,151 @@ error_streak() {
 # is in the run log.
 error_reason() {
 	printf '%s\n' "$1" | tr '\t' ' ' | sed '/^[[:space:]]*$/d' | tail -n1 | cut -c1-300
+}
+
+# --------------------------------------------------------------- reports ---
+
+REPORT_DIR="$STATE_DIR/reports"
+
+# A task, and its uuid on stdout. The description travels as one argv element
+# after `--`, never through a shell string.
+task_add() {
+	local description="$1" out uuid
+	shift
+	out="$(task rc.verbose=new-uuid rc.confirmation=off add "$@" -- "$description" 2>&1)" || {
+		printf '%s\n' "$out" >&2
+		return 1
+	}
+	uuid="$(grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' <<<"$out" | head -n1)"
+	[ -n "$uuid" ] || {
+		printf 'task add printed no uuid: %s\n' "$out" >&2
+		return 1
+	}
+	printf '%s' "$uuid"
+}
+
+task_note() {
+	task rc.verbose=nothing rc.confirmation=off "$1" annotate -- "$2" >/dev/null 2>&1
+}
+
+# Board titles stay under 60 characters.
+short_title() {
+	printf '%s' "$1" | tr '\n\t' '  ' | cut -c1-"$2"
+}
+
+home_path() {
+	printf '%s' "${1/#$HOME/\~}"
+}
+
+record_trigger() {
+	jq -r 'if (.on_notify // "") != "" then "on popup /" + .on_notify + "/"
+		elif (.repeat // "") != "" then "repeat " + .repeat
+		elif (.when // "") != "" then "at " + .when else "none" end' <<<"$1"
+}
+
+# The trace of a finished packet: what it was, the check and its verdict,
+# the action that ran, the fire history and where the logs are. Written before
+# the report task, so a failed task write still leaves the trace.
+write_trace() {
+	local record="$1" outcome="$2" rc="$3" output="$4" field="$5" hook="$6" hrc="$7" houtput="$8" id file
+	id="$(jq -r '.id' <<<"$record")"
+	mkdir -p "$REPORT_DIR/$id"
+	file="$REPORT_DIR/$id/brief.md"
+	{
+		printf '# %s\n\n' "$(record_title "$record")"
+		printf -- '- Reminder: %s\n' "$id"
+		printf -- '- Outcome: %s (exit %s)\n' "$outcome" "$rc"
+		printf -- '- Finished: %s\n' "$(now_iso)"
+		printf -- '- Created: %s by %s\n' "$(jq -r '.created // "?"' <<<"$record")" "$(jq -r '.origin // "?"' <<<"$record")"
+		printf -- '- Trigger: %s\n' "$(record_trigger "$record")"
+		printf -- '- Deadline: %s\n' "$(jq -r '.deadline // "none"' <<<"$record")"
+		printf -- '- Subject: %s\n' "$(jq -r '.subject // "none"' <<<"$record")"
+		printf '\n## Check\n\n```\n$ %s\n%s\n```\n' "$(jq -r '.command // ""' <<<"$record")" "$output"
+		if [ -n "$hook" ]; then
+			printf '\n## Action: %s (exit %s)\n\n```\n$ %s\n%s\n```\n' "${field//_/-}" "$hrc" "$hook" "$houtput"
+		else
+			printf '\n## Action\n\nNone: the check itself was the whole packet.\n'
+		fi
+		printf '\n## History\n\n```\n'
+		[ -f "$FIRE_LOG" ] && awk -F '\t' -v id="$id" '$2 == id' "$FIRE_LOG" | tail -n 40
+		printf '```\n\n## Logs\n\n- Runs: %s\n- Fire log: %s\n' "$(home_path "$RUNS_DIR/$id.log")" "$(home_path "$FIRE_LOG")"
+	} >"$file"
+	printf '%s' "$file"
+}
+
+# The report task every finished packet leaves for Piotr and Gordon. Prints
+# its uuid.
+report_task() {
+	local record="$1" outcome="$2" trace="$3" output="$4" id title uuid url first
+	id="$(jq -r '.id' <<<"$record")"
+	title="$(record_title "$record")"
+	uuid="$(task_add "$(short_title "$outcome: $title" 60)" +piotr +work +reminder)" || return 1
+	first="$(printf '%s\n' "$output" | sed '/^[[:space:]]*$/d' | head -n2 | tr '\n' ' ' | cut -c1-300)"
+	task_note "$uuid" "what: Reminder $id finished with $outcome: $title. Its actions already ran; this task is the report."
+	task_note "$uuid" "brief: ${first:-The check printed nothing.} The trace lists the check, the action and every run. Read it, then close this task."
+	task_note "$uuid" "trace: $(home_path "$trace")"
+	url="$(subject_url "$(jq -r '.subject // ""' <<<"$record")")" && task_note "$uuid" "link: $url"
+	printf '%s' "$uuid"
+}
+
+# A packet completes once. The report task must exist before it retires: a
+# failed write keeps the record active with report_pending, and the next fire
+# retries the write without running the check or its action again (a one-shot
+# gets its retry time here).
+complete_packet() {
+	local id="$1" outcome="$2" trace="$3" output="$4" record title uuid err
+	record="$(get_record "$id")"
+	title="$(record_title "$record")"
+	err="$(mktemp "${XDG_RUNTIME_DIR:-/tmp}/remind-report.XXXXXX")"
+	if uuid="$(report_task "$record" "$outcome" "$trace" "$output" 2>"$err")"; then
+		update_record "$id" '.status = "done" | .report_task = $uuid
+			| del(.when, .repeat, .report_pending, .report_outcome, .deadline_retry)' --arg uuid "$uuid"
+		log_fire "$id" reported "$outcome task $uuid" "$title"
+	else
+		update_record "$id" '.report_pending = $trace | .report_outcome = $outcome
+			| if (.repeat // "") == "" then .when = $retry else . end' \
+			--arg trace "$trace" --arg outcome "$outcome" --arg retry "$(parse_when "$DEFAULT_SNOOZE")"
+		log_fire "$id" error "report task failed: $(error_reason "$(cat "$err")")" "$title"
+	fi
+	rm -f "$err"
+	cmd_sync >/dev/null
+}
+
+# One open task per failing packet, for Gordon or another AI. A new reason
+# annotates it; the same reason again only counts in the fire log, so a check
+# failing every 30 minutes leaves one task with one note per distinct failure.
+error_task() {
+	local id="$1" title="$2" reason="$3" record uuid status
+	record="$(get_record "$id")"
+	uuid="$(jq -r '.error_task // ""' <<<"$record")"
+	if [ -n "$uuid" ]; then
+		status="$(task_field "$uuid" status)"
+		if [ "$status" = pending ] || [ "$status" = waiting ]; then
+			[ "$reason" != "$(jq -r '.error_reason // ""' <<<"$record")" ] || return 0
+			task_note "$uuid" "error again $(now_iso): $reason" || true
+			update_record "$id" '.error_reason = $reason' --arg reason "$reason"
+			return 0
+		fi
+	fi
+	uuid="$(task_add "$(short_title "$id ($title" 52)) error" +gordon +work +reminder 2>/dev/null)" || {
+		log_fire "$id" error "could not write the error task" "$title"
+		return 0
+	}
+	task_note "$uuid" "what: Reminder $id ($title) failed to run: $reason. Read the run log, fix the check or its action, then close this task."
+	task_note "$uuid" "log: $(home_path "$RUNS_DIR/$id.log")"
+	update_record "$id" '.error_task = $uuid | .error_reason = $reason' --arg uuid "$uuid" --arg reason "$reason"
+	log_fire "$id" error-task "$uuid" "$title"
+}
+
+# A clean verdict after errors: one note on the open error task, then the
+# record forgets it, so the next failure starts a fresh task.
+clear_error_task() {
+	local id="$1" record uuid
+	record="$(get_record "$id")"
+	uuid="$(jq -r '.error_task // ""' <<<"$record")"
+	[ -n "$uuid" ] || return 0
+	task_note "$uuid" "recovered $(now_iso): the check ran clean again" || true
+	update_record "$id" 'del(.error_task, .error_reason)'
 }
 
 cmd_fire() {
@@ -1469,72 +1762,146 @@ cmd_fire() {
 		cmd_sync >/dev/null
 		;;
 	exec)
-		# The exit code is the command's verdict, the same channel __cron_run.sh
-		# reads: 0 found nothing and stays silent, 2 is a hit that shows the
-		# output and retires the reminder (a repeat included, so a verificator
-		# stops once it has tripped), anything else is an error that shows and
-		# keeps the schedule so the next run can succeed.
+		# The exit code is the verdict, the same channel __cron_run.sh reads:
+		# 0 not yet (silent), 2 success, 3 failure, anything else an execution
+		# error. Success and failure complete the packet (complete_packet);
+		# an error, or a hook that fails, opens the error task and keeps the
+		# schedule so the next run can succeed. Nothing here opens a dialog:
+		# a verdict is a task, never a popup.
 		update_record "$id" '.last_fired = $now' --arg now "$(now_iso)"
+		if [ -n "$(jq -r '.report_pending // ""' <<<"$record")" ]; then
+			complete_packet "$id" "$(jq -r '.report_outcome // "success"' <<<"$record")" "$(jq -r '.report_pending' <<<"$record")" ""
+			return 0
+		fi
 		command="$(jq -r '.command // ""' <<<"$record")"
 		local rc=0 output
 		output="$(bash -c "$command" 2>&1)" || rc=$?
 		log_fire "$id" exec "rc=$rc" "$title"
-		notify="$(jq -r '.notify // "dialog"' <<<"$record")"
+		notify="$(jq -r '.notify // ""' <<<"$record")"
 		BRANCH_RC=0 BRANCH_OUTPUT="" BRANCH_HOOK="" BRANCH_FIELD=""
 		run_branch "$id" "$record" "$rc" "$output" "$title"
 		log_run "$id" "$rc" "$command" "$output" "$BRANCH_FIELD" "$BRANCH_HOOK" "$BRANCH_RC" "$BRANCH_OUTPUT"
-		# A hit whose on-hit hook failed is not done: the condition held but
-		# the action did not happen, so report it and keep the schedule for
-		# a retry.
+		# A verdict whose hook failed is an execution error: the condition held
+		# but the action did not happen, so the schedule stays for a retry.
 		local verdict="$rc" err_label="exit $rc"
-		if [ "$rc" -eq 2 ] && [ "$BRANCH_RC" -ne 0 ]; then
+		if [ "$BRANCH_RC" -ne 0 ]; then
 			verdict=hook_failed
-			err_label="on-hit exit $BRANCH_RC"
+			err_label="${BRANCH_FIELD//_/-} exit $BRANCH_RC"
 			output="$BRANCH_OUTPUT"$'\n---\n'"$output"
 		fi
-		local streak reason
+		local streak reason outcome trace
 		case "$verdict" in
-		0 | 2) ;;
-		hook_failed)
-			reason="$(error_reason "$BRANCH_OUTPUT")"
-			log_fire "$id" error "${reason:-no output}" "$title"
+		0)
+			clear_error_task "$id"
+			mark_done "$id"
+			cmd_sync >/dev/null
+			;;
+		2 | 3)
+			clear_error_task "$id"
+			outcome=success
+			[ "$verdict" -eq 3 ] && outcome=failure
+			trace="$(write_trace "$record" "$outcome" "$rc" "$output" "$BRANCH_FIELD" "$BRANCH_HOOK" "$BRANCH_RC" "$BRANCH_OUTPUT")"
+			if [ "$(record_to "$record")" = gordon ] && notify_gordon "$id" "$outcome: $title" "$output"; then
+				log_fire "$id" delivered gordon "$title"
+			elif [ "$notify" = mail ]; then
+				printf '%s\n' "$output" | "$MAILER" "$outcome: $title"
+			fi
+			complete_packet "$id" "$outcome" "$trace" "$output"
 			;;
 		*)
 			streak="$(error_streak "$id")"
-			reason="$(error_reason "$output")"
-			err_label="$err_label${streak:+, $streak}"
+			if [ "$verdict" = hook_failed ]; then
+				reason="$(error_reason "$BRANCH_OUTPUT")"
+			else
+				reason="$(error_reason "$output")"
+			fi
 			log_fire "$id" error "${streak:+$streak: }${reason:-no output}" "$title"
-			;;
-		esac
-		case "$verdict" in
-		0) mark_done "$id"; cmd_sync >/dev/null ;;
-		2)
-			# A hit ends the schedule. With a dialog, acknowledging it is yours
-			# (Done and Snooze both work); by mail or silently there is nothing
-			# left to ask, so the reminder is done.
-			update_record "$id" 'del(.repeat)'
-			if [ "$(record_to "$record")" = gordon ] && notify_gordon "$id" "$title" "$output"; then notify=gordon; fi
-			case "$notify" in
-			gordon) update_record "$id" '.status = "done" | del(.when)'; cmd_sync >/dev/null; log_fire "$id" delivered gordon "$title" ;;
-			mail) printf '%s\n' "$output" | "$MAILER" "$title"; update_record "$id" '.status = "done" | del(.when)'; cmd_sync >/dev/null ;;
-			silent) update_record "$id" '.status = "done" | del(.when)'; cmd_sync >/dev/null ;;
-			*) guarded_dialog "$id" "$record" "$title" "$output" "$url" "${due:+$(human_when "$due")}" "$late" ;;
-			esac
-			;;
-		*)
-			# An error keeps the schedule (a repeat retries on its own). A dialog
-			# asks what to do with this run; mail reports it and moves on.
-			if [ "$(record_to "$record")" = gordon ] && notify_gordon "$id" "error: $title" "$err_label $output"; then notify=gordon; fi
-			case "$notify" in
-			gordon) log_fire "$id" delivered "gordon error" "$title" ;;
-			mail) printf '%s\n%s\n' "$err_label" "$output" | "$MAILER" "error: $title"; mark_done "$id"; cmd_sync >/dev/null ;;
-			silent) mark_done "$id"; cmd_sync >/dev/null ;;
-			*) guarded_dialog "$id" "$record" "$title" "$err_label"$'\n'"$output" "$url" "${due:+$(human_when "$due")}" "$late" ;;
-			esac
+			error_task "$id" "$title" "$err_label: ${reason:-no output}"
+			if [ "$(record_to "$record")" = gordon ] && notify_gordon "$id" "error: $title" "$err_label${streak:+, $streak} $output"; then
+				log_fire "$id" delivered "gordon error" "$title"
+			elif [ "$notify" = mail ]; then
+				printf '%s\n%s\n' "$err_label${streak:+, $streak}" "$output" | "$MAILER" "error: $title"
+			fi
+			# A one-shot that errored runs again after the default snooze; a
+			# repeat retries on its own schedule.
+			if [ -z "$(jq -r '.repeat // ""' <<<"$record")" ]; then
+				update_record "$id" '.when = $retry' --arg retry "$(parse_when "$DEFAULT_SNOOZE")"
+				cmd_sync >/dev/null
+			fi
 			;;
 		esac
 		;;
 	esac
+}
+
+# The deadline clock: the packet's check neither succeeded nor failed in
+# time. This is the one reminder on a clock, so it reaches Piotr whoever owns
+# the packet: Gordon gets a line, Piotr the form (extend, send to AI, delete).
+# The packet keeps running whatever the answer. The retry is set before the
+# form opens, so a dismissed or dying form comes back after the default snooze.
+cmd_deadline() {
+	local id="$1" record status title deadline subject url late_s
+	valid_id "$id" || die "Invalid id $id."
+	export DISPLAY="${DISPLAY:-:0}"
+	export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=/run/user/$(id -u)/bus}"
+	record="$(get_record "$id")" || {
+		log_fire "$id" missing "deadline" ""
+		return 0
+	}
+	status="$(jq -r '.status' <<<"$record")"
+	title="$(record_title "$record")"
+	deadline="$(jq -r '.deadline // ""' <<<"$record")"
+	if [ "$status" != active ] || [ -z "$(deadline_due "$record")" ]; then
+		log_fire "$id" skipped "deadline: status $status${deadline:+, deadline $deadline}" "$title"
+		return 0
+	fi
+	late_s=$(($(date +%s) - $(epoch_of "$deadline")))
+	if [ "$late_s" -lt 0 ]; then
+		log_fire "$id" skipped "deadline moved to $deadline" "$title"
+		return 0
+	fi
+	if [ -z "$(jq -r '.deadline_retry // ""' <<<"$record")" ]; then
+		log_fire "$id" deadline "passed $deadline" "$title"
+		notify_gordon "$id" "deadline passed: $title" "$(deadline_report "$record")" || true
+	else
+		log_fire "$id" deadline "still passed $deadline" "$title"
+	fi
+	update_record "$id" '.deadline_retry = $retry' --arg retry "$(parse_when "$DEFAULT_SNOOZE")"
+	cmd_sync >/dev/null
+	mkdir -p "$STATE_DIR"
+	exec 8>"$STATE_DIR/fire-$id.lock"
+	if ! flock -n 8; then
+		log_fire "$id" skipped "deadline form already open" "$title"
+		return 0
+	fi
+	record="$(get_record "$id")"
+	subject="$(jq -r '.subject // ""' <<<"$record")"
+	url="$(subject_url "$subject")" || url=""
+	show_dialog "$id" "$record" "$title" "$(deadline_report "$record")" "$url" "$(human_when "$deadline")" \
+		"$( [ "$late_s" -gt "$LATE_AFTER" ] && human_duration "$late_s")" deadline
+	flock -u 8
+}
+
+# What the deadline form and Gordon's line show: what the packet waits for,
+# since when, how its checks went, and the last run's output.
+deadline_report() {
+	local record="$1" id runs last last_out created
+	id="$(jq -r '.id' <<<"$record")"
+	created="$(jq -r '.created // ""' <<<"$record")"
+	runs=0 last=""
+	if [ -f "$FIRE_LOG" ]; then
+		runs="$(awk -F '\t' -v id="$id" '$2 == id && $3 == "exec"' "$FIRE_LOG" | wc -l)"
+		last="$(awk -F '\t' -v id="$id" '$2 == id && $3 == "exec" { at = $1; v = $4 } END { if (at != "") print at " " v }' "$FIRE_LOG")"
+	fi
+	last_out=""
+	[ -f "$RUNS_DIR/$id.log" ] && last_out="$(awk '/^=== / { n = 0; split("", out); next } n == 0 && /^\$ / { next } { out[n++] = $0 } END { for (i = 0; i < n; i++) print out[i] }' "$RUNS_DIR/$id.log" | tail -n 8)"
+	printf 'The deadline %s passed and neither the success nor the failure condition held.\n' "$(human_when "$(jq -r '.deadline' <<<"$record")")"
+	printf 'Waiting since %s (%s), %s.\n' "${created:+$(human_when "$created")}" "$(jq -r '.origin // "?"' <<<"$record")" "$(record_trigger "$record")"
+	printf 'Checks: %s run(s)%s.\n' "$runs" "${last:+, last $last}"
+	[ -n "$(jq -r '.command // ""' <<<"$record")" ] && printf 'Runs: %s\n' "$(jq -r '.command' <<<"$record")"
+	[ -n "$last_out" ] && printf 'Last output:\n%s\n' "$last_out"
+	[ -f "$RUNS_DIR/$id.log" ] && printf 'Run log: %s\n' "$(home_path "$RUNS_DIR/$id.log")"
+	return 0
 }
 
 # -------------------------------------------------------------- dialogs ----
@@ -1798,6 +2165,7 @@ sync) cmd_sync ;;
 gc) cmd_gc ;;
 compact) cmd_compact ;;
 fire) [ -n "${1:-}" ] || die "fire needs an id."; cmd_fire "$1" "${2:-}" ;;
+deadline) [ -n "${1:-}" ] || die "deadline needs an id."; cmd_deadline "$1" ;;
 match) cmd_match ;;
 watch) if [ $# -gt 0 ]; then cmd_watch_thread "$@"; else cmd_watch; fi ;;
 open) [ -n "${1:-}" ] || die "open needs an id."; cmd_open "$1" ;;

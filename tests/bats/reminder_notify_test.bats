@@ -88,7 +88,7 @@ standup_popup() {
 @test "add refuses a pattern with a clock, a non-exec action, a bad regex, and a lone delay" {
   run "$REMINDER" add "x" 10m --on-notify 'a' --action exec --command true
   [ "$status" -ne 0 ] && [[ "$output" == *"takes no time or repeat"* ]]
-  run "$REMINDER" add "x" --on-notify 'a' --repeat 'every 1h' --action exec --command true
+  run "$REMINDER" add "x" --on-notify 'a' --repeat 'every 1h' --deadline 30d --action exec --command true
   [ "$status" -ne 0 ] && [[ "$output" == *"takes no time or repeat"* ]]
   run "$REMINDER" add "x" --on-notify 'a'
   [ "$status" -ne 0 ] && [[ "$output" == *"needs --action exec"* ]]

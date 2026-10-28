@@ -87,11 +87,18 @@ case "$1" in
 esac
 STUB
 
+  # task: `add` prints a fresh uuid (or fails with TEST_TASK_ADD_RC), `_get`
+  # answers uuid, status and description; every call is logged one per line.
+  export TEST_TASK_SEQ="${BATS_TEST_TMPDIR}/task.seq"
   cat >"$BIN/task" <<'STUB'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >>"$TEST_TASK_LOG"
 for arg in "$@"; do
   case "$arg" in
+    add)
+      if [ "${TEST_TASK_ADD_RC:-0}" -ne 0 ]; then echo "database locked" >&2; exit "$TEST_TASK_ADD_RC"; fi
+      n=$(( $(cat "$TEST_TASK_SEQ" 2>/dev/null || echo 0) + 1 )); echo "$n" >"$TEST_TASK_SEQ"
+      printf 'Created task 00000000-0000-4000-8000-%012d.\n' "$n"; exit 0 ;;
     *.uuid) printf '%s\n' "${arg%.uuid}"; exit 0 ;;
     *.status) cat "$TEST_TASK_STATUS"; exit 0 ;;
     *.description) printf 'review the lease-to-own offer\n'; exit 0 ;;
@@ -255,36 +262,61 @@ only_id() {
   grep -q "	$id	done	done	Call vodafone$" "$REMINDER_LOG"
 }
 
-@test "done + copy spends the one-shot and puts the reminder text on the clipboard" {
-  export REMINDER_CLIPBOARD="$BIN/clipboard"
-  printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$*" >"$BATS_TEST_TMPDIR/clip.args"\ncat >"$BATS_TEST_TMPDIR/clip.txt"\n' >"$BIN/clipboard"
-  chmod +x "$BIN/clipboard"
-  "$REMINDER" add 'Check $(rm -rf ~) for #8813' '2026-09-08 09:00' --subject 'link: https://vodafone.de/kontakt' >/dev/null
-  id="$(only_id)"
-  gui_returns '{"action":"done","copy":true}'
-
-  run "$REMINDER" fire "$id"
-
-  [ "$status" -eq 0 ]
-  [ "$(last_record | jq -r '.status')" = done ]
-  [ "$(<"$BATS_TEST_TMPDIR/clip.args")" = "-selection clipboard" ]
-  [ "$(<"$BATS_TEST_TMPDIR/clip.txt")" = 'Check $(rm -rf ~) for #8813'$'\n\n''link: https://vodafone.de/kontakt' ]
-  grep -q "	$id	done	done copied	Check" "$REMINDER_LOG"
+# tmux and snd stubs for Send to AI: panes come from TEST_TMUX_PANES, one
+# client is attached, and every call lands in a log.
+ai_stubs() {
+  export REMINDER_TMUX="$BIN/tmux" REMINDER_SND="$BIN/snd" REMINDER_CLAUDE=/opt/claude-launcher
+  export TEST_TMUX_LOG="${BATS_TEST_TMPDIR}/tmux.log" TEST_SND_LOG="${BATS_TEST_TMPDIR}/snd.log"
+  export TEST_TMUX_PANES="${1:-}" TEST_SND_RC="${2:-0}"
+  cat >"$BIN/tmux" <<'STUB'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >>"$TEST_TMUX_LOG"
+case "$1" in
+  list-panes) [ -n "$TEST_TMUX_PANES" ] && printf '%s\n' "$TEST_TMUX_PANES" ;;
+  list-clients) printf '/dev/pts/1\n' ;;
+  display-message) printf 'task\n' ;;
+esac
+exit 0
+STUB
+  cat >"$BIN/snd" <<'STUB'
+#!/usr/bin/env bash
+printf 'from=%s %s\n' "$SND_FROM" "$*" >>"$TEST_SND_LOG"
+exit "$TEST_SND_RC"
+STUB
+  chmod +x "$BIN/tmux" "$BIN/snd"
 }
 
-@test "done + copy still spends the one-shot when the clipboard fails" {
-  export REMINDER_CLIPBOARD="$BIN/clipboard"
-  printf '#!/usr/bin/env bash\nexit 1\n' >"$BIN/clipboard"
-  chmod +x "$BIN/clipboard"
-  "$REMINDER" add "Ping triage" '2026-09-08 09:00' >/dev/null
+@test "send to AI hands a reminder to Gordon on the bus, moves the terminal to his pane, and spends it" {
+  ai_stubs $'%3 \n%5 triage'
+  "$REMINDER" add 'Book the return train' '2026-09-08 09:00' --subject 'url:https://bahn.de' >/dev/null
   id="$(only_id)"
-  gui_returns '{"action":"done","copy":true}'
+  gui_returns '{"action":"ai"}'
 
   run "$REMINDER" fire "$id"
 
   [ "$status" -eq 0 ]
+  grep -q "^from=reminder --no-human -t triage Piotr sent reminder $id to you from its form: Book the return train" "$TEST_SND_LOG"
+  grep -q '^switch-client -c /dev/pts/1 -t %5$' "$TEST_TMUX_LOG"
+  ! grep -q '^new-window' "$TEST_TMUX_LOG"
   [ "$(last_record | jq -r '.status')" = done ]
-  grep -q "	$id	done	done copy-failed	Ping triage$" "$REMINDER_LOG"
+  grep -q "	$id	sent	gordon (triage)	" "$REMINDER_LOG"
+}
+
+@test "send to AI opens a new Claude window when Gordon is not running or the DM fails" {
+  for setup in "|0" "%5 triage|1"; do
+    ai_stubs "${setup%|*}" "${setup#*|}"
+    : >"$TEST_TMUX_LOG"
+    "$REMINDER" add 'Book the return train' '2026-09-08 09:00' >/dev/null
+    id="$(only_id)"
+    gui_returns '{"action":"ai"}'
+
+    run "$REMINDER" fire "$id"
+
+    [ "$status" -eq 0 ]
+    grep -q "^new-window -t task: -c $HOME/dev/dotfiles -n remind-$id -- /opt/claude-launcher Piotr sent reminder $id" "$TEST_TMUX_LOG"
+    [ "$(last_record | jq -r '.status')" = done ]
+    grep -q "	$id	sent	new claude window	" "$REMINDER_LOG"
+  done
 }
 
 @test "a gordon reminder appends one logger-format line and opens no dialog" {
@@ -330,8 +362,8 @@ only_id() {
   [ ! -e "$NOTIFY_LOG" ]
 }
 
-@test "a gordon exec hit delivers the output to the log and retires the repeat" {
-  "$REMINDER" add "verify: hit" --repeat '0 9 * * 1' --action exec --command 'echo found it; exit 2' --notify mail --to gordon >/dev/null
+@test "a gordon exec success delivers the output to the log, reports, and retires the repeat" {
+  "$REMINDER" add "verify: hit" --repeat '0 9 * * 1' --deadline 30d --action exec --command 'echo found it; exit 2' --notify mail --to gordon >/dev/null
   id="$(only_id)"
   rm -f "$TEST_MAIL_LOG"
 
@@ -339,8 +371,9 @@ only_id() {
 
   [ "$status" -eq 0 ]
   [ ! -e "$TEST_MAIL_LOG" ]
-  [[ "$(<"$NOTIFY_LOG")" == *$'\treminder\tverify: hit\t'"id:$id | found it" ]]
+  [[ "$(<"$NOTIFY_LOG")" == *$'\treminder\tsuccess: verify: hit\t'"id:$id | found it" ]]
   [ "$(last_record | jq -r '.status')" = done ]
+  [ "$(last_record | jq -r '.report_task')" = 00000000-0000-4000-8000-000000000001 ]
 }
 
 @test "edit --to switches the recipient and rejects unknown ones" {
@@ -673,8 +706,8 @@ STUB
   [[ "$output" != *"__toggles"* ]]
 }
 
-@test "an exec repeat is silent on 0, retires itself on a 2 hit, and survives an error" {
-  "$REMINDER" add "Seats check" --repeat 'every 7d' --action exec --command "cat $BATS_TEST_TMPDIR/verdict; exit \$(cat $BATS_TEST_TMPDIR/rc)" >/dev/null
+@test "an exec repeat is silent on 0, opens an error task on an error, and reports and retires on success" {
+  "$REMINDER" add "Seats check" --repeat 'every 7d' --deadline 30d --action exec --command "cat $BATS_TEST_TMPDIR/verdict; exit \$(cat $BATS_TEST_TMPDIR/rc)" >/dev/null
   id="$(only_id)"
   gui_returns '{"action":"dismiss"}'
 
@@ -682,7 +715,7 @@ STUB
   run "$REMINDER" fire "$id"
   [ "$status" -eq 0 ]
   [ "$(last_record | jq -r '.status')" = active ]
-  [ ! -s "$TEST_ALERT_REQUEST" ]
+  ! grep -q ' add ' "$TEST_TASK_LOG"
   grep -q "	$id	exec	rc=0	" "$REMINDER_LOG"
 
   printf 'broken pipe\n' >"$BATS_TEST_TMPDIR/verdict"; printf '1\n' >"$BATS_TEST_TMPDIR/rc"
@@ -690,24 +723,95 @@ STUB
   [ "$status" -eq 0 ]
   [ "$(last_record | jq -r '.status')" = active ]
   [ "$(last_record | jq -r '.repeat')" = "every 7d" ]
-  [ "$(jq -r '.body' "$TEST_ALERT_REQUEST")" = $'exit 1\nbroken pipe' ]
-  # dismissed: the provisional snooze stands, so this run comes back
-  [ -n "$(last_record | jq -r '.when // ""')" ]
+  grep -q "^rc.verbose=new-uuid rc.confirmation=off add +gordon +work +reminder -- $id (Seats check) error$" "$TEST_TASK_LOG"
+  grep -q "annotate -- what: Reminder $id (Seats check) failed to run: exit 1: broken pipe\." "$TEST_TASK_LOG"
 
   printf 'seats: 3 available\n' >"$BATS_TEST_TMPDIR/verdict"; printf '2\n' >"$BATS_TEST_TMPDIR/rc"
-  : >"$TEST_ALERT_REQUEST"
-  gui_returns '{"action":"done"}'
   run "$REMINDER" fire "$id"
   [ "$status" -eq 0 ]
-  [ "$(jq -r '.body' "$TEST_ALERT_REQUEST")" = "seats: 3 available" ]
-  [ "$(jq -r '.title' "$TEST_ALERT_REQUEST")" = "Seats check" ]
+  [ ! -s "$TEST_ALERT_REQUEST" ]
+  grep -q "^rc.verbose=new-uuid rc.confirmation=off add +piotr +work +reminder -- success: Seats check$" "$TEST_TASK_LOG"
+  grep -q "00000000-0000-4000-8000-000000000002 annotate -- brief: seats: 3 available " "$TEST_TASK_LOG"
+  grep -q "00000000-0000-4000-8000-000000000001 annotate -- recovered " "$TEST_TASK_LOG"
   [ "$(last_record | jq -r '.status')" = done ]
   [ "$(last_record | jq -r '.repeat // "gone"')" = gone ]
   ! grep -q "remind-$id" "$TEST_CRONTAB"
 }
 
-@test "notify mail: a hit is mailed and the reminder is done without a dialog" {
-  "$REMINDER" add "tmux watch" --repeat '26 10 * * 1' --action exec --command "echo 'tmux 3.8 released'; exit 2" --notify mail >/dev/null
+@test "success writes the trace before the report task, and the task points at it" {
+  "$REMINDER" add "LLMday agenda" --repeat '31 9 * * *' --deadline 30d --action exec \
+    --command "echo 'slot 14:20'; exit 2" --on-hit "echo booked train" --subject 'url:https://llmday.com' >/dev/null
+  id="$(only_id)"
+
+  run "$REMINDER" fire "$id"
+
+  trace="$REMINDER_STATE_DIR/reports/$id/brief.md"
+  [ "$status" -eq 0 ]
+  grep -q '^- Outcome: success (exit 2)$' "$trace"
+  grep -q '^slot 14:20$' "$trace"
+  grep -q '^## Action: on-hit (exit 0)$' "$trace"
+  grep -q '^booked train$' "$trace"
+  grep -q "	$id	exec	rc=2	" "$trace"
+  grep -q "annotate -- trace: $trace$" "$TEST_TASK_LOG"
+  grep -q "annotate -- link: https://llmday.com$" "$TEST_TASK_LOG"
+  grep -q "	$id	reported	success task 00000000-0000-4000-8000-000000000001	" "$REMINDER_LOG"
+}
+
+@test "failure (exit 3) runs on-fail, not on-hit, and reports a failure" {
+  "$REMINDER" add "PR reaction" --repeat 'every 1d' --deadline 7d --action exec \
+    --command "echo 'PR closed unmerged'; exit 3" --on-hit "touch $BATS_TEST_TMPDIR/hit" \
+    --on-fail "cat >$BATS_TEST_TMPDIR/fail" >/dev/null
+  id="$(only_id)"
+
+  run "$REMINDER" fire "$id"
+
+  [ "$status" -eq 0 ]
+  [ ! -e "$BATS_TEST_TMPDIR/hit" ]
+  [ "$(<"$BATS_TEST_TMPDIR/fail")" = "PR closed unmerged" ]
+  grep -q -- '-- failure: PR reaction$' "$TEST_TASK_LOG"
+  [ "$(last_record | jq -r '.status')" = done ]
+}
+
+@test "a failed report write keeps the packet; the next fire writes the report without rerunning the check" {
+  "$REMINDER" add "once" --repeat 'every 1d' --deadline 30d --action exec \
+    --command "echo run >>$BATS_TEST_TMPDIR/runs; exit 2" >/dev/null
+  id="$(only_id)"
+
+  run env TEST_TASK_ADD_RC=1 "$REMINDER" fire "$id"
+  [ "$status" -eq 0 ]
+  [ "$(last_record | jq -r '.status')" = active ]
+  [ "$(last_record | jq -r '.report_pending')" = "$REMINDER_STATE_DIR/reports/$id/brief.md" ]
+  grep -q "	$id	error	report task failed: database locked	" "$REMINDER_LOG"
+
+  run "$REMINDER" fire "$id"
+  [ "$status" -eq 0 ]
+  [ "$(grep -c run "$BATS_TEST_TMPDIR/runs")" -eq 1 ]
+  [ "$(last_record | jq -r '.status')" = done ]
+  [ "$(last_record | jq -r '.report_pending // "gone"')" = gone ]
+}
+
+@test "one error task per failing packet: the same reason adds nothing, a new reason one note" {
+  "$REMINDER" add "flaky" --repeat 'every 1d' --deadline 30d --action exec --command "echo \$(cat $BATS_TEST_TMPDIR/why); exit 1" >/dev/null
+  id="$(only_id)"
+
+  printf 'token expired\n' >"$BATS_TEST_TMPDIR/why"
+  "$REMINDER" fire "$id" >/dev/null
+  "$REMINDER" fire "$id" >/dev/null
+  printf 'rate limited\n' >"$BATS_TEST_TMPDIR/why"
+  "$REMINDER" fire "$id" >/dev/null
+
+  [ "$(grep -c ' add ' "$TEST_TASK_LOG")" -eq 1 ]
+  [ "$(grep -c 'annotate -- error again' "$TEST_TASK_LOG")" -eq 1 ]
+  grep -q 'annotate -- error again .*: exit 1: rate limited$' "$TEST_TASK_LOG"
+
+  "$REMINDER" edit "$id" --command 'exit 0' >/dev/null
+  "$REMINDER" fire "$id" >/dev/null
+  grep -q '00000000-0000-4000-8000-000000000001 annotate -- recovered ' "$TEST_TASK_LOG"
+  [ "$(last_record | jq -r '.error_task // "gone"')" = gone ]
+}
+
+@test "notify mail: a success is mailed, reported, and the reminder is done without a dialog" {
+  "$REMINDER" add "tmux watch" --repeat '26 10 * * 1' --deadline 30d --action exec --command "echo 'tmux 3.8 released'; exit 2" --notify mail >/dev/null
   id="$(only_id)"
   gui_returns '{"action":"dismiss"}'
 
@@ -715,14 +819,15 @@ STUB
 
   [ "$status" -eq 0 ]
   [ ! -s "$TEST_ALERT_REQUEST" ]
-  grep -q '^subject: tmux watch$' "$TEST_MAIL_LOG"
+  grep -q '^subject: success: tmux watch$' "$TEST_MAIL_LOG"
   grep -q '^tmux 3.8 released$' "$TEST_MAIL_LOG"
+  grep -q -- '-- success: tmux watch$' "$TEST_TASK_LOG"
   [ "$(last_record | jq -r '.status')" = done ]
   ! grep -q "remind-$id" "$TEST_CRONTAB"
 }
 
-@test "notify silent: the command told you itself, the hit just retires the reminder" {
-  "$REMINDER" add "self-mailing watch" --repeat '26 10 * * 1' --action exec --command "exit 2" --notify silent >/dev/null
+@test "notify silent: no mail and no dialog, but the report task is still written" {
+  "$REMINDER" add "self-mailing watch" --repeat '26 10 * * 1' --deadline 30d --action exec --command "exit 2" --notify silent >/dev/null
   id="$(only_id)"
   gui_returns '{"action":"dismiss"}'
 
@@ -731,6 +836,7 @@ STUB
   [ "$status" -eq 0 ]
   [ ! -s "$TEST_ALERT_REQUEST" ]
   [ ! -f "$TEST_MAIL_LOG" ]
+  grep -q -- '-- success: self-mailing watch$' "$TEST_TASK_LOG"
   [ "$(last_record | jq -r '.status')" = done ]
 }
 
@@ -748,7 +854,7 @@ STUB
 }
 
 @test "the agenda renders and applies :notify:" {
-  "$REMINDER" add "tmux watch" --repeat '26 10 * * 1' --action exec --command "/x/watch.sh" --notify silent >/dev/null
+  "$REMINDER" add "tmux watch" --repeat '26 10 * * 1' --deadline 30d --action exec --command "/x/watch.sh" --notify silent >/dev/null
   id="$(only_id)"
   run "$REMINDER" agenda render
   [[ "$output" == *"   :notify: silent"* ]]
@@ -765,7 +871,7 @@ STUB
 }
 
 @test "on-hit and on-miss run the branch with the check output on stdin, and chain" {
-  "$REMINDER" add "revert check" --repeat 'every 1d' --action exec \
+  "$REMINDER" add "revert check" --repeat 'every 1d' --deadline 30d --action exec \
     --command "cat $BATS_TEST_TMPDIR/verdict; exit \$(cat $BATS_TEST_TMPDIR/rc)" \
     --on-hit "cat >$BATS_TEST_TMPDIR/hit && $BIN/mailer 'reverted'" \
     --on-miss "cat >$BATS_TEST_TMPDIR/miss" --notify silent >/dev/null
@@ -792,7 +898,7 @@ STUB
 }
 
 @test "a failing on-hit keeps a repeating reminder alive and reports the hook, not a hit" {
-  "$REMINDER" add "download on release" --repeat 'every 1d' --action exec \
+  "$REMINDER" add "download on release" --repeat 'every 1d' --deadline 30d --action exec \
     --command "echo 3.8 is out; exit 2" \
     --on-hit "echo no space left; exit 1" --notify mail >/dev/null
   id="$(only_id)"
@@ -812,7 +918,7 @@ STUB
 }
 
 @test "the agenda shows how the last firing ended, where its output is, and apply ignores both" {
-  "$REMINDER" add "tmux watch" --repeat 'every 1d' --action exec \
+  "$REMINDER" add "tmux watch" --repeat 'every 1d' --deadline 30d --action exec \
     --command "echo checked; exit \$(cat $BATS_TEST_TMPDIR/rc)" \
     --on-hit "echo no pattern given; exit 1" --notify mail >/dev/null
   id="$(only_id)"
@@ -828,7 +934,7 @@ STUB
   printf '2\n' >"$BATS_TEST_TMPDIR/rc"
   "$REMINDER" fire "$id" >/dev/null
   run "$REMINDER" agenda render
-  grep -Eq "^   :last: $stamp hit, on-hit failed \(exit 1\), no pattern given$" <<<"$output"
+  grep -Eq "^   :last: $stamp success, on-hit failed \(exit 1\), no pattern given$" <<<"$output"
   grep -q "^   :log: .*/runs/$id.log$" <<<"$output"
 
   runlog="$REMINDER_STATE_DIR/runs/$id.log"
@@ -850,7 +956,7 @@ STUB
 
 @test "the run log keeps only the newest lines" {
   export REMINDER_RUN_LOG_LINES=4
-  "$REMINDER" add "chatty" --repeat 'every 1d' --action exec --command "seq 1 3" --notify silent >/dev/null
+  "$REMINDER" add "chatty" --repeat 'every 1d' --deadline 30d --action exec --command "seq 1 3" --notify silent >/dev/null
   id="$(only_id)"
 
   "$REMINDER" fire "$id" >/dev/null
@@ -863,7 +969,7 @@ STUB
 }
 
 @test "the agenda round-trips :on-hit: and :on-miss:" {
-  "$REMINDER" add "watch" --repeat 'every 1d' --action exec --command /x/check.sh --on-hit '/x/y.sh && /x/mail.sh "yes"' >/dev/null
+  "$REMINDER" add "watch" --repeat 'every 1d' --deadline 30d --action exec --command /x/check.sh --on-hit '/x/y.sh && /x/mail.sh "yes"' >/dev/null
   id="$(only_id)"
   run "$REMINDER" agenda render
   [[ "$output" == *'   :on-hit: /x/y.sh && /x/mail.sh "yes"'* ]]
@@ -873,21 +979,6 @@ STUB
   [ "$status" -eq 0 ]
   [ "$(last_record | jq -r '.on_miss')" = '/x/mail.sh "not yet"' ]
   [ "$(last_record | jq -r '.on_hit')" = '/x/y.sh && /x/mail.sh "yes"' ]
-}
-
-@test "a hit on an exec repeat that is snoozed keeps a one-shot and no schedule" {
-  "$REMINDER" add "Seats check" --repeat 'every 7d' --action exec --command "echo found; exit 2" >/dev/null
-  id="$(only_id)"
-  gui_returns '{"action":"snooze","when":"2026-09-12 09:00"}'
-
-  run "$REMINDER" fire "$id"
-
-  [ "$status" -eq 0 ]
-  [ "$(last_record | jq -r '.status')" = active ]
-  [ "$(last_record | jq -r '.repeat // "gone"')" = gone ]
-  [ "$(last_record | jq -r '.when')" = "2026-09-12T09:00:00$(date -d 2026-09-12 +%:z)" ]
-  ! grep -q "remind-$id" "$TEST_CRONTAB"
-  tail -n1 "$TEST_AT_LOG" | grep -q -- '-q r -t 202609120900'
 }
 
 @test "the dialog's Open task on a task reminder opens the task, not a link" {
@@ -1075,7 +1166,7 @@ STUB
 }
 
 @test "a failing check records its reason and how long it has failed, and a clean run resets the count" {
-  "$REMINDER" add "canary" --repeat '36 10 * * *' --action exec --notify mail \
+  "$REMINDER" add "canary" --repeat '36 10 * * *' --deadline 30d --action exec --notify mail \
     --command "echo progress; printf 'ERROR: aws exit 255:\tToken has expired\n\nlast words\n' >&2; exit \$(cat $BATS_TEST_TMPDIR/rc)" >/dev/null
   id="$(only_id)"
   printf '1\n' >"$BATS_TEST_TMPDIR/rc"
@@ -1194,15 +1285,117 @@ STUB
   [ "$(last_record | jq -r '.subject')" = "text:new note" ]
 }
 
-@test "exec error and hit dialogs show the due time the way show dialogs do" {
-  "$REMINDER" add "check" "$(date -d '+3 days' '+%Y-%m-%d 10:00')" --action exec --command "exit \$(cat $BATS_TEST_TMPDIR/rc)" >/dev/null
-  id="$(only_id)"
-  gui_returns '{"action":"dismiss"}'
 
-  for rc in 1 2; do
-    printf '%s\n' "$rc" >"$BATS_TEST_TMPDIR/rc"
-    when="$(last_record | jq -r '.when')"
-    "$REMINDER" fire "$id" >/dev/null
-    [ "$(jq -r '.due' "$TEST_ALERT_REQUEST")" = "$(date -d "$when" '+%a %d %b %H:%M')" ]
-  done
+@test "an exec repeat needs a deadline; a one-shot exec and a popup rule do not" {
+  run "$REMINDER" add "no end" --repeat 'every 1d' --action exec --command true
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"An exec repeat needs --deadline"* ]]
+  [ ! -s "$REMINDER_STORE" ]
+
+  run "$REMINDER" add "once" '2026-11-09 09:00' --action exec --command true
+  [ "$status" -eq 0 ]
+  run "$REMINDER" add "rule" --on-notify 'x' --action exec --command true
+  [ "$status" -eq 0 ]
+}
+
+@test "a deadline gets its own at job, edit moves it, and a finished packet drops it" {
+  run "$REMINDER" add "PR reaction" --repeat 'every 1d' --deadline '2026-11-04 09:00' --action exec --command 'exit 2'
+  [ "$status" -eq 0 ]
+  id="$(only_id)"
+  [[ "$output" == *", deadline Wed 04 Nov 09:00" ]]
+  [ "$(last_record | jq -r '.deadline')" = "2026-11-04T09:00:00$(date -d 2026-11-04 +%:z)" ]
+  grep -qx -- '-q r -t 202611040900' "$TEST_AT_LOG"
+  [[ "$(<"$TEST_AT_BODIES/42")" == *" deadline $id" ]]
+
+  "$REMINDER" edit "$id" --deadline '2026-11-11 09:00' >/dev/null
+  grep -qx -- '-q r -t 202611110900' "$TEST_AT_LOG"
+  grep -qx 42 "$TEST_ATRM"
+
+  "$REMINDER" fire "$id" >/dev/null
+  [ "$(last_record | jq -r '.status')" = done ]
+  [ ! -s "$TEST_ATQ" ]
+}
+
+@test "a passed deadline tells Gordon once, opens the deadline form, and comes back when dismissed" {
+  "$REMINDER" add "PR reaction" --repeat 'every 1d' --deadline '2026-10-01 09:00' --action exec \
+    --command "echo no comments yet" --subject 'url:https://github.com/x/y/pull/1' >/dev/null
+  id="$(only_id)"
+  "$REMINDER" fire "$id" >/dev/null
+  gui_closes
+
+  run env REMINDER_DEFAULT_SNOOZE='2030-01-02 10:00' "$REMINDER" deadline "$id"
+
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.kind' "$TEST_ALERT_REQUEST")" = deadline ]
+  [ "$(jq -r '.url' "$TEST_ALERT_REQUEST")" = https://github.com/x/y/pull/1 ]
+  jq -r '.body' "$TEST_ALERT_REQUEST" | grep -q '^The deadline Thu 01 Oct 09:00 passed and neither the success nor the failure condition held\.$'
+  jq -r '.body' "$TEST_ALERT_REQUEST" | grep -q '^Checks: 1 run(s), last .* rc=0\.$'
+  jq -r '.body' "$TEST_ALERT_REQUEST" | grep -q '^no comments yet$'
+  [ "$(grep -c $'\treminder\tdeadline passed: PR reaction\t' "$NOTIFY_LOG")" -eq 1 ]
+  [ "$(last_record | jq -r '.deadline_retry')" = "2030-01-02T10:00:00$(date -d 2030-01-02 +%:z)" ]
+  grep -qx -- '-q r -t 203001021000' "$TEST_AT_LOG"
+  [ "$(last_record | jq -r '.status')" = active ]
+
+  run "$REMINDER" deadline "$id"
+  [ "$(grep -c $'\treminder\tdeadline passed: PR reaction\t' "$NOTIFY_LOG")" -eq 1 ]
+}
+
+@test "the deadline form extends the deadline, sends it to AI once, or deletes the packet" {
+  ai_stubs '%5 triage'
+  "$REMINDER" add "PR reaction" --repeat 'every 1d' --deadline '2026-10-01 09:00' --action exec --command true >/dev/null
+  id="$(only_id)"
+
+  gui_returns '{"action":"extend","when":"2030-03-04 15:45"}'
+  "$REMINDER" deadline "$id" >/dev/null
+  [ "$(last_record | jq -r '.deadline')" = "2030-03-04T15:45:00$(date -d 2030-03-04 +%:z)" ]
+  [ "$(last_record | jq -r '.deadline_retry // "none"')" = none ]
+  tail -n1 "$TEST_AT_LOG" | grep -qx -- '-q r -t 203003041545'
+
+  "$REMINDER" edit "$id" --deadline '2026-10-01 09:00' >/dev/null
+  gui_returns '{"action":"ai"}'
+  "$REMINDER" deadline "$id" >/dev/null
+  grep -q "Its deadline passed with neither the success nor the failure condition met" "$TEST_SND_LOG"
+  [ "$(last_record | jq -r '.deadline_seen')" = "$(last_record | jq -r '.deadline')" ]
+  [ "$(last_record | jq -r '.status')" = active ]
+  run "$REMINDER" deadline "$id"
+  grep -q "	$id	skipped	deadline: status active" "$REMINDER_LOG"
+
+  "$REMINDER" edit "$id" --deadline '2026-10-02 09:00' >/dev/null
+  gui_returns '{"action":"delete"}'
+  "$REMINDER" deadline "$id" >/dev/null
+  [ "$(last_record | jq -r '.status')" = deleted ]
+  grep -q "	$id	deleted	from the deadline form	" "$REMINDER_LOG"
+}
+
+@test "the show form extends to a picked date and time" {
+  "$REMINDER" add "Call back" '2026-09-08 09:00' >/dev/null
+  id="$(only_id)"
+  gui_returns '{"action":"extend","when":"2030-05-06 07:30"}'
+
+  run "$REMINDER" fire "$id"
+
+  [ "$(jq -r '.kind' "$TEST_ALERT_REQUEST")" = show ]
+  [ "$(jq -r '.pick' "$TEST_ALERT_REQUEST")" = "$(date -d 'tomorrow 9:00' '+%Y-%m-%d %H:%M')" ]
+  [ "$(last_record | jq -r '.when')" = "2030-05-06T07:30:00$(date -d 2030-05-06 +%:z)" ]
+  grep -q "	$id	snoozed	2030-05-06T07:30" "$REMINDER_LOG"
+}
+
+@test "the agenda and the list carry the deadline and on-fail" {
+  "$REMINDER" add "PR reaction" --repeat 'every 1d' --deadline '2026-11-04 09:00' --action exec --command /x/check.sh --on-fail '/x/replan.sh' >/dev/null
+  id="$(only_id)"
+  run "$REMINDER" agenda render
+  [[ "$output" == *"   :deadline: <2026-11-04 Wed 09:00>"* ]]
+  [[ "$output" == *"   :on-fail: /x/replan.sh"* ]]
+
+  agenda="${BATS_TEST_TMPDIR}/agenda.org"
+  before="$(last_record)"
+  "$REMINDER" agenda render >"$agenda"
+  "$REMINDER" agenda apply "$agenda" >/dev/null
+  [ "$(last_record)" = "$before" ]
+  "$REMINDER" agenda render | sed 's/^   :deadline: .*/   :deadline: <2026-11-18 Wed 09:00>/' >"$agenda"
+  "$REMINDER" agenda apply "$agenda" >/dev/null
+  [ "$(last_record | jq -r '.deadline')" = "2026-11-18T09:00:00$(date -d 2026-11-18 +%:z)" ]
+
+  run "$REMINDER" list
+  [[ "$output" == *"by Wed 18 Nov 09:00"*"PR reaction" ]]
 }

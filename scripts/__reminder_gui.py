@@ -177,16 +177,71 @@ class ReminderDialog:
 
     # The helper owns every consequence: it opens the url, edits the record
     # and syncs the clocks. This dialog only names the choice. Closing it
-    # without choosing exits 1, which the helper reads as the default snooze.
-    SNOOZES = (
+    # without choosing exits 1, which the helper reads as "back later".
+    EXTENDS = (
         ("15m", "15 minutes"),
         ("1h", "1 hour"),
         ("Tomorrow 9:00", "tomorrow 9:00"),
         ("Next Monday", "next monday 9:00"),
     )
 
+    def picker(self):
+        """A calendar and an hour and minute, folded under an expander. Returns
+        the expander and a function that reads the choice as 'YYYY-MM-DD HH:MM'."""
+        pick = str(self.request.get("pick", "")).strip()
+        try:
+            start = GLib.DateTime.new_local(
+                int(pick[0:4]), int(pick[5:7]), int(pick[8:10]), int(pick[11:13]), int(pick[14:16]), 0
+            )
+        except (ValueError, TypeError):
+            start = None
+        if start is None:
+            start = GLib.DateTime.new_now_local().add_days(1)
+
+        calendar = Gtk.Calendar()
+        calendar.select_month(start.get_month() - 1, start.get_year())
+        calendar.select_day(start.get_day_of_month())
+        hour = Gtk.SpinButton.new_with_range(0, 23, 1)
+        hour.set_value(start.get_hour())
+        minute = Gtk.SpinButton.new_with_range(0, 55, 5)
+        minute.set_value(start.get_minute() - start.get_minute() % 5)
+        def padded(spin):
+            spin.set_text("%02d" % spin.get_value_as_int())
+            return True
+
+        for spin in (hour, minute):
+            spin.set_numeric(True)
+            spin.set_wrap(True)
+            spin.set_width_chars(2)
+            spin.connect("output", padded)
+
+        def chosen():
+            year, month, day = calendar.get_date()
+            return "%04d-%02d-%02d %02d:%02d" % (
+                year, month + 1, day, hour.get_value_as_int(), minute.get_value_as_int()
+            )
+
+        time_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        self.add(time_row, self.label("Time"))
+        self.add(time_row, hour)
+        self.add(time_row, Gtk.Label(label=":"))
+        self.add(time_row, minute)
+        set_button = Gtk.Button(label="Extend to this")
+        set_button.connect(
+            "clicked", lambda *_args: self.finish({"action": "extend", "when": chosen()})
+        )
+        time_row.pack_end(set_button, False, False, 0)
+
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        self.add(box, calendar)
+        self.add(box, time_row)
+        expander = Gtk.Expander(label="Pick a date and time")
+        expander.add(box)
+        return expander
+
     def alert(self):
-        window, content = self.window("Reminder", 460)
+        deadline = str(self.request.get("kind", "show")) == "deadline"
+        window, content = self.window("Deadline passed" if deadline else "Reminder", 480)
         title = self.label("")
         title.set_markup(
             "<b>%s</b>" % GLib.markup_escape_text(str(self.request.get("title", "Reminder")))
@@ -198,11 +253,11 @@ class ReminderDialog:
         repeat = str(self.request.get("repeat", "")).strip()
         parts = []
         if due:
-            parts.append("Due %s" % due)
+            parts.append(("Deadline %s" if deadline else "Due %s") % due)
         if late:
             parts.append("%s late" % late)
         if repeat:
-            parts.append("repeats %s" % repeat)
+            parts.append(("checks %s" if deadline else "repeats %s") % repeat)
         if parts:
             when = self.label(", ".join(parts))
             when.get_style_context().add_class("dim-label")
@@ -218,42 +273,48 @@ class ReminderDialog:
             scroll = Gtk.ScrolledWindow()
             scroll.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
             scroll.set_shadow_type(Gtk.ShadowType.IN)
-            scroll.set_min_content_height(90)
+            scroll.set_min_content_height(160 if deadline else 90)
             scroll.add(view)
             self.add(content, scroll, True)
 
-        snooze_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        self.add(snooze_row, self.label("Snooze"))
-        for caption, spec in self.SNOOZES:
+        extend_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        self.add(extend_row, self.label("Extend"))
+        for caption, spec in self.EXTENDS:
             button = Gtk.Button(label=caption)
             button.connect(
                 "clicked",
-                lambda _b, s=spec: self.finish({"action": "snooze", "when": s}),
+                lambda _b, s=spec: self.finish({"action": "extend", "when": s}),
             )
-            self.add(snooze_row, button)
-        self.add(content, snooze_row)
+            self.add(extend_row, button)
+        self.add(content, extend_row)
+        self.add(content, self.picker())
 
         actions = self.actions(content)
         if str(self.request.get("url", "")).strip():
             open_link = Gtk.Button(label="Open link")
             open_link.connect("clicked", lambda *_args: self.finish({"action": "open"}))
             self.add(actions, open_link)
-        done_label = "Done"
-        if str(self.request.get("subject_type", "")) == "task":
-            done_label = "Task done"
+        task_subject = str(self.request.get("subject_type", "")) == "task"
+        if task_subject:
             open_task = Gtk.Button(label="Open task")
             open_task.connect("clicked", lambda *_args: self.finish({"action": "open"}))
             self.add(actions, open_task)
-        done_copy = Gtk.Button(label="%s + copy" % done_label)
-        done_copy.connect(
-            "clicked", lambda *_args: self.finish({"action": "done", "copy": True})
-        )
-        self.add(actions, done_copy)
-        done = Gtk.Button(label=done_label)
-        done.get_style_context().add_class("suggested-action")
-        done.connect("clicked", lambda *_args: self.finish({"action": "done"}))
-        self.add(actions, done)
-        self.default_button(done)
+        delete = Gtk.Button(label="Delete")
+        delete.get_style_context().add_class("destructive-action")
+        delete.connect("clicked", lambda *_args: self.finish({"action": "delete"}))
+        self.add(actions, delete)
+        send = Gtk.Button(label="Send to AI")
+        send.set_tooltip_text("Gordon when he is running, otherwise a new Claude window")
+        send.connect("clicked", lambda *_args: self.finish({"action": "ai"}))
+        self.add(actions, send)
+        default = send
+        if not deadline:
+            done = Gtk.Button(label="Task done" if task_subject else "Done")
+            done.connect("clicked", lambda *_args: self.finish({"action": "done"}))
+            self.add(actions, done)
+            default = done
+        default.get_style_context().add_class("suggested-action")
+        self.default_button(default)
         window.show_all()
         window.present()
 
