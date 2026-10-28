@@ -10,7 +10,8 @@ SCRIPT
   cat >"$BATS_TEST_TMPDIR/bin/cockpit" <<'SCRIPT'
 #!/usr/bin/env bash
 sleep 0.6
-printf '    AGENT:   1d2c-rsi-orphan-finish · codex · terra xhigh\nLATEST:  Linear OAuth done then CMA runtime wiring and GitHub access\n'
+printf 'width=%s cache=%s\n' "$COCKPIT_VERTICAL_WIDTH" "${COCKPIT_CACHE:-1}"
+printf 'AGENT: live-worker\n'
 SCRIPT
   chmod +x "$BATS_TEST_TMPDIR/bin/tmux" "$BATS_TEST_TMPDIR/bin/cockpit"
   export PATH="$BATS_TEST_TMPDIR/bin:$PATH" WIDTH_FILE="$BATS_TEST_TMPDIR/width"
@@ -19,30 +20,31 @@ SCRIPT
   export TMUX_READING_MARGIN_FOCUS_COMMAND="$BATS_TEST_TMPDIR/absent"
 }
 
-@test "cached margin reflows on each width without waiting for collection" {
+@test "first draw renders synchronously at the pane width without a loading placeholder" {
   printf '35\n' >"$WIDTH_FILE"
   run "$work" --cached-render test '@1'
   [ "$status" -eq 0 ]
-  [[ "$output" == *'Loading cockpit'* ]]
-  for _ in {1..50}; do
-    sleep 0.05
-    run "$work" --cached-render test '@1'
-    [[ "$output" == *'1d2c-rsi-orphan-finish'* ]] && break
-  done
-  [[ "$output" == *'1d2c-rsi-orphan-finish'* ]]
-  [[ "$output" == *$'\n             '* ]]
+  [[ "$output" == *'AGENT: live-worker'* ]]
+  [[ "$output" == *'width=35 cache=0'* ]]
+  [[ "$output" != *'Loading'* ]]
+}
+
+@test "each draw uses the current width including narrow panes" {
+  printf '35\n' >"$WIDTH_FILE"
+  run "$work" --cached-render test '@1'
+  [ "$status" -eq 0 ]
   printf '52\n' >"$WIDTH_FILE"
   run timeout 1 "$work" --cached-render test '@1'
   [ "$status" -eq 0 ]
-  [[ "$output" == *'1d2c-rsi-orphan-finish · codex'* ]]
+  [[ "$output" == *'width=52 cache=0'* ]]
   printf '12\n' >"$WIDTH_FILE"
   run timeout 1 "$work" --cached-render test '@1'
   [ "$status" -eq 0 ]
-  [ -z "$output" ]
+  [[ "$output" == *'width=12 cache=0'* ]]
   printf '1\n' >"$WIDTH_FILE"
   run timeout 1 "$work" --cached-render test '@1'
   [ "$status" -eq 0 ]
-  [ -z "$output" ]
+  [[ "$output" == *'width=1 cache=0'* ]]
 }
 
 @test "focus is cached at each width and redrawn when the width changes" {

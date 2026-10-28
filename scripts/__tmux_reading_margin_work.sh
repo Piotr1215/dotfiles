@@ -7,8 +7,8 @@ if [[ "${1:-}" != "--render" && "${1:-}" != "--cached-render" ]]; then
   session="${1:-$(tmux display-message -p '#{session_name}')}"
   window="${2:-$(tmux display-message -p '#{window_id}')}"
   viddy="${TMUX_READING_MARGIN_VIDDY_COMMAND:-viddy}"
-  # Viddy redraws its old snapshot on SIGWINCH but only re-runs the command at
-  # its interval. Reflow the cached board at viddy's shortest interval.
+  # Viddy re-runs the renderer at its shortest interval so every completed
+  # draw uses the current pane width and live roster.
   exec "$viddy" --interval 0.1 --no-title \
     "$0" --cached-render "$session" "$window"
 fi
@@ -26,10 +26,6 @@ if [[ -n "${TMUX_PANE:-}" ]]; then
   width="$(tmux display-message -p -t "$TMUX_PANE" '#{pane_width}' 2>/dev/null || true)"
 fi
 case "$width" in ''|*[!0-9]*) width=100 ;; esac
-if (( width < 24 )); then
-  printf '\n'
-  exit 0
-fi
 
 cockpit_command="${TMUX_READING_MARGIN_COCKPIT_STATE_COMMAND:-$HOME/.claude/scripts/__cockpit_state.sh}"
 focus_command="${TMUX_READING_MARGIN_FOCUS_COMMAND:-$HOME/.claude/scripts/__focus.py}"
@@ -61,25 +57,7 @@ if [[ -x "$focus_command" ]]; then
   printf '\n'
 fi
 
-if [[ "$mode" == --cached-render ]]; then
-  # Collect the expensive tmux and TaskWarrior state in the background. Keep
-  # an unwrapped snapshot so a resize only needs a fast reflow of that data.
-  if [[ -z $(find "$cache" -mmin -0.0833 2>/dev/null) ]]; then
-    (
-      flock -n 9 || exit 0
-      if [[ -z $(find "$cache" -mmin -0.0833 2>/dev/null) ]]; then
-        temp="$cache.$BASHPID"
-        if COCKPIT_LAYOUT=vertical COCKPIT_VERTICAL_WIDTH=10000 "$cockpit_command" >"$temp"; then
-          mv -f "$temp" "$cache"
-        fi
-      fi
-    ) 9>"$cache.lock" </dev/null >/dev/null 2>&1 &
-  fi
-  if [[ -f "$cache" ]]; then
-    python3 "$HOME/.claude/scripts/__cockpit_wrap.py" --board "$width" < "$cache"
-  else
-    printf 'Loading cockpit\n'
-  fi
-else
-  COCKPIT_LAYOUT=vertical COCKPIT_VERTICAL_WIDTH="$width" "$cockpit_command"
-fi
+# Roster rows come from live tmux panes on every draw. Caching this board here
+# or in the cockpit can keep a closed agent visible or hide a new one. Only
+# Focus above is cached; a cold draw and a resize both render synchronously.
+COCKPIT_CACHE=0 COCKPIT_LAYOUT=vertical COCKPIT_VERTICAL_WIDTH="$width" "$cockpit_command"
