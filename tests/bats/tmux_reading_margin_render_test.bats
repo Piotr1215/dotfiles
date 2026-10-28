@@ -1,0 +1,42 @@
+#!/usr/bin/env bats
+
+setup() {
+  work="${BATS_TEST_DIRNAME}/../../scripts/__tmux_reading_margin_work.sh"
+  mkdir -p "$BATS_TEST_TMPDIR/bin" "$BATS_TEST_TMPDIR/cache"
+  cat >"$BATS_TEST_TMPDIR/bin/tmux" <<'SCRIPT'
+#!/usr/bin/env bash
+cat "$WIDTH_FILE"
+SCRIPT
+  cat >"$BATS_TEST_TMPDIR/bin/cockpit" <<'SCRIPT'
+#!/usr/bin/env bash
+sleep 0.6
+printf '    AGENT:   1d2c-rsi-orphan-finish · codex · terra xhigh\nLATEST:  Linear OAuth done then CMA runtime wiring and GitHub access\n'
+SCRIPT
+  chmod +x "$BATS_TEST_TMPDIR/bin/tmux" "$BATS_TEST_TMPDIR/bin/cockpit"
+  export PATH="$BATS_TEST_TMPDIR/bin:$PATH" WIDTH_FILE="$BATS_TEST_TMPDIR/width"
+  export XDG_RUNTIME_DIR="$BATS_TEST_TMPDIR/cache" TMUX_PANE='%99' TMUX='test-server,1,0'
+  export TMUX_READING_MARGIN_COCKPIT_STATE_COMMAND="$BATS_TEST_TMPDIR/bin/cockpit"
+  export TMUX_READING_MARGIN_FOCUS_COMMAND="$BATS_TEST_TMPDIR/absent"
+}
+
+@test "cached margin reflows on each width without waiting for collection" {
+  printf '35\n' >"$WIDTH_FILE"
+  run "$work" --cached-render test '@1'
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'Loading cockpit'* ]]
+  for _ in {1..50}; do
+    sleep 0.05
+    run "$work" --cached-render test '@1'
+    [[ "$output" == *'1d2c-rsi-orphan-finish'* ]] && break
+  done
+  [[ "$output" == *'1d2c-rsi-orphan-finish'* ]]
+  [[ "$output" == *$'\n             '* ]]
+  printf '52\n' >"$WIDTH_FILE"
+  run timeout 1 "$work" --cached-render test '@1'
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'1d2c-rsi-orphan-finish · codex'* ]]
+  printf '12\n' >"$WIDTH_FILE"
+  run timeout 1 "$work" --cached-render test '@1'
+  [ "$status" -eq 0 ]
+  [ "$output" = 'pane too nar' ]
+}
