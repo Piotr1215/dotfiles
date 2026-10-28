@@ -1,35 +1,18 @@
 #!/usr/bin/env bash
-# Alacritty hint target (Ctrl+3): jump the attached tmux client to an agent's
-# window.
-#
-# Alacritty passes the matched hint text as the last arg. The cockpit
-# (~/.claude/scripts/__cockpit_state.sh) prints one token per agent row:
-#   jump:<name>            the row's agent name: gordon, kendra, or the pane's
-#                          @agent_name tag. Resolved to the tagged pane, wherever
-#                          its window sits.
-#   jump:<session>:<win>   printed only when two rows share a name.
-#   jump:<session>         a row with no tagged pane. Also matches an id as a
-#                          delimited token in a session name (DEVOPS-1017 ->
-#                          eng-infra-config-DEVOPS-1017).
-# The window and pane are selected by id before the client switches. A bare
-# session switch lands on whichever window the session last had active, which
-# put the jump to Gordon on Kendra's window once both shared `task`.
-#
-# Pressing the token of the pane the client is already on steps to the next
-# agent pane in that session, Gordon (triage) first: on Gordon, jump:gordon goes
-# to Kendra; on Kendra, jump:kendra goes back to Gordon.
-#
-# Resolution is dynamic on purpose: the board can name an agent that has since
-# died, and we degrade to a notification instead of switching blindly.
+# Resolve an Alacritty jump hint to one live agent and switch the clicked client.
+# Alacritty does not normally pass a client identity, so use the calling tty if
+# it is a tmux client, otherwise the most recently active client.
 set -eo pipefail
 
 raw="${1:-}"
 token="${raw#jump:}"
 [ -n "$token" ] || exit 0
 
-# label_of SESSION TAG: set `label` to the name the cockpit gives an agent pane.
-# Mirrors pass 1a of __cockpit_state.sh: Gordon (triage in task) and Kendra
-# (intake) by role, a stray triage tag by its session, anything else by its tag.
+notice() {
+  if command -v notify-send >/dev/null 2>&1; then notify-send "tmux-jump" "$1" || true; fi
+}
+
+# Mirror the cockpit's labels for the two special agent roles.
 label_of() {
   if [ "$1" = task ] && [ "$2" = triage ]; then label=gordon
   elif [ "$2" = triage ]; then label="$1"
@@ -37,80 +20,66 @@ label_of() {
   else label="$2"; fi
 }
 
-# build_ring SESSION: set `ring` to the session's tagged panes, triage first,
-# then the rest in tmux order.
-build_ring() {
-  local row s w wn p tag
-  local -a first=() rest=()
-  for row in "${panes[@]}"; do
-    IFS='|' read -r s w wn p tag <<<"$row"
-    if [ "$s" != "$1" ] || [ -z "$tag" ]; then continue; fi
-    if [ "$tag" = triage ]; then first+=("$p"); else rest+=("$p"); fi
-  done
-  ring=("${first[@]}" "${rest[@]}")
-}
-
 mapfile -t panes < <(tmux list-panes -a \
-  -F '#{session_name}|#{window_id}|#{window_name}|#{pane_id}|#{@agent_name}' 2>/dev/null || true)
-
-session="" window="" pane="" label="" ring=()
-if [[ "$token" == *:* ]]; then
-  # jump:<session>:<window>, the cockpit's answer to a name two rows share.
-  for row in "${panes[@]}"; do
-    IFS='|' read -r s w wn p tag <<<"$row"
+  -F '#{session_name}|#{window_name}|#{pane_id}|#{@agent_name}' 2>/dev/null || true)
+matches=()
+for row in "${panes[@]}"; do
+  IFS='|' read -r s wn p tag <<<"$row"
+  [ -n "$tag" ] || continue
+  if [[ "$token" == *:* ]]; then
     if [ "$s" != "${token%%:*}" ] || [ "$wn" != "${token#*:}" ]; then continue; fi
-    session="$s"; window="$w"
-    if [ -n "$tag" ]; then pane="$p"; break; fi
-  done
-else
-  for row in "${panes[@]}"; do
-    IFS='|' read -r s w wn p tag <<<"$row"
-    [ -n "$tag" ] || continue
+  else
     label_of "$s" "$tag"
-    if [ "$label" = "$token" ]; then session="$s"; pane="$p"; break; fi
-  done
-  if [ -z "$session" ]; then
-    # A row with no tagged pane names its session; an id matches as a whole
-    # token inside a session name (avoids 192 -> 1923). `|| true`: under
-    # pipefail a grep with no match would exit before the notification below.
-    sessions="$(tmux list-sessions -F '#{session_name}' 2>/dev/null)" || true
-    session="$(grep -xF -- "$token" <<<"$sessions" | head -1)" || true
-    [ -n "$session" ] || session="$(grep -iE -- "(^|[-_.])${token}([-_.]|$)" <<<"$sessions" | head -1)" || true
-    if [ -n "$session" ]; then
-      build_ring "$session"
-      pane="${ring[0]:-}"
-    fi
+    [ "$label" = "$token" ] || continue
   fi
-fi
+  matches+=("$p")
+done
 
-if [ -z "$session" ]; then
-  command -v notify-send >/dev/null 2>&1 \
-    && notify-send "tmux-jump" "no live agent for ${token}"
-  exit 0
-fi
-
-# Already on the target: step to the session's next agent pane.
-if [ -n "$pane" ]; then
-  current="$(tmux display-message -p '#{pane_id}' 2>/dev/null)" || true
-  if [ "$pane" = "$current" ]; then
-    build_ring "$session"
-    for i in "${!ring[@]}"; do
-      if [ "${ring[$i]}" = "$pane" ]; then
-        pane="${ring[$(( (i + 1) % ${#ring[@]} ))]}"
-        break
-      fi
+if [ "${#matches[@]}" -eq 0 ] && [[ "$token" != *:* ]]; then
+  # Exact session names take precedence over an ID delimited within a name.
+  mapfile -t sessions < <(tmux list-sessions -F '#{session_name}' 2>/dev/null || true)
+  for s in "${sessions[@]}"; do
+    if [ "$s" = "$token" ]; then matches+=("$s"); fi
+  done
+  if [ "${#matches[@]}" -eq 0 ]; then
+    for s in "${sessions[@]}"; do
+      padded="-${s,,}-"
+      normalized="${padded//[_.]/-}"
+      normalized_token="${token,,}"
+      normalized_token="${normalized_token//[_.]/-}"
+      if [[ "$normalized" == *"-${normalized_token}-"* ]]; then matches+=("$s"); fi
     done
   fi
+  # A session fallback must not silently choose between several tagged panes.
+  if [ "${#matches[@]}" -eq 1 ]; then
+    session="${matches[0]}"
+    tagged=()
+    for row in "${panes[@]}"; do
+      IFS='|' read -r s wn p tag <<<"$row"
+      if [ "$s" = "$session" ] && [ -n "$tag" ]; then tagged+=("$p"); fi
+    done
+    if [ "${#tagged[@]}" -gt 0 ]; then matches=("${tagged[@]}"); fi
+  fi
 fi
 
-# Select the window, then the pane, by id, so the client lands on them whatever
-# the session had active. A pane target moves the client to its session, window
-# and pane in one step.
-if [ -n "$pane" ]; then
-  tmux select-window -t "$pane" 2>/dev/null || true
-  tmux select-pane -t "$pane" 2>/dev/null || true
-  tmux switch-client -t "$pane"
-else
-  if [ -n "$window" ]; then tmux select-window -t "$window" 2>/dev/null || true; fi
-  tmux switch-client -t "$session"
+if [ "${#matches[@]}" -eq 0 ]; then notice "no live agent for ${token}"; exit 0; fi
+if [ "${#matches[@]}" -gt 1 ]; then notice "ambiguous target ${token}"; exit 0; fi
+
+target="${matches[0]}"
+mapfile -t clients < <(tmux list-clients -F '#{client_tty}|#{client_activity}' 2>/dev/null || true)
+calling_tty="$(tty 2>/dev/null || true)"
+client="" newest=-1
+for row in "${clients[@]}"; do
+  IFS='|' read -r client_tty activity <<<"$row"
+  [ -n "$client_tty" ] || continue
+  if [ "$client_tty" = "$calling_tty" ]; then client="$client_tty"; break; fi
+  [[ "$activity" =~ ^[0-9]+$ ]] || continue
+  if (( activity > newest )); then client="$client_tty"; newest="$activity"; fi
+done
+if [ -z "$client" ]; then notice "no live tmux client"; exit 0; fi
+
+# switch-client accepts a pane ID and selects its session, window and pane.
+# Repeating a hint for the current pane stays on that pane for mouse and keyboard.
+if ! tmux switch-client -c "$client" -t "$target" 2>/dev/null; then
+  notice "target no longer available: ${token}"
 fi
