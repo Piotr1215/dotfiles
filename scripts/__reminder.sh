@@ -1944,8 +1944,10 @@ cmd_fire_locked() {
 			[ "$verdict" -eq 3 ] && outcome=failure
 			if [ "$(record_to "$record")" = gordon ] && notify_gordon "$id" "$outcome: $title" "$output"; then
 				log_fire "$id" delivered gordon "$title"
-			elif [ "$notify" = mail ]; then
+			fi
+			if [ "$notify" = mail ]; then
 				printf '%s\n' "$output" | "$MAILER" "$outcome: $title"
+				log_fire "$id" mailed "$outcome" "$title"
 			fi
 			complete_packet "$id" "$outcome" "$trace" "$output"
 			;;
@@ -1960,8 +1962,10 @@ cmd_fire_locked() {
 			error_task "$id" "$title" "$err_label: ${reason:-no output}"
 			if [ "$(record_to "$record")" = gordon ] && notify_gordon "$id" "error: $title" "$err_label${streak:+, $streak} $output"; then
 				log_fire "$id" delivered "gordon error" "$title"
-			elif [ "$notify" = mail ]; then
+			fi
+			if [ "$notify" = mail ]; then
 				printf '%s\n%s\n' "$err_label${streak:+, $streak}" "$output" | "$MAILER" "error: $title"
+				log_fire "$id" mailed error "$title"
 			fi
 			# A one-shot that errored runs again after the default snooze; a
 			# repeat retries on its own schedule.
@@ -2086,11 +2090,12 @@ fire_on_notify() {
 	notify="$(jq -r '.notify // ""' <<<"$record")"
 	if [ "$(record_to "$record")" = gordon ] && notify_gordon "$id" "error: $title" "$err_label $output"; then
 		log_fire "$id" delivered "gordon error" "$title"
-	elif [ "$notify" = mail ]; then
+	elif [ "$notify" != mail ]; then
+		show_error "error: $title"$'\n'"$err_label"$'\n'"$output"
+	fi
+	if [ "$notify" = mail ]; then
 		printf '%s\n%s\n' "$err_label" "$output" | "$MAILER" "error: $title"
 		log_fire "$id" mailed error "$title"
-	else
-		show_error "error: $title"$'\n'"$err_label"$'\n'"$output"
 	fi
 }
 

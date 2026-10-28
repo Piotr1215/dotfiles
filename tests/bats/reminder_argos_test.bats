@@ -363,7 +363,7 @@ STUB
   [ ! -e "$NOTIFY_LOG" ]
 }
 
-@test "a gordon exec success delivers the output to the log, reports, and retires the repeat" {
+@test "a gordon exec success delivers the output and mails it, reports, and retires the repeat" {
   "$REMINDER" add "verify: hit" --repeat '0 9 * * 1' --deadline 30d --action exec --command 'echo found it; exit 2' --notify mail --to gordon >/dev/null
   id="$(only_id)"
   rm -f "$TEST_MAIL_LOG"
@@ -371,7 +371,9 @@ STUB
   run "$REMINDER" fire "$id"
 
   [ "$status" -eq 0 ]
-  [ ! -e "$TEST_MAIL_LOG" ]
+  grep -q '^subject: success: verify: hit$' "$TEST_MAIL_LOG"
+  grep -q '^found it$' "$TEST_MAIL_LOG"
+  grep -q "	$id	mailed	" "$REMINDER_LOG"
   [[ "$(<"$NOTIFY_LOG")" == *$'\treminder\tsuccess: verify: hit\t'"id:$id | found it" ]]
   [ "$(last_record | jq -r '.status')" = done ]
   [ "$(last_record | jq -r '.report_task')" = 00000000-0000-4000-8000-000000000001 ]
@@ -976,7 +978,7 @@ STUB
   printf '2\n' >"$BATS_TEST_TMPDIR/rc"
   "$REMINDER" fire "$id" >/dev/null
   run "$REMINDER" agenda render
-  grep -Eq "^   :last: $stamp success, on-hit failed \(exit 1\), no pattern given$" <<<"$output"
+  grep -Eq "^   :last: $stamp success, on-hit failed \(exit 1\), no pattern given, mailed$" <<<"$output"
   grep -q "^   :log: .*/runs/$id.log$" <<<"$output"
 
   runlog="$REMINDER_STATE_DIR/runs/$id.log"
