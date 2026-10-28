@@ -156,11 +156,11 @@ landed_on() { # landed_on PANE: the pane is the active pane of its session's cur
   landed_on "$WORKER"
 }
 
-@test "a session with no tagged agent falls back to the session" {
+@test "a surviving session without a tagged agent is rejected as stale" {
   jump_from "$PLAIN" jump:1923
   [ "$status" -eq 0 ]
-  [ "$(switched_to)" = scratch-1923 ]
-  ! grep -q '^select-pane' "$CMDLOG"
+  ! grep -q '^switch-client' "$CMDLOG"
+  grep -q '^notify tmux-jump no live agent for 1923' "$CMDLOG"
 }
 
 @test "an unknown name notifies and switches nothing" {

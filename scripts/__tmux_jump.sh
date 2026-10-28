@@ -58,7 +58,7 @@ if [ "${#matches[@]}" -eq 0 ] && [[ "$token" != *:* ]]; then
       IFS='|' read -r s wn p tag <<<"$row"
       if [ "$s" = "$session" ] && [ -n "$tag" ]; then tagged+=("$p"); fi
     done
-    if [ "${#tagged[@]}" -gt 0 ]; then matches=("${tagged[@]}"); fi
+    matches=("${tagged[@]}")
   fi
 fi
 
