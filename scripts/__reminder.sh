@@ -18,11 +18,15 @@
 # reminder.
 #
 # An exec reminder is a packet: a check, the actions it runs, and a deadline.
-# The check's exit code is the verdict: 0 not yet, 2 success, 3 failure, else
-# an execution error. Success or failure completes the packet once: its hook
-# runs, a trace (reports/<id>/brief.md) and a report task are written, and only
-# then does it retire. An execution error opens one task for an AI and keeps
-# the schedule. The deadline is the one reminder on a clock: when it passes with
+# The check's exit code is the verdict: 0 not yet, 2 success, 3 failure, 4
+# withdrawn, else an execution error. Success or failure completes the packet
+# once: its hook runs, a trace (reports/<id>/brief.md) and a report task are
+# written, and only then does it retire. Withdrawn retires it quietly, with a
+# fire.log line and no task: Piotr ended what it watched (closed the linked
+# task), so a report would tell him nothing. Exit 4 withdraws only when the
+# last output line starts with "withdrawn:"; gh (expired login) and wget
+# (network failure) also exit 4, and a check passing that through is an error. An execution error opens one task
+# for an AI and keeps the schedule. The deadline is the one reminder on a clock: when it passes with
 # neither verdict, Piotr gets the form (extend, send to AI, delete) and Gordon a
 # line; the packet keeps running.
 set -eo pipefail
@@ -124,9 +128,11 @@ Options for add and edit:
                       execution error and the schedule stays
   --command <cmd>     literal command for the exec action; its exit code is the
                       verdict: 0 not yet, 2 success, 3 failure (both write the trace
-                      and a report task, then retire it), else an execution error
-                      (one task for Gordon, the schedule stays); it sees its
-                      packet id in $REMINDER_ID
+                      and a report task, then retire it), 4 withdrawn (retire
+                      quietly, no task: what it watched was ended by hand; the
+                      last output line must start with "withdrawn:"), else
+                      an execution error (one task for Gordon, the schedule
+                      stays); it sees its packet id in $REMINDER_ID
   --origin <o>        who created it (cli, claude, dialog, migrate)
   --to <r>            piotr (default, a dialog) or gordon (a line in the notification
                       log that Gordon's session reads; falls back to the dialog)
@@ -1792,10 +1798,23 @@ cmd_fire() {
 			output="$BRANCH_OUTPUT"$'\n---\n'"$output"
 		fi
 		local streak reason outcome trace
+		if [ "$verdict" = 4 ]; then
+			case "$(error_reason "$output")" in
+			withdrawn:*) ;;
+			*) verdict=error ;;
+			esac
+		fi
 		case "$verdict" in
 		0)
 			clear_error_task "$id"
 			mark_done "$id"
+			cmd_sync >/dev/null
+			;;
+		4)
+			clear_error_task "$id"
+			update_record "$id" '.status = "done" | del(.when, .repeat, .report_pending, .report_outcome, .deadline_retry)'
+			reason="$(error_reason "$output")"
+			log_fire "$id" withdrawn "${reason#withdrawn: }" "$title"
 			cmd_sync >/dev/null
 			;;
 		2 | 3)

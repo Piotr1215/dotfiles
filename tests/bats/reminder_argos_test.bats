@@ -738,6 +738,42 @@ STUB
   ! grep -q "remind-$id" "$TEST_CRONTAB"
 }
 
+@test "withdrawn (exit 4) retires quietly: no report task, no Gordon line, the error task released" {
+  "$REMINDER" add "Thread watch" --repeat 'every 30m' --deadline 7d --to gordon --action exec --command "cat $BATS_TEST_TMPDIR/verdict; exit \$(cat $BATS_TEST_TMPDIR/rc)" >/dev/null
+  id="$(only_id)"
+  printf 'broken pipe\n' >"$BATS_TEST_TMPDIR/verdict"; printf '1\n' >"$BATS_TEST_TMPDIR/rc"
+  "$REMINDER" fire "$id"
+  : >"$NOTIFY_LOG"
+
+  printf 'withdrawn: task 6631abaa is completed; ending the subscription\n' >"$BATS_TEST_TMPDIR/verdict"; printf '4\n' >"$BATS_TEST_TMPDIR/rc"
+  run "$REMINDER" fire "$id"
+
+  [ "$status" -eq 0 ]
+  ! grep -q ' add +piotr ' "$TEST_TASK_LOG"
+  [ ! -e "$REMINDER_STATE_DIR/reports/$id" ]
+  [ ! -s "$NOTIFY_LOG" ]
+  [ ! -s "$TEST_ALERT_REQUEST" ]
+  grep -q "00000000-0000-4000-8000-000000000001 annotate -- recovered " "$TEST_TASK_LOG"
+  grep -q "	$id	withdrawn	task 6631abaa is completed; ending the subscription	Thread watch$" "$REMINDER_LOG"
+  [ "$(last_record | jq -r '.status')" = done ]
+  [ "$(last_record | jq -r '.error_task // "none"')" = none ]
+  ! grep -q "remind-$id" "$TEST_CRONTAB"
+}
+
+@test "exit 4 without the withdrawn: line is an error, so gh's expired login never retires a packet" {
+  "$REMINDER" add "PR reaction" --repeat 'every 2h' --deadline 7d --action exec \
+    --command "echo 'To get started with GitHub CLI, please run:  gh auth login'; exit 4" >/dev/null
+  id="$(only_id)"
+
+  run "$REMINDER" fire "$id"
+
+  [ "$status" -eq 0 ]
+  [ "$(last_record | jq -r '.status')" = active ]
+  grep -q "add +gordon +work +reminder -- $id (PR reaction) error$" "$TEST_TASK_LOG"
+  ! grep -q "	$id	withdrawn	" "$REMINDER_LOG"
+  grep -q "remind-$id" "$TEST_CRONTAB"
+}
+
 @test "success writes the trace before the report task, and the task points at it" {
   "$REMINDER" add "LLMday agenda" --repeat '31 9 * * *' --deadline 30d --action exec \
     --command "echo 'slot 14:20'; exit 2" --on-hit "echo booked train" --subject 'url:https://llmday.com' >/dev/null
