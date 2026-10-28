@@ -498,14 +498,14 @@ STUB
   grep -q "	$id	opened	https://example.com/standup	Standup doc$" "$REMINDER_LOG"
 }
 
-@test "the exec action runs the literal command and records its exit code" {
-  "$REMINDER" add "Touch marker" 1h --action exec --command "touch '$BATS_TEST_TMPDIR/marker'" >/dev/null
+@test "the exec action runs the literal command with its id in REMINDER_ID and records its exit code" {
+  "$REMINDER" add "Touch marker" 1h --action exec --command "printf %s \"\$REMINDER_ID\" >'$BATS_TEST_TMPDIR/marker'" >/dev/null
   id="$(only_id)"
 
   run "$REMINDER" fire "$id"
 
   [ "$status" -eq 0 ]
-  [ -f "$BATS_TEST_TMPDIR/marker" ]
+  [ "$(cat "$BATS_TEST_TMPDIR/marker")" = "$id" ]
   grep -q "	$id	exec	rc=0	Touch marker$" "$REMINDER_LOG"
 }
 

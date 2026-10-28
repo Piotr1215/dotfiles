@@ -97,8 +97,9 @@ Agenda format (org): one ** heading per reminder, properties indented below.
   deadline <id>                     what the deadline clock calls; shows the form
   match                             one pass over new notification log lines
   watch                             match forever (reminder-watch.service)
-  watch <thread-url> [--task <uuid>] [--label t] [--every 30m]
-                                    subscribe to a thread (__thread_watch.sh subscribe)
+  watch <thread-url> [--task <uuid>] [--label t] [--every 30m] [--once]
+                                    subscribe to a thread (__thread_watch.sh subscribe);
+                                    --once ends it on the first reply
 
 Options for add and edit:
   --when <spec>       10m 2h 1d 1w, tomorrow, eod, eow, or anything date -d
@@ -124,7 +125,8 @@ Options for add and edit:
   --command <cmd>     literal command for the exec action; its exit code is the
                       verdict: 0 not yet, 2 success, 3 failure (both write the trace
                       and a report task, then retire it), else an execution error
-                      (one task for Gordon, the schedule stays)
+                      (one task for Gordon, the schedule stays); it sees its
+                      packet id in $REMINDER_ID
   --origin <o>        who created it (cli, claude, dialog, migrate)
   --to <r>            piotr (default, a dialog) or gordon (a line in the notification
                       log that Gordon's session reads; falls back to the dialog)
@@ -1775,7 +1777,7 @@ cmd_fire() {
 		fi
 		command="$(jq -r '.command // ""' <<<"$record")"
 		local rc=0 output
-		output="$(bash -c "$command" 2>&1)" || rc=$?
+		output="$(REMINDER_ID="$id" bash -c "$command" 2>&1)" || rc=$?
 		log_fire "$id" exec "rc=$rc" "$title"
 		notify="$(jq -r '.notify // ""' <<<"$record")"
 		BRANCH_RC=0 BRANCH_OUTPUT="" BRANCH_HOOK="" BRANCH_FIELD=""
