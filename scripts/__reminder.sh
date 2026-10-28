@@ -1620,11 +1620,13 @@ report_task() {
 	local record="$1" outcome="$2" trace="$3" output="$4" id title uuid url first
 	id="$(jq -r '.id' <<<"$record")"
 	title="$(record_title "$record")"
-	uuid="$(task_add "$(short_title "$outcome: $title" 60)" +piotr +work +reminder)" || return 1
+	uuid="$(task_add "$(short_title "reminder-report: $title" 60)" +piotr +work +reminder "+$outcome")" || return 1
 	first="$(printf '%s\n' "$output" | sed '/^[[:space:]]*$/d' | head -n2 | tr '\n' ' ' | cut -c1-300)"
 	task_note "$uuid" "what: Reminder $id finished with $outcome: $title. Its actions already ran; this task is the report."
+	task_note "$uuid" "done-when: manual Piotr reviews the report then closes it."
 	task_note "$uuid" "brief: ${first:-The check printed nothing.} The trace lists the check, the action and every run. Read it, then close this task."
 	task_note "$uuid" "trace: $(home_path "$trace")"
+	task_note "$uuid" "$(home_path "$trace")"
 	url="$(subject_url "$(jq -r '.subject // ""' <<<"$record")")" && task_note "$uuid" "link: $url"
 	printf '%s' "$uuid"
 }

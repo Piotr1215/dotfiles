@@ -730,7 +730,7 @@ STUB
   run "$REMINDER" fire "$id"
   [ "$status" -eq 0 ]
   [ ! -s "$TEST_ALERT_REQUEST" ]
-  grep -q "^rc.verbose=new-uuid rc.confirmation=off add +piotr +work +reminder -- success: Seats check$" "$TEST_TASK_LOG"
+  grep -q "^rc.verbose=new-uuid rc.confirmation=off add +piotr +work +reminder +success -- reminder-report: Seats check$" "$TEST_TASK_LOG"
   grep -q "00000000-0000-4000-8000-000000000002 annotate -- brief: seats: 3 available " "$TEST_TASK_LOG"
   grep -q "00000000-0000-4000-8000-000000000001 annotate -- recovered " "$TEST_TASK_LOG"
   [ "$(last_record | jq -r '.status')" = done ]
@@ -788,7 +788,11 @@ STUB
   grep -q '^## Action: on-hit (exit 0)$' "$trace"
   grep -q '^booked train$' "$trace"
   grep -q "	$id	exec	rc=2	" "$trace"
+  grep -q '^rc.verbose=new-uuid rc.confirmation=off add +piotr +work +reminder +success -- reminder-report: LLMday agenda$' "$TEST_TASK_LOG"
+  grep -q "annotate -- what: Reminder $id finished with success: LLMday agenda\." "$TEST_TASK_LOG"
+  grep -q 'annotate -- done-when: manual Piotr reviews the report then closes it\.$' "$TEST_TASK_LOG"
   grep -q "annotate -- trace: $trace$" "$TEST_TASK_LOG"
+  grep -Fq "annotate -- $trace" "$TEST_TASK_LOG"
   grep -q "annotate -- link: https://llmday.com$" "$TEST_TASK_LOG"
   grep -q "	$id	reported	success task 00000000-0000-4000-8000-000000000001	" "$REMINDER_LOG"
 }
@@ -804,7 +808,10 @@ STUB
   [ "$status" -eq 0 ]
   [ ! -e "$BATS_TEST_TMPDIR/hit" ]
   [ "$(<"$BATS_TEST_TMPDIR/fail")" = "PR closed unmerged" ]
-  grep -q -- '-- failure: PR reaction$' "$TEST_TASK_LOG"
+  grep -q '^rc.verbose=new-uuid rc.confirmation=off add +piotr +work +reminder +failure -- reminder-report: PR reaction$' "$TEST_TASK_LOG"
+  grep -q "annotate -- what: Reminder $id finished with failure: PR reaction\." "$TEST_TASK_LOG"
+  grep -q 'annotate -- done-when: manual Piotr reviews the report then closes it\.$' "$TEST_TASK_LOG"
+  grep -Fq "annotate -- $REMINDER_STATE_DIR/reports/$id/brief.md" "$TEST_TASK_LOG"
   [ "$(last_record | jq -r '.status')" = done ]
 }
 
@@ -824,6 +831,8 @@ STUB
   [ "$(grep -c run "$BATS_TEST_TMPDIR/runs")" -eq 1 ]
   [ "$(last_record | jq -r '.status')" = done ]
   [ "$(last_record | jq -r '.report_pending // "gone"')" = gone ]
+  grep -q '^rc.verbose=new-uuid rc.confirmation=off add +piotr +work +reminder +success -- reminder-report: once$' "$TEST_TASK_LOG"
+  grep -q 'annotate -- done-when: manual Piotr reviews the report then closes it\.$' "$TEST_TASK_LOG"
 }
 
 @test "one error task per failing packet: the same reason adds nothing, a new reason one note" {
@@ -857,7 +866,7 @@ STUB
   [ ! -s "$TEST_ALERT_REQUEST" ]
   grep -q '^subject: success: tmux watch$' "$TEST_MAIL_LOG"
   grep -q '^tmux 3.8 released$' "$TEST_MAIL_LOG"
-  grep -q -- '-- success: tmux watch$' "$TEST_TASK_LOG"
+  grep -q -- '+success -- reminder-report: tmux watch$' "$TEST_TASK_LOG"
   [ "$(last_record | jq -r '.status')" = done ]
   ! grep -q "remind-$id" "$TEST_CRONTAB"
 }
@@ -872,7 +881,7 @@ STUB
   [ "$status" -eq 0 ]
   [ ! -s "$TEST_ALERT_REQUEST" ]
   [ ! -f "$TEST_MAIL_LOG" ]
-  grep -q -- '-- success: self-mailing watch$' "$TEST_TASK_LOG"
+  grep -q -- '+success -- reminder-report: self-mailing watch$' "$TEST_TASK_LOG"
   [ "$(last_record | jq -r '.status')" = done ]
 }
 
