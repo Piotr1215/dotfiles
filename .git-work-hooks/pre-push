@@ -9,6 +9,8 @@ current_branch=$(git symbolic-ref HEAD | sed -e 's,.*/\(.*\),\1,')
 echo "Current branch: $current_branch" >&2
 echo "Protected branches: ${protected_branches[*]}" >&2
 
+# Match the branch name literally within the protected list.
+# shellcheck disable=SC2076
 if [[ " ${protected_branches[*]} " =~ " ${current_branch} " ]]; then
     echo "🚫 Blocking push to protected branch: $current_branch" >&2
     exit 1
@@ -18,11 +20,22 @@ full_branch=$(git symbolic-ref --short HEAD)
 branch_suffix="${full_branch##*/}"
 
 if [[ "$branch_suffix" =~ ^[0-9_-]+$ ]]; then
-    echo "🚫 Branch has auto-generated slug: $full_branch" >&2
-    echo "   Suffix '$branch_suffix' contains no letters - likely auto-generated" >&2
-    echo "   Rename to something meaningful:" >&2
-    echo "   git branch -m $full_branch ${full_branch%/*}/descriptive-slug" >&2
-    exit 1
+    existing_remote_refs=false
+    while read -r _ _ remote_ref remote_sha; do
+        if [[ -z "$remote_ref" || ! "$remote_sha" =~ ^[0-9a-fA-F]+$ || "$remote_sha" =~ ^0+$ ]]; then
+            existing_remote_refs=false
+            break
+        fi
+        existing_remote_refs=true
+    done
+
+    if [[ "$existing_remote_refs" != true ]]; then
+        echo "🚫 Branch has auto-generated slug: $full_branch" >&2
+        echo "   Suffix '$branch_suffix' contains no letters - likely auto-generated" >&2
+        echo "   Rename to something meaningful:" >&2
+        echo "   git branch -m $full_branch ${full_branch%/*}/descriptive-slug" >&2
+        exit 1
+    fi
 fi
 
 echo "✅ Push allowed" >&2
