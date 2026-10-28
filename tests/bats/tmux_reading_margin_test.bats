@@ -94,11 +94,13 @@ EOF
   defs="$(sed -n '/^c_hdr=/,/^c_alert=/p' "$script")"
   run bash -c "$defs; $fn
     for s in 'waiting: permission 20m' 'waiting: dialog' input blocked stalled live working ready 'in review' done idle; do
-      printf '%s=%q\n' \"\$s\" \"\$(status_color \"\$s\")\"
-    done"
+      printf '%s=%q\n' \"\$s\" \"\$(status_color \"\$s\" 0)\"
+    done
+    printf 'permission alert=%q\n' \"\$(status_color 'waiting: permission 20m' 1)\""
   [ "$status" -eq 0 ]
-  [[ "$output" == *"waiting: permission 20m=$'\\E[1;97;41m'"* ]]
-  [[ "$output" == *"waiting: dialog=$'\\E[1;97;41m'"* ]]
+  [[ "$output" == *"waiting: permission 20m=$'\\E[1;38;5;208m'"* ]]
+  [[ "$output" == *"waiting: dialog=$'\\E[1;38;5;208m'"* ]]
+  [[ "$output" == *"permission alert=$'\\E[1;97;41m'"* ]]
   [[ "$output" == *"input=$'\\E[1;38;5;208m'"* ]]
   [[ "$output" == *"blocked=$'\\E[31m'"* ]]
   [[ "$output" == *"stalled=$'\\E[35m'"* ]]
