@@ -518,6 +518,10 @@ EOF
     "exec viddy --interval 5 --no-title $legacy_work --render test @0" > "$BATS_TEST_TMPDIR/legacy-id"
   old_margin="$(cat "$BATS_TEST_TMPDIR/legacy-id")"
   tmux -L "$SOCKET_NAME" set-option -w @reading_margin_pane "$old_margin"
+  for _ in {1..40}; do
+    [ "$(tmux -L "$SOCKET_NAME" display-message -p -t "$old_margin" '#{pane_current_command}')" = viddy ] && break
+    sleep 0.05
+  done
   tmux -L "$SOCKET_NAME" run-shell "$SCRIPT --upgrade-legacy '$PANE_ID'"
   new_margin="$(tmux -L "$SOCKET_NAME" show-options -wqv @reading_margin_pane)"
   [ -n "$new_margin" ]
@@ -525,6 +529,46 @@ EOF
   [ "$(tmux -L "$SOCKET_NAME" display-message -p -t "$PANE_ID" '#{pane_id}')" = "$PANE_ID" ]
   tmux -L "$SOCKET_NAME" run-shell "$SCRIPT --upgrade-legacy '$PANE_ID'"
   [ "$(tmux -L "$SOCKET_NAME" show-options -wqv @reading_margin_pane)" = "$new_margin" ]
+}
+
+@test "cached viewer with the old interval upgrades to the current default" {
+  tmux -L "$SOCKET_NAME" set-environment -gu TMUX_READING_MARGIN_WORK_COMMAND
+  legacy_work="$(realpath "$WORK_SCRIPT")"
+  tmux -L "$SOCKET_NAME" split-window -bd -h -t "$PANE_ID" -P -F '#{pane_id}' \
+    "exec viddy --interval 0.5 --no-title $legacy_work --cached-render test @0" > "$BATS_TEST_TMPDIR/legacy-id"
+  old_margin="$(cat "$BATS_TEST_TMPDIR/legacy-id")"
+  tmux -L "$SOCKET_NAME" set-option -w @reading_margin_pane "$old_margin"
+  for _ in {1..40}; do
+    [ "$(tmux -L "$SOCKET_NAME" display-message -p -t "$old_margin" '#{pane_current_command}')" = viddy ] && break
+    sleep 0.05
+  done
+  tmux -L "$SOCKET_NAME" run-shell "$SCRIPT --upgrade-legacy '$PANE_ID'"
+  new_margin="$(tmux -L "$SOCKET_NAME" show-options -wqv @reading_margin_pane)"
+  [ -n "$new_margin" ]
+  [ "$new_margin" != "$old_margin" ]
+  pid="$(tmux -L "$SOCKET_NAME" display-message -p -t "$new_margin" '#{pane_pid}')"
+  [[ "$(tr '\0' ' ' < "/proc/$pid/cmdline")" == *'--interval 0.1 --no-title'*'--cached-render'* ]]
+  tmux -L "$SOCKET_NAME" run-shell "$SCRIPT --upgrade-legacy '$PANE_ID'"
+  [ "$(tmux -L "$SOCKET_NAME" show-options -wqv @reading_margin_pane)" = "$new_margin" ]
+}
+
+@test "uncached viewer upgrades even at the current interval" {
+  tmux -L "$SOCKET_NAME" set-environment -gu TMUX_READING_MARGIN_WORK_COMMAND
+  legacy_work="$(realpath "$WORK_SCRIPT")"
+  tmux -L "$SOCKET_NAME" split-window -bd -h -t "$PANE_ID" -P -F '#{pane_id}' \
+    "exec viddy --interval 0.1 --no-title $legacy_work --render test @0" > "$BATS_TEST_TMPDIR/legacy-id"
+  old_margin="$(cat "$BATS_TEST_TMPDIR/legacy-id")"
+  tmux -L "$SOCKET_NAME" set-option -w @reading_margin_pane "$old_margin"
+  for _ in {1..40}; do
+    [ "$(tmux -L "$SOCKET_NAME" display-message -p -t "$old_margin" '#{pane_current_command}')" = viddy ] && break
+    sleep 0.05
+  done
+  tmux -L "$SOCKET_NAME" run-shell "$SCRIPT --upgrade-legacy '$PANE_ID'"
+  new_margin="$(tmux -L "$SOCKET_NAME" show-options -wqv @reading_margin_pane)"
+  [ -n "$new_margin" ]
+  [ "$new_margin" != "$old_margin" ]
+  pid="$(tmux -L "$SOCKET_NAME" display-message -p -t "$new_margin" '#{pane_pid}')"
+  [[ "$(tr '\0' ' ' < "/proc/$pid/cmdline")" == *'--interval 0.1 --no-title'*'--cached-render'* ]]
 }
 
 @test "status reports the default and current window state" {

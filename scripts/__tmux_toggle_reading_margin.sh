@@ -137,9 +137,10 @@ if $upgrade_legacy; then
   mapfile -d '' -t viewer_args < "/proc/$viewer_pid/cmdline"
   viewer_name="${viewer_args[0]:-}"
   [[ "${viewer_name##*/}" == viddy && "${viewer_args[1]:-}" == --interval &&
-     "${viewer_args[2]:-}" == 5 && "${viewer_args[3]:-}" == --no-title &&
+     "${viewer_args[2]:-}" =~ ^[0-9]+([.][0-9]+)?$ && "${viewer_args[3]:-}" == --no-title &&
      "${viewer_args[4]:-}" == "$HOME/dev/dotfiles/scripts/__tmux_reading_margin_work.sh" &&
-     "${viewer_args[5]:-}" == --render ]] || exit 0
+     ( "${viewer_args[5]:-}" == --render || "${viewer_args[5]:-}" == --cached-render ) ]] || exit 0
+  [[ "${viewer_args[2]}" == 0.1 && "${viewer_args[5]}" == --cached-render ]] && exit 0
 fi
 
 set_visible() {
