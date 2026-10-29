@@ -2,6 +2,8 @@
 """Refresh the work margin, keeping terminal redraws independent of collection."""
 
 import ctypes
+import fcntl
+import hashlib
 import locale
 import os
 from pathlib import Path
@@ -11,7 +13,6 @@ import signal
 import subprocess
 import sys
 import termios
-import time
 import tty
 
 SGR = re.compile(r"\x1b\[[0-9;]*m")
@@ -20,6 +21,21 @@ locale.setlocale(locale.LC_CTYPE, "")
 LIBC = ctypes.CDLL(None)
 LIBC.wcwidth.argtypes = [ctypes.c_wchar]
 LIBC.wcwidth.restype = ctypes.c_int
+
+
+def shared_state_dir():
+    override = os.environ.get("TMUX_READING_MARGIN_STATE_DIR")
+    if override:
+        return Path(override)
+    root = os.environ.get("XDG_RUNTIME_DIR") or os.environ.get("XDG_CACHE_HOME") or str(Path.home() / ".cache")
+    socket = os.environ.get("TMUX", "").split(",", 1)[0]
+    return Path(root) / "reading-margin-shared" / hashlib.sha256(socket.encode()).hexdigest()
+
+
+def atomic_write(path, data):
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    tmp.write_text(data)
+    os.replace(tmp, path)
 
 
 def physical_lines(text, width):
@@ -101,9 +117,19 @@ def scroll(key, offset, lines, width, height):
 def main():
     """Run a small refresh loop with a nonblocking renderer and instant resize."""
     command = sys.argv[1:]
+    if command == ["--state-dir"]:
+        print(shared_state_dir())
+        return
     if not command:
         raise SystemExit("usage: __tmux_reading_margin_view.py renderer [arguments ...]")
     jump_command = os.environ.get("TMUX_READING_MARGIN_JUMP_COMMAND", str(Path(__file__).with_name("__tmux_jump.sh")))
+    state = shared_state_dir()
+    state.mkdir(mode=0o700, parents=True, exist_ok=True)
+    leader_fd = os.open(state / "leader.lock", os.O_CREAT | os.O_RDWR, 0o600)
+    scroll_fd = os.open(state / "scroll.lock", os.O_CREAT | os.O_RDWR, 0o600)
+    leader = False
+    frame_version, offset_version = None, None
+    collector, parent_pipe = None, None
     selector = selectors.DefaultSelector()
     selector.register(sys.stdin, selectors.EVENT_READ, "key")
     saved = termios.tcgetattr(sys.stdin)
@@ -123,7 +149,8 @@ def main():
     signal.signal(signal.SIGWINCH, resize)
     raw, lines, offset, size = "", [], 0, None
     targets, jump_children = [], []
-    process, output, next_read, pending = None, bytearray(), 0.0, b""
+    painted_targets, painted_offset, painted_size = [], 0, (0, 0)
+    pending = b""
     sys.stdout.write("\x1b[?1049h\x1b[?7l\x1b[?25l\x1b[?1000h\x1b[?1006h")
     sys.stdout.flush()
     try:
@@ -133,69 +160,101 @@ def main():
             if current_size != size:
                 size, dirty = current_size, True
             width, height = max(1, size.columns), max(1, size.lines)
-            if process is None and time.monotonic() >= next_read:
-                process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, start_new_session=True)
-                os.set_blocking(process.stdout.fileno(), False)
-                selector.register(process.stdout, selectors.EVENT_READ, "board")
-                output = bytearray()
-                next_read = time.monotonic() + 0.2
-            for event, _ in selector.select(0.03):
-                if event.data == "board":
-                    chunk = os.read(event.fileobj.fileno(), 65536)
-                    if chunk:
-                        output.extend(chunk)
-                    else:
-                        selector.unregister(event.fileobj)
-                        event.fileobj.close()
-                else:
-                    data = os.read(sys.stdin.fileno(), 4096)
-                    if not data:
-                        running = False
-                    pending += data
-                    while pending:
-                        if pending.startswith(b"\x1b["):
-                            match = KEY.match(pending)
-                            if not match:
-                                break
-                            key = match.group()
-                        elif pending == b"\x1b":
+            if collector is not None and collector.poll() is not None:
+                os.close(parent_pipe)
+                parent_pipe = None
+                collector = None
+                os.close(leader_fd)
+                leader_fd = os.open(state / "leader.lock", os.O_CREAT | os.O_RDWR, 0o600)
+                leader = False
+            if not leader:
+                try:
+                    fcntl.flock(leader_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    read_fd, parent_pipe = os.pipe()
+                    env = dict(os.environ, MARGIN_LEADER_FD=str(leader_fd), MARGIN_PARENT_FD=str(read_fd))
+                    collector_command = os.environ.get("TMUX_READING_MARGIN_COLLECT_COMMAND", str(Path(__file__).with_name("__tmux_reading_margin_collect")))
+                    try:
+                        collector = subprocess.Popen([collector_command, "--state-dir", str(state), "--", *command], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env, pass_fds=(leader_fd, read_fd))
+                    except OSError:
+                        os.close(parent_pipe)
+                        parent_pipe = None
+                        fcntl.flock(leader_fd, fcntl.LOCK_UN)
+                        raise
+                    finally:
+                        os.close(read_fd)
+                    leader = True
+                except BlockingIOError:
+                    pass
+            for filename in ("frame", "offset"):
+                path = state / filename
+                try:
+                    version = path.stat().st_mtime_ns
+                    if filename == "frame" and version != frame_version:
+                        raw = path.read_text()
+                        targets = jump_targets(raw)
+                        frame_version, dirty = version, True
+                    elif filename == "offset" and version != offset_version:
+                        offset = max(0, int(path.read_text()))
+                        offset_version, dirty = version, True
+                except (OSError, ValueError):
+                    pass
+            for event, _ in selector.select(0.1):
+                data = os.read(sys.stdin.fileno(), 4096)
+                if not data:
+                    running = False
+                pending += data
+                while pending:
+                    if pending.startswith(b"\x1b["):
+                        match = KEY.match(pending)
+                        if not match:
                             break
-                        else:
-                            key = pending[:1]
-                        pending = pending[len(key):]
-                        if key == b"q":
-                            running = False
-                        click = re.fullmatch(rb"\x1b\[<0;([0-9]+);([0-9]+)M", key)
-                        if click:
-                            x, y = map(int, click.groups())
-                            row = offset + y - 1
-                            if 1 <= x <= width and 1 <= y <= max(1, height - 1) and row < len(targets) and targets[row]:
-                                try:
-                                    jump_children.append(subprocess.Popen([jump_command, targets[row]], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True))
-                                except OSError:
-                                    pass
-                        offset = scroll(key, offset, lines, width, height)
-                        dirty = True
-            if process is not None and process.poll() is not None and process.stdout.closed:
-                incoming = output.decode(errors="replace") if process.returncode == 0 else "Roster read failed\n"
-                dirty = dirty or incoming != raw
-                raw, process = incoming, None
-                targets = jump_targets(raw)
+                        key = match.group()
+                    elif pending == b"\x1b":
+                        break
+                    else:
+                        key = pending[:1]
+                    pending = pending[len(key):]
+                    if key == b"q":
+                        running = False
+                    click = re.fullmatch(rb"\x1b\[<0;([0-9]+);([0-9]+)M", key)
+                    if click:
+                        x, y = map(int, click.groups())
+                        row = painted_offset + y - 1
+                        painted_width, painted_height = painted_size
+                        if 1 <= x <= painted_width and 1 <= y <= max(1, painted_height - 1) and row < len(painted_targets) and painted_targets[row]:
+                            try:
+                                jump_children.append(subprocess.Popen([jump_command, painted_targets[row]], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True))
+                            except OSError:
+                                pass
+                    fcntl.flock(scroll_fd, fcntl.LOCK_EX)
+                    try:
+                        try:
+                            current_offset = max(0, int((state / "offset").read_text()))
+                        except (OSError, ValueError):
+                            current_offset = 0
+                        updated = scroll(key, current_offset, lines, width, height)
+                        if updated != current_offset:
+                            atomic_write(state / "offset", str(updated))
+                        offset = updated
+                    finally:
+                        fcntl.flock(scroll_fd, fcntl.LOCK_UN)
+                    dirty = True
             if dirty and raw:
                 lines = physical_lines(raw, width)
-                offset = min(offset, bottom_offset(lines, width, max(1, height - 1)))
+                offset = min(offset, max(0, len(lines) - 1))
                 paint(lines, offset, width, height)
+                painted_targets, painted_offset, painted_size = targets, offset, (width, height)
                 dirty = False
     finally:
         try:
-            if process is not None and process.poll() is None:
-                try:
-                    os.killpg(process.pid, signal.SIGTERM)
-                except ProcessLookupError:
-                    pass
-                process.wait()
+            if parent_pipe is not None:
+                os.close(parent_pipe)
+            if collector is not None:
+                collector.wait()
         finally:
             selector.close()
+            os.close(leader_fd)
+            os.close(scroll_fd)
             termios.tcsetattr(sys.stdin, termios.TCSANOW, saved)
             sys.stdout.write("\x1b[?1000l\x1b[?1006l\x1b[?7h\x1b[?25h\x1b[?1049l")
             sys.stdout.flush()

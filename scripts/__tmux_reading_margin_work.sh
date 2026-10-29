@@ -7,6 +7,33 @@ if [[ "${1:-}" != "--render" && "${1:-}" != "--cached-render" && "${1:-}" != "--
   session="${1:-$(tmux display-message -p '#{session_name}')}"
   window="${2:-$(tmux display-message -p '#{window_id}')}"
   script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+  state_dir="$(python3 "$script_dir/__tmux_reading_margin_view.py" --state-dir)"
+  (umask 077; mkdir -p "$state_dir")
+  exec {setup_fd}>"$state_dir/setup.lock"
+  flock "$setup_fd"
+  if [[ -z ${TMUX_READING_MARGIN_COLLECT_COMMAND:-} ]]; then
+    collector_source="$script_dir/tmux_reading_margin_collect.go"
+    read -r collector_hash _ < <(sha256sum "$collector_source")
+    collector="$state_dir/collector-$collector_hash"
+    if [[ ! -x "$collector" ]]; then
+      go build -trimpath -o "$collector.$BASHPID.tmp" "$collector_source"
+      mv -f "$collector.$BASHPID.tmp" "$collector"
+    fi
+    export TMUX_READING_MARGIN_COLLECT_COMMAND="$collector"
+  fi
+  # Keep the existing hook arrays. Each server installs this invalidation path
+  # once; viewer redraws and scrolling never collect data or start processes.
+  hook_marker="v1:$state_dir"
+  if [[ $(tmux show-options -gqv @reading_margin_shared_hooks) != "$hook_marker" ]]; then
+    printf -v touch_command 'touch -- %q' "$state_dir/dirty"
+    printf -v hook_command 'run-shell -b %q' "$touch_command"
+    for hook in after-set-option after-set-environment session-created session-closed \
+      session-renamed window-linked window-unlinked pane-created pane-exited; do
+      tmux set-hook -ag "$hook" "$hook_command"
+    done
+    tmux set-option -g @reading_margin_shared_hooks "$hook_marker"
+  fi
+  exec {setup_fd}>&-
   exec python3 "$script_dir/__tmux_reading_margin_view.py" \
     "$0" --raw-render "$session" "$window"
 fi
@@ -25,8 +52,7 @@ if [[ -n "${TMUX_PANE:-}" ]]; then
 fi
 case "$width" in ''|*[!0-9]*) width=100 ;; esac
 if [[ "$mode" == --raw-render ]]; then
-  # Retain logical lines so a resize can reflow immediately while the next
-  # live roster is being collected.
+  # Keep full logical lines so widening reveals clipped data immediately.
   width=10000
   export COCKPIT_RAW=1
   export COCKPIT_ORDER_FILE="${CYCLE_AGENT_CACHE_DIR:-${XDG_RUNTIME_DIR:-/tmp}/cycle-agent-order}/order"
@@ -36,8 +62,8 @@ cockpit_command="${TMUX_READING_MARGIN_COCKPIT_STATE_COMMAND:-$HOME/.claude/scri
 focus_command="${TMUX_READING_MARGIN_FOCUS_COMMAND:-$HOME/.claude/scripts/__focus.py}"
 
 # Handoffs come first and scroll with the roster. Ranking happens outside the
-# pane; only this independent handoff block retains its short cache.
-if [[ "$mode" == --cached-render || "$mode" == --raw-render ]]; then
+# pane. The shared collector reads fresh handoffs only when an input changes.
+if [[ "$mode" == --cached-render ]]; then
   cache_root="${XDG_RUNTIME_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}}/reading-margin"
   (umask 077; mkdir -p "$cache_root")
   key=$(printf '%s\0%s' "${TMUX:-}" "${TMUX_PANE:-}" | sha256sum)
@@ -45,7 +71,7 @@ if [[ "$mode" == --cached-render || "$mode" == --raw-render ]]; then
 fi
 
 if [[ -x "$focus_command" ]]; then
-  if [[ "$mode" == --cached-render || "$mode" == --raw-render ]]; then
+  if [[ "$mode" == --cached-render ]]; then
     focus_cache="$cache.focus-$width"
     if [[ -z $(find "$focus_cache" -mmin -0.0833 2>/dev/null) ]]; then
       focus_tmp="$focus_cache.$BASHPID"
@@ -60,7 +86,6 @@ if [[ -x "$focus_command" ]]; then
   printf '\n'
 fi
 
-# Roster rows come from live tmux panes on every draw. Caching this board here
-# or in the cockpit can keep a closed agent visible or hide a new one. Only
-# Focus above is cached; a cold draw and a resize both render synchronously.
+# The one shared collector owns caching and invalidation. Its input reads must
+# stay fresh; viewers reuse the resulting frame for resize and scrolling.
 COCKPIT_CACHE=0 COCKPIT_LAYOUT=vertical COCKPIT_VERTICAL_WIDTH="$width" "$cockpit_command"
