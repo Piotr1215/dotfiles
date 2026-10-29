@@ -28,8 +28,8 @@ wires="${TRIPWIRE_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/tripwire/wires}"
 state="${XDG_STATE_HOME:-$HOME/.local/state}/tripwire"
 snd="${TRIPWIRE_SND:-$HOME/dev/agents-mcp-server/build/snd.js}"
 min_p=0.8
-# Jev, TypeSafe's decisioning model, judges each headline (classif and its local models are suspended).
-jev="${TRIPWIRE_JEV:-$HOME/dev/dotfiles/scripts/__jev.sh}"
+# The shared decision adapter judges each headline; TRIPWIRE_JEV keeps its override.
+jev="${TRIPWIRE_JEV:-$HOME/.claude/scripts/__quick_decide.py}"
 
 die() {
 	echo "tripwire: $*" >&2
