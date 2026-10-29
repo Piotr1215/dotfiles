@@ -2,7 +2,7 @@
 
 # __create_linear_issue.sh (taskwarrior-tui shortcut 8) and its DOC twin file a
 # Linear issue from a task. Piotr, 26 Oct 2026: new issues carry no assignee
-# unless he names one, and stay in the team's default state (Triage). Mock curl
+# unless he names one, and use the team's Triage state. Mock curl
 # records every GraphQL body; mock task records every call.
 
 setup() {
@@ -16,19 +16,26 @@ setup() {
   export LINEAR_API_KEY=test-key
   export LINEAR_DEVOPS_TEAM_ID=team-devops
   export LINEAR_DOCS_TEAM_ID=team-docs
+  export LOOKUP_REPLY='{"data":{"team":{"id":"team-devops","states":{"nodes":[{"id":"triage-devops","name":"Triage"}],"pageInfo":{"hasNextPage":false}}}}}'
 
   cat > "$BIN/curl" <<'EOF'
 #!/usr/bin/env bash
 while [ $# -gt 0 ]; do
-  if [ "$1" = "--data" ]; then printf '%s\n' "$2" >> "$CURL_LOG"; shift; fi
+  if [ "$1" = "--data" ]; then body="$2"; printf '%s\n' "$2" | jq -c . >> "$CURL_LOG"; shift; fi
   shift
 done
-printf '%s' "$CURL_REPLY"
+if [[ "$body" == *TeamStates* ]]; then
+  [ "${LOOKUP_FAIL:-0}" = 0 ] || exit 22
+  printf '%s' "$LOOKUP_REPLY"
+else
+  printf '%s' "$CURL_REPLY"
+fi
 EOF
   cat > "$BIN/task" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >> "$TASK_LOG"
 case "$*" in
+  *"_get task-uuid.repo") printf '%s' "${TASK_REPO:-}" ;;
   *" export") printf '[{"description":"fix the thing"}]' ;;
 esac
 EOF
@@ -40,31 +47,64 @@ reply_for() {
   printf '{"data":{"issueCreate":{"success":true,"issue":{"id":"i1","title":"fix the thing","url":"https://linear.app/loft/issue/%s-1800/fix-the-thing","number":1800}}}}' "$1"
 }
 
-@test "a DEVOPS issue is created with no assignee and no state" {
+@test "DEVOPS creation sends Triage and leaves the assignee unset" {
   export CURL_REPLY="$(reply_for DEVOPS)"
   run "$SCRIPTS/__create_linear_issue.sh" task-uuid
   [ "$status" -eq 0 ]
-  [ "$(jq -s 'length' "$CURL_LOG")" = 1 ]
-  [ "$(jq -r '.query | test("assignee|stateId|viewer")' "$CURL_LOG")" = false ]
-  [ "$(jq -c '.variables | keys' "$CURL_LOG")" = '["desc","team","title"]' ]
-  [ "$(jq -r '.variables.team' "$CURL_LOG")" = team-devops ]
-}
-
-@test "a DEVOPS issue still links its id back to the task" {
-  export CURL_REPLY="$(reply_for DEVOPS)"
-  run "$SCRIPTS/__create_linear_issue.sh" task-uuid
-  [ "$status" -eq 0 ]
+  [ "$(jq -s 'length' "$CURL_LOG")" = 2 ]
+  [ "$(sed -n '2p' "$CURL_LOG" | jq -r '.query | test("assignee|viewer")')" = false ]
+  [ "$(sed -n '2p' "$CURL_LOG" | jq -r '.variables.state')" = triage-devops ]
+  [ "$(sed -n '2p' "$CURL_LOG" | jq -r '.query | contains("stateId: $state")')" = true ]
+  [ "$(sed -n '2p' "$CURL_LOG" | jq -r '.variables.team')" = team-devops ]
   grep -Fx 'task-uuid modify linear_issue_id:DEVOPS-1800' "$TASK_LOG"
   grep -Fx 'task-uuid annotate https://linear.app/loft/issue/DEVOPS-1800/fix-the-thing' "$TASK_LOG"
 }
 
-@test "a DOC issue is created with no assignee and no state" {
+@test "DOC creation sends its own Triage and links the task" {
+  export LOOKUP_REPLY='{"data":{"team":{"id":"team-docs","states":{"nodes":[{"id":"triage-docs","name":"Triage"}],"pageInfo":{"hasNextPage":false}}}}}'
   export CURL_REPLY="$(reply_for DOC)"
   run "$SCRIPTS/__create_linear_issue_docs.sh" task-uuid
   [ "$status" -eq 0 ]
-  [ "$(jq -s 'length' "$CURL_LOG")" = 1 ]
-  [ "$(jq -r '.query | test("assignee|stateId|viewer")' "$CURL_LOG")" = false ]
-  [ "$(jq -c '.variables | keys' "$CURL_LOG")" = '["desc","team","title"]' ]
-  [ "$(jq -r '.variables.team' "$CURL_LOG")" = team-docs ]
+  [ "$(sed -n '2p' "$CURL_LOG" | jq -r '.variables.state')" = triage-docs ]
+  [ "$(sed -n '2p' "$CURL_LOG" | jq -r '.variables.team')" = team-docs ]
+  [ "$(sed -n '2p' "$CURL_LOG" | jq -r '.query | test("assignee|viewer")')" = false ]
   grep -Fx 'task-uuid modify linear_issue_id:DOC-1800' "$TASK_LOG"
+  grep -Fx 'task-uuid annotate https://linear.app/loft/issue/DOC-1800/fix-the-thing' "$TASK_LOG"
+}
+
+@test "both scripts fail before creation for missing, ambiguous, incomplete or failed lookup" {
+  for script in __create_linear_issue.sh __create_linear_issue_docs.sh; do
+    for reply in \
+      '{"data":{"team":{"id":"team-devops","states":{"nodes":[],"pageInfo":{"hasNextPage":false}}}}}' \
+      '{"data":{"team":{"id":"team-devops","states":{"nodes":[{"id":"a","name":"Triage"},{"id":"b","name":"Triage"}],"pageInfo":{"hasNextPage":false}}}}}' \
+      '{"data":{"team":{"id":"team-devops","states":{"nodes":[{"id":"a","name":"Triage"}],"pageInfo":{"hasNextPage":true}}}}}' \
+      '{"errors":[{"message":"failed"}]}' \
+      'invalid'; do
+      : > "$CURL_LOG"
+      export LOOKUP_REPLY="$reply"
+      if [ "$script" = __create_linear_issue_docs.sh ]; then export LINEAR_DOCS_TEAM_ID=team-devops; fi
+      run "$SCRIPTS/$script" task-uuid
+      [ "$status" -ne 0 ]
+      [ "$(wc -l < "$CURL_LOG")" -eq 1 ]
+      ! grep -q issueCreate "$CURL_LOG"
+    done
+    : > "$CURL_LOG"
+    export LOOKUP_FAIL=1
+    run "$SCRIPTS/$script" task-uuid
+    [ "$status" -ne 0 ]
+    ! grep -q issueCreate "$CURL_LOG"
+    unset LOOKUP_FAIL
+  done
+}
+
+@test "both scripts clear the no-repo marker when linking the task" {
+  export TASK_REPO=no-repo
+  export CURL_REPLY="$(reply_for DEVOPS)"
+  export LINEAR_DOCS_TEAM_ID=team-devops
+  for script in __create_linear_issue.sh __create_linear_issue_docs.sh; do
+    : > "$TASK_LOG"
+    run "$SCRIPTS/$script" task-uuid
+    [ "$status" -eq 0 ]
+    grep -E '^task-uuid modify linear_issue_id:(DEVOPS|DOC)-1800 repo:$' "$TASK_LOG"
+  done
 }

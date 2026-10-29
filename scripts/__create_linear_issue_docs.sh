@@ -18,19 +18,44 @@ TASK_DESCRIPTION=$(echo "$TASK_DETAILS" | jq -r '.[0].description')
 # Create markdown template
 DESCRIPTION=$'## Description\n\n## Acceptance Criteria\n\n- [ ]\n\n## Related'
 
-# No assignee and no state: Linear files the issue unassigned in the team's
-# default state (Triage), and Piotr assigns it by hand.
+LINEAR_TEAM_ID="$LINEAR_DOCS_TEAM_ID"
+# Resolve the exact team's Triage state before creating an issue.
+lookup_query=$(jq -n --arg team "$LINEAR_TEAM_ID" '{
+  query: "query TeamStates($team: String!) { team(id: $team) { id states(first: 250) { nodes { id name } pageInfo { hasNextPage } } } }",
+  variables: {team: $team}
+}')
+if ! lookup_response=$(curl -fsS -X POST \
+  -H "Content-Type: application/json" \
+  -H "Authorization: $LINEAR_API_KEY" \
+  --data "$lookup_query" https://api.linear.app/graphql); then
+  echo "Failed to look up Linear Triage state" >&2
+  exit 1
+fi
+if ! state_id=$(jq -er --arg team "$LINEAR_TEAM_ID" '
+  if (.errors // [] | length) != 0 or .data.team.id != $team or
+     .data.team.states.pageInfo.hasNextPage != false or
+     (.data.team.states.nodes | type) != "array" then error("invalid state lookup")
+  else [.data.team.states.nodes[] | select(.name == "Triage") | .id] |
+    if length == 1 and (.[0] | type == "string" and length > 0) then .[0]
+    else error("missing or ambiguous Triage state") end
+  end' <<< "$lookup_response"); then
+  echo "Failed to resolve a unique Linear Triage state" >&2
+  exit 1
+fi
+
 # Construct the GraphQL mutation using jq
 query=$(jq -n \
 	--arg title "$TASK_DESCRIPTION" \
 	--arg desc "$DESCRIPTION" \
-	--arg team "$LINEAR_DOCS_TEAM_ID" \
+	--arg team "$LINEAR_TEAM_ID" \
+	--arg state "$state_id" \
 	'{
-    query: "mutation IssueCreate($title: String!, $desc: String!, $team: String!) {
+    query: "mutation IssueCreate($title: String!, $desc: String!, $team: String!, $state: String!) {
       issueCreate(input: {
         title: $title,
         description: $desc,
-        teamId: $team
+        teamId: $team,
+        stateId: $state
       }) {
         success
         issue {
@@ -44,7 +69,8 @@ query=$(jq -n \
     variables: {
       title: $title,
       desc: $desc,
-      team: $team
+      team: $team,
+      state: $state
     }
   }')
 
