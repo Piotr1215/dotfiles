@@ -835,7 +835,7 @@ cs() {
     fi
     cwd=${out%%$'\t'*}
     id=${out##*$'\t'}
-    cd "$cwd" && claude --resume "$id"
+    cd "$cwd" && __claude_with_monitor.sh --resume "$id"
 }
 
 # Pipe stdin to Claude and stream the answer as it is generated, then print a

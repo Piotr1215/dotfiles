@@ -54,7 +54,7 @@ function execute_and_claude() {
 
     # Use tmux to send the command directly to the pane
     # This ensures proper TTY handling
-    tmux send-keys -t "$pane_id" "KUBECONFIG=/home/decoder/dev/homelab/kubeconfig /home/decoder/.local/bin/claude" C-m
+    tmux send-keys -t "$pane_id" "KUBECONFIG=/home/decoder/dev/homelab/kubeconfig __claude_with_monitor.sh" C-m
 
     # Background task to send keys after claude starts
     (
@@ -124,7 +124,7 @@ function claude_prompt() {
     local pane_id=$(tmux display-message -p '#{pane_id}')
 
     # Use tmux to send the command directly to the pane
-    tmux send-keys -t "$pane_id" "KUBECONFIG=/home/decoder/dev/homelab/kubeconfig /home/decoder/.local/bin/claude" C-m
+    tmux send-keys -t "$pane_id" "KUBECONFIG=/home/decoder/dev/homelab/kubeconfig __claude_with_monitor.sh" C-m
 
     # Background task to send keys after claude starts
     (
@@ -513,9 +513,8 @@ bindkey '^[K' codex_skill_picker
 
 # Per-account Claude config routing (#91)
 #
-# The launcher (__claude_with_monitor.sh) routes work vs personal by cwd, but the
-# direct-binary entry points bypass it: `plaude` (raw /home/decoder/.local/bin/claude),
-# `cs`/resume helpers, and any keybinding that calls the binary. Setting
+# Interactive entry points use __claude_with_monitor.sh for account routing and
+# agents-bus channels. Print-mode `plaude` still calls the binary directly. Setting
 # CLAUDE_CONFIG_DIR from the current directory on every `cd` makes EVERY entry
 # point inherit the correct account, so a `plaude` run inside ~/loft uses the work
 # login and one anywhere else uses personal, with no manual switch.
