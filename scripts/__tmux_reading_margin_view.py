@@ -4,7 +4,6 @@
 import ctypes
 import locale
 import os
-from pathlib import Path
 import re
 import selectors
 import signal
@@ -23,22 +22,23 @@ LIBC.wcwidth.restype = ctypes.c_int
 
 
 def physical_lines(text, width):
-    """Track soft wraps so even a hint taller than the viewport can scroll."""
+    """Clip each logical line to the pane width without losing its left edge."""
     rows = []
     for line in text.splitlines():
-        current, style, used = "", "", 0
+        current, used = "", 0
         for token in re.split(r"(\x1b\[[0-9;]*m)", line):
             if SGR.fullmatch(token):
-                style = "" if token in ("\x1b[m", "\x1b[0m") else style + token
                 current += token
                 continue
             for char in token:
                 cells = max(0, LIBC.wcwidth(char))
-                if used and used + cells > width:
-                    rows.append((current, True))
-                    current, used = style, 0
+                if used + cells > width:
+                    break
                 current += char
                 used += cells
+            else:
+                continue
+            break
         rows.append((current, False))
     return rows
 
@@ -53,8 +53,7 @@ def paint(lines, offset, width, height):
     visible = lines[offset:offset + max(1, height - 1)]
     footer = f"{offset + 1 if lines else 0}-{offset + len(visible)}/{len(lines)}  j/k scroll"
     footer = footer[:max(0, width - 1)]
-    frame = "".join(line + ("" if soft else "\r\n") for line, soft in visible)
-    frame = frame.removesuffix("\r\n")
+    frame = "".join(f"\x1b[{row};1H\x1b[0m{line}" for row, (line, _) in enumerate(visible, 1))
     footer_frame = f"\x1b[{height};1H{footer}\x1b[J" if height > 1 else ""
     sys.stdout.write(f"\x1b[?2026h\x1b[H\x1b[2J{frame}\x1b[0m{footer_frame}\x1b[?2026l")
     sys.stdout.flush()
@@ -84,7 +83,6 @@ def main():
     command = sys.argv[1:]
     if not command:
         raise SystemExit("usage: __tmux_reading_margin_view.py renderer [arguments ...]")
-    wrapper = os.environ.get("TMUX_READING_MARGIN_WRAP_COMMAND", str(Path.home() / ".claude/scripts/__cockpit_wrap.py"))
     selector = selectors.DefaultSelector()
     selector.register(sys.stdin, selectors.EVENT_READ, "key")
     saved = termios.tcgetattr(sys.stdin)
@@ -104,7 +102,7 @@ def main():
     signal.signal(signal.SIGWINCH, resize)
     raw, lines, offset, size = "", [], 0, None
     process, output, next_read, pending = None, bytearray(), 0.0, b""
-    sys.stdout.write("\x1b[?1049h\x1b[?25l\x1b[?1000h\x1b[?1006h")
+    sys.stdout.write("\x1b[?1049h\x1b[?7l\x1b[?25l\x1b[?1000h\x1b[?1006h")
     sys.stdout.flush()
     try:
         while running:
@@ -151,8 +149,7 @@ def main():
                 dirty = dirty or incoming != raw
                 raw, process = incoming, None
             if dirty and raw:
-                wrapped = subprocess.run([sys.executable, wrapper, "--board", str(width)], input=raw, text=True, capture_output=True, check=True)
-                lines = physical_lines(wrapped.stdout, width)
+                lines = physical_lines(raw, width)
                 offset = min(offset, bottom_offset(lines, width, max(1, height - 1)))
                 paint(lines, offset, width, height)
                 dirty = False
@@ -167,7 +164,7 @@ def main():
         finally:
             selector.close()
             termios.tcsetattr(sys.stdin, termios.TCSANOW, saved)
-            sys.stdout.write("\x1b[?1000l\x1b[?1006l\x1b[?25h\x1b[?1049l")
+            sys.stdout.write("\x1b[?1000l\x1b[?1006l\x1b[?7h\x1b[?25h\x1b[?1049l")
             sys.stdout.flush()
 
 
