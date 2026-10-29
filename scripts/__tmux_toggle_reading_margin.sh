@@ -61,7 +61,10 @@ case "${1:-}" in
   if [[ -z "$sync_client" ]]; then
     exit 0
   fi
-  target_pane="$(tmux display-message -p -c "$sync_client" '#{pane_id}' 2>/dev/null || true)"
+  # display-message -c selects the message client, not its pane context. An
+  # inherited TMUX_PANE can point at another window, so read the client's row.
+  target_pane="$(tmux list-clients -F '#{client_name}|#{pane_id}' 2>/dev/null \
+    | awk -F'|' -v client="$sync_client" '$1 == client { print $2; exit }' || true)"
   [ -n "$target_pane" ] || exit 0
   sync=true
   ;;
