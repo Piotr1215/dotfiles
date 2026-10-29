@@ -4,6 +4,7 @@
 import ctypes
 import locale
 import os
+from pathlib import Path
 import re
 import selectors
 import signal
@@ -41,6 +42,25 @@ def physical_lines(text, width):
             break
         rows.append((current, False))
     return rows
+
+
+def jump_targets(text):
+    """Map each nonblank agent block row to its full SESSION token."""
+    rows = [SGR.sub("", line) for line in text.splitlines()]
+    targets = [None] * len(rows)
+    start = None
+    for index in range(len(rows) + 1):
+        line = rows[index] if index < len(rows) else ""
+        if start is not None and (not line.strip() or re.match(r"^\s*AGENT:\s", line)):
+            for item in rows[start:index]:
+                match = re.match(r"^\s*SESSION:\s*(jump:[^\s]+)", item)
+                if match:
+                    targets[start:index] = [match.group(1)] * (index - start)
+                    break
+            start = None
+        if re.match(r"^\s*AGENT:\s", line):
+            start = index
+    return targets
 
 
 def bottom_offset(lines, width, height):
@@ -83,6 +103,7 @@ def main():
     command = sys.argv[1:]
     if not command:
         raise SystemExit("usage: __tmux_reading_margin_view.py renderer [arguments ...]")
+    jump_command = os.environ.get("TMUX_READING_MARGIN_JUMP_COMMAND", str(Path(__file__).with_name("__tmux_jump.sh")))
     selector = selectors.DefaultSelector()
     selector.register(sys.stdin, selectors.EVENT_READ, "key")
     saved = termios.tcgetattr(sys.stdin)
@@ -101,11 +122,13 @@ def main():
         signal.signal(signum, stop)
     signal.signal(signal.SIGWINCH, resize)
     raw, lines, offset, size = "", [], 0, None
+    targets, jump_children = [], []
     process, output, next_read, pending = None, bytearray(), 0.0, b""
     sys.stdout.write("\x1b[?1049h\x1b[?7l\x1b[?25l\x1b[?1000h\x1b[?1006h")
     sys.stdout.flush()
     try:
         while running:
+            jump_children = [child for child in jump_children if child.poll() is None]
             current_size = os.get_terminal_size(sys.stdout.fileno())
             if current_size != size:
                 size, dirty = current_size, True
@@ -142,12 +165,22 @@ def main():
                         pending = pending[len(key):]
                         if key == b"q":
                             running = False
+                        click = re.fullmatch(rb"\x1b\[<0;([0-9]+);([0-9]+)M", key)
+                        if click:
+                            x, y = map(int, click.groups())
+                            row = offset + y - 1
+                            if 1 <= x <= width and 1 <= y <= max(1, height - 1) and row < len(targets) and targets[row]:
+                                try:
+                                    jump_children.append(subprocess.Popen([jump_command, targets[row]], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True))
+                                except OSError:
+                                    pass
                         offset = scroll(key, offset, lines, width, height)
                         dirty = True
             if process is not None and process.poll() is not None and process.stdout.closed:
                 incoming = output.decode(errors="replace") if process.returncode == 0 else "Roster read failed\n"
                 dirty = dirty or incoming != raw
                 raw, process = incoming, None
+                targets = jump_targets(raw)
             if dirty and raw:
                 lines = physical_lines(raw, width)
                 offset = min(offset, bottom_offset(lines, width, max(1, height - 1)))

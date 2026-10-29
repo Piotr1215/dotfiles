@@ -22,6 +22,66 @@ spec.loader.exec_module(VIEW)
 
 
 class MarginViewTest(unittest.TestCase):
+    def test_clicks_use_full_block_in_each_viewer(self):
+        with tempfile.TemporaryDirectory(prefix='margin-click-') as tmp:
+            root = Path(tmp)
+            renderer, jump, hits = root / 'renderer', root / 'jump', root / 'hits'
+            renderer.write_text('#!/bin/sh\nprintf "HEADER\\n\\nAGENT: first\\nLATEST: update\\nSTATUS: working\\nSESSION: jump:first:window\\n\\nAGENT: second\\nSTATUS: idle\\nSESSION: jump:second\\n"\nsleep 3\n')
+            jump.write_text('#!/bin/sh\nprintf "%s\\n" "$1" >> "$TEST_HITS"\n')
+            renderer.chmod(0o755)
+            jump.chmod(0o755)
+            viewers = []
+            for _ in range(2):
+                master, slave = os.openpty()
+                fcntl.ioctl(master, termios.TIOCSWINSZ, struct.pack('HHHH', 5, 15, 0, 0))
+                env = dict(os.environ, TEST_HITS=str(hits), TMUX_READING_MARGIN_JUMP_COMMAND=str(jump))
+                proc = subprocess.Popen(['python3', str(VIEW_PATH), str(renderer)], stdin=slave, stdout=slave, stderr=subprocess.DEVNULL, env=env, start_new_session=True)
+                os.close(slave)
+                viewers.append((master, proc))
+            def cleanup():
+                for master, proc in viewers:
+                    if proc.poll() is None:
+                        proc.terminate()
+                        proc.wait(timeout=3)
+                    os.close(master)
+            self.addCleanup(cleanup)
+            def wait_text(master, needle):
+                data = b''
+                end = time.monotonic() + 5
+                while time.monotonic() < end:
+                    if needle in data:
+                        return
+                    ready, _, _ = select.select([master], [], [], .05)
+                    if ready:
+                        data += os.read(master, 65536)
+                self.fail(f'no {needle!r}: {data!r}')
+            def wait_hits(count):
+                end = time.monotonic() + 2
+                while time.monotonic() < end:
+                    if hits.exists() and len(hits.read_text().splitlines()) >= count:
+                        return hits.read_text().splitlines()
+                    time.sleep(.01)
+                self.fail('jump did not run')
+            for master, _ in viewers:
+                wait_text(master, b'LATEST: update')
+                os.write(master, b'\x1b[<0;1;4M')
+            self.assertEqual(wait_hits(2), ['jump:first:window'] * 2)
+            master, _ = viewers[0]
+            os.write(master, b'\x1b[<0;1;1M\x1b[<0;1;2M\x1b[<4;1;3M\x1b[<16;1;3M\x1b[<0;1;3m\x1b[<1;1;3M')
+            time.sleep(.2)
+            self.assertEqual(hits.read_text().splitlines(), ['jump:first:window'] * 2)
+            os.write(master, b'\x1b[<65;1;1M')
+            wait_text(master, b'STATUS: working')
+            os.write(master, b'\x1b[<0;1;4M')
+            self.assertEqual(wait_hits(3), ['jump:first:window'] * 3)
+            os.write(master, b'G')
+            wait_text(master, b'STATUS: idle')
+            os.write(master, b'\x1b[<0;1;3M')
+            self.assertEqual(wait_hits(4), ['jump:first:window'] * 3 + ['jump:second'])
+            os.write(master, b'\x1b[<0;1;5M\x1b[<0;0;3M\x1b[<0;16;3M\x1b[<0;1;0M')
+            time.sleep(.2)
+            self.assertEqual(hits.read_text().splitlines(), ['jump:first:window'] * 3 + ['jump:second'])
+
     def test_clips_unicode_and_ansi_without_wrapping(self):
         rows = VIEW.physical_lines('\x1b[31m界abc\x1b[0m\n    child', 4)
         self.assertEqual(rows, [('\x1b[31m界ab', False), ('    ', False)])
