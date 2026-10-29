@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -207,13 +208,23 @@ func main() {
 	var output strings.Builder
 	var lastFingerprint, pendingFingerprint string
 	var pendingValid bool
+	orderFile := filepath.Join(state, "pane-order")
+	cycleDir := os.Getenv("CYCLE_AGENT_CACHE_DIR")
+	if cycleDir == "" {
+		runtime := os.Getenv("XDG_RUNTIME_DIR")
+		if runtime == "" {
+			runtime = "/tmp"
+		}
+		cycleDir = filepath.Join(runtime, "cycle-agent-order")
+	}
 	nextWatches := time.Now().Add(200 * time.Millisecond)
 	start := func() {
 		output.Reset()
+		_ = os.Remove(orderFile)
 		cmd = exec.Command(args[0], args[1:]...)
 		cmd.Stdout = &output
 		cmd.Stderr = io.Discard
-		cmd.Env = append(os.Environ(), "TMUX_PANE=")
+		cmd.Env = append(os.Environ(), "TMUX_PANE=", "COCKPIT_ORDER_FILE="+orderFile)
 		cmd.ExtraFiles = []*os.File{lock}
 		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 		if err := cmd.Start(); err != nil {
@@ -242,9 +253,22 @@ func main() {
 				if pendingValid {
 					lastFingerprint = pendingFingerprint
 				}
+				// Keep identity and text in one publication. The cycle shortcut may
+				// replace its own order independently while a viewer is painting.
+				order, _ := os.ReadFile(orderFile)
+				frame, _ := json.Marshal(struct {
+					Text  string   `json:"text"`
+					Panes []string `json:"panes"`
+				}{output.String(), strings.Fields(string(order))})
 				tmp := filepath.Join(state, fmt.Sprintf(".frame.%d.tmp", os.Getpid()))
-				if os.WriteFile(tmp, []byte(output.String()), 0600) == nil {
+				if os.WriteFile(tmp, frame, 0600) == nil {
 					_ = os.Rename(tmp, filepath.Join(state, "frame"))
+				}
+				if order != nil && os.MkdirAll(cycleDir, 0700) == nil {
+					tmp := filepath.Join(cycleDir, fmt.Sprintf(".order.%d.tmp", os.Getpid()))
+					if os.WriteFile(tmp, order, 0600) == nil {
+						_ = os.Rename(tmp, filepath.Join(cycleDir, "order"))
+					}
 				}
 			} else if _, statErr := os.Stat(filepath.Join(state, "frame")); os.IsNotExist(statErr) {
 				_ = os.WriteFile(filepath.Join(state, "frame"), []byte("Roster read failed\n"), 0600)

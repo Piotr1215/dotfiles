@@ -33,6 +33,15 @@ if [[ "${1:-}" != "--render" && "${1:-}" != "--cached-render" && "${1:-}" != "--
     done
     tmux set-option -g @reading_margin_shared_hooks "$hook_marker"
   fi
+  # Selection never recollects the roster or waits for a shell. Resolve the
+  # current pane in the background, so bursts of switches converge on live state.
+  if [[ $(tmux show-options -gqv @reading_margin_focus_hooks) != "$hook_marker" ]]; then
+    printf -v active_command 'tmux display-message -p -t "#{hook_window}" '\''##{pane_id}'\'' > %q/active-#{hook_window}' "$state_dir"
+    printf -v active_hook 'run-shell -b %q' "$active_command"
+    tmux set-hook -ag window-pane-changed "$active_hook"
+    tmux set-option -g @reading_margin_focus_hooks "$hook_marker"
+  fi
+  export TMUX_READING_MARGIN_WINDOW="$window"
   exec {setup_fd}>&-
   exec python3 "$script_dir/__tmux_reading_margin_view.py" \
     "$0" --raw-render "$session" "$window"
@@ -55,7 +64,7 @@ if [[ "$mode" == --raw-render ]]; then
   # Keep full logical lines so widening reveals clipped data immediately.
   width=10000
   export COCKPIT_RAW=1
-  export COCKPIT_ORDER_FILE="${CYCLE_AGENT_CACHE_DIR:-${XDG_RUNTIME_DIR:-/tmp}/cycle-agent-order}/order"
+  export COCKPIT_ORDER_FILE="${COCKPIT_ORDER_FILE:-${CYCLE_AGENT_CACHE_DIR:-${XDG_RUNTIME_DIR:-/tmp}/cycle-agent-order}/order}"
 fi
 
 cockpit_command="${TMUX_READING_MARGIN_COCKPIT_STATE_COMMAND:-$HOME/.claude/scripts/__cockpit_state.sh}"

@@ -15,6 +15,7 @@ setup() {
   tmux -L "$SOCKET_NAME" set-environment -g TMUX_READING_MARGIN_WEEKEND_COMMAND \
     "printf 'weekend\\n' > '$COMMAND_LOG'; exec sleep infinity"
   tmux -L "$SOCKET_NAME" set-environment -g TMUX_READING_MARGIN_DISPLAY_STATE expanded
+  tmux -L "$SOCKET_NAME" set-environment -g CYCLE_AGENT_CACHE_DIR "$BATS_TEST_TMPDIR/cycle-order"
   # No visualizer unless a test asks for one, whether or not cava is installed.
   tmux -L "$SOCKET_NAME" set-environment -g TMUX_READING_MARGIN_VISUALIZER ''
   tmux -L "$SOCKET_NAME" set-option -g @reading_margin_default on
@@ -33,6 +34,19 @@ wait_for_pane_count() {
     [ "$(tmux -L "$SOCKET_NAME" list-panes -F '#{pane_id}' | wc -l)" -eq "$1" ] && return
     sleep 0.05
   done
+  return 1
+}
+
+# Startup can build the collector before exec replaces the shell with Python.
+wait_for_shared_viewer() {
+  local pid command
+  pid="$(tmux -L "$SOCKET_NAME" display-message -p -t "$1" '#{pane_pid}')"
+  for _ in {1..100}; do
+    command="$(tr '\0' ' ' < "/proc/$pid/cmdline")"
+    [[ "$command" == *'__tmux_reading_margin_view.py'*'__tmux_reading_margin_work.sh --raw-render test @0'* ]] && return
+    sleep 0.05
+  done
+  printf 'shared viewer did not start: %s\n' "$command" >&2
   return 1
 }
 
@@ -548,8 +562,7 @@ EOF
   new_margin="$(tmux -L "$SOCKET_NAME" show-options -wqv @reading_margin_pane)"
   [ -n "$new_margin" ]
   [ "$new_margin" != "$old_margin" ]
-  pid="$(tmux -L "$SOCKET_NAME" display-message -p -t "$new_margin" '#{pane_pid}')"
-  [[ "$(tr '\0' ' ' < "/proc/$pid/cmdline")" == *'--interval 0.1 --no-title'*'--cached-render'* ]]
+  wait_for_shared_viewer "$new_margin"
   tmux -L "$SOCKET_NAME" run-shell "$SCRIPT --upgrade-legacy '$PANE_ID'"
   [ "$(tmux -L "$SOCKET_NAME" show-options -wqv @reading_margin_pane)" = "$new_margin" ]
 }
@@ -569,8 +582,7 @@ EOF
   new_margin="$(tmux -L "$SOCKET_NAME" show-options -wqv @reading_margin_pane)"
   [ -n "$new_margin" ]
   [ "$new_margin" != "$old_margin" ]
-  pid="$(tmux -L "$SOCKET_NAME" display-message -p -t "$new_margin" '#{pane_pid}')"
-  [[ "$(tr '\0' ' ' < "/proc/$pid/cmdline")" == *'--interval 0.1 --no-title'*'--cached-render'* ]]
+  wait_for_shared_viewer "$new_margin"
 }
 
 @test "status reports the default and current window state" {

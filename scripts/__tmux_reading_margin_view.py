@@ -4,6 +4,7 @@
 import ctypes
 import fcntl
 import hashlib
+import json
 import locale
 import os
 from pathlib import Path
@@ -36,6 +37,19 @@ def atomic_write(path, data):
     tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
     tmp.write_text(data)
     os.replace(tmp, path)
+
+
+def decode_frame(data):
+    """Read text and its matching pane order from one atomic publication."""
+    try:
+        frame = json.loads(data)
+        if (isinstance(frame, dict) and isinstance(frame.get("text"), str) and
+                isinstance(frame.get("panes"), list) and
+                all(isinstance(pane, str) and re.fullmatch(r"%[0-9]+", pane) for pane in frame["panes"])):
+            return frame["text"], frame["panes"]
+    except ValueError:
+        pass
+    return data, []
 
 
 def physical_lines(text, width):
@@ -79,6 +93,19 @@ def jump_targets(text):
     return targets
 
 
+def mark_active_agent(text, active_pane, pane_order):
+    """Mark one live block by pane ID without changing the shared frame."""
+    rows = text.splitlines(keepends=True)
+    targets = jump_targets(text)
+    headers = [i for i, row in enumerate(rows)
+               if targets[i] and re.match(r"^\s*AGENT:\s", SGR.sub("", row))]
+    if not active_pane or len(headers) != len(pane_order) or active_pane not in pane_order:
+        return text
+    index = headers[pane_order.index(active_pane)]
+    rows[index] = re.sub(r"(AGENT:(?:[ \t]|\x1b\[[0-9;]*m)*)", r"\1* ", rows[index], count=1)
+    return "".join(rows)
+
+
 def bottom_offset(lines, width, height):
     """Find the first logical line of the last visible page."""
     return max(0, len(lines) - height)
@@ -86,19 +113,16 @@ def bottom_offset(lines, width, height):
 
 def paint(lines, offset, width, height):
     """Write one complete frame; never scroll the first rows out of the pane."""
-    visible = lines[offset:offset + max(1, height - 1)]
-    footer = f"{offset + 1 if lines else 0}-{offset + len(visible)}/{len(lines)}  j/k scroll"
-    footer = footer[:max(0, width - 1)]
+    visible = lines[offset:offset + max(1, height)]
     frame = "".join(f"\x1b[{row};1H\x1b[0m{line}" for row, (line, _) in enumerate(visible, 1))
-    footer_frame = f"\x1b[{height};1H{footer}\x1b[J" if height > 1 else ""
-    sys.stdout.write(f"\x1b[?2026h\x1b[H\x1b[2J{frame}\x1b[0m{footer_frame}\x1b[?2026l")
+    sys.stdout.write(f"\x1b[?2026h\x1b[H\x1b[2J{frame}\x1b[0m\x1b[?2026l")
     sys.stdout.flush()
 
 
 def scroll(key, offset, lines, width, height):
     """Handle the usual scroll keys and SGR mouse-wheel reports."""
-    page = max(1, height - 2)
-    end = bottom_offset(lines, width, max(1, height - 1))
+    page = max(1, height - 1)
+    end = bottom_offset(lines, width, max(1, height))
     if key in (b"g", b"\x1b[H", b"\x1b[1~"):
         return 0
     if key in (b"G", b"\x1b[F", b"\x1b[4~"):
@@ -125,6 +149,18 @@ def main():
     jump_command = os.environ.get("TMUX_READING_MARGIN_JUMP_COMMAND", str(Path(__file__).with_name("__tmux_jump.sh")))
     state = shared_state_dir()
     state.mkdir(mode=0o700, parents=True, exist_ok=True)
+    window = os.environ.get("TMUX_READING_MARGIN_WINDOW", "")
+    active_file = state / f"active-{window}"
+    active_pane, active_version = "", None
+    if re.fullmatch(r"@[0-9]+", window):
+        # One query on startup; pane changes arrive through the async tmux hook.
+        try:
+            active_version = active_file.stat().st_mtime_ns if active_file.exists() else None
+            active_pane = subprocess.check_output(
+                ["tmux", "display-message", "-p", "-t", window, "#{pane_id}"],
+                text=True, timeout=1).strip()
+        except (OSError, subprocess.SubprocessError):
+            pass
     leader_fd = os.open(state / "leader.lock", os.O_CREAT | os.O_RDWR, 0o600)
     scroll_fd = os.open(state / "scroll.lock", os.O_CREAT | os.O_RDWR, 0o600)
     leader = False
@@ -148,6 +184,7 @@ def main():
         signal.signal(signum, stop)
     signal.signal(signal.SIGWINCH, resize)
     raw, lines, offset, size = "", [], 0, None
+    pane_order = []
     targets, jump_children = [], []
     painted_targets, painted_offset, painted_size = [], 0, (0, 0)
     pending = b""
@@ -190,13 +227,22 @@ def main():
                 try:
                     version = path.stat().st_mtime_ns
                     if filename == "frame" and version != frame_version:
-                        raw = path.read_text()
+                        raw, pane_order = decode_frame(path.read_text())
                         targets = jump_targets(raw)
                         frame_version, dirty = version, True
                     elif filename == "offset" and version != offset_version:
                         offset = max(0, int(path.read_text()))
                         offset_version, dirty = version, True
                 except (OSError, ValueError):
+                    pass
+            if window:
+                try:
+                    version = active_file.stat().st_mtime_ns
+                    if version != active_version:
+                        pane = active_file.read_text().strip()
+                        if re.fullmatch(r"%[0-9]+", pane):
+                            active_pane, active_version, dirty = pane, version, True
+                except OSError:
                     pass
             for event, _ in selector.select(0.1):
                 data = os.read(sys.stdin.fileno(), 4096)
@@ -221,7 +267,7 @@ def main():
                         x, y = map(int, click.groups())
                         row = painted_offset + y - 1
                         painted_width, painted_height = painted_size
-                        if 1 <= x <= painted_width and 1 <= y <= max(1, painted_height - 1) and row < len(painted_targets) and painted_targets[row]:
+                        if 1 <= x <= painted_width and 1 <= y <= painted_height and row < len(painted_targets) and painted_targets[row]:
                             try:
                                 jump_children.append(subprocess.Popen([jump_command, painted_targets[row]], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True))
                             except OSError:
@@ -240,7 +286,7 @@ def main():
                         fcntl.flock(scroll_fd, fcntl.LOCK_UN)
                     dirty = True
             if dirty and raw:
-                lines = physical_lines(raw, width)
+                lines = physical_lines(mark_active_agent(raw, active_pane, pane_order), width)
                 offset = min(offset, max(0, len(lines) - 1))
                 paint(lines, offset, width, height)
                 painted_targets, painted_offset, painted_size = targets, offset, (width, height)

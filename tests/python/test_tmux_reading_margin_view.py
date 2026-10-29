@@ -3,6 +3,7 @@
 import fcntl
 import importlib.util
 import io
+import json
 import os
 from pathlib import Path
 import select
@@ -31,12 +32,53 @@ class MarginViewTest(unittest.TestCase):
         self.assertEqual(VIEW.scroll(b'g', 2, lines, 20, 10), 0)
         self.assertEqual(VIEW.scroll(b'j', 0, lines, 20, 3), 1)
 
+    def test_active_marker_uses_live_pane_identity(self):
+        frame = ("AGENT: group\nSTATUS: summary\n\n"
+                 "\x1b[32m  AGENT: duplicate\x1b[0m\nSESSION: jump:same\n\n"
+                 "    AGENT: duplicate\nSESSION: jump:same\n")
+        expected = frame.replace("    AGENT: duplicate", "    AGENT: * duplicate")
+        self.assertEqual(VIEW.mark_active_agent(frame, '%2', ['%1', '%2']), expected)
+        self.assertEqual(VIEW.mark_active_agent(frame, '%3', ['%1', '%2']), frame)
+        self.assertEqual(VIEW.mark_active_agent(frame, '%1', ['%1']), frame)
+        self.assertEqual(VIEW.mark_active_agent(frame, '', ['%1', '%2']), frame)
+
+    def test_decode_frame_validates_metadata_and_accepts_legacy(self):
+        frame = 'AGENT: one\nSESSION: jump:one\n'
+        self.assertEqual(VIEW.decode_frame(json.dumps({'text': frame, 'panes': ['%1']})), (frame, ['%1']))
+        self.assertEqual(VIEW.decode_frame(frame), (frame, []))
+        for panes in (None, 'not-a-list', [1], ['%1', None]):
+            encoded = json.dumps({'text': frame, 'panes': panes})
+            self.assertEqual(VIEW.decode_frame(encoded), (encoded, []))
+
+    def test_frame_metadata_keeps_pane_order_with_text(self):
+        frame = 'AGENT: one\nSESSION: jump:one\n\nAGENT: two\nSESSION: jump:two\n'
+        first = json.dumps({'text': frame, 'panes': ['%1', '%2']})
+        second = json.dumps({'text': frame, 'panes': ['%2', '%1']})
+        raw, panes = VIEW.decode_frame(first)
+        self.assertIn('AGENT: * one', VIEW.mark_active_agent(raw, '%1', panes))
+        raw, panes = VIEW.decode_frame(second)
+        self.assertIn('AGENT: * two', VIEW.mark_active_agent(raw, '%1', panes))
+        raw, panes = VIEW.decode_frame(first)
+        self.assertIn('AGENT: * one', VIEW.mark_active_agent(raw, '%1', panes))
+
+    def test_paint_and_scroll_use_last_row(self):
+        lines = [(f'row-{i}', False) for i in range(6)]
+        stream = io.StringIO()
+        with patch.object(VIEW.sys, 'stdout', stream):
+            VIEW.paint(lines, 0, 20, 4)
+        self.assertIn('\x1b[4;1H\x1b[0mrow-3', stream.getvalue())
+        self.assertNotIn('j/k scroll', stream.getvalue())
+        self.assertEqual(VIEW.scroll(b'G', 0, lines, 20, 4), 2)
+        self.assertEqual(VIEW.scroll(b'j', 0, lines, 20, 4), 1)
+        self.assertEqual(VIEW.scroll(b'k', 1, lines, 20, 4), 0)
+
     @classmethod
     def setUpClass(cls):
-        cls.env_patch = patch.dict(os.environ, {'TMUX_READING_MARGIN_SEMANTIC_FILTER': '0'})
-        cls.env_patch.start()
         cls.build_dir = tempfile.TemporaryDirectory(prefix='margin-build-')
         root = Path(cls.build_dir.name)
+        cls.env_patch = patch.dict(os.environ, {'TMUX_READING_MARGIN_SEMANTIC_FILTER': '0',
+                                                'CYCLE_AGENT_CACHE_DIR': str(root / 'cycle')})
+        cls.env_patch.start()
         source = root / 'main.go'
         source.write_text(VIEW_PATH.with_name('tmux_reading_margin_collect.go').read_text())
         cls.collector = root / 'collector'
@@ -235,6 +277,9 @@ print(pathlib.Path(os.environ['SOURCE']).read_text(), end='')
                 self.fail(f'missing {needle!r}: {data!r}')
             for master, _ in viewers:
                 read_until(master, b'AGENT: one')
+            frame = json.loads((state / 'frame').read_text())
+            self.assertEqual(frame['panes'], [])  # Renderer did not publish an order.
+            self.assertEqual(frame['text'], source.read_text())
             time.sleep(.4)
             self.assertEqual(len(calls.read_text().splitlines()), 1)
             os.write(viewers[0][0], b'G')
@@ -258,6 +303,72 @@ print(pathlib.Path(os.environ['SOURCE']).read_text(), end='')
                 time.sleep(.02)
             self.assertEqual(len(calls.read_text().splitlines()), 3)
             self.assertNotEqual(int(calls.read_text().splitlines()[-1]), leader_pid)
+
+    def test_viewer_focus_is_independent_and_does_not_collect(self):
+        with tempfile.TemporaryDirectory(prefix='margin-focus-') as tmp:
+            root = Path(tmp)
+            state, calls, tmux_calls = root / 'state', root / 'calls', root / 'tmux-calls'
+            state.mkdir()
+            order = root / 'renderer-order'
+            order.write_text('%1\n%2\n')
+            renderer = root / 'renderer'
+            frame = 'AGENT: one\nSESSION: jump:same\n\nAGENT: two\nSESSION: jump:same\n'
+            renderer.write_text('#!/bin/sh\necho call >> "$CALLS"\ncat "$ORDER" > "$COCKPIT_ORDER_FILE"\nprintf "AGENT: one\\nSESSION: jump:same\\n\\nAGENT: two\\nSESSION: jump:same\\n"\n')
+            renderer.chmod(0o755)
+            bindir = root / 'bin'
+            bindir.mkdir()
+            tmux = bindir / 'tmux'
+            tmux.write_text('#!/bin/sh\necho call >> "$TMUX_CALLS"\nprintf "%s\\n" "$INITIAL_PANE"\n')
+            tmux.chmod(0o755)
+            viewers = []
+            for window, pane in (('@1', '%1'), ('@2', '%2')):
+                master, slave = os.openpty()
+                fcntl.ioctl(master, termios.TIOCSWINSZ, struct.pack('HHHH', 8, 40, 0, 0))
+                env = dict(os.environ, HOME=str(root), TASKDATA=str(root / 'taskdata'),
+                           XDG_STATE_HOME=str(root / 'xdg'), HANDOFF_PROBE_STATE=str(root / 'probe/state.json'),
+                           PATH=str(bindir) + ':' + os.environ['PATH'], CALLS=str(calls), TMUX_CALLS=str(tmux_calls),
+                           INITIAL_PANE=pane, ORDER=str(order), TMUX_READING_MARGIN_WINDOW=window,
+                           TMUX_READING_MARGIN_STATE_DIR=str(state),
+                           TMUX_READING_MARGIN_COLLECT_COMMAND=str(self.collector))
+                proc = subprocess.Popen(['python3', str(VIEW_PATH), str(renderer)], stdin=slave,
+                                        stdout=slave, stderr=subprocess.DEVNULL, env=env, start_new_session=True)
+                os.close(slave)
+                viewers.append((master, proc))
+            def cleanup():
+                for master, proc in viewers:
+                    if proc.poll() is None:
+                        proc.terminate()
+                        proc.wait(timeout=3)
+                    os.close(master)
+            self.addCleanup(cleanup)
+            def wait_text(master, needle, timeout=3):
+                data = b''
+                end = time.monotonic() + timeout
+                while time.monotonic() < end:
+                    ready, _, _ = select.select([master], [], [], .05)
+                    if ready:
+                        data += os.read(master, 65536)
+                        if needle in data:
+                            return data
+                self.fail(f'missing {needle!r}: {data!r}')
+            first = wait_text(viewers[0][0], b'AGENT: * one')
+            second = wait_text(viewers[1][0], b'AGENT: * two')
+            self.assertNotIn(b'AGENT: * two', first)
+            self.assertNotIn(b'AGENT: * one', second)
+            time.sleep(.3)
+            self.assertEqual(len(tmux_calls.read_text().splitlines()), 2)
+            self.assertEqual(len(calls.read_text().splitlines()), 1)
+            self.assertEqual(VIEW.decode_frame((state / 'frame').read_text()), (frame, ['%1', '%2']))
+            # A changed side file must not alter the order stored in this frame.
+            (state / 'pane-order').write_text('%2\n%1\n')
+            (state / 'active-@1').write_text('%2\n')
+            wait_text(viewers[0][0], b'AGENT: * two', 1)
+            (state / 'active-@2').write_text('%1\n')
+            wait_text(viewers[1][0], b'AGENT: * one', 1)
+            time.sleep(.3)
+            self.assertEqual(len(tmux_calls.read_text().splitlines()), 2)
+            self.assertEqual(len(calls.read_text().splitlines()), 1)
+            self.assertEqual(VIEW.decode_frame((state / 'frame').read_text()), (frame, ['%1', '%2']))
 
     def test_clicks_use_full_block_in_each_viewer(self):
         with tempfile.TemporaryDirectory(prefix='margin-click-') as tmp:
@@ -315,9 +426,11 @@ print(pathlib.Path(os.environ['SOURCE']).read_text(), end='')
             wait_text(master, b'STATUS: idle')
             os.write(master, b'\x1b[<0;1;3M')
             self.assertEqual(wait_hits(4), ['jump:first:window'] * 3 + ['jump:second'])
-            os.write(master, b'\x1b[<0;1;5M\x1b[<0;0;3M\x1b[<0;16;3M\x1b[<0;1;0M')
+            os.write(master, b'\x1b[<0;1;5M')
+            self.assertEqual(wait_hits(5), ['jump:first:window'] * 3 + ['jump:second'] * 2)
+            os.write(master, b'\x1b[<0;1;6M\x1b[<0;0;3M\x1b[<0;16;3M\x1b[<0;1;0M')
             time.sleep(.2)
-            self.assertEqual(hits.read_text().splitlines(), ['jump:first:window'] * 3 + ['jump:second'])
+            self.assertEqual(hits.read_text().splitlines(), ['jump:first:window'] * 3 + ['jump:second'] * 2)
 
     def test_clips_unicode_and_ansi_without_wrapping(self):
         rows = VIEW.physical_lines('\x1b[31m界abc\x1b[0m\n    child', 4)
@@ -393,7 +506,7 @@ for i in range(12): print('ROW-%02d' % i)
             (root / 'state' / 'dirty').touch()
             output.clear()
             time.sleep(1.6)
-            self.assertIn('CHILD: fixed-left', (root / 'state' / 'frame').read_text())
+            self.assertIn('CHILD: fixed-left', VIEW.decode_frame((root / 'state' / 'frame').read_text())[0])
             os.write(master, b'q')
             proc.wait(timeout=3)
             wait_for(b'\x1b[?7h', 1)

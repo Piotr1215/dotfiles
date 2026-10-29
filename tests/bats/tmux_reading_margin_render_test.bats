@@ -28,16 +28,16 @@ SCRIPT
   cat >"$BATS_TEST_TMPDIR/bin/tmux" <<'SCRIPT'
 #!/usr/bin/env bash
 case "$1" in
-  show-options) [[ ! -f "$HOOK_MARKER" ]] || cat "$HOOK_MARKER" ;;
+  show-options) [[ ! -f "$HOOK_MARKER.${@: -1}" ]] || cat "$HOOK_MARKER.${@: -1}" ;;
   set-hook) printf '%s\n' "$*" >>"$HOOK_LOG" ;;
-  set-option) printf '%s\n' "${@: -1}" >"$HOOK_MARKER" ;;
+  set-option) printf '%s\n' "${@: -1}" >"$HOOK_MARKER.${@: -2:1}" ;;
 esac
 SCRIPT
   cat >"$BATS_TEST_TMPDIR/bin/python3" <<'SCRIPT'
 #!/usr/bin/env bash
 if [[ "${2:-}" == --state-dir ]]; then printf '%s\n' "$SHARED_STATE"; exit 0; fi
 [[ -x "$TMUX_READING_MARGIN_COLLECT_COMMAND" ]] || exit 1
-printf '%s\n' "$*" >>"$VIEWER_LOG"
+printf '%s\n' "$* window=$TMUX_READING_MARGIN_WINDOW" >>"$VIEWER_LOG"
 SCRIPT
   cat >"$BATS_TEST_TMPDIR/bin/go" <<'SCRIPT'
 #!/usr/bin/env bash
@@ -54,11 +54,16 @@ SCRIPT
   run "$work" other '@2'
   [ "$status" -eq 0 ]
   [ "$(wc -l <"$BUILD_LOG")" -eq 1 ]
-  [ "$(wc -l <"$HOOK_LOG")" -eq 9 ]
+  [ "$(wc -l <"$HOOK_LOG")" -eq 10 ]
   [ "$(wc -l <"$VIEWER_LOG")" -eq 2 ]
   [[ $(cat "$HOOK_LOG") == *'set-hook -ag after-set-option'* ]]
   [[ $(cat "$HOOK_LOG") == *"$SHARED_STATE/dirty"* ]]
   [[ $(cat "$VIEWER_LOG") == *'--raw-render other @2'* ]]
+  [[ $(cat "$VIEWER_LOG") == *'window=@2'* ]]
+  focus_hook=$(rg 'set-hook -ag window-pane-changed ' "$HOOK_LOG")
+  [[ "$focus_hook" == *'window-pane-changed run-shell -b '* ]]
+  [[ "$focus_hook" == *'active-'* ]]
+  [[ "$focus_hook" != *'/dirty'* ]]
 }
 
 @test "shared raw collection reads handoffs fresh on every input change" {
