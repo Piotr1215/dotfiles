@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import select
 import signal
+import sqlite3
 import struct
 import subprocess
 import tempfile
@@ -22,8 +23,18 @@ spec.loader.exec_module(VIEW)
 
 
 class MarginViewTest(unittest.TestCase):
+    def test_scroll_down_preserves_shared_offset_in_tall_view(self):
+        lines = [(str(i), False) for i in range(5)]
+        for key in (b'j', b'\x1b[<65;1;1M', b' ', b'\x1b[6~'):
+            self.assertEqual(VIEW.scroll(key, 2, lines, 20, 10), 2)
+        self.assertEqual(VIEW.scroll(b'k', 2, lines, 20, 10), 1)
+        self.assertEqual(VIEW.scroll(b'g', 2, lines, 20, 10), 0)
+        self.assertEqual(VIEW.scroll(b'j', 0, lines, 20, 3), 1)
+
     @classmethod
     def setUpClass(cls):
+        cls.env_patch = patch.dict(os.environ, {'TMUX_READING_MARGIN_SEMANTIC_FILTER': '0'})
+        cls.env_patch.start()
         cls.build_dir = tempfile.TemporaryDirectory(prefix='margin-build-')
         root = Path(cls.build_dir.name)
         source = root / 'main.go'
@@ -34,6 +45,51 @@ class MarginViewTest(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.build_dir.cleanup()
+        cls.env_patch.stop()
+
+    def test_semantic_filter(self):
+        with tempfile.TemporaryDirectory(prefix='margin-semantic-') as tmp:
+            root = Path(tmp)
+            task, state, bindir = root / 'task', root / 'state', root / 'bin'
+            task.mkdir(); bindir.mkdir()
+            db = task / 'taskchampion.sqlite3'
+            with sqlite3.connect(db) as conn:
+                conn.executescript("create table tasks (id text, data text); create table working_set (id text); create table sync_meta (val text); insert into tasks values ('a','one'),('b','two'); insert into working_set values ('a'); insert into sync_meta values ('old');")
+            pane, calls = root / 'pane', root / 'calls'
+            pane.write_text('session window pane option-one\n')
+            tmux = bindir / 'tmux'; tmux.write_text('#!/bin/sh\ncat "$PANE"\n'); tmux.chmod(0o755)
+            renderer = root / 'renderer'; renderer.write_text('#!/bin/sh\necho call >> "$CALLS"\nprintf "frame\\n"\n'); renderer.chmod(0o755)
+            master, slave = os.openpty()
+            fcntl.ioctl(master, termios.TIOCSWINSZ, struct.pack('HHHH', 5, 25, 0, 0))
+            env = dict(os.environ, HOME=str(root), TASKDATA=str(task), XDG_STATE_HOME=str(root / 'xdg'), HANDOFF_PROBE_STATE=str(root / 'probe/state.json'), TMUX='', PATH=str(bindir) + ':' + os.environ['PATH'], PANE=str(pane), CALLS=str(calls), TMUX_READING_MARGIN_STATE_DIR=str(state), TMUX_READING_MARGIN_COLLECT_COMMAND=str(self.collector), TMUX_READING_MARGIN_SEMANTIC_FILTER='1')
+            env.pop('TMUX_READING_MARGIN_SEMANTIC_FILTER')
+            proc = subprocess.Popen(['python3', str(VIEW_PATH), str(renderer)], stdin=slave, stdout=slave, stderr=subprocess.DEVNULL, env=env, start_new_session=True)
+            os.close(slave)
+            def cleanup():
+                if proc.poll() is None: proc.terminate(); proc.wait(timeout=3)
+                os.close(master)
+            self.addCleanup(cleanup)
+            def wait_calls(n):
+                end = time.monotonic() + 1
+                while time.monotonic() < end:
+                    if calls.exists() and len(calls.read_text().splitlines()) >= n: return
+                    time.sleep(.01)
+                self.fail(f'expected {n} renders')
+            wait_calls(1)
+            with sqlite3.connect(db) as conn: conn.execute("update sync_meta set val='changed'")
+            (state / 'dirty').touch()
+            time.sleep(.7)
+            self.assertEqual(len(calls.read_text().splitlines()), 1)
+            with sqlite3.connect(db) as conn:
+                conn.execute('delete from tasks')
+                conn.executemany('insert into tasks values (?,?)', [('b','two'), ('a','one')])
+            time.sleep(.7)
+            self.assertEqual(len(calls.read_text().splitlines()), 1)
+            with sqlite3.connect(db) as conn: conn.execute("update tasks set data='changed' where id='a'")
+            wait_calls(2)
+            pane.write_text('session window pane option-two\n')
+            (state / 'dirty').touch()
+            wait_calls(3)
 
     @staticmethod
     def viewer_for_collector(collector_pid, viewers):

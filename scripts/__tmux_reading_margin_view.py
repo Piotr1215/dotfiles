@@ -106,11 +106,11 @@ def scroll(key, offset, lines, width, height):
     if key in (b"k", b"\x1b[A") or key.startswith(b"\x1b[<64;"):
         return max(0, offset - 1)
     if key in (b"j", b"\x1b[B") or key.startswith(b"\x1b[<65;"):
-        return min(end, offset + 1)
+        return min(max(end, offset), offset + 1)
     if key in (b"\x1b[5~", b"\x02"):
         return max(0, offset - page)
     if key in (b"\x1b[6~", b"\x06", b" "):
-        return min(end, offset + page)
+        return min(max(end, offset), offset + page)
     return offset
 
 
