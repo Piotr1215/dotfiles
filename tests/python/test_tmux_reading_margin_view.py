@@ -54,7 +54,7 @@ class MarginViewTest(unittest.TestCase):
             task.mkdir(); bindir.mkdir()
             db = task / 'taskchampion.sqlite3'
             with sqlite3.connect(db) as conn:
-                conn.executescript("create table tasks (id text, data text); create table working_set (id text); create table sync_meta (val text); insert into tasks values ('a','one'),('b','two'); insert into working_set values ('a'); insert into sync_meta values ('old');")
+                conn.executescript("create table tasks (uuid text, data text); create table working_set (id text); create table sync_meta (val text); insert into tasks values ('a','one'),('b','two'); insert into working_set values ('a'); insert into sync_meta values ('old');")
             pane, calls = root / 'pane', root / 'calls'
             pane.write_text('session window pane option-one\n')
             tmux = bindir / 'tmux'; tmux.write_text('#!/bin/sh\ncat "$PANE"\n'); tmux.chmod(0o755)
@@ -85,7 +85,7 @@ class MarginViewTest(unittest.TestCase):
                 conn.executemany('insert into tasks values (?,?)', [('b','two'), ('a','one')])
             time.sleep(.7)
             self.assertEqual(len(calls.read_text().splitlines()), 1)
-            with sqlite3.connect(db) as conn: conn.execute("update tasks set data='changed' where id='a'")
+            with sqlite3.connect(db) as conn: conn.execute("update tasks set data='changed' where uuid='a'")
             wait_calls(2)
             pane.write_text('session window pane option-two\n')
             (state / 'dirty').touch()

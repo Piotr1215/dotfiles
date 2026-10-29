@@ -33,13 +33,25 @@ func fingerprint(task, notes, taskrc, probe string) (string, error) {
 	fmt.Fprintf(h, "tmux:%q\n", lines)
 	db := filepath.Join(task, "taskchampion.sqlite3")
 	if _, err := os.Stat(db); err == nil {
-		const py = `import sqlite3,sys,json,base64
+		const py = `import sqlite3,sys,hashlib,struct
 c=sqlite3.connect('file:'+__import__('urllib.parse',fromlist=['quote']).quote(sys.argv[1])+'?mode=ro',uri=True,timeout=2)
 c.execute('BEGIN')
-def conv(v): return {'bytes':base64.b64encode(v).decode()} if isinstance(v,bytes) else v
-for name in ('tasks','working_set'):
- rows=[json.dumps([conv(v) for v in row],sort_keys=True,separators=(',',':')) for row in c.execute('select * from "'+name+'"')]
- print(name, json.dumps(sorted(rows),separators=(',',':')))
+h=hashlib.sha256()
+def feed(tag,b):
+ h.update(tag); h.update(struct.pack('>Q',len(b))); h.update(b)
+for name,key in (('tasks','uuid'),('working_set','id')):
+ if key not in {col[1] for col in c.execute('pragma table_info("'+name+'")')}: raise ValueError('unsupported schema')
+ feed(b'T',name.encode())
+ for row in c.execute('select * from "'+name+'" order by "'+key+'"'):
+  feed(b'R',b'')
+  for v in row:
+   if v is None: feed(b'N',b'')
+   elif isinstance(v,bytes): feed(b'B',v)
+   elif isinstance(v,str): feed(b'S',v.encode())
+   elif isinstance(v,int): feed(b'I',str(v).encode())
+   elif isinstance(v,float): feed(b'F',struct.pack('>d',v))
+   else: raise TypeError('unsupported SQLite value')
+print(h.hexdigest())
 `
 		out, err := exec.CommandContext(ctx, "python3", "-c", py, db).Output()
 		if err != nil {
