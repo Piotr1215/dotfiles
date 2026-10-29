@@ -134,8 +134,10 @@ send_to_pane() {
     # copy-mode swallows send-keys, so leave it first. Errors when the pane is
     # not in copy-mode, which is the normal case.
     tmux send-keys -t "$pane" -X cancel 2>/dev/null || true
+    tmux set-option -p -t "$pane" @agent_injected_at "$(date +%s)" || return 1
     tmux send-keys -t "$pane" -l "$message" || return 1
     sleep "$ENTER_DELAY"
+    tmux set-option -p -t "$pane" @agent_injected_at "$(date +%s)" || return 1
     tmux send-keys -t "$pane" Enter || return 1
 }
 

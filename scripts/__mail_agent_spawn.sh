@@ -83,8 +83,10 @@ agent_pane() {
 send_directive() {
     local pane="$1"
     [ -n "$directive" ] || return 0
+    tmux set-option -p -t "${TARGET}.${pane}" @agent_injected_at "$(date +%s)" || return 1
     tmux send-keys -t "${TARGET}.${pane}" -l "$directive"
     sleep 0.4
+    tmux set-option -p -t "${TARGET}.${pane}" @agent_injected_at "$(date +%s)" || return 1
     tmux send-keys -t "${TARGET}.${pane}" Enter
 }
 

@@ -207,6 +207,7 @@ send_to_gordon() {
     pause 'no Gordon pane (no tmux pane has @agent_name=triage)'
     return 1
   fi
+  "$tmux_bin" set-option -p -t "$pane" @agent_injected_at "$(date +%s)" || return 1
   "$tmux_bin" send-keys -t "$pane" -l -- "$1"
 }
 

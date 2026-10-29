@@ -32,8 +32,10 @@ fi
 # and the directive sits in the prompt unsent.
 send_directive() {
     local pane="$1"
+    tmux set-option -p -t "${SESSION}:status.${pane}" @agent_injected_at "$(date +%s)" || return 1
     tmux send-keys -t "${SESSION}:status.${pane}" -l "$directive"
     sleep 0.4
+    tmux set-option -p -t "${SESSION}:status.${pane}" @agent_injected_at "$(date +%s)" || return 1
     tmux send-keys -t "${SESSION}:status.${pane}" Enter
 }
 
