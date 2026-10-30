@@ -261,12 +261,14 @@ wait_for_command() {
 @test "reading margin is as wide as the task todo window's left column" {
   # The todo window carries the margin content in a fixed pane, so the two sit
   # side by side when switching sessions. Its layout is the source of truth.
-  layout="$(sed -n 's/^ *layout: //p' "${BATS_TEST_DIRNAME}/../../.config/tmuxinator/task.yml")"
-  [[ "$layout" =~ ^[0-9a-f]{4},([0-9]+)x([0-9]+),0,0\{([0-9]+)x[0-9]+,0,0[^,]*,.*,([0-9]+)x[0-9]+,([0-9]+),0\[ ]]
-  layout_width="${BASH_REMATCH[1]}"
-  layout_height="${BASH_REMATCH[2]}"
-  left_width="${BASH_REMATCH[3]}"
-  right_width="${BASH_REMATCH[4]}"
+  dimensions="$(ruby -r yaml -r json -e '
+    config = YAML.load_file(ARGV.fetch(0))
+    todo = config.fetch("windows").find { |window| window.key?("todo") }.fetch("todo")
+    layout = JSON.parse(todo.fetch("layout")).fetch("L")
+    abort "unexpected todo layout" unless layout.fetch("t") == "h" && layout.fetch("c").length == 2
+    puts [layout.fetch("w"), layout.fetch("h"), *layout.fetch("c").map { |pane| pane.fetch("w") }].join(" ")
+  ' "${BATS_TEST_DIRNAME}/../../.config/tmuxinator/task.yml")"
+  read -r layout_width layout_height left_width right_width <<< "$dimensions"
   tmux -L "$SOCKET_NAME" resize-window -t test -x "$layout_width" -y "$layout_height"
 
   toggle_margin
