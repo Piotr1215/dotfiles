@@ -1,7 +1,6 @@
 -- Completion for ~/.claude/models.env: after `AGENT_MODEL_<ROLE>=` offer the
--- model ids that role accepts. The ids live in one place, __lib_models.sh,
--- reached through `__models.sh candidates <role>`, so a new model shipping never
--- touches this file. Enabled for that one buffer by the autocmd at the bottom,
+-- live provider model ids from `__models.sh candidates <role>`. Enabled for
+-- that one buffer by the autocmd at the bottom,
 -- not added to the global cmp sources, so no other buffer sees these items.
 
 local M = {}
@@ -19,36 +18,47 @@ function M.role_for_line(line)
   return (var:lower():gsub("_", "-"))
 end
 
----Ids for a role from the shell library. Empty when the role is unknown.
----@param role string
----@return string[]
-function M.candidates(role)
-  local out = vim.fn.systemlist { models_cli, "candidates", role }
-  if vim.v.shell_error ~= 0 then
-    return {}
-  end
-  return out
-end
-
----Items for the text before the cursor. The current value sorts first so the
----model in use is never hidden behind the alternatives.
+---Fetch completion items without blocking the editor.
 ---@param before string
----@return table[]
-function M.items_for_line(before)
+---@param callback fun(items: table[])
+function M.items_for_line(before, callback)
   local role = M.role_for_line(before)
   if not role then
-    return {}
+    callback {}
+    return
   end
-  local current = vim.fn.systemlist({ models_cli, "get", role })[1]
-  local items = {}
-  for i, id in ipairs(M.candidates(role)) do
-    table.insert(items, {
-      label = id,
-      sortText = (id == current) and "0" or tostring(i),
-      detail = (id == current) and "current" or nil,
-    })
+  local function run(args, done)
+    local ok, err = pcall(vim.system, args, { text = true }, function(result)
+      vim.schedule(function()
+        if result.code ~= 0 then
+          vim.notify("Model completion failed: " .. vim.trim(result.stderr or ""), vim.log.levels.WARN)
+          callback {}
+        else
+          done(result.stdout or "")
+        end
+      end)
+    end)
+    if not ok then
+      vim.schedule(function()
+        vim.notify("Model completion failed: " .. tostring(err), vim.log.levels.WARN)
+        callback {}
+      end)
+    end
   end
-  return items
+  run({ models_cli, "candidates", role }, function(output)
+    run({ models_cli, "get", role }, function(value)
+      local current = vim.trim(value)
+      local items = {}
+      for i, id in ipairs(vim.split(output, "\n", { trimempty = true })) do
+        table.insert(items, {
+          label = id,
+          sortText = (id == current) and "0" or tostring(i),
+          detail = (id == current) and "current" or nil,
+        })
+      end
+      callback(items)
+    end)
+  end)
 end
 
 local source = {}
@@ -73,7 +83,7 @@ end
 ---@param params table
 ---@param callback fun(response: table|nil)
 function source:complete(params, callback)
-  callback(M.items_for_line(params.context.cursor_before_line))
+  M.items_for_line(params.context.cursor_before_line, callback)
 end
 
 local ok, cmp = pcall(require, "cmp")
