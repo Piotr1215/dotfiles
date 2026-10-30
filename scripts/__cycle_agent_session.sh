@@ -1,21 +1,17 @@
 #!/usr/bin/env bash
 set -eo pipefail
 
-# Cycle through every live agent pane in the order the Alt-m cockpit lists them.
+# Cycle through main agent panes in the order the Alt-m cockpit lists them.
 #
-# WHY: this key used to walk only delegated sessions, in tmux's own session
-# order, so it jumped around while the cockpit showed another order entirely.
-# The order now comes from __cockpit_state.sh itself (COCKPIT_LAYOUT=order, the
-# sorted rows the board renders), so the ring cannot drift from the list. Gordon
-# and intake share the `task` session in different windows, so the ring steps
-# by pane, not by session.
+# The cockpit includes delegated workers and Kendra, but M-i is for main agents.
+# Keep the cockpit order and filter using current tmux metadata on every press.
 #
 # Next is the entry after the one holding the current pane, wrapping at the end.
 # From a pane that is not an agent, next enters at the first entry and prev at
 # the last.
 #
 # Usage: __cycle_agent_session.sh [next|prev] [current-pane-id]
-# Only next is bound (Alt-i).
+# Next and prev are bound to Alt-i and Alt-comma.
 
 direction="${1:-next}"
 
@@ -59,11 +55,17 @@ current="${2:-$(tmux display-message -p '#{pane_id}')}"
 
 [[ -r "$cache" ]] || exit 0
 
-# Drop panes that died since the render, so a stale cache never targets a ghost.
-mapfile -t live < <(tmux list-panes -a -F '#{pane_id}')
+# Drop dead panes, delegated sessions and Kendra even when the cache is stale.
+declare -A eligible=()
+while IFS='|' read -r pane name spawn_level; do
+    [[ -n "$pane" && "$spawn_level" != delegated && "$name" != intake && "$name" != kendra ]] || continue
+    eligible["$pane"]=1
+done < <(tmux list-panes -a -F '#{pane_id}|#{@agent_name}|#{@agent_spawn_level}')
 panes=()
 while IFS= read -r p; do
-    for l in "${live[@]}"; do [[ "$l" == "$p" ]] && { panes+=("$p"); break; }; done
+    if [[ -n "$p" && -n "${eligible[$p]:-}" ]]; then
+        panes+=("$p")
+    fi
 done < "$cache"
 
 (( ${#panes[@]} == 0 )) && exit 0
