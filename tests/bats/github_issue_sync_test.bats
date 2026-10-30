@@ -189,6 +189,14 @@ teardown() {
     grep -q "project:docs-maintenance" "${TEST_DIR}/task_commands.log"
 }
 
+@test "manage_project_settings strips an owner from a mapped repo" {
+    source "$TEMP_SCRIPT"
+    TEAM_PREFIX_REPO[DOC]="loft-sh/vcluster-docs"
+    manage_project_settings "test-uuid" "" "DOC-123"
+    grep -q 'repo:vcluster-docs' "${TEST_DIR}/task_commands.log"
+    ! grep -q 'repo:loft-sh/' "${TEST_DIR}/task_commands.log"
+}
+
 @test "manage_project_settings handles DEVOPS issues" {
     # Re-source to get associative arrays (bats 1.2.1 doesn't preserve from setup)
     source "$TEMP_SCRIPT"
@@ -3741,10 +3749,8 @@ https://x.slack.com/archives/C3/p1000000000000003"
     [ ! -f "${TEST_DIR}/annotate.log" ]
 }
 
-@test "create_and_annotate_task clears the repo default on a synced issue" {
-    # uda.repo.default=no-repo stamps every new task. A Linear task must start
-    # with repo unset or the team-prefix derivation in on-modify-nats-claude.py
-    # is skipped and triage's "+triaged with empty repo" nudge never fires.
+@test "create_and_annotate_task preserves the repo default on a synced issue" {
+    # The sync must not clear the no-repo default while attaching the Linear ID.
     cat > "${TEST_DIR}/task" << 'EOF2'
 #!/bin/bash
 if [[ "$1" == "add" ]]; then
@@ -3761,7 +3767,8 @@ EOF2
 
     run create_and_annotate_task "Repo issue" "linear" "https://linear.app/test/issue/ENG-5" "ENG-5" "operations" "Todo" "" "" "" "2026-06-26T09:00:00Z"
     [ "$status" -eq 0 ]
-    grep -Eq 'modify test-uuid-repo linear_issue_id:ENG-5 repo:( rc\.context=none)?$' "${TEST_DIR}/task_commands.log"
+    grep -Eq 'modify test-uuid-repo linear_issue_id:ENG-5( rc\.context=none)?$' "${TEST_DIR}/task_commands.log"
+    ! grep -Eq 'modify test-uuid-repo.* repo:' "${TEST_DIR}/task_commands.log"
 }
 
 # ====================================================

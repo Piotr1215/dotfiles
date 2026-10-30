@@ -779,7 +779,8 @@ manage_project_settings() {
     local prefix
     for prefix in "${!TEAM_PREFIX_REPO[@]}"; do
         if [[ "$issue_number" == "${prefix}-"* ]]; then
-            task rc.confirmation=no modify "$task_uuid" repo:"${TEAM_PREFIX_REPO[$prefix]}"
+            local mapped_repo=${TEAM_PREFIX_REPO[$prefix]##*/}
+            task rc.confirmation=no modify "$task_uuid" repo:"${mapped_repo:-no-repo}"
             break
         fi
     done
@@ -1187,9 +1188,9 @@ create_and_annotate_task() {
         attach_link_annotations "$task_uuid" "slack" "$issue_slack_urls"
         attach_link_annotations "$task_uuid" "link" "$issue_link_urls"
         log "Task created and annotated for: $issue_description"
-        # uda.repo.default=no-repo stamps every new task; a synced issue must start
-        # with repo unset so triage and the team-prefix derivation still decide it.
-        task rc.confirmation=no modify "$task_uuid" linear_issue_id:"$issue_number" repo:
+        # Keep the default until the issue's repository is known. The hook can
+        # derive a repository from the Linear ID when the value is no-repo.
+        task rc.confirmation=no modify "$task_uuid" linear_issue_id:"$issue_number"
         
         # Manage project settings
         manage_project_settings "$task_uuid" "$project_name" "$issue_number"
