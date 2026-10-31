@@ -39,10 +39,11 @@ VOICE_LOCK = os.path.expanduser('~/.local/state/klod-voice.lock')
 NATS = os.path.expanduser('~/.local/bin/nats')
 SND = os.path.expanduser('~/dev/agents-mcp-server/build/snd.js')
 NATS_URL = os.environ.get('AGENTS_NATS_URL', 'nats://nats-nats-tailscale.tail165ec.ts.net:4222')
-# The top bar blinks the name in here once the bus takes a line, which proves it
-# was published, not read. See .config/argos/notion-mic.1s.sh.
-DELIVERED = os.path.join(os.environ.get('XDG_RUNTIME_DIR', f'/run/user/{os.getuid()}'),
-                         'voice-mode-delivered')
+# What became of the last line, for the top bar to blink: sent means the bus took it,
+# which proves it was published, not read; dropped means it named no agent; failed
+# means it named one and could not be sent. See .config/argos/notion-mic.1s.sh.
+LINE_STATUS = os.path.join(os.environ.get('XDG_RUNTIME_DIR', f'/run/user/{os.getuid()}'),
+                           'voice-mode-line')
 
 RATE = 16000
 FRAME_BYTES = 960  # 30 ms of s16le mono
@@ -192,20 +193,29 @@ def transcribe(pcm):
     return json.loads(result.stdout)['text']
 
 
+def signal(status):
+    with open(LINE_STATUS, 'w', encoding='utf-8') as marker:
+        marker.write(status)
+
+
 def handle(pcm):
     """Send one utterance to the agent it names, if it names one."""
-    addressed = route(transcribe(pcm))
+    heard = transcribe(pcm)
+    addressed = route(heard)
     if not addressed:
         print('voice-mode: line names no agent, dropped', flush=True)
+        if heard.strip():
+            signal('dropped')
         return
     agent, message = addressed
     if not registered(agent):
+        signal('failed')
         say(f'Voice mode to Piotr. No agent is registered as {agent}.')
     elif deliver(agent, f'{VOICE_TAG} Piotr to {agent}: {message} {VOICE_NOTE}'):
         print(f'voice-mode: line sent to {agent}', flush=True)
-        with open(DELIVERED, 'w', encoding='utf-8') as marker:
-            marker.write(agent)
+        signal('sent')
     else:
+        signal('failed')
         say(f'Voice mode to Piotr. {agent} did not get that line.')
 
 
@@ -224,6 +234,7 @@ def worker(clips, act):
             act(pcm)
         except (OSError, subprocess.SubprocessError, ValueError, KeyError) as err:
             print(f'voice-mode: {type(err).__name__}: {err}', file=sys.stderr, flush=True)
+            signal('failed')
 
 
 def watch_presence():

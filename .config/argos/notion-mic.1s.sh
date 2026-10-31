@@ -26,8 +26,8 @@ readonly notion_window_re='Notion - Google Chrome'
 # Flips go through the toggle board, which owns the on and off logic.
 readonly toggles="${TOGGLES_BIN:-$HOME/dev/dotfiles/scripts/__toggles.sh}"
 readonly voice_replies_off_flag="${KLOD_VOICE_STATE:-$HOME/.local/state/klod-voice}/off"
-# __voice_mode.py writes the agent's name here after it submits a line.
-readonly delivered="${XDG_RUNTIME_DIR:-/run/user/$UID}/voice-mode-delivered"
+# __voice_mode.py writes what became of each spoken line here.
+readonly line_status="${XDG_RUNTIME_DIR:-/run/user/$UID}/voice-mode-line"
 readonly blink_seconds=4
 
 # --- side-effect actions (invoked from dropdown menu items) ---------------
@@ -99,24 +99,31 @@ fi
 # --- panel line -----------------------------------------------------------
 # UP   = mic icon + green dot; visually obvious the routing is live.
 # DOWN = dim mic icon only.
-# A blue dot means voice mode is listening on the headset.
-# A blinking name behind them is the agent that just took a spoken line.
+# A blue dot means voice mode is listening on the headset. After a spoken line it
+# blinks what became of the line: green when the bus took it, orange when it named
+# no agent, red when it named one and could not be sent.
 if [[ "$state" == "up" ]]; then
-	mic="🎙 <span color='#44ff44'>●</span>${voice_dot}"
+	mic="🎙 <span color='#44ff44'>●</span>"
 else
-	mic="<span color='#888888'>🎙</span>${voice_dot}"
+	mic="<span color='#888888'>🎙</span>"
+fi
+
+line_color=""
+if [[ -f "$line_status" ]] && (($(date +%s) - $(stat -c %Y "$line_status") < blink_seconds)); then
+	case "$(<"$line_status")" in
+		sent) line_color='#44ff44' ;;
+		dropped) line_color='#ffaa00' ;;
+		failed) line_color='#ff4444' ;;
+	esac
 fi
 
 # Two button lines start argos's line cycler, which is the blink; dropdown=false
-# keeps them out of the menu. A name puts letters on the line, so it takes the
-# lettered size (see panel_label_size).
-if [[ -f "$delivered" ]] && (($(date +%s) - $(stat -c %Y "$delivered") < blink_seconds)); then
-	agent=$(<"$delivered")
-	name_size=$(panel_label_size 11)
-	echo "${mic} <span color='#44ff44'>${agent}</span> | font='monospace' size=${name_size} dropdown=false"
-	echo "${mic} <span color='#222222'>${agent}</span> | font='monospace' size=${name_size} dropdown=false"
+# keeps them out of the menu.
+if [[ -n "$line_color" ]]; then
+	echo "${mic} <span color='${line_color}'>●</span> | font='monospace' size=${PANEL_SIZE} dropdown=false"
+	echo "${mic} <span color='#222222'>●</span> | font='monospace' size=${PANEL_SIZE} dropdown=false"
 else
-	echo "${mic} | font='monospace' size=${PANEL_SIZE}"
+	echo "${mic}${voice_dot} | font='monospace' size=${PANEL_SIZE}"
 fi
 
 # --- dropdown -------------------------------------------------------------

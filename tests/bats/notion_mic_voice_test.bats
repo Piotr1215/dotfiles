@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 
-# The voice bridge rows and delivery blink of the Argos mic item. systemctl and
+# The voice bridge rows and line status blink of the Argos mic item. systemctl and
 # the toggle board are stubs, so no test touches the real service, flag or board.
 # Blink failures to guard: a marker that keeps blinking after its window, a
 # single button line (argos cycles only two or more), a blink that leaks into the
@@ -16,7 +16,7 @@ setup() {
   mkdir -p "$KLOD_VOICE_STATE"
   export XDG_RUNTIME_DIR="${BATS_TEST_TMPDIR}/run"
   mkdir -p "$XDG_RUNTIME_DIR"
-  MARKER="${XDG_RUNTIME_DIR}/voice-mode-delivered"
+  MARKER="${XDG_RUNTIME_DIR}/voice-mode-line"
   export TOGGLES_BIN="${STUBS}/toggles"
   printf '#!/usr/bin/env bash\necho "$*" >>"%s"\n' "$CALLS" >"$TOGGLES_BIN"
   chmod +x "$TOGGLES_BIN"
@@ -64,44 +64,66 @@ voice_mode_is() {
   [ "$(cat "$CALLS")" = "$(printf '__run voice-mode off\n__run voice-replies off')" ]
 }
 
-@test "with no delivery the mic stays one line with no name" {
+# blinks <status> <colour>: the dot takes the colour on one line and goes dark on the other.
+blinks() {
+  voice_mode_is 0
+  printf '%s' "$1" >"$MARKER"
+  run bash "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [ "${lines[2]}" = "---" ]
+  [[ "${lines[0]}" == *" <span color='$2'>●</span> | font='monospace' size="*" dropdown=false" ]]
+  [[ "${lines[1]}" == *" <span color='#222222'>●</span> | font='monospace' size="*" dropdown=false" ]]
+  [[ "${lines[0]}" != *"#44aaff"* ]]
+}
+
+@test "with no spoken line the mic stays one line with the blue dot" {
   voice_mode_is 0
   run bash "$SCRIPT"
   [ "$status" -eq 0 ]
   [ "${lines[1]}" = "---" ]
+  [[ "${lines[0]}" == *"#44aaff"* ]]
   [[ "${lines[0]}" != *"dropdown=false"* ]]
 }
 
-@test "a fresh delivery blinks the name behind the listening dot" {
-  voice_mode_is 0
-  printf 'klod2' >"$MARKER"
-  run bash "$SCRIPT"
-  [ "$status" -eq 0 ]
-  [ "${lines[2]}" = "---" ]
-  [[ "${lines[0]}" == *"#44aaff"*">klod2<"*" dropdown=false" ]]
-  [[ "${lines[1]}" == *"#44aaff"*">klod2<"*" dropdown=false" ]]
-  [ "${lines[0]}" != "${lines[1]}" ]
+@test "a line the bus took blinks green" {
+  blinks sent '#44ff44'
 }
 
-@test "the name takes the lettered panel size" {
-  voice_mode_is 0
-  printf 'klod2' >"$MARKER"
-  source "${BATS_TEST_DIRNAME}/../../scripts/__lib_screen.sh"
-  run bash "$SCRIPT"
-  [[ "${lines[0]}" == *" size=$(panel_label_size 11) dropdown=false" ]]
+@test "a line that named no agent blinks orange" {
+  blinks dropped '#ffaa00'
 }
 
-@test "a delivery leaves the menu alone" {
+@test "a line that could not be sent blinks red" {
+  blinks failed '#ff4444'
+}
+
+@test "a marker caught half written does not blink" {
+  voice_mode_is 0
+  : >"$MARKER"
+  run bash "$SCRIPT"
+  [ "${lines[1]}" = "---" ]
+}
+
+@test "a blink keeps the panel size, so the bar does not shift" {
+  voice_mode_is 0
+  size_of() { sed -n '1s/.* size=\([0-9.]*\).*/\1/p'; }
+  idle="$(bash "$SCRIPT" | size_of)"
+  printf sent >"$MARKER"
+  [ -n "$idle" ]
+  [ "$(bash "$SCRIPT" | size_of)" = "$idle" ]
+}
+
+@test "a blink leaves the menu alone" {
   voice_mode_is 0
   menu() { sed -n '/^---$/,$p'; }
   idle="$(bash "$SCRIPT" | menu)"
-  printf 'klod2' >"$MARKER"
+  printf sent >"$MARKER"
   [ "$(bash "$SCRIPT" | menu)" = "$idle" ]
 }
 
 @test "the blink still runs inside its window" {
   voice_mode_is 0
-  printf 'klod2' >"$MARKER"
+  printf sent >"$MARKER"
   touch -d '-3 seconds' "$MARKER"
   run bash "$SCRIPT"
   [ "${lines[2]}" = "---" ]
@@ -109,14 +131,14 @@ voice_mode_is() {
 
 @test "the blink stops once its window has passed" {
   voice_mode_is 0
-  printf 'klod2' >"$MARKER"
+  printf sent >"$MARKER"
   touch -d '-5 seconds' "$MARKER"
   run bash "$SCRIPT"
   [ "${lines[1]}" = "---" ]
-  [[ "$output" != *"klod2"* ]]
+  [[ "${lines[0]}" == *"#44aaff"* ]]
 }
 
 @test "the relay writes the marker the applet reads" {
-  grep -q "'voice-mode-delivered'" "${BATS_TEST_DIRNAME}/../../scripts/__voice_mode.py"
-  grep -q '/voice-mode-delivered"' "$SCRIPT"
+  grep -q "'voice-mode-line'" "${BATS_TEST_DIRNAME}/../../scripts/__voice_mode.py"
+  grep -q '/voice-mode-line"' "$SCRIPT"
 }

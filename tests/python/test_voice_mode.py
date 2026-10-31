@@ -195,7 +195,7 @@ class Line:
         monkeypatch.setattr(voice, 'registered', lambda name: name in agents)
         monkeypatch.setattr(voice, 'say', self.spoken.append)
         monkeypatch.setattr(voice, 'deliver', lambda a, t: self.sent.append((a, t)) or delivered)
-        monkeypatch.setattr(voice, 'DELIVERED', os.devnull)  # the live marker flashes the panel
+        monkeypatch.setattr(voice, 'LINE_STATUS', os.devnull)  # the live marker flashes the panel
 
 
 def test_handle_labels_who_is_talking_to_whom(monkeypatch):
