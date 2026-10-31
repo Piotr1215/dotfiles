@@ -1,6 +1,8 @@
 """The Piper launcher: real speech with no idle spinning."""
 import importlib.util
 import subprocess
+import sys
+import types
 import wave
 from pathlib import Path
 
@@ -34,6 +36,56 @@ def test_the_launcher_still_makes_speech(tmp_path):
     subprocess.run([LAUNCHER, '-m', MODEL, '-f', speech], input='Hello there.', text=True, capture_output=True, check=True)
     with wave.open(str(speech)) as audio:
         assert audio.getnframes() > audio.getframerate() / 4
+
+
+@pytest.fixture
+def settings(monkeypatch, tmp_path):
+    """The launcher's settings code, with state and voices in a scratch directory."""
+    monkeypatch.setitem(sys.modules, 'onnxruntime', types.SimpleNamespace(SessionOptions=object))
+    spec = importlib.util.spec_from_file_location('piper_quiet', LAUNCHER)
+    quiet = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(quiet)
+    monkeypatch.setenv('KLOD_VOICE_STATE', str(tmp_path))
+    monkeypatch.setenv('KLOD_VOICE_DIR', str(tmp_path / 'voices'))
+    return quiet, tmp_path
+
+
+ARGS = ['-m', 'stock.onnx', '-f', 'out.wav']
+
+
+def test_no_settings_leave_piper_as_it_was(settings):
+    quiet, _ = settings
+    assert quiet.with_settings(ARGS) == ARGS
+
+
+@pytest.mark.parametrize(('tempo', 'added'), [
+    ('0.8', ['--length-scale', '0.8']),
+    ('0.5', ['--length-scale', '0.5']),
+    ('2', ['--length-scale', '2.0']),
+    ('0.4', []),
+    ('2.1', []),
+    ('fast', []),
+    ('nan', []),
+], ids=['faster', 'fastest allowed', 'slowest allowed', 'too fast', 'too slow', 'a word', 'not a number'])
+def test_tempo_becomes_the_length_scale_when_it_is_usable(settings, tempo, added):
+    quiet, state = settings
+    (state / 'tempo').write_text(f'{tempo}\n')
+    assert quiet.with_settings(ARGS) == [*ARGS, *added]
+
+
+def test_a_chosen_voice_replaces_the_model(settings):
+    quiet, state = settings
+    (state / 'voices' / 'ryan-medium').mkdir(parents=True)
+    model = state / 'voices' / 'ryan-medium' / 'en_US-ryan-medium.onnx'
+    model.touch()
+    (state / 'voice').write_text('ryan-medium\n')
+    assert quiet.with_settings(ARGS) == ['-m', str(model), '-f', 'out.wav']
+
+
+def test_a_voice_that_is_not_installed_keeps_the_model(settings):
+    quiet, state = settings
+    (state / 'voice').write_text('nobody-medium')
+    assert quiet.with_settings(ARGS) == ARGS
 
 
 def test_voice_mode_notices_are_made_by_the_launcher(monkeypatch):
