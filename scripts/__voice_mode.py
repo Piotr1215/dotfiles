@@ -33,9 +33,10 @@ import wave
 SOURCE = 'alsa_input.usb-Logitech_PRO_X_Wireless_Gaming_Headset-00.mono-fallback'
 SINK = 'alsa_output.usb-Logitech_PRO_X_Wireless_Gaming_Headset-00.analog-stereo'
 HANDY = os.path.expanduser('~/.local/bin/handy')
+PIPER = os.path.join(os.path.dirname(os.path.abspath(__file__)), '__piper_quiet.py')
 VOICE = os.path.expanduser('~/.local/share/piper-voices/lessac-medium/en_US-lessac-medium.onnx')
 VOICE_LOCK = os.path.expanduser('~/.local/state/klod-voice.lock')
-# The top bar flashes the name in here, see .config/argos/voice-line.1s.sh.
+# The top bar blinks the name in here, see .config/argos/notion-mic.1s.sh.
 DELIVERED = os.path.join(os.environ.get('XDG_RUNTIME_DIR', f'/run/user/{os.getuid()}'),
                          'voice-mode-delivered')
 
@@ -174,7 +175,7 @@ def silence():
 
 def say(text):
     with tempfile.NamedTemporaryFile(suffix='.wav') as speech:
-        subprocess.run(['piper', '-m', VOICE, '-f', speech.name], input=text, text=True,
+        subprocess.run([PIPER, '-m', VOICE, '-f', speech.name], input=text, text=True,
                        capture_output=True, timeout=30, check=True)
         subprocess.run(['flock', VOICE_LOCK, 'timeout', '30', 'pw-play', '--target', SINK, speech.name],
                        timeout=90, check=True)
