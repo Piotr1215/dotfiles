@@ -57,6 +57,33 @@ def test_a_line_that_came_back_with_no_words_is_not_lost_in_silence(monkeypatch,
     assert marker.read_text() == 'dropped'
 
 
+@pytest.mark.parametrize(('heard', 'still_talking', 'status'), [
+    ('Check check Claw two run', True, 'armed'),
+    ('Check, check. Claw two', True, 'armed'),
+    ('Please pass the salt', True, None),
+    ('Let me check check the', True, None),
+    ('Check check Claw two run', False, None),
+], ids=['opens with it', 'with a pause', 'room talk', 'said inside a sentence', 'line already closed'])
+def test_the_light_turns_yellow_only_for_a_live_line_that_opens_with_the_wake_word(
+        monkeypatch, marker, heard, still_talking, status):
+    monkeypatch.setattr(voice, 'transcribe', lambda _: heard)
+    segmenter = voice.Segmenter()
+    segmenter.utterance = [b''] if still_talking else None
+    voice.check_wake(b'', segmenter)
+    assert (marker.read_text() if marker.exists() else None) == status
+
+
+def test_an_opening_that_cannot_be_transcribed_shows_nothing(monkeypatch, marker):
+    def broken(_):
+        raise voice.subprocess.CalledProcessError(1, 'handy')
+
+    monkeypatch.setattr(voice, 'transcribe', broken)
+    segmenter = voice.Segmenter()
+    segmenter.utterance = [b'']
+    voice.check_wake(b'', segmenter)
+    assert not marker.exists()
+
+
 def test_a_clip_that_cannot_be_transcribed_shows_as_failed(monkeypatch, marker):
     def broken(_):
         raise ValueError('no transcript')

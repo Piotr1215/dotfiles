@@ -123,6 +123,26 @@ def bursts(segmenter, frames):
     return found
 
 
+def test_a_line_offers_its_opening_once_while_it_is_still_going():
+    segmenter = voice.Segmenter()
+    offered = []
+    for frame in [LOUD] * (voice.OPENING_FRAMES * 3):
+        segmenter.push(frame)
+        if opening := segmenter.opening():
+            offered.append(opening)
+    assert len(offered) == 1
+    assert len(offered[0]) == voice.OPENING_FRAMES * len(LOUD)
+
+
+def test_a_click_offers_no_opening():
+    segmenter = voice.Segmenter()
+    offered = []
+    for frame in [LOUD] * (voice.MIN_VOICED - 1) + [QUIET] * voice.END_FRAMES:
+        segmenter.push(frame)
+        offered.append(segmenter.opening())
+    assert not any(offered)
+
+
 def test_a_short_burst_is_offered_as_soon_as_it_goes_quiet():
     speech = [LOUD] * voice.MIN_VOICED
     quiet = [QUIET] * voice.QUICK_END
@@ -434,6 +454,15 @@ def test_a_named_line_can_call_the_next_agent_too(monkeypatch):
     assert model.openings() == ['Codex do Y.']
 
 
+def test_the_phrase_said_inside_a_sentence_stays_in_the_line(monkeypatch, tmp_path):
+    # Piotr's own lines at 23:58 and 23:59 lost everything from the phrase onwards.
+    line = Line(monkeypatch, 'Claude 1, turn the dot yellow after the words check check are heard', {'klod1'})
+    Model(monkeypatch, ['klod1'], probability=voice.FIT_FLOOR - 0.01)
+    monkeypatch.setattr(voice, 'LINE_STATUS', str(tmp_path / 'status'))
+    voice.handle(b'')
+    assert said_to(line) == [('klod1', 'turn the dot yellow after the words check check are heard')]
+
+
 def test_a_trailing_wake_word_adds_no_call(monkeypatch):
     line = Line(monkeypatch, 'check check Codex do Y. Check check.', {'codex'})
     Model(monkeypatch, ['codex'], choice=CALLS)
@@ -464,19 +493,34 @@ def test_the_light_shows_the_worst_call_of_the_line(monkeypatch, tmp_path, agent
     assert (tmp_path / 'status').read_text() == status
 
 
-def test_one_weak_name_does_not_cost_the_others(monkeypatch, tmp_path):
+def test_words_after_a_weak_name_stay_in_the_call_before_them(monkeypatch, tmp_path):
     line = Line(monkeypatch, 'Gordon, do X. Check check reviewer do Y.', {'triage'})
     monkeypatch.setattr(voice, 'LINE_STATUS', str(tmp_path / 'status'))
     Model(monkeypatch, ['klod1'], probability=0.5)
     voice.handle(b'')
-    assert said_to(line) == [('triage', 'do X.')]
+    assert said_to(line) == [('triage', 'do X. check check reviewer do Y.')]
+
+
+def test_every_weak_name_stays_in_the_one_real_call(monkeypatch):
+    line = Line(monkeypatch, 'Gordon, do X. Check check reviewer do Y. Check check planner do Z.', {'triage'})
+    Model(monkeypatch, ['klod1'], probability=0.5)
+    voice.handle(b'')
+    assert said_to(line) == [('triage', 'do X. check check reviewer do Y. check check planner do Z.')]
+
+
+def test_a_call_that_found_nobody_is_orange_though_its_words_arrived(monkeypatch, tmp_path):
+    # Green here would read as reviewer got it, and the light exists to show that loss.
+    Line(monkeypatch, 'Gordon, do X. Check check reviewer do Y.', {'triage'})
+    monkeypatch.setattr(voice, 'LINE_STATUS', str(tmp_path / 'status'))
+    Model(monkeypatch, ['klod1'], probability=0.5)
+    voice.handle(b'')
     assert (tmp_path / 'status').read_text() == 'dropped'
 
 
 def test_a_failed_call_outranks_a_dropped_one_on_the_light(monkeypatch, tmp_path):
-    Line(monkeypatch, 'Gordon, do X. Check check reviewer do Y.', set())
+    Line(monkeypatch, 'Check check reviewer do X. Check check Gordon do Y.', set())
     monkeypatch.setattr(voice, 'LINE_STATUS', str(tmp_path / 'status'))
-    Model(monkeypatch, ['klod1'], probability=0.5)
+    monkeypatch.setattr(voice, 'closest', lambda part: 'triage' if 'Gordon' in part else None)
     voice.handle(b'')
     assert (tmp_path / 'status').read_text() == 'failed'
 

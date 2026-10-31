@@ -97,6 +97,27 @@ blinks() {
   blinks failed '#ff4444'
 }
 
+@test "a line that opened with the wake word holds the dot bright yellow" {
+  voice_mode_is 0
+  printf armed >"$MARKER"
+  touch -d '-30 seconds' "$MARKER"
+  run bash "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [ "${lines[1]}" = "---" ]
+  [[ "${lines[0]}" == *" <span color='#ffee00'>●</span> | font='monospace' size="* ]]
+  [[ "${lines[0]}" != *"#44aaff"* ]]
+  [[ "${lines[0]}" != *"dropdown=false"* ]]
+}
+
+@test "yellow left behind by a relay that died goes back to blue" {
+  voice_mode_is 0
+  printf armed >"$MARKER"
+  touch -d '-61 seconds' "$MARKER"
+  run bash "$SCRIPT"
+  [[ "${lines[0]}" == *"#44aaff"* ]]
+  [[ "$output" != *"#ffee00"* ]]
+}
+
 @test "a marker caught half written does not blink" {
   voice_mode_is 0
   : >"$MARKER"

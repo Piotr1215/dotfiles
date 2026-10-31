@@ -29,6 +29,8 @@ readonly voice_replies_off_flag="${KLOD_VOICE_STATE:-$HOME/.local/state/klod-voi
 # __voice_mode.py writes what became of each spoken line here.
 readonly line_status="${XDG_RUNTIME_DIR:-/run/user/$UID}/voice-mode-line"
 readonly blink_seconds=4
+# As long as a line can run. The line's outcome normally replaces the yellow sooner.
+readonly armed_seconds=60
 
 # --- side-effect actions (invoked from dropdown menu items) ---------------
 
@@ -102,7 +104,8 @@ fi
 # A blue dot means voice mode is listening on the headset. After a spoken line it
 # blinks what became of the line: green when the bus took it, orange when it reached
 # nobody, red when it named an agent and could not be sent. No blink means the relay
-# cut no line from the mic.
+# cut no line from the mic. It holds bright yellow while a line that opened with the
+# wake word is still going.
 if [[ "$state" == "up" ]]; then
 	mic="🎙 <span color='#44ff44'>●</span>"
 else
@@ -110,17 +113,22 @@ else
 fi
 
 line_color=""
-if [[ -f "$line_status" ]] && (($(date +%s) - $(stat -c %Y "$line_status") < blink_seconds)); then
+armed=""
+if [[ -f "$line_status" ]]; then
+	line_age=$(($(date +%s) - $(stat -c %Y "$line_status")))
 	case "$(<"$line_status")" in
-		sent) line_color='#44ff44' ;;
-		dropped) line_color='#ffaa00' ;;
-		failed) line_color='#ff4444' ;;
+		armed) ((line_age < armed_seconds)) && armed="yes" ;;
+		sent) ((line_age < blink_seconds)) && line_color='#44ff44' ;;
+		dropped) ((line_age < blink_seconds)) && line_color='#ffaa00' ;;
+		failed) ((line_age < blink_seconds)) && line_color='#ff4444' ;;
 	esac
 fi
 
 # Two button lines start argos's line cycler, which is the blink; dropdown=false
 # keeps them out of the menu.
-if [[ -n "$line_color" ]]; then
+if [[ -n "$armed" ]]; then
+	echo "${mic} <span color='#ffee00'>●</span> | font='monospace' size=${PANEL_SIZE}"
+elif [[ -n "$line_color" ]]; then
 	echo "${mic} <span color='${line_color}'>●</span> | font='monospace' size=${PANEL_SIZE} dropdown=false"
 	echo "${mic} <span color='#222222'>●</span> | font='monospace' size=${PANEL_SIZE} dropdown=false"
 else

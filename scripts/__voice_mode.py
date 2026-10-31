@@ -51,7 +51,8 @@ NATS_URL = os.environ.get('AGENTS_NATS_URL', 'nats://nats-nats-tailscale.tail165
 # What became of the last line, for the top bar to blink: sent means the bus took it,
 # which proves it was published, not read; dropped means it reached nobody, including
 # a voiced clip that came back with no words; failed means it named an agent and
-# could not be sent. See .config/argos/notion-mic.1s.sh.
+# could not be sent; armed means a line opened with the wake word and is still going.
+# See .config/argos/notion-mic.1s.sh.
 LINE_STATUS = os.path.join(os.environ.get('XDG_RUNTIME_DIR', f'/run/user/{os.getuid()}'),
                            'voice-mode-line')
 
@@ -67,6 +68,7 @@ PRE_ROLL = 15  # 450 ms kept up to the onset, so first words survive
 MAX_FRAMES = 2000  # 60 s, pauses included; audio past the cut has no name and is lost
 QUICK_END = 20  # 0.6 s of quiet is enough to test a short burst for the stop word
 QUICK_MAX = 100  # 3 s; anything longer is a line, not the stop word
+OPENING_FRAMES = 67  # 2 s with the lead-in: at 1.5 s Handy missed the wake word in one of three Piper voices
 HOLD_FRAMES = 16  # about 0.5 s: how soon a reply that starts mid-line is paused
 
 BUS_NAME = 'human-via-voice'
@@ -152,6 +154,12 @@ class Segmenter:
             return None
         utterance, self.utterance, self.onset = self.utterance, None, 0
         return b''.join(utterance) if self.voiced >= MIN_VOICED else None
+
+    def opening(self):
+        """Return the open utterance once, when it is long enough to hold the wake word."""
+        if self.utterance is None or len(self.utterance) != OPENING_FRAMES or self.voiced < MIN_VOICED:
+            return None
+        return b''.join(self.utterance)
 
     def burst(self):
         """Return the open utterance at the moment a short one goes quiet."""
@@ -272,15 +280,24 @@ def signal(status):
 def calls(text):
     """Return (agent, message) for each call in a line. A weak name leaves agent as None.
 
-    Every wake word starts a call, once the line itself opens with one or with a name.
+    A wake word starts a call once the line itself opens with one or with a name, unless
+    what follows names nobody: the phrase in a sentence and a misheard name look alike, so
+    the words stay in the call before it and a None entry still turns the light orange.
     All names are settled before anything is sent, so a failed decision sends nothing.
     """
     opening, *called = WAKE.split(text.strip())
     named = route(opening)
     if not named and re.search(r'\w', opening) and not STOP_WORD.fullmatch(opening):
         return []
-    called = [part.strip(' ,;:') for part in called if re.search(r'\w', part)]
-    return ([named] if named else []) + [(closest(part), part) for part in called]
+    lines, unplaced = ([named] if named else []), []
+    for part in (part.strip(' ,;:') for part in called if re.search(r'\w', part)):
+        agent = closest(part)
+        if agent or not lines:
+            lines.append((agent, part))
+        else:
+            lines[-1] = (lines[-1][0], f'{lines[-1][1]} check check {part}')
+            unplaced.append((None, part))
+    return lines + unplaced
 
 
 def send(agent, message):
@@ -307,6 +324,22 @@ def handle(pcm):
         return
     outcomes = [send(agent, message) for agent, message in calls(text) or [(None, '')]]
     signal(next(status for status in ('failed', 'dropped', 'sent') if status in outcomes))
+
+
+def check_wake(pcm, segmenter):
+    """Light the top bar while Piotr still talks, once his line opens with the wake word.
+
+    The line's outcome replaces the light, so a line that closed first leaves it alone.
+    A failure here costs no words, the whole line is transcribed when it closes, so it
+    stays off the light instead of reaching worker's red.
+    """
+    try:
+        heard = transcribe(pcm)
+    except (OSError, subprocess.SubprocessError, ValueError, KeyError) as err:
+        print(f'voice-mode: opening not checked: {type(err).__name__}', file=sys.stderr, flush=True)
+        return
+    if WAKE.match(heard.strip()) and segmenter.utterance is not None:
+        signal('armed')
 
 
 def check_stop(pcm):
@@ -341,11 +374,13 @@ def main():
     threading.Thread(target=watch_presence, daemon=True).start()
     utterances = queue.Queue()
     bursts = queue.Queue()  # its own worker: a slow delivery must not hold up the stop word
+    openings = queue.Queue()
+    segmenter = Segmenter()
     threading.Thread(target=worker, args=(utterances, handle), daemon=True).start()
     threading.Thread(target=worker, args=(bursts, check_stop), daemon=True).start()
+    threading.Thread(target=worker, args=(openings, lambda pcm: check_wake(pcm, segmenter)), daemon=True).start()
     mic = subprocess.Popen(['parec', f'--device={SOURCE}', f'--rate={RATE}', '--channels=1',
                             '--format=s16le', '--latency-msec=30'], stdout=subprocess.PIPE)
-    segmenter = Segmenter()
     barge_in = BargeIn()
     hold_speech(False)  # a relay that died mid-line left speech paused
     while len(frame := mic.stdout.read(FRAME_BYTES)) == FRAME_BYTES:
@@ -355,6 +390,8 @@ def main():
             utterances.put(pcm)
         if burst := segmenter.burst():
             bursts.put(burst)
+        if opening := segmenter.opening():
+            openings.put(opening)
     sys.exit('voice-mode: microphone stream ended')
 
 
