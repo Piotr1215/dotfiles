@@ -18,7 +18,6 @@ and Handy then erases the selection.
 """
 import array
 import collections
-import fcntl
 import json
 import math
 import os
@@ -40,7 +39,8 @@ VOICE_LOCK = os.path.expanduser('~/.local/state/klod-voice.lock')
 NATS = os.path.expanduser('~/.local/bin/nats')
 SND = os.path.expanduser('~/dev/agents-mcp-server/build/snd.js')
 NATS_URL = os.environ.get('AGENTS_NATS_URL', 'nats://nats-nats-tailscale.tail165ec.ts.net:4222')
-# The top bar blinks the name in here, see .config/argos/notion-mic.1s.sh.
+# The top bar blinks the name in here once the bus takes a line, which proves it
+# was published, not read. See .config/argos/notion-mic.1s.sh.
 DELIVERED = os.path.join(os.environ.get('XDG_RUNTIME_DIR', f'/run/user/{os.getuid()}'),
                          'voice-mode-delivered')
 
@@ -75,12 +75,15 @@ ADDRESS = re.compile(
 BUS_NAMES = {'gordon': 'triage', 'kendra': 'intake'}
 SPOKEN_DIGITS = {'one': '1', 'won': '1', 'two': '2', 'to': '2', 'too': '2'}
 STOP_WORD = re.compile(r'\W*stop\W+stop\W*', re.IGNORECASE)
+# Every spoken reply opens "klod1 to Piotr:", so one that reached the mic must not
+# route back to the agent that said it.
+OWN_SPEECH = re.compile(r'to\W+(?:piotr|peter)\b', re.IGNORECASE)
 
 
 def route(text):
     """Return (agent, message) when the line opens with an agent's name."""
     match = ADDRESS.match(text.strip())
-    if not match or not match[4]:
+    if not match or not match[4] or OWN_SPEECH.match(match[4]):
         return None
     if match[3]:
         name = match[3].lower()
@@ -164,16 +167,6 @@ def deliver(agent, text):
         return False
 
 
-def speaking():
-    """True while an agent holds the shared speech lock."""
-    with open(VOICE_LOCK, 'a') as lock:
-        try:
-            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            return True
-    return False
-
-
 def silence():
     """End the speech playing now and the replies queued behind it."""
     subprocess.run(['pkill', '-f', f'^(flock .*|timeout .*)?pw-play --target {SINK}'], check=False)
@@ -254,7 +247,7 @@ def main():
     segmenter = Segmenter()
     while len(frame := mic.stdout.read(FRAME_BYTES)) == FRAME_BYTES:
         pcm = segmenter.push(frame)
-        if pcm and not speaking():
+        if pcm:
             utterances.put(pcm)
         if burst := segmenter.burst():
             bursts.put(burst)

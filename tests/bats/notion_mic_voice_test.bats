@@ -5,7 +5,7 @@
 # Blink failures to guard: a marker that keeps blinking after its window, a
 # single button line (argos cycles only two or more), a blink that leaks into the
 # menu, and the relay drifting onto another marker path, which would leave a
-# delivered line looking lost.
+# published line looking lost.
 
 setup() {
   SCRIPT="${BATS_TEST_DIRNAME}/../../.config/argos/notion-mic.1s.sh"

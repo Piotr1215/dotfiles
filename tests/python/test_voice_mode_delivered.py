@@ -1,4 +1,4 @@
-"""Voice mode: the marker the top bar flashes once a line reaches an agent."""
+"""Voice mode: the marker the top bar blinks once the bus takes a line."""
 import importlib.util
 from pathlib import Path
 
@@ -25,12 +25,12 @@ def hear(monkeypatch, heard, delivered=True):
     voice.handle(b'')
 
 
-def test_a_delivered_line_names_the_agent_that_took_it(monkeypatch, marker):
+def test_a_published_line_names_its_agent(monkeypatch, marker):
     hear(monkeypatch, 'Claude 2, run the tests')
     assert marker.read_text() == 'klod2'
 
 
-def test_each_delivery_replaces_the_name(monkeypatch, marker):
+def test_each_published_line_replaces_the_name(monkeypatch, marker):
     marker.write_text('klod1')
     hear(monkeypatch, 'Claude 2, run the tests')
     assert marker.read_text() == 'klod2'
@@ -41,6 +41,6 @@ def test_each_delivery_replaces_the_name(monkeypatch, marker):
     ('Codex, fix the test', True),
     ('Claude 2, yes', False),
 ], ids=['names no agent', 'no such agent', 'agent not ready'])
-def test_a_line_that_reached_nobody_leaves_no_signal(monkeypatch, marker, heard, delivered):
+def test_a_line_that_was_not_published_leaves_no_signal(monkeypatch, marker, heard, delivered):
     hear(monkeypatch, heard, delivered)
     assert not marker.exists()

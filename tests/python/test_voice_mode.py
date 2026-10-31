@@ -1,6 +1,5 @@
 """Voice mode: what gets through from the mic to an agent pane, and what must not."""
 import array
-import fcntl
 import importlib.util
 import json
 import os
@@ -52,6 +51,8 @@ def test_named_line_reaches_that_agent(heard, agent, message):
     'Plot too thin to finish',
     'Claude is great',
     'Codex is great',  # no pause after the name, so it is talk about Codex
+    'Claude 1 to Piotr: the tests pass',  # an agent's own speech caught by the mic
+    'Cloud 2 to Peter. The build is green.',
     'Gordon is out today',
     'Kendra said no',
     'The plot 2 twist',  # the name must open the line
@@ -182,16 +183,6 @@ def test_only_the_whole_stop_word_silences_anything(monkeypatch, capsys, heard, 
     assert silenced == ([True] if stopped else [])
     assert typed == []  # speech stops, the agents keep working
     assert capsys.readouterr().out == ('voice-mode: stop word heard\n' if stopped else '')
-
-
-def test_speaking_follows_the_shared_lock(tmp_path, monkeypatch):
-    lock = tmp_path / 'voice.lock'
-    monkeypatch.setattr(voice, 'VOICE_LOCK', str(lock))
-    assert voice.speaking() is False
-    with open(lock, 'a') as held:
-        fcntl.flock(held, fcntl.LOCK_EX)
-        assert voice.speaking() is True
-    assert voice.speaking() is False
 
 
 class Line:
