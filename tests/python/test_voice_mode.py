@@ -2,6 +2,7 @@
 import array
 import fcntl
 import importlib.util
+import os
 import signal
 import subprocess
 from pathlib import Path
@@ -262,6 +263,7 @@ class Line:
         monkeypatch.setattr(voice, 'panes', lambda: panes)
         monkeypatch.setattr(voice, 'say', self.spoken.append)
         monkeypatch.setattr(voice, 'deliver', lambda p, t: self.typed.append((p, t)) or delivered)
+        monkeypatch.setattr(voice, 'DELIVERED', os.devnull)  # the live marker flashes the panel
 
 
 def test_handle_labels_who_is_talking_to_whom(monkeypatch):
