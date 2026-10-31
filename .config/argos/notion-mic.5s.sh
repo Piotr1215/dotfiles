@@ -22,6 +22,9 @@ readonly loopback="$HOME/dev/dotfiles/scripts/__notion_loopback.sh"
 readonly notion_url="https://www.notion.so/"
 # Title substring stable enough across Notion releases to match the tab.
 readonly notion_window_re='Notion - Google Chrome'
+# Flips go through the toggle board, which owns the on and off logic.
+readonly toggles="${TOGGLES_BIN:-$HOME/dev/dotfiles/scripts/__toggles.sh}"
+readonly voice_replies_off_flag="${KLOD_VOICE_STATE:-$HOME/.local/state/klod-voice}/off"
 
 # --- side-effect actions (invoked from dropdown menu items) ---------------
 
@@ -59,6 +62,11 @@ case "${1:-}" in
 		focus_or_open_notion
 		exit 0
 		;;
+	--voice-off)
+		"$toggles" __run voice-mode off
+		"$toggles" __run voice-replies off
+		exit 0
+		;;
 esac
 
 # --- state ----------------------------------------------------------------
@@ -69,13 +77,29 @@ else
 	state="down"
 fi
 
+# Read directly: the board's __render runs every toggle's status, too heavy for
+# a 5s refresh.
+if systemctl --user is-active --quiet voice-mode.service; then
+	voice_listening="on"
+	voice_dot=" <span color='#44aaff'>●</span>"
+else
+	voice_listening="off"
+	voice_dot=""
+fi
+if [[ -e "$voice_replies_off_flag" ]]; then
+	voice_replies="off"
+else
+	voice_replies="on"
+fi
+
 # --- panel line -----------------------------------------------------------
 # UP   = mic icon + green dot; visually obvious the routing is live.
 # DOWN = dim mic icon only.
+# A blue dot means voice mode is listening on the headset.
 if [[ "$state" == "up" ]]; then
-	echo "🎙 <span color='#44ff44'>●</span> | font='monospace' size=${PANEL_SIZE}"
+	echo "🎙 <span color='#44ff44'>●</span>${voice_dot} | font='monospace' size=${PANEL_SIZE}"
 else
-	echo "<span color='#888888'>🎙</span> | font='monospace' size=${PANEL_SIZE}"
+	echo "<span color='#888888'>🎙</span>${voice_dot} | font='monospace' size=${PANEL_SIZE}"
 fi
 
 # --- dropdown -------------------------------------------------------------
@@ -104,4 +128,23 @@ fi
 
 echo "---"
 echo "<i>In Notion's recorder pick \"NotionMic\".</i> | font=monospace"
+echo "---"
+
+# One submenu row per board toggle: voice_item <toggle> <label> <on|off>
+voice_item() {
+	if [[ "$3" == "on" ]]; then
+		echo "--🟢 $2: on, click to turn off | bash='\"$toggles\" __run $1 off' terminal=false refresh=true"
+	else
+		echo "--⚪ $2: off, click to turn on | bash='\"$toggles\" __run $1 on' terminal=false refresh=true"
+	fi
+}
+
+echo "🎧 Voice bridge | font=monospace"
+voice_item voice-mode "Hands-free listening" "$voice_listening"
+voice_item voice-replies "Spoken replies (Piper)" "$voice_replies"
+if [[ "$voice_listening" == "on" || "$voice_replies" == "on" ]]; then
+	echo "--🛑 All off (normal mode) | bash='\"$0\" --voice-off' terminal=false refresh=true"
+fi
+
+echo "---"
 echo "Refresh now | refresh=true"
