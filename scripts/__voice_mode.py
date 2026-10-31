@@ -39,10 +39,10 @@ FRAME_BYTES = 960  # 30 ms of s16le mono
 # The headset gates silence to zero; measured speech runs at 300 to 800 RMS.
 SPEECH_RMS = 100
 START_FRAMES = 3  # 90 ms of speech opens an utterance
-END_FRAMES = 40  # 1.2 s of quiet closes it
+END_FRAMES = 84  # 2.5 s of quiet closes it; Piotr pauses to think mid-line
 MIN_VOICED = 10  # shorter than 300 ms of speech is a click or a cough
 PRE_ROLL = 15  # 450 ms kept up to the onset, so first words survive
-MAX_FRAMES = 1000  # 30 s
+MAX_FRAMES = 2000  # 60 s, pauses included; audio past the cut has no name and is lost
 
 READY_WAIT_SECONDS = 20
 

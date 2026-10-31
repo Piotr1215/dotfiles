@@ -73,6 +73,18 @@ def test_a_pause_inside_a_sentence_does_not_split_it():
     assert cuts[0].count(LOUD) >= 2 * voice.MIN_VOICED
 
 
+def test_a_two_second_thinking_pause_stays_inside_the_line():
+    pause = [QUIET] * int(2 / 0.03)
+    speech = [LOUD] * voice.MIN_VOICED
+    assert len(feed(voice.Segmenter(), speech + pause + speech + [QUIET] * voice.END_FRAMES)) == 1
+
+
+def test_a_line_with_thinking_pauses_can_run_a_full_minute():
+    stretch = [LOUD] * 10 + [QUIET] * 60  # speak, then pause for 1.8 s
+    cuts = feed(voice.Segmenter(), stretch * 80)
+    assert len(cuts) == 0  # 56 s of it is still one open line
+
+
 def test_a_click_is_too_short_to_be_speech():
     click = [LOUD] * (voice.MIN_VOICED - 1)
     assert feed(voice.Segmenter(), click + [QUIET] * voice.END_FRAMES) == []
