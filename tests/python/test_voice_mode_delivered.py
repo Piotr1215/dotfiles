@@ -45,9 +45,9 @@ def test_the_latest_line_replaces_the_last_outcome(monkeypatch, marker):
     assert marker.read_text() == 'sent'
 
 
-def test_noise_with_no_words_leaves_no_signal(monkeypatch, marker):
+def test_a_line_that_came_back_with_no_words_is_not_lost_in_silence(monkeypatch, marker):
     hear(monkeypatch, '  ')
-    assert not marker.exists()
+    assert marker.read_text() == 'dropped'
 
 
 def test_a_clip_that_cannot_be_transcribed_shows_as_failed(monkeypatch, marker):

@@ -40,8 +40,9 @@ NATS = os.path.expanduser('~/.local/bin/nats')
 SND = os.path.expanduser('~/dev/agents-mcp-server/build/snd.js')
 NATS_URL = os.environ.get('AGENTS_NATS_URL', 'nats://nats-nats-tailscale.tail165ec.ts.net:4222')
 # What became of the last line, for the top bar to blink: sent means the bus took it,
-# which proves it was published, not read; dropped means it named no agent; failed
-# means it named one and could not be sent. See .config/argos/notion-mic.1s.sh.
+# which proves it was published, not read; dropped means it reached nobody, including
+# a voiced clip that came back with no words; failed means it named an agent and
+# could not be sent. See .config/argos/notion-mic.1s.sh.
 LINE_STATUS = os.path.join(os.environ.get('XDG_RUNTIME_DIR', f'/run/user/{os.getuid()}'),
                            'voice-mode-line')
 
@@ -200,12 +201,10 @@ def signal(status):
 
 def handle(pcm):
     """Send one utterance to the agent it names, if it names one."""
-    heard = transcribe(pcm)
-    addressed = route(heard)
+    addressed = route(transcribe(pcm))
     if not addressed:
         print('voice-mode: line names no agent, dropped', flush=True)
-        if heard.strip():
-            signal('dropped')
+        signal('dropped')
         return
     agent, message = addressed
     if not registered(agent):
