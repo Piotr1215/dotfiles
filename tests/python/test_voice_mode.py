@@ -33,6 +33,8 @@ NBSP = ' '
     ('Claude won, stop', 'klod1', 'stop'),
     ('Hey Claude two, look at this', 'klod2', 'look at this'),
     ('klod one: ship it', 'klod1', 'ship it'),
+    # The stop word and a line said before the quiet could close it.
+    ('Stop, stop. Claude 2, run the tests.', 'klod2', 'run the tests.'),
 ])
 def test_named_line_reaches_that_agent(heard, agent, message):
     assert voice.route(heard) == (agent, message)

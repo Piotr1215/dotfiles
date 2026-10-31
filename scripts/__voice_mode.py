@@ -59,7 +59,7 @@ READY_WAIT_SECONDS = 20
 # Cloud and plot are everyday words, so they need a real number; "cloud to edge"
 # is not an address. Codex needs a pause after its name.
 ADDRESS = re.compile(
-    r'^\W*(?:hey\W+)?(?:(?:claude|klod|clod)\W*(\d|one|won|two|to|too)\b'
+    r'^\W*(?:stop\W+stop\W+)?(?:hey\W+)?(?:(?:claude|klod|clod)\W*(\d|one|won|two|to|too)\b'
     r'|(?:cloud|plot)\W*(\d|one|two)\b|(codex)\s*[,.:;!?])\W*(.*)$',
     re.IGNORECASE | re.DOTALL,
 )
