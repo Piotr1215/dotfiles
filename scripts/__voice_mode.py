@@ -16,6 +16,9 @@ They are not marked [HUMAN], because a transcript can be misheard.
 Saying "stop stop" on its own cuts all speech and the replies queued behind it.
 The agents keep working; only their voices stop.
 
+While Piotr talks, whoever is speaking pauses and carries on from the same spot when
+his line ends. A flag file switches that off, from the toggle board.
+
 Handy must stay on the system default mic, with the headset as that default.
 A selected mic is opened raw, which fails while this stream holds the device,
 and Handy then erases the selection.
@@ -40,6 +43,7 @@ HANDY = os.path.expanduser('~/.local/bin/handy')
 PIPER = os.path.join(os.path.dirname(os.path.abspath(__file__)), '__piper_quiet.py')
 VOICE = os.path.expanduser('~/.local/share/piper-voices/lessac-medium/en_US-lessac-medium.onnx')
 VOICE_LOCK = os.path.expanduser('~/.local/state/klod-voice.lock')
+NO_BARGE_IN = os.path.expanduser('~/.local/state/klod-voice/no-barge-in')
 NATS = os.path.expanduser('~/.local/bin/nats')
 SND = os.path.expanduser('~/dev/agents-mcp-server/build/snd.js')
 NATS_URL = os.environ.get('AGENTS_NATS_URL', 'nats://nats-nats-tailscale.tail165ec.ts.net:4222')
@@ -62,6 +66,7 @@ PRE_ROLL = 15  # 450 ms kept up to the onset, so first words survive
 MAX_FRAMES = 2000  # 60 s, pauses included; audio past the cut has no name and is lost
 QUICK_END = 20  # 0.6 s of quiet is enough to test a short burst for the stop word
 QUICK_MAX = 100  # 3 s; anything longer is a line, not the stop word
+HOLD_FRAMES = 16  # about 0.5 s: how soon a reply that starts mid-line is paused
 
 BUS_NAME = 'human-via-voice'
 VOICE_TAG = '[PIOTR VIA VOICE]'
@@ -214,6 +219,28 @@ def deliver(agent, text):
 def silence():
     """End the speech playing now and the replies queued behind it."""
     subprocess.run(['pkill', '-f', f'^(flock .*|timeout .*)?pw-play --target {SINK}'], check=False)
+    hold_speech(False)  # paused speech takes the signal only once it wakes
+
+
+def hold_speech(held):
+    """Pause the speech playing now, or let it carry on. Its lock keeps the rest queued."""
+    subprocess.run(['pkill', '-STOP' if held else '-CONT', '-f', f'^pw-play --target {SINK}'], check=False)
+
+
+class BargeIn:
+    """Keep speech paused for as long as Piotr is talking."""
+
+    def __init__(self):
+        self.frames = 0
+
+    def update(self, talking):
+        if talking and not os.path.exists(NO_BARGE_IN):
+            if self.frames % HOLD_FRAMES == 0:
+                hold_speech(True)
+            self.frames += 1
+        elif self.frames:
+            hold_speech(False)
+            self.frames = 0
 
 
 def say(text):
@@ -309,8 +336,11 @@ def main():
     mic = subprocess.Popen(['parec', f'--device={SOURCE}', f'--rate={RATE}', '--channels=1',
                             '--format=s16le', '--latency-msec=30'], stdout=subprocess.PIPE)
     segmenter = Segmenter()
+    barge_in = BargeIn()
+    hold_speech(False)  # a relay that died mid-line left speech paused
     while len(frame := mic.stdout.read(FRAME_BYTES)) == FRAME_BYTES:
         pcm = segmenter.push(frame)
+        barge_in.update(segmenter.utterance is not None)
         if pcm:
             utterances.put(pcm)
         if burst := segmenter.burst():

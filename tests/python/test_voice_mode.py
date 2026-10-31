@@ -1,10 +1,13 @@
 """Voice mode: what gets through from the mic to an agent pane, and what must not."""
 import array
 import importlib.util
+import io
 import json
 import os
 import signal
 import subprocess
+import time
+import types
 from pathlib import Path
 
 import pytest
@@ -402,3 +405,100 @@ def test_a_failed_decision_carries_no_words_to_the_log(monkeypatch):
     with pytest.raises(subprocess.SubprocessError) as err:
         voice.handle(b'')
     assert 'private' not in str(err.value)
+
+
+class Held:
+    """Record what BargeIn asks of the speech playing."""
+
+    def __init__(self, monkeypatch, tmp_path):
+        self.calls = []
+        self.flag = tmp_path / 'no-barge-in'
+        monkeypatch.setattr(voice, 'hold_speech', self.calls.append)
+        monkeypatch.setattr(voice, 'NO_BARGE_IN', str(self.flag))
+
+
+def test_speech_pauses_when_piotr_starts_and_carries_on_when_he_ends(monkeypatch, tmp_path):
+    held = Held(monkeypatch, tmp_path)
+    barge_in = voice.BargeIn()
+    for talking in (False, True, True, False, False):
+        barge_in.update(talking)
+    assert held.calls == [True, False]
+
+
+def test_a_reply_that_starts_while_he_talks_is_paused_too(monkeypatch, tmp_path):
+    held = Held(monkeypatch, tmp_path)
+    barge_in = voice.BargeIn()
+    for _ in range(voice.HOLD_FRAMES + 1):
+        barge_in.update(True)
+    assert held.calls == [True, True]
+
+
+def test_the_toggle_off_leaves_speech_alone(monkeypatch, tmp_path):
+    held = Held(monkeypatch, tmp_path)
+    held.flag.touch()
+    barge_in = voice.BargeIn()
+    for talking in (True, True, False):
+        barge_in.update(talking)
+    assert held.calls == []
+
+
+def test_switching_off_mid_line_lets_speech_carry_on(monkeypatch, tmp_path):
+    held = Held(monkeypatch, tmp_path)
+    barge_in = voice.BargeIn()
+    barge_in.update(True)
+    held.flag.touch()
+    barge_in.update(True)
+    assert held.calls == [True, False]
+
+
+def run_state(process):
+    with open(f'/proc/{process.pid}/stat', encoding='utf-8') as stat:
+        return stat.read().rsplit(')', 1)[1].split()[0]
+
+
+def settled(process, wanted):
+    """The process's state once it reaches wanted, or as it stands after a second."""
+    deadline = time.monotonic() + 1
+    while run_state(process) != wanted and time.monotonic() < deadline:
+        time.sleep(0.01)
+    return run_state(process)
+
+
+def test_a_hold_pauses_only_the_player_and_the_release_wakes_it(monkeypatch):
+    monkeypatch.setattr(voice, 'SINK', 'test-sink-for-hold')
+    play = 'pw-play --target test-sink-for-hold a.wav'
+    spawn = lambda cmdline: subprocess.Popen([cmdline, '30'], executable='sleep')
+    player, wrapper, other = spawn(play), spawn(f'timeout 60 {play}'), spawn('pw-play --target other-sink a.wav')
+    try:
+        voice.hold_speech(True)
+        assert settled(player, 'T') == 'T'
+        assert 'T' not in (run_state(wrapper), run_state(other))
+        voice.hold_speech(False)
+        assert settled(player, 'S') != 'T'
+    finally:
+        for process in (player, wrapper, other):
+            process.kill()
+
+
+def test_the_stop_word_still_ends_paused_speech(monkeypatch):
+    monkeypatch.setattr(voice, 'SINK', 'test-sink-for-paused-stop')
+    player = subprocess.Popen(['pw-play --target test-sink-for-paused-stop a.wav', '30'], executable='sleep')
+    try:
+        voice.hold_speech(True)
+        settled(player, 'T')
+        voice.silence()
+        assert player.wait(timeout=5) == -signal.SIGTERM
+    finally:
+        player.kill()
+
+
+def test_the_relay_holds_speech_for_the_length_of_a_line(monkeypatch, tmp_path):
+    held = Held(monkeypatch, tmp_path)
+    frames = LOUD * voice.MIN_VOICED + QUIET * voice.END_FRAMES
+    monkeypatch.setattr(voice.subprocess, 'Popen', lambda *_, **__: types.SimpleNamespace(stdout=io.BytesIO(frames)))
+    monkeypatch.setattr(voice.threading, 'Thread', lambda **_: types.SimpleNamespace(start=lambda: None))
+    with pytest.raises(SystemExit):
+        voice.main()
+    assert held.calls[:2] == [False, True]  # a relay that died mid-line left speech paused
+    assert held.calls[-1] is False
+    assert held.calls.count(False) == 2
