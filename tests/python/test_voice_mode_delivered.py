@@ -12,6 +12,11 @@ voice = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(voice)
 
 
+@pytest.fixture(autouse=True)
+def no_earlier_line(monkeypatch):
+    monkeypatch.setattr(voice, 'LATEST', {})
+
+
 @pytest.fixture
 def marker(monkeypatch, tmp_path):
     path = tmp_path / 'voice-mode-line'

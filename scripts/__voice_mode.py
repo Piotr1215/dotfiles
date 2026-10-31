@@ -11,6 +11,14 @@ most of them. The next few words go to the quick decision model with the live ro
 and the line goes to the name they sound most like. Nothing else leaves the machine.
 One breath can call several agents: each "check check" starts a call of its own.
 
+A line that opens with no name and follows a sent one is the same thought, past a
+pause to think, so it goes to the same agent. A flag file switches that off.
+
+Every closed line waits in a RAM folder until all its calls are sent, so a crash, a
+restart or a line that reached nobody costs no words. `__voice_mode.py --lost` prints
+what is there. That includes room talk, so it holds few lines, and a flag file switches
+it off. The journal still gets no words.
+
 Lines travel as messages, never as keys, so speech cannot answer a permission prompt.
 They are not marked [HUMAN], because a transcript can be misheard.
 
@@ -26,11 +34,14 @@ and Handy then erases the selection.
 """
 import array
 import collections
+import difflib
+import glob
 import json
 import math
 import os
 import queue
 import re
+import signal as signals
 import subprocess
 import sys
 import tempfile
@@ -45,6 +56,8 @@ PIPER = os.path.join(os.path.dirname(os.path.abspath(__file__)), '__piper_quiet.
 VOICE = os.path.expanduser('~/.local/share/piper-voices/lessac-medium/en_US-lessac-medium.onnx')
 VOICE_LOCK = os.path.expanduser('~/.local/state/klod-voice.lock')
 NO_BARGE_IN = os.path.expanduser('~/.local/state/klod-voice/no-barge-in')
+NO_KEEP = os.path.expanduser('~/.local/state/klod-voice/no-keep')
+NO_CONTINUE = os.path.expanduser('~/.local/state/klod-voice/no-continue')
 NATS = os.path.expanduser('~/.local/bin/nats')
 SND = os.path.expanduser('~/dev/agents-mcp-server/build/snd.js')
 NATS_URL = os.environ.get('AGENTS_NATS_URL', 'nats://nats-nats-tailscale.tail165ec.ts.net:4222')
@@ -53,8 +66,10 @@ NATS_URL = os.environ.get('AGENTS_NATS_URL', 'nats://nats-nats-tailscale.tail165
 # a voiced clip that came back with no words; failed means it named an agent and
 # could not be sent; armed means a line opened with the wake word and is still going.
 # See .config/argos/notion-mic.1s.sh.
-LINE_STATUS = os.path.join(os.environ.get('XDG_RUNTIME_DIR', f'/run/user/{os.getuid()}'),
-                           'voice-mode-line')
+RUNTIME_DIR = os.environ.get('XDG_RUNTIME_DIR', f'/run/user/{os.getuid()}')
+LINE_STATUS = os.path.join(RUNTIME_DIR, 'voice-mode-line')
+LOST_DIR = os.path.join(RUNTIME_DIR, 'voice-mode-lost')  # tmpfs: gone at reboot
+LOST_KEPT = 20
 
 RATE = 16000
 FRAME_BYTES = 960  # 30 ms of s16le mono
@@ -65,11 +80,17 @@ START_FRAMES = 3  # 90 ms of speech opens an utterance
 END_FRAMES = 84  # 2.5 s of quiet closes it; Piotr pauses to think mid-line
 MIN_VOICED = 10  # shorter than 300 ms of speech is a click or a cough
 PRE_ROLL = 15  # 450 ms kept up to the onset, so first words survive
-MAX_FRAMES = 2000  # 60 s, pauses included; audio past the cut has no name and is lost
+MAX_FRAMES = 20000  # 10 min, pauses included; past that the rest carries on to the same agent
+PIECE_FRAMES = 2000  # 60 s at a time: Handy ran out of GPU memory on 6 min of speech, not on 2.5
+SEEK_FRAMES = 170  # 5 s back from a piece's end, to cut in a quiet spot and not in a word
+TRANSCRIBE_TRIES = 3
 QUICK_END = 20  # 0.6 s of quiet is enough to test a short burst for the stop word
 QUICK_MAX = 100  # 3 s; anything longer is a line, not the stop word
 OPENING_FRAMES = 67  # 2 s with the lead-in: at 1.5 s Handy missed the wake word in one of three Piper voices
 HOLD_FRAMES = 16  # about 0.5 s: how soon a reply that starts mid-line is paused
+CONTINUE_SECONDS = 10  # quiet allowed after a sent line closed, itself 2.5 s after his last word
+CONTINUE_WORDS = 4  # fewer may be a yes to someone in the room, and an agent would take it as his
+NAME_LIKE = 0.6  # measured: 15 of 16 misheard names at or over it, 11 of 16 plain thoughts under it
 
 BUS_NAME = 'human-via-voice'
 VOICE_TAG = '[PIOTR VIA VOICE]'
@@ -190,6 +211,8 @@ class Presence:
 
 
 PRESENCE = Presence()
+LATEST = {}  # who the last sent call went to, and when its line closed
+HANDY_TURN = threading.Lock()  # measured: of three Handys at once, one ran out of GPU memory
 
 
 def registered(name):
@@ -260,21 +283,108 @@ def say(text):
                        timeout=90, check=True)
 
 
-def transcribe(pcm):
+def write_wav(path, pcm):
+    with wave.open(path, 'wb') as out:
+        out.setnchannels(1)
+        out.setsampwidth(2)
+        out.setframerate(RATE)
+        out.writeframes(pcm)
+
+
+def pieces(pcm):
+    """Cut a long line for Handy at its quietest moments. Short lines come back whole."""
+    while len(pcm) > PIECE_FRAMES * FRAME_BYTES:
+        frames = range((PIECE_FRAMES - SEEK_FRAMES) * FRAME_BYTES, PIECE_FRAMES * FRAME_BYTES, FRAME_BYTES)
+        cut = min(frames, key=lambda start: rms(pcm[start:start + FRAME_BYTES]))
+        yield pcm[:cut]
+        pcm = pcm[cut:]
+    yield pcm
+
+
+def transcribe_piece(pcm):
+    """One clip through Handy, waiting out a GPU that something else has filled."""
     with tempfile.NamedTemporaryFile(suffix='.wav') as audio:
-        with wave.open(audio.name, 'wb') as out:
-            out.setnchannels(1)
-            out.setsampwidth(2)
-            out.setframerate(RATE)
-            out.writeframes(pcm)
-        result = subprocess.run([HANDY, '--transcribe-file', audio.name, '--json'],
-                                capture_output=True, text=True, timeout=30, check=True)
-    return json.loads(result.stdout)['text']
+        write_wav(audio.name, pcm)
+        for tries_left in reversed(range(TRANSCRIBE_TRIES)):
+            try:
+                with HANDY_TURN:
+                    result = subprocess.run([HANDY, '--transcribe-file', audio.name, '--json'],
+                                            capture_output=True, text=True, timeout=30, check=True)
+                return json.loads(result.stdout)['text']
+            except subprocess.CalledProcessError:
+                if not tries_left:
+                    raise
+                time.sleep(1)
+
+
+def transcribe(pcm):
+    return ' '.join(filter(None, (transcribe_piece(piece) for piece in pieces(pcm))))
 
 
 def signal(status):
-    with open(LINE_STATUS, 'w', encoding='utf-8') as marker:
-        marker.write(status)
+    try:
+        with open(LINE_STATUS, 'w', encoding='utf-8') as marker:
+            marker.write(status)
+    except OSError as err:  # a light that cannot change must not cost the line
+        print(f'voice-mode: {type(err).__name__}', file=sys.stderr, flush=True)
+
+
+def keep(pcm):
+    """Write a closed line down before anything can lose it, and return where."""
+    if os.path.exists(NO_KEEP):
+        return None
+    try:
+        os.makedirs(LOST_DIR, mode=0o700, exist_ok=True)
+        path = os.path.join(LOST_DIR, f'{time.time_ns()}.wav')
+        write_wav(path, pcm)
+        for old in sorted(glob.glob(os.path.join(LOST_DIR, '*.wav')))[:-LOST_KEPT]:
+            forget(old)
+    except OSError as err:  # called from the capture loop, which must keep running
+        print(f'voice-mode: line not kept: {type(err).__name__}', file=sys.stderr, flush=True)
+        return None
+    return path
+
+
+def forget(kept):
+    """Remove a kept line and its words, once nothing can still need them."""
+    for path in (kept, f'{kept}.txt') if kept else ():
+        if os.path.exists(path):
+            os.remove(path)
+
+
+def note(kept, text):
+    """Put the words beside the audio of a line that did not reach everyone."""
+    if kept and text:
+        with open(f'{kept}.txt', 'w', encoding='utf-8') as words:
+            words.write(text)
+
+
+def rescue(segmenter):
+    """Keep the line still open when the relay stops."""
+    if segmenter.utterance and segmenter.voiced >= MIN_VOICED:
+        keep(b''.join(segmenter.utterance))
+
+
+def recovered(path):
+    """A kept line's words, from its audio when it never got as far as words."""
+    if os.path.exists(f'{path}.txt'):
+        with open(f'{path}.txt', encoding='utf-8') as words:
+            return words.read()
+    try:
+        with wave.open(path, 'rb') as audio:
+            return transcribe(audio.readframes(audio.getnframes())) or f'(no words heard, audio in {path})'
+    except (OSError, EOFError, wave.Error, subprocess.SubprocessError, ValueError, KeyError):
+        return f'(not transcribed, audio in {path})'
+
+
+def lost():
+    """Print the lines that reached nobody, oldest first."""
+    kept = sorted(glob.glob(os.path.join(LOST_DIR, '*.wav')))
+    for path in kept:
+        said = time.localtime(int(os.path.basename(path).removesuffix('.wav')) / 1e9)
+        print(f'{time.strftime("%H:%M:%S", said)} {recovered(path)}')
+    if not kept:
+        print('voice-mode: no lost lines')
 
 
 def calls(text):
@@ -317,12 +427,52 @@ def send(agent, message):
     return 'failed'
 
 
-def handle(pcm):
-    """Send one utterance to each agent it calls, and show the worst outcome."""
+def attempt(agent, message):
+    """Send one call. A notice that cannot play must not cost the calls after it."""
+    try:
+        return send(agent, message)
+    except (OSError, subprocess.SubprocessError) as err:
+        print(f'voice-mode: {type(err).__name__}', file=sys.stderr, flush=True)
+        return 'failed'
+
+
+def opens_like_a_name(words):
+    """True when a line's first words sound like someone on the roster: a misheard call."""
+    heard = spoken(re.sub(r'\W+', ' ', ' '.join(words[:6])).lower()).split()
+    return any(difflib.SequenceMatcher(None, ' '.join(heard[:len(name.split())]), name).ratio() >= NAME_LIKE
+               for name in roster())
+
+
+def continued(text, started):
+    """Return the call for a nameless line that carries on from a sent one, past a pause or the cap.
+
+    A call whose name went unheard must not land on the last agent, who would act on it.
+    Better it stays orange and in the lost lines.
+    """
+    if not LATEST or started - LATEST['closed'] >= CONTINUE_SECONDS or os.path.exists(NO_CONTINUE):
+        return []
+    words = text.split()
+    if len(words) < CONTINUE_WORDS or OWN_SPEECH.search(' '.join(words[:6])) or opens_like_a_name(words):
+        return []
+    return [(LATEST['agent'], text)]
+
+
+def handle(pcm, kept=None, closed=None):
+    """Send one utterance to each agent it calls, show the worst outcome, free its audio if sent."""
+    closed = time.monotonic() if closed is None else closed
     text = transcribe(pcm)
     if STOP_WORD.fullmatch(text):  # check_stop already acted on it, moments earlier
+        forget(kept)
         return
-    outcomes = [send(agent, message) for agent, message in calls(text) or [(None, '')]]
+    found = calls(text) or continued(text, closed - len(pcm) / (2 * RATE)) or [(None, '')]
+    outcomes = [attempt(agent, message) for agent, message in found]
+    for (agent, _), outcome in zip(found, outcomes):
+        if outcome == 'sent':
+            LATEST.update(agent=agent, closed=closed)
+    if set(outcomes) == {'sent'}:
+        forget(kept)
+    else:
+        note(kept, text)
     signal(next(status for status in ('failed', 'dropped', 'sent') if status in outcomes))
 
 
@@ -355,7 +505,7 @@ def worker(clips, act):
         pcm = clips.get()
         try:
             act(pcm)
-        except (OSError, subprocess.SubprocessError, ValueError, KeyError) as err:
+        except Exception as err:  # a dead worker would take every later line with it
             print(f'voice-mode: {type(err).__name__}: {err}', file=sys.stderr, flush=True)
             signal('failed')
 
@@ -376,24 +526,28 @@ def main():
     bursts = queue.Queue()  # its own worker: a slow delivery must not hold up the stop word
     openings = queue.Queue()
     segmenter = Segmenter()
-    threading.Thread(target=worker, args=(utterances, handle), daemon=True).start()
+    threading.Thread(target=worker, args=(utterances, lambda line: handle(*line)), daemon=True).start()
     threading.Thread(target=worker, args=(bursts, check_stop), daemon=True).start()
     threading.Thread(target=worker, args=(openings, lambda pcm: check_wake(pcm, segmenter)), daemon=True).start()
     mic = subprocess.Popen(['parec', f'--device={SOURCE}', f'--rate={RATE}', '--channels=1',
                             '--format=s16le', '--latency-msec=30'], stdout=subprocess.PIPE)
     barge_in = BargeIn()
     hold_speech(False)  # a relay that died mid-line left speech paused
-    while len(frame := mic.stdout.read(FRAME_BYTES)) == FRAME_BYTES:
-        pcm = segmenter.push(frame)
-        barge_in.update(segmenter.utterance is not None)
-        if pcm:
-            utterances.put(pcm)
-        if burst := segmenter.burst():
-            bursts.put(burst)
-        if opening := segmenter.opening():
-            openings.put(opening)
+    signals.signal(signals.SIGTERM, lambda *_: sys.exit(0))  # so a stop mid-line reaches the rescue
+    try:
+        while len(frame := mic.stdout.read(FRAME_BYTES)) == FRAME_BYTES:
+            pcm = segmenter.push(frame)
+            barge_in.update(segmenter.utterance is not None)
+            if pcm:
+                utterances.put((pcm, keep(pcm), time.monotonic()))
+            if burst := segmenter.burst():
+                bursts.put(burst)
+            if opening := segmenter.opening():
+                openings.put(opening)
+    finally:
+        rescue(segmenter)
     sys.exit('voice-mode: microphone stream ended')
 
 
 if __name__ == '__main__':
-    main()
+    lost() if sys.argv[1:] == ['--lost'] else main()

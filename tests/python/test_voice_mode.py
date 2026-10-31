@@ -6,6 +6,8 @@ import json
 import os
 import signal
 import subprocess
+import sys
+import threading
 import time
 import types
 from pathlib import Path
@@ -19,6 +21,15 @@ spec.loader.exec_module(voice)
 
 LOUD = array.array('h', [1000] * 480).tobytes()
 QUIET = bytes(960)
+
+
+@pytest.fixture(autouse=True)
+def fresh_relay(monkeypatch, tmp_path):
+    """No test inherits an earlier line's agent, or touches the real lost lines and flags."""
+    monkeypatch.setattr(voice, 'LATEST', {})
+    monkeypatch.setattr(voice, 'LOST_DIR', str(tmp_path / 'lost'))
+    monkeypatch.setattr(voice, 'NO_KEEP', str(tmp_path / 'no-keep'))
+    monkeypatch.setattr(voice, 'NO_CONTINUE', str(tmp_path / 'no-continue'))
 
 
 @pytest.mark.parametrize(('heard', 'agent', 'message'), [
@@ -632,3 +643,355 @@ def test_the_relay_holds_speech_for_the_length_of_a_line(monkeypatch, tmp_path):
     assert held.calls[:2] == [False, True]  # a relay that died mid-line left speech paused
     assert held.calls[-1] is False
     assert held.calls.count(False) == 2
+
+
+# Words must not vanish. Measured on the real path before this: 147 s of speech cut into
+# 60, 60 and 29 s and only the first piece reached an agent; 361 s the same, Handy 3.5 s.
+
+MINUTE = bytes(2 * voice.RATE * 60)
+
+
+def lost_files():
+    folder = Path(voice.LOST_DIR)
+    return sorted(path.name[-4:] for path in folder.iterdir()) if folder.exists() else []
+
+
+def test_a_two_minute_line_stays_one_line():
+    frames = [LOUD] * int(120 / 0.03)
+    cuts = feed(voice.Segmenter(), frames + [QUIET] * voice.END_FRAMES)
+    assert len(cuts) == 1
+    assert len(cuts[0]) >= len(MINUTE) * 2
+
+
+def test_a_line_that_never_ends_still_closes(monkeypatch):
+    monkeypatch.setattr(voice, 'MAX_FRAMES', 50)
+    assert len(feed(voice.Segmenter(), [LOUD] * 120)) == 2
+
+
+class Handy:
+    """Stands in for the Handy binary: notes how long each clip was, and fails on request."""
+
+    def __init__(self, monkeypatch, failures=0):
+        self.clips, self.failures = [], failures
+        self.running = self.most = 0
+        monkeypatch.setattr(voice.subprocess, 'run', self.run)
+        monkeypatch.setattr(voice.time, 'sleep', lambda _: None)
+
+    def run(self, command, **_):
+        self.running += 1
+        self.most = max(self.most, self.running)
+        with voice.wave.open(command[2], 'rb') as clip:
+            self.clips.append(clip.getnframes() / voice.RATE)
+        threading.Event().wait(0.01)
+        self.running -= 1
+        if self.failures:
+            self.failures -= 1
+            raise subprocess.CalledProcessError(1, command)
+        return subprocess.CompletedProcess(command, 0, stdout=json.dumps({'text': f'part{len(self.clips)}'}))
+
+
+def test_a_long_line_reaches_handy_in_pieces_and_comes_back_as_one(monkeypatch):
+    handy = Handy(monkeypatch)
+    assert voice.transcribe(LOUD * int(150 / 0.03)) == 'part1 part2 part3'
+    assert max(handy.clips) <= 60 and sum(handy.clips) == pytest.approx(150)
+
+
+def test_a_line_just_over_a_minute_is_cut():
+    assert len(list(voice.pieces(LOUD * int(62 / 0.03)))) == 2
+
+
+def test_a_short_line_is_one_clip(monkeypatch):
+    handy = Handy(monkeypatch)
+    assert voice.transcribe(LOUD * 100) == 'part1'
+    assert len(handy.clips) == 1
+
+
+def test_a_piece_ends_in_the_quiet_and_no_audio_goes_missing():
+    frames = [LOUD] * voice.PIECE_FRAMES * 2
+    frames[voice.PIECE_FRAMES - 60] = QUIET
+    first, *rest = voice.pieces(b''.join(frames))
+    assert len(first) == (voice.PIECE_FRAMES - 60) * voice.FRAME_BYTES
+    assert first + b''.join(rest) == b''.join(frames)
+
+
+def test_handy_failing_for_a_moment_costs_nothing(monkeypatch):
+    handy = Handy(monkeypatch, failures=2)
+    assert voice.transcribe(LOUD) == 'part3'
+    assert len(handy.clips) == 3
+
+
+def test_handy_that_keeps_failing_is_reported(monkeypatch):
+    Handy(monkeypatch, failures=voice.TRANSCRIBE_TRIES)
+    with pytest.raises(subprocess.CalledProcessError):
+        voice.transcribe(LOUD)
+
+
+def test_only_one_handy_runs_at_a_time(monkeypatch):
+    handy = Handy(monkeypatch)
+    runs = [threading.Thread(target=voice.transcribe, args=(LOUD,)) for _ in range(4)]
+    for run in runs:
+        run.start()
+    for run in runs:
+        run.join()
+    assert len(handy.clips) == 4 and handy.most == 1
+
+
+def second_part(monkeypatch, heard, gap, first='Claude 2, here is the idea', agents=('klod2',), delivered=True):
+    """Say a named line that closes at 1000, then a 60 s line starting gap seconds later."""
+    line = Line(monkeypatch, first, set(agents), delivered)
+    voice.handle(b'', closed=1000.0)
+    monkeypatch.setattr(voice, 'transcribe', lambda _: heard)
+    line.sent.clear()
+    voice.handle(MINUTE, closed=1000.0 + gap + 60)
+    return line
+
+
+def test_past_the_cap_the_line_goes_on_to_the_same_agent(monkeypatch):
+    line = second_part(monkeypatch, 'and this is the second minute of it', 0)
+    assert [agent for agent, _ in line.sent] == ['klod2']
+    assert 'and this is the second minute of it' in line.sent[0][1]
+
+
+@pytest.mark.parametrize(('gap', 'carried'), [(9.9, True), (10.1, False)])
+def test_a_pause_to_think_keeps_the_line_with_its_agent(monkeypatch, gap, carried):
+    line = second_part(monkeypatch, 'and then the rest of the thought', gap)
+    assert bool(line.sent) is carried
+
+
+def test_a_thought_can_carry_on_more_than_once(monkeypatch):
+    line = second_part(monkeypatch, 'a second part of the thought', 5)
+    voice.handle(MINUTE, closed=1070.0 + 60)  # past the first line's window, inside the second's
+    assert len(line.sent) == 2
+
+
+def test_a_named_line_is_not_a_continuation(monkeypatch):
+    line = second_part(monkeypatch, 'Codex, take this one instead', 1, agents=('klod2', 'codex'))
+    assert [agent for agent, _ in line.sent] == ['codex']
+
+
+@pytest.mark.parametrize('heard', [
+    'yes go ahead',  # short enough to be for someone in the room, and an agent would obey it
+    '',
+    'Claude 1 to Piotr, the tests pass today',  # a reply caught by the mic
+    'Voice mode to Peter. Something went wrong here.',
+])
+def test_only_a_real_thought_of_his_carries_on(monkeypatch, heard):
+    assert second_part(monkeypatch, heard, 1).sent == []
+
+
+@pytest.mark.parametrize('heard', ['Codex run the tests', 'Codecs run the tests', 'Clot 1 do the thing now',
+                                   'Plod 2 this is a test', 'Gordon check this for me'])
+def test_a_call_with_an_unheard_name_does_not_land_on_the_last_agent(monkeypatch, heard):
+    monkeypatch.setattr(voice, 'roster', lambda: {'codex': 'codex', 'klod one': 'klod1', 'klod two': 'klod2',
+                                                  'gordon': 'triage'})
+    assert second_part(monkeypatch, heard, 1).sent == []
+
+
+def test_a_thought_about_nobody_still_carries_on_with_that_roster(monkeypatch):
+    monkeypatch.setattr(voice, 'roster', lambda: {'codex': 'codex', 'klod one': 'klod1', 'klod two': 'klod2',
+                                                  'gordon': 'triage'})
+    assert len(second_part(monkeypatch, 'because the tests fail on master', 1).sent) == 1
+
+
+def test_the_toggle_ends_carrying_on(monkeypatch):
+    Path(voice.NO_CONTINUE).touch()
+    assert second_part(monkeypatch, 'and then the rest of the thought', 1).sent == []
+
+
+def test_a_line_that_failed_is_nothing_to_carry_on_from(monkeypatch):
+    assert second_part(monkeypatch, 'and then the rest of the thought', 1, delivered=False).sent == []
+
+
+def test_a_kept_line_reads_back_as_it_was_heard():
+    kept = voice.keep(LOUD)
+    with voice.wave.open(kept, 'rb') as audio:
+        assert audio.readframes(audio.getnframes()) == LOUD
+        assert audio.getframerate() == voice.RATE
+
+
+def test_a_line_that_reached_its_agent_leaves_nothing_behind(monkeypatch):
+    Line(monkeypatch, 'Claude 2, run the tests', {'klod2'})
+    voice.handle(LOUD, voice.keep(LOUD))
+    assert lost_files() == []
+
+
+@pytest.mark.parametrize(('heard', 'agents', 'delivered'), [
+    ('Please remember this idea', {'klod2'}, True),  # names nobody
+    ('Codex, fix the test', {'klod2'}, True),  # no such agent
+    ('Claude 2, yes do it', {'klod2'}, False),  # the bus refused
+])
+def test_a_line_that_reached_nobody_keeps_its_audio_and_words(monkeypatch, heard, agents, delivered):
+    Line(monkeypatch, heard, agents, delivered)
+    kept = voice.keep(LOUD)
+    voice.handle(LOUD, kept)
+    assert lost_files() == ['.txt', '.wav']
+    assert voice.recovered(kept) == heard
+
+
+def test_a_line_that_reached_only_one_agent_is_kept_whole(monkeypatch):
+    line = Line(monkeypatch, 'both calls', {'codex'})
+    monkeypatch.setattr(voice, 'calls', lambda _: [('codex', 'one'), ('gone', 'two')])
+    voice.handle(LOUD, voice.keep(LOUD))
+    assert len(line.sent) == 1
+    assert lost_files() == ['.txt', '.wav']
+
+
+def test_a_clip_with_no_words_keeps_its_audio(monkeypatch):
+    Line(monkeypatch, '', {'klod2'})
+    voice.handle(LOUD, voice.keep(LOUD))
+    assert lost_files() == ['.wav']
+
+
+def test_a_crash_before_the_words_keeps_the_audio(monkeypatch):
+    def broken(_):
+        raise subprocess.TimeoutExpired('handy', 120)
+
+    monkeypatch.setattr(voice, 'transcribe', broken)
+    kept = voice.keep(LOUD)
+    with pytest.raises(subprocess.TimeoutExpired):
+        voice.handle(LOUD, kept)
+    assert lost_files() == ['.wav']
+
+
+def test_the_stop_word_is_not_a_lost_line(monkeypatch):
+    Line(monkeypatch, 'Stop stop.', {'klod2'})
+    voice.handle(LOUD, voice.keep(LOUD))
+    assert lost_files() == []
+
+
+def test_the_toggle_ends_keeping_lines():
+    Path(voice.NO_KEEP).touch()
+    assert voice.keep(LOUD) is None
+    assert lost_files() == []
+
+
+def test_keeping_a_line_cannot_stop_the_capture_loop(monkeypatch, tmp_path):
+    (tmp_path / 'a-file').touch()
+    monkeypatch.setattr(voice, 'LOST_DIR', str(tmp_path / 'a-file' / 'lost'))
+    assert voice.keep(LOUD) is None
+
+
+def test_only_the_last_lines_are_kept(monkeypatch):
+    monkeypatch.setattr(voice, 'LOST_KEPT', 2)
+    Line(monkeypatch, 'Please remember this idea', set())
+    kept = [voice.keep(LOUD) for _ in range(2)]
+    voice.handle(LOUD, kept[0])
+    voice.keep(LOUD)
+    assert not os.path.exists(kept[0]) and not os.path.exists(f'{kept[0]}.txt')
+    assert lost_files() == ['.wav', '.wav']
+
+
+def open_line(frames):
+    segmenter = voice.Segmenter()
+    feed(segmenter, frames)
+    return segmenter
+
+
+def test_a_line_still_open_at_a_stop_is_kept():
+    voice.rescue(open_line([LOUD] * (voice.MIN_VOICED + voice.START_FRAMES)))
+    assert lost_files() == ['.wav']
+
+
+@pytest.mark.parametrize('frames', [[], [QUIET] * 5, [LOUD] * (voice.MIN_VOICED - 2)])
+def test_silence_or_a_click_at_a_stop_is_not_kept(frames):
+    voice.rescue(open_line(frames))
+    assert lost_files() == []
+
+
+def test_stopping_the_relay_mid_line_keeps_what_was_said(tmp_path):
+    bin_dir = tmp_path / 'bin'
+    bin_dir.mkdir()
+    started = tmp_path / 'started'
+    parec = bin_dir / 'parec'
+    parec.write_text(f'''#!{sys.executable}
+import pathlib, sys, time
+sys.stdout.buffer.write({LOUD!r} * 120)  # past the pipe buffer, so the relay has read it
+sys.stdout.buffer.flush()
+pathlib.Path({str(started)!r}).touch()
+time.sleep(5)
+''')
+    pkill = bin_dir / 'pkill'
+    pkill.write_text('#!/bin/sh\nexit 0\n')
+    parec.chmod(0o755)
+    pkill.chmod(0o755)
+    env = {'PATH': f'{bin_dir}:/usr/bin:/bin', 'HOME': str(tmp_path), 'XDG_RUNTIME_DIR': str(tmp_path)}
+    relay = subprocess.Popen([sys.executable, str(ROOT / 'scripts' / '__voice_mode.py')], env=env,
+                             stderr=subprocess.DEVNULL)
+    deadline = time.monotonic() + 5
+    while not started.exists() and time.monotonic() < deadline:
+        time.sleep(0.01)
+    time.sleep(0.2)
+    relay.terminate()
+    assert relay.wait(5) == 0  # a stop, so systemd does not call it a failure
+    assert len(list((tmp_path / 'voice-mode-lost').glob('*.wav'))) == 1
+
+
+def test_lost_prints_the_words_of_a_kept_line(monkeypatch, capsys):
+    Line(monkeypatch, 'Please remember this idea', set())
+    voice.handle(LOUD, voice.keep(LOUD))
+    capsys.readouterr()
+    voice.lost()
+    assert capsys.readouterr().out.split(' ', 1)[1] == 'Please remember this idea\n'
+
+
+def test_lost_transcribes_a_line_that_never_got_that_far(monkeypatch, capsys):
+    kept = voice.keep(LOUD)
+    monkeypatch.setattr(voice, 'transcribe', lambda pcm: f'{len(pcm)} bytes of words')
+    voice.lost()
+    assert capsys.readouterr().out.split(' ', 1)[1] == f'{len(LOUD)} bytes of words\n'
+    assert voice.recovered(kept) == f'{len(LOUD)} bytes of words'
+
+
+def test_lost_points_at_audio_it_cannot_turn_into_words(monkeypatch):
+    kept = voice.keep(LOUD)
+    monkeypatch.setattr(voice, 'transcribe', lambda _: '')
+    assert voice.recovered(kept) == f'(no words heard, audio in {kept})'
+
+    def broken(_):
+        raise subprocess.SubprocessError
+
+    monkeypatch.setattr(voice, 'transcribe', broken)
+    assert voice.recovered(kept) == f'(not transcribed, audio in {kept})'
+
+
+def test_lost_says_so_when_there_is_nothing(capsys):
+    voice.lost()
+    assert capsys.readouterr().out == 'voice-mode: no lost lines\n'
+
+
+class EndOfTest(BaseException):
+    pass
+
+
+def test_a_worker_outlives_a_bug(monkeypatch):
+    monkeypatch.setattr(voice, 'LINE_STATUS', os.devnull)
+    seen = []
+    clips = voice.queue.Queue()
+    clips.put('first')
+    clips.put('second')
+
+    def act(clip):
+        seen.append(clip)
+        raise (TypeError if clip == 'first' else EndOfTest)
+
+    with pytest.raises(EndOfTest):
+        voice.worker(clips, act)
+    assert seen == ['first', 'second']
+
+
+def test_a_light_that_cannot_change_costs_nothing(monkeypatch, tmp_path):
+    monkeypatch.setattr(voice, 'LINE_STATUS', str(tmp_path))  # a folder, so open() fails
+    voice.signal('sent')
+
+
+def test_a_notice_that_cannot_play_costs_no_later_call(monkeypatch):
+    line = Line(monkeypatch, 'three calls', {'codex', 'klod1'})
+
+    def broken(_):
+        raise subprocess.TimeoutExpired('piper', 30)
+
+    monkeypatch.setattr(voice, 'say', broken)
+    monkeypatch.setattr(voice, 'calls', lambda _: [('codex', 'one'), ('gone', 'two'), ('klod1', 'three')])
+    voice.handle(LOUD, voice.keep(LOUD))
+    assert [agent for agent, _ in line.sent] == ['codex', 'klod1']
+    assert lost_files() == ['.txt', '.wav']
