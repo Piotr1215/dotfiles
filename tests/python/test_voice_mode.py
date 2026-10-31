@@ -287,3 +287,118 @@ def timed_out(command, **_):
 def test_a_publish_that_fails_is_not_called_delivered(monkeypatch, failure):
     monkeypatch.setattr(voice.subprocess, 'run', failure)
     assert voice.deliver('klod2', 'the line') is False
+
+
+class Model:
+    """The live roster, and a stand-in for the quick decision model that records what it is shown."""
+
+    def __init__(self, monkeypatch, agents, choice='klod two', probability=0.9):
+        self.calls = []
+        presence = voice.Presence()
+        for agent in agents:
+            presence.beat(beat(agent))
+        monkeypatch.setattr(voice, 'PRESENCE', presence)
+
+        def decided(command, **options):
+            self.calls.append((command, options))
+            answer = {'choice': choice, 'probabilities': {choice: probability}}
+            return subprocess.CompletedProcess(command, 0, stdout=json.dumps({'answers': {'q': answer}}))
+
+        monkeypatch.setattr(voice.subprocess, 'run', decided)
+
+    def options(self):
+        [(command, _)] = self.calls
+        return set(command[command.index('-c') + 1].split(','))
+
+
+@pytest.mark.parametrize(('agent', 'said'), [
+    ('klod2', 'klod two'),
+    ('codex', 'codex'),
+    ('devops-1673', 'devops one six seven three'),
+    ('doc-42', 'doc four two'),
+    ('triage', 'gordon'),
+    ('intake', 'kendra'),
+])
+def test_a_name_is_offered_as_it_is_said_aloud(agent, said):
+    assert voice.spoken(agent) == said
+
+
+@pytest.mark.parametrize('heard', [
+    'Check check Claw two, run the tests.',
+    'Check, check. Claw two, run the tests.',
+    'CHECK-CHECK: Claw two, run the tests.',
+    'Stop, stop. Check, check. Claw two, run the tests.',
+])
+def test_the_wake_word_sends_the_line_to_the_name_it_sounds_like(monkeypatch, heard):
+    line = Line(monkeypatch, heard, {'klod2'})
+    Model(monkeypatch, ['klod1', 'klod2', 'codex'])
+    voice.handle(b'')
+    [(agent, text)] = line.sent
+    assert agent == 'klod2'
+    assert text.startswith('[PIOTR VIA VOICE] Piotr to klod2: Claw two, run the tests. (Local transcript')
+
+
+def test_the_model_sees_the_live_roster_and_only_the_opening_words(monkeypatch):
+    words = ' '.join(f'word{n}' for n in range(voice.FIT_WORDS + 3))
+    Line(monkeypatch, f'check check {words}', {'klod2'})
+    model = Model(monkeypatch, ['klod2', 'codex', 'devops-1673', 'human-via-signal'])
+    voice.handle(b'')
+    [(command, options)] = model.calls
+    assert model.options() == {'klod two', 'codex', 'devops one six seven three', 'gordon', 'kendra'}
+    assert options['input'] == ' '.join(words.split()[:voice.FIT_WORDS])
+    assert 'word0' not in ' '.join(command)  # argv reaches error messages, and the relay logs no words
+
+
+def test_an_agent_that_left_the_bus_is_not_offered(monkeypatch):
+    clock = [1000.0]
+    monkeypatch.setattr(voice.time, 'monotonic', lambda: clock[0])
+    Line(monkeypatch, 'check check claw two, go', {'klod2'})
+    model = Model(monkeypatch, ['klod1', 'klod2'])
+    clock[0] += voice.PEER_TTL_SECONDS
+    voice.PRESENCE.beat(beat('klod2'))
+    voice.handle(b'')
+    assert 'klod one' not in model.options()
+
+
+def test_gordon_away_gets_the_notice_not_the_nearest_agent(monkeypatch):
+    line = Line(monkeypatch, 'check check Gordon, what is on my list?', {'klod2'})
+    Model(monkeypatch, ['klod2'], choice='gordon')
+    voice.handle(b'')
+    assert line.sent == []
+    assert line.spoken == ['Voice mode to Piotr. No agent is registered as triage.']
+
+
+@pytest.mark.parametrize(('probability', 'sent'), [(voice.FIT_FLOOR, 1), (voice.FIT_FLOOR - 0.01, 0)])
+def test_a_name_that_sounds_like_nobody_goes_nowhere(monkeypatch, tmp_path, probability, sent):
+    line = Line(monkeypatch, 'check check reviewer, look at this', {'klod2'})
+    monkeypatch.setattr(voice, 'LINE_STATUS', str(tmp_path / 'status'))
+    Model(monkeypatch, ['klod2'], probability=probability)
+    voice.handle(b'')
+    assert len(line.sent) == sent
+    assert (tmp_path / 'status').read_text() == ('sent' if sent else 'dropped')
+
+
+@pytest.mark.parametrize('heard', [
+    'Please pass the salt.',
+    'Claw two, run the tests.',  # no wake word, so it stays on this machine
+    'Claude 2, run the tests.',  # an exact name needs no model
+    'Let me check check the build.',  # the wake word must open the line
+    'Check, check.',  # nothing after it to send
+])
+def test_nothing_reaches_the_model_without_the_wake_word_and_a_line(monkeypatch, heard):
+    Line(monkeypatch, heard, {'klod2'})
+    model = Model(monkeypatch, ['klod2'])
+    voice.handle(b'')
+    assert model.calls == []
+
+
+def test_a_failed_decision_carries_no_words_to_the_log(monkeypatch):
+    def failed(command, **options):
+        raise subprocess.CalledProcessError(1, command)
+
+    Line(monkeypatch, 'check check klod two, the private thing', {'klod2'})
+    Model(monkeypatch, ['klod2'])
+    monkeypatch.setattr(voice.subprocess, 'run', failed)
+    with pytest.raises(subprocess.SubprocessError) as err:
+        voice.handle(b'')
+    assert 'private' not in str(err.value)

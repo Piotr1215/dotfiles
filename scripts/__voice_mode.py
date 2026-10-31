@@ -6,6 +6,10 @@ with an agent's name ("Claude 2, run the tests") goes out as a DM to that name, 
 any agent registered on the bus can be addressed, Claude or Codex. All other speech
 is dropped. Run by voice-mode.service, switched from the toggle board.
 
+A line that opens "check check" needs no exact name, because Parakeet has never heard
+most of them. The next few words go to the quick decision model with the live roster,
+and the line goes to the name they sound most like. Nothing else leaves the machine.
+
 Lines travel as messages, never as keys, so speech cannot answer a permission prompt.
 They are not marked [HUMAN], because a transcript can be misheard.
 
@@ -66,6 +70,14 @@ VOICE_NOTE = ('(Local transcript, can be misheard. Answer in your chat. '
 PEER_TTL_SECONDS = 30  # agents-mcp-server's own: three missed beats and a peer is gone
 SND_TIMEOUT_SECONDS = 15
 
+QUICK_DECIDE = os.path.expanduser('~/.claude/scripts/__quick_decide.py')
+FIT_QUESTION = ('Speech recognition misheard an agent name at the start of this text. Read the text and each '
+                'choice aloud and pick the choice that sounds closest. A word that sounds like a number counts '
+                'as that number: to and too are two, won is one, ate is eight.')
+FIT_WORDS = 8  # room for a spoken issue id; the rest of the line stays here
+FIT_FLOOR = 0.6  # measured: named lines came back at 0.70 or more, absent names mostly under 0.55
+FIT_TIMEOUT_SECONDS = 10
+
 # Parakeet hears "klod" as cloud or plot, and Piotr's "Claude 2" as "Claude too".
 # Cloud and plot are everyday words, so they need a real number; "cloud to edge"
 # is not an address. Other names need a pause after them, so "Gordon is out" is talk.
@@ -75,7 +87,10 @@ ADDRESS = re.compile(
     re.IGNORECASE | re.DOTALL,
 )
 BUS_NAMES = {'gordon': 'triage', 'kendra': 'intake'}
+SPOKEN_NAMES = {bus: name for name, bus in BUS_NAMES.items()}
 SPOKEN_DIGITS = {'one': '1', 'won': '1', 'two': '2', 'to': '2', 'too': '2'}
+DIGIT_WORDS = 'zero one two three four five six seven eight nine'.split()
+WAKE = re.compile(r'^\W*(?:stop\W+stop\W+)?check\W+check\b\W*(.*)$', re.IGNORECASE | re.DOTALL)
 STOP_WORD = re.compile(r'\W*stop\W+stop\W*', re.IGNORECASE)
 # Every spoken reply opens "klod1 to Piotr:", so one that reached the mic must not
 # route back to the agent that said it.
@@ -92,6 +107,12 @@ def route(text):
         return BUS_NAMES.get(name, name), match[4]
     number = (match[1] or match[2]).lower()
     return f'klod{SPOKEN_DIGITS.get(number, number)}', match[4]
+
+
+def spoken(agent):
+    """An agent's name as it is said aloud: klod2 is klod two, triage is gordon."""
+    name = SPOKEN_NAMES.get(agent, agent).replace('-', ' ')
+    return ' '.join(re.sub(r'\d', lambda digit: f' {DIGIT_WORDS[int(digit[0])]} ', name).split())
 
 
 def rms(frame):
@@ -150,6 +171,9 @@ class Presence:
         last = self.last_beat.get(name)
         return last is not None and time.monotonic() - last < PEER_TTL_SECONDS
 
+    def live(self):
+        return [name for name in list(self.last_beat) if self.has(name)]
+
 
 PRESENCE = Presence()
 
@@ -157,6 +181,24 @@ PRESENCE = Presence()
 def registered(name):
     """True while name is on the bus. snd does not check, and a DM to nobody is lost."""
     return PRESENCE.has(name)
+
+
+def roster():
+    """Spoken name to bus name for everyone who can be called. Gordon and Kendra stay
+    on it while they are away, so calling one gets the notice, not the nearest agent."""
+    names = {*PRESENCE.live(), *BUS_NAMES.values()}
+    return {spoken(name): name for name in sorted(names) if not name.startswith('human-via-')}
+
+
+def closest(heard):
+    """Return the agent whose name the line's opening sounds most like, if one sounds close."""
+    names = roster()
+    # On stdin, not argv: argv reaches error messages, and the relay logs no words.
+    decided = subprocess.run([QUICK_DECIDE, '-j', '-c', ','.join(names), FIT_QUESTION],
+                             input=' '.join(heard.split()[:FIT_WORDS]), capture_output=True,
+                             text=True, timeout=FIT_TIMEOUT_SECONDS, check=True)
+    answer = json.loads(decided.stdout)['answers']['q']
+    return names[answer['choice']] if answer['probabilities'][answer['choice']] >= FIT_FLOOR else None
 
 
 def deliver(agent, text):
@@ -199,9 +241,18 @@ def signal(status):
         marker.write(status)
 
 
+def address(text):
+    """Return (agent, message) for a line called with the wake word or opening with a name."""
+    called = WAKE.match(text.strip())
+    if not called or not called[1]:
+        return route(text)
+    agent = closest(called[1])
+    return (agent, called[1]) if agent else None
+
+
 def handle(pcm):
     """Send one utterance to the agent it names, if it names one."""
-    addressed = route(transcribe(pcm))
+    addressed = address(transcribe(pcm))
     if not addressed:
         print('voice-mode: line names no agent, dropped', flush=True)
         signal('dropped')
