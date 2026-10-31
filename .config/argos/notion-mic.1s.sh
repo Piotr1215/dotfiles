@@ -7,8 +7,9 @@
 #
 # Click the panel item -> "Turn ON + open Notion" / "Turn OFF".
 #
-# Refresh: 5s (from filename suffix). The same script handles dropdown
-# actions when invoked with --on / --off / --open / --restart.
+# Refresh: 1s (from filename suffix), so an agent's name blinks as a spoken line
+# lands. The same script handles dropdown actions when invoked with --on / --off
+# / --open / --restart.
 #
 # See: https://github.com/Piotr1215/claude/issues/137
 
@@ -25,6 +26,9 @@ readonly notion_window_re='Notion - Google Chrome'
 # Flips go through the toggle board, which owns the on and off logic.
 readonly toggles="${TOGGLES_BIN:-$HOME/dev/dotfiles/scripts/__toggles.sh}"
 readonly voice_replies_off_flag="${KLOD_VOICE_STATE:-$HOME/.local/state/klod-voice}/off"
+# __voice_mode.py writes the agent's name here after it submits a line.
+readonly delivered="${XDG_RUNTIME_DIR:-/run/user/$UID}/voice-mode-delivered"
+readonly blink_seconds=4
 
 # --- side-effect actions (invoked from dropdown menu items) ---------------
 
@@ -78,7 +82,7 @@ else
 fi
 
 # Read directly: the board's __render runs every toggle's status, too heavy for
-# a 5s refresh.
+# a 1s refresh.
 if systemctl --user is-active --quiet voice-mode.service; then
 	voice_listening="on"
 	voice_dot=" <span color='#44aaff'>●</span>"
@@ -96,10 +100,23 @@ fi
 # UP   = mic icon + green dot; visually obvious the routing is live.
 # DOWN = dim mic icon only.
 # A blue dot means voice mode is listening on the headset.
+# A blinking name behind them is the agent that just took a spoken line.
 if [[ "$state" == "up" ]]; then
-	echo "🎙 <span color='#44ff44'>●</span>${voice_dot} | font='monospace' size=${PANEL_SIZE}"
+	mic="🎙 <span color='#44ff44'>●</span>${voice_dot}"
 else
-	echo "<span color='#888888'>🎙</span>${voice_dot} | font='monospace' size=${PANEL_SIZE}"
+	mic="<span color='#888888'>🎙</span>${voice_dot}"
+fi
+
+# Two button lines start argos's line cycler, which is the blink; dropdown=false
+# keeps them out of the menu. A name puts letters on the line, so it takes the
+# lettered size (see panel_label_size).
+if [[ -f "$delivered" ]] && (($(date +%s) - $(stat -c %Y "$delivered") < blink_seconds)); then
+	agent=$(<"$delivered")
+	name_size=$(panel_label_size 11)
+	echo "${mic} <span color='#44ff44'>${agent}</span> | font='monospace' size=${name_size} dropdown=false"
+	echo "${mic} <span color='#222222'>${agent}</span> | font='monospace' size=${name_size} dropdown=false"
+else
+	echo "${mic} | font='monospace' size=${PANEL_SIZE}"
 fi
 
 # --- dropdown -------------------------------------------------------------
