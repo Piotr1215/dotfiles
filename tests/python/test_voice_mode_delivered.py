@@ -45,6 +45,13 @@ def test_the_latest_line_replaces_the_last_outcome(monkeypatch, marker):
     assert marker.read_text() == 'sent'
 
 
+def test_the_stop_word_is_not_a_dropped_line(monkeypatch, marker, capsys):
+    marker.write_text('sent')
+    hear(monkeypatch, 'Stop, stop.')
+    assert marker.read_text() == 'sent'
+    assert 'dropped' not in capsys.readouterr().out
+
+
 def test_a_line_that_came_back_with_no_words_is_not_lost_in_silence(monkeypatch, marker):
     hear(monkeypatch, '  ')
     assert marker.read_text() == 'dropped'

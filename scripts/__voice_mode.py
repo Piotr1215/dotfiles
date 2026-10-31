@@ -252,7 +252,10 @@ def address(text):
 
 def handle(pcm):
     """Send one utterance to the agent it names, if it names one."""
-    addressed = address(transcribe(pcm))
+    text = transcribe(pcm)
+    if STOP_WORD.fullmatch(text):  # check_stop already acted on it, moments earlier
+        return
+    addressed = address(text)
     if not addressed:
         print('voice-mode: line names no agent, dropped', flush=True)
         signal('dropped')
