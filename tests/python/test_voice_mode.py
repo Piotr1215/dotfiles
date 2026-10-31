@@ -2,6 +2,8 @@
 import array
 import fcntl
 import importlib.util
+import signal
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -100,6 +102,38 @@ def test_endless_speech_is_cut_at_the_limit():
     assert len(cuts[0]) == voice.MAX_FRAMES * voice.FRAME_BYTES
 
 
+def bursts(segmenter, frames):
+    found = []
+    for frame in frames:
+        segmenter.push(frame)
+        if burst := segmenter.burst():
+            found.append(burst)
+    return found
+
+
+def test_a_short_burst_is_offered_as_soon_as_it_goes_quiet():
+    speech = [LOUD] * voice.MIN_VOICED
+    quiet = [QUIET] * voice.QUICK_END
+    assert bursts(voice.Segmenter(), speech + quiet) == [b''.join(speech + quiet)]
+
+
+def test_a_burst_is_offered_once_per_pause_and_leaves_the_line_open():
+    segmenter = voice.Segmenter()
+    speech = [LOUD] * voice.MIN_VOICED
+    assert len(bursts(segmenter, speech + [QUIET] * (voice.END_FRAMES - 1))) == 1
+    assert len(feed(segmenter, [QUIET])) == 1
+
+
+def test_a_click_is_never_offered_as_a_burst():
+    click = [LOUD] * (voice.MIN_VOICED - 1)
+    assert bursts(voice.Segmenter(), click + [QUIET] * voice.QUICK_END) == []
+
+
+def test_a_long_line_is_never_offered_as_a_burst():
+    line = [LOUD] * voice.QUICK_MAX
+    assert bursts(voice.Segmenter(), line + [QUIET] * voice.QUICK_END) == []
+
+
 def claude_box(*rows):
     return '\n'.join(['transcript', RULE, *rows, RULE, '  status line'])
 
@@ -164,6 +198,48 @@ def test_panes_maps_agent_names_and_skips_unnamed_panes(monkeypatch):
     listing = {'#{@agent_name} #{pane_id}': ' %1\nklod2 %11\n\nklod1 %37\n'}
     monkeypatch.setattr(voice, 'tmux', lambda *args: listing[args[-1]])
     assert voice.panes() == {'klod2': '%11', 'klod1': '%37'}
+
+
+def test_silence_ends_speech_and_its_queue_but_nothing_else(monkeypatch):
+    monkeypatch.setattr(voice, 'SINK', 'test-sink-for-silence')
+    play = 'pw-play --target test-sink-for-silence a.wav'
+    spawn = lambda cmdline: subprocess.Popen([cmdline, '30'], executable='sleep')
+    speech = [spawn(play), spawn(f'timeout 60 {play}'), spawn(f'flock -w 90 lock timeout 60 {play}')]
+    others = [spawn('pw-play --target other-sink a.wav'), spawn(f'zsh -c {play}')]
+    try:
+        voice.silence()
+        assert [process.wait(timeout=5) for process in speech] == [-signal.SIGTERM] * 3
+        assert [process.poll() for process in others] == [None, None]
+    finally:
+        for process in speech + others:
+            process.kill()
+
+
+def test_silence_with_nothing_playing_is_not_an_error(monkeypatch):
+    monkeypatch.setattr(voice, 'SINK', 'test-sink-with-no-speech')
+    voice.silence()
+
+
+@pytest.mark.parametrize(('heard', 'stopped'), [
+    ('Stop, stop.', True),  # Parakeet's real output for "Stop stop."
+    ('stop stop', True),
+    ('STOP! STOP!', True),
+    ('Stop.', False),
+    ('Stop talking.', False),
+    ('Stop stop the tests', False),
+    ('Please stop, stop it', False),
+    ('', False),
+])
+def test_only_the_whole_stop_word_silences_anything(monkeypatch, capsys, heard, stopped):
+    silenced = []
+    typed = []
+    monkeypatch.setattr(voice, 'transcribe', lambda _: heard)
+    monkeypatch.setattr(voice, 'silence', lambda: silenced.append(True))
+    monkeypatch.setattr(voice, 'tmux', lambda *args: typed.append(args) or '')
+    voice.check_stop(b'')
+    assert silenced == ([True] if stopped else [])
+    assert typed == []  # speech stops, the agents keep working
+    assert capsys.readouterr().out == ('voice-mode: stop word heard\n' if stopped else '')
 
 
 def test_speaking_follows_the_shared_lock(tmp_path, monkeypatch):

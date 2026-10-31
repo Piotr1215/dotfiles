@@ -8,6 +8,9 @@ and dropped. Run by voice-mode.service, switched from the toggle board.
 Permission prompts stay keyboard-only: a pane showing one has no empty composer,
 so nothing is typed into it and Enter can never answer it.
 
+Saying "stop stop" on its own cuts all speech and the replies queued behind it.
+The agents keep working; only their voices stop.
+
 Handy must stay on the system default mic, with the headset as that default.
 A selected mic is opened raw, which fails while this stream holds the device,
 and Handy then erases the selection.
@@ -32,6 +35,9 @@ SINK = 'alsa_output.usb-Logitech_PRO_X_Wireless_Gaming_Headset-00.analog-stereo'
 HANDY = os.path.expanduser('~/.local/bin/handy')
 VOICE = os.path.expanduser('~/.local/share/piper-voices/lessac-medium/en_US-lessac-medium.onnx')
 VOICE_LOCK = os.path.expanduser('~/.local/state/klod-voice.lock')
+# The top bar flashes the name in here, see .config/argos/voice-line.1s.sh.
+DELIVERED = os.path.join(os.environ.get('XDG_RUNTIME_DIR', f'/run/user/{os.getuid()}'),
+                         'voice-mode-delivered')
 
 RATE = 16000
 FRAME_BYTES = 960  # 30 ms of s16le mono
@@ -43,6 +49,8 @@ END_FRAMES = 84  # 2.5 s of quiet closes it; Piotr pauses to think mid-line
 MIN_VOICED = 10  # shorter than 300 ms of speech is a click or a cough
 PRE_ROLL = 15  # 450 ms kept up to the onset, so first words survive
 MAX_FRAMES = 2000  # 60 s, pauses included; audio past the cut has no name and is lost
+QUICK_END = 20  # 0.6 s of quiet is enough to test a short burst for the stop word
+QUICK_MAX = 100  # 3 s; anything longer is a line, not the stop word
 
 READY_WAIT_SECONDS = 20
 
@@ -55,6 +63,7 @@ ADDRESS = re.compile(
     re.IGNORECASE | re.DOTALL,
 )
 SPOKEN_DIGITS = {'one': '1', 'won': '1', 'two': '2', 'to': '2', 'too': '2'}
+STOP_WORD = re.compile(r'\W*stop\W+stop\W*', re.IGNORECASE)
 EMPTY_COMPOSER = {'', 'Press up to edit queued messages', 'Ask Codex to do anything'}
 
 
@@ -100,6 +109,13 @@ class Segmenter:
             return None
         utterance, self.utterance, self.onset = self.utterance, None, 0
         return b''.join(utterance) if self.voiced >= MIN_VOICED else None
+
+    def burst(self):
+        """Return the open utterance at the moment a short one goes quiet."""
+        if self.utterance is None or self.quiet != QUICK_END:
+            return None
+        short = len(self.utterance) <= QUICK_MAX and self.voiced >= MIN_VOICED
+        return b''.join(self.utterance) if short else None
 
 
 def composer_ready(capture, cursor_y):
@@ -151,6 +167,11 @@ def speaking():
     return False
 
 
+def silence():
+    """End the speech playing now and the replies queued behind it."""
+    subprocess.run(['pkill', '-f', f'^(flock .*|timeout .*)?pw-play --target {SINK}'], check=False)
+
+
 def say(text):
     with tempfile.NamedTemporaryFile(suffix='.wav') as speech:
         subprocess.run(['piper', '-m', VOICE, '-f', speech.name], input=text, text=True,
@@ -183,23 +204,34 @@ def handle(pcm):
         say(f'Voice mode to Piotr. No pane is named {agent}.')
     elif deliver(pane, f'Piotr to {agent} (voice): {message}'):
         print(f'voice-mode: line sent to {agent}', flush=True)
+        with open(DELIVERED, 'w', encoding='utf-8') as marker:
+            marker.write(agent)
     else:
         say(f'Voice mode to Piotr. {agent} is not ready, so that line was dropped.')
 
 
-def worker(utterances):
+def check_stop(pcm):
+    """Silence every agent when a short burst is the stop word."""
+    if STOP_WORD.fullmatch(transcribe(pcm)):
+        silence()
+        print('voice-mode: stop word heard', flush=True)
+
+
+def worker(clips, act):
     """Transcribe off the capture loop, which must keep draining the mic."""
     while True:
-        pcm = utterances.get()
+        pcm = clips.get()
         try:
-            handle(pcm)
+            act(pcm)
         except (OSError, subprocess.SubprocessError, ValueError, KeyError) as err:
             print(f'voice-mode: {type(err).__name__}: {err}', file=sys.stderr, flush=True)
 
 
 def main():
     utterances = queue.Queue()
-    threading.Thread(target=worker, args=(utterances,), daemon=True).start()
+    bursts = queue.Queue()  # its own worker: a slow delivery must not hold up the stop word
+    threading.Thread(target=worker, args=(utterances, handle), daemon=True).start()
+    threading.Thread(target=worker, args=(bursts, check_stop), daemon=True).start()
     mic = subprocess.Popen(['parec', f'--device={SOURCE}', f'--rate={RATE}', '--channels=1',
                             '--format=s16le', '--latency-msec=30'], stdout=subprocess.PIPE)
     segmenter = Segmenter()
@@ -207,6 +239,8 @@ def main():
         pcm = segmenter.push(frame)
         if pcm and not speaking():
             utterances.put(pcm)
+        if burst := segmenter.burst():
+            bursts.put(burst)
     sys.exit('voice-mode: microphone stream ended')
 
 
