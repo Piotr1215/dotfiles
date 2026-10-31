@@ -26,8 +26,9 @@ voice_mode_is() {
   touch "${KLOD_VOICE_STATE}/off"
   run bash "$SCRIPT"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"--⚪ Hands-free listening: off, click to turn on | bash='\"${TOGGLES_BIN}\" __run voice-mode on'"* ]]
-  [[ "$output" == *"--⚪ Spoken replies (Piper): off, click to turn on | bash='\"${TOGGLES_BIN}\" __run voice-replies on'"* ]]
+  [[ "$output" == *$'\n'"<b>Voice bridge</b> | font=monospace"* ]]
+  [[ "$output" == *$'\n'"⚪ Hands-free listening: off, click to turn on | bash='\"${TOGGLES_BIN}\" __run voice-mode on'"* ]]
+  [[ "$output" == *$'\n'"⚪ Spoken replies (Piper): off, click to turn on | bash='\"${TOGGLES_BIN}\" __run voice-replies on'"* ]]
   [[ "$output" != *"#44aaff"* ]]
   [[ "$output" != *"All off"* ]]
 }
@@ -37,16 +38,16 @@ voice_mode_is() {
   touch "${KLOD_VOICE_STATE}/off"
   run bash "$SCRIPT"
   [[ "${lines[0]}" == *"#44aaff"* ]]
-  [[ "$output" == *"--🟢 Hands-free listening: on, click to turn off | bash='\"${TOGGLES_BIN}\" __run voice-mode off'"* ]]
-  [[ "$output" == *"--⚪ Spoken replies (Piper): off"* ]]
-  [[ "$output" == *"--🛑 All off (normal mode) | bash='\"${SCRIPT}\" --voice-off'"* ]]
+  [[ "$output" == *$'\n'"🟢 Hands-free listening: on, click to turn off | bash='\"${TOGGLES_BIN}\" __run voice-mode off'"* ]]
+  [[ "$output" == *$'\n'"⚪ Spoken replies (Piper): off"* ]]
+  [[ "$output" == *$'\n'"🛑 All off (normal mode) | bash='\"${SCRIPT}\" --voice-off'"* ]]
 }
 
 @test "spoken replies alone still offer the way back to normal" {
   voice_mode_is 3
   run bash "$SCRIPT"
-  [[ "$output" == *"--🟢 Spoken replies (Piper): on, click to turn off | bash='\"${TOGGLES_BIN}\" __run voice-replies off'"* ]]
-  [[ "$output" == *"--🛑 All off (normal mode)"* ]]
+  [[ "$output" == *$'\n'"🟢 Spoken replies (Piper): on, click to turn off | bash='\"${TOGGLES_BIN}\" __run voice-replies off'"* ]]
+  [[ "$output" == *$'\n'"🛑 All off (normal mode)"* ]]
 }
 
 @test "all off switches both toggles off through the board" {

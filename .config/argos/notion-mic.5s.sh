@@ -130,20 +130,20 @@ echo "---"
 echo "<i>In Notion's recorder pick \"NotionMic\".</i> | font=monospace"
 echo "---"
 
-# One submenu row per board toggle: voice_item <toggle> <label> <on|off>
+# One menu row per board toggle: voice_item <toggle> <label> <on|off>
 voice_item() {
 	if [[ "$3" == "on" ]]; then
-		echo "--🟢 $2: on, click to turn off | bash='\"$toggles\" __run $1 off' terminal=false refresh=true"
+		echo "🟢 $2: on, click to turn off | bash='\"$toggles\" __run $1 off' terminal=false refresh=true"
 	else
-		echo "--⚪ $2: off, click to turn on | bash='\"$toggles\" __run $1 on' terminal=false refresh=true"
+		echo "⚪ $2: off, click to turn on | bash='\"$toggles\" __run $1 on' terminal=false refresh=true"
 	fi
 }
 
-echo "🎧 Voice bridge | font=monospace"
+echo "<b>Voice bridge</b> | font=monospace"
 voice_item voice-mode "Hands-free listening" "$voice_listening"
 voice_item voice-replies "Spoken replies (Piper)" "$voice_replies"
 if [[ "$voice_listening" == "on" || "$voice_replies" == "on" ]]; then
-	echo "--🛑 All off (normal mode) | bash='\"$0\" --voice-off' terminal=false refresh=true"
+	echo "🛑 All off (normal mode) | bash='\"$0\" --voice-off' terminal=false refresh=true"
 fi
 
 echo "---"
