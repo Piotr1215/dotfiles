@@ -15,13 +15,13 @@ def marker(monkeypatch, tmp_path):
     path = tmp_path / 'voice-mode-delivered'
     monkeypatch.setattr(voice, 'DELIVERED', str(path))
     monkeypatch.setattr(voice, 'say', lambda _: None)
-    monkeypatch.setattr(voice, 'panes', lambda: {'klod2': '%11'})
+    monkeypatch.setattr(voice, 'registered', lambda name: name == 'klod2')
     return path
 
 
 def hear(monkeypatch, heard, delivered=True):
     monkeypatch.setattr(voice, 'transcribe', lambda _: heard)
-    monkeypatch.setattr(voice, 'deliver', lambda pane, text: delivered)
+    monkeypatch.setattr(voice, 'deliver', lambda agent, text: delivered)
     voice.handle(b'')
 
 
@@ -40,7 +40,7 @@ def test_each_delivery_replaces_the_name(monkeypatch, marker):
     ('Please pass the salt', True),
     ('Codex, fix the test', True),
     ('Claude 2, yes', False),
-], ids=['names no agent', 'no such pane', 'agent not ready'])
+], ids=['names no agent', 'no such agent', 'agent not ready'])
 def test_a_line_that_reached_nobody_leaves_no_signal(monkeypatch, marker, heard, delivered):
     hear(monkeypatch, heard, delivered)
     assert not marker.exists()

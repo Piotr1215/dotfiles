@@ -2,6 +2,7 @@
 import array
 import fcntl
 import importlib.util
+import json
 import os
 import signal
 import subprocess
@@ -16,8 +17,6 @@ spec.loader.exec_module(voice)
 
 LOUD = array.array('h', [1000] * 480).tobytes()
 QUIET = bytes(960)
-RULE = '─' * 40
-NBSP = ' '
 
 
 @pytest.mark.parametrize(('heard', 'agent', 'message'), [
@@ -27,6 +26,10 @@ NBSP = ' '
     ('Claude 2, check the build.', 'klod2', 'check the build.'),
     ('Claude 1. Stop', 'klod1', 'Stop'),
     ('Codex, fix the failing test', 'codex', 'fix the failing test'),
+    # Gordon and Kendra answer on the bus as triage and intake.
+    ('Gordon, what is on my list?', 'triage', 'what is on my list?'),
+    ('Hey Gordon, look at this.', 'triage', 'look at this.'),
+    ('Kendra, check the inbox', 'intake', 'check the inbox'),
     # Parakeet's real output for Piotr's own spoken "Claude 2, can you hear me?"
     ('Claude too, can you hear me?', 'klod2', 'can you hear me?'),
     ('Claude to, can you hear me?', 'klod2', 'can you hear me?'),
@@ -49,6 +52,8 @@ def test_named_line_reaches_that_agent(heard, agent, message):
     'Plot too thin to finish',
     'Claude is great',
     'Codex is great',  # no pause after the name, so it is talk about Codex
+    'Gordon is out today',
+    'Kendra said no',
     'The plot 2 twist',  # the name must open the line
     '',
 ])
@@ -137,72 +142,6 @@ def test_a_long_line_is_never_offered_as_a_burst():
     assert bursts(voice.Segmenter(), line + [QUIET] * voice.QUICK_END) == []
 
 
-def claude_box(*rows):
-    return '\n'.join(['transcript', RULE, *rows, RULE, '  status line'])
-
-
-@pytest.mark.parametrize(('capture', 'cursor', 'ready'), [
-    (claude_box(f'❯{NBSP}'), 0, True),
-    (claude_box(f'❯{NBSP}Press up to edit queued messages'), 0, True),
-    (claude_box(f'❯{NBSP}half typed thought'), 0, False),
-    (claude_box(f'❯{NBSP}', '  second row of a draft'), 0, False),
-    # A permission dialog also opens with the ❯ marker. Enter would approve it.
-    (claude_box('❯ 1. Yes', '  2. No'), 0, False),
-    (claude_box('Do you want to proceed?', '❯ 1. Yes', '  2. No'), 0, False),
-    ('› Ask Codex to do anything\n\n  ? for shortcuts', 0, True),
-    ('›\n\n  ? for shortcuts', 0, True),
-    ('› half typed thought\n\n  ? for shortcuts', 0, False),
-    # An old Codex prompt in the scrollback is not the live composer.
-    ('› old prompt\nworking\n', 1, False),
-    ('plain shell output', 0, False),
-])
-def test_composer_ready(capture, cursor, ready):
-    assert voice.composer_ready(capture, cursor) is ready
-
-
-class FakeTmux:
-    def __init__(self, composer):
-        self.composer = composer
-        self.calls = []
-
-    def __call__(self, *args):
-        self.calls.append(args)
-        if args[0] == 'capture-pane':
-            return self.composer
-        if args[0] == 'display-message':
-            return '0'
-        return ''
-
-    def writes(self):
-        return [c for c in self.calls if c[0] in ('set-option', 'send-keys')]
-
-
-def test_deliver_stamps_the_pane_then_types_then_submits_once(monkeypatch):
-    fake = FakeTmux(claude_box(f'❯{NBSP}'))
-    monkeypatch.setattr(voice, 'tmux', fake)
-    assert voice.deliver('%11', 'Piotr to klod2 (voice): run the tests') is True
-    stamp, typed, enter = fake.writes()
-    assert stamp[:4] == ('set-option', '-p', '-t', '%11')
-    assert stamp[4] == '@agent_injected_at'
-    assert typed == ('send-keys', '-t', '%11', '-l', '--', 'Piotr to klod2 (voice): run the tests')
-    assert enter == ('send-keys', '-t', '%11', 'Enter')
-
-
-def test_deliver_sends_nothing_to_a_pane_showing_a_dialog(monkeypatch):
-    fake = FakeTmux(claude_box('❯ 1. Yes', '  2. No'))
-    monkeypatch.setattr(voice, 'tmux', fake)
-    monkeypatch.setattr(voice, 'READY_WAIT_SECONDS', 2)
-    monkeypatch.setattr(voice.time, 'sleep', lambda _: None)
-    assert voice.deliver('%11', 'Piotr to klod2 (voice): yes') is False
-    assert fake.writes() == []
-
-
-def test_panes_maps_agent_names_and_skips_unnamed_panes(monkeypatch):
-    listing = {'#{@agent_name} #{pane_id}': ' %1\nklod2 %11\n\nklod1 %37\n'}
-    monkeypatch.setattr(voice, 'tmux', lambda *args: listing[args[-1]])
-    assert voice.panes() == {'klod2': '%11', 'klod1': '%37'}
-
-
 def test_silence_ends_speech_and_its_queue_but_nothing_else(monkeypatch):
     monkeypatch.setattr(voice, 'SINK', 'test-sink-for-silence')
     play = 'pw-play --target test-sink-for-silence a.wav'
@@ -238,7 +177,7 @@ def test_only_the_whole_stop_word_silences_anything(monkeypatch, capsys, heard, 
     typed = []
     monkeypatch.setattr(voice, 'transcribe', lambda _: heard)
     monkeypatch.setattr(voice, 'silence', lambda: silenced.append(True))
-    monkeypatch.setattr(voice, 'tmux', lambda *args: typed.append(args) or '')
+    monkeypatch.setattr(voice, 'deliver', lambda *args: typed.append(args))
     voice.check_stop(b'')
     assert silenced == ([True] if stopped else [])
     assert typed == []  # speech stops, the agents keep working
@@ -256,29 +195,31 @@ def test_speaking_follows_the_shared_lock(tmp_path, monkeypatch):
 
 
 class Line:
-    """Run handle() with the mic, panes and speech replaced."""
+    """Run handle() with the mic, bus and speech replaced."""
 
-    def __init__(self, monkeypatch, heard, panes, delivered=True):
-        self.typed = []
+    def __init__(self, monkeypatch, heard, agents, delivered=True):
+        self.sent = []
         self.spoken = []
         monkeypatch.setattr(voice, 'transcribe', lambda _: heard)
-        monkeypatch.setattr(voice, 'panes', lambda: panes)
+        monkeypatch.setattr(voice, 'registered', lambda name: name in agents)
         monkeypatch.setattr(voice, 'say', self.spoken.append)
-        monkeypatch.setattr(voice, 'deliver', lambda p, t: self.typed.append((p, t)) or delivered)
+        monkeypatch.setattr(voice, 'deliver', lambda a, t: self.sent.append((a, t)) or delivered)
         monkeypatch.setattr(voice, 'DELIVERED', os.devnull)  # the live marker flashes the panel
 
 
 def test_handle_labels_who_is_talking_to_whom(monkeypatch):
-    line = Line(monkeypatch, 'Claude 2, run the tests.', {'klod2': '%11'})
+    line = Line(monkeypatch, 'Claude 2, run the tests.', {'klod2'})
     voice.handle(b'')
-    assert line.typed == [('%11', 'Piotr to klod2 (voice): run the tests.')]
+    assert line.sent == [('klod2', '[PIOTR VIA VOICE] Piotr to klod2: run the tests. '
+                          '(Local transcript, can be misheard. Answer in your chat. '
+                          'Confirm anything destructive with him first.)')]
     assert line.spoken == []
 
 
 def test_handle_stays_silent_on_unaddressed_speech(monkeypatch):
-    line = Line(monkeypatch, 'Please pass the salt.', {'klod2': '%11'})
+    line = Line(monkeypatch, 'Please pass the salt.', {'klod2'})
     voice.handle(b'')
-    assert line.typed == []
+    assert line.sent == []
     assert line.spoken == []
 
 
@@ -287,19 +228,71 @@ def test_handle_stays_silent_on_unaddressed_speech(monkeypatch):
     ('The private call went fine', 'voice-mode: line names no agent, dropped\n'),
 ])
 def test_handle_logs_the_outcome_but_never_the_words(monkeypatch, capsys, heard, logged):
-    Line(monkeypatch, heard, {'klod2': '%11'})
+    Line(monkeypatch, heard, {'klod2'})
     voice.handle(b'')
     assert capsys.readouterr().out == logged
 
 
-def test_handle_says_so_when_no_pane_has_that_name(monkeypatch):
-    line = Line(monkeypatch, 'Codex, fix the test', {'klod2': '%11'})
+def test_handle_says_so_when_no_agent_has_that_name(monkeypatch):
+    line = Line(monkeypatch, 'Codex, fix the test', {'klod2'})
     voice.handle(b'')
-    assert line.typed == []
-    assert line.spoken == ['Voice mode to Piotr. No pane is named codex.']
+    assert line.sent == []
+    assert line.spoken == ['Voice mode to Piotr. No agent is registered as codex.']
 
 
 def test_handle_says_so_when_the_agent_cannot_take_the_line(monkeypatch):
-    line = Line(monkeypatch, 'Claude 2, yes', {'klod2': '%11'}, delivered=False)
+    line = Line(monkeypatch, 'Claude 2, yes', {'klod2'}, delivered=False)
     voice.handle(b'')
-    assert line.spoken == ['Voice mode to Piotr. klod2 is not ready, so that line was dropped.']
+    assert line.spoken == ['Voice mode to Piotr. klod2 did not get that line.']
+
+
+def beat(name):
+    return json.dumps({'agent_id': f'{name}-1', 'name': name, 'group': 'default', 'host': 'serval', 'ts': 1})
+
+
+def test_an_agent_is_registered_only_while_its_beats_arrive(monkeypatch):
+    clock = [1000.0]
+    monkeypatch.setattr(voice.time, 'monotonic', lambda: clock[0])
+    presence = voice.Presence()
+    assert presence.has('klod2') is False
+    presence.beat(beat('klod2'))
+    clock[0] += voice.PEER_TTL_SECONDS - 1
+    assert presence.has('klod2') is True
+    clock[0] += 1
+    assert presence.has('klod2') is False
+
+
+@pytest.mark.parametrize('noise', ['', 'Subscribing on agents.presence', '[1]', '{"host": "serval"}'])
+def test_anything_but_a_beat_registers_nobody(noise):
+    presence = voice.Presence()
+    presence.beat(noise)
+    assert presence.last_beat == {}
+
+
+def test_a_line_goes_out_as_a_bus_dm_never_marked_human(monkeypatch):
+    calls = []
+
+    def published(command, **options):
+        calls.append((command, options))
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr(voice.subprocess, 'run', published)
+    assert voice.deliver('klod2', 'the line') is True
+    [(command, options)] = calls
+    assert command == ['node', voice.SND, 'klod2', 'the line']
+    assert options['env']['SND_FROM'] == 'human-via-voice'
+    assert options['env']['AGENTS_NATS_URL'] == voice.NATS_URL
+
+
+def refused(command, **_):
+    return subprocess.CompletedProcess(command, 2)
+
+
+def timed_out(command, **_):
+    raise subprocess.TimeoutExpired(command, voice.SND_TIMEOUT_SECONDS)
+
+
+@pytest.mark.parametrize('failure', [refused, timed_out])
+def test_a_publish_that_fails_is_not_called_delivered(monkeypatch, failure):
+    monkeypatch.setattr(voice.subprocess, 'run', failure)
+    assert voice.deliver('klod2', 'the line') is False
