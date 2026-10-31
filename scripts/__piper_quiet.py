@@ -8,7 +8,8 @@ mostly threads spinning idle. These options cost 4.5 s and arrive no later.
 All speech comes through here, replies and relay notices alike, so two files in the
 voice state directory reach all of it from the next line, with no restart:
   tempo  Piper's length scale: below 1 is faster, above 1 is slower.
-  voice  a folder name under the voices directory.
+  voice  a folder name under the voices directory. A speaker that sets
+         KLOD_VOICE_MODEL keeps its own voice through this swap.
 A value that cannot be used is ignored, so a typo never costs the speech.
 """
 import glob
@@ -44,7 +45,7 @@ def with_settings(args):
     args = list(args)
     voices = os.environ.get('KLOD_VOICE_DIR', os.path.expanduser('~/.local/share/piper-voices'))
     models = glob.glob(os.path.join(voices, glob.escape(setting('voice')), '*.onnx')) if setting('voice') else []
-    if models and '-m' in args:
+    if models and '-m' in args and 'KLOD_VOICE_MODEL' not in os.environ:
         args[args.index('-m') + 1] = models[0]
     try:
         tempo = float(setting('tempo'))

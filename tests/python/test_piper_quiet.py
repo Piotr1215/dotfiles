@@ -47,6 +47,7 @@ def settings(monkeypatch, tmp_path):
     spec.loader.exec_module(quiet)
     monkeypatch.setenv('KLOD_VOICE_STATE', str(tmp_path))
     monkeypatch.setenv('KLOD_VOICE_DIR', str(tmp_path / 'voices'))
+    monkeypatch.delenv('KLOD_VOICE_MODEL', raising=False)
     return quiet, tmp_path
 
 
@@ -80,6 +81,17 @@ def test_a_chosen_voice_replaces_the_model(settings):
     model.touch()
     (state / 'voice').write_text('ryan-medium\n')
     assert quiet.with_settings(ARGS) == ['-m', str(model), '-f', 'out.wav']
+
+
+def test_a_speaker_with_its_own_voice_keeps_it_through_a_swap(settings, monkeypatch):
+    quiet, state = settings
+    (state / 'voices' / 'ryan-medium').mkdir(parents=True)
+    (state / 'voices' / 'ryan-medium' / 'en_US-ryan-medium.onnx').touch()
+    (state / 'voice').write_text('ryan-medium\n')
+    (state / 'tempo').write_text('0.8\n')
+    monkeypatch.setenv('KLOD_VOICE_MODEL', 'alba.onnx')
+    assert quiet.with_settings(['-m', 'alba.onnx', '-f', 'out.wav']) == [
+        '-m', 'alba.onnx', '-f', 'out.wav', '--length-scale', '0.8']
 
 
 def test_a_voice_that_is_not_installed_keeps_the_model(settings):
