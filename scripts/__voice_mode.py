@@ -9,6 +9,7 @@ is dropped. Run by voice-mode.service, switched from the toggle board.
 A line that opens "check check" needs no exact name, because Parakeet has never heard
 most of them. The next few words go to the quick decision model with the live roster,
 and the line goes to the name they sound most like. Nothing else leaves the machine.
+One breath can call several agents: each "check check" starts a call of its own.
 
 Lines travel as messages, never as keys, so speech cannot answer a permission prompt.
 They are not marked [HUMAN], because a transcript can be misheard.
@@ -95,7 +96,7 @@ BUS_NAMES = {'gordon': 'triage', 'kendra': 'intake'}
 SPOKEN_NAMES = {bus: name for name, bus in BUS_NAMES.items()}
 SPOKEN_DIGITS = {'one': '1', 'won': '1', 'two': '2', 'to': '2', 'too': '2'}
 DIGIT_WORDS = 'zero one two three four five six seven eight nine'.split()
-WAKE = re.compile(r'^\W*(?:stop\W+stop\W+)?check\W+check\b\W*(.*)$', re.IGNORECASE | re.DOTALL)
+WAKE = re.compile(r'\bcheck\W+check\b\W*', re.IGNORECASE)
 STOP_WORD = re.compile(r'\W*stop\W+stop\W*', re.IGNORECASE)
 # Every spoken reply opens "klod1 to Piotr:", so one that reached the mic must not
 # route back to the agent that said it.
@@ -268,35 +269,44 @@ def signal(status):
         marker.write(status)
 
 
-def address(text):
-    """Return (agent, message) for a line called with the wake word or opening with a name."""
-    called = WAKE.match(text.strip())
-    if not called or not called[1]:
-        return route(text)
-    agent = closest(called[1])
-    return (agent, called[1]) if agent else None
+def calls(text):
+    """Return (agent, message) for each call in a line. A weak name leaves agent as None.
+
+    Every wake word starts a call, once the line itself opens with one or with a name.
+    All names are settled before anything is sent, so a failed decision sends nothing.
+    """
+    opening, *called = WAKE.split(text.strip())
+    named = route(opening)
+    if not named and re.search(r'\w', opening) and not STOP_WORD.fullmatch(opening):
+        return []
+    called = [part.strip(' ,;:') for part in called if re.search(r'\w', part)]
+    return ([named] if named else []) + [(closest(part), part) for part in called]
 
 
-def handle(pcm):
-    """Send one utterance to the agent it names, if it names one."""
-    text = transcribe(pcm)
-    if STOP_WORD.fullmatch(text):  # check_stop already acted on it, moments earlier
-        return
-    addressed = address(text)
-    if not addressed:
+def send(agent, message):
+    """Pass one call to its agent and return what became of it."""
+    if not agent:
         print('voice-mode: line names no agent, dropped', flush=True)
-        signal('dropped')
-        return
-    agent, message = addressed
+        return 'dropped'
     if not registered(agent):
         signal('failed')
         say(f'Voice mode to Piotr. No agent is registered as {agent}.')
-    elif deliver(agent, f'{VOICE_TAG} Piotr to {agent}: {message} {VOICE_NOTE}'):
+        return 'failed'
+    if deliver(agent, f'{VOICE_TAG} Piotr to {agent}: {message} {VOICE_NOTE}'):
         print(f'voice-mode: line sent to {agent}', flush=True)
-        signal('sent')
-    else:
-        signal('failed')
-        say(f'Voice mode to Piotr. {agent} did not get that line.')
+        return 'sent'
+    signal('failed')
+    say(f'Voice mode to Piotr. {agent} did not get that line.')
+    return 'failed'
+
+
+def handle(pcm):
+    """Send one utterance to each agent it calls, and show the worst outcome."""
+    text = transcribe(pcm)
+    if STOP_WORD.fullmatch(text):  # check_stop already acted on it, moments earlier
+        return
+    outcomes = [send(agent, message) for agent, message in calls(text) or [(None, '')]]
+    signal(next(status for status in ('failed', 'dropped', 'sent') if status in outcomes))
 
 
 def check_stop(pcm):

@@ -304,10 +304,15 @@ class Model:
 
         def decided(command, **options):
             self.calls.append((command, options))
-            answer = {'choice': choice, 'probabilities': {choice: probability}}
+            picked = choice if isinstance(choice, str) else next(
+                name for words, name in choice.items() if words in options['input'])
+            answer = {'choice': picked, 'probabilities': {picked: probability}}
             return subprocess.CompletedProcess(command, 0, stdout=json.dumps({'answers': {'q': answer}}))
 
         monkeypatch.setattr(voice.subprocess, 'run', decided)
+
+    def openings(self):
+        return [options['input'] for _, options in self.calls]
 
     def options(self):
         [(command, _)] = self.calls
@@ -393,6 +398,87 @@ def test_nothing_reaches_the_model_without_the_wake_word_and_a_line(monkeypatch,
     model = Model(monkeypatch, ['klod2'])
     voice.handle(b'')
     assert model.calls == []
+
+
+CALLS = {'Claw one': 'klod one', 'Codex': 'codex', 'clause two': 'klod two'}
+
+
+def said_to(line):
+    return [(agent, text.split(': ', 1)[1].split(' (Local')[0]) for agent, text in line.sent]
+
+
+@pytest.mark.parametrize('heard', [
+    'Check check Claw one, do X. Check check Codex do Y. Check check clause two do Z.',
+    'Check, check, Claw one, do X. Check, check. Codex do Y. Check check: clause two do Z.',
+])
+def test_one_line_reaches_each_agent_it_calls(monkeypatch, heard):
+    line = Line(monkeypatch, heard, {'klod1', 'klod2', 'codex'})
+    model = Model(monkeypatch, ['klod1', 'klod2', 'codex'], choice=CALLS)
+    voice.handle(b'')
+    assert said_to(line) == [('klod1', 'Claw one, do X.'), ('codex', 'Codex do Y.'), ('klod2', 'clause two do Z.')]
+    assert model.openings() == ['Claw one, do X.', 'Codex do Y.', 'clause two do Z.']
+
+
+def test_a_comma_before_the_next_call_stays_out_of_the_message(monkeypatch):
+    line = Line(monkeypatch, 'check check Claw one do X, check check Codex do Y', {'klod1', 'codex'})
+    Model(monkeypatch, ['klod1', 'codex'], choice=CALLS)
+    voice.handle(b'')
+    assert said_to(line) == [('klod1', 'Claw one do X'), ('codex', 'Codex do Y')]
+
+
+def test_a_named_line_can_call_the_next_agent_too(monkeypatch):
+    line = Line(monkeypatch, 'Gordon, do X. Check check Codex do Y.', {'triage', 'codex'})
+    model = Model(monkeypatch, ['codex'], choice=CALLS)
+    voice.handle(b'')
+    assert said_to(line) == [('triage', 'do X.'), ('codex', 'Codex do Y.')]
+    assert model.openings() == ['Codex do Y.']
+
+
+def test_a_trailing_wake_word_adds_no_call(monkeypatch):
+    line = Line(monkeypatch, 'check check Codex do Y. Check check.', {'codex'})
+    Model(monkeypatch, ['codex'], choice=CALLS)
+    voice.handle(b'')
+    assert said_to(line) == [('codex', 'Codex do Y.')]
+
+
+def test_a_failed_decision_sends_none_of_the_line(monkeypatch):
+    line = Line(monkeypatch, 'check check Claw one do X check check Codex do Y', {'klod1', 'codex'})
+    model = Model(monkeypatch, ['klod1', 'codex'], choice='not on the roster')
+    with pytest.raises(KeyError):
+        voice.handle(b'')
+    assert line.sent == []
+    assert len(model.calls) == 1
+
+
+@pytest.mark.parametrize(('agents', 'delivered', 'probability', 'status'), [
+    ({'klod1', 'codex'}, True, 0.9, 'sent'),
+    ({'klod1'}, True, 0.9, 'failed'),  # one of them is not on the bus
+    ({'klod1', 'codex'}, False, 0.9, 'failed'),
+    ({'klod1', 'codex'}, True, 0.5, 'dropped'),
+])
+def test_the_light_shows_the_worst_call_of_the_line(monkeypatch, tmp_path, agents, delivered, probability, status):
+    Line(monkeypatch, 'check check Claw one do X check check Codex do Y', agents, delivered=delivered)
+    monkeypatch.setattr(voice, 'LINE_STATUS', str(tmp_path / 'status'))
+    Model(monkeypatch, ['klod1', 'codex'], choice=CALLS, probability=probability)
+    voice.handle(b'')
+    assert (tmp_path / 'status').read_text() == status
+
+
+def test_one_weak_name_does_not_cost_the_others(monkeypatch, tmp_path):
+    line = Line(monkeypatch, 'Gordon, do X. Check check reviewer do Y.', {'triage'})
+    monkeypatch.setattr(voice, 'LINE_STATUS', str(tmp_path / 'status'))
+    Model(monkeypatch, ['klod1'], probability=0.5)
+    voice.handle(b'')
+    assert said_to(line) == [('triage', 'do X.')]
+    assert (tmp_path / 'status').read_text() == 'dropped'
+
+
+def test_a_failed_call_outranks_a_dropped_one_on_the_light(monkeypatch, tmp_path):
+    Line(monkeypatch, 'Gordon, do X. Check check reviewer do Y.', set())
+    monkeypatch.setattr(voice, 'LINE_STATUS', str(tmp_path / 'status'))
+    Model(monkeypatch, ['klod1'], probability=0.5)
+    voice.handle(b'')
+    assert (tmp_path / 'status').read_text() == 'failed'
 
 
 def test_a_failed_decision_carries_no_words_to_the_log(monkeypatch):
