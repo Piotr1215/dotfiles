@@ -7,6 +7,7 @@ import json
 import os
 import re
 import subprocess
+import time
 from urllib.request import urlopen
 from urllib.error import URLError, HTTPError
 from urllib.parse import quote
@@ -34,6 +35,11 @@ envrc_path = os.path.expanduser("~/.envrc")
 pass_entry = "personal/WEATHER_API_KEY"
 units = 'metric'  # kelvin, metric, imperial
 lang = 'en'
+# argos reruns this only every 30m, and its first run after a boot lands seconds
+# before the network is up, so wait about a minute rather than show the warning
+# for 30m. argos spawns the script async, so the wait blocks nothing.
+network_tries = 12
+retry_delay = 5
 
 # Weather icon mapping
 weather_icons = {
@@ -99,12 +105,15 @@ def fetch(endpoint, city, api_key):
     url = f'https://api.openweathermap.org/data/2.5/{endpoint}?q={quote(city)}&units={units}&lang={lang}&appid={api_key}'
     # Build the message from code/reason only, and cut the cause chain: the URL
     # carries the key and must never reach the panel or a traceback.
-    try:
-        return json.load(urlopen(url, timeout=15))
-    except HTTPError as e:
-        raise RuntimeError(f"{endpoint}: HTTP {e.code} {e.reason}") from None
-    except URLError as e:
-        raise RuntimeError(f"{endpoint}: {e.reason}") from None
+    for attempt in range(1, network_tries + 1):
+        try:
+            return json.load(urlopen(url, timeout=15))
+        except HTTPError as e:
+            raise RuntimeError(f"{endpoint}: HTTP {e.code} {e.reason}") from None
+        except URLError as e:
+            if attempt == network_tries:
+                raise RuntimeError(f"{endpoint}: {e.reason}") from None
+            time.sleep(retry_delay)
 
 def get_weather_data():
     city = get_city()

@@ -1,8 +1,10 @@
 import importlib.util
 import os
 import unittest
+from io import BytesIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from urllib.error import HTTPError, URLError
 
 SCRIPT = Path(__file__).parents[2] / ".config" / "argos" / "weather.30m.py"
 
@@ -61,6 +63,44 @@ class GetCityTest(unittest.TestCase):
     def test_a_missing_envrc_is_an_error(self):
         with self.assertRaisesRegex(RuntimeError, "CITY unset"):
             self.weather.get_city()
+
+
+class FetchTest(unittest.TestCase):
+    """argos reruns the applet every 30m, so one failed run shows for 30m. The
+    first run after a boot lands seconds before the network is up."""
+
+    def setUp(self):
+        self.weather = load_module()
+        self.weather.retry_delay = 0
+        self.calls = 0
+
+    def serve(self, *outcomes):
+        def urlopen(url, timeout):
+            outcome = outcomes[min(self.calls, len(outcomes) - 1)]
+            self.calls += 1
+            if isinstance(outcome, Exception):
+                raise outcome
+            return BytesIO(outcome)
+        self.weather.urlopen = urlopen
+
+    def test_waits_for_the_network_to_come_up(self):
+        down = URLError("Temporary failure in name resolution")
+        self.serve(down, down, b'{"name": "Mittelbuchen"}')
+        self.assertEqual(self.weather.fetch("weather", "X", "KEY"), {"name": "Mittelbuchen"})
+        self.assertEqual(self.calls, 3)
+
+    def test_gives_up_when_the_network_stays_down(self):
+        self.serve(URLError("Network is unreachable"))
+        with self.assertRaisesRegex(RuntimeError, "weather: Network is unreachable") as caught:
+            self.weather.fetch("weather", "X", "KEY")
+        self.assertEqual(self.calls, self.weather.network_tries)
+        self.assertNotIn("KEY", str(caught.exception))
+
+    def test_a_server_refusal_is_final(self):
+        self.serve(HTTPError("https://x", 401, "Unauthorized", None, None))
+        with self.assertRaisesRegex(RuntimeError, "weather: HTTP 401 Unauthorized"):
+            self.weather.fetch("weather", "X", "KEY")
+        self.assertEqual(self.calls, 1)
 
 
 if __name__ == "__main__":
