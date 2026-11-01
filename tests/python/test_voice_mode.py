@@ -636,43 +636,125 @@ class Held:
 
 def test_speech_pauses_when_piotr_starts_and_carries_on_when_he_ends(monkeypatch, tmp_path):
     held = Held(monkeypatch, tmp_path)
+    held.resume.touch()
     barge_in = voice.BargeIn()
     for talking in (False, True, True, False, False):
         barge_in.update(talking)
     assert held.calls == [True, False]
 
 
-def test_speech_ends_for_good_once_he_is_really_talking(monkeypatch, tmp_path):
+def test_speech_ends_for_good_when_he_talks(monkeypatch, tmp_path):
     held = Held(monkeypatch, tmp_path)
     barge_in = voice.BargeIn()
-    barge_in.update(True, voice.MIN_VOICED - 1)
-    assert held.cuts == []
-    barge_in.update(True, voice.MIN_VOICED)
-    barge_in.update(True, voice.MIN_VOICED + 1)
+    barge_in.update(True)
+    barge_in.update(True)
     assert held.cuts == [True]
-
-
-def test_a_cough_only_pauses_speech(monkeypatch, tmp_path):
-    held = Held(monkeypatch, tmp_path)
-    barge_in = voice.BargeIn()
-    barge_in.update(True, voice.MIN_VOICED - 1)
-    barge_in.update(False)
-    assert (held.cuts, held.calls) == ([], [True, False])
 
 
 def test_each_line_ends_speech_afresh(monkeypatch, tmp_path):
     held = Held(monkeypatch, tmp_path)
     barge_in = voice.BargeIn()
-    for voiced, talking in ((voice.MIN_VOICED, True), (0, False), (voice.MIN_VOICED, True)):
-        barge_in.update(talking, voiced)
+    for talking in (True, False, True):
+        barge_in.update(talking)
     assert held.cuts == [True, True]
+
+
+class Scores:
+    """A voice model that answers from a list and records what it read."""
+
+    def __init__(self, *scores):
+        self.scores, self.chunks, self.resets = list(scores), [], 0
+
+    def score(self, chunk):
+        self.chunks.append(chunk)
+        return self.scores.pop(0) if self.scores else 0
+
+    def reset(self):
+        self.resets += 1
+
+
+def hear_all(check, frames=120):
+    """Feed one open line and return whether the check heard a voice by its end."""
+    return [check.hear(QUIET, True) for _ in range(frames)][-1]
+
+
+def test_a_voice_needs_an_unbroken_run():
+    run = voice.SILERO_RUN
+    assert not hear_all(voice.VoiceCheck(Scores(*[1] * (run - 1), 0, *[1] * (run - 1))))
+    assert hear_all(voice.VoiceCheck(Scores(*[1] * (run - 1), 0, *[1] * run)))
+
+
+def test_the_floor_itself_counts_as_voice():
+    floor = voice.SILERO_FLOOR
+    assert hear_all(voice.VoiceCheck(Scores(*[floor] * voice.SILERO_RUN)))
+    assert not hear_all(voice.VoiceCheck(Scores(*[floor - 0.01] * voice.SILERO_RUN)))
+
+
+def test_the_model_reads_every_byte_in_its_own_chunks():
+    model = Scores()
+    check = voice.VoiceCheck(model)
+    frames = [bytes([n]) * voice.FRAME_BYTES for n in range(32)]
+    for frame in frames:
+        check.hear(frame, True)
+    assert {len(chunk) for chunk in model.chunks} == {voice.SILERO_CHUNK}
+    assert b''.join(model.chunks) + check.pending == b''.join(frames)
+
+
+def test_a_heard_voice_lasts_the_line_and_the_model_rests():
+    model = Scores(*[1] * voice.SILERO_RUN, *[0] * 50)
+    check = voice.VoiceCheck(model)
+    assert hear_all(check)
+    read, left = len(model.chunks), check.pending
+    assert hear_all(check)
+    assert (len(model.chunks), check.pending) == (read, left)  # a 10 minute line must not pile up
+
+
+def test_a_closed_line_starts_the_next_one_clean():
+    model = Scores(*[1] * (voice.SILERO_RUN - 1), 0, *[1] * (voice.SILERO_RUN - 1))
+    check = voice.VoiceCheck(model)
+    for _ in range(voice.SILERO_RUN * 2):
+        check.hear(QUIET, True)
+    assert check.hear(QUIET, False) is False
+    assert (model.resets, check.run, check.pending) == (1, 0, b'')
+    check.hear(QUIET, False)
+    assert model.resets == 1  # nothing to clear, so a silent room costs nothing
+
+
+def test_a_heard_voice_does_not_outlive_its_line():
+    check = voice.VoiceCheck(Scores(*[1] * voice.SILERO_RUN))
+    assert hear_all(check)
+    assert check.hear(QUIET, False) is False
+    assert not hear_all(check)
+
+
+def test_with_no_model_nothing_counts_as_voice():
+    assert voice.VoiceCheck(None).hear(LOUD, True) is False
+
+
+def test_a_model_that_cannot_load_keeps_the_relay_alive(monkeypatch, capsys):
+    def broken():
+        raise RuntimeError('no such model')
+    monkeypatch.setattr(voice, 'Silero', broken)
+    assert voice.voice_model() is None
+    assert 'no voice check: RuntimeError' in capsys.readouterr().err
+
+
+def test_the_real_model_calls_silence_silence_and_forgets_on_reset():
+    pytest.importorskip('onnxruntime')
+    if not os.path.exists(voice.SILERO):
+        pytest.skip('no voice model on this machine')
+    model = voice.Silero()
+    assert model.score(bytes(voice.SILERO_CHUNK)) < voice.SILERO_FLOOR
+    assert any(model.memory[0].flat)
+    model.reset()
+    assert not any(model.memory[0].flat)
 
 
 def test_the_resume_setting_keeps_speech_paused_not_ended(monkeypatch, tmp_path):
     held = Held(monkeypatch, tmp_path)
     held.resume.touch()
     barge_in = voice.BargeIn()
-    barge_in.update(True, voice.MIN_VOICED)
+    barge_in.update(True)
     barge_in.update(False)
     assert (held.cuts, held.calls) == ([], [True, False])
 
@@ -680,13 +762,14 @@ def test_the_resume_setting_keeps_speech_paused_not_ended(monkeypatch, tmp_path)
 def test_the_toggle_off_never_ends_speech(monkeypatch, tmp_path):
     held = Held(monkeypatch, tmp_path)
     held.flag.touch()
-    voice.BargeIn().update(True, voice.MIN_VOICED)
+    voice.BargeIn().update(True)
     assert held.cuts == []
 
 
 def test_a_reply_that_starts_while_he_talks_is_paused_too(monkeypatch, tmp_path):
     held = Held(monkeypatch, tmp_path)
     barge_in = voice.BargeIn()
+    held.resume.touch()
     for _ in range(voice.HOLD_FRAMES + 1):
         barge_in.update(True)
     assert held.calls == [True, True]
@@ -704,6 +787,7 @@ def test_the_toggle_off_leaves_speech_alone(monkeypatch, tmp_path):
 def test_switching_off_mid_line_lets_speech_carry_on(monkeypatch, tmp_path):
     held = Held(monkeypatch, tmp_path)
     barge_in = voice.BargeIn()
+    held.resume.touch()
     barge_in.update(True)
     held.flag.touch()
     barge_in.update(True)
@@ -751,17 +835,28 @@ def test_the_stop_word_still_ends_paused_speech(monkeypatch):
         player.kill()
 
 
-def test_the_relay_holds_speech_for_the_length_of_a_line(monkeypatch, tmp_path):
-    held = Held(monkeypatch, tmp_path)
-    frames = LOUD * voice.MIN_VOICED + QUIET * voice.END_FRAMES
+def relay_over(monkeypatch, frames, model):
+    """Run the real capture loop over a mic that plays frames, then ends."""
+    monkeypatch.setattr(voice, 'Silero', lambda: model)
     monkeypatch.setattr(voice.subprocess, 'Popen', lambda *_, **__: types.SimpleNamespace(stdout=io.BytesIO(frames)))
     monkeypatch.setattr(voice.threading, 'Thread', lambda **_: types.SimpleNamespace(start=lambda: None))
     with pytest.raises(SystemExit):
         voice.main()
+
+
+def test_the_relay_ends_speech_when_a_line_holds_a_voice(monkeypatch, tmp_path):
+    held = Held(monkeypatch, tmp_path)
+    relay_over(monkeypatch, LOUD * (voice.MIN_VOICED * 3) + QUIET * voice.END_FRAMES, Scores(*[1] * 99))
     assert held.calls[:2] == [False, True]  # a relay that died mid-line left speech paused
     assert held.calls[-1] is False
     assert held.calls.count(False) == 2
-    assert held.cuts == [True]  # stopped for good, on real speech rather than the first click
+    assert held.cuts == [True]
+
+
+def test_noise_that_opens_a_line_leaves_speech_alone(monkeypatch, tmp_path):
+    held = Held(monkeypatch, tmp_path)
+    relay_over(monkeypatch, LOUD * (voice.MIN_VOICED * 3) + QUIET * voice.END_FRAMES, Scores())
+    assert (held.calls, held.cuts) == ([False], [])  # False: the startup release, nothing else
 
 
 # Words must not vanish. Measured on the real path before this: 147 s of speech cut into

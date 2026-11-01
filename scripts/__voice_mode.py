@@ -25,9 +25,10 @@ They are not marked [HUMAN], because a transcript can be misheard.
 Saying "stop stop" on its own cuts all speech and the replies queued behind it, and
 closes the channel, so the next line needs a name. The agents keep working.
 
-When Piotr starts to talk, whoever is speaking pauses, and stops for good once it is
-plainly speech, because he has heard enough. A cough only pauses it. One flag file
-brings back carrying on from the same spot, another switches all of this off.
+When Piotr starts to talk, whoever is speaking stops for good, because he has heard
+enough. A voice model decides that, so a thud or a breath leaves speech alone, though
+any voice counts, not only his. One flag file brings back pausing and carrying on from
+the same spot, another switches all of this off.
 
 Mic and speech follow the system's default devices, the ones GNOME's Sound panel sets.
 Handy with no device selected reads the same ones, and must stay that way: a selected
@@ -93,6 +94,10 @@ QUICK_END = 20  # 0.6 s of quiet is enough to test a short burst for the stop wo
 QUICK_MAX = 100  # 3 s; anything longer is a line, not the stop word
 OPENING_FRAMES = 67  # 2 s with the lead-in: at 1.5 s Handy missed the wake word in one of three Piper voices
 HOLD_FRAMES = 16  # about 0.5 s: how soon a reply that starts mid-line is paused
+SILERO = os.path.expanduser('~/.local/share/silero-vad/silero_vad_v4.onnx')  # copied from Handy
+SILERO_CHUNK = 1024  # 32 ms of s16le mono, the length the model reads
+SILERO_FLOOR = 0.5
+SILERO_RUN = 12  # 384 ms in a row. On 33 real clips: 6 of 6 lines by 2.3 s, 0 of 27 noises
 
 BUS_NAME = 'human-via-voice'
 VOICE_TAG = '[PIOTR VIA VOICE]'
@@ -275,19 +280,76 @@ def hold_speech(held):
     subprocess.run(['pkill', '-STOP' if held else '-CONT', '-f', f'^{PLAYER}'], check=False)
 
 
+class Silero:
+    """Handy's voice model: how likely each 32 ms chunk of a line is speech."""
+
+    def __init__(self):
+        import numpy  # pylint: disable=import-outside-toplevel
+        import onnxruntime  # pylint: disable=import-outside-toplevel
+        options = onnxruntime.SessionOptions()
+        options.intra_op_num_threads = options.inter_op_num_threads = 1
+        self.numpy = numpy
+        self.session = onnxruntime.InferenceSession(SILERO, options, providers=['CPUExecutionProvider'])
+        self.reset()
+
+    def reset(self):
+        self.memory = [self.numpy.zeros((2, 1, 64), dtype=self.numpy.float32) for _ in 'hc']
+
+    def score(self, chunk):
+        samples = self.numpy.frombuffer(chunk, dtype=self.numpy.int16).astype(self.numpy.float32) / 32768
+        chance, *self.memory = self.session.run(None, {
+            'input': samples[None], 'sr': self.numpy.array(RATE, dtype=self.numpy.int64),
+            'h': self.memory[0], 'c': self.memory[1]})
+        return float(chance[0][0])
+
+
+def voice_model():
+    """The model, or None: speech then plays through everything but the stop word."""
+    try:
+        return Silero()
+    except Exception as err:  # pylint: disable=broad-except  # no model must not cost the mic
+        print(f'voice-mode: no voice check: {type(err).__name__}', file=sys.stderr, flush=True)
+        return None
+
+
+class VoiceCheck:
+    """Say when the open line holds a voice. The level gate cannot: it opens on noise too."""
+
+    def __init__(self, model):
+        self.model = model
+        self.pending, self.run, self.heard = b'', 0, False
+
+    def hear(self, frame, line_open):
+        if not self.model:
+            return False
+        if not line_open:
+            if self.pending or self.run or self.heard:
+                self.model.reset()
+                self.pending, self.run, self.heard = b'', 0, False
+            return False
+        if self.heard:
+            return True
+        self.pending += frame
+        while len(self.pending) >= SILERO_CHUNK and not self.heard:
+            chunk, self.pending = self.pending[:SILERO_CHUNK], self.pending[SILERO_CHUNK:]
+            self.run = self.run + 1 if self.model.score(chunk) >= SILERO_FLOOR else 0
+            self.heard = self.run >= SILERO_RUN
+        return self.heard
+
+
 class BargeIn:
-    """Pause speech when Piotr starts to talk, and end it once that is plainly speech."""
+    """End speech while Piotr talks, or only pause it when the resume setting is on."""
 
     def __init__(self):
         self.frames = 0
         self.cut = False
 
-    def update(self, talking, voiced=0):
+    def update(self, talking):
         if talking and not os.path.exists(NO_BARGE_IN):
             if self.frames % HOLD_FRAMES == 0:
                 hold_speech(True)
             self.frames += 1
-            if voiced >= MIN_VOICED and not self.cut and not os.path.exists(RESUME_SPEECH):
+            if not self.cut and not os.path.exists(RESUME_SPEECH):
                 silence()
                 self.cut = True
         elif self.frames:
@@ -544,12 +606,13 @@ def main():
     mic = subprocess.Popen(['parec', f'--rate={RATE}', '--channels=1',
                             '--format=s16le', '--latency-msec=30'], stdout=subprocess.PIPE)
     barge_in = BargeIn()
+    voice_check = VoiceCheck(voice_model())
     hold_speech(False)  # a relay that died mid-line left speech paused
     signals.signal(signals.SIGTERM, lambda *_: sys.exit(0))  # so a stop mid-line reaches the rescue
     try:
         while len(frame := mic.stdout.read(FRAME_BYTES)) == FRAME_BYTES:
             pcm = segmenter.push(frame)
-            barge_in.update(segmenter.utterance is not None, segmenter.voiced)
+            barge_in.update(voice_check.hear(frame, segmenter.utterance is not None))
             if pcm:
                 utterances.put((pcm, keep(pcm)))
             if burst := segmenter.burst():
