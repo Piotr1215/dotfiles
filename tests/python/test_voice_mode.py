@@ -252,16 +252,17 @@ def test_a_long_line_is_never_offered_as_a_burst():
     assert bursts(voice.Segmenter(), line + [QUIET] * voice.QUICK_END) == []
 
 
-def test_silence_ends_speech_and_its_queue_but_nothing_else(monkeypatch):
+def test_silence_ends_the_reply_playing_and_nothing_else(monkeypatch):
     monkeypatch.setattr(voice, 'PLAYER', 'pw-play -P media.name=test-silence')
     play = 'pw-play -P media.name=test-silence a.wav'
     spawn = lambda cmdline: subprocess.Popen([cmdline, '30'], executable='sleep')
-    speech = [spawn(play), spawn(f'timeout 60 {play}'), spawn(f'flock -w 90 lock timeout 60 {play}')]
-    others = [spawn('pw-play -P media.name=test-other a.wav'), spawn(f'zsh -c {play}')]
+    speech = [spawn(play), spawn(f'timeout 60 {play}')]
+    others = [spawn(f'flock -w 90 lock timeout 60 {play}'),  # the queue: the next reply takes over
+              spawn('pw-play -P media.name=test-other a.wav'), spawn(f'zsh -c {play}')]
     try:
         voice.silence()
-        assert [process.wait(timeout=5) for process in speech] == [-signal.SIGTERM] * 3
-        assert [process.poll() for process in others] == [None, None]
+        assert [process.wait(timeout=5) for process in speech] == [-signal.SIGTERM] * 2
+        assert [process.poll() for process in others] == [None] * 3
     finally:
         for process in speech + others:
             process.kill()
@@ -288,7 +289,7 @@ def test_only_the_whole_stop_word_silences_anything(monkeypatch, capsys, heard, 
     monkeypatch.setattr(voice, 'transcribe', lambda _: heard)
     monkeypatch.setattr(voice, 'silence', lambda: silenced.append(True))
     monkeypatch.setattr(voice, 'deliver', lambda *args: typed.append(args))
-    voice.check_stop(b'')
+    voice.check_stop(b'', voice.BargeIn())
     assert silenced == ([True] if stopped else [])
     assert typed == []  # speech stops, the agents keep working
     assert capsys.readouterr().out == ('voice-mode: stop word heard\n' if stopped else '')
@@ -301,7 +302,7 @@ class Line:
         self.sent = []
         self.spoken = []
         self.cuts = []
-        monkeypatch.setattr(voice, 'silence', lambda: self.cuts.append(len(self.sent)))
+        monkeypatch.setattr(voice, 'silence_agent', self.cuts.append)
         monkeypatch.setattr(voice, 'transcribe', lambda _: heard)
         monkeypatch.setattr(voice, 'registered', lambda name: name in agents)
         monkeypatch.setattr(voice, 'say', self.spoken.append)
@@ -1011,8 +1012,24 @@ def test_the_stop_word_caught_early_closes_the_channel_too(monkeypatch):
     monkeypatch.setattr(voice, 'silence', lambda: None)
     line = next_line(monkeypatch, 'stop stop')
     voice.open_channel('klod2')
-    voice.check_stop(MINUTE)
+    voice.check_stop(MINUTE, voice.BargeIn())
     assert voice.channel() is None
+
+
+def test_a_stop_word_ends_one_reply_not_two(monkeypatch, tmp_path):
+    held = Held(monkeypatch, tmp_path)
+    monkeypatch.setattr(voice, 'transcribe', lambda _: 'stop stop')
+    barge_in = voice.BargeIn()
+    barge_in.update(True)  # saying it was already talking over the reply
+    voice.check_stop(MINUTE, barge_in)
+    assert held.cuts == [True]
+
+
+def test_a_stop_word_ends_the_reply_when_talking_did_not(monkeypatch, tmp_path):
+    held = Held(monkeypatch, tmp_path)
+    monkeypatch.setattr(voice, 'transcribe', lambda _: 'stop stop')
+    voice.check_stop(MINUTE, voice.BargeIn())
+    assert held.cuts == [True]
 
 
 @pytest.mark.parametrize('heard', [
@@ -1027,19 +1044,26 @@ def test_silence_and_speech_caught_by_the_mic_stay_off_the_channel(monkeypatch, 
 def test_a_line_that_reaches_an_agent_ends_speech_after_delivery(monkeypatch):
     line = Line(monkeypatch, 'Claude 2, new thought.', {'klod2'})
     voice.handle(b'')
-    assert line.cuts == [1]
+    assert line.cuts == ['klod2']
 
 
 def test_a_line_that_reached_one_of_two_agents_ends_speech(monkeypatch):
     monkeypatch.setattr(voice, 'closest', lambda _: 'klod1')
     line = Line(monkeypatch, 'Claude 2, first check check Claude 1, second', {'klod2'})
     voice.handle(b'')
-    assert line.cuts == [1]
+    assert line.cuts == ['klod2']
+
+
+def test_a_line_to_two_agents_ends_both(monkeypatch):
+    monkeypatch.setattr(voice, 'closest', lambda _: 'klod1')
+    line = Line(monkeypatch, 'Claude 2, first check check Claude 1, second', {'klod1', 'klod2'})
+    voice.handle(b'')
+    assert line.cuts == ['klod2', 'klod1']
 
 
 def test_a_line_on_the_channel_ends_speech_too(monkeypatch):
     line = next_line(monkeypatch, 'and then the rest of the thought')
-    assert line.cuts[-1] == 1  # the second line, with the first one's sends cleared
+    assert line.cuts == ['klod2', 'klod2']
 
 
 @pytest.mark.parametrize(('heard', 'agents', 'delivered'), [
@@ -1063,20 +1087,54 @@ def test_the_speech_settings_also_rule_a_delivered_line(monkeypatch, tmp_path, f
     assert line.cuts == []
 
 
+def players(tag):
+    """Fake one reply as it plays and as it waits for the lock, on the real command lines."""
+    play = f'pw-play -P media.name=test-agents /tmp/tmp.abc.{tag}.wav'
+    spawn = lambda cmdline: subprocess.Popen([cmdline, '30'], executable='sleep')
+    return [spawn(play), spawn(f'timeout 60 {play}'), spawn(f'flock -w 90 lock timeout 60 {play}')]
+
+
+def test_a_line_ends_only_the_speech_of_the_agent_it_reached(monkeypatch):
+    monkeypatch.setattr(voice, 'PLAYER', 'pw-play -P media.name=test-agents')
+    ours, other = players('klod2'), players('klod22')
+    try:
+        voice.silence_agent('klod2')
+        assert [process.wait(timeout=5) for process in ours] == [-signal.SIGTERM] * 3
+        assert [process.poll() for process in other] == [None] * 3
+        assert os.path.exists(f'{voice.SPEECH_CUT}.klod2')
+        assert not os.path.exists(f'{voice.SPEECH_CUT}.klod22')
+    finally:
+        for process in ours + other:
+            process.kill()
+
+
+def test_a_line_to_gordon_finds_him_under_either_name(monkeypatch):
+    monkeypatch.setattr(voice, 'PLAYER', 'pw-play -P media.name=test-agents')
+    bus, spoken_name = players('triage'), players('gordon')
+    try:
+        voice.silence_agent('triage')
+        assert [process.wait(timeout=5) for process in bus + spoken_name] == [-signal.SIGTERM] * 6
+        assert os.path.exists(f'{voice.SPEECH_CUT}.gordon') and os.path.exists(f'{voice.SPEECH_CUT}.triage')
+    finally:
+        for process in bus + spoken_name:
+            process.kill()
+
+
 def test_every_cut_marks_the_replies_still_being_made(monkeypatch):
     monkeypatch.setattr(voice.subprocess, 'run', lambda *_, **__: None)
-    voice.silence()
-    first = os.stat(voice.SPEECH_CUT).st_mtime_ns
-    os.utime(voice.SPEECH_CUT, ns=(1, 1))
-    voice.silence()
-    assert os.stat(voice.SPEECH_CUT).st_mtime_ns >= first
+    marker = f'{voice.SPEECH_CUT}.klod2'
+    voice.silence_agent('klod2')
+    first = os.stat(marker).st_mtime_ns
+    os.utime(marker, ns=(1, 1))
+    voice.silence_agent('klod2')
+    assert os.stat(marker).st_mtime_ns >= first
 
 
 def test_a_cut_it_cannot_mark_still_ends_speech(monkeypatch, tmp_path, capsys):
     ran = []
     monkeypatch.setattr(voice, 'SPEECH_CUT', str(tmp_path / 'gone' / 'cut'))
     monkeypatch.setattr(voice.subprocess, 'run', lambda *args, **_: ran.append(args))
-    voice.silence()
+    voice.silence_agent('klod2')
     assert len(ran) == 2
     assert 'cut not marked: FileNotFoundError' in capsys.readouterr().err
 

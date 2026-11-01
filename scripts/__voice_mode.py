@@ -23,14 +23,16 @@ it off. The journal still gets no words.
 Lines travel as messages, never as keys, so speech cannot answer a permission prompt.
 They are not marked [HUMAN], because a transcript can be misheard.
 
-Saying "stop stop" on its own cuts all speech and the replies queued behind it, and
-closes the channel, so the next line needs a name. The agents keep working.
+Agents speak one at a time, in a queue. Saying "stop stop" on its own ends the reply
+playing, the next one takes over, and the channel closes, so the next line needs a
+name. The agents keep working.
 
 When Piotr starts to talk, whoever is speaking stops for good, because he has heard
 enough. A voice model decides that, so a thud or a breath leaves speech alone, though
-any voice counts, not only his. A line that reaches an agent ends speech as well, and
-a reply still being made is dropped, because he has moved on. One flag file brings back
-pausing and carrying on from the same spot, another switches all of this off.
+any voice counts, not only his. Only the reply playing ends: the next one keeps its
+turn. A line that reaches an agent also ends that agent's queued replies and any it
+is still making, because he has moved on, and other agents keep theirs. One flag file
+brings back pausing and carrying on from the same spot, another switches all of this off.
 
 Mic and speech follow the system's default devices, the ones GNOME's Sound panel sets.
 Handy with no device selected reads the same ones, and must stay that way: a selected
@@ -272,15 +274,29 @@ def deliver(agent, text):
         return False
 
 
-def silence():
-    """End the speech playing now, the replies queued behind it and those still being made."""
+def mark_cut(path):
+    """Tell the reply hook to drop what it is still making."""
     try:
-        with open(SPEECH_CUT, 'a', encoding='utf-8'):
-            os.utime(SPEECH_CUT)
+        with open(path, 'a', encoding='utf-8'):
+            os.utime(path)
     except OSError as err:  # called from the capture loop, which must keep running
         print(f'voice-mode: cut not marked: {type(err).__name__}', file=sys.stderr, flush=True)
-    subprocess.run(['pkill', '-f', f'^(flock .*|timeout .*)?{PLAYER}'], check=False)
+
+
+def silence():
+    """End the reply playing now. The next one in the queue takes over."""
+    subprocess.run(['pkill', '-f', f'^(timeout .*)?{PLAYER}'], check=False)
     hold_speech(False)  # paused speech takes the signal only once it wakes
+
+
+def silence_agent(agent):
+    """End one agent's speech, queued replies and replies being made. Others keep their turn."""
+    tags = sorted({agent, SPOKEN_NAMES.get(agent, agent)})  # Gordon's pane may carry either name
+    for tag in tags:
+        mark_cut(f'{SPEECH_CUT}.{tag}')
+    names = '|'.join(re.escape(tag) for tag in tags)
+    subprocess.run(['pkill', '-f', rf'^(flock .*|timeout .*)?{PLAYER} .*\.({names})\.wav'], check=False)
+    hold_speech(False)
 
 
 def hold_speech(held):
@@ -563,10 +579,10 @@ def continued(text):
     return [(agent, text)]
 
 
-def moved_on():
-    """A line reached an agent, so whatever was still being said is out of date."""
+def moved_on(agent):
+    """A line reached this agent, so whatever it still had to say is out of date."""
     if not os.path.exists(NO_BARGE_IN) and not os.path.exists(RESUME_SPEECH):
-        silence()
+        silence_agent(agent)
 
 
 def handle(pcm, kept=None):
@@ -581,8 +597,7 @@ def handle(pcm, kept=None):
     for (agent, _), outcome in zip(found, outcomes):
         if outcome == 'sent':
             open_channel(agent)
-    if 'sent' in outcomes:
-        moved_on()
+            moved_on(agent)
     if set(outcomes) == {'sent'}:
         forget(kept)
     else:
@@ -606,10 +621,15 @@ def check_wake(pcm, segmenter):
         signal('armed')
 
 
-def check_stop(pcm):
-    """Silence every agent and close the channel when a short burst is the stop word."""
+def check_stop(pcm, barge_in):
+    """End the reply playing and close the channel when a short burst is the stop word.
+
+    Saying the word may have ended that reply already, and a second cut would take the
+    next one too, which Piotr still wants to hear.
+    """
     if STOP_WORD.fullmatch(transcribe(pcm)):
-        silence()
+        if not barge_in.cut:
+            silence()
         close_channel()
         print('voice-mode: stop word heard', flush=True)
 
@@ -641,12 +661,12 @@ def main():
     bursts = queue.Queue()  # its own worker: a slow delivery must not hold up the stop word
     openings = queue.Queue()
     segmenter = Segmenter()
+    barge_in = BargeIn()
     threading.Thread(target=worker, args=(utterances, lambda line: handle(*line)), daemon=True).start()
-    threading.Thread(target=worker, args=(bursts, check_stop), daemon=True).start()
+    threading.Thread(target=worker, args=(bursts, lambda pcm: check_stop(pcm, barge_in)), daemon=True).start()
     threading.Thread(target=worker, args=(openings, lambda pcm: check_wake(pcm, segmenter)), daemon=True).start()
     mic = subprocess.Popen(['parec', f'--rate={RATE}', '--channels=1',
                             '--format=s16le', '--latency-msec=30'], stdout=subprocess.PIPE)
-    barge_in = BargeIn()
     voice_check = VoiceCheck(voice_model())
     hold_speech(False)  # a relay that died mid-line left speech paused
     signals.signal(signals.SIGTERM, lambda *_: sys.exit(0))  # so a stop mid-line reaches the rescue
