@@ -625,9 +625,13 @@ class Held:
 
     def __init__(self, monkeypatch, tmp_path):
         self.calls = []
+        self.cuts = []
         self.flag = tmp_path / 'no-barge-in'
+        self.resume = tmp_path / 'resume-speech'
         monkeypatch.setattr(voice, 'hold_speech', self.calls.append)
+        monkeypatch.setattr(voice, 'silence', lambda: self.cuts.append(True))
         monkeypatch.setattr(voice, 'NO_BARGE_IN', str(self.flag))
+        monkeypatch.setattr(voice, 'RESUME_SPEECH', str(self.resume))
 
 
 def test_speech_pauses_when_piotr_starts_and_carries_on_when_he_ends(monkeypatch, tmp_path):
@@ -636,6 +640,48 @@ def test_speech_pauses_when_piotr_starts_and_carries_on_when_he_ends(monkeypatch
     for talking in (False, True, True, False, False):
         barge_in.update(talking)
     assert held.calls == [True, False]
+
+
+def test_speech_ends_for_good_once_he_is_really_talking(monkeypatch, tmp_path):
+    held = Held(monkeypatch, tmp_path)
+    barge_in = voice.BargeIn()
+    barge_in.update(True, voice.MIN_VOICED - 1)
+    assert held.cuts == []
+    barge_in.update(True, voice.MIN_VOICED)
+    barge_in.update(True, voice.MIN_VOICED + 1)
+    assert held.cuts == [True]
+
+
+def test_a_cough_only_pauses_speech(monkeypatch, tmp_path):
+    held = Held(monkeypatch, tmp_path)
+    barge_in = voice.BargeIn()
+    barge_in.update(True, voice.MIN_VOICED - 1)
+    barge_in.update(False)
+    assert (held.cuts, held.calls) == ([], [True, False])
+
+
+def test_each_line_ends_speech_afresh(monkeypatch, tmp_path):
+    held = Held(monkeypatch, tmp_path)
+    barge_in = voice.BargeIn()
+    for voiced, talking in ((voice.MIN_VOICED, True), (0, False), (voice.MIN_VOICED, True)):
+        barge_in.update(talking, voiced)
+    assert held.cuts == [True, True]
+
+
+def test_the_resume_setting_keeps_speech_paused_not_ended(monkeypatch, tmp_path):
+    held = Held(monkeypatch, tmp_path)
+    held.resume.touch()
+    barge_in = voice.BargeIn()
+    barge_in.update(True, voice.MIN_VOICED)
+    barge_in.update(False)
+    assert (held.cuts, held.calls) == ([], [True, False])
+
+
+def test_the_toggle_off_never_ends_speech(monkeypatch, tmp_path):
+    held = Held(monkeypatch, tmp_path)
+    held.flag.touch()
+    voice.BargeIn().update(True, voice.MIN_VOICED)
+    assert held.cuts == []
 
 
 def test_a_reply_that_starts_while_he_talks_is_paused_too(monkeypatch, tmp_path):
@@ -715,6 +761,7 @@ def test_the_relay_holds_speech_for_the_length_of_a_line(monkeypatch, tmp_path):
     assert held.calls[:2] == [False, True]  # a relay that died mid-line left speech paused
     assert held.calls[-1] is False
     assert held.calls.count(False) == 2
+    assert held.cuts == [True]  # stopped for good, on real speech rather than the first click
 
 
 # Words must not vanish. Measured on the real path before this: 147 s of speech cut into
@@ -807,75 +854,83 @@ def test_only_one_handy_runs_at_a_time(monkeypatch):
     assert len(handy.clips) == 4 and handy.most == 1
 
 
-def second_part(monkeypatch, heard, gap, first='Claude 2, here is the idea', agents=('klod2',), delivered=True):
-    """Say a named line that closes at 1000, then a 60 s line starting gap seconds later."""
+def next_line(monkeypatch, heard, first='Claude 2, here is the idea', agents=('klod2',), delivered=True):
+    """Say a named line, then a nameless one a day later. Return what the second one sent."""
     line = Line(monkeypatch, first, set(agents), delivered)
-    voice.handle(b'', closed=1000.0)
+    voice.handle(b'')
     monkeypatch.setattr(voice, 'transcribe', lambda _: heard)
+    now = time.monotonic()
+    monkeypatch.setattr(voice.time, 'monotonic', lambda: now + 86400)
     line.sent.clear()
-    voice.handle(MINUTE, closed=1000.0 + gap + 60)
+    voice.handle(MINUTE)
     return line
 
 
-def test_past_the_cap_the_line_goes_on_to_the_same_agent(monkeypatch):
-    line = second_part(monkeypatch, 'and this is the second minute of it', 0)
-    assert [agent for agent, _ in line.sent] == ['klod2']
-    assert 'and this is the second minute of it' in line.sent[0][1]
-
-
-@pytest.mark.parametrize(('gap', 'carried'), [
-    (5, True),
-    (78, True),  # Piotr's real reply to travel-prep on 1 Nov, dropped by a 10 s window
-    (voice.CONTINUE_SECONDS - 1, True),
-    (voice.CONTINUE_SECONDS, False),
+@pytest.mark.parametrize('heard', [
+    'and then the rest of the thought',
+    'yes go ahead',  # in a channel every line is for the agent, however short
+    'Plod 2 this is a test',  # only the key phrase swaps the channel, never a guess at a name
+    'Codecs run the tests',
 ])
-def test_a_pause_to_think_keeps_the_line_with_its_agent(monkeypatch, gap, carried):
-    line = second_part(monkeypatch, 'and then the rest of the thought', gap)
-    assert bool(line.sent) is carried
+def test_the_channel_stays_open_with_no_time_limit(monkeypatch, heard):
+    line = next_line(monkeypatch, heard)
+    assert [agent for agent, _ in line.sent] == ['klod2']
+    assert heard in line.sent[0][1]
 
 
-def test_a_thought_can_carry_on_more_than_once(monkeypatch):
-    line = second_part(monkeypatch, 'a second part of the thought', 5)
-    voice.handle(MINUTE, closed=1070.0 + 60)  # past the first line's window, inside the second's
+def test_a_channel_outlives_many_lines(monkeypatch):
+    line = next_line(monkeypatch, 'a second part of the thought')
+    voice.handle(MINUTE)
     assert len(line.sent) == 2
 
 
-def test_a_named_line_is_not_a_continuation(monkeypatch):
-    line = second_part(monkeypatch, 'Codex, take this one instead', 1, agents=('klod2', 'codex'))
-    assert [agent for agent, _ in line.sent] == ['codex']
+def test_a_named_line_swaps_the_channel(monkeypatch):
+    line = next_line(monkeypatch, 'Codex, take this one instead', agents=('klod2', 'codex'))
+    monkeypatch.setattr(voice, 'transcribe', lambda _: 'and this as well')
+    voice.handle(MINUTE)
+    assert [agent for agent, _ in line.sent] == ['codex', 'codex']
+
+
+def test_the_key_phrase_swaps_the_channel(monkeypatch):
+    monkeypatch.setattr(voice, 'closest', lambda heard: 'codex')
+    line = next_line(monkeypatch, 'Check check codecs take this one', agents=('klod2', 'codex'))
+    monkeypatch.setattr(voice, 'transcribe', lambda _: 'and this as well')
+    voice.handle(MINUTE)
+    assert [agent for agent, _ in line.sent] == ['codex', 'codex']
+
+
+@pytest.mark.parametrize('stop', ['Stop, stop.', 'stop stop'])
+def test_the_stop_word_closes_the_channel(monkeypatch, stop):
+    line = next_line(monkeypatch, stop)
+    monkeypatch.setattr(voice, 'transcribe', lambda _: 'and then the rest of the thought')
+    voice.handle(MINUTE)
+    assert line.sent == []
+
+
+def test_the_stop_word_caught_early_closes_the_channel_too(monkeypatch):
+    monkeypatch.setattr(voice, 'silence', lambda: None)
+    line = next_line(monkeypatch, 'stop stop')
+    voice.LATEST.update(agent='klod2')
+    voice.check_stop(MINUTE)
+    assert voice.LATEST == {}
 
 
 @pytest.mark.parametrize('heard', [
-    'yes go ahead',  # short enough to be for someone in the room, and an agent would obey it
     '',
     'Claude 1 to Piotr, the tests pass today',  # a reply caught by the mic
     'Voice mode to Peter. Something went wrong here.',
 ])
-def test_only_a_real_thought_of_his_carries_on(monkeypatch, heard):
-    assert second_part(monkeypatch, heard, 1).sent == []
+def test_silence_and_speech_caught_by_the_mic_stay_off_the_channel(monkeypatch, heard):
+    assert next_line(monkeypatch, heard).sent == []
 
 
-@pytest.mark.parametrize('heard', ['Codex run the tests', 'Codecs run the tests', 'Clot 1 do the thing now',
-                                   'Plod 2 this is a test', 'Gordon check this for me'])
-def test_a_call_with_an_unheard_name_does_not_land_on_the_last_agent(monkeypatch, heard):
-    monkeypatch.setattr(voice, 'roster', lambda: {'codex': 'codex', 'klod one': 'klod1', 'klod two': 'klod2',
-                                                  'gordon': 'triage'})
-    assert second_part(monkeypatch, heard, 1).sent == []
-
-
-def test_a_thought_about_nobody_still_carries_on_with_that_roster(monkeypatch):
-    monkeypatch.setattr(voice, 'roster', lambda: {'codex': 'codex', 'klod one': 'klod1', 'klod two': 'klod2',
-                                                  'gordon': 'triage'})
-    assert len(second_part(monkeypatch, 'because the tests fail on master', 1).sent) == 1
-
-
-def test_the_toggle_ends_carrying_on(monkeypatch):
+def test_the_toggle_closes_the_channel(monkeypatch):
     Path(voice.NO_CONTINUE).touch()
-    assert second_part(monkeypatch, 'and then the rest of the thought', 1).sent == []
+    assert next_line(monkeypatch, 'and then the rest of the thought').sent == []
 
 
-def test_a_line_that_failed_is_nothing_to_carry_on_from(monkeypatch):
-    assert second_part(monkeypatch, 'and then the rest of the thought', 1, delivered=False).sent == []
+def test_a_line_that_failed_opens_no_channel(monkeypatch):
+    assert next_line(monkeypatch, 'and then the rest of the thought', delivered=False).sent == []
 
 
 def test_a_kept_line_reads_back_as_it_was_heard():

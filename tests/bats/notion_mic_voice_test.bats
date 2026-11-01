@@ -66,13 +66,22 @@ voice_mode_is() {
   [[ "$output" == *$'\n'"🟢 Read whole replies: on, click to turn off | bash='\"${TOGGLES_BIN}\" __run voice-replies-whole off'"* ]]
 }
 
+@test "the resume row follows its flag and switches through the board" {
+  voice_mode_is 3
+  run bash "$SCRIPT"
+  [[ "$output" == *$'\n'"⚪ Resume speech after I talk: off, click to turn on | bash='\"${TOGGLES_BIN}\" __run voice-resume-speech on'"* ]]
+  touch "${KLOD_VOICE_STATE}/resume-speech"
+  run bash "$SCRIPT"
+  [[ "$output" == *$'\n'"🟢 Resume speech after I talk: on, click to turn off | bash='\"${TOGGLES_BIN}\" __run voice-resume-speech off'"* ]]
+}
+
 @test "the carry on row follows its flag, which marks it off" {
   voice_mode_is 3
   run bash "$SCRIPT"
-  [[ "$output" == *$'\n'"🟢 Carry on to last agent: on, click to turn off | bash='\"${TOGGLES_BIN}\" __run voice-carry-on off'"* ]]
+  [[ "$output" == *$'\n'"🟢 Keep channel open: on, click to turn off | bash='\"${TOGGLES_BIN}\" __run voice-carry-on off'"* ]]
   touch "${KLOD_VOICE_STATE}/no-continue"
   run bash "$SCRIPT"
-  [[ "$output" == *$'\n'"⚪ Carry on to last agent: off, click to turn on | bash='\"${TOGGLES_BIN}\" __run voice-carry-on on'"* ]]
+  [[ "$output" == *$'\n'"⚪ Keep channel open: off, click to turn on | bash='\"${TOGGLES_BIN}\" __run voice-carry-on on'"* ]]
 }
 
 @test "a click on tempo steps normal, fast, slow and back" {

@@ -11,8 +11,8 @@ most of them. The next few words go to the quick decision model with the live ro
 and the line goes to the name they sound most like. Nothing else leaves the machine.
 One breath can call several agents: each "check check" starts a call of its own.
 
-A line that opens with no name and follows a sent one is the same thought, past a
-pause to think, so it goes to the same agent. A flag file switches that off.
+A call opens a channel: every line after it goes to that agent, with no time limit,
+until another call swaps it or the stop word closes it. A flag file switches that off.
 
 Every closed line waits in a RAM folder until all its calls are sent, so a crash, a
 restart or a line that reached nobody costs no words. `__voice_mode.py --lost` prints
@@ -22,11 +22,12 @@ it off. The journal still gets no words.
 Lines travel as messages, never as keys, so speech cannot answer a permission prompt.
 They are not marked [HUMAN], because a transcript can be misheard.
 
-Saying "stop stop" on its own cuts all speech and the replies queued behind it.
-The agents keep working; only their voices stop.
+Saying "stop stop" on its own cuts all speech and the replies queued behind it, and
+closes the channel, so the next line needs a name. The agents keep working.
 
-While Piotr talks, whoever is speaking pauses and carries on from the same spot when
-his line ends. A flag file switches that off, from the toggle board.
+When Piotr starts to talk, whoever is speaking pauses, and stops for good once it is
+plainly speech, because he has heard enough. A cough only pauses it. One flag file
+brings back carrying on from the same spot, another switches all of this off.
 
 Mic and speech follow the system's default devices, the ones GNOME's Sound panel sets.
 Handy with no device selected reads the same ones, and must stay that way: a selected
@@ -34,7 +35,6 @@ mic is opened raw, which fails while this stream holds it, and Handy then erases
 """
 import array
 import collections
-import difflib
 import glob
 import json
 import math
@@ -56,6 +56,7 @@ PIPER = os.path.join(os.path.dirname(os.path.abspath(__file__)), '__piper_quiet.
 VOICE = os.path.expanduser('~/.local/share/piper-voices/lessac-medium/en_US-lessac-medium.onnx')
 VOICE_LOCK = os.path.expanduser('~/.local/state/klod-voice.lock')
 NO_BARGE_IN = os.path.expanduser('~/.local/state/klod-voice/no-barge-in')
+RESUME_SPEECH = os.path.expanduser('~/.local/state/klod-voice/resume-speech')
 NO_KEEP = os.path.expanduser('~/.local/state/klod-voice/no-keep')
 NO_CONTINUE = os.path.expanduser('~/.local/state/klod-voice/no-continue')
 NATS = os.path.expanduser('~/.local/bin/nats')
@@ -92,9 +93,6 @@ QUICK_END = 20  # 0.6 s of quiet is enough to test a short burst for the stop wo
 QUICK_MAX = 100  # 3 s; anything longer is a line, not the stop word
 OPENING_FRAMES = 67  # 2 s with the lead-in: at 1.5 s Handy missed the wake word in one of three Piper voices
 HOLD_FRAMES = 16  # about 0.5 s: how soon a reply that starts mid-line is paused
-CONTINUE_SECONDS = 120  # long enough to hear the agent out and answer: his real reply came at 78 s
-CONTINUE_WORDS = 4  # fewer may be a yes to someone in the room, and an agent would take it as his
-NAME_LIKE = 0.6  # measured: 15 of 16 misheard names at or over it, 11 of 16 plain thoughts under it
 
 BUS_NAME = 'human-via-voice'
 VOICE_TAG = '[PIOTR VIA VOICE]'
@@ -229,7 +227,7 @@ class Presence:
 
 
 PRESENCE = Presence()
-LATEST = {}  # who the last sent call went to, and when its line closed
+LATEST = {}  # the open channel: who the last sent call went to
 HANDY_TURN = threading.Lock()  # measured: of three Handys at once, one ran out of GPU memory
 
 
@@ -278,19 +276,23 @@ def hold_speech(held):
 
 
 class BargeIn:
-    """Keep speech paused for as long as Piotr is talking."""
+    """Pause speech when Piotr starts to talk, and end it once that is plainly speech."""
 
     def __init__(self):
         self.frames = 0
+        self.cut = False
 
-    def update(self, talking):
+    def update(self, talking, voiced=0):
         if talking and not os.path.exists(NO_BARGE_IN):
             if self.frames % HOLD_FRAMES == 0:
                 hold_speech(True)
             self.frames += 1
+            if voiced >= MIN_VOICED and not self.cut and not os.path.exists(RESUME_SPEECH):
+                silence()
+                self.cut = True
         elif self.frames:
             hold_speech(False)
-            self.frames = 0
+            self.frames, self.cut = 0, False
 
 
 def say(text):
@@ -454,39 +456,30 @@ def attempt(agent, message):
         return 'failed'
 
 
-def opens_like_a_name(words):
-    """True when a line's first words sound like someone on the roster: a misheard call."""
-    heard = spoken(re.sub(r'\W+', ' ', ' '.join(words[:6])).lower()).split()
-    return any(difflib.SequenceMatcher(None, ' '.join(heard[:len(name.split())]), name).ratio() >= NAME_LIKE
-               for name in roster())
+def continued(text):
+    """Return the call for a nameless line: it stays on the open channel.
 
-
-def continued(text, started):
-    """Return the call for a nameless line that carries on from a sent one, past a pause or the cap.
-
-    A call whose name went unheard must not land on the last agent, who would act on it.
-    Better it stays orange and in the lost lines.
+    Only another call or the stop word moves the channel, so a line that merely sounds
+    like a name stays on it. Speech the mic caught from a reply never does.
     """
-    if not LATEST or started - LATEST['closed'] >= CONTINUE_SECONDS or os.path.exists(NO_CONTINUE):
-        return []
     words = text.split()
-    if len(words) < CONTINUE_WORDS or OWN_SPEECH.search(' '.join(words[:6])) or opens_like_a_name(words):
+    if not LATEST or not words or os.path.exists(NO_CONTINUE) or OWN_SPEECH.search(' '.join(words[:6])):
         return []
     return [(LATEST['agent'], text)]
 
 
-def handle(pcm, kept=None, closed=None):
+def handle(pcm, kept=None):
     """Send one utterance to each agent it calls, show the worst outcome, free its audio if sent."""
-    closed = time.monotonic() if closed is None else closed
     text = transcribe(pcm)
-    if STOP_WORD.fullmatch(text):  # check_stop already acted on it, moments earlier
+    if STOP_WORD.fullmatch(text):  # check_stop acted on a short one, moments earlier
+        LATEST.clear()
         forget(kept)
         return
-    found = calls(text) or continued(text, closed - len(pcm) / (2 * RATE)) or [(None, '')]
+    found = calls(text) or continued(text) or [(None, '')]
     outcomes = [attempt(agent, message) for agent, message in found]
     for (agent, _), outcome in zip(found, outcomes):
         if outcome == 'sent':
-            LATEST.update(agent=agent, closed=closed)
+            LATEST.update(agent=agent)
     if set(outcomes) == {'sent'}:
         forget(kept)
     else:
@@ -511,9 +504,10 @@ def check_wake(pcm, segmenter):
 
 
 def check_stop(pcm):
-    """Silence every agent when a short burst is the stop word."""
+    """Silence every agent and close the channel when a short burst is the stop word."""
     if STOP_WORD.fullmatch(transcribe(pcm)):
         silence()
+        LATEST.clear()
         print('voice-mode: stop word heard', flush=True)
 
 
@@ -555,9 +549,9 @@ def main():
     try:
         while len(frame := mic.stdout.read(FRAME_BYTES)) == FRAME_BYTES:
             pcm = segmenter.push(frame)
-            barge_in.update(segmenter.utterance is not None)
+            barge_in.update(segmenter.utterance is not None, segmenter.voiced)
             if pcm:
-                utterances.put((pcm, keep(pcm), time.monotonic()))
+                utterances.put((pcm, keep(pcm)))
             if burst := segmenter.burst():
                 bursts.put(burst)
             if opening := segmenter.opening():
