@@ -442,6 +442,11 @@ require("obsidian").setup {
     format = "shortest",
   },
 
+  -- One press marks done; the default steps through ~, ! and > first.
+  checkbox = {
+    order = { " ", "x" },
+  },
+
   -- Use just the note name as ID (obsidian.nvim handles path resolution)
   note_id_func = function(title)
     -- Guard nil/empty title so the file does not land as nil.md
@@ -459,12 +464,8 @@ require("obsidian").setup {
         buffer = 0,
         desc = "Follow Obsidian link",
       })
-
-      -- <CR> to follow links or toggle checkboxes
-      vim.keymap.set("n", "<CR>", "<cmd>Obsidian smart_action<cr>", {
-        buffer = 0,
-        desc = "Obsidian smart action",
-      })
+      -- <CR> stays with the plugin's own smart action, which ticks checkboxes and follows
+      -- links. There is no :Obsidian smart_action command to map it to.
     end,
   },
 
