@@ -27,6 +27,8 @@ readonly notion_window_re='Notion - Google Chrome'
 readonly toggles="${TOGGLES_BIN:-$HOME/dev/dotfiles/scripts/__toggles.sh}"
 readonly voice_replies_off_flag="${KLOD_VOICE_STATE:-$HOME/.local/state/klod-voice}/off"
 readonly voice_whole_flag="${KLOD_VOICE_STATE:-$HOME/.local/state/klod-voice}/whole"
+readonly voice_no_carry_flag="${KLOD_VOICE_STATE:-$HOME/.local/state/klod-voice}/no-continue"
+readonly voice_tempo_file="${KLOD_VOICE_STATE:-$HOME/.local/state/klod-voice}/tempo"
 # __voice_mode.py writes what became of each spoken line here.
 readonly line_status="${XDG_RUNTIME_DIR:-/run/user/$UID}/voice-mode-line"
 readonly blink_seconds=4
@@ -74,6 +76,15 @@ case "${1:-}" in
 		"$toggles" __run voice-replies off
 		exit 0
 		;;
+	--tempo)
+		mkdir -p "$(dirname "$voice_tempo_file")"
+		case "$(cat "$voice_tempo_file" 2>/dev/null)" in
+			0.8) printf 1.2 >"$voice_tempo_file" ;;
+			1.2) : >"$voice_tempo_file" ;;
+			*) printf 0.8 >"$voice_tempo_file" ;;
+		esac
+		exit 0
+		;;
 esac
 
 # --- state ----------------------------------------------------------------
@@ -103,6 +114,18 @@ if [[ -e "$voice_whole_flag" ]]; then
 else
 	voice_whole="off"
 fi
+if [[ -e "$voice_no_carry_flag" ]]; then
+	voice_carry="off"
+else
+	voice_carry="on"
+fi
+voice_tempo=""
+[[ -f "$voice_tempo_file" ]] && voice_tempo="$(<"$voice_tempo_file")"
+case "$voice_tempo" in
+	"") voice_tempo="normal" ;;
+	0.8) voice_tempo="fast" ;;
+	1.2) voice_tempo="slow" ;;
+esac
 
 # --- panel line -----------------------------------------------------------
 # UP   = mic icon + green dot; visually obvious the routing is live.
@@ -182,6 +205,8 @@ echo "<b>Voice bridge</b> | font=monospace"
 voice_item voice-mode "Hands-free listening" "$voice_listening"
 voice_item voice-replies "Spoken replies (Piper)" "$voice_replies"
 voice_item voice-replies-whole "Read whole replies" "$voice_whole"
+voice_item voice-carry-on "Carry on to last agent" "$voice_carry"
+echo "⏱ Speech tempo: ${voice_tempo}, click to change | bash='\"$0\" --tempo' terminal=false refresh=true"
 if [[ "$voice_listening" == "on" || "$voice_replies" == "on" ]]; then
 	echo "🛑 All off (normal mode) | bash='\"$0\" --voice-off' terminal=false refresh=true"
 fi

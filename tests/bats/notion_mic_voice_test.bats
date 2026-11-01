@@ -66,6 +66,34 @@ voice_mode_is() {
   [[ "$output" == *$'\n'"🟢 Read whole replies: on, click to turn off | bash='\"${TOGGLES_BIN}\" __run voice-replies-whole off'"* ]]
 }
 
+@test "the carry on row follows its flag, which marks it off" {
+  voice_mode_is 3
+  run bash "$SCRIPT"
+  [[ "$output" == *$'\n'"🟢 Carry on to last agent: on, click to turn off | bash='\"${TOGGLES_BIN}\" __run voice-carry-on off'"* ]]
+  touch "${KLOD_VOICE_STATE}/no-continue"
+  run bash "$SCRIPT"
+  [[ "$output" == *$'\n'"⚪ Carry on to last agent: off, click to turn on | bash='\"${TOGGLES_BIN}\" __run voice-carry-on on'"* ]]
+}
+
+@test "a click on tempo steps normal, fast, slow and back" {
+  voice_mode_is 3
+  tempo="${KLOD_VOICE_STATE}/tempo"
+  run bash "$SCRIPT"
+  [[ "$output" == *$'\n'"⏱ Speech tempo: normal, click to change | bash='\"${SCRIPT}\" --tempo'"* ]]
+  bash "$SCRIPT" --tempo
+  [ "$(cat "$tempo")" = "0.8" ]
+  run bash "$SCRIPT"
+  [[ "$output" == *"Speech tempo: fast,"* ]]
+  bash "$SCRIPT" --tempo
+  [ "$(cat "$tempo")" = "1.2" ]
+  run bash "$SCRIPT"
+  [[ "$output" == *"Speech tempo: slow,"* ]]
+  bash "$SCRIPT" --tempo
+  [ ! -s "$tempo" ]
+  run bash "$SCRIPT"
+  [[ "$output" == *"Speech tempo: normal,"* ]]
+}
+
 @test "all off switches both toggles off through the board" {
   voice_mode_is 0
   run bash "$SCRIPT" --voice-off
