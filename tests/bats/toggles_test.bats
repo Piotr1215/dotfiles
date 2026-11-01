@@ -224,3 +224,15 @@ EOF
   [[ "$output" =~ ^registered\ [0-9]+$ ]]
   [ "${output#registered }" -ge 1 ]
 }
+
+@test "voice-mode on and off persist through the unit's enablement" {
+  stub="${BATS_TEST_TMPDIR}/bin"
+  mkdir -p "$stub"
+  printf '#!/bin/sh\necho "$*" >>"%s/calls"\n' "$BATS_TEST_TMPDIR" >"$stub/systemctl"
+  chmod +x "$stub/systemctl"
+  export TOGGLES_CONF="${BATS_TEST_DIRNAME}/../../scripts/__toggles.conf"
+  PATH="$stub:$PATH" run "$SCRIPT" __run voice-mode on
+  PATH="$stub:$PATH" run "$SCRIPT" __run voice-mode off
+  grep -Fx -- '--user enable --now voice-mode.service' "$BATS_TEST_TMPDIR/calls"
+  grep -Fx -- '--user disable --now voice-mode.service' "$BATS_TEST_TMPDIR/calls"
+}

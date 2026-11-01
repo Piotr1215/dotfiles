@@ -1,5 +1,5 @@
 [Unit]
-Description=Voice mode (headset speech to named agent panes)
+Description=Voice mode (spoken lines to named agents)
 Documentation=file:%h/dev/dotfiles/scripts/__voice_mode.py
 After=pipewire-pulse.service
 
@@ -9,3 +9,6 @@ ExecStart=%h/dev/dotfiles/scripts/__voice_mode.py
 Restart=on-failure
 RestartSec=3
 Environment="PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin"
+
+[Install]
+WantedBy=default.target

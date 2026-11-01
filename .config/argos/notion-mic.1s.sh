@@ -101,7 +101,7 @@ fi
 # --- panel line -----------------------------------------------------------
 # UP   = mic icon + green dot; visually obvious the routing is live.
 # DOWN = dim mic icon only.
-# A blue dot means voice mode is listening on the headset. After a spoken line it
+# A blue dot means voice mode is listening on the default mic. After a spoken line it
 # blinks what became of the line: green when the bus took it, orange when it reached
 # nobody, red when it named an agent and could not be sent. No blink means the relay
 # cut no line from the mic. It holds bright yellow while a line that opened with the

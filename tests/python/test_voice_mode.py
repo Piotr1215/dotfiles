@@ -3,7 +3,9 @@ import array
 import importlib.util
 import io
 import json
+import math
 import os
+import random
 import signal
 import subprocess
 import sys
@@ -19,7 +21,33 @@ spec = importlib.util.spec_from_file_location('voice_mode', ROOT / 'scripts' / '
 voice = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(voice)
 
-LOUD = array.array('h', [1000] * 480).tobytes()
+OPEN_MIC = voice.Segmenter  # as the relay starts: it has heard no room yet
+
+
+class QuietRoom(voice.Segmenter):
+    """A mic that was silent a moment ago, so a line can open on the first frame."""
+
+    def __init__(self):
+        super().__init__()
+        self.levels.append(0.0)
+
+
+def tone(level):
+    return array.array('h', [level, -level] * 240).tobytes()
+
+
+def room(level, frames):
+    """Steady room noise, the same every run."""
+    noise = random.Random(7)
+    return [array.array('h', [int(noise.gauss(0, level)) for _ in range(480)]).tobytes() for _ in range(frames)]
+
+
+def talking(frames):
+    """Speech with the short gaps real speech has, which show the room behind it."""
+    return (([LOUD] * 99 + [QUIET]) * (frames // 100 + 1))[:frames]
+
+
+LOUD = tone(1000)
 QUIET = bytes(960)
 
 
@@ -30,6 +58,7 @@ def fresh_relay(monkeypatch, tmp_path):
     monkeypatch.setattr(voice, 'LOST_DIR', str(tmp_path / 'lost'))
     monkeypatch.setattr(voice, 'NO_KEEP', str(tmp_path / 'no-keep'))
     monkeypatch.setattr(voice, 'NO_CONTINUE', str(tmp_path / 'no-continue'))
+    monkeypatch.setattr(voice, 'Segmenter', QuietRoom)
 
 
 @pytest.mark.parametrize(('heard', 'agent', 'message'), [
@@ -109,6 +138,49 @@ def test_a_line_with_thinking_pauses_can_run_most_of_a_minute():
     assert len(feed(voice.Segmenter(), stretch * 26 + [QUIET] * voice.END_FRAMES)) == 1  # 55 s
 
 
+def test_room_noise_on_an_open_mic_opens_no_line():
+    segmenter = OPEN_MIC()
+    assert feed(segmenter, room(4000, 300)) == []
+    assert segmenter.utterance is None
+
+
+def test_speech_over_room_noise_is_one_line():
+    frames = room(3000, 60) + [tone(15000)] * voice.MIN_VOICED * 3 + room(3000, voice.END_FRAMES)
+    assert len(feed(OPEN_MIC(), frames)) == 1
+
+
+@pytest.mark.parametrize(('over_margin', 'cuts'), [(-0.5, 0), (0.5, 1)], ids=['under', 'over'])
+def test_speech_has_to_clear_the_room_by_the_margin(over_margin, cuts):
+    speech = tone(int(4000 * (voice.NOISE_MARGIN + over_margin)))
+    frames = [tone(4000)] * 60 + [speech] * voice.MIN_VOICED + [tone(4000)] * voice.END_FRAMES
+    assert len(feed(OPEN_MIC(), frames)) == cuts
+
+
+def test_a_room_that_turns_loud_becomes_the_new_room():
+    segmenter = OPEN_MIC()
+    feed(segmenter, [QUIET] * 5 + room(4000, voice.NOISE_WINDOW + voice.END_FRAMES + 10))
+    assert segmenter.utterance is None
+
+
+def test_a_faint_sound_on_a_silent_mic_stays_under_the_speech_level():
+    assert feed(voice.Segmenter(), [tone(50)] * 50 + [QUIET] * voice.END_FRAMES) == []
+
+
+def test_rumble_below_speech_opens_no_line_on_a_silent_mic():
+    wave = [int(300 * math.sin(2 * math.pi * 30 * n / voice.RATE)) for n in range(480 * 60)]
+    rumble = [array.array('h', wave[start:start + 480]).tobytes() for start in range(0, len(wave), 480)]
+    assert feed(voice.Segmenter(), rumble + [QUIET] * voice.END_FRAMES) == []
+
+
+def test_speech_plays_on_the_default_output(monkeypatch):
+    played = []
+    monkeypatch.setattr(voice.subprocess, 'run', lambda argv, **_: played.append(argv))
+    voice.say('hello')
+    assert played[-1][:4] == ['flock', voice.VOICE_LOCK, 'timeout', '30']
+    assert played[-1][4:-1] == voice.PLAYER.split()
+    assert '--target' not in played[-1]
+
+
 def test_a_click_is_too_short_to_be_speech():
     click = [LOUD] * (voice.MIN_VOICED - 1)
     assert feed(voice.Segmenter(), click + [QUIET] * voice.END_FRAMES) == []
@@ -120,7 +192,7 @@ def test_two_frames_of_noise_never_open_an_utterance():
 
 
 def test_endless_speech_is_cut_at_the_limit():
-    cuts = feed(voice.Segmenter(), [LOUD] * (voice.MAX_FRAMES + voice.START_FRAMES))
+    cuts = feed(voice.Segmenter(), talking(voice.MAX_FRAMES + voice.START_FRAMES))
     assert len(cuts) == 1
     assert len(cuts[0]) == voice.MAX_FRAMES * voice.FRAME_BYTES
 
@@ -178,11 +250,11 @@ def test_a_long_line_is_never_offered_as_a_burst():
 
 
 def test_silence_ends_speech_and_its_queue_but_nothing_else(monkeypatch):
-    monkeypatch.setattr(voice, 'SINK', 'test-sink-for-silence')
-    play = 'pw-play --target test-sink-for-silence a.wav'
+    monkeypatch.setattr(voice, 'PLAYER', 'pw-play -P media.name=test-silence')
+    play = 'pw-play -P media.name=test-silence a.wav'
     spawn = lambda cmdline: subprocess.Popen([cmdline, '30'], executable='sleep')
     speech = [spawn(play), spawn(f'timeout 60 {play}'), spawn(f'flock -w 90 lock timeout 60 {play}')]
-    others = [spawn('pw-play --target other-sink a.wav'), spawn(f'zsh -c {play}')]
+    others = [spawn('pw-play -P media.name=test-other a.wav'), spawn(f'zsh -c {play}')]
     try:
         voice.silence()
         assert [process.wait(timeout=5) for process in speech] == [-signal.SIGTERM] * 3
@@ -193,7 +265,7 @@ def test_silence_ends_speech_and_its_queue_but_nothing_else(monkeypatch):
 
 
 def test_silence_with_nothing_playing_is_not_an_error(monkeypatch):
-    monkeypatch.setattr(voice, 'SINK', 'test-sink-with-no-speech')
+    monkeypatch.setattr(voice, 'PLAYER', 'pw-play -P media.name=test-nothing-playing')
     voice.silence()
 
 
@@ -606,10 +678,10 @@ def settled(process, wanted):
 
 
 def test_a_hold_pauses_only_the_player_and_the_release_wakes_it(monkeypatch):
-    monkeypatch.setattr(voice, 'SINK', 'test-sink-for-hold')
-    play = 'pw-play --target test-sink-for-hold a.wav'
+    monkeypatch.setattr(voice, 'PLAYER', 'pw-play -P media.name=test-hold')
+    play = 'pw-play -P media.name=test-hold a.wav'
     spawn = lambda cmdline: subprocess.Popen([cmdline, '30'], executable='sleep')
-    player, wrapper, other = spawn(play), spawn(f'timeout 60 {play}'), spawn('pw-play --target other-sink a.wav')
+    player, wrapper, other = spawn(play), spawn(f'timeout 60 {play}'), spawn('pw-play -P media.name=test-other a.wav')
     try:
         voice.hold_speech(True)
         assert settled(player, 'T') == 'T'
@@ -622,8 +694,8 @@ def test_a_hold_pauses_only_the_player_and_the_release_wakes_it(monkeypatch):
 
 
 def test_the_stop_word_still_ends_paused_speech(monkeypatch):
-    monkeypatch.setattr(voice, 'SINK', 'test-sink-for-paused-stop')
-    player = subprocess.Popen(['pw-play --target test-sink-for-paused-stop a.wav', '30'], executable='sleep')
+    monkeypatch.setattr(voice, 'PLAYER', 'pw-play -P media.name=test-paused-stop')
+    player = subprocess.Popen(['pw-play -P media.name=test-paused-stop a.wav', '30'], executable='sleep')
     try:
         voice.hold_speech(True)
         settled(player, 'T')
@@ -657,8 +729,7 @@ def lost_files():
 
 
 def test_a_two_minute_line_stays_one_line():
-    frames = [LOUD] * int(120 / 0.03)
-    cuts = feed(voice.Segmenter(), frames + [QUIET] * voice.END_FRAMES)
+    cuts = feed(voice.Segmenter(), talking(int(120 / 0.03)) + [QUIET] * voice.END_FRAMES)
     assert len(cuts) == 1
     assert len(cuts[0]) >= len(MINUTE) * 2
 
@@ -905,9 +976,9 @@ def test_stopping_the_relay_mid_line_keeps_what_was_said(tmp_path):
     parec = bin_dir / 'parec'
     parec.write_text(f'''#!{sys.executable}
 import pathlib, sys, time
-sys.stdout.buffer.write({LOUD!r} * 120)  # past the pipe buffer, so the relay has read it
+sys.stdout.buffer.write({QUIET!r} + {LOUD!r} * 120)  # past the pipe buffer, so the relay has read it
 sys.stdout.buffer.flush()
-pathlib.Path({str(started)!r}).touch()
+pathlib.Path({str(started)!r}).write_text(' '.join(sys.argv))
 time.sleep(5)
 ''')
     pkill = bin_dir / 'pkill'
@@ -923,6 +994,7 @@ time.sleep(5)
     time.sleep(0.2)
     relay.terminate()
     assert relay.wait(5) == 0  # a stop, so systemd does not call it a failure
+    assert '--device' not in started.read_text()  # the mic is the system's default, not a name of ours
     assert len(list((tmp_path / 'voice-mode-lost').glob('*.wav'))) == 1
 
 

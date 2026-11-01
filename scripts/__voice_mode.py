@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Voice mode: hear Piotr on the headset and pass named lines to agents over the bus.
+"""Voice mode: hear Piotr on the default mic and pass named lines to agents over the bus.
 
 Speech becomes text locally and the agents bus does the routing. A line that opens
 with an agent's name ("Claude 2, run the tests") goes out as a DM to that name, so
@@ -28,9 +28,9 @@ The agents keep working; only their voices stop.
 While Piotr talks, whoever is speaking pauses and carries on from the same spot when
 his line ends. A flag file switches that off, from the toggle board.
 
-Handy must stay on the system default mic, with the headset as that default.
-A selected mic is opened raw, which fails while this stream holds the device,
-and Handy then erases the selection.
+Mic and speech follow the system's default devices, the ones GNOME's Sound panel sets.
+Handy with no device selected reads the same ones, and must stay that way: a selected
+mic is opened raw, which fails while this stream holds it, and Handy then erases it.
 """
 import array
 import collections
@@ -49,8 +49,8 @@ import threading
 import time
 import wave
 
-SOURCE = 'alsa_input.usb-Logitech_PRO_X_Wireless_Gaming_Headset-00.mono-fallback'
-SINK = 'alsa_output.usb-Logitech_PRO_X_Wireless_Gaming_Headset-00.analog-stereo'
+# With no target the default output plays it; the name is how pkill finds this speech.
+PLAYER = 'pw-play -P media.name=klod-voice'
 HANDY = os.path.expanduser('~/.local/bin/handy')
 PIPER = os.path.join(os.path.dirname(os.path.abspath(__file__)), '__piper_quiet.py')
 VOICE = os.path.expanduser('~/.local/share/piper-voices/lessac-medium/en_US-lessac-medium.onnx')
@@ -74,8 +74,12 @@ LOST_KEPT = 20
 RATE = 16000
 FRAME_BYTES = 960  # 30 ms of s16le mono
 
-# The headset gates silence to zero; measured speech runs at 300 to 800 RMS.
+# A headset gates silence to zero, with speech at 300 to 800 RMS. A laptop mic idles at
+# thousands, so speech has to clear the room as well as this level.
 SPEECH_RMS = 100
+HIGH_PASS = 0.96  # one pole at about 100 Hz: 65% of the laptop mic's noise is under 50 Hz
+NOISE_WINDOW = 170  # 5 s: speech has gaps, so the quietest frame in here is the room
+NOISE_MARGIN = 3  # measured on 32 s of laptop mic noise: 3 opened no line, 2.5 opened two
 START_FRAMES = 3  # 90 ms of speech opens an utterance
 END_FRAMES = 84  # 2.5 s of quiet closes it; Piotr pauses to think mid-line
 MIN_VOICED = 10  # shorter than 300 ms of speech is a click or a cough
@@ -156,10 +160,24 @@ class Segmenter:
         self.lead_in = collections.deque(maxlen=PRE_ROLL)
         self.utterance = None
         self.onset = self.voiced = self.quiet = 0
+        self.levels = collections.deque(maxlen=NOISE_WINDOW)
+        self.last_in = self.last_out = 0.0
+
+    def level(self, frame):
+        """The frame's RMS with the rumble below speech filtered out."""
+        energy = 0.0
+        samples = array.array('h', frame)
+        for sample in samples:
+            self.last_out = HIGH_PASS * (self.last_out + sample - self.last_in)
+            self.last_in = sample
+            energy += self.last_out * self.last_out
+        return math.sqrt(energy / len(samples))
 
     def push(self, frame):
         """Take one frame. Return the utterance's PCM when one has just closed."""
-        loud = rms(frame) >= SPEECH_RMS
+        level = self.level(frame)
+        self.levels.append(level)
+        loud = level >= max(SPEECH_RMS, NOISE_MARGIN * min(self.levels))
         if self.utterance is None:
             self.lead_in.append(frame)
             self.onset = self.onset + 1 if loud else 0
@@ -250,13 +268,13 @@ def deliver(agent, text):
 
 def silence():
     """End the speech playing now and the replies queued behind it."""
-    subprocess.run(['pkill', '-f', f'^(flock .*|timeout .*)?pw-play --target {SINK}'], check=False)
+    subprocess.run(['pkill', '-f', f'^(flock .*|timeout .*)?{PLAYER}'], check=False)
     hold_speech(False)  # paused speech takes the signal only once it wakes
 
 
 def hold_speech(held):
     """Pause the speech playing now, or let it carry on. Its lock keeps the rest queued."""
-    subprocess.run(['pkill', '-STOP' if held else '-CONT', '-f', f'^pw-play --target {SINK}'], check=False)
+    subprocess.run(['pkill', '-STOP' if held else '-CONT', '-f', f'^{PLAYER}'], check=False)
 
 
 class BargeIn:
@@ -279,7 +297,7 @@ def say(text):
     with tempfile.NamedTemporaryFile(suffix='.wav') as speech:
         subprocess.run([PIPER, '-m', VOICE, '-f', speech.name], input=text, text=True,
                        capture_output=True, timeout=30, check=True)
-        subprocess.run(['flock', VOICE_LOCK, 'timeout', '30', 'pw-play', '--target', SINK, speech.name],
+        subprocess.run(['flock', VOICE_LOCK, 'timeout', '30', *PLAYER.split(), speech.name],
                        timeout=90, check=True)
 
 
@@ -529,7 +547,7 @@ def main():
     threading.Thread(target=worker, args=(utterances, lambda line: handle(*line)), daemon=True).start()
     threading.Thread(target=worker, args=(bursts, check_stop), daemon=True).start()
     threading.Thread(target=worker, args=(openings, lambda pcm: check_wake(pcm, segmenter)), daemon=True).start()
-    mic = subprocess.Popen(['parec', f'--device={SOURCE}', f'--rate={RATE}', '--channels=1',
+    mic = subprocess.Popen(['parec', f'--rate={RATE}', '--channels=1',
                             '--format=s16le', '--latency-msec=30'], stdout=subprocess.PIPE)
     barge_in = BargeIn()
     hold_speech(False)  # a relay that died mid-line left speech paused
