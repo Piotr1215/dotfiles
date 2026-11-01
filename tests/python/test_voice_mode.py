@@ -55,6 +55,9 @@ QUIET = bytes(960)
 def fresh_relay(monkeypatch, tmp_path):
     """No test inherits an earlier line's agent, or touches the real lost lines and flags."""
     monkeypatch.setattr(voice, 'CHANNEL', str(tmp_path / 'channel'))
+    monkeypatch.setattr(voice, 'SPEECH_CUT', str(tmp_path / 'cut'))
+    monkeypatch.setattr(voice, 'NO_BARGE_IN', str(tmp_path / 'no-barge-in'))
+    monkeypatch.setattr(voice, 'RESUME_SPEECH', str(tmp_path / 'resume-speech'))
     monkeypatch.setattr(voice, 'LOST_DIR', str(tmp_path / 'lost'))
     monkeypatch.setattr(voice, 'NO_KEEP', str(tmp_path / 'no-keep'))
     monkeypatch.setattr(voice, 'NO_CONTINUE', str(tmp_path / 'no-continue'))
@@ -297,6 +300,8 @@ class Line:
     def __init__(self, monkeypatch, heard, agents, delivered=True):
         self.sent = []
         self.spoken = []
+        self.cuts = []
+        monkeypatch.setattr(voice, 'silence', lambda: self.cuts.append(len(self.sent)))
         monkeypatch.setattr(voice, 'transcribe', lambda _: heard)
         monkeypatch.setattr(voice, 'registered', lambda name: name in agents)
         monkeypatch.setattr(voice, 'say', self.spoken.append)
@@ -1017,6 +1022,63 @@ def test_the_stop_word_caught_early_closes_the_channel_too(monkeypatch):
 ])
 def test_silence_and_speech_caught_by_the_mic_stay_off_the_channel(monkeypatch, heard):
     assert next_line(monkeypatch, heard).sent == []
+
+
+def test_a_line_that_reaches_an_agent_ends_speech_after_delivery(monkeypatch):
+    line = Line(monkeypatch, 'Claude 2, new thought.', {'klod2'})
+    voice.handle(b'')
+    assert line.cuts == [1]
+
+
+def test_a_line_that_reached_one_of_two_agents_ends_speech(monkeypatch):
+    monkeypatch.setattr(voice, 'closest', lambda _: 'klod1')
+    line = Line(monkeypatch, 'Claude 2, first check check Claude 1, second', {'klod2'})
+    voice.handle(b'')
+    assert line.cuts == [1]
+
+
+def test_a_line_on_the_channel_ends_speech_too(monkeypatch):
+    line = next_line(monkeypatch, 'and then the rest of the thought')
+    assert line.cuts[-1] == 1  # the second line, with the first one's sends cleared
+
+
+@pytest.mark.parametrize(('heard', 'agents', 'delivered'), [
+    ('room talk with no name', {'klod2'}, True),
+    ('', {'klod2'}, True),
+    ('Claude 2, new thought.', set(), True),
+    ('Claude 2, new thought.', {'klod2'}, False),
+])
+def test_a_line_that_reached_nobody_leaves_speech_alone(monkeypatch, heard, agents, delivered):
+    line = Line(monkeypatch, heard, agents, delivered)
+    voice.handle(b'')
+    assert line.cuts == []
+
+
+@pytest.mark.parametrize('flag', ['NO_BARGE_IN', 'RESUME_SPEECH'])
+def test_the_speech_settings_also_rule_a_delivered_line(monkeypatch, tmp_path, flag):
+    (tmp_path / 'set').touch()
+    monkeypatch.setattr(voice, flag, str(tmp_path / 'set'))
+    line = Line(monkeypatch, 'Claude 2, new thought.', {'klod2'})
+    voice.handle(b'')
+    assert line.cuts == []
+
+
+def test_every_cut_marks_the_replies_still_being_made(monkeypatch):
+    monkeypatch.setattr(voice.subprocess, 'run', lambda *_, **__: None)
+    voice.silence()
+    first = os.stat(voice.SPEECH_CUT).st_mtime_ns
+    os.utime(voice.SPEECH_CUT, ns=(1, 1))
+    voice.silence()
+    assert os.stat(voice.SPEECH_CUT).st_mtime_ns >= first
+
+
+def test_a_cut_it_cannot_mark_still_ends_speech(monkeypatch, tmp_path, capsys):
+    ran = []
+    monkeypatch.setattr(voice, 'SPEECH_CUT', str(tmp_path / 'gone' / 'cut'))
+    monkeypatch.setattr(voice.subprocess, 'run', lambda *args, **_: ran.append(args))
+    voice.silence()
+    assert len(ran) == 2
+    assert 'cut not marked: FileNotFoundError' in capsys.readouterr().err
 
 
 def test_a_relay_restart_leaves_the_channel_open(monkeypatch):

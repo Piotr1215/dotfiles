@@ -15,6 +15,7 @@ spec.loader.exec_module(voice)
 @pytest.fixture(autouse=True)
 def no_earlier_line(monkeypatch, tmp_path):
     monkeypatch.setattr(voice, 'CHANNEL', str(tmp_path / 'channel'))
+    monkeypatch.setattr(voice, 'moved_on', lambda: None)
 
 
 @pytest.fixture

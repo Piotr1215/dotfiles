@@ -28,8 +28,9 @@ closes the channel, so the next line needs a name. The agents keep working.
 
 When Piotr starts to talk, whoever is speaking stops for good, because he has heard
 enough. A voice model decides that, so a thud or a breath leaves speech alone, though
-any voice counts, not only his. One flag file brings back pausing and carrying on from
-the same spot, another switches all of this off.
+any voice counts, not only his. A line that reaches an agent ends speech as well, and
+a reply still being made is dropped, because he has moved on. One flag file brings back
+pausing and carrying on from the same spot, another switches all of this off.
 
 Mic and speech follow the system's default devices, the ones GNOME's Sound panel sets.
 Handy with no device selected reads the same ones, and must stay that way: a selected
@@ -59,6 +60,7 @@ VOICE = os.path.expanduser('~/.local/share/piper-voices/lessac-medium/en_US-less
 VOICE_LOCK = os.path.expanduser('~/.local/state/klod-voice.lock')
 NO_BARGE_IN = os.path.expanduser('~/.local/state/klod-voice/no-barge-in')
 RESUME_SPEECH = os.path.expanduser('~/.local/state/klod-voice/resume-speech')
+SPEECH_CUT = os.path.expanduser('~/.local/state/klod-voice/cut')  # the reply hook drops what it was making
 NO_KEEP = os.path.expanduser('~/.local/state/klod-voice/no-keep')
 NO_CONTINUE = os.path.expanduser('~/.local/state/klod-voice/no-continue')
 NATS = os.path.expanduser('~/.local/bin/nats')
@@ -271,7 +273,12 @@ def deliver(agent, text):
 
 
 def silence():
-    """End the speech playing now and the replies queued behind it."""
+    """End the speech playing now, the replies queued behind it and those still being made."""
+    try:
+        with open(SPEECH_CUT, 'a', encoding='utf-8'):
+            os.utime(SPEECH_CUT)
+    except OSError as err:  # called from the capture loop, which must keep running
+        print(f'voice-mode: cut not marked: {type(err).__name__}', file=sys.stderr, flush=True)
     subprocess.run(['pkill', '-f', f'^(flock .*|timeout .*)?{PLAYER}'], check=False)
     hold_speech(False)  # paused speech takes the signal only once it wakes
 
@@ -556,6 +563,12 @@ def continued(text):
     return [(agent, text)]
 
 
+def moved_on():
+    """A line reached an agent, so whatever was still being said is out of date."""
+    if not os.path.exists(NO_BARGE_IN) and not os.path.exists(RESUME_SPEECH):
+        silence()
+
+
 def handle(pcm, kept=None):
     """Send one utterance to each agent it calls, show the worst outcome, free its audio if sent."""
     text = transcribe(pcm)
@@ -568,6 +581,8 @@ def handle(pcm, kept=None):
     for (agent, _), outcome in zip(found, outcomes):
         if outcome == 'sent':
             open_channel(agent)
+    if 'sent' in outcomes:
+        moved_on()
     if set(outcomes) == {'sent'}:
         forget(kept)
     else:
