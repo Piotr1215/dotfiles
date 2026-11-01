@@ -12,6 +12,7 @@ import sys
 import threading
 import time
 import types
+import wave
 from pathlib import Path
 
 import pytest
@@ -55,6 +56,7 @@ QUIET = bytes(960)
 def fresh_relay(monkeypatch, tmp_path):
     """No test inherits an earlier line's agent, or touches the real lost lines and flags."""
     monkeypatch.setattr(voice, 'CHANNEL', str(tmp_path / 'channel'))
+    monkeypatch.setattr(voice, 'SOUND_FILE', str(tmp_path / 'sound'))
     monkeypatch.setattr(voice, 'SPEECH_CUT', str(tmp_path / 'cut'))
     monkeypatch.setattr(voice, 'NO_BARGE_IN', str(tmp_path / 'no-barge-in'))
     monkeypatch.setattr(voice, 'RESUME_SPEECH', str(tmp_path / 'resume-speech'))
@@ -302,7 +304,9 @@ class Line:
         self.sent = []
         self.spoken = []
         self.cuts = []
+        self.sounds = []
         monkeypatch.setattr(voice, 'silence_agent', self.cuts.append)
+        monkeypatch.setattr(voice, 'sound', self.sounds.append)
         monkeypatch.setattr(voice, 'transcribe', lambda _: heard)
         monkeypatch.setattr(voice, 'registered', lambda name: name in agents)
         monkeypatch.setattr(voice, 'say', self.spoken.append)
@@ -1285,6 +1289,102 @@ def test_check_once_still_ends_that_agents_older_speech(monkeypatch):
     assert line.cuts == ['klod1']
 
 
+def test_a_line_that_reached_everyone_plays_one_sent_sound(monkeypatch):
+    monkeypatch.setattr(voice, 'closest', lambda _: 'klod1')
+    line = Line(monkeypatch, 'Claude 2, first check check Claude 1, second', {'klod1', 'klod2'})
+    voice.handle(b'')
+    assert line.sounds == ['sent']
+
+
+@pytest.mark.parametrize('heard', ['Check once Claude 1, thank you', 'and the rest of the thought'])
+def test_an_aside_or_a_channel_line_plays_it_too(monkeypatch, heard):
+    assert on_channel(monkeypatch, heard).sounds == ['sent']
+
+
+@pytest.mark.parametrize('heard', ['room talk with no name', ''])
+def test_room_talk_and_noise_play_nothing(monkeypatch, heard):
+    line = Line(monkeypatch, heard, {'klod2'})
+    voice.handle(b'')
+    assert (line.sent, line.sounds) == ([], [])
+
+
+def test_a_call_no_agent_fits_plays_the_miss(monkeypatch):
+    monkeypatch.setattr(voice, 'closest', lambda _: None)
+    line = Line(monkeypatch, 'Check check travel agent mark passport as taken', {'klod2'})
+    voice.handle(b'')
+    assert (line.sent, line.sounds) == ([], ['miss'])
+
+
+def test_a_second_call_no_agent_fits_plays_only_the_miss(monkeypatch):
+    monkeypatch.setattr(voice, 'closest', lambda _: None)
+    line = Line(monkeypatch, 'Claude 2, first check check mumble', {'klod2'})
+    voice.handle(b'')
+    assert (len(line.sent), line.sounds) == (1, ['miss'])
+
+
+@pytest.mark.parametrize(('agents', 'delivered'), [(set(), True), ({'klod2'}, False)])
+def test_a_failed_call_plays_the_miss_before_its_notice_waits_for_the_speech_queue(monkeypatch, agents, delivered):
+    line = Line(monkeypatch, 'Claude 2, new thought.', agents, delivered)
+    monkeypatch.setattr(voice, 'say', lambda _: line.sounds.append('notice'))
+    voice.handle(b'')
+    assert line.sounds == ['miss', 'notice']
+
+
+def test_a_line_that_reached_one_of_two_plays_only_the_miss(monkeypatch):
+    monkeypatch.setattr(voice, 'closest', lambda _: 'klod1')
+    line = Line(monkeypatch, 'Claude 2, first check check Claude 1, second', {'klod2'})
+    voice.handle(b'')
+    assert (len(line.sent), line.sounds) == (1, ['miss'])
+
+
+def test_the_stop_word_plays_nothing(monkeypatch):
+    line = Line(monkeypatch, 'Stop stop.', {'klod2'})
+    voice.handle(b'')
+    assert line.sounds == []
+
+
+def test_a_bus_client_that_will_not_start_reads_as_a_failed_call(monkeypatch):
+    def broken(*_, **__):
+        raise OSError('no node')
+    monkeypatch.setattr(voice.subprocess, 'run', broken)
+    assert voice.deliver('klod2', 'words') is False
+
+
+def notes_of(name):
+    with wave.open(f'{voice.SOUND_FILE}-{name}.wav', 'rb') as tone:
+        assert tone.getframerate() == voice.RATE
+        samples = array.array('h', tone.readframes(tone.getnframes()))
+    return [samples[start:start + voice.NOTE_SAMPLES] for start in range(0, len(samples), voice.NOTE_SAMPLES)]
+
+
+def pitch(note):
+    crossings = sum(1 for one, two in zip(note, note[1:]) if (one < 0) != (two < 0))
+    return crossings * voice.RATE / (2 * len(note))
+
+
+@pytest.mark.parametrize(('name', 'pitches'), [('sent', [880]), ('miss', [440, 330])])
+def test_each_sound_is_short_faint_clean_and_its_own(monkeypatch, name, pitches):
+    played = []
+    monkeypatch.setattr(voice.subprocess, 'run', lambda command, **_: played.append(command))
+    voice.sound(name)
+    voice.sound(name)
+    notes = notes_of(name)
+    assert [pitch(note) for note in notes] == pytest.approx(pitches, rel=0.03)
+    for note in notes:
+        assert 0.6 * voice.SOUND_PEAK < max(note) <= voice.SOUND_PEAK
+        assert max(abs(note[0]), abs(note[-1])) < 50  # no click at either end
+    assert len(played) == 2 and voice.PLAYER not in ' '.join(played[0])
+
+
+@pytest.mark.parametrize('error', [OSError('no pw-play'), subprocess.TimeoutExpired('pw-play', 5)])
+def test_a_sound_that_cannot_play_costs_nothing(monkeypatch, capsys, error):
+    def broken(*_, **__):
+        raise error
+    monkeypatch.setattr(voice.subprocess, 'run', broken)
+    voice.sound('sent')
+    assert 'no sound' in capsys.readouterr().err
+
+
 def test_a_relay_restart_leaves_the_channel_open(monkeypatch):
     next_line(monkeypatch, 'and then the rest of the thought')
     restarted = importlib.util.module_from_spec(spec)
@@ -1400,14 +1500,45 @@ def open_line(frames):
     return segmenter
 
 
-def test_a_line_still_open_at_a_stop_is_kept():
-    voice.rescue(open_line([LOUD] * (voice.MIN_VOICED + voice.START_FRAMES)))
+def stopping_with(monkeypatch, frames, waiting=0):
+    """Stop the relay with this line open and this many lines still in hand. Return the sounds."""
+    sounds = []
+    monkeypatch.setattr(voice, 'sound', sounds.append)
+    lines = voice.queue.Queue()
+    for _ in range(waiting):
+        lines.put('line')
+    voice.rescue(open_line(frames), lines)
+    return sounds
+
+
+def test_a_line_still_open_at_a_stop_is_kept(monkeypatch):
+    sounds = stopping_with(monkeypatch, [LOUD] * (voice.MIN_VOICED + voice.START_FRAMES))
     assert lost_files() == ['.wav']
+    assert sounds == ['miss']
+
+
+def test_a_line_closed_but_not_finished_at_a_stop_plays_the_miss(monkeypatch):
+    assert stopping_with(monkeypatch, [], waiting=1) == ['miss']
+
+
+def test_a_line_finished_before_a_stop_plays_nothing(monkeypatch):
+    sounds = []
+    monkeypatch.setattr(voice, 'sound', sounds.append)
+    lines = voice.queue.Queue()
+    lines.put('line')
+    lines.put('end')
+    def act(clip):
+        if clip == 'end':
+            raise EndOfTest
+    with pytest.raises(EndOfTest):
+        voice.worker(lines, act)
+    voice.rescue(open_line([]), lines)
+    assert sounds == []
 
 
 @pytest.mark.parametrize('frames', [[], [QUIET] * 5, [LOUD] * (voice.MIN_VOICED - 2)])
-def test_silence_or_a_click_at_a_stop_is_not_kept(frames):
-    voice.rescue(open_line(frames))
+def test_silence_or_a_click_at_a_stop_is_not_kept(monkeypatch, frames):
+    assert stopping_with(monkeypatch, frames) == []
     assert lost_files() == []
 
 
@@ -1488,9 +1619,12 @@ def test_a_worker_outlives_a_bug(monkeypatch):
         seen.append(clip)
         raise (TypeError if clip == 'first' else EndOfTest)
 
+    sounds = []
+    monkeypatch.setattr(voice, 'sound', sounds.append)
     with pytest.raises(EndOfTest):
         voice.worker(clips, act)
     assert seen == ['first', 'second']
+    assert sounds == ['miss']
 
 
 def test_a_light_that_cannot_change_costs_nothing(monkeypatch, tmp_path):

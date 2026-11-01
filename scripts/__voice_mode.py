@@ -22,6 +22,12 @@ restart or a line that reached nobody costs no words. `__voice_mode.py --lost` p
 what is there. That includes room talk, so it holds few lines, and a flag file switches
 it off. The journal still gets no words.
 
+A faint sound on the default output tells Piotr what became of a line without looking.
+One high note: the bus took it for a live agent, which does not prove the agent read it.
+Two falling notes: an error. A called agent was not reached or no agent fit, the relay
+hit a fault, or it stopped with a line in hand. Room talk and noise play nothing, so no
+sound means the line did not go: say it again.
+
 Lines travel as messages, never as keys, so speech cannot answer a permission prompt.
 They are not marked [HUMAN], because a transcript can be misheard.
 
@@ -80,6 +86,10 @@ RUNTIME_DIR = os.environ.get('XDG_RUNTIME_DIR', f'/run/user/{os.getuid()}')
 LINE_STATUS = os.path.join(RUNTIME_DIR, 'voice-mode-line')
 LOST_DIR = os.path.join(RUNTIME_DIR, 'voice-mode-lost')  # tmpfs: gone at reboot
 LOST_KEPT = 20
+SOUND_FILE = os.path.join(RUNTIME_DIR, 'voice-mode-sound')
+SOUND_PEAK = 2500  # 12 dB under the average level of a Piper reply, measured on one
+SOUND_NOTES = {'sent': (880,), 'miss': (440, 330)}
+NOTE_SAMPLES = 2400  # 150 ms
 CHANNEL = os.path.join(RUNTIME_DIR, 'voice-mode-channel')  # tmpfs: a restart keeps it, a reboot does not
 
 RATE = 16000
@@ -276,7 +286,7 @@ def deliver(agent, text):
     try:
         return subprocess.run(['node', SND, agent, text], env=env, capture_output=True,
                               timeout=SND_TIMEOUT_SECONDS).returncode == 0
-    except subprocess.TimeoutExpired:
+    except (OSError, subprocess.TimeoutExpired):
         return False
 
 
@@ -402,6 +412,20 @@ def say(text):
                        timeout=90, check=True)
 
 
+def sound(name):
+    """Play what became of a line. Its own stream, so no pause or cut touches it, and no lock waits."""
+    path = f'{SOUND_FILE}-{name}.wav'
+    try:
+        if not os.path.exists(path):
+            write_wav(path, array.array('h', (
+                round(SOUND_PEAK * (1 - abs(2 * n / NOTE_SAMPLES - 1)) * math.sin(2 * math.pi * hz * n / RATE))
+                for hz in SOUND_NOTES[name] for n in range(NOTE_SAMPLES))).tobytes())
+        subprocess.run(['pw-play', '-P', 'media.name=klod-sound', path], timeout=5, check=False,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except (OSError, subprocess.SubprocessError) as err:  # the line's fate is already settled
+        print(f'voice-mode: no sound: {type(err).__name__}', file=sys.stderr, flush=True)
+
+
 def write_wav(path, pcm):
     with wave.open(path, 'wb') as out:
         out.setnchannels(1)
@@ -478,10 +502,13 @@ def note(kept, text):
             words.write(text)
 
 
-def rescue(segmenter):
-    """Keep the line still open when the relay stops."""
-    if segmenter.utterance and segmenter.voiced >= MIN_VOICED:
+def rescue(segmenter, utterances):
+    """Keep the line still open when the relay stops, and say so if any line is going nowhere."""
+    cut_off = segmenter.utterance and segmenter.voiced >= MIN_VOICED
+    if cut_off:
         keep(b''.join(segmenter.utterance))
+    if cut_off or utterances.unfinished_tasks:
+        sound('miss')
 
 
 def recovered(path):
@@ -541,21 +568,25 @@ def calls(text):
     return (ahead if lead else []) + lines + unplaced
 
 
+def refuse(notice):
+    """Show a call failed at once. The words wait their turn behind any reply playing."""
+    signal('failed')
+    sound('miss')
+    say(notice)
+    return 'failed'
+
+
 def send(agent, message):
     """Pass one call to its agent and return what became of it."""
     if not agent:
         print('voice-mode: line names no agent, dropped', flush=True)
         return 'dropped'
     if not registered(agent):
-        signal('failed')
-        say(f'Voice mode to Piotr. No agent is registered as {agent}.')
-        return 'failed'
+        return refuse(f'Voice mode to Piotr. No agent is registered as {agent}.')
     if deliver(agent, f'{VOICE_TAG} Piotr to {agent}: {message} {VOICE_NOTE}'):
         print(f'voice-mode: line sent to {agent}', flush=True)
         return 'sent'
-    signal('failed')
-    say(f'Voice mode to Piotr. {agent} did not get that line.')
-    return 'failed'
+    return refuse(f'Voice mode to Piotr. {agent} did not get that line.')
 
 
 def attempt(agent, message):
@@ -624,11 +655,15 @@ def handle(pcm, kept=None):
             moved_on(call.agent)
             if not call.once:
                 open_channel(call.agent)
-    if set(outcomes) == {'sent'}:
+    status = next(status for status in ('failed', 'dropped', 'sent') if status in outcomes)
+    signal(status)
+    if status == 'sent':
         forget(kept)
-    else:
-        note(kept, text)
-    signal(next(status for status in ('failed', 'dropped', 'sent') if status in outcomes))
+        sound('sent')
+        return
+    note(kept, text)
+    if status == 'dropped' and WAKE.search(text):  # he called and no agent fit. A failed call played it already
+        sound('miss')
 
 
 def check_wake(pcm, segmenter, barge_in):
@@ -671,6 +706,9 @@ def worker(clips, act):
         except Exception as err:  # a dead worker would take every later line with it
             print(f'voice-mode: {type(err).__name__}: {err}', file=sys.stderr, flush=True)
             signal('failed')
+            sound('miss')
+        finally:
+            clips.task_done()
 
 
 def watch_presence():
@@ -710,7 +748,7 @@ def main():
             if opening := segmenter.opening():
                 openings.put(opening)
     finally:
-        rescue(segmenter)
+        rescue(segmenter, utterances)
     sys.exit('voice-mode: microphone stream ended')
 
 
