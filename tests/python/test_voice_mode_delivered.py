@@ -13,8 +13,8 @@ spec.loader.exec_module(voice)
 
 
 @pytest.fixture(autouse=True)
-def no_earlier_line(monkeypatch):
-    monkeypatch.setattr(voice, 'LATEST', {})
+def no_earlier_line(monkeypatch, tmp_path):
+    monkeypatch.setattr(voice, 'CHANNEL', str(tmp_path / 'channel'))
 
 
 @pytest.fixture

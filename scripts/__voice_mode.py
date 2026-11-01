@@ -12,7 +12,8 @@ and the line goes to the name they sound most like. Nothing else leaves the mach
 One breath can call several agents: each "check check" starts a call of its own.
 
 A call opens a channel: every line after it goes to that agent, with no time limit,
-until another call swaps it or the stop word closes it. A flag file switches that off.
+until another call swaps it or the stop word closes it. It survives a relay restart
+and ends at reboot. A flag file switches that off.
 
 Every closed line waits in a RAM folder until all its calls are sent, so a crash, a
 restart or a line that reached nobody costs no words. `__voice_mode.py --lost` prints
@@ -72,6 +73,7 @@ RUNTIME_DIR = os.environ.get('XDG_RUNTIME_DIR', f'/run/user/{os.getuid()}')
 LINE_STATUS = os.path.join(RUNTIME_DIR, 'voice-mode-line')
 LOST_DIR = os.path.join(RUNTIME_DIR, 'voice-mode-lost')  # tmpfs: gone at reboot
 LOST_KEPT = 20
+CHANNEL = os.path.join(RUNTIME_DIR, 'voice-mode-channel')  # tmpfs: a restart keeps it, a reboot does not
 
 RATE = 16000
 FRAME_BYTES = 960  # 30 ms of s16le mono
@@ -232,7 +234,6 @@ class Presence:
 
 
 PRESENCE = Presence()
-LATEST = {}  # the open channel: who the last sent call went to
 HANDY_TURN = threading.Lock()  # measured: of three Handys at once, one ran out of GPU memory
 
 
@@ -518,6 +519,30 @@ def attempt(agent, message):
         return 'failed'
 
 
+def channel():
+    """The agent on the open channel, or nothing. On disk, because a relay restart must not close it."""
+    try:
+        with open(CHANNEL, encoding='utf-8') as agent:
+            return agent.read()
+    except OSError:
+        return None
+
+
+def open_channel(agent):
+    try:
+        with open(CHANNEL, 'w', encoding='utf-8') as marker:
+            marker.write(agent)
+    except OSError as err:  # the line is already sent, and must not read as failed
+        print(f'voice-mode: channel not kept: {type(err).__name__}', file=sys.stderr, flush=True)
+
+
+def close_channel():
+    try:
+        os.remove(CHANNEL)
+    except OSError:  # already closed: a short stop word reaches here on two paths
+        pass
+
+
 def continued(text):
     """Return the call for a nameless line: it stays on the open channel.
 
@@ -525,23 +550,24 @@ def continued(text):
     like a name stays on it. Speech the mic caught from a reply never does.
     """
     words = text.split()
-    if not LATEST or not words or os.path.exists(NO_CONTINUE) or OWN_SPEECH.search(' '.join(words[:6])):
+    agent = channel()
+    if not agent or not words or os.path.exists(NO_CONTINUE) or OWN_SPEECH.search(' '.join(words[:6])):
         return []
-    return [(LATEST['agent'], text)]
+    return [(agent, text)]
 
 
 def handle(pcm, kept=None):
     """Send one utterance to each agent it calls, show the worst outcome, free its audio if sent."""
     text = transcribe(pcm)
     if STOP_WORD.fullmatch(text):  # check_stop acted on a short one, moments earlier
-        LATEST.clear()
+        close_channel()
         forget(kept)
         return
     found = calls(text) or continued(text) or [(None, '')]
     outcomes = [attempt(agent, message) for agent, message in found]
     for (agent, _), outcome in zip(found, outcomes):
         if outcome == 'sent':
-            LATEST.update(agent=agent)
+            open_channel(agent)
     if set(outcomes) == {'sent'}:
         forget(kept)
     else:
@@ -569,7 +595,7 @@ def check_stop(pcm):
     """Silence every agent and close the channel when a short burst is the stop word."""
     if STOP_WORD.fullmatch(transcribe(pcm)):
         silence()
-        LATEST.clear()
+        close_channel()
         print('voice-mode: stop word heard', flush=True)
 
 

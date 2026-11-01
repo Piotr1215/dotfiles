@@ -54,7 +54,7 @@ QUIET = bytes(960)
 @pytest.fixture(autouse=True)
 def fresh_relay(monkeypatch, tmp_path):
     """No test inherits an earlier line's agent, or touches the real lost lines and flags."""
-    monkeypatch.setattr(voice, 'LATEST', {})
+    monkeypatch.setattr(voice, 'CHANNEL', str(tmp_path / 'channel'))
     monkeypatch.setattr(voice, 'LOST_DIR', str(tmp_path / 'lost'))
     monkeypatch.setattr(voice, 'NO_KEEP', str(tmp_path / 'no-keep'))
     monkeypatch.setattr(voice, 'NO_CONTINUE', str(tmp_path / 'no-continue'))
@@ -1005,9 +1005,9 @@ def test_the_stop_word_closes_the_channel(monkeypatch, stop):
 def test_the_stop_word_caught_early_closes_the_channel_too(monkeypatch):
     monkeypatch.setattr(voice, 'silence', lambda: None)
     line = next_line(monkeypatch, 'stop stop')
-    voice.LATEST.update(agent='klod2')
+    voice.open_channel('klod2')
     voice.check_stop(MINUTE)
-    assert voice.LATEST == {}
+    assert voice.channel() is None
 
 
 @pytest.mark.parametrize('heard', [
@@ -1017,6 +1017,27 @@ def test_the_stop_word_caught_early_closes_the_channel_too(monkeypatch):
 ])
 def test_silence_and_speech_caught_by_the_mic_stay_off_the_channel(monkeypatch, heard):
     assert next_line(monkeypatch, heard).sent == []
+
+
+def test_a_relay_restart_leaves_the_channel_open(monkeypatch):
+    next_line(monkeypatch, 'and then the rest of the thought')
+    restarted = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(restarted)
+    monkeypatch.setattr(restarted, 'CHANNEL', voice.CHANNEL)
+    assert restarted.continued('clothing is secured') == [('klod2', 'clothing is secured')]
+
+
+def test_a_channel_it_cannot_keep_does_not_fail_the_line(monkeypatch, tmp_path, capsys):
+    monkeypatch.setattr(voice, 'CHANNEL', str(tmp_path / 'gone' / 'channel'))
+    line = Line(monkeypatch, 'Claude 2, here is the idea', {'klod2'}, True)
+    voice.handle(b'')
+    assert (len(line.sent), voice.channel()) == (1, None)
+    assert 'channel not kept: FileNotFoundError' in capsys.readouterr().err
+
+
+def test_closing_a_closed_channel_is_harmless():
+    voice.close_channel()
+    assert voice.channel() is None
 
 
 def test_the_toggle_closes_the_channel(monkeypatch):
