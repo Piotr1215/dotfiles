@@ -823,7 +823,12 @@ def test_past_the_cap_the_line_goes_on_to_the_same_agent(monkeypatch):
     assert 'and this is the second minute of it' in line.sent[0][1]
 
 
-@pytest.mark.parametrize(('gap', 'carried'), [(9.9, True), (10.1, False)])
+@pytest.mark.parametrize(('gap', 'carried'), [
+    (5, True),
+    (78, True),  # Piotr's real reply to travel-prep on 1 Nov, dropped by a 10 s window
+    (voice.CONTINUE_SECONDS - 1, True),
+    (voice.CONTINUE_SECONDS, False),
+])
 def test_a_pause_to_think_keeps_the_line_with_its_agent(monkeypatch, gap, carried):
     line = second_part(monkeypatch, 'and then the rest of the thought', gap)
     assert bool(line.sent) is carried

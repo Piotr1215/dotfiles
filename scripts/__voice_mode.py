@@ -92,7 +92,7 @@ QUICK_END = 20  # 0.6 s of quiet is enough to test a short burst for the stop wo
 QUICK_MAX = 100  # 3 s; anything longer is a line, not the stop word
 OPENING_FRAMES = 67  # 2 s with the lead-in: at 1.5 s Handy missed the wake word in one of three Piper voices
 HOLD_FRAMES = 16  # about 0.5 s: how soon a reply that starts mid-line is paused
-CONTINUE_SECONDS = 10  # quiet allowed after a sent line closed, itself 2.5 s after his last word
+CONTINUE_SECONDS = 120  # long enough to hear the agent out and answer: his real reply came at 78 s
 CONTINUE_WORDS = 4  # fewer may be a yes to someone in the room, and an agent would take it as his
 NAME_LIKE = 0.6  # measured: 15 of 16 misheard names at or over it, 11 of 16 plain thoughts under it
 
