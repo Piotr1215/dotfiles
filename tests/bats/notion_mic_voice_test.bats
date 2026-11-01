@@ -122,6 +122,52 @@ blinks() {
   [[ "${lines[0]}" != *"#44aaff"* ]]
 }
 
+@test "the panel names the agent the channel goes to" {
+  voice_mode_is 0
+  printf 'travel-prep' >"${XDG_RUNTIME_DIR}/voice-mode-channel"
+  run bash "$SCRIPT"
+  [[ "${lines[0]}" == *"●</span> travel-prep |"* ]]
+}
+
+@test "with no channel the panel names nobody" {
+  voice_mode_is 0
+  : >"${XDG_RUNTIME_DIR}/voice-mode-channel"
+  run bash "$SCRIPT"
+  [[ "${lines[0]}" == *"●</span> | font"* ]]
+}
+
+@test "with listening off a leftover channel is not shown" {
+  voice_mode_is 3
+  printf 'travel-prep' >"${XDG_RUNTIME_DIR}/voice-mode-channel"
+  run bash "$SCRIPT"
+  [[ "${lines[0]}" != *"travel-prep"* ]]
+}
+
+@test "with the channel switched off a leftover one is not shown" {
+  voice_mode_is 0
+  printf 'travel-prep' >"${XDG_RUNTIME_DIR}/voice-mode-channel"
+  touch "${KLOD_VOICE_STATE}/no-continue"
+  run bash "$SCRIPT"
+  [[ "${lines[0]}" != *"travel-prep"* ]]
+}
+
+@test "a blink keeps the agent's name in both of its frames" {
+  voice_mode_is 0
+  printf 'travel-prep' >"${XDG_RUNTIME_DIR}/voice-mode-channel"
+  printf sent >"$MARKER"
+  run bash "$SCRIPT"
+  [[ "${lines[0]}" == *"travel-prep"* ]]
+  [[ "${lines[1]}" == *"travel-prep"* ]]
+}
+
+@test "the yellow wake light keeps the agent's name" {
+  voice_mode_is 0
+  printf 'travel-prep' >"${XDG_RUNTIME_DIR}/voice-mode-channel"
+  printf armed >"$MARKER"
+  run bash "$SCRIPT"
+  [[ "${lines[0]}" == *"#ffee00"*"travel-prep"* ]]
+}
+
 @test "with no spoken line the mic stays one line with the blue dot" {
   voice_mode_is 0
   run bash "$SCRIPT"

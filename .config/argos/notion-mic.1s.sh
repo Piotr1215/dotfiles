@@ -32,6 +32,7 @@ readonly voice_resume_flag="${KLOD_VOICE_STATE:-$HOME/.local/state/klod-voice}/r
 readonly voice_tempo_file="${KLOD_VOICE_STATE:-$HOME/.local/state/klod-voice}/tempo"
 # __voice_mode.py writes what became of each spoken line here.
 readonly line_status="${XDG_RUNTIME_DIR:-/run/user/$UID}/voice-mode-line"
+readonly channel_file="${XDG_RUNTIME_DIR:-/run/user/$UID}/voice-mode-channel"
 readonly blink_seconds=4
 # As long as a line can run. The line's outcome normally replaces the yellow sooner.
 readonly armed_seconds=60
@@ -125,6 +126,11 @@ if [[ -e "$voice_resume_flag" ]]; then
 else
 	voice_resume="off"
 fi
+# Who the open channel goes to, beside the dot: nameless lines land there.
+voice_channel=""
+if [[ "$voice_listening" == "on" && "$voice_carry" == "on" && -s "$channel_file" ]]; then
+	voice_channel=" $(<"$channel_file")"
+fi
 voice_tempo=""
 [[ -f "$voice_tempo_file" ]] && voice_tempo="$(<"$voice_tempo_file")"
 case "$voice_tempo" in
@@ -162,12 +168,12 @@ fi
 # Two button lines start argos's line cycler, which is the blink; dropdown=false
 # keeps them out of the menu.
 if [[ -n "$armed" ]]; then
-	echo "${mic} <span color='#ffee00'>●</span> | font='monospace' size=${PANEL_SIZE}"
+	echo "${mic} <span color='#ffee00'>●</span>${voice_channel} | font='monospace' size=${PANEL_SIZE}"
 elif [[ -n "$line_color" ]]; then
-	echo "${mic} <span color='${line_color}'>●</span> | font='monospace' size=${PANEL_SIZE} dropdown=false"
-	echo "${mic} <span color='#222222'>●</span> | font='monospace' size=${PANEL_SIZE} dropdown=false"
+	echo "${mic} <span color='${line_color}'>●</span>${voice_channel} | font='monospace' size=${PANEL_SIZE} dropdown=false"
+	echo "${mic} <span color='#222222'>●</span>${voice_channel} | font='monospace' size=${PANEL_SIZE} dropdown=false"
 else
-	echo "${mic}${voice_dot} | font='monospace' size=${PANEL_SIZE}"
+	echo "${mic}${voice_dot}${voice_channel} | font='monospace' size=${PANEL_SIZE}"
 fi
 
 # --- dropdown -------------------------------------------------------------
