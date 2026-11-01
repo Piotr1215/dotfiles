@@ -225,14 +225,21 @@ EOF
   [ "${output#registered }" -ge 1 ]
 }
 
-@test "voice-mode on and off persist through the unit's enablement" {
+@test "voice-mode off persists in a flag the unit reads at login, and never disables" {
   stub="${BATS_TEST_TMPDIR}/bin"
   mkdir -p "$stub"
   printf '#!/bin/sh\necho "$*" >>"%s/calls"\n' "$BATS_TEST_TMPDIR" >"$stub/systemctl"
   chmod +x "$stub/systemctl"
-  export TOGGLES_CONF="${BATS_TEST_DIRNAME}/../../scripts/__toggles.conf"
-  PATH="$stub:$PATH" run "$SCRIPT" __run voice-mode on
+  export HOME="${BATS_TEST_TMPDIR}/home" TOGGLES_CONF="${BATS_TEST_DIRNAME}/../../scripts/__toggles.conf"
+  flag="$HOME/.local/state/klod-voice/no-listening"
   PATH="$stub:$PATH" run "$SCRIPT" __run voice-mode off
+  [ -e "$flag" ]
+  PATH="$stub:$PATH" run "$SCRIPT" __run voice-mode on
+  [ ! -e "$flag" ]
+  grep -Fx -- '--user stop voice-mode.service' "$BATS_TEST_TMPDIR/calls"
   grep -Fx -- '--user enable --now voice-mode.service' "$BATS_TEST_TMPDIR/calls"
-  grep -Fx -- '--user disable --now voice-mode.service' "$BATS_TEST_TMPDIR/calls"
+  # disable also deletes the unit's link, so the next start finds no unit.
+  ! grep -q disable "$BATS_TEST_TMPDIR/calls"
+  grep -Fx 'ConditionPathExists=!%h/.local/state/klod-voice/no-listening' \
+    "${BATS_TEST_DIRNAME}/../../.config/systemd/user/voice-mode.service"
 }

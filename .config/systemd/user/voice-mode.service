@@ -2,6 +2,8 @@
 Description=Voice mode (spoken lines to named agents)
 Documentation=file:%h/dev/dotfiles/scripts/__voice_mode.py
 After=pipewire-pulse.service
+# Written by the voice-mode toggle, so a reboot keeps it off.
+ConditionPathExists=!%h/.local/state/klod-voice/no-listening
 
 [Service]
 Type=simple
