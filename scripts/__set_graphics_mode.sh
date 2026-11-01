@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # PROJECT: graphics-mode-aliases
 #
-# Switch system76 graphics mode + power profile and reboot.
+# Switch system76 graphics mode, power profile and lid behaviour, then reboot.
 #
 # Modes (one function per mode — extend freely):
-#   base   powered: nvidia GPU, balanced profile (home, hotel, anywhere on AC)
-#   speak  presenting: hybrid GPU, battery profile (HDMI projector on battery)
+#   base   powered: nvidia GPU, balanced profile, lid ignored (home, hotel, anywhere on AC)
+#   speak  presenting: hybrid GPU, battery profile, lid suspends (HDMI projector on battery)
 #
 # Usage: __set_graphics_mode.sh <base|speak> [--no-reboot] [--yes]
 #   --no-reboot   apply settings but do not reboot
@@ -13,15 +13,18 @@
 #
 # Note: `system76-power graphics` writes to /etc/modprobe.d and needs sudo.
 #       `system76-power profile` runs as user (matches existing `perf` alias).
+#       HandleLidSwitch lives in logind.conf, needs sudo, and takes effect at reboot.
 
 set -eo pipefail
+
+LOGIND_CONF="${LOGIND_CONF:-/etc/systemd/logind.conf}"
 
 usage() {
   cat >&2 <<EOF
 usage: $(basename "$0") <base|speak> [--no-reboot] [--yes]
 
-  base   nvidia + balanced  (powered: home, hotel, anywhere on AC)
-  speak  hybrid  + battery  (presenting: HDMI projector on battery)
+  base   nvidia + balanced, lid ignored   (powered: home, hotel, anywhere on AC)
+  speak  hybrid  + battery, lid suspends  (presenting: HDMI projector on battery)
 
   --no-reboot   apply settings but do not reboot
   --yes, -y     skip confirmation prompt
@@ -45,11 +48,25 @@ apply_profile() {
   system76-power profile "${profile}"
 }
 
+# Set what closing the lid does. Requires sudo. Fails rather than reboot on a setting
+# that did not land, so a dock never comes back with the lid in the wrong state.
+# Arg: $1 = suspend|ignore
+apply_lid() {
+  local action="$1"
+  echo ">>> HandleLidSwitch=${action}"
+  sudo sed -i -E "s/^#?HandleLidSwitch=.*/HandleLidSwitch=${action}/" "$LOGIND_CONF"
+  grep -qx "HandleLidSwitch=${action}" "$LOGIND_CONF" || {
+    echo "no HandleLidSwitch line in ${LOGIND_CONF}" >&2
+    exit 1
+  }
+}
+
 # Mode: powered — enforce nvidia graphics, balanced power.
 # Covers home/docked, hotel on AC, conference hallway plugged in, EVE travel night.
 mode_base() {
   apply_graphics nvidia
   apply_profile balanced
+  apply_lid ignore
   # extend here: e.g., set EPP, fan curve, mount NAS, etc.
 }
 
@@ -64,6 +81,7 @@ mode_base() {
 mode_speak() {
   apply_graphics hybrid
   apply_profile battery
+  apply_lid suspend
   # extend here: e.g., dim brightness, mute audio, pre-pull demo images.
 }
 
@@ -103,7 +121,7 @@ main() {
     echo ">>> rebooting..."
     sudo reboot
   else
-    echo ">>> done. reboot required for graphics mode change to take effect."
+    echo ">>> done. reboot required for the graphics and lid changes to take effect."
   fi
 }
 
