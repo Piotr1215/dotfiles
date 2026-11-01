@@ -8,6 +8,7 @@ function M.select_note_type_and_create()
     "resources",
     "meetings",
     "reviews",
+    "travel",
     "moc",
   }
 
@@ -288,11 +289,15 @@ function M.append_to_moc(moc_name, note_title, section)
   return true
 end
 
+-- Note types stored in another type's folder; a trip is a project.
+local note_folders = { travel = "projects" }
+
 function M.create_note_with_template(template_type, note_title, moc_name)
   -- Define base directory for notes
   local base_dir = "Notes"
+  local folder = note_folders[template_type] or template_type
   -- Define the command to create a new note using Obsidian new
-  local obsidian_new_cmd = string.format(":Obsidian new %s/%s/%s", base_dir, template_type, note_title)
+  local obsidian_new_cmd = string.format(":Obsidian new %s/%s/%s", base_dir, folder, note_title)
   vim.api.nvim_command(obsidian_new_cmd)
 
   -- Wait briefly to ensure command execution completion
