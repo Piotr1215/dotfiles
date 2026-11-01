@@ -499,10 +499,9 @@ def test_a_name_that_sounds_like_nobody_goes_nowhere(monkeypatch, tmp_path, prob
     'Please pass the salt.',
     'Claw two, run the tests.',  # no wake word, so it stays on this machine
     'Claude 2, run the tests.',  # an exact name needs no model
-    'Let me check check the build.',  # the wake word must open the line
     'Check, check.',  # nothing after it to send
 ])
-def test_nothing_reaches_the_model_without_the_wake_word_and_a_line(monkeypatch, heard):
+def test_nothing_reaches_the_model_without_the_key_phrase_and_a_line(monkeypatch, heard):
     Line(monkeypatch, heard, {'klod2'})
     model = Model(monkeypatch, ['klod2'])
     voice.handle(b'')
@@ -649,20 +648,68 @@ def test_speech_pauses_when_piotr_starts_and_carries_on_when_he_ends(monkeypatch
     assert held.calls == [True, False]
 
 
-def test_speech_ends_for_good_when_he_talks(monkeypatch, tmp_path):
+def test_words_in_the_line_end_speech_for_good(monkeypatch, tmp_path):
     held = Held(monkeypatch, tmp_path)
     barge_in = voice.BargeIn()
+    barge_in.update(True)
+    assert held.cuts == []
+    barge_in.words = True
     barge_in.update(True)
     barge_in.update(True)
     assert held.cuts == [True]
 
 
+def test_a_voice_with_no_words_only_pauses_speech(monkeypatch, tmp_path):
+    held = Held(monkeypatch, tmp_path)
+    barge_in = voice.BargeIn()
+    for talking in (True, True, False):
+        barge_in.update(talking)
+    assert (held.cuts, held.calls) == ([], [True, False])
+
+
 def test_each_line_ends_speech_afresh(monkeypatch, tmp_path):
     held = Held(monkeypatch, tmp_path)
     barge_in = voice.BargeIn()
-    for talking in (True, False, True):
-        barge_in.update(talking)
+    for _ in range(2):
+        barge_in.words = True
+        barge_in.update(True)
+        barge_in.update(False, False)
     assert held.cuts == [True, True]
+
+
+def test_words_do_not_outlive_their_line(monkeypatch, tmp_path):
+    held = Held(monkeypatch, tmp_path)
+    barge_in = voice.BargeIn()
+    barge_in.words = True
+    barge_in.update(False, False)  # the opening's words arrived as the line closed
+    barge_in.update(True)
+    assert held.cuts == []
+
+
+def test_words_that_arrive_before_the_voice_check_still_count(monkeypatch, tmp_path):
+    held = Held(monkeypatch, tmp_path)
+    barge_in = voice.BargeIn()
+    barge_in.words = True
+    barge_in.update(False, True)
+    barge_in.update(True, True)
+    assert held.cuts == [True]
+
+
+@pytest.mark.parametrize(('heard', 'words'), [('anything at all', True), ('', False), ('   ', False)])
+def test_the_opening_says_whether_the_line_holds_words(monkeypatch, heard, words):
+    monkeypatch.setattr(voice, 'transcribe', lambda _: heard)
+    monkeypatch.setattr(voice, 'LINE_STATUS', os.devnull)
+    segmenter, barge_in = voice.Segmenter(), voice.BargeIn()
+    segmenter.utterance = [b'']
+    voice.check_wake(b'', segmenter, barge_in)
+    assert barge_in.words is words
+
+
+def test_an_opening_read_after_its_line_closed_says_nothing(monkeypatch):
+    monkeypatch.setattr(voice, 'transcribe', lambda _: 'anything at all')
+    barge_in = voice.BargeIn()
+    voice.check_wake(b'', voice.Segmenter(), barge_in)
+    assert barge_in.words is False
 
 
 class Scores:
@@ -760,6 +807,7 @@ def test_the_resume_setting_keeps_speech_paused_not_ended(monkeypatch, tmp_path)
     held = Held(monkeypatch, tmp_path)
     held.resume.touch()
     barge_in = voice.BargeIn()
+    barge_in.words = True
     barge_in.update(True)
     barge_in.update(False)
     assert (held.cuts, held.calls) == ([], [True, False])
@@ -768,7 +816,9 @@ def test_the_resume_setting_keeps_speech_paused_not_ended(monkeypatch, tmp_path)
 def test_the_toggle_off_never_ends_speech(monkeypatch, tmp_path):
     held = Held(monkeypatch, tmp_path)
     held.flag.touch()
-    voice.BargeIn().update(True)
+    barge_in = voice.BargeIn()
+    barge_in.words = True
+    barge_in.update(True)
     assert held.cuts == []
 
 
@@ -841,27 +891,49 @@ def test_the_stop_word_still_ends_paused_speech(monkeypatch):
         player.kill()
 
 
-def relay_over(monkeypatch, frames, model):
-    """Run the real capture loop over a mic that plays frames, then ends."""
+def relay_over(monkeypatch, heard, model, lines=1):
+    """Run the real capture loop over long lines. Each worker acts as its queue fills."""
+    frames = (LOUD * (voice.OPENING_FRAMES + 20) + QUIET * voice.END_FRAMES) * lines
+    heard = iter([heard] if isinstance(heard, str) else heard)
+    def thread(target=None, args=(), **_):
+        if target is voice.worker:
+            args[0].put = args[1]
+        return types.SimpleNamespace(start=lambda: None)
     monkeypatch.setattr(voice, 'Silero', lambda: model)
+    monkeypatch.setattr(voice, 'transcribe', lambda _: next(heard))
+    monkeypatch.setattr(voice, 'handle', lambda *_: None)
+    monkeypatch.setattr(voice, 'LINE_STATUS', os.devnull)
     monkeypatch.setattr(voice.subprocess, 'Popen', lambda *_, **__: types.SimpleNamespace(stdout=io.BytesIO(frames)))
-    monkeypatch.setattr(voice.threading, 'Thread', lambda **_: types.SimpleNamespace(start=lambda: None))
+    monkeypatch.setattr(voice.threading, 'Thread', thread)
     with pytest.raises(SystemExit):
         voice.main()
 
 
-def test_the_relay_ends_speech_when_a_line_holds_a_voice(monkeypatch, tmp_path):
+def test_the_relay_ends_speech_when_a_line_holds_words(monkeypatch, tmp_path):
     held = Held(monkeypatch, tmp_path)
-    relay_over(monkeypatch, LOUD * (voice.MIN_VOICED * 3) + QUIET * voice.END_FRAMES, Scores(*[1] * 99))
+    relay_over(monkeypatch, 'real words', Scores(*[1] * 99))
     assert held.calls[:2] == [False, True]  # a relay that died mid-line left speech paused
     assert held.calls[-1] is False
-    assert held.calls.count(False) == 2
     assert held.cuts == [True]
+
+
+def test_the_words_of_one_line_end_no_speech_in_the_next(monkeypatch, tmp_path):
+    held = Held(monkeypatch, tmp_path)
+    relay_over(monkeypatch, ['real words', ''], Scores(*[1] * 999), lines=2)
+    assert held.cuts == [True]
+
+
+def test_a_throat_clear_pauses_speech_and_lets_it_carry_on(monkeypatch, tmp_path):
+    held = Held(monkeypatch, tmp_path)
+    relay_over(monkeypatch, '', Scores(*[1] * 99))
+    assert held.calls[:2] == [False, True]
+    assert held.calls[-1] is False
+    assert held.cuts == []
 
 
 def test_noise_that_opens_a_line_leaves_speech_alone(monkeypatch, tmp_path):
     held = Held(monkeypatch, tmp_path)
-    relay_over(monkeypatch, LOUD * (voice.MIN_VOICED * 3) + QUIET * voice.END_FRAMES, Scores())
+    relay_over(monkeypatch, '', Scores())
     assert (held.calls, held.cuts) == ([False], [])  # False: the startup release, nothing else
 
 
@@ -1139,12 +1211,86 @@ def test_a_cut_it_cannot_mark_still_ends_speech(monkeypatch, tmp_path, capsys):
     assert 'cut not marked: FileNotFoundError' in capsys.readouterr().err
 
 
+def named(part):
+    """A name matcher that knows Claude 1 and Claude 2 and nobody else."""
+    return {'Claude 1': 'klod1', 'Claude 2': 'klod2'}.get(' '.join(part.split()[:2]).strip(' ,'))
+
+
+def said(line):
+    return [(agent, text.split(': ', 1)[1].split(' (Local')[0]) for agent, text in line.sent]
+
+
+def on_channel(monkeypatch, heard, agent='klod2'):
+    """Say a line with a channel open on agent, or with none."""
+    line = Line(monkeypatch, heard, {'klod1', 'klod2'})
+    monkeypatch.setattr(voice, 'closest', named)
+    if agent:
+        voice.open_channel(agent)
+    voice.handle(b'')
+    return line
+
+
+def test_the_key_phrase_wins_after_other_words(monkeypatch):
+    line = on_channel(monkeypatch, 'Okay, understood check check Claude 1, a new thought')
+    assert said(line) == [('klod2', 'Okay, understood'), ('klod1', 'Claude 1, a new thought')]
+    assert voice.channel() == 'klod1'
+
+
+def test_with_no_channel_the_words_before_the_key_phrase_join_the_call(monkeypatch):
+    line = on_channel(monkeypatch, 'Okay, understood check check Claude 1, a new thought', None)
+    assert said(line) == [('klod1', 'Okay, understood Claude 1, a new thought')]
+
+
+def test_a_key_phrase_in_a_sentence_stays_on_the_channel(monkeypatch):
+    line = on_channel(monkeypatch, 'I keep saying check check what is going on')
+    assert said(line) == [('klod2', 'I keep saying check check what is going on')]
+    assert voice.channel() == 'klod2'
+
+
+def test_a_key_phrase_in_a_sentence_with_no_channel_reaches_nobody(monkeypatch):
+    line = on_channel(monkeypatch, 'I keep saying check check what is going on', None)
+    assert line.sent == []
+
+
+def test_a_phrase_that_named_nobody_stays_with_the_words_before_it(monkeypatch):
+    line = on_channel(monkeypatch, 'as I said check check nobody here check check Claude 1, a thought')
+    assert said(line) == [('klod2', 'as I said check check nobody here'), ('klod1', 'Claude 1, a thought')]
+
+
+def test_check_once_leaves_the_channel_where_it_is(monkeypatch):
+    line = on_channel(monkeypatch, 'Check once Claude 1, thank you')
+    assert said(line) == [('klod1', 'Claude 1, thank you')]
+    assert voice.channel() == 'klod2'
+
+
+def test_check_once_with_no_channel_opens_none(monkeypatch):
+    on_channel(monkeypatch, 'Check once Claude 1, thank you', None)
+    assert voice.channel() is None
+
+
+def test_check_once_after_other_words_keeps_both(monkeypatch):
+    line = on_channel(monkeypatch, 'that is all check once Claude 1, thank you')
+    assert said(line) == [('klod2', 'that is all'), ('klod1', 'Claude 1, thank you')]
+    assert voice.channel() == 'klod2'
+
+
+def test_check_once_with_no_clear_name_reaches_nobody(monkeypatch):
+    line = on_channel(monkeypatch, 'Check once somebody, thank you')
+    assert line.sent == []
+    assert voice.channel() == 'klod2'
+
+
+def test_check_once_still_ends_that_agents_older_speech(monkeypatch):
+    line = on_channel(monkeypatch, 'Check once Claude 1, thank you')
+    assert line.cuts == ['klod1']
+
+
 def test_a_relay_restart_leaves_the_channel_open(monkeypatch):
     next_line(monkeypatch, 'and then the rest of the thought')
     restarted = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(restarted)
     monkeypatch.setattr(restarted, 'CHANNEL', voice.CHANNEL)
-    assert restarted.continued('clothing is secured') == [('klod2', 'clothing is secured')]
+    assert restarted.continued('clothing is secured')[0][:2] == ('klod2', 'clothing is secured')
 
 
 def test_a_channel_it_cannot_keep_does_not_fail_the_line(monkeypatch, tmp_path, capsys):
@@ -1197,7 +1343,7 @@ def test_a_line_that_reached_nobody_keeps_its_audio_and_words(monkeypatch, heard
 
 def test_a_line_that_reached_only_one_agent_is_kept_whole(monkeypatch):
     line = Line(monkeypatch, 'both calls', {'codex'})
-    monkeypatch.setattr(voice, 'calls', lambda _: [('codex', 'one'), ('gone', 'two')])
+    monkeypatch.setattr(voice, 'calls', lambda _: [voice.Call('codex', 'one'), voice.Call('gone', 'two')])
     voice.handle(LOUD, voice.keep(LOUD))
     assert len(line.sent) == 1
     assert lost_files() == ['.txt', '.wav']
@@ -1359,7 +1505,7 @@ def test_a_notice_that_cannot_play_costs_no_later_call(monkeypatch):
         raise subprocess.TimeoutExpired('piper', 30)
 
     monkeypatch.setattr(voice, 'say', broken)
-    monkeypatch.setattr(voice, 'calls', lambda _: [('codex', 'one'), ('gone', 'two'), ('klod1', 'three')])
+    monkeypatch.setattr(voice, 'calls', lambda _: [voice.Call(name, word) for name, word in zip(('codex', 'gone', 'klod1'), ('one', 'two', 'three'))])
     voice.handle(LOUD, voice.keep(LOUD))
     assert [agent for agent, _ in line.sent] == ['codex', 'klod1']
     assert lost_files() == ['.txt', '.wav']

@@ -75,7 +75,7 @@ def test_the_light_turns_yellow_only_for_a_live_line_that_opens_with_the_wake_wo
     monkeypatch.setattr(voice, 'transcribe', lambda _: heard)
     segmenter = voice.Segmenter()
     segmenter.utterance = [b''] if still_talking else None
-    voice.check_wake(b'', segmenter)
+    voice.check_wake(b'', segmenter, voice.BargeIn())
     assert (marker.read_text() if marker.exists() else None) == status
 
 
@@ -86,7 +86,7 @@ def test_an_opening_that_cannot_be_transcribed_shows_nothing(monkeypatch, marker
     monkeypatch.setattr(voice, 'transcribe', broken)
     segmenter = voice.Segmenter()
     segmenter.utterance = [b'']
-    voice.check_wake(b'', segmenter)
+    voice.check_wake(b'', segmenter, voice.BargeIn())
     assert not marker.exists()
 
 

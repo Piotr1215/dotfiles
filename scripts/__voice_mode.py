@@ -13,7 +13,9 @@ One breath can call several agents: each "check check" starts a call of its own.
 
 A call opens a channel: every line after it goes to that agent, with no time limit,
 until another call swaps it or the stop word closes it. It survives a relay restart
-and ends at reboot. A flag file switches that off.
+and ends at reboot. A flag file switches that off. The key phrase wins wherever it
+falls in a line, and the words before it stay on the channel. "check once" sends a
+single line to an agent and leaves the channel where it is, for an aside.
 
 Every closed line waits in a RAM folder until all its calls are sent, so a crash, a
 restart or a line that reached nobody costs no words. `__voice_mode.py --lost` prints
@@ -29,8 +31,9 @@ name. The agents keep working.
 
 When Piotr starts to talk, whoever is speaking stops for good, because he has heard
 enough. A voice model decides that, so a thud or a breath leaves speech alone, though
-any voice counts, not only his. Only the reply playing ends: the next one keeps its
-turn. A line that reaches an agent also ends that agent's queued replies and any it
+any voice counts, not only his. A voice pauses the reply, and it ends once Handy hears
+words in the line, because a throat clear reads as voice. No words and it carries on.
+Only the reply playing ends: the next one keeps its turn. A line that reaches an agent also ends that agent's queued replies and any it
 is still making, because he has moved on, and other agents keep theirs. One flag file
 brings back pausing and carrying on from the same spot, another switches all of this off.
 
@@ -132,11 +135,14 @@ BUS_NAMES = {'gordon': 'triage', 'kendra': 'intake'}
 SPOKEN_NAMES = {bus: name for name, bus in BUS_NAMES.items()}
 SPOKEN_DIGITS = {'one': '1', 'won': '1', 'two': '2', 'to': '2', 'too': '2'}
 DIGIT_WORDS = 'zero one two three four five six seven eight nine'.split()
-WAKE = re.compile(r'\bcheck\W+check\b\W*', re.IGNORECASE)
+WAKE = re.compile(r'\bcheck\W+(check|once)\b\W*', re.IGNORECASE)
 STOP_WORD = re.compile(r'\W*stop\W+stop\W*', re.IGNORECASE)
 # Every spoken reply opens "klod1 to Piotr:", so one that reached the mic must not
 # route back to the agent that said it.
 OWN_SPEECH = re.compile(r'to\W+(?:piotr|peter)\b', re.IGNORECASE)
+
+
+Call = collections.namedtuple('Call', 'agent message once', defaults=(False,))  # once: leave the channel
 
 
 def route(text):
@@ -362,23 +368,30 @@ class VoiceCheck:
 
 
 class BargeIn:
-    """End speech while Piotr talks, or only pause it when the resume setting is on."""
+    """Pause speech on a voice, and end it once the line holds words.
+
+    A throat clear passes the voice check, so only words end a reply. Set by check_wake,
+    off the capture loop. The resume setting keeps every line a pause.
+    """
 
     def __init__(self):
         self.frames = 0
         self.cut = False
+        self.words = False
 
-    def update(self, talking):
+    def update(self, talking, line_open=True):
         if talking and not os.path.exists(NO_BARGE_IN):
             if self.frames % HOLD_FRAMES == 0:
                 hold_speech(True)
             self.frames += 1
-            if not self.cut and not os.path.exists(RESUME_SPEECH):
+            if self.words and not self.cut and not os.path.exists(RESUME_SPEECH):
                 silence()
                 self.cut = True
         elif self.frames:
             hold_speech(False)
             self.frames, self.cut = 0, False
+        if not line_open:
+            self.words = False
 
 
 def say(text):
@@ -494,26 +507,38 @@ def lost():
 
 
 def calls(text):
-    """Return (agent, message) for each call in a line. A weak name leaves agent as None.
+    """Return a Call for each call in a line. A weak name leaves agent as None.
 
-    A wake word starts a call once the line itself opens with one or with a name, unless
-    what follows names nobody: the phrase in a sentence and a misheard name look alike, so
-    the words stay in the call before it and a None entry still turns the light orange.
-    All names are settled before anything is sent, so a failed decision sends nothing.
+    A key phrase starts a call wherever it falls, unless what follows names nobody: the
+    phrase in a sentence and a misheard name look alike, so the words stay in the call
+    before it and a None entry still turns the light orange. Words ahead of the first
+    call stay on the open channel, or go with that call when none is open. All names
+    are settled before anything is sent, so a failed decision sends nothing.
     """
     opening, *called = WAKE.split(text.strip())
     named = route(opening)
+    lead = ''
     if not named and re.search(r'\w', opening) and not STOP_WORD.fullmatch(opening):
-        return []
-    lines, unplaced = ([named] if named else []), []
-    for part in (part.strip(' ,;:') for part in called if re.search(r'\w', part)):
+        if not called:
+            return []
+        lead = opening.strip(' ,;:')
+    lines, unplaced = ([Call(*named)] if named else []), []
+    for kind, part in zip(called[::2], (part.strip(' ,;:') for part in called[1::2])):
+        if not re.search(r'\w', part):
+            continue
         agent = closest(part)
-        if agent or not lines:
-            lines.append((agent, part))
+        if agent or not (lines or lead):
+            lines.append(Call(agent, part, kind.lower() == 'once'))
+        elif lines:
+            lines[-1] = lines[-1]._replace(message=f'{lines[-1].message} check {kind} {part}')
+            unplaced.append(Call(None, part))
         else:
-            lines[-1] = (lines[-1][0], f'{lines[-1][1]} check check {part}')
-            unplaced.append((None, part))
-    return lines + unplaced
+            lead = f'{lead} check {kind} {part}'
+    if lead and not lines:
+        return []
+    if lead and not (ahead := continued(lead)):
+        lines[0] = lines[0]._replace(message=f'{lead} {lines[0].message}')
+    return (ahead if lead else []) + lines + unplaced
 
 
 def send(agent, message):
@@ -576,7 +601,7 @@ def continued(text):
     agent = channel()
     if not agent or not words or os.path.exists(NO_CONTINUE) or OWN_SPEECH.search(' '.join(words[:6])):
         return []
-    return [(agent, text)]
+    return [Call(agent, text)]
 
 
 def moved_on(agent):
@@ -592,12 +617,13 @@ def handle(pcm, kept=None):
         close_channel()
         forget(kept)
         return
-    found = calls(text) or continued(text) or [(None, '')]
-    outcomes = [attempt(agent, message) for agent, message in found]
-    for (agent, _), outcome in zip(found, outcomes):
+    found = calls(text) or continued(text) or [Call(None, '')]
+    outcomes = [attempt(call.agent, call.message) for call in found]
+    for call, outcome in zip(found, outcomes):
         if outcome == 'sent':
-            open_channel(agent)
-            moved_on(agent)
+            moved_on(call.agent)
+            if not call.once:
+                open_channel(call.agent)
     if set(outcomes) == {'sent'}:
         forget(kept)
     else:
@@ -605,8 +631,8 @@ def handle(pcm, kept=None):
     signal(next(status for status in ('failed', 'dropped', 'sent') if status in outcomes))
 
 
-def check_wake(pcm, segmenter):
-    """Light the top bar while Piotr still talks, once his line opens with the wake word.
+def check_wake(pcm, segmenter, barge_in):
+    """Read a line's opening while Piotr still talks: words end speech, the key phrase lights the bar.
 
     The line's outcome replaces the light, so a line that closed first leaves it alone.
     A failure here costs no words, the whole line is transcribed when it closes, so it
@@ -617,6 +643,8 @@ def check_wake(pcm, segmenter):
     except (OSError, subprocess.SubprocessError, ValueError, KeyError) as err:
         print(f'voice-mode: opening not checked: {type(err).__name__}', file=sys.stderr, flush=True)
         return
+    if heard.strip() and segmenter.utterance is not None:
+        barge_in.words = True
     if WAKE.match(heard.strip()) and segmenter.utterance is not None:
         signal('armed')
 
@@ -664,7 +692,7 @@ def main():
     barge_in = BargeIn()
     threading.Thread(target=worker, args=(utterances, lambda line: handle(*line)), daemon=True).start()
     threading.Thread(target=worker, args=(bursts, lambda pcm: check_stop(pcm, barge_in)), daemon=True).start()
-    threading.Thread(target=worker, args=(openings, lambda pcm: check_wake(pcm, segmenter)), daemon=True).start()
+    threading.Thread(target=worker, args=(openings, lambda pcm: check_wake(pcm, segmenter, barge_in)), daemon=True).start()
     mic = subprocess.Popen(['parec', f'--rate={RATE}', '--channels=1',
                             '--format=s16le', '--latency-msec=30'], stdout=subprocess.PIPE)
     voice_check = VoiceCheck(voice_model())
@@ -673,7 +701,8 @@ def main():
     try:
         while len(frame := mic.stdout.read(FRAME_BYTES)) == FRAME_BYTES:
             pcm = segmenter.push(frame)
-            barge_in.update(voice_check.hear(frame, segmenter.utterance is not None))
+            line_open = segmenter.utterance is not None
+            barge_in.update(voice_check.hear(frame, line_open), line_open)
             if pcm:
                 utterances.put((pcm, keep(pcm)))
             if burst := segmenter.burst():
