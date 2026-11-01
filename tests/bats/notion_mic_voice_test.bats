@@ -57,6 +57,15 @@ voice_mode_is() {
   [[ "$output" == *$'\n'"🛑 All off (normal mode)"* ]]
 }
 
+@test "the whole replies row follows its flag and switches through the board" {
+  voice_mode_is 3
+  run bash "$SCRIPT"
+  [[ "$output" == *$'\n'"⚪ Read whole replies: off, click to turn on | bash='\"${TOGGLES_BIN}\" __run voice-replies-whole on'"* ]]
+  touch "${KLOD_VOICE_STATE}/whole"
+  run bash "$SCRIPT"
+  [[ "$output" == *$'\n'"🟢 Read whole replies: on, click to turn off | bash='\"${TOGGLES_BIN}\" __run voice-replies-whole off'"* ]]
+}
+
 @test "all off switches both toggles off through the board" {
   voice_mode_is 0
   run bash "$SCRIPT" --voice-off

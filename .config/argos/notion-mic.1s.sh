@@ -26,6 +26,7 @@ readonly notion_window_re='Notion - Google Chrome'
 # Flips go through the toggle board, which owns the on and off logic.
 readonly toggles="${TOGGLES_BIN:-$HOME/dev/dotfiles/scripts/__toggles.sh}"
 readonly voice_replies_off_flag="${KLOD_VOICE_STATE:-$HOME/.local/state/klod-voice}/off"
+readonly voice_whole_flag="${KLOD_VOICE_STATE:-$HOME/.local/state/klod-voice}/whole"
 # __voice_mode.py writes what became of each spoken line here.
 readonly line_status="${XDG_RUNTIME_DIR:-/run/user/$UID}/voice-mode-line"
 readonly blink_seconds=4
@@ -96,6 +97,11 @@ if [[ -e "$voice_replies_off_flag" ]]; then
 	voice_replies="off"
 else
 	voice_replies="on"
+fi
+if [[ -e "$voice_whole_flag" ]]; then
+	voice_whole="on"
+else
+	voice_whole="off"
 fi
 
 # --- panel line -----------------------------------------------------------
@@ -175,6 +181,7 @@ voice_item() {
 echo "<b>Voice bridge</b> | font=monospace"
 voice_item voice-mode "Hands-free listening" "$voice_listening"
 voice_item voice-replies "Spoken replies (Piper)" "$voice_replies"
+voice_item voice-replies-whole "Read whole replies" "$voice_whole"
 if [[ "$voice_listening" == "on" || "$voice_replies" == "on" ]]; then
 	echo "🛑 All off (normal mode) | bash='\"$0\" --voice-off' terminal=false refresh=true"
 fi
