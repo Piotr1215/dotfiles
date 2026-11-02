@@ -1,19 +1,21 @@
 #!/usr/bin/env bash
 # PROJECT: graphics-mode-aliases
 #
-# Switch system76 graphics mode, power profile and lid behaviour, then reboot.
+# Switch system76 graphics mode, power profile and lid behaviour, then shut down, so
+# the next manual power-on lands in the mode.
 #
 # Modes (one function per mode — extend freely):
 #   base   powered: nvidia GPU, balanced profile, lid ignored (home, hotel, anywhere on AC)
 #   speak  presenting: hybrid GPU, battery profile, lid suspends (HDMI projector on battery)
 #
-# Usage: __set_graphics_mode.sh <base|speak> [--no-reboot] [--yes]
-#   --no-reboot   apply settings but do not reboot
-#   --yes / -y    skip confirmation prompt
+# Usage: __set_graphics_mode.sh <base|speak> [--reboot] [--no-shutdown] [--yes]
+#   --reboot       reboot instead of shutting down
+#   --no-shutdown  apply settings and leave the machine on
+#   --yes / -y     skip confirmation prompt
 #
 # Note: `system76-power graphics` writes to /etc/modprobe.d and needs sudo.
 #       `system76-power profile` runs as user (matches existing `perf` alias).
-#       HandleLidSwitch lives in logind.conf, needs sudo, and takes effect at reboot.
+#       HandleLidSwitch lives in logind.conf, needs sudo, and takes effect at the next boot.
 
 set -eo pipefail
 
@@ -21,18 +23,19 @@ LOGIND_CONF="${LOGIND_CONF:-/etc/systemd/logind.conf}"
 
 usage() {
   cat >&2 <<EOF
-usage: $(basename "$0") <base|speak> [--no-reboot] [--yes]
+usage: $(basename "$0") <base|speak> [--reboot] [--no-shutdown] [--yes]
 
   base   nvidia + balanced, lid ignored   (powered: home, hotel, anywhere on AC)
   speak  hybrid  + battery, lid suspends  (presenting: HDMI projector on battery)
 
-  --no-reboot   apply settings but do not reboot
-  --yes, -y     skip confirmation prompt
+  --reboot       reboot instead of shutting down
+  --no-shutdown  apply settings and leave the machine on
+  --yes, -y      skip confirmation prompt
 EOF
   exit 1
 }
 
-# Switch graphics mode. Requires sudo. Reboot needed for change to take effect.
+# Switch graphics mode. Requires sudo. Takes effect at the next boot.
 # Arg: $1 = nvidia|hybrid|integrated|compute
 apply_graphics() {
   local graphics="$1"
@@ -48,7 +51,7 @@ apply_profile() {
   system76-power profile "${profile}"
 }
 
-# Set what closing the lid does. Requires sudo. Fails rather than reboot on a setting
+# Set what closing the lid does. Requires sudo. Fails rather than power down on a setting
 # that did not land, so a dock never comes back with the lid in the wrong state.
 # Arg: $1 = suspend|ignore
 apply_lid() {
@@ -87,13 +90,14 @@ mode_speak() {
 
 main() {
   local mode=""
-  local do_reboot=1
+  local after="poweroff"
   local skip_confirm=0
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
       base|speak)      mode="$1" ;;
-      --no-reboot)     do_reboot=0 ;;
+      --reboot)        after="reboot" ;;
+      --no-shutdown)   after="none" ;;
       -y|--yes)        skip_confirm=1 ;;
       -h|--help)       usage ;;
       *) echo "unknown arg: $1" >&2; usage ;;
@@ -105,8 +109,8 @@ main() {
 
   echo ">>> mode: ${mode}"
   if [[ $skip_confirm -eq 0 ]]; then
-    local prompt=">>> apply and reboot? [y/N] "
-    [[ $do_reboot -eq 0 ]] && prompt=">>> apply (no reboot)? [y/N] "
+    local prompt=">>> apply and ${after}? [y/N] "
+    [[ "$after" == none ]] && prompt=">>> apply and stay on? [y/N] "
     read -r -p "$prompt" reply
     [[ "$reply" =~ ^[Yy]$ ]] || { echo "aborted."; exit 0; }
   fi
@@ -116,12 +120,12 @@ main() {
     speak) mode_speak ;;
   esac
 
-  if [[ $do_reboot -eq 1 ]]; then
-    sync
-    echo ">>> rebooting..."
-    sudo reboot
+  if [[ "$after" == none ]]; then
+    echo ">>> done. the graphics and lid changes take effect at the next boot."
   else
-    echo ">>> done. reboot required for the graphics and lid changes to take effect."
+    sync
+    echo ">>> ${after}..."
+    sudo "$after"
   fi
 }
 
