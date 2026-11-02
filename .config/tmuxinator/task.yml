@@ -71,9 +71,11 @@ windows:
   # Kendra takes Gordon's routine event stream (popups, auto-triage nudges,
   # task-closed notices, PR movement) and registers on the bus as intake, which
   # also names the pane. While this window is down everything reaches Gordon as
-  # before. The model is the `intake` role in ~/.claude/models.env.
+  # before. __intake_launch.sh picks her runtime at launch from the work
+  # account's Claude load: Claude (the `intake` role in ~/.claude/models.env)
+  # when normal, Codex Terra when tight or red and the Codex login answers.
   - kendra:
       layout: '{"V":2,"L":{"t":"v","w":255,"h":61,"x":0,"y":0,"c":[{"t":"p","w":255,"h":41,"x":0,"y":0,"l":0,"i":1,"I":"%2"},{"t":"p","w":255,"h":19,"x":0,"y":42,"a":true,"i":2,"I":"%23"}]}}'
       panes:
-        - cd "$HOME/loft/kendra" && MCP_TIMEOUT=120000 __claude_with_monitor.sh --system-prompt-file ~/.claude/system-prompts/intake-agent-system-prompt.md --model "$(~/.claude/scripts/__models.sh get intake)" -- "Start your shift. Register as intake and catch up on the bus."
+        - __intake_launch.sh
         - NCURSES_NO_UTF8_ACS=1 tui -r backlog
