@@ -282,8 +282,15 @@ epoch_of() {
 	date -d "$1" +%s
 }
 
+# A date for a person. The year appears when the date is over half a year away,
+# as in ls, so a 2036 deadline cannot read as last week.
 human_when() {
-	date -d "$1" '+%a %d %b %H:%M'
+	local away=$(($(date -d "$1" +%s) - $(date +%s)))
+	if [ "${away#-}" -gt 15552000 ]; then
+		date -d "$1" '+%a %d %b %Y %H:%M'
+	else
+		date -d "$1" '+%a %d %b %H:%M'
+	fi
 }
 
 human_duration() {
@@ -1756,15 +1763,22 @@ error_task() {
 	log_fire "$id" error-task "$uuid" "$title"
 }
 
-# A clean verdict after errors: one note on the open error task, then the
-# record forgets it, so the next failure starts a fresh task.
+# A clean run after errors: one note on the open error task. A packet that keeps
+# running passes keep and holds on to the task, so its next failure adds to it
+# and a flaky network cannot stack open tasks. A retiring packet forgets it.
 clear_error_task() {
-	local id="$1" record uuid
+	local id="$1" keep="${2:-}" record uuid reason
 	record="$(get_record "$id")"
 	uuid="$(jq -r '.error_task // ""' <<<"$record")"
+	reason="$(jq -r '.error_reason // ""' <<<"$record")"
 	[ -n "$uuid" ] || return 0
-	task_note "$uuid" "recovered $(now_iso): the check ran clean again" || true
-	update_record "$id" 'del(.error_task, .error_reason)'
+	[ -n "$reason" ] || [ -z "$keep" ] || return 0
+	[ -z "$reason" ] || task_note "$uuid" "recovered $(now_iso): the check ran clean again" || true
+	if [ -n "$keep" ]; then
+		update_record "$id" 'del(.error_reason)'
+	else
+		update_record "$id" 'del(.error_task, .error_reason)'
+	fi
 }
 
 # Exec packets serialize the whole fire, including report creation. A second
@@ -1890,7 +1904,12 @@ cmd_fire_locked() {
 			output="$(jq -r '.verdict.output' <<<"$record")"
 		else
 			command="$(jq -r '.command // ""' <<<"$record")"
-			output="$(REMINDER_ID="$id" bash -c "$command" 6>&- 2>&1)" || rc=$?
+			# bash exits 2 on a syntax error, which would read as a success verdict.
+			if ! output="$(bash -n -c "$command" 2>&1)"; then
+				rc=1
+			else
+				output="$(REMINDER_ID="$id" bash -c "$command" 6>&- 2>&1)" || rc=$?
+			fi
 			log_fire "$id" exec "rc=$rc" "$title"
 			if [ "$rc" = 2 ] || [ "$rc" = 3 ]; then
 				latch_verdict "$id" "$record" "$rc" "$output"
@@ -1927,7 +1946,7 @@ cmd_fire_locked() {
 		fi
 		case "$verdict" in
 		0)
-			clear_error_task "$id"
+			clear_error_task "$id" keep
 			mark_done "$id"
 			cmd_sync >/dev/null
 			;;

@@ -851,7 +851,38 @@ STUB
   "$REMINDER" edit "$id" --command 'exit 0' >/dev/null
   "$REMINDER" fire "$id" >/dev/null
   grep -q '00000000-0000-4000-8000-000000000001 annotate -- recovered ' "$TEST_TASK_LOG"
-  [ "$(last_record | jq -r '.error_task // "gone"')" = gone ]
+  [ "$(last_record | jq -r '.error_reason // "gone"')" = gone ]
+
+  # A second clean run says nothing new.
+  "$REMINDER" fire "$id" >/dev/null
+  [ "$(grep -c 'annotate -- recovered' "$TEST_TASK_LOG")" -eq 1 ]
+
+  # The next failure lands on the same open task, so blips cannot stack tasks.
+  "$REMINDER" edit "$id" --command 'echo network down; exit 1' >/dev/null
+  "$REMINDER" fire "$id" >/dev/null
+  [ "$(grep -c ' add ' "$TEST_TASK_LOG")" -eq 1 ]
+  grep -q 'annotate -- error again .*: exit 1: network down$' "$TEST_TASK_LOG"
+}
+
+@test "a check with a syntax error is an error, never the success its exit 2 would read as" {
+  "$REMINDER" add "typo" --repeat 'every 1d' --deadline 30d --action exec --command 'if then' --on-hit "touch $BATS_TEST_TMPDIR/hit"
+  id="$(only_id)"
+
+  run "$REMINDER" fire "$id"
+  [ "$status" -eq 0 ]
+  [ "$(last_record | jq -r '.status')" = active ]
+  [ ! -e "$BATS_TEST_TMPDIR/hit" ]
+  grep -q "	$id	exec	rc=1	" "$REMINDER_LOG"
+  grep -q ' add +gordon +work +reminder -- ' "$TEST_TASK_LOG"
+}
+
+@test "list shows the year only for a date more than half a year away" {
+  "$REMINDER" add "near" --repeat 'every 1d' --deadline 30d --action exec --command 'exit 0' >/dev/null
+  "$REMINDER" add "far" --repeat 'every 1d' --deadline 3650d --action exec --command 'exit 0' >/dev/null
+
+  run "$REMINDER" list
+  [[ "$output" == *"by $(date -d '+30 days' '+%a %d %b') "* ]]
+  [[ "$output" == *"by $(date -d '+3650 days' '+%a %d %b %Y') "* ]]
 }
 
 @test "notify mail: a success is mailed, reported, and the reminder is done without a dialog" {
@@ -1071,7 +1102,8 @@ STUB
   "$REMINDER" add "pto off" "$later" --action exec --command '/x/__toggles.sh __run pto-mode off' >/dev/null
   "$REMINDER" add "Weekly" --repeat '0 9 * * 1' --subject 'text:first line
 second line' >/dev/null
-  "$REMINDER" add "Soon" "$(date -d '+2 hours' '+%Y-%m-%d %H:%M')" >/dev/null
+  # The end of today, so the fixture cannot roll into tomorrow on a late run.
+  "$REMINDER" add "Soon" "$(date '+%F') 23:59" >/dev/null
   "$REMINDER" add "Gone" '2020-01-01 09:00' >/dev/null
 
   run "$REMINDER" agenda render
@@ -1441,7 +1473,7 @@ STUB
   [ "$(last_record | jq -r '.deadline')" = "2026-11-18T09:00:00$(date -d 2026-11-18 +%:z)" ]
 
   run "$REMINDER" list
-  [[ "$output" == *"by Wed 18 Nov 09:00"*"PR reaction" ]]
+  [[ "$output" == *"by Wed 18 Nov"*"09:00"*"PR reaction" ]]
 }
 
 
