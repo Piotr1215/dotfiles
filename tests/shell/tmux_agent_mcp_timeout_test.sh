@@ -4,11 +4,11 @@ set -euo pipefail
 config="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/.config/tmuxinator/task.yml"
 tmp_dir="$(mktemp -d)"
 trap 'rm -rf "$tmp_dir"' EXIT
-mkdir -p "$tmp_dir/bin" "$tmp_dir/.claude/scripts"
+mkdir -p "$tmp_dir/bin" "$tmp_dir/.claude/scripts" "$tmp_dir/loft/gordon" "$tmp_dir/loft/kendra"
 
 cat > "$tmp_dir/bin/__claude_with_monitor.sh" <<'EOF'
 #!/usr/bin/env bash
-printf '%s\n' "${MCP_TIMEOUT-unset}" "$*"
+printf '%s\n' "${MCP_TIMEOUT-unset}" "$PWD" "$*"
 EOF
 cat > "$tmp_dir/.claude/scripts/__models.sh" <<'EOF'
 #!/usr/bin/env bash
@@ -27,8 +27,9 @@ for window in todo kendra; do
     result="$(env -u MCP_TIMEOUT HOME="$tmp_dir" PATH="$tmp_dir/bin:$PATH" bash -c "$launch")"
     [[ "${result%%$'\n'*}" == 120000 ]] || { printf '%s timeout missing: %s\n' "$window" "$result" >&2; exit 1; }
     case "$window" in
-        todo) [[ "$result" == *triage-agent-system-prompt.md* ]] ;;
-        kendra) [[ "$result" == *intake-agent-system-prompt.md* ]] ;;
+        todo) folder=gordon; [[ "$result" == *triage-agent-system-prompt.md* ]] ;;
+        kendra) folder=kendra; [[ "$result" == *intake-agent-system-prompt.md* ]] ;;
     esac
+    [[ "$(sed -n '2p' <<< "$result")" == "$tmp_dir/loft/$folder" ]] || { printf '%s cwd wrong: %s\n' "$window" "$result" >&2; exit 1; }
 done
-printf '%s\n' 'Gordon and Kendra launch with MCP_TIMEOUT=120000'
+printf '%s\n' '2 launches passed: separate agent folders and MCP_TIMEOUT=120000'
