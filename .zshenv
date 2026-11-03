@@ -10,3 +10,6 @@ export VISUAL=nvim
 
 if [ -e /home/decoder/.nix-profile/etc/profile.d/nix.sh ]; then . /home/decoder/.nix-profile/etc/profile.d/nix.sh; fi # added by Nix installer
 . "$HOME/.cargo/env"
+
+# rclone.conf is encrypted; rclone fetches its password from pass on demand.
+export RCLONE_PASSWORD_COMMAND="$HOME/dev/dotfiles/scripts/__lib_secret_object.sh read RCLONE_CONFIG_PASS"
