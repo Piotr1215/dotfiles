@@ -51,15 +51,19 @@ fi
 echo "$*" > "${TEST_DIR}/tmux_args"
 STUB
     chmod +x "${TEST_DIR}/tmux"
-    # Stands in for nvim: consumes the brief and exits with STUB_NVIM_RC, the
-    # code the real key maps produce (0 close, 10 Enter, 11 s).
-    cat > "${TEST_DIR}/nvim" << 'STUB'
+    cat > "${TEST_DIR}/handoffs" << 'STUB'
 #!/bin/bash
-cat > "${TEST_DIR}/nvim_stdin"
-exit "${STUB_NVIM_RC:-0}"
+printf '%s\n' "$*" > "${TEST_DIR}/editor_args"
+printf '%s\n' "$HANDOFFS_NVIM" > "${TEST_DIR}/editor_nvim"
 STUB
-    chmod +x "${TEST_DIR}/nvim"
+    cat > "${TEST_DIR}/tw" << 'STUB'
+#!/bin/bash
+printf '%s\n' "$*" > "${TEST_DIR}/tw_calls"
+STUB
+    chmod +x "${TEST_DIR}/handoffs" "${TEST_DIR}/tw"
     export TASK_BRIEF_NVIM_COMMAND="${TEST_DIR}/nvim"
+    export TASK_BRIEF_HANDOFFS_COMMAND="${TEST_DIR}/handoffs"
+    export TASK_BRIEF_TW_COMMAND="${TEST_DIR}/tw"
     export TASK_BRIEF_TASK_COMMAND="${TEST_DIR}/task"
     export TASK_BRIEF_TMUX_COMMAND="${TEST_DIR}/tmux"
 }
@@ -163,15 +167,15 @@ teardown() {
     grep -q -- "--actions-run '843f'" "${TEST_DIR}/tmux_args"
 }
 
-@test "unique ref resolves, shows the brief and the key legend" {
-    STUB_NVIM_RC=0 run "$SCRIPT" --actions-run 843f
+@test "unique ref opens the editable handoffs file on the selected full UUID" {
+    run "$SCRIPT" --actions-run 843f
     [ "$status" -eq 0 ]
-    grep -q 'Grant Kai push' "${TEST_DIR}/nvim_stdin"
-    grep -q '\[Enter\] unfurl' "${TEST_DIR}/nvim_stdin"
+    [ "$(cat "${TEST_DIR}/editor_args")" = 'edit 843f1111-aaaa-4bbb-8ccc-000000000001' ]
+    [ "$(cat "${TEST_DIR}/editor_nvim")" = "$TASK_BRIEF_NVIM_COMMAND" ]
 }
 
 @test "ref resolution reads pending tasks with hooks off" {
-    STUB_NVIM_RC=0 run "$SCRIPT" --actions-run 843f
+    run "$SCRIPT" --actions-run 843f
     grep -q 'status:pending' "${TEST_DIR}/task_calls"
     grep -q 'rc.hooks=off' "${TEST_DIR}/task_calls"
     ! grep -Eq ' (modify|annotate|done|add|delete)' "${TEST_DIR}/task_calls"
@@ -181,27 +185,27 @@ teardown() {
     run "$SCRIPT" --actions-run beef </dev/null
     [ "$status" -eq 1 ]
     [[ "$output" == *"no pending task matches beef"* ]]
-    [ ! -f "${TEST_DIR}/nvim_stdin" ]
+    [ ! -f "${TEST_DIR}/editor_args" ]
     ! grep -q send-keys "${TEST_DIR}/tmux_calls" 2>/dev/null
 }
 
 @test "ambiguous ref lists the matches and the pick opens that task" {
-    STUB_NVIM_RC=0 run "$SCRIPT" --actions-run 7deb <<<"2"
+    run "$SCRIPT" --actions-run 7deb <<<"2"
     [ "$status" -eq 0 ]
     [[ "$output" == *"matches 2 pending tasks"* ]]
     [[ "$output" == *"7deb2222"* ]]
     [[ "$output" == *"7deb3333"* ]]
-    grep -q 'Second 7deb task' "${TEST_DIR}/nvim_stdin"
+    [ "$(cat "${TEST_DIR}/editor_args")" = 'edit 7deb3333-aaaa-4bbb-8ccc-000000000003' ]
 }
 
 @test "ambiguous ref cancelled by another key opens nothing" {
     run "$SCRIPT" --actions-run 7deb <<<"x"
     [ "$status" -eq 0 ]
-    [ ! -f "${TEST_DIR}/nvim_stdin" ]
+    [ ! -f "${TEST_DIR}/editor_args" ]
 }
 
 @test "Enter sends the no-repo task token literally, without Enter" {
-    STUB_NVIM_RC=10 run "$SCRIPT" --actions-run 843f
+    run "$SCRIPT" --action enter 843f1111-aaaa-4bbb-8ccc-000000000001
     [ "$status" -eq 0 ]
     line=$(grep send-keys "${TEST_DIR}/tmux_calls")
     [[ "$line" == 'send-keys -t %4 -l -- @"843f1111-aaaa-4bbb-8ccc-000000000001|-|no-repo|Grant Kai push on loft-sh/kine?"' ]]
@@ -210,13 +214,13 @@ teardown() {
 }
 
 @test "token for a Linear task carries the linear id and repo" {
-    STUB_NVIM_RC=10 run "$SCRIPT" --actions-run 7deb <<<"1"
+    run "$SCRIPT" --action enter 7deb2222-aaaa-4bbb-8ccc-000000000002
     line=$(grep send-keys "${TEST_DIR}/tmux_calls")
     [[ "$line" == 'send-keys -t %4 -l -- @"7deb2222-aaaa-4bbb-8ccc-000000000002|DEVOPS-1717|loft-sh/vcluster-pro|Get PR 8827 approved"' ]]
 }
 
 @test "s sends the spawn prefix, the token and a trailing space" {
-    STUB_NVIM_RC=11 run "$SCRIPT" --actions-run 843f
+    run "$SCRIPT" --action spawn 843f1111-aaaa-4bbb-8ccc-000000000001
     [ "$status" -eq 0 ]
     line=$(grep send-keys "${TEST_DIR}/tmux_calls")
     [[ "$line" == 'send-keys -t %4 -l -- /ops-spawn-agent @"843f1111-aaaa-4bbb-8ccc-000000000001|-|no-repo|Grant Kai push on loft-sh/kine?" ' ]]
@@ -224,42 +228,50 @@ teardown() {
 }
 
 @test "q or Esc sends nothing" {
-    STUB_NVIM_RC=0 run "$SCRIPT" --actions-run 843f
+    run "$SCRIPT" --actions-run 843f
     [ "$status" -eq 0 ]
     ! grep -q send-keys "${TEST_DIR}/tmux_calls"
 }
 
 @test "no Gordon pane fails with a short message and sends nothing" {
-    STUB_NO_GORDON=1 STUB_NVIM_RC=10 run "$SCRIPT" --actions-run 843f </dev/null
+    STUB_NO_GORDON=1 run "$SCRIPT" --action enter 843f1111-aaaa-4bbb-8ccc-000000000001 </dev/null
     [ "$status" -eq 1 ]
     [[ "$output" == *"no Gordon pane"* ]]
     ! grep -q send-keys "${TEST_DIR}/tmux_calls"
 }
 
 @test "Gordon pane is looked up by @agent_name" {
-    STUB_NVIM_RC=10 run "$SCRIPT" --actions-run 843f
+    run "$SCRIPT" --action enter 843f1111-aaaa-4bbb-8ccc-000000000001
     grep -q "list-panes -a -F #{pane_id} #{@agent_name}" "${TEST_DIR}/tmux_calls"
 }
 
-@test "a full uuid opens the actions view regardless of status" {
-    STUB_NVIM_RC=10 run "$SCRIPT" --actions-run 843f1111-aaaa-4bbb-8ccc-000000000001
+@test "a full uuid skips the pending reference lookup" {
+    run "$SCRIPT" --actions-run 843f1111-aaaa-4bbb-8ccc-000000000001
     [ "$status" -eq 0 ]
     ! grep -q 'status:pending' "${TEST_DIR}/task_calls"
-    grep -q 'send-keys -t %4 -l -- @"843f1111-aaaa' "${TEST_DIR}/tmux_calls"
+    [ "$(cat "${TEST_DIR}/editor_args")" = 'edit 843f1111-aaaa-4bbb-8ccc-000000000001' ]
 }
 
-@test "d marks the task done with hooks on and sends nothing" {
-    STUB_NVIM_RC=12 run "$SCRIPT" --actions-run 843f
+@test "d closes through the guarded task wrapper and sends nothing" {
+    run "$SCRIPT" --action done 843f1111-aaaa-4bbb-8ccc-000000000001
     [ "$status" -eq 0 ]
-    line=$(grep ' done' "${TEST_DIR}/task_calls")
-    [[ "$line" == *"843f1111-aaaa-4bbb-8ccc-000000000001 done" ]]
-    [[ "$line" != *"rc.hooks=off"* ]]
+    [ "$(cat "${TEST_DIR}/tw_calls")" = 'done 843f1111-aaaa-4bbb-8ccc-000000000001' ]
+    ! grep -Eq ' (modify|annotate|done|add|delete)' "${TEST_DIR}/task_calls" 2>/dev/null
     ! grep -q send-keys "${TEST_DIR}/tmux_calls"
 }
 
-@test "the legend names the d key" {
-    STUB_NVIM_RC=0 run "$SCRIPT" --actions-run 843f
-    grep -q '\[d\] done' "${TEST_DIR}/nvim_stdin"
+@test "actions reject unknown keys and short references" {
+    run "$SCRIPT" --action bogus 843f1111-aaaa-4bbb-8ccc-000000000001
+    [ "$status" -eq 2 ]
+    run "$SCRIPT" --action enter 843f
+    [ "$status" -eq 2 ]
+    ! grep -q send-keys "${TEST_DIR}/tmux_calls" 2>/dev/null
+}
+
+@test "an absent task never injects an empty token" {
+    run "$SCRIPT" --action enter 00000000-0000-4000-8000-000000000000
+    [ "$status" -ne 0 ]
+    ! grep -q send-keys "${TEST_DIR}/tmux_calls" 2>/dev/null
 }
 
 # The what: note. On 26 Oct Piotr picked 3b9d with the @task picker and asked

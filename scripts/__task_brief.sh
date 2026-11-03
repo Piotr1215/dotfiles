@@ -8,7 +8,7 @@
 #   __task_brief.sh --popup <token>           open it in a tmux popup (nvim -R,
 #                                             readable and copyable); this is
 #                                             the plain read-only popup
-#   __task_brief.sh --actions <token>         popup with actions; what the
+#   __task_brief.sh --actions <token>         editable handoffs.md popup; what the
 #                                             Alacritty ctrl+6 hint runs, for a
 #                                             full uuid or a 4-hex handoff ref
 #                                             from the Alt-m board. Keys:
@@ -17,6 +17,7 @@
 #                                             same prefixed with /ops-spawn-agent,
 #                                             d marks the task done. Text is
 #                                             typed, never submitted.
+#   __task_brief.sh --action <key> <uuid>     editor callback: enter, spawn, done
 #   __task_brief.sh --card <token>            a short card for the @task
 #                                             instant answer: ref, title, What:,
 #                                             the "Your step:" sentence of the
@@ -35,15 +36,18 @@
 #   @"<uuid>|<linear id or ->|<repo or ->|<description>"
 #
 # Env (tests): TASK_BRIEF_TASK_COMMAND, TASK_BRIEF_TMUX_COMMAND,
-# TASK_BRIEF_NVIM_COMMAND, TASK_BRIEF_WIDTH
+# TASK_BRIEF_NVIM_COMMAND, TASK_BRIEF_WIDTH, TASK_BRIEF_HANDOFFS_COMMAND,
+# TASK_BRIEF_TW_COMMAND
 
 set -eo pipefail
 
 mode=plain
+action=""
 case "${1:-}" in
   --popup) mode=popup; shift ;;
   --actions) mode=actions; shift ;;
   --actions-run) mode=actions_run; shift ;;
+  --action) mode=action; action="${2:-}"; shift; [[ $# -eq 0 ]] || shift ;;
   --card) mode=card; shift ;;
 esac
 
@@ -193,7 +197,7 @@ pause() {
 
 # The picker token for task $1, same shape as file-suggestion.toml builds.
 build_token() {
-  tw "$1" export 2>/dev/null | jq -r '.[0] |
+  tw "$1" export 2>/dev/null | jq -er '.[0] | select(.uuid != null) |
     "@\"\(.uuid)|\(.linear_issue_id // "-")|\(.repo // "-")|\(.description)\""'
 }
 
@@ -211,9 +215,24 @@ send_to_gordon() {
   "$tmux_bin" send-keys -t "$pane" -l -- "$1"
 }
 
-# Popup body for --actions: resolve the ref, show the brief, act on the key.
+# Called by the handoffs buffer with the full UUID under the cursor.
+run_action() {
+  local id="$1" token
+  [[ "$id" =~ ^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$ ]] || {
+    printf 'action needs a full task uuid\n' >&2
+    return 2
+  }
+  case "$action" in
+    enter) token=$(build_token "$id") && send_to_gordon "$token" ;;
+    spawn) token=$(build_token "$id") && send_to_gordon "/ops-spawn-agent $token " ;;
+    done) "${TASK_BRIEF_TW_COMMAND:-$HOME/.claude/scripts/__tw.sh}" 'done' "$id" ;;
+    *) printf 'unknown handoff action: %s\n' "$action" >&2; return 2 ;;
+  esac
+}
+
+# Popup body for --actions: resolve the ref, then edit the shared handoffs file.
 actions_run() {
-  local ref="${1,,}" id line n i key rc keys tmpf token
+  local ref="${1,,}" id line n i key keys
   local -a ids=() descs=()
   # A full uuid opens whatever its status; a short ref means a pending task.
   local -a filter=(status:pending)
@@ -246,30 +265,14 @@ actions_run() {
     [[ -n "$id" ]] || return 0
   fi
 
-  tmpf=$(mktemp)
-  {
-    printf '[Enter] unfurl into Gordon   [s] spawn   [d] done   [q/Esc] close\n\n'
-    print_brief "$id"
-  } >"$tmpf"
-
-  rc=0
-  "${TASK_BRIEF_NVIM_COMMAND:-nvim}" -R \
-    -c 'nnoremap <silent> q :qa!<CR>' \
-    -c 'nnoremap <silent> <Esc> :qa!<CR>' \
-    -c 'nnoremap <silent> <CR> :cq 10<CR>' \
-    -c 'nnoremap <silent> s :cq 11<CR>' \
-    -c 'nnoremap <silent> d :cq 12<CR>' \
-    - <"$tmpf" || rc=$?
-  rm -f "$tmpf"
-
-  case "$rc" in
-    10) token=$(build_token "$id"); send_to_gordon "$token" ;;
-    11) token=$(build_token "$id"); send_to_gordon "/ops-spawn-agent $token " ;;
-    # Hooks stay on: closing is a real write, unlike the reads above.
-    12) "$task_bin" rc.confirmation=no rc.verbose=nothing "$id" 'done' >/dev/null ;;
-    *) return 0 ;;
-  esac
+  HANDOFFS_NVIM="${TASK_BRIEF_NVIM_COMMAND:-${HANDOFFS_NVIM:-nvim}}" \
+    "${TASK_BRIEF_HANDOFFS_COMMAND:-$HOME/.claude/scripts/__handoffs_file.py}" edit "$id"
 }
+
+if [[ "$mode" == action ]]; then
+  run_action "$uuid"
+  exit $?
+fi
 
 if [[ "$mode" == actions_run ]]; then
   actions_run "$uuid"

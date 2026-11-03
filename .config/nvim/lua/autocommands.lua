@@ -525,12 +525,13 @@ vim.api.nvim_create_autocmd("BufWritePre", {
 -- fires it for exactly this path and reports the outcome.
 local handoffsGroup = api.nvim_create_augroup("GordonHandoffs", { clear = true })
 local handoffs_path = vim.fn.expand "~/.local/state/gordon/handoffs.md"
+local handoffs_saves = {}
 vim.api.nvim_create_autocmd("BufWritePost", {
   group = handoffsGroup,
   pattern = handoffs_path,
-  callback = function()
+  callback = function(ev)
     local script = vim.fn.expand "~/.claude/scripts/__handoffs_file.py"
-    vim.system({ script, "save" }, { text = true }, function(res)
+    handoffs_saves[ev.buf] = vim.system({ script, "save" }, { text = true }, function(res)
       vim.schedule(function()
         if res.code == 0 then
           local sent = vim.trim(res.stdout or "")
@@ -544,4 +545,88 @@ vim.api.nvim_create_autocmd("BufWritePost", {
     end)
   end,
   desc = "Deliver handoff replies to Gordon on save",
+})
+
+local function handoff_uuid(buf)
+  local lines = api.nvim_buf_get_lines(buf, 0, -1, false)
+  for row = api.nvim_win_get_cursor(0)[1], 1, -1 do
+    if lines[row]:match "^## " then
+      local uuid = (lines[row + 1] or ""):match "^<!%-%- handoff: ([0-9a-f%-]+) %-%->$"
+      if uuid then
+        local a, b, c, d, e = uuid:match "^(%x+)%-(%x+)%-(%x+)%-(%x+)%-(%x+)$"
+        if a and #a == 8 and #b == 4 and #c == 4 and #d == 4 and #e == 12 then
+          return uuid
+        end
+      end
+      return nil
+    end
+  end
+end
+
+local function handoffs_write(buf)
+  if vim.bo[buf].modified then
+    local ok, err = pcall(vim.cmd, "write")
+    if not ok then
+      vim.notify(tostring(err), vim.log.levels.ERROR)
+      return false
+    end
+  end
+  local job = handoffs_saves[buf]
+  if job and job:wait(60000).code ~= 0 then
+    vim.notify("Reply delivery failed; save again to retry.", vim.log.levels.ERROR)
+    return false
+  end
+  return true
+end
+
+vim.api.nvim_create_autocmd({ "BufReadPost", "BufNewFile" }, {
+  group = handoffsGroup,
+  pattern = handoffs_path,
+  callback = function(ev)
+    vim.bo[ev.buf].filetype = "markdown"
+    vim.wo.wrap = true
+    vim.wo.linebreak = true
+    vim.wo.breakindent = true
+    local function close()
+      if vim.bo[ev.buf].modified then
+        local choice = vim.fn.confirm("Save handoff replies before closing?", "&Save\n&Cancel\n&Discard", 2)
+        if choice == 1 then
+          if not handoffs_write(ev.buf) then
+            return
+          end
+        elseif choice ~= 3 then
+          return
+        end
+      elseif not handoffs_write(ev.buf) then
+        return
+      end
+      vim.cmd "quit!"
+    end
+    local function act(action)
+      local uuid = handoff_uuid(ev.buf)
+      if not uuid then
+        vim.notify("Place the cursor on a handoff with a UUID marker.", vim.log.levels.WARN)
+        return
+      end
+      if not handoffs_write(ev.buf) then
+        return
+      end
+      local script = vim.fn.expand "~/dev/dotfiles/scripts/__task_brief.sh"
+      local result = vim.fn.system { script, "--action", action, uuid }
+      if vim.v.shell_error ~= 0 then
+        vim.notify(vim.trim(result), vim.log.levels.ERROR)
+        return
+      end
+      vim.cmd "quit"
+    end
+    for key, action in pairs { ["<CR>"] = "enter", s = "spawn", d = "done" } do
+      vim.keymap.set("n", key, function()
+        act(action)
+      end, { buffer = ev.buf, silent = true, desc = "Handoff: " .. action })
+    end
+    for _, key in ipairs { "q", "<Esc>" } do
+      vim.keymap.set("n", key, close, { buffer = ev.buf, silent = true, desc = "Close handoffs" })
+    end
+  end,
+  desc = "Edit handoffs with actions for the item under the cursor",
 })
