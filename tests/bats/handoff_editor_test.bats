@@ -84,6 +84,7 @@ vim.cmd('wincmd p')
 local handoff_window = vim.api.nvim_get_current_win()
 vim.api.nvim_win_set_cursor(0, { 14, 0 })
 local key = vim.env.TEST_KEY == 'CR' and '<CR>' or vim.env.TEST_KEY
+vim.fn.confirm = function() return 1 end
 vim.fn.maparg(key, 'n', false, true).callback()
 assert(vim.wait(5000, function() return not vim.api.nvim_win_is_valid(handoff_window) end, 20), 'handoff window was not closed')
 assert(vim.api.nvim_get_current_buf() ~= handoff, 'still viewing handoffs')
@@ -118,6 +119,7 @@ vim.cmd('wincmd p')
 local handoff_window = vim.api.nvim_get_current_win()
 vim.api.nvim_win_set_cursor(0, { 6, 0 })
 vim.api.nvim_buf_set_lines(handoff, 6, 7, false, { '> reply' })
+vim.fn.confirm = function() return 1 end
 vim.fn.maparg('d', 'n', false, true).callback()
 assert(vim.wait(5000, function() return not vim.api.nvim_win_is_valid(handoff_window) end, 20), 'handoff window was not closed')
 assert(vim.api.nvim_get_current_buf() ~= handoff, 'still viewing handoffs')
@@ -176,6 +178,7 @@ local handoff = vim.api.nvim_get_current_buf()
 local window = vim.api.nvim_get_current_win()
 vim.api.nvim_win_set_cursor(0, { 6, 0 })
 vim.api.nvim_buf_set_lines(handoff, 6, 7, false, { '> reply' })
+vim.fn.confirm = function() return 1 end
 vim.fn.maparg('d', 'n', false, true).callback()
 assert(vim.api.nvim_win_is_valid(window), 'view closed after failed save')
 assert(vim.api.nvim_get_current_buf() == handoff, 'handoff no longer displayed')
@@ -197,4 +200,71 @@ assert(vim.api.nvim_get_current_buf() == handoff, 'handoff no longer displayed')
 S
   run_nvim
   [ "$(cat "$BATS_TEST_TMPDIR/events")" = 'action <--action> <spawn> <11111111-1111-4111-8111-111111111111>' ]
+}
+
+@test "cancelling close leaves the edited buffer untouched" {
+  for answer in n Esc Enter; do
+    export TEST_ANSWER="$answer"
+    cat > "$BATS_TEST_TMPDIR/scenario.lua" <<'S'
+vim.cmd.edit(vim.fn.fnameescape(vim.env.HOME .. '/.local/state/gordon/handoffs.md'))
+local buf = vim.api.nvim_get_current_buf()
+vim.api.nvim_win_set_cursor(0, { 6, 0 })
+vim.api.nvim_buf_set_lines(buf, 6, 7, false, { '> unsaved' })
+local before = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+local input = ({ n = 'n', Esc = '<Esc>', Enter = '<CR>' })[vim.env.TEST_ANSWER]
+vim.fn.feedkeys(vim.api.nvim_replace_termcodes(input, true, false, true), 't')
+vim.fn.maparg('d', 'n', false, true).callback()
+assert(vim.bo[buf].modified and vim.deep_equal(before, vim.api.nvim_buf_get_lines(buf, 0, -1, false)))
+S
+    run_nvim
+    [ ! -e "$BATS_TEST_TMPDIR/events" ]
+  done
+}
+
+@test "real popup entry loads the full config and selects the requested reply" {
+  mkdir -p "$HOME/.config" "$HOME/dev/obsidian/decoder"
+  ln -s "$REPO_ROOT/.config/nvim" "$HOME/.config/nvim"
+  export XDG_DATA_HOME=/home/decoder/.local/share
+  export HANDOFFS_FILE="$HOME/.local/state/gordon/handoffs.md"
+  export HANDOFFS_STATE="$BATS_TEST_TMPDIR/state.json"
+  export FOCUS_TASK_CMD="$BATS_TEST_TMPDIR/task"
+  export TASK_BRIEF_TASK_COMMAND="$BATS_TEST_TMPDIR/task"
+  export TASK_BRIEF_TMUX_COMMAND="$BATS_TEST_TMPDIR/tmux"
+  export TASK_BRIEF_HANDOFFS_COMMAND=/home/decoder/.claude/scripts/__handoffs_file.py
+  export TASK_BRIEF_NVIM_COMMAND="$BATS_TEST_TMPDIR/nvim"
+  cat > "$BATS_TEST_TMPDIR/task" <<'S'
+#!/usr/bin/env bash
+printf '%s\n' '[{"uuid":"11111111-1111-4111-8111-111111111111","status":"pending","tags":["piotr"],"description":"first"},{"uuid":"22222222-2222-4222-8222-222222222222","status":"pending","tags":["piotr"],"description":"second"}]'
+S
+  cat > "$BATS_TEST_TMPDIR/tmux" <<'S'
+#!/usr/bin/env bash
+[[ "$1" == display-popup ]] || exit 1
+bash -c "${!#}"
+S
+  cat > "$BATS_TEST_TMPDIR/nvim" <<'S'
+#!/usr/bin/env bash
+exec nvim --headless "$@" -c "lua vim.api.nvim_create_autocmd('VimEnter',{once=true,callback=function() vim.defer_fn(function() local lines={vim.fn.getline('.'),vim.wo.winbar,vim.fn.getline(vim.fn.search('^## ', 'bnW'))}; for _,k in ipairs({'<CR>','s','d','q','<Esc>'}) do local m=vim.fn.maparg(k,'n',false,true); table.insert(lines,k..':'..tostring(m.buffer)) end; vim.fn.writefile(lines,vim.env.BATS_TEST_TMPDIR..'/entry-result'); vim.cmd('qa!') end,900) end})"
+S
+  chmod +x "$BATS_TEST_TMPDIR"/{task,tmux,nvim}
+  run timeout 20 "$REPO_ROOT/scripts/__task_brief.sh" --actions 2222
+  [ "$status" -eq 0 ] || { printf '%s\n' "$output" >&2; return 1; }
+  [ "$(head -1 "$BATS_TEST_TMPDIR/entry-result")" = '>' ]
+  grep -q '^## 2222  second$' "$BATS_TEST_TMPDIR/entry-result"
+  grep -q 'd: close (confirm)' "$BATS_TEST_TMPDIR/entry-result" || { cat "$BATS_TEST_TMPDIR/entry-result"; printf "%s\n" "$output"; return 1; }
+  [ "$(grep -c ':1$' "$BATS_TEST_TMPDIR/entry-result")" -eq 5 ]
+}
+
+@test "handoff navigation skips subsections and lands on each reply" {
+  cat > "$BATS_TEST_TMPDIR/scenario.lua" <<'S'
+vim.cmd.edit(vim.fn.fnameescape(vim.env.HOME .. '/.local/state/gordon/handoffs.md'))
+vim.api.nvim_win_set_cursor(0, { 7, 0 })
+assert(vim.wait(2000, function() return type(vim.fn.maparg(']]', 'n', false, true).callback) == 'function' end), 'navigation missing')
+vim.fn.maparg(']]', 'n', false, true).callback()
+assert(vim.fn.line('.') == 15 and vim.fn.getline('.') == '>', 'next did not reach second reply')
+assert(vim.fn.line('w0') == 9, 'next did not put heading at top')
+vim.fn.maparg('[[', 'n', false, true).callback()
+assert(vim.fn.line('.') == 7 and vim.fn.getline('.') == '>', 'previous did not reach first reply')
+assert(vim.fn.line('w0') == 1, 'previous did not put heading at top')
+S
+  run_nvim
 }

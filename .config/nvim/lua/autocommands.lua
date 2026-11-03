@@ -524,13 +524,13 @@ vim.api.nvim_create_autocmd("BufWritePre", {
 -- (notes it on the task, DMs triage). The script does the work; this only
 -- fires it for exactly this path and reports the outcome.
 local handoffsGroup = api.nvim_create_augroup("GordonHandoffs", { clear = true })
-local handoffs_path = vim.fn.expand "~/.local/state/gordon/handoffs.md"
+local handoffs_path = vim.env.HOME .. "/.local/state/gordon/handoffs.md"
 local handoffs_saves = {}
 vim.api.nvim_create_autocmd("BufWritePost", {
   group = handoffsGroup,
   pattern = handoffs_path,
   callback = function(ev)
-    local script = vim.fn.expand "~/.claude/scripts/__handoffs_file.py"
+    local script = vim.env.HOME .. "/.claude/scripts/__handoffs_file.py"
     handoffs_saves[ev.buf] = vim.system({ script, "save" }, { text = true }, function(res)
       vim.schedule(function()
         if res.code == 0 then
@@ -587,6 +587,57 @@ vim.api.nvim_create_autocmd({ "BufReadPost", "BufNewFile" }, {
     vim.wo.wrap = true
     vim.wo.linebreak = true
     vim.wo.breakindent = true
+    vim.wo.winbar = " Enter: unfurl  s: spawn  d: close (confirm)  [[/]]: handoff  q/Esc: close "
+    local function navigate(direction)
+      local lines = api.nvim_buf_get_lines(ev.buf, 0, -1, false)
+      local headings = {}
+      for row, line in ipairs(lines) do
+        if line:match "^## " and (lines[row + 1] or ""):match "^<!%-%- handoff: " then
+          headings[#headings + 1] = row
+        end
+      end
+      local current = api.nvim_win_get_cursor(0)[1]
+      local current_heading = 0
+      for _, row in ipairs(headings) do
+        if row <= current then
+          current_heading = row
+        end
+      end
+      local target
+      for _, row in ipairs(headings) do
+        if direction > 0 and row > current then
+          target = row
+          break
+        elseif direction < 0 and row < current_heading then
+          target = row
+        end
+      end
+      if not target then
+        vim.notify("No more handoffs", vim.log.levels.INFO)
+        return
+      end
+      for row = target + 1, #lines do
+        if lines[row]:match "^## " then
+          break
+        elseif lines[row]:match "^>" then
+          api.nvim_win_set_cursor(0, { row, 0 })
+          vim.cmd "normal! zv"
+          vim.fn.winrestview { topline = target }
+          return
+        end
+      end
+    end
+    vim.defer_fn(function()
+      if not api.nvim_buf_is_valid(ev.buf) then
+        return
+      end
+      vim.keymap.set("n", "]]", function()
+        navigate(1)
+      end, { buffer = ev.buf, silent = true, desc = "Next handoff" })
+      vim.keymap.set("n", "[[", function()
+        navigate(-1)
+      end, { buffer = ev.buf, silent = true, desc = "Previous handoff" })
+    end, 200)
     local function close()
       if vim.bo[ev.buf].modified then
         local choice = vim.fn.confirm("Save handoff replies before closing?", "&Save\n&Cancel\n&Discard", 2)
@@ -608,10 +659,23 @@ vim.api.nvim_create_autocmd({ "BufReadPost", "BufNewFile" }, {
         vim.notify("Place the cursor on a handoff with a UUID marker.", vim.log.levels.WARN)
         return
       end
+      if action == "done" then
+        local heading = ""
+        for row = api.nvim_win_get_cursor(0)[1], 1, -1 do
+          local line = api.nvim_buf_get_lines(ev.buf, row - 1, row, false)[1]
+          if line:match "^## " then
+            heading = line:sub(4)
+            break
+          end
+        end
+        if vim.fn.confirm("Close " .. heading .. "?", "&Yes\n&No", 2) ~= 1 then
+          return
+        end
+      end
       if not handoffs_write(ev.buf) then
         return
       end
-      local script = vim.fn.expand "~/dev/dotfiles/scripts/__task_brief.sh"
+      local script = vim.env.HOME .. "/dev/dotfiles/scripts/__task_brief.sh"
       local result = vim.fn.system { script, "--action", action, uuid }
       if vim.v.shell_error ~= 0 then
         vim.notify(vim.trim(result), vim.log.levels.ERROR)
