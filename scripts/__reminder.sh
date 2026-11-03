@@ -16,6 +16,8 @@
 # Every fire appends one line to the fire log. Snooze is an edit of `when` plus
 # `sync`; a dismissed or dying dialog snoozes by default, so no path drops a
 # reminder.
+# The fire log rolls at 1 MiB, keeping three older generations (.1 plain,
+# .2.gz and .3.gz). Reports read that retained history oldest first.
 #
 # An exec reminder is a packet: a check, the actions it runs, and a deadline.
 # The check's exit code is the verdict: 0 not yet, 2 success, 3 failure, 4
@@ -98,6 +100,7 @@ Agenda format (org): one ** heading per reminder, properties indented below.
   sync                              rebuild the at queue and the crontab block
   gc                                compact the store to active records, drop stale fire locks
   compact                           one line per reminder, done and deleted kept (runs at boot)
+  rotate-log                        rotate fire.log if it has reached 1 MiB; clocks unchanged
   fire <id> [token]                 what the clocks call; runs the action
   deadline <id>                     what the deadline clock calls; shows the form
   match                             one pass over new notification log lines
@@ -572,10 +575,55 @@ sync_patterns() {
 
 # ------------------------------------------------------------------ log ----
 
+# Caller holds the fire-log lock. Leave the newest archive plain for any
+# writer already in flight when this version of the helper was installed.
+rotate_fire_log_locked() {
+	[ -f "$FIRE_LOG" ] || return 0
+	[ "$(stat -c %s "$FIRE_LOG")" -ge 1048576 ] || return 0
+	if [ -f "$FIRE_LOG.1" ]; then
+		# Finish compression before changing any existing generation.
+		gzip -c -- "$FIRE_LOG.1" >"$FIRE_LOG.2.gz.tmp"
+		[ ! -f "$FIRE_LOG.2.gz" ] || mv -f -- "$FIRE_LOG.2.gz" "$FIRE_LOG.3.gz"
+		mv -f -- "$FIRE_LOG.2.gz.tmp" "$FIRE_LOG.2.gz"
+		rm -- "$FIRE_LOG.1"
+	fi
+	mv -- "$FIRE_LOG" "$FIRE_LOG.1"
+	touch -- "$FIRE_LOG"
+	chmod --reference="$FIRE_LOG.1" -- "$FIRE_LOG"
+}
+
+# Explicit maintenance uses the same lock and threshold as each append.
+cmd_rotate_log() {
+	mkdir -p "$(dirname "$FIRE_LOG")"
+	(
+		flock 5
+		rotate_fire_log_locked
+	) 5>>"$FIRE_LOG.lock"
+}
+
+# Keep readers on one consistent set of generations while rotation waits.
+fire_history() {
+	[ -d "$(dirname "$FIRE_LOG")" ] || return 0
+	(
+		flock -s 5
+		local generation
+		for generation in 3 2; do
+			[ ! -f "$FIRE_LOG.$generation.gz" ] || gzip -cd -- "$FIRE_LOG.$generation.gz"
+		done
+		[ ! -f "$FIRE_LOG.1" ] || cat -- "$FIRE_LOG.1"
+		[ ! -f "$FIRE_LOG" ] || cat -- "$FIRE_LOG"
+	) 5>>"$FIRE_LOG.lock"
+}
+
+# Serialize the size check, rotation and append across concurrent reminders.
 log_fire() {
 	local id="$1" event="$2" detail="$3" label="$4"
 	mkdir -p "$(dirname "$FIRE_LOG")"
-	printf '%s\t%s\t%s\t%s\t%s\n' "$(now_iso)" "$id" "$event" "$detail" "$(printf '%s' "$label" | tr '\t\n' '  ')" >>"$FIRE_LOG"
+	(
+		flock 5
+		rotate_fire_log_locked
+		printf '%s\t%s\t%s\t%s\t%s\n' "$(now_iso)" "$id" "$event" "$detail" "$(printf '%s' "$label" | tr '\t\n' '  ')" >>"$FIRE_LOG"
+	) 5>>"$FIRE_LOG.lock"
 }
 
 # ---------------------------------------------------------------- verbs ----
@@ -925,7 +973,7 @@ agenda_section() {
 agenda_last() {
 	local id="$1" last
 	[ -f "$FIRE_LOG" ] || return 0
-	last="$(awk -F '\t' -v id="$id" '
+	last="$(fire_history | awk -F '\t' -v id="$id" '
 		function add(s) { out = out == "" ? s : out ", " s }
 		$2 != id { next }
 		$3 == "fired" { at = $1; out = ""; popup = ($4 ~ /on popup/); next }
@@ -945,7 +993,7 @@ agenda_last() {
 		$3 == "error" { add($4); next }
 		$3 == "failed" { add("failed: " $4); next }
 		END { if (at != "") printf "%s\t%s\n", at, out == "" ? "fired" : out }
-	' "$FIRE_LOG")"
+	')"
 	[ -n "$last" ] || return 0
 	printf '   :last: [%s] %s\n' "$(agenda_stamp "${last%%$'\t'*}")" "${last#*$'\t'}"
 	[ -f "$RUNS_DIR/$id.log" ] && printf '   :log: %s/%s.log\n' "${RUNS_DIR/#$HOME/\~}" "$id"
@@ -1602,12 +1650,12 @@ run_latched_actions() {
 # error, "7 errors in a row since <first>" once it repeats. A 0 or 2 verdict
 # ends a streak.
 error_streak() {
-	awk -F '\t' -v id="$1" '
+	fire_history | awk -F '\t' -v id="$1" '
 		$2 != id || $3 != "exec" { next }
 		$4 == "rc=0" || $4 == "rc=2" || $4 == "rc=3" { n = 0; next }
 		{ if (n++ == 0) since = $1 }
 		END { if (n > 1) printf "%d errors in a row since %s", n, since }
-	' "$FIRE_LOG"
+	'
 }
 
 # The line that says why a check failed: its last non-empty output line, one
@@ -1693,7 +1741,7 @@ write_trace() {
 			printf '\n## Action\n\nNone: the check itself was the whole packet.\n'
 		fi
 		printf '\n## History\n\n```\n'
-		[ -f "$FIRE_LOG" ] && awk -F '\t' -v id="$id" '$2 == id' "$FIRE_LOG" | tail -n 40
+		fire_history | awk -F '\t' -v id="$id" '$2 == id' | tail -n 40
 		printf '```\n\n## Logs\n\n- Runs: %s\n- Fire log: %s\n' "$(home_path "$RUNS_DIR/$id.log")" "$(home_path "$FIRE_LOG")"
 	} >"$file"
 	printf '%s' "$file"
@@ -2054,8 +2102,8 @@ deadline_report() {
 	created="$(jq -r '.created // ""' <<<"$record")"
 	runs=0 last=""
 	if [ -f "$FIRE_LOG" ]; then
-		runs="$(awk -F '\t' -v id="$id" '$2 == id && $3 == "exec"' "$FIRE_LOG" | wc -l)"
-		last="$(awk -F '\t' -v id="$id" '$2 == id && $3 == "exec" { at = $1; v = $4 } END { if (at != "") print at " " v }' "$FIRE_LOG")"
+		runs="$(fire_history | awk -F '\t' -v id="$id" '$2 == id && $3 == "exec"' | wc -l)"
+		last="$(fire_history | awk -F '\t' -v id="$id" '$2 == id && $3 == "exec" { at = $1; v = $4 } END { if (at != "") print at " " v }')"
 	fi
 	last_out=""
 	[ -f "$RUNS_DIR/$id.log" ] && last_out="$(awk '/^=== / { n = 0; split("", out); next } n == 0 && /^\$ / { next } { out[n++] = $0 } END { for (i = 0; i < n; i++) print out[i] }' "$RUNS_DIR/$id.log" | tail -n 8)"
@@ -2329,6 +2377,7 @@ delete) [ -n "${1:-}" ] || die "delete needs an id."; cmd_delete "$1" ;;
 sync) cmd_sync ;;
 gc) cmd_gc ;;
 compact) cmd_compact ;;
+rotate-log) cmd_rotate_log ;;
 fire) [ -n "${1:-}" ] || die "fire needs an id."; cmd_fire "$1" "${2:-}" ;;
 deadline) [ -n "${1:-}" ] || die "deadline needs an id."; cmd_deadline "$1" ;;
 match) cmd_match ;;
