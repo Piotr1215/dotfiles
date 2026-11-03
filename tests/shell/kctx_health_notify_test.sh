@@ -5,43 +5,42 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 test_dir="$(mktemp -d)"
 trap 'rm -rf "$test_dir"' EXIT
 
-fake_mailer="$test_dir/msmtp"
-message="$test_dir/message.eml"
-args="$test_dir/args"
-cat >"$fake_mailer" <<'EOF'
+notifications="$test_dir/state/kctx/notifications.log"
+mailer_calls="$test_dir/msmtp-calls"
+cat >"$test_dir/msmtp" <<'MSMTP'
 #!/usr/bin/env bash
-printf '%s\n' "$*" >"$KCTX_TEST_ARGS"
-cat >"$KCTX_TEST_MESSAGE"
-EOF
-chmod +x "$fake_mailer"
+printf 'called\n' >>"$KCTX_TEST_MAILER_CALLS"
+MSMTP
+chmod +x "$test_dir/msmtp"
 
-KCTX_HEALTH_MAILER="$fake_mailer" \
-KCTX_TEST_ARGS="$args" \
-KCTX_TEST_MESSAGE="$message" \
+PATH="$test_dir:$PATH" \
+KCTX_TEST_MAILER_CALLS="$mailer_calls" \
+KCTX_NOTIFICATIONS_LOG="$notifications" \
 KCTX_HEALTH_HOST="serval" \
 KCTX_HEALTH_LOG=$'refresh failed: \033[31mexpired login\033[0m' \
     "$repo_root/scripts/__kctx_health_notify.sh"
-
-grep -Fqx 'piotrzan@gmail.com' "$args"
-grep -Fqx 'Subject: [kctx FAILED] serval connection refresh' "$message"
-grep -Fqx 'From: piotrzan@gmail.com' "$message"
-grep -Fqx 'To: piotrzan@gmail.com' "$message"
-grep -Fqx 'The kctx background reconciler did not complete successfully on serval.' "$message"
-grep -Fqx 'Source-specific recovery: kctx sources' "$message"
-grep -Fqx 'refresh failed: expired login' "$message"
-if grep -Fq 'at least one source or reconciliation step is degraded' "$message"; then
-    echo 'failure notification conflates handled degradation with reconciliation failure' >&2
+grep -F 'host=serval health refresh failed' "$notifications"
+grep -Fqx 'refresh failed: expired login' "$notifications"
+[[ "$(stat -c '%a' "$test_dir/state/kctx")" == 700 ]]
+[[ "$(stat -c '%a' "$notifications")" == 600 ]]
+if grep -q $'\033' "$notifications"; then
+    echo 'notification log contains an ANSI escape' >&2
     exit 1
 fi
-if grep -q $'\033' "$message"; then
-    echo 'notification contains an ANSI escape' >&2
-    exit 1
-fi
+[[ ! -e "$mailer_calls" ]]
 
 service="$repo_root/.config/systemd/user/kctx-health.service"
 alert="$repo_root/.config/systemd/user/kctx-health-alert.service"
 grep -Fqx 'OnFailure=kctx-health-alert.service' "$service"
-grep -Fqx 'StartLimitIntervalSec=6h' "$alert"
-grep -Fqx 'StartLimitBurst=1' "$alert"
+grep -Fqx 'ExecStart=%h/dev/dotfiles/scripts/__kctx_health_notify.sh' "$alert"
+grep -Fqx 'Description=Record a kctx connection refresh failure' "$alert"
+if rg -n 'msmtp|sendmail|mailx|mailto|KCTX_HEALTH_MAILER|KCTX_CREDENTIAL_MAILER' \
+    "$repo_root/scripts/__kctx_health_notify.sh" \
+    "$repo_root/scripts/__kctx_credential_notify.sh" \
+    "$repo_root/.config/systemd/user/kctx-health.service" \
+    "$repo_root/.config/systemd/user/kctx-health-alert.service"; then
+    echo 'kctx notification sender still contains an email path' >&2
+    exit 1
+fi
 
-echo 'kctx health notification test passed'
+printf 'kctx health local notification test passed\n'

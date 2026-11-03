@@ -1,5 +1,5 @@
 [Unit]
-Description=Email a kctx connection refresh failure
+Description=Record a kctx connection refresh failure
 After=network-online.target
 Wants=network-online.target
 StartLimitIntervalSec=6h
