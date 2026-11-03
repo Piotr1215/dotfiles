@@ -14,3 +14,4 @@ shortcuts.md
 justfile
 .claude
 notmuch
+^/\.pytest_cache
