@@ -11,9 +11,6 @@
     "wait"
   ],
   "model": "winnow:12b-q4_K_M",
-  "hosts": [
-    "localhost:11434"
-  ],
   "num_ctx": 32768,
   "threshold": {},
   "smoke": [

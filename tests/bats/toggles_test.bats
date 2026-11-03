@@ -243,3 +243,120 @@ EOF
   grep -Fx 'ConditionPathExists=!%h/.local/state/klod-voice/no-listening' \
     "${BATS_TEST_DIRNAME}/../../.config/systemd/user/voice-mode.service"
 }
+
+setup_classif_toggle() {
+  export HOME="${BATS_TEST_TMPDIR}/classif-home"
+  export PATH="${BATS_TEST_TMPDIR}/classif-bin:$PATH"
+  export CLASSIF_TOGGLE_SYSTEMCTL_LOG="${BATS_TEST_TMPDIR}/systemctl.log"
+  export CLASSIF_TOGGLE_CURL_LOG="${BATS_TEST_TMPDIR}/curl.log"
+  mkdir -p "$HOME/.claude/config" "$HOME/.config/classif" \
+    "$HOME/dev/dotfiles/.config/classif" "$HOME/.local/state/classif-vm" \
+    "$BATS_TEST_TMPDIR/classif-bin"
+  cat >"$HOME/.claude/config/quick-decisions.json" <<'EOF'
+{
+  "provider": "classif",
+  "classif_hosts": "localhost:11434=winnow:12b-q4_K_M",
+  "openai_project": null
+}
+EOF
+  printf 'localhost:11434=winnow:12b-q4_K_M\n' >"$HOME/dev/dotfiles/.config/classif/hosts"
+  ln -s "$HOME/dev/dotfiles/.config/classif/hosts" "$HOME/.config/classif/hosts"
+  touch "$HOME/.local/state/classif-vm/pc-mode"
+  cat >"$BATS_TEST_TMPDIR/classif-bin/systemctl" <<'EOF'
+#!/bin/sh
+echo "$*" >>"$CLASSIF_TOGGLE_SYSTEMCTL_LOG"
+EOF
+  cat >"$BATS_TEST_TMPDIR/classif-bin/curl" <<'EOF'
+#!/bin/sh
+echo "$*" >>"$CLASSIF_TOGGLE_CURL_LOG"
+case "$*" in
+  */api/ps*)
+    [ "${OLLAMA_UP:-1}" = 1 ] || exit 7
+    if [ "${OLLAMA_LOADED:-1}" = 1 ]; then
+      printf '{"models":[{"name":"winnow:12b-q4_K_M"}]}\n'
+    else
+      printf '{"models":[]}\n'
+    fi
+    ;;
+  */api/generate*) [ "${UNLOAD_FAIL:-0}" = 0 ] ;;
+  *) exit 2 ;;
+esac
+EOF
+  chmod +x "$BATS_TEST_TMPDIR/classif-bin/systemctl" "$BATS_TEST_TMPDIR/classif-bin/curl"
+  HELPER="${BATS_TEST_DIRNAME}/../../scripts/__classif_vm_toggle.py"
+}
+
+@test "classif VM toggle updates both routing files and unloads local Ollama" {
+  setup_classif_toggle
+  run python3 "$HELPER" status
+  [ "$status" -eq 1 ]
+
+  run python3 "$HELPER" vm
+  [ "$status" -eq 0 ]
+  run python3 "$HELPER" status
+  [ "$status" -eq 0 ]
+  grep -F '"classif_hosts": "127.0.0.1:11435=winnow:12b-q4_K_M"' \
+    "$HOME/.claude/config/quick-decisions.json"
+  [ -L "$HOME/.config/classif/hosts" ]
+  grep -Fx '127.0.0.1:11435=winnow:12b-q4_K_M' "$HOME/.config/classif/hosts"
+  grep -F 'keep_alive":0' "$CLASSIF_TOGGLE_CURL_LOG"
+  grep -Fx -- '--user enable --now classif-vm-tunnel.service' "$CLASSIF_TOGGLE_SYSTEMCTL_LOG"
+
+  run python3 "$HELPER" pc
+  [ "$status" -eq 0 ]
+  run python3 "$HELPER" status
+  [ "$status" -eq 1 ]
+  grep -Fx 'localhost:11434=winnow:12b-q4_K_M' "$HOME/.config/classif/hosts"
+  grep -Fx -- '--user stop classif-vm-tunnel.service' "$CLASSIF_TOGGLE_SYSTEMCTL_LOG"
+}
+
+@test "classif VM route remains exclusive when local Ollama is unavailable" {
+  setup_classif_toggle
+  export OLLAMA_UP=0
+  run python3 "$HELPER" vm
+  [ "$status" -eq 0 ]
+  run python3 "$HELPER" status
+  [ "$status" -eq 0 ]
+  ! grep -q '/api/generate' "$CLASSIF_TOGGLE_CURL_LOG"
+}
+
+@test "classif VM mode does not load Winnow just to unload it" {
+  setup_classif_toggle
+  export OLLAMA_LOADED=0
+  run python3 "$HELPER" vm
+  [ "$status" -eq 0 ]
+  ! grep -q '/api/generate' "$CLASSIF_TOGGLE_CURL_LOG"
+}
+
+@test "classif unload errors are reported without restoring laptop routing" {
+  setup_classif_toggle
+  export UNLOAD_FAIL=1
+  run python3 "$HELPER" vm
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"classif vm switch failed"* ]]
+  run python3 "$HELPER" status
+  [ "$status" -eq 0 ]
+}
+
+@test "classif toggle refuses mismatched configuration without acting" {
+  setup_classif_toggle
+  printf '127.0.0.1:11435=winnow:12b-q4_K_M\n' >"$HOME/.config/classif/hosts"
+  run python3 "$HELPER" status
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"disagree"* ]]
+  [ ! -e "$CLASSIF_TOGGLE_SYSTEMCTL_LOG" ]
+  [ ! -e "$CLASSIF_TOGGLE_CURL_LOG" ]
+}
+
+@test "game action spec inherits the host selected by the toggle" {
+  run python3 -c 'import json,sys; assert "hosts" not in json.load(open(sys.argv[1]))' \
+    "${BATS_TEST_DIRNAME}/../../.config/classif/specs/game-action.json"
+  [ "$status" -eq 0 ]
+}
+
+@test "checked-in classif hosts default to only the forwarded VM endpoint" {
+  hosts="${BATS_TEST_DIRNAME}/../../.config/classif/hosts"
+  run bash -c 'grep -vE "^[[:space:]]*(#|$)" "$1"' _ "$hosts"
+  [ "$status" -eq 0 ]
+  [ "$output" = "127.0.0.1:11435=winnow:12b-q4_K_M" ]
+}

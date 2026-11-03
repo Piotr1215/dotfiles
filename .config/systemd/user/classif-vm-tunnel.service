@@ -1,0 +1,15 @@
+[Unit]
+Description=SSH port forward to classif Ollama on vind-node
+After=network-online.target
+ConditionPathExists=!%h/.local/state/classif-vm/pc-mode
+
+[Service]
+Type=simple
+ExecStart=/home/decoder/dev/google-cloud-sdk/bin/gcloud compute ssh vind-node --project=eng-sandbox-02 --zone=us-central1-a --quiet --ssh-flag=-N --ssh-flag=-T --ssh-flag=-L --ssh-flag=127.0.0.1:11435:127.0.0.1:11434 --ssh-flag=-oBatchMode=yes --ssh-flag=-oExitOnForwardFailure=yes --ssh-flag=-oServerAliveInterval=30 --ssh-flag=-oServerAliveCountMax=3
+Restart=always
+RestartSec=5
+Environment=CLOUDSDK_CORE_CHECK_GCE_METADATA=false
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+
+[Install]
+WantedBy=default.target
