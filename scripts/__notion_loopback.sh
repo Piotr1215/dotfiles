@@ -154,15 +154,24 @@ cmd_down() {
 }
 
 cmd_status() {
-	if is_up; then
-		printf 'notion_loopback: UP\n'
-		pactl list short sinks   | awk -v s="$sink_name" '$2==s {print "  sink   #"$1, $2}'
-		pactl list short sources | awk -v s="${sink_name}.monitor" '$2==s {print "  source #"$1, $2}'
-		pactl list short sources | awk -v s="$mic_name" '$2==s {print "  remap  #"$1, $2, "(pick this in Notion)"}'
-		return 0
+	local sinks sources id name rest sink_lines='' source_lines='' remap_lines=''
+	sinks=$(pactl list short sinks) || sinks=''
+	while read -r id name rest; do
+		[[ "$name" == "$sink_name" ]] && sink_lines+="  sink   #$id $name"$'\n'
+	done <<< "$sinks"
+	if [[ -z "$sink_lines" ]]; then
+		printf 'notion_loopback: DOWN\n'
+		return 1
 	fi
-	printf 'notion_loopback: DOWN\n'
-	return 1
+	printf 'notion_loopback: UP\n%s' "$sink_lines"
+	sources=$(pactl list short sources) || return $?
+	while read -r id name rest; do
+		case "$name" in
+			"${sink_name}.monitor") source_lines+="  source #$id $name"$'\n' ;;
+			"$mic_name") remap_lines+="  remap  #$id $name (pick this in Notion)"$'\n' ;;
+		esac
+	done <<< "$sources"
+	printf '%s%s' "$source_lines" "$remap_lines"
 }
 
 main() {

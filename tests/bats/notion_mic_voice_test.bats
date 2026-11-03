@@ -12,6 +12,8 @@ setup() {
   STUBS="${BATS_TEST_TMPDIR}/bin"
   CALLS="${BATS_TEST_TMPDIR}/calls"
   mkdir -p "$STUBS"
+  printf '#!/usr/bin/env bash\nexit 1\n' >"${STUBS}/pactl"
+  chmod +x "${STUBS}/pactl"
   export KLOD_VOICE_STATE="${BATS_TEST_TMPDIR}/klod-voice"
   mkdir -p "$KLOD_VOICE_STATE"
   export XDG_RUNTIME_DIR="${BATS_TEST_TMPDIR}/run"

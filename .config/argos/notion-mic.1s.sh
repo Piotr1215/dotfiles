@@ -91,7 +91,7 @@ esac
 
 # --- state ----------------------------------------------------------------
 
-if "$loopback" status >/dev/null 2>&1; then
+if loopback_status=$("$loopback" status 2>/dev/null); then
 	state="up"
 else
 	state="down"
@@ -183,11 +183,11 @@ if [[ "$state" == "up" ]]; then
 	echo "<b>Notion virtual mic — UP</b> | font=monospace"
 	# Surface what's actually being captured so the user can spot drift
 	# (e.g. headset switched but routing still points at the old default).
-	"$loopback" status 2>/dev/null \
-		| sed -e '1d' \
-		| while IFS= read -r line; do
+	if [[ "$loopback_status" == *$'\n'* ]]; then
+		while IFS= read -r line; do
 			echo "${line} | font=monospace"
-		done
+		done <<< "${loopback_status#*$'\n'}"
+	fi
 	echo "---"
 	echo "🛑 Turn OFF | bash='\"$0\" --off' terminal=false refresh=true"
 	echo "🔄 Restart routing | bash='\"$0\" --restart' terminal=false refresh=true"
