@@ -1,0 +1,3 @@
+# Skip releases younger than 3 days (seconds).
+[install]
+minimumReleaseAge = 259200

@@ -1,0 +1,2 @@
+# Skip releases younger than 3 days: hijacked versions are usually pulled within that window.
+exclude-newer = "3 days"
