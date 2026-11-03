@@ -29,6 +29,7 @@ set -eo pipefail
 
 vault="${DAILY_NOTE_VAULT:-$HOME/dev/obsidian/decoder}"
 handoffs="${HANDOFFS_FILE:-$HOME/.local/state/gordon/handoffs/index.md}"
+legacy_handoffs="${HANDOFFS_LEGACY_FILE:-${handoffs%/*}.md}"
 pins_base="${GORDON_PINS_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/gordon-pins}"
 TAB=$'\t'
 
@@ -89,8 +90,8 @@ is_daily_pin() {
     [[ "$1" == "note${TAB}$2/"[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9].md ]]
 }
 
-# Make note $1 pin 2 in pane $2's store: the handoffs file, then $1, then the
-# other pins in their order, without any older daily note. Leaves the file
+# Make note $1 pin 2 in pane $2's store: the handoffs index, then $1, then the
+# other pins in their order, without the legacy board or an older daily note. Leaves the file
 # untouched when it already reads that way.
 pin_note() {
     local note=$1 dir="$pins_base/panes/${2#%}" folder line want=() rest=()
@@ -103,6 +104,7 @@ pin_note() {
         while IFS= read -r line; do
             [[ -n "$line" ]] || continue
             [[ "$line" == "note${TAB}$handoffs" ]] && continue
+            [[ "$line" == "note${TAB}$legacy_handoffs" ]] && continue
             is_daily_pin "$line" "$folder" && continue
             rest+=("$line")
         done <"$pins"

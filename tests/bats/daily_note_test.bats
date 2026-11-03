@@ -90,6 +90,14 @@ pins_of() {
 	[ "$(pins_of 5)" = "$(printf '%s\n' "note $HANDOFFS_FILE" "note $NOTE" 'note /some/case.md')" ]
 }
 
+@test "--pin replaces the legacy combined handoffs pin with the index" {
+	panes '%5 triage task todo'
+	store 5 'note /some/case.md' 'note /state/gordon/handoffs.md' "note $HANDOFFS_FILE"
+	run "$SCRIPT" --pin
+	[ "$status" -eq 0 ]
+	[ "$(pins_of 5)" = "$(printf '%s\n' "note $HANDOFFS_FILE" "note $NOTE" 'note /some/case.md')" ]
+}
+
 @test "--pin twice leaves the store unchanged" {
 	panes '%5 triage task todo'
 	store 5 "note $HANDOFFS_FILE" 'note /some/case.md'
