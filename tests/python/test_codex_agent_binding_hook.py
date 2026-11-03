@@ -21,6 +21,7 @@ def run_hook(
     group: str | None = None,
     tool_response: object = None,
     tmux_session: str | None = None,
+    inherited_pane: str | None = None,
 ) -> subprocess.CompletedProcess[str]:
     tool_input = {"name": agent_name}
     if group is not None:
@@ -58,6 +59,8 @@ def run_hook(
         env["CODEX_APP_SERVER_SOCKET"] = socket_path
     if pane is not None:
         env["CODEX_TMUX_PANE"] = pane
+    if inherited_pane is not None:
+        env["TMUX_PANE"] = inherited_pane
     if status_script is not None:
         env["CODEX_TMUX_AGENT_STATUS"] = str(status_script)
     if status_log is not None:
@@ -134,6 +137,18 @@ class CodexAgentBindingHookTest(unittest.TestCase):
 
             self.assertEqual(result.returncode, 0)
             self.assertEqual(status_log.read_text(), "set greta %42\n")
+
+    def test_inherited_pane_is_not_labeled_or_written_to_ledger(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            status_script, status_log = make_status_script(root)
+            for tool in ("mcp__agents__agent_register", "mcp__agents__agent_deregister"):
+                result = run_hook(root, tool, "greta", inherited_pane="%4",
+                                  status_script=status_script, status_log=status_log,
+                                  tmux_session="caller")
+                self.assertEqual(result.returncode, 0)
+            self.assertFalse(status_log.exists())
+            self.assertFalse((root / "agent-sessions.tsv").exists())
 
     def test_deregister_clears_only_the_matching_pane_agent_name(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

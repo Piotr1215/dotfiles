@@ -10,7 +10,7 @@ from urllib.parse import quote
 
 
 def update_tmux_agent_label(tool_name: str, agent_name: str) -> None:
-    pane = os.environ.get("CODEX_TMUX_PANE") or os.environ.get("TMUX_PANE", "")
+    pane = os.environ.get("CODEX_TMUX_PANE", "")
     if not pane:
         return
 
@@ -93,7 +93,7 @@ def response_agent_id(response: object) -> str:
 
 
 def ledger_append(agent_name: str, group: str, agent_id: str) -> None:
-    pane = os.environ.get("CODEX_TMUX_PANE") or os.environ.get("TMUX_PANE", "")
+    pane = os.environ.get("CODEX_TMUX_PANE", "")
     session = tmux_session_name(pane) if pane else ""
     if not session:
         return
