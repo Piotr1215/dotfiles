@@ -32,6 +32,12 @@ save_in_nvim() { # save_in_nvim <file>
   [ "$(cat "$BATS_TEST_TMPDIR/save.calls")" = "save $HOME/.local/state/gordon/handoffs/11111111-1111-4111-8111-111111111111.md" ]
 }
 
+@test "saving an archived handoff runs save with its path" {
+  mkdir -p "$HOME/.local/state/gordon/handoffs/archive"
+  save_in_nvim "$HOME/.local/state/gordon/handoffs/archive/11111111-1111-4111-8111-111111111111.md"
+  [ "$(cat "$BATS_TEST_TMPDIR/save.calls")" = "save $HOME/.local/state/gordon/handoffs/archive/11111111-1111-4111-8111-111111111111.md" ]
+}
+
 @test "saving any other file does not" {
   save_in_nvim "$BATS_TEST_TMPDIR/other.md"
   [ ! -e "$BATS_TEST_TMPDIR/save.calls" ]

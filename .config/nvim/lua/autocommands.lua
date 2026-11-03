@@ -525,7 +525,7 @@ vim.api.nvim_create_autocmd("BufWritePre", {
 local handoffsGroup = api.nvim_create_augroup("GordonHandoffs", { clear = true })
 local handoffs_legacy = vim.env.HOME .. "/.local/state/gordon/handoffs.md"
 local handoffs_dir = vim.env.HOME .. "/.local/state/gordon/handoffs"
-local handoffs_pattern = handoffs_dir .. "/*.md"
+local handoffs_pattern = handoffs_dir .. "/**.md"
 local handoffs_index = handoffs_dir .. "/index.md"
 local handoffs_patterns = { handoffs_legacy, handoffs_pattern }
 local handoffs_saves = {}
