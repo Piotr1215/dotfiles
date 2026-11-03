@@ -28,7 +28,7 @@
 set -eo pipefail
 
 vault="${DAILY_NOTE_VAULT:-$HOME/dev/obsidian/decoder}"
-handoffs="${HANDOFFS_FILE:-$HOME/.local/state/gordon/handoffs.md}"
+handoffs="${HANDOFFS_FILE:-$HOME/.local/state/gordon/handoffs/index.md}"
 pins_base="${GORDON_PINS_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/gordon-pins}"
 TAB=$'\t'
 

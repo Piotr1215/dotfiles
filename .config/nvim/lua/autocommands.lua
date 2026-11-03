@@ -520,18 +520,25 @@ vim.api.nvim_create_autocmd("BufWritePre", {
   desc = "Collapse blank lines after presenterm end_slide markers",
 })
 
--- Gordon handoffs file: a save sends what Piotr typed under each item to Gordon
--- (notes it on the task, DMs triage). The script does the work; this only
--- fires it for exactly this path and reports the outcome.
+-- Gordon handoff files: each editable buffer holds one handoff. Saves send
+-- Piotr's reply to Gordon (notes it on the task, DMs triage).
 local handoffsGroup = api.nvim_create_augroup("GordonHandoffs", { clear = true })
-local handoffs_path = vim.env.HOME .. "/.local/state/gordon/handoffs.md"
+local handoffs_legacy = vim.env.HOME .. "/.local/state/gordon/handoffs.md"
+local handoffs_dir = vim.env.HOME .. "/.local/state/gordon/handoffs"
+local handoffs_pattern = handoffs_dir .. "/*.md"
+local handoffs_index = handoffs_dir .. "/index.md"
+local handoffs_patterns = { handoffs_legacy, handoffs_pattern }
 local handoffs_saves = {}
 vim.api.nvim_create_autocmd("BufWritePost", {
   group = handoffsGroup,
-  pattern = handoffs_path,
+  pattern = handoffs_patterns,
   callback = function(ev)
+    if ev.file == handoffs_index then
+      return
+    end
     local script = vim.env.HOME .. "/.claude/scripts/__handoffs_file.py"
-    handoffs_saves[ev.buf] = vim.system({ script, "save" }, { text = true }, function(res)
+    local command = ev.file == handoffs_legacy and { script, "save" } or { script, "save", ev.file }
+    handoffs_saves[ev.buf] = vim.system(command, { text = true }, function(res)
       vim.schedule(function()
         if res.code == 0 then
           local sent = vim.trim(res.stdout or "")
@@ -581,48 +588,31 @@ end
 
 vim.api.nvim_create_autocmd({ "BufReadPost", "BufNewFile" }, {
   group = handoffsGroup,
-  pattern = handoffs_path,
+  pattern = handoffs_patterns,
   callback = function(ev)
+    if ev.file == handoffs_index or ev.file == handoffs_legacy then
+      vim.bo[ev.buf].filetype = "markdown"
+      vim.bo[ev.buf].readonly = true
+      return
+    end
     vim.bo[ev.buf].filetype = "markdown"
     vim.wo.wrap = true
     vim.wo.linebreak = true
     vim.wo.breakindent = true
     vim.wo.winbar = " Enter: unfurl  s: spawn  d: close (confirm)  [[/]]: handoff  q/Esc: close "
     local function navigate(direction)
-      local lines = api.nvim_buf_get_lines(ev.buf, 0, -1, false)
-      local headings = {}
-      for row, line in ipairs(lines) do
-        if line:match "^## " and (lines[row + 1] or ""):match "^<!%-%- handoff: " then
-          headings[#headings + 1] = row
-        end
-      end
-      local current = api.nvim_win_get_cursor(0)[1]
-      local current_heading = 0
-      for _, row in ipairs(headings) do
-        if row <= current then
-          current_heading = row
-        end
-      end
-      local target
-      for _, row in ipairs(headings) do
-        if direction > 0 and row > current then
-          target = row
-          break
-        elseif direction < 0 and row < current_heading then
-          target = row
-        end
-      end
-      if not target then
+      local script = vim.env.HOME .. "/.claude/scripts/__handoffs_file.py"
+      local step = direction > 0 and "next" or "prev"
+      local path = vim.fn.system { script, "neighbor", ev.file, step }
+      if vim.v.shell_error ~= 0 or vim.trim(path) == "" then
         vim.notify("No more handoffs", vim.log.levels.INFO)
         return
       end
-      for row = target + 1, #lines do
-        if lines[row]:match "^## " then
-          break
-        elseif lines[row]:match "^>" then
+      vim.cmd.edit(vim.fn.fnameescape(vim.trim(path)))
+      local lines = api.nvim_buf_get_lines(0, 0, -1, false)
+      for row, line in ipairs(lines) do
+        if line:match "^>" then
           api.nvim_win_set_cursor(0, { row, 0 })
-          vim.cmd "normal! zv"
-          vim.fn.winrestview { topline = target }
           return
         end
       end
@@ -693,4 +683,45 @@ vim.api.nvim_create_autocmd({ "BufReadPost", "BufNewFile" }, {
     end
   end,
   desc = "Edit handoffs with actions for the item under the cursor",
+})
+
+vim.api.nvim_create_autocmd({ "BufReadPost", "BufNewFile" }, {
+  group = handoffsGroup,
+  pattern = handoffs_index,
+  callback = function(ev)
+    vim.bo[ev.buf].filetype = "markdown"
+    vim.bo[ev.buf].modifiable = false
+    vim.bo[ev.buf].readonly = true
+    vim.wo.wrap = true
+    vim.wo.linebreak = true
+    vim.wo.winbar = " Enter: open handoff  [[/]]: handoff  q/Esc: close "
+    local function neighbor(direction)
+      local script = vim.env.HOME .. "/.claude/scripts/__handoffs_file.py"
+      local step = direction > 0 and "next" or "prev"
+      local path = vim.fn.system { script, "neighbor", ev.file, step }
+      if vim.v.shell_error ~= 0 or vim.trim(path) == "" then
+        vim.notify("No more handoffs", vim.log.levels.INFO)
+        return
+      end
+      vim.cmd.edit(vim.fn.fnameescape(vim.trim(path)))
+    end
+    vim.keymap.set("n", "<CR>", function()
+      local line = api.nvim_get_current_line()
+      local target = line:match "%]%(([^)]+)%)"
+      if not target then
+        vim.notify("Place the cursor on a handoff link.", vim.log.levels.WARN)
+        return
+      end
+      target = target:gsub("^<", ""):gsub(">$", "")
+      local path = vim.fs.normalize(vim.fn.fnamemodify(ev.file, ":h") .. "/" .. target)
+      vim.cmd.edit(vim.fn.fnameescape(path))
+    end, { buffer = ev.buf, silent = true, desc = "Open handoff" })
+    vim.keymap.set("n", "]]", function()
+      neighbor(1)
+    end, { buffer = ev.buf, silent = true, desc = "Next handoff" })
+    vim.keymap.set("n", "[[", function()
+      neighbor(-1)
+    end, { buffer = ev.buf, silent = true, desc = "Previous handoff" })
+  end,
+  desc = "Browse handoff index without editing it",
 })

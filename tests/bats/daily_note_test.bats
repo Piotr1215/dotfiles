@@ -9,7 +9,7 @@ setup() {
 	export DAILY_NOTE_VAULT="$BATS_TEST_TMPDIR/vault"
 	export DAILY_NOTE_DATE=2026-10-26
 	export GORDON_PINS_DIR="$BATS_TEST_TMPDIR/pins"
-	export HANDOFFS_FILE=/state/gordon/handoffs.md
+	export HANDOFFS_FILE=/state/gordon/handoffs/index.md
 	unset TMUX_PANE
 	mkdir -p "$DAILY_NOTE_VAULT/.obsidian" "$DAILY_NOTE_VAULT/Templates"
 	printf '{"folder": "_Current", "template": "Templates/Daily", "format": "YYYY-MM-DD"}\n' \

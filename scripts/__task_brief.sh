@@ -8,7 +8,7 @@
 #   __task_brief.sh --popup <token>           open it in a tmux popup (nvim -R,
 #                                             readable and copyable); this is
 #                                             the plain read-only popup
-#   __task_brief.sh --actions <token>         editable handoffs.md popup; what the
+#   __task_brief.sh --actions <token>         editable per-handoff file popup; what the
 #                                             Alacritty ctrl+6 hint runs, for a
 #                                             full uuid or a 4-hex handoff ref
 #                                             from the Alt-m board. Keys:
