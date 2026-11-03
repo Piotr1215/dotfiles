@@ -493,14 +493,29 @@ cron_line() {
 }
 
 cron_block() {
-	local record id repeat
+	local record id repeat action fast dispatch=0
 	printf '%s\n' "$CRON_BEGIN"
 	printf '@reboot sleep 90 && %s sync; %s compact\n' "$SELF" "$SELF"
 	while IFS= read -r record; do
 		id="$(jq -r '.id' <<<"$record")"
 		repeat="$(jq -r '.repeat // ""' <<<"$record")"
+		action="$(jq -r '.action // "show"' <<<"$record")"
+		fast=0
+		if [[ "$repeat" == '* * * * *' ]]; then
+			fast=1
+		elif [[ "$repeat" =~ ^every\ 0*[0-4]m$ ]]; then
+			fast=1
+		fi
+		if [[ "$action" == exec && "$fast" == 1 ]]; then
+			dispatch=1
+			continue
+		fi
 		[ -n "$repeat" ] && cron_line "$id" "$repeat"
 	done < <(active_records)
+	if [ "$dispatch" = 1 ]; then
+		printf '*/5 * * * * %q reminder-dispatch -- %q --store %q --state-dir %q --runner %q --reminder %q\n' \
+			"$CRON_RUN" "$SCRIPT_DIR/__reminder_dispatch.py" "$STORE" "$STATE_DIR" "$CRON_RUN" "$SELF"
+	fi
 	printf '%s\n' "$CRON_END"
 }
 
@@ -510,6 +525,8 @@ sync_cron() {
 	stripped="$(awk -v b="$CRON_BEGIN" -v e="$CRON_END" '$0 == b {skip=1} !skip {print} $0 == e {skip=0}' <<<"$current")"
 	block="$(cron_block)"
 	updated="$(printf '%s\n\n%s\n' "$stripped" "$block" | sed '/./,$!d')"
+	# Reject future sub-five-minute polls before installing the generated table.
+	printf '%s\n' "$updated" | python3 "$SCRIPT_DIR/__schedule_audit.py" || return 1
 	[ "$updated" != "$current" ] || return 0
 	mkdir -p "$STATE_DIR"
 	printf '%s\n' "$current" >"$STATE_DIR/crontab.previous"

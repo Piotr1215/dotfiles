@@ -19,6 +19,15 @@
 # never silently as `no-hit` — an unrecognized non-zero/non-2 code is `error`.
 set -eo pipefail
 
+# Cron opts in explicitly. The pacer preserves plain reminders' exact times;
+# the active flag prevents recursive pacing inside a dispatched check.
+if [ "${CRON_PACED:-0}" = 1 ] && [ "${CRON_PACED_ACTIVE:-0}" != 1 ]; then
+    case "${1:-}" in
+        ''|--sweep-stale) ;;
+        *) exec python3 "$(dirname "$0")/__cron_pace.py" "$0" "$@" ;;
+    esac
+fi
+
 STATE_DIR="${CRON_STATE_DIR:-$HOME/.local/state/cron-jobs}"
 mkdir -p "$STATE_DIR"
 
