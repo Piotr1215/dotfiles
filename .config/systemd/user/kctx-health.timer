@@ -2,9 +2,9 @@
 Description=Periodically reconcile kctx connection health
 
 [Timer]
-OnBootSec=2min
-OnUnitActiveSec=5min
-RandomizedDelaySec=30s
+OnActiveSec=30min
+OnUnitActiveSec=30min
+RandomizedDelaySec=2min
 Persistent=true
 Unit=kctx-health.service
 

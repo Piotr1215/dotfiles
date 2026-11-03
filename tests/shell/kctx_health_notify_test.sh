@@ -31,7 +31,16 @@ fi
 
 service="$repo_root/.config/systemd/user/kctx-health.service"
 alert="$repo_root/.config/systemd/user/kctx-health-alert.service"
+timer="$repo_root/.config/systemd/user/kctx-health.timer"
 grep -Fqx 'OnFailure=kctx-health-alert.service' "$service"
+grep -Fqx 'ExecStart=%h/.local/bin/kctx connections refresh --jobs 1' "$service"
+grep -Fqx 'Nice=19' "$service"
+grep -Fqx 'IOSchedulingClass=idle' "$service"
+grep -Fqx 'CPUQuota=25%' "$service"
+grep -Fqx 'TimeoutStartSec=5min' "$service"
+grep -Fqx 'OnActiveSec=30min' "$timer"
+grep -Fqx 'OnUnitActiveSec=30min' "$timer"
+grep -Fqx 'RandomizedDelaySec=2min' "$timer"
 grep -Fqx 'ExecStart=%h/dev/dotfiles/scripts/__kctx_health_notify.sh' "$alert"
 grep -Fqx 'Description=Record a kctx connection refresh failure' "$alert"
 if rg -n 'msmtp|sendmail|mailx|mailto|KCTX_HEALTH_MAILER|KCTX_CREDENTIAL_MAILER' \
