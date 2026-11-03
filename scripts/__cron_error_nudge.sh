@@ -104,14 +104,23 @@ nudge_target() {
 # states count here: `stale` and `pending` are guesses the dashboard derives
 # from log mtimes, not evidence that a run failed.
 errored_jobs() {
-    local f job
-    for f in "$STATE_DIR"/*.json; do
-        [ -e "$f" ] || continue
-        job=$(basename "$f" .json)
-        [ "$job" = "$SELF_JOB" ] && continue
-        [ "$(jq -r '.state // ""' "$f" 2>/dev/null)" = "error" ] && printf '%s\n' "$job"
-    done
-    return 0
+    python3 - "$STATE_DIR" "$SELF_JOB" <<'PY'
+import json
+import pathlib
+import sys
+
+# Historical reminder states accumulate here. Scan them in one process rather
+# than launching basename and jq for every file on each watchdog tick.
+for path in sorted(pathlib.Path(sys.argv[1]).glob('*.json')):
+    if path.stem == sys.argv[2]:
+        continue
+    try:
+        state = json.loads(path.read_text())
+        if isinstance(state, dict) and state.get('state') == 'error':
+            print(path.stem)
+    except (OSError, ValueError):
+        continue
+PY
 }
 
 # True while pid is the wrapper of that job's run (mirrors
@@ -127,13 +136,9 @@ run_alive() {
 
 # Runs past their overrun limit, one "<job>@<start ts><TAB><notice>" per line.
 overrunning_runs() {
-    local f now job st ts pid prev log limit age
+    local now job st ts pid prev log limit age
     now=$(date +%s)
-    for f in "$STATE_DIR"/*.json; do
-        [ -e "$f" ] || continue
-        IFS=$'\t' read -r job st ts pid prev log < <(jq -r \
-            '[.job // "", .state // "", .ts // 0, .pid // "", .prev_duration_s // 0, .log_path // "-"] | @tsv' \
-            "$f" 2>/dev/null) || continue
+    while IFS=$'\t' read -r job st ts pid prev log; do
         [ "$st" = running ] || continue
         [ "$job" != "$SELF_JOB" ] || continue
         case "$ts$pid$prev" in *[!0-9]*|'') continue ;; esac
@@ -144,7 +149,26 @@ overrunning_runs() {
         [ "$age" -gt "$limit" ] || continue
         printf '%s@%s\tcron-overrun: %s running %sm (previous run %ss) pid %s :: log %s\n' \
             "$job" "$ts" "$job" "$((age / 60))" "$prev" "$pid" "$log"
-    done
+    done < <(python3 - "$STATE_DIR" <<'PY'
+import json
+import pathlib
+import sys
+
+for path in sorted(pathlib.Path(sys.argv[1]).glob('*.json')):
+    try:
+        state = json.loads(path.read_text())
+        if not isinstance(state, dict) or state.get('state') != 'running':
+            continue
+        values = [state.get('job') or '', 'running', state.get('ts') or 0,
+                  state.get('pid') or '', state.get('prev_duration_s') or 0,
+                  state.get('log_path') or '-']
+        # Match jq @tsv: embedded separators must not turn into extra records.
+        print('\t'.join(str(value).replace('\\', '\\\\').replace('\t', '\\t')
+                        .replace('\n', '\\n').replace('\r', '\\r') for value in values))
+    except (OSError, ValueError):
+        continue
+PY
+    )
     return 0
 }
 

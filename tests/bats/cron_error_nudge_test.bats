@@ -149,3 +149,32 @@ running() {
     [ ! -e "$SENT" ]
     [ "$(jq length "$CRON_OVERRUN_NUDGE_STATE")" -eq 1 ]
 }
+
+@test "historical and malformed state files do not add jq scans or hide errors" {
+    seeded
+    job backup error
+    python3 - "$CRON_STATE_DIR" <<'PY'
+import json
+import pathlib
+import sys
+root = pathlib.Path(sys.argv[1])
+for number in range(300):
+    (root / f'retired-{number}.json').write_text(json.dumps({'state': 'no-hit'}))
+(root / 'broken.json').write_text('{')
+(root / 'array.json').write_text('[]')
+PY
+    export JQ_CALLS="$BATS_TEST_TMPDIR/jq-calls"
+    export REAL_JQ
+    REAL_JQ=$(command -v jq)
+    cat >"$BATS_TEST_TMPDIR/bin/jq" <<'S'
+#!/usr/bin/env bash
+printf 'x\n' >>"$JQ_CALLS"
+exec "$REAL_JQ" "$@"
+S
+    chmod +x "$BATS_TEST_TMPDIR/bin/jq"
+    run bash "$SCRIPT"
+    [ "$status" -eq 2 ]
+    [ "$(wc -l <"$SENT")" -eq 1 ]
+    [ "$(wc -l <"$JQ_CALLS")" -lt 20 ]
+    [[ "$(cat "$SENT")" == *"cron-error: backup "* ]]
+}
