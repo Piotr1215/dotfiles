@@ -64,8 +64,7 @@ esc() {
 }
 
 human_age() {
-    local then="$1" now delta
-    now=$(date +%s)
+    local then="$1" delta
     delta=$(( now - then ))
     if   [ "$delta" -lt 3600 ]; then echo "$(( delta / 60 ))m"
     elif [ "$delta" -lt 86400 ]; then echo "$(( delta / 3600 ))h"
@@ -91,16 +90,63 @@ running=0
 rows=""
 attention=""
 now=$(date +%s)
+# Read by cron_overdue in the shared library.
+# shellcheck disable=SC2034
+CRON_VIEW_NOW="$now"
+
+# Read the registry once and batch the state and next-run lookups. The unit
+# separator keeps empty fields intact when Bash splits the result.
+mapfile -t registry < <(cron_registry)
+mapfile -t snapshots < <({ if ((${#registry[@]})); then printf '%s\n' "${registry[@]}"; fi; } | python3 -c '
+import datetime, json, os, runpy, sys
+state_dir, helper = sys.argv[1:]
+next_run = runpy.run_path(helper)
+now = datetime.datetime.now()
+def field(value, default=""):
+    if value is None or value is False:
+        return default
+    if isinstance(value, (dict, list)):
+        value = json.dumps(value, separators=(",", ":"))
+    elif value is True:
+        value = "true"
+    return str(value).replace("\n", " ").replace("\x1f", " ")
+for row in sys.stdin:
+    parts = row.rstrip("\n").split("\t")
+    if len(parts) < 2:
+        continue
+    schedule, job = parts[:2]
+    try:
+        nxt = next_run["next_run"](schedule, now)
+        future = next_run["humanize"](nxt - now) if nxt else "-"
+    except (ValueError, KeyError, TypeError, OverflowError):
+        future = "-"
+    path = os.path.join(state_dir, job + ".json")
+    if not os.path.isfile(path):
+        print("\x1f".join((future, "0", "", "", "", "", "")))
+        continue
+    try:
+        with open(path) as handle:
+            data = json.load(handle)
+        state = field(data.get("state"), "?")
+        ts = field(data.get("ts"))
+        pid = field(data.get("pid"))
+        log = field(data.get("log_path"))
+        msg = field(data.get("message"))
+    except (OSError, ValueError, AttributeError):
+        state, ts, pid, log, msg = "?", "", "", "", ""
+    print("\x1f".join((future, "1", state, ts, pid, log, msg)))
+' "$STATE_DIR" "$NEXT_RUN")
+index=0
 
 while IFS=$'\t' read -r schedule job cmd purpose; do
     # Reset per row: a leaked $ts from the previous job would paint an
     # unknowable job green off someone else's timestamp.
     ts=""; msg=""; age="?"; log_path=""
-    status_file="${STATE_DIR}/${job}.json"
-    if [ -f "$status_file" ]; then
-        IFS='|' read -r state ts pid msg < <(jq -r '[.state // "?", .ts // "", .pid // "", (.message // "" | gsub("\n"; " "))] | join("|")' "$status_file" 2>/dev/null || echo "?|||")
+    IFS=$'\x1f' read -r next present state ts pid log_path msg <<< "${snapshots[index]:--$'\x1f'0} "
+    msg="${msg% }"
+    index=$(( index + 1 ))
+    if [ "$present" = "1" ]; then
         [ -n "$ts" ] && age=$(human_age "$ts")
-        log_path=$(jq -r '.log_path // ""' "$status_file" 2>/dev/null)
         # A `running` marker carries only {job, ts, state, pid}; the wrapper
         # adds log_path once the run finishes. The path is predictable, so
         # fall back to it; the existence check below still gates the menu.
@@ -189,7 +235,6 @@ while IFS=$'\t' read -r schedule job cmd purpose; do
     # Strip the dotfiles' leading-underscore convention for display; the bar is
     # read at a glance and `__` is noise there.
     label="${job#__}"
-    next=$(printf '%s\n' "$schedule" | "$NEXT_RUN" 2>/dev/null || echo "-")
     # Purpose before schedule: "what is this" is the question a glance asks.
     # The row shows the first 54 characters; the full sentence is the first
     # line of the row's submenu, so a click reads the rest.
@@ -222,7 +267,7 @@ while IFS=$'\t' read -r schedule job cmd purpose; do
         rows+="--★ mark as read | bash='${ACK} \"${job}\"' terminal=false refresh=true"$'\n'
     fi
     rows+="--▶ run now | bash='${TRIGGER} \"${job}\"' terminal=false refresh=true"$'\n'
-done < <(cron_registry)
+done < <(if ((${#registry[@]})); then printf '%s\n' "${registry[@]}"; fi)
 
 # --- the bar ----------------------------------------------------------------
 # Not a clock/alarm glyph: the reminders widget already owns those in the bar.

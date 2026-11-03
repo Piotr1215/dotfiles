@@ -137,7 +137,7 @@ cron_overdue() {
             since="$CRON_VIEW_BOOT_TS"
         fi
     fi
-    [ "$(( $(date +%s) - since ))" -gt "$budget" ]
+    [ "$(( ${CRON_VIEW_NOW:-$(date +%s)} - since ))" -gt "$budget" ]
 }
 
 # True when the wrapper message says the job's own purpose is spent: a
