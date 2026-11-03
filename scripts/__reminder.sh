@@ -210,6 +210,8 @@ update_record() {
 	prepare_store
 	lock_store
 	record="$(get_record "$id")" || die "No reminder with id $id."
+	# Keep the locked snapshot for callers that need to know what changed.
+	UPDATE_RECORD_BEFORE="$record"
 	updated="$(jq -c "$@" "$filter | with_entries(select(.value != null and .value != \"\"))" <<<"$record")"
 	printf '%s\n' "$updated" >>"$STORE"
 	unlock_store
@@ -1996,7 +1998,11 @@ cmd_fire_locked() {
 		0)
 			clear_error_task "$id" keep
 			mark_done "$id"
-			cmd_sync >/dev/null
+			# An ordinary repeat has no one-shot to remove. Inspect the same
+			# locked record mark_done changed, not the older pre-command snapshot.
+			if ! jq -e '(.repeat // "") != "" and (.when // "") == ""' <<<"$UPDATE_RECORD_BEFORE" >/dev/null; then
+				cmd_sync >/dev/null
+			fi
 			;;
 		4)
 			clear_error_task "$id"

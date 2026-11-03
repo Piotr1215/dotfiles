@@ -1,0 +1,59 @@
+#!/usr/bin/env bats
+
+setup() {
+  REMINDER="$BATS_TEST_DIRNAME/../../scripts/__reminder.sh"
+  export REMINDER_STATE_DIR="$BATS_TEST_TMPDIR/state"
+  export REMINDER_STORE="$REMINDER_STATE_DIR/reminders.jsonl"
+  export REMINDER_OWN_CLOCKS=1
+  export CLOCK_LOG="$BATS_TEST_TMPDIR/clocks.log"
+  export CRON_EVERY_STAMP_DIR="$BATS_TEST_TMPDIR/stamps"
+  mkdir -p "$REMINDER_STATE_DIR" "$BATS_TEST_TMPDIR/bin"
+  : >"$CLOCK_LOG"
+  for cmd in atq at atrm crontab; do
+    cat >"$BATS_TEST_TMPDIR/bin/$cmd" <<'STUB'
+#!/usr/bin/env bash
+printf '%s\n' "${0##*/}" >>"$CLOCK_LOG"
+exit 0
+STUB
+    chmod +x "$BATS_TEST_TMPDIR/bin/$cmd"
+  done
+  export PATH="$BATS_TEST_TMPDIR/bin:$PATH"
+}
+
+@test "unresolved recurring exec leaves the clocks alone" {
+  printf '%s\n' '{"id":"deadbeef","status":"active","action":"exec","command":"true","repeat":"* * * * *"}' >"$REMINDER_STORE"
+  run "$REMINDER" fire deadbeef
+  [ "$status" -eq 0 ]
+  [ ! -s "$CLOCK_LOG" ]
+  jq -se 'last | .status == "active" and .repeat == "* * * * *" and .when == null' "$REMINDER_STORE"
+}
+
+@test "unresolved recurring exec removes a pending one-shot and syncs" {
+  printf '%s\n' '{"id":"deadbeef","status":"active","action":"exec","command":"true","repeat":"* * * * *","when":"2030-01-01T09:00:00+00:00"}' >"$REMINDER_STORE"
+  run "$REMINDER" fire deadbeef
+  [ "$status" -eq 0 ]
+  grep -qx atq "$CLOCK_LOG"
+  jq -se 'last | .status == "active" and .repeat == "* * * * *" and .when == null' "$REMINDER_STORE"
+}
+
+@test "a pending one-shot added during the command is removed and synced" {
+  cat >"$BATS_TEST_TMPDIR/edit-record" <<'STUB'
+#!/usr/bin/env bash
+record=$(tail -n1 "$REMINDER_STORE")
+jq -c '.when = "2030-01-01T09:00:00+00:00"' <<<"$record" >>"$REMINDER_STORE"
+STUB
+  chmod +x "$BATS_TEST_TMPDIR/edit-record"
+  jq -nc --arg command "$BATS_TEST_TMPDIR/edit-record" '{id:"deadbeef",status:"active",action:"exec",command:$command,repeat:"* * * * *"}' >"$REMINDER_STORE"
+  run "$REMINDER" fire deadbeef
+  [ "$status" -eq 0 ]
+  grep -qx atq "$CLOCK_LOG"
+  jq -se 'last | .status == "active" and .when == null' "$REMINDER_STORE"
+}
+
+@test "unresolved one-shot exec completes and syncs" {
+  printf '%s\n' '{"id":"deadbeef","status":"active","action":"exec","command":"true","when":"2030-01-01T09:00:00+00:00"}' >"$REMINDER_STORE"
+  run "$REMINDER" fire deadbeef
+  [ "$status" -eq 0 ]
+  grep -qx atq "$CLOCK_LOG"
+  jq -se 'last | .status == "done" and .when == null' "$REMINDER_STORE"
+}
