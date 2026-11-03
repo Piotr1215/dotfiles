@@ -1,2 +1,2 @@
-# VM is the default. The classif-vm board toggle changes this to localhost.
-127.0.0.1:11435=winnow:12b-q4_K_M
+# managed by my classif target toggle
+localhost:11434=winnow:12b-q4_K_M

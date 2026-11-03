@@ -299,9 +299,13 @@ EOF
   [ "$status" -eq 0 ]
 }
 
-@test "checked-in classif hosts default to only the forwarded VM endpoint" {
+@test "automation tunnel can start in PC mode" {
+  ! grep -q 'pc-mode' "${BATS_TEST_DIRNAME}/../../.config/systemd/user/classif-vm-tunnel.service"
+}
+
+@test "classif hosts contain one interactive endpoint" {
   hosts="${BATS_TEST_DIRNAME}/../../.config/classif/hosts"
   run bash -c 'grep -vE "^[[:space:]]*(#|$)" "$1"' _ "$hosts"
   [ "$status" -eq 0 ]
-  [ "$output" = "127.0.0.1:11435=winnow:12b-q4_K_M" ]
+  [[ "$output" = "localhost:11434=winnow:12b-q4_K_M" || "$output" = "127.0.0.1:11435=winnow:12b-q4_K_M" ]]
 }

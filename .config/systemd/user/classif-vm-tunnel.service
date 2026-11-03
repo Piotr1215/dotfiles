@@ -1,7 +1,6 @@
 [Unit]
 Description=SSH port forward to classif Ollama on vind-node
 After=network-online.target
-ConditionPathExists=!%h/.local/state/classif-vm/pc-mode
 
 [Service]
 Type=simple
