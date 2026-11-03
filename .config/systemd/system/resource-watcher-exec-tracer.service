@@ -1,0 +1,16 @@
+[Unit]
+Description=Resource watcher process and spike tracer
+After=local-fs.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /usr/local/lib/resource-watcher/exec-spike-tracer.py
+Restart=on-failure
+RestartSec=10
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/var/lib/resource-watcher-exec-tracer
+
+[Install]
+WantedBy=multi-user.target
