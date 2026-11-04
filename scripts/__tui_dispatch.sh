@@ -8,6 +8,7 @@ tmux_bin=${TUI_TMUX_COMMAND:-tmux}
 report=${TASKWARRIOR_TUI_REPORT:-}
 if [[ -z "$report" && -n "$uuid" ]] && "$task_bin" rc.context=none rc.hooks=off "$uuid" export | jq -e '.[0].tags // [] | index("piotr") != null' >/dev/null; then
   report=handoffs
+  export TASKWARRIOR_TUI_REPORT=handoffs
 fi
 if [[ "$slot" == 2 ]]; then exec "$root/__cycle_tui_reports.sh" cycle; fi
 if [[ "$slot" == 8 ]]; then exec "$root/__cycle_tui_reports.sh" toggle; fi
