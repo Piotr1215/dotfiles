@@ -21,7 +21,7 @@ if [[ "$report" == handoffs ]]; then
     6|7)
       [[ "$uuid" =~ ^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$ ]] || { echo 'Invalid task UUID' >&2; exit 1; }
       task_json=$("$task_bin" rc.context=none rc.hooks=off "$uuid" export)
-      token=$(jq -er --arg id "$uuid" '.[0] | select(.uuid == $id and (.description | type == "string")) | "@\"\(.uuid)|\(.linear_issue_id // "-")|\(.repo // "-")|\(.description)\""' <<< "$task_json") || { echo 'Task not found' >&2; exit 1; }
+      token=$(jq -er --arg id "$uuid" 'def flat: tostring | gsub("[\u0000-\u001f\u007f-\u009f]"; " ") | gsub("\\s+"; " ") | gsub("^ +| +$"; ""); .[0] | select(.uuid == $id and (.description | type == "string")) | "@\"\(.uuid)|\((.linear_issue_id // "-") | flat)|\((.repo // "-") | flat)|\(.description | flat)\""' <<< "$task_json") || { echo 'Task not found' >&2; exit 1; }
       payload="$token"
       [[ "$slot" != 7 ]] || payload="/ops-spawn-agent $token "
       pane=$($tmux_bin list-panes -a -F '#{pane_id} #{@agent_name}' | awk '$2 == "triage" {print $1; exit}')
@@ -32,7 +32,7 @@ if [[ "$report" == handoffs ]]; then
       timestamp=$(date +%s)
       exec "$tmux_bin" set-buffer -b "$buffer" -- "$payload" \; \
         if-shell -F -t "$pane" '#{==:#{@agent_name},triage}' \
-        "set-option -p -t $pane @agent_injected_at $timestamp \; paste-buffer -d -b $buffer -t $pane \; switch-client -t $pane" \
+        "set-option -p -t $pane @agent_injected_at $timestamp \; paste-buffer -d -p -b $buffer -t $pane \; switch-client -t $pane" \
         "delete-buffer -b $buffer \; display-message 'Gordon pane changed'" ;;
     8) echo "No action assigned for handoffs on key $slot" >&2; exit 0 ;;
   esac
