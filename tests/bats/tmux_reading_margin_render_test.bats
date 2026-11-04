@@ -66,25 +66,11 @@ SCRIPT
   [[ "$focus_hook" != *'/dirty'* ]]
 }
 
-@test "shared raw collection reads handoffs fresh on every input change" {
-  focus="$BATS_TEST_TMPDIR/bin/focus"
-  cat >"$focus" <<'SCRIPT'
-#!/usr/bin/env bash
-printf '%s\n' "$*" >>"$FOCUS_CALLS"
-cat "$FOCUS_VALUE"
-SCRIPT
-  chmod +x "$focus"
-  export TMUX_READING_MARGIN_FOCUS_COMMAND="$focus" FOCUS_CALLS="$BATS_TEST_TMPDIR/focus-calls"
-  export FOCUS_VALUE="$BATS_TEST_TMPDIR/focus-value"
-  printf 'first handoff\n' >"$FOCUS_VALUE"
+@test "raw collection shows the roster without the retired handoff panel" {
   run "$work" --raw-render test '@1'
   [ "$status" -eq 0 ]
-  [[ "$output" == *'first handoff'* ]]
-  printf 'changed handoff\n' >"$FOCUS_VALUE"
-  run "$work" --raw-render other '@2'
-  [ "$status" -eq 0 ]
-  [[ "$output" == *'changed handoff'* ]]
-  [ "$(wc -l <"$FOCUS_CALLS")" -eq 2 ]
+  [[ "$output" == *'AGENT: live-worker'* ]]
+  [[ "$output" != *'HANDOFFS'* ]]
 }
 
 @test "first draw renders synchronously at the pane width without a loading placeholder" {
@@ -114,22 +100,3 @@ SCRIPT
   [[ "$output" == *'width=1 cache=0'* ]]
 }
 
-@test "focus is cached at each width and redrawn when the width changes" {
-  focus="$BATS_TEST_TMPDIR/bin/focus"
-  cat >"$focus" <<'SCRIPT'
-#!/usr/bin/env bash
-printf '%s\n' "$*" >> "$FOCUS_CALLS"
-printf 'focus at %s\n' "$3"
-SCRIPT
-  chmod +x "$focus"
-  export TMUX_READING_MARGIN_FOCUS_COMMAND="$focus" FOCUS_CALLS="$BATS_TEST_TMPDIR/focus-calls"
-  printf '35\n' >"$WIDTH_FILE"
-  run "$work" --cached-render test '@1'
-  [[ "$output" == *'focus at 35'* ]]
-  run "$work" --cached-render test '@1'
-  [ "$(wc -l <"$FOCUS_CALLS")" -eq 1 ]
-  printf '52\n' >"$WIDTH_FILE"
-  run "$work" --cached-render test '@1'
-  [[ "$output" == *'focus at 52'* ]]
-  [ "$(wc -l <"$FOCUS_CALLS")" -eq 2 ]
-}

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Show handoffs and the live agent roster in the work margin.
+# Show the live agent roster in the work margin.
 
 set -eo pipefail
 
@@ -68,32 +68,6 @@ if [[ "$mode" == --raw-render ]]; then
 fi
 
 cockpit_command="${TMUX_READING_MARGIN_COCKPIT_STATE_COMMAND:-$HOME/.claude/scripts/__cockpit_state.sh}"
-focus_command="${TMUX_READING_MARGIN_FOCUS_COMMAND:-$HOME/.claude/scripts/__focus.py}"
-
-# Handoffs come first and scroll with the roster. Ranking happens outside the
-# pane. The shared collector reads fresh handoffs only when an input changes.
-if [[ "$mode" == --cached-render ]]; then
-  cache_root="${XDG_RUNTIME_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}}/reading-margin"
-  (umask 077; mkdir -p "$cache_root")
-  key=$(printf '%s\0%s' "${TMUX:-}" "${TMUX_PANE:-}" | sha256sum)
-  cache="$cache_root/${key%% *}"
-fi
-
-if [[ -x "$focus_command" ]]; then
-  if [[ "$mode" == --cached-render ]]; then
-    focus_cache="$cache.focus-$width"
-    if [[ -z $(find "$focus_cache" -mmin -0.0833 2>/dev/null) ]]; then
-      focus_tmp="$focus_cache.$BASHPID"
-      if "$focus_command" render --width "$width" >"$focus_tmp"; then
-        mv -f "$focus_tmp" "$focus_cache"
-      fi
-    fi
-    [[ -f "$focus_cache" ]] && cat "$focus_cache"
-  else
-    "$focus_command" render --width "$width" || true
-  fi
-  printf '\n'
-fi
 
 # The one shared collector owns caching and invalidation. Its input reads must
 # stay fresh; viewers reuse the resulting frame for resize and scrolling.

@@ -71,31 +71,31 @@ pins_of() {
 	[ ! -e "$NOTE" ]
 }
 
-@test "--pin puts today's note second, drops the old daily pin, keeps the rest in order" {
+@test "--pin puts today's note first and keeps unrelated pins in order" {
 	panes '%2 intake task kendra' '%5 triage task todo'
 	store 5 "note $HANDOFFS_FILE" "note $OLD" 'note /some/case.md' 'linear DEVOPS-1'
 	run "$SCRIPT" --pin
 	[ "$status" -eq 0 ]
 	[ "$output" = "$NOTE" ]
-	[ "$(pins_of 5)" = "$(printf '%s\n' "note $HANDOFFS_FILE" "note $NOTE" 'note /some/case.md' 'linear DEVOPS-1')" ]
+	[ "$(pins_of 5)" = "$(printf '%s\n' "note $NOTE" 'note /some/case.md' 'linear DEVOPS-1')" ]
 }
 
-@test "--pin puts the handoffs file first when it was elsewhere or missing" {
+@test "--pin removes the retired handoffs index" {
 	panes '%5 triage task todo'
 	store 5 'note /some/case.md' "note $HANDOFFS_FILE"
 	run "$SCRIPT" --pin
-	[ "$(pins_of 5)" = "$(printf '%s\n' "note $HANDOFFS_FILE" "note $NOTE" 'note /some/case.md')" ]
+	[ "$(pins_of 5)" = "$(printf '%s\n' "note $NOTE" 'note /some/case.md')" ]
 	store 5 'note /some/case.md'
 	run "$SCRIPT" --pin
-	[ "$(pins_of 5)" = "$(printf '%s\n' "note $HANDOFFS_FILE" "note $NOTE" 'note /some/case.md')" ]
+	[ "$(pins_of 5)" = "$(printf '%s\n' "note $NOTE" 'note /some/case.md')" ]
 }
 
-@test "--pin replaces the legacy combined handoffs pin with the index" {
+@test "--pin removes both retired handoff pins" {
 	panes '%5 triage task todo'
 	store 5 'note /some/case.md' 'note /state/gordon/handoffs.md' "note $HANDOFFS_FILE"
 	run "$SCRIPT" --pin
 	[ "$status" -eq 0 ]
-	[ "$(pins_of 5)" = "$(printf '%s\n' "note $HANDOFFS_FILE" "note $NOTE" 'note /some/case.md')" ]
+	[ "$(pins_of 5)" = "$(printf '%s\n' "note $NOTE" 'note /some/case.md')" ]
 }
 
 @test "--pin twice leaves the store unchanged" {

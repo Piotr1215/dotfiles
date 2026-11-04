@@ -8,16 +8,6 @@
 #   __task_brief.sh --popup <token>           open it in a tmux popup (nvim -R,
 #                                             readable and copyable); this is
 #                                             the plain read-only popup
-#   __task_brief.sh --actions <token>         editable per-handoff file popup; what the
-#                                             Alacritty ctrl+6 hint runs, for a
-#                                             full uuid or a 4-hex handoff ref
-#                                             from the Alt-m board. Keys:
-#                                             q/Esc close, Enter unfurl the task
-#                                             token into Gordon's prompt, s the
-#                                             same prefixed with /ops-spawn-agent,
-#                                             d marks the task done. Text is
-#                                             typed, never submitted.
-#   __task_brief.sh --action <key> <uuid>     editor callback: enter, spawn, done
 #   __task_brief.sh --card <token>            a short card for the @task
 #                                             instant answer: ref, title, What:,
 #                                             the "Your step:" sentence of the
@@ -29,31 +19,20 @@
 # was a log in Gordon's shorthand with no plain sentence saying what it was.
 # <token> may be a full uuid, a prefix, `task:<prefix>`, or a whole
 # `@"<uuid>|..."` picker token; the first uuid-looking run is used.
-# A ref that matches several pending tasks opens a pick list first.
-#
-# The Gordon pane is the tmux pane whose @agent_name is `triage`, resolved live.
-# The token has the shape of the Claude Code @ picker (file-suggestion.toml):
-#   @"<uuid>|<linear id or ->|<repo or ->|<description>"
-#
 # Env (tests): TASK_BRIEF_TASK_COMMAND, TASK_BRIEF_TMUX_COMMAND,
-# TASK_BRIEF_NVIM_COMMAND, TASK_BRIEF_WIDTH, TASK_BRIEF_HANDOFFS_COMMAND,
-# TASK_BRIEF_TW_COMMAND
+# TASK_BRIEF_WIDTH
 
 set -eo pipefail
 
 mode=plain
-action=""
 case "${1:-}" in
   --popup) mode=popup; shift ;;
-  --actions) mode=actions; shift ;;
-  --actions-run) mode=actions_run; shift ;;
-  --action) mode=action; action="${2:-}"; shift; [[ $# -eq 0 ]] || shift ;;
   --card) mode=card; shift ;;
 esac
 
 token="${1:-}"
 if [[ -z "$token" ]]; then
-  printf 'usage: %s [--popup|--actions] <uuid-or-prefix>\n' "${0##*/}" >&2
+  printf 'usage: %s [--popup|--card] <uuid-or-prefix>\n' "${0##*/}" >&2
   exit 2
 fi
 
@@ -73,11 +52,6 @@ self="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/${0##*/}"
 if [[ "$mode" == popup ]]; then
   exec "$tmux_bin" display-popup -E -h 80% -w 85% -T " task ${uuid:0:8} " \
     "'$self' '$uuid' | nvim -R -"
-fi
-
-if [[ "$mode" == actions ]]; then
-  exec "$tmux_bin" display-popup -E -h 80% -w 85% -T " handoff ${uuid:0:8} " \
-    "'$self' --actions-run '$uuid'"
 fi
 
 task_bin="${TASK_BRIEF_TASK_COMMAND:-task}"
@@ -188,96 +162,6 @@ print_card() {
   [[ -n "$out" ]] || return 3
   printf '%s\n' "$out"
 }
-
-# Wait for a key so a popup message can be read before -E closes it.
-pause() {
-  printf '%s\n(press any key)\n' "$1"
-  read -rsn1 _ || true
-}
-
-# The picker token for task $1, same shape as file-suggestion.toml builds.
-build_token() {
-  tw "$1" export 2>/dev/null | jq -er '.[0] | select(.uuid != null) |
-    "@\"\(.uuid)|\(.linear_issue_id // "-")|\(.repo // "-")|\(.description)\""'
-}
-
-# Type $1 into the Gordon pane (@agent_name = triage). -l keeps it literal and
-# no Enter is sent, so Piotr reviews the line and submits it himself.
-send_to_gordon() {
-  local pane
-  pane=$("$tmux_bin" list-panes -a -F '#{pane_id} #{@agent_name}' 2>/dev/null |
-    awk '$2 == "triage" { print $1; exit }')
-  if [[ -z "$pane" ]]; then
-    pause 'no Gordon pane (no tmux pane has @agent_name=triage)'
-    return 1
-  fi
-  "$tmux_bin" set-option -p -t "$pane" @agent_injected_at "$(date +%s)" || return 1
-  "$tmux_bin" send-keys -t "$pane" -l -- "$1"
-}
-
-# Called by the handoffs buffer with the full UUID under the cursor.
-run_action() {
-  local id="$1" token
-  [[ "$id" =~ ^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$ ]] || {
-    printf 'action needs a full task uuid\n' >&2
-    return 2
-  }
-  case "$action" in
-    enter) token=$(build_token "$id") && send_to_gordon "$token" ;;
-    spawn) token=$(build_token "$id") && send_to_gordon "/ops-spawn-agent $token " ;;
-    done) "${TASK_BRIEF_TW_COMMAND:-$HOME/.claude/scripts/__tw.sh}" 'done' "$id" ;;
-    *) printf 'unknown handoff action: %s\n' "$action" >&2; return 2 ;;
-  esac
-}
-
-# Popup body for --actions: resolve the ref, then edit the shared handoffs file.
-actions_run() {
-  local ref="${1,,}" id line n i key keys
-  local -a ids=() descs=()
-  # A full uuid opens whatever its status; a short ref means a pending task.
-  local -a filter=(status:pending)
-  [[ ${#ref} -eq 36 ]] && filter=("$ref")
-  while IFS=$'\t' read -r id line; do
-    [[ -n "$id" ]] || continue
-    ids+=("$id")
-    descs+=("$line")
-  done < <(tw "${filter[@]}" export 2>/dev/null |
-    jq -r --arg p "$ref" '.[] | select(.uuid | startswith($p)) | "\(.uuid)\t\(.description)"')
-
-  n=${#ids[@]}
-  if ((n == 0)); then
-    pause "no pending task matches $ref"
-    return 1
-  fi
-  id="${ids[0]}"
-  if ((n > 1)); then
-    keys=123456789abcdefghijklmnopqrstuvwxyz
-    printf '%s matches %d pending tasks, pick one:\n\n' "$ref" "$n"
-    for ((i = 0; i < n && i < ${#keys}; i++)); do
-      printf '  %s  %s  %s\n' "${keys:i:1}" "${ids[i]:0:8}" "${descs[i]}"
-    done
-    printf '\nkey to pick, anything else cancels\n'
-    read -rsn1 key || key=""
-    id=""
-    for ((i = 0; i < n && i < ${#keys}; i++)); do
-      [[ "$key" == "${keys:i:1}" ]] && id="${ids[i]}"
-    done
-    [[ -n "$id" ]] || return 0
-  fi
-
-  HANDOFFS_NVIM="${TASK_BRIEF_NVIM_COMMAND:-${HANDOFFS_NVIM:-nvim}}" \
-    "${TASK_BRIEF_HANDOFFS_COMMAND:-$HOME/.claude/scripts/__handoffs_file.py}" edit "$id"
-}
-
-if [[ "$mode" == action ]]; then
-  run_action "$uuid"
-  exit $?
-fi
-
-if [[ "$mode" == actions_run ]]; then
-  actions_run "$uuid"
-  exit $?
-fi
 
 if [[ "$mode" == card ]]; then
   rc=0

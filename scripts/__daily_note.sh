@@ -4,9 +4,8 @@
 # note template when it is missing, then print its absolute path.
 #
 # Usage: __daily_note.sh [--pin]
-#   --pin   also make today's note pin 2 in Gordon's tmux pane: pin 1 stays
-#           the handoffs file, an older daily note pin goes, and every other
-#           pin keeps its order. No Gordon pane means no pin.
+#   --pin   make today's note the first pin in Gordon's tmux pane. Older
+#           daily notes and retired handoff pins are removed.
 #
 # The folder and template come from the vault's .obsidian/daily-notes.json,
 # the settings Obsidian's own Daily notes plugin reads, so a note made here and
@@ -90,9 +89,7 @@ is_daily_pin() {
     [[ "$1" == "note${TAB}$2/"[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9].md ]]
 }
 
-# Make note $1 pin 2 in pane $2's store: the handoffs index, then $1, then the
-# other pins in their order, without the legacy board or an older daily note. Leaves the file
-# untouched when it already reads that way.
+# Make note $1 the first pin, preserving unrelated pins and removing retired boards.
 pin_note() {
     local note=$1 dir="$pins_base/panes/${2#%}" folder line want=() rest=()
     local pins="$dir/pins.tsv"
@@ -109,7 +106,7 @@ pin_note() {
             rest+=("$line")
         done <"$pins"
     fi
-    want=("note${TAB}$handoffs" "note${TAB}$note" "${rest[@]}")
+    want=("note${TAB}$note" "${rest[@]}")
     if [[ -f "$pins" ]] && [[ "$(<"$pins")" == "$(printf '%s\n' "${want[@]}")" ]]; then
         return 0
     fi
