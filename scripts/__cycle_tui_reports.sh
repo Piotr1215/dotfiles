@@ -12,15 +12,15 @@ report=inbox
 for i in "${!reports[@]}"; do
   if [[ "${reports[$i]}" == "$current" ]]; then report="${reports[$(((i + 1) % ${#reports[@]}))]}"; break; fi
 done
-if [[ -n "$request_file" ]]; then
-  [[ -f "$request_file" && -w "$request_file" ]] || { echo 'Cannot write the report request' >&2; exit 1; }
+version=${TASKWARRIOR_TUI_VIEW_VERSION:-0}
+if [[ "$version" =~ ^[0-9]+$ ]] && ((10#$version >= 2)) && [[ -n "$request_file" && -f "$request_file" && -w "$request_file" ]]; then
   printf '%s\n' "$report" > "$request_file"
   exit
 fi
 # Keep the old instance paused as the parent. A second old binary must not
 # recursively start more children; the upgraded binary uses the request above.
-[[ "${TUI_REPORT_BRIDGE:-}" != 1 ]] || { echo 'Report switching requires the upgraded taskwarrior-tui binary' >&2; exit 1; }
-export TUI_REPORT_BRIDGE=1
+[[ "${TUI_REPORT_BRIDGE:-}" != 2 ]] || { echo 'Report switching requires the upgraded taskwarrior-tui binary' >&2; exit 1; }
+export TUI_REPORT_BRIDGE=2
 if [[ "$report" != handoffs && -n "${TASKRC:-}" ]]; then
   legacy_rc="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../.config/taskwarrior-tui/handoffs.taskrc"
   current_rc=$(realpath -e -- "$TASKRC" 2>/dev/null || true)

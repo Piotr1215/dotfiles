@@ -2,6 +2,7 @@
 setup() {
   repo_root="$(cd "$BATS_TEST_DIRNAME/../.." && pwd)"
   export TUI_REPORT_STATE_FILE="$BATS_TEST_TMPDIR/previous" TASKWARRIOR_TUI_REPORT_REQUEST="$BATS_TEST_TMPDIR/request"
+  export TASKWARRIOR_TUI_VIEW_VERSION=2
   : > "$TASKWARRIOR_TUI_REPORT_REQUEST"
 }
 @test "cycle includes handoffs and wraps current to inbox" {
@@ -15,6 +16,11 @@ setup() {
   run "$repo_root/scripts/__cycle_tui_reports.sh"
   [ "$status" -eq 0 ]; grep -qx inbox "$TASKWARRIOR_TUI_REPORT_REQUEST"
 }
+@test "v2 uses its request even inside the bridge and preserves taskrc" {
+  export TUI_REPORT_BRIDGE=2 TASKWARRIOR_TUI_REPORT=handoffs TASKRC="$BATS_TEST_TMPDIR/custom"
+  run "$repo_root/scripts/__cycle_tui_reports.sh"
+  [ "$status" -eq 0 ]; grep -qx current "$TASKWARRIOR_TUI_REPORT_REQUEST"; [ ! -e "$TASKRC" ]
+}
 @test "old tui bridges once using a known pane title" {
   unset TASKWARRIOR_TUI_REPORT_REQUEST TASKWARRIOR_TUI_REPORT
   export TUI_REPORT_BINARY="$BATS_TEST_TMPDIR/tui" TMUX_PANE='%42' PATH="$BATS_TEST_TMPDIR:$PATH"
@@ -22,7 +28,7 @@ setup() {
   printf '#!/bin/sh\nprintf "%%s %%s %%s\\n" "$TUI_REPORT_BRIDGE" "$1" "$2"\n' > "$TUI_REPORT_BINARY"
   chmod +x "$BATS_TEST_TMPDIR/tmux" "$TUI_REPORT_BINARY"
   run "$repo_root/scripts/__cycle_tui_reports.sh"
-  [ "$status" -eq 0 ]; [ "$output" = '1 -r handoffs' ]
+  [ "$status" -eq 0 ]; [ "$output" = '2 -r handoffs' ]
 }
 @test "unknown pane title falls back to cycling from inbox" {
   unset TASKWARRIOR_TUI_REPORT_REQUEST TASKWARRIOR_TUI_REPORT
@@ -54,14 +60,22 @@ setup() {
 }
 @test "bridge guard refuses recursive launches" {
   unset TASKWARRIOR_TUI_REPORT_REQUEST
-  export TUI_REPORT_BRIDGE=1
+  export TUI_REPORT_BRIDGE=2
   run "$repo_root/scripts/__cycle_tui_reports.sh"
   [ "$status" -ne 0 ]; [[ "$output" == *'upgraded taskwarrior-tui'* ]]
 }
-@test "invalid request fails instead of bridging" {
-  export TASKWARRIOR_TUI_REPORT_REQUEST="$BATS_TEST_TMPDIR/missing"
+@test "v1 with a request upgrades once even from an earlier bridge" {
+  export TASKWARRIOR_TUI_VIEW_VERSION=1 TUI_REPORT_BRIDGE=1 TASKWARRIOR_TUI_REPORT=byrepo TUI_REPORT_BINARY="$BATS_TEST_TMPDIR/tui"
+  printf '#!/bin/sh\nprintf "%%s %%s %%s\\n" "$TUI_REPORT_BRIDGE" "$1" "$2"\n' > "$TUI_REPORT_BINARY"
+  chmod +x "$TUI_REPORT_BINARY"
   run "$repo_root/scripts/__cycle_tui_reports.sh"
-  [ "$status" -ne 0 ]; [[ "$output" == *'Cannot write'* ]]
+  [ "$status" -eq 0 ]; [ "$output" = '2 -r byproject' ]
+  [ ! -s "$TASKWARRIOR_TUI_REPORT_REQUEST" ]
+}
+@test "invalid v2 request with bridge guard fails rather than nesting" {
+  export TASKWARRIOR_TUI_REPORT_REQUEST="$BATS_TEST_TMPDIR/missing" TUI_REPORT_BRIDGE=2
+  run "$repo_root/scripts/__cycle_tui_reports.sh"
+  [ "$status" -ne 0 ]; [[ "$output" == *'upgraded taskwarrior-tui'* ]]
 }
 @test "handoffs overrides context and detail and legends are configured" {
   grep -qx 'uda.taskwarrior-tui.report.handoffs.context=none' "$repo_root/.taskrc"
