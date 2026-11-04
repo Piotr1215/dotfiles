@@ -37,3 +37,8 @@ MOCK
   run bash -c 'printf "\n" | "$1" 7 "$2"' _ "$root/scripts/__tui_dispatch.sh" "$uuid"
   [ "$status" -eq 0 ]; grep -Fq "$uuid done" "$LOG"
 }
+
+@test "handoff key 8 never creates an issue" {
+  run "$root/scripts/__tui_dispatch.sh" 8 "$uuid"
+  [ "$status" -eq 0 ]; [[ "$output" == *'No action assigned'* ]]; [ ! -f "$LOG" ]
+}

@@ -4,25 +4,20 @@ setup() {
   export TUI_REPORT_STATE_FILE="$BATS_TEST_TMPDIR/previous" TASKWARRIOR_TUI_REPORT_REQUEST="$BATS_TEST_TMPDIR/request"
   : > "$TASKWARRIOR_TUI_REPORT_REQUEST"
 }
-@test "cycle skips handoffs and wraps current to inbox" {
+@test "cycle includes handoffs and wraps current to inbox" {
   export TASKWARRIOR_TUI_REPORT=byproject
-  run "$repo_root/scripts/__cycle_tui_reports.sh" cycle
+  run "$repo_root/scripts/__cycle_tui_reports.sh"
+  [ "$status" -eq 0 ]; grep -qx handoffs "$TASKWARRIOR_TUI_REPORT_REQUEST"
+  export TASKWARRIOR_TUI_REPORT=handoffs
+  run "$repo_root/scripts/__cycle_tui_reports.sh"
   [ "$status" -eq 0 ]; grep -qx current "$TASKWARRIOR_TUI_REPORT_REQUEST"
   export TASKWARRIOR_TUI_REPORT=current
-  run "$repo_root/scripts/__cycle_tui_reports.sh" cycle
+  run "$repo_root/scripts/__cycle_tui_reports.sh"
   [ "$status" -eq 0 ]; grep -qx inbox "$TASKWARRIOR_TUI_REPORT_REQUEST"
-}
-@test "toggle requests handoffs and returns to the prior report" {
-  export TASKWARRIOR_TUI_REPORT=byrepo
-  run "$repo_root/scripts/__cycle_tui_reports.sh" toggle
-  [ "$status" -eq 0 ]; grep -qx handoffs "$TASKWARRIOR_TUI_REPORT_REQUEST"; grep -qx byrepo "$TUI_REPORT_STATE_FILE"
-  export TASKWARRIOR_TUI_REPORT=handoffs
-  run "$repo_root/scripts/__cycle_tui_reports.sh" toggle
-  [ "$status" -eq 0 ]; grep -qx byrepo "$TASKWARRIOR_TUI_REPORT_REQUEST"
 }
 @test "missing report request fails before changing state" {
   unset TASKWARRIOR_TUI_REPORT_REQUEST
-  run "$repo_root/scripts/__cycle_tui_reports.sh" toggle
+  run "$repo_root/scripts/__cycle_tui_reports.sh"
   [ "$status" -ne 0 ]; [[ "$output" == *'upgraded taskwarrior-tui'* ]]; [ ! -e "$TUI_REPORT_STATE_FILE" ]
 }
 @test "handoffs overrides context and detail and legends are configured" {
