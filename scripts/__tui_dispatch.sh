@@ -18,13 +18,23 @@ if [[ "$report" == handoffs ]]; then
     3) exec "$root/__task_brief.sh" --popup "$uuid" ;;
     4) read -r -p 'Annotation: ' note; [[ -n "$note" ]] && exec "$task_bin" rc.context=none "$uuid" annotate "$note"; exit 0 ;;
     5) exec "$root/__tui_promote_handoff.sh" "$uuid" ;;
-    6)
+    6|7)
       [[ "$uuid" =~ ^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$ ]] || { echo 'Invalid task UUID' >&2; exit 1; }
+      task_json=$("$task_bin" rc.context=none rc.hooks=off "$uuid" export)
+      token=$(jq -er --arg id "$uuid" '.[0] | select(.uuid == $id and (.description | type == "string")) | "@\"\(.uuid)|\(.linear_issue_id // "-")|\(.repo // "-")|\(.description)\""' <<< "$task_json") || { echo 'Task not found' >&2; exit 1; }
+      payload="$token"
+      [[ "$slot" != 7 ]] || payload="/ops-spawn-agent $token "
       pane=$($tmux_bin list-panes -a -F '#{pane_id} #{@agent_name}' | awk '$2 == "triage" {print $1; exit}')
       [[ "$pane" =~ ^%[0-9]+$ ]] || { echo 'Gordon pane not found' >&2; exit 1; }
-      # Validate the pane identity in the server command queue before sending.
-      exec "$tmux_bin" if-shell -F -t "$pane" '#{==:#{@agent_name},triage}' "send-keys -t $pane -l -- '@${uuid:0:8} ' \; switch-client -t $pane" 'display-message "Gordon pane changed"' ;;
-    7|8) echo "No action assigned for handoffs on key $slot" >&2; exit 0 ;;
+      # A named buffer carries arbitrary task text without parsing it as tmux commands.
+      # The identity guard, paste, and focus run together in tmux's command queue.
+      buffer="tui-handoff-$$-$RANDOM"
+      timestamp=$(date +%s)
+      exec "$tmux_bin" set-buffer -b "$buffer" -- "$payload" \; \
+        if-shell -F -t "$pane" '#{==:#{@agent_name},triage}' \
+        "set-option -p -t $pane @agent_injected_at $timestamp \; paste-buffer -d -b $buffer -t $pane \; switch-client -t $pane" \
+        "delete-buffer -b $buffer \; display-message 'Gordon pane changed'" ;;
+    8) echo "No action assigned for handoffs on key $slot" >&2; exit 0 ;;
   esac
 fi
 case "$slot" in

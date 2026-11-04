@@ -6,7 +6,11 @@ setup() {
   uuid=12345678-1234-1234-1234-123456789abc
   cat > "$TUI_TASK_COMMAND" <<'MOCK'
 #!/usr/bin/env bash
-printf '%s\n' "$*" >> "$LOG"
+if [[ "$*" == *export ]]; then
+  printf '%s\n' '{"not":"used"}' | jq -c '[{uuid:"12345678-1234-1234-1234-123456789abc",description:"Test task",repo:"no-repo"}]'
+else
+  printf '%s\n' "$*" >> "$LOG"
+fi
 MOCK
   cat > "$TUI_TMUX_COMMAND" <<'MOCK'
 #!/usr/bin/env bash
@@ -14,13 +18,20 @@ if [[ "$1" == list-panes ]]; then echo '%42 triage'; else printf '%s\n' "$*" >> 
 MOCK
   chmod +x "$TUI_TASK_COMMAND" "$TUI_TMUX_COMMAND"
 }
-@test "handoff key 7 does not write to task" {
-  run "$root/scripts/__tui_dispatch.sh" 7 "$uuid"
-  [ "$status" -eq 0 ]; [[ "$output" == *'No action assigned'* ]]; [ ! -f "$LOG" ]
-}
-@test "reply guards pane and types a reference without enter" {
+@test "reply inserts the old full picker token without enter" {
   run "$root/scripts/__tui_dispatch.sh" 6 "$uuid"
-  [ "$status" -eq 0 ]; grep -Fq '#{==:#{@agent_name},triage}' "$LOG"; grep -Fq "@12345678 " "$LOG"; grep -Fq "switch-client -t %42" "$LOG"; ! grep -q 'C-m' "$LOG"
+  [ "$status" -eq 0 ]; grep -Fq '@"12345678-1234-1234-1234-123456789abc|-|no-repo|Test task"' "$LOG"
+  grep -Fq '#{==:#{@agent_name},triage}' "$LOG"; grep -Fq 'paste-buffer -d' "$LOG"; grep -Fq 'switch-client -t %42' "$LOG"; ! grep -q 'C-m' "$LOG"
+}
+@test "spawn inserts the old spawn command and token with trailing space" {
+  run "$root/scripts/__tui_dispatch.sh" 7 "$uuid"
+  [ "$status" -eq 0 ]; grep -Fq '/ops-spawn-agent @"12345678-1234-1234-1234-123456789abc|-|no-repo|Test task" ' "$LOG"
+  grep -Fq '#{==:#{@agent_name},triage}' "$LOG"; ! grep -q 'C-m' "$LOG"
+}
+@test "reply refuses a missing task and does not send" {
+  printf '#!/bin/sh\nprintf "[]\\n"\n' > "$TUI_TASK_COMMAND"; chmod +x "$TUI_TASK_COMMAND"
+  run "$root/scripts/__tui_dispatch.sh" 6 "$uuid"
+  [ "$status" -ne 0 ]; [ ! -f "$LOG" ]
 }
 @test "annotation writes selected text" {
   run bash -c 'printf "new note\\n" | "$1" 4 "$2"' _ "$root/scripts/__tui_dispatch.sh" "$uuid"
@@ -34,7 +45,7 @@ MOCK
 if [[ "$*" == *export ]]; then echo '[{"tags":["piotr"]}]'; else printf '%s\n' "$*" >> "$LOG"; fi
 MOCK
   chmod +x "$TUI_TASK_COMMAND"
-  run "$root/scripts/__tui_dispatch.sh" 7 "$uuid"
+  run "$root/scripts/__tui_dispatch.sh" 8 "$uuid"
   [ "$status" -eq 0 ]; [[ "$output" == *'No action assigned'* ]]; [ ! -f "$LOG" ]
 }
 
