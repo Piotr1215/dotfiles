@@ -58,11 +58,27 @@ setup() {
   run "$repo_root/scripts/__cycle_tui_reports.sh"
   [ "$status" -eq 0 ]; [ "$output" = "$TASKRC" ]
 }
-@test "bridge guard refuses recursive launches" {
+@test "bridge 2 without a fingerprint upgrades" {
+  unset TASKWARRIOR_TUI_REPORT_REQUEST TUI_REPORT_BRIDGE_BINARY
+  export TUI_REPORT_BRIDGE=2 TUI_REPORT_BINARY="$BATS_TEST_TMPDIR/tui"
+  printf '#!/bin/sh\nprintf "upgraded\\n"\n' > "$TUI_REPORT_BINARY"; chmod +x "$TUI_REPORT_BINARY"
+  run "$repo_root/scripts/__cycle_tui_reports.sh"
+  [ "$status" -eq 0 ]; [ "$output" = upgraded ]
+}
+@test "bridge refuses the same binary fingerprint" {
   unset TASKWARRIOR_TUI_REPORT_REQUEST
-  export TUI_REPORT_BRIDGE=2
+  export TUI_REPORT_BRIDGE=2 TUI_REPORT_BINARY="$BATS_TEST_TMPDIR/tui"
+  printf '#!/bin/sh\nexit 0\n' > "$TUI_REPORT_BINARY"; chmod +x "$TUI_REPORT_BINARY"
+  export TUI_REPORT_BRIDGE_BINARY="$(sha256sum "$TUI_REPORT_BINARY" | cut -d ' ' -f 1)"
   run "$repo_root/scripts/__cycle_tui_reports.sh"
   [ "$status" -ne 0 ]; [[ "$output" == *'upgraded taskwarrior-tui'* ]]
+}
+@test "bridge permits a changed binary fingerprint" {
+  unset TASKWARRIOR_TUI_REPORT_REQUEST
+  export TUI_REPORT_BRIDGE=2 TUI_REPORT_BRIDGE_BINARY=previous TUI_REPORT_BINARY="$BATS_TEST_TMPDIR/tui"
+  printf '#!/bin/sh\nprintf "%%s\\n" "$TUI_REPORT_BRIDGE_BINARY"\n' > "$TUI_REPORT_BINARY"; chmod +x "$TUI_REPORT_BINARY"
+  run "$repo_root/scripts/__cycle_tui_reports.sh"
+  [ "$status" -eq 0 ]; [ "$output" = "$(sha256sum "$TUI_REPORT_BINARY" | cut -d ' ' -f 1)" ]
 }
 @test "v1 with a request upgrades once even from an earlier bridge" {
   export TASKWARRIOR_TUI_VIEW_VERSION=1 TUI_REPORT_BRIDGE=1 TASKWARRIOR_TUI_REPORT=byrepo TUI_REPORT_BINARY="$BATS_TEST_TMPDIR/tui"
@@ -72,8 +88,10 @@ setup() {
   [ "$status" -eq 0 ]; [ "$output" = '2 -r byproject' ]
   [ ! -s "$TASKWARRIOR_TUI_REPORT_REQUEST" ]
 }
-@test "invalid v2 request with bridge guard fails rather than nesting" {
-  export TASKWARRIOR_TUI_REPORT_REQUEST="$BATS_TEST_TMPDIR/missing" TUI_REPORT_BRIDGE=2
+@test "invalid v2 request and same fingerprint fails rather than nesting" {
+  export TASKWARRIOR_TUI_REPORT_REQUEST="$BATS_TEST_TMPDIR/missing" TUI_REPORT_BRIDGE=2 TUI_REPORT_BINARY="$BATS_TEST_TMPDIR/tui"
+  printf '#!/bin/sh\nexit 0\n' > "$TUI_REPORT_BINARY"; chmod +x "$TUI_REPORT_BINARY"
+  export TUI_REPORT_BRIDGE_BINARY="$(sha256sum "$TUI_REPORT_BINARY" | cut -d ' ' -f 1)"
   run "$repo_root/scripts/__cycle_tui_reports.sh"
   [ "$status" -ne 0 ]; [[ "$output" == *'upgraded taskwarrior-tui'* ]]
 }

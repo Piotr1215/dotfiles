@@ -17,10 +17,14 @@ if [[ "$version" =~ ^[0-9]+$ ]] && ((10#$version >= 2)) && [[ -n "$request_file"
   printf '%s\n' "$report" > "$request_file"
   exit
 fi
-# Keep the old instance paused as the parent. A second old binary must not
-# recursively start more children; the upgraded binary uses the request above.
-[[ "${TUI_REPORT_BRIDGE:-}" != 2 ]] || { echo 'Report switching requires the upgraded taskwarrior-tui binary' >&2; exit 1; }
-export TUI_REPORT_BRIDGE=2
+# Keep the old instance paused as the parent. Retry only after the installed
+# binary changes, so an old binary cannot recursively start itself.
+binary=${TUI_REPORT_BINARY:-taskwarrior-tui}
+binary_path=$(command -v -- "$binary") || { echo 'taskwarrior-tui binary not found' >&2; exit 1; }
+fingerprint=$(sha256sum -- "$binary_path") || { echo 'Cannot fingerprint taskwarrior-tui binary' >&2; exit 1; }
+fingerprint=${fingerprint%% *}
+[[ "${TUI_REPORT_BRIDGE_BINARY:-}" != "$fingerprint" ]] || { echo 'Report switching requires the upgraded taskwarrior-tui binary' >&2; exit 1; }
+export TUI_REPORT_BRIDGE=2 TUI_REPORT_BRIDGE_BINARY="$fingerprint"
 if [[ "$report" != handoffs && -n "${TASKRC:-}" ]]; then
   legacy_rc="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../.config/taskwarrior-tui/handoffs.taskrc"
   current_rc=$(realpath -e -- "$TASKRC" 2>/dev/null || true)
@@ -29,4 +33,4 @@ if [[ "$report" != handoffs && -n "${TASKRC:-}" ]]; then
     export TASKRC="$HOME/.taskrc"
   fi
 fi
-exec "${TUI_REPORT_BINARY:-taskwarrior-tui}" -r "$report"
+exec "$binary_path" -r "$report"
