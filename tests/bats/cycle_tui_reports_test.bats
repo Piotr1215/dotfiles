@@ -127,3 +127,9 @@ setup() {
   grep -qx 'report.handoffs.columns=id,priority,due.relative,description.desc' "$repo_root/.taskrc"
   grep -qx 'report.handoffs.labels=ID,P,Due,Desc' "$repo_root/.taskrc"
 }
+
+@test "frequent reports have the intended picker order" {
+  for entry in inbox:1 handoffs:2 current:3 byrepo:4 byproject:5; do
+    grep -qx "uda.taskwarrior-tui.report.${entry%:*}.order=${entry#*:}" "$repo_root/.taskrc"
+  done
+}
