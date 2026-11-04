@@ -1,32 +1,33 @@
 #!/usr/bin/env bats
 setup() {
   repo_root="$(cd "$BATS_TEST_DIRNAME/../.." && pwd)"
-  export TUI_REPORT_STATE_FILE="$BATS_TEST_TMPDIR/previous" TUI_REPORT_TMUX="$BATS_TEST_TMPDIR/tmux" TMUX_LOG="$BATS_TEST_TMPDIR/log"
-  cat >"$TUI_REPORT_TMUX" <<'MOCK'
-#!/usr/bin/env bash
-[[ "$1" == display-message ]] && { echo '%1'; exit; }
-printf '%s\n' "$*" >> "$TMUX_LOG"
-MOCK
-  chmod +x "$TUI_REPORT_TMUX"
+  export TUI_REPORT_STATE_FILE="$BATS_TEST_TMPDIR/previous" TASKWARRIOR_TUI_REPORT_REQUEST="$BATS_TEST_TMPDIR/request"
+  : > "$TASKWARRIOR_TUI_REPORT_REQUEST"
 }
 @test "cycle skips handoffs and wraps current to inbox" {
   export TASKWARRIOR_TUI_REPORT=byproject
   run "$repo_root/scripts/__cycle_tui_reports.sh" cycle
-  [ "$status" -eq 0 ]; grep -Fq -- '-T current' "$TMUX_LOG"
+  [ "$status" -eq 0 ]; grep -qx current "$TASKWARRIOR_TUI_REPORT_REQUEST"
   export TASKWARRIOR_TUI_REPORT=current
   run "$repo_root/scripts/__cycle_tui_reports.sh" cycle
-  [ "$status" -eq 0 ]; grep -Fq -- '-T inbox' "$TMUX_LOG"
+  [ "$status" -eq 0 ]; grep -qx inbox "$TASKWARRIOR_TUI_REPORT_REQUEST"
 }
-@test "toggle returns to the prior report and handoffs clears context" {
+@test "toggle requests handoffs and returns to the prior report" {
   export TASKWARRIOR_TUI_REPORT=byrepo
   run "$repo_root/scripts/__cycle_tui_reports.sh" toggle
-  [ "$status" -eq 0 ]; grep -Fq -- '--taskrc' "$TMUX_LOG"; grep -qx byrepo "$TUI_REPORT_STATE_FILE"
+  [ "$status" -eq 0 ]; grep -qx handoffs "$TASKWARRIOR_TUI_REPORT_REQUEST"; grep -qx byrepo "$TUI_REPORT_STATE_FILE"
   export TASKWARRIOR_TUI_REPORT=handoffs
   run "$repo_root/scripts/__cycle_tui_reports.sh" toggle
-  [ "$status" -eq 0 ]; grep -Fq -- '-T byrepo' "$TMUX_LOG"
-  grep -qx 'context=none' "$repo_root/.config/taskwarrior-tui/handoffs.taskrc"
+  [ "$status" -eq 0 ]; grep -qx byrepo "$TASKWARRIOR_TUI_REPORT_REQUEST"
 }
-@test "legends and slots are configured per report" {
+@test "missing report request fails before changing state" {
+  unset TASKWARRIOR_TUI_REPORT_REQUEST
+  run "$repo_root/scripts/__cycle_tui_reports.sh" toggle
+  [ "$status" -ne 0 ]; [[ "$output" == *'upgraded taskwarrior-tui'* ]]; [ ! -e "$TUI_REPORT_STATE_FILE" ]
+}
+@test "handoffs overrides context and detail and legends are configured" {
+  grep -qx 'uda.taskwarrior-tui.report.handoffs.context=none' "$repo_root/.taskrc"
+  grep -qx 'uda.taskwarrior-tui.report.handoffs.show-info=true' "$repo_root/.taskrc"
   grep -q '^uda.taskwarrior-tui.legend.default=' "$repo_root/.taskrc"
   grep -q '^uda.taskwarrior-tui.legend.handoffs=' "$repo_root/.taskrc"
   for i in {1..9}; do grep -q "^uda.taskwarrior-tui.shortcuts.$i=.*__tui_shortcut_$i.sh" "$repo_root/.taskrc"; done

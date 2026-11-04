@@ -12,7 +12,7 @@ if [ -z "$uuid" ]; then
 fi
 
 # Get task details
-TASK_DETAILS=$(task "$uuid" export)
+TASK_DETAILS=$(task rc.context=none "$uuid" export)
 TASK_DESCRIPTION=$(echo "$TASK_DETAILS" | jq -r '.[0].description')
 
 # Create markdown template
@@ -93,12 +93,12 @@ linear_issue_id=$(echo "$issue_url" | grep -oE '[A-Z]+-[0-9]+')
 if [ -n "$linear_issue_id" ] && [ "$linear_issue_id" != "null" ]; then
 	# uda.repo.default=no-repo marks a task with no repo; once it has an issue the
 	# repo must be unset again so the team-prefix derivation and triage apply.
-	if [ "$(task _get "${uuid}.repo" 2>/dev/null)" = "no-repo" ]; then
-		task "$uuid" modify linear_issue_id:"$linear_issue_id" repo:
+	if [ "$(task rc.context=none _get "${uuid}.repo" 2>/dev/null)" = "no-repo" ]; then
+		task rc.context=none "$uuid" modify linear_issue_id:"$linear_issue_id" repo:
 	else
-		task "$uuid" modify linear_issue_id:"$linear_issue_id"
+		task rc.context=none "$uuid" modify linear_issue_id:"$linear_issue_id"
 	fi
-	task "$uuid" annotate "$issue_url"
+	task rc.context=none "$uuid" annotate "$issue_url"
 else
 	echo "Failed to create Linear issue"
 	echo "Response: $response"

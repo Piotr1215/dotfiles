@@ -115,6 +115,7 @@ reply_for() {
   run "$SCRIPTS/__tui_promote_handoff.sh" task-uuid
   [ "$status" -eq 0 ]
   [ "$(sed -n '2p' "$CURL_LOG" | jq -r '.variables.state')" = triage-devops ]
+  grep -Fx 'rc.context=none task-uuid export' "$TASK_LOG"
   [ "$(sed -n '2p' "$CURL_LOG" | jq -r '.variables.desc')" = $'what: capacity\n\nbrief: investigate\n\ndone-when: fixed' ]
 }
 @test "handoff promotion refuses a task without its brief" {
