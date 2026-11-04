@@ -27,3 +27,23 @@ setup() {
   [ "$status" -eq 0 ]
   [[ "$output" == *"FAILED: ERROR: boom"* ]]
 }
+
+@test "a successful sync replaces stale failures with the current run" {
+  printf 'old failure\n' > "$SYNC_LOG_FILE"
+  printf '#!/usr/bin/env bash\necho current-run\n' > "$SYNC_SCRIPT"
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  ! grep -q 'old failure' "$SYNC_LOG_FILE"
+  grep -q 'current-run' "$SYNC_LOG_FILE"
+  grep -q 'OK: github issue sync completed' "$SYNC_LOG_FILE"
+}
+
+@test "a command-not-found failure reports the reason and caps the log" {
+  seq 1200 > "$SYNC_LOG_FILE"
+  printf '#!/usr/bin/env bash\necho "line 1815: asses: command not found" >&2\nexit 127\n' > "$SYNC_SCRIPT"
+  run "$SCRIPT"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"FAILED: line 1815: asses: command not found"* ]]
+  [ "$(wc -l < "$SYNC_LOG_FILE")" -le 1000 ]
+  grep -q 'FAILED: line 1815: asses: command not found' "$SYNC_LOG_FILE"
+}

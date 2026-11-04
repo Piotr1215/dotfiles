@@ -4,6 +4,15 @@
 LOG_FILE="${SYNC_LOG_FILE:-/tmp/github-issue-sync.log}"
 SYNC_SCRIPT="${SYNC_SCRIPT:-/home/decoder/dev/dotfiles/scripts/__github_issue_sync.sh}"
 
+# Keep the existing log on failure, but bound it on every exit.
+run_log=$(mktemp "${LOG_FILE}.run.XXXXXX") || exit 1
+# shellcheck disable=SC2317 # Called by the EXIT trap.
+cleanup_log() {
+    tail -n 1000 "$LOG_FILE" > "${run_log}.tail" && mv "${run_log}.tail" "$LOG_FILE"
+    rm -f "$run_log" "${run_log}.tail"
+}
+trap cleanup_log EXIT
+
 # Set up environment for the sync script
 if [[ -f "$HOME/.envrc" ]]; then
     # shellcheck disable=SC1091
@@ -34,15 +43,16 @@ export DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus
 # log stayed blank for the whole time the work was actually happening. Teeing
 # streams to the file and to stdout at once, which is what lets the cron
 # wrapper's log fill as the sync progresses instead of all at the end.
-"$SYNC_SCRIPT" 2>&1 | tee -a "$LOG_FILE"
+"$SYNC_SCRIPT" 2>&1 | tee -a "$LOG_FILE" "$run_log"
 sync_rc=${PIPESTATUS[0]}
 if [ "$sync_rc" -ne 0 ]; then
     # Get last 5 lines for context
-    error_context=$(tail -n 5 "$LOG_FILE")
+    error_context=$(tail -n 5 "$run_log")
 
     # Try to extract a concise error message
-    error_msg=$(echo "$error_context" | grep -i "error" | head -n 1 || echo "Unknown error occurred")
-    printf 'FAILED: %s\n' "$error_msg"
+    error_msg=$(printf '%s\n' "$error_context" | grep -iE 'error|failed|not found' | tail -n 1)
+    [[ -n "$error_msg" ]] || error_msg="sync exited with status $sync_rc: $(printf '%s\n' "$error_context" | tail -n 1)"
+    printf '[%s]: FAILED: %s\n' "$(date +'%Y-%m-%dT%H:%M:%S%z')" "$error_msg" | tee -a "$LOG_FILE"
 
     # Show notification with action to view full log
     action=$(dunstify -u critical \
@@ -76,10 +86,10 @@ fi
 
 # One line of outcome on stdout: a silent success is indistinguishable from a
 # run that never happened once the transcript goes to a different file.
-printf 'OK: github issue sync completed (exit %s)\n' "$sync_rc"
+printf '[%s]: OK: github issue sync completed (exit %s)\n' "$(date +'%Y-%m-%dT%H:%M:%S%z')" "$sync_rc" | tee -a "$run_log"
 
-# Success - keep log clean (last 1000 lines only)
-tail -n 1000 "$LOG_FILE" > "${LOG_FILE}.tmp" && mv "${LOG_FILE}.tmp" "$LOG_FILE" 2>/dev/null || true
+# A successful run replaces stale failures with its own transcript.
+cp "$run_log" "$LOG_FILE"
 
 # Nudge is now triggered from inside __github_issue_sync.sh so both cron
 # and manual invocations produce one — see triage thread 2026-05-12.
