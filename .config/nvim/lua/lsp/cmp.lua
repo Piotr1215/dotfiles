@@ -40,6 +40,7 @@ cmp.setup {
         nvim_lua = "[Lua]",
         projects = "[Projects]",
         models = "[Models]",
+        pass = "[Pass]",
         emoji = "[Emoji]",
         luasnip = "[Snippet]",
       },
@@ -84,6 +85,7 @@ cmp.setup {
     { name = "nvim_lua", priority = 100 },
     { name = "luasnip", priority = 90 },
     { name = "path" },
+    { name = "pass", priority = 100 },
   }, {
     { name = "buffer" },
     { name = "emoji" },
