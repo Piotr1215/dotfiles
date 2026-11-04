@@ -2,7 +2,7 @@
 setup() {
   repo_root="$(cd "$BATS_TEST_DIRNAME/../.." && pwd)"
   export TUI_REPORT_STATE_FILE="$BATS_TEST_TMPDIR/previous" TASKWARRIOR_TUI_REPORT_REQUEST="$BATS_TEST_TMPDIR/request"
-  export TASKWARRIOR_TUI_VIEW_VERSION=2
+  export TASKWARRIOR_TUI_VIEW_VERSION=3
   : > "$TASKWARRIOR_TUI_REPORT_REQUEST"
 }
 @test "cycle includes handoffs and wraps current to inbox" {
@@ -16,7 +16,7 @@ setup() {
   run "$repo_root/scripts/__cycle_tui_reports.sh"
   [ "$status" -eq 0 ]; grep -qx inbox "$TASKWARRIOR_TUI_REPORT_REQUEST"
 }
-@test "v2 uses its request even inside the bridge and preserves taskrc" {
+@test "v3 uses its request even inside the bridge and preserves taskrc" {
   export TUI_REPORT_BRIDGE=2 TASKWARRIOR_TUI_REPORT=handoffs TASKRC="$BATS_TEST_TMPDIR/custom"
   run "$repo_root/scripts/__cycle_tui_reports.sh"
   [ "$status" -eq 0 ]; grep -qx current "$TASKWARRIOR_TUI_REPORT_REQUEST"; [ ! -e "$TASKRC" ]
@@ -88,7 +88,14 @@ setup() {
   [ "$status" -eq 0 ]; [ "$output" = '2 -r byproject' ]
   [ ! -s "$TASKWARRIOR_TUI_REPORT_REQUEST" ]
 }
-@test "invalid v2 request and same fingerprint fails rather than nesting" {
+@test "v2 with a request upgrades to v3" {
+  export TASKWARRIOR_TUI_VIEW_VERSION=2 TASKWARRIOR_TUI_REPORT=byrepo TUI_REPORT_BINARY="$BATS_TEST_TMPDIR/tui"
+  printf '#!/bin/sh\nprintf "%%s %%s\\n" "$1" "$2"\n' > "$TUI_REPORT_BINARY"
+  chmod +x "$TUI_REPORT_BINARY"
+  run "$repo_root/scripts/__cycle_tui_reports.sh"
+  [ "$status" -eq 0 ]; [ "$output" = '-r byproject' ]; [ ! -s "$TASKWARRIOR_TUI_REPORT_REQUEST" ]
+}
+@test "invalid v3 request and same fingerprint fails rather than nesting" {
   export TASKWARRIOR_TUI_REPORT_REQUEST="$BATS_TEST_TMPDIR/missing" TUI_REPORT_BRIDGE=2 TUI_REPORT_BINARY="$BATS_TEST_TMPDIR/tui"
   printf '#!/bin/sh\nexit 0\n' > "$TUI_REPORT_BINARY"; chmod +x "$TUI_REPORT_BINARY"
   export TUI_REPORT_BRIDGE_BINARY="$(sha256sum "$TUI_REPORT_BINARY" | cut -d ' ' -f 1)"
@@ -99,8 +106,8 @@ setup() {
   grep -qx 'uda.taskwarrior-tui.report.handoffs.context=none' "$repo_root/.taskrc"
   grep -qx 'uda.taskwarrior-tui.report.handoffs.show-info=false' "$repo_root/.taskrc"
   grep -qx 'uda.taskwarrior-tui.shortcuts.background=5,6,9' "$repo_root/.taskrc"
-  grep -q '^uda.taskwarrior-tui.legend.default=' "$repo_root/.taskrc"
-  grep -q '^uda.taskwarrior-tui.legend.handoffs=.*d done.*z details' "$repo_root/.taskrc"
+  grep -q '^uda.taskwarrior-tui.legend.default=.*\^P project' "$repo_root/.taskrc"
+  grep -q '^uda.taskwarrior-tui.legend.handoffs=.*d done.*z details.*\^P project' "$repo_root/.taskrc"
   grep -qx 'uda.taskwarrior-tui.task-report.show-info=false' "$repo_root/.config/taskwarrior-tui/handoffs.taskrc"
   ! grep -q '^uda.taskwarrior-tui.shortcuts.z=' "$repo_root/.taskrc"
   for i in {1..9}; do grep -q "^uda.taskwarrior-tui.shortcuts.$i=.*__tui_shortcut_$i.sh" "$repo_root/.taskrc"; done
