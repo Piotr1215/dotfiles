@@ -1233,6 +1233,128 @@ create_and_annotate_task() {
     fi
 }
 
+# Newly created Linear tasks are queued for prep after the full sync succeeds.
+# Queueing is durable so a concurrent sync never loses IDs when the prep runner
+# lock is held. The next successful trigger drains the pending queue.
+queue_issue_prep_ids() {
+    local issue_ids="$1"
+    local launch="${2:-yes}"
+    local state_dir="${ISSUE_PREP_SYNC_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/gordon/issue-prep-sync}"
+    local queue_file="$state_dir/pending-issue-ids"
+    local queue_lock="$state_dir/queue.lock"
+    local log_file="$state_dir/worker.log"
+    local issue_id
+    mkdir -p "$state_dir" || { log "WARN: cannot create prep state directory $state_dir"; return 1; }
+
+    {
+        flock -x 9 || return 1
+        if [[ -n "$issue_ids" ]]; then
+            while IFS= read -r issue_id; do
+                [[ -n "$issue_id" ]] && printf '%s\n' "$issue_id" >> "$queue_file"
+            done <<< "$issue_ids"
+            sort -u "$queue_file" -o "$queue_file"
+        fi
+    } 9>"$queue_lock" || return 1
+
+    [[ "$launch" == yes ]] || return 0
+    [[ -s "$queue_file" ]] || compgen -G "$state_dir/snapshot.*" >/dev/null || return 0
+
+    if [[ "${ISSUE_PREP_SYNC_TEST_NO_LAUNCH:-0}" == 1 ]]; then
+        log "Issue prep IDs queued for test: $queue_file"
+        return 0
+    fi
+    log "Queueing detached issue prep worker"
+    nohup env AGENT_LAUNCH=1 CODEX_HOME="$HOME/.codex-work" ISSUE_PREP_SYNC_WORKER=1 \
+        ISSUE_PREP_SYNC_STATE_DIR="$state_dir" ISSUE_PREP_BATCH_SCRIPT="${ISSUE_PREP_BATCH_SCRIPT:-$HOME/.claude/scripts/__issue_prep_batch.py}" \
+        ISSUE_PREP_PYTHON="${ISSUE_PREP_PYTHON:-python3}" "$BASH" "${BASH_SOURCE[0]}" \
+        >>"$log_file" 2>&1 </dev/null &
+}
+
+run_issue_prep_sync_worker() {
+    local state_dir="${ISSUE_PREP_SYNC_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/gordon/issue-prep-sync}"
+    local queue_file="$state_dir/pending-issue-ids"
+    local queue_lock="$state_dir/queue.lock"
+    local runner_lock="$state_dir/runner.lock"
+    local snapshot output
+    local batch_script="${ISSUE_PREP_BATCH_SCRIPT:-$HOME/.claude/scripts/__issue_prep_batch.py}"
+    local python="${ISSUE_PREP_PYTHON:-python3}"
+
+    exec 8>"$runner_lock"
+    flock -n 8 || { log "Prep worker already running; queued IDs remain pending"; return 0; }
+    {
+        flock -x 9 || return 1
+        local abandoned_snapshot
+        for abandoned_snapshot in "$state_dir"/snapshot.*; do
+            [[ -f "$abandoned_snapshot" ]] || continue
+            cat "$abandoned_snapshot" >> "$queue_file"
+            rm -f "$abandoned_snapshot"
+        done
+        if [[ -s "$queue_file" ]]; then
+            sort -u "$queue_file" -o "$queue_file"
+        fi
+    } 9>"$queue_lock" || return 1
+
+    while :; do
+        snapshot="$state_dir/snapshot.$$"
+        output="$state_dir/result.$$"
+        {
+            flock -x 9 || return 1
+            [[ -s "$queue_file" ]] || break
+            mv "$queue_file" "$snapshot"
+        } 9>"$queue_lock" || return 1
+
+        if "$python" "$batch_script" prepare --issues-file "$snapshot" --output "$output"; then
+            log "Issue prep completed for $(wc -l < "$snapshot" | tr -d ' ') queued issue(s)"
+            rm -f "$snapshot" "$output"
+        else
+            local failed_ids retry_ids="" issue_id retry_file="$state_dir/retried-issue-ids"
+            local failure_copy="$state_dir/failed-batch-$(date +%Y%m%dT%H%M%S%N)-$$.json"
+            failed_ids=$(python3 - "$output" "$snapshot" <<'PY'
+import json
+import pathlib
+import sys
+
+output_path, issues_path = map(pathlib.Path, sys.argv[1:])
+issues = {line.strip().upper() for line in issues_path.read_text().splitlines() if line.strip()}
+failed = set(issues)
+try:
+    summary = json.loads(output_path.read_text())
+    failed = {str(item.get("issue", "")).upper() for item in summary.get("results", [])
+              if item.get("status") in {"failed", "failed_refresh_cleared"}}
+    failed.update(str(item).upper() for item in summary.get("unmatched_issue_ids", []))
+except (OSError, json.JSONDecodeError, AttributeError, TypeError):
+    pass
+print("\n".join(sorted(issues & failed)))
+PY
+)
+            if [[ -f "$output" ]]; then
+                cp "$output" "$failure_copy"
+            else
+                printf '{"error":"prep batch exited without a result file","issues_file":"%s"}\n' "$snapshot" > "$failure_copy"
+            fi
+            while IFS= read -r issue_id; do
+                [[ -n "$issue_id" ]] || continue
+                if grep -Fqx "$issue_id" "$retry_file" 2>/dev/null; then
+                    log "Issue prep retry exhausted for $issue_id; failure evidence: $failure_copy"
+                else
+                    printf '%s\n' "$issue_id" >> "$retry_file"
+                    retry_ids+="$issue_id"$'\n'
+                fi
+            done <<< "$failed_ids"
+            log "WARN: issue prep batch failed; one later-sync retry queued for $(printf '%s' "$retry_ids" | sed '/^$/d' | paste -sd, -)"
+            {
+                flock -x 9 || return 1
+                if [[ -n "$retry_ids" ]]; then
+                    printf '%s' "$retry_ids" >> "$queue_file"
+                    sort -u "$queue_file" -o "$queue_file"
+                fi
+            } 9>"$queue_lock"
+            rm -f "$snapshot" "$output"
+            return 1
+        fi
+    done
+}
+
 # Synchronize a single issue with Taskwarrior
 sync_to_taskwarrior() {
     local issue_line="$1"
@@ -1327,6 +1449,13 @@ sync_to_taskwarrior() {
     if [[ -z "$task_uuid" || "$task_uuid" == "null" ]]; then
         log "No valid existing task found - creating new task"
         create_and_annotate_task "$issue_description" "$issue_repo_name" "$issue_url" "$issue_number" "$project_name" "$issue_status" "$issue_due_date" "$issue_priority" "$cycle_number" "$issue_updated_at" "$pr_url" "$slack_urls" "$link_urls"
+        if [[ -n "$issue_number" ]]; then
+            local created_task_uuid
+            created_task_uuid=$(task "linear_issue_id:$issue_number" "${TASK_LIVE_FILTER[@]}" export 2>/dev/null | jq -r '.[0].uuid // empty' 2>/dev/null)
+            if [[ -n "$created_task_uuid" && "$created_task_uuid" != "null" ]]; then
+                SYNC_NEW_ISSUE_IDS+=("$issue_number")
+            fi
+        fi
     else
         # Fix any issues with newlines in task_uuid
         task_uuid=$(echo "$task_uuid" | tr -d '\n')
@@ -1486,9 +1615,12 @@ sync_to_taskwarrior() {
 # Synchronize all issues to Taskwarrior
 sync_issues_to_taskwarrior() {
     local issues="$1"
-    echo "$issues" | jq -c '.' | while IFS= read -r line; do
-        sync_to_taskwarrior "$line"
-    done
+    local sync_status=0
+    SYNC_NEW_ISSUE_IDS=()
+    while IFS= read -r line; do
+        sync_to_taskwarrior "$line" || sync_status=$?
+    done < <(echo "$issues" | jq -c '.')
+    return "$sync_status"
 }
 
 # ====================================================
@@ -1694,7 +1826,27 @@ main() {
         log "GUARD: SKIPPING find_and_clean_reassigned_tasks — Linear fetch incomplete/errored (status $fetch_status); refusing to complete/delete tasks on a partial feed."
     fi
 
-    sync_issues_to_taskwarrior "$linear_issues"
+    local sync_status=0
+    sync_issues_to_taskwarrior "$linear_issues" || sync_status=$?
+    local prep_ids=""
+    if [[ ${#SYNC_NEW_ISSUE_IDS[@]} -gt 0 ]]; then
+        prep_ids="$(printf '%s\n' "${SYNC_NEW_ISSUE_IDS[@]}" | sort -u)"
+    fi
+    local prep_state_dir="${ISSUE_PREP_SYNC_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/gordon/issue-prep-sync}"
+    local pending_prep=false
+    [[ -s "$prep_state_dir/pending-issue-ids" ]] && pending_prep=true
+    compgen -G "$prep_state_dir/snapshot.*" >/dev/null && pending_prep=true
+    if [[ "$fetch_status" -eq 0 && "$sync_status" -eq 0 && ( -n "$prep_ids" || "$pending_prep" == true ) ]]; then
+        queue_issue_prep_ids "$(printf '%s\n' "${SYNC_NEW_ISSUE_IDS[@]}" | sort -u)" || \
+            log "WARN: could not queue new issue IDs for prep"
+    elif [[ "$fetch_status" -ne 0 || "$sync_status" -ne 0 ]]; then
+        if [[ -n "$prep_ids" ]]; then
+            queue_issue_prep_ids "$prep_ids" no || log "WARN: could not queue new issue IDs for prep"
+        fi
+        log "Skipping issue prep trigger because Linear sync did not complete successfully"
+    else
+        log "No newly created issue tasks to prep"
+    fi
 
     # Phase 5: Cleanup and Maintenance
     log "Phase 5: Performing cleanup and maintenance"
@@ -1720,5 +1872,9 @@ main() {
     fi
 }
 
-# Execute the main function
-main
+# Execute the main function or the detached prep worker.
+if [[ "${ISSUE_PREP_SYNC_WORKER:-0}" == 1 ]]; then
+    run_issue_prep_sync_worker
+else
+    main
+fi

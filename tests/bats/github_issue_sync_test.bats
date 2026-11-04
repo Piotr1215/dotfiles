@@ -75,7 +75,7 @@ EOF
     # Then source only the functions from the main script, not the main execution
     # Write to file (not process substitution) to preserve declare -A arrays
     TEMP_SCRIPT="${TEST_DIR}/github_issue_sync_functions.sh"
-    sed '/^main$/,$d' scripts/__github_issue_sync.sh | grep -v '^source.*__lib_taskwarrior_interop.sh' > "$TEMP_SCRIPT"
+    sed '/^# Execute the main function or the detached prep worker\./,$d' scripts/__github_issue_sync.sh | grep -v '^source.*__lib_taskwarrior_interop.sh' > "$TEMP_SCRIPT"
     # Export for tests that need to re-source (bats 1.2.1 doesn't preserve associative arrays from setup)
     export TEMP_SCRIPT
     source "$TEMP_SCRIPT"
@@ -3164,6 +3164,229 @@ EOF
     [[ "$output" =~ "No issues retrieved" ]]
     # Nothing ran: no sync, no cleanup.
     [ ! -f "${TEST_DIR}/calls.log" ]
+}
+
+@test "main queues newly created issues after a successful sync" {
+    export HOME="$TEST_DIR"
+    export ISSUE_PREP_SYNC_STATE_DIR="$TEST_DIR/prep-state"
+    export ISSUE_PREP_SYNC_TEST_NO_LAUNCH=1
+    get_linear_issues() { printf '%s\n' '[{"issue_id":"DEVOPS-101","description":"new task"}]'; }
+    find_and_clean_reassigned_tasks() { :; }
+    compare_and_clean_tasks() { :; }
+    sync_issues_to_taskwarrior() { SYNC_NEW_ISSUE_IDS=("DEVOPS-101"); }
+
+    run main
+    [ "$status" -eq 0 ]
+    [ "$(cat "$ISSUE_PREP_SYNC_STATE_DIR/pending-issue-ids")" = "DEVOPS-101" ]
+}
+
+@test "main does not trigger prep when sync creates no new tasks" {
+    export HOME="$TEST_DIR"
+    export ISSUE_PREP_SYNC_STATE_DIR="$TEST_DIR/prep-state"
+    export ISSUE_PREP_SYNC_TEST_NO_LAUNCH=1
+    get_linear_issues() { printf '%s\n' '[{"issue_id":"DEVOPS-101","description":"old task"}]'; }
+    find_and_clean_reassigned_tasks() { :; }
+    compare_and_clean_tasks() { :; }
+    sync_issues_to_taskwarrior() { SYNC_NEW_ISSUE_IDS=(); }
+
+    run main
+    [ "$status" -eq 0 ]
+    [ ! -e "$ISSUE_PREP_SYNC_STATE_DIR/pending-issue-ids" ]
+}
+
+@test "main restarts queued prep work after a successful sync with no new tasks" {
+    export HOME="$TEST_DIR"
+    export ISSUE_PREP_SYNC_STATE_DIR="$TEST_DIR/prep-state"
+    export ISSUE_PREP_SYNC_TEST_NO_LAUNCH=1
+    mkdir -p "$ISSUE_PREP_SYNC_STATE_DIR"
+    printf 'DEVOPS-100\n' > "$ISSUE_PREP_SYNC_STATE_DIR/pending-issue-ids"
+    get_linear_issues() { printf '%s\n' '[{"issue_id":"DEVOPS-101","description":"existing task"}]'; }
+    find_and_clean_reassigned_tasks() { :; }
+    compare_and_clean_tasks() { :; }
+    sync_issues_to_taskwarrior() { SYNC_NEW_ISSUE_IDS=(); }
+
+    run main
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Issue prep IDs queued for test" ]]
+    [ "$(cat "$ISSUE_PREP_SYNC_STATE_DIR/pending-issue-ids")" = "DEVOPS-100" ]
+}
+
+@test "main starts prep worker to recover an abandoned snapshot" {
+    export HOME="$TEST_DIR"
+    export ISSUE_PREP_SYNC_STATE_DIR="$TEST_DIR/prep-state"
+    export ISSUE_PREP_SYNC_TEST_NO_LAUNCH=1
+    mkdir -p "$ISSUE_PREP_SYNC_STATE_DIR"
+    printf 'DEVOPS-100\n' > "$ISSUE_PREP_SYNC_STATE_DIR/snapshot.abandoned"
+    get_linear_issues() { printf '%s\n' '[{"issue_id":"DEVOPS-101","description":"existing task"}]'; }
+    find_and_clean_reassigned_tasks() { :; }
+    compare_and_clean_tasks() { :; }
+    sync_issues_to_taskwarrior() { SYNC_NEW_ISSUE_IDS=(); }
+
+    run main
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Issue prep IDs queued for test" ]]
+    [ -e "$ISSUE_PREP_SYNC_STATE_DIR/snapshot.abandoned" ]
+}
+
+@test "main does not trigger prep after an incomplete Linear fetch" {
+    export HOME="$TEST_DIR"
+    export ISSUE_PREP_SYNC_STATE_DIR="$TEST_DIR/prep-state"
+    export ISSUE_PREP_SYNC_TEST_NO_LAUNCH=1
+    get_linear_issues() { printf '%s\n' '[{"issue_id":"DEVOPS-101","description":"partial task"}]'; return 2; }
+    find_and_clean_reassigned_tasks() { :; }
+    compare_and_clean_tasks() { :; }
+    sync_issues_to_taskwarrior() { SYNC_NEW_ISSUE_IDS=("DEVOPS-101"); }
+
+    run main
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Skipping issue prep trigger" ]]
+    [ "$(cat "$ISSUE_PREP_SYNC_STATE_DIR/pending-issue-ids")" = "DEVOPS-101" ]
+    [[ ! "$output" =~ "Issue prep IDs queued for test" ]]
+}
+
+@test "main does not trigger prep after a sync failure" {
+    export HOME="$TEST_DIR"
+    export ISSUE_PREP_SYNC_STATE_DIR="$TEST_DIR/prep-state"
+    export ISSUE_PREP_SYNC_TEST_NO_LAUNCH=1
+    get_linear_issues() { printf '%s\n' '[{"issue_id":"DEVOPS-101","description":"failed task"}]'; }
+    find_and_clean_reassigned_tasks() { :; }
+    compare_and_clean_tasks() { :; }
+    sync_issues_to_taskwarrior() { SYNC_NEW_ISSUE_IDS=("DEVOPS-101"); return 1; }
+
+    run main
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Skipping issue prep trigger" ]]
+    [ "$(cat "$ISSUE_PREP_SYNC_STATE_DIR/pending-issue-ids")" = "DEVOPS-101" ]
+    [[ ! "$output" =~ "Issue prep IDs queued for test" ]]
+}
+
+@test "sync selects only newly created non-Triage issue IDs for prep" {
+    printf '0' > "$TEST_DIR/task-export-count"
+    move_triage_issue_to_todo() { return 1; }
+    get_task_id_by_description() { echo ""; }
+    create_and_annotate_task() { :; }
+    task() {
+        local count
+        count=$(cat "$TEST_DIR/task-export-count")
+        count=$((count + 1))
+        printf '%s' "$count" > "$TEST_DIR/task-export-count"
+        if [[ "$count" -gt 1 ]]; then
+            printf '[{"uuid":"created-uuid"}]\n'
+        else
+            printf '[]\n'
+        fi
+    }
+    local issues='{"id":"triage-id","description":"Triage task","repository":"linear","html_url":"https://linear.app/loft/issue/DEVOPS-100/t","issue_id":"DEVOPS-100","project":"ops","status":"Triage"}
+{"id":"todo-id","description":"Todo task","repository":"linear","html_url":"https://linear.app/loft/issue/DEVOPS-101/t","issue_id":"DEVOPS-101","project":"ops","status":"Todo"}'
+
+    sync_issues_to_taskwarrior "$issues" > "$TEST_DIR/sync.out" 2>&1
+    [ "${#SYNC_NEW_ISSUE_IDS[@]}" -eq 1 ]
+    [ "${SYNC_NEW_ISSUE_IDS[0]}" = "DEVOPS-101" ]
+}
+
+@test "overlapping prep worker leaves queued IDs for the active worker" {
+    export HOME="$TEST_DIR"
+    export ISSUE_PREP_SYNC_STATE_DIR="$TEST_DIR/prep-state"
+    mkdir -p "$ISSUE_PREP_SYNC_STATE_DIR"
+    printf 'DEVOPS-101\n' > "$ISSUE_PREP_SYNC_STATE_DIR/pending-issue-ids"
+    (
+        flock -n 8
+        touch "$TEST_DIR/worker-lock-held"
+        sleep 2
+    ) 8>"$ISSUE_PREP_SYNC_STATE_DIR/runner.lock" &
+    local lock_pid=$!
+    for _ in {1..50}; do
+        [ -e "$TEST_DIR/worker-lock-held" ] && break
+        sleep 0.02
+    done
+
+    run run_issue_prep_sync_worker
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "already running" ]]
+    [ "$(cat "$ISSUE_PREP_SYNC_STATE_DIR/pending-issue-ids")" = "DEVOPS-101" ]
+    wait "$lock_pid"
+}
+
+@test "prep worker recovers an abandoned snapshot and sends only queued issue IDs" {
+    export HOME="$TEST_DIR"
+    export ISSUE_PREP_SYNC_STATE_DIR="$TEST_DIR/prep-state"
+    export ISSUE_PREP_BATCH_SCRIPT="$TEST_DIR/fake-batch.py"
+    export ISSUE_PREP_PYTHON="$TEST_DIR/fake-python"
+    mkdir -p "$ISSUE_PREP_SYNC_STATE_DIR"
+    printf 'DEVOPS-101\n' > "$ISSUE_PREP_SYNC_STATE_DIR/pending-issue-ids"
+    printf 'DEVOPS-102\n' > "$ISSUE_PREP_SYNC_STATE_DIR/snapshot.abandoned"
+    cat > "$ISSUE_PREP_PYTHON" <<'EOF'
+#!/bin/bash
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --issues-file) cat "$2" > "$TEST_DIR/received-issues"; shift 2 ;;
+        --output) printf '{"results":[{"issue":"DEVOPS-101","status":"prepared"},{"issue":"DEVOPS-102","status":"prepared"}]}\n' > "$2"; shift 2 ;;
+        *) shift ;;
+    esac
+done
+EOF
+    chmod +x "$ISSUE_PREP_PYTHON"
+
+    run run_issue_prep_sync_worker
+    [ "$status" -eq 0 ]
+    [ "$(sort "$TEST_DIR/received-issues" | tr '\n' ' ')" = "DEVOPS-101 DEVOPS-102 " ]
+    [ ! -e "$ISSUE_PREP_SYNC_STATE_DIR/pending-issue-ids" ]
+    [ ! -e "$ISSUE_PREP_SYNC_STATE_DIR/snapshot.abandoned" ]
+}
+
+@test "prep worker retries failed IDs once and keeps failure evidence" {
+    export HOME="$TEST_DIR"
+    export ISSUE_PREP_SYNC_STATE_DIR="$TEST_DIR/prep-state"
+    export ISSUE_PREP_BATCH_SCRIPT="$TEST_DIR/fake-batch.py"
+    export ISSUE_PREP_PYTHON="$TEST_DIR/fake-python"
+    mkdir -p "$ISSUE_PREP_SYNC_STATE_DIR"
+    printf 'DEVOPS-101\n' > "$ISSUE_PREP_SYNC_STATE_DIR/pending-issue-ids"
+    cat > "$ISSUE_PREP_PYTHON" <<'EOF'
+#!/bin/bash
+issue_id=$(cat "$4")
+count=0
+[[ -f "$TEST_DIR/batch-count" ]] && count=$(cat "$TEST_DIR/batch-count")
+count=$((count + 1))
+printf '%s' "$count" > "$TEST_DIR/batch-count"
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --output) printf '{"results":[{"issue":"%s","status":"failed"}]}\n' "$issue_id" > "$2"; shift 2 ;;
+        *) shift ;;
+    esac
+done
+exit 1
+EOF
+    chmod +x "$ISSUE_PREP_PYTHON"
+
+    run run_issue_prep_sync_worker
+    [ "$status" -eq 1 ]
+    [ "$(cat "$ISSUE_PREP_SYNC_STATE_DIR/pending-issue-ids")" = "DEVOPS-101" ]
+    [ "$(cat "$ISSUE_PREP_SYNC_STATE_DIR/retried-issue-ids")" = "DEVOPS-101" ]
+    [ "$(find "$ISSUE_PREP_SYNC_STATE_DIR" -maxdepth 1 -name 'failed-batch-*.json' | wc -l | tr -d ' ')" -eq 1 ]
+
+    run run_issue_prep_sync_worker
+    [ "$status" -eq 1 ]
+    [ ! -e "$ISSUE_PREP_SYNC_STATE_DIR/pending-issue-ids" ]
+    [ "$(cat "$TEST_DIR/batch-count")" -eq 2 ]
+    [ "$(find "$ISSUE_PREP_SYNC_STATE_DIR" -maxdepth 1 -name 'failed-batch-*.json' | wc -l | tr -d ' ')" -eq 2 ]
+}
+
+@test "sync reports an earlier issue failure even when the last issue succeeds" {
+    printf '0' > "$TEST_DIR/sync-count"
+    sync_to_taskwarrior() {
+        local count
+        count=$(cat "$TEST_DIR/sync-count")
+        count=$((count + 1))
+        printf '%s' "$count" > "$TEST_DIR/sync-count"
+        [[ "$count" -ne 1 ]]
+    }
+    local issues='{"issue_id":"DEVOPS-100"}
+{"issue_id":"DEVOPS-101"}'
+
+    local status=0
+    sync_issues_to_taskwarrior "$issues" > "$TEST_DIR/sync.out" 2>&1 || status=$?
+    [ "$status" -eq 1 ]
+    [ "$(cat "$TEST_DIR/sync-count")" -eq 2 ]
 }
 
 
