@@ -47,6 +47,11 @@ PYTEST
   run "$root/scripts/__tui_dispatch.sh" 6 "$uuid"
   [ "$status" -ne 0 ]; [ ! -f "$LOG" ]
 }
+@test "reply preserves the legacy missing-repo fallback" {
+  export TASK_JSON='[{"uuid":"12345678-1234-1234-1234-123456789abc","description":"Test"}]'
+  run "$root/scripts/__tui_dispatch.sh" 6 "$uuid"
+  [ "$status" -eq 0 ]; grep -Fq '@"12345678-1234-1234-1234-123456789abc|-|-|Test"' "$LOG"
+}
 @test "annotation writes selected text" {
   run bash -c 'printf "new note\\n" | "$1" 4 "$2"' _ "$root/scripts/__tui_dispatch.sh" "$uuid"
   [ "$status" -eq 0 ]; grep -Fq 'annotate new note' "$LOG"
