@@ -36,7 +36,7 @@ EOF
 printf '%s\n' "$*" >> "$TASK_LOG"
 case "$*" in
   *"_get task-uuid.repo") printf '%s' "${TASK_REPO:-}" ;;
-  *" export") printf '[{"description":"fix the thing"}]' ;;
+  *" export") if [[ -n "$TASK_EXPORT" ]]; then printf '%s' "$TASK_EXPORT"; else printf '%s' '[{"description":"fix the thing"}]'; fi ;;
 esac
 EOF
   chmod +x "$BIN/curl" "$BIN/task"
@@ -107,4 +107,17 @@ reply_for() {
     [ "$status" -eq 0 ]
     grep -E '^task-uuid modify linear_issue_id:(DEVOPS|DOC)-1800 repo:$' "$TASK_LOG"
   done
+}
+
+@test "handoff promotion includes annotations and uses DevOps Triage" {
+  export TASK_EXPORT='[{"description":"fix the thing","annotations":[{"description":"what: capacity"},{"description":"brief: investigate"},{"description":"done-when: fixed"}]}]'
+  export CURL_REPLY="$(reply_for DEVOPS)"
+  run "$SCRIPTS/__tui_promote_handoff.sh" task-uuid
+  [ "$status" -eq 0 ]
+  [ "$(sed -n '2p' "$CURL_LOG" | jq -r '.variables.state')" = triage-devops ]
+  [ "$(sed -n '2p' "$CURL_LOG" | jq -r '.variables.desc')" = $'what: capacity\n\nbrief: investigate\n\ndone-when: fixed' ]
+}
+@test "handoff promotion refuses a task without its brief" {
+  run "$SCRIPTS/__tui_promote_handoff.sh" task-uuid
+  [ "$status" -ne 0 ]; [ ! -s "$CURL_LOG" ]
 }
