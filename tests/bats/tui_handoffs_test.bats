@@ -14,9 +14,9 @@ if [[ "$1" == list-panes ]]; then echo '%42 triage'; else printf '%s\n' "$*" >> 
 MOCK
   chmod +x "$TUI_TASK_COMMAND" "$TUI_TMUX_COMMAND"
 }
-@test "ack saves comment then completes task" {
-  run bash -c 'printf "Looks good\\n" | "$1" 7 "$2"' _ "$root/scripts/__tui_dispatch.sh" "$uuid"
-  [ "$status" -eq 0 ]; grep -Fq 'annotate Looks good' "$LOG"; grep -Fq "$uuid done" "$LOG"
+@test "handoff key 7 does not write to task" {
+  run "$root/scripts/__tui_dispatch.sh" 7 "$uuid"
+  [ "$status" -eq 0 ]; [[ "$output" == *'No action assigned'* ]]; [ ! -f "$LOG" ]
 }
 @test "reply guards pane and types a reference without enter" {
   run "$root/scripts/__tui_dispatch.sh" 6 "$uuid"
@@ -34,8 +34,8 @@ MOCK
 if [[ "$*" == *export ]]; then echo '[{"tags":["piotr"]}]'; else printf '%s\n' "$*" >> "$LOG"; fi
 MOCK
   chmod +x "$TUI_TASK_COMMAND"
-  run bash -c 'printf "\n" | "$1" 7 "$2"' _ "$root/scripts/__tui_dispatch.sh" "$uuid"
-  [ "$status" -eq 0 ]; grep -Fq "$uuid done" "$LOG"
+  run "$root/scripts/__tui_dispatch.sh" 7 "$uuid"
+  [ "$status" -eq 0 ]; [[ "$output" == *'No action assigned'* ]]; [ ! -f "$LOG" ]
 }
 
 @test "handoff key 8 never creates an issue" {

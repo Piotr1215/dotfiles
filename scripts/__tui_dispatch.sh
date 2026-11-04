@@ -24,11 +24,7 @@ if [[ "$report" == handoffs ]]; then
       [[ "$pane" =~ ^%[0-9]+$ ]] || { echo 'Gordon pane not found' >&2; exit 1; }
       # Validate the pane identity in the server command queue before sending.
       exec "$tmux_bin" if-shell -F -t "$pane" '#{==:#{@agent_name},triage}' "send-keys -t $pane -l -- '@${uuid:0:8} ' \; switch-client -t $pane" 'display-message "Gordon pane changed"' ;;
-    8) echo 'No action assigned for handoffs on key 8' >&2; exit 0 ;;
-    7)
-      read -r -p 'Optional completion comment: ' note
-      [[ -z "$note" ]] || "$task_bin" rc.context=none "$uuid" annotate "$note"
-      exec "$task_bin" rc.context=none rc.confirmation=off "$uuid" "done" ;;
+    7|8) echo "No action assigned for handoffs on key $slot" >&2; exit 0 ;;
   esac
 fi
 case "$slot" in

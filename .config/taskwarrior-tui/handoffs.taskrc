@@ -3,5 +3,5 @@
 # context, so this rc drops the context. The report filter (+piotr) does the rest.
 include ~/.taskrc
 context=none
-# The detail pane (task info) carries the handoff brief in its annotations.
-uda.taskwarrior-tui.task-report.show-info=true
+# Open without the detail pane; z toggles it when needed.
+uda.taskwarrior-tui.task-report.show-info=false
