@@ -33,6 +33,25 @@ setup() {
   run "$repo_root/scripts/__cycle_tui_reports.sh"
   [ "$status" -eq 0 ]; [ "$output" = '-r byrepo' ]
 }
+@test "bridge clears the legacy handoffs rc for work reports" {
+  unset TASKWARRIOR_TUI_REPORT_REQUEST
+  export TASKWARRIOR_TUI_REPORT=handoffs TUI_REPORT_BINARY="$BATS_TEST_TMPDIR/tui"
+  ln -s "$repo_root/.config/taskwarrior-tui/handoffs.taskrc" "$BATS_TEST_TMPDIR/legacy-rc"
+  export TASKRC="$BATS_TEST_TMPDIR/legacy-rc"
+  printf '#!/bin/sh\nprintf "%%s|%%s %%s\\n" "$TASKRC" "$1" "$2"\n' > "$TUI_REPORT_BINARY"
+  chmod +x "$TUI_REPORT_BINARY"
+  run "$repo_root/scripts/__cycle_tui_reports.sh"
+  [ "$status" -eq 0 ]; [ "$output" = "$HOME/.taskrc|-r current" ]
+}
+@test "bridge preserves unrelated custom taskrc" {
+  unset TASKWARRIOR_TUI_REPORT_REQUEST
+  export TASKWARRIOR_TUI_REPORT=handoffs TUI_REPORT_BINARY="$BATS_TEST_TMPDIR/tui" TASKRC="$BATS_TEST_TMPDIR/custom-rc"
+  : > "$TASKRC"
+  printf '#!/bin/sh\nprintf "%%s\\n" "$TASKRC"\n' > "$TUI_REPORT_BINARY"
+  chmod +x "$TUI_REPORT_BINARY"
+  run "$repo_root/scripts/__cycle_tui_reports.sh"
+  [ "$status" -eq 0 ]; [ "$output" = "$TASKRC" ]
+}
 @test "bridge guard refuses recursive launches" {
   unset TASKWARRIOR_TUI_REPORT_REQUEST
   export TUI_REPORT_BRIDGE=1

@@ -21,4 +21,12 @@ fi
 # recursively start more children; the upgraded binary uses the request above.
 [[ "${TUI_REPORT_BRIDGE:-}" != 1 ]] || { echo 'Report switching requires the upgraded taskwarrior-tui binary' >&2; exit 1; }
 export TUI_REPORT_BRIDGE=1
+if [[ "$report" != handoffs && -n "${TASKRC:-}" ]]; then
+  legacy_rc="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../.config/taskwarrior-tui/handoffs.taskrc"
+  current_rc=$(realpath -e -- "$TASKRC" 2>/dev/null || true)
+  legacy_rc=$(realpath -e -- "$legacy_rc" 2>/dev/null || true)
+  if [[ -n "$current_rc" && -n "$legacy_rc" && "$current_rc" == "$legacy_rc" ]]; then
+    export TASKRC="$HOME/.taskrc"
+  fi
+fi
 exec "${TUI_REPORT_BINARY:-taskwarrior-tui}" -r "$report"
