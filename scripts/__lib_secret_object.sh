@@ -194,6 +194,91 @@ secret_audit() {
 	secret_index | awk -F'\t' '$5 != "ok"'
 }
 
+# --- the card ----------------------------------------------------------------
+
+# An epoch as a local date, or "unknown" where the filesystem kept none: stat %W
+# prints 0, or "-" on older coreutils, when there is no birth time.
+secret_date() {
+	if [[ "$1" =~ ^[0-9]+$ ]] && (($1 > 0)); then
+		date -d "@$1" '+%Y-%m-%d %H:%M'
+	else
+		printf 'unknown\n'
+	fi
+}
+
+# The key ids pass encrypts entry $1 to: the nearest .gpg-id walking up from the
+# entry's directory, which is the lookup pass itself does.
+secret_gpg_id() {
+	local dir="$PASS_DIR"
+	[[ "$1" == */* ]] && dir="$PASS_DIR/${1%/*}"
+	while [[ "$dir" == "$PASS_DIR" || "$dir" == "$PASS_DIR"/* ]]; do
+		if [[ -r "$dir/.gpg-id" ]]; then
+			sed '/^[[:space:]]*$/d' "$dir/.gpg-id" | paste -sd, - | sed 's/,/, /g'
+			return 0
+		fi
+		[[ "$dir" == "$PASS_DIR" ]] && break
+		dir="${dir%/*}"
+	done
+	printf 'unknown\n'
+}
+
+# Stanza types in an age header: piv-p256 is the YubiKey, X25519 a plain key such
+# as the offline backup. The header is plaintext up to the "---" line.
+secret_age_recipients() {
+	LC_ALL=C awk '/^---/ { exit } /^-> / && !seen[$2]++ { print $2 }' "$1" | paste -sd, - | sed 's/,/, /g'
+}
+
+# Everything known about one secret except its value, as plain text to paste.
+# Nothing here decrypts: names, paths, dates, the sidecar description and age's
+# header are already plaintext, so a card never costs a tap. It also works on a
+# row whose invariant is broken, since that is when the facts are most wanted.
+#
+# Neither store is a git repo, so Created is the file's birth time. A rename
+# keeps it; a bastion value rewrite resets it, because secret_write_age swaps in
+# a new file.
+secret_card() {
+	local name owner entry refs status file
+	IFS=$'\t' read -r name owner entry refs status < <(secret_locate "$1")
+	[[ -n "$name" ]] || {
+		secret_die "no secret named '$1'"
+		return 1
+	}
+
+	local store desc
+	case "$owner" in
+	age) store="bastion, one YubiKey tap to read" ;;
+	pass) store="pass, no tap" ;;
+	both) store="bastion AND pass (conflict)" ;;
+	*) store="none, only .envrc references" ;;
+	esac
+	desc=$(secret_desc_get "$name")
+
+	printf '%-13s %s\n' "Secret:" "$name" "Store:" "$store" "Status:" "$status"
+	[[ -n "$desc" ]] && printf '%-13s %s\n' "Description:" "$desc"
+	[[ "$entry" != - ]] && printf '%-13s %s\n' "Pass entry:" "$entry"
+
+	local -a files=()
+	[[ "$owner" == age || "$owner" == both ]] && files+=("$SECRETS_DIR/$name.age")
+	[[ "$owner" == pass || "$owner" == both ]] && files+=("$PASS_DIR/$entry.gpg")
+	for file in "${files[@]}"; do
+		printf '%-13s %s\n' "File:" "$file"
+		if [[ "$file" == *.age ]]; then
+			printf '%-13s age: %s\n' "Encrypted to:" "$(secret_age_recipients "$file")"
+		else
+			printf '%-13s gpg: %s\n' "Encrypted to:" "$(secret_gpg_id "$entry")"
+		fi
+		printf '%-13s %s\n' "Created:" "$(secret_date "$(stat -c %W "$file")")" \
+			"Modified:" "$(secret_date "$(stat -c %Y "$file")")"
+	done
+
+	printf '%-13s %s\n' ".envrc refs:" "$refs"
+	local rfile rline rvar
+	while IFS=$'\t' read -r rfile rline rvar _; do
+		[[ -n "$rfile" ]] && printf '  %s:%s  %s\n' "$rfile" "$rline" "$rvar"
+	done < <(secret_refs "$name")
+	return 0
+}
+
 # --- writes ------------------------------------------------------------------
 
 # Value on stdin. Encrypt to a temp file and swap: `age -o` truncates its target
@@ -510,11 +595,11 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
 	cmd="${1:-index}"
 	shift || true
 	case "$cmd" in
-	index | locate | audit | read | set | create | rm | rename | promote | demote | link | unlink | refs | envrc-files | desc-get | desc-set)
+	index | locate | audit | card | read | set | create | rm | rename | promote | demote | link | unlink | refs | envrc-files | desc-get | desc-set)
 		"secret_${cmd//-/_}" "$@"
 		;;
 	*)
-		printf 'usage: %s {index|locate NAME|audit|read NAME|set NAME|rm NAME|rename OLD NEW|promote NAME|demote NAME SUB|link NAME FILE [VAR]|unlink NAME FILE|refs [NAME]|envrc-files}\n\n' \
+		printf 'usage: %s {index|locate NAME|audit|card NAME|read NAME|set NAME|rm NAME|rename OLD NEW|promote NAME|demote NAME SUB|link NAME FILE [VAR]|unlink NAME FILE|refs [NAME]|envrc-files}\n\n' \
 			"${0##*/}" >&2
 		exit 2
 		;;

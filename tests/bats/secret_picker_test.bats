@@ -13,6 +13,9 @@ setup() {
 	export FORM_RESULT="$BATS_TEST_TMPDIR/form-result"
 	export GUI_LOG="$BATS_TEST_TMPDIR/gui.log"
 	export NOTIFY_LOG="$BATS_TEST_TMPDIR/notify.log"
+	export CLIP="$BATS_TEST_TMPDIR/clipboard"
+	export STORE_LOG="$BATS_TEST_TMPDIR/store.log"
+	unset WAYLAND_DISPLAY
 
 	STUB_BIN="$BATS_TEST_TMPDIR/bin"
 	mkdir -p "$STUB_BIN" "$SECRETS_DIR" "$PASSWORD_STORE_DIR"/{personal,work} \
@@ -22,7 +25,8 @@ setup() {
 	cat >"$STUB_BIN/rofi" <<'EOF'
 #!/usr/bin/env bash
 cat >/dev/null
-exit 16
+[[ -n "${ROFI_PICK:-}" ]] && printf '%s\n' "$ROFI_PICK"
+exit "${ROFI_EXIT:-16}"
 EOF
 	export SECRET_ADD_GUI="$STUB_BIN/secret-add-gui"
 	cat >"$SECRET_ADD_GUI" <<'EOF'
@@ -33,6 +37,7 @@ EOF
 	cat >"$STUB_BIN/pass" <<'EOF'
 #!/usr/bin/env bash
 store="$PASSWORD_STORE_DIR"
+printf 'pass %s\n' "$*" >>"$STORE_LOG"
 cmd="$1"
 shift
 while [[ "${1:-}" == -* ]]; do shift; done
@@ -44,6 +49,7 @@ esac
 EOF
 	cat >"$STUB_BIN/age" <<'EOF'
 #!/usr/bin/env bash
+printf 'age %s\n' "$*" >>"$STORE_LOG"
 while (($#)); do
 	case "$1" in
 	-o) out="$2"; shift 2 ;;
@@ -57,8 +63,24 @@ EOF
 #!/usr/bin/env bash
 printf '%s\n' "$*" >>"$NOTIFY_LOG"
 EOF
+	cat >"$STUB_BIN/xsel" <<'EOF'
+#!/usr/bin/env bash
+cat >"$CLIP"
+EOF
 	chmod +x "$STUB_BIN"/*
 	export PATH="$STUB_BIN:$PATH"
+}
+
+# An .envrc direnv allows, so secret_refs finds it.
+allow_envrc() {
+	printf '%s\n' "$1" >"$DIRENV_ALLOW_DIR/$(basename "$(dirname "$1")")"
+}
+
+# A bastion file whose header names a YubiKey and a backup key, with a marker
+# where the payload would be, so a card that dumped the file would show it.
+write_age_file() {
+	printf 'age-encryption.org/v1\n-> piv-p256 Tg1 abc\nbody\n-> X25519 def\nbody\n--- mac\nAGE_PAYLOAD_LEAK\n' \
+		>"$SECRETS_DIR/$1.age"
 }
 
 write_form() {
@@ -109,4 +131,61 @@ write_form() {
 
 	[ "$status" -eq 0 ]
 	[ "$output" = "GTK 3 ready; position=center-always; value-hidden=false; default-subtree=work" ]
+}
+
+@test "Alt+c copies a pass secret's card with its .envrc references and no value" {
+	printf 'PASS_VALUE_LEAK' >"$PASSWORD_STORE_DIR/personal/P_CARD.gpg"
+	printf 'GPGKEY1\n' >"$PASSWORD_STORE_DIR/.gpg-id"
+	printf 'P_CARD | used by the card test\n' >"$SECRETS_DIR/.descriptions"
+	mkdir -p "$BATS_TEST_TMPDIR/proj"
+	envrc="$BATS_TEST_TMPDIR/proj/.envrc"
+	printf 'export X=1\n_pass_export P_CARD personal/P_CARD\n_pass_export OTHER_VAR personal/P_CARD\n' >"$envrc"
+	allow_envrc "$envrc"
+	export ROFI_PICK=0 ROFI_EXIT=17
+
+	run "$PICKER"
+
+	[ "$status" -eq 0 ]
+	grep -qx 'Secret:       P_CARD' "$CLIP"
+	grep -qx 'Store:        pass, no tap' "$CLIP"
+	grep -qx 'Description:  used by the card test' "$CLIP"
+	grep -qx 'Pass entry:   personal/P_CARD' "$CLIP"
+	grep -qx "File:         $PASSWORD_STORE_DIR/personal/P_CARD.gpg" "$CLIP"
+	grep -qx 'Encrypted to: gpg: GPGKEY1' "$CLIP"
+	grep -Eqx 'Created:      [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}' "$CLIP"
+	grep -qx '.envrc refs:  2' "$CLIP"
+	grep -qx "  $envrc:2  P_CARD" "$CLIP"
+	grep -qx "  $envrc:3  OTHER_VAR" "$CLIP"
+	! grep -q 'PASS_VALUE_LEAK' "$CLIP"
+	! grep -q '^pass show' "$STORE_LOG" 2>/dev/null
+	[ -e "$XDG_RUNTIME_DIR/secret-picker-blink" ]
+}
+
+@test "Alt+c on a bastion secret reads the age header, not the key" {
+	write_age_file Y_CARD
+	export ROFI_PICK=0 ROFI_EXIT=17
+
+	run "$PICKER"
+
+	[ "$status" -eq 0 ]
+	grep -qx 'Store:        bastion, one YubiKey tap to read' "$CLIP"
+	grep -qx 'Encrypted to: age: piv-p256, X25519' "$CLIP"
+	grep -qx '.envrc refs:  0' "$CLIP"
+	! grep -q 'AGE_PAYLOAD_LEAK' "$CLIP"
+	[ ! -e "$STORE_LOG" ]
+	[ ! -e "$XDG_RUNTIME_DIR/secret-picker-touch" ]
+}
+
+@test "Alt+c still copies the card of a secret in both stores" {
+	write_age_file BOTH
+	printf 'PASS_VALUE_LEAK' >"$PASSWORD_STORE_DIR/work/BOTH.gpg"
+	export ROFI_PICK=0 ROFI_EXIT=17
+
+	run "$PICKER"
+
+	[ "$status" -eq 0 ]
+	grep -qx 'Status:       conflict' "$CLIP"
+	grep -qx "File:         $SECRETS_DIR/BOTH.age" "$CLIP"
+	grep -qx "File:         $PASSWORD_STORE_DIR/work/BOTH.gpg" "$CLIP"
+	! grep -q 'LEAK' "$CLIP"
 }
