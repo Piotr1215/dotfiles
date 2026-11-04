@@ -6,7 +6,11 @@ root=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 task_bin=${TUI_TASK_COMMAND:-task}
 tmux_bin=${TUI_TMUX_COMMAND:-tmux}
 if [[ "$slot" == 1 ]]; then exec "$HOME/.config/taskwarrior-tui/shortcut-scripts/taskopen-annotation.sh" "$@"; fi
-if [[ "$slot" == 2 ]]; then exec "$root/__cycle_tui_reports.sh"; fi
+if [[ "$slot" == 2 ]]; then
+  version=${TASKWARRIOR_TUI_VIEW_VERSION:-0}
+  if [[ "$version" =~ ^[0-9]+$ ]] && ((10#$version >= 4)); then exit 0; fi
+  exec "$root/__cycle_tui_reports.sh"
+fi
 report=${TASKWARRIOR_TUI_REPORT:-}
 if [[ -z "$report" && -n "$uuid" ]] && "$task_bin" rc.context=none rc.hooks=off "$uuid" export | jq -e '.[0].tags // [] | index("piotr") != null' >/dev/null; then
   report=handoffs

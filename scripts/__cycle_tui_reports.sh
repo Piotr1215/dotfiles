@@ -13,7 +13,7 @@ for i in "${!reports[@]}"; do
   if [[ "${reports[$i]}" == "$current" ]]; then report="${reports[$(((i + 1) % ${#reports[@]}))]}"; break; fi
 done
 version=${TASKWARRIOR_TUI_VIEW_VERSION:-0}
-if [[ "$version" =~ ^[0-9]+$ ]] && ((10#$version >= 3)) && [[ -n "$request_file" && -f "$request_file" && -w "$request_file" ]]; then
+if [[ "$version" =~ ^[0-9]+$ ]] && ((10#$version >= 4)) && [[ -n "$request_file" && -f "$request_file" && -w "$request_file" ]]; then
   printf '%s\n' "$report" > "$request_file"
   exit
 fi

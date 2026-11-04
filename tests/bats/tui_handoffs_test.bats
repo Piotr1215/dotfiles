@@ -67,3 +67,17 @@ MOCK
   run "$root/scripts/__tui_dispatch.sh" 8 "$uuid"
   [ "$status" -eq 0 ]; [[ "$output" == *'No action assigned'* ]]; [ ! -f "$LOG" ]
 }
+@test "slot 2 is a no-op in v4 even if a stale binding remains" {
+  export TASKWARRIOR_TUI_VIEW_VERSION=4 TASKWARRIOR_TUI_REPORT_REQUEST="$BATS_TEST_TMPDIR/request"
+  : > "$TASKWARRIOR_TUI_REPORT_REQUEST"
+  run "$root/scripts/__tui_dispatch.sh" 2 "$uuid"
+  [ "$status" -eq 0 ]; [ ! -s "$TASKWARRIOR_TUI_REPORT_REQUEST" ]; [ ! -f "$LOG" ]
+}
+@test "legacy slot 2 bridges v3 to the installed binary" {
+  export TASKWARRIOR_TUI_VIEW_VERSION=3 TASKWARRIOR_TUI_REPORT_REQUEST="$BATS_TEST_TMPDIR/request" TUI_REPORT_BINARY="$BATS_TEST_TMPDIR/tui"
+  : > "$TASKWARRIOR_TUI_REPORT_REQUEST"
+  printf '#!/bin/sh\nprintf "%%s %%s %%s\\n" "$TUI_REPORT_BRIDGE" "$1" "$2"\n' > "$TUI_REPORT_BINARY"
+  chmod +x "$TUI_REPORT_BINARY"
+  run "$root/scripts/__tui_dispatch.sh" 2 "$uuid"
+  [ "$status" -eq 0 ]; [ "$output" = '2 -r current' ]; [ ! -s "$TASKWARRIOR_TUI_REPORT_REQUEST" ]
+}
