@@ -529,6 +529,7 @@ local handoffs_pattern = handoffs_dir .. "/**.md"
 local handoffs_index = handoffs_dir .. "/index.md"
 local handoffs_patterns = { handoffs_legacy, handoffs_pattern }
 local handoffs_saves = {}
+local handoffs_acks = {}
 vim.api.nvim_create_autocmd("BufWritePost", {
   group = handoffsGroup,
   pattern = handoffs_patterns,
@@ -538,7 +539,7 @@ vim.api.nvim_create_autocmd("BufWritePost", {
     end
     local script = vim.env.HOME .. "/.claude/scripts/__handoffs_file.py"
     local command = ev.file == handoffs_legacy and { script, "save" } or { script, "save", ev.file }
-    handoffs_saves[ev.buf] = vim.system(command, { text = true }, function(res)
+    handoffs_saves[ev.buf] = vim.system(command, { text = true, detach = true }, function(res)
       vim.schedule(function()
         if res.code == 0 then
           local sent = vim.trim(res.stdout or "")
@@ -599,7 +600,7 @@ vim.api.nvim_create_autocmd({ "BufReadPost", "BufNewFile" }, {
     vim.wo.wrap = true
     vim.wo.linebreak = true
     vim.wo.breakindent = true
-    vim.wo.winbar = " Enter: unfurl  s: spawn  d: close (confirm)  [[/]]: handoff  q/Esc: close "
+    vim.wo.winbar = " a: ack/reply  Enter: unfurl  s: spawn  d: close (confirm)  [[/]]: handoff  q/Esc: close "
     local function navigate(direction)
       local script = vim.env.HOME .. "/.claude/scripts/__handoffs_file.py"
       local step = direction > 0 and "next" or "prev"
@@ -632,14 +633,14 @@ vim.api.nvim_create_autocmd({ "BufReadPost", "BufNewFile" }, {
       if vim.bo[ev.buf].modified then
         local choice = vim.fn.confirm("Save handoff replies before closing?", "&Save\n&Cancel\n&Discard", 2)
         if choice == 1 then
-          if not handoffs_write(ev.buf) then
+          local ok, err = pcall(vim.cmd, "write")
+          if not ok then
+            vim.notify(tostring(err), vim.log.levels.ERROR)
             return
           end
         elseif choice ~= 3 then
           return
         end
-      elseif not handoffs_write(ev.buf) then
-        return
       end
       vim.cmd "quit!"
     end
@@ -673,11 +674,61 @@ vim.api.nvim_create_autocmd({ "BufReadPost", "BufNewFile" }, {
       end
       vim.cmd "quit"
     end
+    local function ack()
+      if handoffs_acks[ev.buf] then
+        return
+      end
+      local uuid = handoff_uuid(ev.buf)
+      if not uuid then
+        vim.notify("Place the cursor on a handoff with a UUID marker.", vim.log.levels.WARN)
+        return
+      end
+      if vim.bo[ev.buf].modified then
+        vim.notify("Save handoff edits before acking.", vim.log.levels.WARN)
+        return
+      end
+      handoffs_acks[ev.buf] = true
+      vim.ui.input({ prompt = "Comment (optional): ", default = "" }, function(comment)
+        if comment == nil or not api.nvim_buf_is_valid(ev.buf) then
+          handoffs_acks[ev.buf] = nil
+          return
+        end
+        local script = vim.env.HOME .. "/.claude/scripts/__handoffs_file.py"
+        vim.system({ script, "ack", uuid, comment }, { text = true, detach = true }, function(result)
+          vim.schedule(function()
+            handoffs_acks[ev.buf] = nil
+            if result.code ~= 0 then
+              vim.notify("Handoff ack failed: " .. vim.trim(result.stderr or ""), vim.log.levels.ERROR)
+              return
+            end
+            local output = vim.trim(result.stdout or "")
+            local json = output:match "([^\n]+)$" or output
+            local ok, response = pcall(vim.json.decode, json)
+            if not ok or type(response) ~= "table" then
+              vim.notify("Handoff ack returned an invalid response.", vim.log.levels.ERROR)
+              return
+            end
+            if response.closed then
+              if api.nvim_buf_is_valid(ev.buf) and api.nvim_buf_get_option(ev.buf, "modified") then
+                vim.notify("Handoff was acked, but this buffer has unsaved edits.", vim.log.levels.WARN)
+                return
+              end
+              if api.nvim_buf_is_valid(ev.buf) and api.nvim_buf_delete then
+                pcall(api.nvim_buf_delete, ev.buf, { force = true })
+              end
+            else
+              vim.notify("Reply sent. This task is not tagged +ack, so it remains open.", vim.log.levels.INFO)
+            end
+          end)
+        end)
+      end)
+    end
     for key, action in pairs { ["<CR>"] = "enter", s = "spawn", d = "done" } do
       vim.keymap.set("n", key, function()
         act(action)
       end, { buffer = ev.buf, silent = true, desc = "Handoff: " .. action })
     end
+    vim.keymap.set("n", "a", ack, { buffer = ev.buf, silent = true, desc = "Ack or reply to handoff" })
     for _, key in ipairs { "q", "<Esc>" } do
       vim.keymap.set("n", key, close, { buffer = ev.buf, silent = true, desc = "Close handoffs" })
     end
