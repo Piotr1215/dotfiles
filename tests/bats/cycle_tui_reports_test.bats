@@ -27,3 +27,8 @@ setup() {
   grep -q '^uda.taskwarrior-tui.legend.handoffs=' "$repo_root/.taskrc"
   for i in {1..9}; do grep -q "^uda.taskwarrior-tui.shortcuts.$i=.*__tui_shortcut_$i.sh" "$repo_root/.taskrc"; done
 }
+
+@test "handoffs report shows supported task IDs" {
+  grep -qx 'report.handoffs.columns=id,priority,due.relative,description.desc' "$repo_root/.taskrc"
+  grep -qx 'report.handoffs.labels=ID,P,Due,Desc' "$repo_root/.taskrc"
+}
