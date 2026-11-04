@@ -23,7 +23,7 @@ if [[ "$report" == handoffs ]]; then
       pane=$($tmux_bin list-panes -a -F '#{pane_id} #{@agent_name}' | awk '$2 == "triage" {print $1; exit}')
       [[ "$pane" =~ ^%[0-9]+$ ]] || { echo 'Gordon pane not found' >&2; exit 1; }
       # Validate the pane identity in the server command queue before sending.
-      exec "$tmux_bin" if-shell -F -t "$pane" '#{==:#{@agent_name},triage}' "send-keys -t $pane -l -- '@${uuid:0:8} ' \; select-window -t $pane \; select-pane -t $pane" 'display-message "Gordon pane changed"' ;;
+      exec "$tmux_bin" if-shell -F -t "$pane" '#{==:#{@agent_name},triage}' "send-keys -t $pane -l -- '@${uuid:0:8} ' \; switch-client -t $pane" 'display-message "Gordon pane changed"' ;;
     7)
       read -r -p 'Optional completion comment: ' note
       [[ -z "$note" ]] || "$task_bin" rc.context=none "$uuid" annotate "$note"

@@ -20,7 +20,7 @@ MOCK
 }
 @test "reply guards pane and types a reference without enter" {
   run "$root/scripts/__tui_dispatch.sh" 6 "$uuid"
-  [ "$status" -eq 0 ]; grep -Fq '#{==:#{@agent_name},triage}' "$LOG"; grep -Fq "@12345678 " "$LOG"; ! grep -q 'C-m' "$LOG"
+  [ "$status" -eq 0 ]; grep -Fq '#{==:#{@agent_name},triage}' "$LOG"; grep -Fq "@12345678 " "$LOG"; grep -Fq "switch-client -t %42" "$LOG"; ! grep -q 'C-m' "$LOG"
 }
 @test "annotation writes selected text" {
   run bash -c 'printf "new note\\n" | "$1" 4 "$2"' _ "$root/scripts/__tui_dispatch.sh" "$uuid"
