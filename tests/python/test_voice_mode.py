@@ -63,6 +63,7 @@ def fresh_relay(monkeypatch, tmp_path):
     monkeypatch.setattr(voice, 'LOST_DIR', str(tmp_path / 'lost'))
     monkeypatch.setattr(voice, 'NO_KEEP', str(tmp_path / 'no-keep'))
     monkeypatch.setattr(voice, 'NO_CONTINUE', str(tmp_path / 'no-continue'))
+    monkeypatch.setattr(voice, 'NO_LISTENING', str(tmp_path / 'no-listening'))
     monkeypatch.setattr(voice, 'Segmenter', QuietRoom)
 
 
@@ -895,6 +896,55 @@ def test_the_stop_word_still_ends_paused_speech(monkeypatch):
         player.kill()
 
 
+def test_presence_eof_before_sigterm_exits_cleanly(tmp_path):
+    # Reproduce systemd killing the subscriber before the main process receives SIGTERM.
+    code = '''
+import importlib.util, os, signal, sys, threading
+spec = importlib.util.spec_from_file_location('voice', sys.argv[1])
+voice = importlib.util.module_from_spec(spec); spec.loader.exec_module(voice)
+class Stream:
+    def __iter__(self):
+        print('eof', flush=True)
+        return iter(())
+voice.subprocess.Popen = lambda *a, **k: type('Child', (), {'stdout': Stream()})()
+voice.NO_LISTENING = sys.argv[2]
+stopping = threading.Event()
+def stop(*_):
+    stopping.set()
+    sys.exit(0)
+signal.signal(signal.SIGTERM, stop)
+threading.Thread(target=voice.watch_presence, args=(stopping,), daemon=True).start()
+signal.pause()
+'''
+    process = subprocess.Popen([sys.executable, '-c', code, str(ROOT / 'scripts/__voice_mode.py'),
+                                str(tmp_path / 'no-listening')], stdout=subprocess.PIPE, text=True)
+    try:
+        assert process.stdout.readline().strip() == 'eof'
+        process.send_signal(signal.SIGTERM)
+        assert process.wait(timeout=3) == 0
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.wait()
+
+
+def test_presence_eof_without_stop_fails(monkeypatch):
+    monkeypatch.setattr(voice.subprocess, 'Popen', lambda *a, **k: types.SimpleNamespace(stdout=[]))
+    monkeypatch.setattr(voice.os, '_exit', lambda code: (_ for _ in ()).throw(SystemExit(code)))
+    with pytest.raises(SystemExit) as result:
+        voice.watch_presence(threading.Event())
+    assert result.value.code == 1
+
+
+def test_presence_eof_after_toggle_off_requests_clean_stop(monkeypatch, tmp_path):
+    monkeypatch.setattr(voice.subprocess, 'Popen', lambda *a, **k: types.SimpleNamespace(stdout=[]))
+    (tmp_path / 'no-listening').touch()
+    sent = []
+    monkeypatch.setattr(voice.os, 'kill', lambda pid, sig: sent.append((pid, sig)))
+    voice.watch_presence(threading.Event())
+    assert sent == [(os.getpid(), signal.SIGTERM)]
+
+
 def relay_over(monkeypatch, heard, model, lines=1):
     """Run the real capture loop over long lines. Each worker acts as its queue fills."""
     frames = (LOUD * (voice.OPENING_FRAMES + 20) + QUIET * voice.END_FRAMES) * lines
@@ -1390,6 +1440,7 @@ def test_a_relay_restart_leaves_the_channel_open(monkeypatch):
     restarted = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(restarted)
     monkeypatch.setattr(restarted, 'CHANNEL', voice.CHANNEL)
+    monkeypatch.setattr(restarted, 'NO_CONTINUE', voice.NO_CONTINUE)
     assert restarted.continued('clothing is secured')[0][:2] == ('klod2', 'clothing is secured')
 
 

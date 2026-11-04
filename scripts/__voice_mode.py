@@ -73,6 +73,7 @@ NO_BARGE_IN = os.path.expanduser('~/.local/state/klod-voice/no-barge-in')
 RESUME_SPEECH = os.path.expanduser('~/.local/state/klod-voice/resume-speech')
 SPEECH_CUT = os.path.expanduser('~/.local/state/klod-voice/cut')  # the reply hook drops what it was making
 NO_KEEP = os.path.expanduser('~/.local/state/klod-voice/no-keep')
+NO_LISTENING = os.path.expanduser('~/.local/state/klod-voice/no-listening')
 NO_CONTINUE = os.path.expanduser('~/.local/state/klod-voice/no-continue')
 NATS = os.path.expanduser('~/.local/bin/nats')
 SND = os.path.expanduser('~/dev/agents-mcp-server/build/snd.js')
@@ -711,18 +712,30 @@ def worker(clips, act):
             clips.task_done()
 
 
-def watch_presence():
+def watch_presence(stopping):
     """Feed the bus's presence beats to PRESENCE. Without them no name resolves, so end the relay."""
     beats = subprocess.Popen([NATS, '--server', NATS_URL, 'sub', 'agents.presence', '--raw'],
                              stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
     for line in beats.stdout:
         PRESENCE.beat(line)
+    # systemd sends SIGTERM to the subscriber and relay together. Give the main
+    # thread time to receive it before treating the subscriber's EOF as a crash.
+    if stopping.wait(1):
+        return
+    if os.path.exists(NO_LISTENING):
+        os.kill(os.getpid(), signals.SIGTERM)
+        return
     print('voice-mode: presence stream ended', file=sys.stderr, flush=True)
     os._exit(1)
 
 
 def main():
-    threading.Thread(target=watch_presence, daemon=True).start()
+    stopping = threading.Event()
+    def stop(*_):
+        stopping.set()
+        sys.exit(0)
+    signals.signal(signals.SIGTERM, stop)
+    threading.Thread(target=watch_presence, args=(stopping,), daemon=True).start()
     utterances = queue.Queue()
     bursts = queue.Queue()  # its own worker: a slow delivery must not hold up the stop word
     openings = queue.Queue()
@@ -735,7 +748,6 @@ def main():
                             '--format=s16le', '--latency-msec=30'], stdout=subprocess.PIPE)
     voice_check = VoiceCheck(voice_model())
     hold_speech(False)  # a relay that died mid-line left speech paused
-    signals.signal(signals.SIGTERM, lambda *_: sys.exit(0))  # so a stop mid-line reaches the rescue
     try:
         while len(frame := mic.stdout.read(FRAME_BYTES)) == FRAME_BYTES:
             pcm = segmenter.push(frame)
@@ -749,6 +761,8 @@ def main():
                 openings.put(opening)
     finally:
         rescue(segmenter, utterances)
+    if stopping.wait(1) or os.path.exists(NO_LISTENING):
+        return
     sys.exit('voice-mode: microphone stream ended')
 
 
