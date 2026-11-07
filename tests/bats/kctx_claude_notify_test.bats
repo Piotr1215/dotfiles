@@ -109,9 +109,12 @@ sent_text() {
 }
 
 @test "rejects a pane id that is a shell metacharacter payload" {
-    run "$SCRIPT" '%1; rm -rf /'
+    # Inert canary: if a regression ever hands the pane id to a shell, the test
+    # fails on the marker file instead of running a destructive payload.
+    run "$SCRIPT" "%1; touch ${TEST_DIR}/injected"
     [ "$status" -eq 1 ]
     [[ "$output" == *"invalid pane id"* ]]
+    [ ! -e "${TEST_DIR}/injected" ]
 }
 
 @test "notifies a claude session running under the pane shell" {
