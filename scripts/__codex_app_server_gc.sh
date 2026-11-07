@@ -23,8 +23,12 @@ else
     runtime_root="${TMPDIR:-/tmp}/kctx-$(id -u)/kctx"
 fi
 
+# A pane-exited hook must not fail: tmux shows "returned 1" on the client, and
+# set -e would skip the app-server cleanup below. kctx gc can lose a race when
+# several panes exit at once (7 Nov 2026), so log its failure and go on.
 if [[ $dry_run -eq 0 && -x "$kctx_bin" ]]; then
-    "$kctx_bin" runtime gc --max-age-seconds 0 >/dev/null
+    "$kctx_bin" runtime gc --max-age-seconds 0 >/dev/null ||
+        echo "kctx runtime gc failed; continuing with app-server cleanup" >&2
 fi
 
 [[ -d "$control_root" ]] || exit 0
