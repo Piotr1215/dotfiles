@@ -11,8 +11,12 @@
 # line on a frequent schedule that is certain to land while the machine is
 # awake, and let this guard no-op until the interval has actually elapsed.
 #
-# Usage in crontab, inside the state wrapper:
-#   0 * * * * __cron_run.sh <job> -- __cron_every.sh <stamp> 604800 -- <command...>
+# Usage in crontab, outside the state wrapper:
+#   0 * * * * __cron_every.sh <stamp> 604800 -- __cron_run.sh <job> -- <command...>
+#
+# Outside, a tick that is not due never reaches the wrapper, so the job's state
+# file keeps its last real run. Inside, every hourly no-op overwrote it with an
+# empty no-hit, and "run now" (which starts at the wrapper) did nothing.
 #
 # The stamp advances only on a successful run (exit 0 or 2), so a failed or
 # interrupted attempt is retried on the next tick instead of being marked done
