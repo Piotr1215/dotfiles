@@ -102,23 +102,30 @@ PY
 	[ "$output" = "$(printf '%s\n' "$r/homelab/.claude/settings.local.json" "$r/homelab/.env" "$r/homelab/.envrc" "$r/homelab/kubeconfig")" ]
 }
 
-@test "__backup.sh on hold exits 0 and runs nothing" {
+@test "__backup.sh on hold takes restic snapshots and nothing that removes NAS data" {
+	# The NAS root is a temp dir and every outside command is a stub, so even a
+	# broken hold copies only into the temp dir and sends no mail.
 	stubs="$T/stubs"
-	mkdir -p "$stubs"
-	for c in mountpoint rsync restic sudo; do
-		printf '#!/usr/bin/env bash\necho "%s $*" >>"%s/calls"\nexit 1\n' "$c" "$T" >"$stubs/$c"
+	mkdir -p "$stubs" "$T/nas/home"
+	for c in mountpoint rsync restic sudo msmtp dunstify notify-send; do
+		printf '#!/usr/bin/env bash\necho "%s $*" >>"%s/calls"\nexit 0\n' "$c" "$T" >"$stubs/$c"
 		chmod +x "$stubs/$c"
 	done
 	echo "restore running" >"$T/hold"
-	PATH="$stubs:$PATH" BACKUP_HOLD_FILE="$T/hold" run bash "$BACKUP"
+	PATH="$stubs:$PATH" BACKUP_HOLD_FILE="$T/hold" BACKUP_TEST_ROOT="$T/nas" run bash "$BACKUP"
 	[ "$status" -eq 0 ]
-	[[ "$output" == *"Backup held, nothing run: restore running"* ]]
-	[ ! -e "$T/calls" ]
+	grep -q '^restic backup ' "$T/calls"
+	! grep -q '^restic forget' "$T/calls"
+	! grep -q -- '--delete' "$T/calls"
+	! grep -q '^sudo ' "$T/calls"
+	[ ! -e "$T/nas/home/pop_os_settings_backup.ini" ]
+	[ ! -e "$HOME/.local/state/backup-last-success" ]
+	grep -q 'Held: rsync mirrors skipped' "$HOME/backup.log"
 }
 
 # make_db <path> <rows> [wal]: a SQLite file with <rows> rows in table t.
 make_db() {
-	python3 -I - "$@" <<'PY'
+	python3 -I - "$@" <<'PY2'
 import sqlite3, sys
 path, rows = sys.argv[1], int(sys.argv[2])
 c = sqlite3.connect(path)
@@ -127,7 +134,7 @@ if len(sys.argv) > 3:
 c.execute("CREATE TABLE t (v)")
 c.executemany("INSERT INTO t VALUES (?)", [(i,) for i in range(rows)])
 c.commit()
-PY
+PY2
 }
 
 @test "browser DB copies: open WAL and journal DBs copied, caches, deep files and non-DBs skipped" {
