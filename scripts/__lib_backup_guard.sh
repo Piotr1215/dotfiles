@@ -79,3 +79,97 @@ local_state_files() {
 			-print0 2>/dev/null
 	done
 }
+
+# Browser profiles. 6d50d64 (14 Sep) dropped them because the nightly tar.gz
+# rewrote ~975 MB; restic uploads only changed chunks. On 2026-11-07 that gap
+# cost LibreWolf two months. These are re-downloadable and stay out: caches,
+# site file systems (Chrome's alone was 1.6 GB), extension code, DRM plugins.
+# restic matches a slash-free pattern against any path component.
+# shellcheck disable=SC2034 # read by __backup.sh and the tests
+BROWSER_EXCLUDES=(
+	--exclude=Cache --exclude='Code Cache' --exclude=GPUCache
+	--exclude=DawnGraphiteCache --exclude=DawnWebGPUCache
+	--exclude='Service Worker/CacheStorage' --exclude='Service Worker/ScriptCache'
+	--exclude='File System' --exclude=Extensions --exclude='Shared Dictionary'
+	--exclude=cache2 --exclude=startupCache --exclude=crashes --exclude=datareporting
+	--exclude=minidumps --exclude=gmp-widevinecdm --exclude='storage/default/*/cache'
+)
+
+# sqlite_tree_snapshot <out_root> <dir>...: checked copies of the SQLite files a
+# running browser holds open, at <out_root><absolute path>. Each file is copied
+# with its -wal or -journal, read through the backup API (which folds the WAL
+# in), and kept only if integrity_check passes; a failed copy is retried once.
+# Looks two levels down and skips cache and site-storage dirs. Prints
+# "ok N failed M" and fails when any copy failed.
+sqlite_tree_snapshot() {
+	python3 -I - "$@" <<'PY'
+import os
+import shutil
+import sqlite3
+import sys
+import tempfile
+
+out_root, roots = sys.argv[1], sys.argv[2:]
+SKIP = {"Cache", "Code Cache", "GPUCache", "Service Worker", "File System", "IndexedDB",
+        "Extensions", "extensions", "Shared Dictionary", "storage", "cache2", "startupCache",
+        "crashes", "datareporting", "minidumps", "gmp-widevinecdm", "security_state"}
+MAGIC = b"SQLite format 3\x00"
+
+
+def databases(root):
+    for dirpath, dirnames, filenames in os.walk(root):
+        depth = os.path.relpath(dirpath, root).count(os.sep) + (dirpath != root)
+        dirnames[:] = [d for d in dirnames if d not in SKIP and depth < 1]
+        for name in filenames:
+            path = os.path.join(dirpath, name)
+            try:
+                if os.path.islink(path) or os.path.getsize(path) > 512 << 20:
+                    continue
+                with open(path, "rb") as fh:
+                    if fh.read(16) == MAGIC:
+                        yield path
+            except OSError:
+                continue
+
+
+def snap(path, out):
+    os.makedirs(os.path.dirname(out), exist_ok=True)
+    tmp = out + ".tmp"
+    for _ in range(2):
+        with tempfile.TemporaryDirectory() as td:
+            base = os.path.join(td, "db")
+            try:
+                shutil.copyfile(path, base)
+                for suffix in ("-wal", "-journal"):
+                    if os.path.exists(path + suffix):
+                        shutil.copyfile(path + suffix, base + suffix)
+                s = sqlite3.connect(base)
+                d = sqlite3.connect(tmp)
+                s.backup(d)
+                s.close()
+                ok = d.execute("PRAGMA integrity_check").fetchone()[0]
+                d.close()
+            except (OSError, sqlite3.Error) as e:
+                ok = str(e)
+        if ok == "ok":
+            os.replace(tmp, out)
+            return True
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+    print(f"failed: {path}: {ok}", file=sys.stderr)
+    return False
+
+
+good = bad = 0
+for root in roots:
+    if not os.path.isdir(root):
+        continue
+    for path in databases(root):
+        if snap(path, out_root + os.path.abspath(path)):
+            good += 1
+        else:
+            bad += 1
+print(f"ok {good} failed {bad}")
+sys.exit(1 if bad else 0)
+PY
+}
