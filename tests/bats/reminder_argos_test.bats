@@ -245,6 +245,21 @@ only_id() {
   [ "$(jq -r '.[0].overdue' <<<"$output")" = false ]
 }
 
+@test "list distinguishes Slack event watches from polling watches" {
+  export THREAD_WATCH_STATE_DIR="$BATS_TEST_TMPDIR/watches"
+  mkdir -p "$THREAD_WATCH_STATE_DIR"
+  "$REMINDER" add --label slack-watch --repeat 'every 1h' --deadline 7d --action exec --command true --origin thread-watch >/dev/null
+  slack_id="$(last_record | jq -r .id)"
+  printf '{"reminder":"%s","source":"slack"}\n' "$slack_id" >"$THREAD_WATCH_STATE_DIR/slack.json"
+  "$REMINDER" add --label linear-watch --repeat 'every 30m' --deadline 7d --action exec --command true --origin thread-watch --subject 'url:https://example.slack.com/archives/C1/p123' >/dev/null
+  linear_id="$(last_record | jq -r .id)"
+  printf '{"reminder":"%s","source":"linear"}\n' "$linear_id" >"$THREAD_WATCH_STATE_DIR/linear.json"
+  run "$REMINDER" list
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Slack events (slack-eventd); 1h fallback when heartbeat is stale"* ]]
+  [[ "$(printf '%s\n' "$output" | grep linear-watch)" == *"every 30m"* ]]
+}
+
 @test "fire shows the resolved subject and done spends the one-shot" {
   "$REMINDER" add "Call vodafone" '2026-09-08 09:00' --subject 'link: https://vodafone.de/kontakt' >/dev/null
   id="$(only_id)"
@@ -1668,4 +1683,83 @@ STUB
   [ ! -s "$NOTIFY_LOG" ]
   [ "$(last_record | jq -r '.status')" = active ]
   [ "$(last_record | jq -c '.verdict')" = "$before" ]
+}
+
+# Shadow router error case (issue 221 step 7). The fake router logs its argv
+# and stdin; a scratch state dir never reaches the real router.
+fake_router() {
+  export ROUTER_LOG="${BATS_TEST_TMPDIR}/router.log"
+  export REMINDER_ROUTER_BIN="$BIN/fake-router"
+  : >"$ROUTER_LOG"
+  printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$*" >>"$ROUTER_LOG"\ncat >>"$ROUTER_LOG"\nprintf "\\n" >>"$ROUTER_LOG"\n%s\n' "${1:-exit 0}" >"$REMINDER_ROUTER_BIN"
+  chmod +x "$REMINDER_ROUTER_BIN"
+}
+
+@test "router error case: called once on a new error with the packet facts, not on a repeat of the same reason" {
+  fake_router
+  "$REMINDER" add "flaky" --repeat 'every 1d' --deadline 30d --action exec --command "echo \$(cat $BATS_TEST_TMPDIR/why); exit 1" >/dev/null
+  id="$(only_id)"
+  printf 'token expired\n' >"$BATS_TEST_TMPDIR/why"
+  "$REMINDER" fire "$id" >/dev/null
+  [ "$(grep -c '^error reminder ' "$ROUTER_LOG")" -eq 1 ]
+  grep -q -- '--record-json -' "$ROUTER_LOG"
+  grep '^{' "$ROUTER_LOG" | jq -e --arg id "$id" '.packet == $id and .exit_code == "1" and .last_error_line == "token expired" and (.log_tail | contains("token expired"))'
+
+  "$REMINDER" fire "$id" >/dev/null
+  [ "$(grep -c '^error reminder ' "$ROUTER_LOG")" -eq 1 ]
+
+  printf 'rate limited\n' >"$BATS_TEST_TMPDIR/why"
+  "$REMINDER" fire "$id" >/dev/null
+  [ "$(grep -c '^error reminder ' "$ROUTER_LOG")" -eq 2 ]
+}
+
+@test "router error case: verdict exits 0, 2, 3 and a withdrawn 4 never reach the router" {
+  fake_router
+  local code
+  for code in 0 2 3; do
+    "$REMINDER" add "v$code" --repeat 'every 1d' --deadline 30d --action exec --command "echo said $code; exit $code" >/dev/null
+  done
+  "$REMINDER" add "w" --repeat 'every 1d' --deadline 30d --action exec --command "echo 'withdrawn: gone'; exit 4" >/dev/null
+  while IFS= read -r id; do
+    "$REMINDER" fire "$id" >/dev/null || true
+  done < <(jq -r '.id' "$REMINDER_STORE" | sort -u)
+  [ ! -s "$ROUTER_LOG" ]
+}
+
+@test "router error case: a failing router leaves the error task and fire.log as they were" {
+  fake_router 'echo boom >&2; exit 7'
+  "$REMINDER" add "flaky" --repeat 'every 1d' --deadline 30d --action exec --command 'echo token expired; exit 1' >/dev/null
+  id="$(only_id)"
+  run "$REMINDER" fire "$id"
+  [ "$status" -eq 0 ]
+  [ "$(grep -c '^error reminder ' "$ROUTER_LOG")" -eq 1 ]
+  [ "$(grep -c ' add ' "$TEST_TASK_LOG")" -eq 1 ]
+  grep -q "	$id	error	token expired	" "$REMINDER_LOG"
+  grep -q "	$id	error-task	" "$REMINDER_LOG"
+  [ "$(last_record | jq -r '.error_reason')" = "exit 1: token expired" ]
+}
+
+@test "router error case: a hanging router is cut off and changes nothing" {
+  fake_router 'exec sleep 30'
+  export REMINDER_ROUTER_TIMEOUT=1
+  "$REMINDER" add "flaky" --repeat 'every 1d' --deadline 30d --action exec --command 'echo token expired; exit 1' >/dev/null
+  id="$(only_id)"
+  start=$SECONDS
+  run "$REMINDER" fire "$id"
+  [ "$status" -eq 0 ]
+  [ $((SECONDS - start)) -lt 15 ]
+  [ "$(grep -c ' add ' "$TEST_TASK_LOG")" -eq 1 ]
+  grep -q "	$id	error	token expired	" "$REMINDER_LOG"
+}
+
+@test "router error case: a missing router and a scratch state dir without an override are skipped" {
+  export REMINDER_ROUTER_BIN="$BATS_TEST_TMPDIR/nope"
+  "$REMINDER" add "flaky" --repeat 'every 1d' --deadline 30d --action exec --command 'echo token expired; exit 1' >/dev/null
+  id="$(only_id)"
+  run "$REMINDER" fire "$id"
+  [ "$status" -eq 0 ]
+  grep -q "	$id	error-task	" "$REMINDER_LOG"
+  unset REMINDER_ROUTER_BIN
+  run "$REMINDER" fire "$id"
+  [ "$status" -eq 0 ]
 }

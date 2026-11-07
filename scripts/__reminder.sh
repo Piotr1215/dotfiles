@@ -51,6 +51,17 @@ SND="${REMINDER_SND:-$HOME/.claude/scripts/snd}"
 TMUX_BIN="${REMINDER_TMUX:-tmux}"
 CLAUDE_LAUNCHER="${REMINDER_CLAUDE:-$HOME/.claude/scripts/__claude_with_monitor.sh}"
 AI_CWD="${REMINDER_AI_CWD:-$HOME/dev/dotfiles}"
+# Shadow router: a packet's first execution error (or a new reason) also goes to
+# the decision router's error case (issue 221 step 7). Journal only. A scratch
+# state dir never reaches the real router unless REMINDER_ROUTER_BIN says so.
+if [ -n "${REMINDER_ROUTER_BIN:-}" ]; then
+	ROUTER_BIN="$REMINDER_ROUTER_BIN"
+elif [ "$STATE_DIR" = "$DEFAULT_STATE_DIR" ]; then
+	ROUTER_BIN="$HOME/.claude/scripts/__decision_router.py"
+else
+	ROUTER_BIN=""
+fi
+ROUTER_TIMEOUT_S="${REMINDER_ROUTER_TIMEOUT:-30}"
 CRON_RUN="${REMINDER_CRON_RUN:-$SCRIPT_DIR/__cron_run.sh}"
 CRON_EVERY="${REMINDER_CRON_EVERY:-$SCRIPT_DIR/__cron_every.sh}"
 STAMP_DIR="${CRON_EVERY_STAMP_DIR:-$HOME/.local/state/cron-every}"
@@ -1329,12 +1340,21 @@ cmd_list() {
 		list_json "$records"
 		return 0
 	fi
-	local record id when repeat action title on_notify delay deadline by
+	local record id when repeat action title on_notify delay deadline by watch_file
 	while IFS= read -r record; do
 		[ -n "$record" ] || continue
 		id="$(jq -r '.id' <<<"$record")"
 		when="$(jq -r '.when // ""' <<<"$record")"
 		repeat="$(jq -r '.repeat // ""' <<<"$record")"
+		if [ "$(jq -r '.origin // ""' <<<"$record")" = thread-watch ]; then
+			for watch_file in "${THREAD_WATCH_STATE_DIR:-$HOME/.local/state/thread-watch}"/*.json; do
+				[ -f "$watch_file" ] || continue
+				if jq -e --arg id "$id" '.reminder == $id and .source == "slack"' "$watch_file" >/dev/null 2>&1; then
+					repeat="Slack events (slack-eventd); ${repeat#every } fallback when heartbeat is stale"
+					break
+				fi
+			done
+		fi
 		on_notify="$(jq -r '.on_notify // ""' <<<"$record")"
 		delay="$(jq -r '.delay // ""' <<<"$record")"
 		deadline="$(jq -r '.deadline // ""' <<<"$record")"
@@ -1809,6 +1829,7 @@ complete_packet() {
 # failing every 30 minutes leaves one task with one note per distinct failure.
 error_task() {
 	local id="$1" title="$2" reason="$3" record uuid status
+	ERROR_TASK_NEW=0
 	record="$(get_record "$id")"
 	uuid="$(jq -r '.error_task // ""' <<<"$record")"
 	if [ -n "$uuid" ]; then
@@ -1816,6 +1837,7 @@ error_task() {
 		if [ "$status" = pending ] || [ "$status" = waiting ]; then
 			[ "$reason" != "$(jq -r '.error_reason // ""' <<<"$record")" ] || return 0
 			task_note "$uuid" "error again $(now_iso): $reason" || true
+			ERROR_TASK_NEW=1
 			update_record "$id" '.error_reason = $reason' --arg reason "$reason"
 			return 0
 		fi
@@ -1828,6 +1850,20 @@ error_task() {
 	task_note "$uuid" "log: $(home_path "$RUNS_DIR/$id.log")"
 	update_record "$id" '.error_task = $uuid | .error_reason = $reason' --arg uuid "$uuid" --arg reason "$reason"
 	log_fire "$id" error-task "$uuid" "$title"
+	ERROR_TASK_NEW=1
+}
+
+# Shadow router error case for a packet whose check failed to run. Time-boxed,
+# output and exit code ignored; a missing or failing router changes nothing.
+router_error_case() {
+	local id="$1" rc="$2" reason="$3" tail_txt="" record
+	[ -n "$ROUTER_BIN" ] && [ -x "$ROUTER_BIN" ] || return 0
+	[ -f "$RUNS_DIR/$id.log" ] && tail_txt="$(tail -n 20 "$RUNS_DIR/$id.log" 2>/dev/null | tail -c 4000 || true)"
+	record="$(jq -cn --arg id "$id" --arg rc "$rc" --arg last "$reason" --arg tail "$tail_txt" \
+		'{packet: $id, exit_code: $rc, last_error_line: $last, log_tail: $tail}')" || return 0
+	printf '%s' "$record" | timeout "$ROUTER_TIMEOUT_S" "$ROUTER_BIN" error reminder \
+		--error "reminder packet $id failed to run" --record-json - >/dev/null 2>&1 || true
+	return 0
 }
 
 # A clean run after errors: one note on the open error task. A packet that keeps
@@ -2050,6 +2086,7 @@ cmd_fire_locked() {
 			fi
 			log_fire "$id" error "${streak:+$streak: }${reason:-no output}" "$title"
 			error_task "$id" "$title" "$err_label: ${reason:-no output}"
+			[ "$ERROR_TASK_NEW" = 1 ] && router_error_case "$id" "$([ "$verdict" = hook_failed ] && echo "$BRANCH_RC" || echo "$rc")" "${reason:-no output}"
 			if [ "$(record_to "$record")" = gordon ] && notify_gordon "$id" "error: $title" "$err_label${streak:+, $streak} $output"; then
 				log_fire "$id" delivered "gordon error" "$title"
 			fi
