@@ -74,6 +74,14 @@ export SND_FROM="${SND_FROM:-cron-watch}"
 INTAKE_ROUTE_BIN="${INTAKE_ROUTE_BIN:-$HOME/.claude/scripts/__intake_route.sh}"
 NUDGE_TO="${CRON_ERROR_NUDGE_TO:-}"
 
+# SHADOW router (issue Piotr1215/claude#221, step 4): every error transition is
+# also put to the shared decision router's error case. It only journals; the DM
+# above is unchanged. A missing, failing or hanging router never alters or
+# blocks the nudge: it is time-boxed and its exit code is ignored.
+DECISION_ROUTER_BIN="${CRON_ROUTER_BIN:-$HOME/.claude/scripts/__decision_router.py}"
+ROUTER_TIMEOUT_S="${CRON_ROUTER_TIMEOUT_S:-70}"
+ROUTER_LOG_LINES=20
+
 DRY_RUN=0
 case "${1:-}" in
     --dry-run) DRY_RUN=1 ;;
@@ -224,6 +232,24 @@ notice_for() {
         "$f" 2>/dev/null || printf 'cron-error: %s (state file unreadable)' "$job"
 }
 
+# Ask the router's error case about one errored job. Record: job, state, exit
+# code, duration and the last log lines (the router redacts). Never fails.
+router_error_case() {
+    local job="$1" f="${STATE_DIR}/${1}.json" lp tail_txt="" record
+    [ -x "$DECISION_ROUTER_BIN" ] || return 0
+    lp=$(jq -r '.log_path // empty' "$f" 2>/dev/null || true)
+    if [ -n "$lp" ] && [ -r "$lp" ]; then
+        tail_txt=$(tail -n "$ROUTER_LOG_LINES" "$lp" 2>/dev/null | tail -c 4000 || true)
+    fi
+    record=$(jq -c --arg job "$job" --arg tail "$tail_txt" \
+        '{job: $job, state: (.state // "error"), exit_code: (.exit_code // null),
+          duration_s: (.duration_s // null), message: (.message // ""), log_tail: $tail}' \
+        "$f" 2>/dev/null) || record=$(jq -cn --arg job "$job" '{job: $job, state: "error"}')
+    printf '%s' "$record" | timeout "$ROUTER_TIMEOUT_S" "$DECISION_ROUTER_BIN" error cron \
+        --error "cron job $job entered error state" --record-json - >/dev/null 2>&1 || true
+    return 0
+}
+
 main() {
     local mode="LIVE"; [ "$DRY_RUN" -eq 1 ] && mode="DRY-RUN"
 
@@ -278,6 +304,7 @@ main() {
                     continue
                 fi
             fi
+            [ "$DRY_RUN" -eq 1 ] || router_error_case "$job"
             # Collect the names that actually went out rather than counting
             # them. A failure part-way down the list would otherwise shift the
             # tally against the list order and mark the wrong jobs as told.

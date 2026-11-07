@@ -26,6 +26,20 @@ S
     export PATH="$BATS_TEST_TMPDIR/bin:$PATH"
     export INTAKE_ROUTE_BIN="$BATS_TEST_TMPDIR/bin/route"
     unset CRON_ERROR_NUDGE_TO
+    # Fake decision router: records argv and stdin, behaviour set by FAKE_ROUTER_MODE.
+    ROUTER_CALLS="$BATS_TEST_TMPDIR/router_calls"
+    export ROUTER_CALLS
+    cat >"$BATS_TEST_TMPDIR/bin/router" <<'S'
+#!/usr/bin/env bash
+printf '%s\t%s\n' "$*" "$(cat)" >>"$ROUTER_CALLS"
+case "${FAKE_ROUTER_MODE:-ok}" in
+    fail) echo boom >&2; exit 3 ;;
+    hang) sleep 30 ;;
+esac
+echo '{"verdict":"x"}'
+S
+    chmod +x "$BATS_TEST_TMPDIR/bin/router"
+    export CRON_ROUTER_BIN="$BATS_TEST_TMPDIR/bin/router"
 }
 
 job() {
@@ -177,4 +191,78 @@ S
     [ "$(wc -l <"$SENT")" -eq 1 ]
     [ "$(wc -l <"$JQ_CALLS")" -lt 20 ]
     [[ "$(cat "$SENT")" == *"cron-error: backup "* ]]
+}
+
+@test "an error transition calls the router error case once with the job in the record" {
+    seeded
+    printf 'line1\nlast log line\n' >"$BATS_TEST_TMPDIR/job.log"
+    printf '{"job":"backup","state":"error","exit_code":7,"duration_s":3,"message":"boom","log_path":"%s"}\n' \
+        "$BATS_TEST_TMPDIR/job.log" >"$CRON_STATE_DIR/backup.json"
+    STUB_ROUTE=intake run bash "$SCRIPT"
+    [ "$status" -eq 2 ]
+    [ "$(wc -l <"$ROUTER_CALLS")" -eq 1 ]
+    [[ "$(cut -f1 "$ROUTER_CALLS")" == "error cron --error "* ]]
+    [[ "$(cut -f1 "$ROUTER_CALLS")" == *"--record-json -" ]]
+    rec=$(cut -f2 "$ROUTER_CALLS")
+    [ "$(jq -r .job <<<"$rec")" = backup ]
+    [ "$(jq -r .state <<<"$rec")" = error ]
+    [ "$(jq -r .exit_code <<<"$rec")" = 7 ]
+    [ "$(jq -r .duration_s <<<"$rec")" = 3 ]
+    [[ "$(jq -r .log_tail <<<"$rec")" == *"last log line"* ]]
+}
+
+@test "the DM is the same with the router present" {
+    seeded
+    job backup error
+    STUB_ROUTE=intake run bash "$SCRIPT"
+    [ "$status" -eq 2 ]
+    [ "$(cat "$SENT")" = "intake cron-error: backup exit=1 after 3s :: boom :: log /l" ]
+}
+
+@test "a failing router does not change the DM or the exit status" {
+    seeded
+    job backup error
+    FAKE_ROUTER_MODE=fail STUB_ROUTE=intake run bash "$SCRIPT"
+    [ "$status" -eq 2 ]
+    [ "$(cat "$SENT")" = "intake cron-error: backup exit=1 after 3s :: boom :: log /l" ]
+    [ "$(wc -l <"$ROUTER_CALLS")" -eq 1 ]
+}
+
+@test "a hanging router is time-boxed and the DM still goes out" {
+    seeded
+    job backup error
+    start=$SECONDS
+    CRON_ROUTER_TIMEOUT_S=1 FAKE_ROUTER_MODE=hang STUB_ROUTE=intake run bash "$SCRIPT"
+    [ "$status" -eq 2 ]
+    [ $((SECONDS - start)) -lt 10 ]
+    [ "$(cat "$SENT")" = "intake cron-error: backup exit=1 after 3s :: boom :: log /l" ]
+}
+
+@test "a missing router does not change the DM" {
+    seeded
+    job backup error
+    CRON_ROUTER_BIN="$BATS_TEST_TMPDIR/nope" STUB_ROUTE=intake run bash "$SCRIPT"
+    [ "$status" -eq 2 ]
+    [ "$(cat "$SENT")" = "intake cron-error: backup exit=1 after 3s :: boom :: log /l" ]
+}
+
+@test "no router call without an error transition" {
+    seeded
+    job backup no-hit 0
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    [ ! -e "$ROUTER_CALLS" ]
+}
+
+@test "no router call on a cold start, on a repeat, or on a dry run" {
+    job backup error
+    run bash "$SCRIPT"
+    [ ! -e "$ROUTER_CALLS" ]
+    seeded
+    run bash "$SCRIPT" --dry-run
+    [ ! -e "$ROUTER_CALLS" ]
+    seeded
+    STUB_ROUTE=intake run bash "$SCRIPT"
+    run bash "$SCRIPT"
+    [ "$(wc -l <"$ROUTER_CALLS")" -eq 1 ]
 }
