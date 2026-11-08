@@ -176,6 +176,27 @@ fake_restic() {
 	[ "$(count "$M/taskchampion.sqlite3")" = 41 ]
 }
 
+@test "a changed DB waits for its byte budget, then goes over" {
+	bash "$SCRIPT" mirror
+	make_tasks "$TASK_DB" 41
+	export TASK_MIRROR_BYTES_PER_HOUR=1000
+	run bash "$SCRIPT" mirror
+	[ "$status" -eq 0 ]
+	[ "$(count "$M/taskchampion.sqlite3")" = 40 ]
+	touch -d '-1 year' "$M/taskchampion.sqlite3"
+	run bash "$SCRIPT" mirror
+	[ "$status" -eq 0 ]
+	[ "$(count "$M/taskchampion.sqlite3")" = 41 ]
+}
+
+@test "a missing DB is not hidden by the byte budget" {
+	bash "$SCRIPT" mirror
+	command rm -f "$TASK_DB" "$TASK_DB-wal" "$TASK_DB-shm"
+	TASK_MIRROR_BYTES_PER_HOUR=1000 run bash "$SCRIPT" mirror
+	[ "$status" -eq 1 ]
+	grep -q 'copy failed' "$M/.last-error"
+}
+
 @test "check pages when briefs and Gordon state stop mirroring" {
 	bash "$SCRIPT" mirror
 	echo "$(($(date +%s) - 3600))" >"$M/.dirs-ok-at"

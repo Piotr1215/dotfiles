@@ -37,6 +37,10 @@ MIRROR="$NAS/taskwarrior-mirror"
 STAGE="${TASK_BACKUP_STAGE:-/dev/shm/task-backup-$(id -u)}"
 NTFY_TOPIC="${TASK_BACKUP_NTFY:-https://ntfy.sh/homelab-piotr1215-backup}"
 MIRROR_MAX_AGE="${TASK_MIRROR_MAX_AGE:-300}"
+# A changed DB is copied at most this many bytes an hour. A full-size DB
+# (225 MB with 45k tasks) goes over about every 6 minutes instead of every
+# minute (13 GB an hour); one under 30 MB still goes every minute.
+MIRROR_BYTES_PER_HOUR="${TASK_MIRROR_BYTES_PER_HOUR:-2147483648}"
 DIRS_MAX_AGE="${TASK_DIRS_MAX_AGE:-1800}"
 # The path __backup.sh puts the daily DB copy under; it marks the snapshots.
 SNAPSHOT_PATH="${TASK_SNAPSHOT_PATH:-$HOME/.local/share/task-backups}"
@@ -68,12 +72,18 @@ source_sig() {
 	stat -c '%.9Y %s' "$TASK_DB" "$TASK_DB-wal" 2>/dev/null | tr '\n' ' ' || true
 }
 
-# mirror_db: copy the DB to the NAS when it changed, unless the copy is damaged
-# or has under half the tasks of the NAS copy (a wiped or replaced DB).
+# mirror_db: copy the DB to the NAS when it changed and its byte budget allows,
+# unless the copy is damaged or has under half the tasks of the NAS copy (a
+# wiped or replaced DB). A missing DB has size 0, so it is never paced.
 mirror_db() {
-	local sig rows prev
+	local sig rows prev gap last
 	sig=$(source_sig)
 	if [[ -f "$MIRROR/taskchampion.sqlite3" && "$sig" == "$(cat "$MIRROR/.source-sig" 2>/dev/null)" ]]; then
+		return 0
+	fi
+	gap=$(($(stat -c %s "$TASK_DB" 2>/dev/null || echo 0) * 3600 / MIRROR_BYTES_PER_HOUR))
+	last=$(stat -c %Y "$MIRROR/taskchampion.sqlite3" 2>/dev/null || echo 0)
+	if (($(date +%s) - last < gap)); then
 		return 0
 	fi
 	if ! rows=$(SNAPSHOT_COUNT_TABLE=tasks sqlite_snapshot "$TASK_DB" "$STAGE/mirror.sqlite3" 2>&1); then
