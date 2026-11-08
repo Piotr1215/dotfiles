@@ -7,7 +7,8 @@ setup() {
   export STATUS_SCRIPT="$BATS_TEST_DIRNAME/../../scripts/__backup_status.sh"
   mkdir -p "$HOME/.local/state/cron-jobs" "$HOME/.local/state/backup-drill" "$BACKUP_ROOT/taskwarrior-mirror" "$BATS_TEST_TMPDIR/bin"
   date +%s > "$HOME/.local/state/backup-last-success"
-  date +%s > "$BACKUP_ROOT/taskwarrior-mirror/.ok-at"
+  date +%s > "$BACKUP_ROOT/taskwarrior-mirror/.dirs-ok-at"
+  printf '[%s] [INFO] run end: exit=0 state=no-hit duration=1s\n' "$(date '+%F %T')" > "$HOME/.local/state/cron-jobs/__task_sync.log"
   printf '[%s] [INFO] Backup completed in 1s\n' "$(date '+%F %T')" > "$HOME/backup.log"
   printf '[%s] [INFO] SUMMARY: backup complete in 1s\n' "$(date '+%F %T')" > "$HOME/.local/state/cron-jobs/system-backup-rsync.log"
   cat > "$BATS_TEST_TMPDIR/bin/restic" <<'STUB'
@@ -37,14 +38,28 @@ STUB
 }
 
 @test "metrics capture stale task and failed drill" {
-  printf '1\n' > "$BACKUP_ROOT/taskwarrior-mirror/.ok-at"
+  printf '1\n' > "$BACKUP_ROOT/taskwarrior-mirror/.dirs-ok-at"
   printf '{"last_run":123,"layers":{"home":{"ok":false,"last_run":123}}}' > "$HOME/.local/state/backup-drill/last.json"
   run "$STATUS_SCRIPT" --prom "$BATS_TEST_TMPDIR/metrics/backup.prom"
   [ "$status" -eq 0 ]
-  grep -Fx 'backup_layer_ok{layer="task"} 0' "$BATS_TEST_TMPDIR/metrics/backup.prom"
+  grep -Fx 'backup_layer_ok{layer="task-files"} 0' "$BATS_TEST_TMPDIR/metrics/backup.prom"
   grep -Fx 'backup_drill_ok{layer="home"} 0' "$BATS_TEST_TMPDIR/metrics/backup.prom"
   grep -Fx 'backup_drill_last_run_timestamp_seconds 123' "$BATS_TEST_TMPDIR/metrics/backup.prom"
   [ "$(find "$BATS_TEST_TMPDIR/metrics" -type f | wc -l)" -eq 1 ]
+}
+
+@test "sync and directory mirror timestamps are reported separately" {
+  printf '1\n' > "$BACKUP_ROOT/taskwarrior-mirror/.ok-at"
+  run "$STATUS_SCRIPT" --prom "$BATS_TEST_TMPDIR/metrics.prom"
+  [ "$status" -eq 0 ]
+  grep -Fx 'backup_layer_ok{layer="task-files"} 1' "$BATS_TEST_TMPDIR/metrics.prom"
+  grep -Fx 'backup_layer_ok{layer="task-sync"} 1' "$BATS_TEST_TMPDIR/metrics.prom"
+  printf '[2000-01-01 00:00:00] [INFO] run end: exit=0 state=no-hit duration=1s\n' > "$HOME/.local/state/cron-jobs/__task_sync.log"
+  printf '[%s] [ERROR] run end: exit=1 state=error duration=1s\n' "$(date '+%F %T')" >> "$HOME/.local/state/cron-jobs/__task_sync.log"
+  run "$STATUS_SCRIPT" --prom "$BATS_TEST_TMPDIR/metrics.prom"
+  [ "$status" -eq 0 ]
+  grep -Fx 'backup_layer_ok{layer="task-files"} 1' "$BATS_TEST_TMPDIR/metrics.prom"
+  grep -Fx 'backup_layer_ok{layer="task-sync"} 0' "$BATS_TEST_TMPDIR/metrics.prom"
 }
 
 @test "exporter reports an enabled textfile directory" {

@@ -14,10 +14,11 @@ setup() {
 	export TASK_BACKUP_DIRS="$T/briefs:$T/gordon"
 	export TASK_BACKUP_NTFY="http://ntfy.invalid/topic"
 	export TASK_BACKUP_UPTIME=100000
+	export CRON_STATE_DIR="$T/cron"
 	export RESTIC_REPOSITORY="$T/repo" RESTIC_PASSWORD=test
 	unset RESTIC_PASSWORD_FILE
 	M="$T/nas/taskwarrior-mirror"
-	mkdir -p "$HOME" "$T/task" "$T/nas" "$T/briefs" "$T/gordon/cases" "$T/stubs"
+	mkdir -p "$HOME" "$T/task" "$T/nas" "$T/briefs" "$T/gordon/cases" "$T/stubs" "$T/cron"
 	echo brief >"$T/briefs/b1.md"
 	echo case >"$T/gordon/cases/c1.json"
 	for c in mountpoint curl notify-send; do
@@ -26,65 +27,24 @@ setup() {
 	done
 	export PATH="$T/stubs:$PATH"
 	make_tasks "$TASK_DB" 40
+	fake_sync "$(date '+%F %T')"
 }
 
-# make_tasks <db> <n>: a WAL-mode DB with n rows in a taskchampion-shaped table.
-make_tasks() {
-	python3 -I - "$@" <<'PY'
-import sqlite3, sys, uuid
-c = sqlite3.connect(sys.argv[1])
-c.execute("PRAGMA journal_mode=WAL")
-c.execute("CREATE TABLE IF NOT EXISTS tasks (uuid TEXT PRIMARY KEY, data TEXT)")
-c.execute("DELETE FROM tasks")
-c.executemany("INSERT INTO tasks VALUES (?, '{}')", [(str(uuid.uuid4()),) for _ in range(int(sys.argv[2]))])
-c.commit()
-PY
+# A real wrapper end line, without including job output in the freshness signal.
+fake_sync() {
+	printf '[%s] [INFO] run end: exit=0 state=no-hit duration=1s\n' "$1" >"$CRON_STATE_DIR/__task_sync.log"
 }
 
-count() { python3 -I -c 'import sqlite3,sys;print(sqlite3.connect(sys.argv[1]).execute("select count(*) from tasks").fetchone()[0])' "$1"; }
+make_tasks() { : >"$1"; }
 
-@test "mirror puts a checked DB copy and the state dirs on the NAS, and the copy restores" {
+@test "mirror copies state directories without copying the task database" {
 	run bash "$SCRIPT" mirror
 	[ "$status" -eq 0 ]
-	[ "$(count "$M/taskchampion.sqlite3")" = 40 ]
-	[ "$(cat "$M/.tasks")" = 40 ]
-	[ -s "$M/.ok-at" ] && [ -s "$M/.dirs-ok-at" ] && [ ! -e "$M/.last-error" ]
+	[ ! -e "$M/taskchampion.sqlite3" ]
+	[ ! -e "$M/.ok-at" ]
+	[ -s "$M/.dirs-ok-at" ]
 	[ "$(cat "$M/state$T/briefs/b1.md")" = brief ]
 	[ -f "$M/state$T/gordon/cases/c1.json" ]
-}
-
-@test "an unchanged DB is not copied again, but the run still counts as a success" {
-	bash "$SCRIPT" mirror
-	touch -d '2020-01-01' "$M/taskchampion.sqlite3"
-	echo 0 >"$M/.ok-at"
-	run bash "$SCRIPT" mirror
-	[ "$status" -eq 0 ]
-	[ "$(stat -c %Y "$M/taskchampion.sqlite3")" = "$(date -d 2020-01-01 +%s)" ]
-	[ "$(cat "$M/.ok-at")" -gt 0 ]
-}
-
-@test "a DB that lost over half its tasks stops the mirror until accepted" {
-	bash "$SCRIPT" mirror
-	make_tasks "$TASK_DB" 3
-	run bash "$SCRIPT" mirror
-	[ "$status" -eq 1 ]
-	[ "$(count "$M/taskchampion.sqlite3")" = 40 ]
-	grep -q 'shrank from 40 to 3' "$M/.last-error"
-	run bash "$SCRIPT" mirror --accept-shrink
-	[ "$status" -eq 0 ]
-	[ "$(count "$M/taskchampion.sqlite3")" = 3 ]
-}
-
-@test "a missing or damaged DB stops the mirror and keeps the NAS copy" {
-	bash "$SCRIPT" mirror
-	echo "not a database" >"$TASK_DB"
-	run bash "$SCRIPT" mirror
-	[ "$status" -eq 1 ]
-	grep -q 'copy failed' "$M/.last-error"
-	command rm -f "$TASK_DB"
-	run bash "$SCRIPT" mirror
-	[ "$status" -eq 1 ]
-	[ "$(count "$M/taskchampion.sqlite3")" = 40 ]
 }
 
 @test "files deleted from a state dir stay on the NAS; a missing state dir stops the mirror" {
@@ -106,7 +66,7 @@ fake_restic() {
 	chmod +x "$T/stubs/restic"
 }
 
-@test "check is quiet while the mirror and snapshots are current" {
+@test "check is quiet while sync, state mirror and snapshots are current" {
 	bash "$SCRIPT" mirror
 	fake_restic "$(date -Iseconds)"
 	run bash "$SCRIPT" check
@@ -115,19 +75,19 @@ fake_restic() {
 	! grep -q '^curl' "$T/calls"
 }
 
-@test "check pages once for a stale mirror and a day-old snapshot, then once on recovery" {
+@test "check pages once for stale sync and a day-old snapshot, then once on recovery" {
 	bash "$SCRIPT" mirror
-	echo "$(($(date +%s) - 900))" >"$M/.ok-at"
-	echo "2026-11-08 00:00:00 rsync failed" >"$M/.last-error"
+	fake_sync "$(date -d '-20 minutes' '+%F %T')"
 	fake_restic "$(date -Iseconds -d '-30 hours')"
 	run bash "$SCRIPT" check
 	[ "$status" -eq 2 ]
-	[[ "$output" == *"mirror last succeeded 15 min ago"*"rsync failed"* ]]
+	[[ "$output" == *"TaskChampion sync last succeeded 20 min ago"* ]]
 	[[ "$output" == *"task DB is 30 h old"* ]]
 	run bash "$SCRIPT" check
 	[ "$status" -eq 2 ]
 	[ "$(grep -c '^curl' "$T/calls")" = 1 ]
 	bash "$SCRIPT" mirror
+	fake_sync "$(date '+%F %T')"
 	fake_restic "$(date -Iseconds)"
 	run bash "$SCRIPT" check
 	[ "$status" -eq 0 ]
@@ -145,7 +105,7 @@ fake_restic() {
 
 @test "right after boot, old stamps do not page" {
 	bash "$SCRIPT" mirror
-	echo 0 >"$M/.ok-at"
+	rm "$CRON_STATE_DIR/__task_sync.log"
 	fake_restic "$(date -Iseconds -d '-12 hours')"
 	TASK_BACKUP_UPTIME=60 run bash "$SCRIPT" check
 	[ "$status" -eq 0 ]
@@ -153,7 +113,7 @@ fake_restic() {
 
 @test "a new kind of problem pages at once, inside the re-page window" {
 	bash "$SCRIPT" mirror
-	echo "$(($(date +%s) - 900))" >"$M/.ok-at"
+	fake_sync "$(date -d '-20 minutes' '+%F %T')"
 	fake_restic "$(date -Iseconds)"
 	run bash "$SCRIPT" check
 	[ "$status" -eq 2 ]
@@ -164,37 +124,16 @@ fake_restic() {
 	[ "$(grep -c '^curl' "$T/calls")" = 2 ]
 }
 
-@test "a DB change reaches the NAS while a slow state-dir walk holds its lock" {
+@test "failed sync after a success does not refresh the success timestamp or expose output" {
 	bash "$SCRIPT" mirror
-	make_tasks "$TASK_DB" 41
-	flock "$T/stage/mirror-dirs.lock" sleep 5 &
-	holder=$!
-	sleep 0.5
-	run bash "$SCRIPT" mirror
-	kill "$holder" 2>/dev/null || true
-	[ "$status" -eq 0 ]
-	[ "$(count "$M/taskchampion.sqlite3")" = 41 ]
-}
-
-@test "a changed DB waits for its byte budget, then goes over" {
-	bash "$SCRIPT" mirror
-	make_tasks "$TASK_DB" 41
-	export TASK_MIRROR_BYTES_PER_HOUR=1000
-	run bash "$SCRIPT" mirror
-	[ "$status" -eq 0 ]
-	[ "$(count "$M/taskchampion.sqlite3")" = 40 ]
-	touch -d '-1 year' "$M/taskchampion.sqlite3"
-	run bash "$SCRIPT" mirror
-	[ "$status" -eq 0 ]
-	[ "$(count "$M/taskchampion.sqlite3")" = 41 ]
-}
-
-@test "a missing DB is not hidden by the byte budget" {
-	bash "$SCRIPT" mirror
-	command rm -f "$TASK_DB" "$TASK_DB-wal" "$TASK_DB-shm"
-	TASK_MIRROR_BYTES_PER_HOUR=1000 run bash "$SCRIPT" mirror
-	[ "$status" -eq 1 ]
-	grep -q 'copy failed' "$M/.last-error"
+	fake_sync "$(date -d '-20 minutes' '+%F %T')"
+	printf '[%s] [ERROR] run end: exit=1 state=error duration=1s\n    secret-marker\n' "$(date '+%F %T')" >>"$CRON_STATE_DIR/__task_sync.log"
+	fake_restic "$(date -Iseconds)"
+	run bash "$SCRIPT" check
+	[ "$status" -eq 2 ]
+	[[ "$output" == *"TaskChampion sync last succeeded 20 min ago"* ]]
+	[[ "$output" != *secret-marker* ]]
+	! grep -q secret-marker "$T/calls"
 }
 
 @test "check pages when briefs and Gordon state stop mirroring" {

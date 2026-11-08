@@ -14,7 +14,6 @@ home = pathlib.Path(os.environ['HOME'])
 nas = pathlib.Path(os.getenv('BACKUP_ROOT', '/mnt/nas-backup'))
 tmp = pathlib.Path(os.environ['DRILL_SCRATCH'])
 state = pathlib.Path(os.getenv('BACKUP_DRILL_STATE', str(home / '.local/state/backup-drill/last.json')))
-task = pathlib.Path(os.getenv('TASK_DB', str(home / '.task/taskchampion.sqlite3')))
 task_copy = pathlib.Path(os.getenv('TASK_SNAPSHOT_PATH', str(home / '.local/share/task-backups'))) / 'taskchampion.sqlite3'
 layers = ['restic', 'home', 'dev', 'task', 'system', 'taskchampion']
 if len(sys.argv) == 3 and sys.argv[1] == '--layer' and sys.argv[2] in layers:
@@ -153,17 +152,32 @@ def restic_check():
             raise RuntimeError('restored snapshot file differs from live file')
     return f'task DB integrity ok, {rows} rows; 3 restored files match'
 
-# Restore the task mirror and compare its row count with a consistent live read.
+# Check files from both state directories in the mirror.
 def task_check():
-    dest = tmp / 'task-mirror.sqlite3'
-    shutil.copyfile(nas / 'taskwarrior-mirror/taskchampion.sqlite3', dest)
-    rows = database(dest)
-    with sqlite3.connect(task.as_uri() + '?mode=ro', uri=True) as db:
-        live = db.execute('select count(*) from tasks').fetchone()[0]
-    delta = int(os.getenv('BACKUP_DRILL_TASK_DELTA', '5'))
-    if abs(rows - live) > delta:
-        raise RuntimeError(f'task row count differs: mirror {rows}, live {live}, limit {delta}')
-    return f'integrity ok, {rows} rows; live {live} (delta {abs(rows-live)})'
+    sources = [home / '.local/state/taskwarrior/briefs', home / '.local/state/gordon']
+    try:
+        stamp = int((nas / 'taskwarrior-mirror/.dirs-ok-at').read_text().strip())
+        if stamp <= 0:
+            raise ValueError('invalid timestamp')
+    except (OSError, ValueError):
+        raise RuntimeError('task state mirror success timestamp missing or invalid') from None
+    checked = 0
+    for source in sources:
+        mirror = nas / 'taskwarrior-mirror/state' / str(source).lstrip('/')
+        if not source.is_dir() or not mirror.is_dir():
+            raise RuntimeError('task state source or mirror directory missing')
+        files = [p for p in source.rglob('*') if p.is_file() and not p.is_symlink() and p.stat().st_mtime < stamp]
+        random.shuffle(files)
+        for p in files[:3]:
+            target = mirror / p.relative_to(source)
+            if target.is_symlink() or not target.is_file():
+                raise RuntimeError('task state file missing from mirror')
+            import filecmp
+            before = p.stat()
+            if not filecmp.cmp(p, target, shallow=False) or p.stat().st_mtime_ns != before.st_mtime_ns:
+                raise RuntimeError('task state mirror differs or changed during comparison')
+            checked += 1
+    return f'{checked} state files match across briefs and Gordon state'
 
 # Restore and compare fstab from the weekly mirror.
 def system_check():
@@ -171,12 +185,45 @@ def system_check():
     compare(source, nas / 'system-backup/etc/fstab', tmp / 'fstab')
     return 'restored fstab matches'
 
-# Check the HTTPS endpoint, without claiming a sync restore was tested.
+# Restore a fresh TaskChampion database using only the live sync settings.
 def server_check():
-    status = run('curl', '--silent', '--show-error', '--max-time', '15', '--output', '/dev/null', '--write-out', '%{http_code}', os.getenv('TASKCHAMPION_URL', 'https://taskchampion.tail165ec.ts.net/')).decode()
-    if status != '200':
-        raise RuntimeError(f'HTTP {status}')
-    return 'HTTPS HTTP 200'
+    settings = {}
+    for key in ('sync.server.url', 'sync.server.client_id', 'sync.encryption_secret'):
+        try:
+            value = run('task', '_get', 'rc.' + key).decode().strip()
+        except UnicodeDecodeError:
+            raise RuntimeError('TaskChampion sync setting invalid') from None
+        if not value or '\n' in value or '\r' in value:
+            raise RuntimeError('TaskChampion sync setting missing or invalid')
+        settings[key] = value
+    taskdata = tmp / 'taskdata'
+    taskdata.mkdir(mode=0o700)
+    taskrc = tmp / 'taskrc'
+    with os.fdopen(os.open(taskrc, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), 'w') as f:
+        for key, value in settings.items():
+            f.write(f'{key}={value}\n')
+    env = os.environ.copy()
+    env.update(TASKRC=str(taskrc), TASKDATA=str(taskdata))
+    def task_run(*args, scratch=False):
+        result = subprocess.run(('task', 'rc.hooks=off', *args), env=env if scratch else None,
+                                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=300)
+        if result.returncode:
+            raise RuntimeError('task command failed')
+        return result.stdout
+    def count(scratch):
+        total = 0
+        for status in ('pending', 'completed'):
+            result = task_run('rc.context=', 'status:' + status, 'count', scratch=scratch).strip()
+            if not result.isdigit():
+                raise RuntimeError('invalid task count')
+            total += int(result)
+        return total
+    task_run('sync', scratch=True)
+    restored, live = count(True), count(False)
+    delta = int(os.getenv('BACKUP_DRILL_TASK_DELTA', '5'))
+    if delta < 0 or abs(restored - live) > delta:
+        raise RuntimeError(f'task count differs: restored {restored}, live {live}, limit {delta}')
+    return f'restored {restored} tasks from the server, live {live}'
 
 checks = {'restic': restic_check, 'home': lambda: mirror_check('home'), 'dev': lambda: mirror_check('dev'), 'task': task_check, 'system': system_check, 'taskchampion': server_check}
 try:

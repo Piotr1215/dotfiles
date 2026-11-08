@@ -11,7 +11,7 @@ home = pathlib.Path(os.environ['HOME'])
 nas = pathlib.Path(os.getenv('BACKUP_ROOT', '/mnt/nas-backup'))
 state_dir = home / '.local/state'
 now = int(time.time())
-names = ['restic', 'home', 'dev', 'task', 'system', 'taskchampion']
+names = ['restic', 'home', 'dev', 'task-files', 'task-sync', 'system', 'taskchampion']
 if len(sys.argv) > 3 or (len(sys.argv) > 1 and sys.argv[1] != '--prom'):
     print('usage: __backup_status.sh [--prom [file]]', file=sys.stderr)
     sys.exit(2)
@@ -64,9 +64,13 @@ try:
 except (OSError, subprocess.SubprocessError, ValueError, KeyError, TypeError):
     restic_time = 0
 try:
-    task_time = int(read(nas / 'taskwarrior-mirror/.ok-at').strip())
+    task_time = int(read(nas / 'taskwarrior-mirror/.dirs-ok-at').strip())
 except ValueError:
     task_time = 0
+cron_state = pathlib.Path(os.getenv('CRON_STATE_DIR', str(state_dir / 'cron-jobs')))
+sync_lines = read(cron_state / '__task_sync.log').splitlines()
+sync_time = max((stamp(line) for line in sync_lines if re.match(
+    r'^\[\d{4}-\d\d-\d\d \d\d:\d\d:\d\d\] \[INFO\] run end: exit=0 state=no-hit duration=\d+s$', line)), default=0)
 system_lines = read(os.getenv('SYSTEM_BACKUP_LOG', str(state_dir / 'cron-jobs/system-backup-rsync.log'))).splitlines()
 system_good = [stamp(line) for line in system_lines if 'SUMMARY: backup complete in' in line]
 system_bad = [stamp(line) for line in system_lines if 'SUMMARY: backup FAILED' in line or 'SUMMARY: backup aborted' in line]
@@ -81,8 +85,8 @@ results = drill.get('layers', {})
 server = results.get('taskchampion', {})
 server_time = server.get('last_success', server.get('last_run', drill.get('last_run', 0)) if server.get('ok') is True else 0)
 rows = []
-for name, last, max_age in [('restic', restic_time, 26*3600), ('home', home_success, 25*3600), ('dev', dev_success, 25*3600), ('task', task_time, 300), ('system', system_time, 8*86400), ('taskchampion', server_time, 86400)]:
-    result = results.get(name, {})
+for name, last, max_age in [('restic', restic_time, 26*3600), ('home', home_success, 25*3600), ('dev', dev_success, 25*3600), ('task-files', task_time, 30*60), ('task-sync', sync_time, 15*60), ('system', system_time, 8*86400), ('taskchampion', server_time, 86400)]:
+    result = results.get('task' if name == 'task-files' else name, {})
     failure = latest['failed'].lower()
     failed = ((name == 'home' and ('system files' in failure or 'home folder' in failure or 'home backup' in failure)) or
               (name == 'dev' and 'dev folder' in failure) or

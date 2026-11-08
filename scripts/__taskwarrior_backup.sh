@@ -1,32 +1,7 @@
 #!/usr/bin/env bash
-# Continuous NAS mirror of the Taskwarrior DB, the handoff briefs and Gordon
-# state, and the alert that says when any task backup goes stale.
-#
-# WHY: on 2026-11-07 an agent test ran `rm -rf ~`. The task DB had reached no
-# backup since 8 Feb (a .gitignore filter in the nightly rsync), so the newest
-# copy anywhere was from 13 Oct. Piotr, 8 Nov: "let's make damn sure this is
-# continuously mirrored to nas"; with the mirror in place, "every 15 min is way
-# too aggressive", "these should be daily snapshot".
-#
-# Two layers:
-#   mirror    this script, every minute from cron. A checked copy of the DB on
-#             the NAS, replaced only when it passes integrity_check and holds at
-#             least half the tasks of the copy it replaces. Briefs and Gordon
-#             state go over with rsync and no --delete. A missing, emptied or
-#             damaged source stops the mirror; it never empties the NAS copy.
-#   daily     __backup.sh at 20:00: a restic snapshot of the same three, kept
-#             7 daily, 4 weekly, 6 monthly. A bad mirror run cannot reach it.
-#
-# `check`, every 5 minutes from cron, pages ntfy when the NAS is gone, the DB
-# mirror has not succeeded for 5 minutes, the state dirs for 30, or the newest
-# daily snapshot is over 26 hours old. It exits 2 on an alert, the cron
-# wrapper's "hit".
-#
-# Restore, never in place:
-#   mirror: /mnt/nas-backup/taskwarrior-mirror/taskchampion.sqlite3 and state/
-#   daily:  restic restore latest --path ~/.local/share/task-backups
-#           --target <scratch dir> (RESTIC_REPOSITORY=/mnt/nas-backup/secure-store,
-#           RESTIC_PASSWORD_FILE=~/.config/restic/password)
+# Mirror handoff briefs and Gordon state to the NAS and alert on stale backups.
+# Task data is synced through TaskChampion; daily restic snapshots remain separate.
+# State files are copied without --delete so missing source files survive on NAS.
 set -eo pipefail
 
 TASK_DB="${TASK_DB:-$HOME/.task/taskchampion.sqlite3}"
@@ -36,11 +11,8 @@ MIRROR="$NAS/taskwarrior-mirror"
 # Staging lives in RAM: the copy is transient and needs no disk write.
 STAGE="${TASK_BACKUP_STAGE:-/dev/shm/task-backup-$(id -u)}"
 NTFY_TOPIC="${TASK_BACKUP_NTFY:-https://ntfy.sh/homelab-piotr1215-backup}"
-MIRROR_MAX_AGE="${TASK_MIRROR_MAX_AGE:-300}"
-# A changed DB is copied at most this many bytes an hour. A full-size DB
-# (225 MB with 45k tasks) goes over about every 6 minutes instead of every
-# minute (13 GB an hour); one under 30 MB still goes every minute.
-MIRROR_BYTES_PER_HOUR="${TASK_MIRROR_BYTES_PER_HOUR:-2147483648}"
+SYNC_MAX_AGE="${TASK_SYNC_MAX_AGE:-900}"
+SYNC_LOG="${CRON_STATE_DIR:-$HOME/.local/state/cron-jobs}/__task_sync.log"
 DIRS_MAX_AGE="${TASK_DIRS_MAX_AGE:-1800}"
 # The path __backup.sh puts the daily DB copy under; it marks the snapshots.
 SNAPSHOT_PATH="${TASK_SNAPSHOT_PATH:-$HOME/.local/share/task-backups}"
@@ -48,9 +20,6 @@ SNAPSHOT_MAX_AGE="${TASK_SNAPSHOT_MAX_AGE:-93600}"
 REALERT_AFTER="${TASK_REALERT_AFTER:-21600}"
 export RESTIC_REPOSITORY="${RESTIC_REPOSITORY:-$NAS/secure-store}"
 [[ -n "$RESTIC_PASSWORD" ]] || export RESTIC_PASSWORD_FILE="${RESTIC_PASSWORD_FILE:-$HOME/.config/restic/password}"
-
-# shellcheck source=./__lib_backup_guard.sh
-source "$(dirname "${BASH_SOURCE[0]}")/__lib_backup_guard.sh"
 
 # nas_ready: the NAS is mounted and takes a write within 20 s. mountpoint alone
 # passes on the autofs stub while the NAS is unreachable (see __backup.sh).
@@ -65,43 +34,6 @@ nas_ready() {
 fail() {
 	printf '%s %s\n' "$(date '+%F %T')" "$1" >"$MIRROR/${ERR_FILE:-.last-error}" 2>/dev/null || true
 	echo "ERROR: $1" >&2
-}
-
-# source_sig: mtime and size of the DB and its WAL; equal means nothing to copy.
-source_sig() {
-	stat -c '%.9Y %s' "$TASK_DB" "$TASK_DB-wal" 2>/dev/null | tr '\n' ' ' || true
-}
-
-# mirror_db: copy the DB to the NAS when it changed and its byte budget allows,
-# unless the copy is damaged or has under half the tasks of the NAS copy (a
-# wiped or replaced DB). A missing DB has size 0, so it is never paced.
-mirror_db() {
-	local sig rows prev gap last
-	sig=$(source_sig)
-	if [[ -f "$MIRROR/taskchampion.sqlite3" && "$sig" == "$(cat "$MIRROR/.source-sig" 2>/dev/null)" ]]; then
-		return 0
-	fi
-	gap=$(($(stat -c %s "$TASK_DB" 2>/dev/null || echo 0) * 3600 / MIRROR_BYTES_PER_HOUR))
-	last=$(stat -c %Y "$MIRROR/taskchampion.sqlite3" 2>/dev/null || echo 0)
-	if (($(date +%s) - last < gap)); then
-		return 0
-	fi
-	if ! rows=$(SNAPSHOT_COUNT_TABLE=tasks sqlite_snapshot "$TASK_DB" "$STAGE/mirror.sqlite3" 2>&1); then
-		fail "task DB copy failed, NAS copy kept: $rows"
-		return 1
-	fi
-	prev=$(cat "$MIRROR/.tasks" 2>/dev/null || echo 0)
-	if ((prev >= 20 && rows * 2 < prev)) && [[ "$ACCEPT_SHRINK" != 1 ]]; then
-		fail "task DB shrank from $prev to $rows tasks, NAS copy kept. If intended: ${0##*/} mirror --accept-shrink"
-		return 1
-	fi
-	if ! timeout -k 5 60 cp "$STAGE/mirror.sqlite3" "$MIRROR/.taskchampion.sqlite3.tmp" ||
-		! mv -f "$MIRROR/.taskchampion.sqlite3.tmp" "$MIRROR/taskchampion.sqlite3"; then
-		fail "copy to $MIRROR failed"
-		return 1
-	fi
-	echo "$rows" >"$MIRROR/.tasks"
-	echo "$sig" >"$MIRROR/.source-sig"
 }
 
 # mirror_dirs: add and update files on the NAS, never delete. A missing source
@@ -122,34 +54,33 @@ mirror_dirs() {
 	done
 }
 
-# The DB and the dirs take separate locks. Walking Gordon state (12k files over
-# NFS) takes 13 s idle and over a minute under load; under one lock it made the
-# next runs skip, and a DB change took up to 151 s to reach the NAS.
+# Serialize state directory mirrors; an overlapping run can skip safely.
 cmd_mirror() {
-	local rc=0
 	if ! nas_ready; then
 		echo "ERROR: NAS $NAS is not mounted or not writable" >&2
 		return 1
 	fi
-	exec 8>"$STAGE/mirror-db.lock"
-	if flock -n 8; then
-		if mirror_db; then
-			date +%s >"$MIRROR/.ok-at"
-			rm -f "$MIRROR/.last-error"
-		else
-			rc=1
-		fi
-		flock -u 8
-	fi
 	exec 9>"$STAGE/mirror-dirs.lock"
-	flock -n 9 || return "$rc"
+	flock -n 9 || return 0
 	if mirror_dirs; then
 		date +%s >"$MIRROR/.dirs-ok-at"
 		rm -f "$MIRROR/.dirs-error"
 	else
-		rc=1
+		return 1
 	fi
-	return "$rc"
+}
+
+# The cron wrapper appends an end line only after the task command exits.
+# Its JSON state holds only the latest run, so a failure would erase the time
+# of the previous success. Read only the wrapper's success timestamp.
+last_sync() {
+	local stamp
+	stamp=$(sed -nE 's/^\[([^]]+)\] \[INFO\] run end: exit=0 state=no-hit duration=[0-9]+s$/\1/p' "$SYNC_LOG" 2>/dev/null | tail -n 1 || true)
+	if [[ -n "$stamp" ]]; then
+		date -d "$stamp" +%s 2>/dev/null || echo 0
+	else
+		echo 0
+	fi
 }
 
 # newest_snapshot: epoch of the newest snapshot holding SNAPSHOT_PATH, 0 for
@@ -171,20 +102,23 @@ page() {
 }
 
 cmd_check() {
-	local problems=() kinds=() now up ok_at dirs_at snap msg alerted="$STAGE/alerted"
+	local problems=() kinds=() now up sync_at dirs_at snap msg alerted="$STAGE/alerted"
 	now=$(date +%s)
 	up=${TASK_BACKUP_UPTIME:-$(cut -d. -f1 /proc/uptime)}
 	[[ -f "$TASK_DB" ]] || { problems+=("no task DB at $TASK_DB"); kinds+=(db); }
+	sync_at=$(last_sync)
+	if ((now - sync_at > SYNC_MAX_AGE && up > SYNC_MAX_AGE)); then
+		if ((sync_at == 0)); then
+			problems+=("TaskChampion sync has no recorded success")
+		else
+			problems+=("TaskChampion sync last succeeded $(((now - sync_at) / 60)) min ago")
+		fi
+		kinds+=(sync)
+	fi
 	if ! nas_ready; then
 		problems+=("NAS $NAS is not mounted or not writable")
 		kinds+=(nas)
 	else
-		# The mirror's age counts only once cron had time to run it after boot.
-		ok_at=$(cat "$MIRROR/.ok-at" 2>/dev/null || echo 0)
-		if ((now - ok_at > MIRROR_MAX_AGE && up > MIRROR_MAX_AGE)); then
-			problems+=("mirror last succeeded $(((now - ok_at) / 60)) min ago: $(cat "$MIRROR/.last-error" 2>/dev/null || echo 'no error recorded, is its cron job running?')")
-			kinds+=(mirror)
-		fi
 		dirs_at=$(cat "$MIRROR/.dirs-ok-at" 2>/dev/null || echo 0)
 		if ((now - dirs_at > DIRS_MAX_AGE && up > DIRS_MAX_AGE)); then
 			problems+=("briefs and Gordon state last mirrored $(((now - dirs_at) / 60)) min ago: $(cat "$MIRROR/.dirs-error" 2>/dev/null || echo 'no error recorded')")
@@ -212,23 +146,21 @@ cmd_check() {
 		return 2
 	fi
 	if [[ -f "$alerted" ]]; then
-		page default white_check_mark "recovered: mirror and daily snapshot are current"
+		page default white_check_mark "recovered: sync, state mirror and daily snapshot are current"
 		rm -f "$alerted"
 	fi
-	echo "ok: mirror $(((now - ok_at) / 60)) min old, daily snapshot $(((now - snap) / 3600)) h old"
+	echo "ok: sync $(((now - sync_at) / 60)) min old, state mirror $(((now - dirs_at) / 60)) min old, daily snapshot $(((now - snap) / 3600)) h old"
 }
 
 umask 077
 mkdir -p "$STAGE"
-ACCEPT_SHRINK=0
 case "${1:-}" in
 mirror)
-	[[ "${2:-}" == --accept-shrink ]] && ACCEPT_SHRINK=1
 	cmd_mirror
 	;;
 check) cmd_check ;;
 *)
-	echo "usage: ${0##*/} mirror [--accept-shrink] | check" >&2
+	echo "usage: ${0##*/} mirror | check" >&2
 	exit 64
 	;;
 esac

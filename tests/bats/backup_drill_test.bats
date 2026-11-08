@@ -22,6 +22,38 @@ for p in (n/'taskwarrior-mirror/taskchampion.sqlite3', h/'.local/share/task-back
 (n/'system-backup/etc/fstab').write_text('fstab')
 (h/'fstab').write_text('fstab')
 PY
+  mkdir -p "$HOME/.local/state/taskwarrior/briefs" "$HOME/.local/state/gordon"
+  printf 'brief' > "$HOME/.local/state/taskwarrior/briefs/one"
+  printf 'state' > "$HOME/.local/state/gordon/one"
+  for d in "$HOME/.local/state/taskwarrior/briefs" "$HOME/.local/state/gordon"; do
+    mkdir -p "$BACKUP_ROOT/taskwarrior-mirror/state$d"
+    cp "$d/one" "$BACKUP_ROOT/taskwarrior-mirror/state$d/one"
+    touch -d '@1' "$d/one"
+  done
+  date +%s > "$BACKUP_ROOT/taskwarrior-mirror/.dirs-ok-at"
+  cat > "$BATS_TEST_TMPDIR/bin/task" <<'STUB'
+#!/usr/bin/env bash
+if [[ "$1" == _get ]]; then
+  case "$2" in
+    rc.sync.server.url) printf '%s\n' 'https://example.invalid/' ;;
+    rc.sync.server.client_id) printf '%s\n' 'client-private-fixture' ;;
+    rc.sync.encryption_secret) if [[ ${BAD_SETTING:-0} == 1 ]]; then printf 'secret-private-fixture\377'; exit 0; fi; printf '%s\n' 'secret-private-fixture' ;;
+  esac
+elif [[ "$2" == sync ]]; then
+  [[ "$(stat -c %a "$TASKRC")" == 600 ]] || exit 1
+  [[ -d "$TASKDATA" && -z "$(ls -A "$TASKDATA")" ]] || exit 1
+  [[ $(wc -l < "$TASKRC") -eq 3 ]] || exit 1
+  printf '%s' secret-private-fixture >&2
+  if [[ ${FAIL_SYNC:-0} == 1 ]]; then printf '%s' secret-private-fixture; exit 1; fi
+elif [[ "$4" == count ]]; then
+  [[ "$2" == rc.context= ]] || exit 1
+  if [[ "$3" == status:pending ]]; then
+    if [[ "$TASKRC" == "$TMPDIR"/* ]]; then printf '%s\n' "${RESTORED_COUNT:-8}"; else printf '%s\n' 8; fi
+  else printf '2\n'; fi
+else exit 1
+fi
+STUB
+  chmod +x "$BATS_TEST_TMPDIR/bin/task"
   export BACKUP_FSTAB="$HOME/fstab"
   cat > "$BATS_TEST_TMPDIR/bin/restic" <<'STUB'
 #!/usr/bin/env python3
@@ -57,12 +89,24 @@ STUB
   jq -e '.layers.home.ok == false' "$HOME/.local/state/backup-drill/last.json"
 }
 
-@test "task mirror rejects an excessive row difference" {
-  export BACKUP_DRILL_TASK_DELTA=0
-  TASK_FILE="$HOME/.task/taskchampion.sqlite3" python3 -c 'import sqlite3,os; c=sqlite3.connect(os.environ["TASK_FILE"]); c.execute("insert into tasks values(2)"); c.commit()'
+@test "task state mirror checks both retained directories" {
+  run "$DRILL_SCRIPT" --layer task
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"2 state files match"* ]]
+  printf 'broken' > "$BACKUP_ROOT/taskwarrior-mirror/state$HOME/.local/state/gordon/one"
   run "$DRILL_SCRIPT" --layer task
   [ "$status" -eq 1 ]
-  [[ "$output" == *"row count differs"* ]]
+  [[ "$output" == *"mirror differs"* ]]
+}
+
+@test "task state mirror ignores files newer than the successful mirror" {
+  printf 'changed' > "$HOME/.local/state/gordon/one"
+  touch -d 'next hour' "$HOME/.local/state/gordon/one"
+  printf 'new' > "$HOME/.local/state/taskwarrior/briefs/new"
+  touch -d 'next hour' "$HOME/.local/state/taskwarrior/briefs/new"
+  run "$DRILL_SCRIPT" --layer task
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"1 state files match"* ]]
 }
 
 @test "system copy mismatch fails and partial runs retain other results" {
@@ -80,19 +124,45 @@ STUB
   [ ! -e "$HOME/.local/state/backup-drill/last.json" ]
 }
 
-@test "task mirror corrupt database fails integrity check" {
-  printf 'not sqlite' > "$BACKUP_ROOT/taskwarrior-mirror/taskchampion.sqlite3"
-  run "$DRILL_SCRIPT" --layer task
-  [ "$status" -eq 1 ]
-  jq -e '.layers.task.ok == false' "$HOME/.local/state/backup-drill/last.json"
+@test "TaskChampion restores tasks with private settings and cleans scratch" {
+  run "$DRILL_SCRIPT" --layer taskchampion
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"restored 10 tasks from the server, live 10"* ]]
+  [[ "$output" != *private-fixture* ]]
+  ! rg -q 'secret-private-fixture|client-private-fixture' "$HOME/.local/state/backup-drill"
+  [ -z "$(find "$TMPDIR" -name taskrc -print)" ]
 }
 
-@test "HTTPS layer rejects a non-200 response" {
-  printf '#!/usr/bin/env bash\nprintf 503\n' > "$BATS_TEST_TMPDIR/bin/curl"
-  chmod +x "$BATS_TEST_TMPDIR/bin/curl"
+@test "TaskChampion count overrides an active context for live and scratch databases" {
+  export TASK_CONTEXT=work
+  run "$DRILL_SCRIPT" --layer taskchampion
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"restored 10 tasks from the server, live 10"* ]]
+}
+
+@test "TaskChampion rejects a count mismatch without exposing secrets" {
+  export RESTORED_COUNT=20 BACKUP_DRILL_TASK_DELTA=0
   run "$DRILL_SCRIPT" --layer taskchampion
   [ "$status" -eq 1 ]
-  [[ "$output" == *"HTTP 503"* ]]
+  [[ "$output" == *"task count differs"* ]]
+  [[ "$output" != *private-fixture* ]]
+  ! rg -q 'secret-private-fixture|client-private-fixture' "$HOME/.local/state/backup-drill"
+}
+
+@test "malformed sync setting does not expose its bytes" {
+  export BAD_SETTING=1
+  run "$DRILL_SCRIPT" --layer taskchampion
+  [ "$status" -eq 1 ]
+  [[ "$output" != *secret-private-fixture* ]]
+  ! rg -q 'secret-private-fixture|client-private-fixture' "$HOME/.local/state/backup-drill"
+}
+
+@test "failed sync does not expose task diagnostics in output or state" {
+  export FAIL_SYNC=1
+  run "$DRILL_SCRIPT" --layer taskchampion
+  [ "$status" -eq 1 ]
+  [[ "$output" != *secret-private-fixture* ]]
+  ! rg -q 'secret-private-fixture|client-private-fixture' "$HOME/.local/state/backup-drill"
 }
 
 @test "restic failure is recorded without leaking its diagnostics" {
@@ -116,7 +186,7 @@ STUB
 @test "a failed partial drill preserves its last successful timestamp" {
   run "$DRILL_SCRIPT" --layer task
   [ "$status" -eq 0 ]
-  printf 'broken' > "$BACKUP_ROOT/taskwarrior-mirror/taskchampion.sqlite3"
+  printf 'broken' > "$BACKUP_ROOT/taskwarrior-mirror/state$HOME/.local/state/gordon/one"
   run "$DRILL_SCRIPT" --layer task
   [ "$status" -eq 1 ]
   jq -e '.layers.task.ok == false and .layers.task.last_success > 0' "$HOME/.local/state/backup-drill/last.json"
