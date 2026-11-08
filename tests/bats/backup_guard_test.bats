@@ -159,6 +159,19 @@ PY
 	grep -Fq "<$sources/dev/repo/.envrc>" "$T/calls"
 }
 
+@test "restic gets the git-crypt key and cloud configs when present" {
+	setup_backup_stubs
+	sources="$T/source"
+	mkdir -p "$sources/dev/dotfiles/.keys" "$sources/.aws" "$sources/.kube"
+	touch "$sources/dev/dotfiles/.keys/git-crypt-key" "$sources/.aws/config" "$sources/.kube/config"
+	echo hold >"$T/hold"
+	PATH="$stubs:$PATH" TMPDIR="$T" BACKUP_TEST_HOME="$sources" BACKUP_HOLD_FILE="$T/hold" BACKUP_TEST_ROOT="$T/nas" run bash "$BACKUP"
+	[ "$status" -eq 0 ]
+	for f in dev/dotfiles/.keys/git-crypt-key .aws/config .kube/config; do
+		grep -Fq "<$sources/$f>" "$T/calls" || return 1
+	done
+}
+
 @test "absent optional sources are skipped and retention groups by host and tags" {
 	setup_backup_stubs
 	mkdir -p "$T/source"
@@ -166,6 +179,7 @@ PY
 	[ "$status" -eq 0 ]
 	grep -Fq 'restic <forget> <--group-by> <host,tags>' "$T/calls"
 	! grep -Fq "<$T/source/.codex/>" "$T/calls"
+	! grep -Fq "<$T/source/.aws/config>" "$T/calls"
 }
 
 @test "each structured log line is written once and remains on stdout" {
