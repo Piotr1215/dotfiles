@@ -12,6 +12,7 @@ setup() {
   CALLS="${WORK}/alert-calls"
 
   export BACKUP_SUCCESS_STAMP="${WORK}/backup-last-success"
+  export BACKUP_HOLD_FILE="${WORK}/backup-hold"
   export CRON_STATE_DIR="${WORK}/state"
   unset MAX_AGE_HOURS
 
@@ -96,4 +97,15 @@ stamp_hours_ago() {
   state="${CRON_STATE_DIR}/backup-watchdog-test.json"
   [ "$(jq -r .state "$state")" = "no-hit" ]
   [[ "$(jq -r .message "$state")" == *"OK: last successful backup 1h ago"* ]]
+}
+
+@test "a hold left in place pages every morning, even with a fresh stamp" {
+  stamp_hours_ago 0
+  echo "restore in progress" >"$BACKUP_HOLD_FILE"
+
+  run "$WATCHDOG"
+
+  [ "$status" -eq 2 ]
+  [[ "$output" == "ALERT: Backup hold in place since "*"restore in progress"*"rm $BACKUP_HOLD_FILE" ]]
+  grep -q notify-send "$CALLS"
 }

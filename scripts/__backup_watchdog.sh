@@ -44,6 +44,14 @@ stale() {
 	exit 2
 }
 
+# A hold skips the nightly NAS mirrors without failing anything, so it pages
+# every morning it is left in place, before the next 20:00 run skips again.
+# Piotr, 8 Nov, after a hold sat unnoticed: "what if I would have forgotten".
+HOLD_FILE="${BACKUP_HOLD_FILE:-$HOME/.local/state/backup-hold}"
+if [[ -e "$HOLD_FILE" ]]; then
+	stale "Backup hold in place since $(date -r "$HOLD_FILE" '+%F %H:%M'): the 20:00 run skips the NAS mirrors. Reason: $(head -c 300 "$HOLD_FILE" 2>/dev/null) Lift it with: rm $HOLD_FILE"
+fi
+
 if [[ ! -f "$SUCCESS_STAMP" ]]; then
 	stale "No successful backup on record (stamp $SUCCESS_STAMP missing). Backup may never have completed since the watchdog was installed."
 fi
