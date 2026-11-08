@@ -70,6 +70,41 @@ try:
         partial.update(('dev', 'loft'))
     if '"$HOME/.local/state/taskwarrior/briefs"' in source:
         partial.add('.local')
+    # Only count the home run when both its tag and its exclude file occur in
+    # the same shell command. Ignore commented-out commands.
+    commands = re.sub(r'\\\n\s*', ' ', source)
+    home_run = any(
+        re.search(r'\brestic\s+backup\s+--tag\s+home\b', line)
+        and '--exclude-file "$BACKUP_SOURCE_HOME/.backup_restic_excludes"' in line
+        for line in commands.splitlines() if not line.lstrip().startswith('#')
+    )
+    excluded, sub_excludes, exclude_errors = {}, {}, []
+    if home_run:
+        exclude_file = home / '.backup_restic_excludes'
+        if not exclude_file.is_file():
+            exclude_errors.append('MISSING EXCLUDE FILE: ' + str(exclude_file))
+        else:
+            reason = ''
+            for line in exclude_file.read_text().splitlines():
+                line = line.strip()
+                if line.startswith('#'):
+                    reason = line[1:].strip()
+                    continue
+                prefix = '${BACKUP_SOURCE_HOME}/'
+                if not line.startswith(prefix):
+                    continue
+                pattern = line[len(prefix):].rstrip('/')
+                top, sep, remainder = pattern.partition('/')
+                if not top:
+                    continue
+                names = [name for name in entries if fnmatch.fnmatchcase(name, top)]
+                if not sep and not names and not any(c in top for c in '*?['):
+                    exclude_errors.append('STALE EXCLUDE: ' + top)
+                for name in names:
+                    if sep:
+                        sub_excludes.setdefault(name, []).append((remainder, reason))
+                    else:
+                        excluded[name] = reason
     # Dedicated rsync sources cover these subtrees, with their own exclusions.
     dedicated_full, dedicated_partial = set(), set()
     for line in source.splitlines():
@@ -91,6 +126,8 @@ try:
         layers = []
         if name in full: layers.append('restic')
         elif name in partial: layers.append('restic (partial)')
+        if home_run and exclude_file.is_file() and name not in excluded:
+            layers.append('restic (home)')
         if name in mirror or name in dedicated_full: layers.append('mirror')
         elif name in dedicated_partial: layers.append('mirror (partial)')
         # Dedicated mirror sources were parsed above; dev is the entire source,
@@ -101,22 +138,30 @@ try:
             remote = subprocess.run(['git', '-C', str(path), 'remote'], text=True,
                                     stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
             if remote.returncode == 0 and remote.stdout.strip():
-                label = 'github' if any(x in layers for x in ('restic', 'mirror', 'task')) else 'github-only'
+                label = 'github' if any(x in layers for x in ('restic', 'restic (home)', 'mirror', 'task')) else 'github-only'
                 layers.append(label + ' (pushed commits only)')
         item = {'name': name, 'type': 'link' if path.is_symlink() else 'directory' if path.is_dir() else 'file',
                 'target': os.readlink(path) if path.is_symlink() else None,
                 'layers': layers, 'manifest': rules.get(name)}
-        item['uncovered'] = not any(layer in ('restic', 'mirror', 'task') for layer in layers) and name not in rules
-        item['mirror_no_history'] = 'mirror' in layers and 'restic' not in layers and 'task' not in layers
+        if home_run:
+            item['home_exclusion'] = excluded.get(name)
+            item['home_sub_exclusions'] = [{'pattern': p, 'reason': r} for p, r in sub_excludes.get(name, [])]
+        item['uncovered'] = not any(layer in ('restic', 'restic (home)', 'mirror', 'task') for layer in layers) and name not in rules and not excluded.get(name)
+        item['mirror_no_history'] = 'mirror' in layers and not any(layer in layers for layer in ('restic', 'restic (home)', 'task'))
         results.append(item)
     uncovered = [x['name'] for x in results if x['uncovered']]
-    data = {'uncovered': uncovered, 'stale': stale, 'entries': results}
+    data = {'exclude_errors': exclude_errors} if home_run else {}
+    data.update({'uncovered': uncovered, 'stale': stale, 'entries': results})
     if args:
         print(json.dumps(data, ensure_ascii=True, indent=2))
     else:
+        for error in exclude_errors: print(error)
         for name in uncovered: print('UNCOVERED: ' + name)
         for name in stale: print('STALE: ' + name)
-        print('Configured layers only; exclusions and backup success are not verified.')
+        if home_run:
+            print('Configured layers only; home skips files over 1G and stores symlinks as links; backup success is not verified.')
+        else:
+            print('Configured layers only; exclusions and backup success are not verified.')
         for item in results:
             label = item['name']
             if item['type'] == 'link': label += ' -> ' + item['target']
@@ -124,8 +169,12 @@ try:
             if item['mirror_no_history']: details += ' (mirror only: no history)'
             if item['manifest']:
                 details += '; ' + item['manifest']['status'] + ': ' + item['manifest']['reason']
+            if item.get('home_exclusion') is not None:
+                details += '; home excluded: ' + item['home_exclusion']
+            for exclusion in item.get('home_sub_exclusions', []):
+                details += '; home excludes ' + exclusion['pattern'] + ': ' + exclusion['reason']
             print(label + ': ' + details)
-    sys.exit(2 if uncovered or stale else 0)
+    sys.exit(2 if uncovered or stale or exclude_errors else 0)
 except (OSError, ValueError, subprocess.CalledProcessError) as e:
     print('backup coverage: ' + str(e), file=sys.stderr)
     sys.exit(1)

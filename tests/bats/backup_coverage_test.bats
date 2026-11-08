@@ -88,3 +88,99 @@ SOURCE
   [[ "$output" == *'UNCOVERED: repo'* ]]
   [[ "$output" == *'repo: github-only (pushed commits only)'* ]]
 }
+
+# Add the proposed home run without running restic.
+enable_home_run() {
+  cat >> "$BACKUP_COVERAGE_SOURCE" <<'SOURCE'
+BACKUP_SOURCE_HOME="$BACKUP_SOURCE_HOME" restic backup --tag home --exclude-larger-than 1G \
+    --exclude-file "$BACKUP_SOURCE_HOME/.backup_restic_excludes" "$BACKUP_SOURCE_HOME/" || record_failure "restic home"
+SOURCE
+  : > "$HOME/.backup_restic_excludes"
+}
+
+@test "home run covers new entries and preserves other layers" {
+  enable_home_run
+  mkdir "$HOME/restic" "$HOME/mirror"
+  touch "$HOME/new"
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'new: restic (home)'* ]]
+  [[ "$output" == *'restic: restic, restic (home)'* ]]
+  [[ "$output" == *'mirror: restic (home), mirror'* ]]
+}
+
+@test "home exclusions show nearest reason and keep other layers" {
+  enable_home_run
+  mkdir "$HOME/restic" "$HOME/mirror"
+  cat > "$HOME/.backup_restic_excludes" <<'EXCLUDES'
+# first reason
+${BACKUP_SOURCE_HOME}/restic
+# other reason
+${BACKUP_SOURCE_HOME}/mirror
+EXCLUDES
+  run "$SCRIPT" --json
+  [ "$status" -eq 0 ]
+  printf '%s' "$output" | python3 -c 'import json,sys; e={v["name"]:v for v in json.load(sys.stdin)["entries"]}; assert e["restic"]["layers"] == ["restic"] and e["restic"]["home_exclusion"] == "first reason"; assert e["mirror"]["layers"] == ["mirror"] and e["mirror"]["home_exclusion"] == "other reason"'
+}
+
+@test "nested exclusions leave the top level covered" {
+  enable_home_run
+  mkdir -p "$HOME/.kube/cache"
+  cat > "$HOME/.backup_restic_excludes" <<'EXCLUDES'
+# cache, rebuilt on use
+${BACKUP_SOURCE_HOME}/.kube/cache
+**/node_modules
+EXCLUDES
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'.kube: restic (home); home excludes cache: cache, rebuilt on use'* ]]
+  [[ "$output" != *'node_modules'* ]]
+}
+
+@test "glob excludes match entries without becoming stale" {
+  enable_home_run
+  touch "$HOME/.zcompdump" "$HOME/.zcompdump-host"
+  cat > "$HOME/.backup_restic_excludes" <<'EXCLUDES'
+# generated cache
+${BACKUP_SOURCE_HOME}/.zcompdump*
+${BACKUP_SOURCE_HOME}/absent*
+EXCLUDES
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'.zcompdump: no layer; home excluded: generated cache'* ]]
+  [[ "$output" == *'.zcompdump-host: no layer; home excluded: generated cache'* ]]
+}
+
+@test "stale anchored exclusions are printed first and return 2" {
+  enable_home_run
+  printf '# old cache\n${BACKUP_SOURCE_HOME}/gone\n' > "$HOME/.backup_restic_excludes"
+  touch "$HOME/new"
+  run "$SCRIPT"
+  [ "$status" -eq 2 ]
+  [ "${lines[0]}" = 'STALE EXCLUDE: gone' ]
+  [[ "$output" == *'new: restic (home)'* ]]
+}
+
+@test "missing home exclude file is printed first and returns 2" {
+  enable_home_run
+  rm "$HOME/.backup_restic_excludes"
+  run "$SCRIPT"
+  [ "$status" -eq 2 ]
+  [ "${lines[0]}" = "MISSING EXCLUDE FILE: $HOME/.backup_restic_excludes" ]
+  run "$SCRIPT" --json
+  [ "$status" -eq 2 ]
+  printf '%s' "$output" | python3 -c 'import json,sys; assert json.load(sys.stdin)["exclude_errors"][0].startswith("MISSING EXCLUDE FILE:")'
+}
+
+@test "exclude file alone and commented home run do not change old behavior" {
+  touch "$HOME/new" "$HOME/.backup_restic_excludes"
+  printf '.backup_restic_excludes\tskip\tfixture\n' >> "$BACKUP_COVERAGE_MANIFEST"
+  cat >> "$BACKUP_COVERAGE_SOURCE" <<'SOURCE'
+# restic backup --tag home --exclude-file "$BACKUP_SOURCE_HOME/.backup_restic_excludes" "$BACKUP_SOURCE_HOME/"
+SOURCE
+  run "$SCRIPT"
+  [ "$status" -eq 2 ]
+  [ "${lines[0]}" = 'UNCOVERED: new' ]
+  [[ "$output" == *'new: no layer'* ]]
+  [[ "$output" != *'restic (home)'* ]]
+}
