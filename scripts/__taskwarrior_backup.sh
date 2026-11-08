@@ -1,7 +1,27 @@
 #!/usr/bin/env bash
-# Mirror handoff briefs and Gordon state to the NAS and alert on stale backups.
-# Task data is synced through TaskChampion; daily restic snapshots remain separate.
-# State files are copied without --delete so missing source files survive on NAS.
+# Mirror handoff briefs and Gordon state to the NAS and alert on stale task backups.
+#
+# WHY: on 2026-11-07 an agent test ran `rm -rf ~`, and the task DB had reached
+# no backup since 8 Feb. Piotr, 8 Nov: "the mirror should be removed if we have
+# taskchampion sync (and restore works)". Tasks, handoffs included, now sync to
+# the homelab TaskChampion server every 5 minutes, and the weekly drill restores
+# them from it. Handoff briefs and Gordon state are files TaskChampion does not
+# carry, so they keep this mirror.
+#
+#   mirror    every 5 minutes from cron: briefs and Gordon state to the NAS with
+#             rsync and no --delete, so a file gone from the source stays there.
+#   daily     __backup.sh at 20:00: a restic snapshot of the DB, briefs and state.
+#   check     every 5 minutes: ntfy page when the NAS is gone, the last good sync
+#             is over 15 minutes old, the state dirs over 30, or the daily
+#             snapshot over 26 hours. Exits 2 on an alert, the cron wrapper's hit.
+#
+# Restore, never in place:
+#   tasks:  a scratch TASKDATA plus the sync settings, then `task sync`
+#           (__backup_drill.sh --layer taskchampion does exactly this)
+#   state:  /mnt/nas-backup/taskwarrior-mirror/state/
+#   daily:  restic restore latest --path ~/.local/share/task-backups
+#           --target <scratch dir> (RESTIC_REPOSITORY=/mnt/nas-backup/secure-store,
+#           RESTIC_PASSWORD_FILE=~/.config/restic/password)
 set -eo pipefail
 
 TASK_DB="${TASK_DB:-$HOME/.task/taskchampion.sqlite3}"
