@@ -10,6 +10,7 @@ tmp/
 
 # Secrets
 .keys/
+.aws/
 
 # Generated/cache
 ai-theater/
