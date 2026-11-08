@@ -1,21 +1,4 @@
 # name	status	reason
-.python_history	skip	empty Python history file
-.ruff_cache	skip	link to Ruff cache
-.sudo_as_admin_successful	skip	empty sudo marker
-.tig_history	skip	empty tig history file
-.z.12564	skip	empty temporary zoxide file
-.z.lock	skip	empty zoxide lock file
-Desktop	skip	empty desktop directory
-Public	skip	empty public directory
-Templates	skip	empty templates directory
-Videos	later	4TB drive from 17 Nov; currently empty
-backup.log	skip	backup process log
-backup.log.0	skip	rotated backup process log
-backup.log.3	skip	rotated backup process log
-backup.log.4	skip	rotated backup process log
-eve-thermal-20260423-2207.log	skip	thermal monitor log
-letterbox	skip	empty directory
-logme.log.2026-06-14	skip	application log
-syslog-failures.log	skip	system failure log
-tasknotes	skip	empty directory
-zoom_monitor.log	skip	application monitor log
+# Entries the whole-home restic run (--tag home) misses and that no other layer holds.
+# Anything not excluded in .backup_restic_excludes is covered, so most of ~ needs no line here.
+Videos	later	4TB drive from 17 Nov; restic home holds it until then, files over 1G excepted
