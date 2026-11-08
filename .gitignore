@@ -1,12 +1,13 @@
 .envrc
-.claude/*
-!.claude/skills/
 .claude-wt
 tmp/
 
-# AI coding tools
-.aider*
-.gp.md
+# AI coding tools. LLM config (CLAUDE.md, AGENTS.md, .claude/, .gp.md,
+# .aider.conf.yml) is a versioned artifact and is never ignored here; only
+# chat history and caches are.
+.aider.chat.history.md
+.aider.input.history
+.aider.tags.cache*/
 
 # Secrets
 .keys/
@@ -16,22 +17,7 @@ tmp/
 ai-theater/
 .config/cmus/
 
-# Spec-kit artifacts
-memory/
-scripts/check-task-prerequisites.sh
-scripts/common.sh
-scripts/create-new-feature.sh
-scripts/get-feature-paths.sh
-scripts/setup-plan.sh
-scripts/update-agent-context.sh
-templates/agent-file-template.md
-templates/plan-template.md
-templates/spec-template.md
-templates/tasks-template.md
-templates/commands/specify.md
-templates/commands/plan.md
-templates/commands/tasks.md
-
+# Claude Code keeps machine-local settings here, and they can hold tokens.
 **/.claude/settings.local.json
 
 # Python bytecode
