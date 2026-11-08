@@ -153,7 +153,7 @@ EOF
 
 @test "an unexpected stack or run id is never typed" {
 	echo '[{"id":"bad;id","state":"UNCONFIRMED"},{"id":"flows-main","state":"UNCONFIRMED"}]' >"$FIX/stacks.json"
-	echo '[{"id":"01M; rm -rf ~","state":"UNCONFIRMED","commit":{"hash":"abc"},"title":"evil"}]' >"$FIX/runs.flows-main.json"
+	echo '[{"id":"01M; echo injected","state":"UNCONFIRMED","commit":{"hash":"abc"},"title":"evil"}]' >"$FIX/runs.flows-main.json"
 	run "$PICKER" 11
 	[ "$status" -eq 0 ]
 	grep -qF "No Spacelift runs wait for confirmation" "$SPY/all.log"
