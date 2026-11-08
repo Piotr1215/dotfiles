@@ -10,6 +10,7 @@
 # Git clone fetches branch refs by default; fetch the refs/wip ref explicitly.
 # bubblewrap makes live paths read-only even to configured Git filters.
 set -eo pipefail
+umask 077
 
 # Keep inherited Git settings from redirecting commands into a live repository.
 unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES
@@ -122,6 +123,7 @@ capture_one() {
     return 0
   fi
   mkdir -p "$mirror_git/objects"
+  chmod 700 "$mirror_git"
   rsync -rltc --omit-dir-times --delete --exclude='/objects/' --exclude='/refs/wip/' --exclude='/logs/refs/wip/' --exclude='*.lock' "$common/" "$mirror_git/"
   primary_objects=$(realpath -e -- "$common/objects")
   copy_objects "$primary_objects" "$mirror_git/objects"

@@ -180,3 +180,13 @@ FILTER
   [ "$(git --git-dir="$shared_mirror" show refs/wip/main:tracked)" = 'shared change' ]
   git --git-dir="$shared_mirror" fsck --full
 }
+
+@test "mirror metadata remains private under a permissive caller umask" {
+  mkdir -p "$REPO/.git/git-crypt/keys"
+  printf 'test key\n' > "$REPO/.git/git-crypt/keys/test"
+  umask 000
+  run capture
+  [ "$status" -eq 0 ]
+  [ "$(stat -c %a "$MIRROR")" = 700 ]
+  [ "$(stat -c %a "$MIRROR/git-crypt/keys/test")" = 600 ]
+}
