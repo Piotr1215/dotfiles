@@ -25,7 +25,7 @@ setup() {
 	echo hold >"$T/hold"
 	PATH="$stubs:$PATH" TMPDIR="$T" BACKUP_TEST_HOME="$T/source" BACKUP_HOLD_FILE="$T/hold" BACKUP_TEST_ROOT="$T/nas" \
 		BACKUP_TEST_X11_DIR="$T/no-x11" run bash "$BACKUP"
-	[ "$status" -eq 0 ]
+	[ "$status" -eq 2 ]
 	grep -q '^restic' "$T/calls"
 }
 
@@ -140,8 +140,12 @@ PY
 		chmod +x "$stubs/$c"
 	done
 	echo "restore running" >"$T/hold"
+	mkdir -p "$HOME/.task"
+	python3 -I -c 'import sqlite3, sys; c = sqlite3.connect(sys.argv[1]); c.execute("CREATE TABLE tasks (id INTEGER)"); c.commit()' \
+		"$HOME/.task/taskchampion.sqlite3"
 	PATH="$stubs:$PATH" BACKUP_HOLD_FILE="$T/hold" BACKUP_TEST_ROOT="$T/nas" run bash "$BACKUP"
-	[ "$status" -eq 0 ]
+	# 2: a held run is a hit, so cron shows it until the hold is lifted.
+	[ "$status" -eq 2 ]
 	grep -q '^restic backup ' "$T/calls"
 	! grep -q '^restic forget' "$T/calls"
 	! grep -q -- '--delete' "$T/calls"
@@ -173,10 +177,10 @@ PY
 	mkdir -p "$sources/.codex" "$sources/.codex-work" "$sources/.claude-work" "$sources/Documents" "$sources/Pictures" \
 		"$sources/dev/repo" "$sources/dev/a/b" "$sources/loft/repo"
 	printf '.envrc\n' >"$sources/dev/repo/.gitignore"
-	touch "$sources/dev/repo/.envrc" "$sources/dev/a/b/.envrc" "$sources/loft/repo/.envrc"
+	touch "$sources/dev/repo/.envrc" "$sources/dev/a/b/.envrc" "$sources/loft/repo/.envrc" "$sources/.backup_restic_excludes"
 	echo hold >"$T/hold"
 	PATH="$stubs:$PATH" TMPDIR="$T" BACKUP_TEST_HOME="$sources" BACKUP_HOLD_FILE="$T/hold" BACKUP_TEST_ROOT="$T/nas" run bash "$BACKUP"
-	[ "$status" -eq 0 ]
+	[ "$status" -eq 2 ]
 	for d in .codex .codex-work .claude-work Documents Pictures; do
 		grep -Fq "<$sources/$d/>" "$T/calls" || return 1
 	done
@@ -192,10 +196,10 @@ PY
 	sources="$T/source"
 	mkdir -p "$sources/dev/dotfiles/.keys" "$sources/.aws" "$sources/.kube" "$sources/.password-store.bak-2026-07-16"
 	touch "$sources/dev/dotfiles/.keys/git-crypt-key" "$sources/.aws/config" "$sources/.kube/config" \
-		"$sources/.zsh_history" "$sources/.envrc.bak-psec"
+		"$sources/.zsh_history" "$sources/.envrc.bak-psec" "$sources/.backup_restic_excludes"
 	echo hold >"$T/hold"
 	PATH="$stubs:$PATH" TMPDIR="$T" BACKUP_TEST_HOME="$sources" BACKUP_HOLD_FILE="$T/hold" BACKUP_TEST_ROOT="$T/nas" run bash "$BACKUP"
-	[ "$status" -eq 0 ]
+	[ "$status" -eq 2 ]
 	for f in dev/dotfiles/.keys/git-crypt-key .aws/config .kube/config .zsh_history .password-store.bak-2026-07-16 .envrc.bak-psec; do
 		grep -Fq "<$sources/$f>" "$T/calls" || return 1
 	done
@@ -205,9 +209,10 @@ PY
 	setup_backup_stubs
 	sources="$T/source"
 	mkdir -p "$sources/Downloads"
+	: >"$sources/.backup_restic_excludes"
 	echo hold >"$T/hold"
 	PATH="$stubs:$PATH" TMPDIR="$T" BACKUP_TEST_HOME="$sources" BACKUP_HOLD_FILE="$T/hold" BACKUP_TEST_ROOT="$T/nas" run bash "$BACKUP"
-	[ "$status" -eq 0 ]
+	[ "$status" -eq 2 ]
 	line=$(grep -F "<$sources/Downloads/>" "$T/calls")
 	[[ "$line" == *"<--tag> <downloads>"* ]]
 	[[ "$line" == *"<--exclude-larger-than> <100M>"* ]]
@@ -221,7 +226,7 @@ PY
 	: >"$sources/.backup_restic_excludes"
 	echo hold >"$T/hold"
 	PATH="$stubs:$PATH" TMPDIR="$T" BACKUP_TEST_HOME="$sources" BACKUP_HOLD_FILE="$T/hold" BACKUP_TEST_ROOT="$T/nas" run bash "$BACKUP"
-	[ "$status" -eq 0 ]
+	[ "$status" -eq 2 ]
 	line=$(grep -F "<$sources/>" "$T/calls")
 	[[ "$line" == *"<--tag> <home>"* ]]
 	[[ "$line" == *"<--exclude-file> <$sources/.backup_restic_excludes>"* ]]
@@ -253,9 +258,124 @@ PY
 	[ ! -e "$T/mirror/gone/old" ]
 }
 
+# sudo runs its command, so the sudo mirror steps reach the rsync stub. The
+# rsync stub logs, answers a dry run with $DRY_DELETES "*deleting" lines for the
+# dev source, and fails the real run of any source listed in $FAIL_SOURCES.
+setup_mirror_stubs() {
+	setup_backup_stubs
+	printf '#!/usr/bin/env bash\nexec "$@"\n' >"$stubs/sudo"
+	cat >"$stubs/rsync" <<EOF
+#!/usr/bin/env bash
+printf "rsync" >>"$T/calls"; printf " <%s>" "\$@" >>"$T/calls"; printf "\\n" >>"$T/calls"
+dry=0; src=""
+for a in "\$@"; do
+	[ "\$a" = --dry-run ] && dry=1
+	case "\$a" in /home/decoder/*/) src="\$src \$a" ;; esac
+done
+if ((dry)); then
+	if [[ "\$src" == *" /home/decoder/dev/"* ]]; then
+		for ((i = 0; i < \${DRY_DELETES:-0}; i++)); do echo "*deleting   old/f\$i"; done
+	fi
+	exit 0
+fi
+for f in \${FAIL_SOURCES:-}; do [[ "\$src" == *" \$f"* ]] && exit 23; done
+exit 0
+EOF
+	chmod +x "$stubs/sudo" "$stubs/rsync"
+	mkdir -p "$T/source"
+	: >"$T/source/.backup_restic_excludes"
+}
+
+@test "a failed mirror step does not stop the rest of the backup" {
+	setup_mirror_stubs
+	FAIL_SOURCES="/home/decoder/dev/" PATH="$stubs:$PATH" TMPDIR="$T" BACKUP_TEST_HOME="$T/source" \
+		BACKUP_HOLD_FILE="$T/no-hold" BACKUP_TEST_ROOT="$T/nas" run bash "$BACKUP"
+	# 1 is the cron state channel's error: the stamp guard retries on the next tick.
+	[ "$status" -eq 1 ]
+	[[ "$output" == *"dev folder failed"* ]]
+	grep -F '</home/decoder/loft/ops/>' "$T/calls" | grep -vqF '<--dry-run>'
+	grep -q '^restic <backup> <--tag> <home>' "$T/calls"
+	grep -q '^restic <forget>' "$T/calls"
+	[ ! -e "$HOME/.local/state/backup-last-success" ]
+}
+
+@test "a mass deletion moves the entries into a dated attic and the step still runs" {
+	setup_mirror_stubs
+	DRY_DELETES=1001 PATH="$stubs:$PATH" TMPDIR="$T" BACKUP_TEST_HOME="$T/source" \
+		BACKUP_HOLD_FILE="$T/no-hold" BACKUP_TEST_ROOT="$T/nas" run bash "$BACKUP"
+	# 2 is a hit: the backup is complete and something needs a look.
+	[ "$status" -eq 2 ]
+	line=$(grep -F '</home/decoder/dev/>' "$T/calls" | grep -vF '<--dry-run>' | head -1)
+	[[ "$line" == *"<--backup>"* ]]
+	[[ "$line" =~ \<--backup-dir=\.attic/[0-9]{8}-[0-9]{6}\> ]]
+	[[ "$output" == *"1001 entries"*".attic/"* ]]
+	[ -e "$HOME/.local/state/backup-last-success" ]
+}
+
+@test "the attic keeps what the mirror dropped and survives the next --delete" {
+	setup_mirror_stubs
+	DRY_DELETES=1001 PATH="$stubs:$PATH" TMPDIR="$T" BACKUP_TEST_HOME="$T/source" \
+		BACKUP_HOLD_FILE="$T/no-hold" BACKUP_TEST_ROOT="$T/nas" run bash "$BACKUP"
+	line=$(grep -F '</home/decoder/dev/>' "$T/calls" | grep -vF '<--dry-run>' | head -1)
+	mapfile -t opts < <(grep -o '<--\(include\|exclude\|backup\|backup-dir\)[^>]*>' <<<"$line" | sed 's/^<//; s/>$//')
+	mkdir -p "$T/live/repo" "$T/mirror/repo" "$T/mirror/gone"
+	echo new >"$T/live/repo/f"
+	echo old >"$T/mirror/repo/f"
+	touch -d '2020-01-01' "$T/mirror/repo/f"
+	echo keep >"$T/mirror/gone/work"
+	rsync -a --delete "${opts[@]}" "$T/live/" "$T/mirror/"
+	[ "$(cat "$T/mirror/repo/f")" = new ]
+	[ ! -e "$T/mirror/gone" ]
+	attic=$(find "$T/mirror/.attic" -mindepth 1 -maxdepth 1 -type d)
+	[ "$(cat "$attic/gone/work")" = keep ]
+	[ "$(cat "$attic/repo/f")" = old ]
+	mapfile -t filters < <(printf '%s\n' "${opts[@]}" | grep -v '^--backup')
+	rsync -a --delete "${filters[@]}" "$T/live/" "$T/mirror/"
+	[ "$(cat "$attic/gone/work")" = keep ]
+}
+
+@test "a failure that repeats on the next tick is emailed once" {
+	setup_mirror_stubs
+	for _ in 1 2; do
+		FAIL_SOURCES="/home/decoder/dev/" PATH="$stubs:$PATH" TMPDIR="$T" BACKUP_TEST_HOME="$T/source" \
+			BACKUP_HOLD_FILE="$T/no-hold" BACKUP_TEST_ROOT="$T/nas" run bash "$BACKUP"
+		[ "$status" -eq 1 ]
+	done
+	[ "$(grep -c '^msmtp' "$T/calls")" -eq 1 ]
+}
+
+@test "a clean run exits 0 and writes the success stamp" {
+	setup_mirror_stubs
+	PATH="$stubs:$PATH" TMPDIR="$T" BACKUP_TEST_HOME="$T/source" \
+		BACKUP_HOLD_FILE="$T/no-hold" BACKUP_TEST_ROOT="$T/nas" run bash "$BACKUP"
+	[ "$status" -eq 0 ]
+	[ -e "$HOME/.local/state/backup-last-success" ]
+	! grep -q '^msmtp' "$T/calls"
+}
+
+@test "a lock left by a dead run does not block the next one" {
+	setup_mirror_stubs
+	# The lock lives next to the test NAS root (LOCK_FILE uses BACKUP_TEST_ROOT).
+	echo 999999 >"$T/nas/backup.lock"
+	PATH="$stubs:$PATH" TMPDIR="$T" BACKUP_TEST_HOME="$T/source" \
+		BACKUP_HOLD_FILE="$T/no-hold" BACKUP_TEST_ROOT="$T/nas" run bash "$BACKUP"
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"stale lock"* ]]
+}
+
+@test "alert_due: a new failure is due, the same one is not until a day passes" {
+	state="$T/alert"
+	alert_due "$state" "dev folder failed"
+	! alert_due "$state" "dev folder failed"
+	alert_due "$state" "restic home failed"
+	printf '%s %s\n' "$(printf '%s' 'restic home failed' | sha256sum | cut -c1-16)" "$(($(date +%s) - 90000))" >"$state"
+	alert_due "$state" "restic home failed"
+}
+
 @test "absent optional sources are skipped and retention groups by host and tags" {
 	setup_backup_stubs
 	mkdir -p "$T/source"
+	: >"$T/source/.backup_restic_excludes"
 	PATH="$stubs:$PATH" TMPDIR="$T" BACKUP_TEST_HOME="$T/source" BACKUP_HOLD_FILE="$T/no-hold" BACKUP_TEST_ROOT="$T/nas" run bash "$BACKUP"
 	[ "$status" -eq 0 ]
 	grep -Fq 'restic <forget> <--group-by> <host,tags>' "$T/calls"
@@ -267,9 +387,10 @@ PY
 @test "each structured log line is written once and remains on stdout" {
 	setup_backup_stubs
 	mkdir -p "$T/source"
+	: >"$T/source/.backup_restic_excludes"
 	echo hold >"$T/hold"
 	PATH="$stubs:$PATH" TMPDIR="$T" BACKUP_TEST_HOME="$T/source" BACKUP_HOLD_FILE="$T/hold" BACKUP_TEST_ROOT="$T/nas" run bash "$BACKUP"
-	[ "$status" -eq 0 ]
+	[ "$status" -eq 2 ]
 	[[ "$output" == *"Backing up env files with restic..."* ]]
 	[ "$(grep -Fc 'Backing up env files with restic...' "$HOME/backup.log")" -eq 1 ]
 	[ "$(grep -Fc 'Restic backup completed successfully' "$HOME/backup.log")" -eq 1 ]

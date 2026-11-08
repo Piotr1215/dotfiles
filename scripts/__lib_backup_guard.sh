@@ -33,6 +33,25 @@ rsync_deletions() {
 	{ "$@" --dry-run --itemize-changes 2>/dev/null || true; } | grep -c '^\*deleting .*[^/]$' || true
 }
 
+# alert_due <state file> <text>: succeed, and record <text>, when it differs
+# from the last alert recorded there or that alert is a day old. A failed run
+# is retried on the next hourly tick, and the same failure must not mail every
+# hour until someone fixes it.
+alert_due() {
+	local state="$1" text="$2" key last_key="" last_ts=0 now
+	key=$(printf '%s' "$text" | sha256sum | cut -c1-16)
+	now=$(date +%s)
+	if [[ -f "$state" ]]; then
+		read -r last_key last_ts <"$state" || true
+		[[ "$last_ts" =~ ^[0-9]+$ ]] || last_ts=0
+		if [[ "$key" == "$last_key" ]] && ((now - last_ts < 86400)); then
+			return 1
+		fi
+	fi
+	mkdir -p "$(dirname "$state")"
+	printf '%s %s\n' "$key" "$now" >"$state"
+}
+
 # sqlite_snapshot <db> <out>: consistent copy of a live SQLite database through
 # the backup API (a plain copy of a WAL database can be torn), checked with
 # PRAGMA integrity_check, then moved into place. Prints the row count of the
