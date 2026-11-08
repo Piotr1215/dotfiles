@@ -1,0 +1,205 @@
+#!/usr/bin/env bash
+# Restore with an intact worktree: rsync the mirror's .git/ back to the repo's .git/.
+# If everything is lost: git clone <mirror .git> <destination>, then in that
+# clone: git fetch <mirror .git> refs/wip/<branch>:refs/wip/<branch>
+# git restore --source=refs/wip/<branch> --worktree -- .
+# Or clone from GitHub, then run the same fetch and restore commands.
+# One file: git --git-dir=<mirror .git> show refs/wip/<branch>:<path>
+# Older snapshots: git --git-dir=<mirror .git> reflog refs/wip/<branch>
+# Linked worktrees use refs/wip/worktrees/<worktree-name>/<branch>.
+# Git clone fetches branch refs by default; fetch the refs/wip ref explicitly.
+# bubblewrap makes live paths read-only even to configured Git filters.
+set -eo pipefail
+
+# Keep inherited Git settings from redirecting commands into a live repository.
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES
+export GIT_OPTIONAL_LOCKS=0
+export GIT_TERMINAL_PROMPT=0
+export LC_ALL=C
+
+# The target is a mountpoint by default. The override is for isolated tests.
+target=${WIP_CAPTURE_TARGET:-/mnt/nas-backup/git-mirror}
+state=${WIP_CAPTURE_STATE:-${XDG_STATE_HOME:-$HOME/.local/state}/wip-capture}
+mount=${WIP_CAPTURE_MOUNT:-/mnt/nas-backup}
+repo_timeout=${WIP_CAPTURE_REPO_TIMEOUT:-120}
+
+# Refuse writable mirror or state paths that overlap a source repository.
+paths_overlap() {
+  local a b
+  a=$(realpath -m -- "$1")
+  b=$(realpath -m -- "$2")
+  [[ $a == "$b" || $a == "$b/"* || $b == "$a/"* ]]
+}
+
+# Compute a read-only fingerprint, including dirty file metadata: porcelain
+# alone does not change when an already modified file is edited again.
+fingerprint() {
+  local repo=$1 gitdir=$2 common=$3 tmp=$4 f
+  git -c core.fsmonitor=false -C "$repo" status --porcelain=v2 -z --untracked-files=all > "$tmp/status"
+  git -c core.fsmonitor=false -C "$repo" ls-files -z --modified --deleted --others --exclude-standard > "$tmp/paths"
+  {
+    cat "$tmp/status"
+    if [[ -f $gitdir/index ]]; then sha256sum "$gitdir/index"; fi
+    for f in "$gitdir/HEAD" "$common/HEAD" "$common/packed-refs"; do
+      if [[ -e $f ]]; then stat -c '%n %s %y %z' -- "$f"; fi
+    done
+    for f in "$common/refs" "$common/logs" "$gitdir/logs"; do
+      if [[ -d $f ]]; then find "$f" -printf '%p %s %T@ %C@\0'; fi
+    done
+    while IFS= read -r -d '' f; do
+      if [[ -e $repo/$f || -L $repo/$f ]]; then stat -c '%n %s %y %z' -- "$repo/$f"; fi
+    done < "$tmp/paths"
+  } | sha256sum | cut -d ' ' -f 1
+}
+
+# Copy alternate object stores into the mirror so it does not depend on live paths.
+copy_objects() {
+  local source=$1 dest=$2 alternate resolved
+  local -a object_rsync=(-rlt --omit-dir-times --exclude=/info/alternates)
+  source=$(realpath -e -- "$source")
+  [[ -d $source ]] || return 1
+  [[ -z ${object_sources[$source]+seen} ]] || return 0
+  object_sources[$source]=1
+  if [[ $source != "$primary_objects" ]]; then object_rsync+=(--exclude=/info/); fi
+  rsync "${object_rsync[@]}" "$source/" "$dest/"
+  if [[ -f $source/info/alternates ]]; then
+    while IFS= read -r alternate || [[ -n $alternate ]]; do
+      [[ -n $alternate ]] || continue
+      if [[ $alternate == \"* ]]; then
+        printf 'quoted alternate object path unsupported: %s\n' "$source" >&2; return 1
+      fi
+      if [[ $alternate == /* ]]; then resolved=$alternate; else resolved=$source/$alternate; fi
+      copy_objects "$resolved" "$dest"
+    done < "$source/info/alternates"
+  fi
+}
+
+# Copy one common Git directory and write a snapshot using only a temporary index.
+capture_one() {
+  local repo=$1 gitdir common main_repo mirror mirror_git mirror_work_git name branch label stamp old_stamp work before after head tree commit msg f size
+  local -A object_sources=()
+  local primary_objects
+  local -a excludes=( ':(exclude).env' ':(exclude)**/.env' ':(exclude).envrc' ':(exclude)**/.envrc' )
+  repo=$(realpath -e -- "$repo")
+  gitdir=$(git -C "$repo" rev-parse --absolute-git-dir)
+  common=$(git -C "$repo" rev-parse --path-format=absolute --git-common-dir)
+  common=$(realpath -e -- "$common")
+  if [[ ${common##*/} == .git ]]; then
+    main_repo=${common%/.git}
+  elif [[ $gitdir == "$common" ]]; then
+    # Submodules have their Git directory under the parent repo's modules/.
+    main_repo=$repo
+  else
+    printf 'unsupported common git directory: %s\n' "$common" >&2; return 1
+  fi
+  if paths_overlap "$repo" "$target" || paths_overlap "$common" "$target" ||
+     paths_overlap "$repo" "$state" || paths_overlap "$common" "$state"; then
+    printf 'source overlaps writable target or state: %s\n' "$repo" >&2; return 1
+  fi
+  case "$main_repo/" in "$HOME/"*) ;; *) printf 'repository outside HOME: %s\n' "$main_repo" >&2; return 1 ;; esac
+  mirror="$target/${main_repo#"$HOME"/}"
+  mirror_git="$mirror/.git"
+  mirror_work_git=$mirror_git
+  name=
+  if [[ $gitdir != "$common" ]]; then
+    case "$gitdir" in "$common"/worktrees/*) name=${gitdir#"$common"/worktrees/} ;; *) printf 'unsupported worktree gitdir: %s\n' "$gitdir" >&2; return 1 ;; esac
+    [[ $name != */* ]] || return 1
+    mirror_work_git="$mirror_git/worktrees/$name"
+  fi
+  branch=$(git -C "$repo" symbolic-ref --quiet --short HEAD || true)
+  if [[ -z $branch ]]; then branch="detached-$(git -C "$repo" rev-parse --verify HEAD)"; fi
+  label=$branch
+  if [[ -n $name ]]; then label="worktrees/$name/$branch"; fi
+  git check-ref-format "refs/wip/$label" >/dev/null
+  work=$(mktemp -d "$state/work.XXXXXXXX")
+  cleanup_work=$work
+  trap 'rm -rf -- "$cleanup_work"' EXIT
+  before=$(fingerprint "$repo" "$gitdir" "$common" "$work")
+  stamp="$state/$(printf '%s\0%s' "$target" "$repo" | sha256sum | cut -d ' ' -f 1).stamp"
+  old_stamp=$(cat "$stamp" 2>/dev/null || true)
+  if [[ $before == "$old_stamp" && -d $mirror_git ]]; then
+    printf 'skip %s\n' "$repo"
+    return 0
+  fi
+  mkdir -p "$mirror_git/objects"
+  rsync -rltc --omit-dir-times --delete --exclude='/objects/' --exclude='/refs/wip/' --exclude='/logs/refs/wip/' --exclude='*.lock' "$common/" "$mirror_git/"
+  primary_objects=$(realpath -e -- "$common/objects")
+  copy_objects "$primary_objects" "$mirror_git/objects"
+  rm -f -- "$mirror_git/objects/info/alternates"
+  if [[ ${common##*/} != .git ]]; then
+    # Its relative core.worktree points into the live parent, not this mirror.
+    git config --file "$mirror_git/config" --unset-all core.worktree || [[ $? == 5 ]]
+  fi
+  [[ -d $mirror_work_git ]] || { printf 'missing mirrored worktree metadata: %s\n' "$repo" >&2; return 1; }
+  if [[ -f $gitdir/index ]]; then cp -- "$gitdir/index" "$work/index"; fi
+  git -c core.fsmonitor=false -C "$repo" ls-files -z --others --exclude-standard > "$work/untracked"
+  while IFS= read -r -d '' f; do
+    if [[ -f $repo/$f && ! -L $repo/$f ]]; then
+      size=$(stat -c %s -- "$repo/$f")
+      if (( size > 50000000 )); then
+        printf 'skip large untracked file: %s/%s (%s bytes)\n' "$repo" "$f" "$size" >&2
+        excludes+=(":(exclude,literal)$f")
+      fi
+    fi
+  done < "$work/untracked"
+  export GIT_DIR=$mirror_work_git GIT_WORK_TREE=$repo GIT_INDEX_FILE=$work/index
+  cd -- "$repo"
+  git -c core.hooksPath=/dev/null -c core.fsmonitor=false add -A -- . "${excludes[@]}"
+  tree=$(git write-tree)
+  head=$(git rev-parse --verify HEAD 2>/dev/null || true)
+  msg="wip capture $(date -u +%Y-%m-%dT%H:%M:%SZ) $label"
+  if [[ -n $head ]]; then
+    commit=$(printf '%s\n' "$msg" | git -c user.name='WIP Capture' -c user.email='wip-capture@localhost' commit-tree "$tree" -p "$head")
+  else
+    commit=$(printf '%s\n' "$msg" | git -c user.name='WIP Capture' -c user.email='wip-capture@localhost' commit-tree "$tree")
+  fi
+  git -c core.logAllRefUpdates=always update-ref --create-reflog -m "$msg" "refs/wip/$label" "$commit"
+  unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
+  after=$(fingerprint "$repo" "$gitdir" "$common" "$work")
+  [[ $before == "$after" ]] || { printf 'repository changed during capture: %s\n' "$repo" >&2; return 1; }
+  printf '%s\n' "$after" > "$work/stamp"
+  mv -f -- "$work/stamp" "$stamp"
+  printf 'captured %s (%s)\n' "$repo" "$label"
+}
+
+if [[ ${1:-} == --capture-one && ${WIP_CAPTURE_SANDBOXED:-0} == 1 ]]; then
+  shift
+  capture_one "$1"
+  exit
+fi
+
+command -v bwrap >/dev/null || { printf 'bubblewrap is required to protect live repositories\n' >&2; exit 1; }
+mkdir -p "$state"
+exec 9>"$state/capture.lock"
+flock -n 9 || { printf 'wip capture already running\n' >&2; exit 1; }
+if [[ ${WIP_CAPTURE_ALLOW_DIRECTORY:-0} != 1 ]] && ! mountpoint -q -- "$mount"; then
+  printf 'target mount is not mounted: %s\n' "$mount" >&2; exit 1
+fi
+if [[ ${WIP_CAPTURE_ALLOW_DIRECTORY:-0} != 1 ]]; then
+  case "$(realpath -m -- "$target")/" in "$(realpath -e -- "$mount")/"*) ;; *) printf 'target is outside mount: %s\n' "$target" >&2; exit 1 ;; esac
+fi
+mkdir -p "$target"
+probe="$target/.wip-probe-$$"
+if ! timeout -k 5 10 touch -- "$probe"; then
+  printf 'target write probe failed: %s\n' "$target" >&2; exit 1
+fi
+rm -f -- "$probe"
+if (( $# )); then roots=("$@"); elif [[ -n ${WIP_CAPTURE_ROOTS:-} ]]; then IFS=: read -r -a roots <<< "$WIP_CAPTURE_ROOTS"; else roots=("$HOME/dev" "$HOME/loft" "$HOME/.claude" "$HOME/.codex"); fi
+list=$(mktemp "$state/repos.XXXXXXXX")
+trap 'rm -f -- "$list"' EXIT
+failed=0
+for root in "${roots[@]}"; do
+  if [[ ! -e $root ]]; then continue; fi
+  if ! find "$root" \( -type d \( -name node_modules -o -name vendor \) -prune \) -o \( -name .git \( -type d -o -type f \) -print0 -prune \) >> "$list"; then failed=$((failed+1)); fi
+done
+count=0
+while IFS= read -r -d '' path; do
+  repo=${path%/.git}
+  count=$((count+1))
+  if ! timeout -k 5 "$repo_timeout" bwrap --die-with-parent --unshare-net --ro-bind / / --dev /dev --bind "$target" "$target" --bind "$state" "$state" --setenv TMPDIR "$state" --setenv WIP_CAPTURE_SANDBOXED 1 -- "$0" --capture-one "$repo"; then
+    printf 'failed %s\n' "$repo" >&2
+    failed=$((failed+1))
+  fi
+done < "$list"
+printf 'summary repositories=%s failures=%s\n' "$count" "$failed"
+(( failed == 0 ))
