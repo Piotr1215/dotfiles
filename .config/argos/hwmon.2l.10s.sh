@@ -19,7 +19,13 @@ epp=$(cat /sys/devices/system/cpu/cpu0/cpufreq/energy_performance_preference 2>/
 # GPU temp + power
 gpu_temp=""
 gpu_power=""
-if command -v nvidia-smi &>/dev/null; then
+# Read from the resource watcher's NVML sample when fresh, so this applet wakes
+# no GPU; see system.1l.1s.sh. nvidia-smi is the fallback.
+watcher_state="${RESOURCE_WATCHER_STATE:-$HOME/.local/state/resource-watcher/current.json}"
+printf -v now '%(%s)T' -1
+if [[ -r "$watcher_state" ]] && (( now - $(stat -c %Y "$watcher_state" 2>/dev/null || echo 0) < 10 )); then
+    IFS='|' read -r gpu_temp gpu_power < <(jq -r '"\(.gpu.temperature_c // "")|\(.gpu.power_w // "")"' "$watcher_state" 2>/dev/null) || true
+elif command -v nvidia-smi &>/dev/null; then
     gpu_temp=$(nvidia-smi --query-gpu=temperature.gpu --format=csv,noheader,nounits 2>/dev/null | head -1 || echo "")
     gpu_power=$(nvidia-smi --query-gpu=power.draw --format=csv,noheader,nounits 2>/dev/null | head -1 || echo "")
 fi

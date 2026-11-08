@@ -25,13 +25,23 @@ get_cpu_usage() {
 # Get all values
 cpu_usage=$(get_cpu_usage)
 
-# GPU usage and VRAM in one nvidia-smi call (one fork per second is enough)
+# GPU usage and VRAM. The resource watcher holds NVML open and rewrites both
+# into current.json every ~2s, so reading that file costs no GPU wake-up. A
+# fresh nvidia-smi every second re-initialised the driver each time and spiked
+# the GPU on an idle desk (2026-11-09). nvidia-smi stays as the fallback for
+# when the watcher is down or its file is stale.
+watcher_state="${RESOURCE_WATCHER_STATE:-$HOME/.local/state/resource-watcher/current.json}"
 gpu_text="N/A "
 gpu_usage=""
 vram_text="N/A  "
 vram_mib=""
-if command -v nvidia-smi &> /dev/null; then
+printf -v now '%(%s)T' -1
+if [[ -r "$watcher_state" ]] && (( now - $(stat -c %Y "$watcher_state" 2>/dev/null || echo 0) < 10 )); then
+    IFS='|' read -r gpu_usage vram_mib < <(jq -r '"\(.gpu.utilization_percent // "")|\(if .gpu.vram_used_mib == null then "" else (.gpu.vram_used_mib | floor) end)"' "$watcher_state" 2>/dev/null)
+elif command -v nvidia-smi &> /dev/null; then
     IFS=', ' read -r gpu_usage vram_mib _ < <(nvidia-smi --query-gpu=utilization.gpu,memory.used --format=csv,noheader,nounits 2>/dev/null | head -1)
+fi
+if [[ -n "$gpu_usage$vram_mib" ]]; then
     # Only use if it's actually a number (nvidia-smi may output error to stdout)
     if [[ "$gpu_usage" =~ ^[0-9]+$ ]]; then
         gpu_text=$(printf "%3d%%" $gpu_usage)
