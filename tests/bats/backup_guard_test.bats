@@ -159,15 +159,16 @@ PY
 	grep -Fq "<$sources/dev/repo/.envrc>" "$T/calls"
 }
 
-@test "restic gets the git-crypt key and cloud configs when present" {
+@test "restic gets the git-crypt key, cloud configs, shell history and hand-made copies when present" {
 	setup_backup_stubs
 	sources="$T/source"
-	mkdir -p "$sources/dev/dotfiles/.keys" "$sources/.aws" "$sources/.kube"
-	touch "$sources/dev/dotfiles/.keys/git-crypt-key" "$sources/.aws/config" "$sources/.kube/config"
+	mkdir -p "$sources/dev/dotfiles/.keys" "$sources/.aws" "$sources/.kube" "$sources/.password-store.bak-2026-07-16"
+	touch "$sources/dev/dotfiles/.keys/git-crypt-key" "$sources/.aws/config" "$sources/.kube/config" \
+		"$sources/.zsh_history" "$sources/.envrc.bak-psec"
 	echo hold >"$T/hold"
 	PATH="$stubs:$PATH" TMPDIR="$T" BACKUP_TEST_HOME="$sources" BACKUP_HOLD_FILE="$T/hold" BACKUP_TEST_ROOT="$T/nas" run bash "$BACKUP"
 	[ "$status" -eq 0 ]
-	for f in dev/dotfiles/.keys/git-crypt-key .aws/config .kube/config; do
+	for f in dev/dotfiles/.keys/git-crypt-key .aws/config .kube/config .zsh_history .password-store.bak-2026-07-16 .envrc.bak-psec; do
 		grep -Fq "<$sources/$f>" "$T/calls" || return 1
 	done
 }
