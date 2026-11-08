@@ -46,8 +46,22 @@ setup() {
 	touch "$T/src/a" "$T/dst/a" "$T/dst/x1" "$T/dst/x2" "$T/dst/gone/f"
 	run rsync_deletions rsync -a --delete "$T/src/" "$T/dst/"
 	[ "$status" -eq 0 ]
-	[ "$output" = "4" ]
+	# x1, x2 and gone/f; the gone/ directory line itself does not count.
+	[ "$output" = "3" ]
 	[ -e "$T/dst/x1" ] && [ -e "$T/dst/gone/f" ]
+}
+
+@test "rsync_deletions does not count directories that excluded files pin in the mirror" {
+	# The dry run itemizes stale/sub/ as "*deleting" although the excluded .pyc
+	# keeps it; on 8 Nov 4,111 such directories held the dev mirror refused.
+	mkdir -p "$T/src" "$T/dst/stale/sub/__pycache__"
+	touch "$T/src/a" "$T/dst/a" "$T/dst/stale/sub/__pycache__/m.pyc"
+	run rsync_deletions rsync -a --delete --exclude=__pycache__/ "$T/src/" "$T/dst/"
+	[ "$status" -eq 0 ]
+	[ "$output" = "0" ]
+	# The real run cannot remove them either, so counting them only blocks it.
+	rsync -a --delete --exclude=__pycache__/ "$T/src/" "$T/dst/" 2>/dev/null || true
+	[ -e "$T/dst/stale/sub/__pycache__/m.pyc" ]
 }
 
 @test "rsync_deletions is 0 for a mirror that matches" {

@@ -23,8 +23,14 @@ backup_hold_reason() {
 # the destination. rsync parses options after its operands, so the dry-run flags
 # go last. Counting entries does not work here: on 2026-11-07 a half-restored
 # ~/dev had 254 top-level entries against the mirror's 253, with 72 repos empty.
+# Only files and symlinks count; directory lines end in "/". The dry run lists a
+# directory as deleted even when an excluded file inside keeps it ("cannot
+# delete non-empty directory"), and the real run then removes nothing. On
+# 2026-11-08 4,111 such directories (old __pycache__, node_modules, .git) and 2
+# files made the guard refuse the dev mirror every night. A directory that holds
+# real data brings its files into the count.
 rsync_deletions() {
-	{ "$@" --dry-run --itemize-changes 2>/dev/null || true; } | grep -c '^\*deleting' || true
+	{ "$@" --dry-run --itemize-changes 2>/dev/null || true; } | grep -c '^\*deleting .*[^/]$' || true
 }
 
 # sqlite_snapshot <db> <out>: consistent copy of a live SQLite database through
