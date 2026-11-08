@@ -123,6 +123,66 @@ PY
 	grep -q 'Held: rsync mirrors skipped' "$HOME/backup.log"
 }
 
+# Stub external backup commands and confine every writable path to the fixture.
+setup_backup_stubs() {
+	stubs="$T/stubs"
+	mkdir -p "$stubs" "$T/nas/home" "$HOME/.task"
+	for c in mountpoint rsync restic sudo msmtp dunstify notify-send dconf; do
+		printf '#!/usr/bin/env bash\nprintf "%%s" "%s" >>"%s/calls"\nprintf " <%%s>" "$@" >>"%s/calls"\nprintf "\\n" >>"%s/calls"\n' "$c" "$T" "$T" "$T" >"$stubs/$c"
+		chmod +x "$stubs/$c"
+	done
+	python3 -I - "$HOME/.task/taskchampion.sqlite3" <<'PY'
+import sqlite3, sys
+c = sqlite3.connect(sys.argv[1])
+c.execute('CREATE TABLE tasks (id INTEGER)')
+c.commit()
+PY
+}
+
+@test "restic gets optional agent homes, Documents and every discovered local envrc" {
+	setup_backup_stubs
+	sources="$T/source"
+	mkdir -p "$sources/.codex" "$sources/.codex-work" "$sources/.claude-work" "$sources/Documents" \
+		"$sources/dev/repo" "$sources/dev/a/b" "$sources/loft/repo"
+	printf '.envrc\n' >"$sources/dev/repo/.gitignore"
+	touch "$sources/dev/repo/.envrc" "$sources/dev/a/b/.envrc" "$sources/loft/repo/.envrc"
+	echo hold >"$T/hold"
+	PATH="$stubs:$PATH" TMPDIR="$T" BACKUP_TEST_HOME="$sources" BACKUP_HOLD_FILE="$T/hold" BACKUP_TEST_ROOT="$T/nas" run bash "$BACKUP"
+	[ "$status" -eq 0 ]
+	for d in .codex .codex-work .claude-work Documents; do
+		grep -Fq "<$sources/$d/>" "$T/calls"
+	done
+	while IFS= read -r -d '' file; do
+		grep -Fq "<$file>" "$T/calls" || return 1
+	done < <(local_state_files "$sources/dev" "$sources/loft")
+	grep -Fq "<$sources/dev/a/b/.envrc>" "$T/calls"
+	grep -Fq "<$sources/dev/repo/.envrc>" "$T/calls"
+}
+
+@test "absent optional sources are skipped and retention groups by host and tags" {
+	setup_backup_stubs
+	mkdir -p "$T/source"
+	PATH="$stubs:$PATH" TMPDIR="$T" BACKUP_TEST_HOME="$T/source" BACKUP_HOLD_FILE="$T/no-hold" BACKUP_TEST_ROOT="$T/nas" run bash "$BACKUP"
+	[ "$status" -eq 0 ]
+	grep -Fq 'restic <forget> <--group-by> <host,tags>' "$T/calls"
+	! grep -Fq "<$T/source/.codex/>" "$T/calls"
+}
+
+@test "each structured log line is written once and remains on stdout" {
+	setup_backup_stubs
+	mkdir -p "$T/source"
+	echo hold >"$T/hold"
+	PATH="$stubs:$PATH" TMPDIR="$T" BACKUP_TEST_HOME="$T/source" BACKUP_HOLD_FILE="$T/hold" BACKUP_TEST_ROOT="$T/nas" run bash "$BACKUP"
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"Backing up env files with restic..."* ]]
+	[ "$(grep -Fc 'Backing up env files with restic...' "$HOME/backup.log")" -eq 1 ]
+	[ "$(grep -Fc 'Restic backup completed successfully' "$HOME/backup.log")" -eq 1 ]
+	while IFS= read -r line; do
+		[[ "$line" =~ ^\[[0-9]{4}-[0-9]{2}-[0-9]{2}\  ]] || continue
+		[ "$(grep -Fxc "$line" "$HOME/backup.log")" -eq "$(printf '%s\n' "$output" | grep -Fxc "$line")" ] || return 1
+	done <"$HOME/backup.log"
+}
+
 # make_db <path> <rows> [wal]: a SQLite file with <rows> rows in table t.
 make_db() {
 	python3 -I - "$@" <<'PY2'
@@ -206,4 +266,31 @@ PY
 		Default/Extensions prof/cache2 prof/storage/default/https+++x/cache; do
 		[[ "$output" != *"$p/$dropped"* ]] || { echo "kept $dropped"; false; }
 	done
+}
+
+@test "agent home excludes drop caches but keep sessions and local state" {
+	command -v restic >/dev/null || skip "restic not installed"
+	p="$T/agent-home"
+	for d in .codex .codex-work .claude-work; do
+		mkdir -p "$p/$d/cache" "$p/$d/plugins/cache" "$p/$d/nested/deep/__pycache__" "$p/$d/sessions"
+		touch "$p/$d/cache/drop" "$p/$d/plugins/cache/drop" "$p/$d/nested/deep/__pycache__/drop" "$p/$d/sessions/keep"
+	done
+	for d in .codex .codex-work; do
+		for part in log logs tmp .tmp .pytest_cache .ruff_cache shell_snapshots; do
+			mkdir -p "$p/$d/$part" && touch "$p/$d/$part/drop"
+		done
+	done
+	for part in paste-cache shell-snapshots .pytest_cache .ruff_cache; do
+		mkdir -p "$p/.claude-work/$part" && touch "$p/.claude-work/$part/drop"
+	done
+	agent_home_excludes "$p"
+	export RESTIC_REPOSITORY="$T/repo" RESTIC_PASSWORD=test RESTIC_CACHE_DIR="$T/restic-cache"
+	restic init -q
+	restic backup -q "${AGENT_HOME_EXCLUDES[@]}" "$p"
+	run restic ls -q latest
+	[ "$status" -eq 0 ]
+	for d in .codex .codex-work .claude-work; do
+		[[ "$output" == *"$p/$d/sessions/keep"* ]]
+	done
+	[[ "$output" != *"/drop"* ]]
 }

@@ -95,6 +95,22 @@ BROWSER_EXCLUDES=(
 	--exclude=minidumps --exclude=gmp-widevinecdm --exclude='storage/default/*/cache'
 )
 
+# agent_home_excludes <home>: set restic exclusions for disposable agent data.
+agent_home_excludes() {
+	local home_dir="$1" dir name
+	AGENT_HOME_EXCLUDES=()
+	for dir in .codex .codex-work; do
+		for name in cache log logs tmp .tmp .pytest_cache .ruff_cache plugins/cache shell_snapshots; do
+			AGENT_HOME_EXCLUDES+=("--exclude=$home_dir/$dir/$name")
+		done
+		AGENT_HOME_EXCLUDES+=("--exclude=$home_dir/$dir/**/__pycache__")
+	done
+	for name in cache paste-cache shell-snapshots .pytest_cache .ruff_cache plugins/cache; do
+		AGENT_HOME_EXCLUDES+=("--exclude=$home_dir/.claude-work/$name")
+	done
+	AGENT_HOME_EXCLUDES+=("--exclude=$home_dir/.claude-work/**/__pycache__")
+}
+
 # sqlite_tree_snapshot <out_root> <dir>...: checked copies of the SQLite files a
 # running browser holds open, at <out_root><absolute path>. Each file is copied
 # with its -wal or -journal, read through the backup API (which folds the WAL
