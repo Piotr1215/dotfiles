@@ -13,6 +13,20 @@ setup() {
 	T="$BATS_TEST_TMPDIR"
 	export HOME="$T/home"
 	mkdir -p "$HOME"
+	# The login profile exports the real repo and password file; a test that
+	# reaches real restic must never inherit them.
+	unset RESTIC_REPOSITORY RESTIC_PASSWORD_FILE RESTIC_PASSWORD
+}
+
+@test "__backup.sh runs on with no X session" {
+	setup_backup_stubs
+	mkdir -p "$T/source"
+	: >"$T/source/.backup_restic_excludes"
+	echo hold >"$T/hold"
+	PATH="$stubs:$PATH" TMPDIR="$T" BACKUP_TEST_HOME="$T/source" BACKUP_HOLD_FILE="$T/hold" BACKUP_TEST_ROOT="$T/nas" \
+		BACKUP_TEST_X11_DIR="$T/no-x11" run bash "$BACKUP"
+	[ "$status" -eq 0 ]
+	grep -q '^restic' "$T/calls"
 }
 
 @test "no hold file means no hold" {
@@ -184,6 +198,45 @@ PY
 	[[ "$line" == *"<--tag> <downloads>"* ]]
 	[[ "$line" == *"<--exclude-larger-than> <100M>"* ]]
 	[[ "$line" == *"<--exclude=*.deb>"* ]]
+}
+
+@test "the rest of home gets a tagged snapshot through its exclude file" {
+	setup_backup_stubs
+	sources="$T/source"
+	mkdir -p "$sources"
+	: >"$sources/.backup_restic_excludes"
+	echo hold >"$T/hold"
+	PATH="$stubs:$PATH" TMPDIR="$T" BACKUP_TEST_HOME="$sources" BACKUP_HOLD_FILE="$T/hold" BACKUP_TEST_ROOT="$T/nas" run bash "$BACKUP"
+	[ "$status" -eq 0 ]
+	line=$(grep -F "<$sources/>" "$T/calls")
+	[[ "$line" == *"<--tag> <home>"* ]]
+	[[ "$line" == *"<--exclude-file> <$sources/.backup_restic_excludes>"* ]]
+	[[ "$line" == *"<--exclude-larger-than> <1G>"* ]]
+	! grep -q 'restic home' "$HOME/backup.log"
+}
+
+@test "a missing home exclude file is a failed part, not a skipped home" {
+	setup_backup_stubs
+	mkdir -p "$T/source"
+	echo hold >"$T/hold"
+	PATH="$stubs:$PATH" TMPDIR="$T" BACKUP_TEST_HOME="$T/source" BACKUP_HOLD_FILE="$T/hold" BACKUP_TEST_ROOT="$T/nas" run bash "$BACKUP"
+	! grep -Fq "<$T/source/>" "$T/calls"
+	grep -q "ERROR.*restic home: $T/source/.backup_restic_excludes is missing" "$HOME/backup.log"
+}
+
+@test "the dev mirror's --delete leaves the loft/ops mirror to the loft step" {
+	setup_backup_stubs
+	mkdir -p "$T/source"
+	PATH="$stubs:$PATH" TMPDIR="$T" BACKUP_TEST_HOME="$T/source" BACKUP_HOLD_FILE="$T/no-hold" BACKUP_TEST_ROOT="$T/nas" run bash "$BACKUP"
+	line=$(grep -F '</home/decoder/dev/>' "$T/calls" | grep -vF '<--dry-run>' | head -1)
+	[ -n "$line" ]
+	mapfile -t filters < <(grep -o '<--\(include\|exclude\)=[^>]*>' <<<"$line" | sed 's/^<//; s/>$//')
+	mkdir -p "$T/live/repo" "$T/mirror/loft/ops" "$T/mirror/gone"
+	touch "$T/live/repo/f" "$T/mirror/loft/ops/notes.md" "$T/mirror/gone/old"
+	rsync -a --delete "${filters[@]}" "$T/live/" "$T/mirror/"
+	[ -e "$T/mirror/loft/ops/notes.md" ]
+	[ -e "$T/mirror/repo/f" ]
+	[ ! -e "$T/mirror/gone/old" ]
 }
 
 @test "absent optional sources are skipped and retention groups by host and tags" {
