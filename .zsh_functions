@@ -168,12 +168,13 @@ function nman() {
 function ufp() {
     local profile_type=$1
     local profiles_ini="$HOME/.var/app/io.gitlab.librewolf-community/.librewolf/profiles.ini"
+    local mode_file="${TIMEOFF_MODE_FILE:-/tmp/timeoff_mode}"
 
     if [ -z "$profile_type" ]; then
         echo "Usage: ufp <work|home>"
         echo "  work = Chrome, tmux work status"
         echo "  home = LibreWolf, tmux music status"
-        if [[ -f /tmp/timeoff_mode ]]; then
+        if [[ -f "$mode_file" ]]; then
             echo "Current: home (LibreWolf)"
         else
             echo "Current: work (Chrome)"
@@ -185,8 +186,8 @@ function ufp() {
 
     case $profile_type in
         "work")
-            rm -f /tmp/timeoff_mode
-            export BROWSER=google-chrome
+            rm -f "$mode_file"
+            export BROWSER="$HOME/dev/dotfiles/scripts/__open_browser.sh"
             xdg-settings set default-web-browser google-chrome.desktop 2>/dev/null
             # Swap LibreWolf default profile to Work
             if [[ -f "$profiles_ini" ]]; then
@@ -195,8 +196,8 @@ function ufp() {
             echo "Mode: work (Chrome, LibreWolf=Work)"
             ;;
         "home")
-            touch /tmp/timeoff_mode
-            export BROWSER=librewolf
+            touch "$mode_file"
+            export BROWSER="$HOME/dev/dotfiles/scripts/__open_browser.sh"
             xdg-settings set default-web-browser io.gitlab.librewolf-community.desktop 2>/dev/null
             # Swap LibreWolf default profile to Home
             if [[ -f "$profiles_ini" ]]; then
