@@ -9,6 +9,10 @@
 ${BACKUP_SOURCE_HOME}/dev
 ${BACKUP_SOURCE_HOME}/loft
 
+# git worktrees: only the uncommitted-work capture keeps their state (Piotr, 8 Nov)
+${BACKUP_SOURCE_HOME}/.task-worktrees
+**/*-worktrees
+
 # own restic run with cache excludes
 ${BACKUP_SOURCE_HOME}/.claude
 ${BACKUP_SOURCE_HOME}/.claude-work
