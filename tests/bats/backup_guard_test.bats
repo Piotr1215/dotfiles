@@ -142,15 +142,15 @@ PY
 @test "restic gets optional agent homes, Documents and every discovered local envrc" {
 	setup_backup_stubs
 	sources="$T/source"
-	mkdir -p "$sources/.codex" "$sources/.codex-work" "$sources/.claude-work" "$sources/Documents" \
+	mkdir -p "$sources/.codex" "$sources/.codex-work" "$sources/.claude-work" "$sources/Documents" "$sources/Pictures" \
 		"$sources/dev/repo" "$sources/dev/a/b" "$sources/loft/repo"
 	printf '.envrc\n' >"$sources/dev/repo/.gitignore"
 	touch "$sources/dev/repo/.envrc" "$sources/dev/a/b/.envrc" "$sources/loft/repo/.envrc"
 	echo hold >"$T/hold"
 	PATH="$stubs:$PATH" TMPDIR="$T" BACKUP_TEST_HOME="$sources" BACKUP_HOLD_FILE="$T/hold" BACKUP_TEST_ROOT="$T/nas" run bash "$BACKUP"
 	[ "$status" -eq 0 ]
-	for d in .codex .codex-work .claude-work Documents; do
-		grep -Fq "<$sources/$d/>" "$T/calls"
+	for d in .codex .codex-work .claude-work Documents Pictures; do
+		grep -Fq "<$sources/$d/>" "$T/calls" || return 1
 	done
 	while IFS= read -r -d '' file; do
 		grep -Fq "<$file>" "$T/calls" || return 1
@@ -172,6 +172,19 @@ PY
 	done
 }
 
+@test "Downloads gets its own tagged snapshot that skips installers and large files" {
+	setup_backup_stubs
+	sources="$T/source"
+	mkdir -p "$sources/Downloads"
+	echo hold >"$T/hold"
+	PATH="$stubs:$PATH" TMPDIR="$T" BACKUP_TEST_HOME="$sources" BACKUP_HOLD_FILE="$T/hold" BACKUP_TEST_ROOT="$T/nas" run bash "$BACKUP"
+	[ "$status" -eq 0 ]
+	line=$(grep -F "<$sources/Downloads/>" "$T/calls")
+	[[ "$line" == *"<--tag> <downloads>"* ]]
+	[[ "$line" == *"<--exclude-larger-than> <100M>"* ]]
+	[[ "$line" == *"<--exclude=*.deb>"* ]]
+}
+
 @test "absent optional sources are skipped and retention groups by host and tags" {
 	setup_backup_stubs
 	mkdir -p "$T/source"
@@ -180,6 +193,7 @@ PY
 	grep -Fq 'restic <forget> <--group-by> <host,tags>' "$T/calls"
 	! grep -Fq "<$T/source/.codex/>" "$T/calls"
 	! grep -Fq "<$T/source/.aws/config>" "$T/calls"
+	! grep -Fq "<$T/source/Downloads/>" "$T/calls"
 }
 
 @test "each structured log line is written once and remains on stdout" {
