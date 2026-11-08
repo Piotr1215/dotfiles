@@ -1,0 +1,91 @@
+# What the nightly `restic backup --tag home` of all of ~ leaves out.
+# restic expands ${BACKUP_SOURCE_HOME}. Each comment line gives the reason for
+# the patterns under it; scripts/__backup_coverage.sh reports that reason.
+# Everything not listed here is backed up, so a new folder in ~ is covered by
+# default. The run also skips any single file over 1G (the 4TB drive takes those
+# from 17 Nov).
+
+# own layers: GitHub, the NAS mirror and the uncommitted-work capture
+${BACKUP_SOURCE_HOME}/dev
+${BACKUP_SOURCE_HOME}/loft
+
+# own restic run with cache excludes
+${BACKUP_SOURCE_HOME}/.claude
+${BACKUP_SOURCE_HOME}/.claude-work
+${BACKUP_SOURCE_HOME}/.codex
+${BACKUP_SOURCE_HOME}/.codex-work
+
+# own restic run with size and installer filters
+${BACKUP_SOURCE_HOME}/Downloads
+
+# own restic run with consistent database copies
+${BACKUP_SOURCE_HOME}/.config/google-chrome
+${BACKUP_SOURCE_HOME}/.config/google-chrome-canary
+${BACKUP_SOURCE_HOME}/.var/app/io.gitlab.librewolf-community
+
+# NAS mirror; the 4TB drive takes it from 17 Nov
+${BACKUP_SOURCE_HOME}/music
+${BACKUP_SOURCE_HOME}/Music
+
+# cache, rebuilt on use
+${BACKUP_SOURCE_HOME}/.cache
+${BACKUP_SOURCE_HOME}/.npm
+${BACKUP_SOURCE_HOME}/.yarn
+${BACKUP_SOURCE_HOME}/.kube/cache
+${BACKUP_SOURCE_HOME}/.kube/http-cache
+${BACKUP_SOURCE_HOME}/.nv
+${BACKUP_SOURCE_HOME}/.debug
+${BACKUP_SOURCE_HOME}/.ansible
+${BACKUP_SOURCE_HOME}/.terraform.d
+${BACKUP_SOURCE_HOME}/.aider.tags.cache.v4
+${BACKUP_SOURCE_HOME}/.config/discord
+${BACKUP_SOURCE_HOME}/.config/Codex
+${BACKUP_SOURCE_HOME}/.local/share/Trash
+${BACKUP_SOURCE_HOME}/.zcompdump*
+**/node_modules
+**/__pycache__
+**/.venv
+
+# toolchain or app install, reinstalled from its upstream
+${BACKUP_SOURCE_HOME}/go
+${BACKUP_SOURCE_HOME}/sdk
+${BACKUP_SOURCE_HOME}/.cargo
+${BACKUP_SOURCE_HOME}/.rustup
+${BACKUP_SOURCE_HOME}/.bun
+${BACKUP_SOURCE_HOME}/.deno
+${BACKUP_SOURCE_HOME}/.npm-global
+${BACKUP_SOURCE_HOME}/.opencode
+${BACKUP_SOURCE_HOME}/.browserstack
+${BACKUP_SOURCE_HOME}/.krew
+${BACKUP_SOURCE_HOME}/.luarocks
+${BACKUP_SOURCE_HOME}/.oh-my-zsh
+${BACKUP_SOURCE_HOME}/.tmux/plugins
+${BACKUP_SOURCE_HOME}/.eclipse
+${BACKUP_SOURCE_HOME}/snap
+${BACKUP_SOURCE_HOME}/kube-ps1
+${BACKUP_SOURCE_HOME}/Games
+${BACKUP_SOURCE_HOME}/.local/bin
+${BACKUP_SOURCE_HOME}/.local/lib
+${BACKUP_SOURCE_HOME}/.local/opt
+${BACKUP_SOURCE_HOME}/.local/share/flatpak
+${BACKUP_SOURCE_HOME}/.local/share/claude
+${BACKUP_SOURCE_HOME}/.local/share/uv
+${BACKUP_SOURCE_HOME}/.local/share/pipx
+${BACKUP_SOURCE_HOME}/.local/share/java
+${BACKUP_SOURCE_HOME}/.local/share/nvidia-pinned-debs
+${BACKUP_SOURCE_HOME}/.local/share/piper-voices
+${BACKUP_SOURCE_HOME}/.local/share/injection-guard
+${BACKUP_SOURCE_HOME}/.ollama/models
+
+# downloadable image
+${BACKUP_SOURCE_HOME}/vms
+
+# local copy of Gmail; the server holds every message
+${BACKUP_SOURCE_HOME}/.local/share/mail
+
+# recovery scratch from the 7 Nov wipe, copies of what other layers hold
+${BACKUP_SOURCE_HOME}/.local/share/restore-2026-11-07
+
+# sockets, locks and empty session files
+${BACKUP_SOURCE_HOME}/.mpv_sockets
+${BACKUP_SOURCE_HOME}/.Xauthority
