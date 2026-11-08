@@ -1,0 +1,181 @@
+# name	status	reason
+.Raritan Virtual KVM Client	unknown	12K; directory; contains webview
+.XCompose	unknown	4.0K; file
+.Xauthority	skip	empty X session authentication file, recreated on login
+.Xresources	unknown	0; link to dev/dotfiles/.Xresources
+.abook	unknown	12K; directory; contains addressbook, addressbook~
+.agents	unknown	6.8M; directory; contains .skill-lock.json, skill-backups, skills
+.aider.chat.history.md	unknown	0; link to dev/dotfiles/.aider.chat.history.md
+.aider.chat.history.mdnlrwxrwxrwx	unknown	0; link to dev/dotfiles/.aider.chat.history.mdnlrwxrwxrwx
+.aider.input.history	unknown	0; link to dev/dotfiles/.aider.input.history
+.aider.input.historynlrwxrwxrwx	unknown	0; link to dev/dotfiles/.aider.input.historynlrwxrwxrwx
+.aider.tags.cache.v4	skip	aider tag cache contains cache.db
+.aider.tags.cache.v4ndrwxrwxr-x	unknown	0; link to dev/dotfiles/.aider.tags.cache.v4ndrwxrwxr-x
+.ansible	skip	Ansible connection and temporary files
+.aws	unknown	config is in restic; directory also contains credentials and other state
+.azure-devops	unknown	292K; directory; contains python-sdk
+.backup_coverage	unknown	0; link to dev/dotfiles/.backup_coverage
+.backup_patterns	unknown	0; link to dev/dotfiles/.backup_patterns
+.bash_history	unknown	4.0K; file
+.bash_logout	unknown	4.0K; file
+.bashrc	unknown	4.0K; file
+.browserstack	unknown	107M; directory; contains .build-name-cache.json, BrowserStackLocal, browserstack-sdk.json, cli
+.bun	unknown	30M; directory; contains install
+.cache	skip	application cache directory
+.cargo	unknown	2.0G; directory; contains .crates.toml, .crates2.json, .global-cache, .package-cache, .package-cache-mutate
+.claude-dashboard-active.yml	unknown	8.0K; file
+.claude-slackbot	unknown	224K; directory; contains .claude.json, .credentials.json, backups, mcp-needs-auth-cache.json, policy-limits.json
+.claude.json.bak	unknown	24K; file
+.claude.json.tmp.1627099.94fe53a94570	unknown	0; file
+.config	unknown	browser profiles are in restic and selected subdirectories mirrored; other application state remains
+.copilot	unknown	12K; directory; contains ide
+.debug	skip	debug symbol files
+.deno	unknown	92M; directory; contains .shellRcBackups, bin, env
+.dircolors	unknown	0; link to dev/dotfiles/.dircolors
+.docker	unknown	28K; directory; contains buildx, cli-plugins
+.eclipse	unknown	5.2M; directory; contains 487352054_linux_gtk_x86_64
+.git-global-hooks	unknown	0; link to dev/dotfiles/.git-global-hooks
+.git-work-hooks	unknown	4.0K; directory; contains pre-push
+.gitattributes	unknown	0; link to dev/dotfiles/.gitattributes
+.gitconfig	unknown	0; link to dev/dotfiles/.gitconfig
+.gitconfig-personal	unknown	0; link to dev/dotfiles/.gitconfig-personal
+.gitconfig-work	unknown	0; link to dev/dotfiles/.gitconfig-work
+.gitignore	unknown	0; link to dev/dotfiles/.gitignore
+.gitignore-work	unknown	0; link to dev/dotfiles/.gitignore-work
+.gp.md	unknown	0; link to dev/dotfiles/.gp.md
+.gsutil	unknown	20K; directory; contains credstore2, credstore2.lock, tracker-files
+.keys	unknown	4.0K; directory; contains git-crypt-key
+.krew	unknown	8.0K; directory; contains store
+.kube	unknown	config is in restic; directory also has cache and kctx.yaml
+.lesshst	unknown	4.0K; file
+.local	unknown	selected keyrings, state and files are in restic or mirror; other local data remains
+.luarc.json	unknown	0; link to dev/dotfiles/.luarc.json
+.luarocks	unknown	8.0K; directory; contains bin
+.mbsyncrc	unknown	4.0K; file
+.mcp-auth	unknown	8.0K; directory; contains mcp-remote-v1
+.mcp.json.bak-1776593138	unknown	4.0K; file
+.mozilla	unknown	3.1M; directory; contains native-messaging-hosts
+.mpv_sockets	skip	mpv IPC sockets
+.msmtprc	unknown	0; link to /home/decoder/.config/msmtp/config
+.newsboat	unknown	52K; directory; contains __feed_to_task.sh, claude_feeds.db, config, urls
+.notmuch-config	unknown	0; link to dev/dotfiles/.notmuch-config
+.npm	unknown	size over 2s; directory; contains _cacache, _logs, _npx, _prebuilds, _update-notifier-last-checked
+.npm-global	unknown	685M; directory; contains bin, lib
+.npmrc	unknown	4.0K; file
+.nv	skip	GPU ComputeCache
+.oh-my-zsh	unknown	34M; directory; contains .devcontainer, .editorconfig, .git, .github, .gitignore
+.ollama	unknown	111M; directory; contains backup, config.json, history, id_ed25519, id_ed25519.pub
+.opencode	unknown	178M; directory; contains bin
+.pki	unknown	76K; directory; contains nssdb
+.playwright-mcp	unknown	0; link to dev/dotfiles/.playwright-mcp
+.profile	unknown	0; link to dev/dotfiles/.profile
+.promptfoo	unknown	444K; directory; contains logs, promptfoo.db, promptfoo.db-shm, promptfoo.db-wal, promptfoo.yaml
+.python_history	skip	empty Python history file
+.ripgreprc	unknown	0; link to dev/dotfiles/.ripgreprc
+.ruff_cache	skip	link to Ruff cache
+.rustup	unknown	1.6G; directory; contains downloads, settings.toml, tmp, toolchains, update-hashes
+.sigstore	unknown	52K; directory; contains root
+.slack	unknown	21M; directory; contains LICENSE, bin, config.json, credentials.json, logs
+.snippets_custom.json	unknown	0; link to dev/dotfiles/.snippets_custom.json
+.spaceflows	unknown	8.0K; directory; contains cli-token.json
+.spacelift	unknown	8.0K; directory; contains config.json
+.sqz	unknown	16M; directory; contains presets, sessions.db, sessions.db-shm, sessions.db-wal
+.sudo_as_admin_successful	skip	empty sudo marker
+.swt	unknown	8.0K; directory; contains trims.prefs
+.task-worktrees	unknown	708K; directory; contains start-draft-fix, switch-race-fix
+.taskopenrc	unknown	0; link to dev/dotfiles/.taskopenrc
+.taskrc	unknown	0; link to dev/dotfiles/.taskrc
+.terraform.d	skip	Terraform checkpoint cache and signature
+.tig_history	skip	empty tig history file
+.tmux	unknown	2.8M; directory; contains plugins
+.tmux.conf	unknown	0; link to dev/dotfiles/.tmux.conf
+.var	unknown	LibreWolf profile is in restic and OBS config mirrored; other app data remains
+.vcluster	unknown	4.0K; directory; contains defaults.json
+.vsnip	unknown	4.0K; directory; contains dosini.json, global.json, go.json, lua.json, markdown.json
+.w3m	unknown	8.0K; directory; contains cookie
+.wget-hsts	unknown	4.0K; file
+.whitesource	unknown	0; link to dev/dotfiles/.whitesource
+.xsessionrc	unknown	0; link to dev/dotfiles/.xsessionrc
+.yarn	unknown	1.6G; directory; contains berry
+.z	unknown	12K; file
+.z.12564	skip	empty temporary zoxide file
+.z.lock	skip	empty zoxide lock file
+.zcompdump	skip	generated zsh completion cache
+.zcompdump-pop-os-5.9.zwc	skip	compiled zsh completion cache
+.zcompdump-serval-5.9	skip	generated zsh completion cache
+.zcompdump-serval-5.9.lock	skip	empty zsh completion lock directory
+.zcompdump-serval-5.9.zwc	skip	compiled zsh completion cache
+.zprofile	unknown	0; link to dev/dotfiles/.zprofile
+.zsh	unknown	link target has completions in restic; rest of target is not covered as a whole
+.zsh_abbreviations	unknown	0; link to dev/dotfiles/.zsh_abbreviations
+.zsh_aliases	unknown	0; link to dev/dotfiles/.zsh_aliases
+.zsh_aliases.work	unknown	0; link to dev/dotfiles/.zsh_aliases.work
+.zsh_claude	unknown	0; link to dev/dotfiles/.zsh_claude
+.zsh_functions	unknown	0; link to dev/dotfiles/.zsh_functions
+.zsh_gpt	unknown	0; link to dev/dotfiles/.zsh_gpt
+.zsh_minimal	unknown	4.0K; directory; contains .zshrc
+.zshenv	unknown	0; link to dev/dotfiles/.zshenv
+.zshrc	unknown	0; link to dev/dotfiles/.zshrc
+.zshrc.bak	unknown	16K; file
+2026-02-07 14-04-35.mp4	unknown	3.4M; file
+2026-09-27 12-18-36.mp4	unknown	5.2M; file
+AGENTS.md	unknown	0; link to dev/dotfiles/AGENTS.md
+ALARMS	unknown	0; link to dev/dotfiles/ALARMS
+ApplicationSettings.xml	unknown	4.0K; file
+CLAUDE.md	unknown	0; link to dev/dotfiles/CLAUDE.md
+Desktop	skip	empty desktop directory
+DeviceTree.xml	unknown	4.0K; file
+EVE-NEXT-STEPS.md	unknown	12K; file
+Games	unknown	3.8G; directory; contains eve-dxvk.conf, eve-o-preview-linux, eve-online, eve-preview-manager, eve-priority-keeper.sh
+KeyboardMacros.xml	unknown	4.0K; file
+Public	skip	empty public directory
+Templates	skip	empty templates directory
+Videos	later	4TB drive from 17 Nov; currently empty
+aaa.md	unknown	4.0K; file
+ai-office-hour-2026-03-20.pptx	unknown	44K; file
+ai-theater	unknown	248K; directory; contains les-unemployables, letterbox, marble-hearts-turn-based-communication-design.md, monaco-08, the-archivists
+backup.log	skip	backup process log
+backup.log.0	skip	rotated backup process log
+backup.log.2	skip	rotated backup process log
+backup.log.3	skip	rotated backup process log
+backup.log.4	skip	rotated backup process log
+bookmarks.html	unknown	660K; file
+completions	unknown	4.0K; directory; contains _pet
+design	unknown	12K; directory; contains wireframes
+designs	unknown	0; link to dev/dotfiles/designs
+docs	unknown	0; link to dev/dotfiles/docs
+dotfiles-pre-rewrite.git	unknown	27M; directory; contains HEAD, branches, config, description, hooks
+eve-thermal-20260423-2207.log	skip	thermal monitor log
+exec.sh	unknown	4.0K; file
+go	unknown	size over 2s; directory; contains bin, pkg
+it-1025-invite-commands.md	unknown	4.0K; file
+kube-ps1	unknown	8.7M; directory; contains .git, .github, .gitignore, CHANGELOG.md, CONTRIBUTING.md
+letterbox	skip	empty directory
+loft	unknown	only ops is mirrored; selected local state is in restic; other directories remain
+logme.log.2026-06-14	skip	application log
+lua	unknown	0; link to dev/dotfiles/lua
+memory	unknown	0; link to dev/dotfiles/memory
+models	unknown	12K; directory; contains Winnow-12B, src
+out.md	unknown	12K; file
+patches	unknown	0; link to dev/dotfiles/patches
+pop_os_settings_backup.ini	unknown	24K; file
+project_dirs.txt	unknown	0; link to dev/dotfiles/project_dirs.txt
+projects.txt	unknown	0; link to dev/dotfiles/projects.txt
+report.md	unknown	4.0K; file
+sample.zip	unknown	4.0K; file
+scratch	unknown	18M; directory; contains security-vet-pocketflow
+sdk	unknown	300M; directory; contains go1.25.8
+secrets	unknown	12K; directory; contains argocd, k8s
+snap	unknown	36K; directory; contains doctl, go
+specs	unknown	16K; directory; contains 001-just-testing-specify, 002-simple-readme-update
+syslog-failures.log	skip	system failure log
+tasknotes	skip	empty directory
+tealdeer-pages	unknown	24K; directory; contains common
+templates	unknown	0; link to dev/dotfiles/templates
+test	unknown	8.0K; directory; contains test_helper
+test.txt	unknown	4.0K; file
+tests	unknown	264K; directory; contains bats, ci_skip.txt, fixtures, nvim, python
+tmp	unknown	0; link to dev/dotfiles/tmp
+tmp_rga	unknown	0; link to dev/dotfiles/tmp_rga
+vms	unknown	657M; directory; contains jammy-server-cloudimg-amd64.img
+zoom_monitor.log	skip	application monitor log
