@@ -23,6 +23,11 @@ target=${WIP_CAPTURE_TARGET:-/mnt/nas-backup/git-mirror}
 state=${WIP_CAPTURE_STATE:-${XDG_STATE_HOME:-$HOME/.local/state}/wip-capture}
 mount=${WIP_CAPTURE_MOUNT:-/mnt/nas-backup}
 repo_timeout=${WIP_CAPTURE_REPO_TIMEOUT:-120}
+# A repo with no good capture for this long raises the daily stale alert. The
+# alert is a service-health line in the log that intake's events-monitor class
+# shows to Kendra. Tests point the log elsewhere and fake the clock.
+stale_after=${WIP_CAPTURE_STALE_AFTER:-86400}
+notify_log=${WIP_CAPTURE_NOTIFY_LOG:-$HOME/.local/state/notifications.log}
 
 # Refuse writable mirror or state paths that overlap a source repository.
 paths_overlap() {
@@ -213,6 +218,34 @@ known_reason() {
   fi
 }
 
+# "3d 2h" style age for the alert text.
+fmt_age() {
+  local s=$1
+  if (( s >= 86400 )); then printf '%sd %sh' $((s/86400)) $((s%86400/3600))
+  elif (( s >= 3600 )); then printf '%sh %sm' $((s/3600)) $((s%3600/60))
+  else printf '%sm' $((s/60)); fi
+}
+
+# Read a two-column tsv (repo, epoch) into the associative array named $2.
+load_times() {
+  local file=$1 repo t
+  local -n map=$2
+  [[ -f $file ]] || return 0
+  while IFS=$'\t' read -r repo t; do
+    # shellcheck disable=SC2004,SC2034  # nameref into the caller's array
+    if [[ -n $repo && $t =~ ^[0-9]+$ ]]; then map[$repo]=$t; fi
+  done < "$file"
+}
+
+# Write the array named $2 as a two-column tsv, atomically.
+save_times() {
+  local file=$1 tmp repo
+  local -n times=$2
+  tmp=$(mktemp "$state/times.XXXXXXXX")
+  for repo in "${!times[@]}"; do printf '%s\t%s\n' "$repo" "${times[$repo]}"; done | sort > "$tmp"
+  mv -f -- "$tmp" "$file"
+}
+
 # Capture one repository in the sandbox and print one tab-separated result line.
 run_one() {
   local repo=$1 out err rc=0 reason line
@@ -235,6 +268,49 @@ run_one() {
   fi
   rm -f -- "$out" "$err"
   printf '%s\n' "$line"
+}
+
+# Track the last good capture per repo and raise one alert a day while any repo
+# with work to back up has had none for over stale_after seconds. Uses the
+# arrays and $now of main (bash dynamic scope). A repo with no good capture on
+# record counts from its first failure. Repos that are gone drop out of the
+# state. Orphan worktrees and embedded repos without a commit have nothing to
+# capture, so they never alert.
+stale_check() {
+  local repo reason since age today list='' n=0 shown=0 alerted_file="$state/stale-alerted"
+  for repo in "${!new_good[@]}"; do good_at[$repo]=${new_good[$repo]}; done
+  for repo in "${!bad[@]}"; do new_fail[$repo]=${fail_at[$repo]:-$now}; done
+  # Keep the old good time of a failing repo; drop repos that are gone.
+  for repo in "${!good_at[@]}"; do
+    if [[ -z ${new_good[$repo]+set} && -z ${bad[$repo]+set} ]]; then unset "good_at[$repo]"; fi
+  done
+  while IFS= read -r repo; do
+    [[ -n $repo ]] || continue
+    reason=${bad[$repo]}
+    case $reason in 'git directory missing'* | 'embedded repository without'*) continue ;; esac
+    since=${good_at[$repo]:-${new_fail[$repo]}}
+    age=$((now - since))
+    (( age > stale_after )) || continue
+    n=$((n+1))
+    if (( shown < 5 )); then
+      shown=$((shown+1))
+      if [[ -n ${good_at[$repo]+set} ]]; then list+="${list:+; }$repo ($reason, last good capture $(fmt_age "$age") ago)"
+      else list+="${list:+; }$repo ($reason, never captured, failing for $(fmt_age "$age"))"; fi
+    fi
+  done < <(printf '%s\n' "${!bad[@]}" | sort)
+  save_times "$state/last-good.tsv" good_at
+  save_times "$state/first-fail.tsv" new_fail
+  (( n > 0 )) || return 0
+  today=$(date -d "@$now" +%F)
+  [[ $(cat "$alerted_file" 2>/dev/null || true) != "$today" ]] || return 0
+  (( n <= shown )) || list+="; and $((n-shown)) more, see known-broken.tsv"
+  if printf '%s\t%s\t%s\t%s\n' "$(date -d "@$now" '+%F %T')" service-health \
+       "⚙ wip-capture: $n repos not backed up for over $((stale_after/3600))h" "$list" >> "$notify_log"; then
+    printf '%s\n' "$today" > "$alerted_file"
+    printf 'alert %s repos not backed up for over %sh\n' "$n" "$((stale_after/3600))"
+  else
+    printf 'could not write the stale alert to %s\n' "$notify_log" >&2
+  fi
 }
 
 main() {
@@ -284,22 +360,29 @@ main() {
   sed -z 's#/\.git$##' "$list" |
     WIP_CAPTURE_PARENT=1 xargs -0 -r -n 1 -P "${WIP_CAPTURE_JOBS:-4}" "$self_copy" --run-one > "$results" || true
   local known_file="$state/known-broken.tsv" known_new
+  local -A good_at=() fail_at=() bad=() new_good=() new_fail=()
+  local now
+  now=${WIP_CAPTURE_NOW:-$(date +%s)}
+  load_times "$state/last-good.tsv" good_at
+  load_times "$state/first-fail.tsv" fail_at
   known_new=$(mktemp "$state/known.XXXXXXXX")
   while IFS=$'\t' read -r kind repo reason; do
     count=$((count+1))
     case $kind in
-      captured) captured=$((captured+1)); printf 'captured %s\n' "$repo" ;;
-      synced) synced=$((synced+1)); [[ ${WIP_CAPTURE_VERBOSE:-0} != 1 ]] || printf 'synced %s\n' "$repo" ;;
-      skip) skipped=$((skipped+1)); [[ ${WIP_CAPTURE_VERBOSE:-0} != 1 ]] || printf 'skip %s\n' "$repo" ;;
+      captured) captured=$((captured+1)); new_good[$repo]=$now; printf 'captured %s\n' "$repo" ;;
+      synced) synced=$((synced+1)); new_good[$repo]=$now; [[ ${WIP_CAPTURE_VERBOSE:-0} != 1 ]] || printf 'synced %s\n' "$repo" ;;
+      skip) skipped=$((skipped+1)); new_good[$repo]=$now; [[ ${WIP_CAPTURE_VERBOSE:-0} != 1 ]] || printf 'skip %s\n' "$repo" ;;
       known)
         known=$((known+1))
+        bad[$repo]=$reason
         printf '%s\t%s\n' "$repo" "$reason" >> "$known_new"
         # Warn once per repo and reason; repeats stay out of the cron log.
         if ! grep -qxF -- "$repo"$'\t'"$reason" "$known_file" 2>/dev/null; then printf 'warning %s: %s\n' "$repo" "$reason"; fi ;;
-      *) failed=$((failed+1)) ;;
+      *) failed=$((failed+1)); bad[$repo]='capture failed' ;;
     esac
   done < "$results"
   mv -f -- "$known_new" "$known_file"
+  stale_check
   printf 'summary repositories=%s captured=%s synced=%s skipped=%s known_broken=%s failures=%s\n' "$count" "$captured" "$synced" "$skipped" "$known" "$failed"
   (( failed == 0 ))
 }

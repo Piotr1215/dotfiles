@@ -287,3 +287,82 @@ FILTER
   [ "$(stat -c %a "$MIRROR")" = 700 ]
   [ "$(stat -c %a "$MIRROR/git-crypt/keys/test")" = 600 ]
 }
+
+# Stale-capture alert. A repo whose capture times out is never captured; the
+# clock is faked with WIP_CAPTURE_NOW and the alert goes to a temp log, never
+# the real notifications.log.
+stale_setup() {
+  export TZ=UTC
+  export WIP_CAPTURE_REPO_TIMEOUT=1
+  export WIP_CAPTURE_NOTIFY_LOG="$BATS_TEST_TMPDIR/notifications.log"
+  T0=1768005000 # 2026-01-10 00:30 UTC
+  git -C "$REPO" config filter.slow.clean 'sleep 5; cat'
+  printf 'tracked filter=slow\n' > "$REPO/.gitattributes"
+  printf 'changed\n' > "$REPO/tracked"
+}
+capture_at() { WIP_CAPTURE_NOW=$((T0 + $1)) capture; }
+alert_count() {
+  if [[ -f $WIP_CAPTURE_NOTIFY_LOG ]]; then grep -c service-health "$WIP_CAPTURE_NOTIFY_LOG" || true; else echo 0; fi
+}
+
+@test "a repo with no good capture for over 24h raises a service-health alert" {
+  stale_setup
+  run capture_at 0
+  [ "$status" -eq 0 ]
+  [ "$(alert_count)" = 0 ]
+  run capture_at $((23 * 3600))
+  [ "$(alert_count)" = 0 ]
+  run capture_at $((25 * 3600))
+  [ "$status" -eq 0 ]
+  [[ $output == *'alert 1 repos'* ]]
+  [ "$(alert_count)" = 1 ]
+  run cat "$WIP_CAPTURE_NOTIFY_LOG"
+  [[ $output == *$'\tservice-health\t'* ]]
+  [[ $output == *"$REPO (capture timed out"* ]]
+  [[ $output == *'never captured, failing for 1d 1h'* ]]
+}
+
+@test "a second run on the same day sends no second alert" {
+  stale_setup
+  capture_at 0
+  capture_at $((25 * 3600))
+  run capture_at $((26 * 3600))
+  [[ $output != *'alert '* ]]
+  [ "$(alert_count)" = 1 ]
+}
+
+@test "a repo still stale the next day alerts again" {
+  stale_setup
+  capture_at 0
+  capture_at $((25 * 3600))
+  run capture_at $((49 * 3600))
+  [[ $output == *'alert 1 repos'* ]]
+  [ "$(alert_count)" = 2 ]
+}
+
+@test "a repo captured again sends no alert and the repeats stop" {
+  stale_setup
+  capture_at 0
+  capture_at $((25 * 3600))
+  [ "$(alert_count)" = 1 ]
+  rm "$REPO/.gitattributes"
+  run capture_at $((49 * 3600))
+  [ "$status" -eq 0 ]
+  [[ $output == *"captured $REPO"* ]]
+  [[ $output != *'alert '* ]]
+  run capture_at $((73 * 3600))
+  [[ $output != *'alert '* ]]
+  [ "$(alert_count)" = 1 ]
+}
+
+@test "an orphan worktree with nothing to capture never alerts" {
+  export TZ=UTC WIP_CAPTURE_NOTIFY_LOG="$BATS_TEST_TMPDIR/notifications.log"
+  T0=1768005000
+  mkdir "$ROOT/broken"
+  printf 'gitdir: /nonexistent\n' > "$ROOT/broken/.git"
+  capture_at 0
+  run capture_at $((50 * 3600))
+  [ "$status" -eq 0 ]
+  [[ $output != *'alert '* ]]
+  [ "$(alert_count)" = 0 ]
+}
