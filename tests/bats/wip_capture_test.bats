@@ -42,6 +42,17 @@ mirror_show() { git --git-dir="$MIRROR" show "refs/wip/$1:$2"; }
   run ! mirror_show main ignored 2>/dev/null
 }
 
+@test "captures a repo whose secret files are gitignored" {
+  printf 'ignored\n.env\n' > "$REPO/.gitignore"
+  git -C "$REPO" commit -qam 'ignore env'
+  printf 'secret\n' > "$REPO/.env"
+  printf 'untracked\n' > "$REPO/new"
+  run capture
+  [ "$status" -eq 0 ]
+  [ "$(mirror_show main new)" = untracked ]
+  run ! mirror_show main .env 2>/dev/null
+}
+
 @test "does not modify live git metadata and works with index.lock" {
   printf 'changed\n' > "$REPO/tracked"
   touch "$REPO/.git/index.lock"

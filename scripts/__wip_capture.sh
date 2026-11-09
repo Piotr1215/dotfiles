@@ -80,7 +80,9 @@ capture_one() {
   local repo=$1 gitdir common main_repo mirror mirror_git mirror_work_git name branch label stamp old_stamp work before after head tree commit msg f size
   local -A object_sources=()
   local primary_objects
-  local -a excludes=( ':(exclude).env' ':(exclude)**/.env' ':(exclude).envrc' ':(exclude)**/.envrc' )
+  # Glob magic: **/ also matches the root, and git add -A exits 1 when a
+  # non-glob exclude names a gitignored file.
+  local -a excludes=( ':(exclude,glob)**/.env' ':(exclude,glob)**/.envrc' )
   repo=$(realpath -e -- "$repo")
   gitdir=$(git -C "$repo" rev-parse --absolute-git-dir)
   common=$(git -C "$repo" rev-parse --path-format=absolute --git-common-dir)
