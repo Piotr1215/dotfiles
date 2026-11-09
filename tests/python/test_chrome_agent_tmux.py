@@ -187,3 +187,32 @@ def test_no_match(server, tabs):
 def test_missing_tabs_file_falls_back(server, monkeypatch, tmp_path):
     monkeypatch.setenv('XDG_STATE_HOME', str(tmp_path))
     assert host.handle({'tabId': 5, 'owner': 'agent'})['rule'] == 'title'
+
+
+def named(tab, agent, session='task', ts=1):
+    return {'tab_id': tab, 'pane': '%1', 'session': session, 'agent': agent, 'ts': ts}
+
+
+def test_names_maps_tabs_to_agents(tabs, monkeypatch):
+    monkeypatch.setattr(host, 'run_tmux', lambda *a: pytest.fail('names must not touch tmux'))
+    tabs(named(1, 'gordon'), named(2, 'kendra'), named(2, 'triage', ts=5), named(3, '', session='work'),
+         named(4, '', session=''), named(5, 'bad\nname', session=''), {'tab_id': '6', 'pane': '%1', 'agent': 'x'})
+    reply = host.handle({'op': 'names', 'tabIds': [1, 2, 3, 4, 5, 6, '1', 99]})
+    assert reply == {'names': {'1': 'gordon', '2': 'triage', '3': 'work'}}
+
+
+@pytest.mark.parametrize('ids', [None, 'x', {}])
+def test_names_rejects_bad_ids(tabs, ids):
+    tabs(named(1, 'gordon'))
+    assert host.handle({'op': 'names', 'tabIds': ids}) == {'names': {}}
+
+
+def test_names_over_native_protocol(tabs):
+    tabs(named(7, 'gordon'))
+    payload = json.dumps({'op': 'names', 'tabIds': [7]}).encode()
+    result = subprocess.run(
+        [str(ROOT / 'scripts/__chrome_agent_tmux.py')],
+        input=struct.pack('=I', len(payload)) + payload, capture_output=True, check=True,
+    )
+    length = struct.unpack('=I', result.stdout[:4])[0]
+    assert json.loads(result.stdout[4:4 + length]) == {'names': {'7': 'gordon'}}

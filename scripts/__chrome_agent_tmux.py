@@ -8,6 +8,7 @@ import subprocess
 import sys
 
 MAX_MESSAGE = 4096
+MAX_NAME_TABS = 200
 PANE_RE = re.compile(r"^%[0-9]+$")
 
 
@@ -24,8 +25,19 @@ def tabs_file():
     return os.path.join(base, "agent-tabs", "tabs.jsonl")
 
 
+def owner_name(row):
+    """The recorded @agent_name, else the tmux session; None when neither is usable."""
+    for key in ("agent", "session"):
+        name = row.get(key)
+        if isinstance(name, str):
+            name = name.strip()
+            if name and len(name) <= 64 and name.isprintable():
+                return name
+    return None
+
+
 def load_tabs():
-    """Newest line per tab_id wins; later lines win ts ties."""
+    """Newest line per tab_id wins; later lines win ts ties. Values are (ts, pane, name)."""
     latest = {}
     try:
         with open(tabs_file(), encoding="utf-8") as handle:
@@ -41,7 +53,7 @@ def load_tabs():
                     continue
                 ts = ts if type(ts) in (int, float) else 0
                 if tab not in latest or ts >= latest[tab][0]:
-                    latest[tab] = (ts, pane)
+                    latest[tab] = (ts, pane, owner_name(row))
     except OSError:
         return {}
     return latest
@@ -71,7 +83,7 @@ def find_pane(message):
     siblings = message.get("groupTabIds")
     if isinstance(siblings, list):
         found = [tabs[t] for t in siblings if type(t) is int and t in tabs]
-        for _, pane in sorted(found, key=lambda row: row[0], reverse=True):
+        for _, pane, _ in sorted(found, key=lambda row: row[0], reverse=True):
             if live_pane(pane):
                 return pane, "group_sibling"
     return None, None
@@ -87,9 +99,24 @@ def title_match(message):
     return "=" + owner
 
 
+def tab_names(message):
+    """Map tab ids to owning agent names for retitling "Claude" groups; never touches tmux."""
+    ids = message.get("tabIds")
+    if not isinstance(ids, list):
+        return {"names": {}}
+    tabs = load_tabs()
+    names = {}
+    for tab in ids[:MAX_NAME_TABS]:
+        if type(tab) is int and tab in tabs and tabs[tab][2]:
+            names[str(tab)] = tabs[tab][2]
+    return {"names": names}
+
+
 def handle(message):
     if not isinstance(message, dict):
         return {"switched": False}
+    if message.get("op") == "names":
+        return tab_names(message)
     target, rule = find_pane(message)
     if target is None:
         target = title_match(message)
