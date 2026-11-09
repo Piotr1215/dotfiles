@@ -6,11 +6,8 @@ root=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 task_bin=${TUI_TASK_COMMAND:-task}
 tmux_bin=${TUI_TMUX_COMMAND:-tmux}
 if [[ "$slot" == 1 ]]; then exec "$HOME/.config/taskwarrior-tui/shortcut-scripts/taskopen-annotation.sh" "$@"; fi
-if [[ "$slot" == 2 ]]; then
-  version=${TASKWARRIOR_TUI_VIEW_VERSION:-0}
-  if [[ "$version" =~ ^[0-9]+$ ]] && ((10#$version >= 4)); then exit 0; fi
-  exec "$root/__cycle_tui_reports.sh"
-fi
+# Key 2 cycles views in every report, so it runs before the handoff lookup.
+if [[ "$slot" == 2 ]]; then exec "$root/__cycle_tui_reports.sh"; fi
 report=${TASKWARRIOR_TUI_REPORT:-}
 if [[ -z "$report" && -n "$uuid" ]] && "$task_bin" rc.context=none rc.hooks=off "$uuid" export | jq -e '.[0].tags // [] | index("piotr") != null' >/dev/null; then
   report=handoffs
@@ -22,7 +19,8 @@ if [[ "$report" == handoffs ]]; then
     3) exec "$root/__task_brief.sh" --popup "$uuid" ;;
     4) read -r -p 'Annotation: ' note; [[ -n "$note" ]] && exec "$task_bin" rc.context=none "$uuid" annotate "$note"; exit 0 ;;
     5) exec "$root/__tui_promote_handoff.sh" "$uuid" ;;
-    6|7)
+    6) exec "$root/__tui_ack_handoff.sh" "$uuid" ;;
+    7|9)
       [[ "$uuid" =~ ^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$ ]] || { echo 'Invalid task UUID' >&2; exit 1; }
       task_json=$("$task_bin" rc.context=none rc.hooks=off "$uuid" export)
       # shellcheck disable=SC1091
@@ -30,6 +28,7 @@ if [[ "$report" == handoffs ]]; then
       token=$(tui_task_packet "$uuid" '-' <<< "$task_json") || { echo 'Task not found' >&2; exit 1; }
       payload="$token"
       [[ "$slot" != 7 ]] || payload="/ops-spawn-agent $token "
+      [[ "$slot" != 9 ]] || payload="$token update my brief with more information about this action, why it is needed now, and what I need to do. Check the source and put explanations and any open questions in my brief document. Use Markdown paragraphs, lists, links and backticks. "
       pane=$($tmux_bin list-panes -a -F '#{pane_id} #{@agent_name}' | awk '$2 == "triage" {print $1; exit}')
       [[ "$pane" =~ ^%[0-9]+$ ]] || { echo 'Gordon pane not found' >&2; exit 1; }
       # A named buffer carries arbitrary task text without parsing it as tmux commands.
@@ -38,8 +37,8 @@ if [[ "$report" == handoffs ]]; then
       timestamp=$(date +%s)
       exec "$tmux_bin" set-buffer -b "$buffer" -- "$payload" \; \
         if-shell -F -t "$pane" '#{==:#{@agent_name},triage}' \
-        "set-option -p -t $pane @agent_injected_at $timestamp \; paste-buffer -d -p -b $buffer -t $pane \; switch-client -t $pane" \
-        "delete-buffer -b $buffer \; display-message 'Gordon pane changed'" ;;
+        "set-option -p -t $pane @agent_injected_at $timestamp ; paste-buffer -d -p -b $buffer -t $pane ; switch-client -t $pane" \
+        "delete-buffer -b $buffer ; display-message 'Gordon pane changed'" ;;
     8) echo "No action assigned for handoffs on key $slot" >&2; exit 0 ;;
   esac
 fi

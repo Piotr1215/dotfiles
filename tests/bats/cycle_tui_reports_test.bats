@@ -119,17 +119,54 @@ setup() {
   grep -q '^uda.taskwarrior-tui.legend.handoffs=.*7 spawn.*r reports.*\^R refresh' "$repo_root/.taskrc"
   grep -qx 'uda.taskwarrior-tui.task-report.show-info=false' "$repo_root/.config/taskwarrior-tui/handoffs.taskrc"
   ! grep -q '^uda.taskwarrior-tui.shortcuts.z=' "$repo_root/.taskrc"
-  ! grep -q '^uda.taskwarrior-tui.shortcuts.2=' "$repo_root/.taskrc"
-  for i in 1 3 4 5 6 7 8 9; do grep -q "^uda.taskwarrior-tui.shortcuts.$i=.*__tui_shortcut_$i.sh" "$repo_root/.taskrc"; done
+  for i in 1 2 3 4 5 6 7 8 9; do grep -q "^uda.taskwarrior-tui.shortcuts.$i=.*__tui_shortcut_$i.sh" "$repo_root/.taskrc"; done
 }
 
 @test "handoffs report shows supported task IDs" {
-  grep -qx 'report.handoffs.columns=id,priority,due.relative,description.desc' "$repo_root/.taskrc"
-  grep -qx 'report.handoffs.labels=ID,P,Due,Desc' "$repo_root/.taskrc"
+  grep -qx 'report.handoffs.columns=id,priority,due.relative,piotr_step,description.desc' "$repo_root/.taskrc"
+  grep -qx 'report.handoffs.labels=ID,P,Due,Your step,Desc' "$repo_root/.taskrc"
 }
 
 @test "frequent reports have the intended picker order" {
   for entry in inbox:1 handoffs:2 current:3 byrepo:4 byproject:5; do
     grep -qx "uda.taskwarrior-tui.report.${entry%:*}.order=${entry#*:}" "$repo_root/.taskrc"
   done
+}
+
+@test "handoffs report renders step and legacy rows" {
+  command -v task >/dev/null || skip "task is not installed"
+  export TASKDATA="$BATS_TEST_TMPDIR/taskdata" TASKRC="$BATS_TEST_TMPDIR/taskrc"
+  mkdir -p "$TASKDATA"
+  printf 'data.location=%s\nhooks=off\nconfirmation=off\n' "$TASKDATA" > "$TASKRC"
+  grep -E '^(report.handoffs.(columns|labels|sort|filter|description)|uda.piotr_step.(type|label))=' "$repo_root/.taskrc" >> "$TASKRC"
+  task rc.confirmation=off add +piotr 'piotr_step:click Approve' 'A handoff' >/dev/null
+  task rc.confirmation=off add +piotr 'Legacy handoff' >/dev/null
+  run task rc.context=none rc.color=off rc.defaultwidth=140 handoffs
+  [ "$status" -eq 0 ]; [[ "$output" == *'click Approve'* ]]; [[ "$output" == *'Legacy handoff'* ]]
+}
+
+# Every view's legend reads digits in order, then letters, then control keys,
+# and lists key 2 (the view cycle) and b (the brief) among them.
+@test "legends list 2 and keep digits, letters and control keys in order" {
+  legends=$(grep -a '^uda.taskwarrior-tui.legend\.' "$repo_root/.taskrc")
+  [ "$(printf '%s\n' "$legends" | wc -l)" -ge 2 ]
+  while IFS= read -r line; do
+    legend=${line#*=}
+    [[ "$legend" == *'1 open  2 next view  3 '* ]] || { echo "key 2 missing: $line"; return 1; }
+    rank=0 last_digit=-1 first_letter=
+    while IFS= read -r entry; do
+      key=${entry%% *}
+      case "$key" in
+        [0-9]) (( rank == 0 )) || { echo "digit after letters: $entry in $line"; return 1; }
+               (( key > last_digit )) || { echo "digits out of order: $entry in $line"; return 1; }
+               last_digit=$key ;;
+        [a-z]) (( rank <= 1 )) || { echo "letter after control keys: $entry in $line"; return 1; }
+               [[ -n "$first_letter" ]] || first_letter=$entry
+               rank=1 ;;
+        ^?) rank=2 ;;
+        *) echo "unexpected legend entry: $entry"; return 1 ;;
+      esac
+    done < <(printf '%s\n' "$legend" | sed 's/  /\n/g')
+    [[ "$first_letter" == 'b brief' ]] || { echo "b brief must open the letter run: $line"; return 1; }
+  done <<<"$legends"
 }

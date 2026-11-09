@@ -14,23 +14,51 @@ fi
 MOCK
   cat > "$TUI_TMUX_COMMAND" <<'MOCK'
 #!/usr/bin/env bash
-if [[ "$1" == list-panes ]]; then echo '%42 triage'; else printf '%s\n' "$*" >> "$LOG"; printf '%s' "$5" > "$LOG.payload"; fi
+if [[ "$1" == list-panes ]]; then echo '%42 triage'; else printf '%s\n' "$*" >> "$LOG"; printf '%s' "$5" > "$LOG.payload"; printf '%s\0' "$@" > "$LOG.argv"; fi
 MOCK
-  chmod +x "$TUI_TASK_COMMAND" "$TUI_TMUX_COMMAND"
+  export TUI_TW_WRAPPER="$BATS_TEST_TMPDIR/tw"
+  printf '#!/bin/sh\nprintf "%%s\\n" "$*" >> "$LOG"\n' > "$TUI_TW_WRAPPER"
+  chmod +x "$TUI_TASK_COMMAND" "$TUI_TMUX_COMMAND" "$TUI_TW_WRAPPER"
 }
-@test "reply inserts the old full picker token without enter" {
-  run "$root/scripts/__tui_dispatch.sh" 6 "$uuid"
-  [ "$status" -eq 0 ]; grep -Fq '@"12345678-1234-1234-1234-123456789abc|-|no-repo|Test task"' "$LOG"
-  grep -Fq '#{==:#{@agent_name},triage}' "$LOG"; grep -Fq 'paste-buffer -d -p' "$LOG"; grep -Fq 'switch-client -t %42' "$LOG"; ! grep -q 'C-m' "$LOG"
+@test "ack opens a popup without writing or pasting" {
+  run bash -c '"$1" 6 "$2" </dev/null' _ "$root/scripts/__tui_dispatch.sh" "$uuid"
+  [ "$status" -eq 0 ]
+  grep -Fq 'display-popup' "$LOG"
+  ! grep -Eq '(^note |^done |paste-buffer|switch-client)' "$LOG"
 }
 @test "spawn inserts the old spawn command and token with trailing space" {
   run "$root/scripts/__tui_dispatch.sh" 7 "$uuid"
   [ "$status" -eq 0 ]; grep -Fq '/ops-spawn-agent @"12345678-1234-1234-1234-123456789abc|-|no-repo|Test task" ' "$LOG"
   grep -Fq '#{==:#{@agent_name},triage}' "$LOG"; ! grep -q 'C-m' "$LOG"
 }
-@test "reply and spawn sanitize control characters without losing quotes or pipes" {
+@test "clarify inserts an editable request to update the selected brief" {
+  run "$root/scripts/__tui_dispatch.sh" 9 "$uuid"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$LOG.payload")" = '@"12345678-1234-1234-1234-123456789abc|-|no-repo|Test task" update my brief with more information about this action, why it is needed now, and what I need to do. Check the source and put explanations and any open questions in my brief document. Use Markdown paragraphs, lists, links and backticks. ' ]
+  grep -Fq '#{==:#{@agent_name},triage}' "$LOG"; grep -Fq 'paste-buffer -d -p' "$LOG"; grep -Fq 'switch-client -t %42' "$LOG"; ! grep -q 'C-m' "$LOG"
+  grep -E '^uda.taskwarrior-tui.legend.handoffs=.*9 clarify' "$root/.taskrc"
+  grep -E '^uda.taskwarrior-tui.legend.default=.*9 effort' "$root/.taskrc"
+}
+@test "handoff paste branches contain tmux command separators rather than escaped arguments" {
+  for key in 7 9; do
+    run "$root/scripts/__tui_dispatch.sh" "$key" "$uuid"
+    [ "$status" -eq 0 ]
+    python3 - "$LOG.argv" <<'PYTEST'
+import pathlib, sys
+args = pathlib.Path(sys.argv[1]).read_bytes().decode().split('\0')[:-1]
+assert args[0] == 'set-buffer' and args[5:7] == [';', 'if-shell']
+assert args[-3] == '#{==:#{@agent_name},triage}'
+success, failure = args[-2:]
+assert '\\;' not in success and '\\;' not in failure
+assert [part.strip().split()[0] for part in success.split(';')] == ['set-option', 'paste-buffer', 'switch-client']
+assert [part.strip().split()[0] for part in failure.split(';')] == ['delete-buffer', 'display-message']
+assert 'paste-buffer -d -p' in success and 'switch-client -t %42' in success
+PYTEST
+  done
+}
+@test "spawn and clarify sanitize control characters without losing quotes or pipes" {
   export TASK_JSON='[{"uuid":"12345678-1234-1234-1234-123456789abc","description":"one\nsecond\rthird\u001bX | \"quoted\"","repo":"a\nb","linear_issue_id":"DEVOPS-1"}]'
-  for key in 6 7; do
+  for key in 7 9; do
     run "$root/scripts/__tui_dispatch.sh" "$key" "$uuid"
     [ "$status" -eq 0 ]
     python3 - "$LOG.payload" <<'PYTEST'
@@ -41,16 +69,6 @@ assert 'a b|one second third X | "quoted"' in text
 PYTEST
     ! grep -q 'C-m' "$LOG"
   done
-}
-@test "reply refuses a missing task and does not send" {
-  printf '#!/bin/sh\nprintf "[]\\n"\n' > "$TUI_TASK_COMMAND"; chmod +x "$TUI_TASK_COMMAND"
-  run "$root/scripts/__tui_dispatch.sh" 6 "$uuid"
-  [ "$status" -ne 0 ]; [ ! -f "$LOG" ]
-}
-@test "reply preserves the legacy missing-repo fallback" {
-  export TASK_JSON='[{"uuid":"12345678-1234-1234-1234-123456789abc","description":"Test"}]'
-  run "$root/scripts/__tui_dispatch.sh" 6 "$uuid"
-  [ "$status" -eq 0 ]; grep -Fq '@"12345678-1234-1234-1234-123456789abc|-|-|Test"' "$LOG"
 }
 @test "annotation writes selected text" {
   run bash -c 'printf "new note\\n" | "$1" 4 "$2"' _ "$root/scripts/__tui_dispatch.sh" "$uuid"
@@ -72,17 +90,19 @@ MOCK
   run "$root/scripts/__tui_dispatch.sh" 8 "$uuid"
   [ "$status" -eq 0 ]; [[ "$output" == *'No action assigned'* ]]; [ ! -f "$LOG" ]
 }
-@test "slot 2 is a no-op in v4 even if a stale binding remains" {
+@test "slot 2 cycles views from a handoff row without touching it" {
   export TASKWARRIOR_TUI_VIEW_VERSION=4 TASKWARRIOR_TUI_REPORT_REQUEST="$BATS_TEST_TMPDIR/request"
   : > "$TASKWARRIOR_TUI_REPORT_REQUEST"
   run "$root/scripts/__tui_dispatch.sh" 2 "$uuid"
-  [ "$status" -eq 0 ]; [ ! -s "$TASKWARRIOR_TUI_REPORT_REQUEST" ]; [ ! -f "$LOG" ]
+  [ "$status" -eq 0 ]
+  grep -qx current "$TASKWARRIOR_TUI_REPORT_REQUEST"
+  [ ! -e "$LOG" ]
 }
-@test "legacy slot 2 bridges v3 to the installed binary" {
-  export TASKWARRIOR_TUI_VIEW_VERSION=3 TASKWARRIOR_TUI_REPORT_REQUEST="$BATS_TEST_TMPDIR/request" TUI_REPORT_BINARY="$BATS_TEST_TMPDIR/tui"
-  : > "$TASKWARRIOR_TUI_REPORT_REQUEST"
-  printf '#!/bin/sh\nprintf "%%s %%s %%s\\n" "$TUI_REPORT_BRIDGE" "$1" "$2"\n' > "$TUI_REPORT_BINARY"
-  chmod +x "$TUI_REPORT_BINARY"
-  run "$root/scripts/__tui_dispatch.sh" 2 "$uuid"
-  [ "$status" -eq 0 ]; [ "$output" = '2 -r current' ]; [ ! -s "$TASKWARRIOR_TUI_REPORT_REQUEST" ]
+@test "slot 2 is a configured foreground shortcut" {
+  grep -q '^uda.taskwarrior-tui.shortcuts.2=~/dev/dotfiles/scripts/__tui_shortcut_2.sh$' "$root/.taskrc"
+  grep -q '^uda.taskwarrior-tui.shortcuts.background=5,6,9$' "$root/.taskrc"
+}
+
+@test "handoffs legend lists the brief shortcut" {
+  grep -a '^uda.taskwarrior-tui.legend.handoffs=' "$root/.taskrc" | grep -q 'b brief'
 }
