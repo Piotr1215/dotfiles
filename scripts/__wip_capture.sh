@@ -47,9 +47,10 @@ fingerprint() {
     for f in "$common/refs" "$common/logs" "$gitdir/logs"; do
       if [[ -d $f ]]; then find "$f" -printf '%p %s %T@ %C@\0'; fi
     done
-    while IFS= read -r -d '' f; do
-      if [[ -e $repo/$f || -L $repo/$f ]]; then stat -c '%n %s %y %z' -- "$repo/$f"; fi
-    done < "$tmp/paths"
+    # One stat for all dirty paths: a fork per path cost minutes on repos with
+    # thousands of untracked files. Missing paths print nothing, as before.
+    while IFS= read -r -d '' f; do printf '%s/%s\0' "$repo" "$f"; done < "$tmp/paths" |
+      xargs -0 -r stat -c '%n %s %y %z' -- 2>/dev/null || true
   } | sha256sum | cut -d ' ' -f 1
 }
 
@@ -166,44 +167,106 @@ capture_one() {
   printf 'captured %s (%s)\n' "$repo" "$label"
 }
 
-if [[ ${1:-} == --capture-one && ${WIP_CAPTURE_SANDBOXED:-0} == 1 ]]; then
-  shift
-  capture_one "$1"
-  exit
-fi
-
-command -v bwrap >/dev/null || { printf 'bubblewrap is required to protect live repositories\n' >&2; exit 1; }
-mkdir -p "$state"
-exec 9>"$state/capture.lock"
-flock -n 9 || { printf 'wip capture already running\n' >&2; exit 1; }
-if [[ ${WIP_CAPTURE_ALLOW_DIRECTORY:-0} != 1 ]] && ! mountpoint -q -- "$mount"; then
-  printf 'target mount is not mounted: %s\n' "$mount" >&2; exit 1
-fi
-if [[ ${WIP_CAPTURE_ALLOW_DIRECTORY:-0} != 1 ]]; then
-  case "$(realpath -m -- "$target")/" in "$(realpath -e -- "$mount")/"*) ;; *) printf 'target is outside mount: %s\n' "$target" >&2; exit 1 ;; esac
-fi
-mkdir -p "$target"
-probe="$target/.wip-probe-$$"
-if ! timeout -k 5 10 touch -- "$probe"; then
-  printf 'target write probe failed: %s\n' "$target" >&2; exit 1
-fi
-rm -f -- "$probe"
-if (( $# )); then roots=("$@"); elif [[ -n ${WIP_CAPTURE_ROOTS:-} ]]; then IFS=: read -r -a roots <<< "$WIP_CAPTURE_ROOTS"; else roots=("$HOME/dev" "$HOME/loft" "$HOME/.claude" "$HOME/.codex"); fi
-list=$(mktemp "$state/repos.XXXXXXXX")
-trap 'rm -f -- "$list"' EXIT
-failed=0
-for root in "${roots[@]}"; do
-  if [[ ! -e $root ]]; then continue; fi
-  if ! find "$root" \( -type d \( -name node_modules -o -name vendor \) -prune \) -o \( -name .git \( -type d -o -type f \) -print0 -prune \) >> "$list"; then failed=$((failed+1)); fi
-done
-count=0
-while IFS= read -r -d '' path; do
-  repo=${path%/.git}
-  count=$((count+1))
-  if ! timeout -k 5 "$repo_timeout" bwrap --die-with-parent --unshare-net --ro-bind / / --dev /dev --bind "$target" "$target" --bind "$state" "$state" --setenv TMPDIR "$state" --setenv WIP_CAPTURE_SANDBOXED 1 -- "$0" --capture-one "$repo"; then
-    printf 'failed %s\n' "$repo" >&2
-    failed=$((failed+1))
+# Classify a failed capture from its stderr. Known repo-side breakage and
+# races are warnings: cron would otherwise report the same checkouts every run.
+known_reason() {
+  local err=$1
+  if grep -q 'repository changed during capture' "$err"; then echo 'changed during capture, retried next run'
+  elif grep -q 'fatal: not a git repository' "$err"; then echo 'git directory missing (orphan worktree or submodule)'
+  elif grep -q 'from promisor remote' "$err"; then echo 'partial clone needs network for missing objects'
+  elif grep -q 'does not have a commit checked out' "$err"; then echo 'embedded repository without a checked out commit'
+  else return 1
   fi
-done < "$list"
-printf 'summary repositories=%s failures=%s\n' "$count" "$failed"
-(( failed == 0 ))
+}
+
+# Capture one repository in the sandbox and print one tab-separated result line.
+run_one() {
+  local repo=$1 out err rc=0 reason line
+  out=$(mktemp "$state/out.XXXXXXXX")
+  err=$(mktemp "$state/err.XXXXXXXX")
+  timeout -k 5 "$repo_timeout" bwrap --die-with-parent --unshare-net --ro-bind / / --dev /dev --bind "$target" "$target" --bind "$state" "$state" --setenv TMPDIR "$state" --setenv WIP_CAPTURE_SANDBOXED 1 -- "$self" --capture-one "$repo" > "$out" 2> "$err" || rc=$?
+  if (( rc == 0 )); then
+    if grep -q '^captured ' "$out"; then line="captured"$'\t'"$repo"; else line="skip"$'\t'"$repo"; fi
+    # Notes such as skipped large files still reach the log.
+    grep -Ev '^(captured|skip) ' "$out" >&2 || true
+    grep '^skip large untracked file' "$err" >&2 || true
+  elif reason=$(known_reason "$err"); then
+    line="known"$'\t'"$repo"$'\t'"$reason"
+  else
+    (( rc == 124 || rc == 137 )) && printf 'timed out after %ss: %s\n' "$repo_timeout" "$repo" >> "$err"
+    { printf 'failed %s\n' "$repo"; cat -- "$err"; } >&2
+    line="failed"$'\t'"$repo"
+  fi
+  rm -f -- "$out" "$err"
+  printf '%s\n' "$line"
+}
+
+main() {
+  if [[ ${1:-} == --capture-one && ${WIP_CAPTURE_SANDBOXED:-0} == 1 ]]; then
+    shift
+    capture_one "$1"
+    return
+  fi
+  if [[ ${1:-} == --run-one && ${WIP_CAPTURE_PARENT:-0} == 1 ]]; then
+    self=$0
+    run_one "$2"
+    return
+  fi
+
+  command -v bwrap >/dev/null || { printf 'bubblewrap is required to protect live repositories\n' >&2; return 1; }
+  mkdir -p "$state"
+  exec 9>"$state/capture.lock"
+  flock -n 9 || { printf 'wip capture already running\n' >&2; return 1; }
+  if [[ ${WIP_CAPTURE_ALLOW_DIRECTORY:-0} != 1 ]] && ! mountpoint -q -- "$mount"; then
+    printf 'target mount is not mounted: %s\n' "$mount" >&2; return 1
+  fi
+  if [[ ${WIP_CAPTURE_ALLOW_DIRECTORY:-0} != 1 ]]; then
+    case "$(realpath -m -- "$target")/" in "$(realpath -e -- "$mount")/"*) ;; *) printf 'target is outside mount: %s\n' "$target" >&2; return 1 ;; esac
+  fi
+  mkdir -p "$target"
+  local probe="$target/.wip-probe-$$"
+  if ! timeout -k 5 10 touch -- "$probe"; then
+    printf 'target write probe failed: %s\n' "$target" >&2; return 1
+  fi
+  rm -f -- "$probe"
+  local -a roots
+  if (( $# )); then roots=("$@"); elif [[ -n ${WIP_CAPTURE_ROOTS:-} ]]; then IFS=: read -r -a roots <<< "$WIP_CAPTURE_ROOTS"; else roots=("$HOME/dev" "$HOME/loft" "$HOME/.claude" "$HOME/.codex"); fi
+  # Workers run a private copy, so editing the script mid-run cannot change them.
+  local list self_copy results root failed=0 kind repo reason count=0 skipped=0 captured=0 known=0
+  list=$(mktemp "$state/repos.XXXXXXXX")
+  self_copy=$(mktemp "$state/self.XXXXXXXX")
+  results=$(mktemp "$state/results.XXXXXXXX")
+  cleanup_main=("$list" "$self_copy" "$results")
+  trap 'rm -f -- "${cleanup_main[@]}"' EXIT
+  cat -- "$0" > "$self_copy"
+  chmod 700 "$self_copy"
+  for root in "${roots[@]}"; do
+    if [[ ! -e $root ]]; then continue; fi
+    if ! find "$root" \( -type d \( -name node_modules -o -name vendor \) -prune \) -o \( -name .git \( -type d -o -type f \) -print0 -prune \) >> "$list"; then failed=$((failed+1)); fi
+  done
+  # Repos are independent; parallel workers hide per-repo git latency.
+  sed -z 's#/\.git$##' "$list" |
+    WIP_CAPTURE_PARENT=1 xargs -0 -r -n 1 -P "${WIP_CAPTURE_JOBS:-4}" "$self_copy" --run-one > "$results" || true
+  local known_file="$state/known-broken.tsv" known_new
+  known_new=$(mktemp "$state/known.XXXXXXXX")
+  while IFS=$'\t' read -r kind repo reason; do
+    count=$((count+1))
+    case $kind in
+      captured) captured=$((captured+1)); printf 'captured %s\n' "$repo" ;;
+      skip) skipped=$((skipped+1)); [[ ${WIP_CAPTURE_VERBOSE:-0} != 1 ]] || printf 'skip %s\n' "$repo" ;;
+      known)
+        known=$((known+1))
+        printf '%s\t%s\n' "$repo" "$reason" >> "$known_new"
+        # Warn once per repo and reason; repeats stay out of the cron log.
+        if ! grep -qxF -- "$repo"$'\t'"$reason" "$known_file" 2>/dev/null; then printf 'warning %s: %s\n' "$repo" "$reason"; fi ;;
+      *) failed=$((failed+1)) ;;
+    esac
+  done < "$results"
+  mv -f -- "$known_new" "$known_file"
+  printf 'summary repositories=%s captured=%s skipped=%s known_broken=%s failures=%s\n' "$count" "$captured" "$skipped" "$known" "$failed"
+  (( failed == 0 ))
+}
+
+# One line: bash has read all of it before main runs, so a mid-run edit cannot
+# be read as the rest of this script.
+main "$@"; exit $?

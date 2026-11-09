@@ -75,9 +75,10 @@ mirror_show() { git --git-dir="$MIRROR" show "refs/wip/$1:$2"; }
   [ "$status" -eq 0 ]
   local first
   first=$(git --git-dir="$MIRROR" rev-parse refs/wip/main)
-  run capture
+  WIP_CAPTURE_VERBOSE=1 run capture
   [ "$status" -eq 0 ]
   [[ $output == *"skip $REPO"* ]]
+  [[ $output == *'skipped=1'* ]]
   [ "$(git --git-dir="$MIRROR" rev-parse refs/wip/main)" = "$first" ]
   printf 'second\n' > "$REPO/tracked"
   run capture
@@ -123,14 +124,50 @@ mirror_show() { git --git-dir="$MIRROR" show "refs/wip/$1:$2"; }
   [ ! -e "$MIRROR" ]
 }
 
-@test "a broken repo does not prevent capturing another repo" {
+@test "a known-broken checkout warns once and does not fail the run" {
   mkdir "$ROOT/broken"
   printf 'gitdir: /nonexistent\n' > "$ROOT/broken/.git"
   printf 'changed\n' > "$REPO/tracked"
   run capture
+  [ "$status" -eq 0 ]
+  [[ $output == *'known_broken=1 failures=0'* ]]
+  [[ $output == *"warning $ROOT/broken: git directory missing"* ]]
+  [ "$(mirror_show main tracked)" = changed ]
+  run capture
+  [ "$status" -eq 0 ]
+  [[ $output == *'known_broken=1'* ]]
+  [[ $output != *"warning $ROOT/broken"* ]]
+}
+
+@test "an unknown failure still fails the run without blocking other repos" {
+  mkdir -p "$ROOT/other"
+  git init -q -b main "$ROOT/other"
+  mkdir -p "$WIP_CAPTURE_TARGET/dev"
+  printf 'not a directory\n' > "$WIP_CAPTURE_TARGET/dev/other"
+  printf 'changed\n' > "$REPO/tracked"
+  run capture
   [ "$status" -ne 0 ]
+  [[ $output == *"failed $ROOT/other"* ]]
   [[ $output == *'failures=1'* ]]
   [ "$(mirror_show main tracked)" = changed ]
+}
+
+@test "editing the script during a run does not break the running capture" {
+  local copy="$BATS_TEST_TMPDIR/wip_capture.sh"
+  cp "$SCRIPT" "$copy"
+  for i in 1 2 3 4 5 6; do git init -q -b main "$ROOT/extra$i"; printf 'x\n' > "$ROOT/extra$i/f"; done
+  "$copy" "$ROOT" > "$BATS_TEST_TMPDIR/out" 2>&1 &
+  local pid=$!
+  sleep 0.2
+  # Truncate the tail mid-run, as an editor saving a shorter file would.
+  head -c 4000 "$SCRIPT" > "$copy"
+  printf '\n"unterminated\n' >> "$copy"
+  wait "$pid"
+  local rc=$?
+  cat "$BATS_TEST_TMPDIR/out"
+  [ "$rc" -eq 0 ]
+  grep -q 'summary repositories=7 captured=7' "$BATS_TEST_TMPDIR/out"
+  ! grep -q 'unexpected EOF' "$BATS_TEST_TMPDIR/out"
 }
 
 @test "skips large untracked files while retaining small files" {
