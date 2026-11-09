@@ -191,6 +191,35 @@ def test_empty_open_block_and_fallback(tmp_path):
     assert nav.open_block(brief) == []
 
 
+@pytest.mark.parametrize(("notes", "expected"), [
+    (("link: https://github.com/a", "cmd: echo hello"),
+     [("navigate", ["https://github.com/a"]), ("command", "echo hello")]),
+    (("link: https://github.com/a",),
+     [("navigate", ["https://github.com/a"]), ("switch", "agent-session")]),
+    (("cmd: echo hello",), [("navigate", []), ("command", "echo hello")]),
+])
+def test_start_navigates_before_kind_action(monkeypatch, tmp_path, notes, expected):
+    monkeypatch.setenv("XDG_RUNTIME_DIR", str(tmp_path))
+    monkeypatch.setenv("TMUX_PANE", "%18")
+    row = dict(task(*notes, "agent: agent-session"), start="20261106T000000Z")
+    brief = tmp_path / "brief"
+    brief.write_text("<!-- begin open -->\n\n<!-- end open -->\n")
+    calls = []
+
+    def run(args, **kwargs):
+        if args[-1] == "export":
+            return subprocess.CompletedProcess(args, 0, json.dumps([row]))
+        return subprocess.CompletedProcess(args, 0, str(brief) if "prepare" in args else "")
+
+    monkeypatch.setattr(nav, "run", run)
+    monkeypatch.setattr(nav, "window_id", lambda _: "111")
+    monkeypatch.setattr(nav, "navigate_many", lambda urls, terminal: calls.append(("navigate", urls)))
+    monkeypatch.setattr(nav, "open_command_window", lambda uuid, command: calls.append(("command", command)))
+    monkeypatch.setattr(nav, "switch_agent_session", lambda session: calls.append(("switch", session)))
+    assert nav.main(["start", UUID]) == 0
+    assert calls == expected
+
+
 def test_empty_block_uses_done_when_and_navigation_failure_still_pins(monkeypatch, tmp_path):
     monkeypatch.setenv("XDG_RUNTIME_DIR", str(tmp_path))
     monkeypatch.setenv("TMUX_PANE", "%18")

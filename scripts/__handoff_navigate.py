@@ -276,11 +276,11 @@ def open_command_window(uuid, command):
 
 
 def act_on_kind(task):
-    """Run the action s means for this kind before the links open (9 Nov).
+    """Run the action s means for this kind after the links open.
 
     command opens a terminal with the cmd: note at the prompt; slack copies the
     newest draft: note; pr, ack and other only open what they opened before.
-    Returns the kind. A failed action is reported and navigation goes on.
+    Returns the kind. A failed action is reported.
     """
     kind = task_kind(task)
     try:
@@ -410,8 +410,8 @@ def main(argv=None):
                     if not re.match(r"^\s*(target|link):", a.get("description", ""), re.I)])
                 fallback = destination(fallback_task)
                 urls = [fallback] if fallback else []
-            kind = act_on_kind(task)
             navigate_many(urls, terminal)
+            kind = act_on_kind(task)
             # Switching to an agent session would hide the command window.
             if kind != "command":
                 switch_agent_session(agent_session(task))
