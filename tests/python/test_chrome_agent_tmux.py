@@ -81,16 +81,31 @@ def test_ambiguous_clients_do_not_switch(server):
         os.close(master)
 
 
-def test_native_message_protocol_switches_owned_session(server):
+def test_native_message_protocol_switches_owned_session(server, tmp_path):
     payload = json.dumps({'owner': 'agent'}).encode()
     result = subprocess.run(
         [str(ROOT / 'scripts/__chrome_agent_tmux.py')],
         input=struct.pack('=I', len(payload)) + payload,
-        capture_output=True, check=True,
+        capture_output=True, check=True, env={**os.environ, 'XDG_STATE_HOME': str(tmp_path)},
     )
     length = struct.unpack('=I', result.stdout[:4])[0]
     assert json.loads(result.stdout[4:4 + length]) == {'switched': True, 'rule': 'title'}
     assert selected(server) == 'agent'
+    logged = json.loads((tmp_path / 'agent-tabs/host.log').read_text().splitlines()[-1])
+    assert logged['in'] == '{"owner": "agent"}'
+    assert logged['out'] == {'switched': True, 'rule': 'title'}
+
+
+def test_a_miss_logs_the_attached_client_count(server, tmp_path):
+    payload = json.dumps({'owner': 'nobody'}).encode()
+    subprocess.run(
+        [str(ROOT / 'scripts/__chrome_agent_tmux.py')],
+        input=struct.pack('=I', len(payload)) + payload,
+        capture_output=True, check=True, env={**os.environ, 'XDG_STATE_HOME': str(tmp_path)},
+    )
+    logged = json.loads((tmp_path / 'agent-tabs/host.log').read_text().splitlines()[-1])
+    assert logged['out'] == {'switched': False}
+    assert logged['clients'] == 1
 
 
 def test_host_installer_targets_checkout(tmp_path):

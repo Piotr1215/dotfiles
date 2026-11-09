@@ -6,9 +6,11 @@ import re
 import struct
 import subprocess
 import sys
+import time
 
 MAX_MESSAGE = 4096
 MAX_NAME_TABS = 200
+MAX_LOG = 256 * 1024
 PANE_RE = re.compile(r"^%[0-9]+$")
 
 
@@ -131,6 +133,27 @@ def handle(message):
     return {"switched": True, "rule": rule}
 
 
+def log_call(payload, reply):
+    """Append what Chrome sent and what the host did to agent-tabs/host.log.
+
+    Without it a click that does not switch leaves no trace: Chrome drops the
+    reply. A miss also records how many tmux clients were attached, since the
+    host switches only with exactly one. The log rolls to host.log.1 past 256 KB."""
+    try:
+        path = os.path.join(os.path.dirname(tabs_file()), "host.log")
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        if os.path.exists(path) and os.path.getsize(path) > MAX_LOG:
+            os.replace(path, path + ".1")
+        row = {"ts": int(time.time()), "in": payload.decode("utf-8", "replace")[:600], "out": reply}
+        if not reply.get("switched"):
+            clients = run_tmux("list-clients", "-F", "#{client_tty}")
+            row["clients"] = len(clients.stdout.splitlines()) if clients.returncode == 0 else None
+        with open(path, "a", encoding="utf-8") as handle_:
+            handle_.write(json.dumps(row) + "\n")
+    except Exception:  # logging must never break a switch
+        pass
+
+
 def main():
     header = sys.stdin.buffer.read(4)
     if len(header) != 4:
@@ -148,6 +171,7 @@ def main():
     data = json.dumps(reply).encode()
     sys.stdout.buffer.write(struct.pack("=I", len(data)) + data)
     sys.stdout.buffer.flush()
+    log_call(payload, reply)
 
 
 if __name__ == "__main__":

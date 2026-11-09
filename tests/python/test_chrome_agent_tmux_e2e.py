@@ -268,7 +268,7 @@ def test_claude_group_switches_by_tab_id_and_sibling(chrome_with_tmux):
     made = eval_extension(cdp, session, "(async()=>{let a=await chrome.tabs.create({url:'about:blank',active:false});let b=await chrome.tabs.create({url:'about:blank',active:false});let g=await chrome.tabs.group({tabIds:[a.id,b.id]});await chrome.tabGroups.update(g,{title:'\u2705Claude'});return [a.id,b.id]})()")
     mapped, sibling = made["result"]["value"]
     tabs = state / "agent-tabs" / "tabs.jsonl"
-    tabs.parent.mkdir(parents=True)
+    tabs.parent.mkdir(parents=True, exist_ok=True)
     tabs.write_text(json.dumps({"tab_id": mapped, "pane": pane, "session": "claude-agent", "agent": "claude-agent", "ts": int(time.time())}) + "\n")
 
     eval_extension(cdp, session, f"chrome.tabs.update({mapped},{{active:true}})")
