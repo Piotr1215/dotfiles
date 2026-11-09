@@ -43,11 +43,12 @@ if [[ "$report" == handoffs ]]; then
   esac
 fi
 case "$slot" in
+  0) exec "$HOME/.config/taskwarrior-tui/shortcut-scripts/__annotate_with_note.sh" "$@" ;;
   3) exec "$root/__github_issue_sync.sh" "$@" ;;
   4) exec "$HOME/.claude/scripts/__spawn_claude_directive.sh" "$@" ;;
   5) exec "$HOME/.config/taskwarrior-tui/shortcut-scripts/__toggle_claude_label.sh" "$@" ;;
   6) exec "$HOME/.config/taskwarrior-tui/shortcut-scripts/__toggle_codex_label.sh" "$@" ;;
-  7) exec "$HOME/.config/taskwarrior-tui/shortcut-scripts/__annotate_with_note.sh" "$@" ;;
+  7) exec "$root/__toggle_linear_backlog.sh" "$@" ;;
   8) exec "$root/__create_linear_issue.sh" "$@" ;;
   9) exec "$root/__cycle_task_effort.sh" "$@" ;;
   *) echo 'Unknown shortcut' >&2; exit 2 ;;

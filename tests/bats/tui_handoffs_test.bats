@@ -98,6 +98,12 @@ MOCK
   grep -qx current "$TASKWARRIOR_TUI_REPORT_REQUEST"
   [ ! -e "$LOG" ]
 }
+@test "slot 7 toggles the Linear backlog and slot 0 keeps the note picker" {
+  grep -qx 'uda.taskwarrior-tui.shortcuts.0=~/dev/dotfiles/scripts/__tui_shortcut_0.sh' "$root/.taskrc"
+  grep -qx 'uda.taskwarrior-tui.shortcuts.7=~/dev/dotfiles/scripts/__tui_shortcut_7.sh' "$root/.taskrc"
+  grep -aE '^uda.taskwarrior-tui.legend.default=0 note .*7 backlog' "$root/.taskrc"
+  grep -Fq '7) exec "$root/__toggle_linear_backlog.sh"' "$root/scripts/__tui_dispatch.sh"
+}
 @test "slot 2 is a configured foreground shortcut" {
   grep -q '^uda.taskwarrior-tui.shortcuts.2=~/dev/dotfiles/scripts/__tui_shortcut_2.sh$' "$root/.taskrc"
   grep -q '^uda.taskwarrior-tui.shortcuts.background=5,6,9$' "$root/.taskrc"
