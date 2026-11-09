@@ -15,7 +15,10 @@ setup() {
 }
 
 teardown() {
-	gpgconf --homedir "$TMP/gnupg" --kill all 2>/dev/null || true
+	# Only gpg-agent: GnuPG 2.4.4 "--kill all" ignores --homedir for keyboxd,
+	# so each teardown woke the user's own socket-activated keyboxd and five
+	# in a row tripped its systemd start limit (6 Nov 2026).
+	gpgconf --homedir "$TMP/gnupg" --kill gpg-agent 2>/dev/null || true
 	rm -rf "$TMP"
 }
 
