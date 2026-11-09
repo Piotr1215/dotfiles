@@ -33,8 +33,11 @@ trap return_focus EXIT
 exec 9>"$lock"
 flock -sn 9 || { echo 'Another handoff brief editor is already open.' >&2; exit 1; }
 python3 "$save_script" init "$HANDOFF_UUID"
+# This shell holds the lock for the whole edit. Neovim gets fd 9 closed: its
+# children (the xsel clipboard owner) outlive it and would keep the lock after
+# the exec below, so parked brief updates waited on a closed editor.
 "$nvim_bin" --listen "$XDG_RUNTIME_DIR/taskwarrior-tui/handoff-${HANDOFF_ORIGIN#%}.sock" \
-  -c 'lua dofile(vim.env.HANDOFF_ROOT .. "/__handoff_floater_v2.lua")' -- "$file"
+  -c 'lua dofile(vim.env.HANDOFF_ROOT .. "/__handoff_floater_v2.lua")' -- "$file" 9>&-
 exec 9>&-
 python3 "$brief_tool" --reconcile-pending >/dev/null
 python3 "$root/__handoff_floater_file.py" --refresh-pending >/dev/null

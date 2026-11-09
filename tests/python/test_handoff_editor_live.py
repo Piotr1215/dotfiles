@@ -1,8 +1,10 @@
 """Exercise the real configured Neovim save, refresh and close path headlessly."""
+import fcntl
 import json
 import os
 from pathlib import Path
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -239,6 +241,58 @@ class HandoffEditorLiveTest(unittest.TestCase):
                 return
             time.sleep(0.05)
         self.fail('condition did not become true before timeout')
+
+
+@unittest.skipUnless(Path('/proc/self/fd').is_dir() and shutil.which('flock'), 'needs /proc and flock')
+class HandoffEditorLockTest(unittest.TestCase):
+    """The wrapper holds the brief lock for the edit, but the editor's children never do."""
+
+    def test_editor_children_do_not_hold_the_brief_lock(self):
+        with tempfile.TemporaryDirectory(prefix='brief-lock-') as directory:
+            base = Path(directory)
+            state = base / 'state'
+            lock = state / 'taskwarrior/briefs/.editor.lock'
+            probe = base / 'probe'
+            linger_pid = base / 'linger.pid'
+            noop = base / 'noop.py'
+            noop.write_text('')
+            # Stands in for nvim: reports whether fd 9 came along and whether the
+            # wrapper still holds the lock, then leaves a child behind the way
+            # nvim's xsel clipboard child outlives the editor.
+            editor = base / 'fake-nvim'
+            editor.write_text(
+                '#!/usr/bin/env bash\n'
+                'if [ -e /proc/self/fd/9 ]; then echo inherited; else echo closed; fi > "$PROBE"\n'
+                'if flock -xn "$LOCK" true; then echo free; else echo held; fi >> "$PROBE"\n'
+                'sleep 30 </dev/null >/dev/null 2>&1 &\n'
+                'echo $! > "$LINGER_PID"\n'
+            )
+            editor.chmod(0o755)
+            env = {key: value for key, value in os.environ.items()
+                   if key not in {'HANDOFF_RETURN_FOCUS', 'TMUX_PANE'}}
+            env.update(XDG_STATE_HOME=str(state), XDG_RUNTIME_DIR=str(base / 'runtime'),
+                       HANDOFF_UUID=UUID, HANDOFF_ORIGIN='%7', HANDOFF_NVIM_COMMAND=str(editor),
+                       HANDOFF_SAVE_SCRIPT=str(noop), HANDOFF_RECONCILE_COMMAND=str(noop),
+                       PROBE=str(probe), LOCK=str(lock), LINGER_PID=str(linger_pid))
+            # Output goes to a file: the lingering child keeps any pipe open.
+            output = base / 'output'
+            try:
+                with open(output, 'w') as sink:
+                    result = subprocess.run([str(EDITOR), str(base / 'brief.md')], env=env,
+                                            stdout=sink, stderr=subprocess.STDOUT, timeout=10)
+                self.assertEqual(result.returncode, 0, output.read_text())
+                self.assertEqual(probe.read_text().split(), ['closed', 'held'])
+                with open(lock) as handle:
+                    try:
+                        fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    except BlockingIOError:
+                        self.fail('a child the editor left behind still holds the brief lock')
+            finally:
+                if linger_pid.exists():
+                    try:
+                        os.kill(int(linger_pid.read_text()), signal.SIGTERM)
+                    except ProcessLookupError:
+                        pass
 
 
 if __name__ == '__main__':
