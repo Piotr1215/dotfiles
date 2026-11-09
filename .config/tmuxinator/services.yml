@@ -17,10 +17,6 @@ on_project_start:
 %>
 
 windows:
-  - dashboard:
-      layout: main-horizontal
-      panes:
-        - while true; do sampler -c "${HOME}/.claude-dashboard-active.yml" 2>/dev/null || sampler -c "${HOME}/.claude/dashboards/claude-dashboard-services.yml"; sleep 1; done
   - resources:
       panes:
         - btop
