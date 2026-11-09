@@ -1,0 +1,590 @@
+diff --git a/src/app.rs b/src/app.rs
+index 9e8a730..6548296 100644
+--- a/src/app.rs
++++ b/src/app.rs
+@@ -55,7 +55,7 @@ use crate::{
+     report::ReportsState,
+   },
+   scrollbar::Scrollbar,
+-  table::{Row, Table, TableMode, TaskwarriorTuiTableState},
++  table::{Row, Table, TableMode, TaskwarriorTuiTableState, selected_row_screen_y},
+   task_report::TaskReportTable,
+   ui, utils,
+ };
+@@ -328,6 +328,8 @@ pub struct TaskwarriorTui {
+   pub current_selection: usize,
+   pub current_selection_uuid: Option<Uuid>,
+   pub current_selection_id: Option<u64>,
++  handoff_selected_row_y: Option<(usize, u16)>,
++  selection_publisher: crate::selection_publisher::SelectionPublisher,
+   pub selection_follow: bool,
+   pub task_report_table: TaskReportTable,
+   pub calendar_year: i32,
+@@ -433,6 +435,8 @@ impl TaskwarriorTui {
+       current_selection: 0,
+       current_selection_uuid: None,
+       current_selection_id: None,
++      handoff_selected_row_y: None,
++      selection_publisher: crate::selection_publisher::SelectionPublisher::from_environment(),
+       selection_follow: true,
+       current_context_filter: "".to_string(),
+       current_context: "".to_string(),
+@@ -811,8 +815,8 @@ impl TaskwarriorTui {
+             self.task_details_modified.clear();
+             self.last_export = Some(std::time::SystemTime::now());
+             self.cursor_fix();
+-            self.update_task_table_state();
+             self.selection_fix();
++            self.update_task_table_state();
+           }
+           Err(e) => self.error = Some(format!("Cannot run `{}`: {}", desc, e)),
+         }
+@@ -2062,6 +2066,8 @@ impl TaskwarriorTui {
+     let (tasks, headers, columns) = self.get_task_report();
+ 
+     if tasks.is_empty() {
++      self.handoff_selected_row_y = None;
++      self.selection_publisher.publish(None);
+       f.render_widget(Block::default(), rect);
+       return;
+     }
+@@ -2135,6 +2141,16 @@ impl TaskwarriorTui {
+       .widths(&constraints);
+ 
+     f.render_stateful_widget(t, table_rect, &mut self.task_table_state);
++    self.handoff_selected_row_y = self
++      .task_table_state
++      .current_selection()
++      .and_then(|selected| selected_row_screen_y(rect.y, 1, self.task_table_state.offset(), selected).map(|y| (selected, y)));
++    // Publish after rendering: only now is the selected row's screen line known.
++    let row = self
++      .handoff_selected_row_y
++      .and_then(|(selected, y)| (selected == self.current_selection).then_some(y));
++    let selection = self.tasks.get(self.current_selection).map(|task| (*task.uuid(), row));
++    self.selection_publisher.publish(selection);
+     if needs_scrollbar {
+       let mut widget = Scrollbar::new(pos, tasks.iter().len());
+       widget.pos_style = self.config.uda_style_report_scrollbar;
+@@ -2203,11 +2219,11 @@ impl TaskwarriorTui {
+       self.timesheet_dirty = false;
+     }
+     self.cursor_fix();
++    self.selection_fix();
+     self.update_task_table_state();
+     if self.task_report_info_show {
+       self.update_task_details().await?;
+     }
+-    self.selection_fix();
+ 
+     Ok(())
+   }
+@@ -3028,6 +3044,45 @@ impl TaskwarriorTui {
+     Ok(())
+   }
+ 
++  fn handoff_navigation_command(&self) -> Option<std::process::Command> {
++    let task = self.tasks.get(self.current_selection)?;
++    if !task.tags().as_ref().is_some_and(|tags| tags.iter().any(|tag| tag == "piotr")) {
++      return None;
++    }
++    let mut command = std::process::Command::new(dirs::home_dir()?.join("dev/dotfiles/scripts/__handoff_navigate.sh"));
++    command.arg(task.uuid().to_string()).stdin(std::process::Stdio::null());
++    Some(command)
++  }
++
++  fn handoff_floater_toggle_command(&self) -> Option<std::process::Command> {
++    let task = self.tasks.get(self.current_selection)?;
++    let mut command = std::process::Command::new(dirs::home_dir()?.join("dev/dotfiles/scripts/__handoff_floater.sh"));
++    command
++      .arg("toggle")
++      .arg(task.uuid().to_string())
++      .arg(std::env::var("TMUX_PANE").unwrap_or_default());
++    if let Some((selected, y)) = self.handoff_selected_row_y
++      && selected == self.current_selection
++    {
++      command.arg(y.to_string());
++    }
++    command.stdin(std::process::Stdio::null());
++    Some(command)
++  }
++
++  // Tab hands the keyboard to an open brief pane; the pane's own Tab hands it
++  // back. The script does nothing when no brief is open.
++  fn brief_focus_command(&self) -> Option<std::process::Command> {
++    let uuid = self.tasks.get(self.current_selection).map(|task| task.uuid().to_string());
++    let mut command = std::process::Command::new(dirs::home_dir()?.join("dev/dotfiles/scripts/__handoff_floater.sh"));
++    command
++      .arg("focus")
++      .arg(uuid.unwrap_or_default())
++      .arg(std::env::var("TMUX_PANE").unwrap_or_default())
++      .stdin(std::process::Stdio::null());
++    Some(command)
++  }
++
+   fn gordon_command(&self) -> Result<std::process::Command, String> {
+     let args = shlex::split(&self.config.uda_gordon_command)
+       .filter(|args| !args.is_empty())
+@@ -3629,6 +3684,21 @@ impl TaskwarriorTui {
+     if let Mode::Tasks(task_mode) = &self.mode {
+       match task_mode {
+         Action::Report => {
++          if input == KeyCode::Char('b')
++            && let Some(command) = self.handoff_floater_toggle_command()
++          {
++            self.queue_write(TaskWrite::new("Brief", true, Select::Nothing, (command, None)), &[]);
++          }
++          if input == KeyCode::Tab
++            && let Some(command) = self.brief_focus_command()
++          {
++            self.queue_write(TaskWrite::new("Brief", true, Select::Nothing, (command, None)), &[]);
++          }
++          if input == KeyCode::Char('S')
++            && let Some(command) = self.handoff_navigation_command()
++          {
++            self.queue_write(TaskWrite::new("Handoff", true, Select::Nothing, (command, None)), &[]);
++          }
+           if input == KeyCode::Esc {
+             self.marked.clear();
+           } else if input == self.keyconfig.quit || input == KeyCode::Ctrl('c') {
+@@ -5474,6 +5544,10 @@ mod tests {
+     test_undo_and_add_run_in_background().await;
+     test_background_shortcut_keeps_the_terminal().await;
+     test_gordon_keeps_the_terminal_and_sends_only_current_task().await;
++    test_selection_signal_and_handoff_navigation().await;
++    test_handoff_key_preserves_configured_action().await;
++    test_brief_key_toggles_floater_for_selected_task().await;
++    test_tab_focuses_the_brief_pane().await;
+     test_report_menu_refresh_error_keeps_reports().await;
+     test_report_menu_refreshes_and_exports_waiting_tasks().await;
+ 
+@@ -5999,6 +6073,196 @@ mod tests {
+     let style = app.style_for_task(&task);
+   }
+ 
++  async fn test_handoff_key_preserves_configured_action() {
++    let mut app = TaskwarriorTui::new("next", false).await.unwrap();
++    assert!(app.tasks.len() >= 2);
++    let (jobs, queue) = std::sync::mpsc::channel();
++    let (_results_sender, results) = tokio::sync::mpsc::unbounded_channel();
++    app.worker = Some(Worker { jobs, results });
++    app.current_selection = 0;
++    app.tasks[0].tags_mut().as_mut().map(|tags| tags.retain(|tag| tag != "piotr"));
++    let uuid = *app.tasks[0].uuid();
++    app.handle_input(KeyCode::Char('S')).await.unwrap();
++    assert_eq!(app.current_selection, 0);
++    assert!(queue.try_recv().is_err());
++
++    add_tag(&mut app.tasks[0], "piotr".to_string());
++    app.handle_input(KeyCode::Char('S')).await.unwrap();
++    assert_eq!(app.current_selection, 0);
++    let (_, Job::Write(write)) = queue.try_recv().unwrap() else {
++      panic!("expected handoff write")
++    };
++    assert_eq!(write.label, "Handoff");
++    assert_eq!(
++      write.cmd.get_args().map(|arg| arg.to_string_lossy().into_owned()).collect::<Vec<_>>(),
++      vec![uuid.to_string()]
++    );
++    assert!(queue.try_recv().is_err());
++
++    app.keyconfig.down = KeyCode::Char('S');
++    app.handle_input(KeyCode::Char('S')).await.unwrap();
++    assert_eq!(app.current_selection, 1);
++    let (_, Job::Write(write)) = queue.try_recv().unwrap() else {
++      panic!("expected handoff write")
++    };
++    assert_eq!(
++      write.cmd.get_args().map(|arg| arg.to_string_lossy().into_owned()).collect::<Vec<_>>(),
++      vec![uuid.to_string()]
++    );
++    assert!(queue.try_recv().is_err());
++
++    app.current_selection = 0;
++    app.tasks[0].tags_mut().as_mut().map(|tags| tags.retain(|tag| tag != "piotr"));
++    app.handle_input(KeyCode::Char('S')).await.unwrap();
++    assert_eq!(app.current_selection, 1);
++    assert!(queue.try_recv().is_err());
++  }
++
++  async fn test_brief_key_toggles_floater_for_selected_task() {
++    let mut app = TaskwarriorTui::new("next", false).await.unwrap();
++    let (jobs, queue) = std::sync::mpsc::channel();
++    let (_results_sender, results) = tokio::sync::mpsc::unbounded_channel();
++    app.worker = Some(Worker { jobs, results });
++    app.current_selection = 0;
++    app.handoff_selected_row_y = Some((0, 12));
++    let uuid = *app.tasks[0].uuid();
++
++    // Regular tasks open the same brief pane as +piotr handoff rows.
++    for handoff in [false, true] {
++      remove_tag(&mut app.tasks[0], "piotr");
++      if handoff {
++        add_tag(&mut app.tasks[0], "piotr".to_string());
++      }
++
++      app.handle_input(KeyCode::Char('b')).await.unwrap();
++
++      assert_eq!(app.current_selection, 0);
++      let (_, Job::Write(write)) = queue.try_recv().unwrap() else {
++        panic!("expected brief toggle write for handoff={handoff}")
++      };
++      assert_eq!(write.label, "Brief");
++      assert_eq!(
++        write.cmd.get_program().to_string_lossy(),
++        dirs::home_dir()
++          .unwrap()
++          .join("dev/dotfiles/scripts/__handoff_floater.sh")
++          .to_string_lossy()
++      );
++      assert_eq!(
++        write.cmd.get_args().map(|arg| arg.to_string_lossy().into_owned()).collect::<Vec<_>>(),
++        vec![
++          "toggle".to_string(),
++          uuid.to_string(),
++          std::env::var("TMUX_PANE").unwrap_or_default(),
++          "12".to_string(),
++        ]
++      );
++      assert!(queue.try_recv().is_err());
++    }
++
++    app.tasks.clear();
++    app.handle_input(KeyCode::Char('b')).await.unwrap();
++    assert!(queue.try_recv().is_err());
++  }
++
++  async fn test_tab_focuses_the_brief_pane() {
++    let mut app = TaskwarriorTui::new("next", false).await.unwrap();
++    let (jobs, queue) = std::sync::mpsc::channel();
++    let (_results_sender, results) = tokio::sync::mpsc::unbounded_channel();
++    app.worker = Some(Worker { jobs, results });
++    app.current_selection = 1;
++    let uuid = *app.tasks[1].uuid();
++    let pane = std::env::var("TMUX_PANE").unwrap_or_default();
++    let focus_args = |queue: &std::sync::mpsc::Receiver<(u64, Job)>| {
++      let (_, Job::Write(write)) = queue.try_recv().unwrap() else {
++        panic!("expected brief focus write")
++      };
++      assert_eq!(write.label, "Brief");
++      assert!(
++        write
++          .cmd
++          .get_program()
++          .to_string_lossy()
++          .ends_with("/dev/dotfiles/scripts/__handoff_floater.sh")
++      );
++      write.cmd.get_args().map(|arg| arg.to_string_lossy().into_owned()).collect::<Vec<_>>()
++    };
++
++    app.handle_input(KeyCode::Tab).await.unwrap();
++    assert_eq!(focus_args(&queue), vec!["focus".to_string(), uuid.to_string(), pane.clone()]);
++    // Tab leaves the selection and the mode alone; it only moves the keyboard.
++    assert_eq!(app.current_selection, 1);
++    assert_eq!(app.mode, Mode::Tasks(Action::Report));
++    assert!(queue.try_recv().is_err());
++
++    // An empty list can still hand focus to an open brief.
++    app.tasks.clear();
++    app.handle_input(KeyCode::Tab).await.unwrap();
++    assert_eq!(focus_args(&queue), vec!["focus".to_string(), String::new(), pane]);
++    assert!(queue.try_recv().is_err());
++  }
++
++  async fn test_selection_signal_and_handoff_navigation() {
++    let dir = std::env::temp_dir().join(format!("taskwarrior-tui-selection-{}", Uuid::new_v4()));
++    std::fs::create_dir(&dir).unwrap();
++    let mut app = TaskwarriorTui::new("next", false).await.unwrap();
++    app.selection_publisher = crate::selection_publisher::SelectionPublisher::new(Some(&dir), Some("%987"));
++    assert!(app.tasks.len() >= 2);
++    let signal = dir.join("taskwarrior-tui/selected-987");
++    let mut terminal = Terminal::new(TestBackend::new(80, 30)).unwrap();
++    let mut draw = |app: &mut TaskwarriorTui| {
++      terminal.draw(|f| app.draw(f)).unwrap();
++      let (selected, y) = app.handoff_selected_row_y.unwrap();
++      assert_eq!(selected, app.current_selection);
++      y
++    };
++    app.current_selection = 0;
++    let first = *app.tasks[0].uuid();
++    app.update_task_table_state();
++    // The brief pane follows the drawn row, so nothing is published before a draw.
++    assert!(!signal.exists());
++    let first_y = draw(&mut app);
++    assert_eq!(std::fs::read_to_string(&signal).unwrap(), format!("{first} {first_y}\n"));
++    app.handle_input(app.keyconfig.down).await.unwrap();
++    let second = *app.tasks[app.current_selection].uuid();
++    assert_ne!(first, second);
++    let second_y = draw(&mut app);
++    assert_eq!(second_y, first_y + 1);
++    assert_eq!(std::fs::read_to_string(&signal).unwrap(), format!("{second} {second_y}\n"));
++    // The same task moved to another row: the signal carries the new row.
++    app.current_selection_uuid = Some(second);
++    app.tasks.swap(0, app.current_selection);
++    app.selection_fix();
++    app.update_task_table_state();
++    let moved_y = draw(&mut app);
++    assert_eq!(moved_y, first_y);
++    assert_eq!(std::fs::read_to_string(&signal).unwrap(), format!("{second} {moved_y}\n"));
++    app.tasks[app.current_selection]
++      .tags_mut()
++      .as_mut()
++      .map(|tags| tags.retain(|tag| tag != "piotr"));
++    assert!(app.handoff_navigation_command().is_none());
++    app.handle_input(KeyCode::Char('S')).await.unwrap();
++    assert_eq!(app.mode, Mode::Tasks(Action::Report));
++    add_tag(&mut app.tasks[app.current_selection], "piotr".to_string());
++    let command = app.handoff_navigation_command().unwrap();
++    assert!(
++      command
++        .get_program()
++        .to_string_lossy()
++        .ends_with("/dev/dotfiles/scripts/__handoff_navigate.sh")
++    );
++    assert_eq!(
++      command.get_args().map(|arg| arg.to_string_lossy().into_owned()).collect::<Vec<_>>(),
++      vec![second.to_string()]
++    );
++    app.tasks.clear();
++    app.update_task_table_state();
++    terminal.draw(|f| app.draw(f)).unwrap();
++    assert!(!signal.exists());
++    std::fs::remove_dir_all(dir).unwrap();
++  }
++
+   async fn test_gordon_keeps_the_terminal_and_sends_only_current_task() {
+     use std::os::unix::fs::PermissionsExt;
+ 
+diff --git a/src/help.tmpl b/src/help.tmpl
+index c384967..942c4b7 100644
+--- a/src/help.tmpl
++++ b/src/help.tmpl
+@@ -44,6 +44,10 @@ Keybindings for task report:
+ 
+     {{start_stop}}: task {selected} start/stop        - Toggle start and stop
+ 
++    b: toggle floating brief for selected task
++
++    Tab: move the keyboard to the open brief      - The brief follows the selected row
++
+     {{quick_tag}}: task {selected} +{tag}/-{tag}     - Toggle {uda.taskwarrior-tui.quick-tag.name} (default: `next`)
+ 
+     {{undo}}: task undo                         - Undo
+diff --git a/src/main.rs b/src/main.rs
+index ffdeb0e..313a348 100644
+--- a/src/main.rs
++++ b/src/main.rs
+@@ -16,6 +16,7 @@ mod history;
+ mod keyconfig;
+ mod pane;
+ mod scrollbar;
++mod selection_publisher;
+ mod table;
+ mod task_report;
+ mod ui;
+diff --git a/src/selection_publisher.rs b/src/selection_publisher.rs
+new file mode 100644
+index 0000000..fa23e3a
+--- /dev/null
++++ b/src/selection_publisher.rs
+@@ -0,0 +1,152 @@
++use std::{
++  fs, io,
++  path::{Path, PathBuf},
++};
++#[cfg(unix)]
++use std::{
++  fs::OpenOptions,
++  io::Write,
++  os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt},
++  sync::atomic::{AtomicU64, Ordering},
++};
++use uuid::Uuid;
++
++#[cfg(unix)]
++static NEXT_TEMP: AtomicU64 = AtomicU64::new(0);
++
++/// The selected task and the terminal row it was drawn on, when known.
++pub type Selection = Option<(Uuid, Option<u16>)>;
++
++pub struct SelectionPublisher {
++  path: Option<PathBuf>,
++  published: Option<Selection>,
++}
++
++impl SelectionPublisher {
++  pub fn from_environment() -> Self {
++    let runtime = std::env::var_os("XDG_RUNTIME_DIR");
++    let pane = std::env::var_os("TMUX_PANE");
++    Self::new(runtime.as_deref().map(Path::new), pane.as_deref().and_then(|p| p.to_str()))
++  }
++
++  pub(crate) fn new(runtime: Option<&Path>, pane: Option<&str>) -> Self {
++    let filename = match pane {
++      None => Some("selected".to_string()),
++      Some(p) if p.starts_with('%') && p.len() > 1 && p[1..].bytes().all(|c| c.is_ascii_digit()) => Some(format!("selected-{}", &p[1..])),
++      _ => None,
++    };
++    Self {
++      path: runtime
++        .filter(|p| p.is_absolute())
++        .zip(filename)
++        .map(|(p, f)| p.join("taskwarrior-tui").join(f)),
++      published: None,
++    }
++  }
++
++  // An open brief pane reads "<uuid> <row>" to follow the selection and sit
++  // under that row; without a drawn row it switches without moving.
++  pub fn publish(&mut self, selection: Selection) {
++    if self.published == Some(selection) {
++      return;
++    }
++    if self.write_selection(selection).is_ok() {
++      self.published = Some(selection);
++    }
++  }
++
++  #[cfg(unix)]
++  fn write_selection(&self, selection: Selection) -> io::Result<()> {
++    let Some(path) = &self.path else { return Ok(()) };
++    let dir = path.parent().expect("signal path has a parent");
++    if let Ok(metadata) = fs::symlink_metadata(dir)
++      && !metadata.file_type().is_dir()
++    {
++      return Err(io::Error::new(io::ErrorKind::InvalidInput, "signal directory is not a directory"));
++    }
++    if let Some((uuid, row)) = selection {
++      fs::DirBuilder::new()
++        .mode(0o700)
++        .create(dir)
++        .or_else(|e| if e.kind() == io::ErrorKind::AlreadyExists { Ok(()) } else { Err(e) })?;
++      if !fs::symlink_metadata(dir)?.file_type().is_dir() {
++        return Err(io::Error::new(io::ErrorKind::InvalidInput, "signal directory is not a directory"));
++      }
++      fs::set_permissions(dir, fs::Permissions::from_mode(0o700))?;
++      let temporary = dir.join(format!(".selected-{}-{}", std::process::id(), NEXT_TEMP.fetch_add(1, Ordering::Relaxed)));
++      let result = (|| {
++        let mut file = OpenOptions::new().write(true).create_new(true).mode(0o600).open(&temporary)?;
++        match row {
++          Some(row) => writeln!(file, "{uuid} {row}")?,
++          None => writeln!(file, "{uuid}")?,
++        }
++        fs::rename(&temporary, path)
++      })();
++      if result.is_err() {
++        let _ = fs::remove_file(&temporary);
++      }
++      result
++    } else {
++      match fs::remove_file(path) {
++        Ok(()) => Ok(()),
++        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(()),
++        Err(e) => Err(e),
++      }
++    }
++  }
++}
++
++#[cfg(not(unix))]
++impl SelectionPublisher {
++  fn write_selection(&self, _selection: Selection) -> io::Result<()> {
++    Ok(())
++  }
++}
++
++#[cfg(all(test, unix))]
++mod tests {
++  use super::*;
++  use std::os::unix::fs::{MetadataExt, PermissionsExt};
++
++  #[test]
++  fn selection_file_tracks_changes_and_removes_empty_selection() {
++    let root = std::env::temp_dir().join(format!(
++      "tui-selection-test-{}-{}",
++      std::process::id(),
++      NEXT_TEMP.fetch_add(1, Ordering::Relaxed)
++    ));
++    fs::create_dir(&root).unwrap();
++    let mut publisher = SelectionPublisher::new(Some(&root), Some("%42"));
++    let path = root.join("taskwarrior-tui/selected-42");
++    let first = Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap();
++    let second = Uuid::parse_str("00000000-0000-0000-0000-000000000002").unwrap();
++    publisher.publish(Some((first, None)));
++    assert_eq!(fs::read_to_string(&path).unwrap(), format!("{first}\n"));
++    assert_eq!(fs::metadata(path.parent().unwrap()).unwrap().permissions().mode() & 0o777, 0o700);
++    let inode = fs::metadata(&path).unwrap().ino();
++    publisher.publish(Some((first, None)));
++    assert_eq!(fs::metadata(&path).unwrap().ino(), inode);
++    // The same task on another row is a new signal: the brief pane must move.
++    publisher.publish(Some((first, Some(7))));
++    assert_eq!(fs::read_to_string(&path).unwrap(), format!("{first} 7\n"));
++    publisher.publish(Some((second, Some(8))));
++    assert_eq!(fs::read_to_string(&path).unwrap(), format!("{second} 8\n"));
++    publisher.publish(None);
++    assert!(!path.exists());
++    fs::remove_dir_all(root).unwrap();
++  }
++
++  #[test]
++  fn paths_require_runtime_and_a_valid_pane() {
++    let root = std::env::temp_dir();
++    assert_eq!(
++      SelectionPublisher::new(Some(&root), None).path.unwrap(),
++      root.join("taskwarrior-tui/selected")
++    );
++    for pane in ["", "%", "%../bad", "42", "%2/3"] {
++      assert!(SelectionPublisher::new(Some(&root), Some(pane)).path.is_none());
++    }
++    assert!(SelectionPublisher::new(None, None).path.is_none());
++    assert!(SelectionPublisher::new(Some(Path::new("relative")), None).path.is_none());
++  }
++}
+diff --git a/src/table.rs b/src/table.rs
+index a9e5fb0..32ba253 100644
+--- a/src/table.rs
++++ b/src/table.rs
+@@ -47,6 +47,11 @@ impl Default for TaskwarriorTuiTableState {
+ }
+ 
+ impl TaskwarriorTuiTableState {
++  /// Row offset currently shown at the top of the table body.
++  pub fn offset(&self) -> usize {
++    self.offset
++  }
++
+   pub fn mode(&self) -> TableMode {
+     self.mode.clone()
+   }
+@@ -99,6 +104,32 @@ impl TaskwarriorTuiTableState {
+   }
+ }
+ 
++/// Return the terminal row occupied by a selected table row.
++///
++/// table_top is the first terminal row of the table widget, and
++/// header_rows is the number of rows before its body (normally one).
++pub fn selected_row_screen_y(table_top: u16, header_rows: u16, offset: usize, selected: usize) -> Option<u16> {
++  let visible_row = selected.checked_sub(offset)?;
++  table_top.checked_add(header_rows)?.checked_add(u16::try_from(visible_row).ok()?)
++}
++
++#[cfg(test)]
++mod selected_row_screen_y_tests {
++  use super::selected_row_screen_y;
++
++  #[test]
++  fn computes_screen_y_for_top_middle_and_scrolled_bottom_rows() {
++    assert_eq!(selected_row_screen_y(0, 1, 0, 0), Some(1));
++    assert_eq!(selected_row_screen_y(0, 1, 0, 9), Some(10));
++    assert_eq!(selected_row_screen_y(0, 1, 18, 23), Some(6));
++  }
++
++  #[test]
++  fn returns_none_when_selection_is_outside_visible_rows() {
++    assert_eq!(selected_row_screen_y(0, 1, 4, 3), None);
++  }
++}
++
+ /// Holds data to be displayed in a Table widget
+ #[derive(Debug, Clone)]
+ pub enum Row<D>
