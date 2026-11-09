@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Tripwires: watch a news search and act when a new headline meets a condition
 # only a model can judge. "Broadcom squeezes VMware partners" has no keyword a
-# grep could wait on; Jev reads each new headline and answers yes or no.
+# grep could wait on; a model reads each new headline and answers yes or no.
 #
 # A wire is a file in ~/.config/tripwire/wires/NAME:
 #   query=VMware Broadcom
@@ -28,8 +28,8 @@ wires="${TRIPWIRE_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/tripwire/wires}"
 state="${XDG_STATE_HOME:-$HOME/.local/state}/tripwire"
 snd="${TRIPWIRE_SND:-$HOME/dev/agents-mcp-server/build/snd.js}"
 min_p=0.8
-# The shared decision adapter judges each headline; TRIPWIRE_JEV keeps its override.
-jev="${TRIPWIRE_JEV:-$HOME/.claude/scripts/__quick_decide.py}"
+# Use the HN gate's Luna configuration; TRIPWIRE_JEV keeps its override.
+jev="${TRIPWIRE_JEV:-$HOME/.claude/scripts/__kendra_decide.sh}"
 
 die() {
 	echo "tripwire: $*" >&2
@@ -47,8 +47,8 @@ headlines() {
 		yq -p xml -o tsv '[.rss.channel.item] | flatten | .[] | select(. != null) | [.guid."+content", .pubDate, .title, .link]' 2>/dev/null
 }
 
-# Jev's yes probability for one headline against the condition, as an exit code
-# (0 at or above min_p, 1 below, 2 when Jev gave no answer), with today's date as context.
+# The yes probability for one headline against the condition, as an exit code
+# (0 at or above min_p, 1 below, 2 when the judge gave no answer), with today's date as context.
 judge() {
 	local condition="$1" date="$2" title="$3" p
 	p="$(printf "Today's date: %s\nPublished: %s\nHeadline: %s\n" "$(date)" "$date" "$title" |
@@ -127,7 +127,7 @@ run_wire() {
 		1 | 3) echo "$id" >>"$seen" ;;
 		*)
 			# Unscored: the headline stays unseen, so the next run judges it again.
-			broken "$name" "jev could not judge (exit $rc)" "$action"
+			broken "$name" "judge could not judge (exit $rc)" "$action"
 			return 1
 			;;
 		esac

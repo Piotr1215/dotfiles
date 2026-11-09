@@ -99,14 +99,12 @@ add_wire() {
   grep -q '^jev Does Broadcom squeeze partners?$' "$LOG"
 }
 
-@test "default judge uses shared adapter and keeps predicate behavior" {
-  local original_home="$HOME" fake_home="$BATS_TEST_TMPDIR/default-home"
-  mkdir -p "$fake_home/.claude/scripts" "$fake_home/dev/dotfiles/scripts"
-  ln -s "$original_home/.claude/scripts/__quick_decide.py" "$fake_home/.claude/scripts/__quick_decide.py"
-  cp "$TRIPWIRE_JEV" "$fake_home/dev/dotfiles/scripts/__jev.sh"
-  printf '%s\n' '{"provider":"jev","openai_project":null}' > "$BATS_TEST_TMPDIR/decisions.json"
+@test "default judge uses the HN gate adapter and keeps predicate behavior" {
+  local fake_home="$BATS_TEST_TMPDIR/default-home"
+  mkdir -p "$fake_home/.claude/scripts"
+  cp "$TRIPWIRE_JEV" "$fake_home/.claude/scripts/__kendra_decide.sh"
   unset TRIPWIRE_JEV
-  export HOME="$fake_home" QUICK_DECISIONS_CONFIG="$BATS_TEST_TMPDIR/decisions.json"
+  export HOME="$fake_home"
   add_wire
   feed "a1:old"
   "$SCRIPT" run
@@ -198,5 +196,5 @@ add_wire() {
   feed "a1:old" "b2:Broadcom squeeze"
   JEV_P="no answer" run "$SCRIPT" run
   [ "$status" -eq 1 ]
-  grep -q 'jev could not judge' "$LOG"
+  grep -q 'judge could not judge' "$LOG"
 }
