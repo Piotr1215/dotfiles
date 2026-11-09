@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "Agent tab tmux switch",
+  "version": "1.0.0",
+  "description": "Switch to an agent session when its Chrome tab is activated.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAz8XeWs35UVCRas4OnewPTTu2axpN5LohLgP4WDr0Jg8laOUtSxCEx+bqpPA/l42N4b7VPn1pVvIOib0MtoEJxRga+85L78BShhZe+hQP6NaS1D4bsNM/A6NRzuXKrdevKdQN1W5jt6r4SSjciAJqT2/ZMA4zPmXVaHiUjDJb90WL66DFuTgOirXmLWJdaAibhkxWm3Nq4kjC/1lYtTFclNxyyDlo2yDEmOJREm8dqu5pwedm1tlPrw+IPonWglFMQt3tOdVYnGEmXZ967+QRMgxqMkC6sEAJGDXdCdiL+vAY7CZa2pudKXOK3j4TJjRN5DNsdLY9WSUxD3FR3i6nPwIDAQAB",
+  "permissions": [
+    "tabs",
+    "tabGroups",
+    "nativeMessaging"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  }
+}
