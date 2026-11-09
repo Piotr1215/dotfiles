@@ -95,7 +95,7 @@ def test_native_message_protocol_switches_owned_session(server):
 
 def test_host_installer_targets_checkout(tmp_path):
     subprocess.run(
-        ['python3', str(ROOT / '.config/chrome-agent-tmux/install-host.py')],
+        ['python3', str(ROOT / 'scripts/__chrome_agent_tmux_install.py')],
         env={**os.environ, 'HOME': str(tmp_path)}, check=True,
     )
     manifest = tmp_path / '.config/google-chrome/NativeMessagingHosts/org.piotr.agent_tab_tmux.json'
@@ -103,6 +103,17 @@ def test_host_installer_targets_checkout(tmp_path):
     assert data['path'] == str(ROOT / 'scripts/__chrome_agent_tmux.py')
     assert data['allowed_origins'] == ['chrome-extension://onlalgjmoaahoijjkpdgijadcnihipao/']
     assert manifest.stat().st_mode & 0o777 == 0o600
+
+
+def test_extension_folder_loads_in_chrome():
+    """Chrome rejects an unpacked extension holding any name that starts with "_".
+
+    A __pycache__ there (9 Nov) made Piotr's reload fail and left no extension
+    running, so no agent tab switched tmux."""
+    folder = ROOT / '.config/chrome-agent-tmux'
+    reserved = [str(p.relative_to(folder)) for p in folder.rglob('*') if p.name.startswith('_')]
+    assert reserved == []
+    assert not list(folder.rglob('*.py'))
 
 
 @pytest.fixture

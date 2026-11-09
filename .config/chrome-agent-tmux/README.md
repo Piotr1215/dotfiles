@@ -11,7 +11,9 @@ leave tmux alone. The host never changes browser focus.
 
 The native host manifest is installed at
 `~/.config/google-chrome/NativeMessagingHosts/org.piotr.agent_tab_tmux.json`.
-Run `python3 .config/chrome-agent-tmux/install-host.py` from this checkout to
+Run `python3 scripts/__chrome_agent_tmux_install.py` from this checkout to
 install it again or update its absolute path after moving the checkout. Load this directory as an unpacked Chrome extension with
 Developer mode enabled. The manifest key fixes its extension ID so Chrome can
 match the native host's allowed origin.
+
+Keep this folder to what Chrome loads. Chrome refuses an unpacked extension holding any name that starts with "_" (a `__pycache__`, for one), and the reload then fails with no extension running, so no tab switches. `test_extension_folder_loads_in_chrome` guards it. Chrome keeps running the old service worker until the extension is reloaded, so a change here is live only after a successful reload.

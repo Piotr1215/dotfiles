@@ -1,9 +1,15 @@
 #!/usr/bin/env python3
-"""Install this checkout's Chrome native-messaging manifest for the user."""
+"""Install this checkout's Chrome native-messaging manifest for the user.
+
+It lives in scripts/, not in the extension folder: Chrome refuses to load an
+unpacked extension holding a name that starts with "_", and Python compiled
+this file into .config/chrome-agent-tmux/__pycache__ there (9 Nov), so every
+reload failed until the folder was removed.
+"""
 import json
 from pathlib import Path
 
-root = Path(__file__).resolve().parents[2]
+root = Path(__file__).resolve().parents[1]
 host = root / 'scripts/__chrome_agent_tmux.py'
 manifest = {
     'name': 'org.piotr.agent_tab_tmux',
