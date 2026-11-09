@@ -122,9 +122,13 @@ setup() {
   for i in 1 2 3 4 5 6 7 8 9; do grep -q "^uda.taskwarrior-tui.shortcuts.$i=.*__tui_shortcut_$i.sh" "$repo_root/.taskrc"; done
 }
 
-@test "handoffs report shows supported task IDs" {
-  grep -qx 'report.handoffs.columns=id,priority,due.relative,piotr_step,description.desc' "$repo_root/.taskrc"
-  grep -qx 'report.handoffs.labels=ID,P,Due,Your step,Desc' "$repo_root/.taskrc"
+@test "handoffs report shows supported task IDs and the kind column" {
+  grep -qx 'report.handoffs.columns=id,priority,due.relative,kind,description.desc' "$repo_root/.taskrc"
+  grep -qx 'report.handoffs.labels=ID,P,Due,Kind,Desc' "$repo_root/.taskrc"
+  grep -qx 'uda.kind.values=slack,command,pr,ack,other' "$repo_root/.taskrc"
+  # piotr_step stays a field: the brief still reads it.
+  grep -qx 'uda.piotr_step.type=string' "$repo_root/.taskrc"
+  grep -q '^uda.taskwarrior-tui.legend.handoffs=.*d done  s kind action  z details' "$repo_root/.taskrc"
 }
 
 @test "frequent reports have the intended picker order" {
@@ -133,16 +137,21 @@ setup() {
   done
 }
 
-@test "handoffs report renders step and legacy rows" {
+@test "handoffs report renders kind and legacy rows" {
   command -v task >/dev/null || skip "task is not installed"
   export TASKDATA="$BATS_TEST_TMPDIR/taskdata" TASKRC="$BATS_TEST_TMPDIR/taskrc"
   mkdir -p "$TASKDATA"
   printf 'data.location=%s\nhooks=off\nconfirmation=off\n' "$TASKDATA" > "$TASKRC"
-  grep -E '^(report.handoffs.(columns|labels|sort|filter|description)|uda.piotr_step.(type|label))=' "$repo_root/.taskrc" >> "$TASKRC"
-  task rc.confirmation=off add +piotr 'piotr_step:click Approve' 'A handoff' >/dev/null
+  grep -E '^(report.handoffs.(columns|labels|sort|filter|description)|uda.(piotr_step|kind).(type|label|values))=' "$repo_root/.taskrc" >> "$TASKRC"
+  task rc.confirmation=off add +piotr 'piotr_step:click Approve' kind:command 'A handoff' >/dev/null
   task rc.confirmation=off add +piotr 'Legacy handoff' >/dev/null
   run task rc.context=none rc.color=off rc.defaultwidth=140 handoffs
-  [ "$status" -eq 0 ]; [[ "$output" == *'click Approve'* ]]; [[ "$output" == *'Legacy handoff'* ]]
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'Kind'* ]]; [[ "$output" != *'Your step'* ]]
+  [[ "$output" == *'command'*'A handoff'* ]]; [[ "$output" == *'Legacy handoff'* ]]
+  [[ "$output" != *'click Approve'* ]]
+  run task rc.confirmation=off add +piotr kind:bogus 'Bad kind'
+  [ "$status" -ne 0 ]
 }
 
 # Every view's legend reads digits in order, then letters, then control keys,
