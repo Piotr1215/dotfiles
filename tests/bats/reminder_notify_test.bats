@@ -298,3 +298,21 @@ STUB
   [ "$status" -eq 1 ]
   [[ "$output" == *"not found"* ]]
 }
+
+@test "standup kickoff opens a missing throwaway session once and ignores other bot notices" {
+  "$REMINDER" add 'start standup on kickoff' \
+    --on-notify '\t\[vcluster-internal\] from Standup and Prosper\t.*time to start your standup' \
+    --action exec --command 'tmux has-session -t "=standup-trigger-test" 2>/dev/null || tmuxinator start standup-trigger-test --no-attach' >/dev/null
+  popup now '' '[vcluster-internal] from Standup and Prosper' 'Heads up! Your standup will be reported in 15 minutes.'
+  "$REMINDER" match
+  [ ! -e "$TEST_TMUXINATOR_LOG" ]
+  popup now '' '[vcluster-internal] from Standup and Prosper' "📜 Standup - Friday. 📜\\nHello, it's time to start your standup in #engineering-enablement-private."
+  "$REMINDER" match
+  [ "$(cat "$TEST_TMUXINATOR_LOG")" = 'start standup-trigger-test --no-attach' ]
+  "$REMINDER" match
+  [ "$(wc -l < "$TEST_TMUXINATOR_LOG")" -eq 1 ]
+  printf '#!/usr/bin/env bash\nexit 0\n' >"$BIN/tmux"
+  popup now '' '[vcluster-internal] from Standup and Prosper' "Hello, it's time to start your standup again."
+  "$REMINDER" match
+  [ "$(wc -l < "$TEST_TMUXINATOR_LOG")" -eq 1 ]
+}
