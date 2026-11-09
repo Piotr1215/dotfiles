@@ -23,7 +23,7 @@ ROOT = Path(__file__).resolve().parents[2]
 CHROME = os.environ.get("AGENT_TAB_TEST_CHROME") or shutil.which("google-chrome")
 XVFB_RUN = shutil.which("xvfb-run")
 TMUX = shutil.which("tmux")
-EXTENSION = ROOT / ".config/chrome-agent-tmux"
+EXTENSION = Path(os.environ.get("AGENT_TAB_TEST_EXTENSION") or ROOT / ".config/chrome-agent-tmux")
 HOST = ROOT / "scripts/__chrome_agent_tmux.py"
 
 
@@ -118,7 +118,8 @@ def chrome_with_tmux(tmp_path, request):
     for host_dir in host_dirs:
         (host_dir / "org.piotr.agent_tab_tmux.json").write_text(json.dumps(host_manifest))
         os.chmod(host_dir / "org.piotr.agent_tab_tmux.json", 0o600)
-    env = {**os.environ, "HOME": str(home), "XDG_CONFIG_HOME": str(home / ".config"), "AGENT_TMUX_TEST_SOCKET": socket_name}
+    state = tmp_path / "state"
+    env = {**os.environ, "HOME": str(home), "XDG_CONFIG_HOME": str(home / ".config"), "XDG_STATE_HOME": str(state), "AGENT_TMUX_TEST_SOCKET": socket_name}
     browser = None
     browser_log = (tmp_path / "chrome.log").open("w")
     client = None
@@ -151,6 +152,7 @@ def chrome_with_tmux(tmp_path, request):
     subprocess.run(tmux + ["new-session", "-d", "-s", "start"], check=True)
     subprocess.run(tmux + ["new-session", "-d", "-s", "agent"], check=True)
     subprocess.run(tmux + ["set-option", "-p", "-t", "=agent:.0", "@agent_name", "agent"], check=True)
+    subprocess.run(tmux + ["new-session", "-d", "-s", "claude-agent"], check=True)
     master, slave = pty.openpty()
     client = subprocess.Popen(tmux + ["attach-session", "-t", "=start"], stdin=slave, stdout=slave, stderr=slave, env={**env, "TERM": "xterm"})
     for _ in range(100):
@@ -214,7 +216,7 @@ def chrome_with_tmux(tmp_path, request):
     if not extension_target:
         pytest.fail("Chrome did not load the unpacked extension service worker")
     attached = cdp.command("Target.attachToTarget", {"targetId": extension_target["id"], "flatten": True})["sessionId"]
-    yield tmux, cdp, attached
+    yield tmux, cdp, attached, state
 
 
 def eval_extension(cdp, session, expression):
@@ -226,7 +228,7 @@ def selected_session(tmux):
 
 
 def test_chrome_activation_switches_agent_and_ignores_unowned_tab(chrome_with_tmux):
-    tmux, cdp, session = chrome_with_tmux
+    tmux, cdp, session, _ = chrome_with_tmux
     unowned = eval_extension(cdp, session, "(async()=>{let t=await chrome.tabs.create({url:'about:blank',active:true});return t.id})()")
     assert "exceptionDetails" not in unowned, unowned
     assert unowned.get("result", {}).get("type") == "number", unowned
@@ -249,3 +251,30 @@ def test_chrome_activation_switches_agent_and_ignores_unowned_tab(chrome_with_tm
     assert activate_unowned.get("result", {}).get("type") == "number", activate_unowned
     time.sleep(.5)
     assert selected_session(tmux) == "agent"
+
+
+def wait_for_session(tmux, name):
+    for _ in range(50):
+        if selected_session(tmux) == name:
+            return True
+        time.sleep(.1)
+    return False
+
+
+def test_claude_group_switches_by_tab_id_and_sibling(chrome_with_tmux):
+    """Claude in Chrome titles every group "Claude", so the hook's tab map decides."""
+    tmux, cdp, session, state = chrome_with_tmux
+    pane = subprocess.check_output(tmux + ["display-message", "-p", "-t", "=claude-agent:", "#{pane_id}"], text=True).strip()
+    made = eval_extension(cdp, session, "(async()=>{let a=await chrome.tabs.create({url:'about:blank',active:false});let b=await chrome.tabs.create({url:'about:blank',active:false});let g=await chrome.tabs.group({tabIds:[a.id,b.id]});await chrome.tabGroups.update(g,{title:'\u2705Claude'});return [a.id,b.id]})()")
+    mapped, sibling = made["result"]["value"]
+    tabs = state / "agent-tabs" / "tabs.jsonl"
+    tabs.parent.mkdir(parents=True)
+    tabs.write_text(json.dumps({"tab_id": mapped, "pane": pane, "session": "claude-agent", "agent": "claude-agent", "ts": int(time.time())}) + "\n")
+
+    eval_extension(cdp, session, f"chrome.tabs.update({mapped},{{active:true}})")
+    assert wait_for_session(tmux, "claude-agent"), "the mapped tab did not switch to its pane"
+
+    subprocess.run(tmux + ["switch-client", "-t", "=start"], check=True)
+    assert wait_for_session(tmux, "start")
+    eval_extension(cdp, session, f"chrome.tabs.update({sibling},{{active:true}})")
+    assert wait_for_session(tmux, "claude-agent"), "an unmapped tab in the mapped group did not switch"

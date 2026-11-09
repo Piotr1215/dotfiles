@@ -1,9 +1,12 @@
 # Agent tab tmux switch
 
-Chrome sends activated tab group titles to the native host. The host switches
-only if a pane in the exact matching session has the same `@agent_name`, and
-only if exactly one tmux client is attached. Other tabs and ambiguous clients
-leave tmux alone. The host never changes browser focus.
+When a grouped tab is activated in a focused window, Chrome sends the host the tab id, the group's tab ids (at most 200) and the group title. Ungrouped tabs send nothing. The host picks the pane in this order:
+
+1. `tab_id`: the tab's newest line in `${XDG_STATE_HOME:-~/.local/state}/agent-tabs/tabs.jsonl`, written by the Claude tab-owner hook (`~/.claude/scripts/__chrome_tab_owner_hook.py`) on every Claude in Chrome tool call. Claude in Chrome titles every group "Claude" behind a status emoji, so this is how Claude tabs switch.
+2. `group_sibling`: the newest mapped tab in the same group, for a tab the agent opened but never named in a tool call.
+3. `title`: a session whose pane has the same `@agent_name` as the group title, which is how Codex groups switch.
+
+A pane that no longer exists is skipped. The host switches only when exactly one tmux client is attached, and never changes browser focus. A Claude session records its tabs only once it runs with the hook (`~/.claude` 870cf284, 9 Nov 10:28); a session started earlier, or a stable agent whose generated `role-settings.json` predates it, has unmapped tabs that leave tmux alone until it restarts.
 
 The native host manifest is installed at
 `~/.config/google-chrome/NativeMessagingHosts/org.piotr.agent_tab_tmux.json`.
