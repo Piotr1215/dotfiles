@@ -81,6 +81,18 @@ def export_task(uid):
     return next(row for row in rows if row.get('uuid') == uid)
 
 
+def emit_intake(message, uid, handoff, event_id):
+    """Write the brief-save as an intake event; False means DM triage directly instead."""
+    emit_path = os.environ.get('HANDOFF_INTAKE_EMIT', str(Path.home() / '.claude/scripts/__intake_emit.py'))
+    command = [sys.executable, emit_path, '--source', 'handoffs-file', '--kind', 'brief-save',
+               '--title', message, '--meta', f'uuid={uid}', '--meta', f'handoff={1 if handoff else 0}',
+               '--meta', f'save_id={event_id}']
+    try:
+        return subprocess.run(command, check=False, timeout=20).returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
 def save(uid):
     brief, baseline, pending_path = brief_paths(uid)
     if not brief.is_file() or not baseline.is_file():
@@ -111,12 +123,15 @@ def save(uid):
         quoted = '\n'.join('> ' + line for line in change.splitlines())
         title = ' '.join(str(task.get('description', '')).split())
         # Triage reads every comment; the wording tells a handoff from a regular task.
-        kind = 'changed handoff' if 'piotr' in task.get('tags', []) else 'commented on task'
+        handoff = 'piotr' in task.get('tags', [])
+        kind = 'changed handoff' if handoff else 'commented on task'
         message = f'Piotr {kind} {uid} {title}:\n{quoted}'
-        sender = os.environ.get('HANDOFF_SND_COMMAND', str(Path.home() / '.claude/scripts/snd'))
-        env = dict(os.environ, SND_FROM='handoffs-file')
-        subprocess.run([sender, '--no-human', '-t', 'triage', message],
-                       check=True, timeout=20, env=env)
+        # Intake rules decide what reaches triage; the direct DM is the fallback and the retry path.
+        if not emit_intake(message, uid, handoff, event_id):
+            sender = os.environ.get('HANDOFF_SND_COMMAND', str(Path.home() / '.claude/scripts/snd'))
+            env = dict(os.environ, SND_FROM='handoffs-file')
+            subprocess.run([sender, '--no-human', '-t', 'triage', message],
+                           check=True, timeout=20, env=env)
 
         temp = baseline.with_suffix('.tmp')
         temp.write_text(current)
