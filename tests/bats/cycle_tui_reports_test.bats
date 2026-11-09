@@ -131,6 +131,14 @@ setup() {
   grep -q '^uda.taskwarrior-tui.legend.handoffs=.*d done  s kind action  z details' "$repo_root/.taskrc"
 }
 
+@test "backlog legend labels key 7 with its Todo destination" {
+  default=$(grep -a '^uda.taskwarrior-tui.legend.default=' "$repo_root/.taskrc")
+  backlog=$(grep -a '^uda.taskwarrior-tui.legend.backlog=' "$repo_root/.taskrc")
+  expected=${default/legend.default=/legend.backlog=}
+  expected=${expected/  7 backlog  /  7 todo  }
+  [ "$backlog" = "$expected" ]
+}
+
 @test "frequent reports have the intended picker order" {
   for entry in inbox:1 handoffs:2 current:3 byrepo:4 byproject:5; do
     grep -qx "uda.taskwarrior-tui.report.${entry%:*}.order=${entry#*:}" "$repo_root/.taskrc"
