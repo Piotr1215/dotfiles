@@ -10,6 +10,12 @@ setup() {
   source "$script"
 }
 
+teardown() {
+  if [[ -n "${sock:-}" ]]; then
+    tmux -L "$sock" kill-server 2>/dev/null || true
+  fi
+}
+
 at() { # position -> "left top width height"
   case "$1" in
     top-left) echo "1 1 58 18" ;;
@@ -70,7 +76,7 @@ step() { # from direction -> target
 
 @test "on a real tmux server the script moves a float and leaves a tiled pane" {
   command -v tmux >/dev/null || skip "tmux not installed"
-  local sock="float-step-$$"
+  sock="float-step-$$-$BATS_TEST_NUMBER"
   tmux -L "$sock" -f /dev/null new-session -d -s t -x 200 -y 50
   tmux -L "$sock" new-pane -t t -x 60 -y 20 -X 70 -Y 15 || {
     tmux -L "$sock" kill-server

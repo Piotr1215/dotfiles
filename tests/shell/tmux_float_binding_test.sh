@@ -2,6 +2,15 @@
 set -euo pipefail
 
 CONF="${0%/*}/../../.tmux.conf"
+probe="float-bind-probe-$$"
+sock="float-bind-$$"
+tmp=''
+cleanup() {
+    tmux -L "$probe" kill-server 2>/dev/null || true
+    tmux -L "$sock" kill-server 2>/dev/null || true
+    [[ -z "$tmp" ]] || rm -f "$tmp"
+}
+trap cleanup EXIT
 
 rg --no-config -F \
     "bind-key '*' if-shell \"tmux list-panes -t '#{window_id}' -F '#{pane_floating_flag}' | grep -q '^1$'\"" \
@@ -20,9 +29,8 @@ printf 'prefix * and M-f open a quarter float top-right with a card fan, prefix 
 # lands a column short): M-f four times gives a quarter float in exactly the
 # top-right snap cell, then each next one a card further down-left. prefix t
 # floats a tile into the same spots and tiles a float back.
-if tmux -L "float-bind-probe-$$" -f /dev/null new-session -d -s p -x 80 -y 24 \; new-pane -x 20 -y 8 2>/dev/null; then
-    tmux -L "float-bind-probe-$$" kill-server
-    sock="float-bind-$$"
+if tmux -L "$probe" -f /dev/null new-session -d -s p -x 80 -y 24 \; new-pane -x 20 -y 8 2>/dev/null; then
+    tmux -L "$probe" kill-server
     tmp=$(mktemp)
     awk '/^bind-key -n M-f /{n=3} n&&n--' "$CONF" > "$tmp"
     awk '/^bind t /{p=1} p{print} p&&/^}/{exit}' "$CONF" >> "$tmp"
@@ -53,7 +61,7 @@ if tmux -L "float-bind-probe-$$" -f /dev/null new-session -d -s p -x 80 -y 24 \;
     [ "$tiles" = 2 ] || { printf 'prefix t on a float left %s tiled panes, want 2\n' "$tiles" >&2; exit 1; }
     printf 'prefix t floats tiles into the same cells and tiles a float back\n'
 else
-    tmux -L "float-bind-probe-$$" kill-server 2>/dev/null || true
+    tmux -L "$probe" kill-server 2>/dev/null || true
     printf 'SKIP real-server M-f check: this tmux has no floating panes\n'
 fi
 

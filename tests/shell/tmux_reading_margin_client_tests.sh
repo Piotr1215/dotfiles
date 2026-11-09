@@ -8,18 +8,11 @@ test_dir="$(mktemp -d "${TMPDIR:-/tmp}/reading-margin-client.XXXXXX")"
 tmux_bin="$(command -v tmux)"
 client_pid=""
 
-# Keep every test command finite so its private server exits without a kill.
+# Stop only the server created on this test's private socket.
 cleanup() {
-  for _ in {1..300}; do
-    if ! test_tmux has-session 2>/dev/null; then
-      if [[ -n "$client_pid" ]]; then wait "$client_pid" 2>/dev/null || true; fi
-      rm -rf -- "$test_dir"
-      return 0
-    fi
-    sleep 0.1
-  done
-  printf 'FAIL: finite test panes did not exit; inspect %s\n' "$test_dir" >&2
-  return 1
+  test_tmux kill-server 2>/dev/null || true
+  if [[ -n "$client_pid" ]]; then wait "$client_pid" 2>/dev/null || true; fi
+  rm -rf -- "$test_dir"
 }
 trap cleanup EXIT
 
