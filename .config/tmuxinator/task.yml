@@ -58,16 +58,19 @@ windows:
         # report used to hold.
         # The small system prompt holds Gordon's values and authority boundary.
         # The gordon plugin loads operating context progressively. Its
-        # SessionStart hook restores the main skill after /clear or compaction.
+        # SessionStart hook writes a recovery file holding his operating skill on
+        # every start, resume, clear and compaction, and a gate makes him read it.
         # ~/loft/gordon selects the WORK account; the shared skills overlay makes
         # the local gordon@skills-dir plugin available there.
         # The model is the `gordon` role in ~/.claude/models.env, read at launch.
-        # The first prompt also loads model-router, which governs every
-        # delegation; without it Gordon spawned general-purpose by default.
+        # The same gate makes him load model-router, which governs every
+        # delegation; without it Gordon spawned general-purpose by default. The
+        # first prompt only starts the turn: a /gordon:gordon here loaded his
+        # skill a second time beside the recovery file (7 Nov census).
         # PR_WATCH_SCOPE=ai: pr-watch polls the PRs the transcript mentions and
         # Gordon picks the band rows, so Piotr sees the PRs agents work on.
         # GORDON_PINS_SCOPE=ai: Gordon keeps up to 3 pins of its own beside his.
-        - cd "$HOME/loft/gordon" && MCP_TIMEOUT=120000 PR_WATCH_SCOPE=ai GORDON_PINS_SCOPE=ai __claude_with_monitor.sh --system-prompt-file ~/.claude/system-prompts/triage-agent-system-prompt.md --model "$(~/.claude/scripts/__models.sh get gordon)" -- "/gordon:gordon Then invoke the model-router skill with the Skill tool before any other work."
+        - cd "$HOME/loft/gordon" && MCP_TIMEOUT=120000 PR_WATCH_SCOPE=ai GORDON_PINS_SCOPE=ai __claude_with_monitor.sh --system-prompt-file ~/.claude/system-prompts/triage-agent-system-prompt.md --model "$(~/.claude/scripts/__models.sh get gordon)" -- "Start your shift. Do the mandatory recovery your session start names, then keep going."
   # Kendra takes Gordon's routine event stream (popups, auto-triage nudges,
   # task-closed notices, PR movement) and registers on the bus as intake, which
   # also names the pane. While this window is down everything reaches Gordon as
