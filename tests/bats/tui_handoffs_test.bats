@@ -31,14 +31,14 @@ MOCK
   [ "$status" -eq 0 ]; grep -Fq '/ops-spawn-agent @"12345678-1234-1234-1234-123456789abc|-|no-repo|Test task" ' "$LOG"
   grep -Fq '#{==:#{@agent_name},triage}' "$LOG"; ! grep -q 'C-m' "$LOG"
 }
-@test "ask Gordon opens a question popup without pasting or completing" {
+@test "later opens a wait-date popup without messaging or completing" {
   run "$root/scripts/__tui_dispatch.sh" 9 "$uuid"
   [ "$status" -eq 0 ]
   grep -Fq 'display-popup' "$LOG"
-  grep -Fq 'Ask Gordon' "$LOG"
-  grep -Fq -- "--ask --comment $uuid" "$LOG"
+  grep -Fq 'Show handoff later' "$LOG"
+  grep -Fq -- "--defer $uuid" "$LOG"
   ! grep -Eq '(paste-buffer|switch-client|^done )' "$LOG"
-  grep -E '^uda.taskwarrior-tui.legend.handoffs=.*9 ask gordon' "$root/.taskrc"
+  grep -E '^uda.taskwarrior-tui.legend.handoffs=.*9 later' "$root/.taskrc"
   grep -E '^uda.taskwarrior-tui.legend.default=.*9 effort' "$root/.taskrc"
 }
 @test "handoff paste branches contain tmux command separators rather than escaped arguments" {

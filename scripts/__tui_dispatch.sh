@@ -39,7 +39,7 @@ if [[ "$report" == handoffs ]]; then
         "set-option -p -t $pane @agent_injected_at $timestamp ; paste-buffer -d -p -b $buffer -t $pane ; switch-client -t $pane" \
         "delete-buffer -b $buffer ; display-message 'Gordon pane changed'" ;;
     8) read -r -p 'Annotation: ' note || true; [[ -n "$note" ]] && exec "$task_bin" rc.context=none "$uuid" annotate "$note"; exit 0 ;;
-    9) exec "$root/__tui_ack_handoff.sh" --ask "$uuid" ;;
+    9) exec "$root/__tui_defer_handoff.sh" "$uuid" ;;
   esac
 fi
 case "$slot" in
