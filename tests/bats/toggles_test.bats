@@ -225,6 +225,78 @@ EOF
   [ "${output#registered }" -ge 1 ]
 }
 
+@test "Gordon pane digest toggle defaults on and controls shared off flag" {
+  export HOME="${BATS_TEST_TMPDIR}/gordon-home"
+  export XDG_STATE_HOME="${BATS_TEST_TMPDIR}/gordon-state"
+  export TOGGLES_CONF="${BATS_TEST_DIRNAME}/../../scripts/__toggles.conf"
+  flag="$XDG_STATE_HOME/gordon/pane-arrival-digest.off"
+
+  run "$SCRIPT" __preview "[active] gordon-pane-digest"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"state:  active"* ]]
+  [ ! -e "$flag" ]
+
+  run "$SCRIPT" __run gordon-pane-digest off
+  [ "$status" -eq 0 ]
+  [ -e "$flag" ]
+
+  run "$SCRIPT" __run gordon-pane-digest on
+  [ "$status" -eq 0 ]
+  [ ! -e "$flag" ]
+}
+
+@test "agent profiles toggle defaults full and controls the launch flag" {
+  export HOME="${BATS_TEST_TMPDIR}/profiles-home"
+  export XDG_STATE_HOME="${BATS_TEST_TMPDIR}/profiles-state"
+  export TOGGLES_CONF="${BATS_TEST_DIRNAME}/../../scripts/__toggles.conf"
+  flag="$XDG_STATE_HOME/agent-profiles/enabled"
+
+  run "$SCRIPT" __preview "[full] agent-profiles"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"state:  full"* ]]
+  [ ! -e "$flag" ]
+
+  run "$SCRIPT" __run agent-profiles on
+  [ "$status" -eq 0 ]
+  [ -e "$flag" ]
+
+  run "$SCRIPT" __run agent-profiles off
+  [ "$status" -eq 0 ]
+  [ ! -e "$flag" ]
+}
+
+@test "Slack DM toggle writes live state and falls back to feed environment" {
+  export HOME="${BATS_TEST_TMPDIR}/slack-home"
+  export XDG_STATE_HOME="${BATS_TEST_TMPDIR}/slack-state"
+  export TOGGLES_CONF="${BATS_TEST_DIRNAME}/../../scripts/__toggles.conf"
+  state="$XDG_STATE_HOME/slack-feed/dms"
+
+  run env SLACK_FEED_SKIP_DMS=1 "$SCRIPT" __preview "[off] slack-dms"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"state:  off"* ]]
+  [ ! -e "$state" ]
+
+  run env SLACK_FEED_SKIP_DMS=0 "$SCRIPT" __preview "[on] slack-dms"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"state:  on"* ]]
+
+  run "$SCRIPT" __run slack-dms on
+  [ "$status" -eq 0 ]
+  [ "$(<"$state")" = on ]
+
+  run env SLACK_FEED_SKIP_DMS=1 "$SCRIPT" __preview "[on] slack-dms"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"state:  on"* ]]
+
+  run "$SCRIPT" __run slack-dms off
+  [ "$status" -eq 0 ]
+  [ "$(<"$state")" = off ]
+
+  run env SLACK_FEED_SKIP_DMS=0 "$SCRIPT" __preview "[off] slack-dms"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"state:  off"* ]]
+}
+
 @test "voice-mode off persists in a flag the unit reads at login, and never disables" {
   stub="${BATS_TEST_TMPDIR}/bin"
   mkdir -p "$stub"
