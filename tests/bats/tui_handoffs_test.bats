@@ -35,11 +35,25 @@ MOCK
   run "$root/scripts/__tui_dispatch.sh" 9 "$uuid"
   [ "$status" -eq 0 ]
   grep -Fq 'display-popup' "$LOG"
-  grep -Fq 'Show handoff later' "$LOG"
+  grep -Fq 'Show tasks later' "$LOG"
   grep -Fq -- "--defer $uuid" "$LOG"
   ! grep -Eq '(paste-buffer|switch-client|^done )' "$LOG"
   grep -E '^uda.taskwarrior-tui.legend.handoffs=.*9 later' "$root/.taskrc"
-  grep -E '^uda.taskwarrior-tui.legend.default=.*9 effort' "$root/.taskrc"
+  grep -E '^uda.taskwarrior-tui.legend.default=.*9 later' "$root/.taskrc"
+}
+@test "key 9 opens later for any report before any handoff lookup" {
+  for report in inbox current backlog byrepo byproject handoffs custom; do
+    rm -f "$LOG"
+    export TASKWARRIOR_TUI_REPORT="$report"
+    run "$root/scripts/__tui_dispatch.sh" 9 "$uuid"
+    [ "$status" -eq 0 ]
+    grep -Fq 'Show tasks later' "$LOG"
+    grep -Fq -- "--defer $uuid" "$LOG"
+    ! grep -Eq '(paste-buffer|switch-client|^done |^modify |^export)' "$LOG"
+  done
+  unset TASKWARRIOR_TUI_REPORT
+  run "$root/scripts/__tui_dispatch.sh" 9 "$uuid"
+  [ "$status" -eq 0 ]; grep -Fq 'Show tasks later' "$LOG"
 }
 @test "handoff paste branches contain tmux command separators rather than escaped arguments" {
   for key in 7; do

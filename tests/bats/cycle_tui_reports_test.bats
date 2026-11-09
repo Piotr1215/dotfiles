@@ -139,6 +139,12 @@ setup() {
   [ "$backlog" = "$expected" ]
 }
 
+@test "every configured legend labels key 9 later" {
+  while IFS= read -r legend; do
+    [[ "$legend" == *'  9 later  '* ]]
+  done < <(grep -a '^uda.taskwarrior-tui.legend\.' "$repo_root/.taskrc")
+}
+
 @test "frequent reports have the intended picker order" {
   for entry in inbox:1 handoffs:2 current:3 byrepo:4 byproject:5; do
     grep -qx "uda.taskwarrior-tui.report.${entry%:*}.order=${entry#*:}" "$repo_root/.taskrc"

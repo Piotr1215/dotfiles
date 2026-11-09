@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 setup() {
   root="$(cd "$BATS_TEST_DIRNAME/../.." && pwd)"
-  helper="$root/scripts/__tui_defer_handoff.sh"
+  helper="$root/scripts/__tui_defer_task.sh"
   uuid=12345678-1234-1234-1234-123456789abc
   export LOG="$BATS_TEST_TMPDIR/log" INPUT_TEXT=tomorrow
   export TUI_TMUX_COMMAND="$BATS_TEST_TMPDIR/tmux" TUI_INPUT_COMMAND="$BATS_TEST_TMPDIR/input"
@@ -34,7 +34,7 @@ r = [json.loads(x) for x in open(sys.argv[1])]
 assert len(r) == 1 and r[0][0] == 'tmux'
 a = r[0][1]
 assert a[0] == 'display-popup' and '-EE' in a
-assert ' Show handoff later ' in a
+assert ' Show tasks later ' in a
 assert '--defer ' + sys.argv[2] in a[-1]
 for name in ('TUI_INPUT_COMMAND', 'TUI_TASK_COMMAND'):
     assert any(a[i:i+2] == ['-e', name + '=' + os.environ[name]] for i in range(len(a)-1))
@@ -50,6 +50,19 @@ assert [x[0] for x in r] == ['input', 'task', 'task']
 assert 'Show again: ' in r[0][1] and 'tomorrow' in r[0][1]
 assert r[1][1] == ['rc.context=none', 'rc.hooks=off', 'calc', 'tomorrow > now']
 assert r[2][1] == ['rc.context=none', 'rc.confirmation=off', sys.argv[2], 'modify', 'wait:tomorrow']
+PY
+}
+@test "one date defers every selected task without changing the selection" {
+  second=87654321-4321-4321-4321-cba987654321
+  run "$helper" --defer "$uuid" "$second"
+  [ "$status" -eq 0 ]
+  python3 - "$LOG" "$uuid" "$second" <<'PY'
+import json, sys
+r = [json.loads(x) for x in open(sys.argv[1])]
+assert [x[0] for x in r] == ['input', 'task', 'task', 'task']
+assert [x[1] for x in r[2:]] == [
+    ['rc.context=none', 'rc.confirmation=off', u, 'modify', 'wait:tomorrow']
+    for u in sys.argv[2:]]
 PY
 }
 @test "cancel or blank date makes no task calls" {
@@ -88,6 +101,24 @@ PY
     if [ "$mode" = popup ]; then run "$helper" invalid; else run "$helper" --defer invalid; fi
     [ "$status" -ne 0 ]; [ ! -e "$LOG" ]
   done
+  run "$helper" --defer "$uuid" invalid
+  [ "$status" -ne 0 ]; [ ! -e "$LOG" ]
+}
+@test "real ordinary task can be deferred without gaining handoff tags" {
+  export TUI_TASK_COMMAND="$(command -v task)"
+  export TASKDATA="$BATS_TEST_TMPDIR/taskdata" TASKRC="$BATS_TEST_TMPDIR/taskrc"
+  mkdir -p "$TASKDATA"
+  printf 'data.location=%s\nhooks=off\nconfirmation=off\n' "$TASKDATA" > "$TASKRC"
+  "$TUI_TASK_COMMAND" add +backlog +work due:tomorrow 'Ordinary task fixture' >/dev/null
+  before=$("$TUI_TASK_COMMAND" export)
+  uuid=$(jq -r '.[0].uuid' <<< "$before")
+  run "$helper" --defer "$uuid"
+  [ "$status" -eq 0 ]
+  after=$("$TUI_TASK_COMMAND" "$uuid" export)
+  jq -e --argjson before "$before" '.[0] | .status == "pending" and (.end | not) and .tags == $before[0].tags and .due == $before[0].due and (.wait | length > 0)' <<< "$after"
+  [ "$("$TUI_TASK_COMMAND" status:pending +backlog count)" -eq 0 ]
+  "$TUI_TASK_COMMAND" "$uuid" modify wait:yesterday >/dev/null
+  [ "$("$TUI_TASK_COMMAND" status:pending +backlog count)" -eq 1 ]
 }
 @test "real wait hides the handoff then returns it without changing due date or completion" {
   export TUI_TASK_COMMAND="$(command -v task)"

@@ -8,6 +8,8 @@ tmux_bin=${TUI_TMUX_COMMAND:-tmux}
 if [[ "$slot" == 1 ]]; then exec "$HOME/.config/taskwarrior-tui/shortcut-scripts/taskopen-annotation.sh" "$@"; fi
 # Key 2 cycles views in every report, so it runs before the handoff lookup.
 if [[ "$slot" == 2 ]]; then exec "$root/__cycle_tui_reports.sh"; fi
+# Key 9 defers selected tasks in every report, without needing a tag lookup.
+if [[ "$slot" == 9 ]]; then exec "$root/__tui_defer_task.sh" "$@"; fi
 report=${TASKWARRIOR_TUI_REPORT:-}
 if [[ -z "$report" && -n "$uuid" ]] && "$task_bin" rc.context=none rc.hooks=off "$uuid" export | jq -e '.[0].tags // [] | index("piotr") != null' >/dev/null; then
   report=handoffs
@@ -39,7 +41,6 @@ if [[ "$report" == handoffs ]]; then
         "set-option -p -t $pane @agent_injected_at $timestamp ; paste-buffer -d -p -b $buffer -t $pane ; switch-client -t $pane" \
         "delete-buffer -b $buffer ; display-message 'Gordon pane changed'" ;;
     8) read -r -p 'Annotation: ' note || true; [[ -n "$note" ]] && exec "$task_bin" rc.context=none "$uuid" annotate "$note"; exit 0 ;;
-    9) exec "$root/__tui_defer_handoff.sh" "$uuid" ;;
   esac
 fi
 case "$slot" in
@@ -50,6 +51,5 @@ case "$slot" in
   6) exec "$HOME/.config/taskwarrior-tui/shortcut-scripts/__toggle_codex_label.sh" "$@" ;;
   7) exec "$root/__toggle_linear_backlog.sh" "$@" ;;
   8) exec "$root/__create_linear_issue.sh" "$@" ;;
-  9) exec "$root/__cycle_task_effort.sh" "$@" ;;
   *) echo 'Unknown shortcut' >&2; exit 2 ;;
 esac
