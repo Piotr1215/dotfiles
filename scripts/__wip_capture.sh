@@ -32,25 +32,39 @@ paths_overlap() {
   [[ $a == "$b" || $a == "$b/"* || $b == "$a/"* ]]
 }
 
-# Compute a read-only fingerprint, including dirty file metadata: porcelain
-# alone does not change when an already modified file is edited again.
+# Worktree fingerprint: what a wip snapshot records. Dirty file metadata is
+# included because porcelain alone does not change when an already modified
+# file is edited again.
 fingerprint() {
-  local repo=$1 gitdir=$2 common=$3 tmp=$4 f
+  local repo=$1 gitdir=$2 tmp=$3 f
   git -c core.fsmonitor=false -C "$repo" status --porcelain=v2 -z --untracked-files=all > "$tmp/status"
   git -c core.fsmonitor=false -C "$repo" ls-files -z --modified --deleted --others --exclude-standard > "$tmp/paths"
   {
     cat "$tmp/status"
+    git -C "$repo" rev-parse --verify -q HEAD || true
     if [[ -f $gitdir/index ]]; then sha256sum "$gitdir/index"; fi
-    for f in "$gitdir/HEAD" "$common/HEAD" "$common/packed-refs"; do
-      if [[ -e $f ]]; then stat -c '%n %s %y %z' -- "$f"; fi
-    done
-    for f in "$common/refs" "$common/logs" "$gitdir/logs"; do
-      if [[ -d $f ]]; then find "$f" -printf '%p %s %T@ %C@\0'; fi
-    done
     # One stat for all dirty paths: a fork per path cost minutes on repos with
-    # thousands of untracked files. Missing paths print nothing, as before.
+    # thousands of untracked files. Missing paths print nothing.
     while IFS= read -r -d '' f; do printf '%s/%s\0' "$repo" "$f"; done < "$tmp/paths" |
       xargs -0 -r stat -c '%n %s %y %z' -- 2>/dev/null || true
+  } | sha256sum | cut -d ' ' -f 1
+}
+
+# Common fingerprint: refs, logs and every worktree's HEAD in the shared Git
+# directory. All worktrees of a repo share it, so one sync serves them all; a
+# fetch or commit in one worktree no longer recaptures its 40 siblings.
+common_fingerprint() {
+  local common=$1 f
+  {
+    for f in "$common/HEAD" "$common/packed-refs"; do
+      if [[ -e $f ]]; then stat -c '%n %s %y %z' -- "$f"; fi
+    done
+    for f in "$common/refs" "$common/logs"; do
+      if [[ -d $f ]]; then find "$f" -printf '%p %s %T@ %C@\0'; fi
+    done
+    if [[ -d $common/worktrees ]]; then
+      find "$common/worktrees" -mindepth 1 \( -path '*/logs/*' -o -name HEAD -o -name gitdir \) -printf '%p %s %T@ %C@\0'
+    fi
   } | sha256sum | cut -d ' ' -f 1
 }
 
@@ -78,7 +92,7 @@ copy_objects() {
 
 # Copy one common Git directory and write a snapshot using only a temporary index.
 capture_one() {
-  local repo=$1 gitdir common main_repo mirror mirror_git mirror_work_git name branch label stamp old_stamp work before after head tree commit msg f size
+  local repo=$1 gitdir common main_repo mirror mirror_git mirror_work_git name branch label stamp old_stamp common_stamp common_before work before after head tree commit msg f size
   local -A object_sources=()
   local primary_objects
   # Glob magic: **/ also matches the root, and git add -A exits 1 when a
@@ -118,27 +132,40 @@ capture_one() {
   work=$(mktemp -d "$state/work.XXXXXXXX")
   cleanup_work=$work
   trap 'rm -rf -- "$cleanup_work"' EXIT
-  before=$(fingerprint "$repo" "$gitdir" "$common" "$work")
+  before=$(fingerprint "$repo" "$gitdir" "$work")
+  common_before=$(common_fingerprint "$common")
   stamp="$state/$(printf '%s\0%s' "$target" "$repo" | sha256sum | cut -d ' ' -f 1).stamp"
+  common_stamp="$state/$(printf '%s\0%s' "$target" "$common" | sha256sum | cut -d ' ' -f 1).common.stamp"
   old_stamp=$(cat "$stamp" 2>/dev/null || true)
-  if [[ $before == "$old_stamp" && -d $mirror_git ]]; then
+  if [[ $before == "$old_stamp" && $common_before == "$(cat "$common_stamp" 2>/dev/null)" && -d $mirror_work_git ]]; then
     printf 'skip %s\n' "$repo"
     return 0
   fi
+  head=$(git -C "$repo" rev-parse --verify -q HEAD || true)
   # Worktrees of one repo share a mirror; parallel workers take turns on it.
   exec 8>"$state/$(printf '%s' "$mirror_git" | sha256sum | cut -d ' ' -f 1).mirror.lock"
   flock 8
-  mkdir -p "$mirror_git/objects"
-  chmod 700 "$mirror_git"
-  rsync -rltc --omit-dir-times --delete --exclude='/objects/' --exclude='/refs/wip/' --exclude='/logs/refs/wip/' --exclude='*.lock' "$common/" "$mirror_git/"
-  primary_objects=$(realpath -e -- "$common/objects")
-  copy_objects "$primary_objects" "$mirror_git/objects"
-  rm -f -- "$mirror_git/objects/info/alternates"
-  if [[ ${common##*/} != .git ]]; then
-    # Its relative core.worktree points into the live parent, not this mirror.
-    git config --file "$mirror_git/config" --unset-all core.worktree || [[ $? == 5 ]]
+  if [[ $common_before != "$(cat "$common_stamp" 2>/dev/null)" || ! -d $mirror_work_git ]] ||
+     { [[ -n $head ]] && ! git --git-dir="$mirror_git" cat-file -e "$head^{commit}" 2>/dev/null; }; then
+    mkdir -p "$mirror_git/objects"
+    chmod 700 "$mirror_git"
+    rsync -rltc --omit-dir-times --delete --exclude='/objects/' --exclude='/refs/wip/' --exclude='/logs/refs/wip/' --exclude='*.lock' "$common/" "$mirror_git/"
+    primary_objects=$(realpath -e -- "$common/objects")
+    copy_objects "$primary_objects" "$mirror_git/objects"
+    rm -f -- "$mirror_git/objects/info/alternates"
+    if [[ ${common##*/} != .git ]]; then
+      # Its relative core.worktree points into the live parent, not this mirror.
+      git config --file "$mirror_git/config" --unset-all core.worktree || [[ $? == 5 ]]
+    fi
+    [[ $common_before == "$(common_fingerprint "$common")" ]] || { printf 'repository changed during capture: %s\n' "$repo" >&2; return 1; }
+    printf '%s\n' "$common_before" > "$work/common_stamp"
+    mv -f -- "$work/common_stamp" "$common_stamp"
   fi
   [[ -d $mirror_work_git ]] || { printf 'missing mirrored worktree metadata: %s\n' "$repo" >&2; return 1; }
+  if [[ $before == "$old_stamp" ]]; then
+    printf 'synced %s (%s)\n' "$repo" "$label"
+    return 0
+  fi
   if [[ -f $gitdir/index ]]; then cp -- "$gitdir/index" "$work/index"; fi
   git -c core.fsmonitor=false -C "$repo" ls-files -z --others --exclude-standard > "$work/untracked"
   while IFS= read -r -d '' f; do
@@ -154,7 +181,8 @@ capture_one() {
   cd -- "$repo"
   git -c core.hooksPath=/dev/null -c core.fsmonitor=false add -A -- . "${excludes[@]}"
   tree=$(git write-tree)
-  head=$(git rev-parse --verify HEAD 2>/dev/null || true)
+  # HEAD comes from the live repo: the mirror's worktree HEAD is only as new
+  # as the last common sync.
   msg="wip capture $(date -u +%Y-%m-%dT%H:%M:%SZ) $label"
   if [[ -n $head ]]; then
     commit=$(printf '%s\n' "$msg" | git -c user.name='WIP Capture' -c user.email='wip-capture@localhost' commit-tree "$tree" -p "$head")
@@ -163,7 +191,7 @@ capture_one() {
   fi
   git -c core.logAllRefUpdates=always update-ref --create-reflog -m "$msg" "refs/wip/$label" "$commit"
   unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
-  after=$(fingerprint "$repo" "$gitdir" "$common" "$work")
+  after=$(fingerprint "$repo" "$gitdir" "$work")
   [[ $before == "$after" ]] || { printf 'repository changed during capture: %s\n' "$repo" >&2; return 1; }
   printf '%s\n' "$after" > "$work/stamp"
   mv -f -- "$work/stamp" "$stamp"
@@ -192,9 +220,11 @@ run_one() {
   err=$(mktemp "$state/err.XXXXXXXX")
   timeout -k 5 "$repo_timeout" bwrap --die-with-parent --unshare-net --ro-bind / / --dev /dev --bind "$target" "$target" --bind "$state" "$state" --setenv TMPDIR "$state" --setenv WIP_CAPTURE_SANDBOXED 1 -- "$self" --capture-one "$repo" > "$out" 2> "$err" || rc=$?
   if (( rc == 0 )); then
-    if grep -q '^captured ' "$out"; then line="captured"$'\t'"$repo"; else line="skip"$'\t'"$repo"; fi
+    if grep -q '^captured ' "$out"; then line="captured"$'\t'"$repo"
+    elif grep -q '^synced ' "$out"; then line="synced"$'\t'"$repo"
+    else line="skip"$'\t'"$repo"; fi
     # Notes such as skipped large files still reach the log.
-    grep -Ev '^(captured|skip) ' "$out" >&2 || true
+    grep -Ev '^(captured|synced|skip) ' "$out" >&2 || true
     grep '^skip large untracked file' "$err" >&2 || true
   elif { (( rc != 124 && rc != 137 )) || printf 'timed out after %ss: %s\n' "$repo_timeout" "$repo" >> "$err"; } &&
        reason=$(known_reason "$err"); then
@@ -238,7 +268,7 @@ main() {
   local -a roots
   if (( $# )); then roots=("$@"); elif [[ -n ${WIP_CAPTURE_ROOTS:-} ]]; then IFS=: read -r -a roots <<< "$WIP_CAPTURE_ROOTS"; else roots=("$HOME/dev" "$HOME/loft" "$HOME/.claude" "$HOME/.codex"); fi
   # Workers run a private copy, so editing the script mid-run cannot change them.
-  local list self_copy results root failed=0 kind repo reason count=0 skipped=0 captured=0 known=0
+  local list self_copy results root failed=0 kind repo reason count=0 skipped=0 synced=0 captured=0 known=0
   list=$(mktemp "$state/repos.XXXXXXXX")
   self_copy=$(mktemp "$state/self.XXXXXXXX")
   results=$(mktemp "$state/results.XXXXXXXX")
@@ -259,6 +289,7 @@ main() {
     count=$((count+1))
     case $kind in
       captured) captured=$((captured+1)); printf 'captured %s\n' "$repo" ;;
+      synced) synced=$((synced+1)); [[ ${WIP_CAPTURE_VERBOSE:-0} != 1 ]] || printf 'synced %s\n' "$repo" ;;
       skip) skipped=$((skipped+1)); [[ ${WIP_CAPTURE_VERBOSE:-0} != 1 ]] || printf 'skip %s\n' "$repo" ;;
       known)
         known=$((known+1))
@@ -269,7 +300,7 @@ main() {
     esac
   done < "$results"
   mv -f -- "$known_new" "$known_file"
-  printf 'summary repositories=%s captured=%s skipped=%s known_broken=%s failures=%s\n' "$count" "$captured" "$skipped" "$known" "$failed"
+  printf 'summary repositories=%s captured=%s synced=%s skipped=%s known_broken=%s failures=%s\n' "$count" "$captured" "$synced" "$skipped" "$known" "$failed"
   (( failed == 0 ))
 }
 

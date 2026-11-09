@@ -114,6 +114,44 @@ mirror_show() { git --git-dir="$MIRROR" show "refs/wip/$1:$2"; }
   [ -n "$(git --git-dir="$MIRROR" reflog show refs/wip/worktrees/linked/feature)" ]
 }
 
+@test "a commit in one worktree syncs the mirror without a new snapshot of its siblings" {
+  git clone -q --bare "$REPO" "$BATS_TEST_TMPDIR/remote.git"
+  git -C "$REPO" remote add origin "$BATS_TEST_TMPDIR/remote.git"
+  source /home/decoder/.claude/scripts/__lib_worktree_base.sh
+  worktree_add_fresh "$REPO" "$ROOT/linked" feature
+  printf 'worktree\n' > "$ROOT/linked/tracked"
+  run capture
+  [ "$status" -eq 0 ]
+  printf 'next\n' > "$REPO/tracked"
+  git -C "$REPO" commit -qam next
+  run capture
+  [ "$status" -eq 0 ]
+  [ "$(git --git-dir="$MIRROR" rev-parse main)" = "$(git -C "$REPO" rev-parse main)" ]
+  [[ $output != *"captured $ROOT/linked"* ]]
+  [ "$(git --git-dir="$MIRROR" reflog show refs/wip/worktrees/linked/feature | wc -l)" -eq 1 ]
+  run capture
+  [[ $output == *'captured=0'* ]]
+}
+
+@test "a detached commit in a linked worktree reaches the mirror" {
+  git clone -q --bare "$REPO" "$BATS_TEST_TMPDIR/remote.git"
+  git -C "$REPO" remote add origin "$BATS_TEST_TMPDIR/remote.git"
+  source /home/decoder/.claude/scripts/__lib_worktree_base.sh
+  worktree_add_fresh "$REPO" "$ROOT/linked" feature
+  run capture
+  [ "$status" -eq 0 ]
+  git -C "$ROOT/linked" checkout -q --detach
+  printf 'detached\n' > "$ROOT/linked/tracked"
+  git -C "$ROOT/linked" commit -qam detached
+  printf 'dirty\n' > "$ROOT/linked/tracked"
+  local head
+  head=$(git -C "$ROOT/linked" rev-parse HEAD)
+  run capture
+  [ "$status" -eq 0 ]
+  [ "$(mirror_show "worktrees/linked/detached-$head" tracked)" = dirty ]
+  [ "$(git --git-dir="$MIRROR" rev-parse "refs/wip/worktrees/linked/detached-$head^")" = "$head" ]
+}
+
 @test "rejects an unmounted target" {
   export WIP_CAPTURE_ALLOW_DIRECTORY=0
   export WIP_CAPTURE_MOUNT="$BATS_TEST_TMPDIR/unmounted"
