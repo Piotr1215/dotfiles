@@ -1,0 +1,5 @@
+# cargo libgit2 cannot use the ssh agent, and ~/.gitconfig-personal rewrites
+# https://github.com/ to ssh, so git deps (yazi-build) fail to authenticate.
+# Let cargo shell out to the git CLI instead.
+[net]
+git-fetch-with-cli = true
