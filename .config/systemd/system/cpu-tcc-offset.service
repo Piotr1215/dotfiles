@@ -1,0 +1,20 @@
+# serval's firmware sets TjMax 105C with TCC offset 13, so the CPU runs bursts up
+# to 92C. Piotr wants it cooler: offset 20 holds 8-core bursts at 87C for about
+# 5% of burst throughput (A/B test, 5 Nov 2026). system76-power sets no TCC on
+# serw14, and the kernel restores the offset after suspend, so boot is the only
+# time it needs writing. Install: sudo install -m644 this file
+# /etc/systemd/system/ && sudo systemctl daemon-reload &&
+# sudo systemctl enable --now cpu-tcc-offset.service
+[Unit]
+Description=Hold the CPU thermal target at 85C (TCC offset 20)
+After=systemd-modules-load.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+Environment=TCC_OFFSET=20
+# The processor thermal driver can probe after this starts; retry for 30 s.
+ExecStart=/bin/sh -c 'for i in $$(seq 30); do for f in /sys/bus/pci/drivers/proc_thermal_pci/*/tcc_offset_degree_celsius; do if [ -w "$$f" ]; then echo "$$TCC_OFFSET" > "$$f" && echo "tcc offset $$(cat "$$f") via $$f" && exit 0; fi; done; sleep 1; done; echo "no writable tcc_offset_degree_celsius" >&2; exit 1'
+
+[Install]
+WantedBy=multi-user.target
