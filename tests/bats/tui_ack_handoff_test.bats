@@ -76,6 +76,69 @@ assert r[2][2] == 'handoffs-tui'
 assert r[3][1] == ['done', u]
 PY
 }
+@test "ask opens a question popup with the selected handoff and overrides" {
+  run "$helper" --ask "$uuid" </dev/null
+  [ "$status" -eq 0 ]
+  python3 - "$LOG" "$uuid" <<'PY'
+import json, os, sys
+r = [json.loads(x) for x in open(sys.argv[1])]
+assert len(r) == 1 and r[0][0] == 'tmux'
+a = r[0][1]
+assert a[0] == 'display-popup' and '-EE' in a and any('Ask Gordon' in s for s in a)
+assert '--ask --comment ' + sys.argv[2] in a[-1]
+for name in ('TUI_INPUT_COMMAND', 'TUI_TW_WRAPPER', 'TUI_SND_COMMAND'):
+    assert any(a[i:i+2] == ['-e', name + '=' + os.environ[name]] for i in range(len(a)-1))
+PY
+}
+@test "question saves and sends literal text once and leaves the handoff open" {
+  run "$helper" --ask --comment "$uuid"
+  [ "$status" -eq 0 ]
+  python3 - "$LOG" "$uuid" <<'PY'
+import json, os, sys
+r = [json.loads(x) for x in open(sys.argv[1])]
+u, text = sys.argv[2], os.environ['INPUT_TEXT']
+assert [x[0] for x in r] == ['input', 'tw', 'snd']
+assert 'Question: ' in r[0][1]
+assert 'Enter sends your question. The handoff stays open. Esc cancels.' in r[0][1]
+assert r[1][1] == ['note', u, 'piotr-question: ' + text]
+assert r[2][1] == ['--no-human', '-t', 'triage', 'Piotr asks about handoff ' + u + ': ' + text + '\nAnswer this question in the handoff brief. Keep the handoff open.']
+assert r[2][2] == 'handoffs-tui'
+PY
+}
+@test "cancel or blank question makes no writes" {
+  for mode in escape interrupt empty whitespace; do
+    rm -f "$LOG"
+    export INPUT_STATUS=0 INPUT_TEXT=''
+    case "$mode" in escape) INPUT_STATUS=1 ;; interrupt) INPUT_STATUS=130 ;; whitespace) INPUT_TEXT='   ' ;; esac
+    run "$helper" --ask --comment "$uuid"
+    [ "$status" -eq 0 ]
+    [ "$(wc -l < "$LOG")" -eq 1 ]
+  done
+}
+@test "question input note and sender failures stop remaining operations" {
+  export INPUT_STATUS=7
+  run "$helper" --ask --comment "$uuid"
+  [ "$status" -eq 7 ]; [ "$(wc -l < "$LOG")" -eq 1 ]
+  export INPUT_STATUS=0
+  for command in tw snd; do
+    rm -f "$LOG"; export FAIL_COMMAND="$command"
+    run "$helper" --ask --comment "$uuid"
+    [ "$status" -eq 42 ]
+    if [ "$command" = snd ]; then [[ "$output" == *'Could not send your question to Gordon.'* ]]; fi
+    python3 - "$LOG" "$command" <<'PY'
+import json, sys
+r = [json.loads(x)[0] for x in open(sys.argv[1])]
+assert r == (['input', 'tw'] if sys.argv[2] == 'tw' else ['input', 'tw', 'snd'])
+PY
+  done
+}
+@test "invalid question uuid is rejected before popup or input" {
+  for mode in popup comment; do
+    rm -f "$LOG"
+    if [ "$mode" = popup ]; then run "$helper" --ask invalid; else run "$helper" --ask --comment invalid; fi
+    [ "$status" -ne 0 ]; [ ! -e "$LOG" ]
+  done
+}
 @test "cancel or blank input makes no writes" {
   for mode in escape interrupt empty whitespace; do
     rm -f "$LOG"

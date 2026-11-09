@@ -21,15 +21,13 @@ if [[ "$report" == handoffs ]]; then
     4) exec "$HOME/.claude/scripts/__spawn_claude_directive.sh" "$uuid" ;;
     5) exec "$root/__tui_promote_handoff.sh" "$uuid" ;;
     6) exec "$root/__tui_ack_handoff.sh" "$uuid" ;;
-    7|9)
+    7)
       [[ "$uuid" =~ ^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$ ]] || { echo 'Invalid task UUID' >&2; exit 1; }
       task_json=$("$task_bin" rc.context=none rc.hooks=off "$uuid" export)
       # shellcheck disable=SC1091
       source "$root/__lib_tui_packet.sh"
       token=$(tui_task_packet "$uuid" '-' <<< "$task_json") || { echo 'Task not found' >&2; exit 1; }
-      payload="$token"
-      [[ "$slot" != 7 ]] || payload="/ops-spawn-agent $token "
-      [[ "$slot" != 9 ]] || payload="$token update my brief with more information about this action, why it is needed now, and what I need to do. Check the source and put explanations and any open questions in my brief document. Use Markdown paragraphs, lists, links and backticks. "
+      payload="/ops-spawn-agent $token "
       pane=$($tmux_bin list-panes -a -F '#{pane_id} #{@agent_name}' | awk '$2 == "triage" {print $1; exit}')
       [[ "$pane" =~ ^%[0-9]+$ ]] || { echo 'Gordon pane not found' >&2; exit 1; }
       # A named buffer carries arbitrary task text without parsing it as tmux commands.
@@ -41,6 +39,7 @@ if [[ "$report" == handoffs ]]; then
         "set-option -p -t $pane @agent_injected_at $timestamp ; paste-buffer -d -p -b $buffer -t $pane ; switch-client -t $pane" \
         "delete-buffer -b $buffer ; display-message 'Gordon pane changed'" ;;
     8) read -r -p 'Annotation: ' note || true; [[ -n "$note" ]] && exec "$task_bin" rc.context=none "$uuid" annotate "$note"; exit 0 ;;
+    9) exec "$root/__tui_ack_handoff.sh" --ask "$uuid" ;;
   esac
 fi
 case "$slot" in

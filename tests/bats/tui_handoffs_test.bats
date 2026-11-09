@@ -31,16 +31,18 @@ MOCK
   [ "$status" -eq 0 ]; grep -Fq '/ops-spawn-agent @"12345678-1234-1234-1234-123456789abc|-|no-repo|Test task" ' "$LOG"
   grep -Fq '#{==:#{@agent_name},triage}' "$LOG"; ! grep -q 'C-m' "$LOG"
 }
-@test "clarify inserts an editable request to update the selected brief" {
+@test "ask Gordon opens a question popup without pasting or completing" {
   run "$root/scripts/__tui_dispatch.sh" 9 "$uuid"
   [ "$status" -eq 0 ]
-  [ "$(cat "$LOG.payload")" = '@"12345678-1234-1234-1234-123456789abc|-|no-repo|Test task" update my brief with more information about this action, why it is needed now, and what I need to do. Check the source and put explanations and any open questions in my brief document. Use Markdown paragraphs, lists, links and backticks. ' ]
-  grep -Fq '#{==:#{@agent_name},triage}' "$LOG"; grep -Fq 'paste-buffer -d -p' "$LOG"; grep -Fq 'switch-client -t %42' "$LOG"; ! grep -q 'C-m' "$LOG"
-  grep -E '^uda.taskwarrior-tui.legend.handoffs=.*9 clarify' "$root/.taskrc"
+  grep -Fq 'display-popup' "$LOG"
+  grep -Fq 'Ask Gordon' "$LOG"
+  grep -Fq -- "--ask --comment $uuid" "$LOG"
+  ! grep -Eq '(paste-buffer|switch-client|^done )' "$LOG"
+  grep -E '^uda.taskwarrior-tui.legend.handoffs=.*9 ask gordon' "$root/.taskrc"
   grep -E '^uda.taskwarrior-tui.legend.default=.*9 effort' "$root/.taskrc"
 }
 @test "handoff paste branches contain tmux command separators rather than escaped arguments" {
-  for key in 7 9; do
+  for key in 7; do
     run "$root/scripts/__tui_dispatch.sh" "$key" "$uuid"
     [ "$status" -eq 0 ]
     python3 - "$LOG.argv" <<'PYTEST'
@@ -56,9 +58,9 @@ assert 'paste-buffer -d -p' in success and 'switch-client -t %42' in success
 PYTEST
   done
 }
-@test "spawn and clarify sanitize control characters without losing quotes or pipes" {
+@test "spawn sanitizes control characters without losing quotes or pipes" {
   export TASK_JSON='[{"uuid":"12345678-1234-1234-1234-123456789abc","description":"one\nsecond\rthird\u001bX | \"quoted\"","repo":"a\nb","linear_issue_id":"DEVOPS-1"}]'
-  for key in 7 9; do
+  for key in 7; do
     run "$root/scripts/__tui_dispatch.sh" "$key" "$uuid"
     [ "$status" -eq 0 ]
     python3 - "$LOG.payload" <<'PYTEST'
