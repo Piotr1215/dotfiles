@@ -20,6 +20,7 @@ DBUS_IFACE="org.gnome.Shell.Extensions.TileHelper"
 # Work area of the target screen (xrandr primary, or LAYOUT_MONITOR), clipped
 # to the GNOME work area so the top panel is excluded. Every layout is laid out
 # inside this rectangle, so it never spans a second monitor. See __lib_screen.sh.
+# shellcheck source=scripts/__lib_screen.sh
 source "$(dirname "${BASH_SOURCE[0]}")/__lib_screen.sh"
 IFS=' ' read -r WA_X WA_Y WA_W WA_H < <(get_target_work_area)
 IFS=$'\n\t'
@@ -35,7 +36,6 @@ fi
 
 # Derived work area dimensions
 HALF_W=$((WA_W / 2))
-HALF_H=$((WA_H / 2))
 MID_X=$((WA_X + HALF_W))
 
 # Tile window by X11 window ID (synchronous unmaximize + move_resize_frame inside Mutter)
@@ -138,6 +138,11 @@ get_alacritty_window() {
 	local -a windows
 	mapfile -t windows < <(xdotool search --onlyvisible --classname Alacritty 2>/dev/null | sort -n)
 	[[ ${#windows[@]} -eq 0 ]] && return 1
+	# Handoff navigation captures its source terminal before raising the app.
+	local requested="${LAYOUT_ALACRITTY_WINDOW:-}"
+	for w in "${windows[@]}"; do
+		[[ "$w" == "$requested" ]] && { printf '%s\n' "$w"; return 0; }
+	done
 
 	local active w
 	active=$(xdotool getactivewindow 2>/dev/null)
@@ -184,7 +189,12 @@ next_alacritty_window() {
 
 max_alacritty() {
 	local window
-	window=$(next_alacritty_window)
+	if [[ -n "${LAYOUT_ALACRITTY_WINDOW:-}" ]]; then
+		window=$(get_alacritty_window)
+		[[ "$window" == "$LAYOUT_ALACRITTY_WINDOW" ]] || return 1
+	else
+		window=$(next_alacritty_window)
+	fi
 	if [ -n "$window" ]; then
 		tile_max "$window"
 	else
@@ -203,7 +213,12 @@ alacritty_firefox_vertical() {
 		return 1
 	fi
 
-	firefox_window=$(cycle_browser_window "alacritty_browser" "${browser_windows[@]}")
+	# An exact destination must stay on the Chrome window just navigated to.
+	local candidate
+	for candidate in "${browser_windows[@]}"; do
+		[[ "$candidate" == "${LAYOUT_BROWSER_WINDOW:-}" ]] && firefox_window="$candidate"
+	done
+	[[ -n "$firefox_window" ]] || firefox_window=$(cycle_browser_window "alacritty_browser" "${browser_windows[@]}")
 
 	[[ -z "$alacritty_window" ]] && alacritty_window=$(get_alacritty_window)
 	if [[ -z "$alacritty_window" ]]; then
@@ -223,7 +238,7 @@ firefox_firefox_vertical() {
 	fi
 
 	local firefox_windows
-	firefox_windows=($(get_browser_windows | head -n 2))
+	mapfile -t firefox_windows < <(get_browser_windows | head -n 2)
 
 	if [ ${#firefox_windows[@]} -eq 2 ]; then
 		tile_left "${firefox_windows[0]}"
@@ -301,7 +316,10 @@ firefox_firefox_alacritty() {
 	local bottom_y=$((WA_Y + half_h))
 
 	local firefox_windows alacritty
-	firefox_windows=($(get_browser_windows | head -n 2))
+	mapfile -t firefox_windows < <(get_browser_windows | head -n 2)
+	if [[ -n "${LAYOUT_BROWSER_WINDOW:-}" && -n "${LAYOUT_BROWSER_WINDOW_2:-}" && "$LAYOUT_BROWSER_WINDOW" != "$LAYOUT_BROWSER_WINDOW_2" ]]; then
+		firefox_windows=("$LAYOUT_BROWSER_WINDOW" "$LAYOUT_BROWSER_WINDOW_2")
+	fi
 	alacritty=$(get_alacritty_window)
 
 	if [ ${#firefox_windows[@]} -eq 2 ] && [ -n "$alacritty" ]; then
@@ -324,7 +342,7 @@ slack_browser_alacritty() {
 
 	local slack browser alacritty
 	slack=$(xdotool search --onlyvisible --classname Slack | head -n 1)
-	browser=$(get_visible_browser_window | head -n 1)
+	browser=${LAYOUT_BROWSER_WINDOW:-$(get_visible_browser_window | head -n 1)}
 	alacritty=$(get_alacritty_window)
 
 	if [[ -n "$slack" && -n "$browser" && -n "$alacritty" ]]; then
@@ -345,7 +363,7 @@ slack_browser_browser() {
 	local slack
 	slack=$(xdotool search --onlyvisible --classname Slack | head -n 1)
 	local browsers
-	browsers=($(get_browser_windows | head -n 2))
+	mapfile -t browsers < <(get_browser_windows | head -n 2)
 
 	if [[ -n "$slack" && ${#browsers[@]} -ge 2 ]]; then
 		tile_place "$slack" "$WA_X" "$WA_Y" "$third_w" "$WA_H"
@@ -362,7 +380,7 @@ browser_browser_browser() {
 	local half_h=$((WA_H / 2))
 
 	local browsers
-	browsers=($(get_browser_windows | head -n 3))
+	mapfile -t browsers < <(get_browser_windows | head -n 3)
 
 	if [[ ${#browsers[@]} -ge 3 ]]; then
 		tile_place "${browsers[0]}" "$WA_X" "$WA_Y" "$half_w" "$WA_H"
@@ -380,7 +398,7 @@ browser_browser_alacritty_slack() {
 	local half_h=$((WA_H / 2))
 
 	local browsers alacritty slack
-	browsers=($(get_browser_windows | head -n 2))
+	mapfile -t browsers < <(get_browser_windows | head -n 2)
 	alacritty=$(get_alacritty_window)
 	slack=$(xdotool search --onlyvisible --classname Slack | head -n 1)
 
@@ -400,7 +418,7 @@ browser_browser_browser_alacritty() {
 	local half_h=$((WA_H / 2))
 
 	local browsers alacritty
-	browsers=($(get_browser_windows | head -n 3))
+	mapfile -t browsers < <(get_browser_windows | head -n 3)
 	alacritty=$(get_alacritty_window)
 
 	if [[ ${#browsers[@]} -ge 3 && -n "$alacritty" ]]; then

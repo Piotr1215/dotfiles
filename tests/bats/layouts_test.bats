@@ -48,6 +48,32 @@ pick() {
   [ "$output" = "62914565" ]
 }
 
+@test "handoff pins its source terminal after the browser takes focus" {
+  export LAYOUT_ALACRITTY_WINDOW=96468997
+  run pick "125829125 96468997 102760453 62914565" 73400324
+  [ "$status" -eq 0 ]
+  [ "$output" = "96468997" ]
+}
+
+@test "stale handoff terminal falls back to a real terminal" {
+  export LAYOUT_ALACRITTY_WINDOW=999
+  run pick "96468997 62914565" 73400324
+  [ "$output" = "62914565" ]
+}
+
+@test "handoff browser window bypasses normal layout cycling" {
+  run bash -c '
+    source <(sed -n "/^alacritty_firefox_vertical()/,/^}/p" "$1")
+    get_browser_windows() { printf "111\n222\n"; }
+    cycle_browser_window() { echo unexpected-cycle >&2; return 1; }
+    tile_left() { echo "left:$1"; }
+    tile_right() { echo "right:$1"; }
+    LAYOUT_BROWSER_WINDOW=222 alacritty_firefox_vertical 333
+  ' bash "$LAYOUTS"
+  [ "$status" -eq 0 ]
+  [ "$output" = $'left:222\nright:333' ]
+}
+
 # Same harness for next_alacritty_window, with xprop stubbed to a scripted
 # _NET_CLIENT_LIST_STACKING (bottom to top, hex, as xprop prints it).
 pick_next() {
@@ -106,7 +132,7 @@ pick_next() {
 }
 
 @test "max alacritty cycles instead of reusing the split-layout pick" {
-  run grep -A3 '^max_alacritty()' "$LAYOUTS"
+  run sed -n '/^max_alacritty()/,/^}/p' "$LAYOUTS"
   [[ "$output" == *'next_alacritty_window'* ]]
 }
 
