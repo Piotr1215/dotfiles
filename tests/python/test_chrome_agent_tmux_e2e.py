@@ -27,9 +27,13 @@ EXTENSION = Path(os.environ.get("AGENT_TAB_TEST_EXTENSION") or ROOT / ".config/c
 HOST = ROOT / "scripts/__chrome_agent_tmux.py"
 
 
-def extension_id():
-    manifest = json.loads((EXTENSION / "manifest.json").read_text())
-    der = base64.b64decode(manifest["key"])
+# Claude in Chrome's public manifest key, so a stand-in loads under its id.
+CLAUDE_IN_CHROME_KEY = "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAjU1XnLPoasGVmZU42K3h6S+sQhkogfcoLPbIcrWH5Oo8QoInBIugkew/7cWaEFySyQrkaEBe1fjeS/rlAqd3r778dKcTvDZcXmj0VVX0Fi1i8tnkarurceGKGdVxfkL7e30nwfgwoPxj3H8OQbsbxFcBWGVtcFekmdpiyaxwz6o4yXIWColfAxh9K2yToOZkoAS5GvgGvTexiCh1gYy++eFdk6C61mcFsyDdoGQtduhGEaX0zZ9uAW1jX4JTPmHV3kEFrZu/WVBl7Obw+Jk/osoHMdmghVNy6SCB8/6mcgmxkP9buPrNUZgYP6n0x5dqEJ2Ecww/lb1Zd4nQf4XGOwIDAQAB"
+
+
+def extension_id(key=None):
+    key = key or json.loads((EXTENSION / "manifest.json").read_text())["key"]
+    der = base64.b64decode(key)
     digest = hashlib.sha256(der).digest()[:16]
     return "".join(chr(ord("a") + (byte >> shift & 0x0f)) for byte in digest for shift in (4, 0))
 
@@ -182,16 +186,27 @@ def chrome_with_tmux(tmp_path, request):
     os.close(pipe_in)
     os.close(pipe_out)
     request.addfinalizer(lambda: (os.close(to_chrome), os.close(from_chrome)))
-    os.write(to_chrome, json.dumps({"id": 1, "method": "Extensions.loadUnpacked", "params": {"path": str(EXTENSION)}}).encode() + b"\0")
-    reply = b""
-    deadline = time.time() + 30
-    while b"\0" not in reply and time.time() < deadline:
-        if select.select([from_chrome], [], [], .5)[0]:
-            chunk = os.read(from_chrome, 65536)
-            if not chunk:
-                break
-            reply += chunk
-    loaded = json.loads(reply.split(b"\0", 1)[0] or b"{}")
+    sequence = [0]
+
+    def load_unpacked(path):
+        """Load or reload an unpacked extension; Chrome's reply, or its error."""
+        sequence[0] += 1
+        os.write(to_chrome, json.dumps({"id": sequence[0], "method": "Extensions.loadUnpacked", "params": {"path": str(path)}}).encode() + b"\0")
+        reply = b""
+        deadline = time.time() + 30
+        while time.time() < deadline:
+            for message in reply.split(b"\0")[:-1]:
+                parsed = json.loads(message)
+                if parsed.get("id") == sequence[0]:
+                    return parsed
+            if select.select([from_chrome], [], [], .5)[0]:
+                chunk = os.read(from_chrome, 65536)
+                if not chunk:
+                    break
+                reply += chunk
+        return {}
+
+    loaded = load_unpacked(EXTENSION)
     if loaded.get("result", {}).get("id") != extension_id():
         pytest.fail(f"Chrome refused the unpacked extension: {loaded}")
     active_port = profile / "DevToolsActivePort"
@@ -215,8 +230,23 @@ def chrome_with_tmux(tmp_path, request):
         time.sleep(.1)
     if not extension_target:
         pytest.fail("Chrome did not load the unpacked extension service worker")
-    attached = cdp.command("Target.attachToTarget", {"targetId": extension_target["id"], "flatten": True})["sessionId"]
-    yield tmux, cdp, attached, state
+    # The first evaluate right after attaching can go unanswered (about one run
+    # in five, with or without this extension's changes), so wait for a
+    # trivial one before the test starts, attaching again if it stalls.
+    for _ in range(3):
+        attached = cdp.command("Target.attachToTarget", {"targetId": extension_target["id"], "flatten": True})["sessionId"]
+        cdp.sock.settimeout(5)
+        try:
+            ready = eval_extension(cdp, attached, "chrome.tabs.query({}).then((tabs) => tabs.length)")
+        except TimeoutError:
+            continue
+        finally:
+            cdp.sock.settimeout(30)
+        if ready.get("result", {}).get("type") == "number":
+            break
+    else:
+        pytest.fail("the extension service worker did not answer an evaluate")
+    yield tmux, cdp, attached, state, load_unpacked
 
 
 def eval_extension(cdp, session, expression):
@@ -228,7 +258,7 @@ def selected_session(tmux):
 
 
 def test_chrome_activation_switches_agent_and_ignores_unowned_tab(chrome_with_tmux):
-    tmux, cdp, session, _ = chrome_with_tmux
+    tmux, cdp, session, _, _ = chrome_with_tmux
     unowned = eval_extension(cdp, session, "(async()=>{let t=await chrome.tabs.create({url:'about:blank',active:true});return t.id})()")
     assert "exceptionDetails" not in unowned, unowned
     assert unowned.get("result", {}).get("type") == "number", unowned
@@ -263,7 +293,7 @@ def wait_for_session(tmux, name):
 
 def test_claude_group_switches_by_tab_id_and_sibling(chrome_with_tmux):
     """Claude in Chrome titles every group "Claude", so the hook's tab map decides."""
-    tmux, cdp, session, state = chrome_with_tmux
+    tmux, cdp, session, state, _ = chrome_with_tmux
     pane = subprocess.check_output(tmux + ["display-message", "-p", "-t", "=claude-agent:", "#{pane_id}"], text=True).strip()
     made = eval_extension(cdp, session, "(async()=>{let a=await chrome.tabs.create({url:'about:blank',active:false});let b=await chrome.tabs.create({url:'about:blank',active:false});let g=await chrome.tabs.group({tabIds:[a.id,b.id]});await chrome.tabGroups.update(g,{title:'\u2705Claude'});return [a.id,b.id]})()")
     mapped, sibling = made["result"]["value"]
@@ -278,3 +308,79 @@ def test_claude_group_switches_by_tab_id_and_sibling(chrome_with_tmux):
     assert wait_for_session(tmux, "start")
     eval_extension(cdp, session, f"chrome.tabs.update({sibling},{{active:true}})")
     assert wait_for_session(tmux, "claude-agent"), "an unmapped tab in the mapped group did not switch"
+
+
+def group_title(cdp, session, group):
+    return eval_extension(cdp, session, f"chrome.tabGroups.get({group}).then(g=>g.title)").get("result", {}).get("value")
+
+
+def wait_for_title(cdp, session, group, expected, seconds=8):
+    deadline = time.time() + seconds
+    while time.time() < deadline:
+        if group_title(cdp, session, group) == expected:
+            return True
+        time.sleep(.1)
+    return False
+
+
+def claude_group(tmux, cdp, session, state):
+    """A "✅Claude" group whose first tab the tab-owner hook mapped to claude-agent."""
+    pane = subprocess.check_output(tmux + ["display-message", "-p", "-t", "=claude-agent:", "#{pane_id}"], text=True).strip()
+    made = eval_extension(cdp, session, "(async()=>{let a=await chrome.tabs.create({url:'about:blank',active:false});let b=await chrome.tabs.create({url:'about:blank',active:false});return [a.id,b.id]})()")
+    mapped, sibling = made["result"]["value"]
+    tabs = state / "agent-tabs" / "tabs.jsonl"
+    tabs.parent.mkdir(parents=True, exist_ok=True)
+    tabs.write_text(json.dumps({"tab_id": mapped, "pane": pane, "session": "claude-agent", "agent": "claude-agent", "ts": int(time.time())}) + "\n")
+    group = eval_extension(cdp, session, f"(async()=>{{let g=await chrome.tabs.group({{tabIds:[{mapped},{sibling}]}});await chrome.tabGroups.update(g,{{title:'✅Claude'}});return g}})()")["result"]["value"]
+    return group, mapped, sibling
+
+
+def test_claude_group_takes_the_agent_name(chrome_with_tmux):
+    """Each "Claude" group shows its agent; status swaps keep it; other titles stay."""
+    tmux, cdp, session, state, _ = chrome_with_tmux
+    group, mapped, _ = claude_group(tmux, cdp, session, state)
+    assert wait_for_title(cdp, session, group, "✅claude-agent"), group_title(cdp, session, group)
+
+    # Claude in Chrome swaps only the status emoji while the agent works.
+    eval_extension(cdp, session, f"chrome.tabGroups.update({group},{{title:'⌛claude-agent'}})")
+    time.sleep(1)
+    assert group_title(cdp, session, group) == "⌛claude-agent"
+
+    # A group a person named and a Claude group no agent maps to keep their titles.
+    named = eval_extension(cdp, session, f"(async()=>{{let t=await chrome.tabs.create({{url:'about:blank',active:false}});let g=await chrome.tabs.group({{tabIds:[t.id]}});await chrome.tabGroups.update(g,{{title:'research'}});return g}})()")["result"]["value"]
+    unmapped = eval_extension(cdp, session, "(async()=>{let t=await chrome.tabs.create({url:'about:blank',active:false});let g=await chrome.tabs.group({tabIds:[t.id]});await chrome.tabGroups.update(g,{title:'✅Claude'});return g})()")["result"]["value"]
+    time.sleep(2.5)
+    assert group_title(cdp, session, named) == "research"
+    assert group_title(cdp, session, unmapped) == "✅Claude"
+
+    eval_extension(cdp, session, f"chrome.tabs.update({mapped},{{active:true}})")
+    assert wait_for_session(tmux, "claude-agent"), "the renamed group's tab did not switch to its pane"
+
+
+def test_claude_in_chrome_reload_gets_its_group_title_back(chrome_with_tmux, tmp_path):
+    """After Claude in Chrome reloads it re-adopts a group only while it reads "Claude"."""
+    tmux, cdp, session, state, load_unpacked = chrome_with_tmux
+    stand_in = tmp_path / "claude-in-chrome"
+    stand_in.mkdir()
+    (stand_in / "manifest.json").write_text(json.dumps({"manifest_version": 3, "name": "Claude in Chrome stand-in", "version": "1.0.0", "key": CLAUDE_IN_CHROME_KEY, "background": {"service_worker": "worker.js"}}))
+    (stand_in / "worker.js").write_text("")
+    claude_id = extension_id(CLAUDE_IN_CHROME_KEY)
+    assert claude_id == "fcoeoabgfenejglbffodgkkbkcdhcgfn"
+    assert load_unpacked(stand_in).get("result", {}).get("id") == claude_id
+
+    group, mapped, _ = claude_group(tmux, cdp, session, state)
+    assert wait_for_title(cdp, session, group, "✅claude-agent"), group_title(cdp, session, group)
+
+    reloaded = load_unpacked(stand_in)
+    assert reloaded.get("result", {}).get("id") == claude_id, reloaded
+    assert wait_for_title(cdp, session, group, "✅Claude"), group_title(cdp, session, group)
+
+    # Clicking the group switches tmux but must not rename it before Claude re-adopts it.
+    eval_extension(cdp, session, f"chrome.tabs.update({mapped},{{active:true}})")
+    assert wait_for_session(tmux, "claude-agent")
+    time.sleep(1.5)
+    assert group_title(cdp, session, group) == "✅Claude"
+
+    # Claude in Chrome changes the status emoji only on a group it owns again.
+    eval_extension(cdp, session, f"chrome.tabGroups.update({group},{{title:'⌛Claude'}})")
+    assert wait_for_title(cdp, session, group, "⌛claude-agent"), group_title(cdp, session, group)

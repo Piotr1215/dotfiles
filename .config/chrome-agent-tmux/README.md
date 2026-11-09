@@ -8,6 +8,12 @@ When a grouped tab is activated in a focused window, Chrome sends the host the t
 
 A pane that no longer exists is skipped. The host switches only when exactly one tmux client is attached, and never changes browser focus. A Claude session records its tabs only once it runs with the hook (`~/.claude` 870cf284, 9 Nov 10:28); a session started earlier, or a stable agent whose generated `role-settings.json` predates it, has unmapped tabs that leave tmux alone until it restarts.
 
+## Group names
+
+The extension also renames each Claude group to its agent: "✅Claude" becomes "✅gordon", and several agents in one group read "✅gordon, kendra". It asks the host (`{"op": "names", "tabIds": [...]}`, which never touches tmux) for the `@agent_name`, else the tmux session, recorded for the group's tabs. Claude in Chrome later swaps only the status emoji, so the name stays. A group no agent maps to keeps "Claude", and a title a person set is never touched. Claude Code can name the group itself only through a desktop-app rename behind a server-side flag (`allow_chrome_tab_group_title`, Claude Code 2.1.319), so the CLI agents cannot.
+
+Claude in Chrome keeps group ownership in `storage.session`, which its own reload or update clears. It then takes a group back only while the title, minus the emoji, is still "Claude"; otherwise it opens a new group and the agent loses its old tabs. So when Claude in Chrome reloads, updates or is re-enabled (`management` events), the extension puts "Claude" back on every group it renamed and holds it until Claude in Chrome changes the title again, which it does only on a group it owns. A Chrome restart gives every group a new id, so Claude in Chrome opens new groups then whatever the title.
+
 The native host manifest is installed at
 `~/.config/google-chrome/NativeMessagingHosts/org.piotr.agent_tab_tmux.json`.
 Run `python3 scripts/__chrome_agent_tmux_install.py` from this checkout to
