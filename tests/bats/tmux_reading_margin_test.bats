@@ -294,6 +294,24 @@ wait_for_command() {
   [ "$(tmux -L "$SOCKET_NAME" show-options -wqv @reading_margin_visible)" = on ]
 }
 
+@test "repair leaves a margin that fills its window alone" {
+  # Regression: once the work pane closed, the margin filled the window and
+  # repair kept asking for its narrow width. tmux cannot narrow a lone pane but
+  # still fires window-layout-changed for the attempt, so the hook re-ran repair
+  # about 15 times a second for hours in two leftover test servers on 5 Nov.
+  toggle_margin
+  log="${BATS_TEST_TMPDIR}/repairs"
+  : > "$log"
+  tmux -L "$SOCKET_NAME" set-hook -g window-layout-changed \
+    "run-shell -b \"echo run >> '$log'; $SCRIPT --repair-window '#{hook_window}'\""
+
+  tmux -L "$SOCKET_NAME" kill-pane -t "$PANE_ID"
+  wait_for_pane_count 1
+  sleep 1
+
+  [ "$(wc -l < "$log")" -le 2 ]
+}
+
 @test "tiled Alacritty zooms the work pane and expanded Alacritty restores the margin" {
   toggle_margin
   margin_id="$(tmux -L "$SOCKET_NAME" show-options -wqv @reading_margin_pane)"

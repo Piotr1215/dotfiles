@@ -280,6 +280,9 @@ repair_width() {
   [[ "$(window_zoomed)" == 1 ]] && return 0
   window_width="$(tmux display-message -p -t "$window_id" '#{window_width}')"
   margin_width="$(tmux display-message -p -t "$margin_pane" '#{pane_width}')"
+  # A margin with no pane beside it spans the window and tmux cannot narrow it,
+  # yet each attempt fires window-layout-changed, whose hook calls this again.
+  ((margin_width < window_width)) || return 0
   expected_width="$(margin_width_for "$window_width")"
   if ((margin_width != expected_width)); then
     tmux resize-pane -t "$margin_pane" -x "$expected_width"
