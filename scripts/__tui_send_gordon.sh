@@ -12,4 +12,5 @@ task_json=$("$task_bin" rc.context=none rc.hooks=off "$uuid" export) || { echo '
 token=$(tui_task_packet "$uuid" no-repo <<< "$task_json") || { echo 'Task not found or UUID does not match' >&2; exit 1; }
 pane=$("$tmux_bin" list-panes -a -F '#{pane_id} #{@agent_name}' | awk '$2 == "triage" {print $1; exit}') || { echo 'Could not find Gordon pane' >&2; exit 1; }
 [[ "$pane" =~ ^%[0-9]+$ ]] || { echo 'Gordon pane not found' >&2; exit 1; }
-exec "$tmux_bin" send-keys -t "$pane" -l -- "$token "
+"$tmux_bin" send-keys -t "$pane" -l -- "$token "
+exec "$tmux_bin" switch-client -t "$pane"

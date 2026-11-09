@@ -10,19 +10,33 @@ printf '%s\n' "$TASK_JSON"
 MOCK
   cat > "$TUI_TMUX_COMMAND" <<'MOCK'
 #!/usr/bin/env bash
-if [[ "$1" == list-panes ]]; then printf '%s\n' "${PANES-%42 triage}"; else printf '%s\n' "$@" > "$LOG"; fi
+if [[ "$1" == list-panes ]]; then
+  printf '%s\n' "${PANES-%42 triage}"
+else
+  printf '%s\n' "$@" >> "$LOG"
+  [[ "$1" != send-keys || "${SEND_FAIL:-0}" == 0 ]]
+fi
 MOCK
   chmod +x "$TUI_TASK_COMMAND" "$TUI_TMUX_COMMAND"
 }
 
-@test "sends the full packet literally with one trailing space and no Enter" {
+@test "sends the full packet without Enter then switches to Gordon's pane" {
   run "$root/scripts/__tui_send_gordon.sh" "$uuid"
   [ "$status" -eq 0 ]
   mapfile -t args < "$LOG"
   [ "${args[0]}" = send-keys ]; [ "${args[1]}" = -t ]; [ "${args[2]}" = %42 ]
   [ "${args[3]}" = -l ]; [ "${args[4]}" = -- ]
   [ "${args[5]}" = '@"12345678-1234-1234-1234-123456789abc|DEVOPS-1|repo|Test task" ' ]
-  [ "${#args[@]}" -eq 6 ]
+  [ "${args[6]}" = switch-client ]; [ "${args[7]}" = -t ]; [ "${args[8]}" = %42 ]
+  [ "${#args[@]}" -eq 9 ]
+}
+
+@test "failed paste does not switch panes" {
+  export SEND_FAIL=1
+  run "$root/scripts/__tui_send_gordon.sh" "$uuid"
+  [ "$status" -ne 0 ]
+  grep -Fxq send-keys "$LOG"
+  ! grep -Fxq switch-client "$LOG"
 }
 
 @test "missing repo and Linear use packet defaults" {
