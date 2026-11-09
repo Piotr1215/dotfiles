@@ -116,7 +116,7 @@ setup() {
   grep -q '^uda.taskwarrior-tui.legend.default=.*\^P project' "$repo_root/.taskrc"
   grep -q '^uda.taskwarrior-tui.legend.handoffs=.*d done.*z details.*\^P project' "$repo_root/.taskrc"
   grep -q '^uda.taskwarrior-tui.legend.default=.*r reports.*\^R refresh' "$repo_root/.taskrc"
-  grep -q '^uda.taskwarrior-tui.legend.handoffs=.*7 spawn.*r reports.*\^R refresh' "$repo_root/.taskrc"
+  grep -q '^uda.taskwarrior-tui.legend.handoffs=.*4 spawn.*7 gordon spawn.*8 annotate.*r reports.*\^R refresh' "$repo_root/.taskrc"
   grep -qx 'uda.taskwarrior-tui.task-report.show-info=false' "$repo_root/.config/taskwarrior-tui/handoffs.taskrc"
   ! grep -q '^uda.taskwarrior-tui.shortcuts.z=' "$repo_root/.taskrc"
   for i in 1 2 3 4 5 6 7 8 9; do grep -q "^uda.taskwarrior-tui.shortcuts.$i=.*__tui_shortcut_$i.sh" "$repo_root/.taskrc"; done

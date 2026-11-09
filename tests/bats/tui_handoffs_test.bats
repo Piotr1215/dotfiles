@@ -70,9 +70,17 @@ PYTEST
     ! grep -q 'C-m' "$LOG"
   done
 }
-@test "annotation writes selected text" {
-  run bash -c 'printf "new note\\n" | "$1" 4 "$2"' _ "$root/scripts/__tui_dispatch.sh" "$uuid"
+@test "annotation on key 8 writes selected text" {
+  run bash -c 'printf "new note\\n" | "$1" 8 "$2"' _ "$root/scripts/__tui_dispatch.sh" "$uuid"
   [ "$status" -eq 0 ]; grep -Fq 'annotate new note' "$LOG"
+}
+@test "key 4 opens the spawn dialog for the selected handoff without Gordon's pane" {
+  export HOME="$BATS_TEST_TMPDIR/home"; mkdir -p "$HOME/.claude/scripts"
+  printf '#!/usr/bin/env bash\nprintf "spawn %%s\\n" "$*" >> "$LOG"\n' > "$HOME/.claude/scripts/__spawn_claude_directive.sh"
+  chmod +x "$HOME/.claude/scripts/__spawn_claude_directive.sh"
+  run "$root/scripts/__tui_dispatch.sh" 4 "$uuid"
+  [ "$status" -eq 0 ]; grep -qx "spawn $uuid" "$LOG"
+  ! grep -Eq '(paste-buffer|switch-client|annotate)' "$LOG"
 }
 
 @test "missing report falls back to selected piotr tag" {
@@ -82,13 +90,13 @@ PYTEST
 if [[ "$*" == *export ]]; then echo '[{"tags":["piotr"]}]'; else printf '%s\n' "$*" >> "$LOG"; fi
 MOCK
   chmod +x "$TUI_TASK_COMMAND"
-  run "$root/scripts/__tui_dispatch.sh" 8 "$uuid"
-  [ "$status" -eq 0 ]; [[ "$output" == *'No action assigned'* ]]; [ ! -f "$LOG" ]
+  run bash -c 'printf "tagged note\\n" | "$1" 8 "$2"' _ "$root/scripts/__tui_dispatch.sh" "$uuid"
+  [ "$status" -eq 0 ]; grep -Fq 'annotate tagged note' "$LOG"
 }
 
 @test "handoff key 8 never creates an issue" {
-  run "$root/scripts/__tui_dispatch.sh" 8 "$uuid"
-  [ "$status" -eq 0 ]; [[ "$output" == *'No action assigned'* ]]; [ ! -f "$LOG" ]
+  run bash -c '"$1" 8 "$2" </dev/null' _ "$root/scripts/__tui_dispatch.sh" "$uuid"
+  [ "$status" -eq 0 ]; [ ! -f "$LOG" ]
 }
 @test "slot 2 cycles views from a handoff row without touching it" {
   export TASKWARRIOR_TUI_VIEW_VERSION=4 TASKWARRIOR_TUI_REPORT_REQUEST="$BATS_TEST_TMPDIR/request"

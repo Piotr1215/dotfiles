@@ -17,7 +17,8 @@ if [[ "$report" == handoffs ]]; then
   [[ -n "$uuid" ]] || { echo 'Select a handoff first' >&2; exit 1; }
   case "$slot" in
     3) exec "$root/__task_brief.sh" --popup "$uuid" ;;
-    4) read -r -p 'Annotation: ' note; [[ -n "$note" ]] && exec "$task_bin" rc.context=none "$uuid" annotate "$note"; exit 0 ;;
+    # Key 4 opens the same spawn dialog as the other reports, so Piotr can start an agent without Gordon's pane.
+    4) exec "$HOME/.claude/scripts/__spawn_claude_directive.sh" "$uuid" ;;
     5) exec "$root/__tui_promote_handoff.sh" "$uuid" ;;
     6) exec "$root/__tui_ack_handoff.sh" "$uuid" ;;
     7|9)
@@ -39,7 +40,7 @@ if [[ "$report" == handoffs ]]; then
         if-shell -F -t "$pane" '#{==:#{@agent_name},triage}' \
         "set-option -p -t $pane @agent_injected_at $timestamp ; paste-buffer -d -p -b $buffer -t $pane ; switch-client -t $pane" \
         "delete-buffer -b $buffer ; display-message 'Gordon pane changed'" ;;
-    8) echo "No action assigned for handoffs on key $slot" >&2; exit 0 ;;
+    8) read -r -p 'Annotation: ' note || true; [[ -n "$note" ]] && exec "$task_bin" rc.context=none "$uuid" annotate "$note"; exit 0 ;;
   esac
 fi
 case "$slot" in
