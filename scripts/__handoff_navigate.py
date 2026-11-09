@@ -11,8 +11,11 @@ import time
 from urllib.parse import parse_qs, urlsplit
 
 ROOT = Path(__file__).resolve().parent
-HOSTS = {"loft-labs-inc.slack.com", "app.slack.com", "github.com", "linear.app",
-         "mail.google.com", "app.notion.com", "docs.google.com"}
+# One workspace, two permalink hosts: since the Enterprise Grid move Slack hands
+# out vcluster-internal.enterprise links beside the older loft-labs-inc ones.
+SLACK_HOSTS = {"loft-labs-inc.slack.com", "vcluster-internal.enterprise.slack.com"}
+HOSTS = SLACK_HOSTS | {"app.slack.com", "github.com", "linear.app",
+                       "mail.google.com", "app.notion.com", "docs.google.com"}
 UUID = re.compile(r"[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}")
 
 
@@ -61,7 +64,7 @@ def destination(task):
                 matches = (parsed.path.rstrip('/') == urlsplit(canonical).path or path
                            if stamp == "top" else
                            path and (parsed.path == urlsplit(canonical).path or thread == [stamp]))
-                if parsed.hostname != "loft-labs-inc.slack.com" or not matches:
+                if parsed.hostname not in SLACK_HOSTS or not matches:
                     uuid = task.get("uuid") or os.environ.get("HANDOFF_TASK_UUID")
                     suffix = f" (task {uuid})" if uuid else " (task UUID unavailable)"
                     raise ValueError("Slack target and permalink disagree" + suffix)
@@ -108,7 +111,7 @@ def slack_deep_link(url):
     """Convert a workspace channel or message URL to a desktop link."""
     parsed = urlsplit(checked_url(url))
     match = re.fullmatch(r"/archives/([CDG][A-Z0-9]+)(?:/p([0-9]{7,}))?/?", parsed.path)
-    if parsed.hostname != "loft-labs-inc.slack.com" or not match:
+    if parsed.hostname not in SLACK_HOSTS or not match:
         raise ValueError("Unsupported Slack destination; use a channel or message permalink")
     team = os.environ.get("SLACK_TEAM_ID", "")
     config = Path(os.environ.get("SLACK_OPEN_TEAMS_CONFIG", str(
@@ -116,6 +119,8 @@ def slack_deep_link(url):
     if not team and config.is_file():
         for line in config.read_text().splitlines():
             parts = line.split()
+            # Both permalink hosts address this workspace; the desktop app maps its
+            # team ID to the enterprise org.
             if len(parts) >= 2 and parts[0] == "loft-labs-inc":
                 team = parts[1]
                 break
@@ -139,12 +144,12 @@ def navigate_many(urls, terminal):
     """Open each URL and apply the layout dictated by the first two destinations."""
     env = dict(os.environ, LAYOUT_ALACRITTY_WINDOW=terminal)
     primary = urls[:2]
-    slack = [u for u in primary if urlsplit(u).hostname in {"loft-labs-inc.slack.com", "app.slack.com"}]
+    slack = [u for u in primary if urlsplit(u).hostname in SLACK_HOSTS | {"app.slack.com"}]
     browsers = [u for u in primary if u not in slack]
     browser_count = 0
     browser_windows = []
     for index, url in enumerate(urls):
-        if urlsplit(url).hostname in {"loft-labs-inc.slack.com", "app.slack.com"}:
+        if urlsplit(url).hostname in SLACK_HOSTS | {"app.slack.com"}:
             run(["xdg-open", slack_deep_link(url)], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             continue
         browser_count += 1
@@ -224,11 +229,15 @@ def switch_agent_session(session):
 
 
 def open_block(path):
-    """Read only the editable generated block; never interpret the draft."""
+    """Read only the editable generated block; never interpret the draft.
+
+    Prepare skips writing the block while the editor holds the brief, so a
+    missing block opens the task's own links instead of nothing (9 Nov).
+    """
     text = Path(path).read_text()
     match = re.search(r"<!-- begin open -->[^\S\n]*\n(.*?)\n<!-- end open -->", text, re.S)
     if not match:
-        raise ValueError("Brief is missing its open block")
+        return []
     return [checked_url(line.strip()) for line in match.group(1).splitlines() if line.strip()]
 
 

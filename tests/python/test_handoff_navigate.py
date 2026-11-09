@@ -286,3 +286,61 @@ def test_start_leaves_agent_spawned_row_running(monkeypatch, tmp_path):
     assert nav.main(["start", UUID]) == 0
     assert not any("stop" in args for args in calls)
     assert calls[-1][1:3] == ["pin", UUID]
+
+
+ENTERPRISE = "https://vcluster-internal.enterprise.slack.com/archives/C0CE21P1C3H/p1793963101837439"
+
+
+def test_enterprise_slack_permalink_target_opens_thread(monkeypatch):
+    """Slack now hands out vcluster-internal.enterprise permalinks for the same workspace (9 Nov)."""
+    row = task(f"target: slack:C0CE21P1C3H/1793963101.837439 {ENTERPRISE}")
+    assert nav.destination(row) == ENTERPRISE
+    monkeypatch.setenv("SLACK_TEAM_ID", "T0123")
+    assert nav.slack_deep_link(ENTERPRISE) == (
+        "slack://channel?team=T0123&id=C0CE21P1C3H"
+        "&message=1793963101.837439&thread_ts=1793963101.837439")
+
+
+def test_enterprise_slack_permalink_still_must_match_target():
+    with pytest.raises(ValueError, match="Slack target and permalink disagree"):
+        nav.destination(task(f"target: slack:C0CE21P1C3H/1793963101.837440 {ENTERPRISE}"))
+    with pytest.raises(ValueError):
+        nav.destination(task("target: slack:C0CE21P1C3H/1793963101.837439 "
+                             "https://evil.enterprise.slack.com/archives/C0CE21P1C3H/p1793963101837439"))
+
+
+def test_enterprise_slack_permalink_opens_desktop_beside_browser(monkeypatch):
+    calls = []
+    monkeypatch.setenv("HANDOFF_BROWSER_COMMAND", "/browser")
+    monkeypatch.setenv("SLACK_TEAM_ID", "T0123")
+    monkeypatch.setattr(nav, "window_id", lambda _: "222")
+    monkeypatch.setattr(nav.time, "sleep", lambda _: None)
+    monkeypatch.setattr(nav, "run", lambda args, **kw: calls.append(args))
+    monkeypatch.setattr(nav.subprocess, "Popen", lambda args, **kw: calls.append(args))
+    nav.navigate_many([ENTERPRISE, "https://github.com/a"], "111")
+    assert calls[0] == ["xdg-open", nav.slack_deep_link(ENTERPRISE)]
+    assert ["/browser", "https://github.com/a"] in calls
+    assert calls[-1][-1] == "10"
+
+
+def test_brief_without_open_block_still_opens_task_links(monkeypatch, tmp_path):
+    """S while the brief is open in the editor: prepare defers, so the block is missing (9 Nov)."""
+    monkeypatch.setenv("XDG_RUNTIME_DIR", str(tmp_path))
+    monkeypatch.setenv("TMUX_PANE", "%3")
+    row = dict(task(f"target: slack:C0CE21P1C3H/1793963101.837439 {ENTERPRISE}",
+                    "link: https://linear.app/loft/issue/DEVOPS-1798"), start="20261109T125819Z")
+    brief = tmp_path / "brief"
+    brief.write_text("# brief without an open block\n")
+    calls = []
+    def run(args, **kwargs):
+        calls.append(args)
+        if args[-1] == "export":
+            return subprocess.CompletedProcess(args, 0, json.dumps([row]))
+        return subprocess.CompletedProcess(args, 0, str(brief) if "prepare" in args else "")
+    monkeypatch.setattr(nav, "run", run)
+    monkeypatch.setattr(nav, "window_id", lambda _: "111")
+    monkeypatch.setattr(nav, "navigate_many", lambda urls, terminal: calls.append((urls, terminal)))
+    monkeypatch.setattr(nav, "switch_agent_session", lambda session: False)
+    assert nav.main(["start", UUID]) == 0
+    assert ([ENTERPRISE, "https://linear.app/loft/issue/DEVOPS-1798"], "111") in calls
+    assert calls[-1][1:3] == ["pin", UUID]
