@@ -264,3 +264,25 @@ def test_missing_slack_team_does_not_open_browser(monkeypatch, tmp_path):
     monkeypatch.setenv("SLACK_OPEN_TEAMS_CONFIG", str(tmp_path / "missing"))
     with pytest.raises(ValueError, match="team ID missing"):
         nav.slack_deep_link("https://loft-labs-inc.slack.com/archives/C0123")
+
+
+def test_start_leaves_agent_spawned_row_running(monkeypatch, tmp_path):
+    """S on one handoff must not stop a row that key 4 handed to an agent (9 Nov)."""
+    monkeypatch.setenv("XDG_RUNTIME_DIR", str(tmp_path))
+    current = dict(task(), start="20261109T125734Z")
+    agent_row = dict(task(tags=["piotr", "claude", "started"]),
+                     uuid="bb476008-cc54-48fe-8530-ea217db834e7", start="20261109T125651Z")
+    calls = []
+    def run(args, **kwargs):
+        calls.append(args)
+        if args[-1] == "export":
+            return subprocess.CompletedProcess(args, 0, json.dumps([agent_row, current] if "+ACTIVE" in args else [current]))
+        return subprocess.CompletedProcess(args, 0, "")
+    monkeypatch.setattr(nav, "run", run)
+    monkeypatch.setattr(nav, "window_id", lambda _: "111")
+    monkeypatch.setattr(nav, "open_block", lambda _: [])
+    monkeypatch.setattr(nav, "navigate_many", lambda urls, terminal: None)
+    monkeypatch.setattr(nav, "switch_agent_session", lambda session: False)
+    assert nav.main(["start", UUID]) == 0
+    assert not any("stop" in args for args in calls)
+    assert calls[-1][1:3] == ["pin", UUID]

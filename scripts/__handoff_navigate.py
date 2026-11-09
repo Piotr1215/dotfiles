@@ -283,7 +283,10 @@ def main(argv=None):
         # current state again, and stop other starts without reentering hooks.
         if not task.get("start"):
             return 0
-        active = task_export(task_bin, "+piotr", "status:pending", "+ACTIVE")
+        # A row carrying +claude or +codex was started by an agent spawn (key 4),
+        # not by S. Leave it running; only Piotr's own starts take turns.
+        active = [row for row in task_export(task_bin, "+piotr", "status:pending", "+ACTIVE")
+                  if row.get("uuid") == uuid or not {"claude", "codex"} & set(row.get("tags", []))]
         # A delayed navigator must never stop a newer start. UUID breaks ties
         # when Taskwarrior records multiple starts in the same second.
         winner = max(active, key=lambda row: (row.get("start", ""), row.get("uuid", "")), default=None)
