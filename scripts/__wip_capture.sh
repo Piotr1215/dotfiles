@@ -125,6 +125,9 @@ capture_one() {
     printf 'skip %s\n' "$repo"
     return 0
   fi
+  # Worktrees of one repo share a mirror; parallel workers take turns on it.
+  exec 8>"$state/$(printf '%s' "$mirror_git" | sha256sum | cut -d ' ' -f 1).mirror.lock"
+  flock 8
   mkdir -p "$mirror_git/objects"
   chmod 700 "$mirror_git"
   rsync -rltc --omit-dir-times --delete --exclude='/objects/' --exclude='/refs/wip/' --exclude='/logs/refs/wip/' --exclude='*.lock' "$common/" "$mirror_git/"
@@ -171,7 +174,10 @@ capture_one() {
 # races are warnings: cron would otherwise report the same checkouts every run.
 known_reason() {
   local err=$1
-  if grep -q 'repository changed during capture' "$err"; then echo 'changed during capture, retried next run'
+  # A checkout too large to capture in time (a module cache in the worktree)
+  # would otherwise fail every run; the stderr note names the timeout.
+  if grep -q '^timed out after ' "$err"; then echo 'capture timed out (too many untracked files?)'
+  elif grep -q 'repository changed during capture' "$err"; then echo 'changed during capture, retried next run'
   elif grep -q 'fatal: not a git repository' "$err"; then echo 'git directory missing (orphan worktree or submodule)'
   elif grep -q 'from promisor remote' "$err"; then echo 'partial clone needs network for missing objects'
   elif grep -q 'does not have a commit checked out' "$err"; then echo 'embedded repository without a checked out commit'
@@ -190,10 +196,10 @@ run_one() {
     # Notes such as skipped large files still reach the log.
     grep -Ev '^(captured|skip) ' "$out" >&2 || true
     grep '^skip large untracked file' "$err" >&2 || true
-  elif reason=$(known_reason "$err"); then
+  elif { (( rc != 124 && rc != 137 )) || printf 'timed out after %ss: %s\n' "$repo_timeout" "$repo" >> "$err"; } &&
+       reason=$(known_reason "$err"); then
     line="known"$'\t'"$repo"$'\t'"$reason"
   else
-    (( rc == 124 || rc == 137 )) && printf 'timed out after %ss: %s\n' "$repo_timeout" "$repo" >> "$err"
     { printf 'failed %s\n' "$repo"; cat -- "$err"; } >&2
     line="failed"$'\t'"$repo"
   fi

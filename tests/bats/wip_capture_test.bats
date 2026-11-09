@@ -152,6 +152,17 @@ mirror_show() { git --git-dir="$MIRROR" show "refs/wip/$1:$2"; }
   [ "$(mirror_show main tracked)" = changed ]
 }
 
+@test "a capture that times out is a known-broken warning" {
+  export WIP_CAPTURE_REPO_TIMEOUT=1
+  git -C "$REPO" config filter.slow.clean 'sleep 5; cat'
+  printf 'tracked filter=slow\n' > "$REPO/.gitattributes"
+  printf 'changed\n' > "$REPO/tracked"
+  run capture
+  [ "$status" -eq 0 ]
+  [[ $output == *"warning $REPO: capture timed out"* ]]
+  [[ $output == *'known_broken=1 failures=0'* ]]
+}
+
 @test "editing the script during a run does not break the running capture" {
   local copy="$BATS_TEST_TMPDIR/wip_capture.sh"
   cp "$SCRIPT" "$copy"
