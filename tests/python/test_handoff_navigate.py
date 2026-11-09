@@ -344,3 +344,189 @@ def test_brief_without_open_block_still_opens_task_links(monkeypatch, tmp_path):
     assert nav.main(["start", UUID]) == 0
     assert ([ENTERPRISE, "https://linear.app/loft/issue/DEVOPS-1798"], "111") in calls
     assert calls[-1][1:3] == ["pin", UUID]
+
+
+# Kind actions on s (9 Nov, Piotr): "this would mean action on start so like
+# [the push handoff] would open terminal with prepopulated push command".
+PUSH = "git -C ~/dev/dotfiles push"
+
+
+def fake_bin(tmp_path, name, body):
+    path = tmp_path / name
+    path.write_text("#!/usr/bin/env bash\n" + body)
+    path.chmod(0o755)
+    return path
+
+
+@pytest.fixture
+def fake_tmux(tmp_path, monkeypatch):
+    """A tmux on disk that logs each argv NUL separated, one call per line."""
+    log = tmp_path / "tmux.log"
+    tmux = fake_bin(tmp_path, "tmux", f"""
+printf '%s\\0' "$@" >> {log}; printf '\\n' >> {log}
+case "$1" in
+  display-message) echo '$4' ;;
+  new-window) echo '%99' ;;
+esac
+""")
+    monkeypatch.setenv("HANDOFF_TMUX_COMMAND", str(tmux))
+    monkeypatch.setenv("TMUX_PANE", "%18")
+    def calls():
+        if not log.exists():
+            return []
+        return [line.split("\0") for line in log.read_text().split("\0\n") if line]
+    return calls
+
+
+@pytest.fixture
+def fake_clipboard(tmp_path, monkeypatch):
+    """xclip and wl-copy that keep what they were given; wl-copy fails on demand."""
+    out = tmp_path / "clipboard"
+    xclip = fake_bin(tmp_path, "xclip", f'printf "xclip %s\\n" "$*" >> {out}.argv; cat > {out}\n')
+    wl = fake_bin(tmp_path, "wl-copy", f'printf "wl-copy\\n" >> {out}.argv; [[ -f {out}.wlfail ]] && exit 1; cat > {out}\n')
+    monkeypatch.setenv("HANDOFF_XCLIP_COMMAND", str(xclip))
+    monkeypatch.setenv("HANDOFF_WLCOPY_COMMAND", str(wl))
+    monkeypatch.delenv("WAYLAND_DISPLAY", raising=False)
+    return out
+
+
+@pytest.mark.parametrize(("row", "kind"), [
+    (dict(task(), kind="command"), "command"),
+    (dict(task(tags=["piotr", "draft"]), kind="pr"), "pr"),
+    (dict(task(), kind="bogus"), "other"),
+    (task(tags=["piotr", "draft"]), "slack"),
+    (task(f"cmd: {PUSH}"), "command"),
+    (task("done-when: manual"), "other"),
+])
+def test_task_kind_reads_the_field_and_keeps_legacy_rows_working(row, kind):
+    assert nav.task_kind(row) == kind
+
+
+def test_newest_note_keeps_inner_lines_and_takes_the_latest():
+    row = {"annotations": [
+        {"entry": "20261109T100002Z", "description": "draft: Hi team\n- one\n- two"},
+        {"entry": "20261109T100001Z", "description": "draft: older"},
+        {"entry": "20261109T100003Z", "description": "what: not a draft"}]}
+    assert nav.newest_note(row, "draft") == "Hi team\n- one\n- two"
+    assert nav.newest_note(row, "cmd") == ""
+
+
+def test_command_kind_opens_a_named_window_with_the_command_unsubmitted(fake_tmux):
+    hostile = "git push; echo $(touch /tmp/pwned) `id` 'q' \"d\" \\ $HOME"
+    row = dict(task(f"cmd: {hostile}"), kind="command")
+    assert nav.act_on_kind(row) == "command"
+    calls = fake_tmux()
+    assert calls[0] == ["display-message", "-p", "-t", "%18", "#{session_id}"]
+    new = calls[1]
+    assert new[:3] == ["new-window", "-P", "-F"] and new[new.index("-t") + 1] == "$4:"
+    assert new[new.index("-n") + 1] == UUID[:8]
+    # The command is one argv element in the window's environment, verbatim.
+    assert new[new.index("-e") + 1] == "HANDOFF_CMD=" + hostile
+    assert new[-3:] == ["--", "zsh", "-i"]
+    # Only the fixed prefill line is typed; no task text reaches the keyboard.
+    assert calls[2:] == [["send-keys", "-t", "%99", "-l", nav.PREFILL], ["send-keys", "-t", "%99", "Enter"]]
+    assert all(hostile not in arg for call in calls[2:] for arg in call)
+    assert "HANDOFF_CMD" in nav.PREFILL and "print -rz" in nav.PREFILL
+
+
+@pytest.mark.parametrize(("notes", "error"), [
+    ((), "no cmd: note"),
+    (("cmd: git push\nrm -rf ~",), "one line"),
+    (("cmd: git push\tx",), "one line"),
+])
+def test_command_kind_without_a_usable_command_reports_and_opens_nothing(fake_tmux, capsys, notes, error):
+    assert nav.act_on_kind(dict(task(*notes), kind="command")) == "command"
+    assert fake_tmux() == []
+    assert error in capsys.readouterr().err
+
+
+def test_command_kind_outside_tmux_reports_the_remedy(fake_tmux, monkeypatch, capsys):
+    monkeypatch.delenv("TMUX_PANE")
+    nav.act_on_kind(dict(task(f"cmd: {PUSH}"), kind="command"))
+    assert fake_tmux() == []
+    assert "press s in the handoffs view" in capsys.readouterr().err
+
+
+def test_slack_kind_copies_the_newest_draft_with_xclip(fake_clipboard, fake_tmux):
+    row = dict(task("draft: old text", "draft: Hi team\n- shipped `x`\n- next $y"), kind="slack")
+    row["annotations"][0]["entry"], row["annotations"][1]["entry"] = "20261109T1", "20261109T2"
+    assert nav.act_on_kind(row) == "slack"
+    assert fake_clipboard.read_text() == "Hi team\n- shipped `x`\n- next $y"
+    assert (fake_clipboard.parent / "clipboard.argv").read_text() == "xclip -selection clipboard\n"
+    assert fake_tmux() == []
+
+
+def test_slack_kind_prefers_wl_copy_on_wayland_and_falls_back_to_xclip(fake_clipboard, monkeypatch):
+    monkeypatch.setenv("WAYLAND_DISPLAY", "wayland-0")
+    row = dict(task("draft: hello"), kind="slack")
+    nav.act_on_kind(row)
+    assert (fake_clipboard.parent / "clipboard.argv").read_text() == "wl-copy\n"
+    (fake_clipboard.parent / "clipboard.wlfail").write_text("")
+    fake_clipboard.write_text("")
+    nav.act_on_kind(dict(task("draft: again"), kind="slack"))
+    assert fake_clipboard.read_text() == "again"
+    assert (fake_clipboard.parent / "clipboard.argv").read_text().splitlines()[-2:] == [
+        "wl-copy", "xclip -selection clipboard"]
+
+
+def test_slack_kind_without_a_clipboard_tool_says_what_to_install(monkeypatch, capsys):
+    monkeypatch.setenv("HANDOFF_XCLIP_COMMAND", "/nonexistent/xclip")
+    monkeypatch.delenv("WAYLAND_DISPLAY", raising=False)
+    nav.act_on_kind(dict(task("draft: hello"), kind="slack"))
+    assert "install xclip or wl-copy" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("kind", ["pr", "ack", "other"])
+def test_pr_ack_and_other_kinds_take_no_extra_action(fake_tmux, fake_clipboard, kind):
+    row = dict(task(f"cmd: {PUSH}", "draft: hello", "done-when: pr-merged architecture#26"), kind=kind)
+    assert nav.act_on_kind(row) == kind
+    assert fake_tmux() == []
+    assert not fake_clipboard.exists()
+
+
+def start_row(monkeypatch, tmp_path, row):
+    """Run main start on one row with the floater, export and navigation faked."""
+    monkeypatch.setenv("XDG_RUNTIME_DIR", str(tmp_path))
+    monkeypatch.setenv("TMUX_PANE", "%18")
+    row = dict(row, start="20261109T170000Z")
+    brief = tmp_path / "brief"
+    brief.write_text("<!-- begin open -->\n\n<!-- end open -->\n")
+    order = []
+    real_run = nav.run
+    def run(args, **kwargs):
+        if args and args[0] == "task":
+            return subprocess.CompletedProcess(args, 0, json.dumps([row]))
+        if "prepare" in args or "pin" in args:
+            order.append(args[1])
+            return subprocess.CompletedProcess(args, 0, str(brief))
+        return real_run(args, **kwargs)
+    monkeypatch.setattr(nav, "run", run)
+    monkeypatch.setattr(nav, "window_id", lambda _: "111")
+    monkeypatch.setattr(nav, "navigate_many", lambda urls, terminal: order.append(("open", urls)))
+    monkeypatch.setattr(nav, "switch_agent_session", lambda session: order.append(("agent", session)))
+    assert nav.main(["start", row["uuid"]]) == 0
+    return order
+
+
+def test_start_on_a_command_row_opens_the_terminal_and_stays_in_this_session(monkeypatch, tmp_path, fake_tmux):
+    row = dict(task(f"cmd: {PUSH}", "agent: some-worker"), kind="command")
+    order = start_row(monkeypatch, tmp_path, row)
+    calls = fake_tmux()
+    assert [c[0] for c in calls] == ["display-message", "new-window", "send-keys", "send-keys"]
+    assert "HANDOFF_CMD=" + PUSH in calls[1]
+    assert order == ["prepare", ("open", []), "pin"]
+
+
+def test_start_on_a_slack_row_copies_the_draft_then_opens_the_thread(monkeypatch, tmp_path, fake_clipboard):
+    target = f"target: slack:C0CE21P1C3H/1793963101.837439 {ENTERPRISE}"
+    row = dict(task(target, "draft: Hi Jan, merged."), tags=["piotr", "draft"], kind="slack")
+    order = start_row(monkeypatch, tmp_path, row)
+    assert fake_clipboard.read_text() == "Hi Jan, merged."
+    assert order == ["prepare", ("open", [ENTERPRISE]), ("agent", ""), "pin"]
+
+
+def test_start_on_a_pr_row_opens_the_pr_as_before(monkeypatch, tmp_path, fake_tmux, fake_clipboard):
+    row = dict(task("done-when: pr-merged architecture#26"), kind="pr")
+    order = start_row(monkeypatch, tmp_path, row)
+    assert order[1] == ("open", ["https://github.com/loft-sh/architecture/pull/26"])
+    assert fake_tmux() == [] and not fake_clipboard.exists()
