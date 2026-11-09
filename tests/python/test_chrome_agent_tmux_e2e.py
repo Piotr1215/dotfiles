@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import pty
+import select
 import shutil
 import signal
 import socket
@@ -159,12 +160,38 @@ def chrome_with_tmux(tmp_path, request):
     else:
         pytest.fail("tmux client failed to attach")
 
+    # Branded Chrome ignores --load-extension (Chrome 156, 9 Nov), so the
+    # extension loads over the DevTools pipe (fd 3 in, fd 4 out) with
+    # Extensions.loadUnpacked, which also returns Chrome's own load error.
+    pipe_in, to_chrome = os.pipe()
+    from_chrome, pipe_out = os.pipe()
+
+    def chrome_fds():
+        os.dup2(pipe_in, 3)
+        os.dup2(pipe_out, 4)
+
     browser = subprocess.Popen(
         [XVFB_RUN, "-a", CHROME, f"--user-data-dir={profile}",
-         f"--load-extension={EXTENSION}", "--no-first-run", "--no-default-browser-check",
+         "--remote-debugging-pipe", "--enable-unsafe-extension-debugging", "--no-first-run", "--no-default-browser-check",
          "--no-sandbox", "--remote-debugging-port=0", "--enable-logging=stderr", "--log-level=1", "about:blank"],
         env=env, stdout=subprocess.DEVNULL, stderr=browser_log, start_new_session=True,
+        pass_fds=(3, 4), preexec_fn=chrome_fds,
     )
+    os.close(pipe_in)
+    os.close(pipe_out)
+    request.addfinalizer(lambda: (os.close(to_chrome), os.close(from_chrome)))
+    os.write(to_chrome, json.dumps({"id": 1, "method": "Extensions.loadUnpacked", "params": {"path": str(EXTENSION)}}).encode() + b"\0")
+    reply = b""
+    deadline = time.time() + 30
+    while b"\0" not in reply and time.time() < deadline:
+        if select.select([from_chrome], [], [], .5)[0]:
+            chunk = os.read(from_chrome, 65536)
+            if not chunk:
+                break
+            reply += chunk
+    loaded = json.loads(reply.split(b"\0", 1)[0] or b"{}")
+    if loaded.get("result", {}).get("id") != extension_id():
+        pytest.fail(f"Chrome refused the unpacked extension: {loaded}")
     active_port = profile / "DevToolsActivePort"
     for _ in range(300):
         if browser.poll() is not None:
