@@ -347,6 +347,27 @@ def switch_agent_session(session):
         return False
 
 
+def show_slack_draft(pane, terminal, runtime):
+    """Position the pinned brief at its draft and restore its terminal window."""
+    if re.fullmatch(r"%[0-9]+", pane):
+        socket = runtime / ("handoff-" + pane[1:] + ".sock")
+        expression = ("luaeval(\"(function() local l=vim.api.nvim_buf_get_lines(0,0,-1,false); "
+                      "for i=#l,1,-1 do if l[i]=='<!-- begin generated draft -->' then "
+                      "vim.api.nvim_win_set_cursor(0,{math.min(i+2,#l),0}); "
+                      "vim.cmd('normal! zz'); return true end end return false end)()\")")
+        try:
+            run([os.environ.get("HANDOFF_NVIM_COMMAND", "nvim"), "--server", socket,
+                 "--remote-expr", expression], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except (OSError, subprocess.SubprocessError) as error:
+            print(f"Could not position handoff draft: {error}", file=sys.stderr)
+    if terminal:
+        try:
+            run(["xdotool", "windowactivate", terminal], stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL)
+        except (OSError, subprocess.SubprocessError) as error:
+            print(f"Could not restore terminal focus: {error}", file=sys.stderr)
+
+
 def open_block(path):
     """Read only the editable generated block; never interpret the draft.
 
@@ -445,11 +466,13 @@ def main(argv=None):
                 urls = [fallback] if fallback else []
             navigate_many(urls, terminal)
             kind = act_on_kind(task)
-            # Switching to an agent session would hide the command window.
-            if kind != "command":
+            # Keep the command window or Slack brief in the originating session.
+            if kind not in {"command", "slack"}:
                 switch_agent_session(agent_session(task))
         finally:
             run([floater, "pin", uuid, pane])
+        if kind == "slack":
+            show_slack_draft(pane, terminal, runtime)
     return 0
 
 

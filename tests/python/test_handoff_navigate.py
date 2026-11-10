@@ -571,6 +571,7 @@ def start_row(monkeypatch, tmp_path, row):
     monkeypatch.setattr(nav, "window_id", lambda _: "111")
     monkeypatch.setattr(nav, "navigate_many", lambda urls, terminal: order.append(("open", urls)))
     monkeypatch.setattr(nav, "switch_agent_session", lambda session: order.append(("agent", session)))
+    monkeypatch.setattr(nav, "show_slack_draft", lambda pane, terminal, runtime: order.append(("draft", pane, terminal)))
     assert nav.main(["start", row["uuid"]]) == 0
     return order
 
@@ -589,7 +590,7 @@ def test_start_on_a_slack_row_copies_the_draft_then_opens_the_thread(monkeypatch
     row = dict(task(target, "draft: Hi Jan, merged."), tags=["piotr", "draft"], kind="slack")
     order = start_row(monkeypatch, tmp_path, row)
     assert fake_clipboard.read_text() == "Hi Jan, merged."
-    assert order == ["prepare", ("open", [ENTERPRISE]), ("agent", ""), "pin"]
+    assert order == ["prepare", ("open", [ENTERPRISE]), "pin", ("draft", "%18", "111")]
 
 
 def test_start_on_a_pr_row_opens_the_pr_as_before(monkeypatch, tmp_path, fake_tmux, fake_clipboard):
@@ -597,3 +598,43 @@ def test_start_on_a_pr_row_opens_the_pr_as_before(monkeypatch, tmp_path, fake_tm
     order = start_row(monkeypatch, tmp_path, row)
     assert order[1] == ("open", ["https://github.com/loft-sh/architecture/pull/26"])
     assert fake_tmux() == [] and not fake_clipboard.exists()
+
+
+def test_show_slack_draft_positions_live_buffer_and_restores_terminal(tmp_path, monkeypatch):
+    import shutil
+    import time
+
+    nvim = shutil.which('nvim')
+    if not nvim:
+        pytest.skip('nvim is unavailable')
+    socket = tmp_path / 'handoff-18.sock'
+    brief = tmp_path / 'brief.md'
+    brief.write_text('intro\n<!-- begin generated draft -->\n```\nold\n```\n'
+                     '<!-- end generated draft -->\nmore\n'
+                     '<!-- begin generated draft -->\n```\nlatest\n```\n'
+                     '<!-- end generated draft -->\n')
+    process = subprocess.Popen([nvim, '--headless', '-u', 'NONE', '--listen', str(socket), str(brief)],
+                               stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+    real_run = nav.run
+    calls = []
+    def run(args, **kwargs):
+        if args[0] == 'xdotool':
+            calls.append(args)
+            return subprocess.CompletedProcess(args, 0)
+        return real_run(args, **kwargs)
+    monkeypatch.setenv('HANDOFF_NVIM_COMMAND', nvim)
+    monkeypatch.setattr(nav, 'run', run)
+    try:
+        for _ in range(100):
+            if socket.exists():
+                break
+            time.sleep(0.05)
+        nav.show_slack_draft('%18', '111', tmp_path)
+        result = subprocess.run([nvim, '--server', str(socket), '--remote-expr', 'line(".")'],
+                                capture_output=True, text=True, check=True, timeout=5)
+        assert result.stdout.strip() == '10'
+        assert calls == [['xdotool', 'windowactivate', '111']]
+    finally:
+        subprocess.run([nvim, '--server', str(socket), '--remote-expr', 'execute("qa!")'],
+                       capture_output=True, timeout=5)
+        process.wait(timeout=5)
