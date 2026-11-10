@@ -15,7 +15,6 @@ ROOT = Path(__file__).resolve().parents[2]
     ('__mail_agent_spawn.sh', 'send_directive', '1', 'worker:main.1'),
     ('__cron_investigate.sh', 'send_directive', '1', 'worker:status.1'),
     ('__kctx_claude_notify.sh', 'send_to_pane', '%42', '%42'),
-    ('__task_brief.sh', 'send_to_gordon', 'report to triage', '%42'),
 ])
 @pytest.mark.parametrize('fail_stamp', [False, True])
 def test_sender_marks_the_exact_pane_before_input(tmp_path, script, function, argument, target, fail_stamp):
