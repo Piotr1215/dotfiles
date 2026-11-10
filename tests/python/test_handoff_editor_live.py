@@ -123,7 +123,9 @@ class HandoffEditorLiveTest(unittest.TestCase):
                 self.assertEqual(code, 0, stderr or stdout)
                 refreshed = brief.read_text()
                 self.assertIn('<!-- begin generated draft -->\n```\nnew draft\n```\n<!-- end generated draft -->', refreshed)
-                self.assertIn('## Previous edited draft\n\nold draft', refreshed)
+                # A conflicting generated update keeps the prior brief in its
+                # recovery file before replacing the generated draft.
+                self.assertIn('old draft', (brief_dir / '.superseded.md').read_text())
                 self.assertIn('my saved comment', refreshed)
                 self.assertFalse((brief_dir / '.prepare-pending').exists())
             finally:
