@@ -1,8 +1,11 @@
 import importlib.util
 import os
+import sys
+import types
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 SCRIPT = Path(__file__).parents[2] / "scripts" / "__search_internet.py"
 
@@ -10,7 +13,10 @@ SCRIPT = Path(__file__).parents[2] / "scripts" / "__search_internet.py"
 def load_module():
     spec = importlib.util.spec_from_file_location("search_internet", SCRIPT)
     module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    # Key resolution does not use HTTP. Keep this test independent of the
+    # optional requests package when the suite runs in a minimal environment.
+    with patch.dict(sys.modules, {"requests": types.ModuleType("requests")}):
+        spec.loader.exec_module(module)
     return module
 
 
