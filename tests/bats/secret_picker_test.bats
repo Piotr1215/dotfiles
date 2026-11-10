@@ -189,3 +189,90 @@ write_form() {
 	grep -qx "File:         $PASSWORD_STORE_DIR/work/BOTH.gpg" "$CLIP"
 	! grep -q 'LEAK' "$CLIP"
 }
+
+# A fake bw: argv to a log, created items decoded to a file. BW_STATUS sets what
+# `bw status` reports.
+stub_bw() {
+	export BW_LOG="$BATS_TEST_TMPDIR/bw.log" BW_CREATED="$BATS_TEST_TMPDIR/bw-created"
+	cat >"$STUB_BIN/bw" <<'STUB'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >>"$BW_LOG"
+case "$1" in
+status) printf '{"status":"%s"}\n' "${BW_STATUS:-unlocked}" ;;
+sync | lock) ;;
+unlock) [[ "$2 $3" == "--raw --passwordenv" && "${!4}" == master-pw ]] && printf 'sess' || exit 1 ;;
+list) [[ "${BW_SESSION:-}" == sess || "${BW_SESSION:-}" == fake ]] && printf '[]' || exit 1 ;;
+encode) base64 -w0 ;;
+create) base64 -d >"$BW_CREATED" ;;
+*) exit 1 ;;
+esac
+STUB
+	chmod +x "$STUB_BIN/bw"
+}
+
+@test "Alt+w saves a pass secret to Bitwarden, the value only on stdin" {
+	stub_bw
+	printf 'bwvalue' >"$PASSWORD_STORE_DIR/work/BW_ROW.gpg"
+	export BW_SESSION=fake ROFI_PICK=0 ROFI_EXIT=18
+
+	run "$PICKER"
+
+	[ "$status" -eq 0 ]
+	[ "$(jq -r .name "$BW_CREATED")" = BW_ROW ]
+	[ "$(jq -r .login.password "$BW_CREATED")" = bwvalue ]
+	! grep -q bwvalue "$BW_LOG"
+	! grep -qx lock "$BW_LOG"
+	grep -q 'BW_ROW saved to Bitwarden' "$NOTIFY_LOG"
+}
+
+@test "Alt+w while logged out asks for bw login and sends nothing" {
+	stub_bw
+	printf 'bwvalue' >"$PASSWORD_STORE_DIR/work/BW_ROW.gpg"
+	unset BW_SESSION
+	export BW_STATUS=unauthenticated ROFI_PICK=0 ROFI_EXIT=18
+
+	run "$PICKER"
+
+	[ "$status" -ne 0 ]
+	[ ! -e "$BW_CREATED" ]
+	grep -q "Run 'bw login' once in a terminal" "$NOTIFY_LOG"
+}
+
+@test "Alt+w on a bastion row with a missed tap sends nothing" {
+	stub_bw
+	: >"$SECRETS_DIR/BW_TAP.age"
+	printf '#!/usr/bin/env bash\nexit 1\n' >"$STUB_BIN/age"
+	export BW_SESSION=fake ROFI_PICK=0 ROFI_EXIT=18
+
+	run "$PICKER"
+
+	[ "$status" -ne 0 ]
+	[ ! -e "$BW_CREATED" ]
+	[ ! -e "$XDG_RUNTIME_DIR/secret-picker-touch" ]
+	grep -q 'no tap registered, BW_TAP not sent to Bitwarden' "$NOTIFY_LOG"
+}
+
+@test "Alt+w unlocks with the master password from rofi and locks again" {
+	stub_bw
+	printf 'bwvalue' >"$PASSWORD_STORE_DIR/work/BW_ROW.gpg"
+	unset BW_SESSION
+	export BW_STATUS=locked ROFI_SEQ="$BATS_TEST_TMPDIR/rofi-seq"
+	# First rofi call is the pick (Alt+w on row 0), the second the password field.
+	printf '0 18\nmaster-pw 0\n' >"$ROFI_SEQ"
+	cat >"$STUB_BIN/rofi" <<'STUB'
+#!/usr/bin/env bash
+cat >/dev/null
+read -r out code <"$ROFI_SEQ"
+sed -i 1d "$ROFI_SEQ"
+printf '%s\n' "$out"
+exit "$code"
+STUB
+	chmod +x "$STUB_BIN/rofi"
+
+	run "$PICKER"
+
+	[ "$status" -eq 0 ]
+	[ "$(jq -r .login.password "$BW_CREATED")" = bwvalue ]
+	! grep -q master-pw "$BW_LOG"
+	[ "$(tail -1 "$BW_LOG")" = lock ]
+}

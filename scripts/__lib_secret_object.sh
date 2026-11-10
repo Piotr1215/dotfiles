@@ -588,6 +588,116 @@ secret_rm() {
 	esac
 }
 
+# --- export: Bitwarden -------------------------------------------------------
+# Bitwarden is an export target, not a fourth store. The XOR invariant above
+# stays about stores 1 and 2: a push copies the current value into a Bitwarden
+# login item named after the object, so the value survives this machine (the
+# 7 Nov wipe took the old encfs vault with it). Nothing records that a push
+# happened, for the same reason nothing records membership: a manifest would
+# drift. A later value change here is not mirrored; push again to refresh.
+#
+# The value arrives on stdin and stays off every argv: jq reads it with
+# --rawfile /dev/stdin, then bw encode and bw create/edit read their stdin. The
+# session comes from BW_SESSION; unlocking is the caller's job, because the
+# picker has no terminal and the CLI user already has `bw unlock`.
+
+# Id of the one item named exactly NAME, empty when there is none. Bitwarden's
+# --search is a substring match, so FOO_KEY would also find FOO_KEY_OLD.
+#
+# Two steps, not one pipe: piped into jq, a locked vault's empty output reads as
+# "no such item" unless the caller set pipefail, and the push would then create
+# a duplicate instead of failing.
+secret_bw_item_id() {
+	local items ids
+	items=$(bw list items --search "$1" 2>/dev/null) || {
+		secret_die "bw list failed (locked? export BW_SESSION=\$(bw unlock --raw))"
+		return 1
+	}
+	ids=$(jq -r --arg n "$1" '.[] | select(.name == $n) | .id' <<<"$items" 2>/dev/null) || {
+		unset items
+		secret_die "bw list returned something that is not an item list"
+		return 1
+	}
+	unset items
+	(($(printf '%s' "$ids" | grep -c .) <= 1)) || {
+		secret_die "several Bitwarden items are named '$1'; delete the extras first"
+		return 1
+	}
+	printf '%s' "$ids"
+}
+
+# Value on stdin. Creates the login item, or replaces its password and notes
+# when exactly one item already has this name. Other fields on an existing item
+# (username, URIs, folder) are kept.
+secret_bw_push() {
+	local name owner entry refs status notes id desc value item
+	# Buffered, because an empty stdin is what a failed read upstream looks like
+	# (a missed tap, gpg-agent down), and pushing it would blank the password in
+	# Bitwarden. The x keeps inner trailing newlines that $(...) would strip;
+	# printf is a builtin, so the value still never reaches an argv. One final
+	# newline is dropped: an interactive `pass insert` stores one, and in a
+	# password field it would be pasted into every login form.
+	value=$(
+		cat
+		printf x
+	)
+	value=${value%x}
+	value=${value%$'\n'}
+	IFS=$'\t' read -r name owner entry refs status < <(secret_locate "$1")
+	case "$owner" in
+	age) notes="source: YubiKey bastion, ~/.secrets/$name.age" ;;
+	pass) notes="source: pass, $entry" ;;
+	both)
+		secret_die "'$1' is in both stores; resolve the conflict first"
+		return 1
+		;;
+	*)
+		secret_die "no secret named '$1'"
+		return 1
+		;;
+	esac
+	command -v bw >/dev/null 2>&1 || {
+		secret_die "bw CLI not found"
+		return 1
+	}
+	[[ -n "${BW_SESSION:-}" ]] || {
+		secret_die "Bitwarden is locked: export BW_SESSION=\$(bw unlock --raw)"
+		return 1
+	}
+	[[ -n "$value" ]] || {
+		secret_die "empty value for '$name' (read failed?); nothing sent to Bitwarden"
+		return 1
+	}
+	desc=$(secret_desc_get "$name")
+	notes="${desc:+$desc$'\n'}$notes"$'\n'"pushed $(date +%F) by secret_bw_push"
+	bw sync >/dev/null 2>&1 || true # a stale cache would miss an item made elsewhere and duplicate it
+	id=$(secret_bw_item_id "$name") || return 1
+
+	if [[ -z "$id" ]]; then
+		printf '%s' "$value" | jq -n --arg n "$name" --arg notes "$notes" --rawfile v /dev/stdin \
+			'{type: 1, name: $n, notes: $notes, favorite: false, fields: [], reprompt: 0,
+			  login: {uris: [], username: null, password: $v, totp: null}}' |
+			bw encode | bw create item >/dev/null
+	else
+		# Fetched before the edit and checked, because an edit sends the whole item
+		# back: a failed get read as an empty item would strip the username, URIs
+		# and folder from the real one. Only a login item has a password to replace.
+		item=$(bw get item "$id" 2>/dev/null) && [[ "$(jq -r 'select(.type == 1) | .id // empty' <<<"$item" 2>/dev/null)" == "$id" ]] || {
+			unset value item
+			secret_die "Bitwarden item '$name' ($id) is unreadable or not a login item; nothing changed"
+			return 1
+		}
+		printf '%s' "$value" | jq -n --slurpfile item <(printf '%s' "$item") --arg notes "$notes" --rawfile v /dev/stdin \
+			'$item[0] | .login.password = $v | .notes = $notes' |
+			bw encode | bw edit item "$id" >/dev/null
+	fi || {
+		unset value item
+		secret_die "bw could not save '$name'"
+		return 1
+	}
+	unset value item
+}
+
 # --- CLI ---------------------------------------------------------------------
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
@@ -598,8 +708,13 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
 	index | locate | audit | card | read | set | create | rm | rename | promote | demote | link | unlink | refs | envrc-files | desc-get | desc-set)
 		"secret_${cmd//-/_}" "$@"
 		;;
+	# Reads the value itself, so the CLI form is one command: a bastion object
+	# costs its tap here exactly as Enter in the picker does.
+	bw-push)
+		secret_read "$1" | secret_bw_push "$1"
+		;;
 	*)
-		printf 'usage: %s {index|locate NAME|audit|card NAME|read NAME|set NAME|rm NAME|rename OLD NEW|promote NAME|demote NAME SUB|link NAME FILE [VAR]|unlink NAME FILE|refs [NAME]|envrc-files}\n\n' \
+		printf 'usage: %s {index|locate NAME|audit|card NAME|read NAME|set NAME|rm NAME|rename OLD NEW|promote NAME|demote NAME SUB|link NAME FILE [VAR]|unlink NAME FILE|refs [NAME]|envrc-files|bw-push NAME}\n\n' \
 			"${0##*/}" >&2
 		exit 2
 		;;

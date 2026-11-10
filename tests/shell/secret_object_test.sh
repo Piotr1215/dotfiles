@@ -214,5 +214,117 @@ is "a multi-line secret demotes into pass" \
 	"$([ -e "$T/.password-store/personal/A_MULTI.gpg" ] && echo yes || echo no)" "yes"
 is "demote keeps every line" "$(secret_read A_MULTI)" "$multi"
 
+echo "== Bitwarden push =="
+# A fake bw that logs every argv and keeps what create and edit receive, decoded.
+# The value must reach bw only on stdin: the argv log is where a leak would show.
+export BW_FAKE="$T/bw"
+cat >"$T/bin/bw" <<'EOF'
+#!/usr/bin/env bash
+d="$BW_FAKE"
+printf '%s\n' "$*" >>"$d/argv"
+case "$1" in
+sync | lock) exit 0 ;;
+list) [[ -e "$d/list_fail" ]] && exit 1; cat "$d/items" 2>/dev/null || printf '[]' ;;
+get) [[ -e "$d/get_fail" ]] && exit 1; jq --arg id "$3" '.[] | select(.id == $id)' "$d/items" ;;
+encode) base64 -w0 ;;
+create) base64 -d >"$d/created" ;;
+edit) base64 -d >"$d/edited" ;;
+*) exit 1 ;;
+esac
+EOF
+chmod +x "$T/bin/bw"
+bwreset() { rm -rf "$BW_FAKE" && mkdir -p "$BW_FAKE"; }
+created() { jq -r "$1" "$BW_FAKE/created" 2>/dev/null; }
+edited() { jq -r "$1" "$BW_FAKE/edited" 2>/dev/null; }
+leaked() { grep -c -- "$1" "$BW_FAKE/argv" 2>/dev/null || true; }
+
+printf 'bwpval' | secret_write_pass work/BW_P
+printf 'bwaval' | secret_write_age BW_A
+printf 'x' | secret_write_age BW_BOTH
+printf 'x' | secret_write_pass work/BW_BOTH
+secret_desc_set BW_P "pushed from the test"
+
+bwreset
+unset BW_SESSION
+printf 'bwpval' | secret_bw_push BW_P 2>/dev/null
+is "a push without BW_SESSION is refused" "$?" "1"
+is "and bw is never asked to write" "$([ -e "$BW_FAKE/created" ] && echo yes || echo no)" "no"
+
+export BW_SESSION=fake-session
+bwreset
+secret_read BW_P | secret_bw_push BW_P
+is "a new name creates one login item" "$(created .type)" "1"
+is "named after the object" "$(created .name)" "BW_P"
+is "holding the value" "$(created .login.password)" "bwpval"
+is "notes carry the description and the source store" \
+	"$(created .notes | head -2 | paste -sd'|')" "pushed from the test|source: pass, work/BW_P"
+is "the value never reaches a bw argv" "$(leaked bwpval)" "0"
+
+bwreset
+secret_read BW_A | secret_bw_push BW_A
+is "a bastion secret pushes too" "$(created .login.password)" "bwaval"
+is "naming the bastion as its source" "$(created .notes | tail -2 | head -1)" "source: YubiKey bastion, ~/.secrets/BW_A.age"
+
+bwreset
+printf 'nl\n' | secret_bw_push BW_P
+is "one trailing newline is dropped" "$(created '.login.password | @json')" '"nl"'
+bwreset
+printf 'l1\nl2\n' | secret_bw_push BW_P
+is "inner lines survive" "$(created '.login.password | @json')" '"l1\nl2"'
+
+bwreset
+printf '' | secret_bw_push BW_P 2>/dev/null
+is "an empty read (a missed tap) is refused" "$?" "1"
+is "and nothing is created" "$([ -e "$BW_FAKE/created" ] && echo yes || echo no)" "no"
+
+bwreset
+printf '[{"id":"other","name":"BW_P_OLD","type":1,"login":{"password":"old"}}]' >"$BW_FAKE/items"
+printf 'bwpval' | secret_bw_push BW_P
+is "a substring match is not the same item" "$(created .name)" "BW_P"
+is "so nothing is edited" "$([ -e "$BW_FAKE/edited" ] && echo yes || echo no)" "no"
+
+bwreset
+printf '[{"id":"id-1","name":"BW_P","type":1,"folderId":"f1","notes":"old","login":{"username":"me","uris":[{"uri":"https://x"}],"password":"old"}}]' \
+	>"$BW_FAKE/items"
+printf 'newval' | secret_bw_push BW_P
+is "an existing item is edited by its id" "$(grep -c '^edit item id-1$' "$BW_FAKE/argv")" "1"
+is "with the new value" "$(edited .login.password)" "newval"
+is "keeping its username" "$(edited .login.username)" "me"
+is "its URIs" "$(edited '.login.uris[0].uri')" "https://x"
+is "and its folder" "$(edited .folderId)" "f1"
+is "and no second item is created" "$([ -e "$BW_FAKE/created" ] && echo yes || echo no)" "no"
+is "the new value never reaches a bw argv" "$(leaked newval)" "0"
+
+bwreset
+printf '[{"id":"id-1","name":"BW_P","type":1,"login":{"username":"me","password":"old"}}]' >"$BW_FAKE/items"
+touch "$BW_FAKE/get_fail"
+printf 'newval' | secret_bw_push BW_P 2>/dev/null
+is "a failed bw get stops the edit" "$?" "1"
+is "so the item is never sent back half empty" "$([ -e "$BW_FAKE/edited" ] && echo yes || echo no)" "no"
+
+bwreset
+printf '[{"id":"id-2","name":"BW_P","type":2,"secureNote":{"type":0}}]' >"$BW_FAKE/items"
+printf 'newval' | secret_bw_push BW_P 2>/dev/null
+is "a same-named secure note is not overwritten" "$?" "1"
+
+bwreset
+printf '[{"id":"a","name":"BW_P","type":1},{"id":"b","name":"BW_P","type":1}]' >"$BW_FAKE/items"
+printf 'bwpval' | secret_bw_push BW_P 2>/dev/null
+is "two items with the name is refused" "$?" "1"
+is "and neither is touched" "$([ -e "$BW_FAKE/edited" ] || [ -e "$BW_FAKE/created" ] && echo yes || echo no)" "no"
+
+bwreset
+touch "$BW_FAKE/list_fail"
+printf 'bwpval' | secret_bw_push BW_P 2>/dev/null
+is "a failed bw list (locked vault) is refused" "$?" "1"
+is "instead of creating a duplicate" "$([ -e "$BW_FAKE/created" ] && echo yes || echo no)" "no"
+
+bwreset
+printf 'x' | secret_bw_push BW_BOTH 2>/dev/null
+is "a name in both stores is refused" "$?" "1"
+printf 'x' | secret_bw_push NO_SUCH 2>/dev/null
+is "an unknown name is refused" "$?" "1"
+unset BW_SESSION
+
 printf '\n%d passed, %d failed\n' "$pass_n" "$fail_n"
 ((fail_n == 0))

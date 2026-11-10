@@ -16,6 +16,7 @@
 #   Alt+d    demote to pass (costs a tap, since the value has to be read out)
 #   Alt+l    reference it from an .envrc via _pass_export
 #   Alt+x    delete it (from pass, the references go too)
+#   Alt+w    save a copy to Bitwarden (a bastion row taps; asks before replacing)
 #
 # The tier MUST stay visible per row. A row that hid which store serves it would
 # have you reach for a secret believing a tap guards it when nothing does. The
@@ -55,7 +56,7 @@ source "$SCRIPT_DIR/__lib_secret_object.sh"
 #
 # Alt+a/c/e/p/d/l/x are free in stock rofi (Alt is taken only by b, f, S, period,
 # grave and the digits), so unlike Control+a in __value_picker.sh none of these
-# needs its default unbound first.
+# needs its default unbound first. Bitwarden is Alt+w, not Alt+b, for that reason.
 rofi_pick() {
 	local prompt="$1" rows="${2:-10}"
 	((rows < 3)) && rows=3
@@ -64,8 +65,31 @@ rofi_pick() {
 	rofi -dmenu -i -p "$prompt" -format i -mesg "$MESG" \
 		-kb-custom-1 "Alt+e" -kb-custom-2 "Alt+p" -kb-custom-3 "Alt+d" \
 		-kb-custom-4 "Alt+l" -kb-custom-5 "Alt+x" -kb-custom-6 "Alt+o" \
-		-kb-custom-7 "Alt+a" -kb-custom-8 "Alt+c" \
+		-kb-custom-7 "Alt+a" -kb-custom-8 "Alt+c" -kb-custom-9 "Alt+w" \
 		"${ROFI_THEME[@]}"
+}
+
+# A Bitwarden session for this one push. An already exported BW_SESSION is used
+# as is and left unlocked; otherwise the master password is asked for in a rofi
+# password field, passed to bw through the environment (never argv), and the
+# vault is locked again on exit. `bw login` is a one-time terminal step that a
+# picker cannot do: it can ask for a 2FA code, a device approval or SSO.
+bw_session() {
+	local state pw
+	command -v bw >/dev/null 2>&1 || fail "bw CLI not found"
+	[[ -n "${BW_SESSION:-}" ]] && return 0
+	state=$(bw status 2>/dev/null | jq -r '.status // empty') || state=""
+	[[ "$state" == unauthenticated ]] && fail "Bitwarden is logged out. Run 'bw login' once in a terminal, then Alt+w again."
+	# rofi 1.7 dropped -lines; the empty list is hidden through the theme instead.
+	rofi_theme 900 1
+	pw=$(rofi -dmenu -password -p "Bitwarden master password" "${ROFI_THEME[@]}" \
+		-theme-str 'listview { enabled: false; }' </dev/null) || exit 0
+	[[ -n "$pw" ]] || exit 0
+	BW_SESSION=$(BW_MASTER="$pw" bw unlock --raw --passwordenv BW_MASTER 2>/dev/null) || BW_SESSION=""
+	unset pw
+	[[ -n "$BW_SESSION" ]] || fail "Bitwarden unlock failed (wrong master password?)"
+	export BW_SESSION
+	BW_LOCK_ON_EXIT=1
 }
 
 # A short list to choose from (pass subtree, .envrc path, yes/no). Text back, not
@@ -162,7 +186,7 @@ ICON_ALERT=$'\uf071'
 # Keys on one line, what the badges mean on the next. The badge legend is here
 # because a glyph nobody can name is noise: the link count in particular reads as
 # decoration until it says "this many .envrc files import this secret".
-MESG="Enter copy   Alt+c card   Alt+a add   Alt+e edit   Alt+o open .envrc uses   Alt+l add .envrc   Alt+p promote   Alt+d demote   Alt+x delete
+MESG="Enter copy   Alt+c card   Alt+a add   Alt+e edit   Alt+o open .envrc uses   Alt+l add .envrc   Alt+w Bitwarden   Alt+p promote   Alt+d demote   Alt+x delete
 $ICON_AGE bastion, one tap    $ICON_PASS pass, no tap    ${ICON_REF}N referenced by N .envrc"
 
 icon_for() {
@@ -247,9 +271,10 @@ secret_count=${#menu[@]}
 if idx=$(printf '%s\n' "${menu[@]}" | rofi_pick "secret" "${#menu[@]}"); then
 	((secret_count)) && action=copy || action=add
 else
-	# rofi exits 10..17 for kb-custom-1..8 and still prints the selection.
+	# rofi exits 10..18 for kb-custom-1..9 and still prints the selection.
 	# Read $? first, before any other command clobbers it.
 	case $? in
+	18) action="bitwarden" ;;
 	17) action="card" ;;
 	10) action="edit" ;;
 	11) action="promote" ;;
@@ -421,6 +446,33 @@ refs)
 	while IFS= read -r rfile; do secret_direnv_allow "$rfile"; done < <(printf '%s\n' "${reflines[@]}" | cut -f1 | sort -u)
 	note "$name: .envrc references re-allowed"
 	;;
+bitwarden)
+	# The value goes picker → library → bw over pipes only, the same path a copy
+	# takes to the clipboard. secret_bw_push refuses an empty read, so a missed tap
+	# can never blank the password in Bitwarden.
+	bw_session
+	# One trap for both cleanups, set before anything can fail. touch_cue_on would
+	# replace it, so the tap cue below is raised with a bare touch.
+	if [[ -n "${BW_LOCK_ON_EXIT:-}" ]]; then
+		trap 'rm -f "$TOUCH_CUE"; bw lock >/dev/null 2>&1' EXIT
+	else
+		trap 'rm -f "$TOUCH_CUE"' EXIT
+	fi
+	bw sync >/dev/null 2>&1 || true
+	existing=$(secret_bw_item_id "$name" 2>&1) || fail "${existing#secret: }"
+	if [[ -n "$existing" ]]; then
+		confirm "replace the password in the Bitwarden item $name?" || exit 0
+	fi
+	[[ "$owner" == age ]] && touch "$TOUCH_CUE"
+	if ! error=$(secret_read "$name" 2>/dev/null | secret_bw_push "$name" 2>&1); then
+		[[ "$owner" == age && "$error" == *"empty value"* ]] &&
+			fail "no tap registered, $name not sent to Bitwarden. Press again and touch the key."
+		fail "${error#secret: }"
+	fi
+	touch_cue_off
+	if [[ -n "$existing" ]]; then note "$name updated in Bitwarden"; else note "$name saved to Bitwarden"; fi
+	;;
+
 delete)
 	refs=$(secret_refs "$name" | wc -l)
 	((refs > 0)) && also=" and its $refs .envrc reference(s)" || also=""
