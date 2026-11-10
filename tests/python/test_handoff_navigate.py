@@ -466,7 +466,7 @@ def test_newest_note_keeps_inner_lines_and_takes_the_latest():
     assert nav.newest_note(row, "cmd") == ""
 
 
-def test_command_kind_opens_a_named_window_and_submits_fixed_runner(fake_tmux):
+def test_command_kind_opens_a_named_window_with_unsubmitted_command(fake_tmux):
     hostile = "git push; echo $(touch /tmp/pwned) `id` 'q' \"d\" \\ $HOME"
     row = dict(task(f"cmd: {hostile}"), kind="command")
     assert nav.act_on_kind(row) == "command"
@@ -478,19 +478,20 @@ def test_command_kind_opens_a_named_window_and_submits_fixed_runner(fake_tmux):
     # The command is one argv element in the window's environment, verbatim.
     assert new[new.index("-e") + 1] == "HANDOFF_CMD=" + hostile
     assert new[-3:] == ["--", "zsh", "-i"]
-    # Only the fixed runner is typed; no task text reaches the keyboard.
-    assert calls[2:] == [["send-keys", "-t", "%99", "-l", nav.RUN_COMMAND], ["send-keys", "-t", "%99", "Enter"]]
+    # Enter submits only the fixed prefill, not the command it queues.
+    assert calls[2:] == [["send-keys", "-t", "%99", "-l", nav.PREFILL], ["send-keys", "-t", "%99", "Enter"]]
     assert all(hostile not in arg for call in calls[2:] for arg in call)
-    assert "HANDOFF_CMD" in nav.RUN_COMMAND
+    assert "HANDOFF_CMD" in nav.PREFILL
 
 
-def test_command_runner_displays_and_executes_command(tmp_path):
+def test_prefill_queues_command_without_executing_it(tmp_path):
     marker = tmp_path / "ran"
-    result = subprocess.run(["zsh", "-c", nav.RUN_COMMAND],
-                            env={"HANDOFF_CMD": f"printf done > {marker}"},
+    command = f"printf done > {marker}"
+    result = subprocess.run(["zsh", "-c", nav.PREFILL + '; read -z queued; print -r -- "$queued"'],
+                            env={"HANDOFF_CMD": command, "TERM": "dumb"},
                             capture_output=True, text=True, check=True)
-    assert result.stdout.strip() == f"printf done > {marker}"
-    assert marker.read_text() == "done"
+    assert result.stdout.strip() == command
+    assert not marker.exists()
 
 
 @pytest.mark.parametrize(("notes", "error"), [
@@ -585,13 +586,14 @@ def start_row(monkeypatch, tmp_path, row):
     return order
 
 
-@pytest.mark.parametrize("kind", ["ack", "pr", "other"])
-def test_start_runs_cmd_for_every_kind(monkeypatch, tmp_path, fake_tmux, kind):
+@pytest.mark.parametrize("kind", ["ack", "pr", "other", "command", "slack"])
+def test_start_prefills_cmd_for_every_kind(monkeypatch, tmp_path, fake_tmux, kind):
     row = dict(task("brief: check credentials", "cmd: echo check", "what: done"),
                kind=kind, tags=["piotr", "ack"], uuid="3726e617-a1b2-464e-8eff-32fc4a2c658c")
     order = start_row(monkeypatch, tmp_path, row)
     calls = fake_tmux()
     assert "HANDOFF_CMD=echo check" in calls[1]
+    assert calls[2:] == [["send-keys", "-t", "%99", "-l", nav.PREFILL], ["send-keys", "-t", "%99", "Enter"]]
     assert not any(isinstance(item, tuple) and item[0] == "agent" for item in order)
 
 
@@ -604,7 +606,7 @@ def test_start_3726e617_selects_its_sts_command_without_running_it(monkeypatch, 
     start_row(monkeypatch, tmp_path, row)
     calls = fake_tmux()
     assert "HANDOFF_CMD=aws sts get-caller-identity --profile sandbox-250811347731" in calls[1]
-    assert calls[2][4] == nav.RUN_COMMAND
+    assert calls[2][4] == nav.PREFILL
 
 
 def test_start_on_a_command_row_opens_the_terminal_and_stays_in_this_session(monkeypatch, tmp_path, fake_tmux):

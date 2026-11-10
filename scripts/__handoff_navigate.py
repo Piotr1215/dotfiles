@@ -240,9 +240,8 @@ def annotation_urls(task):
 
 
 KINDS = {"slack", "command", "pr", "ack", "other"}
-# Typed into the new window. The row travels in the environment, not keystrokes.
-# Show the command before evaluating it so its output has visible context.
-RUN_COMMAND = ' print -r -- "$HANDOFF_CMD"; eval "$HANDOFF_CMD"; unset HANDOFF_CMD'
+# The fixed line puts the row's command in the next editing buffer, unsubmitted.
+PREFILL = ' print -rz -- "$HANDOFF_CMD"; unset HANDOFF_CMD; clear'
 
 
 def newest_note(task, key):
@@ -279,7 +278,7 @@ def copy_to_clipboard(text):
 
 
 def open_command_window(uuid, command):
-    """Open a tmux window named after the row and run its command visibly."""
+    """Open a tmux window with the row's command ready for Enter."""
     if not command:
         raise ValueError("command handoff has no cmd: note; add one with __tw.sh note <ref> 'cmd: <command>'")
     if any(ord(char) < 32 or ord(char) == 127 for char in command):
@@ -298,7 +297,7 @@ def open_command_window(uuid, command):
                  capture_output=True, text=True).stdout.strip()
     if not re.fullmatch(r"%[0-9]+", window):
         raise ValueError("tmux did not report the new window's pane")
-    run([tmux, "send-keys", "-t", window, "-l", RUN_COMMAND])
+    run([tmux, "send-keys", "-t", window, "-l", PREFILL])
     run([tmux, "send-keys", "-t", window, "Enter"])
     return window
 
@@ -306,7 +305,7 @@ def open_command_window(uuid, command):
 def act_on_kind(task):
     """Run the action s means for this kind after the links open.
 
-    Any cmd: opens a terminal and runs the command. Slack also copies the
+    Any cmd: opens a terminal with the command ready for Enter. Slack also copies the
     newest draft: note.
     Returns the kind. A failed action is reported.
     """
