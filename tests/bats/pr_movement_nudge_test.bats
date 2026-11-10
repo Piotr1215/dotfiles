@@ -10,6 +10,9 @@
 setup() {
     TEST_DIR="$(mktemp -d)"
     export TEST_DIR
+    ORIGINAL_HOME="$HOME"
+    export HOME="${TEST_DIR}/home"
+    mkdir -p "$HOME"
     SCRIPT="${BATS_TEST_DIRNAME}/../../scripts/__pr_movement_nudge.sh"
     # Env first: the sourced helpers read it at load time. Nothing here touches
     # the real state, log, lock or gh account.
@@ -29,6 +32,7 @@ setup() {
 }
 
 teardown() {
+    export HOME="$ORIGINAL_HOME"
     rm -rf "${TEST_DIR}"
 }
 

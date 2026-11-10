@@ -15,10 +15,12 @@ set -uo pipefail
 
 SCRIPT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/scripts/__pr_movement_nudge.sh"
 PASS=0; FAIL=0
+ORIGINAL_HOME="$HOME"
 
 # ---- harness -------------------------------------------------------------
 setup() {
     TEST_DIR=$(mktemp -d)
+    export HOME="$TEST_DIR/home"; mkdir -p "$HOME/.claude/scripts"
     BIN="$TEST_DIR/bin"; mkdir -p "$BIN"
     PRVIEW_DIR="$TEST_DIR/prviews"; mkdir -p "$PRVIEW_DIR"
     OUTBOX="$TEST_DIR/outbox"; : > "$OUTBOX"
@@ -140,7 +142,7 @@ EOF
     # the next (export_sessions never clears it).
     export PR_TEST_SESSIONS="" PR_TEST_PANE_TEXT=""
 }
-teardown() { rm -rf "$TEST_DIR"; }
+teardown() { export HOME="$ORIGINAL_HOME"; rm -rf "$TEST_DIR"; }
 
 # search fixture with one PR
 search_one() { # url number repo owner isDraft title
@@ -466,6 +468,14 @@ run --live
 if grep -qx -- "--close --kind pr-merged,pr-closed" "$TEST_DIR/handoff.calls" 2>/dev/null; then PASS=$((PASS+1)); echo "  PASS: live cycle runs the scoped close"; else FAIL=$((FAIL+1)); echo "  FAIL: live cycle did not run the close"; fi
 printf '#!/usr/bin/env bash\nexit 3\n' > "$PR_MOVE_HANDOFF_CHECK"
 if run --live; then PASS=$((PASS+1)); echo "  PASS: a failing check does not fail the cycle"; else FAIL=$((FAIL+1)); echo "  FAIL: a failing check failed the cycle"; fi
+teardown
+
+echo "T25 bundle refresh runs only in live cycles"
+setup
+printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$*" > "%s/bundle.calls"\necho refreshed\n' "$TEST_DIR" > "$HOME/.claude/scripts/__pr_merge_bundle.sh"
+chmod +x "$HOME/.claude/scripts/__pr_merge_bundle.sh"
+if run --dry-run && [ ! -e "$TEST_DIR/bundle.calls" ]; then PASS=$((PASS+1)); echo "  PASS: dry-run skips bundle"; else FAIL=$((FAIL+1)); echo "  FAIL: dry-run ran bundle or failed"; fi
+if run --live && grep -qx -- '--every 1800' "$TEST_DIR/bundle.calls" && grep -q 'bundle: refreshed' "$PR_MOVE_LOG"; then PASS=$((PASS+1)); echo "  PASS: live cycle refreshes and logs bundle"; else FAIL=$((FAIL+1)); echo "  FAIL: live bundle refresh"; fi
 teardown
 
 echo

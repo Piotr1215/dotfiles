@@ -939,6 +939,11 @@ main() {
             while read -r line; do log "  handoff: $line"; done || true
     fi
 
+    if [[ "$DRY_RUN" -eq 0 && -x "$HOME/.claude/scripts/__pr_merge_bundle.sh" ]]; then
+        timeout 120 "$HOME/.claude/scripts/__pr_merge_bundle.sh" --every 1800 2>&1 |
+            while read -r line; do log "  bundle: $line"; done || true
+    fi
+
     log "=== done: seen=$seen watched=$watched moved=$moved sent=$([[ $DRY_RUN -eq 1 ]] && echo 0 || echo $sent) (mode=$mode) ==="
 }
 
