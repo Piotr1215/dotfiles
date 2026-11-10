@@ -466,7 +466,7 @@ def test_newest_note_keeps_inner_lines_and_takes_the_latest():
     assert nav.newest_note(row, "cmd") == ""
 
 
-def test_command_kind_opens_a_named_window_with_the_command_unsubmitted(fake_tmux):
+def test_command_kind_opens_a_named_window_and_submits_fixed_runner(fake_tmux):
     hostile = "git push; echo $(touch /tmp/pwned) `id` 'q' \"d\" \\ $HOME"
     row = dict(task(f"cmd: {hostile}"), kind="command")
     assert nav.act_on_kind(row) == "command"
@@ -478,10 +478,19 @@ def test_command_kind_opens_a_named_window_with_the_command_unsubmitted(fake_tmu
     # The command is one argv element in the window's environment, verbatim.
     assert new[new.index("-e") + 1] == "HANDOFF_CMD=" + hostile
     assert new[-3:] == ["--", "zsh", "-i"]
-    # Only the fixed prefill line is typed; no task text reaches the keyboard.
-    assert calls[2:] == [["send-keys", "-t", "%99", "-l", nav.PREFILL], ["send-keys", "-t", "%99", "Enter"]]
+    # Only the fixed runner is typed; no task text reaches the keyboard.
+    assert calls[2:] == [["send-keys", "-t", "%99", "-l", nav.RUN_COMMAND], ["send-keys", "-t", "%99", "Enter"]]
     assert all(hostile not in arg for call in calls[2:] for arg in call)
-    assert "HANDOFF_CMD" in nav.PREFILL and "print -rz" in nav.PREFILL
+    assert "HANDOFF_CMD" in nav.RUN_COMMAND
+
+
+def test_command_runner_displays_and_executes_command(tmp_path):
+    marker = tmp_path / "ran"
+    result = subprocess.run(["zsh", "-c", nav.RUN_COMMAND],
+                            env={"HANDOFF_CMD": f"printf done > {marker}"},
+                            capture_output=True, text=True, check=True)
+    assert result.stdout.strip() == f"printf done > {marker}"
+    assert marker.read_text() == "done"
 
 
 @pytest.mark.parametrize(("notes", "error"), [
@@ -544,8 +553,8 @@ def test_slack_kind_with_a_cmd_note_copies_the_draft_and_opens_the_command(fake_
 
 
 @pytest.mark.parametrize("kind", ["pr", "ack", "other"])
-def test_pr_ack_and_other_kinds_take_no_extra_action(fake_tmux, fake_clipboard, kind):
-    row = dict(task(f"cmd: {PUSH}", "draft: hello", "done-when: pr-merged architecture#26"), kind=kind)
+def test_pr_ack_and_other_without_cmd_take_no_extra_action(fake_tmux, fake_clipboard, kind):
+    row = dict(task("draft: hello", "done-when: pr-merged architecture#26"), kind=kind)
     assert nav.act_on_kind(row) == kind
     assert fake_tmux() == []
     assert not fake_clipboard.exists()
@@ -574,6 +583,28 @@ def start_row(monkeypatch, tmp_path, row):
     monkeypatch.setattr(nav, "show_slack_draft", lambda pane, terminal, runtime: order.append(("draft", pane, terminal)))
     assert nav.main(["start", row["uuid"]]) == 0
     return order
+
+
+@pytest.mark.parametrize("kind", ["ack", "pr", "other"])
+def test_start_runs_cmd_for_every_kind(monkeypatch, tmp_path, fake_tmux, kind):
+    row = dict(task("brief: check credentials", "cmd: echo check", "what: done"),
+               kind=kind, tags=["piotr", "ack"], uuid="3726e617-a1b2-464e-8eff-32fc4a2c658c")
+    order = start_row(monkeypatch, tmp_path, row)
+    calls = fake_tmux()
+    assert "HANDOFF_CMD=echo check" in calls[1]
+    assert not any(isinstance(item, tuple) and item[0] == "agent" for item in order)
+
+
+def test_start_3726e617_selects_its_sts_command_without_running_it(monkeypatch, tmp_path, fake_tmux):
+    row = {"uuid": "3726e617-a1b2-464e-8eff-32fc4a2c658c", "kind": "ack",
+           "tags": ["ack", "piotr", "started", "work"], "annotations": [
+               {"entry": "20261110T143936Z", "description": "brief: Start runs an STS check"},
+               {"entry": "20261110T143945Z", "description": "cmd: aws sts get-caller-identity --profile sandbox-250811347731"},
+               {"entry": "20261110T144008Z", "description": "what: profiles fixed"}]}
+    start_row(monkeypatch, tmp_path, row)
+    calls = fake_tmux()
+    assert "HANDOFF_CMD=aws sts get-caller-identity --profile sandbox-250811347731" in calls[1]
+    assert calls[2][4] == nav.RUN_COMMAND
 
 
 def test_start_on_a_command_row_opens_the_terminal_and_stays_in_this_session(monkeypatch, tmp_path, fake_tmux):

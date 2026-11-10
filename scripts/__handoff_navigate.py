@@ -240,10 +240,9 @@ def annotation_urls(task):
 
 
 KINDS = {"slack", "command", "pr", "ack", "other"}
-# Typed into the new window; it names the variable, never the task text, so
-# nothing from the row is parsed by the shell. Enter submits only this builtin
-# line: print -z leaves the command at the next prompt, unsubmitted.
-PREFILL = ' print -rz -- "$HANDOFF_CMD"; unset HANDOFF_CMD; clear'
+# Typed into the new window. The row travels in the environment, not keystrokes.
+# Show the command before evaluating it so its output has visible context.
+RUN_COMMAND = ' print -r -- "$HANDOFF_CMD"; eval "$HANDOFF_CMD"; unset HANDOFF_CMD'
 
 
 def newest_note(task, key):
@@ -280,7 +279,7 @@ def copy_to_clipboard(text):
 
 
 def open_command_window(uuid, command):
-    """Open a tmux window named after the row whose prompt holds command."""
+    """Open a tmux window named after the row and run its command visibly."""
     if not command:
         raise ValueError("command handoff has no cmd: note; add one with __tw.sh note <ref> 'cmd: <command>'")
     if any(ord(char) < 32 or ord(char) == 127 for char in command):
@@ -299,7 +298,7 @@ def open_command_window(uuid, command):
                  capture_output=True, text=True).stdout.strip()
     if not re.fullmatch(r"%[0-9]+", window):
         raise ValueError("tmux did not report the new window's pane")
-    run([tmux, "send-keys", "-t", window, "-l", PREFILL])
+    run([tmux, "send-keys", "-t", window, "-l", RUN_COMMAND])
     run([tmux, "send-keys", "-t", window, "Enter"])
     return window
 
@@ -307,23 +306,20 @@ def open_command_window(uuid, command):
 def act_on_kind(task):
     """Run the action s means for this kind after the links open.
 
-    command opens a terminal with the cmd: note at the prompt; slack copies the
-    newest draft: note, and also opens its cmd: note when it has one (10 Nov,
-    9069: a draft row's command to open the receipts in Xournal++ never ran, so
-    s "only copied the text"); pr, ack and other only open what they opened before.
+    Any cmd: opens a terminal and runs the command. Slack also copies the
+    newest draft: note.
     Returns the kind. A failed action is reported.
     """
     kind = task_kind(task)
     try:
-        if kind == "command":
-            open_command_window(task["uuid"], newest_note(task, "cmd"))
-        elif kind == "slack":
+        if kind == "slack":
             draft = newest_note(task, "draft")
             if draft and not copy_to_clipboard(draft):
                 print("Could not copy the draft: install xclip or wl-copy, then press s again.",
                       file=sys.stderr)
-            if newest_note(task, "cmd"):
-                open_command_window(task["uuid"], newest_note(task, "cmd"))
+        command = newest_note(task, "cmd")
+        if command or kind == "command":
+            open_command_window(task["uuid"], command)
     except (ValueError, OSError, subprocess.SubprocessError) as error:
         print(f"Handoff {kind} action: {error}", file=sys.stderr)
     return kind
@@ -467,7 +463,7 @@ def main(argv=None):
             navigate_many(urls, terminal)
             kind = act_on_kind(task)
             # Keep the command window or Slack brief in the originating session.
-            if kind not in {"command", "slack"}:
+            if kind not in {"command", "slack"} and not newest_note(task, "cmd"):
                 switch_agent_session(agent_session(task))
         finally:
             run([floater, "pin", uuid, pane])
