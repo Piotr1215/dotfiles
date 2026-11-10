@@ -139,6 +139,10 @@ LOCK_FILE="${PR_MOVE_LOCK:-/tmp/pr-movement-nudge.lock}"
 # __handoff_discharge_prompt_hook.sh. This call is the backstop for a PR no
 # live session tracks. Skipped when not executable.
 HANDOFF_CHECK="${PR_MOVE_HANDOFF_CHECK:-$HOME/.claude/scripts/__gordon_board_check.sh}"
+# Stale-title check (RSI 7716977c): on a head move, flag a task that names the
+# PR and whose title still says paused, conflicting or blocked; each line it
+# prints goes to triage. Skipped when not executable.
+PUSH_TITLE_CHECK="${PR_MOVE_PUSH_TITLE_CHECK:-$HOME/.claude/scripts/__pr_push_title_check.py}"
 # The status line's view of this run: a tiny file, so a render never parses the
 # state file or calls gh.
 SUMMARY_FILE="${PR_MOVE_SUMMARY:-${STATE_FILE%/*}/pr-watch-summary.json}"
@@ -774,6 +778,22 @@ main() {
         fi
 
         pr_has_live_session "$num" && owner="$OWNER_SESSION"
+
+        # A push (any author, before the own-push cooldown below): a task row
+        # whose title still says paused, conflicting or blocked is stale. On 9 Nov
+        # #9261 was pushed and resumed while its row still said "paused before
+        # push", and Piotr asked why the worker paused (RSI 7716977c).
+        local head_now head_was stale_line
+        head_now=$(jq -r '.headSha' <<<"$sig"); head_was=$(jq -r '.headSha // ""' <<<"$old")
+        if [[ -n "$head_now" && -n "$head_was" && "$head_now" != "$head_was" && -x "$PUSH_TITLE_CHECK" ]]; then
+            local -a title_args=(--ref "$ref" --sha "$head_now")
+            [[ "$DRY_RUN" -eq 1 ]] && title_args+=(--dry-run)
+            while IFS= read -r stale_line; do
+                [[ -n "$stale_line" ]] || continue
+                log "STALE-TITLE: $stale_line"
+                deliver "$stale_line" triage
+            done < <(timeout 60 "$PUSH_TITLE_CHECK" "${title_args[@]}" 2>/dev/null)
+        fi
 
         # Push cooldown: we (Piotr or the agent, same login) pushed recently.
         # Not applied to an owned PR: the owner's own push would otherwise

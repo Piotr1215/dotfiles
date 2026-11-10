@@ -21,6 +21,7 @@ setup() {
     export PR_MOVE_ME="Piotr1215"
     export PR_MOVE_SELF_LOGINS="claude[bot]"
     export PR_MOVE_HANDOFF_CHECK="${TEST_DIR}/no-handoff-check"
+    export PR_MOVE_PUSH_TITLE_CHECK="${TEST_DIR}/no-push-title-check"
     # Source only the helpers, not the flock/main tail that would run a real cycle.
     sed '/^# --- main ---$/,$d' "$SCRIPT" > "${TEST_DIR}/fns.sh"
     # shellcheck source=/dev/null
@@ -820,4 +821,82 @@ one_merge_event() {
     [ "$(grep -c '^triage: ' "$DMS")" -eq 2 ]
     for i in 1 2 3 4; do grep -q "pr-move: loft-sh/vcluster#$i merged" "$DMS"; done
     grep -q "cycle cap 2 reached; 3 line(s) ride in one DM" "${TEST_DIR}/log"
+}
+
+# --- stale task title on a push (RSI 7716977c) --------------------------------
+
+# load_main: setup() strips the main tail, so source main() alone (not the
+# flock and the call that would run a live cycle).
+load_main() {
+    sed -n '/^main() {$/,/^}$/p' "$SCRIPT" > "${TEST_DIR}/main.sh"
+    # shellcheck source=/dev/null
+    source "${TEST_DIR}/main.sh"
+}
+
+@test "main: an own push on #9261 runs the stale-title check before the cooldown and DMs triage" {
+    # 9 Nov: the worker pushed a9f7052f39 to loft-enterprise#9261 and resumed,
+    # the row still said "paused before push", and Piotr asked at 08:34 why the
+    # worker paused. The push was Piotr's own login, inside the cooldown.
+    local key="loft-sh/loft-enterprise#9261" url="https://github.com/loft-sh/loft-enterprise/pull/9261"
+    jq -n --arg k "$key" --arg u "$url" '{($k): {headSha: "5d1c0ffee0", reviewDecision: "", mergeable: "CONFLICTING",
+        lastCommitKnownAuthors: 1, lastCommitMine: true, lastCommitDate: "", lastForeignActivity: "",
+        changesRequested: false, checks: "NONE", ref: $k, url: $u, notifiedSticky: ["merge-conflict"], seenOpen: 1}}' > "$PR_MOVE_STATE"
+    cat > "${TEST_DIR}/check" <<'SH'
+#!/usr/bin/env bash
+echo "$*" > "${TEST_DIR}/check.args"
+echo "stale-title: loft-sh/loft-enterprise#9261 got push a9f7052f but task 10f1f954 \"PR 9261 merge with main paused before push\" still says paused; retitle it"
+SH
+    chmod +x "${TEST_DIR}/check"
+    PUSH_TITLE_CHECK="${TEST_DIR}/check"
+    DRY_RUN=1
+    gh() {
+        if [[ "$1 $2" == "api graphql" ]]; then
+            jq -n --arg u "$url" '{data: {viewer: {open: {nodes: [{number: 9261, url: $u, title: "fix(e2e): allow longer command test runs",
+                isDraft: false, repository: {nameWithOwner: "loft-sh/loft-enterprise"}}], pageInfo: {hasNextPage: false}}, merged: {nodes: []}}}}'
+        else
+            return 1
+        fi
+    }
+    task_pr_links() { echo '[]'; }
+    resolve_target() { echo triage; }
+    pr_has_live_session() { return 1; }
+    fetch_details() {
+        jq -n --arg k "$key" --arg u "$url" --arg d "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '{($k): {url: $u, title: "fix(e2e): allow longer command test runs",
+            state: "OPEN", isDraft: false, headRefOid: "a9f7052f39", mergeable: "MERGEABLE", reviewDecision: "",
+            commits: [{authors: [{login: "Piotr1215"}], committedDate: $d}], reviews: [], comments: [], statusCheckRollup: []}}' > "$2"
+    }
+    load_main
+    run main
+    [ "$status" -eq 0 ]
+    [ "$(cat "${TEST_DIR}/check.args")" = "--ref loft-sh/loft-enterprise#9261 --sha a9f7052f39 --dry-run" ]
+    grep -q 'STALE-TITLE: stale-title: loft-sh/loft-enterprise#9261' "$PR_MOVE_LOG"
+    grep -q '\[DRY-RUN\] would send to triage -> stale-title:' "$PR_MOVE_LOG"
+    grep -q 'skip (recent own push, cooldown)' "$PR_MOVE_LOG"
+}
+
+@test "main: an unchanged head never runs the stale-title check" {
+    local key="loft-sh/loft-enterprise#9261" url="https://github.com/loft-sh/loft-enterprise/pull/9261"
+    jq -n --arg k "$key" --arg u "$url" '{($k): {headSha: "a9f7052f39", reviewDecision: "", mergeable: "MERGEABLE",
+        lastCommitKnownAuthors: 1, lastCommitMine: true, lastCommitDate: "", lastForeignActivity: "",
+        changesRequested: false, checks: "NONE", ref: $k, url: $u, notifiedSticky: [], seenOpen: 1}}' > "$PR_MOVE_STATE"
+    printf '#!/usr/bin/env bash\ntouch "%s/check.ran"\n' "$TEST_DIR" > "${TEST_DIR}/check"
+    chmod +x "${TEST_DIR}/check"
+    PUSH_TITLE_CHECK="${TEST_DIR}/check"
+    DRY_RUN=1
+    gh() {
+        [[ "$1 $2" == "api graphql" ]] || return 1
+        jq -n --arg u "$url" '{data: {viewer: {open: {nodes: [{number: 9261, url: $u, title: "t", isDraft: false,
+            repository: {nameWithOwner: "loft-sh/loft-enterprise"}}], pageInfo: {hasNextPage: false}}, merged: {nodes: []}}}}'
+    }
+    task_pr_links() { echo '[]'; }
+    resolve_target() { echo triage; }
+    pr_has_live_session() { return 1; }
+    fetch_details() {
+        jq -n --arg k "$key" --arg u "$url" '{($k): {url: $u, title: "t", state: "OPEN", isDraft: false, headRefOid: "a9f7052f39",
+            mergeable: "MERGEABLE", reviewDecision: "", commits: [], reviews: [], comments: [], statusCheckRollup: []}}' > "$2"
+    }
+    load_main
+    run main
+    [ "$status" -eq 0 ]
+    [ ! -e "${TEST_DIR}/check.ran" ]
 }
