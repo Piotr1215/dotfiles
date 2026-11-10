@@ -8,14 +8,14 @@ import re
 import subprocess
 import sys
 import time
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, quote, urlsplit
 
 ROOT = Path(__file__).resolve().parent
 # One workspace, two permalink hosts: since the Enterprise Grid move Slack hands
 # out vcluster-internal.enterprise links beside the older loft-labs-inc ones.
 SLACK_HOSTS = {"loft-labs-inc.slack.com", "vcluster-internal.enterprise.slack.com"}
 HOSTS = SLACK_HOSTS | {"app.slack.com", "github.com", "linear.app",
-                       "mail.google.com", "app.notion.com", "docs.google.com"}
+                       "mail.google.com", "app.notion.com", "docs.google.com", "claude.ai"}
 UUID = re.compile(r"[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}")
 
 
@@ -37,6 +37,33 @@ def single_url(text):
     if len(urls) != 1:
         raise ValueError("Handoff needs one destination in target: or link:")
     return checked_url(urls[0])
+
+
+def mail_sent_url(done):
+    """Find the newest message and its mail account for a mail-sent condition."""
+    match = re.match(r"^mail-sent\s+([0-9a-fA-F]+)(?:\s|$)", done)
+    if not match:
+        return None
+    try:
+        messages = run(["notmuch", "search", "--output=messages", "--sort=newest-first",
+                        "thread:" + match.group(1)], capture_output=True, text=True).stdout.splitlines()
+        if not messages or not messages[0].startswith("id:") or not messages[0][3:]:
+            return None
+        message = messages[0][3:]
+        files = run(["notmuch", "search", "--output=files", messages[0]],
+                    capture_output=True, text=True).stdout.splitlines()
+        root = Path.home() / ".local/share/mail"
+        for name in files:
+            try:
+                parts = Path(name).relative_to(root).parts
+            except ValueError:
+                continue
+            if len(parts) >= 2 and ".." not in parts:
+                return checked_url(f"https://mail.google.com/mail/u/{quote(parts[0], safe='')}/"
+                                   f"#search/rfc822msgid%3A{quote(message, safe='')}")
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return None
 
 
 def destination(task):
@@ -74,6 +101,8 @@ def destination(task):
     if "link" in fields:
         return single_url(fields["link"])
     done = fields.get("done-when", "")
+    if re.match(r"^mail-sent(?:\s|$)", done):
+        return mail_sent_url(done)
     if "http" in done:
         return single_url(done)
     prs = re.findall(r"\b((?:[A-Za-z0-9_.-]+/)?[A-Za-z0-9_.-]+)#([1-9][0-9]*)\b", done)

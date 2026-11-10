@@ -21,6 +21,7 @@ def task(*annotations, tags=None):
     "http://github.com/a", "https://github.com.evil.test/a", "https://evil.test/a",
     "https://user@github.com/a", "https://github.com:443/a", "file:///tmp/a",
     "https://github.com\\@evil.test/a", "https://github.com/a\n",
+    "http://claude.ai/artifact/id", "https://claude.ai.evil.com/artifact/id",
 ])
 def test_rejects_unsafe_urls(url):
     with pytest.raises(ValueError):
@@ -66,12 +67,37 @@ def test_floater_validation_identifies_task_from_environment(monkeypatch):
 
 @pytest.mark.parametrize(("annotation", "url"), [
     ("link: https://mail.google.com/mail/u/1/#inbox/abc", "https://mail.google.com/mail/u/1/#inbox/abc"),
+    ("link: https://claude.ai/artifact/abc", "https://claude.ai/artifact/abc"),
     ("done-when: pr-reviewed loft-sh/architecture#26 since 2026-11-06", "https://github.com/loft-sh/architecture/pull/26"),
     ("done-when: pr-merged architecture#26", "https://github.com/loft-sh/architecture/pull/26"),
     ("done-when: linear DEVOPS-1825 released", "https://linear.app/loft/issue/DEVOPS-1825"),
 ])
 def test_destination_forms(annotation, url):
     assert nav.destination(task(annotation)) == url
+
+
+def test_mail_sent_uses_newest_message_and_account(tmp_path, monkeypatch):
+    binary = tmp_path / "notmuch"
+    binary.write_text("#!/bin/sh\ncase \"$2\" in\n"
+                      "--output=messages) printf '%s\\n' 'id:new+id@example.com' 'id:old@example.com';;\n"
+                      f"--output=files) printf '%s\\n' '{Path.home()}/.local/share/mail/work@example.com/Inbox/new/file';;\n"
+                      "esac\n")
+    binary.chmod(0o755)
+    monkeypatch.setenv("PATH", str(tmp_path))
+    done = "done-when: mail-sent 000000000000cae0 since 2026-11-10"
+    assert nav.destination(task(done)) == ("https://mail.google.com/mail/u/work%40example.com/"
+                                            "#search/rfc822msgid%3Anew%2Bid%40example.com")
+    assert nav.destination(task(done, "link: https://github.com/a")) == "https://github.com/a"
+
+
+def test_mail_sent_missing_notmuch_or_message_returns_none(tmp_path, monkeypatch):
+    monkeypatch.setenv("PATH", str(tmp_path))
+    row = task("done-when: mail-sent 000000000000cae0")
+    assert nav.destination(row) is None
+    binary = tmp_path / "notmuch"
+    binary.write_text("#!/bin/sh\nexit 0\n")
+    binary.chmod(0o755)
+    assert nav.destination(row) is None
 
 
 def test_ordinary_row_and_missing_destination_do_nothing():
