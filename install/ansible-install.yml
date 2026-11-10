@@ -182,7 +182,7 @@
           - diff-so-fancy
           - dos2unix
           - elinks
-          - encfs
+          - gocryptfs
           - ffmpeg
           - flatpak
           - glow

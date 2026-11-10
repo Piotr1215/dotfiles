@@ -350,13 +350,12 @@ function saver() {
 function crypt() {
   ENCRYPTED_DIR="$HOME/dev/encrypted"
   # Check if the current directory is the mount point or a subdirectory of it
-  if pwd | grep -q "^$MOUNT_POINT"; then
+  if [[ "$PWD" == "$ENCRYPTED_DIR" || "$PWD" == "$ENCRYPTED_DIR"/* ]]; then
     echo "You are currently in the encrypted directory. Changing to home directory."
     cd ~/dev || return 1
   fi
   if findmnt -M "$ENCRYPTED_DIR" > /dev/null; then
     fusermount -u "$ENCRYPTED_DIR" && echo "Encrypted directory unmounted successfully." || echo "Failed to unmount encrypted directory."
-    echo "Logged out from bitwarden."
   else
     echo "Encrypted directory is not mounted."
   fi
@@ -365,7 +364,7 @@ function crypt() {
 function uncrypt() {
   if [ -n "$(\ls -A ~/dev/encrypted)" ]; then
     echo "Directory is not empty, assuming already uncrypted, switching to directory."
-  elif encfs ~/.encrypted ~/dev/encrypted; then
+  elif gocryptfs ~/.encrypted ~/dev/encrypted; then
     echo "Encrypted directory mounted successfully."
   else
     echo "Failed to mount encrypted directory."
