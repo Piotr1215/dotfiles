@@ -22,10 +22,11 @@ setup() {
 		"$XDG_RUNTIME_DIR" "$DIRENV_ALLOW_DIR"
 	: >"$AGE_RECIPIENTS"
 
-	export ROFI_IN="$BATS_TEST_TMPDIR/rofi-in"
+	export ROFI_IN="$BATS_TEST_TMPDIR/rofi-in" ROFI_ARGS_ALL="$BATS_TEST_TMPDIR/rofi-args-all"
 	cat >"$STUB_BIN/rofi" <<'EOF'
 #!/usr/bin/env bash
 cat >>"$ROFI_IN"
+printf '%s\n' "$*" >>"$ROFI_ARGS_ALL"
 [[ -n "${ROFI_PICK:-}" ]] && printf '%s\n' "$ROFI_PICK"
 exit "${ROFI_EXIT:-16}"
 EOF
@@ -117,7 +118,7 @@ write_form() {
 	[ "$(cat "$SECRETS_DIR/Y_NEW.age")" = yubivalue ]
 	[ ! -e "$PASSWORD_STORE_DIR/personal/Y_NEW.gpg" ]
 	grep -qx 'Y_NEW | needs a tap to read' "$SECRETS_DIR/.descriptions"
-	grep -q 'Y_NEW added to the YubiKey bastion' "$NOTIFY_LOG"
+	grep -q 'Y_NEW added to the YubiKey' "$NOTIFY_LOG"
 }
 
 @test "the add form refuses an empty value" {
@@ -459,6 +460,42 @@ STUB
 	[ ! -e "$BW_CREATED" ]
 	grep -qx BW_ROW "$SECRETS_DIR/.bitwarden"
 	grep -qx PUSHED_EARLIER "$SECRETS_DIR/.bitwarden"
+}
+
+@test "Alt+y moves a pass secret to the YubiKey" {
+	printf 'pval' >"$PASSWORD_STORE_DIR/work/MOVE_UP.gpg"
+	stub_rofi_seq '0 11' 'yes 0'
+
+	run "$PICKER"
+
+	[ "$status" -eq 0 ]
+	grep -q 'move MOVE_UP to the YubiKey?' "$ROFI_ARGS"
+	[ "$(cat "$SECRETS_DIR/MOVE_UP.age")" = pval ]
+	[ ! -e "$PASSWORD_STORE_DIR/work/MOVE_UP.gpg" ]
+	grep -q 'MOVE_UP moved to the YubiKey; reads now need a tap' "$NOTIFY_LOG"
+}
+
+@test "Alt+p moves a YubiKey secret to pass" {
+	stub_age_decrypt
+	printf 'yval' >"$SECRETS_DIR/MOVE_DOWN.age"
+	stub_rofi_seq '0 12' 'work 0'
+
+	run "$PICKER"
+
+	[ "$status" -eq 0 ]
+	grep -q 'move MOVE_DOWN to which pass subtree' "$ROFI_ARGS"
+	[ "$(cat "$PASSWORD_STORE_DIR/work/MOVE_DOWN.gpg")" = yval ]
+	[ ! -e "$SECRETS_DIR/MOVE_DOWN.age" ]
+	grep -q 'MOVE_DOWN moved to pass as work/MOVE_DOWN' "$NOTIFY_LOG"
+}
+
+@test "the key legend names destinations, not promote and demote" {
+	run "$PICKER"
+
+	grep -q 'Alt+y move to YubiKey' "$ROFI_ARGS_ALL"
+	grep -q 'Alt+p move to pass' "$ROFI_ARGS_ALL"
+	grep -q 'Alt+w copy to Bitwarden' "$ROFI_ARGS_ALL"
+	! grep -qiE 'promote|demote' "$ROFI_ARGS_ALL"
 }
 
 @test "Alt+x deletes the local copy and says the Bitwarden copy stays" {

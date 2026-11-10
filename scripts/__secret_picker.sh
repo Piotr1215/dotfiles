@@ -12,8 +12,8 @@
 #   Alt+c    copy its card: every fact about it except the value, never a tap
 #   Alt+a    add a secret to pass or the YubiKey bastion
 #   Alt+e    edit key, value and description in one buffer
-#   Alt+p    promote to the bastion (drops the .envrc references with it)
-#   Alt+d    demote to pass (costs a tap, since the value has to be read out)
+#   Alt+y    move it to the YubiKey (drops the .envrc references with it)
+#   Alt+p    move it to pass (costs a tap, since the value has to be read out)
 #   Alt+l    reference it from an .envrc via _pass_export
 #   Alt+x    delete it here (the references go too; a Bitwarden copy stays)
 #   Alt+w    save a copy to Bitwarden (asks before replacing an item). One tap per
@@ -57,16 +57,22 @@ source "$SCRIPT_DIR/__lib_secret_object.sh"
 # ~113 chars, which 900px silently truncated. The cap rose with the shared font
 # bump, since taller rows fit fewer of them on the same screen.
 #
-# Alt+a/c/e/p/d/l/x are free in stock rofi (Alt is taken only by b, f, S, period,
-# grave and the digits), so unlike Control+a in __value_picker.sh none of these
-# needs its default unbound first. Bitwarden is Alt+w, not Alt+b, for that reason.
+# Alt+a/c/e/y/p/l/o/w/x are free in stock rofi (Alt is taken only by b, f, S,
+# period, grave and the digits), so unlike Control+a in __value_picker.sh none of
+# these needs its default unbound first. Bitwarden is Alt+w, not Alt+b, for that
+# reason.
+#
+# The move keys name where the secret goes: Alt+y the YubiKey, Alt+p pass, Alt+w
+# Bitwarden. They were promote and demote (Alt+p, Alt+d) until Bitwarden became a
+# third destination, when "promote" stopped saying where to and Alt+p, which went
+# to the YubiKey, read as "pass".
 rofi_pick() {
 	local prompt="$1" rows="${2:-10}"
 	((rows < 3)) && rows=3
 	((rows > 26)) && rows=26
 	rofi_theme 1800 "$rows"
 	rofi -dmenu -i -p "$prompt" -format i -mesg "$MESG" \
-		-kb-custom-1 "Alt+e" -kb-custom-2 "Alt+p" -kb-custom-3 "Alt+d" \
+		-kb-custom-1 "Alt+e" -kb-custom-2 "Alt+y" -kb-custom-3 "Alt+p" \
 		-kb-custom-4 "Alt+l" -kb-custom-5 "Alt+x" -kb-custom-6 "Alt+o" \
 		-kb-custom-7 "Alt+a" -kb-custom-8 "Alt+c" -kb-custom-9 "Alt+w" \
 		"${ROFI_THEME[@]}"
@@ -75,7 +81,7 @@ rofi_pick() {
 # The secret holding the Bitwarden master password. In the bastion, Alt+w reads
 # it with a YubiKey tap instead of a typed prompt: the tap is the confirm. In
 # pass it is read with no tap at all, which makes every pushed bastion secret as
-# readable as a pass one; that trade is yours to make with Alt+d. Missing, a
+# readable as a pass one; that trade is yours to make with Alt+p. Missing, a
 # typed prompt. Store it once with Alt+a under this name. Override per machine.
 BW_MASTER_SECRET="${BW_MASTER_SECRET:-BW_MASTER_PASSWORD}"
 
@@ -295,8 +301,8 @@ ICON_BW=$'\U000f11f1'
 # Keys on one line, what the badges mean on the next. The badge legend is here
 # because a glyph nobody can name is noise: the link count in particular reads as
 # decoration until it says "this many .envrc files import this secret".
-MESG="Enter copy   Alt+c card   Alt+a add   Alt+e edit   Alt+o open .envrc uses   Alt+l add .envrc   Alt+w Bitwarden   Alt+p promote   Alt+d demote   Alt+x delete
-$ICON_AGE bastion, one tap    $ICON_PASS pass, no tap    $ICON_BW in Bitwarden    ${ICON_REF}N referenced by N .envrc"
+MESG="Enter copy   Alt+c card   Alt+a add   Alt+e edit   Alt+o open .envrc uses   Alt+l add .envrc   Alt+y move to YubiKey   Alt+p move to pass   Alt+w copy to Bitwarden   Alt+x delete
+$ICON_AGE YubiKey, one tap    $ICON_PASS pass, no tap    $ICON_BW in Bitwarden    ${ICON_REF}N referenced by N .envrc"
 
 icon_for() {
 	case "$1" in
@@ -326,7 +332,7 @@ add_secret() {
 
 	case "$store" in
 	pass) owner=pass; target="pass/$sub" ;;
-	YubiKey) owner=age; target="the YubiKey bastion" ;;
+	YubiKey) owner=age; target="the YubiKey" ;;
 	*) fail "choose pass or YubiKey" ;;
 	esac
 
@@ -400,8 +406,8 @@ else
 	18) action="bitwarden" ;;
 	17) action="card" ;;
 	10) action="edit" ;;
-	11) action="promote" ;;
-	12) action="demote" ;;
+	11) action="to_yubikey" ;;
+	12) action="to_pass" ;;
 	13) action="link" ;;
 	14) action="delete" ;;
 	15) action="refs" ;;
@@ -516,22 +522,22 @@ edit)
 		stale="; Bitwarden still has the old value, Alt+w to update it"
 	note "$name: ${changed[*]} updated$stale"
 	;;
-promote)
-	[[ "$owner" == pass ]] || fail "$name is already in the bastion"
-	confirm "promote $name to the bastion? (removes it from pass and any .envrc)" || exit 0
-	secret_promote "$name" || fail "promote failed for $name"
-	note "$name promoted to the bastion; reads now need a tap"
+to_yubikey)
+	[[ "$owner" == pass ]] || fail "$name is already on the YubiKey"
+	confirm "move $name to the YubiKey? (removes it from pass and any .envrc)" || exit 0
+	secret_promote "$name" || fail "could not move $name to the YubiKey"
+	note "$name moved to the YubiKey; reads now need a tap"
 	;;
 
-demote)
+to_pass)
 	[[ "$owner" == age ]] || fail "$name is already in pass"
 	sub=$(find "$PASS_DIR" -mindepth 1 -maxdepth 1 -type d -not -name '.git' -printf '%f\n' |
-		sort | rofi_menu "demote $name into which pass subtree") || exit 0
+		sort | rofi_menu "move $name to which pass subtree") || exit 0
 	[[ -n "$sub" ]] || exit 0
 	touch_cue_on
-	secret_demote "$name" "$sub" || fail "demote failed for $name (no tap, or pass insert failed)"
+	secret_demote "$name" "$sub" || fail "could not move $name to pass (no tap, or pass insert failed)"
 	touch_cue_off
-	note "$name demoted to $sub/$name; no tap guards it now"
+	note "$name moved to pass as $sub/$name; no tap guards it now"
 	;;
 
 link)
