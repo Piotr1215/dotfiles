@@ -308,7 +308,9 @@ def act_on_kind(task):
     """Run the action s means for this kind after the links open.
 
     command opens a terminal with the cmd: note at the prompt; slack copies the
-    newest draft: note; pr, ack and other only open what they opened before.
+    newest draft: note, and also opens its cmd: note when it has one (10 Nov,
+    9069: a draft row's command to open the receipts in Xournal++ never ran, so
+    s "only copied the text"); pr, ack and other only open what they opened before.
     Returns the kind. A failed action is reported.
     """
     kind = task_kind(task)
@@ -320,6 +322,8 @@ def act_on_kind(task):
             if draft and not copy_to_clipboard(draft):
                 print("Could not copy the draft: install xclip or wl-copy, then press s again.",
                       file=sys.stderr)
+            if newest_note(task, "cmd"):
+                open_command_window(task["uuid"], newest_note(task, "cmd"))
     except (ValueError, OSError, subprocess.SubprocessError) as error:
         print(f"Handoff {kind} action: {error}", file=sys.stderr)
     return kind

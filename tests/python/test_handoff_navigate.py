@@ -531,6 +531,18 @@ def test_slack_kind_without_a_clipboard_tool_says_what_to_install(monkeypatch, c
     assert "install xclip or wl-copy" in capsys.readouterr().err
 
 
+def test_slack_kind_with_a_cmd_note_copies_the_draft_and_opens_the_command(fake_clipboard, fake_tmux):
+    # 10 Nov, 9069 "Slack: signed transport receipts to Daniel": the row had a
+    # draft for Daniel and a cmd: that opens the receipts in Xournal++; s only
+    # copied the text. Piotr: "I think there should be app opening them".
+    row = dict(task("draft: Hi Daniel, signed receipts are in the folder",
+                    "cmd: xournalpp ~/Downloads/eigenbeleg-1.pdf"), kind="slack")
+    assert nav.act_on_kind(row) == "slack"
+    assert fake_clipboard.read_text() == "Hi Daniel, signed receipts are in the folder"
+    calls = fake_tmux()
+    assert calls[1][calls[1].index("-e") + 1] == "HANDOFF_CMD=xournalpp ~/Downloads/eigenbeleg-1.pdf"
+
+
 @pytest.mark.parametrize("kind", ["pr", "ack", "other"])
 def test_pr_ack_and_other_kinds_take_no_extra_action(fake_tmux, fake_clipboard, kind):
     row = dict(task(f"cmd: {PUSH}", "draft: hello", "done-when: pr-merged architecture#26"), kind=kind)
