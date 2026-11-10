@@ -23,6 +23,46 @@ setup() {
 capture() { "$SCRIPT" "$ROOT"; }
 mirror_show() { git --git-dir="$MIRROR" show "refs/wip/$1:$2"; }
 
+# Keep an unchanged blob absent from the checkout and object database.
+blobless_fixture() {
+  mkdir -p "$REPO/visible"
+  printf 'missing blob\n' > "$REPO/missing"
+  printf 'original\n' > "$REPO/visible/file"
+  git -C "$REPO" add .
+  git -C "$REPO" commit -qm 'add sparse files'
+  git -C "$REPO" config uploadpack.allowFilter true
+  git clone -q --filter=blob:none --no-checkout "file://$REPO" "$ROOT/blobless"
+  git -C "$ROOT/blobless" sparse-checkout init --no-cone
+  git -C "$ROOT/blobless" sparse-checkout set --no-cone '/visible/' '/.gitignore'
+  git -C "$ROOT/blobless" checkout -q
+  local oid
+  oid=$(git -C "$REPO" rev-parse HEAD:missing)
+  git -C "$ROOT/blobless" rev-list --objects --missing=print HEAD | grep -qx "?$oid"
+  printf '100644 %s\tmissing\n' "$oid" | git -C "$ROOT/blobless" update-index --index-info
+  git -C "$ROOT/blobless" update-index --skip-worktree missing
+  git -C "$ROOT/blobless" remote set-url origin "$BATS_TEST_TMPDIR/unavailable.git"
+  [ -z "$(git -C "$ROOT/blobless" status --porcelain)" ]
+}
+
+@test "captures a clean blobless sparse clone without fetching absent blobs" {
+  blobless_fixture
+  run capture
+  [ "$status" -eq 0 ]
+  [[ $output != *"warning $ROOT/blobless"* ]]
+  [ -n "$(git --git-dir="$WIP_CAPTURE_TARGET/dev/blobless/.git" rev-parse refs/wip/main)" ]
+  git --git-dir="$WIP_CAPTURE_TARGET/dev/blobless/.git" rev-list --objects --missing=print refs/wip/main | grep -q '^?'
+}
+
+@test "captures a dirty blobless sparse clone without fetching absent blobs" {
+  blobless_fixture
+  printf 'changed offline\n' > "$ROOT/blobless/visible/file"
+  run capture
+  [ "$status" -eq 0 ]
+  [[ $output != *"warning $ROOT/blobless"* ]]
+  [ "$(git --git-dir="$WIP_CAPTURE_TARGET/dev/blobless/.git" show refs/wip/main:visible/file)" = 'changed offline' ]
+  git --git-dir="$WIP_CAPTURE_TARGET/dev/blobless/.git" rev-list --objects --missing=print refs/wip/main | grep -q '^?'
+}
+
 @test "captures staged, unstaged and untracked files while excluding secrets and ignored files" {
   printf 'staged\n' > "$REPO/staged"
   git -C "$REPO" add staged

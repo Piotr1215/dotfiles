@@ -185,7 +185,14 @@ capture_one() {
   export GIT_DIR=$mirror_work_git GIT_WORK_TREE=$repo GIT_INDEX_FILE=$work/index
   cd -- "$repo"
   git -c core.hooksPath=/dev/null -c core.fsmonitor=false add -A -- . "${excludes[@]}"
-  tree=$(git write-tree)
+  # Partial clones intentionally omit unchanged blobs. Their IDs remain in the
+  # tree; git add has already stored changed worktree content in the mirror.
+  # Keep normal object validation for repositories without a promisor remote.
+  if git config --get-regexp '^remote\..*\.promisor$' | grep -qiE '[[:space:]]true$'; then
+    tree=$(git write-tree --missing-ok)
+  else
+    tree=$(git write-tree)
+  fi
   # HEAD comes from the live repo: the mirror's worktree HEAD is only as new
   # as the last common sync.
   msg="wip capture $(date -u +%Y-%m-%dT%H:%M:%SZ) $label"
