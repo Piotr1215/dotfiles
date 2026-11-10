@@ -610,6 +610,13 @@ secret_rm() {
 # session comes from BW_SESSION; unlocking is the caller's job, because the
 # picker has no terminal and the CLI user already has `bw unlock`.
 
+# jq prefix for reading `bw list items`: the items of a real list, an error for
+# anything else. A locked vault makes bw print a password prompt to stderr and
+# exit 0 with nothing on stdout, and a plain `.[]` over nothing succeeds, so
+# "locked" read as "no items": a wiped badge cache, or a duplicate item on push.
+# `input` fails on empty input; --nointeraction makes bw exit 1 instead.
+SECRET_BW_ITEMS='input | if type == "array" then .[] else error("not an item list") end'
+
 # True when the last push saw a Bitwarden login item named exactly NAME.
 secret_bw_has() {
 	[[ -r "$BW_NAMES_FILE" ]] && grep -qxF -- "$1" "$BW_NAMES_FILE"
@@ -624,14 +631,17 @@ secret_bw_names_refresh() {
 	local names tmp
 	names=$(
 		set -o pipefail
-		bw list items 2>/dev/null | jq -r '.[] | select(.type == 1) | .name' 2>/dev/null
+		bw list items --nointeraction 2>/dev/null | jq -rn "$SECRET_BW_ITEMS"' | select(.type == 1) | .name' 2>/dev/null
 	) || {
-		secret_die "bw list failed; the Bitwarden badges were left as they were"
+		secret_die "bw list failed (vault locked?); the Bitwarden badges were left as they were"
 		return 1
 	}
 	mkdir -p "$SECRETS_DIR" && chmod 700 "$SECRETS_DIR"
 	tmp="$BW_NAMES_FILE.$$"
-	printf '%s\n' "$names" ${1:+"$1"} | grep -v '^$' | sort -u >"$tmp" || true
+	(
+		umask 077
+		printf '%s\n' "$names" ${1:+"$1"} | grep -v '^$' | sort -u >"$tmp" || true
+	)
 	mv -f "$tmp" "$BW_NAMES_FILE"
 }
 
@@ -643,11 +653,11 @@ secret_bw_names_refresh() {
 # a duplicate instead of failing.
 secret_bw_item_id() {
 	local items ids
-	items=$(bw list items --search "$1" 2>/dev/null) || {
+	items=$(bw list items --search "$1" --nointeraction 2>/dev/null) || {
 		secret_die "bw list failed (locked? export BW_SESSION=\$(bw unlock --raw))"
 		return 1
 	}
-	ids=$(jq -r --arg n "$1" '.[] | select(.name == $n) | .id' <<<"$items" 2>/dev/null) || {
+	ids=$(jq -rn --arg n "$1" "$SECRET_BW_ITEMS"' | select(.name == $n) | .id' <<<"$items" 2>/dev/null) || {
 		unset items
 		secret_die "bw list returned something that is not an item list"
 		return 1

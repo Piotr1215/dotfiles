@@ -224,7 +224,10 @@ d="$BW_FAKE"
 printf '%s\n' "$*" >>"$d/argv"
 case "$1" in
 sync | lock) exit 0 ;;
-list) [[ -e "$d/list_fail" ]] && exit 1; cat "$d/items" 2>/dev/null || printf '[]' ;;
+list) [[ -e "$d/list_fail" ]] && exit 1
+	# a real locked vault without --nointeraction: a prompt on stderr, exit 0
+	[[ -e "$d/locked" ]] && { [[ " $* " == *" --nointeraction "* ]] && exit 1; echo '? Master password:' >&2; exit 0; }
+	cat "$d/items" 2>/dev/null || printf '[]' ;;
 get) [[ -e "$d/get_fail" ]] && exit 1; jq --arg id "$3" '.[] | select(.id == $id)' "$d/items" ;;
 encode) base64 -w0 ;;
 create) base64 -d >"$d/created" ;;
@@ -345,8 +348,17 @@ touch "$BW_FAKE/list_fail"
 secret_bw_names_refresh 2>/dev/null
 is "a failed list (locked vault) is reported" "$?" "1"
 is "and leaves the badges as they were" "$(grep -cx BW_P "$badges")" "1"
+rm -f "$BW_FAKE/list_fail"
+touch "$BW_FAKE/locked"
+secret_bw_names_refresh 2>/dev/null
+is "a locked vault is a failed list, not an empty vault" "$?" "1"
+is "so it wipes no badge" "$(grep -cx BW_P "$badges")" "1"
+secret_bw_item_id BW_P >/dev/null 2>&1
+is "and no lookup reads it as no such item" "$?" "1"
+rm -f "$BW_FAKE/locked"
 secret_rm BW_P
 is "a local delete keeps the Bitwarden name" "$(secret_bw_has BW_P && echo yes)" "yes"
+is "the cache is owner-only" "$(stat -c %a "$badges")" "600"
 unset BW_SESSION
 
 printf '\n%d passed, %d failed\n' "$pass_n" "$fail_n"
