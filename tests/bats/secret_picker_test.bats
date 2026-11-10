@@ -276,3 +276,40 @@ STUB
 	! grep -q master-pw "$BW_LOG"
 	[ "$(tail -1 "$BW_LOG")" = lock ]
 }
+
+@test "Alt+w reads the master password from the bastion with a tap, no typing" {
+	stub_bw
+	# An age stub that also decrypts: the .age file holds the plaintext here, so
+	# secret_read returns it without a real key or a real tap.
+	cat >"$STUB_BIN/age" <<'STUB'
+#!/usr/bin/env bash
+printf 'age %s\n' "$*" >>"$STORE_LOG"
+dec=0 out="" file=""
+while (($#)); do
+	case "$1" in
+	-d) dec=1; shift ;;
+	-o) out="$2"; shift 2 ;;
+	-i | -R) shift 2 ;;
+	*) file="$1"; shift ;;
+	esac
+done
+if ((dec)); then cat "$file"; else cat >"$out"; fi
+STUB
+	chmod +x "$STUB_BIN/age"
+	# Two rows, alphabetical: BW_MASTER_PASSWORD (index 0), BW_ROW (index 1).
+	printf 'master-pw' >"$SECRETS_DIR/BW_MASTER_PASSWORD.age"
+	printf 'bwvalue' >"$PASSWORD_STORE_DIR/work/BW_ROW.gpg"
+	unset BW_SESSION
+	export BW_STATUS=locked ROFI_PICK=1 ROFI_EXIT=18
+
+	run "$PICKER"
+
+	[ "$status" -eq 0 ]
+	[ "$(jq -r .name "$BW_CREATED")" = BW_ROW ]
+	[ "$(jq -r .login.password "$BW_CREATED")" = bwvalue ]
+	# the master password was read from the bastion, not typed
+	grep -q 'BW_MASTER_PASSWORD.age' "$STORE_LOG"
+	# and never reaches a bw argv
+	! grep -q master-pw "$BW_LOG"
+	[ "$(tail -1 "$BW_LOG")" = lock ]
+}

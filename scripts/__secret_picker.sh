@@ -16,7 +16,8 @@
 #   Alt+d    demote to pass (costs a tap, since the value has to be read out)
 #   Alt+l    reference it from an .envrc via _pass_export
 #   Alt+x    delete it (from pass, the references go too)
-#   Alt+w    save a copy to Bitwarden (a bastion row taps; asks before replacing)
+#   Alt+w    save a copy to Bitwarden (unlock taps when the master password is in
+#            the bastion, else a typed prompt; asks before replacing an item)
 #
 # The tier MUST stay visible per row. A row that hid which store serves it would
 # have you reach for a secret believing a tap guards it when nothing does. The
@@ -69,25 +70,41 @@ rofi_pick() {
 		"${ROFI_THEME[@]}"
 }
 
-# A Bitwarden session for this one push. An already exported BW_SESSION is used
-# as is and left unlocked; otherwise the master password is asked for in a rofi
-# password field, passed to bw through the environment (never argv), and the
-# vault is locked again on exit. `bw login` is a one-time terminal step that a
-# picker cannot do: it can ask for a 2FA code, a device approval or SSO.
+# The bastion secret holding the Bitwarden master password. When it exists, Alt+w
+# reads it with a YubiKey tap instead of a typed prompt: the tap is the confirm.
+# Store it once with Alt+a (choose YubiKey) under this name. Override per machine.
+BW_MASTER_SECRET="${BW_MASTER_SECRET:-BW_MASTER_PASSWORD}"
+
+# A Bitwarden session for this one push. An already exported BW_SESSION is used as
+# is and left unlocked. Otherwise the master password comes from the bastion when
+# a secret named $BW_MASTER_SECRET lives there (one tap, nothing typed), else from
+# a rofi password field. Either way it reaches bw through the environment, never an
+# argv, and the vault is locked again on exit. `bw login` stays a one-time terminal
+# step a picker cannot do: it can ask for a 2FA code, a device approval or SSO.
 bw_session() {
-	local state pw
+	local state pw owner
 	command -v bw >/dev/null 2>&1 || fail "bw CLI not found"
 	[[ -n "${BW_SESSION:-}" ]] && return 0
 	state=$(bw status 2>/dev/null | jq -r '.status // empty') || state=""
 	[[ "$state" == unauthenticated ]] && fail "Bitwarden is logged out. Run 'bw login' once in a terminal, then Alt+w again."
-	# rofi 1.7 dropped -lines; the empty list is hidden through the theme instead.
-	rofi_theme 900 1
-	pw=$(rofi -dmenu -password -p "Bitwarden master password" "${ROFI_THEME[@]}" \
-		-theme-str 'listview { enabled: false; }' </dev/null) || exit 0
+	owner=$(secret_locate "$BW_MASTER_SECRET" 2>/dev/null | cut -f2)
+	if [[ "$owner" == age ]]; then
+		# The tap that reads the master password is the confirmation. A missed tap
+		# returns nothing, so unlock fails below rather than on an empty password.
+		touch_cue_on
+		pw=$(secret_read "$BW_MASTER_SECRET" 2>/dev/null) ||
+			{ touch_cue_off; fail "no tap registered, Bitwarden not unlocked. Press Alt+w again and touch the key."; }
+		touch_cue_off
+	else
+		# rofi 1.7 dropped -lines; the empty list is hidden through the theme instead.
+		rofi_theme 900 1
+		pw=$(rofi -dmenu -password -p "Bitwarden master password" "${ROFI_THEME[@]}" \
+			-theme-str 'listview { enabled: false; }' </dev/null) || exit 0
+	fi
 	[[ -n "$pw" ]] || exit 0
 	BW_SESSION=$(BW_MASTER="$pw" bw unlock --raw --passwordenv BW_MASTER 2>/dev/null) || BW_SESSION=""
 	unset pw
-	[[ -n "$BW_SESSION" ]] || fail "Bitwarden unlock failed (wrong master password?)"
+	[[ -n "$BW_SESSION" ]] || fail "Bitwarden unlock failed (wrong master password, or the stored $BW_MASTER_SECRET is wrong)."
 	export BW_SESSION
 	BW_LOCK_ON_EXIT=1
 }
