@@ -37,6 +37,7 @@ AGE_ID="${AGE_ID:-$HOME/.config/age/yubikey-pass-bastion.txt}"
 AGE_RECIPIENTS="${AGE_RECIPIENTS:-$HOME/.config/age/recipients.txt}"
 DIRENV_ALLOW_DIR="${DIRENV_ALLOW_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/direnv/allow}"
 DESC_FILE="$SECRETS_DIR/.descriptions"
+BW_NAMES_FILE="$SECRETS_DIR/.bitwarden"
 
 secret_die() {
 	printf 'secret: %s\n' "$1" >&2
@@ -271,6 +272,7 @@ secret_card() {
 			"Modified:" "$(secret_date "$(stat -c %Y "$file")")"
 	done
 
+	secret_bw_has "$name" && printf '%-13s %s\n' "Bitwarden:" "login item $name (value as of the last push)"
 	printf '%-13s %s\n' ".envrc refs:" "$refs"
 	local rfile rline rvar
 	while IFS=$'\t' read -r rfile rline rvar _; do
@@ -592,14 +594,46 @@ secret_rm() {
 # Bitwarden is an export target, not a fourth store. The XOR invariant above
 # stays about stores 1 and 2: a push copies the current value into a Bitwarden
 # login item named after the object, so the value survives this machine (the
-# 7 Nov wipe took the old encfs vault with it). Nothing records that a push
-# happened, for the same reason nothing records membership: a manifest would
-# drift. A later value change here is not mirrored; push again to refresh.
+# 7 Nov wipe took the old encfs vault with it). A later value change here is not
+# mirrored; push again to refresh. Deleting the object here leaves the item in
+# Bitwarden: delete is local, Bitwarden is where a moved secret goes to stay.
+#
+# Which names Bitwarden holds is the one membership fact that cannot be derived
+# when the picker draws, because reading it needs an unlocked vault. So it is
+# cached in the plaintext sidecar $BW_NAMES_FILE, and the cache is rebuilt whole
+# from `bw list items` on every push, never edited by hand: it is at most one
+# push stale, and an item made or deleted in Bitwarden itself shows up on the
+# next push. Names only, like .descriptions; no value is ever written there.
 #
 # The value arrives on stdin and stays off every argv: jq reads it with
 # --rawfile /dev/stdin, then bw encode and bw create/edit read their stdin. The
 # session comes from BW_SESSION; unlocking is the caller's job, because the
 # picker has no terminal and the CLI user already has `bw unlock`.
+
+# True when the last push saw a Bitwarden login item named exactly NAME.
+secret_bw_has() {
+	[[ -r "$BW_NAMES_FILE" ]] && grep -qxF -- "$1" "$BW_NAMES_FILE"
+}
+
+# Rebuild the cache from the open session, plus $1, the name just pushed: a
+# client that has not folded its own create into the list yet must not drop the
+# badge for the item it made. pipefail inside the substitution, because a
+# locked vault piped into jq reads as an empty vault and would wipe every badge.
+# The item list carries every password, so it goes bw -> jq over a pipe only.
+secret_bw_names_refresh() {
+	local names tmp
+	names=$(
+		set -o pipefail
+		bw list items 2>/dev/null | jq -r '.[] | select(.type == 1) | .name' 2>/dev/null
+	) || {
+		secret_die "bw list failed; the Bitwarden badges were left as they were"
+		return 1
+	}
+	mkdir -p "$SECRETS_DIR" && chmod 700 "$SECRETS_DIR"
+	tmp="$BW_NAMES_FILE.$$"
+	printf '%s\n' "$names" ${1:+"$1"} | grep -v '^$' | sort -u >"$tmp" || true
+	mv -f "$tmp" "$BW_NAMES_FILE"
+}
 
 # Id of the one item named exactly NAME, empty when there is none. Bitwarden's
 # --search is a substring match, so FOO_KEY would also find FOO_KEY_OLD.
@@ -696,6 +730,9 @@ secret_bw_push() {
 		return 1
 	}
 	unset value item
+	# The push itself succeeded; a failed refresh only leaves the badges as they
+	# were, so it warns and does not fail the push.
+	secret_bw_names_refresh "$name" || true
 }
 
 # --- CLI ---------------------------------------------------------------------
@@ -708,13 +745,17 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
 	index | locate | audit | card | read | set | create | rm | rename | promote | demote | link | unlink | refs | envrc-files | desc-get | desc-set)
 		"secret_${cmd//-/_}" "$@"
 		;;
+	# Rebuild the Bitwarden badges by hand, with BW_SESSION exported.
+	bw-refresh)
+		secret_bw_names_refresh
+		;;
 	# Reads the value itself, so the CLI form is one command: a bastion object
 	# costs its tap here exactly as Enter in the picker does.
 	bw-push)
 		secret_read "$1" | secret_bw_push "$1"
 		;;
 	*)
-		printf 'usage: %s {index|locate NAME|audit|card NAME|read NAME|set NAME|rm NAME|rename OLD NEW|promote NAME|demote NAME SUB|link NAME FILE [VAR]|unlink NAME FILE|refs [NAME]|envrc-files|bw-push NAME}\n\n' \
+		printf 'usage: %s {index|locate NAME|audit|card NAME|read NAME|set NAME|rm NAME|rename OLD NEW|promote NAME|demote NAME SUB|link NAME FILE [VAR]|unlink NAME FILE|refs [NAME]|envrc-files|bw-push NAME|bw-refresh}\n\n' \
 			"${0##*/}" >&2
 		exit 2
 		;;

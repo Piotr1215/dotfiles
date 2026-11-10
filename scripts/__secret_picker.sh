@@ -15,9 +15,11 @@
 #   Alt+p    promote to the bastion (drops the .envrc references with it)
 #   Alt+d    demote to pass (costs a tap, since the value has to be read out)
 #   Alt+l    reference it from an .envrc via _pass_export
-#   Alt+x    delete it (from pass, the references go too)
-#   Alt+w    save a copy to Bitwarden (unlock taps when the master password is in
-#            the bastion, else a typed prompt; asks before replacing an item)
+#   Alt+x    delete it here (the references go too; a Bitwarden copy stays)
+#   Alt+w    save a copy to Bitwarden (asks before replacing an item). One tap per
+#            push: the unlock is reused for BW_SESSION_TTL seconds after the last
+#            push, so only the first push after a pause taps twice, and each tap
+#            gets a popup naming what it is for
 #
 # The tier MUST stay visible per row. A row that hid which store serves it would
 # have you reach for a secret believing a tap guards it when nothing does. The
@@ -70,43 +72,110 @@ rofi_pick() {
 		"${ROFI_THEME[@]}"
 }
 
-# The bastion secret holding the Bitwarden master password. When it exists, Alt+w
-# reads it with a YubiKey tap instead of a typed prompt: the tap is the confirm.
-# Store it once with Alt+a (choose YubiKey) under this name. Override per machine.
+# The secret holding the Bitwarden master password. In the bastion, Alt+w reads
+# it with a YubiKey tap instead of a typed prompt: the tap is the confirm. In
+# pass it is read with no tap at all, which makes every pushed bastion secret as
+# readable as a pass one; that trade is yours to make with Alt+d. Missing, a
+# typed prompt. Store it once with Alt+a under this name. Override per machine.
 BW_MASTER_SECRET="${BW_MASTER_SECRET:-BW_MASTER_PASSWORD}"
 
-# A Bitwarden session for this one push. An already exported BW_SESSION is used as
-# is and left unlocked. Otherwise the master password comes from the bastion when
-# a secret named $BW_MASTER_SECRET lives there (one tap, nothing typed), else from
-# a rofi password field. Either way it reaches bw through the environment, never an
-# argv, and the vault is locked again on exit. `bw login` stays a one-time terminal
+# How long an unlock is reused after the last push, in seconds. The YubiKey here
+# has touch policy Always: every age decrypt is its own touch, so a bastion
+# secret pushed through a fresh unlock costs two (master, then value). Reusing
+# the session is the only way to one tap that keeps the master in the bastion.
+# 15 minutes is Bitwarden's own default vault timeout. 0 locks after each push.
+BW_SESSION_TTL="${BW_SESSION_TTL:-900}"
+
+# A Bitwarden session for this push. An already exported BW_SESSION is used as is
+# and left alone. Then a session cached by an earlier push, if bw still calls it
+# unlocked and it was used within BW_SESSION_TTL. Otherwise a fresh unlock with
+# the master password from $BW_MASTER_SECRET or a rofi password field; it reaches
+# bw through the environment, never an argv. `bw login` stays a one-time terminal
 # step a picker cannot do: it can ask for a 2FA code, a device approval or SSO.
+# $1 labels the unlock tap, so "1 of 2" says up front that a second one follows.
 bw_session() {
 	local state pw owner
 	command -v bw >/dev/null 2>&1 || fail "bw CLI not found"
 	[[ -n "${BW_SESSION:-}" ]] && return 0
+	if bw_session_cached; then
+		bw_session_keep
+		return 0
+	fi
 	state=$(bw status 2>/dev/null | jq -r '.status // empty') || state=""
 	[[ "$state" == unauthenticated ]] && fail "Bitwarden is logged out. Run 'bw login' once in a terminal, then Alt+w again."
 	owner=$(secret_locate "$BW_MASTER_SECRET" 2>/dev/null | cut -f2)
-	if [[ "$owner" == age ]]; then
+	case "$owner" in
+	age)
 		# The tap that reads the master password is the confirmation. A missed tap
 		# returns nothing, so unlock fails below rather than on an empty password.
-		touch_cue_on
+		touch_cue_on "Touch the YubiKey${1:+ ($1)}: unlock Bitwarden"
 		pw=$(secret_read "$BW_MASTER_SECRET" 2>/dev/null) ||
 			{ touch_cue_off; fail "no tap registered, Bitwarden not unlocked. Press Alt+w again and touch the key."; }
 		touch_cue_off
-	else
+		BW_UNLOCK_TAPPED=1
+		;;
+	pass)
+		pw=$(secret_read "$BW_MASTER_SECRET" 2>/dev/null) || fail "could not read $BW_MASTER_SECRET from pass (gpg-agent down?)"
+		;;
+	*)
 		# rofi 1.7 dropped -lines; the empty list is hidden through the theme instead.
 		rofi_theme 900 1
 		pw=$(rofi -dmenu -password -p "Bitwarden master password" "${ROFI_THEME[@]}" \
 			-theme-str 'listview { enabled: false; }' </dev/null) || exit 0
-	fi
+		;;
+	esac
 	[[ -n "$pw" ]] || exit 0
 	BW_SESSION=$(BW_MASTER="$pw" bw unlock --raw --passwordenv BW_MASTER 2>/dev/null) || BW_SESSION=""
 	unset pw
 	[[ -n "$BW_SESSION" ]] || fail "Bitwarden unlock failed (wrong master password, or the stored $BW_MASTER_SECRET is wrong)."
 	export BW_SESSION
-	BW_LOCK_ON_EXIT=1
+	# Kept before the push runs, so a missed second tap retries with one tap.
+	bw_session_keep
+}
+
+# The cached session, if bw still calls it unlocked and it was used within the
+# TTL. Checked rather than trusted: a `bw lock` or logout elsewhere kills it, and
+# the lock timer below runs on monotonic time, which stands still in suspend.
+bw_session_cached() {
+	local sess idle
+	((BW_SESSION_TTL > 0)) && [[ -r "$BW_SESSION_FILE" ]] || return 1
+	idle=$(($(date +%s) - $(stat -c %Y "$BW_SESSION_FILE")))
+	if ((idle >= BW_SESSION_TTL)); then
+		rm -f "$BW_SESSION_FILE"
+		bw lock >/dev/null 2>&1 || true
+		return 1
+	fi
+	sess=$(<"$BW_SESSION_FILE")
+	if [[ "$(BW_SESSION="$sess" bw status 2>/dev/null | jq -r '.status // empty')" != unlocked ]]; then
+		rm -f "$BW_SESSION_FILE"
+		return 1
+	fi
+	BW_SESSION="$sess"
+	export BW_SESSION
+}
+
+# Cache the session in tmpfs, 0600 in the 0700 runtime dir, and (re)arm the lock.
+# The window slides: every push restarts it. Each push leaves a sleeper behind;
+# a sleeper that wakes to a file touched since its own deadline leaves it be, so
+# only the one armed by the last push locks. setsid, so closing rofi spares it.
+# With BW_SESSION_TTL=0 nothing is cached and the vault locks when this exits.
+bw_session_keep() {
+	if ((BW_SESSION_TTL <= 0)); then
+		BW_LOCK_ON_EXIT=1
+		return 0
+	fi
+	(
+		umask 077
+		printf '%s' "$BW_SESSION" >"$BW_SESSION_FILE"
+	)
+	# shellcheck disable=SC2016 # expands in the child bash, from its own $1 and $2
+	setsid -f bash -c '
+		sleep "$1"
+		[[ -f "$2" ]] || exit 0
+		(($(date +%s) - $(stat -c %Y "$2") >= $1)) || exit 0
+		rm -f "$2"
+		bw lock >/dev/null 2>&1
+	' secret-picker-bw-lock "$BW_SESSION_TTL" "$BW_SESSION_FILE" </dev/null >/dev/null 2>&1 || true
 }
 
 # A short list to choose from (pass subtree, .envrc path, yes/no). Text back, not
@@ -165,6 +234,8 @@ note() { notify-send -t 5000 "Secret picker" "$1"; }
 # on screen long after the key had been touched.
 BADGE_DIR="${XDG_RUNTIME_DIR:-/run/user/$UID}"
 TOUCH_CUE="$BADGE_DIR/secret-picker-touch"
+BW_SESSION_FILE="$BADGE_DIR/secret-picker-bw-session"
+TOUCH_POPUP=""
 
 # Yellow flashes: the value is on the clipboard.
 blink_key() { touch "$BADGE_DIR/secret-picker-blink"; }
@@ -172,11 +243,30 @@ blink_key() { touch "$BADGE_DIR/secret-picker-blink"; }
 # Red flashing T: age is blocked on the key and wants a touch. The trap matters
 # more than the on/off pair does. `fail` exits from inside the wait, and without
 # it the T would still be asking for a touch nobody owes.
+#
+# $1, when given, also raises a popup saying what the touch is for. The Bitwarden
+# push uses it: there a touch can be the first of two, and a badge alone did not
+# say a second one was owed. The popup is closed by id the moment the touch
+# lands, so it never outlives the wait the way the old card did.
 touch_cue_on() {
 	touch "$TOUCH_CUE"
-	trap 'rm -f "$TOUCH_CUE"' EXIT
+	TOUCH_POPUP=""
+	[[ -n "${1:-}" ]] && { TOUCH_POPUP=$(notify-send -p -e -u critical "Secret picker" "$1" 2>/dev/null) || TOUCH_POPUP=""; }
+	trap on_exit EXIT
 }
-touch_cue_off() { rm -f "$TOUCH_CUE"; }
+touch_cue_off() {
+	rm -f "$TOUCH_CUE"
+	if [[ "$TOUCH_POPUP" =~ ^[0-9]+$ ]]; then
+		gdbus call --session --dest org.freedesktop.Notifications --object-path /org/freedesktop/Notifications \
+			--method org.freedesktop.Notifications.CloseNotification "$TOUCH_POPUP" >/dev/null 2>&1 || true
+	fi
+	TOUCH_POPUP=""
+}
+on_exit() {
+	touch_cue_off
+	[[ -n "${BW_LOCK_ON_EXIT:-}" ]] && { bw lock >/dev/null 2>&1 || true; }
+	return 0
+}
 
 fail() {
 	notify-send -u critical "Secret picker" "$1"
@@ -195,16 +285,18 @@ fail() {
 #   nf-fa-key     U+F084  pass, no tap
 #   nf-fa-link    U+F0C1  .envrc references, with their count
 #   nf-fa-warning U+F071  the invariant is broken on this row
+#   nf-md-cloud_lock U+F11F1  Bitwarden holds an item with this name
 ICON_AGE=$'\uf132'
 ICON_PASS=$'\uf084'
 ICON_REF=$'\uf0c1'
 ICON_ALERT=$'\uf071'
+ICON_BW=$'\U000f11f1'
 
 # Keys on one line, what the badges mean on the next. The badge legend is here
 # because a glyph nobody can name is noise: the link count in particular reads as
 # decoration until it says "this many .envrc files import this secret".
 MESG="Enter copy   Alt+c card   Alt+a add   Alt+e edit   Alt+o open .envrc uses   Alt+l add .envrc   Alt+w Bitwarden   Alt+p promote   Alt+d demote   Alt+x delete
-$ICON_AGE bastion, one tap    $ICON_PASS pass, no tap    ${ICON_REF}N referenced by N .envrc"
+$ICON_AGE bastion, one tap    $ICON_PASS pass, no tap    $ICON_BW in Bitwarden    ${ICON_REF}N referenced by N .envrc"
 
 icon_for() {
 	case "$1" in
@@ -256,6 +348,15 @@ entries=()
 statuses=()
 menu=()
 
+# Read once, not per row: the cache of Bitwarden item names (see the export
+# section of __lib_secret_object.sh), as of the last push.
+declare -A in_bw=()
+if [[ -r "$BW_NAMES_FILE" ]]; then
+	while IFS= read -r bwname; do
+		[[ -n "$bwname" ]] && in_bw["$bwname"]=1
+	done <"$BW_NAMES_FILE"
+fi
+
 while IFS=$'\t' read -r name owner entry refs status; do
 	[[ -n "$name" ]] || continue
 	names+=("$name")
@@ -264,6 +365,11 @@ while IFS=$'\t' read -r name owner entry refs status; do
 	statuses+=("$status")
 
 	badge="$(icon_for "$owner")"
+	if [[ -n "${in_bw[$name]:-}" ]]; then
+		badge+=" $ICON_BW"
+	else
+		badge+='  '
+	fi
 	if ((refs > 0)); then
 		badge+="$(printf " %s%-2s" "$ICON_REF" "$refs")"
 	else
@@ -405,7 +511,10 @@ edit)
 	fi
 
 	((${#changed[@]})) || exit 0
-	note "$name: ${changed[*]} updated"
+	stale=""
+	[[ " ${changed[*]} " == *" value "* ]] && secret_bw_has "$name" &&
+		stale="; Bitwarden still has the old value, Alt+w to update it"
+	note "$name: ${changed[*]} updated$stale"
 	;;
 promote)
 	[[ "$owner" == pass ]] || fail "$name is already in the bastion"
@@ -467,20 +576,18 @@ bitwarden)
 	# The value goes picker → library → bw over pipes only, the same path a copy
 	# takes to the clipboard. secret_bw_push refuses an empty read, so a missed tap
 	# can never blank the password in Bitwarden.
-	bw_session
-	# One trap for both cleanups, set before anything can fail. touch_cue_on would
-	# replace it, so the tap cue below is raised with a bare touch.
-	if [[ -n "${BW_LOCK_ON_EXIT:-}" ]]; then
-		trap 'rm -f "$TOUCH_CUE"; bw lock >/dev/null 2>&1' EXIT
-	else
-		trap 'rm -f "$TOUCH_CUE"' EXIT
-	fi
+	trap on_exit EXIT
+	if [[ "$owner" == age ]]; then bw_session "1 of 2"; else bw_session; fi
 	bw sync >/dev/null 2>&1 || true
 	existing=$(secret_bw_item_id "$name" 2>&1) || fail "${existing#secret: }"
 	if [[ -n "$existing" ]]; then
 		confirm "replace the password in the Bitwarden item $name?" || exit 0
 	fi
-	[[ "$owner" == age ]] && touch "$TOUCH_CUE"
+	if [[ "$owner" == age ]]; then
+		step=""
+		[[ -n "${BW_UNLOCK_TAPPED:-}" ]] && step=" (2 of 2)"
+		touch_cue_on "Touch the YubiKey$step: send $name to Bitwarden"
+	fi
 	if ! error=$(secret_read "$name" 2>/dev/null | secret_bw_push "$name" 2>&1); then
 		[[ "$owner" == age && "$error" == *"empty value"* ]] &&
 			fail "no tap registered, $name not sent to Bitwarden. Press again and touch the key."
@@ -491,10 +598,14 @@ bitwarden)
 	;;
 
 delete)
+	# Delete is local. A Bitwarden copy is where a moved secret lives on, so it is
+	# left alone, and the row goes: it lists what this machine holds.
 	refs=$(secret_refs "$name" | wc -l)
 	((refs > 0)) && also=" and its $refs .envrc reference(s)" || also=""
-	confirm "delete $name from $owner$also?" || exit 0
+	kept=""
+	secret_bw_has "$name" && kept="; the Bitwarden copy stays"
+	confirm "delete $name from $owner$also$kept?" || exit 0
 	secret_rm "$name" || fail "delete failed for $name"
-	note "$name deleted from $owner"
+	note "$name deleted from $owner$kept"
 	;;
 esac

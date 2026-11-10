@@ -324,6 +324,29 @@ printf 'x' | secret_bw_push BW_BOTH 2>/dev/null
 is "a name in both stores is refused" "$?" "1"
 printf 'x' | secret_bw_push NO_SUCH 2>/dev/null
 is "an unknown name is refused" "$?" "1"
+
+echo "== Bitwarden badges =="
+# The picker draws a badge from $SECRETS_DIR/.bitwarden, rebuilt from bw on
+# every push. The fake's create does not add to its list, which is exactly the
+# lagging client the pushed name is added for.
+badges="$SECRETS_DIR/.bitwarden"
+bwreset
+rm -f "$badges"
+printf '[{"id":"e","name":"FROM_ELSEWHERE","type":1},{"id":"n","name":"A_NOTE","type":2}]' >"$BW_FAKE/items"
+printf 'bwpval' | secret_bw_push BW_P
+is "a push records its own name" "$(grep -cx BW_P "$badges")" "1"
+is "and every login item Bitwarden holds" "$(grep -cx FROM_ELSEWHERE "$badges")" "1"
+is "but no secure note" "$(grep -cx A_NOTE "$badges")" "0"
+is "secret_bw_has sees the pushed name" "$(secret_bw_has BW_P && echo yes)" "yes"
+is "and not an unpushed one" "$(secret_bw_has BW_A || echo no)" "no"
+is "the card names the Bitwarden copy" "$(secret_card BW_P | grep -c '^Bitwarden:')" "1"
+is "and no value lands in the cache" "$(grep -c bwpval "$badges")" "0"
+touch "$BW_FAKE/list_fail"
+secret_bw_names_refresh 2>/dev/null
+is "a failed list (locked vault) is reported" "$?" "1"
+is "and leaves the badges as they were" "$(grep -cx BW_P "$badges")" "1"
+secret_rm BW_P
+is "a local delete keeps the Bitwarden name" "$(secret_bw_has BW_P && echo yes)" "yes"
 unset BW_SESSION
 
 printf '\n%d passed, %d failed\n' "$pass_n" "$fail_n"
