@@ -85,7 +85,7 @@ def test_mail_sent_uses_newest_message_and_account(tmp_path, monkeypatch):
     binary.chmod(0o755)
     monkeypatch.setenv("PATH", str(tmp_path))
     done = "done-when: mail-sent 000000000000cae0 since 2026-11-10"
-    assert nav.destination(task(done)) == ("https://mail.google.com/mail/u/work%40example.com/"
+    assert nav.destination(task(done)) == ("https://mail.google.com/mail/?authuser=work@example.com"
                                             "#search/rfc822msgid%3Anew%2Bid%40example.com")
     assert nav.destination(task(done, "link: https://github.com/a")) == "https://github.com/a"
 

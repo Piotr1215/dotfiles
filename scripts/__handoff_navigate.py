@@ -59,7 +59,7 @@ def mail_sent_url(done):
             except ValueError:
                 continue
             if len(parts) >= 2 and ".." not in parts:
-                return checked_url(f"https://mail.google.com/mail/u/{quote(parts[0], safe='')}/"
+                return checked_url(f"https://mail.google.com/mail/?authuser={quote(parts[0], safe='@')}"
                                    f"#search/rfc822msgid%3A{quote(message, safe='')}")
     except (OSError, subprocess.SubprocessError):
         return None
