@@ -301,3 +301,88 @@ chrome.tabs.onActivated.addListener(async ({tabId}) => {
 chrome.management.onInstalled.addListener(claudeInChromeRestarted);
 chrome.management.onEnabled.addListener(claudeInChromeRestarted);
 chrome.tabGroups.query({}).then((groups) => groups.forEach(syncIfStatusTitle), () => {});
+
+// Self-reload. Chrome keeps running the service worker it loaded until the
+// extension reloads, so a change here used to wait for Piotr's click in
+// chrome://extensions. Every 30 seconds the worker hashes the manifest and
+// the service worker file, read fresh from disk. A hash that differs from the
+// loaded one and holds for one more tick goes to the host, which checks the
+// folder would load (no "_" names, a manifest, node --check); only then does
+// the extension reload itself, about a minute after the last edit. A refused
+// hash is not asked about again, so a broken change leaves the running code
+// in place. chrome.runtime.reload needs Developer mode, which loading an
+// unpacked extension already turned on.
+const LOADED_KEY = 'loadedHash';
+const SEEN_KEY = 'reloadSeen';
+const RELOAD_ALARM = 'self-reload';
+const RELOAD_PERIOD_MIN = 0.5;
+let checking = null;
+
+async function readOwnFile(file) {
+  try {
+    const response = await fetch(chrome.runtime.getURL(file), {cache: 'no-store'});
+    return response.ok ? await response.text() : '';
+  } catch (_) {
+    return '';
+  }
+}
+
+async function diskHash() {
+  const manifest = await readOwnFile('manifest.json');
+  let worker = '';
+  try {
+    worker = String(JSON.parse(manifest).background.service_worker ?? '');
+  } catch (_) {
+    // A broken manifest still hashes, so the host gets to refuse it.
+  }
+  const text = `${manifest}\0${worker}\0${worker ? await readOwnFile(worker) : ''}`;
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function updateOnce() {
+  const hash = await diskHash();
+  const loaded = (await chrome.storage.local.get(LOADED_KEY))[LOADED_KEY];
+  if (!loaded) {
+    await chrome.storage.local.set({[LOADED_KEY]: hash});
+    return 'baseline';
+  }
+  if (hash === loaded) return 'current';
+  const seen = (await chrome.storage.session.get(SEEN_KEY))[SEEN_KEY];
+  if (seen?.hash !== hash) {
+    await chrome.storage.session.set({[SEEN_KEY]: {hash, refused: false}});
+    return 'settling';
+  }
+  if (seen.refused) return 'refused';
+  const reply = await askHost({op: 'check'});
+  if (typeof reply?.loadable !== 'boolean') return 'no-host';
+  if (!reply.loadable) {
+    await chrome.storage.session.set({[SEEN_KEY]: {hash, refused: true}});
+    return 'refused';
+  }
+  if (await diskHash() !== hash) return 'settling';
+  // Stored before the reload, so the new worker starts as current and cannot loop.
+  await chrome.storage.local.set({[LOADED_KEY]: hash});
+  chrome.runtime.reload();
+  return 'reloading';
+}
+
+// One check at a time; the tests call this directly instead of waiting for the alarm.
+function checkForUpdate() {
+  checking ??= updateOnce().finally(() => {
+    checking = null;
+  });
+  return checking;
+}
+
+chrome.runtime.onInstalled.addListener(async () => {
+  const hash = await diskHash();
+  await chrome.storage.local.set({[LOADED_KEY]: hash});
+  await askHost({op: 'loaded', hash});
+});
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === RELOAD_ALARM) checkForUpdate().catch(() => {});
+});
+chrome.alarms.get(RELOAD_ALARM).then((alarm) => {
+  if (!alarm) chrome.alarms.create(RELOAD_ALARM, {periodInMinutes: RELOAD_PERIOD_MIN});
+}, () => {});

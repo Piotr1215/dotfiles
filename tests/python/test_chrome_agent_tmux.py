@@ -3,6 +3,7 @@ import json
 import struct
 import os
 import pty
+import shutil
 import subprocess
 import time
 import uuid
@@ -270,3 +271,63 @@ def test_names_over_native_protocol(tabs):
     )
     length = struct.unpack('=I', result.stdout[:4])[0]
     assert json.loads(result.stdout[4:4 + length]) == {'names': {'7': 'gordon'}}
+
+
+@pytest.fixture
+def extension_copy(tmp_path, monkeypatch):
+    monkeypatch.setattr(host, 'run_tmux', lambda *a: pytest.fail('the extension ops must not touch tmux'))
+    folder = tmp_path / 'ext'
+    shutil.copytree(ROOT / '.config/chrome-agent-tmux', folder)
+    monkeypatch.setenv('AGENT_TAB_EXTENSION_DIR', str(folder))
+    return folder
+
+
+def test_extension_dir_defaults_to_the_checkout(monkeypatch):
+    monkeypatch.delenv('AGENT_TAB_EXTENSION_DIR', raising=False)
+    assert host.extension_dir() == str(ROOT / '.config/chrome-agent-tmux')
+
+
+def test_check_accepts_the_extension(extension_copy):
+    assert host.handle({'op': 'check'}) == {'loadable': True}
+
+
+def break_reserved(folder):
+    (folder / '__pycache__').mkdir()
+
+
+def break_syntax(folder):
+    with open(folder / 'background.js', 'a') as handle:
+        handle.write('\nfunction (\n')
+
+
+def break_manifest(folder):
+    (folder / 'manifest.json').write_text('{')
+
+
+def break_worker_name(folder):
+    manifest = json.loads((folder / 'manifest.json').read_text())
+    manifest['background']['service_worker'] = 'gone.js'
+    (folder / 'manifest.json').write_text(json.dumps(manifest))
+
+
+@pytest.mark.parametrize('breaker, error', [
+    (break_reserved, 'reserved name __pycache__'),
+    (break_syntax, 'background.js: SyntaxError'),
+    (break_manifest, 'manifest:'),
+    (break_worker_name, "manifest: no service worker file 'gone.js'"),
+])
+def test_check_refuses_a_folder_chrome_would_not_run(extension_copy, breaker, error):
+    """The extension reloads itself only when this says the folder loads."""
+    breaker(extension_copy)
+    reply = host.handle({'op': 'check'})
+    assert reply['loadable'] is False
+    assert error in reply['error']
+
+
+def test_check_refuses_without_node(extension_copy, monkeypatch):
+    monkeypatch.setattr(host.shutil, 'which', lambda name: None)
+    assert host.handle({'op': 'check'}) == {'loadable': False, 'error': 'node not found for the syntax check'}
+
+
+def test_loaded_only_acknowledges(extension_copy):
+    assert host.handle({'op': 'loaded', 'hash': 'abc'}) == {'ok': True}

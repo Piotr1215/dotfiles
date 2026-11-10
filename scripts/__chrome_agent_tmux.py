@@ -3,6 +3,7 @@
 import json
 import os
 import re
+import shutil
 import struct
 import subprocess
 import sys
@@ -138,11 +139,60 @@ def tab_names(message):
     return {"names": names}
 
 
+def extension_dir():
+    return os.environ.get("AGENT_TAB_EXTENSION_DIR") or os.path.join(
+        os.path.dirname(os.path.dirname(os.path.realpath(__file__))), ".config", "chrome-agent-tmux")
+
+
+def check_extension():
+    """Whether the extension folder would load, so the extension reloads itself only into code that runs.
+
+    Chrome refuses a folder holding a name that starts with "_" and leaves no
+    extension running (9 Nov), and a service worker with a syntax error never
+    starts, which would also end the self-reload."""
+    folder = extension_dir()
+    problems = []
+    for root, dirs, files in os.walk(folder):
+        for name in dirs + files:
+            if name.startswith("_"):
+                problems.append("reserved name " + os.path.relpath(os.path.join(root, name), folder))
+    try:
+        with open(os.path.join(folder, "manifest.json"), encoding="utf-8") as handle_:
+            worker = json.load(handle_)["background"]["service_worker"]
+        if not isinstance(worker, str) or not os.path.isfile(os.path.join(folder, worker)):
+            raise ValueError(f"no service worker file {worker!r}")
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        problems.append(f"manifest: {error}")
+        worker = None
+    if worker:
+        node = shutil.which("node")
+        if node is None:
+            problems.append("node not found for the syntax check")
+        else:
+            try:
+                result = subprocess.run([node, "--check", os.path.join(folder, worker)],
+                                        capture_output=True, text=True, timeout=20, check=False)
+            except (OSError, subprocess.SubprocessError) as error:
+                problems.append(f"syntax check: {error}")
+            else:
+                if result.returncode:
+                    lines = [line for line in result.stderr.splitlines() if "Error" in line] or ["syntax error"]
+                    problems.append(f"{worker}: {lines[0]}")
+    if problems:
+        return {"loadable": False, "error": "; ".join(problems)[:300]}
+    return {"loadable": True}
+
+
 def handle(message):
     if not isinstance(message, dict):
         return {"switched": False}
     if message.get("op") == "names":
         return tab_names(message)
+    if message.get("op") == "check":
+        return check_extension()
+    if message.get("op") == "loaded":
+        # The extension reports each start after a reload, so host.log shows when a change went live.
+        return {"ok": True}
     target, rule = find_pane(message)
     if target is None:
         target = title_match(message)

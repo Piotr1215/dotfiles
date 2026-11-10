@@ -114,6 +114,10 @@ def chrome_with_tmux(tmp_path, request):
     host_dirs = [home / ".config/google-chrome/NativeMessagingHosts", home / ".config/google-chrome-for-testing/NativeMessagingHosts", home / ".config/chromium/NativeMessagingHosts", profile / "NativeMessagingHosts"]
     for host_dir in host_dirs:
         host_dir.mkdir(parents=True)
+    # Developer mode on, as in Piotr's Chrome: without it Chrome refuses to
+    # reload an unpacked extension and leaves it disabled.
+    (profile / "Default").mkdir(parents=True)
+    (profile / "Default" / "Preferences").write_text(json.dumps({"extensions": {"ui": {"developer_mode": True}}}))
     host_manifest = {
         "name": "org.piotr.agent_tab_tmux", "description": "test host",
         "path": str(HOST), "type": "stdio",
@@ -123,7 +127,12 @@ def chrome_with_tmux(tmp_path, request):
         (host_dir / "org.piotr.agent_tab_tmux.json").write_text(json.dumps(host_manifest))
         os.chmod(host_dir / "org.piotr.agent_tab_tmux.json", 0o600)
     state = tmp_path / "state"
-    env = {**os.environ, "HOME": str(home), "XDG_CONFIG_HOME": str(home / ".config"), "XDG_STATE_HOME": str(state), "AGENT_TMUX_TEST_SOCKET": socket_name}
+    # A test that edits the extension on disk asks for a copy (indirect param "copy").
+    extension = EXTENSION
+    if getattr(request, "param", None) == "copy":
+        extension = tmp_path / "extension"
+        shutil.copytree(EXTENSION, extension)
+    env = {**os.environ, "HOME": str(home), "XDG_CONFIG_HOME": str(home / ".config"), "XDG_STATE_HOME": str(state), "AGENT_TMUX_TEST_SOCKET": socket_name, "AGENT_TAB_EXTENSION_DIR": str(extension)}
     browser = None
     browser_log = (tmp_path / "chrome.log").open("w")
     client = None
@@ -206,7 +215,7 @@ def chrome_with_tmux(tmp_path, request):
                 reply += chunk
         return {}
 
-    loaded = load_unpacked(EXTENSION)
+    loaded = load_unpacked(extension)
     if loaded.get("result", {}).get("id") != extension_id():
         pytest.fail(f"Chrome refused the unpacked extension: {loaded}")
     active_port = profile / "DevToolsActivePort"
@@ -469,3 +478,94 @@ def test_claude_in_chrome_reload_gets_its_group_title_back(chrome_with_tmux, tmp
     # Claude in Chrome changes the status emoji only on a group it owns again.
     eval_extension(cdp, session, f"chrome.tabGroups.update({group},{{title:'⌛Claude'}})")
     assert wait_for_title(cdp, session, group, "⌛claude-agent"), group_title(cdp, session, group)
+
+
+def worker_ids(cdp):
+    return [t["targetId"] for t in cdp.command("Target.getTargets")["targetInfos"]
+            if t["type"] == "service_worker" and t["url"].startswith(f"chrome-extension://{extension_id()}/")]
+
+
+def attach_worker(cdp, other_than=None, seconds=15):
+    """Attach to the extension's service worker; after a reload, to the new one."""
+    deadline = time.time() + seconds
+    while time.time() < deadline:
+        fresh = [target for target in worker_ids(cdp) if target != other_than]
+        if fresh:
+            for _ in range(3):
+                attached = cdp.command("Target.attachToTarget", {"targetId": fresh[0], "flatten": True})["sessionId"]
+                cdp.sock.settimeout(5)
+                try:
+                    if eval_extension(cdp, attached, "typeof checkForUpdate").get("result", {}).get("value") == "function":
+                        return fresh[0], attached
+                except TimeoutError:
+                    continue
+                finally:
+                    cdp.sock.settimeout(30)
+        time.sleep(.1)
+    pytest.fail("no extension service worker answered")
+
+
+def check_update(cdp, session):
+    return eval_extension(cdp, session, "checkForUpdate()").get("result", {}).get("value")
+
+
+def host_calls(state, op):
+    log = state / "agent-tabs" / "host.log"
+    rows = [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
+    return [row for row in rows if json.loads(row["in"]).get("op") == op]
+
+
+@pytest.mark.parametrize("chrome_with_tmux", ["copy"], indirect=True)
+def test_a_change_on_disk_reloads_the_extension(chrome_with_tmux, tmp_path):
+    """Piotr, 10 Nov: "can this be automated". Chrome runs the loaded code until a reload,
+    so the extension reloads itself once a changed folder passes the host's check."""
+    tmux, cdp, session, state, _ = chrome_with_tmux
+    extension = tmp_path / "extension"
+    assert eval_extension(cdp, session, "chrome.alarms.get('self-reload').then(a=>a&&a.periodInMinutes)")["result"]["value"] == 0.5
+    assert check_update(cdp, session) in ("current", "baseline")
+    assert check_update(cdp, session) == "current"
+    old, _ = attach_worker(cdp)
+
+    with open(extension / "background.js", "a") as handle:
+        handle.write("\nglobalThis.reloadMarker = 42;\n")
+    assert check_update(cdp, session) == "settling"
+    # The worker goes away mid-call, so the reply is not awaited.
+    cdp.command("Runtime.evaluate", {"expression": "checkForUpdate()"}, session)
+    new, fresh = attach_worker(cdp, other_than=old)
+    assert eval_extension(cdp, fresh, "globalThis.reloadMarker")["result"].get("value") == 42
+    assert check_update(cdp, fresh) == "current", "the reloaded worker would reload again"
+    assert [row["out"] for row in host_calls(state, "check")] == [{"loadable": True}]
+    for _ in range(50):
+        if len(host_calls(state, "loaded")) >= 2:
+            break
+        time.sleep(.1)
+    assert len(host_calls(state, "loaded")) >= 2, "the reload left no trace in host.log"
+
+    # Tabs still switch tmux after the reload.
+    group, mapped, _ = claude_group(tmux, cdp, fresh, state)
+    eval_extension(cdp, fresh, f"chrome.tabs.update({mapped},{{active:true}})")
+    assert wait_for_session(tmux, "claude-agent")
+
+
+@pytest.mark.parametrize("chrome_with_tmux", ["copy"], indirect=True)
+def test_a_broken_change_keeps_the_running_code(chrome_with_tmux, tmp_path):
+    """A reload into code that cannot start would end the self-reload too."""
+    tmux, cdp, session, state, _ = chrome_with_tmux
+    extension = tmp_path / "extension"
+    original = (extension / "background.js").read_text()
+    check_update(cdp, session)
+    old, _ = attach_worker(cdp)
+
+    (extension / "background.js").write_text(original + "\nfunction (\n")
+    assert check_update(cdp, session) == "settling"
+    assert check_update(cdp, session) == "refused"
+    assert check_update(cdp, session) == "refused"
+    # The host writes its log line after it replies, so give a second call time to land.
+    time.sleep(1)
+    refusals = host_calls(state, "check")
+    assert len(refusals) == 1, "a refused change was sent to the host again"
+    assert refusals[0]["out"]["loadable"] is False and "SyntaxError" in refusals[0]["out"]["error"]
+    assert worker_ids(cdp) == [old]
+
+    (extension / "background.js").write_text(original)
+    assert check_update(cdp, session) == "current"
