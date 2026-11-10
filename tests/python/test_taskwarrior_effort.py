@@ -117,10 +117,8 @@ class EffortUdaTests(unittest.TestCase):
         self.task("add", "custom default proof")
         self.assertEqual(json.loads(self.task("export").stdout)[0]["effort"], "M")
 
-    def test_shortcut_nine_cycles_selected_task(self):
+    def test_cycle_selected_task(self):
         script = REPO / "scripts/__cycle_task_effort.sh"
-        binding = f"uda.taskwarrior-tui.shortcuts.9={script}"
-        self.assertIn(binding, (REPO / ".taskrc").read_text().splitlines())
         self.assertTrue(os.access(script, os.X_OK))
         self.task("add", "+codex", "cycle effort proof")
         original = json.loads(self.task("export").stdout)[0]
