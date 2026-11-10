@@ -217,7 +217,7 @@ case "$1" in
 status) s="${BW_STATUS:-unlocked}"; [[ "${BW_SESSION:-}" == sess ]] && s=unlocked; printf '{"status":"%s"}\n' "$s" ;;
 sync | lock) ;;
 unlock) [[ "$2 $3" == "--raw --passwordenv" && "${!4}" == master-pw ]] && printf 'sess' || exit 1 ;;
-list) [[ "${BW_SESSION:-}" == sess || "${BW_SESSION:-}" == fake ]] && printf '[]' || exit 1 ;;
+list) [[ "${BW_SESSION:-}" == sess || "${BW_SESSION:-}" == fake ]] && printf '%s' "${BW_ITEMS:-[]}" || exit 1 ;;
 encode) base64 -w0 ;;
 create) base64 -d >"$BW_CREATED" ;;
 *) exit 1 ;;
@@ -443,6 +443,22 @@ STUB
 	bw_glyph=$'\U000f11f1'
 	grep "BW_ROW" "$ROFI_IN" | grep -qF "$bw_glyph"
 	! grep "NOT_PUSHED" "$ROFI_IN" | grep -qF "$bw_glyph"
+}
+
+@test "Alt+w answered no at replace still rebuilds the badges" {
+	stub_bw
+	printf 'bwvalue' >"$PASSWORD_STORE_DIR/work/BW_ROW.gpg"
+	export BW_SESSION=fake
+	export BW_ITEMS='[{"id":"i1","name":"BW_ROW","type":1},{"id":"i2","name":"PUSHED_EARLIER","type":1}]'
+	stub_rofi_seq '0 18' 'no 0'
+
+	run "$PICKER"
+
+	[ "$status" -eq 0 ]
+	grep -q 'replace the password in the Bitwarden item BW_ROW?' "$ROFI_ARGS"
+	[ ! -e "$BW_CREATED" ]
+	grep -qx BW_ROW "$SECRETS_DIR/.bitwarden"
+	grep -qx PUSHED_EARLIER "$SECRETS_DIR/.bitwarden"
 }
 
 @test "Alt+x deletes the local copy and says the Bitwarden copy stays" {

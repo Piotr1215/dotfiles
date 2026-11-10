@@ -579,6 +579,10 @@ bitwarden)
 	trap on_exit EXIT
 	if [[ "$owner" == age ]]; then bw_session "1 of 2"; else bw_session; fi
 	bw sync >/dev/null 2>&1 || true
+	# Rebuilt here, not only after a push: an open session is the one moment the
+	# names can be read, and a push that ends at "replace?" with no still has to
+	# leave the badges right, including items pushed before the badge existed.
+	secret_bw_names_refresh 2>/dev/null || true
 	existing=$(secret_bw_item_id "$name" 2>&1) || fail "${existing#secret: }"
 	if [[ -n "$existing" ]]; then
 		confirm "replace the password in the Bitwarden item $name?" || exit 0
