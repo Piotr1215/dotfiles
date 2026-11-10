@@ -160,7 +160,7 @@ def test_agent_session_missing_session_is_not_switched(monkeypatch):
     (["https://loft-labs-inc.slack.com/archives/C0123"], "8"),
     (["https://github.com/a"], "2"),
     (["https://loft-labs-inc.slack.com/archives/C0123", "https://github.com/a"], "10"),
-    (["https://github.com/a", "https://linear.app/b"], "7"),
+    (["https://github.com/a", "https://linear.app/b"], "2"),
 ])
 def test_layout_and_url_arguments(monkeypatch, urls, layout):
     calls = []
@@ -176,6 +176,19 @@ def test_layout_and_url_arguments(monkeypatch, urls, layout):
     for url in urls:
         expected = nav.slack_deep_link(url) if "slack.com" in url else url
         assert any(expected in args for args, _ in calls)
+
+
+def test_multiple_browser_links_open_once_in_one_window(monkeypatch):
+    calls = []
+    monkeypatch.delenv("HANDOFF_BROWSER_COMMAND", raising=False)
+    monkeypatch.setattr(nav, "window_id", lambda _: "222")
+    monkeypatch.setattr(nav.time, "sleep", lambda _: None)
+    monkeypatch.setattr(nav, "run", lambda args, **kw: calls.append((args, kw)))
+    monkeypatch.setattr(nav.subprocess, "Popen", lambda args, **kw: calls.append((args, kw)))
+    nav.navigate_many(["https://github.com/a", "https://linear.app/b", "https://github.com/a"], "111")
+    assert calls[0][0] == ["google-chrome-stable", "--new-window", "https://github.com/a", "https://linear.app/b"]
+    assert len(calls) == 2
+    assert calls[-1][0][-1] == "2"
 
 
 @pytest.mark.parametrize("edited", ["", "https://github.com/edited"])

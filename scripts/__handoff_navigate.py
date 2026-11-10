@@ -171,39 +171,34 @@ def slack_deep_link(url):
 
 def navigate_many(urls, terminal):
     """Open each URL and apply the layout dictated by the first two destinations."""
+    urls = list(dict.fromkeys(urls))
     env = dict(os.environ, LAYOUT_ALACRITTY_WINDOW=terminal)
     primary = urls[:2]
     slack = [u for u in primary if urlsplit(u).hostname in SLACK_HOSTS | {"app.slack.com"}]
     browsers = [u for u in primary if u not in slack]
-    browser_count = 0
-    browser_windows = []
-    for index, url in enumerate(urls):
+    all_browsers = [u for u in urls if urlsplit(u).hostname not in SLACK_HOSTS | {"app.slack.com"}]
+    browser_opened = False
+    for url in urls:
         if urlsplit(url).hostname in SLACK_HOSTS | {"app.slack.com"}:
             run(["xdg-open", slack_deep_link(url)], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             continue
-        browser_count += 1
+        if browser_opened:
+            continue
+        browser_opened = True
         browser = os.environ.get("HANDOFF_BROWSER_COMMAND")
-        new_window = not slack and len(browsers) >= 2 and browser_count == 2
         try:
-            if not browser or new_window:
+            if not browser:
                 raise OSError("Chrome window required")
-            run([browser, url])
+            run([browser, *all_browsers])
         except (OSError, subprocess.SubprocessError):
             args = [os.environ.get("HANDOFF_CHROME_COMMAND", "google-chrome-stable")]
-            if new_window:
-                args.append("--new-window")
-            subprocess.Popen(args + [url], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+            subprocess.Popen(args + ["--new-window", *all_browsers], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                              stderr=subprocess.DEVNULL, start_new_session=True)
         time.sleep(0.5)
-        if index < 2:
-            browser_windows.append(window_id("google-chrome"))
+        env["LAYOUT_BROWSER_WINDOW"] = window_id("google-chrome")
     if not urls:
         return
-    if browser_windows:
-        env["LAYOUT_BROWSER_WINDOW"] = browser_windows[0]
-    if len(browser_windows) > 1:
-        env["LAYOUT_BROWSER_WINDOW_2"] = browser_windows[1]
-    layout = "10" if slack and browsers else "8" if slack else "7" if len(browsers) >= 2 else "2"
+    layout = "10" if slack and browsers else "8" if slack else "2"
     run([os.environ.get("HANDOFF_LAYOUT_COMMAND", str(ROOT / "__layouts.sh")), layout],
         env=env, stdout=subprocess.DEVNULL)
 
