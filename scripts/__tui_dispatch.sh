@@ -10,6 +10,8 @@ if [[ "$slot" == 1 ]]; then exec "$HOME/.config/taskwarrior-tui/shortcut-scripts
 if [[ "$slot" == 2 ]]; then exec "$root/__cycle_tui_reports.sh"; fi
 # Key 9 defers selected tasks in every report, without needing a tag lookup.
 if [[ "$slot" == 9 ]]; then exec "$root/__tui_defer_task.sh" "$@"; fi
+# Key 0 jumps to the selected task's agent session in every report.
+if [[ "$slot" == 0 ]]; then exec "$root/__tui_jump_agent.sh" "$@"; fi
 report=${TASKWARRIOR_TUI_REPORT:-}
 if [[ -z "$report" && -n "$uuid" ]] && "$task_bin" rc.context=none rc.hooks=off "$uuid" export | jq -e '.[0].tags // [] | index("piotr") != null' >/dev/null; then
   report=handoffs
@@ -44,7 +46,6 @@ if [[ "$report" == handoffs ]]; then
   esac
 fi
 case "$slot" in
-  0) exec "$HOME/.config/taskwarrior-tui/shortcut-scripts/__annotate_with_note.sh" "$@" ;;
   3) exec "$root/__github_issue_sync.sh" "$@" ;;
   4) exec "$HOME/.claude/scripts/__spawn_claude_directive.sh" "$@" ;;
   5) exec "$HOME/.config/taskwarrior-tui/shortcut-scripts/__toggle_claude_label.sh" "$@" ;;

@@ -112,7 +112,7 @@ setup() {
 @test "handoffs overrides context and detail and legends are configured" {
   grep -qx 'uda.taskwarrior-tui.report.handoffs.context=none' "$repo_root/.taskrc"
   grep -qx 'uda.taskwarrior-tui.report.handoffs.show-info=false' "$repo_root/.taskrc"
-  grep -qx 'uda.taskwarrior-tui.shortcuts.background=5,6,9' "$repo_root/.taskrc"
+  grep -qx 'uda.taskwarrior-tui.shortcuts.background=0,5,6,9' "$repo_root/.taskrc"
   grep -q '^uda.taskwarrior-tui.legend.default=.*\^P project' "$repo_root/.taskrc"
   grep -q '^uda.taskwarrior-tui.legend.handoffs=.*d done.*z details.*\^P project' "$repo_root/.taskrc"
   grep -q '^uda.taskwarrior-tui.legend.default=.*r reports.*\^R refresh' "$repo_root/.taskrc"

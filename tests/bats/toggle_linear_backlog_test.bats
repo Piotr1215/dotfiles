@@ -169,15 +169,11 @@ tags_of() { task _get "$1.tags"; }
   [[ "$output" != *pass-key* ]]
 }
 
-@test "dispatcher routes key 7 to the toggle and key 0 to the note picker" {
-  export HOME="$BATS_TEST_TMPDIR/home"
-  mkdir -p "$HOME/.config/taskwarrior-tui/shortcut-scripts"
-  printf '#!/usr/bin/env bash\necho "note $*"\n' > "$HOME/.config/taskwarrior-tui/shortcut-scripts/__annotate_with_note.sh"
-  chmod +x "$HOME/.config/taskwarrior-tui/shortcut-scripts/__annotate_with_note.sh"
+@test "dispatcher routes key 7 to the toggle and key 0 to the agent jump" {
   uuid=$(add_task 'routed' linear_issue_id:DEVOPS-1828)
   export TASKWARRIOR_TUI_REPORT=current
   run "$root/scripts/__tui_shortcut_7.sh" "$uuid"
   [ "$status" -eq 0 ]; [[ "$output" == *'DEVOPS-1828: In Progress -> Backlog'* ]]
   run "$root/scripts/__tui_shortcut_0.sh" "$uuid"
-  [ "$status" -eq 0 ]; [ "$output" = "note $uuid" ]
+  [ "$status" -eq 1 ]; [ "$output" = 'No agent session recorded on this task' ]
 }
