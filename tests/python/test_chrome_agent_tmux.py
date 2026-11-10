@@ -204,6 +204,34 @@ def test_title_fallback(server, tabs):
     assert host.handle({'tabId': 5, 'groupTabIds': [5], 'owner': 'agent'}) == {'switched': True, 'rule': 'title'}
 
 
+@pytest.mark.parametrize('owner', ['✅agent', '⌛ agent', '🔴agent'])
+def test_title_fallback_reads_past_the_status_symbol(server, tabs, owner):
+    """The extension renames a Claude group "✅<agent>"; a stale tab map must still reach the agent."""
+    tabs(row(7, '%9999'))
+    assert host.handle({'tabId': 7, 'groupTabIds': [7], 'owner': owner}) == {'switched': True, 'rule': 'title'}
+    assert current(server).split()[0] == 'agent'
+
+
+def test_title_fallback_finds_an_agent_in_a_shared_session(server, tabs):
+    # Gordon and Kendra run as windows of `task`, so no session carries their name.
+    subprocess.run(server + ['new-window', '-t', '=start:'], check=True)
+    target = pane_of(server, '=start:1.0')
+    subprocess.run(server + ['set-option', '-p', '-t', target, '@agent_name', 'gordon'], check=True)
+    subprocess.run(server + ['select-window', '-t', '=start:0'], check=True)
+    assert host.handle({'groupTabIds': [5], 'owner': '✅gordon'}) == {'switched': True, 'rule': 'title'}
+    assert current(server).split() == ['start', '1', target]
+
+
+def test_title_fallback_skips_an_ambiguous_or_shared_title(server, tabs):
+    for session in ('one', 'two'):
+        subprocess.run(server + ['new-session', '-d', '-s', session], check=True)
+        subprocess.run(server + ['set-option', '-p', '-t', f'={session}:.0', '@agent_name', 'twin'], check=True)
+    assert host.handle({'owner': '✅twin'}) == {'switched': False}
+    assert host.handle({'owner': '✅agent, twin'}) == {'switched': False}
+    assert host.handle({'owner': '✅'}) == {'switched': False}
+    assert current(server).split()[0] == 'start'
+
+
 def test_no_match(server, tabs):
     assert host.handle({'tabId': 5, 'groupTabIds': [5], 'owner': 'Claude'}) == {'switched': False}
     assert host.handle({'tabId': 5, 'groupTabIds': [], 'owner': ''}) == {'switched': False}

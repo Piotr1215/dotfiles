@@ -91,14 +91,38 @@ def find_pane(message):
     return None, None
 
 
+def title_name(owner):
+    """The agent name in a group title, without the status symbol Claude in Chrome puts in front."""
+    if not isinstance(owner, str) or len(owner) > 200 or any(c in owner for c in "\n\r\0\t"):
+        return None
+    start = 0
+    while start < len(owner) and not owner[start].isalnum():
+        start += 1
+    return owner[start:].strip() or None
+
+
 def title_match(message):
-    owner = message.get("owner")
-    if not isinstance(owner, str) or not owner or len(owner) > 200 or any(c in owner for c in "\n\r\0"):
+    """The pane whose @agent_name is the group title: the agent's own session first, else the only one.
+
+    Codex titles its group with the agent name; the extension renames a Claude
+    group to "✅<agent>", which keeps working when the tab map is stale (a
+    Chrome restart gives every tab a new id) or the agent restarted in a new pane."""
+    name = title_name(message.get("owner"))
+    if name is None:
         return None
-    panes = run_tmux("list-panes", "-a", "-F", "#{session_name}\t#{@agent_name}")
-    if panes.returncode or f"{owner}\t{owner}" not in panes.stdout.splitlines():
+    panes = run_tmux("list-panes", "-a", "-F", "#{pane_id}\t#{session_name}\t#{@agent_name}")
+    if panes.returncode:
         return None
-    return "=" + owner
+    found = []
+    for line in panes.stdout.splitlines():
+        pane, _, rest = line.partition("\t")
+        session, _, agent = rest.partition("\t")
+        if agent == name and PANE_RE.match(pane):
+            found.append((session, pane))
+    own = [pane for session, pane in found if session == name]
+    if own:
+        return own[0]
+    return found[0][1] if len(found) == 1 else None
 
 
 def tab_names(message):

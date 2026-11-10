@@ -7,6 +7,14 @@
 // and falls back to the title, which Codex sets to the agent's name.
 const MAX_GROUP_TABS = 200;
 let generation = 0;
+
+function switchTmux(message) {
+  chrome.runtime.sendNativeMessage('org.piotr.agent_tab_tmux', message, () => {
+    // The host can be unavailable when tmux is not running.
+    void chrome.runtime.lastError;
+  });
+}
+
 chrome.tabs.onActivated.addListener(async ({tabId, windowId}) => {
   const current = ++generation;
   try {
@@ -17,18 +25,82 @@ chrome.tabs.onActivated.addListener(async ({tabId, windowId}) => {
     const active = await chrome.tabs.query({active: true, windowId});
     const window = await chrome.windows.get(windowId);
     if (current !== generation || active[0]?.id !== tabId || !window.focused) return;
-    chrome.runtime.sendNativeMessage('org.piotr.agent_tab_tmux', {
+    switchTmux({
       tabId,
       groupId: tab.groupId,
       groupTabIds: siblings.map((t) => t.id).slice(0, MAX_GROUP_TABS),
       owner: group.title ?? '',
-    }, () => {
-      // The host can be unavailable when tmux is not running.
-      void chrome.runtime.lastError;
     });
   } catch (_) {
     // Tabs and groups can disappear during activation.
   }
+});
+
+// Group name clicks. Clicking a group's name collapses or expands it and
+// activates no tab, so the listener above never hears it. Chrome reports only
+// the new collapsed state, so keep each group's last state and read a change
+// in a focused window as a click. The service worker sleeps between clicks,
+// so the states live in storage.session; every start records the groups it
+// has not seen, and a group seen before keeps its stored state for the
+// comparison. Collapsing a group that holds the active tab first activates a
+// tab outside it; the generation bump below drops that activation's switch,
+// so the group clicked wins.
+const COLLAPSED_KEY = 'collapsedGroups';
+let collapsed = {};
+const collapsedLoaded = chrome.storage.session.get(COLLAPSED_KEY).then(async (stored) => {
+  collapsed = stored?.[COLLAPSED_KEY] ?? {};
+  const groups = await chrome.tabGroups.query({});
+  let changed = false;
+  for (const group of groups) {
+    if (collapsed[group.id] === undefined) {
+      collapsed[group.id] = group.collapsed;
+      changed = true;
+    }
+  }
+  if (changed) await saveCollapsed();
+}, () => {});
+
+function saveCollapsed() {
+  return chrome.storage.session.set({[COLLAPSED_KEY]: collapsed}).catch(() => {});
+}
+
+chrome.tabGroups.onUpdated.addListener(async (group) => {
+  try {
+    await collapsedLoaded;
+    const before = collapsed[group.id];
+    if (before === group.collapsed) return;
+    collapsed[group.id] = group.collapsed;
+    // Only a collapse change counts: title updates (status emoji, our renames)
+    // arrive here too and must not cancel a tab click's switch.
+    const current = before === undefined ? null : ++generation;
+    await saveCollapsed();
+    if (current === null) return;
+    const window = await chrome.windows.get(group.windowId);
+    const tabs = await chrome.tabs.query({groupId: group.id});
+    if (current !== generation || !window.focused || !tabs.length) return;
+    switchTmux({
+      groupId: group.id,
+      groupTabIds: tabs.map((t) => t.id).slice(0, MAX_GROUP_TABS),
+      owner: group.title ?? '',
+      via: 'group',
+    });
+  } catch (_) {
+    // Groups can close during the lookup.
+  }
+});
+chrome.tabGroups.onCreated.addListener((group) => {
+  collapsedLoaded.then(() => {
+    if (collapsed[group.id] !== undefined) return;
+    collapsed[group.id] = group.collapsed;
+    return saveCollapsed();
+  });
+});
+chrome.tabGroups.onRemoved.addListener((group) => {
+  collapsedLoaded.then(() => {
+    if (collapsed[group.id] === undefined) return;
+    delete collapsed[group.id];
+    return saveCollapsed();
+  });
 });
 
 // Group names. Claude in Chrome titles a new group "Claude" behind a status

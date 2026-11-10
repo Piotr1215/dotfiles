@@ -357,6 +357,91 @@ def test_claude_group_takes_the_agent_name(chrome_with_tmux):
     assert wait_for_session(tmux, "claude-agent"), "the renamed group's tab did not switch to its pane"
 
 
+def stays_on(tmux, name, seconds=1.5):
+    deadline = time.time() + seconds
+    while time.time() < deadline:
+        if selected_session(tmux) != name:
+            return False
+        time.sleep(.1)
+    return True
+
+
+def test_clicking_a_group_name_switches_to_its_agent(chrome_with_tmux):
+    """Piotr, 10 Nov: "clicking on the agent chrome tab group doesnt' take me to claude session".
+
+    Clicking a group's name only collapses or expands it; no tab activates."""
+    tmux, cdp, session, state, _ = chrome_with_tmux
+    eval_extension(cdp, session, "chrome.tabs.create({url:'about:blank',active:true})")
+    group, _, _ = claude_group(tmux, cdp, session, state)
+    assert wait_for_title(cdp, session, group, "✅claude-agent"), group_title(cdp, session, group)
+    assert stays_on(tmux, "start", .5)
+
+    eval_extension(cdp, session, f"chrome.tabGroups.update({group},{{collapsed:true}})")
+    assert wait_for_session(tmux, "claude-agent"), "collapsing the group did not switch"
+
+    subprocess.run(tmux + ["switch-client", "-t", "=start"], check=True)
+    eval_extension(cdp, session, f"chrome.tabGroups.update({group},{{collapsed:false}})")
+    assert wait_for_session(tmux, "claude-agent"), "expanding the group did not switch"
+
+    # A status swap or rename is not a click.
+    subprocess.run(tmux + ["switch-client", "-t", "=start"], check=True)
+    eval_extension(cdp, session, f"chrome.tabGroups.update({group},{{title:'⌛claude-agent'}})")
+    assert stays_on(tmux, "start"), "a title change switched tmux"
+
+
+def test_a_group_click_wakes_a_sleeping_extension(chrome_with_tmux, tmp_path):
+    """Chrome stops the service worker when idle, so the click that wakes it must
+    still see the group's earlier state. A second extension's page collapses the
+    group after the worker is stopped, the way Piotr's click arrives minutes later."""
+    tmux, cdp, session, state, load_unpacked = chrome_with_tmux
+    helper = tmp_path / "helper"
+    helper.mkdir()
+    (helper / "manifest.json").write_text(json.dumps({"manifest_version": 3, "name": "group clicker", "version": "1.0.0", "permissions": ["tabGroups"]}))
+    (helper / "page.html").write_text("<!doctype html><title>clicker</title>")
+    helper_id = load_unpacked(helper)["result"]["id"]
+    eval_extension(cdp, session, "chrome.tabs.create({url:'about:blank',active:true})")
+    group, _, _ = claude_group(tmux, cdp, session, state)
+    assert wait_for_title(cdp, session, group, "✅claude-agent"), group_title(cdp, session, group)
+    page = cdp.command("Target.createTarget", {"url": f"chrome-extension://{helper_id}/page.html", "background": True})["targetId"]
+    clicker = cdp.command("Target.attachToTarget", {"targetId": page, "flatten": True})["sessionId"]
+    for _ in range(50):
+        if cdp.command("Runtime.evaluate", {"expression": "typeof chrome.tabGroups", "returnByValue": True}, clicker)["result"].get("value") == "object":
+            break
+        time.sleep(.1)
+    time.sleep(.5)
+    cdp.command("ServiceWorker.enable", {}, clicker)
+    cdp.command("ServiceWorker.stopAllWorkers", {}, clicker)
+    for _ in range(50):
+        if not [t for t in cdp.command("Target.getTargets")["targetInfos"] if t["type"] == "service_worker" and extension_id() in t["url"]]:
+            break
+        time.sleep(.1)
+    else:
+        pytest.fail("the extension service worker did not stop")
+    assert selected_session(tmux) == "start"
+
+    cdp.command("Runtime.evaluate", {"expression": f"chrome.tabGroups.update({group},{{collapsed:true}})", "awaitPromise": True}, clicker)
+    assert wait_for_session(tmux, "claude-agent"), "a click on a sleeping extension did not switch"
+
+
+def test_collapsing_the_active_group_keeps_the_clicked_agent(chrome_with_tmux):
+    """A click on the name of the group holding the active tab first activates a tab
+    outside it, then collapses it; tmux must land on the group clicked, not on the
+    neighbour's agent. tabGroups.update leaves the active tab inside the group, so
+    the test plays the header click's two steps in the same order."""
+    tmux, cdp, session, state, _ = chrome_with_tmux
+    group, mapped, _ = claude_group(tmux, cdp, session, state)
+    neighbour = eval_extension(cdp, session, "(async()=>{let t=await chrome.tabs.create({url:'about:blank',active:false});let g=await chrome.tabs.group({tabIds:[t.id]});await chrome.tabGroups.update(g,{title:'agent'});return t.id})()")["result"]["value"]
+    eval_extension(cdp, session, f"chrome.tabs.update({mapped},{{active:true}})")
+    assert wait_for_session(tmux, "claude-agent")
+
+    subprocess.run(tmux + ["switch-client", "-t", "=start"], check=True)
+    eval_extension(cdp, session, f"(()=>{{chrome.tabs.update({neighbour},{{active:true}});return chrome.tabGroups.update({group},{{collapsed:true}})}})()")
+    active = eval_extension(cdp, session, "chrome.tabs.query({active:true,lastFocusedWindow:true}).then(t=>t[0].id)")["result"]["value"]
+    assert active == neighbour
+    assert wait_for_session(tmux, "claude-agent"), "collapsing did not switch"
+    assert stays_on(tmux, "claude-agent"), "the neighbour's activation took tmux to its agent"
+
+
 def test_claude_in_chrome_reload_gets_its_group_title_back(chrome_with_tmux, tmp_path):
     """After Claude in Chrome reloads it re-adopts a group only while it reads "Claude"."""
     tmux, cdp, session, state, load_unpacked = chrome_with_tmux

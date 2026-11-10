@@ -1,10 +1,10 @@
 # Agent tab tmux switch
 
-When a grouped tab is activated in a focused window, Chrome sends the host the tab id, the group's tab ids (at most 200) and the group title. Ungrouped tabs send nothing. The host picks the pane in this order:
+When a grouped tab is activated in a focused window, Chrome sends the host the tab id, the group's tab ids (at most 200) and the group title. Ungrouped tabs send nothing. A click on a group's name sends the same without a tab id: it only collapses or expands the group and activates no tab, so the extension keeps each group's last collapsed state in `storage.session` (the service worker sleeps between clicks) and reads a change in a focused window as a click. When the group holds the active tab, Chrome first activates a tab outside it; the group click still wins. The host picks the pane in this order:
 
 1. `tab_id`: the tab's newest line in `${XDG_STATE_HOME:-~/.local/state}/agent-tabs/tabs.jsonl`, written by the Claude tab-owner hook (`~/.claude/scripts/__chrome_tab_owner_hook.py`) on every Claude in Chrome tool call. Claude in Chrome titles every group "Claude" behind a status emoji, so this is how Claude tabs switch.
-2. `group_sibling`: the newest mapped tab in the same group, for a tab the agent opened but never named in a tool call.
-3. `title`: a session whose pane has the same `@agent_name` as the group title, which is how Codex groups switch.
+2. `group_sibling`: the newest mapped tab in the same group, for a tab the agent opened but never named in a tool call, and for a click on the group's name.
+3. `title`: the pane whose `@agent_name` is the group title minus any leading status symbol ("✅gordon" reads "gordon"), in the session of that name if there is one, else the only such pane. This is how Codex groups switch, and how a renamed Claude group still switches when its tab map is stale (a Chrome restart gives every tab a new id) or the agent moved to a new pane. A title naming several agents switches nothing.
 
 A pane that no longer exists is skipped. The host switches only when exactly one tmux client is attached, and never changes browser focus. A Claude session records its tabs only once it runs with the hook (`~/.claude` 870cf284, 9 Nov 10:28); a session started earlier, or a stable agent whose generated `role-settings.json` predates it, has unmapped tabs that leave tmux alone until it restarts.
 
