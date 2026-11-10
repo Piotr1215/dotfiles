@@ -16,7 +16,7 @@
 #   Alt+p    move it to pass (costs a tap, since the value has to be read out)
 #   Alt+l    reference it from an .envrc via _pass_export
 #   Alt+x    delete it here (the references go too; a Bitwarden copy stays)
-#   Alt+w    save a copy to Bitwarden (asks before replacing an item). One tap per
+#   Alt+b    save a copy to Bitwarden (asks before replacing an item). One tap per
 #            push: the unlock is reused for BW_SESSION_TTL seconds after the last
 #            push, so only the first push after a pause taps twice, and each tap
 #            gets a popup naming what it is for
@@ -57,12 +57,12 @@ source "$SCRIPT_DIR/__lib_secret_object.sh"
 # ~113 chars, which 900px silently truncated. The cap rose with the shared font
 # bump, since taller rows fit fewer of them on the same screen.
 #
-# Alt+a/c/e/y/p/l/o/w/x are free in stock rofi (Alt is taken only by b, f, S,
-# period, grave and the digits), so unlike Control+a in __value_picker.sh none of
-# these needs its default unbound first. Bitwarden is Alt+w, not Alt+b, for that
-# reason.
+# Alt+a/c/e/y/p/l/o/x are free in stock rofi (Alt is taken only by b, f, S,
+# period, grave and the digits). Alt+b is not: stock rofi moves a word back on
+# it. Bitwarden takes it anyway, the same way __value_picker.sh takes Control+a,
+# by rebinding move-word-back to its other default, Control+Left, alone.
 #
-# The move keys name where the secret goes: Alt+y the YubiKey, Alt+p pass, Alt+w
+# The move keys name where the secret goes: Alt+y the YubiKey, Alt+p pass, Alt+b
 # Bitwarden. They were promote and demote (Alt+p, Alt+d) until Bitwarden became a
 # third destination, when "promote" stopped saying where to and Alt+p, which went
 # to the YubiKey, read as "pass".
@@ -74,11 +74,12 @@ rofi_pick() {
 	rofi -dmenu -i -p "$prompt" -format i -mesg "$MESG" \
 		-kb-custom-1 "Alt+e" -kb-custom-2 "Alt+y" -kb-custom-3 "Alt+p" \
 		-kb-custom-4 "Alt+l" -kb-custom-5 "Alt+x" -kb-custom-6 "Alt+o" \
-		-kb-custom-7 "Alt+a" -kb-custom-8 "Alt+c" -kb-custom-9 "Alt+w" \
+		-kb-custom-7 "Alt+a" -kb-custom-8 "Alt+c" -kb-custom-9 "Alt+b" \
+		-kb-move-word-back "Control+Left" \
 		"${ROFI_THEME[@]}"
 }
 
-# The secret holding the Bitwarden master password. In the bastion, Alt+w reads
+# The secret holding the Bitwarden master password. In the bastion, Alt+b reads
 # it with a YubiKey tap instead of a typed prompt: the tap is the confirm. In
 # pass it is read with no tap at all, which makes every pushed bastion secret as
 # readable as a pass one; that trade is yours to make with Alt+p. Missing, a
@@ -108,7 +109,7 @@ bw_session() {
 		return 0
 	fi
 	state=$(bw status 2>/dev/null | jq -r '.status // empty') || state=""
-	[[ "$state" == unauthenticated ]] && fail "Bitwarden is logged out. Run 'bw login' once in a terminal, then Alt+w again."
+	[[ "$state" == unauthenticated ]] && fail "Bitwarden is logged out. Run 'bw login' once in a terminal, then Alt+b again."
 	owner=$(secret_locate "$BW_MASTER_SECRET" 2>/dev/null | cut -f2)
 	case "$owner" in
 	age)
@@ -116,7 +117,7 @@ bw_session() {
 		# returns nothing, so unlock fails below rather than on an empty password.
 		touch_cue_on "Touch the YubiKey${1:+ ($1)}: unlock Bitwarden"
 		pw=$(secret_read "$BW_MASTER_SECRET" 2>/dev/null) ||
-			{ touch_cue_off; fail "no tap registered, Bitwarden not unlocked. Press Alt+w again and touch the key."; }
+			{ touch_cue_off; fail "no tap registered, Bitwarden not unlocked. Press Alt+b again and touch the key."; }
 		touch_cue_off
 		BW_UNLOCK_TAPPED=1
 		;;
@@ -301,7 +302,7 @@ ICON_BW=$'\U000f11f1'
 # Keys on one line, what the badges mean on the next. The badge legend is here
 # because a glyph nobody can name is noise: the link count in particular reads as
 # decoration until it says "this many .envrc files import this secret".
-MESG="Enter copy   Alt+c card   Alt+a add   Alt+e edit   Alt+o open .envrc uses   Alt+l add .envrc   Alt+y move to YubiKey   Alt+p move to pass   Alt+w copy to Bitwarden   Alt+x delete
+MESG="Enter copy   Alt+c card   Alt+a add   Alt+e edit   Alt+o open .envrc uses   Alt+l add .envrc   Alt+y move to YubiKey   Alt+p move to pass   Alt+b copy to Bitwarden   Alt+x delete
 $ICON_AGE YubiKey, one tap    $ICON_PASS pass, no tap    $ICON_BW in Bitwarden    ${ICON_REF}N referenced by N .envrc"
 
 icon_for() {
@@ -519,7 +520,7 @@ edit)
 	((${#changed[@]})) || exit 0
 	stale=""
 	[[ " ${changed[*]} " == *" value "* ]] && secret_bw_has "$name" &&
-		stale="; Bitwarden still has the old value, Alt+w to update it"
+		stale="; Bitwarden still has the old value, Alt+b to update it"
 	note "$name: ${changed[*]} updated$stale"
 	;;
 to_yubikey)

@@ -264,7 +264,7 @@ STUB
 	chmod +x "$STUB_BIN/rofi"
 }
 
-@test "Alt+w saves a pass secret to Bitwarden, the value only on stdin" {
+@test "Alt+b saves a pass secret to Bitwarden, the value only on stdin" {
 	stub_bw
 	printf 'bwvalue' >"$PASSWORD_STORE_DIR/work/BW_ROW.gpg"
 	export BW_SESSION=fake ROFI_PICK=0 ROFI_EXIT=18
@@ -279,7 +279,7 @@ STUB
 	grep -q 'BW_ROW saved to Bitwarden' "$NOTIFY_LOG"
 }
 
-@test "Alt+w while logged out asks for bw login and sends nothing" {
+@test "Alt+b while logged out asks for bw login and sends nothing" {
 	stub_bw
 	printf 'bwvalue' >"$PASSWORD_STORE_DIR/work/BW_ROW.gpg"
 	unset BW_SESSION
@@ -292,7 +292,7 @@ STUB
 	grep -q "Run 'bw login' once in a terminal" "$NOTIFY_LOG"
 }
 
-@test "Alt+w on a bastion row with a missed tap sends nothing" {
+@test "Alt+b on a bastion row with a missed tap sends nothing" {
 	stub_bw
 	: >"$SECRETS_DIR/BW_TAP.age"
 	printf '#!/usr/bin/env bash\nexit 1\n' >"$STUB_BIN/age"
@@ -306,12 +306,12 @@ STUB
 	grep -q 'no tap registered, BW_TAP not sent to Bitwarden' "$NOTIFY_LOG"
 }
 
-@test "Alt+w unlocks with the master password from rofi and keeps the session" {
+@test "Alt+b unlocks with the master password from rofi and keeps the session" {
 	stub_bw
 	printf 'bwvalue' >"$PASSWORD_STORE_DIR/work/BW_ROW.gpg"
 	unset BW_SESSION
 	export BW_STATUS=locked
-	# First rofi call is the pick (Alt+w on row 0), the second the password field.
+	# First rofi call is the pick (Alt+b on row 0), the second the password field.
 	stub_rofi_seq '0 18' 'master-pw 0'
 
 	run "$PICKER"
@@ -326,7 +326,7 @@ STUB
 	! grep -qx lock "$BW_LOG"
 }
 
-@test "Alt+w with BW_SESSION_TTL=0 caches nothing and locks on exit" {
+@test "Alt+b with BW_SESSION_TTL=0 caches nothing and locks on exit" {
 	stub_bw
 	printf 'bwvalue' >"$PASSWORD_STORE_DIR/work/BW_ROW.gpg"
 	unset BW_SESSION
@@ -342,7 +342,7 @@ STUB
 	[ "$(tail -1 "$BW_LOG")" = lock ]
 }
 
-@test "Alt+w reads the master password from the bastion with a tap, no typing" {
+@test "Alt+b reads the master password from the bastion with a tap, no typing" {
 	stub_bw
 	stub_age_decrypt
 	# Two rows, alphabetical: BW_MASTER_PASSWORD (index 0), BW_ROW (index 1).
@@ -367,7 +367,7 @@ STUB
 	[ ! -e "$XDG_RUNTIME_DIR/secret-picker-touch" ]
 }
 
-@test "Alt+w on a bastion row after a fresh unlock numbers both taps" {
+@test "Alt+b on a bastion row after a fresh unlock numbers both taps" {
 	stub_bw
 	stub_age_decrypt
 	printf 'master-pw' >"$SECRETS_DIR/BW_MASTER_PASSWORD.age"
@@ -385,7 +385,7 @@ STUB
 	[ "$(grep -cx 'close 42' "$NOTIFY_LOG")" -eq 2 ]
 }
 
-@test "Alt+w with a cached session taps once, for the value only" {
+@test "Alt+b with a cached session taps once, for the value only" {
 	stub_bw
 	stub_age_decrypt
 	printf 'master-pw' >"$SECRETS_DIR/BW_MASTER_PASSWORD.age"
@@ -408,7 +408,7 @@ STUB
 	grep -qx "timer 900 $BW_SESSION_FILE_UNDER_TEST" "$BW_TIMER_LOG"
 }
 
-@test "Alt+w drops a cached session idle past the TTL and unlocks afresh" {
+@test "Alt+b drops a cached session idle past the TTL and unlocks afresh" {
 	stub_bw
 	printf 'bwvalue' >"$PASSWORD_STORE_DIR/work/BW_ROW.gpg"
 	printf 'old-sess' >"$XDG_RUNTIME_DIR/secret-picker-bw-session"
@@ -446,7 +446,7 @@ STUB
 	! grep "NOT_PUSHED" "$ROFI_IN" | grep -qF "$bw_glyph"
 }
 
-@test "Alt+w answered no at replace still rebuilds the badges" {
+@test "Alt+b answered no at replace still rebuilds the badges" {
 	stub_bw
 	printf 'bwvalue' >"$PASSWORD_STORE_DIR/work/BW_ROW.gpg"
 	export BW_SESSION=fake
@@ -494,7 +494,8 @@ STUB
 
 	grep -q 'Alt+y move to YubiKey' "$ROFI_ARGS_ALL"
 	grep -q 'Alt+p move to pass' "$ROFI_ARGS_ALL"
-	grep -q 'Alt+w copy to Bitwarden' "$ROFI_ARGS_ALL"
+	grep -q 'Alt+b copy to Bitwarden' "$ROFI_ARGS_ALL"
+	grep -q -- '-kb-custom-9 Alt+b' "$ROFI_ARGS_ALL"
 	! grep -qiE 'promote|demote' "$ROFI_ARGS_ALL"
 }
 
