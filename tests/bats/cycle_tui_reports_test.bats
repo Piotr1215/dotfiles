@@ -25,6 +25,20 @@ setup() {
   grep -qx 'uda.taskwarrior-tui.report.myprojects.context=none' "$repo_root/.taskrc"
   grep -q '^report.myprojects.filter=.*+view or ( +work -gordon -piotr' "$repo_root/.taskrc"
 }
+@test "myprojects includes local backlog work but excludes gordon and private work" {
+  export TASKRC="$BATS_TEST_TMPDIR/taskrc" TASKDATA="$BATS_TEST_TMPDIR/taskdata"
+  mkdir -p "$TASKDATA"
+  grep '^report.myprojects.filter=' "$repo_root/.taskrc" > "$TASKRC"
+  printf 'report.myprojects.columns=description\nreport.myprojects.labels=Description\n' >> "$TASKRC"
+  task rc.confirmation=off add project:operations +work +backlog local-backlog >/dev/null
+  task rc.confirmation=off add +work +gordon excluded-gordon >/dev/null
+  task rc.confirmation=off add +work +private excluded-private >/dev/null
+  run task rc.context=none rc.color=off rc.defaultwidth=200 myprojects
+  [ "$status" -eq 0 ]
+  [[ "$output" == *local-backlog* ]]
+  [[ "$output" != *excluded-gordon* ]]
+  [[ "$output" != *excluded-private* ]]
+}
 @test "v4 uses its request even inside the bridge and preserves taskrc" {
   export TUI_REPORT_BRIDGE=2 TASKWARRIOR_TUI_REPORT=handoffs TASKRC="$BATS_TEST_TMPDIR/custom"
   run "$repo_root/scripts/__cycle_tui_reports.sh"
