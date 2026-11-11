@@ -193,6 +193,12 @@ class ContextTests(unittest.TestCase):
 
 
 class AssociationTests(unittest.TestCase):
+    def test_explicit_local_bucket_membership_survives_source_assessment(self):
+        header = handoff(None, tags=["view"], view_key="local:my-bucket", project="my-bucket")
+        member = handoff("DEVOPS-999", project="admin", view_project="my-bucket")
+        native = handoff("DEVOPS-999", project="my-bucket", view_project="my-bucket")
+        self.assertEqual(pv.association_plan(self.snap, [header, member, native]), ([], [header, member, native]))
+
     def test_unavailable_pr_preserves_only_tasks_that_reference_it(self):
         unavailable = "loft-sh/inaccessible#7"
         self.b["issues"][0]["attachments"]["nodes"].append({"url": pr(unavailable)["url"]})
@@ -322,6 +328,24 @@ class AssociationTests(unittest.TestCase):
 
 
 class SourceRowTests(unittest.TestCase):
+    def test_local_buckets_require_two_non_gordon_tasks_and_keep_existing_header(self):
+        def task(uid, project_name, tags=()):
+            return handoff(None, uuid=uid, project=project_name, tags=list(tags))
+        tasks = [task("1", "local-ops"), task("2", "local-ops"),
+                 task("3", "single"), task("4", "single", ["gordon"]),
+                 task("5", "admin"), task("6", "admin"), task("7", "release-pipeline")]
+        linear, local = pv.bucket_candidates(tasks, {"release-pipeline": ["p1"]})
+        self.assertEqual(linear, {"release-pipeline"})
+        self.assertEqual(local, {"local-ops"})
+        snap = snapshot([project()])
+        snap["local_buckets"] = local
+        rows, scopes = pv.build_rows(snap, tasks, github(), NOW)
+        self.assertEqual(rows["local:local-ops"]["view_title"], "Local Ops")
+        header = handoff(None, tags=["view"], project="local-ops", view_key="local:local-ops")
+        rows, scopes = pv.build_rows(snap, tasks + [header], github(), NOW)
+        self.assertNotIn("local:local-ops", rows)
+        self.assertNotIn(header, pv.plan(rows, scopes, [header], NOW)[0])
+
     def test_generated_row_metadata_comes_from_structured_sources(self):
         ref = "loft-sh/tool#12"
         activity = issue("DEVOPS-1", "In Review", "started", title="Explain the release change", prs=[pr(ref)["url"]])
@@ -329,13 +353,12 @@ class SourceRowTests(unittest.TestCase):
         snap = snapshot([project(issues=[activity])], [assigned_issue])
         gh = github({ref: pr(ref, review="CHANGES_REQUESTED")})
         rows, scopes = pv.build_rows(snap, [], gh, NOW)
-        expected = {"standing:p1": ("project", "Explain the release change", "In Progress", "DEVOPS-1"),
+        expected = {"standing:p1": ("project", "Release pipeline", "In Progress", ""),
                     "issue:DEVOPS-5": ("issue", "Check prerequisites", "Todo", "DEVOPS-5"),
                     "ask:p1:" + ref: ("ask", "Fix release checks", "changes requested", "DEVOPS-1")}
         for key, values in expected.items():
             self.assertEqual(tuple(rows[key][field] for field in pv.VIEW_METADATA), values)
-        self.assertEqual(rows["standing:p1"]["description"],
-                         "standing · DEVOPS-1 Explain the release change (In Review)")
+        self.assertEqual(rows["standing:p1"]["description"], "Release pipeline")
         self.assertEqual(rows["issue:DEVOPS-5"]["description"], "no task · DEVOPS-5 Todo · Check prerequisites")
         payload, _ = pv.plan(rows, scopes, [], NOW)
         for row in payload:
@@ -384,6 +407,26 @@ class SourceRowTests(unittest.TestCase):
 
 
 class PlanTests(unittest.TestCase):
+    def test_new_issue_ranks_follow_source_order_after_all_existing_ranks(self):
+        first, second = issue("DEVOPS-2"), issue("DEVOPS-1")
+        first["sortOrder"], second["sortOrder"] = 10, 20
+        proj = project(issues=[second, first])
+        rows, scopes = pv.build_rows(snapshot([proj], [assigned("DEVOPS-1"), assigned("DEVOPS-2")]), [], github(), NOW)
+        existing = [handoff(view_project="release-pipeline", view_rank=35)]
+        payload, _ = pv.plan(rows, scopes, existing, NOW)
+        ranks = {row["view_key"]: row.get("view_rank") for row in payload}
+        self.assertEqual(ranks["issue:DEVOPS-2"], 40)
+        self.assertEqual(ranks["issue:DEVOPS-1"], 50)
+
+    def test_existing_rank_survives_refresh(self):
+        first, _ = pv.plan(self.rows, self.scopes, [], NOW)
+        old = stored(first)
+        old[0]["view_rank"] = 73
+        self.rows["standing:p1"]["view_state"] = "Paused"
+        changed, _ = pv.plan(self.rows, self.scopes, old, NOW)
+        self.assertEqual(changed[0]["view_rank"], 73)
+        self.assertEqual(pv.plan(self.rows, self.scopes, stored(changed), NOW)[0], [])
+
     def test_a_structured_metadata_change_is_applied_once_without_rewriting_other_fields(self):
         first, _ = pv.plan(self.rows, self.scopes, [], NOW)
         old = stored(first)
@@ -478,9 +521,9 @@ class RefreshTests(unittest.TestCase):
         pv.source_status(rows, scopes, old, changed_snap, None, later, {"sources": sources})
         row = rows["standing:p1"]
         self.assertEqual(row["view_kind"], "project")
-        self.assertEqual(row["view_title"], "Current release checks")
-        self.assertEqual(row["view_issue"], "DEVOPS-1")
-        self.assertEqual(row["view_state"], "source unavailable")
+        self.assertEqual(row["view_title"], "Release pipeline")
+        self.assertEqual(row["view_issue"], "")
+        self.assertEqual(row["view_state"], "In Progress")
         payload, _ = pv.plan(rows, scopes, old, later)
         self.assertEqual(payload[0]["view_title"], old[0]["view_title"])
         self.assertEqual(pv.plan(rows, scopes, stored(payload), later)[0], [])
@@ -806,7 +849,8 @@ class RefreshTests(unittest.TestCase):
                    mock.patch.object(pv, "datetime", wraps=datetime),
                    mock.patch("sys.stdout"), mock.patch("sys.stderr"),
                    mock.patch.object(pv, "apply_associations", side_effect=lambda intents: {
-                       "changed": len(intents), "skipped": 0})]
+                       "changed": len(intents), "skipped": 0}),
+                   mock.patch.object(pv, "discover_buckets")]
         result = []
         for patch in patches:
             result.append(patch.start())
@@ -982,6 +1026,7 @@ class LinearRateLimitTests(unittest.TestCase):
                 mock.patch.object(pv, "task_json", return_value=[]), \
                 mock.patch.object(pv, "linear_key", return_value="fixture") as key, \
                 mock.patch.object(pv, "read_linear", return_value=snapshot()) as read, \
+                mock.patch.object(pv, "discover_buckets"), \
                 mock.patch.object(pv, "read_github", return_value=github()) as gh, \
                 mock.patch.object(pv, "apply"), mock.patch.object(pv, "publish_contexts"), \
                 mock.patch("sys.stdout"), mock.patch("sys.stderr"):
@@ -1448,8 +1493,8 @@ class TaskwarriorRoundtripTests(unittest.TestCase):
         exported = self.plain_export()
         for field in ("uuid", "description", "project", "tags", "entry", "annotations", "custom", "due"):
             self.assertEqual(exported[0][field], old[0][field])
-        self.assertEqual(tuple(exported[0][field] for field in pv.VIEW_METADATA),
-                         ("project", "A clear activity title", "In Progress", "DEVOPS-1"))
+        self.assertEqual(tuple(exported[0].get(field, "") for field in pv.VIEW_METADATA),
+                         ("project", "Release pipeline", "In Progress", ""))
         self.assertNotIn("linear_issue_id", exported[0])
         self.assertEqual(pv.plan(rows, scopes, exported, NOW)[0], [])
 

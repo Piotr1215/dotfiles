@@ -111,6 +111,12 @@ Q_PROJECTS = """query ($after: String) {
   }) { pageInfo { hasNextPage endCursor } nodes { id lead { isMe } } }
 }"""
 
+Q_ALL_PROJECT_NAMES = """query ($after: String) {
+  projects(first: 100, after: $after) {
+    pageInfo { hasNextPage endCursor } nodes { id name }
+  }
+}"""
+
 Q_ASSIGNED = """query ($after: String) {
   viewer { assignedIssues(first: 100, after: $after,
            filter: {state: {type: {nin: ["completed", "canceled", "duplicate"]}}}) {
@@ -124,7 +130,7 @@ Q_PROJECT = """query ($id: String!, $after: String) {
       {state: {type: {nin: ["completed", "canceled", "duplicate"]}}},
       {completedAt: {gte: "-P7D"}}, {canceledAt: {gte: "-P7D"}}]}) {
       pageInfo { hasNextPage endCursor }
-      nodes { identifier title url updatedAt completedAt canceledAt
+      nodes { identifier title url sortOrder updatedAt completedAt canceledAt
               state { name type } assignee { name isMe }
               projectMilestone { id name }
               attachments(first: 100) { pageInfo { hasNextPage } nodes { url } }
@@ -485,6 +491,38 @@ def read_linear(linear, tasks=()):
             "reference_rate_limited": reference_rate_limited, "rate_limit": linear.rate_limit}
 
 
+def bucket_candidates(tasks, linear_names):
+    """Classify pending native projects only after complete Linear discovery."""
+    counts = {}
+    for task in tasks:
+        name = task.get("project") or ""
+        if (task.get("status") != "pending" or not name or name == "admin"
+                or "gordon" in (task.get("tags") or []) or TAG in (task.get("tags") or [])):
+            continue
+        counts[name] = counts.get(name, 0) + 1
+    linear = {name for name in counts if name in linear_names}
+    local = {name for name, count in counts.items() if name not in linear_names and count >= 2}
+    return linear, local
+
+
+def discover_buckets(linear, snapshot, tasks):
+    """Read every project name before classifying any native project as local."""
+    names = {}
+    for project in linear.pages(Q_ALL_PROJECT_NAMES, ["projects"]):
+        names.setdefault(kebab(project["name"]), []).append(project["id"])
+    linear_names, local = bucket_candidates(tasks, names)
+    for name in sorted(linear_names):
+        ids = names[name]
+        if len(ids) != 1:
+            raise RuntimeError(f"ambiguous Linear project name: {name}")
+        pid = ids[0]
+        if pid not in snapshot["projects"]:
+            snapshot["projects"][pid] = {**read_project(linear, pid), "listed": False, "led": False}
+        snapshot["wanted"] = sorted(set(snapshot["wanted"]) | {pid})
+    snapshot["local_buckets"] = local
+    snapshot["linear_buckets"] = linear_names
+
+
 class GitHubUnreadable(RuntimeError):
     """A GitHub resource is missing or inaccessible to the current token."""
 
@@ -756,7 +794,7 @@ def standing(project, tasks, github, now):
     lines.extend(["", "Current-work scope: all open issues plus recent closed issues and the bounded completion history. "
                   "Completion and merge records do not establish deployment."])
     activity = open_[0] if open_ else None
-    summary = (f"{activity['identifier']} {clean(activity['title'], 70)} ({activity['state']['name']})"
+    summary = (f"current: {activity['identifier']} {clean(activity['title'], 70)} ({activity['state']['name']})"
                if activity else project["status"]["name"])
     return "standing · " + summary, "\n".join(lines)
 
@@ -784,6 +822,9 @@ def association_plan(snapshot, tasks, github_available=True, unavailable_refs=()
     if snapshot.get("failures") or snapshot.get("assigned") is None or not github_available:
         return [], tasks
     projects = snapshot["projects"]
+    local_groups = set(snapshot.get("local_buckets") or ()) | {t.get("view_project") or t.get("project") for t in tasks
+                    if (t.get("view_key") or "").startswith("local:")
+                    and t.get("status") in ("pending", "waiting")}
     identifiers, urls, prs = {}, {}, {}
     def add(index, key, pid):
         if key:
@@ -802,8 +843,15 @@ def association_plan(snapshot, tasks, github_available=True, unavailable_refs=()
     changes, resolved = [], []
     unavailable_refs = set(unavailable_refs)
     for task in tasks:
-        if (not pending_for_grouping(task) or "piotr" not in (task.get("tags") or [])
+        if (not pending_for_grouping(task) or "gordon" in (task.get("tags") or [])
+                or "piotr" not in (task.get("tags") or [])
                 or TAG in (task.get("tags") or [])):
+            resolved.append(task)
+            continue
+        if task.get("view_project") and (task["view_project"] == task.get("project")
+                                         or task["view_project"] in local_groups):
+            # An explicitly assigned native bucket belongs to its owner, not
+            # to the source association refresh.
             resolved.append(task)
             continue
         if any(pr_ref(url) in unavailable_refs for url in task_urls(task)):
@@ -928,6 +976,9 @@ def build_rows(snapshot, tasks, github, now):
         group = task.get("view_project") or task.get("project") or ""
         by_project.setdefault(group, []).append(task)
     rows = {}
+    issue_order = {issue["identifier"]: (issue.get("sortOrder") if issue.get("sortOrder") is not None else index)
+                   for project in snapshot["projects"].values()
+                   for index, issue in enumerate(project["issues"])}
 
     assigned = snapshot["assigned"]
     mine_by_project = {}
@@ -946,6 +997,7 @@ def build_rows(snapshot, tasks, github, now):
             "description": f"no task · {issue['identifier']} {issue['state']['name']} · {clean(issue['title'])}",
             "view_kind": "issue", "view_title": clean(issue["title"], 200),
             "view_state": issue["state"]["name"], "view_issue": issue["identifier"],
+            "issue_order": issue_order.get(issue["identifier"], float("inf")),
             "annotations": [issue["url"], "link: " + issue["url"]],
         }
 
@@ -955,16 +1007,15 @@ def build_rows(snapshot, tasks, github, now):
         updates = project["projectUpdates"]["nodes"]
         last_update = parse_time(updates[0]["createdAt"]) if updates else None
         recent = any(parse_time(i["updatedAt"]) >= now - WINDOW for i in project["issues"])
-        has_work = bool(tasks_here or mine_by_project.get(pid))
+        has_work = bool(tasks_here or mine_by_project.get(pid) or name in snapshot.get("linear_buckets", ()))
         alive = (last_update and last_update >= now - MEMBER_ALIVE) or recent
         if not (project["led"] or has_work or alive):
             continue
-        description, detail = standing(project, tasks_here, github, now)
-        activity = next(iter(active_issues(project)), None)
+        _, detail = standing(project, tasks_here, github, now)
         rows[f"standing:{pid}"] = {
-            "project": name, "rank": RANK["standing"], "description": description,
-            "view_kind": "project", "view_title": clean(activity["title"] if activity else project["name"], 200),
-            "view_state": project["status"]["name"], "view_issue": activity["identifier"] if activity else "",
+            "project": name, "rank": RANK["standing"], "description": project["name"],
+            "view_kind": "project", "view_title": clean(project["name"], 200),
+            "view_state": project["status"]["name"], "view_issue": "",
             "annotations": [project["url"], "brief: " + detail.rstrip() + "\n"],
         }
         if github is None:
@@ -996,6 +1047,15 @@ def build_rows(snapshot, tasks, github, now):
                     "annotations": [f"https://github.com/{owner_repo}/issues/{number}",
                                     f"link: https://github.com/{owner_repo}/pull/{number}"],
                 }
+
+    existing_keys = {t.get("view_key") for t in tasks}
+    for name in sorted(snapshot.get("local_buckets") or ()):
+        key = "local:" + name
+        if key not in existing_keys:
+            title = name.replace("-", " ").replace("_", " ").title()
+            rows[key] = {"project": name, "rank": RANK["standing"], "description": title,
+                         "view_kind": "project", "view_title": title, "view_state": "local",
+                         "view_issue": "", "annotations": []}
 
     scopes = {
         "assigned": assigned is not None,
@@ -1031,7 +1091,14 @@ def plan(rows, scopes, existing, now):
     """
     by_key = {t.get("view_key"): t for t in existing if TAG in (t.get("tags") or [])}
     payload, changes = [], {"add": [], "change": [], "delete": []}
-    for key, row in sorted(rows.items()):
+    ranks = {}
+    for task in existing:
+        group = task.get("view_project") or task.get("project")
+        if task.get("status") in ("pending", "waiting") and group and task.get("view_rank") is not None:
+            ranks[group] = max(ranks.get(group, 0), float(task["view_rank"]))
+    ordered_rows = sorted(rows.items(), key=lambda item: (item[1]["project"],
+                          item[1].get("issue_order", float("inf")), item[0]))
+    for key, row in ordered_rows:
         old = by_key.get(key)
         uid = old["uuid"] if old else row_uuid(key)
         old_notes = {a["description"]: a["entry"] for a in (old or {}).get("annotations") or []}
@@ -1049,14 +1116,17 @@ def plan(rows, scopes, existing, now):
         notes.sort(key=lambda a: a["entry"])
         want = {k: v for k, v in (old or {}).items() if k not in ("id", "urgency", "modified", "wait", "end")}
         want.update({"uuid": uid, "status": "pending", "description": row["description"],
-                "project": row["project"], "tags": [TAG], "view_rank": row["rank"],
+                "project": row["project"], "tags": [TAG],
                 "view_key": key, "annotations": notes})
         want.update({field: row.get(field, "") for field in VIEW_METADATA})
+        if not old and key.startswith("issue:"):
+            group = row["project"]
+            ranks[group] = (int(ranks.get(group, 0) // 10) + 1) * 10
+            want["view_rank"] = ranks[group]
         if old:
             want["entry"] = old["entry"]
             same = (old.get("status") == "pending" and old.get("description") == want["description"]
                     and old.get("project") == want["project"] and sorted(old.get("tags") or []) == [TAG]
-                    and float(old.get("view_rank") or 0) == float(row["rank"])
                     and old.get("view_key") == key
                     and all((old.get(field) or "") == want[field] for field in VIEW_METADATA)
                     and [a["description"] for a in sorted(old.get("annotations") or [], key=lambda a: a["entry"])]
@@ -1229,6 +1299,12 @@ def source_status(rows, scopes, existing, snapshot, github, now, previous):
                    "annotations": ["brief: " + (detail or "Project context is unavailable.")]}
             row.update({field: old[field] for field in VIEW_METADATA if field in old})
             rows[key] = row
+        row["view_issue"] = ""
+        if pid in snapshot["projects"]:
+            row["view_title"] = clean(snapshot["projects"][pid]["name"], 200)
+        else:
+            row["view_title"] = (old.get("project") or "Project").replace("-", " ").title()
+        row["description"] = row["view_title"]
         # These stamps describe the content actually displayed. A later good
         # Linear read withheld during a GitHub outage cannot refresh old text.
         if retained:
@@ -1241,12 +1317,13 @@ def source_status(rows, scopes, existing, snapshot, github, now, previous):
             project_checks[pid] = linear_snapshot
         gh_project_checks[pid] = github_snapshot
         if unavailable:
-            row.update(view_kind="project", view_state="source unavailable")
+            row["view_kind"] = "project"
+            row["view_state"] = (snapshot["projects"][pid]["status"]["name"]
+                                 if pid in snapshot["projects"] else "source unavailable")
             status = ("; ".join(unavailable) + ". Prior context retained when available.\n"
                       + "Linear last verified: " + (linear_snapshot or "unknown") + ".\n"
                       + "GitHub last verified: " + (github_snapshot or "unknown") + ".\n"
                       + "These are source snapshot times. Current state may have changed; the existing timer retries.")
-            row["description"] += " · source unavailable"
         else:
             status = (f"Linear last verified: {now.isoformat()}.\n"
                       f"GitHub last verified: {now.isoformat()}.\n"
@@ -1322,6 +1399,11 @@ def main(argv=None):
             raise LinearRateLimited(rate_limit)
         linear = Linear(linear_key(), on_rate_limit=None if args.dry_run else write_rate_limit)
         snapshot = read_linear(linear, live_tasks)
+        try:
+            discover_buckets(linear, snapshot, live_tasks)
+        except Exception as error:
+            snapshot["failures"].append("bucket discovery unavailable")
+            warn(f"bucket discovery unavailable ({error}); preserving local buckets")
     except Exception as error:
         warn(f"Linear unavailable ({error}); preserving project contexts and associations")
         snapshot = {"projects": {}, "assigned": None,
@@ -1353,7 +1435,7 @@ def main(argv=None):
     associations, live_tasks = association_plan(snapshot, live_tasks, github is not None, unavailable_refs)
     rows, scopes = build_rows(snapshot, live_tasks, github, now)
     sources = source_status(rows, scopes, existing, snapshot, github, now, previous)
-    payload, changes = plan(rows, scopes, existing, now)
+    payload, changes = plan(rows, scopes, tasks, now)
     if args.dry_run:
         for kind in ("add", "change", "delete"):
             for row in changes[kind]:
