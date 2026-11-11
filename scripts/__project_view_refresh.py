@@ -7,6 +7,10 @@ verified recent completions, current issues and PR states, milestones and real
 local action rows. After a successful batched import the same text is atomically
 published to $XDG_STATE_HOME/taskwarrior/briefs/<header UUID>/project-status.md.
 The existing project-view.timer schedules this reader every ten minutes.
+Generated rows also carry string UDAs view_kind, view_title, view_state and
+view_issue so the TUI can render source data without decoding descriptions.
+Project state is the Linear project status; its highlighted issue has a separate
+view_issue value. Existing descriptions remain compatible with older clients.
 
 Issue and review rows keep their own issue:/ask: identity and canonical link:
 annotations. They are context/source rows, never +piotr handoff copies. Actual
@@ -17,6 +21,8 @@ An explicit unresolved ownership assessment uses view_project=!unassigned to
 keep a native administrative or conflicting project from grouping it by fallback.
 Legacy tasks without explicit source evidence keep their native project grouping;
 that grouping is separate from an automatically verified association.
+Real handoff grouping uses a final batched recheck and guarded view_project-only
+modify commands. Real task snapshots never enter the generated-row import.
 
 Usage: __project_view_refresh.py [--dry-run]. Dry runs write no tasks or files.
 Env: PROJECT_VIEW_TASK_CMD (task), PROJECT_VIEW_GH_CMD (gh), LINEAR_API_KEY or
@@ -76,8 +82,9 @@ EXACT_URL = re.compile(r"https://[^\s<>\[\]()]+")
 ISSUE_ID = re.compile(r"[A-Z][A-Z0-9]*-\d+", re.IGNORECASE)
 LINEAR_ISSUE_URL = re.compile(r"https://linear\.app/([\w-]+)/issue/([a-z][a-z0-9]*-\d+)(?:/[\w.-]+)?", re.IGNORECASE)
 SOURCE_HEADING = "\n\n## Source status\n"
+VIEW_METADATA = ("view_kind", "view_title", "view_state", "view_issue")
 TASK_UDA = ["rc.uda.view_project.type=string", "rc.uda.view_key.type=string",
-            "rc.uda.view_rank.type=numeric"]
+            "rc.uda.view_rank.type=numeric", *(f"rc.uda.{field}.type=string" for field in VIEW_METADATA)]
 
 PROJECT_FIELDS = """id name description url targetDate startDate status { name type }
   lead { name isMe }
@@ -533,11 +540,16 @@ def issue_link(issue):
     return f"[{issue['identifier']} {markdown(issue['title'])}]({issue['url']})"
 
 
+def active_issues(project):
+    """The same source-backed activity ordering used by the brief and row."""
+    return sorted((i for i in project["issues"] if i["state"]["type"] not in DONE),
+                  key=lambda i: (bucket(i) != "started", i["identifier"]))
+
+
 def standing(project, tasks, github, now):
     """A deterministic, evidence-backed overview shared by every project."""
     issues = project["issues"]
-    open_ = sorted((i for i in issues if i["state"]["type"] not in DONE),
-                   key=lambda i: (bucket(i) != "started", i["identifier"]))
+    open_ = active_issues(project)
     completed = sorted((i for i in issues if i["state"]["type"] == "completed"
                         and parse_time(i.get("completedAt"))),
                        key=lambda i: (i["completedAt"], i["identifier"]), reverse=True)
@@ -645,6 +657,17 @@ def standing(project, tasks, github, now):
     return "standing · " + summary, "\n".join(lines)
 
 
+def pending_for_grouping(task):
+    """Match Taskwarrior's pending filter, including its virtual waiting state."""
+    if task.get("status") != "pending":
+        return False
+    try:
+        wait = parse_time(task.get("wait"))
+        return wait is None or wait <= datetime.now(UTC)
+    except (TypeError, ValueError):
+        return False
+
+
 def association_plan(snapshot, tasks, github_available=True, unavailable_refs=()):
     """Add grouping only for exact structured links with one verified owner.
 
@@ -675,7 +698,8 @@ def association_plan(snapshot, tasks, github_available=True, unavailable_refs=()
     changes, resolved = [], []
     unavailable_refs = set(unavailable_refs)
     for task in tasks:
-        if "piotr" not in (task.get("tags") or []) or TAG in (task.get("tags") or []):
+        if (not pending_for_grouping(task) or "piotr" not in (task.get("tags") or [])
+                or TAG in (task.get("tags") or [])):
             resolved.append(task)
             continue
         if any(pr_ref(url) in unavailable_refs for url in task_urls(task)):
@@ -727,9 +751,64 @@ def association_plan(snapshot, tasks, github_available=True, unavailable_refs=()
         updated = dict(task)
         if slug != (task.get("view_project") or ""):
             updated["view_project"] = slug
-            changes.append({k: v for k, v in updated.items() if k not in ("id", "urgency", "modified")})
+            changes.append({"uuid": task["uuid"], "view_project": slug,
+                            "expected": association_evidence(task)})
         resolved.append(updated)
     return changes, resolved
+
+
+def association_evidence(task):
+    """Fields used to reject an association whose local evidence changed."""
+    return {"project": task.get("project") or "", "linear_issue_id": task.get("linear_issue_id") or "",
+            "description": task.get("description") or "", "urls": sorted(task_urls(task)),
+            "view_project": task.get("view_project") or ""}
+
+
+def apply_associations(intents):
+    """Revalidate once, then atomically modify only a pending handoff's grouping.
+
+    Taskwarrior import replaces omitted fields, so real task snapshots must
+    never enter the view-row import. Native project, issue ID, description and
+    prior grouping also remain filters at mutation time. Annotation URLs are
+    checked in the final batched export; unrelated new annotations survive.
+    """
+    result = {"changed": 0, "skipped": 0}
+    if not intents:
+        return result
+    selectors = []
+    for intent in intents:
+        uid = intent["uuid"]
+        if str(uuid.UUID(uid)) != uid.lower():
+            raise ValueError("association UUID must be canonical")
+        if selectors:
+            selectors.append("or")
+        selectors.append("uuid:" + uid)
+    current = {t["uuid"]: t for t in task_json("(", *selectors, ")")}
+    for intent in intents:
+        task = current.get(intent["uuid"])
+        if (not task or not pending_for_grouping(task) or "piotr" not in (task.get("tags") or [])
+                or TAG in (task.get("tags") or []) or association_evidence(task) != intent["expected"]):
+            result["skipped"] += 1
+            continue
+        expected = intent["expected"]
+        reply = subprocess.run([*TASK_CMD, *TASK_UDA, "rc.context=none", "rc.hooks=off",
+                                "rc.confirmation=off", "rc.bulk=0", "rc.verbose=nothing",
+                                "uuid:" + intent["uuid"], "status:pending", "+piotr", "-view",
+                                "project.is:" + expected["project"],
+                                "linear_issue_id.is:" + expected["linear_issue_id"],
+                                "description.is:" + expected["description"],
+                                "view_project.is:" + expected["view_project"],
+                                "modify", "view_project:" + intent["view_project"]],
+                               capture_output=True, text=True, encoding="utf-8", timeout=60, check=False)
+        if reply.returncode == 0:
+            result["changed"] += 1
+        elif reply.returncode == 1 and not reply.stdout.strip() and not reply.stderr.strip():
+            # Taskwarrior reports no match this way with verbose=nothing. A
+            # completion or guarded-field edit after the export wins the race.
+            result["skipped"] += 1
+        else:
+            raise RuntimeError(f"task grouping modify failed: {reply.stderr.strip()}")
+    return result
 
 
 def build_rows(snapshot, tasks, github, now):
@@ -761,6 +840,8 @@ def build_rows(snapshot, tasks, github, now):
         rows[key] = {
             "project": project, "rank": RANK["issue"],
             "description": f"no task · {issue['identifier']} {issue['state']['name']} · {clean(issue['title'])}",
+            "view_kind": "issue", "view_title": clean(issue["title"], 200),
+            "view_state": issue["state"]["name"], "view_issue": issue["identifier"],
             "annotations": [issue["url"], "link: " + issue["url"]],
         }
 
@@ -775,8 +856,11 @@ def build_rows(snapshot, tasks, github, now):
         if not (project["led"] or has_work or alive):
             continue
         description, detail = standing(project, tasks_here, github, now)
+        activity = next(iter(active_issues(project)), None)
         rows[f"standing:{pid}"] = {
             "project": name, "rank": RANK["standing"], "description": description,
+            "view_kind": "project", "view_title": clean(activity["title"] if activity else project["name"], 200),
+            "view_state": project["status"]["name"], "view_issue": activity["identifier"] if activity else "",
             "annotations": [project["url"], "brief: " + detail.rstrip() + "\n"],
         }
         if github is None:
@@ -800,6 +884,8 @@ def build_rows(snapshot, tasks, github, now):
                 suffix = "" if who == "you" else f" · {who}"
                 rows[f"ask:{pid}:{ref}"] = {
                     "project": name, "rank": RANK["ask"],
+                    "view_kind": "ask", "view_title": clean(pr["title"], 200),
+                    "view_state": pr_note(pr), "view_issue": issue["identifier"],
                     "description": f"review ask · {short_ref(ref)} · {author} · {clean(pr['title'], 60)} "
                                    f"({issue['identifier']}){suffix}",
                     # Keep the original row link and an explicit canonical target.
@@ -861,12 +947,14 @@ def plan(rows, scopes, existing, now):
         want.update({"uuid": uid, "status": "pending", "description": row["description"],
                 "project": row["project"], "tags": [TAG], "view_rank": row["rank"],
                 "view_key": key, "annotations": notes})
+        want.update({field: row.get(field, "") for field in VIEW_METADATA})
         if old:
             want["entry"] = old["entry"]
             same = (old.get("status") == "pending" and old.get("description") == want["description"]
                     and old.get("project") == want["project"] and sorted(old.get("tags") or []) == [TAG]
                     and float(old.get("view_rank") or 0) == float(row["rank"])
                     and old.get("view_key") == key
+                    and all((old.get(field) or "") == want[field] for field in VIEW_METADATA)
                     and [a["description"] for a in sorted(old.get("annotations") or [], key=lambda a: a["entry"])]
                     == [n["description"] for n in notes] and not old.get("wait"))
             if same:
@@ -891,12 +979,13 @@ def plan(rows, scopes, existing, now):
 
 
 def apply(payload):
-    """Write the payload with one task import, hooks off."""
+    """Write one UTF-8 task import without surrogate escapes, hooks off."""
     if not payload:
         return
     result = subprocess.run([*TASK_CMD, *TASK_UDA, "rc.context=none", "rc.hooks=off", "rc.verbose=nothing",
                              "rc.confirmation=off", "import", "-"],
-                            input=json.dumps(payload), capture_output=True, text=True, timeout=60, check=False)
+                            input=json.dumps(payload, ensure_ascii=False), capture_output=True,
+                            text=True, encoding="utf-8", timeout=60, check=False)
     if result.returncode != 0:
         raise RuntimeError(f"task import failed: {result.stderr.strip()}")
 
@@ -984,6 +1073,7 @@ def source_status(rows, scopes, existing, snapshot, github, now, previous):
             row = {"project": old.get("project", ""), "rank": RANK["standing"],
                    "description": old.get("description", "standing").split(" · source unavailable")[0],
                    "annotations": ["brief: " + old_brief]}
+            row.update({field: old[field] for field in VIEW_METADATA if field in old})
             rows[key] = row
         elif key in rows:
             row = rows[key]
@@ -993,6 +1083,7 @@ def source_status(rows, scopes, existing, snapshot, github, now, previous):
             row = {"project": old.get("project", ""), "rank": RANK["standing"],
                    "description": old.get("description", "standing").split(" · source unavailable")[0],
                    "annotations": ["brief: " + (detail or "Project context is unavailable.")]}
+            row.update({field: old[field] for field in VIEW_METADATA if field in old})
             rows[key] = row
         # These stamps describe the content actually displayed. A later good
         # Linear read withheld during a GitHub outage cannot refresh old text.
@@ -1006,6 +1097,7 @@ def source_status(rows, scopes, existing, snapshot, github, now, previous):
             project_checks[pid] = linear_snapshot
         gh_project_checks[pid] = github_snapshot
         if unavailable:
+            row.update(view_kind="project", view_state="source unavailable")
             status = ("; ".join(unavailable) + ". Prior context retained when available.\n"
                       + "Linear last verified: " + (linear_snapshot or "unknown") + ".\n"
                       + "GitHub last verified: " + (github_snapshot or "unknown") + ".\n"
@@ -1111,7 +1203,6 @@ def main(argv=None):
     rows, scopes = build_rows(snapshot, live_tasks, github, now)
     sources = source_status(rows, scopes, existing, snapshot, github, now, previous)
     payload, changes = plan(rows, scopes, existing, now)
-    payload.extend(associations)
     if args.dry_run:
         for kind in ("add", "change", "delete"):
             for row in changes[kind]:
@@ -1119,22 +1210,25 @@ def main(argv=None):
         for task in associations:
             group = task.get("view_project")
             print(f"group  {task['uuid']}: {group if group and group != UNASSIGNED else 'unassigned'}")
-        print(f"project-view: dry run, {len(rows)} rows, {len(payload)} writes skipped")
+        print(f"project-view: dry run, {len(rows)} rows, {len(payload) + len(associations)} writes skipped")
         return 0
     try:
         apply(payload)
+        association_result = apply_associations(associations)
         publish_contexts(rows, existing)
     except Exception as error:
         return failed(error, now)
     summary = {"at": now.isoformat(), "rows": len(rows), "added": len(changes["add"]),
                "changed": len(changes["change"]), "deleted": len(changes["delete"]),
-               "associations": len(associations), "failures": failures, "sources": sources,
+               "associations": association_result["changed"], "associations_skipped": association_result["skipped"],
+               "failures": failures, "sources": sources,
                "unavailable_refs": sorted(unavailable_refs)}
     summary["last_success_at"] = (previous.get("last_success_at")
                                   or (previous.get("at") if not previous.get("failures") else None)) if failures else now.isoformat()
     write_state(summary)
     print(f"project-view: {len(rows)} rows, {summary['added']} added, {summary['changed']} changed, "
-          f"{summary['deleted']} deleted, {len(associations)} associations changed"
+          f"{summary['deleted']} deleted, {summary['associations']} associations changed, "
+          f"{summary['associations_skipped']} skipped after local edits"
           + (f", {len(failures)} sources failed" if failures else ""))
     return failed(RuntimeError("; ".join(failures)), now) if failures else 0
 

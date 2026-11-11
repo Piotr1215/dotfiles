@@ -320,6 +320,35 @@ class AssociationTests(unittest.TestCase):
 
 
 class SourceRowTests(unittest.TestCase):
+    def test_generated_row_metadata_comes_from_structured_sources(self):
+        ref = "loft-sh/tool#12"
+        activity = issue("DEVOPS-1", "In Review", "started", title="Explain the release change", prs=[pr(ref)["url"]])
+        assigned_issue = assigned("DEVOPS-5")
+        snap = snapshot([project(issues=[activity])], [assigned_issue])
+        gh = github({ref: pr(ref, review="CHANGES_REQUESTED")})
+        rows, scopes = pv.build_rows(snap, [], gh, NOW)
+        expected = {"standing:p1": ("project", "Explain the release change", "In Progress", "DEVOPS-1"),
+                    "issue:DEVOPS-5": ("issue", "Check prerequisites", "Todo", "DEVOPS-5"),
+                    "ask:p1:" + ref: ("ask", "Fix release checks", "changes requested", "DEVOPS-1")}
+        for key, values in expected.items():
+            self.assertEqual(tuple(rows[key][field] for field in pv.VIEW_METADATA), values)
+        self.assertEqual(rows["standing:p1"]["description"],
+                         "standing · DEVOPS-1 Explain the release change (In Review)")
+        self.assertEqual(rows["issue:DEVOPS-5"]["description"], "no task · DEVOPS-5 Todo · Check prerequisites")
+        payload, _ = pv.plan(rows, scopes, [], NOW)
+        for row in payload:
+            self.assertNotIn("linear_issue_id", row)
+        for field in pv.VIEW_METADATA:
+            self.assertIn(f"rc.uda.{field}.type=string", pv.TASK_UDA)
+
+    def test_project_without_activity_has_no_invented_source_issue(self):
+        rows, _ = pv.build_rows(snapshot([project()]), [], github(), NOW)
+        row = rows["standing:p1"]
+        self.assertEqual(row["view_kind"], "project")
+        self.assertEqual(row["view_title"], "Release pipeline")
+        self.assertEqual(row["view_state"], "In Progress")
+        self.assertEqual(row["view_issue"], "")
+
     def test_untracked_issue_and_review_keep_separate_identity_and_exact_links(self):
         ref = "loft-sh/tool#12"
         proj = project(issues=[issue("DEVOPS-1", prs=[pr(ref)["url"]])])
@@ -353,6 +382,19 @@ class SourceRowTests(unittest.TestCase):
 
 
 class PlanTests(unittest.TestCase):
+    def test_a_structured_metadata_change_is_applied_once_without_rewriting_other_fields(self):
+        first, _ = pv.plan(self.rows, self.scopes, [], NOW)
+        old = stored(first)
+        old[0]["custom"] = "Keep this"
+        old[0]["due"] = "20261201T000000Z"
+        self.rows["standing:p1"]["view_state"] = "Paused"
+        changed, _ = pv.plan(self.rows, self.scopes, old, NOW)
+        self.assertEqual(len(changed), 1)
+        self.assertEqual(changed[0]["view_state"], "Paused")
+        for field in ("uuid", "description", "project", "tags", "entry", "annotations", "custom", "due"):
+            self.assertEqual(changed[0][field], old[0][field])
+        self.assertEqual(pv.plan(self.rows, self.scopes, stored(changed), NOW)[0], [])
+
     def setUp(self):
         self.rows, self.scopes = pv.build_rows(snapshot([project(issues=[issue("DEVOPS-1")])]), [], github(), NOW)
 
@@ -401,6 +443,24 @@ class PlanTests(unittest.TestCase):
 
 
 class RefreshTests(unittest.TestCase):
+    def test_failed_source_retains_structured_title_and_issue_with_unavailable_state(self):
+        rows, scopes, sources = self.generate()
+        first, _ = pv.plan(rows, scopes, [], NOW)
+        old = stored(first)
+        changed_snap = copy.deepcopy(self.snap)
+        changed_snap["projects"]["p1"]["issues"] = [issue("DEVOPS-999", title="Withheld newer action")]
+        later = NOW + timedelta(minutes=10)
+        rows, scopes = pv.build_rows(changed_snap, old, None, later)
+        pv.source_status(rows, scopes, old, changed_snap, None, later, {"sources": sources})
+        row = rows["standing:p1"]
+        self.assertEqual(row["view_kind"], "project")
+        self.assertEqual(row["view_title"], "Current release checks")
+        self.assertEqual(row["view_issue"], "DEVOPS-1")
+        self.assertEqual(row["view_state"], "source unavailable")
+        payload, _ = pv.plan(rows, scopes, old, later)
+        self.assertEqual(payload[0]["view_title"], old[0]["view_title"])
+        self.assertEqual(pv.plan(rows, scopes, stored(payload), later)[0], [])
+
     def test_unreadable_attached_pr_retains_only_affected_context_and_review_row(self):
         healthy, unavailable = "loft-sh/tool#12", "loft-sh/inaccessible#7"
         a = project("p1", "Healthy project", [issue("DEVOPS-1", title="Healthy old title", prs=[pr(healthy)["url"]])])
@@ -720,7 +780,9 @@ class RefreshTests(unittest.TestCase):
                    mock.patch.object(pv, "read_github", return_value=self.gh),
                    mock.patch.object(pv, "task_json", return_value=list(tasks)),
                    mock.patch.object(pv, "datetime", wraps=datetime),
-                   mock.patch("sys.stdout"), mock.patch("sys.stderr")]
+                   mock.patch("sys.stdout"), mock.patch("sys.stderr"),
+                   mock.patch.object(pv, "apply_associations", side_effect=lambda intents: {
+                       "changed": len(intents), "skipped": 0})]
         result = []
         for patch in patches:
             result.append(patch.start())
@@ -731,11 +793,12 @@ class RefreshTests(unittest.TestCase):
     def test_dry_run_does_not_write_files_import_or_use_per_task_commands(self):
         patches = self.main_patches([handoff()])
         with mock.patch.object(pv, "apply") as apply, mock.patch.object(pv, "publish_contexts") as publish, \
-                mock.patch.object(pv, "write_state") as write:
+                mock.patch.object(pv, "write_state") as write, mock.patch.object(pv, "apply_associations") as grouping:
             self.assertEqual(pv.main(["--dry-run"]), 0)
         apply.assert_not_called()
         publish.assert_not_called()
         write.assert_not_called()
+        grouping.assert_not_called()
         patches[3].assert_called_once()
         self.assertEqual(list(self.root.iterdir()), [])
 
@@ -752,15 +815,32 @@ class RefreshTests(unittest.TestCase):
         publish.assert_not_called()
         state.assert_not_called()
 
-    def test_main_imports_header_and_association_together_before_publication(self):
+    def test_grouping_failure_does_not_publish_context_or_advance_state(self):
+        self.main_patches([handoff()])
+        with mock.patch.object(pv, "apply") as apply, \
+                mock.patch.object(pv, "apply_associations", side_effect=RuntimeError("modify failed")), \
+                mock.patch.object(pv, "publish_contexts") as publish, mock.patch.object(pv, "write_state") as state:
+            self.assertEqual(pv.main([]), 1)
+        apply.assert_called_once()
+        self.assertTrue(all(t["tags"] == ["view"] for t in apply.call_args.args[0]))
+        publish.assert_not_called()
+        state.assert_not_called()
+
+    def test_main_imports_only_views_and_modifies_associations_before_publication(self):
         patches = self.main_patches([handoff()])
         events = []
+        def grouping(intents):
+            events.append(("grouping", intents))
+            return {"changed": len(intents), "skipped": 0}
         with mock.patch.object(pv, "apply", side_effect=lambda payload: events.append(("import", payload))), \
+                mock.patch.object(pv, "apply_associations", side_effect=grouping), \
                 mock.patch.object(pv, "publish_contexts", side_effect=lambda *args: events.append(("publish", args))):
             self.assertEqual(pv.main([]), 0)
-        self.assertEqual([e[0] for e in events], ["import", "publish"])
-        self.assertEqual(len(events[0][1]), 2)
-        self.assertEqual(events[0][1][1]["view_project"], "release-pipeline")
+        self.assertEqual([e[0] for e in events], ["import", "grouping", "publish"])
+        self.assertEqual(len(events[0][1]), 1)
+        self.assertEqual(events[0][1][0]["tags"], ["view"])
+        self.assertNotEqual(events[0][1][0]["uuid"], handoff()["uuid"])
+        self.assertEqual(events[1][1][0]["view_project"], "release-pipeline")
         patches[3].assert_called_once()
         self.assertTrue((self.state / "last-run.json").is_file())
 
@@ -1044,13 +1124,164 @@ class SourcePaginationTests(unittest.TestCase):
 
 @unittest.skipUnless(shutil.which("task"), "task is not installed")
 class TaskwarriorRoundtripTests(unittest.TestCase):
+    def test_multiple_grouping_intents_use_one_final_export_and_exact_uuid_modifies(self):
+        tasks = [handoff(uuid=str(uuid.uuid4())), handoff(uuid=str(uuid.uuid4()))]
+        pv.apply(tasks)
+        snap = snapshot([project(issues=[issue("DEVOPS-1")])])
+        intents, _ = pv.association_plan(snap, self.plain_export())
+        with mock.patch.object(pv, "task_json", wraps=pv.task_json) as export, \
+                mock.patch.object(pv.subprocess, "run", wraps=subprocess.run) as run:
+            self.assertEqual(pv.apply_associations(intents), {"changed": 2, "skipped": 0})
+        export.assert_called_once()
+        for task in tasks:
+            self.assertIn("uuid:" + task["uuid"], export.call_args.args)
+        commands = [c.args[0] for c in run.call_args_list if "modify" in c.args[0]]
+        self.assertEqual(len(commands), 2)
+        for command in commands:
+            self.assertEqual(sum(arg.startswith("uuid:") for arg in command), 1)
+        self.assertTrue(all(t["view_project"] == "release-pipeline" for t in self.plain_export()))
+
+    def test_grouping_modify_preserves_user_notes_priority_and_dates_after_planning(self):
+        original = handoff(description="Review 🌱", due="20261201T000000Z", custom="Keep this")
+        pv.apply([original])
+        snap = snapshot([project(issues=[issue("DEVOPS-1")])])
+        intents, _ = pv.association_plan(snap, self.plain_export())
+        latest = self.plain_export()[0]
+        latest.update(priority="L", due="20261215T000000Z", custom="User's newer value")
+        latest["tags"].append("user-added")
+        latest["annotations"].append({"entry": "20261111T120000Z", "description": "New user note 🌱"})
+        pv.apply([latest])
+        before = self.plain_export()[0]
+        with mock.patch.object(pv, "task_json", wraps=pv.task_json) as export, \
+                mock.patch.object(pv.subprocess, "run", wraps=subprocess.run) as run:
+            result = pv.apply_associations(intents)
+        self.assertEqual(result, {"changed": 1, "skipped": 0})
+        export.assert_called_once()
+        modify = next(c.args[0] for c in run.call_args_list if "modify" in c.args[0])
+        self.assertIn("uuid:" + original["uuid"], modify)
+        self.assertIn("status:pending", modify)
+        self.assertIn("rc.hooks=off", modify)
+        self.assertIn("rc.confirmation=off", modify)
+        self.assertIn("rc.bulk=0", modify)
+        self.assertEqual(modify[modify.index("modify") + 1:], ["view_project:release-pipeline"])
+        after = self.plain_export()[0]
+        ignored = {"id", "urgency", "modified", "view_project"}
+        self.assertEqual({k: v for k, v in after.items() if k not in ignored},
+                         {k: v for k, v in before.items() if k not in ignored})
+        self.assertEqual(after["view_project"], "release-pipeline")
+        again, _ = pv.association_plan(snap, [after])
+        self.assertEqual(again, [])
+        with mock.patch.object(pv, "task_json") as export:
+            self.assertEqual(pv.apply_associations(again), {"changed": 0, "skipped": 0})
+        export.assert_not_called()
+
+    def test_user_completion_category_or_evidence_edit_after_plan_wins(self):
+        snap = snapshot([project(issues=[issue("DEVOPS-1")])])
+        edits = [{"status": "completed", "end": "20261111T120000Z"},
+                 {"project": "user-category"}, {"linear_issue_id": "DOC-999"},
+                 {"description": "Changed source https://linear.app/loft/issue/DOC-999/new-source"},
+                 {"view_project": "user-selected-project"}, {"tags": ["work"]},
+                 {"annotations": [{"entry": "20261111T120000Z", "description": "https://github.com/loft-sh/tool/pull/999"}]}]
+        for edit in edits:
+            with self.subTest(edit=next(iter(edit))):
+                original = handoff(uuid=str(uuid.uuid4()))
+                pv.apply([original])
+                before_plan = next(t for t in self.plain_export() if t["uuid"] == original["uuid"])
+                intents, _ = pv.association_plan(snap, [before_plan])
+                latest = {**before_plan, **edit}
+                pv.apply([latest])
+                before = next(t for t in self.plain_export() if t["uuid"] == original["uuid"])
+                self.assertEqual(pv.apply_associations(intents), {"changed": 0, "skipped": 1})
+                after = next(t for t in self.plain_export() if t["uuid"] == original["uuid"])
+                self.assertEqual(after, before)
+
+    def test_atomic_status_and_native_project_filters_guard_the_final_read_race(self):
+        snap = snapshot([project(issues=[issue("DEVOPS-1")])])
+        for edit in ({"status": "completed", "end": "20261111T120000Z"}, {"project": "new-category"}):
+            with self.subTest(edit=next(iter(edit))):
+                original = handoff(uuid=str(uuid.uuid4()))
+                pv.apply([original])
+                snapshot_task = next(t for t in self.plain_export() if t["uuid"] == original["uuid"])
+                intents, _ = pv.association_plan(snap, [snapshot_task])
+                real_export = pv.task_json
+                def export_then_user_edit(*args):
+                    tasks = real_export(*args)
+                    pv.apply([{**tasks[0], **edit}])
+                    return tasks
+                with mock.patch.object(pv, "task_json", side_effect=export_then_user_edit) as export:
+                    self.assertEqual(pv.apply_associations(intents), {"changed": 0, "skipped": 1})
+                export.assert_called_once()
+                after = next(t for t in self.plain_export() if t["uuid"] == original["uuid"])
+                for field, value in edit.items():
+                    self.assertEqual(after[field], value)
+                self.assertNotIn("view_project", after)
+                self.assertEqual(after["annotations"], original["annotations"])
+
+    def test_future_wait_task_is_not_planned_despite_pending_in_export(self):
+        future = pv.tw_time(datetime.now(UTC) + timedelta(days=365))
+        original = handoff(status="waiting", wait=future)
+        pv.apply([original])
+        current = self.plain_export()
+        snap = snapshot([project(issues=[issue("DEVOPS-1")])])
+        intents, resolved = pv.association_plan(snap, current)
+        # Taskwarrior 3 exports a future-wait task as pending plus a wait date.
+        self.assertEqual(current[0]["status"], "pending")
+        self.assertEqual(intents, [])
+        self.assertEqual(resolved, current)
+        self.assertEqual(pv.apply_associations(intents), {"changed": 0, "skipped": 0})
+        after = self.plain_export()[0]
+        self.assertEqual(after["status"], current[0]["status"])
+        self.assertEqual(after["wait"], current[0]["wait"])
+        self.assertEqual(after["annotations"], current[0]["annotations"])
+
+    def test_incremental_structured_metadata_import_preserves_existing_header_fields(self):
+        snap = snapshot([project(issues=[issue("DEVOPS-1", title="A clear activity title")])])
+        rows, scopes = pv.build_rows(snap, [], github(), NOW)
+        pv.source_status(rows, scopes, [], snap, github(), NOW, {})
+        payload, _ = pv.plan(rows, scopes, [], NOW)
+        legacy = payload[0]
+        for field in pv.VIEW_METADATA:
+            legacy.pop(field)
+        legacy.update(custom="Keep this", due="20261201T000000Z")
+        legacy["annotations"].insert(0, {"entry": "20261101T000000Z", "description": "Human context"})
+        pv.apply([legacy])
+        old = self.plain_export()
+        changed, _ = pv.plan(rows, scopes, old, NOW)
+        self.assertEqual(len(changed), 1)
+        pv.apply(changed)
+        exported = self.plain_export()
+        for field in ("uuid", "description", "project", "tags", "entry", "annotations", "custom", "due"):
+            self.assertEqual(exported[0][field], old[0][field])
+        self.assertEqual(tuple(exported[0][field] for field in pv.VIEW_METADATA),
+                         ("project", "A clear activity title", "In Progress", "DEVOPS-1"))
+        self.assertNotIn("linear_issue_id", exported[0])
+        self.assertEqual(pv.plan(rows, scopes, exported, NOW)[0], [])
+
+    def test_non_bmp_unicode_brief_roundtrips_and_matches_the_canonical_file(self):
+        proj = project(issues=[issue("DEVOPS-1", title="Grow 🌱 and ship 🚀; café")])
+        snap = snapshot([proj])
+        rows, scopes = pv.build_rows(snap, [], github(), NOW)
+        pv.source_status(rows, scopes, [], snap, github(), NOW, {})
+        payload, _ = pv.plan(rows, scopes, [], NOW)
+        pv.apply(payload)
+        exported = self.plain_export()
+        header = next(t for t in exported if t["view_key"] == "standing:p1")
+        annotation = next(a["description"][7:] for a in reversed(header["annotations"])
+                          if a["description"].startswith("brief: "))
+        self.assertIn("Grow 🌱 and ship 🚀; café", annotation)
+        with mock.patch.object(pv, "BRIEFS_DIR", self.data.parent / "briefs"):
+            pv.publish_contexts(rows, exported)
+            canonical = pv.BRIEFS_DIR / header["uuid"] / "project-status.md"
+            self.assertEqual(canonical.read_text(encoding="utf-8"), annotation)
+        self.assertEqual(pv.plan(rows, scopes, exported, NOW)[0], [])
+
     def test_unresolved_marker_survives_plain_export_with_native_project_intact(self):
         original = handoff("DEVOPS-999", project="release-pipeline")
         pv.apply([original])
         snap = snapshot([project(issues=[issue("DEVOPS-1")])])
         changes, _ = pv.association_plan(snap, self.plain_export())
         self.assertEqual(changes[0]["view_project"], "!unassigned")
-        pv.apply(changes)
+        pv.apply_associations(changes)
         exported = self.plain_export()[0]
         self.assertEqual(exported["view_project"], "!unassigned")
         self.assertEqual(exported["project"], "release-pipeline")
@@ -1082,7 +1313,7 @@ class TaskwarriorRoundtripTests(unittest.TestCase):
         snap = snapshot([project(issues=[issue("DEVOPS-1")])])
         changes, _ = pv.association_plan(snap, self.plain_export())
         self.assertEqual(len(changes), 1)
-        pv.apply(changes)
+        pv.apply_associations(changes)
         exported = self.plain_export()[0]
         self.assertEqual(exported["view_project"], "release-pipeline")
         for key in ("uuid", "project", "entry", "due", "priority", "tags", "annotations", "custom"):
