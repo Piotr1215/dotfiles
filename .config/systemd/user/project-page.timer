@@ -1,0 +1,12 @@
+[Unit]
+Description=Refresh local project pages every 10 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=10min
+RandomizedDelaySec=30s
+Persistent=true
+Unit=project-page.service
+
+[Install]
+WantedBy=timers.target

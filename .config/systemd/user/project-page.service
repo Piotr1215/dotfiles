@@ -1,0 +1,12 @@
+[Unit]
+Description=Refresh the local project status page
+After=network-online.target
+
+[Service]
+Type=oneshot
+Slice=background-automation.slice
+Nice=10
+Environment="PATH=%h/dev/dotfiles/scripts:%h/.local/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=/usr/bin/python3 %h/dev/dotfiles/scripts/__project_page.py
+TimeoutStartSec=10min
+StandardError=journal
