@@ -9,8 +9,27 @@ spec = importlib.util.spec_from_file_location('handoff_tab', path)
 tab = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(tab)
 
+@pytest.fixture(autouse=True)
+def production_environment(monkeypatch):
+    monkeypatch.delenv('PYTEST_CURRENT_TEST', raising=False)
+    monkeypatch.delenv('BATS_TEST_FILENAME', raising=False)
+    monkeypatch.delenv('TASKDATA', raising=False)
+    monkeypatch.delenv('TASKRC', raising=False)
+
+@pytest.mark.parametrize(('key', 'value'), [
+    ('PYTEST_CURRENT_TEST', 'test'), ('BATS_TEST_FILENAME', 'test.bats'),
+    ('TASKDATA', '/tmp/isolated-taskdata'), ('TASKRC', '/tmp/isolated-taskrc'),
+])
+def test_isolated_runs_never_connect(monkeypatch, key, value):
+    monkeypatch.delenv('PYTEST_CURRENT_TEST', raising=False)
+    monkeypatch.setenv(key, value)
+    monkeypatch.setattr(tab, 'RequestClient', lambda *args: pytest.fail('connected'))
+    with pytest.raises(RuntimeError, match='suppressed'):
+        asyncio.run(tab.open_tab('https://example.com/'))
+
 
 def test_bridge_sends_url_and_focus(monkeypatch):
+    monkeypatch.delenv('PYTEST_CURRENT_TEST', raising=False)
     calls = []
     class Client:
         def __init__(self, socket):
@@ -30,6 +49,7 @@ def test_bridge_sends_url_and_focus(monkeypatch):
 
 
 def test_bridge_reports_rejection(monkeypatch):
+    monkeypatch.delenv('PYTEST_CURRENT_TEST', raising=False)
     class Client:
         def __init__(self, socket): pass
         async def connect(self): pass
@@ -44,6 +64,7 @@ def test_bridge_reports_rejection(monkeypatch):
 @pytest.mark.parametrize('url', ['http://example.com/', 'https://user@example.com/',
                                   'https://example.com:443/', 'https://example.com/\n'])
 def test_rejects_ambiguous_url_before_connecting(monkeypatch, url):
+    monkeypatch.delenv('PYTEST_CURRENT_TEST', raising=False)
     monkeypatch.setattr(tab, 'RequestClient', lambda *args: pytest.fail('connected'))
     with pytest.raises(ValueError):
         asyncio.run(tab.open_tab(url))

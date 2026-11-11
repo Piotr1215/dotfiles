@@ -42,6 +42,12 @@ opened() {
     cat "${TEST_DIR}/opened" 2>/dev/null
 }
 
+@test "opens a resolved channel deep link in Slack" {
+    run "$SCRIPT" 'slack://channel?team=T1&id=C1&message=1234567890.123456'
+    [ "$status" -eq 0 ]
+    [ "$(opened)" = 'slack://channel?team=T1&id=C1&message=1234567890.123456' ]
+}
+
 @test "converts a message permalink into a slack:// deep link" {
     export SLACK_TEAM_ID="T024313FSQZ"
 

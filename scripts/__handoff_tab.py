@@ -13,6 +13,14 @@ from paths import default_socket_path
 
 
 async def open_tab(url, focus=False):
+    if 'PYTEST_CURRENT_TEST' in os.environ or 'BATS_TEST_FILENAME' in os.environ:
+        raise RuntimeError('handoff tab suppressed under test')
+    taskdata = os.environ.get('TASKDATA')
+    if taskdata and Path(taskdata).resolve() != (Path.home() / '.task').resolve():
+        raise RuntimeError('handoff tab suppressed for non-default TASKDATA')
+    taskrc = os.environ.get('TASKRC')
+    if taskrc and Path(taskrc).resolve() != (Path.home() / '.taskrc').resolve():
+        raise RuntimeError('handoff tab suppressed for non-default TASKRC')
     parsed = urlsplit(url)
     if (parsed.scheme != 'https' or not parsed.hostname or parsed.username is not None
             or parsed.password is not None or parsed.port is not None

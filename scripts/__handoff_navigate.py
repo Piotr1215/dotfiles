@@ -14,7 +14,7 @@ from urllib.parse import parse_qs, quote, urlsplit
 ROOT = Path(__file__).resolve().parent
 # One workspace, two permalink hosts: since the Enterprise Grid move Slack hands
 # out vcluster-internal.enterprise links beside the older loft-labs-inc ones.
-SLACK_HOSTS = {"loft-labs-inc.slack.com", "vcluster-internal.enterprise.slack.com"}
+SLACK_HOSTS = {"slack.com", "loft-labs-inc.slack.com", "vcluster-internal.enterprise.slack.com"}
 HOSTS = SLACK_HOSTS | {"app.slack.com", "github.com", "linear.app",
                        "mail.google.com", "app.notion.com", "docs.google.com", "claude.ai"}
 UUID = re.compile(r"[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}")
@@ -235,6 +235,13 @@ def open_page(url):
     "but with huge delay"). No --focus, so the broker neither raises nor tiles
     Chrome, and neither path asks for a new window.
     """
+    taskdata = os.environ.get("TASKDATA")
+    taskrc = os.environ.get("TASKRC")
+    if ("PYTEST_CURRENT_TEST" in os.environ or "BATS_TEST_FILENAME" in os.environ or
+            (taskdata and Path(taskdata).resolve() != (Path.home() / ".task").resolve()) or
+            (taskrc and Path(taskrc).resolve() != (Path.home() / ".taskrc").resolve())):
+        log("handoff: browser suppressed for test or non-default TASKDATA or TASKRC")
+        return
     try:
         timeout = float(os.environ.get("HANDOFF_TAB_TIMEOUT", "1"))
     except ValueError:
@@ -253,20 +260,17 @@ def open_page(url):
 
 
 def navigate_many(urls, terminal, slack_tabs=False):
-    """Open each URL and tile its browser or Slack window beside the terminal.
-
-    slack_tabs opens Slack permalinks as browser tabs too: a draft row is pasted
-    into the thread in Chrome.
-    """
+    """Open URLs and tile the browser or Slack beside the terminal."""
     urls = list(dict.fromkeys(urls))
     env = dict(os.environ, LAYOUT_ALACRITTY_WINDOW=terminal)
     is_slack = lambda u: urlsplit(u).hostname in SLACK_HOSTS | {"app.slack.com"}
-    desktop = [] if slack_tabs else [u for u in urls if is_slack(u)]
+    desktop = [u for u in urls if is_slack(u)]
     pages = [u for u in urls if u not in desktop]
     for url in desktop:
         deep_link = slack_deep_link(url)
         log(f"handoff: opening desktop {deep_link}")
-        run(["xdg-open", deep_link], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        run([str(ROOT / "__slack_open.sh"), deep_link], env=dict(env, SLACK_OPEN_LAYOUT="0"),
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     browser = os.environ.get("HANDOFF_BROWSER_COMMAND")
     if browser and pages:
         run([browser, *pages])

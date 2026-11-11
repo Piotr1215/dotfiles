@@ -203,6 +203,7 @@ def test_layout_and_url_arguments(monkeypatch, urls, layout):
 
 
 def test_multiple_browser_links_open_once_as_background_tabs(monkeypatch):
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
     monkeypatch.setattr(nav, "terminal_monitor", lambda _: "HDMI-0")
     monkeypatch.setattr(nav, "window_id", lambda _: "222")
     calls = []
@@ -213,14 +214,16 @@ def test_multiple_browser_links_open_once_as_background_tabs(monkeypatch):
     assert all(kw["timeout"] == 1.0 for _, kw in calls[:-1])
 
 
-def test_draft_row_opens_slack_permalink_as_a_tab(monkeypatch):
+def test_draft_row_opens_slack_in_desktop(monkeypatch):
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
     monkeypatch.setattr(nav, "terminal_monitor", lambda _: "HDMI-0")
     monkeypatch.setattr(nav, "window_id", lambda _: "222")
     calls = []
     monkeypatch.delenv("HANDOFF_BROWSER_COMMAND", raising=False)
     monkeypatch.setattr(nav, "run", lambda args, **kw: calls.append(args))
     nav.navigate_many([ENTERPRISE, "https://github.com/a"], "111", slack_tabs=True)
-    assert [args[1:] for args in calls[:-1]] == [[ENTERPRISE], ["https://github.com/a"]]
+    assert calls[0] == [str(nav.ROOT / "__slack_open.sh"), nav.slack_deep_link(ENTERPRISE)]
+    assert calls[1][1:] == ["https://github.com/a"]
 
 
 @pytest.mark.parametrize("edited", ["", "https://github.com/edited"])
@@ -349,6 +352,7 @@ def test_delayed_old_worker_cannot_stop_newer(monkeypatch, tmp_path):
 
 
 @pytest.mark.parametrize(("url", "expected"), [
+    ("https://slack.com/archives/C123/p1234567890123456", "slack://channel?team=T0123&id=C123&message=1234567890.123456&thread_ts=1234567890.123456"),
     ("https://loft-labs-inc.slack.com/archives/C0123/p1793895191898810?thread_ts=1793895191.898809", "slack://channel?team=T0123&id=C0123&message=1793895191.898810&thread_ts=1793895191.898809"),
     ("https://loft-labs-inc.slack.com/archives/C08EQAJQD24", "slack://channel?team=T0123&id=C08EQAJQD24"),
     ("https://loft-labs-inc.slack.com/archives/C0123/p1793917323756099", "slack://channel?team=T0123&id=C0123&message=1793917323.756099&thread_ts=1793917323.756099"),
@@ -362,7 +366,7 @@ def test_slack_desktop_links_never_open_browser(monkeypatch, url, expected):
     monkeypatch.setattr(nav, "run", lambda args, **kw: calls.append(args))
     monkeypatch.setattr(nav.subprocess, "Popen", lambda *a, **kw: pytest.fail("opened Chrome"))
     nav.navigate_many([url], "111")
-    assert calls[0] == ["xdg-open", expected]
+    assert calls[0] == [str(nav.ROOT / "__slack_open.sh"), expected]
 
 
 def test_missing_slack_team_does_not_open_browser(monkeypatch, tmp_path):
@@ -423,7 +427,7 @@ def test_enterprise_slack_permalink_opens_desktop_beside_browser(monkeypatch):
     monkeypatch.setenv("SLACK_TEAM_ID", "T0123")
     monkeypatch.setattr(nav, "run", lambda args, **kw: calls.append(args))
     nav.navigate_many([ENTERPRISE, "https://github.com/a"], "111")
-    assert calls[0] == ["xdg-open", nav.slack_deep_link(ENTERPRISE)]
+    assert calls[0] == [str(nav.ROOT / "__slack_open.sh"), nav.slack_deep_link(ENTERPRISE)]
     assert ["/browser", "https://github.com/a"] in calls
     assert calls[-1][-1] == "8"
 
@@ -908,6 +912,7 @@ def fake_pages(tmp_path, monkeypatch):
     log = tmp_path / "pages.log"
     record = f'printf "%s " "$(basename "$0")" "$@" >> {log}; printf "\\n" >> {log}\n'
     def setup(bridge_status, hang=False):
+        monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
         tab = fake_bin(tmp_path, "tab", record + ("exec sleep 30\n" if hang else f"exit {bridge_status}\n"))
         fake_bin(tmp_path, "xdg-open", record)
         layout = fake_bin(tmp_path, "layout", record)
@@ -1014,8 +1019,11 @@ echo 'RIGHT connected 2000x1200+2000+0'
     nav.navigate_many(urls, "111", slack_tabs=True)
     calls = tiles.read_text().splitlines()
     assert len(calls) == 2
-    assert calls[0].endswith("TileXid 222 2000 40 1000 1160")
-    assert calls[1].endswith("TileXid 111 3000 40 1000 1160")
+    if urls == [ENTERPRISE]:
+        assert calls[0].endswith("TileXid 111 2000 40 1000 1160")
+    else:
+        assert calls[0].endswith("TileXid 222 2000 40 1000 1160")
+        assert calls[1].endswith("TileXid 111 3000 40 1000 1160")
 
 
 def test_missing_terminal_monitor_never_tiles(monkeypatch):
@@ -1049,9 +1057,22 @@ def test_terminal_monitor_logs_missing_terminal(nav_log):
 
 
 def test_tab_bridge_error_is_logged(tmp_path, monkeypatch, nav_log):
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
     tab = fake_bin(tmp_path, "failed-tab", 'echo "bridge rejected request" >&2\nexit 1\n')
     fake_bin(tmp_path, "xdg-open", "exit 0\n")
     monkeypatch.setenv("PATH", f"{tmp_path}{os.pathsep}{os.environ['PATH']}")
     monkeypatch.setenv("HANDOFF_TAB_COMMAND", str(tab))
     nav.open_page("https://github.com/a")
     assert "handoff: tab bridge error: bridge rejected request" in nav_log.read_text()
+
+
+@pytest.mark.parametrize("key", ["PYTEST_CURRENT_TEST", "BATS_TEST_FILENAME", "TASKDATA", "TASKRC"])
+def test_test_context_never_falls_back_to_browser(monkeypatch, nav_log, key):
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+    monkeypatch.delenv("BATS_TEST_FILENAME", raising=False)
+    monkeypatch.delenv("TASKDATA", raising=False)
+    monkeypatch.delenv("TASKRC", raising=False)
+    monkeypatch.setenv(key, "/tmp/isolated")
+    monkeypatch.setattr(nav, "run", lambda *args, **kwargs: pytest.fail("launched"))
+    nav.open_page("https://github.com/a")
+    assert "browser suppressed" in nav_log.read_text()

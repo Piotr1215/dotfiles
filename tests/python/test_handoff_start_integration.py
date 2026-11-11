@@ -26,8 +26,9 @@ def test_real_start_hook_keeps_newest_handoff_and_opens_reply_permalink(command_
         (hooks / "on-modify-openurl-or-program.py").chmod(0o755)
         home = root / "home"
         (home / "dev/dotfiles/scripts").mkdir(parents=True)
+        (home / ".task").symlink_to(data, target_is_directory=True)
         scripts = home / "dev/dotfiles/scripts"
-        for script in ("__handoff_navigate.sh", "__handoff_navigate.py", "__handoff_floater_file.py"):
+        for script in ("__handoff_navigate.sh", "__handoff_navigate.py", "__handoff_floater_file.py", "__slack_open.sh"):
             (scripts / script).write_bytes((SCRIPTS / script).read_bytes())
             (scripts / script).chmod(0o755)
         bin_dir = root / "bin"
@@ -51,6 +52,7 @@ def test_real_start_hook_keeps_newest_handoff_and_opens_reply_permalink(command_
             "hooks=on\n"
             "confirmation=no\n"
         )
+        (home / ".taskrc").symlink_to(taskrc)
         runtime = root / "runtime"
         state = root / "state"
         log = root / "calls.jsonl"
@@ -85,9 +87,11 @@ def test_real_start_hook_keeps_newest_handoff_and_opens_reply_permalink(command_
         task_bin = root / "task"
         task_bin.symlink_to(TASK)
         env = dict(os.environ)
+        env.pop("PYTEST_CURRENT_TEST", None)
+        env.pop("BATS_TEST_FILENAME", None)
         env.update(HOME=str(home), TASKRC=str(taskrc), TASKDATA=str(data),
                    XDG_RUNTIME_DIR=str(runtime), XDG_STATE_HOME=str(state),
-                   PATH=str(bin_dir) + os.pathsep + os.environ["PATH"], SLACK_TEAM_ID="TTEST",
+                   PATH=str(bin_dir) + os.pathsep + os.environ["PATH"], SLACK_TEAM_ID="TTEST", SLACK_OPEN_NO_DETACH="1",
                    HANDOFF_TASK_COMMAND=str(task_bin), HANDOFF_FLOATER_COMMAND=str(mock),
                    HANDOFF_LAYOUT_COMMAND=str(mock), HANDOFF_BROWSER_COMMAND=str(mock),
                    HANDOFF_TMUX_COMMAND=str(tmux), MOCK_LOG=str(log), PREPARE_SCRIPT=str(scripts / "__handoff_floater_file.py"), TMUX_PANE="%77")

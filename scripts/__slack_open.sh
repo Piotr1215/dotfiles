@@ -164,6 +164,7 @@ main() {
         -h|--help) usage; exit 0 ;;
         "")        usage >&2; exit 1 ;;
         --detect)  if detect_team_ids; then exit 0; else exit 1; fi ;;
+        slack://channel\?team=*) open_detached "$url"; apply_layout; exit 0 ;;
     esac
 
     # Parse https://<workspace>.slack.com/archives/<CHANNEL>/p<DIGITS>[?query]
