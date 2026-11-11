@@ -19,24 +19,24 @@ HOSTS = SLACK_HOSTS | {"app.slack.com", "github.com", "linear.app",
 UUID = re.compile(r"[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}")
 
 
-def checked_url(url):
+def checked_url(url, *, any_host=False):
     """Reject ambiguous authorities and schemes before any process is launched."""
     if any(ord(c) <= 32 or ord(c) == 127 for c in url) or "\\" in url:
         raise ValueError("Invalid destination URL")
     parsed = urlsplit(url)
-    if (parsed.scheme != "https" or parsed.hostname not in HOSTS
+    if (parsed.scheme != "https" or not parsed.hostname or (not any_host and parsed.hostname not in HOSTS)
             or parsed.username is not None or parsed.password is not None
             or parsed.port is not None):
         raise ValueError("Handoff destination must use an allowed HTTPS host")
     return url
 
 
-def single_url(text):
+def single_url(text, *, any_host=False):
     """Read one URL, allowing a Markdown link or a terminal sentence period."""
     urls = list(dict.fromkeys(u.rstrip(".,;") for u in re.findall(r"https?://[^\s<>\])]+", text)))
     if len(urls) != 1:
         raise ValueError("Handoff needs one destination in target: or link:")
-    return checked_url(urls[0])
+    return checked_url(urls[0], any_host=any_host)
 
 
 def mail_sent_url(done):
@@ -73,8 +73,10 @@ def destination(task):
     fields = {}
     for annotation in sorted(task.get("annotations", []), key=lambda a: a.get("entry", "")):
         key, sep, value = annotation.get("description", "").partition(":")
-        if sep and key.lower() in {"target", "link", "done-when"}:
+        if sep and key.lower() in {"target", "link", "tab", "done-when"}:
             fields[key.lower()] = value.strip()
+    if "tab" in fields:
+        return single_url(fields["tab"], any_host=True)
     if "target" in fields:
         target = fields["target"]
         slack = re.match(r"slack:([CDG][A-Z0-9]+)/(top|[0-9]+\.[0-9]{6})(?:\s|$)", target)
@@ -186,14 +188,12 @@ def navigate_many(urls, terminal):
             continue
         browser_opened = True
         browser = os.environ.get("HANDOFF_BROWSER_COMMAND")
-        try:
-            if not browser:
-                raise OSError("Chrome window required")
+        if browser:
             run([browser, *all_browsers])
-        except (OSError, subprocess.SubprocessError):
-            args = [os.environ.get("HANDOFF_CHROME_COMMAND", "google-chrome-stable")]
-            subprocess.Popen(args + ["--new-window", *all_browsers], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                             stderr=subprocess.DEVNULL, start_new_session=True)
+        else:
+            for page in all_browsers:
+                run([os.environ.get("HANDOFF_TAB_COMMAND", str(ROOT / "__handoff_tab.py")), "--focus", page],
+                    stdout=subprocess.DEVNULL)
         time.sleep(0.5)
         env["LAYOUT_BROWSER_WINDOW"] = window_id("google-chrome")
     if not urls:
@@ -225,10 +225,10 @@ def annotation_urls(task):
         except ValueError as error:
             print(f"Could not open handoff destination: {error}", file=sys.stderr)
     for annotation in annotations:
-        match = re.match(r"^\s*link:\s*(.*)$", annotation.get("description", ""), re.I)
+        match = re.match(r"^\s*(?:link|tab):\s*(.*)$", annotation.get("description", ""), re.I)
         if match:
             try:
-                urls.append(single_url(match.group(1)))
+                urls.append(single_url(match.group(1), any_host=annotation.get("description", "").lstrip().lower().startswith("tab:")))
             except ValueError as error:
                 print(f"Could not open handoff destination: {error}", file=sys.stderr)
     return list(dict.fromkeys(url for url in urls if url))
@@ -312,7 +312,9 @@ def act_on_kind(task):
                 print("Could not copy the draft: install xclip or wl-copy, then press s again.",
                       file=sys.stderr)
         command = newest_note(task, "cmd")
-        if command or kind == "command":
+        if command.startswith("xdg-open https://"):
+            command = ""
+        elif command or kind == "command":
             open_command_window(task["uuid"], command)
     except (ValueError, OSError, subprocess.SubprocessError) as error:
         print(f"Handoff {kind} action: {error}", file=sys.stderr)

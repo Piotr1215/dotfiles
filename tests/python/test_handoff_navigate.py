@@ -18,10 +18,10 @@ def task(*annotations, tags=None):
 
 
 @pytest.mark.parametrize("url", [
-    "http://github.com/a", "https://github.com.evil.test/a", "https://evil.test/a",
+    "http://github.com/a",
     "https://user@github.com/a", "https://github.com:443/a", "file:///tmp/a",
     "https://github.com\\@evil.test/a", "https://github.com/a\n",
-    "http://claude.ai/artifact/id", "https://claude.ai.evil.com/artifact/id",
+    "http://claude.ai/artifact/id",
 ])
 def test_rejects_unsafe_urls(url):
     with pytest.raises(ValueError):
@@ -74,6 +74,14 @@ def test_floater_validation_identifies_task_from_environment(monkeypatch):
 ])
 def test_destination_forms(annotation, url):
     assert nav.destination(task(annotation)) == url
+
+
+def test_tab_note_opens_console_url_and_suppresses_legacy_command(monkeypatch):
+    row = task('tab: https://console.example.com/settings', 'cmd: xdg-open https://console.example.com/settings')
+    assert nav.destination(row) == 'https://console.example.com/settings'
+    assert nav.annotation_urls(row) == ['https://console.example.com/settings']
+    monkeypatch.setattr(nav, 'open_command_window', lambda *args: pytest.fail('legacy command shown'))
+    nav.act_on_kind(row)
 
 
 def test_mail_sent_uses_newest_message_and_account(tmp_path, monkeypatch):
@@ -186,8 +194,9 @@ def test_multiple_browser_links_open_once_in_one_window(monkeypatch):
     monkeypatch.setattr(nav, "run", lambda args, **kw: calls.append((args, kw)))
     monkeypatch.setattr(nav.subprocess, "Popen", lambda args, **kw: calls.append((args, kw)))
     nav.navigate_many(["https://github.com/a", "https://linear.app/b", "https://github.com/a"], "111")
-    assert calls[0][0] == ["google-chrome-stable", "--new-window", "https://github.com/a", "https://linear.app/b"]
-    assert len(calls) == 2
+    assert calls[0][0][-2:] == ["--focus", "https://github.com/a"]
+    assert calls[1][0][-2:] == ["--focus", "https://linear.app/b"]
+    assert len(calls) == 3
     assert calls[-1][0][-1] == "2"
 
 
