@@ -155,16 +155,20 @@ def window_id(window_class):
 def terminal_monitor(terminal):
     """Find the connected output containing the source window's center."""
     if not terminal:
+        log("handoff: terminal xid=missing geometry=missing monitor=missing")
         return ""
+    geometry = "missing"
     try:
         windows = run(["wmctrl", "-lG"], capture_output=True, text=True).stdout.splitlines()
         for line in windows:
             fields = line.split()
             if len(fields) >= 6 and int(fields[0], 16) == int(terminal):
                 x, y, width, height = map(int, fields[2:6])
+                geometry = f"{x},{y},{width},{height}"
                 cx, cy = x + width // 2, y + height // 2
                 break
         else:
+            log(f"handoff: terminal xid={terminal} geometry={geometry} monitor=missing")
             return ""
         outputs = run(["xrandr", "--current"], capture_output=True, text=True).stdout.splitlines()
         for line in outputs:
@@ -172,9 +176,11 @@ def terminal_monitor(terminal):
             if match:
                 name, w, h, x, y = match.groups()
                 if int(x) <= cx < int(x) + int(w) and int(y) <= cy < int(y) + int(h):
+                    log(f"handoff: terminal xid={terminal} geometry={geometry} monitor={name}")
                     return name
-    except (OSError, subprocess.SubprocessError, ValueError):
-        pass
+    except (OSError, subprocess.SubprocessError, ValueError) as error:
+        log(f"handoff: terminal lookup error={type(error).__name__}")
+    log(f"handoff: terminal xid={terminal} geometry={geometry} monitor=missing")
     return ""
 
 

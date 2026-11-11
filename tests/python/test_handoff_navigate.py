@@ -980,3 +980,22 @@ def test_missing_terminal_monitor_never_tiles(monkeypatch):
     monkeypatch.setattr(nav, "run", lambda args, **kw: calls.append(args))
     nav.navigate_many(["https://github.com/a"], "111")
     assert calls == []
+
+
+@pytest.mark.parametrize(("outputs", "expected"), [
+    ("HDMI-0 connected primary 1920x1080+0+0", "HDMI-0"),
+    ("HDMI-0 connected primary 100x100+0+0", "missing"),
+])
+def test_terminal_monitor_logs_geometry_and_result(monkeypatch, nav_log, outputs, expected):
+    def run(args, **kwargs):
+        output = "0x0000006f  0 100 200 800 600 host terminal\n" if args[0] == "wmctrl" else outputs
+        return subprocess.CompletedProcess(args, 0, stdout=output)
+
+    monkeypatch.setattr(nav, "run", run)
+    assert nav.terminal_monitor("111") == (expected if expected != "missing" else "")
+    assert f"terminal xid=111 geometry=100,200,800,600 monitor={expected}" in nav_log.read_text()
+
+
+def test_terminal_monitor_logs_missing_terminal(nav_log):
+    assert nav.terminal_monitor("") == ""
+    assert "terminal xid=missing geometry=missing monitor=missing" in nav_log.read_text()
