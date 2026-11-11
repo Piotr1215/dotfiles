@@ -47,3 +47,12 @@ def test_rejects_ambiguous_url_before_connecting(monkeypatch, url):
     monkeypatch.setattr(tab, 'RequestClient', lambda *args: pytest.fail('connected'))
     with pytest.raises(ValueError):
         asyncio.run(tab.open_tab(url))
+
+
+def test_timeout_names_the_unresponsive_bridge(monkeypatch, capsys):
+    async def timeout(*args):
+        raise asyncio.TimeoutError()
+    monkeypatch.setattr(tab, 'open_tab', timeout)
+    monkeypatch.setattr(tab.sys, 'argv', ['handoff-tab', 'https://example.com/'])
+    assert tab.main() == 1
+    assert 'browser bridge did not respond' in capsys.readouterr().err

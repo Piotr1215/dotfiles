@@ -38,7 +38,10 @@ def main():
         result = asyncio.run(open_tab(sys.argv[-1], focus))
         print(json.dumps(result))
         return 0
-    except (OSError, RuntimeError, ValueError, asyncio.TimeoutError) as error:
+    except asyncio.TimeoutError:
+        print('Chrome handoff: browser bridge did not respond; reload its extension', file=sys.stderr)
+        return 1
+    except (OSError, RuntimeError, ValueError) as error:
         print(f'Chrome handoff: {error}', file=sys.stderr)
         return 1
 
