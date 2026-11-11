@@ -41,7 +41,7 @@ class StatusTest(unittest.TestCase):
         candidates = ci.resolve(fixture(), [], NOW, Path('/nonexistent'))['done']
         valid = ['Guard live DEVOPS-1', 'Runner fixed DEVOPS-2', 'Guard merged a/b#1']
         self.assertEqual(ci.validate_done(valid, candidates), valid)
-        for lines in ([*valid, 'Unknown DEVOPS-99'], [*valid, 'Still open DEVOPS-3'], valid[:2], [*valid, 'word ' * 12 + 'DEVOPS-1']):
+        for lines in ([*valid, 'Unknown DEVOPS-99'], [*valid, 'Still open DEVOPS-3'], valid[:2], [*valid, 'word ' * 13 + 'DEVOPS-1']):
             with self.assertRaises(ValueError):
                 ci.validate_done(lines, candidates)
 
@@ -60,18 +60,29 @@ class StatusTest(unittest.TestCase):
                 ci.completed_summary(changed, cache)
                 self.assertEqual(run.call_count, 2)
 
-    def test_row_description_has_no_gap_before_punctuation(self):
+    def test_facts_merge_sources_and_description_is_a_plain_sentence(self):
         resolved = {'done': [], 'active': [], 'handoffs': []}
-        with patch.object(ci, 'resolve', return_value=resolved), patch.object(ci, 'completed_summary', return_value=['Completed DEVOPS-1: guard updated']):
+        done = ['Chromium download overlaps UI checks (DEVOPS-1, a/b#1)', 'Runner fixed (DEVOPS-2)']
+        with patch.object(ci, 'resolve', return_value=resolved), patch.object(ci, 'completed_summary', return_value=done):
             status, _ = ci.generate({}, [])
-        self.assertEqual(status['description'], 'CI infrastructure: Completed: guard updated')
+        self.assertEqual(status['description'], 'CI infrastructure: Chromium download overlaps UI checks.')
+        self.assertEqual(status['done'], ['Chromium download overlaps UI checks', 'Runner fixed'])
+        brief = ci.format_brief(status, [])
+        self.assertEqual(brief.count('Chromium download'), 1)
+        self.assertTrue(brief.endswith('sources: DEVOPS-1, a/b#1, DEVOPS-2'))
+        self.assertNotRegex(brief.split('sources:')[0], ci.ID)
+
+    def test_acknowledgements_are_not_next_steps(self):
+        tasks = [{'status': 'pending', 'tags': ['piotr', 'ack'], 'description': 'Read result', 'project': ci.PROJECT},
+                 {'status': 'pending', 'tags': ['piotr'], 'description': 'Make decision', 'project': ci.PROJECT}]
+        self.assertEqual(ci.resolve(fixture(), tasks, NOW, Path('/nonexistent'))['handoffs'], ['Make decision'])
 
     def test_project_issue_pr_and_deck_match_pending_only(self):
         tasks = [{'status': 'pending', 'tags': ['piotr'], 'description': 'Direct', 'project': ci.PROJECT},
                  {'status': 'pending', 'tags': ['piotr'], 'description': 'Linked', 'annotations': [{'description': 'a/b#2'}]},
                  {'status': 'completed', 'tags': ['piotr'], 'description': 'Done', 'project': ci.PROJECT}]
         self.assertEqual([t['description'] for t in ci.handoffs(tasks, fixture())], ['Direct', 'Linked'])
-        self.assertEqual(ci.format_brief({'done':['a'], 'now':['b']}, ['Direct']), 'Done:\n- a\n\nNow:\n- b\n\nNext:\n- Direct')
+        self.assertEqual(ci.format_brief({'done':['a'], 'now':['b'], 'sources':['DEVOPS-1']}, ['Direct']), 'Done:\n- a\n\nNow:\n- b\n\nNext:\n- Direct\n\nsources: DEVOPS-1')
 
 
 if __name__ == '__main__':
