@@ -22,6 +22,18 @@ def fixture():
 
 
 class ProjectPageTest(unittest.TestCase):
+    def test_summary_keeps_cited_sentences_and_bold_heading(self):
+        response = ('DEVOPS-123 moved to Released after a/b#1 was merged.\n'
+                    'An unsupported statement. another unsupported statement (DEVOPS-999).\n**Next steps**\n\n'
+                    '- Walk through the network (DEVOPS-123, Todo).\n'
+                    '- Invented issue (DEVOPS-999).\n')
+        def run(cmd, **kwargs):
+            Path(cmd[cmd.index('--out') + 1]).write_text(response)
+            return unittest.mock.Mock(returncode=0)
+        with patch.object(page.subprocess, 'run', side_effect=run):
+            result = page.summary(fixture())
+        self.assertEqual(result, 'DEVOPS-123 moved to Released after a/b#1 was merged.\nNext steps\n- Walk through the network (DEVOPS-123, Todo).')
+
     def test_render_all_sections_and_escape(self):
         data = fixture()
         data['project']['issues'][0]['title'] = '<script>'
