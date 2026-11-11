@@ -295,6 +295,9 @@ EOF
   run env SLACK_FEED_SKIP_DMS=0 "$SCRIPT" __preview "[off] slack-dms"
   [ "$status" -eq 0 ]
   [[ "$output" == *"state:  off"* ]]
+  # Off is a privacy pause for every agent path, not only the feed.
+  [[ "$output" == *"Off pauses DMs for every agent"* ]]
+  [[ "$output" == *"agent Slack reads of DMs, Slack files"* ]]
 }
 
 @test "voice-mode off persists in a flag the unit reads at login, and never disables" {
