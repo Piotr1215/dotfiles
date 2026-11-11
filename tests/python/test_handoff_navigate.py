@@ -788,7 +788,7 @@ def test_verify_closes_the_row_when_its_probe_proves_done(tmp_path, monkeypatch,
     assert "closed aa476008 by done-when probe" in capsys.readouterr().err
 
 
-def test_verify_keeps_an_unproved_row_open_with_the_reason(tmp_path, monkeypatch):
+def test_verify_keeps_an_unproved_row_open_with_the_reason(tmp_path, monkeypatch, capsys):
     probe = fake_bin(tmp_path, "probe", f'echo "{UUID[:8]} open: PR still open"; exit 0\n')
     tw = fake_bin(tmp_path, "tw", f'printf "%s|" "$@" >> {tmp_path}/tw.argv\n')
     monkeypatch.setenv("HANDOFF_PROBE_COMMAND", str(probe))
@@ -797,6 +797,8 @@ def test_verify_keeps_an_unproved_row_open_with_the_reason(tmp_path, monkeypatch
     assert nav.verify(task("done-when: pr-merged loft-sh/architecture#26")) == 1
     assert (tmp_path / "tw.argv").read_text() == (
         f"--all|note|{UUID}|s: cmd exited 0; done-when not proved ({UUID[:8]} open: PR still open); row stays open|")
+    output = capsys.readouterr()
+    assert (output.out + output.err).count("row stays open") == 1
 
 
 @pytest.mark.parametrize("notes", [(), ("done-when: manual Piotr reads the page",)])
