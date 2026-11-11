@@ -1,53 +1,36 @@
 #!/usr/bin/env python3
-"""Keep the +view rows of the taskwarrior-tui `myprojects` report live.
+"""Refresh per-project context and source rows in the myprojects report.
 
-The report (key 2 in taskwarrior-tui) lists Piotr's own Linear-linked tasks
-grouped by project. Under each project's tasks it shows the rows this script
-writes from Linear and GitHub:
+Each relevant Linear project has one +view header with view_key=standing:<id>.
+The newest brief: annotation holds its full deterministic Markdown overview:
+verified recent completions, current issues and PR states, milestones and real
+local action rows. After a successful batched import the same text is atomically
+published to $XDG_STATE_HOME/taskwarrior/briefs/<header UUID>/project-status.md.
+The existing project-view.timer schedules this reader every ten minutes.
 
-  no task     an open issue assigned to Piotr that no open task carries (Linear
-              Triage issues never sync, so these are mostly his Triage inbox)
-  review ask  an open PR, attached to one of the project's open issues, that
-              asks Piotr or one of his teams for review
-  standing    where the project is: state, target, last update, open issues by
-              state, what is stuck (blocked, stalled, triage), what changed in
-              7 days, his own PRs. Its annotation (b brief) lists the issues.
+Issue and review rows keep their own issue:/ask: identity and canonical link:
+annotations. They are context/source rows, never +piotr handoff copies. Actual
++piotr tasks retain their UUID and native project. Their optional view_project
+UDA is set only by exact, unambiguous source ownership. Failed sources preserve
+previous verified context and grouping, with source-age details in the brief.
+An explicit unresolved ownership assessment uses view_project=!unassigned to
+keep a native administrative or conflicting project from grouping it by fallback.
+Legacy tasks without explicit source evidence keep their native project grouping;
+that grouping is separate from an automatically verified association.
 
-WHY: on 11 Nov Piotr asked for a per-project view for him alone, continuous and
-tactical. Linear project updates are weekly snapshots written for everyone.
-
-View rows are ordinary tasks tagged +view, one fixed uuid per row key (stored in
-the view_key UDA), so a rerun rewrites them in place and only real changes reach
-the task database. They carry no +work, so every work-context report hides
-them; no +piotr, so they never reach the handoff board; no linear_issue_id, so
-the issue sync and issue prep never adopt them; and no github.com/<o>/<r>/pull/N
-URL, so the PR movement watcher (__pr_movement_nudge.sh) never starts watching a
-PR because of them. Writes go through one `task import` with hooks off, so the
-intake records and the other hooks never see them. A row Piotr marks done comes
-back on the next run while its source still holds: these rows mirror Linear and
-GitHub and are changed there.
-
-A source that fails leaves the rows it feeds as they were: a project whose
-issues cannot be read keeps its rows, a failed assigned-issue read keeps the
-no-task rows, and a failed GitHub read keeps the review asks and says "PRs
-unavailable" on the standing row.
-
-Usage: __project_view_refresh.py [--dry-run]
-Runs from project-view.timer every 10 minutes. --dry-run reads every source and
-prints the rows it would add, change and delete, writing nothing.
-
+Usage: __project_view_refresh.py [--dry-run]. Dry runs write no tasks or files.
 Env: PROJECT_VIEW_TASK_CMD (task), PROJECT_VIEW_GH_CMD (gh), LINEAR_API_KEY or
 PROJECT_VIEW_LINEAR_KEY_CMD (pass show work/LINEAR_API_KEY),
 PROJECT_VIEW_LINEAR_URL, PROJECT_VIEW_STATE (~/.local/state/project-view).
 """
 import argparse
-import importlib.util
 import json
 import os
 import re
 import shlex
 import subprocess
 import sys
+import tempfile
 import urllib.request
 import uuid
 from concurrent.futures import ThreadPoolExecutor
@@ -59,8 +42,10 @@ GH_CMD = shlex.split(os.environ.get("PROJECT_VIEW_GH_CMD") or "gh")
 LINEAR_URL = os.environ.get("PROJECT_VIEW_LINEAR_URL", "https://api.linear.app/graphql")
 LINEAR_KEY_CMD = os.environ.get("PROJECT_VIEW_LINEAR_KEY_CMD", "pass show work/LINEAR_API_KEY")
 STATE_DIR = Path(os.environ.get("PROJECT_VIEW_STATE") or Path.home() / ".local/state/project-view")
+BRIEFS_DIR = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local/state") / "taskwarrior/briefs"
 
 TAG = "view"
+UNASSIGNED = "!unassigned"
 NAMESPACE = uuid.UUID("5d1f3c2e-7a4b-4c8e-9f60-2b7e1d3a9c41")
 RANK = {"issue": 1, "ask": 2, "standing": 9}
 DONE = {"completed", "canceled", "duplicate"}
@@ -68,23 +53,33 @@ WINDOW = timedelta(days=7)
 # A member-only project with no work of Piotr's shows only while it is alive:
 # a status update or an issue change inside this window.
 MEMBER_ALIVE = timedelta(days=30)
-# Past this age a status update reads as a month, not a day count.
-STALE_UPDATE = timedelta(days=60)
 # A failed run fails the unit only once the view is this stale, so a short
 # Linear, GitHub or network outage logs a WARN instead of a failure record.
 STALE_VIEW = timedelta(hours=1)
 PAGES = 10
 GH_CHUNK = 25
+REFERENCE_LIMIT = 200
+LINEAR_CHUNK = 25
+HISTORY_LIMIT = 100
+ISSUE_PAGE_SIZE = 20
+PROJECT_ISSUE_LIMIT = 500
+PROJECT_ISSUE_PAGES = PROJECT_ISSUE_LIMIT // ISSUE_PAGE_SIZE
+HISTORY_PAGES = HISTORY_LIMIT // ISSUE_PAGE_SIZE
+DONE_LIMIT = 20
 # The issue sync files a project-less issue under its team's project
 # (TEAM_PREFIX_PROJECT in __github_issue_sync.sh); a no-task row follows suit.
 TEAM_PROJECT = {"DOC": "docs-maintenance", "DEVOPS": "operations", "ENGAI": "ai"}
 HEALTH = {"onTrack": "on track", "atRisk": "at risk", "offTrack": "off track"}
-# My PR states, most actionable first.
-PR_NOTES = ("changes requested", "approved", "awaiting review", "draft")
-PR_URL = re.compile(r"https?://github\.com/([\w.-]+)/([\w.-]+)/pull/(\d+)")
+PR_URL = re.compile(r"https://github\.com/([\w.-]+)/([\w.-]+)/pull/(\d+)")
 LINK = re.compile(r"(?:https?://|www\.)\S+")
+EXACT_URL = re.compile(r"https://[^\s<>\[\]()]+")
+ISSUE_ID = re.compile(r"[A-Z][A-Z0-9]*-\d+", re.IGNORECASE)
+LINEAR_ISSUE_URL = re.compile(r"https://linear\.app/([\w-]+)/issue/([a-z][a-z0-9]*-\d+)(?:/[\w.-]+)?", re.IGNORECASE)
+SOURCE_HEADING = "\n\n## Source status\n"
+TASK_UDA = ["rc.uda.view_project.type=string", "rc.uda.view_key.type=string",
+            "rc.uda.view_rank.type=numeric"]
 
-PROJECT_FIELDS = """id name url targetDate startDate status { name type }
+PROJECT_FIELDS = """id name description url targetDate startDate status { name type }
   lead { name isMe }
   projectUpdates(first: 1) { nodes { createdAt health user { name } } }"""
 
@@ -104,15 +99,37 @@ Q_ASSIGNED = """query ($after: String) {
 
 Q_PROJECT = """query ($id: String!, $after: String) {
   project(id: $id) { FIELDS
-    issues(first: 50, after: $after, filter: {or: [
+    issues(first: 20, after: $after, filter: {or: [
       {state: {type: {nin: ["completed", "canceled", "duplicate"]}}},
       {completedAt: {gte: "-P7D"}}, {canceledAt: {gte: "-P7D"}}]}) {
       pageInfo { hasNextPage endCursor }
       nodes { identifier title url updatedAt completedAt canceledAt
               state { name type } assignee { name isMe }
-              attachments(first: 20) { nodes { url } }
-              inverseRelations(first: 20) { nodes { type issue { identifier state { type } } } } } } }
+              projectMilestone { id name }
+              attachments(first: 100) { pageInfo { hasNextPage } nodes { url } }
+              inverseRelations(first: 100) { pageInfo { hasNextPage }
+                nodes { type issue { identifier state { type } } } } } } }
 }""".replace("FIELDS", PROJECT_FIELDS)
+
+Q_MILESTONES = """query ($id: String!, $after: String) {
+  project(id: $id) { projectMilestones(first: 100, after: $after) {
+    pageInfo { hasNextPage endCursor }
+    nodes { id name description targetDate sortOrder progress status updatedAt }
+  } }
+}"""
+
+Q_COMPLETED = """query ($id: String!, $after: String) {
+  project(id: $id) { issues(first: 20, after: $after, orderBy: updatedAt, includeArchived: true,
+      filter: {state: {type: {eq: "completed"}}}) {
+    pageInfo { hasNextPage endCursor }
+    nodes { identifier title url updatedAt completedAt canceledAt
+      state { name type } assignee { name isMe } projectMilestone { id name }
+      attachments(first: 100) { pageInfo { hasNextPage } nodes { url } }
+      inverseRelations(first: 100) { pageInfo { hasNextPage }
+        nodes { type issue { identifier state { type } } } }
+    }
+  } }
+}"""
 
 
 def warn(message):
@@ -159,7 +176,7 @@ def clean(text, limit=70):
 
 def pr_ref(url):
     """owner/repo#n for a GitHub PR URL, or None."""
-    match = PR_URL.match(url or "")
+    match = PR_URL.fullmatch(url or "")
     return f"{match[1]}/{match[2]}#{match[3]}".lower() if match else None
 
 
@@ -217,21 +234,102 @@ def linear_key():
     return result.stdout.strip().splitlines()[0]
 
 
+def complete_issue_links(issues):
+    """Never infer ownership or blockers from a truncated nested connection."""
+    for issue in issues:
+        for field in ("attachments", "inverseRelations"):
+            if issue[field].get("pageInfo", {}).get("hasNextPage"):
+                raise RuntimeError(f"{issue['identifier']} has more than 100 {field}")
+
+
+def issue_cursor(connection, seen, source):
+    """A partial issue connection requires a new, nonempty continuation cursor."""
+    if not connection["pageInfo"]["hasNextPage"]:
+        return None
+    after = connection["pageInfo"].get("endCursor")
+    if not isinstance(after, str) or not after or after in seen:
+        raise RuntimeError(f"{source} pagination cursor missing or repeated")
+    seen.add(after)
+    return after
+
+
+def read_completed(linear, project_id):
+    """Read up to 100 completed issues in small pages, with intentional truncation."""
+    issues, after, seen = [], None, set()
+    for _ in range(HISTORY_PAGES):
+        data = linear.query(Q_COMPLETED, {"id": project_id, "after": after})["project"]["issues"]
+        complete_issue_links(data["nodes"])
+        issues.extend(data["nodes"])
+        after = issue_cursor(data, seen, "completed issue history")
+        if after is None:
+            return issues, False
+    return issues, True
+
+
 def read_project(linear, project_id):
-    """One project's fields and its open and recently closed issues."""
-    issues, fields = [], None
-    after = None
-    for _ in range(PAGES):
+    """One project, up to 500 current issues and a bounded completion history."""
+    issues, fields, after, seen = [], None, None, set()
+    for _ in range(PROJECT_ISSUE_PAGES):
         data = linear.query(Q_PROJECT, {"id": project_id, "after": after})["project"]
         fields = fields or {k: v for k, v in data.items() if k != "issues"}
+        complete_issue_links(data["issues"]["nodes"])
         issues.extend(data["issues"]["nodes"])
-        if not data["issues"]["pageInfo"]["hasNextPage"]:
-            return {**fields, "issues": issues}
-        after = data["issues"]["pageInfo"]["endCursor"]
-    raise RuntimeError(f"more than {PAGES} pages of issues")
+        after = issue_cursor(data["issues"], seen, "project issues")
+        if after is None:
+            break
+    else:
+        raise RuntimeError(f"more than {PROJECT_ISSUE_LIMIT} current project issues ({PROJECT_ISSUE_PAGES} pages)")
+    milestones = list(linear.pages(Q_MILESTONES, ["project", "projectMilestones"], {"id": project_id}))
+    history, truncated = read_completed(linear, project_id)
+    all_issues = {i["identifier"]: i for i in [*issues, *history]}
+    return {**fields, "issues": list(all_issues.values()), "milestones": milestones,
+            "history_truncated": truncated, "history_count": len(history)}
 
 
-def read_linear(linear):
+def task_urls(task):
+    """Explicit URLs, including Markdown destinations, rather than prose IDs."""
+    text = "\n".join([task.get("description") or "", task.get("url") or "",
+                      *(a.get("description") or "" for a in task.get("annotations") or [])])
+    return {url.rstrip(".,;:") for url in EXACT_URL.findall(text)}
+
+
+def referenced_identifiers(tasks):
+    identifiers = set()
+    for task in tasks:
+        if "piotr" not in (task.get("tags") or []) or TAG in (task.get("tags") or []):
+            continue
+        ident = task.get("linear_issue_id") or ""
+        if ISSUE_ID.fullmatch(ident):
+            identifiers.add(ident.upper())
+        for url in task_urls(task):
+            match = LINEAR_ISSUE_URL.fullmatch(url)
+            if match:
+                identifiers.add(match[2].upper())
+    return identifiers
+
+
+def read_referenced(linear, identifiers):
+    """Bounded batches resolve handoff references outside the recent issue window."""
+    wanted = sorted(identifiers)
+    if len(wanted) > REFERENCE_LIMIT:
+        raise RuntimeError(f"more than {REFERENCE_LIMIT} unresolved handoff issue references")
+    found = []
+    for start in range(0, len(wanted), LINEAR_CHUNK):
+        chunk = wanted[start:start + LINEAR_CHUNK]
+        fields = " ".join(f'i{i}: issue(id: {json.dumps(ident)}) '
+                          '{ identifier title url state { name type } project { id name } }'
+                          for i, ident in enumerate(chunk))
+        data = linear.query("query { " + fields + " }")
+        for i, ident in enumerate(chunk):
+            issue = data.get(f"i{i}")
+            if issue:
+                if issue["identifier"].upper() != ident:
+                    raise RuntimeError("Linear returned a different issue for an exact reference")
+                found.append(issue)
+    return found
+
+
+def read_linear(linear, tasks=()):
     """Projects Piotr leads or is in, his open assigned issues, and each project's issues.
 
     The project list must read whole, or the run stops: without it no row can
@@ -257,62 +355,132 @@ def read_linear(linear):
         except Exception as error:  # noqa: BLE001 - one project failing keeps its rows
             failures.append(f"project {pid}: {error}")
             warn(f"project {pid} unreadable ({error}); its rows stay as they were")
-    return {"projects": projects, "assigned": assigned, "wanted": sorted(wanted), "failures": failures}
+    known = {i["identifier"].upper() for p in projects.values() for i in p["issues"]}
+    known.update(i["identifier"].upper() for i in assigned or [])
+    referenced, reference_failure = [], False
+    try:
+        referenced = read_referenced(linear, referenced_identifiers(tasks) - known)
+        structured = {t["linear_issue_id"].upper() for t in tasks
+                      if "piotr" in (t.get("tags") or []) and TAG not in (t.get("tags") or [])
+                      and ISSUE_ID.fullmatch(t.get("linear_issue_id") or "")}
+        routes = {(match[1].lower(), match[2].upper()) for task in tasks
+                  if "piotr" in (task.get("tags") or []) and TAG not in (task.get("tags") or [])
+                  for url in task_urls(task) if (match := LINEAR_ISSUE_URL.fullmatch(url))}
+        referenced = [i for i in referenced if i["identifier"].upper() in structured
+                      or ((match := LINEAR_ISSUE_URL.fullmatch(i["url"]))
+                          and (match[1].lower(), match[2].upper()) in routes)]
+    except Exception as error:
+        reference_failure = True
+        failures.append(f"handoff issue ownership: {error}")
+        warn(f"handoff issue ownership unavailable ({error}); previous grouping stays")
+    additional = {i["project"]["id"] for i in referenced if i.get("project")} - wanted
+    wanted.update(additional)
+    if additional:
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            futures = {pid: pool.submit(read_project, linear, pid) for pid in sorted(additional)}
+        for pid, future in futures.items():
+            try:
+                projects[pid] = {**future.result(), "listed": False, "led": False}
+            except Exception as error:
+                failures.append(f"project {pid}: {error}")
+                warn(f"referenced project {pid} unavailable ({error}); previous grouping stays")
+    return {"projects": projects, "assigned": assigned, "wanted": sorted(wanted), "failures": failures,
+            "referenced": referenced, "reference_failure": reference_failure}
 
 
 def gh_graphql(query):
-    """Run one gh GraphQL query; partial data from a failed call still counts."""
+    """Run one gh GraphQL query; incomplete replies cannot verify ownership."""
     result = subprocess.run([*GH_CMD, "api", "graphql", "-f", f"query={query}"],
                             capture_output=True, text=True, timeout=60, check=False)
     try:
         reply = json.loads(result.stdout or "{}")
     except json.JSONDecodeError:
         reply = {}
-    if not reply.get("data"):
+    if result.returncode or reply.get("errors") or not reply.get("data"):
         raise RuntimeError((result.stderr or "gh api graphql failed").strip().splitlines()[-1])
     return reply["data"]
 
 
 def read_github(refs):
     """Piotr's open PRs, his teams, and the state of every attached PR in refs."""
-    viewer = gh_graphql("query { viewer { login pullRequests(states: OPEN, first: 100) "
-                        "{ nodes { url isDraft reviewDecision } } } }")["viewer"]
+    viewer = gh_graphql("query { viewer { login } }")["viewer"]
     login = viewer["login"]
-    mine = {pr_ref(n["url"]): n for n in viewer["pullRequests"]["nodes"] if pr_ref(n["url"])}
+    mine = {}
+    after = None
+    for _ in range(PAGES):
+        page = gh_graphql("query { viewer { pullRequests(states: OPEN, first: 100, after: "
+                          + json.dumps(after) + ") { pageInfo { hasNextPage endCursor } "
+                          "nodes { url state title isDraft reviewDecision } } } }")["viewer"]["pullRequests"]
+        mine.update({pr_ref(n["url"]): n for n in page["nodes"] if pr_ref(n["url"])})
+        if not page["pageInfo"]["hasNextPage"]:
+            break
+        after = page["pageInfo"]["endCursor"]
+    else:
+        raise RuntimeError(f"more than {PAGES} pages of own PRs")
     owners = sorted({ref.split("/", 1)[0] for ref in refs})
     teams = set()
     if owners:
         fields = " ".join(
             f'o{i}: organization(login: {json.dumps(owner)}) '
-            f'{{ login teams(first: 100, userLogins: [{json.dumps(login)}]) {{ nodes {{ slug }} }} }}'
+            f'{{ login teams(first: 100, userLogins: [{json.dumps(login)}]) '
+            f'{{ pageInfo {{ hasNextPage }} nodes {{ slug }} }} }}'
             for i, owner in enumerate(owners))
         for org in gh_graphql(f"query {{ {fields} }}").values():
             if org:
+                if org["teams"]["pageInfo"]["hasNextPage"]:
+                    raise RuntimeError("more than 100 teams in an organization")
                 teams.update(f"{org['login'].lower()}/{t['slug']}" for t in org["teams"]["nodes"])
-    prs = {}
-    wanted = sorted(refs)
-    for start in range(0, len(wanted), GH_CHUNK):
-        chunk = wanted[start:start + GH_CHUNK]
+    prs, unavailable = read_attached_prs(refs)
+    return {"login": login, "mine": mine, "teams": teams, "prs": prs,
+            "unavailable_refs": unavailable}
+
+
+def read_attached_prs(refs):
+    """Isolate unreadable PRs without discarding a healthy batch.
+
+    A failing batch is bisected to single refs. For n refs in each original
+    chunk, at most 2*n-1 queries run; a healthy chunk needs one. Null or
+    incomplete PR replies remain unknown rather than being treated as closed.
+    """
+    prs, unavailable = {}, set()
+
+    def read_chunk(chunk):
         fields = []
         for i, ref in enumerate(chunk):
             repo, number = ref.split("#")
             owner, name = repo.split("/")
             fields.append(
                 f'p{i}: repository(owner: {json.dumps(owner)}, name: {json.dumps(name)}) '
-                f'{{ pullRequest(number: {number}) {{ url state isDraft reviewDecision title '
-                f'author {{ login }} reviewRequests(first: 20) {{ nodes {{ requestedReviewer '
+                f'{{ pullRequest(number: {number}) {{ url state mergedAt closedAt isDraft reviewDecision title '
+                f'author {{ login }} reviewRequests(first: 100) {{ pageInfo {{ hasNextPage }} nodes {{ requestedReviewer '
                 f'{{ __typename ... on User {{ login }} ... on Team {{ slug organization {{ login }} }} }} }} }} }} }}')
-        data = gh_graphql("query { " + " ".join(fields) + " }")
+        try:
+            data = gh_graphql("query { " + " ".join(fields) + " }")
+        except Exception:  # One unreadable repository must not poison other refs.
+            if len(chunk) == 1:
+                unavailable.add(chunk[0])
+                return
+            middle = len(chunk) // 2
+            read_chunk(chunk[:middle])
+            read_chunk(chunk[middle:])
+            return
         for i, ref in enumerate(chunk):
             pr = (data.get(f"p{i}") or {}).get("pullRequest")
-            if pr:
+            if (not pr or not pr.get("state") or not pr.get("url")
+                    or pr.get("reviewRequests", {}).get("pageInfo", {}).get("hasNextPage") is not False):
+                unavailable.add(ref)
+            else:
                 prs[ref] = pr
-    return {"login": login, "mine": mine, "teams": teams, "prs": prs}
+
+    wanted = sorted(refs)
+    for start in range(0, len(wanted), GH_CHUNK):
+        read_chunk(wanted[start:start + GH_CHUNK])
+    return prs, unavailable
 
 
 def task_json(*args):
     """Export tasks through Taskwarrior with no context and no hooks."""
-    result = subprocess.run([*TASK_CMD, "rc.context=none", "rc.hooks=off", "rc.verbose=nothing",
+    result = subprocess.run([*TASK_CMD, *TASK_UDA, "rc.context=none", "rc.hooks=off", "rc.verbose=nothing",
                              "rc.confirmation=off", *args, "export"],
                             capture_output=True, text=True, timeout=60, check=False)
     if result.returncode != 0:
@@ -356,117 +524,212 @@ def bucket(issue):
     return {"unstarted": "todo"}.get(issue["state"]["type"], issue["state"]["type"])
 
 
-def standing(project, tasks, github, now):
-    """The standing row's one-line description and its detail annotation."""
-    issues = project["issues"]
-    open_ = [i for i in issues if i["state"]["type"] not in DONE]
-    closed = [i for i in issues if i["state"]["type"] in DONE
-              and (parse_time(i.get("completedAt")) or parse_time(i.get("canceledAt")) or now - 2 * WINDOW) >= now - WINDOW]
-    changed = [i for i in open_ if parse_time(i["updatedAt"]) >= now - WINDOW]
-    stalled = [i for i in open_ if bucket(i) == "started" and parse_time(i["updatedAt"]) < now - WINDOW]
-    blocked = []
-    for issue in open_:
-        blockers = [r["issue"]["identifier"] for r in issue["inverseRelations"]["nodes"]
-                    if r["type"] == "blocks" and r["issue"]["state"]["type"] not in DONE]
-        if blockers:
-            blocked.append((issue, blockers))
-    counts = {}
-    for issue in open_:
-        counts[bucket(issue)] = counts.get(bucket(issue), 0) + 1
-    order = ("started", "todo", "triage", "backlog", "parked")
+def markdown(text):
+    """Keep source titles on one Markdown line, including their full wording."""
+    return " ".join(str(text or "").split()).replace("[", "\\[").replace("]", "\\]")
 
-    target = parse_time(project.get("targetDate") and project["targetDate"] + "T00:00:00+00:00")
-    state = project["status"]["name"]
-    if target:
-        state += f", target {day(target, now)}" + (" passed" if target.date() < now.date() else "")
-    updates = project["projectUpdates"]["nodes"]
+
+def issue_link(issue):
+    return f"[{issue['identifier']} {markdown(issue['title'])}]({issue['url']})"
+
+
+def standing(project, tasks, github, now):
+    """A deterministic, evidence-backed overview shared by every project."""
+    issues = project["issues"]
+    open_ = sorted((i for i in issues if i["state"]["type"] not in DONE),
+                   key=lambda i: (bucket(i) != "started", i["identifier"]))
+    completed = sorted((i for i in issues if i["state"]["type"] == "completed"
+                        and parse_time(i.get("completedAt"))),
+                       key=lambda i: (i["completedAt"], i["identifier"]), reverse=True)
+    milestones = sorted(project.get("milestones") or [],
+                        key=lambda m: (m.get("sortOrder") or 0, m["id"]))
+    achieved = [m for m in milestones if m.get("status") == "done"]
+    target = project.get("targetDate") or "not set"
+    lead = (project.get("lead") or {}).get("name") or "unassigned"
+    lines = [f"# {markdown(project['name'])}", "", f"[Linear project]({project['url']})",
+             f"State: {project['status']['name']}. Lead: {lead}. Target: {target}."]
+    if project.get("description"):
+        lines.extend(["", project["description"].strip()])
+    updates = (project.get("projectUpdates") or {}).get("nodes") or []
     if updates:
         update = updates[0]
-        when = parse_time(update["createdAt"])
-        health = HEALTH.get(update.get("health"), update.get("health") or "no health")
-        if now - when <= STALE_UPDATE:
-            update_line = f"{health}, updated {ago(when, now)}"
-        else:
-            update_line = f"{health}, last update {when.strftime('%b')} {when.year}"
-    else:
-        update_line = "no update yet"
-    summary = f"{len(open_)} open"
-    if open_:
-        summary += ": " + ", ".join(f"{counts[k]} {k}" for k in order if counts.get(k))
-    # What needs Piotr leads and the slow facts trail: a 190-column tui pane
-    # shows about 60 characters of the description.
-    attention = []
-    if counts.get("triage"):
-        attention.append(f"{counts['triage']} in triage")
-    stuck = [f"{n} {label}" for n, label in ((len(blocked), "blocked"), (len(stalled), "stalled")) if n]
-    if stuck:
-        attention.append("stuck: " + ", ".join(stuck))
-
+        lines.extend(["", "Latest project update: " + update["createdAt"][:10]
+                      + ", " + HEALTH.get(update.get("health"), update.get("health") or "no health") + "."])
+    lines.extend(["", "## Done", "", "Verified achievements so far:"])
+    for milestone in achieved:
+        lines.append(f"- [Milestone {markdown(milestone['name'])}]({project['url']}). "
+                     f"Linear status done; source ID {milestone['id']}; "
+                     f"source updated {milestone.get('updatedAt') or 'unknown'}. "
+                     "The source does not provide a completion date.")
+    lines.extend(f"- {issue_link(i)}. Linear completed {i['completedAt'][:10]}." for i in completed[:DONE_LIMIT])
     refs = {}
-    for issue in open_:
+    for issue in issues:
         for ref in attached_refs(issue):
             refs.setdefault(ref, []).append(issue["identifier"])
-    mine_lines, other_lines, mine_counts = [], [], {}
-    if github is None:
-        attention.append("PRs unavailable")
-    else:
-        for ref, ids in sorted(refs.items()):
-            if ref in github["mine"]:
-                note = pr_note(github["mine"][ref])
-                mine_counts[note] = mine_counts.get(note, 0) + 1
-                mine_lines.append(f"{short_ref(ref)} {note} ({', '.join(ids)})")
+    merged = []
+    if github is not None:
+        for ref in sorted(refs):
+            if ref in github.get("unavailable_refs", ()):
                 continue
             pr = github["prs"].get(ref)
-            if pr and pr["state"] == "OPEN":
-                other_lines.append(f"{short_ref(ref)} {pr['author']['login'] if pr.get('author') else 'ghost'}, "
-                                   f"{pr_note(pr)} ({', '.join(ids)})")
-        if mine_counts:
-            attention.append("my PRs: " + ", ".join(f"{mine_counts[note]} {note}" for note in PR_NOTES
-                                                    if mine_counts.get(note)))
-    parts = ["standing", *attention, update_line]
-    if changed or closed:
-        parts.append(f"7d: {len(changed)} changed, {len(closed)} closed")
-    parts += [summary, state]
-    handoffs = [t for t in tasks if "piotr" in (t.get("tags") or [])]
-    # The report leaves +backlog tasks out, as byproject does; count them here.
-    backlog = [t for t in tasks if "backlog" in (t.get("tags") or []) and t not in handoffs]
-    if backlog:
-        parts.append(f"my backlog: {len(backlog)}")
-    if handoffs:
-        parts.append(f"{len(handoffs)} handoff" + ("s" if len(handoffs) > 1 else ""))
-
-    def names(rows, extra=lambda i: ""):
-        return ", ".join(f"{i['identifier']} {(i.get('assignee') or {}).get('name', 'unassigned')}{extra(i)}"
-                         for i in rows) or "none"
-
-    lead = (project.get("lead") or {}).get("name", "no lead")
-    start = parse_time(project.get("startDate") and project["startDate"] + "T00:00:00+00:00")
-    lines = [
-        (f"standing of {project['name']}: lead {lead}, {project['status']['name']}, "
-         f"start {day(start) + ' ' + str(start.year) if start else 'none'}, "
-         f"target {day(target) + ' ' + str(target.year) if target else 'none'}"),
-        ("last update: " + (f"{day(when)} {when.year} by {(updates[0].get('user') or {}).get('name', 'unknown')}, {health}"
-                            if updates else "none")),
-        f"open {len(open_)}: " + (", ".join(f"{k} {counts[k]}" for k in order if counts.get(k)) or "none"),
-        "started: " + names([i for i in open_ if bucket(i) == "started"]),
-        "triage: " + names([i for i in open_ if bucket(i) == "triage"],
-                           lambda i: f" ({clean(i['title'], 50)})"),
-        "blocked: " + (", ".join(f"{i['identifier']} by {', '.join(b)}" for i, b in blocked) or "none"),
-        "stalled 7d+: " + names(stalled, lambda i: f" ({(now - parse_time(i['updatedAt'])).days}d)"),
-        "closed in 7d: " + (", ".join(i["identifier"] for i in closed) or "none"),
-        "changed in 7d: " + (", ".join(i["identifier"] for i in changed) or "none"),
-    ]
+            when = parse_time((pr or {}).get("mergedAt"))
+            if pr and pr["state"] == "MERGED" and when:
+                merged.append((pr["mergedAt"], f"- [{ref} {markdown(pr.get('title'))}]({pr['url']}). "
+                               f"GitHub merged {pr['mergedAt'][:10]} ({', '.join(refs[ref])})."))
+    lines.extend(text for _, text in sorted(merged, reverse=True)[:DONE_LIMIT])
+    if not completed and not merged and not achieved:
+        lines.append("- No verified completions in the available source history.")
+    lines.extend(["", f"History scope: all project milestones; up to {HISTORY_LIMIT} most recently updated completed issues "
+                  f"(including archived issues), with up to {DONE_LIMIT} shown by completion date; "
+                  f"up to {DONE_LIMIT} merged PRs attached to the fetched issues."])
+    if project.get("history_truncated") or len(completed) > DONE_LIMIT or len(merged) > DONE_LIMIT:
+        lines.append("History is truncated; open Linear for the complete record.")
+    lines.extend(["", "## Now", ""])
+    for issue in open_:
+        owner = (issue.get("assignee") or {}).get("name") or "unassigned"
+        milestone = (issue.get("projectMilestone") or {}).get("name")
+        text = f"- {issue_link(issue)}. {issue['state']['name']}; owner {owner}"
+        if milestone:
+            text += f"; milestone {markdown(milestone)}"
+        blockers = sorted(r["issue"]["identifier"] for r in issue["inverseRelations"]["nodes"]
+                          if r["type"] == "blocks" and r["issue"]["state"]["type"] not in DONE)
+        if blockers:
+            text += "; waiting on " + ", ".join(blockers)
+        if issue.get("updatedAt"):
+            text += "; source updated " + issue["updatedAt"][:10]
+        lines.append(text + ".")
+    if not open_:
+        lines.append("- No open issues in the verified project source.")
     if github is None:
-        lines.append("PRs: GitHub unavailable on the last run")
+        lines.append("- GitHub unavailable. Current PR and review states are unknown.")
     else:
-        lines.append("my PRs: " + ("; ".join(mine_lines) or "none"))
-        lines.append("other open PRs: " + ("; ".join(other_lines) or "none"))
-    if backlog:
-        lines.append("my backlog: " + ", ".join(sorted(t.get("linear_issue_id") or clean(t["description"], 50)
-                                                      for t in backlog)))
-    if handoffs:
-        lines.append("handoffs: " + "; ".join(t.get("linear_issue_id") or clean(t["description"], 50) for t in handoffs))
-    return " · ".join(parts), "\n".join(lines)
+        for ref in sorted(refs):
+            if ref in github.get("unavailable_refs", ()):
+                url = "https://github.com/" + ref.replace("#", "/pull/")
+                lines.append(f"- [{ref}]({url}). GitHub unavailable; current PR and review states are unknown.")
+                continue
+            pr = github["prs"].get(ref) or github["mine"].get(ref)
+            if not pr:
+                lines.append(f"- {ref}: GitHub state unavailable.")
+                continue
+            if pr.get("state", "OPEN") == "MERGED":
+                continue
+            state = pr_note(pr) if pr.get("state", "OPEN") == "OPEN" else pr["state"].lower()
+            url = pr.get("url") or "https://github.com/" + ref.replace("#", "/pull/")
+            lines.append(f"- [{ref} {markdown(pr.get('title'))}]({url}). {state} "
+                         f"({', '.join(refs[ref])}).")
+    lines.extend(["", "## Milestones", ""])
+    for milestone in milestones:
+        progress = milestone.get("progress")
+        progress_text = f"{progress * 100:g}%" if isinstance(progress, (int, float)) and 0 <= progress <= 1 else "unavailable"
+        text = (f"- [{markdown(milestone['name'])}]({project['url']}). "
+                f"State: {milestone.get('status') or 'unavailable'}; progress: {progress_text}; "
+                f"target: {milestone.get('targetDate') or 'not set'}; source ID {milestone['id']}.")
+        if milestone.get("description"):
+            text += " " + markdown(milestone["description"])
+        lines.append(text)
+    if not milestones:
+        lines.append("- No milestones are defined in the verified project source.")
+    lines.extend(["", "## Next", "", "Use the action rows under this project in myprojects."])
+    for task in sorted(tasks, key=lambda t: (t.get("priority") not in ("H",), t.get("uuid", ""))):
+        state = "waiting" if task.get("status") == "waiting" or task.get("wait") else "pending"
+        ident = task.get("linear_issue_id") or task.get("uuid", "")
+        lines.append(f"- {markdown(task.get('description'))} ({ident}; {state}).")
+    if not tasks:
+        lines.append("No local action rows are linked to this project.")
+    lines.extend(["", "Current-work scope: all open issues plus recent closed issues and the bounded completion history. "
+                  "Completion and merge records do not establish deployment."])
+    activity = open_[0] if open_ else None
+    summary = (f"{activity['identifier']} {clean(activity['title'], 70)} ({activity['state']['name']})"
+               if activity else project["status"]["name"])
+    return "standing · " + summary, "\n".join(lines)
+
+
+def association_plan(snapshot, tasks, github_available=True, unavailable_refs=()):
+    """Add grouping only for exact structured links with one verified owner.
+
+    Native project and all other task fields remain unchanged. Any incomplete
+    source keeps prior grouping. Successful conflicting or unresolved evidence
+    marks grouping !unassigned instead of guessing from a title or team project.
+    No-evidence legacy tasks retain native grouping, and an existing unresolved
+    marker persists when its source links disappear.
+    """
+    if snapshot.get("failures") or snapshot.get("assigned") is None or not github_available:
+        return [], tasks
+    projects = snapshot["projects"]
+    identifiers, urls, prs = {}, {}, {}
+    def add(index, key, pid):
+        if key:
+            index.setdefault(key, set()).add(pid)
+    for pid, project in projects.items():
+        for issue in project["issues"]:
+            add(identifiers, issue["identifier"], pid)
+            add(urls, issue["url"], pid)
+            for ref in attached_refs(issue):
+                add(prs, ref, pid)
+    for issue in [*(snapshot.get("assigned") or []), *(snapshot.get("referenced") or [])]:
+        pid = (issue.get("project") or {}).get("id")
+        if pid in projects:
+            add(identifiers, issue["identifier"], pid)
+            add(urls, issue["url"], pid)
+    changes, resolved = [], []
+    unavailable_refs = set(unavailable_refs)
+    for task in tasks:
+        if "piotr" not in (task.get("tags") or []) or TAG in (task.get("tags") or []):
+            resolved.append(task)
+            continue
+        if any(pr_ref(url) in unavailable_refs for url in task_urls(task)):
+            # Ownership based on this source is unknown. Keep its last verified
+            # grouping while unrelated exact references can still proceed.
+            resolved.append(task)
+            continue
+        owners, unresolved, assessed = set(), False, False
+        ident = task.get("linear_issue_id")
+        if ident:
+            assessed = True
+            found = identifiers.get(ident.upper(), set())
+            owners.update(found)
+            unresolved = not found
+        for url in task_urls(task):
+            ref = pr_ref(url)
+            if url in urls:
+                assessed = True
+                owners.update(urls[url])
+            elif LINEAR_ISSUE_URL.fullmatch(url):
+                assessed = True
+                # Linear's exact issue route identifies the same entity even
+                # after a title slug changes. Require its source workspace too.
+                match = LINEAR_ISSUE_URL.fullmatch(url)
+                source_owners = set()
+                for source_url, projects_here in urls.items():
+                    source_match = LINEAR_ISSUE_URL.fullmatch(source_url)
+                    if (source_match and source_match[1].lower() == match[1].lower()
+                            and source_match[2].upper() == match[2].upper()):
+                        source_owners.update(projects_here)
+                owners.update(source_owners)
+                unresolved = unresolved or not source_owners
+            elif ref:
+                assessed = True
+                found = prs.get(ref, set())
+                owners.update(found)
+                unresolved = unresolved or not found
+            elif url.startswith("https://linear.app/") and "/issue/" in url:
+                assessed = True
+                unresolved = True
+        slug = kebab(projects[next(iter(owners))]["name"]) if len(owners) == 1 and not unresolved else ""
+        # Two projects sharing a native slug are equally ambiguous for grouping.
+        if slug and sum(kebab(p["name"]) == slug for p in projects.values()) != 1:
+            slug = ""
+        if not slug and (assessed or task.get("view_project")):
+            # An explicit failed assessment must suppress native-project
+            # fallback too. This reserved value cannot equal a source slug.
+            slug = UNASSIGNED
+        updated = dict(task)
+        if slug != (task.get("view_project") or ""):
+            updated["view_project"] = slug
+            changes.append({k: v for k, v in updated.items() if k not in ("id", "urgency", "modified")})
+        resolved.append(updated)
+    return changes, resolved
 
 
 def build_rows(snapshot, tasks, github, now):
@@ -479,7 +742,8 @@ def build_rows(snapshot, tasks, github, now):
     tracked = {t["linear_issue_id"] for t in live if t.get("linear_issue_id")}
     by_project = {}
     for task in live:
-        by_project.setdefault(task.get("project") or "", []).append(task)
+        group = task.get("view_project") or task.get("project") or ""
+        by_project.setdefault(group, []).append(task)
     rows = {}
 
     assigned = snapshot["assigned"]
@@ -497,7 +761,7 @@ def build_rows(snapshot, tasks, github, now):
         rows[key] = {
             "project": project, "rank": RANK["issue"],
             "description": f"no task · {issue['identifier']} {issue['state']['name']} · {clean(issue['title'])}",
-            "annotations": [issue["url"]],
+            "annotations": [issue["url"], "link: " + issue["url"]],
         }
 
     for pid, project in snapshot["projects"].items():
@@ -513,7 +777,7 @@ def build_rows(snapshot, tasks, github, now):
         description, detail = standing(project, tasks_here, github, now)
         rows[f"standing:{pid}"] = {
             "project": name, "rank": RANK["standing"], "description": description,
-            "annotations": [project["url"], detail],
+            "annotations": [project["url"], "brief: " + detail.rstrip() + "\n"],
         }
         if github is None:
             continue
@@ -522,6 +786,8 @@ def build_rows(snapshot, tasks, github, now):
             if issue["state"]["type"] in DONE:
                 continue
             for ref in attached_refs(issue):
+                if ref in github.get("unavailable_refs", ()):
+                    continue
                 pr = github["prs"].get(ref)
                 if ref in seen or ref in github["mine"] or not pr or pr["state"] != "OPEN" or pr.get("isDraft"):
                     continue
@@ -536,14 +802,15 @@ def build_rows(snapshot, tasks, github, now):
                     "project": name, "rank": RANK["ask"],
                     "description": f"review ask · {short_ref(ref)} · {author} · {clean(pr['title'], 60)} "
                                    f"({issue['identifier']}){suffix}",
-                    # /issues/N redirects to the PR on GitHub, and the PR
-                    # movement watcher only reads /pull/N links (see module doc).
-                    "annotations": [f"https://github.com/{owner_repo}/issues/{number}"],
+                    # Keep the original row link and an explicit canonical target.
+                    "annotations": [f"https://github.com/{owner_repo}/issues/{number}",
+                                    f"link: https://github.com/{owner_repo}/pull/{number}"],
                 }
 
     scopes = {
         "assigned": assigned is not None,
         "github": github is not None,
+        "unavailable_refs": set(github.get("unavailable_refs", ())) if github is not None else set(),
         "projects": set(snapshot["projects"]),
         "wanted": set(snapshot["wanted"]),
     }
@@ -558,9 +825,11 @@ def judged(key, scopes):
     if kind == "standing":
         return rest in scopes["projects"] or rest not in scopes["wanted"]
     if kind == "ask":
-        pid = rest.split(":", 1)[0]
+        pid, _, ref = rest.partition(":")
+        if ref in scopes.get("unavailable_refs", ()):
+            return False
         return scopes["github"] and (pid in scopes["projects"] or pid not in scopes["wanted"])
-    return True
+    return False
 
 
 def plan(rows, scopes, existing, now):
@@ -570,19 +839,28 @@ def plan(rows, scopes, existing, now):
     its entry stamp, and a row no source calls for is deleted only when this run
     could judge it.
     """
-    by_uuid = {t["uuid"]: t for t in existing}
+    by_key = {t.get("view_key"): t for t in existing if TAG in (t.get("tags") or [])}
     payload, changes = [], {"add": [], "change": [], "delete": []}
     for key, row in sorted(rows.items()):
-        uid = row_uuid(key)
-        old = by_uuid.get(uid)
+        old = by_key.get(key)
+        uid = old["uuid"] if old else row_uuid(key)
         old_notes = {a["description"]: a["entry"] for a in (old or {}).get("annotations") or []}
-        notes = []
+        # Keep human annotations and fields; replace only this writer's content.
+        notes = [a for a in (old or {}).get("annotations") or []
+                 if not a["description"].startswith(("brief:", "standing of ", "link: "))]
+        latest = max((a.get("entry", "") for a in (old or {}).get("annotations") or []), default="")
+        note_time = max(now, datetime.strptime(latest, "%Y%m%dT%H%M%SZ").replace(tzinfo=UTC)
+                        + timedelta(seconds=1)) if latest else now
         for offset, text in enumerate(row["annotations"]):
-            notes.append({"entry": old_notes.get(text) or tw_time(now + timedelta(seconds=offset)),
+            if any(a["description"] == text for a in notes):
+                continue
+            notes.append({"entry": old_notes.get(text) or tw_time(note_time + timedelta(seconds=offset)),
                           "description": text})
-        want = {"uuid": uid, "status": "pending", "description": row["description"],
+        notes.sort(key=lambda a: a["entry"])
+        want = {k: v for k, v in (old or {}).items() if k not in ("id", "urgency", "modified", "wait", "end")}
+        want.update({"uuid": uid, "status": "pending", "description": row["description"],
                 "project": row["project"], "tags": [TAG], "view_rank": row["rank"],
-                "view_key": key, "annotations": notes}
+                "view_key": key, "annotations": notes})
         if old:
             want["entry"] = old["entry"]
             same = (old.get("status") == "pending" and old.get("description") == want["description"]
@@ -601,6 +879,8 @@ def plan(rows, scopes, existing, now):
         if old.get("status") not in ("pending", "waiting"):
             continue
         key = old.get("view_key") or ""
+        if TAG not in (old.get("tags") or []):
+            continue
         if key in rows or not judged(key, scopes):
             continue
         gone = {k: v for k, v in old.items() if k not in ("id", "urgency", "modified", "wait")}
@@ -614,7 +894,7 @@ def apply(payload):
     """Write the payload with one task import, hooks off."""
     if not payload:
         return
-    result = subprocess.run([*TASK_CMD, "rc.context=none", "rc.hooks=off", "rc.verbose=nothing",
+    result = subprocess.run([*TASK_CMD, *TASK_UDA, "rc.context=none", "rc.hooks=off", "rc.verbose=nothing",
                              "rc.confirmation=off", "import", "-"],
                             input=json.dumps(payload), capture_output=True, text=True, timeout=60, check=False)
     if result.returncode != 0:
@@ -629,13 +909,15 @@ def write_state(summary):
         tmp.write_text(json.dumps(summary, indent=2) + "\n")
         tmp.replace(STATE_DIR / "last-run.json")
     except OSError as error:
-        warn(f"state file not written ({error}); the rows are still current")
+        warn(f"state file not written ({error}); imported context remains available and the next run retries")
 
 
 def failed(error, now):
     """Report a run that could not refresh: 1 once the view is stale, else 0."""
     try:
-        last = datetime.fromisoformat(json.loads((STATE_DIR / "last-run.json").read_text())["at"])
+        summary = json.loads((STATE_DIR / "last-run.json").read_text())
+        value = summary.get("last_success_at") or (summary.get("at") if not summary.get("failures") else None)
+        last = datetime.fromisoformat(value) if value else None
     except (OSError, ValueError, KeyError):
         last = None
     if last and now - last < STALE_VIEW:
@@ -648,67 +930,213 @@ def failed(error, now):
     return 1
 
 
-def add_ci_status(rows, scopes, tasks, read_only=False):
-    """Update the CI standing row, or leave it untouched on failed inputs."""
-    # Preserve the existing CI row when its evidence or model is unavailable.
-    ci_keys = [key for key, row in rows.items()
-               if key.startswith("standing:") and row["project"] == "ci-infrastructure-improvements"]
-    for key in ci_keys:
+def previous_run():
+    """Read refresh metadata without creating state or context files."""
+    try:
+        return json.loads((STATE_DIR / "last-run.json").read_text())
+    except (OSError, ValueError):
+        return {}
+
+
+def brief_text(task):
+    """The newest generated brief, excluding the previous source-status footer."""
+    notes = sorted(task.get("annotations") or [], key=lambda a: a.get("entry", ""), reverse=True)
+    for note in notes:
+        if note["description"].startswith("brief:"):
+            return note["description"][6:].lstrip().partition(SOURCE_HEADING)[0]
+    return None
+
+
+def source_status(rows, scopes, existing, snapshot, github, now, previous):
+    """Retain useful verified content when any source needed for it is missing."""
+    checks = previous.get("sources") or {}
+    project_checks = dict(checks.get("projects") or {})
+    gh_check = checks.get("github")
+    gh_project_checks = dict(checks.get("github_projects") or {})
+    old_rows = {t.get("view_key"): t for t in existing}
+    keys = {key for key in rows if key.startswith("standing:")}
+    keys.update(key for key, task in old_rows.items() if key and key.startswith("standing:")
+                and task.get("status") in ("pending", "waiting") and not judged(key, scopes))
+    for key in sorted(keys):
+        pid = key.split(":", 1)[1]
+        old = old_rows.get(key) or {}
+        unavailable = []
+        if pid not in snapshot["projects"]:
+            unavailable.append("Linear project unavailable")
+        if snapshot.get("assigned") is None:
+            unavailable.append("Linear assigned issues unavailable")
+        if snapshot.get("reference_failure"):
+            unavailable.append("Linear handoff ownership unavailable")
+        missing_refs = set()
+        if github is None:
+            unavailable.append("GitHub unavailable")
+        else:
+            project_refs = {ref for issue in snapshot["projects"].get(pid, {}).get("issues", [])
+                            for ref in attached_refs(issue)}
+            missing_refs = project_refs & set(github.get("unavailable_refs", ()))
+            if missing_refs:
+                unavailable.append("GitHub unavailable for " + ", ".join(sorted(missing_refs))
+                                   + "; current PR states unknown")
+        old_brief = brief_text(old)
+        retained = bool(unavailable and (old_brief or key not in rows))
+        if unavailable and old_brief:
+            # A partial read cannot turn an old unknown into a new current fact.
+            row = {"project": old.get("project", ""), "rank": RANK["standing"],
+                   "description": old.get("description", "standing").split(" · source unavailable")[0],
+                   "annotations": ["brief: " + old_brief]}
+            rows[key] = row
+        elif key in rows:
+            row = rows[key]
+        else:
+            # Legacy rows with no brief still keep their useful existing notes.
+            detail = "\n\n".join(a["description"] for a in old.get("annotations") or [])
+            row = {"project": old.get("project", ""), "rank": RANK["standing"],
+                   "description": old.get("description", "standing").split(" · source unavailable")[0],
+                   "annotations": ["brief: " + (detail or "Project context is unavailable.")]}
+            rows[key] = row
+        # These stamps describe the content actually displayed. A later good
+        # Linear read withheld during a GitHub outage cannot refresh old text.
+        if retained:
+            linear_snapshot = project_checks.get(pid)
+            github_snapshot = gh_project_checks.get(pid, gh_check)
+        else:
+            linear_snapshot = now.isoformat() if pid in snapshot["projects"] else None
+            github_snapshot = now.isoformat() if github is not None and not missing_refs else None
+        if linear_snapshot:
+            project_checks[pid] = linear_snapshot
+        gh_project_checks[pid] = github_snapshot
+        if unavailable:
+            status = ("; ".join(unavailable) + ". Prior context retained when available.\n"
+                      + "Linear last verified: " + (linear_snapshot or "unknown") + ".\n"
+                      + "GitHub last verified: " + (github_snapshot or "unknown") + ".\n"
+                      + "These are source snapshot times. Current state may have changed; the existing timer retries.")
+            row["description"] += " · source unavailable"
+        else:
+            status = (f"Linear last verified: {now.isoformat()}.\n"
+                      f"GitHub last verified: {now.isoformat()}.\n"
+                      "Expected refresh: every 10 minutes. If these source times stop advancing, treat the context as stale.")
+        row["annotations"] = [a for a in row["annotations"] if not a.startswith("brief:")] + [
+            "brief: " + next(a[6:].lstrip().partition(SOURCE_HEADING)[0]
+                             for a in row["annotations"] if a.startswith("brief:")) + SOURCE_HEADING + status + "\n"]
+    return {"projects": project_checks, "github_projects": gh_project_checks,
+            "github": now.isoformat() if github is not None else gh_check}
+
+
+def publish_contexts(rows, existing):
+    """Atomically publish imported context; skip identical files for quiet rereads.
+
+    Called only after the whole batched task import succeeded. An import failure
+    leaves every prior file in place. A file error is retried on the next run.
+    """
+    identities = {t.get("view_key"): t["uuid"] for t in existing}
+    for key, row in sorted(rows.items()):
+        if not key.startswith("standing:"):
+            continue
+        text = next((a[6:].lstrip() for a in reversed(row["annotations"]) if a.startswith("brief:")), None)
+        if text is None:
+            continue
+        text = text.rstrip() + "\n"
+        uid = identities.get(key) or row_uuid(key)
+        # Taskwarrior's UUID is the only path component supplied by source data.
+        uuid.UUID(uid)
+        path = BRIEFS_DIR / uid / "project-status.md"
+        if any(parent.is_symlink() for parent in (path, *path.parents)):
+            raise OSError(f"refusing a symlink in context path for {uid}")
         try:
-            spec = importlib.util.spec_from_file_location("ci_status", Path(__file__).with_name("__ci_project_status.py"))
-            ci = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(ci)
-            data = json.loads(ci.PAGE.read_text())
-            status, handoff_titles = ci.generate(data, tasks, read_only=read_only)
-            rows[key]["description"] = status["description"]
-            rows[key]["annotations"] = ["brief: " + ci.format_brief(status, handoff_titles)]
-        except Exception as error:
-            warn(f"CI status unavailable ({error}); keeping its existing row")
-            rows.pop(key)
-            scopes["projects"].discard(key.split(":", 1)[1])
+            if path.read_text() == text:
+                continue
+        except FileNotFoundError:
+            pass
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temp_path = None
+        try:
+            with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=path.parent,
+                                             prefix=".project-status-", delete=False) as handle:
+                temp_path = Path(handle.name)
+                handle.write(text)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(temp_path, path)
+        finally:
+            if temp_path and temp_path.exists():
+                temp_path.unlink()
+
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--dry-run", action="store_true", help="read every source, write nothing")
     args = parser.parse_args(argv)
     now = datetime.now(UTC).replace(microsecond=0)
+    previous = previous_run()
     try:
-        snapshot = read_linear(Linear(linear_key()))
-        tasks = task_json("(", "status:pending", "or", "status:waiting", ")")
-        existing = task_json(f"+{TAG}")
-    except Exception as error:  # noqa: BLE001 - nothing can be judged without these
+        # One export includes all live tasks and historical view rows, so identity
+        # and association updates use the same local snapshot.
+        tasks = task_json("(", "status:pending", "or", "status:waiting", "or", f"+{TAG}", ")")
+    except Exception as error:
         return 1 if args.dry_run else failed(error, now)
-    refs = set()
-    for project in snapshot["projects"].values():
-        for issue in project["issues"]:
-            if issue["state"]["type"] not in DONE:
-                refs.update(attached_refs(issue))
-    failures = list(snapshot["failures"])
+    existing = [t for t in tasks if TAG in (t.get("tags") or [])]
+    live_tasks = [t for t in tasks if t.get("status") in ("pending", "waiting")]
+    active_overviews = {t["view_key"].split(":", 1)[1] for t in existing
+                        if t.get("status") in ("pending", "waiting")
+                        and (t.get("view_key") or "").startswith("standing:")}
     try:
+        snapshot = read_linear(Linear(linear_key()), live_tasks)
+    except Exception as error:
+        warn(f"Linear unavailable ({error}); preserving project contexts and associations")
+        snapshot = {"projects": {}, "assigned": None,
+                    "wanted": sorted(active_overviews),
+                    "failures": ["Linear unavailable"]}
+    if snapshot.get("reference_failure") or snapshot.get("assigned") is None:
+        # Discovery is incomplete: an earlier task-linked project may still be
+        # relevant even though this read could not rediscover its ownership.
+        snapshot["wanted"] = sorted(set(snapshot["wanted"]) | active_overviews)
+    refs = {ref for project in snapshot["projects"].values() for issue in project["issues"]
+            for ref in attached_refs(issue)}
+    failures = list(snapshot["failures"])
+    unavailable_refs = set()
+    try:
+        if not snapshot["projects"] and snapshot["failures"]:
+            raise RuntimeError("Linear project source unavailable")
         github = read_github(refs)
-    except Exception as error:  # noqa: BLE001 - PR facts are optional for the view
+        unavailable_refs = set(github.get("unavailable_refs", ()))
+        if unavailable_refs:
+            reason = "GitHub attached PRs unavailable: " + ", ".join(sorted(unavailable_refs))
+            failures.append(reason)
+            warn(reason + "; only affected contexts and review rows retain prior evidence")
+    except Exception as error:
         github = None
-        failures.append(f"github: {error}")
-        warn(f"GitHub unreadable ({error}); review asks stay as they were and standing says PRs unavailable")
-    rows, scopes = build_rows(snapshot, tasks, github, now)
-    add_ci_status(rows, scopes, tasks, read_only=args.dry_run)
+        failures.append("GitHub unavailable")
+        warn(f"GitHub unreadable ({error}); preserving verified context and associations")
+    associations, live_tasks = association_plan(snapshot, live_tasks, github is not None, unavailable_refs)
+    rows, scopes = build_rows(snapshot, live_tasks, github, now)
+    sources = source_status(rows, scopes, existing, snapshot, github, now, previous)
     payload, changes = plan(rows, scopes, existing, now)
+    payload.extend(associations)
     if args.dry_run:
         for kind in ("add", "change", "delete"):
             for row in changes[kind]:
                 print(f"{kind:6} {row.get('project', '')}: {row.get('description', '')}")
+        for task in associations:
+            group = task.get("view_project")
+            print(f"group  {task['uuid']}: {group if group and group != UNASSIGNED else 'unassigned'}")
         print(f"project-view: dry run, {len(rows)} rows, {len(payload)} writes skipped")
         return 0
     try:
         apply(payload)
-    except Exception as error:  # noqa: BLE001
+        publish_contexts(rows, existing)
+    except Exception as error:
         return failed(error, now)
     summary = {"at": now.isoformat(), "rows": len(rows), "added": len(changes["add"]),
-               "changed": len(changes["change"]), "deleted": len(changes["delete"]), "failures": failures}
+               "changed": len(changes["change"]), "deleted": len(changes["delete"]),
+               "associations": len(associations), "failures": failures, "sources": sources,
+               "unavailable_refs": sorted(unavailable_refs)}
+    summary["last_success_at"] = (previous.get("last_success_at")
+                                  or (previous.get("at") if not previous.get("failures") else None)) if failures else now.isoformat()
     write_state(summary)
     print(f"project-view: {len(rows)} rows, {summary['added']} added, {summary['changed']} changed, "
-          f"{summary['deleted']} deleted" + (f", {len(failures)} sources failed" if failures else ""))
-    return 0
+          f"{summary['deleted']} deleted, {len(associations)} associations changed"
+          + (f", {len(failures)} sources failed" if failures else ""))
+    return failed(RuntimeError("; ".join(failures)), now) if failures else 0
 
 
 if __name__ == "__main__":

@@ -1,12 +1,15 @@
-"""Tests for __project_view_refresh.py, the +view rows of the myprojects report."""
+"""Fixture-only source tests and isolated Taskwarrior context roundtrips."""
 
+import copy
 import importlib.util
 import json
 import os
+import re
 import shutil
 import subprocess
 import tempfile
 import unittest
+import uuid
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest import mock
@@ -15,425 +18,1090 @@ REPO = Path(__file__).resolve().parents[2]
 SPEC = importlib.util.spec_from_file_location("project_view", REPO / "scripts/__project_view_refresh.py")
 pv = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(pv)
-
 NOW = datetime(2026, 11, 11, 12, 0, tzinfo=UTC)
 
 
-def stamp(days_ago):
-    return (NOW - timedelta(days=days_ago)).isoformat().replace("+00:00", "Z")
+def stamp(days=0):
+    return (NOW - timedelta(days=days)).isoformat().replace("+00:00", "Z")
 
 
-def issue(ident, state="Todo", kind="unstarted", assignee="Someone", me=False, updated=1,
-          prs=(), blockers=(), completed=None, title="A title"):
-    return {
-        "identifier": ident, "title": title, "url": f"https://linear.app/loft/issue/{ident.lower()}",
-        "updatedAt": stamp(updated), "completedAt": stamp(completed) if completed is not None else None,
-        "canceledAt": None, "state": {"name": state, "type": kind},
-        "assignee": {"name": assignee, "isMe": me} if assignee else None,
-        "attachments": {"nodes": [{"url": u} for u in prs]},
-        "inverseRelations": {"nodes": [{"type": "blocks", "issue": {"identifier": b, "state": {"type": t}}}
-                                       for b, t in blockers]},
-    }
-
-
-def project(pid, name, issues, led=True, listed=True, update_days=0, health="onTrack", target=None,
-            status="In Progress"):
-    updates = [] if update_days is None else [
-        {"createdAt": stamp(update_days), "health": health, "user": {"name": "Piotr Zaniewski"}}]
-    return {
-        "id": pid, "name": name, "url": f"https://linear.app/loft/project/{pid}",
-        "targetDate": target, "startDate": "2026-11-03", "status": {"name": status, "type": "started"},
-        "lead": {"name": "Piotr Zaniewski" if led else "Caue Santos", "isMe": led},
-        "projectUpdates": {"nodes": updates}, "issues": issues, "listed": listed, "led": led,
-    }
-
-
-def assigned(ident, project_name=None, pid=None, state="Triage", kind="triage", title="Inbox item"):
+def issue(ident, state="Todo", kind="unstarted", title="A title", prs=(), completed=None,
+          updated=1, blockers=(), milestone=None):
     return {"identifier": ident, "title": title, "url": f"https://linear.app/loft/issue/{ident.lower()}",
-            "state": {"name": state, "type": kind},
-            "project": {"id": pid, "name": project_name} if project_name else None}
+            "updatedAt": stamp(updated), "completedAt": stamp(completed) if completed is not None else None,
+            "canceledAt": None, "state": {"name": state, "type": kind},
+            "assignee": {"name": "Piotr", "isMe": True}, "projectMilestone": milestone,
+            "attachments": {"nodes": [{"url": u} for u in prs]},
+            "inverseRelations": {"nodes": [{"type": "blocks", "issue": {"identifier": b,
+                                            "state": {"type": t}}} for b, t in blockers]}}
 
 
-def github(mine=None, prs=None, teams=("loft-sh/eng-devops",)):
-    return {"login": "Piotr1215", "mine": mine or {}, "teams": set(teams), "prs": prs or {}}
+def project(pid="p1", name="Release pipeline", issues=(), led=True, update_days=1):
+    return {"id": pid, "name": name, "url": f"https://linear.app/loft/project/{pid}",
+            "description": "Make releases reproducible.", "targetDate": "2026-12-08",
+            "startDate": "2026-11-03", "status": {"name": "In Progress", "type": "started"},
+            "lead": {"name": "Piotr", "isMe": led}, "led": led, "listed": True,
+            "projectUpdates": {"nodes": [{"createdAt": stamp(update_days), "health": "onTrack",
+                                         "user": {"name": "Piotr"}}]},
+            "issues": list(issues), "milestones": []}
 
 
-def other_pr(ref, author="vcauesantos", state="OPEN", draft=False, request=("Team", "eng-devops")):
-    owner = ref.split("/", 1)[0]
-    kind, who = request
-    node = ({"__typename": "Team", "slug": who, "organization": {"login": owner}} if kind == "Team"
-            else {"__typename": "User", "login": who})
-    return {"url": f"https://github.com/{ref.replace('#', '/pull/')}", "state": state, "isDraft": draft,
-            "reviewDecision": "REVIEW_REQUIRED", "title": "fix(ci): pick release versions",
-            "author": {"login": author}, "reviewRequests": {"nodes": [{"requestedReviewer": node}]}}
+def assigned(ident="DEVOPS-1", pid="p1", name="Release pipeline"):
+    return {"identifier": ident, "title": "Check prerequisites", "url": f"https://linear.app/loft/issue/{ident.lower()}",
+            "project": {"id": pid, "name": name} if pid else None,
+            "state": {"name": "Todo", "type": "unstarted"}}
 
 
-def snapshot(projects, assigned_issues=()):
-    return {"projects": {p["id"]: p for p in projects},
-            "assigned": list(assigned_issues) if assigned_issues is not None else None,
+def snapshot(projects=(), assigned_issues=()):
+    return {"projects": {p["id"]: p for p in projects}, "assigned": list(assigned_issues),
             "wanted": [p["id"] for p in projects], "failures": []}
 
 
-class CIStatusWriterTests(unittest.TestCase):
-    def test_status_replaces_only_ci_standing_row(self):
-        rows = {'standing:p1': {'project': 'ci-infrastructure-improvements', 'description': 'old', 'annotations': ['old']},
-                'standing:p2': {'project': 'other', 'description': 'keep', 'annotations': []}}
-        scopes = {'projects': {'p1', 'p2'}, 'wanted': {'p1', 'p2'}}
-        with tempfile.TemporaryDirectory() as folder:
-            path = Path(folder) / 'data.json'
-            path.write_text('{}')
-            module = mock.Mock(PAGE=path)
-            module.generate.return_value = ({'description': 'new'}, ['handoff'])
-            module.format_brief.return_value = 'Done:\n\nNow:\n\nNext:\n- handoff'
-            spec = mock.Mock()
-            with mock.patch.object(pv.importlib.util, 'spec_from_file_location', return_value=spec), mock.patch.object(pv.importlib.util, 'module_from_spec', return_value=module):
-                pv.add_ci_status(rows, scopes, [])
-            self.assertEqual(rows['standing:p1']['description'], 'new')
-            self.assertTrue(rows['standing:p1']['annotations'][0].startswith('brief: Done:'))
-            self.assertEqual(rows['standing:p2']['description'], 'keep')
-
-    def test_failure_keeps_existing_row_out_of_import_and_deletion(self):
-        rows = {'standing:p1': {'project': 'ci-infrastructure-improvements'}}
-        scopes = {'projects': {'p1'}, 'wanted': {'p1'}, 'assigned': True, 'github': True}
-        with mock.patch.object(pv.importlib.util, 'spec_from_file_location', side_effect=RuntimeError('offline')):
-            pv.add_ci_status(rows, scopes, [])
-        self.assertEqual(rows, {})
-        self.assertFalse(pv.judged('standing:p1', scopes))
+def github(prs=None, mine=None):
+    return {"login": "Piotr", "mine": mine or {}, "teams": {"loft-sh/eng-devops"}, "prs": prs or {}}
 
 
-class NamingTests(unittest.TestCase):
-    def test_kebab_matches_the_issue_sync_project_names(self):
-        self.assertEqual(pv.kebab("Issue to PR Agentic Pipeline"), "issue-to-pr-agentic-pipeline")
-        self.assertEqual(pv.kebab("CI infrastructure improvements"), "ci-infrastructure-improvements")
-        self.assertEqual(pv.kebab("Brand: vCluster Brand Skills for AI Tools"),
-                         "brand-vcluster-brand-skills-for-ai-tools")
-
-    def test_row_uuid_is_stable_per_key(self):
-        self.assertEqual(pv.row_uuid("issue:DEVOPS-1"), pv.row_uuid("issue:DEVOPS-1"))
-        self.assertNotEqual(pv.row_uuid("issue:DEVOPS-1"), pv.row_uuid("issue:DEVOPS-2"))
+def pr(ref="loft-sh/tool#12", state="OPEN", review="REVIEW_REQUIRED", merged=None, request="Piotr"):
+    return {"url": "https://github.com/" + ref.replace("#", "/pull/"), "state": state,
+            "title": "Fix release checks", "isDraft": False, "reviewDecision": review,
+            "mergedAt": stamp(merged) if merged is not None else None, "closedAt": None,
+            "author": {"login": "author"}, "reviewRequests": {"pageInfo": {"hasNextPage": False}, "nodes": [
+                {"requestedReviewer": {"__typename": "User", "login": request}}]}}
 
 
-class NoTaskRowTests(unittest.TestCase):
-    def test_assigned_issue_without_a_task_shows_under_its_project(self):
-        snap = snapshot([], [assigned("ENGAI-138", "AI Maintenance", "p1"),
-                             assigned("DEVOPS-1838", "LoftRocks Maintenance", "p2")])
-        rows, _ = pv.build_rows(snap, [], github(), NOW)
-        self.assertEqual(rows["issue:ENGAI-138"]["project"], "ai-maintenance")
-        self.assertEqual(rows["issue:DEVOPS-1838"]["project"], "loftrocks-maintenance")
-        self.assertTrue(rows["issue:ENGAI-138"]["description"].startswith("no task · ENGAI-138 Triage · "))
-        self.assertEqual(rows["issue:ENGAI-138"]["annotations"], ["https://linear.app/loft/issue/engai-138"])
-        self.assertEqual(rows["issue:ENGAI-138"]["rank"], 1)
-
-    def test_any_open_task_with_the_issue_id_suppresses_the_row(self):
-        snap = snapshot([], [assigned("DEVOPS-1828", "Cloud Infrastructure Maintenance", "p1", "Todo", "unstarted"),
-                             assigned("DEVOPS-1872", "CI infrastructure improvements", "p2", "Todo", "unstarted")])
-        tasks = [{"uuid": "a", "linear_issue_id": "DEVOPS-1828", "tags": ["piotr"], "status": "pending"},
-                 {"uuid": "b", "linear_issue_id": "DEVOPS-1872", "tags": ["work"], "status": "waiting"}]
-        rows, _ = pv.build_rows(snap, tasks, github(), NOW)
-        self.assertNotIn("issue:DEVOPS-1828", rows)
-        self.assertNotIn("issue:DEVOPS-1872", rows)
-
-    def test_a_view_row_never_counts_as_the_issue_task(self):
-        snap = snapshot([], [assigned("ENGAI-138", "AI Maintenance", "p1")])
-        tasks = [{"uuid": "v", "linear_issue_id": "ENGAI-138", "tags": ["view"], "status": "pending"}]
-        rows, _ = pv.build_rows(snap, tasks, github(), NOW)
-        self.assertIn("issue:ENGAI-138", rows)
-
-    def test_project_less_issue_follows_the_team_project(self):
-        snap = snapshot([], [assigned("ENGAI-139"), assigned("REV-1")])
-        rows, _ = pv.build_rows(snap, [], github(), NOW)
-        self.assertEqual(rows["issue:ENGAI-139"]["project"], "ai")
-        self.assertEqual(rows["issue:REV-1"]["project"], "no-project")
-
-    def test_links_in_titles_never_reach_the_row(self):
-        snap = snapshot([], [assigned("DEVOPS-1879", "Prod", "p1",
-                                      title="helper fails when https://ip-api.com/json answers 403")])
-        rows, _ = pv.build_rows(snap, [], github(), NOW)
-        self.assertNotIn("http", rows["issue:DEVOPS-1879"]["description"])
+def handoff(ident="DEVOPS-1", **fields):
+    row = {"uuid": "12345678-1234-4234-8234-123456789abc", "status": "pending", "project": "admin",
+           "description": "Review the result", "tags": ["piotr", "work"], "entry": "20261101T000000Z",
+           "priority": "H", "annotations": [{"entry": "20261102T000000Z", "description": "Human context"}]}
+    if ident:
+        row["linear_issue_id"] = ident
+    row.update(fields)
+    return row
 
 
-class StandingTests(unittest.TestCase):
-    def row(self, proj, tasks=(), gh=None, assigned_issues=()):
-        rows, _ = pv.build_rows(snapshot([proj], assigned_issues), list(tasks),
-                                github() if gh is None else gh, NOW)
-        return rows.get(f"standing:{proj['id']}")
-
-    def test_standing_summarises_state_update_and_open_issues(self):
-        proj = project("p1", "CI infrastructure improvements", [
-            issue("DEVOPS-1", "In Progress", "started", "Piotr Zaniewski", True),
-            issue("DEVOPS-2", "In Review", "started"),
-            issue("DEVOPS-3", "Todo"), issue("DEVOPS-4", "Triage", "triage", None),
-            issue("DEVOPS-5", "Backlog", "backlog"), issue("DEVOPS-6", "Parked", "started"),
-            issue("DEVOPS-7", "Released", "completed", completed=2),
-        ], update_days=0, target="2026-12-08")
-        row = self.row(proj)
-        self.assertEqual(row["project"], "ci-infrastructure-improvements")
-        self.assertEqual(row["rank"], 9)
-        self.assertEqual(row["description"],
-                         "standing · 1 in triage · on track, updated today · 7d: 6 changed, 1 closed · "
-                         "6 open: 2 started, 1 todo, 1 triage, 1 backlog, 1 parked · In Progress, target 8 Dec")
-        self.assertEqual(row["annotations"][0], "https://linear.app/loft/project/p1")
-
-    def test_stuck_counts_blocked_and_stalled_but_not_parked(self):
-        proj = project("p1", "Self-hosted ai stack", [
-            issue("DEVOPS-1580", blockers=[("DEVOPS-1579", "unstarted")]),
-            issue("DEVOPS-1581", blockers=[("DEVOPS-1500", "completed")]),
-            issue("DEVOPS-1105", "In Progress", "started", updated=12),
-            issue("DEVOPS-1809", "Parked", "started", updated=30),
-        ], led=False, update_days=7, health="offTrack", target="2027-06-30")
-        row = self.row(proj)
-        self.assertTrue(row["description"].startswith("standing · stuck: 1 blocked, 1 stalled · off track, "
-                                                      "updated 7d ago ·"))
-        self.assertTrue(row["description"].endswith("· In Progress, target 30 Jun 2027"))
-        detail = row["annotations"][1]
-        self.assertIn("blocked: DEVOPS-1580 by DEVOPS-1579", detail)
-        self.assertIn("stalled 7d+: DEVOPS-1105 Someone (12d)", detail)
-
-    def test_old_and_missing_updates_and_a_passed_target(self):
-        proj = project("p1", "Prod release", [issue("DEVOPS-1")], update_days=126, target="2026-03-31")
-        description = self.row(proj)["description"]
-        self.assertTrue(description.startswith("standing · on track, last update Jul 2026 ·"))
-        self.assertTrue(description.endswith("· In Progress, target 31 Mar passed"))
-        proj = project("p2", "AI Maintenance", [issue("DEVOPS-2")], update_days=None, status="Maintenance")
-        self.assertTrue(self.row(proj)["description"].startswith("standing · no update yet ·"))
-
-    def test_my_prs_and_handoffs_count_on_the_row(self):
-        mine = "loft-sh/loft-enterprise#9403"
-        proj = project("p1", "CI infrastructure improvements", [
-            issue("DEVOPS-1872", "In Progress", "started", prs=[f"https://github.com/{mine.replace('#', '/pull/')}"])])
-        gh = github(mine={mine: {"isDraft": False, "reviewDecision": "REVIEW_REQUIRED"}})
-        tasks = [{"uuid": "h", "project": "ci-infrastructure-improvements", "tags": ["piotr"],
-                  "linear_issue_id": "DEVOPS-1828", "description": "click Approve", "status": "pending"}]
-        row = self.row(proj, tasks, gh)
-        self.assertTrue(row["description"].startswith("standing · my PRs: 1 awaiting review · on track"))
-        self.assertTrue(row["description"].endswith("· In Progress · 1 handoff"))
-        self.assertIn("my PRs: loft-enterprise#9403 awaiting review (DEVOPS-1872)", row["annotations"][1])
-        self.assertIn("handoffs: DEVOPS-1828", row["annotations"][1])
-
-    def test_my_prs_lead_with_the_most_actionable_state(self):
-        refs = ["loft-sh/a#1", "loft-sh/b#2", "loft-sh/c#3"]
-        proj = project("p1", "GitHub Asks", [issue("DEVOPS-1803", "In Review", "started",
-                                                   prs=[f"https://github.com/{r.replace('#', '/pull/')}" for r in refs])])
-        gh = github(mine={refs[0]: {"isDraft": False, "reviewDecision": "REVIEW_REQUIRED"},
-                          refs[1]: {"isDraft": False, "reviewDecision": "APPROVED"},
-                          refs[2]: {"isDraft": False, "reviewDecision": "CHANGES_REQUESTED"}})
-        self.assertTrue(self.row(proj, gh=gh)["description"].startswith(
-            "standing · my PRs: 1 changes requested, 1 approved, 1 awaiting review · "))
-
-    def test_backlog_tasks_are_counted_and_listed_on_the_row(self):
-        proj = project("p1", "AI Maintenance", [issue("DEVOPS-1818", "Backlog", "backlog")])
-        tasks = [{"uuid": f"b{n}", "project": "ai-maintenance", "tags": ["backlog", "work"],
-                  "linear_issue_id": ident, "description": "later", "status": "pending"}
-                 for n, ident in enumerate(("DEVOPS-1818", "DEVOPS-1306"))]
-        row = self.row(proj, tasks)
-        self.assertTrue(row["description"].endswith("· my backlog: 2"))
-        self.assertIn("my backlog: DEVOPS-1306, DEVOPS-1818", row["annotations"][1])
-
-    def test_github_down_says_prs_unavailable(self):
-        proj = project("p1", "CI infrastructure improvements", [issue("DEVOPS-1")])
-        rows, scopes = pv.build_rows(snapshot([proj]), [], None, NOW)
-        self.assertIn("· PRs unavailable", rows["standing:p1"]["description"])
-        self.assertFalse(scopes["github"])
-
-    def test_member_projects_show_only_with_work_or_life(self):
-        dead = project("p1", "Staging: Content Development", [issue("MAR-1", updated=40)], led=False, update_days=500)
-        self.assertIsNone(self.row(dead))
-        alive = project("p2", "Snyk replacement options", [issue("ENGSEC-7", updated=40)], led=False, update_days=5)
-        self.assertIsNotNone(self.row(alive))
-        busy = project("p3", "Release checklist automation", [issue("DEVOPS-1135", updated=2)], led=False,
-                       update_days=500)
-        self.assertIsNotNone(self.row(busy))
-        mine = project("p4", "Prod release", [issue("DEVOPS-1879", updated=40)], led=False, update_days=500)
-        self.assertIsNotNone(self.row(mine, assigned_issues=[assigned("DEVOPS-1879", "Prod release", "p4")]))
-        led = project("p5", "vClusterCloud Maintenance", [issue("DEVOPS-1247", updated=90)], update_days=600)
-        self.assertIsNotNone(self.row(led))
+def stored(payload):
+    return [{"entry": "20261101T000000Z", **row} for row in copy.deepcopy(payload)]
 
 
-class ReviewAskTests(unittest.TestCase):
-    def rows(self, prs, gh):
-        proj = project("p1", "GitHub Asks", [issue("DEVOPS-1400", "In Review", "started", prs=prs)])
-        rows, _ = pv.build_rows(snapshot([proj]), [], gh, NOW)
-        return {k: v for k, v in rows.items() if k.startswith("ask:")}
+class ContextTests(unittest.TestCase):
+    def test_achieved_milestones_persist_with_proof_and_due_dates_do_not_claim_done(self):
+        proj = project()
+        proj["milestones"] = [
+            {"id": "design-id", "name": "Design approved", "status": "done", "progress": 1.0,
+             "sortOrder": 1, "updatedAt": stamp(90), "targetDate": "2026-07-01"},
+            {"id": "release-id", "name": "Release", "status": "overdue", "progress": 0.75,
+             "sortOrder": 2, "updatedAt": stamp(1), "targetDate": "2026-10-01"}]
+        _, brief = pv.standing(proj, [], github(), NOW)
+        done, milestones = brief.split("## Done")[1].split("## Now")[0], brief.split("## Milestones")[1]
+        self.assertIn("[Milestone Design approved](https://linear.app/loft/project/p1)", done)
+        self.assertIn("Linear status done; source ID design-id; source updated 2026-08-13", done)
+        self.assertIn("does not provide a completion date", done)
+        self.assertNotIn("Milestone Release", done)
+        self.assertIn("State: overdue; progress: 75%", milestones)
+        self.assertIn("progress: 100%", milestones)
 
-    def test_team_request_on_an_attached_pr_is_an_ask(self):
-        ref = "loft-sh/loft-enterprise#9373"
-        asks = self.rows(["https://github.com/loft-sh/loft-enterprise/pull/9373"],
-                         github(prs={ref: other_pr(ref)}))
-        row = asks[f"ask:p1:{ref}"]
-        self.assertEqual(row["project"], "github-asks")
-        self.assertEqual(row["rank"], 2)
-        self.assertTrue(row["description"].startswith("review ask · loft-enterprise#9373 · vcauesantos · "))
-        self.assertTrue(row["description"].endswith("(DEVOPS-1400) · via eng-devops"))
-        self.assertEqual(row["annotations"], ["https://github.com/loft-sh/loft-enterprise/issues/9373"])
+    def test_history_cap_and_order_are_explicit(self):
+        proj = project(issues=[issue(f"DEVOPS-{n}", "Done", "completed", completed=n)
+                               for n in range(1, 25)])
+        proj["history_truncated"] = True
+        _, brief = pv.standing(proj, [], github(), NOW)
+        done = brief.split("## Done")[1].split("## Now")[0]
+        self.assertEqual(done.count("Linear completed"), 20)
+        self.assertLess(done.index("[DEVOPS-1 "), done.index("[DEVOPS-20 "))
+        self.assertNotIn("[DEVOPS-21 ", done)
+        self.assertIn("100 most recently updated completed issues", done)
+        self.assertIn("20 shown by completion date", done)
+        self.assertIn("History is truncated", done)
 
-    def test_direct_request_has_no_team_suffix(self):
-        ref = "loft-sh/vcluster-docs#3111"
-        asks = self.rows([f"https://github.com/{ref.replace('#', '/pull/')}"],
-                         github(prs={ref: other_pr(ref, request=("User", "piotr1215"))}))
-        self.assertTrue(asks[f"ask:p1:{ref}"]["description"].endswith("(DEVOPS-1400)"))
+    def test_every_project_has_detailed_done_now_milestones_and_real_next(self):
+        ref = "loft-sh/tool#12"
+        done = issue("DEVOPS-1", "Done", "completed", "Make builds repeatable", completed=2,
+                     prs=[pr(ref)["url"]])
+        active = issue("DEVOPS-2", "In Review", "started", "Check rollout logs", prs=[pr(ref)["url"]],
+                       blockers=[("DEVOPS-8", "started")], milestone={"id": "m1", "name": "Pilot"})
+        a = project(issues=[done, active])
+        a["milestones"] = [{"id": "m1", "name": "Pilot", "targetDate": "2026-11-20",
+                             "description": "Verify one end-to-end release.", "sortOrder": 1,
+                             "progress": 0.75, "status": "next", "updatedAt": stamp(1)}]
+        b = project("p2", "Documentation", [issue("DOC-3", title="Write the setup guide")])
+        next_row = handoff("DEVOPS-2", view_project="release-pipeline", description="Approve the verified release")
+        rows, _ = pv.build_rows(snapshot([a, b]), [next_row], github({ref: pr(ref, state="MERGED", merged=1)}), NOW)
+        for pid, name in (("p1", "Release pipeline"), ("p2", "Documentation")):
+            row = rows[f"standing:{pid}"]
+            brief = row["annotations"][-1]
+            self.assertTrue(brief.startswith("brief: # " + name))
+            for heading in ("## Done", "## Now", "## Milestones", "## Next"):
+                self.assertIn(heading, brief)
+            self.assertIn(f"[Linear project](https://linear.app/loft/project/{pid})", brief)
+            self.assertNotIn("ci_project_status", brief)
+        brief = rows["standing:p1"]["annotations"][-1]
+        self.assertIn("[DEVOPS-1 Make builds repeatable](https://linear.app/loft/issue/devops-1)", brief)
+        self.assertIn("Linear completed 2026-11-09", brief)
+        self.assertIn("GitHub merged 2026-11-10", brief)
+        self.assertIn("Check rollout logs", brief)
+        self.assertIn("waiting on DEVOPS-8", brief)
+        self.assertIn("milestone Pilot", brief)
+        self.assertIn("target: 2026-11-20", brief)
+        self.assertIn("progress: 75%", brief)
+        self.assertIn("Verify one end-to-end release", brief)
+        self.assertIn("Approve the verified release (DEVOPS-2; pending)", brief)
+        self.assertIn("do not establish deployment", brief)
+        self.assertNotIn("changed,", brief)
+        self.assertIn("DOC-3 Write the setup guide", rows["standing:p2"]["annotations"][-1])
 
-    def test_own_draft_closed_and_unrequested_prs_are_not_asks(self):
-        refs = ["loft-sh/a#1", "loft-sh/b#2", "loft-sh/c#3", "loft-sh/d#4"]
-        urls = [f"https://github.com/{r.replace('#', '/pull/')}" for r in refs]
-        gh = github(mine={refs[0]: {"isDraft": False, "reviewDecision": None}},
-                    prs={refs[1]: other_pr(refs[1], draft=True), refs[2]: other_pr(refs[2], state="MERGED"),
-                         refs[3]: other_pr(refs[3], request=("Team", "eng-docs"))})
-        self.assertEqual(self.rows(urls, gh), {})
+    def test_canceled_and_missing_timestamp_are_not_done_but_old_verified_completion_is(self):
+        canceled = issue("DEVOPS-1", "Canceled", "canceled", completed=1)
+        canceled["canceledAt"] = stamp(1)
+        items = [canceled, issue("DEVOPS-2", "Done", "completed"),
+                 issue("DEVOPS-3", "Done", "completed", completed=8)]
+        _, text = pv.standing(project(issues=items), [], github(), NOW)
+        done = text.split("## Done")[1].split("## Now")[0]
+        for ident in ("DEVOPS-1", "DEVOPS-2"):
+            self.assertNotIn(ident, done)
+        self.assertIn("DEVOPS-3", done)
+        self.assertIn("Linear completed 2026-11-03", done)
+
+    def test_current_pr_review_states_and_unknowns_have_links(self):
+        refs = ["loft-sh/tool#12", "loft-sh/tool#13", "loft-sh/tool#14"]
+        item = issue("DEVOPS-1", prs=[pr(ref)["url"] for ref in refs])
+        gh = github({refs[0]: pr(refs[0], review="CHANGES_REQUESTED"),
+                     refs[1]: pr(refs[1], state="CLOSED")})
+        _, text = pv.standing(project(issues=[item]), [], gh, NOW)
+        self.assertIn("changes requested (DEVOPS-1)", text)
+        self.assertIn("](https://github.com/loft-sh/tool/pull/13). closed", text)
+        self.assertIn("loft-sh/tool#14: GitHub state unavailable", text)
+        _, text = pv.standing(project(issues=[item]), [], None, NOW)
+        self.assertIn("Current PR and review states are unknown", text)
+
+    def test_member_project_relevance_uses_source_work_and_activity(self):
+        dead = project(issues=[issue("DEVOPS-1", updated=40)], led=False, update_days=500)
+        rows, _ = pv.build_rows(snapshot([dead]), [], github(), NOW)
+        self.assertNotIn("standing:p1", rows)
+        rows, _ = pv.build_rows(snapshot([dead], [assigned()]), [], github(), NOW)
+        self.assertIn("standing:p1", rows)
+        dead["led"] = True
+        rows, _ = pv.build_rows(snapshot([dead]), [], github(), NOW)
+        self.assertIn("standing:p1", rows)
+
+    def test_no_ci_import_or_model_dependency(self):
+        text = (REPO / "scripts/__project_view_refresh.py").read_text()
+        self.assertNotIn("__ci_project_status", text)
+        self.assertNotIn("ci-infrastructure-improvements", text)
+        self.assertNotIn("importlib", text)
 
 
-class SafetyTests(unittest.TestCase):
-    def test_rows_never_carry_work_piotr_linear_or_pull_links(self):
-        ref = "loft-sh/loft-enterprise#9373"
-        proj = project("p1", "GitHub Asks", [issue("DEVOPS-1400", "In Review", "started",
-                                                   prs=["https://github.com/loft-sh/loft-enterprise/pull/9373"])])
-        rows, scopes = pv.build_rows(snapshot([proj], [assigned("DEVOPS-1838", "LoftRocks", "p2")]), [],
-                                     github(prs={ref: other_pr(ref)}), NOW)
+class AssociationTests(unittest.TestCase):
+    def test_unavailable_pr_preserves_only_tasks_that_reference_it(self):
+        unavailable = "loft-sh/inaccessible#7"
+        self.b["issues"][0]["attachments"]["nodes"].append({"url": pr(unavailable)["url"]})
+        bad = handoff(None, description=pr(unavailable)["url"], view_project="previous-project")
+        unknown = handoff(None, uuid=str(uuid.uuid4()), description=pr(unavailable)["url"])
+        healthy = handoff(None, uuid=str(uuid.uuid4()), description=pr(self.ref)["url"])
+        structured = handoff("DOC-3", uuid=str(uuid.uuid4()))
+        conflict = handoff(None, uuid=str(uuid.uuid4()), view_project="prior-owner",
+                           description=pr(unavailable)["url"] + " " + pr(self.ref)["url"])
+        changes, resolved = pv.association_plan(self.snap, [bad, unknown, healthy, structured, conflict],
+                                                 unavailable_refs={unavailable})
+        self.assertEqual([t["view_project"] for t in changes], ["release-pipeline", "documentation"])
+        self.assertEqual(resolved[0], bad)
+        self.assertEqual(resolved[1], unknown)
+        self.assertEqual(resolved[-1], conflict)
+
+    def test_exact_linear_route_can_keep_working_after_title_slug_changes(self):
+        self.a["issues"][0]["url"] = "https://linear.app/loft/issue/DEVOPS-1/new-title"
+        task = handoff(None, description="https://linear.app/loft/issue/DEVOPS-1/old-title")
+        changes, _ = pv.association_plan(self.snap, [task])
+        self.assertEqual(changes[0]["view_project"], "release-pipeline")
+        task["description"] = "https://linear.app/other-workspace/issue/DEVOPS-1/new-title"
+        self.assertEqual(pv.association_plan(self.snap, [task])[0][0]["view_project"], "!unassigned")
+
+    def test_standalone_pr_without_verified_issue_linkage_remains_unassigned(self):
+        task = handoff(None, description="https://github.com/loft-sh/tool/pull/999")
+        changes, resolved = pv.association_plan(self.snap, [task])
+        self.assertEqual(changes[0]["view_project"], "!unassigned")
+        self.assertEqual(resolved[0]["project"], "admin")
+
+    def setUp(self):
+        self.ref = "loft-sh/tool#12"
+        self.a = project(issues=[issue("DEVOPS-1", prs=[pr(self.ref)["url"]])])
+        self.b = project("p2", "Documentation", [issue("DOC-3")])
+        self.snap = snapshot([self.a, self.b])
+
+    def test_structured_id_exact_issue_url_and_pr_url_resolve(self):
+        tasks = [handoff(), handoff(None, uuid=str(uuid.uuid4()), description="Read this " + self.b["issues"][0]["url"]),
+                 handoff(None, uuid=str(uuid.uuid4()), annotations=[{"entry": "20261101T000000Z",
+                            "description": "link: " + pr(self.ref)["url"]}])]
+        changes, resolved = pv.association_plan(self.snap, tasks)
+        self.assertEqual([t["view_project"] for t in changes], ["release-pipeline", "documentation", "release-pipeline"])
+        for old, new in zip(tasks, resolved):
+            self.assertEqual({k: v for k, v in new.items() if k != "view_project"}, old)
+            self.assertEqual(new["project"], "admin")
+
+    def test_multiple_exact_links_to_the_same_owner_are_unambiguous(self):
+        task = handoff(description=self.a["issues"][0]["url"] + " " + pr(self.ref)["url"])
+        changes, _ = pv.association_plan(self.snap, [task])
+        self.assertEqual(changes[0]["view_project"], "release-pipeline")
+
+    def test_prose_team_project_and_similar_urls_do_not_guess_ownership(self):
+        tasks = [handoff(None, description="Release pipeline DEVOPS-1 requires review", project="release-pipeline"),
+                 handoff(None, description=pr(self.ref)["url"] + "/files"),
+                 handoff(None, description="https://example.org/loft/issue/devops-1"),
+                 handoff(None, description=self.a["issues"][0]["url"] + "-similar")]
+        changes, resolved = pv.association_plan(self.snap, tasks)
+        self.assertEqual(len(changes), 1)
+        self.assertEqual(changes[0]["uuid"], tasks[-1]["uuid"])
+        self.assertTrue(all(not t.get("view_project") for t in resolved[:-1]))
+        self.assertEqual(resolved[-1]["view_project"], "!unassigned")
+
+    def test_conflicting_sources_or_unknown_structured_id_remain_unassigned(self):
+        tasks = [handoff(description=self.b["issues"][0]["url"], view_project="release-pipeline"),
+                 handoff("DEVOPS-999", description=pr(self.ref)["url"], view_project="release-pipeline")]
+        changes, resolved = pv.association_plan(self.snap, tasks)
+        self.assertEqual([t["view_project"] for t in changes], ["!unassigned", "!unassigned"])
+        self.assertTrue(all(t["view_project"] == "!unassigned" for t in resolved))
+
+    def test_shared_pr_duplicate_issue_id_and_slug_collisions_do_not_choose(self):
+        self.b["issues"].append(issue("DOC-4", prs=[pr(self.ref)["url"]]))
+        task = handoff(None, description=pr(self.ref)["url"], view_project="release-pipeline")
+        changes, _ = pv.association_plan(self.snap, [task])
+        self.assertEqual(changes[0]["view_project"], "!unassigned")
+        self.b["issues"].append(issue("DEVOPS-1"))
+        changes, _ = pv.association_plan(self.snap, [handoff(view_project="release-pipeline")])
+        self.assertEqual(changes[0]["view_project"], "!unassigned")
+        self.b["name"] = self.a["name"]
+        changes, _ = pv.association_plan(self.snap, [handoff("DOC-3", view_project="documentation")])
+        self.assertEqual(changes[0]["view_project"], "!unassigned")
+
+    def test_failed_exact_assessment_cannot_fall_back_to_matching_native_project(self):
+        for task in (handoff(description="Make the critical decision " + self.b["issues"][0]["url"]),
+                     handoff("DEVOPS-999", description="Make the critical decision"),
+                     handoff(None, description="Make the critical decision https://github.com/loft-sh/tool/pull/999")):
+            task["project"] = "release-pipeline"
+            changes, resolved = pv.association_plan(self.snap, [task])
+            self.assertEqual(changes[0]["view_project"], "!unassigned")
+            self.assertEqual(resolved[0]["uuid"], task["uuid"])
+            self.assertEqual(resolved[0]["project"], "release-pipeline")
+            rows, _ = pv.build_rows(self.snap, resolved, github(), NOW)
+            for key in ("standing:p1", "standing:p2"):
+                next_section = rows[key]["annotations"][-1].split("## Next")[1]
+                self.assertNotIn("Make the critical decision", next_section)
+
+    def test_legacy_no_evidence_keeps_native_fallback_and_unresolved_marker_persists(self):
+        legacy = handoff(None, project="release-pipeline", description="Legacy native action")
+        marked = handoff(None, project="release-pipeline", view_project="!unassigned", description="Unresolved action")
+        changes, resolved = pv.association_plan(self.snap, [legacy, marked])
+        self.assertEqual(changes, [])
+        self.assertEqual(resolved, [legacy, marked])
+        rows, _ = pv.build_rows(self.snap, resolved, github(), NOW)
+        next_section = rows["standing:p1"]["annotations"][-1].split("## Next")[1]
+        self.assertIn("Legacy native action", next_section)
+        self.assertNotIn("Unresolved action", next_section)
+
+    def test_failure_preserves_last_verified_association_and_all_fields(self):
+        task = handoff(view_project="release-pipeline", wait="20261201T000000Z", depends=[str(uuid.uuid4())])
+        for mode in ("project", "assigned", "github"):
+            snap = copy.deepcopy(self.snap)
+            if mode == "project":
+                snap["failures"] = ["project p1 timed out"]
+                snap["projects"].pop("p1")
+            elif mode == "assigned":
+                snap["assigned"] = None
+            changes, resolved = pv.association_plan(snap, [task], mode != "github")
+            self.assertEqual(changes, [])
+            self.assertEqual(resolved, [task])
+
+    def test_non_handoff_and_view_rows_are_never_reassociated(self):
+        tasks = [handoff(tags=["work"]), handoff(tags=["piotr", "view"])]
+        self.assertEqual(pv.association_plan(self.snap, tasks), ([], tasks))
+
+    def test_verified_unchanged_grouping_does_not_churn_metadata(self):
+        task = handoff(view_project="release-pipeline", modified="20261103T000000Z")
+        self.assertEqual(pv.association_plan(self.snap, [task]), ([], [task]))
+
+
+class SourceRowTests(unittest.TestCase):
+    def test_untracked_issue_and_review_keep_separate_identity_and_exact_links(self):
+        ref = "loft-sh/tool#12"
+        proj = project(issues=[issue("DEVOPS-1", prs=[pr(ref)["url"]])])
+        rows, scopes = pv.build_rows(snapshot([proj], [assigned()]), [], github({ref: pr(ref)}), NOW)
+        self.assertEqual(set(rows), {"standing:p1", "issue:DEVOPS-1", "ask:p1:" + ref})
+        self.assertIn("link: " + assigned()["url"], rows["issue:DEVOPS-1"]["annotations"])
+        self.assertIn("link: " + pr(ref)["url"], rows["ask:p1:" + ref]["annotations"])
         payload, _ = pv.plan(rows, scopes, [], NOW)
-        self.assertEqual(len(payload), 3)
         for row in payload:
             self.assertEqual(row["tags"], ["view"])
             self.assertNotIn("linear_issue_id", row)
-            text = json.dumps(row)
-            self.assertNotRegex(text, r"github\.com/[^/]+/[^/]+/pull/\d+")
+            self.assertNotIn("piotr", row["tags"])
+
+    def test_real_issue_task_suppresses_source_mirror_and_projectless_issue_uses_team(self):
+        snap = snapshot([], [assigned(), assigned("ENGAI-3", None)])
+        rows, _ = pv.build_rows(snap, [handoff()], github(), NOW)
+        self.assertNotIn("issue:DEVOPS-1", rows)
+        self.assertEqual(rows["issue:ENGAI-3"]["project"], "ai")
+        rows, _ = pv.build_rows(snap, [handoff(tags=["view"])], github(), NOW)
+        self.assertIn("issue:DEVOPS-1", rows)
+
+    def test_own_draft_closed_or_unrequested_pr_is_not_a_review_row(self):
+        ref = "loft-sh/tool#12"
+        proj = project(issues=[issue("DEVOPS-1", prs=[pr(ref)["url"]])])
+        draft = pr(ref)
+        draft["isDraft"] = True
+        for gh in (github({ref: draft}), github({ref: pr(ref, state="CLOSED")}),
+                   github({ref: pr(ref, request="someone-else")}), github(mine={ref: pr(ref)})):
+            rows, _ = pv.build_rows(snapshot([proj]), [], gh, NOW)
+            self.assertFalse(any(k.startswith("ask:") for k in rows))
 
 
 class PlanTests(unittest.TestCase):
     def setUp(self):
-        self.rows = {"issue:DEVOPS-1": {"project": "p", "rank": 1, "description": "no task · DEVOPS-1",
-                                        "annotations": ["https://linear.app/loft/issue/devops-1"]},
-                     "standing:p1": {"project": "p", "rank": 9, "description": "standing · v1",
-                                     "annotations": ["https://linear.app/loft/project/p1", "detail v1"]}}
-        self.scopes = {"assigned": True, "github": True, "projects": {"p1"}, "wanted": {"p1"}}
+        self.rows, self.scopes = pv.build_rows(snapshot([project(issues=[issue("DEVOPS-1")])]), [], github(), NOW)
 
-    def stored(self, payload):
-        """What task export would return for imported rows."""
-        return [{**row, "entry": row.get("entry", "20261101T000000Z")} for row in payload]
-
-    def test_rerun_with_the_same_rows_writes_nothing(self):
-        payload, _ = pv.plan(self.rows, self.scopes, [], NOW)
-        again, changes = pv.plan(self.rows, self.scopes, self.stored(payload), NOW + timedelta(minutes=10))
-        self.assertEqual(again, [])
-        self.assertEqual(changes, {"add": [], "change": [], "delete": []})
-
-    def test_a_change_keeps_the_entry_and_unchanged_annotation_stamps(self):
+    def test_uuid_is_stable_and_existing_header_identity_is_preserved(self):
         first, _ = pv.plan(self.rows, self.scopes, [], NOW)
-        stored = self.stored(first)
-        self.rows["standing:p1"]["description"] = "standing · v2"
-        self.rows["standing:p1"]["annotations"][1] = "detail v2"
-        later = NOW + timedelta(hours=1)
-        payload, changes = pv.plan(self.rows, self.scopes, stored, later)
-        self.assertEqual(len(changes["change"]), 1)
-        row = payload[0]
-        old = next(r for r in stored if r["view_key"] == "standing:p1")
-        self.assertEqual(row["entry"], old["entry"])
-        self.assertEqual(row["annotations"][0]["entry"], old["annotations"][0]["entry"])
-        self.assertEqual(row["annotations"][1]["entry"], pv.tw_time(later + timedelta(seconds=1)))
+        self.assertEqual(first[0]["uuid"], pv.row_uuid("standing:p1"))
+        old = stored(first)
+        old[0]["uuid"] = "12345678-1234-4234-8234-123456789abc"
+        self.rows["standing:p1"]["description"] = "standing · changed"
+        again, _ = pv.plan(self.rows, self.scopes, old, NOW)
+        self.assertEqual(again[0]["uuid"], old[0]["uuid"])
+        self.assertEqual(again[0]["entry"], old[0]["entry"])
 
-    def test_a_done_row_comes_back_while_its_source_holds(self):
-        payload, _ = pv.plan(self.rows, self.scopes, [], NOW)
-        stored = self.stored(payload)
-        stored[0]["status"] = "completed"
-        again, _ = pv.plan(self.rows, self.scopes, stored, NOW)
-        self.assertEqual([r["status"] for r in again], ["pending"])
+    def test_unchanged_refresh_is_quiet_and_human_fields_and_annotations_survive(self):
+        first, _ = pv.plan(self.rows, self.scopes, [], NOW)
+        old = stored(first)
+        old[0]["due"] = "20261201T000000Z"
+        old[0]["custom"] = "preserve me"
+        old[0]["annotations"].append({"entry": "20261101T000000Z", "description": "Human context"})
+        old[0]["annotations"].append({"entry": "20261102T000000Z", "description": "https://example.com/proof"})
+        old[0]["annotations"].sort(key=lambda a: a["entry"])
+        again, _ = pv.plan(self.rows, self.scopes, old, NOW + timedelta(minutes=10))
+        self.assertEqual(again, [])
+        self.rows["standing:p1"]["annotations"][-1] = "brief: Changed context\n"
+        changed, _ = pv.plan(self.rows, self.scopes, old, NOW + timedelta(hours=1))
+        self.assertEqual(changed[0]["custom"], "preserve me")
+        self.assertEqual(changed[0]["due"], old[0]["due"])
+        self.assertEqual(changed[0]["annotations"][-1]["description"], "brief: Changed context\n")
+        self.assertIn("Human context", [a["description"] for a in changed[0]["annotations"]])
+        self.assertIn("https://example.com/proof", [a["description"] for a in changed[0]["annotations"]])
 
-    def test_obsolete_rows_go_only_when_their_source_was_read(self):
-        payload, _ = pv.plan(self.rows, self.scopes, [], NOW)
-        stored = self.stored(payload)
-        _, changes = pv.plan({}, self.scopes, stored, NOW)
-        self.assertEqual(sorted(r["view_key"] for r in changes["delete"]), ["issue:DEVOPS-1", "standing:p1"])
-        self.assertTrue(all(r["status"] == "deleted" and r["end"] for r in changes["delete"]))
+    def test_obsolete_rows_delete_only_after_a_complete_source_read(self):
+        first, _ = pv.plan(self.rows, self.scopes, [], NOW)
+        old = stored(first)
         blind = {"assigned": False, "github": False, "projects": set(), "wanted": {"p1"}}
-        payload, changes = pv.plan({}, blind, stored, NOW)
+        payload, _ = pv.plan({}, blind, old, NOW)
+        self.assertEqual(payload, [])
+        payload, changes = pv.plan({}, self.scopes, old, NOW)
+        self.assertEqual([r["status"] for r in changes["delete"]], ["deleted"])
+        self.assertTrue(payload[0]["end"])
+
+    def test_an_unrelated_view_key_is_not_adopted_or_deleted(self):
+        old = handoff(tags=["view"], view_key="some-other-view")
+        payload, _ = pv.plan({}, self.scopes, [old], NOW)
         self.assertEqual(payload, [])
 
 
-class FailureTests(unittest.TestCase):
-    """A failed run fails the unit only once the view is an hour stale."""
+class RefreshTests(unittest.TestCase):
+    def test_unreadable_attached_pr_retains_only_affected_context_and_review_row(self):
+        healthy, unavailable = "loft-sh/tool#12", "loft-sh/inaccessible#7"
+        a = project("p1", "Healthy project", [issue("DEVOPS-1", title="Healthy old title", prs=[pr(healthy)["url"]])])
+        b = project("p2", "Affected project", [issue("DOC-2", title="Affected old title", prs=[pr(unavailable)["url"]])])
+        snap = snapshot([a, b])
+        initial_gh = github({healthy: pr(healthy), unavailable: pr(unavailable)})
+        rows, scopes = pv.build_rows(snap, [], initial_gh, NOW)
+        sources = pv.source_status(rows, scopes, [], snap, initial_gh, NOW, {})
+        first, _ = pv.plan(rows, scopes, [], NOW)
+        old = stored(first)
+        a["issues"][0]["title"] = "Healthy updated title"
+        b["issues"][0]["title"] = "Affected withheld title"
+        partial_gh = {**github({healthy: pr(healthy, state="CLOSED")}), "unavailable_refs": {unavailable}}
+        later = NOW + timedelta(minutes=10)
+        rows, scopes = pv.build_rows(snap, [], partial_gh, later)
+        sources = pv.source_status(rows, scopes, old, snap, partial_gh, later, {"sources": sources})
+        healthy_text = rows["standing:p1"]["annotations"][-1]
+        affected_text = rows["standing:p2"]["annotations"][-1]
+        self.assertIn("Healthy updated title", healthy_text)
+        self.assertIn("GitHub last verified: " + later.isoformat(), healthy_text)
+        self.assertNotIn("source unavailable", rows["standing:p1"]["description"])
+        self.assertIn("Affected old title", affected_text)
+        self.assertNotIn("Affected withheld title", affected_text)
+        self.assertIn("GitHub unavailable for " + unavailable, affected_text)
+        self.assertIn("current PR states unknown", affected_text)
+        self.assertIn("Linear last verified: " + NOW.isoformat(), affected_text)
+        self.assertIn("GitHub last verified: " + NOW.isoformat(), affected_text)
+        self.assertEqual(sources["projects"], {"p1": later.isoformat(), "p2": NOW.isoformat()})
+        self.assertEqual(sources["github_projects"], {"p1": later.isoformat(), "p2": NOW.isoformat()})
+        changed, changes = pv.plan(rows, scopes, old, later)
+        self.assertEqual([t["view_key"] for t in changes["delete"]], ["ask:p1:" + healthy])
+        self.assertNotIn("ask:p2:" + unavailable, {t["view_key"] for t in changed})
+        self.assertFalse(pv.judged("ask:p2:" + unavailable, scopes))
+
+    def test_new_affected_project_marks_unavailable_pr_unknown_without_a_snapshot_claim(self):
+        unavailable = "loft-sh/inaccessible#7"
+        self.snap["projects"]["p1"]["issues"][0]["attachments"]["nodes"] = [{"url": pr(unavailable)["url"]}]
+        partial_gh = {**github(), "unavailable_refs": {unavailable}}
+        rows, scopes = pv.build_rows(self.snap, [], partial_gh, NOW)
+        sources = pv.source_status(rows, scopes, [], self.snap, partial_gh, NOW, {})
+        text = rows["standing:p1"]["annotations"][-1]
+        self.assertIn("Current release checks", text)
+        self.assertIn("GitHub unavailable; current PR and review states are unknown", text)
+        self.assertIn("Linear last verified: " + NOW.isoformat(), text)
+        self.assertIn("GitHub last verified: unknown", text)
+        self.assertIsNone(sources["github_projects"]["p1"])
+
+    def test_partial_github_summary_and_warning_name_unavailable_refs(self):
+        unavailable = "loft-sh/inaccessible#7"
+        self.snap["projects"]["p1"]["issues"][0]["attachments"]["nodes"] = [{"url": pr(unavailable)["url"]}]
+        self.gh["unavailable_refs"] = {unavailable}
+        self.state.mkdir()
+        (self.state / "last-run.json").write_text(json.dumps({"at": NOW.isoformat()}))
+        patches = self.main_patches()
+        with mock.patch.object(pv, "apply"):
+            self.assertEqual(pv.main([]), 0)
+        summary = json.loads((self.state / "last-run.json").read_text())
+        self.assertEqual(summary["unavailable_refs"], [unavailable])
+        self.assertTrue(any(unavailable in failure for failure in summary["failures"]))
+        warning = "".join(c.args[0] for c in patches[6].write.call_args_list)
+        self.assertIn("GitHub attached PRs unavailable: " + unavailable, warning)
+
+    def test_outages_preserve_only_active_overviews_and_never_revive_history(self):
+        projects = [project(f"p{n}", f"Project {n}", [issue(f"DEVOPS-{n}")]) for n in range(1, 5)]
+        snap = snapshot(projects)
+        rows, scopes = pv.build_rows(snap, [], github(), NOW)
+        sources = pv.source_status(rows, scopes, [], snap, github(), NOW, {})
+        payload, _ = pv.plan(rows, scopes, [], NOW)
+        old = stored(payload)
+        statuses = {"standing:p1": "pending", "standing:p2": "deleted",
+                    "standing:p3": "completed", "standing:p4": "waiting"}
+        for task in old:
+            task["status"] = statuses[task["view_key"]]
+        self.state.mkdir()
+        (self.state / "last-run.json").write_text(json.dumps({"at": NOW.isoformat(), "sources": sources}))
+        self.main_patches(old)
+        for mode in ("total", "assigned", "reference"):
+            with self.subTest(mode=mode):
+                unavailable = {"projects": {}, "assigned": None if mode == "assigned" else [],
+                               "wanted": [], "failures": [mode + " unavailable"],
+                               "reference_failure": mode == "reference"}
+                read = (mock.patch.object(pv, "read_linear", side_effect=RuntimeError("offline"))
+                        if mode == "total" else mock.patch.object(pv, "read_linear", return_value=unavailable))
+                with read, mock.patch.object(pv, "apply") as apply:
+                    self.assertEqual(pv.main([]), 0)
+                changed = apply.call_args.args[0]
+                self.assertEqual({t["view_key"] for t in changed}, {"standing:p1", "standing:p4"})
+                self.assertTrue(all(t["status"] == "pending" for t in changed))
+                for task in old:
+                    file = self.briefs / task["uuid"] / "project-status.md"
+                    self.assertEqual(file.exists(), task["status"] in ("pending", "waiting"))
+
+    def test_actual_current_source_can_reuse_a_deleted_header_uuid(self):
+        rows, scopes, sources = self.generate()
+        first, _ = pv.plan(rows, scopes, [], NOW)
+        old = stored(first)
+        old[0].update(status="deleted", uuid="12345678-1234-4234-8234-123456789abc")
+        rows, scopes = pv.build_rows(self.snap, old, github(), NOW)
+        pv.source_status(rows, scopes, old, self.snap, github(), NOW, {"sources": sources})
+        changed, _ = pv.plan(rows, scopes, old, NOW)
+        self.assertEqual(len(changed), 1)
+        self.assertEqual(changed[0]["uuid"], old[0]["uuid"])
+        self.assertEqual(changed[0]["status"], "pending")
+
+    def test_repeated_github_outages_keep_the_displayed_linear_snapshot_time(self):
+        rows, scopes, sources = self.generate()
+        first, _ = pv.plan(rows, scopes, [], NOW)
+        old = stored(first)
+        for minutes in (10, 20, 30):
+            later = NOW + timedelta(minutes=minutes)
+            snap = copy.deepcopy(self.snap)
+            snap["projects"]["p1"]["issues"][0]["title"] = f"Withheld newer title at {minutes}"
+            rows, scopes = pv.build_rows(snap, old, None, later)
+            sources = pv.source_status(rows, scopes, old, snap, None, later, {"sources": sources})
+            text = rows["standing:p1"]["annotations"][-1]
+            self.assertIn("Current release checks", text)
+            self.assertNotIn("Withheld newer title", text)
+            self.assertIn("Linear last verified: " + NOW.isoformat(), text)
+            self.assertIn("GitHub last verified: " + NOW.isoformat(), text)
+            self.assertNotIn(later.isoformat(), text)
+            self.assertEqual(sources["projects"]["p1"], NOW.isoformat())
+            self.assertEqual(sources["github_projects"]["p1"], NOW.isoformat())
+            changed, _ = pv.plan(rows, scopes, old, later)
+            if minutes == 10:
+                self.assertEqual(len(changed), 1)
+                old = stored(changed)
+            else:
+                self.assertEqual(changed, [])
+
+    def test_retained_github_snapshot_is_per_project_during_partial_failure(self):
+        a = self.snap["projects"]["p1"]
+        b = project("p2", "Other project", [issue("DOC-2", title="Other work")])
+        snap = snapshot([a, b])
+        rows, scopes = pv.build_rows(snap, [], github(), NOW)
+        sources = pv.source_status(rows, scopes, [], snap, github(), NOW, {})
+        first, _ = pv.plan(rows, scopes, [], NOW)
+        old = stored(first)
+        later = NOW + timedelta(minutes=10)
+        partial = snapshot([b])
+        partial.update(wanted=["p1", "p2"], failures=["project p1 unavailable"])
+        rows, scopes = pv.build_rows(partial, old, github(), later)
+        sources = pv.source_status(rows, scopes, old, partial, github(), later, {"sources": sources})
+        changed, _ = pv.plan(rows, scopes, old, later)
+        old = stored(changed)
+        self.assertEqual(sources["github_projects"], {"p1": NOW.isoformat(), "p2": later.isoformat()})
+        final = NOW + timedelta(minutes=20)
+        rows, scopes = pv.build_rows(snap, old, None, final)
+        pv.source_status(rows, scopes, old, snap, None, final, {"sources": sources})
+        self.assertIn("GitHub last verified: " + NOW.isoformat(), rows["standing:p1"]["annotations"][-1])
+        self.assertIn("GitHub last verified: " + later.isoformat(), rows["standing:p2"]["annotations"][-1])
+
+    def test_dated_source_snapshots_expose_stopped_timer_and_same_time_is_idempotent(self):
+        rows, scopes, sources = self.generate()
+        first, _ = pv.plan(rows, scopes, [], NOW)
+        old = stored(first)
+        text = rows["standing:p1"]["annotations"][-1]
+        self.assertIn("Linear last verified: " + NOW.isoformat(), text)
+        self.assertIn("GitHub last verified: " + NOW.isoformat(), text)
+        self.assertIn("Expected refresh: every 10 minutes", text)
+        self.assertIn("times stop advancing", text)
+        same_rows, same_scopes, _ = self.generate(tasks=old, previous={"sources": sources})
+        self.assertEqual(pv.plan(same_rows, same_scopes, old, NOW)[0], [])
+        next_rows, next_scopes, _ = self.generate(tasks=old, previous={"sources": sources},
+                                                 when=NOW + timedelta(minutes=10))
+        self.assertEqual(len(pv.plan(next_rows, next_scopes, old, NOW + timedelta(minutes=10))[0]), 1)
+
+    def test_history_source_failure_preserves_old_done_in_partial_and_total_failure(self):
+        self.snap["projects"]["p1"]["issues"].append(
+            issue("DEVOPS-50", "Done", "completed", title="Completed release milestone", completed=90))
+        rows, scopes, sources = self.generate()
+        headers, _ = pv.plan(rows, scopes, [], NOW)
+        old = stored(headers)
+        for total in (False, True):
+            snap = {"projects": {}, "assigned": None if total else [], "wanted": ["p1"],
+                    "failures": ["history source failed"]}
+            rows, scopes = pv.build_rows(snap, old, None if total else github(), NOW)
+            pv.source_status(rows, scopes, old, snap, None if total else github(), NOW, {"sources": sources})
+            text = rows["standing:p1"]["annotations"][-1]
+            self.assertIn("DEVOPS-50 Completed release milestone", text)
+            self.assertIn("Linear completed 2026-08-13", text)
+            self.assertIn("Prior context retained", text)
+
+    def test_reference_lookup_failure_retains_project_that_discovery_could_not_repeat(self):
+        rows, scopes, sources = self.generate()
+        headers, _ = pv.plan(rows, scopes, [], NOW)
+        old = stored(headers) + [handoff(view_project="release-pipeline")]
+        self.state.mkdir()
+        (self.state / "last-run.json").write_text(json.dumps({"at": NOW.isoformat(), "sources": sources}))
+        self.main_patches(old)
+        failed_snap = {"projects": {}, "assigned": [], "wanted": [], "failures": ["references unavailable"],
+                       "reference_failure": True}
+        with mock.patch.object(pv, "read_linear", return_value=failed_snap), mock.patch.object(pv, "apply") as apply:
+            self.assertEqual(pv.main([]), 0)
+        payload = apply.call_args.args[0]
+        self.assertEqual(len(payload), 1)
+        self.assertEqual(payload[0]["status"], "pending")
+        self.assertIn("Linear handoff ownership unavailable", payload[0]["annotations"][-1]["description"])
+
+    def test_repeated_source_failure_does_not_advance_last_success(self):
+        self.state.mkdir()
+        previous = NOW - timedelta(hours=2)
+        (self.state / "last-run.json").write_text(json.dumps({"at": previous.isoformat()}))
+        self.main_patches()
+        with mock.patch.object(pv, "read_linear", side_effect=RuntimeError("offline")), mock.patch.object(pv, "apply"):
+            self.assertEqual(pv.main([]), 1)
+        result = json.loads((self.state / "last-run.json").read_text())
+        self.assertEqual(result["last_success_at"], previous.isoformat())
+        self.assertNotEqual(result["at"], result["last_success_at"])
 
     def setUp(self):
-        self.state = tempfile.TemporaryDirectory(prefix="project-view-state-")
-        self.addCleanup(self.state.cleanup)
-        patch = mock.patch.object(pv, "STATE_DIR", Path(self.state.name))
-        patch.start()
-        self.addCleanup(patch.stop)
+        folder = tempfile.TemporaryDirectory(prefix="project-view-")
+        self.addCleanup(folder.cleanup)
+        self.root = Path(folder.name)
+        self.state, self.briefs = self.root / "state", self.root / "briefs"
+        for patch in (mock.patch.object(pv, "STATE_DIR", self.state),
+                      mock.patch.object(pv, "BRIEFS_DIR", self.briefs)):
+            patch.start()
+            self.addCleanup(patch.stop)
+        self.snap = snapshot([project(issues=[issue("DEVOPS-1", title="Current release checks")])])
+        self.gh = github()
 
-    def last_run(self, minutes_ago):
-        (Path(self.state.name) / "last-run.json").write_text(
-            json.dumps({"at": (NOW - timedelta(minutes=minutes_ago)).isoformat()}))
+    def generate(self, snap=None, tasks=(), gh=None, previous=None, when=NOW):
+        snap = self.snap if snap is None else snap
+        gh = self.gh if gh is None else gh
+        rows, scopes = pv.build_rows(snap, list(tasks), gh, when)
+        sources = pv.source_status(rows, scopes, list(tasks), snap, gh, when, previous or {})
+        return rows, scopes, sources
 
-    def test_a_fresh_view_warns_and_passes(self):
-        self.last_run(20)
-        with mock.patch("sys.stderr") as err:
-            self.assertEqual(pv.failed(RuntimeError("Linear timed out"), NOW), 0)
-        self.assertIn("WARN Linear timed out", "".join(c.args[0] for c in err.write.call_args_list))
+    def test_successful_unchanged_snapshot_does_not_rewrite_tasks_or_files(self):
+        rows, scopes, sources = self.generate()
+        first, _ = pv.plan(rows, scopes, [], NOW)
+        old = stored(first)
+        pv.publish_contexts(rows, old)
+        path = self.briefs / first[0]["uuid"] / "project-status.md"
+        inode = path.stat().st_ino
+        later = NOW  # Same observation time and source content are idempotent.
+        rows, scopes, _ = self.generate(tasks=old, previous={"sources": sources}, when=later)
+        again, _ = pv.plan(rows, scopes, old, later)
+        self.assertEqual(again, [])
+        pv.publish_contexts(rows, old)
+        self.assertEqual(path.stat().st_ino, inode)
 
-    def test_a_stale_or_never_refreshed_view_fails(self):
-        with mock.patch("sys.stderr"):
-            self.assertEqual(pv.failed(RuntimeError("no key"), NOW), 1)
-            self.last_run(61)
-            self.assertEqual(pv.failed(RuntimeError("no key"), NOW), 1)
+    def test_failed_project_or_github_retains_context_with_stable_source_age(self):
+        rows, scopes, sources = self.generate()
+        first, _ = pv.plan(rows, scopes, [], NOW)
+        old = stored(first)
+        prior = {"sources": sources}
+        for fail in ("project", "github", "assigned"):
+            snap = copy.deepcopy(self.snap)
+            gh = self.gh
+            if fail == "project":
+                snap["projects"] = {}
+                snap["failures"] = ["project p1 unavailable"]
+            elif fail == "github":
+                gh = None
+                snap["projects"]["p1"]["issues"][0]["title"] = "New partial title"
+            else:
+                snap["assigned"] = None
+            current, current_scopes = pv.build_rows(snap, old, gh, NOW + timedelta(minutes=10))
+            pv.source_status(current, current_scopes, old, snap, gh, NOW + timedelta(minutes=10), prior)
+            brief = current["standing:p1"]["annotations"][-1]
+            self.assertIn("Current release checks", brief)
+            self.assertNotIn("New partial title", brief)
+            self.assertIn("unavailable", brief)
+            self.assertIn(NOW.isoformat(), brief)
+            stale, _ = pv.plan(current, current_scopes, old, NOW + timedelta(minutes=10))
+            again, _ = pv.plan(current, current_scopes, stored(stale), NOW + timedelta(minutes=20))
+            self.assertEqual(again, [])
+
+    def test_new_project_without_github_states_says_unknown(self):
+        rows, scopes = pv.build_rows(self.snap, [], None, NOW)
+        pv.source_status(rows, scopes, [], self.snap, None, NOW, {})
+        text = rows["standing:p1"]["annotations"][-1]
+        self.assertIn("Current PR and review states are unknown", text)
+        self.assertIn("GitHub last verified: unknown", text)
+
+    def test_atomic_publication_matches_brief_and_uses_existing_uuid(self):
+        rows, scopes, _ = self.generate()
+        first, _ = pv.plan(rows, scopes, [], NOW)
+        old = stored(first)
+        old[0]["uuid"] = str(uuid.uuid4())
+        with mock.patch.object(pv.os, "replace", wraps=os.replace) as replace:
+            pv.publish_contexts(rows, old)
+        path = self.briefs / old[0]["uuid"] / "project-status.md"
+        self.assertEqual(path.read_text(), rows["standing:p1"]["annotations"][-1][7:])
+        replace.assert_called_once()
+        self.assertEqual(replace.call_args.args[0].parent, path.parent)
+        self.assertEqual(list(path.parent.iterdir()), [path])
+
+    def test_atomic_replace_failure_keeps_old_file_and_cleans_temp(self):
+        rows, _, _ = self.generate()
+        pv.publish_contexts(rows, [])
+        path = self.briefs / pv.row_uuid("standing:p1") / "project-status.md"
+        old = path.read_text()
+        rows["standing:p1"]["annotations"][-1] = "brief: Changed\n"
+        with mock.patch.object(pv.os, "replace", side_effect=OSError("disk full")):
+            with self.assertRaises(OSError):
+                pv.publish_contexts(rows, [])
+        self.assertEqual(path.read_text(), old)
+        self.assertEqual(list(path.parent.iterdir()), [path])
+
+    def test_symlink_and_invalid_uuid_paths_are_rejected(self):
+        rows, _, _ = self.generate()
+        target = self.root / "outside"
+        target.mkdir()
+        self.briefs.symlink_to(target, target_is_directory=True)
+        with self.assertRaises(OSError):
+            pv.publish_contexts(rows, [])
+        self.assertEqual(list(target.iterdir()), [])
+        self.briefs.unlink()
+        with self.assertRaises(ValueError):
+            pv.publish_contexts(rows, [{"view_key": "standing:p1", "uuid": "../outside"}])
+
+    def main_patches(self, tasks=()):
+        patches = [mock.patch.object(pv, "linear_key", return_value="fixture"),
+                   mock.patch.object(pv, "read_linear", return_value=self.snap),
+                   mock.patch.object(pv, "read_github", return_value=self.gh),
+                   mock.patch.object(pv, "task_json", return_value=list(tasks)),
+                   mock.patch.object(pv, "datetime", wraps=datetime),
+                   mock.patch("sys.stdout"), mock.patch("sys.stderr")]
+        result = []
+        for patch in patches:
+            result.append(patch.start())
+            self.addCleanup(patch.stop)
+        result[4].now.return_value = NOW
+        return result
+
+    def test_dry_run_does_not_write_files_import_or_use_per_task_commands(self):
+        patches = self.main_patches([handoff()])
+        with mock.patch.object(pv, "apply") as apply, mock.patch.object(pv, "publish_contexts") as publish, \
+                mock.patch.object(pv, "write_state") as write:
+            self.assertEqual(pv.main(["--dry-run"]), 0)
+        apply.assert_not_called()
+        publish.assert_not_called()
+        write.assert_not_called()
+        patches[3].assert_called_once()
+        self.assertEqual(list(self.root.iterdir()), [])
+
+    def test_import_failure_does_not_publish_files_or_advance_state(self):
+        rows, _, _ = self.generate()
+        pv.publish_contexts(rows, [])
+        path = self.briefs / pv.row_uuid("standing:p1") / "project-status.md"
+        original = path.read_text()
+        self.main_patches()
+        with mock.patch.object(pv, "apply", side_effect=RuntimeError("import failed")), \
+                mock.patch.object(pv, "publish_contexts") as publish, mock.patch.object(pv, "write_state") as state:
+            self.assertEqual(pv.main([]), 1)
+        self.assertEqual(path.read_text(), original)
+        publish.assert_not_called()
+        state.assert_not_called()
+
+    def test_main_imports_header_and_association_together_before_publication(self):
+        patches = self.main_patches([handoff()])
+        events = []
+        with mock.patch.object(pv, "apply", side_effect=lambda payload: events.append(("import", payload))), \
+                mock.patch.object(pv, "publish_contexts", side_effect=lambda *args: events.append(("publish", args))):
+            self.assertEqual(pv.main([]), 0)
+        self.assertEqual([e[0] for e in events], ["import", "publish"])
+        self.assertEqual(len(events[0][1]), 2)
+        self.assertEqual(events[0][1][1]["view_project"], "release-pipeline")
+        patches[3].assert_called_once()
+        self.assertTrue((self.state / "last-run.json").is_file())
+
+    def test_total_linear_failure_preserves_headers_and_association(self):
+        rows, scopes, sources = self.generate()
+        headers, _ = pv.plan(rows, scopes, [], NOW)
+        tasks = stored(headers) + [handoff(view_project="release-pipeline")]
+        self.state.mkdir()
+        (self.state / "last-run.json").write_text(json.dumps({"at": NOW.isoformat(), "sources": sources}))
+        self.main_patches(tasks)
+        with mock.patch.object(pv, "read_linear", side_effect=RuntimeError("offline")), \
+                mock.patch.object(pv, "apply") as apply:
+            self.assertEqual(pv.main([]), 0)
+        payload = apply.call_args.args[0]
+        self.assertEqual(len(payload), 1)
+        self.assertEqual(payload[0]["uuid"], headers[0]["uuid"])
+        self.assertIn("Current release checks", payload[0]["annotations"][-1]["description"])
+        self.assertIn("Linear project unavailable", payload[0]["annotations"][-1]["description"])
+
+
+class SourcePaginationTests(unittest.TestCase):
+    def test_failed_attached_pr_batch_is_bisected_and_healthy_refs_survive(self):
+        refs = {f"loft-sh/tool#{n}" for n in range(1, 9)}
+        unavailable = "loft-sh/tool#3"
+        def reply(query):
+            found = re.findall(r'p(\d+): repository\(owner: "([^"]+)", name: "([^"]+)"\) '
+                               r'\{ pullRequest\(number: (\d+)\)', query)
+            names = {f"{owner}/{repo}#{number}" for _, owner, repo, number in found}
+            if unavailable in names:
+                raise RuntimeError("repository unavailable")
+            return {f"p{alias}": {"pullRequest": pr(f"{owner}/{repo}#{number}")}
+                    for alias, owner, repo, number in found}
+        with mock.patch.object(pv, "gh_graphql", side_effect=reply) as query:
+            prs, missing = pv.read_attached_prs(refs)
+        self.assertEqual(set(prs), refs - {unavailable})
+        self.assertEqual(missing, {unavailable})
+        self.assertEqual(query.call_count, 7)
+
+    def test_failed_attached_pr_queries_have_a_finite_per_chunk_bound(self):
+        refs = {f"loft-sh/tool#{n}" for n in range(1, 7)}
+        with mock.patch.object(pv, "gh_graphql", side_effect=RuntimeError("unavailable")) as query, \
+                mock.patch.object(pv, "GH_CHUNK", 4):
+            prs, missing = pv.read_attached_prs(refs)
+        self.assertEqual(prs, {})
+        self.assertEqual(missing, refs)
+        self.assertEqual(query.call_count, (2 * 4 - 1) + (2 * 2 - 1))
+
+    def test_null_or_incomplete_attached_pr_reply_remains_unknown(self):
+        refs = ["loft-sh/tool#1", "loft-sh/tool#2", "loft-sh/tool#3"]
+        incomplete = pr(refs[1], state="MERGED", merged=1)
+        incomplete["reviewRequests"]["pageInfo"]["hasNextPage"] = True
+        data = {"p0": None, "p1": {"pullRequest": incomplete}, "p2": {"pullRequest": pr(refs[2])}}
+        with mock.patch.object(pv, "gh_graphql", return_value=data) as query:
+            prs, missing = pv.read_attached_prs(set(refs))
+        self.assertEqual(set(prs), {refs[2]})
+        self.assertEqual(missing, set(refs[:2]))
+        query.assert_called_once()
+
+    def test_global_viewer_or_own_pr_failure_still_fails_the_whole_github_source(self):
+        for replies in ([RuntimeError("viewer unavailable")],
+                        [{"viewer": {"login": "Piotr"}}, RuntimeError("own PRs unavailable")]):
+            with mock.patch.object(pv, "gh_graphql", side_effect=replies), \
+                    mock.patch.object(pv, "read_attached_prs") as attached:
+                with self.assertRaises(RuntimeError):
+                    pv.read_github({"loft-sh/tool#1"})
+            attached.assert_not_called()
+
+    def test_another_workspace_url_cannot_discover_or_claim_an_own_workspace_project(self):
+        client = pv.Linear("fixture")
+        own_issue = assigned("DEVOPS-50", "p3", "Own project")
+        task = handoff(None, description="https://linear.app/another/issue/DEVOPS-50/title")
+        with mock.patch.object(client, "pages", return_value=iter([])), \
+                mock.patch.object(client, "query", return_value={"i0": own_issue}), \
+                mock.patch.object(pv, "read_project") as read:
+            snap = pv.read_linear(client, [task])
+        self.assertEqual(snap["referenced"], [])
+        self.assertEqual(snap["projects"], {})
+        read.assert_not_called()
+
+    def test_older_exact_handoff_reference_brings_its_project_into_the_same_refresh(self):
+        client = pv.Linear("fixture")
+        old = assigned("DEVOPS-50", "p3", "Historical release")
+        old["state"] = {"name": "Done", "type": "completed"}
+        linked = project("p3", "Historical release", [], led=False, update_days=500)
+        task = handoff("DEVOPS-50")
+        with mock.patch.object(client, "pages", return_value=iter([])), \
+                mock.patch.object(client, "query", return_value={"i0": old}) as query, \
+                mock.patch.object(pv, "read_project", return_value=linked) as read_project:
+            snap = pv.read_linear(client, [task])
+        self.assertEqual(snap["wanted"], ["p3"])
+        self.assertEqual(snap["referenced"], [old])
+        read_project.assert_called_once_with(client, "p3")
+        self.assertIn('issue(id: "DEVOPS-50")', query.call_args.args[0])
+        changes, resolved = pv.association_plan(snap, [task])
+        self.assertEqual(changes[0]["view_project"], "historical-release")
+        rows, _ = pv.build_rows(snap, resolved, github(), NOW)
+        self.assertIn("standing:p3", rows)
+
+    def test_reference_query_failure_preserves_metadata_without_guessing_from_prose(self):
+        client = pv.Linear("fixture")
+        task = handoff("DEVOPS-50", view_project="release-pipeline")
+        with mock.patch.object(client, "pages", return_value=iter([])), \
+                mock.patch.object(client, "query", side_effect=RuntimeError("offline")), mock.patch("sys.stderr"):
+            snap = pv.read_linear(client, [task])
+        self.assertTrue(snap["reference_failure"])
+        self.assertEqual(pv.association_plan(snap, [task]), ([], [task]))
+        prose = handoff(None, description="DEVOPS-50 relates to this release")
+        with mock.patch.object(client, "query") as query:
+            self.assertEqual(pv.read_referenced(client, pv.referenced_identifiers([prose])), [])
+        query.assert_not_called()
+
+    def test_reference_queries_are_batched_and_bounded(self):
+        client = pv.Linear("fixture")
+        with mock.patch.object(client, "query", return_value={}) as query:
+            self.assertEqual(pv.read_referenced(client, {f"DEVOPS-{n}" for n in range(26)}), [])
+        self.assertEqual(query.call_count, 2)
+        self.assertEqual(query.call_args_list[0].args[0].count("issue(id:"), 25)
+        with self.assertRaisesRegex(RuntimeError, "more than 200"):
+            pv.read_referenced(client, {f"DEVOPS-{n}" for n in range(201)})
+
+    def test_completed_history_failure_is_a_project_failure_not_empty_done(self):
+        client = pv.Linear("fixture")
+        first = {"project": {**project(), "issues": {"nodes": [],
+                 "pageInfo": {"hasNextPage": False, "endCursor": None}}}}
+        with mock.patch.object(client, "query", side_effect=[first, RuntimeError("history offline")]), \
+                mock.patch.object(client, "pages", return_value=iter([])):
+            with self.assertRaisesRegex(RuntimeError, "history offline"):
+                pv.read_project(client, "p1")
+
+    def test_linear_pages_fail_on_incomplete_read_or_missing_cursor(self):
+        client = pv.Linear("fixture")
+        page = {"nodes": [{"id": "one"}], "pageInfo": {"hasNextPage": True, "endCursor": "one"}}
+        with mock.patch.object(client, "query", return_value={"projects": page}), mock.patch.object(pv, "PAGES", 2):
+            with self.assertRaisesRegex(RuntimeError, "more than 2 pages"):
+                list(client.pages("query", ["projects"]))
+
+    def test_project_issues_and_milestones_are_both_paginated(self):
+        client = pv.Linear("fixture")
+        fields = project()
+        fields.pop("issues")
+        fields.pop("milestones")
+        first = {"project": {**fields, "issues": {"nodes": [issue("DEVOPS-1")],
+                 "pageInfo": {"hasNextPage": True, "endCursor": "issues-1"}}}}
+        second = {"project": {**fields, "issues": {"nodes": [issue("DEVOPS-2")],
+                  "pageInfo": {"hasNextPage": False, "endCursor": None}}}}
+        milestones = [{"project": {"projectMilestones": {"nodes": [{"id": "m1", "name": "Pilot"}],
+                       "pageInfo": {"hasNextPage": True, "endCursor": "milestone-1"}}}},
+                      {"project": {"projectMilestones": {"nodes": [{"id": "m2", "name": "Release"}],
+                       "pageInfo": {"hasNextPage": False, "endCursor": None}}}}]
+        history = {"project": {"issues": {"nodes": [issue("DEVOPS-0", "Done", "completed", completed=60)],
+                   "pageInfo": {"hasNextPage": False, "endCursor": None}}}}
+        with mock.patch.object(client, "query", side_effect=[first, second, *milestones, history]) as query:
+            result = pv.read_project(client, "p1")
+        self.assertEqual([i["identifier"] for i in result["issues"]], ["DEVOPS-1", "DEVOPS-2", "DEVOPS-0"])
+        self.assertEqual([m["name"] for m in result["milestones"]], ["Pilot", "Release"])
+        self.assertEqual(query.call_args_list[1].args[1]["after"], "issues-1")
+        self.assertEqual(query.call_args_list[3].args[1]["after"], "milestone-1")
+        self.assertFalse(result["history_truncated"])
+        self.assertIn('orderBy: updatedAt, includeArchived: true', query.call_args.args[0])
+        self.assertEqual(query.call_args.args[1], {"id": "p1", "after": None})
+
+    def test_issue_queries_limit_outer_pages_without_reducing_nested_completeness(self):
+        self.assertIn("issues(first: 20, after: $after", pv.Q_PROJECT)
+        self.assertIn("issues(first: 20, after: $after", pv.Q_COMPLETED)
+        for query in (pv.Q_PROJECT, pv.Q_COMPLETED):
+            self.assertIn("attachments(first: 100)", query)
+            self.assertIn("inverseRelations(first: 100)", query)
+            self.assertIn("pageInfo { hasNextPage endCursor }", query)
+        self.assertEqual(pv.PROJECT_ISSUE_PAGES * pv.ISSUE_PAGE_SIZE, 500)
+        self.assertEqual(pv.HISTORY_PAGES * pv.ISSUE_PAGE_SIZE, 100)
+        self.assertEqual(pv.PAGES, 10)
+
+    def test_completed_history_reads_five_pages_preserves_order_and_marks_limit(self):
+        client = pv.Linear("fixture")
+        for more_history in (False, True):
+            with self.subTest(more_history=more_history):
+                replies = []
+                for page in range(5):
+                    items = [issue(f"DEVOPS-{page * 20 + n}", "Done", "completed", completed=page * 20 + n)
+                             for n in range(1, 21)]
+                    replies.append({"project": {"issues": {"nodes": items, "pageInfo": {
+                        "hasNextPage": page < 4 or more_history, "endCursor": f"history-{page + 1}"}}}})
+                with mock.patch.object(client, "query", side_effect=replies) as query:
+                    history, truncated = pv.read_completed(client, "p1")
+                self.assertEqual(len(history), 100)
+                self.assertEqual([i["identifier"] for i in history], [f"DEVOPS-{n}" for n in range(1, 101)])
+                self.assertEqual(truncated, more_history)
+                self.assertEqual(query.call_count, 5)
+                self.assertEqual([c.args[1]["after"] for c in query.call_args_list],
+                                 [None, "history-1", "history-2", "history-3", "history-4"])
+
+    def test_current_project_issues_keep_all_500_with_25_small_pages(self):
+        client = pv.Linear("fixture")
+        replies = []
+        for page in range(25):
+            items = [issue(f"DEVOPS-{page * 20 + n}") for n in range(1, 21)]
+            replies.append({"project": {**project(), "issues": {"nodes": items, "pageInfo": {
+                "hasNextPage": page < 24, "endCursor": f"current-{page + 1}"}}}})
+        with mock.patch.object(client, "query", side_effect=replies) as query, \
+                mock.patch.object(client, "pages", return_value=iter([])), \
+                mock.patch.object(pv, "read_completed", return_value=([], False)):
+            result = pv.read_project(client, "p1")
+        self.assertEqual(len(result["issues"]), 500)
+        self.assertEqual(result["issues"][-1]["identifier"], "DEVOPS-500")
+        self.assertEqual(query.call_count, 25)
+        self.assertEqual(query.call_args.args[1]["after"], "current-24")
+
+    def test_more_than_500_current_issues_fails_without_silently_truncating(self):
+        client = pv.Linear("fixture")
+        replies = [{"project": {**project(), "issues": {
+            "nodes": [issue(f"DEVOPS-{page * 20 + n}") for n in range(1, 21)],
+            "pageInfo": {"hasNextPage": True, "endCursor": f"current-{page + 1}"}}}}
+            for page in range(25)]
+        with mock.patch.object(client, "query", side_effect=replies) as query:
+            with self.assertRaisesRegex(RuntimeError, "more than 500 current project issues"):
+                pv.read_project(client, "p1")
+        self.assertEqual(query.call_count, 25)
+
+    def test_incomplete_issue_pages_need_valid_new_cursors(self):
+        client = pv.Linear("fixture")
+        for source in ("current", "history"):
+            for cursor in (None, "", "repeat"):
+                with self.subTest(source=source, cursor=cursor):
+                    def reply(value):
+                        connection = {"nodes": [issue("DEVOPS-1")],
+                                      "pageInfo": {"hasNextPage": True, "endCursor": value}}
+                        if value is None:
+                            connection["pageInfo"].pop("endCursor")
+                        return {"project": {**project(), "issues": connection}}
+                    replies = [reply(cursor)] * (2 if cursor == "repeat" else 1)
+                    with mock.patch.object(client, "query", side_effect=replies) as query:
+                        with self.assertRaisesRegex(RuntimeError, "pagination cursor missing or repeated"):
+                            (pv.read_project if source == "current" else pv.read_completed)(client, "p1")
+                    self.assertEqual(query.call_count, len(replies))
+
+    def test_interrupted_history_page_does_not_return_a_partial_completion_list(self):
+        client = pv.Linear("fixture")
+        first = {"project": {"issues": {"nodes": [issue("DEVOPS-1", "Done", "completed", completed=1)],
+                 "pageInfo": {"hasNextPage": True, "endCursor": "next"}}}}
+        with mock.patch.object(client, "query", side_effect=[first, RuntimeError("history page unavailable")]):
+            with self.assertRaisesRegex(RuntimeError, "history page unavailable"):
+                pv.read_completed(client, "p1")
+
+    def test_truncated_attachment_or_blocker_connection_fails_closed(self):
+        client = pv.Linear("fixture")
+        item = issue("DEVOPS-1")
+        item["attachments"]["pageInfo"] = {"hasNextPage": True}
+        value = {"project": {**project(), "issues": {"nodes": [item],
+                 "pageInfo": {"hasNextPage": False, "endCursor": None}}}}
+        with mock.patch.object(client, "query", return_value=value):
+            with self.assertRaisesRegex(RuntimeError, "more than 100 attachments"):
+                pv.read_project(client, "p1")
+
+    def test_github_partial_errors_cannot_establish_ownership(self):
+        reply = mock.Mock(returncode=0, stdout=json.dumps({"data": {"p1": None}, "errors": [{"message": "denied"}]}),
+                          stderr="")
+        with mock.patch.object(pv.subprocess, "run", return_value=reply):
+            with self.assertRaises(RuntimeError):
+                pv.gh_graphql("query")
+
+    def test_github_own_prs_paginate_and_attachment_reads_stay_batched(self):
+        closed_page = {"pageInfo": {"hasNextPage": False, "endCursor": None}, "nodes": []}
+        a, b = pr("loft-sh/tool#1"), pr("loft-sh/tool#2")
+        own1 = {"viewer": {"pullRequests": {"nodes": [a],
+                "pageInfo": {"hasNextPage": True, "endCursor": "next"}}}}
+        own2 = {"viewer": {"pullRequests": {"nodes": [b],
+                "pageInfo": {"hasNextPage": False, "endCursor": None}}}}
+        refs = [f"loft-sh/tool#{n}" for n in range(3, 6)]
+        attached = {f"p{i}": {"pullRequest": {**pr(ref), "reviewRequests": closed_page}}
+                    for i, ref in enumerate(refs)}
+        replies = [{"viewer": {"login": "Piotr"}}, own1, own2,
+                   {"o0": {"login": "loft-sh", "teams": closed_page}}, attached]
+        with mock.patch.object(pv, "gh_graphql", side_effect=replies) as query:
+            result = pv.read_github(set(refs))
+        self.assertEqual(set(result["mine"]), {"loft-sh/tool#1", "loft-sh/tool#2"})
+        self.assertEqual(set(result["prs"]), set(refs))
+        self.assertEqual(query.call_count, 5)
+        self.assertIn('after: "next"', query.call_args_list[2].args[0])
+        self.assertEqual(query.call_args.args[0].count("pullRequest(number:"), 3)
 
 
 @unittest.skipUnless(shutil.which("task"), "task is not installed")
-class TaskwarriorTests(unittest.TestCase):
-    """The rows round-trip through a real Taskwarrior and the report shows them."""
+class TaskwarriorRoundtripTests(unittest.TestCase):
+    def test_unresolved_marker_survives_plain_export_with_native_project_intact(self):
+        original = handoff("DEVOPS-999", project="release-pipeline")
+        pv.apply([original])
+        snap = snapshot([project(issues=[issue("DEVOPS-1")])])
+        changes, _ = pv.association_plan(snap, self.plain_export())
+        self.assertEqual(changes[0]["view_project"], "!unassigned")
+        pv.apply(changes)
+        exported = self.plain_export()[0]
+        self.assertEqual(exported["view_project"], "!unassigned")
+        self.assertEqual(exported["project"], "release-pipeline")
+        self.assertEqual(exported["uuid"], original["uuid"])
 
     def setUp(self):
-        self.data = tempfile.TemporaryDirectory(prefix="task-project-view-")
-        self.addCleanup(self.data.cleanup)
-        rc = Path(self.data.name) / "taskrc"
-        rc.write_text(f"include {REPO / '.taskrc'}\ndata.location={self.data.name}\n"
-                      "hooks=off\nconfirmation=off\nrecurrence=off\ncolor=off\n")
-        self.env = {**os.environ, "TASKRC": str(rc), "TASKDATA": self.data.name}
-        patches = [mock.patch.object(pv, "TASK_CMD", ["task", f"rc.data.location={self.data.name}"]),
-                   mock.patch.dict(os.environ, {"TASKRC": str(rc), "TASKDATA": self.data.name})]
-        for patch in patches:
+        folder = tempfile.TemporaryDirectory(prefix="project-view-task-")
+        self.addCleanup(folder.cleanup)
+        root = Path(folder.name)
+        self.rc = root / "taskrc"
+        self.data = root / "data"
+        self.data.mkdir()
+        self.rc.write_text(f"data.location={self.data}\nhooks=off\nconfirmation=off\n"
+                           "recurrence=off\ncolor=off\nnews.version=3.3.0\n")
+        for patch in (mock.patch.dict(os.environ, {"TASKRC": str(self.rc), "TASKDATA": str(self.data)}),
+                      mock.patch.object(pv, "TASK_CMD", ["task", f"rc.data.location={self.data}"])):
             patch.start()
             self.addCleanup(patch.stop)
 
-    def task(self, *args):
-        result = subprocess.run(["task", f"rc.data.location={self.data.name}", "rc.hooks=off",
-                                 "rc.confirmation=off", "rc.verbose=nothing", "rc.defaultwidth=250", *args],
-                                env=self.env, stdin=subprocess.DEVNULL, capture_output=True, text=True,
-                                timeout=20, check=False)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        return result.stdout
+    def plain_export(self):
+        reply = subprocess.run(["task", "rc.hooks=off", "rc.confirmation=off", "rc.verbose=nothing", "export"],
+                               capture_output=True, text=True, timeout=20, check=False)
+        self.assertEqual(reply.returncode, 0, reply.stderr)
+        return json.loads(reply.stdout)
 
-    def test_report_lists_own_work_then_view_rows_and_reruns_are_quiet(self):
-        project_name = "ci-infrastructure-improvements"
-        self.task("rc.context=none", "add", "+work", f"project:{project_name}", "linear_issue_id:DEVOPS-1872",
-                  "parallel job steps")
-        self.task("rc.context=none", "add", "+work", "+piotr", f"project:{project_name}",
-                  "linear_issue_id:DEVOPS-1828", "a handoff row")
-        self.task("rc.context=none", "add", "+work", "project:talks", "not linear work")
-        self.task("rc.context=none", "add", "+work", "+backlog", f"project:{project_name}",
-                  "linear_issue_id:DEVOPS-1797", "compare runner costs")
-        self.task("rc.context=none", "add", "+work", "+gordon", "linear_issue_id:DEVOPS-9", "gordon job")
-        proj = project("p1", "CI infrastructure improvements",
-                       [issue("DEVOPS-1872", "In Progress", "started", "Piotr Zaniewski", True)])
-        snap = snapshot([proj], [assigned("DEVOPS-1879", "CI infrastructure improvements", "p1")])
-        tasks = pv.task_json("(", "status:pending", "or", "status:waiting", ")")
-        rows, scopes = pv.build_rows(snap, tasks, github(), NOW)
-        payload, changes = pv.plan(rows, scopes, pv.task_json("+view"), NOW)
-        self.assertEqual(len(changes["add"]), 2)
-        pv.apply(payload)
+    def test_grouping_and_arbitrary_metadata_survive_plain_export_without_uda_config(self):
+        original = handoff(due="20261201T000000Z", custom="keep this")
+        pv.apply([original])
+        snap = snapshot([project(issues=[issue("DEVOPS-1")])])
+        changes, _ = pv.association_plan(snap, self.plain_export())
+        self.assertEqual(len(changes), 1)
+        pv.apply(changes)
+        exported = self.plain_export()[0]
+        self.assertEqual(exported["view_project"], "release-pipeline")
+        for key in ("uuid", "project", "entry", "due", "priority", "tags", "annotations", "custom"):
+            self.assertEqual(exported[key], original[key])
+        self.assertNotIn("uda.view_project", self.rc.read_text())
 
-        report = self.task("rc.context=none", "myprojects")
-        lines = [line for line in report.splitlines() if line.strip()]
-        body = [line for line in lines if project_name[:10] in line]
-        self.assertEqual(len(body), 3, report)
-        self.assertIn("parallel job steps", body[0])
-        self.assertIn("no task · DEVOPS-1879", body[1])
-        self.assertIn("standing · on track, updated today", body[2])
-        self.assertIn("my backlog: 1 · 1 handoff", body[2])
-        for hidden in ("a handoff row", "not linear work", "gordon job", "compare runner costs"):
-            self.assertNotIn(hidden, report)
-        self.assertNotIn("standing", self.task("rc.context=work", "inbox"))
-
-        tasks = pv.task_json("(", "status:pending", "or", "status:waiting", ")")
-        rows, scopes = pv.build_rows(snap, tasks, github(), NOW + timedelta(minutes=10))
-        again, _ = pv.plan(rows, scopes, pv.task_json("+view"), NOW + timedelta(minutes=10))
+    def test_header_brief_uuid_and_source_row_identity_roundtrip_without_churn(self):
+        snap = snapshot([project(issues=[issue("DEVOPS-1")])], [assigned()])
+        rows, scopes = pv.build_rows(snap, [], github(), NOW)
+        pv.source_status(rows, scopes, [], snap, github(), NOW, {})
+        first, _ = pv.plan(rows, scopes, [], NOW)
+        pv.apply(first)
+        exported = self.plain_export()
+        self.assertEqual({t["view_key"] for t in exported}, {"standing:p1", "issue:DEVOPS-1"})
+        again, _ = pv.plan(rows, scopes, exported, NOW + timedelta(minutes=10))
         self.assertEqual(again, [])
+        header = next(t for t in exported if t["view_key"] == "standing:p1")
+        self.assertEqual(header["uuid"], pv.row_uuid("standing:p1"))
+        self.assertTrue(header["annotations"][-1]["description"].startswith("brief: # Release pipeline"))
 
 
 if __name__ == "__main__":
