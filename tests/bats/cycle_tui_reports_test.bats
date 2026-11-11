@@ -6,7 +6,7 @@ setup() {
   : > "$TASKWARRIOR_TUI_REPORT_REQUEST"
 }
 @test "cycle includes handoffs and wraps current to inbox" {
-  export TASKWARRIOR_TUI_REPORT=byproject
+  export TASKWARRIOR_TUI_REPORT=myprojects
   run "$repo_root/scripts/__cycle_tui_reports.sh"
   [ "$status" -eq 0 ]; grep -qx handoffs "$TASKWARRIOR_TUI_REPORT_REQUEST"
   export TASKWARRIOR_TUI_REPORT=handoffs
@@ -16,6 +16,15 @@ setup() {
   run "$repo_root/scripts/__cycle_tui_reports.sh"
   [ "$status" -eq 0 ]; grep -qx inbox "$TASKWARRIOR_TUI_REPORT_REQUEST"
 }
+# Piotr's per-project view sits between byproject and handoffs, and runs with no
+# context because its +view rows carry no +work.
+@test "cycle reaches myprojects after byproject and it runs without context" {
+  export TASKWARRIOR_TUI_REPORT=byproject
+  run "$repo_root/scripts/__cycle_tui_reports.sh"
+  [ "$status" -eq 0 ]; grep -qx myprojects "$TASKWARRIOR_TUI_REPORT_REQUEST"
+  grep -qx 'uda.taskwarrior-tui.report.myprojects.context=none' "$repo_root/.taskrc"
+  grep -q '^report.myprojects.filter=.*+view or ( +work -gordon -piotr' "$repo_root/.taskrc"
+}
 @test "v4 uses its request even inside the bridge and preserves taskrc" {
   export TUI_REPORT_BRIDGE=2 TASKWARRIOR_TUI_REPORT=handoffs TASKRC="$BATS_TEST_TMPDIR/custom"
   run "$repo_root/scripts/__cycle_tui_reports.sh"
@@ -24,7 +33,7 @@ setup() {
 @test "old tui bridges once using a known pane title" {
   unset TASKWARRIOR_TUI_REPORT_REQUEST TASKWARRIOR_TUI_REPORT
   export TUI_REPORT_BINARY="$BATS_TEST_TMPDIR/tui" TMUX_PANE='%42' PATH="$BATS_TEST_TMPDIR:$PATH"
-  printf '#!/bin/sh\nprintf "%%s\\n" byproject\n' > "$BATS_TEST_TMPDIR/tmux"
+  printf '#!/bin/sh\nprintf "%%s\\n" myprojects\n' > "$BATS_TEST_TMPDIR/tmux"
   printf '#!/bin/sh\nprintf "%%s %%s %%s\\n" "$TUI_REPORT_BRIDGE" "$1" "$2"\n' > "$TUI_REPORT_BINARY"
   chmod +x "$BATS_TEST_TMPDIR/tmux" "$TUI_REPORT_BINARY"
   run "$repo_root/scripts/__cycle_tui_reports.sh"
@@ -146,7 +155,7 @@ setup() {
 }
 
 @test "frequent reports have the intended picker order" {
-  for entry in inbox:1 handoffs:2 current:3 byrepo:4 byproject:5; do
+  for entry in inbox:1 handoffs:2 current:3 byrepo:4 byproject:5 myprojects:6; do
     grep -qx "uda.taskwarrior-tui.report.${entry%:*}.order=${entry#*:}" "$repo_root/.taskrc"
   done
 }
