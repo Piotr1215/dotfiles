@@ -586,8 +586,8 @@ def start_row(monkeypatch, tmp_path, row):
     def run(args, **kwargs):
         if args and args[0] == "task":
             return subprocess.CompletedProcess(args, 0, json.dumps([row]))
-        if "prepare" in args or "pin" in args:
-            order.append(args[1])
+        if "prepare" in args or "pin" in args or "focus" in args:
+            order.append(("focus", str(args[2]), args[3]) if args[1] == "focus" else args[1])
             return subprocess.CompletedProcess(args, 0, str(brief))
         return real_run(args, **kwargs)
     monkeypatch.setattr(nav, "run", run)
@@ -631,12 +631,31 @@ def test_start_on_a_command_row_opens_the_terminal_and_stays_in_this_session(mon
     assert order == ["prepare", ("open", []), "pin"]
 
 
-def test_start_on_a_slack_row_copies_the_draft_then_opens_the_thread(monkeypatch, tmp_path, fake_clipboard):
+def test_start_on_a_slack_row_copies_the_draft_then_opens_the_thread(monkeypatch, tmp_path, fake_clipboard, fake_tmux):
     target = f"target: slack:C0CE21P1C3H/1793963101.837439 {ENTERPRISE}"
     row = dict(task(target, "draft: Hi Jan, merged."), tags=["piotr", "draft"], kind="slack")
     order = start_row(monkeypatch, tmp_path, row)
     assert fake_clipboard.read_text() == "Hi Jan, merged."
-    assert order == ["prepare", ("open", [ENTERPRISE]), "pin", ("draft", "%18", "111")]
+    assert fake_tmux() == [["select-window", "-t", "%18"]]
+    assert order == ["prepare", ("open", [ENTERPRISE]), "pin", ("draft", "%18", "111"), ("focus", row["uuid"], "%18")]
+
+
+
+def test_draft_with_command_returns_to_floater_after_prefill(monkeypatch, tmp_path, fake_tmux, fake_clipboard):
+    row = dict(task("draft: hello", "cmd: echo check"), tags=["piotr", "draft"], kind="slack")
+    order = start_row(monkeypatch, tmp_path, row)
+    calls = fake_tmux()
+    assert calls[-1] == ["select-window", "-t", "%18"]
+    assert calls[-3:-1] == [["send-keys", "-t", "%99", "-l", nav.PREFILL],
+                            ["send-keys", "-t", "%99", "Enter"]]
+    assert order[-2:] == [("draft", "%18", "111"), ("focus", row["uuid"], "%18")]
+
+
+def test_slack_kind_without_draft_tag_keeps_list_focus(monkeypatch, tmp_path, fake_tmux, fake_clipboard):
+    row = dict(task("draft: hello"), tags=["piotr"], kind="slack")
+    order = start_row(monkeypatch, tmp_path, row)
+    assert order == ["prepare", ("open", []), "pin", ("draft", "%18", "111")]
+    assert fake_tmux() == []
 
 
 def test_start_on_a_pr_row_opens_the_pr_as_before(monkeypatch, tmp_path, fake_tmux, fake_clipboard):

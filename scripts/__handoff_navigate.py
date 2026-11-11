@@ -463,6 +463,10 @@ def main(argv=None):
             run([floater, "pin", uuid, pane])
         if kind == "slack":
             show_slack_draft(pane, terminal, runtime)
+        if "draft" in task.get("tags", []) and re.fullmatch(r"%[0-9]+", pane):
+            # A cmd: may have selected another window; return before focusing the float.
+            run([os.environ.get("HANDOFF_TMUX_COMMAND", "tmux"), "select-window", "-t", pane])
+            run([floater, "focus", uuid, pane])
     return 0
 
 
