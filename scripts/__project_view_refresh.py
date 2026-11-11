@@ -98,7 +98,7 @@ LINEAR_ISSUE_URL = re.compile(r"https://linear\.app/([\w-]+)/issue/([a-z][a-z0-9
 SOURCE_HEADING = "\n\n## Source status\n"
 VIEW_METADATA = ("view_kind", "view_title", "view_state", "view_issue")
 TASK_UDA = ["rc.uda.view_project.type=string", "rc.uda.view_key.type=string",
-            "rc.uda.view_rank.type=numeric", *(f"rc.uda.{field}.type=string" for field in VIEW_METADATA)]
+            "rc.uda.view_rank.type=numeric", "rc.uda.linear_status.type=string", *(f"rc.uda.{field}.type=string" for field in VIEW_METADATA)]
 
 PROJECT_FIELDS = """id name description url targetDate startDate status { name type }
   lead { name isMe }
@@ -397,11 +397,13 @@ def task_urls(task):
 def referenced_identifiers(tasks):
     identifiers = set()
     for task in tasks:
-        if "piotr" not in (task.get("tags") or []) or TAG in (task.get("tags") or []):
+        if TAG in (task.get("tags") or []):
             continue
         ident = task.get("linear_issue_id") or ""
         if ISSUE_ID.fullmatch(ident):
             identifiers.add(ident.upper())
+        if "piotr" not in (task.get("tags") or []):
+            continue
         for url in task_urls(task):
             match = LINEAR_ISSUE_URL.fullmatch(url)
             if match:
@@ -462,7 +464,7 @@ def read_linear(linear, tasks=()):
     try:
         referenced = read_referenced(linear, referenced_identifiers(tasks) - known)
         structured = {t["linear_issue_id"].upper() for t in tasks
-                      if "piotr" in (t.get("tags") or []) and TAG not in (t.get("tags") or [])
+                      if TAG not in (t.get("tags") or [])
                       and ISSUE_ID.fullmatch(t.get("linear_issue_id") or "")}
         routes = {(match[1].lower(), match[2].upper()) for task in tasks
                   if "piotr" in (task.get("tags") or []) and TAG not in (task.get("tags") or [])
@@ -963,6 +965,31 @@ def apply_associations(intents):
     return result
 
 
+def status_plan(snapshot, tasks):
+    """Use only successfully read issue states; retain values on source failure."""
+    issues = [i for p in snapshot.get("projects", {}).values() for i in p["issues"]]
+    issues += (snapshot.get("assigned") or []) + (snapshot.get("referenced") or [])
+    states = {i["identifier"].upper(): i["state"]["name"] for i in issues
+              if i.get("identifier") and (i.get("state") or {}).get("name")}
+    return [(t["uuid"], t["linear_issue_id"], t.get("linear_status") or "", states[t["linear_issue_id"].upper()])
+            for t in tasks if TAG not in (t.get("tags") or []) and t.get("linear_issue_id")
+            and t["linear_issue_id"].upper() in states
+            and t.get("linear_status") != states[t["linear_issue_id"].upper()]]
+
+
+def apply_statuses(intents):
+    for uid, ident, old, state in intents:
+        if str(uuid.UUID(uid)) != uid.lower():
+            raise ValueError("status UUID must be canonical")
+        result = subprocess.run([*TASK_CMD, *TASK_UDA, "rc.context=none", "rc.hooks=off",
+                                 "rc.confirmation=off", "rc.bulk=0", "rc.verbose=nothing",
+                                 "uuid:" + uid, "status:pending", "linear_issue_id.is:" + ident,
+                                 "linear_status.is:" + old, "modify", "linear_status:" + state],
+                                capture_output=True, text=True, encoding="utf-8", timeout=60, check=False)
+        if result.returncode and not (result.returncode == 1 and not result.stdout.strip() and not result.stderr.strip()):
+            raise RuntimeError(f"task status modify failed: {result.stderr.strip()}")
+
+
 def build_rows(snapshot, tasks, github, now):
     """Every view row the sources call for, keyed by view_key.
 
@@ -1433,6 +1460,7 @@ def main(argv=None):
         failures.append("GitHub unavailable")
         warn(f"GitHub unreadable ({error}); preserving verified context and associations")
     associations, live_tasks = association_plan(snapshot, live_tasks, github is not None, unavailable_refs)
+    statuses = status_plan(snapshot, live_tasks)
     rows, scopes = build_rows(snapshot, live_tasks, github, now)
     sources = source_status(rows, scopes, existing, snapshot, github, now, previous)
     payload, changes = plan(rows, scopes, tasks, now)
@@ -1448,6 +1476,7 @@ def main(argv=None):
     try:
         apply(payload)
         association_result = apply_associations(associations)
+        apply_statuses(statuses)
         publish_contexts(rows, existing)
     except Exception as error:
         return failed(error, now)

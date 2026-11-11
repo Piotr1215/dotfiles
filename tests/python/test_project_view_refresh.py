@@ -85,6 +85,24 @@ def stored(payload):
     return [{"entry": "20261101T000000Z", **row} for row in copy.deepcopy(payload)]
 
 
+class LinearStatusTests(unittest.TestCase):
+    def test_updates_exact_issue_and_preserves_unavailable(self):
+        task = {"uuid": "31f19044-2838-4275-b59d-f4e0d971536b", "linear_issue_id": "DEVOPS-1688", "linear_status": "Todo"}
+        issue = {"identifier": "DEVOPS-1688", "state": {"name": "Parked"}}
+        snapshot = {"projects": {}, "assigned": None, "referenced": [issue]}
+        self.assertEqual(pv.status_plan(snapshot, [task]), [(task["uuid"], "DEVOPS-1688", "Todo", "Parked")])
+        self.assertEqual(pv.status_plan({"projects": {}, "assigned": None}, [task]), [])
+        with mock.patch.object(pv.subprocess, "run") as run:
+            run.return_value = subprocess.CompletedProcess([], 0, "", "")
+            pv.apply_statuses(pv.status_plan(snapshot, [task]))
+            args = run.call_args.args[0]
+            self.assertIn("linear_status.is:Todo", args)
+            self.assertIn("linear_status:Parked", args)
+
+    def test_exact_linear_ids_are_fetched_for_regular_tasks(self):
+        self.assertEqual(pv.referenced_identifiers([{"linear_issue_id": "DEVOPS-1688", "tags": ["work"]}]), {"DEVOPS-1688"})
+
+
 class ContextTests(unittest.TestCase):
     def test_achieved_milestones_persist_with_proof_and_due_dates_do_not_claim_done(self):
         proj = project()
