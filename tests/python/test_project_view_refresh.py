@@ -508,7 +508,7 @@ class RefreshTests(unittest.TestCase):
         self.assertNotIn("source unavailable", rows["standing:p1"]["description"])
         self.assertIn("Affected old title", affected_text)
         self.assertNotIn("Affected withheld title", affected_text)
-        self.assertIn("GitHub unavailable for " + unavailable, affected_text)
+        self.assertIn("GitHub unreadable for " + unavailable, affected_text)
         self.assertIn("current PR states unknown", affected_text)
         self.assertIn("Linear last verified: " + NOW.isoformat(), affected_text)
         self.assertIn("GitHub last verified: " + NOW.isoformat(), affected_text)
@@ -543,9 +543,9 @@ class RefreshTests(unittest.TestCase):
             self.assertEqual(pv.main([]), 0)
         summary = json.loads((self.state / "last-run.json").read_text())
         self.assertEqual(summary["unavailable_refs"], [unavailable])
-        self.assertTrue(any(unavailable in failure for failure in summary["failures"]))
+        self.assertEqual(summary["failures"], [])
         warning = "".join(c.args[0] for c in patches[6].write.call_args_list)
-        self.assertIn("GitHub attached PRs unavailable: " + unavailable, warning)
+        self.assertIn("GitHub attached PR unreadable: " + unavailable, warning)
 
     def test_outages_preserve_only_active_overviews_and_never_revive_history(self):
         projects = [project(f"p{n}", f"Project {n}", [issue(f"DEVOPS-{n}")]) for n in range(1, 5)]
@@ -1022,7 +1022,7 @@ class SourcePaginationTests(unittest.TestCase):
                                r'\{ pullRequest\(number: (\d+)\)', query)
             names = {f"{owner}/{repo}#{number}" for _, owner, repo, number in found}
             if unavailable in names:
-                raise RuntimeError("repository unavailable")
+                raise pv.GitHubUnreadable("HTTP 404")
             return {f"p{alias}": {"pullRequest": pr(f"{owner}/{repo}#{number}")}
                     for alias, owner, repo, number in found}
         with mock.patch.object(pv, "gh_graphql", side_effect=reply) as query:
@@ -1033,7 +1033,7 @@ class SourcePaginationTests(unittest.TestCase):
 
     def test_failed_attached_pr_queries_have_a_finite_per_chunk_bound(self):
         refs = {f"loft-sh/tool#{n}" for n in range(1, 7)}
-        with mock.patch.object(pv, "gh_graphql", side_effect=RuntimeError("unavailable")) as query, \
+        with mock.patch.object(pv, "gh_graphql", side_effect=pv.GitHubUnreadable("HTTP 404")) as query, \
                 mock.patch.object(pv, "GH_CHUNK", 4):
             prs, missing = pv.read_attached_prs(refs)
         self.assertEqual(prs, {})
@@ -1046,10 +1046,24 @@ class SourcePaginationTests(unittest.TestCase):
         incomplete["reviewRequests"]["pageInfo"]["hasNextPage"] = True
         data = {"p0": None, "p1": {"pullRequest": incomplete}, "p2": {"pullRequest": pr(refs[2])}}
         with mock.patch.object(pv, "gh_graphql", return_value=data) as query:
-            prs, missing = pv.read_attached_prs(set(refs))
-        self.assertEqual(set(prs), {refs[2]})
-        self.assertEqual(missing, set(refs[:2]))
+            with self.assertRaisesRegex(RuntimeError, "incomplete GitHub reply"):
+                pv.read_attached_prs(set(refs))
         query.assert_called_once()
+
+    def test_graphql_attachment_errors_classify_missing_and_fail_other_errors(self):
+        for kind, message, soft in [("NOT_FOUND", "missing", True),
+                                    ("FORBIDDEN", "access denied", True),
+                                    ("FORBIDDEN", "rate limit exceeded", False),
+                                    ("INTERNAL", "server error", False)]:
+            error = {"type": kind, "path": ["p0"], "message": message}
+            result = subprocess.CompletedProcess([], 1, json.dumps({"errors": [error]}), "gh: error")
+            with self.subTest(kind=kind, message=message), mock.patch.object(pv.subprocess, "run", return_value=result):
+                if soft:
+                    self.assertEqual(pv.read_attached_prs({"loft-sh/tool#1"})[1], {"loft-sh/tool#1"})
+                else:
+                    with self.assertRaises(RuntimeError) as caught:
+                        pv.read_attached_prs({"loft-sh/tool#1"})
+                    self.assertNotIsInstance(caught.exception, pv.GitHubUnreadable)
 
     def test_global_viewer_or_own_pr_failure_still_fails_the_whole_github_source(self):
         for replies in ([RuntimeError("viewer unavailable")],

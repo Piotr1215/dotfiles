@@ -485,6 +485,10 @@ def read_linear(linear, tasks=()):
             "reference_rate_limited": reference_rate_limited, "rate_limit": linear.rate_limit}
 
 
+class GitHubUnreadable(RuntimeError):
+    """A GitHub resource is missing or inaccessible to the current token."""
+
+
 def gh_graphql(query):
     """Run one gh GraphQL query; incomplete replies cannot verify ownership."""
     result = subprocess.run([*GH_CMD, "api", "graphql", "-f", f"query={query}"],
@@ -494,7 +498,17 @@ def gh_graphql(query):
     except json.JSONDecodeError:
         reply = {}
     if result.returncode or reply.get("errors") or not reply.get("data"):
-        raise RuntimeError((result.stderr or "gh api graphql failed").strip().splitlines()[-1])
+        message = (result.stderr or "gh api graphql failed").strip().splitlines()[-1]
+        errors = reply.get("errors") or []
+        resource_errors = errors and all(
+            error.get("type") in ("NOT_FOUND", "FORBIDDEN") and error.get("path")
+            and re.fullmatch(r"p\d+", str(error["path"][0]))
+            and "rate limit" not in error.get("message", "").lower()
+            for error in errors)
+        if resource_errors or (not errors and re.search(r"HTTP (404|403)\b", message)
+                               and "rate limit" not in message.lower()):
+            raise GitHubUnreadable(message)
+        raise RuntimeError(message)
     return reply["data"]
 
 
@@ -553,7 +567,7 @@ def read_attached_prs(refs):
                 f'{{ __typename ... on User {{ login }} ... on Team {{ slug organization {{ login }} }} }} }} }} }} }}')
         try:
             data = gh_graphql("query { " + " ".join(fields) + " }")
-        except Exception:  # One unreadable repository must not poison other refs.
+        except GitHubUnreadable:  # Isolate missing or inaccessible repositories.
             if len(chunk) == 1:
                 unavailable.add(chunk[0])
                 return
@@ -565,7 +579,7 @@ def read_attached_prs(refs):
             pr = (data.get(f"p{i}") or {}).get("pullRequest")
             if (not pr or not pr.get("state") or not pr.get("url")
                     or pr.get("reviewRequests", {}).get("pageInfo", {}).get("hasNextPage") is not False):
-                unavailable.add(ref)
+                raise RuntimeError(f"incomplete GitHub reply for {ref}")
             else:
                 prs[ref] = pr
 
@@ -1194,7 +1208,7 @@ def source_status(rows, scopes, existing, snapshot, github, now, previous):
                             for ref in attached_refs(issue)}
             missing_refs = project_refs & set(github.get("unavailable_refs", ()))
             if missing_refs:
-                unavailable.append("GitHub unavailable for " + ", ".join(sorted(missing_refs))
+                unavailable.append("GitHub unreadable for " + ", ".join(sorted(missing_refs))
                                    + "; current PR states unknown")
         old_brief = brief_text(old)
         retained = bool(unavailable and (old_brief or key not in rows))
@@ -1330,9 +1344,8 @@ def main(argv=None):
         github = read_github(refs)
         unavailable_refs = set(github.get("unavailable_refs", ()))
         if unavailable_refs:
-            reason = "GitHub attached PRs unavailable: " + ", ".join(sorted(unavailable_refs))
-            failures.append(reason)
-            warn(reason + "; only affected contexts and review rows retain prior evidence")
+            for ref in sorted(unavailable_refs):
+                warn(f"GitHub attached PR unreadable: {ref}; retaining prior evidence")
     except Exception as error:
         github = None
         failures.append("GitHub unavailable")
