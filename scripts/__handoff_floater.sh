@@ -2,12 +2,30 @@
 # A non-modal tmux 3.8 pane, with an event-driven selection watcher.
 set -eo pipefail
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-mode=${1:-}; uuid=${2:-}; origin=${3:-${TMUX_PANE:-}}
-selected_row=${4:-}
+mode=${1:-}; uuid=${2:-}; origin=${TMUX_PANE:-}
+selected_row='' layout=default
 log_dir=${XDG_STATE_HOME:-$HOME/.local/state}
 mkdir -p "$log_dir"
 exec 3>&2
 exec 2> >(while IFS= read -r line; do printf '%s uuid=%s mode=%s %s\n' "$(date -Is)" "$uuid" "$mode" "$line" | tee -a "$log_dir/handoff-floater.log" >&3; done)
+# Keep the original positional interface; the report appends its layout flag.
+shift "$(( $# < 2 ? $# : 2 ))"
+if (( $# )) && [[ "$1" != --* ]]; then
+  origin=${1:-$origin}
+  shift
+fi
+while (( $# )); do
+  if [[ "$1" == --layout && $# == 2 && "$2" =~ ^(default|project)$ ]]; then
+    layout=$2
+    shift 2
+  elif [[ -z "$selected_row" && "$1" != --* ]]; then
+    selected_row=$1
+    shift
+  else
+    echo 'Expected [<row>] [--layout project|default]' >&2
+    exit 2
+  fi
+done
 tmux_bin=${HANDOFF_TMUX_COMMAND:-tmux}
 nvim_bin=${HANDOFF_NVIM_COMMAND:-nvim}
 runtime=${XDG_RUNTIME_DIR:?XDG_RUNTIME_DIR is required}/taskwarrior-tui
@@ -26,6 +44,7 @@ pane_id_file="$runtime/floater-${origin#%}.id"
 pin_file="$runtime/pinned-${origin#%}"
 peek_file="$runtime/peeking-${origin#%}"
 pin_geometry_file="$runtime/pinned-geometry-${origin#%}"
+layout_file="$runtime/layout-${origin#%}"
 
 # RPC returns an error without switching when writing the current buffer fails.
 rpc() { "$nvim_bin" --server "$socket" --remote-expr "$1"; }
@@ -72,12 +91,39 @@ place_peek() {
     move-pane -t "$pane_id" -X "$((pane_left - 1))" -Y "$float_top"
 }
 
+# Geometry includes the outer border. Leave room for the list on the left,
+# and use almost the full height without anchoring to the selected row.
+project_geometry() {
+  local dimensions width height float_width float_height top
+  dimensions=$("$tmux_bin" display-message -p -t "$origin" '#{window_width} #{window_height}') || return 1
+  read -r width height <<<"$dimensions"
+  [[ "$width" =~ ^[0-9]+$ && "$height" =~ ^[0-9]+$ ]] || return 1
+  (( width >= 3 && height >= 3 )) || return 1
+  float_width=$((width * 55 / 100))
+  (( float_width <= 100 )) || float_width=100
+  if (( width >= 80 && float_width > width - 40 )); then float_width=$((width - 40)); fi
+  (( float_width >= 3 )) || float_width=3
+  top=0
+  (( height < 8 )) || top=1
+  float_height=$((height - 2 * top))
+  printf '%s %s %s %s\n' "$float_width" "$float_height" "$((width - float_width))" "$top"
+}
+
+place_project() {
+  local geometry width height left top
+  geometry=$(project_geometry) || { echo 'Terminal is too small for a project brief' >&2; return 1; }
+  read -r width height left top <<<"$geometry"
+  "$tmux_bin" resize-pane -t "$1" -x "$width" -y "$height" \; \
+    move-pane -t "$1" -X "$left" -Y "$top"
+}
+
 # Bring the brief to the row the task list selected. The TUI writes
 # "<uuid> <row>"; older builds wrote the uuid alone, which switches without a
 # move. The editor answers 1 when it now shows that task and 0 when it keeps
 # its own (pinned, or holding an edit it could not save), so a kept brief
 # stays beside its own row.
 follow_selection() {
+  [[ $(cat "$layout_file" 2>/dev/null || true) != project ]] || return 0
   local selected="" row="" pane_id followed
   read -r selected row 2>/dev/null < "$runtime/$selection" || [[ -n "$selected" ]] || return 0
   valid_uuid "$selected" || return 0
@@ -136,7 +182,20 @@ case "$mode" in
     exec 9>"$runtime/handoff-${origin#%}.lock"
     flock 9
     if [[ -S "$socket" ]] && rpc '1' >/dev/null 2>&1; then
-      if [[ "$mode" == toggle ]]; then
+      if [[ "$layout" == project && "$mode" != close ]]; then
+        pane_id=$(current_floater_id)
+        if [[ "$mode" == toggle && $(rpc "luaeval('HandoffCurrent()')") == "$uuid" ]]; then
+          rpc "luaeval('HandoffHide()')" >/dev/null
+          rm -f "$pin_file" "$peek_file" "$pin_geometry_file" "$pane_id_file" "$layout_file"
+        else
+          rpc "luaeval('HandoffSwitch(_A, true)', '$uuid')" >/dev/null
+          if [[ $(cat "$layout_file" 2>/dev/null || true) != project ]]; then
+            place_project "$pane_id"
+          fi
+          printf 'project\n' > "$layout_file"
+          [[ "$mode" != toggle ]] || "$tmux_bin" select-pane -t "$pane_id"
+        fi
+      elif [[ "$mode" == toggle ]]; then
         rpc "luaeval('HandoffToggle(_A)', '$uuid')" >/dev/null
         if [[ -f "$pin_file" ]] && pane_id=$(current_floater_id); then
           printf '%s\n' "$pane_id" > "$pane_id_file"
@@ -154,7 +213,7 @@ case "$mode" in
         fi
       elif [[ "$mode" == close ]]; then
         rpc "luaeval('HandoffHide()')" >/dev/null
-        rm -f "$pin_file" "$peek_file" "$pin_geometry_file" "$pane_id_file"
+        rm -f "$pin_file" "$peek_file" "$pin_geometry_file" "$pane_id_file" "$layout_file"
       elif [[ "$mode" == pin ]]; then
         rpc "luaeval('HandoffPin(_A)', '$uuid')" >/dev/null
         pane_id=$(current_floater_id) || pane_id=
@@ -171,25 +230,32 @@ case "$mode" in
       else
         rpc "luaeval('HandoffSwitch(_A, true)', '$uuid')" >/dev/null
       fi
+      # An active request from another report restores its normal following
+      # behavior. Passive watch/focus calls must keep project context steady.
+      [[ "$layout" != default ]] || rm -f "$layout_file"
       exit 0
     fi
     [[ "$mode" == close ]] && exit 0
     # A q key or prior toggle may have removed Neovim without cleaning its
     # runtime markers. A new pane starts with fresh, unpinned state.
-    rm -f "$pin_file" "$peek_file" "$pin_geometry_file" "$pane_id_file"
+    rm -f "$pin_file" "$peek_file" "$pin_geometry_file" "$pane_id_file" "$layout_file"
     file=$(HANDOFF_TASK_UUID="$uuid" python3 "$root/__handoff_floater_file.py" "$uuid")
-    float_size='-x 90% -y 65% -X 5% -Y 30%'
-    if [[ "$mode" == toggle ]] && geometry=$(peek_geometry); then
+    float_size=(-x 90% -y 65% -X 5% -Y 30%)
+    if [[ "$layout" == project ]]; then
+      geometry=$(project_geometry) || { echo 'Terminal is too small for a project brief' >&2; exit 1; }
+      read -r float_width float_height float_left float_top <<<"$geometry"
+      float_size=(-x "$float_width" -y "$float_height" -X "$float_left" -Y "$float_top")
+      printf 'project\n' > "$layout_file"
+    elif [[ "$mode" == toggle ]] && geometry=$(peek_geometry); then
       read -r float_height float_top <<<"$geometry"
-      float_size="-x 90% -y $((float_height + 2)) -X 5% -Y $float_top"
+      float_size=(-x 90% -y "$((float_height + 2))" -X 5% -Y "$float_top")
     fi
     # b (toggle) opens the brief to read and type in, so it takes focus at once
     # (Piotr, 6 Nov). Handoff starts pin it with -d and keep the task view focused.
     focus=(-d)
     [[ "$mode" == toggle ]] && focus=()
     # Multiple command argv bypass tmux's shell-string path.
-    # shellcheck disable=SC2086 # tmux geometry is a fixed, validated argv fragment.
-    pane_id=$("$tmux_bin" new-pane "${focus[@]}" -P -F '#{pane_id}' -t "$origin" $float_size \
+    pane_id=$("$tmux_bin" new-pane "${focus[@]}" -P -F '#{pane_id}' -t "$origin" "${float_size[@]}" \
       -T "handoff ${uuid:0:8}" \
       env "HANDOFF_ROOT=$root" "HANDOFF_ORIGIN=$origin" "HANDOFF_UUID=$uuid" \
       "HANDOFF_RETURN_FOCUS=1" \
@@ -220,5 +286,5 @@ case "$mode" in
     echo 'Handoff editor did not become ready' >&2
     exit 1
     ;;
-  *) echo 'usage: __handoff_floater.sh open|toggle|pin|close|focus|focus-list <uuid> [<twoy-pane>] [<row>]' >&2; exit 2 ;;
+  *) echo 'usage: __handoff_floater.sh open|toggle|pin|close|focus|focus-list <uuid> [<twoy-pane>] [<row>] [--layout project]' >&2; exit 2 ;;
 esac

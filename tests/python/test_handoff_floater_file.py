@@ -38,6 +38,8 @@ class HandoffFloaterFileTest(unittest.TestCase):
         self.command.chmod(0o755)
         self.env = os.environ.copy()
         self.env.update(XDG_STATE_HOME=str(self.root / "state"),
+                        HOME=str(self.root), XDG_CONFIG_HOME=str(self.root / 'config'),
+                        XDG_RUNTIME_DIR=str(self.root / 'runtime'),
                         HANDOFF_TASK_COMMAND=str(self.command),
                         HANDOFF_BRIEF_RENDERER=str(RENDERER),
                         FAKE_TASK_EXPORT=str(self.export))
@@ -58,13 +60,6 @@ class HandoffFloaterFileTest(unittest.TestCase):
     def prepare(self, uid=UUID):
         return subprocess.run([sys.executable, str(SCRIPT), uid], env=self.env,
                               capture_output=True, text=True, check=False)
-
-    def test_ci_view_brief_has_only_the_generated_sections(self):
-        self.task.update(project='ci-infrastructure-improvements', tags=['view'], view_key='standing:pid', annotations=[{'entry': '20261111T120000Z', 'description': 'brief: Done:\n- Done item\n\nNow:\n- Now item\n\nNext:\n- Next item'}])
-        self.write_export()
-        result = self.prepare()
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(Path(result.stdout.strip()).read_text(), 'Done:\n- Done item\n\nNow:\n- Now item\n\nNext:\n- Next item\n')
 
     def test_creates_missing_brief_and_seeds_latest_draft(self):
         result = self.prepare()
@@ -290,6 +285,139 @@ class HandoffFloaterFileTest(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("Could not open handoff brief:", result.stderr)
         self.assertFalse(self.path.exists())
+
+    def project_task(self):
+        self.task = {'uuid': UUID, 'description': 'Issue to PR', 'tags': ['view'],
+                     'view_key': 'standing:issue-to-pr', 'annotations': [
+                         {'entry': '20261111T100000Z', 'description': 'brief: # New overview\n\nNow'},
+                         {'entry': '20261110T100000Z', 'description': 'brief: # Older overview'},
+                     ]}
+        self.write_export()
+        return self.path.with_name('project-status.md')
+
+    def test_any_standing_header_uses_newest_generated_annotation(self):
+        overview = self.project_task()
+        # Generated context does not depend on the editable brief renderer.
+        self.env['HANDOFF_BRIEF_RENDERER'] = str(self.root / 'missing-renderer')
+        result = self.prepare()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip(), str(overview))
+        self.assertEqual(overview.read_text(), '# New overview\n\nNow\n')
+        self.assertFalse(self.path.exists())
+        self.assertFalse(overview.with_name('.task-details.md').exists())
+
+    def test_generated_content_is_replaced_atomically_only_on_change(self):
+        overview = self.project_task()
+        self.assertEqual(self.prepare().returncode, 0)
+        before = overview.stat()
+        self.assertEqual(self.prepare().returncode, 0)
+        self.assertEqual((before.st_ino, before.st_mtime_ns),
+                         (overview.stat().st_ino, overview.stat().st_mtime_ns))
+        self.task['annotations'].append({'entry': '20261112T100000Z', 'description': 'brief: New Now'})
+        self.write_export()
+        with overview.open() as old_file:
+            self.assertEqual(self.prepare().returncode, 0)
+            self.assertEqual(old_file.read(), '# New overview\n\nNow\n')
+        self.assertEqual(overview.read_text(), 'New Now\n')
+        self.assertEqual(list(overview.parent.glob('.project-status-*')), [])
+
+    def test_generated_header_missing_or_malformed_annotation_is_explicitly_unavailable(self):
+        overview = self.project_task()
+        cases = [[], None, ['bad'], [{'description': None}],
+                 [{'entry': '20261112T100000Z', 'description': 'brief: '}],
+                 [{'entry': 'not-a-stamp', 'description': 'brief: Invalid'}],
+                 [{'entry': '20269999T100000Z', 'description': 'brief: Invalid'}],
+                 [{'entry': '20261112T100000Z', 'description': 'brief: bad\0text'}]]
+        for annotations in cases:
+            with self.subTest(annotations=annotations):
+                self.task['annotations'] = annotations
+                self.write_export()
+                result = self.prepare()
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn('Project overview unavailable', overview.read_text())
+                self.assertNotIn('New overview', overview.read_text())
+
+    def test_generated_annotation_is_literal_text_and_cannot_select_a_file(self):
+        overview = self.project_task()
+        outside = self.root / 'private.md'
+        outside.write_text('Private content')
+        self.task['annotations'] = [{'entry': '20261112T100000Z',
+                                     'description': f'brief: {outside}'}]
+        self.write_export()
+        result = self.prepare()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip(), str(overview))
+        self.assertEqual(overview.read_text(), str(outside) + '\n')
+        self.assertEqual(outside.read_text(), 'Private content')
+
+    def test_empty_latest_overview_does_not_fall_back_to_old_text(self):
+        overview = self.project_task()
+        self.task['annotations'].append({'entry': '20261112T100000Z', 'description': 'brief: '})
+        self.write_export()
+        self.assertEqual(self.prepare().returncode, 0)
+        self.assertIn('Project overview unavailable', overview.read_text())
+        self.assertNotIn('New overview', overview.read_text())
+
+    def test_generated_canonical_path_rejects_symlink_file_or_directory(self):
+        overview = self.project_task()
+        outside = self.root / 'outside'
+        outside.mkdir()
+        overview.parent.mkdir(parents=True)
+        target = outside / 'secret'
+        target.write_text('untouched')
+        overview.symlink_to(target)
+        result = self.prepare()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('symlink', result.stderr)
+        self.assertEqual(target.read_text(), 'untouched')
+        overview.unlink()
+        overview.parent.rmdir()
+        overview.parent.symlink_to(outside, target_is_directory=True)
+        self.assertNotEqual(self.prepare().returncode, 0)
+        self.assertFalse((outside / 'project-status.md').exists())
+
+    def test_uuid_traversal_is_rejected_before_export_or_path_creation(self):
+        self.project_task()
+        for uid in ('../outside', UUID + '/../../outside'):
+            with self.subTest(uid=uid):
+                result = self.prepare(uid)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn('full task UUID', result.stderr)
+
+    def test_non_header_view_row_keeps_existing_editable_brief(self):
+        for key in ('issue:ENGAI-1', 'ask:1', 'standing', ' ', 7, None):
+            with self.subTest(view_key=key):
+                self.project_task()
+                self.task['view_key'] = key
+                self.write_export()
+                result = self.prepare()
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout.strip(), str(self.path))
+                self.assertFalse(self.path.with_name('project-status.md').exists())
+
+    def test_legacy_overview_headers_use_generated_path_and_never_render_editable_brief(self):
+        for key in (None, '', 'standing:'):
+            for has_annotation in (False, True):
+                with self.subTest(view_key=key, has_annotation=has_annotation):
+                    overview = self.project_task()
+                    if key is None:
+                        self.task.pop('view_key')
+                    else:
+                        self.task['view_key'] = key
+                    if not has_annotation:
+                        self.task['annotations'] = []
+                    self.write_export()
+                    self.env['HANDOFF_BRIEF_RENDERER'] = str(self.root / 'must-not-run-renderer')
+                    result = self.prepare()
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(result.stdout.strip(), str(overview))
+                    self.assertFalse(self.path.exists())
+                    self.assertFalse(self.path.with_name('.piotr-baseline.md').exists())
+                    self.assertFalse(self.path.with_name('.task-details.md').exists())
+                    if has_annotation:
+                        self.assertEqual(overview.read_text(), '# New overview\n\nNow\n')
+                    else:
+                        self.assertIn('Project overview unavailable', overview.read_text())
 
 
 if __name__ == "__main__":

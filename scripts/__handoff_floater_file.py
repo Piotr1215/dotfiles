@@ -10,10 +10,67 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+import tempfile
 
 OPEN_START = '<!-- begin open -->'
 OPEN_END = '<!-- end open -->'
 DETAILS_FILE = '.task-details.md'
+PROJECT_FILE = 'project-status.md'
+UUID_PATTERN = r'[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}'
+
+
+def project_overview(task):
+    """Use the newest generated brief as text, never as a local file name."""
+    annotations = task.get('annotations', [])
+    candidates = []
+    if isinstance(annotations, list):
+        for row in annotations:
+            if not isinstance(row, dict) or not isinstance(row.get('description'), str):
+                continue
+            match = re.match(r'^\s*brief:\s*(.*)$', row['description'], re.I | re.S)
+            if match:
+                entry = row.get('entry', '')
+                if not isinstance(entry, str) or not re.fullmatch(r'\d{8}T\d{6}Z', entry):
+                    continue
+                try:
+                    datetime.strptime(entry, '%Y%m%dT%H%M%SZ')
+                except ValueError:
+                    continue
+                candidates.append((entry, match.group(1)))
+    if candidates:
+        candidates.sort(key=lambda row: row[0])
+        text = candidates[-1][1]
+        if text.strip() and '\0' not in text:
+            return text.rstrip() + '\n'
+    title = task.get('description') or 'Project'
+    return f'# {title}\n\nProject overview unavailable: no valid brief annotation.\n'
+
+
+def write_project_overview(root, uid, task):
+    """Publish only inside the UUID's canonical directory, atomically on change."""
+    folder = root
+    for name in ('taskwarrior', 'briefs', uid):
+        folder /= name
+        if folder.is_symlink():
+            raise ValueError('Project overview directory must not be a symlink')
+        folder.mkdir(mode=0o700, exist_ok=True)
+    path = folder / PROJECT_FILE
+    if path.is_symlink():
+        raise ValueError('Project overview must not be a symlink')
+    text = project_overview(task)
+    if path.exists() and path.read_text() == text:
+        return path
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(mode='w', dir=folder, prefix='.project-status-',
+                                         encoding='utf-8', delete=False) as stream:
+            temporary = Path(stream.name)
+            stream.write(text)
+        temporary.replace(path)
+    finally:
+        if temporary:
+            temporary.unlink(missing_ok=True)
+    return path
 
 
 def task_time(value):
@@ -142,11 +199,8 @@ def marked_block(text, start_marker, end_marker, markdown_lines):
 
 def prepare(uid):
     """Keep the canonical brief path and only refresh a newly changed draft."""
-    helper = Path(os.environ.get(
-        'HANDOFF_BRIEF_RENDERER', str(Path.home() / '.claude/scripts/__tw_brief.py')))
-    spec = importlib.util.spec_from_file_location('tw_brief', helper)
-    brief = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(brief)
+    if not re.fullmatch(UUID_PATTERN, uid):
+        raise ValueError('A full task UUID is required')
     command = os.environ.get('HANDOFF_TASK_COMMAND', 'task')
     result = subprocess.run([command, 'rc.context=none', 'rc.hooks=off',
                              'rc.verbose=nothing', 'rc.gc=off', uid, 'export'],
@@ -154,21 +208,19 @@ def prepare(uid):
     rows = json.loads(result.stdout)
     task = next(row for row in rows if row.get('uuid') == uid)
     root = Path(os.environ.get('XDG_STATE_HOME', str(Path.home() / '.local/state')))
+    # Match the TUI's is_overview predicate, including legacy unkeyed headers.
+    view_key = task.get('view_key', '')
+    if ('view' in task.get('tags', []) and isinstance(view_key, str)
+            and (not view_key or view_key.startswith('standing:'))):
+        root.mkdir(mode=0o700, parents=True, exist_ok=True)
+        print(write_project_overview(root, uid, task))
+        return
+    helper = Path(os.environ.get(
+        'HANDOFF_BRIEF_RENDERER', str(Path.home() / '.claude/scripts/__tw_brief.py')))
+    spec = importlib.util.spec_from_file_location('tw_brief', helper)
+    brief = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(brief)
     path = root / 'taskwarrior/briefs' / uid / 'brief.md'
-    # The project status is a generated view, not an editable handoff brief.
-    if task.get('view_key', '').startswith('standing:') and task.get('project') == 'ci-infrastructure-improvements':
-        annotations = task.get('annotations', [])
-        notes = [a.get('description', '') for a in annotations if a.get('description', '').startswith('brief: ')]
-        if notes:
-            path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-            status_path = path.parent / 'project-status.md'
-            content = notes[-1][len('brief: '):].strip() + '\n'
-            if not status_path.exists() or status_path.read_text() != content:
-                temp = status_path.with_suffix('.tmp')
-                temp.write_text(content)
-                temp.replace(status_path)
-            print(status_path)
-            return
     # The shared helper uses this same canonical trace path. Do not follow an
     # arbitrary task annotation to another local file.
     path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)

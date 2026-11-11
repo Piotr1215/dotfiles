@@ -32,7 +32,11 @@ trap return_focus EXIT
 
 exec 9>"$lock"
 flock -sn 9 || { echo 'Another handoff brief editor is already open.' >&2; exit 1; }
-python3 "$save_script" init "$HANDOFF_UUID"
+# Generated project context has no comments or delivery baseline. Actual
+# handoff buffers initialize their own baseline if the reader switches to one.
+if [[ "$file" != "$brief_root/$HANDOFF_UUID/project-status.md" ]]; then
+  python3 "$save_script" init "$HANDOFF_UUID"
+fi
 # This shell holds the lock for the whole edit. Neovim gets fd 9 closed: its
 # children (the xsel clipboard owner) outlive it and would keep the lock after
 # the exec below, so parked brief updates waited on a closed editor.

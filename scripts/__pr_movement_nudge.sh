@@ -16,7 +16,7 @@
 #
 # WATCHED PRs: Piotr's open authored PRs, plus every GitHub PR linked
 #   (https://github.com/<owner>/<repo>/pull/<n>) from the description or an
-#   annotation of any PENDING taskwarrior task, any tag (`rc.context=none`, so
+#   annotation of any PENDING non-view taskwarrior task (`rc.context=none`, so
 #   hidden +gordon tasks count; dependabot and other bot PRs included). A line
 #   for a task-linked PR ends in ` task:<uuid8>[,<uuid8>]`, naming the owning
 #   task(s). A PR no source names any more keeps its entry for PR_MOVE_TRACK_WINDOW
@@ -416,13 +416,16 @@ backport_items() {
 
 # task_pr_links -> JSON array of {owner, repo, num, task}: one row per GitHub PR
 # URL (https://github.com/<owner>/<repo>/pull/<n>) found in the description or
-# an annotation of any PENDING task, with the first 8 characters of the task
-# uuid. Context none, so hidden +gordon tasks count. Fails when task does.
+# an annotation of any PENDING non-view task, with its uuid's first 8 characters.
+# Generated +view rows cite project evidence; they do not own that work.
+# Context none still includes hidden +gordon tasks. Fails when task does.
 task_pr_links() {
     local out
     out=$(task rc.context=none rc.verbose=nothing rc.hooks=off rc.confirmation=no status:pending export 2>/dev/null) || return 1
     jq -c '
-        [ .[]? | select(.status == "pending") | (.uuid // "")[0:8] as $u
+        [ .[]? | select(.status == "pending")
+          | select((.tags // []) | index("view") == null)
+          | (.uuid // "")[0:8] as $u
           | ([.description // ""] + [(.annotations // [])[]? | .description // ""])[]
           | scan("(?i)https?://github\\.com/([A-Za-z0-9._-]+)/([A-Za-z0-9._-]+)/pull/([0-9]+)")
           | {owner: .[0], repo: .[1], num: (.[2] | tonumber), task: $u} ]

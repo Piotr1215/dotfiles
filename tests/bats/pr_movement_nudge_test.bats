@@ -324,6 +324,23 @@ gql_calls() { grep -c '^graphql' "$GH_LOG" || true; }
     [ "$status" -ne 0 ]
 }
 
+@test "task_pr_links: project evidence is not work ownership, real handoffs still count" {
+    TASKS_FILE="${TEST_DIR}/tasks.json"
+    cat > "$TASKS_FILE" <<'JSON'
+[
+  {"uuid":"aaaaaaaa-0000-0000-0000-000000000001","status":"pending","tags":["view"],"view_key":"standing:example","description":"Project overview","annotations":[{"description":"brief: Done: https://github.com/example/project/pull/10"}]},
+  {"uuid":"bbbbbbbb-0000-0000-0000-000000000001","status":"pending","tags":["view"],"view_key":"ask:example:example/project#11","description":"Review source row","annotations":[{"description":"link: https://github.com/example/project/pull/11"}]},
+  {"uuid":"cccccccc-0000-0000-0000-000000000001","status":"pending","tags":["piotr"],"view_project":"example","description":"Merge the reviewed change","annotations":[{"description":"link: https://github.com/example/project/pull/11"}]},
+  {"uuid":"dddddddd-0000-0000-0000-000000000001","status":"pending","tags":["gordon"],"description":"Watch https://github.com/example/project/pull/12"}
+]
+JSON
+    task() { cat "$TASKS_FILE"; }
+    run task_pr_links
+    [ "$status" -eq 0 ]
+    [ "$(jq -c 'map(.task) | sort' <<<"$output")" = '["cccccccc","dddddddd"]' ]
+    [ "$(jq -c 'map(.num) | sort' <<<"$output")" = '[11,12]' ]
+}
+
 @test "build_watch: an authored PR also linked by two tasks is one item naming both" {
     local authored links
     authored='[{"url":"https://github.com/loft-sh/loft-enterprise/pull/8827","number":8827,"title":"t","repository":{"name":"loft-enterprise","nameWithOwner":"loft-sh/loft-enterprise"},"isDraft":false}]'
