@@ -37,10 +37,13 @@ import shlex
 import subprocess
 import sys
 import tempfile
+import threading
+import urllib.error
 import urllib.request
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 
 TASK_CMD = shlex.split(os.environ.get("PROJECT_VIEW_TASK_CMD") or "task")
@@ -62,6 +65,17 @@ MEMBER_ALIVE = timedelta(days=30)
 # A failed run fails the unit only once the view is this stale, so a short
 # Linear, GitHub or network outage logs a WARN instead of a failure record.
 STALE_VIEW = timedelta(hours=1)
+RATE_FALLBACK = timedelta(minutes=15)
+RATE_MAX = timedelta(hours=24)
+RATE_MIN = timedelta(seconds=30)
+# https://linear.app/developers/rate-limiting documents UTC epoch milliseconds
+# for the named reset headers; Retry-After is a delay in seconds.
+RATE_HEADERS = {"retry-after", "x-ratelimit-limit", "x-ratelimit-remaining", "x-ratelimit-reset",
+                "x-ratelimit-requests-limit", "x-ratelimit-requests-remaining", "x-ratelimit-requests-reset",
+                "x-ratelimit-complexity-limit", "x-ratelimit-complexity-remaining", "x-ratelimit-complexity-reset",
+                "x-ratelimit-endpoint-requests-limit", "x-ratelimit-endpoint-requests-remaining",
+                "x-ratelimit-endpoint-requests-reset",
+                "ratelimit-limit", "ratelimit-remaining", "ratelimit-reset", "x-complexity"}
 PAGES = 10
 GH_CHUNK = 25
 REFERENCE_LIMIT = 200
@@ -199,18 +213,93 @@ def row_uuid(key):
 
 # Sources ---------------------------------------------------------------------
 
+def safe_rate_headers(headers):
+    """Keep only recognized numeric limits and a parsed retry date, never auth."""
+    safe = {}
+    for name, value in (headers or {}).items():
+        name, value = name.lower(), str(value).strip()
+        if name not in RATE_HEADERS:
+            continue
+        if re.fullmatch(r"\d+(?:\.\d+)?", value):
+            safe[name] = value
+        elif name == "retry-after":
+            try:
+                stamp = parsedate_to_datetime(value)
+            except (TypeError, ValueError):
+                try:
+                    stamp = parse_time(value)
+                except (TypeError, ValueError):
+                    continue
+            if stamp and stamp.tzinfo:
+                safe[name] = stamp.astimezone(UTC).isoformat()
+    return safe
+
+
+def rate_limit_record(headers, now):
+    safe = safe_rate_headers(headers)
+    retry = safe.get("retry-after")
+    deadline = None
+    if retry:
+        try:
+            deadline = now + timedelta(seconds=float(retry)) if re.fullmatch(r"\d+(?:\.\d+)?", retry) else parse_time(retry)
+        except (OverflowError, ValueError):
+            pass
+    if deadline is None:
+        resets = []
+        for name, value in safe.items():
+            if name.endswith("reset"):
+                try:
+                    number = float(value)
+                    stamp = (now + timedelta(seconds=number) if name == "ratelimit-reset" else
+                             datetime.fromtimestamp(number / 1000 if number > 100_000_000_000 else number, UTC))
+                    if stamp > now:
+                        resets.append(stamp)
+                except (OverflowError, ValueError, OSError):
+                    pass
+        deadline = max(resets) if resets else now + RATE_FALLBACK
+    deadline = max(now + RATE_MIN, min(deadline, now + RATE_MAX))
+    return {"status": 429, "observed_at": now.isoformat(), "retry_at": deadline.isoformat(), "headers": safe}
+
+
+class LinearRateLimited(RuntimeError):
+    def __init__(self, record):
+        self.record = record
+        super().__init__(f"Linear rate limited (HTTP 429); retry at {record['retry_at']}")
+
+
 class Linear:
     """A small Linear GraphQL client that reads its key once."""
 
-    def __init__(self, key):
+    def __init__(self, key, on_rate_limit=None):
         self.key = key
+        self.rate_limit = None
+        self.request_count = 0
+        self._stop = threading.Event()
+        self._lock = threading.Lock()
+        self._on_rate_limit = on_rate_limit
 
     def query(self, text, variables=None):
+        with self._lock:
+            if self._stop.is_set():
+                raise LinearRateLimited(self.rate_limit)
+            self.request_count += 1
         body = json.dumps({"query": text, "variables": variables or {}}).encode()
         request = urllib.request.Request(LINEAR_URL, data=body, headers={
             "Authorization": self.key, "Content-Type": "application/json"})
-        with urllib.request.urlopen(request, timeout=30) as response:
-            reply = json.load(response)
+        try:
+            with urllib.request.urlopen(request, timeout=30) as response:
+                reply = json.load(response)
+        except urllib.error.HTTPError as error:
+            if error.code != 429:
+                raise
+            record = rate_limit_record(error.headers, datetime.now(UTC))
+            with self._lock:
+                if self.rate_limit is None or record["retry_at"] > self.rate_limit["retry_at"]:
+                    self.rate_limit = record
+                    self._stop.set()
+                    if self._on_rate_limit:
+                        self._on_rate_limit(record)
+            raise LinearRateLimited(self.rate_limit) from None
         if reply.get("errors"):
             raise RuntimeError(reply["errors"][0].get("message", "Linear error"))
         return reply["data"]
@@ -364,7 +453,7 @@ def read_linear(linear, tasks=()):
             warn(f"project {pid} unreadable ({error}); its rows stay as they were")
     known = {i["identifier"].upper() for p in projects.values() for i in p["issues"]}
     known.update(i["identifier"].upper() for i in assigned or [])
-    referenced, reference_failure = [], False
+    referenced, reference_failure, reference_rate_limited = [], False, False
     try:
         referenced = read_referenced(linear, referenced_identifiers(tasks) - known)
         structured = {t["linear_issue_id"].upper() for t in tasks
@@ -378,6 +467,7 @@ def read_linear(linear, tasks=()):
                           and (match[1].lower(), match[2].upper()) in routes)]
     except Exception as error:
         reference_failure = True
+        reference_rate_limited = isinstance(error, LinearRateLimited)
         failures.append(f"handoff issue ownership: {error}")
         warn(f"handoff issue ownership unavailable ({error}); previous grouping stays")
     additional = {i["project"]["id"] for i in referenced if i.get("project")} - wanted
@@ -392,7 +482,8 @@ def read_linear(linear, tasks=()):
                 failures.append(f"project {pid}: {error}")
                 warn(f"referenced project {pid} unavailable ({error}); previous grouping stays")
     return {"projects": projects, "assigned": assigned, "wanted": sorted(wanted), "failures": failures,
-            "referenced": referenced, "reference_failure": reference_failure}
+            "referenced": referenced, "reference_failure": reference_failure,
+            "reference_rate_limited": reference_rate_limited, "rate_limit": linear.rate_limit}
 
 
 def gh_graphql(query):
@@ -1027,6 +1118,43 @@ def previous_run():
         return {}
 
 
+def active_rate_limit(previous, now):
+    """Read a bounded throttle checkpoint without touching credentials or APIs."""
+    records = [previous.get("linear_rate_limit")]
+    try:
+        records.append(json.loads((STATE_DIR / "linear-rate-limit.json").read_text()))
+    except (OSError, ValueError):
+        pass
+    active = []
+    for record in records:
+        try:
+            deadline = parse_time(record["retry_at"])
+            observed = parse_time(record["observed_at"])
+            if record["status"] == 429 and now < deadline <= now + RATE_MAX and observed.tzinfo:
+                active.append({"status": 429, "observed_at": observed.isoformat(),
+                               "retry_at": deadline.isoformat(), "headers": safe_rate_headers(record.get("headers"))})
+        except (KeyError, TypeError, ValueError, AttributeError):
+            pass
+    return max(active, key=lambda r: r["retry_at"]) if active else None
+
+
+def write_rate_limit(record):
+    """Persist the first throttle immediately, even if later task writes fail."""
+    temp = None
+    try:
+        STATE_DIR.mkdir(parents=True, exist_ok=True)
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=STATE_DIR,
+                                         prefix=".linear-rate-limit-", delete=False) as handle:
+            temp = Path(handle.name)
+            handle.write(json.dumps(record) + "\n")
+        os.replace(temp, STATE_DIR / "linear-rate-limit.json")
+    except OSError:
+        warn("Linear throttle checkpoint could not be written; this process still defers further reads")
+    finally:
+        if temp and temp.exists():
+            temp.unlink()
+
+
 def brief_text(task):
     """The newest generated brief, excluding the previous source-status footer."""
     notes = sorted(task.get("annotations") or [], key=lambda a: a.get("entry", ""), reverse=True)
@@ -1051,10 +1179,13 @@ def source_status(rows, scopes, existing, snapshot, github, now, previous):
         old = old_rows.get(key) or {}
         unavailable = []
         if pid not in snapshot["projects"]:
-            unavailable.append("Linear project unavailable")
+            if snapshot.get("rate_limit"):
+                unavailable.append("Linear project deferred until " + snapshot["rate_limit"]["retry_at"])
+            else:
+                unavailable.append("Linear project unavailable")
         if snapshot.get("assigned") is None:
             unavailable.append("Linear assigned issues unavailable")
-        if snapshot.get("reference_failure"):
+        if snapshot.get("reference_failure") and not snapshot.get("reference_rate_limited"):
             unavailable.append("Linear handoff ownership unavailable")
         missing_refs = set()
         if github is None:
@@ -1171,13 +1302,21 @@ def main(argv=None):
     active_overviews = {t["view_key"].split(":", 1)[1] for t in existing
                         if t.get("status") in ("pending", "waiting")
                         and (t.get("view_key") or "").startswith("standing:")}
+    rate_limit = active_rate_limit(previous, now)
+    linear = None
     try:
-        snapshot = read_linear(Linear(linear_key()), live_tasks)
+        if rate_limit:
+            raise LinearRateLimited(rate_limit)
+        linear = Linear(linear_key(), on_rate_limit=None if args.dry_run else write_rate_limit)
+        snapshot = read_linear(linear, live_tasks)
     except Exception as error:
         warn(f"Linear unavailable ({error}); preserving project contexts and associations")
         snapshot = {"projects": {}, "assigned": None,
                     "wanted": sorted(active_overviews),
-                    "failures": ["Linear unavailable"]}
+                    "failures": [str(error) if isinstance(error, LinearRateLimited) else "Linear unavailable"]}
+    rate_limit = (linear.rate_limit if linear else None) or rate_limit
+    if rate_limit:
+        snapshot["rate_limit"] = rate_limit
     if snapshot.get("reference_failure") or snapshot.get("assigned") is None:
         # Discovery is incomplete: an earlier task-linked project may still be
         # relevant even though this read could not rediscover its ownership.
@@ -1222,7 +1361,8 @@ def main(argv=None):
                "changed": len(changes["change"]), "deleted": len(changes["delete"]),
                "associations": association_result["changed"], "associations_skipped": association_result["skipped"],
                "failures": failures, "sources": sources,
-               "unavailable_refs": sorted(unavailable_refs)}
+               "unavailable_refs": sorted(unavailable_refs), "linear_rate_limit": rate_limit,
+               "linear_requests": linear.request_count if linear else 0}
     summary["last_success_at"] = (previous.get("last_success_at")
                                   or (previous.get("at") if not previous.get("failures") else None)) if failures else now.isoformat()
     write_state(summary)

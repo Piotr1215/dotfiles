@@ -2,12 +2,14 @@
 
 import copy
 import importlib.util
+import io
 import json
 import os
 import re
 import shutil
 import subprocess
 import tempfile
+import threading
 import unittest
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -443,6 +445,28 @@ class PlanTests(unittest.TestCase):
 
 
 class RefreshTests(unittest.TestCase):
+    def test_rate_limited_project_defers_but_completed_project_snapshot_publishes(self):
+        a = self.snap["projects"]["p1"]
+        b = project("p2", "Other project", [issue("DOC-2", title="Prior other work")])
+        snap = snapshot([a, b])
+        rows, scopes = pv.build_rows(snap, [], github(), NOW)
+        sources = pv.source_status(rows, scopes, [], snap, github(), NOW, {})
+        first, _ = pv.plan(rows, scopes, [], NOW)
+        old = stored(first)
+        a["issues"][0]["title"] = "Fresh completed source read"
+        later = NOW + timedelta(minutes=10)
+        partial = snapshot([a])
+        partial.update(wanted=["p1", "p2"], failures=["project p2 rate limited"], reference_failure=True,
+                       reference_rate_limited=True, rate_limit=pv.rate_limit_record({}, later))
+        rows, scopes = pv.build_rows(partial, old, github(), later)
+        pv.source_status(rows, scopes, old, partial, github(), later, {"sources": sources})
+        self.assertIn("Fresh completed source read", rows["standing:p1"]["annotations"][-1])
+        self.assertEqual(rows["standing:p1"]["view_state"], "In Progress")
+        self.assertIn("Prior other work", rows["standing:p2"]["annotations"][-1])
+        self.assertIn("Linear project deferred until " + partial["rate_limit"]["retry_at"],
+                      rows["standing:p2"]["annotations"][-1])
+        self.assertIn("Linear last verified: " + NOW.isoformat(), rows["standing:p2"]["annotations"][-1])
+
     def test_failed_source_retains_structured_title_and_issue_with_unavailable_state(self):
         rows, scopes, sources = self.generate()
         first, _ = pv.plan(rows, scopes, [], NOW)
@@ -859,6 +883,134 @@ class RefreshTests(unittest.TestCase):
         self.assertEqual(payload[0]["uuid"], headers[0]["uuid"])
         self.assertIn("Current release checks", payload[0]["annotations"][-1]["description"])
         self.assertIn("Linear project unavailable", payload[0]["annotations"][-1]["description"])
+
+
+class LinearRateLimitTests(unittest.TestCase):
+    """No API calls: mock HTTP429 and the headers documented by Linear."""
+    def setUp(self):
+        folder = tempfile.TemporaryDirectory(prefix="project-rate-limit-")
+        self.addCleanup(folder.cleanup)
+        self.root = Path(folder.name)
+        patch = mock.patch.object(pv, "STATE_DIR", self.root / "state")
+        patch.start()
+        self.addCleanup(patch.stop)
+
+    def error(self, headers=None):
+        return pv.urllib.error.HTTPError("https://fixture.invalid/?token=secret-url", 429,
+                                         "secret-error-body", headers or {}, None)
+
+    def test_429_stops_later_queries_and_keeps_only_safe_diagnostics(self):
+        headers = {"Retry-After": "120", "Authorization": "secret-key", "Set-Cookie": "secret-cookie",
+                   "X-RateLimit-Complexity-Limit": "3000000", "X-RateLimit-Complexity-Remaining": "0",
+                   "X-RateLimit-Requests-Reset": "secret-header-value"}
+        client = pv.Linear("secret-api-key", on_rate_limit=pv.write_rate_limit)
+        with mock.patch.object(pv, "datetime", wraps=datetime) as clock, \
+                mock.patch.object(pv.urllib.request, "urlopen", side_effect=self.error(headers)) as request:
+            clock.now.return_value = NOW
+            for _ in range(3):
+                with self.assertRaises(pv.LinearRateLimited) as error:
+                    client.query("fixture")
+                self.assertNotIn("secret", str(error.exception))
+        request.assert_called_once()
+        self.assertEqual(client.request_count, 1)
+        stored = json.loads((pv.STATE_DIR / "linear-rate-limit.json").read_text())
+        self.assertEqual(stored["retry_at"], (NOW + timedelta(seconds=120)).isoformat())
+        self.assertEqual(stored["headers"], {"retry-after": "120", "x-ratelimit-complexity-limit": "3000000",
+                                            "x-ratelimit-complexity-remaining": "0"})
+        self.assertNotIn("secret", json.dumps(stored))
+
+    def test_reset_milliseconds_retry_date_and_bounded_fallback(self):
+        deadline = NOW + timedelta(hours=1)
+        for name in ("X-RateLimit-Requests-Reset", "X-RateLimit-Complexity-Reset", "X-RateLimit-Endpoint-Requests-Reset"):
+            record = pv.rate_limit_record({name: str(int(deadline.timestamp() * 1000))}, NOW)
+            self.assertEqual(record["retry_at"], deadline.isoformat())
+        record = pv.rate_limit_record({"Retry-After": deadline.strftime("%a, %d %b %Y %H:%M:%S GMT")}, NOW)
+        self.assertEqual(record["retry_at"], deadline.isoformat())
+        record = pv.rate_limit_record({"Retry-After": "secret-invalid", "X-RateLimit-Requests-Reset": "invalid"}, NOW)
+        self.assertEqual(record["retry_at"], (NOW + timedelta(minutes=15)).isoformat())
+        self.assertEqual(record["headers"], {})
+        self.assertEqual(pv.rate_limit_record({"Retry-After": "9999999"}, NOW)["retry_at"],
+                         (NOW + timedelta(hours=24)).isoformat())
+
+    def test_shared_workers_do_not_start_queued_requests_after_first_429(self):
+        client = pv.Linear("fixture")
+        barrier, lock, calls = threading.Barrier(4), threading.Lock(), []
+        def request(*args, **kwargs):
+            with lock:
+                calls.append(1)
+                index = len(calls)
+            barrier.wait(timeout=3)
+            if index == 1:
+                raise self.error({"Retry-After": "60"})
+            self.assertTrue(client._stop.wait(timeout=3))
+            return io.BytesIO(b'{"data":{"ok":true}}')
+        with mock.patch.object(pv.urllib.request, "urlopen", side_effect=request):
+            with pv.ThreadPoolExecutor(max_workers=4) as pool:
+                futures = [pool.submit(client.query, "fixture") for _ in range(20)]
+            good = 0
+            for future in futures:
+                try:
+                    good += future.result()["ok"]
+                except pv.LinearRateLimited:
+                    pass
+        self.assertEqual(good, 3)
+        self.assertEqual(len(calls), 4)
+        self.assertEqual(client.request_count, 4)
+
+    def test_atomic_checkpoint_and_malformed_or_expired_state_fail_open(self):
+        record = pv.rate_limit_record({}, NOW)
+        with mock.patch.object(pv.os, "replace", wraps=os.replace) as replace:
+            pv.write_rate_limit(record)
+        target = pv.STATE_DIR / "linear-rate-limit.json"
+        replace.assert_called_once()
+        self.assertEqual(replace.call_args.args[0].parent, target.parent)
+        self.assertEqual(list(target.parent.iterdir()), [target])
+        self.assertEqual(pv.active_rate_limit({}, NOW), record)
+        self.assertIsNone(pv.active_rate_limit({}, NOW + timedelta(minutes=16)))
+        for malformed in ("{invalid", json.dumps({"status": 429, "retry_at": "invalid", "observed_at": "secret"})):
+            target.write_text(malformed)
+            self.assertIsNone(pv.active_rate_limit({}, NOW))
+        target.write_text(json.dumps(record))
+        with mock.patch.object(pv.os, "replace", side_effect=OSError("disk full")), mock.patch("sys.stderr"):
+            pv.write_rate_limit(pv.rate_limit_record({"Retry-After": "1800"}, NOW))
+        self.assertEqual(json.loads(target.read_text()), record)
+        self.assertEqual(list(target.parent.iterdir()), [target])
+
+    def test_seeded_cooldown_skips_credentials_and_api_until_deadline_then_resumes(self):
+        pv.write_rate_limit(pv.rate_limit_record({}, NOW))
+        with mock.patch.object(pv, "datetime", wraps=datetime) as clock, \
+                mock.patch.object(pv, "task_json", return_value=[]), \
+                mock.patch.object(pv, "linear_key", return_value="fixture") as key, \
+                mock.patch.object(pv, "read_linear", return_value=snapshot()) as read, \
+                mock.patch.object(pv, "read_github", return_value=github()) as gh, \
+                mock.patch.object(pv, "apply"), mock.patch.object(pv, "publish_contexts"), \
+                mock.patch("sys.stdout"), mock.patch("sys.stderr"):
+            clock.now.return_value = NOW + timedelta(minutes=1)
+            pv.main([])
+            key.assert_not_called()
+            read.assert_not_called()
+            gh.assert_not_called()
+            summary = json.loads((pv.STATE_DIR / "last-run.json").read_text())
+            self.assertEqual(summary["linear_requests"], 0)
+            self.assertEqual(summary["linear_rate_limit"]["status"], 429)
+            clock.now.return_value = NOW + timedelta(minutes=16)
+            pv.main([])
+            key.assert_called_once()
+            read.assert_called_once()
+            gh.assert_called_once()
+
+    def test_dry_run_429_writes_no_checkpoint_or_other_state(self):
+        def read(client, tasks):
+            return client.query("fixture")
+        with mock.patch.object(pv, "datetime", wraps=datetime) as clock, \
+                mock.patch.object(pv, "task_json", return_value=[]), \
+                mock.patch.object(pv, "linear_key", return_value="fixture"), \
+                mock.patch.object(pv, "read_linear", side_effect=read), \
+                mock.patch.object(pv.urllib.request, "urlopen", side_effect=self.error({"Retry-After": "60"})), \
+                mock.patch("sys.stdout"), mock.patch("sys.stderr"):
+            clock.now.return_value = NOW
+            self.assertEqual(pv.main(["--dry-run"]), 0)
+        self.assertEqual(list(self.root.iterdir()), [])
 
 
 class SourcePaginationTests(unittest.TestCase):
