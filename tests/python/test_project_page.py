@@ -30,10 +30,11 @@ class ProjectPageTest(unittest.TestCase):
         done = copy.deepcopy(todo)
         done.update(identifier='DEVOPS-125', title='Finished work', state={'name': 'Done', 'type': 'completed'}, completedAt='2026-11-10T10:00:00+00:00')
         data['project']['issues'].extend([todo, done])
+        data['tasks'][0]['annotations'] = [{'description': 'target: slack:C123/1234567890.123456'}]
         result = page.render(data, 'Work continues (DEVOPS-123).\nNext steps\n- Fix builds (DEVOPS-123)', '2026-11-11T12:00:00+00:00')
         for name in ('Where it stands', 'Changed in the last 24 hours', 'Waiting on Piotr', 'In progress', 'Next', 'Done in the last 14 days', 'Blocked', 'Conversations', 'Links'):
             self.assertIn(name, result)
-        for text in ('&lt;script&gt;', 'First: 1/3', 'CI green', 'new comment', 'Thread', 'Project deck', 'content="300"', 'DEVOPS-124 Next work', 'DEVOPS-125 Finished work'):
+        for text in ('&lt;script&gt;', 'First: 1/3', 'CI green', 'new comment', 'Thread', 'Project deck', 'content="300"', 'DEVOPS-124 Next work', 'DEVOPS-125 Finished work', 'https://loft-labs-inc.slack.com/archives/C123/p1234567890123456'):
             self.assertIn(text, result)
         self.assertNotIn('<script>', result)
 

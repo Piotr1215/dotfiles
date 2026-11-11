@@ -188,6 +188,10 @@ def render(data, synopsis, generated):
             text = annotation.get('description', '')
             for url in re.findall(r'https?://[^\s<>]+', text):
                 if 'slack.com/' in url: conv[url.rstrip('.,)')] = text.splitlines()[0]
+            for channel, stamp in re.findall(r'slack:([CDG][A-Z0-9]+)/(top|[0-9]+\.[0-9]{6})', text):
+                url = f'https://loft-labs-inc.slack.com/archives/{channel}'
+                if stamp != 'top': url += '/p' + stamp.replace('.', '')
+                conv[url] = text.splitlines()[0]
     if data.get('deck'): docs[data['deck']] = 'Project deck'
     header = '<h1>' + link(p['url'], p['name']) + '</h1><p>Health: ' + html.escape(u.get('health') or 'unknown') + ' | Target: ' + html.escape(p.get('targetDate') or 'unset') + ' | Latest update: ' + (link(u.get('url'), u.get('createdAt')) if u else 'none') + ' | Generated: ' + html.escape(generated) + '</p><p>Milestones: ' + (', '.join(progress) or 'none') + '</p>'
     if synopsis:
