@@ -363,7 +363,8 @@ KINDS = {"slack", "command", "pr", "ack", "other"}
 # The fixed line puts the row's command in the next editing buffer, unsubmitted,
 # and arms a one-shot hook: the first command Piotr runs there that exits 0
 # calls `verify` (Piotr, 11 Nov: "once command is ran verify it and close task").
-PREFILL = (' handoff_ran() { HANDOFF_RAN=1; };'
+PREFILL = (' xdg-open() { command xdg-open "$@" > >(sed \"/^[Oo]pening in existing browser session\\.$/d\") 2> >(sed -E \"/zygote_linux\\.cc:.*Broken pipe|zygote_main_linux\\.cc:.*Broken pipe/d\" >&2); };'
+           ' handoff_ran() { HANDOFF_RAN=1; };'
            ' handoff_rc() { local rc=$?; [[ -n $HANDOFF_RAN ]] || return 0; unset HANDOFF_RAN;'
            ' (( rc == 0 )) || return 0;'
            ' precmd_functions=(${precmd_functions:#handoff_rc});'
@@ -433,24 +434,25 @@ def open_floating(title, argv, focus=True):
 
 
 def open_command_window(uuid, command, focus=True):
-    """Type the row's command, ready for Enter, in a focused floating tmux pane.
-
-    Piotr, 11 Nov: "when I start on things the floating tmux window should
-    always be in focus". The command travels as one argv element into the
-    pane's environment and never through send-keys.
-    """
+    """Queue the command for Enter in a tmux window that stays open."""
     if not command:
         raise ValueError("command handoff has no cmd: note; add one with __tw.sh note <ref> 'cmd: <command>'")
     if any(ord(char) < 32 or ord(char) == 127 for char in command):
         raise ValueError("cmd: note must be one line without control characters")
     tmux = os.environ.get("HANDOFF_TMUX_COMMAND", "tmux")
-    pane = open_floating("handoff cmd " + uuid[:8],
-                         ["env", "HANDOFF_CMD=" + command, "HANDOFF_UUID=" + uuid,
-                          "HANDOFF_NAVIGATOR=" + str(Path(__file__).resolve()), "zsh", "-i"], focus)
+    argv = ["env", "HANDOFF_CMD=" + command, "HANDOFF_UUID=" + uuid,
+            "HANDOFF_NAVIGATOR=" + str(Path(__file__).resolve()), "zsh", "-i"]
+    if re.fullmatch(r"%[0-9]+", os.environ.get("TMUX_PANE", "")):
+        flags = [] if focus else ["-d"]
+        pane = run([tmux, "new-window", "-P", "-F", "#{pane_id}", *flags,
+                    "-t", origin_pane(), "-n", "handoff-" + uuid[:8], *argv],
+                   capture_output=True, text=True).stdout.strip()
+        if not re.fullmatch(r"%[0-9]+", pane):
+            raise ValueError("tmux did not report the new window pane")
+    else:
+        pane = open_floating("handoff cmd " + uuid[:8], argv, focus)
     run([tmux, "send-keys", "-t", pane, "-l", PREFILL])
     run([tmux, "send-keys", "-t", pane, "Enter"])
-    if focus:
-        run([tmux, "select-pane", "-t", pane])
     return pane
 
 
@@ -472,7 +474,7 @@ def act_on_kind(task, slack=False):
 
     slack: copy the newest draft: (its brief floater shows the draft); a cmd: also
     waits unfocused, since the draft keeps the keyboard. command: the cmd: waits
-    for Enter in a focused floating pane. agent: the newest live `agent:` or
+    for Enter in a separate tmux window. agent: the newest live `agent:` or
     `tmux session <name>` session is attached in a focused floating pane.
     none: nothing applied. failed: the action was logged with its remedy.
     """
@@ -522,19 +524,41 @@ def verify(task):
             lines = [line for line in result.stdout.splitlines() if line.startswith(uuid[:8])]
             verdict = (lines or [result.stderr.strip() or f"probe exit {result.returncode}"])[-1]
             if result.returncode == 2:
-                print(f"handoff: closed {uuid[:8]} with proof: {verdict}")
-                log(f"handoff: cmd verified and closed {uuid}: {verdict}")
+                log(f"handoff: closed {uuid[:8]} by done-when probe: {verdict}")
                 return 0
             why = f"done-when not proved ({verdict})"
         except (OSError, subprocess.SubprocessError) as error:
             why = f"done-when probe failed ({error})"
-    note = f"s: cmd exited 0; {why}; row stays open"
-    print(f"handoff: {note}")
-    log(f"handoff: {uuid} {note}")
+    # A timer can close the row before or during our probe. An empty probe
+    # result is not evidence that it remained pending.
+    def current():
+        rows = task_export(os.environ.get("HANDOFF_TASK_COMMAND", "task"), uuid)
+        if len(rows) != 1 or rows[0].get("uuid", "").lower() != uuid.lower():
+            raise ValueError("task state unavailable")
+        return rows[0]
+
+    def closed(row):
+        if row.get("status") == "completed":
+            proof = newest_note(row, "done-when proved")
+            actor = "done-when probe" if "__handoff_probe.py" in proof else "another action (actor unknown)"
+            log(f"handoff: {uuid[:8]} already closed by {actor}")
+            return True
+        return False
+
     try:
-        run([tw, "note", uuid, note], stdout=subprocess.DEVNULL)
-    except (OSError, subprocess.SubprocessError) as error:
-        log(f"handoff: could not note {uuid}: {error}")
+        if closed(current()):
+            return 0
+        note = f"s: cmd exited 0; {why}; row stays open"
+        result = subprocess.run([tw, "--all", "note", uuid, note], capture_output=True, text=True, timeout=15)
+        if closed(current()):
+            return 0
+        if result.returncode:
+            detail = (result.stderr or result.stdout).strip().splitlines()
+            log(f"handoff: {uuid[:8]} could not save result: {detail[-1] if detail else 'note failed'}")
+            return 1
+        log(f"handoff: {uuid[:8]} {note}")
+    except (OSError, ValueError, subprocess.SubprocessError) as error:
+        log(f"handoff: {uuid[:8]} could not check or save result: {type(error).__name__}")
     return 1
 
 

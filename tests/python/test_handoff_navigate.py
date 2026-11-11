@@ -516,25 +516,24 @@ def test_newest_note_keeps_inner_lines_and_takes_the_latest():
     assert nav.newest_note(row, "cmd") == ""
 
 
-def test_command_kind_types_the_command_in_a_focused_floating_pane(fake_tmux):
+def test_command_kind_types_the_command_in_a_focused_window(fake_tmux):
     """Piotr, 11 Nov: "the floating tmux window should always be in focus"."""
     hostile = "git push; echo $(touch /tmp/pwned) `id` 'q' \"d\" \\ $HOME"
     row = dict(task(f"cmd: {hostile}"), kind="command")
     assert nav.act_on_kind(row) == "command"
     calls = fake_tmux()
     new = calls[0]
-    assert new[:4] == ["new-pane", "-P", "-F", "#{pane_id}"] and "-d" not in new
+    assert new[:4] == ["new-window", "-P", "-F", "#{pane_id}"] and "-d" not in new
     assert new[new.index("-t") + 1] == "%18"
-    assert new[new.index("-x"):new.index("-x") + 8] == nav.FLOAT
-    assert new[new.index("-T") + 1] == "handoff cmd " + UUID[:8]
+    assert new[new.index("-n") + 1] == "handoff-" + UUID[:8]
     # The command is one argv element in the pane's environment, verbatim.
-    tail = new[new.index("--") + 1:]
+    tail = new[new.index("env"): ]
     assert tail[:3] == ["env", "HANDOFF_CMD=" + hostile, "HANDOFF_UUID=" + UUID]
     assert tail[3] == "HANDOFF_NAVIGATOR=" + str(PATH)
     assert tail[-2:] == ["zsh", "-i"]
     # Enter submits only the fixed prefill, not the command it queues.
     assert calls[1:] == [["send-keys", "-t", "%99", "-l", nav.PREFILL], ["send-keys", "-t", "%99", "Enter"],
-                         ["select-pane", "-t", "%99"]]
+                         ]
     assert all(hostile not in arg for call in calls[1:] for arg in call)
     assert "HANDOFF_CMD" in nav.PREFILL
 
@@ -710,7 +709,7 @@ def test_start_on_a_command_row_focuses_the_command_pane_without_a_brief(monkeyp
     row = dict(task(f"cmd: {PUSH}", "agent: some-worker"), kind="command")
     order = start_row(monkeypatch, tmp_path, row)
     calls = fake_tmux()
-    assert [c[0] for c in calls] == ["new-pane", "send-keys", "send-keys", "select-pane"]
+    assert [c[0] for c in calls] == ["new-window", "send-keys", "send-keys"]
     assert "HANDOFF_CMD=" + PUSH in calls[0]
     assert order == ["prepare", ("open", [])]
 
@@ -786,7 +785,7 @@ def test_verify_closes_the_row_when_its_probe_proves_done(tmp_path, monkeypatch,
     assert nav.verify(task("cmd: gh pr merge 26", "done-when: pr-merged loft-sh/architecture#26")) == 0
     assert (tmp_path / "probe.argv").read_text() == f"run --uuid {UUID}\n"
     assert not (tmp_path / "tw.argv").exists()
-    assert "closed aa476008 with proof: aa476008 done: PR merged" in capsys.readouterr().out
+    assert "closed aa476008 by done-when probe" in capsys.readouterr().err
 
 
 def test_verify_keeps_an_unproved_row_open_with_the_reason(tmp_path, monkeypatch):
@@ -794,9 +793,10 @@ def test_verify_keeps_an_unproved_row_open_with_the_reason(tmp_path, monkeypatch
     tw = fake_bin(tmp_path, "tw", f'printf "%s|" "$@" >> {tmp_path}/tw.argv\n')
     monkeypatch.setenv("HANDOFF_PROBE_COMMAND", str(probe))
     monkeypatch.setenv("HANDOFF_TW_WRAPPER", str(tw))
+    monkeypatch.setattr(nav, "task_export", lambda *args: [dict(task(), status="pending")])
     assert nav.verify(task("done-when: pr-merged loft-sh/architecture#26")) == 1
     assert (tmp_path / "tw.argv").read_text() == (
-        f"note|{UUID}|s: cmd exited 0; done-when not proved ({UUID[:8]} open: PR still open); row stays open|")
+        f"--all|note|{UUID}|s: cmd exited 0; done-when not proved ({UUID[:8]} open: PR still open); row stays open|")
 
 
 @pytest.mark.parametrize("notes", [(), ("done-when: manual Piotr reads the page",)])
@@ -804,9 +804,51 @@ def test_verify_without_a_machine_checkable_probe_never_runs_it(tmp_path, monkey
     tw = fake_bin(tmp_path, "tw", f'printf "%s|" "$@" >> {tmp_path}/tw.argv\n')
     monkeypatch.setenv("HANDOFF_PROBE_COMMAND", "/nonexistent/probe")
     monkeypatch.setenv("HANDOFF_TW_WRAPPER", str(tw))
+    monkeypatch.setattr(nav, "task_export", lambda *args: [dict(task(), status="pending")])
     assert nav.verify(task(*notes)) == 1
     assert "no machine-checkable done-when; row stays open" in (tmp_path / "tw.argv").read_text()
 
+
+
+def test_verify_reports_previously_closed_probe_row_without_note(tmp_path, monkeypatch, capsys):
+    probe = fake_bin(tmp_path, "probe", "exit 0\n")
+    monkeypatch.setenv("HANDOFF_PROBE_COMMAND", str(probe))
+    row = dict(task("done-when proved: merged (__handoff_probe.py)"), status="completed")
+    monkeypatch.setattr(nav, "task_export", lambda *args: [row])
+    monkeypatch.setenv("HANDOFF_TW_WRAPPER", str(tmp_path / "must-not-run"))
+    assert nav.verify(task("done-when: pr-merged repo#1")) == 0
+    output = capsys.readouterr()
+    assert "already closed by done-when probe" in output.err
+    assert "row stays open" not in output.err + output.out
+
+
+def test_verify_handles_close_during_note(tmp_path, monkeypatch, capsys):
+    tw = fake_bin(tmp_path, "tw", "exit 0\n")
+    monkeypatch.setenv("HANDOFF_TW_WRAPPER", str(tw))
+    rows = iter([dict(task(), status="pending"), dict(task(), status="completed")])
+    monkeypatch.setattr(nav, "task_export", lambda *args: [next(rows)])
+    assert nav.verify(task("done-when: manual check")) == 0
+    assert "already closed by another action (actor unknown)" in capsys.readouterr().err
+
+
+def test_xdg_open_filters_noise_but_preserves_errors(tmp_path):
+    opener = fake_bin(tmp_path, "xdg-open", 'echo "Opening in existing browser session."; echo "zygote_linux.cc:662 Broken pipe" >&2; echo "real failure" >&2; exit 3\n')
+    script = nav.PREFILL + '; read -z queued; xdg-open url; print -r -- "status=$?"'
+    result = subprocess.run(["zsh", "-fc", script], capture_output=True, text=True,
+                            env={"PATH": str(tmp_path) + ":/usr/bin:/bin", "HANDOFF_CMD": "true", "TERM": "dumb"})
+    assert "Opening in existing" not in result.stdout
+    assert "Broken pipe" not in result.stderr
+    assert "real failure" in result.stderr and "status=3" in result.stdout
+
+
+def test_note_failure_is_one_readable_line(tmp_path, monkeypatch, capsys):
+    tw = fake_bin(tmp_path, "tw", 'echo "note denied" >&2; exit 1\n')
+    monkeypatch.setenv("HANDOFF_TW_WRAPPER", str(tw))
+    monkeypatch.setattr(nav, "task_export", lambda *args: [dict(task(), status="pending")])
+    assert nav.verify(task("done-when: manual check")) == 1
+    output = capsys.readouterr()
+    assert output.err.count("handoff:") == 1
+    assert "note denied" in output.err and "CalledProcessError" not in output.err
 
 def test_verify_mode_reads_the_row_and_runs_its_probe(tmp_path, monkeypatch):
     row = task("done-when: pr-merged loft-sh/architecture#26")
