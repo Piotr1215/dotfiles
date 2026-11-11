@@ -1438,13 +1438,14 @@ cmd_compact() {
 
 # The form behind a show reminder and a passed deadline (kind show or
 # deadline). The GUI only names the choice; every consequence is here. Open
-# loops back to the form. Extend moves the reminder's time, or the deadline;
-# Send to AI hands the state report to Gordon or a new Claude; Delete deletes;
+# loops back to the form, with any instruction Piotr typed still in it.
+# Extend moves the reminder's time, or the deadline; Send to AI hands the state
+# report and Piotr's instruction to Gordon or a new Claude; Delete deletes;
 # Done (show only) spends it. Closing without a choice leaves the provisional
 # retry the caller set, so the form comes back.
 show_dialog() {
 	local id="$1" record="$2" title="$3" body="$4" url="$5" due="$6" late="$7" kind="${8:-show}"
-	local subject repeat response action when pick
+	local subject repeat response action when pick note=""
 	subject="$(jq -r '.subject // ""' <<<"$record")"
 	repeat="$(jq -r '.repeat // ""' <<<"$record")"
 	pick="$(date -d 'tomorrow 9:00' '+%Y-%m-%d %H:%M')"
@@ -1452,13 +1453,14 @@ show_dialog() {
 	while true; do
 		response="$(jq -nc --arg title "$title" --arg body "$body" --arg url "$url" \
 			--arg due "$due" --arg late "$late" --arg type "$(subject_type "$subject")" --arg repeat "$repeat" \
-			--arg kind "$kind" --arg pick "$pick" \
-			'{kind:$kind, title:$title, body:$body, url:$url, due:$due, late:$late, subject_type:$type, repeat:$repeat, pick:$pick}' \
+			--arg kind "$kind" --arg pick "$pick" --arg note "$note" \
+			'{kind:$kind, title:$title, body:$body, url:$url, due:$due, late:$late, subject_type:$type, repeat:$repeat, pick:$pick, note:$note}' \
 			| "$GUI" alert)" || {
 			log_fire "$id" dismissed "snooze $DEFAULT_SNOOZE" "$title"
 			return 0
 		}
 		action="$(jq -r '.action // ""' <<<"$response")"
+		note="$(jq -r '.note // ""' <<<"$response")"
 		case "$action" in
 		open)
 			case "$subject" in
@@ -1490,7 +1492,7 @@ show_dialog() {
 			return 0
 			;;
 		ai)
-			send_to_ai "$id" "$title" "$body" "$kind" || return 0
+			send_to_ai "$id" "$title" "$body" "$kind" "$note" || return 0
 			if [ "$kind" = deadline ]; then
 				update_record "$id" '.deadline_seen = .deadline | del(.deadline_retry)'
 			else
@@ -1522,23 +1524,27 @@ gordon_pane() {
 		awk '$2 == "triage" || $2 == "gordon" { print $1, $2; exit }'
 }
 
+# Piotr's instruction and the ask come before the report: the bus DM is capped
+# at 1500 characters, and a long report would otherwise cut them off. The
+# report's tail is the part the record can give back.
 ai_prompt() {
-	local id="$1" title="$2" report="$3" kind="$4" ask
+	local id="$1" title="$2" report="$3" kind="$4" note="${5:-}" ask instruction=""
 	if [ "$kind" = deadline ]; then
 		ask="Its deadline passed with neither the success nor the failure condition met. Work with Piotr on its conditions: change the check, extend the deadline (remind edit $id --deadline <when>), or delete it."
 	else
 		ask="Work with Piotr on what it asks for, then mark it done or move it (remind edit $id --when <when>)."
 	fi
-	printf 'Piotr sent reminder %s to you from its form: %s\n\n%s\n\n%s Load the reminder skill; `remind list --json | jq '"'"'.[] | select(.id == "%s")'"'"'` shows the record.' \
-		"$id" "$title" "$report" "$ask" "$id"
+	[ -n "$note" ] && instruction="Piotr's instruction: $note"$'\n\n'
+	printf 'Piotr sent reminder %s to you from its form: %s\n\n%s%s Load the reminder skill; `remind list --json | jq '"'"'.[] | select(.id == "%s")'"'"'` shows the record.\n\n%s' \
+		"$id" "$title" "$instruction" "$ask" "$id" "$report"
 }
 
 # Gordon when his pane is up: a DM on the agents bus, then Piotr's terminal
 # moves to that pane so the conversation is in front of him. Otherwise, or
 # when the DM fails, a new Claude window in the attached tmux session.
 send_to_ai() {
-	local id="$1" title="$2" report="$3" kind="$4" prompt pane="" agent="" client session
-	prompt="$(ai_prompt "$id" "$title" "$report" "$kind")"
+	local id="$1" title="$2" report="$3" kind="$4" note="${5:-}" prompt pane="" agent="" client session
+	prompt="$(ai_prompt "$id" "$title" "$report" "$kind" "$note")"
 	read -r pane agent < <(gordon_pane) || true
 	client="$("$TMUX_BIN" list-clients -F '#{client_name}' 2>/dev/null | head -n1)" || true
 	if [ -n "$pane" ] && SND_FROM=reminder timeout 20 "$SND" --no-human -t "$agent" "${prompt:0:1500}" >/dev/null 2>&1; then

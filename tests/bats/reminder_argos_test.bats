@@ -318,6 +318,38 @@ STUB
   grep -q "	$id	sent	gordon (triage)	" "$REMINDER_LOG"
 }
 
+@test "send to AI carries Piotr's instruction ahead of the ask and the report, and Open keeps it in the form" {
+  ai_stubs '%5 triage'
+  "$REMINDER" add 'Renew Tailscale' '2026-09-08 09:00' --subject 'Ask for the annual plan price' >/dev/null
+  id="$(only_id)"
+  export TEST_GUI_CALLS="${BATS_TEST_TMPDIR}/gui-calls"
+  : >"$TEST_GUI_CALLS"
+  # First the form answers Open with a typed instruction, then Send to AI.
+  cat >"$REMINDER_GUI" <<'STUB'
+#!/usr/bin/env bash
+printf 'call\n' >>"$TEST_GUI_CALLS"
+n=$(wc -l <"$TEST_GUI_CALLS")
+cat >"$TEST_ALERT_REQUEST.$n"
+case "$n" in
+  1) printf '%s\n' '{"action":"open","note":"renew on the annual plan"}' ;;
+  *) printf '%s\n' '{"action":"ai","note":"renew on the annual plan"}' ;;
+esac
+STUB
+  chmod +x "$REMINDER_GUI"
+
+  run "$REMINDER" fire "$id"
+
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.note' "$TEST_ALERT_REQUEST.1")" = "" ]
+  [ "$(jq -r '.note' "$TEST_ALERT_REQUEST.2")" = "renew on the annual plan" ]
+  instruction=$(grep -n "^Piotr's instruction: renew on the annual plan$" "$TEST_SND_LOG" | cut -d: -f1)
+  ask=$(grep -n '^Work with Piotr on what it asks for' "$TEST_SND_LOG" | cut -d: -f1)
+  report=$(grep -n '^Ask for the annual plan price$' "$TEST_SND_LOG" | cut -d: -f1)
+  [ -n "$instruction" ] && [ "$instruction" -lt "$ask" ] && [ "$ask" -lt "$report" ]
+  [ "$(last_record | jq -r '.status')" = done ]
+  grep -q "	$id	sent	gordon (triage)	" "$REMINDER_LOG"
+}
+
 @test "send to AI opens a new Claude window when Gordon is not running or the DM fails" {
   for setup in "|0" "%5 triage|1"; do
     ai_stubs "${setup%|*}" "${setup#*|}"
