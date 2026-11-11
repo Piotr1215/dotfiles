@@ -1,0 +1,15 @@
+[Unit]
+Description=Refresh the +view rows of the taskwarrior-tui myprojects report
+Documentation=file://%h/dev/dotfiles/scripts/__project_view_refresh.py
+After=network-online.target
+
+[Service]
+Type=oneshot
+Slice=background-automation.slice
+Nice=10
+CPUQuota=30%
+# gh and pass for the GitHub and Linear reads; task for the view rows.
+Environment="PATH=%h/dev/dotfiles/scripts:%h/.local/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=%h/dev/dotfiles/scripts/__cron_run.sh __project_view_refresh -- /usr/bin/python3 %h/dev/dotfiles/scripts/__project_view_refresh.py
+TimeoutStartSec=5min
+StandardError=journal

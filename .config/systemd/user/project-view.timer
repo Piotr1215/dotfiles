@@ -1,0 +1,12 @@
+[Unit]
+Description=Keep Piotr's per-project taskwarrior-tui view live every 10 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=10min
+RandomizedDelaySec=30s
+Persistent=true
+Unit=project-view.service
+
+[Install]
+WantedBy=timers.target
