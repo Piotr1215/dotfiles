@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import os
 from pathlib import Path
 import subprocess
 
@@ -721,3 +722,57 @@ def test_show_slack_draft_positions_live_buffer_and_restores_terminal(tmp_path, 
         subprocess.run([nvim, '--server', str(socket), '--remote-expr', 'execute("qa!")'],
                        capture_output=True, timeout=5)
         process.wait(timeout=5)
+
+
+@pytest.fixture
+def fake_pages(tmp_path, monkeypatch):
+    """Tab bridge, xdg-open and layout on disk, each logging its argv as one line."""
+    log = tmp_path / "pages.log"
+    record = f'printf "%s " "$(basename "$0")" "$@" >> {log}; printf "\\n" >> {log}\n'
+    def setup(bridge_status):
+        tab = fake_bin(tmp_path, "tab", record + f"exit {bridge_status}\n")
+        fake_bin(tmp_path, "xdg-open", record)
+        layout = fake_bin(tmp_path, "layout", record)
+        monkeypatch.setenv("PATH", f"{tmp_path}{os.pathsep}{os.environ['PATH']}")
+        monkeypatch.setenv("HANDOFF_TAB_COMMAND", str(tab))
+        monkeypatch.setenv("HANDOFF_LAYOUT_COMMAND", str(layout))
+        monkeypatch.delenv("HANDOFF_BROWSER_COMMAND", raising=False)
+        monkeypatch.setattr(nav, "window_id", lambda _: "222")
+        monkeypatch.setattr(nav.time, "sleep", lambda _: None)
+        return lambda: [line.split() for line in log.read_text().splitlines()]
+    return setup
+
+
+DCA = ["https://github.com/loft-sh/.github/pull/11", "https://github.com/loft-sh"]
+
+
+def test_stale_tab_bridge_falls_back_to_xdg_open_tabs(fake_pages, capsys):
+    """Piotr, 11 Nov on dca07548: s opened nothing once the bridge extension went stale."""
+    calls = fake_pages(1)
+    nav.navigate_many(DCA, "111")
+    assert [c for c in calls() if c[0] == "xdg-open"] == [["xdg-open", url] for url in DCA]
+    assert not any("--new-window" in c for c in calls())
+    assert calls()[-1] == ["layout", "2"]
+    err = capsys.readouterr().err
+    for url in DCA:
+        assert f"handoff: tab bridge failed, fallback xdg-open {url}" in err
+
+
+def test_live_tab_bridge_opens_pages_without_xdg_open(fake_pages, capsys):
+    calls = fake_pages(0)
+    nav.navigate_many(DCA, "111")
+    assert [c for c in calls() if c[0] != "layout"] == [["tab", "--focus", url] for url in DCA]
+    assert capsys.readouterr().err.count("handoff: opened via tab bridge") == 2
+
+
+def test_cmd_page_opens_beside_links_and_only_then_skips_the_command(monkeypatch):
+    shown = []
+    monkeypatch.setattr(nav, "open_command_window", lambda uuid, command: shown.append(command))
+    row = task(f"link: {DCA[0]}", "cmd: xdg-open https://github.com/loft-sh/vcluster")
+    assert nav.annotation_urls(row) == [DCA[0], "https://github.com/loft-sh/vcluster"]
+    nav.act_on_kind(row)
+    assert shown == []
+    bad = task(f"link: {DCA[0]}", "cmd: xdg-open https://github.com:8443/loft-sh")
+    assert nav.annotation_urls(bad) == [DCA[0]]
+    nav.act_on_kind(bad)
+    assert shown == ["xdg-open https://github.com:8443/loft-sh"]

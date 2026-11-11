@@ -172,6 +172,20 @@ def slack_deep_link(url):
     return link
 
 
+def open_page(url):
+    """Open one page as a tab in the existing Chrome window, bridge first.
+
+    A stale bridge extension exits 1; xdg-open still reaches the page (11 Nov).
+    """
+    try:
+        run([os.environ.get("HANDOFF_TAB_COMMAND", str(ROOT / "__handoff_tab.py")), "--focus", url],
+            stdout=subprocess.DEVNULL)
+        print(f"handoff: opened via tab bridge {url}", file=sys.stderr)
+    except (OSError, subprocess.SubprocessError):
+        print(f"handoff: tab bridge failed, fallback xdg-open {url}", file=sys.stderr)
+        run(["xdg-open", url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
 def navigate_many(urls, terminal):
     """Open each URL and apply the layout dictated by the first two destinations."""
     urls = list(dict.fromkeys(urls))
@@ -193,8 +207,7 @@ def navigate_many(urls, terminal):
             run([browser, *all_browsers])
         else:
             for page in all_browsers:
-                run([os.environ.get("HANDOFF_TAB_COMMAND", str(ROOT / "__handoff_tab.py")), "--focus", page],
-                    stdout=subprocess.DEVNULL)
+                open_page(page)
         time.sleep(0.5)
         env["LAYOUT_BROWSER_WINDOW"] = window_id("google-chrome")
     if not urls:
@@ -214,7 +227,7 @@ def agent_session(task):
 
 
 def annotation_urls(task):
-    """Return the latest target and every explicit link note in task order."""
+    """Return the latest target, every explicit link note in task order, then the cmd_page."""
     annotations = sorted(task.get("annotations", []), key=lambda a: a.get("entry", ""))
     target_rows = [a for a in annotations
                    if re.match(r"^\s*target:\s*\S", a.get("description", ""), re.I)]
@@ -232,15 +245,19 @@ def annotation_urls(task):
                 urls.append(single_url(match.group(1), any_host=annotation.get("description", "").lstrip().lower().startswith("tab:")))
             except ValueError as error:
                 print(f"Could not open handoff destination: {error}", file=sys.stderr)
-    if not urls:
-        command = newest_note(task, "cmd")
-        try:
-            args = shlex.split(command)
-            if len(args) == 2 and args[0] == "xdg-open":
-                urls.append(checked_url(args[1], any_host=True))
-        except ValueError:
-            pass
+    urls.append(cmd_page(task))
     return list(dict.fromkeys(url for url in urls if url))
+
+
+def cmd_page(task):
+    """Return the page a legacy `cmd: xdg-open <url>` note opens, or ''."""
+    try:
+        args = shlex.split(newest_note(task, "cmd"))
+        if len(args) == 2 and args[0] == "xdg-open":
+            return checked_url(args[1], any_host=True)
+    except ValueError:
+        pass
+    return ""
 
 
 KINDS = {"slack", "command", "pr", "ack", "other"}
@@ -309,8 +326,8 @@ def open_command_window(uuid, command):
 def act_on_kind(task):
     """Run the action s means for this kind after the links open.
 
-    Any cmd: opens a terminal with the command ready for Enter. Slack also copies the
-    newest draft: note.
+    Any cmd: other than a cmd_page opens a terminal with the command ready for Enter.
+    Slack also copies the newest draft: note.
     Returns the kind. A failed action is reported.
     """
     kind = task_kind(task)
@@ -321,13 +338,8 @@ def act_on_kind(task):
                 print("Could not copy the draft: install xclip or wl-copy, then press s again.",
                       file=sys.stderr)
         command = newest_note(task, "cmd")
-        try:
-            words = shlex.split(command)
-        except ValueError:
-            words = []
-        if len(words) == 2 and words[0] == "xdg-open" and words[1].startswith("https://"):
-            command = ""
-        elif command or kind == "command":
+        # annotation_urls already opened a cmd_page, so it needs no window.
+        if not cmd_page(task) and (command or kind == "command"):
             open_command_window(task["uuid"], command)
     except (ValueError, OSError, subprocess.SubprocessError) as error:
         print(f"Handoff {kind} action: {error}", file=sys.stderr)
