@@ -139,15 +139,14 @@ Q_MILESTONES = """query ($id: String!, $after: String) {
   } }
 }"""
 
+# History needs PR attachments for proof and ownership; only open work renders
+# blockers, assignees and issue-to-milestone assignments.
 Q_COMPLETED = """query ($id: String!, $after: String) {
   project(id: $id) { issues(first: 20, after: $after, orderBy: updatedAt, includeArchived: true,
       filter: {state: {type: {eq: "completed"}}}) {
     pageInfo { hasNextPage endCursor }
-    nodes { identifier title url updatedAt completedAt canceledAt
-      state { name type } assignee { name isMe } projectMilestone { id name }
+    nodes { identifier title url updatedAt completedAt state { type }
       attachments(first: 100) { pageInfo { hasNextPage } nodes { url } }
-      inverseRelations(first: 100) { pageInfo { hasNextPage }
-        nodes { type issue { identifier state { type } } } }
     }
   } }
 }"""
@@ -330,10 +329,10 @@ def linear_key():
     return result.stdout.strip().splitlines()[0]
 
 
-def complete_issue_links(issues):
+def complete_issue_links(issues, fields=("attachments", "inverseRelations")):
     """Never infer ownership or blockers from a truncated nested connection."""
     for issue in issues:
-        for field in ("attachments", "inverseRelations"):
+        for field in fields:
             if issue[field].get("pageInfo", {}).get("hasNextPage"):
                 raise RuntimeError(f"{issue['identifier']} has more than 100 {field}")
 
@@ -354,7 +353,7 @@ def read_completed(linear, project_id):
     issues, after, seen = [], None, set()
     for _ in range(HISTORY_PAGES):
         data = linear.query(Q_COMPLETED, {"id": project_id, "after": after})["project"]["issues"]
-        complete_issue_links(data["nodes"])
+        complete_issue_links(data["nodes"], fields=("attachments",))
         issues.extend(data["nodes"])
         after = issue_cursor(data, seen, "completed issue history")
         if after is None:

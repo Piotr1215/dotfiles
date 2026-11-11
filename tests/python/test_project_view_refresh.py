@@ -1159,8 +1159,10 @@ class SourcePaginationTests(unittest.TestCase):
         self.assertIn("issues(first: 20, after: $after", pv.Q_COMPLETED)
         for query in (pv.Q_PROJECT, pv.Q_COMPLETED):
             self.assertIn("attachments(first: 100)", query)
-            self.assertIn("inverseRelations(first: 100)", query)
             self.assertIn("pageInfo { hasNextPage endCursor }", query)
+        self.assertIn("inverseRelations(first: 100)", pv.Q_PROJECT)
+        for unused in ("inverseRelations", "assignee", "projectMilestone", "canceledAt", "state { name"):
+            self.assertNotIn(unused, pv.Q_COMPLETED)
         self.assertEqual(pv.PROJECT_ISSUE_PAGES * pv.ISSUE_PAGE_SIZE, 500)
         self.assertEqual(pv.HISTORY_PAGES * pv.ISSUE_PAGE_SIZE, 100)
         self.assertEqual(pv.PAGES, 10)
@@ -1238,13 +1240,41 @@ class SourcePaginationTests(unittest.TestCase):
 
     def test_truncated_attachment_or_blocker_connection_fails_closed(self):
         client = pv.Linear("fixture")
-        item = issue("DEVOPS-1")
+        for field in ("attachments", "inverseRelations"):
+            item = issue("DEVOPS-1")
+            item[field]["pageInfo"] = {"hasNextPage": True}
+            value = {"project": {**project(), "issues": {"nodes": [item],
+                     "pageInfo": {"hasNextPage": False, "endCursor": None}}}}
+            with mock.patch.object(client, "query", return_value=value):
+                with self.assertRaisesRegex(RuntimeError, "more than 100 " + field):
+                    pv.read_project(client, "p1")
+
+    def test_lean_completed_history_preserves_done_pr_proof_and_ownership(self):
+        client = pv.Linear("fixture")
+        ref = "loft-sh/tool#12"
+        item = issue("DEVOPS-1", "Done", "completed", title="Verified historical delivery",
+                     completed=60, prs=[pr(ref)["url"]])
+        for field in ("inverseRelations", "assignee", "projectMilestone", "canceledAt"):
+            item.pop(field)
+        item["state"].pop("name")
+        value = {"project": {"issues": {"nodes": [item], "pageInfo": {"hasNextPage": False, "endCursor": None}}}}
+        with mock.patch.object(client, "query", return_value=value):
+            history, truncated = pv.read_completed(client, "p1")
+        self.assertFalse(truncated)
+        proj = project(issues=history)
+        snap = snapshot([proj])
+        gh = github({ref: pr(ref, state="MERGED", merged=60)})
+        rows, _ = pv.build_rows(snap, [], gh, NOW)
+        brief = rows["standing:p1"]["annotations"][-1]
+        self.assertIn("DEVOPS-1 Verified historical delivery", brief)
+        self.assertIn("Linear completed 2026-09-12", brief)
+        self.assertIn("GitHub merged 2026-09-12", brief)
+        changes, _ = pv.association_plan(snap, [handoff(None, description=pr(ref)["url"])])
+        self.assertEqual(changes[0]["view_project"], "release-pipeline")
         item["attachments"]["pageInfo"] = {"hasNextPage": True}
-        value = {"project": {**project(), "issues": {"nodes": [item],
-                 "pageInfo": {"hasNextPage": False, "endCursor": None}}}}
         with mock.patch.object(client, "query", return_value=value):
             with self.assertRaisesRegex(RuntimeError, "more than 100 attachments"):
-                pv.read_project(client, "p1")
+                pv.read_completed(client, "p1")
 
     def test_github_partial_errors_cannot_establish_ownership(self):
         reply = mock.Mock(returncode=0, stdout=json.dumps({"data": {"p1": None}, "errors": [{"message": "denied"}]}),
