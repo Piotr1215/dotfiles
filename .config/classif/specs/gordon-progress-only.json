@@ -1,0 +1,35 @@
+{
+  "question": "Gordon is an assistant agent and Piotr is the person he works for. This line is what Gordon showed Piotr after an automated event, not after Piotr asked something. Answer yes when the line only says what Gordon is doing, will do next, is waiting on, or has routed, or that nothing needs Piotr, with no finished result, no decision or question for Piotr, no blocker or failure and no new fact Piotr could act on. Answer no when the line carries any of those. Does the line only report Gordon's own progress?",
+  "text": "LINE: {line}",
+  "fields": {
+    "line": 600
+  },
+  "collapse": [
+    "line"
+  ],
+  "labels": [
+    "yes",
+    "no"
+  ],
+  "model": "winnow:12b-q4_K_M",
+  "hosts": [
+    "localhost:11434"
+  ],
+  "num_ctx": 32768,
+  "budget": 4,
+  "threshold": {},
+  "smoke": [
+    {"line": "The goal hook wants fresh evidence for three parts, so I'm starting two quick checks and reading the ledger for the third.", "expect": "yes"},
+    {"line": "Waiting on workers now. Nothing needs you right now.", "expect": "yes"},
+    {"line": "Kendra handed me the Spacelift recovery, so I'm routing it to the worker that already owns the stack check.", "expect": "yes"},
+    {"line": "Both reviews are still running; I'll read their reports when they land.", "expect": "yes"},
+    {"line": "Spawning a worker for the Linear feed fix and recording the row on the board.", "expect": "yes"},
+    {"line": "Re-checking the release workflow and reading its log before I touch the handoff.", "expect": "yes"},
+    {"line": "The 4.8.3 release failed again on the same step; the rerun did not help and it needs a fix in the workflow.", "expect": "no"},
+    {"line": "The Denise draft is saved in your DM with her; press Send when it reads right.", "expect": "no"},
+    {"line": "Should the cleanup PR remove the three shared VPCs or keep them?", "expect": "no"},
+    {"line": "All 21 stacks are deleted; list-stacks shows each with a deletion time.", "expect": "no"},
+    {"line": "The Fireworks breach reaches us through Notion AI, so our Notion workspace data may be exposed.", "expect": "no"},
+    {"line": "Merged the docs PR and closed the handoff row.", "expect": "no"}
+  ]
+}
