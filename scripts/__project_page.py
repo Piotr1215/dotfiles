@@ -153,7 +153,7 @@ def render(data, synopsis, generated):
     active = [i for i in issues if i['state']['type'] == 'started']
     current = next((m for m in milestones if any((i.get('projectMilestone') or {}).get('id') == m['id'] and i['state']['type'] == 'started' for i in issues)), None)
     if not current:
-        current = next((m for m in milestones if m.get('status') == 'next'), None)
+        current = next((m for m in milestones if m.get('status') == 'next' and any((i.get('projectMilestone') or {}).get('id') == m['id'] and i['state']['type'] not in ('completed', 'canceled') for i in issues)), None)
     if not current:
         current = next((m for m in milestones if any((i.get('projectMilestone') or {}).get('id') == m['id'] and i['state']['type'] not in ('completed', 'canceled') for i in issues)), None)
     upcoming = sorted([i for i in issues if i['state']['type'] in ('unstarted', 'backlog') and current and (i.get('projectMilestone') or {}).get('id') == current['id']], key=lambda i: (i.get('priority') or 99, i['identifier']))

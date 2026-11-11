@@ -57,6 +57,15 @@ class ProjectPageTest(unittest.TestCase):
             self.assertEqual(run.call_count, 1)
             self.assertIn('statusCheckRollup', run.call_args.args[0][-1])
 
+    def test_next_skips_empty_next_milestone(self):
+        data = fixture()
+        issue = data['project']['issues'][0]
+        issue['state'] = {'name': 'Todo', 'type': 'unstarted'}
+        data['project']['projectMilestones']['nodes'].insert(0, {'id': 'empty', 'name': 'Empty', 'status': 'next', 'sortOrder': -1})
+        result = page.render(data, '', '2026-11-11T12:00:00+00:00')
+        next_section = result.split('<h2>Next</h2>', 1)[1].split('</section>', 1)[0]
+        self.assertIn('DEVOPS-123', next_section)
+
     def test_ci_status(self):
         self.assertEqual(page.ci({'statusCheckRollup': [{'conclusion': 'FAILURE'}]}), 'red')
         self.assertEqual(page.ci({'statusCheckRollup': [{'state': 'PENDING'}]}), 'pending')
