@@ -255,20 +255,12 @@ def main():
             if old and ci(old) != ci(pr): events.append({'url': url, 'time': now, 'from': ci(old), 'to': ci(pr)})
         data = {'summary_version': 5, 'project': project, 'prs': prs, 'tasks': matching_tasks(tasks, task_project, project['issues']), 'github_login': login, 'deck': deck_url(deck), 'ci_events': events}
         digest = hashlib.sha256(json.dumps(data, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
-        if digest == previous.get('hash'):
-            synopsis = previous.get('summary', '')
-        else:
-            try: synopsis = summary(data)
-            except Exception as error:
-                print(str(error), file=sys.stderr)
-                synopsis = ''
-        result = {**data, 'hash': digest, 'summary': synopsis, 'generated_at': now}
-        path.write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n')
-        path.chmod(0o600)
-        page = STATE / (name + '.html')
-        page.write_text(render(data, synopsis, now))
-        page.chmod(0o600)
-        print(f'{name}: {len(project["issues"])} issues, {len(prs)} PRs, {len(data["tasks"])} tasks; summary {"available" if synopsis else "unavailable"}; {page}')
+        result = {**data, 'hash': digest, 'generated_at': now}
+        tmp = path.with_suffix('.json.tmp')
+        tmp.write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n')
+        tmp.chmod(0o600)
+        tmp.replace(path)
+        print(f'{name}: {len(project["issues"])} issues, {len(prs)} PRs, {len(data["tasks"])} tasks; {path}')
 
 
 if __name__ == '__main__':

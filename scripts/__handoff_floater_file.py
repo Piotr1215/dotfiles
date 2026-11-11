@@ -155,6 +155,20 @@ def prepare(uid):
     task = next(row for row in rows if row.get('uuid') == uid)
     root = Path(os.environ.get('XDG_STATE_HOME', str(Path.home() / '.local/state')))
     path = root / 'taskwarrior/briefs' / uid / 'brief.md'
+    # The project status is a generated view, not an editable handoff brief.
+    if task.get('view_key', '').startswith('standing:') and task.get('project') == 'ci-infrastructure-improvements':
+        annotations = task.get('annotations', [])
+        notes = [a.get('description', '') for a in annotations if a.get('description', '').startswith('brief: ')]
+        if notes:
+            path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+            status_path = path.parent / 'project-status.md'
+            content = notes[-1][len('brief: '):].strip() + '\n'
+            if not status_path.exists() or status_path.read_text() != content:
+                temp = status_path.with_suffix('.tmp')
+                temp.write_text(content)
+                temp.replace(status_path)
+            print(status_path)
+            return
     # The shared helper uses this same canonical trace path. Do not follow an
     # arbitrary task annotation to another local file.
     path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)

@@ -59,6 +59,13 @@ class HandoffFloaterFileTest(unittest.TestCase):
         return subprocess.run([sys.executable, str(SCRIPT), uid], env=self.env,
                               capture_output=True, text=True, check=False)
 
+    def test_ci_view_brief_has_only_the_generated_sections(self):
+        self.task.update(project='ci-infrastructure-improvements', tags=['view'], view_key='standing:pid', annotations=[{'entry': '20261111T120000Z', 'description': 'brief: Done:\n- Done item\n\nNow:\n- Now item\n\nNext:\n- Next item'}])
+        self.write_export()
+        result = self.prepare()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(Path(result.stdout.strip()).read_text(), 'Done:\n- Done item\n\nNow:\n- Now item\n\nNext:\n- Next item\n')
+
     def test_creates_missing_brief_and_seeds_latest_draft(self):
         result = self.prepare()
         self.assertEqual(result.returncode, 0, result.stderr)

@@ -74,6 +74,33 @@ def snapshot(projects, assigned_issues=()):
             "wanted": [p["id"] for p in projects], "failures": []}
 
 
+class CIStatusWriterTests(unittest.TestCase):
+    def test_status_replaces_only_ci_standing_row(self):
+        rows = {'standing:p1': {'project': 'ci-infrastructure-improvements', 'description': 'old', 'annotations': ['old']},
+                'standing:p2': {'project': 'other', 'description': 'keep', 'annotations': []}}
+        scopes = {'projects': {'p1', 'p2'}, 'wanted': {'p1', 'p2'}}
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'data.json'
+            path.write_text('{}')
+            module = mock.Mock(PAGE=path)
+            module.generate.return_value = ({'description': 'new'}, ['handoff'])
+            module.format_brief.return_value = 'Done:\n\nNow:\n\nNext:\n- handoff'
+            spec = mock.Mock()
+            with mock.patch.object(pv.importlib.util, 'spec_from_file_location', return_value=spec), mock.patch.object(pv.importlib.util, 'module_from_spec', return_value=module):
+                pv.add_ci_status(rows, scopes, [])
+            self.assertEqual(rows['standing:p1']['description'], 'new')
+            self.assertTrue(rows['standing:p1']['annotations'][0].startswith('brief: Done:'))
+            self.assertEqual(rows['standing:p2']['description'], 'keep')
+
+    def test_failure_keeps_existing_row_out_of_import_and_deletion(self):
+        rows = {'standing:p1': {'project': 'ci-infrastructure-improvements'}}
+        scopes = {'projects': {'p1'}, 'wanted': {'p1'}, 'assigned': True, 'github': True}
+        with mock.patch.object(pv.importlib.util, 'spec_from_file_location', side_effect=RuntimeError('offline')):
+            pv.add_ci_status(rows, scopes, [])
+        self.assertEqual(rows, {})
+        self.assertFalse(pv.judged('standing:p1', scopes))
+
+
 class NamingTests(unittest.TestCase):
     def test_kebab_matches_the_issue_sync_project_names(self):
         self.assertEqual(pv.kebab("Issue to PR Agentic Pipeline"), "issue-to-pr-agentic-pipeline")

@@ -50,15 +50,14 @@ class ProjectPageTest(unittest.TestCase):
             self.assertIn(text, result)
         self.assertNotIn('<script>', result)
 
-    def test_failed_summary_renders_and_unchanged_skips(self):
+    def test_refresh_writes_json_and_no_html_or_model(self):
         data = fixture()
-        with tempfile.TemporaryDirectory() as tmp, patch.object(page, 'STATE', Path(tmp)), patch.object(page.view, 'linear_key', return_value='stub'), patch.object(page.view, 'task_json', return_value=data['tasks']), patch.object(page, 'collect_project', return_value=data['project']), patch.object(page, 'read_prs', return_value=data['prs']), patch.object(page, 'deck_url', return_value=data['deck']), patch.object(page.subprocess, 'run') as run, patch.object(page, 'summary', side_effect=RuntimeError('summary API failed')) as summary:
+        with tempfile.TemporaryDirectory() as tmp, patch.object(page, 'STATE', Path(tmp)), patch.object(page.view, 'linear_key', return_value='stub'), patch.object(page.view, 'task_json', return_value=data['tasks']), patch.object(page, 'collect_project', return_value=data['project']), patch.object(page, 'read_prs', return_value=data['prs']), patch.object(page, 'deck_url', return_value=data['deck']), patch.object(page.subprocess, 'run') as run, patch.object(page, 'summary') as summary:
             run.return_value.stdout = 'piotr\n'
             page.main()
-            self.assertIn('Summary unavailable', (Path(tmp) / 'ci-infra.html').read_text())
-            page.main()
-            self.assertEqual(summary.call_count, 1)
-            self.assertEqual(json.loads((Path(tmp) / 'ci-infra.json').read_text())['summary'], '')
+            self.assertTrue((Path(tmp) / 'ci-infra.json').exists())
+            self.assertFalse((Path(tmp) / 'ci-infra.html').exists())
+            summary.assert_not_called()
 
     def test_github_collection_uses_attached_prs(self):
         data = fixture()

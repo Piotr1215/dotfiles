@@ -41,6 +41,7 @@ PROJECT_VIEW_LINEAR_KEY_CMD (pass show work/LINEAR_API_KEY),
 PROJECT_VIEW_LINEAR_URL, PROJECT_VIEW_STATE (~/.local/state/project-view).
 """
 import argparse
+import importlib.util
 import json
 import os
 import re
@@ -647,6 +648,25 @@ def failed(error, now):
     return 1
 
 
+def add_ci_status(rows, scopes, tasks, read_only=False):
+    """Update the CI standing row, or leave it untouched on failed inputs."""
+    # Preserve the existing CI row when its evidence or model is unavailable.
+    ci_keys = [key for key, row in rows.items()
+               if key.startswith("standing:") and row["project"] == "ci-infrastructure-improvements"]
+    for key in ci_keys:
+        try:
+            spec = importlib.util.spec_from_file_location("ci_status", Path(__file__).with_name("__ci_project_status.py"))
+            ci = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(ci)
+            data = json.loads(ci.PAGE.read_text())
+            status, handoff_titles = ci.generate(data, tasks, read_only=read_only)
+            rows[key]["description"] = status["description"]
+            rows[key]["annotations"] = ["brief: " + ci.format_brief(status, handoff_titles)]
+        except Exception as error:
+            warn(f"CI status unavailable ({error}); keeping its existing row")
+            rows.pop(key)
+            scopes["projects"].discard(key.split(":", 1)[1])
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--dry-run", action="store_true", help="read every source, write nothing")
@@ -671,6 +691,7 @@ def main(argv=None):
         failures.append(f"github: {error}")
         warn(f"GitHub unreadable ({error}); review asks stay as they were and standing says PRs unavailable")
     rows, scopes = build_rows(snapshot, tasks, github, now)
+    add_ci_status(rows, scopes, tasks, read_only=args.dry_run)
     payload, changes = plan(rows, scopes, existing, now)
     if args.dry_run:
         for kind in ("add", "change", "delete"):
