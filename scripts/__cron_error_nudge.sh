@@ -15,6 +15,10 @@
 # of an already-announced job are deliberately NOT re-announced: the job never
 # left error, so nothing transitioned.
 #
+# GRACE holds an allowlisted exit 1 with a transient log signature for one run.
+# Recovery clears it; another failed run or a stale timestamp announces it.
+# Cold starts seed as before, and dry runs do not write grace state.
+#
 # COLD START seeds silently. On the very first run (no watermark file at all)
 # every job already sitting in error is recorded as announced without sending
 # anything. Without this, installing the watcher would fire a burst of stale
@@ -45,6 +49,10 @@ set -eo pipefail
 
 STATE_DIR="${CRON_STATE_DIR:-$HOME/.local/state/cron-jobs}"
 NUDGE_STATE="${CRON_ERROR_NUDGE_STATE:-$HOME/.claude/data/cron-error-nudged.json}"
+GRACE_STATE="${CRON_ERROR_GRACE_STATE:-$HOME/.claude/data/cron-error-grace.json}"
+GRACE_JOBS="${CRON_ERROR_GRACE_JOBS:-__github_notifications __linear_feed}"
+GRACE_RE="${CRON_ERROR_GRACE_RE:-WARN: (GitHub|Linear) request failed|TimeoutError}"
+GRACE_MAX_S="${CRON_ERROR_GRACE_MAX_S:-2400}"
 LOCK_FILE="${CRON_ERROR_NUDGE_LOCK:-/tmp/cron-error-nudge.lock}"
 
 # This script's own job name in the crontab, excluded from the sweep. See the
@@ -74,7 +82,7 @@ export SND_FROM="${SND_FROM:-cron-watch}"
 INTAKE_ROUTE_BIN="${INTAKE_ROUTE_BIN:-$HOME/.claude/scripts/__intake_route.sh}"
 NUDGE_TO="${CRON_ERROR_NUDGE_TO:-}"
 
-# SHADOW router (issue Piotr1215/claude#221, step 4): every error transition is
+# SHADOW router (issue Piotr1215/claude#221, step 4): every announced error is
 # also put to the shared decision router's error case. It only journals; the DM
 # above is unchanged. A missing, failing or hanging router never alters or
 # blocks the nudge: it is time-boxed and its exit code is ignored.
@@ -232,6 +240,16 @@ notice_for() {
         "$f" 2>/dev/null || printf 'cron-error: %s (state file unreadable)' "$job"
 }
 
+# Only allowlisted exit 1 jobs with a readable, matching log qualify.
+grace_candidate() {
+    local job="$1" exit_code="$2" lp="$3" tail_txt
+    [[ " $GRACE_JOBS " == *" $job "* ]] || return 1
+    [ "$exit_code" = 1 ] && [ -n "$lp" ] && [ -r "$lp" ] || return 1
+    tail_txt=$(tail -n "$ROUTER_LOG_LINES" "$lp") || return 1
+    grep -Eq -- "$GRACE_RE" <<<"$tail_txt" || return 1
+    ! grep -q '^ERROR' <<<"$tail_txt"
+}
+
 # Ask the router's error case about one errored job. Record: job, state, exit
 # code, duration and the last log lines (the router redacts). Never fails.
 router_error_case() {
@@ -255,7 +273,7 @@ main() {
 
     if [ ! -d "$STATE_DIR" ]; then
         log "ERROR: state dir missing: $STATE_DIR"
-        echo "SUMMARY: errors=0 announced=0 cleared=0 (no state dir)"
+        echo "SUMMARY: errors=0 announced=0 cleared=0 (no state dir) graced=0"
         return 1
     fi
 
@@ -271,6 +289,18 @@ main() {
     local announced
     announced=$(jq -c 'if type == "array" then . else [] end' "$NUDGE_STATE" 2>/dev/null || echo '[]')
 
+    local grace='{}' grace_job
+    if [ -f "$GRACE_STATE" ]; then
+        grace=$(jq -c 'if type == "object" then . else {} end' "$GRACE_STATE" 2>/dev/null || echo '{}')
+    fi
+    while IFS= read -r grace_job; do
+        [ -n "$grace_job" ] || continue
+        if ! grep -Fxq -- "$grace_job" <<<"$current"; then
+            log "grace cleared $grace_job"
+            grace=$(jq -c --arg job "$grace_job" 'del(.[$job])' <<<"$grace")
+        fi
+    done < <(jq -r 'keys[]' <<<"$grace")
+
     # Still-broken jobs stay on the list; recovered ones drop off it. That drop
     # is what re-arms them, and it is the only reset there is.
     local keep cleared_n
@@ -283,18 +313,36 @@ main() {
     new_jobs=$(jq -rn --argjson k "$keep" --arg cur "$current" \
         '($cur | split("\n") | map(select(. != ""))) - $k | .[]')
 
-    local errors_n announced_n=0 job line rc=0 sent=""
+    local errors_n announced_n=0 graced_n=0 job line rc=0 sent="" ts exit_code lp grace_ts now
     errors_n=$(printf '%s' "$current" | grep -c . || true)
 
     if [ "$cold_start" -eq 1 ] && [ -n "$new_jobs" ]; then
         log "cold start: seeding ${errors_n} already-broken job(s) silently: $(tr '\n' ' ' <<<"$new_jobs")"
     elif [ -n "$new_jobs" ]; then
-        NUDGE_TO=$(nudge_target)
         while IFS= read -r job; do
             [ -n "$job" ] || continue
+            IFS=$'\t' read -r ts exit_code lp < <(jq -r '[(.ts // ""), (.exit_code // ""), (.log_path // "")] | @tsv' "${STATE_DIR}/${job}.json")
+            grace_ts=$(jq -r --arg job "$job" '.[$job] // empty' <<<"$grace")
+            if [[ "$grace_ts" =~ ^[0-9]+$ ]]; then
+                now=$(date +%s)
+                if [[ "$ts" =~ ^[0-9]+$ ]] && { [ "$ts" -lt "$grace_ts" ] || { [ "$ts" -eq "$grace_ts" ] && [ "$((now - grace_ts))" -le "$GRACE_MAX_S" ]; }; }; then
+                    continue
+                fi
+            elif [[ "$ts" =~ ^[0-9]+$ ]] && grace_candidate "$job" "$exit_code" "$lp"; then
+                graced_n=$((graced_n + 1))
+                if [ "$DRY_RUN" -eq 1 ]; then
+                    log "would grace $job"
+                else
+                    grace=$(jq -c --arg job "$job" --argjson ts "$ts" '.[$job] = $ts' <<<"$grace")
+                    log "graced $job exit=$exit_code ts=$ts: single transient failure, announced only if the next run fails too"
+                fi
+                continue
+            fi
+            NUDGE_TO=$(nudge_target)
             line=$(notice_for "$job")
             if [ "$DRY_RUN" -eq 1 ]; then
                 log "would send to ${NUDGE_TO}: $line"
+                [ -z "$grace_ts" ] || continue
             else
                 if send_dm "$line" >/dev/null 2>&1; then
                     log "sent to ${NUDGE_TO}: $line"
@@ -305,6 +353,7 @@ main() {
                 fi
             fi
             [ "$DRY_RUN" -eq 1 ] || router_error_case "$job"
+            grace=$(jq -c --arg job "$job" 'del(.[$job])' <<<"$grace")
             # Collect the names that actually went out rather than counting
             # them. A failure part-way down the list would otherwise shift the
             # tally against the list order and mark the wrong jobs as told.
@@ -325,13 +374,19 @@ main() {
     tmp=$(mktemp "${NUDGE_STATE}.XXXXXX") || { log "ERROR: mktemp failed"; return 1; }
     printf '%s\n' "$final" >"$tmp" && mv "$tmp" "$NUDGE_STATE"
 
+    if [ "$DRY_RUN" -eq 0 ] && { [ -f "$GRACE_STATE" ] || [ "$grace" != '{}' ]; }; then
+        mkdir -p "$(dirname "$GRACE_STATE")"
+        tmp=$(mktemp "${GRACE_STATE}.XXXXXX") || { log "ERROR: mktemp failed"; return 1; }
+        printf '%s\n' "$grace" >"$tmp" && mv "$tmp" "$GRACE_STATE"
+    fi
+
     announce_overruns
     [ "$OVERRUN_FAILED" -eq 0 ] || rc=1
 
     # Unconditional summary: the wrapper lifts the last non-blank line into the
     # JSON `message` the dashboard shows, and a tally printed only when
     # something happened is indistinguishable from a job that never ran.
-    echo "SUMMARY: mode=$mode errors=$errors_n announced=$announced_n cleared=$cleared_n overruns=$OVERRUN_N"
+    echo "SUMMARY: mode=$mode errors=$errors_n announced=$announced_n cleared=$cleared_n overruns=$OVERRUN_N graced=$graced_n"
 
     [ "$rc" -ne 0 ] && return 1
     [ "$((announced_n + OVERRUN_N))" -gt 0 ] && return 2

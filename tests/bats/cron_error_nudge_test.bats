@@ -4,6 +4,7 @@ setup() {
     mkdir -p "$HOME"
     export CRON_STATE_DIR="$BATS_TEST_TMPDIR/jobs"
     export CRON_ERROR_NUDGE_STATE="$BATS_TEST_TMPDIR/nudged.json"
+    export CRON_ERROR_GRACE_STATE="$BATS_TEST_TMPDIR/grace.json"
     export CRON_ERROR_NUDGE_LOCK="$BATS_TEST_TMPDIR/lock"
     export CRON_OVERRUN_NUDGE_STATE="$BATS_TEST_TMPDIR/overrun.json"
     export SND_NODE_BIN=snd.js
@@ -14,6 +15,7 @@ setup() {
     # node: records "<target> <line>" for each snd.js call.
     cat >"$BATS_TEST_TMPDIR/bin/node" <<'S'
 #!/usr/bin/env bash
+[ "${FAKE_SND_FAIL:-0}" != 1 ] || exit 1
 printf '%s %s\n' "$3" "$4" >>"$SENT"
 S
     # __intake_route.sh: counts its calls, answers STUB_ROUTE.
@@ -47,6 +49,15 @@ job() {
         "$1" "$2" "${3:-1}" >"$CRON_STATE_DIR/$1.json"
 }
 seeded() { echo '[]' >"$CRON_ERROR_NUDGE_STATE"; echo '[]' >"$CRON_OVERRUN_NUDGE_STATE"; }
+
+transient_job() {
+    local name="$1" ts="$2" exit_code="${3:-1}"
+    jq -n --arg job "$name" --argjson ts "$ts" --argjson code "$exit_code" \
+        --arg log "$BATS_TEST_TMPDIR/$name.log" \
+        '{job:$job, state:"error", ts:$ts, exit_code:$code, duration_s:3, message:"boom", log_path:$log}' \
+        >"$CRON_STATE_DIR/$name.json"
+    printf 'WARN: GitHub request failed\n' >"$BATS_TEST_TMPDIR/$name.log"
+}
 
 teardown() { [ -z "${WRAPPER_PID:-}" ] || kill "$WRAPPER_PID" 2>/dev/null || true; }
 
@@ -265,4 +276,175 @@ S
     STUB_ROUTE=intake run bash "$SCRIPT"
     run bash "$SCRIPT"
     [ "$(wc -l <"$ROUTER_CALLS")" -eq 1 ]
+}
+
+@test "a transient first failure is graced without a send or router call" {
+    seeded
+    ts=$(date +%s)
+    transient_job __github_notifications "$ts"
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"graced __github_notifications exit=1 ts=$ts: single transient failure"* ]]
+    [[ "$output" == *"overruns=0 graced=1"* ]]
+    [ "$(jq -r '.__github_notifications' "$CRON_ERROR_GRACE_STATE")" = "$ts" ]
+    [ "$(jq -c . "$CRON_ERROR_NUDGE_STATE")" = '[]' ]
+    [ ! -e "$SENT" ]
+    [ ! -e "$ROUTER_CALLS" ]
+    [ ! -e "$ROUTED" ]
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"graced=0"* ]]
+    [ ! -e "$SENT" ]
+}
+
+@test "recovery clears grace without a send" {
+    seeded
+    transient_job __linear_feed "$(date +%s)"
+    run bash "$SCRIPT"
+    job __linear_feed no-hit 0
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"grace cleared __linear_feed"* ]]
+    [ "$(jq -c . "$CRON_ERROR_GRACE_STATE")" = '{}' ]
+    [ ! -e "$SENT" ]
+    [ ! -e "$ROUTER_CALLS" ]
+}
+
+@test "a newer consecutive failure is announced and removed from grace" {
+    seeded
+    ts=$(date +%s)
+    transient_job __github_notifications "$ts"
+    run bash "$SCRIPT"
+    transient_job __github_notifications "$((ts + 1))"
+    run bash "$SCRIPT"
+    [ "$status" -eq 2 ]
+    [ "$(wc -l <"$SENT")" -eq 1 ]
+    [ "$(wc -l <"$ROUTER_CALLS")" -eq 1 ]
+    [ "$(jq -c . "$CRON_ERROR_GRACE_STATE")" = '{}' ]
+    [ "$(jq -c . "$CRON_ERROR_NUDGE_STATE")" = '["__github_notifications"]' ]
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    [ "$(wc -l <"$SENT")" -eq 1 ]
+}
+
+@test "a stale failure with the same timestamp is announced" {
+    seeded
+    ts=$(($(date +%s) - 100))
+    transient_job __github_notifications "$ts"
+    CRON_ERROR_GRACE_MAX_S=200 run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    CRON_ERROR_GRACE_MAX_S=10 run bash "$SCRIPT"
+    [ "$status" -eq 2 ]
+    [ "$(wc -l <"$SENT")" -eq 1 ]
+    [ "$(jq -c . "$CRON_ERROR_GRACE_STATE")" = '{}' ]
+}
+
+@test "a job outside the allowlist is announced immediately" {
+    seeded
+    transient_job backup "$(date +%s)"
+    run bash "$SCRIPT"
+    [ "$status" -eq 2 ]
+    [ "$(wc -l <"$SENT")" -eq 1 ]
+    [ ! -e "$CRON_ERROR_GRACE_STATE" ]
+}
+
+@test "an ERROR line prevents grace" {
+    seeded
+    transient_job __linear_feed "$(date +%s)"
+    printf 'ERROR: another failure\n' >>"$BATS_TEST_TMPDIR/__linear_feed.log"
+    run bash "$SCRIPT"
+    [ "$status" -eq 2 ]
+    [ "$(wc -l <"$SENT")" -eq 1 ]
+}
+
+@test "exit 2 prevents grace" {
+    seeded
+    transient_job __linear_feed "$(date +%s)" 2
+    run bash "$SCRIPT"
+    [ "$status" -eq 2 ]
+    [ "$(wc -l <"$SENT")" -eq 1 ]
+}
+
+@test "a matching error on cold start is seeded without grace" {
+    transient_job __github_notifications "$(date +%s)"
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    [ ! -e "$SENT" ]
+    [ ! -e "$CRON_ERROR_GRACE_STATE" ]
+    [ "$(jq -c . "$CRON_ERROR_NUDGE_STATE")" = '["__github_notifications"]' ]
+}
+
+@test "dry run reports grace without writing it" {
+    seeded
+    transient_job __github_notifications "$(date +%s)"
+    run bash "$SCRIPT" --dry-run
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"would grace __github_notifications"* ]]
+    [ ! -e "$CRON_ERROR_GRACE_STATE" ]
+    [ ! -e "$SENT" ]
+    [ "$(jq -c . "$CRON_ERROR_NUDGE_STATE")" = '[]' ]
+}
+
+@test "dry run of a repeated failure preserves grace for live delivery" {
+    seeded
+    ts=$(date +%s)
+    transient_job __github_notifications "$ts"
+    run bash "$SCRIPT"
+    transient_job __github_notifications "$((ts + 1))"
+    run bash "$SCRIPT" --dry-run
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"would send to"* ]]
+    [ "$(jq -r '.__github_notifications' "$CRON_ERROR_GRACE_STATE")" = "$ts" ]
+    [ "$(jq -c . "$CRON_ERROR_NUDGE_STATE")" = '[]' ]
+    run bash "$SCRIPT"
+    [ "$status" -eq 2 ]
+    [ "$(wc -l <"$SENT")" -eq 1 ]
+}
+
+@test "grace checks only the last 20 log lines and honors custom settings" {
+    seeded
+    transient_job custom "$(date +%s)"
+    { printf 'ERROR: old failure\n'; for _ in {1..20}; do printf 'temporary custom failure\n'; done; } >"$BATS_TEST_TMPDIR/custom.log"
+    CRON_ERROR_GRACE_JOBS=custom CRON_ERROR_GRACE_RE='temporary custom failure' run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    [ "$(jq 'has("custom")' "$CRON_ERROR_GRACE_STATE")" = true ]
+    [ ! -e "$SENT" ]
+}
+
+@test "a different error without a transient signature is announced" {
+    seeded
+    transient_job __github_notifications "$(date +%s)"
+    printf 'connection refused\n' >"$BATS_TEST_TMPDIR/__github_notifications.log"
+    run bash "$SCRIPT"
+    [ "$status" -eq 2 ]
+    [ "$(wc -l <"$SENT")" -eq 1 ]
+}
+
+@test "a failed delivery after grace is retried on the next tick" {
+    seeded
+    ts=$(date +%s)
+    transient_job __github_notifications "$ts"
+    run bash "$SCRIPT"
+    transient_job __github_notifications "$((ts + 1))"
+    FAKE_SND_FAIL=1 run bash "$SCRIPT"
+    [ "$status" -eq 1 ]
+    [ "$(jq -r '.__github_notifications' "$CRON_ERROR_GRACE_STATE")" = "$ts" ]
+    [ "$(jq -c . "$CRON_ERROR_NUDGE_STATE")" = '[]' ]
+    run bash "$SCRIPT"
+    [ "$status" -eq 2 ]
+    [ "$(wc -l <"$SENT")" -eq 1 ]
+    [ "$(jq -c . "$CRON_ERROR_GRACE_STATE")" = '{}' ]
+}
+
+@test "dry run recovery leaves existing grace state unchanged" {
+    seeded
+    transient_job __linear_feed "$(date +%s)"
+    run bash "$SCRIPT"
+    before=$(cat "$CRON_ERROR_GRACE_STATE")
+    job __linear_feed no-hit 0
+    run bash "$SCRIPT" --dry-run
+    [ "$status" -eq 0 ]
+    [ "$(cat "$CRON_ERROR_GRACE_STATE")" = "$before" ]
+    run bash "$SCRIPT"
+    [ "$(jq -c . "$CRON_ERROR_GRACE_STATE")" = '{}' ]
 }
