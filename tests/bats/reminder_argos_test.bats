@@ -22,9 +22,11 @@ setup() {
   # This store is not the default one; at, atq, atrm and crontab are stubs.
   export REMINDER_OWN_CLOCKS=1
   export TEST_MAIL_LOG="${BATS_TEST_TMPDIR}/mail.log"
+  # shellcheck disable=SC2016 # single quotes preserve literal expressions
   printf '#!/usr/bin/env bash\n{ printf "subject: %%s\\n" "$1"; cat; } >>"$TEST_MAIL_LOG"\n' >"$BIN/mailer"
   chmod +x "$BIN/mailer"
   export TEST_TASK_OPENER_LOG="${BATS_TEST_TMPDIR}/task-opener.log"
+  # shellcheck disable=SC2016 # single quotes preserve literal expressions
   printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$1" >"$TEST_TASK_OPENER_LOG"\n' >"$BIN/task-opener"
   chmod +x "$BIN/task-opener"
   export REMINDER_CRON_RUN="/opt/cron/__cron_run.sh"
@@ -188,7 +190,7 @@ only_id() {
   grep -q "^0 9 \* \* 1 /opt/cron/__cron_run.sh remind-$id -- .*__reminder.sh fire $id$" "$TEST_CRONTAB"
   grep -q "^@reboot sleep 90 && .*__reminder.sh sync; .*__reminder.sh compact$" "$TEST_CRONTAB"
   grep -q '^# END remind$' "$TEST_CRONTAB"
-  ! grep -q 'Weekly review' "$TEST_CRONTAB"
+  run ! grep -q 'Weekly review' "$TEST_CRONTAB"
 }
 
 @test "an interval repeat goes through __cron_every for catch-up" {
@@ -271,7 +273,7 @@ only_id() {
   [ "$(jq -r '.title' "$TEST_ALERT_REQUEST")" = "Call vodafone" ]
   [ "$(jq -r '.url' "$TEST_ALERT_REQUEST")" = "https://vodafone.de/kontakt" ]
   [ "$(jq -r '.due' "$TEST_ALERT_REQUEST")" = "Tue 08 Sep 09:00" ]
-  [ "$(last_record | jq -r '.status')" = done ]
+  [ "$(last_record | jq -r '.status')" = "done" ]
   [ "$(last_record | jq -r '.when // "none"')" = none ]
   [ -n "$(last_record | jq -r '.last_fired')" ]
   grep -q "	$id	fired	show due 2026-09-08T09:00:00.* late .*	Call vodafone$" "$REMINDER_LOG"
@@ -313,8 +315,8 @@ STUB
   [ "$status" -eq 0 ]
   grep -q "^from=reminder --no-human -t triage Piotr sent reminder $id to you from its form: Book the return train" "$TEST_SND_LOG"
   grep -q '^switch-client -c /dev/pts/1 -t %5$' "$TEST_TMUX_LOG"
-  ! grep -q '^new-window' "$TEST_TMUX_LOG"
-  [ "$(last_record | jq -r '.status')" = done ]
+  run ! grep -q '^new-window' "$TEST_TMUX_LOG"
+  [ "$(last_record | jq -r '.status')" = "done" ]
   grep -q "	$id	sent	gordon (triage)	" "$REMINDER_LOG"
 }
 
@@ -346,7 +348,7 @@ STUB
   ask=$(grep -n '^Work with Piotr on what it asks for' "$TEST_SND_LOG" | cut -d: -f1)
   report=$(grep -n '^Ask for the annual plan price$' "$TEST_SND_LOG" | cut -d: -f1)
   [ -n "$instruction" ] && [ "$instruction" -lt "$ask" ] && [ "$ask" -lt "$report" ]
-  [ "$(last_record | jq -r '.status')" = done ]
+  [ "$(last_record | jq -r '.status')" = "done" ]
   grep -q "	$id	sent	gordon (triage)	" "$REMINDER_LOG"
 }
 
@@ -362,7 +364,7 @@ STUB
 
     [ "$status" -eq 0 ]
     grep -q "^new-window -t task: -c $HOME/dev/dotfiles -n remind-$id -- /opt/claude-launcher Piotr sent reminder $id" "$TEST_TMUX_LOG"
-    [ "$(last_record | jq -r '.status')" = done ]
+    [ "$(last_record | jq -r '.status')" = "done" ]
     grep -q "	$id	sent	new claude window	" "$REMINDER_LOG"
   done
 }
@@ -379,13 +381,16 @@ STUB
   [ "$status" -eq 0 ]
   [ ! -e "$TEST_ALERT_REQUEST" ]
   [ "$(wc -l <"$NOTIFY_LOG")" -eq 1 ]
+  # shellcheck disable=SC1011 # Bash regex contains literal quoted fragments
+  # shellcheck disable=SC2026 # Bash regex contains literal quoted fragments
   [[ "$(<"$NOTIFY_LOG")" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}\ [0-9:]{8}$'\t'reminder$'\t'"verify: budget note"$'\t'"id:$id | check the branch events"$ ]]
-  [ "$(last_record | jq -r '.status')" = done ]
+  [ "$(last_record | jq -r '.status')" = "done" ]
   grep -q "	$id	delivered	gordon	verify: budget note$" "$REMINDER_LOG"
 }
 
 @test "a gordon reminder falls back to the dialog when the log append fails" {
   mkdir "$BATS_TEST_TMPDIR/notdir"
+  # shellcheck disable=SC2030 # Bats runs each test in its own process
   export NOTIFY_LOG="$BATS_TEST_TMPDIR/notdir"
   "$REMINDER" add "verify: fallback" '2026-09-08 09:00' --to gordon >/dev/null
   id="$(only_id)"
@@ -395,7 +400,7 @@ STUB
 
   [ "$status" -eq 0 ]
   [ "$(jq -r '.title' "$TEST_ALERT_REQUEST")" = "verify: fallback" ]
-  [ "$(last_record | jq -r '.status')" = done ]
+  [ "$(last_record | jq -r '.status')" = "done" ]
 }
 
 @test "a piotr reminder still takes the dialog path and writes no log line" {
@@ -407,6 +412,7 @@ STUB
 
   [ "$status" -eq 0 ]
   [ "$(jq -r '.title' "$TEST_ALERT_REQUEST")" = "Call vodafone" ]
+  # shellcheck disable=SC2031 # Bats runs each test in its own process
   [ ! -e "$NOTIFY_LOG" ]
 }
 
@@ -421,8 +427,9 @@ STUB
   grep -q '^subject: success: verify: hit$' "$TEST_MAIL_LOG"
   grep -q '^found it$' "$TEST_MAIL_LOG"
   grep -q "	$id	mailed	" "$REMINDER_LOG"
+  # shellcheck disable=SC2031 # Bats runs each test in its own process
   [[ "$(<"$NOTIFY_LOG")" == *$'\treminder\tsuccess: verify: hit\t'"id:$id | found it" ]]
-  [ "$(last_record | jq -r '.status')" = done ]
+  [ "$(last_record | jq -r '.status')" = "done" ]
   [ "$(last_record | jq -r '.report_task')" = 00000000-0000-4000-8000-000000000001 ]
 }
 
@@ -488,7 +495,7 @@ STUB
   [ "$(wc -l <"$TEST_ALERT_REQUEST.count")" -eq 1 ]
   grep -q "	$id	skipped	dialog already open, snoozed to " "$REMINDER_LOG"
   grep -q "	$id	done	done	Away from desk$" "$REMINDER_LOG"
-  [ "$(last_record | jq -r '.status')" = done ]
+  [ "$(last_record | jq -r '.status')" = "done" ]
   [ "$(last_record | jq -r '.when // "none"')" = none ]
 }
 
@@ -503,7 +510,7 @@ STUB
   [ "$(jq -r '.title' "$TEST_ALERT_REQUEST")" = "review the lease-to-own offer" ]
   [ "$(jq -r '.subject_type' "$TEST_ALERT_REQUEST")" = task ]
   grep -q 'f5b77f7b-29ba-4167-a161-71d35b73b807 done' "$TEST_TASK_LOG"
-  [ "$(last_record | jq -r '.status')" = done ]
+  [ "$(last_record | jq -r '.status')" = "done" ]
 }
 
 @test "a reminder whose task is completed is skipped, not shown" {
@@ -516,7 +523,7 @@ STUB
 
   [ "$status" -eq 0 ]
   [ ! -f "$TEST_ALERT_REQUEST" ]
-  [ "$(last_record | jq -r '.status')" = done ]
+  [ "$(last_record | jq -r '.status')" = "done" ]
   grep -q "	$id	skipped	task completed	Stale$" "$REMINDER_LOG"
 }
 
@@ -544,7 +551,7 @@ STUB
   [ "$status" -eq 0 ]
   [ ! -f "$TEST_ALERT_REQUEST" ]
   [ "$(<"$TEST_OPENER_LOG")" = "https://example.com/standup" ]
-  [ "$(last_record | jq -r '.status')" = done ]
+  [ "$(last_record | jq -r '.status')" = "done" ]
   grep -q "	$id	opened	https://example.com/standup	Standup doc$" "$REMINDER_LOG"
 }
 
@@ -678,6 +685,7 @@ cp "$1" "$TEST_FORM_SEEN"
 sed -i -e 's#/x/#/y/#' -e 's/^when: .*/when: 2026-09-27 21:30/' "$1"
 STUB
   chmod +x "$BIN/form-editor"
+  # shellcheck disable=SC2030 # Bats runs each test in its own process
   export TEST_FORM_SEEN="${BATS_TEST_TMPDIR}/form"
 
   run env XDG_RUNTIME_DIR="$BATS_TEST_TMPDIR" REMINDER_EDITOR="$BIN/form-editor" "$REMINDER" edit "$id"
@@ -691,6 +699,7 @@ STUB
   [ "$(last_record | jq -r '.command')" = "/y/__toggles.sh __run pto-mode off" ]
   [ "$(last_record | jq -r '.when')" = "2026-09-27T21:30:00$(date -d 2026-09-27 +%:z)" ]
   tail -n1 "$TEST_AT_LOG" | grep -q -- '-q r -t 202609272130'
+  # shellcheck disable=SC2314 # Bats assertion intentionally negates the command
   ! ls "$BATS_TEST_TMPDIR"/remind-edit.* >/dev/null 2>&1
 }
 
@@ -708,13 +717,16 @@ STUB
   [ "$status" -eq 1 ]
   [[ "$output" == *"nothing changed"* ]]
   [ "$(wc -l <"$REMINDER_STORE")" -eq "$before" ]
+  # shellcheck disable=SC2314 # Bats assertion intentionally negates the command
   ! ls "$BATS_TEST_TMPDIR"/remind-edit.* >/dev/null 2>&1
 }
 
 @test "the form refuses exec without a command and can switch an exec back to show" {
   "$REMINDER" add "pto off" '2026-09-27 22:00' --action exec --command '/x/y' >/dev/null
   id="$(only_id)"
+  # shellcheck disable=SC2016 # single quotes preserve literal expressions
   printf '#!/usr/bin/env bash\nsed -i "s#^command:.*#command:#" "$1"\n' >"$BIN/clear-command"
+  # shellcheck disable=SC2016 # single quotes preserve literal expressions
   printf '#!/usr/bin/env bash\nsed -i -e "s/^action:.*/action: show/" -e "s#^command:.*#command:#" "$1"\n' >"$BIN/to-show"
   chmod +x "$BIN/clear-command" "$BIN/to-show"
 
@@ -765,7 +777,7 @@ STUB
   run "$REMINDER" fire "$id"
   [ "$status" -eq 0 ]
   [ "$(last_record | jq -r '.status')" = active ]
-  ! grep -q ' add ' "$TEST_TASK_LOG"
+  run ! grep -q ' add ' "$TEST_TASK_LOG"
   grep -q "	$id	exec	rc=0	" "$REMINDER_LOG"
 
   printf 'broken pipe\n' >"$BATS_TEST_TMPDIR/verdict"; printf '1\n' >"$BATS_TEST_TMPDIR/rc"
@@ -783,9 +795,9 @@ STUB
   grep -q "^rc.verbose=new-uuid rc.confirmation=off add tags:work,reminder,packet-report,success -- packet-report: Seats check$" "$TEST_TASK_LOG"
   grep -q "00000000-0000-4000-8000-000000000002 annotate -- brief: seats: 3 available " "$TEST_TASK_LOG"
   grep -q "00000000-0000-4000-8000-000000000001 annotate -- recovered " "$TEST_TASK_LOG"
-  [ "$(last_record | jq -r '.status')" = done ]
+  [ "$(last_record | jq -r '.status')" = "done" ]
   [ "$(last_record | jq -r '.repeat // "gone"')" = gone ]
-  ! grep -q "remind-$id" "$TEST_CRONTAB"
+  run ! grep -q "remind-$id" "$TEST_CRONTAB"
 }
 
 @test "withdrawn (exit 4) retires quietly: no report task, no Gordon line, the error task released" {
@@ -793,21 +805,23 @@ STUB
   id="$(only_id)"
   printf 'broken pipe\n' >"$BATS_TEST_TMPDIR/verdict"; printf '1\n' >"$BATS_TEST_TMPDIR/rc"
   "$REMINDER" fire "$id"
+  # shellcheck disable=SC2031 # Bats runs each test in its own process
   : >"$NOTIFY_LOG"
 
   printf 'withdrawn: task 6631abaa is completed; ending the subscription\n' >"$BATS_TEST_TMPDIR/verdict"; printf '4\n' >"$BATS_TEST_TMPDIR/rc"
   run "$REMINDER" fire "$id"
 
   [ "$status" -eq 0 ]
-  ! grep -q ' add +piotr ' "$TEST_TASK_LOG"
+  run ! grep -q ' add +piotr ' "$TEST_TASK_LOG"
   [ ! -e "$REMINDER_STATE_DIR/reports/$id" ]
+  # shellcheck disable=SC2031 # Bats runs each test in its own process
   [ ! -s "$NOTIFY_LOG" ]
   [ ! -s "$TEST_ALERT_REQUEST" ]
   grep -q "00000000-0000-4000-8000-000000000001 annotate -- recovered " "$TEST_TASK_LOG"
   grep -q "	$id	withdrawn	task 6631abaa is completed; ending the subscription	Thread watch$" "$REMINDER_LOG"
-  [ "$(last_record | jq -r '.status')" = done ]
+  [ "$(last_record | jq -r '.status')" = "done" ]
   [ "$(last_record | jq -r '.error_task // "none"')" = none ]
-  ! grep -q "remind-$id" "$TEST_CRONTAB"
+  run ! grep -q "remind-$id" "$TEST_CRONTAB"
 }
 
 @test "exit 4 without the withdrawn: line is an error, so gh's expired login never retires a packet" {
@@ -820,7 +834,7 @@ STUB
   [ "$status" -eq 0 ]
   [ "$(last_record | jq -r '.status')" = active ]
   grep -q "add +gordon +work +reminder -- $id (PR reaction) error$" "$TEST_TASK_LOG"
-  ! grep -q "	$id	withdrawn	" "$REMINDER_LOG"
+  run ! grep -q "	$id	withdrawn	" "$REMINDER_LOG"
   grep -q "remind-$id" "$TEST_CRONTAB"
 }
 
@@ -859,7 +873,7 @@ STUB
   [ "$(<"$BATS_TEST_TMPDIR/fail")" = "PR closed unmerged" ]
   grep -q '^rc.verbose=new-uuid rc.confirmation=off add tags:work,reminder,packet-report,failure -- packet-report: PR reaction$' "$TEST_TASK_LOG"
   grep -q "annotate -- what: Reminder $id finished with failure: PR reaction\." "$TEST_TASK_LOG"
-  [ "$(last_record | jq -r '.status')" = done ]
+  [ "$(last_record | jq -r '.status')" = "done" ]
 }
 
 @test "a failed report write keeps the packet; the next fire writes the report without rerunning the check" {
@@ -876,7 +890,7 @@ STUB
   run "$REMINDER" fire "$id"
   [ "$status" -eq 0 ]
   [ "$(grep -c run "$BATS_TEST_TMPDIR/runs")" -eq 1 ]
-  [ "$(last_record | jq -r '.status')" = done ]
+  [ "$(last_record | jq -r '.status')" = "done" ]
   [ "$(last_record | jq -r '.report_pending // "gone"')" = gone ]
   grep -q '^rc.verbose=new-uuid rc.confirmation=off add tags:work,reminder,packet-report,success -- packet-report: once$' "$TEST_TASK_LOG"
 }
@@ -944,8 +958,8 @@ STUB
   grep -q '^subject: success: tmux watch$' "$TEST_MAIL_LOG"
   grep -q '^tmux 3.8 released$' "$TEST_MAIL_LOG"
   grep -q -- 'tags:work,reminder,packet-report,success -- packet-report: tmux watch$' "$TEST_TASK_LOG"
-  [ "$(last_record | jq -r '.status')" = done ]
-  ! grep -q "remind-$id" "$TEST_CRONTAB"
+  [ "$(last_record | jq -r '.status')" = "done" ]
+  run ! grep -q "remind-$id" "$TEST_CRONTAB"
 }
 
 @test "notify silent: no mail and no dialog, but the report task is still written" {
@@ -959,7 +973,7 @@ STUB
   [ ! -s "$TEST_ALERT_REQUEST" ]
   [ ! -f "$TEST_MAIL_LOG" ]
   grep -q -- 'tags:work,reminder,packet-report,success -- packet-report: self-mailing watch$' "$TEST_TASK_LOG"
-  [ "$(last_record | jq -r '.status')" = done ]
+  [ "$(last_record | jq -r '.status')" = "done" ]
 }
 
 @test "notify mail on a show reminder mails the body on the date" {
@@ -971,7 +985,7 @@ STUB
   [ "$status" -eq 0 ]
   grep -q '^subject: Renew the domain$' "$TEST_MAIL_LOG"
   grep -q 'https://example.com/renew' "$TEST_MAIL_LOG"
-  [ "$(last_record | jq -r '.status')" = done ]
+  [ "$(last_record | jq -r '.status')" = "done" ]
   grep -q "	$id	mailed	" "$REMINDER_LOG"
 }
 
@@ -1012,7 +1026,7 @@ STUB
   [ "$status" -eq 0 ]
   [ "$(<"$BATS_TEST_TMPDIR/hit")" = "gone" ]
   grep -q '^subject: reverted$' "$TEST_MAIL_LOG"
-  [ "$(last_record | jq -r '.status')" = done ]
+  [ "$(last_record | jq -r '.status')" = "done" ]
   grep -q "	$id	on_hit	rc=0	" "$REMINDER_LOG"
 
   run "$REMINDER" agenda render
@@ -1032,7 +1046,7 @@ STUB
   grep -q '^on-hit exit 1$' "$TEST_MAIL_LOG"
   grep -q '^no space left$' "$TEST_MAIL_LOG"
   grep -q '^3.8 is out$' "$TEST_MAIL_LOG"
-  ! grep -q '^subject: download on release$' "$TEST_MAIL_LOG"
+  run ! grep -q '^subject: download on release$' "$TEST_MAIL_LOG"
   [ "$(last_record | jq -r '.status')" = active ]
   [ "$(last_record | jq -r '.repeat')" = "every 1d" ]
   run "$REMINDER" agenda render
@@ -1246,6 +1260,7 @@ EOF
 @test "bare remind is the agenda: renders to the state file, runs the editor, and applies" {
   "$REMINDER" add "Move me" '2026-09-27 22:00' >/dev/null
   id="$(only_id)"
+  # shellcheck disable=SC2016 # single quotes preserve literal expressions
   printf '#!/usr/bin/env bash\nsed -i "s/22:00/20:00/" "$1"\n' >"$BIN/agenda-editor"
   chmod +x "$BIN/agenda-editor"
 
@@ -1279,6 +1294,7 @@ STUB
   : >"$TEST_ATQ"
   # A slow atq widens the read-then-schedule window two unlocked syncs raced
   # through on 2026-09-09, when one reminder fired 2, 4, then 7 times.
+  # shellcheck disable=SC2016 # single quotes preserve literal expressions
   printf '#!/usr/bin/env bash\nsleep 0.5\ncat "$TEST_ATQ"\n' >"$BIN/atq"
 
   "$REMINDER" sync >/dev/null &
@@ -1333,6 +1349,7 @@ STUB
   live="$(only_id)"
   "$REMINDER" add "Spent" 1h >/dev/null
   spent="$(only_id)"
+  # shellcheck disable=SC1010 # Bats syntax confuses the parser
   "$REMINDER" done "$spent" >/dev/null
   "$REMINDER" add "Held" 1h >/dev/null
   held="$(only_id)"
@@ -1355,6 +1372,7 @@ STUB
 @test "gc drops stale fire locks too" {
   "$REMINDER" add "Spent" 1h >/dev/null
   spent="$(only_id)"
+  # shellcheck disable=SC1010 # Bats syntax confuses the parser
   "$REMINDER" done "$spent" >/dev/null
   : >"$REMINDER_STATE_DIR/fire-$spent.lock"
 
@@ -1435,7 +1453,7 @@ STUB
   grep -qx 42 "$TEST_ATRM"
 
   "$REMINDER" fire "$id" >/dev/null
-  [ "$(last_record | jq -r '.status')" = done ]
+  [ "$(last_record | jq -r '.status')" = "done" ]
   [ ! -s "$TEST_ATQ" ]
 }
 
@@ -1454,12 +1472,14 @@ STUB
   jq -r '.body' "$TEST_ALERT_REQUEST" | grep -q '^The deadline Thu 01 Oct 09:00 passed and neither the success nor the failure condition held\.$'
   jq -r '.body' "$TEST_ALERT_REQUEST" | grep -q '^Checks: 1 run(s), last .* rc=0\.$'
   jq -r '.body' "$TEST_ALERT_REQUEST" | grep -q '^no comments yet$'
+  # shellcheck disable=SC2031 # Bats runs each test in its own process
   [ "$(grep -c $'\treminder\tdeadline passed: PR reaction\t' "$NOTIFY_LOG")" -eq 1 ]
   [ "$(last_record | jq -r '.deadline_retry')" = "2030-01-02T10:00:00$(date -d 2030-01-02 +%:z)" ]
   grep -qx -- '-q r -t 203001021000' "$TEST_AT_LOG"
   [ "$(last_record | jq -r '.status')" = active ]
 
   run "$REMINDER" deadline "$id"
+  # shellcheck disable=SC2031 # Bats runs each test in its own process
   [ "$(grep -c $'\treminder\tdeadline passed: PR reaction\t' "$NOTIFY_LOG")" -eq 1 ]
 }
 
@@ -1545,7 +1565,7 @@ STUB
   run "$REMINDER" fire "$id"
   [ "$status" -eq 0 ]
   [ "$(cat "$BATS_TEST_TMPDIR/order")" = "$(printf 'first:check-output\nsecond:check-output')" ]
-  [ "$(last_record | jq -r '.status')" = done ]
+  [ "$(last_record | jq -r '.status')" = "done" ]
   [ "$(grep -c 'add tags:work,reminder,packet-report,success' "$TEST_TASK_LOG")" -eq 1 ]
 }
 
@@ -1567,14 +1587,14 @@ STUB
     [ "$status" -eq 0 ]
     [ "$(cat "$order")" = "$(printf 'first\nmiddle\nlast')" ]
     [ "$(last_record | jq -r '.status')" = active ]
-    ! grep -q 'add tags:work,reminder,packet-report,' "$TEST_TASK_LOG"
+    run ! grep -q 'add tags:work,reminder,packet-report,' "$TEST_TASK_LOG"
 
     run "$REMINDER" fire "$id"
     [ "$status" -eq 0 ]
     [ "$(cat "$checks")" = check ]
     [ "$(cat "$order")" = "$(printf 'first\nmiddle\nlast\nmiddle')" ]
     [ "$(cat "$attempts")" = "$(printf 'original\noriginal')" ]
-    [ "$(last_record | jq -r '.status')" = done ]
+    [ "$(last_record | jq -r '.status')" = "done" ]
     [ "$(grep -c 'add tags:work,reminder,packet-report,' "$TEST_TASK_LOG")" -eq 1 ]
     trace="$REMINDER_STATE_DIR/reports/$id/brief.md"
     grep -Fq 'first-output' "$trace"
@@ -1605,7 +1625,7 @@ STUB
   run "$REMINDER" fire "$id"
   [ "$status" -eq 0 ]
   [ "$(cat "$BATS_TEST_TMPDIR/legacy")" = legacy-input ]
-  [ "$(last_record | jq -r '.status')" = done ]
+  [ "$(last_record | jq -r '.status')" = "done" ]
 }
 
 
@@ -1646,13 +1666,14 @@ STUB
   [ "$(wc -l <"$BATS_TEST_TMPDIR/checks")" -eq 1 ]
   [ "$(wc -l <"$BATS_TEST_TMPDIR/actions")" -eq 1 ]
   [ "$(grep -c 'add tags:work,reminder,packet-report,success' "$TEST_TASK_LOG")" -eq 1 ]
-  [ "$(last_record | jq -r '.status')" = done ]
+  [ "$(last_record | jq -r '.status')" = "done" ]
 }
 
 @test "edit form round-trips repeated verdict actions" {
   "$REMINDER" add "form actions" --repeat 'every 1d' --deadline 30d --action exec --command true \
     --on-hit 'echo hit one' --on-hit 'echo hit two' --on-fail 'echo fail one' --on-fail 'echo fail two' >/dev/null
   id="$(only_id)"
+  # shellcheck disable=SC2031 # Bats runs each test in its own process
   export TEST_FORM_SEEN="$BATS_TEST_TMPDIR/form"
   cat >"$BIN/actions-editor" <<'STUB'
 #!/usr/bin/env bash
@@ -1693,6 +1714,7 @@ STUB
   jq -e 'any(.[]; .description == "packet-task: action title" and (["work", "reminder", "packet-task", "verified"] - .tags | length == 0))' <<<"$output" >/dev/null
 
   command -v taskopen >/dev/null || skip "taskopen is not installed"
+  # shellcheck disable=SC2016 # single quotes preserve literal expressions
   run taskopen batch --config="${BATS_TEST_DIRNAME}/../../.taskopenrc" --include=files --execute='printf "%s\n" "$FILE"' "$report_uuid"
   [ "$status" -eq 0 ]
   [[ "$output" == *"$REMINDER_STATE_DIR/reports/$id/brief.md"* ]]
@@ -1712,6 +1734,7 @@ STUB
   run "$REMINDER" deadline "$id"
   [ "$status" -eq 0 ]
   [ ! -e "$TEST_ALERT_REQUEST" ]
+  # shellcheck disable=SC2031 # Bats runs each test in its own process
   [ ! -s "$NOTIFY_LOG" ]
   [ "$(last_record | jq -r '.status')" = active ]
   [ "$(last_record | jq -c '.verdict')" = "$before" ]
@@ -1723,6 +1746,7 @@ fake_router() {
   export ROUTER_LOG="${BATS_TEST_TMPDIR}/router.log"
   export REMINDER_ROUTER_BIN="$BIN/fake-router"
   : >"$ROUTER_LOG"
+  # shellcheck disable=SC2016 # single quotes preserve literal expressions
   printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$*" >>"$ROUTER_LOG"\ncat >>"$ROUTER_LOG"\nprintf "\\n" >>"$ROUTER_LOG"\n%s\n' "${1:-exit 0}" >"$REMINDER_ROUTER_BIN"
   chmod +x "$REMINDER_ROUTER_BIN"
 }

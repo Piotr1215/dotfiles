@@ -1128,6 +1128,7 @@ agenda_parse_heading() {
 			line_when="$token"
 		fi
 	done
+	# shellcheck disable=SC2001 # sed preserves the existing regular expression
 	line_title="$(sed 's/[[:space:]]*$//' <<<"$rest")"
 }
 
@@ -1162,6 +1163,7 @@ agenda_flush() {
 agenda_prop() {
 	[[ "$1" =~ ^[[:space:]]*:([a-z-]+):[[:space:]]*(.*)$ ]] || return 1
 	prop_key="${BASH_REMATCH[1]}"
+	# shellcheck disable=SC2001 # sed preserves the existing regular expression
 	prop_value="$(sed 's/[[:space:]]*$//' <<<"${BASH_REMATCH[2]}")"
 }
 
@@ -1206,7 +1208,9 @@ agenda_apply() {
 			notify) cur_notify="$prop_value" ;;
 			on-hit) cur_on_hit="$(jq -c --arg action "$prop_value" '. + (if $action == "" then [] else [$action] end)' <<<"${cur_on_hit:-[]}")" ;;
 			on-fail) cur_on_fail="$(jq -c --arg action "$prop_value" '. + (if $action == "" then [] else [$action] end)' <<<"${cur_on_fail:-[]}")" ;;
-			deadline) cur_deadline="$(sed 's/^<\(.*\)>$/\1/' <<<"$prop_value")" ;;
+			deadline)
+				# shellcheck disable=SC2001 # sed preserves the existing regular expression
+				cur_deadline="$(sed 's/^<\(.*\)>$/\1/' <<<"$prop_value")" ;;
 			on-miss) cur_on_miss="$prop_value" ;;
 			on-notify) cur_on_notify="$prop_value" ;;
 			delay) cur_delay="$prop_value" ;;
@@ -1482,9 +1486,11 @@ show_dialog() {
 			when="$(jq -r '.when // ""' <<<"$response")"
 			when="$(parse_when "$when")" || when="$(parse_when "$DEFAULT_SNOOZE")"
 			if [ "$kind" = deadline ]; then
+				# shellcheck disable=SC2016 # single quotes preserve literal expressions
 				update_record "$id" '.deadline = $when | del(.deadline_retry, .deadline_seen)' --arg when "$when"
 				log_fire "$id" extended "$when" "$title"
 			else
+				# shellcheck disable=SC2016 # single quotes preserve literal expressions
 				update_record "$id" '.when = $when' --arg when "$when"
 				log_fire "$id" snoozed "$when" "$title"
 			fi
@@ -1596,6 +1602,7 @@ guarded_dialog() {
 	local id="$1" record="$2" title="$3" body="$4" url="$5" due="$6" late="$7"
 	local snooze_until
 	snooze_until="$(parse_when "$DEFAULT_SNOOZE")"
+	# shellcheck disable=SC2016 # single quotes preserve literal expressions
 	update_record "$id" '.when = $when | .last_fired = $now' \
 		--arg when "$snooze_until" --arg now "$(now_iso)"
 	cmd_sync >/dev/null
@@ -1656,6 +1663,7 @@ run_branch() {
 latch_verdict() {
 	local id="$1" record="$2" rc="$3" output="$4" field=on_hit outcome=success
 	if [ "$rc" = 3 ]; then field=on_fail; outcome=failure; fi
+	# shellcheck disable=SC2016 # single quotes preserve literal expressions
 	update_record "$id" '.verdict = {rc:$rc, outcome:$outcome, output:$output,
 		command:$command, field:$field, actions:($actions | map({command:., status:"pending", attempts:0, history:[]}))}' \
 		--argjson rc "$rc" --arg outcome "$outcome" --arg output "$output" \
@@ -1678,6 +1686,7 @@ run_latched_actions() {
 		command="$(jq -r '.command' <<<"$action")"
 		rc=0
 		output="$(printf '%s\n' "$check_output" | REMINDER_ID="$id" bash -c "$command" 6>&- 2>&1)" || rc=$?
+		# shellcheck disable=SC2016 # single quotes preserve literal expressions
 		update_record "$id" '.verdict.actions[$index] |= (.attempts += 1 |
 			.rc = $rc | .output = $output | .last_line = $last_line |
 			.status = (if $rc == 0 then "done" else "failed" end) |
@@ -1767,20 +1776,24 @@ write_trace() {
 		printf -- '- Trigger: %s\n' "$(record_trigger "$record")"
 		printf -- '- Deadline: %s\n' "$(jq -r '.deadline // "none"' <<<"$record")"
 		printf -- '- Subject: %s\n' "$(jq -r '.subject // "none"' <<<"$record")"
+		# shellcheck disable=SC2016 # single quotes preserve literal expressions
 		printf '\n## Check\n\n```\n$ %s\n%s\n```\n' "$(jq -r '.verdict.command // .command // ""' <<<"$record")" "$output"
 		if [ "$(jq '.verdict.actions // [] | length' <<<"$record")" -gt 0 ]; then
 			local entry action attempt
 			while IFS= read -r entry; do
 				action="$(jq -c '.value' <<<"$entry")"
+				# shellcheck disable=SC2016 # single quotes preserve literal expressions
 				printf '\n## Action %s: %s (%s, attempts %s)\n\n```\n$ %s\n```\n' \
 					"$(jq '.key + 1' <<<"$entry")" "${field//_/-}" "$(jq -r '.status' <<<"$action")" \
 					"$(jq '.attempts' <<<"$action")" "$(jq -r '.command' <<<"$action")"
 				while IFS= read -r attempt; do
+					# shellcheck disable=SC2016 # single quotes preserve literal expressions
 					printf '\n### Attempt %s (exit %s)\n\n```\n%s\n```\n' "$(jq '.attempt' <<<"$attempt")" "$(jq '.rc' <<<"$attempt")" "$(jq -r '.output' <<<"$attempt")"
 				done < <(jq -c '.history[]' <<<"$action")
 				printf '\nLast output: %s\n' "$(jq -r '.last_line // ""' <<<"$action")"
 			done < <(jq -c '.verdict.actions | to_entries[]' <<<"$record")
 		elif [ -n "$hook" ]; then
+			# shellcheck disable=SC2016 # single quotes preserve literal expressions
 			printf '\n## Action: %s (exit %s)\n\n```\n$ %s\n%s\n```\n' "${field//_/-}" "$hrc" "$hook" "$houtput"
 		else
 			printf '\n## Action\n\nNone: the check itself was the whole packet.\n'
@@ -1817,10 +1830,12 @@ complete_packet() {
 	title="$(record_title "$record")"
 	err="$(mktemp "${XDG_RUNTIME_DIR:-/tmp}/remind-report.XXXXXX")"
 	if uuid="$(report_task "$record" "$outcome" "$trace" "$output" 2>"$err")"; then
+		# shellcheck disable=SC2016 # single quotes preserve literal expressions
 		update_record "$id" '.status = "done" | .report_task = $uuid
 			| del(.when, .repeat, .report_pending, .report_outcome, .deadline_retry)' --arg uuid "$uuid"
 		log_fire "$id" reported "$outcome task $uuid" "$title"
 	else
+		# shellcheck disable=SC2016 # single quotes preserve literal expressions
 		update_record "$id" '.report_pending = $trace | .report_outcome = $outcome
 			| if (.repeat // "") == "" then .when = $retry else . end' \
 			--arg trace "$trace" --arg outcome "$outcome" --arg retry "$(parse_when "$DEFAULT_SNOOZE")"
@@ -1844,6 +1859,7 @@ error_task() {
 			[ "$reason" != "$(jq -r '.error_reason // ""' <<<"$record")" ] || return 0
 			task_note "$uuid" "error again $(now_iso): $reason" || true
 			ERROR_TASK_NEW=1
+			# shellcheck disable=SC2016 # single quotes preserve literal expressions
 			update_record "$id" '.error_reason = $reason' --arg reason "$reason"
 			return 0
 		fi
@@ -1854,6 +1870,7 @@ error_task() {
 	}
 	task_note "$uuid" "what: Reminder $id ($title) failed to run: $reason. Read the run log, fix the check or its action, then close this task."
 	task_note "$uuid" "log: $(home_path "$RUNS_DIR/$id.log")"
+	# shellcheck disable=SC2016 # single quotes preserve literal expressions
 	update_record "$id" '.error_task = $uuid | .error_reason = $reason' --arg uuid "$uuid" --arg reason "$reason"
 	log_fire "$id" error-task "$uuid" "$title"
 	ERROR_TASK_NEW=1
@@ -1981,6 +1998,7 @@ cmd_fire_locked() {
 		esac
 		;;
 	open)
+		# shellcheck disable=SC2016 # single quotes preserve literal expressions
 		update_record "$id" '.last_fired = $now' --arg now "$(now_iso)"
 		if [ -n "$url" ]; then
 			if open_url "$url"; then
@@ -2001,6 +2019,7 @@ cmd_fire_locked() {
 		# an error, or a hook that fails, opens the error task and keeps the
 		# schedule so the next run can succeed. Nothing here opens a dialog:
 		# a verdict is a task, never a popup.
+		# shellcheck disable=SC2016 # single quotes preserve literal expressions
 		update_record "$id" '.last_fired = $now' --arg now "$(now_iso)"
 		if [ -n "$(jq -r '.report_pending // ""' <<<"$record")" ]; then
 			complete_packet "$id" "$(jq -r '.report_outcome // "success"' <<<"$record")" "$(jq -r '.report_pending' <<<"$record")" ""
@@ -2103,6 +2122,7 @@ cmd_fire_locked() {
 			# A one-shot that errored runs again after the default snooze; a
 			# repeat retries on its own schedule.
 			if [ -z "$(jq -r '.repeat // ""' <<<"$record")" ]; then
+				# shellcheck disable=SC2016 # single quotes preserve literal expressions
 				update_record "$id" '.when = $retry' --arg retry "$(parse_when "$DEFAULT_SNOOZE")"
 				cmd_sync >/dev/null
 			fi
@@ -2144,6 +2164,7 @@ cmd_deadline() {
 	else
 		log_fire "$id" deadline "still passed $deadline" "$title"
 	fi
+	# shellcheck disable=SC2016 # single quotes preserve literal expressions
 	update_record "$id" '.deadline_retry = $retry' --arg retry "$(parse_when "$DEFAULT_SNOOZE")"
 	cmd_sync >/dev/null
 	mkdir -p "$STATE_DIR"
@@ -2207,6 +2228,7 @@ fire_on_notify() {
 		match="${REMINDER_MATCH:-}"
 	fi
 	log_fire "$id" fired "exec on popup${token:+ (delayed)}" "$title"
+	# shellcheck disable=SC2016 # single quotes preserve literal expressions
 	update_record "$id" '.last_fired = $now' --arg now "$(now_iso)"
 	command="$(jq -r '.command // ""' <<<"$record")"
 	output="$(printf '%s\n' "$match" | REMINDER_MATCH="$match" timeout "$NOTIFY_TIMEOUT" bash -c "$command" 2>&1)" || rc=$?
