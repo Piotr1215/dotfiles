@@ -103,6 +103,7 @@ for arg in "$@"; do
       n=$(( $(cat "$TEST_TASK_SEQ" 2>/dev/null || echo 0) + 1 )); echo "$n" >"$TEST_TASK_SEQ"
       printf 'Created task 00000000-0000-4000-8000-%012d.\n' "$n"; exit 0 ;;
     *.uuid) printf '%s\n' "${arg%.uuid}"; exit 0 ;;
+    00000000-0000-4000-8000-*.status) echo pending; exit 0 ;;
     *.status) cat "$TEST_TASK_STATUS"; exit 0 ;;
     *.description) printf 'review the lease-to-own offer\n'; exit 0 ;;
   esac
@@ -798,6 +799,38 @@ STUB
   [ "$(last_record | jq -r '.status')" = "done" ]
   [ "$(last_record | jq -r '.repeat // "gone"')" = gone ]
   run ! grep -q "remind-$id" "$TEST_CRONTAB"
+}
+
+@test "closed task subjects alert once for repeating exec packets" {
+  "$REMINDER" add "Sweep" --repeat 'every 2d' --deadline 30d --action exec \
+    --command "touch $BATS_TEST_TMPDIR/ran" --subject task:0075598e >/dev/null
+  id="$(only_id)"
+
+  for task_status in completed deleted ''; do
+    printf '%s\n' "$task_status" >"$TEST_TASK_STATUS"
+    run "$REMINDER" fire "$id"
+    [ "$status" -eq 0 ]
+    run "$REMINDER" fire "$id"
+    [ "$status" -eq 0 ]
+  done
+  [ ! -e "$BATS_TEST_TMPDIR/ran" ]
+  [ "$(last_record | jq -r '.status')" = active ]
+  [ "$(grep -c ' add +gordon +work +reminder ' "$TEST_TASK_LOG")" -eq 1 ]
+  [ "$(grep -c 'annotate -- error again' "$TEST_TASK_LOG")" -eq 2 ]
+  grep -q "linked task 0075598e is completed; fix with remind edit $id --subject" "$TEST_TASK_LOG"
+  grep -q "linked task 0075598e is gone; fix with remind edit $id --subject" "$TEST_TASK_LOG"
+}
+
+@test "closed task subjects stay quiet for plain, one-shot and thread-watch reminders" {
+  printf 'completed\n' >"$TEST_TASK_STATUS"
+  "$REMINDER" add plain 1h --subject task:0075598e >/dev/null
+  "$REMINDER" fire "$(only_id)"
+  "$REMINDER" add once 1h --action exec --command true --subject task:0075598e >/dev/null
+  "$REMINDER" fire "$(only_id)"
+  "$REMINDER" add watch --repeat 'every 1h' --deadline 7d --action exec --command true --origin thread-watch --subject task:0075598e >/dev/null
+  "$REMINDER" fire "$(only_id)"
+  run grep -q ' add ' "$TEST_TASK_LOG"
+  [ "$status" -eq 1 ]
 }
 
 @test "withdrawn (exit 4) retires quietly: no report task, no Gordon line, the error task released" {

@@ -1960,6 +1960,12 @@ cmd_fire_locked() {
 		pending | waiting) ;;
 		*)
 			log_fire "$id" skipped "task ${status:-gone}" "$title"
+			if { [ "$status" = completed ] || [ "$status" = deleted ] || [ -z "$status" ]; } &&
+				[ "$(jq -r '.action // ""' <<<"$record")" = exec ] &&
+				[ -n "$(jq -r '.repeat // ""' <<<"$record")" ] &&
+				[ "$(jq -r '.origin // ""' <<<"$record")" != thread-watch ]; then
+				error_task "$id" "$title" "linked task ${subject#task:} is ${status:-gone}; fix with remind edit $id --subject ..."
+			fi
 			mark_done "$id"
 			cmd_sync >/dev/null
 			return 0
