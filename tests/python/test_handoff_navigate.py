@@ -349,6 +349,7 @@ def test_delayed_old_worker_cannot_stop_newer(monkeypatch, tmp_path):
 
 
 @pytest.mark.parametrize(("url", "expected"), [
+    ("https://loft-labs-inc.slack.com/archives/C0123/p1793895191898810?thread_ts=1793895191.898809", "slack://channel?team=T0123&id=C0123&message=1793895191.898810&thread_ts=1793895191.898809"),
     ("https://loft-labs-inc.slack.com/archives/C08EQAJQD24", "slack://channel?team=T0123&id=C08EQAJQD24"),
     ("https://loft-labs-inc.slack.com/archives/C0123/p1793917323756099", "slack://channel?team=T0123&id=C0123&message=1793917323.756099&thread_ts=1793917323.756099"),
     ("https://loft-labs-inc.slack.com/archives/C0123/p1793917323756099?thread_ts=1793917323.756099", "slack://channel?team=T0123&id=C0123&message=1793917323.756099&thread_ts=1793917323.756099"),
@@ -676,6 +677,7 @@ def start_row(monkeypatch, tmp_path, row):
                         order.append(("open", urls) if not slack_tabs else ("open tabs", urls)))
     monkeypatch.setattr(nav, "live_agent_session", lambda row: "")
     monkeypatch.setattr(nav, "attach_agent_session", lambda session: order.append(("agent", session)))
+    monkeypatch.setattr(nav, "wait_for_slack_focus", lambda: order.append("slack ready"))
     monkeypatch.setattr(nav, "show_slack_draft", lambda pane, terminal, runtime: order.append(("draft", pane, terminal)))
     assert nav.main(["start", row["uuid"]]) == 0
     return order
@@ -713,13 +715,13 @@ def test_start_on_a_command_row_focuses_the_command_pane_without_a_brief(monkeyp
     assert order == ["prepare", ("open", [])]
 
 
-def test_start_on_a_slack_row_copies_the_draft_then_opens_the_thread_as_a_tab(monkeypatch, tmp_path, fake_clipboard, fake_tmux):
+def test_start_on_a_slack_row_copies_the_draft_then_opens_the_thread_on_desktop(monkeypatch, tmp_path, fake_clipboard, fake_tmux):
     target = f"target: slack:C0CE21P1C3H/1793963101.837439 {ENTERPRISE}"
     row = dict(task(target, "draft: Hi Jan, merged."), tags=["piotr", "draft"], kind="slack")
     order = start_row(monkeypatch, tmp_path, row)
     assert fake_clipboard.read_text() == "Hi Jan, merged."
     assert fake_tmux() == [["select-window", "-t", "%18"]]
-    assert order == ["prepare", ("open tabs", [ENTERPRISE]), "pin", ("draft", "%18", "111"),
+    assert order == ["prepare", ("open", [ENTERPRISE]), "pin", "slack ready", ("draft", "%18", "111"),
                      ("focus", row["uuid"], "%18")]
 
 
@@ -737,7 +739,7 @@ def test_draft_with_command_returns_to_floater_after_prefill(monkeypatch, tmp_pa
 def test_slack_kind_without_draft_tag_also_focuses_the_draft(monkeypatch, tmp_path, fake_tmux, fake_clipboard):
     row = dict(task("draft: hello"), tags=["piotr"], kind="slack")
     order = start_row(monkeypatch, tmp_path, row)
-    assert order == ["prepare", ("open tabs", []), "pin", ("draft", "%18", "111"), ("focus", UUID, "%18")]
+    assert order == ["prepare", ("open", []), "pin", ("draft", "%18", "111"), ("focus", UUID, "%18")]
     assert fake_tmux() == [["select-window", "-t", "%18"]]
 
 

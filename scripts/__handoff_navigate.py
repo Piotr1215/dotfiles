@@ -245,7 +245,9 @@ def navigate_many(urls, terminal, slack_tabs=False):
     desktop = [] if slack_tabs else [u for u in urls if is_slack(u)]
     pages = [u for u in urls if u not in desktop]
     for url in desktop:
-        run(["xdg-open", slack_deep_link(url)], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        deep_link = slack_deep_link(url)
+        log(f"handoff: opening desktop {deep_link}")
+        run(["xdg-open", deep_link], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     browser = os.environ.get("HANDOFF_BROWSER_COMMAND")
     if browser and pages:
         run([browser, *pages])
@@ -517,6 +519,20 @@ def verify(task):
     return 1
 
 
+def wait_for_slack_focus():
+    """Wait briefly for the desktop app to raise itself before restoring the draft."""
+    deadline = time.monotonic() + 3
+    while time.monotonic() < deadline:
+        try:
+            slack = window_id("slack")
+            active = run(["xdotool", "getactivewindow"], capture_output=True, text=True).stdout.strip()
+            if slack and active == slack:
+                return
+        except (OSError, subprocess.SubprocessError):
+            return
+        time.sleep(0.1)
+
+
 def show_slack_draft(pane, terminal, runtime):
     """Position the pinned brief at its draft and restore its terminal window."""
     if re.fullmatch(r"%[0-9]+", pane):
@@ -642,7 +658,7 @@ def main(argv=None):
                     if not re.match(r"^\s*(target|link):", a.get("description", ""), re.I)])
                 fallback = destination(fallback_task)
                 urls = [fallback] if fallback else []
-            navigate_many(urls, terminal, slack_tabs=slack)
+            navigate_many(urls, terminal)
             if act_on_kind(task, slack) == "none" and not urls:
                 # Nothing to open or run: Gordon fixes the row (link:, cmd: or agent:).
                 log(f"handoff: no action on {uuid}")
@@ -650,6 +666,8 @@ def main(argv=None):
             if slack:
                 run([floater, "pin", uuid, pane])
         if slack:
+            if any(urlsplit(url).hostname in SLACK_HOSTS for url in urls):
+                wait_for_slack_focus()
             show_slack_draft(pane, terminal, runtime)
             if re.fullmatch(r"%[0-9]+", pane):
                 # A cmd: pane may hold the keyboard; the draft brief takes it back.

@@ -181,3 +181,17 @@ pick_next() {
   [[ "$output" == *"Requested browser window not found."* ]]
   [[ "$output" != *wrong* ]]
 }
+
+@test "slack split unmaximizes before tiling the source terminal" {
+  run bash -c '
+    source <(sed -n "/^slack_alacritty_vertical()/,/^}/p" "$1")
+    xdotool() { echo 222; }
+    get_alacritty_window() { echo 333; }
+    wmctrl() { echo "wmctrl:$*"; }
+    tile_left() { echo "left:$1"; }
+    tile_right() { echo "right:$1"; }
+    slack_alacritty_vertical
+  ' bash "$LAYOUTS"
+  [ "$status" -eq 0 ]
+  [ "$output" = $'wmctrl:-i -r 222 -b remove,maximized_vert,maximized_horz\nleft:222\nright:333' ]
+}

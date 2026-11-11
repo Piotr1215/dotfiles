@@ -309,6 +309,7 @@ slack_alacritty_vertical() {
 		return 1
 	fi
 
+	wmctrl -i -r "$slack_window" -b remove,maximized_vert,maximized_horz
 	tile_left "$slack_window"
 	tile_right "$alacritty_window"
 }
