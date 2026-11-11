@@ -6,13 +6,16 @@ import subprocess
 import tempfile
 import time
 
+import pytest
+
 
 TASK = "/usr/local/bin/task"
 HOOK = Path.home() / ".task/hooks/on-modify-openurl-or-program.py"
 SCRIPTS = Path(__file__).resolve().parents[2] / "scripts"
 
 
-def test_real_start_hook_keeps_newest_handoff_and_opens_reply_permalink():
+@pytest.mark.parametrize("command_only", [False, True])
+def test_real_start_hook_keeps_newest_handoff_and_opens_reply_permalink(command_only):
     with tempfile.TemporaryDirectory() as directory:
         root = Path(directory)
         data = root / "data"
@@ -66,6 +69,19 @@ def test_real_start_hook_keeps_newest_handoff_and_opens_reply_permalink():
             "if sys.argv[1] == 'prepare': os.execv(sys.executable, [sys.executable, os.environ['PREPARE_SCRIPT'], sys.argv[2]])\n"
         )
         mock.chmod(0o755)
+        tmux = root / "tmux"
+        tmux.write_text(
+            "#!/usr/bin/env python3\n"
+            "import json, os, sys\n"
+            "args = sys.argv[1:]\n"
+            "with open(os.environ['MOCK_LOG'], 'a') as f: f.write(json.dumps(args)+'\\n')\n"
+            "if args[0] == 'display-message': print('$9')\n"
+            "if args[0] == 'new-window':\n"
+            "    if args[args.index('-t') + 1] != '$9:':\n"
+            "        print('index in use', file=sys.stderr); sys.exit(1)\n"
+            "    print('%99')\n"
+        )
+        tmux.chmod(0o755)
         task_bin = root / "task"
         task_bin.symlink_to(TASK)
         env = dict(os.environ)
@@ -74,7 +90,7 @@ def test_real_start_hook_keeps_newest_handoff_and_opens_reply_permalink():
                    PATH=str(bin_dir) + os.pathsep + os.environ["PATH"], SLACK_TEAM_ID="TTEST",
                    HANDOFF_TASK_COMMAND=str(task_bin), HANDOFF_FLOATER_COMMAND=str(mock),
                    HANDOFF_LAYOUT_COMMAND=str(mock), HANDOFF_BROWSER_COMMAND=str(mock),
-                   MOCK_LOG=str(log), PREPARE_SCRIPT=str(scripts / "__handoff_floater_file.py"), TMUX_PANE="%77")
+                   HANDOFF_TMUX_COMMAND=str(tmux), MOCK_LOG=str(log), PREPARE_SCRIPT=str(scripts / "__handoff_floater_file.py"), TMUX_PANE="%77")
 
         def task(*args):
             return subprocess.run([TASK, *args], env=env, capture_output=True, text=True,
@@ -88,7 +104,10 @@ def test_real_start_hook_keeps_newest_handoff_and_opens_reply_permalink():
                                       "export").stdout)
             ids.append(matches[0]["uuid"])
         permalink = "https://loft-labs-inc.slack.com/archives/C07G0T9HS4U/p1793971823896409?thread_ts=1793868031.988299&cid=C07G0T9HS4U"
-        task("rc.hooks=off", ids[2], "annotate", "--", "target: slack:C07G0T9HS4U/1793868031.988299 " + permalink)
+        if command_only:
+            task("rc.hooks=off", ids[2], "annotate", "--", "cmd: echo safe && echo ready")
+        else:
+            task("rc.hooks=off", ids[2], "annotate", "--", "target: slack:C07G0T9HS4U/1793868031.988299 " + permalink)
         ordinary = ids[-1]
         task("rc.hooks=off", ordinary, "start")
         for uid in ids[:3]:
@@ -116,9 +135,15 @@ def test_real_start_hook_keeps_newest_handoff_and_opens_reply_permalink():
         while time.monotonic() < deadline:
             if log.exists():
                 calls = [json.loads(line) for line in log.read_text().splitlines()]
-                if any(call and call[0] == "pin" and call[1] == winner for call in calls):
+                if (["send-keys", "-t", "%99", "Enter"] in calls if command_only
+                        else any(call and call[0].startswith("slack://") for call in calls)):
                     break
             time.sleep(0.05)
         assert ["prepare", winner, "%77"] in calls
-        assert ["pin", winner, "%77"] in calls
-        assert ["slack://channel?team=TTEST&id=C07G0T9HS4U&message=1793971823.896409&thread_ts=1793868031.988299"] in calls, calls
+        if command_only:
+            new = next(call for call in calls if call[0] == "new-window")
+            assert new[new.index("-t") + 1] == "$9:"
+            assert "HANDOFF_CMD=echo safe && echo ready" in new
+            assert ["send-keys", "-t", "%99", "Enter"] in calls
+        else:
+            assert ["slack://channel?team=TTEST&id=C07G0T9HS4U&message=1793971823.896409&thread_ts=1793868031.988299"] in calls, calls

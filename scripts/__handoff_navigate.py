@@ -444,8 +444,12 @@ def open_command_window(uuid, command, focus=True):
             "HANDOFF_NAVIGATOR=" + str(Path(__file__).resolve()), "zsh", "-i"]
     if re.fullmatch(r"%[0-9]+", os.environ.get("TMUX_PANE", "")):
         flags = [] if focus else ["-d"]
+        session = run([tmux, "display-message", "-p", "-t", origin_pane(), "#{session_id}"],
+                      capture_output=True, text=True).stdout.strip()
+        if not re.fullmatch(r"\$[0-9]+", session):
+            raise ValueError("tmux did not report the origin session")
         pane = run([tmux, "new-window", "-P", "-F", "#{pane_id}", *flags,
-                    "-t", origin_pane(), "-n", "handoff-" + uuid[:8], *argv],
+                    "-t", session + ":", "-n", "handoff-" + uuid[:8], *argv],
                    capture_output=True, text=True).stdout.strip()
         if not re.fullmatch(r"%[0-9]+", pane):
             raise ValueError("tmux did not report the new window pane")

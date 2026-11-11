@@ -470,7 +470,7 @@ def fake_tmux(tmp_path, monkeypatch):
     tmux = fake_bin(tmp_path, "tmux", f"""
 printf '%s\\0' "$@" >> {log}; printf '\\n' >> {log}
 case "$1" in
-  display-message) echo '$4' ;;
+  display-message) if [[ "$*" == *'#{{session_id}}'* ]]; then echo '$9'; else echo '$4'; fi ;;
   new-window|new-pane) echo '%99' ;;
 esac
 """)
@@ -522,9 +522,10 @@ def test_command_kind_types_the_command_in_a_focused_window(fake_tmux):
     row = dict(task(f"cmd: {hostile}"), kind="command")
     assert nav.act_on_kind(row) == "command"
     calls = fake_tmux()
-    new = calls[0]
+    assert calls[0] == ["display-message", "-p", "-t", "%18", "#{session_id}"]
+    new = calls[1]
     assert new[:4] == ["new-window", "-P", "-F", "#{pane_id}"] and "-d" not in new
-    assert new[new.index("-t") + 1] == "%18"
+    assert new[new.index("-t") + 1] == "$9:"
     assert new[new.index("-n") + 1] == "handoff-" + UUID[:8]
     # The command is one argv element in the pane's environment, verbatim.
     tail = new[new.index("env"): ]
@@ -532,9 +533,9 @@ def test_command_kind_types_the_command_in_a_focused_window(fake_tmux):
     assert tail[3] == "HANDOFF_NAVIGATOR=" + str(PATH)
     assert tail[-2:] == ["zsh", "-i"]
     # Enter submits only the fixed prefill, not the command it queues.
-    assert calls[1:] == [["send-keys", "-t", "%99", "-l", nav.PREFILL], ["send-keys", "-t", "%99", "Enter"],
+    assert calls[2:] == [["send-keys", "-t", "%99", "-l", nav.PREFILL], ["send-keys", "-t", "%99", "Enter"],
                          ]
-    assert all(hostile not in arg for call in calls[1:] for arg in call)
+    assert all(hostile not in arg for call in calls[2:] for arg in call)
     assert "HANDOFF_CMD" in nav.PREFILL
 
 
@@ -622,7 +623,7 @@ def test_slack_kind_with_a_cmd_note_copies_the_draft_and_opens_the_command(fake_
     assert fake_clipboard.read_text() == "Hi Daniel, signed receipts are in the folder"
     calls = fake_tmux()
     # The draft brief keeps the keyboard, so the command pane opens unfocused.
-    assert "-d" in calls[0] and "HANDOFF_CMD=xournalpp ~/Downloads/eigenbeleg-1.pdf" in calls[0]
+    assert "-d" in calls[1] and "HANDOFF_CMD=xournalpp ~/Downloads/eigenbeleg-1.pdf" in calls[1]
     assert ["select-pane", "-t", "%99"] not in calls
 
 
@@ -688,8 +689,8 @@ def test_start_prefills_cmd_for_every_kind(monkeypatch, tmp_path, fake_tmux, kin
                kind=kind, tags=["piotr", "ack"], uuid="3726e617-a1b2-464e-8eff-32fc4a2c658c")
     order = start_row(monkeypatch, tmp_path, row)
     calls = fake_tmux()
-    assert "HANDOFF_CMD=echo check" in calls[0]
-    assert calls[1:3] == [["send-keys", "-t", "%99", "-l", nav.PREFILL], ["send-keys", "-t", "%99", "Enter"]]
+    assert "HANDOFF_CMD=echo check" in calls[1]
+    assert calls[2:4] == [["send-keys", "-t", "%99", "-l", nav.PREFILL], ["send-keys", "-t", "%99", "Enter"]]
     assert not any(isinstance(item, tuple) and item[0] == "agent" for item in order)
 
 
@@ -701,16 +702,16 @@ def test_start_3726e617_selects_its_sts_command_without_running_it(monkeypatch, 
                {"entry": "20261110T144008Z", "description": "what: profiles fixed"}]}
     start_row(monkeypatch, tmp_path, row)
     calls = fake_tmux()
-    assert "HANDOFF_CMD=aws sts get-caller-identity --profile sandbox-250811347731" in calls[0]
-    assert calls[1][4] == nav.PREFILL
+    assert "HANDOFF_CMD=aws sts get-caller-identity --profile sandbox-250811347731" in calls[1]
+    assert calls[2][4] == nav.PREFILL
 
 
 def test_start_on_a_command_row_focuses_the_command_pane_without_a_brief(monkeypatch, tmp_path, fake_tmux):
     row = dict(task(f"cmd: {PUSH}", "agent: some-worker"), kind="command")
     order = start_row(monkeypatch, tmp_path, row)
     calls = fake_tmux()
-    assert [c[0] for c in calls] == ["new-window", "send-keys", "send-keys"]
-    assert "HANDOFF_CMD=" + PUSH in calls[0]
+    assert [c[0] for c in calls] == ["display-message", "new-window", "send-keys", "send-keys"]
+    assert "HANDOFF_CMD=" + PUSH in calls[1]
     assert order == ["prepare", ("open", [])]
 
 
