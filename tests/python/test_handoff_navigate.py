@@ -84,6 +84,15 @@ def test_tab_note_opens_console_url_and_suppresses_legacy_command(monkeypatch):
     nav.act_on_kind(row)
 
 
+def test_legacy_quoted_page_and_slack_permalink_are_destinations(monkeypatch):
+    for url in ('https://mail.google.com/mail/?authuser=a@example.com#all/thread',
+                'https://loft-labs-inc.slack.com/archives/C0123/p1700000000000100'):
+        row = task(f"cmd: xdg-open '{url}'")
+        assert nav.annotation_urls(row) == [url]
+        monkeypatch.setattr(nav, 'open_command_window', lambda *args: pytest.fail('legacy command shown'))
+        nav.act_on_kind(row)
+
+
 def test_mail_sent_uses_newest_message_and_account(tmp_path, monkeypatch):
     binary = tmp_path / "notmuch"
     binary.write_text("#!/bin/sh\ncase \"$2\" in\n"

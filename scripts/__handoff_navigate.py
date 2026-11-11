@@ -5,6 +5,7 @@ import fcntl
 import os
 from pathlib import Path
 import re
+import shlex
 import subprocess
 import sys
 import time
@@ -231,6 +232,14 @@ def annotation_urls(task):
                 urls.append(single_url(match.group(1), any_host=annotation.get("description", "").lstrip().lower().startswith("tab:")))
             except ValueError as error:
                 print(f"Could not open handoff destination: {error}", file=sys.stderr)
+    if not urls:
+        command = newest_note(task, "cmd")
+        try:
+            args = shlex.split(command)
+            if len(args) == 2 and args[0] == "xdg-open":
+                urls.append(checked_url(args[1], any_host=True))
+        except ValueError:
+            pass
     return list(dict.fromkeys(url for url in urls if url))
 
 
@@ -312,7 +321,11 @@ def act_on_kind(task):
                 print("Could not copy the draft: install xclip or wl-copy, then press s again.",
                       file=sys.stderr)
         command = newest_note(task, "cmd")
-        if command.startswith("xdg-open https://"):
+        try:
+            words = shlex.split(command)
+        except ValueError:
+            words = []
+        if len(words) == 2 and words[0] == "xdg-open" and words[1].startswith("https://"):
             command = ""
         elif command or kind == "command":
             open_command_window(task["uuid"], command)
