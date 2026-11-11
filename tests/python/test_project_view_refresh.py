@@ -143,8 +143,8 @@ class StandingTests(unittest.TestCase):
         self.assertEqual(row["project"], "ci-infrastructure-improvements")
         self.assertEqual(row["rank"], 9)
         self.assertEqual(row["description"],
-                         "standing · In Progress, target 8 Dec · updated today, on track · "
-                         "6 open: 2 started, 1 todo, 1 triage, 1 backlog, 1 parked · 7d: 6 changed, 1 closed")
+                         "standing · 1 in triage · on track, updated today · 7d: 6 changed, 1 closed · "
+                         "6 open: 2 started, 1 todo, 1 triage, 1 backlog, 1 parked · In Progress, target 8 Dec")
         self.assertEqual(row["annotations"][0], "https://linear.app/loft/project/p1")
 
     def test_stuck_counts_blocked_and_stalled_but_not_parked(self):
@@ -155,18 +155,20 @@ class StandingTests(unittest.TestCase):
             issue("DEVOPS-1809", "Parked", "started", updated=30),
         ], led=False, update_days=7, health="offTrack", target="2027-06-30")
         row = self.row(proj)
-        self.assertIn("target 30 Jun 2027 ·", row["description"])
-        self.assertIn("updated 7d ago, off track", row["description"])
-        self.assertIn("stuck: 1 blocked, 1 stalled", row["description"])
+        self.assertTrue(row["description"].startswith("standing · stuck: 1 blocked, 1 stalled · off track, "
+                                                      "updated 7d ago ·"))
+        self.assertTrue(row["description"].endswith("· In Progress, target 30 Jun 2027"))
         detail = row["annotations"][1]
         self.assertIn("blocked: DEVOPS-1580 by DEVOPS-1579", detail)
         self.assertIn("stalled 7d+: DEVOPS-1105 Someone (12d)", detail)
 
     def test_old_and_missing_updates_and_a_passed_target(self):
         proj = project("p1", "Prod release", [issue("DEVOPS-1")], update_days=126, target="2026-03-31")
-        self.assertIn("target 31 Mar passed · last update Jul 2026, on track", self.row(proj)["description"])
+        description = self.row(proj)["description"]
+        self.assertTrue(description.startswith("standing · on track, last update Jul 2026 ·"))
+        self.assertTrue(description.endswith("· In Progress, target 31 Mar passed"))
         proj = project("p2", "AI Maintenance", [issue("DEVOPS-2")], update_days=None, status="Maintenance")
-        self.assertIn("standing · Maintenance · no update yet ·", self.row(proj)["description"])
+        self.assertTrue(self.row(proj)["description"].startswith("standing · no update yet ·"))
 
     def test_my_prs_and_handoffs_count_on_the_row(self):
         mine = "loft-sh/loft-enterprise#9403"
@@ -176,9 +178,20 @@ class StandingTests(unittest.TestCase):
         tasks = [{"uuid": "h", "project": "ci-infrastructure-improvements", "tags": ["piotr"],
                   "linear_issue_id": "DEVOPS-1828", "description": "click Approve", "status": "pending"}]
         row = self.row(proj, tasks, gh)
-        self.assertTrue(row["description"].endswith("· my PRs: 1 awaiting review · 1 handoff"))
+        self.assertTrue(row["description"].startswith("standing · my PRs: 1 awaiting review · on track"))
+        self.assertTrue(row["description"].endswith("· In Progress · 1 handoff"))
         self.assertIn("my PRs: loft-enterprise#9403 awaiting review (DEVOPS-1872)", row["annotations"][1])
         self.assertIn("handoffs: DEVOPS-1828", row["annotations"][1])
+
+    def test_my_prs_lead_with_the_most_actionable_state(self):
+        refs = ["loft-sh/a#1", "loft-sh/b#2", "loft-sh/c#3"]
+        proj = project("p1", "GitHub Asks", [issue("DEVOPS-1803", "In Review", "started",
+                                                   prs=[f"https://github.com/{r.replace('#', '/pull/')}" for r in refs])])
+        gh = github(mine={refs[0]: {"isDraft": False, "reviewDecision": "REVIEW_REQUIRED"},
+                          refs[1]: {"isDraft": False, "reviewDecision": "APPROVED"},
+                          refs[2]: {"isDraft": False, "reviewDecision": "CHANGES_REQUESTED"}})
+        self.assertTrue(self.row(proj, gh=gh)["description"].startswith(
+            "standing · my PRs: 1 changes requested, 1 approved, 1 awaiting review · "))
 
     def test_backlog_tasks_are_counted_and_listed_on_the_row(self):
         proj = project("p1", "AI Maintenance", [issue("DEVOPS-1818", "Backlog", "backlog")])
@@ -384,7 +397,7 @@ class TaskwarriorTests(unittest.TestCase):
         self.assertEqual(len(body), 3, report)
         self.assertIn("parallel job steps", body[0])
         self.assertIn("no task · DEVOPS-1879", body[1])
-        self.assertIn("standing · In Progress", body[2])
+        self.assertIn("standing · on track, updated today", body[2])
         self.assertIn("my backlog: 1 · 1 handoff", body[2])
         for hidden in ("a handoff row", "not linear work", "gordon job", "compare runner costs"):
             self.assertNotIn(hidden, report)

@@ -78,6 +78,8 @@ GH_CHUNK = 25
 # (TEAM_PREFIX_PROJECT in __github_issue_sync.sh); a no-task row follows suit.
 TEAM_PROJECT = {"DOC": "docs-maintenance", "DEVOPS": "operations", "ENGAI": "ai"}
 HEALTH = {"onTrack": "on track", "atRisk": "at risk", "offTrack": "off track"}
+# My PR states, most actionable first.
+PR_NOTES = ("changes requested", "approved", "awaiting review", "draft")
 PR_URL = re.compile(r"https?://github\.com/([\w.-]+)/([\w.-]+)/pull/(\d+)")
 LINK = re.compile(r"(?:https?://|www\.)\S+")
 
@@ -382,21 +384,22 @@ def standing(project, tasks, github, now):
         when = parse_time(update["createdAt"])
         health = HEALTH.get(update.get("health"), update.get("health") or "no health")
         if now - when <= STALE_UPDATE:
-            update_line = f"updated {ago(when, now)}, {health}"
+            update_line = f"{health}, updated {ago(when, now)}"
         else:
-            update_line = f"last update {when.strftime('%b')} {when.year}, {health}"
+            update_line = f"{health}, last update {when.strftime('%b')} {when.year}"
     else:
         update_line = "no update yet"
-    parts = ["standing", state, update_line]
     summary = f"{len(open_)} open"
     if open_:
         summary += ": " + ", ".join(f"{counts[k]} {k}" for k in order if counts.get(k))
-    parts.append(summary)
+    # What needs Piotr leads and the slow facts trail: a 190-column tui pane
+    # shows about 60 characters of the description.
+    attention = []
+    if counts.get("triage"):
+        attention.append(f"{counts['triage']} in triage")
     stuck = [f"{n} {label}" for n, label in ((len(blocked), "blocked"), (len(stalled), "stalled")) if n]
     if stuck:
-        parts.append("stuck: " + ", ".join(stuck))
-    if changed or closed:
-        parts.append(f"7d: {len(changed)} changed, {len(closed)} closed")
+        attention.append("stuck: " + ", ".join(stuck))
 
     refs = {}
     for issue in open_:
@@ -404,7 +407,7 @@ def standing(project, tasks, github, now):
             refs.setdefault(ref, []).append(issue["identifier"])
     mine_lines, other_lines, mine_counts = [], [], {}
     if github is None:
-        parts.append("PRs unavailable")
+        attention.append("PRs unavailable")
     else:
         for ref, ids in sorted(refs.items()):
             if ref in github["mine"]:
@@ -417,7 +420,12 @@ def standing(project, tasks, github, now):
                 other_lines.append(f"{short_ref(ref)} {pr['author']['login'] if pr.get('author') else 'ghost'}, "
                                    f"{pr_note(pr)} ({', '.join(ids)})")
         if mine_counts:
-            parts.append("my PRs: " + ", ".join(f"{n} {note}" for note, n in sorted(mine_counts.items())))
+            attention.append("my PRs: " + ", ".join(f"{mine_counts[note]} {note}" for note in PR_NOTES
+                                                    if mine_counts.get(note)))
+    parts = ["standing", *attention, update_line]
+    if changed or closed:
+        parts.append(f"7d: {len(changed)} changed, {len(closed)} closed")
+    parts += [summary, state]
     handoffs = [t for t in tasks if "piotr" in (t.get("tags") or [])]
     # The report leaves +backlog tasks out, as byproject does; count them here.
     backlog = [t for t in tasks if "backlog" in (t.get("tags") or []) and t not in handoffs]
