@@ -13,6 +13,14 @@ spec.loader.exec_module(nav)
 UUID = "aa476008-cc54-48fe-8530-ea217db834e7"
 
 
+@pytest.fixture(autouse=True)
+def nav_log(tmp_path, monkeypatch):
+    """Keep the navigator's state log out of the real home."""
+    monkeypatch.setenv("HANDOFF_NAV_LOG", str(tmp_path / "nav.log"))
+    (tmp_path / "nav.log").write_text("")
+    return tmp_path / "nav.log"
+
+
 def task(*annotations, tags=None):
     return {"uuid": UUID, "tags": ["piotr"] if tags is None else tags,
             "annotations": [{"description": text} for text in annotations]}
@@ -151,63 +159,62 @@ def test_annotation_urls_include_every_explicit_link_and_latest_target():
     ]
 
 
-def test_agent_session_switches_only_to_existing_exact_tmux_session(monkeypatch):
-    calls = []
-    def fake_run(args, **kwargs):
-        calls.append(args)
-        return subprocess.CompletedProcess(args, 0 if args[1] == "has-session" else 0)
-    monkeypatch.setattr(nav.subprocess, "run", fake_run)
-    monkeypatch.setattr(nav, "run", fake_run)
-    assert nav.switch_agent_session("slack-reply-anvesh")
-    assert calls == [
-        ["tmux", "has-session", "-t", "=slack-reply-anvesh"],
-        ["tmux", "switch-client", "-t", "=slack-reply-anvesh"],
-    ]
+def test_agent_sessions_read_agent_and_tmux_session_notes_newest_first():
+    row = task("agent: old-worker", "12:42 tmux session fada-s-key-acts (dotfiles): s acts per kind",
+               "tmux session fada-constitution-s")
+    assert nav.agent_sessions(row) == ["fada-constitution-s", "fada-s-key-acts", "old-worker"]
+    assert nav.agent_session(row) == "fada-constitution-s"
 
 
-def test_agent_session_missing_session_is_not_switched(monkeypatch):
+def test_live_agent_session_skips_sessions_tmux_does_not_have(monkeypatch):
     calls = []
-    monkeypatch.setattr(nav.subprocess, "run", lambda args, **kwargs:
-                        calls.append(args) or subprocess.CompletedProcess(args, 1))
-    monkeypatch.setattr(nav, "run", lambda *args, **kwargs: pytest.fail("switched missing session"))
-    assert not nav.switch_agent_session("closed-agent")
-    assert calls == [["tmux", "has-session", "-t", "=closed-agent"]]
+    monkeypatch.setattr(nav.subprocess, "run", lambda args, **kwargs: calls.append(args) or
+                        subprocess.CompletedProcess(args, 0 if args[-1] == "=older-live" else 1))
+    row = task("agent: older-live", "tmux session newest-gone")
+    assert nav.live_agent_session(row) == "older-live"
+    assert calls == [["tmux", "has-session", "-t", "=newest-gone"],
+                     ["tmux", "has-session", "-t", "=older-live"]]
+    monkeypatch.setattr(nav.subprocess, "run", lambda args, **kwargs: subprocess.CompletedProcess(args, 1))
+    assert nav.live_agent_session(row) == ""
 
 
 @pytest.mark.parametrize(("urls", "layout"), [
     (["https://loft-labs-inc.slack.com/archives/C0123"], "8"),
-    (["https://github.com/a"], "2"),
-    (["https://loft-labs-inc.slack.com/archives/C0123", "https://github.com/a"], "10"),
-    (["https://github.com/a", "https://linear.app/b"], "2"),
+    (["https://github.com/a"], None),
+    (["https://loft-labs-inc.slack.com/archives/C0123", "https://github.com/a"], "8"),
+    (["https://github.com/a", "https://linear.app/b"], None),
 ])
 def test_layout_and_url_arguments(monkeypatch, urls, layout):
+    """Pages open as background tabs, so only a Slack desktop link tiles windows (11 Nov)."""
     calls = []
     monkeypatch.setenv("HANDOFF_BROWSER_COMMAND", "/browser")
     monkeypatch.setenv("SLACK_TEAM_ID", "T0123")
-    monkeypatch.setattr(nav, "window_id", lambda _: "222")
-    monkeypatch.setattr(nav.time, "sleep", lambda _: None)
     monkeypatch.setattr(nav, "run", lambda args, **kw: calls.append((args, kw)))
-    monkeypatch.setattr(nav.subprocess, "Popen", lambda args, **kw: calls.append((args, kw)))
     nav.navigate_many(urls, "111")
-    assert calls[-1][0][-1] == layout
-    assert calls[-1][1]["env"]["LAYOUT_ALACRITTY_WINDOW"] == "111"
+    layouts = [(args, kw) for args, kw in calls if args[0].endswith("__layouts.sh")]
+    assert [args[-1] for args, _ in layouts] == ([layout] if layout else [])
+    if layout:
+        assert layouts[0][1]["env"]["LAYOUT_ALACRITTY_WINDOW"] == "111"
     for url in urls:
         expected = nav.slack_deep_link(url) if "slack.com" in url else url
         assert any(expected in args for args, _ in calls)
 
 
-def test_multiple_browser_links_open_once_in_one_window(monkeypatch):
+def test_multiple_browser_links_open_once_as_background_tabs(monkeypatch):
     calls = []
     monkeypatch.delenv("HANDOFF_BROWSER_COMMAND", raising=False)
-    monkeypatch.setattr(nav, "window_id", lambda _: "222")
-    monkeypatch.setattr(nav.time, "sleep", lambda _: None)
     monkeypatch.setattr(nav, "run", lambda args, **kw: calls.append((args, kw)))
-    monkeypatch.setattr(nav.subprocess, "Popen", lambda args, **kw: calls.append((args, kw)))
     nav.navigate_many(["https://github.com/a", "https://linear.app/b", "https://github.com/a"], "111")
-    assert calls[0][0][-2:] == ["--focus", "https://github.com/a"]
-    assert calls[1][0][-2:] == ["--focus", "https://linear.app/b"]
-    assert len(calls) == 3
-    assert calls[-1][0][-1] == "2"
+    assert [args[1:] for args, _ in calls] == [["https://github.com/a"], ["https://linear.app/b"]]
+    assert all(kw["timeout"] == 1.0 for _, kw in calls)
+
+
+def test_draft_row_opens_slack_permalink_as_a_tab(monkeypatch):
+    calls = []
+    monkeypatch.delenv("HANDOFF_BROWSER_COMMAND", raising=False)
+    monkeypatch.setattr(nav, "run", lambda args, **kw: calls.append(args))
+    nav.navigate_many([ENTERPRISE, "https://github.com/a"], "111", slack_tabs=True)
+    assert [args[1:] for args in calls] == [[ENTERPRISE], ["https://github.com/a"]]
 
 
 @pytest.mark.parametrize("edited", ["", "https://github.com/edited"])
@@ -231,13 +238,15 @@ def test_work_reads_edits_and_stops_previous_task(monkeypatch, tmp_path, edited)
         return subprocess.CompletedProcess(args, 0, "")
     monkeypatch.setattr(nav, "run", run)
     monkeypatch.setattr(nav, "window_id", lambda _: "111")
-    monkeypatch.setattr(nav, "navigate_many", lambda urls, terminal: calls.append((urls, terminal)))
-    monkeypatch.setattr(nav, "switch_agent_session", lambda session: calls.append(("agent", session)))
+    monkeypatch.setattr(nav, "navigate_many", lambda urls, terminal, slack_tabs=False: calls.append((urls, terminal)))
+    monkeypatch.setattr(nav, "live_agent_session", lambda row: nav.agent_session(row))
+    monkeypatch.setattr(nav, "attach_agent_session", lambda session: calls.append(("agent", session)))
     assert nav.main(["start", UUID]) == 0
     assert (([edited] if edited else []) + ["https://app.notion.com/p/runbook", "https://app.notion.com/p/access"], "111") in calls
     assert ("agent", "slack-reply-anvesh") in calls
     assert any("stop" in call and "rc.hooks=off" in call for call in calls)
-    assert calls[-1][1:3] == ["pin", UUID]
+    # Not a Slack row: no brief floater (Piotr, 11 Nov 12:44).
+    assert not any(isinstance(call, list) and "pin" in call for call in calls)
     assert nav.main(["stop", UUID]) == 0
     assert calls[-2][1:3] == ["close", UUID]
     assert calls[-1][-1] == "1"
@@ -253,7 +262,7 @@ def test_empty_open_block_and_fallback(tmp_path):
     (("link: https://github.com/a", "cmd: echo hello"),
      [("navigate", ["https://github.com/a"]), ("command", "echo hello")]),
     (("link: https://github.com/a",),
-     [("navigate", ["https://github.com/a"]), ("switch", "agent-session")]),
+     [("navigate", ["https://github.com/a"]), ("agent", "agent-session")]),
     (("cmd: echo hello",), [("navigate", []), ("command", "echo hello")]),
 ])
 def test_start_navigates_before_kind_action(monkeypatch, tmp_path, notes, expected):
@@ -271,9 +280,10 @@ def test_start_navigates_before_kind_action(monkeypatch, tmp_path, notes, expect
 
     monkeypatch.setattr(nav, "run", run)
     monkeypatch.setattr(nav, "window_id", lambda _: "111")
-    monkeypatch.setattr(nav, "navigate_many", lambda urls, terminal: calls.append(("navigate", urls)))
-    monkeypatch.setattr(nav, "open_command_window", lambda uuid, command: calls.append(("command", command)))
-    monkeypatch.setattr(nav, "switch_agent_session", lambda session: calls.append(("switch", session)))
+    monkeypatch.setattr(nav, "navigate_many", lambda urls, terminal, slack_tabs=False: calls.append(("navigate", urls)))
+    monkeypatch.setattr(nav, "open_command_window", lambda uuid, command, focus=True: calls.append(("command", command)))
+    monkeypatch.setattr(nav, "live_agent_session", lambda row: nav.agent_session(row))
+    monkeypatch.setattr(nav, "attach_agent_session", lambda session: calls.append(("agent", session)))
     assert nav.main(["start", UUID]) == 0
     assert calls == expected
 
@@ -281,7 +291,7 @@ def test_start_navigates_before_kind_action(monkeypatch, tmp_path, notes, expect
 def test_empty_block_uses_done_when_and_navigation_failure_still_pins(monkeypatch, tmp_path):
     monkeypatch.setenv("XDG_RUNTIME_DIR", str(tmp_path))
     monkeypatch.setenv("TMUX_PANE", "%18")
-    row = dict(task("done-when: pr-merged architecture#26"), start="20261106T000000Z")
+    row = dict(task("done-when: pr-merged architecture#26"), start="20261106T000000Z", tags=["piotr", "draft"])
     brief = tmp_path / "brief"
     brief.write_text("<!-- begin open -->\n\n<!-- end open -->\n")
     calls = []
@@ -294,7 +304,7 @@ def test_empty_block_uses_done_when_and_navigation_failure_still_pins(monkeypatc
 
     monkeypatch.setattr(nav, "run", run)
     monkeypatch.setattr(nav, "window_id", lambda _: "111")
-    def fail(urls, terminal):
+    def fail(urls, terminal, slack_tabs=False):
         assert urls == ["https://github.com/loft-sh/architecture/pull/26"]
         raise OSError("navigation failed")
     monkeypatch.setattr(nav, "navigate_many", fail)
@@ -368,11 +378,11 @@ def test_start_leaves_agent_spawned_row_running(monkeypatch, tmp_path):
     monkeypatch.setattr(nav, "run", run)
     monkeypatch.setattr(nav, "window_id", lambda _: "111")
     monkeypatch.setattr(nav, "open_block", lambda _: [])
-    monkeypatch.setattr(nav, "navigate_many", lambda urls, terminal: None)
-    monkeypatch.setattr(nav, "switch_agent_session", lambda session: False)
+    monkeypatch.setattr(nav, "navigate_many", lambda urls, terminal, slack_tabs=False: None)
+    monkeypatch.setattr(nav, "live_agent_session", lambda row: "")
     assert nav.main(["start", UUID]) == 0
     assert not any("stop" in args for args in calls)
-    assert calls[-1][1:3] == ["pin", UUID]
+    assert not any("pin" in args for args in calls)
 
 
 ENTERPRISE = "https://vcluster-internal.enterprise.slack.com/archives/C0CE21P1C3H/p1793963101837439"
@@ -400,14 +410,11 @@ def test_enterprise_slack_permalink_opens_desktop_beside_browser(monkeypatch):
     calls = []
     monkeypatch.setenv("HANDOFF_BROWSER_COMMAND", "/browser")
     monkeypatch.setenv("SLACK_TEAM_ID", "T0123")
-    monkeypatch.setattr(nav, "window_id", lambda _: "222")
-    monkeypatch.setattr(nav.time, "sleep", lambda _: None)
     monkeypatch.setattr(nav, "run", lambda args, **kw: calls.append(args))
-    monkeypatch.setattr(nav.subprocess, "Popen", lambda args, **kw: calls.append(args))
     nav.navigate_many([ENTERPRISE, "https://github.com/a"], "111")
     assert calls[0] == ["xdg-open", nav.slack_deep_link(ENTERPRISE)]
     assert ["/browser", "https://github.com/a"] in calls
-    assert calls[-1][-1] == "10"
+    assert calls[-1][-1] == "8"
 
 
 def test_brief_without_open_block_still_opens_task_links(monkeypatch, tmp_path):
@@ -426,11 +433,11 @@ def test_brief_without_open_block_still_opens_task_links(monkeypatch, tmp_path):
         return subprocess.CompletedProcess(args, 0, str(brief) if "prepare" in args else "")
     monkeypatch.setattr(nav, "run", run)
     monkeypatch.setattr(nav, "window_id", lambda _: "111")
-    monkeypatch.setattr(nav, "navigate_many", lambda urls, terminal: calls.append((urls, terminal)))
-    monkeypatch.setattr(nav, "switch_agent_session", lambda session: False)
+    monkeypatch.setattr(nav, "navigate_many", lambda urls, terminal, slack_tabs=False: calls.append((urls, terminal)))
+    monkeypatch.setattr(nav, "live_agent_session", lambda row: "")
     assert nav.main(["start", UUID]) == 0
     assert ([ENTERPRISE, "https://linear.app/loft/issue/DEVOPS-1798"], "111") in calls
-    assert calls[-1][1:3] == ["pin", UUID]
+    assert not any(isinstance(call, list) and "pin" in call for call in calls)
 
 
 # Kind actions on s (9 Nov, Piotr): "this would mean action on start so like
@@ -453,7 +460,7 @@ def fake_tmux(tmp_path, monkeypatch):
 printf '%s\\0' "$@" >> {log}; printf '\\n' >> {log}
 case "$1" in
   display-message) echo '$4' ;;
-  new-window) echo '%99' ;;
+  new-window|new-pane) echo '%99' ;;
 esac
 """)
     monkeypatch.setenv("HANDOFF_TMUX_COMMAND", str(tmux))
@@ -498,22 +505,44 @@ def test_newest_note_keeps_inner_lines_and_takes_the_latest():
     assert nav.newest_note(row, "cmd") == ""
 
 
-def test_command_kind_opens_a_named_window_with_unsubmitted_command(fake_tmux):
+def test_command_kind_types_the_command_in_a_focused_floating_pane(fake_tmux):
+    """Piotr, 11 Nov: "the floating tmux window should always be in focus"."""
     hostile = "git push; echo $(touch /tmp/pwned) `id` 'q' \"d\" \\ $HOME"
     row = dict(task(f"cmd: {hostile}"), kind="command")
     assert nav.act_on_kind(row) == "command"
     calls = fake_tmux()
-    assert calls[0] == ["display-message", "-p", "-t", "%18", "#{session_id}"]
-    new = calls[1]
-    assert new[:3] == ["new-window", "-P", "-F"] and new[new.index("-t") + 1] == "$4:"
-    assert new[new.index("-n") + 1] == UUID[:8]
-    # The command is one argv element in the window's environment, verbatim.
-    assert new[new.index("-e") + 1] == "HANDOFF_CMD=" + hostile
-    assert new[-3:] == ["--", "zsh", "-i"]
+    new = calls[0]
+    assert new[:4] == ["new-pane", "-P", "-F", "#{pane_id}"] and "-d" not in new
+    assert new[new.index("-t") + 1] == "%18"
+    assert new[new.index("-x"):new.index("-x") + 8] == nav.FLOAT
+    assert new[new.index("-T") + 1] == "handoff cmd " + UUID[:8]
+    # The command is one argv element in the pane's environment, verbatim.
+    tail = new[new.index("--") + 1:]
+    assert tail[:3] == ["env", "HANDOFF_CMD=" + hostile, "HANDOFF_UUID=" + UUID]
+    assert tail[3] == "HANDOFF_NAVIGATOR=" + str(PATH)
+    assert tail[-2:] == ["zsh", "-i"]
     # Enter submits only the fixed prefill, not the command it queues.
-    assert calls[2:] == [["send-keys", "-t", "%99", "-l", nav.PREFILL], ["send-keys", "-t", "%99", "Enter"]]
-    assert all(hostile not in arg for call in calls[2:] for arg in call)
+    assert calls[1:] == [["send-keys", "-t", "%99", "-l", nav.PREFILL], ["send-keys", "-t", "%99", "Enter"],
+                         ["select-pane", "-t", "%99"]]
+    assert all(hostile not in arg for call in calls[1:] for arg in call)
     assert "HANDOFF_CMD" in nav.PREFILL
+
+
+def test_prefill_hook_verifies_once_after_the_command_exits_zero(tmp_path):
+    """Piotr, 11 Nov: "once command is ran verify it and close task"."""
+    log = tmp_path / "verify.log"
+    navigator = fake_bin(tmp_path, "nav", f'printf "%s\\n" "$*" >> {log}\n')
+    # sim runs the hooks the way an interactive prompt does around one command.
+    script = (nav.PREFILL + "; read -z queued;"
+              ' sim() { local f s; for f in $preexec_functions; do $f; done; eval "$1"; s=$?;'
+              ' for f in $precmd_functions; do (exit $s); $f; done; };'
+              " sim false; sim true; sim true;"   # a failed run stays armed; success verifies once
+              ' print -r -- "${precmd_functions[*]}|${preexec_functions[*]}"')
+    result = subprocess.run(["zsh", "-fc", script], capture_output=True, text=True, check=True,
+                            env={"HANDOFF_CMD": "true", "HANDOFF_UUID": UUID,
+                                 "HANDOFF_NAVIGATOR": str(navigator), "TERM": "dumb"})
+    assert log.read_text() == f"verify {UUID}\n"
+    assert "handoff_rc" not in result.stdout and "handoff_ran" not in result.stdout
 
 
 def test_prefill_queues_command_without_executing_it(tmp_path):
@@ -532,7 +561,7 @@ def test_prefill_queues_command_without_executing_it(tmp_path):
     (("cmd: git push\tx",), "one line"),
 ])
 def test_command_kind_without_a_usable_command_reports_and_opens_nothing(fake_tmux, capsys, notes, error):
-    assert nav.act_on_kind(dict(task(*notes), kind="command")) == "command"
+    assert nav.act_on_kind(dict(task(*notes), kind="command")) == "failed"
     assert fake_tmux() == []
     assert error in capsys.readouterr().err
 
@@ -582,15 +611,37 @@ def test_slack_kind_with_a_cmd_note_copies_the_draft_and_opens_the_command(fake_
     assert nav.act_on_kind(row) == "slack"
     assert fake_clipboard.read_text() == "Hi Daniel, signed receipts are in the folder"
     calls = fake_tmux()
-    assert calls[1][calls[1].index("-e") + 1] == "HANDOFF_CMD=xournalpp ~/Downloads/eigenbeleg-1.pdf"
+    # The draft brief keeps the keyboard, so the command pane opens unfocused.
+    assert "-d" in calls[0] and "HANDOFF_CMD=xournalpp ~/Downloads/eigenbeleg-1.pdf" in calls[0]
+    assert ["select-pane", "-t", "%99"] not in calls
 
 
 @pytest.mark.parametrize("kind", ["pr", "ack", "other"])
 def test_pr_ack_and_other_without_cmd_take_no_extra_action(fake_tmux, fake_clipboard, kind):
     row = dict(task("draft: hello", "done-when: pr-merged architecture#26"), kind=kind)
-    assert nav.act_on_kind(row) == kind
+    assert nav.act_on_kind(row) == "none"
     assert fake_tmux() == []
     assert not fake_clipboard.exists()
+
+
+def test_agent_row_attaches_live_session_in_a_focused_floating_pane(fake_tmux, monkeypatch):
+    monkeypatch.setattr(nav, "live_agent_session", lambda row: "fada-page-guard")
+    row = task("12:40 guard the add path. tmux session fada-page-guard")
+    assert nav.act_on_kind(row) == "agent"
+    calls = fake_tmux()
+    assert calls[0] == ["display-message", "-p", "-t", "%18", "#{session_name}"]
+    new = calls[1]
+    assert new[0] == "new-pane" and "-d" not in new and new[new.index("-T") + 1] == "agent fada-page-guard"
+    assert new[new.index("--") + 1:] == ["env", "-u", "TMUX", os.environ["HANDOFF_TMUX_COMMAND"],
+                                         "attach-session", "-t", "=fada-page-guard"]
+    assert calls[2] == ["select-pane", "-t", "%99"]
+
+
+def test_agent_row_never_nests_the_session_s_was_pressed_in(fake_tmux, monkeypatch, capsys):
+    monkeypatch.setattr(nav, "live_agent_session", lambda row: "$4")
+    assert nav.act_on_kind(task("agent: $4")) == "failed"
+    assert [c[0] for c in fake_tmux()] == ["display-message"]
+    assert "is the session s was pressed in" in capsys.readouterr().err
 
 
 def start_row(monkeypatch, tmp_path, row):
@@ -611,8 +662,10 @@ def start_row(monkeypatch, tmp_path, row):
         return real_run(args, **kwargs)
     monkeypatch.setattr(nav, "run", run)
     monkeypatch.setattr(nav, "window_id", lambda _: "111")
-    monkeypatch.setattr(nav, "navigate_many", lambda urls, terminal: order.append(("open", urls)))
-    monkeypatch.setattr(nav, "switch_agent_session", lambda session: order.append(("agent", session)))
+    monkeypatch.setattr(nav, "navigate_many", lambda urls, terminal, slack_tabs=False:
+                        order.append(("open", urls) if not slack_tabs else ("open tabs", urls)))
+    monkeypatch.setattr(nav, "live_agent_session", lambda row: "")
+    monkeypatch.setattr(nav, "attach_agent_session", lambda session: order.append(("agent", session)))
     monkeypatch.setattr(nav, "show_slack_draft", lambda pane, terminal, runtime: order.append(("draft", pane, terminal)))
     assert nav.main(["start", row["uuid"]]) == 0
     return order
@@ -624,8 +677,8 @@ def test_start_prefills_cmd_for_every_kind(monkeypatch, tmp_path, fake_tmux, kin
                kind=kind, tags=["piotr", "ack"], uuid="3726e617-a1b2-464e-8eff-32fc4a2c658c")
     order = start_row(monkeypatch, tmp_path, row)
     calls = fake_tmux()
-    assert "HANDOFF_CMD=echo check" in calls[1]
-    assert calls[2:] == [["send-keys", "-t", "%99", "-l", nav.PREFILL], ["send-keys", "-t", "%99", "Enter"]]
+    assert "HANDOFF_CMD=echo check" in calls[0]
+    assert calls[1:3] == [["send-keys", "-t", "%99", "-l", nav.PREFILL], ["send-keys", "-t", "%99", "Enter"]]
     assert not any(isinstance(item, tuple) and item[0] == "agent" for item in order)
 
 
@@ -637,26 +690,27 @@ def test_start_3726e617_selects_its_sts_command_without_running_it(monkeypatch, 
                {"entry": "20261110T144008Z", "description": "what: profiles fixed"}]}
     start_row(monkeypatch, tmp_path, row)
     calls = fake_tmux()
-    assert "HANDOFF_CMD=aws sts get-caller-identity --profile sandbox-250811347731" in calls[1]
-    assert calls[2][4] == nav.PREFILL
+    assert "HANDOFF_CMD=aws sts get-caller-identity --profile sandbox-250811347731" in calls[0]
+    assert calls[1][4] == nav.PREFILL
 
 
-def test_start_on_a_command_row_opens_the_terminal_and_stays_in_this_session(monkeypatch, tmp_path, fake_tmux):
+def test_start_on_a_command_row_focuses_the_command_pane_without_a_brief(monkeypatch, tmp_path, fake_tmux):
     row = dict(task(f"cmd: {PUSH}", "agent: some-worker"), kind="command")
     order = start_row(monkeypatch, tmp_path, row)
     calls = fake_tmux()
-    assert [c[0] for c in calls] == ["display-message", "new-window", "send-keys", "send-keys"]
-    assert "HANDOFF_CMD=" + PUSH in calls[1]
-    assert order == ["prepare", ("open", []), "pin"]
+    assert [c[0] for c in calls] == ["new-pane", "send-keys", "send-keys", "select-pane"]
+    assert "HANDOFF_CMD=" + PUSH in calls[0]
+    assert order == ["prepare", ("open", [])]
 
 
-def test_start_on_a_slack_row_copies_the_draft_then_opens_the_thread(monkeypatch, tmp_path, fake_clipboard, fake_tmux):
+def test_start_on_a_slack_row_copies_the_draft_then_opens_the_thread_as_a_tab(monkeypatch, tmp_path, fake_clipboard, fake_tmux):
     target = f"target: slack:C0CE21P1C3H/1793963101.837439 {ENTERPRISE}"
     row = dict(task(target, "draft: Hi Jan, merged."), tags=["piotr", "draft"], kind="slack")
     order = start_row(monkeypatch, tmp_path, row)
     assert fake_clipboard.read_text() == "Hi Jan, merged."
     assert fake_tmux() == [["select-window", "-t", "%18"]]
-    assert order == ["prepare", ("open", [ENTERPRISE]), "pin", ("draft", "%18", "111"), ("focus", row["uuid"], "%18")]
+    assert order == ["prepare", ("open tabs", [ENTERPRISE]), "pin", ("draft", "%18", "111"),
+                     ("focus", row["uuid"], "%18")]
 
 
 
@@ -670,18 +724,85 @@ def test_draft_with_command_returns_to_floater_after_prefill(monkeypatch, tmp_pa
     assert order[-2:] == [("draft", "%18", "111"), ("focus", row["uuid"], "%18")]
 
 
-def test_slack_kind_without_draft_tag_keeps_list_focus(monkeypatch, tmp_path, fake_tmux, fake_clipboard):
+def test_slack_kind_without_draft_tag_also_focuses_the_draft(monkeypatch, tmp_path, fake_tmux, fake_clipboard):
     row = dict(task("draft: hello"), tags=["piotr"], kind="slack")
     order = start_row(monkeypatch, tmp_path, row)
-    assert order == ["prepare", ("open", []), "pin", ("draft", "%18", "111")]
-    assert fake_tmux() == []
+    assert order == ["prepare", ("open tabs", []), "pin", ("draft", "%18", "111"), ("focus", UUID, "%18")]
+    assert fake_tmux() == [["select-window", "-t", "%18"]]
 
 
-def test_start_on_a_pr_row_opens_the_pr_as_before(monkeypatch, tmp_path, fake_tmux, fake_clipboard):
+def test_start_on_a_pr_row_opens_the_pr_without_a_brief(monkeypatch, tmp_path, fake_tmux, fake_clipboard):
     row = dict(task("done-when: pr-merged architecture#26"), kind="pr")
     order = start_row(monkeypatch, tmp_path, row)
-    assert order[1] == ("open", ["https://github.com/loft-sh/architecture/pull/26"])
+    assert order == ["prepare", ("open", ["https://github.com/loft-sh/architecture/pull/26"])]
     assert fake_tmux() == [] and not fake_clipboard.exists()
+    assert "no action" not in (tmp_path / "nav.log").read_text()
+
+
+def test_start_on_a_row_with_nothing_to_do_logs_it_and_shows_no_brief(monkeypatch, tmp_path, fake_tmux, fake_clipboard):
+    row = dict(task("brief: read this", "done-when: manual"), kind="other")
+    order = start_row(monkeypatch, tmp_path, row)
+    assert order == ["prepare", ("open", [])]
+    assert fake_tmux() == []
+    assert f"handoff: no action on {UUID}" in (tmp_path / "nav.log").read_text()
+
+
+def test_start_on_an_agent_row_attaches_its_live_session(monkeypatch, tmp_path, fake_tmux):
+    """fada2a27 names its worker as `tmux session <name>`; s attaches it, focused."""
+    row = dict(task("12:42 tmux session fada-s-key-acts (dotfiles): s acts per row kind"), kind="other")
+    real_live, real_attach = nav.live_agent_session, nav.attach_agent_session
+    real_subprocess_run = subprocess.run
+    order = start_row(monkeypatch, tmp_path, dict(row))
+    assert order == ["prepare", ("open", [])] and fake_tmux() == []   # start_row stubs: no live session
+    # With tmux reporting the session alive, the same start attaches it.
+    tmux = os.environ["HANDOFF_TMUX_COMMAND"]
+    monkeypatch.setattr(nav, "live_agent_session", real_live)
+    monkeypatch.setattr(nav, "attach_agent_session", real_attach)
+    monkeypatch.setattr(nav.subprocess, "run", lambda args, **kw: subprocess.CompletedProcess(args, 0)
+                        if args[:2] == [tmux, "has-session"] else real_subprocess_run(args, **kw))
+    assert nav.act_on_kind(row) == "agent"
+    calls = fake_tmux()
+    assert [c[0] for c in calls] == ["display-message", "new-pane", "select-pane"]
+    assert calls[1][-1] == "=fada-s-key-acts"
+
+
+def test_verify_closes_the_row_when_its_probe_proves_done(tmp_path, monkeypatch, capsys):
+    probe = fake_bin(tmp_path, "probe", f'echo "$*" > {tmp_path}/probe.argv; echo "{UUID[:8]} done: PR merged"; exit 2\n')
+    tw = fake_bin(tmp_path, "tw", f'echo "$*" >> {tmp_path}/tw.argv\n')
+    monkeypatch.setenv("HANDOFF_PROBE_COMMAND", str(probe))
+    monkeypatch.setenv("HANDOFF_TW_WRAPPER", str(tw))
+    assert nav.verify(task("cmd: gh pr merge 26", "done-when: pr-merged loft-sh/architecture#26")) == 0
+    assert (tmp_path / "probe.argv").read_text() == f"run --uuid {UUID}\n"
+    assert not (tmp_path / "tw.argv").exists()
+    assert "closed aa476008 with proof: aa476008 done: PR merged" in capsys.readouterr().out
+
+
+def test_verify_keeps_an_unproved_row_open_with_the_reason(tmp_path, monkeypatch):
+    probe = fake_bin(tmp_path, "probe", f'echo "{UUID[:8]} open: PR still open"; exit 0\n')
+    tw = fake_bin(tmp_path, "tw", f'printf "%s|" "$@" >> {tmp_path}/tw.argv\n')
+    monkeypatch.setenv("HANDOFF_PROBE_COMMAND", str(probe))
+    monkeypatch.setenv("HANDOFF_TW_WRAPPER", str(tw))
+    assert nav.verify(task("done-when: pr-merged loft-sh/architecture#26")) == 1
+    assert (tmp_path / "tw.argv").read_text() == (
+        f"note|{UUID}|s: cmd exited 0; done-when not proved ({UUID[:8]} open: PR still open); row stays open|")
+
+
+@pytest.mark.parametrize("notes", [(), ("done-when: manual Piotr reads the page",)])
+def test_verify_without_a_machine_checkable_probe_never_runs_it(tmp_path, monkeypatch, notes):
+    tw = fake_bin(tmp_path, "tw", f'printf "%s|" "$@" >> {tmp_path}/tw.argv\n')
+    monkeypatch.setenv("HANDOFF_PROBE_COMMAND", "/nonexistent/probe")
+    monkeypatch.setenv("HANDOFF_TW_WRAPPER", str(tw))
+    assert nav.verify(task(*notes)) == 1
+    assert "no machine-checkable done-when; row stays open" in (tmp_path / "tw.argv").read_text()
+
+
+def test_verify_mode_reads_the_row_and_runs_its_probe(tmp_path, monkeypatch):
+    row = task("done-when: pr-merged loft-sh/architecture#26")
+    seen = []
+    monkeypatch.setattr(nav, "run", lambda args, **kw: subprocess.CompletedProcess(args, 0, json.dumps([row])))
+    monkeypatch.setattr(nav, "verify", lambda r: seen.append(r) or 0)
+    assert nav.main(["verify", UUID]) == 0
+    assert seen == [row]
 
 
 def test_show_slack_draft_positions_live_buffer_and_restores_terminal(tmp_path, monkeypatch):
@@ -729,8 +850,8 @@ def fake_pages(tmp_path, monkeypatch):
     """Tab bridge, xdg-open and layout on disk, each logging its argv as one line."""
     log = tmp_path / "pages.log"
     record = f'printf "%s " "$(basename "$0")" "$@" >> {log}; printf "\\n" >> {log}\n'
-    def setup(bridge_status):
-        tab = fake_bin(tmp_path, "tab", record + f"exit {bridge_status}\n")
+    def setup(bridge_status, hang=False):
+        tab = fake_bin(tmp_path, "tab", record + ("exec sleep 30\n" if hang else f"exit {bridge_status}\n"))
         fake_bin(tmp_path, "xdg-open", record)
         layout = fake_bin(tmp_path, "layout", record)
         monkeypatch.setenv("PATH", f"{tmp_path}{os.pathsep}{os.environ['PATH']}")
@@ -752,17 +873,41 @@ def test_stale_tab_bridge_falls_back_to_xdg_open_tabs(fake_pages, capsys):
     nav.navigate_many(DCA, "111")
     assert [c for c in calls() if c[0] == "xdg-open"] == [["xdg-open", url] for url in DCA]
     assert not any("--new-window" in c for c in calls())
-    assert calls()[-1] == ["layout", "2"]
+    assert not any(c[0] == "layout" for c in calls())
     err = capsys.readouterr().err
     for url in DCA:
         assert f"handoff: tab bridge failed, fallback xdg-open {url}" in err
 
 
-def test_live_tab_bridge_opens_pages_without_xdg_open(fake_pages, capsys):
+def test_live_tab_bridge_opens_background_tabs_without_xdg_open(fake_pages, capsys):
     calls = fake_pages(0)
     nav.navigate_many(DCA, "111")
-    assert [c for c in calls() if c[0] != "layout"] == [["tab", "--focus", url] for url in DCA]
+    # No --focus: the broker neither raises nor tiles Chrome (11 Nov).
+    assert calls() == [["tab", url] for url in DCA]
     assert capsys.readouterr().err.count("handoff: opened via tab bridge") == 2
+
+
+def test_hanging_tab_bridge_falls_back_within_about_a_second(fake_pages, nav_log):
+    """Piotr, 11 Nov on the 8d1dd0a6 fallback: the right mail "but with huge delay"."""
+    import time
+    calls = fake_pages(0, hang=True)
+    started = time.monotonic()
+    nav.navigate_many([DCA[0]], "111")
+    elapsed = time.monotonic() - started
+    assert 0.9 <= elapsed < 2.0
+    assert calls() == [["tab", DCA[0]], ["xdg-open", DCA[0]]]
+    assert f"handoff: tab bridge failed, fallback xdg-open {DCA[0]}" in nav_log.read_text()
+
+
+@pytest.mark.parametrize("status", [0, 1])
+def test_no_page_path_asks_for_a_new_window_or_focus(fake_pages, status):
+    calls = fake_pages(status)
+    nav.navigate_many(DCA, "111")
+    nav.navigate_many([ENTERPRISE, DCA[0]], "111", slack_tabs=True)
+    flat = [arg for call in calls() for arg in call]
+    assert flat and "--new-window" not in flat and "--focus" not in flat
+    for script in (PATH, PATH.with_name("__handoff_tab.py")):
+        assert "--new-window" not in script.read_text()
 
 
 def test_cmd_page_opens_beside_links_and_only_then_skips_the_command(monkeypatch):

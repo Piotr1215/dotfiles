@@ -122,9 +122,22 @@ def destination(task):
     return None
 
 
-def run(argv, **kwargs):
+def run(argv, timeout=15, **kwargs):
     """Keep argument boundaries intact and bound external commands."""
-    return subprocess.run([str(a) for a in argv], timeout=15, check=True, **kwargs)
+    return subprocess.run([str(a) for a in argv], timeout=timeout, check=True, **kwargs)
+
+
+def log(line):
+    """Report on stderr and in a state log; the task hook discards stderr."""
+    print(line, file=sys.stderr)
+    path = Path(os.environ.get("HANDOFF_NAV_LOG", str(
+        Path(os.environ.get("XDG_STATE_HOME", str(Path.home() / ".local/state"))) / "handoff-navigate.log")))
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a") as handle:
+            handle.write(time.strftime("%Y-%m-%dT%H:%M:%S%z ") + line + "\n")
+    except OSError:
+        pass
 
 
 def window_id(window_class):
@@ -173,57 +186,86 @@ def slack_deep_link(url):
 
 
 def open_page(url):
-    """Open one page as a tab in the existing Chrome window, bridge first.
+    """Open one page as a background tab in the existing Chrome window, bridge first.
 
     A stale bridge extension exits 1; xdg-open still reaches the page (11 Nov).
+    The bridge gets about a second: a bridge that accepted the request and never
+    answered held s for its full timeout first (Piotr, 11 Nov: the right mail
+    "but with huge delay"). No --focus, so the broker neither raises nor tiles
+    Chrome, and neither path asks for a new window.
     """
     try:
-        run([os.environ.get("HANDOFF_TAB_COMMAND", str(ROOT / "__handoff_tab.py")), "--focus", url],
-            stdout=subprocess.DEVNULL)
-        print(f"handoff: opened via tab bridge {url}", file=sys.stderr)
+        timeout = float(os.environ.get("HANDOFF_TAB_TIMEOUT", "1"))
+    except ValueError:
+        timeout = 1.0
+    try:
+        run([os.environ.get("HANDOFF_TAB_COMMAND", str(ROOT / "__handoff_tab.py")), url],
+            timeout=timeout, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        log(f"handoff: opened via tab bridge {url}")
     except (OSError, subprocess.SubprocessError):
-        print(f"handoff: tab bridge failed, fallback xdg-open {url}", file=sys.stderr)
+        log(f"handoff: tab bridge failed, fallback xdg-open {url}")
         run(["xdg-open", url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
-def navigate_many(urls, terminal):
-    """Open each URL and apply the layout dictated by the first two destinations."""
+def navigate_many(urls, terminal, slack_tabs=False):
+    """Open each URL; pages stay background tabs, so only Slack desktop moves windows.
+
+    slack_tabs opens Slack permalinks as browser tabs too: a draft row is pasted
+    into the thread in Chrome.
+    """
     urls = list(dict.fromkeys(urls))
     env = dict(os.environ, LAYOUT_ALACRITTY_WINDOW=terminal)
-    primary = urls[:2]
-    slack = [u for u in primary if urlsplit(u).hostname in SLACK_HOSTS | {"app.slack.com"}]
-    browsers = [u for u in primary if u not in slack]
-    all_browsers = [u for u in urls if urlsplit(u).hostname not in SLACK_HOSTS | {"app.slack.com"}]
-    browser_opened = False
-    for url in urls:
-        if urlsplit(url).hostname in SLACK_HOSTS | {"app.slack.com"}:
-            run(["xdg-open", slack_deep_link(url)], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            continue
-        if browser_opened:
-            continue
-        browser_opened = True
-        browser = os.environ.get("HANDOFF_BROWSER_COMMAND")
-        if browser:
-            run([browser, *all_browsers])
-        else:
-            for page in all_browsers:
-                open_page(page)
-        time.sleep(0.5)
-        env["LAYOUT_BROWSER_WINDOW"] = window_id("google-chrome")
-    if not urls:
-        return
-    layout = "10" if slack and browsers else "8" if slack else "2"
-    run([os.environ.get("HANDOFF_LAYOUT_COMMAND", str(ROOT / "__layouts.sh")), layout],
-        env=env, stdout=subprocess.DEVNULL)
+    is_slack = lambda u: urlsplit(u).hostname in SLACK_HOSTS | {"app.slack.com"}
+    desktop = [] if slack_tabs else [u for u in urls if is_slack(u)]
+    pages = [u for u in urls if u not in desktop]
+    for url in desktop:
+        run(["xdg-open", slack_deep_link(url)], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    browser = os.environ.get("HANDOFF_BROWSER_COMMAND")
+    if browser and pages:
+        run([browser, *pages])
+    else:
+        for page in pages:
+            open_page(page)
+    # Layout 8 tiles Slack beside the terminal; Chrome is never raised (11 Nov).
+    if desktop:
+        run([os.environ.get("HANDOFF_LAYOUT_COMMAND", str(ROOT / "__layouts.sh")), "8"],
+            env=env, stdout=subprocess.DEVNULL)
+
+
+SESSION_NOTE = re.compile(r"\btmux session ([A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*)")
+
+
+def agent_sessions(task):
+    """Return declared agent sessions, newest first: `agent:` notes and `tmux session <name>`."""
+    names = []
+    for annotation in sorted(task.get("annotations", []), key=lambda a: a.get("entry", "")):
+        text = annotation.get("description", "")
+        key, sep, value = text.partition(":")
+        if sep and key.strip().lower() == "agent" and value.strip():
+            names.append(value.strip())
+        names.extend(SESSION_NOTE.findall(text))
+    return list(dict.fromkeys(reversed(names)))
 
 
 def agent_session(task):
-    """Return the newest declared agent session without interpreting other notes."""
-    fields = [a.get("description", "").partition(":")
-              for a in sorted(task.get("annotations", []), key=lambda a: a.get("entry", ""))]
-    values = [value.strip() for key, sep, value in fields
-              if sep and key.strip().lower() == "agent"]
-    return values[-1] if values else ""
+    """Return the newest declared agent session without checking that it lives."""
+    sessions = agent_sessions(task)
+    return sessions[0] if sessions else ""
+
+
+def live_agent_session(task):
+    """Return the newest declared session tmux has-session confirms, or ''."""
+    tmux = os.environ.get("HANDOFF_TMUX_COMMAND", "tmux")
+    for session in agent_sessions(task):
+        if any(ord(char) < 32 or ord(char) == 127 for char in session):
+            continue
+        try:
+            if subprocess.run([tmux, "has-session", "-t", "=" + session], timeout=5,
+                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0:
+                return session
+        except (OSError, subprocess.SubprocessError):
+            continue
+    return ""
 
 
 def annotation_urls(task):
@@ -261,8 +303,19 @@ def cmd_page(task):
 
 
 KINDS = {"slack", "command", "pr", "ack", "other"}
-# The fixed line puts the row's command in the next editing buffer, unsubmitted.
-PREFILL = ' print -rz -- "$HANDOFF_CMD"; unset HANDOFF_CMD; clear'
+# The fixed line puts the row's command in the next editing buffer, unsubmitted,
+# and arms a one-shot hook: the first command Piotr runs there that exits 0
+# calls `verify` (Piotr, 11 Nov: "once command is ran verify it and close task").
+PREFILL = (' handoff_ran() { HANDOFF_RAN=1; };'
+           ' handoff_rc() { local rc=$?; [[ -n $HANDOFF_RAN ]] || return 0; unset HANDOFF_RAN;'
+           ' (( rc == 0 )) || return 0;'
+           ' precmd_functions=(${precmd_functions:#handoff_rc});'
+           ' preexec_functions=(${preexec_functions:#handoff_ran});'
+           ' "$HANDOFF_NAVIGATOR" verify "$HANDOFF_UUID"; };'
+           ' preexec_functions+=(handoff_ran); precmd_functions+=(handoff_rc);'
+           ' print -rz -- "$HANDOFF_CMD"; unset HANDOFF_CMD; clear')
+# The floating pane geometry the brief floater uses (__handoff_floater.sh).
+FLOAT = ["-x", "90%", "-y", "65%", "-X", "5%", "-Y", "30%"]
 
 
 def newest_note(task, key):
@@ -298,70 +351,134 @@ def copy_to_clipboard(text):
     return False
 
 
-def open_command_window(uuid, command):
-    """Open a tmux window with the row's command ready for Enter."""
+def slack_row(task):
+    """A +draft row or a slack kind: the only rows whose brief floater opens on s."""
+    return "draft" in task.get("tags", []) or task_kind(task) == "slack"
+
+
+def origin_pane():
+    pane = os.environ.get("TMUX_PANE", "")
+    if not re.fullmatch(r"%[0-9]+", pane):
+        raise ValueError("no tmux pane to open the floating window over; press s in the handoffs view")
+    return pane
+
+
+def open_floating(title, argv, focus=True):
+    """Open a floating tmux pane over the handoffs view; it takes the keyboard unless focus is False."""
+    tmux = os.environ.get("HANDOFF_TMUX_COMMAND", "tmux")
+    flags = ["-P", "-F", "#{pane_id}"] + ([] if focus else ["-d"])
+    # Multiple argv elements bypass tmux's shell-string path.
+    pane = run([tmux, "new-pane", *flags, "-t", origin_pane(), *FLOAT, "-T", title, "--", *argv],
+               capture_output=True, text=True).stdout.strip()
+    if not re.fullmatch(r"%[0-9]+", pane):
+        raise ValueError("tmux did not report the floating pane")
+    return pane
+
+
+def open_command_window(uuid, command, focus=True):
+    """Type the row's command, ready for Enter, in a focused floating tmux pane.
+
+    Piotr, 11 Nov: "when I start on things the floating tmux window should
+    always be in focus". The command travels as one argv element into the
+    pane's environment and never through send-keys.
+    """
     if not command:
         raise ValueError("command handoff has no cmd: note; add one with __tw.sh note <ref> 'cmd: <command>'")
     if any(ord(char) < 32 or ord(char) == 127 for char in command):
         raise ValueError("cmd: note must be one line without control characters")
-    pane = os.environ.get("TMUX_PANE", "")
-    if not re.fullmatch(r"%[0-9]+", pane):
-        raise ValueError("no tmux pane to open the command beside; press s in the handoffs view")
     tmux = os.environ.get("HANDOFF_TMUX_COMMAND", "tmux")
-    session = run([tmux, "display-message", "-p", "-t", pane, "#{session_id}"],
+    pane = open_floating("handoff cmd " + uuid[:8],
+                         ["env", "HANDOFF_CMD=" + command, "HANDOFF_UUID=" + uuid,
+                          "HANDOFF_NAVIGATOR=" + str(Path(__file__).resolve()), "zsh", "-i"], focus)
+    run([tmux, "send-keys", "-t", pane, "-l", PREFILL])
+    run([tmux, "send-keys", "-t", pane, "Enter"])
+    if focus:
+        run([tmux, "select-pane", "-t", pane])
+    return pane
+
+
+def attach_agent_session(session):
+    """Attach a live agent session inside a focused floating pane."""
+    tmux = os.environ.get("HANDOFF_TMUX_COMMAND", "tmux")
+    current = run([tmux, "display-message", "-p", "-t", origin_pane(), "#{session_name}"],
                   capture_output=True, text=True).stdout.strip()
-    if not re.fullmatch(r"\$[0-9]+", session):
-        raise ValueError("could not resolve the tmux session of " + pane)
-    # The command travels as one argv element into the window's environment.
-    window = run([tmux, "new-window", "-P", "-F", "#{pane_id}", "-t", session + ":",
-                  "-n", uuid[:8], "-e", "HANDOFF_CMD=" + command, "--", "zsh", "-i"],
-                 capture_output=True, text=True).stdout.strip()
-    if not re.fullmatch(r"%[0-9]+", window):
-        raise ValueError("tmux did not report the new window's pane")
-    run([tmux, "send-keys", "-t", window, "-l", PREFILL])
-    run([tmux, "send-keys", "-t", window, "Enter"])
-    return window
+    if current == session:
+        raise ValueError(f"agent session {session} is the session s was pressed in")
+    # A nested client needs TMUX unset; tmux refuses to nest otherwise.
+    pane = open_floating("agent " + session, ["env", "-u", "TMUX", tmux, "attach-session", "-t", "=" + session])
+    run([tmux, "select-pane", "-t", pane])
+    return pane
 
 
-def act_on_kind(task):
-    """Run the action s means for this kind after the links open.
+def act_on_kind(task, slack=False):
+    """Run what s means for the row once its links are open; returns what it did.
 
-    Any cmd: other than a cmd_page opens a terminal with the command ready for Enter.
-    Slack also copies the newest draft: note.
-    Returns the kind. A failed action is reported.
+    slack: copy the newest draft: (its brief floater shows the draft); a cmd: also
+    waits unfocused, since the draft keeps the keyboard. command: the cmd: waits
+    for Enter in a focused floating pane. agent: the newest live `agent:` or
+    `tmux session <name>` session is attached in a focused floating pane.
+    none: nothing applied. failed: the action was logged with its remedy.
     """
     kind = task_kind(task)
+    slack = slack or slack_row(task)
+    command = newest_note(task, "cmd")
+    # annotation_urls already opened a cmd_page, so it needs no window.
+    runnable = not cmd_page(task) and (command or kind == "command")
     try:
-        if kind == "slack":
+        if slack:
             draft = newest_note(task, "draft")
             if draft and not copy_to_clipboard(draft):
-                print("Could not copy the draft: install xclip or wl-copy, then press s again.",
-                      file=sys.stderr)
-        command = newest_note(task, "cmd")
-        # annotation_urls already opened a cmd_page, so it needs no window.
-        if not cmd_page(task) and (command or kind == "command"):
+                log("Could not copy the draft: install xclip or wl-copy, then press s again.")
+            if runnable:
+                open_command_window(task["uuid"], command, focus=False)
+            return "slack"
+        if runnable:
             open_command_window(task["uuid"], command)
+            return "command"
+        session = live_agent_session(task)
+        if session:
+            attach_agent_session(session)
+            return "agent"
     except (ValueError, OSError, subprocess.SubprocessError) as error:
-        print(f"Handoff {kind} action: {error}", file=sys.stderr)
-    return kind
+        log(f"handoff: {kind} action on {task.get('uuid')} failed: {error}")
+        return "failed"
+    return "none"
 
 
-def switch_agent_session(session):
-    """Switch the current tmux client to an existing exact session name."""
-    if not session or any(ord(char) < 32 or ord(char) == 127 for char in session):
-        return False
-    tmux = os.environ.get("HANDOFF_TMUX_COMMAND", "tmux")
-    target = "=" + session
+def verify(task):
+    """After the row's cmd: exits 0, let its done-when probe close the row with proof.
+
+    The probe (__handoff_probe.py run) owns the evidence and the close; a row
+    without a machine-checkable done-when, or one the probe does not prove,
+    stays open with a note saying why.
+    """
+    uuid = task["uuid"]
+    tw = os.environ.get("HANDOFF_TW_WRAPPER", str(Path.home() / ".claude/scripts/__tw.sh"))
+    probe = newest_note(task, "done-when")
+    if not probe or probe.split()[0].lower() == "manual":
+        why = "no machine-checkable done-when"
+    else:
+        try:
+            result = subprocess.run([os.environ.get("HANDOFF_PROBE_COMMAND",
+                                                    str(Path.home() / ".claude/scripts/__handoff_probe.py")),
+                                     "run", "--uuid", uuid], capture_output=True, text=True, timeout=120)
+            lines = [line for line in result.stdout.splitlines() if line.startswith(uuid[:8])]
+            verdict = (lines or [result.stderr.strip() or f"probe exit {result.returncode}"])[-1]
+            if result.returncode == 2:
+                print(f"handoff: closed {uuid[:8]} with proof: {verdict}")
+                log(f"handoff: cmd verified and closed {uuid}: {verdict}")
+                return 0
+            why = f"done-when not proved ({verdict})"
+        except (OSError, subprocess.SubprocessError) as error:
+            why = f"done-when probe failed ({error})"
+    note = f"s: cmd exited 0; {why}; row stays open"
+    print(f"handoff: {note}")
+    log(f"handoff: {uuid} {note}")
     try:
-        exists = subprocess.run([tmux, "has-session", "-t", target], timeout=5,
-                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        if exists.returncode != 0:
-            return False
-        run([tmux, "switch-client", "-t", target], stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL)
-        return True
-    except (OSError, subprocess.SubprocessError):
-        return False
+        run([tw, "note", uuid, note], stdout=subprocess.DEVNULL)
+    except (OSError, subprocess.SubprocessError) as error:
+        log(f"handoff: could not note {uuid}: {error}")
+    return 1
 
 
 def show_slack_draft(pane, terminal, runtime):
@@ -406,12 +523,17 @@ def task_export(task_bin, *filters):
 
 def main(argv=None):
     args = list(sys.argv[1:] if argv is None else argv)
-    mode = args.pop(0) if args and args[0] in {"start", "stop"} else "start"
+    mode = args.pop(0) if args and args[0] in {"start", "stop", "verify"} else "start"
     if not args or not UUID.fullmatch(args[0]):
         print("Select a handoff using its full task UUID.", file=sys.stderr)
         return 2
     uuid = args[0]
     task_bin = os.environ.get("HANDOFF_TASK_COMMAND", "task")
+    if mode == "verify":
+        rows = task_export(task_bin, uuid)
+        if len(rows) != 1 or rows[0].get("uuid", "").lower() != uuid.lower():
+            raise ValueError("Task UUID did not resolve to exactly one task")
+        return verify(rows[0])
     runtime = Path(os.environ.get("XDG_RUNTIME_DIR", "/tmp")) / "taskwarrior-tui"
     runtime.mkdir(mode=0o700, parents=True, exist_ok=True)
     state = runtime / "handoff-work.json"
@@ -466,7 +588,10 @@ def main(argv=None):
             return 0
         pane = os.environ.get("TMUX_PANE", "")
         terminal = window_id("alacritty")
-        if old and old.get("uuid") != uuid and old.get("pane") != pane:
+        # Piotr, 11 Nov 12:44: "do not open the floating window brief for
+        # anything else than slack". Other rows act directly.
+        slack = slack_row(task)
+        if old and old.get("uuid") != uuid and (old.get("pane") != pane or not slack):
             run([floater, "close", old["uuid"], old["pane"]])
         state.write_text(json.dumps({"uuid": uuid, "pane": pane, "terminal": terminal}))
         try:
@@ -481,19 +606,19 @@ def main(argv=None):
                     if not re.match(r"^\s*(target|link):", a.get("description", ""), re.I)])
                 fallback = destination(fallback_task)
                 urls = [fallback] if fallback else []
-            navigate_many(urls, terminal)
-            kind = act_on_kind(task)
-            # Keep the command window or Slack brief in the originating session.
-            if kind not in {"command", "slack"} and not newest_note(task, "cmd"):
-                switch_agent_session(agent_session(task))
+            navigate_many(urls, terminal, slack_tabs=slack)
+            if act_on_kind(task, slack) == "none" and not urls:
+                # Nothing to open or run: Gordon fixes the row (link:, cmd: or agent:).
+                log(f"handoff: no action on {uuid}")
         finally:
-            run([floater, "pin", uuid, pane])
-        if kind == "slack":
+            if slack:
+                run([floater, "pin", uuid, pane])
+        if slack:
             show_slack_draft(pane, terminal, runtime)
-        if "draft" in task.get("tags", []) and re.fullmatch(r"%[0-9]+", pane):
-            # A cmd: may have selected another window; return before focusing the float.
-            run([os.environ.get("HANDOFF_TMUX_COMMAND", "tmux"), "select-window", "-t", pane])
-            run([floater, "focus", uuid, pane])
+            if re.fullmatch(r"%[0-9]+", pane):
+                # A cmd: pane may hold the keyboard; the draft brief takes it back.
+                run([os.environ.get("HANDOFF_TMUX_COMMAND", "tmux"), "select-window", "-t", pane])
+                run([floater, "focus", uuid, pane])
     return 0
 
 
