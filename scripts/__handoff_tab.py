@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import sys
+from urllib.parse import urlsplit
 
 sys.path.insert(0, str(Path.home() / '.codex/scripts/agent_browser'))
 from client import RequestClient
@@ -12,6 +13,11 @@ from paths import default_socket_path
 
 
 async def open_tab(url, focus=False):
+    parsed = urlsplit(url)
+    if (parsed.scheme != 'https' or not parsed.hostname or parsed.username is not None
+            or parsed.password is not None or parsed.port is not None
+            or any(ord(char) <= 32 or ord(char) == 127 for char in url) or '\\' in url):
+        raise ValueError('handoff URL must be an unambiguous HTTPS URL')
     client = RequestClient(os.environ.get('AGENT_BROWSER_NATIVE_SOCKET') or default_socket_path())
     await client.connect()
     try:
@@ -32,7 +38,7 @@ def main():
         result = asyncio.run(open_tab(sys.argv[-1], focus))
         print(json.dumps(result))
         return 0
-    except (OSError, RuntimeError, asyncio.TimeoutError) as error:
+    except (OSError, RuntimeError, ValueError, asyncio.TimeoutError) as error:
         print(f'Chrome handoff: {error}', file=sys.stderr)
         return 1
 

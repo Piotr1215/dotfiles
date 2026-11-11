@@ -39,3 +39,11 @@ def test_bridge_reports_rejection(monkeypatch):
     monkeypatch.setenv('AGENT_BROWSER_NATIVE_SOCKET', '/tmp/test-browser.sock')
     with pytest.raises(RuntimeError, match='could not open'):
         asyncio.run(tab.open_tab('https://example.com/'))
+
+
+@pytest.mark.parametrize('url', ['http://example.com/', 'https://user@example.com/',
+                                  'https://example.com:443/', 'https://example.com/\n'])
+def test_rejects_ambiguous_url_before_connecting(monkeypatch, url):
+    monkeypatch.setattr(tab, 'RequestClient', lambda *args: pytest.fail('connected'))
+    with pytest.raises(ValueError):
+        asyncio.run(tab.open_tab(url))
