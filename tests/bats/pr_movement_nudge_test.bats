@@ -291,6 +291,55 @@ run_nudge() {
 dms() { cat "$DMS"; }
 gql_calls() { grep -c '^graphql' "$GH_LOG" || true; }
 
+@test "ci-green: first green and red to green emit once per head" {
+    e2e_setup
+    set_search loft-sh vcluster 7
+    gql_node loft-sh vcluster 7 OPEN REVIEW_REQUIRED MERGEABLE FAILURE
+    run_nudge
+    ! grep -q 'ci-green' "$PR_MOVE_NOTIFY_LOG"
+    gql_node loft-sh vcluster 7 OPEN REVIEW_REQUIRED MERGEABLE SUCCESS
+    run_nudge
+    run_nudge
+    [ "$(grep -c 'ci-green' "$PR_MOVE_NOTIFY_LOG")" -eq 1 ]
+    grep -q 'kind:pr-move via:pr-watch link:https://github.com/loft-sh/vcluster/pull/7 | pr-move: loft-sh/vcluster#7 ci-green .* sha:sha-Piotr1215 title:feat: work' "$PR_MOVE_NOTIFY_LOG"
+    gql_node loft-sh vcluster 7 OPEN REVIEW_REQUIRED MERGEABLE SUCCESS other
+    run_nudge
+    [ "$(grep -c 'ci-green' "$PR_MOVE_NOTIFY_LOG")" -eq 2 ]
+    gql_node loft-sh vcluster 7 OPEN REVIEW_REQUIRED MERGEABLE SUCCESS
+    run_nudge
+    [ "$(grep -c 'ci-green' "$PR_MOVE_NOTIFY_LOG")" -eq 2 ]
+}
+
+@test "ci-green: first observation emits once and skipped and neutral pass" {
+    e2e_setup
+    set_search loft-sh vcluster 7
+    gql_node loft-sh vcluster 7 OPEN REVIEW_REQUIRED MERGEABLE SKIPPED
+    run_nudge
+    run_nudge
+    [ "$(grep -c 'ci-green' "$PR_MOVE_NOTIFY_LOG")" -eq 1 ]
+    gql_node loft-sh vcluster 7 OPEN REVIEW_REQUIRED MERGEABLE NEUTRAL other
+    run_nudge
+    [ "$(grep -c 'ci-green' "$PR_MOVE_NOTIFY_LOG")" -eq 2 ]
+}
+
+@test "ci-green: draft, no checks, pending and truncated checks emit nothing" {
+    e2e_setup
+    set_search loft-sh vcluster 7
+    gql_node loft-sh vcluster 7
+    local f="$GQL_DIR/loft-sh_vcluster_7.json"
+    jq '.isDraft = true' "$f" > "$f.tmp"; mv "$f.tmp" "$f"
+    run_nudge
+    jq '.isDraft = false | .commits.nodes[0].commit.statusCheckRollup.contexts.nodes = []' "$f" > "$f.tmp"; mv "$f.tmp" "$f"
+    run_nudge
+    gql_node loft-sh vcluster 7
+    jq '.commits.nodes[0].commit.statusCheckRollup.contexts.nodes[0].status = "IN_PROGRESS"' "$f" > "$f.tmp"; mv "$f.tmp" "$f"
+    run_nudge
+    gql_node loft-sh vcluster 7
+    jq '.commits.nodes[0].commit.statusCheckRollup.contexts.pageInfo.hasNextPage = true' "$f" > "$f.tmp"; mv "$f.tmp" "$f"
+    run_nudge
+    ! grep -q 'ci-green' "$PR_MOVE_NOTIFY_LOG"
+}
+
 # --- task-linked PR enumeration ----------------------------------------------
 
 @test "task_pr_links: finds a PR URL in a description and in an annotation, +gordon task included" {
@@ -690,8 +739,8 @@ one_merge_event() {
 @test "records: each line also lands in notifications.log as one github record" {
     e2e_setup
     one_merge_event
-    [ "$(wc -l < "$PR_MOVE_NOTIFY_LOG")" -eq 1 ]
-    IFS=$'\t' read -r stamp app head body < "$PR_MOVE_NOTIFY_LOG"
+    [ "$(grep -c ' merged ' "$PR_MOVE_NOTIFY_LOG")" -eq 1 ]
+    IFS=$'\t' read -r stamp app head body < <(grep ' merged ' "$PR_MOVE_NOTIFY_LOG")
     [[ "$stamp" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}\ [0-9]{2}:[0-9]{2}:[0-9]{2}$ ]]
     [ "$app" = "github" ]
     [ "$head" = "🐙loft-sh/vcluster#21:" ]
@@ -703,7 +752,7 @@ one_merge_event() {
     echo "vcluster-pr-21" > "$TMUX_SESSIONS_FILE"
     one_merge_event
     [ "$(grep -c . "$DMS")" -eq 2 ]
-    [ "$(wc -l < "$PR_MOVE_NOTIFY_LOG")" -eq 1 ]
+    [ "$(grep -c ' merged ' "$PR_MOVE_NOTIFY_LOG")" -eq 1 ]
     grep -q '| pr-move: loft-sh/vcluster#21 merged .* (owned by vcluster-pr-21)$' "$PR_MOVE_NOTIFY_LOG"
 }
 
@@ -714,7 +763,7 @@ one_merge_event() {
     local i
     for i in 1 2 3 4; do gql_node loft-sh vcluster "$i" MERGED; done
     PR_MOVE_CYCLE_CAP=2 run_nudge
-    [ "$(wc -l < "$PR_MOVE_NOTIFY_LOG")" -eq 4 ]
+    [ "$(grep -c ' merged ' "$PR_MOVE_NOTIFY_LOG")" -eq 4 ]
     for i in 1 2 3 4; do grep -q "	🐙loft-sh/vcluster#$i:	kind:pr-move " "$PR_MOVE_NOTIFY_LOG"; done
 }
 

@@ -54,6 +54,7 @@
 #   changes-requested  reviewDecision -> CHANGES_REQUESTED               (sticky)
 #   review-comment     new review/comment by a non-Piotr, non-bot actor  (edge)
 #   ci-red             statusCheckRollup -> FAILURE                       (sticky)
+#   ci-green           all head checks passed, once per head              (record)
 #   merge-conflict     mergeable -> CONFLICTING                          (sticky)
 #   foreign-push       new head commit whose author is not a self login  (edge)
 #                      (only on a PR a self login authored: on someone else's
@@ -72,7 +73,7 @@
 #   lastForeignActivity) and fire per occurrence.
 # IGNORED: pushes/commits/comments by a self identity (Piotr, or the Claude bot
 #   login he pushes as -- see PR_MOVE_SELF_LOGINS), draft PRs, bot comments, CI
-#   green/pending, approvals (surface-only), Piotr's edits.
+#   pending, approvals (surface-only), Piotr's edits.
 # NOISE FILTER (Gordon's live-cycle feedback):
 #   - PRs outside NUDGE_ORGS (default loft-sh) are skipped entirely: the
 #     dispatcher hardcodes loft-sh URLs, so other orgs are undispatchable.
@@ -106,7 +107,7 @@
 # LIMITATION: inline review-thread replies are not fetched (reviews and PR
 #   comments are); they surface indirectly via the carrying review. reviewThreads
 #   can be added to GQL_PR_FRAGMENT if needed. Check rows beyond the first 100
-#   contexts of a PR's newest commit are not read.
+#   contexts beyond the first 100 are not read; green is withheld when more exist.
 #
 # DELIVERY: one DM per line up to PR_MOVE_CYCLE_CAP (default 8) per cycle. Past
 #   the cap the remaining lines ride together in one more DM, one per line, so a
@@ -227,6 +228,7 @@ record() {
         log "[DRY-RUN] would record -> $rec"
     elif ! printf '%s\n' "$rec" >> "$NOTIFY_LOG"; then
         log "ERROR: cannot append to $NOTIFY_LOG: $1"
+        return 1
     fi
 }
 
@@ -520,7 +522,7 @@ GQL_PR_FRAGMENT='fragment F on PullRequest {
   commits(last: 1) { nodes { commit {
     oid committedDate authoredDate
     authors(first: 10) { nodes { user { login } } }
-    statusCheckRollup { contexts(first: 100) { nodes {
+    statusCheckRollup { contexts(first: 100) { pageInfo { hasNextPage } nodes {
       __typename
       ... on CheckRun { name status conclusion }
       ... on StatusContext { context state }
@@ -539,7 +541,8 @@ GQL_VIEW_JQ='
         comments: [ (.comments | nodes)[] | {author: {login: (.author.login // null)}, createdAt} ],
         commits: [ (.commits | nodes)[] | .commit | {oid, committedDate, authoredDate,
                    authors: [ (.authors | nodes)[] | {login: (.user.login // null)} ]} ],
-        statusCheckRollup: ((.commits | nodes | last | .commit.statusCheckRollup.contexts | nodes) // [])
+        statusCheckRollup: ((.commits | nodes | last | .commit.statusCheckRollup.contexts | nodes) // []),
+        checksHaveNextPage: (.commits | nodes | last | .commit.statusCheckRollup.contexts.pageInfo.hasNextPage // false)
     };'
 
 # gql_to_view PR_JSON -> the PullRequest node as a `gh pr view --json` object.
@@ -753,6 +756,28 @@ main() {
 
         sig=$(compute_sig "$detail") || { log "WARN: sig compute failed for $ref"; continue; }
 
+        # Green is an intake record, independent of the movement DM cooldown and
+        # silent first-contact baseline. Require the fetched commit to be the
+        # current head and every context to have an explicit passing verdict.
+        local green_sha green_sent green_msg
+        green_sha=$(jq -r '.headSha' <<<"$sig")
+        green_sent='[]'
+        [[ -n "$old" ]] && green_sent=$(jq -c '.greenNotifiedShas // []' <<<"$old")
+        if [[ -n "$green_sha" ]] && ! jq -e --arg sha "$green_sha" 'index($sha) != null' <<<"$green_sent" >/dev/null && jq -e '
+            . as $p | ($p.statusCheckRollup // []) as $checks |
+            ($p.checksHaveNextPage != true) and ($p.commits[-1].oid == $p.headRefOid) and
+            ($checks | length > 0) and all($checks[];
+                if .__typename == "CheckRun" then
+                    .conclusion as $c | .status == "COMPLETED" and (["SUCCESS", "NEUTRAL", "SKIPPED"] | index($c)) != null
+                elif .__typename == "StatusContext" then .state == "SUCCESS"
+                else false end)' <<<"$detail" >/dev/null; then
+            green_msg="pr-move: $ref ci-green $url sha:$green_sha title:$title$task_sfx$bp_sfx"
+            if record "$green_msg" && [[ "$DRY_RUN" -eq 0 ]]; then
+                green_sent=$(jq -c --arg sha "$green_sha" '. + [$sha]' <<<"$green_sent")
+            fi
+        fi
+        sig=$(jq -c --argjson green "$green_sent" '. + {greenNotifiedShas: $green}' <<<"$sig")
+
         # First contact: seed silently, no nudge (mirrors Linear new_activity seed).
         # Record any sticky reason ALREADY true at seed as notified, so a
         # pre-existing red build / changes-requested / conflict does not fire on
@@ -918,7 +943,7 @@ main() {
         if [[ -n "$own" ]]; then
             tmsg="${nudges[$i]} (owned by $own)"
         fi
-        record "$tmsg"
+        record "$tmsg" || true
         if [[ -n "$own" ]]; then
             deliver "${nudges[$i]}" "$own"
         fi
