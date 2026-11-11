@@ -218,6 +218,10 @@ alacritty_firefox_vertical() {
 	for candidate in "${browser_windows[@]}"; do
 		[[ "$candidate" == "${LAYOUT_BROWSER_WINDOW:-}" ]] && firefox_window="$candidate"
 	done
+	if [[ -n "${LAYOUT_BROWSER_WINDOW:-}" && -z "$firefox_window" ]]; then
+		echo "Requested browser window not found."
+		return 1
+	fi
 	[[ -n "$firefox_window" ]] || firefox_window=$(cycle_browser_window "alacritty_browser" "${browser_windows[@]}")
 
 	[[ -z "$alacritty_window" ]] && alacritty_window=$(get_alacritty_window)

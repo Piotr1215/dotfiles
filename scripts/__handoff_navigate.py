@@ -152,6 +152,32 @@ def window_id(window_class):
         return ""
 
 
+def terminal_monitor(terminal):
+    """Find the connected output containing the source window's center."""
+    if not terminal:
+        return ""
+    try:
+        windows = run(["wmctrl", "-lG"], capture_output=True, text=True).stdout.splitlines()
+        for line in windows:
+            fields = line.split()
+            if len(fields) >= 6 and int(fields[0], 16) == int(terminal):
+                x, y, width, height = map(int, fields[2:6])
+                cx, cy = x + width // 2, y + height // 2
+                break
+        else:
+            return ""
+        outputs = run(["xrandr", "--current"], capture_output=True, text=True).stdout.splitlines()
+        for line in outputs:
+            match = re.match(r"(\S+) connected (?:primary )?(\d+)x(\d+)\+(\d+)\+(\d+)", line)
+            if match:
+                name, w, h, x, y = match.groups()
+                if int(x) <= cx < int(x) + int(w) and int(y) <= cy < int(y) + int(h):
+                    return name
+    except (OSError, subprocess.SubprocessError, ValueError):
+        pass
+    return ""
+
+
 def slack_deep_link(url):
     """Convert a workspace channel or message URL to a desktop link."""
     parsed = urlsplit(checked_url(url))
@@ -208,7 +234,7 @@ def open_page(url):
 
 
 def navigate_many(urls, terminal, slack_tabs=False):
-    """Open each URL; pages stay background tabs, so only Slack desktop moves windows.
+    """Open each URL and tile its browser or Slack window beside the terminal.
 
     slack_tabs opens Slack permalinks as browser tabs too: a draft row is pasted
     into the thread in Chrome.
@@ -226,10 +252,20 @@ def navigate_many(urls, terminal, slack_tabs=False):
     else:
         for page in pages:
             open_page(page)
-    # Layout 8 tiles Slack beside the terminal; Chrome is never raised (11 Nov).
-    if desktop:
-        run([os.environ.get("HANDOFF_LAYOUT_COMMAND", str(ROOT / "__layouts.sh")), "8"],
-            env=env, stdout=subprocess.DEVNULL)
+    if desktop or pages:
+        monitor = terminal_monitor(terminal)
+        if not terminal or not monitor:
+            log("handoff: cannot tile without the source terminal and its monitor")
+            return
+        env["LAYOUT_MONITOR"] = monitor
+        if pages and not desktop:
+            browser_id = window_id("google-chrome")
+            if not terminal or not browser_id:
+                log("handoff: cannot tile without the source terminal and Chrome window")
+                return
+            env["LAYOUT_BROWSER_WINDOW"] = browser_id
+        run([os.environ.get("HANDOFF_LAYOUT_COMMAND", str(ROOT / "__layouts.sh")),
+             "8" if desktop else "2"], env=env, stdout=subprocess.DEVNULL)
 
 
 SESSION_NOTE = re.compile(r"\btmux session ([A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*)")

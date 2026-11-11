@@ -180,12 +180,14 @@ def test_live_agent_session_skips_sessions_tmux_does_not_have(monkeypatch):
 
 @pytest.mark.parametrize(("urls", "layout"), [
     (["https://loft-labs-inc.slack.com/archives/C0123"], "8"),
-    (["https://github.com/a"], None),
+    (["https://github.com/a"], "2"),
     (["https://loft-labs-inc.slack.com/archives/C0123", "https://github.com/a"], "8"),
-    (["https://github.com/a", "https://linear.app/b"], None),
+    (["https://github.com/a", "https://linear.app/b"], "2"),
 ])
 def test_layout_and_url_arguments(monkeypatch, urls, layout):
-    """Pages open as background tabs, so only a Slack desktop link tiles windows (11 Nov)."""
+    """Desktop Slack and browser pages use their respective layouts."""
+    monkeypatch.setattr(nav, "terminal_monitor", lambda _: "HDMI-0")
+    monkeypatch.setattr(nav, "window_id", lambda _: "222")
     calls = []
     monkeypatch.setenv("HANDOFF_BROWSER_COMMAND", "/browser")
     monkeypatch.setenv("SLACK_TEAM_ID", "T0123")
@@ -201,20 +203,24 @@ def test_layout_and_url_arguments(monkeypatch, urls, layout):
 
 
 def test_multiple_browser_links_open_once_as_background_tabs(monkeypatch):
+    monkeypatch.setattr(nav, "terminal_monitor", lambda _: "HDMI-0")
+    monkeypatch.setattr(nav, "window_id", lambda _: "222")
     calls = []
     monkeypatch.delenv("HANDOFF_BROWSER_COMMAND", raising=False)
     monkeypatch.setattr(nav, "run", lambda args, **kw: calls.append((args, kw)))
     nav.navigate_many(["https://github.com/a", "https://linear.app/b", "https://github.com/a"], "111")
-    assert [args[1:] for args, _ in calls] == [["https://github.com/a"], ["https://linear.app/b"]]
-    assert all(kw["timeout"] == 1.0 for _, kw in calls)
+    assert [args[1:] for args, _ in calls[:-1]] == [["https://github.com/a"], ["https://linear.app/b"]]
+    assert all(kw["timeout"] == 1.0 for _, kw in calls[:-1])
 
 
 def test_draft_row_opens_slack_permalink_as_a_tab(monkeypatch):
+    monkeypatch.setattr(nav, "terminal_monitor", lambda _: "HDMI-0")
+    monkeypatch.setattr(nav, "window_id", lambda _: "222")
     calls = []
     monkeypatch.delenv("HANDOFF_BROWSER_COMMAND", raising=False)
     monkeypatch.setattr(nav, "run", lambda args, **kw: calls.append(args))
     nav.navigate_many([ENTERPRISE, "https://github.com/a"], "111", slack_tabs=True)
-    assert [args[1:] for args in calls] == [[ENTERPRISE], ["https://github.com/a"]]
+    assert [args[1:] for args in calls[:-1]] == [[ENTERPRISE], ["https://github.com/a"]]
 
 
 @pytest.mark.parametrize("edited", ["", "https://github.com/edited"])
@@ -348,6 +354,8 @@ def test_delayed_old_worker_cannot_stop_newer(monkeypatch, tmp_path):
     ("https://loft-labs-inc.slack.com/archives/C0123/p1793917323756099?thread_ts=1793917323.756099", "slack://channel?team=T0123&id=C0123&message=1793917323.756099&thread_ts=1793917323.756099"),
 ])
 def test_slack_desktop_links_never_open_browser(monkeypatch, url, expected):
+    monkeypatch.setattr(nav, "terminal_monitor", lambda _: "HDMI-0")
+    monkeypatch.setattr(nav, "window_id", lambda _: "222")
     calls = []
     monkeypatch.setenv("SLACK_TEAM_ID", "T0123")
     monkeypatch.setattr(nav, "run", lambda args, **kw: calls.append(args))
@@ -407,6 +415,8 @@ def test_enterprise_slack_permalink_still_must_match_target():
 
 
 def test_enterprise_slack_permalink_opens_desktop_beside_browser(monkeypatch):
+    monkeypatch.setattr(nav, "terminal_monitor", lambda _: "HDMI-0")
+    monkeypatch.setattr(nav, "window_id", lambda _: "222")
     calls = []
     monkeypatch.setenv("HANDOFF_BROWSER_COMMAND", "/browser")
     monkeypatch.setenv("SLACK_TEAM_ID", "T0123")
@@ -859,6 +869,7 @@ def fake_pages(tmp_path, monkeypatch):
         monkeypatch.setenv("HANDOFF_LAYOUT_COMMAND", str(layout))
         monkeypatch.delenv("HANDOFF_BROWSER_COMMAND", raising=False)
         monkeypatch.setattr(nav, "window_id", lambda _: "222")
+        monkeypatch.setattr(nav, "terminal_monitor", lambda _: "HDMI-0")
         monkeypatch.setattr(nav.time, "sleep", lambda _: None)
         return lambda: [line.split() for line in log.read_text().splitlines()]
     return setup
@@ -873,7 +884,7 @@ def test_stale_tab_bridge_falls_back_to_xdg_open_tabs(fake_pages, capsys):
     nav.navigate_many(DCA, "111")
     assert [c for c in calls() if c[0] == "xdg-open"] == [["xdg-open", url] for url in DCA]
     assert not any("--new-window" in c for c in calls())
-    assert not any(c[0] == "layout" for c in calls())
+    assert calls()[-1] == ["layout", "2"]
     err = capsys.readouterr().err
     for url in DCA:
         assert f"handoff: tab bridge failed, fallback xdg-open {url}" in err
@@ -883,7 +894,7 @@ def test_live_tab_bridge_opens_background_tabs_without_xdg_open(fake_pages, caps
     calls = fake_pages(0)
     nav.navigate_many(DCA, "111")
     # No --focus: the broker neither raises nor tiles Chrome (11 Nov).
-    assert calls() == [["tab", url] for url in DCA]
+    assert calls() == [["tab", url] for url in DCA] + [["layout", "2"]]
     assert capsys.readouterr().err.count("handoff: opened via tab bridge") == 2
 
 
@@ -895,7 +906,7 @@ def test_hanging_tab_bridge_falls_back_within_about_a_second(fake_pages, nav_log
     nav.navigate_many([DCA[0]], "111")
     elapsed = time.monotonic() - started
     assert 0.9 <= elapsed < 2.0
-    assert calls() == [["tab", DCA[0]], ["xdg-open", DCA[0]]]
+    assert calls() == [["tab", DCA[0]], ["xdg-open", DCA[0]], ["layout", "2"]]
     assert f"handoff: tab bridge failed, fallback xdg-open {DCA[0]}" in nav_log.read_text()
 
 
@@ -921,3 +932,49 @@ def test_cmd_page_opens_beside_links_and_only_then_skips_the_command(monkeypatch
     assert nav.annotation_urls(bad) == [DCA[0]]
     nav.act_on_kind(bad)
     assert shown == ["xdg-open https://github.com:8443/loft-sh"]
+
+@pytest.mark.parametrize("bridge_status", [0, 1])
+@pytest.mark.parametrize("urls", [["https://github.com/a"], [ENTERPRISE],
+                                  ["https://linear.app/a", "https://linear.app/b"]])
+def test_link_paths_tile_real_layout_with_stubbed_windows(tmp_path, monkeypatch, bridge_status, urls):
+    """Both browser paths send the real layout exact IDs on the terminal monitor."""
+    import shutil
+    scripts = tmp_path / "scripts"
+    scripts.mkdir()
+    for name in ("__layouts.sh", "__lib_screen.sh"):
+        shutil.copy(PATH.with_name(name), scripts / name)
+    for name in ("__alacritty_font_scale.sh", "__panel_adapt.sh"):
+        fake_bin(scripts, name, "exit 0\n")
+    tiles = tmp_path / "tiles"
+    fake_bin(tmp_path, "tab", f"exit {bridge_status}\n")
+    fake_bin(tmp_path, "xdg-open", "exit 0\n")
+    fake_bin(tmp_path, "gsettings", "exit 0\n")
+    fake_bin(tmp_path, "gdbus", f'printf "%s\\n" "$*" >> "{tiles}"\n')
+    fake_bin(tmp_path, "xdotool", 'case "$1" in search) echo 111;; getactivewindow) echo 111;; esac\n')
+    fake_bin(tmp_path, "wmctrl", '''case "$*" in
+-lG) echo '0x0000006f 0 2100 100 800 600 host terminal';;
+-d) echo '0 * DG: 4000x1200 VP: 0,0 WA: 0,40 4000x1160';;
+*) echo '0x000000de 0 google-chrome.Google-chrome host Chrome';;
+esac
+''')
+    fake_bin(tmp_path, "xrandr", '''echo 'LEFT connected primary 2000x1200+0+0'
+echo 'RIGHT connected 2000x1200+2000+0'
+''')
+    monkeypatch.setenv("PATH", f"{tmp_path}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setenv("HANDOFF_TAB_COMMAND", str(tmp_path / "tab"))
+    monkeypatch.setenv("HANDOFF_LAYOUT_COMMAND", str(scripts / "__layouts.sh"))
+    monkeypatch.delenv("HANDOFF_BROWSER_COMMAND", raising=False)
+    nav.navigate_many(urls, "111", slack_tabs=True)
+    calls = tiles.read_text().splitlines()
+    assert len(calls) == 2
+    assert calls[0].endswith("TileXid 222 2000 40 1000 1160")
+    assert calls[1].endswith("TileXid 111 3000 40 1000 1160")
+
+
+def test_missing_terminal_monitor_never_tiles(monkeypatch):
+    calls = []
+    monkeypatch.setattr(nav, "open_page", lambda url: None)
+    monkeypatch.setattr(nav, "terminal_monitor", lambda _: "")
+    monkeypatch.setattr(nav, "run", lambda args, **kw: calls.append(args))
+    nav.navigate_many(["https://github.com/a"], "111")
+    assert calls == []

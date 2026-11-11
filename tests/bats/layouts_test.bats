@@ -169,3 +169,15 @@ pick_next() {
   run grep -c 'get_target_work_area' "$LAYOUTS"
   [ "$output" -eq 1 ]
 }
+
+@test "handoff refuses a missing requested browser instead of cycling" {
+  run bash -c '
+    source <(sed -n "/^alacritty_firefox_vertical()/,/^}/p" "$1")
+    get_browser_windows() { echo 333; }
+    cycle_browser_window() { echo wrong >&2; return 1; }
+    LAYOUT_BROWSER_WINDOW=222 alacritty_firefox_vertical 111
+  ' bash "$LAYOUTS"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Requested browser window not found."* ]]
+  [[ "$output" != *wrong* ]]
+}
