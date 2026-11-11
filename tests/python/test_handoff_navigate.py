@@ -984,7 +984,9 @@ def test_missing_terminal_monitor_never_tiles(monkeypatch):
 
 @pytest.mark.parametrize(("outputs", "expected"), [
     ("HDMI-0 connected primary 1920x1080+0+0", "HDMI-0"),
-    ("HDMI-0 connected primary 100x100+0+0", "missing"),
+    ("HDMI-0 connected primary 100x100+0+0", "HDMI-0"),
+    ("HDMI-0 connected primary 100x100-100-100", "HDMI-0"),
+    ("HDMI-0 disconnected", "missing"),
 ])
 def test_terminal_monitor_logs_geometry_and_result(monkeypatch, nav_log, outputs, expected):
     def run(args, **kwargs):
@@ -999,3 +1001,12 @@ def test_terminal_monitor_logs_geometry_and_result(monkeypatch, nav_log, outputs
 def test_terminal_monitor_logs_missing_terminal(nav_log):
     assert nav.terminal_monitor("") == ""
     assert "terminal xid=missing geometry=missing monitor=missing" in nav_log.read_text()
+
+
+def test_tab_bridge_error_is_logged(tmp_path, monkeypatch, nav_log):
+    tab = fake_bin(tmp_path, "failed-tab", 'echo "bridge rejected request" >&2\nexit 1\n')
+    fake_bin(tmp_path, "xdg-open", "exit 0\n")
+    monkeypatch.setenv("PATH", f"{tmp_path}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setenv("HANDOFF_TAB_COMMAND", str(tab))
+    nav.open_page("https://github.com/a")
+    assert "handoff: tab bridge error: bridge rejected request" in nav_log.read_text()

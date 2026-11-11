@@ -171,13 +171,22 @@ def terminal_monitor(terminal):
             log(f"handoff: terminal xid={terminal} geometry={geometry} monitor=missing")
             return ""
         outputs = run(["xrandr", "--current"], capture_output=True, text=True).stdout.splitlines()
+        nearest = None
         for line in outputs:
-            match = re.match(r"(\S+) connected (?:primary )?(\d+)x(\d+)\+(\d+)\+(\d+)", line)
+            match = re.match(r"(\S+) connected (?:primary )?(\d+)x(\d+)([+-]\d+)([+-]\d+)", line)
             if match:
                 name, w, h, x, y = match.groups()
                 if int(x) <= cx < int(x) + int(w) and int(y) <= cy < int(y) + int(h):
                     log(f"handoff: terminal xid={terminal} geometry={geometry} monitor={name}")
                     return name
+                dx = max(int(x) - cx, 0, cx - (int(x) + int(w) - 1))
+                dy = max(int(y) - cy, 0, cy - (int(y) + int(h) - 1))
+                candidate = (dx * dx + dy * dy, name)
+                if nearest is None or candidate < nearest:
+                    nearest = candidate
+        if nearest:
+            log(f"handoff: terminal xid={terminal} geometry={geometry} monitor={nearest[1]} (nearest)")
+            return nearest[1]
     except (OSError, subprocess.SubprocessError, ValueError) as error:
         log(f"handoff: terminal lookup error={type(error).__name__}")
     log(f"handoff: terminal xid={terminal} geometry={geometry} monitor=missing")
@@ -232,9 +241,13 @@ def open_page(url):
         timeout = 1.0
     try:
         run([os.environ.get("HANDOFF_TAB_COMMAND", str(ROOT / "__handoff_tab.py")), url],
-            timeout=timeout, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            timeout=timeout, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
         log(f"handoff: opened via tab bridge {url}")
-    except (OSError, subprocess.SubprocessError):
+    except (OSError, subprocess.SubprocessError) as error:
+        detail = getattr(error, "stderr", None) or str(error)
+        if isinstance(detail, bytes):
+            detail = detail.decode(errors="replace")
+        log(f"handoff: tab bridge error: {detail.strip()}")
         log(f"handoff: tab bridge failed, fallback xdg-open {url}")
         run(["xdg-open", url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
