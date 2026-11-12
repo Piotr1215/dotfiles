@@ -35,6 +35,7 @@ EOF
 #!/usr/bin/env bash
 printf '%s\n' "$*" >> "$TASK_LOG"
 case "$*" in
+  *"_get task-uuid.linear_issue_id") if [[ -n "${TASK_LINEAR_ID:-}" ]]; then printf '%s' "$TASK_LINEAR_ID"; else exit 1; fi ;;
   *"_get task-uuid.repo") printf '%s' "${TASK_REPO:-}" ;;
   *" export") if [[ -n "$TASK_EXPORT" ]]; then printf '%s' "$TASK_EXPORT"; else printf '%s' '[{"description":"fix the thing"}]'; fi ;;
 esac
@@ -47,11 +48,38 @@ reply_for() {
   printf '{"data":{"issueCreate":{"success":true,"issue":{"id":"i1","title":"fix the thing","url":"https://linear.app/loft/issue/%s-1800/fix-the-thing","number":1800}}}}' "$1"
 }
 
+@test "linked task refuses creation before any Linear call" {
+  export TASK_LINEAR_ID=DEVOPS-1791
+  run "$SCRIPTS/__create_linear_issue.sh" task-uuid
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Task already linked to DEVOPS-1791"* ]]
+  [[ "$output" == *"https://linear.app/loft/issue/DEVOPS-1791"* ]]
+  [ ! -s "$CURL_LOG" ]
+  ! grep -q ' modify\| annotate' "$TASK_LOG"
+}
+
+@test "force permits a linked task to create another issue" {
+  export TASK_LINEAR_ID=DEVOPS-1791
+  export CURL_REPLY="$(reply_for DEVOPS)"
+  run "$SCRIPTS/__create_linear_issue.sh" task-uuid --force
+  [ "$status" -eq 0 ]
+  grep -q issueCreate "$CURL_LOG"
+}
+
+@test "failed field lookup cannot hide an existing link in the export" {
+  export TASK_EXPORT='[{"description":"fix the thing","linear_issue_id":"DEVOPS-1791"}]'
+  run "$SCRIPTS/__create_linear_issue.sh" task-uuid
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"DEVOPS-1791"* ]]
+  [ ! -s "$CURL_LOG" ]
+}
+
 @test "DEVOPS creation sends Triage and leaves the assignee unset" {
   export CURL_REPLY="$(reply_for DEVOPS)"
   run "$SCRIPTS/__create_linear_issue.sh" task-uuid
   [ "$status" -eq 0 ]
   [ "$(jq -s 'length' "$CURL_LOG")" = 2 ]
+  grep -q issueCreate "$CURL_LOG"
   [ "$(sed -n '2p' "$CURL_LOG" | jq -r '.query | test("assignee|viewer")')" = false ]
   [ "$(sed -n '2p' "$CURL_LOG" | jq -r '.variables.state')" = triage-devops ]
   [ "$(sed -n '2p' "$CURL_LOG" | jq -r '.query | contains("stateId: $state")')" = true ]

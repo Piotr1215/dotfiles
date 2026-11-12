@@ -4,7 +4,14 @@ set -eo pipefail
 
 exec 1> >(tee -a /tmp/linear_create.log) 2>&1
 
-uuid="$1"
+uuid="${1:-}"
+force=false
+if [[ "${2:-}" == --force && $# -eq 2 ]]; then
+	force=true
+elif [[ $# -ne 1 ]]; then
+	echo "Usage: $0 <task-uuid> [--force]" >&2
+	exit 1
+fi
 
 if [ -z "$uuid" ]; then
 	echo "Error: Task UUID not provided"
@@ -13,6 +20,17 @@ fi
 
 # Get task details
 TASK_DETAILS=$(task "$uuid" export)
+if ! existing=$(task _get "${uuid}.linear_issue_id" 2>/dev/null); then
+	# _get returns 1 for an unset value; validate the export before proceeding.
+	if ! existing=$(jq -er 'if length == 1 and (.[0] | type == "object") then .[0].linear_issue_id // "" else error("task not found") end' <<< "$TASK_DETAILS"); then
+		echo "Failed to read task's Linear issue" >&2
+		exit 1
+	fi
+fi
+if [[ -n "$existing" && "$force" != true ]]; then
+	printf 'Task already linked to %s\nhttps://linear.app/loft/issue/%s\nUse --force to create another issue.\n' "$existing" "$existing"
+	exit 1
+fi
 TASK_DESCRIPTION=$(echo "$TASK_DETAILS" | jq -r '.[0].description')
 
 # Create markdown template
