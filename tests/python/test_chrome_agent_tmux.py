@@ -17,6 +17,16 @@ host = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(host)
 
 
+def test_title_falls_back_to_exact_tmux_session(monkeypatch):
+    def run(*args):
+        if args[0] == 'list-panes':
+            return subprocess.CompletedProcess(args, 0, '%1\tother\tother\n')
+        assert args == ('display', '-p', '-t', '=worker:', '#{pane_id}')
+        return subprocess.CompletedProcess(args, 0, '%42\n')
+    monkeypatch.setattr(host, 'run_tmux', run)
+    assert host.title_match({'owner': 'worker'}) == '%42'
+
+
 @pytest.fixture
 def server(monkeypatch, request):
     socket = 'agent-tab-test-' + uuid.uuid4().hex
@@ -59,7 +69,7 @@ def test_switches_owned_session(server):
     assert selected(server) == 'agent'
 
 
-@pytest.mark.parametrize('owner', ['', 'missing', 'start', 'agent\nstart', None, 12])
+@pytest.mark.parametrize('owner', ['', 'missing', 'agent\nstart', None, 12])
 def test_skips_unknown_or_invalid_owner(server, owner):
     assert host.handle({'owner': owner}) == {'switched': False}
     assert selected(server) == 'start'

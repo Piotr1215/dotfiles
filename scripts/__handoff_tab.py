@@ -29,7 +29,7 @@ async def open_tab(url, focus=False):
     client = RequestClient(os.environ.get('AGENT_BROWSER_NATIVE_SOCKET') or default_socket_path())
     await client.connect()
     try:
-        result = await client.request({'action': 'handoff', 'agent': 'handoffs', 'url': url, 'focus': focus})
+        result = await client.request({'action': 'handoff', 'agent': os.environ.get('HANDOFF_AGENT', 'handoffs'), 'url': url, 'focus': focus})
     finally:
         await client.close()
     if result.get('event') not in ('created', 'existing'):

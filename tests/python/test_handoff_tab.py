@@ -48,6 +48,22 @@ def test_bridge_sends_url_and_focus(monkeypatch):
     assert calls[-1] == ('close',)
 
 
+def test_bridge_sends_declared_owner(monkeypatch):
+    monkeypatch.delenv('PYTEST_CURRENT_TEST', raising=False)
+    requests = []
+    class Client:
+        def __init__(self, socket): pass
+        async def connect(self): pass
+        async def request(self, payload):
+            requests.append(payload)
+            return {'event': 'created'}
+        async def close(self): pass
+    monkeypatch.setattr(tab, 'RequestClient', Client)
+    monkeypatch.setenv('HANDOFF_AGENT', 'agent-one')
+    asyncio.run(tab.open_tab('https://example.com/'))
+    assert requests[0]['agent'] == 'agent-one'
+
+
 def test_bridge_reports_rejection(monkeypatch):
     monkeypatch.delenv('PYTEST_CURRENT_TEST', raising=False)
     class Client:

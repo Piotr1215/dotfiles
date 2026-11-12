@@ -314,6 +314,16 @@ def agent_session(task):
     return sessions[0] if sessions else ""
 
 
+def handoff_owner(task):
+    """Prefer an explicit owner, then a live recorded session, then Gordon."""
+    annotations = sorted(task.get("annotations", []), key=lambda a: a.get("entry", ""), reverse=True)
+    for annotation in annotations:
+        key, sep, value = annotation.get("description", "").partition(":")
+        if sep and key.strip().lower() == "agent" and value.strip():
+            return value.strip()
+    return live_agent_session(task) or "handoffs"
+
+
 def live_agent_session(task):
     """Return the newest declared session tmux has-session confirms, or ''."""
     tmux = os.environ.get("HANDOFF_TMUX_COMMAND", "tmux")
@@ -717,7 +727,15 @@ def main(argv=None):
                     if not re.match(r"^\s*(target|link):", a.get("description", ""), re.I)])
                 fallback = destination(fallback_task)
                 urls = [fallback] if fallback else []
-            navigate_many(urls, terminal)
+            previous_owner = os.environ.get("HANDOFF_AGENT")
+            os.environ["HANDOFF_AGENT"] = handoff_owner(task)
+            try:
+                navigate_many(urls, terminal)
+            finally:
+                if previous_owner is None:
+                    os.environ.pop("HANDOFF_AGENT", None)
+                else:
+                    os.environ["HANDOFF_AGENT"] = previous_owner
             if act_on_kind(task, slack) == "none" and not urls:
                 # Nothing to open or run: Gordon fixes the row (link:, cmd: or agent:).
                 log(f"handoff: no action on {uuid}")

@@ -123,7 +123,14 @@ def title_match(message):
     own = [pane for session, pane in found if session == name]
     if own:
         return own[0]
-    return found[0][1] if len(found) == 1 else None
+    if len(found) == 1:
+        return found[0][1]
+    if found:
+        return None
+    # A handoff may identify a tmux session that has no @agent_name.
+    session = run_tmux("display", "-p", "-t", "=" + name + ":", "#{pane_id}")
+    pane = session.stdout.strip()
+    return pane if session.returncode == 0 and PANE_RE.fullmatch(pane) else None
 
 
 def tab_names(message):

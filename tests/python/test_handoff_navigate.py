@@ -181,6 +181,14 @@ def test_agent_session_uses_latest_annotation():
     assert nav.agent_session(task("link: https://github.com/a")) == ""
 
 
+def test_handoff_owner_prefers_annotation_then_live_session(monkeypatch):
+    monkeypatch.setattr(nav, "live_agent_session", lambda row: "live-session")
+    assert nav.handoff_owner(task("agent: owner", "tmux session newer")) == "owner"
+    assert nav.handoff_owner(task("tmux session live-session")) == "live-session"
+    monkeypatch.setattr(nav, "live_agent_session", lambda row: "")
+    assert nav.handoff_owner(task("link: https://github.com/a")) == "handoffs"
+
+
 def test_annotation_urls_include_every_explicit_link_and_latest_target():
     assert nav.annotation_urls(task(
         "target: https://linear.app/loft/issue/DEVOPS-1",
