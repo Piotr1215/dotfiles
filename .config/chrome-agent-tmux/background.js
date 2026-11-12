@@ -8,31 +8,42 @@
 const MAX_GROUP_TABS = 200;
 let generation = 0;
 
+function report(op, detail) {
+  try {
+    chrome.runtime.sendNativeMessage('org.piotr.agent_tab_tmux', {op, ...detail}, () => {
+      void chrome.runtime.lastError;
+    });
+  } catch (_) { /* reporting must never disrupt a click */ }
+}
+
 function switchTmux(message) {
-  chrome.runtime.sendNativeMessage('org.piotr.agent_tab_tmux', message, () => {
-    // The host can be unavailable when tmux is not running.
-    void chrome.runtime.lastError;
-  });
+  try {
+    chrome.runtime.sendNativeMessage('org.piotr.agent_tab_tmux', message, () => {
+      const error = chrome.runtime.lastError;
+      if (error) report('error', {where: 'switch', message: error.message});
+    });
+  } catch (error) { report('error', {where: 'switch', message: String(error)}); }
 }
 
 chrome.tabs.onActivated.addListener(async ({tabId, windowId}) => {
   const current = ++generation;
   try {
     const tab = await chrome.tabs.get(tabId);
-    if (current !== generation || !tab.active || tab.windowId !== windowId || tab.groupId < 0) return;
+    if (tab.groupId < 0) return;
+    if (current !== generation || !tab.active || tab.windowId !== windowId) { report('skip', {reason: 'stale-activation', tabId}); return; }
     const group = await chrome.tabGroups.get(tab.groupId);
     const siblings = await chrome.tabs.query({groupId: tab.groupId});
     const active = await chrome.tabs.query({active: true, windowId});
     const window = await chrome.windows.get(windowId);
-    if (current !== generation || active[0]?.id !== tabId || !window.focused) return;
+    if (current !== generation || active[0]?.id !== tabId || !window.focused) { report('skip', {reason: !window.focused ? 'focus-guard' : 'stale-activation', tabId}); return; }
     switchTmux({
       tabId,
       groupId: tab.groupId,
       groupTabIds: siblings.map((t) => t.id).slice(0, MAX_GROUP_TABS),
       owner: group.title ?? '',
     });
-  } catch (_) {
-    // Tabs and groups can disappear during activation.
+  } catch (error) {
+    report('error', {where: 'activation', message: String(error)});
   }
 });
 
@@ -77,15 +88,15 @@ chrome.tabGroups.onUpdated.addListener(async (group) => {
     if (current === null) return;
     const window = await chrome.windows.get(group.windowId);
     const tabs = await chrome.tabs.query({groupId: group.id});
-    if (current !== generation || !window.focused || !tabs.length) return;
+    if (current !== generation || !window.focused || !tabs.length) { report('skip', {reason: !window.focused ? 'focus-guard' : 'stale-activation', groupId: group.id}); return; }
     switchTmux({
       groupId: group.id,
       groupTabIds: tabs.map((t) => t.id).slice(0, MAX_GROUP_TABS),
       owner: group.title ?? '',
       via: 'group',
     });
-  } catch (_) {
-    // Groups can close during the lookup.
+  } catch (error) {
+    report('error', {where: 'group-activation', message: String(error)});
   }
 });
 chrome.tabGroups.onCreated.addListener((group) => {
@@ -142,7 +153,8 @@ function saveHeld() {
 function askHost(message) {
   return new Promise((resolve) => {
     chrome.runtime.sendNativeMessage(HOST, message, (reply) => {
-      void chrome.runtime.lastError;
+      const error = chrome.runtime.lastError;
+      if (error) report('error', {where: message.op ?? 'host', message: error.message});
       resolve(reply);
     });
   });
@@ -315,6 +327,7 @@ chrome.tabGroups.query({}).then((groups) => groups.forEach(syncIfStatusTitle), (
 const LOADED_KEY = 'loadedHash';
 const SEEN_KEY = 'reloadSeen';
 const RELOAD_ALARM = 'self-reload';
+const PING_ALARM = 'health-ping';
 const RELOAD_PERIOD_MIN = 0.5;
 let checking = null;
 
@@ -380,9 +393,18 @@ chrome.runtime.onInstalled.addListener(async () => {
   await chrome.storage.local.set({[LOADED_KEY]: hash});
   await askHost({op: 'loaded', hash});
 });
+function pingHealth() {
+  return chrome.storage.local.get(LOADED_KEY).then((v) => report('ping', {hash: v[LOADED_KEY]}), (error) => report('error', {where: 'ping', message: String(error)}));
+}
+
 chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === RELOAD_ALARM) checkForUpdate().catch(() => {});
+  if (alarm.name === RELOAD_ALARM) checkForUpdate().catch((error) => report('error', {where: 'self-reload', message: String(error)}));
+  if (alarm.name === PING_ALARM) pingHealth();
 });
 chrome.alarms.get(RELOAD_ALARM).then((alarm) => {
   if (!alarm) chrome.alarms.create(RELOAD_ALARM, {periodInMinutes: RELOAD_PERIOD_MIN});
 }, () => {});
+
+chrome.alarms.get(PING_ALARM).then((alarm) => {
+  if (!alarm) chrome.alarms.create(PING_ALARM, {periodInMinutes: 5});
+}, (error) => report('error', {where: 'ping-alarm', message: String(error)}));

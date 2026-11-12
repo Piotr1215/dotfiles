@@ -197,7 +197,7 @@ def handle(message):
         return tab_names(message)
     if message.get("op") == "check":
         return check_extension()
-    if message.get("op") == "loaded":
+    if message.get("op") in ("loaded", "ping", "error", "skip"):
         # The extension reports each start after a reload, so host.log shows when a change went live.
         return {"ok": True}
     if message.get("owner") == "handoffs":
@@ -234,7 +234,7 @@ def log_call(payload, reply):
         if os.path.exists(path) and os.path.getsize(path) > MAX_LOG:
             os.replace(path, path + ".1")
         row = {"ts": int(time.time()), "in": payload.decode("utf-8", "replace")[:600], "out": reply}
-        if not reply.get("switched"):
+        if "switched" in reply and not reply["switched"]:
             clients = run_tmux("list-clients", "-F", "#{client_tty}")
             row["clients"] = len(clients.stdout.splitlines()) if clients.returncode == 0 else None
         with open(path, "a", encoding="utf-8") as handle_:

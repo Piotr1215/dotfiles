@@ -362,3 +362,26 @@ def test_handoff_group_requires_one_triage_pane(server, tabs):
 def test_other_group_named_like_handoffs_does_not_switch(server, tabs):
     subprocess.run(server + ['set-option', '-p', '-t', '=agent:.0', '@agent_name', 'triage'], check=True)
     assert host.handle({'owner': 'other handoffs'}) == {'switched': False}
+
+
+def test_health_messages_do_not_switch_tmux(monkeypatch):
+    def fail(*args):
+        raise AssertionError("health message must not invoke tmux")
+    monkeypatch.setattr(host, "run_tmux", fail)
+    for op in ("ping", "skip", "error"):
+        assert host.handle({"op": op}) == {"ok": True}
+
+
+def test_heartbeat_and_error_report_in_extension(tmp_path):
+    import subprocess
+    source = (ROOT / ".config/chrome-agent-tmux/background.js").read_text()
+    report = source[source.index("function report("):source.index("chrome.tabs.onActivated")]
+    ping = source[source.index("function pingHealth("):source.index("chrome.alarms.onAlarm.addListener")]
+    script = """
+const sent = [];
+global.chrome = {runtime: {sendNativeMessage: (_host, msg, cb) => { sent.push(msg); cb(); }, lastError: null}, storage: {local: {get: async () => ({loadedHash: 'abc'})}}};
+const LOADED_KEY = 'loadedHash';
+""" + report + ping + """
+pingHealth().then(() => { if (JSON.stringify(sent[0]) !== JSON.stringify({op:'ping',hash:'abc'})) process.exit(1); report('skip',{reason:'focus-guard'}); if (sent[1].reason !== 'focus-guard') process.exit(2); });
+"""
+    subprocess.run(["node", "-e", script], check=True)
