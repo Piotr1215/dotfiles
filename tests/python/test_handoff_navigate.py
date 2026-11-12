@@ -244,7 +244,7 @@ def test_layout_and_url_arguments(monkeypatch, urls, layout):
         assert any(expected in args for args, _ in calls)
 
 
-def test_multiple_browser_links_open_once_as_background_tabs(monkeypatch):
+def test_multiple_browser_links_open_once_and_focus(monkeypatch):
     monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
     monkeypatch.setattr(nav, "terminal_monitor", lambda _: "HDMI-0")
     monkeypatch.setattr(nav, "window_id", lambda _: "222")
@@ -252,7 +252,7 @@ def test_multiple_browser_links_open_once_as_background_tabs(monkeypatch):
     monkeypatch.delenv("HANDOFF_BROWSER_COMMAND", raising=False)
     monkeypatch.setattr(nav, "run", lambda args, **kw: calls.append((args, kw)))
     nav.navigate_many(["https://github.com/a", "https://linear.app/b", "https://github.com/a"], "111")
-    assert [args[1:] for args, _ in calls[:-1]] == [["https://github.com/a"], ["https://linear.app/b"]]
+    assert [args[1:] for args, _ in calls[:-1]] == [["--focus", "https://github.com/a"], ["--focus", "https://linear.app/b"]]
     assert all(kw["timeout"] == 1.0 for _, kw in calls[:-1])
 
 
@@ -265,7 +265,7 @@ def test_draft_row_opens_slack_in_desktop(monkeypatch):
     monkeypatch.setattr(nav, "run", lambda args, **kw: calls.append(args))
     nav.navigate_many([ENTERPRISE, "https://github.com/a"], "111", slack_tabs=True)
     assert calls[0] == [str(nav.ROOT / "__slack_open.sh"), nav.slack_deep_link(ENTERPRISE)]
-    assert calls[1][1:] == ["https://github.com/a"]
+    assert calls[1][1:] == ["--focus", "https://github.com/a"]
 
 
 @pytest.mark.parametrize("edited", ["", "https://github.com/edited"])
@@ -1000,11 +1000,10 @@ def test_stale_tab_bridge_falls_back_to_xdg_open_tabs(fake_pages, capsys):
         assert f"handoff: tab bridge failed, fallback xdg-open {url}" in err
 
 
-def test_live_tab_bridge_opens_background_tabs_without_xdg_open(fake_pages, capsys):
+def test_live_tab_bridge_focuses_tabs_without_xdg_open(fake_pages, capsys):
     calls = fake_pages(0)
     nav.navigate_many(DCA, "111")
-    # No --focus: the broker neither raises nor tiles Chrome (11 Nov).
-    assert calls() == [["tab", url] for url in DCA] + [["layout", "2"]]
+    assert calls() == [["tab", "--focus", url] for url in DCA] + [["layout", "2"]]
     assert capsys.readouterr().err.count("handoff: opened via tab bridge") == 2
 
 
@@ -1016,17 +1015,17 @@ def test_hanging_tab_bridge_falls_back_within_about_a_second(fake_pages, nav_log
     nav.navigate_many([DCA[0]], "111")
     elapsed = time.monotonic() - started
     assert 0.9 <= elapsed < 2.0
-    assert calls() == [["tab", DCA[0]], ["xdg-open", DCA[0]], ["layout", "2"]]
+    assert calls() == [["tab", "--focus", DCA[0]], ["xdg-open", DCA[0]], ["layout", "2"]]
     assert f"handoff: tab bridge failed, fallback xdg-open {DCA[0]}" in nav_log.read_text()
 
 
 @pytest.mark.parametrize("status", [0, 1])
-def test_no_page_path_asks_for_a_new_window_or_focus(fake_pages, status):
+def test_no_page_path_asks_for_a_new_window(fake_pages, status):
     calls = fake_pages(status)
     nav.navigate_many(DCA, "111")
     nav.navigate_many([ENTERPRISE, DCA[0]], "111", slack_tabs=True)
     flat = [arg for call in calls() for arg in call]
-    assert flat and "--new-window" not in flat and "--focus" not in flat
+    assert flat and "--new-window" not in flat
     for script in (PATH, PATH.with_name("__handoff_tab.py")):
         assert "--new-window" not in script.read_text()
 

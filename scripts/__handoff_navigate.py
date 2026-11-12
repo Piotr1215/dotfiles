@@ -227,13 +227,13 @@ def slack_deep_link(url):
 
 
 def open_page(url):
-    """Open one page as a background tab in the existing Chrome window, bridge first.
+    """Open and select one page in the existing Chrome window, bridge first.
 
     A stale bridge extension exits 1; xdg-open still reaches the page (11 Nov).
     The bridge gets about a second: a bridge that accepted the request and never
     answered held s for its full timeout first (Piotr, 11 Nov: the right mail
-    "but with huge delay"). No --focus, so the broker neither raises nor tiles
-    Chrome, and neither path asks for a new window.
+    "but with huge delay"). The bridge selects the page after grouping it;
+    neither path asks for a new window.
     """
     taskdata = os.environ.get("TASKDATA")
     taskrc = os.environ.get("TASKRC")
@@ -247,7 +247,7 @@ def open_page(url):
     except ValueError:
         timeout = 1.0
     try:
-        run([os.environ.get("HANDOFF_TAB_COMMAND", str(ROOT / "__handoff_tab.py")), url],
+        run([os.environ.get("HANDOFF_TAB_COMMAND", str(ROOT / "__handoff_tab.py")), "--focus", url],
             timeout=timeout, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
         log(f"handoff: opened via tab bridge {url}")
     except (OSError, subprocess.SubprocessError) as error:
