@@ -193,10 +193,18 @@ def handle(message):
     if message.get("op") == "loaded":
         # The extension reports each start after a reload, so host.log shows when a change went live.
         return {"ok": True}
-    target, rule = find_pane(message)
-    if target is None:
-        target = title_match(message)
-        rule = "title" if target else None
+    if message.get("owner") == "handoffs":
+        panes = run_tmux("list-panes", "-a", "-F", "#{pane_id}\t#{@agent_name}")
+        matches = [pane for line in panes.stdout.splitlines()
+                   for pane, sep, agent in [line.partition("\t")]
+                   if sep and agent == "triage" and PANE_RE.fullmatch(pane)] if panes.returncode == 0 else []
+        target = matches[0] if len(matches) == 1 else None
+        rule = "handoffs" if target else None
+    else:
+        target, rule = find_pane(message)
+        if target is None:
+            target = title_match(message)
+            rule = "title" if target else None
     if target is None:
         return {"switched": False}
     client = sole_client()

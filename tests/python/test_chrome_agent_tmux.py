@@ -331,3 +331,24 @@ def test_check_refuses_without_node(extension_copy, monkeypatch):
 
 def test_loaded_only_acknowledges(extension_copy):
     assert host.handle({'op': 'loaded', 'hash': 'abc'}) == {'ok': True}
+
+
+def test_handoff_group_switches_to_triage(server, tabs):
+    subprocess.run(server + ['set-option', '-p', '-t', '=agent:.0', '@agent_name', 'triage'], check=True)
+    target = pane_of(server, '=agent:.0')
+    tabs(row(295205624, pane_of(server, '=start:.0')))
+    assert host.handle({'tabId': 295205624, 'groupTabIds': [295205624], 'owner': 'handoffs'}) == {'switched': True, 'rule': 'handoffs'}
+    assert current(server).split()[2] == target
+
+
+def test_handoff_group_requires_one_triage_pane(server, tabs):
+    assert host.handle({'owner': 'handoffs'}) == {'switched': False}
+    for session in ('start', 'agent'):
+        subprocess.run(server + ['set-option', '-p', '-t', f'={session}:.0', '@agent_name', 'triage'], check=True)
+    assert host.handle({'owner': 'handoffs'}) == {'switched': False}
+    assert selected(server) == 'start'
+
+
+def test_other_group_named_like_handoffs_does_not_switch(server, tabs):
+    subprocess.run(server + ['set-option', '-p', '-t', '=agent:.0', '@agent_name', 'triage'], check=True)
+    assert host.handle({'owner': 'other handoffs'}) == {'switched': False}
