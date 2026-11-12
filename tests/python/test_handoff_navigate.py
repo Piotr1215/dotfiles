@@ -93,6 +93,40 @@ def test_tab_note_opens_console_url_and_suppresses_legacy_command(monkeypatch):
     nav.act_on_kind(row)
 
 
+def test_other_handoff_start_opens_newest_explicit_link(monkeypatch, tmp_path):
+    uuid = "a1586e1a-affd-4fb2-b0bb-d387f3e9247d"
+    url = "https://link.rippling.com/inbox?path=/inbox/&view=needs-attention"
+    row = dict(task("mail: old mail", f"link: {url}"), uuid=uuid,
+               start="20261112T080000Z", kind="other")
+    monkeypatch.setenv("XDG_RUNTIME_DIR", str(tmp_path))
+    brief = tmp_path / "brief"
+    brief.write_text(f"<!-- begin open -->\n{url}\n<!-- end open -->\n")
+    calls = []
+    def run(args, **kwargs):
+        if args[-1] == "export":
+            return subprocess.CompletedProcess(args, 0, json.dumps([row]))
+        return subprocess.CompletedProcess(args, 0, str(brief) if "prepare" in args else "")
+    monkeypatch.setattr(nav, "run", run)
+    monkeypatch.setattr(nav, "window_id", lambda _: "")
+    monkeypatch.setattr(nav, "navigate_many", lambda urls, terminal: calls.append(urls))
+    monkeypatch.setattr(nav, "live_agent_session", lambda _: "")
+    floater_spec = importlib.util.spec_from_file_location("handoff_floater_file", PATH.with_name("__handoff_floater_file.py"))
+    floater = importlib.util.module_from_spec(floater_spec)
+    floater_spec.loader.exec_module(floater)
+    assert floater.open_urls(row) == [url]
+    assert nav.destination(row) == url
+    assert nav.destination(dict(row, annotations=[{"entry": "1", "description": "link: https://old.example/page"},
+                                                   {"entry": "2", "description": f"link: {url}"}])) == url
+    assert nav.main(["start", uuid]) == 0
+    assert calls == [[url]]
+
+
+@pytest.mark.parametrize("url", ["http://example.com/a", "https://user@example.com/a", "https://example.com:443/a"])
+def test_other_handoff_link_keeps_url_safety_checks(url):
+    with pytest.raises(ValueError):
+        nav.destination(task(f"link: {url}"))
+
+
 def test_legacy_quoted_page_and_slack_permalink_are_destinations(monkeypatch):
     for url in ('https://mail.google.com/mail/?authuser=a@example.com#all/thread',
                 'https://loft-labs-inc.slack.com/archives/C0123/p1700000000000100'):
@@ -390,7 +424,7 @@ def test_start_leaves_agent_spawned_row_running(monkeypatch, tmp_path):
         return subprocess.CompletedProcess(args, 0, "")
     monkeypatch.setattr(nav, "run", run)
     monkeypatch.setattr(nav, "window_id", lambda _: "111")
-    monkeypatch.setattr(nav, "open_block", lambda _: [])
+    monkeypatch.setattr(nav, "open_block", lambda _, **kwargs: [])
     monkeypatch.setattr(nav, "navigate_many", lambda urls, terminal, slack_tabs=False: None)
     monkeypatch.setattr(nav, "live_agent_session", lambda row: "")
     assert nav.main(["start", UUID]) == 0

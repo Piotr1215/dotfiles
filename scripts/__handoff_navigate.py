@@ -102,7 +102,7 @@ def destination(task):
             return canonical if stamp == "top" else canonical + "?thread_ts=" + stamp
         return single_url(target)
     if "link" in fields:
-        return single_url(fields["link"])
+        return single_url(fields["link"], any_host=plain_link_row(task))
     done = fields.get("done-when", "")
     if re.match(r"^mail-sent(?:\s|$)", done):
         return mail_sent_url(done)
@@ -341,11 +341,13 @@ def annotation_urls(task):
                                      "annotations": [target_rows[-1]]}))
         except ValueError as error:
             print(f"Could not open handoff destination: {error}", file=sys.stderr)
+    plain_link = plain_link_row(task)
     for annotation in annotations:
         match = re.match(r"^\s*(?:link|tab):\s*(.*)$", annotation.get("description", ""), re.I)
         if match:
+            is_link = annotation.get("description", "").lstrip().lower().startswith("link:")
             try:
-                urls.append(single_url(match.group(1), any_host=annotation.get("description", "").lstrip().lower().startswith("tab:")))
+                urls.append(single_url(match.group(1), any_host=plain_link or not is_link))
             except ValueError as error:
                 print(f"Could not open handoff destination: {error}", file=sys.stderr)
     urls.append(cmd_page(task))
@@ -397,6 +399,12 @@ def task_kind(task):
     if "draft" in task.get("tags", []):
         return "slack"
     return "command" if newest_note(task, "cmd") else "other"
+
+
+def plain_link_row(task):
+    """Allow a handoff's direct link when it has no separate action."""
+    return ("piotr" in task.get("tags", []) and task_kind(task) == "other"
+            and not newest_note(task, "cmd") and not newest_note(task, "tab"))
 
 
 def copy_to_clipboard(text):
@@ -605,7 +613,7 @@ def show_slack_draft(pane, terminal, runtime):
             print(f"Could not restore terminal focus: {error}", file=sys.stderr)
 
 
-def open_block(path):
+def open_block(path, *, any_host=False):
     """Read only the editable generated block; never interpret the draft.
 
     Prepare skips writing the block while the editor holds the brief, so a
@@ -615,7 +623,7 @@ def open_block(path):
     match = re.search(r"<!-- begin open -->[^\S\n]*\n(.*?)\n<!-- end open -->", text, re.S)
     if not match:
         return []
-    return [checked_url(line.strip()) for line in match.group(1).splitlines() if line.strip()]
+    return [checked_url(line.strip(), any_host=any_host) for line in match.group(1).splitlines() if line.strip()]
 
 
 def task_export(task_bin, *filters):
@@ -700,7 +708,7 @@ def main(argv=None):
         try:
             prepared = run([floater, "prepare", uuid, pane], capture_output=True, text=True,
                            env=dict(os.environ, HANDOFF_TASK_UUID=uuid)).stdout.strip()
-            urls = open_block(prepared)
+            urls = open_block(prepared, any_host=plain_link_row(task))
             for url in annotation_urls(task):
                 if url not in urls:
                     urls.append(url)

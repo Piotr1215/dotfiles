@@ -145,6 +145,8 @@ def open_urls(task):
     spec = importlib.util.spec_from_file_location('handoff_navigate', navigate_path)
     navigate = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(navigate)
+    if navigate.plain_link_row(task):
+        return navigate.annotation_urls(task)
     annotations = sorted(task.get('annotations', []), key=lambda row: row.get('entry', ''))
     target_rows = [row for row in annotations
                    if re.match(r'^\s*target:\s*\S', row.get('description', ''), flags=re.I)]
