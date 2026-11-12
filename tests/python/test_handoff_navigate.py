@@ -688,10 +688,16 @@ def test_agent_row_attaches_live_session_in_a_focused_floating_pane(fake_tmux, m
     calls = fake_tmux()
     assert calls[0] == ["display-message", "-p", "-t", "%18", "#{session_name}"]
     new = calls[1]
-    assert new[0] == "new-pane" and "-d" not in new and new[new.index("-T") + 1] == "agent fada-page-guard"
+    assert new[0] == "new-pane" and "-d" not in new and new[new.index("-T") + 1] == "agent fada-page-guard | F12 closes this peek, the session keeps running"
     assert new[new.index("--") + 1:] == ["env", "-u", "TMUX", os.environ["HANDOFF_TMUX_COMMAND"],
                                          "attach-session", "-t", "=fada-page-guard"]
     assert calls[2] == ["select-pane", "-t", "%99"]
+
+
+def test_the_peek_close_key_is_bound_to_kill_pane():
+    # ac5b3afa: the title promises F12 closes the peek; .tmux.conf must keep that binding.
+    conf = (Path(nav.__file__).resolve().parents[1] / ".tmux.conf").read_text()
+    assert "bind-key -n F12 kill-pane" in conf
 
 
 def test_agent_row_never_nests_the_session_s_was_pressed_in(fake_tmux, monkeypatch, capsys):

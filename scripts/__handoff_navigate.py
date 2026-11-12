@@ -490,7 +490,11 @@ def attach_agent_session(session):
     if current == session:
         raise ValueError(f"agent session {session} is the session s was pressed in")
     # A nested client needs TMUX unset; tmux refuses to nest otherwise.
-    pane = open_floating("agent " + session, ["env", "-u", "TMUX", tmux, "attach-session", "-t", "=" + session])
+    # The title names the close key: F12 (kill-pane in .tmux.conf) ends only this
+    # client, the session runs on. Piotr, 12 Nov 09:14 CET: "I had to fiddle with
+    # binding to close the floater only" (ledger ac5b3afa).
+    pane = open_floating(f"agent {session} | F12 closes this peek, the session keeps running",
+                         ["env", "-u", "TMUX", tmux, "attach-session", "-t", "=" + session])
     run([tmux, "select-pane", "-t", pane])
     return pane
 
