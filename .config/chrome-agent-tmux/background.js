@@ -38,6 +38,7 @@ chrome.tabs.onActivated.addListener(async ({tabId, windowId}) => {
     if (current !== generation || active[0]?.id !== tabId || !window.focused) { report('skip', {reason: !window.focused ? 'focus-guard' : 'stale-activation', tabId}); return; }
     switchTmux({
       tabId,
+      url: tab.url ?? '',
       groupId: tab.groupId,
       groupTabIds: siblings.map((t) => t.id).slice(0, MAX_GROUP_TABS),
       owner: group.title ?? '',

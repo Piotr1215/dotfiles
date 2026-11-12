@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Native messaging host for switching the sole attached tmux client."""
+import importlib.util
 import json
 import os
 import re
@@ -13,6 +14,8 @@ MAX_MESSAGE = 4096
 MAX_NAME_TABS = 200
 MAX_LOG = 256 * 1024
 PANE_RE = re.compile(r"^%[0-9]+$")
+UUID_RE = re.compile(r"^[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$")
+URL_RE = re.compile(r"https?://[^\s<>\])]+")
 
 
 def run_tmux(*args):
@@ -133,6 +136,52 @@ def title_match(message):
     return pane if session.returncode == 0 and PANE_RE.fullmatch(pane) else None
 
 
+def pending_handoffs():
+    """Read current handoff rows without running Taskwarrior hooks."""
+    try:
+        result = subprocess.run([os.environ.get('HANDOFF_TASK_COMMAND', 'task'),
+                                 'rc.context=none', 'rc.hooks=off', 'rc.verbose=nothing',
+                                 'rc.gc=off', '+piotr', 'status:pending', 'export'],
+                                capture_output=True, text=True, timeout=5, check=True)
+        rows = json.loads(result.stdout)
+        return rows if isinstance(rows, list) else []
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return []
+
+
+def handoff_target(url):
+    """Resolve an exact URL to one pending row and then its live owner."""
+    if not isinstance(url, str) or not url.startswith(('https://', 'http://')):
+        return None
+    spec = importlib.util.spec_from_file_location('handoff_navigate',
+        os.path.join(os.path.dirname(os.path.realpath(__file__)), '__handoff_navigate.py'))
+    navigate = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(navigate)
+    matches = []
+    for task in pending_handoffs():
+        if not isinstance(task, dict):
+            continue
+        texts = [a.get('description', '') for a in task.get('annotations', []) if isinstance(a, dict)]
+        uid = task.get('uuid', '')
+        if isinstance(uid, str) and UUID_RE.fullmatch(uid):
+            base = os.environ.get('XDG_STATE_HOME') or os.path.expanduser('~/.local/state')
+            try:
+                with open(os.path.join(base, 'taskwarrior', 'briefs', uid, 'brief.md'), encoding='utf-8') as brief:
+                    texts.append(brief.read())
+            except OSError:
+                pass
+        urls = {match.rstrip('.,;') for text in texts if isinstance(text, str) for match in URL_RE.findall(text)}
+        if url in urls:
+            matches.append(task)
+    if len(matches) != 1:
+        return None
+    for name in navigate.agent_sessions(matches[0]):
+        pane = title_match({'owner': name})
+        if pane:
+            return pane
+    return None
+
+
 def tab_names(message):
     """Map tab ids to owning agent names for retitling "Claude" groups; never touches tmux."""
     ids = message.get("tabIds")
@@ -201,6 +250,12 @@ def handle(message):
         # The extension reports each start after a reload, so host.log shows when a change went live.
         return {"ok": True}
     if message.get("owner") == "handoffs":
+        target = handoff_target(message.get('url'))
+        if target:
+            client = sole_client()
+            if client and switch_to_pane(client, target):
+                return {'switched': True, 'rule': 'handoff_owner'}
+            return {'switched': False}
         panes = run_tmux("list-panes", "-a", "-F", "#{pane_id}\t#{@agent_name}")
         matches = [pane for line in panes.stdout.splitlines()
                    for pane, sep, agent in [line.partition("\t")]
@@ -233,7 +288,13 @@ def log_call(payload, reply):
         os.makedirs(os.path.dirname(path), exist_ok=True)
         if os.path.exists(path) and os.path.getsize(path) > MAX_LOG:
             os.replace(path, path + ".1")
-        row = {"ts": int(time.time()), "in": payload.decode("utf-8", "replace")[:600], "out": reply}
+        incoming = json.loads(payload)
+        if isinstance(incoming, dict) and 'url' in incoming:
+            incoming['url'] = '[redacted]'
+            logged = json.dumps(incoming)
+        else:
+            logged = payload.decode("utf-8", "replace")
+        row = {"ts": int(time.time()), "in": logged[:600], "out": reply}
         if "switched" in reply and not reply["switched"]:
             clients = run_tmux("list-clients", "-F", "#{client_tty}")
             row["clients"] = len(clients.stdout.splitlines()) if clients.returncode == 0 else None

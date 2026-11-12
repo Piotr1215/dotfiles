@@ -119,6 +119,15 @@ def test_a_miss_logs_the_attached_client_count(server, tmp_path):
     assert logged['clients'] == 1
 
 
+def test_host_log_redacts_tab_url(tmp_path, monkeypatch):
+    monkeypatch.setenv('XDG_STATE_HOME', str(tmp_path))
+    host.log_call(json.dumps({'url': 'https://example.com/?secret=value', 'owner': 'agent'}).encode(),
+                  {'switched': True})
+    logged = (tmp_path / 'agent-tabs/host.log').read_text()
+    assert 'secret=value' not in logged
+    assert '[redacted]' in logged
+
+
 def test_host_installer_targets_checkout(tmp_path):
     subprocess.run(
         ['python3', str(ROOT / 'scripts/__chrome_agent_tmux_install.py')],
@@ -349,6 +358,40 @@ def test_handoff_group_switches_to_triage(server, tabs):
     tabs(row(295205624, pane_of(server, '=start:.0')))
     assert host.handle({'tabId': 295205624, 'groupTabIds': [295205624], 'owner': 'handoffs'}) == {'switched': True, 'rule': 'handoffs'}
     assert current(server).split()[2] == target
+
+
+def test_handoff_tab_follows_owner_started_after_open(server, tabs, monkeypatch):
+    url = 'https://example.com/handoff'
+    task = {'uuid': '11111111-1111-1111-1111-111111111111', 'tags': ['piotr'],
+            'annotations': [{'description': 'link: ' + url},
+                            {'description': 'agent: late-owner'}]}
+    monkeypatch.setattr(host, 'pending_handoffs', lambda: [task], raising=False)
+    subprocess.run(server + ['set-option', '-p', '-t', '=agent:.0', '@agent_name', 'triage'], check=True)
+    message = {'tabId': 7, 'owner': 'handoffs', 'url': url}
+    assert host.handle(message) == {'switched': True, 'rule': 'handoffs'}
+    assert selected(server) == 'agent'
+    subprocess.run(server + ['new-session', '-d', '-s', 'late-owner'], check=True)
+    assert host.handle(message) == {'switched': True, 'rule': 'handoff_owner'}
+    assert selected(server) == 'late-owner'
+
+
+def test_handoff_matches_brief_and_rejects_ambiguous_url(server, tabs, monkeypatch, tmp_path):
+    uid = '11111111-1111-1111-1111-111111111111'
+    brief = tmp_path / 'taskwarrior' / 'briefs' / uid / 'brief.md'
+    brief.parent.mkdir(parents=True)
+    brief.write_text('[page](https://example.com/page)')
+    task = {'uuid': uid, 'annotations': [{'description': 'agent: agent'}]}
+    monkeypatch.setattr(host, 'pending_handoffs', lambda: [task])
+    assert host.handoff_target('https://example.com/page') == pane_of(server, '=agent:.0')
+    assert host.handoff_target('https://example.com/page-extra') is None
+    monkeypatch.setattr(host, 'pending_handoffs', lambda: [task, task])
+    assert host.handoff_target('https://example.com/page') is None
+
+
+def test_extension_sends_activated_tab_url():
+    source = (ROOT / '.config/chrome-agent-tmux/background.js').read_text()
+    activated = source[source.index('chrome.tabs.onActivated'):source.index('// Group name clicks.')]
+    assert "url: tab.url ?? ''" in activated
 
 
 def test_handoff_group_requires_one_triage_pane(server, tabs):
