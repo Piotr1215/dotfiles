@@ -1,0 +1,7 @@
+[Unit]
+Description=Keep Zoom current
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/home/decoder/dev/dotfiles/scripts/__zoom_autoupdate.sh
