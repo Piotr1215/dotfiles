@@ -612,6 +612,16 @@ def test_prefill_queues_command_without_executing_it(tmp_path):
     assert not marker.exists()
 
 
+def test_prefill_runs_an_exact_tmux_target_as_written(tmp_path):
+    """9ae24e1d, 12 Nov: `-t =<session>` hit zsh's equals expansion and never reached tmux."""
+    command = "print -r -- tmux switch-client -t =76e4-cloudzero-login"
+    result = subprocess.run(["zsh", "-fc", nav.PREFILL + '; read -z queued; eval "$queued"'],
+                            env={"HANDOFF_CMD": command, "TERM": "dumb"},
+                            capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "tmux switch-client -t =76e4-cloudzero-login"
+
+
 @pytest.mark.parametrize(("notes", "error"), [
     ((), "no cmd: note"),
     (("cmd: git push\nrm -rf ~",), "one line"),

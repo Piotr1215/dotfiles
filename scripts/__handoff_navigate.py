@@ -379,7 +379,11 @@ KINDS = {"slack", "command", "pr", "ack", "other"}
 # The fixed line puts the row's command in the next editing buffer, unsubmitted,
 # and arms a one-shot hook: the first command Piotr runs there that exits 0
 # calls `verify` (Piotr, 11 Nov: "once command is ran verify it and close task").
-PREFILL = (' xdg-open() { command xdg-open "$@" > >(sed \"/^[Oo]pening in existing browser session\\.$/d\") 2> >(sed -E \"/zygote_linux\\.cc:.*Broken pipe|zygote_main_linux\\.cc:.*Broken pipe/d\" >&2); };'
+# no_equals: zsh reads a word that starts with `=` as a command path, so
+# `tmux switch-client -t =76e4-cloudzero-login` failed with "zsh: 76e4-cloudzero-login
+# not found" on 12 Nov 12:05Z and Start looked broken (claude ledger 9ae24e1d).
+PREFILL = (' setopt no_equals;'
+           ' xdg-open() { command xdg-open "$@" > >(sed \"/^[Oo]pening in existing browser session\\.$/d\") 2> >(sed -E \"/zygote_linux\\.cc:.*Broken pipe|zygote_main_linux\\.cc:.*Broken pipe/d\" >&2); };'
            ' handoff_ran() { HANDOFF_RAN=1; };'
            ' handoff_rc() { local rc=$?; [[ -n $HANDOFF_RAN ]] || return 0; unset HANDOFF_RAN;'
            ' (( rc == 0 )) || return 0;'
