@@ -13,7 +13,9 @@ if [[ "$slot" == 9 ]]; then exec "$root/__tui_defer_task.sh" "$@"; fi
 # Key 0 jumps to the selected task's agent session in every report.
 if [[ "$slot" == 0 ]]; then exec "$root/__tui_jump_agent.sh" "$@"; fi
 report=${TASKWARRIOR_TUI_REPORT:-}
-if [[ -z "$report" && -n "$uuid" ]] && "$task_bin" rc.context=none rc.hooks=off "$uuid" export | jq -e '.[0].tags // [] | index("piotr") != null' >/dev/null; then
+# The Projects view mixes handoffs with other rows, so its handoff rows take
+# the handoffs keys and every other row keeps the default ones.
+if [[ ( -z "$report" || "$report" == myprojects ) && -n "$uuid" ]] && "$task_bin" rc.context=none rc.hooks=off "$uuid" export | jq -e '.[0].tags // [] | index("piotr") != null' >/dev/null; then
   report=handoffs
   export TASKWARRIOR_TUI_REPORT=handoffs
 fi

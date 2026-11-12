@@ -110,6 +110,23 @@ MOCK
   [ "$status" -eq 0 ]; grep -Fq 'annotate tagged note' "$LOG"
 }
 
+@test "projects handoff rows use the handoffs keys and other rows the default keys" {
+  export TASKWARRIOR_TUI_REPORT=myprojects
+  stub="$BATS_TEST_TMPDIR/scripts"
+  mkdir -p "$stub"
+  cp "$root/scripts/__tui_dispatch.sh" "$stub/"
+  printf '#!/bin/sh\necho "brief $*" >> "$LOG"\n' > "$stub/__task_brief.sh"
+  printf '#!/bin/sh\necho "sync $*" >> "$LOG"\n' > "$stub/__github_issue_sync.sh"
+  chmod +x "$stub"/*.sh
+  export TASK_JSON='[{"tags":["piotr"]}]'
+  run "$stub/__tui_dispatch.sh" 3 "$uuid"
+  [ "$status" -eq 0 ]; grep -Fxq "brief --popup $uuid" "$LOG"
+  rm -f "$LOG"
+  export TASK_JSON='[{"tags":["work"]}]'
+  run "$stub/__tui_dispatch.sh" 3 "$uuid"
+  [ "$status" -eq 0 ]; grep -Fxq "sync $uuid" "$LOG"
+}
+
 @test "handoff key 8 never creates an issue" {
   run bash -c '"$1" 8 "$2" </dev/null' _ "$root/scripts/__tui_dispatch.sh" "$uuid"
   [ "$status" -eq 0 ]; [ ! -f "$LOG" ]
