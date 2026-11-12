@@ -7,6 +7,9 @@ load 'helpers/test_helper'
 
 # Setup function runs before each test
 setup() {
+    ORIGINAL_HOME="$HOME"
+    export REAL_TASK_BIN
+    REAL_TASK_BIN=$(command -v task || true)
     # Set test environment variables
     export LINEAR_API_KEY="test-linear-key-12345"
     export LINEAR_USER_ID="test-user-67890"
@@ -83,6 +86,7 @@ EOF
 
 # Teardown function runs after each test
 teardown() {
+    export HOME="$ORIGINAL_HOME"
     # Clean up test directory
     rm -rf "$TEST_DIR"
 }
@@ -4242,4 +4246,228 @@ created_by_piotr_already_assigned() {
     [[ "$output" =~ "DEVOPS-1738 is in Triage status - excluding from sync" ]]
     no_mutation_sent
     [ ! -f "${TEST_DIR}/task_commands.log" ]
+}
+
+# Selected refresh uses the real entry point with isolated task and API stubs.
+selected_fixture() {
+    export SELECTED_UUID=aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa
+    cat > "$TEST_DIR/row" <<JSON
+[{"uuid":"$SELECTED_UUID","status":"waiting","wait":"20300101T000000Z","description":"Old","tags":["view"],"view_key":"issue:DEVOPS-42","view_issue":"DEVOPS-42"}]
+JSON
+    cat > "$TEST_DIR/reply" <<'JSON'
+{"data":{"issue":{"id":"issue-uuid","identifier":"DEVOPS-42","title":"New title","url":"https://linear.app/test/issue/DEVOPS-42/new","state":{"name":"Triage","type":"triage"},"assignee":{"id":"test-user-67890"},"project":null,"dueDate":null,"priority":0,"updatedAt":"2026-01-01T00:00:00Z","cycle":null,"history":{"nodes":[]},"comments":{"nodes":[]},"attachments":{"nodes":[]}}}}
+JSON
+    cat > "$TEST_DIR/task" <<'SH'
+#!/bin/bash
+printf '%s\n' "$*" >> "$TEST_DIR/all_tasks"
+case " $* " in
+  *' export '*) cat "$TEST_DIR/row" ;;
+  *' _get '*'.description'*) echo Old ;;
+  *' _get '*'.linear_issue_id'*) echo DEVOPS-42 ;;
+  *' _get '*) echo '' ;;
+  *) printf '%s\n' "$*" >> "$TEST_DIR/writes" ;;
+esac
+SH
+    cat > "$TEST_DIR/curl" <<'SH'
+#!/bin/bash
+printf 'CALL\n' >> "$TEST_DIR/curl_count"
+printf '%s\n' "$*" >> "$TEST_DIR/curl_calls"
+if [[ -f "$TEST_DIR/race_row" ]]; then cp "$TEST_DIR/race_row" "$TEST_DIR/row"; fi
+cat "$TEST_DIR/reply"
+printf '\n%s' "${HTTP_CODE:-200}"
+SH
+    chmod +x "$TEST_DIR/task" "$TEST_DIR/curl"
+}
+
+@test "selected view refresh reads one issue and updates only the selected row" {
+    selected_fixture
+    run bash scripts/__github_issue_sync.sh --task "$SELECTED_UUID"
+    [ "$status" -eq 0 ]
+    [ "$(wc -l < "$TEST_DIR/curl_count")" -eq 1 ]
+    grep -q 'query(\$id: String!)' "$TEST_DIR/curl_calls"
+    ! grep -Eq 'mutation|assignedIssues' "$TEST_DIR/curl_calls"
+    grep -q 'view_state:Triage' "$TEST_DIR/writes"
+    grep -q "$SELECTED_UUID" "$TEST_DIR/writes"
+    ! grep -Eq ' delete| import|wait:|start:| nudge| prep' "$TEST_DIR/writes"
+    grep -q 'rc.hooks=off rc.context=none' "$TEST_DIR/all_tasks"
+}
+
+@test "selected refresh rejects malformed API responses without writes" {
+    selected_fixture
+    for reply in 'bad json' '{"errors":[{"message":"failure"}]}' '{"data":{"issue":null}}' '{"data":{"issue":{"identifier":"OTHER-1"}}}'; do
+        printf '%s' "$reply" > "$TEST_DIR/reply"
+        run bash scripts/__github_issue_sync.sh --task "$SELECTED_UUID"
+        [ "$status" -ne 0 ]
+        [ ! -e "$TEST_DIR/writes" ]
+    done
+    export HTTP_CODE=500
+    run bash scripts/__github_issue_sync.sh --task "$SELECTED_UUID"
+    [ "$status" -ne 0 ]
+    [ ! -e "$TEST_DIR/writes" ]
+}
+
+@test "selected refresh rejects invalid UUID and non-issue rows before API" {
+    selected_fixture
+    run bash scripts/__github_issue_sync.sh --task short
+    [ "$status" -ne 0 ]
+    jq '.[0].view_key="standing:project" | .[0].view_issue=""' "$TEST_DIR/row" > "$TEST_DIR/newrow"
+    mv "$TEST_DIR/newrow" "$TEST_DIR/row"
+    run bash scripts/__github_issue_sync.sh --task "$SELECTED_UUID"
+    [ "$status" -ne 0 ]
+    [ ! -e "$TEST_DIR/curl_calls" ]
+    [ ! -e "$TEST_DIR/writes" ]
+}
+
+@test "selected native waiting task updates only its own fields" {
+    selected_fixture
+    jq '.[0] |= (del(.view_key,.view_issue) | .linear_issue_id="DEVOPS-42" | .tags=["triaged"] | .start="20250101T000000Z")' "$TEST_DIR/row" > "$TEST_DIR/newrow"
+    mv "$TEST_DIR/newrow" "$TEST_DIR/row"
+    jq '.data.issue.state={"name":"Todo","type":"unstarted"}' "$TEST_DIR/reply" > "$TEST_DIR/newreply"
+    mv "$TEST_DIR/newreply" "$TEST_DIR/reply"
+    run bash scripts/__github_issue_sync.sh --task "$SELECTED_UUID"
+    [ "$status" -eq 0 ]
+    grep -q 'description:New title' "$TEST_DIR/writes"
+    ! grep -Eq ' delete| import|wait:|start:' "$TEST_DIR/writes"
+    [ "$(wc -l < "$TEST_DIR/curl_count")" -eq 1 ]
+}
+
+@test "accepted selected view retires only itself when its native task exists" {
+    selected_fixture
+    jq '.data.issue.state={"name":"Todo","type":"unstarted"}' "$TEST_DIR/reply" > "$TEST_DIR/newreply"
+    mv "$TEST_DIR/newreply" "$TEST_DIR/reply"
+    cat > "$TEST_DIR/task" <<'SH'
+#!/bin/bash
+printf '%s\n' "$*" >> "$TEST_DIR/all_tasks"
+case " $* " in
+  *'linear_issue_id:DEVOPS-42'*' export '*) echo '[{"uuid":"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa","linear_issue_id":"DEVOPS-42","status":"pending","tags":["view"]},{"uuid":"bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb","linear_issue_id":"DEVOPS-42","status":"waiting","tags":["triaged"]}]' ;;
+  *' export '*) cat "$TEST_DIR/row" ;;
+  *' _get '*) echo '' ;;
+  *) printf '%s\n' "$*" >> "$TEST_DIR/writes" ;;
+esac
+SH
+    chmod +x "$TEST_DIR/task"
+    run bash scripts/__github_issue_sync.sh --task "$SELECTED_UUID"
+    [ "$status" -eq 0 ]
+    grep -q "${SELECTED_UUID} done" "$TEST_DIR/writes"
+    ! grep -q 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb done' "$TEST_DIR/writes"
+    ! grep -Eq ' import|wait:|start:' "$TEST_DIR/writes"
+    [ "$(wc -l < "$TEST_DIR/curl_count")" -eq 1 ]
+}
+
+@test "accepted selected view creates one native task and retires the source" {
+    selected_fixture
+    jq '.data.issue.state={"name":"Todo","type":"unstarted"}' "$TEST_DIR/reply" > "$TEST_DIR/newreply"
+    mv "$TEST_DIR/newreply" "$TEST_DIR/reply"
+    cat > "$TEST_DIR/task" <<'SH'
+#!/bin/bash
+printf '%s\n' "$*" >> "$TEST_DIR/all_tasks"
+case " $* " in
+  *'linear_issue_id:DEVOPS-42'*' export '*)
+    if [ -f "$TEST_DIR/created" ]; then echo '[{"uuid":"bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb","linear_issue_id":"DEVOPS-42","status":"pending"}]'; else echo '[]'; fi ;;
+  *' export '*) cat "$TEST_DIR/row" ;;
+  *' add '*) touch "$TEST_DIR/created"; echo 'Created task bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb' ;;
+  *' _get '*) echo '' ;;
+  *) printf '%s\n' "$*" >> "$TEST_DIR/writes" ;;
+esac
+SH
+    chmod +x "$TEST_DIR/task"
+    run bash scripts/__github_issue_sync.sh --task "$SELECTED_UUID"
+    [ "$status" -eq 0 ]
+    [ "$(grep -c ' add ' "$TEST_DIR/all_tasks")" -eq 1 ]
+    grep -q "${SELECTED_UUID} done" "$TEST_DIR/writes"
+    [ "$(wc -l < "$TEST_DIR/curl_count")" -eq 1 ]
+}
+
+@test "selected view keyed by issue updates when assigned elsewhere without creating work" {
+    selected_fixture
+    jq '.[0].view_issue=""' "$TEST_DIR/row" > "$TEST_DIR/newrow"
+    mv "$TEST_DIR/newrow" "$TEST_DIR/row"
+    jq '.data.issue.state={"name":"Todo","type":"unstarted"} | .data.issue.assignee.id="someone-else"' "$TEST_DIR/reply" > "$TEST_DIR/newreply"
+    mv "$TEST_DIR/newreply" "$TEST_DIR/reply"
+    run bash scripts/__github_issue_sync.sh --task "$SELECTED_UUID"
+    [ "$status" -eq 0 ]
+    grep -q 'view_state:Todo' "$TEST_DIR/writes"
+    grep -q 'view_issue:DEVOPS-42' "$TEST_DIR/writes"
+    ! grep -Eq ' add | delete| import' "$TEST_DIR/all_tasks"
+}
+
+@test "selected refresh refuses a row changed during the API call" {
+    selected_fixture
+    jq '.[0].view_issue="DEVOPS-99"' "$TEST_DIR/row" > "$TEST_DIR/race_row"
+    run bash scripts/__github_issue_sync.sh --task "$SELECTED_UUID"
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"changed during refresh"* ]]
+    [ ! -e "$TEST_DIR/writes" ]
+}
+
+@test "legacy shortcut UUID argument keeps bulk sync while malformed selected args fail" {
+    selected_fixture
+    export HOME="$TEST_DIR"
+    printf '%s\n' '{"data":{"user":{"assignedIssues":{"nodes":[],"pageInfo":{"hasNextPage":false}}}}}' > "$TEST_DIR/reply"
+    run bash scripts/__github_issue_sync.sh "$SELECTED_UUID"
+    [ "$status" -eq 0 ]
+    grep -q assignedIssues "$TEST_DIR/curl_calls"
+    rm "$TEST_DIR/curl_calls" "$TEST_DIR/curl_count"
+    run bash scripts/__github_issue_sync.sh --task "$SELECTED_UUID" extra
+    [ "$status" -ne 0 ]
+    [ ! -e "$TEST_DIR/curl_calls" ]
+}
+
+@test "selected refresh creates visible native status using isolated real Taskwarrior" {
+    [[ -n "$REAL_TASK_BIN" && -x "$REAL_TASK_BIN" ]] || skip "Taskwarrior is not installed"
+    selected_fixture
+    export HOME="$TEST_DIR/home" TASKDATA="$TEST_DIR/taskdata" TASKRC="$TEST_DIR/taskrc"
+    mkdir -p "$HOME" "$TASKDATA"
+    cat > "$TASKRC" <<CONFIG
+data.location=$TASKDATA
+confirmation=no
+verbose=nothing
+uda.linear_issue_id.type=string
+uda.new_activity.type=date
+uda.cycle.type=numeric
+uda.repo.type=string
+uda.view_key.type=string
+CONFIG
+    cat > "$TEST_DIR/task" <<'SH'
+#!/bin/bash
+exec "$REAL_TASK_BIN" "$@"
+SH
+    chmod +x "$TEST_DIR/task"
+    jq '.data.issue.state={"name":"Todo","type":"unstarted"}' "$TEST_DIR/reply" > "$TEST_DIR/newreply"
+    mv "$TEST_DIR/newreply" "$TEST_DIR/reply"
+    "$REAL_TASK_BIN" rc.hooks=off rc.uda.view_issue.type=string add +view view_key:issue:DEVOPS-42 view_issue:DEVOPS-42 'source row' >/dev/null
+    local source_uuid unrelated_uuid before after
+    source_uuid=$("$REAL_TASK_BIN" rc.hooks=off +view export | jq -r '.[0].uuid')
+    "$REAL_TASK_BIN" rc.hooks=off add +work +triaged linear_issue_id:DEVOPS-99 'unrelated' >/dev/null
+    unrelated_uuid=$("$REAL_TASK_BIN" rc.hooks=off linear_issue_id:DEVOPS-99 export | jq -r '.[0].uuid')
+    "$REAL_TASK_BIN" rc.hooks=off "$unrelated_uuid" start >/dev/null
+    "$REAL_TASK_BIN" rc.hooks=off "$unrelated_uuid" modify wait:2030-01-01 >/dev/null
+    before=$("$REAL_TASK_BIN" rc.hooks=off "$unrelated_uuid" export | jq -c '.[0] | {wait,start,tags,status}')
+    jq -e '.wait != null and .start != null and .status == "pending" and (.tags | index("triaged") != null)' <<<"$before" >/dev/null
+    run bash scripts/__github_issue_sync.sh --task "$source_uuid"
+    [ "$status" -eq 0 ]
+    "$REAL_TASK_BIN" rc.hooks=off rc.uda.linear_status.type=string linear_issue_id:DEVOPS-42 export | jq -e 'length == 1 and .[0].linear_status == "Todo" and (.[0].tags | index("work") != null)' >/dev/null
+    "$REAL_TASK_BIN" rc.hooks=off "$source_uuid" export | jq -e '.[0].status == "completed"' >/dev/null
+    after=$("$REAL_TASK_BIN" rc.hooks=off "$unrelated_uuid" export | jq -c '.[0] | {wait,start,tags,status}')
+    [ "$before" = "$after" ]
+    [ "$(wc -l < "$TEST_DIR/curl_count")" -eq 1 ]
+}
+
+@test "selected native refresh writes status for Triage and another assignee without creating work" {
+    selected_fixture
+    jq '.[0] |= (del(.view_key,.view_issue) | .linear_issue_id="DEVOPS-42" | .tags=["triaged"])' "$TEST_DIR/row" > "$TEST_DIR/newrow"
+    mv "$TEST_DIR/newrow" "$TEST_DIR/row"
+    run bash scripts/__github_issue_sync.sh --task "$SELECTED_UUID"
+    [ "$status" -eq 0 ]
+    grep -q "${SELECTED_UUID} linear_status:Triage" "$TEST_DIR/writes"
+    ! grep -Eq 'mutation|assignedIssues' "$TEST_DIR/curl_calls"
+    ! grep -Eq ' add | delete| done| import' "$TEST_DIR/all_tasks"
+    rm "$TEST_DIR/writes" "$TEST_DIR/all_tasks" "$TEST_DIR/curl_calls" "$TEST_DIR/curl_count"
+    jq '.data.issue.state={"name":"Todo","type":"unstarted"} | .data.issue.assignee.id="someone-else"' "$TEST_DIR/reply" > "$TEST_DIR/newreply"
+    mv "$TEST_DIR/newreply" "$TEST_DIR/reply"
+    run bash scripts/__github_issue_sync.sh --task "$SELECTED_UUID"
+    [ "$status" -eq 0 ]
+    grep -q "${SELECTED_UUID} linear_status:Todo" "$TEST_DIR/writes"
+    ! grep -Eq 'mutation|assignedIssues' "$TEST_DIR/curl_calls"
+    ! grep -Eq ' add | delete| done| import' "$TEST_DIR/all_tasks"
 }

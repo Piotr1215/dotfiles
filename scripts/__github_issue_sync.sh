@@ -45,6 +45,12 @@ TASK_LIVE_FILTER=( '(status:pending or status:waiting)' )
 # so argument positions that tests match on stay put. `_get` takes only DOM
 # references and a uuid reference ignores context, so it passes through.
 task() {
+    if [[ "${SELECTED_SYNC:-0}" == 1 ]]; then
+        command task rc.hooks=off rc.context=none rc.uda.linear_status.type=string \
+            rc.uda.view_kind.type=string rc.uda.view_title.type=string \
+            rc.uda.view_state.type=string rc.uda.view_issue.type=string "$@"
+        return
+    fi
     if (($# == 0)) || [[ "$1" == _get ]]; then
         command task "$@"
         return
@@ -157,6 +163,51 @@ validate_env_vars() {
 # PHASE 2: DATA FETCHING
 # ====================================================
 
+# Shape a Linear feed for the common Taskwarrior sync path.
+normalize_linear_issues() {
+    jq -c '
+
+        ([.data.user.assignedIssues.nodes[].attachments.nodes[]?
+          | select(.sourceType == "slack")
+          | select(.metadata.channelName != null)
+          | {key: (.metadata.channelId // (.url | capture("/archives/(?<c>[A-Za-z0-9]+)/") | .c)),
+             value: .metadata.channelName}]
+         | from_entries) as $channels
+        | .data.user.assignedIssues.nodes[]
+        | ([(.history.nodes[]? | {at: .createdAt, who: .actor.id}),
+            (.comments.nodes[]? | {at: .createdAt, who: .user.id})]
+           | map(select(.at != null and .who != null))
+           | sort_by(.at) | last) as $last_actor
+        | {
+            id: .id,
+            description: .title,
+            repository: "linear",
+            html_url: .url,
+            issue_id: (.url | split("/") | .[-2]),
+            project: .project.name,
+            status: .state.name,
+            due_date: .dueDate,
+            priority: .priority,
+            updated_at: .updatedAt,
+            cycle_number: .cycle.number,
+            last_actor_id: $last_actor.who,
+            last_actor_at: $last_actor.at,
+            pr_url: ([.attachments.nodes[]? | select(.url != null and (.url | test("github.com.*/pull/"))) | .url] | .[0] // null),
+            slack_urls: ([.attachments.nodes[]?
+                          | select(.url != null and (.url | test("//[^/]*slack\\.com/archives/")))
+                          | . as $a
+                          | ($a.url | capture("/archives/(?<c>[A-Za-z0-9]+)/") | .c) as $cid
+                          | (($a.metadata.channelName // $channels[$cid]) // null) as $cname
+                          | if $cname then "\($a.url) # #\($cname)" else $a.url end]
+                         | unique),
+            link_urls: ([.attachments.nodes[]?
+                         | select(.url != null and (.url | test("^https?://")))
+                         | select((.sourceType // "") | test("^(slack|github)$") | not)
+                         | select(.url | test("^https?://uploads\\.linear\\.app/") | not)
+                         | .url] | unique)
+        }' <<<"$1"
+}
+
 # Retrieve and format Linear issues with enhanced error handling
 get_linear_issues() {
     local response
@@ -252,46 +303,7 @@ get_linear_issues() {
     # carries an empty metadata object. The gap is recoverable because the same
     # channel appears named on another issue, so pooling the feed resolves every
     # channel without needing a Slack token.
-    if ! issues=$(echo "$content" | jq -c '
-        ([.data.user.assignedIssues.nodes[].attachments.nodes[]?
-          | select(.sourceType == "slack")
-          | select(.metadata.channelName != null)
-          | {key: (.metadata.channelId // (.url | capture("/archives/(?<c>[A-Za-z0-9]+)/") | .c)),
-             value: .metadata.channelName}]
-         | from_entries) as $channels
-        | .data.user.assignedIssues.nodes[]
-        | ([(.history.nodes[]? | {at: .createdAt, who: .actor.id}),
-            (.comments.nodes[]? | {at: .createdAt, who: .user.id})]
-           | map(select(.at != null and .who != null))
-           | sort_by(.at) | last) as $last_actor
-        | {
-            id: .id,
-            description: .title,
-            repository: "linear",
-            html_url: .url,
-            issue_id: (.url | split("/") | .[-2]),
-            project: .project.name,
-            status: .state.name,
-            due_date: .dueDate,
-            priority: .priority,
-            updated_at: .updatedAt,
-            cycle_number: .cycle.number,
-            last_actor_id: $last_actor.who,
-            last_actor_at: $last_actor.at,
-            pr_url: ([.attachments.nodes[]? | select(.url != null and (.url | test("github.com.*/pull/"))) | .url] | .[0] // null),
-            slack_urls: ([.attachments.nodes[]?
-                          | select(.url != null and (.url | test("//[^/]*slack\\.com/archives/")))
-                          | . as $a
-                          | ($a.url | capture("/archives/(?<c>[A-Za-z0-9]+)/") | .c) as $cid
-                          | (($a.metadata.channelName // $channels[$cid]) // null) as $cname
-                          | if $cname then "\($a.url) # #\($cname)" else $a.url end]
-                         | unique),
-            link_urls: ([.attachments.nodes[]?
-                         | select(.url != null and (.url | test("^https?://")))
-                         | select((.sourceType // "") | test("^(slack|github)$") | not)
-                         | select(.url | test("^https?://uploads\\.linear\\.app/") | not)
-                         | .url] | unique)
-        }' 2>/dev/null); then
+    if ! issues=$(normalize_linear_issues "$content"); then
         echo "Error: Failed to parse Linear issues" >&2
         rm -f "$temp_response"
         return 1
@@ -1178,9 +1190,11 @@ create_and_annotate_task() {
     
     local task_uuid
     # Don't add +linear tag - it's redundant with linear_issue_id field
-    local repo_tag=""
-    [[ "$issue_repo_name" != "linear" ]] && repo_tag="+$issue_repo_name"
-    task_uuid=$(create_task "$issue_description" $repo_tag $fresh_tag "project:$project_name")
+    local tag_args=()
+    [[ "$issue_repo_name" != "linear" ]] && tag_args+=("+$issue_repo_name")
+    [[ -n "$fresh_tag" ]] && tag_args+=("$fresh_tag")
+    [[ "${SELECTED_SYNC:-0}" == 1 ]] && tag_args+=("+work")
+    task_uuid=$(create_task "$issue_description" "${tag_args[@]}" "project:$project_name")
     
     if [[ -n "$task_uuid" ]]; then
         annotate_task "$task_uuid" "$issue_url"
@@ -1412,7 +1426,7 @@ sync_to_taskwarrior() {
     # triage pass has run: move_triage_issue_to_todo moves it to Todo, and it
     # syncs as Todo on this same run.
     if [[ "$issue_status" == "Triage" ]]; then
-        if move_triage_issue_to_todo "$issue_number"; then
+        if [[ "${SELECTED_SYNC:-0}" != 1 ]] && move_triage_issue_to_todo "$issue_number"; then
             issue_status="Todo"
         else
             log "Issue $issue_number is in Triage status - excluding from sync (not created, not updated, not triaged)"
@@ -1422,12 +1436,14 @@ sync_to_taskwarrior() {
 
     # First, try to find task by linear_issue_id if available
     local existing_task_uuid=""
-    if [[ -n "$issue_number" ]]; then
+    if [[ -n "${SELECTED_NATIVE_UUID:-}" ]]; then
+        existing_task_uuid="$SELECTED_NATIVE_UUID"
+    elif [[ "${SELECTED_SYNC:-0}" != 1 && -n "$issue_number" ]]; then
         existing_task_uuid=$(task "linear_issue_id:$issue_number" "${TASK_LIVE_FILTER[@]}" export 2>/dev/null | jq -r '.[0].uuid' 2>/dev/null || echo "")
     fi
 
     # If not found by linear_issue_id, try by description
-    if [[ -z "$existing_task_uuid" ]]; then
+    if [[ -z "$existing_task_uuid" && "${SELECTED_SYNC:-0}" != 1 ]]; then
         existing_task_uuid=$(get_task_id_by_description "$issue_description")
     fi
     
@@ -1793,6 +1809,77 @@ find_and_clean_reassigned_tasks() {
 # PHASE 6: MAIN EXECUTION
 # ====================================================
 
+# Refresh one exact row without running feed cleanup or writing to Linear.
+selected_sync() {
+    local uuid="$1" row current_row row_identity current_identity key response code content issue normalized state assignee is_view native
+    [[ "$uuid" =~ ^[[:xdigit:]]{8}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{12}$ ]] || { echo "Invalid task UUID" >&2; return 1; }
+    SELECTED_SYNC=1
+    row=$(task "$uuid" export) || return 1
+    row=$(jq -ce --arg uuid "$uuid" 'if type == "array" and length == 1 and .[0].uuid == $uuid then .[0] else error("task not found") end' <<<"$row") || return 1
+    if jq -e '((.tags // []) | index("view")) != null and ((.view_key // "") | startswith("issue:") | not)' <<<"$row" >/dev/null; then
+        echo "Selected view row is not an issue" >&2
+        return 1
+    fi
+    row_identity=$(jq -ce 'select(.status == "pending" or .status == "waiting") | {uuid,status,linear_issue_id,view_issue,view_key,is_view: ((.tags // []) | index("view") != null)}' <<<"$row") || { echo "Selected task is not live" >&2; return 1; }
+    key=$(jq -r '[.linear_issue_id, .view_issue] | map(select(type == "string" and length > 0)) | .[0] // empty' <<<"$row")
+    if [[ -z "$key" ]]; then
+        key=$(jq -r 'if ((.tags // []) | index("view")) and ((.view_key // "") | startswith("issue:")) then .view_key[6:] else empty end' <<<"$row")
+    fi
+    if jq -e '((.tags // []) | index("view")) != null' <<<"$row" >/dev/null && [[ "$(jq -r '.view_key' <<<"$row")" != "issue:$key" ]]; then
+        echo "Selected view issue identity does not match its key" >&2
+        return 1
+    fi
+    [[ "$key" =~ ^[A-Za-z][A-Za-z0-9]*-[0-9]+$ ]] || { echo "Selected row has no valid Linear issue" >&2; return 1; }
+    validate_env_vars
+    local payload
+    payload=$(jq -n --arg id "$key" '{query:"query($id: String!) { issue(id: $id) { id identifier title url state { name type } assignee { id } project { name } dueDate priority updatedAt cycle { number } history(first: 1) { nodes { createdAt actor { id } } } comments(first: 1) { nodes { createdAt user { id } } } attachments { nodes { url sourceType metadata } } } }", variables:{id:$id}}')
+    response=$(curl -s -w '\n%{http_code}' --connect-timeout 10 --max-time 30 -X POST -H 'Content-Type: application/json' -H "Authorization: ${LINEAR_API_KEY}" --data "$payload" https://api.linear.app/graphql) || { echo "Linear request failed" >&2; return 1; }
+    code=${response##*$'\n'}
+    content=${response%$'\n'*}
+    [[ "$code" == 200 ]] || { echo "Linear returned HTTP $code" >&2; return 1; }
+    issue=$(jq -ce --arg key "$key" 'select(type == "object" and ((.errors // []) | length == 0)) | .data.issue | select(type == "object" and .identifier == $key and (.id | type == "string" and length > 0) and (.title | type == "string") and (.url | type == "string" and length > 0) and (.state.name | type == "string" and length > 0) and (.state.type | type == "string" and length > 0) and (has("assignee")) and (.assignee == null or (.assignee.id | type == "string" and length > 0)))' <<<"$content") || { echo "Invalid Linear issue response" >&2; return 1; }
+    # The common normalizer expects a feed; use the authoritative identifier instead
+    # of deriving it from a potentially changed URL shape.
+    normalized=$(jq -cn --argjson issue "$issue" '{data:{user:{assignedIssues:{nodes:[$issue]}}}}' | { read -r feed; normalize_linear_issues "$feed"; } | jq -c --arg key "$key" '.issue_id = $key') || return 1
+    # The selection may have been changed or retired while the request was in flight.
+    current_row=$(task "$uuid" export) || return 1
+    current_identity=$(jq -ce --arg uuid "$uuid" 'if type == "array" and length == 1 and .[0].uuid == $uuid then .[0] else error("task not found") end | select(.status == "pending" or .status == "waiting") | {uuid,status,linear_issue_id,view_issue,view_key,is_view: ((.tags // []) | index("view") != null)}' <<<"$current_row") || { echo "Selected task is no longer live" >&2; return 1; }
+    [[ "$row_identity" == "$current_identity" ]] || { echo "Selected task changed during refresh" >&2; return 1; }
+    state=$(jq -r '.state.name' <<<"$issue")
+    assignee=$(jq -r '.assignee.id // empty' <<<"$issue")
+    is_view=$(jq -r '((.tags // []) | index("view")) != null and (.view_key // "") == ("issue:" + $key)' --arg key "$key" <<<"$row")
+    if [[ "$is_view" == true ]]; then
+        local title description
+        title=$(jq -r '.title' <<<"$issue" | tr '\n\r' '  ' | sed 's/  */ /g; s/^ //; s/ $//')
+        description="no task · $key $state · $title"
+        task rc.confirmation=no modify "$uuid" "description:$description" "view_kind:issue" "view_title:${title:0:200}" "view_state:$state" "view_issue:$key"
+    else
+        task rc.confirmation=no modify "$uuid" "linear_status:$state"
+    fi
+    if [[ "$(jq -r '.state.type' <<<"$issue")" =~ ^(completed|canceled)$ ]]; then
+        if [[ "$is_view" == true ]]; then task rc.confirmation=no "$uuid" "done"; else handle_task_completion "$uuid" "$(jq -r '.description' <<<"$row")" complete; fi
+        return
+    fi
+    if [[ "$assignee" != "$LINEAR_USER_ID" || "$state" == Triage || "$(jq -r '.state.type' <<<"$issue")" == triage ]]; then
+        log "Issue $key remains in $state or is assigned elsewhere; retained selected row"
+        return 0
+    fi
+    SYNC_NEW_ISSUE_IDS=()
+    if [[ "$is_view" != true ]]; then
+        SELECTED_NATIVE_UUID="$uuid"
+    else
+        SELECTED_NATIVE_UUID=$(task "linear_issue_id:$key" "${TASK_LIVE_FILTER[@]}" export | jq -r --arg key "$key" '[.[] | select(.linear_issue_id == $key and (.status == "pending" or .status == "waiting") and ((.tags // []) | index("view") | not))][0].uuid // empty') || return 1
+    fi
+    sync_to_taskwarrior "$normalized" || return
+    if [[ "$is_view" == true ]]; then
+        native=$(task "linear_issue_id:$key" "${TASK_LIVE_FILTER[@]}" export | jq -r --arg key "$key" '[.[] | select(.linear_issue_id == $key and (.status == "pending" or .status == "waiting") and ((.tags // []) | index("view") | not))][0].uuid // empty')
+        if [[ -n "$native" && "$native" != "$uuid" ]]; then
+            task rc.confirmation=no modify "$native" "linear_status:$state"
+            task rc.confirmation=no "$uuid" "done"
+        fi
+    fi
+}
+
 # Main function to orchestrate the synchronization
 main() {
     # Phase 1: Environment and Setup
@@ -1872,8 +1959,20 @@ main() {
     fi
 }
 
-# Execute the main function or the detached prep worker.
-if [[ "${ISSUE_PREP_SYNC_WORKER:-0}" == 1 ]]; then
+# Execute the main function or the detached prep worker. Legacy shortcuts pass
+# selected UUIDs to bulk sync; --task is the explicit single-issue contract.
+if [[ "$1" == --task ]]; then
+    if [[ $# -ne 2 ]]; then echo "Usage: $0 [--task UUID]" >&2; exit 1; fi
+    selected_sync "$2"
+elif [[ $# -gt 0 ]]; then
+    for arg in "$@"; do
+        if [[ ! "$arg" =~ ^[[:xdigit:]]{8}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{12}$ ]]; then
+            echo "Usage: $0 [--task UUID]" >&2
+            exit 1
+        fi
+    done
+    main
+elif [[ "${ISSUE_PREP_SYNC_WORKER:-0}" == 1 ]]; then
     run_issue_prep_sync_worker
 else
     main
