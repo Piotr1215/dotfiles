@@ -5,7 +5,7 @@
 -- <leader>mh picks a heading and <CR> follows the link under the cursor
 -- (links.lua). It has no gutter or spell marks and is read-only, and it
 -- refreshes when the source changes. <leader>mr, <C-p> and <C-n> swap the
--- window between the file and the copy at the matching line and screen height.
+-- window between the file and the copy at the same line, column and height.
 -- q returns to the file and closes the copy.
 local copy = require "markdown_reader.copy"
 local style = require "markdown_reader.style"
@@ -74,7 +74,7 @@ function M.refresh(buf)
 end
 
 -- Put `row` of window `w`'s buffer at screen line `winline` (0 is the top).
-local function place(w, row, winline)
+local function place(w, row, winline, col)
   local buf = vim.api.nvim_win_get_buf(w)
   row = math.max(1, math.min(row, vim.api.nvim_buf_line_count(buf)))
   local top = row
@@ -86,7 +86,7 @@ local function place(w, row, winline)
     top = top - 1
   end
   vim.api.nvim_win_call(w, function()
-    vim.fn.winrestview { lnum = row, col = 0, topline = top }
+    vim.fn.winrestview { lnum = row, col = col or 0, curswant = col or 0, topline = top }
   end)
 end
 
@@ -121,8 +121,9 @@ follow = function(src, buf)
     end,
   })
   -- Swapping a window between the two (<leader>mr, <C-p>, <C-n>) lands on
-  -- the matching line at the same height: leaving one records where the other
-  -- should show, entering the other applies it.
+  -- the matching line and column at the same height: leaving one records
+  -- where the other should show, entering the other applies it. The copy
+  -- holds the source text line for line, so the column carries over as is.
   local handoff
   for _, b in ipairs { src, buf } do
     local other = b == src and buf or src
@@ -130,8 +131,8 @@ follow = function(src, buf)
       group = group,
       buffer = b,
       callback = function()
-        local row = matching(b, buf, vim.api.nvim_win_get_cursor(0)[1])
-        handoff = { to = other, row = row, winline = vim.fn.winline() - 1 }
+        local pos = vim.api.nvim_win_get_cursor(0)
+        handoff = { to = other, row = matching(b, buf, pos[1]), col = pos[2], winline = vim.fn.winline() - 1 }
       end,
     })
     -- BufWinEnter, not BufEnter: the window restores its own last cursor for
@@ -141,7 +142,7 @@ follow = function(src, buf)
       buffer = b,
       callback = function()
         if handoff and handoff.to == b then
-          place(vim.api.nvim_get_current_win(), handoff.row, handoff.winline)
+          place(vim.api.nvim_get_current_win(), handoff.row, handoff.winline, handoff.col)
         end
         handoff = nil
       end,
@@ -163,9 +164,10 @@ end
 -- buffer instead, the copy opens at its top without visiting the source.
 function M.enter(src)
   local win = vim.api.nvim_get_current_win()
-  local row, winline = 1, 0
+  local row, col, winline = 1, 0, 0
   if not src then
-    src, row = vim.api.nvim_get_current_buf(), vim.api.nvim_win_get_cursor(win)[1]
+    local pos = vim.api.nvim_win_get_cursor(win)
+    src, row, col = vim.api.nvim_get_current_buf(), pos[1], pos[2]
     winline = vim.fn.winline() - 1
   end
   local lines, map = copy.spaced_lines(vim.api.nvim_buf_get_lines(src, 0, -1, false))
@@ -188,7 +190,7 @@ function M.enter(src)
   for name, value in pairs(reading_values) do
     vim.api.nvim_set_option_value(name, value, { scope = "local", win = win })
   end
-  place(win, map[row] or 1, winline)
+  place(win, map[row] or 1, winline, col)
 
   local opts = { buffer = buf, silent = true, nowait = true }
   vim.keymap.set("n", "j", "gj", opts)
@@ -211,10 +213,10 @@ function M.leave()
   if not src then
     return
   end
-  local back = copy.source_row(vim.b[buf].markdown_reader_map or {}, vim.api.nvim_win_get_cursor(win)[1])
+  -- Switching the window hands the line, column and height over to the
+  -- source (see follow); then the copy goes.
   if vim.api.nvim_buf_is_valid(src) then
     vim.api.nvim_win_set_buf(win, src)
-    pcall(vim.api.nvim_win_set_cursor, win, { back, 0 })
   end
   vim.api.nvim_buf_delete(buf, { force = true })
 end
