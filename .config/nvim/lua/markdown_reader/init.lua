@@ -135,16 +135,22 @@ follow = function(src, buf)
         handoff = { to = other, row = matching(b, buf, pos[1]), col = pos[2], winline = vim.fn.winline() - 1 }
       end,
     })
-    -- BufWinEnter, not BufEnter: the window restores its own last cursor for
-    -- the buffer between the two, which would undo the placement.
+    -- Placed once the switch has finished: the window restores the buffer's
+    -- last cursor after BufEnter, and nvim-markdown's BufWinEnter loadview
+    -- restores a saved view after any handler registered before it.
     vim.api.nvim_create_autocmd("BufWinEnter", {
       group = group,
       buffer = b,
       callback = function()
-        if handoff and handoff.to == b then
-          place(vim.api.nvim_get_current_win(), handoff.row, handoff.winline, handoff.col)
-        end
+        local h, win = handoff, vim.api.nvim_get_current_win()
         handoff = nil
+        if h and h.to == b then
+          vim.schedule(function()
+            if vim.api.nvim_win_is_valid(win) and vim.api.nvim_win_get_buf(win) == b then
+              place(win, h.row, h.winline, h.col)
+            end
+          end)
+        end
       end,
     })
   end
