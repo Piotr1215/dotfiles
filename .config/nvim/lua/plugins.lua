@@ -351,7 +351,13 @@ return require("lazy").setup({
     ft = { "markdown" },
     dependencies = { "nvim-treesitter/nvim-treesitter", "nvim-tree/nvim-web-devicons" },
     -- No html or latex treesitter parsers here, so skip those renderers.
-    opts = { html = { enabled = false }, latex = { enabled = false } },
+    -- Headings and code blocks sized to their text, not the whole window.
+    opts = {
+      html = { enabled = false },
+      latex = { enabled = false },
+      heading = { sign = false, position = "inline", width = "block", left_pad = 1, right_pad = 2 },
+      code = { sign = false, width = "block", left_pad = 2, right_pad = 4, border = "thin" },
+    },
   },
   "weirongxu/plantuml-previewer.vim",
   "aklt/plantuml-syntax",

@@ -100,6 +100,10 @@ vim.api.nvim_create_autocmd("FileType", {
     -- Keep textwidth for manual `gq` reflow, but never auto-insert hard line
     -- breaks while typing (drop 't' = auto-wrap text, 'a' = auto-format paras).
     vim.opt_local.formatoptions:remove { "t", "a" }
+    -- Long lines wrap on word boundaries, and a wrapped list item hangs under its text.
+    vim.opt_local.linebreak = true
+    vim.opt_local.breakindent = true
+    vim.opt_local.breakindentopt = "list:-1"
     vim.opt_local.spell = true
     vim.opt_local.spelllang = "en_us"
     vim.opt_local.expandtab = true
