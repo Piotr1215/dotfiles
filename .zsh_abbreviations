@@ -1,16 +1,24 @@
 # Define the abbreviation
 typeset -A abbrevs
 abbrevs=(
-    "_spo" '__sponge_expand'
-    "_bak" '__backup_expand'
-    "_ind" '__into_new_dir'
-    "_xrg" '__xargs_expand'
-    "_chmo" '__chmod_file'
-    "?rep" '__global_replace'
-    "?fil" '__file_replace'
-    "?filt" '__temp_file_replace'
-    "_pad" '__pueue_add_expand'
+    "_spo" '__sponge_expand'        # pipe into sponge on the last arg
+    "_bak" '__backup_expand'        # cp -a the last arg to a dated .bak
+    "_ind" '__into_new_dir'         # mkdir -p the last arg first
+    "_xrg" '__xargs_expand'         # turn the last word into xargs -I {}
+    "_chmo" '__chmod_file'          # chmod +x a file picked in fzf
+    "?rep" '__global_replace'       # rerun last command with :gs/NAME/
+    "?fil" '__file_replace'         # replace NAME with a picked file
+    "?filt" '__temp_file_replace'   # replace NAME with a picked /tmp file
+    "_pad" '__pueue_add_expand'     # wrap the line in pueue add
+    "_last" '__last_arg_expand'     # last arg of the previous command
 )
+
+# Insert the last word of the previous command (like Alt+.)
+__last_arg_expand() {
+    local prev=$(fc -ln -1)
+    local words=("${(z)prev}")
+    LBUFFER+="${words[-1]}"
+}
 
 __pueue_add_expand() {
     # Remove the _pad trigger and any trailing space
