@@ -111,15 +111,6 @@ return require("lazy").setup({
     },
   },
   "MunifTanjim/nui.nvim",
-  {
-    -- Centers ui2's command line while typing (ui2 is enabled in init.lua).
-    -- Fork: keeps 'cmdheight' as set and anchors the cmp menu under it.
-    "Piotr1215/tiny-cmdline.nvim",
-    dev = true,
-    init = function()
-      vim.g.tiny_cmdline = { manage_cmdheight = false }
-    end,
-  },
   "stevearc/dressing.nvim",
   "tyru/open-browser.vim",
   "jbyuki/one-small-step-for-vimkind",
