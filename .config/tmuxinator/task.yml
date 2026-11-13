@@ -81,5 +81,5 @@ windows:
       panes:
         # command: the viddy function in .zsh_functions wraps its arguments
         # as the watched command, so -n became the command name.
-        - command viddy -n 10s -t '~/.claude/scripts/__kendra_fn.py status --rows 49' ';' '~/.claude/scripts/__gordon_board.py status --rows 9'
+        - command viddy -n 10s -t '~/.claude/scripts/__kendra_fn.py dashboard --rows 58'
         - NCURSES_NO_UTF8_ACS=1 tui -r backlog

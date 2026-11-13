@@ -202,7 +202,7 @@ alias ccstatus="~/.claude/scripts/__cockpit_board.sh"
 alias handoffs="~/.claude/scripts/__focus.py walk"
 
 # AI cost and operations dashboard: Kendra by hour, Claude-wide cost watch, Gordon tokens; 10s refresh
-alias aicost="command viddy -n 10s -t '~/.claude/scripts/__kendra_fn.py status --rows 80' ';' '~/.claude/scripts/__gordon_board.py status --rows 30'"
+alias aicost="command viddy -n 10s -t '~/.claude/scripts/__kendra_fn.py dashboard'"
 
 # desktop notification history (durable log kept by notification-logger.service)
 # not = full log, noti = recent, notif = follow live. GNOME popups vanish on click; this is the copyable record.
