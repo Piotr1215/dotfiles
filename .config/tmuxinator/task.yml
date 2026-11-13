@@ -71,14 +71,13 @@ windows:
         # Gordon picks the band rows, so Piotr sees the PRs agents work on.
         # GORDON_PINS_SCOPE=ai: Gordon keeps up to 3 pins of its own beside his.
         - cd "$HOME/loft/gordon" && MCP_TIMEOUT=120000 PR_WATCH_SCOPE=ai GORDON_PINS_SCOPE=ai __claude_with_monitor.sh --system-prompt-file ~/.claude/system-prompts/triage-agent-system-prompt.md --model "$(~/.claude/scripts/__models.sh get gordon)" -- "Start your shift. Do the mandatory recovery your session start names, then keep going."
-  # Kendra takes Gordon's routine event stream (popups, auto-triage nudges,
-  # task-closed notices, PR movement) and registers on the bus as intake, which
-  # also names the pane. While this window is down everything reaches Gordon as
-  # before. __intake_launch.sh picks her runtime at launch from the work
-  # account's Claude load: Claude (the `intake` role in ~/.claude/models.env)
-  # when normal, Codex Terra when tight or red and the Codex login answers.
+  # Kendra is a function, not a session (Piotr1215/claude#230): kendra-fn.timer
+  # judges everything sent to the bus name intake every 5 minutes in one fresh
+  # headless call per batch and applies the verdicts with scripts. This pane
+  # only watches her: mode, presence, next run, events, cost, and the latest
+  # verdicts. The old session launcher, __intake_launch.sh, is kept for rollback.
   - kendra:
       layout: '{"V":2,"L":{"t":"v","w":255,"h":61,"x":0,"y":0,"c":[{"t":"p","w":255,"h":41,"x":0,"y":0,"l":0,"i":1,"I":"%2"},{"t":"p","w":255,"h":19,"x":0,"y":42,"a":true,"i":2,"I":"%23"}]}}'
       panes:
-        - __intake_launch.sh
+        - viddy -n 10s -t '~/.claude/scripts/__kendra_fn.py status --rows 34'
         - NCURSES_NO_UTF8_ACS=1 tui -r backlog
