@@ -1,6 +1,9 @@
 # Define the abbreviation
 typeset -A abbrevs
 abbrevs=(
+    # The "# description" comment on each line is what the ;;abbr picker shows.
+    ";;abbr" '__abbrev_picker'      # pick an abbreviation in fzf
+    "_last" '__last_arg_expand'     # last arg of the previous command
     "_spo" '__sponge_expand'        # pipe into sponge on the last arg
     "_bak" '__backup_expand'        # cp -a the last arg to a dated .bak
     "_ind" '__into_new_dir'         # mkdir -p the last arg first
@@ -10,8 +13,31 @@ abbrevs=(
     "?fil" '__file_replace'         # replace NAME with a picked file
     "?filt" '__temp_file_replace'   # replace NAME with a picked /tmp file
     "_pad" '__pueue_add_expand'     # wrap the line in pueue add
-    "_last" '__last_arg_expand'     # last arg of the previous command
 )
+
+# Pick an abbreviation in fzf and insert its trigger (space then expands it).
+# Ctrl-E opens this file at the picked entry and reloads it on exit.
+__abbrev_picker() {
+    local src=~/.zsh_abbreviations out key sel trigger line
+    out=$(awk -F'#' '
+        /^abbrevs=\(/ { on=1; next }
+        on && /^\)/   { exit }
+        on && match($1, /"[^"]+"/) {
+            t=substr($1, RSTART+1, RLENGTH-2); d=$2; sub(/^[ \t]+/,"",d)
+            if (t != ";;abbr") printf "%-7s %s\n", t, d
+        }' "$src" | fzf --height 40% --reverse --prompt 'abbr> ' --tiebreak=index \
+            --expect=ctrl-e --header 'enter: insert · ctrl-e: edit source')
+    key=${out%%$'\n'*}
+    sel=${${out#*$'\n'}%% *}
+    if [[ "$key" == ctrl-e ]]; then
+        line=$(grep -nF "\"$sel\"" "$src" | head -1 | cut -d: -f1)
+        ${EDITOR:-nvim} +${line:-1} "$src" </dev/tty
+        source "$src"
+    elif [[ -n "$sel" ]]; then
+        LBUFFER+="$sel"
+    fi
+    zle reset-prompt
+}
 
 # Insert the last word of the previous command (like Alt+.)
 __last_arg_expand() {
@@ -164,11 +190,11 @@ __backup_expand() {
 
 expand-abbrev() {
     local MATCH
-    LBUFFER=${LBUFFER%%(#m)[?_a-zA-Z0-9]#}
+    LBUFFER=${LBUFFER%%(#m)[?;_a-zA-Z0-9]#}
     if [[ -n "${abbrevs[$MATCH]}" ]]; then
         ${abbrevs[$MATCH]}
-        # Don't add space for ?rep and ?fil abbreviations
-        if [[ "$MATCH" != "?rep" && "$MATCH" != "?fil" ]]; then
+        # No space after ?rep, ?fil and the ;;abbr picker
+        if [[ "$MATCH" != "?rep" && "$MATCH" != "?fil" && "$MATCH" != ";;abbr" ]]; then
             zle self-insert
         fi
     else
