@@ -46,4 +46,17 @@ function M.relocate(old, row, new)
   return math.max(1, math.min(target, #new))
 end
 
+-- Source row shown at `row` of the copy, given the source-to-copy `map`. A
+-- spacer line added between list items belongs to the item above it.
+function M.source_row(map, row)
+  local back = 1
+  for i, copy_row in ipairs(map) do
+    if copy_row > row then
+      break
+    end
+    back = i
+  end
+  return back
+end
+
 return M

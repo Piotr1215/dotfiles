@@ -4,8 +4,9 @@
 -- and acronyms, always rendered (style.lua). <leader>mo picks a link,
 -- <leader>mh picks a heading and <CR> follows the link under the cursor
 -- (links.lua). It has no gutter or spell marks and is read-only, and it
--- refreshes when the source changes. q or <leader>mr returns to the source at
--- the matching line and closes the copy.
+-- refreshes when the source changes. With the source in a split beside it,
+-- moving the cursor in either one moves the other to the matching line. q or
+-- <leader>mr returns to the source at the matching line and closes the copy.
 local copy = require "markdown_reader.copy"
 local style = require "markdown_reader.style"
 local links = require "markdown_reader.links"
@@ -72,9 +73,43 @@ function M.refresh(buf)
   end
 end
 
+-- Put `row` of `buf` at screen line `winline` in every other window of this
+-- tab showing `buf`, so a source split and its reading copy scroll together.
+local function show_row(buf, row, winline)
+  local current = vim.api.nvim_get_current_win()
+  for _, w in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+    if w ~= current and vim.api.nvim_win_get_buf(w) == buf then
+      row = math.max(1, math.min(row, vim.api.nvim_buf_line_count(buf)))
+      local top = row
+      while top > 1 do
+        local above = vim.api.nvim_win_text_height(w, { start_row = top - 2, end_row = row - 2 }).all
+        if above > winline then
+          break
+        end
+        top = top - 1
+      end
+      vim.api.nvim_win_call(w, function()
+        vim.fn.winrestview { lnum = row, col = 0, topline = top }
+      end)
+    end
+  end
+end
+
+-- Mirror the cursor of the current window, on `from`, into windows on `to`.
+local function mirror(from, to, buf)
+  local map = vim.b[buf].markdown_reader_map
+  if not (map and vim.api.nvim_buf_is_valid(to)) then
+    return
+  end
+  local row = vim.api.nvim_win_get_cursor(0)[1]
+  row = from == buf and copy.source_row(map, row) or (map[row] or row)
+  show_row(to, row, vim.fn.winline() - 1)
+end
+
 -- Keep the copy in step with its source: edits in another window, saves, and
 -- changes on disk (an agent writing the file) all refresh it. Entering the copy
 -- runs :checktime first, so a file changed on disk is reloaded into the source.
+-- With both open side by side, moving in one moves the other.
 follow = function(src, buf)
   local group = vim.api.nvim_create_augroup("markdown_reader_" .. buf, { clear = true })
   vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI", "BufReadPost", "FileChangedShellPost" }, {
@@ -93,6 +128,20 @@ follow = function(src, buf)
       if vim.api.nvim_buf_is_valid(src) and vim.api.nvim_buf_get_name(src) ~= "" then
         vim.cmd("silent! checktime " .. src)
       end
+    end,
+  })
+  vim.api.nvim_create_autocmd({ "CursorMoved", "CursorMovedI" }, {
+    group = group,
+    buffer = src,
+    callback = function()
+      mirror(src, buf, buf)
+    end,
+  })
+  vim.api.nvim_create_autocmd("CursorMoved", {
+    group = group,
+    buffer = buf,
+    callback = function()
+      mirror(buf, src, buf)
     end,
   })
   vim.api.nvim_create_autocmd("BufWipeout", {
@@ -158,14 +207,7 @@ function M.leave()
   if not src then
     return
   end
-  local map = vim.b[buf].markdown_reader_map or {}
-  local row, back = vim.api.nvim_win_get_cursor(win)[1], 1
-  for i, copy_row in ipairs(map) do
-    if copy_row <= row then
-      back = i
-    end
-  end
-
+  local back = copy.source_row(vim.b[buf].markdown_reader_map or {}, vim.api.nvim_win_get_cursor(win)[1])
   if vim.api.nvim_buf_is_valid(src) then
     vim.api.nvim_win_set_buf(win, src)
     pcall(vim.api.nvim_win_set_cursor, win, { back, 0 })

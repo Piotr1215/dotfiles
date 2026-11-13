@@ -50,6 +50,14 @@ check("blank line between list items, none inside code", lines, {
 })
 check("each source line maps to its line in the copy", map, { 1, 2, 4, 6, 8, 9, 10, 11, 12, 13 })
 
+check(
+	"source_row: each copy line maps back, a spacer to the item above",
+	vim.tbl_map(function(row)
+		return reader.source_row(map, row)
+	end, { 1, 2, 3, 4, 5, 13 }),
+	{ 1, 2, 2, 3, 3, 10 }
+)
+
 local plain = { "a", "", "b" }
 check("text without lists is unchanged", (reader.spaced_lines(plain)), plain)
 
