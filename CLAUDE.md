@@ -55,8 +55,8 @@
 - Documentation: Comment above each function explaining purpose
 - Error handling: Use `>&2` for error messages, proper exit codes (exit 1)
 - Tests:
-  - Legacy tests: `_tests.sh` suffix with assertion and cleanup functions
-  - Bats tests: `_tests.bats` suffix with `@test` annotations
+  - Shell tests: `_test.sh` suffix with assertion and cleanup functions (two older files use `_tests.sh`)
+  - Bats tests: `_test.bats` suffix with `@test` annotations
 
 ## Common Patterns
 - Source other scripts with `source ./__script_name.sh`
