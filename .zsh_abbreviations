@@ -13,7 +13,76 @@ abbrevs=(
     "?fil" '__file_replace'         # replace NAME with a picked file
     "?filt" '__temp_file_replace'   # replace NAME with a picked /tmp file
     "_pad" '__pueue_add_expand'     # wrap the line in pueue add
+    "_jq" '__jq_expand'             # pipe output through jq
+    "_br" '__branch_expand'         # insert the current git branch
+    "_dup" '__duplicate_expand'      # duplicate the last argument
+    "_sub" '__substitute_expand'    # wrap the line in command substitution
+    "_for" '__for_expand'           # loop over selected arguments
 )
+
+# Add a jq filter and put the cursor before its initial dot.
+__jq_expand() {
+    local cmd=${LBUFFER% }
+    [[ -n $cmd ]] || return 1
+    local -a words=("${(z)cmd}")
+    if [[ $cmd == curl(|[[:space:]]*) ]]; then
+        local word silent=0
+        for word in "${words[@]:1}"; do
+            [[ $word == '|' || $word == ';' || $word == '&&' || $word == '||' ]] && break
+            [[ $word == --silent || $word == -[^-]#s[^-]# ]] && silent=1
+        done
+        (( silent )) || cmd="curl -s${cmd#curl}"
+    fi
+    LBUFFER="$cmd | jq -r '"
+    RBUFFER=".'$RBUFFER"
+}
+
+# Insert a quoted symbolic branch name, leaving the trigger on failure.
+__branch_expand() {
+    local branch
+    branch=$(command git symbolic-ref --quiet --short HEAD 2>/dev/null) || return 1
+    [[ -n $branch ]] || return 1
+    LBUFFER+=${(q)branch}
+}
+
+# Duplicate the last shell word without evaluating it.
+__duplicate_expand() {
+    local cmd=${LBUFFER% }
+    local -a words=("${(z)cmd}")
+    (( ${#words} >= 2 )) || return 1
+    [[ ${words[-1]} == [0-9]#(\<|\>)* || ${words[-1]} == (\||\|\||\&|\&\&|\;) ]] && return 1
+    LBUFFER="$cmd ${words[-1]}"
+}
+
+# Wrap the existing line and leave the cursor before the substitution.
+__substitute_expand() {
+    local cmd=${LBUFFER% }
+    [[ -n $cmd ]] || return 1
+    LBUFFER=''
+    RBUFFER=" \$($cmd)$RBUFFER"
+}
+
+# Offer each possible split between a simple command and its arguments.
+__for_expand() {
+    local cmd=${LBUFFER% } word row choice
+    local -a words=("${(z)cmd}") rows
+    (( ${#words} >= 2 )) || return 1
+    for word in "${words[@]}"; do
+        [[ $word == [0-9]#(\<|\>)* || $word == (\||\|\||\&|\&\&|\;|\;\;|\|\&) || $word == *$'\n'* ]] && return 1
+    done
+    local i
+    for (( i = 1; i < ${#words}; i++ )); do
+        rows+=("$i"$'\t'"${(j: :)words[1,i]} | ${(j: :)words[i+1,-1]}")
+    done
+    if (( ${#rows} == 1 )); then
+        choice=1
+    else
+        row=$(printf '%s\n' "${rows[@]}" | fzf --delimiter=$'\t' --with-nth=2.. --prompt='split> ') || return 1
+        choice=${row%%$'\t'*}
+        [[ $choice == <-> ]] && (( choice >= 1 && choice <= ${#rows} )) || return 1
+    fi
+    LBUFFER="for x in ${(j: :)words[choice+1,-1]}; do ${(j: :)words[1,choice]} \"\$x\"; done"
+}
 
 # Pick an abbreviation in fzf and insert its trigger (space then expands it).
 # Ctrl-E opens this file at the picked entry and reloads it on exit.
@@ -192,9 +261,12 @@ expand-abbrev() {
     local MATCH
     LBUFFER=${LBUFFER%%(#m)[?;_a-zA-Z0-9]#}
     if [[ -n "${abbrevs[$MATCH]}" ]]; then
-        ${abbrevs[$MATCH]}
-        # No space after ?rep, ?fil and the ;;abbr picker
-        if [[ "$MATCH" != "?rep" && "$MATCH" != "?fil" && "$MATCH" != ";;abbr" ]]; then
+        if ! ${abbrevs[$MATCH]}; then
+            LBUFFER+=$MATCH
+            return
+        fi
+        # Keep the cursor in place for rewrites that need further editing.
+        if [[ "$MATCH" != "?rep" && "$MATCH" != "?fil" && "$MATCH" != "?filt" && "$MATCH" != ";;abbr" && "$MATCH" != "_jq" && "$MATCH" != "_dup" && "$MATCH" != "_sub" && "$MATCH" != "_for" ]]; then
             zle self-insert
         fi
     else
