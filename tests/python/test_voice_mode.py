@@ -74,10 +74,10 @@ def fresh_relay(monkeypatch, tmp_path):
     ('Claude 2, check the build.', 'klod2', 'check the build.'),
     ('Claude 1. Stop', 'klod1', 'Stop'),
     ('Codex, fix the failing test', 'codex', 'fix the failing test'),
-    # Gordon and Kendra answer on the bus as triage and intake.
+    # Both names route to Gordon on the bus.
     ('Gordon, what is on my list?', 'triage', 'what is on my list?'),
     ('Hey Gordon, look at this.', 'triage', 'look at this.'),
-    ('Kendra, check the inbox', 'intake', 'check the inbox'),
+    ('Kendra, check the inbox', 'triage', 'check the inbox'),
     # Parakeet's real output for Piotr's own spoken "Claude 2, can you hear me?"
     ('Claude too, can you hear me?', 'klod2', 'can you hear me?'),
     ('Claude to, can you hear me?', 'klod2', 'can you hear me?'),
@@ -439,7 +439,6 @@ class Model:
     ('devops-1673', 'devops one six seven three'),
     ('doc-42', 'doc four two'),
     ('triage', 'gordon'),
-    ('intake', 'kendra'),
 ])
 def test_a_name_is_offered_as_it_is_said_aloud(agent, said):
     assert voice.spoken(agent) == said
@@ -463,10 +462,11 @@ def test_the_wake_word_sends_the_line_to_the_name_it_sounds_like(monkeypatch, he
 def test_the_model_sees_the_live_roster_and_only_the_opening_words(monkeypatch):
     words = ' '.join(f'word{n}' for n in range(voice.FIT_WORDS + 3))
     Line(monkeypatch, f'check check {words}', {'klod2'})
-    model = Model(monkeypatch, ['klod2', 'codex', 'devops-1673', 'human-via-signal'])
+    model = Model(monkeypatch, ['klod2', 'codex', 'devops-1673', 'intake', 'human-via-signal'])
     voice.handle(b'')
     [(command, options)] = model.calls
     assert model.options() == {'klod two', 'codex', 'devops one six seven three', 'gordon', 'kendra'}
+    assert voice.roster()['kendra'] == 'triage'
     assert options['input'] == ' '.join(words.split()[:voice.FIT_WORDS])
     assert 'word0' not in ' '.join(command)  # argv reaches error messages, and the relay logs no words
 

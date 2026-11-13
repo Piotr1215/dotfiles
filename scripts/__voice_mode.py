@@ -142,8 +142,8 @@ ADDRESS = re.compile(
     r'|(?:cloud|plot)\W*(\d|one|two)\b|(codex|gordon|kendra)\s*[,.:;!?])\W*(.*)$',
     re.IGNORECASE | re.DOTALL,
 )
-BUS_NAMES = {'gordon': 'triage', 'kendra': 'intake'}
-SPOKEN_NAMES = {bus: name for name, bus in BUS_NAMES.items()}
+BUS_NAMES = {'gordon': 'triage', 'kendra': 'triage'}
+SPOKEN_NAMES = {'triage': 'gordon'}
 SPOKEN_DIGITS = {'one': '1', 'won': '1', 'two': '2', 'to': '2', 'too': '2'}
 DIGIT_WORDS = 'zero one two three four five six seven eight nine'.split()
 WAKE = re.compile(r'\bcheck\W+(check|once)\b\W*', re.IGNORECASE)
@@ -264,10 +264,11 @@ def registered(name):
 
 
 def roster():
-    """Spoken name to bus name for everyone who can be called. Gordon and Kendra stay
-    on it while they are away, so calling one gets the notice, not the nearest agent."""
+    """Spoken names for callable agents; both Gordon and Kendra reach triage."""
     names = {*PRESENCE.live(), *BUS_NAMES.values()}
-    return {spoken(name): name for name in sorted(names) if not name.startswith('human-via-')}
+    result = {spoken(name): name for name in sorted(names) if name != 'intake' and not name.startswith('human-via-')}
+    result.update(BUS_NAMES)
+    return result
 
 
 def closest(heard):
