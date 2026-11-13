@@ -197,6 +197,7 @@ vim.api.nvim_create_autocmd("FileType", {
         { "n", "<leader>mp", ":MarkdownPreview<CR>:silent !bash -c 'wmctrl -a Librewolf'<CR>" },
         { "n", "<leader>mr", require("markdown_reader").toggle },
         { "n", "<leader>mo", require("markdown_reader").pick_links },
+        { "n", "<leader>mh", require("markdown_reader").pick_headings },
         { "n", "<leader>pi", paste_image },
         { "n", "ctd", "4wvg$y" },
         { "v", "<leader>hi", ":HeaderIncrease<CR>" },

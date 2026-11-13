@@ -1,9 +1,11 @@
 -- Markdown reading mode: <leader>mr swaps the current window to a reading copy
 -- of the file and back. The copy is a listed scratch buffer (buffer switching
 -- returns to it) with spaced list items (copy.lua), coloured headings, labels
--- and acronyms, always rendered (style.lua), and <leader>mo for a link
--- picker (links.lua). It has no gutter or spell marks and is read-only. q or
--- <leader>mr returns to the source at the matching line and closes the copy.
+-- and acronyms, always rendered (style.lua). <leader>mo picks a link,
+-- <leader>mh picks a heading and <CR> follows the link under the cursor
+-- (links.lua). It has no gutter or spell marks and is read-only, and it
+-- refreshes when the source changes. q or <leader>mr returns to the source at
+-- the matching line and closes the copy.
 local copy = require "markdown_reader.copy"
 local style = require "markdown_reader.style"
 local links = require "markdown_reader.links"
@@ -14,6 +16,7 @@ local follow
 M.spaced_lines = copy.spaced_lines
 M.links = links.links
 M.pick_links = links.pick_links
+M.pick_headings = links.pick_headings
 
 local reading_values = {
   number = false,
@@ -40,13 +43,15 @@ local function copy_of(src)
   end
 end
 
--- Rebuild the copy `buf` from its source after the source changed, keeping
--- every window on the copy at its current line.
+-- Rebuild the copy `buf` from its source after the source changed. Each
+-- window on the copy keeps the same text under the cursor and the same
+-- distance from the top of the window, even when lines moved above it.
 function M.refresh(buf)
   local src = vim.b[buf].markdown_reader_source
   if not (src and vim.api.nvim_buf_is_valid(src) and vim.api.nvim_buf_is_valid(buf)) then
     return
   end
+  local old = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
   local lines, map = copy.spaced_lines(vim.api.nvim_buf_get_lines(src, 0, -1, false))
   local views = {}
   for _, w in ipairs(vim.fn.win_findbuf(buf)) do
@@ -58,6 +63,9 @@ function M.refresh(buf)
   vim.b[buf].markdown_reader_map = map
   style.mark_words(buf, lines)
   for w, view in pairs(views) do
+    local lnum = copy.relocate(old, view.lnum, lines)
+    view.topline = math.max(1, view.topline + lnum - view.lnum)
+    view.lnum = lnum
     vim.api.nvim_win_call(w, function()
       vim.fn.winrestview(view)
     end)
@@ -96,13 +104,18 @@ follow = function(src, buf)
   })
 end
 
--- Open a fresh reading copy of the current buffer in the current window. The
+-- Open a fresh reading copy of a buffer in the current window. The
 -- copy is a listed buffer, so buffer switching (<C-p>, <C-n>) comes back to it,
 -- and its window options are set for that buffer only.
-function M.enter()
-  local src, win = vim.api.nvim_get_current_buf(), vim.api.nvim_get_current_win()
+-- `src` defaults to the current buffer at the cursor line; given a loaded
+-- buffer instead, the copy opens at its top without visiting the source.
+function M.enter(src)
+  local win = vim.api.nvim_get_current_win()
+  local row = 1
+  if not src then
+    src, row = vim.api.nvim_get_current_buf(), vim.api.nvim_win_get_cursor(win)[1]
+  end
   local lines, map = copy.spaced_lines(vim.api.nvim_buf_get_lines(src, 0, -1, false))
-  local row = vim.api.nvim_win_get_cursor(win)[1]
 
   local old = copy_of(src)
   if old then
@@ -129,6 +142,7 @@ function M.enter()
   vim.keymap.set("n", "k", "gk", opts)
   vim.keymap.set("n", "q", M.leave, opts)
   vim.keymap.set("n", "<leader>mr", M.leave, opts)
+  vim.keymap.set("n", "<CR>", links.follow, opts)
 
   style.set_highlights()
   style.mark_words(buf, lines)
