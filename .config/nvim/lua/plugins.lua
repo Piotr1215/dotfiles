@@ -346,6 +346,13 @@ return require("lazy").setup({
     end,
     ft = { "markdown" },
   },
+  {
+    "MeanderingProgrammer/render-markdown.nvim",
+    ft = { "markdown" },
+    dependencies = { "nvim-treesitter/nvim-treesitter", "nvim-tree/nvim-web-devicons" },
+    -- No html or latex treesitter parsers here, so skip those renderers.
+    opts = { html = { enabled = false }, latex = { enabled = false } },
+  },
   "weirongxu/plantuml-previewer.vim",
   "aklt/plantuml-syntax",
   -- }}}
