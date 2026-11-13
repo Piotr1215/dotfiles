@@ -1,5 +1,6 @@
--- Reading view look: heading and keyword colours, and render-markdown tuned
--- for reading (cursor line rendered, bars around headings).
+-- Reading view look: heading and keyword colours, gaps between list items,
+-- and render-markdown tuned for reading (cursor line rendered, bars around
+-- headings).
 local M = {}
 
 -- Heading, bullet and emphasis colours for the reading view, linked to the
@@ -61,6 +62,22 @@ function M.mark_words(buf, lines)
       end
     end
   end
+end
+
+local gap_ns = vim.api.nvim_create_namespace "markdown_reader_gaps"
+
+-- Draw an empty virtual line below each row in `gaps` (see paragraphs.lua).
+function M.mark_gaps(buf, gaps)
+  vim.api.nvim_buf_clear_namespace(buf, gap_ns, 0, -1)
+  for row in pairs(gaps) do
+    vim.api.nvim_buf_set_extmark(buf, gap_ns, row - 1, 0, { virt_lines = { { { "", "" } } } })
+  end
+end
+
+-- Remove the reading marks (words and gaps) from `buf`.
+function M.clear(buf)
+  vim.api.nvim_buf_clear_namespace(buf, ns, 0, -1)
+  vim.api.nvim_buf_clear_namespace(buf, gap_ns, 0, -1)
 end
 
 -- Per-buffer render-markdown tweaks: render the cursor line too, and draw bars

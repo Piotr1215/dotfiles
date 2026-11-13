@@ -1,11 +1,11 @@
--- Tests for markdown reading mode: the spaced copy (blank lines between list
--- items, none inside fenced code, a line map back to the source) and the link
--- collector behind the picker.
+-- Tests for markdown reading mode: the gaps between list items and the
+-- paragraph motions and text objects that count them, and the link collector
+-- behind the picker.
 -- Run: nvim --headless --clean -u NONE -l tests/nvim/markdown_reader_test.lua
 
 local here = debug.getinfo(1, "S").source:sub(2):match("(.*)/")
 local root = here .. "/../../.config/nvim/lua/markdown_reader/"
-local reader = dofile(root .. "copy.lua")
+local paragraphs = dofile(root .. "paragraphs.lua")
 local links = dofile(root .. "links.lua")
 
 local failures = 0
@@ -19,59 +19,51 @@ local function check(name, got, want)
 	end
 end
 
-local source = {
+local doc = {
 	"# Title", -- 1
-	"- one", -- 2
-	"- two", -- 3
-	"1. first", -- 4
-	"2. second", -- 5
-	"```sh", -- 6
-	"- not a list", -- 7
-	"- still code", -- 8
-	"```", -- 9
-	"para", -- 10
+	"", -- 2
+	"Intro line one", -- 3
+	"intro line two", -- 4
+	"", -- 5
+	"- one", -- 6
+	"- two", -- 7
+	"  more of two", -- 8
+	"- three", -- 9
+	"", -- 10
+	"```sh", -- 11
+	"- not a list", -- 12
+	"- still code", -- 13
+	"```", -- 14
+	"", -- 15
+	"", -- 16
+	"end", -- 17
 }
-local lines, map = reader.spaced_lines(source)
+local gaps = paragraphs.gaps(doc)
 
-check("blank line between list items, none inside code", lines, {
-	"# Title",
-	"- one",
-	"",
-	"- two",
-	"",
-	"1. first",
-	"",
-	"2. second",
-	"```sh",
-	"- not a list",
-	"- still code",
-	"```",
-	"para",
-})
-check("each source line maps to its line in the copy", map, { 1, 2, 4, 6, 8, 9, 10, 11, 12, 13 })
+check("gaps: between list items only, none in code or under a continuation line", vim.tbl_keys(gaps), { 6 })
+check("gaps: text without lists has none", next(paragraphs.gaps({ "a", "", "b" })), nil)
 
-check(
-	"source_row: each copy line maps back, a spacer to the item above",
-	vim.tbl_map(function(row)
-		return reader.source_row(map, row)
-	end, { 1, 2, 3, 4, 5, 13 }),
-	{ 1, 2, 2, 3, 3, 10 }
-)
-
-local plain = { "a", "", "b" }
-check("text without lists is unchanged", (reader.spaced_lines(plain)), plain)
-
--- Refresh keeps the reader on the same text when lines move above it.
-local before = {}
-for i = 1, 60 do
-	before[#before + 1] = "Paragraph " .. i
-	before[#before + 1] = ""
+local function walk(row, forward, n)
+	local out = {}
+	for _ = 1, n do
+		row = paragraphs.stop(doc, gaps, row, forward)
+		out[#out + 1] = row
+	end
+	return out
 end
-local after = vim.list_extend({ "New line one", "New line two" }, before)
-check("relocate: insertion above keeps the same paragraph", after[reader.relocate(before, 79, after)], "Paragraph 40")
-check("relocate: a blank line keeps its offset below the paragraph", reader.relocate(before, 80, after), 82)
-check("relocate: deletion above moves up with the text", reader.relocate(after, 81, before), 79)
-check("relocate: text that vanished keeps the old row", reader.relocate({ "a", "gone", "c" }, 2, { "a", "c" }), 2)
+check("} stops on empty lines after text and on the item below a gap", walk(1, true, 6), { 2, 5, 7, 10, 15, 17 })
+check("{ stops on empty lines before text and on the item below a gap", walk(17, false, 6), { 16, 10, 7, 5, 2, 1 })
+
+local function span(row, around)
+	return { paragraphs.paragraph(doc, gaps, row, around) }
+end
+check("ip: a paragraph without gaps", span(4, false), { 3, 4 })
+check("ip: one list item, cut at its gap", span(6, false), { 6, 6 })
+check("ip: an item with its continuation line", span(8, false), { 7, 9 })
+check("ip: on an empty line, the run of empty lines", span(16, false), { 15, 16 })
+check("ap: the item plus the empty line after the list", span(9, true), { 7, 10 })
+check("ap: a gap adds nothing", span(6, true), { 6, 6 })
+check("ap: last paragraph takes the empty lines before it", span(17, true), { 15, 17 })
 
 local dir = vim.fn.tempname()
 vim.fn.mkdir(dir .. "/sub", "p")

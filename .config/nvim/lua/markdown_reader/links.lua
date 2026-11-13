@@ -1,6 +1,6 @@
 -- Follow what a markdown document points at. <leader>mo is a Telescope picker
 -- over its links, URLs, file paths and same-page anchors; <leader>mh is an
--- outline of its headings; <CR> in the reading copy follows the link under the
+-- outline of its headings; <CR> in reading mode follows the link under the
 -- cursor. A URL opens in the browser, a file opens in the window (a markdown
 -- file in reading mode), and a #heading anchor jumps to that heading. Every
 -- jump goes through the jumplist, so <C-o> returns to where you were.
@@ -124,11 +124,9 @@ function M.target_at(line, col, base_dir)
   return best and best.hit
 end
 
--- Directory that relative paths in `buf` resolve against: the source file's
--- for a reading copy, else the buffer's own.
+-- Directory that relative paths in `buf` resolve against.
 local function base_dir(buf)
-  local src = vim.b[buf].markdown_reader_source
-  local name = vim.api.nvim_buf_get_name(src and vim.api.nvim_buf_is_valid(src) and src or buf)
+  local name = vim.api.nvim_buf_get_name(buf)
   return name ~= "" and vim.fn.fnamemodify(name, ":p:h") or vim.fn.getcwd()
 end
 
@@ -152,8 +150,8 @@ local function jump_to_anchor(anchor, remember)
   return false
 end
 
--- Open what `hit` points at. A markdown file opened from the reading copy
--- opens in reading mode too.
+-- Open what `hit` points at. A markdown file opened from reading mode opens
+-- in reading mode too.
 function M.open(hit)
   if hit.kind == "url" then
     vim.ui.open(hit.target)
@@ -164,16 +162,10 @@ function M.open(hit)
     return
   end
   local reader = require "markdown_reader"
-  if reader.is_reading() and hit.target:match "%.md$" then
-    -- Straight into the target's reading copy: the jumplist gets only the
-    -- spot the link was followed from, so <C-o> returns there.
-    local src = vim.fn.bufadd(hit.target)
-    vim.fn.bufload(src)
-    vim.bo[src].buflisted = true
-    vim.cmd "normal! m'"
-    reader.enter(src)
-  else
-    vim.cmd.edit(vim.fn.fnameescape(hit.target))
+  local reading = reader.is_reading()
+  vim.cmd.edit(vim.fn.fnameescape(hit.target))
+  if reading and hit.target:match "%.md$" then
+    reader.enter()
   end
   if hit.anchor then
     jump_to_anchor(hit.anchor, false)
@@ -190,26 +182,6 @@ function M.follow()
   else
     pcall(vim.cmd, "normal! gf")
   end
-end
-
--- File and source line to preview for `lnum` of `buf`: the source document,
--- mapped back from the reading copy when `buf` is one.
-local function doc_position(buf)
-  local src = vim.b[buf].markdown_reader_source
-  local doc = vim.api.nvim_buf_get_name(src and vim.api.nvim_buf_is_valid(src) and src or buf)
-  local map = vim.b[buf].markdown_reader_map
-  return doc,
-    function(lnum)
-      if not map then
-        return lnum
-      end
-      for source_row, copy_row in ipairs(map) do
-        if copy_row >= lnum then
-          return source_row
-        end
-      end
-      return lnum
-    end
 end
 
 local function picker(title, entries, make, on_pick)
@@ -245,7 +217,7 @@ function M.pick_links()
     vim.notify("no links or file paths here", vim.log.levels.INFO)
     return
   end
-  local doc, doc_line = doc_position(buf)
+  local doc = vim.api.nvim_buf_get_name(buf)
   local home, icons = vim.env.HOME, { url = "󰖟 ", file = "󰈔 ", heading = "󰓩 " }
   picker("Links and files", entries, function(e)
     local shown = e.kind == "file" and e.target:gsub("^" .. vim.pesc(home), "~") or e.target
@@ -258,7 +230,7 @@ function M.pick_links()
       display = icons[e.kind] .. shown,
       ordinal = e.kind .. " " .. shown .. " " .. e.text,
       path = is_file and e.target or doc,
-      lnum = not is_file and doc_line(e.lnum) or nil,
+      lnum = not is_file and e.lnum or nil,
     }
   end, M.open)
 end
@@ -272,14 +244,14 @@ function M.pick_headings()
     vim.notify("no headings here", vim.log.levels.INFO)
     return
   end
-  local doc, doc_line = doc_position(buf)
+  local doc = vim.api.nvim_buf_get_name(buf)
   picker("Outline", entries, function(h)
     return {
       value = h,
       display = string.rep("  ", h.level - 1) .. h.text,
       ordinal = h.text,
       path = doc,
-      lnum = doc_line(h.lnum),
+      lnum = h.lnum,
     }
   end, function(h)
     vim.cmd "normal! m'"
