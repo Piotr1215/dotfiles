@@ -79,5 +79,7 @@ windows:
   - kendra:
       layout: '{"V":2,"L":{"t":"v","w":255,"h":61,"x":0,"y":0,"c":[{"t":"p","w":255,"h":41,"x":0,"y":0,"l":0,"i":1,"I":"%2"},{"t":"p","w":255,"h":19,"x":0,"y":42,"a":true,"i":2,"I":"%23"}]}}'
       panes:
-        - viddy -n 10s -t '~/.claude/scripts/__kendra_fn.py status --rows 34'
+        # command: the viddy function in .zsh_functions wraps its arguments
+        # as the watched command, so -n became the command name.
+        - command viddy -n 10s -t '~/.claude/scripts/__kendra_fn.py status --rows 34'
         - NCURSES_NO_UTF8_ACS=1 tui -r backlog
