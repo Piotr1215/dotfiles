@@ -4,9 +4,9 @@
 -- and acronyms, always rendered (style.lua). <leader>mo picks a link,
 -- <leader>mh picks a heading and <CR> follows the link under the cursor
 -- (links.lua). It has no gutter or spell marks and is read-only, and it
--- refreshes when the source changes. With the source in a split beside it,
--- moving the cursor in either one moves the other to the matching line. q or
--- <leader>mr returns to the source at the matching line and closes the copy.
+-- refreshes when the source changes. <leader>mr, <C-p> and <C-n> swap the
+-- window between the file and the copy at the matching line and screen height.
+-- q returns to the file and closes the copy.
 local copy = require "markdown_reader.copy"
 local style = require "markdown_reader.style"
 local links = require "markdown_reader.links"
@@ -73,43 +73,33 @@ function M.refresh(buf)
   end
 end
 
--- Put `row` of `buf` at screen line `winline` in every other window of this
--- tab showing `buf`, so a source split and its reading copy scroll together.
-local function show_row(buf, row, winline)
-  local current = vim.api.nvim_get_current_win()
-  for _, w in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
-    if w ~= current and vim.api.nvim_win_get_buf(w) == buf then
-      row = math.max(1, math.min(row, vim.api.nvim_buf_line_count(buf)))
-      local top = row
-      while top > 1 do
-        local above = vim.api.nvim_win_text_height(w, { start_row = top - 2, end_row = row - 2 }).all
-        if above > winline then
-          break
-        end
-        top = top - 1
-      end
-      vim.api.nvim_win_call(w, function()
-        vim.fn.winrestview { lnum = row, col = 0, topline = top }
-      end)
+-- Put `row` of window `w`'s buffer at screen line `winline` (0 is the top).
+local function place(w, row, winline)
+  local buf = vim.api.nvim_win_get_buf(w)
+  row = math.max(1, math.min(row, vim.api.nvim_buf_line_count(buf)))
+  local top = row
+  while top > 1 do
+    local above = vim.api.nvim_win_text_height(w, { start_row = top - 2, end_row = row - 2 }).all
+    if above > winline then
+      break
     end
+    top = top - 1
   end
+  vim.api.nvim_win_call(w, function()
+    vim.fn.winrestview { lnum = row, col = 0, topline = top }
+  end)
 end
 
--- Mirror the cursor of the current window, on `from`, into windows on `to`.
-local function mirror(from, to, buf)
-  local map = vim.b[buf].markdown_reader_map
-  if not (map and vim.api.nvim_buf_is_valid(to)) then
-    return
-  end
-  local row = vim.api.nvim_win_get_cursor(0)[1]
-  row = from == buf and copy.source_row(map, row) or (map[row] or row)
-  show_row(to, row, vim.fn.winline() - 1)
+-- The row of the other buffer in the pair (source `src`, copy `buf`) that
+-- matches `row` of `from`.
+local function matching(from, buf, row)
+  local map = vim.b[buf].markdown_reader_map or {}
+  return from == buf and copy.source_row(map, row) or (map[row] or row)
 end
 
 -- Keep the copy in step with its source: edits in another window, saves, and
 -- changes on disk (an agent writing the file) all refresh it. Entering the copy
 -- runs :checktime first, so a file changed on disk is reloaded into the source.
--- With both open side by side, moving in one moves the other.
 follow = function(src, buf)
   local group = vim.api.nvim_create_augroup("markdown_reader_" .. buf, { clear = true })
   vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI", "BufReadPost", "FileChangedShellPost" }, {
@@ -130,20 +120,33 @@ follow = function(src, buf)
       end
     end,
   })
-  vim.api.nvim_create_autocmd({ "CursorMoved", "CursorMovedI" }, {
-    group = group,
-    buffer = src,
-    callback = function()
-      mirror(src, buf, buf)
-    end,
-  })
-  vim.api.nvim_create_autocmd("CursorMoved", {
-    group = group,
-    buffer = buf,
-    callback = function()
-      mirror(buf, src, buf)
-    end,
-  })
+  -- Swapping a window between the two (<leader>mr, <C-p>, <C-n>) lands on
+  -- the matching line at the same height: leaving one records where the other
+  -- should show, entering the other applies it.
+  local handoff
+  for _, b in ipairs { src, buf } do
+    local other = b == src and buf or src
+    vim.api.nvim_create_autocmd("BufLeave", {
+      group = group,
+      buffer = b,
+      callback = function()
+        local row = matching(b, buf, vim.api.nvim_win_get_cursor(0)[1])
+        handoff = { to = other, row = row, winline = vim.fn.winline() - 1 }
+      end,
+    })
+    -- BufWinEnter, not BufEnter: the window restores its own last cursor for
+    -- the buffer between the two, which would undo the placement.
+    vim.api.nvim_create_autocmd("BufWinEnter", {
+      group = group,
+      buffer = b,
+      callback = function()
+        if handoff and handoff.to == b then
+          place(vim.api.nvim_get_current_win(), handoff.row, handoff.winline)
+        end
+        handoff = nil
+      end,
+    })
+  end
   vim.api.nvim_create_autocmd("BufWipeout", {
     group = group,
     buffer = buf,
@@ -160,9 +163,10 @@ end
 -- buffer instead, the copy opens at its top without visiting the source.
 function M.enter(src)
   local win = vim.api.nvim_get_current_win()
-  local row = 1
+  local row, winline = 1, 0
   if not src then
     src, row = vim.api.nvim_get_current_buf(), vim.api.nvim_win_get_cursor(win)[1]
+    winline = vim.fn.winline() - 1
   end
   local lines, map = copy.spaced_lines(vim.api.nvim_buf_get_lines(src, 0, -1, false))
 
@@ -184,13 +188,13 @@ function M.enter(src)
   for name, value in pairs(reading_values) do
     vim.api.nvim_set_option_value(name, value, { scope = "local", win = win })
   end
-  vim.api.nvim_win_set_cursor(win, { map[row] or 1, 0 })
+  place(win, map[row] or 1, winline)
 
   local opts = { buffer = buf, silent = true, nowait = true }
   vim.keymap.set("n", "j", "gj", opts)
   vim.keymap.set("n", "k", "gk", opts)
   vim.keymap.set("n", "q", M.leave, opts)
-  vim.keymap.set("n", "<leader>mr", M.leave, opts)
+  vim.keymap.set("n", "<leader>mr", M.toggle, opts)
   vim.keymap.set("n", "<CR>", links.follow, opts)
 
   style.set_highlights()
@@ -215,11 +219,25 @@ function M.leave()
   vim.api.nvim_buf_delete(buf, { force = true })
 end
 
+-- Swap the window between the normal view and the reading view, at the
+-- matching line and screen height. The copy stays open, so swapping back is
+-- instant; q closes it.
 function M.toggle()
-  if M.is_reading() then
-    M.leave()
-  else
-    M.enter()
+  local win, cur = vim.api.nvim_get_current_win(), vim.api.nvim_get_current_buf()
+  local src = vim.b[cur].markdown_reader_source
+  if src then
+    if vim.api.nvim_buf_is_valid(src) then
+      vim.api.nvim_win_set_buf(win, src)
+    end
+    return
+  end
+  local buf = copy_of(cur)
+  if not buf then
+    return M.enter()
+  end
+  vim.api.nvim_win_set_buf(win, buf)
+  for name, value in pairs(reading_values) do
+    vim.api.nvim_set_option_value(name, value, { scope = "local", win = win })
   end
 end
 
