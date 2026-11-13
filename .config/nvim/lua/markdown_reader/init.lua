@@ -1,8 +1,8 @@
 -- Markdown reading mode: <leader>mr swaps the current window to a reading copy
 -- of the file and back. The copy is a listed scratch buffer (buffer switching
 -- returns to it) with spaced list items (copy.lua), coloured headings, labels
--- and acronyms, always rendered (style.lua), and o for a link picker
--- (links.lua). It has no gutter or spell marks and is read-only. q or
+-- and acronyms, always rendered (style.lua), and <leader>mo for a link
+-- picker (links.lua). It has no gutter or spell marks and is read-only. q or
 -- <leader>mr returns to the source at the matching line and closes the copy.
 local copy = require "markdown_reader.copy"
 local style = require "markdown_reader.style"
@@ -129,7 +129,6 @@ function M.enter()
   vim.keymap.set("n", "k", "gk", opts)
   vim.keymap.set("n", "q", M.leave, opts)
   vim.keymap.set("n", "<leader>mr", M.leave, opts)
-  vim.keymap.set("n", "o", links.pick_links, opts)
 
   style.set_highlights()
   style.mark_words(buf, lines)

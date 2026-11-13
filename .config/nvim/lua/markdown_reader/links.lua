@@ -60,11 +60,26 @@ local function base_dir(buf)
   return name ~= "" and vim.fn.fnamemodify(name, ":p:h") or vim.fn.getcwd()
 end
 
--- Telescope picker over M.links of the current buffer. Enter opens a file in
--- this window (like gf) or a URL in the browser.
+-- Telescope picker over M.links of the current buffer, with a preview. Enter
+-- opens a file in this window (like gf) or a URL in the browser.
 function M.pick_links()
   local buf = vim.api.nvim_get_current_buf()
   local entries = M.links(vim.api.nvim_buf_get_lines(buf, 0, -1, false), base_dir(buf))
+  -- The file the document lives in, for previewing a URL at the line it sits on.
+  local src = vim.b[buf].markdown_reader_source
+  local doc = vim.api.nvim_buf_get_name(src and vim.api.nvim_buf_is_valid(src) and src or buf)
+  local doc_line = function(lnum)
+    local map = vim.b[buf].markdown_reader_map
+    if not map then
+      return lnum
+    end
+    for source_row, copy_row in ipairs(map) do
+      if copy_row >= lnum then
+        return source_row
+      end
+    end
+    return lnum
+  end
   if #entries == 0 then
     vim.notify("no links or file paths here", vim.log.levels.INFO)
     return
@@ -81,10 +96,19 @@ function M.pick_links()
         entry_maker = function(e)
           local shown = e.kind == "file" and e.target:gsub("^" .. vim.pesc(home), "~") or e.target
           local icon = e.kind == "url" and "󰖟 " or "󰈔 "
-          return { value = e, display = icon .. shown, ordinal = e.kind .. " " .. shown .. " " .. e.text, lnum = e.lnum }
+          -- Preview: a file shows itself; a URL shows the document at its line.
+          local is_url = e.kind == "url"
+          return {
+            value = e,
+            display = icon .. shown,
+            ordinal = e.kind .. " " .. shown .. " " .. e.text,
+            path = is_url and doc or e.target,
+            lnum = is_url and doc_line(e.lnum) or nil,
+          }
         end,
       },
       sorter = conf.generic_sorter {},
+      previewer = conf.grep_previewer {},
       attach_mappings = function(prompt_bufnr)
         actions.select_default:replace(function()
           local entry = state.get_selected_entry()
