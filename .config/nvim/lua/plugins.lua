@@ -350,9 +350,11 @@ return require("lazy").setup({
     "MeanderingProgrammer/render-markdown.nvim",
     ft = { "markdown" },
     dependencies = { "nvim-treesitter/nvim-treesitter", "nvim-tree/nvim-web-devicons" },
-    -- No html or latex treesitter parsers here, so skip those renderers.
-    -- Headings and code blocks sized to their text, not the whole window.
+    -- Off while editing; the <leader>mr reading view (user_functions.markdown_reader)
+    -- turns it on for its own buffer. No html or latex treesitter parsers here,
+    -- so skip those renderers. Headings and code blocks sized to their text.
     opts = {
+      enabled = false,
       html = { enabled = false },
       latex = { enabled = false },
       heading = { sign = false, position = "inline", width = "block", left_pad = 1, right_pad = 2 },
