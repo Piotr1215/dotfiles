@@ -42,6 +42,32 @@ local function paste_image()
   vim.fn["mdip#MarkdownClipboardImage"]()
 end
 
+-- Jump to the next or previous ATX heading ("#" lines), skipping "#" lines
+-- inside fenced code blocks. Replaces nvim-markdown's header motion, whose
+-- setext regex stalled on plain paragraphs. flags: "W" forward, "bW" back.
+local function jump_header(flags)
+  local in_fence = function(lnum)
+    local fences = 0
+    for _, l in ipairs(vim.api.nvim_buf_get_lines(0, 0, lnum - 1, false)) do
+      if l:match "^%s*```" or l:match "^%s*~~~" then
+        fences = fences + 1
+      end
+    end
+    return fences % 2 == 1
+  end
+  local start = vim.api.nvim_win_get_cursor(0)
+  while true do
+    local lnum = vim.fn.search([[^#\{1,6}\s]], flags)
+    if lnum == 0 then
+      vim.api.nvim_win_set_cursor(0, start)
+      return
+    end
+    if not in_fence(lnum) then
+      return
+    end
+  end
+end
+
 -- markdown.nvim settings
 local markdown_settings = {
   no_default_key_mappings = 1,
@@ -153,8 +179,20 @@ vim.api.nvim_create_autocmd("FileType", {
     -- Set keymaps
     local function set_keymaps()
       local maps = {
-        { "n", "]]", "<Plug>Markdown_MoveToNextHeader" },
-        { "n", "[[", "<Plug>Markdown_MoveToPreviousHeader" },
+        {
+          "n",
+          "]]",
+          function()
+            jump_header "W"
+          end,
+        },
+        {
+          "n",
+          "[[",
+          function()
+            jump_header "bW"
+          end,
+        },
         { "n", "]c", "]c", { noremap = true } },
         { "n", "<leader>mp", ":MarkdownPreview<CR>:silent !bash -c 'wmctrl -a Librewolf'<CR>" },
         { "n", "<leader>pi", paste_image },
