@@ -60,7 +60,10 @@ post_processing = true
 # reports the resolved /home/decoder/foo.md, so the path looks right and the
 # content is missing. case/set is used instead of eval because the hint captures
 # arbitrary on-screen text.
-command = { program = "/usr/local/bin/tmux", args = ["split-window", "-h", "-c", "#{pane_current_path}", "sh", "-c", 'case $0 in "~/"*) f=$HOME/${0#?/} ;; *) f=$0 ;; esac; exec nvim "$f"'] }
+# The new pane inherits the PATH of this alacritty-spawned client, which lacks
+# ~/.npm-global/bin, so nvim could not spawn yaml-language-server. The command
+# takes PATH from tmux's global environment, the one every shell pane gets.
+command = { program = "/usr/local/bin/tmux", args = ["split-window", "-h", "-c", "#{pane_current_path}", "sh", "-c", 'p=$(/usr/local/bin/tmux show-environment -g PATH) && PATH=${p#PATH=}; case $0 in "~/"*) f=$HOME/${0#?/} ;; *) f=$0 ;; esac; exec nvim "$f"'] }
 binding = { key = "2", mods = "Control" }
 
 # Shift-click or ctrl+3: jump to the agent named on the cockpit board.
