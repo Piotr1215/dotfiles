@@ -32,6 +32,18 @@ class Upstream(BaseHTTPRequestHandler):
     def respond(self):
         body = self.rfile.read(int(self.headers.get('Content-Length', 0)))
         self.server.calls.append((self.command, self.path, body))
+        if self.path == '/api/version':
+            if self.server.blackhole:
+                self.server.blackhole.wait(6)
+                return
+            data = b'{"version":"test"}'
+            self.send_response(200)
+            self.send_header('Content-Length', str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+            return
+        if self.server.header_delay:
+            time.sleep(self.server.header_delay)
         if self.path == '/api/tags':
             data = json.dumps({'models': [{'name': 'gpt-oss:20b'}, {'name': 'nomic-embed-text:v1.5'}]}).encode()
             self.send_response(200)
@@ -62,6 +74,8 @@ def servers():
         server.daemon_threads = True
         server.calls, server.status, server.first, server.second, server.wait = [], 200, b'first', b'', None
         server.declared_length = None
+        server.blackhole = None
+        server.header_delay = 0
         threading.Thread(target=server.serve_forever, daemon=True).start()
         running.append(server)
         return server
@@ -84,7 +98,7 @@ def start_proxy(servers, remote, local):
 
 
 def request(server, path='/api/chat', body=b'{"model":"gpt-oss:20b"}', method='POST'):
-    conn = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=4)
+    conn = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=8)
     conn.request(method, path, body=body, headers={'Content-Type': 'application/json'})
     return conn, conn.getresponse()
 
@@ -94,7 +108,7 @@ def test_remote_preferred(servers):
     server = start_proxy(servers, url(remote), local)
     conn, response = request(server)
     assert response.status == 200 and response.read() == b'first'
-    assert len(remote.calls) == 1 and local.calls == []
+    assert [call[1] for call in remote.calls] == ['/api/version', '/api/chat'] and local.calls == []
     conn.close()
 
 
@@ -151,5 +165,48 @@ def test_interrupted_stream_is_not_retried(servers):
     server = start_proxy(servers, url(remote), local)
     conn, response = request(server)
     assert response.read() == b'first'
-    assert len(remote.calls) == 1 and local.calls == []
+    assert [call[1] for call in remote.calls] == ['/api/version', '/api/chat'] and local.calls == []
+    conn.close()
+
+
+def test_blackholed_remote_falls_back_within_health_timeout(servers):
+    remote, local = servers(Upstream), servers(Upstream)
+    remote.blackhole = threading.Event()
+    server = start_proxy(servers, url(remote), local)
+    before = time.monotonic()
+    conn, response = request(server)
+    elapsed = time.monotonic() - before
+    assert response.status == 200 and response.read() == b'first'
+    assert elapsed < 5
+    assert [call[1] for call in remote.calls] == ['/api/version']
+    assert local.calls[-1][1] == '/api/chat'
+    remote.blackhole.set()
+    conn.close()
+
+
+def test_healthy_remote_allows_slow_generation_headers(servers):
+    remote, local = servers(Upstream), servers(Upstream)
+    remote.header_delay = 3.2
+    server = start_proxy(servers, url(remote), local)
+    before = time.monotonic()
+    conn, response = request(server)
+    assert response.status == 200 and response.read() == b'first'
+    assert time.monotonic() - before >= 3
+    assert [call[1] for call in remote.calls] == ['/api/version', '/api/chat']
+    assert local.calls == []
+    conn.close()
+
+
+def test_blackholed_metadata_falls_back_within_timeout(servers):
+    remote, local = servers(Upstream), servers(Upstream)
+    remote.blackhole = threading.Event()
+    server = start_proxy(servers, url(remote), local)
+    before = time.monotonic()
+    conn, response = request(server, path='/api/version', body=None, method='GET')
+    assert response.status == 200
+    assert json.loads(response.read()) == {'version': 'test'}
+    assert time.monotonic() - before < 5
+    assert [call[1] for call in remote.calls] == ['/api/version']
+    assert [call[1] for call in local.calls] == ['/api/version']
+    remote.blackhole.set()
     conn.close()

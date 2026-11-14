@@ -17,6 +17,8 @@ SAFE_POST = {'/api/chat', '/api/generate', '/api/show', '/api/embed',
              '/api/embeddings', '/v1/chat/completions', '/v1/completions', '/v1/embeddings'}
 CHAT_POST = {'/api/chat', '/api/generate', '/api/show', '/v1/chat/completions', '/v1/completions'}
 EMBED_POST = {'/api/embed', '/api/embeddings', '/v1/embeddings'}
+GENERATION_POST = (CHAT_POST | EMBED_POST) - {'/api/show'}
+HEALTH_TIMEOUT = 3
 HOP_HEADERS = {'connection', 'keep-alive', 'proxy-authenticate', 'proxy-authorization',
                'te', 'trailer', 'transfer-encoding', 'upgrade', 'host', 'content-length'}
 
@@ -66,6 +68,18 @@ def local_body(path, body, url):
     return body
 
 
+def check_remote(url):
+    conn = connect(url, HEALTH_TIMEOUT)
+    try:
+        conn.request('GET', '/api/version')
+        response = conn.getresponse()
+        if response.status != 200:
+            raise OSError('remote health check failed')
+        response.read(4096)
+    finally:
+        conn.close()
+
+
 class Proxy(BaseHTTPRequestHandler):
     protocol_version = 'HTTP/1.1'
 
@@ -101,7 +115,10 @@ class Proxy(BaseHTTPRequestHandler):
         headers_sent = False
         try:
             try:
-                conn, response = self.upstream(self.server.remote_url, body, headers)
+                if self.command == 'POST' and path in GENERATION_POST:
+                    check_remote(self.server.remote_url)
+                conn, response = self.upstream(self.server.remote_url, body, headers,
+                                               generation=path in GENERATION_POST and self.command == 'POST')
                 if safe and response.status in RETRYABLE_STATUS:
                     conn.close()
                     conn = None
@@ -113,9 +130,10 @@ class Proxy(BaseHTTPRequestHandler):
                     conn.close()
                 url = self.server.local_url or local_url(self.server.local_container)
                 body = local_body(path, body, url)
-                conn, response = self.upstream(url, body, headers, timeout=30)
+                conn, response = self.upstream(url, body, headers, timeout=30,
+                                               generation=path in GENERATION_POST and self.command == 'POST')
             # From here on a retry could duplicate a request or splice two streams.
-            if conn.sock:
+            if conn.sock and self.command == 'POST' and path in GENERATION_POST:
                 conn.sock.settimeout(None)
             self.send_response(response.status, response.reason)
             for key, value in response.getheaders():
@@ -139,12 +157,12 @@ class Proxy(BaseHTTPRequestHandler):
             if conn:
                 conn.close()
 
-    def upstream(self, url, body, headers, timeout=3):
+    def upstream(self, url, body, headers, timeout=3, generation=False):
         conn = connect(url, timeout)
         try:
             conn.connect()
-            # Model loading may take longer than connecting to the server.
-            conn.sock.settimeout(300)
+            # Only model execution needs time for a cold model to load.
+            conn.sock.settimeout(300 if generation else HEALTH_TIMEOUT)
             conn.request(self.command, self.path, body=body if self.command != 'GET' else None, headers=headers)
             return conn, conn.getresponse()
         except Exception:
