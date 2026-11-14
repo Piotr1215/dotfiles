@@ -3,9 +3,9 @@
 # See: __cron_run.sh (writes the state this reads), __cron_status_dump.sh,
 #      __pr_movement_nudge.sh (same delivery path and watermark shape)
 #
-# Announce a cron job that has just entered `error` state into the live Claude
-# pane, so a broken job is known within minutes instead of being noticed hours
-# later on the dashboard. Silent when nothing is wrong.
+# Announce new cron errors and overruns through intake, source cron-watch and
+# class events-cron-watch. Direct DM is the fallback; CRON_ERROR_NUDGE_TO
+# overrides intake with an explicit recipient. Silent when nothing is wrong.
 #
 # EDGE-TRIGGERED, not level-triggered. `~/.claude/data/cron-error-nudged.json`
 # records which jobs have already been announced; a job stays on that list for
@@ -34,7 +34,7 @@
 # red argos badge.
 #
 # Usage:
-#   __cron_error_nudge.sh              # live: DM each new error to the pane
+#   __cron_error_nudge.sh              # live: deliver each new notice
 #   __cron_error_nudge.sh --dry-run    # print what would be sent, send nothing
 #
 # Exit codes follow the wrapper contract in ops-cron-manager.md:
@@ -54,6 +54,9 @@ GRACE_JOBS="${CRON_ERROR_GRACE_JOBS:-__github_notifications __linear_feed}"
 GRACE_RE="${CRON_ERROR_GRACE_RE:-WARN: (GitHub|Linear) request failed|TimeoutError}"
 GRACE_MAX_S="${CRON_ERROR_GRACE_MAX_S:-2400}"
 LOCK_FILE="${CRON_ERROR_NUDGE_LOCK:-/tmp/cron-error-nudge.lock}"
+# The emitter writes one notifications.log record: exit 0 written, 3 the
+# INTAKE_DIRECT_DM=1 revert switch, 1 failure.
+EMIT_BIN="${CRON_ERROR_EMIT_BIN:-$HOME/.claude/scripts/__intake_emit.py}"
 
 # This script's own job name in the crontab, excluded from the sweep. See the
 # blind-spot note above.
@@ -76,15 +79,15 @@ SND_NODE_BIN="${SND_NODE_BIN:-/home/decoder/dev/agents-mcp-server/build/snd.js}"
 AGENTS_NATS_URL_DEFAULT="nats://nats-nats-tailscale.tail165ec.ts.net:4222"
 export AGENTS_NATS_URL="${AGENTS_NATS_URL:-$AGENTS_NATS_URL_DEFAULT}"
 export SND_FROM="${SND_FROM:-cron-watch}"
-# Who hears it: CRON_ERROR_NUDGE_TO when set, else Kendra (intake) while she
-# holds Gordon's routine stream, else triage. __intake_route.sh answers, and is
-# asked only when there is something to send: it can wait on the bus.
+# Who hears it: intake handles source cron-watch, class events-cron-watch.
+# CRON_ERROR_NUDGE_TO overrides it with a direct DM. On emitter failure,
+# __intake_route.sh picks Kendra or triage for the direct DM fallback.
 INTAKE_ROUTE_BIN="${INTAKE_ROUTE_BIN:-$HOME/.claude/scripts/__intake_route.sh}"
 NUDGE_TO="${CRON_ERROR_NUDGE_TO:-}"
 
 # SHADOW router (issue Piotr1215/claude#221, step 4): every announced error is
-# also put to the shared decision router's error case. It only journals; the DM
-# above is unchanged. A missing, failing or hanging router never alters or
+# also put to the shared decision router's error case. It only journals.
+# A missing, failing or hanging router never alters or
 # blocks the nudge: it is time-boxed and its exit code is ignored.
 DECISION_ROUTER_BIN="${CRON_ROUTER_BIN:-$HOME/.claude/scripts/__decision_router.py}"
 ROUTER_TIMEOUT_S="${CRON_ROUTER_TIMEOUT_S:-70}"
@@ -114,6 +117,24 @@ nudge_target() {
     else
         echo triage
     fi
+}
+
+# Print the notice prefix before the first colon.
+notice_kind() { printf '%s\n' "${1%%:*}"; }
+
+# Deliver through intake unless overridden, then fall back to a direct DM.
+deliver() {
+    local line="$1" NUDGE_TO="${CRON_ERROR_NUDGE_TO:-}"
+    if [ -z "$NUDGE_TO" ]; then
+        if python3 "$EMIT_BIN" --source cron-watch --kind "$(notice_kind "$line")" \
+            --title "$line" --meta to=kendra >/dev/null 2>&1; then
+            echo intake
+            return 0
+        fi
+        NUDGE_TO=$(nudge_target)
+    fi
+    send_dm "$line" >/dev/null 2>&1 || return 1
+    printf '%s\n' "$NUDGE_TO"
 }
 
 # Jobs currently reporting `error`, one name per line. Only the wrapper's own
@@ -194,7 +215,7 @@ PY
 announce_overruns() {
     OVERRUN_N=0
     OVERRUN_FAILED=0
-    local runs told keys key line cold=0 sent="" tmp
+    local runs told keys key line where cold=0 sent="" tmp
     runs=$(overrunning_runs)
     keys=$(cut -f1 <<<"$runs" | grep -v '^$' || true)
     if [ ! -f "$OVERRUN_STATE" ]; then
@@ -211,17 +232,16 @@ announce_overruns() {
         while IFS=$'\t' read -r key line; do
             [ -n "$key" ] || continue
             jq -e --arg k "$key" 'index($k)' <<<"$told" >/dev/null && continue
-            NUDGE_TO=$(nudge_target)
             if [ "$DRY_RUN" -eq 1 ]; then
-                log "would send to ${NUDGE_TO}: $line"
-            elif send_dm "$line" >/dev/null 2>&1; then
-                log "sent to ${NUDGE_TO}: $line"
+                log "would deliver: $line"
+            elif where=$(deliver "$line"); then
+                log "sent to ${where}: $line"
             else
                 log "ERROR: delivery failed for overrun $key"
                 OVERRUN_FAILED=1
                 continue
             fi
-            sent+="${key}"$'\n'
+            [ "$DRY_RUN" -eq 1 ] || sent+="${key}"$'\n'
             OVERRUN_N=$((OVERRUN_N + 1))
         done <<<"$runs"
     fi
@@ -313,7 +333,7 @@ main() {
     new_jobs=$(jq -rn --argjson k "$keep" --arg cur "$current" \
         '($cur | split("\n") | map(select(. != ""))) - $k | .[]')
 
-    local errors_n announced_n=0 graced_n=0 job line rc=0 sent="" ts exit_code lp grace_ts now
+    local errors_n announced_n=0 graced_n=0 job line where rc=0 sent="" ts exit_code lp grace_ts now
     errors_n=$(printf '%s' "$current" | grep -c . || true)
 
     if [ "$cold_start" -eq 1 ] && [ -n "$new_jobs" ]; then
@@ -338,14 +358,13 @@ main() {
                 fi
                 continue
             fi
-            NUDGE_TO=$(nudge_target)
             line=$(notice_for "$job")
             if [ "$DRY_RUN" -eq 1 ]; then
-                log "would send to ${NUDGE_TO}: $line"
+                log "would deliver: $line"
                 [ -z "$grace_ts" ] || continue
             else
-                if send_dm "$line" >/dev/null 2>&1; then
-                    log "sent to ${NUDGE_TO}: $line"
+                if where=$(deliver "$line"); then
+                    log "sent to ${where}: $line"
                 else
                     log "ERROR: delivery failed for $job"
                     rc=1
@@ -357,7 +376,7 @@ main() {
             # Collect the names that actually went out rather than counting
             # them. A failure part-way down the list would otherwise shift the
             # tally against the list order and mark the wrong jobs as told.
-            sent+="${job}"$'\n'
+            [ "$DRY_RUN" -eq 1 ] || sent+="${job}"$'\n'
             announced_n=$((announced_n + 1))
         done <<<"$new_jobs"
     fi

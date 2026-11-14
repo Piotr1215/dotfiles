@@ -11,7 +11,18 @@ setup() {
     mkdir -p "$CRON_STATE_DIR" "$BATS_TEST_TMPDIR/bin"
     SENT="$BATS_TEST_TMPDIR/sent"
     ROUTED="$BATS_TEST_TMPDIR/routed"
-    export SENT ROUTED
+    EMITTED="$BATS_TEST_TMPDIR/emitted"
+    export SENT ROUTED EMITTED
+    export CRON_ERROR_EMIT_BIN="$BATS_TEST_TMPDIR/bin/emit"
+    export FAKE_EMIT_RC=3
+    cat >"$CRON_ERROR_EMIT_BIN" <<'PY'
+import os
+import sys
+
+with open(os.environ['EMITTED'], 'a') as output:
+    output.write('\t'.join(sys.argv[1:]) + '\n')
+sys.exit(int(os.environ.get('FAKE_EMIT_RC', '3')))
+PY
     # node: records "<target> <line>" for each snd.js call.
     cat >"$BATS_TEST_TMPDIR/bin/node" <<'S'
 #!/usr/bin/env bash
@@ -98,6 +109,95 @@ running() {
     [ "$status" -eq 2 ]
     [ "$(cut -d' ' -f1 "$SENT")" = "worker" ]
     [ ! -e "$ROUTED" ]
+}
+
+@test "a new error is emitted through intake and recorded once" {
+    seeded
+    job backup error
+    FAKE_EMIT_RC=0 run bash "$SCRIPT"
+    [ "$status" -eq 2 ]
+    line='cron-error: backup exit=1 after 3s :: boom :: log /l'
+    [ "$(cat "$EMITTED")" = "$(printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s' --source cron-watch --kind cron-error --title "$line" --meta to=kendra)" ]
+    [[ "$output" == *"sent to intake: $line"* ]]
+    [ ! -e "$SENT" ]
+    [ ! -e "$ROUTED" ]
+    [ "$(jq -c . "$CRON_ERROR_NUDGE_STATE")" = '["backup"]' ]
+    [ "$(wc -l <"$ROUTER_CALLS")" -eq 1 ]
+}
+
+@test "a new overrun is emitted through intake" {
+    seeded
+    wrapper slow
+    running slow 3700 100
+    FAKE_EMIT_RC=0 run bash "$SCRIPT"
+    [ "$status" -eq 2 ]
+    line="cron-overrun: slow running 61m (previous run 100s) pid $WRAPPER_PID :: log /l"
+    [ "$(cat "$EMITTED")" = "$(printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s' --source cron-watch --kind cron-overrun --title "$line" --meta to=kendra)" ]
+    [[ "$output" == *"sent to intake: $line"* ]]
+    [ ! -e "$SENT" ]
+    [ ! -e "$ROUTED" ]
+    [ "$(jq length "$CRON_OVERRUN_NUDGE_STATE")" -eq 1 ]
+}
+
+@test "emitter failure falls back to the routed DM" {
+    seeded
+    job backup error
+    FAKE_EMIT_RC=1 STUB_ROUTE=intake run bash "$SCRIPT"
+    [ "$status" -eq 2 ]
+    [ "$(cat "$SENT")" = 'intake cron-error: backup exit=1 after 3s :: boom :: log /l' ]
+    [ "$(wc -l <"$EMITTED")" -eq 1 ]
+    [ "$(wc -l <"$ROUTED")" -eq 1 ]
+}
+
+@test "failed emitter and DM leave the error untold" {
+    seeded
+    job backup error
+    FAKE_EMIT_RC=1 FAKE_SND_FAIL=1 run bash "$SCRIPT"
+    [ "$status" -eq 1 ]
+    [ "$(jq -c . "$CRON_ERROR_NUDGE_STATE")" = '[]' ]
+    [ "$(wc -l <"$EMITTED")" -eq 1 ]
+    [ "$(wc -l <"$ROUTED")" -eq 1 ]
+    [ ! -e "$ROUTER_CALLS" ]
+}
+
+@test "failed emitter and DM leave the overrun untold" {
+    seeded
+    wrapper slow
+    running slow 3700 100
+    FAKE_EMIT_RC=1 FAKE_SND_FAIL=1 run bash "$SCRIPT"
+    [ "$status" -eq 1 ]
+    [ "$(jq -c . "$CRON_OVERRUN_NUDGE_STATE")" = '[]' ]
+    [ "$(wc -l <"$EMITTED")" -eq 1 ]
+    [ "$(wc -l <"$ROUTED")" -eq 1 ]
+}
+
+@test "an explicit recipient bypasses intake even when emission would succeed" {
+    seeded
+    job backup error
+    CRON_ERROR_NUDGE_TO=worker FAKE_EMIT_RC=0 run bash "$SCRIPT"
+    [ "$status" -eq 2 ]
+    [ "$(cat "$SENT")" = 'worker cron-error: backup exit=1 after 3s :: boom :: log /l' ]
+    [ ! -e "$EMITTED" ]
+    [ ! -e "$ROUTED" ]
+}
+
+@test "dry run delivers neither errors nor overruns" {
+    seeded
+    job backup error
+    wrapper slow
+    running slow 3700 100
+    FAKE_EMIT_RC=0 run bash "$SCRIPT" --dry-run
+    [ "$status" -eq 2 ]
+    [[ "$output" == *'would deliver: cron-error: backup'* ]]
+    [[ "$output" == *'would deliver: cron-overrun: slow'* ]]
+    [ ! -e "$EMITTED" ]
+    [ ! -e "$SENT" ]
+    [ ! -e "$ROUTED" ]
+    [ "$(jq -c . "$CRON_ERROR_NUDGE_STATE")" = '[]' ]
+    [ "$(jq -c . "$CRON_OVERRUN_NUDGE_STATE")" = '[]' ]
+    FAKE_EMIT_RC=0 run bash "$SCRIPT"
+    [ "$status" -eq 2 ]
+    [ "$(wc -l <"$EMITTED")" -eq 2 ]
 }
 
 @test "nothing new sends nothing and never asks the route" {
@@ -393,7 +493,7 @@ S
     transient_job __github_notifications "$((ts + 1))"
     run bash "$SCRIPT" --dry-run
     [ "$status" -eq 0 ]
-    [[ "$output" == *"would send to"* ]]
+    [[ "$output" == *"would deliver:"* ]]
     [ "$(jq -r '.__github_notifications' "$CRON_ERROR_GRACE_STATE")" = "$ts" ]
     [ "$(jq -c . "$CRON_ERROR_NUDGE_STATE")" = '[]' ]
     run bash "$SCRIPT"
