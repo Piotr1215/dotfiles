@@ -75,18 +75,18 @@ class ControllerTest(unittest.TestCase):
         self.remote = {'url': 'http://10.114.0.1:11436', 'model': 'gpt-oss:20b', 'fallback_unit': 'nomad-ollama-fallback.service'}
         self.assertEqual(self.invoke('on'), 0)
         commands = self.commands()
-        start = ['systemctl', '--user', 'enable', '--now', 'nomad-ollama-fallback.service']
+        start = ['systemctl', '--user', 'start', 'nomad-ollama-fallback.service']
         self.assertLess(commands.index(nomadctl.MANAGED_STOPPED), commands.index(start))
         self.assertLess(commands.index(start), commands.index(['systemctl', '--user', 'enable', '--now', nomadctl.UNIT]))
         self.calls.clear()
         self.assertEqual(self.invoke('off'), 0)
         commands = self.commands()
-        stop = ['systemctl', '--user', 'disable', '--now', 'nomad-ollama-fallback.service']
+        stop = ['systemctl', '--user', 'stop', 'nomad-ollama-fallback.service']
         self.assertLess(commands.index(stop), commands.index(nomadctl.MANAGED_ALL))
 
     def test_fallback_start_failure_fails_nomad_on(self):
         self.remote = {'url': 'http://10.114.0.1:11436', 'model': 'gpt-oss:20b', 'fallback_unit': 'nomad-ollama-fallback.service'}
-        self.failing_commands.add(('systemctl', '--user', 'enable', '--now', 'nomad-ollama-fallback.service'))
+        self.failing_commands.add(('systemctl', '--user', 'start', 'nomad-ollama-fallback.service'))
         self.assertEqual(self.invoke('on'), 1)
         self.assertNotIn(['systemctl', '--user', 'enable', '--now', nomadctl.UNIT], self.commands())
 

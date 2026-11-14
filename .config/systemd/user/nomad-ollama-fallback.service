@@ -8,6 +8,3 @@ ExecStartPre=/usr/bin/docker start nomad_ollama
 ExecStart=/usr/bin/python3 %h/dev/dotfiles/scripts/__nomad_ollama_proxy.py
 Restart=on-failure
 RestartSec=5
-
-[Install]
-WantedBy=default.target

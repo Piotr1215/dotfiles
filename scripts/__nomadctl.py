@@ -113,7 +113,7 @@ def on(open_browser=True):
         return 1
     if not containers(MANAGED_STOPPED, 'start', exclude_names=('nomad_ollama',) if remote else ()):
         return 1
-    if remote and remote.get('fallback_unit') and checked(['systemctl', '--user', 'enable', '--now', remote['fallback_unit']]) is None:
+    if remote and remote.get('fallback_unit') and checked(['systemctl', '--user', 'start', remote['fallback_unit']]) is None:
         return 1
     if checked(['systemctl', '--user', 'enable', '--now', UNIT]) is None:
         return 1
@@ -129,7 +129,7 @@ def off():
     success = unload_remote(remote) if remote else True
     if checked(['systemctl', '--user', 'disable', '--now', UNIT]) is None:
         success = False
-    if remote and remote.get('fallback_unit') and checked(['systemctl', '--user', 'disable', '--now', remote['fallback_unit']]) is None:
+    if remote and remote.get('fallback_unit') and checked(['systemctl', '--user', 'stop', remote['fallback_unit']]) is None:
         success = False
     if not containers(MANAGED_ALL, 'stop'):
         success = False
