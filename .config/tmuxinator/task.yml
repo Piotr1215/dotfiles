@@ -70,7 +70,10 @@ windows:
         # PR_WATCH_SCOPE=ai: pr-watch polls the PRs the transcript mentions and
         # Gordon picks the band rows, so Piotr sees the PRs agents work on.
         # GORDON_PINS_SCOPE=ai: Gordon keeps up to 3 pins of its own beside his.
-        - cd "$HOME/loft/gordon" && MCP_TIMEOUT=120000 PR_WATCH_SCOPE=ai GORDON_PINS_SCOPE=ai __claude_with_monitor.sh --system-prompt-file ~/.claude/system-prompts/triage-agent-system-prompt.md --model "$(~/.claude/scripts/__models.sh get gordon)" -- "Start your shift. Do the mandatory recovery your session start names, then keep going."
+        # MEMORY_SEARCH_COMPACT=1: memory searches return id, type, date and the
+        # first 400 chars per hit. Set here, not in his .mcp.json, because
+        # __role_home.py rewrites that file from the account on every launch.
+        - cd "$HOME/loft/gordon" && MCP_TIMEOUT=120000 PR_WATCH_SCOPE=ai GORDON_PINS_SCOPE=ai MEMORY_SEARCH_COMPACT=1 __claude_with_monitor.sh --system-prompt-file ~/.claude/system-prompts/triage-agent-system-prompt.md --model "$(~/.claude/scripts/__models.sh get gordon)" -- "Start your shift. Do the mandatory recovery your session start names, then keep going."
   # Kendra is a function, not a session (Piotr1215/claude#230): kendra-fn.timer
   # judges everything sent to the bus name intake every 5 minutes in one fresh
   # headless call per batch and applies the verdicts with scripts. This pane
