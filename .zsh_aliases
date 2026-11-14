@@ -233,3 +233,4 @@ alias 2md="~/dev/dotfiles/scripts/__readable.mjs --url"
   fi
 }
 alias headset_fix='xinput disable "Logitech PRO X Wireless Gaming Headset Consumer Control"; xinput enable "Logitech PRO X Wireless Gaming Headset Consumer Control"'
+alias ks='__kiwix_search.sh'
