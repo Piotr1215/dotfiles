@@ -430,6 +430,77 @@ function _kcma() {
 }
 (( $+functions[compdef] )) && compdef _kcma kcma
 
+# Run a whole Claude Code session as one of the local agents in ~/.claude/agents (the work
+# home links the same folder), through the usual launcher:
+#   ca [AGENT] [claude args or prompt...]
+# The agent's prompt replaces the default system prompt and its tools, model and effort
+# apply, so a lookup session costs less than a full `c` session. AGENT tab-completes with
+# model/effort and description; without it fzf lists every agent; CA_PICK=AGENT skips fzf.
+# A first word that is no agent stays in the arguments, as in kcma.
+function ca() {
+  local rows want="${CA_PICK:-}" pick
+  rows=$(_ca_rows)
+  [[ -n "$rows" ]] || { echo "ca: no agent definitions in ${CLAUDE_AGENTS_DIR:-$HOME/.claude/agents}" >&2; return 1; }
+  if [[ -z "$want" && -n "$1" ]] && _ca_known "$rows" "$1"; then
+    want="$1"; shift
+  fi
+  if [[ -n "$want" ]]; then
+    _ca_known "$rows" "$want" || { echo "ca: no agent named $want" >&2; return 1; }
+    pick="$want"
+  else
+    command -v fzf >/dev/null || { echo "ca: fzf is not installed" >&2; return 1; }
+    pick=$(print -r -- "$rows" | fzf --reverse --border --delimiter=$'\t' --tabstop=4 --prompt='ca / ')
+    pick="${pick%%$'\t'*}"
+    [[ -n "$pick" ]] || return 1
+  fi
+  "$HOME/.claude/scripts/__claude_with_monitor.sh" --agent "$pick" "$@"
+}
+
+# True when ROWS (from _ca_rows) has an agent named NAME.
+function _ca_known() {
+  print -r -- "$1" | awk -F'\t' -v n="$2" '$1 == n { found = 1 } END { exit !found }'
+}
+
+# One row per agent file: name, model, effort and description, tab-separated, read from the
+# frontmatter. A folded description (description: >-) joins its lines; a missing model reads
+# inherit, a missing effort -, and a file without frontmatter is listed by its file name.
+function _ca_rows() {
+  local f
+  for f in "${CLAUDE_AGENTS_DIR:-$HOME/.claude/agents}"/*.md(N); do
+    awk -v file="${f:t:r}" '
+      NR == 1 && $0 != "---" { exit }
+      NR > 1 && $0 == "---" { exit }
+      fold && /^[ \t]+[^ \t]/ { sub(/^[ \t]+/, ""); desc = desc (desc == "" ? "" : " ") $0; next }
+      { fold = 0 }
+      /^name:/ { name = $0; sub(/^name:[ \t]*/, "", name) }
+      /^model:/ { model = $0; sub(/^model:[ \t]*/, "", model) }
+      /^effort:/ { effort = $0; sub(/^effort:[ \t]*/, "", effort) }
+      /^description:/ {
+        desc = $0; sub(/^description:[ \t]*/, "", desc)
+        if (desc ~ /^[>|]-?$/) { fold = 1; desc = "" }
+      }
+      END {
+        if (desc ~ /^".*"$/ || desc ~ /^\047.*\047$/) desc = substr(desc, 2, length(desc) - 2)
+        printf "%s\t%s\t%s\t%s\n", (name == "" ? file : name), (model == "" ? "inherit" : model),
+          (effort == "" ? "-" : effort), desc
+      }
+    ' "$f"
+  done
+}
+
+# `name:model/effort  description` lines for _describe, descriptions cut to 90 chars.
+function _ca_completions() {
+  _ca_rows | awk -F'\t' '{ d = $4; if (length(d) > 90) d = substr(d, 1, 89) "…"; printf "%s:%s/%s  %s\n", $1, $2, $3, d }'
+}
+
+function _ca() {
+  (( CURRENT == 2 )) || return 1
+  local -a agents
+  agents=("${(@f)$(_ca_completions)}")
+  (( ${#agents} )) && [[ -n "${agents[1]}" ]] && _describe 'agent' agents
+}
+(( $+functions[compdef] )) && compdef _ca ca
+
 # Headless one-shot Claude Code in the current dir on a work key, read-only tools by default:
 #   kp [-k NAME] [-m MODEL] [-e EFFORT] [-t TOOLS] "prompt"   (prompt on stdin otherwise)
 # Effort defaults to xhigh; a model the models cache lists without it runs at the highest
