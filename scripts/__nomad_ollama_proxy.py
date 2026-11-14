@@ -139,12 +139,12 @@ class Proxy(BaseHTTPRequestHandler):
             if conn:
                 conn.close()
 
-    def upstream(self, url, body, headers, timeout=5):
+    def upstream(self, url, body, headers, timeout=3):
         conn = connect(url, timeout)
         try:
             conn.connect()
             # Model loading may take longer than connecting to the server.
-            conn.sock.settimeout(120)
+            conn.sock.settimeout(300)
             conn.request(self.command, self.path, body=body if self.command != 'GET' else None, headers=headers)
             return conn, conn.getresponse()
         except Exception:
