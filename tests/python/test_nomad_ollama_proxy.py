@@ -210,3 +210,18 @@ def test_blackholed_metadata_falls_back_within_timeout(servers):
     assert [call[1] for call in local.calls] == ['/api/version']
     remote.blackhole.set()
     conn.close()
+
+
+def test_server_binds_without_dns(monkeypatch):
+    def reject_dns(*args):
+        raise AssertionError('offline bind attempted DNS lookup')
+
+    monkeypatch.setattr(socket, 'getfqdn', reject_dns)
+    server = proxy.OfflineHTTPServer(('127.0.0.1', 0), proxy.Proxy)
+    try:
+        assert server.server_name == '127.0.0.1'
+        assert server.server_port > 0
+        assert server.socket.getsockname()[1] == server.server_port
+        assert server.socket.getsockopt(socket.SOL_SOCKET, socket.SO_ACCEPTCONN) == 1
+    finally:
+        server.server_close()

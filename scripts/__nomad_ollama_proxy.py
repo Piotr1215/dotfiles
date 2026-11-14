@@ -4,6 +4,7 @@ import argparse
 import http.client
 import json
 import socket
+import socketserver
 import subprocess
 import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -78,6 +79,16 @@ def check_remote(url):
         response.read(4096)
     finally:
         conn.close()
+
+
+class OfflineHTTPServer(ThreadingHTTPServer):
+    def server_bind(self):
+        # HTTPServer.server_bind resolves the address with getfqdn, which can
+        # stall or depend on DNS when NOMAD is operating offline.
+        socketserver.TCPServer.server_bind(self)
+        host, port = self.server_address[:2]
+        self.server_name = host
+        self.server_port = port
 
 
 class Proxy(BaseHTTPRequestHandler):
@@ -183,7 +194,7 @@ def main():
     if args.local_url:
         connect(args.local_url, 5).close()
     host, port = args.listen.rsplit(':', 1)
-    server = ThreadingHTTPServer((host, int(port)), Proxy)
+    server = OfflineHTTPServer((host, int(port)), Proxy)
     server.remote_url, server.local_url, server.local_container = remote, args.local_url, args.local_container
     server.serve_forever()
 
