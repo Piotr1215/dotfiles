@@ -6,6 +6,7 @@ import Meta from 'gi://Meta';
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import St from 'gi://St';
+import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 const IFACE = `
 <node>
@@ -82,12 +83,43 @@ function _findByXid(xid) {
         .find(w => w.get_description() === hex);
 }
 
+// Placement is instant: skip the shell's next effect (minimize, unminimize,
+// maximize or unmaximize) on this window. Call it only right before a state
+// change that fires one, or the skip lingers and eats a later effect.
+// Replaces the enable-animations toggle __layouts.sh flipped on every
+// keypress, which gsd-xsettings broadcast to every GTK client: browsers read
+// it as prefers-reduced-motion and restyled twice per layout.
+function _skipEffect(win) {
+    const actor = win.get_compositor_private();
+    if (actor)
+        Main.wm.skipNextEffect(actor);
+}
+
+function _unminimize(win) {
+    if (!win.minimized) return;
+    _skipEffect(win);
+    win.unminimize();
+}
+
+function _maximize(win) {
+    if (win.get_maximized() === Meta.MaximizeFlags.BOTH) return;
+    _skipEffect(win);
+    win.maximize(Meta.MaximizeFlags.BOTH);
+}
+
+function _minimize(win) {
+    if (win.minimized) return;
+    _skipEffect(win);
+    win.minimize();
+}
+
 function _tileWindow(win, x, y, width, height) {
     if (!win) return false;
-    if (win.minimized)
-        win.unminimize();
-    if (win.get_maximized())
+    _unminimize(win);
+    if (win.get_maximized()) {
+        _skipEffect(win);
         win.unmaximize(Meta.MaximizeFlags.BOTH);
+    }
     // Callers (wmctrl/xdotool-based scripts) pass physical X11 pixels.
     // On a scaled monitor Mutter's move_resize_frame takes the POSITION in
     // logical coords (physical = logical * scale) while SIZE stays physical.
@@ -180,8 +212,8 @@ export default class TileHelperExtension {
     Maximize(wmClass) {
         const win = _findByClass(wmClass);
         if (!win) return false;
-        if (win.minimized) win.unminimize();
-        win.maximize(Meta.MaximizeFlags.BOTH);
+        _unminimize(win);
+        _maximize(win);
         win.activate(global.get_current_time());
         return true;
     }
@@ -189,7 +221,7 @@ export default class TileHelperExtension {
     Minimize(wmClass) {
         const win = _findByClass(wmClass);
         if (!win) return false;
-        win.minimize();
+        _minimize(win);
         return true;
     }
 
@@ -201,8 +233,8 @@ export default class TileHelperExtension {
     MaximizeXid(xid) {
         const win = _findByXid(xid);
         if (!win) return false;
-        if (win.minimized) win.unminimize();
-        win.maximize(Meta.MaximizeFlags.BOTH);
+        _unminimize(win);
+        _maximize(win);
         win.activate(global.get_current_time());
         return true;
     }
@@ -210,7 +242,7 @@ export default class TileHelperExtension {
     MinimizeXid(xid) {
         const win = _findByXid(xid);
         if (!win) return false;
-        win.minimize();
+        _minimize(win);
         return true;
     }
 

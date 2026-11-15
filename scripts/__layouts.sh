@@ -48,12 +48,27 @@ tile_place() {
 tile_left() { tile_place "$1" "$WA_X" "$WA_Y" "$HALF_W" "$WA_H"; }
 tile_right() { tile_place "$1" "$MID_X" "$WA_Y" "$HALF_W" "$WA_H"; }
 
+# True when the window is maximized and its top-left sits in the target work
+# area, so maximizing it again would change nothing.
+is_maximized_on_target() {
+	local wid="$1" state key val X="" Y=""
+	state=$(xprop -id "$wid" _NET_WM_STATE 2>/dev/null)
+	[[ "$state" == *_NET_WM_STATE_MAXIMIZED_HORZ* && "$state" == *_NET_WM_STATE_MAXIMIZED_VERT* ]] || return 1
+	while IFS='=' read -r key val; do
+		[[ "$key" == X ]] && X="$val"
+		[[ "$key" == Y ]] && Y="$val"
+	done < <(xdotool getwindowgeometry --shell "$wid" 2>/dev/null)
+	[[ "$X" =~ ^-?[0-9]+$ && "$Y" =~ ^-?[0-9]+$ ]] || return 1
+	((X >= WA_X && X < WA_X + WA_W && Y >= WA_Y && Y < WA_Y + WA_H))
+}
+
 # Mutter maximizes onto the monitor the window is on, so a window sitting on
 # the laptop screen would fill that screen. Place it on the target work area
-# first, then maximize.
+# first, then maximize. tile_place unmaximizes to the saved size and back, a
+# visible double resize, so a window already maximized there is only raised.
 tile_max() {
 	local wid="$1"
-	tile_place "$wid" "$WA_X" "$WA_Y" "$WA_W" "$WA_H"
+	is_maximized_on_target "$wid" || tile_place "$wid" "$WA_X" "$WA_Y" "$WA_W" "$WA_H"
 	gdbus call --session -d "$DBUS_DEST" -o "$DBUS_PATH" \
 		-m "$DBUS_IFACE.MaximizeXid" "$wid" >/dev/null 2>&1
 }
@@ -93,15 +108,6 @@ cycle_browser_window() {
 
 	printf '%s' "$pick" > "$state_file"
 	printf '%s' "$pick"
-}
-
-# Animations wrapper
-run_layout() {
-	gsettings set org.gnome.desktop.interface enable-animations false
-	trap 'gsettings set org.gnome.desktop.interface enable-animations true' EXIT
-	"$@"
-	gsettings set org.gnome.desktop.interface enable-animations true
-	trap - EXIT
 }
 
 # Get browser windows (Chrome for work, LibreWolf for home).
@@ -309,7 +315,6 @@ slack_alacritty_vertical() {
 		return 1
 	fi
 
-	wmctrl -i -r "$slack_window" -b remove,maximized_vert,maximized_horz
 	tile_left "$slack_window"
 	tile_right "$alacritty_window"
 }
@@ -523,22 +528,22 @@ alacritty_firefox_vertical_focus_terminal() {
 }
 
 case $1 in
-1) run_layout max_alacritty ;;
-2) run_layout alacritty_firefox_vertical ;;
-3) run_layout firefox_firefox_vertical ;;
-4) run_layout slack_firefox_vertical ;;
-5) run_layout max_firefox ;;
-6) run_layout max_slack ;;
-7) run_layout firefox_firefox_alacritty ;;
-8) run_layout slack_alacritty_vertical ;;
-9) run_layout chatgpt_alacritty_vertical ;;
-10) run_layout slack_browser_alacritty ;;
-11) run_layout slack_browser_browser ;;
-12) run_layout browser_browser_browser ;;
-13) run_layout browser_browser_alacritty_slack ;;
-14) run_layout browser_browser_browser_alacritty ;;
-17) run_layout alacritty_alacritty_vertical ;;
-18) run_layout alacritty_firefox_vertical_focus_terminal ;;
+1) max_alacritty ;;
+2) alacritty_firefox_vertical ;;
+3) firefox_firefox_vertical ;;
+4) slack_firefox_vertical ;;
+5) max_firefox ;;
+6) max_slack ;;
+7) firefox_firefox_alacritty ;;
+8) slack_alacritty_vertical ;;
+9) chatgpt_alacritty_vertical ;;
+10) slack_browser_alacritty ;;
+11) slack_browser_browser ;;
+12) browser_browser_browser ;;
+13) browser_browser_alacritty_slack ;;
+14) browser_browser_browser_alacritty ;;
+17) alacritty_alacritty_vertical ;;
+18) alacritty_firefox_vertical_focus_terminal ;;
 *)
 	echo "Usage: $0 {1-18}"
 	exit 1

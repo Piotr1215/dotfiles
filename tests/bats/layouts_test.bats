@@ -182,7 +182,9 @@ pick_next() {
   [[ "$output" != *wrong* ]]
 }
 
-@test "slack split unmaximizes before tiling the source terminal" {
+# TileXid unmaximizes inside Mutter. The extra wmctrl unmaximize ran outside
+# it, so the shell animated it.
+@test "slack split tiles without a separate wmctrl unmaximize" {
   run bash -c '
     source <(sed -n "/^slack_alacritty_vertical()/,/^}/p" "$1")
     xdotool() { echo 222; }
@@ -193,5 +195,48 @@ pick_next() {
     slack_alacritty_vertical
   ' bash "$LAYOUTS"
   [ "$status" -eq 0 ]
-  [ "$output" = $'wmctrl:-i -r 222 -b remove,maximized_vert,maximized_horz\nleft:222\nright:333' ]
+  [ "$output" = $'left:222\nright:333' ]
+}
+
+# Layout 5 (ctrl+alt+e) on an already maximized browser went through
+# tile_place, which unmaximizes to the saved size and back: a visible double
+# resize. A window already maximized on the target screen is only raised.
+max_calls() {
+  local state="$1" x="$2" y="$3"
+  # tile_max sends gdbus output to /dev/null, so the stubs log to a file.
+  local log="$BATS_TEST_TMPDIR/calls"
+  STATE="$state" GX="$x" GY="$y" LOG="$log" bash -c '
+    source <(sed -n "/^is_maximized_on_target()/,/^}/p;/^tile_max()/,/^}/p" "$1")
+    WA_X=0 WA_Y=64 WA_W=3840 WA_H=2128
+    xprop() { printf "_NET_WM_STATE(ATOM) = %s\n" "$STATE"; }
+    xdotool() { printf "WINDOW=7\nX=%s\nY=%s\nWIDTH=3840\nHEIGHT=2128\n" "$GX" "$GY"; }
+    tile_place() { echo "place:$*" >> "$LOG"; }
+    gdbus() { echo "maximize:${*: -1}" >> "$LOG"; }
+    tile_max 7
+  ' bash "$LAYOUTS"
+  cat "$log"
+}
+
+@test "maximized window on the target screen is not unmaximized first" {
+  run max_calls "_NET_WM_STATE_MAXIMIZED_HORZ, _NET_WM_STATE_MAXIMIZED_VERT" 0 64
+  [ "$status" -eq 0 ]
+  [ "$output" = "maximize:7" ]
+}
+
+@test "unmaximized window is placed on the target screen before maximizing" {
+  run max_calls "_NET_WM_STATE_FOCUSED" 1920 64
+  [ "$output" = $'place:7 0 64 3840 2128\nmaximize:7' ]
+}
+
+@test "window maximized on another screen is moved to the target first" {
+  run max_calls "_NET_WM_STATE_MAXIMIZED_HORZ, _NET_WM_STATE_MAXIMIZED_VERT" 3840 0
+  [ "$output" = $'place:7 0 64 3840 2128\nmaximize:7' ]
+}
+
+# Flipping enable-animations around each layout reached every GTK client via
+# gsd-xsettings; browsers read it as prefers-reduced-motion and restyled twice
+# per keypress. tile-helper skips the shell effect per window instead.
+@test "layouts never toggle the global animation setting" {
+  run grep -n 'enable-animations' "$LAYOUTS"
+  [ "$status" -eq 1 ]
 }
