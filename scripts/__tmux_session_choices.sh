@@ -27,21 +27,24 @@ resolve_choice() {
 }
 
 list_choices() {
-    local session paneinfo agent level parent node depth
+    local session agent level parent node depth
     declare -a sessions=()
-    declare -A session_by_agent=() parent_by_session=() depth_by_session=() root_by_session=()
+    declare -A session_by_agent=() parent_by_session=() depth_by_session=() root_by_session=() level_by_session=() parent_name_by_session=()
 
-    mapfile -t sessions < <(tmux list-sessions -F '#{session_name}' 2>/dev/null | sort -u)
-    for session in "${sessions[@]}"; do
-        paneinfo=$(tmux list-panes -t "$session" -F '#{pane_active}|#{@agent_name}' 2>/dev/null \
-            | awk -F'|' '$1==1{print $2; exit}')
-        agent="${paneinfo:-$session}"
+    # list-sessions resolves pane options against each session's active pane.
+    # Fetch all fields at once, rather than starting three clients per session.
+    while IFS='|' read -r session agent level parent; do
+        [[ -n "$session" ]] || continue
+        sessions+=("$session")
+        agent="${agent:-$session}"
         session_by_agent["$agent"]="$session"
-    done
+        level_by_session["$session"]="$level"
+        parent_name_by_session["$session"]="$parent"
+    done < <(tmux list-sessions -F '#{session_name}|#{@agent_name}|#{@agent_spawn_level}|#{@agent_spawn_parent}' 2>/dev/null | sort -t'|' -k1,1)
 
     for session in "${sessions[@]}"; do
-        level=$(tmux show-options -qv -t "$session" @agent_spawn_level 2>/dev/null || true)
-        parent=$(tmux show-options -qv -t "$session" @agent_spawn_parent 2>/dev/null || true)
+        level="${level_by_session[$session]}"
+        parent="${parent_name_by_session[$session]}"
         if [[ "$level" == delegated && -n "$parent" ]]; then
             parent_by_session["$session"]="${session_by_agent[$parent]:-$parent}"
         fi
@@ -77,6 +80,8 @@ list_choices() {
 list_dormant() {
     local active session
     active=$(tmux list-sessions -F '#{session_name}' 2>/dev/null | sort -u)
+    # Config names are session names; keep the existing basename filtering.
+    # shellcheck disable=SC2011
     while IFS= read -r session; do
         [[ -n "$session" ]] || continue
         grep -qxF "$session" <<<"$active" && continue

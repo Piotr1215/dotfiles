@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT="$HOME/dev/dotfiles/scripts/__tmux_session_choices.sh"
-FILE_OPENER="$HOME/dev/dotfiles/scripts/__file_opener.sh"
+REPO_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
+SCRIPT="$REPO_ROOT/scripts/__tmux_session_choices.sh"
+FILE_OPENER="$REPO_ROOT/scripts/__file_opener.sh"
 T=$(mktemp -d)
 BIN="$T/bin"
 LOG="$T/tmux.log"
@@ -12,37 +13,8 @@ trap 'rm -rf "$T"' EXIT
 cat > "$BIN/tmux" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >> "$STUB_TMUX_LOG"
-case "$1" in
-  list-sessions) printf 'orchestrator\nworker-b\ntask\nai-agents-pr-74\nhuman-pane\n' ;;
-  list-panes)
-    target=""
-    while [[ $# -gt 0 ]]; do
-      [[ "$1" == -t ]] && { target="$2"; break; }
-      shift
-    done
-    case "$target" in
-      orchestrator) printf '1|orchestrator\n' ;;
-      worker-b) printf '1|worker-b\n' ;;
-      task) printf '1|task\n' ;;
-      ai-agents-pr-74) printf '1|ai-agents-pr-74\n' ;;
-      human-pane) printf '1|\n' ;;
-    esac
-    ;;
-  show-options)
-    target=""; option="${@: -1}"
-    while [[ $# -gt 0 ]]; do
-      [[ "$1" == -t ]] && { target="$2"; break; }
-      shift
-    done
-    if [[ "$target" == worker-b ]]; then
-      [[ "$option" == @agent_spawn_level ]] && printf 'delegated\n'
-      [[ "$option" == @agent_spawn_parent ]] && printf 'orchestrator\n'
-    elif [[ "$target" == ai-agents-pr-74 ]]; then
-      [[ "$option" == @agent_spawn_level ]] && printf 'delegated\n'
-      [[ "$option" == @agent_spawn_parent ]] && printf 'task\n'
-    fi
-    ;;
-esac
+[[ "$1" == list-sessions ]] || exit 1
+printf '%s\n' 'orchestrator|captain||' 'worker-b|worker-b|delegated|captain' 'task|task||' 'ai-agents-pr-74|ai-agents-pr-74|delegated|task' 'human-pane|||'
 EOF
 chmod +x "$BIN/tmux"
 
@@ -53,6 +25,8 @@ bad() { FAIL=$((FAIL + 1)); printf '  FAIL: %s\n' "$1"; }
 
 export STUB_TMUX_LOG="$LOG"
 out=$(PATH="$BIN:$PATH" "$SCRIPT" list)
+if [[ $(wc -l < "$LOG") -eq 1 ]]; then ok "one tmux call for the whole session list"
+else bad "one tmux call for the whole session list"; fi
 
 echo "== hierarchy without filtering =="
 if [[ $(wc -l <<<"$out") -eq 5 ]]; then ok "all sessions remain selectable"
@@ -77,6 +51,36 @@ if ! PATH="$BIN:$PATH" "$SCRIPT" claim "$choice" 2>/dev/null; then
 else
     bad "claim is gone"
 fi
+
+echo "== real tmux active pane and session options =="
+socket="mx-choices-test-$$"
+cleanup() { command tmux -L "$socket" kill-server 2>/dev/null || true; rm -rf "$T"; }
+trap cleanup EXIT
+command tmux -L "$socket" -f /dev/null new-session -d -s root
+command tmux -L "$socket" set-option -p -t root:0.0 @agent_name captain
+command tmux -L "$socket" new-window -d -t root -n inactive
+command tmux -L "$socket" set-option -p -t root:inactive.0 @agent_name wrong
+command tmux -L "$socket" split-window -d -t root:0
+command tmux -L "$socket" set-option -p -t root:0.1 @agent_name wrong
+command tmux -L "$socket" select-pane -t root:0.0
+command tmux -L "$socket" new-session -d -s child
+command tmux -L "$socket" set-option -t child @agent_spawn_level delegated
+command tmux -L "$socket" set-option -t child @agent_spawn_parent captain
+mkdir -p "$T/real-bin"
+TEST_TMUX_BIN="$(command -v tmux)"
+export TEST_TMUX_BIN
+cat > "$T/real-bin/tmux" <<'EOF'
+#!/usr/bin/env bash
+exec "$TEST_TMUX_BIN" -L "$TEST_TMUX_SOCKET" "$@"
+EOF
+chmod +x "$T/real-bin/tmux"
+export TEST_TMUX_SOCKET="$socket"
+real_out=$(PATH="$T/real-bin:$PATH" "$SCRIPT" list)
+if [[ "$real_out" == $'root ◀◀◀\n  - child ◀◀◀' ]]; then ok "active pane alias and session metadata group child"
+else bad "active pane alias and session metadata group child: $real_out"; fi
+command tmux -L "$socket" kill-server
+if [[ -z $(PATH="$T/real-bin:$PATH" "$SCRIPT" list) ]]; then ok "no tmux server yields an empty list"
+else bad "no tmux server yields an empty list"; fi
 
 echo "== M-x uses the hierarchy helper =="
 if grep -qF '__tmux_session_choices.sh list' "$FILE_OPENER"; then
