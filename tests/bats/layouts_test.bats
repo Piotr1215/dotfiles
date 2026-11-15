@@ -198,18 +198,19 @@ pick_next() {
   [ "$output" = $'left:222\nright:333' ]
 }
 
-# Layout 5 (ctrl+alt+e) on an already maximized browser went through
-# tile_place, which unmaximizes to the saved size and back: a visible double
-# resize. A window already maximized on the target screen is only raised.
+# Layout 5 (ctrl+alt+e) placed the window at the full work area before
+# maximizing it. A maximized browser went to its saved size and back, and a
+# half-tiled LibreWolf drew its client-side shadow border at full size before
+# maximize dropped it: a visible jump. A window already on the target screen
+# is maximized directly; only one on another screen is moved first.
 max_calls() {
-  local state="$1" x="$2" y="$3"
+  local x="$1" y="$2" w="$3" h="$4"
   # tile_max sends gdbus output to /dev/null, so the stubs log to a file.
   local log="$BATS_TEST_TMPDIR/calls"
-  STATE="$state" GX="$x" GY="$y" LOG="$log" bash -c '
-    source <(sed -n "/^is_maximized_on_target()/,/^}/p;/^tile_max()/,/^}/p" "$1")
+  GX="$x" GY="$y" GW="$w" GH="$h" LOG="$log" bash -c '
+    source <(sed -n "/^is_on_target_screen()/,/^}/p;/^tile_max()/,/^}/p" "$1")
     WA_X=0 WA_Y=64 WA_W=3840 WA_H=2128
-    xprop() { printf "_NET_WM_STATE(ATOM) = %s\n" "$STATE"; }
-    xdotool() { printf "WINDOW=7\nX=%s\nY=%s\nWIDTH=3840\nHEIGHT=2128\n" "$GX" "$GY"; }
+    xdotool() { printf "WINDOW=7\nX=%s\nY=%s\nWIDTH=%s\nHEIGHT=%s\n" "$GX" "$GY" "$GW" "$GH"; }
     tile_place() { echo "place:$*" >> "$LOG"; }
     gdbus() { echo "maximize:${*: -1}" >> "$LOG"; }
     tile_max 7
@@ -217,19 +218,21 @@ max_calls() {
   cat "$log"
 }
 
-@test "maximized window on the target screen is not unmaximized first" {
-  run max_calls "_NET_WM_STATE_MAXIMIZED_HORZ, _NET_WM_STATE_MAXIMIZED_VERT" 0 64
+@test "maximized window on the target screen is maximized without placing" {
+  run max_calls 0 64 3840 2128
   [ "$status" -eq 0 ]
   [ "$output" = "maximize:7" ]
 }
 
-@test "unmaximized window is placed on the target screen before maximizing" {
-  run max_calls "_NET_WM_STATE_FOCUSED" 1920 64
-  [ "$output" = $'place:7 0 64 3840 2128\nmaximize:7' ]
+@test "half-tiled window with a shadow border is maximized without placing" {
+  # LibreWolf left half: the X window reaches past the screen edge by its
+  # client-side shadow, so the top-left alone would read as off screen.
+  run max_calls -26 38 1972 2180
+  [ "$output" = "maximize:7" ]
 }
 
-@test "window maximized on another screen is moved to the target first" {
-  run max_calls "_NET_WM_STATE_MAXIMIZED_HORZ, _NET_WM_STATE_MAXIMIZED_VERT" 3840 0
+@test "window on another screen is moved to the target first" {
+  run max_calls 3840 0 1920 1080
   [ "$output" = $'place:7 0 64 3840 2128\nmaximize:7' ]
 }
 

@@ -48,27 +48,29 @@ tile_place() {
 tile_left() { tile_place "$1" "$WA_X" "$WA_Y" "$HALF_W" "$WA_H"; }
 tile_right() { tile_place "$1" "$MID_X" "$WA_Y" "$HALF_W" "$WA_H"; }
 
-# True when the window is maximized and its top-left sits in the target work
-# area, so maximizing it again would change nothing.
-is_maximized_on_target() {
-	local wid="$1" state key val X="" Y=""
-	state=$(xprop -id "$wid" _NET_WM_STATE 2>/dev/null)
-	[[ "$state" == *_NET_WM_STATE_MAXIMIZED_HORZ* && "$state" == *_NET_WM_STATE_MAXIMIZED_VERT* ]] || return 1
+# True when the window's center lies in the target work area, so Mutter
+# would maximize it onto the target screen as it is.
+is_on_target_screen() {
+	local wid="$1" key val X="" Y="" W="" H=""
 	while IFS='=' read -r key val; do
-		[[ "$key" == X ]] && X="$val"
-		[[ "$key" == Y ]] && Y="$val"
+		case "$key" in
+		X) X="$val" ;; Y) Y="$val" ;; WIDTH) W="$val" ;; HEIGHT) H="$val" ;;
+		esac
 	done < <(xdotool getwindowgeometry --shell "$wid" 2>/dev/null)
-	[[ "$X" =~ ^-?[0-9]+$ && "$Y" =~ ^-?[0-9]+$ ]] || return 1
-	((X >= WA_X && X < WA_X + WA_W && Y >= WA_Y && Y < WA_Y + WA_H))
+	[[ "$X" =~ ^-?[0-9]+$ && "$Y" =~ ^-?[0-9]+$ && "$W" =~ ^[0-9]+$ && "$H" =~ ^[0-9]+$ ]] || return 1
+	local cx=$((X + W / 2)) cy=$((Y + H / 2))
+	((cx >= WA_X && cx < WA_X + WA_W && cy >= WA_Y && cy < WA_Y + WA_H))
 }
 
 # Mutter maximizes onto the monitor the window is on, so a window sitting on
-# the laptop screen would fill that screen. Place it on the target work area
-# first, then maximize. tile_place unmaximizes to the saved size and back, a
-# visible double resize, so a window already maximized there is only raised.
+# the laptop screen would fill that screen: place it on the target work area
+# first, then maximize. A window already on the target screen is maximized
+# directly. Placing it first drew it un-maximized at full size (LibreWolf
+# with its client-side shadow border, a maximized one at its saved size),
+# then maximize redrew it again: the small jump before the window settles.
 tile_max() {
 	local wid="$1"
-	is_maximized_on_target "$wid" || tile_place "$wid" "$WA_X" "$WA_Y" "$WA_W" "$WA_H"
+	is_on_target_screen "$wid" || tile_place "$wid" "$WA_X" "$WA_Y" "$WA_W" "$WA_H"
 	gdbus call --session -d "$DBUS_DEST" -o "$DBUS_PATH" \
 		-m "$DBUS_IFACE.MaximizeXid" "$wid" >/dev/null 2>&1
 }
