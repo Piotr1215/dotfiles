@@ -26,36 +26,48 @@ EOF
     chmod +x "$HOME/bin/"* "$HOME/.codex/scripts/"*.sh
 }
 
-# Capture the launch command. The detached UI poll exits on its first sleep.
+# Run a widget with nvim stubbed to type a request, or to cancel when NVIM_RC is 1.
+# The command widget leaves its next step in BUFFER, which the shell would run.
 run_widget() {
     run timeout 10 zsh -f -c '
         source "$REPO_ROOT/.zsh_claude"
         zle() { :; }
-        sleep() { exit 0; }
         mktemp() { command mktemp "$HOME/prompt.XXXXXX"; }
-        tmux() {
-            case "$1" in
-                display-message) print -r -- %999 ;;
-                send-keys) printf "%s\n" "$@" > "$LAUNCH_LOG" ;;
-            esac
-        }
+        nvim() { (( ${NVIM_RC:-0} )) && return 1; print -r -- "my request" >> "${@[-1]}"; }
         BUFFER="printf widget-output"
         "$1"
+        [[ "$1" == execute_and_claude ]] && eval "$BUFFER"
+        ls "$HOME"/prompt.* 2>/dev/null && exit 9
+        exit 0
     ' zsh "$1"
 }
 
-@test "command widget launches through the channels-enabled wrapper" {
-    run_widget execute_and_claude
-    [ "$status" -eq 0 ]
-    [ "$(cat "$LAUNCH_LOG")" = "$(printf '%s\n' send-keys -t %999 \
-        'KUBECONFIG=/home/decoder/dev/homelab/kubeconfig __claude_with_monitor.sh' C-m)" ]
+# The prompt the launcher got, after the -- that ends its options.
+launched_prompt() {
+    sed -n '4,$p' "$LAUNCH_LOG"
 }
 
-@test "template widget launches through the channels-enabled wrapper" {
+@test "command widget launches the wrapper with the command, output and request" {
+    run_widget execute_and_claude
+    [ "$status" -eq 0 ]
+    [ "$(sed -n 1p "$LAUNCH_LOG")" = launcher ]
+    [ "$(sed -n 3p "$LAUNCH_LOG")" = -- ]
+    launched_prompt | grep -qx 'Command: printf widget-output'
+    launched_prompt | grep -qx 'widget-output'
+    launched_prompt | grep -qx 'my request'
+}
+
+@test "template widget launches the wrapper with the instructions and request" {
     run_widget claude_prompt
     [ "$status" -eq 0 ]
-    [ "$(cat "$LAUNCH_LOG")" = "$(printf '%s\n' send-keys -t %999 \
-        'KUBECONFIG=/home/decoder/dev/homelab/kubeconfig __claude_with_monitor.sh' C-m)" ]
+    launched_prompt | grep -qx 'User request below:'
+    launched_prompt | grep -qx 'my request'
+}
+
+@test "quitting nvim with :cq launches nothing and removes the prompt file" {
+    NVIM_RC=1 run_widget execute_and_claude
+    [ "$status" -eq 0 ]
+    [ ! -e "$LAUNCH_LOG" ]
 }
 
 @test "bookmark resume uses the wrapper without relying on aliases" {
