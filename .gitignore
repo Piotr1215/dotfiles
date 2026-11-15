@@ -23,3 +23,6 @@ ai-theater/
 # Python bytecode
 __pycache__/
 *.pyc
+
+# Playwright MCP page snapshots
+.playwright-mcp/
