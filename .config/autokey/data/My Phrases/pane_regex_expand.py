@@ -8,7 +8,7 @@ import subprocess
 # last restarted it, often an agent's pane. tmux answers the plugin's "pane on
 # screen" lookup from the caller's TMUX_PANE, so ;;^ searched that agent pane.
 # Name the focused client's pane outright and drop both variables.
-LIB = "/home/decoder/dev/dotfiles/scripts/__lib_pane_deliver.sh"
+LIB = os.path.expanduser("~/dev/dotfiles/scripts/__lib_pane_deliver.sh")
 env = {k: v for k, v in os.environ.items() if k not in ("TMUX", "TMUX_PANE")}
 
 

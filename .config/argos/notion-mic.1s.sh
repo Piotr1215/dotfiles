@@ -14,7 +14,7 @@
 # See: https://github.com/Piotr1215/claude/issues/137
 
 # Panel label size follows the main screen width (see panel_label_size).
-source /home/decoder/dev/dotfiles/scripts/__lib_screen.sh
+source "$HOME/dev/dotfiles/scripts/__lib_screen.sh"
 PANEL_SIZE=$(panel_label_size 11 letterless)
 
 set -eo pipefail

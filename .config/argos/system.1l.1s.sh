@@ -109,7 +109,7 @@ mem_formatted=$(printf "%3d%%" $mem_percent)
 # holds only the workspace pill, so it keeps the full readable form on every
 # desk. The right box is bounded by the clock, and on a 1080p main screen the
 # other indicators need all of it. Only the font size follows the screen.
-source /home/decoder/dev/dotfiles/scripts/__lib_screen.sh
+source "$HOME/dev/dotfiles/scripts/__lib_screen.sh"
 PANEL_SIZE=$(panel_label_size 12)
 spacing="   "
 l_cpu="CPU:"; l_gpu="GPU:"; l_vram="VRAM:"; l_ram="RAM:"

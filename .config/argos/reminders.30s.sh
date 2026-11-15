@@ -7,7 +7,7 @@
 # Panel label size comes from the screen lib. "R:" rather than an alarm emoji:
 # the panel draws a label with no Latin letter about 20 percent larger than its
 # neighbours, so a letter keeps it in line with C:OK and T:57C.
-source /home/decoder/dev/dotfiles/scripts/__lib_screen.sh
+source "$HOME/dev/dotfiles/scripts/__lib_screen.sh"
 PANEL_SIZE=$(panel_label_size 12)
 
 set -o pipefail

@@ -5,7 +5,7 @@ set -eo pipefail
 # panel draws a label with no Latin letter about 20 percent larger than its
 # neighbours, so a letter keeps it in line with C:OK and T:57C. The copied
 # flash now colours the count instead of swapping the glyph.
-source /home/decoder/dev/dotfiles/scripts/__lib_screen.sh
+source "$HOME/dev/dotfiles/scripts/__lib_screen.sh"
 PANEL_SIZE=$(panel_label_size 12)
 
 # The YubiKey's OATH accounts as a panel badge, and the two signals the secret
