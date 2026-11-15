@@ -17,6 +17,8 @@ UUID = "aa476008-cc54-48fe-8530-ea217db834e7"
 def nav_log(tmp_path, monkeypatch):
     """Keep the navigator's state log out of the real home."""
     monkeypatch.setenv("HANDOFF_NAV_LOG", str(tmp_path / "nav.log"))
+    # A fixed team ID, so no test depends on the real ~/.config/slack-open/teams.
+    monkeypatch.setenv("SLACK_TEAM_ID", "T0123")
     (tmp_path / "nav.log").write_text("")
     return tmp_path / "nav.log"
 

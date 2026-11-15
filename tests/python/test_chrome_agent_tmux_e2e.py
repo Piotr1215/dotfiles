@@ -21,7 +21,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 CHROME = os.environ.get("AGENT_TAB_TEST_CHROME") or shutil.which("google-chrome")
-XVFB_RUN = shutil.which("xvfb-run")
+XVFB = shutil.which("Xvfb")
 TMUX = shutil.which("tmux")
 EXTENSION = Path(os.environ.get("AGENT_TAB_TEST_EXTENSION") or ROOT / ".config/chrome-agent-tmux")
 HOST = ROOT / "scripts/__chrome_agent_tmux.py"
@@ -133,7 +133,7 @@ def chrome_with_tmux(tmp_path, request):
         extension = tmp_path / "extension"
         shutil.copytree(EXTENSION, extension)
     env = {**os.environ, "HOME": str(home), "XDG_CONFIG_HOME": str(home / ".config"), "XDG_STATE_HOME": str(state), "AGENT_TMUX_TEST_SOCKET": socket_name, "AGENT_TAB_EXTENSION_DIR": str(extension)}
-    browser = None
+    browser = xvfb = None
     browser_log = (tmp_path / "chrome.log").open("w")
     client = None
     master = slave = None
@@ -153,6 +153,9 @@ def chrome_with_tmux(tmp_path, request):
                     pass
                 browser.wait(timeout=5)
         browser_log.close()
+        if xvfb is not None:
+            xvfb.kill()
+            xvfb.wait(timeout=5)
         subprocess.run(tmux + ["kill-server"], capture_output=True)
         if client is not None:
             client.wait(timeout=5)
@@ -185,8 +188,22 @@ def chrome_with_tmux(tmp_path, request):
         os.dup2(pipe_in, 3)
         os.dup2(pipe_out, 4)
 
+    # Xvfb starts here rather than through xvfb-run: Ubuntu 26.04's xvfb-run
+    # takes fd 3 for its own log and closes it for the command, which cut
+    # Chrome off from the DevTools pipe. -displayfd picks a free display.
+    display_read, display_write = os.pipe()
+    xvfb = subprocess.Popen(
+        [XVFB, "-displayfd", str(display_write), "-screen", "0", "1280x1024x24", "-nolisten", "tcp"],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, pass_fds=(display_write,),
+    )
+    os.close(display_write)
+    display = os.read(display_read, 32).decode().strip()
+    os.close(display_read)
+    if not display:
+        pytest.fail("Xvfb did not report a display")
+    env["DISPLAY"] = f":{display}"
     browser = subprocess.Popen(
-        [XVFB_RUN, "-a", CHROME, f"--user-data-dir={profile}",
+        [CHROME, f"--user-data-dir={profile}",
          "--remote-debugging-pipe", "--enable-unsafe-extension-debugging", "--no-first-run", "--no-default-browser-check",
          "--no-sandbox", "--remote-debugging-port=0", "--enable-logging=stderr", "--log-level=1", "about:blank"],
         env=env, stdout=subprocess.DEVNULL, stderr=browser_log, start_new_session=True,

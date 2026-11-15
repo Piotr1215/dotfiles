@@ -348,7 +348,8 @@ use_real_task_in_sandbox() {
     [ "$status" -eq 0 ]
     run task rc.context=none linear_issue_id:DEVOPS-1706 export
     [ "$(jq length <<<"$output")" -eq 1 ]
-    [ "$(jq -r '.[0].wait' <<<"$output")" = "20291231T230000Z" ]
+    # wait:2030-01-01 is local midnight, so the UTC stamp depends on the zone.
+    [ "$(jq -r '.[0].wait' <<<"$output")" = "$(date -u -d "@$(date -d 2030-01-01 +%s)" +%Y%m%dT%H%M%SZ)" ]
     # export reports status "pending" for a waiting task; the filter knows better
     run task rc.context=none linear_issue_id:DEVOPS-1706 status:waiting count
     [ "$output" = "1" ]

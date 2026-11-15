@@ -1,6 +1,12 @@
 import json, os, subprocess, time
 from pathlib import Path
 
+import pytest
+
+# The floater renders through the private repo's brief helper and the local nvim build.
+if not (Path.home() / '.claude/scripts/__tw_brief.py').is_file() or not Path('/usr/local/bin/nvim').is_file():
+    pytest.skip('needs ~/.claude/scripts and /usr/local/bin/nvim', allow_module_level=True)
+
 def test_open(tmp_path):
     uid='11111111-1111-4111-8111-111111111111'
     task=tmp_path/'task'; task.write_text('#!/bin/sh\necho ' + "'" + json.dumps([{'uuid':uid,'description':'fixture','annotations':[]}]) + "'\n"); task.chmod(0o755)

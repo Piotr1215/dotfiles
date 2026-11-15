@@ -158,7 +158,11 @@ class HandoffBriefSaveTest(unittest.TestCase):
     def intake_env(self, **extra):
         """The real emit helper writing to a temp log, never the live notifications.log."""
         self.intake_log = self.root / 'events.log'
-        env = dict(self.env, HANDOFF_INTAKE_EMIT=str(Path.home() / '.claude/scripts/__intake_emit.py'),
+        emit = Path.home() / '.claude/scripts/__intake_emit.py'
+        # Without the private emit helper the save falls back to the direct DM.
+        if extra.get('INTAKE_DIRECT_DM') != '1' and not emit.is_file():
+            self.skipTest('needs ~/.claude/scripts from the private repo')
+        env = dict(self.env, HANDOFF_INTAKE_EMIT=str(emit),
                    INTAKE_EVENTS_LOG=str(self.intake_log), INTAKE_DIRECT_DM='0')
         env.update(extra)
         self.env = env

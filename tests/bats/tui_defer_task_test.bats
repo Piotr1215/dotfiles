@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+load helpers/git_crypt
 setup() {
   root="$(cd "$BATS_TEST_DIRNAME/../.." && pwd)"
   helper="$root/scripts/__tui_defer_task.sh"
@@ -121,6 +122,7 @@ PY
   [ "$("$TUI_TASK_COMMAND" status:pending +backlog count)" -eq 1 ]
 }
 @test "real wait hides the handoff then returns it without changing due date or completion" {
+  skip_if_encrypted "$root/.taskrc"
   export TUI_TASK_COMMAND="$(command -v task)"
   export TASKDATA="$BATS_TEST_TMPDIR/taskdata" TASKRC="$BATS_TEST_TMPDIR/taskrc"
   mkdir -p "$TASKDATA"

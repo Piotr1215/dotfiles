@@ -91,5 +91,6 @@ large_log() {
   "$REMINDER" rotate-log
   run "$REMINDER" agenda render
   [ "$status" -eq 0 ]
-  [[ "$output" == *':last: [2026-11-03 Tue 11:00] done'* ]]
+  # The agenda shows the firing in local time, so the hour depends on the zone.
+  [[ "$output" == *":last: [$(date -d 2026-11-03T11:00:00+01:00 '+%Y-%m-%d %a %H:%M')] done"* ]]
 }

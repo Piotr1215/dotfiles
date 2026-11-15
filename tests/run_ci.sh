@@ -32,7 +32,12 @@ run_file() {
             interp=bash
             head -1 "$file" | grep -q zsh && interp=zsh
             (cd tests/shell && "$interp" "$(basename "$file")") ;;
-        tests/python/test_*) python3 -m pytest -q -p no:cacheprovider "$file" ;;
+        # pytest exits 5 when it collects nothing, which is how a module that
+        # skips itself (a dependency only serval has) ends: not a failure.
+        tests/python/test_*)
+            local rc=0
+            python3 -m pytest -q -p no:cacheprovider "$file" || rc=$?
+            [ "$rc" -eq 0 ] || [ "$rc" -eq 5 ] ;;
         tests/python/*) python3 "$file" ;;
     esac
 }

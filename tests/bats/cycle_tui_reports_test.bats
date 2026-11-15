@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+load helpers/git_crypt
 setup() {
   repo_root="$(cd "$BATS_TEST_DIRNAME/../.." && pwd)"
   export TUI_REPORT_STATE_FILE="$BATS_TEST_TMPDIR/previous" TASKWARRIOR_TUI_REPORT_REQUEST="$BATS_TEST_TMPDIR/request"
@@ -19,6 +20,7 @@ setup() {
 # Piotr's per-project view sits between byproject and handoffs, and runs with no
 # context because its +view rows carry no +work.
 @test "cycle reaches myprojects after byproject and it runs without context" {
+  skip_if_encrypted "$repo_root/.taskrc"
   export TASKWARRIOR_TUI_REPORT=byproject
   run "$repo_root/scripts/__cycle_tui_reports.sh"
   [ "$status" -eq 0 ]; grep -qx myprojects "$TASKWARRIOR_TUI_REPORT_REQUEST"
@@ -26,6 +28,7 @@ setup() {
   grep -q '^report.myprojects.filter=.*+view or ( +work -gordon -piotr' "$repo_root/.taskrc"
 }
 @test "myprojects includes local backlog work but excludes gordon and private work" {
+  skip_if_encrypted "$repo_root/.taskrc"
   export TASKRC="$BATS_TEST_TMPDIR/taskrc" TASKDATA="$BATS_TEST_TMPDIR/taskdata"
   mkdir -p "$TASKDATA"
   grep '^report.myprojects.filter=' "$repo_root/.taskrc" > "$TASKRC"
@@ -63,6 +66,7 @@ setup() {
   [ "$status" -eq 0 ]; [ "$output" = '-r byrepo' ]
 }
 @test "bridge clears the legacy handoffs rc for work reports" {
+  skip_if_encrypted "$repo_root/.taskrc"
   unset TASKWARRIOR_TUI_REPORT_REQUEST
   export TASKWARRIOR_TUI_REPORT=handoffs TUI_REPORT_BINARY="$BATS_TEST_TMPDIR/tui"
   ln -s "$repo_root/.config/taskwarrior-tui/handoffs.taskrc" "$BATS_TEST_TMPDIR/legacy-rc"
@@ -133,6 +137,7 @@ setup() {
   [ "$status" -ne 0 ]; [[ "$output" == *'upgraded taskwarrior-tui'* ]]
 }
 @test "handoffs overrides context and detail and legends are configured" {
+  skip_if_encrypted "$repo_root/.taskrc"
   grep -qx 'uda.taskwarrior-tui.report.handoffs.context=none' "$repo_root/.taskrc"
   grep -qx 'uda.taskwarrior-tui.report.handoffs.show-info=false' "$repo_root/.taskrc"
   grep -qx 'uda.taskwarrior-tui.shortcuts.background=0,5,6,9' "$repo_root/.taskrc"
@@ -146,6 +151,7 @@ setup() {
 }
 
 @test "handoffs report shows supported task IDs and the kind column" {
+  skip_if_encrypted "$repo_root/.taskrc"
   grep -qx 'report.handoffs.columns=id,priority,due.relative,kind,description.desc' "$repo_root/.taskrc"
   grep -qx 'report.handoffs.labels=ID,P,Due,Kind,Desc' "$repo_root/.taskrc"
   grep -qx 'uda.kind.values=slack,command,pr,ack,other' "$repo_root/.taskrc"
@@ -155,6 +161,7 @@ setup() {
 }
 
 @test "backlog legend labels key 7 with its Todo destination" {
+  skip_if_encrypted "$repo_root/.taskrc"
   default=$(grep -a '^uda.taskwarrior-tui.legend.default=' "$repo_root/.taskrc")
   backlog=$(grep -a '^uda.taskwarrior-tui.legend.backlog=' "$repo_root/.taskrc")
   expected=${default/legend.default=/legend.backlog=}
@@ -163,18 +170,21 @@ setup() {
 }
 
 @test "every configured legend labels key 9 later" {
+  skip_if_encrypted "$repo_root/.taskrc"
   while IFS= read -r legend; do
     [[ "$legend" == *'  9 later  '* ]]
   done < <(grep -a '^uda.taskwarrior-tui.legend\.' "$repo_root/.taskrc")
 }
 
 @test "frequent reports have the intended picker order" {
+  skip_if_encrypted "$repo_root/.taskrc"
   for entry in inbox:1 handoffs:2 current:3 byrepo:4 byproject:5 myprojects:6; do
     grep -qx "uda.taskwarrior-tui.report.${entry%:*}.order=${entry#*:}" "$repo_root/.taskrc"
   done
 }
 
 @test "handoffs report renders kind and legacy rows" {
+  skip_if_encrypted "$repo_root/.taskrc"
   command -v task >/dev/null || skip "task is not installed"
   export TASKDATA="$BATS_TEST_TMPDIR/taskdata" TASKRC="$BATS_TEST_TMPDIR/taskrc"
   mkdir -p "$TASKDATA"
@@ -194,6 +204,7 @@ setup() {
 # Every view's legend reads digits in order, then letters, then control keys,
 # and lists key 2 (the view cycle) and b (the brief) among them.
 @test "legends list 2 and keep digits, letters and control keys in order" {
+  skip_if_encrypted "$repo_root/.taskrc"
   legends=$(grep -a '^uda.taskwarrior-tui.legend\.' "$repo_root/.taskrc")
   [ "$(printf '%s\n' "$legends" | wc -l)" -ge 2 ]
   while IFS= read -r line; do

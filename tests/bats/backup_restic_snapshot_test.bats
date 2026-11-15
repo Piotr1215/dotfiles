@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+load helpers/git_crypt
 # Tests for restic_snapshot in scripts/__backup.sh: restic exit 3 caused only by
 # files that vanished mid-scan is a warning, anything else stays a failure.
 # The function is lifted out of the script and run against a stub restic.
@@ -6,6 +7,7 @@
 SCRIPT="${BATS_TEST_DIRNAME}/../../scripts/__backup.sh"
 
 setup() {
+	skip_if_encrypted "$SCRIPT"
 	mkdir -p "$BATS_TEST_TMPDIR/bin"
 	export PATH="$BATS_TEST_TMPDIR/bin:$PATH"
 	eval "$(sed -n '/^restic_snapshot() {/,/^}/p' "$SCRIPT")"

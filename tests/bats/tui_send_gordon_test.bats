@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+load helpers/git_crypt
 setup() {
   root="$(cd "$BATS_TEST_DIRNAME/../.." && pwd)"
   export TUI_TASK_COMMAND="$BATS_TEST_TMPDIR/task" TUI_TMUX_COMMAND="$BATS_TEST_TMPDIR/tmux" LOG="$BATS_TEST_TMPDIR/log"
@@ -80,6 +81,7 @@ MOCK
 }
 
 @test "configuration binds Gordon and shows it in both legends" {
+  skip_if_encrypted "$root/.taskrc"
   grep -Fxq 'uda.taskwarrior-tui.gordon.command=~/dev/dotfiles/scripts/__tui_send_gordon.sh' "$root/.taskrc"
   grep -q '^uda.taskwarrior-tui.legend.default=.*\^G gordon' "$root/.taskrc"
   grep -q '^uda.taskwarrior-tui.legend.handoffs=.*\^G gordon' "$root/.taskrc"

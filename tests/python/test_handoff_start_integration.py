@@ -12,6 +12,8 @@ import pytest
 TASK = "/usr/local/bin/task"
 HOOK = Path.home() / ".task/hooks/on-modify-openurl-or-program.py"
 SCRIPTS = Path(__file__).resolve().parents[2] / "scripts"
+if not (HOOK.is_file() and Path(TASK).is_file() and (Path.home() / ".claude/scripts/__tw_brief.py").is_file()):
+    pytest.skip("needs the installed task hook, /usr/local/bin/task and ~/.claude/scripts", allow_module_level=True)
 
 
 @pytest.mark.parametrize("command_only", [False, True])

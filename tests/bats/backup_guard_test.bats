@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+load helpers/git_crypt
 # Tests for scripts/__lib_backup_guard.sh and the hold in scripts/__backup.sh.
 # Everything runs in BATS_TEST_TMPDIR. The one __backup.sh run has mountpoint,
 # rsync, restic and sudo stubbed first on PATH, and the mountpoint stub reports
@@ -19,6 +20,7 @@ setup() {
 }
 
 @test "__backup.sh runs on with no X session" {
+	skip_if_encrypted "$BACKUP"
 	setup_backup_stubs
 	mkdir -p "$T/source"
 	: >"$T/source/.backup_restic_excludes"
@@ -131,6 +133,7 @@ PY
 }
 
 @test "__backup.sh on hold takes restic snapshots and nothing that removes NAS data" {
+	skip_if_encrypted "$BACKUP"
 	# The NAS root is a temp dir and every outside command is a stub, so even a
 	# broken hold copies only into the temp dir and sends no mail.
 	stubs="$T/stubs"
@@ -172,6 +175,7 @@ PY
 }
 
 @test "restic gets optional agent homes, Documents and every discovered local envrc" {
+	skip_if_encrypted "$BACKUP"
 	setup_backup_stubs
 	sources="$T/source"
 	mkdir -p "$sources/.codex" "$sources/.codex-work" "$sources/.claude-work" "$sources/Documents" "$sources/Pictures" \
@@ -192,6 +196,7 @@ PY
 }
 
 @test "restic gets the git-crypt key, cloud configs, shell history and hand-made copies when present" {
+	skip_if_encrypted "$BACKUP"
 	setup_backup_stubs
 	sources="$T/source"
 	mkdir -p "$sources/dev/dotfiles/.keys" "$sources/.aws" "$sources/.kube" "$sources/.password-store.bak-2026-07-16"
@@ -206,6 +211,7 @@ PY
 }
 
 @test "Downloads gets its own tagged snapshot that skips installers and large files" {
+	skip_if_encrypted "$BACKUP"
 	setup_backup_stubs
 	sources="$T/source"
 	mkdir -p "$sources/Downloads"
@@ -220,6 +226,7 @@ PY
 }
 
 @test "the rest of home gets a tagged snapshot through its exclude file" {
+	skip_if_encrypted "$BACKUP"
 	setup_backup_stubs
 	sources="$T/source"
 	mkdir -p "$sources"
@@ -235,6 +242,7 @@ PY
 }
 
 @test "a missing home exclude file is a failed part, not a skipped home" {
+	skip_if_encrypted "$BACKUP"
 	setup_backup_stubs
 	mkdir -p "$T/source"
 	echo hold >"$T/hold"
@@ -244,6 +252,7 @@ PY
 }
 
 @test "the dev mirror's --delete leaves the loft/ops mirror to the loft step" {
+	skip_if_encrypted "$BACKUP"
 	setup_backup_stubs
 	mkdir -p "$T/source"
 	PATH="$stubs:$PATH" TMPDIR="$T" BACKUP_TEST_HOME="$T/source" BACKUP_HOLD_FILE="$T/no-hold" BACKUP_TEST_ROOT="$T/nas" run bash "$BACKUP"
@@ -287,6 +296,7 @@ EOF
 }
 
 @test "a failed mirror step does not stop the rest of the backup" {
+	skip_if_encrypted "$BACKUP"
 	setup_mirror_stubs
 	FAIL_SOURCES="/home/decoder/dev/" PATH="$stubs:$PATH" TMPDIR="$T" BACKUP_TEST_HOME="$T/source" \
 		BACKUP_HOLD_FILE="$T/no-hold" BACKUP_TEST_ROOT="$T/nas" run bash "$BACKUP"
@@ -300,6 +310,7 @@ EOF
 }
 
 @test "a mass deletion moves the entries into a dated attic and the step still runs" {
+	skip_if_encrypted "$BACKUP"
 	setup_mirror_stubs
 	DRY_DELETES=1001 PATH="$stubs:$PATH" TMPDIR="$T" BACKUP_TEST_HOME="$T/source" \
 		BACKUP_HOLD_FILE="$T/no-hold" BACKUP_TEST_ROOT="$T/nas" run bash "$BACKUP"
@@ -313,6 +324,7 @@ EOF
 }
 
 @test "the attic keeps what the mirror dropped and survives the next --delete" {
+	skip_if_encrypted "$BACKUP"
 	setup_mirror_stubs
 	DRY_DELETES=1001 PATH="$stubs:$PATH" TMPDIR="$T" BACKUP_TEST_HOME="$T/source" \
 		BACKUP_HOLD_FILE="$T/no-hold" BACKUP_TEST_ROOT="$T/nas" run bash "$BACKUP"
@@ -335,6 +347,7 @@ EOF
 }
 
 @test "a failure that repeats on the next tick is emailed once" {
+	skip_if_encrypted "$BACKUP"
 	setup_mirror_stubs
 	for _ in 1 2; do
 		FAIL_SOURCES="/home/decoder/dev/" PATH="$stubs:$PATH" TMPDIR="$T" BACKUP_TEST_HOME="$T/source" \
@@ -345,6 +358,7 @@ EOF
 }
 
 @test "a clean run exits 0 and writes the success stamp" {
+	skip_if_encrypted "$BACKUP"
 	setup_mirror_stubs
 	PATH="$stubs:$PATH" TMPDIR="$T" BACKUP_TEST_HOME="$T/source" \
 		BACKUP_HOLD_FILE="$T/no-hold" BACKUP_TEST_ROOT="$T/nas" run bash "$BACKUP"
@@ -354,6 +368,7 @@ EOF
 }
 
 @test "a lock left by a dead run does not block the next one" {
+	skip_if_encrypted "$BACKUP"
 	setup_mirror_stubs
 	# The lock lives next to the test NAS root (LOCK_FILE uses BACKUP_TEST_ROOT).
 	echo 999999 >"$T/nas/backup.lock"
@@ -373,6 +388,7 @@ EOF
 }
 
 @test "absent optional sources are skipped and retention groups by host and tags" {
+	skip_if_encrypted "$BACKUP"
 	setup_backup_stubs
 	mkdir -p "$T/source"
 	: >"$T/source/.backup_restic_excludes"
@@ -385,6 +401,7 @@ EOF
 }
 
 @test "each structured log line is written once and remains on stdout" {
+	skip_if_encrypted "$BACKUP"
 	setup_backup_stubs
 	mkdir -p "$T/source"
 	: >"$T/source/.backup_restic_excludes"

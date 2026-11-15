@@ -14,6 +14,8 @@ import unittest
 
 SCRIPT = Path(__file__).resolve().parents[2] / "scripts/__handoff_floater_file.py"
 RENDERER = Path.home() / '.claude/scripts/__tw_brief.py'
+if not RENDERER.is_file():
+    raise unittest.SkipTest('needs ~/.claude/scripts from the private repo')
 SPEC = importlib.util.spec_from_file_location('tw_brief_renderer', RENDERER)
 BRIEF = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(BRIEF)

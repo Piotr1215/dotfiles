@@ -37,6 +37,18 @@ teardown() {
   [[ "$output" == *"shell: ran 1, skipped 0, failed 0"* ]]
 }
 
+@test "a pytest module that skips itself passes, a failing one does not" {
+  python3 -c 'import pytest' 2>/dev/null || skip "pytest not installed"
+  mkdir -p "$WORK/tests/python"
+  printf 'import pytest\npytest.skip("absent", allow_module_level=True)\n' >"$WORK/tests/python/test_skipped.py"
+  printf 'def test_fails():\n    assert False\n' >"$WORK/tests/python/test_broken.py"
+  run "$RUN_CI" python
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"python: ran 2, skipped 0, failed 1"* ]]
+  [[ "$output" == *"FAILED tests/python/test_broken.py"* ]]
+  [[ "$output" != *"FAILED tests/python/test_skipped.py"* ]]
+}
+
 @test "an unknown suite is an error" {
   run "$RUN_CI" nope
   [ "$status" -ne 0 ]

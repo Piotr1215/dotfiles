@@ -4,6 +4,8 @@ from pathlib import Path
 
 import pytest
 
+if not (Path.home() / '.codex/scripts/agent_browser/client.py').is_file():
+    pytest.skip('needs ~/.codex/scripts/agent_browser from the private repo', allow_module_level=True)
 path = Path(__file__).resolve().parents[2] / 'scripts/__handoff_tab.py'
 spec = importlib.util.spec_from_file_location('handoff_tab', path)
 tab = importlib.util.module_from_spec(spec)

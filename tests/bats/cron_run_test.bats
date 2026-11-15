@@ -268,6 +268,7 @@ EOF
 # reads. A paused feed must not run and must leave its last state alone, so the
 # health table reads it as paused, not as a fresh run.
 @test "a paused ingest job is skipped and keeps its last state" {
+  [ -r "$HOME/.claude/scripts/__lib_ingest_pause.sh" ] || skip "needs ~/.claude/scripts from the private repo"
   mkdir -p "$CRON_STATE_DIR"
   echo '{"job":"__linear_feed","ts":1,"state":"no-hit"}' >"${CRON_STATE_DIR}/__linear_feed.json"
   export INGEST_PAUSE_FLAG="${WORK}/ingest-paused"

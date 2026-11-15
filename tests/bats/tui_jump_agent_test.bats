@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+load helpers/git_crypt
 # Key 0 in taskwarrior-tui switches tmux to the agent working on the selected task.
 setup() {
   root="$(cd "$BATS_TEST_DIRNAME/../.." && pwd)"
@@ -69,6 +70,7 @@ MOCK
 }
 
 @test "key 0 jumps before the handoff lookup and the legends and background list say so" {
+  skip_if_encrypted "$root/.taskrc"
   export TASKWARRIOR_TUI_REPORT=handoffs LIVE="directive-12345678"
   export PANES_directive_12345678='%85 directive-12345678\n'
   run "$root/scripts/__tui_dispatch.sh" 0 "$uuid"

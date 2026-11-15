@@ -30,7 +30,7 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y tmux zsh neovim ripgrep fzf age taskwarrior \
-          python3-gi gir1.2-gtk-3.0 xvfb python3-pytest python3-requests
+          python3-gi gir1.2-gtk-3.0 xvfb python3-pytest python3-requests gum notmuch stow bc
         sudo npm install -g bats
         # Create minimal .taskrc to avoid interactive prompts
         echo 'data.location=~/task' > ~/.taskrc

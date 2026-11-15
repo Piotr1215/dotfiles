@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+load helpers/git_crypt
 setup() {
   root="$(cd "$BATS_TEST_DIRNAME/../.." && pwd)"
   export TUI_TASK_COMMAND="$BATS_TEST_TMPDIR/task" TUI_TMUX_COMMAND="$BATS_TEST_TMPDIR/tmux" LOG="$BATS_TEST_TMPDIR/log"
@@ -32,6 +33,7 @@ MOCK
   grep -Fq '#{==:#{@agent_name},triage}' "$LOG"; ! grep -q 'C-m' "$LOG"
 }
 @test "later opens a wait-date popup without messaging or completing" {
+  skip_if_encrypted "$root/.taskrc"
   run "$root/scripts/__tui_dispatch.sh" 9 "$uuid"
   [ "$status" -eq 0 ]
   grep -Fq 'display-popup' "$LOG"
@@ -140,16 +142,19 @@ MOCK
   [ ! -e "$LOG" ]
 }
 @test "slot 7 toggles the Linear backlog and slot 0 jumps to the agent" {
+  skip_if_encrypted "$root/.taskrc"
   grep -qx 'uda.taskwarrior-tui.shortcuts.0=~/dev/dotfiles/scripts/__tui_shortcut_0.sh' "$root/.taskrc"
   grep -qx 'uda.taskwarrior-tui.shortcuts.7=~/dev/dotfiles/scripts/__tui_shortcut_7.sh' "$root/.taskrc"
   grep -aE '^uda.taskwarrior-tui.legend.default=0 jump .*7 backlog' "$root/.taskrc"
   grep -Fq '7) exec "$root/__toggle_linear_backlog.sh"' "$root/scripts/__tui_dispatch.sh"
 }
 @test "slot 2 is a configured foreground shortcut" {
+  skip_if_encrypted "$root/.taskrc"
   grep -q '^uda.taskwarrior-tui.shortcuts.2=~/dev/dotfiles/scripts/__tui_shortcut_2.sh$' "$root/.taskrc"
   grep -q '^uda.taskwarrior-tui.shortcuts.background=0,5,6,9$' "$root/.taskrc"
 }
 
 @test "handoffs legend lists the brief shortcut" {
+  skip_if_encrypted "$root/.taskrc"
   grep -a '^uda.taskwarrior-tui.legend.handoffs=' "$root/.taskrc" | grep -q 'b brief'
 }
