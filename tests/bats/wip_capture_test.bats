@@ -2,6 +2,9 @@
 
 setup_file() { bats_require_minimum_version 1.5.0; }
 setup() {
+  # The worktree helper lives in the private ~/.claude repo; resolve it before
+  # HOME moves into the sandbox.
+  WORKTREE_LIB="$HOME/.claude/scripts/__lib_worktree_base.sh"
   export HOME="$BATS_TEST_TMPDIR/home"
   export XDG_CONFIG_HOME="$HOME/.config"
   export WIP_CAPTURE_TARGET="$BATS_TEST_TMPDIR/target"
@@ -21,6 +24,12 @@ setup() {
   git -C "$REPO" commit -qm initial
 }
 capture() { "$SCRIPT" "$ROOT"; }
+# Loads worktree_add_fresh, or skips where the private repo is absent (CI).
+use_worktree_lib() {
+  [[ -r $WORKTREE_LIB ]] || skip "needs ~/.claude/scripts from the private repo"
+  # shellcheck source=/dev/null
+  source "$WORKTREE_LIB"
+}
 mirror_show() { git --git-dir="$MIRROR" show "refs/wip/$1:$2"; }
 
 # Keep an unchanged blob absent from the checkout and object database.
@@ -145,7 +154,7 @@ blobless_fixture() {
 @test "captures linked worktree under the common mirror" {
   git clone -q --bare "$REPO" "$BATS_TEST_TMPDIR/remote.git"
   git -C "$REPO" remote add origin "$BATS_TEST_TMPDIR/remote.git"
-  source /home/decoder/.claude/scripts/__lib_worktree_base.sh
+  use_worktree_lib
   worktree_add_fresh "$REPO" "$ROOT/linked" feature
   printf 'worktree\n' > "$ROOT/linked/tracked"
   run capture
@@ -157,7 +166,7 @@ blobless_fixture() {
 @test "a commit in one worktree syncs the mirror without a new snapshot of its siblings" {
   git clone -q --bare "$REPO" "$BATS_TEST_TMPDIR/remote.git"
   git -C "$REPO" remote add origin "$BATS_TEST_TMPDIR/remote.git"
-  source /home/decoder/.claude/scripts/__lib_worktree_base.sh
+  use_worktree_lib
   worktree_add_fresh "$REPO" "$ROOT/linked" feature
   printf 'worktree\n' > "$ROOT/linked/tracked"
   run capture
@@ -176,7 +185,7 @@ blobless_fixture() {
 @test "a detached commit in a linked worktree reaches the mirror" {
   git clone -q --bare "$REPO" "$BATS_TEST_TMPDIR/remote.git"
   git -C "$REPO" remote add origin "$BATS_TEST_TMPDIR/remote.git"
-  source /home/decoder/.claude/scripts/__lib_worktree_base.sh
+  use_worktree_lib
   worktree_add_fresh "$REPO" "$ROOT/linked" feature
   run capture
   [ "$status" -eq 0 ]
@@ -393,6 +402,15 @@ alert_count() {
   run capture_at $((73 * 3600))
   [[ $output != *'alert '* ]]
   [ "$(alert_count)" = 1 ]
+}
+
+@test "both git wordings for a missing gitdir are a known-broken warning" {
+  eval "$(sed -n '/^known_reason() {/,/^}/p' "$SCRIPT")"
+  # git 2.43 to 2.53, then git 2.56 and later.
+  printf 'fatal: not a git repository: /nonexistent\n' > "$BATS_TEST_TMPDIR/err"
+  [ "$(known_reason "$BATS_TEST_TMPDIR/err")" = 'git directory missing (orphan worktree or submodule)' ]
+  printf 'fatal: gitfile does not point to a valid repository: /b/.git\n' > "$BATS_TEST_TMPDIR/err"
+  [ "$(known_reason "$BATS_TEST_TMPDIR/err")" = 'git directory missing (orphan worktree or submodule)' ]
 }
 
 @test "an orphan worktree with nothing to capture never alerts" {

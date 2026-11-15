@@ -218,7 +218,8 @@ known_reason() {
   # would otherwise fail every run; the stderr note names the timeout.
   if grep -q '^timed out after ' "$err"; then echo 'capture timed out (too many untracked files?)'
   elif grep -q 'repository changed during capture' "$err"; then echo 'changed during capture, retried next run'
-  elif grep -q 'fatal: not a git repository' "$err"; then echo 'git directory missing (orphan worktree or submodule)'
+  # git 2.56 reports a gitfile whose target is gone in its own words.
+  elif grep -Eq 'fatal: (not a git repository|gitfile does not point to a valid repository)' "$err"; then echo 'git directory missing (orphan worktree or submodule)'
   elif grep -q 'from promisor remote' "$err"; then echo 'partial clone needs network for missing objects'
   elif grep -q 'does not have a commit checked out' "$err"; then echo 'embedded repository without a checked out commit'
   else return 1
