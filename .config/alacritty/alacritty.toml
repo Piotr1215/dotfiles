@@ -147,7 +147,7 @@ osc52 = "CopyPaste"  # Better clipboard performance
 blur = false  # Disable blur for better performance
 # PROJECT: alacritty_transparency
 opacity = 1.0
-decorations = "none"
+decorations = "none" # full
 startup_mode = "Maximized"
 dynamic_padding = false  # Reduce redraws
 [window.dimensions]
