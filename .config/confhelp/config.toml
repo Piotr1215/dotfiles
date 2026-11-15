@@ -1,5 +1,8 @@
 # Config-driven parser definitions for bindings help
 # Each section defines how to extract bindings from a config file
+# notation = zsh | tmux | vim | plus rewrites a section's keys into one form,
+# "M-S-g (alt+shift+g)", so m-s-g or alt+shift+g finds the key in any source.
+# The nvim engine uses vim notation by default.
 
 base_dirs = ["~/dev/dotfiles"]
 query_engines = ["nvim", "tmuxinator"]  # Enable runtime query engines
@@ -15,6 +18,7 @@ regex = 'bind(?:-key)?\s+(?:-n\s+)?(\S+)(.*)'
 key_group = 1
 desc_group = 2
 type = "tmux"
+notation = "tmux"
 
 [tmux-copy]
 paths = [".tmux.conf"]
@@ -25,6 +29,7 @@ regex = 'bind(?:-key)?\s+-T\s+\S+\s+(\S+)(.*)'
 key_group = 1
 desc_group = 2
 type = "tmux-copy"
+notation = "tmux"
 
 [zsh-bindkey]
 # Every sourced file that calls bindkey, not just .zshrc: Ctrl+Alt+G lives in
@@ -37,6 +42,7 @@ key_group = 1
 # desc from trailing comment or function name
 desc_from_comment = true
 type = "zsh"
+notation = "zsh"
 
 [alias]
 paths = [".zsh_aliases", ".zsh_claude"]
@@ -84,6 +90,7 @@ regex = '^([^|]+)\|(.+)$'
 key_group = 1
 desc_group = 2
 type = "autokey"
+notation = "plus"
 
 [gnome]
 paths = ["scripts/__gnome_bindings.conf"]
@@ -92,6 +99,7 @@ regex = '^([^|]+)\|(.+)$'
 key_group = 1
 desc_group = 2
 type = "gnome"
+notation = "plus"
 
 [zsh-jumper]
 paths = ["~/.config/zsh-jumper/config.toml"]
@@ -100,6 +108,7 @@ regex = "binding\\s*=\\s*['\"]([^'\"]+)['\"]"
 key_group = 1
 desc_literal = "(zsh-jumper fzf action)"
 type = "zj"
+notation = "plus"
 
 [zledit-actions]
 parser = "toml"
@@ -108,6 +117,7 @@ binding_path = "actions"
 key = "binding"
 desc = "description"
 type = "zledit"
+notation = "plus"
 
 [zledit-previewers]
 parser = "toml"
@@ -145,6 +155,7 @@ regex = '"([^"]+)"\s*:\s*"([^"]+)"'
 key_group = 1
 desc_group = 2
 type = "claude"
+notation = "plus"
 
 # Alacritty key bindings. An entry carries either an action or a chars escape
 # sequence, never both, so desc combines the two and takes whichever is set.
@@ -155,6 +166,7 @@ binding_path = "keyboard.bindings"
 key = "mods+key"
 desc = "action+chars"
 type = "alacritty"
+notation = "plus"
 
 # fzf sub-bindings, from the generated index. The useful row is "M-x ctrl-l",
 # and its two halves live in different files: .tmux.conf says M-x runs
@@ -169,3 +181,4 @@ regex = '^([^;]+);(.+)$'
 key_group = 1
 desc_group = 2
 type = "fzf"
+notation = "plus"

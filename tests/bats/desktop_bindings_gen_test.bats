@@ -164,6 +164,6 @@ EOF
 	[ "$status" -eq 0 ]
 	# The comment header carries a '|' and must not be parsed as a binding.
 	[[ "$output" != *"<key>"* ]]
-	[[ "$output" == *"[autokey]|ctrl+alt+p (M-C-p)|SecretPicker"* ]]
-	[[ "$output" == *"[gnome]|ctrl+alt+space (M-C-space)|Layout Picker"* ]]
+	[[ "$output" == *"[autokey]|M-C-p (ctrl+alt+p)|SecretPicker"* ]]
+	[[ "$output" == *"[gnome]|M-C-Space (ctrl+alt+space)|Layout Picker"* ]]
 }
