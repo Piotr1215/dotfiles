@@ -18,7 +18,7 @@ set -uo pipefail
 # Name precedence when $2 is empty:
 #   pane option @session_name > pane option @agent_name > cwd basename.
 # A cwd-basename session is renamed in the background once Haiku names it from
-# the pane's cwd, branch and running command (Piotr, 15 Nov). The move itself
+# the pane's cwd, branch, running command and last screen lines (Piotr, 15 Nov). The move itself
 # never waits on Haiku; a failed or taken name keeps the basename.
 
 NAMER="${TMUX_SESSION_NAMER:-$HOME/.claude/scripts/__spawn_session_name.py}"
@@ -26,13 +26,16 @@ NAMER="${TMUX_SESSION_NAMER:-$HOME/.claude/scripts/__spawn_session_name.py}"
 # haiku_rename PANE SESSION_ID OLD_NAME CWD: ask the namer for a name on the
 # account the cwd belongs to (~/loft is work) and rename the session to it.
 haiku_rename() {
-  local pane="$1" sid="$2" old="$3" cwd="$4" where=home branch cmd new
+  local pane="$1" sid="$2" old="$3" cwd="$4" where=home branch cmd screen new
   [[ -x "$NAMER" ]] || return 0
   [[ "$cwd" == "$HOME/loft" || "$cwd" == "$HOME/loft/"* ]] && where=work
   branch=$(git -C "$cwd" branch --show-current 2>/dev/null)
   cmd=$(tmux display-message -p -t "$pane" '#{pane_current_command}')
-  new=$(printf 'Terminal work in the project "%s" (folder %s), git branch %s, running %s. Name the session after the project and branch.\n' \
-    "$(basename "$cwd")" "${cwd/#$HOME/\~}" "${branch:-none}" "$cmd" | timeout 15 "$NAMER" --where "$where") || return 0
+  # The last screen lines say what the pane is doing; folder and branch alone
+  # left Haiku guessing (Piotr, 15 Nov: sending screen content is fine).
+  screen=$(tmux capture-pane -p -J -t "$pane" -S -40 2>/dev/null | grep -v '^[[:space:]]*$' | tail -n 30 | cut -c1-200)
+  new=$(printf 'Terminal work in the project "%s" (folder %s), git branch %s, running %s. Name the session after what the screen shows is being done there.\n\nLast screen lines:\n%s\n' \
+    "$(basename "$cwd")" "${cwd/#$HOME/\~}" "${branch:-none}" "$cmd" "${screen:-none}" | timeout 15 "$NAMER" --where "$where") || return 0
   [[ "$new" =~ ^[a-z0-9][a-z0-9-]{1,59}$ ]] || return 0
   tmux has-session -t "=$new" 2>/dev/null && return 0
   tmux rename-session -t "$sid" "$new" && tmux display-message "session '$old' renamed '$new'"

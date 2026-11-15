@@ -50,6 +50,7 @@ sessions() { tmux list-sessions -F '#{session_name}' | sort | tr '\n' ' '; }
 	[ "$(sessions)" = "base tidy-proj-notes " ]
 	grep -qx -- '--where home' "$LOG.args"
 	grep -q "(folder $WORK)" "$LOG.stdin"
+	grep -q "Last screen lines:" "$LOG.stdin"
 }
 
 @test "the move does not wait for the namer" {
