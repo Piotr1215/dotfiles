@@ -9,4 +9,3 @@ windows:
       layout: even-horizontal
       panes:
         - echo "=== NATS WATCHER (Linear Tasks Only) ===" && journalctl --user -u nats-watcher -f -o cat -b
-  - chat: agents-irc
