@@ -21,7 +21,6 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 CHROME = os.environ.get("AGENT_TAB_TEST_CHROME") or shutil.which("google-chrome")
-XVFB = shutil.which("Xvfb")
 TMUX = shutil.which("tmux")
 EXTENSION = Path(os.environ.get("AGENT_TAB_TEST_EXTENSION") or ROOT / ".config/chrome-agent-tmux")
 HOST = ROOT / "scripts/__chrome_agent_tmux.py"
@@ -104,19 +103,6 @@ class CDP:
         return payload
 
 
-def x_server_accepts(path):
-    """True when the X server at this unix socket answers a connection setup with success."""
-    try:
-        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as conn:
-            conn.settimeout(1)
-            conn.connect(str(path))
-            # Little-endian setup request: protocol 11.0, no auth name or data.
-            conn.sendall(b"l\0" + struct.pack("<HHHH", 11, 0, 0, 0) + b"\0\0")
-            return conn.recv(1) == b"\x01"
-    except OSError:
-        return False
-
-
 @pytest.fixture
 def chrome_with_tmux(tmp_path, request):
     """Start private Chrome and tmux instances; always tear them down."""
@@ -146,7 +132,7 @@ def chrome_with_tmux(tmp_path, request):
         extension = tmp_path / "extension"
         shutil.copytree(EXTENSION, extension)
     env = {**os.environ, "HOME": str(home), "XDG_CONFIG_HOME": str(home / ".config"), "XDG_STATE_HOME": str(state), "AGENT_TMUX_TEST_SOCKET": socket_name, "AGENT_TAB_EXTENSION_DIR": str(extension)}
-    browser = xvfb = None
+    browser = None
     browser_log = (tmp_path / "chrome.log").open("w")
     client = None
     master = slave = None
@@ -166,14 +152,6 @@ def chrome_with_tmux(tmp_path, request):
                     pass
                 browser.wait(timeout=5)
         browser_log.close()
-        if xvfb is not None:
-            # SIGTERM lets Xvfb remove its lock and socket for the next test.
-            xvfb.terminate()
-            try:
-                xvfb.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                xvfb.kill()
-                xvfb.wait(timeout=5)
         subprocess.run(tmux + ["kill-server"], capture_output=True)
         if client is not None:
             client.wait(timeout=5)
@@ -206,34 +184,11 @@ def chrome_with_tmux(tmp_path, request):
         os.dup2(pipe_in, 3)
         os.dup2(pipe_out, 4)
 
-    # Xvfb starts here rather than through xvfb-run: Ubuntu 26.04's xvfb-run
-    # takes fd 3 for its own log and closes it for the command, which cut
-    # Chrome off from the DevTools pipe. -displayfd picks a free display.
-    display_read, display_write = os.pipe()
-    xvfb = subprocess.Popen(
-        [XVFB, "-displayfd", str(display_write), "-screen", "0", "1280x1024x24", "-nolisten", "tcp"],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, pass_fds=(display_write,),
-    )
-    os.close(display_write)
-    display = os.read(display_read, 32).decode().strip()
-    os.close(display_read)
-    if not display:
-        pytest.fail("Xvfb did not report a display")
-    # On the runner Chrome sometimes found no X server right after Xvfb named
-    # its display, even with the socket file present, so wait until the server
-    # completes a real X connection handshake.
-    x_socket = Path(f"/tmp/.X11-unix/X{display}")
-    for _ in range(100):
-        if x_server_accepts(x_socket):
-            break
-        if xvfb.poll() is not None:
-            pytest.fail(f"Xvfb exited with {xvfb.returncode}")
-        time.sleep(.05)
-    else:
-        pytest.fail(f"Xvfb display :{display} never accepted an X connection on {x_socket}")
-    env["DISPLAY"] = f":{display}"
+    # Headless Chrome is the full browser (extensions, tab groups, native
+    # messaging) with no X server. The runner's Xvfb sometimes exited right
+    # after naming its display and took Chrome down with it.
     browser = subprocess.Popen(
-        [CHROME, f"--user-data-dir={profile}",
+        [CHROME, "--headless", f"--user-data-dir={profile}",
          "--remote-debugging-pipe", "--enable-unsafe-extension-debugging", "--no-first-run", "--no-default-browser-check",
          "--no-sandbox", "--remote-debugging-port=0", "--enable-logging=stderr", "--log-level=1", "about:blank"],
         env=env, stdout=subprocess.DEVNULL, stderr=browser_log, start_new_session=True,
@@ -271,10 +226,7 @@ def chrome_with_tmux(tmp_path, request):
     loaded = load_unpacked(extension)
     if loaded.get("result", {}).get("id") != extension_id():
         state = "running" if browser.poll() is None else f"exited {browser.returncode}"
-        x_state = "running" if xvfb.poll() is None else f"exited {xvfb.returncode}"
-        x_ok = x_server_accepts(x_socket)
-        pytest.fail(f"Chrome refused the unpacked extension: {loaded} (Chrome {state}, Xvfb {x_state}, "
-                    f"handshake now {'ok' if x_ok else 'refused'}, DISPLAY={env.get('DISPLAY')})\n{chrome_log_tail()}")
+        pytest.fail(f"Chrome refused the unpacked extension: {loaded} (Chrome {state})\n{chrome_log_tail()}")
     active_port = profile / "DevToolsActivePort"
     for _ in range(300):
         if browser.poll() is not None:
