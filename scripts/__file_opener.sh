@@ -139,10 +139,11 @@ source "$PANE_SEARCH_LIB"
 RETURN_MARKER="/tmp/file_opener_return_$$"
 KCTX_MARKER="/tmp/file_opener_kctx_$$"
 SESSION_CHOICES="$HOME/dev/dotfiles/scripts/__tmux_session_choices.sh"
+PICKER_CHOICES="$HOME/dev/dotfiles/scripts/__file_opener_choices.sh"
 
 # Define keybindings for switching sources (only the useful filters)
 # Ctrl+X returns to main view (all sources: sessions + zoxide + files)
-HOME_BIND="ctrl-x:change-prompt(all> )+reload(~/dev/dotfiles/scripts/__tmux_session_choices.sh list; zoxide query -l; cache=/tmp/file_opener_cache_\$USER; if [[ -f \$cache ]] && [[ \$(((\$(date +%s) - \$(stat -c %Y \$cache)))) -lt 60 ]]; then cat \$cache; else fd --type f --hidden --absolute-path --color never --exclude .git --exclude node_modules --exclude .cache --exclude image-cache --exclude plugins --exclude stats-cache.json --exclude claude-wt-worktrees --exclude vendor --changed-within 7d . ~/dev ~/loft ~/.config/nvim ~/.claude 2>/dev/null | xargs stat --format '%Y %n' 2>/dev/null | sort -rn | cut -d' ' -f2- | tee \$cache; fi)"
+HOME_BIND="ctrl-x:change-prompt(all> )+reload($PICKER_CHOICES)"
 # Sessions view (Ctrl+T for tmux) - live sessions and dormant tmuxinator configs,
 # the only place the dormant ones appear. They used to sit in the main list where
 # they outranked every path, which is the friction this key exists to remove.
@@ -192,21 +193,9 @@ TOGGLES_BIND="ctrl-d:execute(~/dev/dotfiles/scripts/__toggles.sh --return-marker
 
 # Loop to allow returning from PRs/Linear back to main picker
 while true; do
-    OUTPUT=$( {
-        # Rank order under --tiebreak=index, first line lands at the cursor.
-        # Live sessions only: dormant tmuxinator configs live behind Ctrl-T so
-        # they stop burying the path you are typing towards.
-        "$SESSION_CHOICES" list
-        # Zoxide directories (most frequently used) - already sorted by frecency
-        zoxide query -l
-        # Files from work directories - use cache if fresh (<60s old), else regenerate
-        cache_file="/tmp/file_opener_cache_$USER"
-        if [[ -f "$cache_file" ]] && [[ $(($(date +%s) - $(stat -c %Y "$cache_file"))) -lt 60 ]]; then
-            cat "$cache_file"
-        else
-            fd --type f --hidden --absolute-path --color never --exclude .git --exclude node_modules --exclude .cache --exclude image-cache --exclude plugins --exclude stats-cache.json --exclude claude-wt-worktrees --exclude vendor --changed-within 7d . ~/dev ~/loft ~/.config/nvim ~/.claude 2>/dev/null | xargs stat --format '%Y %n' 2>/dev/null | sort -rn | cut -d' ' -f2- | tee "$cache_file"
-        fi
-    } | fzf \
+    # Do not wait for the file producer after fzf accepts a session or aborts.
+    # A pipeline here waits for a cold file scan even after the picker exits.
+    OUTPUT=$(fzf \
         --multi \
         --scheme=path \
         --tiebreak=index \
@@ -249,7 +238,7 @@ while true; do
         --bind "$SEARCH_BIND" \
         --bind "$TOGGLES_BIND" \
         --bind "ctrl-c:abort" \
-        2>/dev/null) || true
+        2>/dev/null < <("$PICKER_CHOICES")) || true
 
     # Exit completely if copy was performed
     [[ -f /tmp/file_opener_copied ]] && { rm -f /tmp/file_opener_copied; exit 0; }
