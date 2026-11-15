@@ -154,8 +154,13 @@ def chrome_with_tmux(tmp_path, request):
                 browser.wait(timeout=5)
         browser_log.close()
         if xvfb is not None:
-            xvfb.kill()
-            xvfb.wait(timeout=5)
+            # SIGTERM lets Xvfb remove its lock and socket for the next test.
+            xvfb.terminate()
+            try:
+                xvfb.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                xvfb.kill()
+                xvfb.wait(timeout=5)
         subprocess.run(tmux + ["kill-server"], capture_output=True)
         if client is not None:
             client.wait(timeout=5)
@@ -201,6 +206,17 @@ def chrome_with_tmux(tmp_path, request):
     os.close(display_read)
     if not display:
         pytest.fail("Xvfb did not report a display")
+    # Chrome found no X server once on the runner right after Xvfb named its
+    # display, so wait until the display's socket is there.
+    x_socket = Path(f"/tmp/.X11-unix/X{display}")
+    for _ in range(100):
+        if x_socket.exists():
+            break
+        if xvfb.poll() is not None:
+            pytest.fail(f"Xvfb exited with {xvfb.returncode}")
+        time.sleep(.05)
+    else:
+        pytest.fail(f"Xvfb display :{display} never opened {x_socket}")
     env["DISPLAY"] = f":{display}"
     browser = subprocess.Popen(
         [CHROME, f"--user-data-dir={profile}",
