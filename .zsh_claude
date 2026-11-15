@@ -32,7 +32,7 @@ function claude_from_file() {
     KUBECONFIG=/home/decoder/dev/homelab/kubeconfig __claude_with_monitor.sh -- "$prompt"
 }
 
-# Ctrl+Alt+G: run the command line, put the instructions, command and output in nvim,
+# Alt+Shift+G: run the command line, put the instructions, command and output in nvim,
 # then start Claude Code with what you wrote.
 function execute_and_claude() {
     local cmd="$BUFFER" output tmpfile
@@ -59,8 +59,8 @@ function claude_prompt() {
 # Create widgets
 zle -N execute_and_claude
 
-# Bind to Ctrl+Alt+G (replaces gpt binding)
-bindkey '^[^G' execute_and_claude
+# Alt+Shift+G
+bindkey '^[G' execute_and_claude
 
 # Create 'gpt' alias for backward compatibility - now opens Claude Code
 alias gpt='claude_prompt'
