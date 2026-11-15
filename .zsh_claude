@@ -22,13 +22,15 @@ Keep your responses concise and actionable. When providing commands or code:
 User request below:"
 
 # Open FILE in nvim with the cursor on a new line under "User request below:", then
-# start Claude Code with the saved file as its first prompt. :cq in nvim cancels.
+# start Claude Code with the saved file as its first prompt. Quitting without saving a
+# change (:q, :q!, :cq) cancels, like Ctrl+C.
 function claude_from_file() {
-    local file="$1" prompt
-    nvim +'call search("^User request below:")' +'normal! o' +startinsert "$file" \
-        || { command rm -f "$file"; return 1; }
+    local file="$1" before prompt
+    before=$(<"$file")
+    nvim +'call search("^User request below:")' +'normal! o' +startinsert "$file"
     prompt=$(<"$file")
     command rm -f "$file"
+    [[ "$prompt" != "$before" ]] || return 1
     KUBECONFIG=/home/decoder/dev/homelab/kubeconfig __claude_with_monitor.sh -- "$prompt"
 }
 

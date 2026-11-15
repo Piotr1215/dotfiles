@@ -33,7 +33,11 @@ run_widget() {
         source "$REPO_ROOT/.zsh_claude"
         zle() { :; }
         mktemp() { command mktemp "$HOME/prompt.XXXXXX"; }
-        nvim() { (( ${NVIM_RC:-0} )) && return 1; print -r -- "my request" >> "${@[-1]}"; }
+        nvim() {
+            (( ${NVIM_RC:-0} )) && return 1
+            (( ${NVIM_NOWRITE:-0} )) && return 0
+            print -r -- "my request" >> "${@[-1]}"
+        }
         BUFFER="printf widget-output"
         "$1"
         [[ "$1" == execute_and_claude ]] && eval "$BUFFER"
@@ -66,6 +70,15 @@ launched_prompt() {
 
 @test "quitting nvim with :cq launches nothing and removes the prompt file" {
     NVIM_RC=1 run_widget execute_and_claude
+    [ "$status" -eq 0 ]
+    [ ! -e "$LAUNCH_LOG" ]
+}
+
+@test "quitting nvim with :q or :q! (exit 0, file unchanged) launches nothing" {
+    NVIM_RC=0 NVIM_NOWRITE=1 run_widget execute_and_claude
+    [ "$status" -eq 0 ]
+    [ ! -e "$LAUNCH_LOG" ]
+    NVIM_NOWRITE=1 run_widget claude_prompt
     [ "$status" -eq 0 ]
     [ ! -e "$LAUNCH_LOG" ]
 }
