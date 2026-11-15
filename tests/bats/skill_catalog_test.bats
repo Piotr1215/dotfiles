@@ -242,3 +242,119 @@ EOF
 	[[ "$output" == *replacement-name* ]]
 	[[ "$output" != *first-name* ]]
 }
+
+# The plugin rows cost one CLI call per plugin, so the stub counts its calls.
+make_counting_claude_stub() {
+	local plugin_root="$1" skill="$2"
+	mkdir -p "$FIXTURE_ROOT/bin"
+	cat > "$FIXTURE_ROOT/bin/claude" <<STUB
+#!/usr/bin/env bash
+echo "\$*" >> "$FIXTURE_ROOT/calls.log"
+case "\$1 \$2" in
+"plugin list") echo '[{"id":"costs@market","enabled":true,"installPath":"$plugin_root"}]' ;;
+"plugin details") echo "  Skills (1)  $skill" ;;
+esac
+STUB
+	chmod +x "$FIXTURE_ROOT/bin/claude"
+}
+
+run_cached_claude_catalog() {
+	run env \
+		XDG_CACHE_HOME="$FIXTURE_ROOT/cache" \
+		CLAUDE_SKILLS_ROOT="$FIXTURE_ROOT/claude-skills" \
+		CLAUDE_COMMANDS_ROOT="$FIXTURE_ROOT/missing-commands" \
+		CLAUDE_BIN="$FIXTURE_ROOT/bin/claude" \
+		CLAUDE_INSTALLED_PLUGINS="$FIXTURE_ROOT/installed.json" \
+		CLAUDE_SETTINGS_FILE="$FIXTURE_ROOT/settings.json" \
+		bash "$CATALOG_TOOL" list claude "$FIXTURE_ROOT/project"
+}
+
+# Wait for the detached plugin refresh to finish: it holds the lock while it runs.
+wait_for_refresh() {
+	local lock
+	for lock in "$FIXTURE_ROOT"/cache/capability-picker/plugins-*.lock; do
+		[[ -e "$lock" ]] && flock "$lock" true
+	done
+}
+
+# Skills are edited dozens of times a day. Each edit used to drop the whole
+# cache and rerun every `claude plugin details`, a 3s stall on the next ;;skill.
+@test "editing a personal skill rebuilds its rows without rerunning the plugin CLI" {
+	local plugin="$FIXTURE_ROOT/plugin"
+	make_skill "$plugin/skills/compare/SKILL.md" compare
+	make_skill "$FIXTURE_ROOT/claude-skills/example/SKILL.md" first-name
+	printf '{"plugins":{"costs@market":[{"installPath":"%s"}]}}\n' "$plugin" > "$FIXTURE_ROOT/installed.json"
+	echo '{"enabledPlugins":{"costs@market":true}}' > "$FIXTURE_ROOT/settings.json"
+	make_counting_claude_stub "$plugin" compare
+
+	run_cached_claude_catalog
+	[ "$status" -eq 0 ]
+	[[ "$output" == *first-name* && "$output" == *costs:compare* ]]
+	local calls
+	calls="$(wc -l < "$FIXTURE_ROOT/calls.log")"
+
+	sleep 0.01
+	make_skill "$FIXTURE_ROOT/claude-skills/example/SKILL.md" replacement-name
+	run_cached_claude_catalog
+	[ "$status" -eq 0 ]
+	[[ "$output" == *replacement-name* && "$output" != *first-name* ]]
+	[[ "$output" == *costs:compare* ]]
+	wait_for_refresh
+	[ "$(wc -l < "$FIXTURE_ROOT/calls.log")" -eq "$calls" ]
+}
+
+# The picker must open at once even right after a plugin change: it shows the
+# last plugin rows and a background job picks up the change for the next open.
+# settings.json changes for hooks and permissions all day; only enabledPlugins
+# decides which plugin rows exist, so only that may trigger the CLI.
+@test "plugin rows are served at once and refresh in the background on enabledPlugins changes" {
+	local plugin="$FIXTURE_ROOT/plugin"
+	make_skill "$plugin/skills/compare/SKILL.md" compare
+	make_skill "$plugin/skills/forecast/SKILL.md" forecast
+	printf '{"plugins":{"costs@market":[{"installPath":"%s"}]}}\n' "$plugin" > "$FIXTURE_ROOT/installed.json"
+	echo '{"enabledPlugins":{"costs@market":true},"hooks":{}}' > "$FIXTURE_ROOT/settings.json"
+	make_counting_claude_stub "$plugin" compare
+
+	run_cached_claude_catalog
+	[[ "$output" == *costs:compare* ]]
+	local calls
+	calls="$(wc -l < "$FIXTURE_ROOT/calls.log")"
+
+	echo '{"enabledPlugins":{"costs@market":true},"hooks":{"Stop":[]}}' > "$FIXTURE_ROOT/settings.json"
+	run_cached_claude_catalog
+	wait_for_refresh
+	[ "$(wc -l < "$FIXTURE_ROOT/calls.log")" -eq "$calls" ]
+
+	make_counting_claude_stub "$plugin" forecast
+	echo '{"enabledPlugins":{"costs@market":true,"other@market":false}}' > "$FIXTURE_ROOT/settings.json"
+	run_cached_claude_catalog
+	[ "$status" -eq 0 ]
+	[[ "$output" == *costs:compare* && "$output" != *costs:forecast* ]]
+
+	wait_for_refresh
+	[ "$(wc -l < "$FIXTURE_ROOT/calls.log")" -gt "$calls" ]
+	run_cached_claude_catalog
+	[[ "$output" == *costs:forecast* && "$output" != *costs:compare* ]]
+}
+
+# All SKILL.md headers are now read in one awk pass, so each file's fields must
+# stay its own and only the frontmatter may count.
+@test "one-pass frontmatter keeps each skill's fields and ignores the body" {
+	make_skill "$FIXTURE_ROOT/claude-skills/hidden/SKILL.md" hidden 'user-invocable: false'
+	make_skill "$FIXTURE_ROOT/claude-skills/shown/SKILL.md" shown
+	printf '%s\n' '' 'user-invocable: false' 'name: not-this' >> "$FIXTURE_ROOT/claude-skills/shown/SKILL.md"
+	mkdir -p "$FIXTURE_ROOT/claude-skills/no-frontmatter"
+	printf '%s\n' '# plain' 'name: body-name' > "$FIXTURE_ROOT/claude-skills/no-frontmatter/SKILL.md"
+
+	run env \
+		CAPABILITY_PICKER_DISABLE_CACHE=1 \
+		CLAUDE_SKILLS_ROOT="$FIXTURE_ROOT/claude-skills" \
+		CLAUDE_COMMANDS_ROOT="$FIXTURE_ROOT/missing-commands" \
+		CLAUDE_BIN="$FIXTURE_ROOT/no-such-cli" \
+		bash "$CATALOG_TOOL" list claude "$FIXTURE_ROOT/project"
+
+	[ "$status" -eq 0 ]
+	printf '%s\n' "$output" | grep -F $'\t/shown\tpersonal'
+	printf '%s\n' "$output" | grep -F $'\t/no-frontmatter\tpersonal'
+	[[ "$output" != *hidden* && "$output" != *not-this* && "$output" != *body-name* ]]
+}
