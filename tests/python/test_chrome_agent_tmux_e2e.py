@@ -104,6 +104,19 @@ class CDP:
         return payload
 
 
+def x_server_accepts(path):
+    """True when the X server at this unix socket answers a connection setup with success."""
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as conn:
+            conn.settimeout(1)
+            conn.connect(str(path))
+            # Little-endian setup request: protocol 11.0, no auth name or data.
+            conn.sendall(b"l\0" + struct.pack("<HHHH", 11, 0, 0, 0) + b"\0\0")
+            return conn.recv(1) == b"\x01"
+    except OSError:
+        return False
+
+
 @pytest.fixture
 def chrome_with_tmux(tmp_path, request):
     """Start private Chrome and tmux instances; always tear them down."""
@@ -206,17 +219,18 @@ def chrome_with_tmux(tmp_path, request):
     os.close(display_read)
     if not display:
         pytest.fail("Xvfb did not report a display")
-    # Chrome found no X server once on the runner right after Xvfb named its
-    # display, so wait until the display's socket is there.
+    # On the runner Chrome sometimes found no X server right after Xvfb named
+    # its display, even with the socket file present, so wait until the server
+    # completes a real X connection handshake.
     x_socket = Path(f"/tmp/.X11-unix/X{display}")
     for _ in range(100):
-        if x_socket.exists():
+        if x_server_accepts(x_socket):
             break
         if xvfb.poll() is not None:
             pytest.fail(f"Xvfb exited with {xvfb.returncode}")
         time.sleep(.05)
     else:
-        pytest.fail(f"Xvfb display :{display} never opened {x_socket}")
+        pytest.fail(f"Xvfb display :{display} never accepted an X connection on {x_socket}")
     env["DISPLAY"] = f":{display}"
     browser = subprocess.Popen(
         [CHROME, f"--user-data-dir={profile}",
@@ -257,7 +271,10 @@ def chrome_with_tmux(tmp_path, request):
     loaded = load_unpacked(extension)
     if loaded.get("result", {}).get("id") != extension_id():
         state = "running" if browser.poll() is None else f"exited {browser.returncode}"
-        pytest.fail(f"Chrome refused the unpacked extension: {loaded} (Chrome {state})\n{chrome_log_tail()}")
+        x_state = "running" if xvfb.poll() is None else f"exited {xvfb.returncode}"
+        x_ok = x_server_accepts(x_socket)
+        pytest.fail(f"Chrome refused the unpacked extension: {loaded} (Chrome {state}, Xvfb {x_state}, "
+                    f"handshake now {'ok' if x_ok else 'refused'}, DISPLAY={env.get('DISPLAY')})\n{chrome_log_tail()}")
     active_port = profile / "DevToolsActivePort"
     for _ in range(300):
         if browser.poll() is not None:
