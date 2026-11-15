@@ -29,10 +29,13 @@ if [[ -z "${WA_W:-}" ]]; then
 	exit 1
 fi
 
-# Font size follows the main screen too. Idempotent, so this costs one xrandr
-# call per keypress and only rewrites the import when the desk changed.
-"$(dirname "${BASH_SOURCE[0]}")/__alacritty_font_scale.sh" 2>/dev/null || true
-"$(dirname "${BASH_SOURCE[0]}")/__panel_adapt.sh" 2>/dev/null || true
+# Font size and panel padding follow the main screen too. Both are idempotent
+# and only write when the desk changed. They run in the background so their
+# ~65 ms do not delay the window move.
+{
+	"$(dirname "${BASH_SOURCE[0]}")/__alacritty_font_scale.sh"
+	"$(dirname "${BASH_SOURCE[0]}")/__panel_adapt.sh"
+} >/dev/null 2>&1 &
 
 # Derived work area dimensions
 HALF_W=$((WA_W / 2))
