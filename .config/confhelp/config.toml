@@ -27,7 +27,9 @@ desc_group = 2
 type = "tmux-copy"
 
 [zsh-bindkey]
-paths = [".zshrc"]
+# Every sourced file that calls bindkey, not just .zshrc: Ctrl+Alt+G lives in
+# .zsh_claude and was missing from the help while only .zshrc was listed.
+paths = [".zshrc", ".zsh_claude", ".zsh/pane-text-completion.zsh"]
 match_line = "bindkey"
 skip_comment = true
 regex = "bindkey\\s+(?:-s\\s+)?['\"]([^'\"]+)['\"]"
