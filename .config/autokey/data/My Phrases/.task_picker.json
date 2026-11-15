@@ -1,0 +1,30 @@
+{
+  "type": "script",
+  "description": "pending work task, as the @task token (picker)",
+  "store": {},
+  "modes": [
+    1
+  ],
+  "usageCount": 0,
+  "prompt": false,
+  "omitTrigger": true,
+  "showInTrayMenu": false,
+  "abbreviation": {
+    "abbreviations": [
+      ";;task"
+    ],
+    "backspace": false,
+    "ignoreCase": false,
+    "immediate": false,
+    "triggerInside": true,
+    "wordChars": "[\\w]"
+  },
+  "hotkey": {
+    "modifiers": [],
+    "hotKey": null
+  },
+  "filter": {
+    "regex": null,
+    "isRecursive": false
+  }
+}
