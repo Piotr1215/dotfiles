@@ -233,3 +233,4 @@ alias 2md="~/dev/dotfiles/scripts/__readable.mjs --url"
 }
 alias headset_fix='xinput disable "Logitech PRO X Wireless Gaming Headset Consumer Control"; xinput enable "Logitech PRO X Wireless Gaming Headset Consumer Control"'
 alias ks='__kiwix_search.sh'
+alias snt='snd -g tasks'  # broadcast to the tasks group on the agents bus
