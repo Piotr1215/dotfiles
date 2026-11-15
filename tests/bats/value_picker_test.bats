@@ -35,3 +35,46 @@ setup() {
 	[ "$(sed -n 1p "$SPY/xdotool.log")" = "key --clearmodifiers BackSpace BackSpace" ]
 	[ "$(sed -n 2p "$SPY/xdotool.log")" = "type --clearmodifiers --delay 12 -- /a/b.jsonl" ]
 }
+
+# rofi stub that records its menu on stdin and answers with $1 (rofi's "-format
+# 'i s'" reply), so a test sees both what was shown and what got typed.
+rofi_answers() {
+	printf '#!/usr/bin/env bash\necho "$*" >> "%s/rofi.log"\ncat > "%s/rofi.menu"\nprintf "%%s\\n" "%s"\n' \
+		"$SPY" "$SPY" "$1" > "$STUB_BIN/rofi"
+	chmod +x "$STUB_BIN/rofi"
+}
+
+@test "a tab line shows only its label and types the hidden value" {
+	printf '@"u1|D-1|r|fix a"\tfix a  D-1\n@"u2|D-2|r|fix b"\tfix b  D-2\n' > "$VALUE_SETS_DIR/tabs"
+	rofi_answers "1 fix b  D-2"
+	run "$PICKER" tabs 0
+	[ "$status" -eq 0 ]
+	[ "$(cat "$SPY/rofi.menu")" = "$(printf 'fix a  D-1\nfix b  D-2')" ]
+	[[ "$(cat "$SPY/rofi.log")" == *"-format i s"* ]]
+	[ "$(tail -1 "$SPY/xdotool.log")" = 'type --clearmodifiers --delay 12 -- @"u2|D-2|r|fix b"' ]
+}
+
+@test "a pipe line still shows whole and types the part before the pipe" {
+	printf 'v1 | one\nv2 | two\n' > "$VALUE_SETS_DIR/pipes"
+	rofi_answers "0 v1 | one"
+	run "$PICKER" pipes 0
+	[ "$status" -eq 0 ]
+	[ "$(cat "$SPY/rofi.menu")" = "$(printf 'v1 | one\nv2 | two')" ]
+	[ "$(tail -1 "$SPY/xdotool.log")" = "type --clearmodifiers --delay 12 -- v1" ]
+}
+
+@test "a custom entry with no matching row types what was entered" {
+	printf 'v1\nv2\n' > "$VALUE_SETS_DIR/plain"
+	rofi_answers "-1 typed by hand"
+	run "$PICKER" plain 0
+	[ "$status" -eq 0 ]
+	[ "$(tail -1 "$SPY/xdotool.log")" = "type --clearmodifiers --delay 12 -- typed by hand" ]
+}
+
+@test "a single tab line types its hidden value without a menu" {
+	printf '@"u1|D-1|r|fix a"\tfix a\n' > "$VALUE_SETS_DIR/onetab"
+	run "$PICKER" onetab 0
+	[ "$status" -eq 0 ]
+	[ ! -e "$SPY/rofi.log" ]
+	[ "$(tail -1 "$SPY/xdotool.log")" = 'type --clearmodifiers --delay 12 -- @"u1|D-1|r|fix a"' ]
+}

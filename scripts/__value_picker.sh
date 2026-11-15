@@ -8,6 +8,8 @@
 #   - executable file -> run it, its stdout lines are the values (live data)
 # Line format:  VALUE              -> typed verbatim
 #               VALUE | label      -> rofi shows the whole line, types only VALUE
+#               VALUE<TAB>label    -> rofi shows and filters only the label,
+#                                     types VALUE (ids nobody searches by)
 #
 # Usage:
 #   __value_picker.sh <set>   pick a value from <set>
@@ -29,11 +31,23 @@ source "$SCRIPT_DIR/__lib_rofi_theme.sh"
 # file, and the skill name) sits at the END of the line, so a truncating window
 # hides exactly the part being chosen between.
 rofi_pick() {
+    local prompt="$1"
+    shift
     rofi_theme 2000
-    rofi -dmenu -i -p "$1" \
+    rofi -dmenu -i -p "$prompt" \
         -kb-move-front "" -kb-custom-1 "Control+a" \
         -mesg 'Ctrl+A → copy whole list to clipboard' \
-        "${ROFI_THEME[@]}"
+        "${ROFI_THEME[@]}" "$@"
+}
+
+# What rofi shows for a line: the label of a VALUE<TAB>label line, else all of it.
+display_of() {
+    if [[ "$1" == *$'\t'* ]]; then printf '%s\n' "${1#*$'\t'}"; else printf '%s\n' "$1"; fi
+}
+
+# What gets typed for a line: VALUE before a tab, else the text before " | ".
+value_of() {
+    if [[ "$1" == *$'\t'* ]]; then printf '%s' "${1%%$'\t'*}"; else printf '%s' "${1%% | *}"; fi
 }
 
 # Names of all available sets (filenames in SETS_DIR).
@@ -74,8 +88,15 @@ mapfile -t lines < <(load_set "$set_name")
 dump_all=0
 if (( ${#lines[@]} == 1 )); then
     selection="${lines[0]}"
-elif selection=$(printf '%s\n' "${lines[@]}" | rofi_pick "$set_name"); then
-    : # normal pick
+elif picked=$(for l in "${lines[@]}"; do display_of "$l"; done | rofi_pick "$set_name" -format 'i s'); then
+    # rofi returns "<index> <text>"; the index maps back to the full line, so a
+    # hidden VALUE survives. A custom entry has index -1: type its text as is.
+    idx="${picked%% *}"
+    if [[ "$idx" =~ ^[0-9]+$ ]] && (( idx < ${#lines[@]} )); then
+        selection="${lines[idx]}"
+    else
+        selection="${picked#* }"
+    fi
 else
     # rofi exits 10 for kb-custom-1 (Control+a) = "type the whole list".
     # Anything else (1 = Esc) is a cancel. Read $? first, before any command.
@@ -97,7 +118,7 @@ fi
 # newline and, in a terminal, execute each line. Clipboard + manual paste keeps
 # the list inert and lets the user place it where they want.
 if (( dump_all )); then
-    printf '%s\n' "${lines[@]}" | xclip -selection clipboard
+    printf '%s\n' "${lines[@]}" | sed 's/\t/ | /' | xclip -selection clipboard
     command -v notify-send >/dev/null 2>&1 &&
         notify-send "Value picker" "Copied ${#lines[@]} items to clipboard"
     exit 0
@@ -106,5 +127,5 @@ fi
 # Normal pick: type the single VALUE (text before " | "). One line, no Enter, so
 # nothing executes. Multi-line content is never typed (see dump-all above).
 [[ -z "$selection" ]] && exit 0
-to_type="${selection%% | *}"
+to_type="$(value_of "$selection")"
 xdotool type --clearmodifiers --delay 12 -- "$to_type"
