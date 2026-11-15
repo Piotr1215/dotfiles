@@ -340,6 +340,8 @@ uv_argv() {
 	[ "$status" -eq 0 ]
 	[ "$(cat "$STUB_LOG/uv.key")" = "unset" ]
 	[ "$(cat "$STUB_LOG/uv.args")" = "$(uv_argv --pass work/ANTHROPIC_PR_REVIEW_SWARM_KEY --name probe --out 'out file.md')" ]
+	# The relative --out lands in the temp dir; before the cd it leaked into tests/bats.
+	[ "$(cat "$BATS_TEST_TMPDIR/out file.md")" = PICK-OK ]
 	[ ! -e "$STUB_LOG/uv.list.args" ]
 	[[ "$output" == *"console: https://console.example/session"* ]]
 	[[ "$output" == *'"status": "ok"'* ]]
