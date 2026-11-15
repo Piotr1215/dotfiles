@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Test margin clipping and redraw through a private pseudo-terminal."""
+import contextlib
 import fcntl
 import importlib.util
 import io
@@ -89,8 +90,22 @@ class MarginViewTest(unittest.TestCase):
         cls.build_dir.cleanup()
         cls.env_patch.stop()
 
+    @contextlib.contextmanager
+    def viewer_dir(self, prefix):
+        """A temp dir removed only after the registered cleanups stop the viewers.
+
+        addCleanup runs after the test method returns, so a plain
+        TemporaryDirectory was removed while viewers still wrote state into it
+        (Directory not empty on the CI runner).
+        """
+        with tempfile.TemporaryDirectory(prefix=prefix) as tmp:
+            try:
+                yield tmp
+            finally:
+                self.doCleanups()
+
     def test_semantic_filter(self):
-        with tempfile.TemporaryDirectory(prefix='margin-semantic-') as tmp:
+        with self.viewer_dir('margin-semantic-') as tmp:
             root = Path(tmp)
             task, state, bindir = root / 'task', root / 'state', root / 'bin'
             task.mkdir(); bindir.mkdir()
@@ -139,7 +154,7 @@ class MarginViewTest(unittest.TestCase):
         return next(proc for _, proc in viewers if proc.pid == ppid)
 
     def test_nested_inputs_and_continuous_dirty(self):
-        with tempfile.TemporaryDirectory(prefix='margin-inputs-') as tmp:
+        with self.viewer_dir('margin-inputs-') as tmp:
             root = Path(tmp)
             notes = root / '.claude/tmp'
             updates = notes / 'cockpit-updates'
@@ -201,7 +216,7 @@ class MarginViewTest(unittest.TestCase):
             self.assertGreater(len(calls.read_text().splitlines()), before)
 
     def test_leader_crash_keeps_lock_until_collector_exits(self):
-        with tempfile.TemporaryDirectory(prefix='margin-crash-') as tmp:
+        with self.viewer_dir('margin-crash-') as tmp:
             root = Path(tmp)
             renderer, calls, state = root / 'renderer.py', root / 'calls', root / 'state'
             renderer.write_text('''#!/usr/bin/env python3
@@ -241,7 +256,7 @@ print('READY')
             self.assertFalse(Path(str(calls) + '.overlap').exists())
 
     def test_shared_frame_scroll_and_leader_failover(self):
-        with tempfile.TemporaryDirectory(prefix='margin-shared-') as tmp:
+        with self.viewer_dir('margin-shared-') as tmp:
             root = Path(tmp)
             renderer, source, calls, state = root / 'renderer.py', root / 'source', root / 'calls', root / 'state'
             source.write_text('HEADER\nAGENT: one\nSTATUS: idle\nSESSION: jump:one\n' + ''.join(f'ROW-{i}\n' for i in range(12)))

@@ -5,8 +5,9 @@ set -eo pipefail
 source "$HOME/dev/dotfiles/scripts/__lib_screen.sh"
 PANEL_SIZE=$(panel_label_size 12)
 
-# CPU package temp
-pkg_temp=$(cat /sys/class/thermal/thermal_zone0/temp 2>/dev/null)
+# CPU package temp. A machine with no thermal zone (a VM) reads 0; under
+# set -e a bare failing cat here ended the applet before it printed a line.
+pkg_temp=$(cat "${HWMON_THERMAL_FILE:-/sys/class/thermal/thermal_zone0/temp}" 2>/dev/null || echo 0)
 pkg_temp=$((pkg_temp / 1000))
 
 # Fan speeds

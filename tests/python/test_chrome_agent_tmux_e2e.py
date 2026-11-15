@@ -232,13 +232,20 @@ def chrome_with_tmux(tmp_path, request):
                 reply += chunk
         return {}
 
+    def chrome_log_tail():
+        """The end of Chrome's own log, so a failure on a remote runner says why."""
+        browser_log.flush()
+        lines = (tmp_path / "chrome.log").read_text(errors="replace").splitlines()
+        return "\n".join(lines[-25:])
+
     loaded = load_unpacked(extension)
     if loaded.get("result", {}).get("id") != extension_id():
-        pytest.fail(f"Chrome refused the unpacked extension: {loaded}")
+        state = "running" if browser.poll() is None else f"exited {browser.returncode}"
+        pytest.fail(f"Chrome refused the unpacked extension: {loaded} (Chrome {state})\n{chrome_log_tail()}")
     active_port = profile / "DevToolsActivePort"
     for _ in range(300):
         if browser.poll() is not None:
-            pytest.fail(f"Chrome exited with {browser.returncode}")
+            pytest.fail(f"Chrome exited with {browser.returncode}\n{chrome_log_tail()}")
         if active_port.exists():
             break
         time.sleep(.1)

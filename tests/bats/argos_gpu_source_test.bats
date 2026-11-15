@@ -76,6 +76,12 @@ calls() {
     [ "$(calls)" -eq 0 ]
 }
 
+@test "hwmon applet still prints on a machine with no thermal zone" {
+    HWMON_THERMAL_FILE="$WORK/no-thermal-zone" run bash "$ARGOS/hwmon.2l.10s.sh"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"51°C"* ]]
+}
+
 @test "hwmon applet falls back to nvidia-smi when the watcher file is stale" {
     touch -d '-1 minute' "$RESOURCE_WATCHER_STATE"
     run bash "$ARGOS/hwmon.2l.10s.sh"
