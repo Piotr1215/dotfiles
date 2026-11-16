@@ -13,6 +13,18 @@ add_task_if_not_exists() {
 	# Check for pending tasks due today
 	if ! task project:admin description.is:"$task_description" due:today status:pending count | grep -q '1' &&
 		! task project:admin description.is:"$task_description" due:today status:completed count | grep -q '1'; then
+		# An earlier day's copy still pending is carried to today instead of
+		# getting a twin beside it (ledger 899fdda8); extra stale copies go.
+		local -a copies
+		IFS=' ' read -ra copies <<<"$(task rc.verbose=nothing project:admin description.is:"$task_description" status:pending uuids)"
+		if [ "${#copies[@]}" -gt 0 ]; then
+			task rc.verbose=nothing "${copies[0]}" modify due:"$due_time"
+			if [ "${#copies[@]}" -gt 1 ]; then
+				task rc.verbose=nothing rc.confirmation=off rc.bulk=0 "${copies[@]:1}" delete
+			fi
+			echo "Carried to today: $task_description"
+			return
+		fi
 		if [ -n "$session" ]; then
 			task add project:admin tags:work,kill due:"$due_time" "$task_description" "$session"
 		else

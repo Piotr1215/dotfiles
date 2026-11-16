@@ -21,6 +21,7 @@ setup() {
 printf '%s\n' "$*" >>"$TASK_LOG"
 case "$*" in
 *count*) printf '%s\n' "${EXISTING_COUNT:-0}" ;;
+*uuids*) printf '%s\n' "${PENDING_UUIDS:-}" ;;
 esac
 exit 0
 EOF
@@ -88,5 +89,29 @@ EOF
 @test "standup is not recreated here; it is a standing task" {
 	run_on 2
 	run grep -qi 'standup' "$TASK_LOG"
+	[ "$status" -ne 0 ]
+}
+
+# 16 Nov, ledger 899fdda8: Friday's unfinished "check notifications", "fill
+# daily hours" and "respond to slack messages" sat on Piotr's screens beside
+# Monday's fresh copies. The guard only looked at due:today, so an earlier
+# day's pending copy never stopped a new add.
+@test "899fdda8: an earlier day's pending copy is carried to today, not added twice" {
+	PENDING_UUIDS="aaaa1111-0000-0000-0000-000000000000" run_on 1
+	[ "$status" -eq 0 ]
+	run grep -q 'add ' "$TASK_LOG"
+	[ "$status" -ne 0 ]
+	run grep -q 'aaaa1111-0000-0000-0000-000000000000 modify due:today+8h' "$TASK_LOG"
+	[ "$status" -eq 0 ]
+}
+
+@test "899fdda8: two stale copies collapse into the first one" {
+	PENDING_UUIDS="aaaa1111-0000-0000-0000-000000000000 bbbb2222-0000-0000-0000-000000000000" run_on 1
+	[ "$status" -eq 0 ]
+	run grep -q 'aaaa1111-0000-0000-0000-000000000000 modify due:today+8h' "$TASK_LOG"
+	[ "$status" -eq 0 ]
+	run grep -q 'bbbb2222-0000-0000-0000-000000000000 delete' "$TASK_LOG"
+	[ "$status" -eq 0 ]
+	run grep -q 'add ' "$TASK_LOG"
 	[ "$status" -ne 0 ]
 }
