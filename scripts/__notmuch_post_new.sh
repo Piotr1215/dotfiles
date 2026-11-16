@@ -266,7 +266,7 @@ event_for() {
     subject="$(jq -r '.headers.Subject // ""' <<<"$msg")"
     svc="$(svc_of "$from_addr")"
     append_record "📧${from_name:0:80}:" \
-        "thread:${tid} to:${addressed} bulk:${bulk} account:${account} folder:${folder} from:${from_addr}${svc:+ svc:$svc} | ${subject:0:200}"
+        "thread:${tid} mid:${id} to:${addressed} bulk:${bulk} account:${account} folder:${folder} from:${from_addr}${svc:+ svc:$svc} | ${subject:0:200}"
 }
 
 # waiting_ops <thread id>: prints the notmuch tag batch lines that bring the

@@ -110,7 +110,13 @@ tags_of() {
   [[ "$line" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}\ [0-9]{2}:[0-9]{2}:[0-9]{2}$'\t'mail$'\t'📧Smith,\ Dan:$'\t' ]]
   tid="$(notmuch search --output=threads id:m1@test)"
   body="$(cut -f4 <<<"$line")"
-  [ "$body" = "${tid} to:direct bulk:- account:piotr.zaniewski@loft.sh folder:inbox from:dan.smith@mend.io | Mend terms and DPA for review" ]
+  [ "$body" = "${tid} mid:m1@test to:direct bulk:- account:piotr.zaniewski@loft.sh folder:inbox from:dan.smith@mend.io | Mend terms and DPA for review" ]
+}
+
+@test "the event carries the bare message id" {
+  deliver "$WORK_INBOX" 'first.last+tag@example.org' 'Ann <ann@example.org>' 'piotrzan@gmail.com' 'hello'
+  notmuch new --quiet
+  [[ "$(records)" == *' mid:first.last+tag@example.org '* ]]
 }
 
 @test "a tool's notification mail carries svc, other mail none" {
