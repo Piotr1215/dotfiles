@@ -86,3 +86,11 @@ windows:
         # as the watched command, so -n became the command name.
         - command viddy -n 10s -t '~/.claude/scripts/__kendra_fn.py dashboard --rows 58'
         - NCURSES_NO_UTF8_ACS=1 tui -r backlog
+  # Meeting Notes: Piotr pastes a meeting transcript or a notes link (Notion,
+  # claude.ai meeting, Google Doc) and it archives the meeting and files the
+  # follow-ups: Linear issues per owner, handoff and Slack draft rows, checks
+  # for Gordon. Bus name meeting-notes. ~/loft/meeting-notes selects the WORK
+  # account; the model is the `meeting-notes` role in ~/.claude/models.env.
+  - meeting-notes:
+      panes:
+        - cd "$HOME/loft/meeting-notes" && MCP_TIMEOUT=120000 __claude_with_monitor.sh --system-prompt-file ~/.claude/system-prompts/meeting-notes-system-prompt.md --model "$(~/.claude/scripts/__models.sh get meeting-notes)" -- "Start your shift. Run your startup checklist."
