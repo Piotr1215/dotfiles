@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Cycle the selected task's effort: M -> H -> X -> M.
+# Cycle the selected task's effort: L -> M -> H -> X -> Z -> L
+# (low, medium, high, xhigh, max; Piotr, 17 Nov).
 set -euo pipefail
 
 raw="${1:?task uuid or id required}"
@@ -12,10 +13,12 @@ if [[ -z "$effort" ]]; then
 fi
 
 case "${effort:-H}" in
+    L|low) next=M ;;
     M|medium) next=H ;;
     H|high) next=X ;;
-    X|xhigh) next=M ;;
-    *) echo "Invalid effort: $effort. Set it to M, H, or X." >&2; exit 1 ;;
+    X|xhigh) next=Z ;;
+    Z|max) next=L ;;
+    *) echo "Invalid effort: $effort. Set it to L, M, H, X, or Z." >&2; exit 1 ;;
 esac
 
 # A bare UUID filter loads every task in the database; `<id> uuid:<uuid>`

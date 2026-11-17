@@ -45,7 +45,7 @@ class EffortUdaTests(unittest.TestCase):
     def test_default_and_explicit_values(self):
         self.task("add", "project:effort-test", "default effort proof")
         self.assertEqual(json.loads(self.task("export").stdout)[0]["effort"], "H")
-        for effort in ("M", "H", "X"):
+        for effort in ("L", "M", "H", "X", "Z"):
             with self.subTest(effort=effort):
                 self.task("1", "modify", f"effort:{effort}")
                 self.assertEqual(json.loads(self.task("export").stdout)[0]["effort"], effort)
@@ -93,7 +93,7 @@ class EffortUdaTests(unittest.TestCase):
         )
         dialog.chmod(0o755)
         args_file = script_dir / "dialog-args.json"
-        for effort in ("M", "H", "X"):
+        for effort in ("L", "M", "H", "X", "Z"):
             with self.subTest(effort=effort):
                 self.task("1", "modify", f"effort:{effort}", "-codex")
                 result = subprocess.run(
@@ -122,7 +122,7 @@ class EffortUdaTests(unittest.TestCase):
         self.assertTrue(os.access(script, os.X_OK))
         self.task("add", "+codex", "cycle effort proof")
         original = json.loads(self.task("export").stdout)[0]
-        for expected in ("X", "M", "H"):
+        for expected in ("X", "Z", "L", "M", "H"):
             result = subprocess.run(
                 [str(script), original["uuid"]], env=self.env,
                 capture_output=True, text=True, timeout=10,
