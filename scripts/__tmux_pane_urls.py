@@ -33,12 +33,22 @@ def trim(url):
     return url
 
 
+def truncated(raw):
+    """True when a display cut the link short: Claude's collapsed tool view
+    prints "https://githu…", and trimming the dots off "…/os..." would leave a
+    link that looks whole and is not."""
+    url = trim(raw)
+    return "\u2026" in raw or raw[len(url):].startswith("...")
+
+
 def extract_urls(text):
     """Return the links in text, the last seen first, each once."""
     found = []
     for line in text.splitlines():
-        found.extend(OSC8.findall(line))
-        found.extend(trim(m) for m in URL.findall(ESCAPES.sub("", line)))
+        # Claude Code links URL-looking text itself, so an OSC 8 target can be
+        # as cut short or punctuated as the text it wraps.
+        raw = OSC8.findall(line) + URL.findall(ESCAPES.sub("", line))
+        found.extend(trim(m) for m in raw if not truncated(m))
     seen = set()
     ordered = []
     for url in reversed(found):

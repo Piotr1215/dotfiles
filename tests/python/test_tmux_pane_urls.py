@@ -49,3 +49,14 @@ def test_no_links_gives_empty_list():
 def test_backslash_ends_a_url():
     text = r"printf 'https://a.io/x\e\\label https://b.io/y).\n'" + "\n"
     assert sorted(extract(text)) == ["https://a.io/x", "https://b.io/y"]
+
+
+def test_display_truncated_links_are_dropped():
+    text = "plain https://githu…) and https://example.com/os... cut, https://ok.io/x...\n"
+    assert extract(text) == []
+
+
+def test_osc8_targets_get_the_same_cleanup():
+    text = ("\x1b]8;id=1;https://githu…,\x1b\\https://githu…,\x1b]8;;\x1b\\ "
+            "\x1b]8;id=2;https://ok.io/a).\x1b\\https://ok.io/a).\x1b]8;;\x1b\\\n")
+    assert extract(text) == ["https://ok.io/a"]
