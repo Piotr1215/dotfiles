@@ -25,6 +25,25 @@ scale() {
 XR_1080P='HDMI-0 connected primary 1920x1080+2560+0 (normal left inverted right x axis y axis) 476mm x 267mm\neDP-1-1 connected 2560x1600+0+0 (normal) 345mm x 215mm'
 XR_4K_32='DP-2 connected primary 3840x2160+0+0 (normal left inverted right x axis y axis) 774mm x 435mm'
 XR_NO_MM='HDMI-1 connected primary 1920x1080+0+0 (normal) 0mm x 0mm'
+XR_LAPTOP='HDMI-0 disconnected (normal left inverted right x axis y axis)\neDP-1-1 connected primary 2560x1600+0+0 (normal left inverted right x axis y axis) 345mm x 215mm'
+
+# The laptop is read from closer than a desk monitor, so the desk's 4.6mm
+# glyph came out at 25.5pt there and Piotr shrank it by hand to 15pt.
+@test "the laptop panel alone gets its own smaller target, 15pt" {
+  run scale "$XR_LAPTOP" 96 --print
+  [ "$status" -eq 0 ]
+  [ "$output" = "15.0" ]
+}
+
+@test "the laptop panel target is tunable through the environment" {
+  ALACRITTY_FONT_MM_PANEL=3.0 run scale "$XR_LAPTOP" 96 --print
+  [ "$output" = "16.5" ]
+}
+
+@test "an external primary beside the laptop keeps the desk target" {
+  ALACRITTY_FONT_MM_PANEL=1.0 run scale "$XR_1080P" 96 --print
+  [ "$output" = "14.0" ]
+}
 
 @test "24 inch 1080p at 96 dpi gets 14pt" {
   run scale "$XR_1080P" 96 --print

@@ -5,14 +5,18 @@
 # and write it to the import file alacritty.toml pulls in. The same point size
 # renders 16pt as 5mm glyphs on a 24" 1080p panel and 3.5mm on a 32" 4k panel,
 # so one number in alacritty.toml fits exactly one desk. Targeting a glyph
-# height in millimetres makes every desk come out the same size. Alacritty
-# reloads imports live, so running windows resize as soon as the file changes.
+# height in millimetres makes every desk come out the same size. A laptop's
+# built-in panel is read from closer, so it takes its own smaller target: the
+# desk's 4.6mm gave 25.5pt on the 16" serval panel, where 15pt reads right.
+# Alacritty reloads imports live, so running windows resize as soon as the
+# file changes.
 #
 # Usage: __alacritty_font_scale.sh [--print]
 #   --print   show the computed size, write nothing
 # Env:
-#   ALACRITTY_FONT_MM   target glyph height in mm (default 4.6)
-#   ALACRITTY_FONT_BASE size used when the screen reports no physical size
+#   ALACRITTY_FONT_MM       target glyph height in mm on a monitor (default 4.6)
+#   ALACRITTY_FONT_MM_PANEL target on a built-in laptop panel (default 2.7)
+#   ALACRITTY_FONT_BASE     size used when the screen reports no physical size
 
 set -eo pipefail
 IFS=$'\n\t'
@@ -21,6 +25,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/__lib_screen.sh"
 
 FONT_FILE="${ALACRITTY_FONT_FILE:-$HOME/.config/alacritty/font-size.toml}"
 TARGET_MM="${ALACRITTY_FONT_MM:-4.6}"
+PANEL_MM="${ALACRITTY_FONT_MM_PANEL:-2.7}"
 BASE_SIZE="${ALACRITTY_FONT_BASE:-16.0}"
 MIN_SIZE=8
 MAX_SIZE=28
@@ -34,12 +39,14 @@ xft_dpi() {
 
 # Print the font size in points, rounded to the nearest half point.
 compute_font_size() {
-	local mon name mm_per_px dpi
+	local mon name mm_per_px dpi target="$TARGET_MM"
 	mon=$(get_target_monitor) || { printf '%s\n' "$BASE_SIZE"; return 0; }
 	name="${mon%% *}"
 	mm_per_px=$(get_monitor_mm_per_px "$name") || { printf '%s\n' "$BASE_SIZE"; return 0; }
+	# eDP, LVDS and DSI are the connectors of a built-in laptop panel.
+	[[ "$name" =~ ^(eDP|LVDS|DSI) ]] && target="$PANEL_MM"
 	dpi=$(xft_dpi)
-	awk -v mm="$TARGET_MM" -v pitch="$mm_per_px" -v dpi="$dpi" -v lo="$MIN_SIZE" -v hi="$MAX_SIZE" 'BEGIN {
+	awk -v mm="$target" -v pitch="$mm_per_px" -v dpi="$dpi" -v lo="$MIN_SIZE" -v hi="$MAX_SIZE" 'BEGIN {
 		px = mm / pitch
 		pt = px * 72 / dpi
 		pt = int(pt * 2 + 0.5) / 2
