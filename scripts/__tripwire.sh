@@ -40,7 +40,7 @@ die() {
 headlines() {
 	local url xml
 	url="https://news.google.com/rss/search?q=$(jq -rn --arg q "$1" '$q|@uri')&hl=en-US&gl=US&ceid=US:en"
-	xml="$(curl -sf --max-time 20 "$url")" || return 1
+	xml="$(curl -sf --retry 2 --retry-delay 5 --retry-all-errors --max-time 20 "$url")" || return 1
 	[[ "$xml" == *"<rss"* ]] || return 1
 	# One item parses as a map, not a list: wrap and flatten so one or none read the same as many.
 	printf '%s' "$xml" |

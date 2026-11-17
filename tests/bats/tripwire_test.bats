@@ -140,6 +140,26 @@ add_wire() {
   [[ "$output" == *"broken: the news feed did not answer"* ]]
 }
 
+@test "a transient feed failure is retried and the wire arms" {
+  add_wire
+  feed "a1:old"
+  stub curl '
+    [[ "$1 $2 $3 $4 $5 $6 $7" == "-sf --retry 2 --retry-delay 5 --retry-all-errors --max-time" ]] || exit 22
+    [[ "$8" == 20 ]] || exit 22
+    for attempt in 1 2; do
+      echo "$attempt" >>"$LOG"
+      [[ "$attempt" == 1 ]] && continue
+      cat "$FEED"
+      exit 0
+    done
+    exit 22'
+  run "$SCRIPT" run
+  [ "$status" -eq 0 ]
+  [ "$(cat "$LOG")" = $'1\n2' ]
+  grep -qx a1 "$XDG_STATE_HOME/tripwire/vmware.seen"
+  [ ! -e "$XDG_STATE_HOME/tripwire/vmware.broken" ]
+}
+
 @test "with CLASSIF=0 nothing is fetched or judged" {
   add_wire
   feed "a1:old"
