@@ -18,10 +18,11 @@ FETCH_LIMIT reads a run; past that, or on a failed read, the record carries
 the title only). pr-watch already DMs movement on the PRs it watches and
 direct review requests, so a PR thread whose URL is a key of its state file
 (~/.claude/data/pr-watermarks.json), or in its _reviewRequests, is marked
-recorded without a record. An unreadable state file records everything:
+recorded without a record, except mentions, which are always recorded. An unreadable state file records everything:
 a duplicate beats a drop. The first run (no recorded file) records only the
 last FIRST_HOURS hours and seeds the rest. recorded.json, beside done.json,
-maps thread id to the updated_at last recorded.
+maps thread id to the updated_at last recorded. Mention receipts are kept separately
+and initialized from actual log records to recover events previously suppressed.
 """
 
 import argparse
@@ -32,7 +33,7 @@ import re
 import subprocess
 import tempfile
 import time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 NOTIFICATIONS = "/notifications?all=true&per_page=50"
@@ -80,6 +81,9 @@ def record_feed_error(kind, detail):
 
 def github_api(method, endpoint, paginate=False):
     """Call gh without a shell or printing credentials or response bodies."""
+    if method == "GET" and endpoint == NOTIFICATIONS:
+        since = (datetime.now(UTC) - timedelta(days=3)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        endpoint += "&since=" + since
     command = ["gh", "api", "--hostname", "github.com", "--method", method, endpoint]
     if paginate:
         command += ["--paginate", "--slurp"]
@@ -170,9 +174,10 @@ class Recorder:
     write=False prints the records instead (preview)."""
 
     def __init__(self, api, log, recorded, watched, direct, get_viewer=None, first_since=None,
-                 write=True, output=print, now=None):
+                 write=True, output=print, now=None, mentions=None):
         self.api, self.log, self.recorded = api, Path(log), recorded
         self.watched, self.direct = watched, direct
+        self.mentions = mentions if mentions is not None else recorded
         self.get_viewer, self.first_since = get_viewer, first_since
         self.write, self.output = write, output
         self.now = now if now is not None else time.time()
@@ -183,14 +188,16 @@ class Recorder:
     def __call__(self, thread, pr=None, rule=None):
         """One thread; for a pull request, pr and the cleanup rule it matched."""
         identifier, updated = thread["id"], thread.get("updated_at")
-        if not isinstance(updated, str) or self.recorded.get(identifier) == updated:
+        mention = thread.get("reason") in {"mention", "team_mention"}
+        ledger = self.mentions if mention else self.recorded
+        if not isinstance(updated, str) or ledger.get(identifier) == updated:
             return
         subject = thread["subject"]
         repo = (thread.get("repository") or {}).get("full_name") or ""
         link = html_url(subject.get("url"), repo)
-        if self.first_since is not None and epoch_of(updated) < self.first_since:
+        if not mention and self.first_since is not None and epoch_of(updated) < self.first_since:
             self.counts["seeded"] += 1
-        elif link in self.watched or (thread.get("reason") == "review_requested" and link in self.direct):
+        elif not mention and (link in self.watched or (thread.get("reason") == "review_requested" and link in self.direct)):
             self.counts["covered"] += 1
         elif rule == "bot":
             # An open bot PR nobody asked Piotr about: the cleanup marks it Done as noise.
@@ -199,6 +206,8 @@ class Recorder:
             self._append(self._line(thread, subject, repo, link, pr))
             self.counts["recorded"] += 1
         self.recorded[identifier] = updated
+        if mention:
+            self.mentions[identifier] = updated
 
     def _get(self, endpoint):
         if self.fetched >= FETCH_LIMIT:
@@ -354,7 +363,7 @@ def cleanup(api, apply=False, output=print, receipts=None, on_done=None, recorde
                     raise APIError("Missing PR URL or timestamp; retain it and retry")
                 # all=true also returns Done threads. A receipt avoids replaying
                 # them until a new event changes the notification timestamp.
-                if receipts.get(identifier) == updated:
+                if receipts.get(identifier) == updated and thread.get("reason") not in {"mention", "team_mention"}:
                     counts["skipped"] += 1
                     continue
                 endpoint = match.group(1)
@@ -363,6 +372,9 @@ def cleanup(api, apply=False, output=print, receipts=None, on_done=None, recorde
                 pr = pull_requests[endpoint]
                 rule = matching_rule(thread, pr, get_viewer)
                 recorder = record(recorder, thread, pr, rule)
+                if receipts.get(identifier) == updated:
+                    counts["skipped"] += 1
+                    continue
                 if rule is None:
                     counts["kept"] += 1
                     if is_bot_pr(pr):
@@ -442,6 +454,23 @@ def save_receipts(path, receipts):
             os.unlink(temporary)
 
 
+def mention_receipts_from_log(path):
+    """Recover delivered mention receipts; old recorded.json also holds suppressed events."""
+    receipts = {}
+    try:
+        with path.open() as handle:
+            for line in handle:
+                fields = line.rstrip("\n").split("\t", 3)
+                if len(fields) != 4 or fields[1] != "github":
+                    continue
+                meta = dict(re.findall(r"(?:^|\s)(kind|thread|at):(\S+)", fields[3].split(" | ", 1)[0]))
+                if meta.get("kind") in {"mention", "team_mention"} and meta.get("thread") and meta.get("at"):
+                    receipts[meta["thread"]] = meta["at"]
+    except FileNotFoundError:
+        pass
+    return receipts
+
+
 def main(argv=None):
     """Load receipts; serialize apply runs while leaving preview read only."""
     parser = argparse.ArgumentParser(description=__doc__)
@@ -473,6 +502,7 @@ def main(argv=None):
             raise ValueError("invalid receipt format")
         recorder = None
         recorded_file = args.state_file.with_name("recorded.json")
+        mentions_file = args.state_file.with_name("mentions-recorded.json")
         if not args.no_record:
             try:
                 recorded = json.loads(recorded_file.read_text())
@@ -481,13 +511,20 @@ def main(argv=None):
                 recorded, first_since = {}, time.time() - FIRST_HOURS * 3600
             if not isinstance(recorded, dict):
                 raise ValueError("invalid recorded format")
+            try:
+                mentions = json.loads(mentions_file.read_text())
+            except FileNotFoundError:
+                mentions = mention_receipts_from_log(args.log)
+            if not isinstance(mentions, dict):
+                raise ValueError("invalid mention receipt format")
             watched, direct = pr_watch_sets(args.pr_watch_state)
             recorder = Recorder(github_api, args.log, recorded, watched, direct,
-                                first_since=first_since, write=args.apply)
+                                first_since=first_since, write=args.apply, mentions=mentions)
         code = cleanup(github_api, apply=args.apply, receipts=receipts,
                        on_done=lambda value: save_receipts(args.state_file, value), recorder=recorder)
         if recorder is not None and args.apply:
             save_receipts(recorded_file, recorder.recorded)
+            save_receipts(mentions_file, recorder.mentions)
         return code
     except (OSError, ValueError):
         print("ERROR: cannot read or lock Done receipts; check the state file before retrying")

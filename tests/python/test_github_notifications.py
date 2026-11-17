@@ -327,7 +327,9 @@ class EntryPointTest(unittest.TestCase):
         with mock.patch.object(self.module.subprocess, "run", return_value=result) as run:
             self.assertEqual(self.module.github_api("GET", LIST, paginate=True), [[1], [2]])
         command = run.call_args.args[0]
-        self.assertEqual(command, ["gh", "api", "--hostname", "github.com", "--method", "GET", LIST, "--paginate", "--slurp"])
+        self.assertEqual(command[:6], ["gh", "api", "--hostname", "github.com", "--method", "GET"])
+        self.assertRegex(command[6], r"^/notifications\?all=true&per_page=50&since=\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$")
+        self.assertEqual(command[7:], ["--paginate", "--slurp"])
         self.assertFalse(run.call_args.kwargs.get("shell", False))
 
     def test_api_adapter_extracts_http_status(self):
@@ -589,6 +591,24 @@ class RecordTest(unittest.TestCase):
                 self.assertEqual(rec.counts["covered"], 1)
                 self.assertEqual(rec.recorded, {"1": "2026-10-22T08:00:00Z"})
 
+    def test_read_team_mention_on_watched_pr_recovers_and_deduplicates(self):
+        item = notification(reason="team_mention", unread=False, repository=RECORD_REPO)
+        api, _ = self.fake({LIST: [[item]], PR: {"state": "open", "user": {"login": "dan", "type": "User"}},
+                            "/repos/example/project/issues/123/comments?since=2026-10-22T07:45:00Z&per_page=100": []})
+        old = {"1": item["updated_at"]}
+        rec = self.module.Recorder(api, self.log, old, {"https://github.com/example/project/pull/123"},
+                                   set(), mentions={}, output=lambda _: None, now=0)
+        for _ in range(2):
+            self.assertEqual(self.module.cleanup(api, apply=True, output=lambda _: None, recorder=rec), 0)
+        self.assertEqual(len(self.records()), 1)
+        self.assertIn("kind:team_mention", self.records()[0])
+        self.assertEqual(rec.mentions, {"1": item["updated_at"]})
+
+    def test_mention_migration_reads_only_actual_github_records(self):
+        self.log.write_text("2026-10-22 10:00:00\tgithub\tx\tkind:team_mention thread:1 at:2026-10-22T08:00:00Z | text\n"
+                            "2026-10-22 10:00:00\tslack\tx\tkind:mention thread:2 at:2026-10-22T08:00:00Z | text\n")
+        self.assertEqual(self.module.mention_receipts_from_log(self.log), {"1": "2026-10-22T08:00:00Z"})
+
     def test_a_team_review_request_on_a_human_pr_is_recorded(self):
         item = notification(reason="review_requested", repository=RECORD_REPO)
         api, _ = self.fake({LIST: [[item]], PR: {"state": "open", "user": {"login": "dan", "type": "User"}},
@@ -617,7 +637,7 @@ class RecordTest(unittest.TestCase):
         self.assertEqual(len(self.records()), 1)
 
     def test_first_run_seeds_threads_older_than_its_window(self):
-        api, calls = self.fake({LIST: [[self.issue_thread()]]})
+        api, calls = self.fake({LIST: [[self.issue_thread(reason="subscribed")]]})
         rec = self.recorder(api, first_since=self.module.epoch_of("2026-10-22T09:00:00Z"))
         self.module.cleanup(api, apply=True, output=lambda _: None, recorder=rec)
         self.assertEqual(self.records(), [])
