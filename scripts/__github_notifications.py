@@ -44,6 +44,11 @@ PERSONAL_REASONS = {"mention", "team_mention", "assign"}
 API_ROOT = "https://api.github.com"
 FETCH_LIMIT = 15
 FIRST_HOURS = 2
+# A dropped connection (hotel wifi, captive portal, a GitHub 5xx) is retried
+# after each of these delays, then ends the run as offline: no error state
+# unless the last clean run is older than OFFLINE_GRACE seconds.
+RETRY_DELAYS = (2, 5)
+OFFLINE_GRACE = 6 * 3600
 MAX_TEXT = 400
 MAX_TITLE = 100
 
@@ -51,9 +56,10 @@ MAX_TITLE = 100
 class APIError(Exception):
     """An API failure whose optional HTTP status can identify a stale thread."""
 
-    def __init__(self, message, status=None):
+    def __init__(self, message, status=None, transient=False):
         super().__init__(message)
         self.status = status
+        self.transient = transient
 
 
 FEED_ERRORS_MAX = 1 << 20
@@ -88,14 +94,32 @@ def github_api(method, endpoint, paginate=False):
     if paginate:
         command += ["--paginate", "--slurp"]
     where = f"{method} {endpoint.split('?')[0]}"
-    try:
-        result = subprocess.run(command, capture_output=True, text=True, timeout=120)
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        record_feed_error("error", f"{where}: {exc.__class__.__name__}")
-        raise APIError("gh could not complete the request; check gh and connectivity") from exc
-    if result.returncode:
-        match = re.search(r"HTTP ([0-9]{3})", result.stderr)
+    for delay in (*RETRY_DELAYS, None):
+        try:
+            result = subprocess.run(command, capture_output=True, text=True, timeout=60)
+        except subprocess.TimeoutExpired as exc:
+            if delay is not None:
+                time.sleep(delay)
+                continue
+            record_feed_error("error", f"{where}: {exc.__class__.__name__}")
+            raise APIError("GitHub unreachable; the next run retries", transient=True) from exc
+        except OSError as exc:
+            record_feed_error("error", f"{where}: {exc.__class__.__name__}")
+            raise APIError("gh could not complete the request; check gh and connectivity") from exc
+        match = re.search(r"HTTP ([0-9]{3})", result.stderr) if result.returncode else None
         status = int(match.group(1)) if match else None
+        # No HTTP status means gh never got an answer: a connection failure.
+        # Exit 4 is gh's "not logged in", which no retry fixes.
+        transient = bool(result.returncode) and (
+            (status is None and result.returncode != 4) or (status is not None and status >= 500))
+        if transient and delay is not None:
+            time.sleep(delay)
+            continue
+        break
+    if result.returncode:
+        if transient:
+            record_feed_error("error", f"{where} HTTP {status}" if status else f"{where}: gh exit {result.returncode}")
+            raise APIError("GitHub unreachable; the next run retries", status, transient=True)
         # A 404 is a deleted thread or PR, an answer the run handles, not a failure.
         if status == 429 or (status == 403 and "rate limit" in result.stderr.lower()):
             record_feed_error("throttle", f"{where} HTTP {status}")
@@ -291,11 +315,13 @@ def pr_watch_sets(path):
             set(direct) if isinstance(direct, list) else set())
 
 
-def cleanup(api, apply=False, output=print, receipts=None, on_done=None, recorder=None):
-    """Plan with GETs, then recheck each eligible thread and PR before DELETE."""
+def cleanup(api, apply=False, output=print, receipts=None, on_done=None, recorder=None, stats=None):
+    """Plan with GETs, then recheck each eligible thread and PR before DELETE.
+    A transient failure stops the run as offline=1: every thread not yet Done
+    is retained for the next run. stats, when given, receives the counts."""
     receipts = receipts if receipts is not None else {}
     counts = dict(scanned=0, candidates=0, done=0, kept=0, skipped=0, errors=0,
-                  closed_done=0, bot_done=0, personal_kept=0)
+                  closed_done=0, bot_done=0, personal_kept=0, offline=0)
     candidates = []
     pull_requests = {}
     identity = {}
@@ -385,6 +411,8 @@ def cleanup(api, apply=False, output=print, receipts=None, on_done=None, recorde
                 candidates.append((identifier, updated, endpoint, subject))
                 output(f"CANDIDATE: thread={identifier} pr={endpoint} rule={rule}")
             except APIError as exc:
+                if exc.transient:
+                    raise
                 if exc.status == 404:
                     counts["skipped"] += 1
                     output("WARN: PR no longer available; retain the thread and restore access before retrying")
@@ -421,6 +449,8 @@ def cleanup(api, apply=False, output=print, receipts=None, on_done=None, recorde
                     if on_done is not None:
                         on_done(receipts)
                 except APIError as exc:
+                    if exc.transient:
+                        raise
                     if exc.status == 404:
                         counts["skipped"] += 1
                         output(f"SKIP: thread={identifier} no longer available")
@@ -432,11 +462,17 @@ def cleanup(api, apply=False, output=print, receipts=None, on_done=None, recorde
                     output("ERROR: cannot save Done receipts; check state directory permissions")
                     break
     except APIError as exc:
-        counts["errors"] += 1
-        output(f"ERROR: {exc}")
+        if exc.transient:
+            counts["offline"] = 1
+            output(f"WARN: {exc}")
+        else:
+            counts["errors"] += 1
+            output(f"ERROR: {exc}")
     finally:
         if started is not None:
             counts.update(started.counts)
+        if stats is not None:
+            stats.update(counts)
         output("SUMMARY: mode=" + mode + " " + " ".join(f"{k}={v}" for k, v in counts.items()))
     return 1 if counts["errors"] else 0
 
@@ -469,6 +505,25 @@ def mention_receipts_from_log(path):
     except FileNotFoundError:
         pass
     return receipts
+
+
+def offline_verdict(stamp, code, offline):
+    """Touch the clean-run stamp; an offline run is an error only past OFFLINE_GRACE,
+    so a flaky network stays quiet while GitHub lost for good still surfaces."""
+    if code == 0 and not offline:
+        stamp.touch()
+        return 0
+    if code or not offline:
+        return code
+    try:
+        age = time.time() - stamp.stat().st_mtime
+    except FileNotFoundError:
+        age = None
+    if age is not None and age < OFFLINE_GRACE:
+        return 0
+    since = f"{int(age // 3600)}h" if age is not None else "ever"
+    print(f"ERROR: GitHub unreachable; no clean run for {since}, check the network and gh")
+    return 1
 
 
 def main(argv=None):
@@ -520,11 +575,15 @@ def main(argv=None):
             watched, direct = pr_watch_sets(args.pr_watch_state)
             recorder = Recorder(github_api, args.log, recorded, watched, direct,
                                 first_since=first_since, write=args.apply, mentions=mentions)
+        stats = {}
         code = cleanup(github_api, apply=args.apply, receipts=receipts,
-                       on_done=lambda value: save_receipts(args.state_file, value), recorder=recorder)
+                       on_done=lambda value: save_receipts(args.state_file, value), recorder=recorder,
+                       stats=stats)
         if recorder is not None and args.apply:
             save_receipts(recorded_file, recorder.recorded)
             save_receipts(mentions_file, recorder.mentions)
+        if args.apply:
+            code = offline_verdict(args.state_file.with_name("last-ok"), code, stats.get("offline"))
         return code
     except (OSError, ValueError):
         print("ERROR: cannot read or lock Done receipts; check the state file before retrying")

@@ -41,6 +41,13 @@ again immediately before writing, including new personal requests or mentions.
 Threads whose current state no longer qualifies stay. Unreadable metadata stays;
 API failures return a nonzero status and appear in the final summary.
 
+A dropped connection (no HTTP answer, a timeout or a GitHub 5xx) is retried
+twice, after 2s and 5s. If it still fails, the run stops with `offline=1`,
+keeps every thread it has not marked Done, and exits 0, so flaky wifi does not
+turn the job red; the next run retries. It exits 1 only when the last clean
+run, stamped in `~/.local/state/github-notifications/last-ok`, is over 6 hours
+old. Auth failures (gh exit 4, HTTP 401) and other 4xx answers are not retried.
+
 The API can return threads already marked Done. The script records successful
 writes in `${XDG_STATE_HOME:-$HOME/.local/state}/github-notifications/done.json`
 and skips unchanged threads on later runs. A new timestamp triggers another
@@ -84,7 +91,7 @@ jq . "$HOME/.local/state/cron-jobs/__github_notifications.json"
 Log entries show `CANDIDATE` and `DONE` with `rule=closed` or `rule=bot`, plus
 `KEEP` for personal bot requests and `SKIP` for changed or missing threads.
 Every run ends with counts: `scanned`, `candidates`, `done`, `kept`, `skipped`,
-`errors`, `closed_done`, `bot_done` and `personal_kept`. The wrapper's `no-hit`
+`errors`, `closed_done`, `bot_done`, `personal_kept` and `offline`. The wrapper's `no-hit`
 state means success, even when cleanup marked threads Done. Errors use its normal
 error state. This is polling cleanup: GitHub may show a new notification until
 the next weekday run; it does not block upstream delivery.

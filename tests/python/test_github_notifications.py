@@ -738,6 +738,9 @@ class FeedErrorsTest(unittest.TestCase):
         patcher = mock.patch.dict(os.environ, {"FEED_ERRORS_LOG": str(self.log)})
         patcher.start()
         self.addCleanup(patcher.stop)
+        delays = mock.patch.object(self.module, "RETRY_DELAYS", (0, 0))
+        delays.start()
+        self.addCleanup(delays.stop)
 
     def call(self, result=None, side_effect=None, endpoint="/notifications?all=true&per_page=50"):
         with mock.patch.object(self.module.subprocess, "run", return_value=result, side_effect=side_effect):
@@ -785,6 +788,85 @@ class FeedErrorsTest(unittest.TestCase):
         os.environ["FEED_ERRORS_LOG"] = str(Path(self.dir.name) / "missing-file-as-dir" / "x")
         (Path(self.dir.name) / "missing-file-as-dir").write_text("")
         self.call(mock.Mock(returncode=1, stdout="", stderr="gh: Bad Gateway (HTTP 502)"))
+
+
+class OfflineTest(unittest.TestCase):
+    """Hotel wifi: a dropped connection retries, then ends the run quietly."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.module = load_module()
+
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.dir.cleanup)
+        for patcher in (mock.patch.dict(os.environ, {"FEED_ERRORS_LOG": str(Path(self.dir.name) / "fe.jsonl")}),
+                        mock.patch.object(self.module, "RETRY_DELAYS", (0, 0))):
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def run_gh(self, *results):
+        with mock.patch.object(self.module.subprocess, "run", side_effect=list(results)) as run:
+            try:
+                return self.module.github_api("GET", "/user"), run.call_count
+            except self.module.APIError as exc:
+                return exc, run.call_count
+
+    def test_connection_drop_is_retried_until_it_answers(self):
+        dropped = mock.Mock(returncode=1, stdout="", stderr="error connecting to api.github.com")
+        ok = mock.Mock(returncode=0, stdout='{"login": "me"}', stderr="")
+        self.assertEqual(self.run_gh(dropped, dropped, ok), ({"login": "me"}, 3))
+        self.assertFalse((Path(self.dir.name) / "fe.jsonl").exists())
+
+    def test_server_error_and_timeout_retry_then_mark_transient(self):
+        bad = mock.Mock(returncode=1, stdout="", stderr="gh: Bad Gateway (HTTP 502)")
+        exc, calls = self.run_gh(bad, bad, bad)
+        self.assertEqual((calls, exc.transient, exc.status), (3, True, 502))
+        timeout = subprocess.TimeoutExpired("gh", 60)
+        exc, calls = self.run_gh(timeout, timeout, timeout)
+        self.assertEqual((calls, exc.transient), (3, True))
+
+    def test_auth_and_client_errors_are_not_retried(self):
+        for result in (mock.Mock(returncode=4, stdout="", stderr="To get started with GitHub CLI, please run: gh auth login"),
+                       mock.Mock(returncode=1, stdout="", stderr="gh: Bad credentials (HTTP 401)"),
+                       mock.Mock(returncode=1, stdout="", stderr="gh: Not Found (HTTP 404)")):
+            with self.subTest(stderr=result.stderr):
+                exc, calls = self.run_gh(result)
+                self.assertEqual((calls, exc.transient), (1, False))
+
+    def test_drop_mid_run_stops_as_offline_and_keeps_threads(self):
+        unreachable = self.module.APIError("GitHub unreachable; the next run retries", transient=True)
+        api = ScriptedAPI([get(LIST, [[notification("1"), notification("2")]], paginate=True),
+                           get(PR, unreachable)])
+        lines, stats = [], {}
+        code = self.module.cleanup(api, apply=True, output=lines.append, receipts={}, stats=stats)
+        self.assertEqual(code, 0)
+        self.assertFalse(api.steps)
+        self.assertEqual((stats["offline"], stats["errors"], stats["done"]), (1, 0, 0))
+        self.assertIn("offline=1", lines[-1])
+
+    def test_real_errors_still_fail_the_run(self):
+        api = ScriptedAPI([get(LIST, self.module.APIError("GitHub request failed", 401), paginate=True)])
+        lines, stats = [], {}
+        self.assertEqual(self.module.cleanup(api, apply=True, output=lines.append, stats=stats), 1)
+        self.assertEqual((stats["offline"], stats["errors"]), (0, 1))
+
+    def test_offline_is_quiet_within_grace_and_an_error_past_it(self):
+        stamp = Path(self.dir.name) / "last-ok"
+        self.assertEqual(self.module.offline_verdict(stamp, 0, 0), 0)
+        self.assertTrue(stamp.exists())
+        self.assertEqual(self.module.offline_verdict(stamp, 0, 1), 0)
+        old = stamp.stat().st_mtime - self.module.OFFLINE_GRACE - 60
+        os.utime(stamp, (old, old))
+        with contextlib.redirect_stdout(io.StringIO()) as output:
+            self.assertEqual(self.module.offline_verdict(stamp, 0, 1), 1)
+        self.assertIn("no clean run for 6h", output.getvalue())
+        self.assertEqual(self.module.offline_verdict(stamp, 1, 0), 1)
+        self.assertLess(stamp.stat().st_mtime, old + 1)
+
+    def test_never_clean_and_offline_is_an_error(self):
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(self.module.offline_verdict(Path(self.dir.name) / "none", 0, 1), 1)
 
 
 if __name__ == "__main__":
