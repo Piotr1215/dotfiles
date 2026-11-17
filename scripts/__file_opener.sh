@@ -193,8 +193,9 @@ TOGGLES_BIND="ctrl-d:execute(~/dev/dotfiles/scripts/__toggles.sh --return-marker
 
 # Loop to allow returning from PRs/Linear back to main picker
 while true; do
-    # Do not wait for the file producer after fzf accepts a session or aborts.
-    # A pipeline here waits for a cold file scan even after the picker exits.
+    # fzf owns the producer (start:reload) so it can kill it: a reload (C-b,
+    # C-t, C-x) or a pick never waits for a cold file scan. Fed on stdin,
+    # every reload waited for the scan to finish.
     OUTPUT=$(fzf \
         --multi \
         --scheme=path \
@@ -222,6 +223,7 @@ while true; do
  open  C-g:PRs C-l:Linear C-n:mail C-s:panes C-k:kctx
  act   C-d:toggles C-e:edit C-u:music C-y:copy Tab:paste' \
         --prompt 'all> ' \
+        --bind "start:reload($PICKER_CHOICES)" \
         --bind "$HOME_BIND" \
         --bind "$SESSIONS_BIND" \
         --bind "$FILE_BIND" \
@@ -238,7 +240,7 @@ while true; do
         --bind "$SEARCH_BIND" \
         --bind "$TOGGLES_BIND" \
         --bind "ctrl-c:abort" \
-        2>/dev/null < <("$PICKER_CHOICES")) || true
+        2>/dev/null </dev/null) || true
 
     # Exit completely if copy was performed
     [[ -f /tmp/file_opener_copied ]] && { rm -f /tmp/file_opener_copied; exit 0; }
@@ -268,7 +270,7 @@ while true; do
     # Check if 2d files mode requested (streams instantly)
     if [[ -f "/tmp/file_opener_2d" ]]; then
         rm -f "/tmp/file_opener_2d"
-        OUTPUT=$(fd --type f --hidden --absolute-path --color never --exclude .git --exclude node_modules --exclude .cache --exclude image-cache --exclude plugins --exclude stats-cache.json --exclude claude-wt-worktrees --exclude vendor --changed-within 30d . ~/dev ~/loft ~/.config/nvim ~/.claude 2>/dev/null | xargs -P 0 stat --format '%Y %n' 2>/dev/null | sort -rn | cut -d' ' -f2- | fzf --prompt '30d> ' --preview '[[ -f {} ]] && bat --color=always {} 2>/dev/null || cat {}' --preview-window 'right:50%:wrap' --bind "$COPY_BIND" --bind "$PASTE_BIND") || true
+        OUTPUT=$(fd --type f --hidden --absolute-path --color never --exclude .git --exclude node_modules --exclude .cache --exclude image-cache --exclude plugins --exclude stats-cache.json --exclude '*-worktrees' --exclude vendor --changed-within 30d . ~/dev ~/loft ~/.config/nvim ~/.claude 2>/dev/null | xargs -P 0 stat --format '%Y %n' 2>/dev/null | sort -rn | cut -d' ' -f2- | fzf --prompt '30d> ' --preview '[[ -f {} ]] && bat --color=always {} 2>/dev/null || cat {}' --preview-window 'right:50%:wrap' --bind "$COPY_BIND" --bind "$PASTE_BIND") || true
         [[ -f /tmp/file_opener_copied ]] && { rm -f /tmp/file_opener_copied; exit 0; }
         if [[ -f /tmp/file_opener_paste ]]; then
             rm -f /tmp/file_opener_paste
