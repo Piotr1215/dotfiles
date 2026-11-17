@@ -6,7 +6,7 @@
 #
 # Modes (one function per mode — extend freely):
 #   base   powered: nvidia GPU, balanced profile, lid ignored (home, hotel, anywhere on AC)
-#   speak  presenting: hybrid GPU, battery profile, lid suspends (HDMI projector on battery)
+#   speak  presenting: hybrid GPU, battery profile, lid suspends on battery and on power
 #
 # Usage: __set_graphics_mode.sh <base|speak> [--reboot] [--no-shutdown] [--yes]
 #   --reboot       reboot instead of shutting down
@@ -15,7 +15,8 @@
 #
 # Note: `system76-power graphics` writes to /etc/modprobe.d and needs sudo.
 #       `system76-power profile` runs as user (matches existing `perf` alias).
-#       HandleLidSwitch lives in logind.conf, needs sudo, and takes effect at the next boot.
+#       HandleLidSwitch and HandleLidSwitchExternalPower live in logind.conf, need sudo,
+#       and take effect at the next boot.
 
 set -eo pipefail
 
@@ -26,7 +27,7 @@ usage() {
 usage: $(basename "$0") <base|speak> [--reboot] [--no-shutdown] [--yes]
 
   base   nvidia + balanced, lid ignored   (powered: home, hotel, anywhere on AC)
-  speak  hybrid  + battery, lid suspends  (presenting: HDMI projector on battery)
+  speak  hybrid  + battery, lid suspends  (presenting, on battery or plugged in)
 
   --reboot       reboot instead of shutting down
   --no-shutdown  apply settings and leave the machine on
@@ -51,17 +52,21 @@ apply_profile() {
   system76-power profile "${profile}"
 }
 
-# Set what closing the lid does. Requires sudo. Fails rather than power down on a setting
-# that did not land, so a dock never comes back with the lid in the wrong state.
+# Set what closing the lid does, on battery and plugged in alike: a talk usually runs on
+# the venue's power. Requires sudo. Fails rather than power down on a setting that did
+# not land, so a dock never comes back with the lid in the wrong state.
 # Arg: $1 = suspend|ignore
 apply_lid() {
-  local action="$1"
-  echo ">>> HandleLidSwitch=${action}"
-  sudo sed -i -E "s/^#?HandleLidSwitch=.*/HandleLidSwitch=${action}/" "$LOGIND_CONF"
-  grep -qx "HandleLidSwitch=${action}" "$LOGIND_CONF" || {
-    echo "no HandleLidSwitch line in ${LOGIND_CONF}" >&2
-    exit 1
-  }
+  local action="$1" key
+  echo ">>> HandleLidSwitch=${action} HandleLidSwitchExternalPower=${action}"
+  sudo sed -i -E -e "s/^#?HandleLidSwitch=.*/HandleLidSwitch=${action}/" \
+    -e "s/^#?HandleLidSwitchExternalPower=.*/HandleLidSwitchExternalPower=${action}/" "$LOGIND_CONF"
+  for key in HandleLidSwitch HandleLidSwitchExternalPower; do
+    grep -qx "${key}=${action}" "$LOGIND_CONF" || {
+      echo "no ${key} line in ${LOGIND_CONF}" >&2
+      exit 1
+    }
+  done
 }
 
 # Mode: powered — enforce nvidia graphics, balanced power.

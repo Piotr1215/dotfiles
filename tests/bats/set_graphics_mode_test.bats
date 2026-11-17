@@ -35,6 +35,26 @@ EOF
     grep -qx 'HandleLidSwitch=suspend' "$LOGIND_CONF"
 }
 
+@test "speak suspends on the lid when plugged in too" {
+    run "$script" speak --yes --no-shutdown
+    [ "$status" -eq 0 ]
+    grep -qx 'HandleLidSwitchExternalPower=suspend' "$LOGIND_CONF"
+}
+
+@test "base ignores the lid when plugged in" {
+    sed -i 's/^HandleLidSwitchExternalPower=ignore/HandleLidSwitchExternalPower=suspend/' "$LOGIND_CONF"
+    run "$script" base --yes --no-shutdown
+    [ "$status" -eq 0 ]
+    grep -qx 'HandleLidSwitchExternalPower=ignore' "$LOGIND_CONF"
+}
+
+@test "no shutdown when the plugged-in lid line cannot be set" {
+    sed -i '/^HandleLidSwitchExternalPower=/d' "$LOGIND_CONF"
+    run "$script" speak --yes
+    [ "$status" -ne 0 ]
+    ! grep -qE 'sudo (poweroff|reboot)' "$log"
+}
+
 @test "base puts the lid back to ignore" {
     sed -i 's/^HandleLidSwitch=ignore/HandleLidSwitch=suspend/' "$LOGIND_CONF"
     run "$script" base --yes --no-shutdown
@@ -49,10 +69,11 @@ EOF
     [ "$(grep -c '^#\?HandleLidSwitch=' "$LOGIND_CONF")" -eq 1 ]
 }
 
-@test "only the lid line changes" {
-    before="$(grep -v '^HandleLidSwitch=' "$LOGIND_CONF")"
+@test "only the lid lines change" {
+    before="$(grep -vE '^HandleLidSwitch(ExternalPower)?=' "$LOGIND_CONF")"
     run "$script" speak --yes --no-shutdown
-    [ "$(grep -v '^HandleLidSwitch=' "$LOGIND_CONF")" == "$before" ]
+    [ "$(grep -vE '^HandleLidSwitch(ExternalPower)?=' "$LOGIND_CONF")" == "$before" ]
+    grep -qx '#HandleLidSwitchDocked=ignore' "$LOGIND_CONF"
 }
 
 @test "the lid is written before the shutdown" {
