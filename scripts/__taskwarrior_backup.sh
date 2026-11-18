@@ -41,6 +41,27 @@ REALERT_AFTER="${TASK_REALERT_AFTER:-21600}"
 export RESTIC_REPOSITORY="${RESTIC_REPOSITORY:-$NAS/secure-store}"
 [[ -n "$RESTIC_PASSWORD" ]] || export RESTIC_PASSWORD_FILE="${RESTIC_PASSWORD_FILE:-$HOME/.config/restic/password}"
 
+# Off LAN, rsync onto the NFS mount pays one tailnet round trip per file: on
+# 2026-11-17, on a phone hotspot, the 22k-file Gordon state hit the 900 s
+# timeout (exit 124) every run. pop-os sits on the NAS LAN and mounts the same
+# share, so off LAN the mirror rsync goes over ssh to pop-os, as __backup.sh
+# does (#181); the dry run took 10 s. The key is pinned on pop-os to
+# `rrsync -wo /mnt/nas-backup`, so remote paths are relative to the share.
+# The relay is off when TASK_BACKUP_NAS points elsewhere (tests), unless
+# TASK_BACKUP_RELAY names one.
+NAS_LAN_PROBE="${TASK_BACKUP_LAN_PROBE:-192.168.178.138/2049}"
+if [[ -n "${TASK_BACKUP_RELAY+set}" ]]; then
+	RELAY="$TASK_BACKUP_RELAY"
+elif [[ "$NAS" == /mnt/nas-backup ]]; then
+	RELAY="decoder@100.84.38.78:"
+else
+	RELAY=""
+fi
+RELAY_SSH="${TASK_BACKUP_RELAY_SSH:-ssh -i $HOME/.ssh/id_ed25519_backup_pop_os -o IdentitiesOnly=yes -o IdentityAgent=none -o BatchMode=yes -o ConnectTimeout=15 -o HostKeyAlias=192.168.178.125 -o UserKnownHostsFile=$HOME/.ssh/known_hosts}"
+# Set by pick_route: where mirror_dirs writes, and the rsync options for it.
+DEST="$MIRROR"
+ROUTE_OPTS=()
+
 # nas_ready: the NAS is mounted and takes a write within 20 s. mountpoint alone
 # passes on the autofs stub while the NAS is unreachable (see __backup.sh).
 nas_ready() {
@@ -52,21 +73,28 @@ nas_ready() {
 # fail <message>: record why the mirror stopped, for the check's page, in
 # ERR_FILE (.last-error for the DB, .dirs-error for the state dirs).
 fail() {
-	printf '%s %s\n' "$(date '+%F %T')" "$1" >"$MIRROR/${ERR_FILE:-.last-error}" 2>/dev/null || true
+	# Bounded: off LAN the NFS write can stall with the uplink.
+	# shellcheck disable=SC2016 # $1 and $2 expand in the inner bash
+	timeout -k 5 20 bash -c 'printf "%s\n" "$2" >"$1"' _ "$MIRROR/${ERR_FILE:-.last-error}" "$(date '+%F %T') $1" 2>/dev/null || true
 	echo "ERROR: $1" >&2
 }
 
 # mirror_dirs: add and update files on the NAS, never delete. A missing source
 # dir stops the mirror. rsync exit 24 (a file vanished mid-run) is normal here.
 mirror_dirs() {
-	local d rc
+	local d rc try
 	for d in "${DIRS[@]}"; do
 		if [[ ! -d "$d" ]]; then
 			ERR_FILE=.dirs-error fail "$d is missing, NAS copy kept"
 			return 1
 		fi
-		rc=0
-		timeout -k 5 900 rsync -rlpt --mkpath "$d/" "$MIRROR/state$d/" || rc=$?
+		# Exit 255 is the relay's ssh failing to connect; off LAN the uplink
+		# stalls for a minute at a time, so try again before giving up.
+		for try in 1 2 3; do
+			rc=0
+			timeout -k 5 900 rsync -rlpt --mkpath "${ROUTE_OPTS[@]}" "$d/" "$DEST/state$d/" || rc=$?
+			((rc == 255 && ${#ROUTE_OPTS[@]} > 0)) || break
+		done
 		if ((rc != 0 && rc != 24)); then
 			ERR_FILE=.dirs-error fail "rsync of $d failed (exit $rc)"
 			return 1
@@ -74,20 +102,63 @@ mirror_dirs() {
 	done
 }
 
+# pick_route: on LAN, or with no relay, write to the NFS mount. Off LAN, write
+# through the relay when it answers; if it does not, fall back to the mount.
+# Three tries: on the 17 Nov hotspot the uplink stalled most minutes and the
+# first ssh connect timed out while the next one went through.
+pick_route() {
+	local empty try
+	if [[ -z "$RELAY" ]] || timeout 3 bash -c ": </dev/tcp/$NAS_LAN_PROBE" 2>/dev/null; then
+		echo "route: NFS mount"
+		return 0
+	fi
+	empty=$(mktemp -d "$STAGE/preflight.XXXXXX")
+	for try in 1 2 3; do
+		if timeout 45 rsync -n -d --timeout=30 -e "$RELAY_SSH" "$empty/" "${RELAY}${MIRROR#"$NAS"/}/" >/dev/null 2>&1; then
+			DEST="${RELAY}${MIRROR#"$NAS"/}"
+			ROUTE_OPTS=(-e "$RELAY_SSH" --timeout=300)
+			echo "route: off LAN, through the pop-os relay (try $try)"
+			break
+		fi
+	done
+	[[ "$DEST" != "$MIRROR" ]] || echo "route: off LAN and the relay did not answer 3 tries, NFS mount (slow)" >&2
+	rmdir "$empty"
+}
+
 # Serialize state directory mirrors; an overlapping run can skip safely.
+# Through the relay the NFS mount is not needed, so its write probe (which
+# stalls with the uplink) only gates the mount route.
 cmd_mirror() {
-	if ! nas_ready; then
+	exec 9>"$STAGE/mirror-dirs.lock"
+	flock -n 9 || return 0
+	pick_route
+	if [[ "$DEST" == "$MIRROR" ]] && ! nas_ready; then
 		echo "ERROR: NAS $NAS is not mounted or not writable" >&2
 		return 1
 	fi
-	exec 9>"$STAGE/mirror-dirs.lock"
-	flock -n 9 || return 0
-	if mirror_dirs; then
+	mirror_dirs || return 1
+	mark_ok
+}
+
+# mark_ok: stamp the success where the check reads it. Through the relay the
+# stamps travel by rsync too, and an empty .dirs-error replaces the old one,
+# since `rrsync -wo` cannot delete a single file.
+mark_ok() {
+	if [[ "$DEST" == "$MIRROR" ]]; then
 		date +%s >"$MIRROR/.dirs-ok-at"
 		rm -f "$MIRROR/.dirs-error"
-	else
-		return 1
+		return 0
 	fi
+	mkdir -p "$STAGE/stamps"
+	date +%s >"$STAGE/stamps/.dirs-ok-at"
+	: >"$STAGE/stamps/.dirs-error"
+	local try rc
+	for try in 1 2 3; do
+		rc=0
+		timeout -k 5 120 rsync -t "${ROUTE_OPTS[@]}" "$STAGE/stamps/.dirs-ok-at" "$STAGE/stamps/.dirs-error" "$DEST/" || rc=$?
+		((rc == 255)) || break
+	done
+	return "$rc"
 }
 
 # The cron wrapper appends an end line only after the task command exits.
@@ -141,7 +212,7 @@ cmd_check() {
 	else
 		dirs_at=$(cat "$MIRROR/.dirs-ok-at" 2>/dev/null || echo 0)
 		if ((now - dirs_at > DIRS_MAX_AGE && up > DIRS_MAX_AGE)); then
-			problems+=("briefs and Gordon state last mirrored $(((now - dirs_at) / 60)) min ago: $(cat "$MIRROR/.dirs-error" 2>/dev/null || echo 'no error recorded')")
+			problems+=("briefs and Gordon state last mirrored $(((now - dirs_at) / 60)) min ago: $([[ -s "$MIRROR/.dirs-error" ]] && cat "$MIRROR/.dirs-error" || echo 'no error recorded')")
 			kinds+=(dirs)
 		fi
 		snap=$(newest_snapshot)

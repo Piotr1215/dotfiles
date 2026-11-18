@@ -218,7 +218,7 @@ main() {
 		                      # deletes in a sticky dir it does not own (/var/tmp,
 		                      # /var/spool/cron and more); root on serval passed (#181)
 		--delete
-		--partial             # a failed attempt resumes rather than restarts
+		--partial-dir=.rsync-partial # a failed attempt resumes; the old copy stays whole meanwhile
 		--timeout=600         # rsync's own I/O stall detection (a select() on its
 		                      # socket, so it cannot fire from inside a blocked
 		                      # write to a hard NFS mount; exit 30 here retries)

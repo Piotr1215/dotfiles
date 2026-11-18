@@ -146,3 +146,86 @@ fake_restic() {
 	[[ "$output" == *"Gordon state last mirrored 60 min ago"*"exit 23"* ]]
 	[[ "$output" != *"mirror last succeeded"* ]]
 }
+
+# fake_relay: an ssh stub that runs the remote rsync inside $T/share, the way
+# rrsync on pop-os confines it to the NAS share.
+fake_relay() {
+	mkdir -p "$T/share"
+	printf '#!/usr/bin/env bash\nshift\ncd %q && exec sh -c "$*"\n' "$T/share" >"$T/stubs/fake-ssh"
+	chmod +x "$T/stubs/fake-ssh"
+	export TASK_BACKUP_RELAY="fakehost:" TASK_BACKUP_RELAY_SSH="$T/stubs/fake-ssh"
+	export TASK_BACKUP_LAN_PROBE="127.0.0.1/1"
+}
+
+@test "off LAN the mirror writes through the relay, paths relative to the share" {
+	fake_relay
+	run bash "$SCRIPT" mirror
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"through the pop-os relay"* ]]
+	[ "$(cat "$T/share/taskwarrior-mirror/state$T/briefs/b1.md")" = brief ]
+	[ -f "$T/share/taskwarrior-mirror/state$T/gordon/cases/c1.json" ]
+	[ ! -e "$M/state" ]
+	[ -s "$T/share/taskwarrior-mirror/.dirs-ok-at" ]
+	[ -e "$T/share/taskwarrior-mirror/.dirs-error" ]
+	[ ! -s "$T/share/taskwarrior-mirror/.dirs-error" ]
+}
+
+@test "off LAN the relay route does not wait on the NFS mount" {
+	fake_relay
+	printf '#!/usr/bin/env bash\nexit 1\n' >"$T/stubs/mountpoint"
+	run bash "$SCRIPT" mirror
+	[ "$status" -eq 0 ]
+	[ -f "$T/share/taskwarrior-mirror/state$T/briefs/b1.md" ]
+}
+
+@test "an empty error file reads as no error recorded" {
+	bash "$SCRIPT" mirror
+	echo "$(($(date +%s) - 3600))" >"$M/.dirs-ok-at"
+	: >"$M/.dirs-error"
+	fake_restic "$(date -Iseconds)"
+	run bash "$SCRIPT" check
+	[ "$status" -eq 2 ]
+	[[ "$output" == *"60 min ago: no error recorded"* ]]
+}
+
+@test "off LAN with a dead relay the mirror falls back to the NFS mount" {
+	fake_relay
+	printf '#!/usr/bin/env bash\nexit 255\n' >"$T/stubs/fake-ssh"
+	run bash "$SCRIPT" mirror
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"relay did not answer"* ]]
+	[ "$(cat "$M/state$T/briefs/b1.md")" = brief ]
+}
+
+@test "on LAN the mirror writes to the NFS mount even with a relay set" {
+	fake_relay
+	exec 7< <(python3 -I -c 'import socket,time;s=socket.socket();s.bind(("127.0.0.1",0));s.listen();print(s.getsockname()[1],flush=True);time.sleep(30)')
+	read -r port <&7
+	TASK_BACKUP_LAN_PROBE="127.0.0.1/$port" run bash "$SCRIPT" mirror
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"route: NFS mount"* ]]
+	[ "$(cat "$M/state$T/briefs/b1.md")" = brief ]
+	[ ! -e "$T/share/taskwarrior-mirror" ]
+}
+
+@test "off LAN a relay that drops the first connect is retried" {
+	fake_relay
+	mv "$T/stubs/fake-ssh" "$T/stubs/real-fake-ssh"
+	printf '#!/usr/bin/env bash\nif [ ! -e %q ]; then : >%q; exit 255; fi\nexec %q "$@"\n' "$T/dropped" "$T/dropped" "$T/stubs/real-fake-ssh" >"$T/stubs/fake-ssh"
+	chmod +x "$T/stubs/fake-ssh"
+	run bash "$SCRIPT" mirror
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"through the pop-os relay (try 2)"* ]]
+	[ -f "$T/share/taskwarrior-mirror/state$T/briefs/b1.md" ]
+}
+
+@test "off LAN a transfer whose ssh connect drops after the preflight is retried" {
+	fake_relay
+	mv "$T/stubs/fake-ssh" "$T/stubs/real-fake-ssh"
+	printf '#!/usr/bin/env bash\necho x >>%q\nif [ "$(wc -l <%q)" -eq 2 ]; then exit 255; fi\nexec %q "$@"\n' "$T/ssh-calls" "$T/ssh-calls" "$T/stubs/real-fake-ssh" >"$T/stubs/fake-ssh"
+	chmod +x "$T/stubs/fake-ssh"
+	run bash "$SCRIPT" mirror
+	[ "$status" -eq 0 ]
+	[ -f "$T/share/taskwarrior-mirror/state$T/briefs/b1.md" ]
+	[ -s "$T/share/taskwarrior-mirror/.dirs-ok-at" ]
+}
