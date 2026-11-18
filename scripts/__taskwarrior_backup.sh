@@ -43,21 +43,21 @@ export RESTIC_REPOSITORY="${RESTIC_REPOSITORY:-$NAS/secure-store}"
 
 # Off LAN, rsync onto the NFS mount pays one tailnet round trip per file: on
 # 2026-11-17, on a phone hotspot, the 22k-file Gordon state hit the 900 s
-# timeout (exit 124) every run. pop-os sits on the NAS LAN and mounts the same
-# share, so off LAN the mirror rsync goes over ssh to pop-os, as __backup.sh
-# does (#181); the dry run took 10 s. The key is pinned on pop-os to
-# `rrsync -wo /mnt/nas-backup`, so remote paths are relative to the share.
+# timeout (exit 124) every run. So off LAN the mirror rsync goes over ssh to the
+# NAS itself (nomad), as __backup.sh does (#181). The key is pinned on nomad's
+# bacuper account to `sudo -u admin rrsync -wo /volume1/backups`, so remote
+# paths are relative to the share and files land as 1024:100.
 # The relay is off when TASK_BACKUP_NAS points elsewhere (tests), unless
 # TASK_BACKUP_RELAY names one.
 NAS_LAN_PROBE="${TASK_BACKUP_LAN_PROBE:-192.168.178.138/2049}"
 if [[ -n "${TASK_BACKUP_RELAY+set}" ]]; then
 	RELAY="$TASK_BACKUP_RELAY"
 elif [[ "$NAS" == /mnt/nas-backup ]]; then
-	RELAY="decoder@100.84.38.78:"
+	RELAY="bacuper@100.114.171.119:"
 else
 	RELAY=""
 fi
-RELAY_SSH="${TASK_BACKUP_RELAY_SSH:-ssh -i $HOME/.ssh/id_ed25519_backup_pop_os -o IdentitiesOnly=yes -o IdentityAgent=none -o BatchMode=yes -o ConnectTimeout=15 -o HostKeyAlias=192.168.178.125 -o UserKnownHostsFile=$HOME/.ssh/known_hosts}"
+RELAY_SSH="${TASK_BACKUP_RELAY_SSH:-ssh -i $HOME/.ssh/id_ed25519_backup_pop_os -o IdentitiesOnly=yes -o IdentityAgent=none -o BatchMode=yes -o ConnectTimeout=15 -o HostKeyAlias=100.114.171.119 -o UserKnownHostsFile=$HOME/.ssh/known_hosts}"
 # Set by pick_route: where mirror_dirs writes, and the rsync options for it.
 DEST="$MIRROR"
 ROUTE_OPTS=()
@@ -92,7 +92,9 @@ mirror_dirs() {
 		# stalls for a minute at a time, so try again before giving up.
 		for try in 1 2 3; do
 			rc=0
-			timeout -k 5 900 rsync -rlpt --mkpath "${ROUTE_OPTS[@]}" "$d/" "$DEST/state$d/" || rc=$?
+			# -R recreates $d under state/. Not --mkpath: the NAS end of the
+			# relay runs rsync 3.1.2, which refuses it.
+			timeout -k 5 900 rsync -rlpt -R "${ROUTE_OPTS[@]}" "$d/" "$DEST/state/" || rc=$?
 			((rc == 255 && ${#ROUTE_OPTS[@]} > 0)) || break
 		done
 		if ((rc != 0 && rc != 24)); then
@@ -114,10 +116,12 @@ pick_route() {
 	fi
 	empty=$(mktemp -d "$STAGE/preflight.XXXXXX")
 	for try in 1 2 3; do
-		if timeout 45 rsync -n -d --timeout=30 -e "$RELAY_SSH" "$empty/" "${RELAY}${MIRROR#"$NAS"/}/" >/dev/null 2>&1; then
+		# Not a dry run: pushing the empty dir also creates the mirror dir, so
+		# the transfer below only needs state/ one level down (rsync makes one).
+		if timeout 45 rsync -d --timeout=30 -e "$RELAY_SSH" "$empty/" "${RELAY}${MIRROR#"$NAS"/}/" >/dev/null 2>&1; then
 			DEST="${RELAY}${MIRROR#"$NAS"/}"
 			ROUTE_OPTS=(-e "$RELAY_SSH" --timeout=300)
-			echo "route: off LAN, through the pop-os relay (try $try)"
+			echo "route: off LAN, through the nomad relay (try $try)"
 			break
 		fi
 	done

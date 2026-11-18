@@ -19,7 +19,7 @@
 # There is no wall-clock ceiling. rsync is idempotent and resumable, so a run
 # that is moving is left to finish however long it takes, and a run that fails
 # is retried rather than killed. Since 2026-09-14 fstab mounts the NAS `soft`
-# (timeo=150,retrans=3) through the pop-os relay, so a NAS that stops answering
+# (timeo=150,retrans=3) over the tailnet, so a NAS that stops answering
 # fails the writer with an I/O error after about two minutes instead of holding
 # it in D state forever; that attempt fails and the retry loop takes over (#181).
 # The --info output above is what makes a stall visible in the log.
@@ -41,15 +41,16 @@ MAX_ATTEMPTS="${SYSTEM_BACKUP_MAX_ATTEMPTS:-5}"
 BARREN_LIMIT="${SYSTEM_BACKUP_BARREN_LIMIT:-3}"
 RETRY_DELAY="${SYSTEM_BACKUP_RETRY_DELAY:-60}"
 
-# Off LAN the NAS is reached through the pop-os NFS relay, where rsync pays one
-# ~90ms tailnet round trip per entry (33,309 entries on 2026-09-12). pop-os
-# mounts the same share on the NAS LAN, so off LAN rsync goes over ssh to pop-os
-# and compares there; the full dry run took 15s. The key is pinned on pop-os to
-# `rrsync -wo /mnt/nas-backup`, so the target is relative to the share. On LAN
-# nothing changes, and if pop-os does not answer the NFS path is used (#181).
+# Off LAN, rsync onto the NFS mount pays one ~90ms tailnet round trip per entry
+# (33,309 entries on 2026-09-12), so off LAN rsync goes over ssh to the NAS
+# itself (nomad) and compares there. The key is pinned on nomad's bacuper
+# account to `sudo -u admin rrsync -wo /volume1/backups`, so the target is
+# relative to the share and files land as 1024:100. Until 18 Nov this went
+# through pop-os. On LAN nothing changes, and if the relay does not answer the
+# NFS path is used (#181).
 LAN_PROBE="${SYSTEM_BACKUP_LAN_PROBE:-192.168.178.138/2049}"
-RELAY_TARGET="${SYSTEM_BACKUP_RELAY_TARGET:-decoder@100.84.38.78:system-backup}"
-RELAY_SSH="${SYSTEM_BACKUP_RELAY_SSH:-ssh -i $HOME/.ssh/id_ed25519_backup_pop_os -o IdentitiesOnly=yes -o IdentityAgent=none -o BatchMode=yes -o ConnectTimeout=15 -o HostKeyAlias=192.168.178.125 -o UserKnownHostsFile=$HOME/.ssh/known_hosts}"
+RELAY_TARGET="${SYSTEM_BACKUP_RELAY_TARGET:-bacuper@100.114.171.119:system-backup}"
+RELAY_SSH="${SYSTEM_BACKUP_RELAY_SSH:-ssh -i $HOME/.ssh/id_ed25519_backup_pop_os -o IdentitiesOnly=yes -o IdentityAgent=none -o BatchMode=yes -o ConnectTimeout=15 -o HostKeyAlias=100.114.171.119 -o UserKnownHostsFile=$HOME/.ssh/known_hosts}"
 # Where rsync writes this run and the options that get it there; choose_transport
 # switches both to the relay when it picks the ssh path.
 TARGET="$DEST"
@@ -165,10 +166,10 @@ jam_watch() {
 	done
 }
 
-# Pick the NFS mount or the pop-os ssh path; returns 0 when it picked ssh. The
+# Pick the NFS mount or the nomad ssh relay; returns 0 when it picked ssh. The
 # LAN probe is a TCP connect to the NAS's NFS port, which answers only on the
 # home LAN. Off LAN a dry-run push of an empty dir proves the pinned key, sshd,
-# rrsync and pop-os's share guard all work before anything is sent.
+# sudo and rrsync on nomad all work before anything is sent.
 choose_transport() {
 	if timeout 3 bash -c ": </dev/tcp/${LAN_PROBE}" 2>/dev/null; then
 		log INFO "transport: on LAN, writing to the NFS mount"
@@ -179,12 +180,12 @@ choose_transport() {
 	timeout 60 rsync -n -d --timeout=30 -e "$RELAY_SSH" "${empty}/" "${RELAY_TARGET}/" >/dev/null 2>&1 || rc=$?
 	rmdir "$empty"
 	if [ "$rc" -ne 0 ]; then
-		log WARN "transport: off LAN and pop-os did not answer (rsync exit ${rc}); using the NFS relay mount, which is slow"
+		log WARN "transport: off LAN and the nomad relay did not answer (rsync exit ${rc}); using the NFS mount, which is slow"
 		return 1
 	fi
 	TARGET="$RELAY_TARGET"
 	TRANSPORT_OPTS=(-e "$RELAY_SSH")
-	log INFO "transport: off LAN, rsync goes over ssh through pop-os to ${RELAY_TARGET}"
+	log INFO "transport: off LAN, rsync goes over ssh to the nomad relay at ${RELAY_TARGET}"
 	return 0
 }
 
@@ -214,7 +215,7 @@ main() {
 		                      # which is why a full pass never completed.
 		-H                    # preserve hard links
 		--chmod=D-t           # no sticky bit on the NAS copy. Off LAN the writer is
-		                      # decoder on pop-os, and the kernel refuses renames and
+		                      # admin on nomad, and the kernel refuses renames and
 		                      # deletes in a sticky dir it does not own (/var/tmp,
 		                      # /var/spool/cron and more); root on serval passed (#181)
 		--delete

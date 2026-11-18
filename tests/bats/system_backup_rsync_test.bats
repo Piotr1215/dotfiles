@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 
 # __system_backup_rsync.sh must refuse to run when the NAS is not mounted, and off
-# LAN it must send rsync over ssh through pop-os instead of the slow NFS relay.
+# LAN it must send rsync over ssh to the nomad relay instead of the slow NFS path.
 # The preflight used `findmnt -T`, which resolves any path to the mount that
 # contains it: an unmounted /mnt/nas-backup answered with / and passed (#181).
 
@@ -12,7 +12,7 @@ setup() {
 
   # sudo runs the command unprivileged. rsync records each call and prints the
   # stats lines the retry loop reads back; the transport preflight (-n -d) exits
-  # with $RSYNC_PREFLIGHT_RC so a test can play pop-os not answering.
+  # with $RSYNC_PREFLIGHT_RC so a test can play the relay not answering.
   mkdir -p "${WORK}/bin"
   cat >"${WORK}/bin/sudo" <<'EOF'
 #!/usr/bin/env bash
@@ -81,13 +81,13 @@ on_lan() {
   [ "$(grep -c -- "-e ssh-stub" "$CALLS")" -eq 0 ]
 }
 
-@test "off LAN with pop-os answering, rsync goes over ssh to the relay and skips the NFS preflight" {
+@test "off LAN with the relay answering, rsync goes over ssh to the relay and skips the NFS preflight" {
   mkdir -p "${WORK}/nas"
 
   SYSTEM_BACKUP_MOUNT="${WORK}/nas" SYSTEM_BACKUP_DEST="${WORK}/nas/system-backup" run "$SCRIPT"
 
   [ "$status" -eq 0 ]
-  [[ "$output" == *"transport: off LAN, rsync goes over ssh through pop-os"* ]]
+  [[ "$output" == *"transport: off LAN, rsync goes over ssh to the nomad relay"* ]]
   [[ "$output" != *"preflight:"* ]]
   [[ "$output" == *"SUMMARY: backup complete"* ]]
   grep -q -- "-n -d .* relay.test:system-backup/\$" "$CALLS"
@@ -95,13 +95,13 @@ on_lan() {
   [ ! -e "${WORK}/nas/system-backup" ]
 }
 
-@test "off LAN with pop-os not answering, it falls back to the NFS path and its preflight" {
+@test "off LAN with the relay not answering, it falls back to the NFS path and its preflight" {
   mkdir -p "${WORK}/nas"
 
   RSYNC_PREFLIGHT_RC=12 SYSTEM_BACKUP_MOUNT="${WORK}/nas" SYSTEM_BACKUP_DEST="${WORK}/nas/system-backup" run "$SCRIPT"
 
   [ "$status" -eq 1 ]
-  [[ "$output" == *"transport: off LAN and pop-os did not answer (rsync exit 12)"* ]]
+  [[ "$output" == *"transport: off LAN and the nomad relay did not answer (rsync exit 12)"* ]]
   [[ "$output" == *"preflight: ${WORK}/nas is not a mount point"* ]]
   [ "$(wc -l <"$CALLS")" -eq 1 ]
 }
@@ -127,7 +127,7 @@ on_lan() {
     SYSTEM_BACKUP_MOUNT="${WORK}/nas" SYSTEM_BACKUP_DEST="${WORK}/nas/system-backup" run "$SCRIPT"
 
   [ "$status" -eq 0 ]
-  [[ "$output" == *"transport: off LAN, rsync goes over ssh through pop-os"* ]]
+  [[ "$output" == *"transport: off LAN, rsync goes over ssh to the nomad relay"* ]]
   [[ "$output" != *"JAMMED"* ]]
   [[ "$output" == *"SUMMARY: backup complete"* ]]
 }

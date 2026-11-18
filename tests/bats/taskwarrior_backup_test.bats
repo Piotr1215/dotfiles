@@ -148,10 +148,11 @@ fake_restic() {
 }
 
 # fake_relay: an ssh stub that runs the remote rsync inside $T/share, the way
-# rrsync on pop-os confines it to the NAS share.
+# rrsync on nomad confines it to the NAS share. Like nomad's rsync 3.1.2 it
+# refuses --mkpath, which the first nomad run hit on 18 Nov.
 fake_relay() {
 	mkdir -p "$T/share"
-	printf '#!/usr/bin/env bash\nshift\ncd %q && exec sh -c "$*"\n' "$T/share" >"$T/stubs/fake-ssh"
+	printf '#!/usr/bin/env bash\nshift\ncase "$*" in *--mkpath*) echo "rsync: on remote machine: --mkpath: unknown option" >&2; exit 1 ;; esac\ncd %q && exec sh -c "$*"\n' "$T/share" >"$T/stubs/fake-ssh"
 	chmod +x "$T/stubs/fake-ssh"
 	export TASK_BACKUP_RELAY="fakehost:" TASK_BACKUP_RELAY_SSH="$T/stubs/fake-ssh"
 	export TASK_BACKUP_LAN_PROBE="127.0.0.1/1"
@@ -161,7 +162,7 @@ fake_relay() {
 	fake_relay
 	run bash "$SCRIPT" mirror
 	[ "$status" -eq 0 ]
-	[[ "$output" == *"through the pop-os relay"* ]]
+	[[ "$output" == *"through the nomad relay"* ]]
 	[ "$(cat "$T/share/taskwarrior-mirror/state$T/briefs/b1.md")" = brief ]
 	[ -f "$T/share/taskwarrior-mirror/state$T/gordon/cases/c1.json" ]
 	[ ! -e "$M/state" ]
@@ -215,7 +216,7 @@ fake_relay() {
 	chmod +x "$T/stubs/fake-ssh"
 	run bash "$SCRIPT" mirror
 	[ "$status" -eq 0 ]
-	[[ "$output" == *"through the pop-os relay (try 2)"* ]]
+	[[ "$output" == *"through the nomad relay (try 2)"* ]]
 	[ -f "$T/share/taskwarrior-mirror/state$T/briefs/b1.md" ]
 }
 
