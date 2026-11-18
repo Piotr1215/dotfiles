@@ -424,3 +424,19 @@ alert_count() {
   [[ $output != *'alert '* ]]
   [ "$(alert_count)" = 0 ]
 }
+
+@test "a target that stops taking writes mid-run skips the run and keeps the alert clocks" {
+  # 2026-11-17: the NAS stalled mid-run and every repo timed out in turn.
+  export WIP_CAPTURE_REPO_TIMEOUT=2
+  mkdir -p "$WIP_CAPTURE_STATE"
+  printf '/elsewhere\t1\n' > "$WIP_CAPTURE_STATE/first-fail.tsv"
+  git -C "$REPO" config filter.gone.clean "chmod 500 '$WIP_CAPTURE_TARGET'; sleep 5; cat"
+  printf 'tracked filter=gone\n' > "$REPO/.gitattributes"
+  printf 'changed\n' > "$REPO/tracked"
+  run capture
+  chmod 700 "$WIP_CAPTURE_TARGET"
+  [ "$status" -eq 75 ]
+  [[ $output == *"SUMMARY: skipped, $WIP_CAPTURE_TARGET stopped taking writes mid-run"* ]]
+  [[ $output != *'summary repositories='* ]]
+  [ "$(cat "$WIP_CAPTURE_STATE/first-fail.tsv")" = "$(printf '/elsewhere\t1')" ]
+}

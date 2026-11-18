@@ -260,6 +260,12 @@ run_one() {
   out=$(mktemp "$state/out.XXXXXXXX")
   err=$(mktemp "$state/err.XXXXXXXX")
   timeout -k 5 "$repo_timeout" bwrap --die-with-parent --unshare-net --ro-bind / / --dev /dev --bind "$target" "$target" --bind "$state" "$state" --setenv TMPDIR "$state" --setenv WIP_CAPTURE_SANDBOXED 1 -- "$self" --capture-one "$repo" > "$out" 2> "$err" || rc=$?
+  # A failure while the target takes no write is the NAS gone, not the repo.
+  # Exit 255 so xargs starts no more repos (2026-11-17: 15 hours of timeouts).
+  if (( rc != 0 )) && ! timeout -k 5 10 touch -- "$target/.wip-probe" 2>/dev/null; then
+    rm -f -- "$out" "$err"
+    return 255
+  fi
   if (( rc == 0 )); then
     if grep -q '^captured ' "$out"; then line="captured"$'\t'"$repo"
     elif grep -q '^synced ' "$out"; then line="synced"$'\t'"$repo"
@@ -352,7 +358,7 @@ main() {
   local -a roots
   if (( $# )); then roots=("$@"); elif [[ -n ${WIP_CAPTURE_ROOTS:-} ]]; then IFS=: read -r -a roots <<< "$WIP_CAPTURE_ROOTS"; else roots=("$HOME/dev" "$HOME/loft" "$HOME/.claude" "$HOME/.codex"); fi
   # Workers run a private copy, so editing the script mid-run cannot change them.
-  local list self_copy results root failed=0 kind repo reason count=0 skipped=0 synced=0 captured=0 known=0
+  local list self_copy results root xrc=0 failed=0 kind repo reason count=0 skipped=0 synced=0 captured=0 known=0
   list=$(mktemp "$state/repos.XXXXXXXX")
   self_copy=$(mktemp "$state/self.XXXXXXXX")
   results=$(mktemp "$state/results.XXXXXXXX")
@@ -366,7 +372,12 @@ main() {
   done
   # Repos are independent; parallel workers hide per-repo git latency.
   sed -z 's#/\.git$##' "$list" |
-    WIP_CAPTURE_PARENT=1 xargs -0 -r -n 1 -P "${WIP_CAPTURE_JOBS:-4}" "$self_copy" --run-one > "$results" || true
+    WIP_CAPTURE_PARENT=1 xargs -0 -r -n 1 -P "${WIP_CAPTURE_JOBS:-4}" "$self_copy" --run-one > "$results" || xrc=$?
+  # xargs exits 124 when a worker exited 255. Skip: leave every clock alone.
+  if (( xrc == 124 )); then
+    echo "SUMMARY: skipped, $target stopped taking writes mid-run"
+    return 75
+  fi
   local known_file="$state/known-broken.tsv" known_new
   local -A good_at=() fail_at=() bad=() new_good=() new_fail=()
   local now
