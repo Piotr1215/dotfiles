@@ -21,7 +21,8 @@
 # Failing checks and drafts never get --admin. The rofi row says "bypass" or
 # "bypass after checks" for those PRs before you pick.
 #
-# Usage: __pr_merge_pick.sh [erase]   erase = trigger length to backspace
+# Usage: __pr_merge_pick.sh [erase] | --pr owner/repo#number
+# --pr selects a single approved, clean, green PR without showing the picker.
 #
 # Env: PR_MERGE_REPO (skip repo lookup), PR_MERGE_DIR (directory to resolve the
 # repo from instead of the focused tmux pane), PR_MERGE_OPEN=0 (no browser),
@@ -124,6 +125,12 @@ open_pr() {
 	fi
 }
 
+direct=""
+if [[ "${1:-}" == "--pr" ]]; then
+    direct="${2:-}"
+    [[ "$direct" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+#[0-9]+$ ]] || { echo "invalid PR ref" >&2; exit 2; }
+    shift 2
+fi
 pane="" dir="${PR_MERGE_DIR:-}"
 if [[ -z "$dir" ]]; then
 	read -r pane dir < <(focused_pane) || true
@@ -131,7 +138,18 @@ fi
 
 # A worker pane's pr-watch list first; repo stays empty in that mode.
 repo="" prs=""
-watch_file=$(pr_watch_file "$pane")
+watch_file=""
+if [[ -n "$direct" ]]; then
+    direct_repo=${direct%#*} direct_num=${direct##*#}
+    prs=$(gh pr view "$direct_num" --repo "$direct_repo" --json number,title,url,author,state,isDraft,reviewDecision,mergeStateStatus,statusCheckRollup | jq -c '[select(.state == "OPEN")]')
+    repo="$direct_repo"
+    if ! jq -e 'length == 1 and .[0].reviewDecision == "APPROVED" and .[0].mergeStateStatus == "CLEAN" and .[0].isDraft == false and ([.[0].statusCheckRollup[]? | ((.status // "COMPLETED") == "COMPLETED" and ((.conclusion // .state // "") | IN("SUCCESS", "NEUTRAL", "SKIPPED")))] | length > 0 and all)' <<<"$prs" >/dev/null; then
+        echo "PR is no longer approved, clean and green" >&2
+        exit 1
+    fi
+else
+    watch_file=$(pr_watch_file "$pane")
+fi
 if [[ -n "$watch_file" ]]; then
 	prs=$(watched_prs "$watch_file" || true)
 	[[ "$(jq 'length' <<<"$prs" 2>/dev/null)" =~ ^[1-9] ]] || prs=""
@@ -183,7 +201,11 @@ for row in "${rows[@]}"; do
 done
 
 rofi_theme 1400
-selection=$(printf '%s\n' "${labels[@]}" | rofi -dmenu -i -p "$prompt" "${ROFI_THEME[@]}") || exit 0
+if [[ -n "$direct" ]]; then
+    selection="${labels[0]}"
+else
+    selection=$(printf '%s\n' "${labels[@]}" | rofi -dmenu -i -p "$prompt" "${ROFI_THEME[@]}") || exit 0
+fi
 k="${selection%% *}"
 [[ -n "${author[$k]:-}" ]] || exit 0
 pick_repo=${repo_of[$k]} n=${num_of[$k]}
@@ -205,6 +227,8 @@ if bypass_after_checks "$k"; then
 	wait="gh pr checks $n --repo $pick_repo --watch --fail-fast >/dev/null && "
 fi
 
+prefix="!"
+[[ -n "$direct" ]] && prefix=""
 xdotool type --clearmodifiers --delay 12 -- \
-	"!${wait}gh pr merge $n --repo $pick_repo --$method$admin && __pr_merge_watch.sh $pick_repo $n"
+	"${prefix}${wait}gh pr merge $n --repo $pick_repo --$method$admin && __pr_merge_watch.sh $pick_repo $n"
 open_pr "https://github.com/$pick_repo/pull/$n"

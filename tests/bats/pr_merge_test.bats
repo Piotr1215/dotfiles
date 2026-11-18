@@ -442,3 +442,25 @@ follow() {
 	[ "$status" -eq 1 ]
 	[ ! -e "$SPY/all.log" ]
 }
+
+@test "direct PR selects one without a picker and uses the repository merge method" {
+    view loft-sh/flows 54 OPEN "fix: retry" CLEAN
+    jq '.reviewDecision = "APPROVED"' "$FIX/view.$(printf '%s' 'https://github.com/loft-sh/flows/pull/54' | tr -c 'A-Za-z0-9' _).json" > "$FIX/pr_view.json"
+    run "$PICKER" --pr loft-sh/flows#54
+    [ "$status" -eq 0 ]
+    ! grep -q '^rofi ' "$SPY/all.log"
+    [ "$(typed)" = 'gh pr merge 54 --repo loft-sh/flows --squash && __pr_merge_watch.sh loft-sh/flows 54' ]
+}
+
+@test "direct PR refuses a review-required or closed PR" {
+    view loft-sh/flows 54 OPEN "fix: retry" CLEAN
+    cp "$FIX/view.$(printf '%s' 'https://github.com/loft-sh/flows/pull/54' | tr -c 'A-Za-z0-9' _).json" "$FIX/pr_view.json"
+    run "$PICKER" --pr loft-sh/flows#54
+    [ "$status" -ne 0 ]
+    ! grep -q '^xdotool type' "$SPY/all.log"
+    jq '.state = "CLOSED" | .reviewDecision = "APPROVED"' "$FIX/pr_view.json" > "$FIX/closed.json"
+    cp "$FIX/closed.json" "$FIX/pr_view.json"
+    run "$PICKER" --pr loft-sh/flows#54
+    [ "$status" -ne 0 ]
+    ! grep -q '^xdotool type' "$SPY/all.log"
+}
