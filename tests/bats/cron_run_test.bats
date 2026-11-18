@@ -304,3 +304,84 @@ EOF
   [ "$status" -eq 0 ]
   [ -e "${WORK}/ran" ]
 }
+
+# CRON_NEEDS: what the line lists is checked before the job starts; if it does
+# not answer, the run is skipped (exit 75), never an error. /dev/shm stands in
+# for a mounted NAS, a plain directory for an unplugged drive.
+@test "CRON_NEEDS met: the job runs" {
+  findmnt -rn --mountpoint /dev/shm >/dev/null || skip "/dev/shm is not a mount here"
+  job="$(job_script ran.sh '#!/usr/bin/env bash' "touch '${WORK}/ran'" 'exit 0')"
+  CRON_NEEDS=mount:/dev/shm run "$CRON_RUN" job -- "$job"
+  rm -f /dev/shm/.cron-probe
+  [ "$status" -eq 0 ]
+  [ -e "${WORK}/ran" ]
+}
+
+@test "CRON_NEEDS mount not there: skipped, the job never starts" {
+  mkdir -p "${WORK}/nas"
+  job="$(job_script ran.sh '#!/usr/bin/env bash' "touch '${WORK}/ran'" 'exit 0')"
+  CRON_NEEDS="mount:${WORK}/nas" run "$CRON_RUN" job -- "$job"
+  [ "$status" -eq 75 ]
+  [ ! -e "${WORK}/ran" ]
+  [ "$(state_of)" = "skipped" ]
+  [ "$(jq -r '.message' "$STATUS")" = "skipped: ${WORK}/nas is not reachable" ]
+}
+
+# A listener on a free port stands in for a homelab service.
+listen() {
+  python3 -c 'import socket,time; s=socket.socket(); s.bind(("127.0.0.1",0)); s.listen(); print(s.getsockname()[1], flush=True); time.sleep(30)' >"${WORK}/port" &
+  LISTENER=$!
+  for _ in $(seq 50); do [ -s "${WORK}/port" ] && break; sleep 0.1; done
+  PORT=$(cat "${WORK}/port")
+}
+
+@test "CRON_NEEDS tcp: a closed port skips, an open one runs" {
+  job="$(job_script ran.sh '#!/usr/bin/env bash' "touch '${WORK}/ran'" 'exit 0')"
+  CRON_NEEDS="tcp:127.0.0.1:1" run "$CRON_RUN" job -- "$job"
+  [ "$status" -eq 75 ]
+  [ ! -e "${WORK}/ran" ]
+  listen
+  CRON_NEEDS="tcp:127.0.0.1:${PORT}" run "$CRON_RUN" job -- "$job"
+  kill "$LISTENER"
+  [ "$status" -eq 0 ]
+  [ -e "${WORK}/ran" ]
+}
+
+@test "a run that fails because its host went away mid-run is skipped" {
+  listen
+  job="$(job_script drop.sh '#!/usr/bin/env bash' "kill ${LISTENER}; sleep 0.5" 'echo "rsync: connection reset"' 'exit 12')"
+  CRON_NEEDS="tcp:127.0.0.1:${PORT}" run "$CRON_RUN" job -- "$job"
+  [ "$status" -eq 75 ]
+  [ "$(state_of)" = "skipped" ]
+}
+
+@test "a run that fails while its host is up is still an error" {
+  listen
+  job="$(job_script fail.sh '#!/usr/bin/env bash' 'exit 12')"
+  CRON_NEEDS="tcp:127.0.0.1:${PORT}" run "$CRON_RUN" job -- "$job"
+  kill "$LISTENER"
+  [ "$status" -eq 12 ]
+  [ "$(state_of)" = "error" ]
+}
+
+@test "a job that exits 75 itself is skipped" {
+  job="$(job_script gone.sh '#!/usr/bin/env bash' 'exit 75')"
+  run "$CRON_RUN" job -- "$job"
+  [ "$status" -eq 75 ]
+  [ "$(state_of)" = "skipped" ]
+}
+
+@test "a skipped stamp-gated job is not marked done and runs on the next tick" {
+  findmnt -rn --mountpoint /dev/shm >/dev/null || skip "/dev/shm is not a mount here"
+  export CRON_EVERY_STAMP_DIR="${WORK}/stamps"
+  every="${BATS_TEST_DIRNAME}/../../scripts/__cron_every.sh"
+  mkdir -p "${WORK}/nas"
+  job="$(job_script ran.sh '#!/usr/bin/env bash' "touch '${WORK}/ran'" 'exit 0')"
+  CRON_NEEDS="mount:${WORK}/nas" run "$every" weekly 604800 -- "$CRON_RUN" job -- "$job"
+  [ "$status" -eq 75 ]
+  [ ! -e "${WORK}/stamps/weekly" ]
+  CRON_NEEDS=mount:/dev/shm run "$every" weekly 604800 -- "$CRON_RUN" job -- "$job"
+  rm -f /dev/shm/.cron-probe
+  [ "$status" -eq 0 ]
+  [ -s "${WORK}/stamps/weekly" ]
+}

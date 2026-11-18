@@ -12,6 +12,7 @@
 # unless there's something to say):
 #   0        -> no-hit  (ran clean, nothing notable)
 #   2        -> hit     (ran clean, found something worth surfacing)
+#   75       -> skipped   (what CRON_NEEDS lists is not reachable)
 #   anything else -> error
 # A job that wants to report "hit" must exit 2 on that path itself; there is
 # no other signal channel. Anything the wrapper can't attribute to the job
@@ -179,6 +180,34 @@ fi
 #   PATH     cron's environment is nearly bare, and a tool found interactively
 #            but missing under cron is the single most frequent cron-only fault.
 if [ -t 0 ]; then caller="interactive"; else caller="cron"; fi
+
+# Home infrastructure rule (Piotr, 18 Nov): CRON_NEEDS on the crontab line
+# lists what the job relies on, "mount:/mnt/nas-backup" or "tcp:host:port".
+# If one is not reachable the job does not start: state "skipped", exit 75,
+# never an error. 75 is not success to __cron_every.sh, so the next tick
+# retries. A run that fails while one is unreachable is recorded the same way.
+needs_unmet() {
+    local spec h
+    for spec in ${CRON_NEEDS:-}; do
+        # shellcheck disable=SC2016 # tcp: $1 and $2 expand in the inner bash
+        case "$spec" in
+            mount:/*) timeout 10 mountpoint -q "${spec#mount:}" &&
+                timeout -k 2 10 touch "${spec#mount:}/.cron-probe" 2>/dev/null ;;
+            tcp:*:*) h="${spec#tcp:}"; timeout 10 bash -c ': <"/dev/tcp/$1/$2"' _ "${h%:*}" "${h##*:}" 2>/dev/null ;;
+            *) echo "malformed CRON_NEEDS entry: ${spec}" >&2; false ;;
+        esac || { echo "${spec#*:}"; return 0; }
+    done
+    return 1
+}
+if unmet=$(needs_unmet); then
+    wlog INFO "=== skipped: ${job} (pid $$, ${caller}): ${unmet} is not reachable"
+    jq -n --arg job "$job" --argjson ts "$(date +%s)" --arg msg "skipped: ${unmet} is not reachable" \
+        --arg lp "$log_file" '{job: $job, ts: $ts, state: "skipped", exit_code: 75,
+        duration_s: 0, message: $msg, log_path: $lp}' >"${status_file}.tmp"
+    mv "${status_file}.tmp" "$status_file"
+    exit 75
+fi
+
 wlog INFO "=== run start: ${job} (pid $$, ${caller})"
 
 # Render the argv so it can be pasted back into a shell verbatim. Plain "$*"
@@ -339,8 +368,14 @@ case "$code" in
     # 137 (SIGKILL) is deliberately NOT here: that is what `timeout --kill-after`
     # sends when a job ignored SIGTERM, i.e. a genuine hang worth waking up for.
     129|130|131|143) state="interrupted" ;;
+    75) state="skipped" ;;
     *) state="error" ;;
 esac
+
+if [ "$state" = "error" ] && unmet=$(needs_unmet); then
+    state="skipped" code=75
+    wlog INFO "failed while ${unmet} is not reachable: recorded as skipped"
+fi
 
 # A bare exit code hides the most interesting failure here: this machine powers
 # off nightly, so a long job killed mid-run reports 143 and reads like a generic
@@ -394,6 +429,6 @@ fi
 # the only case here, which meant an `interrupted` run exited 0 and told every
 # caller the job had succeeded, hiding the very interruption the state records.
 case "$state" in
-    error|interrupted) exit "$code" ;;
+    error|interrupted|skipped) exit "$code" ;;
 esac
 exit 0

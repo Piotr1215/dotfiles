@@ -200,6 +200,9 @@ while IFS=$'\t' read -r schedule job cmd purpose; do
             fi
             ;;
         pending) glyph="🔵" ;;
+        # The NAS it relies on was not reachable, so it skipped (CRON_NEEDS).
+        # Normal operation away from home: uncounted, no badge, no sentence.
+        skipped) glyph="⏭" ;;
         # Ran, then something took the machine out from under it. Amber, not
         # red: nothing is broken and there is nothing to fix, so it must not
         # read as "a cron job is fucked, spawn klod". Uncounted for the same

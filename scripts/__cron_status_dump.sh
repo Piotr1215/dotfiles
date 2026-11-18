@@ -42,6 +42,9 @@ state_glyph() {
         spent) echo "✅" ;;
         pending) echo "🔵" ;;
         running) echo "🟣" ;;
+        # The NAS it relies on was not reachable, so it skipped (CRON_NEEDS).
+        # Normal operation away from home: never red, never amber.
+        skipped) echo "⏭" ;;
         *) echo "⚫" ;;
     esac
 }
