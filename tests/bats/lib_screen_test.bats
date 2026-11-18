@@ -107,3 +107,33 @@ WM_4K='0  * DG: 3840x2160  VP: 0,0  WA: 0,64 3840x2096  Workspace 1'
   run grep -c 'xrandr --current' "$LIB"
   [ "$output" -ge 3 ]
 }
+
+# A layout started from a terminal follows that terminal's screen, so the lib
+# must name the output under a window's centre. xdotool is stubbed with the
+# --shell geometry it prints for a real window.
+on_window() {
+  local geo="$1"
+  XR="$XR_LAPTOP" GEO="$geo" bash -c '
+    IFS=$'"'"'\n\t'"'"'
+    source "'"$LIB"'"
+    xrandr() { printf "%b\n" "$XR"; }
+    xdotool() { [[ -n "$GEO" ]] && printf "%b\n" "$GEO"; return 0; }
+    export -f xrandr xdotool
+    window_monitor 111
+  '
+}
+
+@test "window_monitor names the output under the window centre" {
+  run on_window 'WINDOW=111\nX=2700\nY=100\nWIDTH=800\nHEIGHT=600\nSCREEN=0'
+  [ "$status" -eq 0 ]
+  [ "$output" = "HDMI-0" ]
+
+  run on_window 'WINDOW=111\nX=100\nY=100\nWIDTH=800\nHEIGHT=600\nSCREEN=0'
+  [ "$output" = "eDP-1-1" ]
+}
+
+@test "window_monitor fails for a window with no geometry" {
+  run on_window ''
+  [ "$status" -ne 0 ]
+  [ -z "$output" ]
+}

@@ -57,6 +57,36 @@ get_secondary_monitor() {
 	return 1
 }
 
+# Print the connected xrandr output whose rectangle holds the point X Y.
+monitor_at() {
+	local px="$1" py="$2" line geom w h x y
+	while IFS= read -r line; do
+		[[ "$line" == *" connected "* ]] || continue
+		geom=$(grep -oE '[0-9]+x[0-9]+\+[0-9]+\+[0-9]+' <<<"$line" | head -n 1)
+		[[ -n "$geom" ]] || continue
+		IFS='x+' read -r w h x y <<<"$geom"
+		if (( px >= x && px < x + w && py >= y && py < y + h )); then
+			printf '%s\n' "${line%% *}"
+			return 0
+		fi
+	done < <(xrandr --current 2>/dev/null)
+	return 1
+}
+
+# Print the output that holds the centre of X11 window $1, so a layout can stay on
+# the screen of the terminal it was started from. Fails when the window has no
+# readable geometry or sits on no connected output.
+window_monitor() {
+	local wid="$1" key val x="" y="" w="" h=""
+	while IFS='=' read -r key val; do
+		case "$key" in
+		X) x="$val" ;; Y) y="$val" ;; WIDTH) w="$val" ;; HEIGHT) h="$val" ;;
+		esac
+	done < <(xdotool getwindowgeometry --shell "$wid" 2>/dev/null)
+	[[ "$x" =~ ^-?[0-9]+$ && "$y" =~ ^-?[0-9]+$ && "$w" =~ ^[0-9]+$ && "$h" =~ ^[0-9]+$ ]] || return 1
+	monitor_at $((x + w / 2)) $((y + h / 2))
+}
+
 # Print "X Y W H" of _NET_WORKAREA for the current desktop.
 get_net_workarea() {
 	wmctrl -d 2>/dev/null | awk '$2 == "*" || NR == 1 { wa = $0; if ($2 == "*") exit } END {

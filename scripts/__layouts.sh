@@ -22,6 +22,12 @@ DBUS_IFACE="org.gnome.Shell.Extensions.TileHelper"
 # inside this rectangle, so it never spans a second monitor. See __lib_screen.sh.
 # shellcheck source=scripts/__lib_screen.sh
 source "$(dirname "${BASH_SOURCE[0]}")/__lib_screen.sh"
+# A layout handed its terminal (LAYOUT_ALACRITTY_WINDOW, as the ctrl+1 url hint
+# does) tiles on that terminal's screen, so a terminal on the projector splits
+# there instead of on the primary laptop panel. LAYOUT_MONITOR still wins.
+if [[ -z "${LAYOUT_MONITOR:-}" && -n "${LAYOUT_ALACRITTY_WINDOW:-}" ]]; then
+	LAYOUT_MONITOR=$(window_monitor "$LAYOUT_ALACRITTY_WINDOW") || LAYOUT_MONITOR=""
+fi
 IFS=' ' read -r WA_X WA_Y WA_W WA_H < <(get_target_work_area)
 IFS=$'\n\t'
 if [[ -z "${WA_W:-}" ]]; then

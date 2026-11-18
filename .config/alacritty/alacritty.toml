@@ -32,7 +32,9 @@ bindings = [
 # browser: hint mode does not cancel on focus loss (the only stop() paths are
 # escape, no visible matches, and a pick with persist = false), so with focus
 # back here the overlay is still live and the next letter picks another url.
-command = { program = "/bin/sh", args = ["-c", "xdg-open \"$0\" >/dev/null 2>&1; sleep 1.5; /home/decoder/dev/dotfiles/scripts/__layouts.sh 18 >/dev/null 2>&1"] }
+# The terminal is read before xdg-open hands focus to Chrome, and passed on so the
+# split lands on this terminal's screen, not the primary one.
+command = { program = "/bin/sh", args = ["-c", "w=$(/usr/bin/xdotool getactivewindow 2>/dev/null); xdg-open \"$0\" >/dev/null 2>&1; sleep 1.5; LAYOUT_ALACRITTY_WINDOW=\"$w\" /home/decoder/dev/dotfiles/scripts/__layouts.sh 18 >/dev/null 2>&1"] }
 hyperlinks = true
 post_processing = true
 persist = true

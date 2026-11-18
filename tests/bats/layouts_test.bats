@@ -243,3 +243,54 @@ max_calls() {
   run grep -n 'enable-animations' "$LAYOUTS"
   [ "$status" -eq 1 ]
 }
+
+# The ctrl+1 url hint names its terminal in LAYOUT_ALACRITTY_WINDOW. With a
+# projector beside the laptop the laptop panel stays primary, so a layout that
+# ignored the terminal split on the laptop while the terminal sat on the
+# projector. Runs the real layout 18 from a temp copy (the font and panel
+# scripts are stubbed there, so no real config is written) and records the
+# TileXid geometry: terminal 111 sits on RIGHT, Chrome is 0xde = 222.
+split_from_terminal() {
+  local dir="$BATS_TEST_TMPDIR" name
+  mkdir -p "$dir/scripts" "$dir/bin"
+  cp "$LAYOUTS" "${BATS_TEST_DIRNAME}/../../scripts/__lib_screen.sh" "$dir/scripts/"
+  for name in __alacritty_font_scale.sh __panel_adapt.sh; do
+    printf '#!/bin/sh\nexit 0\n' >"$dir/scripts/$name"
+  done
+  cat >"$dir/bin/xdotool" <<'STUB'
+#!/bin/sh
+case "$1" in
+search|getactivewindow) echo 111 ;;
+getwindowgeometry) printf 'WINDOW=111\nX=2100\nY=100\nWIDTH=800\nHEIGHT=600\nSCREEN=0\n' ;;
+esac
+STUB
+  cat >"$dir/bin/wmctrl" <<'STUB'
+#!/bin/sh
+case "$*" in
+-d) echo '0 * DG: 4000x1200 VP: 0,0 WA: 0,40 4000x1160' ;;
+*) echo '0x000000de 0 google-chrome.Google-chrome host Chrome' ;;
+esac
+STUB
+  printf '#!/bin/sh\necho "LEFT connected primary 2000x1200+0+0"\necho "RIGHT connected 2000x1200+2000+0"\n' >"$dir/bin/xrandr"
+  printf '#!/bin/sh\nprintf "%%s\\n" "$*" >>"%s/tiles"\n' "$dir" >"$dir/bin/gdbus"
+  printf '#!/bin/sh\nexit 0\n' >"$dir/bin/sleep"
+  chmod +x "$dir"/scripts/* "$dir"/bin/*
+  : >"$dir/tiles"
+  PATH="$dir/bin:$PATH" bash "$dir/scripts/__layouts.sh" 18 >/dev/null 2>&1
+  grep -o 'TileXid .*' "$dir/tiles"
+}
+
+@test "url hint split lands on the terminal's screen, not the primary" {
+  LAYOUT_ALACRITTY_WINDOW=111 run split_from_terminal
+  [ "$output" = $'TileXid 222 2000 40 1000 1160\nTileXid 111 3000 40 1000 1160' ]
+}
+
+@test "layout without a named terminal still splits on the primary" {
+  run split_from_terminal
+  [ "$output" = $'TileXid 222 0 40 1000 1160\nTileXid 111 1000 40 1000 1160' ]
+}
+
+@test "LAYOUT_MONITOR set by the caller wins over the terminal's screen" {
+  LAYOUT_MONITOR=LEFT LAYOUT_ALACRITTY_WINDOW=111 run split_from_terminal
+  [ "$output" = $'TileXid 222 0 40 1000 1160\nTileXid 111 1000 40 1000 1160' ]
+}

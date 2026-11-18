@@ -30,22 +30,6 @@ tile_helper() {
 	gdbus call --session -d "$DBUS_DEST" -o "$DBUS_PATH" -m "$DBUS_IFACE.$1" "${@:2}" >/dev/null
 }
 
-# Print the connected xrandr output whose rectangle holds the point X Y.
-monitor_at() {
-	local px="$1" py="$2" line geom w h x y
-	while IFS= read -r line; do
-		[[ "$line" == *" connected "* ]] || continue
-		geom=$(grep -oE '[0-9]+x[0-9]+\+[0-9]+\+[0-9]+' <<<"$line" | head -n 1)
-		[[ -n "$geom" ]] || continue
-		IFS='x+' read -r w h x y <<<"$geom"
-		if (( px >= x && px < x + w && py >= y && py < y + h )); then
-			printf '%s\n' "${line%% *}"
-			return 0
-		fi
-	done < <(xrandr --current 2>/dev/null)
-	return 1
-}
-
 # Print full, half or third: the step after the window's current shape.
 next_step() {
 	local state="$1" win_w="$2" area_w="$3"
