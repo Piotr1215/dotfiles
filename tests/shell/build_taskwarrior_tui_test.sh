@@ -12,6 +12,7 @@ cat > "$test_root/stubs/git" <<'STUB'
 set -eo pipefail
 printf 'git %s\n' "$*" >> "$TEST_LOG"
 if [[ "$1" == clone || "$1" == init ]]; then
+  [[ "$1" != clone || "${FAIL_CLONE:-0}" != 1 ]] || exit 1
   mkdir -p -- "${@: -1}"
 elif [[ "$1" == -C && "$3" == rev-parse ]]; then
   printf '%s\n' "${TEST_SHA:-aeb778fae3c7b1a5c29d0f9b4cc2febfe09797d6}"
@@ -69,7 +70,7 @@ setup_case() {
   printf 'original binary\n' > "$test_home/bin/taskwarrior-tui"
   chmod +x "$test_home/bin/taskwarrior-tui"
   : > "$TEST_LOG"
-  unset FAIL_TEST TEST_SHA BROKEN_BINARY
+  unset FAIL_TEST TEST_SHA BROKEN_BINARY FAIL_CLONE
 }
 
 assert_original() {
@@ -82,7 +83,8 @@ setup_case build_only
 env HOME="$test_home" bash "$repo_dir/scripts/__build_taskwarrior_tui.sh" > /dev/null
 assert_original
 [[ -x "$CARGO_TARGET_DIR/release/taskwarrior-tui" ]]
-[[ "$(grep -c '^git .* apply ' "$TEST_LOG")" == 2 ]]
+grep -q '^git clone .* --branch main https://github.com/Piotr1215/taskwarrior-tui.git ' "$TEST_LOG"
+if grep -q '^git .* apply ' "$TEST_LOG"; then exit 1; fi
 grep -q '^cargo test ' "$TEST_LOG"
 grep -q '^cargo build ' "$TEST_LOG"
 if grep -q '^smoke ' "$TEST_LOG"; then exit 1; fi
@@ -116,13 +118,12 @@ fi
 assert_original
 if grep -q '^cargo build ' "$TEST_LOG"; then exit 1; fi
 
-setup_case wrong_sha
-export TEST_SHA=incorrect
+setup_case clone_failure
+export FAIL_CLONE=1
 if env HOME="$test_home" bash "$repo_dir/scripts/__build_taskwarrior_tui.sh" --install > /dev/null 2>&1; then
-  printf 'wrong upstream SHA unexpectedly succeeded\n' >&2
+  printf 'clone failure unexpectedly succeeded\n' >&2
   exit 1
 fi
 assert_original
 if grep -q '^cargo ' "$TEST_LOG"; then exit 1; fi
-if grep -q '^git .* apply ' "$TEST_LOG"; then exit 1; fi
 printf '5 build and install cases passed\n'

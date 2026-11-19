@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -eo pipefail
 
-# Rebuild the pinned Twoy source and run its tests before optional installation.
+# Rebuild fork main and run its tests before optional installation.
 main() {
   local install_binary=false
   case "${1:-}" in
@@ -11,22 +11,16 @@ main() {
   esac
   [[ $# -le 1 ]] || return 2
 
-  local script_dir patch_dir build_root source_dir target_dir fixture_dir install_path backup_dir backup_path staged
+  local script_dir build_root source_dir target_dir fixture_dir install_path backup_dir backup_path staged
   script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-  patch_dir="$script_dir/../patches/taskwarrior-tui"
   build_root="${XDG_CACHE_HOME:-$HOME/.cache}/taskwarrior-tui-build"
   mkdir -p -- "$build_root"
   source_dir="$(mktemp -d "$build_root/source.XXXXXX")"
   target_dir="${CARGO_TARGET_DIR:-$build_root/target}"
   [[ "$target_dir" = /* ]] || { printf 'CARGO_TARGET_DIR must be absolute\n' >&2; return 2; }
 
-  git clone --quiet --depth 1 --branch v0.27.0 https://github.com/kdheepak/taskwarrior-tui.git "$source_dir"
-  [[ "$(git -C "$source_dir" rev-parse HEAD)" = aeb778fae3c7b1a5c29d0f9b4cc2febfe09797d6 ]] || {
-    printf 'Upstream v0.27.0 changed; refusing to build\n' >&2
-    return 1
-  }
-  git -C "$source_dir" apply "$patch_dir/0001-installed-customizations.patch"
-  git -C "$source_dir" apply "$patch_dir/0002-handoff-selection.patch"
+  git clone --quiet --depth 1 --branch main https://github.com/Piotr1215/taskwarrior-tui.git "$source_dir"
+  printf 'Fork main commit: %s\n' "$(git -C "$source_dir" rev-parse HEAD)"
   fixture_dir="$source_dir/tests/data"
   git init --quiet "$fixture_dir"
   git -C "$fixture_dir" fetch --quiet --depth 1 https://github.com/kdheepak/taskwarrior-testdata cdcdb20de1e9aefb2e2b50de7bbd27388b41f80e
