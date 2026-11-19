@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Executable value-set: pending tasks, typed as the same token Claude's
+# @task file suggestion inserts: @"<uuid>|<linear>|<repo>|<description>".
+# In a Claude prompt the __gordon_task_mention.sh hook expands it to the task's
+# brief; anywhere else it reads as a plain task reference.
+#
+# Rows are "<token><TAB><label>": rofi shows and filters only the label
+# (description, Linear id, repo), so the uuid is typed but never searched.
+#
+# Query pending tasks without the active context, which may hide private tasks.
+set -eo pipefail
+
+task rc.context=none status:pending export 2>/dev/null |
+    jq -r '.[] | "\(.uuid)|\(.linear_issue_id // "-")|\(.repo // "-")|\(.description)"' |
+awk -F'|' 'NF {
+	desc = $4
+	for (i = 5; i <= NF; i++) desc = desc "|" $i
+	label = desc
+	if ($2 != "-") label = label "   " $2
+	if ($3 != "-" && $3 != "no-repo") label = label "   " $3
+	printf "@\"%s\"\t%s\n", $0, label
+}'
