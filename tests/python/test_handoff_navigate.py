@@ -54,6 +54,18 @@ def test_agent_kind_requires_brief_and_does_not_focus_on_spawn_failure(monkeypat
     assert len(calls) == 1
 
 
+def test_started_agent_handoff_skips_page_navigation(monkeypatch, tmp_path):
+    row = dict(task("agent-brief: do work", "tab: https://github.com/a/b"),
+               kind="agent", start="20261119T080000Z")
+    monkeypatch.setenv("XDG_RUNTIME_DIR", str(tmp_path))
+    monkeypatch.setattr(nav, "task_export", lambda *args: [row])
+    calls = []
+    monkeypatch.setattr(nav, "act_on_kind", lambda value: calls.append(value))
+    monkeypatch.setattr(nav, "navigate_many", lambda *args: pytest.fail("opened a page"))
+    assert nav.main([UUID]) == 0
+    assert calls == [row]
+
+
 @pytest.mark.parametrize("url", [
     "http://github.com/a",
     "https://user@github.com/a", "https://github.com:443/a", "file:///tmp/a",
