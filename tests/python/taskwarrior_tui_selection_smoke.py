@@ -48,6 +48,7 @@ def main():
         "report.signal.sort=id+\nreport.signal.filter=status:pending\n"
         "uda.taskwarrior-tui.task-report.show-info=false\n"
         "uda.taskwarrior-tui.tick-rate=100\n"
+        "uda.taskwarrior-tui.keyconfig.sync-issue=Ctrl+s\n"
     )
     (test_home / ".taskrc").symlink_to(rc)
     (test_home / ".task").symlink_to(root / "tasks")
