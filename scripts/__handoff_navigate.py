@@ -375,7 +375,7 @@ def cmd_page(task):
     return ""
 
 
-KINDS = {"slack", "command", "pr", "ack", "other"}
+KINDS = {"slack", "command", "pr", "ack", "other", "agent"}
 # The fixed line puts the row's command in the next editing buffer, unsubmitted,
 # and arms a one-shot hook: the first command Piotr runs there that exits 0
 # calls `verify` (Piotr, 11 Nov: "once command is ran verify it and close task").
@@ -518,6 +518,25 @@ def act_on_kind(task, slack=False):
     # annotation_urls already opened a cmd_page, so it needs no window.
     runnable = not cmd_page(task) and (command or kind == "command")
     try:
+        if kind == "agent":
+            brief = newest_note(task, "agent-brief")
+            if not brief:
+                raise ValueError("agent handoff needs an agent-brief: note")
+            uuid = task["uuid"]
+            if not UUID.fullmatch(uuid):
+                raise ValueError("invalid task UUID")
+            spawn = os.environ.get("HANDOFF_SPAWN_COMMAND", str(Path.home() / ".claude/scripts/__spawn_agent.sh"))
+            argv = [spawn, "--name", uuid[:8] + "-handoff", "--cwd", str(Path.home() / "loft"),
+                    "--origin", "piotr", "--task", uuid, "--prompt", brief, "--json"]
+            agent = newest_note(task, "agent")
+            if agent:
+                argv += ["--agent", agent]
+            result = run(argv, timeout=120, capture_output=True, text=True)
+            session = json.loads(result.stdout.splitlines()[-1])["session"]
+            if not re.fullmatch(r"[a-zA-Z0-9_-]+", session):
+                raise ValueError("spawn returned an invalid session")
+            run([os.environ.get("HANDOFF_TMUX_COMMAND", "tmux"), "switch-client", "-t", "=" + session])
+            return "agent"
         if slack:
             draft = newest_note(task, "draft")
             if draft and not copy_to_clipboard(draft):
@@ -532,7 +551,7 @@ def act_on_kind(task, slack=False):
         if session:
             attach_agent_session(session)
             return "agent"
-    except (ValueError, OSError, subprocess.SubprocessError) as error:
+    except (ValueError, KeyError, IndexError, OSError, subprocess.SubprocessError) as error:
         log(f"handoff: {kind} action on {task.get('uuid')} failed: {error}")
         return "failed"
     return "none"
@@ -699,6 +718,9 @@ def main(argv=None):
         # This detached process runs after the originating hook returns. Check
         # current state again, and stop other starts without reentering hooks.
         if not task.get("start"):
+            return 0
+        if task_kind(task) == "agent":
+            act_on_kind(task)
             return 0
         # A row carrying +claude or +codex was started by an agent spawn (key 4),
         # not by S. Leave it running; only Piotr's own starts take turns.

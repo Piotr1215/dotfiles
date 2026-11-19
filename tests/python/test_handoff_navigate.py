@@ -28,6 +28,32 @@ def task(*annotations, tags=None):
             "annotations": [{"description": text} for text in annotations]}
 
 
+def test_agent_kind_spawns_task_and_focuses_session(monkeypatch):
+    calls = []
+    def run(args, **kwargs):
+        calls.append(args)
+        return subprocess.CompletedProcess(args, 0, json.dumps({"session": "aa476008-handoff"}))
+    monkeypatch.setattr(nav, "run", run)
+    row = dict(task("agent-brief: old", "agent-brief: exact prompt", "agent: code-writer", "cmd: ignored"), kind="agent")
+    assert nav.act_on_kind(row) == "agent"
+    assert calls[0][1:] == ["--name", "aa476008-handoff", "--cwd", str(Path.home() / "loft"),
+                            "--origin", "piotr", "--task", UUID, "--prompt", "exact prompt",
+                            "--json", "--agent", "code-writer"]
+    assert calls[1] == ["tmux", "switch-client", "-t", "=aa476008-handoff"]
+
+
+def test_agent_kind_requires_brief_and_does_not_focus_on_spawn_failure(monkeypatch):
+    calls = []
+    def fail(args, **kwargs):
+        calls.append(args)
+        raise subprocess.CalledProcessError(1, args)
+    monkeypatch.setattr(nav, "run", fail)
+    assert nav.act_on_kind(dict(task(), kind="agent")) == "failed"
+    assert not calls
+    assert nav.act_on_kind(dict(task("agent-brief: do work"), kind="agent")) == "failed"
+    assert len(calls) == 1
+
+
 @pytest.mark.parametrize("url", [
     "http://github.com/a",
     "https://user@github.com/a", "https://github.com:443/a", "file:///tmp/a",
