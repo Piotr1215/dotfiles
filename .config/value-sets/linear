@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# Executable value-set: Linear issues from work tasks, typed as the same token
+# Claude's @lin file suggestion inserts: @"<ISSUE-ID> <title>".
+#
+# The query is read from the lin prefix in ~/.claude/file-suggestion.toml, so
+# ;;linear and @lin always list the same issues.
+#
+# Rows are "<token><TAB><label>": rofi shows and filters the plain
+# "<ISSUE-ID> <title>" line and types it wrapped as Claude does.
+set -eo pipefail
+
+toml="${FILE_SUGGESTION_TOML:-$HOME/.claude/file-suggestion.toml}"
+
+query=$(python3 - "$toml" <<'PY'
+import sys, tomllib
+with open(sys.argv[1], "rb") as f:
+    cfg = tomllib.load(f)
+for p in cfg.get("prefixes", []):
+    if p.get("name") == "lin" and p.get("exec"):
+        print(p["exec"])
+        break
+PY
+)
+[[ -n "$query" ]] || { echo "no lin prefix with an exec in $toml" >&2; exit 1; }
+
+bash -c "$query" | awk 'NF { printf "@\"%s\"\t%s\n", $0, $0 }'
