@@ -1,5 +1,5 @@
 diff --git a/src/app.rs b/src/app.rs
-index 9e8a730..6548296 100644
+index 9e8a730..7a33d9c 100644
 --- a/src/app.rs
 +++ b/src/app.rs
 @@ -55,7 +55,7 @@ use crate::{
@@ -124,7 +124,22 @@ index 9e8a730..6548296 100644
    fn gordon_command(&self) -> Result<std::process::Command, String> {
      let args = shlex::split(&self.config.uda_gordon_command)
        .filter(|args| !args.is_empty())
-@@ -3629,6 +3684,21 @@ impl TaskwarriorTui {
+@@ -3217,4 +3272,14 @@ impl TaskwarriorTui {
+     for task_uuid in &task_uuids {
++      if self.task_by_uuid(*task_uuid).is_some_and(|task| {
++        task.start().is_some() && task.tags().as_ref().is_some_and(|tags| tags.iter().any(|tag| tag == "piotr"))
++      }) {
++        if let Some(home) = dirs::home_dir() {
++          let mut command = std::process::Command::new(home.join("dev/dotfiles/scripts/__handoff_navigate.sh"));
++          command.arg(task_uuid.to_string()).stdin(std::process::Stdio::null());
++          self.queue_write(TaskWrite::new("Handoff", true, Select::Nothing, (command, None)), &[]);
++        }
++        continue;
++      }
+       let command = match self.task_by_uuid(*task_uuid) {
+         Some(t) if t.start().is_some() => "stop",
+         _ => "start",
+@@ -3629,6 +3694,21 @@ impl TaskwarriorTui {
      if let Mode::Tasks(task_mode) = &self.mode {
        match task_mode {
          Action::Report => {
@@ -146,21 +161,46 @@ index 9e8a730..6548296 100644
            if input == KeyCode::Esc {
              self.marked.clear();
            } else if input == self.keyconfig.quit || input == KeyCode::Ctrl('c') {
-@@ -5474,6 +5544,10 @@ mod tests {
+@@ -5474,6 +5554,11 @@ mod tests {
      test_undo_and_add_run_in_background().await;
      test_background_shortcut_keeps_the_terminal().await;
      test_gordon_keeps_the_terminal_and_sends_only_current_task().await;
 +    test_selection_signal_and_handoff_navigation().await;
 +    test_handoff_key_preserves_configured_action().await;
++    test_start_stop_navigates_active_handoff().await;
 +    test_brief_key_toggles_floater_for_selected_task().await;
 +    test_tab_focuses_the_brief_pane().await;
      test_report_menu_refresh_error_keeps_reports().await;
      test_report_menu_refreshes_and_exports_waiting_tasks().await;
  
-@@ -5999,6 +6073,196 @@ mod tests {
+@@ -5999,6 +6084,220 @@ mod tests {
      let style = app.style_for_task(&task);
    }
  
++  async fn test_start_stop_navigates_active_handoff() {
++    let mut app = TaskwarriorTui::new("next", false).await.unwrap();
++    let (jobs, queue) = std::sync::mpsc::channel();
++    let (_results_sender, results) = tokio::sync::mpsc::unbounded_channel();
++    app.worker = Some(Worker { jobs, results });
++    app.current_selection = 0;
++    app.marked.clear();
++    let fixture = r#"[{"uuid":"437428a3-7c09-429b-bb79-a3e2b0d74135","description":"handoff","status":"pending","entry":"20261119T100000Z","start":"20261119T120757Z","tags":["piotr"]}]"#;
++    app.tasks[0] = task_hookrs::import::import(fixture.as_bytes()).unwrap().remove(0);
++    let uuid = *app.tasks[0].uuid();
++    app.task_start_stop().unwrap();
++    let (_, Job::Write(write)) = queue.try_recv().unwrap() else { panic!("expected navigation") };
++    assert_eq!(write.label, "Handoff");
++    assert!(write.cmd.get_program().to_string_lossy().ends_with("/scripts/__handoff_navigate.sh"));
++    assert_eq!(write.cmd.get_args().map(|arg| arg.to_string_lossy().into_owned()).collect::<Vec<_>>(), vec![uuid.to_string()]);
++    assert!(queue.try_recv().is_err());
++
++    app.tasks[0].tags_mut().as_mut().unwrap().retain(|tag| tag != "piotr");
++    app.task_start_stop().unwrap();
++    let (_, Job::Write(write)) = queue.try_recv().unwrap() else { panic!("expected stop") };
++    assert_eq!(write.label, "Start/stop");
++    assert!(write.cmd.get_args().any(|arg| arg == "stop"));
++  }
++
 +  async fn test_handoff_key_preserves_configured_action() {
 +    let mut app = TaskwarriorTui::new("next", false).await.unwrap();
 +    assert!(app.tasks.len() >= 2);
