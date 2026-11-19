@@ -283,14 +283,14 @@ def navigate_many(urls, terminal, slack_tabs=False):
             log("handoff: cannot tile without the source terminal and its monitor")
             return
         env["LAYOUT_MONITOR"] = monitor
-        if pages and not desktop:
+        if pages:
             browser_id = window_id("google-chrome")
             if not terminal or not browser_id:
                 log("handoff: cannot tile without the source terminal and Chrome window")
                 return
             env["LAYOUT_BROWSER_WINDOW"] = browser_id
         run([os.environ.get("HANDOFF_LAYOUT_COMMAND", str(ROOT / "__layouts.sh")),
-             "8" if desktop else "2"], env=env, stdout=subprocess.DEVNULL)
+             "10" if desktop and pages else "8" if desktop else "2"], env=env, stdout=subprocess.DEVNULL)
 
 
 SESSION_NOTE = re.compile(r"\btmux session ([A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*)")
@@ -340,7 +340,7 @@ def live_agent_session(task):
 
 
 def prefer_linear(task, urls):
-    """Open the linked issue in place of its originating Slack thread."""
+    """Include the linked issue alongside any originating Slack thread."""
     urls = list(urls)
     issue = task.get("linear_issue_id", "") or ""
     if not issue:
@@ -349,8 +349,6 @@ def prefer_linear(task, urls):
         issue = match.group(1) if match else ""
     if re.fullmatch(r"[A-Z][A-Z0-9]+-[1-9][0-9]*", issue):
         urls.append(f"https://linear.app/loft/issue/{issue}")
-    if any(urlsplit(url).hostname == "linear.app" and "/issue/" in urlsplit(url).path for url in urls):
-        urls = [url for url in urls if urlsplit(url).hostname not in SLACK_HOSTS | {"app.slack.com"}]
     return list(dict.fromkeys(urls))
 
 

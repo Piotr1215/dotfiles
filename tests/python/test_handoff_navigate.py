@@ -229,12 +229,12 @@ def test_handoff_owner_prefers_annotation_then_live_session(monkeypatch):
     assert nav.handoff_owner(task("link: https://github.com/a")) == "handoffs"
 
 
-def test_prefer_linear_issue_over_slack_but_keep_unlinked_thread():
+def test_linked_linear_issue_keeps_source_thread():
     thread = "https://loft-labs-inc.slack.com/archives/C0123/p1793917323756099"
     issue = "https://linear.app/loft/issue/DEVOPS-123"
-    assert nav.prefer_linear(dict(task(), linear_issue_id="DEVOPS-123"), [thread]) == [issue]
-    assert nav.prefer_linear(task("done-when: linear-closed DEVOPS-123"), [thread]) == [issue]
-    assert nav.prefer_linear(task(), [thread, issue]) == [issue]
+    assert nav.prefer_linear(dict(task(), linear_issue_id="DEVOPS-123"), [thread]) == [thread, issue]
+    assert nav.prefer_linear(task("done-when: linear-closed DEVOPS-123"), [thread]) == [thread, issue]
+    assert nav.prefer_linear(task(), [thread, issue]) == [thread, issue]
     assert nav.prefer_linear(task(), [thread]) == [thread]
 
 
@@ -272,7 +272,7 @@ def test_live_agent_session_skips_sessions_tmux_does_not_have(monkeypatch):
 @pytest.mark.parametrize(("urls", "layout"), [
     (["https://loft-labs-inc.slack.com/archives/C0123"], "8"),
     (["https://github.com/a"], "2"),
-    (["https://loft-labs-inc.slack.com/archives/C0123", "https://github.com/a"], "8"),
+    (["https://loft-labs-inc.slack.com/archives/C0123", "https://github.com/a"], "10"),
     (["https://github.com/a", "https://linear.app/b"], "2"),
 ])
 def test_layout_and_url_arguments(monkeypatch, urls, layout):
@@ -520,7 +520,7 @@ def test_enterprise_slack_permalink_opens_desktop_beside_browser(monkeypatch):
     nav.navigate_many([ENTERPRISE, "https://github.com/a"], "111")
     assert calls[0] == [str(nav.ROOT / "__slack_open.sh"), nav.slack_deep_link(ENTERPRISE)]
     assert ["/browser", "https://github.com/a"] in calls
-    assert calls[-1][-1] == "8"
+    assert calls[-1][-1] == "10"
 
 
 def test_brief_without_open_block_still_opens_task_links(monkeypatch, tmp_path):
@@ -542,7 +542,7 @@ def test_brief_without_open_block_still_opens_task_links(monkeypatch, tmp_path):
     monkeypatch.setattr(nav, "navigate_many", lambda urls, terminal, slack_tabs=False: calls.append((urls, terminal)))
     monkeypatch.setattr(nav, "live_agent_session", lambda row: "")
     assert nav.main(["start", UUID]) == 0
-    assert (["https://linear.app/loft/issue/DEVOPS-1798"], "111") in calls
+    assert ([ENTERPRISE, "https://linear.app/loft/issue/DEVOPS-1798"], "111") in calls
     assert not any(isinstance(call, list) and "pin" in call for call in calls)
 
 
