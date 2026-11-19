@@ -53,7 +53,10 @@ def main():
          "status": "pending", "entry": "20260101T000000Z"}
         for n in range(45)
     ]
-    tasks[0]["tags"] = ["piotr"]
+    tasks[0]["tags"] = ["piotr", "started"]
+    for index, kind in enumerate(("draft", "command", "page", "agent"), start=2):
+        tasks[index]["tags"] = ["piotr", "started", kind]
+        tasks[index]["start"] = "20260102T000000Z"
     run("task", "import", "-", input=json.dumps(tasks), env=env)
     ordered = sorted(json.loads(run("task", "export", env=env)), key=lambda t: t["id"])
     name = f"twoy-selection-test-{os.getpid()}"
@@ -124,7 +127,23 @@ def main():
             wait_for(lambda: "start" in json.loads(run("task", ordered[0]["uuid"], "export", env=env))[0], "s starts task")
             keys("s")
             wait_for(lambda: "start" not in json.loads(run("task", ordered[0]["uuid"], "export", env=env))[0], "s stops task")
-            wait_for(lambda: nav_log.read_text() == first + f"start {first_id}\n{first_id}\n", "s reopens the active handoff without closing it")
+            wait_for(lambda: nav_log.read_text() == first + f"start {first_id}\n", "s stops without opening or closing the handoff")
+        if args.start_hook:
+            keys("j")
+            wait_for(lambda: selected() == second_id, "select row before stop fixtures")
+            for index, kind in enumerate(("draft", "command", "page", "agent"), start=2):
+                keys("j")
+                task_uuid = ordered[index]["uuid"]
+                wait_for(lambda: selected() == task_uuid, f"select {kind} row")
+                before = nav_log.read_text()
+                keys("s")
+                wait_for(lambda: "start" not in json.loads(run("task", task_uuid, "export", env=env))[0], f"s stops {kind}")
+                time.sleep(0.3)
+                assert nav_log.read_text() == before, f"s opened or closed {kind}"
+                print(f"PASS s leaves {kind} destination alone")
+            for _ in range(5):
+                keys("k")
+            wait_for(lambda: selected() == first_id, "return to first row")
         keys("J")
         wait_for(lambda: selected() not in (None, first_id, second_id), "paging changes UUID")
         keys("K")

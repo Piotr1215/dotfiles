@@ -124,20 +124,13 @@ index 9e8a730..cbf521d 100644
    fn gordon_command(&self) -> Result<std::process::Command, String> {
      let args = shlex::split(&self.config.uda_gordon_command)
        .filter(|args| !args.is_empty())
-@@ -3215,12 +3270,29 @@ impl TaskwarriorTui {
+@@ -3215,12 +3270,22 @@ impl TaskwarriorTui {
      let task_uuids = self.selected_task_uuids();
 
      for task_uuid in &task_uuids {
 +      let active_handoff = self.task_by_uuid(*task_uuid).is_some_and(|task| {
 +        task.start().is_some() && task.tags().as_ref().is_some_and(|tags| tags.iter().any(|tag| tag == "piotr"))
 +      });
-+      if active_handoff {
-+        if let Some(home) = dirs::home_dir() {
-+          let mut command = std::process::Command::new(home.join("dev/dotfiles/scripts/__handoff_navigate.sh"));
-+          command.arg(task_uuid.to_string()).stdin(std::process::Stdio::null());
-+          self.queue_write(TaskWrite::new("Handoff", true, Select::Nothing, (command, None)), &[]);
-+        }
-+      }
        let command = match self.task_by_uuid(*task_uuid) {
          Some(t) if t.start().is_some() => "stop",
          _ => "start",
@@ -146,7 +139,7 @@ index 9e8a730..cbf521d 100644
 -      let cmd = self.task_command(&[QUIET], &[*task_uuid], &[command.to_string()]);
 +      let mut cmd = self.task_command(&[QUIET], &[*task_uuid], &[command.to_string()]);
 +      if active_handoff {
-+        // Keep the stop hook from closing the handoff we just opened.
++        // Stopping must not open or close the handoff destination.
 +        cmd.0.env("HANDOFF_SWITCH", "1");
 +        if let Some(retry) = &mut cmd.1 {
 +          retry.env("HANDOFF_SWITCH", "1");
@@ -183,17 +176,17 @@ index 9e8a730..cbf521d 100644
      test_gordon_keeps_the_terminal_and_sends_only_current_task().await;
 +    test_selection_signal_and_handoff_navigation().await;
 +    test_handoff_key_preserves_configured_action().await;
-+    test_start_stop_navigates_active_handoff().await;
++    test_start_stop_does_not_navigate_active_handoff().await;
 +    test_brief_key_toggles_floater_for_selected_task().await;
 +    test_tab_focuses_the_brief_pane().await;
      test_report_menu_refresh_error_keeps_reports().await;
      test_report_menu_refreshes_and_exports_waiting_tasks().await;
  
-@@ -5999,6 +6091,232 @@ mod tests {
+@@ -5999,6 +6091,227 @@ mod tests {
      let style = app.style_for_task(&task);
    }
  
-+  async fn test_start_stop_navigates_active_handoff() {
++  async fn test_start_stop_does_not_navigate_active_handoff() {
 +    let mut app = TaskwarriorTui::new("next", false).await.unwrap();
 +    let (jobs, queue) = std::sync::mpsc::channel();
 +    let (_results_sender, results) = tokio::sync::mpsc::unbounded_channel();
@@ -202,12 +195,7 @@ index 9e8a730..cbf521d 100644
 +    app.marked.clear();
 +    let fixture = r#"[{"uuid":"437428a3-7c09-429b-bb79-a3e2b0d74135","description":"handoff","status":"pending","entry":"20261119T100000Z","start":"20261119T120757Z","tags":["piotr"]}]"#;
 +    app.tasks[0] = task_hookrs::import::import(fixture.as_bytes()).unwrap().remove(0);
-+    let uuid = *app.tasks[0].uuid();
 +    app.task_start_stop().unwrap();
-+    let (_, Job::Write(write)) = queue.try_recv().unwrap() else { panic!("expected navigation") };
-+    assert_eq!(write.label, "Handoff");
-+    assert!(write.cmd.get_program().to_string_lossy().ends_with("/scripts/__handoff_navigate.sh"));
-+    assert_eq!(write.cmd.get_args().map(|arg| arg.to_string_lossy().into_owned()).collect::<Vec<_>>(), vec![uuid.to_string()]);
 +    let (_, Job::Write(stop)) = queue.try_recv().unwrap() else { panic!("expected stop") };
 +    assert_eq!(stop.label, "Start/stop");
 +    assert!(stop.cmd.get_args().any(|arg| arg == "stop"));
