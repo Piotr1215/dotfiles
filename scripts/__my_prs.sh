@@ -198,7 +198,11 @@ case "$MODE" in
                 elif [ "$stashed" = true ]; then
                     tmux send-keys -t "$session_name" "echo \"✅  Auto-stashed changes were applied after PR #$pr_num checkout\"" C-m;
                 fi;
-                tmux switch-client -t "$session_name" || tmux attach-session -t "$session_name"
+                if [ -n "${TMUX:-}${TMUX_PANE:-}" ]; then
+                    tmux switch-client -t "=$session_name"
+                else
+                    tmux attach-session -t "=$session_name"
+                fi
             )+abort' \
             --bind 'ctrl-r:reload(bash '"$0"' fzf)')
         

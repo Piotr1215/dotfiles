@@ -500,20 +500,13 @@ def open_command_window(uuid, command, focus=True):
 
 
 def attach_agent_session(session):
-    """Attach a live agent session inside a focused floating pane."""
+    """Switch the outer client to the live agent session."""
     tmux = os.environ.get("HANDOFF_TMUX_COMMAND", "tmux")
     current = run([tmux, "display-message", "-p", "-t", origin_pane(), "#{session_name}"],
                   capture_output=True, text=True).stdout.strip()
     if current == session:
         raise ValueError(f"agent session {session} is the session s was pressed in")
-    # A nested client needs TMUX unset; tmux refuses to nest otherwise.
-    # The title names the close key: F12 (kill-pane in .tmux.conf) ends only this
-    # client, the session runs on. Piotr, 12 Nov 09:14 CET: "I had to fiddle with
-    # binding to close the floater only" (ledger ac5b3afa).
-    pane = open_floating(f"agent {session} | F12 closes this peek, the session keeps running",
-                         ["env", "-u", "TMUX", tmux, "attach-session", "-t", "=" + session])
-    run([tmux, "select-pane", "-t", pane])
-    return pane
+    run([tmux, "switch-client", "-t", "=" + session])
 
 
 def act_on_kind(task, slack=False):
@@ -522,7 +515,7 @@ def act_on_kind(task, slack=False):
     slack: copy the newest draft: (its brief floater shows the draft); a cmd: also
     waits unfocused, since the draft keeps the keyboard. command: the cmd: waits
     for Enter in a separate tmux window. agent: the newest live `agent:` or
-    `tmux session <name>` session is attached in a focused floating pane.
+    `tmux session <name>` session is selected in the outer client.
     none: nothing applied. failed: the action was logged with its remedy.
     """
     kind = task_kind(task)

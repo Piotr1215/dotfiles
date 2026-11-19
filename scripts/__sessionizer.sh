@@ -44,7 +44,7 @@ else # fd is not installed
 fi
 
 if [ $# -eq 0 ]; then               # no argument provided
-  if [ "$TMUX" = "" ]; then         # not in tmux
+  if [ -z "${TMUX:-}${TMUX_PANE:-}" ]; then # not in tmux
     if [ $TMUX_STATUS -eq 0 ]; then # tmux is running
       RESULT=$(
         (tmux list-sessions -F '#S' && (zoxide query -l | sed -e "$HOME_REPLACER")) | fzf \
@@ -176,7 +176,7 @@ else
   SESSION=""
 fi
 
-if [ -z "$TMUX" ]; then                              # not currently in tmux
+if [ -z "${TMUX:-}${TMUX_PANE:-}" ]; then            # not currently in tmux
   if [ -z "$SESSION" ]; then                         # session does not exist
     if [ "$IS_FILE" = true ]; then
       # Create a session in the directory and open the file in Neovim

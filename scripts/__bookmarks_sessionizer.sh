@@ -60,7 +60,7 @@ else
   SESSION=""
 fi
 
-if [ -z "$TMUX" ]; then                              # not currently in tmux
+if [ -z "${TMUX:-}${TMUX_PANE:-}" ]; then            # not currently in tmux
   if [ -z "$SESSION" ]; then                         # session does not exist
     if [ "$IS_FILE" = true ]; then
       tmux new-session -s "$SESSION_NAME" -c "$DIR_PATH" "$NVIM_COMMAND"

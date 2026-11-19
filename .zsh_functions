@@ -686,7 +686,7 @@ function create_tmux_session() {
         tmux new-session -d -s "$SESSION_NAME" -c "$RESULT"
     fi
     
-    if [ -z "$TMUX" ]; then
+    if [ -z "${TMUX:-}${TMUX_PANE:-}" ]; then
         tmux attach -t "$SESSION_NAME"
     else
         tmux switch-client -t "$SESSION_NAME"

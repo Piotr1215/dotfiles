@@ -31,8 +31,18 @@ EOF
 }
 
 run_sessionizer() {
-  run env PATH="$STUB_BIN:$PATH" TMUX= BOOKMARKS_FILE="$BOOKMARKS_FILE" \
+  run env PATH="$STUB_BIN:$PATH" TMUX= TMUX_PANE= BOOKMARKS_FILE="$BOOKMARKS_FILE" \
     bash "$SESSIONIZER"
+}
+
+@test "a pane with TMUX cleared switches the outer client" {
+  mkdir -p "$BATS_TEST_TMPDIR/project"
+  printf 'project;%s\n' "$BATS_TEST_TMPDIR/project" > "$BOOKMARKS_FILE"
+  stub_fzf "project;$BATS_TEST_TMPDIR/project"
+  run env PATH="$STUB_BIN:$PATH" TMUX= TMUX_PANE=%9 BOOKMARKS_FILE="$BOOKMARKS_FILE" bash "$SESSIONIZER"
+  [ "$status" -eq 0 ]
+  grep -F 'new-session -d -s project' "$TMUX_LOG"
+  grep -F 'switch-client -t project' "$TMUX_LOG"
 }
 
 @test "a directory bookmark opens a session in that directory" {

@@ -740,23 +740,13 @@ def test_pr_ack_and_other_without_cmd_take_no_extra_action(fake_tmux, fake_clipb
     assert not fake_clipboard.exists()
 
 
-def test_agent_row_attaches_live_session_in_a_focused_floating_pane(fake_tmux, monkeypatch):
+def test_agent_row_switches_outer_client_to_live_session(fake_tmux, monkeypatch):
     monkeypatch.setattr(nav, "live_agent_session", lambda row: "fada-page-guard")
     row = task("12:40 guard the add path. tmux session fada-page-guard")
     assert nav.act_on_kind(row) == "agent"
     calls = fake_tmux()
     assert calls[0] == ["display-message", "-p", "-t", "%18", "#{session_name}"]
-    new = calls[1]
-    assert new[0] == "new-pane" and "-d" not in new and new[new.index("-T") + 1] == "agent fada-page-guard | F12 closes this peek, the session keeps running"
-    assert new[new.index("--") + 1:] == ["env", "-u", "TMUX", os.environ["HANDOFF_TMUX_COMMAND"],
-                                         "attach-session", "-t", "=fada-page-guard"]
-    assert calls[2] == ["select-pane", "-t", "%99"]
-
-
-def test_the_peek_close_key_is_bound_to_kill_pane():
-    # ac5b3afa: the title promises F12 closes the peek; .tmux.conf must keep that binding.
-    conf = (Path(nav.__file__).resolve().parents[1] / ".tmux.conf").read_text()
-    assert "bind-key -n F12 kill-pane" in conf
+    assert calls[1:] == [["switch-client", "-t", "=fada-page-guard"]]
 
 
 def test_agent_row_never_nests_the_session_s_was_pressed_in(fake_tmux, monkeypatch, capsys):
@@ -885,7 +875,7 @@ def test_start_on_an_agent_row_attaches_its_live_session(monkeypatch, tmp_path, 
                         if args[:2] == [tmux, "has-session"] else real_subprocess_run(args, **kw))
     assert nav.act_on_kind(row) == "agent"
     calls = fake_tmux()
-    assert [c[0] for c in calls] == ["display-message", "new-pane", "select-pane"]
+    assert [c[0] for c in calls] == ["display-message", "switch-client"]
     assert calls[1][-1] == "=fada-s-key-acts"
 
 

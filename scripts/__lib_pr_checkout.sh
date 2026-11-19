@@ -103,7 +103,7 @@ checkout_pr_in_repo() {
     fi
     
     # Try to switch client, or attach if not in tmux
-    if [ -n "$TMUX" ]; then
+    if [ -n "${TMUX:-}${TMUX_PANE:-}" ]; then
         tmux switch-client -t "$session_name"
     else
         tmux attach-session -t "$session_name"
