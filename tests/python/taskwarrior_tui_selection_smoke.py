@@ -41,6 +41,8 @@ def main():
         "uda.taskwarrior-tui.task-report.show-info=false\n"
         "uda.taskwarrior-tui.tick-rate=100\n"
     )
+    (test_home / ".taskrc").symlink_to(rc)
+    (test_home / ".task").symlink_to(root / "tasks")
     env = dict(os.environ, TASKRC=str(rc), TASKDATA=str(root / "tasks"))
     if args.start_hook:
         hooks = root / "tasks/hooks"
@@ -122,7 +124,7 @@ def main():
             wait_for(lambda: "start" in json.loads(run("task", ordered[0]["uuid"], "export", env=env))[0], "s starts task")
             keys("s")
             wait_for(lambda: "start" not in json.loads(run("task", ordered[0]["uuid"], "export", env=env))[0], "s stops task")
-            wait_for(lambda: nav_log.read_text() == first + f"start {first_id}\nstop {first_id}\n", "s stop hook closes handoff once")
+            wait_for(lambda: nav_log.read_text() == first + f"start {first_id}\n{first_id}\n", "s reopens the active handoff without closing it")
         keys("J")
         wait_for(lambda: selected() not in (None, first_id, second_id), "paging changes UUID")
         keys("K")
