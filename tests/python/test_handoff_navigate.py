@@ -28,7 +28,7 @@ def task(*annotations, tags=None):
             "annotations": [{"description": text} for text in annotations]}
 
 
-def test_agent_kind_spawns_task_and_focuses_session(monkeypatch):
+def test_agent_kind_spawns_task_without_switching_session(monkeypatch):
     calls = []
     def run(args, **kwargs):
         calls.append(args)
@@ -39,7 +39,7 @@ def test_agent_kind_spawns_task_and_focuses_session(monkeypatch):
     assert calls[0][1:] == ["--name", "aa476008-handoff", "--cwd", str(Path.home() / "loft"),
                             "--origin", "piotr", "--task", UUID, "--prompt", "exact prompt",
                             "--json", "--agent", "code-writer"]
-    assert calls[1] == ["tmux", "switch-client", "-t", "=aa476008-handoff"]
+    assert len(calls) == 1
 
 
 def test_agent_kind_requires_brief_and_does_not_focus_on_spawn_failure(monkeypatch):
@@ -227,6 +227,15 @@ def test_handoff_owner_prefers_annotation_then_live_session(monkeypatch):
     assert nav.handoff_owner(task("tmux session live-session")) == "live-session"
     monkeypatch.setattr(nav, "live_agent_session", lambda row: "")
     assert nav.handoff_owner(task("link: https://github.com/a")) == "handoffs"
+
+
+def test_prefer_linear_issue_over_slack_but_keep_unlinked_thread():
+    thread = "https://loft-labs-inc.slack.com/archives/C0123/p1793917323756099"
+    issue = "https://linear.app/loft/issue/DEVOPS-123"
+    assert nav.prefer_linear(dict(task(), linear_issue_id="DEVOPS-123"), [thread]) == [issue]
+    assert nav.prefer_linear(task("done-when: linear-closed DEVOPS-123"), [thread]) == [issue]
+    assert nav.prefer_linear(task(), [thread, issue]) == [issue]
+    assert nav.prefer_linear(task(), [thread]) == [thread]
 
 
 def test_annotation_urls_include_every_explicit_link_and_latest_target():
@@ -533,7 +542,7 @@ def test_brief_without_open_block_still_opens_task_links(monkeypatch, tmp_path):
     monkeypatch.setattr(nav, "navigate_many", lambda urls, terminal, slack_tabs=False: calls.append((urls, terminal)))
     monkeypatch.setattr(nav, "live_agent_session", lambda row: "")
     assert nav.main(["start", UUID]) == 0
-    assert ([ENTERPRISE, "https://linear.app/loft/issue/DEVOPS-1798"], "111") in calls
+    assert (["https://linear.app/loft/issue/DEVOPS-1798"], "111") in calls
     assert not any(isinstance(call, list) and "pin" in call for call in calls)
 
 

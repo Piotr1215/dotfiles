@@ -339,6 +339,21 @@ def live_agent_session(task):
     return ""
 
 
+def prefer_linear(task, urls):
+    """Open the linked issue in place of its originating Slack thread."""
+    urls = list(urls)
+    issue = task.get("linear_issue_id", "") or ""
+    if not issue:
+        done = newest_note(task, "done-when")
+        match = re.match(r"linear-closed\s+([A-Z][A-Z0-9]+-[1-9][0-9]*)\b", done)
+        issue = match.group(1) if match else ""
+    if re.fullmatch(r"[A-Z][A-Z0-9]+-[1-9][0-9]*", issue):
+        urls.append(f"https://linear.app/loft/issue/{issue}")
+    if any(urlsplit(url).hostname == "linear.app" and "/issue/" in urlsplit(url).path for url in urls):
+        urls = [url for url in urls if urlsplit(url).hostname not in SLACK_HOSTS | {"app.slack.com"}]
+    return list(dict.fromkeys(urls))
+
+
 def annotation_urls(task):
     """Return the latest target, every explicit link note in task order, then the cmd_page."""
     annotations = sorted(task.get("annotations", []), key=lambda a: a.get("entry", ""))
@@ -535,7 +550,6 @@ def act_on_kind(task, slack=False):
             session = json.loads(result.stdout.splitlines()[-1])["session"]
             if not re.fullmatch(r"[a-zA-Z0-9_-]+", session):
                 raise ValueError("spawn returned an invalid session")
-            run([os.environ.get("HANDOFF_TMUX_COMMAND", "tmux"), "switch-client", "-t", "=" + session])
             return "agent"
         if slack:
             draft = newest_note(task, "draft")
@@ -757,6 +771,7 @@ def main(argv=None):
                     if not re.match(r"^\s*(target|link):", a.get("description", ""), re.I)])
                 fallback = destination(fallback_task)
                 urls = [fallback] if fallback else []
+            urls = prefer_linear(task, urls)
             previous_owner = os.environ.get("HANDOFF_AGENT")
             os.environ["HANDOFF_AGENT"] = handoff_owner(task)
             try:
