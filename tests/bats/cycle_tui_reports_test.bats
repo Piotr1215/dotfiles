@@ -6,16 +6,32 @@ setup() {
   export TASKWARRIOR_TUI_VIEW_VERSION=4
   : > "$TASKWARRIOR_TUI_REPORT_REQUEST"
 }
-@test "cycle includes handoffs and wraps current to inbox" {
+@test "cycle includes handoffs and private and wraps current to inbox" {
   export TASKWARRIOR_TUI_REPORT=myprojects
   run "$repo_root/scripts/__cycle_tui_reports.sh"
   [ "$status" -eq 0 ]; grep -qx handoffs "$TASKWARRIOR_TUI_REPORT_REQUEST"
   export TASKWARRIOR_TUI_REPORT=handoffs
   run "$repo_root/scripts/__cycle_tui_reports.sh"
+  [ "$status" -eq 0 ]; grep -qx private "$TASKWARRIOR_TUI_REPORT_REQUEST"
+  export TASKWARRIOR_TUI_REPORT=private
+  run "$repo_root/scripts/__cycle_tui_reports.sh"
   [ "$status" -eq 0 ]; grep -qx current "$TASKWARRIOR_TUI_REPORT_REQUEST"
   export TASKWARRIOR_TUI_REPORT=current
   run "$repo_root/scripts/__cycle_tui_reports.sh"
   [ "$status" -eq 0 ]; grep -qx inbox "$TASKWARRIOR_TUI_REPORT_REQUEST"
+}
+@test "private report uses private context and includes home projects" {
+  skip_if_encrypted "$repo_root/.taskrc"
+  grep -qx 'uda.taskwarrior-tui.report.private.context=private' "$repo_root/.taskrc"
+  export TASKRC="$BATS_TEST_TMPDIR/taskrc" TASKDATA="$BATS_TEST_TMPDIR/taskdata"
+  mkdir -p "$TASKDATA"
+  grep -E '^(report.private\.|context.private\.)' "$repo_root/.taskrc" > "$TASKRC"
+  task rc.context=none rc.confirmation=off add +private project:home personal-task >/dev/null
+  task rc.context=none rc.confirmation=off add +work work-task >/dev/null
+  run task rc.context=private rc.color=off rc.defaultwidth=200 rc.report.private.columns=description rc.report.private.labels=Description private
+  [ "$status" -eq 0 ]
+  [[ "$output" == *personal-task* ]]
+  [[ "$output" != *work-task* ]]
 }
 # Piotr's per-project view sits between byproject and handoffs, and runs with no
 # context because its +view rows carry no +work.
@@ -45,7 +61,7 @@ setup() {
 @test "v4 uses its request even inside the bridge and preserves taskrc" {
   export TUI_REPORT_BRIDGE=2 TASKWARRIOR_TUI_REPORT=handoffs TASKRC="$BATS_TEST_TMPDIR/custom"
   run "$repo_root/scripts/__cycle_tui_reports.sh"
-  [ "$status" -eq 0 ]; grep -qx current "$TASKWARRIOR_TUI_REPORT_REQUEST"; [ ! -e "$TASKRC" ]
+  [ "$status" -eq 0 ]; grep -qx private "$TASKWARRIOR_TUI_REPORT_REQUEST"; [ ! -e "$TASKRC" ]
 }
 @test "old tui bridges once using a known pane title" {
   unset TASKWARRIOR_TUI_REPORT_REQUEST TASKWARRIOR_TUI_REPORT
@@ -74,7 +90,7 @@ setup() {
   printf '#!/bin/sh\nprintf "%%s|%%s %%s\\n" "$TASKRC" "$1" "$2"\n' > "$TUI_REPORT_BINARY"
   chmod +x "$TUI_REPORT_BINARY"
   run "$repo_root/scripts/__cycle_tui_reports.sh"
-  [ "$status" -eq 0 ]; [ "$output" = "$HOME/.taskrc|-r current" ]
+  [ "$status" -eq 0 ]; [ "$output" = "$HOME/.taskrc|-r private" ]
 }
 @test "bridge preserves unrelated custom taskrc" {
   unset TASKWARRIOR_TUI_REPORT_REQUEST
