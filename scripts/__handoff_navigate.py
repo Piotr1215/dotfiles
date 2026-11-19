@@ -556,6 +556,10 @@ def act_on_kind(task, slack=False):
         if session:
             attach_agent_session(session)
             return "agent"
+    except subprocess.CalledProcessError as error:
+        detail = (error.stderr or "").strip()
+        log(f"handoff: {kind} action on {task.get('uuid')} failed: exit {error.returncode}" + (f": {detail}" if detail else ""))
+        return "failed"
     except (ValueError, KeyError, IndexError, OSError, subprocess.SubprocessError) as error:
         log(f"handoff: {kind} action on {task.get('uuid')} failed: {error}")
         return "failed"

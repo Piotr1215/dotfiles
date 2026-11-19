@@ -54,6 +54,17 @@ def test_agent_kind_requires_brief_and_does_not_focus_on_spawn_failure(monkeypat
     assert len(calls) == 1
 
 
+def test_agent_spawn_failure_logs_stderr_without_brief(monkeypatch, nav_log):
+    def fail(args, **kwargs):
+        raise subprocess.CalledProcessError(2, args, stderr="gha: live read failed")
+    monkeypatch.setattr(nav, "run", fail)
+    row = dict(task("agent-brief: private instructions", "agent: gh-admin"), kind="agent")
+    assert nav.act_on_kind(row) == "failed"
+    log = nav_log.read_text()
+    assert "exit 2: gha: live read failed" in log
+    assert "private instructions" not in log
+
+
 def test_started_agent_handoff_skips_page_navigation(monkeypatch, tmp_path):
     row = dict(task("agent-brief: do work", "tab: https://github.com/a/b"),
                kind="agent", start="20261119T080000Z")
