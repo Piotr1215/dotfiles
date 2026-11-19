@@ -31,7 +31,8 @@ fail() { printf 'gordon %s: %s\n' "$1" "$result" >&2; exit 1; }
 [[ "${result%%$'\n'*}" == 120000 ]] || fail "timeout missing"
 [[ "$(sed -n '2p' <<< "$result")" == "$tmp_dir/loft/gordon" ]] || fail "cwd wrong"
 [[ "$result" == *triage-agent-system-prompt.md* ]] || fail "system prompt missing"
+[[ "$result" == *"--effort xhigh -- "* ]] || fail "xhigh effort missing before prompt"
 # His .mcp.json is regenerated from the account on every launch (__role_home.py),
 # so the compact memory-search switch must ride on the launch environment.
 [[ "$result" == *"compact=1"* ]] || fail "compact memory search missing"
-printf '%s\n' 'gordon launch passed: own folder, MCP_TIMEOUT=120000, triage prompt, compact memory search'
+printf '%s\n' 'gordon launch passed: own folder, MCP_TIMEOUT=120000, triage prompt, xhigh effort, compact memory search'
