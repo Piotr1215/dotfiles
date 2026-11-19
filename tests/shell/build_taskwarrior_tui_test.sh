@@ -37,10 +37,24 @@ fi
 if [[ "$1" == build ]]; then
   target="${@: -1}"
   mkdir -p -- "$target/release"
-  printf 'new binary\n' > "$target/release/taskwarrior-tui"
+  if [[ "${BROKEN_BINARY:-0}" == 1 ]]; then
+    printf '#!/usr/bin/env bash\nprintf "FAIL started row opened handoff\\n" >&2\nexit 1\n' > "$target/release/taskwarrior-tui"
+  else
+    printf '#!/usr/bin/env bash\nexit 0\n' > "$target/release/taskwarrior-tui"
+  fi
+  chmod +x "$target/release/taskwarrior-tui"
 fi
 STUB
-chmod +x "$test_root/stubs/git" "$test_root/stubs/cargo"
+cat > "$test_root/stubs/python3" <<'STUB'
+#!/usr/bin/env bash
+set -eo pipefail
+printf 'smoke %s\n' "$*" >> "$TEST_LOG"
+[[ "$1" == */tests/python/taskwarrior_tui_selection_smoke.py ]]
+[[ "$2" == "$CARGO_TARGET_DIR/release/taskwarrior-tui" ]]
+[[ "$3" == --start-hook && "$4" == */tests/fixtures/taskwarrior-tui/on-modify-handoff.py ]]
+"$2"
+STUB
+chmod +x "$test_root/stubs/git" "$test_root/stubs/cargo" "$test_root/stubs/python3"
 
 # Give each case a separate home, binary, target, and call log.
 setup_case() {
@@ -55,7 +69,7 @@ setup_case() {
   printf 'original binary\n' > "$test_home/bin/taskwarrior-tui"
   chmod +x "$test_home/bin/taskwarrior-tui"
   : > "$TEST_LOG"
-  unset FAIL_TEST TEST_SHA
+  unset FAIL_TEST TEST_SHA BROKEN_BINARY
 }
 
 assert_original() {
@@ -67,18 +81,31 @@ base_path="$PATH"
 setup_case build_only
 env HOME="$test_home" bash "$repo_dir/scripts/__build_taskwarrior_tui.sh" > /dev/null
 assert_original
-[[ "$(cat "$CARGO_TARGET_DIR/release/taskwarrior-tui")" == 'new binary' ]]
+[[ -x "$CARGO_TARGET_DIR/release/taskwarrior-tui" ]]
 [[ "$(grep -c '^git .* apply ' "$TEST_LOG")" == 2 ]]
 grep -q '^cargo test ' "$TEST_LOG"
 grep -q '^cargo build ' "$TEST_LOG"
+if grep -q '^smoke ' "$TEST_LOG"; then exit 1; fi
 
 setup_case install
 env HOME="$test_home" bash "$repo_dir/scripts/__build_taskwarrior_tui.sh" --install > /dev/null
-[[ "$(cat "$test_home/bin/taskwarrior-tui")" == 'new binary' ]]
+cmp -s "$test_home/bin/taskwarrior-tui" "$CARGO_TARGET_DIR/release/taskwarrior-tui"
+grep -q '^smoke ' "$TEST_LOG"
 shopt -s nullglob
 backups=("$XDG_STATE_HOME/taskwarrior-tui/backups/"*)
 [[ ${#backups[@]} == 1 ]]
 [[ "$(cat "${backups[0]}")" == 'original binary' ]]
+
+setup_case broken_binary
+export BROKEN_BINARY=1
+if env HOME="$test_home" bash "$repo_dir/scripts/__build_taskwarrior_tui.sh" --install > "$test_root/broken-output" 2>&1; then
+  printf 'broken binary unexpectedly installed\n' >&2
+  exit 1
+fi
+assert_original
+grep -q 'FAIL started row opened handoff' "$test_root/broken-output"
+printf 'PASS broken binary refused; original unchanged: '
+grep 'FAIL started row opened handoff' "$test_root/broken-output"
 
 setup_case test_failure
 export FAIL_TEST=1
@@ -98,4 +125,4 @@ fi
 assert_original
 if grep -q '^cargo ' "$TEST_LOG"; then exit 1; fi
 if grep -q '^git .* apply ' "$TEST_LOG"; then exit 1; fi
-printf '4 build and install cases passed\n'
+printf '5 build and install cases passed\n'

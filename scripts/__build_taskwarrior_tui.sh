@@ -44,6 +44,10 @@ main() {
   printf 'Built and tested: %s\nSource: %s\n' "$target_dir/release/taskwarrior-tui" "$source_dir"
   "$install_binary" || return 0
 
+  python3 "$script_dir/../tests/python/taskwarrior_tui_selection_smoke.py" \
+    "$target_dir/release/taskwarrior-tui" \
+    --start-hook "$script_dir/../tests/fixtures/taskwarrior-tui/on-modify-handoff.py"
+
   install_path="$(command -v taskwarrior-tui)"
   [[ "$install_path" = "$HOME/"* && -f "$install_path" && ! -L "$install_path" ]] || {
     printf 'Refusing to replace a binary outside HOME, a symlink, or a missing file: %s\n' "$install_path" >&2

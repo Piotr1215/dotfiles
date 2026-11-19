@@ -44,8 +44,8 @@ Build and run upstream plus patch tests:
 scripts/__build_taskwarrior_tui.sh
 ```
 
-Install after the tests pass, backing up the executable found by
-`command -v taskwarrior-tui` first:
+Install after the Rust tests and isolated selection smoke test pass, backing up
+the executable found by `command -v taskwarrior-tui` first:
 
 ```sh
 scripts/__build_taskwarrior_tui.sh --install
@@ -60,13 +60,13 @@ Acceptance: UUIDs match j/k and paging; refresh follows the selected task rather
 than a row number; empty reports clear the signal; patch and upstream tests pass;
 installation preserves a verified backup.
 
-Exercise the installed binary with isolated tasks and a stub navigation helper:
+Exercise a binary with isolated tasks, the test hook and stub desktop commands:
 
 ```sh
 python3 tests/python/taskwarrior_tui_selection_smoke.py "$(command -v taskwarrior-tui)" \
-  --start-hook "$HOME/.task/hooks/on-modify-openurl-or-program.py"
+  --start-hook tests/fixtures/taskwarrior-tui/on-modify-handoff.py
 ```
 
-This covers S without starting a task, lowercase s start/stop through a copy of
-the real hook, and the selection checks above. It leaves Piotr's running views
-and task database untouched.
+This covers S without starting a task, lowercase s start/stop through the test
+hook, the stop switch and window-command checks, and the selection checks above.
+It leaves Piotr's running views and task database untouched.
