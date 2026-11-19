@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Executable value-set: files in ~/loft up to three levels deep. Replaces the
+# @loft prefix.
+#
+# Rows are "<absolute path><TAB><path under ~/loft>": rofi shows and filters
+# the short path, the absolute one is typed so it works in any window.
+set -eo pipefail
+
+root="${VALUE_SET_ROOT:-$HOME/loft}"
+fd --type f --max-depth 3 --base-directory "$root" \
+    --exclude .git --exclude node_modules --exclude __pycache__ --exclude .venv \
+    --exclude .cache --exclude dist --exclude build --exclude target --exclude .mypy_cache |
+    LC_ALL=C sort | awk -v root="$root" '{ printf "%s/%s\t%s\n", root, $0, $0 }'

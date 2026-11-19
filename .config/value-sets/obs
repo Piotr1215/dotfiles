@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Executable value-set: Obsidian notes in ~/dev/obsidian up to five levels
+# deep. Replaces the @obs prefix.
+#
+# Rows are "<absolute path><TAB><path inside the vault>": rofi shows and filters
+# the short path, the absolute one is typed so it works in any window.
+set -eo pipefail
+
+root="${VALUE_SET_ROOT:-$HOME/dev/obsidian}"
+fd --type f --max-depth 5 --base-directory "$root" \
+    --exclude .git --exclude node_modules --exclude __pycache__ --exclude .venv \
+    --exclude .cache --exclude dist --exclude build --exclude target --exclude .mypy_cache |
+    LC_ALL=C sort | awk -v root="$root" '{ printf "%s/%s\t%s\n", root, $0, $0 }'

@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# Executable value-set: the Slack channels Piotr is a member of, public and
+# private, typed as #name. Replaces the @slack prefix, which read a list cached
+# once by hand.
+#
+# Read live with users.conversations on every open (about 0.2s), so the list is
+# never stale. When pass or Slack fails, the last good list is served from the
+# cache. The token reaches curl on stdin, never in its arguments.
+set -eo pipefail
+
+cache="${SLACK_CHANNELS_CACHE:-$HOME/.cache/slack-channels.txt}"
+token_cmd="${SLACK_CHANNELS_TOKEN_CMD:-pass show work/SLACK_USER_TOKEN}"
+
+# Print every page of the member channels as #name; non-zero on any failure.
+fetch() {
+    local token resp cursor=""
+    # shellcheck disable=SC2086  # token_cmd is a command line, split on purpose
+    token=$($token_cmd 2>/dev/null) || return 1
+    token="${token%%$'\n'*}"
+    [[ -n "$token" ]] || return 1
+    while :; do
+        resp=$(printf 'Authorization: Bearer %s\n' "$token" |
+            curl -sS --max-time 10 -G https://slack.com/api/users.conversations -H @- \
+                --data-urlencode types=public_channel,private_channel \
+                --data-urlencode exclude_archived=true --data-urlencode limit=1000 \
+                --data-urlencode "cursor=$cursor") || return 1
+        jq -e '.ok == true' <<<"$resp" >/dev/null || return 1
+        jq -r '.channels[].name | "#" + .' <<<"$resp"
+        cursor=$(jq -r '.response_metadata.next_cursor // empty' <<<"$resp")
+        [[ -n "$cursor" ]] || return 0
+    done
+}
+
+if list=$(fetch) && [[ -n "$list" ]]; then
+    mkdir -p "$(dirname "$cache")"
+    LC_ALL=C sort -u <<<"$list" > "$cache.tmp"
+    mv "$cache.tmp" "$cache"
+fi
+if [[ -f "$cache" ]]; then cat "$cache"; fi

@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Executable value-set: environment variables, typed as VAR=value. Replaces the
+# @env prefix. AutoKey runs with the desktop session's environment, which
+# matches a terminal's apart from TMUX and TMUX_PANE.
+#
+# Rows are "VAR=value<TAB>VAR=value" so a value holding " | " is typed whole.
+# Multi-line values are skipped: a picker row is one line.
+set -eo pipefail
+
+env -0 | while IFS= read -r -d '' kv; do
+    [[ "$kv" == *$'\n'* ]] && continue
+    printf '%s\t%s\n' "$kv" "$kv"
+done | LC_ALL=C sort
