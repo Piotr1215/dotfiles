@@ -509,6 +509,13 @@ def attach_agent_session(session):
     run([tmux, "switch-client", "-t", "=" + session])
 
 
+def attach_handoff_session(task, session):
+    """Switch to the existing session and record the action on the row."""
+    attach_agent_session(session)
+    run([str(Path.home() / ".claude/scripts/__tw.sh"), "note", task["uuid"],
+         "s: attached to live session " + session], capture_output=True, text=True)
+
+
 def report_spawn_failure(task, reason):
     """Show the spawn error and leave it on the task for Gordon."""
     reason = " ".join(reason.split()) or "spawn failed without an error message"
@@ -537,12 +544,16 @@ def act_on_kind(task, slack=False):
     runnable = not cmd_page(task) and (command or kind == "command")
     try:
         if kind == "agent":
-            brief = newest_note(task, "agent-brief")
-            if not brief:
-                raise ValueError("agent handoff needs an agent-brief: note")
             uuid = task["uuid"]
             if not UUID.fullmatch(uuid):
                 raise ValueError("invalid task UUID")
+            session = uuid[:8] + "-handoff"
+            if live_agent_session({"annotations": [{"description": "tmux session " + session}]}):
+                attach_handoff_session(task, session)
+                return "agent"
+            brief = newest_note(task, "agent-brief")
+            if not brief:
+                raise ValueError("agent handoff needs an agent-brief: note")
             spawn = os.environ.get("HANDOFF_SPAWN_COMMAND", str(Path.home() / ".claude/scripts/__spawn_agent.sh"))
             argv = [spawn, "--name", uuid[:8] + "-handoff", "--cwd", str(Path.home() / "loft"),
                     "--origin", "piotr", "--task", uuid, "--prompt", brief, "--json"]
@@ -552,6 +563,10 @@ def act_on_kind(task, slack=False):
             try:
                 result = run(argv, timeout=120, capture_output=True, text=True)
             except subprocess.CalledProcessError as error:
+                held = re.search(r"task ([0-9a-fA-F-]+) is already held by live tmux session '([a-zA-Z0-9_-]+)'", error.stderr or "")
+                if held and uuid.lower().startswith(held.group(1).lower()):
+                    attach_handoff_session(task, held.group(2))
+                    return "agent"
                 report_spawn_failure(task, (error.stderr or "").strip() or f"exit {error.returncode}")
                 raise
             except (OSError, subprocess.SubprocessError) as error:

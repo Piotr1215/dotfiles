@@ -42,6 +42,33 @@ def test_agent_kind_spawns_task_without_switching_session(monkeypatch):
     assert len(calls) == 1
 
 
+def test_agent_kind_attaches_existing_handoff_without_spawning(monkeypatch):
+    calls = []
+    monkeypatch.setattr(nav, "live_agent_session", lambda row: "aa476008-handoff")
+    monkeypatch.setattr(nav, "attach_agent_session", lambda session: calls.append(("attach", session)))
+    monkeypatch.setattr(nav, "run", lambda args, **kwargs: calls.append(args))
+    row = dict(task("agent-brief: do work"), kind="agent")
+    assert nav.act_on_kind(row) == "agent"
+    assert calls == [("attach", "aa476008-handoff"),
+                     [str(Path.home() / ".claude/scripts/__tw.sh"), "note", UUID,
+                      "s: attached to live session aa476008-handoff"]]
+
+
+def test_agent_kind_attaches_holder_after_spawn_refusal(monkeypatch):
+    calls = []
+    monkeypatch.setattr(nav, "live_agent_session", lambda row: "")
+    monkeypatch.setattr(nav, "attach_agent_session", lambda session: calls.append(("attach", session)))
+    def run(args, **kwargs):
+        calls.append(args)
+        if "--prompt" in args:
+            raise subprocess.CalledProcessError(1, args, stderr=f"Error: task {UUID[:8]} is already held by live tmux session 'other-worker'. Not spawning")
+    monkeypatch.setattr(nav, "run", run)
+    assert nav.act_on_kind(dict(task("agent-brief: do work"), kind="agent")) == "agent"
+    assert calls[1] == ("attach", "other-worker")
+    assert calls[2][-1] == "s: attached to live session other-worker"
+    assert len(calls) == 3
+
+
 def test_agent_kind_requires_brief_and_does_not_focus_on_spawn_failure(monkeypatch):
     calls = []
     monkeypatch.setattr(nav, "report_spawn_failure", lambda *args: None)
