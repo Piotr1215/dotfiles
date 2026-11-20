@@ -138,7 +138,6 @@
           # Additional packages
           - tree
           - wmctrl
-          - direnv
           - taskwarrior
           - ripgrep
           - cmake
@@ -542,6 +541,8 @@
         - github.com/onsi/ginkgo/v2/ginkgo@latest
         - github.com/abice/go-enum@latest
         - github.com/Gelio/go-global-update@latest
+        # apt ships 2.32, which ignores hide_env_diff in direnv.toml (needs 2.34+)
+        - github.com/direnv/direnv/v2@latest
 
     - name: Set Zsh as default shell
       user:
