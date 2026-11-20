@@ -90,8 +90,8 @@ zstyle ':fzf-tab:*' switch-group '<' '>'
 zstyle ':fzf-tab:*' popup-min-size 75 20
 
 # Turn history on to have cd - history
-SAVEHIST=1000
-HISTSIZE=1000
+SAVEHIST=100000
+HISTSIZE=100000
 
 setopt append_history           # append
 setopt hist_ignore_all_dups     # no duplicate
