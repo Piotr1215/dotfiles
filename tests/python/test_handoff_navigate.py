@@ -44,6 +44,7 @@ def test_agent_kind_spawns_task_without_switching_session(monkeypatch):
 
 def test_agent_kind_requires_brief_and_does_not_focus_on_spawn_failure(monkeypatch):
     calls = []
+    monkeypatch.setattr(nav, "report_spawn_failure", lambda *args: None)
     def fail(args, **kwargs):
         calls.append(args)
         raise subprocess.CalledProcessError(1, args)
@@ -55,14 +56,21 @@ def test_agent_kind_requires_brief_and_does_not_focus_on_spawn_failure(monkeypat
 
 
 def test_agent_spawn_failure_logs_stderr_without_brief(monkeypatch, nav_log):
+    calls = []
     def fail(args, **kwargs):
-        raise subprocess.CalledProcessError(2, args, stderr="gha: live read failed")
+        calls.append(args)
+        if "--prompt" in args:
+            raise subprocess.CalledProcessError(2, args, stderr="Error: gh-admin needs a first line such as gha-case: IT-1315")
+        return subprocess.CompletedProcess(args, 0, "")
     monkeypatch.setattr(nav, "run", fail)
     row = dict(task("agent-brief: private instructions", "agent: gh-admin"), kind="agent")
     assert nav.act_on_kind(row) == "failed"
     log = nav_log.read_text()
-    assert "exit 2: gha: live read failed" in log
+    reason = "Error: gh-admin needs a first line such as gha-case: IT-1315"
+    assert "exit 2: " + reason in log
     assert "private instructions" not in log
+    assert calls[1] == ["notify-send", "Handoff", "Agent spawn failed: " + reason]
+    assert calls[2] == [str(Path.home() / ".claude/scripts/__tw.sh"), "note", UUID, "spawn-failed: " + reason]
 
 
 def test_started_agent_handoff_skips_page_navigation(monkeypatch, tmp_path):

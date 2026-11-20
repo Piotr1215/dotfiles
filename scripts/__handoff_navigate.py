@@ -509,6 +509,18 @@ def attach_agent_session(session):
     run([tmux, "switch-client", "-t", "=" + session])
 
 
+def report_spawn_failure(task, reason):
+    """Show the spawn error and leave it on the task for Gordon."""
+    reason = " ".join(reason.split()) or "spawn failed without an error message"
+    message = "Agent spawn failed: " + reason
+    for argv in (["notify-send", "Handoff", message],
+                 [str(Path.home() / ".claude/scripts/__tw.sh"), "note", task["uuid"], "spawn-failed: " + reason]):
+        try:
+            run(argv, capture_output=True, text=True)
+        except (OSError, subprocess.SubprocessError) as error:
+            log(f"handoff: could not report spawn failure: {error}")
+
+
 def act_on_kind(task, slack=False):
     """Run what s means for the row once its links are open; returns what it did.
 
@@ -537,7 +549,14 @@ def act_on_kind(task, slack=False):
             agent = newest_note(task, "agent")
             if agent:
                 argv += ["--agent", agent]
-            result = run(argv, timeout=120, capture_output=True, text=True)
+            try:
+                result = run(argv, timeout=120, capture_output=True, text=True)
+            except subprocess.CalledProcessError as error:
+                report_spawn_failure(task, (error.stderr or "").strip() or f"exit {error.returncode}")
+                raise
+            except (OSError, subprocess.SubprocessError) as error:
+                report_spawn_failure(task, str(error))
+                raise
             session = json.loads(result.stdout.splitlines()[-1])["session"]
             if not re.fullmatch(r"[a-zA-Z0-9_-]+", session):
                 raise ValueError("spawn returned an invalid session")
