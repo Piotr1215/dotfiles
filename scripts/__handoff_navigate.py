@@ -25,6 +25,9 @@ def checked_url(url, *, any_host=False):
     if any(ord(c) <= 32 or ord(c) == 127 for c in url) or "\\" in url:
         raise ValueError("Invalid destination URL")
     parsed = urlsplit(url)
+    if (parsed.hostname in SLACK_HOSTS and
+            re.match(r"^/archives/[UW][A-Z0-9]+(?:/|$)", parsed.path)):
+        raise ValueError("Slack user ID is not a DM channel; use the DM channel ID (D...)")
     if (parsed.scheme != "https" or not parsed.hostname or (not any_host and parsed.hostname not in HOSTS)
             or parsed.username is not None or parsed.password is not None
             or parsed.port is not None):
@@ -693,7 +696,7 @@ def show_slack_draft(pane, terminal, runtime):
             print(f"Could not restore terminal focus: {error}", file=sys.stderr)
 
 
-def open_block(path, *, any_host=False):
+def open_block(path, *, any_host=False, skip_slack=False):
     """Read only the editable generated block; never interpret the draft.
 
     Prepare skips writing the block while the editor holds the brief, so a
@@ -703,7 +706,18 @@ def open_block(path, *, any_host=False):
     match = re.search(r"<!-- begin open -->[^\S\n]*\n(.*?)\n<!-- end open -->", text, re.S)
     if not match:
         return []
-    return [checked_url(line.strip(), any_host=any_host) for line in match.group(1).splitlines() if line.strip()]
+    lines = [line.strip() for line in match.group(1).splitlines() if line.strip()]
+    if skip_slack:
+        lines = [line for line in lines if urlsplit(line).hostname not in SLACK_HOSTS | {"app.slack.com"}]
+    return [checked_url(line, any_host=any_host) for line in lines]
+
+
+def navigation_urls(task, path):
+    """Prefer a draft's latest target over Slack URLs saved in its editable block."""
+    has_draft_target = "draft" in task.get("tags", []) and bool(newest_note(task, "target"))
+    annotations = annotation_urls(task)
+    block = open_block(path, any_host=plain_link_row(task), skip_slack=has_draft_target)
+    return list(dict.fromkeys((annotations + block) if has_draft_target else (block + annotations)))
 
 
 def task_export(task_bin, *filters):
@@ -791,10 +805,7 @@ def main(argv=None):
         try:
             prepared = run([floater, "prepare", uuid, pane], capture_output=True, text=True,
                            env=dict(os.environ, HANDOFF_TASK_UUID=uuid)).stdout.strip()
-            urls = open_block(prepared, any_host=plain_link_row(task))
-            for url in annotation_urls(task):
-                if url not in urls:
-                    urls.append(url)
+            urls = navigation_urls(task, prepared)
             if not urls:
                 fallback_task = dict(task, annotations=[a for a in task.get("annotations", [])
                     if not re.match(r"^\s*(target|link):", a.get("description", ""), re.I)])

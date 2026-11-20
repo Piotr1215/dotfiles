@@ -404,6 +404,27 @@ def test_empty_open_block_and_fallback(tmp_path):
     assert nav.open_block(brief) == []
 
 
+def test_draft_navigation_uses_newest_target_over_stale_open_block(tmp_path):
+    brief = tmp_path / "brief"
+    brief.write_text("<!-- begin open -->\nhttps://loft-labs-inc.slack.com/archives/U0B9AF2RFA5\n<!-- end open -->\n")
+    row = task(tags=["piotr", "draft"])
+    row["annotations"] = [
+        {"entry": "20261120T090331Z", "description": "target: slack:D0CKCA6GNM9/top https://loft-labs-inc.slack.com/archives/D0CKCA6GNM9"},
+        {"entry": "20261120T084857Z", "description": "target: slack:U0B9AF2RFA5/top https://loft-labs-inc.slack.com/archives/U0B9AF2RFA5"},
+        {"entry": "20261120T090150Z", "description": "link: https://loft-labs-inc.slack.com/archives/D0CKCA6GNM9"},
+    ]
+    assert nav.navigation_urls(row, brief) == ["https://loft-labs-inc.slack.com/archives/D0CKCA6GNM9"]
+
+
+@pytest.mark.parametrize("note", [
+    "target: slack:U0B9AF2RFA5/top https://loft-labs-inc.slack.com/archives/U0B9AF2RFA5",
+    "link: https://loft-labs-inc.slack.com/archives/U0B9AF2RFA5",
+])
+def test_slack_user_id_url_is_rejected(note):
+    with pytest.raises(ValueError, match="user ID is not a DM channel"):
+        nav.destination(task(note))
+
+
 @pytest.mark.parametrize(("notes", "expected"), [
     (("link: https://github.com/a", "cmd: echo hello"),
      [("navigate", ["https://github.com/a"]), ("command", "echo hello")]),
