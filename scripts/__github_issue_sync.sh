@@ -23,7 +23,7 @@
 # Note: The cross-team Triage feed was removed — only issues assigned to me sync.
 # Note: GitHub issue sync was removed in v1.0-with-github-sync (no GitHub issues assigned)
 
-# shellcheck disable=SC2155
+# shellcheck disable=SC2155,SC1091
 source "$(dirname "${BASH_SOURCE[0]}")/__lib_taskwarrior_interop.sh"
 
 set -eo pipefail
@@ -224,113 +224,120 @@ get_linear_issues() {
     fi
 
     # Ensure cleanup on exit
+    # Expand the temporary path now so the exit trap retains it.
+    # shellcheck disable=SC2064
     trap "rm -f '$temp_response'" EXIT
 
-    # Retry loop for API call
-    while [[ $retry_count -lt $max_retries ]]; do
-        # Make API call with explicit error handling and timeouts
-        local curl_stderr
-        curl_stderr=$(mktemp)
-        trap "rm -f '$temp_response' '$curl_stderr'" EXIT
+    local cursor="" cursor_json payload has_next next_cursor
+    local -A seen_cursors=()
+    local page_count=0
+    : > "$temp_response"
+    while :; do
+        retry_count=0
+        wait_time=2
+        # Retry loop for each API page.
+        while [[ $retry_count -lt $max_retries ]]; do
+            # Make API call with explicit error handling and timeouts
+            local curl_stderr
+            curl_stderr=$(mktemp)
+            # shellcheck disable=SC2064
+            trap "rm -f '$temp_response' '$curl_stderr'" EXIT
 
-        response=$(curl -s -w "\n%{http_code}" \
-            --connect-timeout 10 \
-            --max-time 30 \
-            -X POST \
-            -H "Content-Type: application/json" \
-            -H "Authorization: ${LINEAR_API_KEY}" \
-            --data '{"query": "query { user(id: \"'"$LINEAR_USER_ID"'\") { id name assignedIssues(filter: { state: { name: { nin: [\"Released\", \"Canceled\",\"Done\",\"Ready for Release\",\"Duplicate\",\"Archived\"] } } }) { nodes { id title url state { name } project { name } dueDate priority updatedAt cycle { number } history(first: 1) { nodes { createdAt actor { id } } } comments(first: 1) { nodes { createdAt user { id } } } attachments { nodes { url sourceType metadata } } } pageInfo { hasNextPage } } } }"}' \
-            https://api.linear.app/graphql 2>"$curl_stderr")
-        exit_code=$?
+            cursor_json=$(jq -cn --arg cursor "$cursor" '$cursor | if . == "" then null else . end')
+            payload=$(jq -cn --arg user "$LINEAR_USER_ID" --argjson cursor "$cursor_json" \
+                '{query: "query($user: String!, $cursor: String) { user(id: $user) { id name assignedIssues(first: 50, after: $cursor, filter: { state: { name: { nin: [\"Released\", \"Canceled\", \"Done\", \"Ready for Release\", \"Duplicate\", \"Archived\"] } } }) { nodes { id title url state { name } project { name } dueDate priority updatedAt cycle { number } history(first: 1) { nodes { createdAt actor { id } } } comments(first: 1) { nodes { createdAt user { id } } } attachments { nodes { url sourceType metadata } } } pageInfo { hasNextPage endCursor } } } }", variables: {user: $user, cursor: $cursor}}')
+            response=$(curl -s -w "\n%{http_code}" \
+                --connect-timeout 10 \
+                --max-time 30 \
+                -X POST \
+                -H "Content-Type: application/json" \
+                -H "Authorization: ${LINEAR_API_KEY}" \
+                --data "$payload" \
+                https://api.linear.app/graphql 2>"$curl_stderr")
+            exit_code=$?
 
-        if [[ $exit_code -eq 0 ]]; then
-            rm -f "$curl_stderr"
-            break
-        fi
+            if [[ $exit_code -eq 0 ]]; then
+                rm -f "$curl_stderr"
+                break
+            fi
 
-        # Log error and retry if not last attempt
-        local error_msg
-        error_msg=$(cat "$curl_stderr" 2>/dev/null || echo "Unknown error")
-        retry_count=$((retry_count + 1))
+            # Log error and retry if not last attempt
+            local error_msg
+            error_msg=$(cat "$curl_stderr" 2>/dev/null || echo "Unknown error")
+            retry_count=$((retry_count + 1))
 
-        if [[ $retry_count -lt $max_retries ]]; then
-            echo "Warning: Linear API request failed (attempt $retry_count/$max_retries, curl exit code: $exit_code)" >&2
-            echo "Details: $error_msg" >&2
-            echo "Retrying in ${wait_time}s..." >&2
-            sleep "$wait_time"
-            wait_time=$((wait_time * 2))  # Exponential backoff
-            rm -f "$curl_stderr"
-        else
-            echo "Error: Linear API request failed after $max_retries attempts (curl exit code: $exit_code)" >&2
-            echo "Details: $error_msg" >&2
-            rm -f "$temp_response" "$curl_stderr"
+            if [[ $retry_count -lt $max_retries ]]; then
+                echo "Warning: Linear API request failed (attempt $retry_count/$max_retries, curl exit code: $exit_code)" >&2
+                echo "Details: $error_msg" >&2
+                echo "Retrying in ${wait_time}s..." >&2
+                sleep "$wait_time"
+                wait_time=$((wait_time * 2))  # Exponential backoff
+                rm -f "$curl_stderr"
+            else
+                echo "Error: Linear API request failed after $max_retries attempts (curl exit code: $exit_code)" >&2
+                echo "Details: $error_msg" >&2
+                rm -f "$temp_response" "$curl_stderr"
+                return 1
+            fi
+        done
+    
+        local http_code=$(echo "$response" | tail -1)
+        local content=$(echo "$response" | head -n -1)
+    
+        if [[ "$http_code" -ne 200 ]]; then
+            echo "Error: Linear API returned HTTP $http_code" >&2
+            echo "Response: $content" >&2
+            rm -f "$temp_response"
             return 1
         fi
+    
+        # Validate JSON response
+        if ! echo "$content" | jq empty 2>/dev/null; then
+            echo "Error: Invalid JSON response from Linear API" >&2
+            echo "Response: $content" >&2
+            rm -f "$temp_response"
+            return 1
+        fi
+    
+        # Check for API errors in the response
+        local errors
+        errors=$(echo "$content" | jq -r '.errors // empty')
+        if [[ -n "$errors" ]]; then
+            echo "Error: Linear API returned errors: $errors" >&2
+            rm -f "$temp_response"
+            return 1
+        fi
+    
+        # Require a valid connection and explicit page state before cleanup.
+        if ! jq -e '.data.user.assignedIssues | (.nodes | type == "array") and (.pageInfo.hasNextPage | type == "boolean")' <<<"$content" >/dev/null; then
+            echo "Error: Linear feed INCOMPLETE: invalid nodes or pageInfo" >&2
+            rm -f "$temp_response"
+            return 2
+        fi
+        jq -c '.data.user.assignedIssues.nodes[]' <<<"$content" >> "$temp_response"
+        has_next=$(jq -r '.data.user.assignedIssues.pageInfo.hasNextPage' <<<"$content")
+        page_count=$((page_count + 1))
+        [[ "$has_next" == false ]] && break
+        next_cursor=$(jq -r '.data.user.assignedIssues.pageInfo.endCursor // empty' <<<"$content")
+        if [[ -z "$next_cursor" || -n "${seen_cursors[$next_cursor]+set}" || "$page_count" -ge 100 ]]; then
+            echo "Error: Linear feed INCOMPLETE: missing or repeated cursor, or page limit reached" >&2
+            rm -f "$temp_response"
+            return 2
+        fi
+        seen_cursors["$next_cursor"]=1
+        cursor="$next_cursor"
     done
-    
-    local http_code=$(echo "$response" | tail -1)
-    local content=$(echo "$response" | head -n -1)
-    
-    if [[ "$http_code" -ne 200 ]]; then
-        echo "Error: Linear API returned HTTP $http_code" >&2
-        echo "Response: $content" >&2
-        rm -f "$temp_response"
-        return 1
-    fi
-    
-    # Validate JSON response
-    if ! echo "$content" | jq empty 2>/dev/null; then
-        echo "Error: Invalid JSON response from Linear API" >&2
-        echo "Response: $content" >&2
-        rm -f "$temp_response"
-        return 1
-    fi
-    
-    # Check for API errors in the response
-    local errors
-    errors=$(echo "$content" | jq -r '.errors // empty')
-    if [[ -n "$errors" ]]; then
-        echo "Error: Linear API returned errors: $errors" >&2
-        rm -f "$temp_response"
-        return 1
-    fi
-    
-    # Parse the issues with error handling
-    local issues
-    # Channel id -> channel name, built across the WHOLE feed before any issue is
-    # shaped. Linear puts the name in attachment metadata, but not on every
-    # attachment: 7 of 8 slack attachments carry metadata.channelName and one
-    # carries an empty metadata object. The gap is recoverable because the same
-    # channel appears named on another issue, so pooling the feed resolves every
-    # channel without needing a Slack token.
-    if ! issues=$(normalize_linear_issues "$content"); then
-        echo "Error: Failed to parse Linear issues" >&2
-        rm -f "$temp_response"
-        return 1
-    fi
-    
-    # Cleanup
+
+    # Normalize the whole feed together so attachment metadata can be shared
+    # across pages.
+    local issues combined
+    combined=$(jq -s '{data: {user: {assignedIssues: {nodes: .}}}}' "$temp_response")
     rm -f "$temp_response"
-
-    echo "$issues"
-
-    # SAFETY GUARD (protects the destructive cleanup passes). find_and_clean_
-    # reassigned_tasks and compare_and_clean_tasks complete/delete any task whose
-    # Linear issue is ABSENT from this feed. If Linear returned more assigned
-    # issues than fit in one page (hasNextPage=true), the feed is TRUNCATED and
-    # every issue past page one would be wrongly treated as unassigned/closed.
-    # The active (non-done) assigned set is normally well under Linear's 50-node
-    # default, so this should never fire; if it ever does, we still emit the
-    # partial feed above (so non-destructive create/update runs) but return
-    # non-zero so main() SKIPS all destructive cleanup instead of mass-completing
-    # live tasks. Do not paginate here: an unexpectedly large feed is a signal to
-    # stop and be noticed, not to silently churn through pages.
-    local has_next
-    has_next=$(echo "$content" | jq -r '.data.user.assignedIssues.pageInfo.hasNextPage')
-    if [[ "$has_next" == "true" ]]; then
-        echo "Error: Linear feed TRUNCATED (assignedIssues.pageInfo.hasNextPage=true): more assigned issues than one page. Marking fetch INCOMPLETE so destructive cleanup is skipped this run." >&2
-        return 2
+    if ! issues=$(normalize_linear_issues "$combined"); then
+        echo "Error: Failed to parse Linear issues" >&2
+        return 1
     fi
+    echo "$issues"
 
     return 0
 }
@@ -1680,7 +1687,7 @@ compare_and_clean_tasks() {
     trap 'if [[ "$cleanup_needed" == true ]]; then rm -f "$issues_file"; fi' EXIT ERR
     
     echo "$issues_descriptions" | tr -d '\r' | grep -v '^$' | while IFS= read -r issue; do
-        echo "$(sanitize_description "${issue,,}")" >>"$issues_file"
+        sanitize_description "${issue,,}" >>"$issues_file"
     done
 
     # Debug count
@@ -1901,12 +1908,12 @@ main() {
     log "Phase 3 & 4: Running synchronization operations"
 
     # DESTRUCTIVE-CLEANUP GUARD: get_linear_issues returns non-zero on any
-    # curl/HTTP/JSON/GraphQL error or a truncated feed (hasNextPage=true). Both
+    # curl/HTTP/JSON/GraphQL error or an incomplete paginated feed. Both
     # cleanup passes complete/delete any task whose Linear issue is absent from
     # the feed, so running them on an incomplete feed mass-completes live tasks
     # (the reported incident). Run the destructive passes ONLY when fetch_status
     # is 0 (complete, error-free); otherwise skip them and log loudly. The
-    # non-destructive create/update sync still runs on whatever came back.
+    # A failed page produces no feed, so incomplete data cannot reach cleanup.
     if [[ "$fetch_status" -eq 0 ]]; then
         find_and_clean_reassigned_tasks "$linear_issues"
     else

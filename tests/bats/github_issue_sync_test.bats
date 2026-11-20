@@ -787,6 +787,7 @@ if [[ "$*" =~ "linear.app" ]]; then
   "data": {
     "user": {
       "assignedIssues": {
+        "pageInfo": {"hasNextPage": false},
         "nodes": [
           {
             "id": "test-id",
@@ -1064,6 +1065,7 @@ if [[ "$*" =~ "linear.app" ]]; then
   "data": {
     "user": {
       "assignedIssues": {
+        "pageInfo": {"hasNextPage": false},
         "nodes": [
           {
             "id": "test-id",
@@ -2385,7 +2387,7 @@ EOF
 #!/bin/bash
 echo "$*" >> "${TEST_DIR}/curl_args.log"
 if [[ "$*" =~ "linear.app" ]]; then
-    echo '{"data":{"user":{"assignedIssues":{"nodes":[]}}}}'
+    echo '{"data":{"user":{"assignedIssues":{"pageInfo":{"hasNextPage":false},"nodes":[]}}}}'
     echo "200"
 else
     /usr/bin/curl "$@"
@@ -2409,7 +2411,7 @@ EOF
 if [[ "$*" =~ "linear.app" ]]; then
     cat << 'RESPONSE'
 {
-  "data": { "user": { "assignedIssues": { "nodes": [
+  "data": { "user": { "assignedIssues": { "pageInfo": {"hasNextPage": false}, "nodes": [
     {
       "id": "test-id",
       "title": "Commented last",
@@ -2473,7 +2475,7 @@ EOF
 #!/bin/bash
 echo "$*" >> "${TEST_DIR}/curl_args.log"
 if [[ "$*" =~ "linear.app" ]]; then
-    echo '{"data":{"user":{"assignedIssues":{"nodes":[]}}}}'
+    echo '{"data":{"user":{"assignedIssues":{"pageInfo":{"hasNextPage":false},"nodes":[]}}}}'
     echo "200"
 else
     /usr/bin/curl "$@"
@@ -2494,7 +2496,7 @@ EOF
 if [[ "$*" =~ "linear.app" ]]; then
     cat << 'RESPONSE'
 {
-  "data": { "user": { "assignedIssues": { "nodes": [
+  "data": { "user": { "assignedIssues": { "pageInfo": {"hasNextPage": false}, "nodes": [
     {
       "id": "test-id",
       "title": "Renovate backport",
@@ -2532,7 +2534,7 @@ EOF
 if [[ "$*" =~ "linear.app" ]]; then
     cat << 'RESPONSE'
 {
-  "data": { "user": { "assignedIssues": { "nodes": [
+  "data": { "user": { "assignedIssues": { "pageInfo": {"hasNextPage": false}, "nodes": [
     {
       "id": "test-id",
       "title": "No PR issue",
@@ -3067,12 +3069,12 @@ EOF
 # ====================================================
 # DESTRUCTIVE-CLEANUP FETCH GUARD
 # The reported incident: a bad/partial Linear fetch let the cleanup passes
-# complete/delete live tasks. get_linear_issues now returns non-zero on a
-# truncated feed (pageInfo.hasNextPage=true), and main() must skip BOTH
+# complete/delete live tasks. get_linear_issues returns non-zero when it cannot
+# retrieve every page, and main() must skip BOTH
 # destructive passes whenever the fetch is incomplete or empty.
 # ====================================================
 
-@test "get_linear_issues returns non-zero and flags TRUNCATED when hasNextPage is true" {
+@test "get_linear_issues returns non-zero when a page has no continuation cursor" {
     cat > "${TEST_DIR}/curl" << 'EOF'
 #!/bin/bash
 if [[ "$*" =~ "linear.app" ]]; then
@@ -3095,9 +3097,7 @@ EOF
 
     run get_linear_issues
     [ "$status" -eq 2 ]
-    [[ "$output" =~ "TRUNCATED" ]]
-    # Partial feed is still emitted so non-destructive create/update can run.
-    echo "$output" | grep -q '"issue_id":"DEVOPS-1"'
+    [[ "$output" =~ "INCOMPLETE" ]]
 }
 
 @test "get_linear_issues returns 0 when hasNextPage is false" {
@@ -3747,7 +3747,7 @@ _write_curl_mock_with_attachments() {
 if [[ "\$*" =~ "linear.app" ]]; then
     cat << 'RESPONSE'
 {
-  "data": { "user": { "assignedIssues": { "nodes": [
+  "data": { "user": { "assignedIssues": { "pageInfo": {"hasNextPage": false}, "nodes": [
     {
       "id": "test-id",
       "title": "Slack linked issue",
@@ -3778,7 +3778,7 @@ EOF
 #!/bin/bash
 echo "$*" >> "${TEST_DIR}/curl_args.log"
 if [[ "$*" =~ "linear.app" ]]; then
-    echo '{"data":{"user":{"assignedIssues":{"nodes":[]}}}}'
+    echo '{"data":{"user":{"assignedIssues":{"pageInfo":{"hasNextPage":false},"nodes":[]}}}}'
     echo "200"
 else
     /usr/bin/curl "$@"
@@ -4471,4 +4471,48 @@ SH
     grep -q "${SELECTED_UUID} linear_status:Todo" "$TEST_DIR/writes"
     ! grep -Eq 'mutation|assignedIssues' "$TEST_DIR/curl_calls"
     ! grep -Eq ' add | delete| done| import' "$TEST_DIR/all_tasks"
+}
+
+@test "get_linear_issues fetches all pages before returning a complete feed" {
+    cat > "$TEST_DIR/curl" <<'SH'
+#!/bin/bash
+while [ "$#" -gt 0 ]; do
+    if [ "$1" = --data ]; then payload=$2; break; fi
+    shift
+done
+cursor=$(jq -r '.variables.cursor // "first"' <<<"$payload")
+printf '%s\n' "$cursor" >> "$TEST_DIR/cursors"
+case "$cursor" in
+    first) id=1; next=true; end=cursor1 ;;
+    cursor1) id=2; next=false; end=cursor2 ;;
+    *) exit 1 ;;
+esac
+jq -cn --arg id "$id" --arg end "$end" --argjson next "$next" '{data:{user:{assignedIssues:{nodes:[{id:$id,title:("issue"+$id),url:("https://linear.app/x/issue/DEVOPS-"+$id+"/x"),state:{name:"Todo"},attachments:{nodes:[]}}],pageInfo:{hasNextPage:$next,endCursor:$end}}}}}'
+echo 200
+SH
+    chmod +x "$TEST_DIR/curl"
+    run get_linear_issues
+    [ "$status" -eq 0 ]
+    [[ "$output" == *'DEVOPS-1'* && "$output" == *'DEVOPS-2'* ]]
+    [ "$(cat "$TEST_DIR/cursors")" = $'first\ncursor1' ]
+}
+
+@test "get_linear_issues refuses cleanup on a later page error" {
+    cat > "$TEST_DIR/curl" <<'SH'
+#!/bin/bash
+while [ "$#" -gt 0 ]; do
+    if [ "$1" = --data ]; then payload=$2; break; fi
+    shift
+done
+if [ "$(jq -r '.variables.cursor // "first"' <<<"$payload")" = first ]; then
+    echo '{"data":{"user":{"assignedIssues":{"nodes":[],"pageInfo":{"hasNextPage":true,"endCursor":"next"}}}}}'
+else
+    echo '{"errors":[{"message":"failed"}]}'
+fi
+echo 200
+SH
+    chmod +x "$TEST_DIR/curl"
+    run get_linear_issues
+    [ "$status" -ne 0 ]
+    [[ "$output" == *'Linear API returned errors'* ]]
 }
