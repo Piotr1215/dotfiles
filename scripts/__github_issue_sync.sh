@@ -1900,8 +1900,12 @@ main() {
     linear_issues=$(get_linear_issues) || fetch_status=$?
 
     if [[ -z "$linear_issues" ]]; then
+        if [[ "$fetch_status" -ne 0 ]]; then
+            log "GUARD: Linear fetch failed (status $fetch_status); cleanup skipped."
+            return "$fetch_status"
+        fi
         log "No issues retrieved from Linear. Exiting."
-        exit 0
+        return 0
     fi
 
     # Phase 3 & 4: Task Management & Synchronization
@@ -1912,7 +1916,7 @@ main() {
     # cleanup passes complete/delete any task whose Linear issue is absent from
     # the feed, so running them on an incomplete feed mass-completes live tasks
     # (the reported incident). Run the destructive passes ONLY when fetch_status
-    # is 0 (complete, error-free); otherwise skip them and log loudly. The
+    # is 0 (complete, error-free); otherwise skip them and log loudly.
     # A failed page produces no feed, so incomplete data cannot reach cleanup.
     if [[ "$fetch_status" -eq 0 ]]; then
         find_and_clean_reassigned_tasks "$linear_issues"

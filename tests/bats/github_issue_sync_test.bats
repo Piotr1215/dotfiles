@@ -3157,6 +3157,17 @@ EOF
     grep -q "CLEAN2" "${TEST_DIR}/calls.log"
 }
 
+@test "main reports a failed fetch with no feed and skips cleanup" {
+    export HOME="$TEST_DIR"
+    get_linear_issues() { return 2; }
+    find_and_clean_reassigned_tasks() { echo CLEAN >> "${TEST_DIR}/calls.log"; }
+    compare_and_clean_tasks() { echo CLEAN >> "${TEST_DIR}/calls.log"; }
+    run main
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"Linear fetch failed (status 2); cleanup skipped"* ]]
+    [ ! -f "${TEST_DIR}/calls.log" ]
+}
+
 @test "main does not complete/delete anything when the feed is empty" {
     export HOME="$TEST_DIR"
     get_linear_issues() { printf ''; return 0; }
