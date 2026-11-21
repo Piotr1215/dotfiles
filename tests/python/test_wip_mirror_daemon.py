@@ -123,6 +123,35 @@ def test_a_stop_ends_a_scan_at_the_next_entry(tmp_path):
         daemon.serve_drive(inbox, drive, 123, lambda: nullcontext(mirror))
     assert scanned == ["one"]
 
+
+def test_a_busy_database_is_copied_once_per_interval(tmp_path):
+    inbox = daemon.Inbox(threading.Event())
+    pacer = daemon.Pacer(interval=300)
+    database = tmp_path / "taskchampion.sqlite3"
+    assert pacer.admit(database, 1000)
+    assert not pacer.admit(tmp_path / "taskchampion.sqlite3-wal", 1002)
+    assert pacer.admit(tmp_path / "notes.md", 1003)
+    pacer.release(inbox, 1299)
+    assert inbox.take() is None
+    pacer.release(inbox, 1300)
+    assert inbox.take() == database
+    assert pacer.admit(database, 1300)
+    assert not pacer.held
+
+
+def test_the_writer_holds_a_repeat_database_event_until_its_interval(tmp_path, monkeypatch):
+    monkeypatch.setattr(daemon, "POLL_SECONDS", 0.01)
+    monkeypatch.setattr(daemon, "DATABASE_INTERVAL", 0.05)
+    inbox = daemon.Inbox(threading.Event())
+    for name in ("work.db", "work.db-wal", "notes.md"):
+        inbox.offer(tmp_path / name)
+    probes = iter([123] * 50)
+    drive = SimpleNamespace(identity=lambda: next(probes, 456))
+    copied = []
+    mirror = SimpleNamespace(catch_up=lambda between=None: None, sync=copied.append)
+    daemon.serve_drive(inbox, drive, 123, lambda: nullcontext(mirror))
+    assert copied == [tmp_path / "work.db", tmp_path / "notes.md", tmp_path / "work.db"]
+
 @pytest.mark.parametrize("directory", ["", ".", "..", "../wip", "/wip"])
 def test_drive_rejects_a_destination_outside_its_mount(tmp_path, directory):
     with pytest.raises(ValueError, match="single destination directory name"):

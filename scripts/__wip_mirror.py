@@ -29,7 +29,40 @@ DIR_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
 POLL_SECONDS = 1
 # Distinct pending paths. A repeat write to a pending path takes no new slot.
 QUEUE_LIMIT = 65536
+# A database is snapshotted whole. serval's 300M task DB changes every 2 s, so
+# each database gets at most one snapshot per interval, and a held change is
+# copied when the interval ends.
+DATABASE_INTERVAL = 300
+DATABASE_SUFFIXES = (".sqlite3", ".db")
 TARGET_IO_ERRORS = {errno.EIO, errno.ENODEV, errno.ENOSPC, errno.EROFS, errno.ESTALE}
+
+
+class Pacer:
+    """Hold repeat copies of a database until its interval has passed."""
+
+    def __init__(self, interval: float = DATABASE_INTERVAL):
+        self.interval = interval
+        self.last = {}
+        self.held = {}
+
+    def admit(self, path: Path, now: float) -> bool:
+        name = path.name[:-4] if path.name.endswith("-wal") else path.name
+        if not name.endswith(DATABASE_SUFFIXES):
+            return True
+        database = path.with_name(name)
+        due = self.last.get(database, float("-inf")) + self.interval
+        if now < due:
+            self.held[database] = due
+            return False
+        self.last[database] = now
+        self.held.pop(database, None)
+        return True
+
+    def release(self, inbox: "Inbox", now: float):
+        for database, due in list(self.held.items()):
+            if due <= now:
+                del self.held[database]
+                inbox.offer(database)
 
 
 class Stopped(Exception):
@@ -207,7 +240,7 @@ def copy(connect, inbox: Inbox, path: Path):
         logging.warning("could not mirror %s: %s", path, error)
 
 
-def rescan(inbox: Inbox, connect):
+def rescan(inbox: Inbox, connect, pacer: Pacer):
     started = time.monotonic()
     with connect() as mirror:
         busy = False
@@ -227,7 +260,8 @@ def rescan(inbox: Inbox, connect):
                     path = inbox.take()
                     if path is None:
                         break
-                    copy(lambda: nullcontext(mirror), inbox, path)
+                    if pacer.admit(path, time.monotonic()):
+                        copy(lambda: nullcontext(mirror), inbox, path)
             finally:
                 busy = False
 
@@ -237,8 +271,9 @@ def rescan(inbox: Inbox, connect):
 
 def serve_drive(inbox: Inbox, drive: Drive, identity: int, connect):
     inbox.loss.clear()
+    pacer = Pacer(DATABASE_INTERVAL)
     logging.info("catching up WIP mirror")
-    logging.info("WIP mirror catch-up complete in %.0f s", rescan(inbox, connect))
+    logging.info("WIP mirror catch-up complete in %.0f s", rescan(inbox, connect, pacer))
     next_probe = 0.0
     while not inbox.stopped.is_set():
         now = time.monotonic()
@@ -250,9 +285,10 @@ def serve_drive(inbox: Inbox, drive: Drive, identity: int, connect):
             # Clear before scanning so a second loss during the scan triggers
             # another scan. Events already in the inbox still get replayed.
             inbox.loss.clear()
-            logging.warning("WIP mirror rescan after event loss took %.0f s", rescan(inbox, connect))
+            logging.warning("WIP mirror rescan after event loss took %.0f s", rescan(inbox, connect, pacer))
+        pacer.release(inbox, now)
         path = inbox.take(POLL_SECONDS)
-        if path is None:
+        if path is None or not pacer.admit(path, time.monotonic()):
             continue
         copy(connect, inbox, path)
 

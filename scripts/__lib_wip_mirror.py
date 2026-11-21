@@ -340,10 +340,11 @@ class Mirror:
                 os.utime(output.fileno(), ns=(info.st_atime_ns, info.st_mtime_ns))
                 if sqlite:
                     _save_state(output.fileno(), source_state)
+                # Cheap checks first: comparing contents reads both files.
                 if (destination.is_file() and not destination.is_symlink()
-                        and filecmp.cmp(temporary, destination, shallow=False)
                         and stat.S_IMODE(destination.stat().st_mode) == mode
-                        and destination.stat().st_mtime_ns == info.st_mtime_ns):
+                        and destination.stat().st_mtime_ns == info.st_mtime_ns
+                        and filecmp.cmp(temporary, destination, shallow=False)):
                     if sqlite:
                         _save_state(destination, source_state)
                     return
