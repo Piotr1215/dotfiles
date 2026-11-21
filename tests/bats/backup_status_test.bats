@@ -204,3 +204,17 @@ wip_state() {
   run "$STATUS_SCRIPT"
   [ "$(wip_state media)" = failed ]
 }
+
+@test "the weekly server restore counts for 8 days and undrilled layers get no drill metric" {
+  now=$(date +%s)
+  printf '{"last_run":%s,"layers":{"taskchampion":{"ok":true,"last_run":%s,"last_success":%s}}}' "$now" "$((now - 6 * 86400))" "$((now - 6 * 86400))" > "$HOME/.local/state/backup-drill/last.json"
+  run "$STATUS_SCRIPT" --prom "$BATS_TEST_TMPDIR/metrics.prom"
+  [ "$status" -eq 0 ]
+  grep -Fx 'backup_layer_ok{layer="taskchampion"} 1' "$BATS_TEST_TMPDIR/metrics.prom"
+  grep -Fx 'backup_drill_ok{layer="taskchampion"} 1' "$BATS_TEST_TMPDIR/metrics.prom"
+  run grep -F 'backup_drill_ok{layer="task-sync"}' "$BATS_TEST_TMPDIR/metrics.prom"
+  [ "$status" -eq 1 ]
+  printf '{"last_run":%s,"layers":{"taskchampion":{"ok":true,"last_run":%s,"last_success":%s}}}' "$now" "$((now - 9 * 86400))" "$((now - 9 * 86400))" > "$HOME/.local/state/backup-drill/last.json"
+  run "$STATUS_SCRIPT"
+  [ "$(wip_state taskchampion)" = stale ]
+}

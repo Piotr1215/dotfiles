@@ -90,7 +90,7 @@ results = drill.get('layers', {})
 server = results.get('taskchampion', {})
 server_time = server.get('last_success', server.get('last_run', drill.get('last_run', 0)) if server.get('ok') is True else 0)
 rows = []
-for name, last, max_age in [('restic', restic_time, 26*3600), ('home', home_success, 25*3600), ('dev', dev_success, 25*3600), ('task-files', task_time, 30*60), ('task-sync', sync_time, 15*60), ('system', system_time, 8*86400), ('taskchampion', server_time, 86400)]:
+for name, last, max_age in [('restic', restic_time, 26*3600), ('home', home_success, 25*3600), ('dev', dev_success, 25*3600), ('task-files', task_time, 30*60), ('task-sync', sync_time, 15*60), ('system', system_time, 8*86400), ('taskchampion', server_time, 8*86400)]:
     result = results.get('task' if name == 'task-files' else name, {})
     failure = latest['failed'].lower()
     failed = ((name == 'home' and ('system files' in failure or 'home folder' in failure or 'home backup' in failure)) or
@@ -202,7 +202,9 @@ if len(sys.argv) > 1:
         for name, last, status, result in rows:
             f.write(f'backup_layer_last_success_timestamp_seconds{{layer="{name}"}} {last}\n')
             f.write(f'backup_layer_ok{{layer="{name}"}} {int(status == "ok")}\n')
-            f.write(f'backup_drill_ok{{layer="{name}"}} {int(result.get("ok") is True)}\n')
+            # A layer the drill does not cover has no drill result; 0 would read as a failed drill.
+            if 'ok' in result:
+                f.write(f'backup_drill_ok{{layer="{name}"}} {int(result.get("ok") is True)}\n')
         f.write(f'backup_drill_last_run_timestamp_seconds {int(drill.get("last_run", 0))}\n')
         f.write(f'backup_hold_active {int(hold)}\n')
         f.write(f'backup_layer_installed{{layer="wip"}} {int(wip_gate != "not-installed")}\n')
