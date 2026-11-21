@@ -14,6 +14,8 @@ MEDIA_SOURCES="${MEDIA_SOURCES:-$HOME/Videos:$HOME/models:$HOME/Downloads:$HOME/
 SNAPSHOT_KEEP="${SNAPSHOT_KEEP:-3}"
 BACKUP_MAX_DELETES="${BACKUP_MAX_DELETES:-1000}"
 LOCK_FILE="${DRIVE_LOCK_FILE:-${TMPDIR:-/tmp}/backup-drive.lock}"
+NIGHTLY_LOCK_FILE="${NIGHTLY_LOCK_FILE:-/tmp/backup.lock}"
+NTFY_URL="${BACKUP_NTFY_URL:-https://ntfy.sh/homelab-piotr1215-backup}"
 unset RESTIC_REPOSITORY RESTIC_PASSWORD
 
 # Print a timestamped message to stdout.
@@ -82,6 +84,15 @@ snapshot_subvolume() {
 	return "$failed"
 }
 
+# Page the backup ntfy topic, at most once a day for the same failure: a failed
+# run retries on every hourly tick.
+alert_failure() {
+	local text="$1"
+	alert_due "$DRIVE_STATE_DIR/alert" "$text" 2>/dev/null || return 0
+	curl -fsS -m 20 -H "Priority: high" -H "Tags: warning" -d "serval: drive backup failed: $text" "$NTFY_URL" >/dev/null ||
+		log WARNING "ntfy alert failed"
+}
+
 # Write the successful run timestamp atomically.
 write_stamp() {
 	local tmp
@@ -110,9 +121,18 @@ if ! flock -n 9; then
 	exit 75
 fi
 
+# The nightly NAS run ends with a prune that takes an exclusive lock and does
+# not retry, so a copy holding the NAS repo then would fail it. Wait it out.
+nightly_pid=$(cat "$NIGHTLY_LOCK_FILE" 2>/dev/null || true)
+if [[ "$nightly_pid" =~ ^[0-9]+$ ]] && kill -0 "$nightly_pid" 2>/dev/null; then
+	log INFO "The nightly NAS backup is running (pid $nightly_pid); skipping"
+	exit 75
+fi
+
 log INFO "Checking drive mount: $DRIVE_MOUNT"
 if [[ "$(findmnt -n -o UUID,FSTYPE --mountpoint "$DRIVE_MOUNT" 2>/dev/null || true)" != "$DRIVE_UUID btrfs" ]]; then
 	log ERROR "drive not mounted at $DRIVE_MOUNT with the expected UUID $DRIVE_UUID"
+	alert_failure "drive not mounted"
 	exit 1
 fi
 log INFO "Drive mount verified: $DRIVE_MOUNT"
@@ -182,6 +202,7 @@ if ((${#FAILED[@]} == 0 && !held)); then
 fi
 if ((${#FAILED[@]})); then
 	log ERROR "SUMMARY: drive backup FAILED: ${FAILED[*]}"
+	alert_failure "${FAILED[*]}"
 	exit 1
 fi
 log INFO "SUMMARY: drive backup complete in $(($(date +%s) - start_time))s"

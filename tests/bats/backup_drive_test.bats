@@ -9,6 +9,7 @@ setup() {
   export DRIVE_SCRIPT="$BATS_TEST_DIRNAME/../../scripts/__backup_drive.sh"
   export MEDIA_SOURCES="$BATS_TEST_TMPDIR/photos:$BATS_TEST_TMPDIR/videos" SNAPSHOT_KEEP=3
   export CALLS_DIR="$BATS_TEST_TMPDIR/calls"
+  export NIGHTLY_LOCK_FILE="$BATS_TEST_TMPDIR/backup.lock" BACKUP_NTFY_URL=https://ntfy.invalid/topic
   unset RESTIC_REPOSITORY RESTIC_PASSWORD RESTIC_PASSWORD_FILE
   export RESTIC_PASSWORD_FILE="$BATS_TEST_TMPDIR/restic-password"
   printf 'test password\n' > "$RESTIC_PASSWORD_FILE"
@@ -51,7 +52,11 @@ else
   exit 1
 fi
 STUB
-  chmod +x "$BATS_TEST_TMPDIR/bin/findmnt" "$BATS_TEST_TMPDIR/bin/restic" "$BATS_TEST_TMPDIR/bin/sudo"
+  cat > "$BATS_TEST_TMPDIR/bin/curl" <<'STUB'
+#!/usr/bin/env bash
+printf '%s\n' "${@: -2:1}" >> "$CALLS_DIR/curl"
+STUB
+  chmod +x "$BATS_TEST_TMPDIR/bin/findmnt" "$BATS_TEST_TMPDIR/bin/restic" "$BATS_TEST_TMPDIR/bin/sudo" "$BATS_TEST_TMPDIR/bin/curl"
 }
 
 @test "wrong UUID and empty mount identity stop before any backup activity" {
@@ -288,4 +293,33 @@ STUB
   grep -E '(^| )copy( |$)' "$CALLS_DIR/restic"
   [ "$(find "$DRIVE_MOUNT/snapshots" -mindepth 1 -maxdepth 1 -type d | wc -l)" -eq 2 ]
   [[ "$(cat "$DRIVE_STATE_DIR/last-success")" =~ ^[0-9]+$ ]]
+}
+
+@test "a running nightly NAS backup makes the drive job skip with 75" {
+  sleep 30 &
+  printf '%s\n' "$!" > "$NIGHTLY_LOCK_FILE"
+  run bash "$DRIVE_SCRIPT"
+  kill "$!" 2>/dev/null || true
+  [ "$status" -eq 75 ]
+  [[ "$output" == *'nightly NAS backup is running'* ]]
+  [ ! -e "$CALLS_DIR/restic" ]
+  printf '999999999\n' > "$NIGHTLY_LOCK_FILE"
+  run bash "$DRIVE_SCRIPT"
+  [ "$status" -eq 0 ]
+}
+
+@test "a failure pages ntfy once a day for the same cause" {
+  export FAKE_FINDMNT=''
+  run bash "$DRIVE_SCRIPT"
+  [ "$status" -eq 1 ]
+  run bash "$DRIVE_SCRIPT"
+  [ "$status" -eq 1 ]
+  [ "$(wc -l < "$CALLS_DIR/curl")" -eq 1 ]
+  grep -Fx 'serval: drive backup failed: drive not mounted' "$CALLS_DIR/curl"
+  unset FAKE_FINDMNT
+  export RESTIC_FAIL=1
+  run bash "$DRIVE_SCRIPT"
+  [ "$status" -eq 1 ]
+  [ "$(wc -l < "$CALLS_DIR/curl")" -eq 2 ]
+  grep -F 'restic copy' "$CALLS_DIR/curl"
 }
