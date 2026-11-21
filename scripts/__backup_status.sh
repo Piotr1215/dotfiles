@@ -10,6 +10,9 @@ import datetime, json, os, pathlib, re, subprocess, sys, tempfile, time
 home = pathlib.Path(os.environ['HOME'])
 nas = pathlib.Path(os.getenv('BACKUP_ROOT', '/mnt/nas-backup'))
 state_dir = home / '.local/state'
+wip_mount = pathlib.Path(os.getenv('WIP_MIRROR_MOUNT', '/mnt/nvme-backup'))
+wip_root = wip_mount / os.getenv('WIP_MIRROR_DIR', 'wip')
+wip_uuid = os.getenv('WIP_MIRROR_UUID', 'd74106d0-1b12-4d65-873d-d69ed3a729e6')
 now = int(time.time())
 names = ['restic', 'home', 'dev', 'task-files', 'task-sync', 'system', 'taskchampion']
 if len(sys.argv) > 3 or (len(sys.argv) > 1 and sys.argv[1] != '--prom'):
@@ -107,6 +110,41 @@ for name, last, max_age in [('restic', restic_time, 26*3600), ('home', home_succ
         status = 'failed'
     rows.append((name, int(last), status, result))
 
+# The NVMe WIP layer gets a row only once wip-mirror.service is enabled; the same
+# gate as __backup_drill.sh. Its freshness is the weekly drill's last success.
+def wip_state():
+    def quiet(*args):
+        try:
+            return subprocess.run(args, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, timeout=30)
+        except (OSError, subprocess.SubprocessError):
+            return None
+    enabled = quiet('systemctl', 'is-enabled', '--quiet', 'wip-mirror.service')
+    if not enabled or enabled.returncode:
+        return 'not-installed'
+    mount = quiet('findmnt', '-n', '-o', 'UUID,FSTYPE', '--mountpoint', str(wip_mount))
+    if not mount or mount.returncode or mount.stdout.split() != [wip_uuid, 'btrfs']:
+        return 'unavailable'
+    if not (wip_root / 'live').is_dir() or not (wip_root / 'versions').is_dir():
+        return 'incomplete'
+    active = quiet('systemctl', 'is-active', '--quiet', 'wip-mirror.service')
+    return 'ready' if active and active.returncode == 0 else 'inactive'
+wip_gate = wip_state()
+print('wip mirror: ' + ('not installed (wip-mirror.service not enabled)' if wip_gate == 'not-installed' else wip_gate), file=sys.stderr)
+if wip_gate != 'not-installed':
+    result = results.get('wip', {})
+    last = int(result.get('last_success', 0) or 0)
+    if wip_gate in ('unavailable', 'inactive'):
+        status = wip_gate
+    elif wip_gate == 'incomplete' or result.get('ok') is False:
+        status = 'failed'
+    elif not last:
+        status = 'unknown'
+    elif last > now + 300 or now - last > 8*86400:
+        status = 'stale'
+    else:
+        status = 'ok'
+    rows.append(('wip', last, status, result))
+
 # Discover the actual textfile directory only when the running exporter enables it.
 try:
     processes = subprocess.run(['pgrep', '-a', 'node_exporter'], capture_output=True, text=True, check=False).stdout
@@ -130,16 +168,17 @@ if len(sys.argv) > 1:
             f.write(f'backup_drill_ok{{layer="{name}"}} {int(result.get("ok") is True)}\n')
         f.write(f'backup_drill_last_run_timestamp_seconds {int(drill.get("last_run", 0))}\n')
         f.write(f'backup_hold_active {int(hold)}\n')
+        f.write(f'backup_layer_installed{{layer="wip"}} {int(wip_gate != "not-installed")}\n')
     os.replace(f.name, target)
 else:
-    print(f'{"layer":13} | {"last success":19} | {"age":8} | {"state":7} | last drill')
+    print(f'{"layer":13} | {"last success":19} | {"age":8} | {"state":11} | last drill')
     for name, last, status, result in rows:
         when = datetime.datetime.fromtimestamp(last).strftime('%Y-%m-%d %H:%M:%S') if last else '-'
         age = (f'{max(0, now-last)//86400}d{(max(0, now-last)%86400)//3600}h' if now-last >= 86400 else f'{max(0, now-last)//3600}h{(max(0, now-last)%3600)//60}m') if last else '-'
         d = ('ok' if result.get('ok') is True else 'FAIL' if result.get('ok') is False else '-')
         if result.get('last_run'):
             d += ' ' + datetime.datetime.fromtimestamp(result['last_run']).strftime('%Y-%m-%d %H:%M')
-        color = {'ok': '\033[32m', 'failed': '\033[31m', 'held': '\033[33m', 'stale': '\033[33m', 'unknown': '\033[33m'}
-        shown = color[status] + f'{status:7}' + '\033[0m' if sys.stdout.isatty() else f'{status:7}'
+        color = {'ok': '\033[32m', 'failed': '\033[31m', 'unavailable': '\033[31m', 'held': '\033[33m', 'stale': '\033[33m', 'unknown': '\033[33m', 'inactive': '\033[33m'}
+        shown = color[status] + f'{status:11}' + '\033[0m' if sys.stdout.isatty() else f'{status:11}'
         print(f'{name:13} | {when:19} | {age:8} | {shown} | {d}')
 PY

@@ -19,7 +19,26 @@ STUB
 #!/usr/bin/env bash
 exit 1
 STUB
-  chmod +x "$BATS_TEST_TMPDIR/bin/restic" "$BATS_TEST_TMPDIR/bin/pgrep"
+  # The WIP drive layer: the unit is not enabled unless a test says so.
+  export WIP_MIRROR_MOUNT="$BATS_TEST_TMPDIR/nvme" WIP_MIRROR_UUID=fixture-uuid
+  cat > "$BATS_TEST_TMPDIR/bin/systemctl" <<'STUB'
+#!/usr/bin/env bash
+case "$1" in
+  is-enabled) [[ ${WIP_ENABLED:-0} == 1 ]] ;;
+  is-active) [[ ${WIP_ACTIVE:-1} == 1 ]] ;;
+  *) exit 1 ;;
+esac
+STUB
+  cat > "$BATS_TEST_TMPDIR/bin/findmnt" <<'STUB'
+#!/usr/bin/env bash
+printf '%s\n' "${WIP_FINDMNT-fixture-uuid btrfs}"
+STUB
+  chmod +x "$BATS_TEST_TMPDIR/bin/restic" "$BATS_TEST_TMPDIR/bin/pgrep" "$BATS_TEST_TMPDIR/bin/systemctl" "$BATS_TEST_TMPDIR/bin/findmnt"
+}
+
+# Print the state column of the wip row, or nothing when there is no row.
+wip_state() {
+  awk -F' [|] ' 'NF >= 5 && $1 ~ /^wip / { gsub(/ +$/, "", $4); print $4 }' <<<"$output"
 }
 
 @test "table uses producer timestamps and marks absent drill unknown" {
@@ -112,4 +131,47 @@ STUB
   [ "$status" -eq 0 ]
   grep -Fx 'backup_layer_last_success_timestamp_seconds{layer="taskchampion"} 123' "$BATS_TEST_TMPDIR/metrics.prom"
   grep -Fx 'backup_layer_ok{layer="taskchampion"} 0' "$BATS_TEST_TMPDIR/metrics.prom"
+}
+
+@test "wip layer has no row and no health metric before the unit is enabled" {
+  run "$STATUS_SCRIPT"
+  [ "$status" -eq 0 ]
+  [ -z "$(wip_state)" ]
+  [[ "$output" == *"wip mirror: not installed"* ]]
+  run "$STATUS_SCRIPT" --prom "$BATS_TEST_TMPDIR/metrics.prom"
+  grep -Fx 'backup_layer_installed{layer="wip"} 0' "$BATS_TEST_TMPDIR/metrics.prom"
+  ! grep -F 'backup_layer_ok{layer="wip"}' "$BATS_TEST_TMPDIR/metrics.prom"
+}
+
+@test "an enabled unit with a missing or foreign drive shows unavailable" {
+  export WIP_ENABLED=1
+  mkdir -p "$WIP_MIRROR_MOUNT/wip/live" "$WIP_MIRROR_MOUNT/wip/versions"
+  WIP_FINDMNT='' run "$STATUS_SCRIPT"
+  [ "$(wip_state)" = unavailable ]
+  WIP_FINDMNT='other-uuid btrfs' run "$STATUS_SCRIPT" --prom "$BATS_TEST_TMPDIR/metrics.prom"
+  grep -Fx 'backup_layer_installed{layer="wip"} 1' "$BATS_TEST_TMPDIR/metrics.prom"
+  grep -Fx 'backup_layer_ok{layer="wip"} 0' "$BATS_TEST_TMPDIR/metrics.prom"
+}
+
+@test "an enabled drive reports missing trees, inactive unit, drill freshness and drill failure" {
+  export WIP_ENABLED=1
+  mkdir -p "$WIP_MIRROR_MOUNT/wip/live"
+  run "$STATUS_SCRIPT"
+  [ "$(wip_state)" = failed ]
+  mkdir -p "$WIP_MIRROR_MOUNT/wip/versions"
+  run "$STATUS_SCRIPT"
+  [ "$(wip_state)" = unknown ]
+  printf '{"last_run":%s,"layers":{"wip":{"ok":true,"last_run":%s,"last_success":%s}}}' "$(date +%s)" "$(date +%s)" "$(date +%s)" > "$HOME/.local/state/backup-drill/last.json"
+  run "$STATUS_SCRIPT" --prom "$BATS_TEST_TMPDIR/metrics.prom"
+  grep -Fx 'backup_layer_ok{layer="wip"} 1' "$BATS_TEST_TMPDIR/metrics.prom"
+  run "$STATUS_SCRIPT"
+  [ "$(wip_state)" = ok ]
+  WIP_ACTIVE=0 run "$STATUS_SCRIPT"
+  [ "$(wip_state)" = inactive ]
+  printf '{"last_run":1,"layers":{"wip":{"ok":true,"last_run":1,"last_success":1}}}' > "$HOME/.local/state/backup-drill/last.json"
+  run "$STATUS_SCRIPT"
+  [ "$(wip_state)" = stale ]
+  printf '{"last_run":2,"layers":{"wip":{"ok":false,"last_run":2,"last_success":1}}}' > "$HOME/.local/state/backup-drill/last.json"
+  run "$STATUS_SCRIPT"
+  [ "$(wip_state)" = failed ]
 }

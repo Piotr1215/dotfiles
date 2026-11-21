@@ -70,6 +70,29 @@ elif a[0]=='restore':
 else: sys.exit(1)
 STUB
   chmod +x "$BATS_TEST_TMPDIR/bin/restic"
+  # The WIP drive layer: the unit is not enabled unless a test says so.
+  export WIP_MIRROR_MOUNT="$BATS_TEST_TMPDIR/nvme" WIP_MIRROR_UUID=fixture-uuid
+  cat > "$BATS_TEST_TMPDIR/bin/systemctl" <<'STUB'
+#!/usr/bin/env bash
+case "$1" in
+  is-enabled) [[ ${WIP_ENABLED:-0} == 1 ]] ;;
+  is-active) [[ ${WIP_ACTIVE:-1} == 1 ]] ;;
+  *) exit 1 ;;
+esac
+STUB
+  cat > "$BATS_TEST_TMPDIR/bin/findmnt" <<'STUB'
+#!/usr/bin/env bash
+printf '%s\n' "${WIP_FINDMNT-fixture-uuid btrfs}"
+STUB
+  chmod +x "$BATS_TEST_TMPDIR/bin/systemctl" "$BATS_TEST_TMPDIR/bin/findmnt"
+}
+
+# Mirror the dev fixtures onto the fake WIP drive, with one prior version of fixture0.
+wip_drive() {
+  local live="$WIP_MIRROR_MOUNT/wip/live$HOME/dev" versions="$WIP_MIRROR_MOUNT/wip/versions$HOME/dev"
+  mkdir -p "$live" "$versions"
+  cp -p "$HOME/dev/fixture"* "$live/"
+  printf 'older' > "$versions/fixture0@1700000000000000000-0123abcd"
 }
 
 @test "restic restores a database and three files into scratch" {
@@ -190,4 +213,90 @@ STUB
   run "$DRILL_SCRIPT" --layer task
   [ "$status" -eq 1 ]
   jq -e '.layers.task.ok == false and .layers.task.last_success > 0' "$HOME/.local/state/backup-drill/last.json"
+}
+
+@test "wip layer is skipped and unrecorded before the unit is enabled" {
+  mkdir -p "$HOME/.local/state/backup-drill"
+  printf '{"last_run":7,"layers":{"wip":{"ok":true,"last_run":1,"last_success":1}}}' > "$HOME/.local/state/backup-drill/last.json"
+  run "$DRILL_SCRIPT" --layer wip
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"wip: skipped: wip-mirror.service not enabled"* ]]
+  jq -e '(.layers | has("wip") | not) and .last_run == 7' "$HOME/.local/state/backup-drill/last.json"
+  run "$DRILL_SCRIPT"
+  [ "$status" -eq 0 ]
+  jq -e '(.layers | has("wip") | not) and .layers.restic.ok == true' "$HOME/.local/state/backup-drill/last.json"
+}
+
+@test "an enabled unit without the expected drive fails the drill" {
+  export WIP_ENABLED=1
+  wip_drive
+  WIP_FINDMNT='other-uuid btrfs' run "$DRILL_SCRIPT" --layer wip
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"expected UUID"* ]]
+  jq -e '.layers.wip.ok == false' "$HOME/.local/state/backup-drill/last.json"
+  WIP_FINDMNT='' run "$DRILL_SCRIPT" --layer wip
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"expected UUID"* ]]
+}
+
+@test "an enabled drive without both trees fails the drill" {
+  export WIP_ENABLED=1
+  mkdir -p "$WIP_MIRROR_MOUNT/wip/live"
+  run "$DRILL_SCRIPT" --layer wip
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"live or versions directory missing"* ]]
+}
+
+@test "wip drill restores live copies and a prior version into scratch" {
+  export WIP_ENABLED=1
+  wip_drive
+  run "$DRILL_SCRIPT" --layer wip
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"5 restored live files match; 1 prior versions restore intact; 0 root-only copies skipped"* ]]
+  jq -e '.layers.wip.ok == true and .layers.wip.last_success > 0' "$HOME/.local/state/backup-drill/last.json"
+}
+
+@test "a live copy that differs from its source fails" {
+  export WIP_ENABLED=1
+  wip_drive
+  for f in "$WIP_MIRROR_MOUNT/wip/live$HOME/dev/fixture"*; do printf 'broken' > "$f"; touch -d '@1' "$f"; done
+  run "$DRILL_SCRIPT" --layer wip
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"differs"* ]]
+}
+
+@test "root-only live copies are counted, not compared" {
+  export WIP_ENABLED=1
+  wip_drive
+  chmod 000 "$WIP_MIRROR_MOUNT/wip/live$HOME/dev/fixture0" "$WIP_MIRROR_MOUNT/wip/live$HOME/dev/fixture1"
+  run "$DRILL_SCRIPT" --layer wip
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"only 4 readable live copies"*"(2 root-only skipped)"* ]]
+}
+
+@test "prior versions this user cannot read fail instead of passing unproven" {
+  export WIP_ENABLED=1
+  wip_drive
+  chmod 000 "$WIP_MIRROR_MOUNT/wip/versions$HOME/dev/fixture0@"*
+  run "$DRILL_SCRIPT" --layer wip
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"1 prior versions, none readable"* ]]
+}
+
+@test "a prior version without a current copy on the drive fails" {
+  export WIP_ENABLED=1
+  wip_drive
+  rm "$WIP_MIRROR_MOUNT/wip/live$HOME/dev/fixture0"
+  run "$DRILL_SCRIPT" --layer wip
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"no current copy"* ]]
+}
+
+@test "a drive with no prior versions yet passes" {
+  export WIP_ENABLED=1
+  wip_drive
+  rm "$WIP_MIRROR_MOUNT/wip/versions$HOME/dev/fixture0@"*
+  run "$DRILL_SCRIPT" --layer wip
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"no prior versions yet"* ]]
 }

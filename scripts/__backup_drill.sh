@@ -8,14 +8,17 @@ export DRILL_SCRATCH="$T"
 export RESTIC_REPOSITORY="${RESTIC_REPOSITORY:-/mnt/nas-backup/secure-store}"
 export RESTIC_PASSWORD_FILE="${RESTIC_PASSWORD_FILE:-$HOME/.config/restic/password}"
 python3 - "$@" <<'PY'
-import datetime, json, os, pathlib, random, shutil, sqlite3, subprocess, sys, time
+import datetime, json, os, pathlib, random, re, shutil, sqlite3, subprocess, sys, time
 
 home = pathlib.Path(os.environ['HOME'])
 nas = pathlib.Path(os.getenv('BACKUP_ROOT', '/mnt/nas-backup'))
 tmp = pathlib.Path(os.environ['DRILL_SCRATCH'])
 state = pathlib.Path(os.getenv('BACKUP_DRILL_STATE', str(home / '.local/state/backup-drill/last.json')))
 task_copy = pathlib.Path(os.getenv('TASK_SNAPSHOT_PATH', str(home / '.local/share/task-backups'))) / 'taskchampion.sqlite3'
-layers = ['restic', 'home', 'dev', 'task', 'system', 'taskchampion']
+wip_mount = pathlib.Path(os.getenv('WIP_MIRROR_MOUNT', '/mnt/nvme-backup'))
+wip_root = wip_mount / os.getenv('WIP_MIRROR_DIR', 'wip')
+wip_uuid = os.getenv('WIP_MIRROR_UUID', 'd74106d0-1b12-4d65-873d-d69ed3a729e6')
+layers = ['restic', 'home', 'dev', 'task', 'system', 'taskchampion', 'wip']
 if len(sys.argv) == 3 and sys.argv[1] == '--layer' and sys.argv[2] in layers:
     selected = [sys.argv[2]]
 elif len(sys.argv) == 1:
@@ -225,18 +228,119 @@ def server_check():
         raise RuntimeError(f'task count differs: restored {restored}, live {live}, limit {delta}')
     return f'restored {restored} tasks from the server, live {live}'
 
-checks = {'restic': restic_check, 'home': lambda: mirror_check('home'), 'dev': lambda: mirror_check('dev'), 'task': task_check, 'system': system_check, 'taskchampion': server_check}
+class Skipped(Exception):
+    """A layer that is not installed yet: no result is recorded for it."""
+
+# Gate the NVMe WIP layer: enabled unit, the expected btrfs drive, both trees, active unit.
+def wip_state():
+    def quiet(*args):
+        try:
+            return subprocess.run(args, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, timeout=30)
+        except (OSError, subprocess.SubprocessError):
+            return None
+    enabled = quiet('systemctl', 'is-enabled', '--quiet', 'wip-mirror.service')
+    if not enabled or enabled.returncode:
+        return 'not-installed'
+    mount = quiet('findmnt', '-n', '-o', 'UUID,FSTYPE', '--mountpoint', str(wip_mount))
+    if not mount or mount.returncode or mount.stdout.split() != [wip_uuid, 'btrfs']:
+        return 'unavailable'
+    if not (wip_root / 'live').is_dir() or not (wip_root / 'versions').is_dir():
+        return 'incomplete'
+    active = quiet('systemctl', 'is-active', '--quiet', 'wip-mirror.service')
+    return 'ready' if active and active.returncode == 0 else 'inactive'
+
+# Restore five current copies and up to three prior versions from the WIP drive.
+# The drive keeps source modes on root-owned copies, so this user can only test
+# copies of readable files; the count of root-only copies skipped is reported.
+def wip_check():
+    gate = wip_state()
+    if gate == 'not-installed':
+        raise Skipped('wip-mirror.service not enabled')
+    if gate == 'unavailable':
+        raise RuntimeError(f'drive not mounted at {wip_mount} with the expected UUID')
+    if gate == 'incomplete':
+        raise RuntimeError('live or versions directory missing on the drive')
+    live_root, versions_root = wip_root / 'live', wip_root / 'versions'
+    cutoff = time.time() - 120
+    sample, private = [], 0
+    for root, dirs, files in os.walk(live_root, followlinks=False):
+        random.shuffle(dirs)
+        random.shuffle(files)
+        for file in files:
+            p = pathlib.Path(root) / file
+            source = pathlib.Path('/') / p.relative_to(live_root)
+            try:
+                if p.is_symlink() or not p.is_file() or source.is_symlink() or not source.is_file():
+                    continue
+                info = source.stat()
+                # A source edited since its copy, or in the last two minutes, is not comparable yet.
+                if info.st_mtime >= cutoff or info.st_mtime_ns != p.stat().st_mtime_ns:
+                    continue
+                if not os.access(p, os.R_OK):
+                    private += 1
+                    continue
+                if not os.access(source, os.R_OK):
+                    continue
+            except OSError:
+                continue
+            sample.append((source, p))
+            if len(sample) == 5:
+                break
+        if len(sample) == 5:
+            break
+    if len(sample) < 5:
+        raise RuntimeError(f'only {len(sample)} readable live copies match their source mtime; need 5 ({private} root-only skipped)')
+    for i, (source, p) in enumerate(sample):
+        compare(source, p, tmp / f'wip-live-{i}')
+    version_name = re.compile(r'^(.+)@(\d+)-[0-9a-f]+$')
+    picked, found = [], 0
+    for root, dirs, files in os.walk(versions_root, followlinks=False):
+        random.shuffle(dirs)
+        random.shuffle(files)
+        for file in files:
+            match = version_name.match(file)
+            p = pathlib.Path(root) / file
+            if not match or p.is_symlink() or not p.is_file():
+                continue
+            found += 1
+            if os.access(p, os.R_OK):
+                picked.append((p, match))
+                if len(picked) == 3:
+                    break
+        if len(picked) == 3:
+            break
+    if found and not picked:
+        raise RuntimeError(f'{found} prior versions, none readable by this user')
+    import filecmp
+    for i, (p, match) in enumerate(picked):
+        if int(match.group(2)) > time.time_ns() + 300 * 10**9:
+            raise RuntimeError('prior version timestamp is in the future')
+        if not os.path.lexists(live_root / p.parent.relative_to(versions_root) / match.group(1)):
+            raise RuntimeError('prior version has no current copy on the drive')
+        dest = tmp / f'wip-version-{i}'
+        shutil.copyfile(p, dest)
+        if not filecmp.cmp(p, dest, shallow=False):
+            raise RuntimeError('restored prior version differs from the drive copy')
+    versions = f'{len(picked)} prior versions restore intact' if picked else 'no prior versions yet'
+    return f'5 restored live files match; {versions}; {private} root-only copies skipped'
+
+checks = {'restic': restic_check, 'home': lambda: mirror_check('home'), 'dev': lambda: mirror_check('dev'), 'task': task_check, 'system': system_check, 'taskchampion': server_check, 'wip': wip_check}
 try:
     data = json.loads(state.read_text())
 except (OSError, ValueError):
     data = {}
 data.setdefault('layers', {})
-failed = False
+failed = ran = False
 for name in selected:
     start = time.monotonic()
     try:
         detail = checks[name]()
         ok = True
+    except Skipped as exc:
+        # Drop any earlier result so a removed layer cannot keep looking proven.
+        data['layers'].pop(name, None)
+        print(f'{name}: skipped: {exc}', flush=True)
+        continue
     except Exception as exc:
         detail = str(exc)
         ok = False
@@ -247,7 +351,10 @@ for name in selected:
     last_success = last_run if ok else previous.get('last_success', previous.get('last_run', 0) if previous.get('ok') is True else 0)
     data['layers'][name] = {'ok': ok, 'detail': detail, 'seconds': seconds, 'last_run': last_run, 'last_success': last_success}
     print(f"{name}: {'ok' if ok else 'FAIL'}: {detail} ({seconds}s)", file=sys.stdout if ok else sys.stderr, flush=True)
-data['last_run'] = int(time.time())
+    ran = True
+# A run that only skipped layers proves nothing, so it leaves the drill time alone.
+if ran:
+    data['last_run'] = int(time.time())
 state.parent.mkdir(parents=True, exist_ok=True)
 # Replacing a unique file in the same directory makes the result atomic.
 import tempfile
