@@ -24,9 +24,63 @@ EOF
     cat >"$bin/system76-power" <<EOF
 #!/usr/bin/env bash
 echo "system76-power \$*" >>"$log"
+if [[ \$# -eq 1 && \$1 == graphics ]]; then
+    echo "\${GRAPHICS:-nvidia}"
+fi
+exit 0
 EOF
     chmod +x "$bin/sudo" "$bin/system76-power"
     PATH="$bin:$PATH"
+}
+
+@test "login restores the battery profile for hybrid graphics" {
+    export GRAPHICS=hybrid
+    run "$script" login
+    [ "$status" -eq 0 ]
+    grep -qx 'system76-power profile battery' "$log"
+}
+
+@test "login leaves the profile alone for nvidia graphics" {
+    export GRAPHICS=nvidia
+    run "$script" login
+    [ "$status" -eq 0 ]
+    ! grep -q '^system76-power profile' "$log"
+}
+
+@test "login needs no input or sudo" {
+    export GRAPHICS=hybrid
+    run "$script" login </dev/null
+    [ "$status" -eq 0 ]
+    ! grep -q '^sudo ' "$log"
+}
+
+@test "login succeeds when system76-power fails" {
+    cat >"$bin/system76-power" <<'EOF'
+#!/usr/bin/env bash
+exit 1
+EOF
+    run "$script" login
+    [ "$status" -eq 0 ]
+}
+
+@test "login succeeds when setting the battery profile fails" {
+    cat >"$bin/system76-power" <<'EOF'
+#!/usr/bin/env bash
+if [[ $1 == graphics ]]; then
+    echo hybrid
+    exit 0
+fi
+exit 1
+EOF
+    run "$script" login
+    [ "$status" -eq 0 ]
+}
+
+@test "login succeeds when system76-power is missing" {
+    rm "$bin/system76-power"
+    ln -s "$(command -v bash)" "$bin/bash"
+    run env PATH="$bin" "$script" login
+    [ "$status" -eq 0 ]
 }
 
 @test "speak sets the lid to suspend" {

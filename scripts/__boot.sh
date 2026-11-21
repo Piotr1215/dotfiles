@@ -79,6 +79,9 @@ start_task_session() {
 # keeps the previous desk's size.
 /home/decoder/dev/dotfiles/scripts/__alacritty_font_scale.sh 2>/dev/null || true
 
+# Speak's battery profile does not survive the reboot speak needs.
+/home/decoder/dev/dotfiles/scripts/__set_graphics_mode.sh login >/dev/null 2>&1 || true
+
 if [[ " ${weekdays[*]} " =~ $current_day ]] && [[ "$timeoff" == 0 ]]; then
 	rm -f /tmp/timeoff_mode
 	xdg-settings set default-web-browser google-chrome.desktop 2>/dev/null

@@ -28,6 +28,7 @@ usage: $(basename "$0") <base|speak> [--reboot] [--no-shutdown] [--yes]
 
   base   nvidia + balanced, lid ignored   (powered: home, hotel, anywhere on AC)
   speak  hybrid  + battery, lid suspends  (presenting, on battery or plugged in)
+  login  restore the battery profile when graphics is hybrid
 
   --reboot       reboot instead of shutting down
   --no-shutdown  apply settings and leave the machine on
@@ -93,7 +94,23 @@ mode_speak() {
   # extend here: e.g., dim brightness, mute audio, pre-pull demo images.
 }
 
+# The system76-power daemon resets the profile to balanced on start, so restore
+# battery after the boot that applies speak's hybrid graphics.
+mode_login() {
+  local graphics
+  graphics=$(system76-power graphics 2>/dev/null) || return 0
+  if [[ "$graphics" == hybrid ]]; then
+    apply_profile battery || true
+  fi
+  return 0
+}
+
 main() {
+  if [[ "${1:-}" == login ]]; then
+    mode_login
+    return 0
+  fi
+
   local mode=""
   local after="poweroff"
   local skip_confirm=0
