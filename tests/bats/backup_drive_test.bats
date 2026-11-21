@@ -43,6 +43,7 @@ if [[ $# == 7 && $1 == -n && $2 == btrfs && $3 == subvolume && $4 == snapshot &&
   [[ $src == "$drive/"* && $dst == "$drive/"* ]] || exit 1
   [[ ${FAIL_SNAPSHOT:-} == "$(basename "$6")" ]] && exit 1
   mkdir -p -- "$dst"
+  cp -a -- "$src/." "$dst/"
 elif [[ $# == 5 && $1 == -n && $2 == btrfs && $3 == subvolume && $4 == delete ]]; then
   target=$(realpath -m -- "$5") || exit 1
   [[ $target == "$drive/snapshots/"* ]] || exit 1
@@ -88,6 +89,27 @@ STUB
     [[ "$name" =~ ^${kind}@[0-9]{8}T[0-9]{6}$ ]]
   done
   [[ "$(cat "$DRIVE_STATE_DIR/last-success")" =~ ^[0-9]+$ ]]
+}
+
+@test "media snapshots only on change, so the kept ones are distinct states" {
+  media_snaps() { find "$DRIVE_MOUNT/snapshots" -maxdepth 1 -type d -name 'media@*' | wc -l; }
+  run bash "$DRIVE_SCRIPT"
+  [ "$status" -eq 0 ]
+  [ "$(media_snaps)" -eq 1 ]
+  sleep 1
+  run bash "$DRIVE_SCRIPT"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'Media unchanged since its newest snapshot'* ]]
+  [ "$(media_snaps)" -eq 1 ]
+  [ "$(find "$DRIVE_MOUNT/snapshots" -maxdepth 1 -type d -name 'restic@*' | wc -l)" -eq 2 ]
+  rm "$BATS_TEST_TMPDIR/videos/two"
+  sleep 1
+  run bash "$DRIVE_SCRIPT"
+  [ "$status" -eq 0 ]
+  [ "$(media_snaps)" -eq 2 ]
+  # The older snapshot still holds the deleted file.
+  oldest=$(find "$DRIVE_MOUNT/snapshots" -maxdepth 1 -type d -name 'media@*' | sort | head -1)
+  [ -f "$oldest/videos/two" ]
 }
 
 @test "snapshot retention keeps the newest configured number of each kind" {

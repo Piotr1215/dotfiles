@@ -54,6 +54,22 @@ mirror_media() {
 	log INFO "Media backup complete: $src"
 }
 
+# Succeed when the media mirror differs from its newest snapshot, or has none.
+# Media snapshots are taken only on change, so the newest SNAPSHOT_KEEP are that
+# many distinct states however old, not that many days (Piotr, 21 Nov: "2 or 3
+# good states", no months of history). Comparing with the snapshot itself also
+# catches a change whose snapshot failed or was skipped on an earlier run.
+media_changed() {
+	local out
+	local -a snapshots=()
+	shopt -s nullglob
+	snapshots=("$DRIVE_MOUNT/snapshots/media"@*)
+	shopt -u nullglob
+	((${#snapshots[@]})) || return 0
+	out=$(rsync -a --delete --dry-run --itemize-changes "$DRIVE_MOUNT/media/" "${snapshots[-1]}/" 2>/dev/null) || return 0
+	[[ -n "$out" ]]
+}
+
 # Create a read-only snapshot and retain the newest configured number.
 snapshot_subvolume() {
 	local sub="$1" snapshot_dir="$DRIVE_MOUNT/snapshots" path count remove i failed=0
@@ -184,7 +200,11 @@ else
 	restic_failed=1
 fi
 if ((snapshot_config_ok && media_succeeded && !media_failed)); then
-	snapshot_subvolume media || record_failure "media snapshot"
+	if media_changed; then
+		snapshot_subvolume media || record_failure "media snapshot"
+	else
+		log INFO "Media unchanged since its newest snapshot; no new snapshot"
+	fi
 fi
 if ((snapshot_config_ok && !restic_failed)); then
 	snapshot_subvolume restic || record_failure "restic snapshot"

@@ -4,7 +4,7 @@
 # Everything not listed here is backed up, so a new folder in ~ is covered by
 # default. The run also skips any single file over 1G; the drive's media mirror
 # (scripts/__backup_drive.sh) holds ~/Videos, ~/models, ~/Downloads and ~/music
-# whole, large files included, with 3 daily read-only snapshots.
+# whole, large files included, with read-only snapshots of its 3 last distinct states.
 
 # own layers: GitHub, the NAS mirror and the uncommitted-work capture
 ${BACKUP_SOURCE_HOME}/dev
@@ -27,6 +27,10 @@ ${BACKUP_SOURCE_HOME}/Downloads
 ${BACKUP_SOURCE_HOME}/.config/google-chrome
 ${BACKUP_SOURCE_HOME}/.config/google-chrome-canary
 ${BACKUP_SOURCE_HOME}/.var/app/io.gitlab.librewolf-community
+
+# drive media mirror with snapshots of its 3 last distinct states, and the NAS mirror; no restic history (Piotr, 21 Nov)
+${BACKUP_SOURCE_HOME}/music
+${BACKUP_SOURCE_HOME}/Music
 
 # cache, rebuilt on use
 ${BACKUP_SOURCE_HOME}/.cache
