@@ -20,6 +20,9 @@ ctx="${MCLAUDE_CTX:-49152}"
 idle="${MCLAUDE_IDLE:-600}"
 need_mib="${MCLAUDE_NEED_MIB:-10600}"
 watch_interval="${MCLAUDE_WATCH_INTERVAL:-30}"
+# The chat template defaults to high reasoning effort (0.9); most of a reply's
+# time was hidden reasoning. Low halved typical replies (7 s against 15 s).
+effort="${MCLAUDE_EFFORT:-low}"
 state="${MCLAUDE_STATE:-${XDG_STATE_HOME:-$HOME/.local/state}/mclaude}"
 config="${MCLAUDE_CONFIG:-${XDG_CONFIG_HOME:-$HOME/.config}/mclaude}"
 aichat="${MCLAUDE_AICHAT:-$HOME/.cargo/bin/aichat}"
@@ -127,7 +130,7 @@ ensure_server() {
     --host 127.0.0.1 --port "$port" -ngl 99 \
     -ot 'blk\.([0-5]|1[89]|2[0-3])\.ffn_.*_exps\.=CPU' \
     -fa on -c "$ctx" -ub 128 -ctk q8_0 -ctv q8_0 -np 1 --jinja \
-    --temp 1.0 --top-p 1.0 --top-k 0 --min-p 0.0 >"$state/server.log" 2>&1 < /dev/null &
+    --chat-template-kwargs "{\"reasoning_effort\":\"$effort\"}" --temp 1.0 --top-p 1.0 --top-k 0 --min-p 0.0 >"$state/server.log" 2>&1 < /dev/null &
   pid=$!
   printf '%s\n' "$pid" > "$state/server.pid"
   for ((i = 0; i < 90; i++)); do
