@@ -3,6 +3,7 @@
 import queue
 import sys
 import threading
+from contextlib import contextmanager, nullcontext
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -48,7 +49,7 @@ def test_loss_during_catch_up_causes_a_rescan_before_event_replay(tmp_path):
 
     drive = SimpleNamespace(identity=lambda: 123)
     mirror = SimpleNamespace(catch_up=catch_up, sync=sync)
-    daemon.serve_drive(inbox, drive, 123, mirror)
+    daemon.serve_drive(inbox, drive, 123, lambda: nullcontext(mirror))
 
     assert len(scans) == 2
     assert mirrored == [path]
@@ -60,10 +61,30 @@ def test_drive_replacement_preserves_events_for_new_mount(tmp_path):
     inbox.offer(path)
     drive = SimpleNamespace(identity=lambda: 456)
     mirror = Mock()
-    daemon.serve_drive(inbox, drive, 123, mirror)
+    daemon.serve_drive(inbox, drive, 123, lambda: nullcontext(mirror))
 
     mirror.sync.assert_not_called()
     assert inbox.paths.get_nowait() == path
+
+
+def test_target_is_closed_between_catch_up_and_live_copy(tmp_path):
+    inbox = daemon.Inbox(threading.Event())
+    inbox.offer(tmp_path / "file")
+    events = []
+
+    def sync(_):
+        events.append("copy")
+        inbox.stopped.set()
+
+    @contextmanager
+    def connect():
+        events.append("open")
+        yield SimpleNamespace(catch_up=lambda: events.append("catch up"), sync=sync)
+        events.append("close")
+
+    drive = SimpleNamespace(identity=lambda: 123)
+    daemon.serve_drive(inbox, drive, 123, connect)
+    assert events == ["open", "catch up", "close", "open", "copy", "close"]
 
 
 @pytest.mark.parametrize("directory", ["", ".", "..", "../wip", "/wip"])

@@ -5,6 +5,7 @@ import argparse
 from contextlib import contextmanager
 from datetime import datetime
 import errno
+from functools import partial
 import logging
 import os
 from pathlib import Path
@@ -159,10 +160,18 @@ def alert_missing(source_user: str, ntfy: str | None):
         logging.warning("could not publish mirror notification: %s", error)
 
 
-def serve_drive(inbox: Inbox, drive: Drive, identity: int, mirror: Mirror):
+@contextmanager
+def open_mirror(drive: Drive, identity: int, roots: tuple[Path, ...], source_user: str):
+    # Pin the target only while working. An idle mirror must permit a clean eject.
+    with drive.open(identity) as target:
+        yield Mirror(target, roots, source_user=source_user)
+
+
+def serve_drive(inbox: Inbox, drive: Drive, identity: int, connect):
     inbox.loss.clear()
     logging.info("catching up WIP mirror")
-    mirror.catch_up()
+    with connect() as mirror:
+        mirror.catch_up()
     logging.info("WIP mirror catch-up complete")
     next_probe = 0.0
     while not inbox.stopped.is_set():
@@ -176,13 +185,15 @@ def serve_drive(inbox: Inbox, drive: Drive, identity: int, mirror: Mirror):
             # another scan. Events already in the inbox still get replayed.
             inbox.loss.clear()
             logging.warning("fanotify event loss, rescanning WIP mirror")
-            mirror.catch_up()
+            with connect() as mirror:
+                mirror.catch_up()
         try:
             path = inbox.paths.get(timeout=POLL_SECONDS)
         except queue.Empty:
             continue
         try:
-            mirror.sync(path)
+            with connect() as mirror:
+                mirror.sync(path)
         except OSError as error:
             if error.errno in TARGET_IO_ERRORS:
                 raise
@@ -216,10 +227,10 @@ def run(args):
                         reported = True
                     stopped.wait(POLL_SECONDS)
                     continue
+                reported = False
                 try:
-                    with drive.open(identity) as target:
-                        reported = False
-                        serve_drive(inbox, drive, identity, Mirror(target, roots, source_user=args.source_user))
+                    connect = partial(open_mirror, drive, identity, roots, args.source_user)
+                    serve_drive(inbox, drive, identity, connect)
                 except OSError as error:
                     if error.errno not in TARGET_IO_ERRORS or drive.identity() == identity:
                         raise
