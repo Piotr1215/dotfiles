@@ -1,4 +1,3 @@
 # name	status	reason
 # Entries the whole-home restic run (--tag home) misses and that no other layer holds.
 # Anything not excluded in .backup_restic_excludes is covered, so most of ~ needs no line here.
-Videos	later	4TB drive from 17 Nov; restic home holds it until then, files over 1G excepted

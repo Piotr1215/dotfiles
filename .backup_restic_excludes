@@ -2,8 +2,9 @@
 # restic expands ${BACKUP_SOURCE_HOME}. Each comment line gives the reason for
 # the patterns under it; scripts/__backup_coverage.sh reports that reason.
 # Everything not listed here is backed up, so a new folder in ~ is covered by
-# default. The run also skips any single file over 1G (the 4TB drive takes those
-# from 17 Nov).
+# default. The run also skips any single file over 1G; the drive's media mirror
+# (scripts/__backup_drive.sh) holds ~/Videos, ~/models, ~/Downloads and ~/music
+# whole, large files included, with 3 daily read-only snapshots.
 
 # own layers: GitHub, the NAS mirror and the uncommitted-work capture
 ${BACKUP_SOURCE_HOME}/dev
@@ -19,7 +20,7 @@ ${BACKUP_SOURCE_HOME}/.claude-work
 ${BACKUP_SOURCE_HOME}/.codex
 ${BACKUP_SOURCE_HOME}/.codex-work
 
-# own restic run with size and installer filters
+# own restic run with size and installer filters; whole on the drive's media mirror
 ${BACKUP_SOURCE_HOME}/Downloads
 
 # own restic run with consistent database copies
@@ -27,7 +28,7 @@ ${BACKUP_SOURCE_HOME}/.config/google-chrome
 ${BACKUP_SOURCE_HOME}/.config/google-chrome-canary
 ${BACKUP_SOURCE_HOME}/.var/app/io.gitlab.librewolf-community
 
-# NAS mirror; the 4TB drive takes it from 17 Nov
+# NAS mirror, and the drive's media mirror with 3 daily snapshots
 ${BACKUP_SOURCE_HOME}/music
 ${BACKUP_SOURCE_HOME}/Music
 

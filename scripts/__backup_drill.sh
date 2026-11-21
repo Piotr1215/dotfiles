@@ -20,7 +20,7 @@ drive_uuid = os.getenv('DRIVE_UUID', 'd74106d0-1b12-4d65-873d-d69ed3a729e6')
 drive_stamp = pathlib.Path(os.getenv('DRIVE_STATE_DIR', str(home / '.local/state/backup-drive'))) / 'last-success'
 drive_repo = drive_mount / 'restic/secure-store'
 wip_root = drive_mount / os.getenv('WIP_MIRROR_DIR', 'wip')
-media_sources = [pathlib.Path(p) for p in os.getenv('MEDIA_SOURCES', f'{home}/Videos:{home}/models:{home}/Downloads').split(':') if p]
+media_sources = [pathlib.Path(p) for p in os.getenv('MEDIA_SOURCES', f'{home}/Videos:{home}/models:{home}/Downloads:{home}/music').split(':') if p]
 layers = ['restic', 'home', 'dev', 'task', 'system', 'taskchampion', 'wip', 'media', 'drive-restic']
 if len(sys.argv) == 3 and sys.argv[1] == '--layer' and sys.argv[2] in layers:
     selected = [sys.argv[2]]
