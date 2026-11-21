@@ -7,6 +7,7 @@ setup() {
     bin="$BATS_TEST_TMPDIR/bin"
     log="$BATS_TEST_TMPDIR/log"
     export LOGIND_CONF="$BATS_TEST_TMPDIR/logind.conf"
+    export XDG_RUNTIME_DIR="$BATS_TEST_TMPDIR"
     mkdir -p "$bin"
     cat >"$LOGIND_CONF" <<'EOF'
 [Login]
@@ -38,13 +39,16 @@ EOF
     run "$script" login
     [ "$status" -eq 0 ]
     grep -qx 'system76-power profile battery' "$log"
+    [ -f "$XDG_RUNTIME_DIR/speak-mode" ]
 }
 
 @test "login leaves the profile alone for nvidia graphics" {
     export GRAPHICS=nvidia
+    touch "$XDG_RUNTIME_DIR/speak-mode"
     run "$script" login
     [ "$status" -eq 0 ]
     ! grep -q '^system76-power profile' "$log"
+    [ ! -e "$XDG_RUNTIME_DIR/speak-mode" ]
 }
 
 @test "login needs no input or sudo" {
@@ -74,6 +78,7 @@ exit 1
 EOF
     run "$script" login
     [ "$status" -eq 0 ]
+    [ -f "$XDG_RUNTIME_DIR/speak-mode" ]
 }
 
 @test "login succeeds when system76-power is missing" {

@@ -97,10 +97,13 @@ mode_speak() {
 # The system76-power daemon resets the profile to balanced on start, so restore
 # battery after the boot that applies speak's hybrid graphics.
 mode_login() {
-  local graphics
+  local graphics speak_flag="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/speak-mode"
   graphics=$(system76-power graphics 2>/dev/null) || return 0
   if [[ "$graphics" == hybrid ]]; then
+    touch "$speak_flag" || true
     apply_profile battery || true
+  else
+    rm -f "$speak_flag" || true
   fi
   return 0
 }

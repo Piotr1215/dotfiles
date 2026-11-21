@@ -13,8 +13,33 @@ setup() {
   mkdir -p "$BIN"
 
   export CRON_STATE_DIR="${WORK}/state"
+  export XDG_RUNTIME_DIR="$WORK"
+  export INGEST_PAUSE_FLAG="$WORK/ingest-paused"
   STATUS="${CRON_STATE_DIR}/job.json"
   LOG="${CRON_STATE_DIR}/job.log"
+}
+
+@test "speak mode skips both jobs and preserves their last real state" {
+  touch "$XDG_RUNTIME_DIR/speak-mode"
+  mkdir -p "$CRON_STATE_DIR"
+  job="$(job_script speak.sh '#!/usr/bin/env bash' "touch \"${WORK}/ran\"")"
+  for name in __r2r_repo_sha_sweep __sync_with_notify; do
+    echo '{"ts":1,"state":"error"}' >"$CRON_STATE_DIR/$name.json"
+    run "$CRON_RUN" "$name" -- "$job"
+    [ "$status" -eq 0 ]
+    [ ! -e "$WORK/ran" ]
+    [ "$(cat "$CRON_STATE_DIR/$name.json")" = '{"ts":1,"state":"error"}' ]
+    grep -q 'skipped: speak mode' "$CRON_STATE_DIR/$name.log"
+  done
+}
+
+@test "speak mode leaves unrelated jobs running" {
+  touch "$XDG_RUNTIME_DIR/speak-mode"
+  job="$(job_script other.sh '#!/usr/bin/env bash' "touch \"${WORK}/ran\"")"
+  run "$CRON_RUN" job -- "$job"
+  [ "$status" -eq 0 ]
+  [ -e "$WORK/ran" ]
+  [ "$(state_of)" = no-hit ]
 }
 
 teardown() {
@@ -281,6 +306,16 @@ EOF
   [ ! -e "${WORK}/ran" ]
   [ "$(jq -r '.ts' "${CRON_STATE_DIR}/__linear_feed.json")" = "1" ]
   grep -q 'skipped: ingest paused since 2026-10-23T19:30:00+02:00' "${CRON_STATE_DIR}/__linear_feed.log"
+}
+
+@test "the ingest toggle still skips sync when speak mode is off" {
+  touch "$INGEST_PAUSE_FLAG"
+  job="$(job_script sync.sh '#!/usr/bin/env bash' "touch \"${WORK}/ran\"")"
+  run "$CRON_RUN" __sync_with_notify -- "$job"
+  [ "$status" -eq 0 ]
+  [ ! -e "$WORK/ran" ]
+  [ ! -e "$CRON_STATE_DIR/__sync_with_notify.json" ]
+  grep -q 'skipped: ingest paused' "$CRON_STATE_DIR/__sync_with_notify.log"
 }
 
 @test "the ingest pause leaves jobs outside the feed list running" {

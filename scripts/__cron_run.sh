@@ -124,6 +124,10 @@ ingest_lib="${INGEST_PAUSE_LIB:-$HOME/.claude/scripts/__lib_ingest_pause.sh}"
 if [ -r "$ingest_lib" ]; then
     # shellcheck source=/dev/null
     . "$ingest_lib"
+    if speak_paused_job "$job"; then
+        wlog INFO "skipped: speak mode"
+        exit 0
+    fi
     if ingest_paused_job "$job"; then
         wlog INFO "skipped: ingest paused since $(ingest_since)"
         exit 0
