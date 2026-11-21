@@ -32,6 +32,10 @@ QUEUE_LIMIT = 65536
 TARGET_IO_ERRORS = {errno.EIO, errno.ENODEV, errno.ENOSPC, errno.EROFS, errno.ESTALE}
 
 
+class Stopped(Exception):
+    """SIGTERM arrived during a scan."""
+
+
 class Drive:
     """Identify the destination by UUID and pin the verified directory."""
 
@@ -212,6 +216,9 @@ def rescan(inbox: Inbox, connect):
         # save does not wait for the whole scan.
         def between():
             nonlocal busy
+            if inbox.stopped.is_set():
+                # A scan can take minutes; systemd kills a stop after 90 s.
+                raise Stopped
             if busy or not inbox.pending:
                 return
             busy = True
@@ -276,6 +283,8 @@ def run(args):
                 try:
                     connect = partial(open_mirror, drive, identity, roots, args.source_user)
                     serve_drive(inbox, drive, identity, connect)
+                except Stopped:
+                    break
                 except OSError as error:
                     if error.errno not in TARGET_IO_ERRORS or drive.identity() == identity:
                         raise

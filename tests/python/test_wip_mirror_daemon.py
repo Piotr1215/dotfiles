@@ -105,6 +105,24 @@ def test_events_are_copied_between_entries_of_a_rescan(tmp_path):
     daemon.serve_drive(inbox, drive, 123, lambda: nullcontext(mirror))
     assert events == ["scan start", "copy saved", "scan end"]
 
+
+def test_a_stop_ends_a_scan_at_the_next_entry(tmp_path):
+    inbox = daemon.Inbox(threading.Event())
+    scanned = []
+
+    def catch_up(between=None):
+        for name in ("one", "two", "three"):
+            scanned.append(name)
+            if name == "one":
+                inbox.stopped.set()
+            between()
+
+    drive = SimpleNamespace(identity=lambda: 123)
+    mirror = SimpleNamespace(catch_up=catch_up, sync=Mock())
+    with pytest.raises(daemon.Stopped):
+        daemon.serve_drive(inbox, drive, 123, lambda: nullcontext(mirror))
+    assert scanned == ["one"]
+
 @pytest.mark.parametrize("directory", ["", ".", "..", "../wip", "/wip"])
 def test_drive_rejects_a_destination_outside_its_mount(tmp_path, directory):
     with pytest.raises(ValueError, match="single destination directory name"):
