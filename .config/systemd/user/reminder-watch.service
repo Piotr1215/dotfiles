@@ -5,7 +5,7 @@ After=graphical-session.target notification-logger.service
 
 [Service]
 Type=simple
-ExecStart=%h/dev/packets/scripts/__reminder.sh watch
+ExecStart=%h/.local/bin/__reminder.sh watch
 Restart=always
 RestartSec=2
 Nice=10

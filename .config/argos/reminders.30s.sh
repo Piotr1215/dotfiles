@@ -17,7 +17,7 @@ if [ -n "${REMINDER_HELPER:-}" ]; then
 	helper="$REMINDER_HELPER"
 else
 	# The engine lives in its own repo since 21 Nov 2026.
-	helper="$HOME/dev/packets/scripts/__reminder.sh"
+	helper="$HOME/.local/bin/__reminder.sh"
 fi
 
 if [ ! -x "$helper" ]; then
