@@ -83,8 +83,8 @@ mode_base() {
 # Mode: presenting — enforce hybrid graphics + battery profile.
 # Hybrid is mandatory: HDMI is wired to the dGPU on serw14, and presenting
 # always involves a projector/beamer over HDMI. Do NOT switch this to
-# `integrated` — that kills HDMI output. Pay the ~5W dGPU PRIME idle floor
-# as the cost of having HDMI work on battery.
+# `integrated` — that kills HDMI output. The dGPU should sleep when no display
+# is connected to it.
 # Battery profile caps CPU max_perf_pct and disables turbo — saves 5–10W vs
 # balanced, the single biggest lever toward the 3h target. If you need turbo
 # for a specific moment, run `perf` to override.
@@ -109,9 +109,41 @@ mode_login() {
   return 0
 }
 
+# Report an awake NVIDIA display controller only when all its outputs are disconnected.
+check_nvidia_runtime() {
+  local pci connector pci_path connector_path vendor class runtime status
+  local found all_disconnected
+  for pci in "${SYSFS_PCI:-/sys/bus/pci/devices}"/*; do
+    [[ -r "$pci/vendor" && -r "$pci/class" && -r "$pci/power/runtime_status" ]] || continue
+    read -r vendor < "$pci/vendor" || continue
+    read -r class < "$pci/class" || continue
+    [[ "$vendor" == 0x10de && "$class" == 0x03???? ]] || continue
+    read -r runtime < "$pci/power/runtime_status" || continue
+    [[ "$runtime" != suspended ]] || continue
+    pci_path=$(readlink -e "$pci") || continue
+    found=0; all_disconnected=1
+    for connector in "${SYSFS_DRM:-/sys/class/drm}"/card*-*; do
+      [[ -e "$connector/device" ]] || continue
+      connector_path=$(readlink -e "$connector/device") || continue
+      if [[ "$connector_path" != "$pci_path" ]]; then
+        connector_path=$(readlink -e "$connector/device/device") || continue
+        [[ "$connector_path" == "$pci_path" ]] || continue
+      fi
+      found=1
+      if [[ ! -r "$connector/status" ]] || ! read -r status < "$connector/status" || [[ "$status" != disconnected ]]; then
+        all_disconnected=0
+      fi
+    done
+    if (( found && all_disconnected )); then
+      printf '%s\n' "NVIDIA GPU awake (runtime_status $runtime) with no display on it"
+    fi
+  done
+  return 0
+}
+
 # Report every setting that disagrees with the active graphics mode.
 mode_check() {
-  local graphics profile profile_output expected_profile expected_lid mode key line value
+  local graphics profile profile_output expected_profile expected_lid mode key line value gpu_mismatch
   local lid="missing" lid_external="missing"
   local speak_flag="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/speak-mode"
   local -a wrong=()
@@ -152,6 +184,11 @@ mode_check() {
     fi
     [[ "$lid" == "$expected_lid" ]] || wrong+=("HandleLidSwitch=$lid (expected $expected_lid)")
     [[ "$lid_external" == "$expected_lid" ]] || wrong+=("HandleLidSwitchExternalPower=$lid_external (expected $expected_lid)")
+    if [[ "$mode" == speak ]]; then
+      while IFS= read -r gpu_mismatch; do
+        [[ -z "$gpu_mismatch" ]] || wrong+=("$gpu_mismatch")
+      done < <(check_nvidia_runtime)
+    fi
   elif [[ "$profile_output" == unavailable ]]; then
     wrong+=("profile=unavailable")
   fi

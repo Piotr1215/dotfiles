@@ -8,7 +8,27 @@ setup() {
     log="$BATS_TEST_TMPDIR/log"
     export LOGIND_CONF="$BATS_TEST_TMPDIR/logind.conf"
     export XDG_RUNTIME_DIR="$BATS_TEST_TMPDIR"
-    mkdir -p "$bin"
+    export SYSFS_PCI="$BATS_TEST_TMPDIR/sys/bus/pci/devices"
+    export SYSFS_DRM="$BATS_TEST_TMPDIR/sys/class/drm"
+    gpu="$BATS_TEST_TMPDIR/sys/devices/0000:02:00.0"
+    igpu="$BATS_TEST_TMPDIR/sys/devices/0000:00:02.0"
+    mkdir -p "$bin" "$SYSFS_PCI" "$SYSFS_DRM" "$gpu/power" "$gpu/drm/card7" "$igpu/drm/card0"
+    printf '0x10de\n' > "$gpu/vendor"
+    printf '0x030000\n' > "$gpu/class"
+    printf 'suspended\n' > "$gpu/power/runtime_status"
+    ln -s "$gpu" "$SYSFS_PCI/0000:02:00.0"
+    ln -s "$gpu" "$gpu/drm/card7/device"
+    ln -s "$igpu" "$igpu/drm/card0/device"
+    for name in card7-HDMI-A-1 card7-eDP-2; do
+        mkdir -p "$gpu/drm/card7/$name"
+        ln -s "$gpu/drm/card7" "$gpu/drm/card7/$name/device"
+        ln -s "$gpu/drm/card7/$name" "$SYSFS_DRM/$name"
+        printf 'disconnected\n' > "$SYSFS_DRM/$name/status"
+    done
+    mkdir -p "$igpu/drm/card0/card0-eDP-1"
+    ln -s "$igpu/drm/card0" "$igpu/drm/card0/card0-eDP-1/device"
+    ln -s "$igpu/drm/card0/card0-eDP-1" "$SYSFS_DRM/card0-eDP-1"
+    printf 'connected\n' > "$SYSFS_DRM/card0-eDP-1/status"
     cat >"$LOGIND_CONF" <<'EOF'
 [Login]
 #KillUserProcesses=no
@@ -34,6 +54,45 @@ exit 0
 EOF
     chmod +x "$bin/sudo" "$bin/system76-power"
     PATH="$bin:$PATH"
+}
+
+@test "check reports an awake NVIDIA GPU with all its outputs disconnected" {
+    export GRAPHICS=hybrid PROFILE=Battery
+    touch "$XDG_RUNTIME_DIR/speak-mode"
+    sed -i 's/=ignore/=suspend/g' "$LOGIND_CONF"
+    printf 'active\n' > "$gpu/power/runtime_status"
+    run "$script" check
+    [ "$status" -eq 1 ]
+    [ "$output" = 'mode speak mismatch: NVIDIA GPU awake (runtime_status active) with no display on it' ]
+}
+
+@test "check accepts an awake NVIDIA GPU with HDMI connected in speak mode" {
+    export GRAPHICS=hybrid PROFILE=Battery
+    touch "$XDG_RUNTIME_DIR/speak-mode"
+    sed -i 's/=ignore/=suspend/g' "$LOGIND_CONF"
+    printf 'active\n' > "$gpu/power/runtime_status"
+    printf 'connected\n' > "$SYSFS_DRM/card7-HDMI-A-1/status"
+    run "$script" check
+    [ "$status" -eq 0 ]
+    [ "$output" = 'mode speak ok' ]
+}
+
+@test "check accepts an awake NVIDIA GPU in base mode" {
+    printf 'active\n' > "$gpu/power/runtime_status"
+    run "$script" check
+    [ "$status" -eq 0 ]
+    [ "$output" = 'mode base ok' ]
+}
+
+@test "check does not claim every output is disconnected when status is unknown" {
+    export GRAPHICS=hybrid PROFILE=Battery
+    touch "$XDG_RUNTIME_DIR/speak-mode"
+    sed -i 's/=ignore/=suspend/g' "$LOGIND_CONF"
+    printf 'active\n' > "$gpu/power/runtime_status"
+    printf 'unknown\n' > "$SYSFS_DRM/card7-HDMI-A-1/status"
+    run "$script" check
+    [ "$status" -eq 0 ]
+    [ "$output" = 'mode speak ok' ]
 }
 
 @test "check accepts consistent speak mode without sudo" {
