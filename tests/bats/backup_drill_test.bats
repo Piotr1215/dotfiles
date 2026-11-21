@@ -2,7 +2,11 @@
 
 # Prepare an isolated home, NAS mirror, SQLite DB, and restic stub.
 setup() {
+  local test_fd
+  test_fd=$(command -v fd || true)
   export HOME="$BATS_TEST_TMPDIR/home" BACKUP_ROOT="$BATS_TEST_TMPDIR/nas" TMPDIR="$BATS_TEST_TMPDIR"
+  export RESTIC_REPOSITORY="$BATS_TEST_TMPDIR/restic-repo" RESTIC_PASSWORD_FILE="$BATS_TEST_TMPDIR/restic-password"
+  export BACKUP_DRILL_STATE="$HOME/.local/state/backup-drill/last.json" TASK_SNAPSHOT_PATH="$HOME/.local/share/task-backups" WIP_MIRROR_DIR=wip
   export PATH="$BATS_TEST_TMPDIR/bin:$PATH"
   export DRILL_SCRIPT="$BATS_TEST_DIRNAME/../../scripts/__backup_drill.sh"
   mkdir -p "$HOME/.local/state" "$HOME/.local/share/task-backups" "$HOME/.task" "$HOME/dev" "$BACKUP_ROOT/home" "$BACKUP_ROOT/dev" "$BACKUP_ROOT/taskwarrior-mirror" "$BACKUP_ROOT/system-backup/etc" "$BATS_TEST_TMPDIR/bin"
@@ -59,20 +63,40 @@ STUB
 #!/usr/bin/env python3
 import json, os, pathlib, shutil, sys
 h=pathlib.Path(os.environ['HOME']); a=sys.argv[1:]
+assert os.environ.get('RESTIC_REPOSITORY') == os.environ['BATS_TEST_TMPDIR']+'/restic-repo'
+assert os.environ.get('RESTIC_PASSWORD_FILE') == os.environ['BATS_TEST_TMPDIR']+'/restic-password'
 with open(os.environ['BATS_TEST_TMPDIR']+'/restic-calls','a') as f: f.write(' '.join(a)+'\n')
 while a and a[0] in ('-r','--retry-lock'): a=a[2:]
 if a[0]=='check': sys.exit(int(os.environ.get('RESTIC_CHECK_FAIL','0')))
 if a[0]=='snapshots':
- print(json.dumps([{'id':'test','time':'2099-01-01T00:00:00Z','paths':[str(h/'.local/share/task-backups')]}]))
+ fixture=pathlib.Path(os.environ['BATS_TEST_TMPDIR'])/'snapshots.json'
+ if fixture.exists(): print(fixture.read_text(),end='')
+ else: print(json.dumps([{'id':'test','time':'2099-01-01T00:00:00Z','paths':[str(h/'.local/share/task-backups')]}]))
 elif a[0]=='ls':
  if '--recursive' in a:
   for i in range(6): print(json.dumps({'type':'file','path':str(h/f'fixture{i}'),'size':10}))
- else: print(json.dumps({'type':'file','path':str(h/'.local/share/task-backups/taskchampion.sqlite3')}))
+ else:
+  fixture=pathlib.Path(os.environ['BATS_TEST_TMPDIR'])/('restic-'+a[a.index('--json')+1]+'.jsonl')
+  if fixture.exists(): print(fixture.read_text(),end='')
+  else: print(json.dumps({'type':'file','path':str(h/'.local/share/task-backups/taskchampion.sqlite3')}))
 elif a[0]=='restore':
  p=pathlib.Path(a[a.index('--include')+1]); target=pathlib.Path(a[a.index('--target')+1])/str(p).lstrip('/'); target.parent.mkdir(parents=True,exist_ok=True); shutil.copyfile(p,target)
 else: sys.exit(1)
 STUB
   chmod +x "$BATS_TEST_TMPDIR/bin/restic"
+  # Run fd only on the fixture home and record that the real search ran.
+  if [[ -n "$test_fd" ]]; then
+    export DRILL_TEST_FD="$test_fd"
+    cat > "$BATS_TEST_TMPDIR/bin/fd" <<'STUB'
+#!/usr/bin/env bash
+[[ ${!#} == "$HOME" ]] || exit 1
+printf '%s\n' "$*" > "$BATS_TEST_TMPDIR/fd-calls"
+exec "$DRILL_TEST_FD" "$@"
+STUB
+    chmod +x "$BATS_TEST_TMPDIR/bin/fd"
+  fi
+  printf '#!/usr/bin/env bash\nexit 1\n' > "$BATS_TEST_TMPDIR/bin/pgrep"
+  chmod +x "$BATS_TEST_TMPDIR/bin/pgrep"
   # The drive layers: the WIP unit is not enabled and the drive job has not run unless a test says so.
   export DRIVE_MOUNT="$BATS_TEST_TMPDIR/nvme" DRIVE_UUID=fixture-uuid DRIVE_STATE_DIR="$BATS_TEST_TMPDIR/drive-state"
   export MEDIA_SOURCES="$HOME/Videos:$HOME/Downloads"
@@ -103,6 +127,217 @@ wip_drive() {
   mkdir -p "$live" "$versions"
   cp -p "$HOME/dev/fixture"* "$live/"
   printf 'older' > "$versions/fixture0@1700000000000000000-0123abcd"
+}
+
+# Create an old regular .envrc under the isolated home.
+envrc_file() {
+  mkdir -p "$(dirname "$HOME/$1")"
+  printf '%s' "$2" > "$HOME/$1"
+  touch -d '@946684800' "$HOME/$1"
+}
+
+# Model the explicit-path and whole-home snapshots from one nightly run.
+envrc_snapshots() {
+  cat > "$BATS_TEST_TMPDIR/snapshots.json" <<'JSON'
+[{"id":"explicit","time":"2030-06-01T10:00:00Z","paths":[]},
+ {"id":"home","time":"2030-06-01T12:00:00Z","tags":["home"]}]
+JSON
+}
+
+# Model restic's JSON-lines listing, including its snapshot header.
+envrc_listing() {
+  local id="$1"
+  shift
+  python3 - "$BATS_TEST_TMPDIR/restic-$id.jsonl" "$id" "$@" <<'PY'
+import json, pathlib, sys
+with open(sys.argv[1], 'w') as output:
+    output.write(json.dumps({'struct_type': 'snapshot', 'id': sys.argv[2]}) + '\n')
+    for name in sys.argv[3:]:
+        path = pathlib.Path(name)
+        node = {'struct_type': 'node', 'type': 'file', 'name': path.name,
+                'path': str(path), 'size': path.stat().st_size, 'mtime': '2000-01-01T00:00:00Z'}
+        output.write(json.dumps(node) + '\n')
+PY
+}
+
+@test "envrc coverage unions explicit and home snapshots, including ignored hidden files" {
+  local hidden_path=$'.hidden/ignored\nfolder/.envrc'
+  envrc_file '.envrc' root
+  envrc_file 'dev/repo/.envrc' repository
+  envrc_file "$hidden_path" hidden
+  mkdir -p "$HOME/dev/repo/.git"
+  printf '.envrc\n' > "$HOME/dev/repo/.gitignore"
+  envrc_snapshots
+  envrc_listing explicit "$HOME/dev/repo/.envrc"
+  envrc_listing home "$HOME/.envrc" "$HOME/$hidden_path"
+  run "$DRILL_SCRIPT" --layer envrc
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"3 .envrc found; 3 in the latest run's snapshots; skipped 0 worktree, 0 third-party, 0 newer than the run"* ]]
+  jq -e '.layers.envrc.ok == true and .layers.envrc.last_success > 0' "$HOME/.local/state/backup-drill/last.json"
+  if [[ -n ${DRILL_TEST_FD:-} ]]; then
+    [[ "$(cat "$BATS_TEST_TMPDIR/fd-calls")" == *'-H -I -t f -g .envrc'* ]]
+  fi
+  grep -Fx 'snapshots --no-lock --json' "$BATS_TEST_TMPDIR/restic-calls"
+  grep -Fx 'ls --no-lock --json explicit' "$BATS_TEST_TMPDIR/restic-calls"
+  grep -Fx 'ls --no-lock --json home' "$BATS_TEST_TMPDIR/restic-calls"
+}
+
+@test "a missing old envrc fails, names it, and records the failure" {
+  envrc_file 'dev/missing/.envrc' missing
+  envrc_snapshots
+  envrc_listing explicit
+  envrc_listing home
+  run "$DRILL_SCRIPT" --layer envrc
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"1 .envrc missing"* && "$output" == *"$HOME/dev/missing/.envrc"* ]]
+  jq -e '.layers.envrc.ok == false and (.layers.envrc.detail | contains("dev/missing/.envrc"))' "$HOME/.local/state/backup-drill/last.json"
+}
+
+@test "missing envrc output shows the total and at most ten paths" {
+  for i in {00..11}; do envrc_file "dev/repo$i/.envrc" missing; done
+  envrc_snapshots
+  envrc_listing explicit
+  envrc_listing home
+  run "$DRILL_SCRIPT" --layer envrc
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"12 .envrc missing"* && "$output" == *"$HOME/dev/repo09/.envrc"* ]]
+  [[ "$output" != *"$HOME/dev/repo10/.envrc"* && "$output" != *"$HOME/dev/repo11/.envrc"* ]]
+}
+
+@test "worktrees and third-party copies are counted and skipped" {
+  envrc_file '.task-worktrees/task/.envrc' skipped
+  envrc_file 'dev/repo-worktrees/branch/.envrc' skipped
+  envrc_file 'dev/repo/node_modules/pkg/.envrc' skipped
+  envrc_file 'dev/repo/vendor/pkg/.envrc' skipped
+  envrc_file '.cache/pkg/.envrc' skipped
+  envrc_file '.cargo/registry/src/pkg/.envrc' skipped
+  envrc_file 'go/pkg/mod/pkg/.envrc' skipped
+  envrc_snapshots
+  envrc_listing explicit
+  envrc_listing home
+  run "$DRILL_SCRIPT" --layer envrc
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"7 .envrc found; 0 in the latest run's snapshots; skipped 2 worktree, 5 third-party, 0 newer than the run"* ]]
+}
+
+@test "files at or after the earliest selected snapshot are skipped" {
+  envrc_file 'dev/at-start/.envrc' at-start
+  envrc_file 'dev/after-start/.envrc' after-start
+  touch -d '2030-06-01T10:00:00Z' "$HOME/dev/at-start/.envrc"
+  touch -d '2030-06-01T11:00:00Z' "$HOME/dev/after-start/.envrc"
+  envrc_snapshots
+  envrc_listing explicit
+  envrc_listing home
+  run "$DRILL_SCRIPT" --layer envrc
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"2 .envrc found; 0 in the latest run's snapshots; skipped 0 worktree, 0 third-party, 2 newer than the run"* ]]
+}
+
+@test "an old envrc with a size mismatch fails" {
+  envrc_file 'dev/repo/.envrc' snapshot
+  envrc_snapshots
+  envrc_listing explicit "$HOME/dev/repo/.envrc"
+  envrc_listing home
+  printf 'different size' > "$HOME/dev/repo/.envrc"
+  touch -d '@946684800' "$HOME/dev/repo/.envrc"
+  run "$DRILL_SCRIPT" --layer envrc
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"size"* && "$output" == *"$HOME/dev/repo/.envrc"* ]]
+  jq -e '.layers.envrc.ok == false' "$HOME/.local/state/backup-drill/last.json"
+}
+
+@test "the newest selected copy supplies metadata for a path in multiple snapshots" {
+  envrc_file 'dev/repo/.envrc' old
+  envrc_snapshots
+  envrc_listing explicit "$HOME/dev/repo/.envrc"
+  printf 'newer copy' > "$HOME/dev/repo/.envrc"
+  touch -d '@946684800' "$HOME/dev/repo/.envrc"
+  envrc_listing home "$HOME/dev/repo/.envrc"
+  run "$DRILL_SCRIPT" --layer envrc
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"1 .envrc found; 1 in the latest run's snapshots"* ]]
+}
+
+@test "browser and old snapshots are excluded but the six-hour boundary is included" {
+  envrc_file 'dev/browser-only/.envrc' browser
+  envrc_file 'dev/old-only/.envrc' old
+  envrc_file 'dev/boundary/.envrc' boundary
+  cat > "$BATS_TEST_TMPDIR/snapshots.json" <<'JSON'
+[{"id":"old","time":"2030-06-01T05:59:59Z"},
+ {"id":"boundary","time":"2030-06-01T08:00:00+02:00"},
+ {"id":"home","time":"2030-06-01T11:30:00Z","tags":["home"]},
+ {"id":"browser","time":"2030-06-01T12:00:00Z","tags":["browser"]}]
+JSON
+  envrc_listing old "$HOME/dev/old-only/.envrc"
+  envrc_listing boundary "$HOME/dev/boundary/.envrc"
+  envrc_listing home
+  envrc_listing browser "$HOME/dev/browser-only/.envrc"
+  run "$DRILL_SCRIPT" --layer envrc
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"2 .envrc missing"* && "$output" == *"$HOME/dev/old-only/.envrc"* && "$output" == *"$HOME/dev/browser-only/.envrc"* ]]
+  [[ "$output" != *"$HOME/dev/boundary/.envrc"* ]]
+  grep -Fx 'ls --no-lock --json boundary' "$BATS_TEST_TMPDIR/restic-calls"
+  grep -Fx 'ls --no-lock --json home' "$BATS_TEST_TMPDIR/restic-calls"
+  ! grep -E '^ls .* (old|browser)$' "$BATS_TEST_TMPDIR/restic-calls"
+}
+
+@test "no snapshots fails" {
+  printf '[]\n' > "$BATS_TEST_TMPDIR/snapshots.json"
+  run "$DRILL_SCRIPT" --layer envrc
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"no snapshots"* ]]
+  jq -e '.layers.envrc.ok == false' "$HOME/.local/state/backup-drill/last.json"
+}
+
+@test "a latest window with only browser snapshots fails" {
+  printf '[{"id":"browser","time":"2030-06-01T12:00:00Z","tags":["browser"]}]\n' > "$BATS_TEST_TMPDIR/snapshots.json"
+  run "$DRILL_SCRIPT" --layer envrc
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"no non-browser snapshots"* ]]
+}
+
+@test "envrc search does not follow file or directory symlinks" {
+  mkdir -p "$BATS_TEST_TMPDIR/outside" "$HOME/symlink"
+  printf outside > "$BATS_TEST_TMPDIR/outside/.envrc"
+  ln -s "$BATS_TEST_TMPDIR/outside/.envrc" "$HOME/symlink/.envrc"
+  ln -s "$BATS_TEST_TMPDIR/outside" "$HOME/link-dir"
+  envrc_snapshots
+  envrc_listing explicit
+  envrc_listing home
+  run "$DRILL_SCRIPT" --layer envrc
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"0 .envrc found"* ]]
+}
+
+@test "envrc search falls back to os.walk when fd is unavailable" {
+  local path=$'dev/odd\nname/.envrc' tool
+  envrc_file "$path" data
+  mkdir -p "$BATS_TEST_TMPDIR/outside" "$HOME/symlink"
+  printf outside > "$BATS_TEST_TMPDIR/outside/.envrc"
+  ln -s "$BATS_TEST_TMPDIR/outside/.envrc" "$HOME/symlink/.envrc"
+  ln -s "$BATS_TEST_TMPDIR/outside" "$HOME/link-dir"
+  envrc_snapshots
+  envrc_listing explicit "$HOME/$path"
+  envrc_listing home
+  mkdir -p "$BATS_TEST_TMPDIR/nofd"
+  for tool in bash python3 mktemp; do ln -s "$(command -v "$tool")" "$BATS_TEST_TMPDIR/nofd/$tool"; done
+  ln -s /usr/bin/rm "$BATS_TEST_TMPDIR/nofd/rm"
+  ln -s "$BATS_TEST_TMPDIR/bin/restic" "$BATS_TEST_TMPDIR/nofd/restic"
+  PATH="$BATS_TEST_TMPDIR/nofd" run "$DRILL_SCRIPT" --layer envrc
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"1 .envrc found; 1 in the latest run's snapshots"* ]]
+  [ ! -e "$BATS_TEST_TMPDIR/fd-calls" ]
+}
+
+@test "a plain drill fails for missing envrc coverage without adding a status row" {
+  envrc_file 'dev/missing/.envrc' missing
+  run "$DRILL_SCRIPT"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"envrc: FAIL:"* && "$output" == *"$HOME/dev/missing/.envrc"* ]]
+  jq -e '.layers.envrc.ok == false and .layers.restic.ok == true' "$HOME/.local/state/backup-drill/last.json"
+  run "$BATS_TEST_DIRNAME/../../scripts/__backup_status.sh"
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"envrc"* ]]
 }
 
 @test "restic restores a database and three files into scratch" {
@@ -368,4 +603,19 @@ media_drive() {
   RESTIC_CHECK_FAIL=1 run "$DRILL_SCRIPT" --layer drive-restic
   [ "$status" -eq 1 ]
   jq -e '.layers["drive-restic"].ok == false' "$HOME/.local/state/backup-drill/last.json"
+}
+
+@test "a keep-tagged one-off hours after the nightly does not move the window" {
+  envrc_file 'dev/repo/.envrc' run
+  cat > "$BATS_TEST_TMPDIR/snapshots.json" <<'JSON'
+[{"id":"run","time":"2030-06-01T10:00:00Z"},
+ {"id":"oneoff","time":"2030-06-01T20:00:00Z","tags":["keep","nomad-state-2030-06-01"]}]
+JSON
+  envrc_listing run "$HOME/dev/repo/.envrc"
+  envrc_listing oneoff
+  run "$DRILL_SCRIPT" --layer envrc
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"1 .envrc found; 1 in the latest run's snapshots"* ]]
+  run grep -F 'ls --no-lock --json oneoff' "$BATS_TEST_TMPDIR/restic-calls"
+  [ "$status" -eq 1 ]
 }

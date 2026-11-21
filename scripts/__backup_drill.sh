@@ -8,7 +8,7 @@ export DRILL_SCRATCH="$T"
 export RESTIC_REPOSITORY="${RESTIC_REPOSITORY:-/mnt/nas-backup/secure-store}"
 export RESTIC_PASSWORD_FILE="${RESTIC_PASSWORD_FILE:-$HOME/.config/restic/password}"
 python3 - "$@" <<'PY'
-import datetime, json, os, pathlib, random, re, shutil, sqlite3, subprocess, sys, time
+import datetime, json, os, pathlib, random, re, shutil, sqlite3, stat, subprocess, sys, time
 
 home = pathlib.Path(os.environ['HOME'])
 nas = pathlib.Path(os.getenv('BACKUP_ROOT', '/mnt/nas-backup'))
@@ -21,7 +21,7 @@ drive_stamp = pathlib.Path(os.getenv('DRIVE_STATE_DIR', str(home / '.local/state
 drive_repo = drive_mount / 'restic/secure-store'
 wip_root = drive_mount / os.getenv('WIP_MIRROR_DIR', 'wip')
 media_sources = [pathlib.Path(p) for p in os.getenv('MEDIA_SOURCES', f'{home}/Videos:{home}/models:{home}/Downloads:{home}/music').split(':') if p]
-layers = ['restic', 'home', 'dev', 'task', 'system', 'taskchampion', 'wip', 'media', 'drive-restic']
+layers = ['restic', 'envrc', 'home', 'dev', 'task', 'system', 'taskchampion', 'wip', 'media', 'drive-restic']
 if len(sys.argv) == 3 and sys.argv[1] == '--layer' and sys.argv[2] in layers:
     selected = [sys.argv[2]]
 elif len(sys.argv) == 1:
@@ -159,6 +159,71 @@ def restic_check(repo=None):
         if not filecmp.cmp(p, restored, shallow=False) or p.stat().st_mtime_ns != before.st_mtime_ns:
             raise RuntimeError('restored snapshot file differs from live file')
     return f'task DB integrity ok, {rows} rows; 3 restored files match'
+
+# Check old, local .envrc files against all snapshots from the latest nightly run.
+def envrc_check():
+    # A keep-tagged snapshot is a one-off (the nomad state of 21 Nov), not a
+    # nightly run; one taken hours after the nightly must not move the window.
+    snapshots = [s for s in json.loads(run('restic', 'snapshots', '--no-lock', '--json'))
+                 if 'keep' not in (s.get('tags') or [])]
+    if not snapshots:
+        raise RuntimeError('no snapshots in restic repository')
+    timed = [(datetime.datetime.fromisoformat(s['time'].replace('Z', '+00:00')), s) for s in snapshots]
+    newest = max(t for t, _ in timed)
+    selected = sorted(((t, s) for t, s in timed if t >= newest - datetime.timedelta(hours=6)
+                       and 'browser' not in (s.get('tags') or [])), key=lambda item: item[0])
+    if not selected:
+        raise RuntimeError('no non-browser snapshots in the latest six-hour window')
+    start = selected[0][0].timestamp()
+    copies = {}
+    # Visit older snapshots first so the most recent copy wins when paths overlap.
+    for _, snapshot in selected:
+        listing = run('restic', 'ls', '--no-lock', '--json', snapshot['id'])
+        for line in listing.splitlines():
+            node = json.loads(line)
+            if node.get('type') == 'file' and node.get('name') == '.envrc':
+                copies[node['path']] = (node['size'], node['mtime'])
+
+    if shutil.which('fd'):
+        output = run('fd', '-H', '-I', '-t', 'f', '-g', '.envrc', '--print0', str(home))
+        paths = (pathlib.Path(os.fsdecode(p)) for p in output.split(b'\0') if p)
+    else:
+        def walk_error(error):
+            raise error
+        paths = (pathlib.Path(root) / '.envrc' for root, _, files in os.walk(home, followlinks=False, onerror=walk_error)
+                 if '.envrc' in files)
+    found = covered = 0
+    skipped = {'worktree': 0, 'third-party': 0, 'newer': 0}
+    missing, mismatched = [], []
+    for path in sorted(paths):
+        info = os.stat(path, follow_symlinks=False)
+        if path.name != '.envrc' or not stat.S_ISREG(info.st_mode):
+            continue
+        found += 1
+        parts = path.parts
+        if ({'node_modules', 'vendor', '.cache'} & set(parts) or '/.cargo/registry/' in str(path)
+                or '/go/pkg/mod/' in str(path)):
+            skipped['third-party'] += 1
+        elif any('worktree' in part for part in parts):
+            skipped['worktree'] += 1
+        elif info.st_mtime >= start:
+            skipped['newer'] += 1
+        elif str(path) not in copies:
+            missing.append(str(path))
+        elif info.st_size != copies[str(path)][0]:
+            mismatched.append(str(path))
+        else:
+            covered += 1
+    problems = []
+    if missing:
+        problems.append(f'{len(missing)} .envrc missing from latest run snapshots: ' + ', '.join(missing[:10]))
+    if mismatched:
+        problems.append(f'{len(mismatched)} .envrc size mismatch: ' + ', '.join(mismatched[:10]))
+    if problems:
+        raise RuntimeError('; '.join(problems))
+    return (f"{found} .envrc found; {covered} in the latest run's snapshots; "
+            f"skipped {skipped['worktree']} worktree, {skipped['third-party']} third-party, "
+            f"{skipped['newer']} newer than the run")
 
 # Check files from both state directories in the mirror.
 def task_check():
@@ -374,7 +439,7 @@ def drive_restic_check():
     run('restic', '-r', str(drive_repo), '--retry-lock', '5m', 'check', '--read-data-subset=5%')
     return 'check of 5% of data ok; ' + restic_check(drive_repo)
 
-checks = {'restic': restic_check, 'home': lambda: mirror_check('home'), 'dev': lambda: mirror_check('dev'), 'task': task_check, 'system': system_check, 'taskchampion': server_check, 'wip': wip_check, 'media': media_check, 'drive-restic': drive_restic_check}
+checks = {'restic': restic_check, 'envrc': envrc_check, 'home': lambda: mirror_check('home'), 'dev': lambda: mirror_check('dev'), 'task': task_check, 'system': system_check, 'taskchampion': server_check, 'wip': wip_check, 'media': media_check, 'drive-restic': drive_restic_check}
 try:
     data = json.loads(state.read_text())
 except (OSError, ValueError):
