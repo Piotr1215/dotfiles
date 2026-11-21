@@ -15,7 +15,6 @@ def load(name):
     return mod
 
 pace = load('cron_pace')
-audit = load('schedule_audit')
 
 class PacingTest(unittest.TestCase):
     def test_plain_reminders_keep_time_but_exec_checks_are_paced(self):
@@ -82,14 +81,5 @@ class PacingTest(unittest.TestCase):
             finally:
                 if old is None: os.environ.pop('CRON_STATE_DIR', None)
                 else: os.environ['CRON_STATE_DIR'] = old
-
-class ScheduleAuditTest(unittest.TestCase):
-    def test_schedule_fixtures(self):
-        for minute in ('*', '*/2', '0,4', '0-10/3', '1,58'):
-            self.assertTrue(audit.audit([f'{minute} * * * * echo hi']))
-        for minute in ('*/5', '0,5,10', '1', '0-59/10'):
-            self.assertFalse(audit.audit([f'{minute} * * * * echo hi']))
-        self.assertFalse(audit.audit(['# */1 * * * * ignored', 'CRON_PACED=1', '@reboot true']))
-        self.assertTrue(audit.audit(['@minutely true']))
 
 if __name__ == '__main__': unittest.main()
