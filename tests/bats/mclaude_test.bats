@@ -107,11 +107,15 @@ PYX
   run "$SCRIPT" hi
   [ "$status" -eq 0 ]
   local file="$MCLAUDE_CONFIG/aichat/config.yaml"
-  grep -Fx 'model: local:inkling-2-mini' "$file"
+  grep -Fx 'model: local:low' "$file"
+  grep -Fx '      - name: high' "$file"
+  grep -Fx '              reasoning_effort: high' "$file"
+  [ "$(grep -c '        real_name: inkling-2-mini' "$file")" -eq 6 ]
   grep -Fx '    api_base: http://127.0.0.1:18090/v1' "$file"
   grep -Fx '        max_input_tokens: 40960' "$file"
-  MCLAUDE_PORT=18091 run "$SCRIPT" hi
+  MCLAUDE_PORT=18091 MCLAUDE_EFFORT=high run "$SCRIPT" hi
   grep -Fx '    api_base: http://127.0.0.1:18091/v1' "$file"
+  grep -Fx 'model: local:high' "$file"
 }
 
 # Inkling reasons before it answers and aichat prints that as a <think> block;

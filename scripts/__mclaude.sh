@@ -6,7 +6,8 @@ set -eo pipefail
 # what you type, so a reply starts in seconds. Claude Code spent 90 s reading
 # its own 15K-token preamble here before the first word.
 #
-#   mclaude                     chat; .file <path> adds a file, .copy the reply
+#   mclaude                     chat; .file <path> adds a file, .copy the reply,
+#                               .model local:high raises reasoning effort
 #   mclaude 'question'          one answer; cat draft | mclaude 'tighten this'
 #   mclaude web                 start the server and open its own chat page
 #   mclaude status | stop
@@ -191,23 +192,24 @@ cleanup_session() {
   rm -f "$state/sessions/$$"
 }
 
-# Write aichat's config with the local server as its only client. It is
-# regenerated on every run so the port and window always match this script.
+# Write aichat's config with the local server as its only client. Each model
+# entry is Inkling at one reasoning effort, sent per request, so .model
+# local:high in the chat raises it without a server restart. It is regenerated
+# on every run so the port and window always match this script.
 write_chat_config() {
-  cat > "$config/aichat/config.yaml" <<EOF
-# Written by __mclaude.sh on every run.
-model: local:inkling-2-mini
-stream: true
-clients:
-  - type: openai-compatible
-    name: local
-    api_base: http://127.0.0.1:$port/v1
-    api_key: local
-    models:
-      - name: inkling-2-mini
-        max_input_tokens: $((ctx - 8192))
-        max_output_tokens: 8192
-EOF
+  local level
+  {
+    printf '# Written by __mclaude.sh on every run.\n'
+    printf 'model: local:%s\nstream: true\nclients:\n' "$effort"
+    printf '  - type: openai-compatible\n    name: local\n'
+    printf '    api_base: http://127.0.0.1:%s/v1\n    api_key: local\n    models:\n' "$port"
+    for level in none minimal low medium high xhigh; do
+      printf '      - name: %s\n        real_name: inkling-2-mini\n' "$level"
+      printf '        max_input_tokens: %s\n        max_output_tokens: 8192\n' "$((ctx - 8192))"
+      printf '        patch:\n          body:\n            chat_template_kwargs:\n'
+      printf '              reasoning_effort: %s\n' "$level"
+    done
+  } > "$config/aichat/config.yaml"
 }
 
 # Run aichat with only the explicitly allowed environment, so a command run
