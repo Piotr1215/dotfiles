@@ -256,6 +256,12 @@ main() {
 		# also the worst possible shape for NFS: 21KB average file, so the cost
 		# is round trips, not bytes. Same reasoning that excluded /usr.
 		--exclude='/opt'                  # 3.8G  vendor installs, 32k tiny files
+		# Nix store, new on 2026-11-20. Every path rebuilds or refetches from its
+		# derivation. Its dirs are read-only (0555), and rsync as root does not
+		# add the temporary u+w a non-root receiver would, so on the squashed
+		# NFS copy each store dir was created unwritable and the run died with
+		# exit 23 on 3,100 EACCES errors.
+		--exclude='/nix'                  # 4.5G  Nix store, rebuildable
 		# /root is 19,583 files and 19,523 of them are cache. Excluding these two
 		# leaves ~60 real files: root's shell config, ssh, and the dotfiles that
 		# are the only reason to back /root up at all. npm repopulates its cache
