@@ -4,7 +4,7 @@
 # Everything not listed here is backed up, so a new folder in ~ is covered by
 # default. The run also skips any single file over 1G; the drive's media mirror
 # (scripts/__backup_drive.sh) holds ~/Videos, ~/models, ~/Downloads and ~/music
-# whole, large files included, with read-only snapshots of its 3 last distinct states.
+# whole, large files included, with read-only snapshots of the 3 last distinct ~/music states.
 
 # own layers: GitHub, the NAS mirror and the uncommitted-work capture
 ${BACKUP_SOURCE_HOME}/dev
