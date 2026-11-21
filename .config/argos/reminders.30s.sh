@@ -15,8 +15,8 @@ set -o pipefail
 if [ -n "${REMINDER_HELPER:-}" ]; then
 	helper="$REMINDER_HELPER"
 else
-	script_dir="$(dirname "$(readlink -f "$0")")"
-	helper="$(readlink -f "$script_dir/../../scripts/__reminder.sh")"
+	# The engine lives in its own repo since 21 Nov 2026.
+	helper="$HOME/dev/packets/scripts/__reminder.sh"
 fi
 
 if [ ! -x "$helper" ]; then

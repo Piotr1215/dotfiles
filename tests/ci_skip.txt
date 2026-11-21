@@ -17,7 +17,6 @@ tests/bats/pr_movement_nudge_test.bats         # setup fails sourcing the extrac
 tests/bats/skill_catalog_test.bats             # runner only, passes in an ubuntu:26.04 container: "claude lists personal skills with slash invocations"
 tests/bats/task_agent_shortcuts_test.bats      # git-crypt: reads .taskrc
 tests/bats/taskwarrior_recurrence_test.bats    # git-crypt: reads .taskrc
-tests/bats/reminder_argos_test.bats            # undiagnosed: "the GTK reminder UI passes its dependency check"
 tests/bats/standup_tmuxinator_test.bats        # git-crypt: the test file itself is encrypted
 tests/bats/tmux_pane_menu_test.bats            # undiagnosed: private_tmux helper fails in the first test
 tests/bats/tmux_reading_margin_test.bats       # undiagnosed: "time-off margin stacks a visualizer under the picker"
