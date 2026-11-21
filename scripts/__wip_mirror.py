@@ -150,6 +150,9 @@ class Inbox:
         self.ready = threading.Condition()
         self.limit = limit
         self.loss = threading.Event()
+        # True once a scan finished or a clean-stop list was taken: only then
+        # can a stop promise the next start that nothing was missed.
+        self.caught_up = False
         self.stopped = stopped
         self.error = None
 
@@ -256,6 +259,7 @@ def copy(connect, inbox: Inbox, path: Path):
 
 def rescan(inbox: Inbox, connect, pacer: Pacer):
     started = time.monotonic()
+    inbox.caught_up = False
     with connect() as mirror:
         busy = False
 
@@ -280,6 +284,7 @@ def rescan(inbox: Inbox, connect, pacer: Pacer):
                 busy = False
 
         mirror.catch_up(between)
+    inbox.caught_up = True
     return time.monotonic() - started
 
 
@@ -328,6 +333,7 @@ def serve_drive(inbox: Inbox, drive: Drive, identity: int, connect, pacer: Pacer
         logging.info("clean stop before: copying %d pending paths, no full scan", len(resume))
         for path in resume:
             inbox.offer(path)
+        inbox.caught_up = True
     else:
         inbox.loss.clear()
         logging.info("catching up WIP mirror")
@@ -399,7 +405,7 @@ def run(args):
         while inbox.read(reader, roots):
             pass
     identity = drive.identity()
-    if identity is not None and not inbox.loss.is_set():
+    if identity is not None and inbox.caught_up and not inbox.loss.is_set():
         try:
             with drive.open(identity) as target:
                 save_clean_stop(target, list(inbox.pending) + list(pacer.held))

@@ -189,6 +189,16 @@ def test_a_stale_or_broken_clean_stop_list_means_a_full_scan(tmp_path, monkeypat
     assert not (tmp_path / daemon.CLEAN_STOP).exists()
 
 
+def test_a_scan_cut_short_clears_caught_up():
+    inbox = daemon.Inbox(threading.Event())
+    inbox.caught_up = True
+    inbox.stopped.set()
+    mirror = SimpleNamespace(catch_up=lambda between: between())
+    with pytest.raises(daemon.Stopped):
+        daemon.rescan(inbox, lambda: nullcontext(mirror), daemon.Pacer())
+    assert inbox.caught_up is False
+
+
 def test_resume_copies_the_list_without_a_scan_unless_events_were_lost(tmp_path):
     for lost in (False, True):
         inbox = daemon.Inbox(threading.Event())
@@ -261,6 +271,15 @@ def test_a_stopped_daemon_leaves_its_list_and_the_next_start_skips_the_scan(tmp_
                 daemon.run(args)
             assert any(expected in line for line in caplog.messages)
             assert str(root / "late.md") in json.loads((target / daemon.CLEAN_STOP).read_text())["pending"]
+        # A stop during the scan must leave no list: the scan never finished.
+        (target / daemon.CLEAN_STOP).unlink()
+
+        def stopped_mid_scan(self, between=None):
+            raise daemon.Stopped
+
+        monkeypatch.setattr(daemon.Mirror, "catch_up", stopped_mid_scan)
+        daemon.run(args)
+        assert not (target / daemon.CLEAN_STOP).exists()
     finally:
         signal.signal(signal.SIGTERM, previous)
     assert (target / "live" / str(root / "notes.md").lstrip("/")).read_text() == "first"
