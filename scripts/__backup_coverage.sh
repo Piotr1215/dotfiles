@@ -71,10 +71,11 @@ try:
     if '"$HOME/.local/state/taskwarrior/briefs"' in source:
         partial.add('.local')
     # Only count the home run when both its tag and its exclude file occur in
-    # the same shell command. Ignore commented-out commands.
+    # the same shell command. Ignore commented-out commands. __backup.sh calls
+    # restic through its restic_snapshot "<label>" wrapper since db40c636.
     commands = re.sub(r'\\\n\s*', ' ', source)
     home_run = any(
-        re.search(r'\brestic\s+backup\s+--tag\s+home\b', line)
+        re.search(r'\b(?:restic\s+backup|restic_snapshot\s+"[^"]*")\s+--tag\s+home\b', line)
         and '--exclude-file "$BACKUP_SOURCE_HOME/.backup_restic_excludes"' in line
         for line in commands.splitlines() if not line.lstrip().startswith('#')
     )

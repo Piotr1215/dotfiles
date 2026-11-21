@@ -109,6 +109,18 @@ SOURCE
   [[ "$output" == *'mirror: restic (home), mirror'* ]]
 }
 
+@test "home run through the restic_snapshot wrapper counts as the home run" {
+  cat >> "$BACKUP_COVERAGE_SOURCE" <<'SOURCE'
+		restic_snapshot "restic home" --tag home --exclude-larger-than 1G \
+			--exclude-file "$BACKUP_SOURCE_HOME/.backup_restic_excludes" "$BACKUP_SOURCE_HOME/" || true
+SOURCE
+  : > "$HOME/.backup_restic_excludes"
+  touch "$HOME/new"
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'new: restic (home)'* ]]
+}
+
 @test "home exclusions show nearest reason and keep other layers" {
   enable_home_run
   mkdir "$HOME/restic" "$HOME/mirror"
