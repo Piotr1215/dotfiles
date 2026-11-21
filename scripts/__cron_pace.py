@@ -44,9 +44,7 @@ def pace(argv, state_dir, *, now=time.time, sleep=time.sleep, launch=subprocess.
         if plain_reminder(job):
             result = launch([wrapper, *argv[1:]], env=env)
             return result.returncode if result.returncode >= 0 else 128 - result.returncode
-        # The dispatcher spreads its own children across the five-minute window.
-        # It still needs this scope and duplicate guard, but no extra jitter.
-        sleep(0 if job == 'reminder-dispatch' else int(key[:8], 16) % 241)
+        sleep(int(key[:8], 16) % 241)
         with (state_dir / 'claims.lock').open('a+') as claims:
             fcntl.flock(claims, fcntl.LOCK_EX)
             claims.seek(0)

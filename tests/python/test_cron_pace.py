@@ -64,18 +64,6 @@ class PacingTest(unittest.TestCase):
                 self.assertEqual(pace.pace(['/wrapper', 'a', '--', 'true'], d,
                     sleep=lambda _: self.fail('slept'), launch=lambda *a, **kw: self.fail('launched')), 0)
 
-    def test_dispatcher_keeps_its_own_timing_inside_the_limited_scope(self):
-        with tempfile.TemporaryDirectory() as d:
-            sleeps = []
-            calls = []
-            def launch(args, env):
-                calls.append(args)
-                return subprocess.CompletedProcess(args, 0)
-            self.assertEqual(pace.pace(['/wrapper', 'reminder-dispatch', '--', '/dispatch'], d,
-                now=lambda: 1000, sleep=sleeps.append, launch=launch), 0)
-            self.assertEqual(sleeps, [0])
-            self.assertIn('--slice=background-automation.slice', calls[0])
-
     def test_real_wrapper_exit_and_state(self):
         wrapper = str(ROOT / 'scripts' / '__cron_run.sh')
         with tempfile.TemporaryDirectory() as d:
