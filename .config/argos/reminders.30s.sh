@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+if [[ -e "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/speak-mode" ]]; then printf '%s\n' '---'; exit 0; fi
 # Argos applet for reminders. The panel answers "how many" and "is anything
 # overdue"; everything else is the agenda, the whole list as an org file
 # opened in the editor. A consumer of `remind list --json` only: it never

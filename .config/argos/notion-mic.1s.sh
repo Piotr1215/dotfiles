@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+if [[ -e "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/speak-mode" ]]; then printf '%s\n' '---'; exit 0; fi
 # PROJECT: notion-meeting-mic
 #
 # Argos panel toggle for the Notion AI Meeting Notes virtual mic.

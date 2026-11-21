@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+if [[ -e "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/speak-mode" ]]; then printf '%s\n' '---'; exit 0; fi
 # PROJECT: cron-manager
 #
 # Argos panel: registry + status for every locally scheduled cron job.

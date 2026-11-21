@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
 
+import os
+
+if os.path.exists(os.path.join(os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}", "speak-mode")):
+    print("---")
+    raise SystemExit(0)
+
 # Service Status Monitor for Argos
 # Monitors AWS, GCP, Azure, Netlify, Cloudflare, GitHub, Linear, Claude,
 # OpenAI, Rippling, Spacelift, and Tailscale status pages
@@ -8,7 +14,6 @@ import json
 import urllib.request
 import urllib.error
 from datetime import datetime
-import os
 import base64
 import tempfile
 import hashlib

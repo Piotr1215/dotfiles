@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
+if [[ -e "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/speak-mode" ]]; then printf '%s\n' '---'; exit 0; fi
 # PROJECT: graphics-mode-aliases
 #
 # Argos panel: invisible on AC, visible on battery.
 # When on battery, surfaces a switch action toward `speak` (hybrid + battery)
 # and shows live draw/runtime so the user can spot mismatches at a glance.
 #
-# Refresh: 30s (from filename suffix). Argos hides the panel item if stdout
-# is empty, so an early `exit 0` while AC is connected keeps the panel clean.
+# Refresh: 30s (from filename suffix).
 
 # Panel label size follows the main screen width (see panel_label_size).
 source "$HOME/dev/dotfiles/scripts/__lib_screen.sh"

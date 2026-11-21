@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+if [[ -e "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/speak-mode" ]]; then printf '%s\n' '---'; exit 0; fi
 set -eo pipefail
 
 # Panel label size follows the main screen width (see panel_label_size).
