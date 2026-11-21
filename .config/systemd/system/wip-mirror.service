@@ -2,6 +2,9 @@
 Description=Real-time NVMe mirror of work-in-progress files
 # Keep running across unmounts so reconnect can trigger catch-up.
 After=local-fs.target
+# Start before logins and stop after every user session, so a clean-stop list
+# written at shutdown misses no save and the next boot can skip the full scan.
+Before=systemd-user-sessions.service
 
 [Service]
 Type=simple

@@ -6,6 +6,7 @@ from contextlib import contextmanager, nullcontext
 from datetime import datetime
 import errno
 from functools import partial
+import json
 import logging
 import os
 from pathlib import Path
@@ -34,6 +35,14 @@ QUEUE_LIMIT = 65536
 # copied when the interval ends.
 DATABASE_INTERVAL = 300
 DATABASE_SUFFIXES = (".sqlite3", ".db")
+# After a clean stop the daemon leaves this list of uncopied paths on the drive,
+# and the next start copies those instead of scanning every file (Piotr, 21 Nov:
+# the full scan took a core for minutes at every boot). A list written during
+# shutdown is honoured on the next boot; the unit stops after user sessions, so
+# nothing saved after it. Within one boot it is honoured for RESUME_SECONDS (a
+# restart); a crash, lost events or a longer stop means a full scan.
+CLEAN_STOP = ".clean-stop"
+RESUME_SECONDS = 120
 TARGET_IO_ERRORS = {errno.EIO, errno.ENODEV, errno.ENOSPC, errno.EROFS, errno.ESTALE}
 
 
@@ -173,21 +182,26 @@ class Inbox:
         try:
             while not self.stopped.is_set():
                 ready, _, _ = select.select([reader], [], [], POLL_SECONDS)
-                if not ready:
-                    continue
-                for event in reader.read():
-                    if event.mask & OVERFLOW:
-                        self.lose("fanotify queue overflow")
-                    elif event.path is not None and in_scope(event.path, roots):
-                        # Regular CREATE can precede the first write. CLOSE_WRITE
-                        # copies the finished file, and MOVED_TO handles atomic saves.
-                        if event.mask & (CLOSE_WRITE | MOVED_TO) or (
-                            event.mask & CREATE and event.path.is_symlink()
-                        ):
-                            self.offer(event.path)
+                if ready:
+                    self.read(reader, roots)
         except Exception as error:
             self.error = error
             self.stopped.set()
+
+    def read(self, reader: Fanotify, roots: tuple[Path, ...]) -> int:
+        count = 0
+        for event in reader.read():
+            count += 1
+            if event.mask & OVERFLOW:
+                self.lose("fanotify queue overflow")
+            elif event.path is not None and in_scope(event.path, roots):
+                # Regular CREATE can precede the first write. CLOSE_WRITE
+                # copies the finished file, and MOVED_TO handles atomic saves.
+                if event.mask & (CLOSE_WRITE | MOVED_TO) or (
+                    event.mask & CREATE and event.path.is_symlink()
+                ):
+                    self.offer(event.path)
+        return count
 
 
 def alert_missing(source_user: str, ntfy: str | None):
@@ -269,11 +283,55 @@ def rescan(inbox: Inbox, connect, pacer: Pacer):
     return time.monotonic() - started
 
 
-def serve_drive(inbox: Inbox, drive: Drive, identity: int, connect):
-    inbox.loss.clear()
-    pacer = Pacer(DATABASE_INTERVAL)
-    logging.info("catching up WIP mirror")
-    logging.info("WIP mirror catch-up complete in %.0f s", rescan(inbox, connect, pacer))
+def boot_id() -> str:
+    return Path("/proc/sys/kernel/random/boot_id").read_text().strip()
+
+
+def shutting_down() -> bool:
+    result = subprocess.run(["systemctl", "is-system-running"], capture_output=True, text=True, check=False)
+    return result.stdout.strip() == "stopping"
+
+
+def save_clean_stop(target: Path, pending):
+    marker = target / CLEAN_STOP
+    temporary = target / (CLEAN_STOP + ".tmp")
+    with open(temporary, "w", encoding="utf-8") as output:
+        json.dump({"boot": boot_id(), "time": time.time(), "shutdown": shutting_down(),
+                   "pending": sorted(str(path) for path in pending)}, output)
+        output.flush()
+        os.fsync(output.fileno())
+    os.replace(temporary, marker)
+
+
+def take_clean_stop(target: Path) -> list[Path] | None:
+    """Read and delete the clean-stop list; None means a full scan is needed."""
+    marker = target / CLEAN_STOP
+    try:
+        data = json.loads(marker.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        data = None
+    marker.unlink(missing_ok=True)
+    if not isinstance(data, dict) or not isinstance(data.get("pending"), list):
+        return None
+    if data.get("boot") == boot_id():
+        if not 0 <= time.time() - float(data.get("time", 0)) <= RESUME_SECONDS:
+            return None
+    elif data.get("shutdown") is not True:
+        return None
+    return [Path(path) for path in data["pending"]]
+
+
+def serve_drive(inbox: Inbox, drive: Drive, identity: int, connect, pacer: Pacer | None = None,
+                resume: list[Path] | None = None):
+    pacer = pacer or Pacer(DATABASE_INTERVAL)
+    if resume is not None and not inbox.loss.is_set():
+        logging.info("clean stop before: copying %d pending paths, no full scan", len(resume))
+        for path in resume:
+            inbox.offer(path)
+    else:
+        inbox.loss.clear()
+        logging.info("catching up WIP mirror")
+        logging.info("WIP mirror catch-up complete in %.0f s", rescan(inbox, connect, pacer))
     next_probe = 0.0
     while not inbox.stopped.is_set():
         now = time.monotonic()
@@ -302,6 +360,8 @@ def run(args):
     signal.signal(signal.SIGTERM, lambda *_: stopped.set())
     signal.signal(signal.SIGINT, lambda *_: stopped.set())
     inbox = Inbox(stopped)
+    pacer = Pacer(DATABASE_INTERVAL)
+    first = True
     with Fanotify(roots[0]) as reader:
         capture = threading.Thread(target=inbox.capture, args=(reader, roots))
         capture.start()
@@ -318,7 +378,12 @@ def run(args):
                 reported = False
                 try:
                     connect = partial(open_mirror, drive, identity, roots, args.source_user)
-                    serve_drive(inbox, drive, identity, connect)
+                    resume = None
+                    if first:
+                        first = False
+                        with drive.open(identity) as target:
+                            resume = take_clean_stop(target)
+                    serve_drive(inbox, drive, identity, connect, pacer, resume)
                 except Stopped:
                     break
                 except OSError as error:
@@ -329,6 +394,20 @@ def run(args):
             capture.join()
         if inbox.error is not None:
             raise RuntimeError("fanotify reader stopped") from inbox.error
+        # Pick up events that arrived while stopping, then leave what is still
+        # uncopied for the next start.
+        while inbox.read(reader, roots):
+            pass
+    identity = drive.identity()
+    if identity is not None and not inbox.loss.is_set():
+        try:
+            with drive.open(identity) as target:
+                save_clean_stop(target, list(inbox.pending) + list(pacer.held))
+        except OSError as error:
+            logging.warning("no clean-stop list, the next start scans: %s", error)
+            return
+        logging.info("clean stop: %d paths left for the next start",
+                     len(inbox.pending) + len(pacer.held))
 
 
 def main():
