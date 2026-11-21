@@ -8,7 +8,7 @@ setup() {
   export PATH="$BATS_TEST_TMPDIR/bin:$PATH"
   export DRIVE_SCRIPT="$BATS_TEST_DIRNAME/../../scripts/__backup_drive.sh"
   export MEDIA_SOURCES="$BATS_TEST_TMPDIR/photos:$BATS_TEST_TMPDIR/videos" SNAPSHOT_KEEP=3
-  export CALLS_DIR="$BATS_TEST_TMPDIR/calls"
+  export CALLS_DIR="$BATS_TEST_TMPDIR/calls" MEDIA_SNAPSHOT_ON=videos
   export NIGHTLY_LOCK_FILE="$BATS_TEST_TMPDIR/backup.lock" BACKUP_NTFY_URL=https://ntfy.invalid/topic
   unset RESTIC_REPOSITORY RESTIC_PASSWORD RESTIC_PASSWORD_FILE
   export RESTIC_PASSWORD_FILE="$BATS_TEST_TMPDIR/restic-password"
@@ -344,4 +344,21 @@ STUB
   [ "$status" -eq 1 ]
   [ "$(wc -l < "$CALLS_DIR/curl")" -eq 2 ]
   grep -F 'restic copy' "$CALLS_DIR/curl"
+}
+
+@test "a change only in a folder outside MEDIA_SNAPSHOT_ON takes no media snapshot" {
+  media_snaps() { find "$DRIVE_MOUNT/snapshots" -maxdepth 1 -type d -name 'media@*' | wc -l; }
+  run bash "$DRIVE_SCRIPT"
+  [ "$(media_snaps)" -eq 1 ]
+  printf 'new download\n' > "$BATS_TEST_TMPDIR/photos/new"
+  sleep 1
+  run bash "$DRIVE_SCRIPT"
+  [ "$status" -eq 0 ]
+  [ -f "$DRIVE_MOUNT/media/photos/new" ]
+  [[ "$output" == *'Media unchanged since its newest snapshot'* ]]
+  [ "$(media_snaps)" -eq 1 ]
+  printf 'new track\n' > "$BATS_TEST_TMPDIR/videos/three"
+  sleep 1
+  run bash "$DRIVE_SCRIPT"
+  [ "$(media_snaps)" -eq 2 ]
 }

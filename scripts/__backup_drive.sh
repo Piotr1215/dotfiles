@@ -11,6 +11,9 @@ NAS_REPO="${NAS_REPO:-/mnt/nas-backup/secure-store}"
 RESTIC_PASSWORD_FILE="${RESTIC_PASSWORD_FILE:-$HOME/.config/restic/password}"
 DRIVE_STATE_DIR="${DRIVE_STATE_DIR:-$HOME/.local/state/backup-drive}"
 MEDIA_SOURCES="${MEDIA_SOURCES:-$HOME/Videos:$HOME/models:$HOME/Downloads:$HOME/music}"
+# Mirrored folders whose change takes a new media snapshot. Only ~/music has no
+# restic history; a new download alone must not push out older music states.
+MEDIA_SNAPSHOT_ON="${MEDIA_SNAPSHOT_ON:-music}"
 SNAPSHOT_KEEP="${SNAPSHOT_KEEP:-3}"
 BACKUP_MAX_DELETES="${BACKUP_MAX_DELETES:-1000}"
 LOCK_FILE="${DRIVE_LOCK_FILE:-${TMPDIR:-/tmp}/backup-drive.lock}"
@@ -54,20 +57,27 @@ mirror_media() {
 	log INFO "Media backup complete: $src"
 }
 
-# Succeed when the media mirror differs from its newest snapshot, or has none.
+# Succeed when a MEDIA_SNAPSHOT_ON folder differs from its newest snapshot, or
+# there is no snapshot.
 # Media snapshots are taken only on change, so the newest SNAPSHOT_KEEP are that
 # many distinct states however old, not that many days (Piotr, 21 Nov: "2 or 3
 # good states", no months of history). Comparing with the snapshot itself also
 # catches a change whose snapshot failed or was skipped on an earlier run.
 media_changed() {
-	local out
-	local -a snapshots=()
+	local out name
+	local -a snapshots=() names=()
 	shopt -s nullglob
 	snapshots=("$DRIVE_MOUNT/snapshots/media"@*)
 	shopt -u nullglob
 	((${#snapshots[@]})) || return 0
-	out=$(rsync -a --delete --dry-run --itemize-changes "$DRIVE_MOUNT/media/" "${snapshots[-1]}/" 2>/dev/null) || return 0
-	[[ -n "$out" ]]
+	IFS=: read -r -a names <<<"$MEDIA_SNAPSHOT_ON"
+	for name in "${names[@]}"; do
+		[[ -e "$DRIVE_MOUNT/media/$name" || -e "${snapshots[-1]}/$name" ]] || continue
+		[[ -d "$DRIVE_MOUNT/media/$name" && -d "${snapshots[-1]}/$name" ]] || return 0
+		out=$(rsync -a --delete --dry-run --itemize-changes "$DRIVE_MOUNT/media/$name/" "${snapshots[-1]}/$name/" 2>/dev/null) || return 0
+		[[ -n "$out" ]] && return 0
+	done
+	return 1
 }
 
 # Create a read-only snapshot and retain the newest configured number.
