@@ -19,8 +19,8 @@ STUB
 #!/usr/bin/env bash
 exit 1
 STUB
-  # The WIP drive layer: the unit is not enabled unless a test says so.
-  export WIP_MIRROR_MOUNT="$BATS_TEST_TMPDIR/nvme" WIP_MIRROR_UUID=fixture-uuid
+  # The drive layers: the WIP unit is not enabled and the drive job has not run unless a test says so.
+  export DRIVE_MOUNT="$BATS_TEST_TMPDIR/nvme" DRIVE_UUID=fixture-uuid DRIVE_STATE_DIR="$BATS_TEST_TMPDIR/drive-state"
   cat > "$BATS_TEST_TMPDIR/bin/systemctl" <<'STUB'
 #!/usr/bin/env bash
 case "$1" in
@@ -36,9 +36,9 @@ STUB
   chmod +x "$BATS_TEST_TMPDIR/bin/restic" "$BATS_TEST_TMPDIR/bin/pgrep" "$BATS_TEST_TMPDIR/bin/systemctl" "$BATS_TEST_TMPDIR/bin/findmnt"
 }
 
-# Print the state column of the wip row, or nothing when there is no row.
+# Print the state column of the row for layer $1 (default wip), or nothing when there is no row.
 wip_state() {
-  awk -F' [|] ' 'NF >= 5 && $1 ~ /^wip / { gsub(/ +$/, "", $4); print $4 }' <<<"$output"
+  awk -F' [|] ' -v layer="${1:-wip}" 'NF >= 5 { name = $1; gsub(/ +$/, "", name) } NF >= 5 && name == layer { gsub(/ +$/, "", $4); print $4 }' <<<"$output"
 }
 
 @test "table uses producer timestamps and marks absent drill unknown" {
@@ -145,7 +145,7 @@ wip_state() {
 
 @test "an enabled unit with a missing or foreign drive shows unavailable" {
   export WIP_ENABLED=1
-  mkdir -p "$WIP_MIRROR_MOUNT/wip/live" "$WIP_MIRROR_MOUNT/wip/versions"
+  mkdir -p "$DRIVE_MOUNT/wip/live" "$DRIVE_MOUNT/wip/versions"
   WIP_FINDMNT='' run "$STATUS_SCRIPT"
   [ "$(wip_state)" = unavailable ]
   WIP_FINDMNT='other-uuid btrfs' run "$STATUS_SCRIPT" --prom "$BATS_TEST_TMPDIR/metrics.prom"
@@ -155,10 +155,10 @@ wip_state() {
 
 @test "an enabled drive reports missing trees, inactive unit, drill freshness and drill failure" {
   export WIP_ENABLED=1
-  mkdir -p "$WIP_MIRROR_MOUNT/wip/live"
+  mkdir -p "$DRIVE_MOUNT/wip/live"
   run "$STATUS_SCRIPT"
   [ "$(wip_state)" = failed ]
-  mkdir -p "$WIP_MIRROR_MOUNT/wip/versions"
+  mkdir -p "$DRIVE_MOUNT/wip/versions"
   run "$STATUS_SCRIPT"
   [ "$(wip_state)" = unknown ]
   printf '{"last_run":%s,"layers":{"wip":{"ok":true,"last_run":%s,"last_success":%s}}}' "$(date +%s)" "$(date +%s)" "$(date +%s)" > "$HOME/.local/state/backup-drill/last.json"
@@ -174,4 +174,33 @@ wip_state() {
   printf '{"last_run":2,"layers":{"wip":{"ok":false,"last_run":2,"last_success":1}}}' > "$HOME/.local/state/backup-drill/last.json"
   run "$STATUS_SCRIPT"
   [ "$(wip_state)" = failed ]
+}
+
+@test "drive rows appear after the drive job succeeds and show a missing drive" {
+  run "$STATUS_SCRIPT"
+  [ -z "$(wip_state media)" ]
+  [ -z "$(wip_state drive-restic)" ]
+  mkdir -p "$DRIVE_STATE_DIR"
+  date +%s > "$DRIVE_STATE_DIR/last-success"
+  run "$STATUS_SCRIPT"
+  [ "$(wip_state media)" = ok ]
+  [ "$(wip_state drive-restic)" = ok ]
+  WIP_FINDMNT='' run "$STATUS_SCRIPT" --prom "$BATS_TEST_TMPDIR/metrics.prom"
+  grep -Fx 'backup_layer_ok{layer="media"} 0' "$BATS_TEST_TMPDIR/metrics.prom"
+  WIP_FINDMNT='' run "$STATUS_SCRIPT"
+  [ "$(wip_state media)" = unavailable ]
+  [ "$(wip_state drive-restic)" = unavailable ]
+}
+
+@test "drive rows go stale, unknown or failed on their own evidence" {
+  mkdir -p "$DRIVE_STATE_DIR"
+  printf '1\n' > "$DRIVE_STATE_DIR/last-success"
+  printf '#!/usr/bin/env bash\nexit 1\n' > "$BATS_TEST_TMPDIR/bin/restic"
+  run "$STATUS_SCRIPT"
+  [ "$(wip_state media)" = stale ]
+  [ "$(wip_state drive-restic)" = unknown ]
+  date +%s > "$DRIVE_STATE_DIR/last-success"
+  printf '{"last_run":2,"layers":{"media":{"ok":false,"last_run":2,"last_success":1}}}' > "$HOME/.local/state/backup-drill/last.json"
+  run "$STATUS_SCRIPT"
+  [ "$(wip_state media)" = failed ]
 }

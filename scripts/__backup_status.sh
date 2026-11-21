@@ -10,9 +10,11 @@ import datetime, json, os, pathlib, re, subprocess, sys, tempfile, time
 home = pathlib.Path(os.environ['HOME'])
 nas = pathlib.Path(os.getenv('BACKUP_ROOT', '/mnt/nas-backup'))
 state_dir = home / '.local/state'
-wip_mount = pathlib.Path(os.getenv('WIP_MIRROR_MOUNT', '/mnt/nvme-backup'))
-wip_root = wip_mount / os.getenv('WIP_MIRROR_DIR', 'wip')
-wip_uuid = os.getenv('WIP_MIRROR_UUID', 'd74106d0-1b12-4d65-873d-d69ed3a729e6')
+drive_mount = pathlib.Path(os.getenv('DRIVE_MOUNT', '/mnt/nvme-backup'))
+drive_uuid = os.getenv('DRIVE_UUID', 'd74106d0-1b12-4d65-873d-d69ed3a729e6')
+drive_stamp = pathlib.Path(os.getenv('DRIVE_STATE_DIR', str(state_dir / 'backup-drive'))) / 'last-success'
+drive_repo = drive_mount / 'restic/secure-store'
+wip_root = drive_mount / os.getenv('WIP_MIRROR_DIR', 'wip')
 now = int(time.time())
 names = ['restic', 'home', 'dev', 'task-files', 'task-sync', 'system', 'taskchampion']
 if len(sys.argv) > 3 or (len(sys.argv) > 1 and sys.argv[1] != '--prom'):
@@ -110,19 +112,25 @@ for name, last, max_age in [('restic', restic_time, 26*3600), ('home', home_succ
         status = 'failed'
     rows.append((name, int(last), status, result))
 
+# Run a probe command quietly; None when it cannot start.
+def quiet(*args):
+    try:
+        return subprocess.run(args, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, timeout=30)
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+# True when the backup drive is mounted at its mount point with the expected btrfs UUID.
+def drive_mounted():
+    mount = quiet('findmnt', '-n', '-o', 'UUID,FSTYPE', '--mountpoint', str(drive_mount))
+    return bool(mount) and mount.returncode == 0 and mount.stdout.split() == [drive_uuid, 'btrfs']
+
 # The NVMe WIP layer gets a row only once wip-mirror.service is enabled; the same
 # gate as __backup_drill.sh. Its freshness is the weekly drill's last success.
 def wip_state():
-    def quiet(*args):
-        try:
-            return subprocess.run(args, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, timeout=30)
-        except (OSError, subprocess.SubprocessError):
-            return None
     enabled = quiet('systemctl', 'is-enabled', '--quiet', 'wip-mirror.service')
     if not enabled or enabled.returncode:
         return 'not-installed'
-    mount = quiet('findmnt', '-n', '-o', 'UUID,FSTYPE', '--mountpoint', str(wip_mount))
-    if not mount or mount.returncode or mount.stdout.split() != [wip_uuid, 'btrfs']:
+    if not drive_mounted():
         return 'unavailable'
     if not (wip_root / 'live').is_dir() or not (wip_root / 'versions').is_dir():
         return 'incomplete'
@@ -144,6 +152,35 @@ if wip_gate != 'not-installed':
     else:
         status = 'ok'
     rows.append(('wip', last, status, result))
+
+# The media and drive restic rows appear once the drive job has succeeded once.
+# Media freshness is that job's stamp; the copy's is its newest snapshot.
+if drive_stamp.exists():
+    mounted = drive_mounted()
+    try:
+        media_time = int(read(drive_stamp).strip())
+    except ValueError:
+        media_time = 0
+    copy_time = 0
+    if mounted:
+        try:
+            p = subprocess.run(['restic', '-r', str(drive_repo), 'snapshots', '--no-lock', '--json'], capture_output=True, timeout=60, check=True)
+            copy_time = max((int(datetime.datetime.fromisoformat(x['time'].replace('Z', '+00:00')).timestamp()) for x in json.loads(p.stdout) if 'browser' not in (x.get('tags') or [])), default=0)
+        except (OSError, subprocess.SubprocessError, ValueError, KeyError, TypeError):
+            copy_time = 0
+    for name, last, max_age in [('media', media_time, 26*3600), ('drive-restic', copy_time, 27*3600)]:
+        result = results.get(name, {})
+        if not mounted:
+            status = 'unavailable'
+        elif result.get('ok') is False:
+            status = 'failed'
+        elif not last:
+            status = 'unknown'
+        elif last > now + 300 or now - last > max_age:
+            status = 'stale'
+        else:
+            status = 'ok'
+        rows.append((name, last, status, result))
 
 # Discover the actual textfile directory only when the running exporter enables it.
 try:

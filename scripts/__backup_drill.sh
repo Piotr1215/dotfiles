@@ -15,10 +15,13 @@ nas = pathlib.Path(os.getenv('BACKUP_ROOT', '/mnt/nas-backup'))
 tmp = pathlib.Path(os.environ['DRILL_SCRATCH'])
 state = pathlib.Path(os.getenv('BACKUP_DRILL_STATE', str(home / '.local/state/backup-drill/last.json')))
 task_copy = pathlib.Path(os.getenv('TASK_SNAPSHOT_PATH', str(home / '.local/share/task-backups'))) / 'taskchampion.sqlite3'
-wip_mount = pathlib.Path(os.getenv('WIP_MIRROR_MOUNT', '/mnt/nvme-backup'))
-wip_root = wip_mount / os.getenv('WIP_MIRROR_DIR', 'wip')
-wip_uuid = os.getenv('WIP_MIRROR_UUID', 'd74106d0-1b12-4d65-873d-d69ed3a729e6')
-layers = ['restic', 'home', 'dev', 'task', 'system', 'taskchampion', 'wip']
+drive_mount = pathlib.Path(os.getenv('DRIVE_MOUNT', '/mnt/nvme-backup'))
+drive_uuid = os.getenv('DRIVE_UUID', 'd74106d0-1b12-4d65-873d-d69ed3a729e6')
+drive_stamp = pathlib.Path(os.getenv('DRIVE_STATE_DIR', str(home / '.local/state/backup-drive'))) / 'last-success'
+drive_repo = drive_mount / 'restic/secure-store'
+wip_root = drive_mount / os.getenv('WIP_MIRROR_DIR', 'wip')
+media_sources = [pathlib.Path(p) for p in os.getenv('MEDIA_SOURCES', f'{home}/Videos:{home}/models:{home}/Downloads').split(':') if p]
+layers = ['restic', 'home', 'dev', 'task', 'system', 'taskchampion', 'wip', 'media', 'drive-restic']
 if len(sys.argv) == 3 and sys.argv[1] == '--layer' and sys.argv[2] in layers:
     selected = [sys.argv[2]]
 elif len(sys.argv) == 1:
@@ -98,8 +101,10 @@ def mirror_check(name):
     return '5 restored files match'
 
 # Restore the newest copy of the task DB and sample three files from the newest nightly snapshot.
-def restic_check():
-    snapshots = json.loads(run('restic', 'snapshots', '--no-lock', '--json'))
+# Without a repo this reads RESTIC_REPOSITORY (the NAS); the drive copy passes its own.
+def restic_check(repo=None):
+    restic = ('restic', '-r', str(repo)) if repo else ('restic',)
+    snapshots = json.loads(run(*restic, 'snapshots', '--no-lock', '--json'))
     nightly = [s for s in snapshots if str(task_copy.parent) in [p.rstrip('/') for p in s.get('paths', [])] and 'browser' not in s.get('tags', [])]
     nightly.sort(key=lambda s: s['time'], reverse=True)
     if not nightly:
@@ -108,18 +113,18 @@ def restic_check():
     containing.sort(key=lambda s: s['time'], reverse=True)
     chosen = None
     for snap in containing:
-        listing = run('restic', 'ls', '--no-lock', '--json', snap['id'], str(task_copy.parent))
+        listing = run(*restic, 'ls', '--no-lock', '--json', snap['id'], str(task_copy.parent))
         if any(x.get('path') == str(task_copy) and x.get('type') == 'file' for x in map(json.loads, listing.splitlines())):
             chosen = snap
             break
     if chosen is None:
         raise RuntimeError('task DB not found in snapshots')
-    run('restic', 'restore', '--no-lock', chosen['id'], '--target', str(tmp), '--include', str(task_copy))
+    run(*restic, 'restore', '--no-lock', chosen['id'], '--target', str(tmp), '--include', str(task_copy))
     rows = database(tmp / str(task_copy).lstrip('/'))
     snap = nightly[0]
     cutoff = datetime.datetime.fromisoformat(snap['time'].replace('Z', '+00:00')).timestamp()
     # Reservoir sampling avoids storing the full potentially large listing.
-    proc = subprocess.Popen(['restic', 'ls', '--no-lock', '--json', '--recursive', snap['id']], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    proc = subprocess.Popen([*restic, 'ls', '--no-lock', '--json', '--recursive', snap['id']], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
     candidates = []
     seen = 0
     for line in proc.stdout:
@@ -145,7 +150,7 @@ def restic_check():
     if len(candidates) < 3:
         raise RuntimeError(f'only {len(candidates)} eligible snapshot files; need 3')
     for p in candidates:
-        run('restic', 'restore', '--no-lock', snap['id'], '--target', str(tmp), '--include', str(p))
+        run(*restic, 'restore', '--no-lock', snap['id'], '--target', str(tmp), '--include', str(p))
         restored = tmp / str(p).lstrip('/')
         before = p.stat()
         if before.st_mtime >= cutoff:
@@ -231,18 +236,24 @@ def server_check():
 class Skipped(Exception):
     """A layer that is not installed yet: no result is recorded for it."""
 
+# Run a probe command quietly; None when it cannot start.
+def quiet(*args):
+    try:
+        return subprocess.run(args, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, timeout=30)
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+# True when the backup drive is mounted at its mount point with the expected btrfs UUID.
+def drive_mounted():
+    mount = quiet('findmnt', '-n', '-o', 'UUID,FSTYPE', '--mountpoint', str(drive_mount))
+    return bool(mount) and mount.returncode == 0 and mount.stdout.split() == [drive_uuid, 'btrfs']
+
 # Gate the NVMe WIP layer: enabled unit, the expected btrfs drive, both trees, active unit.
 def wip_state():
-    def quiet(*args):
-        try:
-            return subprocess.run(args, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, timeout=30)
-        except (OSError, subprocess.SubprocessError):
-            return None
     enabled = quiet('systemctl', 'is-enabled', '--quiet', 'wip-mirror.service')
     if not enabled or enabled.returncode:
         return 'not-installed'
-    mount = quiet('findmnt', '-n', '-o', 'UUID,FSTYPE', '--mountpoint', str(wip_mount))
-    if not mount or mount.returncode or mount.stdout.split() != [wip_uuid, 'btrfs']:
+    if not drive_mounted():
         return 'unavailable'
     if not (wip_root / 'live').is_dir() or not (wip_root / 'versions').is_dir():
         return 'incomplete'
@@ -266,7 +277,7 @@ def wip_check():
     if gate == 'not-installed':
         raise Skipped('wip-mirror.service not enabled')
     if gate == 'unavailable':
-        raise RuntimeError(f'drive not mounted at {wip_mount} with the expected UUID')
+        raise RuntimeError(f'drive not mounted at {drive_mount} with the expected UUID')
     if gate == 'incomplete':
         raise RuntimeError('live or versions directory missing on the drive')
     live_root, versions_root = wip_root / 'live', wip_root / 'versions'
@@ -325,7 +336,45 @@ def wip_check():
     versions = f'{len(picked)} prior versions restore intact' if picked else 'no prior versions yet'
     return f'5 restored live files match; {versions}; {private} root-only copies read with sudo'
 
-checks = {'restic': restic_check, 'home': lambda: mirror_check('home'), 'dev': lambda: mirror_check('dev'), 'task': task_check, 'system': system_check, 'taskchampion': server_check, 'wip': wip_check}
+# The media and drive restic layers exist once the drive job has succeeded once.
+def drive_gate():
+    if not drive_stamp.exists():
+        raise Skipped('the drive job has not succeeded yet')
+    if not drive_mounted():
+        raise RuntimeError(f'drive not mounted at {drive_mount} with the expected UUID')
+
+# Restore up to five media files from the drive mirror and compare them with their sources.
+def media_check():
+    drive_gate()
+    stamp = int(drive_stamp.read_text().strip())
+    sample = []
+    for source_root in random.sample(media_sources, len(media_sources)):
+        mirror_root = drive_mount / 'media' / source_root.name
+        for root, dirs, files in os.walk(mirror_root, followlinks=False):
+            dirs[:] = [d for d in dirs if d != '.attic']
+            for file in files:
+                p = pathlib.Path(root) / file
+                source = source_root / p.relative_to(mirror_root)
+                try:
+                    if p.is_symlink() or not p.is_file() or source.is_symlink() or not source.is_file() or source.stat().st_mtime >= stamp:
+                        continue
+                except OSError:
+                    continue
+                sample.append((source, p))
+    if len(sample) < 3:
+        raise RuntimeError(f'only {len(sample)} media files older than the last drive run; need 3')
+    sample = random.sample(sample, min(5, len(sample)))
+    for i, (source, p) in enumerate(sample):
+        compare(source, p, tmp / f'media-{i}')
+    return f'{len(sample)} restored media files match'
+
+# Check 5% of the drive repo's data, then restore from it as the NAS restic drill does.
+def drive_restic_check():
+    drive_gate()
+    run('restic', '-r', str(drive_repo), '--retry-lock', '5m', 'check', '--read-data-subset=5%')
+    return 'check of 5% of data ok; ' + restic_check(drive_repo)
+
+checks = {'restic': restic_check, 'home': lambda: mirror_check('home'), 'dev': lambda: mirror_check('dev'), 'task': task_check, 'system': system_check, 'taskchampion': server_check, 'wip': wip_check, 'media': media_check, 'drive-restic': drive_restic_check}
 try:
     data = json.loads(state.read_text())
 except (OSError, ValueError):
