@@ -84,7 +84,13 @@ STUB
 #!/usr/bin/env bash
 printf '%s\n' "${WIP_FINDMNT-fixture-uuid btrfs}"
 STUB
-  chmod +x "$BATS_TEST_TMPDIR/bin/systemctl" "$BATS_TEST_TMPDIR/bin/findmnt"
+  # Stands in for root: reads a mode 000 fixture by lending it read permission.
+  cat > "$BATS_TEST_TMPDIR/bin/sudo" <<'STUB'
+#!/usr/bin/env bash
+[[ ${SUDO_FAIL:-0} == 1 || $1 != -n || $2 != cat || $3 != -- || $# -ne 4 ]] && exit 1
+chmod u+r "$4" && cat "$4"; rc=$?; chmod u-r "$4"; exit $rc
+STUB
+  chmod +x "$BATS_TEST_TMPDIR/bin/systemctl" "$BATS_TEST_TMPDIR/bin/findmnt" "$BATS_TEST_TMPDIR/bin/sudo"
 }
 
 # Mirror the dev fixtures onto the fake WIP drive, with one prior version of fixture0.
@@ -252,7 +258,7 @@ wip_drive() {
   wip_drive
   run "$DRILL_SCRIPT" --layer wip
   [ "$status" -eq 0 ]
-  [[ "$output" == *"5 restored live files match; 1 prior versions restore intact; 0 root-only copies skipped"* ]]
+  [[ "$output" == *"5 restored live files match; 1 prior versions restore intact; 0 root-only copies read with sudo"* ]]
   jq -e '.layers.wip.ok == true and .layers.wip.last_success > 0' "$HOME/.local/state/backup-drill/last.json"
 }
 
@@ -265,22 +271,26 @@ wip_drive() {
   [[ "$output" == *"differs"* ]]
 }
 
-@test "root-only live copies are counted, not compared" {
+@test "root-only copies are restored with sudo and compared" {
   export WIP_ENABLED=1
   wip_drive
-  chmod 000 "$WIP_MIRROR_MOUNT/wip/live$HOME/dev/fixture0" "$WIP_MIRROR_MOUNT/wip/live$HOME/dev/fixture1"
+  chmod 000 "$WIP_MIRROR_MOUNT/wip/live$HOME/dev/fixture"* "$WIP_MIRROR_MOUNT/wip/versions$HOME/dev/fixture0@"*
+  run "$DRILL_SCRIPT" --layer wip
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"5 restored live files match; 1 prior versions restore intact; 6 root-only copies read with sudo"* ]]
+  for f in "$WIP_MIRROR_MOUNT/wip/live$HOME/dev/fixture"*; do chmod 600 "$f"; printf 'broken' > "$f"; touch -d '@1' "$f"; chmod 000 "$f"; done
   run "$DRILL_SCRIPT" --layer wip
   [ "$status" -eq 1 ]
-  [[ "$output" == *"only 4 readable live copies"*"(2 root-only skipped)"* ]]
+  [[ "$output" == *"differs"* ]]
 }
 
-@test "prior versions this user cannot read fail instead of passing unproven" {
-  export WIP_ENABLED=1
+@test "a sudo refusal fails the drill instead of skipping private copies" {
+  export WIP_ENABLED=1 SUDO_FAIL=1
   wip_drive
-  chmod 000 "$WIP_MIRROR_MOUNT/wip/versions$HOME/dev/fixture0@"*
+  chmod 000 "$WIP_MIRROR_MOUNT/wip/live$HOME/dev/fixture"*
   run "$DRILL_SCRIPT" --layer wip
   [ "$status" -eq 1 ]
-  [[ "$output" == *"1 prior versions, none readable"* ]]
+  [[ "$output" == *"sudo -n could not read a root-only copy"* ]]
 }
 
 @test "a prior version without a current copy on the drive fails" {

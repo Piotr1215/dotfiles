@@ -43,9 +43,9 @@ def database(path):
         return db.execute('select count(*) from tasks').fetchone()[0]
 
 # Compare stable files after first copying them into scratch.
-def compare(source, mirror, dest):
+def compare(source, mirror, dest, fetch=shutil.copyfile):
     before = source.stat()
-    shutil.copyfile(mirror, dest)
+    fetch(mirror, dest)
     import filecmp
     if not filecmp.cmp(source, dest, shallow=False):
         raise RuntimeError(f'restored file differs from live file: {source}')
@@ -249,9 +249,18 @@ def wip_state():
     active = quiet('systemctl', 'is-active', '--quiet', 'wip-mirror.service')
     return 'ready' if active and active.returncode == 0 else 'inactive'
 
+# Copy a drive file into scratch. The drive keeps source modes on root-owned
+# copies, so a private file's copy is read with passwordless sudo (Piotr, 21 Nov).
+def wip_fetch(copy, dest):
+    if os.access(copy, os.R_OK):
+        shutil.copyfile(copy, dest)
+        return
+    with os.fdopen(os.open(dest, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), 'wb') as f:
+        result = subprocess.run(['sudo', '-n', 'cat', '--', str(copy)], stdout=f, stderr=subprocess.DEVNULL, timeout=300)
+    if result.returncode:
+        raise RuntimeError('sudo -n could not read a root-only copy')
+
 # Restore five current copies and up to three prior versions from the WIP drive.
-# The drive keeps source modes on root-owned copies, so this user can only test
-# copies of readable files; the count of root-only copies skipped is reported.
 def wip_check():
     gate = wip_state()
     if gate == 'not-installed':
@@ -274,55 +283,47 @@ def wip_check():
                     continue
                 info = source.stat()
                 # A source edited since its copy, or in the last two minutes, is not comparable yet.
-                if info.st_mtime >= cutoff or info.st_mtime_ns != p.stat().st_mtime_ns:
-                    continue
-                if not os.access(p, os.R_OK):
-                    private += 1
-                    continue
-                if not os.access(source, os.R_OK):
+                if info.st_mtime >= cutoff or info.st_mtime_ns != p.stat().st_mtime_ns or not os.access(source, os.R_OK):
                     continue
             except OSError:
                 continue
+            private += not os.access(p, os.R_OK)
             sample.append((source, p))
             if len(sample) == 5:
                 break
         if len(sample) == 5:
             break
     if len(sample) < 5:
-        raise RuntimeError(f'only {len(sample)} readable live copies match their source mtime; need 5 ({private} root-only skipped)')
+        raise RuntimeError(f'only {len(sample)} live copies match their source mtime; need 5')
     for i, (source, p) in enumerate(sample):
-        compare(source, p, tmp / f'wip-live-{i}')
+        compare(source, p, tmp / f'wip-live-{i}', fetch=wip_fetch)
     version_name = re.compile(r'^(.+)@(\d+)-[0-9a-f]+$')
-    picked, found = [], 0
+    picked = []
     for root, dirs, files in os.walk(versions_root, followlinks=False):
         random.shuffle(dirs)
         random.shuffle(files)
         for file in files:
             match = version_name.match(file)
             p = pathlib.Path(root) / file
-            if not match or p.is_symlink() or not p.is_file():
-                continue
-            found += 1
-            if os.access(p, os.R_OK):
+            if match and not p.is_symlink() and p.is_file():
                 picked.append((p, match))
                 if len(picked) == 3:
                     break
         if len(picked) == 3:
             break
-    if found and not picked:
-        raise RuntimeError(f'{found} prior versions, none readable by this user')
-    import filecmp
     for i, (p, match) in enumerate(picked):
         if int(match.group(2)) > time.time_ns() + 300 * 10**9:
             raise RuntimeError('prior version timestamp is in the future')
         if not os.path.lexists(live_root / p.parent.relative_to(versions_root) / match.group(1)):
             raise RuntimeError('prior version has no current copy on the drive')
+        private += not os.access(p, os.R_OK)
+        # A full read proves the blocks: btrfs fails a read whose checksum does not match.
         dest = tmp / f'wip-version-{i}'
-        shutil.copyfile(p, dest)
-        if not filecmp.cmp(p, dest, shallow=False):
-            raise RuntimeError('restored prior version differs from the drive copy')
+        wip_fetch(p, dest)
+        if dest.stat().st_size != p.stat().st_size:
+            raise RuntimeError('restored prior version is not the size of the drive copy')
     versions = f'{len(picked)} prior versions restore intact' if picked else 'no prior versions yet'
-    return f'5 restored live files match; {versions}; {private} root-only copies skipped'
+    return f'5 restored live files match; {versions}; {private} root-only copies read with sudo'
 
 checks = {'restic': restic_check, 'home': lambda: mirror_check('home'), 'dev': lambda: mirror_check('dev'), 'task': task_check, 'system': system_check, 'taskchampion': server_check, 'wip': wip_check}
 try:
