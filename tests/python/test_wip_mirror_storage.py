@@ -194,12 +194,50 @@ class MirrorStorageTest(unittest.TestCase):
             db.execute('CREATE TABLE records (value TEXT)')
             db.execute("INSERT INTO records VALUES ('safe')")
         self.mirror.sync(source)
+        with sqlite3.connect(source) as db:
+            db.execute("INSERT INTO records VALUES ('unsaved')")
         with patch.object(storage.subprocess, 'run', side_effect=storage.subprocess.CalledProcessError(20, 'snapshot')):
             with self.assertRaises(storage.SourceSnapshotError):
                 self.mirror.sync(source)
         with sqlite3.connect(self.mirrored('work.db').as_uri() + '?mode=ro&immutable=1', uri=True) as copy:
             self.assertEqual(copy.execute('SELECT value FROM records').fetchall(), [('safe',)])
         self.assertEqual(self.versions('work.db'), [])
+
+    def test_unchanged_sqlite_database_is_not_snapshotted_again(self):
+        source = self.root / 'work.sqlite3'
+        with sqlite3.connect(source) as db:
+            db.execute('PRAGMA journal_mode=WAL')
+            db.execute('CREATE TABLE records (value TEXT)')
+            db.commit()
+            self.mirror.sync(source)
+            with patch.object(storage.subprocess, 'run', side_effect=AssertionError('snapshotted')):
+                self.mirror.sync(source)
+                self.mirror.catch_up()
+            db.execute("INSERT INTO records VALUES ('wal only')")
+            db.commit()
+            self.mirror.catch_up()
+        with sqlite3.connect(self.mirrored('work.sqlite3').as_uri() + '?mode=ro&immutable=1', uri=True) as copy:
+            self.assertEqual(copy.execute('SELECT value FROM records').fetchall(), [('wal only',)])
+
+    def test_catch_up_calls_between_after_each_entry(self):
+        (self.root / 'dir').mkdir()
+        (self.root / 'dir' / 'one').write_text('1')
+        (self.root / 'two').write_text('2')
+        calls = []
+        self.mirror.catch_up(lambda: calls.append(True))
+        self.assertEqual(len(calls), 3)
+
+    def test_scan_trusts_matching_metadata_and_an_event_compares_content(self):
+        source = self.root / 'file'
+        source.write_text('aaaa')
+        self.mirror.sync(source)
+        stamp = source.stat().st_mtime_ns
+        source.write_text('bbbb')
+        os.utime(source, ns=(stamp, stamp))
+        self.mirror.catch_up()
+        self.assertEqual(self.mirrored('file').read_text(), 'aaaa')
+        self.mirror.sync(source)
+        self.assertEqual(self.mirrored('file').read_text(), 'bbbb')
 
     def test_non_sqlite_db_is_copied_as_a_regular_file(self):
         source = self.root / 'cache.db'

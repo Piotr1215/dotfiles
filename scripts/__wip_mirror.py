@@ -2,7 +2,7 @@
 """Keep real-time, versioned copies of serval's work files on its NVMe."""
 
 import argparse
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from datetime import datetime
 import errno
 from functools import partial
@@ -10,7 +10,6 @@ import logging
 import os
 from pathlib import Path
 import pwd
-import queue
 import select
 import signal
 import socket
@@ -28,7 +27,8 @@ DEFAULT_HOME = Path("/home/decoder")
 DEFAULT_NTFY = "https://ntfy.sh/homelab-piotr1215-backup"
 DIR_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
 POLL_SECONDS = 1
-QUEUE_LIMIT = 16384
+# Distinct pending paths. A repeat write to a pending path takes no new slot.
+QUEUE_LIMIT = 65536
 TARGET_IO_ERRORS = {errno.EIO, errno.ENODEV, errno.ENOSPC, errno.EROFS, errno.ESTALE}
 
 
@@ -99,17 +99,38 @@ def in_scope(path: Path, roots: tuple[Path, ...]) -> bool:
 class Inbox:
     """Drain the kernel queue while the writer scans or copies large files."""
 
-    def __init__(self, stopped: threading.Event):
-        self.paths = queue.Queue(maxsize=QUEUE_LIMIT)
+    def __init__(self, stopped: threading.Event, limit: int = QUEUE_LIMIT):
+        self.pending = {}
+        self.ready = threading.Condition()
+        self.limit = limit
         self.loss = threading.Event()
         self.stopped = stopped
         self.error = None
 
     def offer(self, path: Path):
-        try:
-            self.paths.put_nowait(path)
-        except queue.Full:
-            self.loss.set()
+        with self.ready:
+            if path in self.pending:
+                return
+            if len(self.pending) >= self.limit:
+                self.lose("WIP mirror inbox full")
+                return
+            self.pending[path] = None
+            self.ready.notify()
+
+    def take(self, timeout: float = 0) -> Path | None:
+        with self.ready:
+            if not self.pending and timeout:
+                self.ready.wait(timeout)
+            if not self.pending:
+                return None
+            path = next(iter(self.pending))
+            del self.pending[path]
+            return path
+
+    def lose(self, reason: str):
+        if not self.loss.is_set():
+            logging.warning("%s, a rescan follows", reason)
+        self.loss.set()
 
     def capture(self, reader: Fanotify, roots: tuple[Path, ...]):
         try:
@@ -119,7 +140,7 @@ class Inbox:
                     continue
                 for event in reader.read():
                     if event.mask & OVERFLOW:
-                        self.loss.set()
+                        self.lose("fanotify queue overflow")
                     elif event.path is not None and in_scope(event.path, roots):
                         # Regular CREATE can precede the first write. CLOSE_WRITE
                         # copies the finished file, and MOVED_TO handles atomic saves.
@@ -167,12 +188,50 @@ def open_mirror(drive: Drive, identity: int, roots: tuple[Path, ...], source_use
         yield Mirror(target, roots, source_user=source_user)
 
 
+def copy(connect, inbox: Inbox, path: Path):
+    try:
+        with connect() as mirror:
+            mirror.sync(path)
+    except OSError as error:
+        if error.errno in TARGET_IO_ERRORS:
+            raise
+        if error.errno == errno.EAGAIN:
+            inbox.offer(path)
+        else:
+            logging.warning("could not mirror %s: %s", path, error)
+    except (RuntimeError, subprocess.SubprocessError) as error:
+        logging.warning("could not mirror %s: %s", path, error)
+
+
+def rescan(inbox: Inbox, connect):
+    started = time.monotonic()
+    with connect() as mirror:
+        busy = False
+
+        # Copy the events that arrived so far between scanned entries, so a
+        # save does not wait for the whole scan.
+        def between():
+            nonlocal busy
+            if busy or not inbox.pending:
+                return
+            busy = True
+            try:
+                for _ in range(len(inbox.pending)):
+                    path = inbox.take()
+                    if path is None:
+                        break
+                    copy(lambda: nullcontext(mirror), inbox, path)
+            finally:
+                busy = False
+
+        mirror.catch_up(between)
+    return time.monotonic() - started
+
+
 def serve_drive(inbox: Inbox, drive: Drive, identity: int, connect):
     inbox.loss.clear()
     logging.info("catching up WIP mirror")
-    with connect() as mirror:
-        mirror.catch_up()
-    logging.info("WIP mirror catch-up complete")
+    logging.info("WIP mirror catch-up complete in %.0f s", rescan(inbox, connect))
     next_probe = 0.0
     while not inbox.stopped.is_set():
         now = time.monotonic()
@@ -184,25 +243,11 @@ def serve_drive(inbox: Inbox, drive: Drive, identity: int, connect):
             # Clear before scanning so a second loss during the scan triggers
             # another scan. Events already in the inbox still get replayed.
             inbox.loss.clear()
-            logging.warning("fanotify event loss, rescanning WIP mirror")
-            with connect() as mirror:
-                mirror.catch_up()
-        try:
-            path = inbox.paths.get(timeout=POLL_SECONDS)
-        except queue.Empty:
+            logging.warning("WIP mirror rescan after event loss took %.0f s", rescan(inbox, connect))
+        path = inbox.take(POLL_SECONDS)
+        if path is None:
             continue
-        try:
-            with connect() as mirror:
-                mirror.sync(path)
-        except OSError as error:
-            if error.errno in TARGET_IO_ERRORS:
-                raise
-            if error.errno == errno.EAGAIN:
-                inbox.offer(path)
-            else:
-                logging.warning("could not mirror %s: %s", path, error)
-        except (RuntimeError, subprocess.SubprocessError) as error:
-            logging.warning("could not mirror %s: %s", path, error)
+        copy(connect, inbox, path)
 
 
 def run(args):

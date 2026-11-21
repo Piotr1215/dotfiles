@@ -1,6 +1,5 @@
 """Exercise queue loss and target replacement through the writer loop."""
 
-import queue
 import sys
 import threading
 from contextlib import contextmanager, nullcontext
@@ -23,11 +22,13 @@ def test_scope_checks_directory_boundaries_and_exclusions(tmp_path):
 
 
 def test_user_space_queue_loss_requests_catch_up(tmp_path):
-    inbox = daemon.Inbox(threading.Event())
-    inbox.paths = queue.Queue(maxsize=1)
+    inbox = daemon.Inbox(threading.Event(), limit=1)
     inbox.offer(tmp_path / "first")
+    inbox.offer(tmp_path / "first")
+    assert not inbox.loss.is_set()
     inbox.offer(tmp_path / "overflow")
-    assert inbox.paths.get_nowait() == tmp_path / "first"
+    assert inbox.take() == tmp_path / "first"
+    assert inbox.take() is None
     assert inbox.loss.is_set()
 
 
@@ -38,7 +39,7 @@ def test_loss_during_catch_up_causes_a_rescan_before_event_replay(tmp_path):
     mirrored = []
     scans = []
 
-    def catch_up():
+    def catch_up(between=None):
         scans.append(True)
         if len(scans) == 1:
             inbox.loss.set()
@@ -64,7 +65,7 @@ def test_drive_replacement_preserves_events_for_new_mount(tmp_path):
     daemon.serve_drive(inbox, drive, 123, lambda: nullcontext(mirror))
 
     mirror.sync.assert_not_called()
-    assert inbox.paths.get_nowait() == path
+    assert inbox.take() == path
 
 
 def test_target_is_closed_between_catch_up_and_live_copy(tmp_path):
@@ -79,13 +80,30 @@ def test_target_is_closed_between_catch_up_and_live_copy(tmp_path):
     @contextmanager
     def connect():
         events.append("open")
-        yield SimpleNamespace(catch_up=lambda: events.append("catch up"), sync=sync)
+        yield SimpleNamespace(catch_up=lambda between=None: events.append("catch up"), sync=sync)
         events.append("close")
 
     drive = SimpleNamespace(identity=lambda: 123)
     daemon.serve_drive(inbox, drive, 123, connect)
     assert events == ["open", "catch up", "close", "open", "copy", "close"]
 
+
+
+def test_events_are_copied_between_entries_of_a_rescan(tmp_path):
+    inbox = daemon.Inbox(threading.Event())
+    events = []
+
+    def catch_up(between=None):
+        events.append("scan start")
+        inbox.offer(tmp_path / "saved")
+        between()
+        events.append("scan end")
+        inbox.stopped.set()
+
+    drive = SimpleNamespace(identity=lambda: 123)
+    mirror = SimpleNamespace(catch_up=catch_up, sync=lambda path: events.append(f"copy {path.name}"))
+    daemon.serve_drive(inbox, drive, 123, lambda: nullcontext(mirror))
+    assert events == ["scan start", "copy saved", "scan end"]
 
 @pytest.mark.parametrize("directory", ["", ".", "..", "../wip", "/wip"])
 def test_drive_rejects_a_destination_outside_its_mount(tmp_path, directory):

@@ -22,6 +22,8 @@ EXCLUDED = frozenset({
 })
 DIR_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
 SOURCE_RACES = (errno.ENOENT, errno.ENOTDIR, errno.ELOOP)
+# The source state a SQLite copy was taken from: main file and WAL size and mtime.
+SOURCE_XATTR = 'user.wip.source'
 
 
 class MirrorEntryConflict(RuntimeError):
@@ -103,6 +105,7 @@ class Mirror:
         self.source_user = source_user
         self.reflink = reflink
         self._catching_up = False
+        self._between = None
         self._skipped = 0
         if not self.target.is_dir() or not self.roots:
             raise ValueError('target must exist and roots must be nonempty')
@@ -116,14 +119,18 @@ class Mirror:
             if os.geteuid() not in (0, account.pw_uid):
                 raise PermissionError('cannot switch to source user')
 
-    def catch_up(self):
+    def catch_up(self, between=None):
+        # between runs after each scanned entry, so live events need not wait
+        # for a full scan.
         self._catching_up = True
+        self._between = between
         self._skipped = 0
         try:
             for root in self.roots:
                 self.sync(root)
         finally:
             self._catching_up = False
+            self._between = None
             if self._skipped:
                 logging.warning('wip mirror catch-up skipped %d entries', self._skipped)
 
@@ -186,6 +193,8 @@ class Mirror:
                         if not self._catching_up:
                             raise
                         self._skip(path / entry.name, error)
+                    if self._between is not None:
+                        self._between()
 
     def _entry(self, parent_fd, name, path, mounts):
         if path in mounts:
@@ -294,7 +303,11 @@ class Mirror:
         destination = self._destination('live', path)
         mode = stat.S_IMODE(info.st_mode) & 0o755
         sqlite = path.suffix in ('.sqlite3', '.db') and os.pread(fd, 16, 0) == b'SQLite format 3\0'
-        if not sqlite and self._unchanged(fd, info, destination, mode):
+        if sqlite:
+            source_state = _sqlite_state(path, info)
+            if _saved_state(destination, mode) == source_state:
+                return
+        elif self._unchanged(fd, info, destination, mode):
             return
         with tempfile.NamedTemporaryFile(prefix='.wip-', dir=destination.parent, delete=False) as output:
             temporary = Path(output.name)
@@ -319,10 +332,14 @@ class Mirror:
                 output.flush()
                 os.fchmod(output.fileno(), mode)
                 os.utime(output.fileno(), ns=(info.st_atime_ns, info.st_mtime_ns))
+                if sqlite:
+                    _save_state(output.fileno(), source_state)
                 if (destination.is_file() and not destination.is_symlink()
                         and filecmp.cmp(temporary, destination, shallow=False)
                         and stat.S_IMODE(destination.stat().st_mode) == mode
                         and destination.stat().st_mtime_ns == info.st_mtime_ns):
+                    if sqlite:
+                        _save_state(destination, source_state)
                     return
                 self._version(destination, path)
                 os.replace(temporary, destination)
@@ -346,6 +363,10 @@ class Mirror:
             if (saved.st_size, saved.st_mtime_ns, stat.S_IMODE(saved.st_mode)) != (
                     info.st_size, info.st_mtime_ns, mode):
                 return False
+            if self._catching_up:
+                # A scan compares size, mtime and mode like rsync. Reading every
+                # file twice made each rescan take 25 minutes on serval.
+                return True
             while True:
                 source_chunk = os.read(source_fd, 1024 * 1024)
                 if source_chunk != os.read(destination_fd, 1024 * 1024):
@@ -355,3 +376,32 @@ class Mirror:
         finally:
             os.lseek(source_fd, 0, os.SEEK_SET)
             os.close(destination_fd)
+
+
+def _sqlite_state(path, info):
+    # A WAL commit changes the database without touching the main file.
+    try:
+        wal = os.stat(f'{path}-wal', follow_symlinks=False)
+        wal_state = (wal.st_size, wal.st_mtime_ns)
+    except FileNotFoundError:
+        wal_state = (0, 0)
+    return f'{info.st_size}:{info.st_mtime_ns}:{wal_state[0]}:{wal_state[1]}'
+
+
+def _saved_state(destination, mode):
+    """Return the source state the saved SQLite copy was taken from, if known."""
+    try:
+        saved = os.stat(destination, follow_symlinks=False)
+        if not stat.S_ISREG(saved.st_mode) or stat.S_IMODE(saved.st_mode) != mode:
+            return None
+        return os.getxattr(destination, SOURCE_XATTR, follow_symlinks=False).decode()
+    except OSError:
+        return None
+
+
+def _save_state(target, state):
+    try:
+        os.setxattr(target, SOURCE_XATTR, state.encode())
+    except OSError as error:
+        if error.errno not in (errno.ENOTSUP, errno.EOPNOTSUPP):
+            raise
