@@ -28,10 +28,6 @@ ${BACKUP_SOURCE_HOME}/.config/google-chrome
 ${BACKUP_SOURCE_HOME}/.config/google-chrome-canary
 ${BACKUP_SOURCE_HOME}/.var/app/io.gitlab.librewolf-community
 
-# NAS mirror, and the drive's media mirror with 3 daily snapshots
-${BACKUP_SOURCE_HOME}/music
-${BACKUP_SOURCE_HOME}/Music
-
 # cache, rebuilt on use
 ${BACKUP_SOURCE_HOME}/.cache
 ${BACKUP_SOURCE_HOME}/.npm
