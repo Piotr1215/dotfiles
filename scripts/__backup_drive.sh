@@ -11,9 +11,11 @@ NAS_REPO="${NAS_REPO:-/mnt/nas-backup/secure-store}"
 RESTIC_PASSWORD_FILE="${RESTIC_PASSWORD_FILE:-$HOME/.config/restic/password}"
 DRIVE_STATE_DIR="${DRIVE_STATE_DIR:-$HOME/.local/state/backup-drive}"
 MEDIA_SOURCES="${MEDIA_SOURCES:-$HOME/Videos:$HOME/models:$HOME/Downloads:$HOME/music}"
-# Mirrored folders whose change takes a new media snapshot. Only ~/music has no
-# restic history; a new download alone must not push out older music states.
-MEDIA_SNAPSHOT_ON="${MEDIA_SNAPSHOT_ON:-music}"
+# Mirrored folders whose change takes a new media snapshot. ~/music is in no
+# restic run, and restic skips Videos and models files over 1G, so those three
+# count. Downloads is left out: it changes most days and would push out the
+# other folders' older states, and it is transient.
+MEDIA_SNAPSHOT_ON="${MEDIA_SNAPSHOT_ON:-music:Videos:models}"
 SNAPSHOT_KEEP="${SNAPSHOT_KEEP:-3}"
 BACKUP_MAX_DELETES="${BACKUP_MAX_DELETES:-1000}"
 LOCK_FILE="${DRIVE_LOCK_FILE:-${TMPDIR:-/tmp}/backup-drive.lock}"
