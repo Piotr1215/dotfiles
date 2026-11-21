@@ -52,6 +52,22 @@ class MirrorStorageTest(unittest.TestCase):
         self.mirror.sync(source)
         self.assertEqual(self.mirrored('file').read_text(), 'second')
 
+    def test_only_the_two_newest_versions_are_kept(self):
+        source = self.root / 'file'
+        lookalike = 'file@1-' + '0' * 32
+        for text in ('a1', 'a2', 'a3'):
+            (self.root / lookalike).write_text(text)
+            self.mirror.sync(self.root / lookalike)
+        for text in ('first', 'second', 'third', 'fourth', 'fifth'):
+            source.write_text(text)
+            self.mirror.sync(source)
+        self.assertEqual(self.mirrored('file').read_text(), 'fifth')
+        def kept(name):
+            return [p.read_text() for p in self.versions(name)
+                    if p.name[:storage.VERSION_SUFFIX.search(p.name).start()] == name]
+        self.assertEqual(kept('file'), ['third', 'fourth'])
+        self.assertEqual(kept(lookalike), ['a1', 'a2'])
+
     def test_unchanged_file_does_not_stage_a_copy(self):
         source = self.root / 'file'
         source.write_text('same')

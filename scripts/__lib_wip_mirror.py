@@ -6,6 +6,7 @@ import logging
 import os
 from pathlib import Path
 import pwd
+import re
 import shutil
 import stat
 import subprocess
@@ -22,6 +23,10 @@ EXCLUDED = frozenset({
 })
 DIR_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
 SOURCE_RACES = (errno.ENOENT, errno.ENOTDIR, errno.ELOOP)
+# Earlier copies kept per file next to the live one (Piotr, 21 Nov: "2 or 3
+# good states", no long history).
+KEEP_VERSIONS = 2
+VERSION_SUFFIX = re.compile(r'@([0-9]+)-[0-9a-f]{32}$')
 # The source state a SQLite copy was taken from: main file and WAL size and mtime.
 SOURCE_XATTR = 'user.wip.source'
 
@@ -286,6 +291,7 @@ class Mirror:
                 temporary.unlink(missing_ok=True)
         else:
             raise MirrorEntryConflict(f'unsafe mirror entry: {destination}')
+        prune_versions(version.parent, path.name)
 
     def _symlink(self, path, value):
         destination = self._destination('live', path)
@@ -405,3 +411,17 @@ def _save_state(target, state):
     except OSError as error:
         if error.errno not in (errno.ENOTSUP, errno.EOPNOTSUPP):
             raise
+
+
+def prune_versions(directory, name, keep=KEEP_VERSIONS):
+    """Delete all but the newest keep versions of name in directory."""
+    stamped = []
+    with os.scandir(directory) as entries:
+        for entry in entries:
+            match = VERSION_SUFFIX.search(entry.name)
+            if (match and entry.name[:match.start()] == name
+                    and not entry.is_dir(follow_symlinks=False)):
+                stamped.append((int(match.group(1)), entry.name))
+    stamped.sort()
+    for _, old in stamped[:max(len(stamped) - keep, 0)]:
+        (Path(directory) / old).unlink(missing_ok=True)
