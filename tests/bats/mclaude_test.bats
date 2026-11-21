@@ -72,6 +72,17 @@ teardown() {
   [ "$status" -eq 2 ]
 }
 
+# Auto mode lets a classifier approve tool calls, and here the classifier is
+# the local model itself, so it is refused like bypass.
+@test "rejects auto permission mode in both forms" {
+  touch "$HOME/healthy"
+  run "$SCRIPT" --permission-mode auto
+  [ "$status" -eq 2 ]
+  run "$SCRIPT" --permission-mode=auto
+  [ "$status" -eq 2 ]
+  [ ! -e "$HOME/claude-argv" ]
+}
+
 # A server start on battery requires an explicit power override.
 @test "refuses battery power unless forced" {
   echo 0 > "$MCLAUDE_POWER_DIR/AC0/online"
@@ -105,7 +116,12 @@ teardown() {
   python3 - "$HOME/claude-argv" <<'PY'
 import sys
 args = open(sys.argv[1], 'rb').read().decode().split('\0')[:-1]
-assert args == ['--settings', '{"disableAllHooks":true}', '--setting-sources', '', '--strict-mcp-config', '--model', 'inkling-2-mini', '-p', 'hi'], args
+import json
+assert args[0] == '--settings', args
+settings = json.loads(args[1])
+assert settings == {'disableAllHooks': True, 'disableAutoMode': 'disable',
+                    'permissions': {'defaultMode': 'default', 'disableBypassPermissionsMode': 'disable'}}, settings
+assert args[2:] == ['--setting-sources', '', '--strict-mcp-config', '--model', 'inkling-2-mini', '-p', 'hi'], args
 PY
   grep -Fx 'ANTHROPIC_BASE_URL=http://127.0.0.1:18090' "$HOME/claude-env"
   ! grep -E '^(TMUX|TMUX_PANE|CLAUDE_PANE_ID|ANTHROPIC_API_KEY)=' "$HOME/claude-env"

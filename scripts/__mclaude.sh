@@ -5,17 +5,18 @@ set -eo pipefail
 # normal hooks, MCP servers, instructions, and agent environment do not load.
 
 # Reject flags that would turn off permission prompts before doing any work.
+# Auto mode counts: its classifier would be the local model itself.
 check_permissions() {
   local arg previous=''
   for arg in "$@"; do
     case "$arg" in
-      --dangerously-skip-permissions|--allow-dangerously-skip-permissions|--permission-mode=bypassPermissions)
-        echo 'mclaude: bypassing permissions is not allowed' >&2
+      --dangerously-skip-permissions|--allow-dangerously-skip-permissions|--permission-mode=bypassPermissions|--permission-mode=auto)
+        echo 'mclaude: bypass and auto permission modes are not allowed' >&2
         exit 2
         ;;
     esac
-    if [[ "$previous" == --permission-mode && "$arg" == bypassPermissions ]]; then
-      echo 'mclaude: bypassing permissions is not allowed' >&2
+    if [[ "$previous" == --permission-mode && ( "$arg" == bypassPermissions || "$arg" == auto ) ]]; then
+      echo 'mclaude: bypass and auto permission modes are not allowed' >&2
       exit 2
     fi
     previous="$arg"
@@ -37,6 +38,9 @@ state="${MCLAUDE_STATE:-${XDG_STATE_HOME:-$HOME/.local/state}/mclaude}"
 config="${MCLAUDE_CONFIG:-${XDG_CONFIG_HOME:-$HOME/.config}/mclaude}"
 claude="${MCLAUDE_CLAUDE:-$HOME/.local/bin/claude}"
 power_dir="${MCLAUDE_POWER_DIR:-/sys/class/power_supply}"
+# Claude Code 2.1.283+ starts terminal sessions in auto mode by default, so
+# the session is pinned to manual (default) and auto leaves the Shift+Tab cycle.
+bare_settings='{"disableAllHooks":true,"disableAutoMode":"disable","permissions":{"defaultMode":"default","disableBypassPermissionsMode":"disable"}}'
 
 # Check that a pid exists and is not a zombie waiting for its parent.
 process_alive() {
@@ -222,7 +226,7 @@ run_claude() {
     'DISABLE_AUTOUPDATER=1' 'DISABLE_TELEMETRY=1'
     "CLAUDE_CODE_MAX_CONTEXT_TOKENS=$((ctx - 8192))")
   result=0
-  env -i "${clean_env[@]}" "$claude" --settings '{"disableAllHooks":true}' \
+  env -i "${clean_env[@]}" "$claude" --settings "$bare_settings" \
     --setting-sources '' --strict-mcp-config --model inkling-2-mini "$@" || result=$?
   return "$result"
 }
