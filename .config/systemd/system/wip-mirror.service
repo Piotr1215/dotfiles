@@ -9,6 +9,12 @@ ExecStart=/usr/bin/python3 -EsB /usr/local/lib/wip-mirror/__wip_mirror.py
 Restart=on-failure
 RestartSec=10s
 Nice=10
+# The startup scan reads every file under the roots and ran at a full core
+# for 8 minutes at each boot, when Gordon and its subagents need the CPU
+# (Piotr, 21 Nov). An idle weight runs the daemon only on CPU nothing else
+# wants, and the quota caps it at a quarter of one core.
+CPUWeight=idle
+CPUQuota=25%
 IOSchedulingClass=idle
 NoNewPrivileges=yes
 
