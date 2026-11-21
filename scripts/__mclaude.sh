@@ -1,29 +1,15 @@
 #!/usr/bin/env bash
 set -eo pipefail
 
-# Launch Claude Code against a local model with a bare configuration so the
-# normal hooks, MCP servers, instructions, and agent environment do not load.
-
-# Reject flags that would turn off permission prompts before doing any work.
-# Auto mode counts: its classifier would be the local model itself.
-check_permissions() {
-  local arg previous=''
-  for arg in "$@"; do
-    case "$arg" in
-      --dangerously-skip-permissions|--allow-dangerously-skip-permissions|--permission-mode=bypassPermissions|--permission-mode=auto)
-        echo 'mclaude: bypass and auto permission modes are not allowed' >&2
-        exit 2
-        ;;
-    esac
-    if [[ "$previous" == --permission-mode && ( "$arg" == bypassPermissions || "$arg" == auto ) ]]; then
-      echo 'mclaude: bypass and auto permission modes are not allowed' >&2
-      exit 2
-    fi
-    previous="$arg"
-  done
-}
-
-check_permissions "$@"
+# mclaude: a plain terminal chat (aichat) with Inkling 2 Mini, served locally
+# by llama.cpp. No agent harness and no preloaded prompt: the model reads only
+# what you type, so a reply starts in seconds. Claude Code spent 90 s reading
+# its own 15K-token preamble here before the first word.
+#
+#   mclaude                     chat; .file <path> adds a file, .copy the reply
+#   mclaude 'question'          one answer; cat draft | mclaude 'tighten this'
+#   mclaude web                 start the server and open its own chat page
+#   mclaude status | stop
 
 llama_dir="${MCLAUDE_LLAMA_DIR:-$HOME/.local/opt/llama.cpp-b12613}"
 server="${MCLAUDE_SERVER:-$llama_dir/llama-b12613/llama-server}"
@@ -36,11 +22,9 @@ need_mib="${MCLAUDE_NEED_MIB:-10600}"
 watch_interval="${MCLAUDE_WATCH_INTERVAL:-30}"
 state="${MCLAUDE_STATE:-${XDG_STATE_HOME:-$HOME/.local/state}/mclaude}"
 config="${MCLAUDE_CONFIG:-${XDG_CONFIG_HOME:-$HOME/.config}/mclaude}"
-claude="${MCLAUDE_CLAUDE:-$HOME/.local/bin/claude}"
+aichat="${MCLAUDE_AICHAT:-$HOME/.cargo/bin/aichat}"
+opener="${MCLAUDE_OPEN:-xdg-open}"
 power_dir="${MCLAUDE_POWER_DIR:-/sys/class/power_supply}"
-# Claude Code 2.1.283+ starts terminal sessions in auto mode by default, so
-# the session is pinned to manual (default) and auto leaves the Shift+Tab cycle.
-bare_settings='{"disableAllHooks":true,"disableAutoMode":"disable","permissions":{"defaultMode":"default","disableBypassPermissionsMode":"disable"}}'
 
 # Check that a pid exists and is not a zombie waiting for its parent.
 process_alive() {
@@ -89,6 +73,7 @@ show_status() {
   if healthy; then printf 'up\n'; else printf 'down\n'; fi
   pid="$(read_pid "$state/server.pid")" || pid='none'
   printf 'server pid: %s\n' "$pid"
+  printf 'chat page: http://127.0.0.1:%s (mclaude web opens it)\n' "$port"
   nvidia-smi --query-gpu=memory.used,memory.total --format=csv,noheader
 }
 
@@ -198,45 +183,74 @@ watchdog() {
   rm -f "$state/watchdog.pid"
 }
 
-# Remove this launcher's session marker after Claude exits.
+# Remove this launcher's session marker after the chat exits.
 cleanup_session() {
   rm -f "$state/sessions/$$"
 }
 
-# Launch Claude with only the explicitly allowed environment and settings.
-# For an unknown model ID Claude Code assumes a 1M window and reserves 32K for
-# each reply; told the real window with that reserve, it compacted every turn.
-# Replies are capped at 8K and auto-compact is off: a compaction re-reads the
-# whole conversation and drops the cache, so /clear between tasks is cheaper.
-run_claude() {
-  local name result
+# Write aichat's config with the local server as its only client. It is
+# regenerated on every run so the port and window always match this script.
+write_chat_config() {
+  cat > "$config/aichat/config.yaml" <<EOF
+# Written by __mclaude.sh on every run.
+model: local:inkling-2-mini
+stream: true
+clients:
+  - type: openai-compatible
+    name: local
+    api_base: http://127.0.0.1:$port/v1
+    api_key: local
+    models:
+      - name: inkling-2-mini
+        max_input_tokens: $((ctx - 8192))
+        max_output_tokens: 8192
+EOF
+}
+
+# Run aichat with only the explicitly allowed environment, so a command run
+# from its shell mode never sees the caller's tokens or agents-bus identity.
+run_chat() {
+  local name result=0
   local -a clean_env=()
-  mkdir -p "$state/sessions" "$config/claude"
+  if [[ ! -x "$aichat" ]]; then
+    echo "mclaude: $aichat not found, install it with: cargo install --locked aichat" >&2
+    return 1
+  fi
+  mkdir -p "$state/sessions" "$config/aichat"
   trap cleanup_session EXIT
   printf '%s\n' "$$" > "$state/sessions/$$"
   ensure_server || return $?
-  if [[ ! -e "$config/claude/.claude.json" ]]; then
-    printf '%s\n' '{"hasCompletedOnboarding": true}' > "$config/claude/.claude.json"
-  fi
-  for name in HOME PATH TERM COLORTERM LANG LC_ALL USER SHELL DISPLAY WAYLAND_DISPLAY XDG_RUNTIME_DIR; do
+  write_chat_config
+  for name in HOME PATH TERM COLORTERM LANG LC_ALL USER SHELL EDITOR VISUAL DISPLAY WAYLAND_DISPLAY XDG_RUNTIME_DIR; do
     if [[ -v "$name" ]]; then clean_env+=("$name=${!name}"); fi
   done
-  clean_env+=("CLAUDE_CONFIG_DIR=$config/claude" "ANTHROPIC_BASE_URL=http://127.0.0.1:$port"
-    'ANTHROPIC_AUTH_TOKEN=local' 'ANTHROPIC_MODEL=inkling-2-mini'
-    'ANTHROPIC_DEFAULT_HAIKU_MODEL=inkling-2-mini' 'ANTHROPIC_DEFAULT_SONNET_MODEL=inkling-2-mini'
-    'ANTHROPIC_DEFAULT_OPUS_MODEL=inkling-2-mini' 'CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1'
-    'DISABLE_AUTOUPDATER=1' 'DISABLE_TELEMETRY=1'
-    "CLAUDE_CODE_MAX_CONTEXT_TOKENS=$ctx" 'CLAUDE_CODE_MAX_OUTPUT_TOKENS=8192'
-    'DISABLE_AUTO_COMPACT=1')
-  result=0
-  env -i "${clean_env[@]}" "$claude" --settings "$bare_settings" \
-    --setting-sources '' --strict-mcp-config --model inkling-2-mini "$@" || result=$?
+  clean_env+=("AICHAT_CONFIG_DIR=$config/aichat")
+  if [[ -t 1 ]]; then
+    env -i "${clean_env[@]}" "$aichat" "$@" || result=$?
+  else
+    env -i "${clean_env[@]}" "$aichat" "$@" | strip_thinking || result=$?
+  fi
   return "$result"
+}
+
+# Drop the leading <think> block aichat prints for the model's reasoning, so a
+# reply piped to the clipboard or a file is the answer alone.
+strip_thinking() {
+  perl -0777 -pe 's/\A\s*<think>.*?<\/think>\s*//s'
+}
+
+# Start the server if needed and open llama-server's chat page, which sends
+# only what is typed and starts replying in seconds.
+open_web() {
+  ensure_server || return $?
+  printf 'chat page: http://127.0.0.1:%s\n' "$port"
+  "$opener" "http://127.0.0.1:$port" > /dev/null 2>&1 &
 }
 
 case "${1:-}" in
   stop) stop_server ;;
   status) show_status ;;
+  web) open_web ;;
   __watchdog) watchdog ;;
-  *) run_claude "$@" ;;
+  *) run_chat "$@" ;;
 esac

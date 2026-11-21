@@ -9,7 +9,8 @@ setup() {
   export MCLAUDE_STATE="$BATS_TEST_TMPDIR/state"
   export MCLAUDE_CONFIG="$BATS_TEST_TMPDIR/config"
   export MCLAUDE_POWER_DIR="$BATS_TEST_TMPDIR/power"
-  export MCLAUDE_CLAUDE="$BATS_TEST_TMPDIR/bin/claude-stub"
+  export MCLAUDE_AICHAT="$BATS_TEST_TMPDIR/bin/aichat-stub"
+  export MCLAUDE_OPEN="$BATS_TEST_TMPDIR/bin/open-stub"
   export MCLAUDE_SERVER="$BATS_TEST_TMPDIR/bin/server-stub"
   export MCLAUDE_PORT=18090 MCLAUDE_NEED_MIB=10600 MCLAUDE_WATCH_INTERVAL=0.1
   echo 1 > "$MCLAUDE_POWER_DIR/AC0/online"
@@ -33,11 +34,15 @@ printf '%s\n' "$LD_LIBRARY_PATH" > "$HOME/server-libs"
 touch "$HOME/healthy"
 exec sleep 300
 STUB
-  cat > "$MCLAUDE_CLAUDE" <<'STUB'
+  cat > "$MCLAUDE_AICHAT" <<'STUB'
 #!/usr/bin/env bash
-printf '%s\0' "$@" > "$HOME/claude-argv"
-env > "$HOME/claude-env"
+printf '%s\0' "$@" > "$HOME/aichat-argv"
+env > "$HOME/aichat-env"
 if [[ -f "$HOME/exit-code" ]]; then exit "$(cat "$HOME/exit-code")"; fi
+STUB
+  cat > "$MCLAUDE_OPEN" <<'STUB'
+#!/usr/bin/env bash
+printf '%s\n' "$@" > "$HOME/opened"
 STUB
   chmod +x "$BATS_TEST_TMPDIR/bin/"*
 }
@@ -54,46 +59,17 @@ teardown() {
   wait 2>/dev/null || true
 }
 
-# Bypassing permission prompts must be rejected before touching state.
-@test "rejects dangerous permission bypass" {
-  run "$SCRIPT" --dangerously-skip-permissions
-  [ "$status" -eq 2 ]
-  [ ! -e "$HOME/claude-argv" ]
-  [ ! -e "$MCLAUDE_STATE" ]
-  run "$SCRIPT" --allow-dangerously-skip-permissions
-  [ "$status" -eq 2 ]
-}
-
-# Both forms of permission mode must keep permission prompts enabled.
-@test "rejects both bypass permission mode forms" {
-  run "$SCRIPT" --permission-mode bypassPermissions
-  [ "$status" -eq 2 ]
-  run "$SCRIPT" --permission-mode=bypassPermissions
-  [ "$status" -eq 2 ]
-}
-
-# Auto mode lets a classifier approve tool calls, and here the classifier is
-# the local model itself, so it is refused like bypass.
-@test "rejects auto permission mode in both forms" {
-  touch "$HOME/healthy"
-  run "$SCRIPT" --permission-mode auto
-  [ "$status" -eq 2 ]
-  run "$SCRIPT" --permission-mode=auto
-  [ "$status" -eq 2 ]
-  [ ! -e "$HOME/claude-argv" ]
-}
-
 # A server start on battery requires an explicit power override.
 @test "refuses battery power unless forced" {
   echo 0 > "$MCLAUDE_POWER_DIR/AC0/online"
-  run "$SCRIPT" -p hi
+  run "$SCRIPT" hi
   [ "$status" -eq 3 ]
   [[ "$output" == *'on battery'* ]]
-  [ ! -e "$HOME/claude-argv" ]
+  [ ! -e "$HOME/aichat-argv" ]
   export MCLAUDE_FORCE=1
-  run "$SCRIPT" -p hi
+  run "$SCRIPT" hi
   [ "$status" -eq 0 ]
-  [ -e "$HOME/claude-argv" ]
+  [ -e "$HOME/aichat-argv" ]
   [ -e "$HOME/server-argv" ]
 }
 
@@ -104,46 +80,55 @@ teardown() {
   [ "$status" -eq 3 ]
   [[ "$output" == *'VRAM'*'10000 MiB free'*'10600 MiB needed'* ]]
   [[ "$output" == *'game'* ]]
-  [ ! -e "$HOME/claude-argv" ]
+  [ ! -e "$HOME/aichat-argv" ]
 }
 
-# A healthy server launches Claude with isolated settings and environment.
-@test "passes bare settings and strips caller environment" {
+# aichat gets its own config dir, the user's args untouched, and an
+# environment without the caller's tokens or agents-bus identity.
+@test "runs aichat on its own config with a clean environment" {
   touch "$HOME/healthy"
-  export TMUX_PANE='%42' ANTHROPIC_API_KEY=secret CLAUDE_PANE_ID=secret TMUX=secret
-  run "$SCRIPT" -p hi
+  export TMUX_PANE='%42' ANTHROPIC_API_KEY=secret GITHUB_TOKEN=secret TMUX=secret EDITOR=nvim
+  run "$SCRIPT" hi
   [ "$status" -eq 0 ]
-  python3 - "$HOME/claude-argv" <<'PY'
+  python3 - "$HOME/aichat-argv" <<'PYX'
 import sys
 args = open(sys.argv[1], 'rb').read().decode().split('\0')[:-1]
-import json
-assert args[0] == '--settings', args
-settings = json.loads(args[1])
-assert settings == {'disableAllHooks': True, 'disableAutoMode': 'disable',
-                    'permissions': {'defaultMode': 'default', 'disableBypassPermissionsMode': 'disable'}}, settings
-assert args[2:] == ['--setting-sources', '', '--strict-mcp-config', '--model', 'inkling-2-mini', '-p', 'hi'], args
-PY
-  grep -Fx 'ANTHROPIC_BASE_URL=http://127.0.0.1:18090' "$HOME/claude-env"
-  ! grep -E '^(TMUX|TMUX_PANE|CLAUDE_PANE_ID|ANTHROPIC_API_KEY)=' "$HOME/claude-env"
+assert args == ['hi'], args
+PYX
+  grep -Fx "AICHAT_CONFIG_DIR=$MCLAUDE_CONFIG/aichat" "$HOME/aichat-env"
+  grep -Fx 'EDITOR=nvim' "$HOME/aichat-env"
+  ! grep -E '^(TMUX|TMUX_PANE|ANTHROPIC_API_KEY|GITHUB_TOKEN)=' "$HOME/aichat-env"
 }
 
-# For an unknown model ID Claude Code reserves 32K output tokens, which left
-# 9K of a 40K window for a 15K preamble, so it compacted on every turn. Each
-# compaction re-read the whole conversation at ~170 tok/s and dropped the cache.
-@test "gives Claude the real window, small replies and no auto-compact" {
+# The only client is the local server, on the port and window this script
+# starts it with, regenerated so a changed port never leaves a stale config.
+@test "points aichat at the local server" {
   touch "$HOME/healthy"
-  run "$SCRIPT" -p hi
+  run "$SCRIPT" hi
   [ "$status" -eq 0 ]
-  grep -Fx 'CLAUDE_CODE_MAX_CONTEXT_TOKENS=49152' "$HOME/claude-env"
-  grep -Fx 'CLAUDE_CODE_MAX_OUTPUT_TOKENS=8192' "$HOME/claude-env"
-  grep -Fx 'DISABLE_AUTO_COMPACT=1' "$HOME/claude-env"
-  MCLAUDE_CTX=32768 run "$SCRIPT" -p hi
-  [ "$status" -eq 0 ]
-  grep -Fx 'CLAUDE_CODE_MAX_CONTEXT_TOKENS=32768' "$HOME/claude-env"
+  local file="$MCLAUDE_CONFIG/aichat/config.yaml"
+  grep -Fx 'model: local:inkling-2-mini' "$file"
+  grep -Fx '    api_base: http://127.0.0.1:18090/v1' "$file"
+  grep -Fx '        max_input_tokens: 40960' "$file"
+  MCLAUDE_PORT=18091 run "$SCRIPT" hi
+  grep -Fx '    api_base: http://127.0.0.1:18091/v1' "$file"
 }
 
-# Child failures must reach the caller without leaving a live session marker.
-@test "propagates Claude exit code and removes session" {
+# Inkling reasons before it answers and aichat prints that as a <think> block;
+# a reply piped to the clipboard or a file must be the answer alone.
+@test "strips the reasoning block from piped output" {
+  touch "$HOME/healthy"
+  cat > "$MCLAUDE_AICHAT" <<'STUB'
+#!/usr/bin/env bash
+printf '<think>\nplan the rewrite\n</think>\n\nHi team, the deploy is late.\n'
+STUB
+  run "$SCRIPT" 'rewrite this'
+  [ "$status" -eq 0 ]
+  [ "$output" = 'Hi team, the deploy is late.' ]
+}
+
+# Chat failures must reach the caller without leaving a live session marker.
+@test "propagates aichat exit code and removes session" {
   touch "$HOME/healthy"
   echo 17 > "$HOME/exit-code"
   run "$SCRIPT"
@@ -151,19 +136,24 @@ PY
   [ -z "$(find "$MCLAUDE_STATE/sessions" -type f -print -quit)" ]
 }
 
-# A separate config must skip onboarding without changing an existing config.
-@test "writes onboarding state only when missing" {
-  touch "$HOME/healthy"
-  run "$SCRIPT"
+# A missing chat client must say how to install it before the GPU is touched.
+@test "names the install command when aichat is missing" {
+  export MCLAUDE_AICHAT="$BATS_TEST_TMPDIR/bin/no-such-aichat"
+  run "$SCRIPT" hi
+  [ "$status" -eq 1 ]
+  [[ "$output" == *'cargo install --locked aichat'* ]]
+  [ ! -e "$HOME/server-argv" ]
+}
+
+# The chat page needs the server but not the terminal client.
+@test "web starts the server and opens the chat page" {
+  run "$SCRIPT" web
   [ "$status" -eq 0 ]
-  python3 - "$MCLAUDE_CONFIG/claude/.claude.json" <<'PY'
-import json, sys
-assert json.load(open(sys.argv[1])) == {'hasCompletedOnboarding': True}
-PY
-  echo '{"existing": true}' > "$MCLAUDE_CONFIG/claude/.claude.json"
-  run "$SCRIPT"
-  [ "$status" -eq 0 ]
-  grep -Fx '{"existing": true}' "$MCLAUDE_CONFIG/claude/.claude.json"
+  [[ "$output" == *'chat page: http://127.0.0.1:18090'* ]]
+  for _ in $(seq 20); do [ -e "$HOME/opened" ] && break; sleep 0.1; done
+  grep -Fx 'http://127.0.0.1:18090' "$HOME/opened"
+  [ -e "$HOME/server-argv" ]
+  [ ! -e "$HOME/aichat-argv" ]
 }
 
 # An idle unmanaged session must not keep the GPU server alive indefinitely.
@@ -204,7 +194,7 @@ PY
 # The real startup path must pass the requested model flags and server libraries.
 @test "starts detached server with requested flags and library path" {
   export MCLAUDE_LIBS='/test/lib:/test/cuda' MCLAUDE_CTX=12345
-  run "$SCRIPT" -p hi
+  run "$SCRIPT" hi
   [ "$status" -eq 0 ]
   [ "$(cat "$HOME/server-libs")" = '/test/lib:/test/cuda' ]
   python3 - "$HOME/server-argv" <<'PY'
@@ -216,7 +206,7 @@ PY
   [ -s "$MCLAUDE_STATE/watchdog.pid" ]
 }
 
-# Startup failure must report the log and never call Claude.
+# Startup failure must report the log and never start the chat.
 @test "reports an early server exit" {
   cat > "$MCLAUDE_SERVER" <<'STUB'
 #!/usr/bin/env bash
@@ -226,7 +216,7 @@ STUB
   run "$SCRIPT"
   [ "$status" -eq 1 ]
   [[ "$output" == *'stub server failed'* ]]
-  [ ! -e "$HOME/claude-argv" ]
+  [ ! -e "$HOME/aichat-argv" ]
 }
 
 # Status reports the health, server pid, and current GPU use.
@@ -234,7 +224,7 @@ STUB
   touch "$HOME/healthy"
   run "$SCRIPT" status
   [ "$status" -eq 0 ]
-  [[ "$output" == *up*'server pid: none'*'1000 MiB, 12000 MiB'* ]]
+  [[ "$output" == *up*'server pid: none'*'chat page: http://127.0.0.1:18090'*'1000 MiB, 12000 MiB'* ]]
 }
 
 # Force bypasses only the battery check, never the GPU capacity check.
@@ -245,7 +235,7 @@ STUB
   run "$SCRIPT"
   [ "$status" -eq 3 ]
   [[ "$output" == *'VRAM'* ]]
-  [ ! -e "$HOME/claude-argv" ]
+  [ ! -e "$HOME/aichat-argv" ]
 }
 
 # Stop ends both managed processes and removes their pid files.
