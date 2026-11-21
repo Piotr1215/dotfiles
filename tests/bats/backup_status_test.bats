@@ -21,6 +21,9 @@ exit 1
 STUB
   # The drive layers: the WIP unit is not enabled and the drive job has not run unless a test says so.
   export DRIVE_MOUNT="$BATS_TEST_TMPDIR/nvme" DRIVE_UUID=fixture-uuid DRIVE_STATE_DIR="$BATS_TEST_TMPDIR/drive-state"
+  export WIP_PROBE_STATE_DIR="$BATS_TEST_TMPDIR/wip-probe"
+  mkdir -p "$WIP_PROBE_STATE_DIR"
+  date +%s > "$WIP_PROBE_STATE_DIR/last-success"
   cat > "$BATS_TEST_TMPDIR/bin/systemctl" <<'STUB'
 #!/usr/bin/env bash
 case "$1" in
@@ -217,4 +220,20 @@ wip_state() {
   printf '{"last_run":%s,"layers":{"taskchampion":{"ok":true,"last_run":%s,"last_success":%s}}}' "$now" "$((now - 9 * 86400))" "$((now - 9 * 86400))" > "$HOME/.local/state/backup-drill/last.json"
   run "$STATUS_SCRIPT"
   [ "$(wip_state taskchampion)" = stale ]
+}
+
+@test "a fresh drill is not enough: the mirror needs a new save on the drive within 15 minutes" {
+  export WIP_ENABLED=1
+  mkdir -p "$DRIVE_MOUNT/wip/live" "$DRIVE_MOUNT/wip/versions"
+  printf '{"last_run":%s,"layers":{"wip":{"ok":true,"last_run":%s,"last_success":%s}}}' "$(date +%s)" "$(date +%s)" "$(date +%s)" > "$HOME/.local/state/backup-drill/last.json"
+  run "$STATUS_SCRIPT"
+  [ "$(wip_state)" = ok ]
+  echo $(( $(date +%s) - 1000 )) > "$WIP_PROBE_STATE_DIR/last-success"
+  run "$STATUS_SCRIPT" --prom "$BATS_TEST_TMPDIR/metrics.prom"
+  grep -Fx 'backup_layer_ok{layer="wip"} 0' "$BATS_TEST_TMPDIR/metrics.prom"
+  run "$STATUS_SCRIPT"
+  [ "$(wip_state)" = stale ]
+  rm "$WIP_PROBE_STATE_DIR/last-success"
+  run "$STATUS_SCRIPT"
+  [ "$(wip_state)" = unknown ]
 }

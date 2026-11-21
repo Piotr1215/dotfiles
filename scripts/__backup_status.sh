@@ -15,6 +15,7 @@ drive_uuid = os.getenv('DRIVE_UUID', 'd74106d0-1b12-4d65-873d-d69ed3a729e6')
 drive_stamp = pathlib.Path(os.getenv('DRIVE_STATE_DIR', str(state_dir / 'backup-drive'))) / 'last-success'
 drive_repo = drive_mount / 'restic/secure-store'
 wip_root = drive_mount / os.getenv('WIP_MIRROR_DIR', 'wip')
+wip_probe = pathlib.Path(os.getenv('WIP_PROBE_STATE_DIR', str(state_dir / 'wip-probe'))) / 'last-success'
 now = int(time.time())
 names = ['restic', 'home', 'dev', 'task-files', 'task-sync', 'system', 'taskchampion']
 if len(sys.argv) > 3 or (len(sys.argv) > 1 and sys.argv[1] != '--prom'):
@@ -125,7 +126,10 @@ def drive_mounted():
     return bool(mount) and mount.returncode == 0 and mount.stdout.split() == [drive_uuid, 'btrfs']
 
 # The NVMe WIP layer gets a row only once wip-mirror.service is enabled; the same
-# gate as __backup_drill.sh. Its freshness is the weekly drill's last success.
+# gate as __backup_drill.sh. Its freshness is the weekly drill's last success, and
+# the 5-minute __wip_mirror_probe.sh must have seen a new save arrive within 15
+# minutes: the drill reads copies already on the drive, so on 21 Nov a mirror
+# that had stopped copying stayed ok all day.
 def wip_state():
     enabled = quiet('systemctl', 'is-enabled', '--quiet', 'wip-mirror.service')
     if not enabled or enabled.returncode:
@@ -150,7 +154,16 @@ if wip_gate != 'not-installed':
     elif last > now + 300 or now - last > 8*86400:
         status = 'stale'
     else:
-        status = 'ok'
+        try:
+            probe = int(read(wip_probe).strip())
+        except (AttributeError, ValueError):
+            probe = 0
+        if not probe:
+            status = 'unknown'
+        elif probe > now + 300 or now - probe > 900:
+            status = 'stale'
+        else:
+            status = 'ok'
     rows.append(('wip', last, status, result))
 
 # The media and drive restic rows appear once the drive job has succeeded once.
