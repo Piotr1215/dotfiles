@@ -29,6 +29,7 @@ usage: $(basename "$0") <base|speak> [--reboot] [--no-shutdown] [--yes]
   base   nvidia + balanced, lid ignored   (powered: home, hotel, anywhere on AC)
   speak  hybrid  + battery, lid suspends  (presenting, on battery or plugged in)
   login  restore the battery profile when graphics is hybrid
+  check  report whether the current mode settings agree
 
   --reboot       reboot instead of shutting down
   --no-shutdown  apply settings and leave the machine on
@@ -108,10 +109,68 @@ mode_login() {
   return 0
 }
 
+# Report every setting that disagrees with the active graphics mode.
+mode_check() {
+  local graphics profile profile_output expected_profile expected_lid mode key line value
+  local lid="missing" lid_external="missing"
+  local speak_flag="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/speak-mode"
+  local -a wrong=()
+
+  graphics=$(system76-power graphics 2>/dev/null) || graphics="unavailable"
+  profile_output=$(system76-power profile 2>/dev/null) || profile_output="unavailable"
+  profile="${profile_output%%$'\n'*}"
+  if [[ "$profile" == 'Power Profile: '* ]]; then
+    profile="${profile#Power Profile: }"
+  else
+    profile="unavailable"
+  fi
+
+  case "$graphics" in
+    hybrid) mode=speak; expected_profile=Battery; expected_lid=suspend ;;
+    nvidia) mode=base; expected_profile=Balanced; expected_lid=ignore ;;
+    *) mode="$graphics"; wrong+=("graphics=$graphics") ;;
+  esac
+
+  if [[ -n "${expected_profile:-}" ]]; then
+    [[ "$profile" == "$expected_profile" ]] || wrong+=("profile=$profile (expected $expected_profile)")
+    if [[ "$mode" == speak && ! -e "$speak_flag" ]]; then
+      wrong+=("speak-flag=absent (expected present)")
+    elif [[ "$mode" == base && -e "$speak_flag" ]]; then
+      wrong+=("speak-flag=present (expected absent)")
+    fi
+
+    if [[ -r "$LOGIND_CONF" ]]; then
+      while IFS= read -r line || [[ -n "$line" ]]; do
+        if [[ "$line" =~ ^[[:space:]]*(HandleLidSwitch|HandleLidSwitchExternalPower)[[:space:]]*=[[:space:]]*([^[:space:]]*)[[:space:]]*$ ]]; then
+          key="${BASH_REMATCH[1]}"; value="${BASH_REMATCH[2]}"
+          case "$key" in
+            HandleLidSwitch) lid="$value" ;;
+            HandleLidSwitchExternalPower) lid_external="$value" ;;
+          esac
+        fi
+      done < "$LOGIND_CONF"
+    fi
+    [[ "$lid" == "$expected_lid" ]] || wrong+=("HandleLidSwitch=$lid (expected $expected_lid)")
+    [[ "$lid_external" == "$expected_lid" ]] || wrong+=("HandleLidSwitchExternalPower=$lid_external (expected $expected_lid)")
+  elif [[ "$profile_output" == unavailable ]]; then
+    wrong+=("profile=unavailable")
+  fi
+
+  if (( ${#wrong[@]} )); then
+    printf '%s\n' "mode $mode mismatch: ${wrong[*]}"
+    return 1
+  fi
+  printf '%s\n' "mode $mode ok"
+}
+
 main() {
   if [[ "${1:-}" == login ]]; then
     mode_login
     return 0
+  fi
+  if [[ "${1:-}" == check ]]; then
+    mode_check
+    return $?
   fi
 
   local mode=""

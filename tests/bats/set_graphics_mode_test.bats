@@ -27,11 +27,105 @@ EOF
 echo "system76-power \$*" >>"$log"
 if [[ \$# -eq 1 && \$1 == graphics ]]; then
     echo "\${GRAPHICS:-nvidia}"
+elif [[ \$# -eq 1 && \$1 == profile ]]; then
+    echo "Power Profile: \${PROFILE:-Balanced}"
 fi
 exit 0
 EOF
     chmod +x "$bin/sudo" "$bin/system76-power"
     PATH="$bin:$PATH"
+}
+
+@test "check accepts consistent speak mode without sudo" {
+    export GRAPHICS=hybrid PROFILE=Battery
+    touch "$XDG_RUNTIME_DIR/speak-mode"
+    sed -i 's/=ignore/=suspend/g' "$LOGIND_CONF"
+    run "$script" check </dev/null
+    [ "$status" -eq 0 ]
+    [ "$output" = 'mode speak ok' ]
+    ! grep -q '^sudo ' "$log"
+}
+
+@test "check accepts consistent base mode without sudo" {
+    run "$script" check </dev/null
+    [ "$status" -eq 0 ]
+    [ "$output" = 'mode base ok' ]
+    ! grep -q '^sudo ' "$log"
+}
+
+@test "check reports all mismatches in speak mode" {
+    export GRAPHICS=hybrid PROFILE=Balanced
+    run "$script" check </dev/null
+    [ "$status" -eq 1 ]
+    [[ "$output" == *'mode speak mismatch:'* ]]
+    [[ "$output" == *'profile=Balanced (expected Battery)'* ]]
+    [[ "$output" == *'speak-flag=absent'* ]]
+    [[ "$output" == *'HandleLidSwitch=ignore'* ]]
+    [[ "$output" == *'HandleLidSwitchExternalPower=ignore'* ]]
+    ! grep -q '^sudo ' "$log"
+}
+
+@test "check rejects balanced profile alone in speak mode" {
+    export GRAPHICS=hybrid PROFILE=Balanced
+    touch "$XDG_RUNTIME_DIR/speak-mode"
+    sed -i 's/=ignore/=suspend/g' "$LOGIND_CONF"
+    run "$script" check
+    [ "$status" -eq 1 ]
+    [ "$output" = 'mode speak mismatch: profile=Balanced (expected Battery)' ]
+}
+
+@test "check rejects a missing flag alone in speak mode" {
+    export GRAPHICS=hybrid PROFILE=Battery
+    sed -i 's/=ignore/=suspend/g' "$LOGIND_CONF"
+    run "$script" check
+    [ "$status" -eq 1 ]
+    [ "$output" = 'mode speak mismatch: speak-flag=absent (expected present)' ]
+}
+
+@test "check rejects a flag alone in base mode" {
+    touch "$XDG_RUNTIME_DIR/speak-mode"
+    run "$script" check
+    [ "$status" -eq 1 ]
+    [ "$output" = 'mode base mismatch: speak-flag=present (expected absent)' ]
+}
+
+@test "check rejects suspend lid settings alone in base mode" {
+    sed -i 's/=ignore/=suspend/g' "$LOGIND_CONF"
+    run "$script" check
+    [ "$status" -eq 1 ]
+    [[ "$output" == *'HandleLidSwitch=suspend'* ]]
+    [[ "$output" == *'HandleLidSwitchExternalPower=suspend'* ]]
+}
+
+@test "check rejects a present flag and suspend lid in base mode" {
+    touch "$XDG_RUNTIME_DIR/speak-mode"
+    sed -i 's/=ignore/=suspend/g' "$LOGIND_CONF"
+    run "$script" check </dev/null
+    [ "$status" -eq 1 ]
+    [[ "$output" == *'speak-flag=present'* ]]
+    [[ "$output" == *'HandleLidSwitch=suspend'* ]]
+    [[ "$output" == *'HandleLidSwitchExternalPower=suspend'* ]]
+    ! grep -q '^sudo ' "$log"
+}
+
+@test "check rejects integrated graphics without sudo" {
+    export GRAPHICS=integrated
+    run "$script" check </dev/null
+    [ "$status" -eq 1 ]
+    [[ "$output" == *'mode integrated mismatch: graphics=integrated'* ]]
+    ! grep -q '^sudo ' "$log"
+}
+
+@test "check uses the last lid setting and reports unreadable inputs" {
+    printf 'HandleLidSwitch=suspend\n' >> "$LOGIND_CONF"
+    run "$script" check
+    [ "$status" -eq 1 ]
+    [[ "$output" == *'HandleLidSwitch=suspend'* ]]
+    rm "$LOGIND_CONF"
+    run "$script" check
+    [ "$status" -eq 1 ]
+    [[ "$output" == *'HandleLidSwitch=missing'* ]]
+    [[ "$output" == *'HandleLidSwitchExternalPower=missing'* ]]
 }
 
 @test "login restores the battery profile for hybrid graphics" {

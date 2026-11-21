@@ -1,0 +1,8 @@
+[Unit]
+Description=Check speak or base mode after login
+
+[Timer]
+OnStartupSec=5min
+
+[Install]
+WantedBy=timers.target

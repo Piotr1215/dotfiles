@@ -1,0 +1,6 @@
+[Unit]
+Description=Check speak or base mode after login
+
+[Service]
+Type=oneshot
+ExecStart=%h/dev/dotfiles/scripts/__set_graphics_mode.sh check
