@@ -17,6 +17,10 @@ ON_DIRECTORY = 0x40000000
 
 FAN_CLOEXEC = 0x00000001
 FAN_NONBLOCK = 0x00000002
+# The default queue holds 16384 events. The daemon runs under a CPU quota, so
+# a burst outran its reader, the queue overflowed and each overflow forced a
+# full rescan (21 Nov). Unlimited costs kernel memory during a burst, not events.
+FAN_UNLIMITED_QUEUE = 0x00000010
 FAN_REPORT_DFID_NAME = 0x00000C00
 FAN_MARK_ADD_FILESYSTEM = 0x00000101
 FANOTIFY_METADATA_VERSION = 3
@@ -94,7 +98,7 @@ class Fanotify:
         self.mount_fd = os.open(filesystem, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
         try:
             self.fd = checked_fd(self.libc.fanotify_init(
-                FAN_CLOEXEC | FAN_NONBLOCK | FAN_REPORT_DFID_NAME, os.O_RDONLY,
+                FAN_CLOEXEC | FAN_NONBLOCK | FAN_UNLIMITED_QUEUE | FAN_REPORT_DFID_NAME, os.O_RDONLY,
             ))
             try:
                 checked_fd(self.libc.fanotify_mark(

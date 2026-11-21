@@ -1,6 +1,7 @@
 """Checks for the mixed fanotify event stream the mirror consumes."""
 
 import errno
+import os
 import sys
 from pathlib import Path
 from unittest.mock import Mock
@@ -63,3 +64,16 @@ def test_transient_handle_failure_requests_catch_up_and_keeps_reading(monkeypatc
         fanotify.Event(fanotify.OVERFLOW),
         fanotify.Event(fanotify.CLOSE_WRITE, tmp_path / "changed"),
     ]
+
+
+def test_the_event_queue_is_unlimited(tmp_path, monkeypatch):
+    # A capped daemon falls behind in a burst; a bounded queue then overflows.
+    libc = Mock()
+    libc.fanotify_init.return_value = os.open(tmp_path, os.O_RDONLY)
+    libc.fanotify_mark.return_value = 0
+    monkeypatch.setattr(fanotify.ctypes, "CDLL", lambda *a, **k: libc)
+    with fanotify.Fanotify(tmp_path):
+        pass
+    flags = libc.fanotify_init.call_args.args[0]
+    assert flags & fanotify.FAN_UNLIMITED_QUEUE
+    assert flags & fanotify.FAN_REPORT_DFID_NAME

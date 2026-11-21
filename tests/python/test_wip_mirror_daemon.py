@@ -1,6 +1,7 @@
 """Exercise queue loss and target replacement through the writer loop."""
 
 import argparse
+import errno
 import json
 import os
 import signal
@@ -189,6 +190,17 @@ def test_a_stale_or_broken_clean_stop_list_means_a_full_scan(tmp_path, monkeypat
     assert not (tmp_path / daemon.CLEAN_STOP).exists()
 
 
+def test_a_copy_that_loses_the_drive_keeps_its_path():
+    inbox = daemon.Inbox(threading.Event())
+
+    def sync(path):
+        raise OSError(errno.EIO, "drive gone")
+
+    with pytest.raises(OSError):
+        daemon.copy(lambda: nullcontext(SimpleNamespace(sync=sync)), inbox, Path("/home/x/a.md"))
+    assert Path("/home/x/a.md") in inbox.pending
+
+
 def test_a_scan_cut_short_clears_caught_up():
     inbox = daemon.Inbox(threading.Event())
     inbox.caught_up = True
@@ -216,7 +228,9 @@ def test_resume_copies_the_list_without_a_scan_unless_events_were_lost(tmp_path)
 
         drive = SimpleNamespace(identity=lambda: 123)
         mirror = SimpleNamespace(catch_up=catch_up, sync=sync)
-        daemon.serve_drive(inbox, drive, 123, lambda: nullcontext(mirror), resume=[tmp_path / "pending.md"])
+        inbox.offer(tmp_path / "pending.md")
+        inbox.caught_up = True
+        daemon.serve_drive(inbox, drive, 123, lambda: nullcontext(mirror), resume=True)
         assert events == (["scan"] if lost else ["pending.md"])
 
 
@@ -230,6 +244,9 @@ def test_a_stopped_daemon_leaves_its_list_and_the_next_start_skips_the_scan(tmp_
         (target / name).mkdir(parents=True, mode=0o755)
         (target / name).chmod(0o755)
     target.chmod(0o755)
+    state = tmp_path / "state"
+    state.mkdir()
+    monkeypatch.setenv("STATE_DIRECTORY", str(state))
     monkeypatch.setattr(daemon, "POLL_SECONDS", 0.05)
     monkeypatch.setattr(daemon, "boot_id", lambda: "boot-1")
     monkeypatch.setattr(daemon, "shutting_down", lambda: False)
@@ -257,7 +274,11 @@ def test_a_stopped_daemon_leaves_its_list_and_the_next_start_skips_the_scan(tmp_
     def opened(_identity):
         yield target
 
-    drive = SimpleNamespace(identity=lambda: 1, open=opened)
+    # tmpfs has no reflink; the storage tests cover the reflink path.
+    real_mirror = daemon.Mirror
+    monkeypatch.setattr(daemon, "Mirror", lambda *a, **k: real_mirror(*a, **{**k, "reflink": False}))
+    present = {"drive": True}
+    drive = SimpleNamespace(identity=lambda: 1 if present["drive"] else None, open=opened)
     monkeypatch.setattr(daemon, "Fanotify", Reader)
     monkeypatch.setattr(daemon, "Drive", lambda *_: drive)
     args = argparse.Namespace(root=[root], mount=tmp_path / "drive", uuid=daemon.DEFAULT_UUID,
@@ -270,20 +291,33 @@ def test_a_stopped_daemon_leaves_its_list_and_the_next_start_skips_the_scan(tmp_
                 threading.Timer(0.4, os.kill, (os.getpid(), signal.SIGTERM)).start()
                 daemon.run(args)
             assert any(expected in line for line in caplog.messages)
-            assert str(root / "late.md") in json.loads((target / daemon.CLEAN_STOP).read_text())["pending"]
+            assert str(root / "late.md") in json.loads((state / daemon.CLEAN_STOP).read_text())["pending"]
+        # The nofail drive can unmount before the daemon stops at shutdown: the
+        # list still lands on the root filesystem, and the next start uses it.
+        present["drive"] = False
+        (root / "late.md").write_text("saved with the drive gone")
+        threading.Timer(0.4, os.kill, (os.getpid(), signal.SIGTERM)).start()
+        daemon.run(args)
+        assert str(root / "late.md") in json.loads((state / daemon.CLEAN_STOP).read_text())["pending"]
+        present["drive"] = True
+        caplog.clear()
+        with caplog.at_level("INFO"):
+            threading.Timer(0.4, os.kill, (os.getpid(), signal.SIGTERM)).start()
+            daemon.run(args)
+        assert any("no full scan" in line for line in caplog.messages)
+        assert (target / "live" / str(root / "late.md").lstrip("/")).read_text() == "saved with the drive gone"
         # A stop during the scan must leave no list: the scan never finished.
-        (target / daemon.CLEAN_STOP).unlink()
+        (state / daemon.CLEAN_STOP).unlink()
 
         def stopped_mid_scan(self, between=None):
             raise daemon.Stopped
 
-        monkeypatch.setattr(daemon.Mirror, "catch_up", stopped_mid_scan)
+        monkeypatch.setattr(real_mirror, "catch_up", stopped_mid_scan)
         daemon.run(args)
-        assert not (target / daemon.CLEAN_STOP).exists()
+        assert not (state / daemon.CLEAN_STOP).exists()
     finally:
         signal.signal(signal.SIGTERM, previous)
     assert (target / "live" / str(root / "notes.md").lstrip("/")).read_text() == "first"
-    assert (target / "live" / str(root / "late.md").lstrip("/")).read_text() == "saved while stopping"
 
 @pytest.mark.parametrize("directory", ["", ".", "..", "../wip", "/wip"])
 def test_drive_rejects_a_destination_outside_its_mount(tmp_path, directory):

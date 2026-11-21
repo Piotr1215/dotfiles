@@ -35,8 +35,10 @@ QUEUE_LIMIT = 65536
 # copied when the interval ends.
 DATABASE_INTERVAL = 300
 DATABASE_SUFFIXES = (".sqlite3", ".db")
-# After a clean stop the daemon leaves this list of uncopied paths on the drive,
-# and the next start copies those instead of scanning every file (Piotr, 21 Nov:
+# After a clean stop the daemon leaves this list of uncopied paths in its state
+# directory on the root filesystem, which stays mounted to the end of a
+# shutdown (the nofail drive may unmount first). The next start copies those
+# paths instead of scanning every file (Piotr, 21 Nov:
 # the full scan took a core for minutes at every boot). A list written during
 # shutdown is honoured on the next boot; the unit stops after user sessions, so
 # nothing saved after it. Within one boot it is honoured for RESUME_SECONDS (a
@@ -248,6 +250,8 @@ def copy(connect, inbox: Inbox, path: Path):
             mirror.sync(path)
     except OSError as error:
         if error.errno in TARGET_IO_ERRORS:
+            # The drive went away: keep the path for the next drive or the list.
+            inbox.offer(path)
             raise
         if error.errno == errno.EAGAIN:
             inbox.offer(path)
@@ -286,6 +290,10 @@ def rescan(inbox: Inbox, connect, pacer: Pacer):
         mirror.catch_up(between)
     inbox.caught_up = True
     return time.monotonic() - started
+
+
+def state_dir() -> Path:
+    return Path(os.environ.get("STATE_DIRECTORY", "/var/lib/wip-mirror"))
 
 
 def boot_id() -> str:
@@ -327,13 +335,10 @@ def take_clean_stop(target: Path) -> list[Path] | None:
 
 
 def serve_drive(inbox: Inbox, drive: Drive, identity: int, connect, pacer: Pacer | None = None,
-                resume: list[Path] | None = None):
+                resume: bool = False):
     pacer = pacer or Pacer(DATABASE_INTERVAL)
-    if resume is not None and not inbox.loss.is_set():
-        logging.info("clean stop before: copying %d pending paths, no full scan", len(resume))
-        for path in resume:
-            inbox.offer(path)
-        inbox.caught_up = True
+    if resume and inbox.caught_up and not inbox.loss.is_set():
+        logging.info("clean stop before: copying %d pending paths, no full scan", len(inbox.pending))
     else:
         inbox.loss.clear()
         logging.info("catching up WIP mirror")
@@ -367,6 +372,11 @@ def run(args):
     signal.signal(signal.SIGINT, lambda *_: stopped.set())
     inbox = Inbox(stopped)
     pacer = Pacer(DATABASE_INTERVAL)
+    listed = take_clean_stop(state_dir())
+    if listed is not None:
+        for path in listed:
+            inbox.offer(path)
+        inbox.caught_up = True
     first = True
     with Fanotify(roots[0]) as reader:
         capture = threading.Thread(target=inbox.capture, args=(reader, roots))
@@ -384,11 +394,7 @@ def run(args):
                 reported = False
                 try:
                     connect = partial(open_mirror, drive, identity, roots, args.source_user)
-                    resume = None
-                    if first:
-                        first = False
-                        with drive.open(identity) as target:
-                            resume = take_clean_stop(target)
+                    resume, first = first, False
                     serve_drive(inbox, drive, identity, connect, pacer, resume)
                 except Stopped:
                     break
@@ -404,11 +410,9 @@ def run(args):
         # uncopied for the next start.
         while inbox.read(reader, roots):
             pass
-    identity = drive.identity()
-    if identity is not None and inbox.caught_up and not inbox.loss.is_set():
+    if inbox.caught_up and not inbox.loss.is_set():
         try:
-            with drive.open(identity) as target:
-                save_clean_stop(target, list(inbox.pending) + list(pacer.held))
+            save_clean_stop(state_dir(), list(inbox.pending) + list(pacer.held))
         except OSError as error:
             logging.warning("no clean-stop list, the next start scans: %s", error)
             return

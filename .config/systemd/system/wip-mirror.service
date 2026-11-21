@@ -19,6 +19,9 @@ Nice=10
 CPUWeight=idle
 CPUQuota=25%
 IOSchedulingClass=idle
+# /var/lib/wip-mirror holds the clean-stop list; the root filesystem outlives
+# the nofail drive at shutdown.
+StateDirectory=wip-mirror
 NoNewPrivileges=yes
 
 [Install]
