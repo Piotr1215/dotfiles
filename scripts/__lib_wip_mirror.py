@@ -214,19 +214,25 @@ class Mirror:
                 if name.endswith(('.sqlite3-wal', '.db-wal', '.sqlite3-shm', '.db-shm',
                                   '.sqlite3-journal', '.db-journal')):
                     return
-                fd = self._source_call(path, os.open, name,
-                                       os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC,
-                                       dir_fd=parent_fd)
-                if fd is None:
+                handle = self._source_call(path, os.open, name,
+                                           os.O_PATH | os.O_NOFOLLOW | os.O_CLOEXEC,
+                                           dir_fd=parent_fd)
+                if handle is None:
                     return
                 try:
-                    current = os.fstat(fd)
+                    current = os.fstat(handle)
                     if not stat.S_ISREG(current.st_mode) or not _same_source(info, current):
                         self._skip(path, 'file changed during open')
                         return
-                    self._file(path, fd, current)
+                    # Reopen the verified inode for reading. A replacement
+                    # device, FIFO, or symlink cannot slip into this open.
+                    fd = os.open(f'/proc/self/fd/{handle}', os.O_RDONLY | os.O_CLOEXEC)
+                    try:
+                        self._file(path, fd, current)
+                    finally:
+                        os.close(fd)
                 finally:
-                    os.close(fd)
+                    os.close(handle)
         except MirrorEntryConflict:
             raise
 
@@ -261,7 +267,7 @@ class Mirror:
                     inherited = ()
                     if len(parts) >= 5 and parts[1:4] == ('proc', 'self', 'fd'):
                         inherited = (int(parts[4]),)
-                    subprocess.run(['cp', '--reflink=always', '--preserve=mode,timestamps',
+                    subprocess.run(['/usr/bin/cp', '--reflink=always', '--preserve=mode,timestamps',
                                     '--', str(destination), str(temporary)], check=True,
                                    pass_fds=inherited)
                 else:

@@ -1,0 +1,16 @@
+[Unit]
+Description=Real-time NVMe mirror of work-in-progress files
+# Keep running across unmounts so reconnect can trigger catch-up.
+After=local-fs.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 -EsB /usr/local/lib/wip-mirror/__wip_mirror.py
+Restart=on-failure
+RestartSec=10s
+Nice=10
+IOSchedulingClass=idle
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=multi-user.target

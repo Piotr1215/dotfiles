@@ -134,6 +134,26 @@ class MirrorStorageTest(unittest.TestCase):
         self.assertFalse(self.mirrored('fifo').exists())
         self.assertFalse((self.target / 'live' / str(external).lstrip('/')).exists())
 
+    def test_file_replaced_by_fifo_during_open_is_never_opened_for_reading(self):
+        source = self.root / 'changing'
+        source.write_text('work')
+        open_file = os.open
+        accesses = []
+
+        def replace_before_open(path, flags, **kwargs):
+            if path == source.name:
+                accesses.append(flags)
+                source.unlink()
+                os.mkfifo(source)
+            return open_file(path, flags, **kwargs)
+
+        with patch.object(storage.os, 'open', side_effect=replace_before_open):
+            self.mirror.sync(source)
+
+        self.assertEqual(len(accesses), 1)
+        self.assertTrue(accesses[0] & os.O_PATH)
+        self.assertFalse(self.mirrored(source.name).exists())
+
     def test_rename_preserves_both_names(self):
         source = self.root / 'old'
         source.write_text('content')
