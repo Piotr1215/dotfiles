@@ -5,7 +5,8 @@
 # a probe file under ~/dev and waits for the drive copy to hold it.
 #
 # Exit 0 with a success stamp when the copy arrives, 1 (and an ntfy page once a
-# day) when it does not, 0 without a stamp while wip-mirror.service is not enabled.
+# day) when it does not, 0 without a stamp while wip-mirror.service is not enabled
+# or the drive is not mounted (serval away from it; the drive job pages for that).
 set -eo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -31,6 +32,10 @@ main() {
 	local nonce copy deadline
 	if ! systemctl is-enabled --quiet wip-mirror.service 2>/dev/null; then
 		echo "wip-mirror.service not enabled; nothing to probe"
+		return 0
+	fi
+	if ! mountpoint -q "$DRIVE_MOUNT"; then
+		echo "drive not mounted at $DRIVE_MOUNT; the drive job pages for that"
 		return 0
 	fi
 	mkdir -p "$STATE_DIR" "$(dirname "$PROBE_FILE")"

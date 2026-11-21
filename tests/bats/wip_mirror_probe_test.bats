@@ -10,11 +10,15 @@ setup() {
 #!/usr/bin/env bash
 [[ "$1" == is-enabled && ${WIP_ENABLED:-1} == 1 ]]
 STUB
+  cat > "$BATS_TEST_TMPDIR/bin/mountpoint" <<'STUB'
+#!/usr/bin/env bash
+[[ ${DRIVE_MOUNTED:-1} == 1 ]]
+STUB
   cat > "$BATS_TEST_TMPDIR/bin/curl" <<'STUB'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >> "$CALLS/curl"
 STUB
-  chmod +x "$BATS_TEST_TMPDIR/bin/systemctl" "$BATS_TEST_TMPDIR/bin/curl"
+  chmod +x "$BATS_TEST_TMPDIR/bin/systemctl" "$BATS_TEST_TMPDIR/bin/curl" "$BATS_TEST_TMPDIR/bin/mountpoint"
   copy="$DRIVE_MOUNT/wip/live$HOME/dev/.wip-mirror-probe"
 }
 
@@ -62,4 +66,13 @@ start_mirror() {
   [ "$status" -eq 0 ]
   [ ! -e "$HOME/dev/.wip-mirror-probe" ]
   [ ! -e "$CALLS/curl" ]
+}
+
+@test "no probe and no page while the drive is not mounted" {
+  DRIVE_MOUNTED=0 run bash "$PROBE_SCRIPT"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"drive not mounted"* ]]
+  [ ! -e "$HOME/dev/.wip-mirror-probe" ]
+  [ ! -e "$CALLS/curl" ]
+  [ ! -e "$HOME/.local/state/wip-probe/last-success" ]
 }
