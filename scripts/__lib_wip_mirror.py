@@ -31,18 +31,27 @@ class MirrorEntryConflict(RuntimeError):
 class SourceChanged(RuntimeError):
     """A file changed while its contents were being copied."""
 
+
+class SourceSnapshotError(RuntimeError):
+    """SQLite could not read a consistent source snapshot."""
+
 # SQLite reads user-controlled pages, extensions and WAL files. Run it with the
 # source user's permissions and send the resulting database to the parent.
 SQLITE_SNAPSHOT = r'''
 import pathlib, shutil, sqlite3, sys, tempfile
 source = pathlib.Path(sys.argv[1])
-with tempfile.TemporaryDirectory(prefix='wip-sqlite-') as directory:
-    destination = pathlib.Path(directory) / 'snapshot.sqlite3'
-    with sqlite3.connect(source.as_uri() + '?mode=ro', uri=True) as src:
-        with sqlite3.connect(destination) as dst:
-            src.backup(dst)
-    with destination.open('rb') as snapshot:
-        shutil.copyfileobj(snapshot, sys.stdout.buffer)
+try:
+    with tempfile.TemporaryDirectory(prefix='wip-sqlite-') as directory:
+        destination = pathlib.Path(directory) / 'snapshot.sqlite3'
+        with sqlite3.connect(source.as_uri() + '?mode=ro', uri=True) as src:
+            with sqlite3.connect(destination) as dst:
+                src.backup(dst)
+        with destination.open('rb') as snapshot:
+            shutil.copyfileobj(snapshot, sys.stdout.buffer)
+except sqlite3.Error as error:
+    print(f'SQLite snapshot failed: {error}', file=sys.stderr)
+    code = getattr(error, 'sqlite_errorcode', 0) & 0xff
+    sys.exit(21 if code in (sqlite3.SQLITE_IOERR, sqlite3.SQLITE_FULL, sqlite3.SQLITE_NOMEM) else 20)
 '''
 
 
@@ -173,7 +182,7 @@ class Mirror:
                 if entry.name not in EXCLUDED:
                     try:
                         self._entry(descriptor, entry.name, path / entry.name, mounts)
-                    except (MirrorEntryConflict, SourceChanged) as error:
+                    except (MirrorEntryConflict, SourceChanged, SourceSnapshotError) as error:
                         if not self._catching_up:
                             raise
                         self._skip(path / entry.name, error)
@@ -278,18 +287,24 @@ class Mirror:
     def _file(self, path, fd, info):
         destination = self._destination('live', path)
         mode = stat.S_IMODE(info.st_mode) & 0o755
-        if path.suffix not in ('.sqlite3', '.db') and self._unchanged(fd, info, destination, mode):
+        sqlite = path.suffix in ('.sqlite3', '.db') and os.pread(fd, 16, 0) == b'SQLite format 3\0'
+        if not sqlite and self._unchanged(fd, info, destination, mode):
             return
         with tempfile.NamedTemporaryFile(prefix='.wip-', dir=destination.parent, delete=False) as output:
             temporary = Path(output.name)
             try:
-                if path.suffix in ('.sqlite3', '.db'):
+                if sqlite:
                     kwargs = {}
                     if self.source_user is not None and os.geteuid() == 0:
                         account = pwd.getpwnam(self.source_user)
                         kwargs.update(user=account.pw_uid, group=account.pw_gid, extra_groups=[])
-                    subprocess.run([sys.executable, '-I', '-c', SQLITE_SNAPSHOT, str(path)],
-                                   stdout=output, check=True, **kwargs)
+                    try:
+                        subprocess.run([sys.executable, '-I', '-c', SQLITE_SNAPSHOT, str(path)],
+                                       stdout=output, check=True, **kwargs)
+                    except subprocess.CalledProcessError as error:
+                        if error.returncode == 20:
+                            raise SourceSnapshotError(f'SQLite snapshot failed: {path}') from error
+                        raise
                 else:
                     with os.fdopen(os.dup(fd), 'rb') as source:
                         shutil.copyfileobj(source, output)

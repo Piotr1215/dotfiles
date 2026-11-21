@@ -174,12 +174,39 @@ class MirrorStorageTest(unittest.TestCase):
             db.execute('CREATE TABLE records (value TEXT)')
             db.execute("INSERT INTO records VALUES ('safe')")
         self.mirror.sync(source)
-        source.write_text('invalid database')
-        with self.assertRaises(storage.subprocess.CalledProcessError):
-            self.mirror.sync(source)
+        with patch.object(storage.subprocess, 'run', side_effect=storage.subprocess.CalledProcessError(20, 'snapshot')):
+            with self.assertRaises(storage.SourceSnapshotError):
+                self.mirror.sync(source)
         with sqlite3.connect(self.mirrored('work.db').as_uri() + '?mode=ro&immutable=1', uri=True) as copy:
             self.assertEqual(copy.execute('SELECT value FROM records').fetchall(), [('safe',)])
         self.assertEqual(self.versions('work.db'), [])
+
+    def test_non_sqlite_db_is_copied_as_a_regular_file(self):
+        source = self.root / 'cache.db'
+        source.write_text('ordinary file')
+        self.mirror.sync(source)
+        self.assertEqual(self.mirrored('cache.db').read_text(), 'ordinary file')
+
+    def test_catch_up_continues_after_snapshot_error(self):
+        source = self.root / 'work.db'
+        with sqlite3.connect(source) as db:
+            db.execute('CREATE TABLE records (value TEXT)')
+        (self.root / 'safe').write_text('copied')
+        error = storage.subprocess.CalledProcessError(20, 'snapshot')
+        with patch.object(storage.subprocess, 'run', side_effect=error):
+            with self.assertLogs(level='WARNING') as messages:
+                self.mirror.catch_up()
+        self.assertEqual(self.mirrored('safe').read_text(), 'copied')
+        self.assertTrue(any('catch-up skipped 1 entries' in line for line in messages.output))
+
+    def test_catch_up_propagates_snapshot_io_failure(self):
+        source = self.root / 'work.db'
+        with sqlite3.connect(source) as db:
+            db.execute('CREATE TABLE records (value TEXT)')
+        error = storage.subprocess.CalledProcessError(21, 'snapshot')
+        with patch.object(storage.subprocess, 'run', side_effect=error):
+            with self.assertRaises(storage.subprocess.CalledProcessError):
+                self.mirror.catch_up()
 
     def test_reflink_failure_keeps_live_file(self):
         source = self.root / 'file'
