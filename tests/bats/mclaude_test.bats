@@ -127,16 +127,19 @@ PY
   ! grep -E '^(TMUX|TMUX_PANE|CLAUDE_PANE_ID|ANTHROPIC_API_KEY)=' "$HOME/claude-env"
 }
 
-# Claude Code assumes 1M tokens for an unknown model ID and would never compact
-# before the server's window fills; it must compact with room left for a reply.
-@test "tells Claude the server window minus reply room" {
+# For an unknown model ID Claude Code reserves 32K output tokens, which left
+# 9K of a 40K window for a 15K preamble, so it compacted on every turn. Each
+# compaction re-read the whole conversation at ~170 tok/s and dropped the cache.
+@test "gives Claude the real window, small replies and no auto-compact" {
   touch "$HOME/healthy"
   run "$SCRIPT" -p hi
   [ "$status" -eq 0 ]
-  grep -Fx 'CLAUDE_CODE_MAX_CONTEXT_TOKENS=40960' "$HOME/claude-env"
+  grep -Fx 'CLAUDE_CODE_MAX_CONTEXT_TOKENS=49152' "$HOME/claude-env"
+  grep -Fx 'CLAUDE_CODE_MAX_OUTPUT_TOKENS=8192' "$HOME/claude-env"
+  grep -Fx 'DISABLE_AUTO_COMPACT=1' "$HOME/claude-env"
   MCLAUDE_CTX=32768 run "$SCRIPT" -p hi
   [ "$status" -eq 0 ]
-  grep -Fx 'CLAUDE_CODE_MAX_CONTEXT_TOKENS=24576' "$HOME/claude-env"
+  grep -Fx 'CLAUDE_CODE_MAX_CONTEXT_TOKENS=32768' "$HOME/claude-env"
 }
 
 # Child failures must reach the caller without leaving a live session marker.

@@ -204,8 +204,10 @@ cleanup_session() {
 }
 
 # Launch Claude with only the explicitly allowed environment and settings.
-# Claude Code assumes 1M tokens for an unknown model ID, so it is told the
-# server's window minus 8K, compacting while a reply still fits.
+# For an unknown model ID Claude Code assumes a 1M window and reserves 32K for
+# each reply; told the real window with that reserve, it compacted every turn.
+# Replies are capped at 8K and auto-compact is off: a compaction re-reads the
+# whole conversation and drops the cache, so /clear between tasks is cheaper.
 run_claude() {
   local name result
   local -a clean_env=()
@@ -224,7 +226,8 @@ run_claude() {
     'ANTHROPIC_DEFAULT_HAIKU_MODEL=inkling-2-mini' 'ANTHROPIC_DEFAULT_SONNET_MODEL=inkling-2-mini'
     'ANTHROPIC_DEFAULT_OPUS_MODEL=inkling-2-mini' 'CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1'
     'DISABLE_AUTOUPDATER=1' 'DISABLE_TELEMETRY=1'
-    "CLAUDE_CODE_MAX_CONTEXT_TOKENS=$((ctx - 8192))")
+    "CLAUDE_CODE_MAX_CONTEXT_TOKENS=$ctx" 'CLAUDE_CODE_MAX_OUTPUT_TOKENS=8192'
+    'DISABLE_AUTO_COMPACT=1')
   result=0
   env -i "${clean_env[@]}" "$claude" --settings "$bare_settings" \
     --setting-sources '' --strict-mcp-config --model inkling-2-mini "$@" || result=$?
