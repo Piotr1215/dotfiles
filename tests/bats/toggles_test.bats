@@ -539,3 +539,16 @@ EOF
   [ "$status" -eq 0 ]
   [[ "$output" = "localhost:11434=winnow:12b-q4_K_M" || "$output" = "127.0.0.1:11435=winnow:12b-q4_K_M" ]]
 }
+
+@test "automation context toggle reads on without the off flag and flips it" {
+  export HOME="${BATS_TEST_TMPDIR}/automation-home"
+  export TOGGLES_CONF="${BATS_TEST_DIRNAME}/../../scripts/__toggles.conf"
+  export AUTOMATION_STATE="${BATS_TEST_TMPDIR}/automation-state"
+  mkdir -p "$HOME"
+  run "$SCRIPT" __run automation-context off
+  [ "$status" -eq 0 ]
+  [ -f "$AUTOMATION_STATE/delivery-off" ]
+  run "$SCRIPT" __run automation-context on
+  [ "$status" -eq 0 ]
+  [ ! -e "$AUTOMATION_STATE/delivery-off" ]
+}
