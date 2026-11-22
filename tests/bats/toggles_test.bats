@@ -225,6 +225,72 @@ EOF
   [ "${output#registered }" -ge 1 ]
 }
 
+setup_injection_guard() {
+  export HOME="${BATS_TEST_TMPDIR}/guard-home"
+  export TOGGLES_CONF="${BATS_TEST_DIRNAME}/../../scripts/__toggles.conf"
+  export INJECTION_GUARD_STATE="${BATS_TEST_TMPDIR}/guard-state"
+  export INJECTION_GUARD_BIN="${BATS_TEST_TMPDIR}/guard-stub"
+  export INJECTION_GUARD_CALLS="${BATS_TEST_TMPDIR}/guard-calls"
+  mkdir -p "$HOME" "$INJECTION_GUARD_STATE"
+  cat >"$INJECTION_GUARD_BIN" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >>"$INJECTION_GUARD_CALLS"
+case "$1" in
+  on) touch "$INJECTION_GUARD_STATE/enabled" ;;
+  off) rm -f "$INJECTION_GUARD_STATE/enabled" ;;
+  status) : ;;
+  *) exit 1 ;;
+esac
+EOF
+  chmod +x "$INJECTION_GUARD_BIN"
+}
+
+@test "injection guard status follows the flag" {
+  setup_injection_guard
+  run "$SCRIPT" __preview injection-guard
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"state:  off"* ]]
+
+  touch "$INJECTION_GUARD_STATE/enabled"
+  run "$SCRIPT" __preview injection-guard
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"state:  on"* ]]
+  [ "$(cat "$INJECTION_GUARD_CALLS")" = "$(printf 'status\nstatus')" ]
+}
+
+@test "injection guard on calls the guard and verifies the flag" {
+  setup_injection_guard
+  run "$SCRIPT" __run injection-guard on
+  [ "$status" -eq 0 ]
+  [ -e "$INJECTION_GUARD_STATE/enabled" ]
+  run "$SCRIPT" __preview injection-guard
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"state:  on"* ]]
+  [ "$(cat "$INJECTION_GUARD_CALLS")" = "$(printf 'on\nstatus')" ]
+}
+
+@test "injection guard off calls the guard and verifies the flag" {
+  setup_injection_guard
+  touch "$INJECTION_GUARD_STATE/enabled"
+  run "$SCRIPT" __run injection-guard off
+  [ "$status" -eq 0 ]
+  [ ! -e "$INJECTION_GUARD_STATE/enabled" ]
+  run "$SCRIPT" __preview injection-guard
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"state:  off"* ]]
+  [ "$(cat "$INJECTION_GUARD_CALLS")" = "$(printf 'off\nstatus')" ]
+}
+
+@test "injection guard actions fail when the flag does not change" {
+  setup_injection_guard
+  printf '#!/usr/bin/env bash\nexit 0\n' >"$INJECTION_GUARD_BIN"
+  run "$SCRIPT" __run injection-guard on
+  [ "$status" -ne 0 ]
+  touch "$INJECTION_GUARD_STATE/enabled"
+  run "$SCRIPT" __run injection-guard off
+  [ "$status" -ne 0 ]
+}
+
 @test "Gordon pane digest toggle defaults on and controls shared off flag" {
   export HOME="${BATS_TEST_TMPDIR}/gordon-home"
   export XDG_STATE_HOME="${BATS_TEST_TMPDIR}/gordon-state"
