@@ -10,7 +10,7 @@ setup() {
 }
 
 # Fake toggles only: flag files under the test tmpdir, never the real seeds,
-# never tmux, never /tmp/timeoff_mode.
+# never a real tmux, never /tmp/timeoff_mode.
 write_conf() {
   cat >"$TOGGLES_CONF" <<EOF
 alpha_status() { [ -f "${FLAGS}/alpha" ]; }
@@ -188,6 +188,95 @@ EOF
   run env EDITOR="$fake_editor" "$SCRIPT" __edit '[off] beta'
   [ "$status" -eq 0 ]
   [[ "$(<"${BATS_TEST_TMPDIR}/edit.log")" == "$TOGGLES_CONF" ]]
+}
+
+setup_agent_stub() {
+  export TOGGLES_TMUX="${BATS_TEST_TMPDIR}/tmux"
+  export TMUX="dummy-session"
+  export TMUX_LOG="${BATS_TEST_TMPDIR}/tmux.log"
+  cat >"$TOGGLES_TMUX" <<'EOF'
+#!/usr/bin/env bash
+printf '<%s>' "$@" >>"$TMUX_LOG"
+printf '\n' >>"$TMUX_LOG"
+if [[ "$1" == new-window ]]; then printf '%%99\n'; fi
+EOF
+  chmod +x "$TOGGLES_TMUX"
+}
+
+@test "agent opens the code repository and sends its waiting prompt to the new pane" {
+  setup_agent_stub
+  repo="${BATS_TEST_TMPDIR}/code-repo"
+  mkdir -p "$repo/sub"
+  git -C "$repo" init -q
+  touch "$repo/sub/file.sh"
+  printf 'toggle_register "coded" "true" "true" "true" "Code: %s/sub/file.sh. Plan: later"\n' "$repo" >>"$TOGGLES_CONF"
+
+  run "$SCRIPT" __agent '[off] coded'
+  [ "$status" -eq 0 ]
+  mapfile -t calls <"$TMUX_LOG"
+  [ "${calls[0]}" = "<new-window><-P><-F><#{pane_id}><-c><$repo><-n><coded>" ]
+  [ "${calls[1]}" = '<send-keys><-t><%99><c "Toggle board: coded, registered in scripts/__toggles.conf of ~/dev/dotfiles. Do nothing yet. Wait for my instructions."><Enter>' ]
+}
+
+@test "agent falls back to the config repository when code is absent or missing" {
+  setup_agent_stub
+  repo="${BATS_TEST_TMPDIR}/conf-repo"
+  mkdir -p "$repo/sub"
+  git -C "$repo" init -q
+  cp "$TOGGLES_CONF" "$repo/sub/toggles.conf"
+  export TOGGLES_CONF="$repo/sub/toggles.conf"
+  printf 'toggle_register "missing" "true" "true" "true" "Code: %s/missing/file.sh."\n' "$repo" >>"$TOGGLES_CONF"
+
+  run "$SCRIPT" __agent '[off] alpha'
+  [ "$status" -eq 0 ]
+  run "$SCRIPT" __agent '[off] missing'
+  [ "$status" -eq 0 ]
+  mapfile -t calls <"$TMUX_LOG"
+  [ "${calls[0]}" = "<new-window><-P><-F><#{pane_id}><-c><$repo><-n><alpha>" ]
+  [ "${calls[2]}" = "<new-window><-P><-F><#{pane_id}><-c><$repo><-n><missing>" ]
+}
+
+@test "agent expands home and uses a code directory outside git" {
+  setup_agent_stub
+  export HOME="${BATS_TEST_TMPDIR}/home"
+  mkdir -p "$HOME/code"
+  touch "$HOME/code/file.sh"
+  printf '%s\n' 'toggle_register "home-code" "true" "true" "true" "Code: ~/code/file.sh."' >>"$TOGGLES_CONF"
+
+  run "$SCRIPT" __agent '[off] home-code'
+  [ "$status" -eq 0 ]
+  mapfile -t calls <"$TMUX_LOG"
+  [ "${calls[0]}" = "<new-window><-P><-F><#{pane_id}><-c><$HOME/code><-n><home-code>" ]
+}
+
+@test "agent requires tmux and makes no tmux calls outside a session" {
+  setup_agent_stub
+  unset TMUX
+  run "$SCRIPT" __agent '[off] alpha'
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"tmux session is required"* ]]
+  [ ! -e "$TMUX_LOG" ]
+}
+
+@test "ctrl-a launches the selected row and closes the popup chain" {
+  setup_agent_stub
+  mkdir -p "${BATS_TEST_TMPDIR}/bin"
+  cat >"${BATS_TEST_TMPDIR}/bin/fzf" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$@" >"$FZF_ARGS"
+cat >/dev/null
+printf 'ctrl-a\n[off] alpha\n'
+EOF
+  chmod +x "${BATS_TEST_TMPDIR}/bin/fzf"
+  export FZF_ARGS="${BATS_TEST_TMPDIR}/fzf-args"
+  export PATH="${BATS_TEST_TMPDIR}/bin:$PATH"
+  marker="${BATS_TEST_TMPDIR}/return-marker"
+
+  run "$SCRIPT" --return-marker "$marker"
+  [ "$status" -eq 0 ]
+  [ ! -e "$marker" ]
+  grep -Fx -- '--expect=ctrl-c,ctrl-a' "$FZF_ARGS"
+  grep -F '<-n><alpha>' "$TMUX_LOG"
 }
 
 @test "an info action prints live output in the preview and only there" {

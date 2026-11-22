@@ -17,6 +17,7 @@ if [[ "${1:-}" == "--help" ]] || [[ "${1:-}" == "-h" ]]; then
 	  tab       multi-select, then enter flips all of them
 	  ctrl-r    re-read every state
 	  ctrl-e    the toggle's own editor when registered, else the config
+	  ctrl-a    open a Claude session in the toggle's code folder, waiting for instructions
 	  esc       back to the launching picker, when there is one
 	  ctrl-c    quit everything, including the launching picker
 
@@ -48,6 +49,7 @@ if [[ "${1:-}" == "--help" ]] || [[ "${1:-}" == "-h" ]]; then
 	ENVIRONMENT:
 	  TOGGLES_CONF        config file (default: <script dir>/__toggles.conf)
 	  TOGGLES_STATE_DIR   last-result files (default: ~/.local/state/toggles)
+	  TOGGLES_TMUX        tmux binary (default: tmux)
 	EOF
 	exit 0
 fi
@@ -262,6 +264,51 @@ toggle_name_from_row() {
 	fi
 }
 
+# Find the code's repository, or its directory when it is outside a repository.
+toggle_code_dir() {
+	local name="$1" path dir root
+	if [[ "${TOGGLE_DESC[$name]:-}" =~ Code:[[:space:]]+([^[:space:]]+) ]]; then
+		path="${BASH_REMATCH[1]}"
+		while [[ "$path" == *[.,\;:!\?\)\]] ]]; do
+			path="${path%?}"
+		done
+		if [[ "$path" == \~/* ]]; then
+			path="${HOME}/${path#\~/}"
+		fi
+		if [[ -e "$path" ]]; then
+			if [[ -d "$path" ]]; then dir="$path"; else dir="$(dirname "$path")"; fi
+			root="$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null)" || root="$dir"
+			printf '%s\n' "$root"
+			return
+		fi
+	fi
+	dir="$(dirname "$TOGGLES_CONF")"
+	root="$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null)" || root="$dir"
+	printf '%s\n' "$root"
+}
+
+# Open an interactive shell so its c alias can start the waiting session.
+toggle_agent() {
+	local name dir pane prompt
+	name="$(toggle_name_from_row "${1:-}")"
+	if [[ -z "$name" || -z "${TOGGLE_STATUS[$name]:-}" ]]; then
+		printf 'toggles: unknown toggle "%s"\n' "$name" >&2
+		return 1
+	fi
+	if [[ -z "${TMUX:-}" ]]; then
+		printf 'toggles: a tmux session is required to open an agent\n' >&2
+		return 1
+	fi
+	dir="$(toggle_code_dir "$name")"
+	pane="$("${TOGGLES_TMUX:-tmux}" new-window -P -F '#{pane_id}' -c "$dir" -n "$name")"
+	prompt="Toggle board: $name, registered in scripts/__toggles.conf of ~/dev/dotfiles. Do nothing yet. Wait for my instructions."
+	prompt="${prompt//\\/\\\\}"
+	prompt="${prompt//\"/\\\"}"
+	prompt="${prompt//\$/\\\$}"
+	prompt="${prompt//\`/\\\`}"
+	"${TOGGLES_TMUX:-tmux}" send-keys -t "$pane" "c \"$prompt\"" Enter
+}
+
 # Write the last-result file the preview panel reads back.
 toggle_record() {
 	local name="$1" from="$2" to="$3" action="$4" outcome="$5" rc="$6" output="$7"
@@ -431,15 +478,22 @@ toggle_board() {
 	out="$(printf '%s\n' "$list" | fzf \
 		--multi \
 		--reverse \
-		--expect=ctrl-c \
+		--expect=ctrl-c,ctrl-a \
 		--prompt 'toggles> ' \
-		--header 'enter flip · tab multi · C-r refresh · C-e edit · C-c quit' \
+		--header 'enter flip · tab multi · C-r refresh · C-e edit · C-a agent · C-c quit' \
 		--preview "'${SELF}' __preview {}" \
 		--preview-window 'right:55%:wrap' \
 		--bind "enter:execute-silent('${SELF}' __flip {+})+reload('${SELF}' __render)" \
 		--bind "ctrl-r:reload('${SELF}' __render)" \
 		--bind "ctrl-e:execute('${SELF}' __edit {})+reload('${SELF}' __render)")" || true
 
+	if [[ "${out%%$'\n'*}" == ctrl-a ]]; then
+		if [[ "$out" == *$'\n'* ]]; then
+			out="${out#*$'\n'}"
+			"$SELF" __agent "${out%%$'\n'*}"
+		fi
+		return 0
+	fi
 	if [[ "${out%%$'\n'*}" == ctrl-c ]]; then
 		return 0
 	fi
@@ -467,6 +521,7 @@ case "${1:-}" in
 	__flip) shift; toggle_flip_many "$@"; exit 0 ;;
 	__preview) shift; toggle_preview "${1:-}"; exit 0 ;;
 	__edit) shift; toggle_edit "${1:-}"; exit 0 ;;
+	__agent) shift; toggle_agent "${1:-}"; exit 0 ;;
 	__run) shift; toggle_exec_action "${1:-}" "${2:-}"; exit $? ;;
 esac
 
