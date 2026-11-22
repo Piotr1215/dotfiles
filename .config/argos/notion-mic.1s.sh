@@ -8,13 +8,13 @@ if [[ -e "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/speak-mode" ]]; then printf '%s
 #
 # Click the panel item -> "Turn ON + open Notion" / "Turn OFF".
 #
-# Refresh: 1s (from filename suffix), so an agent's name blinks as a spoken line
-# lands. The same script handles dropdown actions when invoked with --on / --off
-# / --open / --restart.
+# Refresh: 1s (from filename suffix). The same script handles dropdown actions
+# when invoked with --on / --off / --open / --restart.
 #
 # See: https://github.com/Piotr1215/claude/issues/137
 
 # Panel label size follows the main screen width (see panel_label_size).
+# shellcheck source=/dev/null
 source "$HOME/dev/dotfiles/scripts/__lib_screen.sh"
 PANEL_SIZE=$(panel_label_size 11 letterless)
 
@@ -28,15 +28,7 @@ readonly notion_window_re='Notion - Google Chrome'
 readonly toggles="${TOGGLES_BIN:-$HOME/dev/dotfiles/scripts/__toggles.sh}"
 readonly voice_replies_off_flag="${KLOD_VOICE_STATE:-$HOME/.local/state/klod-voice}/off"
 readonly voice_whole_flag="${KLOD_VOICE_STATE:-$HOME/.local/state/klod-voice}/whole"
-readonly voice_no_carry_flag="${KLOD_VOICE_STATE:-$HOME/.local/state/klod-voice}/no-continue"
-readonly voice_resume_flag="${KLOD_VOICE_STATE:-$HOME/.local/state/klod-voice}/resume-speech"
 readonly voice_tempo_file="${KLOD_VOICE_STATE:-$HOME/.local/state/klod-voice}/tempo"
-# __voice_mode.py writes what became of each spoken line here.
-readonly line_status="${XDG_RUNTIME_DIR:-/run/user/$UID}/voice-mode-line"
-readonly channel_file="${XDG_RUNTIME_DIR:-/run/user/$UID}/voice-mode-channel"
-readonly blink_seconds=4
-# As long as a line can run. The line's outcome normally replaces the yellow sooner.
-readonly armed_seconds=60
 
 # --- side-effect actions (invoked from dropdown menu items) ---------------
 
@@ -98,15 +90,7 @@ else
 	state="down"
 fi
 
-# Read directly: the board's __render runs every toggle's status, too heavy for
-# a 1s refresh.
-if systemctl --user is-active --quiet voice-mode.service; then
-	voice_listening="on"
-	voice_dot=" <span color='#44aaff'>●</span>"
-else
-	voice_listening="off"
-	voice_dot=""
-fi
+# Read the flags directly, without rendering every toggle on each refresh.
 if [[ -e "$voice_replies_off_flag" ]]; then
 	voice_replies="off"
 else
@@ -116,21 +100,6 @@ if [[ -e "$voice_whole_flag" ]]; then
 	voice_whole="on"
 else
 	voice_whole="off"
-fi
-if [[ -e "$voice_no_carry_flag" ]]; then
-	voice_carry="off"
-else
-	voice_carry="on"
-fi
-if [[ -e "$voice_resume_flag" ]]; then
-	voice_resume="on"
-else
-	voice_resume="off"
-fi
-# Who the open channel goes to, beside the dot: nameless lines land there.
-voice_channel=""
-if [[ "$voice_listening" == "on" && "$voice_carry" == "on" && -s "$channel_file" ]]; then
-	voice_channel=" $(<"$channel_file")"
 fi
 voice_tempo=""
 [[ -f "$voice_tempo_file" ]] && voice_tempo="$(<"$voice_tempo_file")"
@@ -143,39 +112,13 @@ esac
 # --- panel line -----------------------------------------------------------
 # UP   = mic icon + green dot; visually obvious the routing is live.
 # DOWN = dim mic icon only.
-# A blue dot means voice mode is listening on the default mic. After a spoken line it
-# blinks what became of the line: green when the bus took it, orange when it reached
-# nobody, red when it named an agent and could not be sent. No blink means the relay
-# cut no line from the mic. It holds bright yellow while a line that opened with the
-# wake word is still going.
 if [[ "$state" == "up" ]]; then
 	mic="🎙 <span color='#44ff44'>●</span>"
 else
 	mic="<span color='#888888'>🎙</span>"
 fi
 
-line_color=""
-armed=""
-if [[ -f "$line_status" ]]; then
-	line_age=$(($(date +%s) - $(stat -c %Y "$line_status")))
-	case "$(<"$line_status")" in
-		armed) ((line_age < armed_seconds)) && armed="yes" ;;
-		sent) ((line_age < blink_seconds)) && line_color='#44ff44' ;;
-		dropped) ((line_age < blink_seconds)) && line_color='#ffaa00' ;;
-		failed) ((line_age < blink_seconds)) && line_color='#ff4444' ;;
-	esac
-fi
-
-# Two button lines start argos's line cycler, which is the blink; dropdown=false
-# keeps them out of the menu.
-if [[ -n "$armed" ]]; then
-	echo "${mic} <span color='#ffee00'>●</span>${voice_channel} | font='monospace' size=${PANEL_SIZE}"
-elif [[ -n "$line_color" ]]; then
-	echo "${mic} <span color='${line_color}'>●</span>${voice_channel} | font='monospace' size=${PANEL_SIZE} dropdown=false"
-	echo "${mic} <span color='#222222'>●</span>${voice_channel} | font='monospace' size=${PANEL_SIZE} dropdown=false"
-else
-	echo "${mic}${voice_dot}${voice_channel} | font='monospace' size=${PANEL_SIZE}"
-fi
+echo "${mic} | font='monospace' size=${PANEL_SIZE}"
 
 # --- dropdown -------------------------------------------------------------
 echo "---"
@@ -215,13 +158,10 @@ voice_item() {
 }
 
 echo "<b>Voice bridge</b> | font=monospace"
-voice_item voice-mode "Hands-free listening" "$voice_listening"
 voice_item voice-replies "Spoken replies (Piper)" "$voice_replies"
 voice_item voice-replies-whole "Read whole replies" "$voice_whole"
-voice_item voice-carry-on "Keep channel open" "$voice_carry"
-voice_item voice-resume-speech "Resume speech after I talk" "$voice_resume"
 echo "⏱ Speech tempo: ${voice_tempo}, click to change | bash='\"$0\" --tempo' terminal=false refresh=true"
-if [[ "$voice_listening" == "on" || "$voice_replies" == "on" ]]; then
+if [[ "$voice_replies" == "on" ]]; then
 	echo "🛑 All off (normal mode) | bash='\"$0\" --voice-off' terminal=false refresh=true"
 fi
 

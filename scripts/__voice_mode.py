@@ -78,11 +78,11 @@ NO_CONTINUE = os.path.expanduser('~/.local/state/klod-voice/no-continue')
 NATS = os.path.expanduser('~/.local/bin/nats')
 SND = os.path.expanduser('~/dev/agents-mcp-server/build/snd.js')
 NATS_URL = os.environ.get('AGENTS_NATS_URL', 'nats://nats-nats-tailscale.tail165ec.ts.net:4222')
-# What became of the last line, for the top bar to blink: sent means the bus took it,
+# What became of the last line: sent means the bus took it,
 # which proves it was published, not read; dropped means it reached nobody, including
 # a voiced clip that came back with no words; failed means it named an agent and
 # could not be sent; armed means a line opened with the wake word and is still going.
-# See .config/argos/notion-mic.1s.sh.
+# Nothing reads this marker since the Argos rows were removed on 2026-11-22.
 RUNTIME_DIR = os.environ.get('XDG_RUNTIME_DIR', f'/run/user/{os.getuid()}')
 LINE_STATUS = os.path.join(RUNTIME_DIR, 'voice-mode-line')
 LOST_DIR = os.path.join(RUNTIME_DIR, 'voice-mode-lost')  # tmpfs: gone at reboot
