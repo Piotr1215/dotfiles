@@ -1485,8 +1485,10 @@ sync_to_taskwarrior() {
         log "Task already exists for: $issue_description (UUID: $task_uuid)"
         
         # Check if task should have fresh tag but doesn't
-        local task_json
+        local task_json latest_annotation
         task_json=$(task "$task_uuid" export 2>/dev/null)
+        # Capture before this sync attaches its own link annotations.
+        latest_annotation=$(echo "$task_json" | jq -r '[.[0].annotations[]?.entry // empty] | max // empty')
         if [[ -n "$task_json" ]]; then
             local has_fresh=$(echo "$task_json" | jq -r '.[0].tags | if . then contains(["fresh"]) else false end')
             local has_started=$(echo "$task_json" | jq -r '.[0].tags | if . then contains(["started"]) else false end')
@@ -1569,7 +1571,7 @@ sync_to_taskwarrior() {
         # botActor and no user) keeps the old behavior and tags +updated. A missed
         # nudge is worse than an extra one.
         if [[ -n "$issue_updated_at" && "$issue_updated_at" != "null" ]]; then
-            local stored_activity stored_epoch updated_epoch actor_epoch has_fresh_tag
+            local stored_activity stored_epoch updated_epoch actor_epoch annotation_epoch has_fresh_tag
             # Read the watermark from export, not `_get`. `_get` renders the
             # stored instant as a timezone-naive local wall clock (no Z), which
             # `ts_to_epoch` would then compare against the explicit-UTC Linear
@@ -1587,7 +1589,10 @@ sync_to_taskwarrior() {
                     log "Linear activity is newer than watermark (was: $stored_activity), bumping new_activity to $issue_updated_at"
                     task rc.confirmation=no modify "$task_uuid" new_activity:"$issue_updated_at"
                     actor_epoch=$(ts_to_epoch "$last_actor_at")
-                    if [[ -n "$last_actor_id" && "$last_actor_id" == "$LINEAR_USER_ID" && "$actor_epoch" -gt "$stored_epoch" ]]; then
+                    annotation_epoch=$(ts_to_epoch "$latest_annotation")
+                    if [[ "$annotation_epoch" -gt "$updated_epoch" ]]; then
+                        log "Task annotation covers Linear activity ($latest_annotation), watermark bumped without +updated"
+                    elif [[ -n "$last_actor_id" && "$last_actor_id" == "$LINEAR_USER_ID" && "$actor_epoch" -gt "$stored_epoch" ]]; then
                         log "Newest activity in this window is our own write ($last_actor_at), watermark bumped without +updated"
                     else
                         has_fresh_tag=$(task "$task_uuid" export 2>/dev/null | jq -r '.[0].tags | if . then contains(["fresh"]) else false end')

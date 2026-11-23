@@ -1865,6 +1865,151 @@ EOF
     grep -q -- "+updated" "${TEST_DIR}/task_commands.log"
 }
 
+
+@test "sync_to_taskwarrior does not reflag activity covered by a later annotation" {
+    # Carries no last_actor_id, so this also pins the unknown-actor case: when
+    # Linear tells us nothing about who moved the issue, the nudge still fires.
+    test_issue='{
+        "id":"abc",
+        "description":"Resurfacing Issue",
+        "repository":"linear",
+        "html_url":"https://linear.app/test/issue/DEVOPS-200",
+        "issue_id":"DEVOPS-200",
+        "project":"operations",
+        "status":"Todo",
+        "due_date":null,
+        "priority":3,
+        "updated_at":"2026-06-26T05:46:13.819Z",
+        "cycle_number":null
+    }'
+
+    # Existing, non-fresh task with an older new_activity watermark.
+    cat > "${TEST_DIR}/task" << 'EOF'
+#!/bin/bash
+case "$1" in
+    "linear_issue_id:DEVOPS-200")
+        case "$2" in
+            "(status:pending or status:waiting)")
+                case "$3" in
+                    "export")
+                        echo '[{"uuid":"test-uuid-200","description":"Resurfacing Issue","status":"pending","tags":["linear"],"linear_issue_id":"DEVOPS-200"}]'
+                        ;;
+                esac
+                ;;
+        esac
+        ;;
+    "test-uuid-200")
+        case "$2" in
+            "export")
+                # Watermark lives in export JSON as basic-ISO UTC (as real
+                # TaskWarrior renders it); older than the Linear updatedAt.
+                echo '[{"uuid":"test-uuid-200","description":"Resurfacing Issue","status":"pending","tags":["linear"],"linear_issue_id":"DEVOPS-200","annotations":[{"entry":"20260626T055513Z","description":"checkpoint"},{"entry":"20260626T050100Z","description":"older"}],"new_activity":"20260626T050000Z"}]'
+                ;;
+        esac
+        ;;
+    "_get")
+        if [[ "$2" == *".status" ]]; then
+            echo "pending"
+        else
+            echo ""
+        fi
+        ;;
+    "rc.confirmation=no")
+        echo "MOCK: task $*" >> "${TEST_DIR}/task_commands.log"
+        ;;
+    *)
+        echo "test-uuid-200"
+        ;;
+esac
+EOF
+    chmod +x "${TEST_DIR}/task"
+
+    run sync_to_taskwarrior "$test_issue"
+    [ "$status" -eq 0 ]
+
+    # Watermark bumped to the new updatedAt, written WITHOUT the .819 fraction.
+    # The fraction must be stripped before storing: TaskWarrior drops the Z when
+    # a .NNN fraction is present and stores the wall clock as local time, which
+    # shifts the watermark and re-floods +updated. (regression for that bug)
+    grep -q "new_activity:2026-06-26T05:46:13Z" "${TEST_DIR}/task_commands.log"
+    ! grep -q "new_activity:2026-06-26T05:46:13.819Z" "${TEST_DIR}/task_commands.log"
+    # The later checkpoint already covers this activity.
+    ! grep -q -- "+updated" "${TEST_DIR}/task_commands.log"
+}
+
+
+@test "sync_to_taskwarrior flags activity newer than the latest annotation" {
+    # Carries no last_actor_id, so this also pins the unknown-actor case: when
+    # Linear tells us nothing about who moved the issue, the nudge still fires.
+    test_issue='{
+        "id":"abc",
+        "description":"Resurfacing Issue",
+        "repository":"linear",
+        "html_url":"https://linear.app/test/issue/DEVOPS-200",
+        "issue_id":"DEVOPS-200",
+        "project":"operations",
+        "status":"Todo",
+        "due_date":null,
+        "priority":3,
+        "updated_at":"2026-06-26T05:46:13.819Z",
+        "cycle_number":null
+    }'
+
+    # Existing, non-fresh task with an older new_activity watermark.
+    cat > "${TEST_DIR}/task" << 'EOF'
+#!/bin/bash
+case "$1" in
+    "linear_issue_id:DEVOPS-200")
+        case "$2" in
+            "(status:pending or status:waiting)")
+                case "$3" in
+                    "export")
+                        echo '[{"uuid":"test-uuid-200","description":"Resurfacing Issue","status":"pending","tags":["linear"],"linear_issue_id":"DEVOPS-200"}]'
+                        ;;
+                esac
+                ;;
+        esac
+        ;;
+    "test-uuid-200")
+        case "$2" in
+            "export")
+                # Watermark lives in export JSON as basic-ISO UTC (as real
+                # TaskWarrior renders it); older than the Linear updatedAt.
+                echo '[{"uuid":"test-uuid-200","description":"Resurfacing Issue","status":"pending","tags":["linear"],"linear_issue_id":"DEVOPS-200","annotations":[{"entry":"20260626T053713Z","description":"checkpoint"},{"entry":"20260626T050100Z","description":"older"}],"new_activity":"20260626T050000Z"}]'
+                ;;
+        esac
+        ;;
+    "_get")
+        if [[ "$2" == *".status" ]]; then
+            echo "pending"
+        else
+            echo ""
+        fi
+        ;;
+    "rc.confirmation=no")
+        echo "MOCK: task $*" >> "${TEST_DIR}/task_commands.log"
+        ;;
+    *)
+        echo "test-uuid-200"
+        ;;
+esac
+EOF
+    chmod +x "${TEST_DIR}/task"
+
+    run sync_to_taskwarrior "$test_issue"
+    [ "$status" -eq 0 ]
+
+    # Watermark bumped to the new updatedAt, written WITHOUT the .819 fraction.
+    # The fraction must be stripped before storing: TaskWarrior drops the Z when
+    # a .NNN fraction is present and stores the wall clock as local time, which
+    # shifts the watermark and re-floods +updated. (regression for that bug)
+    grep -q "new_activity:2026-06-26T05:46:13Z" "${TEST_DIR}/task_commands.log"
+    ! grep -q "new_activity:2026-06-26T05:46:13.819Z" "${TEST_DIR}/task_commands.log"
+    # Non-fresh task gets +updated to re-surface for triage
+    grep -q -- "+updated" "${TEST_DIR}/task_commands.log"
+}
+
+
 @test "sync_to_taskwarrior does NOT add +updated when updatedAt is equal or older" {
     test_issue='{
         "id":"abc",
