@@ -1,6 +1,7 @@
 import importlib.util
 import copy
 import json
+import subprocess
 from pathlib import Path
 import tempfile
 import unittest
@@ -52,7 +53,7 @@ class ProjectPageTest(unittest.TestCase):
 
     def test_refresh_writes_json_and_no_html_or_model(self):
         data = fixture()
-        with tempfile.TemporaryDirectory() as tmp, patch.object(page, 'STATE', Path(tmp)), patch.object(page.view, 'linear_key', return_value='stub'), patch.object(page.view, 'task_json', return_value=data['tasks']), patch.object(page, 'collect_project', return_value=data['project']), patch.object(page, 'read_prs', return_value=data['prs']), patch.object(page, 'deck_url', return_value=data['deck']), patch.object(page.subprocess, 'run') as run, patch.object(page, 'summary') as summary:
+        with tempfile.TemporaryDirectory() as tmp, patch.object(page, 'STATE', Path(tmp)), patch.object(page.view, 'linear_key', return_value='stub'), patch.object(page.view, 'task_json', return_value=data['tasks']), patch.object(page, 'collect_project', return_value=data['project']), patch.object(page, 'read_prs', return_value=(data['prs'], [])), patch.object(page, 'deck_url', return_value=data['deck']), patch.object(page.subprocess, 'run') as run, patch.object(page, 'summary') as summary:
             run.return_value.stdout = 'piotr\n'
             page.main()
             self.assertTrue((Path(tmp) / 'ci-infra.json').exists())
@@ -65,9 +66,47 @@ class ProjectPageTest(unittest.TestCase):
         with patch.object(page.subprocess, 'run') as run:
             run.return_value.returncode = 0
             run.return_value.stdout = json.dumps(pr)
-            self.assertEqual(page.read_prs(data['project']['issues']), data['prs'])
+            self.assertEqual(page.read_prs(data['project']['issues']), (data['prs'], []))
             self.assertEqual(run.call_count, 1)
             self.assertIn('statusCheckRollup', run.call_args.args[0][-1])
+
+    def test_transient_github_errors_retry_and_preserve_previous(self):
+        data = fixture()
+        url = next(iter(data['prs']))
+        failure = subprocess.CompletedProcess([], 1, '', 'HTTP 504: 504 Gateway Timeout')
+        with patch.object(page.subprocess, 'run', return_value=failure) as run, patch.object(page.time, 'sleep') as sleep, patch('sys.stderr') as stderr:
+            self.assertEqual(page.read_prs(data['project']['issues'], data['prs']), (data['prs'], [url]))
+            self.assertEqual(run.call_count, 3)
+            self.assertEqual(sleep.call_count, 2)
+            self.assertIn(url, ''.join(call.args[0] for call in stderr.write.call_args_list))
+        with patch.object(page.subprocess, 'run', return_value=failure), patch.object(page.time, 'sleep'), patch('sys.stderr'):
+            self.assertEqual(page.read_prs(data['project']['issues']), ({}, [url]))
+
+    def test_timeout_retries_and_auth_failure_does_not(self):
+        data = fixture()
+        pr = next(iter(data['prs'].values()))
+        success = subprocess.CompletedProcess([], 0, json.dumps(pr), '')
+        with patch.object(page.subprocess, 'run', side_effect=[subprocess.TimeoutExpired('gh', 60), success]) as run, patch.object(page.time, 'sleep'):
+            self.assertEqual(page.read_prs(data['project']['issues']), (data['prs'], []))
+            self.assertEqual(run.call_count, 2)
+        denied = subprocess.CompletedProcess([], 1, '', 'HTTP 403: Forbidden')
+        with patch.object(page.subprocess, 'run', return_value=denied) as run, self.assertRaisesRegex(RuntimeError, 'HTTP 403'):
+            page.read_prs(data['project']['issues'])
+        self.assertEqual(run.call_count, 1)
+
+    def test_refresh_records_unavailable_pr_and_keeps_cached_data(self):
+        data = fixture()
+        url = next(iter(data['prs']))
+        failure = subprocess.CompletedProcess([], 1, '', 'HTTP 504: Gateway Timeout')
+        login = subprocess.CompletedProcess([], 0, 'piotr\n', '')
+        with tempfile.TemporaryDirectory() as tmp, patch.object(page, 'STATE', Path(tmp)), patch.object(page.view, 'linear_key', return_value='stub'), patch.object(page.view, 'task_json', return_value=[]), patch.object(page, 'collect_project', return_value=data['project']), patch.object(page, 'deck_url', return_value=None), patch.object(page.subprocess, 'run', side_effect=[login, failure, failure, failure]), patch.object(page.time, 'sleep'), patch('sys.stderr'):
+            path = Path(tmp) / 'ci-infra.json'
+            path.write_text(json.dumps(data))
+            page.main()
+            result = json.loads(path.read_text())
+            self.assertEqual(result['prs'], data['prs'])
+            self.assertEqual(result['unavailable_prs'], [url])
+            self.assertEqual(result['ci_events'], [])
 
     def test_next_skips_empty_next_milestone(self):
         data = fixture()

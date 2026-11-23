@@ -10,6 +10,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 from datetime import UTC, datetime, timedelta
 
 HERE = Path(__file__).resolve().parent
@@ -65,16 +66,31 @@ def collect_project(client, slug):
     raise ValueError('too many issues')
 
 
-def read_prs(issues):
+def read_prs(issues, previous=None):
     urls = sorted({a['url'] for i in issues for a in i['attachments']['nodes'] if view.pr_ref(a.get('url'))})
-    prs = {}
+    prs, unavailable = {}, []
+    previous = previous or {}
     for url in urls:
         cmd = [*view.GH_CMD, 'pr', 'view', url, '--json', 'url,title,state,createdAt,updatedAt,mergedAt,statusCheckRollup,reviewDecision,reviewRequests']
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
-        if proc.returncode:
-            raise RuntimeError(f'GitHub read failed for {url}: {proc.stderr.strip()}')
-        prs[url] = json.loads(proc.stdout)
-    return prs
+        for attempt in range(3):
+            try:
+                proc = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+                if not proc.returncode:
+                    prs[url] = json.loads(proc.stdout)
+                    break
+                error = proc.stderr.strip()
+                if not re.search(r'\bHTTP 5\d\d\b', error, re.I):
+                    raise RuntimeError(f'GitHub read failed for {url}: {error}')
+            except subprocess.TimeoutExpired:
+                error = 'request timed out'
+            if attempt < 2:
+                time.sleep(attempt + 1)
+        else:
+            print(f'project-page: WARN GitHub read unavailable for {url}: {error}', file=sys.stderr)
+            unavailable.append(url)
+            if url in previous:
+                prs[url] = previous[url]
+    return prs, unavailable
 
 
 def ci(pr):
@@ -247,13 +263,13 @@ def main():
         path = STATE / (name + '.json')
         previous = json.loads(path.read_text()) if path.exists() else {}
         project = collect_project(client, slug)
-        prs = read_prs(project['issues'])
+        prs, unavailable = read_prs(project['issues'], previous.get('prs', {}))
         now = datetime.now(UTC).isoformat()
         events = [e for e in previous.get('ci_events', []) if datetime.fromisoformat(e['time']) >= datetime.now(UTC) - timedelta(days=1)]
         for url, pr in prs.items():
             old = previous.get('prs', {}).get(url)
             if old and ci(old) != ci(pr): events.append({'url': url, 'time': now, 'from': ci(old), 'to': ci(pr)})
-        data = {'summary_version': 5, 'project': project, 'prs': prs, 'tasks': matching_tasks(tasks, task_project, project['issues']), 'github_login': login, 'deck': deck_url(deck), 'ci_events': events}
+        data = {'summary_version': 5, 'project': project, 'prs': prs, 'unavailable_prs': unavailable, 'tasks': matching_tasks(tasks, task_project, project['issues']), 'github_login': login, 'deck': deck_url(deck), 'ci_events': events}
         digest = hashlib.sha256(json.dumps(data, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
         result = {**data, 'hash': digest, 'generated_at': now}
         tmp = path.with_suffix('.json.tmp')
