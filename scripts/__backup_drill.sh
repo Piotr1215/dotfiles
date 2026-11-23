@@ -19,9 +19,8 @@ drive_mount = pathlib.Path(os.getenv('DRIVE_MOUNT', '/mnt/nvme-backup'))
 drive_uuid = os.getenv('DRIVE_UUID', 'd74106d0-1b12-4d65-873d-d69ed3a729e6')
 drive_stamp = pathlib.Path(os.getenv('DRIVE_STATE_DIR', str(home / '.local/state/backup-drive'))) / 'last-success'
 drive_repo = drive_mount / 'restic/secure-store'
-wip_root = drive_mount / os.getenv('WIP_MIRROR_DIR', 'wip')
 media_sources = [pathlib.Path(p) for p in os.getenv('MEDIA_SOURCES', f'{home}/Videos:{home}/models:{home}/Downloads:{home}/music').split(':') if p]
-layers = ['restic', 'envrc', 'home', 'dev', 'task', 'system', 'taskchampion', 'wip', 'media', 'drive-restic']
+layers = ['restic', 'envrc', 'home', 'dev', 'task', 'system', 'taskchampion', 'media', 'drive-restic']
 if len(sys.argv) == 3 and sys.argv[1] == '--layer' and sys.argv[2] in layers:
     selected = [sys.argv[2]]
 elif len(sys.argv) == 1:
@@ -313,94 +312,6 @@ def drive_mounted():
     mount = quiet('findmnt', '-n', '-o', 'UUID,FSTYPE', '--mountpoint', str(drive_mount))
     return bool(mount) and mount.returncode == 0 and mount.stdout.split() == [drive_uuid, 'btrfs']
 
-# Gate the NVMe WIP layer: enabled unit, the expected btrfs drive, both trees, active unit.
-def wip_state():
-    enabled = quiet('systemctl', 'is-enabled', '--quiet', 'wip-mirror.service')
-    if not enabled or enabled.returncode:
-        return 'not-installed'
-    if not drive_mounted():
-        return 'unavailable'
-    if not (wip_root / 'live').is_dir() or not (wip_root / 'versions').is_dir():
-        return 'incomplete'
-    active = quiet('systemctl', 'is-active', '--quiet', 'wip-mirror.service')
-    return 'ready' if active and active.returncode == 0 else 'inactive'
-
-# Copy a drive file into scratch. The drive keeps source modes on root-owned
-# copies, so a private file's copy is read with passwordless sudo (Piotr, 21 Nov).
-def wip_fetch(copy, dest):
-    if os.access(copy, os.R_OK):
-        shutil.copyfile(copy, dest)
-        return
-    with os.fdopen(os.open(dest, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), 'wb') as f:
-        result = subprocess.run(['sudo', '-n', 'cat', '--', str(copy)], stdout=f, stderr=subprocess.DEVNULL, timeout=300)
-    if result.returncode:
-        raise RuntimeError('sudo -n could not read a root-only copy')
-
-# Restore five current copies and up to three prior versions from the WIP drive.
-def wip_check():
-    gate = wip_state()
-    if gate == 'not-installed':
-        raise Skipped('wip-mirror.service not enabled')
-    if gate == 'unavailable':
-        raise RuntimeError(f'drive not mounted at {drive_mount} with the expected UUID')
-    if gate == 'incomplete':
-        raise RuntimeError('live or versions directory missing on the drive')
-    live_root, versions_root = wip_root / 'live', wip_root / 'versions'
-    cutoff = time.time() - 120
-    sample, private = [], 0
-    for root, dirs, files in os.walk(live_root, followlinks=False):
-        random.shuffle(dirs)
-        random.shuffle(files)
-        for file in files:
-            p = pathlib.Path(root) / file
-            source = pathlib.Path('/') / p.relative_to(live_root)
-            try:
-                if p.is_symlink() or not p.is_file() or source.is_symlink() or not source.is_file():
-                    continue
-                info = source.stat()
-                # A source edited since its copy, or in the last two minutes, is not comparable yet.
-                if info.st_mtime >= cutoff or info.st_mtime_ns != p.stat().st_mtime_ns or not os.access(source, os.R_OK):
-                    continue
-            except OSError:
-                continue
-            private += not os.access(p, os.R_OK)
-            sample.append((source, p))
-            if len(sample) == 5:
-                break
-        if len(sample) == 5:
-            break
-    if len(sample) < 5:
-        raise RuntimeError(f'only {len(sample)} live copies match their source mtime; need 5')
-    for i, (source, p) in enumerate(sample):
-        compare(source, p, tmp / f'wip-live-{i}', fetch=wip_fetch)
-    version_name = re.compile(r'^(.+)@(\d+)-[0-9a-f]+$')
-    picked = []
-    for root, dirs, files in os.walk(versions_root, followlinks=False):
-        random.shuffle(dirs)
-        random.shuffle(files)
-        for file in files:
-            match = version_name.match(file)
-            p = pathlib.Path(root) / file
-            if match and not p.is_symlink() and p.is_file():
-                picked.append((p, match))
-                if len(picked) == 3:
-                    break
-        if len(picked) == 3:
-            break
-    for i, (p, match) in enumerate(picked):
-        if int(match.group(2)) > time.time_ns() + 300 * 10**9:
-            raise RuntimeError('prior version timestamp is in the future')
-        if not os.path.lexists(live_root / p.parent.relative_to(versions_root) / match.group(1)):
-            raise RuntimeError('prior version has no current copy on the drive')
-        private += not os.access(p, os.R_OK)
-        # A full read proves the blocks: btrfs fails a read whose checksum does not match.
-        dest = tmp / f'wip-version-{i}'
-        wip_fetch(p, dest)
-        if dest.stat().st_size != p.stat().st_size:
-            raise RuntimeError('restored prior version is not the size of the drive copy')
-    versions = f'{len(picked)} prior versions restore intact' if picked else 'no prior versions yet'
-    return f'5 restored live files match; {versions}; {private} root-only copies read with sudo'
-
 # The media and drive restic layers exist once the drive job has succeeded once.
 def drive_gate():
     if not drive_stamp.exists():
@@ -439,7 +350,7 @@ def drive_restic_check():
     run('restic', '-r', str(drive_repo), '--retry-lock', '5m', 'check', '--read-data-subset=5%')
     return 'check of 5% of data ok; ' + restic_check(drive_repo)
 
-checks = {'restic': restic_check, 'envrc': envrc_check, 'home': lambda: mirror_check('home'), 'dev': lambda: mirror_check('dev'), 'task': task_check, 'system': system_check, 'taskchampion': server_check, 'wip': wip_check, 'media': media_check, 'drive-restic': drive_restic_check}
+checks = {'restic': restic_check, 'envrc': envrc_check, 'home': lambda: mirror_check('home'), 'dev': lambda: mirror_check('dev'), 'task': task_check, 'system': system_check, 'taskchampion': server_check, 'media': media_check, 'drive-restic': drive_restic_check}
 try:
     data = json.loads(state.read_text())
 except (OSError, ValueError):
