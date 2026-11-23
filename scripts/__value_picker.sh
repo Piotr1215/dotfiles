@@ -58,14 +58,20 @@ list_sets() {
     done
 }
 
-# Emit the value lines of a set: run it if executable, else cat. Strip comments/blanks.
+# Emit the value lines of a set, without blank lines. A plain file also drops its
+# # comments. An executable's output is all values, because some start with #
+# (;;slack types #channel); its comments live in its code.
 load_set() {
     local f="$SETS_DIR/$1"
     if [[ ! -f "$f" ]]; then
         notify-send "Value Picker" "No such set: $1"
         exit 1
     fi
-    if [[ -x "$f" ]]; then "$f"; else cat "$f"; fi | grep -vE '^[[:space:]]*(#|$)'
+    if [[ -x "$f" ]]; then
+        "$f" | grep -vE '^[[:space:]]*$'
+    else
+        grep -vE '^[[:space:]]*(#|$)' "$f"
+    fi
 }
 
 set_name="$1"

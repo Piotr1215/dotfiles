@@ -78,3 +78,21 @@ rofi_answers() {
 	[ ! -e "$SPY/rofi.log" ]
 	[ "$(tail -1 "$SPY/xdotool.log")" = 'type --clearmodifiers --delay 12 -- @"u1|D-1|r|fix a"' ]
 }
+
+@test "a live set's values that start with # reach the menu" {
+	printf '#!/usr/bin/env bash\nprintf "#alpha\\n\\n#beta\\n"\n' > "$VALUE_SETS_DIR/hashes"
+	chmod +x "$VALUE_SETS_DIR/hashes"
+	rofi_answers "1 #beta"
+	run "$PICKER" hashes 0
+	[ "$status" -eq 0 ]
+	[ "$(cat "$SPY/rofi.menu")" = "$(printf '#alpha\n#beta')" ]
+	[ "$(tail -1 "$SPY/xdotool.log")" = "type --clearmodifiers --delay 12 -- #beta" ]
+}
+
+@test "a plain set still drops # comments and blank lines" {
+	printf '# header\nv1\n\n  # indented note\nv2\n' > "$VALUE_SETS_DIR/commented"
+	rofi_answers "0 v1"
+	run "$PICKER" commented 0
+	[ "$status" -eq 0 ]
+	[ "$(cat "$SPY/rofi.menu")" = "$(printf 'v1\nv2')" ]
+}
