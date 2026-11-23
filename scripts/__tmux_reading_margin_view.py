@@ -106,6 +106,81 @@ def mark_active_agent(text, active_pane, pane_order):
     return "".join(rows)
 
 
+def child_statuses(rows):
+    """Count child STATUS words, each in the colour of its first appearance."""
+    counts, colours = {}, {}
+    for row in rows:
+        if "STATUS:" not in SGR.sub("", row):
+            continue
+        colour = ""
+        for token in re.split(r"(\x1b\[[0-9;]*m)", row.split("STATUS:", 1)[1]):
+            if SGR.fullmatch(token):
+                colour = "" if token == "\x1b[0m" else token
+            elif token.strip():
+                word = token.split(":")[0].split()[0]
+                counts[word] = counts.get(word, 0) + 1
+                colours.setdefault(word, colour)
+                break
+    return ", ".join(f"{colours[word]}{count} {word}\x1b[0m"
+                     for word, count in sorted(counts.items(), key=lambda item: -item[1]))
+
+
+def fold_subagents(text, expanded):
+    """Hide each parent's indented agent blocks behind one toggle row.
+
+    Returns the shown text and, per shown row, the parent key its toggle row
+    flips (None elsewhere). Collapsed is the default: a key is open only while
+    it is in expanded. A hidden active agent lends its marker to the toggle row.
+    """
+    rows = text.splitlines()
+    plain = [SGR.sub("", row) for row in rows]
+    targets = jump_targets(text)
+    shown, folds, parent, index = [], [], "", 0
+    while index < len(rows):
+        if not re.match(r"^\s+AGENT:\s", plain[index]):
+            if plain[index][:1].strip():
+                parent = targets[index] or plain[index].strip()
+            shown.append(rows[index])
+            folds.append(None)
+            index += 1
+            continue
+        end = index
+        while end < len(rows) and not plain[end][:1].strip():
+            end += 1
+        while not plain[end - 1].strip():
+            end -= 1
+        run = rows[index:end]
+        count = sum(1 for line in plain[index:end] if re.match(r"^\s+AGENT:\s", line))
+        is_open = parent in expanded
+        marker = "* " if not is_open and any(
+            re.match(r"^\s+AGENT:\s+\* ", line) for line in plain[index:end]) else ""
+        indent = re.match(r"^\s*", plain[index]).group()
+        noun = "subagent" if count == 1 else "subagents"
+        statuses = child_statuses(run)
+        shown.append(f"{indent}\x1b[90m{'▾' if is_open else '▸'} {marker}{count} {noun}"
+                     + (f":\x1b[0m {statuses}" if statuses else "\x1b[0m"))
+        folds.append(parent)
+        if is_open:
+            shown.extend(["", *run])
+            folds.extend([None] * (len(run) + 1))
+        index = end
+    return "\n".join(shown) + ("\n" if text.endswith("\n") else ""), folds
+
+
+def read_expanded(path):
+    """Read the shared set of open parent keys; anything unreadable is all closed."""
+    try:
+        keys = json.loads(path.read_text())
+    except (OSError, ValueError):
+        return set()
+    return {key for key in keys if isinstance(key, str)} if isinstance(keys, list) else set()
+
+
+def toggled(expanded, keys):
+    """Open every key when any is closed, else close them all."""
+    return expanded | keys if keys - expanded else expanded - keys
+
+
 def bottom_offset(lines, width, height):
     """Find the first logical line of the last visible page."""
     return max(0, len(lines) - height)
@@ -164,7 +239,8 @@ def main():
     leader_fd = os.open(state / "leader.lock", os.O_CREAT | os.O_RDWR, 0o600)
     scroll_fd = os.open(state / "scroll.lock", os.O_CREAT | os.O_RDWR, 0o600)
     leader = False
-    frame_version, offset_version = None, None
+    frame_version, offset_version, expanded_version = None, None, None
+    expanded = set()
     collector, parent_pipe = None, None
     selector = selectors.DefaultSelector()
     selector.register(sys.stdin, selectors.EVENT_READ, "key")
@@ -185,8 +261,8 @@ def main():
     signal.signal(signal.SIGWINCH, resize)
     raw, lines, offset, size = "", [], 0, None
     pane_order = []
-    targets, jump_children = [], []
-    painted_targets, painted_offset, painted_size = [], 0, (0, 0)
+    targets, folds, jump_children = [], [], []
+    painted_targets, painted_folds, painted_offset, painted_size = [], [], 0, (0, 0)
     pending = b""
     sys.stdout.write("\x1b[?1049h\x1b[?7l\x1b[?25l\x1b[?1000h\x1b[?1006h")
     sys.stdout.flush()
@@ -222,17 +298,19 @@ def main():
                     leader = True
                 except BlockingIOError:
                     pass
-            for filename in ("frame", "offset"):
+            for filename in ("frame", "offset", "expanded"):
                 path = state / filename
                 try:
                     version = path.stat().st_mtime_ns
                     if filename == "frame" and version != frame_version:
                         raw, pane_order = decode_frame(path.read_text())
-                        targets = jump_targets(raw)
                         frame_version, dirty = version, True
                     elif filename == "offset" and version != offset_version:
                         offset = max(0, int(path.read_text()))
                         offset_version, dirty = version, True
+                    elif filename == "expanded" and version != expanded_version:
+                        expanded = read_expanded(path)
+                        expanded_version, dirty = version, True
                 except (OSError, ValueError):
                     pass
             if window:
@@ -262,18 +340,29 @@ def main():
                     pending = pending[len(key):]
                     if key == b"q":
                         running = False
+                    flip = set()
+                    if key == b"s":
+                        flip = {fold for fold in painted_folds if fold is not None}
                     click = re.fullmatch(rb"\x1b\[<0;([0-9]+);([0-9]+)M", key)
                     if click:
                         x, y = map(int, click.groups())
                         row = painted_offset + y - 1
                         painted_width, painted_height = painted_size
-                        if 1 <= x <= painted_width and 1 <= y <= painted_height and row < len(painted_targets) and painted_targets[row]:
+                        inside = 1 <= x <= painted_width and 1 <= y <= painted_height
+                        if inside and row < len(painted_folds) and painted_folds[row] is not None:
+                            flip = {painted_folds[row]}
+                        elif inside and row < len(painted_targets) and painted_targets[row]:
                             try:
                                 jump_children.append(subprocess.Popen([jump_command, painted_targets[row]], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True))
                             except OSError:
                                 pass
                     fcntl.flock(scroll_fd, fcntl.LOCK_EX)
                     try:
+                        if flip:
+                            # Fold state is shared like the offset, so every
+                            # margin shows the same rows at the same position.
+                            expanded = toggled(read_expanded(state / "expanded"), flip)
+                            atomic_write(state / "expanded", json.dumps(sorted(expanded)))
                         try:
                             current_offset = max(0, int((state / "offset").read_text()))
                         except (OSError, ValueError):
@@ -286,10 +375,14 @@ def main():
                         fcntl.flock(scroll_fd, fcntl.LOCK_UN)
                     dirty = True
             if dirty and raw:
-                lines = physical_lines(mark_active_agent(raw, active_pane, pane_order), width)
+                # Mark before folding: the marker matches headers to the full
+                # pane order, and a hidden active agent marks its toggle row.
+                shown, folds = fold_subagents(mark_active_agent(raw, active_pane, pane_order), expanded)
+                targets = jump_targets(shown)
+                lines = physical_lines(shown, width)
                 offset = min(offset, max(0, len(lines) - 1))
                 paint(lines, offset, width, height)
-                painted_targets, painted_offset, painted_size = targets, offset, (width, height)
+                painted_targets, painted_folds, painted_offset, painted_size = targets, folds, offset, (width, height)
                 dirty = False
     finally:
         try:

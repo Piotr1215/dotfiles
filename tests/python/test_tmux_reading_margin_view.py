@@ -43,6 +43,51 @@ class MarginViewTest(unittest.TestCase):
         self.assertEqual(VIEW.mark_active_agent(frame, '%1', ['%1']), frame)
         self.assertEqual(VIEW.mark_active_agent(frame, '', ['%1', '%2']), frame)
 
+    FAMILY = ("AGENT: parent\nSESSION: jump:parent\n\n"
+              "    AGENT: kid-one\n    STATUS: \x1b[0m \x1b[32mworking: tests\x1b[0m\n    SESSION: jump:kid-one\n\n"
+              "    AGENT: kid-two\n    STATUS: \x1b[0m \x1b[33mwaiting: permission\x1b[0m\n    SESSION: jump:kid-two\n\n"
+              "AGENT: other\nSESSION: jump:other\n")
+
+    def test_subagents_fold_by_default_behind_one_toggle_row(self):
+        shown, folds = VIEW.fold_subagents(self.FAMILY, set())
+        plain = VIEW.SGR.sub('', shown).splitlines()
+        self.assertEqual(plain, ['AGENT: parent', 'SESSION: jump:parent', '',
+                                 '    ▸ 2 subagents: 1 working, 1 waiting', '',
+                                 'AGENT: other', 'SESSION: jump:other'])
+        self.assertEqual(folds, [None, None, None, 'jump:parent', None, None, None])
+        self.assertIn('\x1b[33m1 waiting', shown)  # A hidden permission wait keeps its colour.
+        self.assertEqual(VIEW.jump_targets(shown)[3], None)
+
+    def test_open_parent_shows_its_subagents_under_the_toggle_row(self):
+        shown, folds = VIEW.fold_subagents(self.FAMILY, {'jump:parent'})
+        plain = VIEW.SGR.sub('', shown).splitlines()
+        self.assertEqual(plain[3], '    ▾ 2 subagents: 1 working, 1 waiting')
+        self.assertEqual(plain[4:], [''] + VIEW.SGR.sub('', self.FAMILY).splitlines()[3:])
+        self.assertEqual(folds[3], 'jump:parent')
+        self.assertEqual(VIEW.jump_targets(shown)[5:8], ['jump:kid-one'] * 3)
+
+    def test_hidden_active_subagent_marks_the_toggle_row(self):
+        marked = self.FAMILY.replace('    AGENT: kid-two', '    AGENT: * kid-two')
+        self.assertIn('▸ * 2 subagents', VIEW.fold_subagents(marked, set())[0])
+        self.assertNotIn('▾ *', VIEW.fold_subagents(marked, {'jump:parent'})[0])
+        self.assertNotIn('▸ *', VIEW.fold_subagents(self.FAMILY, set())[0])
+
+    def test_fold_leaves_frames_without_indented_agents_alone(self):
+        for frame in ('URL: x\n    CHILD: fixed-left\nROW\n', 'AGENT: one\nSESSION: jump:one\n'):
+            self.assertEqual(VIEW.fold_subagents(frame, set()), (frame, [None] * len(frame.splitlines())))
+
+    def test_toggle_flips_one_key_and_opens_all_when_any_is_closed(self):
+        self.assertEqual(VIEW.toggled(set(), {'a'}), {'a'})
+        self.assertEqual(VIEW.toggled({'a', 'z'}, {'a'}), {'z'})
+        self.assertEqual(VIEW.toggled({'a'}, {'a', 'b'}), {'a', 'b'})
+        self.assertEqual(VIEW.toggled({'a', 'b', 'z'}, {'a', 'b'}), {'z'})
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'expanded'
+            for data, expected in (('["a", 1]', {'a'}), ('{"a": 1}', set()), ('junk', set())):
+                path.write_text(data)
+                self.assertEqual(VIEW.read_expanded(path), expected)
+            self.assertEqual(VIEW.read_expanded(Path(tmp) / 'missing'), set())
+
     def test_decode_frame_validates_metadata_and_accepts_legacy(self):
         frame = 'AGENT: one\nSESSION: jump:one\n'
         self.assertEqual(VIEW.decode_frame(json.dumps({'text': frame, 'panes': ['%1']})), (frame, ['%1']))
@@ -446,6 +491,45 @@ print(pathlib.Path(os.environ['SOURCE']).read_text(), end='')
             os.write(master, b'\x1b[<0;1;6M\x1b[<0;0;3M\x1b[<0;16;3M\x1b[<0;1;0M')
             time.sleep(.2)
             self.assertEqual(hits.read_text().splitlines(), ['jump:first:window'] * 3 + ['jump:second'] * 2)
+
+    def test_click_and_s_toggle_shared_subagent_fold(self):
+        with self.viewer_dir('margin-fold-') as tmp:
+            root = Path(tmp)
+            state, jump, hits, source = root / 'state', root / 'jump', root / 'hits', root / 'source'
+            source.write_text(self.FAMILY)
+            renderer = root / 'renderer'
+            renderer.write_text('#!/bin/sh\ncat "$SOURCE"\n')
+            jump.write_text('#!/bin/sh\nprintf "%s\\n" "$1" >> "$TEST_HITS"\n')
+            renderer.chmod(0o755)
+            jump.chmod(0o755)
+            master, slave = os.openpty()
+            fcntl.ioctl(master, termios.TIOCSWINSZ, struct.pack('HHHH', 20, 50, 0, 0))
+            env = dict(os.environ, HOME=str(root), TASKDATA=str(root / 'taskdata'), XDG_STATE_HOME=str(root / 'xdg'), HANDOFF_PROBE_STATE=str(root / 'probe' / 'state.json'), SOURCE=str(source), TEST_HITS=str(hits), TMUX_READING_MARGIN_JUMP_COMMAND=str(jump), TMUX_READING_MARGIN_STATE_DIR=str(state), TMUX_READING_MARGIN_COLLECT_COMMAND=str(self.collector))
+            proc = subprocess.Popen(['python3', str(VIEW_PATH), str(renderer)], stdin=slave, stdout=slave, stderr=subprocess.DEVNULL, env=env, start_new_session=True)
+            os.close(slave)
+            def cleanup():
+                if proc.poll() is None:
+                    proc.terminate()
+                    proc.wait(timeout=3)
+                os.close(master)
+            self.addCleanup(cleanup)
+            def wait_text(needle):
+                data, end = b'', time.monotonic() + 3
+                while time.monotonic() < end:
+                    ready, _, _ = select.select([master], [], [], .05)
+                    if ready:
+                        data += os.read(master, 65536)
+                        if needle in data:
+                            return data.rsplit(b'\x1b[2J', 1)[-1]  # The last painted frame.
+                self.fail(f'missing {needle!r}: {data!r}')
+            self.assertNotIn(b'kid-one', wait_text('▸ 2 subagents'.encode()))
+            os.write(master, b'\x1b[<0;5;4M')
+            self.assertIn('▾ 2 subagents'.encode(), wait_text(b'AGENT: kid-one'))
+            self.assertEqual(json.loads((state / 'expanded').read_text()), ['jump:parent'])
+            os.write(master, b's')
+            self.assertNotIn(b'kid-one', wait_text('▸ 2 subagents'.encode()))
+            self.assertEqual(json.loads((state / 'expanded').read_text()), [])
+            self.assertFalse(hits.exists())  # The toggle row never jumps.
 
     def test_clips_unicode_and_ansi_without_wrapping(self):
         rows = VIEW.physical_lines('\x1b[31m界abc\x1b[0m\n    child', 4)
