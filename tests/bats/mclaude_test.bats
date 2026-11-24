@@ -112,7 +112,7 @@ PYX
   grep -Fx '              reasoning_effort: high' "$file"
   [ "$(grep -c '        real_name: inkling-2-mini' "$file")" -eq 6 ]
   grep -Fx '    api_base: http://127.0.0.1:18090/v1' "$file"
-  grep -Fx '        max_input_tokens: 40960' "$file"
+  grep -Fx '        max_input_tokens: 16384' "$file"
   MCLAUDE_PORT=18091 MCLAUDE_EFFORT=high run "$SCRIPT" hi
   grep -Fx '    api_base: http://127.0.0.1:18091/v1' "$file"
   grep -Fx 'model: local:high' "$file"
@@ -208,6 +208,18 @@ assert args[0] == '-m' and args[1].endswith('/Inkling-2-Mini-UD-Q4_K_M.gguf')
 assert args[2:] == ['--alias', 'inkling-2-mini', '--host', '127.0.0.1', '--port', '18090', '-ngl', '99', '-ot', r'blk\.([0-5]|1[89]|2[0-3])\.ffn_.*_exps\.=CPU', '-fa', 'on', '-c', '12345', '-ub', '128', '-ctk', 'q8_0', '-ctv', 'q8_0', '-np', '1', '--jinja', '--chat-template-kwargs', '{"reasoning_effort":"low"}', '--temp', '1.0', '--top-p', '1.0', '--top-k', '0', '--min-p', '0.0'], args
 PY
   [ -s "$MCLAUDE_STATE/watchdog.pid" ]
+}
+
+# Handy needs VRAM headroom to reload its speech model.
+@test "starts the server with a default context of 24576" {
+  unset MCLAUDE_CTX
+  run "$SCRIPT" hi
+  [ "$status" -eq 0 ]
+  python3 - "$HOME/server-argv" <<'PY'
+import sys
+args = open(sys.argv[1]).read().splitlines()
+assert args.count('-c') == 1 and args[args.index('-c') + 1] == '24576', args
+PY
 }
 
 # Reasoning effort is the main lever on reply time, so it can be raised for
