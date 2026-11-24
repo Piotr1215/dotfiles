@@ -17,6 +17,7 @@ ROOT = Path(__file__).resolve().parent
 SLACK_HOSTS = {"slack.com", "loft-labs-inc.slack.com", "vcluster-internal.enterprise.slack.com"}
 HOSTS = SLACK_HOSTS | {"app.slack.com", "github.com", "linear.app",
                        "mail.google.com", "app.notion.com", "docs.google.com", "claude.ai"}
+MERGE_ROW = "1fdea853-9f5a-49a6-9221-d27d0d218065"
 UUID = re.compile(r"[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}")
 
 
@@ -720,6 +721,26 @@ def navigation_urls(task, path):
     return list(dict.fromkeys((annotations + block) if has_draft_target else (block + annotations)))
 
 
+def standing_merge_urls(task_bin, uuid):
+    """Refresh the merge row, then verify only its current explicit PR links."""
+    run(["python3", Path.home() / ".claude/scripts/__merge_row_sync.py"], timeout=180,
+        stdout=subprocess.DEVNULL)
+    rows = task_export(task_bin, uuid)
+    if len(rows) != 1 or rows[0].get("uuid", "").lower() != uuid.lower() or "standing" not in rows[0].get("tags", []):
+        raise ValueError("Standing merge row did not resolve")
+    urls = []
+    for annotation in rows[0].get("annotations", []):
+        match = re.fullmatch(r"\s*link:\s*(https://github[.]com/[^/\s]+/[^/\s]+/pull/[0-9]+)\s*", annotation.get("description", ""), re.I)
+        if not match or match.group(1) in urls:
+            continue
+        url = match.group(1)
+        result = run(["gh", "pr", "view", url, "--json", "state,isDraft,mergedAt"], capture_output=True, text=True)
+        pr = json.loads(result.stdout)
+        if pr.get("state") == "OPEN" and pr.get("isDraft") is False and pr.get("mergedAt") is None:
+            urls.append(url)
+    return urls
+
+
 def task_export(task_bin, *filters):
     result = run([task_bin, "rc.context=none", "rc.hooks=off", "rc.verbose=nothing",
                   "rc.gc=off", *filters, "export"], capture_output=True, text=True)
@@ -734,6 +755,11 @@ def main(argv=None):
         return 2
     uuid = args[0]
     task_bin = os.environ.get("HANDOFF_TASK_COMMAND", "task")
+    if "--dry-run-merge" in args:
+        if uuid.lower() != MERGE_ROW:
+            raise ValueError("Dry run is only available for the standing merge row")
+        print("\n".join(standing_merge_urls(task_bin, uuid)))
+        return 0
     if mode == "verify":
         rows = task_export(task_bin, uuid)
         if len(rows) != 1 or rows[0].get("uuid", "").lower() != uuid.lower():
@@ -793,6 +819,10 @@ def main(argv=None):
                 run([task_bin, "rc.context=none", "rc.hooks=off", "rc.confirmation=no",
                      other["uuid"], "stop"], stdout=subprocess.DEVNULL)
         if winner.get("uuid") != uuid:
+            return 0
+        if uuid.lower() == MERGE_ROW and "standing" in task.get("tags", []):
+            urls = standing_merge_urls(task_bin, uuid)
+            navigate_many(urls, window_id("alacritty"))
             return 0
         pane = os.environ.get("TMUX_PANE", "")
         terminal = window_id("alacritty")

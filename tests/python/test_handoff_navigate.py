@@ -1239,3 +1239,36 @@ def test_test_context_never_falls_back_to_browser(monkeypatch, nav_log, key):
     monkeypatch.setattr(nav, "run", lambda *args, **kwargs: pytest.fail("launched"))
     nav.open_page("https://github.com/a")
     assert "browser suppressed" in nav_log.read_text()
+
+
+def test_standing_merge_refreshes_then_checks_only_current_links(monkeypatch):
+    calls = []
+    good = "https://github.com/loft-sh/a/pull/1"
+    merged = "https://github.com/loft-sh/a/pull/2"
+    draft = "https://github.com/loft-sh/a/pull/3"
+    old = "https://github.com/loft-sh/a/pull/4"
+    row = dict(task("link: " + good, "link: " + merged, "link: " + draft,
+                    "history: " + old, "brief: " + old, tags=["piotr", "standing"]), uuid=nav.MERGE_ROW)
+    def run(args, **kwargs):
+        calls.append(args)
+        if args[0] == "gh":
+            data = {good: {"state": "OPEN", "isDraft": False, "mergedAt": None},
+                    merged: {"state": "MERGED", "isDraft": False, "mergedAt": "now"},
+                    draft: {"state": "OPEN", "isDraft": True, "mergedAt": None}}[args[3]]
+            return subprocess.CompletedProcess(args, 0, json.dumps(data))
+        return subprocess.CompletedProcess(args, 0, "")
+    monkeypatch.setattr(nav, "run", run)
+    monkeypatch.setattr(nav, "task_export", lambda *args: (calls.append(["export"]) or [row]))
+    assert nav.standing_merge_urls("task", nav.MERGE_ROW) == [good]
+    assert calls[0][0] == "python3"
+    assert calls[1] == ["export"]
+    assert all(old not in c for c in calls)
+
+
+def test_standing_merge_sync_failure_opens_nothing(monkeypatch):
+    def fail(*args, **kwargs):
+        raise subprocess.CalledProcessError(1, "sync")
+    monkeypatch.setattr(nav, "run", fail)
+    monkeypatch.setattr(nav, "task_export", lambda *args: pytest.fail("must fail closed"))
+    with pytest.raises(subprocess.CalledProcessError):
+        nav.standing_merge_urls("task", nav.MERGE_ROW)
