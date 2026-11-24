@@ -44,7 +44,7 @@ class EffortUdaTests(unittest.TestCase):
 
     def test_default_and_explicit_values(self):
         self.task("add", "project:effort-test", "default effort proof")
-        self.assertEqual(json.loads(self.task("export").stdout)[0]["effort"], "H")
+        self.assertEqual(json.loads(self.task("export").stdout)[0]["effort"], "X")
         for effort in ("L", "M", "H", "X", "Z"):
             with self.subTest(effort=effort):
                 self.task("1", "modify", f"effort:{effort}")
@@ -54,7 +54,7 @@ class EffortUdaTests(unittest.TestCase):
         self.task("add", "default effort proof")
         result = self.task("1", "modify", "effort:invalid", check=False)
         self.assertNotEqual(result.returncode, 0)
-        self.assertEqual(json.loads(self.task("export").stdout)[0]["effort"], "H")
+        self.assertEqual(json.loads(self.task("export").stdout)[0]["effort"], "X")
 
     def test_report_columns_and_rendered_values(self):
         self.task("add", "project:effort-test", "effort:X", "effort report proof")
@@ -154,7 +154,7 @@ class EffortUdaTests(unittest.TestCase):
         self.assertTrue(os.access(script, os.X_OK))
         self.task("add", "+codex", "cycle effort proof")
         original = json.loads(self.task("export").stdout)[0]
-        for expected in ("X", "Z", "L", "M", "H"):
+        for expected in ("Z", "L", "M", "H", "X"):
             result = subprocess.run(
                 [str(script), original["uuid"]], env=self.env,
                 capture_output=True, text=True, timeout=10,

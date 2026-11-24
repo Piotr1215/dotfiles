@@ -89,8 +89,12 @@ def test_real_start_hook_keeps_newest_handoff_and_opens_reply_permalink(command_
         task_bin = root / "task"
         task_bin.symlink_to(TASK)
         env = dict(os.environ)
-        env.pop("PYTEST_CURRENT_TEST", None)
-        env.pop("BATS_TEST_FILENAME", None)
+        # Exercise a user's start action, not the hook's agent/background guard.
+        # HOME, TASKDATA, TASKRC and all UI commands still point at fixtures.
+        for name in ("PYTEST_CURRENT_TEST", "BATS_TEST_FILENAME", "TW_BACKGROUND",
+                     "CLAUDECODE", "CODEX_APP_SERVER_SOCKET", "CODEX_SANDBOX_MODE",
+                     "CODEX_APPROVAL_POLICY"):
+            env.pop(name, None)
         env.update(HOME=str(home), TASKRC=str(taskrc), TASKDATA=str(data),
                    XDG_RUNTIME_DIR=str(runtime), XDG_STATE_HOME=str(state),
                    PATH=str(bin_dir) + os.pathsep + os.environ["PATH"], SLACK_TEAM_ID="TTEST", SLACK_OPEN_NO_DETACH="1",
