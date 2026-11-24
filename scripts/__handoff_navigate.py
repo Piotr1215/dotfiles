@@ -736,7 +736,7 @@ def standing_merge_urls(task_bin, uuid):
         url = match.group(1)
         result = run(["gh", "pr", "view", url, "--json", "state,isDraft,mergedAt"], capture_output=True, text=True)
         pr = json.loads(result.stdout)
-        if pr.get("state") == "OPEN" and pr.get("isDraft") is False and pr.get("mergedAt") is None:
+        if pr.get("state") == "OPEN" and pr.get("isDraft") is False and "mergedAt" in pr and pr["mergedAt"] is None:
             urls.append(url)
     return urls
 
