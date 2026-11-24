@@ -85,26 +85,51 @@ class EffortUdaTests(unittest.TestCase):
         script_dir.mkdir()
         selector = script_dir / "__spawn_claude_directive.sh"
         shutil.copyfile(Path.home() / ".claude/scripts/__spawn_claude_directive.sh", selector)
+        selector.chmod(0o755)  # key 4 starts the form through this copy
+        # Key 4 hands the task to the one Alt+K form (24 Nov): it writes a
+        # request file and starts the form detached. The fake form takes the
+        # request, keeps a copy and cancels; the spawn itself is --dispatch.
         dialog = script_dir / "__spawn_directive_dialog.py"
         dialog.write_text(
-            "#!/usr/bin/env python3\nimport json, os, pathlib, sys\n"
-            "pathlib.Path(os.environ['DIALOG_ARGS_FILE']).write_text(json.dumps(sys.argv[1:]))\n"
-            "print(json.dumps({'runner':'codex','directive':'','model':'gpt-6-astra'}))\n"
+            "#!/usr/bin/env python3\nimport os, pathlib, sys, time\n"
+            "req = pathlib.Path(os.environ['SPAWN_DIALOG_TASK_FILE'])\n"
+            "for _ in range(50):\n"
+            "    if req.exists():\n"
+            "        pathlib.Path(os.environ['DIALOG_ARGS_FILE']).write_text(req.read_text())\n"
+            "        req.unlink()\n"
+            "        break\n"
+            "    time.sleep(0.1)\n"
+            "sys.exit(10)\n"
         )
         dialog.chmod(0o755)
-        args_file = script_dir / "dialog-args.json"
+        args_file = script_dir / "dialog-request.json"
+        form_env = {
+            **self.env, "DIALOG_ARGS_FILE": str(args_file),
+            "SPAWN_DIALOG_TASK_FILE": str(script_dir / "task-request.json"),
+            "SPAWN_FORM_LOCK": str(script_dir / "form.lock"),
+            "SPAWN_DIALOG_WINDOW_FILE": str(script_dir / "form-window"),
+            "SPAWN_DIALOG_HISTORY": str(script_dir / "history.jsonl"),
+        }
         for effort in ("L", "M", "H", "X", "Z"):
             with self.subTest(effort=effort):
                 self.task("1", "modify", f"effort:{effort}", "-codex")
+                args_file.unlink(missing_ok=True)
                 result = subprocess.run(
                     ["bash", str(selector), "1"],
-                    env={**self.env, "DIALOG_ARGS_FILE": str(args_file)},
-                    capture_output=True, text=True, timeout=10,
+                    env=form_env, capture_output=True, text=True, timeout=15,
                 )
                 self.assertEqual(result.returncode, 0, result.stderr)
-                args = json.loads(args_file.read_text())
-                self.assertEqual(args[args.index("--effort") + 1], effort)
-                self.assertEqual(args[args.index("--desc") + 1], "selector effort proof")
+                request = json.loads(args_file.read_text())
+                self.assertEqual(request["uuid"], task_uuid)
+                self.assertEqual(request["effort"], effort)
+                self.assertEqual(request["desc"], "selector effort proof")
+                picks = {"runner": "codex", "directive": "", "model": "gpt-6-astra",
+                         "effort": effort, "task": task_uuid}
+                result = subprocess.run(
+                    ["bash", str(selector), "--dispatch"], input=json.dumps(picks),
+                    env=form_env, capture_output=True, text=True, timeout=15,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
                 model = Path("/tmp/claude-directives") / f"{task_uuid}.model"
                 self.assertEqual(model.read_text().strip(), "gpt-6-astra")
                 record = json.loads(self.task("export").stdout)[0]
