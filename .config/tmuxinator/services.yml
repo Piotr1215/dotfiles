@@ -3,7 +3,7 @@ root: ~/.claude
 on_project_start:
   - tmux bind-key d display-popup -E -w 50 -h 8 "~/.claude/dashboards/claude-dashboard-swap.sh"
   - >-
-    for w in services:resources services:resources-metrics; do tmux show-options -gqv @reading_margin_skip_windows | tr " " "\n" | grep -Fxq "$w" || tmux set-option -ag @reading_margin_skip_windows " $w"; done
+    for w in services:resources services:resources-metrics services:thermal; do tmux show-options -gqv @reading_margin_skip_windows | tr " " "\n" | grep -Fxq "$w" || tmux set-option -ag @reading_margin_skip_windows " $w"; done
 
 # Custom user services (regular files in ~/.config/systemd/user/)
 # Excludes: pueued, system-provided (at-spi, evolution, org.gnome, dconf)
@@ -23,6 +23,9 @@ windows:
   - resources-metrics:
       panes:
         - sampler -c ~/.claude/dashboards/claude-dashboard-resources.yml
+  - thermal:
+      panes:
+        - python3 ~/.claude/scripts/__thermal_why.py live
   - sysadmin:
       panes:
         - __claude_with_monitor.sh --system-prompt-file ~/.claude/system-prompts/sysadmin-agent-system-prompt.md -- "/ops-sysadmin-agent"
