@@ -24,6 +24,19 @@ setup() {
   git -C "$REPO" commit -qm initial
 }
 capture() { "$SCRIPT" "$ROOT"; }
+@test "mirror lock wait does not consume the capture timeout" {
+  export WIP_CAPTURE_REPO_TIMEOUT=1
+  mkdir -p "$WIP_CAPTURE_STATE"
+  local lock="$WIP_CAPTURE_STATE/$(printf '%s' "$MIRROR" | sha256sum | cut -d ' ' -f 1).mirror.lock"
+  flock "$lock" sh -c 'touch "$1"; sleep 2' sh "$BATS_TEST_TMPDIR/locked" &
+  local holder=$!
+  while [[ ! -e $BATS_TEST_TMPDIR/locked ]]; do sleep 0.05; done
+  run capture
+  wait "$holder"
+  [ "$status" -eq 0 ]
+  [[ $output == *"captured $REPO"* ]]
+  [ -n "$(git --git-dir="$MIRROR" rev-parse refs/wip/main)" ]
+}
 @test "excludes marketplace clones but captures other claude repositories" {
   mkdir -p "$HOME/.claude/plugins/marketplaces"
   git clone -q "$REPO" "$HOME/.claude/plugins/marketplaces/vendor"

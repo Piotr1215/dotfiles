@@ -147,9 +147,6 @@ capture_one() {
     return 0
   fi
   head=$(git -C "$repo" rev-parse --verify -q HEAD || true)
-  # Worktrees of one repo share a mirror; parallel workers take turns on it.
-  exec 8>"$state/$(printf '%s' "$mirror_git" | sha256sum | cut -d ' ' -f 1).mirror.lock"
-  flock 8
   if [[ $common_before != "$(cat "$common_stamp" 2>/dev/null)" || ! -d $mirror_work_git ]] ||
      { [[ -n $head ]] && ! git --git-dir="$mirror_git" cat-file -e "$head^{commit}" 2>/dev/null; }; then
     mkdir -p "$mirror_git/objects"
@@ -216,7 +213,8 @@ known_reason() {
   local err=$1
   # A checkout too large to capture in time (a module cache in the worktree)
   # would otherwise fail every run; the stderr note names the timeout.
-  if grep -q '^timed out after ' "$err"; then echo 'capture timed out (too many untracked files?)'
+  if grep -q '^mirror lock wait exceeded ' "$err"; then echo 'mirror lock wait timed out'
+  elif grep -q '^timed out after ' "$err"; then echo 'capture timed out (too many untracked files?)'
   elif grep -q 'repository changed during capture' "$err"; then echo 'changed during capture, retried next run'
   # git 2.56 reports a gitfile whose target is gone in its own words.
   elif grep -Eq 'fatal: (not a git repository|gitfile does not point to a valid repository)' "$err"; then echo 'git directory missing (orphan worktree or submodule)'
@@ -256,10 +254,23 @@ save_times() {
 
 # Capture one repository in the sandbox and print one tab-separated result line.
 run_one() {
-  local repo=$1 out err rc=0 reason line
+  local repo=$1 out err rc=0 reason line common main_repo mirror_git lock_repo
   out=$(mktemp "$state/out.XXXXXXXX")
   err=$(mktemp "$state/err.XXXXXXXX")
-  timeout -k 5 "$repo_timeout" bwrap --die-with-parent --unshare-net --ro-bind / / --dev /dev --bind "$target" "$target" --bind "$state" "$state" --setenv TMPDIR "$state" --setenv WIP_CAPTURE_SANDBOXED 1 -- "$self" --capture-one "$repo" > "$out" 2> "$err" || rc=$?
+  # Wait outside the capture timeout: linked worktrees share one mirror and a
+  # slow sync must not consume the next worktree's entire capture budget.
+  lock_repo=$(realpath -e -- "$repo" 2>/dev/null || printf '%s' "$repo")
+  common=$(git -C "$lock_repo" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)
+  common=$(realpath -e -- "$common" 2>/dev/null || true)
+  if [[ ${common##*/} == .git ]]; then main_repo=${common%/.git}; else main_repo=$lock_repo; fi
+  mirror_git="$target/${main_repo#"$HOME"/}/.git"
+  exec 8>"$state/$(printf '%s' "$mirror_git" | sha256sum | cut -d ' ' -f 1).mirror.lock"
+  if flock -w 1800 8; then
+    timeout -k 5 "$repo_timeout" bwrap --die-with-parent --unshare-net --ro-bind / / --dev /dev --bind "$target" "$target" --bind "$state" "$state" --setenv TMPDIR "$state" --setenv WIP_CAPTURE_SANDBOXED 1 -- "$self" --capture-one "$repo" > "$out" 2> "$err" || rc=$?
+  else
+    rc=1
+    printf 'mirror lock wait exceeded 1800s: %s\n' "$repo" >> "$err"
+  fi
   # A failure while the target takes no write is the NAS gone, not the repo.
   # Exit 255 so xargs starts no more repos (2026-11-17: 15 hours of timeouts).
   if (( rc != 0 )) && ! timeout -k 5 10 touch -- "$target/.wip-probe" 2>/dev/null; then
