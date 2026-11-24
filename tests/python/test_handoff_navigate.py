@@ -1251,12 +1251,16 @@ def test_standing_merge_refreshes_then_checks_only_current_links(monkeypatch):
                     "history: " + old, "brief: " + old, tags=["piotr", "standing"]), uuid=nav.MERGE_ROW)
     def run(args, **kwargs):
         calls.append(args)
-        if args[0] == "gh":
-            data = {good: {"state": "OPEN", "isDraft": False, "mergedAt": None},
-                    merged: {"state": "MERGED", "isDraft": False, "mergedAt": "now"},
-                    draft: {"state": "OPEN", "isDraft": True, "mergedAt": None}}[args[3]]
-            return subprocess.CompletedProcess(args, 0, json.dumps(data))
         return subprocess.CompletedProcess(args, 0, "")
+    class Sync:
+        def fetch(self):
+            return [{"url": good, "ready": True}, {"url": merged, "ready": False}, {"url": draft, "ready": False}]
+        def ready(self, pr, rules):
+            return pr["ready"]
+    class Loader:
+        def exec_module(self, module): pass
+    monkeypatch.setattr(nav.importlib.util, "spec_from_file_location", lambda *args: type("Spec", (), {"loader": Loader()})())
+    monkeypatch.setattr(nav.importlib.util, "module_from_spec", lambda spec: Sync())
     monkeypatch.setattr(nav, "run", run)
     monkeypatch.setattr(nav, "task_export", lambda *args: (calls.append(["export"]) or [row]))
     assert nav.standing_merge_urls("task", nav.MERGE_ROW) == [good]

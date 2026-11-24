@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Resolve one handoff destination and open it beside the editable brief."""
 import json
+import importlib.util
 import fcntl
 import os
 from pathlib import Path
@@ -728,15 +729,17 @@ def standing_merge_urls(task_bin, uuid):
     rows = task_export(task_bin, uuid)
     if len(rows) != 1 or rows[0].get("uuid", "").lower() != uuid.lower() or "standing" not in rows[0].get("tags", []):
         raise ValueError("Standing merge row did not resolve")
+    spec = importlib.util.spec_from_file_location("merge_row_sync", Path.home() / ".claude/scripts/__merge_row_sync.py")
+    merge_sync = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(merge_sync)
+    ready_urls = {pr["url"] for pr in merge_sync.fetch() if merge_sync.ready(pr, {})}
     urls = []
     for annotation in rows[0].get("annotations", []):
         match = re.fullmatch(r"\s*link:\s*(https://github[.]com/[^/\s]+/[^/\s]+/pull/[0-9]+)\s*", annotation.get("description", ""), re.I)
         if not match or match.group(1) in urls:
             continue
         url = match.group(1)
-        result = run(["gh", "pr", "view", url, "--json", "state,isDraft,mergedAt"], capture_output=True, text=True)
-        pr = json.loads(result.stdout)
-        if pr.get("state") == "OPEN" and pr.get("isDraft") is False and "mergedAt" in pr and pr["mergedAt"] is None:
+        if url in ready_urls:
             urls.append(url)
     return urls
 
