@@ -1272,3 +1272,17 @@ def test_standing_merge_sync_failure_opens_nothing(monkeypatch):
     monkeypatch.setattr(nav, "task_export", lambda *args: pytest.fail("must fail closed"))
     with pytest.raises(subprocess.CalledProcessError):
         nav.standing_merge_urls("task", nav.MERGE_ROW)
+
+
+def test_start_standing_merge_uses_refreshed_links_without_brief(monkeypatch, tmp_path):
+    row = dict(task("brief: https://github.com/loft-sh/a/pull/2", tags=["piotr", "standing"]),
+               uuid=nav.MERGE_ROW, start="20261124T180000Z")
+    calls = []
+    monkeypatch.setenv("XDG_RUNTIME_DIR", str(tmp_path))
+    monkeypatch.setattr(nav, "task_export", lambda *args: [row])
+    monkeypatch.setattr(nav, "standing_merge_urls", lambda *args: (calls.append("sync") or []))
+    monkeypatch.setattr(nav, "window_id", lambda _: "")
+    monkeypatch.setattr(nav, "navigate_many", lambda urls, terminal: calls.append(("open", urls)))
+    monkeypatch.setattr(nav, "navigation_urls", lambda *args: pytest.fail("read stale brief"))
+    assert nav.main(["start", nav.MERGE_ROW]) == 0
+    assert calls == ["sync", ("open", [])]
