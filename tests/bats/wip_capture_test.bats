@@ -24,6 +24,16 @@ setup() {
   git -C "$REPO" commit -qm initial
 }
 capture() { "$SCRIPT" "$ROOT"; }
+@test "excludes marketplace clones but captures other claude repositories" {
+  mkdir -p "$HOME/.claude/plugins/marketplaces"
+  git clone -q "$REPO" "$HOME/.claude/plugins/marketplaces/vendor"
+  git clone -q "$REPO" "$HOME/.claude/other"
+  run "$SCRIPT" "$HOME/.claude"
+  [ "$status" -eq 0 ]
+  [[ $output == *'repositories=1 '* ]]
+  [ ! -e "$WIP_CAPTURE_TARGET/.claude/plugins/marketplaces/vendor/.git" ]
+  [ -d "$WIP_CAPTURE_TARGET/.claude/other/.git" ]
+}
 # Loads worktree_add_fresh, or skips where the private repo is absent (CI).
 use_worktree_lib() {
   [[ -r $WORKTREE_LIB ]] || skip "needs ~/.claude/scripts from the private repo"

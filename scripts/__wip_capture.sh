@@ -368,7 +368,7 @@ main() {
   chmod 700 "$self_copy"
   for root in "${roots[@]}"; do
     if [[ ! -e $root ]]; then continue; fi
-    if ! find "$root" \( -type d \( -name node_modules -o -name vendor \) -prune \) -o \( -name .git \( -type d -o -type f \) -print0 -prune \) >> "$list"; then failed=$((failed+1)); fi
+    if ! find "$root" \( -type d \( -name node_modules -o -name vendor -o -path "$HOME/.claude/plugins/marketplaces" \) -prune \) -o \( -name .git \( -type d -o -type f \) -print0 -prune \) >> "$list"; then failed=$((failed+1)); fi
   done
   # Repos are independent; parallel workers hide per-repo git latency.
   sed -z 's#/\.git$##' "$list" |
