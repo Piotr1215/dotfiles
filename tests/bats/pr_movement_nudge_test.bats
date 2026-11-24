@@ -970,3 +970,12 @@ SH
     [ "$status" -eq 0 ]
     [ ! -e "${TEST_DIR}/check.ran" ]
 }
+
+@test "live watcher does not run the legacy merge bundle" {
+    e2e_setup
+    mkdir -p "$HOME/.claude/scripts"
+    printf '#!/usr/bin/env bash\ntouch "%s/bundle-ran"\n' "$TEST_DIR" > "$HOME/.claude/scripts/__pr_merge_bundle.sh"
+    chmod +x "$HOME/.claude/scripts/__pr_merge_bundle.sh"
+    run_nudge
+    [ ! -e "$TEST_DIR/bundle-ran" ]
+}
