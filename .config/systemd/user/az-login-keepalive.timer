@@ -1,0 +1,16 @@
+[Unit]
+Description=Keep the Azure CLI login alive (every 4 hours and at login)
+
+[Timer]
+# Entra expires an Azure CLI refresh token left idle for 12 hours (AADSTS700082,
+# 24 Nov 2026). A refresh every 4 hours keeps it well inside that window.
+# Calendar times that pass during suspend fire right after resume, and
+# Persistent catches the ones missed while the machine was off.
+OnCalendar=*-*-* 00/4:00:00
+OnStartupSec=2min
+Persistent=true
+RandomizedDelaySec=10min
+Unit=az-login-keepalive.service
+
+[Install]
+WantedBy=timers.target

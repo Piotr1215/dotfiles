@@ -1,0 +1,12 @@
+[Unit]
+Description=Refresh the Azure CLI token so its refresh token never goes idle
+Documentation=file:///home/decoder/dev/dotfiles/scripts/__az_login_keepalive.sh
+After=network-online.target
+
+[Service]
+Type=oneshot
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=%h/dev/dotfiles/scripts/__az_login_keepalive.sh
+SyslogIdentifier=az-login-keepalive
+Nice=10
+TimeoutStartSec=5min
