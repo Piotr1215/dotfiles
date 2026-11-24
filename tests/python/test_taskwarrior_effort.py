@@ -76,13 +76,18 @@ class EffortUdaTests(unittest.TestCase):
     def test_selector_reads_real_task_uda(self):
         self.task("add", "selector effort proof")
         task_uuid = json.loads(self.task("export").stdout)[0]["uuid"]
-        for suffix in ("model", "txt"):
-            self.addCleanup(
-                (Path("/tmp/claude-directives") / f"{task_uuid}.{suffix}").unlink,
-                missing_ok=True,
-            )
         script_dir = Path(self.data.name) / "selector"
         script_dir.mkdir()
+        directives = script_dir / "directives"
+        # The wrapper under test is the live one: a failing run must not reach
+        # Piotr's desktop. On 24 Nov a run that could not start the form fired
+        # five real critical "shortcut 4 failed" toasts.
+        stub_bin = script_dir / "bin"
+        stub_bin.mkdir()
+        notify_log = script_dir / "notify.log"
+        notify = stub_bin / "notify-send"
+        notify.write_text(f'#!/bin/sh\nprintf "%s\\n" "$*" >> "{notify_log}"\n')
+        notify.chmod(0o755)
         selector = script_dir / "__spawn_claude_directive.sh"
         shutil.copyfile(Path.home() / ".claude/scripts/__spawn_claude_directive.sh", selector)
         selector.chmod(0o755)  # key 4 starts the form through this copy
@@ -105,6 +110,8 @@ class EffortUdaTests(unittest.TestCase):
         args_file = script_dir / "dialog-request.json"
         form_env = {
             **self.env, "DIALOG_ARGS_FILE": str(args_file),
+            "PATH": f"{stub_bin}{os.pathsep}{self.env['PATH']}",
+            "SPAWN_DIRECTIVE_DIR": str(directives),
             "SPAWN_DIALOG_TASK_FILE": str(script_dir / "task-request.json"),
             "SPAWN_FORM_LOCK": str(script_dir / "form.lock"),
             "SPAWN_DIALOG_WINDOW_FILE": str(script_dir / "form-window"),
@@ -130,7 +137,7 @@ class EffortUdaTests(unittest.TestCase):
                     env=form_env, capture_output=True, text=True, timeout=15,
                 )
                 self.assertEqual(result.returncode, 0, result.stderr)
-                model = Path("/tmp/claude-directives") / f"{task_uuid}.model"
+                model = directives / f"{task_uuid}.model"
                 self.assertEqual(model.read_text().strip(), "gpt-6-astra")
                 record = json.loads(self.task("export").stdout)[0]
                 self.assertEqual(record["effort"], effort)
