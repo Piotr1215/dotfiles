@@ -1,0 +1,13 @@
+# Live view of what drives serval's CPU temperature spikes (__thermal_why.py).
+# Each spike's busiest processes land in ~/.local/state/thermal-why/spikes.jsonl
+# while this session runs; `__thermal_why.py report` ranks them.
+name: thermal
+root: ~/.claude
+on_project_start:
+  - >-
+    tmux show-options -gqv @reading_margin_skip_windows | tr " " "\n" | grep -Fxq thermal:thermal || tmux set-option -ag @reading_margin_skip_windows " thermal:thermal"
+
+windows:
+  - thermal:
+      panes:
+        - python3 ~/.claude/scripts/__thermal_why.py live
