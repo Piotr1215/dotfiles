@@ -34,12 +34,20 @@ def test_agent_kind_spawns_task_without_switching_session(monkeypatch):
         calls.append(args)
         return subprocess.CompletedProcess(args, 0, json.dumps({"session": "aa476008-handoff"}))
     monkeypatch.setattr(nav, "run", run)
-    row = dict(task("agent-brief: old", "agent-brief: exact prompt", "agent: code-writer", "cmd: ignored"), kind="agent")
+    row = dict(task("agent-brief: old", "agent-brief: exact prompt", "agent: code-writer"), kind="agent")
     assert nav.act_on_kind(row) == "agent"
     assert calls[0][1:] == ["--name", "aa476008-handoff", "--cwd", str(Path.home() / "loft"),
                             "--origin", "piotr", "--task", UUID, "--prompt", "exact prompt",
                             "--json", "--agent", "code-writer"]
     assert len(calls) == 1
+
+
+def test_agent_kind_with_command_uses_command_path(monkeypatch):
+    calls = []
+    monkeypatch.setattr(nav, "open_command_window", lambda uuid, command: calls.append((uuid, command)))
+    row = dict(task("agent-brief: legacy", "cmd: resurrect-agent example"), kind="agent")
+    assert nav.act_on_kind(row) == "command"
+    assert calls == [(UUID, "resurrect-agent example")]
 
 
 def test_agent_kind_attaches_existing_handoff_without_spawning(monkeypatch):

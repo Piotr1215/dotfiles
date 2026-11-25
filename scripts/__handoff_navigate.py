@@ -549,7 +549,7 @@ def act_on_kind(task, slack=False):
     # annotation_urls already opened a cmd_page, so it needs no window.
     runnable = not cmd_page(task) and (command or kind == "command")
     try:
-        if kind == "agent":
+        if kind == "agent" and not command:
             uuid = task["uuid"]
             if not UUID.fullmatch(uuid):
                 raise ValueError("invalid task UUID")
@@ -806,7 +806,7 @@ def main(argv=None):
         # current state again, and stop other starts without reentering hooks.
         if not task.get("start"):
             return 0
-        if task_kind(task) == "agent":
+        if task_kind(task) == "agent" and not newest_note(task, "cmd"):
             act_on_kind(task)
             return 0
         # A row carrying +claude or +codex was started by an agent spawn (key 4),
