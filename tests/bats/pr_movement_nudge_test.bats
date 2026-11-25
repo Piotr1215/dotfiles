@@ -461,6 +461,7 @@ JSON
 
 @test "merged: a task-linked PR is seeded open, fires once on the edge into merged, then stays quiet" {
     e2e_setup
+    export PR_MOVE_NOTIFY_LOG="$TEST_DIR"
     add_task 7debf451-2d63-40d4-9df0-a687b763646c pending "PR 8827 vite bump (dependabot) awaiting approval: watch" \
         "Left for Piotr: merge https://github.com/loft-sh/loft-enterprise/pull/8827"
     gql_node loft-sh loft-enterprise 8827 OPEN
@@ -492,6 +493,7 @@ JSON
 
 @test "closed: a task-linked PR closed without merge fires once as closed" {
     e2e_setup
+    export PR_MOVE_NOTIFY_LOG="$TEST_DIR"
     add_task 7debf451-2d63-40d4-9df0-a687b763646c pending "watch https://github.com/loft-sh/vcluster/pull/4084"
     gql_node loft-sh vcluster 4084 OPEN
     run_nudge
@@ -514,6 +516,7 @@ JSON
 
 @test "merged: an authored PR that leaves the open search is fetched once more and reported" {
     e2e_setup
+    export PR_MOVE_NOTIFY_LOG="$TEST_DIR"
     set_search loft-sh vcluster 5
     gql_node loft-sh vcluster 5 OPEN
     run_nudge
@@ -534,6 +537,7 @@ JSON
     # gh search skips a PR for a cycle now and then; dropping its entry on the
     # first miss would lose the baseline and swallow the movement in between.
     e2e_setup
+    export PR_MOVE_NOTIFY_LOG="$TEST_DIR"
     set_search loft-sh vcluster 6
     gql_node loft-sh vcluster 6 OPEN
     run_nudge
@@ -578,6 +582,7 @@ JSON
 
 @test "movement on a task-linked PR names the owning task" {
     e2e_setup
+    export PR_MOVE_NOTIFY_LOG="$TEST_DIR"
     add_task 7debf451-2d63-40d4-9df0-a687b763646c pending "watch https://github.com/loft-sh/loft-enterprise/pull/8827"
     gql_node loft-sh loft-enterprise 8827 OPEN REVIEW_REQUIRED MERGEABLE SUCCESS dependabot[bot] dependabot[bot]
     run_nudge
@@ -588,6 +593,7 @@ JSON
 
 @test "foreign-push stays quiet on a task-linked PR someone else authored, fires on one a self login authored" {
     e2e_setup
+    export PR_MOVE_NOTIFY_LOG="$TEST_DIR"
     add_task 7debf451-2d63-40d4-9df0-a687b763646c pending "other https://github.com/loft-sh/vcluster/pull/11"
     add_task 8debf451-2d63-40d4-9df0-a687b763646c pending "mine https://github.com/loft-sh/vcluster/pull/12"
     gql_node loft-sh vcluster 11 OPEN REVIEW_REQUIRED MERGEABLE SUCCESS alice alice
@@ -670,6 +676,7 @@ one_merge_event() {
 
 @test "routing: the DM goes to intake when the helper says intake" {
     e2e_setup
+    export PR_MOVE_NOTIFY_LOG="$TEST_DIR"
     echo intake > "$ROUTE_FILE"
     one_merge_event
     [ "$(dms)" = "intake: pr-move: loft-sh/vcluster#21 merged https://github.com/loft-sh/vcluster/pull/21 task:7debf451" ]
@@ -677,6 +684,7 @@ one_merge_event() {
 
 @test "routing: the DM goes to triage when the helper says triage" {
     e2e_setup
+    export PR_MOVE_NOTIFY_LOG="$TEST_DIR"
     echo triage > "$ROUTE_FILE"
     one_merge_event
     [ "$(dms | cut -d: -f1)" = "triage" ]
@@ -684,6 +692,7 @@ one_merge_event() {
 
 @test "routing: a missing helper means triage" {
     e2e_setup
+    export PR_MOVE_NOTIFY_LOG="$TEST_DIR"
     export INTAKE_ROUTE_BIN="${TEST_DIR}/does-not-exist"
     one_merge_event
     [ "$(dms | cut -d: -f1)" = "triage" ]
@@ -691,6 +700,7 @@ one_merge_event() {
 
 @test "routing: a helper that prints anything else means triage" {
     e2e_setup
+    export PR_MOVE_NOTIFY_LOG="$TEST_DIR"
     echo "kendra" > "$ROUTE_FILE"
     one_merge_event
     [ "$(dms | cut -d: -f1)" = "triage" ]
@@ -698,6 +708,7 @@ one_merge_event() {
 
 @test "routing: a failing helper means triage" {
     e2e_setup
+    export PR_MOVE_NOTIFY_LOG="$TEST_DIR"
     printf '#!/usr/bin/env bash\nexit 7\n' > "$BIN/intake-route"
     one_merge_event
     [ "$(dms | cut -d: -f1)" = "triage" ]
@@ -713,6 +724,7 @@ one_merge_event() {
 
 @test "routing: an owned PR reaches its owner plain and the target marked (owned by ...)" {
     e2e_setup
+    export PR_MOVE_NOTIFY_LOG="$TEST_DIR"
     echo intake > "$ROUTE_FILE"
     echo "vcluster-pr-21" > "$TMUX_SESSIONS_FILE"
     one_merge_event
@@ -740,6 +752,7 @@ one_merge_event() {
     e2e_setup
     one_merge_event
     [ "$(grep -c ' merged ' "$PR_MOVE_NOTIFY_LOG")" -eq 1 ]
+    [ ! -s "$DMS" ]
     IFS=$'\t' read -r stamp app head body < <(grep ' merged ' "$PR_MOVE_NOTIFY_LOG")
     [[ "$stamp" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}\ [0-9]{2}:[0-9]{2}:[0-9]{2}$ ]]
     [ "$app" = "github" ]
@@ -751,7 +764,8 @@ one_merge_event() {
     e2e_setup
     echo "vcluster-pr-21" > "$TMUX_SESSIONS_FILE"
     one_merge_event
-    [ "$(grep -c . "$DMS")" -eq 2 ]
+    [ "$(grep -c . "$DMS")" -eq 1 ]
+    grep -q "^vcluster-pr-21:" "$DMS"
     [ "$(grep -c ' merged ' "$PR_MOVE_NOTIFY_LOG")" -eq 1 ]
     grep -q '| pr-move: loft-sh/vcluster#21 merged .* (owned by vcluster-pr-21)$' "$PR_MOVE_NOTIFY_LOG"
 }
@@ -809,6 +823,7 @@ one_merge_event() {
     # loft-enterprise#8833 merged and the bot opened #8851-#8857; none were
     # authored by Piotr or task-linked, so none were watched (22 Oct 2026).
     e2e_setup
+    export PR_MOVE_NOTIFY_LOG="$TEST_DIR"
     echo '[{"owner":"loft-sh","repo":"loft-enterprise","num":8833}]' > "$MERGED_FILE"
     bot_pr loft-sh loft-enterprise 8851 "[release-4.6] fix(ci): skip the mirror release step on sync push runs (#8833)" \
         $'Backport from `main` to `release-4.6`\n\nOriginal PR Nr.: #8833\n'
@@ -834,6 +849,7 @@ one_merge_event() {
 
 @test "backport: the body line names a task-linked parent, and the parent's task rides along" {
     e2e_setup
+    export PR_MOVE_NOTIFY_LOG="$TEST_DIR"
     add_task 22db7da1-0000-0000-0000-000000000000 pending "fix https://github.com/loft-sh/vcluster-pro/pull/2600"
     gql_node loft-sh vcluster-pro 2600 MERGED REVIEW_REQUIRED MERGEABLE SUCCESS someone someone
     bot_pr loft-sh vcluster-pro 2620 "[v0.37] fix: re-assert tenant content" $'Backport\n\nOriginal PR Nr.: #2600\n'
@@ -883,6 +899,7 @@ one_merge_event() {
     # State is written before delivery, so the old "deferring to next cycle"
     # dropped every line past the cap for good.
     e2e_setup
+    export PR_MOVE_NOTIFY_LOG="$TEST_DIR"
     many_task_prs 4
     run_nudge
     local i

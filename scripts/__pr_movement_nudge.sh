@@ -118,7 +118,7 @@
 #   notifications cron writes, so a PR move reaches the EVENTS stream and
 #   intake's github row even when no agent is on the bus to take the DM:
 #     <date time>\tgithub\t🐙<ref>:\tkind:pr-move|review-request via:pr-watch link:<url> | <line>
-#   The DM stays until the records are proven to reach Kendra and Gordon.
+#   The intake/triage DM is a fallback when the append fails.
 #
 # Usage:
 #   __pr_movement_nudge.sh            # DRY-RUN (default): log only, no DM
@@ -936,17 +936,22 @@ main() {
     # Deliver: one DM per line up to the cap; past it the rest ride together in
     # one more DM, one line each. State is already written, so a line left
     # unsent here would be lost for good.
-    local total=${#nudges[@]} sent=0 i own tmsg
-    local -a out=() overflow=()
+    local sent=0 i own tmsg total
+    local -a out=() overflow=() fallback=()
     for i in "${!nudges[@]}"; do
         own="${owners[$i]}" tmsg="${nudges[$i]}"
         if [[ -n "$own" ]]; then
             tmsg="${nudges[$i]} (owned by $own)"
         fi
-        record "$tmsg" || true
+        if ! record "$tmsg" || [[ "$DRY_RUN" -eq 1 ]]; then
+            fallback+=("$tmsg")
+        fi
         if [[ -n "$own" ]]; then
             deliver "${nudges[$i]}" "$own"
         fi
+    done
+    total=${#fallback[@]}
+    for tmsg in "${fallback[@]}"; do
         if (( total <= CYCLE_CAP || ${#out[@]} < CYCLE_CAP - 1 )); then
             out+=("$tmsg")
         else

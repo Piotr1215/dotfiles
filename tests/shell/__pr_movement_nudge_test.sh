@@ -125,7 +125,8 @@ EOF
     export PR_MOVE_STATE="$TEST_DIR/state.json"
     export PR_MOVE_LOG="$TEST_DIR/log"
     export PR_MOVE_LOCK="$TEST_DIR/lock"
-    export PR_MOVE_NOTIFY_LOG="$TEST_DIR/notifications.log"
+    # Exercise movement delivery through the DM fallback in these outbox tests.
+    export PR_MOVE_NOTIFY_LOG="$TEST_DIR"
     export PR_MOVE_ME="Piotr1215"
     # Self identities beyond $ME: the Claude bot login Piotr's agent pushes as.
     # Pinned here (not left to the shipped default) so the actor-filter tests are
@@ -470,12 +471,12 @@ printf '#!/usr/bin/env bash\nexit 3\n' > "$PR_MOVE_HANDOFF_CHECK"
 if run --live; then PASS=$((PASS+1)); echo "  PASS: a failing check does not fail the cycle"; else FAIL=$((FAIL+1)); echo "  FAIL: a failing check failed the cycle"; fi
 teardown
 
-echo "T25 bundle refresh runs only in live cycles"
+echo "T25 watcher does not run the legacy merge bundle"
 setup
 printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$*" > "%s/bundle.calls"\necho refreshed\n' "$TEST_DIR" > "$HOME/.claude/scripts/__pr_merge_bundle.sh"
 chmod +x "$HOME/.claude/scripts/__pr_merge_bundle.sh"
 if run --dry-run && [ ! -e "$TEST_DIR/bundle.calls" ]; then PASS=$((PASS+1)); echo "  PASS: dry-run skips bundle"; else FAIL=$((FAIL+1)); echo "  FAIL: dry-run ran bundle or failed"; fi
-if run --live && grep -qx -- '--every 1800' "$TEST_DIR/bundle.calls" && grep -q 'bundle: refreshed' "$PR_MOVE_LOG"; then PASS=$((PASS+1)); echo "  PASS: live cycle refreshes and logs bundle"; else FAIL=$((FAIL+1)); echo "  FAIL: live bundle refresh"; fi
+if run --live && [ ! -e "$TEST_DIR/bundle.calls" ]; then PASS=$((PASS+1)); echo "  PASS: live cycle skips bundle"; else FAIL=$((FAIL+1)); echo "  FAIL: live cycle ran bundle or failed"; fi
 teardown
 
 echo
