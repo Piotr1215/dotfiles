@@ -714,8 +714,30 @@ def test_prefill_hook_verifies_once_after_the_command_exits_zero(tmp_path):
     result = subprocess.run(["zsh", "-fc", script], capture_output=True, text=True, check=True,
                             env={"HANDOFF_CMD": "true", "HANDOFF_UUID": UUID,
                                  "HANDOFF_NAVIGATOR": str(navigator), "TERM": "dumb"})
+    import time
+    deadline = time.monotonic() + 2
+    while not log.exists() and time.monotonic() < deadline:
+        time.sleep(0.01)
     assert log.read_text() == f"verify {UUID}\n"
     assert "handoff_rc" not in result.stdout and "handoff_ran" not in result.stdout
+
+
+def test_prefill_returns_without_waiting_for_verification(tmp_path):
+    import time
+    marker = tmp_path / "finished"
+    navigator = fake_bin(tmp_path, "slow-nav", f'sleep 2; touch {marker}\n')
+    script = (nav.PREFILL + '; read -z queued; handoff_ran; (exit 0); handoff_rc')
+    started = time.monotonic()
+    result = subprocess.run(["zsh", "-fc", script], capture_output=True, text=True, timeout=1,
+                            env={"HANDOFF_CMD": "true", "HANDOFF_UUID": UUID,
+                                 "HANDOFF_NAVIGATOR": str(navigator), "TERM": "dumb"})
+    assert time.monotonic() - started < 1
+    assert result.returncode == 0 and "verifying" in result.stdout
+    assert not marker.exists()
+    deadline = time.monotonic() + 4
+    while not marker.exists() and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert marker.exists()
 
 
 def test_prefill_queues_command_without_executing_it(tmp_path):

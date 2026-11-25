@@ -407,7 +407,8 @@ PREFILL = (' setopt no_equals;'
            ' (( rc == 0 )) || return 0;'
            ' precmd_functions=(${precmd_functions:#handoff_rc});'
            ' preexec_functions=(${preexec_functions:#handoff_ran});'
-           ' "$HANDOFF_NAVIGATOR" verify "$HANDOFF_UUID"; };'
+           ' print -r -- "handoff: verifying ${HANDOFF_UUID[1,8]} in background";'
+           ' "$HANDOFF_NAVIGATOR" verify "$HANDOFF_UUID" </dev/null >/dev/null 2>&1 &! };'
            ' preexec_functions+=(handoff_ran); precmd_functions+=(handoff_rc);'
            ' print -rz -- "$HANDOFF_CMD"; unset HANDOFF_CMD; clear')
 # The floating pane geometry the brief floater uses (__handoff_floater.sh).
