@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -32,29 +33,98 @@ func fingerprint(task, notes, taskrc, probe string, notesCache *string) (string,
 	lines := strings.Split(string(tmux), "\n")
 	sort.Strings(lines)
 	fmt.Fprintf(h, "tmux:%q\n", lines)
+	// Consider every pane, even non-agent panes: this is a conservative superset
+	// of the renderer's process-backed rows. PR sessions can resolve through notes.
+	ids := map[string]bool{}
+	idRE := regexp.MustCompile(`(?i)(DEVOPS|DOC|ENGAI|ENGPLAT|IT)-[0-9]+`)
+	for _, line := range lines {
+		fields := strings.Split(line, "\x1f")
+		for _, field := range fields {
+			for _, prefix := range []string{"DEVOPS-", "DOC-", "ENGAI-", "ENGPLAT-", "IT-"} {
+				if strings.HasPrefix(field, prefix) {
+					ids[field] = true
+				}
+			}
+		}
+		for _, id := range idRE.FindAllString(line, -1) {
+			ids[strings.ToUpper(id)] = true
+		}
+	}
+	// A PR session can resolve to any note with the same PR number. Include
+	// all such note keys, covering both the repo match and the fallback match.
+	prNumbers := map[string]bool{}
+	prSessionRE := regexp.MustCompile(`^.+-pr-?([0-9]+)$`)
+	for _, line := range lines {
+		fields := strings.Split(line, "\x1f")
+		for _, index := range []int{0, 6} {
+			if index < len(fields) {
+				if m := prSessionRE.FindStringSubmatch(fields[index]); m != nil {
+					prNumbers[m[1]] = true
+				}
+			}
+		}
+	}
+	if len(prNumbers) != 0 {
+		prRE := regexp.MustCompile(`(^|\|)\s*pr=[^|]*#([0-9]+)\s*(\||$)`)
+		addNote := func(key, value string) {
+			for _, m := range prRE.FindAllStringSubmatch(value, -1) {
+				if prNumbers[m[2]] {
+					ids[key] = true
+				}
+			}
+		}
+		entries, err := os.ReadDir(filepath.Join(notes, "cockpit-updates"))
+		if err != nil && !os.IsNotExist(err) {
+			return "", err
+		}
+		for _, e := range entries {
+			if e.IsDir() || !strings.HasSuffix(e.Name(), ".txt") {
+				continue
+			}
+			data, err := os.ReadFile(filepath.Join(notes, "cockpit-updates", e.Name()))
+			if err != nil {
+				return "", err
+			}
+			first, _, _ := strings.Cut(string(data), "\n")
+			addNote(strings.TrimSuffix(e.Name(), ".txt"), first)
+		}
+		data, err := os.ReadFile(filepath.Join(notes, "cockpit-notes.md"))
+		if err != nil && !os.IsNotExist(err) {
+			return "", err
+		}
+		for _, line := range strings.Split(string(data), "\n") {
+			key, value, ok := strings.Cut(line, ":")
+			if ok {
+				addNote(strings.TrimSpace(key), value)
+			}
+		}
+	}
+
+	keys := make([]string, 0, len(ids))
+	for id := range ids {
+		keys = append(keys, id)
+	}
+	sort.Strings(keys)
+	keyJSON, _ := json.Marshal(keys)
 	db := filepath.Join(task, "taskchampion.sqlite3")
 	if _, err := os.Stat(db); err == nil {
-		const py = `import sqlite3,sys,hashlib,struct
+		const py = `import sqlite3,sys,hashlib,json
 c=sqlite3.connect('file:'+__import__('urllib.parse',fromlist=['quote']).quote(sys.argv[1])+'?mode=ro',uri=True,timeout=2)
 c.execute('BEGIN')
+ids=set(json.loads(sys.argv[2])); review=sys.argv[3]=='1'
 h=hashlib.sha256()
-def feed(tag,b):
- h.update(tag); h.update(struct.pack('>Q',len(b))); h.update(b)
-for name,key in (('tasks','uuid'),('working_set','id')):
- if key not in {col[1] for col in c.execute('pragma table_info("'+name+'")')}: raise ValueError('unsupported schema')
- feed(b'T',name.encode())
- for row in c.execute('select * from "'+name+'" order by "'+key+'"'):
-  feed(b'R',b'')
-  for v in row:
-   if v is None: feed(b'N',b'')
-   elif isinstance(v,bytes): feed(b'B',v)
-   elif isinstance(v,str): feed(b'S',v.encode())
-   elif isinstance(v,int): feed(b'I',str(v).encode())
-   elif isinstance(v,float): feed(b'F',struct.pack('>d',v))
-   else: raise TypeError('unsupported SQLite value')
+selected=set()
+for uuid,data in c.execute('select uuid,data from tasks order by uuid'):
+ d=json.loads(data)
+ if not isinstance(d,dict): raise ValueError('unsupported task data')
+ if any(x.lower() in str(d.get('linear_issue_id','')).lower() for x in ids) or (review and d.get('status')=='pending' and d.get('linear_issue_id') is not None):
+  selected.add(uuid)
+  h.update(json.dumps([uuid,data],ensure_ascii=True,separators=(',',':')).encode()); h.update(b'\n')
+for row in c.execute('select id,uuid from working_set order by id'):
+ if row[1] in selected: h.update(json.dumps(row,separators=(',',':')).encode()); h.update(b'\n')
 print(h.hexdigest())
 `
-		out, err := exec.CommandContext(ctx, "python3", "-c", py, db).Output()
+		out, err := exec.CommandContext(ctx, "python3", "-c", py, db, string(keyJSON), os.Getenv("COCKPIT_SHOW_REVIEW_ROWS")).Output()
 		if err != nil {
 			return "", err
 		}
@@ -77,6 +147,7 @@ print(h.hexdigest())
 			return "", fmt.Errorf("unsupported task backend")
 		}
 	}
+
 	// Task database bookkeeping can trigger frequent checks. Reuse the notes
 	// digest until an inotify event or watch-set change invalidates it.
 	if *notesCache == "" {
@@ -355,6 +426,8 @@ func main() {
 						_ = os.WriteFile(filepath.Join(state, "fingerprint-error"), []byte(fmt.Sprintf("%s: %v\n", time.Now().Format(time.RFC3339), err)), 0600)
 						due = now.Add(2 * time.Second)
 						nextFingerprint = due
+						nextAge = now.Add(60 * time.Second)
+						start()
 						continue
 					}
 					_ = os.Remove(filepath.Join(state, "fingerprint-error"))

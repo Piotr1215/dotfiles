@@ -156,9 +156,9 @@ class MarginViewTest(unittest.TestCase):
             task.mkdir(); bindir.mkdir()
             db = task / 'taskchampion.sqlite3'
             with sqlite3.connect(db) as conn:
-                conn.executescript("create table tasks (uuid text, data text); create table working_set (id text); create table sync_meta (val text); insert into tasks values ('a','one'),('b','two'); insert into working_set values ('a'); insert into sync_meta values ('old');")
+                conn.executescript('''create table tasks (uuid text, data text); create table working_set (id integer, uuid text); create table sync_meta (val text); insert into tasks values ('a','{"linear_issue_id":"DEVOPS-123","description":"one"}'),('b','{"linear_issue_id":"DEVOPS-999","description":"two"}'); insert into working_set values (1,'a'); insert into sync_meta values ('old');''')
             pane, calls = root / 'pane', root / 'calls'
-            pane.write_text('session window pane option-one\n')
+            pane.write_text('DEVOPS-123 window pane option-one\n')
             tmux = bindir / 'tmux'; tmux.write_text('#!/bin/sh\n[ ! -e "$FAIL_FINGERPRINT" ] || exit 1\ncat "$PANE"\n'); tmux.chmod(0o755)
             renderer = root / 'renderer'; renderer.write_text('#!/bin/sh\necho call >> "$CALLS"\nprintf "frame\\n"\n'); renderer.chmod(0o755)
             master, slave = os.openpty()
@@ -184,12 +184,15 @@ class MarginViewTest(unittest.TestCase):
             self.assertEqual(len(calls.read_text().splitlines()), 1)
             with sqlite3.connect(db) as conn:
                 conn.execute('delete from tasks')
-                conn.executemany('insert into tasks values (?,?)', [('b','two'), ('a','one')])
+                conn.executemany('insert into tasks values (?,?)', [('b','{"linear_issue_id":"DEVOPS-999","description":"two"}'), ('a','{"linear_issue_id":"DEVOPS-123","description":"one"}')])
             time.sleep(.7)
             self.assertEqual(len(calls.read_text().splitlines()), 1)
-            with sqlite3.connect(db) as conn: conn.execute("update tasks set data='changed' where uuid='a'")
+            with sqlite3.connect(db) as conn: conn.execute("update tasks set data='{\"linear_issue_id\":\"DEVOPS-999\",\"description\":\"unrelated\"}' where uuid='b'")
+            time.sleep(1.2)
+            self.assertEqual(len(calls.read_text().splitlines()), 1)
+            with sqlite3.connect(db) as conn: conn.execute("update tasks set data='{\"linear_issue_id\":\"DEVOPS-123\",\"description\":\"changed\"}' where uuid='a'")
             wait_calls(2)
-            pane.write_text('session window pane option-two\n')
+            pane.write_text('DEVOPS-123 window pane option-two\n')
             (state / 'dirty').touch()
             wait_calls(3)
             updates = root / '.claude/tmp/cockpit-updates'
@@ -206,16 +209,22 @@ class MarginViewTest(unittest.TestCase):
             time.sleep(1.2)
             self.assertEqual(len(calls.read_text().splitlines()), 6)
             (root / 'fail').touch()
-            pane.write_text('session window pane option-three\n')
+            pane.write_text('DEVOPS-123 window pane option-three\n')
             (state / 'dirty').touch()
             end = time.monotonic() + 3
             while not (state / 'fingerprint-error').exists() and time.monotonic() < end:
                 time.sleep(.02)
             self.assertTrue((state / 'fingerprint-error').exists())
             time.sleep(.5)
-            self.assertEqual(len(calls.read_text().splitlines()), 6)
-            (root / 'fail').unlink()
             wait_calls(7)
+            (root / 'fail').unlink()
+            wait_calls(8)
+            (updates / 'DEVOPS-999.txt').write_text('working | active | pr=org/repo#42')
+            pane.write_text('repo-pr-42\x1fwindow\x1f%1\x1f1\x1fshell\x1f\x1f\n')
+            (state / 'dirty').touch()
+            wait_calls(9)
+            with sqlite3.connect(db) as conn: conn.execute("update tasks set data='{\"linear_issue_id\":\"DEVOPS-999\",\"description\":\"pr title\"}' where uuid='b'")
+            wait_calls(10)
 
     @staticmethod
     def viewer_for_collector(collector_pid, viewers):
