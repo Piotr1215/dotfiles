@@ -216,6 +216,10 @@ print(h.hexdigest())
 				if child.IsDir() || strings.HasPrefix(name, ".") || strings.HasSuffix(name, ".try") || strings.HasSuffix(name, ".lock") || strings.Contains(name, ".tmp.") || strings.HasSuffix(name, "-shm") {
 					continue
 				}
+				// The renderer reads only *.txt update files.
+				if ent.Name() == "cockpit-updates" && !strings.HasSuffix(name, ".txt") {
+					continue
+				}
 				paths = append(paths, filepath.Join(path, name))
 			}
 		}
@@ -226,7 +230,21 @@ print(h.hexdigest())
 			if err != nil && !os.IsNotExist(err) {
 				return "", err
 			}
+			if filepath.Dir(path) == filepath.Join(notes, "cockpit-updates") {
+				first, _, _ := strings.Cut(string(data), "\n")
+				data = []byte(first)
+			}
 			fmt.Fprintf(notesHash, "%q:%q\n", path, data)
+			// These statuses are compared with pane timestamps by the renderer.
+			// A same-text rewrite can therefore change a visible row.
+			if (path == filepath.Join(notes, "cockpit-notes.md") || filepath.Dir(path) == filepath.Join(notes, "cockpit-updates")) &&
+				(strings.Contains(string(data), "input") || strings.Contains(string(data), "blocked") || strings.Contains(string(data), "waiting") || strings.Contains(string(data), "idle")) {
+				if info, err := os.Stat(path); err == nil {
+					fmt.Fprintf(notesHash, "mtime:%d\n", info.ModTime().Unix())
+				} else if !os.IsNotExist(err) {
+					return "", err
+				}
+			}
 		}
 		*notesCache = fmt.Sprintf("%x", notesHash.Sum(nil))
 	}
@@ -329,6 +347,16 @@ func main() {
 	ticker := time.NewTicker(200 * time.Millisecond)
 	defer ticker.Stop()
 	due := time.Now()
+	var dirtySince time.Time
+	markDirty := func(now time.Time) {
+		if dirtySince.IsZero() {
+			dirtySince = now
+		}
+		due = now.Add(700 * time.Millisecond)
+		if limit := dirtySince.Add(4600 * time.Millisecond); due.After(limit) {
+			due = limit
+		}
+	}
 	nextAge := time.Now().Add(60 * time.Second)
 	var nextFingerprint time.Time
 	var cmd *exec.Cmd
@@ -399,8 +427,15 @@ func main() {
 						_ = os.Rename(tmp, filepath.Join(cycleDir, "order"))
 					}
 				}
-			} else if _, statErr := os.Stat(filepath.Join(state, "frame")); os.IsNotExist(statErr) {
-				_ = os.WriteFile(filepath.Join(state, "frame"), []byte("Roster read failed\n"), 0600)
+			} else {
+				if _, statErr := os.Stat(filepath.Join(state, "frame")); os.IsNotExist(statErr) {
+					_ = os.WriteFile(filepath.Join(state, "frame"), []byte("Roster read failed\n"), 0600)
+				}
+				// Retry even when the failed render had the same fingerprint as the
+				// last successful frame, including a failed safety refresh.
+				lastFingerprint = ""
+				dirtySince = time.Time{}
+				due = time.Now().Add(2 * time.Second)
 			}
 			cmd, result = nil, nil
 		case now := <-ticker.C:
@@ -417,7 +452,7 @@ func main() {
 					}
 					if ev.Mask&syscall.IN_Q_OVERFLOW != 0 {
 						notesCache = ""
-						due = now.Add(150 * time.Millisecond)
+						markDirty(now)
 					}
 					name := strings.TrimRight(string(buf[pos:pos+int(ev.Len)]), "\x00")
 					pos += int(ev.Len)
@@ -440,9 +475,7 @@ func main() {
 									nextWatches = now
 								}
 							}
-							if due.IsZero() {
-								due = now.Add(150 * time.Millisecond)
-							}
+							markDirty(now)
 						}
 					}
 				}
@@ -451,9 +484,7 @@ func main() {
 				signature := refreshWatches()
 				if signature != watchSignature {
 					notesCache = ""
-					if due.IsZero() {
-						due = now.Add(150 * time.Millisecond)
-					}
+					markDirty(now)
 				}
 				watchSignature = signature
 				nextWatches = now.Add(time.Second)
@@ -465,6 +496,7 @@ func main() {
 					tasks.signature = ""
 				}
 				due = time.Time{}
+				dirtySince = time.Time{}
 				pendingValid = false
 				if os.Getenv("TMUX_READING_MARGIN_SEMANTIC_FILTER") != "0" {
 					nextFingerprint = now.Add(time.Second)

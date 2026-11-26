@@ -210,14 +210,25 @@ class MarginViewTest(unittest.TestCase):
             note = updates / 'agent.txt'
             note.write_text('first')
             wait_calls(4)
+            note.write_text('first\nignored second line')
+            (updates / 'ignored.data').write_text('ignored')
+            time.sleep(1.5)
+            self.assertEqual(len(calls.read_text().splitlines()), 4)
             replacement = updates / '.new'
             replacement.write_text('second')
             replacement.replace(note)
             wait_calls(5)
             note.unlink()
             wait_calls(6)
+            note.write_text('input | waiting for answer')
+            wait_calls(7)
+            before = note.stat().st_mtime
+            os.utime(note, (before + 5, before + 5))
+            wait_calls(8)
+            note.unlink()
+            wait_calls(9)
             time.sleep(1.2)
-            self.assertEqual(len(calls.read_text().splitlines()), 6)
+            self.assertEqual(len(calls.read_text().splitlines()), 9)
             (root / 'fail').touch()
             pane.write_text('DEVOPS-123 window pane option-three\n')
             (state / 'dirty').touch()
@@ -226,18 +237,18 @@ class MarginViewTest(unittest.TestCase):
                 time.sleep(.02)
             self.assertTrue((state / 'fingerprint-error').exists())
             time.sleep(.5)
-            wait_calls(7)
+            wait_calls(10)
             (root / 'fail').unlink()
-            wait_calls(8)
+            wait_calls(11)
             (updates / 'DEVOPS-999.txt').write_text('working | active | pr=org/repo#42')
             pane.write_text('repo-pr-42\x1fwindow\x1f%1\x1f1\x1fshell\x1f\x1f\n')
             (state / 'dirty').touch()
-            wait_calls(9)
+            wait_calls(12)
             with sqlite3.connect(db) as conn: conn.execute("update tasks set data='{\"linear_issue_id\":\"DEVOPS-999\",\"description\":\"pr title\"}' where uuid='b'")
-            wait_calls(10)
+            wait_calls(13)
             (root / 'fail-query').touch()
             db.touch()
-            wait_calls(11)
+            wait_calls(14)
             self.assertTrue((state / 'fingerprint-error').exists())
             (root / 'fail-query').unlink()
             end = time.monotonic() + 4
@@ -272,7 +283,7 @@ class MarginViewTest(unittest.TestCase):
                     proc.wait(timeout=3)
                 os.close(master)
             self.addCleanup(cleanup)
-            def wait_calls(n, timeout=1):
+            def wait_calls(n, timeout=3):
                 end = time.monotonic() + timeout
                 while time.monotonic() < end:
                     if calls.exists() and len(calls.read_text().splitlines()) >= n:
@@ -310,7 +321,49 @@ class MarginViewTest(unittest.TestCase):
             while time.monotonic() < end:
                 (state / 'dirty').touch()
                 time.sleep(.04)
+            self.assertEqual(len(calls.read_text().splitlines()), before)
+            wait_calls(before + 1)
+            self.assertEqual(len(calls.read_text().splitlines()), before + 1)
+            before = len(calls.read_text().splitlines())
+            started = time.monotonic()
+            while time.monotonic() - started < 5.3:
+                (state / 'dirty').touch()
+                time.sleep(.08)
             self.assertGreater(len(calls.read_text().splitlines()), before)
+
+    def test_safety_refresh_and_renderer_failure_recovery(self):
+        with self.viewer_dir('margin-refresh-') as tmp:
+            root = Path(tmp)
+            calls, state, renderer = root / 'calls', root / 'state', root / 'renderer'
+            renderer.write_text('#!/bin/sh\necho call >> "$CALLS"\n[ -e "$FAIL" ] && exit 1\nprintf "recovered frame\\n"\n')
+            renderer.chmod(0o755)
+            fail = root / 'fail'
+            fail.touch()
+            master, slave = os.openpty()
+            fcntl.ioctl(master, termios.TIOCSWINSZ, struct.pack('HHHH', 5, 25, 0, 0))
+            env = dict(os.environ, HOME=str(root), TASKDATA=str(root / 'taskdata'),
+                       XDG_STATE_HOME=str(root / 'xdg'), CALLS=str(calls), FAIL=str(fail),
+                       TMUX_READING_MARGIN_STATE_DIR=str(state), TMUX_READING_MARGIN_COLLECT_COMMAND=str(self.collector))
+            proc = subprocess.Popen(['python3', str(VIEW_PATH), str(renderer)], stdin=slave, stdout=slave,
+                                    stderr=subprocess.DEVNULL, env=env, start_new_session=True)
+            os.close(slave)
+            def cleanup():
+                if proc.poll() is None:
+                    proc.terminate()
+                    proc.wait(timeout=3)
+                os.close(master)
+            self.addCleanup(cleanup)
+            def wait_for(predicate, timeout):
+                end = time.monotonic() + timeout
+                while time.monotonic() < end:
+                    if predicate(): return
+                    time.sleep(.05)
+                self.fail('collector did not refresh')
+            wait_for(lambda: calls.exists() and calls.read_text().count('call') >= 1, 4)
+            fail.unlink()
+            wait_for(lambda: (state / 'frame').exists() and 'recovered frame' in (state / 'frame').read_text(), 5)
+            count = calls.read_text().count('call')
+            wait_for(lambda: calls.read_text().count('call') > count, 64)
 
     def test_leader_crash_keeps_lock_until_collector_exits(self):
         with self.viewer_dir('margin-crash-') as tmp:
@@ -403,8 +456,8 @@ print(pathlib.Path(os.environ['SOURCE']).read_text(), end='')
             # Return to the top so the shorter replacement frame is visible.
             os.write(viewers[0][0], b'g')
             for master, _ in viewers:
-                read_until(master, b'UPDATED', 1)
-            self.assertLess(time.monotonic() - start, 1)
+                read_until(master, b'UPDATED', 3)
+            self.assertLess(time.monotonic() - start, 5)
             self.assertEqual(len(calls.read_text().splitlines()), 2)
             leader_pid = int(calls.read_text().splitlines()[0])
             leader = self.viewer_for_collector(leader_pid, viewers)
