@@ -549,6 +549,9 @@ def act_on_kind(task, slack=False):
     # annotation_urls already opened a cmd_page, so it needs no window.
     runnable = not cmd_page(task) and (command or kind == "command")
     try:
+        if command and (session := live_agent_session(task)):
+            attach_agent_session(session)
+            return "agent"
         if kind == "agent" and not command:
             uuid = task["uuid"]
             if not UUID.fullmatch(uuid):
@@ -592,7 +595,7 @@ def act_on_kind(task, slack=False):
         if runnable:
             open_command_window(task["uuid"], command)
             return "command"
-        session = live_agent_session(task)
+        session = live_agent_session(task) if not command else ""
         if session:
             attach_agent_session(session)
             return "agent"
@@ -855,13 +858,14 @@ def main(argv=None):
                     os.environ.pop("HANDOFF_AGENT", None)
                 else:
                     os.environ["HANDOFF_AGENT"] = previous_owner
-            if act_on_kind(task, slack) == "none" and not urls:
+            action = act_on_kind(task, slack)
+            if action == "none" and not urls:
                 # Nothing to open or run: Gordon fixes the row (link:, cmd: or agent:).
                 log(f"handoff: no action on {uuid}")
         finally:
             if slack:
                 run([floater, "pin", uuid, pane])
-        if slack:
+        if slack and action != "agent":
             if any(urlsplit(url).hostname in SLACK_HOSTS for url in urls):
                 wait_for_slack_focus()
             show_slack_draft(pane, terminal, runtime)

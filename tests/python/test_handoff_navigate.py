@@ -49,6 +49,22 @@ def test_agent_kind_with_command_uses_command_path(monkeypatch):
     assert nav.act_on_kind(row) == "command"
     assert calls == [(UUID, "resurrect-agent example")]
 
+@pytest.mark.parametrize("kind", ["agent", "command"])
+def test_command_with_live_agent_switches_session(monkeypatch, fake_tmux, kind):
+    tmux = os.environ["HANDOFF_TMUX_COMMAND"]
+    real_run = subprocess.run
+    def run(args, **kwargs):
+        if args[:2] == [tmux, "has-session"]:
+            assert args[2:] == ["-t", "=some-worker"]
+            return subprocess.CompletedProcess(args, 0)
+        return real_run(args, **kwargs)
+    monkeypatch.setattr(nav.subprocess, "run", run)
+    row = dict(task("agent: some-worker", "cmd: ~/.claude/scripts/__spawn_agent.sh --name some-worker"),
+               kind=kind)
+    assert nav.act_on_kind(row) == "agent"
+    assert [args[0] for args in fake_tmux()] == ["display-message", "switch-client"]
+    assert fake_tmux()[-1] == ["switch-client", "-t", "=some-worker"]
+
 
 def test_agent_kind_attaches_existing_handoff_without_spawning(monkeypatch):
     calls = []
@@ -435,10 +451,10 @@ def test_slack_user_id_url_is_rejected(note):
 
 @pytest.mark.parametrize(("notes", "expected"), [
     (("link: https://github.com/a", "cmd: echo hello"),
-     [("navigate", ["https://github.com/a"]), ("command", "echo hello")]),
+     [("navigate", ["https://github.com/a"]), ("agent", "agent-session")]),
     (("link: https://github.com/a",),
      [("navigate", ["https://github.com/a"]), ("agent", "agent-session")]),
-    (("cmd: echo hello",), [("navigate", []), ("command", "echo hello")]),
+    (("cmd: echo hello",), [("navigate", []), ("agent", "agent-session")]),
 ])
 def test_start_navigates_before_kind_action(monkeypatch, tmp_path, notes, expected):
     monkeypatch.setenv("XDG_RUNTIME_DIR", str(tmp_path))
