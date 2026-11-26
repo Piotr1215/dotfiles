@@ -7,7 +7,10 @@ repos work through Piotr's gh login) and exact duplicate URLs, keeping one of
 each. Pinned tabs are never closed.
 
 op "report": DM Gordon (bus name "triage") what the extension closed, through
-~/.claude/scripts/snd.
+~/.claude/scripts/snd, only when the message carries "report": true. Piotr
+asks for it with the popup's "Tell Gordon" button; closes are never reported
+on their own (Piotr, 26 Nov: "this is mostly noise", "he doesn't need to know
+this every time").
 """
 import json
 import os
@@ -103,7 +106,7 @@ def short_url(url):
     return f"{parts.scheme}://{parts.netloc}{parts.path}" if parts.netloc else url.split("?")[0].split("#")[0]
 
 
-def report_text(closed, auto):
+def report_text(closed):
     """One bus line naming what the sweep closed."""
     prs = sorted({r["pr"] for r in closed if r.get("reason") == "merged" and r.get("pr")})
     dupes = {}
@@ -111,7 +114,7 @@ def report_text(closed, auto):
         if row.get("reason") == "duplicate":
             url = short_url(row.get("url", ""))
             dupes[url] = dupes.get(url, 0) + 1
-    parts = [f"Chrome tab sweep closed {len(closed)} tab{'s' * (len(closed) != 1)} ({'auto-close' if auto else 'confirmed by Piotr'})."]
+    parts = [f"Chrome tab sweep closed {len(closed)} tab{'s' * (len(closed) != 1)}."]
     if prs:
         parts.append(f"Merged PRs ({len(prs)}): " + ", ".join(prs[:20]) + (f", and {len(prs) - 20} more" if len(prs) > 20 else "") + ".")
     if dupes:
@@ -120,7 +123,7 @@ def report_text(closed, auto):
     return " ".join(parts)
 
 
-def report(closed, auto):
+def report(closed):
     """DM the report to triage; True when snd published it."""
     rows = [r for r in closed if isinstance(r, dict)]
     if not rows:
@@ -128,7 +131,7 @@ def report(closed, auto):
     snd = os.environ.get("TAB_SWEEP_SND") or os.path.expanduser("~/.claude/scripts/snd")
     env = {**os.environ, "SND_FROM": "tab-sweep"}
     try:
-        run = subprocess.run([snd, "--no-human", "-t", os.environ.get("TAB_SWEEP_TO") or "triage", report_text(rows, auto)],
+        run = subprocess.run([snd, "--no-human", "-t", os.environ.get("TAB_SWEEP_TO") or "triage", report_text(rows)],
                              stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=20, env=env)
     except (OSError, subprocess.TimeoutExpired) as exc:
         return {"reported": False, "error": str(exc)}
@@ -140,7 +143,9 @@ def handle(message):
     if message.get("op") == "plan":
         return plan(message.get("tabs") or [])
     if message.get("op") == "report":
-        return report(message.get("closed") or [], bool(message.get("auto")))
+        if message.get("report") is not True:
+            return {"reported": False}
+        return report(message.get("closed") or [])
     return {"error": "unknown op"}
 
 

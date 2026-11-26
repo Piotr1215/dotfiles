@@ -132,24 +132,32 @@ def test_report_dms_triage_with_prs_and_duplicate_urls_without_query(fakes):
         {'id': 1, 'reason': 'merged', 'pr': 'loft-sh/vcluster#12', 'url': 'https://github.com/loft-sh/vcluster/pull/12'},
         {'id': 2, 'reason': 'duplicate', 'url': 'https://docs.example/page?token=secret#h'},
         {'id': 3, 'reason': 'duplicate', 'url': 'https://docs.example/page?token=secret#h'},
-    ], auto=True)
+    ])
     assert reply == {'reported': True}
     call = json.loads((fakes / 'snd-log').read_text())
     assert call['from'] == 'tab-sweep'
     assert call['argv'][:3] == ['--no-human', '-t', 'triage']
-    assert call['argv'][3] == ('Chrome tab sweep closed 3 tabs (auto-close). Merged PRs (1): loft-sh/vcluster#12. '
+    assert call['argv'][3] == ('Chrome tab sweep closed 3 tabs. Merged PRs (1): loft-sh/vcluster#12. '
                                'Duplicates (2): https://docs.example/page x2.')
 
 
 def test_report_failure_is_returned_not_hidden(fakes, monkeypatch):
     monkeypatch.setenv('FAKE_SND_EXIT', '2')
-    reply = host.report([{'id': 1, 'reason': 'duplicate', 'url': 'https://a/'}], auto=False)
+    reply = host.report([{'id': 1, 'reason': 'duplicate', 'url': 'https://a/'}])
     assert reply == {'reported': False, 'error': 'snd exit 2'}
 
 
 def test_nothing_closed_sends_nothing(fakes):
-    assert host.report([], auto=True)['reported'] is False
+    assert host.report([])['reported'] is False
     assert not (fakes / 'snd-log').exists()
+
+
+def test_a_report_op_without_an_explicit_ask_sends_nothing(fakes):
+    closed = [{'id': 1, 'reason': 'duplicate', 'url': 'https://a/'}]
+    assert host.handle({'op': 'report', 'closed': closed, 'auto': True}) == {'reported': False}
+    assert not (fakes / 'snd-log').exists()
+    assert host.handle({'op': 'report', 'closed': closed, 'report': True}) == {'reported': True}
+    assert len((fakes / 'snd-log').read_text().splitlines()) == 1
 
 
 def test_native_framing_round_trip(fakes):
