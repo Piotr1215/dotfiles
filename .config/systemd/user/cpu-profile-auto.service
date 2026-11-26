@@ -25,6 +25,10 @@ Type=simple
 # 40%/120 s default, so switch up sooner.
 Environment=CPU_PROFILE_AUTO_UP_PERCENT=30
 Environment=CPU_PROFILE_AUTO_UP_SECONDS=60
+# 26 Nov 20:40: agents hold serval at 20 to 25% busy, above the 15% default,
+# so it stayed on Performance (package p50 89 C at 20-29% busy versus 64 C on
+# Balanced) and Piotr found it too hot. Drop to Balanced below 25%.
+Environment=CPU_PROFILE_AUTO_DOWN_PERCENT=25
 ExecStart=%h/dev/dotfiles/scripts/__cpu_profile_auto.sh
 Restart=on-failure
 RestartSec=10
