@@ -13,11 +13,23 @@ setup() {
   cat >"$SPACELIFT_EVENTS_SPACECTL" <<'EOF'
 #!/usr/bin/env bash
 [[ -e "${SL_FIXTURE}.fail" ]] && { echo "dial tcp: i/o timeout" >&2; exit 1; }
+[[ -e "${SL_FIXTURE}.warning" ]] && echo "Warning: Unable to determine Spacelift instance type" >&2
 cat "$SL_FIXTURE"
 EOF
   chmod +x "$SPACELIFT_EVENTS_SPACECTL"
   NOW="$(date +%s)"
   NODES=()
+}
+
+@test "a spacectl warning on stderr does not corrupt the JSON response" {
+  node w1 1 60 false ERROR vcs-failure stack/s1 "Could not notify VCS" "500"
+  serve
+  touch "${SL_FIXTURE}.warning"
+  run "$SCRIPT"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"Warning: Unable to determine"* ]]
+  [[ "$output" == *"SUMMARY: records=1"* ]]
+  [ "$(record_count)" -eq 1 ]
 }
 
 teardown() {
@@ -119,6 +131,11 @@ record_count() {
   run "$SCRIPT"
   [ "$status" -eq 1 ]
   [ "$(record_count)" -eq 1 ]
+  cmp "${SPACELIFT_EVENTS_STATE}/seen" "${WORK}/seen.before"
+  printf 'Warning: no response\n' >"$SL_FIXTURE"
+  run "$SCRIPT"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"unexpected searchNotifications answer"* ]]
   cmp "${SPACELIFT_EVENTS_STATE}/seen" "${WORK}/seen.before"
 }
 

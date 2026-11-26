@@ -81,7 +81,8 @@ main() {
         exit 1
     }
 
-    if ! out="$("$SPACECTL" api "$QUERY" 2>&1)"; then
+    # Keep diagnostics visible, but parse only the JSON written to stdout.
+    if ! out="$("$SPACECTL" api "$QUERY")"; then
         echo "ERROR: spacectl api failed: ${out:0:300}" >&2
         exit 1
     fi
