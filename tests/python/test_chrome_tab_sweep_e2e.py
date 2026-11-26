@@ -158,16 +158,15 @@ def test_popup_lists_tabs_closes_on_click_and_reports_with_the_box_ticked(chrome
     run(cdp, popup, "document.getElementById('close').click(), 1")
     assert wait_text(cdp, popup, "Closed") == "Closed 2 tabs, reported to Gordon."
     assert open_urls(cdp, worker).count("https://example.com/a") == 1
-    assert sent(tmp_path) == [["--no-human", "-t", "triage",
-                               "Chrome tab sweep closed 2 tabs. Merged PRs (1): o/r#1. Duplicates (1): https://example.com/a."]]
+    assert sent(tmp_path) == [["--no-human", "-t", "triage", "Chrome tab sweep closed the tabs of 1 merged PR: o/r#1."]]
 
 
 def test_popup_with_auto_close_sweeps_on_open_and_reports_when_ticked(chrome):
     cdp, port, worker, tmp_path = chrome
-    open_tabs(cdp, worker, [["https://example.com/b", False], ["https://example.com/b", False]])
+    open_tabs(cdp, worker, [["https://example.com/b", False], ["https://example.com/b", False], [f"{PR}/1", False]])
     run(cdp, worker, "chrome.storage.local.set({auto: true, report: true}).then(()=>chrome.tabs.create({url: chrome.runtime.getURL('popup.html')})).then(()=>1)")
     popup = attach(cdp, port, f"chrome-extension://{EXTENSION_ID}/popup.html")
-    assert wait_text(cdp, popup, "Closed") == "Closed 1 tab, reported to Gordon."
+    assert wait_text(cdp, popup, "Closed") == "Closed 2 tabs, reported to Gordon."
     assert len(sent(tmp_path)) == 1
     assert run(cdp, popup, "document.getElementById('report').checked") is True
     assert run(cdp, popup, "document.getElementById('auto').checked") is True
@@ -194,12 +193,22 @@ def test_auto_close_sweeps_in_the_background_with_no_click_and_spares_agent_grou
     alive = "Promise.all(%s.map(id=>chrome.tabs.get(id).then(()=>true,()=>false)))"
     wait_for(cdp, worker, alive % json.dumps([agents, loose, first, copy]), [True, False, True, False])
     wait_for(cdp, worker, "chrome.action.getBadgeText({})", "2")  # set after the report
-    assert sent(tmp_path) == [["--no-human", "-t", "triage",
-                               "Chrome tab sweep closed 2 tabs. Merged PRs (1): o/r#1. Duplicates (1): https://example.com/c."]]
+    assert sent(tmp_path) == [["--no-human", "-t", "triage", "Chrome tab sweep closed the tabs of 1 merged PR: o/r#1."]]
     open_tabs(cdp, worker, [["https://example.com/c", False]])
     wait_for(cdp, worker, "chrome.tabs.query({}).then(ts=>ts.filter(t=>(t.url||t.pendingUrl)==='https://example.com/c').length)", 1)
     wait_for(cdp, worker, "chrome.action.getBadgeText({})", "1")
-    assert len(sent(tmp_path)) == 2
+    assert len(sent(tmp_path)) == 1, "a duplicate close is not reported"
+
+
+def test_auto_close_keeps_the_older_copy_and_moves_piotr_to_it(chrome):
+    cdp, _, worker, _ = chrome
+    # The filler sits between them, so Chrome's own pick after a close would land on it.
+    older, _filler = open_tabs(cdp, worker, [["https://example.com/o", False], ["https://example.com/filler", False]])
+    run(cdp, worker, "chrome.storage.local.set({auto: true}).then(()=>1)")
+    time.sleep(2)
+    fresh = run(cdp, worker, "chrome.tabs.create({url: 'https://example.com/o', active: true}).then(t=>t.id)")
+    alive = "Promise.all(%s.map(id=>chrome.tabs.get(id).then(t=>t.active,()=>null)))" % json.dumps([older, fresh])
+    wait_for(cdp, worker, alive, [True, None])
 
 
 def test_auto_close_sweeps_right_after_the_extension_reloads(chrome):

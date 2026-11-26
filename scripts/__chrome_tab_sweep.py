@@ -4,13 +4,16 @@
 op "plan": given every open tab, name the ones to close: tabs whose GitHub
 pull request is merged (one batched `gh api graphql` call, so private loft-sh
 repos work through Piotr's gh login) and exact duplicate URLs, keeping one of
-each. Pinned tabs are never closed. With "keep_grouped": true (the
-extension's background auto-close) no tab inside a tab group closes at all.
+each. Pinned tabs are never closed. With "unattended": true (the extension's
+background auto-close) no tab inside a tab group closes, and the oldest copy
+of a duplicate stays.
 
-op "report": DM Gordon (bus name "triage") what the extension closed, through
-~/.claude/scripts/snd, only when the message carries "report": true, which the
-extension sets while the popup's "Report closes to Gordon" box is ticked (off
-by default; Piotr, 26 Nov: "this is mostly noise", "either send all or don't").
+op "report": DM Gordon (bus name "triage") the merged PRs the extension
+closed, through ~/.claude/scripts/snd, only when the message carries
+"report": true, which the extension sets while the popup's "Report closes to
+Gordon" box is ticked (off by default; Piotr, 26 Nov: "this is mostly noise",
+"either send all or don't", "report to gordon should only send closed prs not
+other tabs"). Duplicate closes never reach Gordon.
 """
 import json
 import os
@@ -19,7 +22,6 @@ import shutil
 import struct
 import subprocess
 import sys
-from urllib.parse import urlsplit
 
 MAX_MESSAGE = 8 * 1024 * 1024
 MAX_TITLE = 200
@@ -69,21 +71,25 @@ def grouped(tab):
     return isinstance(tab.get("groupId"), int) and tab["groupId"] >= 0
 
 
-def plan(tabs, keep_grouped=False):
+def plan(tabs, unattended=False):
     """Pick the tabs to close: merged PRs first, then extra copies of a URL.
 
     A duplicate group keeps a pinned copy, else one in a tab group, else the
     active one, else the first by window and position. A tab in a tab group is
     never closed as a duplicate: agents work in their own groups (Claude in
     Chrome tracks each tab by id), so an agent's copy stays and Piotr's
-    ungrouped copy closes. keep_grouped also keeps a grouped merged-PR tab, for
-    sweeps nobody clicked, so an agent reading a merged PR keeps its tab."""
+    ungrouped copy closes. Each duplicate row names the copy it keeps.
+
+    unattended is a sweep nobody clicked. It keeps a grouped merged-PR tab too,
+    so an agent reading a merged PR keeps its tab, and among duplicates it
+    keeps the oldest copy (lowest tab id) over the active one: reopening a
+    link closes the fresh tab, not an older one holding unsaved typing."""
     tabs = [t for t in tabs if isinstance(t, dict) and isinstance(t.get("id"), int) and t.get("url")]
     merged, errors = merged_prs({k for k in map(pr_key, (t["url"] for t in tabs)) if k})
     close = {}
     for tab in tabs:
         key = pr_key(tab["url"])
-        if key in merged and not tab.get("pinned") and not (keep_grouped and grouped(tab)):
+        if key in merged and not tab.get("pinned") and not (unattended and grouped(tab)):
             close[tab["id"]] = {"reason": "merged", "pr": key}
     groups = {}
     for tab in tabs:
@@ -91,48 +97,34 @@ def plan(tabs, keep_grouped=False):
     for copies in groups.values():
         if len(copies) < 2:
             continue
-        copies.sort(key=lambda t: (not t.get("pinned"), not grouped(t), not t.get("active"), t.get("windowId", 0), t.get("index", 0)))
+        order = (lambda t: (t["id"],)) if unattended else (lambda t: (not t.get("active"), t.get("windowId", 0), t.get("index", 0)))
+        copies.sort(key=lambda t: (not t.get("pinned"), not grouped(t), *order(t)))
         for tab in copies[1:]:
             if not tab.get("pinned") and not grouped(tab) and tab["id"] not in close:
-                close[tab["id"]] = {"reason": "duplicate"}
+                close[tab["id"]] = {"reason": "duplicate", "kept": copies[0]["id"]}
     rows = [{"id": t["id"], "url": t["url"], "title": str(t.get("title") or "")[:MAX_TITLE], **close[t["id"]]}
             for t in tabs if t["id"] in close]
     rows.sort(key=lambda r: (r["reason"] != "merged", r.get("pr") or r["url"]))
     return {"close": rows, "tabs": len(tabs), "prs": len({pr_key(t["url"]) for t in tabs} - {None}), "errors": errors}
 
 
-def short_url(url):
-    """URL without query or fragment, so a token in a query string stays off the bus."""
-    parts = urlsplit(url)
-    return f"{parts.scheme}://{parts.netloc}{parts.path}" if parts.netloc else url.split("?")[0].split("#")[0]
-
-
-def report_text(closed):
-    """One bus line naming what the sweep closed."""
-    prs = sorted({r["pr"] for r in closed if r.get("reason") == "merged" and r.get("pr")})
-    dupes = {}
-    for row in closed:
-        if row.get("reason") == "duplicate":
-            url = short_url(row.get("url", ""))
-            dupes[url] = dupes.get(url, 0) + 1
-    parts = [f"Chrome tab sweep closed {len(closed)} tab{'s' * (len(closed) != 1)}."]
-    if prs:
-        parts.append(f"Merged PRs ({len(prs)}): " + ", ".join(prs[:20]) + (f", and {len(prs) - 20} more" if len(prs) > 20 else "") + ".")
-    if dupes:
-        listed = [u + (f" x{n}" if n > 1 else "") for u, n in sorted(dupes.items())]
-        parts.append(f"Duplicates ({sum(dupes.values())}): " + ", ".join(listed[:10]) + (f", and {len(listed) - 10} more" if len(listed) > 10 else "") + ".")
-    return " ".join(parts)
+def report_text(prs):
+    """One bus line naming the merged PRs whose tabs the sweep closed."""
+    return (f"Chrome tab sweep closed the tabs of {len(prs)} merged PR{'s' * (len(prs) != 1)}: "
+            + ", ".join(prs[:20]) + (f", and {len(prs) - 20} more" if len(prs) > 20 else "") + ".")
 
 
 def report(closed):
-    """DM the report to triage; True when snd published it."""
-    rows = [r for r in closed if isinstance(r, dict)]
-    if not rows:
-        return {"reported": False, "error": "nothing closed"}
+    """DM triage the merged PRs among the closed rows; True when snd published it.
+
+    Closed duplicates are left out, and with no merged PR nothing is sent."""
+    prs = sorted({r["pr"] for r in closed if isinstance(r, dict) and r.get("reason") == "merged" and isinstance(r.get("pr"), str)})
+    if not prs:
+        return {"reported": False}
     snd = os.environ.get("TAB_SWEEP_SND") or os.path.expanduser("~/.claude/scripts/snd")
     env = {**os.environ, "SND_FROM": "tab-sweep"}
     try:
-        run = subprocess.run([snd, "--no-human", "-t", os.environ.get("TAB_SWEEP_TO") or "triage", report_text(rows)],
+        run = subprocess.run([snd, "--no-human", "-t", os.environ.get("TAB_SWEEP_TO") or "triage", report_text(prs)],
                              stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=20, env=env)
     except (OSError, subprocess.TimeoutExpired) as exc:
         return {"reported": False, "error": str(exc)}
@@ -142,7 +134,7 @@ def report(closed):
 def handle(message):
     """Dispatch one request from the extension."""
     if message.get("op") == "plan":
-        return plan(message.get("tabs") or [], keep_grouped=message.get("keep_grouped") is True)
+        return plan(message.get("tabs") or [], unattended=message.get("unattended") is True)
     if message.get("op") == "report":
         if message.get("report") is not True:
             return {"reported": False}

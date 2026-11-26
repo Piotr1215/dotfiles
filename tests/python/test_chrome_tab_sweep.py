@@ -101,13 +101,23 @@ def test_an_agent_groups_copy_stays_and_the_ungrouped_copy_closes(fakes):
     assert closing(result) == {1: 'duplicate', 6: 'duplicate'}
 
 
-def test_keep_grouped_leaves_a_grouped_merged_pr_open_and_still_closes_loose_ones(fakes, monkeypatch):
+def test_unattended_leaves_a_grouped_merged_pr_open_and_still_closes_loose_ones(fakes, monkeypatch):
     monkeypatch.setenv('FAKE_MERGED', 'o/r#1')
     tabs = [tab(1, 'https://github.com/o/r/pull/1', groupId=0), tab(2, 'https://github.com/o/r/pull/1/files'),
             tab(3, 'https://a.example/'), tab(4, 'https://a.example/')]
-    assert closing(host.handle({'op': 'plan', 'tabs': tabs, 'keep_grouped': True})) == {2: 'merged', 4: 'duplicate'}
+    assert closing(host.handle({'op': 'plan', 'tabs': tabs, 'unattended': True})) == {2: 'merged', 4: 'duplicate'}
     assert closing(host.handle({'op': 'plan', 'tabs': tabs})) == {1: 'merged', 2: 'merged', 4: 'duplicate'}
-    assert closing(host.handle({'op': 'plan', 'tabs': tabs, 'keep_grouped': 'yes'})) == {1: 'merged', 2: 'merged', 4: 'duplicate'}
+    assert closing(host.handle({'op': 'plan', 'tabs': tabs, 'unattended': 'yes'})) == {1: 'merged', 2: 'merged', 4: 'duplicate'}
+
+
+def test_unattended_keeps_the_oldest_copy_so_reopening_a_link_closes_the_new_tab(fakes):
+    # Tab 9 is the link Piotr just reopened, in front; tab 3 is older, maybe holding unsaved typing.
+    tabs = [tab(9, 'https://a.example/', index=0, active=True), tab(3, 'https://a.example/', index=5),
+            tab(8, 'https://b.example/', index=1), tab(4, 'https://b.example/', index=6, pinned=True)]
+    rows = {r['id']: r for r in host.plan(tabs, unattended=True)['close']}
+    assert {i: (r['reason'], r['kept']) for i, r in rows.items()} == {9: ('duplicate', 3), 8: ('duplicate', 4)}
+    rows = {r['id']: r for r in host.plan(tabs)['close']}
+    assert {i: (r['reason'], r['kept']) for i, r in rows.items()} == {3: ('duplicate', 9), 8: ('duplicate', 4)}
 
 
 def test_two_pinned_copies_both_stay(fakes):
@@ -136,33 +146,35 @@ def test_many_prs_are_asked_in_batches_of_fifty(fakes, monkeypatch):
     assert len((fakes / 'gh-calls').read_text().splitlines()) == 2
 
 
-def test_report_dms_triage_with_prs_and_duplicate_urls_without_query(fakes):
+MERGED_ROW = {'id': 1, 'reason': 'merged', 'pr': 'loft-sh/vcluster#12', 'url': 'https://github.com/loft-sh/vcluster/pull/12'}
+
+
+def test_report_names_only_merged_prs_never_duplicates(fakes):
     reply = host.report([
-        {'id': 1, 'reason': 'merged', 'pr': 'loft-sh/vcluster#12', 'url': 'https://github.com/loft-sh/vcluster/pull/12'},
+        MERGED_ROW, {**MERGED_ROW, 'id': 4, 'url': MERGED_ROW['url'] + '/files'},
         {'id': 2, 'reason': 'duplicate', 'url': 'https://docs.example/page?token=secret#h'},
-        {'id': 3, 'reason': 'duplicate', 'url': 'https://docs.example/page?token=secret#h'},
+        {'id': 3, 'reason': 'merged', 'pr': 'o/r#1', 'url': 'https://github.com/o/r/pull/1'},
     ])
     assert reply == {'reported': True}
     call = json.loads((fakes / 'snd-log').read_text())
     assert call['from'] == 'tab-sweep'
-    assert call['argv'][:3] == ['--no-human', '-t', 'triage']
-    assert call['argv'][3] == ('Chrome tab sweep closed 3 tabs. Merged PRs (1): loft-sh/vcluster#12. '
-                               'Duplicates (2): https://docs.example/page x2.')
+    assert call['argv'] == ['--no-human', '-t', 'triage',
+                            'Chrome tab sweep closed the tabs of 2 merged PRs: loft-sh/vcluster#12, o/r#1.']
 
 
 def test_report_failure_is_returned_not_hidden(fakes, monkeypatch):
     monkeypatch.setenv('FAKE_SND_EXIT', '2')
-    reply = host.report([{'id': 1, 'reason': 'duplicate', 'url': 'https://a/'}])
-    assert reply == {'reported': False, 'error': 'snd exit 2'}
+    assert host.report([MERGED_ROW]) == {'reported': False, 'error': 'snd exit 2'}
 
 
-def test_nothing_closed_sends_nothing(fakes):
-    assert host.report([])['reported'] is False
+def test_nothing_merged_sends_nothing(fakes):
+    assert host.report([]) == {'reported': False}
+    assert host.report([{'id': 2, 'reason': 'duplicate', 'url': 'https://a/'}]) == {'reported': False}
     assert not (fakes / 'snd-log').exists()
 
 
 def test_a_report_op_without_an_explicit_ask_sends_nothing(fakes):
-    closed = [{'id': 1, 'reason': 'duplicate', 'url': 'https://a/'}]
+    closed = [MERGED_ROW]
     assert host.handle({'op': 'report', 'closed': closed, 'auto': True}) == {'reported': False}
     assert not (fakes / 'snd-log').exists()
     assert host.handle({'op': 'report', 'closed': closed, 'report': True}) == {'reported': True}

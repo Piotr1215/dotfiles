@@ -1,7 +1,7 @@
 // The popup shows what the sweep would close and closes it on a click, or,
 // with auto-close on, sweeps as soon as it opens (background.js also sweeps
 // on its own then, as tabs change). background.js does the work,
-// and reports every close to Gordon while "Report closes to Gordon" is ticked.
+// and reports merged PRs to Gordon while "Report merged PRs to Gordon" is ticked.
 const status = document.getElementById('status');
 const list = document.getElementById('list');
 const button = document.getElementById('close');
