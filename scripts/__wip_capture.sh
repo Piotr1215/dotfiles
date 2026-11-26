@@ -151,7 +151,11 @@ capture_one() {
      { [[ -n $head ]] && ! git --git-dir="$mirror_git" cat-file -e "$head^{commit}" 2>/dev/null; }; then
     mkdir -p "$mirror_git/objects"
     chmod 700 "$mirror_git"
-    rsync -rltc --omit-dir-times --delete --exclude='/objects/' --exclude='/refs/wip/' --exclude='/logs/refs/wip/' --exclude='*.lock' "$common/" "$mirror_git/"
+    # 1,554 linked indexes were 138 MB of 140 MB across 12,467 non-object
+    # files; a capture took 58s against a 120s timeout. The live index is
+    # copied below. Perishable lets --delete remove old worktree folders.
+    rsync -rltc --omit-dir-times --delete --exclude='/objects/' --exclude='/refs/wip/' --exclude='/logs/refs/wip/' --exclude='*.lock' \
+      --filter='-p /worktrees/*/index' "$common/" "$mirror_git/"
     primary_objects=$(realpath -e -- "$common/objects")
     copy_objects "$primary_objects" "$mirror_git/objects"
     rm -f -- "$mirror_git/objects/info/alternates"

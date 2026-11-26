@@ -54,6 +54,7 @@ use_worktree_lib() {
   source "$WORKTREE_LIB"
 }
 mirror_show() { git --git-dir="$MIRROR" show "refs/wip/$1:$2"; }
+linked_fixture() { git -C "$REPO" worktree add -q -b feature "$ROOT/linked"; }
 
 # Keep an unchanged blob absent from the checkout and object database.
 blobless_fixture() {
@@ -175,15 +176,56 @@ blobless_fixture() {
 }
 
 @test "captures linked worktree under the common mirror" {
-  git clone -q --bare "$REPO" "$BATS_TEST_TMPDIR/remote.git"
-  git -C "$REPO" remote add origin "$BATS_TEST_TMPDIR/remote.git"
-  use_worktree_lib
-  worktree_add_fresh "$REPO" "$ROOT/linked" feature
+  linked_fixture
   printf 'worktree\n' > "$ROOT/linked/tracked"
+  printf 'staged\n' > "$ROOT/linked/staged"
+  git -C "$ROOT/linked" add staged
+  printf 'untracked\n' > "$ROOT/linked/untracked"
   run capture
   [ "$status" -eq 0 ]
-  [ "$(mirror_show worktrees/linked/feature tracked)" = worktree ]
+  [ -f "$MIRROR/worktrees/linked/HEAD" ]
+  [ -f "$MIRROR/worktrees/linked/gitdir" ]
+  [ ! -e "$MIRROR/worktrees/linked/index" ]
+  cmp "$REPO/.git/index" "$MIRROR/index"
+  git --git-dir="$MIRROR" ls-tree -r --name-only refs/wip/worktrees/linked/feature > "$BATS_TEST_TMPDIR/snapshot-paths"
+  git -C "$ROOT/linked" ls-files --cached --others --exclude-standard | LC_ALL=C sort > "$BATS_TEST_TMPDIR/worktree-paths"
+  diff -u "$BATS_TEST_TMPDIR/worktree-paths" "$BATS_TEST_TMPDIR/snapshot-paths"
+  for f in .gitignore tracked staged untracked; do
+    mirror_show worktrees/linked/feature "$f" > "$BATS_TEST_TMPDIR/snapshot-file"
+    cmp "$ROOT/linked/$f" "$BATS_TEST_TMPDIR/snapshot-file"
+  done
   [ -n "$(git --git-dir="$MIRROR" reflog show refs/wip/worktrees/linked/feature)" ]
+}
+
+@test "removes a deleted worktree's mirrored metadata with a legacy index" {
+  linked_fixture
+  run capture
+  [ "$status" -eq 0 ]
+  cp "$REPO/.git/worktrees/linked/index" "$MIRROR/worktrees/linked/index"
+  [ -f "$MIRROR/worktrees/linked/index" ]
+  git -C "$REPO" worktree remove "$ROOT/linked"
+  [ ! -e "$REPO/.git/worktrees/linked" ]
+  run capture
+  [ "$status" -eq 0 ]
+  [[ $output == *'known_broken=0 failures=0'* ]]
+  [ ! -e "$MIRROR/worktrees/linked" ]
+}
+
+@test "captures a live worktree with a legacy mirrored index" {
+  linked_fixture
+  run capture
+  [ "$status" -eq 0 ]
+  cp "$REPO/.git/worktrees/linked/index" "$BATS_TEST_TMPDIR/legacy-index"
+  cp "$BATS_TEST_TMPDIR/legacy-index" "$MIRROR/worktrees/linked/index"
+  printf 'new staged\n' > "$ROOT/linked/staged"
+  git -C "$ROOT/linked" add staged
+  git -C "$REPO" update-ref refs/test/force-sync HEAD
+  run capture
+  [ "$status" -eq 0 ]
+  [[ $output == *'known_broken=0 failures=0'* ]]
+  [ "$(git --git-dir="$MIRROR" rev-parse refs/test/force-sync)" = "$(git -C "$REPO" rev-parse HEAD)" ]
+  cmp "$BATS_TEST_TMPDIR/legacy-index" "$MIRROR/worktrees/linked/index"
+  [ "$(mirror_show worktrees/linked/feature staged)" = 'new staged' ]
 }
 
 @test "a commit in one worktree syncs the mirror without a new snapshot of its siblings" {
