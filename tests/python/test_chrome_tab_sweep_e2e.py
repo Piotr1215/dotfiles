@@ -61,13 +61,16 @@ def chrome(tmp_path, request):
         os.close(from_chrome)
     request.addfinalizer(cleanup)
 
-    os.write(to_chrome, json.dumps({"id": 1, "method": "Extensions.loadUnpacked", "params": {"path": str(EXTENSION)}}).encode() + b"\0")
-    reply, deadline = b"", time.time() + 30
-    while b"\0" not in reply and time.time() < deadline:
-        if select.select([from_chrome], [], [], .5)[0]:
-            reply += os.read(from_chrome, 65536)
-    loaded = json.loads(reply.split(b"\0")[0] or b"{}")
-    assert loaded.get("result", {}).get("id") == EXTENSION_ID, loaded
+    def load():
+        """Load (or, the second time, reload) the extension over the DevTools pipe."""
+        os.write(to_chrome, json.dumps({"id": 1, "method": "Extensions.loadUnpacked", "params": {"path": str(EXTENSION)}}).encode() + b"\0")
+        reply, deadline = b"", time.time() + 30
+        while b"\0" not in reply and time.time() < deadline:
+            if select.select([from_chrome], [], [], .5)[0]:
+                reply += os.read(from_chrome, 65536)
+        loaded = json.loads(reply.split(b"\0")[0] or b"{}")
+        assert loaded.get("result", {}).get("id") == EXTENSION_ID, loaded
+    load()
     active_port = profile / "DevToolsActivePort"
     for _ in range(300):
         if active_port.exists():
@@ -76,6 +79,7 @@ def chrome(tmp_path, request):
     port = int(active_port.read_text().splitlines()[0])
     cdp = CDP(json.load(urllib.request.urlopen(f"http://127.0.0.1:{port}/json/version"))["webSocketDebuggerUrl"])
     worker = attach(cdp, port, f"chrome-extension://{EXTENSION_ID}/background.js")
+    cdp.reload_extension = load
     yield cdp, port, worker, tmp_path
 
 
@@ -196,3 +200,17 @@ def test_auto_close_sweeps_in_the_background_with_no_click_and_spares_agent_grou
     wait_for(cdp, worker, "chrome.tabs.query({}).then(ts=>ts.filter(t=>(t.url||t.pendingUrl)==='https://example.com/c').length)", 1)
     wait_for(cdp, worker, "chrome.action.getBadgeText({})", "1")
     assert len(sent(tmp_path)) == 2
+
+
+def test_auto_close_sweeps_right_after_the_extension_reloads(chrome):
+    cdp, port, worker, _ = chrome
+    open_tabs(cdp, worker, [["https://example.com/r", False], ["https://example.com/r", False]])
+    # Reload before the tick's own sweep fires, so only the reload can close the copy.
+    run(cdp, worker, "chrome.storage.local.set({auto: true}).then(()=>1)")
+    cdp.reload_extension()
+    for _ in range(100):
+        pages = [t for t in cdp.command("Target.getTargets")["targetInfos"] if t["url"] == "https://example.com/r"]
+        if len(pages) == 1:
+            break
+        time.sleep(.1)
+    assert len(pages) == 1

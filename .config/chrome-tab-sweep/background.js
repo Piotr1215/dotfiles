@@ -59,8 +59,8 @@ async function sweep(keepGrouped = false) {
   return {...(await closeTabs(planned.close)), errors: planned.errors || []};
 }
 
-// Auto-close: sweep a moment after the last tab URL change, after a restart,
-// and when the box is ticked. Piotr, 26 Nov: "the tab sweep is marked auto so
+// Auto-close: sweep a moment after the last tab URL change, after a restart
+// or an extension reload, and when the box is ticked. Piotr, 26 Nov: "the tab sweep is marked auto so
 // it should auto close tabs". Sweeps run one at a time.
 let timer = null;
 let queue = Promise.resolve();
@@ -75,6 +75,7 @@ function schedule() {
 }
 chrome.tabs.onUpdated.addListener((_id, change) => { if (change.url) schedule(); });
 chrome.runtime.onStartup.addListener(schedule);
+chrome.runtime.onInstalled.addListener(schedule);
 chrome.storage.onChanged.addListener((change) => { if (change.auto?.newValue === true) schedule(); });
 
 chrome.runtime.onMessage.addListener((message, _sender, respond) => {

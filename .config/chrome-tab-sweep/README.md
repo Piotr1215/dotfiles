@@ -5,7 +5,7 @@ A toolbar button (a white broom on GitHub's merged purple) that closes two kinds
 - tabs of a GitHub pull request that is merged, including its `/files`, `/commits` and `/checks` pages
 - exact duplicate URLs, keeping one copy
 
-Click the icon (or set a shortcut at `chrome://extensions/shortcuts`). The popup lists what would close; "Close N tabs" closes them. Tick "Auto-close, no click needed" and the extension sweeps on its own: 1.5 seconds after any tab changes URL, after a Chrome restart, and when the box is ticked. A click then closes at once with no list. The icon badge shows how many tabs the last close took, since the popup itself vanishes when its window's active tab closes. Ctrl+Shift+T brings tabs back one at a time.
+Click the icon (or set a shortcut at `chrome://extensions/shortcuts`). The popup lists what would close; "Close N tabs" closes them. Tick "Auto-close, no click needed" and the extension sweeps on its own: 1.5 seconds after any tab changes URL, after a Chrome restart or an extension reload, and when the box is ticked. A click then closes at once with no list. The icon badge shows how many tabs the last close took, since the popup itself vanishes when its window's active tab closes. Ctrl+Shift+T brings tabs back one at a time.
 
 Gordon hears about closes only while "Report closes to Gordon" is ticked: then every close, by click or auto-close, sends him one DM, and unticked none do. It is off by default (Piotr, 26 Nov: reporting each close "is mostly noise", "either send all or don't").
 
