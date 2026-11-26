@@ -845,13 +845,30 @@ def main(argv=None):
         task = rows[0]
         if "piotr" not in task.get("tags", []):
             return 0
+        # A stale selection can still be started after the board hides a draft.
+        # Resolve the recorded blocker before any draft window or link opens.
+        blocked = False
+        after = newest_note(task, "after") if "draft" in task.get("tags", []) else None
+        if after and after.lower() != "none":
+            if not UUID.fullmatch(after):
+                raise ValueError("Invalid draft dependency")
+            blockers = task_export(task_bin, after)
+            if len(blockers) != 1 or blockers[0].get("uuid", "").lower() != after.lower():
+                raise ValueError("Draft dependency did not resolve")
+            blocker = blockers[0]
+            if blocker.get("status") not in ("pending", "waiting", "completed"):
+                raise ValueError("Draft dependency is not pending or completed")
+            if blocker.get("status") in ("pending", "waiting") and "settled" not in (blocker.get("tags") or []):
+                task = blocker
+                uuid = after
+                blocked = True
         if "--resolve" in args:
             url = destination(task)
             if url:
                 print(url)
             return 0
         # This detached process runs after the originating hook returns.
-        if not task.get("start"):
+        if not task.get("start") and not blocked:
             return 0
         command = newest_note(task, "cmd")
         if task_kind(task) == "agent" or (command and spawn_command(command)) or agent_sessions(task):

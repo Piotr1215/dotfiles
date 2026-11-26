@@ -1422,3 +1422,40 @@ def test_start_standing_merge_uses_refreshed_links_without_brief(monkeypatch, tm
     monkeypatch.setattr(nav, "navigation_urls", lambda *args: pytest.fail("read stale brief"))
     assert nav.main(["start", nav.MERGE_ROW]) == 0
     assert calls == ["sync", ("open", [])]
+
+
+@pytest.mark.parametrize("status,tags,expected", [
+    ("pending", ["piotr"], "https://github.com/a/blocker"),
+    ("pending", ["piotr", "settled"], "https://github.com/a/draft"),
+    ("completed", ["piotr"], "https://github.com/a/draft"),
+])
+def test_draft_resolve_opens_blocker_until_done(monkeypatch, tmp_path, capsys, status, tags, expected):
+    blocker_id = "bb476008-cc54-48fe-8530-ea217db834e7"
+    draft = dict(task("after: " + blocker_id, "link: https://github.com/a/draft", tags=["piotr", "draft"]), start="20261126T000000Z")
+    blocker = dict(task("link: https://github.com/a/blocker", tags=tags), uuid=blocker_id, status=status)
+    monkeypatch.setenv("XDG_RUNTIME_DIR", str(tmp_path))
+    monkeypatch.setattr(nav, "task_export", lambda binary, ref: [draft] if ref == UUID else [blocker])
+    assert nav.main([UUID, "--resolve"]) == 0
+    assert capsys.readouterr().out.strip() == expected
+
+
+def test_stale_draft_start_acts_only_on_blocking_handoff(monkeypatch, tmp_path):
+    blocker_id = "bb476008-cc54-48fe-8530-ea217db834e7"
+    draft = dict(task("after: " + blocker_id, "target: slack:C123/top", tags=["piotr", "draft"]), start="20261126T000000Z")
+    blocker = dict(task("agent-brief: run command"), uuid=blocker_id, status="pending", kind="agent")
+    calls = []
+    monkeypatch.setenv("XDG_RUNTIME_DIR", str(tmp_path))
+    monkeypatch.setattr(nav, "task_export", lambda binary, ref: [draft] if ref == UUID else [blocker])
+    monkeypatch.setattr(nav, "act_on_kind", lambda row: calls.append(row["uuid"]))
+    assert nav.main([UUID]) == 0
+    assert calls == [blocker_id]
+
+
+def test_draft_with_deleted_dependency_fails_closed(monkeypatch, tmp_path):
+    blocker_id = "bb476008-cc54-48fe-8530-ea217db834e7"
+    draft = dict(task("after: " + blocker_id, "link: https://github.com/a/draft", tags=["piotr", "draft"]), start="20261126T000000Z")
+    blocker = dict(task(), uuid=blocker_id, status="deleted")
+    monkeypatch.setenv("XDG_RUNTIME_DIR", str(tmp_path))
+    monkeypatch.setattr(nav, "task_export", lambda binary, ref: [draft] if ref == UUID else [blocker])
+    with pytest.raises(ValueError, match="not pending or completed"):
+        nav.main([UUID, "--resolve"])
