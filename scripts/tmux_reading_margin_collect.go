@@ -20,7 +20,7 @@ import (
 )
 
 // fingerprint excludes database bookkeeping and collector output files.
-func fingerprint(task, notes, taskrc, probe string) (string, error) {
+func fingerprint(task, notes, taskrc, probe string, notesCache *string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	format := "#{session_name}\x1f#{window_name}\x1f#{pane_id}\x1f#{pane_pid}\x1f#{pane_current_command}\x1f#{@agent_model}\x1f#{@agent_name}\x1f#{@agent_prs}\x1f#{@agent_resumed}\x1f#{@agent_spawn_level}\x1f#{@agent_spawn_parent}\x1f#{@agent_wait}\x1f#{@claude_state}\x1f#{@claude_state_since}"
@@ -77,34 +77,48 @@ print(h.hexdigest())
 			return "", fmt.Errorf("unsupported task backend")
 		}
 	}
-	paths := []string{filepath.Join(notes, "cockpit-notes.md"), taskrc, probe}
-	entries, err := os.ReadDir(notes)
-	if err != nil && !os.IsNotExist(err) {
-		return "", err
-	}
-	for _, ent := range entries {
-		if ent.Name() != "cockpit-updates" && !strings.HasPrefix(ent.Name(), "cockpit-pr-") {
-			continue
-		}
-		path := filepath.Join(notes, ent.Name())
-		if !ent.IsDir() {
-			paths = append(paths, path)
-			continue
-		}
-		children, err := os.ReadDir(path)
-		if err != nil {
+	// Task database bookkeeping can trigger frequent checks. Reuse the notes
+	// digest until an inotify event or watch-set change invalidates it.
+	if *notesCache == "" {
+		paths := []string{filepath.Join(notes, "cockpit-notes.md")}
+		entries, err := os.ReadDir(notes)
+		if err != nil && !os.IsNotExist(err) {
 			return "", err
 		}
-		for _, child := range children {
-			name := child.Name()
-			if child.IsDir() || strings.HasPrefix(name, ".") || strings.HasSuffix(name, ".try") || strings.HasSuffix(name, ".lock") || strings.Contains(name, ".tmp.") || strings.HasSuffix(name, "-shm") {
+		for _, ent := range entries {
+			if ent.Name() != "cockpit-updates" && !strings.HasPrefix(ent.Name(), "cockpit-pr-") {
 				continue
 			}
-			paths = append(paths, filepath.Join(path, name))
+			path := filepath.Join(notes, ent.Name())
+			if !ent.IsDir() {
+				paths = append(paths, path)
+				continue
+			}
+			children, err := os.ReadDir(path)
+			if err != nil {
+				return "", err
+			}
+			for _, child := range children {
+				name := child.Name()
+				if child.IsDir() || strings.HasPrefix(name, ".") || strings.HasSuffix(name, ".try") || strings.HasSuffix(name, ".lock") || strings.Contains(name, ".tmp.") || strings.HasSuffix(name, "-shm") {
+					continue
+				}
+				paths = append(paths, filepath.Join(path, name))
+			}
 		}
+		sort.Strings(paths)
+		notesHash := sha256.New()
+		for _, path := range paths {
+			data, err := os.ReadFile(path)
+			if err != nil && !os.IsNotExist(err) {
+				return "", err
+			}
+			fmt.Fprintf(notesHash, "%q:%q\n", path, data)
+		}
+		*notesCache = fmt.Sprintf("%x", notesHash.Sum(nil))
 	}
-	sort.Strings(paths)
-	for _, path := range paths {
+	fmt.Fprintf(h, "notes:%s\n", *notesCache)
+	for _, path := range []string{taskrc, probe} {
 		data, err := os.ReadFile(path)
 		if err != nil && !os.IsNotExist(err) {
 			return "", err
@@ -206,7 +220,7 @@ func main() {
 	var cmd *exec.Cmd
 	var result chan error
 	var output strings.Builder
-	var lastFingerprint, pendingFingerprint string
+	var lastFingerprint, pendingFingerprint, notesCache string
 	var pendingValid bool
 	orderFile := filepath.Join(state, "pane-order")
 	cycleDir := os.Getenv("CYCLE_AGENT_CACHE_DIR")
@@ -286,29 +300,44 @@ func main() {
 					if pos+int(ev.Len) > n {
 						break
 					}
+					if ev.Mask&syscall.IN_Q_OVERFLOW != 0 {
+						notesCache = ""
+						due = now.Add(150 * time.Millisecond)
+					}
 					name := strings.TrimRight(string(buf[pos:pos+int(ev.Len)]), "\x00")
 					pos += int(ev.Len)
 					for _, w := range watches[int(ev.Wd)] {
-						if relevant(w, name) && due.IsZero() {
-							due = now.Add(150 * time.Millisecond)
+						if relevant(w, name) {
+							if w.kind == "notes" || w.kind == "nested" {
+								notesCache = ""
+							}
+							if due.IsZero() {
+								due = now.Add(150 * time.Millisecond)
+							}
 						}
 					}
 				}
 			}
 			if !now.Before(nextWatches) {
 				signature := refreshWatches()
-				if signature != watchSignature && due.IsZero() {
-					due = now.Add(150 * time.Millisecond)
+				if signature != watchSignature {
+					notesCache = ""
+					if due.IsZero() {
+						due = now.Add(150 * time.Millisecond)
+					}
 				}
 				watchSignature = signature
 				nextWatches = now.Add(200 * time.Millisecond)
 			}
 			if cmd == nil && ((!due.IsZero() && !now.Before(due)) || !now.Before(nextAge)) {
 				ageRefresh := !now.Before(nextAge)
+				if ageRefresh {
+					notesCache = "" // Recover from a missed watch or event.
+				}
 				due = time.Time{}
 				pendingValid = false
 				if os.Getenv("TMUX_READING_MARGIN_SEMANTIC_FILTER") != "0" {
-					fingerprint, err := fingerprint(task, notes, taskrc, probe)
+					fingerprint, err := fingerprint(task, notes, taskrc, probe, &notesCache)
 					if err == nil {
 						pendingFingerprint, pendingValid = fingerprint, true
 						if !ageRefresh && lastFingerprint != "" && fingerprint == lastFingerprint {

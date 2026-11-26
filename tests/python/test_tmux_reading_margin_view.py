@@ -192,6 +192,17 @@ class MarginViewTest(unittest.TestCase):
             pane.write_text('session window pane option-two\n')
             (state / 'dirty').touch()
             wait_calls(3)
+            updates = root / '.claude/tmp/cockpit-updates'
+            updates.mkdir(parents=True)
+            note = updates / 'agent.txt'
+            note.write_text('first')
+            wait_calls(4)
+            replacement = updates / '.new'
+            replacement.write_text('second')
+            replacement.replace(note)
+            wait_calls(5)
+            note.unlink()
+            wait_calls(6)
 
     @staticmethod
     def viewer_for_collector(collector_pid, viewers):
