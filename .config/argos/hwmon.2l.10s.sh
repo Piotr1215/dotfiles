@@ -10,12 +10,14 @@ PANEL_SIZE=$(panel_label_size 12)
 pkg_temp=$(cat "${HWMON_THERMAL_FILE:-/sys/class/thermal/thermal_zone0/temp}" 2>/dev/null || echo 0)
 pkg_temp=$((pkg_temp / 1000))
 
-# Fan speeds
-fan1=$(cat /sys/devices/platform/system76/hwmon/hwmon*/fan1_input 2>/dev/null || echo 0)
-fan2=$(cat /sys/devices/platform/system76/hwmon/hwmon*/fan2_input 2>/dev/null || echo 0)
+# Fan speeds. The default paths are globs (hwmon*), so they stay unquoted.
+# shellcheck disable=SC2086
+fan1=$(cat ${HWMON_FAN1_FILE:-/sys/devices/platform/system76/hwmon/hwmon*/fan1_input} 2>/dev/null || echo 0)
+# shellcheck disable=SC2086
+fan2=$(cat ${HWMON_FAN2_FILE:-/sys/devices/platform/system76/hwmon/hwmon*/fan2_input} 2>/dev/null || echo 0)
 
 # EPP
-epp=$(cat /sys/devices/system/cpu/cpu0/cpufreq/energy_performance_preference 2>/dev/null || echo "unknown")
+epp=$(cat "${HWMON_EPP_FILE:-/sys/devices/system/cpu/cpu0/cpufreq/energy_performance_preference}" 2>/dev/null || echo "unknown")
 
 # GPU temp + power
 gpu_temp=""
@@ -59,10 +61,12 @@ color_for_temp() {
     else echo "#44ff44"; fi
 }
 
+# Fan speed, EPP and GPU power are effort, not danger, and no alert fires on
+# them, so they stop at orange (red means an emergency, 2026-11-26). GPU
+# temperature keeps red above 80 C, where the watcher's gpu_hot alert fires.
 color_for_fan() {
     local rpm=$1
-    if [ "$rpm" -gt 3500 ]; then echo "#ff4444"
-    elif [ "$rpm" -gt 2500 ]; then echo "#ff9900"
+    if [ "$rpm" -gt 2500 ]; then echo "#ff9900"
     elif [ "$rpm" -gt 0 ]; then echo "#44ff44"
     else echo "#666666"; fi
 }
@@ -70,8 +74,7 @@ color_for_fan() {
 color_for_epp() {
     case "$1" in
         balance_power|power) echo "#44ff44" ;;
-        balance_performance) echo "#ff9900" ;;
-        performance) echo "#ff4444" ;;
+        balance_performance|performance) echo "#ff9900" ;;
         *) echo "#666666" ;;
     esac
 }
@@ -99,8 +102,7 @@ echo "  GPU: ${fan2} RPM | size=10 color=${fan2_color}"
 if [ -n "$gpu_temp" ]; then
     gpu_temp_color=$(color_for_temp "$gpu_temp")
     gpu_power_int=${gpu_power%.*}
-    if [ "${gpu_power_int:-0}" -gt 150 ]; then gpu_power_color="#ff4444"
-    elif [ "${gpu_power_int:-0}" -gt 80 ]; then gpu_power_color="#ff9900"
+    if [ "${gpu_power_int:-0}" -gt 80 ]; then gpu_power_color="#ff9900"
     else gpu_power_color="#44ff44"; fi
     echo "---"
     echo "<b>GPU</b> | size=11"

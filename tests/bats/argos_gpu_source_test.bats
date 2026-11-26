@@ -106,3 +106,13 @@ calls() {
     [ "$status" -eq 0 ]
     [[ "$output" == *"<span color='#ff4444'>11.7G</span>"* ]]
 }
+
+# Busy is not an emergency: the thermal target protects the machine, and no
+# alert fires on usage, so CPU and GPU usage stop at orange (26 Nov 2026).
+@test "GPU usage at 95% is orange, not red" {
+    echo '{"gpu":{"vram_used_mib":2000,"utilization_percent":95}}' >"$RESOURCE_WATCHER_STATE"
+    run bash "$ARGOS/system.1l.1s.sh"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"<span color='#ff9900'> 95%</span>"* ]]
+    [[ "$output" != *"#ff4444"* ]]
+}

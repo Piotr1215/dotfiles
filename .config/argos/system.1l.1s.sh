@@ -70,19 +70,17 @@ case "$profile_reply" in
     *) prof_text="?"; prof_color="#666666" ;;
 esac
 
-# Determine colors
-if [ $cpu_usage -gt 90 ]; then
-    cpu_color="#ff4444"
-elif [ $cpu_usage -gt 70 ]; then
+# Determine colors. Red means an emergency to Piotr (2026-11-26), and a busy
+# CPU or GPU is not one: the thermal target protects the machine and no alert
+# fires on usage, so both stop at orange.
+if [ $cpu_usage -gt 70 ]; then
     cpu_color="#ff9900"
 else
     cpu_color="#44ff44"
 fi
 
 if [ -n "$gpu_usage" ]; then
-    if [ "$gpu_usage" -gt 80 ]; then
-        gpu_color="#ff4444"
-    elif [ "$gpu_usage" -gt 50 ]; then
+    if [ "$gpu_usage" -gt 50 ]; then
         gpu_color="#ff9900"
     else
         gpu_color="#44ff44"

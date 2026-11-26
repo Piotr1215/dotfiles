@@ -49,3 +49,21 @@ t_color() {
     [ "$status" -eq 0 ]
     [[ "$output" == *"<span color='#ff9900'>92C</span>"* ]]
 }
+
+# Fan speed, EPP and GPU power are effort, not danger, and no alert fires on
+# them, so the dropdown stops them at orange (26 Nov 2026). GPU temperature
+# keeps red above 80 C, the level where the watcher's gpu_hot alert fires.
+@test "dropdown keeps red for GPU temperature only" {
+    echo 92000 >"$HWMON_THERMAL_FILE"
+    echo 13 >"$HWMON_TCC_FILE"
+    echo 4500 >"$WORK/fan1"; echo 4800 >"$WORK/fan2"; echo performance >"$WORK/epp"
+    export HWMON_FAN1_FILE="$WORK/fan1" HWMON_FAN2_FILE="$WORK/fan2" HWMON_EPP_FILE="$WORK/epp"
+    echo '{"gpu":{"temperature_c":85,"power_w":160.2}}' >"$RESOURCE_WATCHER_STATE"
+    run bash "$ARGOS/hwmon.2l.10s.sh"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"CPU: 4500 RPM | size=10 color=#ff9900"* ]]
+    [[ "$output" == *"GPU: 4800 RPM | size=10 color=#ff9900"* ]]
+    [[ "$output" == *"EPP: performance | size=10 color=#ff9900"* ]]
+    [[ "$output" == *"Power: 160.2W | size=10 color=#ff9900"* ]]
+    [[ "$output" == *"Temp: 85°C | size=10 color=#ff4444"* ]]
+}
