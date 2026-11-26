@@ -46,6 +46,14 @@ else
 fi
 EOF
   chmod +x "$WORK/bin/system76-power"
+  export TEST_NOTES="$WORK/notes"
+  : > "$TEST_NOTES"
+  cat > "$WORK/bin/notify-send" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$TEST_NOTES"
+[[ ${TEST_NOTIFY_FAIL:-0} == 0 ]]
+EOF
+  chmod +x "$WORK/bin/notify-send"
   export PATH="$WORK/bin:$PATH"
 
   cat > "$CPU_PROFILE_AUTO_TEST_HOOK" <<'EOF'
@@ -383,6 +391,32 @@ EOF
   [[ $output != *'failed to switch'* ]]
   [[ $output != *'manual profile change'* ]]
   [ "$(cut -d' ' -f1,3 "$CPU_PROFILE_AUTO_STATE_DIR/state")" = 'Performance 0' ]
+}
+
+@test "every switch, failure and manual change pops a desktop notification" {
+  export CPU_PROFILE_AUTO_TEST_TICKS=13
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [[ $(cat "$TEST_NOTES") == *'CPU profile: Performance'*'busy 120s=45.00%'* ]]
+  : > "$TEST_NOTES"
+  rm "$CPU_PROFILE_AUTO_STATE_DIR/state"
+  printf 'Balanced\n' > "$TEST_PROFILE"
+  export TEST_SET_FAIL=1
+  run "$SCRIPT"
+  [[ $(cat "$TEST_NOTES") == *'CPU profile: switch to Performance failed'* ]]
+  : > "$TEST_NOTES"
+  rm "$CPU_PROFILE_AUTO_STATE_DIR/state"
+  export TEST_SET_FAIL=0 CPU_PROFILE_AUTO_TEST_TICKS=19 TEST_PROFILE_CHANGE_AT=180 TEST_PROFILE_CHANGE_TO=Balanced
+  run "$SCRIPT"
+  [[ $(cat "$TEST_NOTES") == *'CPU profile: Balanced (manual)'*'auto paused 1800s'* ]]
+}
+
+@test "a broken notifier never stops the switch loop" {
+  export CPU_PROFILE_AUTO_TEST_TICKS=19 TEST_NOTIFY_FAIL=1
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$TEST_SETS")" = '1800000120 performance' ]
+  [ -s "$TEST_NOTES" ]
 }
 
 @test "bad configuration and damaged state fail without changing a profile" {
