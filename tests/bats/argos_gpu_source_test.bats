@@ -89,3 +89,20 @@ calls() {
     [[ "$output" == *"66°C"* ]]
     [ "$(calls)" -eq 2 ]
 }
+
+# Red means an emergency to Piotr (26 Nov 2026: "for me red means emergency").
+# A spill past ~10.5 GB only slows GPU work, so it is orange; red is kept for a
+# card about 98% full, where new allocations start failing.
+@test "VRAM past the spill point is orange, not red" {
+    echo '{"gpu":{"vram_used_mib":11023.2,"utilization_percent":12}}' >"$RESOURCE_WATCHER_STATE"
+    run bash "$ARGOS/system.1l.1s.sh"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"<span color='#ff9900'>10.8G</span>"* ]]
+}
+
+@test "VRAM at 98% of the 12 GB card is red" {
+    echo '{"gpu":{"vram_used_mib":12000,"utilization_percent":12}}' >"$RESOURCE_WATCHER_STATE"
+    run bash "$ARGOS/system.1l.1s.sh"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"<span color='#ff4444'>11.7G</span>"* ]]
+}

@@ -92,9 +92,11 @@ else
 fi
 
 # VRAM: the 12 GB card spills to system RAM above ~10.5 GB and every EVE client
-# slows to PCIe speed, so red starts where the spill starts, not at 90%
+# slows to PCIe speed. Slow is not an emergency, and red means one to Piotr
+# (2026-11-26: "for me red means emergency"), so the spill is orange and red
+# waits for about 98% of 12227 MiB, where new allocations start failing.
 if [ -n "$vram_mib" ]; then
-    if [ "$vram_mib" -gt 10752 ]; then
+    if [ "$vram_mib" -gt 11980 ]; then
         vram_color="#ff4444"
     elif [ "$vram_mib" -gt 9728 ]; then
         vram_color="#ff9900"
