@@ -1,0 +1,23 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  body { font: 13px system-ui, sans-serif; width: 420px; margin: 10px; }
+  label { display: block; margin-bottom: 8px; }
+  #status { margin: 6px 0; }
+  ul { list-style: none; padding: 0; margin: 0; max-height: 360px; overflow-y: auto; }
+  li { padding: 3px 0; border-top: 1px solid #eee; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .why { display: inline-block; width: 72px; color: #666; }
+  button { margin-top: 8px; }
+  .error { color: #b00020; }
+</style>
+</head>
+<body>
+<label><input type="checkbox" id="auto"> Auto-close when opened</label>
+<div id="status">Checking tabs...</div>
+<ul id="list"></ul>
+<button id="close" hidden></button>
+<script src="popup.js"></script>
+</body>
+</html>
