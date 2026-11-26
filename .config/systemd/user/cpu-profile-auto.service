@@ -7,7 +7,9 @@
 # ln -s "$HOME/dev/dotfiles/.config/systemd/user/cpu-profile-auto.service" "$HOME/.config/systemd/user/cpu-profile-auto.service"
 # systemctl --user daemon-reload
 # systemctl --user enable --now cpu-profile-auto.service
-# Stop and disable: systemctl --user disable --now cpu-profile-auto.service
+# Turn it off from the toggle board (cpu-profile-auto: auto/manual), which
+# writes ~/.local/state/cpu-profile-auto/off and stops the unit. Never disable
+# it: disable also deletes this link into dotfiles and the next start fails.
 # Tune CPU_PROFILE_AUTO_UP_PERCENT, CPU_PROFILE_AUTO_UP_SECONDS,
 # CPU_PROFILE_AUTO_DOWN_PERCENT, CPU_PROFILE_AUTO_DOWN_SECONDS,
 # CPU_PROFILE_AUTO_COOLDOWN_SECONDS, or CPU_PROFILE_AUTO_MANUAL_SECONDS in a
@@ -15,9 +17,14 @@
 [Unit]
 Description=Switch serval CPU power profile by load
 After=resource-watcher.service
+ConditionPathExists=!%h/.local/state/cpu-profile-auto/off
 
 [Service]
 Type=simple
+# 26 Nov 13:22: audio broke up on Balanced at a 34% two-minute mean, below the
+# 40%/120 s default, so switch up sooner.
+Environment=CPU_PROFILE_AUTO_UP_PERCENT=30
+Environment=CPU_PROFILE_AUTO_UP_SECONDS=60
 ExecStart=%h/dev/dotfiles/scripts/__cpu_profile_auto.sh
 Restart=on-failure
 RestartSec=10
