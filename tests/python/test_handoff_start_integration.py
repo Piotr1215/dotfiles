@@ -17,7 +17,7 @@ if not (HOOK.is_file() and Path(TASK).is_file() and (Path.home() / ".claude/scri
 
 
 @pytest.mark.parametrize("command_only", [False, True])
-def test_real_start_hook_keeps_newest_handoff_and_opens_reply_permalink(command_only):
+def test_real_start_hook_keeps_all_handoffs_and_opens_reply_permalink(command_only):
     with tempfile.TemporaryDirectory() as directory:
         root = Path(directory)
         data = root / "data"
@@ -130,12 +130,11 @@ def test_real_start_hook_keeps_newest_handoff_and_opens_reply_permalink(command_
             exported = json.loads(task("rc.context=none", "rc.hooks=off", "+piotr",
                                        "+ACTIVE", "export").stdout)
             active = [row["uuid"] for row in exported]
-            if len(active) == 1:
+            if len(active) == 3:
                 break
             time.sleep(0.05)
-        assert len(active) == 1, f"active +piotr UUIDs: {active}"
-        winner = active[0]
-        assert winner == ids[2]
+        assert set(active) == set(ids[:3]), f"active +piotr UUIDs: {active}"
+        winner = ids[2]
         still_active = json.loads(task("rc.context=none", "rc.hooks=off", ordinary,
                                        "+ACTIVE", "export").stdout)
         assert [row["uuid"] for row in still_active] == [ordinary]
