@@ -1,5 +1,9 @@
-# Set package PL1 to 160 W and TCC offset to 13, the firmware default of 92C
-# with TjMax 105C. Piotr wants to "remove any artificial blockages on the chip":
+# Set package PL1 to 160 W only when the barrel charger is online and no USB
+# supply is online. Otherwise use the firmware's 44 W limit, including when a
+# power bank powers the laptop at talks. The udev rule reapplies the limit when
+# the barrel charger or a USB-C supply is plugged or unplugged.
+# Keep TCC offset at 13, the firmware default of 92C with TjMax 105C. Piotr
+# wants to "remove any artificial blockages on the chip":
 # "I have good cooling and I need as much power as I can get" (26 Nov 2026).
 # Firmware set PL1 to 44 W on both RAPL interfaces, below Intel's 55 W base
 # power; PL2 was 160 W and MSR 0x610 lock bit 63 was 0. Under agent load, the
@@ -12,7 +16,7 @@
 # sudo systemctl daemon-reload
 # sudo systemctl reenable cpu-tcc-offset.service
 [Unit]
-Description=Run serval's CPU at full power: PL1 160 W, thermal target 92C (TCC offset 13)
+Description=Apply serval CPU power limit for the power source and TCC offset 13
 After=systemd-modules-load.service suspend.target hibernate.target hybrid-sleep.target suspend-then-hibernate.target
 
 [Service]
@@ -20,6 +24,7 @@ Type=oneshot
 RemainAfterExit=no
 Environment=TCC_OFFSET=13
 Environment=PL1_UW=160000000
+Environment=PL1_BATTERY_UW=44000000
 # The processor thermal driver can probe after this starts; retry for 30 s.
 ExecStart=/bin/sh -c 'status=0; tcc_set=0; \
     for _ in $$(seq 30); do \
@@ -31,6 +36,26 @@ ExecStart=/bin/sh -c 'status=0; tcc_set=0; \
         sleep 1; \
     done; \
     if [ "$$tcc_set" -ne 1 ]; then echo "no writable tcc_offset_degree_celsius" >&2; status=1; fi; \
+    source=unknown; pl1=$$PL1_BATTERY_UW; usb_unknown=0; \
+    for supply in /sys/class/power_supply/*; do \
+        if [ ! -r "$$supply/type" ]; then usb_unknown=1; continue; fi; \
+        if ! supply_type=$$(cat "$$supply/type"); then usb_unknown=1; continue; fi; \
+        if [ -z "$$supply_type" ]; then usb_unknown=1; continue; fi; \
+        [ "$$supply_type" = USB ] || continue; \
+        if [ ! -r "$$supply/online" ]; then usb_unknown=1; continue; fi; \
+        case "$$(cat "$$supply/online")" in \
+            1) source=usb; break ;; \
+            0) : ;; \
+            *) usb_unknown=1 ;; \
+        esac; \
+    done; \
+    if [ "$$source" != usb ] && [ "$$usb_unknown" -eq 0 ] && [ -r /sys/class/power_supply/AC/online ]; then \
+        case "$$(cat /sys/class/power_supply/AC/online)" in \
+            1) source=barrel; pl1=$$PL1_UW ;; \
+            0) source=battery ;; \
+        esac; \
+    fi; \
+    echo "power source $$source; pl1 $$pl1 uW"; \
     found=0; \
     for zone in /sys/class/powercap/intel-rapl:* /sys/class/powercap/intel-rapl-mmio:*; do \
         [ -r "$$zone/name" ] || continue; \
@@ -39,7 +64,7 @@ ExecStart=/bin/sh -c 'status=0; tcc_set=0; \
         if [ ! -r "$$zone/constraint_0_name" ] || [ "$$(cat "$$zone/constraint_0_name")" != long_term ]; then \
             echo "missing or unexpected constraint 0 on $$zone" >&2; status=1; continue; \
         fi; \
-        if echo "$$PL1_UW" > "$$zone/constraint_0_power_limit_uw"; then \
+        if echo "$$pl1" > "$$zone/constraint_0_power_limit_uw"; then \
             echo "pl1 $$(cat "$$zone/constraint_0_power_limit_uw") via $$zone"; \
         else \
             status=1; \

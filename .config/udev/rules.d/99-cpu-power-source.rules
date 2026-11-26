@@ -1,0 +1,6 @@
+# Reapply the CPU limit when the barrel charger or USB-C supply changes so
+# a power bank at a talk uses the 44 W PL1 fallback.
+# Install from the dotfiles root:
+# sudo install -Dm644 .config/udev/rules.d/99-cpu-power-source.rules /etc/udev/rules.d/99-cpu-power-source.rules
+# sudo udevadm control --reload
+SUBSYSTEM=="power_supply", ACTION=="change", KERNEL=="AC|ucsi-source-psy-*", RUN+="/usr/bin/systemctl --no-block start cpu-tcc-offset.service"
