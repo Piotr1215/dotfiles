@@ -1,0 +1,26 @@
+# Serval ran at 86 C with light usage on Performance, versus 58 to 63 C on
+# Balanced. Under agent load, Balanced reached 1926 to 2881 MHz at 10 to 50%
+# busy, while Performance reached 4363 to 4604 MHz in those bands. Balanced
+# was 34 to 56% slower. Switch by load so Piotr does not have to remember.
+# Install on serval (user units are linked into ~/.config):
+# mkdir -p "$HOME/.config/systemd/user"
+# ln -s "$HOME/dev/dotfiles/.config/systemd/user/cpu-profile-auto.service" "$HOME/.config/systemd/user/cpu-profile-auto.service"
+# systemctl --user daemon-reload
+# systemctl --user enable --now cpu-profile-auto.service
+# Stop and disable: systemctl --user disable --now cpu-profile-auto.service
+# Tune CPU_PROFILE_AUTO_UP_PERCENT, CPU_PROFILE_AUTO_UP_SECONDS,
+# CPU_PROFILE_AUTO_DOWN_PERCENT, CPU_PROFILE_AUTO_DOWN_SECONDS,
+# CPU_PROFILE_AUTO_COOLDOWN_SECONDS, or CPU_PROFILE_AUTO_MANUAL_SECONDS in a
+# systemd user override. Defaults are 40, 120, 15, 300, 300, and 1800.
+[Unit]
+Description=Switch serval CPU power profile by load
+After=resource-watcher.service
+
+[Service]
+Type=simple
+ExecStart=%h/dev/dotfiles/scripts/__cpu_profile_auto.sh
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target
