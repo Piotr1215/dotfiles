@@ -20,8 +20,33 @@ import (
 	"unsafe"
 )
 
+// taskCache reuses a successful SQLite fingerprint only while its inputs stay unchanged.
+type taskCache struct{ signature, digest string }
+
+// taskSignature detects replacement and writes to the database or its WAL.
+func taskSignature(db string, keys []byte, review string) (string, error) {
+	h := sha256.New()
+	fmt.Fprintf(h, "%s:%s\n", keys, review)
+	for _, name := range []string{db, db + "-wal"} {
+		info, err := os.Stat(name)
+		if os.IsNotExist(err) {
+			fmt.Fprintf(h, "%s:absent\n", name)
+			continue
+		}
+		if err != nil {
+			return "", err
+		}
+		st, ok := info.Sys().(*syscall.Stat_t)
+		if !ok {
+			return "", fmt.Errorf("unsupported stat for %s", name)
+		}
+		fmt.Fprintf(h, "%s:%d:%d:%d:%d:%d:%d:%d:%d\n", name, st.Dev, st.Ino, info.Size(), st.Mtim.Sec, st.Mtim.Nsec, st.Ctim.Sec, st.Ctim.Nsec, st.Mode)
+	}
+	return fmt.Sprintf("%x", h.Sum(nil)), nil
+}
+
 // fingerprint excludes database bookkeeping and collector output files.
-func fingerprint(task, notes, taskrc, probe string, notesCache *string) (string, error) {
+func fingerprint(task, notes, taskrc, probe string, notesCache *string, cache *taskCache) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	format := "#{session_name}\x1f#{window_name}\x1f#{pane_id}\x1f#{pane_pid}\x1f#{pane_current_command}\x1f#{@agent_model}\x1f#{@agent_name}\x1f#{@agent_prs}\x1f#{@agent_resumed}\x1f#{@agent_spawn_level}\x1f#{@agent_spawn_parent}\x1f#{@agent_wait}\x1f#{@claude_state}\x1f#{@claude_state_since}"
@@ -124,11 +149,28 @@ for row in c.execute('select id,uuid from working_set order by id'):
  if row[1] in selected: h.update(json.dumps(row,separators=(',',':')).encode()); h.update(b'\n')
 print(h.hexdigest())
 `
-		out, err := exec.CommandContext(ctx, "python3", "-c", py, db, string(keyJSON), os.Getenv("COCKPIT_SHOW_REVIEW_ROWS")).Output()
+		review := os.Getenv("COCKPIT_SHOW_REVIEW_ROWS")
+		signature, err := taskSignature(db, keyJSON, review)
 		if err != nil {
 			return "", err
 		}
-		fmt.Fprintf(h, "sqlite:%s\n", out)
+		if signature != cache.signature || cache.digest == "" {
+			// Never retain a result if a writer changed an input during the query.
+			out, err := exec.CommandContext(ctx, "python3", "-c", py, db, string(keyJSON), review).Output()
+			if err != nil {
+				cache.signature, cache.digest = "", ""
+				return "", err
+			}
+			after, err := taskSignature(db, keyJSON, review)
+			if err != nil {
+				return "", err
+			}
+			cache.signature, cache.digest = "", string(out)
+			if signature == after {
+				cache.signature = signature
+			}
+		}
+		fmt.Fprintf(h, "sqlite:%s\n", cache.digest)
 	} else if !os.IsNotExist(err) {
 		return "", err
 	} else {
@@ -284,7 +326,7 @@ func main() {
 		}
 		return false
 	}
-	ticker := time.NewTicker(50 * time.Millisecond)
+	ticker := time.NewTicker(200 * time.Millisecond)
 	defer ticker.Stop()
 	due := time.Now()
 	nextAge := time.Now().Add(60 * time.Second)
@@ -294,6 +336,7 @@ func main() {
 	var output strings.Builder
 	var lastFingerprint, pendingFingerprint, notesCache string
 	var pendingValid bool
+	var tasks taskCache
 	orderFile := filepath.Join(state, "pane-order")
 	cycleDir := os.Getenv("CYCLE_AGENT_CACHE_DIR")
 	if cycleDir == "" {
@@ -393,6 +436,9 @@ func main() {
 						if relevant(w, name) {
 							if w.kind == "notes" || w.kind == "nested" {
 								notesCache = ""
+								if w.kind == "notes" {
+									nextWatches = now
+								}
 							}
 							if due.IsZero() {
 								due = now.Add(150 * time.Millisecond)
@@ -410,18 +456,19 @@ func main() {
 					}
 				}
 				watchSignature = signature
-				nextWatches = now.Add(200 * time.Millisecond)
+				nextWatches = now.Add(time.Second)
 			}
 			if cmd == nil && !now.Before(nextFingerprint) && ((!due.IsZero() && !now.Before(due)) || !now.Before(nextAge)) {
 				ageRefresh := !now.Before(nextAge)
 				if ageRefresh {
 					notesCache = "" // Recover from a missed watch or event.
+					tasks.signature = ""
 				}
 				due = time.Time{}
 				pendingValid = false
 				if os.Getenv("TMUX_READING_MARGIN_SEMANTIC_FILTER") != "0" {
 					nextFingerprint = now.Add(time.Second)
-					fingerprint, err := fingerprint(task, notes, taskrc, probe, &notesCache)
+					fingerprint, err := fingerprint(task, notes, taskrc, probe, &notesCache, &tasks)
 					if err != nil {
 						_ = os.WriteFile(filepath.Join(state, "fingerprint-error"), []byte(fmt.Sprintf("%s: %v\n", time.Now().Format(time.RFC3339), err)), 0600)
 						due = now.Add(2 * time.Second)
