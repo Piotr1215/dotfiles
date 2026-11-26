@@ -101,6 +101,15 @@ def test_an_agent_groups_copy_stays_and_the_ungrouped_copy_closes(fakes):
     assert closing(result) == {1: 'duplicate', 6: 'duplicate'}
 
 
+def test_keep_grouped_leaves_a_grouped_merged_pr_open_and_still_closes_loose_ones(fakes, monkeypatch):
+    monkeypatch.setenv('FAKE_MERGED', 'o/r#1')
+    tabs = [tab(1, 'https://github.com/o/r/pull/1', groupId=0), tab(2, 'https://github.com/o/r/pull/1/files'),
+            tab(3, 'https://a.example/'), tab(4, 'https://a.example/')]
+    assert closing(host.handle({'op': 'plan', 'tabs': tabs, 'keep_grouped': True})) == {2: 'merged', 4: 'duplicate'}
+    assert closing(host.handle({'op': 'plan', 'tabs': tabs})) == {1: 'merged', 2: 'merged', 4: 'duplicate'}
+    assert closing(host.handle({'op': 'plan', 'tabs': tabs, 'keep_grouped': 'yes'})) == {1: 'merged', 2: 'merged', 4: 'duplicate'}
+
+
 def test_two_pinned_copies_both_stay(fakes):
     result = host.plan([tab(1, 'https://a.example/', pinned=True), tab(2, 'https://a.example/', pinned=True)])
     assert result['close'] == []

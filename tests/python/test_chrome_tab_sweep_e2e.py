@@ -168,3 +168,31 @@ def test_popup_with_auto_close_sweeps_on_open_and_reports_when_ticked(chrome):
     assert run(cdp, popup, "document.getElementById('report').checked") is True
     assert run(cdp, popup, "document.getElementById('auto').checked") is True
     assert open_urls(cdp, worker).count("https://example.com/b") == 1
+
+
+def wait_for(cdp, session, expression, want, seconds=10):
+    for _ in range(int(seconds * 10)):
+        value = run(cdp, session, expression)
+        if value == want:
+            return value
+        time.sleep(.1)
+    pytest.fail(f"{expression} stayed {value!r}, wanted {want!r}")
+
+
+def test_auto_close_sweeps_in_the_background_with_no_click_and_spares_agent_groups(chrome):
+    cdp, _, worker, tmp_path = chrome
+    agents, loose, first, copy = open_tabs(cdp, worker, [
+        [f"{PR}/1", False], [f"{PR}/1/files", False], ["https://example.com/c", False], ["https://example.com/c", False]])
+    run(cdp, worker, "chrome.tabs.group({tabIds: [%d]}).then(()=>1)" % agents)
+    time.sleep(3)
+    assert len(open_urls(cdp, worker)) == 5, "auto is off, so nothing closes on its own"
+    run(cdp, worker, "chrome.storage.local.set({auto: true, report: true}).then(()=>1)")
+    alive = "Promise.all(%s.map(id=>chrome.tabs.get(id).then(()=>true,()=>false)))"
+    wait_for(cdp, worker, alive % json.dumps([agents, loose, first, copy]), [True, False, True, False])
+    wait_for(cdp, worker, "chrome.action.getBadgeText({})", "2")  # set after the report
+    assert sent(tmp_path) == [["--no-human", "-t", "triage",
+                               "Chrome tab sweep closed 2 tabs. Merged PRs (1): o/r#1. Duplicates (1): https://example.com/c."]]
+    open_tabs(cdp, worker, [["https://example.com/c", False]])
+    wait_for(cdp, worker, "chrome.tabs.query({}).then(ts=>ts.filter(t=>(t.url||t.pendingUrl)==='https://example.com/c').length)", 1)
+    wait_for(cdp, worker, "chrome.action.getBadgeText({})", "1")
+    assert len(sent(tmp_path)) == 2

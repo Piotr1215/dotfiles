@@ -3,6 +3,7 @@
 // when the popup's "Report closes to Gordon" box is ticked, has the host DM
 // Gordon ("triage") the list: every close or none. The work runs here, not in
 // the popup, because Chrome closes the popup when its window's active tab closes.
+// With "Auto-close" ticked it also sweeps on its own, with no click.
 const HOST = 'org.piotr.tab_sweep';
 
 function host(message) {
@@ -16,10 +17,11 @@ function host(message) {
   });
 }
 
-// Every open tab, in the shape the host's plan op reads.
-async function plan() {
+// Every open tab, in the shape the host's plan op reads. keepGrouped leaves
+// every tab in a tab group open, merged PR or not, for sweeps nobody clicked.
+async function plan(keepGrouped = false) {
   const tabs = await chrome.tabs.query({});
-  return host({op: 'plan', tabs: tabs.map((t) => ({
+  return host({op: 'plan', keep_grouped: keepGrouped, tabs: tabs.map((t) => ({
     id: t.id, url: t.url || t.pendingUrl || '', title: t.title || '',
     pinned: t.pinned, active: t.active, windowId: t.windowId, index: t.index, groupId: t.groupId,
   }))});
@@ -46,14 +48,34 @@ async function closeTabs(rows) {
       error = reply.error || null;
     } catch (e) { error = e.message; }
   }
-  await chrome.action.setBadgeText({text: closed.length ? String(closed.length) : ''});
+  // Only a close sets the badge: the popup clears it, and the frequent empty
+  // background sweeps would wipe it before Piotr sees it.
+  if (closed.length) await chrome.action.setBadgeText({text: String(closed.length)});
   return {closed, reported, error};
 }
 
-async function sweep() {
-  const planned = await plan();
+async function sweep(keepGrouped = false) {
+  const planned = await plan(keepGrouped);
   return {...(await closeTabs(planned.close)), errors: planned.errors || []};
 }
+
+// Auto-close: sweep a moment after the last tab URL change, after a restart,
+// and when the box is ticked. Piotr, 26 Nov: "the tab sweep is marked auto so
+// it should auto close tabs". Sweeps run one at a time.
+let timer = null;
+let queue = Promise.resolve();
+function schedule() {
+  clearTimeout(timer);
+  timer = setTimeout(() => {
+    queue = queue.then(async () => {
+      const {auto} = await chrome.storage.local.get('auto');
+      if (auto === true) await sweep(true);
+    }).catch(() => {});
+  }, 1500);
+}
+chrome.tabs.onUpdated.addListener((_id, change) => { if (change.url) schedule(); });
+chrome.runtime.onStartup.addListener(schedule);
+chrome.storage.onChanged.addListener((change) => { if (change.auto?.newValue === true) schedule(); });
 
 chrome.runtime.onMessage.addListener((message, _sender, respond) => {
   const run = message?.op === 'plan' ? plan()

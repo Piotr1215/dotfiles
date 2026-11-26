@@ -4,7 +4,8 @@
 op "plan": given every open tab, name the ones to close: tabs whose GitHub
 pull request is merged (one batched `gh api graphql` call, so private loft-sh
 repos work through Piotr's gh login) and exact duplicate URLs, keeping one of
-each. Pinned tabs are never closed.
+each. Pinned tabs are never closed. With "keep_grouped": true (the
+extension's background auto-close) no tab inside a tab group closes at all.
 
 op "report": DM Gordon (bus name "triage") what the extension closed, through
 ~/.claude/scripts/snd, only when the message carries "report": true, which the
@@ -68,20 +69,21 @@ def grouped(tab):
     return isinstance(tab.get("groupId"), int) and tab["groupId"] >= 0
 
 
-def plan(tabs):
+def plan(tabs, keep_grouped=False):
     """Pick the tabs to close: merged PRs first, then extra copies of a URL.
 
     A duplicate group keeps a pinned copy, else one in a tab group, else the
     active one, else the first by window and position. A tab in a tab group is
     never closed as a duplicate: agents work in their own groups (Claude in
     Chrome tracks each tab by id), so an agent's copy stays and Piotr's
-    ungrouped copy closes."""
+    ungrouped copy closes. keep_grouped also keeps a grouped merged-PR tab, for
+    sweeps nobody clicked, so an agent reading a merged PR keeps its tab."""
     tabs = [t for t in tabs if isinstance(t, dict) and isinstance(t.get("id"), int) and t.get("url")]
     merged, errors = merged_prs({k for k in map(pr_key, (t["url"] for t in tabs)) if k})
     close = {}
     for tab in tabs:
         key = pr_key(tab["url"])
-        if key in merged and not tab.get("pinned"):
+        if key in merged and not tab.get("pinned") and not (keep_grouped and grouped(tab)):
             close[tab["id"]] = {"reason": "merged", "pr": key}
     groups = {}
     for tab in tabs:
@@ -140,7 +142,7 @@ def report(closed):
 def handle(message):
     """Dispatch one request from the extension."""
     if message.get("op") == "plan":
-        return plan(message.get("tabs") or [])
+        return plan(message.get("tabs") or [], keep_grouped=message.get("keep_grouped") is True)
     if message.get("op") == "report":
         if message.get("report") is not True:
             return {"reported": False}
