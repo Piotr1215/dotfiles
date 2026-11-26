@@ -10,12 +10,13 @@ import signal
 import subprocess
 import time
 import urllib.request
+import uuid
 from pathlib import Path
 
 import pytest
 
 from test_chrome_agent_tmux_e2e import CDP, extension_id
-from test_chrome_tab_sweep import FAKE_GH, FAKE_SND, script
+from test_chrome_tab_sweep import FAKE_GH, FAKE_SND, map_tabs, script
 
 ROOT = Path(__file__).resolve().parents[2]
 CHROME = os.environ.get("AGENT_TAB_TEST_CHROME") or shutil.which("google-chrome")
@@ -36,7 +37,9 @@ def chrome(tmp_path, request):
         (directory / "org.piotr.tab_sweep.json").write_text(json.dumps(manifest))
     env = {**os.environ, "HOME": str(home), "XDG_CONFIG_HOME": str(home / ".config"),
            "TAB_SWEEP_GH": str(script(tmp_path / "gh", FAKE_GH)), "TAB_SWEEP_SND": str(script(tmp_path / "snd", FAKE_SND)),
-           "FAKE_GH_CALLS": str(tmp_path / "gh-calls"), "FAKE_SND_LOG": str(tmp_path / "snd-log"), "FAKE_MERGED": "o/r#1"}
+           "FAKE_GH_CALLS": str(tmp_path / "gh-calls"), "FAKE_SND_LOG": str(tmp_path / "snd-log"), "FAKE_MERGED": "o/r#1",
+           "FAKE_MERGED_FILE": str(tmp_path / "merged"), "XDG_STATE_HOME": str(tmp_path / "state"),
+           "AGENT_TMUX_TEST_SOCKET": "tab-sweep-e2e-" + uuid.uuid4().hex}
     env.pop("TAB_SWEEP_TO", None)
     pipe_in, to_chrome = os.pipe()
     from_chrome, pipe_out = os.pipe()
@@ -51,6 +54,7 @@ def chrome(tmp_path, request):
     os.close(pipe_out)
 
     def cleanup():
+        subprocess.run(["tmux", "-L", env["AGENT_TMUX_TEST_SOCKET"], "kill-server"], capture_output=True)
         try:
             os.killpg(browser.pid, signal.SIGKILL)
         except ProcessLookupError:
@@ -80,6 +84,7 @@ def chrome(tmp_path, request):
     cdp = CDP(json.load(urllib.request.urlopen(f"http://127.0.0.1:{port}/json/version"))["webSocketDebuggerUrl"])
     worker = attach(cdp, port, f"chrome-extension://{EXTENSION_ID}/background.js")
     cdp.reload_extension = load
+    cdp.tmux = ["tmux", "-L", env["AGENT_TMUX_TEST_SOCKET"], "-f", "/dev/null"]
     yield cdp, port, worker, tmp_path
 
 
@@ -182,22 +187,46 @@ def wait_for(cdp, session, expression, want, seconds=10):
     pytest.fail(f"{expression} stayed {value!r}, wanted {want!r}")
 
 
-def test_auto_close_sweeps_in_the_background_with_no_click_and_spares_agent_groups(chrome):
+def agent_pane(cdp):
+    """A live pane on the test tmux server, standing in for an agent's."""
+    subprocess.run(cdp.tmux + ["new-session", "-d", "-s", "agent"], check=True)
+    return subprocess.run(cdp.tmux + ["display", "-p", "-t", "=agent:", "#{pane_id}"], capture_output=True, text=True, check=True).stdout.strip()
+
+
+def test_auto_close_sweeps_in_the_background_and_spares_only_a_live_agents_group(chrome):
     cdp, _, worker, tmp_path = chrome
-    agents, loose, first, copy = open_tabs(cdp, worker, [
-        [f"{PR}/1", False], [f"{PR}/1/files", False], ["https://example.com/c", False], ["https://example.com/c", False]])
-    run(cdp, worker, "chrome.tabs.group({tabIds: [%d]}).then(()=>1)" % agents)
+    agent, agents_pr, handoff, loose, first, copy = open_tabs(cdp, worker, [
+        ["https://example.com/agent", False], [f"{PR}/1", False], [f"{PR}/1/commits", False], [f"{PR}/1/files", False],
+        ["https://example.com/c", False], ["https://example.com/c", False]])
+    run(cdp, worker, "chrome.tabs.group({tabIds: [%d, %d]}).then(()=>1)" % (agent, agents_pr))
+    run(cdp, worker, "chrome.tabs.group({tabIds: [%d]}).then(()=>1)" % handoff)  # like the handoffs group
+    map_tabs(tmp_path / "state", [(agent, agent_pane(cdp))])
     time.sleep(3)
-    assert len(open_urls(cdp, worker)) == 5, "auto is off, so nothing closes on its own"
+    assert len(open_urls(cdp, worker)) == 7, "auto is off, so nothing closes on its own"
     run(cdp, worker, "chrome.storage.local.set({auto: true, report: true}).then(()=>1)")
     alive = "Promise.all(%s.map(id=>chrome.tabs.get(id).then(()=>true,()=>false)))"
-    wait_for(cdp, worker, alive % json.dumps([agents, loose, first, copy]), [True, False, True, False])
-    wait_for(cdp, worker, "chrome.action.getBadgeText({})", "2")  # set after the report
+    wait_for(cdp, worker, alive % json.dumps([agent, agents_pr, handoff, loose, first, copy]), [True, True, False, False, True, False])
+    title = "chrome.action.getTitle({}).then(t=>t.replace(/at \\d\\d:\\d\\d$/, 'at HH:MM'))"
+    wait_for(cdp, worker, title, "Tab sweep: auto-closed 3 tabs at HH:MM")  # set after the report
+    assert run(cdp, worker, "chrome.action.getBadgeText({})") == "", "a background close leaves no number on the icon"
     assert sent(tmp_path) == [["--no-human", "-t", "triage", "Chrome tab sweep closed the tabs of 1 merged PR: o/r#1."]]
     open_tabs(cdp, worker, [["https://example.com/c", False]])
     wait_for(cdp, worker, "chrome.tabs.query({}).then(ts=>ts.filter(t=>(t.url||t.pendingUrl)==='https://example.com/c').length)", 1)
-    wait_for(cdp, worker, "chrome.action.getBadgeText({})", "1")
+    wait_for(cdp, worker, title, "Tab sweep: auto-closed 1 tab at HH:MM")
     assert len(sent(tmp_path)) == 1, "a duplicate close is not reported"
+
+
+def test_auto_close_sweeps_each_minute_so_a_pr_merged_in_a_still_tab_closes(chrome):
+    cdp, _, worker, tmp_path = chrome
+    assert run(cdp, worker, "chrome.alarms.get('sweep').then(a=>a.periodInMinutes)") == 1
+    run(cdp, worker, "chrome.storage.local.set({auto: true}).then(()=>1)")
+    still, = open_tabs(cdp, worker, [[f"{PR}/3", False]])
+    time.sleep(3)
+    assert run(cdp, worker, "chrome.tabs.get(%d).then(()=>true,()=>false)" % still) is True, "not merged yet"
+    (tmp_path / "merged").write_text("o/r#3")
+    # Fire the alarm now rather than wait a minute; no tab changes URL.
+    run(cdp, worker, "chrome.alarms.create('sweep', {delayInMinutes: 0.01}).then(()=>1)")
+    wait_for(cdp, worker, "chrome.tabs.get(%d).then(()=>true,()=>false)" % still, False)
 
 
 def test_auto_close_keeps_the_older_copy_and_moves_piotr_to_it(chrome):

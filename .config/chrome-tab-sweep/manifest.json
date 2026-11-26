@@ -1,13 +1,14 @@
 {
   "manifest_version": 3,
   "name": "Tab sweep",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Close tabs of merged GitHub PRs and exact duplicate URLs, and report them to Gordon.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAuF2qwTf+nXeEkE40nSJC+P4fqKT8jc/YV2VwHpzhTsJZ1mdHi+4L05LeZp7Xa8A+GZEf04TSg6B9oFbw90NTZn2AWAZ6pPDrfPngPb0z2bQ+h0N2q0RWH792Dwo1poeOFOkLWmHenKUcrv/9gQm7Qp5WsgtosbX/6qUtVo8pt1AklGTKpRv5Isq5qmwTZImSLlm+KTUT1edhkMlg1Yq9MTTxQBi8NxCmsCGKtuScoeFY8Kwo7HWWoI/9ZNIB6MC0QwMR3oWsu6ipm5CTNGaB4vqTZG2VDF6jQXuyJb9AuJkJ46LLOQtBj8ZCrIXkUeHX+s323Klojygnixiv57lzlQIDAQAB",
   "permissions": [
     "tabs",
     "nativeMessaging",
-    "storage"
+    "storage",
+    "alarms"
   ],
   "background": {
     "service_worker": "background.js"

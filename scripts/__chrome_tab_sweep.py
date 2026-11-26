@@ -5,8 +5,8 @@ op "plan": given every open tab, name the ones to close: tabs whose GitHub
 pull request is merged (one batched `gh api graphql` call, so private loft-sh
 repos work through Piotr's gh login) and exact duplicate URLs, keeping one of
 each. Pinned tabs are never closed. With "unattended": true (the extension's
-background auto-close) no tab inside a tab group closes, and the oldest copy
-of a duplicate stays.
+background auto-close) a merged-PR tab in a live agent's tab group stays, and
+the oldest copy of a duplicate stays.
 
 op "report": DM Gordon (bus name "triage") the merged PRs the extension
 closed, through ~/.claude/scripts/snd, only when the message carries
@@ -15,6 +15,7 @@ Gordon" box is ticked (off by default; Piotr, 26 Nov: "this is mostly noise",
 "either send all or don't", "report to gordon should only send closed prs not
 other tabs"). Duplicate closes never reach Gordon.
 """
+import importlib.util
 import json
 import os
 import re
@@ -22,6 +23,7 @@ import shutil
 import struct
 import subprocess
 import sys
+from pathlib import Path
 
 MAX_MESSAGE = 8 * 1024 * 1024
 MAX_TITLE = 200
@@ -71,6 +73,30 @@ def grouped(tab):
     return isinstance(tab.get("groupId"), int) and tab["groupId"] >= 0
 
 
+def agent_groups(tabs, groups):
+    """The tab groups among `groups` that hold a tab a live Claude agent drives.
+
+    The Claude tab-owner hook maps each tab an agent touches to its tmux pane,
+    read here through __chrome_agent_tmux.py. A group with no such tab, like
+    the "handoffs" group the handoff board opens for Piotr, is not an agent's.
+    If the map cannot be read, every group counts as an agent's."""
+    if not groups:
+        return set()
+    try:
+        spec = importlib.util.spec_from_file_location("agent_tabs", Path(__file__).resolve().with_name("__chrome_agent_tmux.py"))
+        owners = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(owners)
+        mapped = owners.load_tabs()
+    except Exception:
+        return set(groups)
+    live = set()
+    for tab in tabs:
+        group = tab.get("groupId")
+        if group in groups and group not in live and tab["id"] in mapped and owners.live_pane(mapped[tab["id"]][1]):
+            live.add(group)
+    return live
+
+
 def plan(tabs, unattended=False):
     """Pick the tabs to close: merged PRs first, then extra copies of a URL.
 
@@ -80,17 +106,19 @@ def plan(tabs, unattended=False):
     Chrome tracks each tab by id), so an agent's copy stays and Piotr's
     ungrouped copy closes. Each duplicate row names the copy it keeps.
 
-    unattended is a sweep nobody clicked. It keeps a grouped merged-PR tab too,
-    so an agent reading a merged PR keeps its tab, and among duplicates it
+    unattended is a sweep nobody clicked. It keeps a merged-PR tab in a live
+    agent's group, so an agent reading a merged PR keeps its tab, while one in
+    a group no agent drives (the handoffs group) closes. Among duplicates it
     keeps the oldest copy (lowest tab id) over the active one: reopening a
     link closes the fresh tab, not an older one holding unsaved typing."""
     tabs = [t for t in tabs if isinstance(t, dict) and isinstance(t.get("id"), int) and t.get("url")]
     merged, errors = merged_prs({k for k in map(pr_key, (t["url"] for t in tabs)) if k})
+    candidates = [t for t in tabs if pr_key(t["url"]) in merged and not t.get("pinned")]
+    spared = agent_groups(tabs, {t["groupId"] for t in candidates if grouped(t)}) if unattended else set()
     close = {}
-    for tab in tabs:
-        key = pr_key(tab["url"])
-        if key in merged and not tab.get("pinned") and not (unattended and grouped(tab)):
-            close[tab["id"]] = {"reason": "merged", "pr": key}
+    for tab in candidates:
+        if not (grouped(tab) and tab["groupId"] in spared):
+            close[tab["id"]] = {"reason": "merged", "pr": pr_key(tab["url"])}
     groups = {}
     for tab in tabs:
         groups.setdefault(tab["url"], []).append(tab)

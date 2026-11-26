@@ -1,9 +1,11 @@
 """Tab sweep native host: which tabs close, and what Gordon is told."""
 import importlib.util
 import json
+import os
 import struct
 import subprocess
 import sys
+import uuid
 from pathlib import Path
 
 import pytest
@@ -14,7 +16,7 @@ spec = importlib.util.spec_from_file_location('sweep_host', HOST)
 host = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(host)
 
-# Answers like `gh api graphql`: merged for keys in FAKE_MERGED, a null repo
+# Answers like `gh api graphql`: merged for keys in FAKE_MERGED or the FAKE_MERGED_FILE, a null repo
 # plus exit 1 for FAKE_MISSING, and one line per call in FAKE_GH_CALLS.
 FAKE_GH = r'''#!/usr/bin/env python3
 import json, os, re, sys
@@ -24,6 +26,8 @@ with open(os.environ["FAKE_GH_CALLS"], "a") as f:
 if os.environ.get("FAKE_GH_FAIL"):
     sys.stderr.write("gh: HTTP 401: Bad credentials\n"); sys.exit(1)
 merged = set(filter(None, os.environ.get("FAKE_MERGED", "").split(",")))
+if os.path.exists(os.environ.get("FAKE_MERGED_FILE", "")):
+    merged |= set(open(os.environ["FAKE_MERGED_FILE"]).read().split())
 missing = set(filter(None, os.environ.get("FAKE_MISSING", "").split(",")))
 data, errors = {}, []
 for alias, owner, name, number in re.findall(r'(p\d+): repository\(owner: "([^"]+)", name: "([^"]+)"\) \{ pullRequest\(number: (\d+)\)', query):
@@ -57,7 +61,26 @@ def fakes(tmp_path, monkeypatch):
     monkeypatch.setenv('FAKE_GH_CALLS', str(tmp_path / 'gh-calls'))
     monkeypatch.setenv('FAKE_SND_LOG', str(tmp_path / 'snd-log'))
     monkeypatch.delenv('TAB_SWEEP_TO', raising=False)
+    # Never read Piotr's agent tab map or reach his tmux server.
+    monkeypatch.setenv('XDG_STATE_HOME', str(tmp_path / 'state'))
+    monkeypatch.setenv('AGENT_TMUX_TEST_SOCKET', 'tab-sweep-test-' + uuid.uuid4().hex)
     return tmp_path
+
+
+@pytest.fixture
+def agent_pane(fakes, request):
+    """A live pane on a throwaway tmux server; map_tabs records tab ids as that agent's."""
+    cmd = ['tmux', '-L', os.environ['AGENT_TMUX_TEST_SOCKET'], '-f', '/dev/null']
+    request.addfinalizer(lambda: subprocess.run(cmd + ['kill-server'], capture_output=True))
+    subprocess.run(cmd + ['new-session', '-d', '-s', 'agent'], check=True)
+    return subprocess.run(cmd + ['display', '-p', '-t', '=agent:', '#{pane_id}'], capture_output=True, text=True, check=True).stdout.strip()
+
+
+def map_tabs(state, rows):
+    """Write the agent tab map the Claude tab-owner hook keeps: (tab id, pane) rows."""
+    (state / 'agent-tabs').mkdir(parents=True, exist_ok=True)
+    (state / 'agent-tabs/tabs.jsonl').write_text(''.join(
+        json.dumps({'tab_id': tab_id, 'pane': pane, 'session': 'agent', 'ts': 1}) + '\n' for tab_id, pane in rows))
 
 
 def tab(id, url, **extra):
@@ -101,13 +124,34 @@ def test_an_agent_groups_copy_stays_and_the_ungrouped_copy_closes(fakes):
     assert closing(result) == {1: 'duplicate', 6: 'duplicate'}
 
 
-def test_unattended_leaves_a_grouped_merged_pr_open_and_still_closes_loose_ones(fakes, monkeypatch):
+def test_unattended_keeps_a_merged_pr_in_a_live_agents_group_and_closes_the_rest(fakes, agent_pane, monkeypatch):
+    # Group 0 holds a tab the live agent drives (tab 5); group 3 is the handoffs
+    # group no agent drives (Piotr, 26 Nov: auto-close "just shows me numbers"
+    # while its merged PRs stayed); group 4's agent pane is gone.
     monkeypatch.setenv('FAKE_MERGED', 'o/r#1')
-    tabs = [tab(1, 'https://github.com/o/r/pull/1', groupId=0), tab(2, 'https://github.com/o/r/pull/1/files'),
+    map_tabs(fakes / 'state', [(5, agent_pane), (7, '%999')])
+    tabs = [tab(1, 'https://github.com/o/r/pull/1', groupId=0), tab(5, 'https://agent.example/', groupId=0),
+            tab(2, 'https://github.com/o/r/pull/1/files', groupId=3), tab(6, 'https://github.com/o/r/pull/1/checks', groupId=4),
+            tab(7, 'https://other.example/', groupId=4), tab(8, 'https://github.com/o/r/pull/1/commits'),
             tab(3, 'https://a.example/'), tab(4, 'https://a.example/')]
-    assert closing(host.handle({'op': 'plan', 'tabs': tabs, 'unattended': True})) == {2: 'merged', 4: 'duplicate'}
-    assert closing(host.handle({'op': 'plan', 'tabs': tabs})) == {1: 'merged', 2: 'merged', 4: 'duplicate'}
-    assert closing(host.handle({'op': 'plan', 'tabs': tabs, 'unattended': 'yes'})) == {1: 'merged', 2: 'merged', 4: 'duplicate'}
+    assert closing(host.handle({'op': 'plan', 'tabs': tabs, 'unattended': True})) == {2: 'merged', 6: 'merged', 8: 'merged', 4: 'duplicate'}
+    assert closing(host.handle({'op': 'plan', 'tabs': tabs})) == {1: 'merged', 2: 'merged', 6: 'merged', 8: 'merged', 4: 'duplicate'}
+    assert closing(host.handle({'op': 'plan', 'tabs': tabs, 'unattended': 'yes'})) == {1: 'merged', 2: 'merged', 6: 'merged', 8: 'merged', 4: 'duplicate'}
+
+
+def test_unattended_with_no_agent_map_closes_a_grouped_merged_pr(fakes, monkeypatch):
+    monkeypatch.setenv('FAKE_MERGED', 'o/r#1')
+    tabs = [tab(1, 'https://github.com/o/r/pull/1', groupId=3)]
+    assert closing(host.plan(tabs, unattended=True)) == {1: 'merged'}
+
+
+def test_unattended_keeps_every_grouped_merged_pr_when_the_agent_map_cannot_load(fakes, monkeypatch):
+    monkeypatch.setenv('FAKE_MERGED', 'o/r#1')
+    def broken(*_args, **_kwargs):
+        raise OSError('no map')
+    monkeypatch.setattr(host.importlib.util, 'spec_from_file_location', broken)
+    tabs = [tab(1, 'https://github.com/o/r/pull/1', groupId=3), tab(2, 'https://github.com/o/r/pull/1/files')]
+    assert closing(host.plan(tabs, unattended=True)) == {2: 'merged'}
 
 
 def test_unattended_keeps_the_oldest_copy_so_reopening_a_link_closes_the_new_tab(fakes):

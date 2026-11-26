@@ -18,8 +18,8 @@ function host(message) {
 }
 
 // Every open tab, in the shape the host's plan op reads. unattended marks a
-// sweep nobody clicked: the host then leaves tab groups alone and keeps the
-// oldest copy of a duplicate.
+// sweep nobody clicked: the host then keeps merged-PR tabs in a live agent's
+// tab group and the oldest copy of a duplicate.
 async function plan(unattended = false) {
   const tabs = await chrome.tabs.query({});
   return host({op: 'plan', unattended, tabs: tabs.map((t) => ({
@@ -55,9 +55,13 @@ async function closeTabs(rows, unattended = false) {
       error = reply.error || null;
     } catch (e) { error = e.message; }
   }
-  // Only a close sets the badge: the popup clears it, and the frequent empty
-  // background sweeps would wipe it before Piotr sees it.
-  if (closed.length) await chrome.action.setBadgeText({text: String(closed.length)});
+  // A click's close shows its count on the badge, since the popup vanishes
+  // when its window's active tab closes. A background close notes itself only
+  // in the hover title: a number left on the icon read as tabs still waiting
+  // (Piotr, 26 Nov: "instead it just shows me numbers").
+  const s = closed.length === 1 ? '' : 's';
+  if (closed.length && unattended) await chrome.action.setTitle({title: `Tab sweep: auto-closed ${closed.length} tab${s} at ${new Date().toTimeString().slice(0, 5)}`});
+  else if (closed.length) await chrome.action.setBadgeText({text: String(closed.length)});
   return {closed, reported, error};
 }
 
@@ -67,8 +71,9 @@ async function sweep(unattended = false) {
 }
 
 // Auto-close: sweep a moment after the last tab URL change, after a restart
-// or an extension reload, and when the box is ticked. Piotr, 26 Nov: "the tab sweep is marked auto so
-// it should auto close tabs". Sweeps run one at a time.
+// or an extension reload, when the box is ticked, and once a minute, since a
+// PR that merges while its tab sits still changes no URL. Piotr, 26 Nov: "the
+// tab sweep is marked auto so it should auto close tabs". Sweeps run one at a time.
 let timer = null;
 let queue = Promise.resolve();
 function schedule() {
@@ -84,6 +89,8 @@ chrome.tabs.onUpdated.addListener((_id, change) => { if (change.url) schedule();
 chrome.runtime.onStartup.addListener(schedule);
 chrome.runtime.onInstalled.addListener(schedule);
 chrome.storage.onChanged.addListener((change) => { if (change.auto?.newValue === true) schedule(); });
+chrome.alarms.onAlarm.addListener(() => schedule());
+chrome.alarms.get('sweep').then((alarm) => alarm || chrome.alarms.create('sweep', {periodInMinutes: 1}));
 
 chrome.runtime.onMessage.addListener((message, _sender, respond) => {
   const run = message?.op === 'plan' ? plan()
