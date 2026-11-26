@@ -352,7 +352,7 @@ func main() {
 		if dirtySince.IsZero() {
 			dirtySince = now
 		}
-		due = now.Add(700 * time.Millisecond)
+		due = now.Add(1500 * time.Millisecond)
 		if limit := dirtySince.Add(4600 * time.Millisecond); due.After(limit) {
 			due = limit
 		}
