@@ -332,7 +332,17 @@ def handoff_owner(task):
 def live_agent_session(task):
     """Return the newest declared session tmux has-session confirms, or ''."""
     tmux = os.environ.get("HANDOFF_TMUX_COMMAND", "tmux")
-    for session in agent_sessions(task):
+    sessions = agent_sessions(task)
+    command = newest_note(task, "cmd")
+    try:
+        argv = shlex.split(command)
+        if argv and Path(argv[0]).name == "__spawn_agent.sh" and "--name" in argv:
+            sessions.append(argv[argv.index("--name") + 1])
+    except (ValueError, IndexError):
+        pass
+    if (task_kind(task) == "agent" or sessions) and UUID.fullmatch(task.get("uuid", "")):
+        sessions.append(task["uuid"][:8] + "-handoff")
+    for session in dict.fromkeys(sessions):
         if any(ord(char) < 32 or ord(char) == 127 for char in session):
             continue
         try:
@@ -534,6 +544,25 @@ def report_spawn_failure(task, reason):
             log(f"handoff: could not report spawn failure: {error}")
 
 
+def spawn_command(command):
+    """Parse a literal launcher command without invoking a shell."""
+    lexer = shlex.shlex(command, posix=True, punctuation_chars=True)
+    lexer.whitespace_split = True
+    argv = list(lexer)
+    if not argv or Path(argv[0]).name != "__spawn_agent.sh":
+        return None
+    if any(arg and all(c in "();<>|&" for c in arg) for arg in argv):
+        raise ValueError("spawn command must be a single literal command")
+    argv = [os.path.expanduser(arg) for arg in argv]
+    if "--json" not in argv:
+        argv.append("--json")
+    return argv
+
+
+def record_start(uuid):
+    run([str(Path.home() / ".claude/scripts/__tw.sh"), "start", uuid], capture_output=True, text=True)
+
+
 def act_on_kind(task, slack=False):
     """Run what s means for the row once its links are open; returns what it did.
 
@@ -550,6 +579,18 @@ def act_on_kind(task, slack=False):
     runnable = not cmd_page(task) and (command or kind == "command")
     try:
         if (command or kind == "agent") and (session := live_agent_session(task)):
+            attach_agent_session(session)
+            return "agent"
+        spawn_argv = spawn_command(command) if command else None
+        if spawn_argv:
+            try:
+                result = run(spawn_argv, timeout=120, capture_output=True, text=True)
+            except subprocess.CalledProcessError as error:
+                report_spawn_failure(task, (error.stderr or "").strip() or f"exit {error.returncode}")
+                raise
+            session = json.loads(result.stdout.splitlines()[-1])["session"]
+            if not re.fullmatch(r"[a-zA-Z0-9_-]+", session):
+                raise ValueError("spawn returned an invalid session")
             attach_agent_session(session)
             return "agent"
         if kind == "agent" and not command:
@@ -587,6 +628,7 @@ def act_on_kind(task, slack=False):
             session = json.loads(result.stdout.splitlines()[-1])["session"]
             if not re.fullmatch(r"[a-zA-Z0-9_-]+", session):
                 raise ValueError("spawn returned an invalid session")
+            attach_agent_session(session)
             return "agent"
         if slack:
             draft = newest_note(task, "draft")
@@ -808,27 +850,14 @@ def main(argv=None):
             if url:
                 print(url)
             return 0
-        # This detached process runs after the originating hook returns. Check
-        # current state again, and stop other starts without reentering hooks.
+        # This detached process runs after the originating hook returns.
         if not task.get("start"):
             return 0
-        if task_kind(task) == "agent" and not newest_note(task, "cmd"):
+        command = newest_note(task, "cmd")
+        if task_kind(task) == "agent" or (command and spawn_command(command)) or agent_sessions(task):
+            record_start(uuid)
+        if (task_kind(task) == "agent" and not command) or (command and spawn_command(command)):
             act_on_kind(task)
-            return 0
-        # A row carrying +claude or +codex was started by an agent spawn (key 4),
-        # not by S. Leave it running; only Piotr's own starts take turns.
-        active = [row for row in task_export(task_bin, "+piotr", "status:pending", "+ACTIVE")
-                  if row.get("uuid") == uuid or not {"claude", "codex"} & set(row.get("tags", []))]
-        # A delayed navigator must never stop a newer start. UUID breaks ties
-        # when Taskwarrior records multiple starts in the same second.
-        winner = max(active, key=lambda row: (row.get("start", ""), row.get("uuid", "")), default=None)
-        if not winner:
-            return 0
-        for other in active:
-            if other.get("uuid") != winner.get("uuid"):
-                run([task_bin, "rc.context=none", "rc.hooks=off", "rc.confirmation=no",
-                     other["uuid"], "stop"], stdout=subprocess.DEVNULL)
-        if winner.get("uuid") != uuid:
             return 0
         if uuid.lower() == MERGE_ROW and "standing" in task.get("tags", []):
             urls = standing_merge_urls(task_bin, uuid)

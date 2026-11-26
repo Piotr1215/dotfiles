@@ -19,6 +19,7 @@ def nav_log(tmp_path, monkeypatch):
     monkeypatch.setenv("HANDOFF_NAV_LOG", str(tmp_path / "nav.log"))
     # A fixed team ID, so no test depends on the real ~/.config/slack-open/teams.
     monkeypatch.setenv("SLACK_TEAM_ID", "T0123")
+    monkeypatch.setattr(nav, "record_start", lambda uuid: None)
     (tmp_path / "nav.log").write_text("")
     return tmp_path / "nav.log"
 
@@ -28,7 +29,7 @@ def task(*annotations, tags=None):
             "annotations": [{"description": text} for text in annotations]}
 
 
-def test_agent_kind_spawns_task_without_switching_session(monkeypatch, tmp_path):
+def test_agent_kind_spawns_and_switches_session(monkeypatch, tmp_path):
     monkeypatch.setenv("HOME", str(tmp_path))
     definition = tmp_path / ".claude/agents/code-writer.md"
     definition.parent.mkdir(parents=True)
@@ -43,7 +44,7 @@ def test_agent_kind_spawns_task_without_switching_session(monkeypatch, tmp_path)
     assert calls[0][1:] == ["--name", "aa476008-handoff", "--cwd", str(Path.home() / "loft"),
                             "--origin", "piotr", "--task", UUID, "--prompt", "exact prompt",
                             "--json", "--agent", "code-writer"]
-    assert len(calls) == 1
+    assert calls[-1] == ["tmux", "switch-client", "-t", "=aa476008-handoff"]
 
 
 @pytest.mark.parametrize("note", ["agent: existing-worker", "tmux session existing-worker"])
@@ -86,6 +87,32 @@ def test_agent_kind_with_command_uses_command_path(monkeypatch):
     row = dict(task("agent-brief: legacy", "cmd: resurrect-agent example"), kind="agent")
     assert nav.act_on_kind(row) == "command"
     assert calls == [(UUID, "resurrect-agent example")]
+
+
+def test_spawn_command_runs_directly_and_switches(monkeypatch):
+    calls = []
+    monkeypatch.setattr(nav, "live_agent_session", lambda row: "")
+    monkeypatch.setattr(nav, "attach_agent_session", lambda name: calls.append(("attach", name)))
+    monkeypatch.setattr(nav, "open_command_window", lambda *args: pytest.fail("opened command window"))
+    def run(args, **kwargs):
+        calls.append(args)
+        return subprocess.CompletedProcess(args, 0, '{"session":"worker"}')
+    monkeypatch.setattr(nav, "run", run)
+    row = dict(task("cmd: ~/.claude/scripts/__spawn_agent.sh --name worker --prompt 'hello world'"), kind="agent")
+    assert nav.act_on_kind(row) == "agent"
+    assert calls[0][-3:] == ["--prompt", "hello world", "--json"]
+    assert calls[1] == ("attach", "worker")
+
+
+def test_live_session_checks_command_name_and_handoff_fallback(monkeypatch):
+    seen = []
+    def run(args, **kwargs):
+        seen.append(args[-1])
+        return subprocess.CompletedProcess(args, 0 if args[-1] == "=aa476008-handoff" else 1)
+    monkeypatch.setattr(nav.subprocess, "run", run)
+    row = dict(task("agent: old-name", "cmd: ~/.claude/scripts/__spawn_agent.sh --name cmd-name"), kind="agent")
+    assert nav.live_agent_session(row) == "aa476008-handoff"
+    assert seen == ["=old-name", "=cmd-name", "=aa476008-handoff"]
 
 @pytest.mark.parametrize("kind", ["agent", "command"])
 def test_command_with_live_agent_switches_session(monkeypatch, fake_tmux, kind):
@@ -172,6 +199,22 @@ def test_started_agent_handoff_skips_page_navigation(monkeypatch, tmp_path):
     monkeypatch.setattr(nav, "navigate_many", lambda *args: pytest.fail("opened a page"))
     assert nav.main([UUID]) == 0
     assert calls == [row]
+
+
+@pytest.mark.parametrize("notes", [
+    ("agent-brief: do work",),
+    ("cmd: ~/.claude/scripts/__spawn_agent.sh --name worker",),
+    ("agent: worker",),
+])
+def test_agent_handoff_records_start_through_wrapper(monkeypatch, tmp_path, notes):
+    monkeypatch.setenv("XDG_RUNTIME_DIR", str(tmp_path))
+    row = dict(task(*notes), kind="agent", start="20261119T080000Z")
+    monkeypatch.setattr(nav, "task_export", lambda *args: [row])
+    calls = []
+    monkeypatch.setattr(nav, "record_start", lambda uuid: calls.append(("start", uuid)))
+    monkeypatch.setattr(nav, "act_on_kind", lambda value: calls.append(("act", value["uuid"])))
+    assert nav.main([UUID]) == 0
+    assert calls == [("start", UUID), ("act", UUID)]
 
 
 @pytest.mark.parametrize("url", [
@@ -426,7 +469,7 @@ def test_draft_row_opens_slack_in_desktop(monkeypatch):
 
 
 @pytest.mark.parametrize("edited", ["", "https://github.com/edited"])
-def test_work_reads_edits_and_stops_previous_task(monkeypatch, tmp_path, edited):
+def test_work_reads_edits_and_keeps_previous_task_started(monkeypatch, tmp_path, edited):
     monkeypatch.setenv("XDG_RUNTIME_DIR", str(tmp_path))
     monkeypatch.setenv("TMUX_PANE", "%18")
     current = dict(task("draft: https://github.com/ignored", "agent: slack-reply-anvesh",
@@ -452,7 +495,7 @@ def test_work_reads_edits_and_stops_previous_task(monkeypatch, tmp_path, edited)
     assert nav.main(["start", UUID]) == 0
     assert (([edited] if edited else []) + ["https://app.notion.com/p/runbook", "https://app.notion.com/p/access"], "111") in calls
     assert ("agent", "slack-reply-anvesh") in calls
-    assert any("stop" in call and "rc.hooks=off" in call for call in calls)
+    assert not any("stop" in call and "rc.hooks=off" in call for call in calls)
     # Not a Slack row: no brief floater (Piotr, 11 Nov 12:44).
     assert not any(isinstance(call, list) and "pin" in call for call in calls)
     assert nav.main(["stop", UUID]) == 0
@@ -564,11 +607,16 @@ def test_delayed_old_worker_cannot_stop_newer(monkeypatch, tmp_path):
     calls = []
     def run(args, **kwargs):
         calls.append(args)
+        if "prepare" in args:
+            brief = tmp_path / "brief"
+            brief.write_text("<!-- begin open -->\n\n<!-- end open -->\n")
+            return subprocess.CompletedProcess(args, 0, str(brief))
         return subprocess.CompletedProcess(args, 0, json.dumps([old, new] if "+ACTIVE" in args else [old]))
     monkeypatch.setattr(nav, "run", run)
+    monkeypatch.setattr(nav, "window_id", lambda _: "")
+    monkeypatch.setattr(nav, "navigate_many", lambda *args: None)
     assert nav.main(["start", UUID]) == 0
-    assert any("stop" in args and UUID in args for args in calls)
-    assert not any("stop" in args and new["uuid"] in args for args in calls)
+    assert not any("stop" in args for args in calls)
 
 
 @pytest.mark.parametrize(("url", "expected"), [
