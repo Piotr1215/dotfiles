@@ -159,11 +159,11 @@ class MarginViewTest(unittest.TestCase):
                 conn.executescript("create table tasks (uuid text, data text); create table working_set (id text); create table sync_meta (val text); insert into tasks values ('a','one'),('b','two'); insert into working_set values ('a'); insert into sync_meta values ('old');")
             pane, calls = root / 'pane', root / 'calls'
             pane.write_text('session window pane option-one\n')
-            tmux = bindir / 'tmux'; tmux.write_text('#!/bin/sh\ncat "$PANE"\n'); tmux.chmod(0o755)
+            tmux = bindir / 'tmux'; tmux.write_text('#!/bin/sh\n[ ! -e "$FAIL_FINGERPRINT" ] || exit 1\ncat "$PANE"\n'); tmux.chmod(0o755)
             renderer = root / 'renderer'; renderer.write_text('#!/bin/sh\necho call >> "$CALLS"\nprintf "frame\\n"\n'); renderer.chmod(0o755)
             master, slave = os.openpty()
             fcntl.ioctl(master, termios.TIOCSWINSZ, struct.pack('HHHH', 5, 25, 0, 0))
-            env = dict(os.environ, HOME=str(root), TASKDATA=str(task), XDG_STATE_HOME=str(root / 'xdg'), HANDOFF_PROBE_STATE=str(root / 'probe/state.json'), TMUX='', PATH=str(bindir) + ':' + os.environ['PATH'], PANE=str(pane), CALLS=str(calls), TMUX_READING_MARGIN_STATE_DIR=str(state), TMUX_READING_MARGIN_COLLECT_COMMAND=str(self.collector), TMUX_READING_MARGIN_SEMANTIC_FILTER='1')
+            env = dict(os.environ, HOME=str(root), TASKDATA=str(task), XDG_STATE_HOME=str(root / 'xdg'), HANDOFF_PROBE_STATE=str(root / 'probe/state.json'), TMUX='', PATH=str(bindir) + ':' + os.environ['PATH'], PANE=str(pane), CALLS=str(calls), FAIL_FINGERPRINT=str(root / 'fail'), TMUX_READING_MARGIN_STATE_DIR=str(state), TMUX_READING_MARGIN_COLLECT_COMMAND=str(self.collector), TMUX_READING_MARGIN_SEMANTIC_FILTER='1')
             env.pop('TMUX_READING_MARGIN_SEMANTIC_FILTER')
             proc = subprocess.Popen(['python3', str(VIEW_PATH), str(renderer)], stdin=slave, stdout=slave, stderr=subprocess.DEVNULL, env=env, start_new_session=True)
             os.close(slave)
@@ -172,7 +172,7 @@ class MarginViewTest(unittest.TestCase):
                 os.close(master)
             self.addCleanup(cleanup)
             def wait_calls(n):
-                end = time.monotonic() + 1
+                end = time.monotonic() + 3
                 while time.monotonic() < end:
                     if calls.exists() and len(calls.read_text().splitlines()) >= n: return
                     time.sleep(.01)
@@ -203,6 +203,19 @@ class MarginViewTest(unittest.TestCase):
             wait_calls(5)
             note.unlink()
             wait_calls(6)
+            time.sleep(1.2)
+            self.assertEqual(len(calls.read_text().splitlines()), 6)
+            (root / 'fail').touch()
+            pane.write_text('session window pane option-three\n')
+            (state / 'dirty').touch()
+            end = time.monotonic() + 3
+            while not (state / 'fingerprint-error').exists() and time.monotonic() < end:
+                time.sleep(.02)
+            self.assertTrue((state / 'fingerprint-error').exists())
+            time.sleep(.5)
+            self.assertEqual(len(calls.read_text().splitlines()), 6)
+            (root / 'fail').unlink()
+            wait_calls(7)
 
     @staticmethod
     def viewer_for_collector(collector_pid, viewers):

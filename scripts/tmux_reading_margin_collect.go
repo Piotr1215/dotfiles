@@ -216,7 +216,8 @@ func main() {
 	ticker := time.NewTicker(50 * time.Millisecond)
 	defer ticker.Stop()
 	due := time.Now()
-	nextAge := time.Now().Add(30 * time.Second)
+	nextAge := time.Now().Add(60 * time.Second)
+	var nextFingerprint time.Time
 	var cmd *exec.Cmd
 	var result chan error
 	var output strings.Builder
@@ -307,6 +308,17 @@ func main() {
 					name := strings.TrimRight(string(buf[pos:pos+int(ev.Len)]), "\x00")
 					pos += int(ev.Len)
 					for _, w := range watches[int(ev.Wd)] {
+						// SQLite opens and closes its WAL even for read-only queries.
+						// Those events do not establish that task data changed.
+						if w.kind == "task" && (name == "taskchampion.sqlite3" || name == "taskchampion.sqlite3-wal") {
+							mask := uint32(syscall.IN_MODIFY | syscall.IN_MOVED_TO | syscall.IN_ATTRIB)
+							if name == "taskchampion.sqlite3" {
+								mask |= syscall.IN_CREATE | syscall.IN_DELETE
+							}
+							if ev.Mask&mask == 0 {
+								continue
+							}
+						}
 						if relevant(w, name) {
 							if w.kind == "notes" || w.kind == "nested" {
 								notesCache = ""
@@ -329,7 +341,7 @@ func main() {
 				watchSignature = signature
 				nextWatches = now.Add(200 * time.Millisecond)
 			}
-			if cmd == nil && ((!due.IsZero() && !now.Before(due)) || !now.Before(nextAge)) {
+			if cmd == nil && !now.Before(nextFingerprint) && ((!due.IsZero() && !now.Before(due)) || !now.Before(nextAge)) {
 				ageRefresh := !now.Before(nextAge)
 				if ageRefresh {
 					notesCache = "" // Recover from a missed watch or event.
@@ -337,15 +349,21 @@ func main() {
 				due = time.Time{}
 				pendingValid = false
 				if os.Getenv("TMUX_READING_MARGIN_SEMANTIC_FILTER") != "0" {
+					nextFingerprint = now.Add(time.Second)
 					fingerprint, err := fingerprint(task, notes, taskrc, probe, &notesCache)
-					if err == nil {
-						pendingFingerprint, pendingValid = fingerprint, true
-						if !ageRefresh && lastFingerprint != "" && fingerprint == lastFingerprint {
-							continue
-						}
+					if err != nil {
+						_ = os.WriteFile(filepath.Join(state, "fingerprint-error"), []byte(fmt.Sprintf("%s: %v\n", time.Now().Format(time.RFC3339), err)), 0600)
+						due = now.Add(2 * time.Second)
+						nextFingerprint = due
+						continue
+					}
+					_ = os.Remove(filepath.Join(state, "fingerprint-error"))
+					pendingFingerprint, pendingValid = fingerprint, true
+					if !ageRefresh && lastFingerprint != "" && fingerprint == lastFingerprint {
+						continue
 					}
 				}
-				nextAge = now.Add(30 * time.Second)
+				nextAge = now.Add(60 * time.Second)
 				start()
 			}
 		}
