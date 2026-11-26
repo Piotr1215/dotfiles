@@ -121,7 +121,7 @@ def wait_text(cdp, session, prefix, seconds=15):
     pytest.fail(f"popup status stayed {text!r}, wanted {prefix!r}")
 
 
-def test_sweep_closes_merged_prs_and_extra_copies_and_keeps_them_pending(chrome):
+def test_sweep_closes_merged_prs_and_extra_copies_and_tells_nobody_by_default(chrome):
     cdp, _, worker, tmp_path = chrome
     merged, files, still_open, first, copy, pinned = open_tabs(cdp, worker, [
         [f"{PR}/1", False], [f"{PR}/1/files", False], [f"{PR}/2", False],
@@ -129,8 +129,7 @@ def test_sweep_closes_merged_prs_and_extra_copies_and_keeps_them_pending(chrome)
     result = run(cdp, worker, "sweep()")
     assert sorted(row["id"] for row in result["closed"]) == sorted([merged, files, copy]), result
     assert open_urls(cdp, worker) == sorted(["about:blank", f"{PR}/2", "https://example.com/dup", f"{PR}/1/checks"])
-    assert sent(tmp_path) == []
-    assert run(cdp, worker, "chrome.storage.local.get('pending').then(s=>s.pending.map(r=>r.id).sort())") == sorted([merged, files, copy])
+    assert sent(tmp_path) == [] and result["reported"] is False
     assert run(cdp, worker, "chrome.action.getBadgeText({})") == "3"
 
 
@@ -142,7 +141,7 @@ def test_a_copy_in_a_tab_group_stays_and_the_loose_copy_closes(chrome):
     assert run(cdp, worker, "chrome.tabs.get(%d).then(t=>t.groupId>=0)" % agents) is True
 
 
-def test_popup_lists_tabs_and_closes_only_on_click(chrome):
+def test_popup_lists_tabs_closes_on_click_and_reports_with_the_box_ticked(chrome):
     cdp, port, worker, tmp_path = chrome
     open_tabs(cdp, worker, [["https://example.com/a", False], ["https://example.com/a", False], [f"{PR}/1", False]])
     run(cdp, worker, "chrome.tabs.create({url: chrome.runtime.getURL('popup.html')}).then(()=>1)")
@@ -150,24 +149,22 @@ def test_popup_lists_tabs_and_closes_only_on_click(chrome):
     assert wait_text(cdp, popup, "2 of") == "2 of 5 tabs to close:"
     assert run(cdp, popup, "[...document.querySelectorAll('li .why')].map(e=>e.textContent)") == ["merged", "duplicate"]
     assert sent(tmp_path) == [] and len(open_urls(cdp, worker)) == 5
+    run(cdp, popup, "document.getElementById('report').click(), 1")
+    assert run(cdp, popup, "new Promise(r=>setTimeout(()=>chrome.storage.local.get('report').then(s=>r(s.report)),200))") is True
     run(cdp, popup, "document.getElementById('close').click(), 1")
-    assert wait_text(cdp, popup, "Closed") == "Closed 2 tabs."
+    assert wait_text(cdp, popup, "Closed") == "Closed 2 tabs, reported to Gordon."
     assert open_urls(cdp, worker).count("https://example.com/a") == 1
-    assert sent(tmp_path) == []
-    assert run(cdp, popup, "new Promise(r=>setTimeout(()=>r(document.getElementById('tell').textContent),300))") == "Tell Gordon about 2 closed tabs"
-    run(cdp, popup, "document.getElementById('tell').click(), 1")
-    assert wait_text(cdp, popup, "Told") == "Told Gordon about 2 closed tabs."
     assert sent(tmp_path) == [["--no-human", "-t", "triage",
                                "Chrome tab sweep closed 2 tabs. Merged PRs (1): o/r#1. Duplicates (1): https://example.com/a."]]
-    assert run(cdp, popup, "chrome.storage.local.get('pending').then(s=>s.pending===undefined)") is True
 
 
-def test_popup_with_auto_close_sweeps_on_open(chrome):
+def test_popup_with_auto_close_sweeps_on_open_and_reports_when_ticked(chrome):
     cdp, port, worker, tmp_path = chrome
     open_tabs(cdp, worker, [["https://example.com/b", False], ["https://example.com/b", False]])
-    run(cdp, worker, "chrome.storage.local.set({auto: true}).then(()=>chrome.tabs.create({url: chrome.runtime.getURL('popup.html')})).then(()=>1)")
+    run(cdp, worker, "chrome.storage.local.set({auto: true, report: true}).then(()=>chrome.tabs.create({url: chrome.runtime.getURL('popup.html')})).then(()=>1)")
     popup = attach(cdp, port, f"chrome-extension://{EXTENSION_ID}/popup.html")
-    assert wait_text(cdp, popup, "Closed") == "Closed 1 tab."
-    assert sent(tmp_path) == []
+    assert wait_text(cdp, popup, "Closed") == "Closed 1 tab, reported to Gordon."
+    assert len(sent(tmp_path)) == 1
+    assert run(cdp, popup, "document.getElementById('report').checked") is True
     assert run(cdp, popup, "document.getElementById('auto').checked") is True
     assert open_urls(cdp, worker).count("https://example.com/b") == 1

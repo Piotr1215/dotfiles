@@ -7,7 +7,7 @@ A toolbar button (a white broom on GitHub's merged purple) that closes two kinds
 
 Click the icon (or set a shortcut at `chrome://extensions/shortcuts`). The popup lists what would close; "Close N tabs" closes them. Tick "Auto-close when opened" and every later click closes at once with no list. The icon badge shows how many tabs the last close took, since the popup itself vanishes when its window's active tab closes. Ctrl+Shift+T brings tabs back one at a time.
 
-Gordon hears about closes only when you ask: closed tabs pile up quietly, and the popup offers "Tell Gordon about N closed tabs", which sends one DM covering every close since the last one sent (Piotr, 26 Nov: reporting each close "is mostly noise", "he doesn't need to know this every time").
+Gordon hears about closes only while "Report closes to Gordon" is ticked: then every close, by click or auto-close, sends him one DM, and unticked none do. It is off by default (Piotr, 26 Nov: reporting each close "is mostly noise", "either send all or don't").
 
 ## Rules
 
@@ -19,7 +19,7 @@ Gordon hears about closes only when you ask: closed tabs pile up quietly, and th
 
 ## How it works
 
-`background.js` sends every tab to the native host `scripts/__chrome_tab_sweep.py` (`org.piotr.tab_sweep`). The host asks GitHub which PRs are merged in one batched `gh api graphql` call, so private loft-sh repos work through Piotr's gh login, and returns the tabs to close. The worker closes them and appends them to `pending` in `chrome.storage.local` (last 500 kept). "Tell Gordon" sends `pending` to the host with `"report": true`, and the host DMs `triage` (Gordon) through `~/.claude/scripts/snd` as `tab-sweep`, for example:
+`background.js` sends every tab to the native host `scripts/__chrome_tab_sweep.py` (`org.piotr.tab_sweep`). The host asks GitHub which PRs are merged in one batched `gh api graphql` call, so private loft-sh repos work through Piotr's gh login, and returns the tabs to close. The worker closes them and, with the report box ticked, sends the closed list back with `"report": true`, and the host DMs `triage` (Gordon) through `~/.claude/scripts/snd` as `tab-sweep`, for example:
 
     Chrome tab sweep closed 3 tabs. Merged PRs (1): loft-sh/vcluster#12. Duplicates (2): https://docs.example/page x2.
 

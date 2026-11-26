@@ -1,11 +1,11 @@
 // The popup shows what the sweep would close and closes it on a click, or,
-// with auto-close on, sweeps as soon as it opens. background.js does the work.
-// Closed tabs wait in storage.local "pending" until "Tell Gordon" sends them.
+// with auto-close on, sweeps as soon as it opens. background.js does the work,
+// and reports every close to Gordon while "Report closes to Gordon" is ticked.
 const status = document.getElementById('status');
 const list = document.getElementById('list');
 const button = document.getElementById('close');
 const auto = document.getElementById('auto');
-const tell = document.getElementById('tell');
+const report = document.getElementById('report');
 
 function show(rows, errors) {
   list.replaceChildren(...rows.map((row) => {
@@ -27,31 +27,10 @@ function show(rows, errors) {
 
 function done(result) {
   if (result.error && !result.closed) { status.textContent = result.error; status.className = 'error'; return; }
-  status.textContent = `Closed ${result.closed.length} tab${result.closed.length === 1 ? '' : 's'}.`;
+  const sent = result.reported ? ', reported to Gordon' : result.error ? `, Gordon report failed: ${result.error}` : '';
+  status.textContent = `Closed ${result.closed.length} tab${result.closed.length === 1 ? '' : 's'}${sent}.`;
   show(result.closed, result.errors);
   button.hidden = true;
-}
-
-// One DM to Gordon, only on a click, with every close since the last one sent.
-async function offerTell() {
-  const {pending = []} = await chrome.storage.local.get('pending');
-  tell.hidden = !pending.length;
-  tell.disabled = false;
-  tell.textContent = `Tell Gordon about ${pending.length} closed tab${pending.length === 1 ? '' : 's'}`;
-  tell.onclick = async () => {
-    tell.disabled = true;
-    const reply = await chrome.runtime.sendNativeMessage('org.piotr.tab_sweep', {op: 'report', closed: pending, report: true})
-      .catch((e) => ({error: e.message}));
-    if (reply?.reported) {
-      await chrome.storage.local.remove('pending');
-      tell.hidden = true;
-      status.textContent = `Told Gordon about ${pending.length} closed tab${pending.length === 1 ? '' : 's'}.`;
-    } else {
-      status.textContent = `Gordon report failed: ${reply?.error}`;
-      status.className = 'error';
-      tell.disabled = false;
-    }
-  };
 }
 
 async function review() {
@@ -65,15 +44,16 @@ async function review() {
   button.onclick = async () => {
     button.disabled = true;
     done(await chrome.runtime.sendMessage({op: 'close', rows}));
-    await offerTell();
   };
 }
 
 (async () => {
   chrome.action.setBadgeText({text: ''});
-  auto.checked = (await chrome.storage.local.get('auto')).auto === true;
+  const settings = await chrome.storage.local.get(['auto', 'report']);
+  auto.checked = settings.auto === true;
+  report.checked = settings.report === true;
   auto.onchange = () => chrome.storage.local.set({auto: auto.checked});
+  report.onchange = () => chrome.storage.local.set({report: report.checked});
   if (auto.checked) done(await chrome.runtime.sendMessage({op: 'sweep'}));
   else await review();
-  await offerTell();
 })();

@@ -7,10 +7,9 @@ repos work through Piotr's gh login) and exact duplicate URLs, keeping one of
 each. Pinned tabs are never closed.
 
 op "report": DM Gordon (bus name "triage") what the extension closed, through
-~/.claude/scripts/snd, only when the message carries "report": true. Piotr
-asks for it with the popup's "Tell Gordon" button; closes are never reported
-on their own (Piotr, 26 Nov: "this is mostly noise", "he doesn't need to know
-this every time").
+~/.claude/scripts/snd, only when the message carries "report": true, which the
+extension sets while the popup's "Report closes to Gordon" box is ticked (off
+by default; Piotr, 26 Nov: "this is mostly noise", "either send all or don't").
 """
 import json
 import os
