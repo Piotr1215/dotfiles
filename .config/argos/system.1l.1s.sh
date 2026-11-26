@@ -58,6 +58,18 @@ fi
 # Memory Usage
 mem_percent=$(free | awk '/^Mem:/ {printf "%.0f", ($3/$2)*100}')
 
+# Power profile, asked of system76-power's daemon over D-Bus (about 2 ms; the
+# CLI costs 8 ms). GNOME's power menu does not follow switches made by
+# cpu-profile-auto, so this is where the profile change shows (2026-11-26).
+profile_reply=$(timeout 1 busctl --system call com.system76.PowerDaemon /com/system76/PowerDaemon \
+    com.system76.PowerDaemon GetProfile 2>/dev/null || true)
+case "$profile_reply" in
+    *'"Performance"') prof_text="P"; prof_color="#ff9900" ;;
+    *'"Balanced"') prof_text="B"; prof_color="#44ff44" ;;
+    *'"Battery"') prof_text="E"; prof_color="#8be9fd" ;;
+    *) prof_text="?"; prof_color="#666666" ;;
+esac
+
 # Determine colors
 if [ $cpu_usage -gt 90 ]; then
     cpu_color="#ff4444"
@@ -112,7 +124,7 @@ mem_formatted=$(printf "%3d%%" $mem_percent)
 source "$HOME/dev/dotfiles/scripts/__lib_screen.sh"
 PANEL_SIZE=$(panel_label_size 12)
 spacing="   "
-l_cpu="CPU:"; l_gpu="GPU:"; l_vram="VRAM:"; l_ram="RAM:"
+l_cpu="CPU:"; l_gpu="GPU:"; l_vram="VRAM:"; l_ram="RAM:"; l_prof="PWR:"
 
 # Output as ONE LINE with consistent spacing
-echo "<tt><b>${l_cpu}</b></tt><tt><span color='${cpu_color}'>${cpu_formatted}</span></tt>${spacing}<tt><b>${l_gpu}</b></tt><tt><span color='${gpu_color}'>${gpu_text}</span></tt>${spacing}<tt><b>${l_vram}</b></tt><tt><span color='${vram_color}'>${vram_text}</span></tt>${spacing}<tt><b>${l_ram}</b></tt><tt><span color='${mem_color}'>${mem_formatted}</span></tt> | font='monospace' size=${PANEL_SIZE} dropdown=false"
+echo "<tt><b>${l_cpu}</b></tt><tt><span color='${cpu_color}'>${cpu_formatted}</span></tt>${spacing}<tt><b>${l_gpu}</b></tt><tt><span color='${gpu_color}'>${gpu_text}</span></tt>${spacing}<tt><b>${l_vram}</b></tt><tt><span color='${vram_color}'>${vram_text}</span></tt>${spacing}<tt><b>${l_ram}</b></tt><tt><span color='${mem_color}'>${mem_formatted}</span></tt>${spacing}<tt><b>${l_prof}</b></tt><tt><span color='${prof_color}'>${prof_text}</span></tt> | font='monospace' size=${PANEL_SIZE} dropdown=false"

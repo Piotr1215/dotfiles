@@ -177,9 +177,12 @@ window_mean() {
   fi
 }
 
-# Pop a desktop notification so Piotr sees each profile move as it happens
-# (26 Nov 2026: "wire up notification so I can see"). notify-send returns once
-# the message is queued; a missing or broken notifier never stops the loop.
+# Pop a desktop notification for a failed switch only. The argos system line
+# shows the live profile (PWR:), so a pop-up per switch only repeated it
+# (Piotr, 26 Nov 2026: "in this way the notification could be removed"); a
+# switch that did not happen is the one thing that line cannot show.
+# notify-send returns once the message is queued; a missing or broken notifier
+# never stops the loop.
 notify() {
   timeout 5 notify-send -a cpu-profile-auto -t 8000 "$1" "$2" >/dev/null 2>&1 || true
 }
@@ -209,14 +212,6 @@ apply_thermal_target() {
   fi
 }
 
-# The thermal target a profile holds, for the notification text.
-target_note() {
-  case $1 in
-    Balanced) printf '; thermal target %sC' "$((tjmax - tcc_balanced))" ;;
-    Performance) printf '; thermal target %sC' "$((tjmax - tcc_performance))" ;;
-  esac
-}
-
 # Record one decision time before invoking the setter, even if it fails.
 # system76-power can apply the profile and still exit non-zero (serval, 26 Nov
 # 2026: no link power policy file on SCSI host0), so a read-back that matches
@@ -233,7 +228,6 @@ switch_profile() {
     save_state
     printf 'switched to %s; busy %ss=%s %ss=%s\n' "$target" "$up_seconds" "$up_mean" "$down_seconds" "$down_mean"
     apply_thermal_target "$target"
-    notify "CPU profile: $target" "busy ${up_seconds}s=$up_mean ${down_seconds}s=$down_mean$(target_note "$target")"
   else
     if [[ -z ${CPU_PROFILE_AUTO_TEST_TICKS:-} ]]; then last_switch=${EPOCHREALTIME/.}; fi
     save_state
@@ -285,7 +279,6 @@ tick() {
     manual_until=$((observed_us + manual_seconds * 1000000))
     printf 'manual profile change %s -> %s; hold %ss; busy %ss=%s %ss=%s\n' \
       "$last_profile" "$profile" "$manual_seconds" "$up_seconds" "$up_mean" "$down_seconds" "$down_mean"
-    notify "CPU profile: $profile (manual)" "from $last_profile; auto paused ${manual_seconds}s"
     last_profile=$profile
     save_state
   elif [[ $last_profile == none ]]; then
