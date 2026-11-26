@@ -259,6 +259,7 @@ save_times() {
 # Capture one repository in the sandbox and print one tab-separated result line.
 run_one() {
   local repo=$1 out err rc=0 reason line common main_repo mirror_git lock_repo
+  local -a capture_cmd=(timeout -k 5 "$repo_timeout" bwrap --die-with-parent --unshare-net --ro-bind / / --dev /dev --bind "$target" "$target" --bind "$state" "$state" --setenv TMPDIR "$state" --setenv WIP_CAPTURE_SANDBOXED 1 -- "$self" --capture-one "$repo")
   out=$(mktemp "$state/out.XXXXXXXX")
   err=$(mktemp "$state/err.XXXXXXXX")
   # Wait outside the capture timeout: linked worktrees share one mirror and a
@@ -270,7 +271,7 @@ run_one() {
   mirror_git="$target/${main_repo#"$HOME"/}/.git"
   exec 8>"$state/$(printf '%s' "$mirror_git" | sha256sum | cut -d ' ' -f 1).mirror.lock"
   if flock -w 1800 8; then
-    timeout -k 5 "$repo_timeout" bwrap --die-with-parent --unshare-net --ro-bind / / --dev /dev --bind "$target" "$target" --bind "$state" "$state" --setenv TMPDIR "$state" --setenv WIP_CAPTURE_SANDBOXED 1 -- "$self" --capture-one "$repo" > "$out" 2> "$err" || rc=$?
+    "${capture_cmd[@]}" > "$out" 2> "$err" || rc=$?
   else
     rc=1
     printf 'mirror lock wait exceeded 1800s: %s\n' "$repo" >> "$err"
@@ -280,6 +281,16 @@ run_one() {
   if (( rc != 0 )) && ! timeout -k 5 10 touch -- "$target/.wip-probe" 2>/dev/null; then
     rm -f -- "$out" "$err"
     return 255
+  fi
+  # Gordon: six of eight failures were races; the next run is 8h away. One
+  # capture spent 18.4s of 21.3s syncing; the retry can skip the stamped sync.
+  if (( rc != 0 && rc != 124 && rc != 137 )) && grep -q 'repository changed during capture' "$err"; then
+    rc=0
+    "${capture_cmd[@]}" > "$out" 2> "$err" || rc=$?
+    if (( rc != 0 )) && ! timeout -k 5 10 touch -- "$target/.wip-probe" 2>/dev/null; then
+      rm -f -- "$out" "$err"
+      return 255
+    fi
   fi
   if (( rc == 0 )); then
     if grep -q '^captured ' "$out"; then line="captured"$'\t'"$repo"

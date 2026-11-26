@@ -24,6 +24,181 @@ setup() {
   git -C "$REPO" commit -qm initial
 }
 capture() { "$SCRIPT" "$ROOT"; }
+
+# Count sandbox attempts and let the host change a fixture while git add waits.
+capture_attempt_fixture() {
+  export WIP_TEST_REAL_BWRAP WIP_TEST_REAL_GIT WIP_TEST_REPO WIP_TEST_LOCK
+  WIP_TEST_REAL_BWRAP=$(command -v bwrap)
+  WIP_TEST_REAL_GIT=$(command -v git)
+  WIP_TEST_REPO=$REPO
+  WIP_TEST_LOCK="$WIP_CAPTURE_STATE/$(printf '%s' "$MIRROR" | sha256sum | cut -d ' ' -f 1).mirror.lock"
+  mkdir -p "$BATS_TEST_TMPDIR/bin" "$WIP_CAPTURE_STATE"
+  cat > "$BATS_TEST_TMPDIR/bin/bwrap" <<'BWRAP'
+#!/usr/bin/env bash
+attempt=1
+if [[ -f $WIP_CAPTURE_STATE/attempts ]]; then
+  attempt=$(( $(wc -l < "$WIP_CAPTURE_STATE/attempts") + 1 ))
+fi
+printf '%s\n' "$attempt" >> "$WIP_CAPTURE_STATE/attempts"
+if flock -n "$WIP_TEST_LOCK" -c :; then
+  printf 'mirror lock was not held\n' >&2
+  exit 1
+fi
+case ${WIP_TEST_RESULT:-} in
+  killed)
+    printf 'repository changed during capture\n' >&2
+    exit 137 ;;
+  retry-failure | retry-killed)
+    if (( attempt == 2 )); then
+      printf 'second attempt failed\n' >&2
+      [[ $WIP_TEST_RESULT == retry-failure ]] && exit 1
+      exit 137
+    fi ;;
+  target-gone-first | target-gone-retry)
+    if [[ $WIP_TEST_RESULT == target-gone-first || $attempt == 2 ]]; then
+      rm -f -- "$WIP_CAPTURE_TARGET/.wip-probe"
+      chmod 500 "$WIP_CAPTURE_TARGET"
+      printf 'repository changed during capture\n' >&2
+    else
+      printf 'repository changed during capture\n' >&2
+    fi
+    exit 1 ;;
+esac
+export WIP_TEST_ATTEMPT=$attempt
+if (( attempt <= ${WIP_TEST_CHANGE_ATTEMPTS:-0} )); then
+  (
+    for (( i=0; i<1000; i++ )); do
+      if [[ -e $WIP_CAPTURE_STATE/change-request.$attempt ]]; then
+        printf 'changed during attempt %s\n' "$attempt" >> "$WIP_TEST_REPO/tracked"
+        : > "$WIP_CAPTURE_STATE/change-done.$attempt"
+        exit 0
+      fi
+      sleep 0.01
+    done
+    exit 1
+  ) &
+fi
+if [[ ${WIP_TEST_FIRST_NOISE:-0} == 1 && $attempt == 1 ]]; then
+  printf 'captured first attempt only\n'
+  printf 'skip large untracked file: first attempt only\n' >&2
+fi
+exec "$WIP_TEST_REAL_BWRAP" "$@"
+BWRAP
+  cat > "$BATS_TEST_TMPDIR/bin/git" <<'GIT'
+#!/usr/bin/env bash
+if [[ ${WIP_CAPTURE_SANDBOXED:-0} == 1 && ${1:-} == -c && ${2:-} == core.hooksPath=/dev/null && ${5:-} == add ]] &&
+   (( ${WIP_TEST_ATTEMPT:-0} <= ${WIP_TEST_CHANGE_ATTEMPTS:-0} )); then
+  : > "$WIP_CAPTURE_STATE/change-request.$WIP_TEST_ATTEMPT"
+  for (( i=0; i<1000; i++ )); do
+    [[ -e $WIP_CAPTURE_STATE/change-done.$WIP_TEST_ATTEMPT ]] && break
+    sleep 0.01
+  done
+  [[ -e $WIP_CAPTURE_STATE/change-done.$WIP_TEST_ATTEMPT ]] || exit 1
+fi
+exec "$WIP_TEST_REAL_GIT" "$@"
+GIT
+  chmod +x "$BATS_TEST_TMPDIR/bin/bwrap" "$BATS_TEST_TMPDIR/bin/git"
+  export PATH="$BATS_TEST_TMPDIR/bin:$PATH"
+}
+
+@test "retries a changed repository and records the successful capture" {
+  capture_attempt_fixture
+  export WIP_TEST_CHANGE_ATTEMPTS=1 WIP_TEST_FIRST_NOISE=1 WIP_CAPTURE_NOW=123456
+  printf '%s\t%s\n' "$REPO" 100 > "$WIP_CAPTURE_STATE/last-good.tsv"
+  run capture
+  [ "$status" -eq 0 ]
+  [[ $output == *"captured $REPO"* ]]
+  [[ $output == *'captured=1'* ]]
+  [[ $output != *'first attempt only'* ]]
+  [ "$(wc -l < "$WIP_CAPTURE_STATE/attempts")" -eq 2 ]
+  [ "$(mirror_show main tracked)" = "$(printf 'base\nchanged during attempt 1')" ]
+  [ "$(cat "$WIP_CAPTURE_STATE/last-good.tsv")" = "$(printf '%s\t123456' "$REPO")" ]
+}
+
+@test "a repository changed on both attempts warns after exactly two captures" {
+  capture_attempt_fixture
+  export WIP_TEST_CHANGE_ATTEMPTS=2
+  run capture
+  [ "$status" -eq 0 ]
+  [[ $output == *"warning $REPO: changed during capture, retried next run"* ]]
+  [[ $output == *'known_broken=1 failures=0'* ]]
+  [ "$(wc -l < "$WIP_CAPTURE_STATE/attempts")" -eq 2 ]
+  [ "$(cat "$REPO/tracked")" = "$(printf 'base\nchanged during attempt 1\nchanged during attempt 2')" ]
+  [ "$(cat "$WIP_CAPTURE_STATE/known-broken.tsv")" = "$(printf '%s\tchanged during capture, retried next run' "$REPO")" ]
+}
+
+@test "a timed out capture is not retried even if its stderr mentions a change" {
+  capture_attempt_fixture
+  export WIP_CAPTURE_REPO_TIMEOUT=1
+  git -C "$REPO" config filter.slow.clean 'printf "repository changed during capture\n" >&2; sleep 5; cat'
+  printf 'tracked filter=slow\n' > "$REPO/.gitattributes"
+  printf 'changed\n' > "$REPO/tracked"
+  run capture
+  [ "$status" -eq 0 ]
+  [[ $output == *"warning $REPO: capture timed out"* ]]
+  [ "$(wc -l < "$WIP_CAPTURE_STATE/attempts")" -eq 1 ]
+}
+
+@test "a killed capture is not retried even if its stderr mentions a change" {
+  capture_attempt_fixture
+  export WIP_TEST_RESULT=killed
+  run capture
+  [ "$status" -eq 0 ]
+  [[ $output == *"warning $REPO: capture timed out"* ]]
+  [ "$(wc -l < "$WIP_CAPTURE_STATE/attempts")" -eq 1 ]
+}
+
+@test "another capture failure is not retried" {
+  capture_attempt_fixture
+  mkdir -p "$WIP_CAPTURE_TARGET/dev"
+  printf 'not a directory\n' > "$WIP_CAPTURE_TARGET/dev/project"
+  run capture
+  [ "$status" -ne 0 ]
+  [[ $output == *"failed $REPO"* ]]
+  [[ $output == *'failures=1'* ]]
+  [ "$(wc -l < "$WIP_CAPTURE_STATE/attempts")" -eq 1 ]
+}
+
+@test "a different failure on retry is classified from the second attempt" {
+  capture_attempt_fixture
+  export WIP_TEST_CHANGE_ATTEMPTS=1 WIP_TEST_RESULT=retry-failure
+  run capture
+  [ "$status" -ne 0 ]
+  [[ $output == *"failed $REPO"* ]]
+  [[ $output == *'second attempt failed'* ]]
+  [[ $output != *'warning '* ]]
+  [ "$(wc -l < "$WIP_CAPTURE_STATE/attempts")" -eq 2 ]
+}
+
+@test "a killed retry is classified as a timeout" {
+  capture_attempt_fixture
+  export WIP_TEST_CHANGE_ATTEMPTS=1 WIP_TEST_RESULT=retry-killed
+  run capture
+  [ "$status" -eq 0 ]
+  [[ $output == *"warning $REPO: capture timed out"* ]]
+  [ "$(wc -l < "$WIP_CAPTURE_STATE/attempts")" -eq 2 ]
+}
+
+@test "a target that stops taking writes on the first attempt is not retried" {
+  capture_attempt_fixture
+  export WIP_TEST_RESULT=target-gone-first
+  run capture
+  chmod 700 "$WIP_CAPTURE_TARGET"
+  [ "$status" -eq 75 ]
+  [[ $output == *'stopped taking writes mid-run'* ]]
+  [ "$(wc -l < "$WIP_CAPTURE_STATE/attempts")" -eq 1 ]
+}
+
+@test "a target that stops taking writes on retry skips the run" {
+  capture_attempt_fixture
+  export WIP_TEST_RESULT=target-gone-retry
+  run capture
+  chmod 700 "$WIP_CAPTURE_TARGET"
+  [ "$status" -eq 75 ]
+  [[ $output == *'stopped taking writes mid-run'* ]]
+  [ "$(wc -l < "$WIP_CAPTURE_STATE/attempts")" -eq 2 ]
+}
+
 @test "mirror lock wait does not consume the capture timeout" {
   export WIP_CAPTURE_REPO_TIMEOUT=1
   mkdir -p "$WIP_CAPTURE_STATE"
