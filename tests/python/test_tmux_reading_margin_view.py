@@ -161,13 +161,13 @@ class MarginViewTest(unittest.TestCase):
                 conn.executescript('''create table tasks (uuid text, data text); create table working_set (id integer, uuid text); create table sync_meta (val text); insert into tasks values ('a','{"linear_issue_id":"DEVOPS-123","description":"one"}'),('b','{"linear_issue_id":"DEVOPS-999","description":"two"}'); insert into working_set values (1,'a'); insert into sync_meta values ('old');''')
             pane, calls = root / 'pane', root / 'calls'
             queries = root / 'queries'
-            python = bindir / 'python3'; python.write_text('#!/bin/sh\necho query >> "$QUERIES"\n[ ! -e "$FAIL_QUERY" ] || exit 1\nexec ' + shlex.quote(sys.executable) + ' "$@"\n'); python.chmod(0o755)
+            python = bindir / 'python3'; python.write_text('#!/bin/sh\necho query >> "$QUERIES"\nexec ' + shlex.quote(sys.executable) + ' "$@"\n'); python.chmod(0o755)
             pane.write_text('DEVOPS-123 window pane option-one\n')
             tmux = bindir / 'tmux'; tmux.write_text('#!/bin/sh\n[ ! -e "$FAIL_FINGERPRINT" ] || exit 1\ncat "$PANE"\n'); tmux.chmod(0o755)
             renderer = root / 'renderer'; renderer.write_text('#!/bin/sh\necho call >> "$CALLS"\nprintf "frame\\n"\n'); renderer.chmod(0o755)
             master, slave = os.openpty()
             fcntl.ioctl(master, termios.TIOCSWINSZ, struct.pack('HHHH', 5, 25, 0, 0))
-            env = dict(os.environ, HOME=str(root), TASKDATA=str(task), XDG_STATE_HOME=str(root / 'xdg'), HANDOFF_PROBE_STATE=str(root / 'probe/state.json'), TMUX='', PATH=str(bindir) + ':' + os.environ['PATH'], PANE=str(pane), CALLS=str(calls), QUERIES=str(queries), FAIL_QUERY=str(root / 'fail-query'), FAIL_FINGERPRINT=str(root / 'fail'), TMUX_READING_MARGIN_STATE_DIR=str(state), TMUX_READING_MARGIN_COLLECT_COMMAND=str(self.collector), TMUX_READING_MARGIN_SEMANTIC_FILTER='1')
+            env = dict(os.environ, HOME=str(root), TASKDATA=str(task), XDG_STATE_HOME=str(root / 'xdg'), HANDOFF_PROBE_STATE=str(root / 'probe/state.json'), TMUX='', PATH=str(bindir) + ':' + os.environ['PATH'], PANE=str(pane), CALLS=str(calls), QUERIES=str(queries), FAIL_FINGERPRINT=str(root / 'fail'), TMUX_READING_MARGIN_STATE_DIR=str(state), TMUX_READING_MARGIN_COLLECT_COMMAND=str(self.collector), TMUX_READING_MARGIN_SEMANTIC_FILTER='1')
             env.pop('TMUX_READING_MARGIN_SEMANTIC_FILTER')
             proc = subprocess.Popen(['python3', str(VIEW_PATH), str(renderer)], stdin=slave, stdout=slave, stderr=subprocess.DEVNULL, env=env, start_new_session=True)
             os.close(slave)
@@ -201,7 +201,7 @@ class MarginViewTest(unittest.TestCase):
             self.assertEqual(len(calls.read_text().splitlines()), 1)
             with sqlite3.connect(db) as conn: conn.execute("update tasks set data='{\"linear_issue_id\":\"DEVOPS-123\",\"description\":\"changed\"}' where uuid='a'")
             wait_calls(2)
-            self.assertGreater(len(queries.read_text().splitlines()), query_count)
+            self.assertEqual(len(queries.read_text().splitlines()), query_count, 'SQLite reader must be reused after a database change')
             pane.write_text('DEVOPS-123 window pane option-two\n')
             (state / 'dirty').touch()
             wait_calls(3)
@@ -246,11 +246,10 @@ class MarginViewTest(unittest.TestCase):
             wait_calls(12)
             with sqlite3.connect(db) as conn: conn.execute("update tasks set data='{\"linear_issue_id\":\"DEVOPS-999\",\"description\":\"pr title\"}' where uuid='b'")
             wait_calls(13)
-            (root / 'fail-query').touch()
-            db.touch()
+            with sqlite3.connect(db) as conn: conn.execute("update tasks set data='invalid json' where uuid='a'")
             wait_calls(14)
             self.assertTrue((state / 'fingerprint-error').exists())
-            (root / 'fail-query').unlink()
+            with sqlite3.connect(db) as conn: conn.execute("update tasks set data='{}' where uuid='a'")
             end = time.monotonic() + 4
             while (state / 'fingerprint-error').exists() and time.monotonic() < end:
                 time.sleep(.02)

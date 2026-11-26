@@ -2,6 +2,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"crypto/sha256"
 	"encoding/json"
@@ -21,7 +22,90 @@ import (
 )
 
 // taskCache reuses a successful SQLite fingerprint only while its inputs stay unchanged.
-type taskCache struct{ signature, digest string }
+type taskCache struct {
+	signature, digest string
+	cmd               *exec.Cmd
+	input             io.WriteCloser
+	output            *bufio.Reader
+}
+
+func (c *taskCache) closeReader() {
+	if c.input != nil {
+		_ = c.input.Close()
+	}
+	if c.cmd != nil {
+		_ = c.cmd.Process.Kill()
+		_ = c.cmd.Wait()
+	}
+	c.cmd, c.input, c.output = nil, nil, nil
+}
+
+func (c *taskCache) query(ctx context.Context, program, db string, keys []string, review string) (string, error) {
+	if c.cmd == nil {
+		cmd := exec.Command("python3", "-u", "-c", program)
+		in, err := cmd.StdinPipe()
+		if err != nil {
+			return "", err
+		}
+		out, err := cmd.StdoutPipe()
+		if err != nil {
+			_ = in.Close()
+			return "", err
+		}
+		if err = cmd.Start(); err != nil {
+			_ = in.Close()
+			return "", err
+		}
+		c.cmd, c.input, c.output = cmd, in, bufio.NewReader(out)
+	}
+	request, err := json.Marshal([]any{db, keys, review})
+	if err != nil {
+		return "", err
+	}
+	done := make(chan struct {
+		line string
+		err  error
+	}, 1)
+	input, output := c.input, c.output
+	go func() {
+		_, err := input.Write(append(request, '\n'))
+		if err != nil {
+			done <- struct {
+				line string
+				err  error
+			}{"", err}
+			return
+		}
+		line, err := output.ReadString('\n')
+		done <- struct {
+			line string
+			err  error
+		}{line, err}
+	}()
+	select {
+	case result := <-done:
+		if result.err != nil {
+			c.closeReader()
+			return "", result.err
+		}
+		var response struct {
+			Digest string `json:"digest"`
+			Error  string `json:"error"`
+		}
+		if err := json.Unmarshal([]byte(result.line), &response); err != nil {
+			c.closeReader()
+			return "", err
+		}
+		if response.Error != "" {
+			return "", fmt.Errorf("sqlite fingerprint: %s", response.Error)
+		}
+		return response.Digest + "\n", nil
+	case <-ctx.Done():
+		c.closeReader()
+		<-done
+		return "", ctx.Err()
+	}
+}
 
 // taskSignature detects replacement and writes to the database or its WAL.
 func taskSignature(db string, keys []byte, review string) (string, error) {
@@ -133,21 +217,23 @@ func fingerprint(task, notes, taskrc, probe string, notesCache *string, cache *t
 	keyJSON, _ := json.Marshal(keys)
 	db := filepath.Join(task, "taskchampion.sqlite3")
 	if _, err := os.Stat(db); err == nil {
-		const py = `import sqlite3,sys,hashlib,json
-c=sqlite3.connect('file:'+__import__('urllib.parse',fromlist=['quote']).quote(sys.argv[1])+'?mode=ro',uri=True,timeout=2)
-c.execute('BEGIN')
-ids=set(json.loads(sys.argv[2])); review=sys.argv[3]=='1'
-h=hashlib.sha256()
-selected=set()
-for uuid,data in c.execute('select uuid,data from tasks order by uuid'):
- d=json.loads(data)
- if not isinstance(d,dict): raise ValueError('unsupported task data')
- if any(x.lower() in str(d.get('linear_issue_id','')).lower() for x in ids) or (review and d.get('status')=='pending' and d.get('linear_issue_id') is not None):
-  selected.add(uuid)
-  h.update(json.dumps([uuid,data],ensure_ascii=True,separators=(',',':')).encode()); h.update(b'\n')
-for row in c.execute('select id,uuid from working_set order by id'):
- if row[1] in selected: h.update(json.dumps(row,separators=(',',':')).encode()); h.update(b'\n')
-print(h.hexdigest())
+		const py = `import sqlite3,sys,hashlib,json,urllib.parse,contextlib
+for line in sys.stdin:
+ try:
+  db,ids,review=json.loads(line); ids=set(ids); review=review=='1'
+  with contextlib.closing(sqlite3.connect('file:'+urllib.parse.quote(db)+'?mode=ro',uri=True,timeout=2)) as c:
+   c.execute('BEGIN'); h=hashlib.sha256(); selected=set()
+   for uuid,data in c.execute('select uuid,data from tasks order by uuid'):
+    d=json.loads(data)
+    if not isinstance(d,dict): raise ValueError('unsupported task data')
+    if any(x.lower() in str(d.get('linear_issue_id','')).lower() for x in ids) or (review and d.get('status')=='pending' and d.get('linear_issue_id') is not None):
+     selected.add(uuid)
+     h.update(json.dumps([uuid,data],ensure_ascii=True,separators=(',',':')).encode()); h.update(b'\n')
+   for row in c.execute('select id,uuid from working_set order by id'):
+    if row[1] in selected: h.update(json.dumps(row,separators=(',',':')).encode()); h.update(b'\n')
+  print(json.dumps({'digest':h.hexdigest()}),flush=True)
+ except Exception as e:
+  print(json.dumps({'error':str(e)}),flush=True)
 `
 		review := os.Getenv("COCKPIT_SHOW_REVIEW_ROWS")
 		signature, err := taskSignature(db, keyJSON, review)
@@ -156,7 +242,7 @@ print(h.hexdigest())
 		}
 		if signature != cache.signature || cache.digest == "" {
 			// Never retain a result if a writer changed an input during the query.
-			out, err := exec.CommandContext(ctx, "python3", "-c", py, db, string(keyJSON), review).Output()
+			out, err := cache.query(ctx, py, db, keys, review)
 			if err != nil {
 				cache.signature, cache.digest = "", ""
 				return "", err
@@ -165,7 +251,7 @@ print(h.hexdigest())
 			if err != nil {
 				return "", err
 			}
-			cache.signature, cache.digest = "", string(out)
+			cache.signature, cache.digest = "", out
 			if signature == after {
 				cache.signature = signature
 			}
@@ -365,6 +451,7 @@ func main() {
 	var lastFingerprint, pendingFingerprint, notesCache string
 	var pendingValid bool
 	var tasks taskCache
+	defer tasks.closeReader()
 	orderFile := filepath.Join(state, "pane-order")
 	cycleDir := os.Getenv("CYCLE_AGENT_CACHE_DIR")
 	if cycleDir == "" {
