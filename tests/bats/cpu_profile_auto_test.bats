@@ -46,6 +46,26 @@ else
 fi
 EOF
   chmod +x "$WORK/bin/system76-power"
+  # The setter is the power-profiles D-Bus interface GNOME reads; it applies the
+  # same system76 profile and records it in the same file as the CLI stub.
+  export TEST_BUSCTL="$WORK/busctl.calls"
+  cat > "$WORK/bin/busctl" <<'EOF'
+#!/usr/bin/env bash
+set -e
+printf '%s\n' "$*" >> "$TEST_BUSCTL"
+IFS= read -r now < "$TEST_CLOCK"
+[[ $* == '--system set-property org.freedesktop.UPower.PowerProfiles /org/freedesktop/UPower/PowerProfiles org.freedesktop.UPower.PowerProfiles ActiveProfile s '* ]] || exit 1
+value=${!#}
+printf '%s %s\n' "$now" "$value" >> "$TEST_SETS"
+[[ ${TEST_SET_FAIL:-0} == 0 ]] || exit 1
+case $value in
+  performance) printf 'Performance\n' > "$TEST_PROFILE" ;;
+  balanced) printf 'Balanced\n' > "$TEST_PROFILE" ;;
+  *) exit 1 ;;
+esac
+[[ ${TEST_SET_PARTIAL:-0} == 0 ]] || exit 1
+EOF
+  chmod +x "$WORK/bin/busctl"
   export TEST_NOTES="$WORK/notes"
   : > "$TEST_NOTES"
   cat > "$WORK/bin/notify-send" <<'EOF'
@@ -423,6 +443,14 @@ EOF
   [ "$status" -eq 0 ]
   [ "$(cat "$TEST_SETS")" = $'1800000120 performance\n1800000420 performance' ]
   [ -s "$TEST_NOTES" ]
+}
+
+@test "switches go through the power-profiles interface GNOME listens to" {
+  export CPU_PROFILE_AUTO_TEST_TICKS=13
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$TEST_SETS")" = '1800000120 performance' ]
+  [ "$(cat "$TEST_BUSCTL")" = '--system set-property org.freedesktop.UPower.PowerProfiles /org/freedesktop/UPower/PowerProfiles org.freedesktop.UPower.PowerProfiles ActiveProfile s performance' ]
 }
 
 @test "Balanced holds an 85 C thermal target from the first profile read" {

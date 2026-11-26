@@ -212,16 +212,26 @@ apply_thermal_target() {
   fi
 }
 
+# Set the profile through the power-profiles D-Bus interface that
+# system76-power serves for GNOME. The daemon announces ActiveProfile there
+# only for a change made through it: `system76-power profile X` switched serval
+# without a signal, so GNOME's Power Mode kept showing the old profile (26 Nov
+# 2026, checked with busctl monitor). Same daemon, same profile applied.
+set_profile() {
+  busctl --system set-property org.freedesktop.UPower.PowerProfiles /org/freedesktop/UPower/PowerProfiles \
+    org.freedesktop.UPower.PowerProfiles ActiveProfile s "${1,,}" >/dev/null
+}
+
 # Record one decision time before invoking the setter, even if it fails.
-# system76-power can apply the profile and still exit non-zero (serval, 26 Nov
-# 2026: no link power policy file on SCSI host0), so a read-back that matches
-# the target counts as a switch; otherwise the next poll would take it for a
-# manual change and hold the wrong profile for 30 minutes.
+# The setter can apply the profile and still exit non-zero (serval, 26 Nov
+# 2026: the CLI failed on a missing SCSI host0 link power file), so a read-back
+# that matches the target counts as a switch; otherwise the next poll would
+# take it for a manual change and hold the wrong profile for 30 minutes.
 switch_profile() {
   local now_us=$1 target=$2 profile
   last_switch=$now_us
   save_state
-  if system76-power profile "${target,,}" >/dev/null ||
+  if set_profile "$target" ||
       { read_profile && [[ $profile == "$target" ]]; }; then
     if [[ -z ${CPU_PROFILE_AUTO_TEST_TICKS:-} ]]; then last_switch=${EPOCHREALTIME/.}; fi
     last_profile=$target
