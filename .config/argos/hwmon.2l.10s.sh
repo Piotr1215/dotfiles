@@ -31,6 +31,27 @@ elif command -v nvidia-smi &>/dev/null; then
     gpu_power=$(nvidia-smi --query-gpu=power.draw --format=csv,noheader,nounits 2>/dev/null | head -1 || echo "")
 fi
 
+# The CPU package colour follows the thermal target cpu-profile-auto holds
+# (TjMax 105 C minus the TCC offset: 85 C on Balanced, 92 C on Performance
+# since 26 Nov 2026). T:92C showed red at the designed Performance target and
+# Piotr worried, so red now means more than 2 C over the target, the cap not
+# holding; orange is the last 10 C up to it. An unreadable offset uses the
+# firmware's 92 C.
+tcc_offset=13
+for tcc_file in ${HWMON_TCC_FILE:-/sys/bus/pci/drivers/proc_thermal_pci/*/tcc_offset_degree_celsius}; do
+    read -r tcc_offset <"$tcc_file" 2>/dev/null || tcc_offset=13
+    break
+done
+[[ "$tcc_offset" =~ ^[0-9]{1,2}$ ]] || tcc_offset=13
+cpu_target=$((105 - tcc_offset))
+
+color_for_cpu_temp() {
+    local t=$1
+    if [ "$t" -gt $((cpu_target + 2)) ]; then echo "#ff4444"
+    elif [ "$t" -ge $((cpu_target - 10)) ]; then echo "#ff9900"
+    else echo "#44ff44"; fi
+}
+
 color_for_temp() {
     local t=$1
     if [ "$t" -gt 80 ]; then echo "#ff4444"
@@ -55,7 +76,7 @@ color_for_epp() {
     esac
 }
 
-temp_color=$(color_for_temp "$pkg_temp")
+temp_color=$(color_for_cpu_temp "$pkg_temp")
 fan1_color=$(color_for_fan "$fan1")
 fan2_color=$(color_for_fan "$fan2")
 epp_color=$(color_for_epp "$epp")
