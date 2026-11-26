@@ -549,7 +549,7 @@ def act_on_kind(task, slack=False):
     # annotation_urls already opened a cmd_page, so it needs no window.
     runnable = not cmd_page(task) and (command or kind == "command")
     try:
-        if command and (session := live_agent_session(task)):
+        if (command or kind == "agent") and (session := live_agent_session(task)):
             attach_agent_session(session)
             return "agent"
         if kind == "agent" and not command:
@@ -567,7 +567,10 @@ def act_on_kind(task, slack=False):
             argv = [spawn, "--name", uuid[:8] + "-handoff", "--cwd", str(Path.home() / "loft"),
                     "--origin", "piotr", "--task", uuid, "--prompt", brief, "--json"]
             agent = newest_note(task, "agent")
-            if agent:
+            if re.fullmatch(r"[a-zA-Z0-9_-]+", agent) and any(
+                (Path.home() / directory / (agent + suffix)).is_file()
+                for directory, suffix in ((".claude/agents", ".md"), (".codex/agents", ".toml"))
+            ):
                 argv += ["--agent", agent]
             try:
                 result = run(argv, timeout=120, capture_output=True, text=True)

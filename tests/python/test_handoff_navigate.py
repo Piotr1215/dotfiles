@@ -28,7 +28,11 @@ def task(*annotations, tags=None):
             "annotations": [{"description": text} for text in annotations]}
 
 
-def test_agent_kind_spawns_task_without_switching_session(monkeypatch):
+def test_agent_kind_spawns_task_without_switching_session(monkeypatch, tmp_path):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    definition = tmp_path / ".claude/agents/code-writer.md"
+    definition.parent.mkdir(parents=True)
+    definition.touch()
     calls = []
     def run(args, **kwargs):
         calls.append(args)
@@ -40,6 +44,40 @@ def test_agent_kind_spawns_task_without_switching_session(monkeypatch):
                             "--origin", "piotr", "--task", UUID, "--prompt", "exact prompt",
                             "--json", "--agent", "code-writer"]
     assert len(calls) == 1
+
+
+@pytest.mark.parametrize("note", ["agent: existing-worker", "tmux session existing-worker"])
+def test_agent_without_command_switches_to_recorded_live_session(monkeypatch, note):
+    calls = []
+    monkeypatch.setattr(nav, "live_agent_session", lambda row: "existing-worker" if note in [a["description"] for a in row["annotations"]] else "")
+    monkeypatch.setattr(nav, "attach_agent_session", lambda session: calls.append(session))
+    monkeypatch.setattr(nav, "run", lambda *args, **kwargs: pytest.fail("unexpected spawn"))
+    assert nav.act_on_kind(dict(task(note, "agent-brief: do work"), kind="agent")) == "agent"
+    assert calls == ["existing-worker"]
+
+
+@pytest.mark.parametrize("agent, definition, expected", [
+    ("old-session", None, False),
+    ("code-writer", ".claude/agents/code-writer.md", True),
+    ("codex-writer", ".codex/agents/codex-writer.toml", True),
+    ("../escape", ".claude/escape.md", False),
+])
+def test_spawn_passes_only_agent_definitions(monkeypatch, tmp_path, agent, definition, expected):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(nav, "live_agent_session", lambda row: "")
+    if definition:
+        path = tmp_path / definition
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.touch()
+    calls = []
+    def run(args, **kwargs):
+        calls.append(args)
+        return subprocess.CompletedProcess(args, 0, json.dumps({"session": "aa476008-handoff"}))
+    monkeypatch.setattr(nav, "run", run)
+    assert nav.act_on_kind(dict(task("agent: " + agent, "agent-brief: do work"), kind="agent")) == "agent"
+    assert ("--agent" in calls[0]) is expected
+    if expected:
+        assert calls[0][-2:] == ["--agent", agent]
 
 
 def test_agent_kind_with_command_uses_command_path(monkeypatch):
@@ -68,7 +106,7 @@ def test_command_with_live_agent_switches_session(monkeypatch, fake_tmux, kind):
 
 def test_agent_kind_attaches_existing_handoff_without_spawning(monkeypatch):
     calls = []
-    monkeypatch.setattr(nav, "live_agent_session", lambda row: "aa476008-handoff")
+    monkeypatch.setattr(nav, "live_agent_session", lambda row: "aa476008-handoff" if nav.agent_sessions(row) else "")
     monkeypatch.setattr(nav, "attach_agent_session", lambda session: calls.append(("attach", session)))
     monkeypatch.setattr(nav, "run", lambda args, **kwargs: calls.append(args))
     row = dict(task("agent-brief: do work"), kind="agent")
