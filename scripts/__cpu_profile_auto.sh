@@ -163,11 +163,16 @@ window_mean() {
 }
 
 # Record one decision time before invoking the setter, even if it fails.
+# system76-power can apply the profile and still exit non-zero (serval, 26 Nov
+# 2026: no link power policy file on SCSI host0), so a read-back that matches
+# the target counts as a switch; otherwise the next poll would take it for a
+# manual change and hold the wrong profile for 30 minutes.
 switch_profile() {
-  local now_us=$1 target=$2
+  local now_us=$1 target=$2 profile
   last_switch=$now_us
   save_state
-  if system76-power profile "${target,,}" >/dev/null; then
+  if system76-power profile "${target,,}" >/dev/null ||
+      { read_profile && [[ $profile == "$target" ]]; }; then
     if [[ -z ${CPU_PROFILE_AUTO_TEST_TICKS:-} ]]; then last_switch=${EPOCHREALTIME/.}; fi
     last_profile=$target
     save_state

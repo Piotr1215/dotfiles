@@ -40,6 +40,9 @@ else
     balanced) printf 'Balanced\n' > "$TEST_PROFILE" ;;
     *) exit 1 ;;
   esac
+  # The real setter applies the CPU profile, then exits 1 on a missing SCSI
+  # host link power file (serval, 26 Nov 2026).
+  [[ ${TEST_SET_PARTIAL:-0} == 0 ]] || exit 1
 fi
 EOF
   chmod +x "$WORK/bin/system76-power"
@@ -369,6 +372,17 @@ EOF
   [ "$status" -eq 0 ]
   [ "$(cat "$TEST_SETS")" = $'1800000120 performance\n1800000420 performance' ]
   [[ $output == *'failed to switch to Performance'* ]]
+}
+
+@test "a set that applies the profile but exits non-zero is a switch, not a manual change" {
+  export CPU_PROFILE_AUTO_TEST_TICKS=19 TEST_SET_PARTIAL=1
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$TEST_SETS")" = '1800000120 performance' ]
+  [[ $output == *'switched to Performance'* ]]
+  [[ $output != *'failed to switch'* ]]
+  [[ $output != *'manual profile change'* ]]
+  [ "$(cut -d' ' -f1,3 "$CPU_PROFILE_AUTO_STATE_DIR/state")" = 'Performance 0' ]
 }
 
 @test "bad configuration and damaged state fail without changing a profile" {
