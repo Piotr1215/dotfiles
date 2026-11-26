@@ -54,6 +54,16 @@ printf '%s\n' "$*" >> "$TEST_NOTES"
 [[ ${TEST_NOTIFY_FAIL:-0} == 0 ]]
 EOF
   chmod +x "$WORK/bin/notify-send"
+  # Never the real sysfs file or the real sudo: serval's sudo is passwordless.
+  export CPU_PROFILE_AUTO_TCC_FILE="$WORK/tcc_offset"
+  printf '13\n' > "$CPU_PROFILE_AUTO_TCC_FILE"
+  cat > "$WORK/bin/sudo" <<'EOF'
+#!/usr/bin/env bash
+[[ $1 == -n ]] && shift
+[[ ${TEST_SUDO_FAIL:-0} == 0 ]] || exit 1
+exec "$@"
+EOF
+  chmod +x "$WORK/bin/sudo"
   export PATH="$WORK/bin:$PATH"
 
   cat > "$CPU_PROFILE_AUTO_TEST_HOOK" <<'EOF'
@@ -417,6 +427,49 @@ EOF
   [ "$status" -eq 0 ]
   [ "$(cat "$TEST_SETS")" = '1800000120 performance' ]
   [ -s "$TEST_NOTES" ]
+}
+
+@test "Balanced holds an 85 C thermal target from the first profile read" {
+  export CPU_PROFILE_AUTO_TEST_TICKS=1 TEST_BUSY=10
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$CPU_PROFILE_AUTO_TCC_FILE")" = 20 ]
+  [[ $output == *'thermal target 85C for Balanced'* ]]
+}
+
+@test "a switch to Performance restores the 92 C target and says so" {
+  export CPU_PROFILE_AUTO_TEST_TICKS=13
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$CPU_PROFILE_AUTO_TCC_FILE")" = 13 ]
+  [[ $(cat "$TEST_NOTES") == *'CPU profile: Performance'*'thermal target 92C'* ]]
+}
+
+@test "a reset target is put back at the next profile read" {
+  export CPU_PROFILE_AUTO_TEST_TICKS=7 TEST_BUSY=10
+  cat >> "$CPU_PROFILE_AUTO_TEST_HOOK" <<'EOF'
+cpu_profile_reset_hook() { (( $1 - TEST_EPOCH == 30 )) && printf '13\n' > "$CPU_PROFILE_AUTO_TCC_FILE"; return 0; }
+eval "$(declare -f cpu_profile_test_before_tick | sed '2a cpu_profile_reset_hook "$1"')"
+EOF
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$CPU_PROFILE_AUTO_TCC_FILE")" = 20 ]
+  [ "$(grep -c 'thermal target 85C' <<< "$output")" -eq 2 ]
+}
+
+@test "Battery and unknown profiles leave the thermal target alone" {
+  export CPU_PROFILE_AUTO_TEST_TICKS=7
+  printf 'Battery\n' > "$TEST_PROFILE"
+  run "$SCRIPT"
+  [ "$(cat "$CPU_PROFILE_AUTO_TCC_FILE")" = 13 ]
+}
+
+@test "a refused target write is reported once and never stops the loop" {
+  export CPU_PROFILE_AUTO_TEST_TICKS=19 TEST_SUDO_FAIL=1 TEST_BUSY=10
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$CPU_PROFILE_AUTO_TCC_FILE")" = 13 ]
+  [ "$(grep -c 'failed to set thermal target' <<< "$output")" -eq 1 ]
 }
 
 @test "bad configuration and damaged state fail without changing a profile" {

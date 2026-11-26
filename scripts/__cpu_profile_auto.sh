@@ -47,6 +47,21 @@ read_seconds cooldown_seconds "${CPU_PROFILE_AUTO_COOLDOWN_SECONDS:-300}"
 read_seconds manual_seconds "${CPU_PROFILE_AUTO_MANUAL_SECONDS:-1800}"
 read_percent up_threshold "${CPU_PROFILE_AUTO_UP_PERCENT:-40}"
 read_percent down_threshold "${CPU_PROFILE_AUTO_DOWN_PERCENT:-15}"
+# Thermal target per profile, as an offset below serval's 105 C TjMax: 20 holds
+# Balanced at 85 C, 13 is the firmware's 92 C that cpu-tcc-offset.service sets.
+tjmax=105
+tcc_balanced=0 tcc_performance=0
+read_seconds tcc_balanced "${CPU_PROFILE_AUTO_TCC_BALANCED:-20}"
+read_seconds tcc_performance "${CPU_PROFILE_AUTO_TCC_PERFORMANCE:-13}"
+if (( tcc_balanced > 63 || tcc_performance > 63 )); then
+  printf 'thermal target offsets must be 0 to 63\n' >&2
+  exit 1
+fi
+tcc_file=${CPU_PROFILE_AUTO_TCC_FILE:-}
+if [[ -z $tcc_file ]]; then
+  for tcc_file in /sys/bus/pci/drivers/proc_thermal_pci/*/tcc_offset_degree_celsius; do break; done
+fi
+tcc_failed=
 if (( up_seconds == 0 || down_seconds == 0 )); then
   printf 'load windows must be positive\n' >&2
   exit 1
@@ -169,6 +184,39 @@ notify() {
   timeout 5 notify-send -a cpu-profile-auto -t 8000 "$1" "$2" >/dev/null 2>&1 || true
 }
 
+# Hold 85 C on Balanced and 92 C on Performance (26 Nov 2026): light-load
+# bursts on Balanced reached 92 C and spun the fans up, and only the thermal
+# target caps a burst's peak (a 90 W PL2 still let bursts reach 94 C). Battery
+# and unknown profiles keep what cpu-tcc-offset.service set. It runs on every
+# profile read, so a resume or power change that resets the offset is put back
+# within a minute. A refused write is reported once per wanted value.
+apply_thermal_target() {
+  local want current
+  case $1 in
+    Balanced) want=$tcc_balanced ;;
+    Performance) want=$tcc_performance ;;
+    *) return 0 ;;
+  esac
+  [[ -n $tcc_file && -r $tcc_file ]] || return 0
+  IFS= read -r current < "$tcc_file" || return 0
+  [[ $current != "$want" ]] || return 0
+  if printf '%s\n' "$want" | sudo -n tee "$tcc_file" >/dev/null 2>&1; then
+    tcc_failed=
+    printf 'thermal target %sC for %s\n' "$((tjmax - want))" "$1"
+  elif [[ $tcc_failed != "$want" ]]; then
+    tcc_failed=$want
+    printf 'failed to set thermal target %sC for %s\n' "$((tjmax - want))" "$1" >&2
+  fi
+}
+
+# The thermal target a profile holds, for the notification text.
+target_note() {
+  case $1 in
+    Balanced) printf '; thermal target %sC' "$((tjmax - tcc_balanced))" ;;
+    Performance) printf '; thermal target %sC' "$((tjmax - tcc_performance))" ;;
+  esac
+}
+
 # Record one decision time before invoking the setter, even if it fails.
 # system76-power can apply the profile and still exit non-zero (serval, 26 Nov
 # 2026: no link power policy file on SCSI host0), so a read-back that matches
@@ -184,7 +232,8 @@ switch_profile() {
     last_profile=$target
     save_state
     printf 'switched to %s; busy %ss=%s %ss=%s\n' "$target" "$up_seconds" "$up_mean" "$down_seconds" "$down_mean"
-    notify "CPU profile: $target" "busy ${up_seconds}s=$up_mean ${down_seconds}s=$down_mean"
+    apply_thermal_target "$target"
+    notify "CPU profile: $target" "busy ${up_seconds}s=$up_mean ${down_seconds}s=$down_mean$(target_note "$target")"
   else
     if [[ -z ${CPU_PROFILE_AUTO_TEST_TICKS:-} ]]; then last_switch=${EPOCHREALTIME/.}; fi
     save_state
@@ -243,6 +292,7 @@ tick() {
     last_profile=$profile
     save_state
   fi
+  apply_thermal_target "$profile"
 
   (( ${#times[@]} > 0 && observed_us >= manual_until )) || return 0
   (( last_switch < 0 || observed_us - last_switch >= cooldown_seconds * 1000000 )) || return 0

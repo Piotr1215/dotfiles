@@ -30,6 +30,9 @@ Environment=CPU_PROFILE_AUTO_UP_SECONDS=60
 # Balanced) and Piotr found it too hot. Drop to Balanced below 25%.
 Environment=CPU_PROFILE_AUTO_DOWN_PERCENT=25
 ExecStart=%h/dev/dotfiles/scripts/__cpu_profile_auto.sh
+# The script holds an 85 C thermal target on Balanced. When auto is switched
+# off, cpu-tcc-offset.service puts back the 92 C target and the power limit.
+ExecStopPost=-/usr/bin/timeout 10 /usr/bin/sudo -n /usr/bin/systemctl start --no-block cpu-tcc-offset.service
 Restart=on-failure
 RestartSec=10
 
