@@ -355,6 +355,34 @@ use_real_task_in_sandbox() {
     [ "$output" = "1" ]
 }
 
+@test "sync reuses a moved issue by its previous identifier and records its UUID" {
+    use_real_task_in_sandbox
+    task add "old title" linear_issue_id:DEVOPS-1923 +triaged >/dev/null
+    local before
+    before=$(task rc.context=none linear_issue_id:DEVOPS-1923 export | jq -r '.[0].uuid')
+    test_issue='{"id":"f6b427d4-8af5-4241-888a-a5c762f75959","description":"new title","repository":"linear","html_url":"https://linear.app/t/issue/ENGAI-170/title","issue_id":"ENGAI-170","previous_identifiers":["DEVOPS-1923"],"project":"p","status":"In Progress"}'
+    run sync_to_taskwarrior "$test_issue"
+    [ "$status" -eq 0 ]
+    run task rc.context=none linear_issue_id:ENGAI-170 export
+    [ "$(jq length <<<"$output")" -eq 1 ]
+    [ "$(jq -r '.[0].uuid' <<<"$output")" = "$before" ]
+    [ "$(jq -r '.[0].description' <<<"$output")" = "new title" ]
+    jq -e 'any(.[0].annotations[]?; .description == "linear uuid: f6b427d4-8af5-4241-888a-a5c762f75959")' <<<"$output" >/dev/null
+}
+
+@test "sync finds a moved issue by its stored UUID" {
+    use_real_task_in_sandbox
+    task add "old title" linear_issue_id:DEVOPS-1923 +triaged >/dev/null
+    local before
+    before=$(task rc.context=none linear_issue_id:DEVOPS-1923 export | jq -r '.[0].uuid')
+    task "$before" annotate -- "linear uuid: f6b427d4-8af5-4241-888a-a5c762f75959" >/dev/null
+    test_issue='{"id":"f6b427d4-8af5-4241-888a-a5c762f75959","description":"old title","repository":"linear","html_url":"https://linear.app/t/issue/ENGAI-170/title","issue_id":"ENGAI-170","previous_identifiers":[],"project":"p","status":"In Progress"}'
+    run sync_to_taskwarrior "$test_issue"
+    [ "$status" -eq 0 ]
+    run task rc.context=none linear_issue_id:ENGAI-170 export
+    [ "$(jq -r '.[0].uuid' <<<"$output")" = "$before" ]
+}
+
 @test "sync lookups see a waiting task even when the active context would hide it" {
     use_real_task_in_sandbox
     printf 'context.work.read=+work\ncontext=work\n' >> "$TASKRC"

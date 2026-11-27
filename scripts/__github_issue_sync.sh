@@ -180,6 +180,7 @@ normalize_linear_issues() {
            | sort_by(.at) | last) as $last_actor
         | {
             id: .id,
+            previous_identifiers: (.previousIdentifiers // []),
             description: .title,
             repository: "linear",
             html_url: .url,
@@ -245,7 +246,7 @@ get_linear_issues() {
 
             cursor_json=$(jq -cn --arg cursor "$cursor" '$cursor | if . == "" then null else . end')
             payload=$(jq -cn --arg user "$LINEAR_USER_ID" --argjson cursor "$cursor_json" \
-                '{query: "query($user: String!, $cursor: String) { user(id: $user) { id name assignedIssues(first: 50, after: $cursor, filter: { state: { name: { nin: [\"Released\", \"Canceled\", \"Done\", \"Ready for Release\", \"Duplicate\", \"Archived\"] } } }) { nodes { id title url state { name } project { name } dueDate priority updatedAt cycle { number } history(first: 1) { nodes { createdAt actor { id } } } comments(first: 1) { nodes { createdAt user { id } } } attachments { nodes { url sourceType metadata } } } pageInfo { hasNextPage endCursor } } } }", variables: {user: $user, cursor: $cursor}}')
+                '{query: "query($user: String!, $cursor: String) { user(id: $user) { id name assignedIssues(first: 50, after: $cursor, filter: { state: { name: { nin: [\"Released\", \"Canceled\", \"Done\", \"Ready for Release\", \"Duplicate\", \"Archived\"] } } }) { nodes { id previousIdentifiers title url state { name } project { name } dueDate priority updatedAt cycle { number } history(first: 1) { nodes { createdAt actor { id } } } comments(first: 1) { nodes { createdAt user { id } } } attachments { nodes { url sourceType metadata } } } pageInfo { hasNextPage endCursor } } } }", variables: {user: $user, cursor: $cursor}}')
             response=$(curl -s -w "\n%{http_code}" \
                 --connect-timeout 10 \
                 --max-time 30 \
@@ -1441,12 +1442,39 @@ sync_to_taskwarrior() {
         fi
     fi
 
-    # First, try to find task by linear_issue_id if available
-    local existing_task_uuid=""
+    # UUID annotations survive Linear team moves. Older tasks have only the
+    # identifier, so consult Linear's former identifiers before matching titles.
+    local existing_task_uuid="" previous_id matches uuid_marker uuid_match
+    uuid_marker="linear uuid: $issue_id"
     if [[ -n "${SELECTED_NATIVE_UUID:-}" ]]; then
         existing_task_uuid="$SELECTED_NATIVE_UUID"
     elif [[ "${SELECTED_SYNC:-0}" != 1 && -n "$issue_number" ]]; then
         existing_task_uuid=$(task "linear_issue_id:$issue_number" "${TASK_LIVE_FILTER[@]}" export 2>/dev/null | jq -r '.[0].uuid' 2>/dev/null || echo "")
+    fi
+
+    if [[ "${SELECTED_SYNC:-0}" != 1 && "$issue_id" =~ ^[0-9a-fA-F-]{36}$ ]]; then
+        uuid_match=$(task 'linear_issue_id.any:' "${TASK_LIVE_FILTER[@]}" export 2>/dev/null | jq -r --arg marker "$uuid_marker" '[.[] | select(any(.annotations[]?; .description == $marker)) | .uuid] | if length > 1 then error("duplicate Linear UUID") else .[0] // empty end') || { log "Ambiguous task UUID for $issue_number"; return 1; }
+        if [[ -n "$uuid_match" ]]; then
+            if [[ -n "$existing_task_uuid" && "$existing_task_uuid" != null && "$existing_task_uuid" != "$uuid_match" ]]; then
+                log "Conflicting task identities for $issue_number; leaving both unchanged"
+                return 1
+            fi
+            existing_task_uuid="$uuid_match"
+        fi
+    fi
+    if [[ ( -z "$existing_task_uuid" || "$existing_task_uuid" == null ) && "${SELECTED_SYNC:-0}" != 1 ]]; then
+        while IFS= read -r previous_id; do
+            [[ -n "$previous_id" ]] || continue
+            matches=$(task "linear_issue_id:$previous_id" "${TASK_LIVE_FILTER[@]}" export 2>/dev/null | jq -r --arg id "$previous_id" '[.[] | select(.linear_issue_id == $id) | .uuid] | if length > 1 then error("duplicate former identifier") else .[0] // empty end') || { log "Ambiguous former identifier $previous_id"; return 1; }
+            if [[ -n "$matches" ]]; then existing_task_uuid="$matches"; break; fi
+        done < <(jq -r '.previous_identifiers[]?' <<<"$issue_line")
+    fi
+    if [[ -n "$existing_task_uuid" && "$existing_task_uuid" != null && -n "$issue_number" ]]; then
+        local old_identifier
+        old_identifier=$(task _get "$existing_task_uuid".linear_issue_id 2>/dev/null || true)
+        if [[ -n "$old_identifier" && "$old_identifier" != "$issue_number" ]] && { [[ -n "${uuid_match:-}" && "$uuid_match" == "$existing_task_uuid" ]] || jq -e --arg id "$old_identifier" '(.previous_identifiers // []) | index($id) != null' <<<"$issue_line" >/dev/null; }; then
+            task rc.confirmation=no modify "$existing_task_uuid" "linear_issue_id:$issue_number"
+        fi
     fi
 
     # If not found by linear_issue_id, try by description
@@ -1476,6 +1504,7 @@ sync_to_taskwarrior() {
             local created_task_uuid
             created_task_uuid=$(task "linear_issue_id:$issue_number" "${TASK_LIVE_FILTER[@]}" export 2>/dev/null | jq -r '.[0].uuid // empty' 2>/dev/null)
             if [[ -n "$created_task_uuid" && "$created_task_uuid" != "null" ]]; then
+                if [[ "$issue_id" =~ ^[0-9a-fA-F-]{36}$ ]]; then annotate_task "$created_task_uuid" "$uuid_marker"; fi
                 SYNC_NEW_ISSUE_IDS+=("$issue_number")
             fi
         fi
@@ -1489,6 +1518,9 @@ sync_to_taskwarrior() {
         task_json=$(task "$task_uuid" export 2>/dev/null)
         # Capture before this sync attaches its own link annotations.
         latest_annotation=$(echo "$task_json" | jq -r '[.[0].annotations[]?.entry // empty] | max // empty')
+        if [[ "$issue_id" =~ ^[0-9a-fA-F-]{36}$ ]] && ! jq -e --arg marker "$uuid_marker" 'any(.[0].annotations[]?; .description == $marker)' <<<"$task_json" >/dev/null; then
+            annotate_task "$task_uuid" "$uuid_marker"
+        fi
         if [[ -n "$task_json" ]]; then
             local has_fresh=$(echo "$task_json" | jq -r '.[0].tags | if . then contains(["fresh"]) else false end')
             local has_started=$(echo "$task_json" | jq -r '.[0].tags | if . then contains(["started"]) else false end')
@@ -1844,7 +1876,7 @@ selected_sync() {
     [[ "$key" =~ ^[A-Za-z][A-Za-z0-9]*-[0-9]+$ ]] || { echo "Selected row has no valid Linear issue" >&2; return 1; }
     validate_env_vars
     local payload
-    payload=$(jq -n --arg id "$key" '{query:"query($id: String!) { issue(id: $id) { id identifier title url state { name type } assignee { id } project { name } dueDate priority updatedAt cycle { number } history(first: 1) { nodes { createdAt actor { id } } } comments(first: 1) { nodes { createdAt user { id } } } attachments { nodes { url sourceType metadata } } } }", variables:{id:$id}}')
+    payload=$(jq -n --arg id "$key" '{query:"query($id: String!) { issue(id: $id) { id identifier previousIdentifiers title url state { name type } assignee { id } project { name } dueDate priority updatedAt cycle { number } history(first: 1) { nodes { createdAt actor { id } } } comments(first: 1) { nodes { createdAt user { id } } } attachments { nodes { url sourceType metadata } } } }", variables:{id:$id}}')
     response=$(curl -s -w '\n%{http_code}' --connect-timeout 10 --max-time 30 -X POST -H 'Content-Type: application/json' -H "Authorization: ${LINEAR_API_KEY}" --data "$payload" https://api.linear.app/graphql) || { echo "Linear request failed" >&2; return 1; }
     code=${response##*$'\n'}
     content=${response%$'\n'*}
