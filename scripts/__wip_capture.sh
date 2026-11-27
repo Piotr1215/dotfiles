@@ -6,7 +6,9 @@
 # Or clone from GitHub, then run the same fetch and restore commands.
 # One file: git --git-dir=<mirror .git> show refs/wip/<branch>:<path>
 # Older snapshots: git --git-dir=<mirror .git> reflog refs/wip/<branch>
-# Linked worktrees use refs/wip/worktrees/<worktree-name>/<branch>.
+# Linked worktrees are not captured (Piotr, 27 Nov: "do not backup worktrees").
+# Their commits reach the mirror through the main checkout's refs; snapshots from
+# before 27 Nov stay under refs/wip/worktrees/<worktree-name>/<branch>.
 # Git clone fetches branch refs by default; fetch the refs/wip ref explicitly.
 # bubblewrap makes live paths read-only even to configured Git filters.
 set -eo pipefail
@@ -55,9 +57,9 @@ fingerprint() {
   } | sha256sum | cut -d ' ' -f 1
 }
 
-# Common fingerprint: refs, logs and every worktree's HEAD in the shared Git
-# directory. All worktrees of a repo share it, so one sync serves them all; a
-# fetch or commit in one worktree no longer recaptures its 40 siblings.
+# Common fingerprint: refs and logs in the shared Git directory. Linked
+# worktree metadata is left out with the worktrees themselves, so a worker
+# starting or pruning a worktree no longer forces a sync of its main checkout.
 common_fingerprint() {
   local common=$1 f
   {
@@ -67,9 +69,6 @@ common_fingerprint() {
     for f in "$common/refs" "$common/logs"; do
       if [[ -d $f ]]; then find "$f" -printf '%p %s %T@ %C@\0'; fi
     done
-    if [[ -d $common/worktrees ]]; then
-      find "$common/worktrees" -mindepth 1 \( -path '*/logs/*' -o -name HEAD -o -name gitdir \) -printf '%p %s %T@ %C@\0'
-    fi
   } | sha256sum | cut -d ' ' -f 1
 }
 
@@ -151,11 +150,12 @@ capture_one() {
      { [[ -n $head ]] && ! git --git-dir="$mirror_git" cat-file -e "$head^{commit}" 2>/dev/null; }; then
     mkdir -p "$mirror_git/objects"
     chmod 700 "$mirror_git"
-    # 1,554 linked indexes were 138 MB of 140 MB across 12,467 non-object
-    # files; a capture took 58s against a 120s timeout. The live index is
-    # copied below. Perishable lets --delete remove old worktree folders.
+    # Linked worktree metadata stays out, as the worktrees do: 1,554 linked
+    # indexes were 138 MB of 140 MB of non-object files, and a sibling pruned
+    # mid-sync failed the run (2026-11-27). Excluded, so the mirror keeps the
+    # worktree folders it already holds instead of --delete removing them.
     rsync -rltc --omit-dir-times --delete --exclude='/objects/' --exclude='/refs/wip/' --exclude='/logs/refs/wip/' --exclude='*.lock' \
-      --filter='-p /worktrees/*/index' "$common/" "$mirror_git/" || {
+      --exclude='/worktrees/' "$common/" "$mirror_git/" || {
         rc=$?
         # 2026-11-27: exit 24 is a sibling worktree pruned mid-sync ("file has
         # vanished"). That is the change-during-capture race, so take its retry.
@@ -260,6 +260,20 @@ save_times() {
   tmp=$(mktemp "$state/times.XXXXXXXX")
   for repo in "${!times[@]}"; do printf '%s\t%s\n' "$repo" "${times[$repo]}"; done | sort > "$tmp"
   mv -f -- "$tmp" "$file"
+}
+
+# Print each repository root from a NUL list of .git paths, without linked
+# worktrees (a .git file whose gitdir is under some repo's worktrees/).
+# Submodules keep their .git file pointing into modules/ and stay in.
+main_checkouts() {
+  local g line
+  while IFS= read -r -d '' g; do
+    line=
+    if [[ -f $g ]] && { IFS= read -r line || [[ -n $line ]]; } < "$g" && [[ $line == 'gitdir: '*/worktrees/* ]]; then
+      continue
+    fi
+    printf '%s\0' "${g%/.git}"
+  done
 }
 
 # Capture one repository in the sandbox and print one tab-separated result line.
@@ -407,7 +421,7 @@ main() {
     if ! find "$root" \( -type d \( -name node_modules -o -name vendor -o -path "$HOME/.claude/plugins/marketplaces" \) -prune \) -o \( -name .git \( -type d -o -type f \) -print0 -prune \) >> "$list"; then failed=$((failed+1)); fi
   done
   # Repos are independent; parallel workers hide per-repo git latency.
-  sed -z 's#/\.git$##' "$list" |
+  main_checkouts < "$list" |
     WIP_CAPTURE_PARENT=1 xargs -0 -r -n 1 -P "${WIP_CAPTURE_JOBS:-4}" "$self_copy" --run-one > "$results" || xrc=$?
   # xargs exits 124 when a worker exited 255. Skip: leave every clock alone.
   if (( xrc == 124 )); then
