@@ -80,3 +80,12 @@ MOCK
     grep -Eq "^uda.taskwarrior-tui.legend.${legend}=0 jump  " "$root/.taskrc"
   done
 }
+
+@test "agent handoff without a session uses the name from its newest command" {
+  export TASK_JSON='[{"kind":"agent","annotations":[{"entry":"20261110T080538Z","description":"cmd: spawn --name old"},{"entry":"20261111T080538Z","description":"cmd: spawn --name newest --prompt test"}]}]' LIVE="newest"
+  export PANES_newest='%42 newest\n'
+  run "$root/scripts/__tui_jump_agent.sh" "$uuid" --print
+  [ "$status" -eq 0 ]
+  [ "$output" = 'session=newest target=%42' ]
+  [ ! -e "$LOG" ]
+}

@@ -7,6 +7,7 @@
 set -eo pipefail
 
 uuid=${1:-}
+mode=${2:-}
 task_bin=${TUI_TASK_COMMAND:-task}
 tmux_bin=${TUI_TMUX_COMMAND:-tmux}
 
@@ -16,6 +17,12 @@ tmux_bin=${TUI_TMUX_COMMAND:-tmux}
 mapfile -t sessions < <("$task_bin" rc.context=none rc.hooks=off "$uuid" export 2>/dev/null | jq -r '
   .[0].annotations // [] | sort_by(.entry) | reverse | .[].description
   | capture("tmux session (?<s>[A-Za-z0-9._-]+)") | .s' 2>/dev/null || true)
+if [[ ${#sessions[@]} -eq 0 ]]; then
+  mapfile -t sessions < <("$task_bin" rc.context=none rc.hooks=off "$uuid" export 2>/dev/null | jq -r '
+    .[0] | select(.kind == "agent") | .annotations // [] | sort_by(.entry) | reverse
+    | map(select(.description | startswith("cmd:"))) | first // empty | .description
+    | capture("(?:^|[[:space:]])--name[[:space:]]+[\"\u0027]?(?<s>[A-Za-z0-9._-]+)(?:[\"\u0027]?(?:[[:space:]]|$))") | .s' 2>/dev/null || true)
+fi
 [[ ${#sessions[@]} -gt 0 ]] || { echo 'No agent session recorded on this task' >&2; exit 1; }
 
 # Return the agent pane in a live session: the pane tagged with the session's
@@ -34,5 +41,13 @@ live=""
 for session in "${sessions[@]}"; do
   if "$tmux_bin" has-session -t "=$session" 2>/dev/null; then live=$session; break; fi
 done
-[[ -n "$live" ]] || { echo "No live agent session (recorded: ${sessions[*]})" >&2; exit 1; }
-exec "$tmux_bin" switch-client -t "$(agent_target "$live")"
+if [[ -z "$live" ]]; then
+  echo "No live agent session (recorded: ${sessions[*]})" >&2
+  exit 1
+fi
+target=$(agent_target "$live")
+if [[ "$mode" == --print ]]; then
+  printf 'session=%s target=%s\n' "$live" "$target"
+else
+  exec "$tmux_bin" switch-client -t "$target"
+fi

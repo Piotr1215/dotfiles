@@ -591,6 +591,10 @@ def act_on_kind(task, slack=False):
             session = json.loads(result.stdout.splitlines()[-1])["session"]
             if not re.fullmatch(r"[a-zA-Z0-9_-]+", session):
                 raise ValueError("spawn returned an invalid session")
+            # The launcher may associate its own task, not this handoff row.
+            # Record the returned name here so key 0 can find it later.
+            run([str(Path.home() / ".claude/scripts/__tw.sh"), "note", task["uuid"],
+                 "tmux session " + session], capture_output=True, text=True)
             attach_agent_session(session)
             return "agent"
         if kind == "agent" and not command:

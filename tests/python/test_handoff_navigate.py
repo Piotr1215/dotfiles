@@ -1,6 +1,7 @@
 import importlib.util
 import json
 import os
+import shlex
 from pathlib import Path
 import subprocess
 
@@ -101,7 +102,8 @@ def test_spawn_command_runs_directly_and_switches(monkeypatch):
     row = dict(task("cmd: ~/.claude/scripts/__spawn_agent.sh --name worker --prompt 'hello world'"), kind="agent")
     assert nav.act_on_kind(row) == "agent"
     assert calls[0][-3:] == ["--prompt", "hello world", "--json"]
-    assert calls[1] == ("attach", "worker")
+    assert calls[1] == [str(Path.home() / ".claude/scripts/__tw.sh"), "note", UUID, "tmux session worker"]
+    assert calls[2] == ("attach", "worker")
 
 
 def test_live_session_checks_command_name_and_handoff_fallback(monkeypatch):
@@ -1459,3 +1461,33 @@ def test_draft_with_deleted_dependency_fails_closed(monkeypatch, tmp_path):
     monkeypatch.setattr(nav, "task_export", lambda binary, ref: [draft] if ref == UUID else [blocker])
     with pytest.raises(ValueError, match="not pending or completed"):
         nav.main([UUID, "--resolve"])
+
+
+def test_spawned_command_session_is_available_to_key_zero(monkeypatch, tmp_path):
+    """The session returned by s is the one key 0 switches to."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(nav, "live_agent_session", lambda row: "")
+    monkeypatch.setattr(nav, "attach_agent_session", lambda session: None)
+    notes = []
+
+    def run(args, **kwargs):
+        if Path(args[0]).name == "__spawn_agent.sh":
+            return subprocess.CompletedProcess(args, 0, '{"session":"spawned-worker"}')
+        assert args[1:3] == ["note", UUID]
+        notes.append(args[3])
+        return subprocess.CompletedProcess(args, 0, "")
+
+    monkeypatch.setattr(nav, "run", run)
+    row = dict(task("cmd: ~/.claude/scripts/__spawn_agent.sh --origin piotr --prompt-file /tmp/brief"), kind="agent")
+    assert nav.act_on_kind(row) == "agent"
+    row["annotations"].append({"entry": "20261127T120000Z", "description": notes[0]})
+    task_stub = tmp_path / "task"
+    task_stub.write_text("#!/bin/sh\nprintf '%s\\n' " + shlex.quote(json.dumps([row])) + "\n")
+    task_stub.chmod(0o755)
+    tmux_stub = tmp_path / "tmux"
+    tmux_stub.write_text("#!/bin/sh\ncase \"$1\" in has-session) exit 0;; list-panes) echo '%42 spawned-worker';; switch-client) echo \"$*\";; esac\n")
+    tmux_stub.chmod(0o755)
+    env = dict(os.environ, TUI_TASK_COMMAND=str(task_stub), TUI_TMUX_COMMAND=str(tmux_stub))
+    result = subprocess.run([str(PATH.parent / "__tui_dispatch.sh"), "0", UUID], env=env, text=True, capture_output=True)
+    assert result.returncode == 0
+    assert result.stdout.strip() == "switch-client -t %42"
