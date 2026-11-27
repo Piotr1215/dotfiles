@@ -4657,6 +4657,24 @@ SH
     ! grep -Eq ' add | delete| done| import' "$TEST_DIR/all_tasks"
 }
 
+@test "selected moved issue assigned elsewhere gains backlog tag and loses it on Todo" {
+    selected_fixture
+    jq '.[0] |= (del(.view_key,.view_issue) | .linear_issue_id="ENGAI-172" | .tags=["triaged"])' "$TEST_DIR/row" > "$TEST_DIR/newrow"
+    mv "$TEST_DIR/newrow" "$TEST_DIR/row"
+    jq '.data.issue |= (.identifier="ENGAI-172" | .previousIdentifiers=["DEVOPS-1354"] | .state={"name":"Backlog","type":"backlog"} | .assignee.id="someone-else")' "$TEST_DIR/reply" > "$TEST_DIR/newreply"
+    mv "$TEST_DIR/newreply" "$TEST_DIR/reply"
+    run bash scripts/__github_issue_sync.sh --task "$SELECTED_UUID"
+    [ "$status" -eq 0 ]
+    grep -q "${SELECTED_UUID} linear_status:Backlog" "$TEST_DIR/writes"
+    grep -q "${SELECTED_UUID} +backlog -next -hold" "$TEST_DIR/writes"
+    rm "$TEST_DIR/writes"
+    jq '.data.issue.state={"name":"Todo","type":"unstarted"}' "$TEST_DIR/reply" > "$TEST_DIR/newreply"
+    mv "$TEST_DIR/newreply" "$TEST_DIR/reply"
+    run bash scripts/__github_issue_sync.sh --task "$SELECTED_UUID"
+    [ "$status" -eq 0 ]
+    grep -q -- "${SELECTED_UUID} -backlog" "$TEST_DIR/writes"
+}
+
 @test "get_linear_issues fetches all pages before returning a complete feed" {
     cat > "$TEST_DIR/curl" <<'SH'
 #!/bin/bash
