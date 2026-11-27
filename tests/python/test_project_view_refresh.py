@@ -99,6 +99,20 @@ class LinearStatusTests(unittest.TestCase):
             self.assertIn("linear_status.is:Todo", args)
             self.assertIn("linear_status:Parked", args)
 
+    def test_backlog_tag_is_repaired_even_when_status_matches(self):
+        task = {"uuid": "31f19044-2838-4275-b59d-f4e0d971536b", "linear_issue_id": "ENGAI-172", "linear_status": "Backlog", "tags": ["work"]}
+        issue = {"identifier": "ENGAI-172", "state": {"name": "Backlog"}}
+        snapshot = {"projects": {}, "assigned": None, "referenced": [issue]}
+        with mock.patch.object(pv.subprocess, "run") as run:
+            run.return_value = subprocess.CompletedProcess([], 0, "", "")
+            pv.apply_statuses(pv.status_plan(snapshot, [task]))
+            self.assertIn("+backlog", run.call_args.args[0])
+        issue["state"]["name"] = "Todo"
+        with mock.patch.object(pv.subprocess, "run") as run:
+            run.return_value = subprocess.CompletedProcess([], 0, "", "")
+            pv.apply_statuses(pv.status_plan(snapshot, [task]))
+            self.assertIn("-backlog", run.call_args.args[0])
+
     def test_exact_linear_ids_are_fetched_for_regular_tasks(self):
         self.assertEqual(pv.referenced_identifiers([{"linear_issue_id": "DEVOPS-1688", "tags": ["work"]}]), {"DEVOPS-1688"})
 
