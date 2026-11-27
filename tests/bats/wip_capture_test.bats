@@ -63,6 +63,11 @@ case ${WIP_TEST_RESULT:-} in
       printf 'repository changed during capture\n' >&2
     fi
     exit 1 ;;
+  repo-gone)
+    # mv, not rm -rf: agent rm guards refuse a repo root, and gone is gone.
+    mv -- "$WIP_TEST_REPO" "$WIP_TEST_REPO.removed"
+    printf 'realpath: %s: No such file or directory\n' "$WIP_TEST_REPO" >&2
+    exit 1 ;;
 esac
 export WIP_TEST_ATTEMPT=$attempt
 if (( attempt <= ${WIP_TEST_CHANGE_ATTEMPTS:-0} )); then
@@ -113,6 +118,42 @@ GIT
   [ "$(wc -l < "$WIP_CAPTURE_STATE/attempts")" -eq 2 ]
   [ "$(mirror_show main tracked)" = "$(printf 'base\nchanged during attempt 1')" ]
   [ "$(cat "$WIP_CAPTURE_STATE/last-good.tsv")" = "$(printf '%s\t123456' "$REPO")" ]
+}
+
+@test "retries when metadata rsync reports vanished files" {
+  capture_attempt_fixture
+  export WIP_TEST_REAL_RSYNC
+  WIP_TEST_REAL_RSYNC=$(command -v rsync)
+  cat > "$BATS_TEST_TMPDIR/bin/rsync" <<'RSYNC'
+#!/usr/bin/env bash
+if [[ ${1:-} == -rltc ]]; then
+  printf '%s\n' "$WIP_TEST_ATTEMPT" >> "$WIP_CAPTURE_STATE/metadata-attempts"
+  if [[ $WIP_TEST_ATTEMPT == 1 ]]; then
+    printf 'file has vanished: sibling worktree HEAD\n' >&2
+    exit 24
+  fi
+fi
+exec "$WIP_TEST_REAL_RSYNC" "$@"
+RSYNC
+  chmod +x "$BATS_TEST_TMPDIR/bin/rsync"
+  run capture
+  [ "$status" -eq 0 ]
+  [[ $output == *"captured $REPO"* ]]
+  [[ $output == *'captured=1'* ]]
+  [[ $output != *"failed $REPO"* ]]
+  [ "$(wc -l < "$WIP_CAPTURE_STATE/attempts")" -eq 2 ]
+  [ "$(cat "$WIP_CAPTURE_STATE/metadata-attempts")" = "$(printf '1\n2')" ]
+}
+
+@test "a repository removed during the run counts as gone, not failed" {
+  capture_attempt_fixture
+  export WIP_TEST_RESULT=repo-gone
+  run capture
+  [ "$status" -eq 0 ]
+  [[ $output != *"failed $REPO"* ]]
+  [[ $output == *'failures=0'* ]]
+  ! grep -qF -- "$REPO" "$WIP_CAPTURE_STATE/last-good.tsv" 2>/dev/null
+  ! grep -qF -- "$REPO" "$WIP_CAPTURE_STATE/first-fail.tsv" 2>/dev/null
 }
 
 @test "a repository changed on both attempts warns after exactly two captures" {

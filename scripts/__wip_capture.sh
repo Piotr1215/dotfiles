@@ -97,7 +97,7 @@ copy_objects() {
 
 # Copy one common Git directory and write a snapshot using only a temporary index.
 capture_one() {
-  local repo=$1 gitdir common main_repo mirror mirror_git mirror_work_git name branch label stamp old_stamp common_stamp common_before work before after head tree commit msg f size
+  local repo=$1 gitdir common main_repo mirror mirror_git mirror_work_git name branch label stamp old_stamp common_stamp common_before work before after head tree commit msg f size rc
   local -A object_sources=()
   local primary_objects
   # Glob magic: **/ also matches the root, and git add -A exits 1 when a
@@ -155,7 +155,13 @@ capture_one() {
     # files; a capture took 58s against a 120s timeout. The live index is
     # copied below. Perishable lets --delete remove old worktree folders.
     rsync -rltc --omit-dir-times --delete --exclude='/objects/' --exclude='/refs/wip/' --exclude='/logs/refs/wip/' --exclude='*.lock' \
-      --filter='-p /worktrees/*/index' "$common/" "$mirror_git/"
+      --filter='-p /worktrees/*/index' "$common/" "$mirror_git/" || {
+        rc=$?
+        # 2026-11-27: exit 24 is a sibling worktree pruned mid-sync ("file has
+        # vanished"). That is the change-during-capture race, so take its retry.
+        if (( rc == 24 )); then printf 'repository changed during capture: %s\n' "$repo" >&2; return 1; fi
+        return "$rc"
+      }
     primary_objects=$(realpath -e -- "$common/objects")
     copy_objects "$primary_objects" "$mirror_git/objects"
     rm -f -- "$mirror_git/objects/info/alternates"
@@ -299,6 +305,10 @@ run_one() {
     # Notes such as skipped large files still reach the log.
     grep -Ev '^(captured|synced|skip) ' "$out" >&2 || true
     grep '^skip large untracked file' "$err" >&2 || true
+  elif [[ ! -e $repo ]]; then
+    # 2026-11-27: Gordon prunes finished worktrees while a run is going. A
+    # repository deleted before or during its capture has nothing left to back up.
+    line="gone"$'\t'"$repo"
   elif { (( rc != 124 && rc != 137 )) || printf 'timed out after %ss: %s\n' "$repo_timeout" "$repo" >> "$err"; } &&
        reason=$(known_reason "$err"); then
     line="known"$'\t'"$repo"$'\t'"$reason"
@@ -417,6 +427,8 @@ main() {
       captured) captured=$((captured+1)); new_good[$repo]=$now; printf 'captured %s\n' "$repo" ;;
       synced) synced=$((synced+1)); new_good[$repo]=$now; [[ ${WIP_CAPTURE_VERBOSE:-0} != 1 ]] || printf 'synced %s\n' "$repo" ;;
       skip) skipped=$((skipped+1)); new_good[$repo]=$now; [[ ${WIP_CAPTURE_VERBOSE:-0} != 1 ]] || printf 'skip %s\n' "$repo" ;;
+      # Deleted mid-run: no good time, no failure, so stale_check drops it.
+      gone) skipped=$((skipped+1)); [[ ${WIP_CAPTURE_VERBOSE:-0} != 1 ]] || printf 'gone %s\n' "$repo" ;;
       known)
         known=$((known+1))
         bad[$repo]=$reason
