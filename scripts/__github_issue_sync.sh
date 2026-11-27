@@ -1899,6 +1899,11 @@ selected_sync() {
         task rc.confirmation=no modify "$uuid" "description:$description" "view_kind:issue" "view_title:${title:0:200}" "view_state:$state" "view_issue:$key"
     else
         task rc.confirmation=no modify "$uuid" "linear_status:$state"
+        if [[ "$state" == Backlog ]]; then
+            task rc.confirmation=no modify "$uuid" +backlog -next -hold
+        elif [[ "$state" =~ ^(Todo|In\ Progress|Investigating|In\ Review)$ ]]; then
+            task rc.confirmation=no modify "$uuid" -backlog
+        fi
     fi
     if [[ "$(jq -r '.state.type' <<<"$issue")" =~ ^(completed|canceled)$ ]]; then
         if [[ "$is_view" == true ]]; then task rc.confirmation=no "$uuid" "done"; else handle_task_completion "$uuid" "$(jq -r '.description' <<<"$row")" complete; fi
