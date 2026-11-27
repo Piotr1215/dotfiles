@@ -984,7 +984,8 @@ def status_plan(snapshot, tasks):
     return [(t["uuid"], t["linear_issue_id"], t.get("linear_status") or "", states[t["linear_issue_id"].upper()])
             for t in tasks if TAG not in (t.get("tags") or []) and t.get("linear_issue_id")
             and t["linear_issue_id"].upper() in states
-            and t.get("linear_status") != states[t["linear_issue_id"].upper()]]
+            and (t.get("linear_status") != states[t["linear_issue_id"].upper()]
+                 or (states[t["linear_issue_id"].upper()] == "Backlog" and "backlog" not in (t.get("tags") or [])))]
 
 
 def apply_statuses(intents):
@@ -994,7 +995,9 @@ def apply_statuses(intents):
         result = subprocess.run([*TASK_CMD, *TASK_UDA, "rc.context=none", "rc.hooks=off",
                                  "rc.confirmation=off", "rc.bulk=0", "rc.verbose=nothing",
                                  "uuid:" + uid, "status:pending", "linear_issue_id.is:" + ident,
-                                 "linear_status.is:" + old, "modify", "linear_status:" + state],
+                                 "linear_status.is:" + old, "modify", "linear_status:" + state,
+                                 *(["+backlog", "-next", "-hold"] if state == "Backlog" else
+                                   ["-backlog"] if state in ("Todo", "In Progress", "Investigating", "In Review") else [])],
                                 capture_output=True, text=True, encoding="utf-8", timeout=60, check=False)
         if result.returncode and not (result.returncode == 1 and not result.stdout.strip() and not result.stderr.strip()):
             raise RuntimeError(f"task status modify failed: {result.stderr.strip()}")
