@@ -1168,6 +1168,31 @@ class SourcePaginationTests(unittest.TestCase):
         rows, _ = pv.build_rows(snap, resolved, github(), NOW)
         self.assertIn("standing:p3", rows)
 
+    def test_renamed_reference_preserves_verified_ownership(self):
+        client = pv.Linear("fixture")
+        moved = assigned("ENGAI-165", "p3", "Historical release")
+        moved["previousIdentifiers"] = ["DEVOPS-2043"]
+        linked = project("p3", "Historical release", [], led=False, update_days=500)
+        for task in (handoff("DEVOPS-2043"),
+                     handoff(None, description="https://linear.app/loft/issue/DEVOPS-2043/old-title")):
+            with self.subTest(task=task), mock.patch.object(client, "pages", return_value=iter([])), \
+                    mock.patch.object(client, "query", return_value={"i0": moved}) as query, \
+                    mock.patch.object(pv, "read_project", return_value=linked):
+                snap = pv.read_linear(client, [task])
+            self.assertFalse(snap["reference_failure"])
+            self.assertEqual(snap["referenced"], [moved])
+            self.assertIn("previousIdentifiers", query.call_args.args[0])
+            changes, _ = pv.association_plan(snap, [task])
+            self.assertEqual(changes[0]["view_project"], "historical-release")
+
+    def test_different_reference_still_fails_closed(self):
+        client = pv.Linear("fixture")
+        other = assigned("ENGAI-165", "p3", "Historical release")
+        other["previousIdentifiers"] = ["DEVOPS-2042"]
+        with mock.patch.object(client, "query", return_value={"i0": other}):
+            with self.assertRaisesRegex(RuntimeError, "different issue for an exact reference"):
+                pv.read_referenced(client, {"DEVOPS-2043"})
+
     def test_reference_query_failure_preserves_metadata_without_guessing_from_prose(self):
         client = pv.Linear("fixture")
         task = handoff("DEVOPS-50", view_project="release-pipeline")

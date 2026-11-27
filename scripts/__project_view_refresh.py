@@ -420,16 +420,21 @@ def read_referenced(linear, identifiers):
     for start in range(0, len(wanted), LINEAR_CHUNK):
         chunk = wanted[start:start + LINEAR_CHUNK]
         fields = " ".join(f'i{i}: issue(id: {json.dumps(ident)}) '
-                          '{ identifier title url state { name type } project { id name } }'
+                          '{ identifier previousIdentifiers title url state { name type } project { id name } }'
                           for i, ident in enumerate(chunk))
         data = linear.query("query { " + fields + " }")
         for i, ident in enumerate(chunk):
             issue = data.get(f"i{i}")
             if issue:
-                if issue["identifier"].upper() != ident:
+                if ident not in issue_identifiers(issue):
                     raise RuntimeError("Linear returned a different issue for an exact reference")
                 found.append(issue)
     return found
+
+
+def issue_identifiers(issue):
+    """Current and Linear-verified former identifiers for one issue."""
+    return {ident.upper() for ident in [issue["identifier"], *(issue.get("previousIdentifiers") or [])]}
 
 
 def read_linear(linear, tasks=()):
@@ -469,9 +474,9 @@ def read_linear(linear, tasks=()):
         routes = {(match[1].lower(), match[2].upper()) for task in tasks
                   if "piotr" in (task.get("tags") or []) and TAG not in (task.get("tags") or [])
                   for url in task_urls(task) if (match := LINEAR_ISSUE_URL.fullmatch(url))}
-        referenced = [i for i in referenced if i["identifier"].upper() in structured
+        referenced = [i for i in referenced if issue_identifiers(i) & structured
                       or ((match := LINEAR_ISSUE_URL.fullmatch(i["url"]))
-                          and (match[1].lower(), match[2].upper()) in routes)]
+                          and any((match[1].lower(), ident) in routes for ident in issue_identifiers(i)))]
     except Exception as error:
         reference_failure = True
         reference_rate_limited = isinstance(error, LinearRateLimited)
@@ -840,8 +845,13 @@ def association_plan(snapshot, tasks, github_available=True, unavailable_refs=()
     for issue in [*(snapshot.get("assigned") or []), *(snapshot.get("referenced") or [])]:
         pid = (issue.get("project") or {}).get("id")
         if pid in projects:
-            add(identifiers, issue["identifier"], pid)
+            for ident in issue_identifiers(issue):
+                add(identifiers, ident, pid)
             add(urls, issue["url"], pid)
+            match = LINEAR_ISSUE_URL.fullmatch(issue["url"])
+            if match:
+                for ident in issue_identifiers(issue):
+                    add(urls, f"https://linear.app/{match[1]}/issue/{ident}", pid)
     changes, resolved = [], []
     unavailable_refs = set(unavailable_refs)
     for task in tasks:
