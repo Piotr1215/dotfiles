@@ -19,7 +19,7 @@ if [[ ( -z "$report" || "$report" == myprojects ) && -n "$uuid" ]] && "$task_bin
   report=handoffs
   export TASKWARRIOR_TUI_REPORT=handoffs
 fi
-if [[ "$report" == handoffs ]]; then
+if [[ "$report" == handoffs || "$report" == handoffs-area || "$report" == handoffs-kind || "$report" == handoffs-issue ]]; then
   [[ -n "$uuid" ]] || { echo 'Select a handoff first' >&2; exit 1; }
   case "$slot" in
     3) exec "$root/__task_brief.sh" --popup "$uuid" ;;

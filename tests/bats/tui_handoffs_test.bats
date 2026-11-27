@@ -138,7 +138,7 @@ MOCK
   : > "$TASKWARRIOR_TUI_REPORT_REQUEST"
   run "$root/scripts/__tui_dispatch.sh" 2 "$uuid"
   [ "$status" -eq 0 ]
-  grep -qx current "$TASKWARRIOR_TUI_REPORT_REQUEST"
+  grep -qx private "$TASKWARRIOR_TUI_REPORT_REQUEST"
   [ ! -e "$LOG" ]
 }
 @test "slot 7 toggles the Linear backlog and slot 0 jumps to the agent" {
@@ -157,4 +157,13 @@ MOCK
 @test "handoffs legend lists the brief shortcut" {
   skip_if_encrypted "$root/.taskrc"
   grep -a '^uda.taskwarrior-tui.legend.handoffs=' "$root/.taskrc" | grep -q 'b brief'
+}
+
+@test "handoff sort reports use handoff keys" {
+  for report in handoffs-area handoffs-kind handoffs-issue; do
+    export TASKWARRIOR_TUI_REPORT="$report"
+    run "$root/scripts/__tui_dispatch.sh" 6 "$uuid"
+    [ "$status" -eq 0 ]
+    grep -Fq 'display-popup' "$LOG"
+  done
 }
