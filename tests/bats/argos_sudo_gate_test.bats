@@ -46,7 +46,7 @@ record() {
     run "$applet"
     [[ "$output" == *"color='#ff4444'"* ]]
     [[ "$output" == *'Do not touch'* ]]
-    [[ "$output" == *'Allowed for agents (no touch)'* ]]
+    [[ "$output" == *'Edit allowed commands'* ]]
 }
 
 @test "missing context is shown as unknown" {
@@ -87,16 +87,17 @@ record() {
     [[ "$output" == *"color='#888888'"* ]]
 }
 
-@test "idle label and allow rules remain visible" {
+@test "idle label shows the edit row and never lists the rules" {
+    # Piotr, 28 Nov: the list belongs in a file he edits, not in the menu.
     export SUDO_GATE_RULES_FILE="$BATS_TEST_TMPDIR/allow"
-    printf '%s\n' '{"kind":"program","path":"/usr/bin/id","added":"now","note":"test"}' >"$SUDO_GATE_RULES_FILE"
+    printf '%s\n' '/usr/bin/id' >"$SUDO_GATE_RULES_FILE"
     run "$applet"
     [ "$status" -eq 0 ]
-    [[ "$output" == *"color='#888888'"* ]]
     [[ "$(head -1 <<<"$output")" == "<tt><b>SU:</b></tt><tt><span color='#888888'>0</span></tt> | font='monospace' size="* ]]
-    [[ "$output" == *'Allowed for agents (no touch)'* ]]
-    [[ "$output" == *'/usr/bin/id'* ]]
-    [[ "$output" == *'sudo-agent-gate remove 1'* ]]
+    [[ "$(sed -n 2p <<<"$output")" == '---' ]]
+    [[ "$(sed -n 3p <<<"$output")" == "Edit allowed commands | bash='/usr/local/bin/tmux new-window -n sudo-allow $(cd "$BATS_TEST_DIRNAME/../.." && pwd -P)/scripts/__sudo_gate_allow_edit.sh' terminal=false" ]]
+    [[ "$output" != *'/usr/bin/id'* ]]
+    [[ "$output" != *'Remove'* ]]
 }
 
 @test "live request offers allow actions and recent entries" {
@@ -174,14 +175,6 @@ record() {
     [ "$result" -eq 0 ]
 }
 
-@test "exact argv rule renders with its one-based remove action" {
-    export SUDO_GATE_RULES_FILE="$BATS_TEST_TMPDIR/allow"
-    printf '%s\n' '{"kind":"program","path":"/usr/bin/id","added":"now","note":"first"}' '{"kind":"exact","argv":["/usr/bin/printf","hello world"],"added":"now","note":"second"}' >"$SUDO_GATE_RULES_FILE"
-    run "$applet"
-    [ "$status" -eq 0 ]
-    [[ "$output" == *$'/usr/bin/printf &#x27;hello world&#x27; | font=monospace\n--Remove | bash=\'sudo -n /usr/local/sbin/sudo-agent-gate remove 2\''* ]]
-}
-
 @test "recent history renders only the last five entries in order" {
     export SUDO_GATE_RECENT_FILE="$BATS_TEST_TMPDIR/recent.jsonl"
     for number in {1..7}; do
@@ -219,7 +212,7 @@ record() {
     run "$applet"
     [[ "$output" == *"color='#ff4444'"* ]]
     [[ "$output" == *'Do not touch'* ]]
-    [[ "$output" == *'Allowed for agents (no touch)'* ]]
+    [[ "$output" == *'Edit allowed commands'* ]]
     rm "$SUDO_GATE_PENDING_DIR/$sleeper.json"
     ln -s "$BATS_TEST_TMPDIR/missing" "$SUDO_GATE_PENDING_DIR/99999999.json"
     run "$applet" --busy
@@ -243,7 +236,44 @@ record() {
     [[ "$output" == *'ROOT state unavailable'* ]]
     [[ "$output" == *'Command:'* ]]
     [[ "$output" != *'Touch the YubiKey to run exactly this command.'* ]]
-    [[ "$output" == *'Allowed for agents (no touch)'* ]]
+    [[ "$output" == *'Edit allowed commands'* ]]
     run "$applet" --busy
     [ "$status" -eq 2 ]
+}
+
+# The edit row's script: sudoedit, then the gate's check; the window waits for
+# Enter only when something failed.
+edit_env() {
+    editor="$BATS_TEST_DIRNAME/../../scripts/__sudo_gate_allow_edit.sh"
+    mkdir -p "$BATS_TEST_TMPDIR/bin"
+    export PATH="$BATS_TEST_TMPDIR/bin:$PATH" SUDO_GATE_ALLOW_FILE="$BATS_TEST_TMPDIR/allow" EDIT_LOG="$BATS_TEST_TMPDIR/edit.log"
+    printf '#!/bin/sh\necho "sudoedit $SUDO_EDITOR $*" >>"$EDIT_LOG"\nexit "${SUDOEDIT_RC:-0}"\n' >"$BATS_TEST_TMPDIR/bin/sudoedit"
+    printf '#!/bin/sh\necho "gate $*" >>"$EDIT_LOG"\n[ -z "$CHECK_FAIL" ] || { echo "line 3: bad" >&2; exit 1; }\necho "2 allowed commands, file ok"\n' >"$BATS_TEST_TMPDIR/gate"
+    chmod +x "$BATS_TEST_TMPDIR/bin/sudoedit" "$BATS_TEST_TMPDIR/gate"
+    export SUDO_GATE_BIN="$BATS_TEST_TMPDIR/gate"
+}
+
+@test "edit row opens the allow file in sudoedit with nvim and checks it" {
+    edit_env
+    run "$editor" </dev/null
+    [ "$status" -eq 0 ]
+    [[ "$(sed -n 1p "$EDIT_LOG")" == "sudoedit nvim $SUDO_GATE_ALLOW_FILE" ]]
+    [[ "$(sed -n 2p "$EDIT_LOG")" == "gate check --allow $SUDO_GATE_ALLOW_FILE" ]]
+    [[ "$output" == *'file ok'* ]]
+}
+
+@test "edit row keeps the window open on a bad line" {
+    edit_env
+    CHECK_FAIL=1 run "$editor" <<<''
+    [ "$status" -eq 1 ]
+    [[ "$output" == *'line 3: bad'* ]]
+    [[ "$output" == *'Press Enter to close.'* ]]
+}
+
+@test "edit row stops when sudoedit fails" {
+    edit_env
+    SUDOEDIT_RC=1 run "$editor" <<<''
+    [ "$status" -eq 1 ]
+    [[ "$output" == *'sudoedit failed.'* ]]
+    [[ "$(wc -l <"$EDIT_LOG")" -eq 1 ]]
 }

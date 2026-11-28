@@ -26,7 +26,10 @@ const cArgosButton = GObject.registerClass({
 class ArgosButton extends PanelMenu.Button {
 
   _init(file, settings) {
-    super._init(0, "", false);
+    // 0.5 centres each menu under its label, as GNOME's own indicators do. Upstream
+    // passes 0, which starts the menu at the label's middle and runs it to the right
+    // (Piotr, 28 Nov: "the menu is not aligned correclty with the icon").
+    super._init(0.5, "", false);
 
     this._file = file;
     this._updateInterval = settings.updateInterval;

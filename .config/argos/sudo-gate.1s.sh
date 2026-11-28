@@ -193,18 +193,12 @@ def jsonlines(path):
     except OSError:
         pass
 
-print("---")
-print("Allowed for agents (no touch) | font=monospace")
-rules = os.environ.get("SUDO_GATE_RULES_FILE", "/etc/sudo-agent-gate/allow")
-for index, rule in enumerate(jsonlines(rules)):
-    if rule.get("kind") == "program":
-        description = rule.get("path", "")
-    elif rule.get("kind") == "exact" and isinstance(rule.get("argv"), list):
-        description = shlex.join([str(arg) for arg in rule["argv"]])
-    else:
-        continue
-    print(f"{safe(description)} | font=monospace")
-    print(f"--Remove | bash='sudo -n /usr/local/sbin/sudo-agent-gate remove {index + 1}' terminal=false refresh=true")
+if records:
+    print("---")
+# The list itself lives in a root-owned file Piotr edits, not in this menu
+# (Piotr, 28 Nov: "I need file that I can edit that contains this list").
+edit = os.path.normpath(os.path.join(os.path.dirname(os.path.realpath(script)), "../../scripts/__sudo_gate_allow_edit.sh"))
+print(f"Edit allowed commands | bash='/usr/local/bin/tmux new-window -n sudo-allow {edit}' terminal=false")
 recent = os.environ.get("SUDO_GATE_RECENT_FILE", "/run/sudo-agent-gate/recent.jsonl")
 for item in list(jsonlines(recent))[-5:]:
     print(f"auto-allowed: {safe(item.get('agent', 'unknown'))} {safe(item.get('command', ''))} | font=monospace")
