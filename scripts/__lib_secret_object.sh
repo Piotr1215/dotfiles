@@ -312,13 +312,21 @@ secret_write_pass() {
 	pass insert -m -f "$1" >/dev/null
 }
 
+# Block a secret unlock while the root request owns the next touch.
+secret_gate_check() {
+    if "$(dirname -- "${BASH_SOURCE[0]}")/__sudo_gate_busy.sh"; then
+        notify-send "A root request is waiting for the YubiKey: touch or refuse it first (top bar)" 2>/dev/null || :
+        return 75
+    fi
+}
+
 # Print a secret's value. Costs a tap for a bastion object and nothing for a pass
 # one, which is the whole difference between the two tiers.
 secret_read() {
 	local name owner entry refs status
 	IFS=$'\t' read -r name owner entry refs status < <(secret_locate "$1")
 	case "$owner" in
-	age) age -d -i "$AGE_ID" "$SECRETS_DIR/$name.age" ;;
+	age) secret_gate_check || return $?; "$(dirname -- "${BASH_SOURCE[0]}")/__sudo_gate_busy.sh" --run age -d -i "$AGE_ID" "$SECRETS_DIR/$name.age" ;;
 	# No `head -n1` here. That is the pass CLI convention (password on line 1,
 	# metadata below), but this store holds whole values written by passfromenv,
 	# so truncating silently returned the first line of a PEM or a JSON blob.
@@ -552,7 +560,12 @@ secret_demote() {
 	}
 	# Same rule as promote: the tap has to succeed before anything is written.
 	local value
-	value=$(age -d -i "$AGE_ID" "$SECRETS_DIR/$name.age" 2>/dev/null) || value=""
+	secret_gate_check || return $?
+	value=$("$(dirname -- "${BASH_SOURCE[0]}")/__sudo_gate_busy.sh" --run age -d -i "$AGE_ID" "$SECRETS_DIR/$name.age" 2>/dev/null) || {
+		status=$?
+		[[ "$status" -eq 75 ]] && return 75
+		value=""
+	}
 	[[ -n "$value" ]] || {
 		secret_die "no tap registered for '$name'; nothing was written to pass"
 		return 1

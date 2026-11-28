@@ -3,9 +3,9 @@ set -eo pipefail
 
 # Render pending sudo requests, or refuse one after rechecking its state.
 exec python3 - "$0" "$@" <<'PY'
-import glob
 import html
 import json
+import math
 import os
 import shlex
 import signal
@@ -15,34 +15,82 @@ import time
 script, *args = sys.argv[1:]
 pending = os.environ.get("SUDO_GATE_PENDING_DIR", "/run/sudo-agent-gate/pending")
 comm = "sudo"
+proc_root = "/proc"
 if os.environ.get("SUDO_GATE_TEST_MODE") == "1":
     comm = os.environ.get("SUDO_GATE_TEST_COMM", comm)
+    proc_root = os.environ.get("SUDO_GATE_TEST_PROC_ROOT", proc_root)
 now = time.time()
 
 
-def live(path):
+def pid_exists(pid):
+    try:
+        os.kill(pid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except OverflowError as error:
+        raise ValueError("invalid pid") from error
+
+
+def live(path, strict=False):
     try:
         with open(path, encoding="utf-8") as source:
             record = json.load(source)
         pid, ts = record["sudo_pid"], record["ts"]
-        if type(pid) is not int or pid <= 0 or type(ts) not in (int, float):
-            return None
-        if os.path.basename(path) != f"{pid}.json" or not 0 <= now - ts < 120:
-            return None
+        if type(pid) is not int or pid <= 0 or type(ts) not in (int, float) or not math.isfinite(ts):
+            raise ValueError("invalid pid or timestamp")
+        if os.path.basename(path) != f"{pid}.json":
+            raise ValueError("invalid filename")
         for key in ("command", "detection", "agent"):
             if not isinstance(record.get(key), str) or not record[key]:
+                raise ValueError("invalid request")
+        start = record.get("start_time")
+        if start is None:
+            if not 0 <= now - ts < 120:
+                return None
+        else:
+            if not isinstance(start, str) or not start.isdigit():
+                raise ValueError("invalid process start")
+            with open(f"{proc_root}/{pid}/stat", encoding="utf-8") as source:
+                actual = source.read().rsplit(")", 1)[1].split()[19]
+            if start != actual:
                 return None
         for key in ("cwd", "session", "pane"):
             if not isinstance(record.get(key), str) or not record[key].strip():
                 record[key] = "unknown"
-        with open(f"/proc/{pid}/comm", encoding="utf-8") as source:
+        with open(f"{proc_root}/{pid}/comm", encoding="utf-8") as source:
             if source.read().strip() != comm:
                 return None
-        with open(f"/proc/{pid}/task/{pid}/children", encoding="utf-8") as source:
-            if source.read().strip():
+        with open(f"{proc_root}/{pid}/task/{pid}/children", encoding="utf-8") as source:
+            children = source.read().split()
+        for child in children:
+            try:
+                with open(f"{proc_root}/{child}/cmdline", "rb") as source:
+                    command = source.read().split(b"\0")
+            except FileNotFoundError:
+                # A vanished child is safe only once the process is gone.
+                if strict and pid_exists(int(child)):
+                    raise
+                continue
+            if not any(command):
+                # A just-exited gate helper can be a zombie until sudo reaps it.
+                continue
+            if not any(arg == b"/usr/local/sbin/sudo-agent-gate" or
+                       (os.environ.get("SUDO_GATE_TEST_MODE") == "1" and
+                        arg.endswith(b"/__sudo_agent_gate.py")) for arg in command):
                 return None
         return record
-    except (OSError, ValueError, TypeError, KeyError):
+    except FileNotFoundError:
+        if strict:
+            name = os.path.basename(path).removesuffix(".json")
+            if not name.isdigit() or int(name) <= 0 or pid_exists(int(name)):
+                raise
+        return None
+    except (OSError, ValueError, TypeError, KeyError, IndexError):
+        if strict:
+            raise
         return None
 
 
@@ -50,7 +98,32 @@ def safe(value):
     return html.escape(str(value).replace("\n", " ").replace("\r", " "), quote=True).replace("|", "&#124;")
 
 
+def scan():
+    try:
+        with os.scandir(pending) as entries:
+            paths = sorted(entry.path for entry in entries if entry.name.endswith(".json"))
+    except FileNotFoundError:
+        return [], False, False
+    except OSError:
+        return [], True, False
+    records = []
+    unknown = False
+    for path in paths:
+        try:
+            record = live(path, strict=True)
+            if record:
+                records.append(record)
+        except (OSError, ValueError, TypeError, KeyError, IndexError):
+            unknown = True
+    return records, unknown, bool(paths)
+
+
 if args:
+    if args in (["--busy"], ["--state-present"]):
+        records, unknown, present = scan()
+        if args == ["--state-present"]:
+            sys.exit(2 if unknown else 0 if present else 1)
+        sys.exit(2 if unknown else 0 if records else 1)
     if len(args) == 2 and args[0] == "--refuse" and args[1].isdigit():
         record = live(os.path.join(pending, f"{args[1]}.json"))
         if record:
@@ -60,16 +133,20 @@ if args:
                 pass
     sys.exit(0)
 
-records = [record for path in sorted(glob.glob(os.path.join(pending, "*.json"))) if (record := live(path))]
-if not records:
+records, unknown, _ = scan()
+if unknown:
+    print("<span color='#ff4444'>🔑 ROOT state unavailable</span> | font=monospace")
+elif records:
+    first = records[0]
+    label = f"🔑 ROOT {first['agent']}: {first['command']}"
+    if len(label) > 40:
+        label = label[:39] + "…"
+    print(f"<span color='#ff4444'>{safe(label)}</span> | font=monospace")
+else:
+    print("<span color='#888888'>⚿</span> | size=small")
+if unknown:
     print("---")
-    sys.exit(0)
-
-first = records[0]
-label = f"🔑 ROOT {first['agent']}: {first['command']}"
-if len(label) > 40:
-    label = label[:39] + "…"
-print(f"<span color='#ff4444'>{safe(label)}</span> | font=monospace")
+    print("Root request state unavailable. Do not touch the YubiKey. | font=monospace")
 print("---")
 for index, record in enumerate(records):
     if index:
@@ -77,9 +154,47 @@ for index, record in enumerate(records):
     for title, value in (("Command", record["command"]), ("Agent", record["agent"]),
                          ("Session / pane", f"{record['session']} / {record['pane']}"),
                          ("Cwd", record["cwd"]), ("Detection", record["detection"]),
-                         ("Age", f"{int(now - record['ts'])}s")):
+                         ("Age", f"{max(0, int(now - record['ts']))}s")):
         print(f"{title}: {safe(value)} | font=monospace")
-    print("Touch the YubiKey to run exactly this command. Do not tap for anything else while this is red. | font=monospace")
+    if not unknown:
+        print("Touch the YubiKey to run exactly this command. Do not tap for anything else while this is red. | font=monospace")
     command = shlex.quote(os.path.abspath(script)) + " --refuse " + str(record["sudo_pid"])
     print(f"Refuse | bash='{command}' terminal=false refresh=true")
+
+    program = record.get("program")
+    if isinstance(program, str) and program:
+        pid = record["sudo_pid"]
+        gate = "sudo -n /usr/local/sbin/sudo-agent-gate"
+        print(f"Always allow {safe(os.path.basename(program))} for agents | bash='{gate} allow-program-from {pid}' terminal=false refresh=true")
+        print(f"Always allow exactly this command | bash='{gate} allow-exact-from {pid}' terminal=false refresh=true")
+        print("Applies from the next call; touch or refuse this one. | font=monospace")
+
+def jsonlines(path):
+    try:
+        with open(path, encoding="utf-8") as source:
+            for line in source:
+                try:
+                    value = json.loads(line)
+                    if isinstance(value, dict):
+                        yield value
+                except ValueError:
+                    continue
+    except OSError:
+        pass
+
+print("---")
+print("Allowed for agents (no touch) | font=monospace")
+rules = os.environ.get("SUDO_GATE_RULES_FILE", "/etc/sudo-agent-gate/allow")
+for index, rule in enumerate(jsonlines(rules)):
+    if rule.get("kind") == "program":
+        description = rule.get("path", "")
+    elif rule.get("kind") == "exact" and isinstance(rule.get("argv"), list):
+        description = shlex.join([str(arg) for arg in rule["argv"]])
+    else:
+        continue
+    print(f"{safe(description)} | font=monospace")
+    print(f"--Remove | bash='sudo -n /usr/local/sbin/sudo-agent-gate remove {index + 1}' terminal=false refresh=true")
+recent = os.environ.get("SUDO_GATE_RECENT_FILE", "/run/sudo-agent-gate/recent.jsonl")
+for item in list(jsonlines(recent))[-5:]:
+    print(f"auto-allowed: {safe(item.get('agent', 'unknown'))} {safe(item.get('command', ''))} | font=monospace")
 PY

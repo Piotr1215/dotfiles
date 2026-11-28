@@ -6,7 +6,8 @@ emulate -L zsh
 setopt no_unset_warn 2>/dev/null
 
 T=/tmp/sec_regress.$$
-mkdir -p "$T/.config/age" "$T/.secrets" "$T/bin"
+mkdir -p "$T/.config/age" "$T/.secrets" "$T/bin" "$T/dev"
+ln -s /home/decoder/dev/dotfiles "$T/dev/dotfiles"
 HOME="$T"
 
 age-keygen -o "$T/key.txt" 2>/dev/null

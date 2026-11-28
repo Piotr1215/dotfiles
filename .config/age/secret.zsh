@@ -69,14 +69,13 @@ sec() {
     return 1
   fi
 
-  # Cue the physical tap so the wait never looks like a hang.
-  # Both go to stderr / the desktop, never to stdout, so $(sec ...) stays clean.
-  print -u2 "sec: TOUCH your YubiKey to unlock '$name' (it is blinking) ..."
-  if (( $+commands[notify-send] )); then
-    ( notify-send -u normal -t 12000 "🔐 YubiKey" "Touch the key to unlock $name" >/dev/null 2>&1 & )
+  if "$HOME/dev/dotfiles/scripts/__sudo_gate_busy.sh"; then
+    notify-send "A root request is waiting for the YubiKey: touch or refuse it first (top bar)" 2>/dev/null || :
+    return 1
   fi
 
-  age -d -i "$id" "$f"
+  SUDO_GATE_CUE_KIND=sec SUDO_GATE_CUE_NAME="$name" \
+    "$HOME/dev/dotfiles/scripts/__sudo_gate_busy.sh" --run age -d -i "$id" "$f"
 }
 
 # Pop an fzf file picker rooted at $HOME (used by `secfile` with no path).

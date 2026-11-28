@@ -512,3 +512,77 @@ STUB
 	grep -q 'MOVED deleted from pass; the Bitwarden copy stays' "$NOTIFY_LOG"
 	grep -qx MOVED "$SECRETS_DIR/.bitwarden"
 }
+
+pending_root() {
+    export SUDO_GATE_PENDING_DIR="$BATS_TEST_TMPDIR/pending" SUDO_GATE_TEST_MODE=1 SUDO_GATE_TEST_COMM=sleep
+    mkdir -p "$SUDO_GATE_PENDING_DIR"
+    sleep 300 >/dev/null 2>&1 &
+    pending_pid=$!
+    jq -n --argjson pid "$pending_pid" --argjson ts "$(date +%s)" '{sudo_pid:$pid,ts:$ts,command:"sudo id",detection:"agent",agent:"worker"}' >"$SUDO_GATE_PENDING_DIR/$pending_pid.json"
+}
+
+teardown() {
+    if [[ -n "${pending_pid:-}" ]]; then kill "$pending_pid" 2>/dev/null || :; wait "$pending_pid" 2>/dev/null || :; fi
+}
+
+assert_root_blocked() {
+    [ "$status" -ne 0 ] || return 1
+    grep -Fxq 'A root request is waiting for the YubiKey: touch or refuse it first (top bar)' "$NOTIFY_LOG" || return 1
+    ! grep -Eqi 'no tap|touch the key|Touch the YubiKey' "$NOTIFY_LOG" || return 1
+    [ ! -e "$XDG_RUNTIME_DIR/secret-picker-touch" ] || return 1
+    ! grep -q '^age ' "$STORE_LOG" 2>/dev/null
+}
+
+@test "pending root stops picker copy before touch cue" {
+    pending_root
+    printf 'value' >"$SECRETS_DIR/TEST.age"
+    export ROFI_PICK=0 ROFI_EXIT=0
+    run "$PICKER"
+    assert_root_blocked
+}
+
+@test "pending root stops picker demote before touch cue" {
+    pending_root
+    printf 'value' >"$SECRETS_DIR/TEST.age"
+    stub_rofi_seq '0 12' 'work 0'
+    run "$PICKER"
+    assert_root_blocked
+}
+
+@test "pending root stops Bitwarden master unlock before touch cue" {
+    pending_root
+    stub_bw
+    printf 'master' >"$SECRETS_DIR/BW_MASTER_PASSWORD.age"
+    printf 'value' >"$PASSWORD_STORE_DIR/work/TEST.gpg"
+    unset BW_SESSION
+    export BW_STATUS=locked ROFI_PICK=1 ROFI_EXIT=18
+    run "$PICKER"
+    assert_root_blocked
+}
+
+@test "pending root stops Bitwarden bastion push before touch cue" {
+    pending_root
+    stub_bw
+    printf 'value' >"$SECRETS_DIR/TEST.age"
+    export BW_SESSION=fake ROFI_PICK=0 ROFI_EXIT=18
+    run "$PICKER"
+    assert_root_blocked
+}
+
+@test "picker holds the touch lock while its cue and decrypt are active" {
+    export SUDO_GATE_LOCK_FILE="$BATS_TEST_TMPDIR/touch-lock"
+    : >"$SUDO_GATE_LOCK_FILE"
+    cat >"$STUB_BIN/age" <<'STUB'
+#!/usr/bin/env bash
+[[ -e "$XDG_RUNTIME_DIR/secret-picker-touch" ]] || exit 1
+if flock -n "$SUDO_GATE_LOCK_FILE" true; then exit 1; fi
+printf 'value'
+STUB
+    chmod +x "$STUB_BIN/age"
+    printf 'value' >"$SECRETS_DIR/TEST.age"
+    export ROFI_PICK=0 ROFI_EXIT=0
+    run "$PICKER"
+    [ "$status" -eq 0 ]
+    [ "$(cat "$CLIP")" = value ]
+    [ ! -e "$XDG_RUNTIME_DIR/secret-picker-touch" ]
+}

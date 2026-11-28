@@ -116,8 +116,12 @@ bw_session() {
 		# The tap that reads the master password is the confirmation. A missed tap
 		# returns nothing, so unlock fails below rather than on an empty password.
 		touch_cue_on "Touch the YubiKey${1:+ ($1)}: unlock Bitwarden"
-		pw=$(secret_read "$BW_MASTER_SECRET" 2>/dev/null) ||
-			{ touch_cue_off; fail "no tap registered, Bitwarden not unlocked. Press Alt+b again and touch the key."; }
+		pw=$(secret_read "$BW_MASTER_SECRET" 2>/dev/null) || {
+			status=$?
+			touch_cue_off
+			[[ "$status" -eq 75 ]] && exit 1
+			fail "no tap registered, Bitwarden not unlocked. Press Alt+b again and touch the key."
+		}
 		touch_cue_off
 		BW_UNLOCK_TAPPED=1
 		;;
@@ -242,7 +246,6 @@ note() { notify-send -t 5000 "Secret picker" "$1"; }
 BADGE_DIR="${XDG_RUNTIME_DIR:-/run/user/$UID}"
 TOUCH_CUE="$BADGE_DIR/secret-picker-touch"
 BW_SESSION_FILE="$BADGE_DIR/secret-picker-bw-session"
-TOUCH_POPUP=""
 
 # Yellow flashes: the value is on the clipboard.
 blink_key() { touch "$BADGE_DIR/secret-picker-blink"; }
@@ -256,19 +259,14 @@ blink_key() { touch "$BADGE_DIR/secret-picker-blink"; }
 # say a second one was owed. The popup is closed by id the moment the touch
 # lands, so it never outlives the wait the way the old card did.
 touch_cue_on() {
-	touch "$TOUCH_CUE"
-	TOUCH_POPUP=""
-	[[ -n "${1:-}" ]] && { TOUCH_POPUP=$(notify-send -p -e -u critical "Secret picker" "$1" 2>/dev/null) || TOUCH_POPUP=""; }
+	secret_gate_check || exit 1
+	export SUDO_GATE_CUE_KIND=picker SUDO_GATE_CUE_FILE="$TOUCH_CUE" SUDO_GATE_CUE_MESSAGE="${1:-}"
 	trap on_exit EXIT
 }
 touch_cue_off() {
-	rm -f "$TOUCH_CUE"
-	if [[ "$TOUCH_POPUP" =~ ^[0-9]+$ ]]; then
-		gdbus call --session --dest org.freedesktop.Notifications --object-path /org/freedesktop/Notifications \
-			--method org.freedesktop.Notifications.CloseNotification "$TOUCH_POPUP" >/dev/null 2>&1 || true
-	fi
-	TOUCH_POPUP=""
+	unset SUDO_GATE_CUE_KIND SUDO_GATE_CUE_FILE SUDO_GATE_CUE_MESSAGE
 }
+
 on_exit() {
 	touch_cue_off
 	[[ -n "${BW_LOCK_ON_EXIT:-}" ]] && { bw lock >/dev/null 2>&1 || true; }
@@ -454,8 +452,11 @@ copy)
 		# A missed touch is by far the most common failure, and age-plugin-yubikey
 		# reports it as "Failed to decrypt YubiKey stanza", which reads like a
 		# key/recipient fault and sends you debugging the wrong thing. Say what it is.
-		secret_read "$name" 2>/dev/null | clip ||
+		secret_read "$name" 2>/dev/null | clip || {
+			statuses=("${PIPESTATUS[@]}")
+			[[ "${statuses[0]}" -eq 75 ]] && exit 1
 			fail "no tap registered, $name not copied. Press again and touch the key."
+		}
 		touch_cue_off
 	else
 		secret_read "$name" 2>/dev/null | clip ||
@@ -536,7 +537,11 @@ to_pass)
 		sort | rofi_menu "move $name to which pass subtree") || exit 0
 	[[ -n "$sub" ]] || exit 0
 	touch_cue_on
-	secret_demote "$name" "$sub" || fail "could not move $name to pass (no tap, or pass insert failed)"
+	secret_demote "$name" "$sub" || {
+		status=$?
+		[[ "$status" -eq 75 ]] && exit 1
+		fail "could not move $name to pass (no tap, or pass insert failed)"
+	}
 	touch_cue_off
 	note "$name moved to pass as $sub/$name; no tap guards it now"
 	;;
@@ -599,7 +604,16 @@ bitwarden)
 		[[ -n "${BW_UNLOCK_TAPPED:-}" ]] && step=" (2 of 2)"
 		touch_cue_on "Touch the YubiKey$step: send $name to Bitwarden"
 	fi
-	if ! error=$(secret_read "$name" 2>/dev/null | secret_bw_push "$name" 2>&1); then
+	if error=$(
+		secret_read "$name" 2>/dev/null | secret_bw_push "$name" 2>&1
+		statuses=("${PIPESTATUS[@]}")
+		[[ "${statuses[0]}" -eq 75 ]] && exit 75
+		exit "${statuses[1]}"
+	); then
+		:
+	else
+		status=$?
+		[[ "$status" -eq 75 ]] && exit 1
 		[[ "$owner" == age && "$error" == *"empty value"* ]] &&
 			fail "no tap registered, $name not sent to Bitwarden. Press again and touch the key."
 		fail "${error#secret: }"

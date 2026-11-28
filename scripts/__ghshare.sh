@@ -59,7 +59,7 @@ private_keys() {
 }
 
 # Decrypt the block in $1 to stdout with any private key the user holds.
-# Returns 2 when there is no block, 1 when no key opens it.
+# Returns 2 when there is no block, 1 when no key opens it, 75 when root is waiting.
 decrypt_input() {
 	local found kind block ids=() key
 	found=$(find_block "$1") || return 2
@@ -72,7 +72,11 @@ decrypt_input() {
 	age)
 		while IFS= read -r key; do ids+=(-i "$key"); done < <(private_keys '^-----BEGIN (OPENSSH|RSA) PRIVATE KEY-----$')
 		((${#ids[@]})) || return 1
-		printf '%s\n' "$block" | age --decrypt "${ids[@]}"
+		if "$(dirname -- "${BASH_SOURCE[0]}")/__sudo_gate_busy.sh"; then
+			notify-send "A root request is waiting for the YubiKey: touch or refuse it first (top bar)" 2>/dev/null || :
+			return 75
+		fi
+		printf '%s\n' "$block" | "$(dirname -- "${BASH_SOURCE[0]}")/__sudo_gate_busy.sh" --run age --decrypt "${ids[@]}"
 		;;
 	cms)
 		block=$(printf '%s\n' "$block" | sed -E 's/(BEGIN|END) PKCS7/\1 CMS/')
@@ -139,7 +143,7 @@ share() {
 }
 
 main() {
-	local arg="$1" piped="" was_piped="" input login secret
+	local arg="$1" piped="" was_piped="" input login secret status
 
 	if [[ "$arg" == "-d" || "$arg" == "--decrypt" ]]; then
 		if [[ -n "$2" ]]; then
@@ -149,13 +153,21 @@ main() {
 		else
 			input=$(xsel -ob 2>/dev/null) || die "nothing piped and no clipboard to read"
 		fi
-		decrypt_input "$input" || die "no encrypted block here that your keys can open"
+		decrypt_input "$input" || {
+			status=$?
+			[[ "$status" -eq 75 ]] && return 75
+			die "no encrypted block here that your keys can open"
+		}
 		return
 	fi
 
 	# A file argument is a saved block: decrypt it.
 	if [[ -n "$arg" && -f "$arg" ]]; then
-		decrypt_input "$(cat -- "$arg")" || die "$arg holds no block your keys can open"
+		decrypt_input "$(cat -- "$arg")" || {
+			status=$?
+			[[ "$status" -eq 75 ]] && return 75
+			die "$arg holds no block your keys can open"
+		}
 		return
 	fi
 
@@ -164,7 +176,11 @@ main() {
 		was_piped=1
 		piped=$(cat)
 		if find_block "$piped" >/dev/null; then
-			decrypt_input "$piped" || die "the piped block is not for any of your keys"
+			decrypt_input "$piped" || {
+				status=$?
+				[[ "$status" -eq 75 ]] && return 75
+				die "the piped block is not for any of your keys"
+			}
 			return
 		fi
 	fi
@@ -173,8 +189,13 @@ main() {
 	# cannot open, typically the message just shared, falls through to sharing.
 	if [[ -z "$arg" && -t 0 && -z "$GHSHARE_NO_CLIPBOARD" ]] && command -v xsel >/dev/null; then
 		input=$(xsel -ob 2>/dev/null || true)
-		if find_block "$input" >/dev/null && decrypt_input "$input" 2>/dev/null; then
-			return
+		if find_block "$input" >/dev/null; then
+			if decrypt_input "$input" 2>/dev/null; then
+				return
+			else
+				status=$?
+				[[ "$status" -eq 75 ]] && return 75
+			fi
 		fi
 	fi
 
