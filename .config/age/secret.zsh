@@ -70,7 +70,7 @@ sec() {
   fi
 
   if "$HOME/dev/dotfiles/scripts/__sudo_gate_busy.sh"; then
-    notify-send "A root request is waiting for the YubiKey: touch or refuse it first (top bar)" 2>/dev/null || :
+    print -u2 "sec: A root request is waiting for the YubiKey: touch or refuse it first (top bar)"
     return 1
   fi
 

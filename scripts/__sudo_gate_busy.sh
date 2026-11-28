@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # Check for a pending root touch, or hold the touch lock across a command.
+# A refusal goes to stderr, never a desktop notification: the argos label is the
+# only root request signal (Piotr, 28 Nov: "I don't want to see notifications").
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 applet="$script_dir/../.config/argos/sudo-gate.1s.sh"
 if (($# == 0)); then
@@ -13,32 +15,32 @@ fi
 shift
 lock_file=${SUDO_GATE_LOCK_FILE:-/etc/sudo-agent-gate/.touch-lock}
 if [[ -e "$lock_file" ]]; then
-    exec {lock_fd}<"$lock_file" || { notify-send 'Cannot verify root requests; unlock blocked' 2>/dev/null || :; exit 75; }
-    flock -x "$lock_fd" || { notify-send 'Cannot verify root requests; unlock blocked' 2>/dev/null || :; exit 75; }
+    exec {lock_fd}<"$lock_file" || { printf '%s\n' 'Cannot verify root requests; unlock blocked' >&2; exit 75; }
+    flock -x "$lock_fd" || { printf '%s\n' 'Cannot verify root requests; unlock blocked' >&2; exit 75; }
 else
     "$applet" --busy
     state=$?
     if [[ "$state" == 0 ]]; then
-        notify-send 'A root request is waiting for the YubiKey: touch or refuse it first (top bar)' 2>/dev/null || :
+        printf '%s\n' 'A root request is waiting for the YubiKey: touch or refuse it first (top bar)' >&2
         exit 75
     elif [[ "$state" != 1 ]]; then
-        notify-send 'Cannot verify root requests; unlock blocked' 2>/dev/null || :
+        printf '%s\n' 'Cannot verify root requests; unlock blocked' >&2
         exit 75
     fi
     "$applet" --state-present
     state=$?
     if [[ "$state" != 1 ]]; then
-        notify-send 'Cannot verify root requests; unlock blocked' 2>/dev/null || :
+        printf '%s\n' 'Cannot verify root requests; unlock blocked' >&2
         exit 75
     fi
 fi
 "$applet" --busy
 state=$?
 if [[ "$state" == 0 ]]; then
-    notify-send 'A root request is waiting for the YubiKey: touch or refuse it first (top bar)' 2>/dev/null || :
+    printf '%s\n' 'A root request is waiting for the YubiKey: touch or refuse it first (top bar)' >&2
     exit 75
 elif [[ "$state" != 1 ]]; then
-    notify-send 'Cannot verify root requests; unlock blocked' 2>/dev/null || :
+    printf '%s\n' 'Cannot verify root requests; unlock blocked' >&2
     exit 75
 fi
 popup=""

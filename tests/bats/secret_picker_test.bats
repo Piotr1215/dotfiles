@@ -527,8 +527,9 @@ teardown() {
 
 assert_root_blocked() {
     [ "$status" -ne 0 ] || return 1
-    grep -Fxq 'A root request is waiting for the YubiKey: touch or refuse it first (top bar)' "$NOTIFY_LOG" || return 1
-    ! grep -Eqi 'no tap|touch the key|Touch the YubiKey' "$NOTIFY_LOG" || return 1
+    # No popup at all: the red argos label is the only root request cue
+    # (Piotr, 28 Nov: "I don't want to see notifications", "but argos").
+    [ ! -s "$NOTIFY_LOG" ] || return 1
     [ ! -e "$XDG_RUNTIME_DIR/secret-picker-touch" ] || return 1
     ! grep -q '^age ' "$STORE_LOG" 2>/dev/null
 }

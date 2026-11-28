@@ -73,7 +73,7 @@ decrypt_input() {
 		while IFS= read -r key; do ids+=(-i "$key"); done < <(private_keys '^-----BEGIN (OPENSSH|RSA) PRIVATE KEY-----$')
 		((${#ids[@]})) || return 1
 		if "$(dirname -- "${BASH_SOURCE[0]}")/__sudo_gate_busy.sh"; then
-			notify-send "A root request is waiting for the YubiKey: touch or refuse it first (top bar)" 2>/dev/null || :
+			printf '%s\n' 'A root request is waiting for the YubiKey: touch or refuse it first (top bar)' >&2
 			return 75
 		fi
 		printf '%s\n' "$block" | "$(dirname -- "${BASH_SOURCE[0]}")/__sudo_gate_busy.sh" --run age --decrypt "${ids[@]}"
@@ -194,7 +194,11 @@ main() {
 				return
 			else
 				status=$?
-				[[ "$status" -eq 75 ]] && return 75
+				# The probe hides stderr, so say the refusal here.
+				if [[ "$status" -eq 75 ]]; then
+					printf '%s\n' 'A root request is waiting for the YubiKey: touch or refuse it first (top bar)' >&2
+					return 75
+				fi
 			fi
 		fi
 	fi

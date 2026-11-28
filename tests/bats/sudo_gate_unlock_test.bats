@@ -19,10 +19,16 @@ setup() {
     jq -n --argjson pid "$sleeper" --argjson ts "$(date +%s)" '{sudo_pid:$pid,ts:$ts,command:"sudo id",detection:"agent",agent:"worker"}' >"$SUDO_GATE_PENDING_DIR/$sleeper.json"
 }
 teardown() { kill "$sleeper" 2>/dev/null || :; wait "$sleeper" 2>/dev/null || :; }
+# The refusal is said on stderr only: no desktop notification about a root
+# request (Piotr, 28 Nov: "I don't want to see notifications", "but argos").
+no_root_popup() {
+    if [ -e "$LOG" ] && grep -Eqi 'root request|Cannot verify' "$LOG"; then return 1; fi
+}
 assert_blocked() {
     [ "$status" -ne 0 ]
-    ! grep -q '^age$' "$LOG"
-    grep -Fxq 'A root request is waiting for the YubiKey: touch or refuse it first (top bar)' "$LOG"
+    [[ "$output" == *'A root request is waiting for the YubiKey: touch or refuse it first (top bar)'* ]]
+    run ! grep -q '^age$' "$LOG"
+    no_root_popup
 }
 @test "sec blocks before age" {
     run zsh -c 'source "$1/.config/age/secret.zsh"; sec TEST' -- "$root"
@@ -77,7 +83,8 @@ assert_blocked() {
     wait "$runner" || result=$?
     [ "$result" -eq 75 ]
     [ ! -e "$BATS_TEST_TMPDIR/ran" ]
-    grep -Fxq 'A root request is waiting for the YubiKey: touch or refuse it first (top bar)' "$LOG"
+    grep -Fxq 'A root request is waiting for the YubiKey: touch or refuse it first (top bar)' "$BATS_TEST_TMPDIR/output"
+    no_root_popup
 }
 
 @test "locked runner holds lock until the decrypt exits" {
@@ -108,8 +115,9 @@ assert_blocked() {
         [ "$status" -eq 75 ]
         [[ "$output" != *"keys can open"* ]]
         [[ "$output" != *"your keys"* ]]
+        [[ "$output" == *'A root request is waiting for the YubiKey: touch or refuse it first (top bar)'* ]]
     done
-    grep -Fxq 'A root request is waiting for the YubiKey: touch or refuse it first (top bar)' "$LOG"
+    no_root_popup
     run ! grep -q '^age$' "$LOG"
 }
 
@@ -127,8 +135,9 @@ assert_blocked() {
     run timeout 3 script -q -e -c "$root/scripts/__ghshare.sh" /dev/null </dev/null
     [ "$status" -eq 75 ]
     [[ "$output" != *"keys can open"* ]]
+    [[ "$output" == *'A root request is waiting for the YubiKey: touch or refuse it first (top bar)'* ]]
     run ! grep -q '^prompted$' "$LOG"
-    grep -Fxq 'A root request is waiting for the YubiKey: touch or refuse it first (top bar)' "$LOG"
+    no_root_popup
 }
 
 @test "sec shows no touch cue while gate holds lock and publishes a request" {
@@ -156,8 +165,9 @@ STUB
     result=0
     wait "$runner" || result=$?
     [ "$result" -eq 75 ]
-    grep -Fxq 'A root request is waiting for the YubiKey: touch or refuse it first (top bar)' "$LOG"
-    ! grep -q '^age$' "$LOG"
+    grep -Fq 'A root request is waiting for the YubiKey: touch or refuse it first (top bar)' "$BATS_TEST_TMPDIR/sec.out"
+    no_root_popup
+    run ! grep -q '^age$' "$LOG"
 }
 
 @test "picker shows no touch cue while gate holds lock and publishes a request" {
@@ -189,7 +199,9 @@ STUB
     wait "$runner" || result=$?
     [ "$result" -ne 0 ]
     [ ! -e "$XDG_RUNTIME_DIR/secret-picker-touch" ]
-    grep -Fxq 'A root request is waiting for the YubiKey: touch or refuse it first (top bar)' "$LOG"
+    # The picker has no terminal and drops age's stderr: the red label is the
+    # only cue, so it exits without any popup.
+    no_root_popup
     ! grep -Eqi 'no tap|touch the key|Touch the YubiKey' "$LOG"
 }
 
@@ -199,7 +211,9 @@ STUB
     export SUDO_GATE_LOCK_FILE="$BATS_TEST_TMPDIR/missing-lock"
     run "$root/scripts/__sudo_gate_busy.sh" --run age
     [ "$status" -eq 75 ]
-    ! grep -q '^age$' "$LOG"
+    [[ "$output" == *'Cannot verify root requests; unlock blocked'* ]]
+    no_root_popup
+    run ! grep -q '^age$' "$LOG"
 }
 
 @test "unreadable pending record returns unknown and blocks unlock" {

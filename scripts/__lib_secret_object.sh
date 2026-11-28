@@ -315,7 +315,7 @@ secret_write_pass() {
 # Block a secret unlock while the root request owns the next touch.
 secret_gate_check() {
     if "$(dirname -- "${BASH_SOURCE[0]}")/__sudo_gate_busy.sh"; then
-        notify-send "A root request is waiting for the YubiKey: touch or refuse it first (top bar)" 2>/dev/null || :
+        printf '%s\n' 'A root request is waiting for the YubiKey: touch or refuse it first (top bar)' >&2
         return 75
     fi
 }
