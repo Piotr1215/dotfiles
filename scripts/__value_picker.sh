@@ -216,5 +216,7 @@ fi
 
 # Normal pick: paste the single VALUE (text before " | "). One line, no Enter, so
 # nothing executes. Multi-line content is never pasted (see dump-all above).
+# A space follows the value: the trigger was closed with one, AutoKey erased it,
+# and without it the next word lands flush against the value.
 [[ -z "$selection" ]] && exit 0
-deliver "$(value_of "$selection")"
+deliver "$(value_of "$selection") "

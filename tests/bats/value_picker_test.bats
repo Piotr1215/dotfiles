@@ -80,7 +80,7 @@ wait_restore() {
 	[ ! -e "$SPY/rofi.log" ]
 	[ "$(sed -n 1p "$SPY/xdotool.log")" = "key --clearmodifiers BackSpace BackSpace" ]
 	[ "$(sed -n 2p "$SPY/xdotool.log")" = "key --clearmodifiers shift+Insert" ]
-	[ "$(pasted)" = "/a/b.jsonl" ]
+	[ "$(pasted)" = "/a/b.jsonl " ]
 }
 
 @test "a pick is pasted, never typed, and the copied text comes back" {
@@ -88,7 +88,7 @@ wait_restore() {
 	rofi_answers "1 v2"
 	run "$PICKER" plain 0
 	[ "$status" -eq 0 ]
-	[ "$(pasted)" = "v2" ]
+	[ "$(pasted)" = "v2 " ]
 	! grep -q '^type' "$SPY/xdotool.log"
 	wait_restore
 	[ "$(sed -n 2p "$SPY/clipboard.log")" = "$(printf -- '-\told text')" ]
@@ -101,7 +101,7 @@ wait_restore() {
 	rofi_answers "0 v1"
 	run "$PICKER" plain 0
 	[ "$status" -eq 0 ]
-	[ "$(pasted)" = "v1" ]
+	[ "$(pasted)" = "v1 " ]
 	wait_restore
 	[ "$(sed -n 2p "$SPY/clipboard.log")" = "$(printf 'image/png\tPNGBYTES')" ]
 }
@@ -112,7 +112,7 @@ wait_restore() {
 	rofi_answers "0 v1"
 	run "$PICKER" plain 0
 	[ "$status" -eq 0 ]
-	[ "$(pasted)" = "v1" ]
+	[ "$(pasted)" = "v1 " ]
 	! wait_restore
 }
 
@@ -123,7 +123,7 @@ wait_restore() {
 	run "$PICKER" plain 0
 	[ "$status" -eq 0 ]
 	[ ! -e "$SPY/clipboard.log" ]
-	[ "$(tail -1 "$SPY/xdotool.log")" = "type --clearmodifiers --delay 12 -- v1" ]
+	[ "$(tail -1 "$SPY/xdotool.log")" = "type --clearmodifiers --delay 12 -- v1 " ]
 }
 
 @test "a tab line shows only its label and pastes the hidden value" {
@@ -133,7 +133,7 @@ wait_restore() {
 	[ "$status" -eq 0 ]
 	[ "$(cat "$SPY/rofi.menu")" = "$(printf 'fix a  D-1\nfix b  D-2')" ]
 	[[ "$(cat "$SPY/rofi.log")" == *"-format i s"* ]]
-	[ "$(pasted)" = '@"u2|D-2|r|fix b"' ]
+	[ "$(pasted)" = '@"u2|D-2|r|fix b" ' ]
 }
 
 @test "a pipe line still shows whole and pastes the part before the pipe" {
@@ -142,7 +142,7 @@ wait_restore() {
 	run "$PICKER" pipes 0
 	[ "$status" -eq 0 ]
 	[ "$(cat "$SPY/rofi.menu")" = "$(printf 'v1 | one\nv2 | two')" ]
-	[ "$(pasted)" = "v1" ]
+	[ "$(pasted)" = "v1 " ]
 }
 
 @test "a custom entry with no matching row pastes what was entered" {
@@ -150,7 +150,7 @@ wait_restore() {
 	rofi_answers "-1 typed by hand"
 	run "$PICKER" plain 0
 	[ "$status" -eq 0 ]
-	[ "$(pasted)" = "typed by hand" ]
+	[ "$(pasted)" = "typed by hand " ]
 }
 
 @test "a single tab line pastes its hidden value without a menu" {
@@ -158,7 +158,7 @@ wait_restore() {
 	run "$PICKER" onetab 0
 	[ "$status" -eq 0 ]
 	[ ! -e "$SPY/rofi.log" ]
-	[ "$(pasted)" = '@"u1|D-1|r|fix a"' ]
+	[ "$(pasted)" = '@"u1|D-1|r|fix a" ' ]
 }
 
 @test "a live set's values that start with # reach the menu" {
@@ -168,7 +168,7 @@ wait_restore() {
 	run "$PICKER" hashes 0
 	[ "$status" -eq 0 ]
 	[ "$(cat "$SPY/rofi.menu")" = "$(printf '#alpha\n#beta')" ]
-	[ "$(pasted)" = "#beta" ]
+	[ "$(pasted)" = "#beta " ]
 }
 
 @test "a plain set still drops # comments and blank lines" {
@@ -199,4 +199,12 @@ wait_restore() {
 	last_check=$(grep -n '^getactivewindow' "$SPY/xdotool.log" | tail -1 | cut -d: -f1)
 	erase=$(grep -n BackSpace "$SPY/xdotool.log" | cut -d: -f1)
 	[ "$erase" -gt "$last_check" ]
+}
+
+@test "the value ends with a space, the one the trigger was closed with" {
+	printf 'v1\nv2\n' > "$VALUE_SETS_DIR/plain"
+	rofi_answers "1 v2"
+	run "$PICKER" plain 0
+	[ "$status" -eq 0 ]
+	[ "$(sed -n 1p "$SPY/clipboard.log" | cut -f2-)" = "v2 " ]
 }
