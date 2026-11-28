@@ -2,6 +2,13 @@
 set -eo pipefail
 
 # Render pending sudo requests, or refuse one after rechecking its state.
+# Same label size as the other panel labels (see panel_label_size).
+SUDO_GATE_PANEL_SIZE=12
+# shellcheck source=/dev/null
+if source "$HOME/dev/dotfiles/scripts/__lib_screen.sh" 2>/dev/null; then
+    SUDO_GATE_PANEL_SIZE=$(panel_label_size 12) || SUDO_GATE_PANEL_SIZE=12
+fi
+export SUDO_GATE_PANEL_SIZE
 exec python3 - "$0" "$@" <<'PY'
 import html
 import json
@@ -134,16 +141,20 @@ if args:
     sys.exit(0)
 
 records, unknown, _ = scan()
+size = os.environ.get("SUDO_GATE_PANEL_SIZE", "12")
+size = size if size.replace(".", "", 1).isdigit() else "12"
 if unknown:
-    print("<span color='#ff4444'>🔑 ROOT state unavailable</span> | font=monospace")
+    print(f"<span color='#ff4444'>🔑 ROOT state unavailable</span> | font=monospace size={size}")
 elif records:
     first = records[0]
     label = f"🔑 ROOT {first['agent']}: {first['command']}"
     if len(label) > 40:
         label = label[:39] + "…"
-    print(f"<span color='#ff4444'>{safe(label)}</span> | font=monospace")
+    print(f"<span color='#ff4444'>{safe(label)}</span> | font=monospace size={size}")
 else:
-    print("<span color='#888888'>⚿</span> | size=small")
+    # Idle reads like the other labels (C:OK, K:3) at their size: the old small grey
+    # key was there but too faint to find (Piotr, 28 Nov: "I still don't see argos").
+    print(f"<tt><b>SU:</b></tt><tt><span color='#888888'>0</span></tt> | font='monospace' size={size}")
 if unknown:
     print("---")
     print("Root request state unavailable. Do not touch the YubiKey. | font=monospace")

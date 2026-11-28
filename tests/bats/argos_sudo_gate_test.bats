@@ -93,7 +93,7 @@ record() {
     run "$applet"
     [ "$status" -eq 0 ]
     [[ "$output" == *"color='#888888'"* ]]
-    [[ "$output" == *"<span color='#888888'>⚿</span>"* ]]
+    [[ "$(head -1 <<<"$output")" == "<tt><b>SU:</b></tt><tt><span color='#888888'>0</span></tt> | font='monospace' size="* ]]
     [[ "$output" == *'Allowed for agents (no touch)'* ]]
     [[ "$output" == *'/usr/bin/id'* ]]
     [[ "$output" == *'sudo-agent-gate remove 1'* ]]
