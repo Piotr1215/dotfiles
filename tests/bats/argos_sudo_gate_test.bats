@@ -36,8 +36,9 @@ record() {
     [[ "$output" == *'🔑 ROOT worker:'* ]]
     [[ "$output" == *'sudo echo &lt;hello&gt; &#124; cat'* ]]
     [[ "$output" == *'work / %1'* ]]
-    [[ "$output" == *'Touch the YubiKey to run exactly this command.'* ]]
-    [[ "$output" == *'--refuse'* ]]
+    [[ "$output" == *'Or touch the YubiKey to run exactly this command.'* ]]
+    # Refuse is the first row under the label, bold and red, so it is easy to find.
+    [[ "$(sed -n 3p <<<"$output")" == "<b>✕ Refuse this request</b> | bash='"*"--refuse $sleeper' terminal=false refresh=true color=#ff4444 size="* ]]
 }
 
 @test "stale and malformed records are hidden" {
@@ -235,7 +236,7 @@ record() {
     run "$applet"
     [[ "$output" == *'ROOT state unavailable'* ]]
     [[ "$output" == *'Command:'* ]]
-    [[ "$output" != *'Touch the YubiKey to run exactly this command.'* ]]
+    [[ "$output" != *'touch the YubiKey to run exactly this command.'* ]]
     [[ "$output" == *'Edit allowed commands'* ]]
     run "$applet" --busy
     [ "$status" -eq 2 ]

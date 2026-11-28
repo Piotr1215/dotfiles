@@ -162,15 +162,19 @@ print("---")
 for index, record in enumerate(records):
     if index:
         print("---")
+    # Refuse first, bold and red: below the detail rows it was hard to find
+    # (Piotr, 28 Nov: "it's hard to see the refuse element on the list").
+    command = shlex.quote(os.path.abspath(script)) + " --refuse " + str(record["sudo_pid"])
+    print(f"<b>✕ Refuse this request</b> | bash='{command}' terminal=false refresh=true color=#ff4444 size={size}")
+    if not unknown:
+        print("Or touch the YubiKey to run exactly this command. | font=monospace")
     for title, value in (("Command", record["command"]), ("Agent", record["agent"]),
                          ("Session / pane", f"{record['session']} / {record['pane']}"),
                          ("Cwd", record["cwd"]), ("Detection", record["detection"]),
                          ("Age", f"{max(0, int(now - record['ts']))}s")):
         print(f"{title}: {safe(value)} | font=monospace")
     if not unknown:
-        print("Touch the YubiKey to run exactly this command. Do not tap for anything else while this is red. | font=monospace")
-    command = shlex.quote(os.path.abspath(script)) + " --refuse " + str(record["sudo_pid"])
-    print(f"Refuse | bash='{command}' terminal=false refresh=true")
+        print("Do not tap the key for anything else while the label is red. | font=monospace")
 
     program = record.get("program")
     if isinstance(program, str) and program:
