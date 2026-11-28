@@ -48,66 +48,70 @@ agent_pane() {
         grep -v ' viddy$' | awk 'NR==1{print $1}'
 }
 
-# Raise the terminal that is already attached to the session rather than
-# opening a second one. Every click used to run `alacritty -e ...`, so a
-# click was unconditionally a new window: the old one stayed attached to the
-# same session and the desktop filled up with duplicates. tmux only hands us
-# the client's pid (the tmux client process), and the X window belongs to an
-# ancestor of it (alacritty -> shell -> tmux), so walk up the parent chain
-# until xdotool recognises one.
-focus_attached_client() {
-    local pid win
-    pid=$(tmux list-clients -t "$SESSION" -F '#{client_pid}' 2>/dev/null | head -1)
-    [ -n "$pid" ] || return 1
+# The tmux client Piotr typed in last, as "<name> <pid>": the Alacritty window
+# in front of him. A panel click has no calling terminal, so recency is the
+# signal, the same pick as focused_client_pane in __lib_pane_deliver.sh.
+current_client() {
+    tmux list-clients -F '#{client_activity} #{client_name} #{client_pid}' 2>/dev/null |
+        sort -rn | awk 'NR==1{print $2, $3}'
+}
+
+# Raise the X window holding a tmux client. tmux only hands us the client's
+# pid, and the window belongs to an ancestor (alacritty -> shell -> tmux), so
+# walk up the parent chain until xdotool recognises one.
+raise_client_window() {
+    local pid="$1" win
     while [ -n "$pid" ] && [ "$pid" != 1 ]; do
         win=$(xdotool search --onlyvisible --pid "$pid" 2>/dev/null | head -1)
         if [ -n "$win" ]; then
-            xdotool windowactivate "$win" 2>/dev/null && return 0
-            return 1
+            xdotool windowactivate "$win" 2>/dev/null
+            return 0
         fi
         pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')
     done
-    return 1
 }
 
-# setsid so the window outlives argos, which reaps the process group behind a
-# bash= action as soon as it returns.
-spawn_terminal() {
-    if tmux has-session -t "$SESSION" 2>/dev/null; then
-        setsid alacritty -e tmux attach-session -t "$SESSION" >/dev/null 2>&1 &
-    else
-        setsid alacritty -e tmuxinator start "$SESSION" >/dev/null 2>&1 &
-    fi
-}
-
-if tmux has-session -t "$SESSION" 2>/dev/null; then
-    if [ -n "$job" ]; then
-        pane=$(agent_pane)
-        [ -n "$pane" ] && send_directive "$pane"
-    fi
-    # Already inside tmux: the caller has a terminal, just move it.
+# Put the session in the current Alacritty window: switch its tmux client and
+# raise it. Piotr, 28 Nov 2026: "it should open new session in the current
+# alacritty window". Raising whichever window was already attached left the
+# agent behind his work in another window, and a detached session got a new
+# window each time. A new window opens only when no tmux client exists at all;
+# setsid so it outlives argos, which reaps the process group behind a bash=
+# action as soon as it returns.
+show_session() {
+    local client pid
     if [ -n "$TMUX" ]; then
-        exec tmux switch-client -t "$SESSION"
+        tmux switch-client -t "$SESSION"
+        return
     fi
-    # A window is already showing this session: focus it and stop. Only when
-    # the session is detached (every terminal closed) do we need a new one.
-    focus_attached_client && exit 0
-    spawn_terminal
-    exit 0
+    read -r client pid <<< "$(current_client)"
+    if [ -z "$client" ]; then
+        setsid alacritty -e tmux attach-session -t "$SESSION" >/dev/null 2>&1 &
+        return
+    fi
+    tmux switch-client -c "$client" -t "$SESSION"
+    raise_client_window "$pid"
+}
+
+# Start the session detached, so it can be shown in the current window rather
+# than in the one tmuxinator would attach. The old code ran `tmuxinator start`
+# in the foreground, which attaches and blocks, so a fresh session never
+# received the job it was opened for.
+started=0
+if ! tmux has-session -t "$SESSION" 2>/dev/null; then
+    tmuxinator start "$SESSION" --no-attach >/dev/null 2>&1 || true
+    if ! tmux has-session -t "$SESSION" 2>/dev/null; then
+        notify-send "cron-manager" "the session did not start" 2>/dev/null || true
+        exit 1
+    fi
+    started=1
 fi
 
-# No session at all. Start it inside its own window, then wait for the agent
-# pane before typing. The old code ran `tmuxinator start` in the foreground,
-# which attaches and blocks, so the directive below was only ever sent after
-# the user detached: a fresh session never received the job it was opened for.
-spawn_terminal
+show_session
 
 if [ -n "$job" ]; then
-    for _ in $(seq 1 40); do
-        tmux has-session -t "$SESSION" 2>/dev/null && break
-        sleep 0.5
-    done
-    sleep 3
+    # A fresh agent pane needs a moment before its prompt takes input.
+    (( started )) && sleep "${CRON_INVESTIGATE_BOOT_WAIT:-3}"
     pane=$(agent_pane)
     [ -n "$pane" ] && send_directive "$pane"
 fi
