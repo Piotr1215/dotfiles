@@ -6,6 +6,10 @@ setup() {
     export SUDO_GATE_PENDING_DIR="$BATS_TEST_TMPDIR/pending"
     export SUDO_GATE_TEST_MODE=1 SUDO_GATE_TEST_COMM=sleep
     mkdir -p "$SUDO_GATE_PENDING_DIR"
+    export SUDO_GATE_CUE_STATE="$BATS_TEST_TMPDIR/cue" SUDO_GATE_TMUX="$BATS_TEST_TMPDIR/tmux"
+    tmux_log="$BATS_TEST_TMPDIR/tmux.log"
+    printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$*" >>"%s"\n[ "$1" = list-clients ] && echo /dev/pts/7\n[ "$1" = show ] && echo "bg=old-$3"\nexit 0\n' "$tmux_log" >"$SUDO_GATE_TMUX"
+    chmod +x "$SUDO_GATE_TMUX"
     sleep 300 &
     sleeper=$!
 }
@@ -38,16 +42,49 @@ record() {
     [[ "$(head -1 <<<"$output")" == "<tt><b>SU:</b></tt><tt><span color='#ff4444'> ROOT worker:"* ]]
 }
 
+@test "a waiting request reaches tmux once, tints the pane, and restores it when it ends" {
+    # Piotr, 28 Nov: "I look all the time in the middle of the screen (where you input box is)".
+    record "$sleeper"
+    run "$applet"
+    [ "$status" -eq 0 ]
+    [ "$(sed -n 1p "$tmux_log")" = "show -gwv window-active-style" ]
+    [ "$(sed -n 2p "$tmux_log")" = "show -gwv pane-active-border-style" ]
+    [ "$(sed -n 3p "$tmux_log")" = "set -g @sudo_gate AGENT ROOT REQUEST: check the SU menu, top right, before touching the YubiKey ; set -gw window-active-style bg=#4a0000 ; set -gw pane-active-border-style fg=#ff4444,bg=default" ]
+    [ "$(sed -n 4p "$tmux_log")" = "list-clients -F #{client_name}" ]
+    [ "$(sed -n 5p "$tmux_log")" = "refresh-client -S -t /dev/pts/7" ]
+    run "$applet"
+    [ "$(wc -l <"$tmux_log")" -eq 5 ]
+    rm "$SUDO_GATE_PENDING_DIR/$sleeper.json"
+    run "$applet"
+    [ "$(sed -n 6p "$tmux_log")" = "set -g @sudo_gate  ; set -gw window-active-style bg=old-window-active-style ; set -gw pane-active-border-style bg=old-pane-active-border-style" ]
+    run "$applet"
+    [ "$(wc -l <"$tmux_log")" -eq 8 ]
+}
+
+@test "no tmux server: the cue is retried next second" {
+    printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$*" >>"%s"\nexit 1\n' "$tmux_log" >"$SUDO_GATE_TMUX"
+    record "$sleeper"
+    run "$applet"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"ROOT worker:"* ]]
+    [ ! -e "$SUDO_GATE_CUE_STATE" ]
+    run "$applet"
+    [ "$(grep -c '^show -gwv window-active-style' "$tmux_log")" -eq 2 ]
+}
+
 @test "live requests show escaped details and refusal action" {
     record "$sleeper"
     run "$applet"
     [ "$status" -eq 0 ]
     [[ "$output" == *"<tt><b>SU:</b></tt><tt><span background='#ff4444' color='#ffffff'> ROOT worker:"* ]]
     [[ "$output" == *'sudo echo &lt;hello&gt; &#124; cat'* ]]
-    [[ "$output" == *'work / %1'* ]]
-    [[ "$output" == *'Or touch the YubiKey to run exactly this command.'* ]]
-    # Refuse is the first row under the label, bold and red, so it is easy to find.
-    [[ "$(sed -n 3p <<<"$output")" == "<b>✕ Refuse this request</b> | bash='"*"--refuse $sleeper' terminal=false refresh=true color=#ff4444 size="* ]]
+    [[ "$output" == *'--Session / pane: work / %1'* ]]
+    # Three rows decide it, the rest is under Details (Piotr, 28 Nov: "I don't need 80% of things there").
+    [[ "$(sed -n 3p <<<"$output")" == "<b>worker wants root:</b> sudo echo &lt;hello&gt; &#124; cat | font=monospace" ]]
+    [ "$(sed -n 4p <<<"$output")" = "Touch the YubiKey to allow it" ]
+    [[ "$(sed -n 5p <<<"$output")" == "<b>✕ Refuse</b> | bash='"*"--refuse $sleeper' terminal=false refresh=true color=#ff4444" ]]
+    [ "$(sed -n 6p <<<"$output")" = "Details" ]
+    [ "$(grep -c -v -e '^--' -e '^---$' <<<"$output")" -eq 6 ]
 }
 
 @test "stale and malformed records are hidden" {
@@ -74,7 +111,7 @@ record() {
     record "$sleeper"
     record "$second"
     run "$applet"
-    [ "$(printf '%s\n' "$output" | grep -c '^Command:')" -eq 2 ]
+    [ "$(printf '%s\n' "$output" | grep -c '^--Command:')" -eq 2 ]
     run "$applet" --refuse "$second"
     [ "$status" -eq 0 ]
     wait "$second" || true
@@ -120,8 +157,9 @@ record() {
     [[ "$output" == *"Always allow id for agents"* ]]
     [[ "$output" == *"allow-program-from $sleeper"* ]]
     [[ "$output" == *"allow-exact-from $sleeper"* ]]
-    [[ "$output" == *'Applies from the next call; touch or refuse this one.'* ]]
-    [[ "$output" == *'auto-allowed: worker id -u'* ]]
+    [[ "$output" == *'--Always allow exactly this command, from the next call'* ]]
+    [[ "$output" == *'Recently auto-allowed'* ]]
+    [[ "$output" == *'--worker: id -u | font=monospace'* ]]
 }
 
 @test "busy check shares request liveness" {
@@ -192,8 +230,8 @@ record() {
     done
     run "$applet"
     [ "$status" -eq 0 ]
-    recent=$(printf '%s\n' "$output" | rg '^auto-allowed:')
-    expected=$(printf 'auto-allowed: worker%s command%s | font=monospace\n' 3 3 4 4 5 5 6 6 7 7)
+    recent=$(printf '%s\n' "$output" | rg '^--worker')
+    expected=$(printf -- '--worker%s: command%s | font=monospace\n' 3 3 4 4 5 5 6 6 7 7)
     [ "$recent" = "$expected" ]
 }
 
