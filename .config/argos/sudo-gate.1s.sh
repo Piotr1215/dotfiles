@@ -144,13 +144,16 @@ records, unknown, _ = scan()
 size = os.environ.get("SUDO_GATE_PANEL_SIZE", "12")
 size = size if size.replace(".", "", 1).isdigit() else "12"
 if unknown:
-    print(f"<span color='#ff4444'>🔑 ROOT state unavailable</span> | font=monospace size={size}")
+    print(f"<tt><span color='#ff4444'>🔑 ROOT state unavailable</span></tt> | font='monospace' size={size}")
 elif records:
     first = records[0]
-    label = f"🔑 ROOT {first['agent']}: {first['command']}"
+    label = f"ROOT {first['agent']}: {first['command']}"
     if len(label) > 40:
         label = label[:39] + "…"
-    print(f"<span color='#ff4444'>{safe(label)}</span> | font=monospace size={size}")
+    # Same shape as SU:0, C:OK and R:30: a plain prefix, then the coloured part. A label
+    # coloured from its first character rendered white on the panel (screenshot, 28 Nov
+    # 15:08 and 15:10: #F2F2F2), so bob's request went unseen.
+    print(f"<tt><b>SU:</b></tt><tt><span color='#ff4444'>{safe(label)}</span></tt> | font='monospace' size={size}")
 else:
     # Idle reads like the other labels (C:OK, K:3) at their size: the old small grey
     # key was there but too faint to find (Piotr, 28 Nov: "I still don't see argos").
