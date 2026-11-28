@@ -29,11 +29,20 @@ record() {
     [[ "$output" == *"color='#888888'"* ]]
 }
 
+@test "a waiting request flashes: red block on even seconds, red text on odd" {
+    # Piotr, 28 Nov: "it simply doens't draw my attention enough".
+    record "$sleeper"
+    SUDO_GATE_TEST_NOW=1795875300 run "$applet"
+    [[ "$(head -1 <<<"$output")" == "<tt><b>SU:</b></tt><tt><span background='#ff4444' color='#ffffff'> ROOT worker:"* ]]
+    SUDO_GATE_TEST_NOW=1795875301 run "$applet"
+    [[ "$(head -1 <<<"$output")" == "<tt><b>SU:</b></tt><tt><span color='#ff4444'> ROOT worker:"* ]]
+}
+
 @test "live requests show escaped details and refusal action" {
     record "$sleeper"
     run "$applet"
     [ "$status" -eq 0 ]
-    [[ "$output" == *"<tt><b>SU:</b></tt><tt><span color='#ff4444'>ROOT worker:"* ]]
+    [[ "$output" == *"<tt><b>SU:</b></tt><tt><span background='#ff4444' color='#ffffff'> ROOT worker:"* ]]
     [[ "$output" == *'sudo echo &lt;hello&gt; &#124; cat'* ]]
     [[ "$output" == *'work / %1'* ]]
     [[ "$output" == *'Or touch the YubiKey to run exactly this command.'* ]]
@@ -54,7 +63,7 @@ record() {
     jq -n --argjson ts "$(date +%s)" --argjson pid "$sleeper" '{ts:$ts,sudo_pid:$pid,command:"sudo id",detection:"agent",agent:"worker",session:"",pane:null}' >"$SUDO_GATE_PENDING_DIR/$sleeper.json"
     run "$applet"
     [ "$status" -eq 0 ]
-    [[ "$output" == *"<tt><b>SU:</b></tt><tt><span color='#ff4444'>ROOT worker:"* ]]
+    [[ "$output" == *"<tt><b>SU:</b></tt><tt><span background='#ff4444' color='#ffffff'> ROOT worker:"* ]]
     [[ "$output" == *'Session / pane: unknown / unknown'* ]]
     [[ "$output" == *'Cwd: unknown'* ]]
 }
@@ -129,7 +138,7 @@ record() {
     jq --arg start "$start" '.start_time=$start' "$SUDO_GATE_PENDING_DIR/$sleeper.json" >"$BATS_TEST_TMPDIR/record"
     mv "$BATS_TEST_TMPDIR/record" "$SUDO_GATE_PENDING_DIR/$sleeper.json"
     run "$applet"
-    [[ "$output" == *"<tt><b>SU:</b></tt><tt><span color='#ff4444'>ROOT worker:"* ]]
+    [[ "$output" == *"<tt><b>SU:</b></tt><tt><span background='#ff4444' color='#ffffff'> ROOT worker:"* ]]
     run "$applet" --busy
     [ "$status" -eq 0 ]
 }
@@ -194,7 +203,7 @@ record() {
     jq --arg start "$start" '.start_time=$start' "$SUDO_GATE_PENDING_DIR/$sleeper.json" >"$BATS_TEST_TMPDIR/record"
     mv "$BATS_TEST_TMPDIR/record" "$SUDO_GATE_PENDING_DIR/$sleeper.json"
     run "$applet"
-    [[ "$output" == *"<tt><b>SU:</b></tt><tt><span color='#ff4444'>ROOT worker:"* ]]
+    [[ "$output" == *"<tt><b>SU:</b></tt><tt><span background='#ff4444' color='#ffffff'> ROOT worker:"* ]]
     [[ "$output" == *'Age: 0s'* ]]
     run "$applet" --busy
     [ "$status" -eq 0 ]

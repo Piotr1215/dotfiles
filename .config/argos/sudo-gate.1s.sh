@@ -152,8 +152,11 @@ elif records:
         label = label[:39] + "…"
     # Same shape as SU:0, C:OK and R:30: a plain prefix, then the coloured part. A label
     # coloured from its first character rendered white on the panel (screenshot, 28 Nov
-    # 15:08 and 15:10: #F2F2F2), so bob's request went unseen.
-    print(f"<tt><b>SU:</b></tt><tt><span color='#ff4444'>{safe(label)}</span></tt> | font='monospace' size={size}")
+    # 15:08 and 15:10: #F2F2F2). Red text alone still went unseen (Piotr, 28 Nov: "it
+    # simply doens't draw my attention enough"), so it flashes a red block each second.
+    tick = int(os.environ.get("SUDO_GATE_TEST_NOW", "0")) if os.environ.get("SUDO_GATE_TEST_MODE") == "1" else int(now)
+    style = "background='#ff4444' color='#ffffff'" if tick % 2 == 0 else "color='#ff4444'"
+    print(f"<tt><b>SU:</b></tt><tt><span {style}> {safe(label)} </span></tt> | font='monospace' size={size}")
 else:
     # Idle reads like the other labels (C:OK, K:3) at their size: the old small grey
     # key was there but too faint to find (Piotr, 28 Nov: "I still don't see argos").
