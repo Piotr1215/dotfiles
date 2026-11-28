@@ -2,7 +2,7 @@
 #
 # Covers the "open" value-set behind ;;open, the rofi twin of M-x: zoxide folders
 # first, then files changed in the last 30 days newest first (the M-x Ctrl+F
-# list). Each row types the absolute path and shows it with ~ for $HOME.
+# list). Each row pastes the absolute path and shows it with ~ for $HOME.
 
 setup() {
 	SET="$(cd "$(dirname "$BATS_TEST_FILENAME")/../.." && pwd)/.config/value-sets/open"

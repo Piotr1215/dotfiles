@@ -4,7 +4,7 @@
 # Folders from zoxide first (the M-x main view), then files changed in the last
 # 30 days, newest first (the M-x Ctrl+F view in __file_opener.sh, same roots and
 # excludes). Rows are "<absolute path><TAB><label>": rofi shows and filters the
-# label (~ for $HOME, folders end in /), the absolute path is typed.
+# label (~ for $HOME, folders end in /), the absolute path is pasted.
 #
 # The file scan takes one to two seconds for ~60k files, so it is cached: a use
 # shows the cached list at once and, when the cache is older than the TTL,

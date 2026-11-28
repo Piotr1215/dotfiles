@@ -1,15 +1,17 @@
 #!/usr/bin/env bash
 # PROJECT: value-picker
 # Global, rofi-based value picker. Not terminal-bound: pick a value and it is
-# typed in place into whatever window has focus (xdotool).
+# pasted in place into whatever window has focus (clipboard + Shift+Insert).
 #
 # Extensible by data, not code: each "set" is a file in ~/.config/value-sets/
 #   - plain file      -> each non-comment line is a value
 #   - executable file -> run it, its stdout lines are the values (live data)
-# Line format:  VALUE              -> typed verbatim
-#               VALUE | label      -> rofi shows the whole line, types only VALUE
+# Line format:  VALUE              -> pasted verbatim
+#               VALUE | label      -> rofi shows the whole line, pastes only VALUE
 #               VALUE<TAB>label    -> rofi shows and filters only the label,
-#                                     types VALUE (ids nobody searches by)
+#                                     pastes VALUE (ids nobody searches by)
+#
+# Env: VALUE_PICKER_RESTORE_DELAY  seconds before the clipboard is put back (1)
 #
 # Usage:
 #   __value_picker.sh <set>   pick a value from <set>
@@ -52,6 +54,70 @@ value_of() {
     if [[ "$1" == *$'\t'* ]]; then printf '%s' "${1%%$'\t'*}"; else printf '%s' "${1%% | *}"; fi
 }
 
+# What the clipboard holds, as the target to save before a pick borrows it:
+# "text" for text, an image/* target for an image, empty when nothing is on it.
+# Fails for copied files (a file manager copy also offers text, and restoring
+# only that would turn the copy into a path), so the caller types instead.
+clipboard_kind() {
+    local targets image
+    targets=$(xclip -selection clipboard -t TARGETS -o 2>/dev/null) || return 0
+    if grep -qxE 'x-special/gnome-copied-files|text/uri-list' <<< "$targets"; then
+        return 1
+    fi
+    if grep -qxE 'UTF8_STRING|STRING|TEXT|text/plain(;charset=utf-8)?' <<< "$targets"; then
+        printf 'text'
+    elif image=$(grep -m1 '^image/' <<< "$targets"); then
+        printf '%s' "$image"
+    fi
+}
+
+# Put a value where the cursor is by pasting, not typing. Typed keys go through
+# the app's own key handling (Slack opens its command menu on a leading /, Claude
+# Code its file menu on @, editors auto-pair brackets) at 12 ms a key. A paste
+# lands whole and literal, in a terminal as a bracketed paste; Alacritty binds
+# Shift+Insert to the clipboard. The clipboard is borrowed: saved, used, and put
+# back a second later, an image as an image.
+deliver() {
+    local value="$1" kind saved=""
+    if ! kind=$(clipboard_kind); then
+        xdotool type --clearmodifiers --delay 12 -- "$value"
+        return 0
+    fi
+    if [[ -n "$kind" ]]; then
+        saved=$(mktemp "${TMPDIR:-/tmp}/value-picker-clip.XXXXXX")
+        if [[ "$kind" == text ]]; then
+            xclip -selection clipboard -o > "$saved" 2>/dev/null || true
+        else
+            xclip -selection clipboard -t "$kind" -o > "$saved" 2>/dev/null || true
+        fi
+    fi
+    printf '%s' "$value" | xclip -selection clipboard
+    xdotool key --clearmodifiers shift+Insert
+    [[ -n "$saved" ]] || return 0
+    (
+        sleep "${VALUE_PICKER_RESTORE_DELAY:-1}"
+        if [[ "$kind" == text ]]; then
+            xclip -selection clipboard < "$saved"
+        else
+            xclip -selection clipboard -t "$kind" < "$saved"
+        fi
+        rm -f "$saved"
+    ) >/dev/null 2>&1 &
+}
+
+# rofi hands focus back to the window it opened over a moment after it exits,
+# and a key sent sooner is lost: a GTK entry kept the first ";" of ";;open"
+# because one erase backspace went nowhere. Wait up to a second for the
+# original window, then go ahead anyway.
+wait_for_origin() {
+    local origin="$1" i
+    [[ -n "$origin" ]] || return 0
+    for ((i = 0; i < 40; i++)); do
+        [[ "$(xdotool getactivewindow 2>/dev/null)" == "$origin" ]] && return 0
+        sleep 0.025
+    done
+}
+
 # Names of all available sets (filenames in SETS_DIR).
 list_sets() {
     [[ -d "$SETS_DIR" ]] || return 0
@@ -87,7 +153,7 @@ if [[ -z "$set_name" ]]; then
 fi
 
 # If a set resolves to exactly one value, there is nothing to choose: skip rofi
-# and type it straight away. Makes status-style sets (e.g. "reboot" -> yes/no)
+# and paste it straight away. Makes status-style sets (e.g. "reboot" -> yes/no)
 # feel instant instead of popping a one-row menu.
 #
 # The set goes to a temp file first, not into `mapfile < <(...)`: bash reads a
@@ -103,12 +169,17 @@ mapfile -t lines < "$set_file"
 # menu and erases nothing, so the trigger stays as typed.
 (( ${#lines[@]} == 0 )) && exit 0
 
+# The window the trigger was typed in, read before rofi takes focus, so the
+# erase and the paste can wait for it to come back (wait_for_origin).
+origin=""
+(( ${#lines[@]} > 1 )) && origin=$(xdotool getactivewindow 2>/dev/null || true)
+
 dump_all=0
 if (( ${#lines[@]} == 1 )); then
     selection="${lines[0]}"
 elif picked=$(display_lines < "$set_file" | rofi_pick "$set_name" -format 'i s'); then
     # rofi returns "<index> <text>"; the index maps back to the full line, so a
-    # hidden VALUE survives. A custom entry has index -1: type its text as is.
+    # hidden VALUE survives. A custom entry has index -1: paste its text as is.
     idx="${picked%% *}"
     if [[ "$idx" =~ ^[0-9]+$ ]] && (( idx < ${#lines[@]} )); then
         selection="${lines[idx]}"
@@ -124,6 +195,7 @@ fi
 # Erase the trigger that launched us (e.g. autokey's ";;awsid"): $2 = char count.
 # Backspaces only, after rofi has closed, so it never races autokey's own key
 # injection (which left ";;aws" behind / ate the value). This is always safe.
+wait_for_origin "$origin"
 erase="${2:-0}"
 if [[ "$erase" =~ ^[0-9]+$ ]] && (( erase > 0 )); then
     backspaces=()
@@ -142,8 +214,7 @@ if (( dump_all )); then
     exit 0
 fi
 
-# Normal pick: type the single VALUE (text before " | "). One line, no Enter, so
-# nothing executes. Multi-line content is never typed (see dump-all above).
+# Normal pick: paste the single VALUE (text before " | "). One line, no Enter, so
+# nothing executes. Multi-line content is never pasted (see dump-all above).
 [[ -z "$selection" ]] && exit 0
-to_type="$(value_of "$selection")"
-xdotool type --clearmodifiers --delay 12 -- "$to_type"
+deliver "$(value_of "$selection")"
