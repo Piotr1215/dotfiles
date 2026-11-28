@@ -1,0 +1,30 @@
+{
+  "type": "script",
+  "description": "file or folder path, as M-x and M-x C-f list them",
+  "store": {},
+  "modes": [
+    1
+  ],
+  "usageCount": 0,
+  "prompt": false,
+  "omitTrigger": true,
+  "showInTrayMenu": false,
+  "abbreviation": {
+    "abbreviations": [
+      ";;open"
+    ],
+    "backspace": false,
+    "ignoreCase": false,
+    "immediate": false,
+    "triggerInside": true,
+    "wordChars": "[\\w]"
+  },
+  "hotkey": {
+    "modifiers": [],
+    "hotKey": null
+  },
+  "filter": {
+    "regex": null,
+    "isRecursive": false
+  }
+}

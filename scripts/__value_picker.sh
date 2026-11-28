@@ -40,9 +40,11 @@ rofi_pick() {
         "${ROFI_THEME[@]}" "$@"
 }
 
-# What rofi shows for a line: the label of a VALUE<TAB>label line, else all of it.
-display_of() {
-    if [[ "$1" == *$'\t'* ]]; then printf '%s\n' "${1#*$'\t'}"; else printf '%s\n' "$1"; fi
+# What rofi shows for each line on stdin: the label of a VALUE<TAB>label line,
+# else all of it. One awk pass, not a bash call per line: ;;open lists 60k
+# paths and the per-line loop alone took a second before rofi could open.
+display_lines() {
+    awk '{ i = index($0, "\t"); print (i ? substr($0, i + 1) : $0) }'
 }
 
 # What gets typed for a line: VALUE before a tab, else the text before " | ".
@@ -67,10 +69,12 @@ load_set() {
         notify-send "Value Picker" "No such set: $1"
         exit 1
     fi
+    # LC_ALL=C: a UTF-8 [[:space:]] scan took 0.45 s over ;;open's 10 MB list,
+    # the C locale 0.04 s. Only lines of nothing but Unicode spaces differ.
     if [[ -x "$f" ]]; then
-        "$f" | grep -vE '^[[:space:]]*$'
+        "$f" | LC_ALL=C grep -vE '^[[:space:]]*$'
     else
-        grep -vE '^[[:space:]]*(#|$)' "$f"
+        LC_ALL=C grep -vE '^[[:space:]]*(#|$)' "$f"
     fi
 }
 
@@ -85,7 +89,15 @@ fi
 # If a set resolves to exactly one value, there is nothing to choose: skip rofi
 # and type it straight away. Makes status-style sets (e.g. "reboot" -> yes/no)
 # feel instant instead of popping a one-row menu.
-mapfile -t lines < <(load_set "$set_name")
+#
+# The set goes to a temp file first, not into `mapfile < <(...)`: bash reads a
+# pipe one byte at a time so it never reads past a line, and ;;open's 10 MB
+# list took 1.3 s that way. A command substitution still took 0.8 s; a regular
+# file is read in blocks. `|| true` because grep exits 1 on an empty set.
+set_file=$(mktemp "${TMPDIR:-/tmp}/value-picker.XXXXXX")
+trap 'rm -f "$set_file"' EXIT
+load_set "$set_name" > "$set_file" || true
+mapfile -t lines < "$set_file"
 
 # A live set with nothing to offer (;;session outside Claude or Codex) opens no
 # menu and erases nothing, so the trigger stays as typed.
@@ -94,7 +106,7 @@ mapfile -t lines < <(load_set "$set_name")
 dump_all=0
 if (( ${#lines[@]} == 1 )); then
     selection="${lines[0]}"
-elif picked=$(for l in "${lines[@]}"; do display_of "$l"; done | rofi_pick "$set_name" -format 'i s'); then
+elif picked=$(display_lines < "$set_file" | rofi_pick "$set_name" -format 'i s'); then
     # rofi returns "<index> <text>"; the index maps back to the full line, so a
     # hidden VALUE survives. A custom entry has index -1: type its text as is.
     idx="${picked%% *}"

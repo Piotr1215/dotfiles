@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+# Executable value-set behind ;;open: the paths M-x lists, for any window.
+#
+# Folders from zoxide first (the M-x main view), then files changed in the last
+# 30 days, newest first (the M-x Ctrl+F view in __file_opener.sh, same roots and
+# excludes). Rows are "<absolute path><TAB><label>": rofi shows and filters the
+# label (~ for $HOME, folders end in /), the absolute path is typed.
+#
+# The file scan takes one to two seconds for ~60k files, so it is cached: a use
+# shows the cached list at once and, when the cache is older than the TTL,
+# refreshes it in the background for the next use. zoxide is fast and stays live.
+#
+# Env: VALUE_SET_ROOTS      space-separated roots for the file scan
+#      VALUE_SET_CACHE      cache file (default ~/.cache/value-sets/open)
+#      VALUE_SET_CACHE_TTL  seconds before a background refresh (default 60)
+set -eo pipefail
+
+read -ra roots <<< "${VALUE_SET_ROOTS:-$HOME/dev $HOME/loft $HOME/.config/nvim $HOME/.claude}"
+cache="${VALUE_SET_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/value-sets/open}"
+ttl="${VALUE_SET_CACHE_TTL:-60}"
+
+# Append a label to each path on stdin: $HOME becomes ~, then the suffix.
+label() {
+    awk -v home="$HOME" -v suffix="$1" '{
+        l = $0
+        if (index(l, home "/") == 1) l = "~" substr(l, length(home) + 1)
+        printf "%s\t%s%s\n", $0, l, suffix
+    }'
+}
+
+# Files changed in the last 30 days, newest first, as labelled rows.
+scan_files() {
+    local root
+    local -a existing=()
+    # fd fails the whole scan on one missing root, so pass only the ones that exist.
+    for root in "${roots[@]}"; do
+        [[ -d "$root" ]] && existing+=("$root")
+    done
+    ((${#existing[@]})) || return 0
+    fd --type f --hidden --absolute-path --color never \
+        --exclude .git --exclude node_modules --exclude .cache --exclude image-cache \
+        --exclude plugins --exclude stats-cache.json --exclude '*-worktrees' \
+        --exclude vendor --changed-within 30d --print0 . "${existing[@]}" 2>/dev/null |
+        xargs -0 -r stat --format '%Y %n' 2>/dev/null |
+        sort -rn | cut -d' ' -f2- | label ""
+}
+
+# Rebuild the cache through a temp file and an atomic mv, so a reader never sees
+# half a list. An unreadable directory can make fd exit non-zero while the rest
+# of the scan is fine, so publish whatever the scan produced.
+refresh_cache() {
+    local tmp
+    mkdir -p "$(dirname "$cache")"
+    tmp=$(mktemp "$cache.XXXXXX")
+    scan_files > "$tmp" || true
+    mv -f "$tmp" "$cache"
+}
+
+if [[ "${1:-}" == --refresh ]]; then
+    refresh_cache
+    exit 0
+fi
+
+{ zoxide query -l 2>/dev/null || true; } | label /
+
+if [[ -f "$cache" ]]; then
+    cat "$cache"
+    if (( $(date +%s) - $(stat -c %Y "$cache") >= ttl )); then
+        # Detached, so the picker exiting cannot cut the refresh short.
+        setsid -f "${BASH_SOURCE[0]}" --refresh </dev/null >/dev/null 2>&1
+    fi
+else
+    refresh_cache
+    cat "$cache"
+fi
